@@ -1,0 +1,97 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+coverage.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Build directories
+build/
+bin/
+dist/
+
+# Development data directories
+data/
+dev-data/
+*.db
+*.pebble/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Generated code (will be regenerated)
+# Uncomment if you want to ignore generated GraphQL code
+# graph/generated/
+
+# OS specific files
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# macOS
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+
+# Testing
+testdata/output/
+*.cover
+
+# Profiling
+*.prof
+*.pprof
+cpu.prof
+mem.prof
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
+# Benchmark results
+benchmarks/results/
+
+# Release artifacts
+release/
+*.tar.gz
+*.zip
