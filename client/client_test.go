@@ -52,13 +52,12 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-// Integration tests - require running Ethereum node
+// TestClientIntegration contains integration tests - require running Ethereum node
 // Skip by default, run with: go test -tags=integration
-
-//go:build integration
-// +build integration
-
 func TestClientIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	// Set up test client pointing to local or testnet node
 	endpoint := "http://localhost:8545" // Change to your test node
 	logger, _ := zap.NewDevelopment()
