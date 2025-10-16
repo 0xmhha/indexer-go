@@ -12,14 +12,15 @@ import (
 
 // Key prefixes for different data types
 const (
-	prefixMeta     = "/meta/"
-	prefixData     = "/data/"
-	prefixIndex    = "/index/"
-	prefixBlocks   = "/data/blocks/"
-	prefixTxs      = "/data/txs/"
-	prefixReceipts = "/data/receipts/"
-	prefixTxHash   = "/index/txh/"
-	prefixAddr     = "/index/addr/"
+	prefixMeta       = "/meta/"
+	prefixData       = "/data/"
+	prefixIndex      = "/index/"
+	prefixBlocks     = "/data/blocks/"
+	prefixTxs        = "/data/txs/"
+	prefixReceipts   = "/data/receipts/"
+	prefixTxHash     = "/index/txh/"
+	prefixAddr       = "/index/addr/"
+	prefixBlockHash  = "/index/blockh/"
 )
 
 // Metadata keys
@@ -54,6 +55,12 @@ func ReceiptKey(txHash common.Hash) []byte {
 // Format: /index/txh/{txhash}
 func TransactionHashIndexKey(txHash common.Hash) []byte {
 	return []byte(fmt.Sprintf("%s%s", prefixTxHash, txHash.Hex()))
+}
+
+// BlockHashIndexKey returns the key for block hash index
+// Format: /index/blockh/{blockhash}
+func BlockHashIndexKey(blockHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixBlockHash, blockHash.Hex()))
 }
 
 // AddressTransactionKey returns the key for address-transaction index
