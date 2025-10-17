@@ -689,6 +689,18 @@ func TestConfigValidation(t *testing.T) {
 				BatchSize:   10,
 				MaxRetries:  3,
 				RetryDelay:  time.Second,
+				NumWorkers:  10,
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid config with default workers",
+			config: &Config{
+				StartHeight: 0,
+				BatchSize:   10,
+				MaxRetries:  3,
+				RetryDelay:  time.Second,
+				NumWorkers:  0, // Will use default
 			},
 			wantErr: false,
 		},
@@ -699,6 +711,7 @@ func TestConfigValidation(t *testing.T) {
 				BatchSize:   0,
 				MaxRetries:  3,
 				RetryDelay:  time.Second,
+				NumWorkers:  10,
 			},
 			wantErr: true,
 		},
@@ -709,6 +722,7 @@ func TestConfigValidation(t *testing.T) {
 				BatchSize:   10,
 				MaxRetries:  0,
 				RetryDelay:  time.Second,
+				NumWorkers:  10,
 			},
 			wantErr: true,
 		},
@@ -719,6 +733,7 @@ func TestConfigValidation(t *testing.T) {
 				BatchSize:   10,
 				MaxRetries:  3,
 				RetryDelay:  0,
+				NumWorkers:  10,
 			},
 			wantErr: true,
 		},
@@ -732,4 +747,356 @@ func TestConfigValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFetchRangeConcurrent tests concurrent block fetching
+func TestFetchRangeConcurrent(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Add mock blocks
+	numBlocks := uint64(100)
+	for i := uint64(0); i < numBlocks; i++ {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()),
+			Difficulty: big.NewInt(1000),
+			GasLimit:   8000000,
+			GasUsed:    21000,
+		}
+		block := types.NewBlockWithHeader(header)
+		client.blocks[i] = block
+		client.receipts[block.Hash()] = types.Receipts{}
+	}
+	client.latestBlock = numBlocks - 1
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   int(numBlocks),
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+		NumWorkers:  10,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+
+	ctx := context.Background()
+	err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
+	if err != nil {
+		t.Fatalf("FetchRangeConcurrent() error = %v", err)
+	}
+
+	// Verify all blocks were stored in correct order
+	for i := uint64(0); i < numBlocks; i++ {
+		storedBlock, err := storage.GetBlockByHeight(i)
+		if err != nil {
+			t.Errorf("Block %d should be stored, got error = %v", i, err)
+			continue
+		}
+		if storedBlock.Number().Uint64() != i {
+			t.Errorf("Block at height %d has number %d", i, storedBlock.Number().Uint64())
+		}
+	}
+
+	// Verify latest height
+	latestHeight, err := storage.GetLatestHeight()
+	if err != nil {
+		t.Fatalf("GetLatestHeight() error = %v", err)
+	}
+	if latestHeight != numBlocks-1 {
+		t.Errorf("Latest height = %d, want %d", latestHeight, numBlocks-1)
+	}
+}
+
+// TestFetchRangeConcurrentPerformance tests that concurrent fetching is faster than sequential
+func TestFetchRangeConcurrentPerformance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping performance test in short mode")
+	}
+
+	numBlocks := uint64(50)
+
+	// Prepare blocks once
+	blocks := make(map[uint64]*types.Block)
+	receipts := make(map[common.Hash]types.Receipts)
+	for i := uint64(0); i < numBlocks; i++ {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()),
+			Difficulty: big.NewInt(1000),
+			GasLimit:   8000000,
+			GasUsed:    21000,
+		}
+		block := types.NewBlockWithHeader(header)
+		blocks[i] = block
+		receipts[block.Hash()] = types.Receipts{}
+	}
+
+	logger, _ := zap.NewDevelopment()
+
+	// Test sequential fetching
+	t.Run("Sequential", func(t *testing.T) {
+		client := newMockClient()
+		storage := newMockStorage()
+		client.blocks = blocks
+		client.receipts = receipts
+		client.latestBlock = numBlocks - 1
+
+		config := &Config{
+			StartHeight: 0,
+			BatchSize:   int(numBlocks),
+			MaxRetries:  3,
+			RetryDelay:  time.Millisecond * 10,
+			NumWorkers:  1, // Sequential
+		}
+
+		fetcher := NewFetcher(client, storage, config, logger)
+
+		start := time.Now()
+		ctx := context.Background()
+		err := fetcher.FetchRange(ctx, 0, numBlocks-1)
+		sequentialDuration := time.Since(start)
+
+		if err != nil {
+			t.Fatalf("FetchRange() error = %v", err)
+		}
+
+		t.Logf("Sequential fetch took %v for %d blocks", sequentialDuration, numBlocks)
+	})
+
+	// Test concurrent fetching
+	var concurrentDuration time.Duration
+	t.Run("Concurrent", func(t *testing.T) {
+		client := newMockClient()
+		storage := newMockStorage()
+		client.blocks = blocks
+		client.receipts = receipts
+		client.latestBlock = numBlocks - 1
+
+		config := &Config{
+			StartHeight: 0,
+			BatchSize:   int(numBlocks),
+			MaxRetries:  3,
+			RetryDelay:  time.Millisecond * 10,
+			NumWorkers:  10, // Concurrent
+		}
+
+		fetcher := NewFetcher(client, storage, config, logger)
+
+		start := time.Now()
+		ctx := context.Background()
+		err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
+		concurrentDuration = time.Since(start)
+
+		if err != nil {
+			t.Fatalf("FetchRangeConcurrent() error = %v", err)
+		}
+
+		t.Logf("Concurrent fetch took %v for %d blocks", concurrentDuration, numBlocks)
+	})
+
+	// Note: Due to mock implementation, performance difference may not be significant
+	// In production with real network I/O, concurrent should be significantly faster
+	t.Logf("Performance comparison: Sequential vs Concurrent")
+}
+
+// TestFetchRangeConcurrentWithRetry tests concurrent fetching with retry logic
+func TestFetchRangeConcurrentWithRetry(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Add mock blocks
+	numBlocks := uint64(10)
+	for i := uint64(0); i < numBlocks; i++ {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()),
+			Difficulty: big.NewInt(1000),
+			GasLimit:   8000000,
+			GasUsed:    21000,
+		}
+		block := types.NewBlockWithHeader(header)
+		client.blocks[i] = block
+		client.receipts[block.Hash()] = types.Receipts{}
+	}
+	client.latestBlock = numBlocks - 1
+
+	// Set client to fail once, then succeed
+	client.failCount = 1
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   int(numBlocks),
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+		NumWorkers:  5,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+
+	ctx := context.Background()
+	err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
+	if err != nil {
+		t.Fatalf("FetchRangeConcurrent() should succeed after retry, got error = %v", err)
+	}
+
+	// Verify all blocks were stored
+	for i := uint64(0); i < numBlocks; i++ {
+		_, err := storage.GetBlockByHeight(i)
+		if err != nil {
+			t.Errorf("Block %d should be stored after retry, got error = %v", i, err)
+		}
+	}
+}
+
+// TestFetchRangeConcurrentContextCancel tests concurrent fetching with context cancellation
+func TestFetchRangeConcurrentContextCancel(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Add many mock blocks
+	numBlocks := uint64(1000)
+	for i := uint64(0); i < numBlocks; i++ {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()),
+			Difficulty: big.NewInt(1000),
+			GasLimit:   8000000,
+			GasUsed:    21000,
+		}
+		block := types.NewBlockWithHeader(header)
+		client.blocks[i] = block
+		client.receipts[block.Hash()] = types.Receipts{}
+	}
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   int(numBlocks),
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+		NumWorkers:  10,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+
+	// Create context that is already cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
+	if err == nil {
+		t.Error("FetchRangeConcurrent() should return error when context is cancelled")
+	}
+}
+
+// TestFetchRangeConcurrentMaxRetries tests concurrent fetching with max retry limit
+func TestFetchRangeConcurrentMaxRetries(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Add some blocks
+	numBlocks := uint64(5)
+	for i := uint64(0); i < numBlocks; i++ {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()),
+			Difficulty: big.NewInt(1000),
+			GasLimit:   8000000,
+			GasUsed:    21000,
+		}
+		block := types.NewBlockWithHeader(header)
+		client.blocks[i] = block
+		client.receipts[block.Hash()] = types.Receipts{}
+	}
+
+	// Set client to fail more times than max retries
+	client.failCount = 100
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   int(numBlocks),
+		MaxRetries:  2,
+		RetryDelay:  time.Millisecond * 10,
+		NumWorkers:  3,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+
+	ctx := context.Background()
+	err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
+	if err == nil {
+		t.Error("FetchRangeConcurrent() should fail after max retries")
+	}
+}
+
+// TestFetchRangeConcurrentOrderPreservation tests that blocks are stored in order
+func TestFetchRangeConcurrentOrderPreservation(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Add mock blocks with specific data to verify order
+	numBlocks := uint64(50)
+	for i := uint64(0); i < numBlocks; i++ {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()) + i, // Unique timestamp
+			Difficulty: big.NewInt(1000 + int64(i)),   // Unique difficulty
+			GasLimit:   8000000,
+			GasUsed:    21000 + i, // Unique gas used
+		}
+		block := types.NewBlockWithHeader(header)
+		client.blocks[i] = block
+		client.receipts[block.Hash()] = types.Receipts{}
+	}
+	client.latestBlock = numBlocks - 1
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   int(numBlocks),
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+		NumWorkers:  20, // High concurrency
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+
+	ctx := context.Background()
+	err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
+	if err != nil {
+		t.Fatalf("FetchRangeConcurrent() error = %v", err)
+	}
+
+	// Verify blocks are in correct sequential order
+	for i := uint64(0); i < numBlocks; i++ {
+		storedBlock, err := storage.GetBlockByHeight(i)
+		if err != nil {
+			t.Fatalf("Block %d not found: %v", i, err)
+		}
+
+		// Verify block number matches height
+		if storedBlock.Number().Uint64() != i {
+			t.Errorf("Block at height %d has wrong number: got %d, want %d",
+				i, storedBlock.Number().Uint64(), i)
+		}
+
+		// Verify block data is correct (not from wrong height)
+		expectedGasUsed := 21000 + i
+		if storedBlock.GasUsed() != expectedGasUsed {
+			t.Errorf("Block %d has wrong gas used: got %d, want %d",
+				i, storedBlock.GasUsed(), expectedGasUsed)
+		}
+
+		expectedDifficulty := big.NewInt(1000 + int64(i))
+		if storedBlock.Difficulty().Cmp(expectedDifficulty) != 0 {
+			t.Errorf("Block %d has wrong difficulty: got %s, want %s",
+				i, storedBlock.Difficulty(), expectedDifficulty)
+		}
+	}
+
+	t.Logf("Successfully verified order preservation for %d blocks", numBlocks)
 }

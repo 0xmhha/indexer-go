@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,6 +42,10 @@ type Config struct {
 
 	// RetryDelay is the delay between retry attempts
 	RetryDelay time.Duration
+
+	// NumWorkers is the number of concurrent workers for parallel fetching
+	// If 0, defaults to 100
+	NumWorkers int
 }
 
 // Validate validates the fetcher configuration
@@ -54,6 +59,7 @@ func (c *Config) Validate() error {
 	if c.RetryDelay <= 0 {
 		return fmt.Errorf("retry delay must be positive")
 	}
+	// NumWorkers can be 0 (will use default)
 	return nil
 }
 
@@ -185,6 +191,217 @@ func (f *Fetcher) FetchRange(ctx context.Context, start, end uint64) error {
 	)
 
 	return nil
+}
+
+// jobResult holds the result of fetching a single block
+type jobResult struct {
+	height   uint64
+	block    *types.Block
+	receipts types.Receipts
+	err      error
+}
+
+// FetchRangeConcurrent fetches a range of blocks concurrently using a worker pool
+func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) error {
+	numWorkers := f.config.NumWorkers
+	if numWorkers == 0 {
+		numWorkers = 100 // Default worker pool size
+	}
+
+	f.logger.Info("Starting concurrent block range fetch",
+		zap.Uint64("start", start),
+		zap.Uint64("end", end),
+		zap.Uint64("total", end-start+1),
+		zap.Int("workers", numWorkers),
+	)
+
+	totalBlocks := end - start + 1
+
+	// Create channels for job distribution and result collection
+	jobs := make(chan uint64, numWorkers)
+	results := make(chan *jobResult, numWorkers)
+
+	// Start worker pool
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for height := range jobs {
+				// Check context cancellation
+				select {
+				case <-ctx.Done():
+					results <- &jobResult{height: height, err: ctx.Err()}
+					return
+				default:
+				}
+
+				// Fetch block and receipts with retry logic
+				result := f.fetchBlockJob(ctx, height)
+				results <- result
+			}
+		}(i)
+	}
+
+	// Send jobs to workers
+	go func() {
+		for height := start; height <= end; height++ {
+			select {
+			case <-ctx.Done():
+				close(jobs)
+				return
+			case jobs <- height:
+			}
+		}
+		close(jobs)
+	}()
+
+	// Wait for all workers to finish and close results channel
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results and store blocks in order
+	resultMap := make(map[uint64]*jobResult)
+	nextHeight := start
+	processedCount := uint64(0)
+
+	for result := range results {
+		// Handle errors
+		if result.err != nil {
+			return fmt.Errorf("failed to fetch block %d: %w", result.height, result.err)
+		}
+
+		// Store result in map
+		resultMap[result.height] = result
+
+		// Process results in sequential order
+		for {
+			if res, ok := resultMap[nextHeight]; ok {
+				// Store block
+				if err := f.storage.PutBlock(res.block); err != nil {
+					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)
+				}
+
+				// Store receipts
+				for _, receipt := range res.receipts {
+					if err := f.storage.PutReceipt(receipt); err != nil {
+						return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
+					}
+				}
+
+				f.logger.Debug("Stored block",
+					zap.Uint64("height", nextHeight),
+					zap.String("hash", res.block.Hash().Hex()),
+					zap.Int("txs", len(res.block.Transactions())),
+					zap.Int("receipts", len(res.receipts)),
+				)
+
+				// Clean up and move to next height
+				delete(resultMap, nextHeight)
+				processedCount++
+				nextHeight++
+
+				// Log progress periodically
+				if processedCount%100 == 0 || processedCount == totalBlocks {
+					progress := float64(processedCount) / float64(totalBlocks) * 100
+					f.logger.Info("Concurrent fetch progress",
+						zap.Uint64("processed", processedCount),
+						zap.Uint64("total", totalBlocks),
+						zap.Float64("progress", progress),
+					)
+				}
+
+				// Check if we're done
+				if nextHeight > end {
+					break
+				}
+			} else {
+				// Next result not ready yet, wait for more results
+				break
+			}
+		}
+	}
+
+	f.logger.Info("Completed concurrent block range fetch",
+		zap.Uint64("start", start),
+		zap.Uint64("end", end),
+		zap.Uint64("total", totalBlocks),
+		zap.Int("workers", numWorkers),
+	)
+
+	return nil
+}
+
+// fetchBlockJob fetches a single block and its receipts with retry logic
+func (f *Fetcher) fetchBlockJob(ctx context.Context, height uint64) *jobResult {
+	var block *types.Block
+	var receipts types.Receipts
+	var err error
+
+	// Retry logic for fetching block
+	for attempt := 0; attempt <= f.config.MaxRetries; attempt++ {
+		if attempt > 0 {
+			f.logger.Warn("Retrying block fetch",
+				zap.Uint64("height", height),
+				zap.Int("attempt", attempt),
+				zap.Int("max_retries", f.config.MaxRetries),
+			)
+			time.Sleep(f.config.RetryDelay)
+		}
+
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return &jobResult{height: height, err: ctx.Err()}
+		default:
+		}
+
+		// Fetch block
+		block, err = f.client.GetBlockByNumber(ctx, height)
+		if err != nil {
+			f.logger.Error("Failed to fetch block",
+				zap.Uint64("height", height),
+				zap.Int("attempt", attempt),
+				zap.Error(err),
+			)
+			if attempt == f.config.MaxRetries {
+				return &jobResult{
+					height: height,
+					err:    fmt.Errorf("failed to fetch block after %d attempts: %w", f.config.MaxRetries, err),
+				}
+			}
+			continue
+		}
+
+		// Fetch receipts
+		receipts, err = f.client.GetBlockReceipts(ctx, height)
+		if err != nil {
+			f.logger.Error("Failed to fetch receipts",
+				zap.Uint64("height", height),
+				zap.Int("attempt", attempt),
+				zap.Error(err),
+			)
+			if attempt == f.config.MaxRetries {
+				return &jobResult{
+					height: height,
+					err:    fmt.Errorf("failed to fetch receipts after %d attempts: %w", f.config.MaxRetries, err),
+				}
+			}
+			continue
+		}
+
+		// Success - break retry loop
+		break
+	}
+
+	return &jobResult{
+		height:   height,
+		block:    block,
+		receipts: receipts,
+		err:      nil,
+	}
 }
 
 // GetNextHeight determines the next block height to fetch
