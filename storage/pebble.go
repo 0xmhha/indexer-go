@@ -330,9 +330,15 @@ func (s *PebbleStorage) GetTransactionsByAddress(ctx context.Context, addr commo
 	}
 
 	prefix := AddressTransactionKeyPrefix(addr)
+	// Create upper bound by copying prefix and appending 0xff
+	// Must copy to avoid modifying the prefix slice
+	upperBound := make([]byte, len(prefix), len(prefix)+1)
+	copy(upperBound, prefix)
+	upperBound = append(upperBound, 0xff)
+
 	iter, err := s.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
+		UpperBound: upperBound,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)

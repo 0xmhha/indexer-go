@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"os"
 	"testing"
@@ -320,6 +321,280 @@ func TestPebbleStorage_Transaction(t *testing.T) {
 	}
 	if loc.TxIndex != location.TxIndex {
 		t.Errorf("TxIndex = %d, want %d", loc.TxIndex, location.TxIndex)
+	}
+}
+
+// TestPebbleStorage_GetTransaction_NotFound tests transaction not found error
+func TestPebbleStorage_GetTransaction_NotFound(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	_, _, err := storage.GetTransaction(ctx, common.HexToHash("0xnonexistent"))
+	if err != ErrNotFound {
+		t.Errorf("GetTransaction() error = %v, want ErrNotFound", err)
+	}
+}
+
+// TestPebbleStorage_Transaction_DynamicFee tests EIP-1559 dynamic fee transactions
+func TestPebbleStorage_Transaction_DynamicFee(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create EIP-1559 transaction (type 0x02)
+	tx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   big.NewInt(1),
+		Nonce:     1,
+		GasTipCap: big.NewInt(2000000000),
+		GasFeeCap: big.NewInt(3000000000),
+		Gas:       21000,
+		To:        &common.Address{0x01},
+		Value:     big.NewInt(1000000000),
+		Data:      []byte{},
+	})
+
+	location := &TxLocation{
+		BlockHeight: 200,
+		TxIndex:     0,
+		BlockHash:   common.HexToHash("0xblock200"),
+	}
+
+	// Store transaction
+	err := storage.SetTransaction(ctx, tx, location)
+	if err != nil {
+		t.Fatalf("SetTransaction() error = %v", err)
+	}
+
+	// Retrieve and verify
+	retrieved, loc, err := storage.GetTransaction(ctx, tx.Hash())
+	if err != nil {
+		t.Fatalf("GetTransaction() error = %v", err)
+	}
+
+	if retrieved.Hash() != tx.Hash() {
+		t.Errorf("Transaction hash mismatch")
+	}
+	if retrieved.Type() != types.DynamicFeeTxType {
+		t.Errorf("Transaction type = %d, want %d", retrieved.Type(), types.DynamicFeeTxType)
+	}
+	if loc.BlockHeight != 200 {
+		t.Errorf("BlockHeight = %d, want 200", loc.BlockHeight)
+	}
+}
+
+// TestPebbleStorage_Transaction_AccessList tests EIP-2930 access list transactions
+func TestPebbleStorage_Transaction_AccessList(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create EIP-2930 transaction (type 0x01)
+	accessList := types.AccessList{
+		{
+			Address: common.HexToAddress("0x1234"),
+			StorageKeys: []common.Hash{
+				common.HexToHash("0xabcd"),
+			},
+		},
+	}
+
+	tx := types.NewTx(&types.AccessListTx{
+		ChainID:    big.NewInt(1),
+		Nonce:      2,
+		GasPrice:   big.NewInt(1000000000),
+		Gas:        25000,
+		To:         &common.Address{0x02},
+		Value:      big.NewInt(2000000000),
+		Data:       []byte{},
+		AccessList: accessList,
+	})
+
+	location := &TxLocation{
+		BlockHeight: 300,
+		TxIndex:     1,
+		BlockHash:   common.HexToHash("0xblock300"),
+	}
+
+	// Store transaction
+	err := storage.SetTransaction(ctx, tx, location)
+	if err != nil {
+		t.Fatalf("SetTransaction() error = %v", err)
+	}
+
+	// Retrieve and verify
+	retrieved, _, err := storage.GetTransaction(ctx, tx.Hash())
+	if err != nil {
+		t.Fatalf("GetTransaction() error = %v", err)
+	}
+
+	if retrieved.Hash() != tx.Hash() {
+		t.Errorf("Transaction hash mismatch")
+	}
+	if retrieved.Type() != types.AccessListTxType {
+		t.Errorf("Transaction type = %d, want %d", retrieved.Type(), types.AccessListTxType)
+	}
+}
+
+// TestPebbleStorage_Transaction_WithData tests transactions with data payload
+func TestPebbleStorage_Transaction_WithData(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create transaction with data (contract call or deployment)
+	data := []byte{0x60, 0x60, 0x60, 0x40} // Sample contract bytecode
+	tx := types.NewTransaction(
+		3,
+		common.HexToAddress("0xcontract"),
+		big.NewInt(0),
+		100000,
+		big.NewInt(1000000000),
+		data,
+	)
+
+	location := &TxLocation{
+		BlockHeight: 400,
+		TxIndex:     2,
+		BlockHash:   common.HexToHash("0xblock400"),
+	}
+
+	// Store transaction
+	err := storage.SetTransaction(ctx, tx, location)
+	if err != nil {
+		t.Fatalf("SetTransaction() error = %v", err)
+	}
+
+	// Retrieve and verify
+	retrieved, _, err := storage.GetTransaction(ctx, tx.Hash())
+	if err != nil {
+		t.Fatalf("GetTransaction() error = %v", err)
+	}
+
+	if retrieved.Hash() != tx.Hash() {
+		t.Errorf("Transaction hash mismatch")
+	}
+
+	retrievedData := retrieved.Data()
+	if len(retrievedData) != len(data) {
+		t.Errorf("Data length = %d, want %d", len(retrievedData), len(data))
+	}
+}
+
+// TestPebbleStorage_AddressIndex_Pagination tests address index with pagination
+func TestPebbleStorage_AddressIndex_Pagination(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	addr := common.HexToAddress("0xuser1")
+
+	// Add 10 transactions
+	txHashes := make([]common.Hash, 10)
+	for i := 0; i < 10; i++ {
+		txHashes[i] = common.HexToHash(fmt.Sprintf("0x%02d", i))
+		err := storage.AddTransactionToAddressIndex(ctx, addr, txHashes[i])
+		if err != nil {
+			t.Fatalf("AddTransactionToAddressIndex() error = %v", err)
+		}
+	}
+
+	// Test pagination - first page (limit 5, offset 0)
+	page1, err := storage.GetTransactionsByAddress(ctx, addr, 5, 0)
+	if err != nil {
+		t.Fatalf("GetTransactionsByAddress() error = %v", err)
+	}
+	if len(page1) != 5 {
+		t.Errorf("Page 1 length = %d, want 5", len(page1))
+	}
+
+	// Test pagination - second page (limit 5, offset 5)
+	page2, err := storage.GetTransactionsByAddress(ctx, addr, 5, 5)
+	if err != nil {
+		t.Fatalf("GetTransactionsByAddress() error = %v", err)
+	}
+	if len(page2) != 5 {
+		t.Errorf("Page 2 length = %d, want 5", len(page2))
+	}
+
+	// Verify no overlap
+	for _, h1 := range page1 {
+		for _, h2 := range page2 {
+			if h1 == h2 {
+				t.Error("Pages should not overlap")
+			}
+		}
+	}
+}
+
+// TestPebbleStorage_AddressIndex_MultipleAddresses tests multiple addresses
+func TestPebbleStorage_AddressIndex_MultipleAddresses(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	addr1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	addr2 := common.HexToAddress("0x2222222222222222222222222222222222222222")
+
+	tx1 := common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+	tx2 := common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+	tx3 := common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333")
+
+	// Add transactions to addr1
+	err := storage.AddTransactionToAddressIndex(ctx, addr1, tx1)
+	if err != nil {
+		t.Fatalf("AddTransactionToAddressIndex(addr1, tx1) error = %v", err)
+	}
+	err = storage.AddTransactionToAddressIndex(ctx, addr1, tx2)
+	if err != nil {
+		t.Fatalf("AddTransactionToAddressIndex(addr1, tx2) error = %v", err)
+	}
+
+	// Add transaction to addr2
+	err = storage.AddTransactionToAddressIndex(ctx, addr2, tx3)
+	if err != nil {
+		t.Fatalf("AddTransactionToAddressIndex(addr2, tx3) error = %v", err)
+	}
+
+	// Query addr1 - should have 2 transactions
+	txs1, err := storage.GetTransactionsByAddress(ctx, addr1, 10, 0)
+	if err != nil {
+		t.Fatalf("GetTransactionsByAddress(addr1) error = %v", err)
+	}
+	if len(txs1) != 2 {
+		t.Errorf("addr1 has %d txs, want 2", len(txs1))
+	}
+
+	// Query addr2 - should have 1 transaction
+	txs2, err := storage.GetTransactionsByAddress(ctx, addr2, 10, 0)
+	if err != nil {
+		t.Fatalf("GetTransactionsByAddress(addr2) error = %v", err)
+	}
+	if len(txs2) != 1 {
+		t.Errorf("addr2 has %d txs, want 1", len(txs2))
+	}
+}
+
+// TestPebbleStorage_AddressIndex_EmptyAddress tests querying empty address
+func TestPebbleStorage_AddressIndex_EmptyAddress(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	addr := common.HexToAddress("0xempty")
+
+	// Query empty address - should return empty list
+	txs, err := storage.GetTransactionsByAddress(ctx, addr, 10, 0)
+	if err != nil {
+		t.Fatalf("GetTransactionsByAddress() error = %v", err)
+	}
+	if len(txs) != 0 {
+		t.Errorf("Empty address should have 0 txs, got %d", len(txs))
 	}
 }
 
