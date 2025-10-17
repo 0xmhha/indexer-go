@@ -291,7 +291,7 @@ All tests passing
 
 #### 6. Basic Fetcher (P0) ✅
 **Status**: COMPLETED
-**Commit**: Current session
+**Commit**: e1525ec - feat(fetch): implement basic sequential block fetcher
 **Duration**: ~3 hours
 
 **구현 내용**:
