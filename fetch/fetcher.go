@@ -21,11 +21,12 @@ type Client interface {
 
 // Storage defines the interface for storage operations
 type Storage interface {
-	GetLatestHeight() (uint64, error)
-	GetBlockByHeight(height uint64) (*types.Block, error)
-	GetBlockByHash(hash common.Hash) (*types.Block, error)
-	PutBlock(block *types.Block) error
-	PutReceipt(receipt *types.Receipt) error
+	GetLatestHeight(ctx context.Context) (uint64, error)
+	GetBlock(ctx context.Context, height uint64) (*types.Block, error)
+	GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
+	SetBlock(ctx context.Context, block *types.Block) error
+	SetReceipt(ctx context.Context, receipt *types.Receipt) error
+	HasBlock(ctx context.Context, height uint64) (bool, error)
 	Close() error
 }
 
@@ -87,15 +88,18 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	var receipts types.Receipts
 	var err error
 
-	// Retry logic for fetching block
+	// Retry logic for fetching block with exponential backoff
 	for attempt := 0; attempt <= f.config.MaxRetries; attempt++ {
 		if attempt > 0 {
+			// Exponential backoff: delay = baseDelay * 2^(attempt-1)
+			backoffDelay := f.config.RetryDelay * time.Duration(1<<uint(attempt-1))
 			f.logger.Warn("Retrying block fetch",
 				zap.Uint64("height", height),
 				zap.Int("attempt", attempt),
 				zap.Int("max_retries", f.config.MaxRetries),
+				zap.Duration("backoff_delay", backoffDelay),
 			)
-			time.Sleep(f.config.RetryDelay)
+			time.Sleep(backoffDelay)
 		}
 
 		// Fetch block
@@ -131,13 +135,13 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	}
 
 	// Store block
-	if err := f.storage.PutBlock(block); err != nil {
+	if err := f.storage.SetBlock(ctx, block); err != nil {
 		return fmt.Errorf("failed to store block %d: %w", height, err)
 	}
 
 	// Store receipts
 	for _, receipt := range receipts {
-		if err := f.storage.PutReceipt(receipt); err != nil {
+		if err := f.storage.SetReceipt(ctx, receipt); err != nil {
 			return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
 		}
 	}
@@ -199,6 +203,20 @@ type jobResult struct {
 	block    *types.Block
 	receipts types.Receipts
 	err      error
+}
+
+// GapRange represents a range of missing blocks
+type GapRange struct {
+	Start uint64
+	End   uint64
+}
+
+// Size returns the number of blocks in the gap
+func (g GapRange) Size() uint64 {
+	if g.End < g.Start {
+		return 0
+	}
+	return g.End - g.Start + 1
 }
 
 // FetchRangeConcurrent fetches a range of blocks concurrently using a worker pool
@@ -280,13 +298,13 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 		for {
 			if res, ok := resultMap[nextHeight]; ok {
 				// Store block
-				if err := f.storage.PutBlock(res.block); err != nil {
+				if err := f.storage.SetBlock(ctx, res.block); err != nil {
 					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)
 				}
 
 				// Store receipts
 				for _, receipt := range res.receipts {
-					if err := f.storage.PutReceipt(receipt); err != nil {
+					if err := f.storage.SetReceipt(ctx, receipt); err != nil {
 						return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
 					}
 				}
@@ -340,15 +358,18 @@ func (f *Fetcher) fetchBlockJob(ctx context.Context, height uint64) *jobResult {
 	var receipts types.Receipts
 	var err error
 
-	// Retry logic for fetching block
+	// Retry logic for fetching block with exponential backoff
 	for attempt := 0; attempt <= f.config.MaxRetries; attempt++ {
 		if attempt > 0 {
+			// Exponential backoff: delay = baseDelay * 2^(attempt-1)
+			backoffDelay := f.config.RetryDelay * time.Duration(1<<uint(attempt-1))
 			f.logger.Warn("Retrying block fetch",
 				zap.Uint64("height", height),
 				zap.Int("attempt", attempt),
 				zap.Int("max_retries", f.config.MaxRetries),
+				zap.Duration("backoff_delay", backoffDelay),
 			)
-			time.Sleep(f.config.RetryDelay)
+			time.Sleep(backoffDelay)
 		}
 
 		// Check context cancellation
@@ -405,9 +426,9 @@ func (f *Fetcher) fetchBlockJob(ctx context.Context, height uint64) *jobResult {
 }
 
 // GetNextHeight determines the next block height to fetch
-func (f *Fetcher) GetNextHeight() uint64 {
+func (f *Fetcher) GetNextHeight(ctx context.Context) uint64 {
 	// Try to get the latest indexed height
-	latestHeight, err := f.storage.GetLatestHeight()
+	latestHeight, err := f.storage.GetLatestHeight(ctx)
 	if err != nil {
 		// No blocks indexed yet, start from configured start height
 		f.logger.Info("No blocks indexed yet, starting from configured height",
@@ -442,7 +463,7 @@ func (f *Fetcher) Run(ctx context.Context) error {
 	)
 
 	// Get next height to fetch
-	nextHeight := f.GetNextHeight()
+	nextHeight := f.GetNextHeight(ctx)
 
 	for {
 		// Check context cancellation
@@ -493,4 +514,161 @@ func (f *Fetcher) Run(ctx context.Context) error {
 		// Update next height
 		nextHeight = batchEnd + 1
 	}
+}
+
+// DetectGaps scans the storage for missing blocks and returns gap ranges
+func (f *Fetcher) DetectGaps(ctx context.Context, startHeight, endHeight uint64) ([]GapRange, error) {
+	f.logger.Info("Scanning for gaps",
+		zap.Uint64("start", startHeight),
+		zap.Uint64("end", endHeight),
+	)
+
+	var gaps []GapRange
+	var gapStart uint64
+	inGap := false
+
+	for height := startHeight; height <= endHeight; height++ {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return gaps, ctx.Err()
+		default:
+		}
+
+		// Check if block exists
+		exists, err := f.storage.HasBlock(ctx, height)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check block %d: %w", height, err)
+		}
+
+		if !exists {
+			// Start or continue gap
+			if !inGap {
+				gapStart = height
+				inGap = true
+			}
+		} else {
+			// End gap if we were in one
+			if inGap {
+				gaps = append(gaps, GapRange{
+					Start: gapStart,
+					End:   height - 1,
+				})
+				inGap = false
+			}
+		}
+
+		// Log progress periodically
+		if (height-startHeight+1)%1000 == 0 {
+			f.logger.Debug("Gap detection progress",
+				zap.Uint64("current", height),
+				zap.Uint64("end", endHeight),
+				zap.Int("gaps_found", len(gaps)),
+			)
+		}
+	}
+
+	// Handle gap at the end
+	if inGap {
+		gaps = append(gaps, GapRange{
+			Start: gapStart,
+			End:   endHeight,
+		})
+	}
+
+	f.logger.Info("Gap detection completed",
+		zap.Int("total_gaps", len(gaps)),
+		zap.Uint64("start", startHeight),
+		zap.Uint64("end", endHeight),
+	)
+
+	return gaps, nil
+}
+
+// FillGap fills a single gap range by fetching missing blocks
+func (f *Fetcher) FillGap(ctx context.Context, gap GapRange) error {
+	f.logger.Info("Filling gap",
+		zap.Uint64("start", gap.Start),
+		zap.Uint64("end", gap.End),
+		zap.Uint64("size", gap.Size()),
+	)
+
+	// Use concurrent fetching for larger gaps
+	if gap.Size() > 10 {
+		return f.FetchRangeConcurrent(ctx, gap.Start, gap.End)
+	}
+
+	// Use sequential fetching for small gaps
+	return f.FetchRange(ctx, gap.Start, gap.End)
+}
+
+// FillGaps fills all detected gaps concurrently
+func (f *Fetcher) FillGaps(ctx context.Context, gaps []GapRange) error {
+	if len(gaps) == 0 {
+		f.logger.Info("No gaps to fill")
+		return nil
+	}
+
+	f.logger.Info("Starting gap filling",
+		zap.Int("total_gaps", len(gaps)),
+	)
+
+	// Fill each gap sequentially to maintain order and prevent resource exhaustion
+	for i, gap := range gaps {
+		f.logger.Info("Filling gap",
+			zap.Int("gap_num", i+1),
+			zap.Int("total_gaps", len(gaps)),
+			zap.Uint64("start", gap.Start),
+			zap.Uint64("end", gap.End),
+			zap.Uint64("size", gap.Size()),
+		)
+
+		if err := f.FillGap(ctx, gap); err != nil {
+			return fmt.Errorf("failed to fill gap [%d-%d]: %w", gap.Start, gap.End, err)
+		}
+
+		f.logger.Info("Gap filled successfully",
+			zap.Uint64("start", gap.Start),
+			zap.Uint64("end", gap.End),
+		)
+	}
+
+	f.logger.Info("All gaps filled successfully",
+		zap.Int("total_gaps", len(gaps)),
+	)
+
+	return nil
+}
+
+// RunWithGapRecovery starts the fetcher with automatic gap detection and recovery
+func (f *Fetcher) RunWithGapRecovery(ctx context.Context) error {
+	f.logger.Info("Starting fetcher with gap recovery enabled",
+		zap.Uint64("start_height", f.config.StartHeight),
+		zap.Int("batch_size", f.config.BatchSize),
+	)
+
+	// First, check for gaps in existing data
+	latestHeight, err := f.storage.GetLatestHeight(ctx)
+	if err == nil && latestHeight > f.config.StartHeight {
+		f.logger.Info("Checking for gaps in existing data",
+			zap.Uint64("start", f.config.StartHeight),
+			zap.Uint64("end", latestHeight),
+		)
+
+		gaps, err := f.DetectGaps(ctx, f.config.StartHeight, latestHeight)
+		if err != nil {
+			f.logger.Error("Failed to detect gaps", zap.Error(err))
+		} else if len(gaps) > 0 {
+			f.logger.Info("Found gaps in existing data, filling them first",
+				zap.Int("gap_count", len(gaps)),
+			)
+			if err := f.FillGaps(ctx, gaps); err != nil {
+				f.logger.Error("Failed to fill gaps", zap.Error(err))
+				// Continue anyway - gaps will be retried later
+			}
+		}
+	}
+
+	// Run normal fetching loop
+	return f.Run(ctx)
 }

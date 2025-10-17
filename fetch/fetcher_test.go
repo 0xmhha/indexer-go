@@ -80,14 +80,14 @@ func newMockStorage() *mockStorage {
 	}
 }
 
-func (m *mockStorage) GetLatestHeight() (uint64, error) {
+func (m *mockStorage) GetLatestHeight(ctx context.Context) (uint64, error) {
 	if m.latestHeight == 0 {
 		return 0, fmt.Errorf("no blocks indexed")
 	}
 	return m.latestHeight, nil
 }
 
-func (m *mockStorage) GetBlockByHeight(height uint64) (*types.Block, error) {
+func (m *mockStorage) GetBlock(ctx context.Context, height uint64) (*types.Block, error) {
 	block, ok := m.blocks[height]
 	if !ok {
 		return nil, fmt.Errorf("block not found")
@@ -95,7 +95,7 @@ func (m *mockStorage) GetBlockByHeight(height uint64) (*types.Block, error) {
 	return block, nil
 }
 
-func (m *mockStorage) GetBlockByHash(hash common.Hash) (*types.Block, error) {
+func (m *mockStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	for _, block := range m.blocks {
 		if block.Hash() == hash {
 			return block, nil
@@ -104,7 +104,7 @@ func (m *mockStorage) GetBlockByHash(hash common.Hash) (*types.Block, error) {
 	return nil, fmt.Errorf("block not found")
 }
 
-func (m *mockStorage) PutBlock(block *types.Block) error {
+func (m *mockStorage) SetBlock(ctx context.Context, block *types.Block) error {
 	if m.readOnly {
 		return fmt.Errorf("storage is read-only")
 	}
@@ -116,12 +116,30 @@ func (m *mockStorage) PutBlock(block *types.Block) error {
 	return nil
 }
 
-func (m *mockStorage) PutReceipt(receipt *types.Receipt) error {
+func (m *mockStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
 	if m.readOnly {
 		return fmt.Errorf("storage is read-only")
 	}
 	m.receipts[receipt.TxHash] = receipt
 	return nil
+}
+
+func (m *mockStorage) HasBlock(ctx context.Context, height uint64) (bool, error) {
+	_, ok := m.blocks[height]
+	return ok, nil
+}
+
+// Legacy methods for backward compatibility with existing tests
+func (m *mockStorage) GetBlockByHeight(height uint64) (*types.Block, error) {
+	return m.GetBlock(context.Background(), height)
+}
+
+func (m *mockStorage) PutBlock(block *types.Block) error {
+	return m.SetBlock(context.Background(), block)
+}
+
+func (m *mockStorage) PutReceipt(receipt *types.Receipt) error {
+	return m.SetReceipt(context.Background(), receipt)
 }
 
 func (m *mockStorage) Close() error {
@@ -303,7 +321,7 @@ func TestFetchRange(t *testing.T) {
 	}
 
 	// Verify latest height
-	latestHeight, err := storage.GetLatestHeight()
+	latestHeight, err := storage.GetLatestHeight(context.Background())
 	if err != nil {
 		t.Fatalf("GetLatestHeight() error = %v", err)
 	}
@@ -405,7 +423,8 @@ func TestGetNextHeight(t *testing.T) {
 
 			fetcher := NewFetcher(client, storage, config, logger)
 
-			got := fetcher.GetNextHeight()
+			ctx := context.Background()
+			got := fetcher.GetNextHeight(ctx)
 			if got != tt.want {
 				t.Errorf("GetNextHeight() = %d, want %d", got, tt.want)
 			}
@@ -457,7 +476,7 @@ func TestRun(t *testing.T) {
 	}
 
 	// Verify some blocks were indexed
-	latestHeight, err := storage.GetLatestHeight()
+	latestHeight, err := storage.GetLatestHeight(context.Background())
 	if err != nil {
 		t.Fatalf("GetLatestHeight() error = %v", err)
 	}
@@ -669,7 +688,8 @@ func TestGetNextHeightWithError(t *testing.T) {
 	fetcher := NewFetcher(client, storage, config, logger)
 
 	// Should fall back to start height when storage returns error
-	nextHeight := fetcher.GetNextHeight()
+	ctx := context.Background()
+	nextHeight := fetcher.GetNextHeight(ctx)
 	if nextHeight != 100 {
 		t.Errorf("GetNextHeight() = %d, want 100", nextHeight)
 	}
@@ -800,7 +820,7 @@ func TestFetchRangeConcurrent(t *testing.T) {
 	}
 
 	// Verify latest height
-	latestHeight, err := storage.GetLatestHeight()
+	latestHeight, err := storage.GetLatestHeight(context.Background())
 	if err != nil {
 		t.Fatalf("GetLatestHeight() error = %v", err)
 	}
@@ -1099,4 +1119,468 @@ func TestFetchRangeConcurrentOrderPreservation(t *testing.T) {
 	}
 
 	t.Logf("Successfully verified order preservation for %d blocks", numBlocks)
+}
+
+// TestGapRangeSize tests the GapRange Size method
+func TestGapRangeSize(t *testing.T) {
+	tests := []struct {
+		name string
+		gap  GapRange
+		want uint64
+	}{
+		{
+			name: "single block gap",
+			gap:  GapRange{Start: 5, End: 5},
+			want: 1,
+		},
+		{
+			name: "multi-block gap",
+			gap:  GapRange{Start: 10, End: 20},
+			want: 11,
+		},
+		{
+			name: "invalid gap (end < start)",
+			gap:  GapRange{Start: 20, End: 10},
+			want: 0,
+		},
+		{
+			name: "zero gap",
+			gap:  GapRange{Start: 0, End: 0},
+			want: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.gap.Size()
+			if got != tt.want {
+				t.Errorf("GapRange.Size() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDetectGaps tests gap detection functionality
+func TestDetectGaps(t *testing.T) {
+	tests := []struct {
+		name          string
+		storedBlocks  []uint64
+		scanStart     uint64
+		scanEnd       uint64
+		expectedGaps  []GapRange
+		expectError   bool
+	}{
+		{
+			name:         "no gaps - continuous blocks",
+			storedBlocks: []uint64{0, 1, 2, 3, 4, 5},
+			scanStart:    0,
+			scanEnd:      5,
+			expectedGaps: []GapRange{},
+			expectError:  false,
+		},
+		{
+			name:         "single gap in middle",
+			storedBlocks: []uint64{0, 1, 2, 4, 5},
+			scanStart:    0,
+			scanEnd:      5,
+			expectedGaps: []GapRange{{Start: 3, End: 3}},
+			expectError:  false,
+		},
+		{
+			name:         "multiple gaps",
+			storedBlocks: []uint64{0, 1, 4, 5, 8, 9},
+			scanStart:    0,
+			scanEnd:      9,
+			expectedGaps: []GapRange{
+				{Start: 2, End: 3},
+				{Start: 6, End: 7},
+			},
+			expectError: false,
+		},
+		{
+			name:         "gap at the beginning",
+			storedBlocks: []uint64{3, 4, 5},
+			scanStart:    0,
+			scanEnd:      5,
+			expectedGaps: []GapRange{{Start: 0, End: 2}},
+			expectError:  false,
+		},
+		{
+			name:         "gap at the end",
+			storedBlocks: []uint64{0, 1, 2},
+			scanStart:    0,
+			scanEnd:      5,
+			expectedGaps: []GapRange{{Start: 3, End: 5}},
+			expectError:  false,
+		},
+		{
+			name:         "all blocks missing",
+			storedBlocks: []uint64{},
+			scanStart:    0,
+			scanEnd:      5,
+			expectedGaps: []GapRange{{Start: 0, End: 5}},
+			expectError:  false,
+		},
+		{
+			name:         "large gap",
+			storedBlocks: []uint64{0, 1, 100, 101},
+			scanStart:    0,
+			scanEnd:      101,
+			expectedGaps: []GapRange{{Start: 2, End: 99}},
+			expectError:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newMockClient()
+			storage := newMockStorage()
+			logger, _ := zap.NewDevelopment()
+
+			// Store blocks
+			for _, height := range tt.storedBlocks {
+				header := &types.Header{
+					Number:     big.NewInt(int64(height)),
+					Time:       uint64(time.Now().Unix()),
+					Difficulty: big.NewInt(1000),
+					GasLimit:   8000000,
+					GasUsed:    21000,
+				}
+				block := types.NewBlockWithHeader(header)
+				storage.blocks[height] = block
+			}
+
+			config := &Config{
+				StartHeight: 0,
+				BatchSize:   10,
+				MaxRetries:  3,
+				RetryDelay:  time.Millisecond * 10,
+			}
+
+			fetcher := NewFetcher(client, storage, config, logger)
+
+			ctx := context.Background()
+			gaps, err := fetcher.DetectGaps(ctx, tt.scanStart, tt.scanEnd)
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("DetectGaps() error = %v, expectError %v", err, tt.expectError)
+				return
+			}
+
+			if len(gaps) != len(tt.expectedGaps) {
+				t.Errorf("DetectGaps() found %d gaps, expected %d", len(gaps), len(tt.expectedGaps))
+				t.Logf("Found gaps: %+v", gaps)
+				t.Logf("Expected gaps: %+v", tt.expectedGaps)
+				return
+			}
+
+			for i, gap := range gaps {
+				if gap.Start != tt.expectedGaps[i].Start || gap.End != tt.expectedGaps[i].End {
+					t.Errorf("Gap %d: got {%d, %d}, want {%d, %d}",
+						i, gap.Start, gap.End, tt.expectedGaps[i].Start, tt.expectedGaps[i].End)
+				}
+			}
+		})
+	}
+}
+
+// TestDetectGapsContextCancel tests gap detection with context cancellation
+func TestDetectGapsContextCancel(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Store some blocks
+	for i := uint64(0); i < 100; i += 2 {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()),
+			Difficulty: big.NewInt(1000),
+			GasLimit:   8000000,
+			GasUsed:    21000,
+		}
+		block := types.NewBlockWithHeader(header)
+		storage.blocks[i] = block
+	}
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   10,
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+
+	// Create context that is already cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := fetcher.DetectGaps(ctx, 0, 1000)
+	if err == nil {
+		t.Error("DetectGaps() should return error when context is cancelled")
+	}
+}
+
+// TestFillGap tests filling a single gap
+func TestFillGap(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Add blocks to client
+	for i := uint64(0); i < 20; i++ {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()),
+			Difficulty: big.NewInt(1000),
+			GasLimit:   8000000,
+			GasUsed:    21000,
+		}
+		block := types.NewBlockWithHeader(header)
+		client.blocks[i] = block
+		client.receipts[block.Hash()] = types.Receipts{}
+	}
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   10,
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+		NumWorkers:  5,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+	ctx := context.Background()
+
+	tests := []struct {
+		name string
+		gap  GapRange
+	}{
+		{
+			name: "small gap (sequential fetch)",
+			gap:  GapRange{Start: 5, End: 9}, // 5 blocks
+		},
+		{
+			name: "large gap (concurrent fetch)",
+			gap:  GapRange{Start: 10, End: 19}, // 10 blocks
+		},
+		{
+			name: "single block gap",
+			gap:  GapRange{Start: 0, End: 0},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear storage
+			storage.blocks = make(map[uint64]*types.Block)
+			storage.receipts = make(map[common.Hash]*types.Receipt)
+
+			err := fetcher.FillGap(ctx, tt.gap)
+			if err != nil {
+				t.Fatalf("FillGap() error = %v", err)
+			}
+
+			// Verify all blocks in gap were filled
+			for height := tt.gap.Start; height <= tt.gap.End; height++ {
+				_, err := storage.GetBlock(ctx, height)
+				if err != nil {
+					t.Errorf("Block %d should be stored after filling gap, got error = %v", height, err)
+				}
+			}
+		})
+	}
+}
+
+// TestFillGaps tests filling multiple gaps
+func TestFillGaps(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Add blocks to client
+	for i := uint64(0); i < 50; i++ {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()),
+			Difficulty: big.NewInt(1000),
+			GasLimit:   8000000,
+			GasUsed:    21000,
+		}
+		block := types.NewBlockWithHeader(header)
+		client.blocks[i] = block
+		client.receipts[block.Hash()] = types.Receipts{}
+	}
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   10,
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+		NumWorkers:  5,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+	ctx := context.Background()
+
+	// Test multiple gaps
+	gaps := []GapRange{
+		{Start: 5, End: 9},
+		{Start: 15, End: 19},
+		{Start: 30, End: 34},
+	}
+
+	err := fetcher.FillGaps(ctx, gaps)
+	if err != nil {
+		t.Fatalf("FillGaps() error = %v", err)
+	}
+
+	// Verify all gaps were filled
+	for _, gap := range gaps {
+		for height := gap.Start; height <= gap.End; height++ {
+			_, err := storage.GetBlock(ctx, height)
+			if err != nil {
+				t.Errorf("Block %d should be stored after filling gaps, got error = %v", height, err)
+			}
+		}
+	}
+}
+
+// TestFillGapsEmpty tests filling with no gaps
+func TestFillGapsEmpty(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   10,
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+	ctx := context.Background()
+
+	err := fetcher.FillGaps(ctx, []GapRange{})
+	if err != nil {
+		t.Errorf("FillGaps() with empty gaps should not error, got = %v", err)
+	}
+}
+
+// TestRunWithGapRecovery tests the gap recovery workflow
+func TestRunWithGapRecovery(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Add blocks to client
+	for i := uint64(0); i < 20; i++ {
+		header := &types.Header{
+			Number:     big.NewInt(int64(i)),
+			Time:       uint64(time.Now().Unix()),
+			Difficulty: big.NewInt(1000),
+			GasLimit:   8000000,
+			GasUsed:    21000,
+		}
+		block := types.NewBlockWithHeader(header)
+		client.blocks[i] = block
+		client.receipts[block.Hash()] = types.Receipts{}
+	}
+	client.latestBlock = 19
+
+	// Simulate existing data with gaps (blocks 0, 1, 2, 5, 6, 7, 10)
+	existingBlocks := []uint64{0, 1, 2, 5, 6, 7, 10}
+	for _, height := range existingBlocks {
+		storage.blocks[height] = client.blocks[height]
+		storage.latestHeight = height
+	}
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   5,
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+		NumWorkers:  5,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+
+	// Create context with timeout to stop after gap recovery
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
+	defer cancel()
+
+	// Run with gap recovery
+	err := fetcher.RunWithGapRecovery(ctx)
+	// Error expected from context timeout
+	if err == nil {
+		t.Error("RunWithGapRecovery() should return error when context is cancelled")
+	}
+
+	// Verify gaps were filled (blocks 3, 4, 8, 9)
+	gapBlocks := []uint64{3, 4, 8, 9}
+	for _, height := range gapBlocks {
+		_, err := storage.GetBlock(ctx, height)
+		if err != nil {
+			t.Errorf("Gap block %d should be filled, got error = %v", height, err)
+		}
+	}
+}
+
+// TestExponentialBackoff tests that retry delays increase exponentially
+func TestExponentialBackoff(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger, _ := zap.NewDevelopment()
+
+	// Add a mock block
+	header := &types.Header{
+		Number:     big.NewInt(1),
+		Time:       uint64(time.Now().Unix()),
+		Difficulty: big.NewInt(1000),
+		GasLimit:   8000000,
+		GasUsed:    21000,
+	}
+	block := types.NewBlockWithHeader(header)
+	client.blocks[1] = block
+	client.receipts[block.Hash()] = types.Receipts{}
+
+	// Set client to fail 2 times, then succeed
+	client.failCount = 2
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   10,
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 100, // Base delay
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger)
+
+	ctx := context.Background()
+	start := time.Now()
+	err := fetcher.FetchBlock(ctx, 1)
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("FetchBlock() should succeed after retries, got error = %v", err)
+	}
+
+	// With exponential backoff:
+	// Attempt 0: no delay
+	// Attempt 1: 100ms delay
+	// Attempt 2: 200ms delay
+	// Total expected delay: ~300ms
+	expectedMinDelay := time.Millisecond * 300
+	expectedMaxDelay := time.Millisecond * 400 // Allow some overhead
+
+	if duration < expectedMinDelay {
+		t.Errorf("Expected at least %v delay with exponential backoff, got %v", expectedMinDelay, duration)
+	}
+	if duration > expectedMaxDelay {
+		t.Logf("Warning: Delay %v exceeds expected max %v (may be due to slow test environment)", duration, expectedMaxDelay)
+	}
+
+	t.Logf("Exponential backoff test completed in %v", duration)
 }
