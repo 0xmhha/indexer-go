@@ -168,7 +168,7 @@ Note: Integration tests skipped (require Ethereum node)
 
 #### 4. Logging Infrastructure (P1) ✅
 **Status**: COMPLETED
-**Commit**: Current session
+**Commit**: b8f01b1 - feat(logger): implement structured logging infrastructure with zap
 **Duration**: ~1 hour
 
 **구현 내용**:
