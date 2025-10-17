@@ -404,6 +404,10 @@ func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*type
 		return nil, fmt.Errorf("failed to decode receipt: %w", err)
 	}
 
+	// TxHash is not part of RLP encoding, so we need to restore it
+	// from the key used to store the receipt
+	receipt.TxHash = hash
+
 	return receipt, nil
 }
 
@@ -429,6 +433,101 @@ func (s *PebbleStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) 
 	// In practice, caller should ensure TxHash is set
 	txHash := receipt.TxHash
 	return s.db.Set(ReceiptKey(txHash), encoded, pebble.Sync)
+}
+
+// GetReceipts returns multiple receipts by transaction hashes (batch operation)
+func (s *PebbleStorage) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	receipts := make([]*types.Receipt, len(hashes))
+	var firstError error
+
+	for i, hash := range hashes {
+		receipt, err := s.GetReceipt(ctx, hash)
+		if err != nil {
+			if firstError == nil {
+				firstError = err
+			}
+			receipts[i] = nil
+			continue
+		}
+		receipts[i] = receipt
+	}
+
+	if firstError != nil {
+		return receipts, firstError
+	}
+
+	return receipts, nil
+}
+
+// GetReceiptsByBlockHash returns all receipts for a block by block hash
+func (s *PebbleStorage) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	// Get block to find its height
+	block, err := s.GetBlockByHash(ctx, blockHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block: %w", err)
+	}
+
+	return s.GetReceiptsByBlockNumber(ctx, block.Number().Uint64())
+}
+
+// GetReceiptsByBlockNumber returns all receipts for a block by block number
+func (s *PebbleStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	// Get the block to find all transactions
+	block, err := s.GetBlock(ctx, blockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block: %w", err)
+	}
+
+	txs := block.Transactions()
+	receipts := make([]*types.Receipt, 0, len(txs))
+
+	// Get receipt for each transaction
+	for _, tx := range txs {
+		receipt, err := s.GetReceipt(ctx, tx.Hash())
+		if err != nil {
+			if err == ErrNotFound {
+				// Skip missing receipts
+				continue
+			}
+			return nil, fmt.Errorf("failed to get receipt for tx %s: %w", tx.Hash().Hex(), err)
+		}
+		receipts = append(receipts, receipt)
+	}
+
+	return receipts, nil
+}
+
+// SetReceipts stores multiple receipts atomically (batch operation)
+func (s *PebbleStorage) SetReceipts(ctx context.Context, receipts []*types.Receipt) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return err
+	}
+
+	batch := s.NewBatch()
+	defer batch.Close()
+
+	for _, receipt := range receipts {
+		if err := batch.SetReceipt(ctx, receipt); err != nil {
+			return fmt.Errorf("failed to add receipt to batch: %w", err)
+		}
+	}
+
+	return batch.Commit()
 }
 
 // GetBlocks returns multiple blocks by height range
@@ -647,6 +746,16 @@ func (b *pebbleBatch) SetReceipt(ctx context.Context, receipt *types.Receipt) er
 		return err
 	}
 	b.count++
+	return nil
+}
+
+// SetReceipts adds multiple set receipt operations to batch
+func (b *pebbleBatch) SetReceipts(ctx context.Context, receipts []*types.Receipt) error {
+	for _, receipt := range receipts {
+		if err := b.SetReceipt(ctx, receipt); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

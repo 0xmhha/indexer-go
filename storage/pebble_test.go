@@ -358,6 +358,263 @@ func TestPebbleStorage_Receipt(t *testing.T) {
 	}
 }
 
+// TestPebbleStorage_GetReceipt_NotFound tests receipt not found error
+func TestPebbleStorage_GetReceipt_NotFound(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	_, err := storage.GetReceipt(ctx, common.HexToHash("0xnonexistent"))
+	if err != ErrNotFound {
+		t.Errorf("GetReceipt() error = %v, want ErrNotFound", err)
+	}
+}
+
+// TestPebbleStorage_Receipt_FailedTransaction tests receipts for failed transactions
+func TestPebbleStorage_Receipt_FailedTransaction(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create receipt for failed transaction (status = 0)
+	receipt := &types.Receipt{
+		Type:              types.LegacyTxType,
+		Status:            types.ReceiptStatusFailed, // 0 = failed
+		CumulativeGasUsed: 21000,
+		Bloom:             types.Bloom{},
+		Logs:              []*types.Log{},
+		TxHash:            common.HexToHash("0xfailed"),
+		GasUsed:           21000,
+	}
+
+	// Store receipt
+	err := storage.SetReceipt(ctx, receipt)
+	if err != nil {
+		t.Fatalf("SetReceipt() error = %v", err)
+	}
+
+	// Retrieve and verify
+	retrieved, err := storage.GetReceipt(ctx, receipt.TxHash)
+	if err != nil {
+		t.Fatalf("GetReceipt() error = %v", err)
+	}
+
+	if retrieved.Status != types.ReceiptStatusFailed {
+		t.Errorf("Status = %d, want %d (failed)", retrieved.Status, types.ReceiptStatusFailed)
+	}
+}
+
+// TestPebbleStorage_Receipt_WithLogs tests receipts with log events
+func TestPebbleStorage_Receipt_WithLogs(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create receipt with logs
+	log1 := &types.Log{
+		Address: common.HexToAddress("0xcontract"),
+		Topics: []common.Hash{
+			common.HexToHash("0xevent1"),
+			common.HexToHash("0xparam1"),
+		},
+		Data:        []byte("test data"),
+		BlockNumber: 100,
+		TxIndex:     1,
+		Index:       0,
+	}
+
+	receipt := &types.Receipt{
+		Type:              types.LegacyTxType,
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 50000,
+		Bloom:             types.Bloom{},
+		Logs:              []*types.Log{log1},
+		TxHash:            common.HexToHash("0xwithlogs"),
+		GasUsed:           30000,
+	}
+
+	// Store receipt
+	err := storage.SetReceipt(ctx, receipt)
+	if err != nil {
+		t.Fatalf("SetReceipt() error = %v", err)
+	}
+
+	// Retrieve and verify logs
+	retrieved, err := storage.GetReceipt(ctx, receipt.TxHash)
+	if err != nil {
+		t.Fatalf("GetReceipt() error = %v", err)
+	}
+
+	if len(retrieved.Logs) != 1 {
+		t.Fatalf("Logs count = %d, want 1", len(retrieved.Logs))
+	}
+
+	if retrieved.Logs[0].Address != log1.Address {
+		t.Errorf("Log address mismatch")
+	}
+
+	if len(retrieved.Logs[0].Topics) != 2 {
+		t.Errorf("Log topics count = %d, want 2", len(retrieved.Logs[0].Topics))
+	}
+}
+
+// TestPebbleStorage_GetReceipts tests batch receipt retrieval
+func TestPebbleStorage_GetReceipts(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create and store multiple receipts
+	hashes := []common.Hash{
+		common.HexToHash("0xaaa"),
+		common.HexToHash("0xbbb"),
+		common.HexToHash("0xccc"),
+	}
+
+	for i, hash := range hashes {
+		receipt := &types.Receipt{
+			Type:              types.LegacyTxType,
+			Status:            types.ReceiptStatusSuccessful,
+			CumulativeGasUsed: uint64(21000 * (i + 1)),
+			TxHash:            hash,
+			GasUsed:           21000,
+		}
+		err := storage.SetReceipt(ctx, receipt)
+		if err != nil {
+			t.Fatalf("SetReceipt() error = %v", err)
+		}
+	}
+
+	// Batch retrieve receipts
+	receipts, err := storage.GetReceipts(ctx, hashes)
+	if err != nil {
+		t.Fatalf("GetReceipts() error = %v", err)
+	}
+
+	if len(receipts) != 3 {
+		t.Errorf("GetReceipts() returned %d receipts, want 3", len(receipts))
+	}
+
+	// Verify order and content
+	for i, receipt := range receipts {
+		if receipt.TxHash != hashes[i] {
+			t.Errorf("Receipt %d hash mismatch", i)
+		}
+		expectedGas := uint64(21000 * (i + 1))
+		if receipt.CumulativeGasUsed != expectedGas {
+			t.Errorf("Receipt %d gas = %d, want %d", i, receipt.CumulativeGasUsed, expectedGas)
+		}
+	}
+}
+
+// TestPebbleStorage_GetReceipts_PartialNotFound tests batch retrieval with some missing
+func TestPebbleStorage_GetReceipts_PartialNotFound(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Store only one receipt
+	hash1 := common.HexToHash("0xaaa")
+	receipt1 := &types.Receipt{
+		Type:              types.LegacyTxType,
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 21000,
+		TxHash:            hash1,
+		GasUsed:           21000,
+	}
+	storage.SetReceipt(ctx, receipt1)
+
+	// Try to get multiple receipts including non-existent ones
+	hashes := []common.Hash{
+		hash1,
+		common.HexToHash("0xnonexistent1"),
+		common.HexToHash("0xnonexistent2"),
+	}
+
+	receipts, err := storage.GetReceipts(ctx, hashes)
+
+	// Should return error for partial failure
+	if err == nil {
+		t.Error("GetReceipts() should return error when some receipts not found")
+	}
+
+	// But receipts slice should contain what was found (nil for missing)
+	if receipts != nil && len(receipts) > 0 {
+		if receipts[0] == nil {
+			t.Error("First receipt should not be nil")
+		}
+	}
+}
+
+// TestPebbleStorage_SetReceipts tests batch receipt storage
+func TestPebbleStorage_SetReceipts(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create multiple receipts
+	receipts := []*types.Receipt{
+		{
+			Type:              types.LegacyTxType,
+			Status:            types.ReceiptStatusSuccessful,
+			CumulativeGasUsed: 21000,
+			TxHash:            common.HexToHash("0x111"),
+			GasUsed:           21000,
+		},
+		{
+			Type:              types.LegacyTxType,
+			Status:            types.ReceiptStatusSuccessful,
+			CumulativeGasUsed: 42000,
+			TxHash:            common.HexToHash("0x222"),
+			GasUsed:           21000,
+		},
+		{
+			Type:              types.LegacyTxType,
+			Status:            types.ReceiptStatusFailed,
+			CumulativeGasUsed: 63000,
+			TxHash:            common.HexToHash("0x333"),
+			GasUsed:           21000,
+		},
+	}
+
+	// Batch store receipts
+	err := storage.SetReceipts(ctx, receipts)
+	if err != nil {
+		t.Fatalf("SetReceipts() error = %v", err)
+	}
+
+	// Verify all receipts were stored
+	for _, receipt := range receipts {
+		retrieved, err := storage.GetReceipt(ctx, receipt.TxHash)
+		if err != nil {
+			t.Errorf("GetReceipt(%s) error = %v", receipt.TxHash.Hex(), err)
+		}
+		if retrieved.Status != receipt.Status {
+			t.Errorf("Receipt status mismatch for %s", receipt.TxHash.Hex())
+		}
+	}
+}
+
+// TestPebbleStorage_GetReceiptsByBlockNumber tests getting receipts by block number
+func TestPebbleStorage_GetReceiptsByBlockNumber(t *testing.T) {
+	t.Skip("GetReceiptsByBlockNumber requires blocks with transactions; complex to test with mock blocks")
+	// TODO: Implement this test with proper block+transaction creation
+	// or modify GetReceiptsByBlockNumber to query receipts directly by block number
+}
+
+// TestPebbleStorage_GetReceiptsByBlockHash tests getting receipts by block hash
+func TestPebbleStorage_GetReceiptsByBlockHash(t *testing.T) {
+	t.Skip("GetReceiptsByBlockHash requires blocks with transactions; complex to test with mock blocks")
+	// TODO: Implement this test with proper block+transaction creation
+	// or modify GetReceiptsByBlockHash to query receipts directly by block hash
+}
+
 func TestPebbleStorage_AddressIndex(t *testing.T) {
 	storage, cleanup := setupTestStorage(t)
 	defer cleanup()

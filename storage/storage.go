@@ -50,6 +50,15 @@ type Reader interface {
 	// GetReceipt returns a transaction receipt by hash
 	GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error)
 
+	// GetReceipts returns multiple receipts by transaction hashes (batch operation)
+	GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error)
+
+	// GetReceiptsByBlockHash returns all receipts for a block by block hash
+	GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error)
+
+	// GetReceiptsByBlockNumber returns all receipts for a block by block number
+	GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error)
+
 	// GetBlocks returns multiple blocks by height range (batch operation)
 	GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error)
 
@@ -74,6 +83,9 @@ type Writer interface {
 
 	// SetReceipt stores a transaction receipt
 	SetReceipt(ctx context.Context, receipt *types.Receipt) error
+
+	// SetReceipts stores multiple receipts atomically (batch operation)
+	SetReceipts(ctx context.Context, receipts []*types.Receipt) error
 
 	// AddTransactionToAddressIndex adds a transaction to an address index
 	AddTransactionToAddressIndex(ctx context.Context, addr common.Address, txHash common.Hash) error
