@@ -92,29 +92,54 @@ cd indexer-go
 # Install dependencies
 go mod download
 
-# Build
-make build
+# Build production binary
+go build -o build/indexer-go ./cmd/indexer
 
-# Or directly
-go build -o indexer-go ./cmd
+# Build with version information
+VERSION=$(git describe --tags --always --dirty)
+COMMIT=$(git rev-parse --short HEAD)
+BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+
+go build -ldflags "-s -w \
+  -X main.version=$VERSION \
+  -X main.commit=$COMMIT \
+  -X main.buildTime=$BUILD_TIME" \
+  -o build/indexer-go ./cmd/indexer
 ```
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Start indexing
+### 1. Start indexing (indexer only)
 
 ```bash
-./indexer-go start \
-  --remote http://localhost:8545 \
-  --db-path ./data \
-  --listen-address :8080
+./build/indexer-go \
+  --rpc http://localhost:8545 \
+  --db ./data \
+  --log-level info
 ```
 
-### 2. Query via GraphQL
+### 2. Start with API server (GraphQL + JSON-RPC + WebSocket)
 
 ```bash
+./build/indexer-go \
+  --rpc http://localhost:8545 \
+  --db ./data \
+  --api \
+  --graphql \
+  --jsonrpc \
+  --websocket \
+  --api-port 8080
+```
+
+### 3. Query via GraphQL
+
+```bash
+# GraphQL Playground (browser)
+open http://localhost:8080/playground
+
+# GraphQL API (curl)
 curl -X POST http://localhost:8080/graphql \
   -H "Content-Type: application/json" \
   -d '{
@@ -122,7 +147,7 @@ curl -X POST http://localhost:8080/graphql \
   }'
 ```
 
-### 3. Query via JSON-RPC
+### 4. Query via JSON-RPC
 
 ```bash
 curl -X POST http://localhost:8080/rpc \
@@ -135,7 +160,7 @@ curl -X POST http://localhost:8080/rpc \
   }'
 ```
 
-### 4. Subscribe via WebSocket
+### 5. Subscribe via WebSocket
 
 ```javascript
 const ws = new WebSocket('ws://localhost:8080/ws');
@@ -153,46 +178,140 @@ ws.onmessage = (event) => {
 };
 ```
 
+### 6. Check health
+
+```bash
+curl http://localhost:8080/health
+# {"status":"ok","timestamp":"2025-10-20T15:00:00Z"}
+
+curl http://localhost:8080/version
+# {"version":"1.0.0","name":"indexer-go"}
+```
+
 ---
 
 ## ⚙️ Configuration
 
+Configuration can be provided through (in order of priority):
+1. Command-line flags (highest priority)
+2. Environment variables
+3. Configuration file (YAML)
+4. Default values (lowest priority)
+
 ### Command-line flags
 
 ```bash
-indexer-go start [flags]
+./indexer-go [flags]
 
-Flags:
-  --remote string           Stable-One RPC endpoint (required)
-  --db-path string          Path to database directory (default: "./data")
-  --listen-address string   HTTP server listen address (default: ":8080")
-  --max-slots int           Maximum worker pool size (default: 100)
-  --max-chunk-size int      Chunk size for batch processing (default: 100)
-  --rate-limit int          Rate limit (requests/min, 0=unlimited) (default: 0)
-  --disable-introspection   Disable GraphQL introspection (production)
-  --log-level string        Log level (debug/info/warn/error) (default: "info")
+Required Flags:
+  --rpc string              Ethereum RPC endpoint URL
+  --db string               Database path
+
+Indexer Flags:
+  --workers int             Number of concurrent workers (default: 100)
+  --batch-size int          Number of blocks per batch (default: 100)
+  --start-height uint       Block height to start indexing from (default: 0)
+  --gap-recovery            Enable gap detection and recovery at startup
+
+API Server Flags:
+  --api                     Enable API server
+  --api-host string         API server host (default: "localhost")
+  --api-port int            API server port (default: 8080)
+  --graphql                 Enable GraphQL API
+  --jsonrpc                 Enable JSON-RPC API
+  --websocket               Enable WebSocket API
+
+Logging Flags:
+  --log-level string        Log level: debug, info, warn, error (default: "info")
+  --log-format string       Log format: json, console (default: "json")
+
+Other Flags:
+  --config string           Path to configuration file (YAML)
+  --version                 Show version information and exit
 ```
 
 ### Environment variables
 
 ```bash
-INDEXER_REMOTE=http://localhost:8545
+# RPC Configuration
+INDEXER_RPC_ENDPOINT=http://localhost:8545
+INDEXER_RPC_TIMEOUT=30s
+
+# Database Configuration
 INDEXER_DB_PATH=./data
-INDEXER_LISTEN_ADDRESS=:8080
+INDEXER_DB_READONLY=false
+
+# Indexer Configuration
+INDEXER_WORKERS=100
+INDEXER_CHUNK_SIZE=100
+INDEXER_START_HEIGHT=0
+
+# API Server Configuration
+INDEXER_API_ENABLED=true
+INDEXER_API_HOST=localhost
+INDEXER_API_PORT=8080
+INDEXER_API_GRAPHQL=true
+INDEXER_API_JSONRPC=true
+INDEXER_API_WEBSOCKET=true
+
+# Logging Configuration
 INDEXER_LOG_LEVEL=info
+INDEXER_LOG_FORMAT=json
 ```
+
+See [`.env.example`](.env.example) for a complete example.
 
 ### Config file (YAML)
 
 ```yaml
 # config.yaml
-remote: http://localhost:8545
-db_path: ./data
-listen_address: :8080
-max_slots: 100
-max_chunk_size: 100
-rate_limit: 1000
-log_level: info
+rpc:
+  endpoint: "http://localhost:8545"
+  timeout: 30s
+
+database:
+  path: "./data"
+  readonly: false
+
+log:
+  level: "info"
+  format: "json"
+
+indexer:
+  workers: 100
+  chunk_size: 100
+  start_height: 0
+
+api:
+  enabled: true
+  host: "localhost"
+  port: 8080
+  enable_graphql: true
+  enable_jsonrpc: true
+  enable_websocket: true
+  enable_cors: true
+  allowed_origins:
+    - "*"
+```
+
+See [`config.example.yaml`](config.example.yaml) for a complete example.
+
+### Example usage
+
+```bash
+# Using config file
+./indexer-go --config config.yaml
+
+# Using environment variables
+export INDEXER_RPC_ENDPOINT=http://localhost:8545
+export INDEXER_DB_PATH=./data
+./indexer-go
+
+# Using CLI flags (override config file and env vars)
+./indexer-go \
+  --config config.yaml \
+  --rpc http://custom-rpc:8545 \
+  --workers 200
 ```
 
 ---

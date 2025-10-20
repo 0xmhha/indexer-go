@@ -1,0 +1,54 @@
+# Indexer Configuration Example
+# Copy this file to config.yaml and modify as needed
+
+# RPC Configuration
+rpc:
+  # Ethereum RPC endpoint URL (required)
+  endpoint: "http://localhost:8545"
+  # Request timeout duration
+  timeout: 30s
+
+# Database Configuration
+database:
+  # Path to the database directory (required)
+  path: "./data"
+  # Open database in read-only mode
+  readonly: false
+
+# Logging Configuration
+log:
+  # Log level: debug, info, warn, error
+  level: "info"
+  # Log format: json, console
+  format: "json"
+
+# Indexer Configuration
+indexer:
+  # Number of concurrent workers for fetching blocks
+  workers: 100
+  # Number of blocks to fetch per batch
+  chunk_size: 100
+  # Block height to start indexing from (0 = from genesis)
+  start_height: 0
+
+# API Server Configuration
+api:
+  # Enable API server
+  enabled: true
+  # Server host address (use 0.0.0.0 to listen on all interfaces)
+  host: "localhost"
+  # Server port
+  port: 8080
+
+  # Enable GraphQL API
+  enable_graphql: true
+  # Enable JSON-RPC API
+  enable_jsonrpc: true
+  # Enable WebSocket subscriptions
+  enable_websocket: true
+
+  # Enable CORS (Cross-Origin Resource Sharing)
+  enable_cors: true
+  # Allowed origins for CORS (use ["*"] to allow all)
+  allowed_origins:
+    - "*"

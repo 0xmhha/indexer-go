@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Indexer service
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: indexer-go
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      # RPC Configuration
+      INDEXER_RPC_ENDPOINT: ${INDEXER_RPC_ENDPOINT:-http://localhost:8545}
+      INDEXER_RPC_TIMEOUT: ${INDEXER_RPC_TIMEOUT:-30s}
+
+      # Database Configuration
+      INDEXER_DB_PATH: ${INDEXER_DB_PATH:-/data}
+      INDEXER_DB_READONLY: ${INDEXER_DB_READONLY:-false}
+
+      # Logging Configuration
+      INDEXER_LOG_LEVEL: ${INDEXER_LOG_LEVEL:-info}
+      INDEXER_LOG_FORMAT: ${INDEXER_LOG_FORMAT:-json}
+
+      # Indexer Configuration
+      INDEXER_WORKERS: ${INDEXER_WORKERS:-100}
+      INDEXER_CHUNK_SIZE: ${INDEXER_CHUNK_SIZE:-100}
+      INDEXER_START_HEIGHT: ${INDEXER_START_HEIGHT:-0}
+
+      # API Server Configuration
+      INDEXER_API_ENABLED: ${INDEXER_API_ENABLED:-true}
+      INDEXER_API_HOST: ${INDEXER_API_HOST:-0.0.0.0}
+      INDEXER_API_PORT: ${INDEXER_API_PORT:-8080}
+      INDEXER_API_GRAPHQL: ${INDEXER_API_GRAPHQL:-true}
+      INDEXER_API_JSONRPC: ${INDEXER_API_JSONRPC:-true}
+      INDEXER_API_WEBSOCKET: ${INDEXER_API_WEBSOCKET:-true}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - indexer-network
+
+networks:
+  indexer-network:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local
