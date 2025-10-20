@@ -630,6 +630,59 @@ make bench
 - 📄 [METRICS_MONITORING.md](docs/METRICS_MONITORING.md) - Prometheus metrics and monitoring guide
 - 📄 [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) - Performance benchmarks and analysis
 
+### Production Deployment
+- 📄 [OPERATIONS_GUIDE.md](docs/OPERATIONS_GUIDE.md) - Production deployment and operations guide
+
+---
+
+## 🚀 Production Deployment
+
+### Quick Deploy
+
+```bash
+# Automated deployment with systemd
+cd deployments/scripts
+sudo ./deploy.sh latest
+
+# Configure
+sudo nano /etc/indexer-go/config.yaml
+sudo nano /etc/indexer-go/indexer-go.env
+
+# Start service
+sudo systemctl enable indexer-go
+sudo systemctl start indexer-go
+
+# Verify
+curl http://localhost:8080/health
+```
+
+### Manual Setup
+
+```bash
+# 1. Install binary
+sudo cp build/indexer-go /opt/indexer-go/bin/
+
+# 2. Install systemd service
+sudo cp deployments/systemd/indexer-go.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# 3. Install logrotate
+sudo cp deployments/logrotate/indexer-go /etc/logrotate.d/
+
+# 4. Configure and start
+sudo systemctl enable indexer-go
+sudo systemctl start indexer-go
+```
+
+### Health Check
+
+```bash
+# Run automated health check
+./deployments/scripts/health-check.sh localhost:8080
+```
+
+See [OPERATIONS_GUIDE.md](docs/OPERATIONS_GUIDE.md) for complete deployment documentation.
+
 ---
 
 ## 🐳 Docker
@@ -704,8 +757,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Status**: 🚧 Under Development (Phase 5 - 82% Complete)
+**Status**: 🚀 Production Ready (Phase 6 Complete - 90% Overall)
 
-**Version**: 0.5.0
+**Version**: 0.6.0
 
 **Last Updated**: 2025-10-20
