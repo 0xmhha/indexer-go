@@ -19,9 +19,9 @@ func TestIntegration_RealisticWorkflow(t *testing.T) {
 	defer bus.Stop()
 
 	// Create multiple subscribers with different interests
-	blockSub := bus.Subscribe("block-monitor", []EventType{EventTypeBlock}, 100)
-	txSub := bus.Subscribe("tx-monitor", []EventType{EventTypeTransaction}, 100)
-	allSub := bus.Subscribe("all-monitor", []EventType{EventTypeBlock, EventTypeTransaction}, 100)
+	blockSub := bus.Subscribe("block-monitor", []EventType{EventTypeBlock}, nil, 100)
+	txSub := bus.Subscribe("tx-monitor", []EventType{EventTypeTransaction}, nil, 100)
+	allSub := bus.Subscribe("all-monitor", []EventType{EventTypeBlock, EventTypeTransaction}, nil, 100)
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -156,7 +156,7 @@ func TestIntegration_HighThroughput(t *testing.T) {
 	subscribers := make([]*Subscription, subscriberCount)
 	for i := 0; i < subscriberCount; i++ {
 		id := SubscriptionID(string(rune('A' + (i % 26))) + string(rune('0' + (i / 26))))
-		subscribers[i] = bus.Subscribe(id, []EventType{EventTypeBlock}, 1000)
+		subscribers[i] = bus.Subscribe(id, []EventType{EventTypeBlock}, nil, 1000)
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -214,8 +214,8 @@ func TestIntegration_DynamicSubscriptions(t *testing.T) {
 	defer bus.Stop()
 
 	// Start with initial subscribers
-	sub1 := bus.Subscribe("sub1", []EventType{EventTypeBlock}, 100)
-	sub2 := bus.Subscribe("sub2", []EventType{EventTypeBlock}, 100)
+	sub1 := bus.Subscribe("sub1", []EventType{EventTypeBlock}, nil, 100)
+	sub2 := bus.Subscribe("sub2", []EventType{EventTypeBlock}, nil, 100)
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -230,7 +230,7 @@ func TestIntegration_DynamicSubscriptions(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Add new subscriber mid-stream
-	sub3 := bus.Subscribe("sub3", []EventType{EventTypeBlock}, 100)
+	sub3 := bus.Subscribe("sub3", []EventType{EventTypeBlock}, nil, 100)
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -301,7 +301,7 @@ func TestIntegration_ConcurrentPublishSubscribe(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			subID := SubscriptionID(string(rune('A' + (id % 26))) + string(rune('0' + (id / 26))))
-			bus.Subscribe(subID, []EventType{EventTypeBlock, EventTypeTransaction}, 500)
+			bus.Subscribe(subID, []EventType{EventTypeBlock, EventTypeTransaction}, nil, 500)
 		}(i)
 	}
 
@@ -361,4 +361,143 @@ func drainChannel(ch chan Event) int {
 			return count
 		}
 	}
+}
+
+// TestIntegration_FilteredSubscription tests subscriptions with filters
+func TestIntegration_FilteredSubscription(t *testing.T) {
+	bus := NewEventBus(1000, 100)
+	go bus.Run()
+	defer bus.Stop()
+
+	addr1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	addr2 := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	addr3 := common.HexToAddress("0x3333333333333333333333333333333333333333")
+
+	// Create filtered subscriptions
+	filter1 := &Filter{
+		FromAddresses: []common.Address{addr1},
+	}
+	sub1 := bus.Subscribe("addr1-filter", []EventType{EventTypeTransaction}, filter1, 100)
+
+	filter2 := &Filter{
+		ToAddresses: []common.Address{addr2},
+	}
+	sub2 := bus.Subscribe("addr2-filter", []EventType{EventTypeTransaction}, filter2, 100)
+
+	filter3 := &Filter{
+		MinValue: big.NewInt(1000),
+	}
+	sub3 := bus.Subscribe("value-filter", []EventType{EventTypeTransaction}, filter3, 100)
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Publish various transactions
+	// 1. From addr1 to addr2, value 500 - matches filter1, filter2, not filter3
+	tx1 := types.NewTransaction(0, addr2, big.NewInt(500), 21000, big.NewInt(1), nil)
+	bus.Publish(NewTransactionEvent(tx1, 100, common.Hash{}, 0, addr1, nil))
+
+	// 2. From addr1 to addr3, value 2000 - matches filter1, filter3, not filter2
+	tx2 := types.NewTransaction(1, addr3, big.NewInt(2000), 21000, big.NewInt(1), nil)
+	bus.Publish(NewTransactionEvent(tx2, 101, common.Hash{}, 0, addr1, nil))
+
+	// 3. From addr3 to addr2, value 300 - matches filter2, not filter1, not filter3
+	tx3 := types.NewTransaction(2, addr2, big.NewInt(300), 21000, big.NewInt(1), nil)
+	bus.Publish(NewTransactionEvent(tx3, 102, common.Hash{}, 0, addr3, nil))
+
+	// 4. From addr3 to addr3, value 5000 - matches filter3, not filter1, not filter2
+	tx4 := types.NewTransaction(3, addr3, big.NewInt(5000), 21000, big.NewInt(1), nil)
+	bus.Publish(NewTransactionEvent(tx4, 103, common.Hash{}, 0, addr3, nil))
+
+	time.Sleep(100 * time.Millisecond)
+
+	// sub1 (from addr1) should receive tx1 and tx2
+	count1 := drainChannel(sub1.Channel)
+	if count1 != 2 {
+		t.Errorf("sub1: expected 2 events (tx1, tx2), got %d", count1)
+	}
+
+	// sub2 (to addr2) should receive tx1 and tx3
+	count2 := drainChannel(sub2.Channel)
+	if count2 != 2 {
+		t.Errorf("sub2: expected 2 events (tx1, tx3), got %d", count2)
+	}
+
+	// sub3 (minValue 1000) should receive tx2 and tx4
+	count3 := drainChannel(sub3.Channel)
+	if count3 != 2 {
+		t.Errorf("sub3: expected 2 events (tx2, tx4), got %d", count3)
+	}
+
+	t.Logf("Filtered subscription test passed:")
+	t.Logf("  sub1 (from addr1): %d events", count1)
+	t.Logf("  sub2 (to addr2): %d events", count2)
+	t.Logf("  sub3 (minValue 1000): %d events", count3)
+}
+
+// TestIntegration_ComplexFilter tests complex filter conditions
+func TestIntegration_ComplexFilter(t *testing.T) {
+	bus := NewEventBus(1000, 100)
+	go bus.Run()
+	defer bus.Stop()
+
+	addr1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	addr2 := common.HexToAddress("0x2222222222222222222222222222222222222222")
+
+	// Complex filter: from addr1, to addr2, value 1000-5000, block 100-200
+	filter := &Filter{
+		FromAddresses: []common.Address{addr1},
+		ToAddresses:   []common.Address{addr2},
+		MinValue:      big.NewInt(1000),
+		MaxValue:      big.NewInt(5000),
+		FromBlock:     100,
+		ToBlock:       200,
+	}
+	sub := bus.Subscribe("complex-filter", []EventType{EventTypeTransaction}, filter, 100)
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Match: all conditions satisfied
+	tx1 := types.NewTransaction(0, addr2, big.NewInt(2000), 21000, big.NewInt(1), nil)
+	bus.Publish(NewTransactionEvent(tx1, 150, common.Hash{}, 0, addr1, nil))
+
+	// No match: value too low
+	tx2 := types.NewTransaction(1, addr2, big.NewInt(500), 21000, big.NewInt(1), nil)
+	bus.Publish(NewTransactionEvent(tx2, 150, common.Hash{}, 0, addr1, nil))
+
+	// No match: block too high
+	tx3 := types.NewTransaction(2, addr2, big.NewInt(2000), 21000, big.NewInt(1), nil)
+	bus.Publish(NewTransactionEvent(tx3, 250, common.Hash{}, 0, addr1, nil))
+
+	// Match: all conditions satisfied
+	tx4 := types.NewTransaction(3, addr2, big.NewInt(5000), 21000, big.NewInt(1), nil)
+	bus.Publish(NewTransactionEvent(tx4, 200, common.Hash{}, 0, addr1, nil))
+
+	time.Sleep(100 * time.Millisecond)
+
+	count := drainChannel(sub.Channel)
+	if count != 2 {
+		t.Errorf("expected 2 matching events, got %d", count)
+	}
+
+	t.Logf("Complex filter test passed: %d events matched", count)
+}
+
+// TestIntegration_FilterValidation tests invalid filter rejection
+func TestIntegration_FilterValidation(t *testing.T) {
+	bus := NewEventBus(1000, 100)
+	go bus.Run()
+	defer bus.Stop()
+
+	// Invalid filter: minValue > maxValue
+	invalidFilter := &Filter{
+		MinValue: big.NewInt(5000),
+		MaxValue: big.NewInt(1000),
+	}
+
+	sub := bus.Subscribe("invalid-filter", []EventType{EventTypeTransaction}, invalidFilter, 100)
+	if sub != nil {
+		t.Error("Subscribe should return nil for invalid filter")
+	}
+
+	t.Log("Filter validation test passed: invalid filter rejected")
 }

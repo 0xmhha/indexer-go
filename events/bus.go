@@ -17,6 +17,10 @@ type Subscription struct {
 	// EventTypes is the set of event types this subscription is interested in
 	EventTypes map[EventType]bool
 
+	// Filter contains the filtering conditions for this subscription
+	// If nil, no filtering is applied (receives all events of matching types)
+	Filter *Filter
+
 	// Channel is where events are delivered to the subscriber
 	Channel chan Event
 
@@ -119,6 +123,11 @@ func (eb *EventBus) broadcastEvent(event Event) {
 			continue
 		}
 
+		// Apply filter if present
+		if sub.Filter != nil && !sub.Filter.Match(event) {
+			continue
+		}
+
 		// Try to send event non-blocking
 		select {
 		case sub.Channel <- event:
@@ -187,7 +196,18 @@ func (eb *EventBus) Publish(event Event) bool {
 
 // Subscribe creates a new subscription for the given event types
 // Returns a Subscription that can be used to receive events
-func (eb *EventBus) Subscribe(id SubscriptionID, eventTypes []EventType, channelSize int) *Subscription {
+// filter can be nil for no filtering
+func (eb *EventBus) Subscribe(id SubscriptionID, eventTypes []EventType, filter *Filter, channelSize int) *Subscription {
+	// Validate filter if provided
+	if filter != nil {
+		if err := filter.Validate(); err != nil {
+			// Invalid filter, return nil
+			return nil
+		}
+		// Clone filter to prevent external modification
+		filter = filter.Clone()
+	}
+
 	// Create event type map for fast lookup
 	eventTypeMap := make(map[EventType]bool)
 	for _, et := range eventTypes {
@@ -200,6 +220,7 @@ func (eb *EventBus) Subscribe(id SubscriptionID, eventTypes []EventType, channel
 	sub := &Subscription{
 		ID:         id,
 		EventTypes: eventTypeMap,
+		Filter:     filter,
 		Channel:    make(chan Event, channelSize),
 		CancelFunc: cancel,
 	}

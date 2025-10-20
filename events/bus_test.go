@@ -17,7 +17,7 @@ func TestEventBus_BasicPubSub(t *testing.T) {
 	defer bus.Stop()
 
 	// Create a subscription
-	sub := bus.Subscribe("test-sub", []EventType{EventTypeBlock}, 10)
+	sub := bus.Subscribe("test-sub", []EventType{EventTypeBlock}, nil, 10)
 	if sub == nil {
 		t.Fatal("subscription should not be nil")
 	}
@@ -57,9 +57,9 @@ func TestEventBus_MultipleSubscribers(t *testing.T) {
 	defer bus.Stop()
 
 	// Create multiple subscriptions
-	sub1 := bus.Subscribe("sub1", []EventType{EventTypeBlock}, 10)
-	sub2 := bus.Subscribe("sub2", []EventType{EventTypeBlock}, 10)
-	sub3 := bus.Subscribe("sub3", []EventType{EventTypeBlock}, 10)
+	sub1 := bus.Subscribe("sub1", []EventType{EventTypeBlock}, nil, 10)
+	sub2 := bus.Subscribe("sub2", []EventType{EventTypeBlock}, nil, 10)
+	sub3 := bus.Subscribe("sub3", []EventType{EventTypeBlock}, nil, 10)
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -91,9 +91,9 @@ func TestEventBus_EventTypeFiltering(t *testing.T) {
 	defer bus.Stop()
 
 	// Create subscriptions with different event type filters
-	blockSub := bus.Subscribe("block-sub", []EventType{EventTypeBlock}, 10)
-	txSub := bus.Subscribe("tx-sub", []EventType{EventTypeTransaction}, 10)
-	bothSub := bus.Subscribe("both-sub", []EventType{EventTypeBlock, EventTypeTransaction}, 10)
+	blockSub := bus.Subscribe("block-sub", []EventType{EventTypeBlock}, nil, 10)
+	txSub := bus.Subscribe("tx-sub", []EventType{EventTypeTransaction}, nil, 10)
+	bothSub := bus.Subscribe("both-sub", []EventType{EventTypeBlock, EventTypeTransaction}, nil, 10)
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -166,7 +166,7 @@ func TestEventBus_Unsubscribe(t *testing.T) {
 	defer bus.Stop()
 
 	// Create a subscription
-	sub := bus.Subscribe("test-sub", []EventType{EventTypeBlock}, 10)
+	sub := bus.Subscribe("test-sub", []EventType{EventTypeBlock}, nil, 10)
 	time.Sleep(10 * time.Millisecond)
 
 	if count := bus.SubscriberCount(); count != 1 {
@@ -203,8 +203,8 @@ func TestEventBus_Stats(t *testing.T) {
 	defer bus.Stop()
 
 	// Create subscriptions
-	sub1 := bus.Subscribe("sub1", []EventType{EventTypeBlock}, 10)
-	sub2 := bus.Subscribe("sub2", []EventType{EventTypeBlock}, 10)
+	sub1 := bus.Subscribe("sub1", []EventType{EventTypeBlock}, nil, 10)
+	sub2 := bus.Subscribe("sub2", []EventType{EventTypeBlock}, nil, 10)
 	time.Sleep(10 * time.Millisecond)
 
 	// Publish events
@@ -246,7 +246,7 @@ func TestEventBus_DroppedEvents(t *testing.T) {
 	defer bus.Stop()
 
 	// Create subscription with small buffer
-	sub := bus.Subscribe("test-sub", []EventType{EventTypeBlock}, 1)
+	sub := bus.Subscribe("test-sub", []EventType{EventTypeBlock}, nil, 1)
 	time.Sleep(10 * time.Millisecond)
 
 	// Publish many events quickly to overflow buffer
@@ -280,7 +280,7 @@ func TestEventBus_Stop(t *testing.T) {
 	go bus.Run()
 
 	// Create subscription
-	sub := bus.Subscribe("test-sub", []EventType{EventTypeBlock}, 10)
+	sub := bus.Subscribe("test-sub", []EventType{EventTypeBlock}, nil, 10)
 	time.Sleep(10 * time.Millisecond)
 
 	// Stop the bus
@@ -317,7 +317,7 @@ func TestEventBus_ConcurrentOperations(t *testing.T) {
 	for i := 0; i < subscriberCount; i++ {
 		go func(id int) {
 			subID := SubscriptionID(string(rune('A' + id)))
-			bus.Subscribe(subID, []EventType{EventTypeBlock}, 100)
+			bus.Subscribe(subID, []EventType{EventTypeBlock}, nil, 100)
 			done <- true
 		}(i)
 	}
