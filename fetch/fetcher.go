@@ -221,6 +221,13 @@ func (g GapRange) Size() uint64 {
 
 // FetchRangeConcurrent fetches a range of blocks concurrently using a worker pool
 func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) error {
+	// Check context cancellation before starting
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	numWorkers := f.config.NumWorkers
 	if numWorkers == 0 {
 		numWorkers = 100 // Default worker pool size
