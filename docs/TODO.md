@@ -2,17 +2,17 @@
 
 > 프로젝트 진행 상황 및 작업 계획
 
-**Last Updated**: 2025-10-20 21:00
-**Current Phase**: Phase 5 완료 (Event Subscription System)
+**Last Updated**: 2025-10-20 22:00
+**Current Phase**: Phase 6 완료 (Production Readiness)
 
 ---
 
 ## 📊 프로젝트 현황
 
-### 전체 진행률: ~85%
+### 전체 진행률: ~90%
 
 ```
-[█████████████████████░░░░░] 85%
+[██████████████████████░░░░] 90%
 ```
 
 **완료된 기능:**
@@ -30,12 +30,19 @@
   - ✅ 성능 벤치마크 (목표 대비 1000x 초과 달성)
   - ✅ Prometheus 메트릭 & 모니터링
   - ✅ 완전한 문서화 (API, 모니터링, 사용 가이드)
+- ✅ 프로덕션 배포 인프라 (Phase 6 완료)
+  - ✅ Systemd 서비스 설정
+  - ✅ 로그 로테이션
+  - ✅ 자동 배포 스크립트
+  - ✅ Grafana 대시보드
+  - ✅ 운영 가이드 문서
 
 **진행 중:**
 - 없음
 
 **예정:**
-- 📋 프로덕션 배포 준비 (Phase 6)
+- 📋 고급 기능 개발 (Phase 7)
+- 📋 수평 확장 지원 (Phase 8)
 
 ---
 
@@ -348,9 +355,133 @@
 - ✅ 1600+ 라인의 포괄적 문서
 - ✅ Commit: 1388d54
 
+---
+
+### Phase 6: 프로덕션 배포 준비 (완료 ✅)
+
+#### 6.1. Systemd 서비스 설정 (완료 ✅)
+**파일**: `deployments/systemd/`
+
+- [x] Systemd 서비스 파일
+  - [x] 서비스 정의 및 의존성 설정
+  - [x] 보안 강화 (NoNewPrivileges, PrivateTmp, ProtectSystem)
+  - [x] 자동 재시작 정책 (backoff 포함)
+  - [x] 리소스 제한 (파일 디스크립터, 프로세스)
+- [x] 환경 파일 템플릿
+  - [x] 모든 설정 옵션
+  - [x] 프로덕션 권장 값
+  - [x] 주석 및 설명
+
+**결과:**
+- ✅ 프로덕션급 systemd 서비스
+- ✅ 보안 강화 설정
+- ✅ 자동 재시작 및 복구
+
+#### 6.2. 로그 로테이션 (완료 ✅)
+**파일**: `deployments/logrotate/`
+
+- [x] Logrotate 설정
+  - [x] 일일 로테이션 (30일 보관)
+  - [x] 압축 및 지연 압축
+  - [x] 에러 로그 장기 보관 (90일)
+  - [x] 크기 기반 로테이션 (100MB 임계값)
+  - [x] Post-rotate 스크립트
+
+**결과:**
+- ✅ 자동 로그 관리
+- ✅ 디스크 공간 최적화
+- ✅ 장기 에러 로그 보존
+
+#### 6.3. 배포 자동화 (완료 ✅)
+**파일**: `deployments/scripts/`
+
+- [x] deploy.sh - 자동 배포 스크립트
+  - [x] 사용자/그룹 생성
+  - [x] 디렉토리 설정 및 권한
+  - [x] 바이너리 설치 및 백업
+  - [x] 설정 파일 설치
+  - [x] Systemd 및 logrotate 설정
+  - [x] 8단계 배포 프로세스
+- [x] health-check.sh - 헬스 체크 자동화
+  - [x] 5개 엔드포인트 검증
+  - [x] 색상 코드 출력
+  - [x] Systemd 서비스 상태 확인
+  - [x] 상세한 에러 메시지
+
+**결과:**
+- ✅ 원클릭 배포 가능
+- ✅ 자동화된 헬스 체크
+- ✅ 사용자 친화적 출력
+
+#### 6.4. Grafana 대시보드 (완료 ✅)
+**파일**: `deployments/grafana/`
+
+- [x] 프로덕션 대시보드 JSON
+  - [x] 9개 종합 패널:
+    * Active Subscribers
+    * Events/sec 처리량
+    * Dropped events 모니터링
+    * Publishing & delivery rates
+    * Event delivery latency (p50/p95/p99)
+    * Subscribers by event type
+    * Channel buffer usage
+    * Broadcast duration
+  - [x] 10초 자동 새로고침
+  - [x] 1시간 시간 윈도우
+
+**결과:**
+- ✅ 완전한 시각화 대시보드
+- ✅ 실시간 모니터링
+- ✅ 성능 메트릭 추적
+
+#### 6.5. 운영 가이드 (완료 ✅)
+**파일**: `docs/OPERATIONS_GUIDE.md`
+
+- [x] 배포 가이드
+  - [x] 자동 배포 방법
+  - [x] 수동 배포 절차
+  - [x] 설정 관리
+- [x] 서비스 관리
+  - [x] Start/Stop/Restart
+  - [x] 로그 조회
+  - [x] 상태 확인
+- [x] 모니터링
+  - [x] 헬스 체크
+  - [x] Prometheus 통합
+  - [x] Grafana 대시보드
+  - [x] 알림 규칙
+- [x] 트러블슈팅
+  - [x] 일반적인 문제 및 해결책
+  - [x] 메모리/CPU 이슈
+  - [x] 이벤트 드롭 문제
+  - [x] 데이터베이스 이슈
+- [x] 유지보수
+  - [x] 정기 작업
+  - [x] 업그레이드 절차
+  - [x] 데이터베이스 유지보수
+- [x] 백업 & 복구
+  - [x] 백업 전략
+  - [x] 복구 절차
+  - [x] 재해 복구
+- [x] 성능 튜닝
+  - [x] Worker pool 튜닝
+  - [x] EventBus 튜닝
+  - [x] 데이터베이스 최적화
+- [x] 보안
+  - [x] 네트워크 보안
+  - [x] 인증
+  - [x] TLS/SSL
+  - [x] 보안 모범 사례
+
+**결과:**
+- ✅ 포괄적인 운영 가이드 (2000+ 라인)
+- ✅ 실무 중심 절차
+- ✅ 문제 해결 가이드
+- ✅ Commit: 2492d56
+
 ## 🔄 현재 작업
 
-### 없음 (Phase 5 완료)
+### 없음 (Phase 6 완료)
 
 ---
 
@@ -433,13 +564,23 @@
 
 ## 🚀 향후 계획 (Phase 6+)
 
-### Phase 6: 프로덕션 준비 (다음 단계)
-- [ ] Systemd 서비스 파일
-- [ ] 로그 로테이션 설정
+### ~~Phase 6: 프로덕션 준비~~ (완료 ✅)
+- [x] Systemd 서비스 파일 ✅
+- [x] 로그 로테이션 설정 ✅
 - [x] Prometheus 통합 ✅ (Phase 5.5에서 완료)
-- [ ] Grafana 대시보드 (예제만 제공됨)
-- [ ] 배포 스크립트
-- [ ] 운영 문서
+- [x] Grafana 대시보드 ✅ (프로덕션 JSON)
+- [x] 배포 스크립트 ✅
+- [x] 운영 문서 ✅
+
+**생성된 파일:**
+- deployments/systemd/indexer-go.service
+- deployments/systemd/indexer-go.env.example
+- deployments/logrotate/indexer-go
+- deployments/scripts/deploy.sh
+- deployments/scripts/health-check.sh
+- deployments/grafana/dashboard.json
+- docs/OPERATIONS_GUIDE.md (2000+ 라인)
+- Commit: 2492d56
 
 ### Phase 7: 고급 기능 (예정)
 - [ ] Historical data API
@@ -521,9 +662,12 @@
 
 ### Event Subscription System
 - [EVENT_SUBSCRIPTION_DESIGN.md](./EVENT_SUBSCRIPTION_DESIGN.md) - 이벤트 구독 시스템 설계
-- [EVENT_SUBSCRIPTION_API.md](./EVENT_SUBSCRIPTION_API.md) - 완전한 API 레퍼런스 ⭐ NEW
-- [METRICS_MONITORING.md](./METRICS_MONITORING.md) - Prometheus 모니터링 가이드 ⭐ NEW
+- [EVENT_SUBSCRIPTION_API.md](./EVENT_SUBSCRIPTION_API.md) - 완전한 API 레퍼런스
+- [METRICS_MONITORING.md](./METRICS_MONITORING.md) - Prometheus 모니터링 가이드
 - [BENCHMARK_RESULTS.md](./BENCHMARK_RESULTS.md) - 성능 벤치마크 결과
+
+### Production Deployment
+- [OPERATIONS_GUIDE.md](./OPERATIONS_GUIDE.md) - 프로덕션 배포 및 운영 가이드 ⭐ NEW
 
 ---
 
@@ -548,6 +692,6 @@ docs(events): add API documentation
 
 ---
 
-**Status**: ✅ Phase 5 Complete - Event Subscription System
-**Phase**: 5.6 완료 → Phase 6 (프로덕션 준비) 대기
-**Next Milestone**: 프로덕션 배포 준비
+**Status**: 🚀 Phase 6 Complete - Production Ready
+**Phase**: 6.5 완료 → Phase 7 (고급 기능) 대기
+**Next Milestone**: 고급 기능 개발 (Historical API, Analytics)
