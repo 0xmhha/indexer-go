@@ -138,7 +138,7 @@ func (c *Client) GetTransactionReceipt(ctx context.Context, hash common.Hash) (*
 }
 
 // GetBlockReceipts fetches all receipts for a block
-func (c *Client) GetBlockReceipts(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+func (c *Client) GetBlockReceipts(ctx context.Context, blockNumber uint64) (types.Receipts, error) {
 	blockNum := new(big.Int).SetUint64(blockNumber)
 
 	// Use BlockReceipts method from ethclient
@@ -147,7 +147,7 @@ func (c *Client) GetBlockReceipts(ctx context.Context, blockNumber uint64) ([]*t
 		return nil, fmt.Errorf("failed to get receipts for block %d: %w", blockNumber, err)
 	}
 
-	return receipts, nil
+	return types.Receipts(receipts), nil
 }
 
 // GetChainID returns the chain ID

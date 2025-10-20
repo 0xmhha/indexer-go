@@ -2,9 +2,14 @@
 
 # Variables
 BINARY_NAME=indexer-go
-MAIN_PATH=./cmd
+MAIN_PATH=./cmd/indexer
 BUILD_DIR=./build
 COVERAGE_FILE=coverage.out
+
+# Version information
+VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+BUILD_TIME?=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
 # Go commands
 GOCMD=go
@@ -16,8 +21,11 @@ GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 GOVET=$(GOCMD) vet
 
-# Build flags
-LDFLAGS=-ldflags "-s -w"
+# Build flags with version information
+LDFLAGS=-ldflags "-s -w \
+	-X main.version=$(VERSION) \
+	-X main.commit=$(COMMIT) \
+	-X main.buildTime=$(BUILD_TIME)"
 TAGS=-tags release
 
 all: clean build test
@@ -114,10 +122,12 @@ tools:
 ## run: Run the indexer (dev)
 run: build-dev
 	@echo "Starting indexer..."
-	$(BUILD_DIR)/$(BINARY_NAME) start \
-		--remote http://localhost:8545 \
-		--db-path ./dev-data \
-		--log-level debug
+	$(BUILD_DIR)/$(BINARY_NAME) \
+		--rpc http://localhost:8545 \
+		--db ./dev-data \
+		--log-level debug \
+		--workers 10 \
+		--batch-size 100
 
 ## docker-build: Build Docker image
 docker-build:

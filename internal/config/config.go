@@ -15,6 +15,7 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Log      LogConfig      `yaml:"log"`
 	Indexer  IndexerConfig  `yaml:"indexer"`
+	API      APIConfig      `yaml:"api"`
 }
 
 // RPCConfig holds RPC client configuration
@@ -40,6 +41,18 @@ type IndexerConfig struct {
 	Workers     int    `yaml:"workers"`
 	ChunkSize   int    `yaml:"chunk_size"`
 	StartHeight uint64 `yaml:"start_height"`
+}
+
+// APIConfig holds API server configuration
+type APIConfig struct {
+	Enabled         bool     `yaml:"enabled"`
+	Host            string   `yaml:"host"`
+	Port            int      `yaml:"port"`
+	EnableGraphQL   bool     `yaml:"enable_graphql"`
+	EnableJSONRPC   bool     `yaml:"enable_jsonrpc"`
+	EnableWebSocket bool     `yaml:"enable_websocket"`
+	EnableCORS      bool     `yaml:"enable_cors"`
+	AllowedOrigins  []string `yaml:"allowed_origins"`
 }
 
 // NewConfig creates a new Config with default values
@@ -70,6 +83,17 @@ func (c *Config) SetDefaults() {
 	}
 	if c.Indexer.ChunkSize == 0 {
 		c.Indexer.ChunkSize = 100
+	}
+
+	// API defaults
+	if c.API.Host == "" {
+		c.API.Host = "localhost"
+	}
+	if c.API.Port == 0 {
+		c.API.Port = 8080
+	}
+	if c.API.AllowedOrigins == nil {
+		c.API.AllowedOrigins = []string{"*"}
 	}
 }
 
@@ -129,6 +153,46 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_START_HEIGHT: %w", err)
 		}
 		c.Indexer.StartHeight = val
+	}
+
+	// API configuration
+	if enabled := os.Getenv("INDEXER_API_ENABLED"); enabled != "" {
+		val, err := strconv.ParseBool(enabled)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_ENABLED: %w", err)
+		}
+		c.API.Enabled = val
+	}
+	if host := os.Getenv("INDEXER_API_HOST"); host != "" {
+		c.API.Host = host
+	}
+	if port := os.Getenv("INDEXER_API_PORT"); port != "" {
+		val, err := strconv.Atoi(port)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_PORT: %w", err)
+		}
+		c.API.Port = val
+	}
+	if enableGraphQL := os.Getenv("INDEXER_API_GRAPHQL"); enableGraphQL != "" {
+		val, err := strconv.ParseBool(enableGraphQL)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_GRAPHQL: %w", err)
+		}
+		c.API.EnableGraphQL = val
+	}
+	if enableJSONRPC := os.Getenv("INDEXER_API_JSONRPC"); enableJSONRPC != "" {
+		val, err := strconv.ParseBool(enableJSONRPC)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_JSONRPC: %w", err)
+		}
+		c.API.EnableJSONRPC = val
+	}
+	if enableWebSocket := os.Getenv("INDEXER_API_WEBSOCKET"); enableWebSocket != "" {
+		val, err := strconv.ParseBool(enableWebSocket)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_WEBSOCKET: %w", err)
+		}
+		c.API.EnableWebSocket = val
 	}
 
 	return nil
