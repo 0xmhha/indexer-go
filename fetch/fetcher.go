@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/events"
 )
 
 // Client defines the interface for RPC client operations
@@ -66,19 +68,22 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
-	client  Client
-	storage Storage
-	config  *Config
-	logger  *zap.Logger
+	client   Client
+	storage  Storage
+	config   *Config
+	logger   *zap.Logger
+	eventBus *events.EventBus
 }
 
 // NewFetcher creates a new Fetcher instance
-func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logger) *Fetcher {
+// eventBus is optional - if nil, no events will be published
+func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logger, eventBus *events.EventBus) *Fetcher {
 	return &Fetcher{
-		client:  client,
-		storage: storage,
-		config:  config,
-		logger:  logger,
+		client:   client,
+		storage:  storage,
+		config:   config,
+		logger:   logger,
+		eventBus: eventBus,
 	}
 }
 
@@ -139,10 +144,52 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		return fmt.Errorf("failed to store block %d: %w", height, err)
 	}
 
+	// Publish block event if EventBus is configured
+	if f.eventBus != nil {
+		blockEvent := events.NewBlockEvent(block)
+		if !f.eventBus.Publish(blockEvent) {
+			f.logger.Warn("Failed to publish block event (channel full)",
+				zap.Uint64("height", height),
+			)
+		}
+	}
+
 	// Store receipts
 	for _, receipt := range receipts {
 		if err := f.storage.SetReceipt(ctx, receipt); err != nil {
 			return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
+		}
+	}
+
+	// Publish transaction events if EventBus is configured
+	if f.eventBus != nil {
+		transactions := block.Transactions()
+		for i, tx := range transactions {
+			// Find matching receipt
+			var receipt *types.Receipt
+			for _, r := range receipts {
+				if r.TxHash == tx.Hash() {
+					receipt = r
+					break
+				}
+			}
+
+			// Create transaction event
+			txEvent := events.NewTransactionEvent(
+				tx,
+				block.NumberU64(),
+				block.Hash(),
+				uint(i),
+				getTransactionSender(tx),
+				receipt,
+			)
+
+			if !f.eventBus.Publish(txEvent) {
+				f.logger.Warn("Failed to publish transaction event (channel full)",
+					zap.String("tx_hash", tx.Hash().Hex()),
+					zap.Uint64("block", height),
+				)
+			}
 		}
 	}
 
@@ -309,10 +356,52 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)
 				}
 
+				// Publish block event if EventBus is configured
+				if f.eventBus != nil {
+					blockEvent := events.NewBlockEvent(res.block)
+					if !f.eventBus.Publish(blockEvent) {
+						f.logger.Warn("Failed to publish block event (channel full)",
+							zap.Uint64("height", nextHeight),
+						)
+					}
+				}
+
 				// Store receipts
 				for _, receipt := range res.receipts {
 					if err := f.storage.SetReceipt(ctx, receipt); err != nil {
 						return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
+					}
+				}
+
+				// Publish transaction events if EventBus is configured
+				if f.eventBus != nil {
+					transactions := res.block.Transactions()
+					for i, tx := range transactions {
+						// Find matching receipt
+						var receipt *types.Receipt
+						for _, r := range res.receipts {
+							if r.TxHash == tx.Hash() {
+								receipt = r
+								break
+							}
+						}
+
+						// Create transaction event
+						txEvent := events.NewTransactionEvent(
+							tx,
+							res.block.NumberU64(),
+							res.block.Hash(),
+							uint(i),
+							getTransactionSender(tx),
+							receipt,
+						)
+
+						if !f.eventBus.Publish(txEvent) {
+							f.logger.Warn("Failed to publish transaction event (channel full)",
+								zap.String("tx_hash", tx.Hash().Hex()),
+								zap.Uint64("block", nextHeight),
+							)
+						}
 					}
 				}
 
@@ -678,4 +767,17 @@ func (f *Fetcher) RunWithGapRecovery(ctx context.Context) error {
 
 	// Run normal fetching loop
 	return f.Run(ctx)
+}
+
+// getTransactionSender extracts the sender address from a transaction
+// Returns zero address if sender cannot be determined
+func getTransactionSender(tx *types.Transaction) common.Address {
+	// Try to recover sender from transaction signature
+	// This is a simplified version - in production, you'd want proper chain ID
+	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	if err != nil {
+		// Return zero address if we can't recover sender
+		return common.Address{}
+	}
+	return from
 }

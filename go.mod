@@ -1,4 +1,4 @@
-module github.com/wemix-blockchain/indexer-go
+module github.com/0xmhha/indexer-go
 
 go 1.24.0
 
