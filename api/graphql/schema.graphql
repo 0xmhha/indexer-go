@@ -1,0 +1,333 @@
+# GraphQL Schema for Ethereum Blockchain Indexer
+
+# Scalar types for Ethereum data
+# Bytes represents hex-encoded bytes (0x...)
+scalar Bytes
+
+# BigInt represents large integers as strings
+scalar BigInt
+
+# Address represents an Ethereum address (0x...)
+scalar Address
+
+# Hash represents a 32-byte hash (0x...)
+scalar Hash
+
+# Block represents an Ethereum block
+type Block {
+  # Block number (height)
+  number: BigInt!
+
+  # Block hash
+  hash: Hash!
+
+  # Parent block hash
+  parentHash: Hash!
+
+  # Timestamp of the block
+  timestamp: BigInt!
+
+  # Block nonce
+  nonce: Bytes!
+
+  # Miner address (coinbase)
+  miner: Address!
+
+  # Difficulty
+  difficulty: BigInt!
+
+  # Total difficulty
+  totalDifficulty: BigInt
+
+  # Gas limit
+  gasLimit: BigInt!
+
+  # Gas used
+  gasUsed: BigInt!
+
+  # Extra data
+  extraData: Bytes!
+
+  # Size in bytes
+  size: BigInt!
+
+  # Transactions in this block
+  transactions: [Transaction!]!
+
+  # Transaction count
+  transactionCount: Int!
+
+  # Uncle blocks (ommers)
+  uncles: [Hash!]!
+}
+
+# Transaction represents an Ethereum transaction
+type Transaction {
+  # Transaction hash
+  hash: Hash!
+
+  # Block number containing this transaction
+  blockNumber: BigInt!
+
+  # Block hash containing this transaction
+  blockHash: Hash!
+
+  # Transaction index in block
+  transactionIndex: Int!
+
+  # From address
+  from: Address!
+
+  # To address (null for contract creation)
+  to: Address
+
+  # Value transferred
+  value: BigInt!
+
+  # Gas limit
+  gas: BigInt!
+
+  # Gas price
+  gasPrice: BigInt
+
+  # Max fee per gas (EIP-1559)
+  maxFeePerGas: BigInt
+
+  # Max priority fee per gas (EIP-1559)
+  maxPriorityFeePerGas: BigInt
+
+  # Transaction type (0x00, 0x02, 0x03, 0x16)
+  type: Int!
+
+  # Input data
+  input: Bytes!
+
+  # Nonce
+  nonce: BigInt!
+
+  # V signature value
+  v: BigInt!
+
+  # R signature value
+  r: Bytes!
+
+  # S signature value
+  s: Bytes!
+
+  # Chain ID
+  chainId: BigInt
+
+  # Access list (EIP-2930)
+  accessList: [AccessListEntry!]
+
+  # Transaction receipt
+  receipt: Receipt
+}
+
+# AccessListEntry represents an access list entry
+type AccessListEntry {
+  address: Address!
+  storageKeys: [Hash!]!
+}
+
+# Receipt represents a transaction receipt
+type Receipt {
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Block hash
+  blockHash: Hash!
+
+  # Transaction index
+  transactionIndex: Int!
+
+  # Contract address (for contract creation)
+  contractAddress: Address
+
+  # Gas used
+  gasUsed: BigInt!
+
+  # Cumulative gas used
+  cumulativeGasUsed: BigInt!
+
+  # Effective gas price
+  effectiveGasPrice: BigInt!
+
+  # Status (1 for success, 0 for failure)
+  status: Int!
+
+  # Logs
+  logs: [Log!]!
+
+  # Logs bloom filter
+  logsBloom: Bytes!
+}
+
+# Log represents an event log
+type Log {
+  # Address that generated the log
+  address: Address!
+
+  # Topics
+  topics: [Hash!]!
+
+  # Data
+  data: Bytes!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Block hash
+  blockHash: Hash!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Transaction index
+  transactionIndex: Int!
+
+  # Log index
+  logIndex: Int!
+
+  # Removed (true if log was removed due to chain reorg)
+  removed: Boolean!
+}
+
+# Filter input for querying blocks
+input BlockFilter {
+  # Filter by number range
+  numberFrom: BigInt
+  numberTo: BigInt
+
+  # Filter by timestamp range
+  timestampFrom: BigInt
+  timestampTo: BigInt
+
+  # Filter by miner address
+  miner: Address
+}
+
+# Filter input for querying transactions
+input TransactionFilter {
+  # Filter by block number range
+  blockNumberFrom: BigInt
+  blockNumberTo: BigInt
+
+  # Filter by from address
+  from: Address
+
+  # Filter by to address
+  to: Address
+
+  # Filter by transaction type
+  type: Int
+}
+
+# Filter input for querying logs
+input LogFilter {
+  # Filter by address
+  address: Address
+
+  # Filter by topics
+  topics: [Hash!]
+
+  # Filter by block number range
+  blockNumberFrom: BigInt
+  blockNumberTo: BigInt
+}
+
+# Pagination input
+input PaginationInput {
+  # Number of items to return (default: 10, max: 100)
+  limit: Int
+
+  # Offset for pagination
+  offset: Int
+}
+
+# Query root type
+type Query {
+  # Get the latest indexed block height
+  latestHeight: BigInt!
+
+  # Get a block by number
+  block(number: BigInt!): Block
+
+  # Get a block by hash
+  blockByHash(hash: Hash!): Block
+
+  # Get blocks with optional filtering and pagination
+  blocks(filter: BlockFilter, pagination: PaginationInput): BlockConnection!
+
+  # Get a transaction by hash
+  transaction(hash: Hash!): Transaction
+
+  # Get transactions with optional filtering and pagination
+  transactions(filter: TransactionFilter, pagination: PaginationInput): TransactionConnection!
+
+  # Get transactions by address (sent from or received by)
+  transactionsByAddress(address: Address!, pagination: PaginationInput): TransactionConnection!
+
+  # Get a receipt by transaction hash
+  receipt(transactionHash: Hash!): Receipt
+
+  # Get receipts for a block
+  receiptsByBlock(blockNumber: BigInt!): [Receipt!]!
+
+  # Get logs with filtering
+  logs(filter: LogFilter!, pagination: PaginationInput): LogConnection!
+}
+
+# Block connection for pagination
+type BlockConnection {
+  # List of blocks
+  nodes: [Block!]!
+
+  # Total count
+  totalCount: Int!
+
+  # Page info
+  pageInfo: PageInfo!
+}
+
+# Transaction connection for pagination
+type TransactionConnection {
+  # List of transactions
+  nodes: [Transaction!]!
+
+  # Total count
+  totalCount: Int!
+
+  # Page info
+  pageInfo: PageInfo!
+}
+
+# Log connection for pagination
+type LogConnection {
+  # List of logs
+  nodes: [Log!]!
+
+  # Total count
+  totalCount: Int!
+
+  # Page info
+  pageInfo: PageInfo!
+}
+
+# Page info for pagination
+type PageInfo {
+  # Has next page
+  hasNextPage: Boolean!
+
+  # Has previous page
+  hasPreviousPage: Boolean!
+
+  # Start cursor
+  startCursor: String
+
+  # End cursor
+  endCursor: String
+}

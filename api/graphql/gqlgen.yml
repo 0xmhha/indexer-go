@@ -1,0 +1,58 @@
+# GraphQL schema location
+schema:
+  - schema.graphql
+
+# Where should the generated server code go?
+exec:
+  filename: generated/exec.go
+  package: generated
+
+# Where should the model code go?
+model:
+  filename: generated/models.go
+  package: generated
+
+# Where should the resolver implementations go?
+resolver:
+  filename: generated/resolver.go
+  package: generated
+  type: Resolver
+
+# Optional: turn on to not generate builtin types
+# autobind:
+#  - "github.com/wemix-blockchain/indexer-go/types"
+
+# Autobind built-in types
+autobind:
+  - github.com/99designs/gqlgen/graphql
+
+# Custom scalar types - using string representation for simplicity
+models:
+  Bytes:
+    model:
+      - string
+  BigInt:
+    model:
+      - string
+  Address:
+    model:
+      - string
+  Hash:
+    model:
+      - string
+
+# Directives
+# directives:
+#   goField:
+#     locations:
+#       - FIELD_DEFINITION
+#       - INPUT_FIELD_DEFINITION
+
+# Optional: omit getters
+# omit_getters: false
+
+# Optional: omit slice element pointers
+omit_slice_element_pointers: true
+
+# Optional: generate struct field names
+struct_tag: json
