@@ -2,8 +2,8 @@
 
 > 프로젝트 진행 상황 및 작업 계획
 
-**Last Updated**: 2025-10-20 22:00
-**Current Phase**: Phase 6 완료 (Production Readiness)
+**Last Updated**: 2025-10-20 23:00
+**Current Phase**: Phase 7 시작 (Advanced Features - Historical API)
 
 ---
 
@@ -481,7 +481,27 @@
 
 ## 🔄 현재 작업
 
-### 없음 (Phase 6 완료)
+### Phase 7: 고급 기능 - Historical Data API (진행 중)
+
+#### 7.1. Historical Data API 설계 (진행 중 🔄)
+**파일**: `docs/HISTORICAL_API_DESIGN.md`
+
+- [ ] 설계 문서 작성
+  - [ ] 요구사항 분석
+  - [ ] API 엔드포인트 설계
+  - [ ] 데이터베이스 쿼리 최적화
+  - [ ] 성능 고려사항
+- [ ] Historical Block Range API
+  - [ ] 블록 범위 조회 구현
+  - [ ] 페이지네이션 지원
+  - [ ] 효율적인 인덱싱
+- [ ] Transaction History API
+  - [ ] 주소별 트랜잭션 조회
+  - [ ] 시간 범위 필터링
+  - [ ] 정렬 옵션
+- [ ] Address Balance Tracking
+  - [ ] 주소 잔액 추적 시스템
+  - [ ] 히스토리 스냅샷
 
 ---
 
@@ -582,19 +602,50 @@
 - docs/OPERATIONS_GUIDE.md (2000+ 라인)
 - Commit: 2492d56
 
-### Phase 7: 고급 기능 (예정)
-- [ ] Historical data API
+### Phase 7: 고급 기능 (진행 중 🔄)
+
+#### 7.1. Historical Data API (진행 중 🔄)
+- [ ] 설계 문서 (HISTORICAL_API_DESIGN.md)
+- [ ] Historical Block Range API
   - [ ] 과거 블록 범위 조회
-  - [ ] 트랜잭션 히스토리
-  - [ ] 주소 잔액 추적
-- [ ] 분석 기능
-  - [ ] Gas 사용량 통계
-  - [ ] 네트워크 활동 메트릭
-  - [ ] Top addresses
-- [ ] 알림 기능
-  - [ ] Webhook 통합
-  - [ ] Email 알림
-  - [ ] Slack 통합
+  - [ ] 페이지네이션
+  - [ ] 효율적인 인덱싱
+- [ ] Transaction History API
+  - [ ] 주소별 트랜잭션 히스토리
+  - [ ] 시간 범위 필터링
+  - [ ] 정렬 및 페이지네이션
+- [ ] Address Balance Tracking
+  - [ ] 주소 잔액 추적 시스템
+  - [ ] 잔액 히스토리 스냅샷
+  - [ ] 잔액 변화 이벤트
+
+#### 7.2. 분석 기능 (예정)
+- [ ] Gas 사용량 통계
+  - [ ] 블록별 gas 사용량
+  - [ ] 주소별 gas 소비
+  - [ ] 시간대별 gas 트렌드
+- [ ] 네트워크 활동 메트릭
+  - [ ] TPS (Transactions Per Second)
+  - [ ] 블록 생성 시간
+  - [ ] 네트워크 활동 추세
+- [ ] Top Addresses
+  - [ ] 가장 활동적인 주소
+  - [ ] 가장 많은 gas 소비
+  - [ ] 최근 활동 주소
+
+#### 7.3. 알림 기능 (예정)
+- [ ] Webhook 통합
+  - [ ] Webhook 설정 API
+  - [ ] 이벤트 전달 시스템
+  - [ ] 재시도 로직
+- [ ] Email 알림
+  - [ ] SMTP 설정
+  - [ ] 이메일 템플릿
+  - [ ] 구독 관리
+- [ ] Slack 통합
+  - [ ] Slack webhook
+  - [ ] 알림 포맷팅
+  - [ ] 채널 관리
 
 ### Phase 8: 수평 확장 (예정)
 - [ ] Redis Pub/Sub 통합
@@ -692,6 +743,6 @@ docs(events): add API documentation
 
 ---
 
-**Status**: 🚀 Phase 6 Complete - Production Ready
-**Phase**: 6.5 완료 → Phase 7 (고급 기능) 대기
-**Next Milestone**: 고급 기능 개발 (Historical API, Analytics)
+**Status**: 🔄 Phase 7 In Progress - Historical API Development
+**Phase**: Phase 7.1 시작 (Historical Data API 설계 및 구현)
+**Next Milestone**: Historical Data API 완료 → Analytics & Notification Features
