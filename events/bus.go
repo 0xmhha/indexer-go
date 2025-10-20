@@ -4,10 +4,26 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // SubscriptionID is a unique identifier for a subscription
 type SubscriptionID string
+
+// SubscriptionStats tracks statistics for a subscription
+type SubscriptionStats struct {
+	// EventsReceived is the total number of events received by this subscription
+	EventsReceived atomic.Uint64
+
+	// EventsDropped is the number of events dropped due to full channel
+	EventsDropped atomic.Uint64
+
+	// LastEventTime is the timestamp of the last event received
+	LastEventTime atomic.Int64 // Unix timestamp in nanoseconds
+
+	// CreatedAt is when the subscription was created
+	CreatedAt time.Time
+}
 
 // Subscription represents a client subscription to events
 type Subscription struct {
@@ -26,6 +42,9 @@ type Subscription struct {
 
 	// CancelFunc allows canceling this subscription
 	CancelFunc context.CancelFunc
+
+	// Stats tracks statistics for this subscription
+	Stats SubscriptionStats
 }
 
 // EventBus is the central message broker for blockchain events
@@ -58,6 +77,9 @@ type EventBus struct {
 		totalDeliveries atomic.Uint64
 		droppedEvents   atomic.Uint64
 	}
+
+	// metrics holds Prometheus metrics (optional)
+	metrics *Metrics
 }
 
 // NewEventBus creates a new EventBus with the given buffer sizes
@@ -73,6 +95,12 @@ func NewEventBus(publishBufferSize, subscribeBufferSize int) *EventBus {
 		ctx:           ctx,
 		cancel:        cancel,
 	}
+}
+
+// SetMetrics enables Prometheus metrics for the EventBus
+// This is optional - if not called, metrics will not be collected
+func (eb *EventBus) SetMetrics(metrics *Metrics) {
+	eb.metrics = metrics
 }
 
 // Run starts the event bus main loop
@@ -93,6 +121,12 @@ func (eb *EventBus) Run() {
 			eb.subscribers[sub.ID] = sub
 			eb.mu.Unlock()
 
+			// Update metrics
+			if eb.metrics != nil {
+				eb.metrics.RecordSubscription()
+				eb.updateSubscriberMetrics()
+			}
+
 		case subID := <-eb.unsubscribeCh:
 			// Handle unsubscribe
 			eb.mu.Lock()
@@ -102,9 +136,21 @@ func (eb *EventBus) Run() {
 			}
 			eb.mu.Unlock()
 
+			// Update metrics
+			if eb.metrics != nil {
+				eb.metrics.RecordUnsubscription()
+				eb.updateSubscriberMetrics()
+			}
+
 		case event := <-eb.publishCh:
 			// Handle event publishing
 			eb.stats.totalEvents.Add(1)
+
+			// Record metrics
+			if eb.metrics != nil {
+				eb.metrics.RecordEventPublished(event.Type())
+			}
+
 			eb.broadcastEvent(event)
 		}
 	}
@@ -112,6 +158,7 @@ func (eb *EventBus) Run() {
 
 // broadcastEvent sends an event to all interested subscribers
 func (eb *EventBus) broadcastEvent(event Event) {
+	startTime := time.Now()
 	eb.mu.RLock()
 	defer eb.mu.RUnlock()
 
@@ -124,18 +171,48 @@ func (eb *EventBus) broadcastEvent(event Event) {
 		}
 
 		// Apply filter if present
-		if sub.Filter != nil && !sub.Filter.Match(event) {
+		hasFilter := sub.Filter != nil
+		filterStart := time.Now()
+		if hasFilter && !sub.Filter.Match(event) {
+			// Record filter matching time
+			if eb.metrics != nil {
+				eb.metrics.ObserveFilterMatching(eventType, true, time.Since(filterStart))
+				eb.metrics.RecordEventFiltered(eventType, "filtered")
+			}
 			continue
+		}
+		if eb.metrics != nil && hasFilter {
+			eb.metrics.ObserveFilterMatching(eventType, true, time.Since(filterStart))
+		} else if eb.metrics != nil {
+			eb.metrics.ObserveFilterMatching(eventType, false, time.Since(filterStart))
 		}
 
 		// Try to send event non-blocking
+		deliveryStart := time.Now()
 		select {
 		case sub.Channel <- event:
 			eb.stats.totalDeliveries.Add(1)
+			// Update subscription stats
+			sub.Stats.EventsReceived.Add(1)
+			sub.Stats.LastEventTime.Store(time.Now().UnixNano())
+			// Record delivery metrics
+			if eb.metrics != nil {
+				eb.metrics.RecordEventDelivered(eventType)
+				eb.metrics.ObserveEventDelivery(eventType, time.Since(deliveryStart))
+			}
 		default:
 			// Channel is full, drop the event
 			eb.stats.droppedEvents.Add(1)
+			sub.Stats.EventsDropped.Add(1)
+			if eb.metrics != nil {
+				eb.metrics.RecordEventDropped(eventType)
+			}
 		}
+	}
+
+	// Record broadcast duration
+	if eb.metrics != nil {
+		eb.metrics.ObserveBroadcast(time.Since(startTime))
 	}
 }
 
@@ -223,6 +300,9 @@ func (eb *EventBus) Subscribe(id SubscriptionID, eventTypes []EventType, filter 
 		Filter:     filter,
 		Channel:    make(chan Event, channelSize),
 		CancelFunc: cancel,
+		Stats: SubscriptionStats{
+			CreatedAt: time.Now(),
+		},
 	}
 
 	// Send subscribe request
@@ -241,4 +321,97 @@ func (eb *EventBus) Unsubscribe(id SubscriptionID) {
 	case eb.unsubscribeCh <- id:
 	case <-eb.ctx.Done():
 	}
+}
+
+// updateSubscriberMetrics updates subscriber count metrics
+// Must be called with mu held or from within Run()
+func (eb *EventBus) updateSubscriberMetrics() {
+	if eb.metrics == nil {
+		return
+	}
+
+	// Count total subscribers
+	eb.mu.RLock()
+	totalCount := len(eb.subscribers)
+
+	// Count subscribers by event type
+	typeCount := make(map[EventType]int)
+	for _, sub := range eb.subscribers {
+		for eventType := range sub.EventTypes {
+			typeCount[eventType]++
+		}
+	}
+	eb.mu.RUnlock()
+
+	// Update metrics
+	eb.metrics.UpdateSubscriberCount(totalCount)
+	for eventType, count := range typeCount {
+		eb.metrics.UpdateSubscribersByType(eventType, count)
+	}
+
+	// Update channel sizes
+	eb.metrics.UpdatePublishChannelSize(len(eb.publishCh))
+	eb.metrics.UpdateSubscribeChannelSize(len(eb.subscribeCh))
+}
+
+// SubscriberInfo contains information about a subscriber
+type SubscriberInfo struct {
+	ID             SubscriptionID
+	EventTypes     []EventType
+	HasFilter      bool
+	EventsReceived uint64
+	EventsDropped  uint64
+	LastEventTime  time.Time
+	CreatedAt      time.Time
+	Uptime         time.Duration
+}
+
+// GetSubscriberInfo returns information about a specific subscriber
+func (eb *EventBus) GetSubscriberInfo(id SubscriptionID) *SubscriberInfo {
+	eb.mu.RLock()
+	defer eb.mu.RUnlock()
+
+	sub, exists := eb.subscribers[id]
+	if !exists {
+		return nil
+	}
+
+	// Collect event types
+	eventTypes := make([]EventType, 0, len(sub.EventTypes))
+	for et := range sub.EventTypes {
+		eventTypes = append(eventTypes, et)
+	}
+
+	// Get last event time
+	lastEventNano := sub.Stats.LastEventTime.Load()
+	var lastEventTime time.Time
+	if lastEventNano > 0 {
+		lastEventTime = time.Unix(0, lastEventNano)
+	}
+
+	return &SubscriberInfo{
+		ID:             sub.ID,
+		EventTypes:     eventTypes,
+		HasFilter:      sub.Filter != nil,
+		EventsReceived: sub.Stats.EventsReceived.Load(),
+		EventsDropped:  sub.Stats.EventsDropped.Load(),
+		LastEventTime:  lastEventTime,
+		CreatedAt:      sub.Stats.CreatedAt,
+		Uptime:         time.Since(sub.Stats.CreatedAt),
+	}
+}
+
+// GetAllSubscriberInfo returns information about all subscribers
+func (eb *EventBus) GetAllSubscriberInfo() []SubscriberInfo {
+	eb.mu.RLock()
+	defer eb.mu.RUnlock()
+
+	infos := make([]SubscriberInfo, 0, len(eb.subscribers))
+	for id := range eb.subscribers {
+		if info := eb.GetSubscriberInfo(id); info != nil {
+			infos = append(infos, *info)
+		}
+	}
+
+	return infos
 }

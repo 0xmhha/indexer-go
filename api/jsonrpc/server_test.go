@@ -12,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/wemix-blockchain/indexer-go/storage"
+	"github.com/0xmhha/indexer-go/storage"
 	"go.uber.org/zap"
 )
 
