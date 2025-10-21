@@ -159,7 +159,7 @@ func TestNewFetcher(t *testing.T) {
 		RetryDelay:  time.Second,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 	if fetcher == nil {
 		t.Fatal("NewFetcher() returned nil")
 	}
@@ -190,7 +190,7 @@ func TestFetchBlock(t *testing.T) {
 		RetryDelay:  time.Millisecond * 100,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchBlock(ctx, 1)
@@ -236,7 +236,7 @@ func TestFetchBlockWithRetry(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchBlock(ctx, 1)
@@ -267,7 +267,7 @@ func TestFetchBlockMaxRetries(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchBlock(ctx, 1)
@@ -304,7 +304,7 @@ func TestFetchRange(t *testing.T) {
 		RetryDelay:  time.Millisecond * 100,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchRange(ctx, 0, 9)
@@ -361,7 +361,7 @@ func TestFetchRangeWithGap(t *testing.T) {
 		RetryDelay:  time.Millisecond * 100,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchRange(ctx, 0, 9)
@@ -421,7 +421,7 @@ func TestGetNextHeight(t *testing.T) {
 				RetryDelay:  time.Millisecond * 100,
 			}
 
-			fetcher := NewFetcher(client, storage, config, logger)
+			fetcher := NewFetcher(client, storage, config, logger, nil)
 
 			ctx := context.Background()
 			got := fetcher.GetNextHeight(ctx)
@@ -460,7 +460,7 @@ func TestRun(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
@@ -515,7 +515,7 @@ func TestRunCaughtUp(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	// Create context with short timeout
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
@@ -544,7 +544,7 @@ func TestRunWithClientError(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*200)
@@ -585,7 +585,7 @@ func TestFetchBlockStorageError(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchBlock(ctx, 1)
@@ -622,7 +622,7 @@ func TestFetchBlockReceiptError(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchBlock(ctx, 1)
@@ -658,7 +658,7 @@ func TestFetchRangeContextCancel(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	// Create context that is already cancelled
 	ctx, cancel := context.WithCancel(context.Background())
@@ -685,7 +685,7 @@ func TestGetNextHeightWithError(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	// Should fall back to start height when storage returns error
 	ctx := context.Background()
@@ -799,7 +799,7 @@ func TestFetchRangeConcurrent(t *testing.T) {
 		NumWorkers:  10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
@@ -871,7 +871,7 @@ func TestFetchRangeConcurrentPerformance(t *testing.T) {
 			NumWorkers:  1, // Sequential
 		}
 
-		fetcher := NewFetcher(client, storage, config, logger)
+		fetcher := NewFetcher(client, storage, config, logger, nil)
 
 		start := time.Now()
 		ctx := context.Background()
@@ -902,7 +902,7 @@ func TestFetchRangeConcurrentPerformance(t *testing.T) {
 			NumWorkers:  10, // Concurrent
 		}
 
-		fetcher := NewFetcher(client, storage, config, logger)
+		fetcher := NewFetcher(client, storage, config, logger, nil)
 
 		start := time.Now()
 		ctx := context.Background()
@@ -954,7 +954,7 @@ func TestFetchRangeConcurrentWithRetry(t *testing.T) {
 		NumWorkers:  5,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
@@ -1000,7 +1000,7 @@ func TestFetchRangeConcurrentContextCancel(t *testing.T) {
 		NumWorkers:  10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	// Create context that is already cancelled
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1044,7 +1044,7 @@ func TestFetchRangeConcurrentMaxRetries(t *testing.T) {
 		NumWorkers:  3,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
@@ -1083,7 +1083,7 @@ func TestFetchRangeConcurrentOrderPreservation(t *testing.T) {
 		NumWorkers:  20, // High concurrency
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	err := fetcher.FetchRangeConcurrent(ctx, 0, numBlocks-1)
@@ -1257,7 +1257,7 @@ func TestDetectGaps(t *testing.T) {
 				RetryDelay:  time.Millisecond * 10,
 			}
 
-			fetcher := NewFetcher(client, storage, config, logger)
+			fetcher := NewFetcher(client, storage, config, logger, nil)
 
 			ctx := context.Background()
 			gaps, err := fetcher.DetectGaps(ctx, tt.scanStart, tt.scanEnd)
@@ -1310,7 +1310,7 @@ func TestDetectGapsContextCancel(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	// Create context that is already cancelled
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1350,7 +1350,7 @@ func TestFillGap(t *testing.T) {
 		NumWorkers:  5,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -1421,7 +1421,7 @@ func TestFillGaps(t *testing.T) {
 		NumWorkers:  5,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 	ctx := context.Background()
 
 	// Test multiple gaps
@@ -1460,7 +1460,7 @@ func TestFillGapsEmpty(t *testing.T) {
 		RetryDelay:  time.Millisecond * 10,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 	ctx := context.Background()
 
 	err := fetcher.FillGaps(ctx, []GapRange{})
@@ -1505,7 +1505,7 @@ func TestRunWithGapRecovery(t *testing.T) {
 		NumWorkers:  5,
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	// Create context with timeout to stop after gap recovery
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
@@ -1556,7 +1556,7 @@ func TestExponentialBackoff(t *testing.T) {
 		RetryDelay:  time.Millisecond * 100, // Base delay
 	}
 
-	fetcher := NewFetcher(client, storage, config, logger)
+	fetcher := NewFetcher(client, storage, config, logger, nil)
 
 	ctx := context.Background()
 	start := time.Now()

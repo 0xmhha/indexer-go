@@ -25,7 +25,9 @@ const (
 
 // Metadata keys
 const (
-	keyLatestHeight = "/meta/lh"
+	keyLatestHeight      = "/meta/lh"
+	keyBlockCount        = "/meta/bc"
+	keyTransactionCount  = "/meta/tc"
 )
 
 // LatestHeightKey returns the key for storing latest indexed height
@@ -65,8 +67,9 @@ func BlockHashIndexKey(blockHash common.Hash) []byte {
 
 // AddressTransactionKey returns the key for address-transaction index
 // Format: /index/addr/{address}/{seq}
+// Uses zero-padded fixed-width format for proper lexicographic sorting
 func AddressTransactionKey(addr common.Address, seq uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%d", prefixAddr, addr.Hex(), seq))
+	return []byte(fmt.Sprintf("%s%s/%020d", prefixAddr, addr.Hex(), seq))
 }
 
 // ParseBlockKey parses a block key and returns the height
@@ -142,6 +145,46 @@ func BlockKeyRange(startHeight, endHeight uint64) ([]byte, []byte) {
 // Used for iterating all transactions for an address
 func AddressTransactionKeyPrefix(addr common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%s/", prefixAddr, addr.Hex()))
+}
+
+// BlockTimestampKey returns the key for timestamp index
+// Format: /index/time/{timestamp}/{height}
+// Uses zero-padded fixed-width format for proper lexicographic sorting
+func BlockTimestampKey(timestamp uint64, height uint64) []byte {
+	return []byte(fmt.Sprintf("/index/time/%020d/%020d", timestamp, height))
+}
+
+// BlockTimestampKeyPrefix returns the prefix for all timestamp indexes
+func BlockTimestampKeyPrefix() []byte {
+	return []byte("/index/time/")
+}
+
+// AddressBalanceKey returns the key for an address balance at a specific block
+// Format: /index/balance/{address}/history/{seq}
+// Uses zero-padded fixed-width format for proper lexicographic sorting
+func AddressBalanceKey(addr common.Address, seq uint64) []byte {
+	return []byte(fmt.Sprintf("/index/balance/%s/history/%020d", addr.Hex(), seq))
+}
+
+// AddressBalanceLatestKey returns the key for the latest balance of an address
+// Format: /index/balance/{address}/latest
+func AddressBalanceLatestKey(addr common.Address) []byte {
+	return []byte(fmt.Sprintf("/index/balance/%s/latest", addr.Hex()))
+}
+
+// AddressBalanceKeyPrefix returns the prefix for balance history of an address
+func AddressBalanceKeyPrefix(addr common.Address) []byte {
+	return []byte(fmt.Sprintf("/index/balance/%s/history/", addr.Hex()))
+}
+
+// BlockCountKey returns the key for total block count
+func BlockCountKey() []byte {
+	return []byte(keyBlockCount)
+}
+
+// TransactionCountKey returns the key for total transaction count
+func TransactionCountKey() []byte {
+	return []byte(keyTransactionCount)
 }
 
 // HasPrefix checks if key has the given prefix
