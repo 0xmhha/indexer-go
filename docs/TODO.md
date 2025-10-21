@@ -547,7 +547,155 @@
 
 ## 🔄 현재 작업
 
-**없음** - 모든 핵심 기능 구현 완료, 프로덕션 준비 완료
+### Docker Compose 통합 (진행 중 🔄)
+
+#### 개요
+Stable-One 노드를 포함한 완전한 Docker Compose 환경 구성. 로컬 개발 및 테스트를 위한 원클릭 실행 환경 제공.
+
+#### 목표
+- ✅ Stable-One Ethereum 노드와 Indexer를 Docker Compose로 통합 실행
+- ✅ 서비스 간 네트워킹 자동 설정
+- ✅ 볼륨 관리 및 데이터 영속성 보장
+- ✅ 헬스 체크 및 서비스 의존성 관리
+- ✅ 원클릭 환경 구축 및 실행
+
+#### 주요 작업 항목
+
+##### 1. Docker Compose 설정 (완료 ✅)
+**파일**: `docker-compose.yml`
+
+- [x] Stable-One 노드 서비스 추가
+  - [x] Geth (ethereum/client-go) 이미지 사용
+  - [x] HTTP RPC 설정 (포트 8545)
+  - [x] WebSocket RPC 설정 (포트 8546)
+  - [x] P2P 네트워킹 (포트 30303)
+  - [x] Snap 동기화 모드
+  - [x] 캐시 및 피어 설정
+
+- [x] Indexer 서비스 업데이트
+  - [x] stable-one 서비스 의존성 설정
+  - [x] RPC 엔드포인트를 stable-one으로 변경
+  - [x] 헬스 체크 유지
+
+- [x] 네트워크 설정
+  - [x] 전용 서브넷 구성 (172.25.0.0/16)
+  - [x] 서비스 간 통신 설정
+
+- [x] 볼륨 관리
+  - [x] blockchain-data 볼륨 (Stable-One 블록체인 데이터)
+  - [x] data 볼륨 (Indexer 데이터베이스)
+  - [x] 영속성 보장
+
+- [x] 헬스 체크
+  - [x] Stable-One: geth attach 명령어 사용
+  - [x] Indexer: /health 엔드포인트 사용
+  - [x] 시작 지연 시간 설정 (Stable-One: 5분, Indexer: 40초)
+
+- [x] 로깅 설정
+  - [x] JSON 로그 드라이버
+  - [x] 로그 로테이션 (최대 100MB, 3개 파일)
+
+**결과:**
+- ✅ docker-compose.yml 업데이트 완료
+- ✅ 2-service 아키텍처 구현
+- ✅ Commit: [pending]
+
+##### 2. 환경 설정 파일 (진행 예정 📋)
+**파일**: `.env.example`, `docs/DOCKER_SETUP.md`
+
+- [ ] .env.example 업데이트
+  - [ ] Stable-One 관련 환경변수 추가
+    * GETH_NETWORK (mainnet/testnet/devnet)
+    * GETH_CACHE_SIZE (기본: 2048MB)
+    * GETH_MAX_PEERS (기본: 50)
+    * GETH_SYNCMODE (snap/full/light)
+  - [ ] Docker 관련 설정
+    * COMPOSE_PROJECT_NAME
+    * COMPOSE_FILE
+
+- [ ] Docker 설정 문서 작성
+  - [ ] Quick Start 가이드
+  - [ ] 환경변수 설명
+  - [ ] 네트워크 선택 가이드
+  - [ ] 볼륨 관리 가이드
+  - [ ] 트러블슈팅
+
+##### 3. 초기화 및 테스트 (진행 예정 📋)
+
+- [ ] 초기화 스크립트
+  - [ ] scripts/docker-init.sh 작성
+    * 볼륨 디렉토리 생성
+    * 권한 설정
+    * 설정 파일 검증
+  - [ ] scripts/docker-cleanup.sh 작성
+    * 볼륨 정리
+    * 컨테이너 정리
+    * 네트워크 정리
+
+- [ ] 테스트 시나리오
+  - [ ] 서비스 시작 테스트
+    * docker-compose up -d
+    * 헬스 체크 확인
+    * 로그 검증
+  - [ ] 동기화 테스트
+    * Stable-One 블록 동기화 확인
+    * Indexer 데이터 수집 확인
+  - [ ] API 테스트
+    * GraphQL 엔드포인트 검증
+    * JSON-RPC 엔드포인트 검증
+    * WebSocket 연결 테스트
+  - [ ] 재시작 테스트
+    * 서비스 재시작 시나리오
+    * 데이터 영속성 검증
+    * 자동 복구 검증
+
+##### 4. 개발 워크플로우 개선 (진행 예정 📋)
+
+- [ ] Makefile 업데이트
+  - [ ] `make docker-up`: 서비스 시작
+  - [ ] `make docker-down`: 서비스 종료
+  - [ ] `make docker-logs`: 로그 조회
+  - [ ] `make docker-restart`: 서비스 재시작
+  - [ ] `make docker-clean`: 완전 정리
+
+- [ ] 개발 환경 설정
+  - [ ] 핫 리로드 설정 (선택적)
+  - [ ] 로컬 볼륨 마운트
+  - [ ] 디버깅 포트 노출
+
+##### 5. 프로덕션 고려사항 (진행 예정 📋)
+
+- [ ] 보안 강화
+  - [ ] 불필요한 포트 제거
+  - [ ] 네트워크 격리 검증
+  - [ ] Secrets 관리
+
+- [ ] 리소스 제한
+  - [ ] CPU 제한 설정
+  - [ ] 메모리 제한 설정
+  - [ ] 디스크 사용량 모니터링
+
+- [ ] 백업 전략
+  - [ ] 블록체인 데이터 백업
+  - [ ] Indexer 데이터베이스 백업
+  - [ ] 설정 파일 백업
+
+#### 예상 일정
+- **Phase 1** (1일): Docker Compose 설정 ✅
+- **Phase 2** (1일): 환경 설정 및 문서화 📋
+- **Phase 3** (1일): 초기화 및 테스트 📋
+- **Phase 4** (1일): 개발 워크플로우 개선 📋
+- **Phase 5** (선택적): 프로덕션 고려사항 📋
+
+**예상 완료**: 3-5일
+
+#### 성공 기준
+1. ✅ `docker-compose up -d` 명령어로 전체 스택 실행 가능
+2. ⏳ Stable-One 노드가 블록 동기화 시작
+3. ⏳ Indexer가 Stable-One으로부터 데이터 수집 시작
+4. ⏳ 모든 API 엔드포인트 정상 동작
+5. ⏳ 서비스 재시작 후 데이터 영속성 보장
+6. ⏳ 헬스 체크를 통한 서비스 상태 모니터링
 
 ---
 

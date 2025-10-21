@@ -1,20 +1,66 @@
 version: '3.8'
 
 services:
+  # Stable-One Ethereum Node
+  stable-one:
+    image: ethereum/client-go:stable
+    container_name: stable-one-node
+    command:
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,net,web3,debug,txpool
+      - --http.corsdomain=*
+      - --http.vhosts=*
+      - --ws
+      - --ws.addr=0.0.0.0
+      - --ws.port=8546
+      - --ws.api=eth,net,web3,debug,txpool
+      - --ws.origins=*
+      - --syncmode=snap
+      - --cache=2048
+      - --maxpeers=50
+    ports:
+      - "8545:8545"  # HTTP RPC
+      - "8546:8546"  # WebSocket RPC
+      - "30303:30303"  # P2P
+      - "30303:30303/udp"  # P2P UDP
+    volumes:
+      - blockchain-data:/root/.ethereum
+    environment:
+      - GETH_NETWORK=${GETH_NETWORK:-mainnet}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "geth", "attach", "--exec", "eth.blockNumber", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s  # 5 minutes for initial sync to start
+    networks:
+      - indexer-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
   # Indexer service
   indexer:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: indexer-go
+    depends_on:
+      stable-one:
+        condition: service_healthy
     ports:
       - "8080:8080"
     volumes:
       - ./data:/data
       - ./config.yaml:/app/config.yaml:ro
     environment:
-      # RPC Configuration
-      INDEXER_RPC_ENDPOINT: ${INDEXER_RPC_ENDPOINT:-http://localhost:8545}
+      # RPC Configuration - Now pointing to stable-one service
+      INDEXER_RPC_ENDPOINT: ${INDEXER_RPC_ENDPOINT:-http://stable-one:8545}
       INDEXER_RPC_TIMEOUT: ${INDEXER_RPC_TIMEOUT:-30s}
 
       # Database Configuration
@@ -46,11 +92,21 @@ services:
       start_period: 40s
     networks:
       - indexer-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
 
 networks:
   indexer-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
 
 volumes:
+  blockchain-data:
+    driver: local
   data:
     driver: local
