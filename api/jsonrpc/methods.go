@@ -39,6 +39,21 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.getTxResult(ctx, params)
 	case "getTxReceipt":
 		return h.getTxReceipt(ctx, params)
+	// Historical data methods
+	case "getBlocksByTimeRange":
+		return h.getBlocksByTimeRange(ctx, params)
+	case "getBlockByTimestamp":
+		return h.getBlockByTimestamp(ctx, params)
+	case "getTransactionsByAddressFiltered":
+		return h.getTransactionsByAddressFiltered(ctx, params)
+	case "getAddressBalance":
+		return h.getAddressBalance(ctx, params)
+	case "getBalanceHistory":
+		return h.getBalanceHistory(ctx, params)
+	case "getBlockCount":
+		return h.getBlockCount(ctx, params)
+	case "getTransactionCount":
+		return h.getTransactionCount(ctx, params)
 	default:
 		return nil, NewError(MethodNotFound, fmt.Sprintf("method '%s' not found", method), nil)
 	}
