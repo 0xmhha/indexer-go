@@ -43,6 +43,11 @@ var (
 	transactionFilterType *graphql.InputObject
 	logFilterType *graphql.InputObject
 	paginationInputType *graphql.InputObject
+	historicalTransactionFilterType *graphql.InputObject
+
+	// Historical data types
+	balanceSnapshotType *graphql.Object
+	balanceHistoryConnectionType *graphql.Object
 )
 
 func init() {
@@ -392,6 +397,65 @@ func initTypes() {
 			},
 			"offset": &graphql.InputObjectFieldConfig{
 				Type: graphql.Int,
+			},
+		},
+	})
+
+	historicalTransactionFilterType = graphql.NewInputObject(graphql.InputObjectConfig{
+		Name: "HistoricalTransactionFilter",
+		Fields: graphql.InputObjectConfigFieldMap{
+			"fromBlock": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"toBlock": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"minValue": &graphql.InputObjectFieldConfig{
+				Type: bigIntType,
+			},
+			"maxValue": &graphql.InputObjectFieldConfig{
+				Type: bigIntType,
+			},
+			"txType": &graphql.InputObjectFieldConfig{
+				Type: graphql.Int,
+			},
+			"successOnly": &graphql.InputObjectFieldConfig{
+				Type: graphql.Boolean,
+			},
+		},
+	})
+
+	// BalanceSnapshot type
+	balanceSnapshotType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BalanceSnapshot",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"balance": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"delta": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: hashType,
+			},
+		},
+	})
+
+	// BalanceHistoryConnection type
+	balanceHistoryConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BalanceHistoryConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(balanceSnapshotType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
 			},
 		},
 	})

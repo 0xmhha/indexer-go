@@ -1,0 +1,50 @@
+[Unit]
+Description=Indexer-Go - High-Performance Blockchain Indexer for Stable-One
+Documentation=https://github.com/0xmhha/indexer-go
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=indexer
+Group=indexer
+WorkingDirectory=/opt/indexer-go
+
+# Binary and configuration
+ExecStart=/opt/indexer-go/bin/indexer-go \
+  --config /etc/indexer-go/config.yaml
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=300s
+StartLimitBurst=5
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/indexer-go /var/log/indexer-go
+
+# Process management
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+
+# Environment
+Environment="INDEXER_LOG_LEVEL=info"
+Environment="INDEXER_LOG_FORMAT=json"
+EnvironmentFile=-/etc/indexer-go/indexer-go.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=indexer-go
+
+[Install]
+WantedBy=multi-user.target

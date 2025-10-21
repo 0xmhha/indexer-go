@@ -1,0 +1,72 @@
+# Logrotate configuration for Indexer-Go
+# Install to /etc/logrotate.d/indexer-go
+
+/var/log/indexer-go/*.log {
+    # Rotate daily
+    daily
+
+    # Keep 30 days of logs
+    rotate 30
+
+    # Compress old logs
+    compress
+    delaycompress
+
+    # Don't error if log file is missing
+    missingok
+
+    # Don't rotate empty logs
+    notifempty
+
+    # Create new log file with these permissions
+    create 0640 indexer indexer
+
+    # Use date as suffix
+    dateext
+    dateformat -%Y%m%d
+
+    # Truncate instead of moving (for active files)
+    copytruncate
+
+    # Post-rotate script
+    postrotate
+        # Reload systemd service to reopen log files (if using file logging)
+        systemctl reload indexer-go >/dev/null 2>&1 || true
+    endscript
+}
+
+# Separate configuration for access logs (if applicable)
+/var/log/indexer-go/access.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 indexer indexer
+    dateext
+    copytruncate
+}
+
+# Error logs - keep longer
+/var/log/indexer-go/error.log {
+    daily
+    rotate 90
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 indexer indexer
+    dateext
+    copytruncate
+
+    # Alert on size threshold
+    size 100M
+
+    postrotate
+        # Send notification if error log is too large
+        if [ -s /var/log/indexer-go/error.log ]; then
+            logger -t indexer-go "Large error log detected, rotated"
+        fi
+    endscript
+}

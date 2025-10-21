@@ -9,12 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wemix-blockchain/indexer-go/api"
-	"github.com/wemix-blockchain/indexer-go/client"
-	"github.com/wemix-blockchain/indexer-go/fetch"
-	"github.com/wemix-blockchain/indexer-go/internal/config"
-	"github.com/wemix-blockchain/indexer-go/internal/logger"
-	"github.com/wemix-blockchain/indexer-go/storage"
+	"github.com/0xmhha/indexer-go/api"
+	"github.com/0xmhha/indexer-go/client"
+	"github.com/0xmhha/indexer-go/events"
+	"github.com/0xmhha/indexer-go/fetch"
+	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/internal/logger"
+	"github.com/0xmhha/indexer-go/storage"
 	"go.uber.org/zap"
 )
 
@@ -160,6 +161,16 @@ func main() {
 		)
 	}
 
+	// Initialize EventBus
+	eventBus := events.NewEventBus(1000, 100)
+	go eventBus.Run()
+	defer eventBus.Stop()
+
+	log.Info("EventBus initialized",
+		zap.Int("publish_buffer", 1000),
+		zap.Int("subscribe_buffer", 100),
+	)
+
 	// Initialize fetcher
 	fetcherConfig := &fetch.Config{
 		StartHeight: cfg.Indexer.StartHeight,
@@ -169,7 +180,7 @@ func main() {
 		NumWorkers:  cfg.Indexer.Workers,
 	}
 
-	fetcher := fetch.NewFetcher(ethClient, store, fetcherConfig, log)
+	fetcher := fetch.NewFetcher(ethClient, store, fetcherConfig, log, eventBus)
 
 	log.Info("Fetcher initialized, starting indexing...")
 
