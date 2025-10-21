@@ -121,6 +121,84 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				},
 				Resolve: s.resolveLogs,
 			},
+			// Historical data queries
+			"blocksByTimeRange": &graphql.Field{
+				Type: graphql.NewNonNull(blockConnectionType),
+				Args: graphql.FieldConfigArgument{
+					"fromTime": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toTime": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveBlocksByTimeRange,
+			},
+			"blockByTimestamp": &graphql.Field{
+				Type: blockType,
+				Args: graphql.FieldConfigArgument{
+					"timestamp": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveBlockByTimestamp,
+			},
+			"transactionsByAddressFiltered": &graphql.Field{
+				Type: graphql.NewNonNull(transactionConnectionType),
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"filter": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(historicalTransactionFilterType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveTransactionsByAddressFiltered,
+			},
+			"addressBalance": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"blockNumber": &graphql.ArgumentConfig{
+						Type: bigIntType,
+					},
+				},
+				Resolve: s.resolveAddressBalance,
+			},
+			"balanceHistory": &graphql.Field{
+				Type: graphql.NewNonNull(balanceHistoryConnectionType),
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveBalanceHistory,
+			},
+			"blockCount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+				Resolve: s.resolveBlockCount,
+			},
+			"transactionCount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+				Resolve: s.resolveTransactionCount,
+			},
 		},
 	})
 

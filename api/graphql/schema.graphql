@@ -196,6 +196,21 @@ type Log {
   removed: Boolean!
 }
 
+# BalanceSnapshot represents an address balance at a specific block
+type BalanceSnapshot {
+  # Block number
+  blockNumber: BigInt!
+
+  # Account balance at this block
+  balance: BigInt!
+
+  # Change in balance (positive or negative)
+  delta: BigInt!
+
+  # Transaction that caused the balance change (may be null)
+  transactionHash: Hash
+}
+
 # Filter input for querying blocks
 input BlockFilter {
   # Filter by number range
@@ -239,6 +254,25 @@ input LogFilter {
   blockNumberTo: BigInt
 }
 
+# Filter input for historical transaction queries
+input HistoricalTransactionFilter {
+  # Filter by block number range
+  fromBlock: BigInt!
+  toBlock: BigInt!
+
+  # Filter by minimum value
+  minValue: BigInt
+
+  # Filter by maximum value
+  maxValue: BigInt
+
+  # Filter by transaction type (0=all, 1=sent, 2=received)
+  txType: Int
+
+  # Filter by success status only
+  successOnly: Boolean
+}
+
 # Pagination input
 input PaginationInput {
   # Number of items to return (default: 10, max: 100)
@@ -279,6 +313,45 @@ type Query {
 
   # Get logs with filtering
   logs(filter: LogFilter!, pagination: PaginationInput): LogConnection!
+
+  # ========== Historical Data Queries ==========
+
+  # Get blocks within a time range
+  blocksByTimeRange(
+    fromTime: BigInt!
+    toTime: BigInt!
+    pagination: PaginationInput
+  ): BlockConnection!
+
+  # Get the block closest to a specific timestamp
+  blockByTimestamp(timestamp: BigInt!): Block
+
+  # Get filtered transactions for an address with advanced filtering
+  transactionsByAddressFiltered(
+    address: Address!
+    filter: HistoricalTransactionFilter!
+    pagination: PaginationInput
+  ): TransactionConnection!
+
+  # Get address balance at a specific block (0 for latest)
+  addressBalance(
+    address: Address!
+    blockNumber: BigInt
+  ): BigInt!
+
+  # Get balance history for an address
+  balanceHistory(
+    address: Address!
+    fromBlock: BigInt!
+    toBlock: BigInt!
+    pagination: PaginationInput
+  ): BalanceHistoryConnection!
+
+  # Get total number of indexed blocks
+  blockCount: BigInt!
+
+  # Get total number of indexed transactions
+  transactionCount: BigInt!
 }
 
 # Block connection for pagination
@@ -330,4 +403,16 @@ type PageInfo {
 
   # End cursor
   endCursor: String
+}
+
+# Balance history connection for pagination
+type BalanceHistoryConnection {
+  # List of balance snapshots
+  nodes: [BalanceSnapshot!]!
+
+  # Total count
+  totalCount: Int!
+
+  # Page info
+  pageInfo: PageInfo!
 }
