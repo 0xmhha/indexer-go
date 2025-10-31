@@ -133,10 +133,9 @@ func main() {
 	)
 
 	// Initialize storage
-	store, err := storage.NewPebbleStorage(&storage.Config{
-		Path:     cfg.Database.Path,
-		ReadOnly: false,
-	})
+	storageConfig := storage.DefaultConfig(cfg.Database.Path)
+	storageConfig.ReadOnly = false
+	store, err := storage.NewPebbleStorage(storageConfig)
 	if err != nil {
 		log.Fatal("Failed to create storage", zap.Error(err))
 	}
