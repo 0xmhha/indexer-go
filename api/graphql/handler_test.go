@@ -2,14 +2,15 @@ package graphql
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/0xmhha/indexer-go/storage"
 	"go.uber.org/zap"
 )
 
@@ -68,13 +69,23 @@ func (m *mockStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumber 
 	return []*types.Receipt{}, nil
 }
 
+func (m *mockStorage) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
+	blocks := make([]*types.Block, 0, endHeight-startHeight+1)
+	for i := startHeight; i <= endHeight; i++ {
+		if block, ok := m.blocks[i]; ok {
+			blocks = append(blocks, block)
+		}
+	}
+	return blocks, nil
+}
+
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
 	storage.Storage
 }
 
 func (m *mockStorageWithErrors) GetLatestHeight(ctx context.Context) (uint64, error) {
-	return 0, storage.ErrNotFound
+	return 0, fmt.Errorf("storage error")
 }
 
 func (m *mockStorageWithErrors) GetBlock(ctx context.Context, height uint64) (*types.Block, error) {
@@ -98,6 +109,10 @@ func (m *mockStorageWithErrors) GetTransactionsByAddress(ctx context.Context, ad
 }
 
 func (m *mockStorageWithErrors) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
 	return nil, storage.ErrNotFound
 }
 
