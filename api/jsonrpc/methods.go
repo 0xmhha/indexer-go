@@ -3,12 +3,13 @@ package jsonrpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 
+	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/0xmhha/indexer-go/storage"
 	"go.uber.org/zap"
 )
 
@@ -63,6 +64,11 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 func (h *Handler) getLatestHeight(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
 	height, err := h.storage.GetLatestHeight(ctx)
 	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return map[string]interface{}{
+				"height": uint64(0),
+			}, nil
+		}
 		h.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, NewError(InternalError, "failed to get latest height", err.Error())
 	}
@@ -211,25 +217,25 @@ func (h *Handler) blockToJSON(block *types.Block) map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"number":          fmt.Sprintf("0x%x", block.NumberU64()),
-		"hash":            block.Hash().Hex(),
-		"parentHash":      header.ParentHash.Hex(),
-		"nonce":           fmt.Sprintf("0x%x", header.Nonce.Uint64()),
-		"sha3Uncles":      header.UncleHash.Hex(),
-		"logsBloom":       fmt.Sprintf("0x%x", header.Bloom[:]),
+		"number":           fmt.Sprintf("0x%x", block.NumberU64()),
+		"hash":             block.Hash().Hex(),
+		"parentHash":       header.ParentHash.Hex(),
+		"nonce":            fmt.Sprintf("0x%x", header.Nonce.Uint64()),
+		"sha3Uncles":       header.UncleHash.Hex(),
+		"logsBloom":        fmt.Sprintf("0x%x", header.Bloom[:]),
 		"transactionsRoot": header.TxHash.Hex(),
-		"stateRoot":       header.Root.Hex(),
-		"receiptsRoot":    header.ReceiptHash.Hex(),
-		"miner":           header.Coinbase.Hex(),
-		"difficulty":      fmt.Sprintf("0x%x", header.Difficulty),
-		"totalDifficulty": nil, // Not available in types.Block
-		"extraData":       fmt.Sprintf("0x%x", header.Extra),
-		"size":            fmt.Sprintf("0x%x", block.Size()),
-		"gasLimit":        fmt.Sprintf("0x%x", header.GasLimit),
-		"gasUsed":         fmt.Sprintf("0x%x", header.GasUsed),
-		"timestamp":       fmt.Sprintf("0x%x", header.Time),
-		"transactions":    transactions,
-		"uncles":          uncleHashes,
+		"stateRoot":        header.Root.Hex(),
+		"receiptsRoot":     header.ReceiptHash.Hex(),
+		"miner":            header.Coinbase.Hex(),
+		"difficulty":       fmt.Sprintf("0x%x", header.Difficulty),
+		"totalDifficulty":  nil, // Not available in types.Block
+		"extraData":        fmt.Sprintf("0x%x", header.Extra),
+		"size":             fmt.Sprintf("0x%x", block.Size()),
+		"gasLimit":         fmt.Sprintf("0x%x", header.GasLimit),
+		"gasUsed":          fmt.Sprintf("0x%x", header.GasUsed),
+		"timestamp":        fmt.Sprintf("0x%x", header.Time),
+		"transactions":     transactions,
+		"uncles":           uncleHashes,
 	}
 }
 

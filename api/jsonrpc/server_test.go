@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/0xmhha/indexer-go/storage"
 	"go.uber.org/zap"
 )
 
@@ -296,7 +296,7 @@ func TestJSONRPCMethods(t *testing.T) {
 
 	// Extend mockStorage for successful tests
 	storeWithData := &mockStorageWithData{
-		mockStorage: store,
+		mockStorage:  store,
 		transactions: map[common.Hash]*types.Transaction{testTx.Hash(): testTx},
 		receipts:     map[common.Hash]*types.Receipt{testTx.Hash(): testReceipt},
 	}
@@ -672,7 +672,7 @@ type mockStorageWithErrors struct {
 }
 
 func (m *mockStorageWithErrors) GetLatestHeight(ctx context.Context) (uint64, error) {
-	return 0, storage.ErrNotFound
+	return 0, fmt.Errorf("storage error")
 }
 
 func (m *mockStorageWithErrors) GetBlock(ctx context.Context, height uint64) (*types.Block, error) {

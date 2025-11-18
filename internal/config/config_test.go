@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -170,6 +171,8 @@ func TestLoadFromEnv(t *testing.T) {
 	os.Setenv("INDEXER_LOG_FORMAT", "console")
 	os.Setenv("INDEXER_WORKERS", "200")
 	os.Setenv("INDEXER_CHUNK_SIZE", "50")
+	os.Setenv("INDEXER_API_CORS_ENABLED", "true")
+	os.Setenv("INDEXER_API_CORS_ALLOWED_ORIGINS", "http://localhost:3001,https://app.example.com")
 	defer func() {
 		os.Unsetenv("INDEXER_RPC_ENDPOINT")
 		os.Unsetenv("INDEXER_RPC_TIMEOUT")
@@ -178,6 +181,8 @@ func TestLoadFromEnv(t *testing.T) {
 		os.Unsetenv("INDEXER_LOG_FORMAT")
 		os.Unsetenv("INDEXER_WORKERS")
 		os.Unsetenv("INDEXER_CHUNK_SIZE")
+		os.Unsetenv("INDEXER_API_CORS_ENABLED")
+		os.Unsetenv("INDEXER_API_CORS_ALLOWED_ORIGINS")
 	}()
 
 	cfg := NewConfig()
@@ -206,6 +211,13 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.Indexer.ChunkSize != 50 {
 		t.Errorf("Expected chunk size 50, got %d", cfg.Indexer.ChunkSize)
+	}
+	if !cfg.API.EnableCORS {
+		t.Errorf("Expected API CORS enabled")
+	}
+	wantOrigins := []string{"http://localhost:3001", "https://app.example.com"}
+	if !reflect.DeepEqual(cfg.API.AllowedOrigins, wantOrigins) {
+		t.Errorf("Expected allowed origins %v, got %v", wantOrigins, cfg.API.AllowedOrigins)
 	}
 }
 

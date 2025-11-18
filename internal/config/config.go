@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -193,6 +194,26 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_API_WEBSOCKET: %w", err)
 		}
 		c.API.EnableWebSocket = val
+	}
+	if enableCORS := os.Getenv("INDEXER_API_CORS_ENABLED"); enableCORS != "" {
+		val, err := strconv.ParseBool(enableCORS)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_CORS_ENABLED: %w", err)
+		}
+		c.API.EnableCORS = val
+	}
+	if allowedOrigins := os.Getenv("INDEXER_API_CORS_ALLOWED_ORIGINS"); allowedOrigins != "" {
+		origins := make([]string, 0)
+		for _, origin := range strings.Split(allowedOrigins, ",") {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				origins = append(origins, origin)
+			}
+		}
+		if len(origins) == 0 {
+			origins = []string{"*"}
+		}
+		c.API.AllowedOrigins = origins
 	}
 
 	return nil

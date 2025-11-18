@@ -110,9 +110,14 @@ func (m *mockStorage) SetBlock(ctx context.Context, block *types.Block) error {
 	}
 	height := block.Number().Uint64()
 	m.blocks[height] = block
-	if height > m.latestHeight {
-		m.latestHeight = height
+	return nil
+}
+
+func (m *mockStorage) SetLatestHeight(ctx context.Context, height uint64) error {
+	if m.readOnly {
+		return fmt.Errorf("storage is read-only")
 	}
+	m.latestHeight = height
 	return nil
 }
 
@@ -1163,12 +1168,12 @@ func TestGapRangeSize(t *testing.T) {
 // TestDetectGaps tests gap detection functionality
 func TestDetectGaps(t *testing.T) {
 	tests := []struct {
-		name          string
-		storedBlocks  []uint64
-		scanStart     uint64
-		scanEnd       uint64
-		expectedGaps  []GapRange
-		expectError   bool
+		name         string
+		storedBlocks []uint64
+		scanStart    uint64
+		scanEnd      uint64
+		expectedGaps []GapRange
+		expectError  bool
 	}{
 		{
 			name:         "no gaps - continuous blocks",

@@ -26,6 +26,7 @@ type Storage interface {
 	GetLatestHeight(ctx context.Context) (uint64, error)
 	GetBlock(ctx context.Context, height uint64) (*types.Block, error)
 	GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
+	SetLatestHeight(ctx context.Context, height uint64) error
 	SetBlock(ctx context.Context, block *types.Block) error
 	SetReceipt(ctx context.Context, receipt *types.Receipt) error
 	HasBlock(ctx context.Context, height uint64) (bool, error)
@@ -191,6 +192,10 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 				)
 			}
 		}
+	}
+
+	if err := f.storage.SetLatestHeight(ctx, height); err != nil {
+		return fmt.Errorf("failed to update latest height to %d: %w", height, err)
 	}
 
 	f.logger.Info("Successfully indexed block",
@@ -403,6 +408,10 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 							)
 						}
 					}
+				}
+
+				if err := f.storage.SetLatestHeight(ctx, nextHeight); err != nil {
+					return fmt.Errorf("failed to update latest height to %d: %w", nextHeight, err)
 				}
 
 				f.logger.Debug("Stored block",

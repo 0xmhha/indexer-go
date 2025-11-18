@@ -44,6 +44,12 @@ dev-data/
 .env.local
 .env.*.local
 
+# Configuration files with local settings
+config.yaml
+
+# Claude Code configuration
+.claude/
+
 # Log files
 *.log
 logs/

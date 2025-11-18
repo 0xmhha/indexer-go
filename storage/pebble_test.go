@@ -146,10 +146,10 @@ func TestPebbleStorage_LatestHeight(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Should return 0 initially
+	// Should return ErrNotFound initially
 	height, err := storage.GetLatestHeight(ctx)
-	if err != nil {
-		t.Fatalf("GetLatestHeight() error = %v", err)
+	if err != ErrNotFound {
+		t.Fatalf("GetLatestHeight() error = %v, want ErrNotFound", err)
 	}
 	if height != 0 {
 		t.Errorf("Initial height = %d, want 0", height)

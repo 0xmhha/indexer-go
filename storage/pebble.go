@@ -38,13 +38,13 @@ func NewPebbleStorage(cfg *Config) (*PebbleStorage, error) {
 
 	// Configure PebbleDB options
 	opts := &pebble.Options{
-		Cache:                       pebble.NewCache(int64(cfg.Cache) << 20), // Convert MB to bytes
-		MaxOpenFiles:                cfg.MaxOpenFiles,
-		MemTableSize:                uint64(cfg.WriteBuffer) << 20,
-		DisableWAL:                  cfg.DisableWAL,
-		MaxConcurrentCompactions:    func() int { return cfg.CompactionConcurrency },
-		ErrorIfExists:               false,
-		ErrorIfNotExists:            false,
+		Cache:                    pebble.NewCache(int64(cfg.Cache) << 20), // Convert MB to bytes
+		MaxOpenFiles:             cfg.MaxOpenFiles,
+		MemTableSize:             uint64(cfg.WriteBuffer) << 20,
+		DisableWAL:               cfg.DisableWAL,
+		MaxConcurrentCompactions: func() int { return cfg.CompactionConcurrency },
+		ErrorIfExists:            false,
+		ErrorIfNotExists:         false,
 	}
 
 	if cfg.ReadOnly {
@@ -135,7 +135,7 @@ func (s *PebbleStorage) GetLatestHeight(ctx context.Context) (uint64, error) {
 	value, closer, err := s.db.Get(LatestHeightKey())
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return 0, nil // No blocks indexed yet
+			return 0, ErrNotFound
 		}
 		return 0, fmt.Errorf("failed to get latest height: %w", err)
 	}

@@ -4,7 +4,7 @@
 # RPC Configuration
 rpc:
   # Ethereum RPC endpoint URL (required)
-  endpoint: "http://localhost:8545"
+  endpoint: "http://localhost:8501"
   # Request timeout duration
   timeout: 30s
 

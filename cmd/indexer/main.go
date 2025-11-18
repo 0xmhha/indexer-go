@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/logger"
 	"github.com/0xmhha/indexer-go/storage"
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
@@ -153,7 +155,15 @@ func main() {
 	// Get latest indexed height
 	latestHeight, err := store.GetLatestHeight(ctx)
 	if err != nil {
-		log.Info("No blocks indexed yet, starting from genesis")
+		if errors.Is(err, storage.ErrNotFound) {
+			log.Info("No blocks indexed yet, starting from configured height",
+				zap.Uint64("start_height", cfg.Indexer.StartHeight),
+			)
+		} else {
+			log.Warn("Failed to get latest indexed block",
+				zap.Error(err),
+			)
+		}
 	} else {
 		log.Info("Resuming from latest indexed block",
 			zap.Uint64("latest_height", latestHeight),
@@ -189,17 +199,17 @@ func main() {
 		log.Info("Initializing API server...")
 
 		apiConfig := &api.Config{
-			Host:            cfg.API.Host,
-			Port:            cfg.API.Port,
-			ReadTimeout:     15 * time.Second,
-			WriteTimeout:    15 * time.Second,
-			IdleTimeout:     60 * time.Second,
-			EnableCORS:      cfg.API.EnableCORS,
-			AllowedOrigins:  cfg.API.AllowedOrigins,
-			MaxHeaderBytes:  1 << 20, // 1 MB
-			EnableGraphQL:   cfg.API.EnableGraphQL,
-			EnableJSONRPC:   cfg.API.EnableJSONRPC,
-			EnableWebSocket: cfg.API.EnableWebSocket,
+			Host:                  cfg.API.Host,
+			Port:                  cfg.API.Port,
+			ReadTimeout:           15 * time.Second,
+			WriteTimeout:          15 * time.Second,
+			IdleTimeout:           60 * time.Second,
+			EnableCORS:            cfg.API.EnableCORS,
+			AllowedOrigins:        cfg.API.AllowedOrigins,
+			MaxHeaderBytes:        1 << 20, // 1 MB
+			EnableGraphQL:         cfg.API.EnableGraphQL,
+			EnableJSONRPC:         cfg.API.EnableJSONRPC,
+			EnableWebSocket:       cfg.API.EnableWebSocket,
 			GraphQLPath:           "/graphql",
 			GraphQLPlaygroundPath: "/playground",
 			JSONRPCPath:           "/rpc",
@@ -274,6 +284,10 @@ func main() {
 		log.Info("Final statistics",
 			zap.Uint64("latest_height", finalHeight),
 		)
+	} else if !errors.Is(err, storage.ErrNotFound) {
+		log.Warn("Failed to read final indexed height",
+			zap.Error(err),
+		)
 	}
 
 	log.Info("Indexer stopped")
@@ -281,21 +295,34 @@ func main() {
 
 // loadConfig loads configuration from file and environment variables
 func loadConfig(configFile string) (*config.Config, error) {
-	cfg := config.NewConfig()
-
-	// Load from environment variables
-	if err := cfg.LoadFromEnv(); err != nil {
-		return nil, fmt.Errorf("failed to load from environment: %w", err)
+	if err := loadDotEnv(); err != nil {
+		return nil, err
 	}
 
-	// Load from file if specified
-	if configFile != "" {
-		if err := cfg.LoadFromFile(configFile); err != nil {
-			return nil, fmt.Errorf("failed to load config file: %w", err)
-		}
+	cfg, err := config.Load(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	return cfg, nil
+}
+
+// loadDotEnv loads environment variables from a .env file if it exists.
+func loadDotEnv() error {
+	info, err := os.Stat(".env")
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("failed to stat .env: %w", err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf(".env exists but is a directory")
+	}
+	if err := godotenv.Load(".env"); err != nil {
+		return fmt.Errorf("failed to load .env: %w", err)
+	}
+	return nil
 }
 
 // applyFlags applies command-line flags to configuration
