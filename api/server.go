@@ -107,50 +107,58 @@ func (s *Server) setupMiddleware() {
 
 // setupRoutes configures the API routes
 func (s *Server) setupRoutes() {
-	// Health check endpoint
-	s.router.Get("/health", s.handleHealth)
-
-	// API version endpoint
-	s.router.Get("/version", s.handleVersion)
-
-	// Prometheus metrics endpoint
-	s.router.Handle("/metrics", promhttp.Handler())
-
-	// EventBus subscriber stats endpoint (if EventBus is configured)
-	s.router.Get("/subscribers", s.handleSubscribers)
-
-	// GraphQL endpoints
-	if s.config.EnableGraphQL {
-		s.logger.Info("GraphQL API enabled", zap.String("path", s.config.GraphQLPath))
-
-		// Create GraphQL handler
-		graphqlHandler, err := graphql.NewHandler(s.storage, s.logger)
-		if err != nil {
-			s.logger.Error("failed to create GraphQL handler", zap.Error(err))
-		} else {
-			s.router.Handle(s.config.GraphQLPath, graphqlHandler)
-			s.router.Get(s.config.GraphQLPlaygroundPath, graphqlHandler.PlaygroundHandler())
-			s.logger.Info("GraphQL playground enabled", zap.String("path", s.config.GraphQLPlaygroundPath))
-		}
-	}
-
-	// JSON-RPC endpoints
-	if s.config.EnableJSONRPC {
-		s.logger.Info("JSON-RPC API enabled", zap.String("path", s.config.JSONRPCPath))
-
-		// Create JSON-RPC handler
-		jsonrpcServer := jsonrpc.NewServer(s.storage, s.logger)
-		s.router.Post(s.config.JSONRPCPath, jsonrpcServer.ServeHTTP)
-	}
-
-	// WebSocket endpoints
+	// WebSocket endpoints (before timeout middleware to avoid connection issues)
 	if s.config.EnableWebSocket {
 		s.logger.Info("WebSocket API enabled", zap.String("path", s.config.WebSocketPath))
 
 		// Create WebSocket server
 		s.wsServer = websocket.NewServer(s.logger)
-		s.router.Get(s.config.WebSocketPath, s.wsServer.ServeHTTP)
+		// Mount WebSocket without timeout middleware
+		s.router.Group(func(r chi.Router) {
+			r.Get(s.config.WebSocketPath, s.wsServer.ServeHTTP)
+		})
 	}
+
+	// Apply timeout middleware for non-WebSocket routes
+	s.router.Group(func(r chi.Router) {
+		r.Use(middleware.Timeout(30 * time.Second))
+
+		// Health check endpoint
+		r.Get("/health", s.handleHealth)
+
+		// API version endpoint
+		r.Get("/version", s.handleVersion)
+
+		// Prometheus metrics endpoint
+		r.Handle("/metrics", promhttp.Handler())
+
+		// EventBus subscriber stats endpoint (if EventBus is configured)
+		r.Get("/subscribers", s.handleSubscribers)
+
+		// GraphQL endpoints
+		if s.config.EnableGraphQL {
+			s.logger.Info("GraphQL API enabled", zap.String("path", s.config.GraphQLPath))
+
+			// Create GraphQL handler
+			graphqlHandler, err := graphql.NewHandler(s.storage, s.logger)
+			if err != nil {
+				s.logger.Error("failed to create GraphQL handler", zap.Error(err))
+			} else {
+				r.Handle(s.config.GraphQLPath, graphqlHandler)
+				r.Get(s.config.GraphQLPlaygroundPath, graphqlHandler.PlaygroundHandler())
+				s.logger.Info("GraphQL playground enabled", zap.String("path", s.config.GraphQLPlaygroundPath))
+			}
+		}
+
+		// JSON-RPC endpoints
+		if s.config.EnableJSONRPC {
+			s.logger.Info("JSON-RPC API enabled", zap.String("path", s.config.JSONRPCPath))
+
+			// Create JSON-RPC handler
+			jsonrpcServer := jsonrpc.NewServer(s.storage, s.logger)
+			r.Post(s.config.JSONRPCPath, jsonrpcServer.ServeHTTP)
+		}
+	})
 }
 
 // HealthResponse represents the health check response
