@@ -12,22 +12,22 @@ import (
 
 // Key prefixes for different data types
 const (
-	prefixMeta       = "/meta/"
-	prefixData       = "/data/"
-	prefixIndex      = "/index/"
-	prefixBlocks     = "/data/blocks/"
-	prefixTxs        = "/data/txs/"
-	prefixReceipts   = "/data/receipts/"
-	prefixTxHash     = "/index/txh/"
-	prefixAddr       = "/index/addr/"
-	prefixBlockHash  = "/index/blockh/"
+	prefixMeta      = "/meta/"
+	prefixData      = "/data/"
+	prefixIndex     = "/index/"
+	prefixBlocks    = "/data/blocks/"
+	prefixTxs       = "/data/txs/"
+	prefixReceipts  = "/data/receipts/"
+	prefixTxHash    = "/index/txh/"
+	prefixAddr      = "/index/addr/"
+	prefixBlockHash = "/index/blockh/"
 )
 
 // Metadata keys
 const (
-	keyLatestHeight      = "/meta/lh"
-	keyBlockCount        = "/meta/bc"
-	keyTransactionCount  = "/meta/tc"
+	keyLatestHeight     = "/meta/lh"
+	keyBlockCount       = "/meta/bc"
+	keyTransactionCount = "/meta/tc"
 )
 
 // LatestHeightKey returns the key for storing latest indexed height

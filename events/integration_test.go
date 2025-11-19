@@ -155,7 +155,7 @@ func TestIntegration_HighThroughput(t *testing.T) {
 	subscriberCount := 50
 	subscribers := make([]*Subscription, subscriberCount)
 	for i := 0; i < subscriberCount; i++ {
-		id := SubscriptionID(string(rune('A' + (i % 26))) + string(rune('0' + (i / 26))))
+		id := SubscriptionID(string(rune('A'+(i%26))) + string(rune('0'+(i/26))))
 		subscribers[i] = bus.Subscribe(id, []EventType{EventTypeBlock}, nil, 1000)
 	}
 
@@ -300,7 +300,7 @@ func TestIntegration_ConcurrentPublishSubscribe(t *testing.T) {
 	for i := 0; i < subscriberCount; i++ {
 		go func(id int) {
 			defer wg.Done()
-			subID := SubscriptionID(string(rune('A' + (id % 26))) + string(rune('0' + (id / 26))))
+			subID := SubscriptionID(string(rune('A'+(id%26))) + string(rune('0'+(id/26))))
 			bus.Subscribe(subID, []EventType{EventTypeBlock, EventTypeTransaction}, nil, 500)
 		}(i)
 	}

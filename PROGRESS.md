@@ -1,6 +1,6 @@
 # indexer-go 개발 진행사항
 
-> 마지막 업데이트: 2025-10-21
+> 마지막 업데이트: 2025-11-19
 
 ---
 
@@ -765,6 +765,15 @@ All gap recovery scenarios tested successfully:
 
 ## 📝 작업 노트
 
+### 2025-11-19
+
+- WebSocket 연결 오류 수정 완료
+  - **문제**: Timeout 미들웨어가 WebSocket 엔드포인트에도 적용되어 연결 실패
+  - **원인**: `middleware.Timeout(30 * time.Second)`이 모든 라우트에 적용
+  - **해결**: WebSocket 라우트를 별도 라우터 그룹으로 분리하여 Timeout 미들웨어 제외
+  - **커밋**: 1e1ff55 - fix(api): exclude WebSocket route from timeout middleware
+  - **파일**: api/server.go (46 insertions, 38 deletions)
+
 ### 2025-10-17
 - Testing Infrastructure 구현 완료 (Phase 1 마지막 작업)
   - internal/testutil/testutil.go 생성 (181 lines)
@@ -839,6 +848,6 @@ All gap recovery scenarios tested successfully:
 
 ---
 
-**문서 버전**: 1.1
-**마지막 업데이트**: 2025-10-17
-**다음 업데이트 예정**: Phase 2 시작 시
+**문서 버전**: 1.2
+**마지막 업데이트**: 2025-11-19
+**다음 업데이트 예정**: 주요 기능 추가 시

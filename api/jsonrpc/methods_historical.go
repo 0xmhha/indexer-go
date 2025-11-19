@@ -158,10 +158,10 @@ func (h *Handler) getBlockByTimestamp(ctx context.Context, params json.RawMessag
 // getTransactionsByAddressFiltered returns filtered transactions for an address
 func (h *Handler) getTransactionsByAddressFiltered(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
 	var p struct {
-		Address  string                 `json:"address"`
-		Filter   map[string]interface{} `json:"filter"`
-		Limit    *int                   `json:"limit,omitempty"`
-		Offset   *int                   `json:"offset,omitempty"`
+		Address string                 `json:"address"`
+		Filter  map[string]interface{} `json:"filter"`
+		Limit   *int                   `json:"limit,omitempty"`
+		Offset  *int                   `json:"offset,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {

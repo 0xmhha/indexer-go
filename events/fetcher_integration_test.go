@@ -69,7 +69,7 @@ func TestFetcherIntegration_EndToEnd(t *testing.T) {
 			block.Hash(),
 			uint(i),
 			common.HexToAddress("0xaaaa"), // mock sender
-			nil,                            // no receipt for this test
+			nil,                           // no receipt for this test
 		)
 		if !bus.Publish(txEvent) {
 			t.Fatalf("failed to publish transaction event %d", i)

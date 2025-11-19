@@ -6,10 +6,10 @@ import (
 
 var (
 	// Scalar types
-	bytesType = graphql.String
-	bigIntType = graphql.String
+	bytesType   = graphql.String
+	bigIntType  = graphql.String
 	addressType = graphql.String
-	hashType = graphql.String
+	hashType    = graphql.String
 
 	// Block type
 	blockType *graphql.Object
@@ -39,14 +39,14 @@ var (
 	logConnectionType *graphql.Object
 
 	// Input types
-	blockFilterType *graphql.InputObject
-	transactionFilterType *graphql.InputObject
-	logFilterType *graphql.InputObject
-	paginationInputType *graphql.InputObject
+	blockFilterType                 *graphql.InputObject
+	transactionFilterType           *graphql.InputObject
+	logFilterType                   *graphql.InputObject
+	paginationInputType             *graphql.InputObject
 	historicalTransactionFilterType *graphql.InputObject
 
 	// Historical data types
-	balanceSnapshotType *graphql.Object
+	balanceSnapshotType          *graphql.Object
 	balanceHistoryConnectionType *graphql.Object
 )
 

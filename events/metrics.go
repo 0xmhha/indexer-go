@@ -16,17 +16,17 @@ type Metrics struct {
 	SubscribeChannelSize prometheus.Gauge
 
 	// Counters (cumulative values)
-	EventsPublishedTotal  *prometheus.CounterVec
-	EventsDeliveredTotal  *prometheus.CounterVec
-	EventsDroppedTotal    *prometheus.CounterVec
-	EventsFilteredTotal   *prometheus.CounterVec
-	SubscriptionsTotal    prometheus.Counter
-	UnsubscriptionsTotal  prometheus.Counter
+	EventsPublishedTotal *prometheus.CounterVec
+	EventsDeliveredTotal *prometheus.CounterVec
+	EventsDroppedTotal   *prometheus.CounterVec
+	EventsFilteredTotal  *prometheus.CounterVec
+	SubscriptionsTotal   prometheus.Counter
+	UnsubscriptionsTotal prometheus.Counter
 
 	// Histograms (distributions)
-	EventDeliveryDuration *prometheus.HistogramVec
+	EventDeliveryDuration  *prometheus.HistogramVec
 	FilterMatchingDuration *prometheus.HistogramVec
-	BroadcastDuration     prometheus.Histogram
+	BroadcastDuration      prometheus.Histogram
 }
 
 // NewMetrics creates and registers all EventBus metrics

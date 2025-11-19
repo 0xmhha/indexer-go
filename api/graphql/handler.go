@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/0xmhha/indexer-go/storage"
 	"github.com/graphql-go/graphql"
 	graphqlhandler "github.com/graphql-go/handler"
-	"github.com/0xmhha/indexer-go/storage"
 	"go.uber.org/zap"
 )
 

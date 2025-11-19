@@ -145,17 +145,19 @@ This document outlines the prioritized implementation roadmap for indexer-go, fo
 
 ### P1 Tasks
 
-17. **WebSocket Subscriptions**
-    - [ ] Implement newBlock subscription
-    - [ ] Implement newTransaction subscription
-    - [ ] Add connection management
+17. **WebSocket Subscriptions** ✅
+    - [x] Implement newBlock subscription
+    - [x] Implement newTransaction subscription
+    - [x] Add connection management
+    - [x] Fix timeout middleware exclusion for WebSocket routes
     - **Completion Criteria**: Real-time updates working
 
-18. **API Server Infrastructure**
-    - [ ] Setup chi router
-    - [ ] Add CORS middleware
-    - [ ] Implement request logging
-    - [ ] Add error handling middleware
+18. **API Server Infrastructure** ✅
+    - [x] Setup chi router
+    - [x] Add CORS middleware
+    - [x] Implement request logging
+    - [x] Add error handling middleware
+    - [x] Separate WebSocket routes from timeout middleware
     - **Completion Criteria**: Production-ready HTTP server
 
 ### P2 Tasks

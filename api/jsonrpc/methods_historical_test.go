@@ -15,13 +15,13 @@ import (
 // mockHistoricalStorage extends mockStorage with historical query support
 type mockHistoricalStorage struct {
 	*mockStorage
-	blocksByTime    []*types.Block
+	blocksByTime     []*types.Block
 	blockByTimestamp *types.Block
-	txsWithReceipts []*storage.TransactionWithReceipt
-	balance         *big.Int
-	balanceHistory  []storage.BalanceSnapshot
-	blockCount      uint64
-	txCount         uint64
+	txsWithReceipts  []*storage.TransactionWithReceipt
+	balance          *big.Int
+	balanceHistory   []storage.BalanceSnapshot
+	blockCount       uint64
+	txCount          uint64
 }
 
 func (m *mockHistoricalStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
@@ -257,7 +257,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 
 	t.Run("GetBlockByTimestamp_StringFormat", func(t *testing.T) {
 		store := &mockHistoricalStorage{
-			mockStorage: &mockStorage{},
+			mockStorage:      &mockStorage{},
 			blockByTimestamp: block1,
 		}
 
@@ -290,7 +290,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 
 	t.Run("GetBlockByTimestamp_NotFound", func(t *testing.T) {
 		store := &mockHistoricalStorage{
-			mockStorage: &mockStorage{},
+			mockStorage:      &mockStorage{},
 			blockByTimestamp: nil,
 		}
 
@@ -344,7 +344,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 
 	t.Run("GetTransactionsByAddressFiltered_WithComplexFilter", func(t *testing.T) {
 		store := &mockHistoricalStorage{
-			mockStorage: &mockStorage{},
+			mockStorage:     &mockStorage{},
 			txsWithReceipts: []*storage.TransactionWithReceipt{},
 		}
 

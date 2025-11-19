@@ -14,13 +14,13 @@ import (
 // mockHistoricalStorage extends mockStorage with historical methods
 type mockHistoricalStorage struct {
 	mockStorage
-	blocksByTime    []*types.Block
+	blocksByTime     []*types.Block
 	blockByTimestamp *types.Block
-	txsWithReceipts []*storage.TransactionWithReceipt
-	balance         *big.Int
-	balanceHistory  []storage.BalanceSnapshot
-	blockCount      uint64
-	txCount         uint64
+	txsWithReceipts  []*storage.TransactionWithReceipt
+	balance          *big.Int
+	balanceHistory   []storage.BalanceSnapshot
+	blockCount       uint64
+	txCount          uint64
 }
 
 func (m *mockHistoricalStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
@@ -115,7 +115,7 @@ func TestHistoricalResolvers(t *testing.T) {
 			transactions: make(map[common.Hash]*types.Transaction),
 			receipts:     make(map[common.Hash]*types.Receipt),
 		},
-		blocksByTime:    []*types.Block{block1, block2},
+		blocksByTime:     []*types.Block{block1, block2},
 		blockByTimestamp: block1,
 		txsWithReceipts: []*storage.TransactionWithReceipt{
 			{

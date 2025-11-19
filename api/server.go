@@ -7,28 +7,27 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/0xmhha/indexer-go/api/graphql"
 	"github.com/0xmhha/indexer-go/api/jsonrpc"
 	apimiddleware "github.com/0xmhha/indexer-go/api/middleware"
 	"github.com/0xmhha/indexer-go/api/websocket"
 	"github.com/0xmhha/indexer-go/events"
 	"github.com/0xmhha/indexer-go/storage"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
 // Server represents the API server
 type Server struct {
-	config    *Config
-	logger    *zap.Logger
-	storage   storage.Storage
-	eventBus  *events.EventBus
-	router    *chi.Mux
-	server    *http.Server
-	wsServer  *websocket.Server
+	config   *Config
+	logger   *zap.Logger
+	storage  storage.Storage
+	eventBus *events.EventBus
+	router   *chi.Mux
+	server   *http.Server
+	wsServer *websocket.Server
 }
 
 // NewServer creates a new API server
@@ -86,79 +85,90 @@ func (s *Server) setupMiddleware() {
 	// Recoverer middleware (chi's built-in)
 	s.router.Use(middleware.Recoverer)
 
-	// Timeout middleware (30 seconds)
-	s.router.Use(middleware.Timeout(30 * time.Second))
-
-	// CORS middleware
+	// Custom CORS middleware that adds headers to ALL responses
 	if s.config.EnableCORS {
-		s.router.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   s.config.AllowedOrigins,
-			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-			ExposedHeaders:   []string{"Link"},
-			AllowCredentials: true,
-			MaxAge:           300, // Maximum value not ignored by any major browsers
-		}))
-	}
+		s.router.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					origin = "*"
+				}
 
-	// Compressor middleware
-	s.router.Use(middleware.Compress(5))
+				// Check if origin is allowed
+				allowed := false
+				for _, allowedOrigin := range s.config.AllowedOrigins {
+					if allowedOrigin == "*" || allowedOrigin == origin {
+						allowed = true
+						break
+					}
+				}
+
+				if allowed {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+					w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token, Upgrade, Connection")
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					w.Header().Set("Access-Control-Max-Age", "300")
+				}
+
+				// Handle preflight requests
+				if r.Method == "OPTIONS" {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+
+				next.ServeHTTP(w, r)
+			})
+		})
+	}
 }
 
 // setupRoutes configures the API routes
 func (s *Server) setupRoutes() {
-	// WebSocket endpoints (before timeout middleware to avoid connection issues)
+	// WebSocket endpoints - registered directly without timeout/compress
 	if s.config.EnableWebSocket {
 		s.logger.Info("WebSocket API enabled", zap.String("path", s.config.WebSocketPath))
 
 		// Create WebSocket server
 		s.wsServer = websocket.NewServer(s.logger)
-		// Mount WebSocket without timeout middleware
-		s.router.Group(func(r chi.Router) {
-			r.Get(s.config.WebSocketPath, s.wsServer.ServeHTTP)
-		})
+		s.router.Get(s.config.WebSocketPath, s.wsServer.ServeHTTP)
 	}
 
-	// Apply timeout middleware for non-WebSocket routes
-	s.router.Group(func(r chi.Router) {
-		r.Use(middleware.Timeout(30 * time.Second))
+	// Health check endpoint
+	s.router.Get("/health", s.handleHealth)
 
-		// Health check endpoint
-		r.Get("/health", s.handleHealth)
+	// API version endpoint
+	s.router.Get("/version", s.handleVersion)
 
-		// API version endpoint
-		r.Get("/version", s.handleVersion)
+	// Prometheus metrics endpoint
+	s.router.Handle("/metrics", promhttp.Handler())
 
-		// Prometheus metrics endpoint
-		r.Handle("/metrics", promhttp.Handler())
+	// EventBus subscriber stats endpoint (if EventBus is configured)
+	s.router.Get("/subscribers", s.handleSubscribers)
 
-		// EventBus subscriber stats endpoint (if EventBus is configured)
-		r.Get("/subscribers", s.handleSubscribers)
+	// GraphQL endpoints
+	if s.config.EnableGraphQL {
+		s.logger.Info("GraphQL API enabled", zap.String("path", s.config.GraphQLPath))
 
-		// GraphQL endpoints
-		if s.config.EnableGraphQL {
-			s.logger.Info("GraphQL API enabled", zap.String("path", s.config.GraphQLPath))
-
-			// Create GraphQL handler
-			graphqlHandler, err := graphql.NewHandler(s.storage, s.logger)
-			if err != nil {
-				s.logger.Error("failed to create GraphQL handler", zap.Error(err))
-			} else {
-				r.Handle(s.config.GraphQLPath, graphqlHandler)
-				r.Get(s.config.GraphQLPlaygroundPath, graphqlHandler.PlaygroundHandler())
-				s.logger.Info("GraphQL playground enabled", zap.String("path", s.config.GraphQLPlaygroundPath))
-			}
+		// Create GraphQL handler
+		graphqlHandler, err := graphql.NewHandler(s.storage, s.logger)
+		if err != nil {
+			s.logger.Error("failed to create GraphQL handler", zap.Error(err))
+		} else {
+			s.router.Handle(s.config.GraphQLPath, graphqlHandler)
+			s.router.Get(s.config.GraphQLPlaygroundPath, graphqlHandler.PlaygroundHandler())
+			s.logger.Info("GraphQL playground enabled", zap.String("path", s.config.GraphQLPlaygroundPath))
 		}
+	}
 
-		// JSON-RPC endpoints
-		if s.config.EnableJSONRPC {
-			s.logger.Info("JSON-RPC API enabled", zap.String("path", s.config.JSONRPCPath))
+	// JSON-RPC endpoints
+	if s.config.EnableJSONRPC {
+		s.logger.Info("JSON-RPC API enabled", zap.String("path", s.config.JSONRPCPath))
 
-			// Create JSON-RPC handler
-			jsonrpcServer := jsonrpc.NewServer(s.storage, s.logger)
-			r.Post(s.config.JSONRPCPath, jsonrpcServer.ServeHTTP)
-		}
-	})
+		// Create JSON-RPC handler
+		jsonrpcServer := jsonrpc.NewServer(s.storage, s.logger)
+		s.router.Post(s.config.JSONRPCPath, jsonrpcServer.ServeHTTP)
+	}
 }
 
 // HealthResponse represents the health check response
@@ -209,8 +219,8 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 
 // SubscribersResponse represents the subscribers list response
 type SubscribersResponse struct {
-	TotalCount  int                      `json:"total_count"`
-	Subscribers []events.SubscriberInfo  `json:"subscribers"`
+	TotalCount  int                     `json:"total_count"`
+	Subscribers []events.SubscriberInfo `json:"subscribers"`
 }
 
 // handleSubscribers handles the subscribers endpoint

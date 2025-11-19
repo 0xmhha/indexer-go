@@ -1,8 +1,8 @@
 package graphql
 
 import (
-	"github.com/graphql-go/graphql"
 	"github.com/0xmhha/indexer-go/storage"
+	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
 
@@ -192,11 +192,11 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				Resolve: s.resolveBalanceHistory,
 			},
 			"blockCount": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
+				Type:    graphql.NewNonNull(bigIntType),
 				Resolve: s.resolveBlockCount,
 			},
 			"transactionCount": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
+				Type:    graphql.NewNonNull(bigIntType),
 				Resolve: s.resolveTransactionCount,
 			},
 		},

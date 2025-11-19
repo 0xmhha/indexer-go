@@ -759,6 +759,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Status**: 🚀 Production Ready (Core Features + Event Subscription + Historical API)
 
-**Version**: 0.7.0
+**Version**: 0.7.1
 
-**Last Updated**: 2025-10-21
+**Last Updated**: 2025-11-19

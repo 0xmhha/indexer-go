@@ -3,9 +3,9 @@ package graphql
 import (
 	"fmt"
 
+	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/0xmhha/indexer-go/storage"
 	"go.uber.org/zap"
 )
 
@@ -64,26 +64,26 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 	}
 
 	result := map[string]interface{}{
-		"hash":             tx.Hash().Hex(),
-		"blockNumber":      fmt.Sprintf("%d", location.BlockHeight),
-		"blockHash":        location.BlockHash.Hex(),
-		"transactionIndex": int(location.TxIndex),
-		"from":             from.Hex(),
-		"to":               nil,
-		"value":            tx.Value().String(),
-		"gas":              fmt.Sprintf("%d", tx.Gas()),
-		"gasPrice":         nil,
-		"maxFeePerGas":     nil,
+		"hash":                 tx.Hash().Hex(),
+		"blockNumber":          fmt.Sprintf("%d", location.BlockHeight),
+		"blockHash":            location.BlockHash.Hex(),
+		"transactionIndex":     int(location.TxIndex),
+		"from":                 from.Hex(),
+		"to":                   nil,
+		"value":                tx.Value().String(),
+		"gas":                  fmt.Sprintf("%d", tx.Gas()),
+		"gasPrice":             nil,
+		"maxFeePerGas":         nil,
 		"maxPriorityFeePerGas": nil,
-		"type":             int(tx.Type()),
-		"input":            fmt.Sprintf("0x%x", tx.Data()),
-		"nonce":            fmt.Sprintf("%d", tx.Nonce()),
-		"v":                v.String(),
-		"r":                fmt.Sprintf("0x%x", r.Bytes()),
-		"s":                fmt.Sprintf("0x%x", sigS.Bytes()),
-		"chainId":          nil,
-		"accessList":       nil,
-		"receipt":          nil,
+		"type":                 int(tx.Type()),
+		"input":                fmt.Sprintf("0x%x", tx.Data()),
+		"nonce":                fmt.Sprintf("%d", tx.Nonce()),
+		"v":                    v.String(),
+		"r":                    fmt.Sprintf("0x%x", r.Bytes()),
+		"s":                    fmt.Sprintf("0x%x", sigS.Bytes()),
+		"chainId":              nil,
+		"accessList":           nil,
+		"receipt":              nil,
 	}
 
 	if tx.To() != nil {

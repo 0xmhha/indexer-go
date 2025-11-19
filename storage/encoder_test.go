@@ -168,12 +168,12 @@ func TestEncodeDecodeBlock(t *testing.T) {
 func TestEncodeDecodeTransaction(t *testing.T) {
 	// Create a legacy transaction
 	tx := types.NewTransaction(
-		0,                                                                 // nonce
+		0, // nonce
 		common.HexToAddress("0x1234567890123456789012345678901234567890"), // to
-		big.NewInt(1000000000),                                            // value
-		21000,                                                             // gas limit
-		big.NewInt(1000000000),                                            // gas price
-		[]byte{},                                                          // data
+		big.NewInt(1000000000), // value
+		21000,                  // gas limit
+		big.NewInt(1000000000), // gas price
+		[]byte{},               // data
 	)
 
 	// Encode
