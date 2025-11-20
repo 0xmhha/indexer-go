@@ -1,9 +1,8 @@
 # Operations Guide
 
-> Production deployment and operations guide for Indexer-Go
+Operational handbook for deploying, monitoring, and maintaining indexer-go in production environments.
 
-**Version**: 1.0.0
-**Last Updated**: 2025-10-20
+**Last Updated**: 2025-11-20
 
 ---
 

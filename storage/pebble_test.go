@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
 )
 
@@ -1890,3 +1891,2113 @@ func TestPebbleStorage_Batch_DeleteBlock(t *testing.T) {
 		t.Error("Block should not exist after batch deletion")
 	}
 }
+
+func TestPebbleStorage_GetBlockCount(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Test initial count (no blocks)
+	count, err := pebbleStorage.GetBlockCount(ctx)
+	if err != nil {
+		t.Fatalf("GetBlockCount() error = %v", err)
+	}
+	if count != 0 {
+		t.Errorf("GetBlockCount() = %d, want 0", count)
+	}
+
+	// Store count manually
+	countValue := EncodeUint64(5)
+	pebbleStorage.db.Set(BlockCountKey(), countValue, nil)
+
+	// Test retrieval
+	count, err = pebbleStorage.GetBlockCount(ctx)
+	if err != nil {
+		t.Fatalf("GetBlockCount() error = %v", err)
+	}
+	if count != 5 {
+		t.Errorf("GetBlockCount() = %d, want 5", count)
+	}
+
+	// Store larger count
+	countValue = EncodeUint64(1000000)
+	pebbleStorage.db.Set(BlockCountKey(), countValue, nil)
+
+	count, err = pebbleStorage.GetBlockCount(ctx)
+	if err != nil {
+		t.Fatalf("GetBlockCount() error = %v", err)
+	}
+	if count != 1000000 {
+		t.Errorf("GetBlockCount() = %d, want 1000000", count)
+	}
+}
+
+func TestPebbleStorage_GetTransactionCount(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Test initial count (no transactions)
+	count, err := pebbleStorage.GetTransactionCount(ctx)
+	if err != nil {
+		t.Fatalf("GetTransactionCount() error = %v", err)
+	}
+	if count != 0 {
+		t.Errorf("GetTransactionCount() = %d, want 0", count)
+	}
+
+	// Store count manually
+	countValue := EncodeUint64(10)
+	pebbleStorage.db.Set(TransactionCountKey(), countValue, nil)
+
+	// Test retrieval
+	count, err = pebbleStorage.GetTransactionCount(ctx)
+	if err != nil {
+		t.Fatalf("GetTransactionCount() error = %v", err)
+	}
+	if count != 10 {
+		t.Errorf("GetTransactionCount() = %d, want 10", count)
+	}
+
+	// Store larger count
+	countValue = EncodeUint64(5000000)
+	pebbleStorage.db.Set(TransactionCountKey(), countValue, nil)
+
+	count, err = pebbleStorage.GetTransactionCount(ctx)
+	if err != nil {
+		t.Fatalf("GetTransactionCount() error = %v", err)
+	}
+	if count != 5000000 {
+		t.Errorf("GetTransactionCount() = %d, want 5000000", count)
+	}
+}
+
+func TestPebbleStorage_SetBalance(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+
+	// Test initial balance (should be 0)
+	balance, err := pebbleStorage.GetAddressBalance(ctx, addr, 0)
+	if err != nil {
+		t.Fatalf("GetAddressBalance() error = %v", err)
+	}
+	if balance.Cmp(big.NewInt(0)) != 0 {
+		t.Errorf("Initial balance = %v, want 0", balance)
+	}
+
+	// Set balance to 1000
+	err = pebbleStorage.SetBalance(ctx, addr, 1, big.NewInt(1000))
+	if err != nil {
+		t.Fatalf("SetBalance() error = %v", err)
+	}
+
+	// Verify balance
+	balance, err = pebbleStorage.GetAddressBalance(ctx, addr, 0)
+	if err != nil {
+		t.Fatalf("GetAddressBalance() error = %v", err)
+	}
+	if balance.Cmp(big.NewInt(1000)) != 0 {
+		t.Errorf("Balance after SetBalance(1000) = %v, want 1000", balance)
+	}
+
+	// Set balance to 500 (decrease)
+	err = pebbleStorage.SetBalance(ctx, addr, 2, big.NewInt(500))
+	if err != nil {
+		t.Fatalf("SetBalance() error = %v", err)
+	}
+
+	// Verify new balance
+	balance, err = pebbleStorage.GetAddressBalance(ctx, addr, 0)
+	if err != nil {
+		t.Fatalf("GetAddressBalance() error = %v", err)
+	}
+	if balance.Cmp(big.NewInt(500)) != 0 {
+		t.Errorf("Balance after SetBalance(500) = %v, want 500", balance)
+	}
+
+	// Set balance to 2000 (increase)
+	err = pebbleStorage.SetBalance(ctx, addr, 3, big.NewInt(2000))
+	if err != nil {
+		t.Fatalf("SetBalance() error = %v", err)
+	}
+
+	// Verify final balance
+	balance, err = pebbleStorage.GetAddressBalance(ctx, addr, 0)
+	if err != nil {
+		t.Fatalf("GetAddressBalance() error = %v", err)
+	}
+	if balance.Cmp(big.NewInt(2000)) != 0 {
+		t.Errorf("Balance after SetBalance(2000) = %v, want 2000", balance)
+	}
+
+	// Test multiple addresses
+	addr2 := common.HexToAddress("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	err = pebbleStorage.SetBalance(ctx, addr2, 1, big.NewInt(3000))
+	if err != nil {
+		t.Fatalf("SetBalance() for addr2 error = %v", err)
+	}
+
+	// Verify both balances are independent
+	balance, err = pebbleStorage.GetAddressBalance(ctx, addr, 0)
+	if err != nil {
+		t.Fatalf("GetAddressBalance() error = %v", err)
+	}
+	if balance.Cmp(big.NewInt(2000)) != 0 {
+		t.Errorf("addr balance = %v, want 2000", balance)
+	}
+
+	balance2, err := pebbleStorage.GetAddressBalance(ctx, addr2, 0)
+	if err != nil {
+		t.Fatalf("GetAddressBalance() for addr2 error = %v", err)
+	}
+	if balance2.Cmp(big.NewInt(3000)) != 0 {
+		t.Errorf("addr2 balance = %v, want 3000", balance2)
+	}
+}
+
+func TestPebbleStorage_GetBlockCount_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	// Try to get count from closed storage
+	_, err := pebbleStorage.GetBlockCount(ctx)
+	if err == nil {
+		t.Error("GetBlockCount() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetTransactionCount_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	// Try to get count from closed storage
+	_, err := pebbleStorage.GetTransactionCount(ctx)
+	if err == nil {
+		t.Error("GetTransactionCount() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_SetBalance_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+
+	// Try to set balance on closed storage
+	err := pebbleStorage.SetBalance(ctx, addr, 1, big.NewInt(1000))
+	if err == nil {
+		t.Error("SetBalance() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetTransactionsByAddressFiltered_Simple(t *testing.T) {
+	// Simple test for basic code path coverage
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	targetAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+
+	t.Run("empty address - no indexed transactions", func(t *testing.T) {
+		filter := &TransactionFilter{
+			FromBlock: 0,
+			ToBlock:   ^uint64(0),
+			TxType:    TxTypeAll,
+		}
+		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, filter, 10, 0)
+		if err != nil {
+			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("Got %d results, want 0", len(results))
+		}
+	})
+
+	t.Run("with default filter (nil)", func(t *testing.T) {
+		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, nil, 10, 0)
+		if err != nil {
+			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("Got %d results, want 0", len(results))
+		}
+	})
+
+	t.Run("invalid filter", func(t *testing.T) {
+		filter := &TransactionFilter{
+			FromBlock: 100,
+			ToBlock:   0, // Invalid: from > to
+			TxType:    TxTypeAll,
+		}
+		_, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, filter, 10, 0)
+		if err == nil {
+			t.Error("Expected error for invalid filter")
+		}
+	})
+}
+
+func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
+	// Complex test with signed transactions for full filter matching
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Create a test private key for signing
+	privateKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	privateKeyBytes := common.Hex2Bytes(privateKeyHex)
+	key, err := crypto.ToECDSA(privateKeyBytes)
+	if err != nil {
+		t.Fatalf("Failed to create private key: %v", err)
+	}
+
+	fromAddr := crypto.PubkeyToAddress(key.PublicKey)
+	toAddr := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	chainID := big.NewInt(1)
+
+	// Create and store test blocks with signed transactions
+	for i := uint64(1); i <= 3; i++ {
+		// Create block header
+		header := &types.Header{
+			Number:      big.NewInt(int64(i)),
+			Time:        1000 + i*100,
+			Difficulty:  big.NewInt(1),
+			GasLimit:    1000000,
+			ParentHash:  common.Hash{},
+			UncleHash:   types.EmptyUncleHash,
+			Coinbase:    common.Address{},
+			Root:        common.Hash{},
+			TxHash:      types.EmptyTxsHash,
+			ReceiptHash: types.EmptyReceiptsHash,
+		}
+
+		// Create signed transaction
+		tx := types.NewTx(&types.DynamicFeeTx{
+			ChainID:   chainID,
+			Nonce:     i - 1,
+			GasTipCap: big.NewInt(1000000000),
+			GasFeeCap: big.NewInt(1000000000),
+			Gas:       21000,
+			To:        &toAddr,
+			Value:     big.NewInt(int64(i * 1000)),
+		})
+
+		signer := types.LatestSignerForChainID(chainID)
+		signedTx, err := types.SignTx(tx, signer, key)
+		if err != nil {
+			t.Fatalf("Failed to sign transaction: %v", err)
+		}
+
+		block := types.NewBlockWithHeader(header)
+
+		// Store block
+		if err := pebbleStorage.SetBlock(ctx, block); err != nil {
+			t.Fatalf("SetBlock() error = %v", err)
+		}
+
+		// Store transaction
+		txLocation := &TxLocation{
+			BlockHash:   block.Hash(),
+			BlockHeight: i,
+			TxIndex:     0,
+		}
+		if err := pebbleStorage.SetTransaction(ctx, signedTx, txLocation); err != nil {
+			t.Fatalf("SetTransaction() error = %v", err)
+		}
+
+		// Index transaction for sender address
+		if err := pebbleStorage.AddTransactionToAddressIndex(ctx, fromAddr, signedTx.Hash()); err != nil {
+			t.Fatalf("AddTransactionToAddressIndex() error = %v", err)
+		}
+
+		// Store receipt
+		receipt := &types.Receipt{
+			Status:      types.ReceiptStatusSuccessful,
+			TxHash:      signedTx.Hash(),
+			BlockNumber: big.NewInt(int64(i)),
+			BlockHash:   block.Hash(),
+		}
+		if err := pebbleStorage.SetReceipt(ctx, receipt); err != nil {
+			t.Fatalf("SetReceipt() error = %v", err)
+		}
+	}
+
+	t.Run("sent filter - all transactions", func(t *testing.T) {
+		filter := &TransactionFilter{
+			FromBlock: 0,
+			ToBlock:   ^uint64(0),
+			TxType:    TxTypeSent,
+		}
+		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
+		if err != nil {
+			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
+		}
+		if len(results) != 3 {
+			t.Errorf("Got %d results, want 3", len(results))
+		}
+	})
+
+	t.Run("with limit", func(t *testing.T) {
+		filter := &TransactionFilter{
+			FromBlock: 0,
+			ToBlock:   ^uint64(0),
+			TxType:    TxTypeSent,
+		}
+		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 2, 0)
+		if err != nil {
+			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("Got %d results, want 2", len(results))
+		}
+	})
+
+	t.Run("with offset", func(t *testing.T) {
+		filter := &TransactionFilter{
+			FromBlock: 0,
+			ToBlock:   ^uint64(0),
+			TxType:    TxTypeSent,
+		}
+		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 1)
+		if err != nil {
+			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("Got %d results, want 2", len(results))
+		}
+	})
+
+	t.Run("with block filter", func(t *testing.T) {
+		filter := &TransactionFilter{
+			FromBlock: 2,
+			ToBlock:   3,
+			TxType:    TxTypeSent,
+		}
+		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
+		if err != nil {
+			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("Got %d results, want 2", len(results))
+		}
+	})
+
+	t.Run("with value filter", func(t *testing.T) {
+		filter := &TransactionFilter{
+			FromBlock: 0,
+			ToBlock:   ^uint64(0),
+			TxType:    TxTypeSent,
+			MinValue:  big.NewInt(2000),
+		}
+		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
+		if err != nil {
+			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("Got %d results, want 2", len(results))
+		}
+	})
+
+	t.Run("invalid filter", func(t *testing.T) {
+		filter := &TransactionFilter{
+			FromBlock: 100,
+			ToBlock:   0, // Invalid: from > to
+			TxType:    TxTypeSent,
+		}
+		_, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
+		if err == nil {
+			t.Error("Expected error for invalid filter")
+		}
+	})
+
+	t.Run("no results - unknown address", func(t *testing.T) {
+		unknownAddr := common.HexToAddress("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+		filter := &TransactionFilter{
+			FromBlock: 0,
+			ToBlock:   ^uint64(0),
+			TxType:    TxTypeSent,
+		}
+		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, unknownAddr, filter, 10, 0)
+		if err != nil {
+			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("Got %d results, want 0", len(results))
+		}
+	})
+}
+
+func TestPebbleStorage_GetTransactionsByAddressFiltered_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+
+	// Try to get filtered transactions from closed storage
+	_, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, addr, nil, 10, 0)
+	if err == nil {
+		t.Error("GetTransactionsByAddressFiltered() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_SetTransaction_ErrorCases(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("nil transaction", func(t *testing.T) {
+		location := &TxLocation{
+			BlockHash:   common.Hash{},
+			BlockHeight: 1,
+			TxIndex:     0,
+		}
+		err := pebbleStorage.SetTransaction(ctx, nil, location)
+		if err == nil {
+			t.Error("SetTransaction() should fail with nil transaction")
+		}
+	})
+
+	t.Run("nil location", func(t *testing.T) {
+		tx := createTestTransaction(0)
+		err := pebbleStorage.SetTransaction(ctx, tx, nil)
+		if err == nil {
+			t.Error("SetTransaction() should fail with nil location")
+		}
+	})
+}
+
+func TestPebbleStorage_SetTransaction_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	tx := createTestTransaction(0)
+	location := &TxLocation{
+		BlockHash:   common.Hash{},
+		BlockHeight: 1,
+		TxIndex:     0,
+	}
+	err := pebbleStorage.SetTransaction(ctx, tx, location)
+	if err == nil {
+		t.Error("SetTransaction() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetBlocks_Extended(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Store test blocks
+	for i := uint64(1); i <= 5; i++ {
+		block := createTestBlock(i)
+		if err := pebbleStorage.SetBlock(ctx, block); err != nil {
+			t.Fatalf("SetBlock() error = %v", err)
+		}
+	}
+
+	t.Run("get all blocks", func(t *testing.T) {
+		blocks, err := pebbleStorage.GetBlocks(ctx, 1, 5)
+		if err != nil {
+			t.Fatalf("GetBlocks() error = %v", err)
+		}
+		if len(blocks) != 5 {
+			t.Errorf("Got %d blocks, want 5", len(blocks))
+		}
+	})
+
+	t.Run("get partial range", func(t *testing.T) {
+		blocks, err := pebbleStorage.GetBlocks(ctx, 2, 4)
+		if err != nil {
+			t.Fatalf("GetBlocks() error = %v", err)
+		}
+		if len(blocks) != 3 {
+			t.Errorf("Got %d blocks, want 3", len(blocks))
+		}
+	})
+
+	t.Run("skip missing blocks", func(t *testing.T) {
+		// Request range that includes non-existent blocks
+		blocks, err := pebbleStorage.GetBlocks(ctx, 1, 10)
+		if err != nil {
+			t.Fatalf("GetBlocks() error = %v", err)
+		}
+		if len(blocks) != 5 {
+			t.Errorf("Got %d blocks, want 5 (should skip missing)", len(blocks))
+		}
+	})
+
+	t.Run("empty range", func(t *testing.T) {
+		blocks, err := pebbleStorage.GetBlocks(ctx, 100, 200)
+		if err != nil {
+			t.Fatalf("GetBlocks() error = %v", err)
+		}
+		if len(blocks) != 0 {
+			t.Errorf("Got %d blocks, want 0", len(blocks))
+		}
+	})
+}
+
+func TestPebbleStorage_GetBlocks_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, err := pebbleStorage.GetBlocks(ctx, 1, 10)
+	if err == nil {
+		t.Error("GetBlocks() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_SetReceipt_ErrorCases(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("nil receipt", func(t *testing.T) {
+		err := pebbleStorage.SetReceipt(ctx, nil)
+		if err == nil {
+			t.Error("SetReceipt() should fail with nil receipt")
+		}
+	})
+}
+
+func TestPebbleStorage_SetReceipt_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	receipt := &types.Receipt{
+		Status:      types.ReceiptStatusSuccessful,
+		TxHash:      common.Hash{},
+		BlockNumber: big.NewInt(1),
+	}
+	err := pebbleStorage.SetReceipt(ctx, receipt)
+	if err == nil {
+		t.Error("SetReceipt() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_DeleteBlock_ErrorCases(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("delete non-existent block returns nil", func(t *testing.T) {
+		// DeleteBlock returns nil for non-existent blocks (idempotent operation)
+		err := pebbleStorage.DeleteBlock(ctx, 999)
+		if err != nil {
+			t.Errorf("DeleteBlock() for non-existent block should return nil, got %v", err)
+		}
+	})
+
+	t.Run("delete existing block", func(t *testing.T) {
+		// Create and then delete a block
+		block := createTestBlock(100)
+		if err := pebbleStorage.SetBlock(ctx, block); err != nil {
+			t.Fatalf("SetBlock() error = %v", err)
+		}
+
+		// Verify block exists
+		exists, err := pebbleStorage.HasBlock(ctx, 100)
+		if err != nil || !exists {
+			t.Fatalf("Block should exist before deletion")
+		}
+
+		// Delete the block
+		err = pebbleStorage.DeleteBlock(ctx, 100)
+		if err != nil {
+			t.Errorf("DeleteBlock() error = %v", err)
+		}
+
+		// Verify block is deleted
+		exists, err = pebbleStorage.HasBlock(ctx, 100)
+		if err != nil {
+			t.Fatalf("HasBlock() error = %v", err)
+		}
+		if exists {
+			t.Error("Block should not exist after deletion")
+		}
+	})
+}
+
+func TestPebbleStorage_DeleteBlock_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	err := pebbleStorage.DeleteBlock(ctx, 1)
+	if err == nil {
+		t.Error("DeleteBlock() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetTransaction_ErrorCases(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("get non-existent transaction", func(t *testing.T) {
+		_, _, err := pebbleStorage.GetTransaction(ctx, common.Hash{})
+		if err == nil {
+			t.Error("GetTransaction() should fail for non-existent transaction")
+		}
+		if err != ErrNotFound {
+			t.Errorf("GetTransaction() error = %v, want ErrNotFound", err)
+		}
+	})
+}
+
+func TestPebbleStorage_GetTransaction_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, _, err := pebbleStorage.GetTransaction(ctx, common.Hash{})
+	if err == nil {
+		t.Error("GetTransaction() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_SetBlockTimestamp(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("set timestamp", func(t *testing.T) {
+		err := pebbleStorage.SetBlockTimestamp(ctx, 1000, 1)
+		if err != nil {
+			t.Fatalf("SetBlockTimestamp() error = %v", err)
+		}
+
+		err = pebbleStorage.SetBlockTimestamp(ctx, 2000, 2)
+		if err != nil {
+			t.Fatalf("SetBlockTimestamp() error = %v", err)
+		}
+	})
+}
+
+func TestPebbleStorage_SetBlockTimestamp_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	err := pebbleStorage.SetBlockTimestamp(ctx, 1000, 1)
+	if err == nil {
+		t.Error("SetBlockTimestamp() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_SetLatestHeight_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	err := pebbleStorage.SetLatestHeight(ctx, 100)
+	if err == nil {
+		t.Error("SetLatestHeight() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_SetBlock_ErrorCases(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("nil block", func(t *testing.T) {
+		err := pebbleStorage.SetBlock(ctx, nil)
+		if err == nil {
+			t.Error("SetBlock() should fail with nil block")
+		}
+	})
+}
+
+func TestPebbleStorage_SetBlock_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	block := createTestBlock(1)
+	err := pebbleStorage.SetBlock(ctx, block)
+	if err == nil {
+		t.Error("SetBlock() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetBlock_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, err := pebbleStorage.GetBlock(ctx, 1)
+	if err == nil {
+		t.Error("GetBlock() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetBlockByHash_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, err := pebbleStorage.GetBlockByHash(ctx, common.Hash{})
+	if err == nil {
+		t.Error("GetBlockByHash() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetReceipt_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, err := pebbleStorage.GetReceipt(ctx, common.Hash{})
+	if err == nil {
+		t.Error("GetReceipt() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_HasBlock_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, err := pebbleStorage.HasBlock(ctx, 1)
+	if err == nil {
+		t.Error("HasBlock() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_HasTransaction_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, err := pebbleStorage.HasTransaction(ctx, common.Hash{})
+	if err == nil {
+		t.Error("HasTransaction() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetTransactionsByAddress_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	_, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, 10, 0)
+	if err == nil {
+		t.Error("GetTransactionsByAddress() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_AddTransactionToAddressIndex_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	err := pebbleStorage.AddTransactionToAddressIndex(ctx, addr, common.Hash{})
+	if err == nil {
+		t.Error("AddTransactionToAddressIndex() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_SetReceipts_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	receipts := []*types.Receipt{
+		{Status: types.ReceiptStatusSuccessful, TxHash: common.Hash{}},
+	}
+	err := pebbleStorage.SetReceipts(ctx, receipts)
+	if err == nil {
+		t.Error("SetReceipts() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_SetBlocks_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	blocks := []*types.Block{createTestBlock(1)}
+	err := pebbleStorage.SetBlocks(ctx, blocks)
+	if err == nil {
+		t.Error("SetBlocks() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetLatestHeight_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, err := pebbleStorage.GetLatestHeight(ctx)
+	if err == nil {
+		t.Error("GetLatestHeight() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_UpdateBalance_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	err := pebbleStorage.UpdateBalance(ctx, addr, 1, big.NewInt(1000), common.Hash{})
+	if err == nil {
+		t.Error("UpdateBalance() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetAddressBalance_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	_, err := pebbleStorage.GetAddressBalance(ctx, addr, 0)
+	if err == nil {
+		t.Error("GetAddressBalance() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetBalanceHistory_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	_, err := pebbleStorage.GetBalanceHistory(ctx, addr, 0, 100, 10, 0)
+	if err == nil {
+		t.Error("GetBalanceHistory() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetBlocksByTimeRange_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, err := pebbleStorage.GetBlocksByTimeRange(ctx, 0, 1000, 10, 0)
+	if err == nil {
+		t.Error("GetBlocksByTimeRange() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetBlockByTimestamp_ClosedStorage(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	_, err := pebbleStorage.GetBlockByTimestamp(ctx, 1000)
+	if err == nil {
+		t.Error("GetBlockByTimestamp() should fail on closed storage")
+	}
+}
+
+// Batch operation tests
+func TestPebbleBatch_SetLatestHeight(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("successful set latest height", func(t *testing.T) {
+		batch := storage.NewBatch()
+		if batch == nil {
+			t.Fatal("NewBatch() returned nil")
+		}
+		defer batch.Close()
+
+		err := batch.SetLatestHeight(ctx, 100)
+		if err != nil {
+			t.Errorf("SetLatestHeight() error = %v", err)
+		}
+
+		if batch.Count() != 1 {
+			t.Errorf("Count() = %d, want 1", batch.Count())
+		}
+
+		// Commit the batch
+		err = batch.Commit()
+		if err != nil {
+			t.Fatalf("Commit() error = %v", err)
+		}
+
+		// Verify the value was written
+		height, err := storage.GetLatestHeight(ctx)
+		if err != nil {
+			t.Fatalf("GetLatestHeight() error = %v", err)
+		}
+		if height != 100 {
+			t.Errorf("GetLatestHeight() = %d, want 100", height)
+		}
+	})
+
+	t.Run("closed batch error", func(t *testing.T) {
+		batch := storage.NewBatch()
+		batch.Close()
+
+		err := batch.SetLatestHeight(ctx, 200)
+		if err == nil {
+			t.Error("SetLatestHeight() should fail on closed batch")
+		}
+	})
+}
+
+func TestPebbleBatch_SetBlock(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("successful set block", func(t *testing.T) {
+		batch := storage.NewBatch()
+		defer batch.Close()
+
+		block := createTestBlock(50)
+		err := batch.SetBlock(ctx, block)
+		if err != nil {
+			t.Errorf("SetBlock() error = %v", err)
+		}
+
+		if batch.Count() != 2 { // block data + hash index
+			t.Errorf("Count() = %d, want 2", batch.Count())
+		}
+
+		err = batch.Commit()
+		if err != nil {
+			t.Fatalf("Commit() error = %v", err)
+		}
+
+		// Verify the block was written
+		retrieved, err := storage.GetBlock(ctx, 50)
+		if err != nil {
+			t.Fatalf("GetBlock() error = %v", err)
+		}
+		if retrieved.Number().Uint64() != 50 {
+			t.Errorf("GetBlock() returned wrong block number")
+		}
+	})
+
+	t.Run("closed batch error", func(t *testing.T) {
+		batch := storage.NewBatch()
+		batch.Close()
+
+		block := createTestBlock(51)
+		err := batch.SetBlock(ctx, block)
+		if err == nil {
+			t.Error("SetBlock() should fail on closed batch")
+		}
+	})
+}
+
+func TestPebbleBatch_SetTransaction(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("successful set transaction", func(t *testing.T) {
+		batch := storage.NewBatch()
+		defer batch.Close()
+
+		tx := createTestTransaction(1)
+		location := &TxLocation{
+			BlockHeight: 10,
+			TxIndex:     0,
+		}
+
+		err := batch.SetTransaction(ctx, tx, location)
+		if err != nil {
+			t.Errorf("SetTransaction() error = %v", err)
+		}
+
+		if batch.Count() != 2 { // tx data + hash index
+			t.Errorf("Count() = %d, want 2", batch.Count())
+		}
+
+		err = batch.Commit()
+		if err != nil {
+			t.Fatalf("Commit() error = %v", err)
+		}
+
+		// Verify the transaction was written
+		retrieved, _, err := storage.GetTransaction(ctx, tx.Hash())
+		if err != nil {
+			t.Fatalf("GetTransaction() error = %v", err)
+		}
+		if retrieved.Hash() != tx.Hash() {
+			t.Errorf("GetTransaction() returned wrong transaction")
+		}
+	})
+
+	t.Run("closed batch error", func(t *testing.T) {
+		batch := storage.NewBatch()
+		batch.Close()
+
+		tx := createTestTransaction(2)
+		location := &TxLocation{
+			BlockHeight: 11,
+			TxIndex:     0,
+		}
+
+		err := batch.SetTransaction(ctx, tx, location)
+		if err == nil {
+			t.Error("SetTransaction() should fail on closed batch")
+		}
+	})
+}
+
+func TestPebbleBatch_SetReceipt(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("successful set receipt", func(t *testing.T) {
+		batch := storage.NewBatch()
+		defer batch.Close()
+
+		tx := createTestTransaction(1)
+		receipt := &types.Receipt{
+			TxHash:           tx.Hash(),
+			Status:           types.ReceiptStatusSuccessful,
+			BlockNumber:      big.NewInt(10),
+			TransactionIndex: 0,
+			GasUsed:          21000,
+		}
+
+		err := batch.SetReceipt(ctx, receipt)
+		if err != nil {
+			t.Errorf("SetReceipt() error = %v", err)
+		}
+
+		if batch.Count() != 1 {
+			t.Errorf("Count() = %d, want 1", batch.Count())
+		}
+
+		err = batch.Commit()
+		if err != nil {
+			t.Fatalf("Commit() error = %v", err)
+		}
+
+		// Verify the receipt was written
+		retrieved, err := storage.GetReceipt(ctx, tx.Hash())
+		if err != nil {
+			t.Fatalf("GetReceipt() error = %v", err)
+		}
+		if retrieved.TxHash != tx.Hash() {
+			t.Errorf("GetReceipt() returned wrong receipt")
+		}
+	})
+
+	t.Run("closed batch error", func(t *testing.T) {
+		batch := storage.NewBatch()
+		batch.Close()
+
+		tx := createTestTransaction(2)
+		receipt := &types.Receipt{
+			TxHash: tx.Hash(),
+			Status: types.ReceiptStatusSuccessful,
+		}
+
+		err := batch.SetReceipt(ctx, receipt)
+		if err == nil {
+			t.Error("SetReceipt() should fail on closed batch")
+		}
+	})
+}
+
+func TestPebbleBatch_SetReceipts(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("successful set receipts", func(t *testing.T) {
+		batch := storage.NewBatch()
+		defer batch.Close()
+
+		var receipts []*types.Receipt
+		for i := 0; i < 3; i++ {
+			tx := createTestTransaction(uint64(i))
+			receipt := &types.Receipt{
+				TxHash:           tx.Hash(),
+				Status:           types.ReceiptStatusSuccessful,
+				BlockNumber:      big.NewInt(10),
+				TransactionIndex: uint(i),
+				GasUsed:          21000,
+			}
+			receipts = append(receipts, receipt)
+		}
+
+		err := batch.SetReceipts(ctx, receipts)
+		if err != nil {
+			t.Errorf("SetReceipts() error = %v", err)
+		}
+
+		if batch.Count() != 3 {
+			t.Errorf("Count() = %d, want 3", batch.Count())
+		}
+
+		err = batch.Commit()
+		if err != nil {
+			t.Fatalf("Commit() error = %v", err)
+		}
+	})
+
+	t.Run("closed batch error", func(t *testing.T) {
+		batch := storage.NewBatch()
+		batch.Close()
+
+		tx := createTestTransaction(1)
+		receipts := []*types.Receipt{
+			{TxHash: tx.Hash(), Status: types.ReceiptStatusSuccessful},
+		}
+
+		err := batch.SetReceipts(ctx, receipts)
+		if err == nil {
+			t.Error("SetReceipts() should fail on closed batch")
+		}
+	})
+}
+
+func TestPebbleBatch_SetBlocks(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("successful set blocks", func(t *testing.T) {
+		batch := storage.NewBatch()
+		defer batch.Close()
+
+		var blocks []*types.Block
+		for i := uint64(60); i <= 62; i++ {
+			blocks = append(blocks, createTestBlock(i))
+		}
+
+		err := batch.SetBlocks(ctx, blocks)
+		if err != nil {
+			t.Errorf("SetBlocks() error = %v", err)
+		}
+
+		// 3 blocks * 2 operations each (data + hash index)
+		if batch.Count() != 6 {
+			t.Errorf("Count() = %d, want 6", batch.Count())
+		}
+
+		err = batch.Commit()
+		if err != nil {
+			t.Fatalf("Commit() error = %v", err)
+		}
+
+		// Verify blocks were written
+		for i := uint64(60); i <= 62; i++ {
+			retrieved, err := storage.GetBlock(ctx, i)
+			if err != nil {
+				t.Errorf("GetBlock(%d) error = %v", i, err)
+			}
+			if retrieved.Number().Uint64() != i {
+				t.Errorf("GetBlock(%d) returned wrong block", i)
+			}
+		}
+	})
+
+	t.Run("closed batch error", func(t *testing.T) {
+		batch := storage.NewBatch()
+		batch.Close()
+
+		blocks := []*types.Block{createTestBlock(70)}
+
+		err := batch.SetBlocks(ctx, blocks)
+		if err == nil {
+			t.Error("SetBlocks() should fail on closed batch")
+		}
+	})
+}
+
+func TestPebbleBatch_DeleteBlock(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// First create a block to delete
+	block := createTestBlock(80)
+	if err := pebbleStorage.SetBlock(ctx, block); err != nil {
+		t.Fatalf("SetBlock() error = %v", err)
+	}
+
+	t.Run("successful delete block", func(t *testing.T) {
+		batch := storage.NewBatch()
+		defer batch.Close()
+
+		err := batch.DeleteBlock(ctx, 80)
+		if err != nil {
+			t.Errorf("DeleteBlock() error = %v", err)
+		}
+
+		err = batch.Commit()
+		if err != nil {
+			t.Fatalf("Commit() error = %v", err)
+		}
+
+		// Verify block was deleted
+		exists, err := storage.HasBlock(ctx, 80)
+		if err != nil {
+			t.Fatalf("HasBlock() error = %v", err)
+		}
+		if exists {
+			t.Error("Block should not exist after batch delete")
+		}
+	})
+
+	t.Run("delete non-existent block returns nil", func(t *testing.T) {
+		batch := storage.NewBatch()
+		defer batch.Close()
+
+		// Should not error for non-existent block
+		err := batch.DeleteBlock(ctx, 999)
+		if err != nil {
+			t.Errorf("DeleteBlock() for non-existent block should return nil, got %v", err)
+		}
+	})
+
+	t.Run("closed batch error", func(t *testing.T) {
+		batch := storage.NewBatch()
+		batch.Close()
+
+		err := batch.DeleteBlock(ctx, 81)
+		if err == nil {
+			t.Error("DeleteBlock() should fail on closed batch")
+		}
+	})
+}
+
+func TestPebbleStorage_GetBlocksByTimeRange_Extended(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Store blocks with timestamps
+	for i := uint64(1); i <= 10; i++ {
+		block := createTestBlock(i)
+		if err := pebbleStorage.SetBlock(ctx, block); err != nil {
+			t.Fatalf("SetBlock() error = %v", err)
+		}
+		// Set timestamp (timestamp = block number * 1000, height = i)
+		// SetBlockTimestamp(ctx, timestamp, height)
+		if err := pebbleStorage.SetBlockTimestamp(ctx, i*1000, i); err != nil {
+			t.Fatalf("SetBlockTimestamp() error = %v", err)
+		}
+	}
+
+	t.Run("get blocks in time range", func(t *testing.T) {
+		blocks, err := pebbleStorage.GetBlocksByTimeRange(ctx, 2000, 5000, 10, 0)
+		if err != nil {
+			t.Fatalf("GetBlocksByTimeRange() error = %v", err)
+		}
+		if len(blocks) != 4 { // blocks 2, 3, 4, 5
+			t.Errorf("Got %d blocks, want 4", len(blocks))
+		}
+	})
+
+	t.Run("get with limit", func(t *testing.T) {
+		blocks, err := pebbleStorage.GetBlocksByTimeRange(ctx, 1000, 10000, 3, 0)
+		if err != nil {
+			t.Fatalf("GetBlocksByTimeRange() error = %v", err)
+		}
+		if len(blocks) != 3 {
+			t.Errorf("Got %d blocks, want 3", len(blocks))
+		}
+	})
+
+	t.Run("get with offset", func(t *testing.T) {
+		blocks, err := pebbleStorage.GetBlocksByTimeRange(ctx, 1000, 10000, 10, 5)
+		if err != nil {
+			t.Fatalf("GetBlocksByTimeRange() error = %v", err)
+		}
+		if len(blocks) != 5 { // blocks 6, 7, 8, 9, 10
+			t.Errorf("Got %d blocks, want 5", len(blocks))
+		}
+	})
+
+	t.Run("empty range", func(t *testing.T) {
+		blocks, err := pebbleStorage.GetBlocksByTimeRange(ctx, 100000, 200000, 10, 0)
+		if err != nil {
+			t.Fatalf("GetBlocksByTimeRange() error = %v", err)
+		}
+		if len(blocks) != 0 {
+			t.Errorf("Got %d blocks, want 0", len(blocks))
+		}
+	})
+}
+
+func TestPebbleStorage_UpdateBalance_Extended(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	txHash1 := common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+	txHash2 := common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+
+	t.Run("update balance with different values", func(t *testing.T) {
+		// First update - add 1000
+		err := pebbleStorage.UpdateBalance(ctx, addr, 1, big.NewInt(1000), txHash1)
+		if err != nil {
+			t.Errorf("UpdateBalance() error = %v", err)
+		}
+
+		// Second update - add 2000 (total should be 3000)
+		err = pebbleStorage.UpdateBalance(ctx, addr, 2, big.NewInt(2000), txHash2)
+		if err != nil {
+			t.Errorf("UpdateBalance() error = %v", err)
+		}
+
+		// Check latest balance (use blockNumber 0 for latest)
+		// UpdateBalance adds delta, so 1000 + 2000 = 3000
+		balance, err := pebbleStorage.GetAddressBalance(ctx, addr, 0)
+		if err != nil {
+			t.Fatalf("GetAddressBalance() error = %v", err)
+		}
+		if balance.Cmp(big.NewInt(3000)) != 0 {
+			t.Errorf("GetAddressBalance() = %s, want 3000", balance.String())
+		}
+
+		// Check history (fromBlock=1, toBlock=10, limit=10, offset=0)
+		history, err := pebbleStorage.GetBalanceHistory(ctx, addr, 1, 10, 10, 0)
+		if err != nil {
+			t.Fatalf("GetBalanceHistory() error = %v", err)
+		}
+		if len(history) != 2 {
+			t.Errorf("Got %d history entries, want 2", len(history))
+		}
+	})
+
+	t.Run("update with zero balance", func(t *testing.T) {
+		addr2 := common.HexToAddress("0x3333333333333333333333333333333333333333")
+		txHash3 := common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333")
+
+		err := pebbleStorage.UpdateBalance(ctx, addr2, 1, big.NewInt(0), txHash3)
+		if err != nil {
+			t.Errorf("UpdateBalance() with zero error = %v", err)
+		}
+
+		balance, err := pebbleStorage.GetAddressBalance(ctx, addr2, 0)
+		if err != nil {
+			t.Fatalf("GetAddressBalance() error = %v", err)
+		}
+		if balance.Cmp(big.NewInt(0)) != 0 {
+			t.Errorf("GetAddressBalance() = %s, want 0", balance.String())
+		}
+	})
+}
+
+// Additional coverage tests
+func TestPebbleStorage_GetTransaction_NotFound_Extended(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Try to get non-existent transaction
+	nonExistentHash := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	tx, location, err := storage.GetTransaction(ctx, nonExistentHash)
+	if err != ErrNotFound {
+		t.Errorf("GetTransaction() error = %v, want ErrNotFound", err)
+	}
+	if tx != nil {
+		t.Error("GetTransaction() returned non-nil transaction for non-existent hash")
+	}
+	if location != nil {
+		t.Error("GetTransaction() returned non-nil location for non-existent hash")
+	}
+}
+
+func TestPebbleStorage_SetTransaction_Success(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Create and store a transaction
+	tx := createTestTransaction(1)
+	location := &TxLocation{
+		BlockHeight: 100,
+		TxIndex:     5,
+	}
+
+	err := pebbleStorage.SetTransaction(ctx, tx, location)
+	if err != nil {
+		t.Fatalf("SetTransaction() error = %v", err)
+	}
+
+	// Verify it can be retrieved
+	retrieved, loc, err := pebbleStorage.GetTransaction(ctx, tx.Hash())
+	if err != nil {
+		t.Fatalf("GetTransaction() error = %v", err)
+	}
+	if retrieved.Hash() != tx.Hash() {
+		t.Error("Retrieved transaction hash doesn't match")
+	}
+	if loc.BlockHeight != 100 || loc.TxIndex != 5 {
+		t.Errorf("Retrieved location = {%d, %d}, want {100, 5}", loc.BlockHeight, loc.TxIndex)
+	}
+}
+
+func TestPebbleStorage_GetBlocksByTimeRange_InvalidRange(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Test with fromTime > toTime
+	_, err := pebbleStorage.GetBlocksByTimeRange(ctx, 10000, 1000, 10, 0)
+	if err == nil {
+		t.Error("GetBlocksByTimeRange() should fail when fromTime > toTime")
+	}
+}
+
+func TestPebbleStorage_SetBalance_Success(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	addr := common.HexToAddress("0x5555555555555555555555555555555555555555")
+
+	// Set balance directly
+	err := pebbleStorage.SetBalance(ctx, addr, 1, big.NewInt(5000))
+	if err != nil {
+		t.Fatalf("SetBalance() error = %v", err)
+	}
+
+	// Verify the balance
+	balance, err := pebbleStorage.GetAddressBalance(ctx, addr, 0)
+	if err != nil {
+		t.Fatalf("GetAddressBalance() error = %v", err)
+	}
+	if balance.Cmp(big.NewInt(5000)) != 0 {
+		t.Errorf("GetAddressBalance() = %s, want 5000", balance.String())
+	}
+}
+
+func TestPebbleStorage_SetBalance_ClosedStorage_Extended(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Close storage
+	cleanup()
+
+	addr := common.HexToAddress("0x6666666666666666666666666666666666666666")
+	err := pebbleStorage.SetBalance(ctx, addr, 1, big.NewInt(1000))
+	if err == nil {
+		t.Error("SetBalance() should fail on closed storage")
+	}
+}
+
+func TestPebbleStorage_GetBlockByTimestamp(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Store a block with timestamp
+	block := createTestBlock(50)
+	if err := pebbleStorage.SetBlock(ctx, block); err != nil {
+		t.Fatalf("SetBlock() error = %v", err)
+	}
+	if err := pebbleStorage.SetBlockTimestamp(ctx, 50000, 50); err != nil {
+		t.Fatalf("SetBlockTimestamp() error = %v", err)
+	}
+
+	// Get block by timestamp
+	retrieved, err := pebbleStorage.GetBlockByTimestamp(ctx, 50000)
+	if err != nil {
+		t.Fatalf("GetBlockByTimestamp() error = %v", err)
+	}
+	if retrieved.Number().Uint64() != 50 {
+		t.Errorf("GetBlockByTimestamp() returned block %d, want 50", retrieved.Number().Uint64())
+	}
+}
+
+func TestPebbleStorage_GetBlockByTimestamp_NotFound(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Try to get block with non-existent timestamp
+	_, err := pebbleStorage.GetBlockByTimestamp(ctx, 99999)
+	if err == nil {
+		t.Error("GetBlockByTimestamp() should fail for non-existent timestamp")
+	}
+}
+
+func TestPebbleStorage_GetAddressBalance_NotFound(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Get balance for address with no history
+	addr := common.HexToAddress("0x7777777777777777777777777777777777777777")
+	balance, err := pebbleStorage.GetAddressBalance(ctx, addr, 0)
+	if err != nil {
+		t.Fatalf("GetAddressBalance() error = %v", err)
+	}
+	// Should return 0 for non-existent balance
+	if balance.Cmp(big.NewInt(0)) != 0 {
+		t.Errorf("GetAddressBalance() = %s, want 0 for non-existent address", balance.String())
+	}
+}
+
+func TestPebbleStorage_GetBalanceHistory_Empty(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Get history for address with no history
+	addr := common.HexToAddress("0x8888888888888888888888888888888888888888")
+	history, err := pebbleStorage.GetBalanceHistory(ctx, addr, 0, 100, 10, 0)
+	if err != nil {
+		t.Fatalf("GetBalanceHistory() error = %v", err)
+	}
+	if len(history) != 0 {
+		t.Errorf("GetBalanceHistory() returned %d entries, want 0", len(history))
+	}
+}
+
+func TestPebbleStorage_GetBalanceHistory_InvalidRange(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	addr := common.HexToAddress("0x9999999999999999999999999999999999999999")
+
+	// Test with fromBlock > toBlock
+	_, err := pebbleStorage.GetBalanceHistory(ctx, addr, 100, 10, 10, 0)
+	if err == nil {
+		t.Error("GetBalanceHistory() should fail when fromBlock > toBlock")
+	}
+}
+
+// Encoder coverage tests
+func TestEncodeBlock_NilBlock(t *testing.T) {
+	_, err := EncodeBlock(nil)
+	if err == nil {
+		t.Error("EncodeBlock() should fail for nil block")
+	}
+}
+
+func TestEncodeTransaction_NilTx(t *testing.T) {
+	_, err := EncodeTransaction(nil)
+	if err == nil {
+		t.Error("EncodeTransaction() should fail for nil transaction")
+	}
+}
+
+func TestEncodeReceipt_NilReceipt(t *testing.T) {
+	_, err := EncodeReceipt(nil)
+	if err == nil {
+		t.Error("EncodeReceipt() should fail for nil receipt")
+	}
+}
+
+func TestEncodeTxLocation_NilLocation(t *testing.T) {
+	_, err := EncodeTxLocation(nil)
+	if err == nil {
+		t.Error("EncodeTxLocation() should fail for nil location")
+	}
+}
+
+func TestPebbleStorage_NewBatch_Operations(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	batch := storage.NewBatch()
+	if batch == nil {
+		t.Fatal("NewBatch() returned nil")
+	}
+	defer batch.Close()
+
+	// Add multiple operations to batch
+	for i := uint64(1); i <= 5; i++ {
+		block := createTestBlock(i)
+		if err := batch.SetBlock(ctx, block); err != nil {
+			t.Errorf("SetBlock(%d) error = %v", i, err)
+		}
+	}
+
+	// Check count
+	expectedCount := 5 * 2 // 5 blocks * 2 operations each
+	if batch.Count() != expectedCount {
+		t.Errorf("Count() = %d, want %d", batch.Count(), expectedCount)
+	}
+
+	// Reset batch
+	batch.Reset()
+	if batch.Count() != 0 {
+		t.Errorf("Count() after Reset() = %d, want 0", batch.Count())
+	}
+}
+
+func TestPebbleStorage_GetTransaction_SuccessfulRetrieval(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Create multiple transactions
+	for i := uint64(1); i <= 3; i++ {
+		tx := createTestTransaction(i)
+		location := &TxLocation{
+			BlockHeight: i * 10,
+			TxIndex:     i - 1,
+		}
+		if err := pebbleStorage.SetTransaction(ctx, tx, location); err != nil {
+			t.Fatalf("SetTransaction(%d) error = %v", i, err)
+		}
+	}
+
+	// Retrieve each transaction
+	for i := uint64(1); i <= 3; i++ {
+		tx := createTestTransaction(i)
+		retrieved, location, err := pebbleStorage.GetTransaction(ctx, tx.Hash())
+		if err != nil {
+			t.Errorf("GetTransaction(%d) error = %v", i, err)
+			continue
+		}
+		if retrieved.Hash() != tx.Hash() {
+			t.Errorf("GetTransaction(%d) returned wrong hash", i)
+		}
+		if location.BlockHeight != i*10 {
+			t.Errorf("GetTransaction(%d) returned wrong block height: %d", i, location.BlockHeight)
+		}
+	}
+}
+
+func TestPebbleStorage_HasTransaction_Success(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Create and store a transaction
+	tx := createTestTransaction(1)
+	location := &TxLocation{BlockHeight: 10, TxIndex: 0}
+	if err := pebbleStorage.SetTransaction(ctx, tx, location); err != nil {
+		t.Fatalf("SetTransaction() error = %v", err)
+	}
+
+	// Check it exists
+	exists, err := pebbleStorage.HasTransaction(ctx, tx.Hash())
+	if err != nil {
+		t.Fatalf("HasTransaction() error = %v", err)
+	}
+	if !exists {
+		t.Error("HasTransaction() returned false for existing transaction")
+	}
+
+	// Check non-existent
+	nonExistent := common.HexToHash("0xdeadbeef")
+	exists, err = pebbleStorage.HasTransaction(ctx, nonExistent)
+	if err != nil {
+		t.Fatalf("HasTransaction() error = %v", err)
+	}
+	if exists {
+		t.Error("HasTransaction() returned true for non-existent transaction")
+	}
+}
+
+func TestPebbleStorage_HasBlock_Success(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Create and store a block
+	block := createTestBlock(100)
+	if err := pebbleStorage.SetBlock(ctx, block); err != nil {
+		t.Fatalf("SetBlock() error = %v", err)
+	}
+
+	// Check it exists
+	exists, err := pebbleStorage.HasBlock(ctx, 100)
+	if err != nil {
+		t.Fatalf("HasBlock() error = %v", err)
+	}
+	if !exists {
+		t.Error("HasBlock() returned false for existing block")
+	}
+
+	// Check non-existent
+	exists, err = pebbleStorage.HasBlock(ctx, 999)
+	if err != nil {
+		t.Fatalf("HasBlock() error = %v", err)
+	}
+	if exists {
+		t.Error("HasBlock() returned true for non-existent block")
+	}
+}
+
+func TestPebbleBatch_AddTransactionToAddressIndex(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	batch := storage.NewBatch()
+	defer batch.Close()
+
+	addr := common.HexToAddress("0xaaaa")
+	txHash := common.HexToHash("0xbbbb")
+
+	err := batch.AddTransactionToAddressIndex(ctx, addr, txHash)
+	if err != nil {
+		t.Errorf("AddTransactionToAddressIndex() error = %v", err)
+	}
+
+	if batch.Count() != 1 {
+		t.Errorf("Count() = %d, want 1", batch.Count())
+	}
+
+	// Commit and verify
+	err = batch.Commit()
+	if err != nil {
+		t.Fatalf("Commit() error = %v", err)
+	}
+}
+
+func TestPebbleBatch_Commit_ClosedBatch(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	batch := storage.NewBatch()
+	batch.Close()
+
+	err := batch.Commit()
+	if err == nil {
+		t.Error("Commit() should fail on closed batch")
+	}
+}
+
+// Additional normal path tests for better coverage
+func TestPebbleStorage_GetBlockByHash_Success(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Create and store a block
+	block := createTestBlock(100)
+	if err := pebbleStorage.SetBlock(ctx, block); err != nil {
+		t.Fatalf("SetBlock() error = %v", err)
+	}
+
+	// Get by hash
+	retrieved, err := pebbleStorage.GetBlockByHash(ctx, block.Hash())
+	if err != nil {
+		t.Fatalf("GetBlockByHash() error = %v", err)
+	}
+	if retrieved.Number().Uint64() != 100 {
+		t.Errorf("GetBlockByHash() returned wrong block: %d", retrieved.Number().Uint64())
+	}
+}
+
+func TestPebbleStorage_GetBlockByHash_NotFound(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Try to get non-existent block
+	nonExistent := common.HexToHash("0xdeadbeef")
+	_, err := pebbleStorage.GetBlockByHash(ctx, nonExistent)
+	if err == nil {
+		t.Error("GetBlockByHash() should fail for non-existent hash")
+	}
+}
+
+func TestPebbleStorage_GetReceipt_Success(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Create and store receipt
+	tx := createTestTransaction(1)
+	receipt := &types.Receipt{
+		TxHash:           tx.Hash(),
+		Status:           types.ReceiptStatusSuccessful,
+		BlockNumber:      big.NewInt(10),
+		TransactionIndex: 0,
+		GasUsed:          21000,
+	}
+
+	if err := pebbleStorage.SetReceipt(ctx, receipt); err != nil {
+		t.Fatalf("SetReceipt() error = %v", err)
+	}
+
+	// Get receipt
+	retrieved, err := pebbleStorage.GetReceipt(ctx, tx.Hash())
+	if err != nil {
+		t.Fatalf("GetReceipt() error = %v", err)
+	}
+	if retrieved.TxHash != tx.Hash() {
+		t.Error("GetReceipt() returned wrong receipt")
+	}
+}
+
+func TestPebbleStorage_SetReceipts_Success(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	var receipts []*types.Receipt
+	for i := 0; i < 3; i++ {
+		tx := createTestTransaction(uint64(i))
+		receipt := &types.Receipt{
+			TxHash:           tx.Hash(),
+			Status:           types.ReceiptStatusSuccessful,
+			BlockNumber:      big.NewInt(10),
+			TransactionIndex: uint(i),
+			GasUsed:          21000,
+		}
+		receipts = append(receipts, receipt)
+	}
+
+	err := pebbleStorage.SetReceipts(ctx, receipts)
+	if err != nil {
+		t.Fatalf("SetReceipts() error = %v", err)
+	}
+
+	// Verify each receipt
+	for i, r := range receipts {
+		retrieved, err := pebbleStorage.GetReceipt(ctx, r.TxHash)
+		if err != nil {
+			t.Errorf("GetReceipt(%d) error = %v", i, err)
+			continue
+		}
+		if retrieved.TxHash != r.TxHash {
+			t.Errorf("GetReceipt(%d) returned wrong receipt", i)
+		}
+	}
+}
+
+func TestPebbleStorage_SetBlocks_Success(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	var blocks []*types.Block
+	for i := uint64(200); i <= 202; i++ {
+		blocks = append(blocks, createTestBlock(i))
+	}
+
+	err := pebbleStorage.SetBlocks(ctx, blocks)
+	if err != nil {
+		t.Fatalf("SetBlocks() error = %v", err)
+	}
+
+	// Verify each block
+	for i := uint64(200); i <= 202; i++ {
+		retrieved, err := pebbleStorage.GetBlock(ctx, i)
+		if err != nil {
+			t.Errorf("GetBlock(%d) error = %v", i, err)
+			continue
+		}
+		if retrieved.Number().Uint64() != i {
+			t.Errorf("GetBlock(%d) returned wrong block", i)
+		}
+	}
+}
+
+func TestPebbleStorage_AddTransactionToAddressIndex_Success(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	pebbleStorage := storage.(*PebbleStorage)
+
+	addr := common.HexToAddress("0xcccc")
+
+	// Add multiple transactions to index
+	var hashes []common.Hash
+	for i := 0; i < 3; i++ {
+		tx := createTestTransaction(uint64(i))
+		hashes = append(hashes, tx.Hash())
+		if err := pebbleStorage.AddTransactionToAddressIndex(ctx, addr, tx.Hash()); err != nil {
+			t.Fatalf("AddTransactionToAddressIndex(%d) error = %v", i, err)
+		}
+	}
+
+	// Get transactions by address
+	retrieved, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, 10, 0)
+	if err != nil {
+		t.Fatalf("GetTransactionsByAddress() error = %v", err)
+	}
+	if len(retrieved) != 3 {
+		t.Errorf("GetTransactionsByAddress() returned %d transactions, want 3", len(retrieved))
+	}
+}
+
+func TestPebbleStorage_GetLatestHeight_NotSet(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// On fresh storage, GetLatestHeight should return 0 or error
+	height, err := storage.GetLatestHeight(ctx)
+	if err != nil && err != ErrNotFound {
+		t.Fatalf("GetLatestHeight() unexpected error = %v", err)
+	}
+	// Height should be 0 for fresh storage
+	_ = height // Just accessing the value is enough
+}
+

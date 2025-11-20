@@ -42,6 +42,9 @@ func main() {
 		logFormat     = flag.String("log-format", "", "Log format (json, console)")
 		enableGapMode = flag.Bool("gap-recovery", false, "Enable gap detection and recovery at startup")
 
+		// Data management flags
+		clearData = flag.Bool("clear-data", false, "Clear (delete) the data folder before starting")
+
 		// API server flags
 		enableAPI       = flag.Bool("api", false, "Enable API server")
 		apiHost         = flag.String("api-host", "", "API server host")
@@ -97,7 +100,15 @@ func main() {
 		zap.Int("workers", cfg.Indexer.Workers),
 		zap.Int("batch_size", cfg.Indexer.ChunkSize),
 		zap.Bool("gap_recovery", *enableGapMode),
+		zap.Bool("clear_data", *clearData),
 	)
+
+	// Clear data folder if requested
+	if *clearData {
+		if err := clearDataFolder(cfg.Database.Path, log); err != nil {
+			log.Fatal("Failed to clear data folder", zap.Error(err))
+		}
+	}
 
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
@@ -402,4 +413,38 @@ func initLogger(level, format string) (*zap.Logger, error) {
 		Development: true,
 	}
 	return logger.NewWithConfig(&cfg)
+}
+
+// clearDataFolder removes the data folder and all its contents
+func clearDataFolder(path string, log *zap.Logger) error {
+	// Check if path exists
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Info("Data folder does not exist, nothing to clear",
+				zap.String("path", path),
+			)
+			return nil
+		}
+		return fmt.Errorf("failed to stat data folder: %w", err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("data path is not a directory: %s", path)
+	}
+
+	log.Warn("Clearing data folder",
+		zap.String("path", path),
+	)
+
+	// Remove the entire directory
+	if err := os.RemoveAll(path); err != nil {
+		return fmt.Errorf("failed to remove data folder: %w", err)
+	}
+
+	log.Info("Data folder cleared successfully",
+		zap.String("path", path),
+	)
+
+	return nil
 }

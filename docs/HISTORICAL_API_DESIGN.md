@@ -1,10 +1,8 @@
 # Historical Data API Design
 
-> Advanced features for querying historical blockchain data with efficient indexing and pagination
+Design reference for the historical data APIs, focusing on efficient indexing, query semantics, and rollout considerations.
 
-**Version**: 1.0.0
-**Last Updated**: 2025-10-21
-**Status**: Design & Implementation In Progress
+**Last Updated**: 2025-11-20
 
 ---
 
@@ -49,7 +47,7 @@ The Historical Data API provides efficient access to historical blockchain data 
 
 Our storage layer (`storage/pebble.go`) already implements core historical data access:
 
-#### ✅ **Implemented Features**
+#### Implemented Features
 
 1. **Block Range Queries**
    ```go
@@ -76,7 +74,7 @@ Our storage layer (`storage/pebble.go`) already implements core historical data 
    GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error)
    ```
 
-#### ⚠️ **Missing Features**
+#### Missing Features
 
 1. **Time-Based Queries**: No timestamp index for blocks
 2. **Balance Tracking**: No address balance history

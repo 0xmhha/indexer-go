@@ -21,13 +21,14 @@ import (
 
 // Server represents the API server
 type Server struct {
-	config   *Config
-	logger   *zap.Logger
-	storage  storage.Storage
-	eventBus *events.EventBus
-	router   *chi.Mux
-	server   *http.Server
-	wsServer *websocket.Server
+	config     *Config
+	logger     *zap.Logger
+	storage    storage.Storage
+	eventBus   *events.EventBus
+	router     *chi.Mux
+	server     *http.Server
+	wsServer   *websocket.Server
+	gqlSubServer *graphql.SubscriptionServer
 }
 
 // NewServer creates a new API server
@@ -66,6 +67,10 @@ func NewServer(config *Config, logger *zap.Logger, store storage.Storage) (*Serv
 // SetEventBus sets the EventBus for the server (optional)
 func (s *Server) SetEventBus(bus *events.EventBus) {
 	s.eventBus = bus
+	// Also set EventBus for GraphQL Subscription server
+	if s.gqlSubServer != nil {
+		s.gqlSubServer.SetEventBus(bus)
+	}
 }
 
 // setupMiddleware configures the middleware stack
@@ -84,6 +89,19 @@ func (s *Server) setupMiddleware() {
 
 	// Recoverer middleware (chi's built-in)
 	s.router.Use(middleware.Recoverer)
+
+	// Rate limiting middleware (if enabled)
+	if s.config.EnableRateLimit {
+		s.router.Use(apimiddleware.RateLimit(
+			s.config.RateLimitPerSecond,
+			s.config.RateLimitBurst,
+			s.logger,
+		))
+		s.logger.Info("rate limiting enabled",
+			zap.Float64("rate_per_second", s.config.RateLimitPerSecond),
+			zap.Int("burst", s.config.RateLimitBurst),
+		)
+	}
 
 	// Custom CORS middleware that adds headers to ALL responses
 	if s.config.EnableCORS {
@@ -159,6 +177,11 @@ func (s *Server) setupRoutes() {
 			s.router.Get(s.config.GraphQLPlaygroundPath, graphqlHandler.PlaygroundHandler())
 			s.logger.Info("GraphQL playground enabled", zap.String("path", s.config.GraphQLPlaygroundPath))
 		}
+
+		// Create GraphQL Subscription server (WebSocket)
+		s.gqlSubServer = graphql.NewSubscriptionServer(s.eventBus, s.logger)
+		s.router.Get("/graphql/ws", s.gqlSubServer.Handler())
+		s.logger.Info("GraphQL subscriptions enabled", zap.String("path", "/graphql/ws"))
 	}
 
 	// JSON-RPC endpoints

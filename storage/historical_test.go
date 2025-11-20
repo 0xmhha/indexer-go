@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // TestTransactionFilter_Validate tests filter validation
@@ -458,6 +459,320 @@ func TestGetBalanceHistory(t *testing.T) {
 
 			if len(history) != tt.wantCount {
 				t.Errorf("GetBalanceHistory() got %d snapshots, want %d", len(history), tt.wantCount)
+			}
+		})
+	}
+}
+
+// TestMatchTransaction tests the transaction filter matching
+func TestMatchTransaction(t *testing.T) {
+	// Create a test private key for signing
+	// Using a deterministic key for testing
+	privateKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	privateKeyBytes := common.Hex2Bytes(privateKeyHex)
+
+	// Import the key
+	key, err := crypto.ToECDSA(privateKeyBytes)
+	if err != nil {
+		t.Fatalf("Failed to create private key: %v", err)
+	}
+
+	fromAddr := crypto.PubkeyToAddress(key.PublicKey)
+	toAddr := common.HexToAddress("0x2222222222222222222222222222222222222222")
+
+	// Create test transactions
+	createSignedTx := func(to *common.Address, value *big.Int, nonce uint64) *types.Transaction {
+		chainID := big.NewInt(1)
+		signer := types.LatestSignerForChainID(chainID)
+
+		var tx *types.Transaction
+		if to != nil {
+			tx = types.NewTx(&types.DynamicFeeTx{
+				ChainID:   chainID,
+				Nonce:     nonce,
+				GasTipCap: big.NewInt(1000000000),
+				GasFeeCap: big.NewInt(1000000000),
+				Gas:       21000,
+				To:        to,
+				Value:     value,
+			})
+		} else {
+			tx = types.NewTx(&types.DynamicFeeTx{
+				ChainID:   chainID,
+				Nonce:     nonce,
+				GasTipCap: big.NewInt(1000000000),
+				GasFeeCap: big.NewInt(1000000000),
+				Gas:       21000,
+				To:        nil,
+				Value:     value,
+			})
+		}
+
+		signedTx, err := types.SignTx(tx, signer, key)
+		if err != nil {
+			t.Fatalf("Failed to sign transaction: %v", err)
+		}
+		return signedTx
+	}
+
+	// Test transactions
+	sentTx := createSignedTx(&toAddr, big.NewInt(1000), 0)
+	contractTx := createSignedTx(nil, big.NewInt(0), 1)
+
+	// Success receipt
+	successReceipt := &types.Receipt{
+		Status: types.ReceiptStatusSuccessful,
+	}
+
+	// Failed receipt
+	failedReceipt := &types.Receipt{
+		Status: types.ReceiptStatusFailed,
+	}
+
+	tests := []struct {
+		name       string
+		filter     *TransactionFilter
+		tx         *types.Transaction
+		receipt    *types.Receipt
+		location   *TxLocation
+		targetAddr common.Address
+		wantMatch  bool
+	}{
+		{
+			name: "match all - sent transaction",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeAll,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  true,
+		},
+		{
+			name: "match all - received transaction",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeAll,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: toAddr,
+			wantMatch:  true,
+		},
+		{
+			name: "block range - below",
+			filter: &TransactionFilter{
+				FromBlock: 100,
+				ToBlock:   200,
+				TxType:    TxTypeAll,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  false,
+		},
+		{
+			name: "block range - above",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeAll,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 150},
+			targetAddr: fromAddr,
+			wantMatch:  false,
+		},
+		{
+			name: "sent type - from sender",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeSent,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  true,
+		},
+		{
+			name: "sent type - from receiver",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeSent,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: toAddr,
+			wantMatch:  false,
+		},
+		{
+			name: "received type - from receiver",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeReceived,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: toAddr,
+			wantMatch:  true,
+		},
+		{
+			name: "received type - from sender",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeReceived,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  false,
+		},
+		{
+			name: "min value - above",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeAll,
+				MinValue:  big.NewInt(500),
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  true,
+		},
+		{
+			name: "min value - below",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeAll,
+				MinValue:  big.NewInt(2000),
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  false,
+		},
+		{
+			name: "max value - below",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeAll,
+				MaxValue:  big.NewInt(2000),
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  true,
+		},
+		{
+			name: "max value - above",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeAll,
+				MaxValue:  big.NewInt(500),
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  false,
+		},
+		{
+			name: "success only - success",
+			filter: &TransactionFilter{
+				FromBlock:   0,
+				ToBlock:     100,
+				TxType:      TxTypeAll,
+				SuccessOnly: true,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  true,
+		},
+		{
+			name: "success only - failed",
+			filter: &TransactionFilter{
+				FromBlock:   0,
+				ToBlock:     100,
+				TxType:      TxTypeAll,
+				SuccessOnly: true,
+			},
+			tx:         sentTx,
+			receipt:    failedReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  false,
+		},
+		{
+			name: "success only - nil receipt",
+			filter: &TransactionFilter{
+				FromBlock:   0,
+				ToBlock:     100,
+				TxType:      TxTypeAll,
+				SuccessOnly: true,
+			},
+			tx:         sentTx,
+			receipt:    nil,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  false,
+		},
+		{
+			name: "contract creation - received type",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeReceived,
+			},
+			tx:         contractTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: fromAddr,
+			wantMatch:  false,
+		},
+		{
+			name: "all type - unrelated address",
+			filter: &TransactionFilter{
+				FromBlock: 0,
+				ToBlock:   100,
+				TxType:    TxTypeAll,
+			},
+			tx:         sentTx,
+			receipt:    successReceipt,
+			location:   &TxLocation{BlockHeight: 50},
+			targetAddr: common.HexToAddress("0x3333333333333333333333333333333333333333"),
+			wantMatch:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.filter.MatchTransaction(tt.tx, tt.receipt, tt.location, tt.targetAddr)
+			if result != tt.wantMatch {
+				t.Errorf("MatchTransaction() = %v, want %v", result, tt.wantMatch)
 			}
 		})
 	}

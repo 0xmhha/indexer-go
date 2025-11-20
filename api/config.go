@@ -55,6 +55,17 @@ type Config struct {
 
 	// ShutdownTimeout is the graceful shutdown timeout
 	ShutdownTimeout time.Duration
+
+	// EnableRateLimit enables rate limiting middleware
+	EnableRateLimit bool
+
+	// RateLimitPerSecond is the number of requests allowed per second per IP
+	// Default: 1000 (generous for development/testing)
+	RateLimitPerSecond float64
+
+	// RateLimitBurst is the maximum burst size
+	// Default: 2000 (allows temporary spikes)
+	RateLimitBurst int
 }
 
 // DefaultConfig returns a default API server configuration
@@ -76,6 +87,9 @@ func DefaultConfig() *Config {
 		JSONRPCPath:           "/rpc",
 		WebSocketPath:         "/ws",
 		ShutdownTimeout:       30 * time.Second,
+		EnableRateLimit:       false, // Disabled by default for development
+		RateLimitPerSecond:    1000,  // Generous default for development/testing
+		RateLimitBurst:        2000,  // Allow temporary spikes
 	}
 }
 

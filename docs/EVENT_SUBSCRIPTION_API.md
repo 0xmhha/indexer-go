@@ -1,9 +1,8 @@
 # Event Subscription API Reference
 
-> Complete API reference for the Event Subscription System
+Detailed reference for the Event Subscription System, covering API usage, filtering, metrics, and operational guidance.
 
-**Version**: 1.0.0
-**Last Updated**: 2025-10-20
+**Last Updated**: 2025-11-20
 
 ---
 
@@ -590,12 +589,12 @@ sub := bus.Subscribe(id, types, filter, 10)   // Low latency
 ### 2. Filter Optimization
 
 ```go
-// ✅ Good: Specific address filters (fast)
+// Good: Specific address filters (fast)
 filter := &events.Filter{
     FromAddresses: []common.Address{addr1, addr2},
 }
 
-// ⚠️ Slower: Value range filters (big.Int parsing)
+// Slower: Value range filters (big.Int parsing)
 filter := &events.Filter{
     MinValue: big.NewInt(1000),
     MaxValue: big.NewInt(10000),
@@ -605,21 +604,21 @@ filter := &events.Filter{
 ### 3. Event Processing
 
 ```go
-// ✅ Good: Fast processing
+// Good: Fast processing
 go func() {
     for event := range sub.Channel {
         processQuickly(event)
     }
 }()
 
-// ❌ Bad: Slow processing (blocks channel)
+// Slow: Blocking work causes channel backpressure
 go func() {
     for event := range sub.Channel {
         slowDatabaseWrite(event) // Will cause drops
     }
 }()
 
-// ✅ Better: Async processing
+// Better: Async processing
 go func() {
     for event := range sub.Channel {
         go processAsync(event) // Non-blocking
@@ -679,5 +678,4 @@ go func() {
 ## See Also
 
 - [METRICS_MONITORING.md](./METRICS_MONITORING.md) - Prometheus metrics guide
-- [BENCHMARK_RESULTS.md](./BENCHMARK_RESULTS.md) - Performance benchmarks
 - [EVENT_SUBSCRIPTION_DESIGN.md](./EVENT_SUBSCRIPTION_DESIGN.md) - Architecture design

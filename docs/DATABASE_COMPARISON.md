@@ -1,263 +1,69 @@
 # Database Comparison for indexer-go
 
-## PebbleDB - Our Choice
+이 문서는 indexer-go가 사용할 임베디드 스토리지 엔진을 비교 분석하기 위해 작성되었습니다. 분석 대상은 PebbleDB, LevelDB, RocksDB, BadgerDB, BoltDB/bbolt, PostgreSQL/MySQL이며, 기능 요구사항과 제약을 기준으로 평가했습니다.
 
-### What is PebbleDB?
+## 평가 기준
 
-**PebbleDB**는 CockroachDB에서 개발한 **Go 네이티브 key-value 스토어**입니다.
-- LevelDB와 RocksDB에서 영감을 받아 Go로 완전히 재작성
-- LSM-tree (Log-Structured Merge-tree) 기반 아키텍처
-- 2020년부터 CockroachDB의 기본 스토리지 엔진으로 프로덕션 사용 중
+1. **임베디드 배포 가능 여부**: 별도 서버 없이 단일 바이너리로 배포 가능한가?
+2. **쓰기 지향 워크로드 적합성**: 블록 인덱싱(80~150 blocks/s) 같은 고 쓰기 부하를 처리가 가능한가?
+3. **Go 친화성**: CGO 의존도 없이 빌드/배포가 쉬운가?
+4. **운영 안정성**: 프로덕션에서 검증되었는가, 유지보수가 활발한가?
+5. **호환성**: 기존 tx-indexer 아키텍처와의 정합성이 있는가?
 
-### License: BSD-3-Clause (무료 오픈소스)
+## 후보별 핵심 요약
 
-✅ **완전히 무료이며 상업적 사용 가능**
-- BSD-3-Clause 라이센스
-- 저작권 표시만 필요
-- 유료 라이센스 없음
+| 후보 | 장점 요약 | 제약 사항 | 결론 |
+|------|-----------|-----------|-------|
+| PebbleDB | Go 네이티브, 높은 성능, CockroachDB 프로덕션 사용 | 상대적으로 새로운 프로젝트 | 우선 선택 |
+| LevelDB | 널리 사용, 구현 단순 | C++ 코드베이스, 유지보수 중단, Go 1.20+ 빌드 문제 | 신규 프로젝트에 부적합 |
+| RocksDB | 매우 높은 성능, 풍부한 기능 | C++ 및 CGO 의존, 설정 복잡 | 고급 기능이 반드시 필요할 때만 고려 |
+| BadgerDB | Go 네이티브, 단순 배포 | 메모리 사용량 큼, 쓰기 성능 열세 | 메모리 여유가 충분할 때만 부분적 대안 |
+| BoltDB/bbolt | 단순 API, ACID 보장 | B+tree 기반으로 쓰기 병목, 단일 writer | 소규모 임베디드 용도에 한정 |
+| PostgreSQL/MySQL | 성숙한 생태계, 쿼리 능력 | 서버 운영 필요, KV 워크로드 비효율 | indexer-go 요구와 불일치 |
+
+## PebbleDB (선택)
+
+### 개요
+PebbleDB는 CockroachDB 팀이 Go로 재작성한 LSM-tree 기반 key-value 스토어입니다. tx-indexer도 동일한 버전을 사용하므로 운영 경험을 재활용할 수 있습니다.
+
+### 라이선스 및 제공 형태
+- BSD-3-Clause, 상업적 사용에 제한 없음
 - GitHub: https://github.com/cockroachdb/pebble
 
-### Why PebbleDB?
+### 선택 이유
+- `github.com/cockroachdb/pebble v1.1.5`를 tx-indexer에서 이미 사용 중이라 호환성 확보
+- 순수 Go 구현이라 CGO 없이 크로스 컴파일 가능
+- RocksDB 대비 역방향 반복과 동시성 처리 성능 개선
+- CockroachDB 프로덕션에서 2020년 이후 대규모로 검증
+- Column family 같은 불필요한 기능이 없어 학습 곡선이 낮음
 
-#### 1. tx-indexer와 동일한 선택
-```go
-// tx-indexer/go.mod
-github.com/cockroachdb/pebble v1.1.5
-```
-- tx-indexer (Gno chain)가 이미 검증하고 사용 중
-- 유사한 아키텍처이므로 동일한 선택이 합리적
+## 대안 분석
 
-#### 2. Go 네이티브
-- Go로 작성되어 CGO 불필요
-- 크로스 컴파일 용이
-- Go 생태계와 완벽한 통합
-- 디버깅과 프로파일링 쉬움
+### LevelDB
+- 장점: 역사가 길고 검증된 구현, 레거시 프로젝트에서 다수 사용
+- 단점: C++ 구현으로 CGO 필요, 장기간 유지보수 중단, Go 1.20 이상에서 빌드 이슈, 성능이 PebbleDB보다 낮음
+- 결론: 레거시 호환성 목적이 아니라면 신규 프로젝트에서 선택할 이유가 없음
 
-#### 3. 높은 성능
-- RocksDB 대비 개선된 역방향 반복 (reverse iteration)
-- 더 나은 동시성 처리
-- L0 sublevels로 읽기 증폭 감소
-- 쓰기 부하가 높을 때 더 좋은 성능
+### RocksDB
+- 장점: 최고 수준의 성능, column family/transaction 등 고급 기능 제공, Facebook이 유지보수
+- 단점: C++ 및 CGO 의존으로 배포 복잡, 크로스 컴파일 어려움, API/설정 난이도 높음, 바이너리 크기 증가, Go 바인딩 안정성 부족
+- 결론: 고급 기능이 필수 요건일 때만 고려하되 indexer-go 범위에서는 과도한 도입비용
 
-#### 4. 프로덕션 검증
-- CockroachDB에서 2020년부터 대규모 프로덕션 사용
-- 안정성 검증 완료
-- 활발한 유지보수
+### BadgerDB
+- 장점: Go 네이티브, CGO 불필요, 단순한 API, Dgraph에서 개발
+- 단점: 메모리 사용량이 높고 장시간 런닝 시 GC 비용 상승, 쓰기 성능이 PebbleDB 대비 열세, 커뮤니티 규모가 작음
+- 결론: 메모리가 충분한 단순 워크로드에는 적합하지만 indexer-go의 고 쓰기 부하 요구에는 여유 없음
 
-#### 5. 간결한 API
-- RocksDB보다 단순한 API
-- Column families, transactions 등 불필요한 기능 제거
-- 학습 곡선 낮음
+### BoltDB / bbolt
+- 장점: Go 네이티브, 단일 파일 저장, ACID 트랜잭션 지원
+- 단점: B+tree 구조로 쓰기 성능이 LSM 대비 낮고 단일 writer 제약, 대용량 데이터 처리에 부적합, 원본 BoltDB는 유지보수 종료(bbolt fork만 유지)
+- 결론: 소규모 임베디드 DB 시나리오에 한정되며 블록 인덱서에는 맞지 않음
 
-## 대안 비교
-
-### 1. LevelDB
-
-**장점:**
-- 가장 오래되고 안정적
-- 많은 프로젝트에서 사용
-
-**단점:**
-- ❌ C++로 작성되어 CGO 필요
-- ❌ 개발이 거의 중단됨
-- ❌ 성능이 PebbleDB보다 낮음
-- ❌ Go 1.20+ 빌드 이슈
-
-**결론:** 레거시 선택, 새 프로젝트에 부적합
-
----
-
-### 2. RocksDB
-
-**장점:**
-- 매우 높은 성능
-- 풍부한 기능 (column families, transactions 등)
-- Facebook에서 개발 및 유지보수
-
-**단점:**
-- ❌ C++로 작성되어 CGO 필요
-- ❌ 크로스 컴파일 복잡
-- ❌ 복잡한 API와 설정
-- ❌ Go 바인딩 불안정
-- ❌ 바이너리 크기 증가
-
-**결론:** 고급 기능이 필요한 경우에만 고려
-
----
-
-### 3. BadgerDB
-
-**장점:**
-- ✅ Go 네이티브
-- ✅ 순수 Go, CGO 불필요
-- DGRAPH에서 개발
-
-**단점:**
-- ❌ 메모리 사용량이 높음
-- ❌ PebbleDB보다 느린 쓰기 성능
-- ❌ 커뮤니티가 작음
-- ❌ LSM-tree가 아닌 다른 구조
-
-**결론:** 메모리가 충분하고 단순한 사용 사례에 적합
-
----
-
-### 4. BoltDB / bbolt
-
-**장점:**
-- ✅ Go 네이티브
-- ✅ 단순한 API
-- ✅ ACID 트랜잭션
-
-**단점:**
-- ❌ B+tree 기반 (LSM-tree보다 쓰기 느림)
-- ❌ 단일 쓰기 스레드 (동시성 제한)
-- ❌ 대용량 데이터에 부적합
-- ❌ 개발 중단 (etcd에서 fork한 bbolt는 유지 중)
-
-**결론:** 소규모 임베디드 DB용, 블록체인 인덱서에 부적합
-
----
-
-### 5. PostgreSQL / MySQL
-
-**장점:**
-- ✅ 매우 성숙한 생태계
-- ✅ 풍부한 쿼리 기능
-- ✅ 운영 도구 많음
-
-**단점:**
-- ❌ 별도 서버 필요 (임베디드 불가)
-- ❌ 설정 및 운영 복잡도 증가
-- ❌ 오버헤드 높음
-- ❌ Key-value 워크로드에 최적화 안 됨
-
-**결론:** GraphQL 레이어가 이미 있으므로 불필요한 복잡도
-
----
-
-## 선택 기준
-
-### 우리의 요구사항
-
-1. **임베디드 데이터베이스**
-   - 별도 서버 불필요
-   - 단일 바이너리 배포
-
-2. **높은 쓰기 성능**
-   - 블록 인덱싱: 80-150 blocks/s
-   - LSM-tree 구조 필수
-
-3. **Go 네이티브**
-   - CGO 없이 크로스 컴파일
-   - 간편한 배포
-
-4. **프로덕션 안정성**
-   - 대규모 사용 사례 검증
-   - 활발한 유지보수
-
-5. **tx-indexer 호환성**
-   - 유사한 아키텍처
-   - 검증된 선택
-
-### 요구사항별 점수
-
-| Database   | 임베디드 | 쓰기 성능 | Go 네이티브 | 안정성 | tx-indexer | 총점 |
-|------------|---------|----------|------------|--------|------------|------|
-| **PebbleDB** | ✅ 5점 | ✅ 5점   | ✅ 5점     | ✅ 5점 | ✅ 5점     | **25점** |
-| RocksDB    | ✅ 5점 | ✅ 5점   | ❌ 1점     | ✅ 5점 | ❌ 1점     | 17점 |
-| BadgerDB   | ✅ 5점 | ⚠️ 3점   | ✅ 5점     | ⚠️ 3점 | ❌ 1점     | 17점 |
-| LevelDB    | ✅ 5점 | ⚠️ 3점   | ❌ 1점     | ⚠️ 3점 | ❌ 1점     | 13점 |
-| BoltDB     | ✅ 5점 | ❌ 2점   | ✅ 5점     | ⚠️ 3점 | ❌ 1점     | 16점 |
-| PostgreSQL | ❌ 1점 | ⚠️ 3점   | ✅ 5점     | ✅ 5점 | ❌ 1점     | 15점 |
-
-## PebbleDB 성능 특성
-
-### LSM-tree 구조
-
-```
-Write Path:
-User Write → MemTable → Immutable MemTable → L0 SSTable → Compaction → L1-L6
-
-Read Path:
-User Read → MemTable → L0 → L1 → ... → L6
-```
-
-### 성능 특성
-
-**강점:**
-- ✅ 순차 쓰기: 매우 빠름 (블록 인덱싱에 최적)
-- ✅ 배치 쓰기: 높은 처리량
-- ✅ 범위 스캔: 효율적
-- ✅ 압축: Snappy 기본 지원
-
-**약점:**
-- ⚠️ 랜덤 읽기: B-tree보다 느림 (하지만 Bloom filter로 완화)
-- ⚠️ 쓰기 증폭: Compaction 오버헤드
-- ⚠️ 공간 증폭: 임시 공간 필요
-
-**우리 워크로드에 적합한 이유:**
-- 블록 인덱싱은 대부분 순차 쓰기
-- 읽기는 주로 최근 블록 (MemTable/L0에서 처리)
-- 범위 스캔 (address transactions) 빈번
-
-## 실제 사용 사례
-
-### CockroachDB
-- 2020년부터 기본 스토리지 엔진
-- 전세계 수천 개의 프로덕션 클러스터
-- 페타바이트급 데이터 처리
-
-### tx-indexer (Gno chain)
-- Gno 블록체인 인덱서
-- PebbleDB로 블록/트랜잭션 인덱싱
-- 우리와 유사한 아키텍처
-
-### go-ethereum (geth)
-- go-ethereum도 PebbleDB를 선택적으로 지원
-- LevelDB 대안으로 사용 가능
-
-## 마이그레이션 경로
-
-PebbleDB는 Storage 인터페이스 뒤에 숨겨져 있으므로, 필요시 다른 백엔드로 교체 가능:
-
-```go
-type Storage interface {
-    Reader
-    Writer
-    Close() error
-}
-
-// 현재
-storage := NewPebbleStorage(config)
-
-// 미래에 필요하면
-// storage := NewBadgerStorage(config)
-// storage := NewPostgresStorage(config)
-```
+### PostgreSQL / MySQL
+- 장점: 성숙한 생태계와 풍부한 관리 도구, SQL 쿼리 기능
+- 단점: 서버 프로세스 필요, 설정/운영 복잡도 증가, key-value 위주 워크로드에서는 오버헤드가 큼
+- 결론: indexer-go는 이미 GraphQL 레이어를 제공하므로 RDBMS를 추가하면 관리 비용만 늘어남
 
 ## 결론
 
-**PebbleDB를 선택한 이유:**
-
-1. ✅ **무료 오픈소스** (BSD-3-Clause)
-2. ✅ **tx-indexer 검증** (동일한 선택)
-3. ✅ **Go 네이티브** (CGO 불필요)
-4. ✅ **높은 성능** (블록 인덱싱에 최적)
-5. ✅ **프로덕션 검증** (CockroachDB)
-6. ✅ **간결한 API** (학습 용이)
-7. ✅ **활발한 개발** (지속적 개선)
-
-**대안이 필요한 경우:**
-- 메모리가 매우 제한적: BoltDB/bbolt 고려
-- 복잡한 쿼리 필요: PostgreSQL 고려 (하지만 GraphQL이 이미 있음)
-- 기존 RocksDB 인프라: RocksDB 유지
-
-**현재로서는 PebbleDB가 최적의 선택입니다.**
-
-## 참고 자료
-
-- PebbleDB GitHub: https://github.com/cockroachdb/pebble
-- CockroachDB 블로그: https://www.cockroachlabs.com/blog/pebble-rocksdb-kv-store/
-- tx-indexer: https://github.com/gnolang/tx-indexer
-- Go Database Comparison: https://github.com/dgraph-io/badger#benchmarks
+필수 요구사항(임베디드, 고성능 쓰기, Go 네이티브, 안정성, tx-indexer와의 호환성)을 모두 만족하는 후보는 PebbleDB뿐입니다. 나머지 후보는 특정 영역에서 장점이 있으나 프로젝트 목표와 맞지 않거나 운영 복잡도를 크게 높입니다. 따라서 indexer-go의 기본 스토리지 엔진은 PebbleDB로 유지하고, 향후 기능 요구가 변화할 경우에만 RocksDB와 같은 대안을 재검토합니다.

@@ -467,3 +467,59 @@ func TestIsIndexKey(t *testing.T) {
 		})
 	}
 }
+
+func TestBlockCountKey(t *testing.T) {
+	key := BlockCountKey()
+
+	if len(key) == 0 {
+		t.Error("BlockCountKey() returned empty key")
+	}
+
+	// Should be consistent
+	key2 := BlockCountKey()
+	if !bytes.Equal(key, key2) {
+		t.Error("BlockCountKey() is not consistent")
+	}
+
+	// Should be a metadata key
+	if !IsMetadataKey(key) {
+		t.Error("BlockCountKey() should be a metadata key")
+	}
+
+	// Should be different from LatestHeightKey
+	latestKey := LatestHeightKey()
+	if bytes.Equal(key, latestKey) {
+		t.Error("BlockCountKey() should be different from LatestHeightKey()")
+	}
+}
+
+func TestTransactionCountKey(t *testing.T) {
+	key := TransactionCountKey()
+
+	if len(key) == 0 {
+		t.Error("TransactionCountKey() returned empty key")
+	}
+
+	// Should be consistent
+	key2 := TransactionCountKey()
+	if !bytes.Equal(key, key2) {
+		t.Error("TransactionCountKey() is not consistent")
+	}
+
+	// Should be a metadata key
+	if !IsMetadataKey(key) {
+		t.Error("TransactionCountKey() should be a metadata key")
+	}
+
+	// Should be different from BlockCountKey
+	blockCountKey := BlockCountKey()
+	if bytes.Equal(key, blockCountKey) {
+		t.Error("TransactionCountKey() should be different from BlockCountKey()")
+	}
+
+	// Should be different from LatestHeightKey
+	latestKey := LatestHeightKey()
+	if bytes.Equal(key, latestKey) {
+		t.Error("TransactionCountKey() should be different from LatestHeightKey()")
+	}
+}

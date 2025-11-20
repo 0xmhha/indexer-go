@@ -1,9 +1,8 @@
 # Metrics & Monitoring Guide
 
-> Complete guide for monitoring Event Subscription System with Prometheus
+Monitoring reference for the Event Subscription System, covering Prometheus integration, dashboards, and alerting workflows.
 
-**Version**: 1.0.0
-**Last Updated**: 2025-10-20
+**Last Updated**: 2025-11-20
 
 ---
 

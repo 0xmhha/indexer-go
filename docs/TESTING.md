@@ -1,6 +1,10 @@
 # Testing Guide
 
-This document provides guidelines for testing in the indexer-go project.
+Testing standards and execution workflows for indexer-go, including coverage goals and tooling expectations.
+
+**Last Updated**: 2025-11-20
+
+---
 
 ## Table of Contents
 
@@ -18,9 +22,9 @@ This document provides guidelines for testing in the indexer-go project.
 The indexer-go project follows Test-Driven Development (TDD) practices with high test coverage standards. All components must meet minimum coverage requirements before being merged.
 
 **Current Coverage Status**:
-- **fetch**: 90.0% ✅
-- **internal/config**: 95.0% ✅
-- **internal/logger**: 91.7% ✅
+- **fetch**: 90.0%
+- **internal/config**: 95.0%
+- **internal/logger**: 91.7%
 - **storage**: 72.4% (target: 90%)
 - **client**: 16.7% unit tests (integration tests require running Ethereum node)
 
@@ -138,11 +142,11 @@ func TestClientIntegration(t *testing.T) {
 
 | Component | Target | Current | Status |
 |-----------|--------|---------|--------|
-| fetch | 90% | 90.0% | ✅ |
-| internal/config | 90% | 95.0% | ✅ |
-| internal/logger | 90% | 91.7% | ✅ |
-| storage | 90% | 72.4% | 🔄 |
-| client | 90% | 16.7%* | 🔄 |
+| fetch | 90% | 90.0% | Met |
+| internal/config | 90% | 95.0% | Met |
+| internal/logger | 90% | 91.7% | Met |
+| storage | 90% | 72.4% | Needs work |
+| client | 90% | 16.7%* | Needs work |
 
 \* Client package has low unit test coverage because most functionality requires integration tests with a running Ethereum node.
 
