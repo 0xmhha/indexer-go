@@ -55,27 +55,31 @@ Stable-One은 go-ethereum을 기반으로 WBFT를 확장한 **Anzeon 엔진**을
 
 ---
 
-## 3. indexer-go 적용 현황과 TODO
+## 3. indexer-go 구현 현황
 
-### 3.1 Client Layer (구현 완료)
-- `client/client.go`는 `ethclient`와 `rpc.Client`를 wrapping하여 `GetBlockByNumber`, `GetBlockReceipts`, `SubscribeNewHead` 등을 제공합니다.
-- Ping/ChainID/BatchCallContext를 통해 연결 상태와 체인 ID를 확인하도록 되어 있으므로 문서에서 “ethclient 교체 필요”로 남겨둘 이유가 없습니다.
+### 3.1 구현 완료
 
-### 3.2 Storage 직렬화 (구현 완료)
-- `storage/encoder.go`와 `storage/schema.go`는 블록/트랜잭션/Receipt RLP 인코딩과 키 스킴(`/data/blocks/`, `/data/txs/`, `/data/receipts/`)을 제공합니다.
-- `storage/pebble.go`는 `SetBlock`, `SetReceipt`, `GetReceiptsByBlockNumber` 등 RLP 기반 CRUD를 이미 구현했습니다.
+#### Analytics API (완료 ✅)
+- **Top Miners Query**: `topMiners(limit: Int): [MinerStats!]!`
+  - 블록 채굴 횟수 기준 마이너 순위 반환
+  - MinerStats: { address, blockCount, lastBlockNumber }
+- **Token Balance API**: `tokenBalances(address: Address!): [TokenBalance!]!`
+  - ERC-20 Transfer 이벤트 스캔 방식으로 토큰 잔액 조회
+  - TokenBalance: { contractAddress, tokenType, balance, tokenId }
+  - 주의: 대용량 데이터에서 성능 최적화 필요 (향후 Pre-indexed balances 구현)
 
-### 3.3 Fetcher 흐름 (구현 완료)
-- `fetch/fetcher.go`는 워커마다 `GetBlockByNumber`와 `GetBlockReceipts`를 호출해 블록과 Receipt를 저장하고 EventBus 이벤트를 발생시킵니다.
-- Retry/백오프/최신 높이 업데이트도 포함되어 있으므로, 문서에서는 향후 개선 항목(예: gap 감지, 더 적극적인 배치 요청)만 TODO로 남겨야 합니다.
+#### 기타 완료 기능
+- Rate Limiting Middleware
+- GraphQL Subscription
+- Data Folder Management (--clear-data 옵션)
 
-### 3.4 API/스키마 (추가 구현 필요)
+### 3.2 미구현 API/스키마
 - GraphQL/JSON-RPC 레이어는 아직 Gno 구조를 유지하고 있으므로, EIP-1559 필드, fee delegation, NativeCoinAdapter 상태/이벤트 노출은 향후 해야 할 작업입니다.
 
-### 3.5 NativeCoinAdapter & Gov 이벤트 추적 (추가 구현 필요)
+### 3.3 NativeCoinAdapter & Gov 이벤트 추적
 - 현재 indexer-go는 NativeCoinAdapter/Gov 컨트랙트 로그를 별도로 파싱하지 않습니다. base coin 잔액, 활성 minter, validator 변경 히스토리를 API로 제공하려면 로그 인덱싱 파이프라인을 설계해야 합니다.
 
-### 3.6 WBFT 메타데이터 & 모니터링 (추가 구현 필요)
+### 3.4 WBFT 메타데이터 & 모니터링
 - Extra 필드 파서, validator 서명 통계, priority fee 변경 감지는 아직 구현되지 않았습니다. Prometheus에 노출하는 메트릭을 향후 설계해야 합니다.
 
 ---
@@ -84,7 +88,6 @@ Stable-One은 go-ethereum을 기반으로 WBFT를 확장한 **Anzeon 엔진**을
 
 | Phase | 목표 | 상태 |
 |-------|------|------|
-| Phase 1 | Stable-One 분석, ethclient 기반 클라이언트, RLP 스토리지, Fetcher | ✅ 클라이언트/스토리지/Fetcher 구현 완료 |
 | Phase 2 | 워커 풀 튜닝, Gap 감지, 배치 요청 고도화, Receipt 병렬화 | ⏳ 최적화 필요 |
 | Phase 3 | GraphQL/JSON-RPC/WebSocket에서 EVM 필드/fee delegation/NativeCoinAdapter 노출 | ⏳ 미구현 |
 | Phase 4 | 주소 인덱싱 확장, 이벤트 필터, ABI 디코딩, rate limiting/caching | ⏳ 미구현 |

@@ -59,6 +59,28 @@ type BalanceSnapshot struct {
 	TxHash common.Hash
 }
 
+// MinerStats represents mining statistics for a miner address
+type MinerStats struct {
+	// Address is the miner's address
+	Address common.Address
+	// BlockCount is the number of blocks mined
+	BlockCount uint64
+	// LastBlockNumber is the most recent block mined
+	LastBlockNumber uint64
+}
+
+// TokenBalance represents a token balance for an address
+type TokenBalance struct {
+	// ContractAddress is the token contract address
+	ContractAddress common.Address
+	// TokenType is the token standard (ERC20, ERC721, ERC1155)
+	TokenType string
+	// Balance is the token balance (for ERC20) or count (for ERC721)
+	Balance *big.Int
+	// TokenID is the token ID (for ERC721/ERC1155, empty for ERC20)
+	TokenID *big.Int
+}
+
 // HistoricalReader provides read-only access to historical blockchain data
 type HistoricalReader interface {
 	// GetBlocksByTimeRange returns blocks within a time range
@@ -82,6 +104,12 @@ type HistoricalReader interface {
 
 	// GetTransactionCount returns the total number of indexed transactions
 	GetTransactionCount(ctx context.Context) (uint64, error)
+
+	// GetTopMiners returns the top miners by block count
+	GetTopMiners(ctx context.Context, limit int) ([]MinerStats, error)
+
+	// GetTokenBalances returns token balances for an address by scanning Transfer events
+	GetTokenBalances(ctx context.Context, addr common.Address) ([]TokenBalance, error)
 }
 
 // HistoricalWriter provides write access for historical blockchain data

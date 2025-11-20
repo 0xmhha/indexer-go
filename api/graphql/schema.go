@@ -199,6 +199,25 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				Type:    graphql.NewNonNull(bigIntType),
 				Resolve: s.resolveTransactionCount,
 			},
+			// Analytics queries
+			"topMiners": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(minerStatsType))),
+				Args: graphql.FieldConfigArgument{
+					"limit": &graphql.ArgumentConfig{
+						Type: graphql.Int,
+					},
+				},
+				Resolve: s.resolveTopMiners,
+			},
+			"tokenBalances": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(tokenBalanceType))),
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+				},
+				Resolve: s.resolveTokenBalances,
+			},
 		},
 	})
 

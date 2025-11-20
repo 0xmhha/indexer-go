@@ -1235,6 +1235,159 @@ func (s *PebbleStorage) GetTransactionCount(ctx context.Context) (uint64, error)
 	return count, nil
 }
 
+// GetTopMiners returns the top miners by block count
+func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int) ([]MinerStats, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	if limit <= 0 {
+		limit = 10 // Default limit
+	}
+
+	// Get the latest height to know how many blocks to scan
+	latestHeight, err := s.GetLatestHeight(ctx)
+	if err != nil {
+		if err == ErrNotFound {
+			return []MinerStats{}, nil
+		}
+		return nil, fmt.Errorf("failed to get latest height: %w", err)
+	}
+
+	// Aggregate miner stats
+	minerMap := make(map[common.Address]*MinerStats)
+
+	// Scan all blocks
+	for height := uint64(0); height <= latestHeight; height++ {
+		block, err := s.GetBlock(ctx, height)
+		if err != nil {
+			continue // Skip missing blocks
+		}
+
+		miner := block.Coinbase()
+		stats, exists := minerMap[miner]
+		if !exists {
+			stats = &MinerStats{
+				Address:         miner,
+				BlockCount:      0,
+				LastBlockNumber: 0,
+			}
+			minerMap[miner] = stats
+		}
+		stats.BlockCount++
+		if height > stats.LastBlockNumber {
+			stats.LastBlockNumber = height
+		}
+	}
+
+	// Convert map to slice
+	result := make([]MinerStats, 0, len(minerMap))
+	for _, stats := range minerMap {
+		result = append(result, *stats)
+	}
+
+	// Sort by block count (descending)
+	for i := 0; i < len(result); i++ {
+		for j := i + 1; j < len(result); j++ {
+			if result[j].BlockCount > result[i].BlockCount {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	// Apply limit
+	if len(result) > limit {
+		result = result[:limit]
+	}
+
+	return result, nil
+}
+
+// GetTokenBalances returns token balances for an address by scanning Transfer events
+func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Address) ([]TokenBalance, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	// ERC-20 Transfer event signature: Transfer(address indexed from, address indexed to, uint256 value)
+	transferTopic := common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+
+	// Get the latest height
+	latestHeight, err := s.GetLatestHeight(ctx)
+	if err != nil {
+		if err == ErrNotFound {
+			return []TokenBalance{}, nil
+		}
+		return nil, fmt.Errorf("failed to get latest height: %w", err)
+	}
+
+	// Map to track balances by contract address
+	balanceMap := make(map[common.Address]*big.Int)
+
+	// Scan all blocks for receipts
+	for height := uint64(0); height <= latestHeight; height++ {
+		receipts, err := s.GetReceiptsByBlockNumber(ctx, height)
+		if err != nil {
+			continue
+		}
+
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				// Check if this is a Transfer event
+				if len(log.Topics) < 3 || log.Topics[0] != transferTopic {
+					continue
+				}
+
+				// Extract from and to addresses from topics
+				from := common.BytesToAddress(log.Topics[1].Bytes())
+				to := common.BytesToAddress(log.Topics[2].Bytes())
+
+				// Check if this transfer involves our address
+				if from != addr && to != addr {
+					continue
+				}
+
+				// Extract value from data
+				if len(log.Data) < 32 {
+					continue
+				}
+				value := new(big.Int).SetBytes(log.Data[:32])
+
+				// Get or create balance entry for this contract
+				contract := log.Address
+				if _, exists := balanceMap[contract]; !exists {
+					balanceMap[contract] = big.NewInt(0)
+				}
+
+				// Update balance
+				if to == addr {
+					// Receiving tokens
+					balanceMap[contract].Add(balanceMap[contract], value)
+				} else if from == addr {
+					// Sending tokens
+					balanceMap[contract].Sub(balanceMap[contract], value)
+				}
+			}
+		}
+	}
+
+	// Convert map to slice
+	result := make([]TokenBalance, 0, len(balanceMap))
+	for contract, balance := range balanceMap {
+		// Only include non-zero balances
+		if balance.Sign() > 0 {
+			result = append(result, TokenBalance{
+				ContractAddress: contract,
+				TokenType:       "ERC20",
+				Balance:         balance,
+				TokenID:         nil,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 // SetBlockTimestamp indexes a block by timestamp
 func (s *PebbleStorage) SetBlockTimestamp(ctx context.Context, timestamp uint64, height uint64) error {
 	if err := s.ensureNotClosed(); err != nil {

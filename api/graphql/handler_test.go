@@ -11,6 +11,7 @@ import (
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 	"go.uber.org/zap"
 )
 
@@ -127,7 +128,7 @@ func TestGraphQLHandler(t *testing.T) {
 		GasLimit:   8000000,
 		GasUsed:    5000000,
 	}
-	testBlock := types.NewBlock(header, nil, nil, nil)
+	testBlock := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
 
 	store := &mockStorage{
 		latestHeight: 100,
@@ -306,7 +307,7 @@ func TestGraphQLResolvers(t *testing.T) {
 		GasLimit:   8000000,
 		GasUsed:    5000000,
 	}
-	testBlock := types.NewBlock(header, nil, nil, nil)
+	testBlock := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
 
 	// Create test transaction
 	testTx := types.NewTransaction(
@@ -633,7 +634,7 @@ func TestGraphQLMappers(t *testing.T) {
 			GasLimit:   8000000,
 			GasUsed:    5000000,
 		}
-		block := types.NewBlock(header, nil, nil, nil)
+		block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
 		blockMap := schema.blockToMap(block)
 
 		if blockMap == nil {

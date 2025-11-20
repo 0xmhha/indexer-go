@@ -26,6 +26,9 @@ var (
 	// AccessListEntry type
 	accessListEntryType *graphql.Object
 
+	// FeePayerSignature type for Fee Delegation
+	feePayerSignatureType *graphql.Object
+
 	// PageInfo type
 	pageInfoType *graphql.Object
 
@@ -48,6 +51,10 @@ var (
 	// Historical data types
 	balanceSnapshotType          *graphql.Object
 	balanceHistoryConnectionType *graphql.Object
+
+	// Analytics types
+	minerStatsType   *graphql.Object
+	tokenBalanceType *graphql.Object
 )
 
 func init() {
@@ -64,6 +71,23 @@ func initTypes() {
 			},
 			"storageKeys": &graphql.Field{
 				Type: graphql.NewList(graphql.NewNonNull(hashType)),
+			},
+		},
+	})
+
+	// FeePayerSignature type for Fee Delegation transactions
+	feePayerSignatureType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "FeePayerSignature",
+		Description: "Signature from fee payer in Fee Delegation transactions",
+		Fields: graphql.Fields{
+			"v": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"r": &graphql.Field{
+				Type: graphql.NewNonNull(bytesType),
+			},
+			"s": &graphql.Field{
+				Type: graphql.NewNonNull(bytesType),
 			},
 		},
 	})
@@ -206,6 +230,15 @@ func initTypes() {
 			"receipt": &graphql.Field{
 				Type: receiptType,
 			},
+			// Fee Delegation fields (type 0x16)
+			"feePayer": &graphql.Field{
+				Type:        addressType,
+				Description: "Fee payer address for Fee Delegation transactions (type 0x16)",
+			},
+			"feePayerSignatures": &graphql.Field{
+				Type:        graphql.NewList(graphql.NewNonNull(feePayerSignatureType)),
+				Description: "Fee payer signatures for Fee Delegation transactions",
+			},
 		},
 	})
 
@@ -243,6 +276,11 @@ func initTypes() {
 			"gasUsed": &graphql.Field{
 				Type: graphql.NewNonNull(bigIntType),
 			},
+			// EIP-1559 fields
+			"baseFeePerGas": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Base fee per gas for EIP-1559 blocks (post-London)",
+			},
 			"extraData": &graphql.Field{
 				Type: graphql.NewNonNull(bytesType),
 			},
@@ -257,6 +295,20 @@ func initTypes() {
 			},
 			"uncles": &graphql.Field{
 				Type: graphql.NewList(graphql.NewNonNull(hashType)),
+			},
+			// Post-merge fields
+			"withdrawalsRoot": &graphql.Field{
+				Type:        hashType,
+				Description: "Withdrawals merkle root (post-Shanghai)",
+			},
+			// EIP-4844 blob fields
+			"blobGasUsed": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Total blob gas used in this block (EIP-4844)",
+			},
+			"excessBlobGas": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Excess blob gas (EIP-4844)",
 			},
 		},
 	})
@@ -456,6 +508,41 @@ func initTypes() {
 			},
 			"pageInfo": &graphql.Field{
 				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// MinerStats type
+	minerStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "MinerStats",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"blockCount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"lastBlockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// TokenBalance type
+	tokenBalanceType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "TokenBalance",
+		Fields: graphql.Fields{
+			"contractAddress": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"tokenType": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"balance": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"tokenId": &graphql.Field{
+				Type: bigIntType,
 			},
 		},
 	})

@@ -8,6 +8,7 @@ import (
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 	"go.uber.org/zap"
 )
 
@@ -76,7 +77,7 @@ func TestHistoricalResolvers(t *testing.T) {
 		GasLimit: 8000000,
 		GasUsed:  5000000,
 	}
-	block1 := types.NewBlock(header1, nil, nil, nil)
+	block1 := types.NewBlock(header1, &types.Body{}, nil, trie.NewStackTrie(nil))
 
 	header2 := &types.Header{
 		Number:   big.NewInt(2),
@@ -84,7 +85,7 @@ func TestHistoricalResolvers(t *testing.T) {
 		GasLimit: 8000000,
 		GasUsed:  6000000,
 	}
-	block2 := types.NewBlock(header2, nil, nil, nil)
+	block2 := types.NewBlock(header2, &types.Body{}, nil, trie.NewStackTrie(nil))
 
 	// Create test transaction
 	testTx := types.NewTransaction(

@@ -2,8 +2,8 @@
 
 > 프로젝트 진행 상황 및 작업 계획
 
-**Last Updated**: 2025-10-21
-**Current Work**: 프로덕션 준비 완료 - 고급 기능 개발 대기
+**Last Updated**: 2025-11-20
+**Current Work**: Stable-One 체인 특화 기능 개발
 
 ---
 
@@ -22,7 +22,10 @@
 - ✅ CLI 인터페이스
 - ✅ 설정 관리 (YAML, ENV, CLI)
 - ✅ Docker 지원
-- ✅ 테스트 커버리지 85%+
+- ✅ 테스트 커버리지 86%+
+- ✅ Rate Limiting Middleware
+- ✅ GraphQL Subscription
+- ✅ Analytics API (Top Miners, Token Balances)
 - ✅ 실시간 이벤트 구독 시스템 (프로덕션 준비 완료)
   - ✅ Event Bus (Pub/Sub)
   - ✅ Fetcher 통합
@@ -43,9 +46,12 @@
   - ✅ 테스트 커버리지 85%+
 
 **진행 중:**
-- 없음 (프로덕션 준비 완료)
+- 🔄 Stable-One 체인 특화 기능 개발
 
 **예정:**
+- 📋 Stable-One API 필드 확장 (EIP-1559, Fee Delegation)
+- 📋 NativeCoinAdapter & Gov 이벤트 추적
+- 📋 WBFT 메타데이터 파싱 및 모니터링
 - 📋 고급 기능 개발 (Analytics & Notifications)
 - 📋 수평 확장 지원 (Horizontal Scaling)
 
@@ -279,7 +285,7 @@
 - ✅ Commit: a0e6421
 
 #### 성능 벤치마크 (완료 ✅)
-**파일**: `events/benchmark_test.go`, `docs/BENCHMARK_RESULTS.md`
+**파일**: `events/benchmark_test.go`
 
 - [x] 벤치마크 테스트 작성
   - [x] Event publishing performance (0-10K subscribers)
@@ -543,6 +549,40 @@
 - ✅ 완전한 schema 정의
 - ✅ Commit: ae4b790
 
+### Analytics API (완료 ✅)
+
+#### Top Miners Query (완료 ✅)
+**파일**: `storage/pebble.go`, `api/graphql/resolvers_historical.go`
+
+- [x] Storage 메서드 구현
+  - [x] MinerStats 타입 정의
+  - [x] GetTopMiners 메서드 (블록 스캔 및 집계)
+- [x] GraphQL resolver 구현
+  - [x] topMiners(limit: Int): [MinerStats!]!
+  - [x] MinerStats: { address, blockCount, lastBlockNumber }
+
+**결과:**
+- ✅ 블록 채굴 횟수 기준 마이너 순위 반환
+- ✅ 최신 블록 번호 추적
+
+#### Token Balance API (완료 ✅)
+**파일**: `storage/pebble.go`, `api/graphql/resolvers_historical.go`
+
+- [x] Storage 메서드 구현
+  - [x] TokenBalance 타입 정의
+  - [x] GetTokenBalances 메서드 (ERC-20 Transfer 이벤트 스캔)
+- [x] GraphQL resolver 구현
+  - [x] tokenBalances(address: Address!): [TokenBalance!]!
+  - [x] TokenBalance: { contractAddress, tokenType, balance, tokenId }
+
+**결과:**
+- ✅ 주소별 ERC-20 토큰 잔액 조회
+- ✅ Transfer 이벤트 기반 잔액 계산
+
+**주의사항:**
+- 현재 구현은 쿼리 시 전체 블록 스캔 (대용량 데이터에서 최적화 필요)
+- 향후 개선: Pre-indexed balances, Incremental updates, Caching
+
 ---
 
 ## 🔄 현재 작업
@@ -696,6 +736,109 @@ Stable-One 노드를 포함한 완전한 Docker Compose 환경 구성. 로컬 �
 4. ⏳ 모든 API 엔드포인트 정상 동작
 5. ⏳ 서비스 재시작 후 데이터 영속성 보장
 6. ⏳ 헬스 체크를 통한 서비스 상태 모니터링
+
+---
+
+### Stable-One 체인 특화 기능 (예정 📋)
+
+> Stable-One은 go-ethereum 기반 WBFT 합의 엔진(Anzeon)을 사용하는 체인으로, Gno(Tendermint2)와 다른 구조를 가짐
+
+#### Phase 2: Fetcher 최적화 (예정 📋)
+**우선순위**: Medium
+
+- [ ] 워커 풀 튜닝
+  - [ ] RPC rate limit 고려한 워커 수 조정
+  - [ ] 동적 워커 풀 크기 조정
+- [ ] Gap 감지 개선
+  - [ ] 효율적인 gap detection 알고리즘
+  - [ ] 자동 gap recovery 정책
+- [ ] 배치 요청 고도화
+  - [ ] adaptive batch sizing
+  - [ ] RPC 대역폭 최적화
+- [ ] Receipt 병렬화
+  - [ ] `eth_getBlockReceipts` 활용
+  - [ ] 대용량 블록 (105M gas) 처리 최적화
+
+#### Phase 3: API 스키마 확장 (진행 중 🔄)
+**우선순위**: High
+**참고**: STABLE_ONE_TECHNICAL_ANALYSIS.md 섹션 3.1
+
+- [x] GraphQL EVM 필드 추가 ✅
+  - [x] EIP-1559 필드 (baseFeePerGas)
+  - [x] Post-Shanghai 필드 (withdrawalsRoot)
+  - [x] EIP-4844 필드 (blobGasUsed, excessBlobGas)
+  - [x] Block header extra 필드 (기존)
+- [x] Fee Delegation (0x16) 지원 ✅
+  - [x] feePayer 필드 노출
+  - [x] feePayerSignatures 필드 노출
+  - [x] FeePayerSignature 타입 정의
+  - [x] Fee delegation 트랜잭션 타입 처리 (스키마)
+- [x] JSON-RPC EVM 메서드 ✅
+  - [x] EIP-1559 필드 추가 (baseFeePerGas, withdrawalsRoot)
+  - [x] EIP-4844 필드 추가 (blobGasUsed, excessBlobGas)
+  - [x] Fee Delegation 필드 구현 완료 (go-stablenet 연동)
+  - [ ] Stable-One 특화 RPC 메서드 (추후)
+- [ ] WebSocket 구독 확장
+  - [ ] newPendingTransactions 구독
+  - [ ] logs 구독 with filter
+
+**구현 파일:**
+- `go.mod`: go-stablenet replace 디렉티브 추가 (Fee Delegation 지원)
+- `api/graphql/types.go`: Block/Transaction 타입에 새 필드 추가
+- `api/graphql/mappers.go`: blockToMap, transactionToMap 업데이트 (FeePayer, RawFeePayerSignatureValues 호출)
+- `api/jsonrpc/methods.go`: transactionToJSON 업데이트 (Fee Delegation 필드 추출)
+- `docs/ToFrontend.md`: Frontend 통합 가이드
+
+#### Phase 4: 고급 인덱싱 (예정 📋)
+**우선순위**: Medium
+**참고**: STABLE_ONE_TECHNICAL_ANALYSIS.md 섹션 3.2, 3.3
+
+- [ ] NativeCoinAdapter 이벤트 추적
+  - [ ] ERC20 이벤트 파싱 (Transfer, Approval)
+  - [ ] 베이스 코인 총발행량 추적
+  - [ ] Minter 정보 API
+  - [ ] 주소별 베이스 코인 잔액 추적
+- [ ] Gov 컨트랙트 이벤트 추적
+  - [ ] GovValidator (0x1001) 이벤트
+  - [ ] GovMasterMinter (0x1002) 이벤트
+  - [ ] GovMinter (0x1003) 이벤트
+  - [ ] GovCouncil (0x1004) 이벤트
+  - [ ] Validator/Minter 권한 변경 히스토리
+- [ ] WBFT 메타데이터 파싱
+  - [ ] Block header Extra 필드 파서
+  - [ ] BLS signature 추출
+  - [ ] Round/committed seal 정보
+  - [ ] Validator 서명 통계
+- [ ] 주소 인덱싱 확장
+  - [ ] 컨트랙트 생성 트랜잭션 인덱싱
+  - [ ] 내부 트랜잭션 (internal tx) 추적
+  - [ ] ERC20/ERC721 토큰 전송 인덱싱
+- [ ] 이벤트 필터 시스템
+  - [ ] Topic 기반 필터링
+  - [ ] ABI 디코딩
+  - [ ] 로그 인덱싱 파이프라인
+
+#### Phase 5: 성능 및 운영 (예정 📋)
+**우선순위**: Low
+
+- [ ] Rate Limiting/Caching 고도화
+  - [ ] 엔드포인트별 rate limit
+  - [ ] Redis 캐싱 통합
+  - [ ] Query result 캐싱
+- [ ] WBFT 모니터링 메트릭
+  - [ ] Validator 서명 실패/지연 감지
+  - [ ] Priority fee 변경 감지
+  - [ ] Prometheus 메트릭 노출
+- [ ] 대용량 블록 최적화
+  - [ ] Pebble compaction 튜닝
+  - [ ] 디스크 IOPS 최적화
+  - [ ] 백업 전략 개선
+
+#### 예상 구현 순서
+1. **Phase 3** (API 스키마 확장) - 사용자 요구사항 우선
+2. **Phase 4** (고급 인덱싱) - 체인 특화 기능
+3. **Phase 2** (Fetcher 최적화) - 성능 개선
+4. **Phase 5** (성능 및 운영) - 프로덕션 안정화
 
 ---
 
@@ -897,11 +1040,10 @@ Stable-One 노드를 포함한 완전한 Docker Compose 환경 구성. 로컬 �
 
 ### Medium
 - WebSocket 재연결 로직 미구현
-- Rate limiting 미구현
 
 ### Low
-- GraphQL subscription (WebSocket) 미구현
-- Client SDK 없음
+- Storage 테스트 커버리지 86.8% (목표 90%, 나머지는 DB mock 필요)
+- Client SDK 없음 (별도 프로젝트로 분리)
 
 ---
 
@@ -914,8 +1056,7 @@ Stable-One 노드를 포함한 완전한 Docker Compose 환경 구성. 로컬 �
 
 ### Event Subscription System
 - [EVENT_SUBSCRIPTION_API.md](./EVENT_SUBSCRIPTION_API.md) - 완전한 API 레퍼런스
-- [METRICS_MONITORING.md](./METRICS_MONITORING.md) - Prometheus 모니터링 가이드
-- [BENCHMARK_RESULTS.md](./BENCHMARK_RESULTS.md) - 성능 벤치마크 결과
+- [METRICS_MONITORING.md](./METRICS_MONITORING.md) - Prometheus 모니터링 가이드 (벤치마크 결과 포함)
 
 ### Historical Data API
 - [HISTORICAL_API_DESIGN.md](./HISTORICAL_API_DESIGN.md) - Historical Data API 설계 및 구현

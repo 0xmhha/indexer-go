@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // TestTransactionFilter_Validate tests filter validation
@@ -790,5 +791,5 @@ func createTestBlockWithTimestamp(t *testing.T, height uint64, timestamp uint64)
 		GasLimit:   1000000,
 	}
 
-	return types.NewBlock(header, nil, nil, nil)
+	return types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
 }

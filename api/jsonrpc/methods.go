@@ -216,7 +216,7 @@ func (h *Handler) blockToJSON(block *types.Block) map[string]interface{} {
 		uncleHashes[i] = uncle.Hash().Hex()
 	}
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"number":           fmt.Sprintf("0x%x", block.NumberU64()),
 		"hash":             block.Hash().Hex(),
 		"parentHash":       header.ParentHash.Hex(),
@@ -237,6 +237,26 @@ func (h *Handler) blockToJSON(block *types.Block) map[string]interface{} {
 		"transactions":     transactions,
 		"uncles":           uncleHashes,
 	}
+
+	// EIP-1559: Base fee per gas
+	if header.BaseFee != nil {
+		result["baseFeePerGas"] = fmt.Sprintf("0x%x", header.BaseFee)
+	}
+
+	// Post-Shanghai: Withdrawals root
+	if header.WithdrawalsHash != nil {
+		result["withdrawalsRoot"] = header.WithdrawalsHash.Hex()
+	}
+
+	// EIP-4844: Blob gas fields
+	if header.BlobGasUsed != nil {
+		result["blobGasUsed"] = fmt.Sprintf("0x%x", *header.BlobGasUsed)
+	}
+	if header.ExcessBlobGas != nil {
+		result["excessBlobGas"] = fmt.Sprintf("0x%x", *header.ExcessBlobGas)
+	}
+
+	return result
 }
 
 // transactionToJSON converts a transaction to JSON-friendly format
@@ -296,6 +316,32 @@ func (h *Handler) transactionToJSON(tx *types.Transaction, location *storage.TxL
 			}
 		}
 		result["accessList"] = accessListJSON
+	}
+
+	// Fee Delegation transaction (type 0x16 = 22)
+	// Using go-stablenet's extended Transaction type with FeePayer methods
+	const FeeDelegateDynamicFeeTxType = 22
+	if tx.Type() == FeeDelegateDynamicFeeTxType {
+		// Extract fee payer address
+		if feePayer := tx.FeePayer(); feePayer != nil {
+			result["feePayer"] = feePayer.Hex()
+		}
+
+		// Extract fee payer signature values
+		fv, fr, fs := tx.RawFeePayerSignatureValues()
+		if fv != nil && fr != nil && fs != nil {
+			result["feePayerSignatures"] = []interface{}{
+				map[string]interface{}{
+					"v": fmt.Sprintf("0x%x", fv),
+					"r": fmt.Sprintf("0x%x", fr),
+					"s": fmt.Sprintf("0x%x", fs),
+				},
+			}
+		}
+
+		h.logger.Debug("Fee Delegation transaction processed",
+			zap.String("hash", tx.Hash().Hex()),
+			zap.Uint8("type", uint8(tx.Type())))
 	}
 
 	return result

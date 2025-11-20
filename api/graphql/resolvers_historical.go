@@ -354,6 +354,92 @@ func (s *Schema) resolveTransactionCount(p graphql.ResolveParams) (interface{}, 
 	return fmt.Sprintf("%d", count), nil
 }
 
+// resolveTopMiners resolves the top miners by block count
+func (s *Schema) resolveTopMiners(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Get limit parameter
+	limit := 10
+	if l, ok := p.Args["limit"].(int); ok && l > 0 {
+		limit = l
+		if limit > 100 {
+			limit = 100
+		}
+	}
+
+	// Cast storage to HistoricalReader
+	histStorage, ok := s.storage.(storage.HistoricalReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support historical queries")
+	}
+
+	stats, err := histStorage.GetTopMiners(ctx, limit)
+	if err != nil {
+		s.logger.Error("failed to get top miners",
+			zap.Int("limit", limit),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// Convert to response format
+	result := make([]map[string]interface{}, len(stats))
+	for i, stat := range stats {
+		result[i] = map[string]interface{}{
+			"address":         stat.Address.Hex(),
+			"blockCount":      fmt.Sprintf("%d", stat.BlockCount),
+			"lastBlockNumber": fmt.Sprintf("%d", stat.LastBlockNumber),
+		}
+	}
+
+	return result, nil
+}
+
+// resolveTokenBalances resolves token balances for an address
+func (s *Schema) resolveTokenBalances(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Get address parameter
+	addrStr, ok := p.Args["address"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid address")
+	}
+
+	if !common.IsHexAddress(addrStr) {
+		return nil, fmt.Errorf("invalid address format")
+	}
+	addr := common.HexToAddress(addrStr)
+
+	// Cast storage to HistoricalReader
+	histStorage, ok := s.storage.(storage.HistoricalReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support historical queries")
+	}
+
+	balances, err := histStorage.GetTokenBalances(ctx, addr)
+	if err != nil {
+		s.logger.Error("failed to get token balances",
+			zap.String("address", addrStr),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// Convert to response format
+	result := make([]map[string]interface{}, len(balances))
+	for i, balance := range balances {
+		result[i] = map[string]interface{}{
+			"contractAddress": balance.ContractAddress.Hex(),
+			"tokenType":       balance.TokenType,
+			"balance":         balance.Balance.String(),
+			"tokenId":         nil,
+		}
+		if balance.TokenID != nil {
+			result[i]["tokenId"] = balance.TokenID.String()
+		}
+	}
+
+	return result, nil
+}
+
 // parseHistoricalTransactionFilter parses GraphQL filter arguments to storage.TransactionFilter
 func parseHistoricalTransactionFilter(args map[string]interface{}) (*storage.TransactionFilter, error) {
 	filter := &storage.TransactionFilter{

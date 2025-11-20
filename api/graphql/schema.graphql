@@ -45,6 +45,18 @@ type Block {
   # Gas used
   gasUsed: BigInt!
 
+  # Base fee per gas (EIP-1559, post-London)
+  baseFeePerGas: BigInt
+
+  # Withdrawals merkle root (post-Shanghai)
+  withdrawalsRoot: Hash
+
+  # Blob gas used (EIP-4844)
+  blobGasUsed: BigInt
+
+  # Excess blob gas (EIP-4844)
+  excessBlobGas: BigInt
+
   # Extra data
   extraData: Bytes!
 
@@ -122,6 +134,24 @@ type Transaction {
 
   # Transaction receipt
   receipt: Receipt
+
+  # Fee payer address (Fee Delegation, type 0x16)
+  feePayer: Address
+
+  # Fee payer signatures (Fee Delegation, type 0x16)
+  feePayerSignatures: [FeePayerSignature!]
+}
+
+# FeePayerSignature represents a fee payer signature in Fee Delegation transactions
+type FeePayerSignature {
+  # V signature value
+  v: BigInt!
+
+  # R signature value
+  r: Bytes!
+
+  # S signature value
+  s: Bytes!
 }
 
 # AccessListEntry represents an access list entry
@@ -352,6 +382,14 @@ type Query {
 
   # Get total number of indexed transactions
   transactionCount: BigInt!
+
+  # ========== Analytics Queries ==========
+
+  # Get top miners by block count
+  topMiners(limit: Int): [MinerStats!]!
+
+  # Get token balances for an address (ERC-20/721/1155)
+  tokenBalances(address: Address!): [TokenBalance!]!
 }
 
 # Block connection for pagination
@@ -415,4 +453,31 @@ type BalanceHistoryConnection {
 
   # Page info
   pageInfo: PageInfo!
+}
+
+# MinerStats represents mining statistics for a miner address
+type MinerStats {
+  # Miner address
+  address: Address!
+
+  # Number of blocks mined
+  blockCount: BigInt!
+
+  # Most recent block mined
+  lastBlockNumber: BigInt!
+}
+
+# TokenBalance represents a token balance for an address
+type TokenBalance {
+  # Token contract address
+  contractAddress: Address!
+
+  # Token standard (ERC20, ERC721, ERC1155)
+  tokenType: String!
+
+  # Token balance
+  balance: BigInt!
+
+  # Token ID (for ERC721/ERC1155, null for ERC20)
+  tokenId: BigInt
 }

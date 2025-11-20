@@ -178,5 +178,3 @@ Temporary solution if available
 
 ---
 
-**Document Version**: 1.0
-**Maintainer**: Development Team

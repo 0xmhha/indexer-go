@@ -13,6 +13,7 @@ import (
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 	"go.uber.org/zap"
 )
 
@@ -264,7 +265,7 @@ func TestJSONRPCMethods(t *testing.T) {
 		GasLimit:   8000000,
 		GasUsed:    5000000,
 	}
-	testBlock := types.NewBlock(header, nil, nil, nil)
+	testBlock := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
 
 	// Create test transaction
 	testTx := types.NewTransaction(

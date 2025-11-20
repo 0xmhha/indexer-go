@@ -48,7 +48,7 @@ dev-data/
 config.yaml
 
 # Claude Code configuration
-.claude/
+#.claude/
 
 # Log files
 *.log
