@@ -16,7 +16,7 @@ func TestBlockEvent_Interface(t *testing.T) {
 		Number: big.NewInt(100),
 		Time:   uint64(time.Now().Unix()),
 	}
-	block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 
 	event := NewBlockEvent(block)
 
@@ -58,10 +58,7 @@ func TestBlockEvent_WithTransactions(t *testing.T) {
 	tx1 := types.NewTransaction(0, common.HexToAddress("0x1"), big.NewInt(100), 21000, big.NewInt(1), nil)
 	tx2 := types.NewTransaction(1, common.HexToAddress("0x2"), big.NewInt(200), 21000, big.NewInt(1), nil)
 
-	body := &types.Body{
-		Transactions: []*types.Transaction{tx1, tx2},
-	}
-	block := types.NewBlock(header, body, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(header, []*types.Transaction{tx1, tx2}, nil, nil, trie.NewStackTrie(nil))
 
 	event := NewBlockEvent(block)
 
@@ -194,7 +191,7 @@ func TestEventType_String(t *testing.T) {
 		{
 			name: "block event",
 			event: &BlockEvent{
-				Block:     types.NewBlock(&types.Header{}, &types.Body{}, nil, trie.NewStackTrie(nil)),
+				Block:     types.NewBlock(&types.Header{}, nil, nil, nil, trie.NewStackTrie(nil)),
 				CreatedAt: time.Now(),
 			},
 			expected: EventTypeBlock,
@@ -206,6 +203,14 @@ func TestEventType_String(t *testing.T) {
 				CreatedAt: time.Now(),
 			},
 			expected: EventTypeTransaction,
+		},
+		{
+			name: "log event",
+			event: &LogEvent{
+				Log:       &types.Log{},
+				CreatedAt: time.Now(),
+			},
+			expected: EventTypeLog,
 		},
 	}
 
@@ -220,7 +225,7 @@ func TestEventType_String(t *testing.T) {
 
 func TestEvent_TimestampNotZero(t *testing.T) {
 	// Test that all events have non-zero timestamps
-	blockEvent := NewBlockEvent(types.NewBlock(&types.Header{}, &types.Body{}, nil, trie.NewStackTrie(nil)))
+	blockEvent := NewBlockEvent(types.NewBlock(&types.Header{}, nil, nil, nil, trie.NewStackTrie(nil)))
 	if blockEvent.Timestamp().IsZero() {
 		t.Error("BlockEvent timestamp should not be zero")
 	}
@@ -231,6 +236,11 @@ func TestEvent_TimestampNotZero(t *testing.T) {
 		t.Error("TransactionEvent timestamp should not be zero")
 	}
 
+	logEvent := NewLogEvent(&types.Log{})
+	if logEvent.Timestamp().IsZero() {
+		t.Error("LogEvent timestamp should not be zero")
+	}
+
 	// Ensure timestamps are recent (within last second)
 	now := time.Now()
 	if now.Sub(blockEvent.Timestamp()) > time.Second {
@@ -238,5 +248,20 @@ func TestEvent_TimestampNotZero(t *testing.T) {
 	}
 	if now.Sub(txEvent.Timestamp()) > time.Second {
 		t.Error("TransactionEvent timestamp is not recent")
+	}
+	if now.Sub(logEvent.Timestamp()) > time.Second {
+		t.Error("LogEvent timestamp is not recent")
+	}
+}
+
+func TestNewLogEvent(t *testing.T) {
+	original := &types.Log{Address: common.HexToAddress("0x1")}
+	event := NewLogEvent(original)
+
+	if event.Log != original {
+		t.Error("expected original log pointer")
+	}
+	if event.Type() != EventTypeLog {
+		t.Errorf("expected type %s", EventTypeLog)
 	}
 }

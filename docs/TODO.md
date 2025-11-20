@@ -44,12 +44,19 @@
   - ✅ JSON-RPC Methods (7개 메서드)
   - ✅ GraphQL Resolvers (7개 resolver)
   - ✅ 테스트 커버리지 85%+
+- ✅ Stable-One 체인 특화 기능 Phase 3 (완료)
+  - ✅ EIP-1559 필드 (baseFeePerGas, maxFeePerGas, maxPriorityFeePerGas)
+  - ✅ Post-Shanghai 필드 (withdrawalsRoot)
+  - ✅ EIP-4844 필드 (blobGasUsed, excessBlobGas)
+  - ✅ Fee Delegation 지원 (type 0x16, feePayer, feePayerSignatures)
+  - ✅ go-stablenet 통합
+  - ✅ GraphQL Subscription (newPendingTransactions, logs with filter)
+  - ✅ Frontend 통합 가이드 (docs/ToFrontend.md)
 
 **진행 중:**
-- 🔄 Stable-One 체인 특화 기능 개발
+- 🔄 Stable-One 체인 특화 기능 개발 (Phase 4)
 
 **예정:**
-- 📋 Stable-One API 필드 확장 (EIP-1559, Fee Delegation)
 - 📋 NativeCoinAdapter & Gov 이벤트 추적
 - 📋 WBFT 메타데이터 파싱 및 모니터링
 - 📋 고급 기능 개발 (Analytics & Notifications)
@@ -759,7 +766,7 @@ Stable-One 노드를 포함한 완전한 Docker Compose 환경 구성. 로컬 �
   - [ ] `eth_getBlockReceipts` 활용
   - [ ] 대용량 블록 (105M gas) 처리 최적화
 
-#### Phase 3: API 스키마 확장 (진행 중 🔄)
+#### Phase 3: API 스키마 확장 (완료 ✅)
 **우선순위**: High
 **참고**: STABLE_ONE_TECHNICAL_ANALYSIS.md 섹션 3.1
 
@@ -778,14 +785,15 @@ Stable-One 노드를 포함한 완전한 Docker Compose 환경 구성. 로컬 �
   - [x] EIP-4844 필드 추가 (blobGasUsed, excessBlobGas)
   - [x] Fee Delegation 필드 구현 완료 (go-stablenet 연동)
   - [ ] Stable-One 특화 RPC 메서드 (추후)
-- [ ] WebSocket 구독 확장
-  - [ ] newPendingTransactions 구독
-  - [ ] logs 구독 with filter
+- [x] WebSocket 구독 확장
+  - [x] newPendingTransactions 구독
+  - [x] logs 구독 with filter
 
 **구현 파일:**
 - `go.mod`: go-stablenet replace 디렉티브 추가 (Fee Delegation 지원)
 - `api/graphql/types.go`: Block/Transaction 타입에 새 필드 추가
 - `api/graphql/mappers.go`: blockToMap, transactionToMap 업데이트 (FeePayer, RawFeePayerSignatureValues 호출)
+- `api/graphql/subscription.go`: GraphQL subscription 구현 (newPendingTransactions, logs with filter)
 - `api/jsonrpc/methods.go`: transactionToJSON 업데이트 (Fee Delegation 필드 추출)
 - `docs/ToFrontend.md`: Frontend 통합 가이드
 

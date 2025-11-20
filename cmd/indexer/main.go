@@ -234,6 +234,8 @@ func main() {
 			log.Fatal("Failed to create API server", zap.Error(err))
 		}
 
+		apiServer.SetEventBus(eventBus)
+
 		// Start API server in goroutine
 		go func() {
 			if err := apiServer.Start(); err != nil {

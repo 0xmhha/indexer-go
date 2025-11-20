@@ -48,7 +48,7 @@ func TestMetrics_Integration(t *testing.T) {
 		Number: big.NewInt(100),
 		Time:   uint64(time.Now().Unix()),
 	}
-	block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 	blockEvent := NewBlockEvent(block)
 
 	if !bus.Publish(blockEvent) {
@@ -135,7 +135,7 @@ func TestMetrics_DroppedEvents(t *testing.T) {
 			Number: big.NewInt(int64(i)),
 			Time:   uint64(time.Now().Unix()),
 		}
-		block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 		event := NewBlockEvent(block)
 		bus.Publish(event)
 	}

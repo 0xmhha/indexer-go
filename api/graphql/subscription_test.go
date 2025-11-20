@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/events"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -193,6 +194,8 @@ func TestParseSubscriptionType(t *testing.T) {
 	}{
 		{"subscription { newBlock { number } }", "newBlock"},
 		{"subscription { newTransaction { hash } }", "newTransaction"},
+		{"subscription { newPendingTransactions { hash } }", "newPendingTransactions"},
+		{"subscription { logs { address } }", "logs"},
 		{"subscription { unknown { field } }", ""},
 		{"query { block { number } }", ""},
 	}
@@ -224,5 +227,58 @@ func TestContains(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("contains(%q, %q) = %v, want %v", tt.s, tt.substr, result, tt.expected)
 		}
+	}
+}
+
+func TestBuildLogFilter(t *testing.T) {
+	addr1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	addr2 := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	raw := map[string]interface{}{
+		"address":   addr1.Hex(),
+		"addresses": []interface{}{addr2.Hex()},
+		"topics": []interface{}{
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			[]interface{}{"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+			nil,
+		},
+		"fromBlock": float64(10),
+		"toBlock":   "0x20",
+	}
+
+	filter, err := buildLogFilter(raw)
+	if err != nil {
+		t.Fatalf("buildLogFilter returned error: %v", err)
+	}
+	if len(filter.Addresses) != 2 {
+		t.Fatalf("expected 2 addresses, got %d", len(filter.Addresses))
+	}
+	if filter.Addresses[0] != addr1 || filter.Addresses[1] != addr2 {
+		t.Errorf("addresses mismatch: %+v", filter.Addresses)
+	}
+	if len(filter.Topics) != 3 {
+		t.Fatalf("expected 3 topic entries, got %d", len(filter.Topics))
+	}
+	if filter.FromBlock != 10 || filter.ToBlock != 32 {
+		t.Errorf("unexpected block range %d-%d", filter.FromBlock, filter.ToBlock)
+	}
+}
+
+func TestBuildLogFilter_Invalid(t *testing.T) {
+	_, err := buildLogFilter(map[string]interface{}{"address": 123})
+	if err == nil {
+		t.Fatal("expected error for invalid address type")
+	}
+
+	_, err = buildLogFilter(map[string]interface{}{"topics": "not-array"})
+	if err == nil {
+		t.Fatal("expected error for invalid topics")
+	}
+
+	filter, err := buildLogFilter(nil)
+	if err != nil {
+		t.Fatalf("unexpected error for nil filter: %v", err)
+	}
+	if filter != nil {
+		t.Fatalf("expected nil filter, got %+v", filter)
 	}
 }

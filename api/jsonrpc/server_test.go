@@ -19,7 +19,6 @@ import (
 
 // mockStorage is a mock implementation of storage.Storage for testing
 type mockStorage struct {
-	storage.Storage
 	latestHeight uint64
 	blocks       map[uint64]*types.Block
 	blocksByHash map[common.Hash]*types.Block
@@ -49,6 +48,96 @@ func (m *mockStorage) GetTransaction(ctx context.Context, hash common.Hash) (*ty
 
 func (m *mockStorage) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
+	return []common.Hash{}, nil
+}
+
+func (m *mockStorage) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
+	return []*types.Receipt{}, nil
+}
+
+func (m *mockStorage) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
+	return []*types.Receipt{}, nil
+}
+
+func (m *mockStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+	return []*types.Receipt{}, nil
+}
+
+func (m *mockStorage) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
+	blocks := make([]*types.Block, 0, endHeight-startHeight+1)
+	for i := startHeight; i <= endHeight; i++ {
+		if block, ok := m.blocks[i]; ok {
+			blocks = append(blocks, block)
+		}
+	}
+	return blocks, nil
+}
+
+func (m *mockStorage) HasBlock(ctx context.Context, height uint64) (bool, error) {
+	_, ok := m.blocks[height]
+	return ok, nil
+}
+
+func (m *mockStorage) HasTransaction(ctx context.Context, hash common.Hash) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStorage) SetLatestHeight(ctx context.Context, height uint64) error {
+	m.latestHeight = height
+	return nil
+}
+
+func (m *mockStorage) SetBlock(ctx context.Context, block *types.Block) error {
+	m.blocks[block.NumberU64()] = block
+	m.blocksByHash[block.Hash()] = block
+	return nil
+}
+
+func (m *mockStorage) SetTransaction(ctx context.Context, tx *types.Transaction, location *storage.TxLocation) error {
+	return nil
+}
+
+func (m *mockStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
+	return nil
+}
+
+func (m *mockStorage) SetReceipts(ctx context.Context, receipts []*types.Receipt) error {
+	return nil
+}
+
+func (m *mockStorage) AddTransactionToAddressIndex(ctx context.Context, addr common.Address, txHash common.Hash) error {
+	return nil
+}
+
+func (m *mockStorage) SetBlocks(ctx context.Context, blocks []*types.Block) error {
+	for _, block := range blocks {
+		m.blocks[block.NumberU64()] = block
+		m.blocksByHash[block.Hash()] = block
+	}
+	return nil
+}
+
+func (m *mockStorage) DeleteBlock(ctx context.Context, height uint64) error {
+	if block, ok := m.blocks[height]; ok {
+		delete(m.blocksByHash, block.Hash())
+		delete(m.blocks, height)
+	}
+	return nil
+}
+
+func (m *mockStorage) Close() error {
+	return nil
+}
+
+func (m *mockStorage) NewBatch() storage.Batch {
+	return nil
+}
+
+func (m *mockStorage) Compact(ctx context.Context, start, end []byte) error {
+	return nil
 }
 
 // mockStorageWithData extends mockStorage with transaction and receipt data
@@ -265,7 +354,7 @@ func TestJSONRPCMethods(t *testing.T) {
 		GasLimit:   8000000,
 		GasUsed:    5000000,
 	}
-	testBlock := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+	testBlock := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 
 	// Create test transaction
 	testTx := types.NewTransaction(
@@ -669,7 +758,6 @@ func TestJSONRPCMethods(t *testing.T) {
 
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
-	storage.Storage
 }
 
 func (m *mockStorageWithErrors) GetLatestHeight(ctx context.Context) (uint64, error) {
@@ -692,9 +780,80 @@ func (m *mockStorageWithErrors) GetReceipt(ctx context.Context, hash common.Hash
 	return nil, storage.ErrNotFound
 }
 
+func (m *mockStorageWithErrors) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) HasBlock(ctx context.Context, height uint64) (bool, error) {
+	return false, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) HasTransaction(ctx context.Context, hash common.Hash) (bool, error) {
+	return false, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SetLatestHeight(ctx context.Context, height uint64) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SetBlock(ctx context.Context, block *types.Block) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SetTransaction(ctx context.Context, tx *types.Transaction, location *storage.TxLocation) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SetReceipts(ctx context.Context, receipts []*types.Receipt) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) AddTransactionToAddressIndex(ctx context.Context, addr common.Address, txHash common.Hash) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SetBlocks(ctx context.Context, blocks []*types.Block) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) DeleteBlock(ctx context.Context, height uint64) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) Close() error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) NewBatch() storage.Batch {
+	return nil
+}
+
+func (m *mockStorageWithErrors) Compact(ctx context.Context, start, end []byte) error {
+	return storage.ErrNotFound
+}
+
 // mockStorageWithNonNotFoundErrors returns non-ErrNotFound errors to test logging paths
 type mockStorageWithNonNotFoundErrors struct {
-	storage.Storage
 }
 
 func (m *mockStorageWithNonNotFoundErrors) GetLatestHeight(ctx context.Context) (uint64, error) {
@@ -715,6 +874,78 @@ func (m *mockStorageWithNonNotFoundErrors) GetTransaction(ctx context.Context, h
 
 func (m *mockStorageWithNonNotFoundErrors) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) HasBlock(ctx context.Context, height uint64) (bool, error) {
+	return false, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) HasTransaction(ctx context.Context, hash common.Hash) (bool, error) {
+	return false, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetLatestHeight(ctx context.Context, height uint64) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetBlock(ctx context.Context, block *types.Block) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetTransaction(ctx context.Context, tx *types.Transaction, location *storage.TxLocation) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetReceipts(ctx context.Context, receipts []*types.Receipt) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) AddTransactionToAddressIndex(ctx context.Context, addr common.Address, txHash common.Hash) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetBlocks(ctx context.Context, blocks []*types.Block) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) DeleteBlock(ctx context.Context, height uint64) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) Close() error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) NewBatch() storage.Batch {
+	return nil
+}
+
+func (m *mockStorageWithNonNotFoundErrors) Compact(ctx context.Context, start, end []byte) error {
+	return fmt.Errorf("database connection failed")
 }
 
 func TestJSONRPCServerEdgeCases(t *testing.T) {

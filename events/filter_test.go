@@ -88,7 +88,7 @@ func TestFilter_MatchBlock(t *testing.T) {
 		{
 			name:   "empty filter matches all",
 			filter: NewFilter(),
-			block:  NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, &types.Body{}, nil, trie.NewStackTrie(nil))),
+			block:  NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, nil, nil, nil, trie.NewStackTrie(nil))),
 			want:   true,
 		},
 		{
@@ -96,7 +96,7 @@ func TestFilter_MatchBlock(t *testing.T) {
 			filter: &Filter{
 				FromBlock: 50,
 			},
-			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, &types.Body{}, nil, trie.NewStackTrie(nil))),
+			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, nil, nil, nil, trie.NewStackTrie(nil))),
 			want:  true,
 		},
 		{
@@ -104,7 +104,7 @@ func TestFilter_MatchBlock(t *testing.T) {
 			filter: &Filter{
 				FromBlock: 200,
 			},
-			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, &types.Body{}, nil, trie.NewStackTrie(nil))),
+			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, nil, nil, nil, trie.NewStackTrie(nil))),
 			want:  false,
 		},
 		{
@@ -112,7 +112,7 @@ func TestFilter_MatchBlock(t *testing.T) {
 			filter: &Filter{
 				ToBlock: 200,
 			},
-			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, &types.Body{}, nil, trie.NewStackTrie(nil))),
+			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, nil, nil, nil, trie.NewStackTrie(nil))),
 			want:  true,
 		},
 		{
@@ -120,7 +120,7 @@ func TestFilter_MatchBlock(t *testing.T) {
 			filter: &Filter{
 				ToBlock: 50,
 			},
-			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, &types.Body{}, nil, trie.NewStackTrie(nil))),
+			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, nil, nil, nil, trie.NewStackTrie(nil))),
 			want:  false,
 		},
 		{
@@ -129,7 +129,7 @@ func TestFilter_MatchBlock(t *testing.T) {
 				FromBlock: 50,
 				ToBlock:   200,
 			},
-			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, &types.Body{}, nil, trie.NewStackTrie(nil))),
+			block: NewBlockEvent(types.NewBlock(&types.Header{Number: big.NewInt(100)}, nil, nil, nil, trie.NewStackTrie(nil))),
 			want:  true,
 		},
 	}
@@ -329,6 +329,69 @@ func TestFilter_MatchTransaction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.filter.MatchTransaction(tt.tx); got != tt.want {
 				t.Errorf("MatchTransaction() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFilter_MatchLog(t *testing.T) {
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	altAddr := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	topic0 := common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+	topic1 := common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+	log := &types.Log{
+		Address:     addr,
+		Topics:      []common.Hash{topic0, topic1},
+		BlockNumber: 100,
+	}
+	event := &LogEvent{Log: log}
+
+	tests := []struct {
+		name   string
+		filter *Filter
+		want   bool
+	}{
+		{
+			name:   "empty filter matches",
+			filter: NewFilter(),
+			want:   true,
+		},
+		{
+			name:   "address filter matches",
+			filter: &Filter{Addresses: []common.Address{addr}},
+			want:   true,
+		},
+		{
+			name:   "address filter mismatch",
+			filter: &Filter{Addresses: []common.Address{altAddr}},
+			want:   false,
+		},
+		{
+			name:   "topic filter matches",
+			filter: &Filter{Topics: [][]common.Hash{{topic0}}},
+			want:   true,
+		},
+		{
+			name:   "topic filter mismatch",
+			filter: &Filter{Topics: [][]common.Hash{{common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333")}}},
+			want:   false,
+		},
+		{
+			name:   "block range filter",
+			filter: &Filter{FromBlock: 50, ToBlock: 150},
+			want:   true,
+		},
+		{
+			name:   "block range filter mismatch",
+			filter: &Filter{FromBlock: 150, ToBlock: 200},
+			want:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.filter.MatchLog(event); got != tt.want {
+				t.Errorf("MatchLog() = %v, want %v", got, tt.want)
 			}
 		})
 	}

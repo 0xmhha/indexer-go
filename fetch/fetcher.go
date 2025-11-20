@@ -162,7 +162,7 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		}
 	}
 
-	// Publish transaction events if EventBus is configured
+	// Publish transaction and log events if EventBus is configured
 	if f.eventBus != nil {
 		transactions := block.Transactions()
 		for i, tx := range transactions {
@@ -190,6 +190,25 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 					zap.String("tx_hash", tx.Hash().Hex()),
 					zap.Uint64("block", height),
 				)
+			}
+		}
+
+		for _, receipt := range receipts {
+			if receipt == nil {
+				continue
+			}
+			for _, logEntry := range receipt.Logs {
+				if logEntry == nil {
+					continue
+				}
+				logEvent := events.NewLogEvent(logEntry)
+				if !f.eventBus.Publish(logEvent) {
+					f.logger.Warn("Failed to publish log event (channel full)",
+						zap.String("tx_hash", logEntry.TxHash.Hex()),
+						zap.Uint64("block", logEntry.BlockNumber),
+						zap.Uint("log_index", uint(logEntry.Index)),
+					)
+				}
 			}
 		}
 	}

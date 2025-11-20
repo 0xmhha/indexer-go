@@ -36,6 +36,11 @@ type Filter struct {
 	// ToBlock filters events up to this block number (inclusive)
 	// 0 means no maximum block filtering
 	ToBlock uint64
+
+	// Topics filters log events by indexed topics. Each inner slice represents
+	// a position in the topics array and behaves like the eth_subscribe semantics:
+	// nil/empty means wildcard, otherwise an OR match against provided hashes.
+	Topics [][]common.Hash
 }
 
 // NewFilter creates a new empty filter
@@ -44,6 +49,7 @@ func NewFilter() *Filter {
 		Addresses:     make([]common.Address, 0),
 		FromAddresses: make([]common.Address, 0),
 		ToAddresses:   make([]common.Address, 0),
+		Topics:        make([][]common.Hash, 0),
 	}
 }
 
@@ -173,6 +179,8 @@ func (f *Filter) Match(event Event) bool {
 		return f.MatchBlock(e)
 	case *TransactionEvent:
 		return f.MatchTransaction(e)
+	case *LogEvent:
+		return f.MatchLog(e)
 	default:
 		return false
 	}
@@ -186,7 +194,8 @@ func (f *Filter) IsEmpty() bool {
 		f.MinValue == nil &&
 		f.MaxValue == nil &&
 		f.FromBlock == 0 &&
-		f.ToBlock == 0
+		f.ToBlock == 0 &&
+		len(f.Topics) == 0
 }
 
 // Clone creates a deep copy of the filter
@@ -210,5 +219,67 @@ func (f *Filter) Clone() *Filter {
 		clone.MaxValue = new(big.Int).Set(f.MaxValue)
 	}
 
+	if len(f.Topics) > 0 {
+		clone.Topics = make([][]common.Hash, len(f.Topics))
+		for i, topicSet := range f.Topics {
+			if topicSet == nil {
+				continue
+			}
+			clone.Topics[i] = make([]common.Hash, len(topicSet))
+			copy(clone.Topics[i], topicSet)
+		}
+	}
+
 	return clone
+}
+
+// MatchLog checks if a log event matches this filter
+func (f *Filter) MatchLog(event *LogEvent) bool {
+	if event == nil || event.Log == nil {
+		return false
+	}
+
+	logBlock := uint64(event.Log.BlockNumber)
+	if f.FromBlock > 0 && logBlock < f.FromBlock {
+		return false
+	}
+	if f.ToBlock > 0 && logBlock > f.ToBlock {
+		return false
+	}
+
+	if len(f.Addresses) > 0 {
+		matched := false
+		for _, addr := range f.Addresses {
+			if event.Log.Address == addr {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	if len(f.Topics) > 0 {
+		for idx, topicSet := range f.Topics {
+			if topicSet == nil || len(topicSet) == 0 {
+				continue
+			}
+			if idx >= len(event.Log.Topics) {
+				return false
+			}
+			matched := false
+			for _, topic := range topicSet {
+				if event.Log.Topics[idx] == topic {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return false
+			}
+		}
+	}
+
+	return true
 }

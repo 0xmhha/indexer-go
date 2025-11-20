@@ -14,7 +14,7 @@ import (
 
 // mockHistoricalStorage extends mockStorage with historical methods
 type mockHistoricalStorage struct {
-	mockStorage
+	*mockStorage
 	blocksByTime     []*types.Block
 	blockByTimestamp *types.Block
 	txsWithReceipts  []*storage.TransactionWithReceipt
@@ -67,6 +67,14 @@ func (m *mockHistoricalStorage) GetTransactionCount(ctx context.Context) (uint64
 	return m.txCount, nil
 }
 
+func (m *mockHistoricalStorage) GetTopMiners(ctx context.Context, limit int) ([]storage.MinerStats, error) {
+	return []storage.MinerStats{}, nil
+}
+
+func (m *mockHistoricalStorage) GetTokenBalances(ctx context.Context, addr common.Address) ([]storage.TokenBalance, error) {
+	return []storage.TokenBalance{}, nil
+}
+
 func TestHistoricalResolvers(t *testing.T) {
 	logger := zap.NewNop()
 
@@ -77,7 +85,7 @@ func TestHistoricalResolvers(t *testing.T) {
 		GasLimit: 8000000,
 		GasUsed:  5000000,
 	}
-	block1 := types.NewBlock(header1, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block1 := types.NewBlock(header1, nil, nil, nil, trie.NewStackTrie(nil))
 
 	header2 := &types.Header{
 		Number:   big.NewInt(2),
@@ -85,7 +93,7 @@ func TestHistoricalResolvers(t *testing.T) {
 		GasLimit: 8000000,
 		GasUsed:  6000000,
 	}
-	block2 := types.NewBlock(header2, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block2 := types.NewBlock(header2, nil, nil, nil, trie.NewStackTrie(nil))
 
 	// Create test transaction
 	testTx := types.NewTransaction(
@@ -109,7 +117,7 @@ func TestHistoricalResolvers(t *testing.T) {
 	}
 
 	store := &mockHistoricalStorage{
-		mockStorage: mockStorage{
+		mockStorage: &mockStorage{
 			latestHeight: 100,
 			blocks:       map[uint64]*types.Block{1: block1, 2: block2},
 			blocksByHash: map[common.Hash]*types.Block{block1.Hash(): block1, block2.Hash(): block2},
@@ -379,7 +387,7 @@ func TestHistoricalResolversErrorPaths(t *testing.T) {
 
 	t.Run("BlocksByTimeRange_InvalidTime", func(t *testing.T) {
 		store := &mockHistoricalStorage{
-			mockStorage: mockStorage{
+			mockStorage: &mockStorage{
 				latestHeight: 100,
 				blocks:       make(map[uint64]*types.Block),
 				blocksByHash: make(map[common.Hash]*types.Block),
@@ -405,7 +413,7 @@ func TestHistoricalResolversErrorPaths(t *testing.T) {
 
 	t.Run("BlockByTimestamp_InvalidTimestamp", func(t *testing.T) {
 		store := &mockHistoricalStorage{
-			mockStorage: mockStorage{
+			mockStorage: &mockStorage{
 				latestHeight: 100,
 				blocks:       make(map[uint64]*types.Block),
 				blocksByHash: make(map[common.Hash]*types.Block),
@@ -427,7 +435,7 @@ func TestHistoricalResolversErrorPaths(t *testing.T) {
 
 	t.Run("TransactionsByAddressFiltered_InvalidFilter", func(t *testing.T) {
 		store := &mockHistoricalStorage{
-			mockStorage: mockStorage{
+			mockStorage: &mockStorage{
 				latestHeight: 100,
 				blocks:       make(map[uint64]*types.Block),
 				blocksByHash: make(map[common.Hash]*types.Block),
@@ -459,7 +467,7 @@ func TestHistoricalResolversErrorPaths(t *testing.T) {
 
 	t.Run("AddressBalance_InvalidBlockNumber", func(t *testing.T) {
 		store := &mockHistoricalStorage{
-			mockStorage: mockStorage{
+			mockStorage: &mockStorage{
 				latestHeight: 100,
 				blocks:       make(map[uint64]*types.Block),
 				blocksByHash: make(map[common.Hash]*types.Block),
@@ -481,7 +489,7 @@ func TestHistoricalResolversErrorPaths(t *testing.T) {
 
 	t.Run("BalanceHistory_InvalidBlock", func(t *testing.T) {
 		store := &mockHistoricalStorage{
-			mockStorage: mockStorage{
+			mockStorage: &mockStorage{
 				latestHeight: 100,
 				blocks:       make(map[uint64]*types.Block),
 				blocksByHash: make(map[common.Hash]*types.Block),
@@ -534,7 +542,7 @@ func TestHistoricalResolversErrorPaths(t *testing.T) {
 func TestHistoricalTypesInSchema(t *testing.T) {
 	logger := zap.NewNop()
 	store := &mockHistoricalStorage{
-		mockStorage: mockStorage{
+		mockStorage: &mockStorage{
 			latestHeight: 100,
 			blocks:       make(map[uint64]*types.Block),
 			blocksByHash: make(map[common.Hash]*types.Block),

@@ -791,5 +791,5 @@ func createTestBlockWithTimestamp(t *testing.T, height uint64, timestamp uint64)
 		GasLimit:   1000000,
 	}
 
-	return types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+	return types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 }

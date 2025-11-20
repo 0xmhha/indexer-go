@@ -16,6 +16,9 @@ const (
 
 	// EventTypeTransaction represents a new transaction event
 	EventTypeTransaction EventType = "transaction"
+
+	// EventTypeLog represents a log event emitted from receipts
+	EventTypeLog EventType = "log"
 )
 
 // Event is the base interface for all blockchain events
@@ -135,5 +138,32 @@ func NewTransactionEvent(
 		Value:       tx.Value().String(),
 		Receipt:     receipt,
 		CreatedAt:   time.Now(),
+	}
+}
+
+// LogEvent represents a log emitted as part of a transaction receipt
+type LogEvent struct {
+	// Log is the raw Ethereum log data
+	Log *types.Log
+
+	// CreatedAt is when this event was generated
+	CreatedAt time.Time
+}
+
+// Type implements Event interface
+func (e *LogEvent) Type() EventType {
+	return EventTypeLog
+}
+
+// Timestamp implements Event interface
+func (e *LogEvent) Timestamp() time.Time {
+	return e.CreatedAt
+}
+
+// NewLogEvent wraps a types.Log into an Event
+func NewLogEvent(log *types.Log) *LogEvent {
+	return &LogEvent{
+		Log:       log,
+		CreatedAt: time.Now(),
 	}
 }

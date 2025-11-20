@@ -30,7 +30,6 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/errors v1.11.3 // indirect
-	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
@@ -90,3 +89,9 @@ replace github.com/ethereum/go-ethereum => ../go-stablenet
 
 // Pin versions compatible with go-stablenet
 replace github.com/consensys/gnark-crypto => github.com/consensys/gnark-crypto v0.12.1
+
+replace github.com/cockroachdb/pebble => github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
+
+replace github.com/gballet/go-verkle => github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46
+
+replace github.com/crate-crypto/go-ipa => github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233

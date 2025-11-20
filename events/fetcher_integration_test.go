@@ -49,11 +49,8 @@ func TestFetcherIntegration_EndToEnd(t *testing.T) {
 	tx3 := types.NewTransaction(2, common.HexToAddress("0x3333"), big.NewInt(300), 21000, big.NewInt(1), nil)
 
 	transactions := []*types.Transaction{tx1, tx2, tx3}
-	body := &types.Body{
-		Transactions: transactions,
-	}
 
-	block := types.NewBlock(header, body, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(header, transactions, nil, nil, trie.NewStackTrie(nil))
 
 	// Publish BlockEvent (simulating Fetcher.FetchBlock behavior)
 	blockEvent := NewBlockEvent(block)
@@ -156,7 +153,7 @@ func TestFetcherIntegration_FilteredSubscription(t *testing.T) {
 		Number: big.NewInt(200),
 		Time:   uint64(time.Now().Unix()),
 	}
-	block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 
 	// Publish 3 transactions with different senders
 	senders := []common.Address{addr1, addr2, addr3}
@@ -236,7 +233,7 @@ func TestFetcherIntegration_MultipleBlocks(t *testing.T) {
 			Number: big.NewInt(int64(100 + i)),
 			Time:   uint64(time.Now().Unix()),
 		}
-		block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 		blockEvent := NewBlockEvent(block)
 
 		if !bus.Publish(blockEvent) {
@@ -292,7 +289,7 @@ func TestFetcherIntegration_ConcurrentSubscribers(t *testing.T) {
 			Number: big.NewInt(int64(300 + i)),
 			Time:   uint64(time.Now().Unix()),
 		}
-		block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 		blockEvent := NewBlockEvent(block)
 
 		if !bus.Publish(blockEvent) {

@@ -3,11 +3,16 @@ package graphql
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/0xmhha/indexer-go/events"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -202,12 +207,25 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 		return
 	}
 
-	var eventType events.EventType
+	var (
+		eventType events.EventType
+		filter    *events.Filter
+		err       error
+	)
 	switch subType {
 	case "newBlock":
 		eventType = events.EventTypeBlock
 	case "newTransaction":
 		eventType = events.EventTypeTransaction
+	case "newPendingTransactions":
+		eventType = events.EventTypeTransaction
+	case "logs":
+		eventType = events.EventTypeLog
+		filter, err = buildLogFilter(sub.Variables["filter"])
+		if err != nil {
+			c.sendError(id, err.Error())
+			return
+		}
 	default:
 		c.sendError(id, "unknown subscription type")
 		return
@@ -215,7 +233,7 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 
 	// Create subscription ID
 	subID := events.SubscriptionID(id)
-	eventSub := c.server.eventBus.Subscribe(subID, []events.EventType{eventType}, nil, 100)
+	eventSub := c.server.eventBus.Subscribe(subID, []events.EventType{eventType}, filter, 100)
 	if eventSub == nil {
 		c.sendError(id, "failed to create subscription")
 		return
@@ -315,6 +333,61 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				"newTransaction": txData,
 			}
 		}
+
+	case "newPendingTransactions":
+		if txEvent, ok := event.(*events.TransactionEvent); ok {
+			pendingData := map[string]interface{}{
+				"hash":  txEvent.Hash.Hex(),
+				"from":  txEvent.From.Hex(),
+				"value": txEvent.Value,
+			}
+			if txEvent.To != nil {
+				pendingData["to"] = txEvent.To.Hex()
+			}
+			if txEvent.Tx != nil {
+				pendingData["nonce"] = txEvent.Tx.Nonce()
+				pendingData["gas"] = txEvent.Tx.Gas()
+				pendingData["type"] = fmt.Sprintf("0x%x", txEvent.Tx.Type())
+				if gasPrice := txEvent.Tx.GasPrice(); gasPrice != nil {
+					pendingData["gasPrice"] = gasPrice.String()
+				}
+				if maxFee := txEvent.Tx.GasFeeCap(); maxFee != nil {
+					pendingData["maxFeePerGas"] = maxFee.String()
+				}
+				if maxPriority := txEvent.Tx.GasTipCap(); maxPriority != nil {
+					pendingData["maxPriorityFeePerGas"] = maxPriority.String()
+				}
+			} else {
+				pendingData["type"] = "0x0"
+			}
+			payload = map[string]interface{}{
+				"newPendingTransactions": pendingData,
+			}
+		}
+
+	case "logs":
+		if logEvent, ok := event.(*events.LogEvent); ok && logEvent.Log != nil {
+			topicStrings := make([]string, len(logEvent.Log.Topics))
+			for i, topic := range logEvent.Log.Topics {
+				topicStrings[i] = topic.Hex()
+			}
+			logData := map[string]interface{}{
+				"address":          logEvent.Log.Address.Hex(),
+				"topics":           topicStrings,
+				"data":             hexutil.Encode(logEvent.Log.Data),
+				"blockNumber":      logEvent.Log.BlockNumber,
+				"transactionHash":  logEvent.Log.TxHash.Hex(),
+				"transactionIndex": logEvent.Log.TxIndex,
+				"logIndex":         logEvent.Log.Index,
+				"removed":          logEvent.Log.Removed,
+			}
+			if (logEvent.Log.BlockHash != common.Hash{}) {
+				logData["blockHash"] = logEvent.Log.BlockHash.Hex()
+			}
+			payload = map[string]interface{}{
+				"logs": logData,
+			}
+		}
 	}
 
 	if payload != nil {
@@ -325,11 +398,17 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 // parseSubscriptionType extracts subscription type from query
 func (c *subscriptionClient) parseSubscriptionType(query string) string {
 	// Simple parsing - check for subscription keywords
+	if contains(query, "newPendingTransactions") {
+		return "newPendingTransactions"
+	}
 	if contains(query, "newBlock") {
 		return "newBlock"
 	}
 	if contains(query, "newTransaction") {
 		return "newTransaction"
+	}
+	if contains(query, "logs") {
+		return "logs"
 	}
 	return ""
 }
@@ -346,6 +425,185 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func buildLogFilter(raw interface{}) (*events.Filter, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	filterMap, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid log filter format")
+	}
+
+	filter := events.NewFilter()
+
+	if addrVal, ok := filterMap["address"]; ok {
+		addrStr, ok := addrVal.(string)
+		if !ok {
+			return nil, fmt.Errorf("address must be a string")
+		}
+		address, err := parseAddress(addrStr)
+		if err != nil {
+			return nil, err
+		}
+		filter.Addresses = append(filter.Addresses, address)
+	}
+
+	if addrsVal, ok := filterMap["addresses"]; ok {
+		addresses, err := parseAddressList(addrsVal)
+		if err != nil {
+			return nil, err
+		}
+		filter.Addresses = append(filter.Addresses, addresses...)
+	}
+
+	if topicsVal, ok := filterMap["topics"]; ok {
+		topicsSlice, ok := topicsVal.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("topics must be an array")
+		}
+		for _, entry := range topicsSlice {
+			topicSet, err := parseTopicEntry(entry)
+			if err != nil {
+				return nil, err
+			}
+			filter.Topics = append(filter.Topics, topicSet)
+		}
+	}
+
+	if fromVal, ok := filterMap["fromBlock"]; ok {
+		blockNum, err := parseUint64Value(fromVal)
+		if err != nil {
+			return nil, fmt.Errorf("invalid fromBlock: %w", err)
+		}
+		filter.FromBlock = blockNum
+	}
+	if toVal, ok := filterMap["toBlock"]; ok {
+		blockNum, err := parseUint64Value(toVal)
+		if err != nil {
+			return nil, fmt.Errorf("invalid toBlock: %w", err)
+		}
+		filter.ToBlock = blockNum
+	}
+
+	if filter.IsEmpty() {
+		return nil, nil
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+
+	return filter, nil
+}
+
+func parseAddressList(value interface{}) ([]common.Address, error) {
+	switch v := value.(type) {
+	case []interface{}:
+		addresses := make([]common.Address, 0, len(v))
+		for _, item := range v {
+			addrStr, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("address must be a string")
+			}
+			addr, err := parseAddress(addrStr)
+			if err != nil {
+				return nil, err
+			}
+			addresses = append(addresses, addr)
+		}
+		return addresses, nil
+	case string:
+		addr, err := parseAddress(v)
+		if err != nil {
+			return nil, err
+		}
+		return []common.Address{addr}, nil
+	default:
+		return nil, fmt.Errorf("addresses must be an array or string")
+	}
+}
+
+func parseAddress(value string) (common.Address, error) {
+	if !common.IsHexAddress(value) {
+		return common.Address{}, fmt.Errorf("invalid address: %s", value)
+	}
+	return common.HexToAddress(value), nil
+}
+
+func parseTopicEntry(entry interface{}) ([]common.Hash, error) {
+	switch v := entry.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		if v == "" {
+			return nil, nil
+		}
+		hash, err := parseHashString(v)
+		if err != nil {
+			return nil, err
+		}
+		return []common.Hash{hash}, nil
+	case []interface{}:
+		if len(v) == 0 {
+			return nil, nil
+		}
+		hashes := make([]common.Hash, 0, len(v))
+		for _, item := range v {
+			if item == nil {
+				return nil, nil
+			}
+			str, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("topic entry must be a string")
+			}
+			hash, err := parseHashString(str)
+			if err != nil {
+				return nil, err
+			}
+			hashes = append(hashes, hash)
+		}
+		return hashes, nil
+	default:
+		return nil, fmt.Errorf("invalid topic entry type")
+	}
+}
+
+func parseHashString(value string) (common.Hash, error) {
+	if !strings.HasPrefix(value, "0x") {
+		return common.Hash{}, fmt.Errorf("hash must be hex string")
+	}
+	if len(value) != 66 {
+		return common.Hash{}, fmt.Errorf("hash must be 32 bytes: %s", value)
+	}
+	return common.HexToHash(value), nil
+}
+
+func parseUint64Value(value interface{}) (uint64, error) {
+	switch v := value.(type) {
+	case float64:
+		return uint64(v), nil
+	case int:
+		return uint64(v), nil
+	case int64:
+		return uint64(v), nil
+	case string:
+		if strings.HasPrefix(v, "0x") || strings.HasPrefix(v, "0X") {
+			parsed, err := strconv.ParseUint(v[2:], 16, 64)
+			if err != nil {
+				return 0, err
+			}
+			return parsed, nil
+		}
+		parsed, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("unsupported number type %T", value)
+	}
 }
 
 // sendMessage sends a message to the client

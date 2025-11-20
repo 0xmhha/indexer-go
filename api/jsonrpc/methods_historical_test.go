@@ -92,6 +92,14 @@ func (m *mockHistoricalStorage) GetTransactionCount(ctx context.Context) (uint64
 	return m.txCount, nil
 }
 
+func (m *mockHistoricalStorage) GetTopMiners(ctx context.Context, limit int) ([]storage.MinerStats, error) {
+	return []storage.MinerStats{}, nil
+}
+
+func (m *mockHistoricalStorage) GetTokenBalances(ctx context.Context, addr common.Address) ([]storage.TokenBalance, error) {
+	return []storage.TokenBalance{}, nil
+}
+
 func TestHistoricalJSONRPCMethods(t *testing.T) {
 	logger := zap.NewNop()
 	ctx := context.Background()
@@ -104,7 +112,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		GasLimit:   8000000,
 		GasUsed:    5000000,
 	}
-	block1 := types.NewBlock(header1, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block1 := types.NewBlock(header1, nil, nil, nil, trie.NewStackTrie(nil))
 
 	header2 := &types.Header{
 		Number:     big.NewInt(2),
@@ -113,7 +121,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		GasLimit:   8000000,
 		GasUsed:    6000000,
 	}
-	block2 := types.NewBlock(header2, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block2 := types.NewBlock(header2, nil, nil, nil, trie.NewStackTrie(nil))
 
 	// Create test transaction
 	testTx := types.NewTransaction(

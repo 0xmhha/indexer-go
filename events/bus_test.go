@@ -26,7 +26,7 @@ func TestEventBus_BasicPubSub(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Publish a block event
-	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, nil, nil, nil, trie.NewStackTrie(nil))
 	event := NewBlockEvent(block)
 
 	if !bus.Publish(event) {
@@ -69,7 +69,7 @@ func TestEventBus_MultipleSubscribers(t *testing.T) {
 	}
 
 	// Publish an event
-	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, nil, nil, nil, trie.NewStackTrie(nil))
 	event := NewBlockEvent(block)
 	bus.Publish(event)
 
@@ -98,7 +98,7 @@ func TestEventBus_EventTypeFiltering(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Publish a block event
-	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, nil, nil, nil, trie.NewStackTrie(nil))
 	blockEvent := NewBlockEvent(block)
 	bus.Publish(blockEvent)
 
@@ -182,7 +182,7 @@ func TestEventBus_Unsubscribe(t *testing.T) {
 	}
 
 	// Publish an event - subscriber should not receive it
-	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, nil, nil, nil, trie.NewStackTrie(nil))
 	event := NewBlockEvent(block)
 	bus.Publish(event)
 
@@ -209,7 +209,7 @@ func TestEventBus_Stats(t *testing.T) {
 
 	// Publish events
 	for i := 0; i < 5; i++ {
-		block := types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{}, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, nil, nil, nil, trie.NewStackTrie(nil))
 		event := NewBlockEvent(block)
 		bus.Publish(event)
 	}
@@ -251,7 +251,7 @@ func TestEventBus_DroppedEvents(t *testing.T) {
 
 	// Publish many events quickly to overflow buffer
 	for i := 0; i < 10; i++ {
-		block := types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{}, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, nil, nil, nil, trie.NewStackTrie(nil))
 		event := NewBlockEvent(block)
 		bus.Publish(event)
 	}
@@ -287,7 +287,7 @@ func TestEventBus_Stop(t *testing.T) {
 	bus.Stop()
 
 	// Try to publish after stop - should fail
-	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(&types.Header{Number: big.NewInt(1)}, nil, nil, nil, trie.NewStackTrie(nil))
 	event := NewBlockEvent(block)
 
 	if bus.Publish(event) {
@@ -333,7 +333,7 @@ func TestEventBus_ConcurrentOperations(t *testing.T) {
 	publishCount := 100
 	for i := 0; i < publishCount; i++ {
 		go func(num int) {
-			block := types.NewBlock(&types.Header{Number: big.NewInt(int64(num))}, &types.Body{}, nil, trie.NewStackTrie(nil))
+			block := types.NewBlock(&types.Header{Number: big.NewInt(int64(num))}, nil, nil, nil, trie.NewStackTrie(nil))
 			event := NewBlockEvent(block)
 			bus.Publish(event)
 		}(i)

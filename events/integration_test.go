@@ -47,9 +47,8 @@ func TestIntegration_RealisticWorkflow(t *testing.T) {
 			txs[i] = tx
 		}
 
-		body := &types.Body{Transactions: txs}
 		header := &types.Header{Number: big.NewInt(int64(blockNum))}
-		block := types.NewBlock(header, body, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(header, txs, nil, nil, trie.NewStackTrie(nil))
 
 		// Publish block event
 		blockEvent := NewBlockEvent(block)
@@ -167,7 +166,7 @@ func TestIntegration_HighThroughput(t *testing.T) {
 
 	for i := 0; i < eventCount; i++ {
 		header := &types.Header{Number: big.NewInt(int64(i))}
-		block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 		event := NewBlockEvent(block)
 		bus.Publish(event)
 	}
@@ -222,7 +221,7 @@ func TestIntegration_DynamicSubscriptions(t *testing.T) {
 	// Publish some events
 	for i := 0; i < 5; i++ {
 		header := &types.Header{Number: big.NewInt(int64(i))}
-		block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 		event := NewBlockEvent(block)
 		bus.Publish(event)
 	}
@@ -237,7 +236,7 @@ func TestIntegration_DynamicSubscriptions(t *testing.T) {
 	// Publish more events
 	for i := 5; i < 10; i++ {
 		header := &types.Header{Number: big.NewInt(int64(i))}
-		block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 		event := NewBlockEvent(block)
 		bus.Publish(event)
 	}
@@ -252,7 +251,7 @@ func TestIntegration_DynamicSubscriptions(t *testing.T) {
 	// Publish final batch
 	for i := 10; i < 15; i++ {
 		header := &types.Header{Number: big.NewInt(int64(i))}
-		block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+		block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 		event := NewBlockEvent(block)
 		bus.Publish(event)
 	}
@@ -313,7 +312,7 @@ func TestIntegration_ConcurrentPublishSubscribe(t *testing.T) {
 			if num%2 == 0 {
 				// Block event
 				header := &types.Header{Number: big.NewInt(int64(num))}
-				block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+				block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 				event := NewBlockEvent(block)
 				bus.Publish(event)
 			} else {

@@ -21,7 +21,7 @@ func BenchmarkEventBus_Publish(b *testing.B) {
 		Number: big.NewInt(1000),
 		Time:   uint64(time.Now().Unix()),
 	}
-	block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 	event := NewBlockEvent(block)
 
 	b.ResetTimer()
@@ -75,7 +75,7 @@ func BenchmarkEventBus_PublishWithSubscribers(b *testing.B) {
 				Number: big.NewInt(1000),
 				Time:   uint64(time.Now().Unix()),
 			}
-			block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+			block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 			event := NewBlockEvent(block)
 
 			b.ResetTimer()
@@ -230,7 +230,7 @@ func BenchmarkEventBus_ConcurrentPublish(b *testing.B) {
 		Number: big.NewInt(1000),
 		Time:   uint64(time.Now().Unix()),
 	}
-	block := types.NewBlock(header, &types.Body{}, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 	event := NewBlockEvent(block)
 
 	b.ResetTimer()
@@ -305,10 +305,7 @@ func BenchmarkNewBlockEvent(b *testing.B) {
 		)
 	}
 
-	body := &types.Body{
-		Transactions: txs,
-	}
-	block := types.NewBlock(header, body, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(header, nil, nil, nil, trie.NewStackTrie(nil))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

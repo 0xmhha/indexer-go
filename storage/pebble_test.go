@@ -920,7 +920,7 @@ func createTestBlockWithTxs(t *testing.T, height uint64, numTxs int) *types.Bloc
 	}
 
 	if numTxs > 0 {
-		return types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs})
+		return types.NewBlockWithHeader(header).WithBody(txs, nil)
 	}
 	return types.NewBlockWithHeader(header)
 }

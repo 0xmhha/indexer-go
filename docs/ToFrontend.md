@@ -162,33 +162,70 @@ if (transaction.type === 22) {
 
 ## 예정된 추가 기능
 
-### Phase 3 완료 후 추가 예정
+### WebSocket 구독 확장 (적용 완료)
 
-#### 1. WebSocket 구독 확장
+#### 1. `newPendingTransactions`
 
 ```graphql
-subscription {
-  # 새 트랜잭션 구독 (pending)
+subscription PendingTxStream {
   newPendingTransactions {
     hash
     from
     to
     value
+    nonce
+    gas
     type
+    gasPrice
+    maxFeePerGas
+    maxPriorityFeePerGas
   }
+}
+```
 
-  # 로그 구독 (필터 적용)
-  logs(filter: {
-    address: "0x..."
-    topics: ["0x..."]
-  }) {
+- `type`은 `0x0`, `0x2`, `0x16` 등 Ethereum typed transaction 값입니다.
+- `gasPrice`는 Legacy/1559 공통, 1559 타입은 `maxFeePerGas`, `maxPriorityFeePerGas`를 함께 조회하세요.
+- 트랜잭션이 아직 블록에 포함되지 않았으므로 `blockNumber` 대신 `nonce`와 `gas` 정보로 UI를 구성하면 됩니다.
+
+#### 2. `logs` 구독 & 필터 변수 예시
+
+필터는 GraphQL **variables**에 전달해야 하며, address/topic/블록 범위를 모두 지원합니다.
+
+```graphql
+subscription FilteredLogs($filter: LogFilterInput) {
+  logs(filter: $filter) {
     address
     topics
     data
     blockNumber
+    blockHash
+    transactionHash
+    logIndex
+    removed
   }
 }
 ```
+
+```json
+{
+  "filter": {
+    "address": "0x1111...",              // 단일 주소
+    "addresses": ["0x2222..."],        // OR 조건 추가 가능
+    "topics": [
+      "0xddf252ad...",                 // topic0 - Transfer
+      ["0x0000...", "0xffff..."],      // topic1 - 다중 OR
+      null,                              // wildcard
+      null
+    ],
+    "fromBlock": "0xA",                 // hex 또는 decimal
+    "toBlock":  "100"                  // decimal 허용
+  }
+}
+```
+
+- `address`와 `addresses`를 함께 쓰면 모든 값이 OR 조건으로 추가됩니다.
+- `topics` 내부 배열은 **eth_subscribe logs** 규칙과 동일: `null`은 와일드카드, 배열은 OR, 문자열은 단일 매치.
+- 블록 범위는 생략 시 최신 블록 전체 스트림을 받습니다.
 
 ---
 
@@ -285,8 +322,8 @@ type Block {
 | excessBlobGas | ✅ 완료 | ✅ | ✅ | EIP-4844 |
 | feePayer | ✅ 완료 | ✅ | ✅ | Fee Delegation, go-stablenet 연동 완료 |
 | feePayerSignatures | ✅ 완료 | ✅ | ✅ | Fee Delegation, go-stablenet 연동 완료 |
-| newPendingTransactions | 📋 예정 | - | - | WebSocket |
-| logs subscription | 📋 예정 | - | - | WebSocket |
+| newPendingTransactions | ✅ 적용 | WebSocket | GraphQL Subscription | 실시간 펜딩 트랜잭션 스트림 |
+| logs subscription | ✅ 적용 | WebSocket | GraphQL Subscription | 주소 & 토픽 필터 지원 |
 
 **Note**: 모든 Fee Delegation 필드는 go-stablenet의 `Transaction.FeePayer()` 및 `Transaction.RawFeePayerSignatureValues()` 메서드를 통해 실제 값을 추출합니다. type 0x16 (22) 트랜잭션에서 자동으로 feePayer 주소와 서명 값이 반환됩니다.
 
