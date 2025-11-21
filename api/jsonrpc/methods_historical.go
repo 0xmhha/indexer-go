@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strconv"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
@@ -63,12 +64,12 @@ func (h *Handler) getBlocksByTimeRange(ctx context.Context, params json.RawMessa
 	}
 
 	// Parse pagination
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if p.Limit != nil && *p.Limit > 0 {
 		limit = *p.Limit
-		if limit > 100 {
-			limit = 100
+		if limit > constants.DefaultMaxPaginationLimit {
+			limit = constants.DefaultMaxPaginationLimit
 		}
 	}
 	if p.Offset != nil && *p.Offset >= 0 {
@@ -184,12 +185,12 @@ func (h *Handler) getTransactionsByAddressFiltered(ctx context.Context, params j
 	}
 
 	// Parse pagination
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if p.Limit != nil && *p.Limit > 0 {
 		limit = *p.Limit
-		if limit > 100 {
-			limit = 100
+		if limit > constants.DefaultMaxPaginationLimit {
+			limit = constants.DefaultMaxPaginationLimit
 		}
 	}
 	if p.Offset != nil && *p.Offset >= 0 {
@@ -341,12 +342,12 @@ func (h *Handler) getBalanceHistory(ctx context.Context, params json.RawMessage)
 	}
 
 	// Parse pagination
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if p.Limit != nil && *p.Limit > 0 {
 		limit = *p.Limit
-		if limit > 100 {
-			limit = 100
+		if limit > constants.DefaultMaxPaginationLimit {
+			limit = constants.DefaultMaxPaginationLimit
 		}
 	}
 	if p.Offset != nil && *p.Offset >= 0 {

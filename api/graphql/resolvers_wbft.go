@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
@@ -207,12 +208,12 @@ func (s *Schema) resolveAllValidatorsSigningStats(p graphql.ResolveParams) (inte
 	}
 
 	// Get pagination parameters
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > 100 {
-				limit = 100
+			if l > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
 			} else {
 				limit = l
 			}
@@ -288,12 +289,12 @@ func (s *Schema) resolveValidatorSigningActivity(p graphql.ResolveParams) (inter
 	}
 
 	// Get pagination parameters
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > 100 {
-				limit = 100
+			if l > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
 			} else {
 				limit = l
 			}

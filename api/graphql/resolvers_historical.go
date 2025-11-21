@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strconv"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
@@ -36,13 +37,13 @@ func (s *Schema) resolveBlocksByTimeRange(p graphql.ResolveParams) (interface{},
 	}
 
 	// Get pagination parameters
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
 			limit = l
-			if limit > 100 {
-				limit = 100
+			if limit > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
 			}
 		}
 		if o, ok := pagination["offset"].(int); ok && o >= 0 {
@@ -137,13 +138,13 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 	}
 
 	// Get pagination parameters
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
 			limit = l
-			if limit > 100 {
-				limit = 100
+			if limit > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
 			}
 		}
 		if o, ok := pagination["offset"].(int); ok && o >= 0 {
@@ -258,13 +259,13 @@ func (s *Schema) resolveBalanceHistory(p graphql.ResolveParams) (interface{}, er
 	}
 
 	// Get pagination parameters
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
 			limit = l
-			if limit > 100 {
-				limit = 100
+			if limit > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
 			}
 		}
 		if o, ok := pagination["offset"].(int); ok && o >= 0 {

@@ -76,6 +76,29 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.getMintEvents(ctx, params)
 	case "getBurnEvents":
 		return h.getBurnEvents(ctx, params)
+	// Address indexing methods
+	case "getContractCreation":
+		return h.getContractCreation(ctx, params)
+	case "getContractsByCreator":
+		return h.getContractsByCreator(ctx, params)
+	case "getInternalTransactions":
+		return h.getInternalTransactions(ctx, params)
+	case "getInternalTransactionsByAddress":
+		return h.getInternalTransactionsByAddress(ctx, params)
+	case "getERC20Transfer":
+		return h.getERC20Transfer(ctx, params)
+	case "getERC20TransfersByToken":
+		return h.getERC20TransfersByToken(ctx, params)
+	case "getERC20TransfersByAddress":
+		return h.getERC20TransfersByAddress(ctx, params)
+	case "getERC721Transfer":
+		return h.getERC721Transfer(ctx, params)
+	case "getERC721TransfersByToken":
+		return h.getERC721TransfersByToken(ctx, params)
+	case "getERC721TransfersByAddress":
+		return h.getERC721TransfersByAddress(ctx, params)
+	case "getERC721Owner":
+		return h.getERC721Owner(ctx, params)
 	default:
 		return nil, NewError(MethodNotFound, fmt.Sprintf("method '%s' not found", method), nil)
 	}

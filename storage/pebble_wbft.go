@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/internal/constants"
 )
 
 // Ensure PebbleStorage implements WBFTReader and WBFTWriter
@@ -154,10 +156,10 @@ func (s *PebbleStorage) GetAllValidatorsSigningStats(ctx context.Context, fromBl
 
 	// Default limit
 	if limit <= 0 {
-		limit = 100
+		limit = constants.DefaultMaxPaginationLimit
 	}
-	if limit > 1000 {
-		limit = 1000
+	if limit > constants.MaxPaginationLimitExtended {
+		limit = constants.MaxPaginationLimitExtended
 	}
 
 	// Scan all validator activity records to aggregate stats
@@ -249,10 +251,10 @@ func (s *PebbleStorage) GetValidatorSigningActivity(ctx context.Context, validat
 
 	// Default limit
 	if limit <= 0 {
-		limit = 100
+		limit = constants.DefaultMaxPaginationLimit
 	}
-	if limit > 1000 {
-		limit = 1000
+	if limit > constants.MaxPaginationLimitExtended {
+		limit = constants.MaxPaginationLimitExtended
 	}
 
 	prefix := WBFTValidatorActivityKeyPrefix(validatorAddress)

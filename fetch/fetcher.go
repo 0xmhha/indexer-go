@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/events"
 	"github.com/0xmhha/indexer-go/storage"
 )
@@ -149,6 +151,11 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	// Process WBFT metadata
 	if err := f.processWBFTMetadata(ctx, block); err != nil {
 		return fmt.Errorf("failed to process WBFT metadata for block %d: %w", height, err)
+	}
+
+	// Process address indexing (contract creation, token transfers)
+	if err := f.processAddressIndexing(ctx, block, receipts); err != nil {
+		return fmt.Errorf("failed to process address indexing for block %d: %w", height, err)
 	}
 
 	// Publish block event if EventBus is configured
@@ -307,7 +314,7 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 
 	numWorkers := f.config.NumWorkers
 	if numWorkers == 0 {
-		numWorkers = 100 // Default worker pool size
+		numWorkers = constants.DefaultNumWorkers // Default worker pool size
 	}
 
 	f.logger.Info("Starting concurrent block range fetch",
@@ -389,6 +396,11 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 				// Process WBFT metadata
 				if err := f.processWBFTMetadata(ctx, res.block); err != nil {
 					return fmt.Errorf("failed to process WBFT metadata for block %d: %w", nextHeight, err)
+				}
+
+				// Process address indexing (contract creation, token transfers)
+				if err := f.processAddressIndexing(ctx, res.block, res.receipts); err != nil {
+					return fmt.Errorf("failed to process address indexing for block %d: %w", nextHeight, err)
 				}
 
 				// Publish block event if EventBus is configured
@@ -933,4 +945,137 @@ func containsAddress(addresses []common.Address, target common.Address) bool {
 		}
 	}
 	return false
+}
+
+// processAddressIndexing parses and stores address indexing data from block and receipts
+func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block, receipts types.Receipts) error {
+	// Check if storage implements AddressIndexWriter
+	addressWriter, ok := f.storage.(storage.AddressIndexWriter)
+	if !ok {
+		// Storage doesn't support address indexing - skip silently
+		return nil
+	}
+
+	blockNumber := block.NumberU64()
+	blockTime := block.Time()
+	transactions := block.Transactions()
+
+	// Process each transaction and its receipt
+	for _, tx := range transactions {
+		// Find matching receipt
+		var receipt *types.Receipt
+		for _, r := range receipts {
+			if r.TxHash == tx.Hash() {
+				receipt = r
+				break
+			}
+		}
+		if receipt == nil {
+			continue
+		}
+
+		// 1. Contract Creation Detection
+		// Contract creation is indicated by tx.To() == nil
+		if tx.To() == nil && receipt.ContractAddress != (common.Address{}) {
+			creation := &storage.ContractCreation{
+				ContractAddress: receipt.ContractAddress,
+				Creator:         getTransactionSender(tx),
+				TransactionHash: tx.Hash(),
+				BlockNumber:     blockNumber,
+				Timestamp:       blockTime,
+				BytecodeSize:    len(receipt.ContractAddress.Bytes()), // This is simplified
+			}
+
+			if err := addressWriter.SaveContractCreation(ctx, creation); err != nil {
+				f.logger.Warn("Failed to save contract creation",
+					zap.Uint64("block", blockNumber),
+					zap.String("tx", tx.Hash().Hex()),
+					zap.String("contract", receipt.ContractAddress.Hex()),
+					zap.Error(err),
+				)
+			}
+		}
+
+		// 2. Parse ERC20/ERC721 Transfer Events from Logs
+		for _, log := range receipt.Logs {
+			if log == nil || len(log.Topics) == 0 {
+				continue
+			}
+
+			// Check if this is a Transfer event
+			// Transfer event topic: keccak256("Transfer(address,address,uint256)")
+			if log.Topics[0].Hex() != storage.ERC20TransferTopic {
+				continue
+			}
+
+			// ERC20: Transfer(indexed from, indexed to, uint256 value) - 3 topics
+			// ERC721: Transfer(indexed from, indexed to, indexed tokenId) - 4 topics
+			// Note: First topic is the event signature, so total topics are 3 or 4
+
+			if len(log.Topics) == 3 {
+				// ERC20 Transfer Event
+				if len(log.Topics) < 3 || len(log.Data) < 32 {
+					continue
+				}
+
+				from := common.BytesToAddress(log.Topics[1].Bytes())
+				to := common.BytesToAddress(log.Topics[2].Bytes())
+				value := new(big.Int).SetBytes(log.Data)
+
+				transfer := &storage.ERC20Transfer{
+					ContractAddress: log.Address,
+					From:            from,
+					To:              to,
+					Value:           value,
+					TransactionHash: log.TxHash,
+					BlockNumber:     log.BlockNumber,
+					LogIndex:        log.Index,
+					Timestamp:       blockTime,
+				}
+
+				if err := addressWriter.SaveERC20Transfer(ctx, transfer); err != nil {
+					f.logger.Warn("Failed to save ERC20 transfer",
+						zap.Uint64("block", blockNumber),
+						zap.String("tx", tx.Hash().Hex()),
+						zap.String("token", log.Address.Hex()),
+						zap.Error(err),
+					)
+				}
+
+			} else if len(log.Topics) == 4 {
+				// ERC721 Transfer Event
+				from := common.BytesToAddress(log.Topics[1].Bytes())
+				to := common.BytesToAddress(log.Topics[2].Bytes())
+				tokenId := new(big.Int).SetBytes(log.Topics[3].Bytes())
+
+				transfer := &storage.ERC721Transfer{
+					ContractAddress: log.Address,
+					From:            from,
+					To:              to,
+					TokenId:         tokenId,
+					TransactionHash: log.TxHash,
+					BlockNumber:     log.BlockNumber,
+					LogIndex:        log.Index,
+					Timestamp:       blockTime,
+				}
+
+				if err := addressWriter.SaveERC721Transfer(ctx, transfer); err != nil {
+					f.logger.Warn("Failed to save ERC721 transfer",
+						zap.Uint64("block", blockNumber),
+						zap.String("tx", tx.Hash().Hex()),
+						zap.String("token", log.Address.Hex()),
+						zap.String("tokenId", tokenId.String()),
+						zap.Error(err),
+					)
+				}
+			}
+		}
+	}
+
+	f.logger.Debug("Processed address indexing",
+		zap.Uint64("height", blockNumber),
+		zap.Int("transactions", len(transactions)),
+	)
+
+	return nil
 }

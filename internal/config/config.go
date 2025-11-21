@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"gopkg.in/yaml.v3"
 )
 
@@ -67,7 +68,7 @@ func NewConfig() *Config {
 func (c *Config) SetDefaults() {
 	// RPC defaults
 	if c.RPC.Timeout == 0 {
-		c.RPC.Timeout = 30 * time.Second
+		c.RPC.Timeout = constants.DefaultQueryTimeout
 	}
 
 	// Log defaults
@@ -80,18 +81,18 @@ func (c *Config) SetDefaults() {
 
 	// Indexer defaults
 	if c.Indexer.Workers == 0 {
-		c.Indexer.Workers = 100
+		c.Indexer.Workers = constants.DefaultNumWorkers
 	}
 	if c.Indexer.ChunkSize == 0 {
-		c.Indexer.ChunkSize = 100
+		c.Indexer.ChunkSize = constants.DefaultMaxPaginationLimit
 	}
 
 	// API defaults
 	if c.API.Host == "" {
-		c.API.Host = "localhost"
+		c.API.Host = constants.DefaultAPIHost
 	}
 	if c.API.Port == 0 {
-		c.API.Port = 8080
+		c.API.Port = constants.DefaultAPIPort
 	}
 	if c.API.AllowedOrigins == nil {
 		c.API.AllowedOrigins = []string{"*"}

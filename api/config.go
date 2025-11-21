@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/0xmhha/indexer-go/internal/constants"
 )
 
 // Config holds API server configuration
@@ -71,25 +73,25 @@ type Config struct {
 // DefaultConfig returns a default API server configuration
 func DefaultConfig() *Config {
 	return &Config{
-		Host:                  "localhost",
-		Port:                  8080,
-		ReadTimeout:           15 * time.Second,
-		WriteTimeout:          15 * time.Second,
-		IdleTimeout:           60 * time.Second,
+		Host:                  constants.DefaultAPIHost,
+		Port:                  constants.DefaultAPIPort,
+		ReadTimeout:           constants.DefaultReadTimeout,
+		WriteTimeout:          constants.DefaultWriteTimeout,
+		IdleTimeout:           constants.DefaultIdleTimeout,
 		EnableCORS:            true,
 		AllowedOrigins:        []string{"*"},
-		MaxHeaderBytes:        1 << 20, // 1 MB
+		MaxHeaderBytes:        constants.DefaultMaxHeaderBytes,
 		EnableGraphQL:         true,
 		EnableJSONRPC:         true,
 		EnableWebSocket:       true,
-		GraphQLPath:           "/graphql",
-		GraphQLPlaygroundPath: "/playground",
-		JSONRPCPath:           "/rpc",
-		WebSocketPath:         "/ws",
-		ShutdownTimeout:       30 * time.Second,
+		GraphQLPath:           constants.DefaultGraphQLPath,
+		GraphQLPlaygroundPath: constants.DefaultGraphQLPlaygroundPath,
+		JSONRPCPath:           constants.DefaultJSONRPCPath,
+		WebSocketPath:         constants.DefaultWebSocketPath,
+		ShutdownTimeout:       constants.DefaultShutdownTimeout,
 		EnableRateLimit:       false, // Disabled by default for development
-		RateLimitPerSecond:    1000,  // Generous default for development/testing
-		RateLimitBurst:        2000,  // Allow temporary spikes
+		RateLimitPerSecond:    constants.DefaultRateLimitPerSecond,
+		RateLimitBurst:        constants.DefaultRateLimitBurst,
 	}
 }
 
@@ -98,8 +100,8 @@ func (c *Config) Validate() error {
 	if c.Host == "" {
 		return errors.New("host cannot be empty")
 	}
-	if c.Port <= 0 || c.Port > 65535 {
-		return errors.New("port must be between 1 and 65535")
+	if c.Port < constants.MinPort || c.Port > constants.MaxPort {
+		return fmt.Errorf("port must be between %d and %d", constants.MinPort, constants.MaxPort)
 	}
 	if c.ReadTimeout <= 0 {
 		return errors.New("read timeout must be positive")

@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strconv"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -79,12 +80,12 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	// Get pagination parameters with defaults
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > 100 {
-				limit = 100 // Maximum limit to prevent resource exhaustion
+			if l > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit // Maximum limit to prevent resource exhaustion
 			} else {
 				limit = l
 			}
@@ -273,12 +274,12 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 	ctx := p.Context
 
 	// Get pagination parameters with defaults
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > 100 {
-				limit = 100 // Maximum limit to prevent resource exhaustion
+			if l > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit // Maximum limit to prevent resource exhaustion
 			} else {
 				limit = l
 			}
@@ -976,12 +977,12 @@ func (s *Schema) resolveProposals(p graphql.ResolveParams) (interface{}, error) 
 	}
 
 	// Get pagination parameters
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > 100 {
-				limit = 100
+			if l > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
 			} else {
 				limit = l
 			}
