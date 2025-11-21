@@ -584,6 +584,123 @@ async function fetchMintEventsPage(page) {
 
 ## 예정된 추가 기능
 
+### WebSocket 구독 설정
+
+#### 백엔드 엔드포인트
+
+**WebSocket URL**: `ws://localhost:8080/graphql/ws`
+
+백엔드는 GraphQL Subscriptions를 위한 WebSocket 서버를 `/graphql/ws` 경로에서 제공합니다.
+
+#### Apollo Client 설정 (React/Vue/Angular)
+
+**1. 필수 패키지 설치**
+
+```bash
+npm install graphql-ws
+# 또는
+yarn add graphql-ws
+```
+
+**2. Apollo Client 설정**
+
+```javascript
+import { ApolloClient, InMemoryCache, HttpLink, split } from '@apollo/client';
+import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { getMainDefinition } from '@apollo/client/utilities';
+import { createClient } from 'graphql-ws';
+
+// HTTP 링크 (Query & Mutation)
+const httpLink = new HttpLink({
+  uri: 'http://localhost:8080/api/v1/graphql'
+});
+
+// WebSocket 링크 (Subscription)
+const wsLink = new GraphQLWsLink(createClient({
+  url: 'ws://localhost:8080/graphql/ws',
+  retryAttempts: 5,
+  shouldRetry: () => true,
+  connectionParams: {
+    // 필요시 인증 토큰 추가
+    // authToken: localStorage.getItem('token')
+  }
+}));
+
+// HTTP와 WebSocket 자동 라우팅
+const splitLink = split(
+  ({ query }) => {
+    const definition = getMainDefinition(query);
+    return (
+      definition.kind === 'OperationDefinition' &&
+      definition.operation === 'subscription'
+    );
+  },
+  wsLink,      // Subscription → WebSocket
+  httpLink     // Query/Mutation → HTTP
+);
+
+// Apollo Client 생성
+const client = new ApolloClient({
+  link: splitLink,
+  cache: new InMemoryCache()
+});
+
+export default client;
+```
+
+**3. React에서 Subscription 사용 예시**
+
+```javascript
+import { useSubscription, gql } from '@apollo/client';
+
+const NEW_BLOCK_SUBSCRIPTION = gql`
+  subscription OnNewBlock {
+    newBlock {
+      number
+      hash
+      timestamp
+      gasUsed
+      transactionCount
+    }
+  }
+`;
+
+function BlockMonitor() {
+  const { data, loading, error } = useSubscription(NEW_BLOCK_SUBSCRIPTION);
+
+  if (loading) return <p>연결 중...</p>;
+  if (error) return <p>에러: {error.message}</p>;
+
+  return (
+    <div>
+      <h2>최신 블록: #{data?.newBlock?.number}</h2>
+      <p>해시: {data?.newBlock?.hash}</p>
+      <p>트랜잭션: {data?.newBlock?.transactionCount}개</p>
+    </div>
+  );
+}
+```
+
+#### 연결 문제 해결
+
+**WebSocket 연결 실패 시 체크리스트**:
+
+1. **엔드포인트 경로 확인**: `/ws` ❌ → `/graphql/ws` ✅
+2. **프로토콜 확인**: `http://` 대신 `ws://` 사용
+3. **포트 번호 확인**: 백엔드 포트와 일치 (기본값: 8080)
+4. **CORS 설정**: 개발 환경에서 origin 확인
+5. **방화벽/프록시**: WebSocket 트래픽 허용 여부 확인
+
+**브라우저 콘솔에서 직접 테스트**:
+
+```javascript
+const ws = new WebSocket('ws://localhost:8080/graphql/ws', 'graphql-transport-ws');
+ws.onopen = () => console.log('✅ WebSocket 연결 성공');
+ws.onerror = (err) => console.error('❌ WebSocket 에러:', err);
+```
+
+---
+
 ### WebSocket 구독 확장 (적용 완료)
 
 #### 1. `newPendingTransactions`
@@ -797,6 +914,75 @@ const response = await fetch('/api/v1/graphql', {
 const { data } = await response.json();
 ```
 
+#### JSON-RPC API
+
+**메서드**: `getWBFTBlockExtra`, `getWBFTBlockExtraByHash`
+
+```javascript
+// 블록 번호로 WBFT 메타데이터 조회
+const response = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getWBFTBlockExtra',
+    params: {
+      blockNumber: 1000  // 또는 "1000" (문자열도 지원)
+    },
+    id: 1
+  })
+});
+
+const { result } = await response.json();
+/*
+{
+  blockNumber: "1000",
+  blockHash: "0x...",
+  randaoReveal: "0x...",     // BLS 서명 (hex)
+  round: 5,
+  prevRound: 4,
+  timestamp: "1700000000",
+  gasTip: "1000000000",       // wei 단위
+  preparedSeal: {
+    sealers: "0x...",         // 비트맵 (hex)
+    signature: "0x..."        // BLS 집계 서명
+  },
+  committedSeal: {
+    sealers: "0x...",
+    signature: "0x..."
+  },
+  prevPreparedSeal: { ... },  // 재시도 시에만 존재
+  prevCommittedSeal: { ... },
+  epochInfo: {                // 에폭 마지막 블록에만 존재
+    epochNumber: "10",
+    blockNumber: "1000",
+    candidates: [
+      {
+        address: "0x...",
+        diligence: "1000000"  // 10^-6 단위
+      }
+    ],
+    validators: [0, 1, 2],
+    blsPublicKeys: ["0x...", "0x..."]
+  }
+}
+*/
+
+// 블록 해시로 조회
+const response2 = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getWBFTBlockExtraByHash',
+    params: {
+      blockHash: "0x1234..."
+    },
+    id: 1
+  })
+});
+```
+
 ### 2. 에폭(Epoch) 정보 조회
 
 #### GraphQL API
@@ -851,6 +1037,54 @@ const response = await fetch('/api/v1/graphql', {
         }
       }
     `
+  })
+});
+```
+
+#### JSON-RPC API
+
+**메서드**: `getEpochInfo`, `getLatestEpochInfo`
+
+```javascript
+// 특정 에폭 정보 조회
+const response = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getEpochInfo',
+    params: {
+      epochNumber: 10  // 또는 "10" (문자열도 지원)
+    },
+    id: 1
+  })
+});
+
+const { result } = await response.json();
+/*
+{
+  epochNumber: "10",
+  blockNumber: "1000",
+  candidates: [
+    {
+      address: "0x...",
+      diligence: "1000000"
+    }
+  ],
+  validators: [0, 1, 2],
+  blsPublicKeys: ["0x...", "0x..."]
+}
+*/
+
+// 최신 에폭 정보 조회 (파라미터 불필요)
+const response2 = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getLatestEpochInfo',
+    params: {},
+    id: 1
   })
 });
 ```
@@ -960,6 +1194,78 @@ const { data } = await response.json();
 console.log(`서명률: ${data.validatorSigningStats.signingRate}%`);
 ```
 
+#### JSON-RPC API
+
+**메서드**: `getValidatorSigningStats`, `getAllValidatorsSigningStats`
+
+```javascript
+// 특정 검증자의 서명 통계 조회
+const response = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getValidatorSigningStats',
+    params: {
+      validatorAddress: "0x1234...",
+      fromBlock: 0,      // 또는 "0"
+      toBlock: 1000      // 또는 "1000"
+    },
+    id: 1
+  })
+});
+
+const { result } = await response.json();
+/*
+{
+  validatorAddress: "0x1234...",
+  validatorIndex: 0,
+  prepareSignCount: "950",
+  prepareMissCount: "50",
+  commitSignCount: "945",
+  commitMissCount: "55",
+  fromBlock: "0",
+  toBlock: "1000",
+  signingRate: 94.5
+}
+*/
+
+// 모든 검증자의 서명 통계 조회 (페이지네이션)
+const response2 = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getAllValidatorsSigningStats',
+    params: {
+      fromBlock: 0,
+      toBlock: 1000,
+      limit: 100,        // 선택적 (기본값: 100, 최대: 100)
+      offset: 0          // 선택적 (기본값: 0)
+    },
+    id: 1
+  })
+});
+
+const { result: allStats } = await response2.json();
+/*
+[
+  {
+    validatorAddress: "0x1111...",
+    validatorIndex: 0,
+    prepareSignCount: "950",
+    prepareMissCount: "50",
+    commitSignCount: "945",
+    commitMissCount: "55",
+    fromBlock: "0",
+    toBlock: "1000",
+    signingRate: 94.5
+  },
+  ...
+]
+*/
+```
+
 ### 4. 검증자 서명 활동 내역 조회
 
 #### GraphQL API
@@ -1036,6 +1342,57 @@ const response = await fetch('/api/v1/graphql', {
 });
 ```
 
+#### JSON-RPC API
+
+**메서드**: `getValidatorSigningActivity`
+
+```javascript
+// 특정 검증자의 블록별 서명 활동 조회
+const response = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getValidatorSigningActivity',
+    params: {
+      validatorAddress: "0x1234...",
+      fromBlock: 900,
+      toBlock: 1000,
+      limit: 100,        // 선택적 (기본값: 100, 최대: 100)
+      offset: 0          // 선택적 (기본값: 0)
+    },
+    id: 1
+  })
+});
+
+const { result } = await response.json();
+/*
+[
+  {
+    blockNumber: "950",
+    blockHash: "0x...",
+    validatorAddress: "0x1234...",
+    validatorIndex: 0,
+    signedPrepare: true,
+    signedCommit: true,
+    round: 1,
+    timestamp: "1700000000"
+  },
+  {
+    blockNumber: "951",
+    blockHash: "0x...",
+    validatorAddress: "0x1234...",
+    validatorIndex: 0,
+    signedPrepare: true,
+    signedCommit: false,  // Commit 단계 누락
+    round: 1,
+    timestamp: "1700000003"
+  },
+  ...
+]
+*/
+```
+
 ### 5. 블록 서명자 조회
 
 #### GraphQL API
@@ -1077,6 +1434,46 @@ const response = await fetch('/api/v1/graphql', {
 const { data } = await response.json();
 console.log(`Prepare 서명자 수: ${data.blockSigners.preparers.length}`);
 console.log(`Commit 서명자 수: ${data.blockSigners.committers.length}`);
+```
+
+#### JSON-RPC API
+
+**메서드**: `getBlockSigners`
+
+```javascript
+// 특정 블록에 서명한 검증자 목록 조회
+const response = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getBlockSigners',
+    params: {
+      blockNumber: 1000  // 또는 "1000"
+    },
+    id: 1
+  })
+});
+
+const { result } = await response.json();
+/*
+{
+  preparers: [
+    "0x1111111111111111111111111111111111111111",
+    "0x2222222222222222222222222222222222222222",
+    "0x3333333333333333333333333333333333333333"
+  ],
+  committers: [
+    "0x1111111111111111111111111111111111111111",
+    "0x2222222222222222222222222222222222222222",
+    "0x4444444444444444444444444444444444444444"
+  ]
+}
+*/
+
+// 서명자 수 확인
+console.log(`Prepare 서명자 수: ${result.preparers.length}`);
+console.log(`Commit 서명자 수: ${result.committers.length}`);
 ```
 
 ### Frontend 구현 권장사항
@@ -1333,6 +1730,820 @@ async function fetchValidatorsPage(page, fromBlock, toBlock) {
 
 ---
 
+## Address Indexing API
+
+컨트랙트 생성, 내부 트랜잭션, ERC20/ERC721 토큰 전송 등 주소 관련 활동을 추적하는 API가 추가되었습니다.
+
+### 1. Contract Creation - 컨트랙트 생성 추적
+
+#### GraphQL API
+
+```graphql
+# 특정 컨트랙트의 생성 정보 조회
+query GetContractCreation($contractAddress: Address!) {
+  contractCreation(contractAddress: $contractAddress) {
+    contractAddress
+    creator              # 컨트랙트 생성자 주소
+    transactionHash
+    blockNumber
+    timestamp
+    bytecodeSize        # 바이트코드 크기
+  }
+}
+
+# 특정 주소가 생성한 컨트랙트 목록
+query GetContractsByCreator(
+  $creator: Address!
+  $pagination: PaginationInput
+) {
+  contractsByCreator(
+    creator: $creator
+    pagination: $pagination
+  ) {
+    nodes              # 컨트랙트 주소 목록
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+```
+
+#### JSON-RPC API
+
+```javascript
+// 컨트랙트 생성 정보 조회
+const response = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getContractCreation',
+    params: {
+      address: "0x1234567890123456789012345678901234567890"
+    },
+    id: 1
+  })
+});
+// => {
+//   contractAddress: "0x1234...",
+//   creator: "0xabcd...",
+//   transactionHash: "0x...",
+//   blockNumber: 1000,
+//   timestamp: 1234567890,
+//   bytecodeSize: 2048
+// }
+
+// 생성자가 만든 컨트랙트 목록
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getContractsByCreator',
+    params: {
+      creator: "0xabcd...",
+      limit: 10,
+      offset: 0
+    },
+    id: 2
+  })
+});
+// => { contracts: ["0x1111...", "0x2222..."], totalCount: 25 }
+```
+
+### 2. Internal Transactions - 내부 트랜잭션 추적
+
+내부 트랜잭션은 컨트랙트 간 호출(CALL, DELEGATECALL 등)을 추적합니다.
+
+#### GraphQL API
+
+```graphql
+# 특정 트랜잭션의 내부 트랜잭션 목록
+query GetInternalTransactions($txHash: Hash!) {
+  internalTransactions(txHash: $txHash) {
+    transactionHash
+    blockNumber
+    index              # 내부 트랜잭션 인덱스
+    type               # CALL, DELEGATECALL, STATICCALL, CREATE 등
+    from
+    to
+    value
+    gas
+    gasUsed
+    input
+    output
+    error              # 실패 시 에러 메시지
+    depth              # 호출 깊이
+  }
+}
+
+# 특정 주소와 관련된 내부 트랜잭션
+query GetInternalTransactionsByAddress(
+  $address: Address!
+  $isFrom: Boolean!   # true: from 주소, false: to 주소
+  $pagination: PaginationInput
+) {
+  internalTransactionsByAddress(
+    address: $address
+    isFrom: $isFrom
+    pagination: $pagination
+  ) {
+    nodes {
+      transactionHash
+      blockNumber
+      type
+      from
+      to
+      value
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+```
+
+#### JSON-RPC API
+
+```javascript
+// 트랜잭션의 내부 트랜잭션 조회
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getInternalTransactions',
+    params: {
+      txHash: "0xabcdef..."
+    },
+    id: 1
+  })
+});
+// => { internalTxs: [{...}, {...}] }
+
+// 주소별 내부 트랜잭션 조회
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getInternalTransactionsByAddress',
+    params: {
+      address: "0x1234...",
+      isFrom: true,    // from 주소로 필터링
+      limit: 10,
+      offset: 0
+    },
+    id: 2
+  })
+});
+// => { internalTxs: [...], totalCount: 150 }
+```
+
+### 3. ERC20 Token Transfers - ERC20 토큰 전송 추적
+
+#### GraphQL API
+
+```graphql
+# 특정 ERC20 전송 조회
+query GetERC20Transfer($txHash: Hash!, $logIndex: Int!) {
+  erc20Transfer(txHash: $txHash, logIndex: $logIndex) {
+    tokenAddress       # ERC20 토큰 컨트랙트 주소
+    from
+    to
+    value              # 전송량
+    transactionHash
+    blockNumber
+    logIndex
+    timestamp
+  }
+}
+
+# 특정 토큰의 전송 내역
+query GetERC20TransfersByToken(
+  $tokenAddress: Address!
+  $pagination: PaginationInput
+) {
+  erc20TransfersByToken(
+    tokenAddress: $tokenAddress
+    pagination: $pagination
+  ) {
+    nodes {
+      from
+      to
+      value
+      transactionHash
+      timestamp
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+
+# 특정 주소의 ERC20 전송 내역
+query GetERC20TransfersByAddress(
+  $address: Address!
+  $isFrom: Boolean!   # true: from, false: to
+  $pagination: PaginationInput
+) {
+  erc20TransfersByAddress(
+    address: $address
+    isFrom: $isFrom
+    pagination: $pagination
+  ) {
+    nodes {
+      tokenAddress
+      from
+      to
+      value
+      transactionHash
+      timestamp
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+```
+
+#### JSON-RPC API
+
+```javascript
+// 특정 ERC20 전송 조회
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getERC20Transfer',
+    params: {
+      txHash: "0xabcd...",
+      logIndex: 2
+    },
+    id: 1
+  })
+});
+// => {
+//   tokenAddress: "0x...",
+//   from: "0x...",
+//   to: "0x...",
+//   value: "1000000000000000000",  // 1 token (18 decimals)
+//   ...
+// }
+
+// 토큰별 전송 내역
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getERC20TransfersByToken',
+    params: {
+      tokenAddress: "0x...",
+      limit: 20,
+      offset: 0
+    },
+    id: 2
+  })
+});
+
+// 주소별 ERC20 수신 내역
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getERC20TransfersByAddress',
+    params: {
+      address: "0x...",
+      isFrom: false,   // to 주소로 필터링 (수신)
+      limit: 20,
+      offset: 0
+    },
+    id: 3
+  })
+});
+```
+
+### 4. ERC721 Token Transfers - NFT 전송 추적
+
+#### GraphQL API
+
+```graphql
+# 특정 ERC721 전송 조회
+query GetERC721Transfer($txHash: Hash!, $logIndex: Int!) {
+  erc721Transfer(txHash: $txHash, logIndex: $logIndex) {
+    tokenAddress       # NFT 컨트랙트 주소
+    from
+    to
+    tokenId            # NFT 토큰 ID
+    transactionHash
+    blockNumber
+    logIndex
+    timestamp
+  }
+}
+
+# 특정 NFT 컬렉션의 전송 내역
+query GetERC721TransfersByToken(
+  $tokenAddress: Address!
+  $pagination: PaginationInput
+) {
+  erc721TransfersByToken(
+    tokenAddress: $tokenAddress
+    pagination: $pagination
+  ) {
+    nodes {
+      from
+      to
+      tokenId
+      transactionHash
+      timestamp
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+
+# 특정 주소의 NFT 전송 내역
+query GetERC721TransfersByAddress(
+  $address: Address!
+  $isFrom: Boolean!   # true: from, false: to
+  $pagination: PaginationInput
+) {
+  erc721TransfersByAddress(
+    address: $address
+    isFrom: $isFrom
+    pagination: $pagination
+  ) {
+    nodes {
+      tokenAddress
+      from
+      to
+      tokenId
+      transactionHash
+      timestamp
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+
+# 특정 NFT의 현재 소유자 조회
+query GetERC721Owner(
+  $tokenAddress: Address!
+  $tokenId: BigInt!
+) {
+  erc721Owner(
+    tokenAddress: $tokenAddress
+    tokenId: $tokenId
+  )  # 소유자 주소 반환
+}
+```
+
+#### JSON-RPC API
+
+```javascript
+// 특정 ERC721 전송 조회
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getERC721Transfer',
+    params: {
+      txHash: "0xabcd...",
+      logIndex: 1
+    },
+    id: 1
+  })
+});
+// => {
+//   tokenAddress: "0x...",
+//   from: "0x...",
+//   to: "0x...",
+//   tokenId: "42",
+//   ...
+// }
+
+// NFT 컬렉션 전송 내역
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getERC721TransfersByToken',
+    params: {
+      tokenAddress: "0x...",
+      limit: 20,
+      offset: 0
+    },
+    id: 2
+  })
+});
+
+// 주소별 NFT 수신 내역
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getERC721TransfersByAddress',
+    params: {
+      address: "0x...",
+      isFrom: false,   // to 주소로 필터링 (수신)
+      limit: 20,
+      offset: 0
+    },
+    id: 3
+  })
+});
+
+// NFT 소유자 조회
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getERC721Owner',
+    params: {
+      tokenAddress: "0x...",
+      tokenId: "42"
+    },
+    id: 4
+  })
+});
+// => { owner: "0x1234..." }
+```
+
+### Frontend 구현 권장사항
+
+#### 1. 주소 프로필 페이지
+
+```javascript
+// 특정 주소의 모든 활동 조회
+async function fetchAddressProfile(address) {
+  // 생성한 컨트랙트 조회
+  const contracts = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getContractsByCreator',
+      params: { creator: address, limit: 10, offset: 0 },
+      id: 1
+    })
+  });
+
+  // 내부 트랜잭션 (발신)
+  const internalTxsFrom = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getInternalTransactionsByAddress',
+      params: { address, isFrom: true, limit: 10, offset: 0 },
+      id: 2
+    })
+  });
+
+  // ERC20 토큰 전송 내역
+  const erc20Transfers = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getERC20TransfersByAddress',
+      params: { address, isFrom: false, limit: 10, offset: 0 },
+      id: 3
+    })
+  });
+
+  // NFT 보유 내역
+  const nftTransfers = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getERC721TransfersByAddress',
+      params: { address, isFrom: false, limit: 10, offset: 0 },
+      id: 4
+    })
+  });
+
+  return {
+    address,
+    contracts: (await contracts.json()).result,
+    internalTxs: (await internalTxsFrom.json()).result,
+    erc20: (await erc20Transfers.json()).result,
+    nfts: (await nftTransfers.json()).result
+  };
+}
+```
+
+#### 2. 토큰 전송 히스토리
+
+```javascript
+// ERC20/ERC721 전송 내역 표시
+function formatTokenTransfer(transfer, tokenInfo) {
+  const isERC20 = 'value' in transfer;
+
+  if (isERC20) {
+    // ERC20: value를 토큰 단위로 변환
+    const decimals = tokenInfo.decimals || 18;
+    const amount = BigInt(transfer.value) / BigInt(10 ** decimals);
+
+    return {
+      type: 'ERC20',
+      token: tokenInfo.symbol,
+      from: transfer.from,
+      to: transfer.to,
+      amount: amount.toString(),
+      txHash: transfer.transactionHash
+    };
+  } else {
+    // ERC721: tokenId 표시
+    return {
+      type: 'NFT',
+      collection: tokenInfo.name,
+      from: transfer.from,
+      to: transfer.to,
+      tokenId: transfer.tokenId,
+      txHash: transfer.transactionHash
+    };
+  }
+}
+```
+
+#### 3. 컨트랙트 생성 타임라인
+
+```javascript
+// 생성자가 만든 컨트랙트 타임라인
+async function fetchContractCreationTimeline(creator) {
+  const response = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getContractsByCreator',
+      params: {
+        creator: creator,
+        limit: 100,
+        offset: 0
+      },
+      id: 1
+    })
+  });
+
+  const { result } = await response.json();
+
+  // 각 컨트랙트의 상세 정보 조회
+  const details = await Promise.all(
+    result.contracts.map(async (contractAddr) => {
+      const detailResponse = await fetch('/api/v1/jsonrpc', {
+        method: 'POST',
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'getContractCreation',
+          params: { address: contractAddr },
+          id: 2
+        })
+      });
+
+      const { result } = await detailResponse.json();
+      return result;
+    })
+  );
+
+  // 시간순 정렬
+  return details.sort((a, b) => a.timestamp - b.timestamp);
+}
+```
+
+#### 4. 내부 트랜잭션 트레이서
+
+```javascript
+// 트랜잭션의 내부 호출 트리 구성
+async function buildInternalTxTree(txHash) {
+  const response = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getInternalTransactions',
+      params: { txHash },
+      id: 1
+    })
+  });
+
+  const { result } = await response.json();
+  const internals = result.internalTxs;
+
+  // depth 기반으로 트리 구성
+  const tree = [];
+  const stack = [];
+
+  internals.forEach(tx => {
+    const node = {
+      ...tx,
+      children: []
+    };
+
+    // depth 레벨에 맞게 부모 찾기
+    while (stack.length > tx.depth) {
+      stack.pop();
+    }
+
+    if (stack.length === 0) {
+      tree.push(node);
+    } else {
+      stack[stack.length - 1].children.push(node);
+    }
+
+    stack.push(node);
+  });
+
+  return tree;
+}
+
+// 트리를 재귀적으로 렌더링
+function renderInternalTxTree(nodes, indent = 0) {
+  return nodes.map(node => (
+    <div style={{ marginLeft: indent * 20 }}>
+      <span>{node.type}</span>
+      <span>{node.from} → {node.to}</span>
+      <span>{node.value} wei</span>
+      {node.error && <span className="error">{node.error}</span>}
+      {node.children.length > 0 && renderInternalTxTree(node.children, indent + 1)}
+    </div>
+  ));
+}
+```
+
+#### 5. NFT 소유권 추적
+
+```javascript
+// NFT 소유권 변경 히스토리 및 현재 소유자
+async function fetchNFTOwnership(tokenAddress, tokenId) {
+  // 현재 소유자
+  const ownerResponse = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getERC721Owner',
+      params: {
+        tokenAddress,
+        tokenId
+      },
+      id: 1
+    })
+  });
+
+  const { result: ownerResult } = await ownerResponse.json();
+  const currentOwner = ownerResult.owner;
+
+  // 전송 히스토리 (GraphQL)
+  const historyResponse = await fetch('/api/v1/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `
+        query GetNFTTransfers($token: Address!, $limit: Int!) {
+          erc721TransfersByToken(
+            tokenAddress: $token
+            pagination: { limit: $limit, offset: 0 }
+          ) {
+            nodes {
+              from
+              to
+              tokenId
+              transactionHash
+              timestamp
+            }
+          }
+        }
+      `,
+      variables: {
+        token: tokenAddress,
+        limit: 100
+      }
+    })
+  });
+
+  const { data } = await historyResponse.json();
+  const transfers = data.erc721TransfersByToken.nodes;
+
+  // 특정 tokenId만 필터링
+  const tokenTransfers = transfers.filter(t => t.tokenId === tokenId);
+
+  return {
+    currentOwner,
+    transferHistory: tokenTransfers,
+    transferCount: tokenTransfers.length
+  };
+}
+```
+
+### 페이지네이션 처리
+
+```javascript
+// Address Indexing API 페이지네이션 유틸리티
+const ITEMS_PER_PAGE = 20;
+const MAX_ITEMS_PER_REQUEST = 100;  // API 최대 limit
+
+async function fetchPaginatedData(method, params, page) {
+  const response = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: method,
+      params: {
+        ...params,
+        limit: Math.min(ITEMS_PER_PAGE, MAX_ITEMS_PER_REQUEST),
+        offset: page * ITEMS_PER_PAGE
+      },
+      id: Date.now()
+    })
+  });
+
+  const { result } = await response.json();
+
+  return {
+    items: result[Object.keys(result)[0]],  // contracts, internalTxs, 등
+    totalCount: result.totalCount,
+    currentPage: page,
+    totalPages: Math.ceil(result.totalCount / ITEMS_PER_PAGE),
+    hasNextPage: result.totalCount > (page + 1) * ITEMS_PER_PAGE,
+    hasPreviousPage: page > 0
+  };
+}
+
+// 사용 예시
+async function loadERC20TransfersPage(tokenAddress, page) {
+  return fetchPaginatedData(
+    'getERC20TransfersByToken',
+    { tokenAddress },
+    page
+  );
+}
+```
+
+### 필터링 및 정렬
+
+```javascript
+// 토큰 전송 필터링
+function filterTokenTransfers(transfers, filters) {
+  return transfers.filter(transfer => {
+    // 금액 필터 (ERC20)
+    if (filters.minValue && transfer.value) {
+      if (BigInt(transfer.value) < BigInt(filters.minValue)) {
+        return false;
+      }
+    }
+
+    // 날짜 범위 필터
+    if (filters.fromDate && transfer.timestamp < filters.fromDate) {
+      return false;
+    }
+    if (filters.toDate && transfer.timestamp > filters.toDate) {
+      return false;
+    }
+
+    // 주소 필터
+    if (filters.fromAddress && transfer.from !== filters.fromAddress) {
+      return false;
+    }
+    if (filters.toAddress && transfer.to !== filters.toAddress) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+// 정렬
+function sortTransfers(transfers, sortBy = 'timestamp', order = 'desc') {
+  return [...transfers].sort((a, b) => {
+    let comparison = 0;
+
+    switch (sortBy) {
+      case 'timestamp':
+        comparison = a.timestamp - b.timestamp;
+        break;
+      case 'value':
+        comparison = Number(BigInt(a.value || 0) - BigInt(b.value || 0));
+        break;
+      case 'blockNumber':
+        comparison = a.blockNumber - b.blockNumber;
+        break;
+    }
+
+    return order === 'desc' ? -comparison : comparison;
+  });
+}
+```
+
+---
+
 ## 구현 현황
 
 | 기능 | 상태 | GraphQL | JSON-RPC | 비고 |
@@ -1366,11 +2577,25 @@ async function fetchValidatorsPage(page, fromBlock, toBlock) {
 | allValidatorsSigningStats | ✅ 완료 | ✅ | - | 전체 검증자 서명 통계 (페이지네이션) |
 | validatorSigningActivity | ✅ 완료 | ✅ | - | 검증자 서명 활동 내역 (페이지네이션) |
 | blockSigners | ✅ 완료 | ✅ | - | 블록 서명자 목록 (Prepare/Commit) |
+| **Address Indexing** | | | | |
+| contractCreation | ✅ 완료 | ✅ | ✅ | 컨트랙트 생성 정보 조회 |
+| contractsByCreator | ✅ 완료 | ✅ | ✅ | 생성자별 컨트랙트 목록 (페이지네이션) |
+| internalTransactions | ✅ 완료 | ✅ | ✅ | 트랜잭션의 내부 트랜잭션 목록 |
+| internalTransactionsByAddress | ✅ 완료 | ✅ | ✅ | 주소별 내부 트랜잭션 (페이지네이션) |
+| erc20Transfer | ✅ 완료 | ✅ | ✅ | 특정 ERC20 전송 조회 |
+| erc20TransfersByToken | ✅ 완료 | ✅ | ✅ | 토큰별 ERC20 전송 내역 (페이지네이션) |
+| erc20TransfersByAddress | ✅ 완료 | ✅ | ✅ | 주소별 ERC20 전송 내역 (페이지네이션) |
+| erc721Transfer | ✅ 완료 | ✅ | ✅ | 특정 ERC721 전송 조회 |
+| erc721TransfersByToken | ✅ 완료 | ✅ | ✅ | NFT 컬렉션별 전송 내역 (페이지네이션) |
+| erc721TransfersByAddress | ✅ 완료 | ✅ | ✅ | 주소별 NFT 전송 내역 (페이지네이션) |
+| erc721Owner | ✅ 완료 | ✅ | ✅ | NFT 현재 소유자 조회 |
 
 **Note**:
 - 모든 Fee Delegation 필드는 go-stablenet의 `Transaction.FeePayer()` 및 `Transaction.RawFeePayerSignatureValues()` 메서드를 통해 실제 값을 추출합니다.
 - System Contract 쿼리는 시스템 컨트랙트 주소 (0x1000-0x1004)의 이벤트 및 상태를 조회합니다.
-- **WBFT API는 현재 GraphQL만 지원합니다.** JSON-RPC 지원은 향후 추가될 예정입니다.
+- **WBFT API는 GraphQL과 JSON-RPC를 모두 지원합니다.** (2025-11-21 JSON-RPC 지원 추가)
+- **Address Indexing API**는 컨트랙트 생성, 내부 트랜잭션, ERC20/ERC721 토큰 전송을 추적합니다. 모든 페이지네이션 API는 최대 100개 limit를 지원합니다.
+- **WebSocket 엔드포인트**: GraphQL Subscriptions는 `ws://localhost:8080/graphql/ws` 경로에서 제공됩니다.
 
 ---
 
@@ -1384,6 +2609,8 @@ async function fetchValidatorsPage(page, fromBlock, toBlock) {
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2025-11-21 | 0.7.0 | WBFT JSON-RPC API 추가 - GraphQL과 동일한 8개 메서드 지원 (getWBFTBlockExtra, getEpochInfo 등) |
+| 2025-11-21 | 0.6.0 | Address Indexing API 추가 (GraphQL, JSON-RPC) - 컨트랙트 생성, 내부 트랜잭션, ERC20/ERC721 토큰 전송 추적 (11개 쿼리) |
 | 2025-11-21 | 0.5.0 | WBFT 합의 메타데이터 API 추가 (GraphQL) - 블록 메타데이터, 에폭 정보, 검증자 서명 통계 |
 | 2025-11-21 | 0.4.0 | System Contracts & Governance API 추가 (GraphQL, JSON-RPC) |
 | 2025-11-20 | 0.3.0 | go-stablenet 연동으로 Fee Delegation 실제 값 추출 구현 |

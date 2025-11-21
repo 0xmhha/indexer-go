@@ -233,6 +233,8 @@
 - ✅ Magic Number 제거 - 모든 하드코딩된 숫자를 `internal/constants` 패키지로 정리
 - ✅ GraphQL Subscription 타입 추가 - schema.go에 Subscription 타입 정의 추가 (newBlock, newTransaction, newPendingTransactions, logs)
 - ✅ WBFT JSON-RPC API 구현 - GraphQL로만 제공되던 WBFT 기능을 JSON-RPC로 추가 (8개 메서드)
+- ✅ WebSocket 엔드포인트 확인 - `/graphql/ws` 경로에서 GraphQL Subscriptions 정상 작동 확인
+- ✅ Frontend 통합 가이드 업데이트 - ToFrontend.md에 WBFT JSON-RPC API 및 WebSocket 설정 문서화
 
 ---
 
