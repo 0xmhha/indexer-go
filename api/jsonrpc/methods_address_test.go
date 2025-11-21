@@ -15,22 +15,33 @@ import (
 // mockAddressIndexStorage extends mockStorage with address indexing support
 type mockAddressIndexStorage struct {
 	*mockStorage
-	contractCreation     *storage.ContractCreation
-	contractsByCreator   []common.Address
-	internalTxs          []*storage.InternalTransaction
-	internalTxsByAddress []*storage.InternalTransaction
-	erc20Transfer        *storage.ERC20Transfer
-	erc20TransfersByToken   []*storage.ERC20Transfer
-	erc20TransfersByAddress []*storage.ERC20Transfer
-	erc721Transfer          *storage.ERC721Transfer
-	erc721TransfersByToken  []*storage.ERC721Transfer
+	contractCreation         *storage.ContractCreation
+	contractsByCreator       []common.Address
+	internalTxs              []*storage.InternalTransaction
+	internalTxsByAddress     []*storage.InternalTransaction
+	erc20Transfer            *storage.ERC20Transfer
+	erc20TransfersByToken    []*storage.ERC20Transfer
+	erc20TransfersByAddress  []*storage.ERC20Transfer
+	erc721Transfer           *storage.ERC721Transfer
+	erc721TransfersByToken   []*storage.ERC721Transfer
 	erc721TransfersByAddress []*storage.ERC721Transfer
-	erc721Owner             common.Address
+	erc721Owner              common.Address
 }
 
 func (m *mockAddressIndexStorage) GetContractCreation(ctx context.Context, contractAddress common.Address) (*storage.ContractCreation, error) {
 	if m.contractCreation != nil {
 		return m.contractCreation, nil
+	}
+	// For GetContractsByCreator tests, return a valid ContractCreation for any address
+	// Only if contractsByCreator is set (indicating we're testing the list functionality)
+	if m.contractsByCreator != nil {
+		return &storage.ContractCreation{
+			ContractAddress: contractAddress,
+			Creator:         common.HexToAddress("0xcreator123"),
+			TransactionHash: common.HexToHash("0xtx123"),
+			BlockNumber:     100,
+			Timestamp:       1234567890,
+		}, nil
 	}
 	return nil, storage.ErrNotFound
 }
@@ -440,35 +451,40 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 		if !ok {
 			t.Fatal("expected tokenId to be string")
 		}
-		if tokenId != "42" {
-			t.Errorf("expected tokenId 42, got %s", tokenId)
+		// tokenId should be hex encoded (42 decimal = 0x2a hex)
+		if tokenId != "0x2a" {
+			t.Errorf("expected tokenId 0x2a, got %s", tokenId)
 		}
 	})
 
 	t.Run("GetERC721Owner_Success", func(t *testing.T) {
 		store := &mockAddressIndexStorage{
 			mockStorage: &mockStorage{},
-			erc721Owner: common.HexToAddress("0xowner123"),
+			erc721Owner: common.HexToAddress("0x1234567890123456789012345678901234567890"),
 		}
 
 		server := NewServer(store, logger)
 		params := json.RawMessage(`{"token": "0xnft", "tokenId": "42"}`)
 		result, err := server.HandleMethodDirect(ctx, "getERC721Owner", params)
 		if err != nil {
-			t.Errorf("expected no error, got %v", err)
+			t.Fatalf("expected no error, got %v (code: %d, message: %s, data: %v)", err, err.Code, err.Message, err.Data)
+		}
+
+		if result == nil {
+			t.Fatal("expected non-nil result, but got nil - this means ERC721Owner was not found or method returned nil")
 		}
 
 		resultMap, ok := result.(map[string]interface{})
 		if !ok {
-			t.Fatal("expected result to be map")
+			t.Fatalf("expected result to be map, got %T: %v", result, result)
 		}
 
 		owner, ok := resultMap["owner"].(string)
 		if !ok {
 			t.Fatal("expected owner to be string")
 		}
-		if owner != "0x0000000000000000000000000000000000owner123" {
-			t.Errorf("expected owner address, got %s", owner)
+		if owner != "0x1234567890123456789012345678901234567890" {
+			t.Errorf("expected owner 0x1234567890123456789012345678901234567890, got %s", owner)
 		}
 	})
 
@@ -505,12 +521,12 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 			t.Fatal("expected result to be map")
 		}
 
-		transactions, ok := resultMap["transactions"].([]interface{})
+		internals, ok := resultMap["internals"].([]interface{})
 		if !ok {
-			t.Fatal("expected transactions to be array")
+			t.Fatal("expected internals to be array")
 		}
-		if len(transactions) != 1 {
-			t.Errorf("expected 1 internal transaction, got %d", len(transactions))
+		if len(internals) != 1 {
+			t.Errorf("expected 1 internal transaction, got %d", len(internals))
 		}
 	})
 
@@ -547,12 +563,12 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 			t.Fatal("expected result to be map")
 		}
 
-		transactions, ok := resultMap["transactions"].([]interface{})
+		internals, ok := resultMap["internals"].([]interface{})
 		if !ok {
-			t.Fatal("expected transactions to be array")
+			t.Fatal("expected internals to be array")
 		}
-		if len(transactions) != 1 {
-			t.Errorf("expected 1 internal transaction, got %d", len(transactions))
+		if len(internals) != 1 {
+			t.Errorf("expected 1 internal transaction, got %d", len(internals))
 		}
 	})
 

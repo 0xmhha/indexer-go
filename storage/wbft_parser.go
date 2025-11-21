@@ -182,8 +182,8 @@ func ParseWBFTExtra(header *types.Header) (*WBFTBlockExtra, error) {
 	// Convert EpochInfo
 	if wbftExtraRLP.EpochInfo != nil {
 		epochInfo := &EpochInfo{
-			BlockNumber: header.Number.Uint64(),
-			Validators:  wbftExtraRLP.EpochInfo.Validators,
+			BlockNumber:   header.Number.Uint64(),
+			Validators:    wbftExtraRLP.EpochInfo.Validators,
 			BLSPublicKeys: wbftExtraRLP.EpochInfo.BLSPublicKeys,
 		}
 

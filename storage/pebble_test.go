@@ -4000,4 +4000,3 @@ func TestPebbleStorage_GetLatestHeight_NotSet(t *testing.T) {
 	// Height should be 0 for fresh storage
 	_ = height // Just accessing the value is enough
 }
-

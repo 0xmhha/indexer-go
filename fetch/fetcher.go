@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/events"
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/storage"
 )
 

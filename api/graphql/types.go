@@ -87,6 +87,16 @@ var (
 	blockSignersType                       *graphql.Object
 	validatorSigningStatsConnectionType    *graphql.Object
 	validatorSigningActivityConnectionType *graphql.Object
+
+	// Address indexing types
+	contractCreationType              *graphql.Object
+	internalTransactionType           *graphql.Object
+	erc20TransferType                 *graphql.Object
+	erc721TransferType                *graphql.Object
+	contractCreationConnectionType    *graphql.Object
+	internalTransactionConnectionType *graphql.Object
+	erc20TransferConnectionType       *graphql.Object
+	erc721TransferConnectionType      *graphql.Object
 )
 
 func init() {
@@ -1235,6 +1245,202 @@ func initTypes() {
 		Fields: graphql.Fields{
 			"nodes": &graphql.Field{
 				Type: graphql.NewList(graphql.NewNonNull(validatorSigningActivityType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// ========== Address Indexing Types ==========
+
+	// ContractCreation type
+	contractCreationType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ContractCreation",
+		Fields: graphql.Fields{
+			"contractAddress": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"creator": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"bytecodeSize": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+		},
+	})
+
+	// InternalTransaction type
+	internalTransactionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "InternalTransaction",
+		Fields: graphql.Fields{
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"index": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"type": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"from": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"to": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"value": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"gas": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"gasUsed": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"input": &graphql.Field{
+				Type: graphql.NewNonNull(bytesType),
+			},
+			"output": &graphql.Field{
+				Type: graphql.NewNonNull(bytesType),
+			},
+			"error": &graphql.Field{
+				Type: graphql.String,
+			},
+			"depth": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+		},
+	})
+
+	// ERC20Transfer type
+	erc20TransferType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ERC20Transfer",
+		Fields: graphql.Fields{
+			"contractAddress": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"from": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"to": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"value": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"logIndex": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// ERC721Transfer type
+	erc721TransferType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ERC721Transfer",
+		Fields: graphql.Fields{
+			"contractAddress": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"from": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"to": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"tokenId": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"logIndex": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// Connection types
+	contractCreationConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ContractCreationConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(contractCreationType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	internalTransactionConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "InternalTransactionConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(internalTransactionType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	erc20TransferConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ERC20TransferConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(erc20TransferType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	erc721TransferConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ERC721TransferConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(erc721TransferType)),
 			},
 			"totalCount": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.Int),

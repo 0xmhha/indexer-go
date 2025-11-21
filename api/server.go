@@ -21,13 +21,13 @@ import (
 
 // Server represents the API server
 type Server struct {
-	config     *Config
-	logger     *zap.Logger
-	storage    storage.Storage
-	eventBus   *events.EventBus
-	router     *chi.Mux
-	server     *http.Server
-	wsServer   *websocket.Server
+	config       *Config
+	logger       *zap.Logger
+	storage      storage.Storage
+	eventBus     *events.EventBus
+	router       *chi.Mux
+	server       *http.Server
+	wsServer     *websocket.Server
 	gqlSubServer *graphql.SubscriptionServer
 }
 

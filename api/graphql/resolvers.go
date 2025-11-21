@@ -1643,14 +1643,14 @@ func (s *Schema) blacklistEventToMap(event *storage.BlacklistEvent) map[string]i
 // Helper function to convert MemberChangeEvent to map
 func (s *Schema) memberChangeEventToMap(event *storage.MemberChangeEvent) map[string]interface{} {
 	m := map[string]interface{}{
-		"contract":      event.Contract.Hex(),
-		"blockNumber":   fmt.Sprintf("%d", event.BlockNumber),
+		"contract":        event.Contract.Hex(),
+		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
 		"transactionHash": event.TxHash.Hex(),
-		"member":        event.Member.Hex(),
-		"action":        event.Action,
-		"totalMembers":  fmt.Sprintf("%d", event.TotalMembers),
-		"newQuorum":     int(event.NewQuorum),
-		"timestamp":     fmt.Sprintf("%d", event.Timestamp),
+		"member":          event.Member.Hex(),
+		"action":          event.Action,
+		"totalMembers":    fmt.Sprintf("%d", event.TotalMembers),
+		"newQuorum":       int(event.NewQuorum),
+		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
 	}
 	if event.OldMember != nil {
 		m["oldMember"] = event.OldMember.Hex()

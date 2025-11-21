@@ -251,7 +251,7 @@ func (p *SystemContractEventParser) parseBurnEvent(ctx context.Context, log *typ
 		TxHash:       log.TxHash,
 		Burner:       common.BytesToAddress(log.Topics[1].Bytes()),
 		Amount:       amount,
-		Timestamp:    0, // Will be set by storage layer
+		Timestamp:    0,  // Will be set by storage layer
 		WithdrawalID: "", // Not set for NativeCoinAdapter burns
 	}
 

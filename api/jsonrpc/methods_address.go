@@ -609,7 +609,7 @@ func erc20TransferToMap(transfer *storage.ERC20Transfer) map[string]interface{} 
 		"contractAddress": transfer.ContractAddress.Hex(),
 		"from":            transfer.From.Hex(),
 		"to":              transfer.To.Hex(),
-		"value":           transfer.Value.String(),
+		"value":           "0x" + transfer.Value.Text(16), // Hex encoding per JSON-RPC standard
 		"transactionHash": transfer.TransactionHash.Hex(),
 		"blockNumber":     fmt.Sprintf("%d", transfer.BlockNumber),
 		"logIndex":        transfer.LogIndex,
@@ -623,7 +623,7 @@ func erc721TransferToMap(transfer *storage.ERC721Transfer) map[string]interface{
 		"contractAddress": transfer.ContractAddress.Hex(),
 		"from":            transfer.From.Hex(),
 		"to":              transfer.To.Hex(),
-		"tokenId":         transfer.TokenId.String(),
+		"tokenId":         "0x" + transfer.TokenId.Text(16), // Hex encoding per JSON-RPC standard
 		"transactionHash": transfer.TransactionHash.Hex(),
 		"blockNumber":     fmt.Sprintf("%d", transfer.BlockNumber),
 		"logIndex":        transfer.LogIndex,

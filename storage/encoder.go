@@ -367,9 +367,10 @@ func DecodeMinterConfigEvent(data []byte) (*MinterConfigEvent, error) {
 
 // EncodeProposal encodes a Proposal using custom binary format
 // Format: [blockNumber(8)] [txHash(32)] [contract(20)] [proposalIDLen(8)] [proposalID]
-//         [proposer(20)] [actionType(32)] [callDataLen(8)] [callData]
-//         [memberVersion(bytes)] [requiredApprovals(4)] [approved(4)] [rejected(4)]
-//         [status(1)] [createdAt(8)] [hasExecutedAt(1)] [executedAt(8)?]
+//
+//	[proposer(20)] [actionType(32)] [callDataLen(8)] [callData]
+//	[memberVersion(bytes)] [requiredApprovals(4)] [approved(4)] [rejected(4)]
+//	[status(1)] [createdAt(8)] [hasExecutedAt(1)] [executedAt(8)?]
 func EncodeProposal(proposal *Proposal) ([]byte, error) {
 	if proposal == nil {
 		return nil, fmt.Errorf("proposal cannot be nil")
@@ -755,7 +756,8 @@ func DecodeValidatorChangeEvent(data []byte) (*ValidatorChangeEvent, error) {
 
 // EncodeMemberChangeEvent encodes a MemberChangeEvent using custom binary format
 // Format: [contract(20)] [blockNumber(8)] [txHash(32)] [member(20)] [actionLen(8)] [action]
-//         [hasOldMember(1)] [oldMember(20)?] [totalMembers(8)] [newQuorum(4)] [timestamp(8)]
+//
+//	[hasOldMember(1)] [oldMember(20)?] [totalMembers(8)] [newQuorum(4)] [timestamp(8)]
 func EncodeMemberChangeEvent(event *MemberChangeEvent) ([]byte, error) {
 	if event == nil {
 		return nil, fmt.Errorf("event cannot be nil")

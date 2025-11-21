@@ -396,7 +396,7 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				Resolve: s.resolveEpochInfo,
 			},
 			"latestEpochInfo": &graphql.Field{
-				Type: epochInfoType,
+				Type:    epochInfoType,
 				Resolve: s.resolveLatestEpochInfo,
 			},
 			"validatorSigningStats": &graphql.Field{
