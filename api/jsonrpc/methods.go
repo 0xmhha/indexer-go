@@ -99,6 +99,23 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.getERC721TransfersByAddress(ctx, params)
 	case "getERC721Owner":
 		return h.getERC721Owner(ctx, params)
+	// WBFT consensus methods
+	case "getWBFTBlockExtra":
+		return h.getWBFTBlockExtra(ctx, params)
+	case "getWBFTBlockExtraByHash":
+		return h.getWBFTBlockExtraByHash(ctx, params)
+	case "getEpochInfo":
+		return h.getEpochInfo(ctx, params)
+	case "getLatestEpochInfo":
+		return h.getLatestEpochInfo(ctx, params)
+	case "getValidatorSigningStats":
+		return h.getValidatorSigningStats(ctx, params)
+	case "getAllValidatorsSigningStats":
+		return h.getAllValidatorsSigningStats(ctx, params)
+	case "getValidatorSigningActivity":
+		return h.getValidatorSigningActivity(ctx, params)
+	case "getBlockSigners":
+		return h.getBlockSigners(ctx, params)
 	default:
 		return nil, NewError(MethodNotFound, fmt.Sprintf("method '%s' not found", method), nil)
 	}

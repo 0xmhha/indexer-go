@@ -456,12 +456,183 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				},
 				Resolve: s.resolveBlockSigners,
 			},
+
+			// Address Indexing Queries
+			"contractCreation": &graphql.Field{
+				Type: contractCreationType,
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+				},
+				Resolve: s.resolveContractCreation,
+			},
+			"contractsByCreator": &graphql.Field{
+				Type: contractCreationConnectionType,
+				Args: graphql.FieldConfigArgument{
+					"creator": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveContractsByCreator,
+			},
+			"internalTransactions": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(internalTransactionType)),
+				Args: graphql.FieldConfigArgument{
+					"txHash": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(hashType),
+					},
+				},
+				Resolve: s.resolveInternalTransactions,
+			},
+			"internalTransactionsByAddress": &graphql.Field{
+				Type: internalTransactionConnectionType,
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"isFrom": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Boolean),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveInternalTransactionsByAddress,
+			},
+			"erc20Transfer": &graphql.Field{
+				Type: erc20TransferType,
+				Args: graphql.FieldConfigArgument{
+					"txHash": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(hashType),
+					},
+					"logIndex": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Int),
+					},
+				},
+				Resolve: s.resolveERC20Transfer,
+			},
+			"erc20TransfersByToken": &graphql.Field{
+				Type: erc20TransferConnectionType,
+				Args: graphql.FieldConfigArgument{
+					"token": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveERC20TransfersByToken,
+			},
+			"erc20TransfersByAddress": &graphql.Field{
+				Type: erc20TransferConnectionType,
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"isFrom": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Boolean),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveERC20TransfersByAddress,
+			},
+			"erc721Transfer": &graphql.Field{
+				Type: erc721TransferType,
+				Args: graphql.FieldConfigArgument{
+					"txHash": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(hashType),
+					},
+					"logIndex": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Int),
+					},
+				},
+				Resolve: s.resolveERC721Transfer,
+			},
+			"erc721TransfersByToken": &graphql.Field{
+				Type: erc721TransferConnectionType,
+				Args: graphql.FieldConfigArgument{
+					"token": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveERC721TransfersByToken,
+			},
+			"erc721TransfersByAddress": &graphql.Field{
+				Type: erc721TransferConnectionType,
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"isFrom": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(graphql.Boolean),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveERC721TransfersByAddress,
+			},
+			"erc721Owner": &graphql.Field{
+				Type: addressType,
+				Args: graphql.FieldConfigArgument{
+					"token": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"tokenId": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveERC721Owner,
+			},
+		},
+	})
+
+	// Create subscription type
+	subscriptionType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Subscription",
+		Fields: graphql.Fields{
+			"newBlock": &graphql.Field{
+				Type:        graphql.NewNonNull(blockType),
+				Description: "Subscribe to new blocks as they are indexed",
+			},
+			"newTransaction": &graphql.Field{
+				Type:        graphql.NewNonNull(transactionType),
+				Description: "Subscribe to new transactions as they are indexed",
+			},
+			"newPendingTransactions": &graphql.Field{
+				Type: graphql.NewNonNull(transactionType),
+				Args: graphql.FieldConfigArgument{
+					"limit": &graphql.ArgumentConfig{
+						Type: graphql.Int,
+					},
+				},
+				Description: "Subscribe to new pending transactions (if available)",
+			},
+			"logs": &graphql.Field{
+				Type: graphql.NewNonNull(logType),
+				Args: graphql.FieldConfigArgument{
+					"filter": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(logFilterType),
+					},
+				},
+				Description: "Subscribe to new logs matching a filter",
+			},
 		},
 	})
 
 	// Create schema
 	schema, err := graphql.NewSchema(graphql.SchemaConfig{
-		Query: queryType,
+		Query:        queryType,
+		Subscription: subscriptionType,
 	})
 	if err != nil {
 		return nil, err

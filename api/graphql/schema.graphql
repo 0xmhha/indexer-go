@@ -312,6 +312,21 @@ input PaginationInput {
   offset: Int
 }
 
+# Subscription root type for real-time updates
+type Subscription {
+  # Subscribe to new blocks as they are indexed
+  newBlock: Block!
+
+  # Subscribe to new transactions as they are indexed
+  newTransaction: Transaction!
+
+  # Subscribe to new pending transactions (if available)
+  newPendingTransactions(limit: Int): Transaction!
+
+  # Subscribe to new logs matching a filter
+  logs(filter: LogFilter!): Log!
+}
+
 # Query root type
 type Query {
   # Get the latest indexed block height
@@ -510,6 +525,62 @@ type Query {
 
   # Get list of validators who signed a specific block
   blockSigners(blockNumber: BigInt!): BlockSigners
+
+  # ========== Address Indexing Queries ==========
+
+  # Get contract creation information by contract address
+  contractCreation(address: Address!): ContractCreation
+
+  # Get contracts created by a specific address
+  contractsByCreator(
+    creator: Address!
+    pagination: PaginationInput
+  ): ContractCreationConnection!
+
+  # Get internal transactions for a transaction hash
+  internalTransactions(txHash: Hash!): [InternalTransaction!]!
+
+  # Get internal transactions involving a specific address
+  internalTransactionsByAddress(
+    address: Address!
+    isFrom: Boolean!
+    pagination: PaginationInput
+  ): InternalTransactionConnection!
+
+  # Get ERC20 transfer by transaction hash and log index
+  erc20Transfer(txHash: Hash!, logIndex: Int!): ERC20Transfer
+
+  # Get ERC20 transfers for a specific token contract
+  erc20TransfersByToken(
+    token: Address!
+    pagination: PaginationInput
+  ): ERC20TransferConnection!
+
+  # Get ERC20 transfers involving a specific address
+  erc20TransfersByAddress(
+    address: Address!
+    isFrom: Boolean!
+    pagination: PaginationInput
+  ): ERC20TransferConnection!
+
+  # Get ERC721 transfer by transaction hash and log index
+  erc721Transfer(txHash: Hash!, logIndex: Int!): ERC721Transfer
+
+  # Get ERC721 transfers for a specific NFT contract
+  erc721TransfersByToken(
+    token: Address!
+    pagination: PaginationInput
+  ): ERC721TransferConnection!
+
+  # Get ERC721 transfers involving a specific address
+  erc721TransfersByAddress(
+    address: Address!
+    isFrom: Boolean!
+    pagination: PaginationInput
+  ): ERC721TransferConnection!
+
+  # Get current owner of an NFT token
+  erc721Owner(token: Address!, tokenId: BigInt!): Address
 }
 
 # Block connection for pagination
@@ -1111,6 +1182,150 @@ type ValidatorSigningStatsConnection {
 
 type ValidatorSigningActivityConnection {
   nodes: [ValidatorSigningActivity!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+# ========== Address Indexing Types ==========
+
+# ContractCreation represents a contract creation event
+type ContractCreation {
+  # Created contract address
+  contractAddress: Address!
+
+  # Creator address
+  creator: Address!
+
+  # Transaction hash that created the contract
+  transactionHash: Hash!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Timestamp
+  timestamp: BigInt!
+
+  # Deployed bytecode size
+  bytecodeSize: Int!
+}
+
+# InternalTransaction represents an internal call during transaction execution
+type InternalTransaction {
+  # Original transaction hash
+  transactionHash: Hash!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Order index
+  index: Int!
+
+  # Type: CALL, DELEGATECALL, STATICCALL, CREATE, etc.
+  type: String!
+
+  # Caller address
+  from: Address!
+
+  # Callee address (or created address for CREATE)
+  to: Address!
+
+  # Transferred ETH amount (wei)
+  value: BigInt!
+
+  # Allocated gas
+  gas: BigInt!
+
+  # Used gas
+  gasUsed: BigInt!
+
+  # Call data
+  input: Bytes!
+
+  # Return data
+  output: Bytes!
+
+  # Error message (if failed)
+  error: String
+
+  # Call depth (0 = root)
+  depth: Int!
+}
+
+# ERC20Transfer represents an ERC20 token transfer
+type ERC20Transfer {
+  # Token contract address
+  contractAddress: Address!
+
+  # Sender address
+  from: Address!
+
+  # Recipient address
+  to: Address!
+
+  # Transfer amount
+  value: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Log index
+  logIndex: Int!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# ERC721Transfer represents an ERC721 NFT transfer
+type ERC721Transfer {
+  # NFT contract address
+  contractAddress: Address!
+
+  # Sender address
+  from: Address!
+
+  # Recipient address
+  to: Address!
+
+  # Token ID
+  tokenId: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Log index
+  logIndex: Int!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# Connections for address indexing pagination
+type ContractCreationConnection {
+  nodes: [ContractCreation!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+type InternalTransactionConnection {
+  nodes: [InternalTransaction!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+type ERC20TransferConnection {
+  nodes: [ERC20Transfer!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+type ERC721TransferConnection {
+  nodes: [ERC721Transfer!]!
   totalCount: Int!
   pageInfo: PageInfo!
 }
