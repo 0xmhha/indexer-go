@@ -40,6 +40,7 @@ func NewSubscriptionServer(eventBus *events.EventBus, logger *zap.Logger) *Subsc
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
+			Subprotocols:    []string{"graphql-transport-ws", "graphql-ws"}, // Support both protocols
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow all origins for development
 			},
@@ -49,11 +50,25 @@ func NewSubscriptionServer(eventBus *events.EventBus, logger *zap.Logger) *Subsc
 
 // ServeHTTP handles WebSocket connections for GraphQL subscriptions
 func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.logger.Info("WebSocket connection request received",
+		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("origin", r.Header.Get("Origin")),
+		zap.String("protocol", r.Header.Get("Sec-WebSocket-Protocol")),
+	)
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.logger.Error("failed to upgrade connection", zap.Error(err))
+		s.logger.Error("failed to upgrade connection",
+			zap.Error(err),
+			zap.String("remote_addr", r.RemoteAddr),
+		)
 		return
 	}
+
+	s.logger.Info("WebSocket connection established",
+		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("subprotocol", conn.Subprotocol()),
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	client := &subscriptionClient{
@@ -106,6 +121,7 @@ type subscribePayload struct {
 // readPump reads messages from the WebSocket connection
 func (c *subscriptionClient) readPump() {
 	defer func() {
+		c.logger.Info("WebSocket connection closing")
 		c.cleanup()
 		c.conn.Close()
 	}()
@@ -113,6 +129,7 @@ func (c *subscriptionClient) readPump() {
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
+		c.logger.Debug("received pong message")
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
@@ -122,10 +139,13 @@ func (c *subscriptionClient) readPump() {
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				c.logger.Error("websocket read error", zap.Error(err))
+			} else {
+				c.logger.Info("websocket connection closed", zap.Error(err))
 			}
 			break
 		}
 
+		c.logger.Debug("received message", zap.String("message", string(message)))
 		c.handleMessage(message)
 	}
 }
@@ -164,45 +184,83 @@ func (c *subscriptionClient) writePump() {
 func (c *subscriptionClient) handleMessage(data []byte) {
 	var msg wsMessage
 	if err := json.Unmarshal(data, &msg); err != nil {
-		c.logger.Error("failed to unmarshal message", zap.Error(err))
+		c.logger.Error("failed to unmarshal message",
+			zap.Error(err),
+			zap.String("raw_message", string(data)),
+		)
 		return
 	}
 
+	c.logger.Info("handling WebSocket message",
+		zap.String("type", msg.Type),
+		zap.String("id", msg.ID),
+	)
+
 	switch msg.Type {
 	case "connection_init":
+		c.logger.Info("received connection_init, sending connection_ack")
 		c.sendMessage(wsMessage{Type: "connection_ack"})
 
 	case "subscribe":
+		c.logger.Info("received subscribe request", zap.String("id", msg.ID))
 		c.handleSubscribe(msg.ID, msg.Payload)
 
 	case "complete":
+		c.logger.Info("received complete request", zap.String("id", msg.ID))
 		c.handleComplete(msg.ID)
 
 	case "ping":
+		c.logger.Debug("received ping, sending pong")
 		c.sendMessage(wsMessage{Type: "pong"})
 
 	default:
-		c.logger.Warn("unknown message type", zap.String("type", msg.Type))
+		c.logger.Warn("unknown message type",
+			zap.String("type", msg.Type),
+			zap.String("raw_message", string(data)),
+		)
 	}
 }
 
 // handleSubscribe handles subscription requests
 func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage) {
+	c.logger.Info("processing subscribe request",
+		zap.String("id", id),
+		zap.String("payload", string(payload)),
+	)
+
 	var sub subscribePayload
 	if err := json.Unmarshal(payload, &sub); err != nil {
+		c.logger.Error("failed to parse subscription payload",
+			zap.String("id", id),
+			zap.Error(err),
+		)
 		c.sendError(id, "invalid payload")
 		return
 	}
 
 	// Parse the subscription query to determine type
 	subType := c.parseSubscriptionType(sub.Query)
+	c.logger.Info("parsed subscription type",
+		zap.String("id", id),
+		zap.String("type", subType),
+		zap.String("query", sub.Query),
+	)
+
 	if subType == "" {
+		c.logger.Warn("unknown subscription type",
+			zap.String("id", id),
+			zap.String("query", sub.Query),
+		)
 		c.sendError(id, "invalid subscription query")
 		return
 	}
 
 	// Subscribe to EventBus
 	if c.server.eventBus == nil {
+		c.logger.Error("EventBus not available",
+			zap.String("id", id),
+			zap.String("type", subType),
+		)
 		c.sendError(id, "event bus not available")
 		return
 	}
@@ -297,6 +355,11 @@ func (c *subscriptionClient) handleComplete(id string) {
 
 // handleEvent handles events from EventBus
 func (c *subscriptionClient) handleEvent(id string, subType string, event interface{}) {
+	c.logger.Debug("handling event",
+		zap.String("id", id),
+		zap.String("type", subType),
+	)
+
 	var payload interface{}
 
 	switch subType {
@@ -614,16 +677,28 @@ func (c *subscriptionClient) sendMessage(msg wsMessage) {
 		return
 	}
 
+	c.logger.Debug("sending WebSocket message",
+		zap.String("type", msg.Type),
+		zap.String("id", msg.ID),
+		zap.String("message", string(data)),
+	)
+
 	select {
 	case c.send <- data:
 	default:
-		c.logger.Warn("send buffer full, dropping message")
+		c.logger.Warn("send buffer full, dropping message",
+			zap.String("type", msg.Type),
+		)
 	}
 }
 
 // sendNext sends subscription data
 func (c *subscriptionClient) sendNext(id string, payload interface{}) {
 	data, _ := json.Marshal(payload)
+	c.logger.Debug("sending subscription data",
+		zap.String("id", id),
+		zap.Int("payload_size", len(data)),
+	)
 	c.sendMessage(wsMessage{
 		ID:      id,
 		Type:    "next",
@@ -633,6 +708,10 @@ func (c *subscriptionClient) sendNext(id string, payload interface{}) {
 
 // sendError sends an error message
 func (c *subscriptionClient) sendError(id string, errMsg string) {
+	c.logger.Error("sending error to client",
+		zap.String("id", id),
+		zap.String("error", errMsg),
+	)
 	payload, _ := json.Marshal([]map[string]string{
 		{"message": errMsg},
 	})
@@ -645,6 +724,8 @@ func (c *subscriptionClient) sendError(id string, errMsg string) {
 
 // cleanup unsubscribes from all EventBus subscriptions
 func (c *subscriptionClient) cleanup() {
+	c.logger.Info("cleaning up WebSocket client", zap.Int("subscriptions", len(c.subscriptions)))
+
 	// Cancel main context to stop all event loops
 	c.cancel()
 
@@ -654,6 +735,10 @@ func (c *subscriptionClient) cleanup() {
 	// Unsubscribe all subscriptions from EventBus
 	if c.server.eventBus != nil {
 		for id, sub := range c.subscriptions {
+			c.logger.Debug("unsubscribing",
+				zap.String("id", id),
+				zap.String("type", sub.subType),
+			)
 			sub.cancelFunc()
 			c.server.eventBus.Unsubscribe(events.SubscriptionID(id))
 		}
@@ -661,6 +746,7 @@ func (c *subscriptionClient) cleanup() {
 
 	c.subscriptions = make(map[string]*clientSubscription)
 	close(c.send)
+	c.logger.Info("WebSocket client cleanup completed")
 }
 
 // SetEventBus sets the EventBus (for dependency injection)
@@ -672,9 +758,13 @@ func (s *SubscriptionServer) SetEventBus(bus *events.EventBus) {
 func (s *SubscriptionServer) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.eventBus == nil {
+			s.logger.Error("EventBus not available for WebSocket subscriptions",
+				zap.String("remote_addr", r.RemoteAddr),
+			)
 			http.Error(w, "subscriptions not available", http.StatusServiceUnavailable)
 			return
 		}
+		s.logger.Debug("EventBus available, proceeding with WebSocket upgrade")
 		s.ServeHTTP(w, r)
 	}
 }
