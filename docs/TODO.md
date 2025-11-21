@@ -2,17 +2,17 @@
 
 > 프로젝트 진행 상황 및 작업 계획
 
-**Last Updated**: 2025-11-20
-**Current Work**: Stable-One 체인 특화 기능 개발 (Phase 4)
+**Last Updated**: 2025-11-21
+**Current Work**: Stable-One 체인 특화 기능 Phase 4 (System Contracts & WBFT 완료)
 
 ---
 
 ## 프로젝트 현황
 
-### 전체 진행률: ~98%
+### 전체 진행률: ~99%
 
 ```
-[███████████████████████████] 98%
+[███████████████████████████▌] 99%
 ```
 
 **핵심 인프라 완료:**
@@ -26,13 +26,23 @@
   - Fee Delegation 지원 (type 0x16)
   - go-stablenet 통합
   - GraphQL Subscription
+- **System Contracts & Governance API (Phase 4)**
+  - NativeCoinAdapter 이벤트 추적 (Mint/Burn)
+  - Gov 컨트랙트 이벤트 추적 (5개 컨트랙트)
+  - Governance Proposal API (17 GraphQL queries, 10 JSON-RPC methods)
+  - 총 공급량, Minter/Validator 관리 API
+- **WBFT Consensus Metadata API**
+  - WBFT 블록 메타데이터 파싱 (RLP 디코딩)
+  - 검증자 서명 통계 및 활동 추적
+  - 에폭(Epoch) 정보 관리
+  - 8개 GraphQL API 구현
 
 **진행 중:**
-- Stable-One 체인 특화 기능 개발 (Phase 4)
+- Phase 4 나머지 작업 (주소 인덱싱, 이벤트 필터)
 
 **예정:**
-- NativeCoinAdapter & Gov 이벤트 추적
-- WBFT 메타데이터 파싱 및 모니터링
+- 주소 인덱싱 확장 (컨트랙트 생성, 내부 트랜잭션)
+- 이벤트 필터 시스템
 - 고급 기능 개발 (Analytics & Notifications)
 - 수평 확장 지원 (Horizontal Scaling)
 
@@ -63,7 +73,7 @@
 #### Phase 4: 고급 인덱싱 (진행 중)
 **우선순위**: High
 **참고**: STABLE_ONE_TECHNICAL_ANALYSIS.md 섹션 3.2, 3.3
-**상태**: System Contracts & Governance API 완료 (2025-11-21)
+**상태**: System Contracts & WBFT Metadata API 완료 (2025-11-21)
 
 - [x] NativeCoinAdapter 이벤트 추적
   - [x] Mint/Burn 이벤트 파싱 및 저장
@@ -79,11 +89,12 @@
   - [x] Validator/Minter 권한 변경 히스토리 (GraphQL, JSON-RPC)
   - [x] Governance Proposal 조회 API (proposals, proposalVotes)
   - [x] Blacklist 관리 API
-- [ ] WBFT 메타데이터 파싱
-  - [ ] Block header Extra 필드 파서
-  - [ ] BLS signature 추출
-  - [ ] Round/committed seal 정보
-  - [ ] Validator 서명 통계
+- [x] WBFT 메타데이터 파싱
+  - [x] Block header Extra 필드 파서
+  - [x] BLS signature 추출
+  - [x] Round/committed seal 정보
+  - [x] Validator 서명 통계
+  - [x] GraphQL API 구현 (8개 쿼리)
 - [ ] 주소 인덱싱 확장
   - [ ] 컨트랙트 생성 트랜잭션 인덱싱
   - [ ] 내부 트랜잭션 (internal tx) 추적
@@ -162,9 +173,9 @@
 _현재 없음 - 핵심 기능 완료_
 
 ### P1 (High) - 다음 분기 목표
-1. NativeCoinAdapter & Gov 이벤트 추적
-2. WBFT 메타데이터 파싱
-3. 주소 인덱싱 확장
+1. 주소 인덱싱 확장
+2. 이벤트 필터 시스템
+3. 기본 분석 기능
 
 ### P2 (Medium) - 성능 개선
 1. Fetcher 최적화
@@ -181,9 +192,10 @@ _현재 없음 - 핵심 기능 완료_
 ## 향후 계획
 
 ### 단기 목표 (1-2개월)
-- [ ] NativeCoinAdapter 이벤트 추적 구현
-- [ ] Gov 컨트랙트 이벤트 추적
-- [ ] WBFT 메타데이터 파서 구현
+- [x] NativeCoinAdapter 이벤트 추적 구현 ✅ 완료 (2025-11-21)
+- [x] Gov 컨트랙트 이벤트 추적 ✅ 완료 (2025-11-21)
+- [x] WBFT 메타데이터 파서 구현 ✅ 완료 (2025-11-21)
+- [ ] 주소 인덱싱 확장
 - [ ] 기본 분석 기능 (Gas 통계, TPS)
 
 ### 중기 목표 (3-6개월)
@@ -203,15 +215,17 @@ _현재 없음 - 핵심 기능 완료_
 ## 월간 목표
 
 **November 2025** (진행 중)
-- [ ] Phase 4: 고급 인덱싱 시작
-  - [ ] NativeCoinAdapter 이벤트 추적
-  - [ ] Gov 컨트랙트 이벤트 추적
-- [ ] 기본 분석 기능 구현
+- [x] Phase 4: 고급 인덱싱 시작 ✅
+  - [x] NativeCoinAdapter 이벤트 추적 ✅
+  - [x] Gov 컨트랙트 이벤트 추적 ✅
+  - [x] System Contracts & Governance API 구현 ✅
+  - [x] WBFT 메타데이터 파싱 ✅
 
 **December 2025** (예정)
-- [ ] WBFT 메타데이터 파싱
-- [ ] 주소 인덱싱 확장
-- [ ] 고급 분석 대시보드
+- [ ] 주소 인덱싱 확장 (컨트랙트 생성, 내부 트랜잭션)
+- [ ] 이벤트 필터 시스템
+- [ ] 기본 분석 기능 구현
+- [ ] WBFT JSON-RPC API 추가 (현재 GraphQL만 지원)
 
 **Q1 2026** (예정)
 - [ ] 알림 시스템 구현
@@ -249,6 +263,7 @@ _현재 없음 - 핵심 기능 완료_
 - [METRICS_MONITORING.md](./METRICS_MONITORING.md) - Prometheus 모니터링 가이드
 - [HISTORICAL_API_DESIGN.md](./HISTORICAL_API_DESIGN.md) - Historical Data API 설계
 - [ToFrontend.md](./ToFrontend.md) - Frontend 통합 가이드
+- **[SYSTEM_CONTRACTS_EVENTS_DESIGN.md](./SYSTEM_CONTRACTS_EVENTS_DESIGN.md)** - System Contracts 이벤트 설계 ✨ 신규
 
 ### 운영 문서
 - [OPERATIONS_GUIDE.md](./OPERATIONS_GUIDE.md) - 프로덕션 배포 및 운영 가이드
@@ -277,5 +292,6 @@ docs(wbft): add WBFT metadata parsing guide
 ---
 
 **Status**: 프로덕션 준비 완료 (Production Ready)
-**Completion**: 98% - 핵심 기능 완료, 체인 특화 기능 진행 중
-**Next Milestone**: Stable-One 체인 특화 기능 Phase 4 (NativeCoinAdapter & Gov 이벤트 추적)
+**Completion**: 99% - 핵심 기능 완료, System Contracts & WBFT Metadata API 완료 ✅
+**Last Achievement**: WBFT Consensus Metadata API 구현 완료 (2025-11-21)
+**Next Milestone**: 주소 인덱싱 확장 및 이벤트 필터 시스템

@@ -471,6 +471,45 @@ type Query {
     filter: SystemContractEventFilter!
     status: ProposalStatus
   ): [DepositMintProposal!]!
+
+  # ========== WBFT Consensus Queries ==========
+
+  # Get WBFT consensus metadata for a block by number
+  wbftBlockExtra(blockNumber: BigInt!): WBFTBlockExtra
+
+  # Get WBFT consensus metadata for a block by hash
+  wbftBlockExtraByHash(blockHash: Hash!): WBFTBlockExtra
+
+  # Get epoch information for a specific epoch
+  epochInfo(epochNumber: BigInt!): EpochInfo
+
+  # Get the most recent epoch information
+  latestEpochInfo: EpochInfo
+
+  # Get signing statistics for a specific validator
+  validatorSigningStats(
+    validatorAddress: Address!
+    fromBlock: BigInt!
+    toBlock: BigInt!
+  ): ValidatorSigningStats
+
+  # Get signing statistics for all validators in a block range
+  allValidatorsSigningStats(
+    fromBlock: BigInt!
+    toBlock: BigInt!
+    pagination: PaginationInput
+  ): ValidatorSigningStatsConnection!
+
+  # Get detailed signing activity for a specific validator
+  validatorSigningActivity(
+    validatorAddress: Address!
+    fromBlock: BigInt!
+    toBlock: BigInt!
+    pagination: PaginationInput
+  ): ValidatorSigningActivityConnection!
+
+  # Get list of validators who signed a specific block
+  blockSigners(blockNumber: BigInt!): BlockSigners
 }
 
 # Block connection for pagination
@@ -915,4 +954,163 @@ input ProposalFilter {
 
   # Filter by proposer
   proposer: Address
+}
+
+# ========== WBFT Consensus Types ==========
+
+# WBFTAggregatedSeal represents an aggregated BLS signature from validators
+type WBFTAggregatedSeal {
+  # Bitmap of validators who signed
+  sealers: Bytes!
+
+  # Aggregated BLS signature (96 bytes)
+  signature: Bytes!
+}
+
+# Candidate represents a validator candidate
+type Candidate {
+  # Validator address
+  address: Address!
+
+  # Diligence score (unit: 10^-6)
+  diligence: BigInt!
+}
+
+# EpochInfo represents validator set information for an epoch
+type EpochInfo {
+  # Epoch number
+  epochNumber: BigInt!
+
+  # Block number where epoch info is stored
+  blockNumber: BigInt!
+
+  # Candidate list for next epoch
+  candidates: [Candidate!]!
+
+  # Validator indices for next epoch
+  validators: [Int!]!
+
+  # BLS public keys for next epoch
+  blsPublicKeys: [Bytes!]!
+}
+
+# WBFTBlockExtra represents WBFT consensus metadata for a block
+type WBFTBlockExtra {
+  # Block number
+  blockNumber: BigInt!
+
+  # Block hash
+  blockHash: Hash!
+
+  # BLS signature of block number
+  randaoReveal: Bytes!
+
+  # Previous block's round number
+  prevRound: Int!
+
+  # Previous block's prepare seal
+  prevPreparedSeal: WBFTAggregatedSeal
+
+  # Previous block's commit seal
+  prevCommittedSeal: WBFTAggregatedSeal
+
+  # Current round number
+  round: Int!
+
+  # Prepare phase aggregated seal
+  preparedSeal: WBFTAggregatedSeal
+
+  # Commit phase aggregated seal
+  committedSeal: WBFTAggregatedSeal
+
+  # Gas tip value agreed through governance
+  gasTip: BigInt
+
+  # Epoch info (only for last block of epoch)
+  epochInfo: EpochInfo
+
+  # Block timestamp
+  timestamp: BigInt!
+}
+
+# ValidatorSigningStats represents signing statistics for a validator
+type ValidatorSigningStats {
+  # Validator address
+  validatorAddress: Address!
+
+  # Validator index
+  validatorIndex: Int!
+
+  # Total number of prepare signatures
+  prepareSignCount: BigInt!
+
+  # Total number of missed prepare signatures
+  prepareMissCount: BigInt!
+
+  # Total number of commit signatures
+  commitSignCount: BigInt!
+
+  # Total number of missed commit signatures
+  commitMissCount: BigInt!
+
+  # Block range start
+  fromBlock: BigInt!
+
+  # Block range end
+  toBlock: BigInt!
+
+  # Signing rate percentage
+  signingRate: Float!
+}
+
+# ValidatorSigningActivity represents a validator's signing activity for a specific block
+type ValidatorSigningActivity {
+  # Block number
+  blockNumber: BigInt!
+
+  # Block hash
+  blockHash: Hash!
+
+  # Validator address
+  validatorAddress: Address!
+
+  # Validator index
+  validatorIndex: Int!
+
+  # Whether validator signed in prepare phase
+  signedPrepare: Boolean!
+
+  # Whether validator signed in commit phase
+  signedCommit: Boolean!
+
+  # Round number
+  round: Int!
+
+  # Block timestamp
+  timestamp: BigInt!
+}
+
+# BlockSigners represents validators who signed a specific block
+type BlockSigners {
+  # Block number
+  blockNumber: BigInt!
+
+  # Validators who signed in prepare phase
+  preparers: [Address!]!
+
+  # Validators who signed in commit phase
+  committers: [Address!]!
+}
+
+# Connections for pagination
+type ValidatorSigningStatsConnection {
+  nodes: [ValidatorSigningStats!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+type ValidatorSigningActivityConnection {
+  nodes: [ValidatorSigningActivity!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
 }

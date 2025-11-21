@@ -651,56 +651,9 @@ subscription FilteredLogs($filter: LogFilterInput) {
 
 ---
 
-### Phase 4 완료 후 추가 예정
+### 향후 추가 예정 기능
 
-#### 1. NativeCoinAdapter 이벤트
-
-베이스 코인(스테이블 토큰) 관련 이벤트:
-
-```graphql
-type NativeCoinEvent {
-  eventType: String!        # Transfer, Mint, Burn
-  from: Address
-  to: Address
-  value: BigInt!
-  blockNumber: BigInt!
-  transactionHash: Hash!
-}
-
-query GetNativeCoinEvents {
-  nativeCoinEvents(
-    address: "0x..."
-    fromBlock: "0"
-    toBlock: "latest"
-  ) {
-    eventType
-    from
-    to
-    value
-  }
-}
-```
-
-#### 2. Gov 컨트랙트 정보
-
-```graphql
-type ValidatorInfo {
-  address: Address!
-  blsPublicKey: Bytes!
-  isActive: Boolean!
-  since: BigInt!
-}
-
-query GetValidators {
-  validators {
-    address
-    blsPublicKey
-    isActive
-  }
-}
-```
-
-#### 3. WBFT 메타데이터
+#### WBFT 메타데이터 파싱
 
 블록 헤더 Extra 필드에서 파싱된 WBFT 정보:
 
@@ -734,6 +687,652 @@ type Block {
 
 ---
 
+## WBFT 합의 메타데이터 API
+
+Stable-One 체인의 WBFT (Weighted Byzantine Fault Tolerance) 합의 메타데이터를 조회할 수 있는 API가 추가되었습니다.
+
+### WBFT란?
+
+WBFT는 Stable-One 체인이 사용하는 BFT (Byzantine Fault Tolerance) 합의 알고리즘입니다. 블록 생성 시 검증자들이 서명한 정보와 에폭(Epoch) 정보가 블록 헤더에 포함됩니다.
+
+### 1. WBFT 블록 메타데이터 조회
+
+#### GraphQL API
+
+```graphql
+# 블록 번호로 WBFT 메타데이터 조회
+query GetWBFTBlockExtra($blockNumber: BigInt!) {
+  wbftBlockExtra(blockNumber: $blockNumber) {
+    blockNumber
+    blockHash
+    randaoReveal        # BLS 서명
+    prevRound          # 이전 블록 라운드 번호
+    round              # 현재 라운드 번호
+    gasTip             # 거버넌스로 합의된 가스 팁
+    timestamp
+
+    # Prepare 단계 서명
+    preparedSeal {
+      sealers          # 서명한 검증자 비트맵
+      signature        # 집계된 BLS 서명 (96 bytes)
+    }
+
+    # Commit 단계 서명
+    committedSeal {
+      sealers
+      signature
+    }
+
+    # 이전 블록 서명 (재시도 시 사용)
+    prevPreparedSeal {
+      sealers
+      signature
+    }
+
+    prevCommittedSeal {
+      sealers
+      signature
+    }
+
+    # 에폭 정보 (에폭 마지막 블록에만 존재)
+    epochInfo {
+      epochNumber
+      blockNumber
+      candidates {
+        address         # 검증자 후보 주소
+        diligence       # 성실도 점수 (10^-6 단위)
+      }
+      validators        # 검증자 인덱스 목록
+      blsPublicKeys     # BLS 공개키 목록
+    }
+  }
+}
+
+# 블록 해시로 WBFT 메타데이터 조회
+query GetWBFTBlockExtraByHash($blockHash: Hash!) {
+  wbftBlockExtraByHash(blockHash: $blockHash) {
+    # 위와 동일한 필드
+  }
+}
+```
+
+#### 사용 예시
+
+```javascript
+// 특정 블록의 WBFT 메타데이터 조회
+const response = await fetch('/api/v1/graphql', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    query: `
+      query GetWBFTBlockExtra($blockNumber: BigInt!) {
+        wbftBlockExtra(blockNumber: $blockNumber) {
+          blockNumber
+          round
+          gasTip
+          preparedSeal {
+            sealers
+            signature
+          }
+          committedSeal {
+            sealers
+            signature
+          }
+          epochInfo {
+            epochNumber
+            candidates {
+              address
+              diligence
+            }
+          }
+        }
+      }
+    `,
+    variables: {
+      blockNumber: "1000"
+    }
+  })
+});
+
+const { data } = await response.json();
+```
+
+### 2. 에폭(Epoch) 정보 조회
+
+#### GraphQL API
+
+```graphql
+# 특정 에폭 정보 조회
+query GetEpochInfo($epochNumber: BigInt!) {
+  epochInfo(epochNumber: $epochNumber) {
+    epochNumber
+    blockNumber         # 에폭 정보가 저장된 블록 번호
+    candidates {
+      address
+      diligence
+    }
+    validators          # 다음 에폭의 검증자 인덱스
+    blsPublicKeys      # 다음 에폭의 BLS 공개키
+  }
+}
+
+# 최신 에폭 정보 조회
+query GetLatestEpochInfo {
+  latestEpochInfo {
+    epochNumber
+    blockNumber
+    candidates {
+      address
+      diligence
+    }
+    validators
+    blsPublicKeys
+  }
+}
+```
+
+#### 사용 예시
+
+```javascript
+// 최신 에폭 정보 조회
+const response = await fetch('/api/v1/graphql', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    query: `
+      query {
+        latestEpochInfo {
+          epochNumber
+          blockNumber
+          candidates {
+            address
+            diligence
+          }
+        }
+      }
+    `
+  })
+});
+```
+
+### 3. 검증자 서명 통계 조회
+
+#### GraphQL API
+
+```graphql
+# 특정 검증자의 서명 통계 조회
+query GetValidatorSigningStats(
+  $validatorAddress: Address!
+  $fromBlock: BigInt!
+  $toBlock: BigInt!
+) {
+  validatorSigningStats(
+    validatorAddress: $validatorAddress
+    fromBlock: $fromBlock
+    toBlock: $toBlock
+  ) {
+    validatorAddress
+    validatorIndex
+
+    # Prepare 단계 통계
+    prepareSignCount    # 서명한 횟수
+    prepareMissCount    # 누락한 횟수
+
+    # Commit 단계 통계
+    commitSignCount
+    commitMissCount
+
+    # 블록 범위
+    fromBlock
+    toBlock
+
+    # 서명률 (%)
+    signingRate
+  }
+}
+
+# 모든 검증자의 서명 통계 조회 (페이지네이션)
+query GetAllValidatorsSigningStats(
+  $fromBlock: BigInt!
+  $toBlock: BigInt!
+  $pagination: PaginationInput
+) {
+  allValidatorsSigningStats(
+    fromBlock: $fromBlock
+    toBlock: $toBlock
+    pagination: $pagination
+  ) {
+    nodes {
+      validatorAddress
+      validatorIndex
+      prepareSignCount
+      prepareMissCount
+      commitSignCount
+      commitMissCount
+      signingRate
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+```
+
+#### 사용 예시
+
+```javascript
+// 특정 검증자의 서명 통계 조회
+const response = await fetch('/api/v1/graphql', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    query: `
+      query GetValidatorStats(
+        $validator: Address!
+        $fromBlock: BigInt!
+        $toBlock: BigInt!
+      ) {
+        validatorSigningStats(
+          validatorAddress: $validator
+          fromBlock: $fromBlock
+          toBlock: $toBlock
+        ) {
+          validatorAddress
+          prepareSignCount
+          prepareMissCount
+          commitSignCount
+          commitMissCount
+          signingRate
+        }
+      }
+    `,
+    variables: {
+      validator: "0x1234...",
+      fromBlock: "0",
+      toBlock: "1000"
+    }
+  })
+});
+
+const { data } = await response.json();
+console.log(`서명률: ${data.validatorSigningStats.signingRate}%`);
+```
+
+### 4. 검증자 서명 활동 내역 조회
+
+#### GraphQL API
+
+```graphql
+# 특정 검증자의 블록별 서명 활동 조회
+query GetValidatorSigningActivity(
+  $validatorAddress: Address!
+  $fromBlock: BigInt!
+  $toBlock: BigInt!
+  $pagination: PaginationInput
+) {
+  validatorSigningActivity(
+    validatorAddress: $validatorAddress
+    fromBlock: $fromBlock
+    toBlock: $toBlock
+    pagination: $pagination
+  ) {
+    nodes {
+      blockNumber
+      blockHash
+      validatorAddress
+      validatorIndex
+      signedPrepare     # Prepare 단계 서명 여부
+      signedCommit      # Commit 단계 서명 여부
+      round
+      timestamp
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+```
+
+#### 사용 예시
+
+```javascript
+// 검증자의 최근 활동 내역 조회
+const response = await fetch('/api/v1/graphql', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    query: `
+      query GetValidatorActivity(
+        $validator: Address!
+        $fromBlock: BigInt!
+        $toBlock: BigInt!
+      ) {
+        validatorSigningActivity(
+          validatorAddress: $validator
+          fromBlock: $fromBlock
+          toBlock: $toBlock
+          pagination: { limit: 100, offset: 0 }
+        ) {
+          nodes {
+            blockNumber
+            signedPrepare
+            signedCommit
+            round
+          }
+          totalCount
+        }
+      }
+    `,
+    variables: {
+      validator: "0x1234...",
+      fromBlock: "900",
+      toBlock: "1000"
+    }
+  })
+});
+```
+
+### 5. 블록 서명자 조회
+
+#### GraphQL API
+
+```graphql
+# 특정 블록에 서명한 검증자 목록 조회
+query GetBlockSigners($blockNumber: BigInt!) {
+  blockSigners(blockNumber: $blockNumber) {
+    blockNumber
+    preparers       # Prepare 단계에 서명한 검증자 주소 목록
+    committers      # Commit 단계에 서명한 검증자 주소 목록
+  }
+}
+```
+
+#### 사용 예시
+
+```javascript
+// 특정 블록의 서명자 조회
+const response = await fetch('/api/v1/graphql', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    query: `
+      query GetBlockSigners($blockNumber: BigInt!) {
+        blockSigners(blockNumber: $blockNumber) {
+          blockNumber
+          preparers
+          committers
+        }
+      }
+    `,
+    variables: {
+      blockNumber: "1000"
+    }
+  })
+});
+
+const { data } = await response.json();
+console.log(`Prepare 서명자 수: ${data.blockSigners.preparers.length}`);
+console.log(`Commit 서명자 수: ${data.blockSigners.committers.length}`);
+```
+
+### Frontend 구현 권장사항
+
+#### 1. 검증자 대시보드
+
+```javascript
+// 검증자 모니터링 대시보드
+async function fetchValidatorDashboard(validatorAddress, blocks = 1000) {
+  const latestBlock = await getLatestHeight();
+  const fromBlock = Math.max(0, latestBlock - blocks);
+
+  // 검증자 통계 조회
+  const statsResponse = await fetch('/api/v1/graphql', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: `
+        query($validator: Address!, $from: BigInt!, $to: BigInt!) {
+          validatorSigningStats(
+            validatorAddress: $validator
+            fromBlock: $from
+            toBlock: $to
+          ) {
+            prepareSignCount
+            prepareMissCount
+            commitSignCount
+            commitMissCount
+            signingRate
+          }
+        }
+      `,
+      variables: {
+        validator: validatorAddress,
+        from: fromBlock.toString(),
+        to: latestBlock.toString()
+      }
+    })
+  });
+
+  const { data } = await statsResponse.json();
+
+  return {
+    validator: validatorAddress,
+    blocks: blocks,
+    stats: data.validatorSigningStats,
+    health: calculateHealth(data.validatorSigningStats)
+  };
+}
+
+function calculateHealth(stats) {
+  if (stats.signingRate >= 99) return 'excellent';
+  if (stats.signingRate >= 95) return 'good';
+  if (stats.signingRate >= 90) return 'fair';
+  return 'poor';
+}
+```
+
+#### 2. 블록 상세 정보
+
+```javascript
+// 블록 상세 정보에 WBFT 메타데이터 추가
+async function fetchBlockDetails(blockNumber) {
+  const response = await fetch('/api/v1/graphql', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: `
+        query($blockNumber: BigInt!) {
+          block(number: $blockNumber) {
+            number
+            hash
+            timestamp
+            gasUsed
+            transactionCount
+          }
+
+          wbftBlockExtra(blockNumber: $blockNumber) {
+            round
+            gasTip
+            epochInfo {
+              epochNumber
+            }
+          }
+
+          blockSigners(blockNumber: $blockNumber) {
+            preparers
+            committers
+          }
+        }
+      `,
+      variables: {
+        blockNumber: blockNumber.toString()
+      }
+    })
+  });
+
+  const { data } = await response.json();
+
+  return {
+    ...data.block,
+    wbft: data.wbftBlockExtra,
+    signers: data.blockSigners
+  };
+}
+```
+
+#### 3. 에폭 전환 모니터링
+
+```javascript
+// 에폭 전환 감지 및 새 검증자 목록 표시
+async function monitorEpochChanges() {
+  const response = await fetch('/api/v1/graphql', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: `
+        query {
+          latestEpochInfo {
+            epochNumber
+            blockNumber
+            candidates {
+              address
+              diligence
+            }
+          }
+        }
+      `
+    })
+  });
+
+  const { data } = await response.json();
+  const epoch = data.latestEpochInfo;
+
+  // 검증자를 diligence 점수로 정렬
+  const sortedValidators = [...epoch.candidates].sort(
+    (a, b) => Number(b.diligence) - Number(a.diligence)
+  );
+
+  return {
+    epochNumber: epoch.epochNumber,
+    epochBlock: epoch.blockNumber,
+    validatorCount: sortedValidators.length,
+    topValidators: sortedValidators.slice(0, 10)
+  };
+}
+```
+
+#### 4. 검증자 성능 차트
+
+```javascript
+// 검증자 서명률 히스토리 차트 데이터
+async function fetchValidatorPerformanceHistory(
+  validatorAddress,
+  fromBlock,
+  toBlock,
+  interval = 100  // 블록 간격
+) {
+  const chartData = [];
+
+  for (let block = fromBlock; block <= toBlock; block += interval) {
+    const endBlock = Math.min(block + interval - 1, toBlock);
+
+    const response = await fetch('/api/v1/graphql', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: `
+          query($validator: Address!, $from: BigInt!, $to: BigInt!) {
+            validatorSigningStats(
+              validatorAddress: $validator
+              fromBlock: $from
+              toBlock: $to
+            ) {
+              signingRate
+              prepareSignCount
+              commitSignCount
+            }
+          }
+        `,
+        variables: {
+          validator: validatorAddress,
+          from: block.toString(),
+          to: endBlock.toString()
+        }
+      })
+    });
+
+    const { data } = await response.json();
+
+    chartData.push({
+      blockRange: `${block}-${endBlock}`,
+      signingRate: data.validatorSigningStats.signingRate,
+      prepareCount: data.validatorSigningStats.prepareSignCount,
+      commitCount: data.validatorSigningStats.commitSignCount
+    });
+  }
+
+  return chartData;
+}
+```
+
+### 페이지네이션 처리
+
+```javascript
+// 검증자 목록 페이지네이션
+const VALIDATORS_PER_PAGE = 20;
+
+async function fetchValidatorsPage(page, fromBlock, toBlock) {
+  const response = await fetch('/api/v1/graphql', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: `
+        query($from: BigInt!, $to: BigInt!, $limit: Int!, $offset: Int!) {
+          allValidatorsSigningStats(
+            fromBlock: $from
+            toBlock: $to
+            pagination: { limit: $limit, offset: $offset }
+          ) {
+            nodes {
+              validatorAddress
+              validatorIndex
+              signingRate
+              prepareSignCount
+              commitSignCount
+            }
+            totalCount
+            pageInfo {
+              hasNextPage
+              hasPreviousPage
+            }
+          }
+        }
+      `,
+      variables: {
+        from: fromBlock.toString(),
+        to: toBlock.toString(),
+        limit: VALIDATORS_PER_PAGE,
+        offset: page * VALIDATORS_PER_PAGE
+      }
+    })
+  });
+
+  const { data } = await response.json();
+
+  return {
+    validators: data.allValidatorsSigningStats.nodes,
+    totalCount: data.allValidatorsSigningStats.totalCount,
+    currentPage: page,
+    totalPages: Math.ceil(
+      data.allValidatorsSigningStats.totalCount / VALIDATORS_PER_PAGE
+    ),
+    hasNextPage: data.allValidatorsSigningStats.pageInfo.hasNextPage,
+    hasPreviousPage: data.allValidatorsSigningStats.pageInfo.hasPreviousPage
+  };
+}
+```
+
+---
+
 ## 구현 현황
 
 | 기능 | 상태 | GraphQL | JSON-RPC | 비고 |
@@ -758,10 +1357,20 @@ type Block {
 | proposalVotes | ✅ 완료 | ✅ | ✅ | 제안 투표 내역 |
 | activeValidators | ✅ 완료 | ✅ | ✅ | 활성 Validator 목록 |
 | blacklistedAddresses | ✅ 완료 | ✅ | ✅ | 블랙리스트 주소 목록 |
+| **WBFT Consensus** | | | | |
+| wbftBlockExtra | ✅ 완료 | ✅ | - | 블록 WBFT 메타데이터 (번호로 조회) |
+| wbftBlockExtraByHash | ✅ 완료 | ✅ | - | 블록 WBFT 메타데이터 (해시로 조회) |
+| epochInfo | ✅ 완료 | ✅ | - | 특정 에폭 정보 조회 |
+| latestEpochInfo | ✅ 완료 | ✅ | - | 최신 에폭 정보 조회 |
+| validatorSigningStats | ✅ 완료 | ✅ | - | 검증자 서명 통계 |
+| allValidatorsSigningStats | ✅ 완료 | ✅ | - | 전체 검증자 서명 통계 (페이지네이션) |
+| validatorSigningActivity | ✅ 완료 | ✅ | - | 검증자 서명 활동 내역 (페이지네이션) |
+| blockSigners | ✅ 완료 | ✅ | - | 블록 서명자 목록 (Prepare/Commit) |
 
 **Note**:
 - 모든 Fee Delegation 필드는 go-stablenet의 `Transaction.FeePayer()` 및 `Transaction.RawFeePayerSignatureValues()` 메서드를 통해 실제 값을 추출합니다.
 - System Contract 쿼리는 시스템 컨트랙트 주소 (0x1000-0x1004)의 이벤트 및 상태를 조회합니다.
+- **WBFT API는 현재 GraphQL만 지원합니다.** JSON-RPC 지원은 향후 추가될 예정입니다.
 
 ---
 
@@ -775,6 +1384,7 @@ type Block {
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2025-11-21 | 0.5.0 | WBFT 합의 메타데이터 API 추가 (GraphQL) - 블록 메타데이터, 에폭 정보, 검증자 서명 통계 |
 | 2025-11-21 | 0.4.0 | System Contracts & Governance API 추가 (GraphQL, JSON-RPC) |
 | 2025-11-20 | 0.3.0 | go-stablenet 연동으로 Fee Delegation 실제 값 추출 구현 |
 | 2025-11-20 | 0.2.0 | GraphQL 스키마 구현 완료 (EIP-1559, Fee Delegation) |

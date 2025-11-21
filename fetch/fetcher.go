@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/events"
+	"github.com/0xmhha/indexer-go/storage"
 )
 
 // Client defines the interface for RPC client operations
@@ -143,6 +144,11 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	// Store block
 	if err := f.storage.SetBlock(ctx, block); err != nil {
 		return fmt.Errorf("failed to store block %d: %w", height, err)
+	}
+
+	// Process WBFT metadata
+	if err := f.processWBFTMetadata(ctx, block); err != nil {
+		return fmt.Errorf("failed to process WBFT metadata for block %d: %w", height, err)
 	}
 
 	// Publish block event if EventBus is configured
@@ -378,6 +384,11 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 				// Store block
 				if err := f.storage.SetBlock(ctx, res.block); err != nil {
 					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)
+				}
+
+				// Process WBFT metadata
+				if err := f.processWBFTMetadata(ctx, res.block); err != nil {
+					return fmt.Errorf("failed to process WBFT metadata for block %d: %w", nextHeight, err)
 				}
 
 				// Publish block event if EventBus is configured
@@ -808,4 +819,118 @@ func getTransactionSender(tx *types.Transaction) common.Address {
 		return common.Address{}
 	}
 	return from
+}
+
+// processWBFTMetadata parses and stores WBFT consensus metadata from block header
+func (f *Fetcher) processWBFTMetadata(ctx context.Context, block *types.Block) error {
+	// Check if storage implements WBFTWriter
+	wbftWriter, ok := f.storage.(storage.WBFTWriter)
+	if !ok {
+		// Storage doesn't support WBFT metadata - skip silently
+		return nil
+	}
+
+	// Parse WBFT Extra from block header
+	wbftExtra, err := storage.ParseWBFTExtra(block.Header())
+	if err != nil {
+		// Log warning but don't fail the entire block indexing
+		f.logger.Warn("Failed to parse WBFT extra",
+			zap.Uint64("height", block.NumberU64()),
+			zap.String("hash", block.Hash().Hex()),
+			zap.Error(err),
+		)
+		return nil
+	}
+
+	// Save WBFT block extra
+	if err := wbftWriter.SaveWBFTBlockExtra(ctx, wbftExtra); err != nil {
+		return fmt.Errorf("failed to save WBFT block extra: %w", err)
+	}
+
+	// Save epoch info if present
+	if wbftExtra.EpochInfo != nil {
+		if err := wbftWriter.SaveEpochInfo(ctx, wbftExtra.EpochInfo); err != nil {
+			return fmt.Errorf("failed to save epoch info: %w", err)
+		}
+	}
+
+	// Extract and save validator signing activities
+	if wbftExtra.EpochInfo != nil && len(wbftExtra.EpochInfo.Candidates) > 0 {
+		var signingActivities []*storage.ValidatorSigningActivity
+
+		// Extract prepare signers
+		if wbftExtra.PreparedSeal != nil {
+			preparers, err := storage.ExtractSigners(
+				wbftExtra.PreparedSeal.Sealers,
+				wbftExtra.EpochInfo.Validators,
+				wbftExtra.EpochInfo.Candidates,
+			)
+			if err != nil {
+				f.logger.Warn("Failed to extract prepare signers",
+					zap.Uint64("height", block.NumberU64()),
+					zap.Error(err),
+				)
+			} else {
+				// Create signing activities for preparers
+				for i, validator := range wbftExtra.EpochInfo.Candidates {
+					activity := &storage.ValidatorSigningActivity{
+						BlockNumber:      wbftExtra.BlockNumber,
+						BlockHash:        wbftExtra.BlockHash,
+						ValidatorAddress: validator.Address,
+						ValidatorIndex:   uint32(i),
+						SignedPrepare:    containsAddress(preparers, validator.Address),
+						SignedCommit:     false, // Will be updated below
+						Round:            wbftExtra.Round,
+						Timestamp:        wbftExtra.Timestamp,
+					}
+					signingActivities = append(signingActivities, activity)
+				}
+			}
+		}
+
+		// Extract commit signers
+		if wbftExtra.CommittedSeal != nil {
+			committers, err := storage.ExtractSigners(
+				wbftExtra.CommittedSeal.Sealers,
+				wbftExtra.EpochInfo.Validators,
+				wbftExtra.EpochInfo.Candidates,
+			)
+			if err != nil {
+				f.logger.Warn("Failed to extract commit signers",
+					zap.Uint64("height", block.NumberU64()),
+					zap.Error(err),
+				)
+			} else {
+				// Update commit status for existing activities
+				for _, activity := range signingActivities {
+					activity.SignedCommit = containsAddress(committers, activity.ValidatorAddress)
+				}
+			}
+		}
+
+		// Save validator signing activities
+		if len(signingActivities) > 0 {
+			if err := wbftWriter.UpdateValidatorSigningStats(ctx, wbftExtra.BlockNumber, signingActivities); err != nil {
+				return fmt.Errorf("failed to update validator signing stats: %w", err)
+			}
+		}
+	}
+
+	f.logger.Debug("Processed WBFT metadata",
+		zap.Uint64("height", block.NumberU64()),
+		zap.Uint32("round", wbftExtra.Round),
+		zap.Bool("has_epoch_info", wbftExtra.EpochInfo != nil),
+	)
+
+	return nil
+}
+
+// containsAddress checks if an address is in a slice of addresses
+func containsAddress(addresses []common.Address, target common.Address) bool {
+	for _, addr := range addresses {
+		if addr == target {
+			return true
+		}
+	}
+	return false
 }

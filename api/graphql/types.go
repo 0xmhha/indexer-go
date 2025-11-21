@@ -76,6 +76,17 @@ var (
 	mintEventConnectionType       *graphql.Object
 	burnEventConnectionType       *graphql.Object
 	proposalConnectionType        *graphql.Object
+
+	// WBFT consensus types
+	wbftAggregatedSealType                 *graphql.Object
+	candidateType                          *graphql.Object
+	epochInfoType                          *graphql.Object
+	wbftBlockExtraType                     *graphql.Object
+	validatorSigningStatsType              *graphql.Object
+	validatorSigningActivityType           *graphql.Object
+	blockSignersType                       *graphql.Object
+	validatorSigningStatsConnectionType    *graphql.Object
+	validatorSigningActivityConnectionType *graphql.Object
 )
 
 func init() {
@@ -1018,6 +1029,212 @@ func initTypes() {
 		Fields: graphql.Fields{
 			"nodes": &graphql.Field{
 				Type: graphql.NewList(graphql.NewNonNull(proposalType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// ========== WBFT Consensus Types ==========
+
+	// WBFTAggregatedSeal type
+	wbftAggregatedSealType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "WBFTAggregatedSeal",
+		Fields: graphql.Fields{
+			"sealers": &graphql.Field{
+				Type: graphql.NewNonNull(bytesType),
+			},
+			"signature": &graphql.Field{
+				Type: graphql.NewNonNull(bytesType),
+			},
+		},
+	})
+
+	// Candidate type
+	candidateType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "Candidate",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"diligence": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// EpochInfo type
+	epochInfoType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "EpochInfo",
+		Fields: graphql.Fields{
+			"epochNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"candidates": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(candidateType))),
+			},
+			"validators": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(graphql.Int))),
+			},
+			"blsPublicKeys": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(bytesType))),
+			},
+		},
+	})
+
+	// WBFTBlockExtra type
+	wbftBlockExtraType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "WBFTBlockExtra",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blockHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"randaoReveal": &graphql.Field{
+				Type: graphql.NewNonNull(bytesType),
+			},
+			"prevRound": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"prevPreparedSeal": &graphql.Field{
+				Type: wbftAggregatedSealType,
+			},
+			"prevCommittedSeal": &graphql.Field{
+				Type: wbftAggregatedSealType,
+			},
+			"round": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"preparedSeal": &graphql.Field{
+				Type: wbftAggregatedSealType,
+			},
+			"committedSeal": &graphql.Field{
+				Type: wbftAggregatedSealType,
+			},
+			"gasTip": &graphql.Field{
+				Type: bigIntType,
+			},
+			"epochInfo": &graphql.Field{
+				Type: epochInfoType,
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// ValidatorSigningStats type
+	validatorSigningStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorSigningStats",
+		Fields: graphql.Fields{
+			"validatorAddress": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"validatorIndex": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"prepareSignCount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"prepareMissCount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"commitSignCount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"commitMissCount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"fromBlock": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"toBlock": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"signingRate": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Float),
+			},
+		},
+	})
+
+	// ValidatorSigningActivity type
+	validatorSigningActivityType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorSigningActivity",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blockHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"validatorAddress": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"validatorIndex": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"signedPrepare": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"signedCommit": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"round": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// BlockSigners type
+	blockSignersType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BlockSigners",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"preparers": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+			"committers": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+		},
+	})
+
+	// ValidatorSigningStatsConnection type
+	validatorSigningStatsConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorSigningStatsConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(validatorSigningStatsType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// ValidatorSigningActivityConnection type
+	validatorSigningActivityConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorSigningActivityConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(validatorSigningActivityType)),
 			},
 			"totalCount": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.Int),

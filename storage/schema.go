@@ -36,6 +36,18 @@ const (
 	prefixSysEmergency      = "/data/syscontracts/emergency/"
 	prefixSysDepositMint    = "/data/syscontracts/depositmint/"
 
+	// WBFT data prefixes
+	prefixWBFT               = "/data/wbft/"
+	prefixWBFTExtra          = "/data/wbft/extra/"
+	prefixWBFTEpoch          = "/data/wbft/epoch/"
+	prefixWBFTValidatorStats = "/data/wbft/validator/stats/"
+	prefixWBFTValidatorActivity = "/data/wbft/validator/activity/"
+
+	// WBFT index prefixes
+	prefixIdxWBFT               = "/index/wbft/"
+	prefixIdxWBFTSignerPrepare  = "/index/wbft/signers/prepare/"
+	prefixIdxWBFTSignerCommit   = "/index/wbft/signers/commit/"
+
 	// System contracts index prefixes
 	prefixIdxSysContracts    = "/index/syscontracts/"
 	prefixIdxMintMinter      = "/index/syscontracts/mint_minter/"
@@ -45,6 +57,26 @@ const (
 	prefixIdxMinterActive    = "/index/syscontracts/minter_active/"
 	prefixIdxValidatorActive = "/index/syscontracts/validator_active/"
 	prefixIdxTotalSupply     = "/index/syscontracts/total_supply"
+
+	// Address indexing data prefixes
+	prefixContractCreation = "/data/contract/creation/"
+	prefixInternalTx       = "/data/internal/"
+	prefixERC20Transfer    = "/data/erc20/transfer/"
+	prefixERC721Transfer   = "/data/erc721/transfer/"
+
+	// Address indexing index prefixes
+	prefixIdxContractCreator  = "/index/contract/creator/"
+	prefixIdxContractBlock    = "/index/contract/block/"
+	prefixIdxInternalFrom     = "/index/internal/from/"
+	prefixIdxInternalTo       = "/index/internal/to/"
+	prefixIdxInternalBlock    = "/index/internal/block/"
+	prefixIdxERC20Token       = "/index/erc20/token/"
+	prefixIdxERC20From        = "/index/erc20/from/"
+	prefixIdxERC20To          = "/index/erc20/to/"
+	prefixIdxERC721Token      = "/index/erc721/token/"
+	prefixIdxERC721From       = "/index/erc721/from/"
+	prefixIdxERC721To         = "/index/erc721/to/"
+	prefixIdxERC721TokenOwner = "/index/erc721/tokenowner/"
 )
 
 // Metadata keys
@@ -52,6 +84,7 @@ const (
 	keyLatestHeight     = "/meta/lh"
 	keyBlockCount       = "/meta/bc"
 	keyTransactionCount = "/meta/tc"
+	keyLatestEpoch      = "/meta/wbft/latest_epoch"
 )
 
 // LatestHeightKey returns the key for storing latest indexed height
@@ -422,4 +455,240 @@ func MinterActiveIndexKeyPrefix() []byte {
 // ValidatorActiveIndexKeyPrefix returns the prefix for all active validator indexes
 func ValidatorActiveIndexKeyPrefix() []byte {
 	return []byte(prefixIdxValidatorActive)
+}
+
+// WBFT key functions
+
+// WBFTBlockExtraKey returns the key for storing WBFT extra data for a block
+// Format: /data/wbft/extra/{blockNumber}
+func WBFTBlockExtraKey(blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%020d", prefixWBFTExtra, blockNumber))
+}
+
+// WBFTEpochKey returns the key for storing epoch information
+// Format: /data/wbft/epoch/{epochNumber}
+func WBFTEpochKey(epochNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%020d", prefixWBFTEpoch, epochNumber))
+}
+
+// LatestEpochKey returns the key for storing latest epoch number
+func LatestEpochKey() []byte {
+	return []byte(keyLatestEpoch)
+}
+
+// WBFTValidatorStatsKey returns the key for validator signing statistics
+// Format: /data/wbft/validator/stats/{validator}/{fromBlock}_{toBlock}
+func WBFTValidatorStatsKey(validator common.Address, fromBlock, toBlock uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d_%020d", prefixWBFTValidatorStats, validator.Hex(), fromBlock, toBlock))
+}
+
+// WBFTValidatorActivityKey returns the key for validator signing activity at a block
+// Format: /data/wbft/validator/activity/{validator}/{blockNumber}
+func WBFTValidatorActivityKey(validator common.Address, blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d", prefixWBFTValidatorActivity, validator.Hex(), blockNumber))
+}
+
+// WBFTSignerPrepareIndexKey returns the index key for prepare phase signers
+// Format: /index/wbft/signers/prepare/{blockNumber}/{validator}
+func WBFTSignerPrepareIndexKey(blockNumber uint64, validator common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%020d/%s", prefixIdxWBFTSignerPrepare, blockNumber, validator.Hex()))
+}
+
+// WBFTSignerCommitIndexKey returns the index key for commit phase signers
+// Format: /index/wbft/signers/commit/{blockNumber}/{validator}
+func WBFTSignerCommitIndexKey(blockNumber uint64, validator common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%020d/%s", prefixIdxWBFTSignerCommit, blockNumber, validator.Hex()))
+}
+
+// WBFT key prefix functions for range queries
+
+// WBFTBlockExtraKeyPrefix returns the prefix for all WBFT extra data
+func WBFTBlockExtraKeyPrefix() []byte {
+	return []byte(prefixWBFTExtra)
+}
+
+// WBFTEpochKeyPrefix returns the prefix for all epoch data
+func WBFTEpochKeyPrefix() []byte {
+	return []byte(prefixWBFTEpoch)
+}
+
+// WBFTValidatorStatsKeyPrefix returns the prefix for validator stats by validator
+func WBFTValidatorStatsKeyPrefix(validator common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixWBFTValidatorStats, validator.Hex()))
+}
+
+// WBFTValidatorActivityKeyPrefix returns the prefix for validator activity by validator
+func WBFTValidatorActivityKeyPrefix(validator common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixWBFTValidatorActivity, validator.Hex()))
+}
+
+// WBFTValidatorActivityAllKeyPrefix returns the prefix for all validator activities
+func WBFTValidatorActivityAllKeyPrefix() []byte {
+	return []byte(prefixWBFTValidatorActivity)
+}
+
+// WBFTSignerPrepareIndexKeyPrefix returns the prefix for prepare signers by block
+func WBFTSignerPrepareIndexKeyPrefix(blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%020d/", prefixIdxWBFTSignerPrepare, blockNumber))
+}
+
+// WBFTSignerCommitIndexKeyPrefix returns the prefix for commit signers by block
+func WBFTSignerCommitIndexKeyPrefix(blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%020d/", prefixIdxWBFTSignerCommit, blockNumber))
+}
+
+// ========== Address Indexing Key Functions ==========
+
+// Contract Creation Keys
+
+// ContractCreationKey returns the key for storing contract creation data
+// Format: /data/contract/creation/{contractAddress}
+func ContractCreationKey(contractAddress common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixContractCreation, contractAddress.Hex()))
+}
+
+// ContractCreatorIndexKey returns the index key for contracts by creator
+// Format: /index/contract/creator/{creatorAddress}/{blockNumber}/{txHash}
+func ContractCreatorIndexKey(creator common.Address, blockNumber uint64, txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%s", prefixIdxContractCreator, creator.Hex(), blockNumber, txHash.Hex()))
+}
+
+// ContractBlockIndexKey returns the index key for contracts by block
+// Format: /index/contract/block/{blockNumber}/{contractAddress}
+func ContractBlockIndexKey(blockNumber uint64, contractAddress common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%020d/%s", prefixIdxContractBlock, blockNumber, contractAddress.Hex()))
+}
+
+// ContractCreatorIndexKeyPrefix returns the prefix for contracts by creator
+func ContractCreatorIndexKeyPrefix(creator common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxContractCreator, creator.Hex()))
+}
+
+// Internal Transaction Keys
+
+// InternalTransactionKey returns the key for storing internal transaction data
+// Format: /data/internal/{txHash}/{index}
+func InternalTransactionKey(txHash common.Hash, index int) []byte {
+	return []byte(fmt.Sprintf("%s%s/%06d", prefixInternalTx, txHash.Hex(), index))
+}
+
+// InternalTransactionKeyPrefix returns the prefix for all internal transactions of a tx
+func InternalTransactionKeyPrefix(txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixInternalTx, txHash.Hex()))
+}
+
+// InternalTxFromIndexKey returns the index key for internal transactions by from address
+// Format: /index/internal/from/{fromAddress}/{blockNumber}/{txHash}
+func InternalTxFromIndexKey(from common.Address, blockNumber uint64, txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%s", prefixIdxInternalFrom, from.Hex(), blockNumber, txHash.Hex()))
+}
+
+// InternalTxToIndexKey returns the index key for internal transactions by to address
+// Format: /index/internal/to/{toAddress}/{blockNumber}/{txHash}
+func InternalTxToIndexKey(to common.Address, blockNumber uint64, txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%s", prefixIdxInternalTo, to.Hex(), blockNumber, txHash.Hex()))
+}
+
+// InternalTxBlockIndexKey returns the index key for internal transactions by block
+// Format: /index/internal/block/{blockNumber}/{txHash}
+func InternalTxBlockIndexKey(blockNumber uint64, txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%020d/%s", prefixIdxInternalBlock, blockNumber, txHash.Hex()))
+}
+
+// InternalTxFromIndexKeyPrefix returns the prefix for internal transactions by from address
+func InternalTxFromIndexKeyPrefix(from common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxInternalFrom, from.Hex()))
+}
+
+// InternalTxToIndexKeyPrefix returns the prefix for internal transactions by to address
+func InternalTxToIndexKeyPrefix(to common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxInternalTo, to.Hex()))
+}
+
+// ERC20 Transfer Keys
+
+// ERC20TransferKey returns the key for storing ERC20 transfer data
+// Format: /data/erc20/transfer/{txHash}/{logIndex}
+func ERC20TransferKey(txHash common.Hash, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%06d", prefixERC20Transfer, txHash.Hex(), logIndex))
+}
+
+// ERC20TokenIndexKey returns the index key for ERC20 transfers by token
+// Format: /index/erc20/token/{contractAddress}/{blockNumber}/{logIndex}
+func ERC20TokenIndexKey(tokenAddress common.Address, blockNumber uint64, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixIdxERC20Token, tokenAddress.Hex(), blockNumber, logIndex))
+}
+
+// ERC20FromIndexKey returns the index key for ERC20 transfers by from address
+// Format: /index/erc20/from/{fromAddress}/{blockNumber}/{logIndex}
+func ERC20FromIndexKey(from common.Address, blockNumber uint64, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixIdxERC20From, from.Hex(), blockNumber, logIndex))
+}
+
+// ERC20ToIndexKey returns the index key for ERC20 transfers by to address
+// Format: /index/erc20/to/{toAddress}/{blockNumber}/{logIndex}
+func ERC20ToIndexKey(to common.Address, blockNumber uint64, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixIdxERC20To, to.Hex(), blockNumber, logIndex))
+}
+
+// ERC20TokenIndexKeyPrefix returns the prefix for ERC20 transfers by token
+func ERC20TokenIndexKeyPrefix(tokenAddress common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxERC20Token, tokenAddress.Hex()))
+}
+
+// ERC20FromIndexKeyPrefix returns the prefix for ERC20 transfers by from address
+func ERC20FromIndexKeyPrefix(from common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxERC20From, from.Hex()))
+}
+
+// ERC20ToIndexKeyPrefix returns the prefix for ERC20 transfers by to address
+func ERC20ToIndexKeyPrefix(to common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxERC20To, to.Hex()))
+}
+
+// ERC721 Transfer Keys
+
+// ERC721TransferKey returns the key for storing ERC721 transfer data
+// Format: /data/erc721/transfer/{txHash}/{logIndex}
+func ERC721TransferKey(txHash common.Hash, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%06d", prefixERC721Transfer, txHash.Hex(), logIndex))
+}
+
+// ERC721TokenIndexKey returns the index key for ERC721 transfers by token
+// Format: /index/erc721/token/{contractAddress}/{blockNumber}/{logIndex}
+func ERC721TokenIndexKey(tokenAddress common.Address, blockNumber uint64, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixIdxERC721Token, tokenAddress.Hex(), blockNumber, logIndex))
+}
+
+// ERC721FromIndexKey returns the index key for ERC721 transfers by from address
+// Format: /index/erc721/from/{fromAddress}/{blockNumber}/{logIndex}
+func ERC721FromIndexKey(from common.Address, blockNumber uint64, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixIdxERC721From, from.Hex(), blockNumber, logIndex))
+}
+
+// ERC721ToIndexKey returns the index key for ERC721 transfers by to address
+// Format: /index/erc721/to/{toAddress}/{blockNumber}/{logIndex}
+func ERC721ToIndexKey(to common.Address, blockNumber uint64, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixIdxERC721To, to.Hex(), blockNumber, logIndex))
+}
+
+// ERC721TokenOwnerKey returns the key for storing current NFT owner
+// Format: /index/erc721/tokenowner/{contractAddress}/{tokenId}
+func ERC721TokenOwnerKey(tokenAddress common.Address, tokenId string) []byte {
+	return []byte(fmt.Sprintf("%s%s/%s", prefixIdxERC721TokenOwner, tokenAddress.Hex(), tokenId))
+}
+
+// ERC721TokenIndexKeyPrefix returns the prefix for ERC721 transfers by token
+func ERC721TokenIndexKeyPrefix(tokenAddress common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxERC721Token, tokenAddress.Hex()))
+}
+
+// ERC721FromIndexKeyPrefix returns the prefix for ERC721 transfers by from address
+func ERC721FromIndexKeyPrefix(from common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxERC721From, from.Hex()))
+}
+
+// ERC721ToIndexKeyPrefix returns the prefix for ERC721 transfers by to address
+func ERC721ToIndexKeyPrefix(to common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxERC721To, to.Hex()))
 }

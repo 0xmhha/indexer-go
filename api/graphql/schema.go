@@ -367,6 +367,95 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				},
 				Resolve: s.resolveDepositMintProposals,
 			},
+			// WBFT Consensus Queries
+			"wbftBlockExtra": &graphql.Field{
+				Type: wbftBlockExtraType,
+				Args: graphql.FieldConfigArgument{
+					"blockNumber": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveWBFTBlockExtra,
+			},
+			"wbftBlockExtraByHash": &graphql.Field{
+				Type: wbftBlockExtraType,
+				Args: graphql.FieldConfigArgument{
+					"blockHash": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(hashType),
+					},
+				},
+				Resolve: s.resolveWBFTBlockExtraByHash,
+			},
+			"epochInfo": &graphql.Field{
+				Type: epochInfoType,
+				Args: graphql.FieldConfigArgument{
+					"epochNumber": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveEpochInfo,
+			},
+			"latestEpochInfo": &graphql.Field{
+				Type: epochInfoType,
+				Resolve: s.resolveLatestEpochInfo,
+			},
+			"validatorSigningStats": &graphql.Field{
+				Type: validatorSigningStatsType,
+				Args: graphql.FieldConfigArgument{
+					"validatorAddress": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveValidatorSigningStats,
+			},
+			"allValidatorsSigningStats": &graphql.Field{
+				Type: graphql.NewNonNull(validatorSigningStatsConnectionType),
+				Args: graphql.FieldConfigArgument{
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveAllValidatorsSigningStats,
+			},
+			"validatorSigningActivity": &graphql.Field{
+				Type: graphql.NewNonNull(validatorSigningActivityConnectionType),
+				Args: graphql.FieldConfigArgument{
+					"validatorAddress": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveValidatorSigningActivity,
+			},
+			"blockSigners": &graphql.Field{
+				Type: blockSignersType,
+				Args: graphql.FieldConfigArgument{
+					"blockNumber": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveBlockSigners,
+			},
 		},
 	})
 
