@@ -235,6 +235,8 @@
 - ✅ WBFT JSON-RPC API 구현 - GraphQL로만 제공되던 WBFT 기능을 JSON-RPC로 추가 (8개 메서드)
 - ✅ WebSocket 엔드포인트 확인 - `/graphql/ws` 경로에서 GraphQL Subscriptions 정상 작동 확인
 - ✅ Frontend 통합 가이드 업데이트 - ToFrontend.md에 WBFT JSON-RPC API 및 WebSocket 설정 문서화
+- ✅ Address Indexing 테스트 수정 - ERC20/ERC721 값 hex 인코딩, mock storage 개선, 모든 테스트 통과
+- ✅ 코드 품질 검증 - 빌드, 테스트(55.2% coverage), go vet, gofmt 모두 통과
 
 ---
 
