@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/storage"
@@ -821,4 +822,863 @@ func getContext(p graphql.ResolveParams) context.Context {
 		return ctx
 	}
 	return context.Background()
+}
+
+// ========== System Contract Resolvers ==========
+
+// resolveTotalSupply resolves the current total supply
+func (s *Schema) resolveTotalSupply(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Cast storage to SystemContractReader
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	supply, err := reader.GetTotalSupply(ctx)
+	if err != nil {
+		s.logger.Error("failed to get total supply", zap.Error(err))
+		return nil, err
+	}
+
+	return supply.String(), nil
+}
+
+// resolveActiveMinters resolves the list of active minters
+func (s *Schema) resolveActiveMinters(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	minters, err := reader.GetActiveMinters(ctx)
+	if err != nil {
+		s.logger.Error("failed to get active minters", zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, minter := range minters {
+		allowance, err := reader.GetMinterAllowance(ctx, minter)
+		if err != nil {
+			s.logger.Warn("failed to get minter allowance", zap.String("minter", minter.Hex()), zap.Error(err))
+			continue
+		}
+
+		result = append(result, map[string]interface{}{
+			"address":   minter.Hex(),
+			"allowance": allowance.String(),
+			"isActive":  true,
+		})
+	}
+
+	return result, nil
+}
+
+// resolveMinterAllowance resolves the allowance for a specific minter
+func (s *Schema) resolveMinterAllowance(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	minterStr, ok := p.Args["minter"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid minter address")
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	minter := common.HexToAddress(minterStr)
+	allowance, err := reader.GetMinterAllowance(ctx, minter)
+	if err != nil {
+		s.logger.Error("failed to get minter allowance",
+			zap.String("minter", minterStr),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return allowance.String(), nil
+}
+
+// resolveActiveValidators resolves the list of active validators
+func (s *Schema) resolveActiveValidators(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	validators, err := reader.GetActiveValidators(ctx)
+	if err != nil {
+		s.logger.Error("failed to get active validators", zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, validator := range validators {
+		result = append(result, map[string]interface{}{
+			"address":  validator.Hex(),
+			"isActive": true,
+		})
+	}
+
+	return result, nil
+}
+
+// resolveBlacklistedAddresses resolves the list of blacklisted addresses
+func (s *Schema) resolveBlacklistedAddresses(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	addresses, err := reader.GetBlacklistedAddresses(ctx)
+	if err != nil {
+		s.logger.Error("failed to get blacklisted addresses", zap.Error(err))
+		return nil, err
+	}
+
+	var result []string
+	for _, addr := range addresses {
+		result = append(result, addr.Hex())
+	}
+
+	return result, nil
+}
+
+// resolveProposals resolves governance proposals with filtering
+func (s *Schema) resolveProposals(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Parse filter
+	filter, ok := p.Args["filter"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid filter")
+	}
+
+	contractStr, ok := filter["contract"].(string)
+	if !ok {
+		return nil, fmt.Errorf("contract address is required")
+	}
+	contract := common.HexToAddress(contractStr)
+
+	// Parse status (optional)
+	status := storage.ProposalStatusNone
+	if statusStr, ok := filter["status"].(string); ok {
+		status = parseProposalStatus(statusStr)
+	}
+
+	// Get pagination parameters
+	limit := 10
+	offset := 0
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok && l > 0 {
+			if l > 100 {
+				limit = 100
+			} else {
+				limit = l
+			}
+		}
+		if o, ok := pagination["offset"].(int); ok && o >= 0 {
+			offset = o
+		}
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	proposals, err := reader.GetProposals(ctx, contract, status, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get proposals",
+			zap.String("contract", contractStr),
+			zap.Error(err))
+		return nil, err
+	}
+
+	var nodes []map[string]interface{}
+	for _, proposal := range proposals {
+		nodes = append(nodes, s.proposalToMap(proposal))
+	}
+
+	return map[string]interface{}{
+		"nodes":      nodes,
+		"totalCount": len(nodes),
+		"pageInfo": map[string]interface{}{
+			"hasNextPage":     len(nodes) >= limit,
+			"hasPreviousPage": offset > 0,
+			"startCursor":     nil,
+			"endCursor":       nil,
+		},
+	}, nil
+}
+
+// resolveProposal resolves a specific proposal by ID
+func (s *Schema) resolveProposal(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	contractStr, ok := p.Args["contract"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid contract address")
+	}
+
+	proposalIdStr, ok := p.Args["proposalId"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid proposal ID")
+	}
+
+	contract := common.HexToAddress(contractStr)
+	proposalId, success := new(big.Int).SetString(proposalIdStr, 10)
+	if !success {
+		return nil, fmt.Errorf("invalid proposal ID format")
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	proposal, err := reader.GetProposalById(ctx, contract, proposalId)
+	if err != nil {
+		s.logger.Error("failed to get proposal",
+			zap.String("contract", contractStr),
+			zap.String("proposalId", proposalIdStr),
+			zap.Error(err))
+		return nil, err
+	}
+
+	if proposal == nil {
+		return nil, nil
+	}
+
+	return s.proposalToMap(proposal), nil
+}
+
+// resolveProposalVotes resolves votes for a specific proposal
+func (s *Schema) resolveProposalVotes(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	contractStr, ok := p.Args["contract"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid contract address")
+	}
+
+	proposalIdStr, ok := p.Args["proposalId"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid proposal ID")
+	}
+
+	contract := common.HexToAddress(contractStr)
+	proposalId, success := new(big.Int).SetString(proposalIdStr, 10)
+	if !success {
+		return nil, fmt.Errorf("invalid proposal ID format")
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	votes, err := reader.GetProposalVotes(ctx, contract, proposalId)
+	if err != nil {
+		s.logger.Error("failed to get proposal votes",
+			zap.String("contract", contractStr),
+			zap.String("proposalId", proposalIdStr),
+			zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, vote := range votes {
+		result = append(result, s.proposalVoteToMap(vote))
+	}
+
+	return result, nil
+}
+
+// Helper function to convert Proposal to map
+func (s *Schema) proposalToMap(proposal *storage.Proposal) map[string]interface{} {
+	m := map[string]interface{}{
+		"contract":          proposal.Contract.Hex(),
+		"proposalId":        proposal.ProposalID.String(),
+		"proposer":          proposal.Proposer.Hex(),
+		"actionType":        common.Bytes2Hex(proposal.ActionType[:]),
+		"callData":          common.Bytes2Hex(proposal.CallData),
+		"memberVersion":     proposal.MemberVersion.String(),
+		"requiredApprovals": int(proposal.RequiredApprovals),
+		"approved":          int(proposal.Approved),
+		"rejected":          int(proposal.Rejected),
+		"status":            proposalStatusToString(proposal.Status),
+		"createdAt":         fmt.Sprintf("%d", proposal.CreatedAt),
+		"blockNumber":       fmt.Sprintf("%d", proposal.BlockNumber),
+		"transactionHash":   proposal.TxHash.Hex(),
+	}
+
+	if proposal.ExecutedAt != nil {
+		m["executedAt"] = fmt.Sprintf("%d", *proposal.ExecutedAt)
+	} else {
+		m["executedAt"] = nil
+	}
+
+	return m
+}
+
+// Helper function to convert ProposalVote to map
+func (s *Schema) proposalVoteToMap(vote *storage.ProposalVote) map[string]interface{} {
+	return map[string]interface{}{
+		"contract":        vote.Contract.Hex(),
+		"proposalId":      vote.ProposalID.String(),
+		"voter":           vote.Voter.Hex(),
+		"approval":        vote.Approval,
+		"blockNumber":     fmt.Sprintf("%d", vote.BlockNumber),
+		"transactionHash": vote.TxHash.Hex(),
+		"timestamp":       fmt.Sprintf("%d", vote.Timestamp),
+	}
+}
+
+// Helper function to parse ProposalStatus from string
+func parseProposalStatus(statusStr string) storage.ProposalStatus {
+	switch statusStr {
+	case "NONE":
+		return storage.ProposalStatusNone
+	case "VOTING":
+		return storage.ProposalStatusVoting
+	case "APPROVED":
+		return storage.ProposalStatusApproved
+	case "EXECUTED":
+		return storage.ProposalStatusExecuted
+	case "CANCELLED":
+		return storage.ProposalStatusCancelled
+	case "EXPIRED":
+		return storage.ProposalStatusExpired
+	case "FAILED":
+		return storage.ProposalStatusFailed
+	case "REJECTED":
+		return storage.ProposalStatusRejected
+	default:
+		return storage.ProposalStatusNone
+	}
+}
+
+// Helper function to convert ProposalStatus to string
+func proposalStatusToString(status storage.ProposalStatus) string {
+	switch status {
+	case storage.ProposalStatusNone:
+		return "NONE"
+	case storage.ProposalStatusVoting:
+		return "VOTING"
+	case storage.ProposalStatusApproved:
+		return "APPROVED"
+	case storage.ProposalStatusExecuted:
+		return "EXECUTED"
+	case storage.ProposalStatusCancelled:
+		return "CANCELLED"
+	case storage.ProposalStatusExpired:
+		return "EXPIRED"
+	case storage.ProposalStatusFailed:
+		return "FAILED"
+	case storage.ProposalStatusRejected:
+		return "REJECTED"
+	default:
+		return "NONE"
+	}
+}
+
+// resolveMintEvents resolves mint events with filtering and pagination
+func (s *Schema) resolveMintEvents(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	filter, ok := p.Args["filter"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid filter")
+	}
+
+	// Parse block range
+	var fromBlock, toBlock uint64
+	if fb, ok := filter["fromBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(fb, 10, 64)
+		fromBlock = parsed
+	}
+	if tb, ok := filter["toBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(tb, 10, 64)
+		toBlock = parsed
+	}
+
+	// Parse optional minter address
+	var minter common.Address
+	if minterStr, ok := filter["minter"].(string); ok && minterStr != "" {
+		minter = common.HexToAddress(minterStr)
+	}
+
+	// Pagination
+	limit := 10
+	offset := 0
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok && l > 0 {
+			if l > 100 {
+				limit = 100
+			} else {
+				limit = l
+			}
+		}
+		if o, ok := pagination["offset"].(int); ok && o >= 0 {
+			offset = o
+		}
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetMintEvents(ctx, fromBlock, toBlock, minter, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get mint events", zap.Error(err))
+		return nil, err
+	}
+
+	var nodes []map[string]interface{}
+	for _, event := range events {
+		nodes = append(nodes, s.mintEventToMap(event))
+	}
+
+	return map[string]interface{}{
+		"nodes":      nodes,
+		"totalCount": len(nodes),
+		"pageInfo": map[string]interface{}{
+			"hasNextPage":     len(nodes) >= limit,
+			"hasPreviousPage": offset > 0,
+			"startCursor":     nil,
+			"endCursor":       nil,
+		},
+	}, nil
+}
+
+// resolveBurnEvents resolves burn events with filtering and pagination
+func (s *Schema) resolveBurnEvents(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	filter, ok := p.Args["filter"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid filter")
+	}
+
+	// Parse block range
+	var fromBlock, toBlock uint64
+	if fb, ok := filter["fromBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(fb, 10, 64)
+		fromBlock = parsed
+	}
+	if tb, ok := filter["toBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(tb, 10, 64)
+		toBlock = parsed
+	}
+
+	// Parse optional burner address
+	var burner common.Address
+	if burnerStr, ok := filter["burner"].(string); ok && burnerStr != "" {
+		burner = common.HexToAddress(burnerStr)
+	}
+
+	// Pagination
+	limit := 10
+	offset := 0
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok && l > 0 {
+			if l > 100 {
+				limit = 100
+			} else {
+				limit = l
+			}
+		}
+		if o, ok := pagination["offset"].(int); ok && o >= 0 {
+			offset = o
+		}
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetBurnEvents(ctx, fromBlock, toBlock, burner, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get burn events", zap.Error(err))
+		return nil, err
+	}
+
+	var nodes []map[string]interface{}
+	for _, event := range events {
+		nodes = append(nodes, s.burnEventToMap(event))
+	}
+
+	return map[string]interface{}{
+		"nodes":      nodes,
+		"totalCount": len(nodes),
+		"pageInfo": map[string]interface{}{
+			"hasNextPage":     len(nodes) >= limit,
+			"hasPreviousPage": offset > 0,
+			"startCursor":     nil,
+			"endCursor":       nil,
+		},
+	}, nil
+}
+
+// resolveMinterHistory resolves minter configuration history
+func (s *Schema) resolveMinterHistory(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	minterStr, ok := p.Args["minter"].(string)
+	if !ok {
+		return nil, fmt.Errorf("minter address is required")
+	}
+	minter := common.HexToAddress(minterStr)
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetMinterHistory(ctx, minter)
+	if err != nil {
+		s.logger.Error("failed to get minter history", zap.String("minter", minterStr), zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, event := range events {
+		result = append(result, s.minterConfigEventToMap(event))
+	}
+
+	return result, nil
+}
+
+// resolveValidatorHistory resolves validator change history
+func (s *Schema) resolveValidatorHistory(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	validatorStr, ok := p.Args["validator"].(string)
+	if !ok {
+		return nil, fmt.Errorf("validator address is required")
+	}
+	validator := common.HexToAddress(validatorStr)
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetValidatorHistory(ctx, validator)
+	if err != nil {
+		s.logger.Error("failed to get validator history", zap.String("validator", validatorStr), zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, event := range events {
+		result = append(result, s.validatorChangeEventToMap(event))
+	}
+
+	return result, nil
+}
+
+// resolveGasTipHistory resolves gas tip update history
+func (s *Schema) resolveGasTipHistory(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	filter, ok := p.Args["filter"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid filter")
+	}
+
+	// Parse block range
+	var fromBlock, toBlock uint64
+	if fb, ok := filter["fromBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(fb, 10, 64)
+		fromBlock = parsed
+	}
+	if tb, ok := filter["toBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(tb, 10, 64)
+		toBlock = parsed
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetGasTipHistory(ctx, fromBlock, toBlock)
+	if err != nil {
+		s.logger.Error("failed to get gas tip history", zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, event := range events {
+		result = append(result, s.gasTipUpdateEventToMap(event))
+	}
+
+	return result, nil
+}
+
+// resolveBlacklistHistory resolves blacklist change history
+func (s *Schema) resolveBlacklistHistory(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	addressStr, ok := p.Args["address"].(string)
+	if !ok {
+		return nil, fmt.Errorf("address is required")
+	}
+	address := common.HexToAddress(addressStr)
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetBlacklistHistory(ctx, address)
+	if err != nil {
+		s.logger.Error("failed to get blacklist history", zap.String("address", addressStr), zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, event := range events {
+		result = append(result, s.blacklistEventToMap(event))
+	}
+
+	return result, nil
+}
+
+// resolveMemberHistory resolves member change history
+func (s *Schema) resolveMemberHistory(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	contractStr, ok := p.Args["contract"].(string)
+	if !ok {
+		return nil, fmt.Errorf("contract address is required")
+	}
+	contract := common.HexToAddress(contractStr)
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetMemberHistory(ctx, contract)
+	if err != nil {
+		s.logger.Error("failed to get member history", zap.String("contract", contractStr), zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, event := range events {
+		result = append(result, s.memberChangeEventToMap(event))
+	}
+
+	return result, nil
+}
+
+// resolveEmergencyPauseHistory resolves emergency pause history
+func (s *Schema) resolveEmergencyPauseHistory(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	contractStr, ok := p.Args["contract"].(string)
+	if !ok {
+		return nil, fmt.Errorf("contract address is required")
+	}
+	contract := common.HexToAddress(contractStr)
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetEmergencyPauseHistory(ctx, contract)
+	if err != nil {
+		s.logger.Error("failed to get emergency pause history", zap.String("contract", contractStr), zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, event := range events {
+		result = append(result, s.emergencyPauseEventToMap(event))
+	}
+
+	return result, nil
+}
+
+// resolveDepositMintProposals resolves deposit mint proposals
+func (s *Schema) resolveDepositMintProposals(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	filter, ok := p.Args["filter"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid filter")
+	}
+
+	// Parse block range
+	var fromBlock, toBlock uint64
+	if fb, ok := filter["fromBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(fb, 10, 64)
+		fromBlock = parsed
+	}
+	if tb, ok := filter["toBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(tb, 10, 64)
+		toBlock = parsed
+	}
+
+	// Parse optional status filter
+	status := storage.ProposalStatusNone
+	if statusStr, ok := filter["status"].(string); ok && statusStr != "" {
+		status = parseProposalStatus(statusStr)
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	proposals, err := reader.GetDepositMintProposals(ctx, fromBlock, toBlock, status)
+	if err != nil {
+		s.logger.Error("failed to get deposit mint proposals", zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, proposal := range proposals {
+		result = append(result, s.depositMintProposalToMap(proposal))
+	}
+
+	return result, nil
+}
+
+// Helper function to convert MintEvent to map
+func (s *Schema) mintEventToMap(event *storage.MintEvent) map[string]interface{} {
+	return map[string]interface{}{
+		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
+		"transactionHash": event.TxHash.Hex(),
+		"minter":          event.Minter.Hex(),
+		"to":              event.To.Hex(),
+		"amount":          event.Amount.String(),
+		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
+	}
+}
+
+// Helper function to convert BurnEvent to map
+func (s *Schema) burnEventToMap(event *storage.BurnEvent) map[string]interface{} {
+	m := map[string]interface{}{
+		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
+		"transactionHash": event.TxHash.Hex(),
+		"burner":          event.Burner.Hex(),
+		"amount":          event.Amount.String(),
+		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
+	}
+	if event.WithdrawalID != "" {
+		m["withdrawalId"] = event.WithdrawalID
+	}
+	return m
+}
+
+// Helper function to convert MinterConfigEvent to map
+func (s *Schema) minterConfigEventToMap(event *storage.MinterConfigEvent) map[string]interface{} {
+	return map[string]interface{}{
+		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
+		"transactionHash": event.TxHash.Hex(),
+		"minter":          event.Minter.Hex(),
+		"allowance":       event.Allowance.String(),
+		"action":          event.Action,
+		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
+	}
+}
+
+// Helper function to convert ValidatorChangeEvent to map
+func (s *Schema) validatorChangeEventToMap(event *storage.ValidatorChangeEvent) map[string]interface{} {
+	m := map[string]interface{}{
+		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
+		"transactionHash": event.TxHash.Hex(),
+		"validator":       event.Validator.Hex(),
+		"action":          event.Action,
+		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
+	}
+	if event.OldValidator != nil {
+		m["oldValidator"] = event.OldValidator.Hex()
+	}
+	return m
+}
+
+// Helper function to convert GasTipUpdateEvent to map
+func (s *Schema) gasTipUpdateEventToMap(event *storage.GasTipUpdateEvent) map[string]interface{} {
+	return map[string]interface{}{
+		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
+		"transactionHash": event.TxHash.Hex(),
+		"oldTip":          event.OldTip.String(),
+		"newTip":          event.NewTip.String(),
+		"updater":         event.Updater.Hex(),
+		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
+	}
+}
+
+// Helper function to convert BlacklistEvent to map
+func (s *Schema) blacklistEventToMap(event *storage.BlacklistEvent) map[string]interface{} {
+	return map[string]interface{}{
+		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
+		"transactionHash": event.TxHash.Hex(),
+		"account":         event.Account.Hex(),
+		"action":          event.Action,
+		"proposalId":      event.ProposalID.String(),
+		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
+	}
+}
+
+// Helper function to convert MemberChangeEvent to map
+func (s *Schema) memberChangeEventToMap(event *storage.MemberChangeEvent) map[string]interface{} {
+	m := map[string]interface{}{
+		"contract":      event.Contract.Hex(),
+		"blockNumber":   fmt.Sprintf("%d", event.BlockNumber),
+		"transactionHash": event.TxHash.Hex(),
+		"member":        event.Member.Hex(),
+		"action":        event.Action,
+		"totalMembers":  fmt.Sprintf("%d", event.TotalMembers),
+		"newQuorum":     int(event.NewQuorum),
+		"timestamp":     fmt.Sprintf("%d", event.Timestamp),
+	}
+	if event.OldMember != nil {
+		m["oldMember"] = event.OldMember.Hex()
+	}
+	return m
+}
+
+// Helper function to convert EmergencyPauseEvent to map
+func (s *Schema) emergencyPauseEventToMap(event *storage.EmergencyPauseEvent) map[string]interface{} {
+	return map[string]interface{}{
+		"contract":        event.Contract.Hex(),
+		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
+		"transactionHash": event.TxHash.Hex(),
+		"proposalId":      event.ProposalID.String(),
+		"action":          event.Action,
+		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
+	}
+}
+
+// Helper function to convert DepositMintProposal to map
+func (s *Schema) depositMintProposalToMap(proposal *storage.DepositMintProposal) map[string]interface{} {
+	return map[string]interface{}{
+		"proposalId":      proposal.ProposalID.String(),
+		"to":              proposal.To.Hex(),
+		"amount":          proposal.Amount.String(),
+		"depositId":       proposal.DepositID,
+		"status":          proposalStatusToString(proposal.Status),
+		"blockNumber":     fmt.Sprintf("%d", proposal.BlockNumber),
+		"transactionHash": proposal.TxHash.Hex(),
+		"timestamp":       fmt.Sprintf("%d", proposal.Timestamp),
+	}
 }

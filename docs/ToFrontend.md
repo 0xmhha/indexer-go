@@ -2,8 +2,8 @@
 
 > indexer-go API에서 Frontend 개발에 필요한 새로운 필드 및 기능 안내
 
-**Last Updated**: 2025-11-20
-**Status**: In Progress
+**Last Updated**: 2025-11-21
+**Status**: Active
 
 ---
 
@@ -155,6 +155,428 @@ if (transaction.type === 22) {
 
   // UI에서 표시
   console.log(`가스 비용 ${paidAmount} wei는 ${paidBy}가 대납`);
+}
+```
+
+---
+
+## System Contracts & Governance API
+
+Stable-One 체인의 시스템 컨트랙트 이벤트 및 거버넌스 기능을 조회할 수 있는 API가 추가되었습니다.
+
+### 시스템 컨트랙트 주소
+
+```javascript
+const SYSTEM_CONTRACTS = {
+  NativeCoinAdapter: "0x0000000000000000000000000000000000001000",
+  GovValidator:      "0x0000000000000000000000000000000000001001",
+  GovMasterMinter:   "0x0000000000000000000000000000000000001002",
+  GovMinter:         "0x0000000000000000000000000000000000001003",
+  GovCouncil:        "0x0000000000000000000000000000000000001004",
+};
+```
+
+### 1. NativeCoinAdapter - 토큰 발행/소각
+
+#### GraphQL API
+
+```graphql
+# 총 공급량 조회
+query GetTotalSupply {
+  totalSupply  # String (BigInt)
+}
+
+# 활성 Minter 목록
+query GetActiveMinters {
+  activeMinters {
+    address      # Address
+    allowance    # BigInt
+    isActive     # Boolean
+  }
+}
+
+# 특정 Minter의 한도 조회
+query GetMinterAllowance($minter: Address!) {
+  minterAllowance(minter: $minter)  # BigInt
+}
+
+# Mint 이벤트 조회
+query GetMintEvents($filter: SystemContractEventFilter!, $pagination: PaginationInput) {
+  mintEvents(filter: $filter, pagination: $pagination) {
+    nodes {
+      blockNumber
+      transactionHash
+      minter
+      to
+      amount
+      timestamp
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+
+# Burn 이벤트 조회
+query GetBurnEvents($filter: SystemContractEventFilter!, $pagination: PaginationInput) {
+  burnEvents(filter: $filter, pagination: $pagination) {
+    nodes {
+      blockNumber
+      transactionHash
+      burner
+      amount
+      timestamp
+      withdrawalId    # Optional
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+```
+
+#### JSON-RPC API
+
+```javascript
+// 총 공급량 조회
+const response = await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getTotalSupply',
+    params: {},
+    id: 1
+  })
+});
+// => { totalSupply: "1000000000000000000000000" }
+
+// 활성 Minter 목록
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getActiveMinters',
+    params: {},
+    id: 2
+  })
+});
+// => { minters: [{ address: "0x...", allowance: "...", isActive: true }] }
+
+// Mint 이벤트 조회
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getMintEvents',
+    params: {
+      fromBlock: 0,
+      toBlock: 1000,
+      minter: "0x...",  // Optional
+      limit: 10,
+      offset: 0
+    },
+    id: 3
+  })
+});
+// => { events: [...], totalCount: 100 }
+```
+
+### 2. Governance - 제안 및 투표
+
+#### Proposal Status
+
+```javascript
+const ProposalStatus = {
+  NONE: 'none',
+  VOTING: 'voting',
+  APPROVED: 'approved',
+  EXECUTED: 'executed',
+  CANCELLED: 'cancelled',
+  EXPIRED: 'expired',
+  FAILED: 'failed',
+  REJECTED: 'rejected'
+};
+```
+
+#### GraphQL API
+
+```graphql
+# 제안 목록 조회
+query GetProposals($filter: ProposalFilter!, $pagination: PaginationInput) {
+  proposals(filter: $filter, pagination: $pagination) {
+    nodes {
+      contract
+      proposalId
+      proposer
+      actionType
+      callData
+      memberVersion
+      requiredApprovals
+      approved
+      rejected
+      status              # ProposalStatus enum
+      createdAt
+      executedAt
+      blockNumber
+      transactionHash
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+
+# 특정 제안 상세 조회
+query GetProposal($contract: Address!, $proposalId: BigInt!) {
+  proposal(contract: $contract, proposalId: $proposalId) {
+    proposalId
+    proposer
+    status
+    approved
+    rejected
+    requiredApprovals
+    # ... 나머지 필드
+  }
+}
+
+# 제안 투표 내역
+query GetProposalVotes($contract: Address!, $proposalId: BigInt!) {
+  proposalVotes(contract: $contract, proposalId: $proposalId) {
+    contract
+    proposalId
+    voter
+    approval            # Boolean (true=찬성, false=반대)
+    blockNumber
+    transactionHash
+    timestamp
+  }
+}
+```
+
+#### JSON-RPC API
+
+```javascript
+// 제안 목록 조회
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getProposals',
+    params: {
+      contract: SYSTEM_CONTRACTS.GovCouncil,
+      status: 'voting',  // Optional
+      limit: 10,
+      offset: 0
+    },
+    id: 1
+  })
+});
+// => { proposals: [...], totalCount: 50 }
+
+// 특정 제안 조회
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getProposal',
+    params: {
+      contract: SYSTEM_CONTRACTS.GovCouncil,
+      proposalId: "1"
+    },
+    id: 2
+  })
+});
+
+// 투표 내역 조회
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getProposalVotes',
+    params: {
+      contract: SYSTEM_CONTRACTS.GovCouncil,
+      proposalId: "1"
+    },
+    id: 3
+  })
+});
+// => { votes: [{ voter: "0x...", approval: true, ... }] }
+```
+
+### 3. Validator & Council 관리
+
+#### GraphQL API
+
+```graphql
+# 활성 Validator 목록
+query GetActiveValidators {
+  activeValidators {
+    address
+    isActive
+  }
+}
+
+# Blacklist 주소 목록
+query GetBlacklistedAddresses {
+  blacklistedAddresses  # [Address!]!
+}
+```
+
+#### JSON-RPC API
+
+```javascript
+// 활성 Validator 목록
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getActiveValidators',
+    params: {},
+    id: 1
+  })
+});
+// => { validators: [{ address: "0x...", isActive: true }] }
+
+// Blacklist 주소 목록
+await fetch('/api/v1/jsonrpc', {
+  method: 'POST',
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'getBlacklistedAddresses',
+    params: {},
+    id: 2
+  })
+});
+// => { addresses: ["0x...", "0x..."] }
+```
+
+### Frontend 구현 권장사항
+
+#### 1. Governance Dashboard
+
+```javascript
+// 제안 상태별 색상 코딩
+const statusColors = {
+  voting: '#3B82F6',     // 파란색 - 투표 진행 중
+  approved: '#10B981',   // 녹색 - 승인됨
+  executed: '#6B7280',   // 회색 - 실행 완료
+  rejected: '#EF4444',   // 빨간색 - 거부됨
+  cancelled: '#6B7280',  // 회색 - 취소됨
+  expired: '#F59E0B',    // 주황색 - 만료됨
+  failed: '#DC2626',     // 진한 빨간색 - 실패
+};
+
+// 제안 진행률 계산
+function calculateProgress(proposal) {
+  const total = proposal.requiredApprovals;
+  const current = proposal.approved;
+  return (current / total) * 100;
+}
+
+// 제안 상태 체크
+function canVote(proposal) {
+  return proposal.status === 'voting';
+}
+```
+
+#### 2. Token Supply Dashboard
+
+```javascript
+// 총 공급량 표시 (wei → 이더 단위 변환)
+function formatSupply(supplyWei) {
+  const ether = BigInt(supplyWei) / BigInt('1000000000000000000');
+  return ether.toLocaleString('ko-KR');
+}
+
+// Minter 별 발행 한도 차트
+function getMinterStats(minters) {
+  return minters.map(m => ({
+    name: m.address.slice(0, 10) + '...',
+    allowance: Number(BigInt(m.allowance) / BigInt('1000000000000000000')),
+    isActive: m.isActive
+  }));
+}
+```
+
+#### 3. 이벤트 모니터링
+
+```javascript
+// 실시간 Mint 이벤트 폴링
+async function pollMintEvents() {
+  const latestBlock = await getLatestHeight();
+
+  const response = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getMintEvents',
+      params: {
+        fromBlock: latestBlock - 100,  // 최근 100블록
+        toBlock: latestBlock,
+        limit: 50
+      },
+      id: 1
+    })
+  });
+
+  const { result } = await response.json();
+  return result.events;
+}
+
+// 3초마다 업데이트
+setInterval(pollMintEvents, 3000);
+```
+
+### 페이지네이션 처리
+
+```javascript
+// GraphQL
+const ITEMS_PER_PAGE = 10;
+
+function fetchProposalsPage(page, contract, status) {
+  return gqlClient.query({
+    query: GET_PROPOSALS,
+    variables: {
+      filter: {
+        contract: contract,
+        status: status || undefined
+      },
+      pagination: {
+        limit: ITEMS_PER_PAGE,
+        offset: page * ITEMS_PER_PAGE
+      }
+    }
+  });
+}
+
+// JSON-RPC
+async function fetchMintEventsPage(page) {
+  const response = await fetch('/api/v1/jsonrpc', {
+    method: 'POST',
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getMintEvents',
+      params: {
+        limit: ITEMS_PER_PAGE,
+        offset: page * ITEMS_PER_PAGE
+      },
+      id: 1
+    })
+  });
+
+  const { result } = await response.json();
+  return {
+    events: result.events,
+    totalCount: result.totalCount,
+    hasNextPage: result.totalCount > (page + 1) * ITEMS_PER_PAGE
+  };
 }
 ```
 
@@ -324,8 +746,22 @@ type Block {
 | feePayerSignatures | ✅ 완료 | ✅ | ✅ | Fee Delegation, go-stablenet 연동 완료 |
 | newPendingTransactions | ✅ 적용 | WebSocket | GraphQL Subscription | 실시간 펜딩 트랜잭션 스트림 |
 | logs subscription | ✅ 적용 | WebSocket | GraphQL Subscription | 주소 & 토픽 필터 지원 |
+| **System Contracts** | | | | |
+| totalSupply | ✅ 완료 | ✅ | ✅ | NativeCoinAdapter 총 공급량 |
+| activeMinters | ✅ 완료 | ✅ | ✅ | 활성 Minter 목록 |
+| minterAllowance | ✅ 완료 | ✅ | ✅ | Minter별 한도 조회 |
+| mintEvents | ✅ 완료 | ✅ | ✅ | Mint 이벤트 조회, 페이지네이션 지원 |
+| burnEvents | ✅ 완료 | ✅ | ✅ | Burn 이벤트 조회, 페이지네이션 지원 |
+| **Governance** | | | | |
+| proposals | ✅ 완료 | ✅ | ✅ | 거버넌스 제안 목록 |
+| proposal | ✅ 완료 | ✅ | ✅ | 특정 제안 상세 조회 |
+| proposalVotes | ✅ 완료 | ✅ | ✅ | 제안 투표 내역 |
+| activeValidators | ✅ 완료 | ✅ | ✅ | 활성 Validator 목록 |
+| blacklistedAddresses | ✅ 완료 | ✅ | ✅ | 블랙리스트 주소 목록 |
 
-**Note**: 모든 Fee Delegation 필드는 go-stablenet의 `Transaction.FeePayer()` 및 `Transaction.RawFeePayerSignatureValues()` 메서드를 통해 실제 값을 추출합니다. type 0x16 (22) 트랜잭션에서 자동으로 feePayer 주소와 서명 값이 반환됩니다.
+**Note**:
+- 모든 Fee Delegation 필드는 go-stablenet의 `Transaction.FeePayer()` 및 `Transaction.RawFeePayerSignatureValues()` 메서드를 통해 실제 값을 추출합니다.
+- System Contract 쿼리는 시스템 컨트랙트 주소 (0x1000-0x1004)의 이벤트 및 상태를 조회합니다.
 
 ---
 
@@ -339,6 +775,7 @@ type Block {
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2025-11-21 | 0.4.0 | System Contracts & Governance API 추가 (GraphQL, JSON-RPC) |
 | 2025-11-20 | 0.3.0 | go-stablenet 연동으로 Fee Delegation 실제 값 추출 구현 |
 | 2025-11-20 | 0.2.0 | GraphQL 스키마 구현 완료 (EIP-1559, Fee Delegation) |
 | 2025-11-20 | 0.1.0 | 초안 작성, EIP-1559 및 Fee Delegation 필드 정의 |

@@ -218,6 +218,155 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				},
 				Resolve: s.resolveTokenBalances,
 			},
+			// System contract queries
+			"totalSupply": &graphql.Field{
+				Type:    graphql.NewNonNull(bigIntType),
+				Resolve: s.resolveTotalSupply,
+			},
+			"activeMinters": &graphql.Field{
+				Type:    graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(minterInfoType))),
+				Resolve: s.resolveActiveMinters,
+			},
+			"minterAllowance": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+				Args: graphql.FieldConfigArgument{
+					"minter": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+				},
+				Resolve: s.resolveMinterAllowance,
+			},
+			"activeValidators": &graphql.Field{
+				Type:    graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(validatorInfoType))),
+				Resolve: s.resolveActiveValidators,
+			},
+			"blacklistedAddresses": &graphql.Field{
+				Type:    graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+				Resolve: s.resolveBlacklistedAddresses,
+			},
+			"proposals": &graphql.Field{
+				Type: graphql.NewNonNull(proposalConnectionType),
+				Args: graphql.FieldConfigArgument{
+					"filter": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(proposalFilterType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveProposals,
+			},
+			"proposal": &graphql.Field{
+				Type: proposalType,
+				Args: graphql.FieldConfigArgument{
+					"contract": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"proposalId": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveProposal,
+			},
+			"proposalVotes": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(proposalVoteType))),
+				Args: graphql.FieldConfigArgument{
+					"contract": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"proposalId": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveProposalVotes,
+			},
+			"mintEvents": &graphql.Field{
+				Type: graphql.NewNonNull(mintEventConnectionType),
+				Args: graphql.FieldConfigArgument{
+					"filter": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(systemContractEventFilterType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveMintEvents,
+			},
+			"burnEvents": &graphql.Field{
+				Type: graphql.NewNonNull(burnEventConnectionType),
+				Args: graphql.FieldConfigArgument{
+					"filter": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(systemContractEventFilterType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveBurnEvents,
+			},
+			"minterHistory": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(minterConfigEventType))),
+				Args: graphql.FieldConfigArgument{
+					"minter": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+				},
+				Resolve: s.resolveMinterHistory,
+			},
+			"validatorHistory": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(validatorChangeEventType))),
+				Args: graphql.FieldConfigArgument{
+					"validator": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+				},
+				Resolve: s.resolveValidatorHistory,
+			},
+			"gasTipHistory": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(gasTipUpdateEventType))),
+				Args: graphql.FieldConfigArgument{
+					"filter": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(systemContractEventFilterType),
+					},
+				},
+				Resolve: s.resolveGasTipHistory,
+			},
+			"blacklistHistory": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(blacklistEventType))),
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+				},
+				Resolve: s.resolveBlacklistHistory,
+			},
+			"memberHistory": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(memberChangeEventType))),
+				Args: graphql.FieldConfigArgument{
+					"contract": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+				},
+				Resolve: s.resolveMemberHistory,
+			},
+			"emergencyPauseHistory": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(emergencyPauseEventType))),
+				Args: graphql.FieldConfigArgument{
+					"contract": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+				},
+				Resolve: s.resolveEmergencyPauseHistory,
+			},
+			"depositMintProposals": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(depositMintProposalType))),
+				Args: graphql.FieldConfigArgument{
+					"filter": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(systemContractEventFilterType),
+					},
+				},
+				Resolve: s.resolveDepositMintProposals,
+			},
 		},
 	})
 

@@ -55,6 +55,27 @@ var (
 	// Analytics types
 	minerStatsType   *graphql.Object
 	tokenBalanceType *graphql.Object
+
+	// System contract types
+	proposalStatusEnumType        *graphql.Enum
+	mintEventType                 *graphql.Object
+	burnEventType                 *graphql.Object
+	minterConfigEventType         *graphql.Object
+	proposalType                  *graphql.Object
+	proposalVoteType              *graphql.Object
+	gasTipUpdateEventType         *graphql.Object
+	blacklistEventType            *graphql.Object
+	validatorChangeEventType      *graphql.Object
+	memberChangeEventType         *graphql.Object
+	emergencyPauseEventType       *graphql.Object
+	depositMintProposalType       *graphql.Object
+	minterInfoType                *graphql.Object
+	validatorInfoType             *graphql.Object
+	systemContractEventFilterType *graphql.InputObject
+	proposalFilterType            *graphql.InputObject
+	mintEventConnectionType       *graphql.Object
+	burnEventConnectionType       *graphql.Object
+	proposalConnectionType        *graphql.Object
 )
 
 func init() {
@@ -543,6 +564,466 @@ func initTypes() {
 			},
 			"tokenId": &graphql.Field{
 				Type: bigIntType,
+			},
+		},
+	})
+
+	// ProposalStatus enum
+	proposalStatusEnumType = graphql.NewEnum(graphql.EnumConfig{
+		Name: "ProposalStatus",
+		Values: graphql.EnumValueConfigMap{
+			"NONE": &graphql.EnumValueConfig{
+				Value: "NONE",
+			},
+			"VOTING": &graphql.EnumValueConfig{
+				Value: "VOTING",
+			},
+			"APPROVED": &graphql.EnumValueConfig{
+				Value: "APPROVED",
+			},
+			"EXECUTED": &graphql.EnumValueConfig{
+				Value: "EXECUTED",
+			},
+			"CANCELLED": &graphql.EnumValueConfig{
+				Value: "CANCELLED",
+			},
+			"EXPIRED": &graphql.EnumValueConfig{
+				Value: "EXPIRED",
+			},
+			"FAILED": &graphql.EnumValueConfig{
+				Value: "FAILED",
+			},
+			"REJECTED": &graphql.EnumValueConfig{
+				Value: "REJECTED",
+			},
+		},
+	})
+
+	// MintEvent type
+	mintEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "MintEvent",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"minter": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"to": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"amount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// BurnEvent type
+	burnEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BurnEvent",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"burner": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"amount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"withdrawalId": &graphql.Field{
+				Type: graphql.String,
+			},
+		},
+	})
+
+	// MinterConfigEvent type
+	minterConfigEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "MinterConfigEvent",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"minter": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"allowance": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"action": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// Proposal type
+	proposalType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "Proposal",
+		Fields: graphql.Fields{
+			"contract": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"proposalId": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"proposer": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"actionType": &graphql.Field{
+				Type: graphql.NewNonNull(bytesType),
+			},
+			"callData": &graphql.Field{
+				Type: graphql.NewNonNull(bytesType),
+			},
+			"memberVersion": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"requiredApprovals": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"approved": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"rejected": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"status": &graphql.Field{
+				Type: graphql.NewNonNull(proposalStatusEnumType),
+			},
+			"createdAt": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"executedAt": &graphql.Field{
+				Type: bigIntType,
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+		},
+	})
+
+	// ProposalVote type
+	proposalVoteType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ProposalVote",
+		Fields: graphql.Fields{
+			"contract": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"proposalId": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"voter": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"approval": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// GasTipUpdateEvent type
+	gasTipUpdateEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "GasTipUpdateEvent",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"oldTip": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"newTip": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"updater": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// BlacklistEvent type
+	blacklistEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BlacklistEvent",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"account": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"action": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"proposalId": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// ValidatorChangeEvent type
+	validatorChangeEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorChangeEvent",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"validator": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"action": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"oldValidator": &graphql.Field{
+				Type: addressType,
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// MemberChangeEvent type
+	memberChangeEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "MemberChangeEvent",
+		Fields: graphql.Fields{
+			"contract": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"member": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"action": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"oldMember": &graphql.Field{
+				Type: addressType,
+			},
+			"totalMembers": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"newQuorum": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// EmergencyPauseEvent type
+	emergencyPauseEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "EmergencyPauseEvent",
+		Fields: graphql.Fields{
+			"contract": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"proposalId": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"action": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// DepositMintProposal type
+	depositMintProposalType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "DepositMintProposal",
+		Fields: graphql.Fields{
+			"proposalId": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"to": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"amount": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"depositId": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.String),
+			},
+			"status": &graphql.Field{
+				Type: graphql.NewNonNull(proposalStatusEnumType),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// MinterInfo type
+	minterInfoType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "MinterInfo",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"allowance": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"isActive": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+		},
+	})
+
+	// ValidatorInfo type
+	validatorInfoType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorInfo",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"isActive": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+		},
+	})
+
+	// SystemContractEventFilter input type
+	systemContractEventFilterType = graphql.NewInputObject(graphql.InputObjectConfig{
+		Name: "SystemContractEventFilter",
+		Fields: graphql.InputObjectConfigFieldMap{
+			"fromBlock": &graphql.InputObjectFieldConfig{
+				Type: bigIntType,
+			},
+			"toBlock": &graphql.InputObjectFieldConfig{
+				Type: bigIntType,
+			},
+			"minter": &graphql.InputObjectFieldConfig{
+				Type: addressType,
+			},
+			"burner": &graphql.InputObjectFieldConfig{
+				Type: addressType,
+			},
+			"status": &graphql.InputObjectFieldConfig{
+				Type: proposalStatusEnumType,
+			},
+		},
+	})
+
+	// ProposalFilter input type
+	proposalFilterType = graphql.NewInputObject(graphql.InputObjectConfig{
+		Name: "ProposalFilter",
+		Fields: graphql.InputObjectConfigFieldMap{
+			"contract": &graphql.InputObjectFieldConfig{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"status": &graphql.InputObjectFieldConfig{
+				Type: proposalStatusEnumType,
+			},
+		},
+	})
+
+	// MintEventConnection type
+	mintEventConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "MintEventConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(mintEventType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// BurnEventConnection type
+	burnEventConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BurnEventConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(burnEventType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// ProposalConnection type
+	proposalConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ProposalConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(proposalType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
 			},
 		},
 	})

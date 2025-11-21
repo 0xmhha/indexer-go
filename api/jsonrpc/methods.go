@@ -55,6 +55,27 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.getBlockCount(ctx, params)
 	case "getTransactionCount":
 		return h.getTransactionCount(ctx, params)
+	// System contract methods
+	case "getTotalSupply":
+		return h.getTotalSupply(ctx, params)
+	case "getActiveMinters":
+		return h.getActiveMinters(ctx, params)
+	case "getMinterAllowance":
+		return h.getMinterAllowance(ctx, params)
+	case "getActiveValidators":
+		return h.getActiveValidators(ctx, params)
+	case "getBlacklistedAddresses":
+		return h.getBlacklistedAddresses(ctx, params)
+	case "getProposal":
+		return h.getProposal(ctx, params)
+	case "getProposals":
+		return h.getProposals(ctx, params)
+	case "getProposalVotes":
+		return h.getProposalVotes(ctx, params)
+	case "getMintEvents":
+		return h.getMintEvents(ctx, params)
+	case "getBurnEvents":
+		return h.getBurnEvents(ctx, params)
 	default:
 		return nil, NewError(MethodNotFound, fmt.Sprintf("method '%s' not found", method), nil)
 	}

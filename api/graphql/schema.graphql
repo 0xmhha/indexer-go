@@ -390,6 +390,87 @@ type Query {
 
   # Get token balances for an address (ERC-20/721/1155)
   tokenBalances(address: Address!): [TokenBalance!]!
+
+  # ========== System Contract Queries ==========
+
+  # Get current total supply of native coin
+  totalSupply: BigInt!
+
+  # Get mint events
+  mintEvents(
+    filter: SystemContractEventFilter!
+    pagination: PaginationInput
+  ): MintEventConnection!
+
+  # Get burn events
+  burnEvents(
+    filter: SystemContractEventFilter!
+    pagination: PaginationInput
+  ): BurnEventConnection!
+
+  # Get list of active minters
+  activeMinters: [MinterInfo!]!
+
+  # Get minter allowance for a specific minter
+  minterAllowance(minter: Address!): BigInt!
+
+  # Get minter configuration history
+  minterHistory(minter: Address!): [MinterConfigEvent!]!
+
+  # Get list of active validators
+  activeValidators: [ValidatorInfo!]!
+
+  # Get validator change history
+  validatorHistory(
+    validator: Address!
+  ): [ValidatorChangeEvent!]!
+
+  # Get gas tip update history
+  gasTipHistory(
+    filter: SystemContractEventFilter!
+  ): [GasTipUpdateEvent!]!
+
+  # Get list of blacklisted addresses
+  blacklistedAddresses: [Address!]!
+
+  # Get blacklist event history for an address
+  blacklistHistory(
+    address: Address!
+  ): [BlacklistEvent!]!
+
+  # Get governance proposals
+  proposals(
+    filter: ProposalFilter!
+    pagination: PaginationInput
+  ): ProposalConnection!
+
+  # Get a specific proposal by ID
+  proposal(
+    contract: Address!
+    proposalId: BigInt!
+  ): Proposal
+
+  # Get votes for a specific proposal
+  proposalVotes(
+    contract: Address!
+    proposalId: BigInt!
+  ): [ProposalVote!]!
+
+  # Get member change history for a contract
+  memberHistory(
+    contract: Address!
+  ): [MemberChangeEvent!]!
+
+  # Get emergency pause event history for a contract
+  emergencyPauseHistory(
+    contract: Address!
+  ): [EmergencyPauseEvent!]!
+
+  # Get deposit mint proposals
+  depositMintProposals(
+    filter: SystemContractEventFilter!
+    status: ProposalStatus
+  ): [DepositMintProposal!]!
 }
 
 # Block connection for pagination
@@ -480,4 +561,358 @@ type TokenBalance {
 
   # Token ID (for ERC721/ERC1155, null for ERC20)
   tokenId: BigInt
+}
+
+# ========== System Contract Types ==========
+
+# ProposalStatus enum
+enum ProposalStatus {
+  NONE
+  VOTING
+  APPROVED
+  EXECUTED
+  CANCELLED
+  EXPIRED
+  FAILED
+  REJECTED
+}
+
+# MintEvent represents a mint event from NativeCoinAdapter
+type MintEvent {
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Minter address
+  minter: Address!
+
+  # Recipient address
+  to: Address!
+
+  # Mint amount
+  amount: BigInt!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# BurnEvent represents a burn event
+type BurnEvent {
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Burner address
+  burner: Address!
+
+  # Burn amount
+  amount: BigInt!
+
+  # Timestamp
+  timestamp: BigInt!
+
+  # Withdrawal ID (for GovMinter)
+  withdrawalId: String
+}
+
+# MinterConfigEvent represents minter configuration changes
+type MinterConfigEvent {
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Minter address
+  minter: Address!
+
+  # Minter allowance
+  allowance: BigInt!
+
+  # Action (configured or removed)
+  action: String!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# Proposal represents a governance proposal
+type Proposal {
+  # Contract address
+  contract: Address!
+
+  # Proposal ID
+  proposalId: BigInt!
+
+  # Proposer address
+  proposer: Address!
+
+  # Action type
+  actionType: Bytes!
+
+  # Call data
+  callData: Bytes!
+
+  # Member version
+  memberVersion: BigInt!
+
+  # Required approvals
+  requiredApprovals: Int!
+
+  # Approved count
+  approved: Int!
+
+  # Rejected count
+  rejected: Int!
+
+  # Proposal status
+  status: ProposalStatus!
+
+  # Created timestamp
+  createdAt: BigInt!
+
+  # Executed timestamp (null if not executed)
+  executedAt: BigInt
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+}
+
+# ProposalVote represents a vote on a proposal
+type ProposalVote {
+  # Contract address
+  contract: Address!
+
+  # Proposal ID
+  proposalId: BigInt!
+
+  # Voter address
+  voter: Address!
+
+  # Approval (true for approve, false for reject)
+  approval: Boolean!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# GasTipUpdateEvent represents a gas tip update
+type GasTipUpdateEvent {
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Old tip value
+  oldTip: BigInt!
+
+  # New tip value
+  newTip: BigInt!
+
+  # Updater address
+  updater: Address!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# BlacklistEvent represents blacklist changes
+type BlacklistEvent {
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Account address
+  account: Address!
+
+  # Action (blacklisted or unblacklisted)
+  action: String!
+
+  # Proposal ID
+  proposalId: BigInt
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# ValidatorChangeEvent represents validator changes
+type ValidatorChangeEvent {
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Validator address
+  validator: Address!
+
+  # Action (added, removed, changed)
+  action: String!
+
+  # Old validator address (for changed action)
+  oldValidator: Address
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# MemberChangeEvent represents member changes in Gov contracts
+type MemberChangeEvent {
+  # Contract address
+  contract: Address!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Member address
+  member: Address!
+
+  # Action (added, removed, changed)
+  action: String!
+
+  # Old member address (for changed action)
+  oldMember: Address
+
+  # Total members count
+  totalMembers: BigInt!
+
+  # New quorum value
+  newQuorum: Int!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# EmergencyPauseEvent represents emergency pause/unpause events
+type EmergencyPauseEvent {
+  # Contract address
+  contract: Address!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Proposal ID
+  proposalId: BigInt
+
+  # Action (paused or unpaused)
+  action: String!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# DepositMintProposal represents a deposit mint proposal from GovMinter
+type DepositMintProposal {
+  # Proposal ID
+  proposalId: BigInt!
+
+  # Recipient address
+  to: Address!
+
+  # Mint amount
+  amount: BigInt!
+
+  # Deposit ID
+  depositId: String!
+
+  # Proposal status
+  status: ProposalStatus!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# MinterInfo represents information about a minter
+type MinterInfo {
+  # Minter address
+  address: Address!
+
+  # Current allowance
+  allowance: BigInt!
+
+  # Is currently active
+  isActive: Boolean!
+}
+
+# ValidatorInfo represents information about a validator
+type ValidatorInfo {
+  # Validator address
+  address: Address!
+
+  # Is currently active
+  isActive: Boolean!
+}
+
+# Connections for pagination
+type MintEventConnection {
+  nodes: [MintEvent!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+type BurnEventConnection {
+  nodes: [BurnEvent!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+type ProposalConnection {
+  nodes: [Proposal!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+type ProposalVoteConnection {
+  nodes: [ProposalVote!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+# Filter inputs for system contracts
+input SystemContractEventFilter {
+  # Filter by block number range
+  fromBlock: BigInt!
+  toBlock: BigInt!
+
+  # Filter by specific address (minter, burner, validator, etc.)
+  address: Address
+}
+
+input ProposalFilter {
+  # Filter by contract address
+  contract: Address!
+
+  # Filter by status
+  status: ProposalStatus
+
+  # Filter by proposer
+  proposer: Address
 }
