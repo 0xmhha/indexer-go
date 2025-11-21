@@ -94,13 +94,8 @@ if [ ! -f "${CONFIG_DIR}/config.yaml" ]; then
         echo "  ✓ Configuration template installed"
         echo "  ⚠ IMPORTANT: Edit ${CONFIG_DIR}/config.yaml before starting"
     fi
-fi
-
-if [ ! -f "${CONFIG_DIR}/indexer-go.env" ]; then
-    if [ -f "../systemd/indexer-go.env.example" ]; then
-        cp "../systemd/indexer-go.env.example" "${CONFIG_DIR}/indexer-go.env"
-        echo "  ✓ Environment file template installed"
-    fi
+else
+    echo "  ℹ Configuration already exists at ${CONFIG_DIR}/config.yaml"
 fi
 
 # Install systemd service
@@ -127,7 +122,6 @@ echo ""
 echo "Next steps:"
 echo "  1. Edit configuration:"
 echo "     ${CONFIG_DIR}/config.yaml"
-echo "     ${CONFIG_DIR}/indexer-go.env"
 echo ""
 echo "  2. Enable and start service:"
 echo "     systemctl enable indexer-go"

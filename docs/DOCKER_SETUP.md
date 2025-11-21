@@ -81,13 +81,10 @@ Stable-One 노드와 indexer-go를 동일한 호스트에서 실행하기 위한
    git clone https://github.com/0xmhha/indexer-go.git
    cd indexer-go
    ```
-2. **환경 변수 파일 복사**
-   ```bash
-   cp .env.example .env
-   ```
-3. **필요 시 .env 수정**
-   - RPC 엔드포인트, 인덱서 옵션 등을 환경에 맞게 조정합니다.
-4. **Compose 스택 실행**
+2. **설정 파일 준비**
+   - **권장**: `config.yaml` 파일 생성 및 수정
+   - **대체**: Docker Compose에서 환경 변수 직접 설정
+3. **Compose 스택 실행**
    ```bash
    docker-compose up -d
    ```
@@ -165,7 +162,9 @@ Stable-One 노드와 indexer-go를 동일한 호스트에서 실행하기 위한
 | `INDEXER_LOG_LEVEL` | info | 로그 레벨 (debug/info/warn/error)
 | `INDEXER_LOG_FORMAT` | json | 로그 포맷 (json/text)
 
-### .env 예시
+> **참고**: `.env` 파일은 더 이상 자동으로 로드되지 않습니다. Docker Compose에서 환경 변수를 직접 설정하거나 `config.yaml`을 사용하세요.
+
+### Docker Compose 환경 변수 예시
 
 ```bash
 GETH_NETWORK=mainnet
@@ -348,7 +347,7 @@ docker-compose build indexer
 
 ### Indexer가 RPC에 연결하지 못하는 경우
 
-- `.env`의 `INDEXER_RPC_ENDPOINT` 값 확인.
+- Docker Compose의 `INDEXER_RPC_ENDPOINT` 환경 변수 또는 `config.yaml`의 RPC 엔드포인트 값 확인.
 - Stable-One 컨테이너가 정상적으로 8545/8546을 노출하는지 `docker-compose ps`로 확인.
 - 방화벽에서 로컬 포트를 차단하지 않는지 점검.
 

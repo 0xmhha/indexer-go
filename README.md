@@ -268,8 +268,8 @@ curl http://localhost:8080/metrics
 
 Configuration can be provided through (in order of priority):
 1. Command-line flags (highest priority)
-2. Environment variables
-3. Configuration file (YAML)
+2. Configuration file (YAML - `config.yaml`)
+3. Environment variables (still supported for deployment flexibility)
 4. Default values (lowest priority)
 
 ### Command-line flags
@@ -300,11 +300,13 @@ Logging Flags:
   --log-format string       Log format: json, console (default: "json")
 
 Other Flags:
-  --config string           Path to configuration file (YAML)
+  --config string           Path to configuration file (YAML) (default: "config.yaml")
   --version                 Show version information and exit
 ```
 
-### Environment variables
+### Environment variables (Optional)
+
+Environment variables are still supported for deployment flexibility (e.g., Docker, Kubernetes), but **config.yaml is now the recommended primary configuration method**.
 
 ```bash
 # RPC Configuration
@@ -317,7 +319,7 @@ INDEXER_DB_READONLY=false
 
 # Indexer Configuration
 INDEXER_WORKERS=100
-INDEXER_CHUNK_SIZE=100
+INDEXER_CHUNK_SIZE=1          # Use 1 for real-time mode
 INDEXER_START_HEIGHT=0
 
 # API Server Configuration
@@ -333,14 +335,17 @@ INDEXER_LOG_LEVEL=info
 INDEXER_LOG_FORMAT=json
 ```
 
-See [`.env.example`](.env.example) for a complete example.
+**Note**: `.env` files are no longer automatically loaded. Use environment variables directly or configure via `config.yaml`.
 
-### Config file (YAML)
+### Config file (YAML) - Recommended
+
+The recommended way to configure the indexer is using `config.yaml`:
 
 ```yaml
 # config.yaml
 rpc:
-  endpoint: "http://localhost:8545"
+  # Use 127.0.0.1 instead of localhost to force IPv4
+  endpoint: "http://127.0.0.1:8501"
   timeout: 30s
 
 database:
@@ -353,7 +358,7 @@ log:
 
 indexer:
   workers: 100
-  chunk_size: 100
+  chunk_size: 1        # Use 1 for real-time block delivery
   start_height: 0
 
 api:
@@ -373,18 +378,22 @@ See [`config.example.yaml`](config.example.yaml) for a complete example.
 ### Example usage
 
 ```bash
-# Using config file
-./indexer-go --config config.yaml
+# Using config file (recommended - auto-loaded by default)
+./indexer-go
 
-# Using environment variables
-export INDEXER_RPC_ENDPOINT=http://localhost:8545
+# Specify custom config file
+./indexer-go --config /path/to/config.yaml
+
+# Using environment variables (for Docker/K8s deployments)
+export INDEXER_RPC_ENDPOINT=http://127.0.0.1:8501
 export INDEXER_DB_PATH=./data
+export INDEXER_CHUNK_SIZE=1
 ./indexer-go
 
 # Using CLI flags (override config file and env vars)
 ./indexer-go \
-  --config config.yaml \
-  --rpc http://custom-rpc:8545 \
+  --rpc http://127.0.0.1:8501 \
+  --batch-size 1 \
   --workers 200
 ```
 

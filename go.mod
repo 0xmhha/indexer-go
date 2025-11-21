@@ -12,7 +12,6 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/graphql-go/graphql v0.8.1
 	github.com/graphql-go/handler v0.2.4
-	github.com/joho/godotenv v1.5.1
 	github.com/prometheus/client_golang v1.15.0
 	github.com/vektah/gqlparser/v2 v2.5.30
 	go.uber.org/zap v1.27.0

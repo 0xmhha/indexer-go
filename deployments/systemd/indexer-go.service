@@ -36,10 +36,9 @@ KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=30s
 
-# Environment
+# Environment (optional - config.yaml is the primary configuration method)
 Environment="INDEXER_LOG_LEVEL=info"
 Environment="INDEXER_LOG_FORMAT=json"
-EnvironmentFile=-/etc/indexer-go/indexer-go.env
 
 # Logging
 StandardOutput=journal

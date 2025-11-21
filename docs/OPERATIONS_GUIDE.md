@@ -69,7 +69,6 @@ sudo chmod 755 /opt/indexer-go/bin/indexer-go
 
 # Copy configuration
 sudo cp config.example.yaml /etc/indexer-go/config.yaml
-sudo cp deployments/systemd/indexer-go.env.example /etc/indexer-go/indexer-go.env
 
 # Install systemd service
 sudo cp deployments/systemd/indexer-go.service /etc/systemd/system/
@@ -88,11 +87,8 @@ sudo chown -R indexer:indexer /var/log/indexer-go
 #### Edit Configuration Files
 
 ```bash
-# Main configuration
+# Main configuration (primary method)
 sudo nano /etc/indexer-go/config.yaml
-
-# Environment variables
-sudo nano /etc/indexer-go/indexer-go.env
 ```
 
 **Critical Settings**:
@@ -690,8 +686,7 @@ sudo certbot --nginx -d indexer.example.com
 └── backup/                # Binary backups
 
 /etc/indexer-go/
-├── config.yaml            # Main configuration
-└── indexer-go.env         # Environment variables
+└── config.yaml            # Main configuration (YAML)
 
 /var/lib/indexer-go/
 └── data/                  # PebbleDB data

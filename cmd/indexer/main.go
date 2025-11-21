@@ -17,7 +17,6 @@ import (
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/logger"
 	"github.com/0xmhha/indexer-go/storage"
-	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
@@ -31,13 +30,13 @@ var (
 func main() {
 	// Define command-line flags
 	var (
-		configFile    = flag.String("config", "", "Path to configuration file (YAML)")
+		configFile    = flag.String("config", "config.yaml", "Path to configuration file (YAML)")
 		showVersion   = flag.Bool("version", false, "Show version information and exit")
 		rpcEndpoint   = flag.String("rpc", "", "Ethereum RPC endpoint URL")
 		dbPath        = flag.String("db", "", "Database path")
 		startHeight   = flag.Uint64("start-height", 0, "Block height to start indexing from")
 		workers       = flag.Int("workers", 100, "Number of concurrent workers")
-		batchSize     = flag.Int("batch-size", 100, "Number of blocks per batch")
+		batchSize     = flag.Int("batch-size", 0, "Number of blocks per batch (0 = use config.yaml)")
 		logLevel      = flag.String("log-level", "", "Log level (debug, info, warn, error)")
 		logFormat     = flag.String("log-format", "", "Log format (json, console)")
 		enableGapMode = flag.Bool("gap-recovery", false, "Enable gap detection and recovery at startup")
@@ -192,17 +191,26 @@ func main() {
 	)
 
 	// Initialize fetcher
+	// Real-time mode: Use shorter RetryDelay for batch_size=1
+	retryDelay := time.Second * 5
+	if cfg.Indexer.ChunkSize == 1 {
+		retryDelay = time.Millisecond * 200 // Poll every 200ms for real-time delivery
+	}
+
 	fetcherConfig := &fetch.Config{
 		StartHeight: cfg.Indexer.StartHeight,
 		BatchSize:   cfg.Indexer.ChunkSize,
 		MaxRetries:  3,
-		RetryDelay:  time.Second * 5,
+		RetryDelay:  retryDelay,
 		NumWorkers:  cfg.Indexer.Workers,
 	}
 
 	fetcher := fetch.NewFetcher(ethClient, store, fetcherConfig, log, eventBus)
 
-	log.Info("Fetcher initialized, starting indexing...")
+	log.Info("Fetcher initialized, starting indexing...",
+		zap.Duration("retry_delay", retryDelay),
+		zap.Int("batch_size", cfg.Indexer.ChunkSize),
+	)
 
 	// Initialize and start API server if enabled
 	var apiServer *api.Server
@@ -306,36 +314,14 @@ func main() {
 	log.Info("Indexer stopped")
 }
 
-// loadConfig loads configuration from file and environment variables
+// loadConfig loads configuration from YAML file
 func loadConfig(configFile string) (*config.Config, error) {
-	if err := loadDotEnv(); err != nil {
-		return nil, err
-	}
-
 	cfg, err := config.Load(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	return cfg, nil
-}
-
-// loadDotEnv loads environment variables from a .env file if it exists.
-func loadDotEnv() error {
-	info, err := os.Stat(".env")
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("failed to stat .env: %w", err)
-	}
-	if info.IsDir() {
-		return fmt.Errorf(".env exists but is a directory")
-	}
-	if err := godotenv.Load(".env"); err != nil {
-		return fmt.Errorf("failed to load .env: %w", err)
-	}
-	return nil
 }
 
 // applyFlags applies command-line flags to configuration
@@ -388,10 +374,10 @@ func applyAPIFlags(cfg *config.Config, enableAPI bool, apiHost string, apiPort i
 // validateConfig validates the configuration
 func validateConfig(cfg *config.Config) error {
 	if cfg.RPC.Endpoint == "" {
-		return fmt.Errorf("RPC endpoint is required (use --rpc or set INDEXER_RPC_ENDPOINT)")
+		return fmt.Errorf("RPC endpoint is required (use --rpc flag or set in config.yaml)")
 	}
 	if cfg.Database.Path == "" {
-		return fmt.Errorf("database path is required (use --db or set INDEXER_DATABASE_PATH)")
+		return fmt.Errorf("database path is required (use --db flag or set in config.yaml)")
 	}
 	if cfg.Indexer.Workers <= 0 {
 		return fmt.Errorf("workers must be positive")
