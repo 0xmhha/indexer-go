@@ -78,6 +78,26 @@ const (
 
 	// DefaultRetryBackoffMultiplier is the default backoff multiplier for exponential backoff
 	DefaultRetryBackoffMultiplier = 2
+
+	// Adaptive Optimization Constants
+	// DefaultMetricsWindowSize is the size of the sliding window for metrics averaging
+	DefaultMetricsWindowSize = 100
+
+	// DefaultOptimizationInterval is how often to adjust fetcher parameters
+	DefaultOptimizationInterval = 30 * time.Second
+
+	// DefaultRateLimitWindow is the time window for rate limit detection
+	DefaultRateLimitWindow = 5 * time.Minute
+
+	// Large Block Processing Constants
+	// LargeBlockThreshold is the gas threshold to consider a block as "large"
+	LargeBlockThreshold = 50000000 // 50M gas
+
+	// DefaultReceiptBatchSize is the number of receipts to process per batch for large blocks
+	DefaultReceiptBatchSize = 100
+
+	// DefaultMaxReceiptWorkers is the maximum number of workers for parallel receipt processing
+	DefaultMaxReceiptWorkers = 10
 )
 
 // Storage Constants
