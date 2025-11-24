@@ -121,6 +121,10 @@ func (m *mockWBFTStorage) GetBlockSigners(ctx context.Context, blockNumber uint6
 	return preparers, committers, nil
 }
 
+func (m *mockWBFTStorage) ListABIs(ctx context.Context) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
 func TestGetWBFTBlockExtra(t *testing.T) {
 	logger := zap.NewNop()
 	handler := NewHandler(&mockWBFTStorage{}, logger)

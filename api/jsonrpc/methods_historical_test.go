@@ -100,6 +100,26 @@ func (m *mockHistoricalStorage) GetTokenBalances(ctx context.Context, addr commo
 	return []storage.TokenBalance{}, nil
 }
 
+func (m *mockHistoricalStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*storage.GasStats, error) {
+	return &storage.GasStats{}, nil
+}
+
+func (m *mockHistoricalStorage) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*storage.AddressGasStats, error) {
+	return &storage.AddressGasStats{}, nil
+}
+
+func (m *mockHistoricalStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressGasStats, error) {
+	return []storage.AddressGasStats{}, nil
+}
+
+func (m *mockHistoricalStorage) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressActivityStats, error) {
+	return []storage.AddressActivityStats{}, nil
+}
+
+func (m *mockHistoricalStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*storage.NetworkMetrics, error) {
+	return &storage.NetworkMetrics{}, nil
+}
+
 func TestHistoricalJSONRPCMethods(t *testing.T) {
 	logger := zap.NewNop()
 	ctx := context.Background()
