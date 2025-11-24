@@ -83,8 +83,16 @@ type TokenBalance struct {
 	TokenType string
 	// Balance is the token balance (for ERC20) or count (for ERC721)
 	Balance *big.Int
-	// TokenID is the token ID (for ERC721/ERC1155, empty for ERC20)
-	TokenID *big.Int
+	// TokenID is the token ID (for ERC721/ERC1155, empty string for ERC20)
+	TokenID string
+	// Name is the token name (e.g., "Wrapped Ether")
+	Name string
+	// Symbol is the token symbol (e.g., "WETH")
+	Symbol string
+	// Decimals is the number of decimals (for ERC20 only, nil for NFTs)
+	Decimals *int
+	// Metadata is additional token information as JSON string
+	Metadata string
 }
 
 // GasStats represents gas usage statistics
@@ -176,7 +184,8 @@ type HistoricalReader interface {
 	GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]MinerStats, error)
 
 	// GetTokenBalances returns token balances for an address by scanning Transfer events
-	GetTokenBalances(ctx context.Context, addr common.Address) ([]TokenBalance, error)
+	// If tokenType is not empty, filters by token type ("ERC20", "ERC721", "ERC1155")
+	GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]TokenBalance, error)
 
 	// GetGasStatsByBlockRange returns gas usage statistics for a block range
 	GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*GasStats, error)

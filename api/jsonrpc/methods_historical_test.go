@@ -96,7 +96,7 @@ func (m *mockHistoricalStorage) GetTopMiners(ctx context.Context, limit int, fro
 	return []storage.MinerStats{}, nil
 }
 
-func (m *mockHistoricalStorage) GetTokenBalances(ctx context.Context, addr common.Address) ([]storage.TokenBalance, error) {
+func (m *mockHistoricalStorage) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]storage.TokenBalance, error) {
 	return []storage.TokenBalance{}, nil
 }
 

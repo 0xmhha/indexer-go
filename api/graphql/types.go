@@ -614,16 +614,36 @@ func initTypes() {
 		Name: "TokenBalance",
 		Fields: graphql.Fields{
 			"contractAddress": &graphql.Field{
-				Type: graphql.NewNonNull(addressType),
+				Type:        graphql.NewNonNull(addressType),
+				Description: "The token contract address",
 			},
 			"tokenType": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.String),
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Token standard (ERC20, ERC721, ERC1155)",
 			},
 			"balance": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Token balance (for ERC20) or count (for NFTs)",
 			},
 			"tokenId": &graphql.Field{
-				Type: bigIntType,
+				Type:        graphql.String,
+				Description: "Token ID for ERC721/ERC1155, empty for ERC20",
+			},
+			"name": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Token name (e.g., 'Wrapped Ether')",
+			},
+			"symbol": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Token symbol (e.g., 'WETH')",
+			},
+			"decimals": &graphql.Field{
+				Type:        graphql.Int,
+				Description: "Number of decimals (for ERC20 only)",
+			},
+			"metadata": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Additional token metadata as JSON string",
 			},
 		},
 	})

@@ -428,16 +428,23 @@ func (s *Schema) resolveTokenBalances(p graphql.ResolveParams) (interface{}, err
 	}
 	addr := common.HexToAddress(addrStr)
 
+	// Get tokenType parameter (optional)
+	tokenType := ""
+	if tt, ok := p.Args["tokenType"].(string); ok {
+		tokenType = tt
+	}
+
 	// Cast storage to HistoricalReader
 	histStorage, ok := s.storage.(storage.HistoricalReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support historical queries")
 	}
 
-	balances, err := histStorage.GetTokenBalances(ctx, addr)
+	balances, err := histStorage.GetTokenBalances(ctx, addr, tokenType)
 	if err != nil {
 		s.logger.Error("failed to get token balances",
 			zap.String("address", addrStr),
+			zap.String("tokenType", tokenType),
 			zap.Error(err))
 		return nil, err
 	}
@@ -445,15 +452,38 @@ func (s *Schema) resolveTokenBalances(p graphql.ResolveParams) (interface{}, err
 	// Convert to response format
 	result := make([]map[string]interface{}, len(balances))
 	for i, balance := range balances {
-		result[i] = map[string]interface{}{
+		r := map[string]interface{}{
 			"contractAddress": balance.ContractAddress.Hex(),
 			"tokenType":       balance.TokenType,
 			"balance":         balance.Balance.String(),
-			"tokenId":         nil,
 		}
-		if balance.TokenID != nil {
-			result[i]["tokenId"] = balance.TokenID.String()
+
+		// Add tokenId if not empty
+		if balance.TokenID != "" {
+			r["tokenId"] = balance.TokenID
 		}
+
+		// Add name if not empty
+		if balance.Name != "" {
+			r["name"] = balance.Name
+		}
+
+		// Add symbol if not empty
+		if balance.Symbol != "" {
+			r["symbol"] = balance.Symbol
+		}
+
+		// Add decimals if not nil
+		if balance.Decimals != nil {
+			r["decimals"] = *balance.Decimals
+		}
+
+		// Add metadata if not empty
+		if balance.Metadata != "" {
+			r["metadata"] = balance.Metadata
+		}
+
+		result[i] = r
 	}
 
 	return result, nil

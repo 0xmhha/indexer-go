@@ -1352,7 +1352,7 @@ func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, 
 }
 
 // GetTokenBalances returns token balances for an address by scanning Transfer events
-func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Address) ([]TokenBalance, error) {
+func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]TokenBalance, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -1424,12 +1424,21 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 	for contract, balance := range balanceMap {
 		// Only include non-zero balances
 		if balance.Sign() > 0 {
-			result = append(result, TokenBalance{
+			tb := TokenBalance{
 				ContractAddress: contract,
-				TokenType:       "ERC20",
+				TokenType:       "ERC20", // TODO: Detect actual token type (ERC721, ERC1155)
 				Balance:         balance,
-				TokenID:         nil,
-			})
+				TokenID:         "",  // Empty for ERC20
+				Name:            "",  // TODO: Query from contract
+				Symbol:          "",  // TODO: Query from contract
+				Decimals:        nil, // TODO: Query from contract
+				Metadata:        "",  // TODO: Add metadata support
+			}
+
+			// Apply tokenType filter if specified
+			if tokenType == "" || tokenType == tb.TokenType {
+				result = append(result, tb)
+			}
 		}
 	}
 

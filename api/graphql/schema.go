@@ -239,10 +239,16 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(tokenBalanceType))),
 				Args: graphql.FieldConfigArgument{
 					"address": &graphql.ArgumentConfig{
-						Type: graphql.NewNonNull(addressType),
+						Type:        graphql.NewNonNull(addressType),
+						Description: "Address to query token balances for",
+					},
+					"tokenType": &graphql.ArgumentConfig{
+						Type:        graphql.String,
+						Description: "Filter by token type (ERC20, ERC721, ERC1155)",
 					},
 				},
-				Resolve: s.resolveTokenBalances,
+				Description: "Get token balances for an address",
+				Resolve:     s.resolveTokenBalances,
 			},
 			"search": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(searchResultType))),
