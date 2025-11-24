@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
@@ -15,15 +16,24 @@ import (
 
 // Handler handles JSON-RPC method calls
 type Handler struct {
-	storage storage.Storage
-	logger  *zap.Logger
+	storage       storage.Storage
+	logger        *zap.Logger
+	filterManager *FilterManager
 }
 
 // NewHandler creates a new JSON-RPC handler
 func NewHandler(store storage.Storage, logger *zap.Logger) *Handler {
 	return &Handler{
-		storage: store,
-		logger:  logger,
+		storage:       store,
+		logger:        logger,
+		filterManager: NewFilterManager(5 * time.Minute), // 5 minute filter timeout
+	}
+}
+
+// Close cleans up handler resources
+func (h *Handler) Close() {
+	if h.filterManager != nil {
+		h.filterManager.Close()
 	}
 }
 
@@ -119,6 +129,19 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 	// Ethereum-compatible log filtering methods
 	case "eth_getLogs":
 		return h.ethGetLogs(ctx, params)
+	// Ethereum-compatible filter methods
+	case "eth_newFilter":
+		return h.ethNewFilter(ctx, params)
+	case "eth_newBlockFilter":
+		return h.ethNewBlockFilter(ctx, params)
+	case "eth_newPendingTransactionFilter":
+		return h.ethNewPendingTransactionFilter(ctx, params)
+	case "eth_uninstallFilter":
+		return h.ethUninstallFilter(ctx, params)
+	case "eth_getFilterChanges":
+		return h.ethGetFilterChanges(ctx, params)
+	case "eth_getFilterLogs":
+		return h.ethGetFilterLogs(ctx, params)
 	default:
 		return nil, NewError(MethodNotFound, fmt.Sprintf("method '%s' not found", method), nil)
 	}

@@ -35,6 +35,7 @@ const (
 	MethodNotFound = -32601
 	InvalidParams  = -32602
 	InternalError  = -32603
+	FilterNotFound = -32000 // Custom error code for filter not found
 )
 
 // NewError creates a new JSON-RPC error
