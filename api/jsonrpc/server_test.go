@@ -196,6 +196,10 @@ func (m *mockStorage) IndexLog(ctx context.Context, log *types.Log) error {
 	return nil
 }
 
+func (m *mockStorage) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
+	return []storage.SearchResult{}, nil
+}
+
 // mockStorageWithData extends mockStorage with transaction and receipt data
 type mockStorageWithData struct {
 	*mockStorage
@@ -964,6 +968,10 @@ func (m *mockStorageWithErrors) IndexLog(ctx context.Context, log *types.Log) er
 	return storage.ErrNotFound
 }
 
+func (m *mockStorageWithErrors) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
+	return nil, storage.ErrNotFound
+}
+
 // mockStorageWithNonNotFoundErrors returns non-ErrNotFound errors to test logging paths
 type mockStorageWithNonNotFoundErrors struct {
 }
@@ -1114,6 +1122,10 @@ func (m *mockStorageWithNonNotFoundErrors) IndexLogs(ctx context.Context, logs [
 
 func (m *mockStorageWithNonNotFoundErrors) IndexLog(ctx context.Context, log *types.Log) error {
 	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
+	return nil, fmt.Errorf("database connection failed")
 }
 
 func TestJSONRPCServerEdgeCases(t *testing.T) {

@@ -213,6 +213,10 @@ func (m *mockStorage) IndexLog(ctx context.Context, log *types.Log) error {
 	return nil
 }
 
+func (m *mockStorage) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
+	return []storage.SearchResult{}, nil
+}
+
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
 }
@@ -363,6 +367,10 @@ func (m *mockStorageWithErrors) IndexLogs(ctx context.Context, logs []*types.Log
 
 func (m *mockStorageWithErrors) IndexLog(ctx context.Context, log *types.Log) error {
 	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
+	return nil, storage.ErrNotFound
 }
 
 func TestGraphQLHandler(t *testing.T) {

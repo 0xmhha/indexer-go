@@ -106,6 +106,7 @@ type Storage interface {
 	LogWriter
 	ABIReader
 	ABIWriter
+	SearchReader
 
 	// Close closes the storage and releases resources
 	Close() error
