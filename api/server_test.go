@@ -8,12 +8,70 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/storage"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 )
 
 // mockStorage is a mock implementation of storage.Storage for testing
 type mockStorage struct {
 	storage.Storage
+}
+
+func (m *mockStorage) SetABI(ctx context.Context, address common.Address, abiJSON []byte) error {
+	return nil
+}
+
+func (m *mockStorage) GetABI(ctx context.Context, address common.Address) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) DeleteABI(ctx context.Context, address common.Address) error {
+	return nil
+}
+
+func (m *mockStorage) ListABIs(ctx context.Context) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockStorage) HasABI(ctx context.Context, address common.Address) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStorage) GetLogs(ctx context.Context, filter *storage.LogFilter) ([]*types.Log, error) {
+	return []*types.Log{}, nil
+}
+
+func (m *mockStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
+	return []*types.Log{}, nil
+}
+
+func (m *mockStorage) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+	return []*types.Log{}, nil
+}
+
+func (m *mockStorage) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+	return []*types.Log{}, nil
+}
+
+func (m *mockStorage) SaveLog(ctx context.Context, log *types.Log) error {
+	return nil
+}
+
+func (m *mockStorage) SaveLogs(ctx context.Context, logs []*types.Log) error {
+	return nil
+}
+
+func (m *mockStorage) DeleteLogsByBlock(ctx context.Context, blockNumber uint64) error {
+	return nil
+}
+
+func (m *mockStorage) IndexLogs(ctx context.Context, logs []*types.Log) error {
+	return nil
+}
+
+func (m *mockStorage) IndexLog(ctx context.Context, log *types.Log) error {
+	return nil
 }
 
 func TestNewServer(t *testing.T) {

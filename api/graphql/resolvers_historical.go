@@ -774,11 +774,11 @@ func (s *Schema) resolveNetworkMetrics(p graphql.ResolveParams) (interface{}, er
 	}
 
 	return map[string]interface{}{
-		"tps":                metrics.TPS,
-		"blockTime":          metrics.BlockTime,
-		"totalBlocks":        fmt.Sprintf("%d", metrics.TotalBlocks),
-		"totalTransactions":  fmt.Sprintf("%d", metrics.TotalTransactions),
-		"averageBlockSize":   fmt.Sprintf("%d", metrics.AverageBlockSize),
-		"timePeriod":         fmt.Sprintf("%d", metrics.TimePeriod),
+		"tps":               metrics.TPS,
+		"blockTime":         metrics.BlockTime,
+		"totalBlocks":       fmt.Sprintf("%d", metrics.TotalBlocks),
+		"totalTransactions": fmt.Sprintf("%d", metrics.TotalTransactions),
+		"averageBlockSize":  fmt.Sprintf("%d", metrics.AverageBlockSize),
+		"timePeriod":        fmt.Sprintf("%d", metrics.TimePeriod),
 	}, nil
 }

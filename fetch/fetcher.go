@@ -78,13 +78,13 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
-	client             Client
-	storage            Storage
-	config             *Config
-	logger             *zap.Logger
-	eventBus           *events.EventBus
-	metrics            *RPCMetrics
-	optimizer          *AdaptiveOptimizer
+	client              Client
+	storage             Storage
+	config              *Config
+	logger              *zap.Logger
+	eventBus            *events.EventBus
+	metrics             *RPCMetrics
+	optimizer           *AdaptiveOptimizer
 	largeBlockProcessor *LargeBlockProcessor
 }
 

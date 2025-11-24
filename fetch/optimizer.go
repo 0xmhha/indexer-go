@@ -22,10 +22,10 @@ type AdaptiveOptimizer struct {
 	adjustmentInterval time.Duration
 
 	// Target metrics
-	targetErrorRate      float64 // Target error rate (lower is better)
-	maxErrorRate         float64 // Maximum acceptable error rate
-	targetResponseTime   uint64  // Target response time in ms
-	rateLimitThreshold   uint64  // Error count threshold for rate limit detection
+	targetErrorRate    float64 // Target error rate (lower is better)
+	maxErrorRate       float64 // Maximum acceptable error rate
+	targetResponseTime uint64  // Target response time in ms
+	rateLimitThreshold uint64  // Error count threshold for rate limit detection
 
 	// Adjustment parameters
 	workerIncreaseFactor float64 // Factor to increase workers (e.g., 1.2 = 20% increase)
@@ -62,14 +62,14 @@ func DefaultOptimizerConfig() *OptimizerConfig {
 		MinBatchSize:         5,
 		MaxBatchSize:         50,
 		AdjustmentInterval:   30 * time.Second,
-		TargetErrorRate:      0.01,  // 1% error rate
-		MaxErrorRate:         0.05,  // 5% error rate
-		TargetResponseTime:   500,   // 500ms
-		RateLimitThreshold:   10,    // 10 errors in window
-		WorkerIncreaseFactor: 1.2,   // 20% increase
-		WorkerDecreaseFactor: 0.8,   // 20% decrease
-		BatchIncreaseFactor:  1.5,   // 50% increase
-		BatchDecreaseFactor:  0.75,  // 25% decrease
+		TargetErrorRate:      0.01, // 1% error rate
+		MaxErrorRate:         0.05, // 5% error rate
+		TargetResponseTime:   500,  // 500ms
+		RateLimitThreshold:   10,   // 10 errors in window
+		WorkerIncreaseFactor: 1.2,  // 20% increase
+		WorkerDecreaseFactor: 0.8,  // 20% decrease
+		BatchIncreaseFactor:  1.5,  // 50% increase
+		BatchDecreaseFactor:  0.75, // 25% decrease
 	}
 }
 

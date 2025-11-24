@@ -2486,11 +2486,11 @@ func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int,
 				stats, exists := addressMap[sender]
 				if !exists {
 					stats = &AddressGasStats{
-						Address:         sender,
-						TotalGasUsed:    0,
+						Address:          sender,
+						TotalGasUsed:     0,
 						TransactionCount: 0,
-						AverageGasPerTx: 0,
-						TotalFeesPaid:   big.NewInt(0),
+						AverageGasPerTx:  0,
+						TotalFeesPaid:    big.NewInt(0),
 					}
 					addressMap[sender] = stats
 				}

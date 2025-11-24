@@ -31,11 +31,11 @@ type RPCMetrics struct {
 	maxConsecutiveErrs uint64
 
 	// Throughput tracking
-	blocksProcessed       uint64
-	receiptsProcessed     uint64
-	startTime             time.Time
-	lastThroughputUpdate  time.Time
-	currentThroughput     float64 // Blocks per second
+	blocksProcessed      uint64
+	receiptsProcessed    uint64
+	startTime            time.Time
+	lastThroughputUpdate time.Time
+	currentThroughput    float64 // Blocks per second
 
 	// Adaptive parameters
 	optimalWorkerCount int
@@ -49,15 +49,15 @@ type RPCMetrics struct {
 // NewRPCMetrics creates a new metrics tracker
 func NewRPCMetrics(windowSize int, rateLimitWindow time.Duration) *RPCMetrics {
 	return &RPCMetrics{
-		recentResponseTimes: make([]uint64, 0, windowSize),
-		recentErrors:        make([]bool, 0, windowSize),
-		windowSize:          windowSize,
-		rateLimitWindow:     rateLimitWindow,
-		startTime:           time.Now(),
+		recentResponseTimes:  make([]uint64, 0, windowSize),
+		recentErrors:         make([]bool, 0, windowSize),
+		windowSize:           windowSize,
+		rateLimitWindow:      rateLimitWindow,
+		startTime:            time.Now(),
 		lastThroughputUpdate: time.Now(),
-		minResponseTime:     ^uint64(0), // Max uint64
-		optimalWorkerCount:  100,        // Default
-		optimalBatchSize:    10,         // Default
+		minResponseTime:      ^uint64(0), // Max uint64
+		optimalWorkerCount:   100,        // Default
+		optimalBatchSize:     10,         // Default
 	}
 }
 
@@ -271,25 +271,25 @@ func (m *RPCMetrics) GetStats() MetricsSnapshot {
 	defer m.mu.RUnlock()
 
 	return MetricsSnapshot{
-		TotalRequests:        m.totalRequests,
-		SuccessRequests:      m.successRequests,
-		ErrorRequests:        m.errorRequests,
-		ErrorRate:            m.GetErrorRate(),
-		RecentErrorRate:      m.GetRecentErrorRate(),
-		AverageResponseTime:  m.GetAverageResponseTime(),
+		TotalRequests:         m.totalRequests,
+		SuccessRequests:       m.successRequests,
+		ErrorRequests:         m.errorRequests,
+		ErrorRate:             m.GetErrorRate(),
+		RecentErrorRate:       m.GetRecentErrorRate(),
+		AverageResponseTime:   m.GetAverageResponseTime(),
 		RecentAvgResponseTime: m.GetRecentAverageResponseTime(),
-		MinResponseTime:      m.minResponseTime,
-		MaxResponseTime:      m.maxResponseTime,
-		RateLimitErrors:      m.rateLimitErrors,
-		RateLimitDetected:    m.rateLimitDetected,
-		ConsecutiveErrors:    m.consecutiveErrors,
-		MaxConsecutiveErrors: m.maxConsecutiveErrs,
-		BlocksProcessed:      m.blocksProcessed,
-		ReceiptsProcessed:    m.receiptsProcessed,
-		Throughput:           m.currentThroughput,
-		OptimalWorkerCount:   m.optimalWorkerCount,
-		OptimalBatchSize:     m.optimalBatchSize,
-		Uptime:               time.Since(m.startTime),
+		MinResponseTime:       m.minResponseTime,
+		MaxResponseTime:       m.maxResponseTime,
+		RateLimitErrors:       m.rateLimitErrors,
+		RateLimitDetected:     m.rateLimitDetected,
+		ConsecutiveErrors:     m.consecutiveErrors,
+		MaxConsecutiveErrors:  m.maxConsecutiveErrs,
+		BlocksProcessed:       m.blocksProcessed,
+		ReceiptsProcessed:     m.receiptsProcessed,
+		Throughput:            m.currentThroughput,
+		OptimalWorkerCount:    m.optimalWorkerCount,
+		OptimalBatchSize:      m.optimalBatchSize,
+		Uptime:                time.Since(m.startTime),
 	}
 }
 

@@ -140,6 +140,62 @@ func (m *mockStorage) Compact(ctx context.Context, start, end []byte) error {
 	return nil
 }
 
+func (m *mockStorage) SetABI(ctx context.Context, address common.Address, abiJSON []byte) error {
+	return nil
+}
+
+func (m *mockStorage) GetABI(ctx context.Context, address common.Address) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) DeleteABI(ctx context.Context, address common.Address) error {
+	return nil
+}
+
+func (m *mockStorage) ListABIs(ctx context.Context) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockStorage) HasABI(ctx context.Context, address common.Address) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStorage) GetLogs(ctx context.Context, filter *storage.LogFilter) ([]*types.Log, error) {
+	return []*types.Log{}, nil
+}
+
+func (m *mockStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
+	return []*types.Log{}, nil
+}
+
+func (m *mockStorage) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+	return []*types.Log{}, nil
+}
+
+func (m *mockStorage) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+	return []*types.Log{}, nil
+}
+
+func (m *mockStorage) SaveLog(ctx context.Context, log *types.Log) error {
+	return nil
+}
+
+func (m *mockStorage) SaveLogs(ctx context.Context, logs []*types.Log) error {
+	return nil
+}
+
+func (m *mockStorage) DeleteLogsByBlock(ctx context.Context, blockNumber uint64) error {
+	return nil
+}
+
+func (m *mockStorage) IndexLogs(ctx context.Context, logs []*types.Log) error {
+	return nil
+}
+
+func (m *mockStorage) IndexLog(ctx context.Context, log *types.Log) error {
+	return nil
+}
+
 // mockStorageWithData extends mockStorage with transaction and receipt data
 type mockStorageWithData struct {
 	*mockStorage
@@ -852,6 +908,62 @@ func (m *mockStorageWithErrors) Compact(ctx context.Context, start, end []byte) 
 	return storage.ErrNotFound
 }
 
+func (m *mockStorageWithErrors) SetABI(ctx context.Context, address common.Address, abiJSON []byte) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetABI(ctx context.Context, address common.Address) ([]byte, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) DeleteABI(ctx context.Context, address common.Address) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) ListABIs(ctx context.Context) ([]common.Address, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) HasABI(ctx context.Context, address common.Address) (bool, error) {
+	return false, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetLogs(ctx context.Context, filter *storage.LogFilter) ([]*types.Log, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SaveLog(ctx context.Context, log *types.Log) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SaveLogs(ctx context.Context, logs []*types.Log) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) DeleteLogsByBlock(ctx context.Context, blockNumber uint64) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) IndexLogs(ctx context.Context, logs []*types.Log) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) IndexLog(ctx context.Context, log *types.Log) error {
+	return storage.ErrNotFound
+}
+
 // mockStorageWithNonNotFoundErrors returns non-ErrNotFound errors to test logging paths
 type mockStorageWithNonNotFoundErrors struct {
 }
@@ -945,6 +1057,62 @@ func (m *mockStorageWithNonNotFoundErrors) NewBatch() storage.Batch {
 }
 
 func (m *mockStorageWithNonNotFoundErrors) Compact(ctx context.Context, start, end []byte) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetABI(ctx context.Context, address common.Address, abiJSON []byte) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetABI(ctx context.Context, address common.Address) ([]byte, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) DeleteABI(ctx context.Context, address common.Address) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) ListABIs(ctx context.Context) ([]common.Address, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) HasABI(ctx context.Context, address common.Address) (bool, error) {
+	return false, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetLogs(ctx context.Context, filter *storage.LogFilter) ([]*types.Log, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SaveLog(ctx context.Context, log *types.Log) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SaveLogs(ctx context.Context, logs []*types.Log) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) DeleteLogsByBlock(ctx context.Context, blockNumber uint64) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) IndexLogs(ctx context.Context, logs []*types.Log) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) IndexLog(ctx context.Context, log *types.Log) error {
 	return fmt.Errorf("database connection failed")
 }
 

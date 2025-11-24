@@ -56,12 +56,12 @@ var (
 	balanceHistoryConnectionType *graphql.Object
 
 	// Analytics types
-	minerStatsType             *graphql.Object
-	tokenBalanceType           *graphql.Object
-	gasStatsType               *graphql.Object
-	addressGasStatsType        *graphql.Object
-	networkMetricsType         *graphql.Object
-	addressActivityStatsType   *graphql.Object
+	minerStatsType           *graphql.Object
+	tokenBalanceType         *graphql.Object
+	gasStatsType             *graphql.Object
+	addressGasStatsType      *graphql.Object
+	networkMetricsType       *graphql.Object
+	addressActivityStatsType *graphql.Object
 
 	// System contract types
 	proposalStatusEnumType        *graphql.Enum
