@@ -20,6 +20,7 @@ func (h *Handler) ethGetLogs(ctx context.Context, params json.RawMessage) (inter
 		Address   interface{}   `json:"address,omitempty"`
 		Topics    []interface{} `json:"topics,omitempty"`
 		BlockHash *string       `json:"blockHash,omitempty"`
+		Decode    *bool         `json:"decode,omitempty"` // Optional: decode logs using ABI
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -142,10 +143,16 @@ func (h *Handler) ethGetLogs(ctx context.Context, params json.RawMessage) (inter
 		return nil, NewError(InternalError, "failed to get logs", err.Error())
 	}
 
+	// Check if decoding is requested
+	decode := false
+	if filterParam.Decode != nil {
+		decode = *filterParam.Decode
+	}
+
 	// Convert logs to JSON format
 	result := make([]interface{}, len(logs))
 	for i, log := range logs {
-		result[i] = h.logToJSON(log)
+		result[i] = h.logToJSONWithDecode(log, decode)
 	}
 
 	return result, nil
@@ -197,12 +204,17 @@ func (h *Handler) parseBlockNumber(blockParam interface{}) (uint64, error) {
 
 // logToJSON converts a log to JSON-friendly format
 func (h *Handler) logToJSON(log *types.Log) map[string]interface{} {
+	return h.logToJSONWithDecode(log, false)
+}
+
+// logToJSONWithDecode converts a log to JSON-friendly format with optional decoding
+func (h *Handler) logToJSONWithDecode(log *types.Log, decode bool) map[string]interface{} {
 	topics := make([]interface{}, len(log.Topics))
 	for i, topic := range log.Topics {
 		topics[i] = topic.Hex()
 	}
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"address":          log.Address.Hex(),
 		"topics":           topics,
 		"data":             fmt.Sprintf("0x%x", log.Data),
@@ -213,4 +225,18 @@ func (h *Handler) logToJSON(log *types.Log) map[string]interface{} {
 		"logIndex":         fmt.Sprintf("0x%x", log.Index),
 		"removed":          log.Removed,
 	}
+
+	// Optionally decode the log if ABI is available
+	if decode && h.abiDecoder.HasABI(log.Address) {
+		decoded, err := h.abiDecoder.DecodeLog(log)
+		if err == nil {
+			result["decoded"] = map[string]interface{}{
+				"eventName": decoded.EventName,
+				"args":      decoded.Args,
+			}
+		}
+		// Silently ignore decode errors - not all logs may be decodable
+	}
+
+	return result
 }

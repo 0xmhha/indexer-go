@@ -25,12 +25,58 @@ type Handler struct {
 
 // NewHandler creates a new JSON-RPC handler
 func NewHandler(store storage.Storage, logger *zap.Logger) *Handler {
-	return &Handler{
+	h := &Handler{
 		storage:       store,
 		logger:        logger,
 		filterManager: NewFilterManager(5 * time.Minute), // 5 minute filter timeout
 		abiDecoder:    abiDecoder.NewDecoder(),
 	}
+
+	// Load all stored ABIs into the decoder
+	if err := h.loadStoredABIs(context.Background()); err != nil {
+		logger.Warn("failed to load stored ABIs", zap.Error(err))
+		// Don't fail initialization, ABIs can be loaded later
+	}
+
+	return h
+}
+
+// loadStoredABIs loads all ABIs from storage into the decoder
+func (h *Handler) loadStoredABIs(ctx context.Context) error {
+	addresses, err := h.storage.ListABIs(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list ABIs: %w", err)
+	}
+
+	loaded := 0
+	for _, addr := range addresses {
+		abiJSON, err := h.storage.GetABI(ctx, addr)
+		if err != nil {
+			h.logger.Warn("failed to get ABI",
+				zap.String("address", addr.Hex()),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		// Load into decoder
+		if err := h.abiDecoder.LoadABI(addr, "", string(abiJSON)); err != nil {
+			h.logger.Warn("failed to load ABI into decoder",
+				zap.String("address", addr.Hex()),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		loaded++
+	}
+
+	h.logger.Info("loaded ABIs from storage",
+		zap.Int("total", len(addresses)),
+		zap.Int("loaded", loaded),
+	)
+
+	return nil
 }
 
 // Close cleans up handler resources
