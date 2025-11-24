@@ -41,6 +41,9 @@ type Filter struct {
 
 	// LastPollAt is when the filter was last polled
 	LastPollAt time.Time
+
+	// Decode indicates whether to decode logs using ABI
+	Decode bool
 }
 
 // FilterManager manages active filters
@@ -73,7 +76,7 @@ func NewFilterManager(timeout time.Duration) *FilterManager {
 }
 
 // NewFilter creates a new filter and returns its ID
-func (fm *FilterManager) NewFilter(filterType FilterType, logFilter *storage.LogFilter, lastBlock uint64) string {
+func (fm *FilterManager) NewFilter(filterType FilterType, logFilter *storage.LogFilter, lastBlock uint64, decode bool) string {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 
@@ -87,6 +90,7 @@ func (fm *FilterManager) NewFilter(filterType FilterType, logFilter *storage.Log
 		LastPollBlock: lastBlock,
 		CreatedAt:     now,
 		LastPollAt:    now,
+		Decode:        decode,
 	}
 
 	fm.filters[id] = filter

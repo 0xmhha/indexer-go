@@ -18,6 +18,7 @@ func (h *Handler) ethNewFilter(ctx context.Context, params json.RawMessage) (int
 		ToBlock   interface{}   `json:"toBlock,omitempty"`
 		Address   interface{}   `json:"address,omitempty"`
 		Topics    []interface{} `json:"topics,omitempty"`
+		Decode    *bool         `json:"decode,omitempty"` // Optional: decode logs using ABI
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -125,8 +126,14 @@ func (h *Handler) ethNewFilter(ctx context.Context, params json.RawMessage) (int
 		return nil, NewError(InternalError, "failed to get latest height", err.Error())
 	}
 
+	// Check if decoding is requested
+	decode := false
+	if filterParam.Decode != nil {
+		decode = *filterParam.Decode
+	}
+
 	// Create filter
-	filterID := h.filterManager.NewFilter(LogFilterType, filter, latestHeight)
+	filterID := h.filterManager.NewFilter(LogFilterType, filter, latestHeight, decode)
 
 	h.logger.Debug("created new log filter",
 		zap.String("id", filterID),
@@ -134,6 +141,7 @@ func (h *Handler) ethNewFilter(ctx context.Context, params json.RawMessage) (int
 		zap.Uint64("toBlock", filter.ToBlock),
 		zap.Int("addresses", len(filter.Addresses)),
 		zap.Int("topics", len(filter.Topics)),
+		zap.Bool("decode", decode),
 	)
 
 	return filterID, nil
@@ -149,8 +157,8 @@ func (h *Handler) ethNewBlockFilter(ctx context.Context, params json.RawMessage)
 		return nil, NewError(InternalError, "failed to get latest height", err.Error())
 	}
 
-	// Create block filter
-	filterID := h.filterManager.NewFilter(BlockFilterType, nil, latestHeight)
+	// Create block filter (decode=false since block filters don't return logs)
+	filterID := h.filterManager.NewFilter(BlockFilterType, nil, latestHeight, false)
 
 	h.logger.Debug("created new block filter",
 		zap.String("id", filterID),
@@ -170,8 +178,8 @@ func (h *Handler) ethNewPendingTransactionFilter(ctx context.Context, params jso
 		return nil, NewError(InternalError, "failed to get latest height", err.Error())
 	}
 
-	// Create pending transaction filter
-	filterID := h.filterManager.NewFilter(PendingTxFilterType, nil, latestHeight)
+	// Create pending transaction filter (decode=false since tx filters don't return logs)
+	filterID := h.filterManager.NewFilter(PendingTxFilterType, nil, latestHeight, false)
 
 	h.logger.Debug("created new pending transaction filter",
 		zap.String("id", filterID),
@@ -238,16 +246,17 @@ func (h *Handler) ethGetFilterChanges(ctx context.Context, params json.RawMessag
 		// Update last poll block
 		h.filterManager.UpdateLastPollBlock(filterID, currentHeight)
 
-		// Convert logs to JSON format
+		// Convert logs to JSON format with decode setting from filter
 		result := make([]interface{}, len(logs))
 		for i, log := range logs {
-			result[i] = h.logToJSON(log)
+			result[i] = h.logToJSONWithDecode(log, filter.Decode)
 		}
 
 		h.logger.Debug("got filter changes",
 			zap.String("filterID", filterID),
 			zap.String("type", "log"),
 			zap.Int("count", len(result)),
+			zap.Bool("decode", filter.Decode),
 		)
 
 		return result, nil
@@ -344,15 +353,16 @@ func (h *Handler) ethGetFilterLogs(ctx context.Context, params json.RawMessage) 
 		return nil, NewError(InternalError, "failed to get logs", err.Error())
 	}
 
-	// Convert logs to JSON format
+	// Convert logs to JSON format with decode setting from filter
 	result := make([]interface{}, len(logs))
 	for i, log := range logs {
-		result[i] = h.logToJSON(log)
+		result[i] = h.logToJSONWithDecode(log, filter.Decode)
 	}
 
 	h.logger.Debug("got filter logs",
 		zap.String("filterID", filterID),
 		zap.Int("count", len(result)),
+		zap.Bool("decode", filter.Decode),
 	)
 
 	return result, nil
