@@ -401,10 +401,17 @@ type Query {
   # ========== Analytics Queries ==========
 
   # Get top miners by block count
-  topMiners(limit: Int): [MinerStats!]!
+  topMiners(
+    limit: Int
+    fromBlock: BigInt
+    toBlock: BigInt
+  ): [MinerStats!]!
 
   # Get token balances for an address (ERC-20/721/1155)
-  tokenBalances(address: Address!): [TokenBalance!]!
+  tokenBalances(
+    address: Address!
+    tokenType: String
+  ): [TokenBalance!]!
 
   # ========== System Contract Queries ==========
 
@@ -656,6 +663,15 @@ type MinerStats {
 
   # Most recent block mined
   lastBlockNumber: BigInt!
+
+  # Timestamp of last block mined
+  lastBlockTime: BigInt!
+
+  # Percentage of total blocks mined
+  percentage: Float!
+
+  # Total rewards earned (in Wei)
+  totalRewards: BigInt!
 }
 
 # TokenBalance represents a token balance for an address
@@ -671,6 +687,18 @@ type TokenBalance {
 
   # Token ID (for ERC721/ERC1155, null for ERC20)
   tokenId: BigInt
+
+  # Token name
+  name: String
+
+  # Token symbol
+  symbol: String
+
+  # Token decimals (ERC20 only)
+  decimals: Int
+
+  # Token metadata (JSON string, for NFTs)
+  metadata: String
 }
 
 # ========== System Contract Types ==========
