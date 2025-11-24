@@ -500,3 +500,285 @@ func parseHistoricalTransactionFilter(args map[string]interface{}) (*storage.Tra
 
 	return filter, nil
 }
+
+// resolveGasStats resolves gas usage statistics for a block range
+func (s *Schema) resolveGasStats(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Parse fromBlock
+	fromBlockStr, ok := p.Args["fromBlock"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid fromBlock")
+	}
+	fromBlock, err := strconv.ParseUint(fromBlockStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid fromBlock format: %w", err)
+	}
+
+	// Parse toBlock
+	toBlockStr, ok := p.Args["toBlock"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid toBlock")
+	}
+	toBlock, err := strconv.ParseUint(toBlockStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid toBlock format: %w", err)
+	}
+
+	// Cast storage to HistoricalReader
+	histStorage, ok := s.storage.(storage.HistoricalReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support historical queries")
+	}
+
+	stats, err := histStorage.GetGasStatsByBlockRange(ctx, fromBlock, toBlock)
+	if err != nil {
+		s.logger.Error("failed to get gas stats",
+			zap.Uint64("fromBlock", fromBlock),
+			zap.Uint64("toBlock", toBlock),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"totalGasUsed":     fmt.Sprintf("%d", stats.TotalGasUsed),
+		"totalGasLimit":    fmt.Sprintf("%d", stats.TotalGasLimit),
+		"averageGasUsed":   fmt.Sprintf("%d", stats.AverageGasUsed),
+		"averageGasPrice":  stats.AverageGasPrice.String(),
+		"blockCount":       fmt.Sprintf("%d", stats.BlockCount),
+		"transactionCount": fmt.Sprintf("%d", stats.TransactionCount),
+	}, nil
+}
+
+// resolveAddressGasStats resolves gas usage statistics for a specific address
+func (s *Schema) resolveAddressGasStats(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Parse address
+	addrStr, ok := p.Args["address"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid address")
+	}
+	address := common.HexToAddress(addrStr)
+
+	// Parse fromBlock
+	fromBlockStr, ok := p.Args["fromBlock"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid fromBlock")
+	}
+	fromBlock, err := strconv.ParseUint(fromBlockStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid fromBlock format: %w", err)
+	}
+
+	// Parse toBlock
+	toBlockStr, ok := p.Args["toBlock"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid toBlock")
+	}
+	toBlock, err := strconv.ParseUint(toBlockStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid toBlock format: %w", err)
+	}
+
+	// Cast storage to HistoricalReader
+	histStorage, ok := s.storage.(storage.HistoricalReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support historical queries")
+	}
+
+	stats, err := histStorage.GetGasStatsByAddress(ctx, address, fromBlock, toBlock)
+	if err != nil {
+		s.logger.Error("failed to get address gas stats",
+			zap.String("address", address.Hex()),
+			zap.Uint64("fromBlock", fromBlock),
+			zap.Uint64("toBlock", toBlock),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"address":          stats.Address.Hex(),
+		"totalGasUsed":     fmt.Sprintf("%d", stats.TotalGasUsed),
+		"transactionCount": fmt.Sprintf("%d", stats.TransactionCount),
+		"averageGasPerTx":  fmt.Sprintf("%d", stats.AverageGasPerTx),
+		"totalFeesPaid":    stats.TotalFeesPaid.String(),
+	}, nil
+}
+
+// resolveTopAddressesByGasUsed resolves top addresses by total gas used
+func (s *Schema) resolveTopAddressesByGasUsed(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Parse limit
+	limit := 10
+	if l, ok := p.Args["limit"].(int); ok && l > 0 {
+		limit = l
+		if limit > 100 {
+			limit = 100
+		}
+	}
+
+	// Parse fromBlock
+	fromBlockStr, ok := p.Args["fromBlock"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid fromBlock")
+	}
+	fromBlock, err := strconv.ParseUint(fromBlockStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid fromBlock format: %w", err)
+	}
+
+	// Parse toBlock
+	toBlockStr, ok := p.Args["toBlock"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid toBlock")
+	}
+	toBlock, err := strconv.ParseUint(toBlockStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid toBlock format: %w", err)
+	}
+
+	// Cast storage to HistoricalReader
+	histStorage, ok := s.storage.(storage.HistoricalReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support historical queries")
+	}
+
+	statsList, err := histStorage.GetTopAddressesByGasUsed(ctx, limit, fromBlock, toBlock)
+	if err != nil {
+		s.logger.Error("failed to get top addresses by gas used",
+			zap.Int("limit", limit),
+			zap.Uint64("fromBlock", fromBlock),
+			zap.Uint64("toBlock", toBlock),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// Convert to response format
+	result := make([]map[string]interface{}, len(statsList))
+	for i, stats := range statsList {
+		result[i] = map[string]interface{}{
+			"address":          stats.Address.Hex(),
+			"totalGasUsed":     fmt.Sprintf("%d", stats.TotalGasUsed),
+			"transactionCount": fmt.Sprintf("%d", stats.TransactionCount),
+			"averageGasPerTx":  fmt.Sprintf("%d", stats.AverageGasPerTx),
+			"totalFeesPaid":    stats.TotalFeesPaid.String(),
+		}
+	}
+
+	return result, nil
+}
+
+// resolveTopAddressesByTxCount resolves top addresses by transaction count
+func (s *Schema) resolveTopAddressesByTxCount(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Parse limit
+	limit := 10
+	if l, ok := p.Args["limit"].(int); ok && l > 0 {
+		limit = l
+		if limit > 100 {
+			limit = 100
+		}
+	}
+
+	// Parse fromBlock
+	fromBlockStr, ok := p.Args["fromBlock"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid fromBlock")
+	}
+	fromBlock, err := strconv.ParseUint(fromBlockStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid fromBlock format: %w", err)
+	}
+
+	// Parse toBlock
+	toBlockStr, ok := p.Args["toBlock"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid toBlock")
+	}
+	toBlock, err := strconv.ParseUint(toBlockStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid toBlock format: %w", err)
+	}
+
+	// Cast storage to HistoricalReader
+	histStorage, ok := s.storage.(storage.HistoricalReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support historical queries")
+	}
+
+	statsList, err := histStorage.GetTopAddressesByTxCount(ctx, limit, fromBlock, toBlock)
+	if err != nil {
+		s.logger.Error("failed to get top addresses by tx count",
+			zap.Int("limit", limit),
+			zap.Uint64("fromBlock", fromBlock),
+			zap.Uint64("toBlock", toBlock),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// Convert to response format
+	result := make([]map[string]interface{}, len(statsList))
+	for i, stats := range statsList {
+		result[i] = map[string]interface{}{
+			"address":            stats.Address.Hex(),
+			"transactionCount":   fmt.Sprintf("%d", stats.TransactionCount),
+			"totalGasUsed":       fmt.Sprintf("%d", stats.TotalGasUsed),
+			"lastActivityBlock":  fmt.Sprintf("%d", stats.LastActivityBlock),
+			"firstActivityBlock": fmt.Sprintf("%d", stats.FirstActivityBlock),
+		}
+	}
+
+	return result, nil
+}
+
+// resolveNetworkMetrics resolves network activity metrics for a time range
+func (s *Schema) resolveNetworkMetrics(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Parse fromTime
+	fromTimeStr, ok := p.Args["fromTime"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid fromTime")
+	}
+	fromTime, err := strconv.ParseUint(fromTimeStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid fromTime format: %w", err)
+	}
+
+	// Parse toTime
+	toTimeStr, ok := p.Args["toTime"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid toTime")
+	}
+	toTime, err := strconv.ParseUint(toTimeStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid toTime format: %w", err)
+	}
+
+	// Cast storage to HistoricalReader
+	histStorage, ok := s.storage.(storage.HistoricalReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support historical queries")
+	}
+
+	metrics, err := histStorage.GetNetworkMetrics(ctx, fromTime, toTime)
+	if err != nil {
+		s.logger.Error("failed to get network metrics",
+			zap.Uint64("fromTime", fromTime),
+			zap.Uint64("toTime", toTime),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"tps":                metrics.TPS,
+		"blockTime":          metrics.BlockTime,
+		"totalBlocks":        fmt.Sprintf("%d", metrics.TotalBlocks),
+		"totalTransactions":  fmt.Sprintf("%d", metrics.TotalTransactions),
+		"averageBlockSize":   fmt.Sprintf("%d", metrics.AverageBlockSize),
+		"timePeriod":         fmt.Sprintf("%d", metrics.TimePeriod),
+	}, nil
+}

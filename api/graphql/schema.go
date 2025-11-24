@@ -234,6 +234,80 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				},
 				Resolve: s.resolveTokenBalances,
 			},
+			"gasStats": &graphql.Field{
+				Type: gasStatsType,
+				Args: graphql.FieldConfigArgument{
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Description: "Get gas usage statistics for a block range",
+				Resolve:     s.resolveGasStats,
+			},
+			"addressGasStats": &graphql.Field{
+				Type: addressGasStatsType,
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Description: "Get gas usage statistics for a specific address",
+				Resolve:     s.resolveAddressGasStats,
+			},
+			"topAddressesByGasUsed": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressGasStatsType))),
+				Args: graphql.FieldConfigArgument{
+					"limit": &graphql.ArgumentConfig{
+						Type: graphql.Int,
+					},
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Description: "Get top addresses by total gas used",
+				Resolve:     s.resolveTopAddressesByGasUsed,
+			},
+			"topAddressesByTxCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressActivityStatsType))),
+				Args: graphql.FieldConfigArgument{
+					"limit": &graphql.ArgumentConfig{
+						Type: graphql.Int,
+					},
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Description: "Get top addresses by transaction count",
+				Resolve:     s.resolveTopAddressesByTxCount,
+			},
+			"networkMetrics": &graphql.Field{
+				Type: networkMetricsType,
+				Args: graphql.FieldConfigArgument{
+					"fromTime": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toTime": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Description: "Get network activity metrics for a time range",
+				Resolve:     s.resolveNetworkMetrics,
+			},
 			// System contract queries
 			"totalSupply": &graphql.Field{
 				Type:    graphql.NewNonNull(bigIntType),
