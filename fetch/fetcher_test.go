@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"math/big"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
 )
 
@@ -71,12 +73,14 @@ type mockStorage struct {
 	receipts     map[common.Hash]*types.Receipt
 	latestHeight uint64
 	readOnly     bool
+	balances     map[common.Address]*big.Int // For balance tracking
 }
 
 func newMockStorage() *mockStorage {
 	return &mockStorage{
 		blocks:   make(map[uint64]*types.Block),
 		receipts: make(map[common.Hash]*types.Receipt),
+		balances: make(map[common.Address]*big.Int),
 	}
 }
 
@@ -148,6 +152,28 @@ func (m *mockStorage) PutReceipt(receipt *types.Receipt) error {
 }
 
 func (m *mockStorage) Close() error {
+	return nil
+}
+
+// UpdateBalance updates the balance for an address (implements HistoricalWriter)
+func (m *mockStorage) UpdateBalance(ctx context.Context, addr common.Address, blockNumber uint64, delta *big.Int, txHash common.Hash) error {
+	currentBalance, ok := m.balances[addr]
+	if !ok {
+		currentBalance = big.NewInt(0)
+	}
+	newBalance := new(big.Int).Add(currentBalance, delta)
+	m.balances[addr] = newBalance
+	return nil
+}
+
+// SetBlockTimestamp indexes a block by timestamp (implements HistoricalWriter)
+func (m *mockStorage) SetBlockTimestamp(ctx context.Context, timestamp uint64, height uint64) error {
+	return nil
+}
+
+// SetBalance sets the balance for an address (implements HistoricalWriter)
+func (m *mockStorage) SetBalance(ctx context.Context, addr common.Address, blockNumber uint64, balance *big.Int) error {
+	m.balances[addr] = balance
 	return nil
 }
 
@@ -1588,4 +1614,121 @@ func TestExponentialBackoff(t *testing.T) {
 	}
 
 	t.Logf("Exponential backoff test completed in %v", duration)
+}
+
+// TestProcessBalanceTracking tests that balance changes are tracked correctly
+func TestProcessBalanceTracking(t *testing.T) {
+	client := newMockClient()
+	storage := newMockStorage()
+	logger := zap.NewNop()
+
+	// Generate a private key for testing
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("Failed to generate private key: %v", err)
+	}
+
+	// Derive address from private key
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		t.Fatal("Failed to cast public key to ECDSA")
+	}
+	from := crypto.PubkeyToAddress(*publicKeyECDSA)
+	to := common.HexToAddress("0xABCDEF1234567890ABCDEF1234567890ABCDEF12")
+
+	// Create a transaction with value transfer
+	value := big.NewInt(1000000000000000000) // 1 ETH in Wei
+	gasPrice := big.NewInt(20000000000)      // 20 Gwei
+	gasLimit := uint64(21000)
+	chainID := big.NewInt(1) // Mainnet chain ID
+
+	// Create and sign transaction
+	signer := types.NewEIP155Signer(chainID)
+	baseTx := types.NewTx(&types.LegacyTx{
+		Nonce:    0,
+		To:       &to,
+		Value:    value,
+		Gas:      gasLimit,
+		GasPrice: gasPrice,
+		Data:     nil,
+	})
+
+	// Sign the transaction
+	tx, err := types.SignTx(baseTx, signer, privateKey)
+	if err != nil {
+		t.Fatalf("Failed to sign transaction: %v", err)
+	}
+
+	// Verify sender can be recovered
+	recoveredFrom, err := types.Sender(signer, tx)
+	if err != nil {
+		t.Fatalf("Failed to recover sender: %v", err)
+	}
+	if recoveredFrom != from {
+		t.Fatalf("Recovered sender %v != expected %v", recoveredFrom, from)
+	}
+
+	// Create block with the transaction
+	header := &types.Header{
+		Number:     big.NewInt(1),
+		GasUsed:    gasLimit,
+		Difficulty: big.NewInt(1),
+		Time:       uint64(time.Now().Unix()),
+	}
+	block := types.NewBlockWithHeader(header).WithBody([]*types.Transaction{tx}, nil)
+
+	// Create receipt
+	receipt := &types.Receipt{
+		TxHash:          tx.Hash(),
+		GasUsed:         gasLimit,
+		BlockNumber:     big.NewInt(1),
+		TransactionIndex: 0,
+		Status:          types.ReceiptStatusSuccessful,
+	}
+
+	// Setup mock client and storage
+	client.blocks[1] = block
+	client.receipts[block.Hash()] = types.Receipts{receipt}
+	client.latestBlock = 1
+
+	config := &Config{
+		StartHeight: 0,
+		BatchSize:   1,
+		MaxRetries:  3,
+		RetryDelay:  time.Millisecond * 10,
+	}
+
+	fetcher := NewFetcher(client, storage, config, logger, nil)
+
+	ctx := context.Background()
+	err = fetcher.FetchBlock(ctx, 1)
+	if err != nil {
+		t.Fatalf("FetchBlock() error = %v", err)
+	}
+
+	// Verify sender balance decreased by (value + gas cost)
+	gasCost := new(big.Int).Mul(big.NewInt(int64(gasLimit)), gasPrice)
+	expectedSenderDelta := new(big.Int).Neg(new(big.Int).Add(value, gasCost))
+
+	senderBalance, ok := storage.balances[from]
+	if !ok {
+		t.Error("Sender balance not tracked")
+	} else if senderBalance.Cmp(expectedSenderDelta) != 0 {
+		t.Errorf("Sender balance = %v, want %v", senderBalance, expectedSenderDelta)
+	}
+
+	// Verify receiver balance increased by value
+	receiverBalance, ok := storage.balances[to]
+	if !ok {
+		t.Error("Receiver balance not tracked")
+	} else if receiverBalance.Cmp(value) != 0 {
+		t.Errorf("Receiver balance = %v, want %v", receiverBalance, value)
+	}
+
+	t.Logf("Balance tracking test passed:")
+	t.Logf("  From: %s, Balance: %v", from.Hex(), senderBalance)
+	t.Logf("  To: %s, Balance: %v", to.Hex(), receiverBalance)
+	t.Logf("  Value transferred: %v Wei", value)
+	t.Logf("  Gas cost: %v Wei", gasCost)
 }

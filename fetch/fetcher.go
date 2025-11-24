@@ -207,6 +207,11 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		return fmt.Errorf("failed to process address indexing for block %d: %w", height, err)
 	}
 
+	// Process native balance tracking
+	if err := f.processBalanceTracking(ctx, block, receipts); err != nil {
+		return fmt.Errorf("failed to process balance tracking for block %d: %w", height, err)
+	}
+
 	// Publish block event if EventBus is configured
 	if f.eventBus != nil {
 		blockEvent := events.NewBlockEvent(block)
@@ -478,6 +483,11 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 				// Process address indexing (contract creation, token transfers)
 				if err := f.processAddressIndexing(ctx, res.block, res.receipts); err != nil {
 					return fmt.Errorf("failed to process address indexing for block %d: %w", nextHeight, err)
+				}
+
+				// Process native balance tracking
+				if err := f.processBalanceTracking(ctx, res.block, res.receipts); err != nil {
+					return fmt.Errorf("failed to process balance tracking for block %d: %w", nextHeight, err)
 				}
 
 				// Publish block event if EventBus is configured
@@ -1162,6 +1172,98 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 	}
 
 	f.logger.Debug("Processed address indexing",
+		zap.Uint64("height", blockNumber),
+		zap.Int("transactions", len(transactions)),
+	)
+
+	return nil
+}
+
+// processBalanceTracking tracks native balance changes from ETH transfers
+func (f *Fetcher) processBalanceTracking(ctx context.Context, block *types.Block, receipts types.Receipts) error {
+	// Check if storage implements HistoricalWriter
+	histWriter, ok := f.storage.(storage.HistoricalWriter)
+	if !ok {
+		// Storage doesn't support balance tracking - skip silently
+		return nil
+	}
+
+	blockNumber := block.NumberU64()
+	transactions := block.Transactions()
+
+	// Track balance changes for each transaction
+	for _, tx := range transactions {
+		// Find matching receipt
+		var receipt *types.Receipt
+		for _, r := range receipts {
+			if r.TxHash == tx.Hash() {
+				receipt = r
+				break
+			}
+		}
+		if receipt == nil {
+			continue
+		}
+
+		// Get sender address
+		from := getTransactionSender(tx)
+		if from == (common.Address{}) {
+			// Cannot determine sender, skip
+			continue
+		}
+
+		// Calculate gas cost (gas used * effective gas price)
+		gasUsed := new(big.Int).SetUint64(receipt.GasUsed)
+		gasPrice := tx.GasPrice()
+		if gasPrice == nil {
+			gasPrice = big.NewInt(0)
+		}
+		gasCost := new(big.Int).Mul(gasUsed, gasPrice)
+
+		// Calculate total deduction from sender: value + gas cost
+		value := tx.Value()
+		if value == nil {
+			value = big.NewInt(0)
+		}
+		totalDeduction := new(big.Int).Add(value, gasCost)
+
+		// Update sender balance (deduct value + gas)
+		senderDelta := new(big.Int).Neg(totalDeduction)
+		if err := histWriter.UpdateBalance(ctx, from, blockNumber, senderDelta, tx.Hash()); err != nil {
+			f.logger.Warn("Failed to update sender balance",
+				zap.Uint64("block", blockNumber),
+				zap.String("tx", tx.Hash().Hex()),
+				zap.String("from", from.Hex()),
+				zap.String("delta", senderDelta.String()),
+				zap.Error(err),
+			)
+			// Continue processing - balance tracking failure shouldn't block indexing
+		}
+
+		// Update receiver balance (add value only, not gas)
+		// Note: For contract creation, tx.To() is nil, so receiver is the contract address
+		to := tx.To()
+		if to == nil && receipt.ContractAddress != (common.Address{}) {
+			// Contract creation - credit the contract address
+			to = &receipt.ContractAddress
+		}
+
+		if to != nil && value.Sign() > 0 {
+			// Only update if there's actual value transfer
+			if err := histWriter.UpdateBalance(ctx, *to, blockNumber, value, tx.Hash()); err != nil {
+				f.logger.Warn("Failed to update receiver balance",
+					zap.Uint64("block", blockNumber),
+					zap.String("tx", tx.Hash().Hex()),
+					zap.String("to", to.Hex()),
+					zap.String("delta", value.String()),
+					zap.Error(err),
+				)
+				// Continue processing
+			}
+		}
+	}
+
+	f.logger.Debug("Processed balance tracking",
 		zap.Uint64("height", blockNumber),
 		zap.Int("transactions", len(transactions)),
 	)
