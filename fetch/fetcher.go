@@ -53,6 +53,12 @@ type Config struct {
 	// NumWorkers is the number of concurrent workers for parallel fetching
 	// If 0, defaults to 100
 	NumWorkers int
+
+	// EnableAdaptiveOptimization enables automatic adjustment of worker count and batch size
+	EnableAdaptiveOptimization bool
+
+	// OptimizerConfig holds configuration for adaptive optimization (optional)
+	OptimizerConfig *OptimizerConfig
 }
 
 // Validate validates the fetcher configuration
@@ -72,30 +78,62 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
-	client   Client
-	storage  Storage
-	config   *Config
-	logger   *zap.Logger
-	eventBus *events.EventBus
+	client             Client
+	storage            Storage
+	config             *Config
+	logger             *zap.Logger
+	eventBus           *events.EventBus
+	metrics            *RPCMetrics
+	optimizer          *AdaptiveOptimizer
+	largeBlockProcessor *LargeBlockProcessor
 }
 
 // NewFetcher creates a new Fetcher instance
 // eventBus is optional - if nil, no events will be published
 func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logger, eventBus *events.EventBus) *Fetcher {
+	// Initialize metrics tracker
+	metrics := NewRPCMetrics(constants.DefaultMetricsWindowSize, constants.DefaultRateLimitWindow)
+
+	// Initialize large block processor
+	largeBlockProcessor := NewLargeBlockProcessor(storage, logger)
+
+	// Initialize adaptive optimizer if enabled
+	var optimizer *AdaptiveOptimizer
+	if config.EnableAdaptiveOptimization {
+		optimizerConfig := config.OptimizerConfig
+		if optimizerConfig == nil {
+			optimizerConfig = DefaultOptimizerConfig()
+		}
+		optimizer = NewAdaptiveOptimizer(metrics, optimizerConfig, logger)
+
+		logger.Info("Adaptive optimization enabled",
+			zap.Int("min_workers", optimizerConfig.MinWorkers),
+			zap.Int("max_workers", optimizerConfig.MaxWorkers),
+			zap.Int("min_batch_size", optimizerConfig.MinBatchSize),
+			zap.Int("max_batch_size", optimizerConfig.MaxBatchSize),
+			zap.Duration("adjustment_interval", optimizerConfig.AdjustmentInterval),
+		)
+	}
+
 	return &Fetcher{
-		client:   client,
-		storage:  storage,
-		config:   config,
-		logger:   logger,
-		eventBus: eventBus,
+		client:              client,
+		storage:             storage,
+		config:              config,
+		logger:              logger,
+		eventBus:            eventBus,
+		metrics:             metrics,
+		optimizer:           optimizer,
+		largeBlockProcessor: largeBlockProcessor,
 	}
 }
 
 // FetchBlock fetches a single block and its receipts and stores them
 func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
+	startTime := time.Now()
 	var block *types.Block
 	var receipts types.Receipts
 	var err error
+	var hadError bool
 
 	// Retry logic for fetching block with exponential backoff
 	for attempt := 0; attempt <= f.config.MaxRetries; attempt++ {
@@ -114,11 +152,14 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		// Fetch block
 		block, err = f.client.GetBlockByNumber(ctx, height)
 		if err != nil {
+			hadError = true
 			f.logger.Error("Failed to fetch block",
 				zap.Uint64("height", height),
 				zap.Int("attempt", attempt),
 				zap.Error(err),
 			)
+			// Record metrics for failed request
+			f.metrics.RecordRequest(time.Since(startTime), true, false)
 			if attempt == f.config.MaxRetries {
 				return fmt.Errorf("failed to fetch block %d after %d attempts: %w", height, f.config.MaxRetries, err)
 			}
@@ -128,11 +169,14 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		// Fetch receipts
 		receipts, err = f.client.GetBlockReceipts(ctx, height)
 		if err != nil {
+			hadError = true
 			f.logger.Error("Failed to fetch receipts",
 				zap.Uint64("height", height),
 				zap.Int("attempt", attempt),
 				zap.Error(err),
 			)
+			// Record metrics for failed request
+			f.metrics.RecordRequest(time.Since(startTime), true, false)
 			if attempt == f.config.MaxRetries {
 				return fmt.Errorf("failed to fetch receipts for block %d after %d attempts: %w", height, f.config.MaxRetries, err)
 			}
@@ -141,6 +185,11 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 
 		// Success - break retry loop
 		break
+	}
+
+	// Record successful fetch metrics if no errors occurred
+	if !hadError {
+		f.metrics.RecordRequest(time.Since(startTime), false, false)
 	}
 
 	// Store block
@@ -169,20 +218,33 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	}
 
 	// Store receipts and index logs
-	for _, receipt := range receipts {
-		if err := f.storage.SetReceipt(ctx, receipt); err != nil {
-			return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
+	// Use large block processor for blocks exceeding threshold
+	if f.largeBlockProcessor.ShouldProcessInBatches(block, receipts) {
+		f.logger.Info("Using parallel processing for large block",
+			zap.Uint64("height", height),
+			zap.Uint64("gas_used", block.GasUsed()),
+			zap.Int("receipt_count", len(receipts)),
+		)
+		if err := f.largeBlockProcessor.ProcessReceiptsParallel(ctx, block, receipts); err != nil {
+			return fmt.Errorf("failed to process large block receipts: %w", err)
 		}
+	} else {
+		// Standard sequential processing for normal blocks
+		for _, receipt := range receipts {
+			if err := f.storage.SetReceipt(ctx, receipt); err != nil {
+				return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
+			}
 
-		// Index logs from this receipt
-		if logWriter, ok := f.storage.(storage.LogWriter); ok && len(receipt.Logs) > 0 {
-			if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
-				f.logger.Warn("failed to index logs",
-					zap.String("tx", receipt.TxHash.Hex()),
-					zap.Int("logs", len(receipt.Logs)),
-					zap.Error(err),
-				)
-				// Continue processing - log indexing failure shouldn't block block indexing
+			// Index logs from this receipt
+			if logWriter, ok := f.storage.(storage.LogWriter); ok && len(receipt.Logs) > 0 {
+				if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
+					f.logger.Warn("failed to index logs",
+						zap.String("tx", receipt.TxHash.Hex()),
+						zap.Int("logs", len(receipt.Logs)),
+						zap.Error(err),
+					)
+					// Continue processing - log indexing failure shouldn't block block indexing
+				}
 			}
 		}
 	}
@@ -241,6 +303,9 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	if err := f.storage.SetLatestHeight(ctx, height); err != nil {
 		return fmt.Errorf("failed to update latest height to %d: %w", height, err)
 	}
+
+	// Record block processing metrics
+	f.metrics.RecordBlockProcessed(len(receipts))
 
 	f.logger.Info("Successfully indexed block",
 		zap.Uint64("height", height),
@@ -1102,4 +1167,58 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 	)
 
 	return nil
+}
+
+// GetMetrics returns current performance metrics
+func (f *Fetcher) GetMetrics() MetricsSnapshot {
+	return f.metrics.GetStats()
+}
+
+// LogPerformanceMetrics logs current performance metrics
+func (f *Fetcher) LogPerformanceMetrics() {
+	stats := f.metrics.GetStats()
+
+	f.logger.Info("Performance Metrics",
+		zap.Uint64("total_requests", stats.TotalRequests),
+		zap.Uint64("success_requests", stats.SuccessRequests),
+		zap.Uint64("error_requests", stats.ErrorRequests),
+		zap.Float64("error_rate", stats.ErrorRate),
+		zap.Float64("recent_error_rate", stats.RecentErrorRate),
+		zap.Uint64("avg_response_ms", stats.AverageResponseTime),
+		zap.Uint64("recent_avg_response_ms", stats.RecentAvgResponseTime),
+		zap.Uint64("min_response_ms", stats.MinResponseTime),
+		zap.Uint64("max_response_ms", stats.MaxResponseTime),
+		zap.Uint64("rate_limit_errors", stats.RateLimitErrors),
+		zap.Bool("rate_limited", stats.RateLimitDetected),
+		zap.Uint64("consecutive_errors", stats.ConsecutiveErrors),
+		zap.Uint64("blocks_processed", stats.BlocksProcessed),
+		zap.Uint64("receipts_processed", stats.ReceiptsProcessed),
+		zap.Float64("throughput_bps", stats.Throughput),
+		zap.Int("optimal_workers", stats.OptimalWorkerCount),
+		zap.Int("optimal_batch_size", stats.OptimalBatchSize),
+		zap.Duration("uptime", stats.Uptime),
+	)
+}
+
+// OptimizeParameters runs the adaptive optimizer if enabled
+func (f *Fetcher) OptimizeParameters() {
+	if f.optimizer != nil {
+		f.optimizer.Optimize()
+	}
+}
+
+// GetOptimalWorkerCount returns the recommended worker count
+func (f *Fetcher) GetOptimalWorkerCount() int {
+	if f.optimizer != nil {
+		return f.optimizer.GetRecommendedWorkers()
+	}
+	return f.config.NumWorkers
+}
+
+// GetOptimalBatchSize returns the recommended batch size
+func (f *Fetcher) GetOptimalBatchSize() int {
+	if f.optimizer != nil {
+		return f.optimizer.GetRecommendedBatchSize()
+	}
+	return f.config.BatchSize
 }
