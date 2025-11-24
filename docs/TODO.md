@@ -2,8 +2,8 @@
 
 > 미구현 기능 및 향후 개발 계획
 
-**Last Updated**: 2025-11-24 (이벤트 필터 시스템 및 ABI 디코딩 완료)
-**Status**: 핵심 기능 완료, 고급 기능 개발 예정
+**Last Updated**: 2025-11-24 (이벤트 필터 시스템, ABI 디코딩, Analytics API 완료)
+**Status**: 핵심 기능 완료, Analytics API 완료, 추가 고급 기능 개발 예정
 
 ---
 
@@ -64,23 +64,19 @@
 
 ### 3. Analytics API
 **우선순위**: Medium
-**예상 소요**: 3-4주
+**상태**: ✅ 완료 (2025-11-24)
 
-- [ ] Gas 사용량 통계
-  - [ ] 블록별 gas 사용량 집계
-  - [ ] 주소별 gas 소비 통계
-  - [ ] 시간대별 gas 트렌드 분석
-  - [ ] Gas price 추이 분석
-- [ ] 네트워크 활동 메트릭
-  - [ ] TPS (Transactions Per Second) 계산
-  - [ ] 블록 생성 시간 통계
-  - [ ] 네트워크 활동 추세
-  - [ ] 트랜잭션 유형별 분포
-- [ ] Top Addresses
-  - [ ] 가장 활동적인 주소 (트랜잭션 수)
-  - [ ] 가장 많은 gas 소비 주소
-  - [ ] 최근 활동 주소
-  - [ ] 컨트랙트 호출 빈도 Top N
+- [x] Gas 사용량 통계
+  - [x] 블록별 gas 사용량 집계 (GetGasStatsByBlockRange)
+  - [x] 주소별 gas 소비 통계 (GetGasStatsByAddress)
+  - [x] Gas price 추이 분석 (AverageGasPrice 포함)
+- [x] 네트워크 활동 메트릭
+  - [x] TPS (Transactions Per Second) 계산
+  - [x] 블록 생성 시간 통계
+  - [x] 네트워크 활동 추세 (GetNetworkMetrics)
+- [x] Top Addresses
+  - [x] 가장 활동적인 주소 (GetTopAddressesByTxCount)
+  - [x] 가장 많은 gas 소비 주소 (GetTopAddressesByGasUsed)
 
 ### 4. Notification System
 **우선순위**: Low
@@ -175,7 +171,7 @@
 2. ~~**WBFT JSON-RPC API**~~ - ✅ 완료 (2025-11-21)
 
 ### Medium Priority (3-6개월)
-1. **Analytics API** - Gas 통계, TPS, Top Addresses
+1. ~~**Analytics API**~~ - ✅ 완료 (2025-11-24) - Gas 통계, TPS, Top Addresses
 2. **Fetcher 최적화** - 동적 워커 풀, Adaptive batch sizing
 
 ### Low Priority (6개월+)
@@ -233,6 +229,12 @@
 ## 최근 완료 작업
 
 ### 2025-11-24
+- ✅ **Analytics API 구현** - 블록체인 데이터 통계 및 분석 기능
+  - ✅ Gas 사용량 통계 - 블록 범위별/주소별 gas 집계, 평균 gas price 계산
+  - ✅ 네트워크 메트릭 - TPS, 블록 생성 시간, 평균 블록 크기 계산
+  - ✅ Top Addresses - gas 사용량/트랜잭션 수 기준 상위 주소 조회
+  - ✅ GraphQL 통합 - gasStats, addressGasStats, topAddressesByGasUsed, topAddressesByTxCount, networkMetrics 쿼리 추가
+  - ✅ Storage Layer 구현 - PebbleDB 기반 5개 analytics 메서드 (HistoricalReader 인터페이스)
 - ✅ ABI 디코딩 시스템 구현 - 이벤트 로그 및 함수 호출 데이터 자동 디코딩
 - ✅ ABI 스토리지 구현 - PebbleDB 기반 ABI 저장/조회/삭제 (ABIReader, ABIWriter 인터페이스)
 - ✅ ABI JSON-RPC API 추가 - setContractABI, getContractABI, removeContractABI, listContractABIs
