@@ -23,6 +23,9 @@ var (
 	// Log type
 	logType *graphql.Object
 
+	// DecodedLog type
+	decodedLogType *graphql.Object
+
 	// AccessListEntry type
 	accessListEntryType *graphql.Object
 
@@ -134,6 +137,21 @@ func initTypes() {
 		},
 	})
 
+	// DecodedLog type - represents decoded event log data
+	decodedLogType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "DecodedLog",
+		Fields: graphql.Fields{
+			"eventName": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Name of the decoded event",
+			},
+			"args": &graphql.Field{
+				Type:        graphql.String, // JSON string of arguments
+				Description: "Decoded event arguments as JSON",
+			},
+		},
+	})
+
 	// Log type
 	logType = graphql.NewObject(graphql.ObjectConfig{
 		Name: "Log",
@@ -164,6 +182,10 @@ func initTypes() {
 			},
 			"removed": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"decoded": &graphql.Field{
+				Type:        decodedLogType,
+				Description: "Decoded event log data (if ABI is available)",
 			},
 		},
 	})

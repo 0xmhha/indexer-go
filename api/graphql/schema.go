@@ -1,6 +1,10 @@
 package graphql
 
 import (
+	"context"
+	"fmt"
+
+	abiDecoder "github.com/0xmhha/indexer-go/abi"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -8,16 +12,24 @@ import (
 
 // Schema holds the GraphQL schema
 type Schema struct {
-	schema  graphql.Schema
-	storage storage.Storage
-	logger  *zap.Logger
+	schema     graphql.Schema
+	storage    storage.Storage
+	logger     *zap.Logger
+	abiDecoder *abiDecoder.Decoder
 }
 
 // NewSchema creates a new GraphQL schema
 func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 	s := &Schema{
-		storage: store,
-		logger:  logger,
+		storage:    store,
+		logger:     logger,
+		abiDecoder: abiDecoder.NewDecoder(),
+	}
+
+	// Load all stored ABIs into the decoder
+	if err := s.loadStoredABIs(context.Background()); err != nil {
+		logger.Warn("failed to load stored ABIs", zap.Error(err))
+		// Don't fail initialization, ABIs can be loaded later
 	}
 
 	// Create query type
@@ -117,6 +129,10 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 					},
 					"pagination": &graphql.ArgumentConfig{
 						Type: paginationInputType,
+					},
+					"decode": &graphql.ArgumentConfig{
+						Type:        graphql.Boolean,
+						Description: "Decode logs using ABI if available",
 					},
 				},
 				Resolve: s.resolveLogs,
@@ -645,4 +661,42 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 // Schema returns the GraphQL schema
 func (s *Schema) Schema() graphql.Schema {
 	return s.schema
+}
+
+// loadStoredABIs loads all ABIs from storage into the decoder
+func (s *Schema) loadStoredABIs(ctx context.Context) error {
+	addresses, err := s.storage.ListABIs(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list ABIs: %w", err)
+	}
+
+	loaded := 0
+	for _, addr := range addresses {
+		abiJSON, err := s.storage.GetABI(ctx, addr)
+		if err != nil {
+			s.logger.Warn("failed to get ABI",
+				zap.String("address", addr.Hex()),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		// Load into decoder
+		if err := s.abiDecoder.LoadABI(addr, "", string(abiJSON)); err != nil {
+			s.logger.Warn("failed to load ABI into decoder",
+				zap.String("address", addr.Hex()),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		loaded++
+	}
+
+	s.logger.Info("loaded ABIs from storage into GraphQL schema",
+		zap.Int("total", len(addresses)),
+		zap.Int("loaded", loaded),
+	)
+
+	return nil
 }

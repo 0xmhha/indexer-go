@@ -2,7 +2,7 @@
 
 > 미구현 기능 및 향후 개발 계획
 
-**Last Updated**: 2025-11-21 (GraphQL Subscription 타입 추가 완료)
+**Last Updated**: 2025-11-24 (이벤트 필터 시스템 및 ABI 디코딩 완료)
 **Status**: 핵심 기능 완료, 고급 기능 개발 예정
 
 ---
@@ -26,21 +26,24 @@
 
 ### 1. 이벤트 필터 시스템
 **우선순위**: High
-**예상 소요**: 2-3주
+**상태**: ✅ 완료 (2025-11-24)
 
-- [ ] Topic 기반 필터링
-  - [ ] eth_getLogs 구현
-  - [ ] eth_newFilter / eth_getFilterChanges
-  - [ ] eth_newBlockFilter / eth_newPendingTransactionFilter
-  - [ ] 다중 topic 조합 필터링
-- [ ] ABI 디코딩
-  - [ ] ABI 파싱 및 저장
-  - [ ] 이벤트 로그 자동 디코딩
-  - [ ] 함수 호출 데이터 디코딩
-- [ ] 로그 인덱싱 파이프라인
-  - [ ] Topic별 인덱스 생성
-  - [ ] 주소별 로그 인덱싱
-  - [ ] 블록 범위 쿼리 최적화
+- [x] Topic 기반 필터링
+  - [x] eth_getLogs 구현 (decode 파라미터 지원)
+  - [x] eth_newFilter / eth_getFilterChanges (decode 파라미터 지원)
+  - [x] eth_newBlockFilter / eth_newPendingTransactionFilter
+  - [x] 다중 topic 조합 필터링
+- [x] ABI 디코딩
+  - [x] ABI 파싱 및 저장 (PebbleDB)
+  - [x] 이벤트 로그 자동 디코딩
+  - [x] 함수 호출 데이터 디코딩
+  - [x] JSON-RPC API (setContractABI, getContractABI, removeContractABI, listContractABIs)
+  - [x] GraphQL 통합 (decode 파라미터, DecodedLog 타입)
+- [x] 로그 인덱싱 파이프라인
+  - [x] Topic별 인덱스 생성
+  - [x] 주소별 로그 인덱싱
+  - [x] 블록 범위 쿼리 최적화
+  - [x] 필터별 decode 설정 지속성
 
 ### 2. Fetcher 최적화
 **우선순위**: Medium
@@ -168,7 +171,7 @@
 ## 우선순위 요약
 
 ### High Priority (1-2개월)
-1. **이벤트 필터 시스템** - eth_getLogs, Topic 필터링, ABI 디코딩
+1. ~~**이벤트 필터 시스템**~~ - ✅ 완료 (2025-11-24) - eth_getLogs, Topic 필터링, ABI 디코딩
 2. ~~**WBFT JSON-RPC API**~~ - ✅ 완료 (2025-11-21)
 
 ### Medium Priority (3-6개월)
@@ -229,6 +232,16 @@
 
 ## 최근 완료 작업
 
+### 2025-11-24
+- ✅ ABI 디코딩 시스템 구현 - 이벤트 로그 및 함수 호출 데이터 자동 디코딩
+- ✅ ABI 스토리지 구현 - PebbleDB 기반 ABI 저장/조회/삭제 (ABIReader, ABIWriter 인터페이스)
+- ✅ ABI JSON-RPC API 추가 - setContractABI, getContractABI, removeContractABI, listContractABIs
+- ✅ eth_getLogs decode 파라미터 지원 - 선택적 ABI 디코딩 기능 추가
+- ✅ 필터 메서드 decode 지원 - eth_newFilter, eth_getFilterChanges, eth_getFilterLogs에 decode 파라미터 추가
+- ✅ GraphQL ABI 디코딩 통합 - DecodedLog 타입 추가, logs 쿼리에 decode 파라미터 지원
+- ✅ 자동 ABI 로딩 - 서버 시작 시 저장된 모든 ABI를 디코더에 자동 로드
+- ✅ 타입 직렬화 - 복잡한 Ethereum 타입을 JSON 호환 형식으로 변환 (*big.Int, Address, Hash, 배열, 중첩 구조)
+
 ### 2025-11-21
 - ✅ Magic Number 제거 - 모든 하드코딩된 숫자를 `internal/constants` 패키지로 정리
 - ✅ GraphQL Subscription 타입 추가 - schema.go에 Subscription 타입 정의 추가 (newBlock, newTransaction, newPendingTransactions, logs)
@@ -245,4 +258,4 @@
 **Status**: ✅ 프로덕션 준비 완료
 **Core Features**: 100% 완료
 **Advanced Features**: 예정
-**Last Updated**: 2025-11-21
+**Last Updated**: 2025-11-24

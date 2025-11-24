@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/0xmhha/indexer-go/storage"
@@ -234,4 +235,46 @@ func (s *Schema) logToMap(log *types.Log) map[string]interface{} {
 		"logIndex":         int(log.Index),
 		"removed":          log.Removed,
 	}
+}
+
+// logToMapWithDecode converts a log to a GraphQL-friendly map with optional decoding
+func (s *Schema) logToMapWithDecode(log *types.Log, decode bool) map[string]interface{} {
+	if log == nil {
+		return nil
+	}
+
+	topics := make([]interface{}, len(log.Topics))
+	for i, topic := range log.Topics {
+		topics[i] = topic.Hex()
+	}
+
+	result := map[string]interface{}{
+		"address":          log.Address.Hex(),
+		"topics":           topics,
+		"data":             fmt.Sprintf("0x%x", log.Data),
+		"blockNumber":      fmt.Sprintf("%d", log.BlockNumber),
+		"blockHash":        log.BlockHash.Hex(),
+		"transactionHash":  log.TxHash.Hex(),
+		"transactionIndex": int(log.TxIndex),
+		"logIndex":         int(log.Index),
+		"removed":          log.Removed,
+	}
+
+	// Optionally decode the log if ABI is available
+	if decode && s.abiDecoder.HasABI(log.Address) {
+		decoded, err := s.abiDecoder.DecodeLog(log)
+		if err == nil {
+			// Serialize args to JSON string for GraphQL
+			argsJSON, jsonErr := json.Marshal(decoded.Args)
+			if jsonErr == nil {
+				result["decoded"] = map[string]interface{}{
+					"eventName": decoded.EventName,
+					"args":      string(argsJSON),
+				}
+			}
+		}
+		// Silently ignore decode errors - not all logs may be decodable
+	}
+
+	return result
 }

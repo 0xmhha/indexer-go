@@ -618,6 +618,12 @@ func (s *Schema) resolveReceiptsByBlock(p graphql.ResolveParams) (interface{}, e
 func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
+	// Get decode parameter
+	decode := false
+	if d, ok := p.Args["decode"].(bool); ok {
+		decode = d
+	}
+
 	// Get pagination parameters with validation
 	limit := 10
 	offset := 0
@@ -765,7 +771,7 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 					}
 				}
 
-				filteredLogs = append(filteredLogs, s.logToMap(log))
+				filteredLogs = append(filteredLogs, s.logToMapWithDecode(log, decode))
 			}
 		}
 	}
