@@ -67,6 +67,12 @@ type MinerStats struct {
 	BlockCount uint64
 	// LastBlockNumber is the most recent block mined
 	LastBlockNumber uint64
+	// LastBlockTime is the timestamp of the last block mined
+	LastBlockTime uint64
+	// Percentage is the percentage of total blocks mined
+	Percentage float64
+	// TotalRewards is the total mining rewards in Wei
+	TotalRewards *big.Int
 }
 
 // TokenBalance represents a token balance for an address
@@ -166,7 +172,8 @@ type HistoricalReader interface {
 	GetTransactionCount(ctx context.Context) (uint64, error)
 
 	// GetTopMiners returns the top miners by block count
-	GetTopMiners(ctx context.Context, limit int) ([]MinerStats, error)
+	// If fromBlock and toBlock are both 0, returns all-time statistics
+	GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]MinerStats, error)
 
 	// GetTokenBalances returns token balances for an address by scanning Transfer events
 	GetTokenBalances(ctx context.Context, addr common.Address) ([]TokenBalance, error)

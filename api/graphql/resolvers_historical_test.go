@@ -67,7 +67,7 @@ func (m *mockHistoricalStorage) GetTransactionCount(ctx context.Context) (uint64
 	return m.txCount, nil
 }
 
-func (m *mockHistoricalStorage) GetTopMiners(ctx context.Context, limit int) ([]storage.MinerStats, error) {
+func (m *mockHistoricalStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.MinerStats, error) {
 	return []storage.MinerStats{}, nil
 }
 

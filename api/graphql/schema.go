@@ -220,10 +220,20 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(minerStatsType))),
 				Args: graphql.FieldConfigArgument{
 					"limit": &graphql.ArgumentConfig{
-						Type: graphql.Int,
+						Type:        graphql.Int,
+						Description: "Maximum number of miners to return (max: 100, default: 10)",
+					},
+					"fromBlock": &graphql.ArgumentConfig{
+						Type:        bigIntType,
+						Description: "Start block number (0 = genesis)",
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type:        bigIntType,
+						Description: "End block number (0 = latest)",
 					},
 				},
-				Resolve: s.resolveTopMiners,
+				Description: "Get top miners by block count in a given block range",
+				Resolve:     s.resolveTopMiners,
 			},
 			"tokenBalances": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(tokenBalanceType))),
@@ -233,6 +243,26 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 					},
 				},
 				Resolve: s.resolveTokenBalances,
+			},
+			"search": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(searchResultType))),
+				Args: graphql.FieldConfigArgument{
+					"query": &graphql.ArgumentConfig{
+						Type:        graphql.NewNonNull(graphql.String),
+						Description: "Search query (block number, hash, or address)",
+					},
+					"types": &graphql.ArgumentConfig{
+						Type:        graphql.NewList(graphql.String),
+						Description: "Optional filter for result types (block, transaction, address, contract)",
+					},
+					"limit": &graphql.ArgumentConfig{
+						Type:         graphql.Int,
+						DefaultValue: 10,
+						Description:  "Maximum number of results to return",
+					},
+				},
+				Description: "Unified search across blocks, transactions, and addresses",
+				Resolve:     s.resolveSearch,
 			},
 			"gasStats": &graphql.Field{
 				Type: gasStatsType,

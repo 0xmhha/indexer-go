@@ -62,6 +62,7 @@ var (
 	addressGasStatsType      *graphql.Object
 	networkMetricsType       *graphql.Object
 	addressActivityStatsType *graphql.Object
+	searchResultType         *graphql.Object
 
 	// System contract types
 	proposalStatusEnumType        *graphql.Enum
@@ -593,6 +594,18 @@ func initTypes() {
 			"lastBlockNumber": &graphql.Field{
 				Type: graphql.NewNonNull(bigIntType),
 			},
+			"lastBlockTime": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Timestamp of the last block mined",
+			},
+			"percentage": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Float),
+				Description: "Percentage of total blocks mined in the range",
+			},
+			"totalRewards": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total mining rewards (transaction fees) in Wei",
+			},
 		},
 	})
 
@@ -611,6 +624,30 @@ func initTypes() {
 			},
 			"tokenId": &graphql.Field{
 				Type: bigIntType,
+			},
+		},
+	})
+
+	// SearchResult type
+	searchResultType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "SearchResult",
+		Description: "Unified search result across blocks, transactions, and addresses",
+		Fields: graphql.Fields{
+			"type": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Type of result: block, transaction, address, or contract",
+			},
+			"value": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "The matched value (hash, address, or block number)",
+			},
+			"label": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Human-readable display label",
+			},
+			"metadata": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Additional metadata as JSON string",
 			},
 		},
 	})

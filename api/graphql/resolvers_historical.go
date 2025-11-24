@@ -368,16 +368,31 @@ func (s *Schema) resolveTopMiners(p graphql.ResolveParams) (interface{}, error) 
 		}
 	}
 
+	// Get block range parameters (optional)
+	var fromBlock, toBlock uint64
+	if fb, ok := p.Args["fromBlock"].(string); ok {
+		if fbInt, err := strconv.ParseUint(fb, 10, 64); err == nil {
+			fromBlock = fbInt
+		}
+	}
+	if tb, ok := p.Args["toBlock"].(string); ok {
+		if tbInt, err := strconv.ParseUint(tb, 10, 64); err == nil {
+			toBlock = tbInt
+		}
+	}
+
 	// Cast storage to HistoricalReader
 	histStorage, ok := s.storage.(storage.HistoricalReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support historical queries")
 	}
 
-	stats, err := histStorage.GetTopMiners(ctx, limit)
+	stats, err := histStorage.GetTopMiners(ctx, limit, fromBlock, toBlock)
 	if err != nil {
 		s.logger.Error("failed to get top miners",
 			zap.Int("limit", limit),
+			zap.Uint64("fromBlock", fromBlock),
+			zap.Uint64("toBlock", toBlock),
 			zap.Error(err))
 		return nil, err
 	}
@@ -389,6 +404,9 @@ func (s *Schema) resolveTopMiners(p graphql.ResolveParams) (interface{}, error) 
 			"address":         stat.Address.Hex(),
 			"blockCount":      fmt.Sprintf("%d", stat.BlockCount),
 			"lastBlockNumber": fmt.Sprintf("%d", stat.LastBlockNumber),
+			"lastBlockTime":   fmt.Sprintf("%d", stat.LastBlockTime),
+			"percentage":      stat.Percentage,
+			"totalRewards":    stat.TotalRewards.String(),
 		}
 	}
 
