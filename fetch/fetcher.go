@@ -168,10 +168,22 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		}
 	}
 
-	// Store receipts
+	// Store receipts and index logs
 	for _, receipt := range receipts {
 		if err := f.storage.SetReceipt(ctx, receipt); err != nil {
 			return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
+		}
+
+		// Index logs from this receipt
+		if logWriter, ok := f.storage.(storage.LogWriter); ok && len(receipt.Logs) > 0 {
+			if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
+				f.logger.Warn("failed to index logs",
+					zap.String("tx", receipt.TxHash.Hex()),
+					zap.Int("logs", len(receipt.Logs)),
+					zap.Error(err),
+				)
+				// Continue processing - log indexing failure shouldn't block block indexing
+			}
 		}
 	}
 
@@ -413,10 +425,22 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 					}
 				}
 
-				// Store receipts
+				// Store receipts and index logs
 				for _, receipt := range res.receipts {
 					if err := f.storage.SetReceipt(ctx, receipt); err != nil {
 						return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
+					}
+
+					// Index logs from this receipt
+					if logWriter, ok := f.storage.(storage.LogWriter); ok && len(receipt.Logs) > 0 {
+						if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
+							f.logger.Warn("failed to index logs",
+								zap.String("tx", receipt.TxHash.Hex()),
+								zap.Int("logs", len(receipt.Logs)),
+								zap.Error(err),
+							)
+							// Continue processing - log indexing failure shouldn't block block indexing
+						}
 					}
 				}
 

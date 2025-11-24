@@ -116,6 +116,9 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.getValidatorSigningActivity(ctx, params)
 	case "getBlockSigners":
 		return h.getBlockSigners(ctx, params)
+	// Ethereum-compatible log filtering methods
+	case "eth_getLogs":
+		return h.ethGetLogs(ctx, params)
 	default:
 		return nil, NewError(MethodNotFound, fmt.Sprintf("method '%s' not found", method), nil)
 	}

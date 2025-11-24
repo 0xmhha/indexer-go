@@ -102,6 +102,8 @@ type Writer interface {
 type Storage interface {
 	Reader
 	Writer
+	LogReader
+	LogWriter
 
 	// Close closes the storage and releases resources
 	Close() error
@@ -203,4 +205,48 @@ type Stats struct {
 
 	// CompactionCount is the number of compactions performed
 	CompactionCount uint64
+}
+
+// LogFilter represents criteria for filtering event logs
+type LogFilter struct {
+	// FromBlock is the starting block number (inclusive)
+	FromBlock uint64
+
+	// ToBlock is the ending block number (inclusive)
+	// Use 0 or latest block for open-ended range
+	ToBlock uint64
+
+	// Addresses is a list of contract addresses to filter by
+	// Empty list means all addresses
+	Addresses []common.Address
+
+	// Topics is a list of topic filters
+	// Each position can have multiple options (OR logic)
+	// Different positions use AND logic
+	// nil in a position means "any value"
+	Topics [][]common.Hash
+}
+
+// LogReader provides read access to event logs
+type LogReader interface {
+	// GetLogs returns logs matching the given filter
+	GetLogs(ctx context.Context, filter *LogFilter) ([]*types.Log, error)
+
+	// GetLogsByBlock returns all logs in a specific block
+	GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error)
+
+	// GetLogsByAddress returns logs emitted by a specific contract
+	GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error)
+
+	// GetLogsByTopic returns logs with a specific topic at a specific position
+	GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error)
+}
+
+// LogWriter provides write access to event logs
+type LogWriter interface {
+	// IndexLogs indexes logs from a receipt
+	IndexLogs(ctx context.Context, logs []*types.Log) error
+
+	// IndexLog indexes a single log
+	IndexLog(ctx context.Context, log *types.Log) error
 }

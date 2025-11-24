@@ -102,6 +102,34 @@ func DecodeReceipt(data []byte) (*types.Receipt, error) {
 	return &receipt, nil
 }
 
+// EncodeLog encodes a log using RLP
+func EncodeLog(log *types.Log) ([]byte, error) {
+	if log == nil {
+		return nil, fmt.Errorf("log cannot be nil")
+	}
+
+	var buf bytes.Buffer
+	if err := rlp.Encode(&buf, log); err != nil {
+		return nil, fmt.Errorf("failed to encode log: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// DecodeLog decodes a log from RLP
+func DecodeLog(data []byte) (*types.Log, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data cannot be empty")
+	}
+
+	var log types.Log
+	if err := rlp.DecodeBytes(data, &log); err != nil {
+		return nil, fmt.Errorf("failed to decode log: %w", err)
+	}
+
+	return &log, nil
+}
+
 // EncodeTxLocation encodes a TxLocation using RLP
 func EncodeTxLocation(loc *TxLocation) ([]byte, error) {
 	if loc == nil {

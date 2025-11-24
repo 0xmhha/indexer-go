@@ -77,6 +77,17 @@ const (
 	prefixIdxERC721From       = "/index/erc721/from/"
 	prefixIdxERC721To         = "/index/erc721/to/"
 	prefixIdxERC721TokenOwner = "/index/erc721/tokenowner/"
+
+	// Event log data prefixes
+	prefixLogs = "/data/logs/"
+
+	// Event log index prefixes
+	prefixIdxLogsAddr   = "/index/logs/addr/"
+	prefixIdxLogsTopic0 = "/index/logs/topic0/"
+	prefixIdxLogsTopic1 = "/index/logs/topic1/"
+	prefixIdxLogsTopic2 = "/index/logs/topic2/"
+	prefixIdxLogsTopic3 = "/index/logs/topic3/"
+	prefixIdxLogsBlock  = "/index/logs/block/"
 )
 
 // Metadata keys
@@ -691,4 +702,93 @@ func ERC721FromIndexKeyPrefix(from common.Address) []byte {
 // ERC721ToIndexKeyPrefix returns the prefix for ERC721 transfers by to address
 func ERC721ToIndexKeyPrefix(to common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%s/", prefixIdxERC721To, to.Hex()))
+}
+
+// ========== Event Log Key Functions ==========
+
+// LogKey returns the key for storing a log entry
+// Format: /data/logs/{blockNumber}/{txIndex}/{logIndex}
+func LogKey(blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%020d/%06d/%06d", prefixLogs, blockNumber, txIndex, logIndex))
+}
+
+// LogKeyPrefix returns the prefix for all logs
+func LogKeyPrefix() []byte {
+	return []byte(prefixLogs)
+}
+
+// LogBlockKeyPrefix returns the prefix for logs in a specific block
+func LogBlockKeyPrefix(blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%020d/", prefixLogs, blockNumber))
+}
+
+// LogAddressIndexKey returns the index key for logs by contract address
+// Format: /index/logs/addr/{address}/{blockNumber}/{txIndex}/{logIndex}
+func LogAddressIndexKey(address common.Address, blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d/%06d", prefixIdxLogsAddr, address.Hex(), blockNumber, txIndex, logIndex))
+}
+
+// LogAddressIndexKeyPrefix returns the prefix for logs by contract address
+func LogAddressIndexKeyPrefix(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxLogsAddr, address.Hex()))
+}
+
+// LogTopic0IndexKey returns the index key for logs by topic 0
+// Format: /index/logs/topic0/{topic}/{blockNumber}/{txIndex}/{logIndex}
+func LogTopic0IndexKey(topic common.Hash, blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d/%06d", prefixIdxLogsTopic0, topic.Hex(), blockNumber, txIndex, logIndex))
+}
+
+// LogTopic0IndexKeyPrefix returns the prefix for logs by topic 0
+func LogTopic0IndexKeyPrefix(topic common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxLogsTopic0, topic.Hex()))
+}
+
+// LogTopic1IndexKey returns the index key for logs by topic 1
+// Format: /index/logs/topic1/{topic}/{blockNumber}/{txIndex}/{logIndex}
+func LogTopic1IndexKey(topic common.Hash, blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d/%06d", prefixIdxLogsTopic1, topic.Hex(), blockNumber, txIndex, logIndex))
+}
+
+// LogTopic1IndexKeyPrefix returns the prefix for logs by topic 1
+func LogTopic1IndexKeyPrefix(topic common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxLogsTopic1, topic.Hex()))
+}
+
+// LogTopic2IndexKey returns the index key for logs by topic 2
+// Format: /index/logs/topic2/{topic}/{blockNumber}/{txIndex}/{logIndex}
+func LogTopic2IndexKey(topic common.Hash, blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d/%06d", prefixIdxLogsTopic2, topic.Hex(), blockNumber, txIndex, logIndex))
+}
+
+// LogTopic2IndexKeyPrefix returns the prefix for logs by topic 2
+func LogTopic2IndexKeyPrefix(topic common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxLogsTopic2, topic.Hex()))
+}
+
+// LogTopic3IndexKey returns the index key for logs by topic 3
+// Format: /index/logs/topic3/{topic}/{blockNumber}/{txIndex}/{logIndex}
+func LogTopic3IndexKey(topic common.Hash, blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d/%06d", prefixIdxLogsTopic3, topic.Hex(), blockNumber, txIndex, logIndex))
+}
+
+// LogTopic3IndexKeyPrefix returns the prefix for logs by topic 3
+func LogTopic3IndexKeyPrefix(topic common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxLogsTopic3, topic.Hex()))
+}
+
+// LogBlockIndexKey returns the index key for logs by block number
+// Format: /index/logs/block/{blockNumber}/{txIndex}/{logIndex}
+func LogBlockIndexKey(blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%020d/%06d/%06d", prefixIdxLogsBlock, blockNumber, txIndex, logIndex))
+}
+
+// LogBlockIndexKeyPrefix returns the prefix for logs in a block
+func LogBlockIndexKeyPrefix(blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%020d/", prefixIdxLogsBlock, blockNumber))
+}
+
+// LogBlockRangeIndexKeyPrefix returns the prefix for logs in a block range
+func LogBlockRangeIndexKeyPrefix(fromBlock uint64) []byte {
+	return []byte(fmt.Sprintf("%s%020d/", prefixIdxLogsBlock, fromBlock))
 }
