@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	abiDecoder "github.com/0xmhha/indexer-go/abi"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -19,6 +20,7 @@ type Handler struct {
 	storage       storage.Storage
 	logger        *zap.Logger
 	filterManager *FilterManager
+	abiDecoder    *abiDecoder.Decoder
 }
 
 // NewHandler creates a new JSON-RPC handler
@@ -27,6 +29,7 @@ func NewHandler(store storage.Storage, logger *zap.Logger) *Handler {
 		storage:       store,
 		logger:        logger,
 		filterManager: NewFilterManager(5 * time.Minute), // 5 minute filter timeout
+		abiDecoder:    abiDecoder.NewDecoder(),
 	}
 }
 
@@ -142,6 +145,17 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.ethGetFilterChanges(ctx, params)
 	case "eth_getFilterLogs":
 		return h.ethGetFilterLogs(ctx, params)
+	// ABI management methods
+	case "setContractABI":
+		return h.setContractABI(ctx, params)
+	case "getContractABI":
+		return h.getContractABI(ctx, params)
+	case "deleteContractABI":
+		return h.deleteContractABI(ctx, params)
+	case "listContractABIs":
+		return h.listContractABIs(ctx, params)
+	case "decodeLog":
+		return h.decodeLog(ctx, params)
 	default:
 		return nil, NewError(MethodNotFound, fmt.Sprintf("method '%s' not found", method), nil)
 	}

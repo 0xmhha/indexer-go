@@ -104,6 +104,8 @@ type Storage interface {
 	Writer
 	LogReader
 	LogWriter
+	ABIReader
+	ABIWriter
 
 	// Close closes the storage and releases resources
 	Close() error
@@ -249,4 +251,25 @@ type LogWriter interface {
 
 	// IndexLog indexes a single log
 	IndexLog(ctx context.Context, log *types.Log) error
+}
+
+// ABIReader provides read access to contract ABIs
+type ABIReader interface {
+	// GetABI returns the ABI for a contract
+	GetABI(ctx context.Context, address common.Address) ([]byte, error)
+
+	// HasABI checks if an ABI exists for a contract
+	HasABI(ctx context.Context, address common.Address) (bool, error)
+
+	// ListABIs returns all contract addresses that have ABIs
+	ListABIs(ctx context.Context) ([]common.Address, error)
+}
+
+// ABIWriter provides write access to contract ABIs
+type ABIWriter interface {
+	// SetABI stores an ABI for a contract
+	SetABI(ctx context.Context, address common.Address, abiJSON []byte) error
+
+	// DeleteABI removes an ABI for a contract
+	DeleteABI(ctx context.Context, address common.Address) error
 }

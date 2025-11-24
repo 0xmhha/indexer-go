@@ -88,6 +88,9 @@ const (
 	prefixIdxLogsTopic2 = "/index/logs/topic2/"
 	prefixIdxLogsTopic3 = "/index/logs/topic3/"
 	prefixIdxLogsBlock  = "/index/logs/block/"
+
+	// ABI data prefixes
+	prefixABI = "/data/abi/"
 )
 
 // Metadata keys
@@ -791,4 +794,17 @@ func LogBlockIndexKeyPrefix(blockNumber uint64) []byte {
 // LogBlockRangeIndexKeyPrefix returns the prefix for logs in a block range
 func LogBlockRangeIndexKeyPrefix(fromBlock uint64) []byte {
 	return []byte(fmt.Sprintf("%s%020d/", prefixIdxLogsBlock, fromBlock))
+}
+
+// ========== ABI Keys ==========
+
+// ABIKey returns the key for storing an ABI definition
+// Format: /data/abi/{address}
+func ABIKey(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixABI, address.Hex()))
+}
+
+// ABIKeyPrefix returns the prefix for all ABIs
+func ABIKeyPrefix() []byte {
+	return []byte(prefixABI)
 }
