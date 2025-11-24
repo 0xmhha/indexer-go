@@ -81,6 +81,66 @@ type TokenBalance struct {
 	TokenID *big.Int
 }
 
+// GasStats represents gas usage statistics
+type GasStats struct {
+	// TotalGasUsed is the total gas used in the range
+	TotalGasUsed uint64
+	// TotalGasLimit is the total gas limit in the range
+	TotalGasLimit uint64
+	// AverageGasUsed is the average gas used per block
+	AverageGasUsed uint64
+	// AverageGasPrice is the average gas price
+	AverageGasPrice *big.Int
+	// BlockCount is the number of blocks in the range
+	BlockCount uint64
+	// TransactionCount is the number of transactions in the range
+	TransactionCount uint64
+}
+
+// AddressGasStats represents gas usage statistics for a specific address
+type AddressGasStats struct {
+	// Address is the address
+	Address common.Address
+	// TotalGasUsed is the total gas used by this address
+	TotalGasUsed uint64
+	// TransactionCount is the number of transactions
+	TransactionCount uint64
+	// AverageGasPerTx is the average gas per transaction
+	AverageGasPerTx uint64
+	// TotalFeesPaid is the total fees paid (gas * gasPrice)
+	TotalFeesPaid *big.Int
+}
+
+// NetworkMetrics represents network activity metrics
+type NetworkMetrics struct {
+	// TPS is the transactions per second
+	TPS float64
+	// BlockTime is the average block time in seconds
+	BlockTime float64
+	// TotalBlocks is the total number of blocks
+	TotalBlocks uint64
+	// TotalTransactions is the total number of transactions
+	TotalTransactions uint64
+	// AverageBlockSize is the average block size in gas
+	AverageBlockSize uint64
+	// TimePeriod is the time period for this metric (in seconds)
+	TimePeriod uint64
+}
+
+// AddressActivityStats represents activity statistics for an address
+type AddressActivityStats struct {
+	// Address is the address
+	Address common.Address
+	// TransactionCount is the total number of transactions
+	TransactionCount uint64
+	// TotalGasUsed is the total gas used
+	TotalGasUsed uint64
+	// LastActivityBlock is the most recent block with activity
+	LastActivityBlock uint64
+	// FirstActivityBlock is the first block with activity
+	FirstActivityBlock uint64
+}
+
 // HistoricalReader provides read-only access to historical blockchain data
 type HistoricalReader interface {
 	// GetBlocksByTimeRange returns blocks within a time range
@@ -110,6 +170,21 @@ type HistoricalReader interface {
 
 	// GetTokenBalances returns token balances for an address by scanning Transfer events
 	GetTokenBalances(ctx context.Context, addr common.Address) ([]TokenBalance, error)
+
+	// GetGasStatsByBlockRange returns gas usage statistics for a block range
+	GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*GasStats, error)
+
+	// GetGasStatsByAddress returns gas usage statistics for a specific address
+	GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*AddressGasStats, error)
+
+	// GetTopAddressesByGasUsed returns the top addresses by total gas used
+	GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]AddressGasStats, error)
+
+	// GetTopAddressesByTxCount returns the top addresses by transaction count
+	GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]AddressActivityStats, error)
+
+	// GetNetworkMetrics returns network activity metrics for a time range
+	GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*NetworkMetrics, error)
 }
 
 // HistoricalWriter provides write access for historical blockchain data

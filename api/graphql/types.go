@@ -56,8 +56,12 @@ var (
 	balanceHistoryConnectionType *graphql.Object
 
 	// Analytics types
-	minerStatsType   *graphql.Object
-	tokenBalanceType *graphql.Object
+	minerStatsType             *graphql.Object
+	tokenBalanceType           *graphql.Object
+	gasStatsType               *graphql.Object
+	addressGasStatsType        *graphql.Object
+	networkMetricsType         *graphql.Object
+	addressActivityStatsType   *graphql.Object
 
 	// System contract types
 	proposalStatusEnumType        *graphql.Enum
@@ -607,6 +611,122 @@ func initTypes() {
 			},
 			"tokenId": &graphql.Field{
 				Type: bigIntType,
+			},
+		},
+	})
+
+	// GasStats type
+	gasStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "GasStats",
+		Fields: graphql.Fields{
+			"totalGasUsed": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total gas used in the range",
+			},
+			"totalGasLimit": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total gas limit in the range",
+			},
+			"averageGasUsed": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Average gas used per block",
+			},
+			"averageGasPrice": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Average gas price",
+			},
+			"blockCount": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Number of blocks in the range",
+			},
+			"transactionCount": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Number of transactions in the range",
+			},
+		},
+	})
+
+	// AddressGasStats type
+	addressGasStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "AddressGasStats",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "The address",
+			},
+			"totalGasUsed": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total gas used by this address",
+			},
+			"transactionCount": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Number of transactions",
+			},
+			"averageGasPerTx": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Average gas per transaction",
+			},
+			"totalFeesPaid": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total fees paid (gas * gasPrice)",
+			},
+		},
+	})
+
+	// NetworkMetrics type
+	networkMetricsType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "NetworkMetrics",
+		Fields: graphql.Fields{
+			"tps": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Float),
+				Description: "Transactions per second",
+			},
+			"blockTime": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Float),
+				Description: "Average block time in seconds",
+			},
+			"totalBlocks": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total number of blocks",
+			},
+			"totalTransactions": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total number of transactions",
+			},
+			"averageBlockSize": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Average block size in gas",
+			},
+			"timePeriod": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Time period for this metric (in seconds)",
+			},
+		},
+	})
+
+	// AddressActivityStats type
+	addressActivityStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "AddressActivityStats",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "The address",
+			},
+			"transactionCount": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total number of transactions",
+			},
+			"totalGasUsed": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total gas used",
+			},
+			"lastActivityBlock": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Most recent block with activity",
+			},
+			"firstActivityBlock": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "First block with activity",
 			},
 		},
 	})
