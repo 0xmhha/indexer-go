@@ -1680,11 +1680,11 @@ func TestProcessBalanceTracking(t *testing.T) {
 
 	// Create receipt
 	receipt := &types.Receipt{
-		TxHash:          tx.Hash(),
-		GasUsed:         gasLimit,
-		BlockNumber:     big.NewInt(1),
+		TxHash:           tx.Hash(),
+		GasUsed:          gasLimit,
+		BlockNumber:      big.NewInt(1),
 		TransactionIndex: 0,
-		Status:          types.ReceiptStatusSuccessful,
+		Status:           types.ReceiptStatusSuccessful,
 	}
 
 	// Setup mock client and storage
