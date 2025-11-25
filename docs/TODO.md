@@ -221,10 +221,12 @@
 
 ### Medium
 - WebSocket 재연결 로직 미구현 (클라이언트 측에서 처리 필요)
+- newPendingTransactions 구독 미완성 (mempool 미지원)
 
 ### Low
 - Storage 테스트 커버리지 86.8% (목표 90%)
 - Client SDK 미제공 (별도 프로젝트로 분리 예정)
+- ChainConfig 변경 이벤트 자동 감지 미구현 (수동 이벤트 발행 필요)
 
 ## 최근 완료 작업
 
@@ -253,6 +255,16 @@
   - ✅ Search API 확인 - 이미 완전히 구현됨
   - ✅ Top Miners API 확인 - 모든 필드 구현 완료
   - ✅ Token Balance API 확인 - 메타데이터 포함 완전 구현
+- ✅ **WebSocket 구독 기능 강화** - 실시간 이벤트 구독 개선 및 System Events 지원
+  - ✅ miner 필드 추가 - newBlock 구독에 Block.Coinbase() 정보 포함
+  - ✅ Transaction Filter 구현 - from/to 주소 기반 트랜잭션 필터링 지원
+  - ✅ System Events 구독 구현 - chainConfig, validatorSet 이벤트 실시간 구독
+  - ✅ ChainConfigEvent 추가 - 체인 설정 변경 이벤트 (gasLimit, chainId 등)
+  - ✅ ValidatorSetEvent 추가 - Validator 추가/제거/업데이트 이벤트
+  - ✅ detectSystemEvents() 구현 - GovValidator 컨트랙트(0x1001) 이벤트 감지
+  - ✅ WEBSOCKET_GUIDE.md 업데이트 - miner, chainConfig, validatorSet 문서화
+  - ✅ 통합 테스트 통과 - 모든 WebSocket 테스트 (7/7) 성공
+  - ✅ GraphQL-WS 프로토콜 준수 - payload.data 래퍼 정확히 구현
 
 ### 2025-11-24
 - ✅ **Fetcher 최적화 시스템 구현** - 지능형 적응형 최적화 및 대용량 블록 처리
