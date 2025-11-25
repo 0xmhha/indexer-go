@@ -272,6 +272,17 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				Description: "Unified search across blocks, transactions, and addresses",
 				Resolve:     s.resolveSearch,
 			},
+			"contractVerification": &graphql.Field{
+				Type: contractVerificationType,
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type:        graphql.NewNonNull(addressType),
+						Description: "Contract address to get verification data for",
+					},
+				},
+				Description: "Get contract verification data",
+				Resolve:     s.resolveContractVerification,
+			},
 			"gasStats": &graphql.Field{
 				Type: gasStatsType,
 				Args: graphql.FieldConfigArgument{
@@ -757,9 +768,56 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 		},
 	})
 
+	// Create mutation type
+	mutationType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Mutation",
+		Fields: graphql.Fields{
+			"verifyContract": &graphql.Field{
+				Type: graphql.NewNonNull(contractVerificationType),
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type:        graphql.NewNonNull(addressType),
+						Description: "Contract address to verify",
+					},
+					"sourceCode": &graphql.ArgumentConfig{
+						Type:        graphql.NewNonNull(graphql.String),
+						Description: "Solidity source code",
+					},
+					"compilerVersion": &graphql.ArgumentConfig{
+						Type:        graphql.NewNonNull(graphql.String),
+						Description: "Solidity compiler version (e.g., 0.8.20)",
+					},
+					"optimizationEnabled": &graphql.ArgumentConfig{
+						Type:        graphql.NewNonNull(graphql.Boolean),
+						Description: "Whether optimization was enabled",
+					},
+					"optimizationRuns": &graphql.ArgumentConfig{
+						Type:        graphql.Int,
+						Description: "Number of optimization runs (default: 200)",
+					},
+					"constructorArguments": &graphql.ArgumentConfig{
+						Type:        graphql.String,
+						Description: "Constructor arguments (hex encoded)",
+					},
+					"contractName": &graphql.ArgumentConfig{
+						Type:        graphql.String,
+						Description: "Contract name (required for multiple contracts)",
+					},
+					"licenseType": &graphql.ArgumentConfig{
+						Type:        graphql.String,
+						Description: "License type (e.g., MIT, Apache-2.0)",
+					},
+				},
+				Description: "Verify a contract's source code",
+				Resolve:     s.resolveVerifyContract,
+			},
+		},
+	})
+
 	// Create schema
 	schema, err := graphql.NewSchema(graphql.SchemaConfig{
 		Query:        queryType,
+		Mutation:     mutationType,
 		Subscription: subscriptionType,
 	})
 	if err != nil {

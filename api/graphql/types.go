@@ -105,6 +105,9 @@ var (
 	internalTransactionConnectionType *graphql.Object
 	erc20TransferConnectionType       *graphql.Object
 	erc721TransferConnectionType      *graphql.Object
+
+	// Contract verification types
+	contractVerificationType *graphql.Object
 )
 
 func init() {
@@ -1646,6 +1649,46 @@ func initTypes() {
 			},
 			"pageInfo": &graphql.Field{
 				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// Contract verification type
+	contractVerificationType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ContractVerification",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"isVerified": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"name": &graphql.Field{
+				Type: graphql.String,
+			},
+			"compilerVersion": &graphql.Field{
+				Type: graphql.String,
+			},
+			"optimizationEnabled": &graphql.Field{
+				Type: graphql.Boolean,
+			},
+			"optimizationRuns": &graphql.Field{
+				Type: graphql.Int,
+			},
+			"sourceCode": &graphql.Field{
+				Type: graphql.String,
+			},
+			"abi": &graphql.Field{
+				Type: graphql.String,
+			},
+			"constructorArguments": &graphql.Field{
+				Type: graphql.String,
+			},
+			"verifiedAt": &graphql.Field{
+				Type: graphql.String,
+			},
+			"licenseType": &graphql.Field{
+				Type: graphql.String,
 			},
 		},
 	})
