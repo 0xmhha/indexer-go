@@ -244,3 +244,20 @@ func (c *Client) BatchGetReceipts(ctx context.Context, hashes []common.Hash) ([]
 
 	return receipts, nil
 }
+
+// SubscribePendingTransactions subscribes to pending transaction hashes
+// Returns a channel that receives transaction hashes and a subscription object
+func (c *Client) SubscribePendingTransactions(ctx context.Context) (<-chan common.Hash, ethereum.Subscription, error) {
+	ch := make(chan common.Hash, 100) // Buffer to prevent blocking
+
+	// Use RPC client's EthSubscribe for newPendingTransactions
+	sub, err := c.rpcClient.EthSubscribe(ctx, ch, "newPendingTransactions")
+	if err != nil {
+		close(ch)
+		return nil, nil, fmt.Errorf("failed to subscribe to pending transactions: %w", err)
+	}
+
+	c.logger.Info("subscribed to pending transactions")
+
+	return ch, sub, nil
+}

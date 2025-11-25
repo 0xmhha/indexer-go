@@ -375,6 +375,68 @@ function subscribeToValidatorSet(ws) {
 
 ---
 
+### 2-7. Pending 트랜잭션 구독 (newPendingTransactions)
+
+```javascript
+function subscribeToPendingTransactions(ws) {
+  const subscriptionId = 'pending-tx-sub-1';
+
+  ws.send(JSON.stringify({
+    id: subscriptionId,
+    type: 'subscribe',
+    payload: {
+      query: `
+        subscription {
+          newPendingTransactions {
+            hash
+            from
+            to
+            value
+            nonce
+            gas
+            gasPrice
+            maxFeePerGas
+            maxPriorityFeePerGas
+            type
+          }
+        }
+      `
+    }
+  }));
+}
+```
+
+**수신 데이터 형식**:
+```json
+{
+  "id": "pending-tx-sub-1",
+  "type": "next",
+  "payload": {
+    "data": {
+      "newPendingTransactions": {
+        "hash": "0x123...",
+        "from": "0xabc...",
+        "to": "0xdef...",
+        "value": "1000000000000000000",
+        "nonce": 42,
+        "gas": 21000,
+        "gasPrice": "20000000000",
+        "maxFeePerGas": "30000000000",
+        "maxPriorityFeePerGas": "2000000000",
+        "type": "0x2"
+      }
+    }
+  }
+}
+```
+
+**주의사항**:
+- RPC 서버가 `newPendingTransactions` subscription을 지원해야 합니다
+- Pending 트랜잭션은 블록에 포함되기 전 상태이므로 blockNumber, blockHash가 없습니다
+- Stable-One은 블록 생성이 빠르므로 (1-2초), pending 상태가 매우 짧을 수 있습니다
+
+---
+
 ## 3. 구독 중지
 
 ```javascript
@@ -625,7 +687,7 @@ ws.onclose = () => console.log('🔌 Disconnected');
 | `logs` | ✅ 지원 | 컨트랙트 이벤트 로그 (필터 지원) |
 | `chainConfig` | ✅ 지원 | 체인 설정 변경 이벤트 (예: gasLimit, chainId 변경) |
 | `validatorSet` | ✅ 지원 | Validator 추가/제거/변경 이벤트 |
-| `newPendingTransactions` | ⚠️ 미완성 | 타입만 정의됨 (mempool 미지원) |
+| `newPendingTransactions` | ✅ 지원 | Mempool의 대기 중인 트랜잭션 실시간 전송 |
 
 ---
 
@@ -908,7 +970,8 @@ setTimeout(() => {
 
 ## 15. 현재 알려진 제약사항
 
-1. **Pending 트랜잭션 미지원**: `newPendingTransactions`는 동작하지 않음 (mempool 미구현)
+1. **RPC 서버 의존성**: `newPendingTransactions` 구독은 RPC 서버가 해당 subscription을 지원해야 합니다
+2. **빠른 블록 생성**: Stable-One은 블록 생성이 매우 빠르므로 (1-2초) pending 트랜잭션 상태가 짧을 수 있습니다
 
 ---
 

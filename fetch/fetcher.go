@@ -21,7 +21,21 @@ type Client interface {
 	GetLatestBlockNumber(ctx context.Context) (uint64, error)
 	GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error)
 	GetBlockReceipts(ctx context.Context, blockNumber uint64) (types.Receipts, error)
+	GetTransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
 	Close()
+}
+
+// PendingTxClient defines the interface for pending transaction subscription
+// This is optional and separate from the main Client interface
+type PendingTxClient interface {
+	GetTransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
+	SubscribePendingTransactions(ctx context.Context) (<-chan common.Hash, Subscription, error)
+}
+
+// Subscription defines the interface for subscription management
+type Subscription interface {
+	Err() <-chan error
+	Unsubscribe()
 }
 
 // Storage defines the interface for storage operations
@@ -1403,4 +1417,101 @@ func (f *Fetcher) detectSystemEvents(block *types.Block, log *types.Log) {
 			}
 		}
 	}
+}
+
+// StartPendingTxSubscription starts subscribing to pending transactions
+// and publishes them to the EventBus. Returns an error channel that receives
+// subscription errors. Should be run in a separate goroutine.
+func (f *Fetcher) StartPendingTxSubscription(ctx context.Context) (<-chan error, error) {
+	if f.eventBus == nil {
+		return nil, fmt.Errorf("EventBus is not configured")
+	}
+
+	// Check if client supports pending transaction subscription
+	pendingClient, ok := f.client.(PendingTxClient)
+	if !ok {
+		return nil, fmt.Errorf("client does not support pending transaction subscription")
+	}
+
+	f.logger.Info("starting pending transaction subscription")
+
+	// Subscribe to pending transactions
+	txHashCh, sub, err := pendingClient.SubscribePendingTransactions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to subscribe to pending transactions: %w", err)
+	}
+
+	errCh := make(chan error, 1)
+
+	// Start goroutine to process pending transactions
+	go func() {
+		defer sub.Unsubscribe()
+		defer close(errCh)
+
+		for {
+			select {
+			case <-ctx.Done():
+				f.logger.Info("pending transaction subscription stopped")
+				return
+
+			case err := <-sub.Err():
+				if err != nil {
+					f.logger.Error("pending transaction subscription error", zap.Error(err))
+					errCh <- err
+					return
+				}
+
+			case txHash := <-txHashCh:
+				// Fetch full transaction details
+				tx, isPending, err := f.client.GetTransactionByHash(ctx, txHash)
+				if err != nil {
+					f.logger.Warn("failed to fetch pending transaction",
+						zap.String("hash", txHash.Hex()),
+						zap.Error(err),
+					)
+					continue
+				}
+
+				// Only process if still pending
+				if !isPending {
+					continue
+				}
+
+				// Extract sender address
+				signer := types.LatestSignerForChainID(tx.ChainId())
+				from, err := signer.Sender(tx)
+				if err != nil {
+					f.logger.Warn("failed to extract sender",
+						zap.String("hash", txHash.Hex()),
+						zap.Error(err),
+					)
+					continue
+				}
+
+				// Create transaction event
+				txEvent := events.NewTransactionEvent(
+					tx,
+					0,                   // No block number for pending tx
+					common.Hash{},       // No block hash for pending tx
+					0,                   // No index for pending tx
+					from,
+					nil,                 // No receipt for pending tx
+				)
+
+				// Publish to EventBus
+				if !f.eventBus.Publish(txEvent) {
+					f.logger.Warn("EventBus channel full, pending transaction dropped",
+						zap.String("hash", txHash.Hex()),
+					)
+				} else {
+					f.logger.Debug("published pending transaction event",
+						zap.String("hash", txHash.Hex()),
+						zap.String("from", from.Hex()),
+					)
+				}
+			}
+		}
+	}()
+
+	return errCh, nil
 }
