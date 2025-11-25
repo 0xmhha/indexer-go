@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -10,6 +11,18 @@ import (
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
+
+// verificationParams holds the parameters for contract verification
+type verificationParams struct {
+	addressStr           string
+	sourceCode           string
+	compilerVersion      string
+	optimizationEnabled  bool
+	optimizationRuns     int
+	constructorArguments string
+	contractName         string
+	licenseType          string
+}
 
 // resolveContractVerification handles the contractVerification query
 func (s *Schema) resolveContractVerification(params graphql.ResolveParams) (interface{}, error) {
@@ -72,7 +85,52 @@ func (s *Schema) resolveContractVerification(params graphql.ResolveParams) (inte
 func (s *Schema) resolveVerifyContract(params graphql.ResolveParams) (interface{}, error) {
 	ctx := params.Context
 
-	// Extract parameters
+	// Extract and validate parameters
+	vParams, err := extractVerificationParams(params)
+	if err != nil {
+		return nil, err
+	}
+
+	address, err := validateVerificationInputs(vParams.addressStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check storage and verifier availability
+	verificationWriter, err := s.getVerificationWriter()
+	if err != nil {
+		return nil, err
+	}
+
+	if s.verifier == nil {
+		return nil, fmt.Errorf("contract verifier is not configured")
+	}
+
+	// Build and execute verification request
+	req := buildVerificationRequest(vParams, address)
+
+	result, err := s.executeVerification(ctx, address, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store verification result
+	verification, err := s.storeVerificationResult(ctx, verificationWriter, vParams, address, result)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logger.Info("contract verified successfully",
+		zap.String("address", address.Hex()),
+		zap.String("compiler", vParams.compilerVersion))
+
+	// Return verification result
+	return buildVerificationResponse(verification), nil
+}
+
+// extractVerificationParams extracts and validates parameters from GraphQL params
+func extractVerificationParams(params graphql.ResolveParams) (*verificationParams, error) {
+	// Extract required parameters
 	addressStr, ok := params.Args["address"].(string)
 	if !ok || addressStr == "" {
 		return nil, fmt.Errorf("address is required")
@@ -93,8 +151,8 @@ func (s *Schema) resolveVerifyContract(params graphql.ResolveParams) (interface{
 		optimizationEnabled = false
 	}
 
-	// Optional parameters
-	optimizationRuns := 200 // Default value
+	// Extract optional parameters
+	optimizationRuns := DefaultOptimizationRuns
 	if runs, ok := params.Args["optimizationRuns"].(int); ok && runs > 0 {
 		optimizationRuns = runs
 	}
@@ -114,37 +172,51 @@ func (s *Schema) resolveVerifyContract(params graphql.ResolveParams) (interface{
 		licenseType = license
 	}
 
-	// Validate address
+	return &verificationParams{
+		addressStr:           addressStr,
+		sourceCode:           sourceCode,
+		compilerVersion:      compilerVersion,
+		optimizationEnabled:  optimizationEnabled,
+		optimizationRuns:     optimizationRuns,
+		constructorArguments: constructorArguments,
+		contractName:         contractName,
+		licenseType:          licenseType,
+	}, nil
+}
+
+// validateVerificationInputs validates the address format
+func validateVerificationInputs(addressStr string) (common.Address, error) {
 	if !common.IsHexAddress(addressStr) {
-		return nil, fmt.Errorf("invalid address format")
+		return common.Address{}, fmt.Errorf("invalid address format")
 	}
+	return common.HexToAddress(addressStr), nil
+}
 
-	address := common.HexToAddress(addressStr)
-
-	// Cast storage to ContractVerificationWriter
+// getVerificationWriter checks if storage supports contract verification writes
+func (s *Schema) getVerificationWriter() (storage.ContractVerificationWriter, error) {
 	verificationWriter, ok := s.storage.(storage.ContractVerificationWriter)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support contract verification writes")
 	}
+	return verificationWriter, nil
+}
 
-	// Check if verifier is available
-	if s.verifier == nil {
-		return nil, fmt.Errorf("contract verifier is not configured")
-	}
-
-	// Create verification request
-	req := &verifier.VerificationRequest{
+// buildVerificationRequest creates a verification request from parameters
+func buildVerificationRequest(vParams *verificationParams, address common.Address) *verifier.VerificationRequest {
+	return &verifier.VerificationRequest{
 		Address:              address,
-		SourceCode:           sourceCode,
-		CompilerVersion:      compilerVersion,
-		ContractName:         contractName,
-		OptimizationEnabled:  optimizationEnabled,
-		OptimizationRuns:     optimizationRuns,
-		ConstructorArguments: constructorArguments,
-		LicenseType:          licenseType,
+		SourceCode:           vParams.sourceCode,
+		CompilerVersion:      vParams.compilerVersion,
+		ContractName:         vParams.contractName,
+		OptimizationEnabled:  vParams.optimizationEnabled,
+		OptimizationRuns:     vParams.optimizationRuns,
+		ConstructorArguments: vParams.constructorArguments,
+		LicenseType:          vParams.licenseType,
 	}
+}
 
-	// Verify contract
+// executeVerification executes the verification and handles errors
+func (s *Schema) executeVerification(ctx context.Context, address common.Address, req *verifier.VerificationRequest) (*verifier.VerificationResult, error) {
 	result, err := s.verifier.Verify(ctx, req)
 	if err != nil {
 		s.logger.Error("contract verification failed",
@@ -160,33 +232,43 @@ func (s *Schema) resolveVerifyContract(params graphql.ResolveParams) (interface{
 		return nil, fmt.Errorf("verification failed: %w", result.Error)
 	}
 
-	// Store verification data
+	return result, nil
+}
+
+// storeVerificationResult stores the verification result in the database
+func (s *Schema) storeVerificationResult(
+	ctx context.Context,
+	writer storage.ContractVerificationWriter,
+	vParams *verificationParams,
+	address common.Address,
+	result *verifier.VerificationResult,
+) (*storage.ContractVerification, error) {
 	verification := &storage.ContractVerification{
 		Address:              address,
 		IsVerified:           true,
-		Name:                 contractName,
-		CompilerVersion:      compilerVersion,
-		OptimizationEnabled:  optimizationEnabled,
-		OptimizationRuns:     optimizationRuns,
-		SourceCode:           sourceCode,
+		Name:                 vParams.contractName,
+		CompilerVersion:      vParams.compilerVersion,
+		OptimizationEnabled:  vParams.optimizationEnabled,
+		OptimizationRuns:     vParams.optimizationRuns,
+		SourceCode:           vParams.sourceCode,
 		ABI:                  result.ABI,
-		ConstructorArguments: constructorArguments,
+		ConstructorArguments: vParams.constructorArguments,
 		VerifiedAt:           time.Now(),
-		LicenseType:          licenseType,
+		LicenseType:          vParams.licenseType,
 	}
 
-	if err := verificationWriter.SetContractVerification(ctx, verification); err != nil {
+	if err := writer.SetContractVerification(ctx, verification); err != nil {
 		s.logger.Error("failed to store contract verification",
 			zap.String("address", address.Hex()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to store verification: %w", err)
 	}
 
-	s.logger.Info("contract verified successfully",
-		zap.String("address", address.Hex()),
-		zap.String("compiler", compilerVersion))
+	return verification, nil
+}
 
-	// Return verification result
+// buildVerificationResponse builds the GraphQL response from verification data
+func buildVerificationResponse(verification *storage.ContractVerification) map[string]interface{} {
 	return map[string]interface{}{
 		"address":              verification.Address.Hex(),
 		"isVerified":           verification.IsVerified,
@@ -199,5 +281,5 @@ func (s *Schema) resolveVerifyContract(params graphql.ResolveParams) (interface{
 		"constructorArguments": verification.ConstructorArguments,
 		"verifiedAt":           verification.VerifiedAt.Format(time.RFC3339),
 		"licenseType":          verification.LicenseType,
-	}, nil
+	}
 }

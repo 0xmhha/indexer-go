@@ -200,6 +200,31 @@ func (m *mockStorage) Search(ctx context.Context, query string, resultTypes []st
 	return []storage.SearchResult{}, nil
 }
 
+// Contract verification methods
+func (m *mockStorage) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStorage) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockStorage) CountVerifiedContracts(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *mockStorage) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+	return nil
+}
+
+func (m *mockStorage) DeleteContractVerification(ctx context.Context, address common.Address) error {
+	return nil
+}
+
 // mockStorageWithData extends mockStorage with transaction and receipt data
 type mockStorageWithData struct {
 	*mockStorage
@@ -972,6 +997,31 @@ func (m *mockStorageWithErrors) Search(ctx context.Context, query string, result
 	return nil, storage.ErrNotFound
 }
 
+// Contract verification methods
+func (m *mockStorageWithErrors) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
+	return false, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) CountVerifiedContracts(ctx context.Context) (int, error) {
+	return 0, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) DeleteContractVerification(ctx context.Context, address common.Address) error {
+	return storage.ErrNotFound
+}
+
 // mockStorageWithNonNotFoundErrors returns non-ErrNotFound errors to test logging paths
 type mockStorageWithNonNotFoundErrors struct {
 }
@@ -1126,6 +1176,31 @@ func (m *mockStorageWithNonNotFoundErrors) IndexLog(ctx context.Context, log *ty
 
 func (m *mockStorageWithNonNotFoundErrors) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
 	return nil, fmt.Errorf("database connection failed")
+}
+
+// Contract verification methods
+func (m *mockStorageWithNonNotFoundErrors) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
+	return false, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) CountVerifiedContracts(ctx context.Context) (int, error) {
+	return 0, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) DeleteContractVerification(ctx context.Context, address common.Address) error {
+	return fmt.Errorf("database connection failed")
 }
 
 func TestJSONRPCServerEdgeCases(t *testing.T) {

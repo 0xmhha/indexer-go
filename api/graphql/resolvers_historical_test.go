@@ -95,6 +95,31 @@ func (m *mockHistoricalStorage) GetNetworkMetrics(ctx context.Context, fromTime,
 	return &storage.NetworkMetrics{}, nil
 }
 
+// Contract verification methods
+func (m *mockHistoricalStorage) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockHistoricalStorage) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
+	return false, nil
+}
+
+func (m *mockHistoricalStorage) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockHistoricalStorage) CountVerifiedContracts(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *mockHistoricalStorage) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+	return nil
+}
+
+func (m *mockHistoricalStorage) DeleteContractVerification(ctx context.Context, address common.Address) error {
+	return nil
+}
+
 func TestHistoricalResolvers(t *testing.T) {
 	logger := zap.NewNop()
 

@@ -2,7 +2,6 @@ package verifier
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -15,7 +14,7 @@ import (
 
 // Common errors
 var (
-	// ErrBytecodeM ismatch is returned when deployed and compiled bytecode don't match
+	// ErrBytecodeMismatch is returned when deployed and compiled bytecode don't match
 	ErrBytecodeMismatch = errors.New("bytecode mismatch")
 
 	// ErrNoDeployedCode is returned when no code is deployed at the address
@@ -249,8 +248,8 @@ func (v *ContractVerifier) compareBytecodeWithoutMetadata(deployed, compiled str
 	// Calculate similarity ratio
 	similarity := v.calculateSimilarity(deployedWithoutMeta, compiledWithoutMeta)
 
-	// If similarity is high enough (>95%), consider it a match
-	return similarity > 0.95, nil
+	// If similarity is high enough, consider it a match
+	return similarity > MinBytecodeSimilarityThreshold, nil
 }
 
 // stripMetadata removes metadata from bytecode
@@ -314,9 +313,3 @@ func max(a, b int) int {
 	return b
 }
 
-// ComputeBytecodeHash computes SHA256 hash of bytecode
-func ComputeBytecodeHash(bytecode string) string {
-	bytecode = strings.TrimPrefix(bytecode, "0x")
-	hash := sha256.Sum256([]byte(bytecode))
-	return hex.EncodeToString(hash[:])
-}

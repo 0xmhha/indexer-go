@@ -65,7 +65,7 @@ func (s *PebbleStorage) ListVerifiedContracts(ctx context.Context, limit, offset
 	}
 
 	if limit <= 0 {
-		limit = 100 // Default limit
+		limit = DefaultVerifiedContractsLimit
 	}
 	if offset < 0 {
 		offset = 0

@@ -2,8 +2,6 @@ package compiler
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,51 +48,99 @@ func NewSolcCompiler(config *Config) (*SolcCompiler, error) {
 
 // Compile compiles Solidity source code with the given options
 func (s *SolcCompiler) Compile(ctx context.Context, opts *CompilationOptions) (*CompilationResult, error) {
-	if opts == nil {
-		return nil, fmt.Errorf("options cannot be nil")
+	if err := s.validateCompilationOptions(opts); err != nil {
+		return nil, err
 	}
 
-	if opts.SourceCode == "" {
-		return nil, fmt.Errorf("source code cannot be empty")
+	if err := s.ensureCompilerAvailable(ctx, opts.CompilerVersion); err != nil {
+		return nil, err
 	}
 
-	if opts.CompilerVersion == "" {
-		return nil, fmt.Errorf("compiler version cannot be empty")
-	}
-
-	// Check if compiler version is available
-	available, err := s.IsVersionAvailable(opts.CompilerVersion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check version availability: %w", err)
-	}
-
-	// Download compiler if not available and auto-download is enabled
-	if !available {
-		if s.config.AutoDownload {
-			if err := s.DownloadVersion(ctx, opts.CompilerVersion); err != nil {
-				return nil, fmt.Errorf("failed to download compiler: %w", err)
-			}
-		} else {
-			return nil, ErrCompilerNotFound
-		}
-	}
-
-	// Get compiler binary path
 	solcPath := s.getCompilerPath(opts.CompilerVersion)
 
-	// Create temporary source file
-	tmpDir, err := os.MkdirTemp("", "solc-compile-*")
+	tmpDir, sourceFile, err := s.prepareSourceFile(opts.SourceCode)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp directory: %w", err)
+		return nil, err
 	}
 	defer os.RemoveAll(tmpDir)
 
-	sourceFile := filepath.Join(tmpDir, "contract.sol")
-	if err := os.WriteFile(sourceFile, []byte(opts.SourceCode), 0644); err != nil {
-		return nil, fmt.Errorf("failed to write source file: %w", err)
+	args := s.buildSolcArgs(opts, sourceFile)
+
+	compileCtx, cancel := s.createCompilationContext(ctx, opts)
+	if cancel != nil {
+		defer cancel()
 	}
 
-	// Build solc command arguments
+	output, err := s.executeSolcCommand(compileCtx, solcPath, args)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.parseCompilationOutput(output, opts.ContractName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse compilation output: %w", err)
+	}
+
+	result.CompilerVersion = opts.CompilerVersion
+
+	return result, nil
+}
+
+// validateCompilationOptions validates the compilation options
+func (s *SolcCompiler) validateCompilationOptions(opts *CompilationOptions) error {
+	if opts == nil {
+		return fmt.Errorf("options cannot be nil")
+	}
+
+	if opts.SourceCode == "" {
+		return fmt.Errorf("source code cannot be empty")
+	}
+
+	if opts.CompilerVersion == "" {
+		return fmt.Errorf("compiler version cannot be empty")
+	}
+
+	return nil
+}
+
+// ensureCompilerAvailable checks if compiler is available and downloads if needed
+func (s *SolcCompiler) ensureCompilerAvailable(ctx context.Context, version string) error {
+	available, err := s.IsVersionAvailable(version)
+	if err != nil {
+		return fmt.Errorf("failed to check version availability: %w", err)
+	}
+
+	if !available {
+		if s.config.AutoDownload {
+			if err := s.DownloadVersion(ctx, version); err != nil {
+				return fmt.Errorf("failed to download compiler: %w", err)
+			}
+		} else {
+			return ErrCompilerNotFound
+		}
+	}
+
+	return nil
+}
+
+// prepareSourceFile creates a temporary directory and writes the source code to a file
+func (s *SolcCompiler) prepareSourceFile(sourceCode string) (tmpDir string, sourceFile string, err error) {
+	tmpDir, err = os.MkdirTemp("", "solc-compile-*")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	sourceFile = filepath.Join(tmpDir, "contract.sol")
+	if err := os.WriteFile(sourceFile, []byte(sourceCode), 0644); err != nil {
+		os.RemoveAll(tmpDir)
+		return "", "", fmt.Errorf("failed to write source file: %w", err)
+	}
+
+	return tmpDir, sourceFile, nil
+}
+
+// buildSolcArgs builds the solc command arguments
+func (s *SolcCompiler) buildSolcArgs(opts *CompilationOptions, sourceFile string) []string {
 	args := []string{
 		"--combined-json", "abi,bin,metadata",
 		"--optimize",
@@ -110,35 +156,30 @@ func (s *SolcCompiler) Compile(ctx context.Context, opts *CompilationOptions) (*
 
 	args = append(args, sourceFile)
 
-	// Create context with timeout
-	compileCtx := ctx
+	return args
+}
+
+// createCompilationContext creates a context with timeout for compilation
+func (s *SolcCompiler) createCompilationContext(ctx context.Context, opts *CompilationOptions) (context.Context, context.CancelFunc) {
 	if opts.Timeout != nil {
-		compileCtx = opts.Timeout
-	} else {
-		var cancel context.CancelFunc
-		compileCtx, cancel = context.WithTimeout(ctx, time.Duration(s.config.MaxCompilationTime)*time.Second)
-		defer cancel()
+		return opts.Timeout, nil
 	}
 
-	// Execute solc command
-	cmd := exec.CommandContext(compileCtx, solcPath, args...)
+	return context.WithTimeout(ctx, time.Duration(s.config.MaxCompilationTime)*time.Second)
+}
+
+// executeSolcCommand executes the solc command and returns the output
+func (s *SolcCompiler) executeSolcCommand(ctx context.Context, solcPath string, args []string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, solcPath, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		if compileCtx.Err() == context.DeadlineExceeded {
+		if ctx.Err() == context.DeadlineExceeded {
 			return nil, ErrTimeout
 		}
 		return nil, fmt.Errorf("%w: %s", ErrCompilationFailed, string(output))
 	}
 
-	// Parse compilation output
-	result, err := s.parseCompilationOutput(output, opts.ContractName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse compilation output: %w", err)
-	}
-
-	result.CompilerVersion = opts.CompilerVersion
-
-	return result, nil
+	return output, nil
 }
 
 // parseCompilationOutput parses the solc JSON output
@@ -290,18 +331,4 @@ func (s *SolcCompiler) getCompilerPath(version string) string {
 		ext = ".exe"
 	}
 	return filepath.Join(s.config.BinDir, fmt.Sprintf("solc-%s%s", version, ext))
-}
-
-// getCacheKey generates a cache key for compilation options
-func (s *SolcCompiler) getCacheKey(opts *CompilationOptions) string {
-	data := fmt.Sprintf("%s|%s|%s|%t|%d|%s",
-		opts.SourceCode,
-		opts.CompilerVersion,
-		opts.ContractName,
-		opts.OptimizationEnabled,
-		opts.OptimizationRuns,
-		opts.EVMVersion,
-	)
-	hash := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(hash[:])
 }

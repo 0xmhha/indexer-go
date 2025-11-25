@@ -217,6 +217,31 @@ func (m *mockStorage) Search(ctx context.Context, query string, resultTypes []st
 	return []storage.SearchResult{}, nil
 }
 
+// Contract verification methods
+func (m *mockStorage) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStorage) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockStorage) CountVerifiedContracts(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *mockStorage) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+	return nil
+}
+
+func (m *mockStorage) DeleteContractVerification(ctx context.Context, address common.Address) error {
+	return nil
+}
+
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
 }
@@ -371,6 +396,31 @@ func (m *mockStorageWithErrors) IndexLog(ctx context.Context, log *types.Log) er
 
 func (m *mockStorageWithErrors) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
 	return nil, storage.ErrNotFound
+}
+
+// Contract verification methods
+func (m *mockStorageWithErrors) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
+	return false, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) CountVerifiedContracts(ctx context.Context) (int, error) {
+	return 0, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+	return fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) DeleteContractVerification(ctx context.Context, address common.Address) error {
+	return fmt.Errorf("storage error")
 }
 
 func TestGraphQLHandler(t *testing.T) {

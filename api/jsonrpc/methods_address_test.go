@@ -164,6 +164,31 @@ func (m *mockAddressIndexStorage) GetERC721Owner(ctx context.Context, tokenAddre
 	return common.Address{}, storage.ErrNotFound
 }
 
+// Contract verification methods
+func (m *mockAddressIndexStorage) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockAddressIndexStorage) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
+	return false, nil
+}
+
+func (m *mockAddressIndexStorage) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockAddressIndexStorage) CountVerifiedContracts(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *mockAddressIndexStorage) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+	return nil
+}
+
+func (m *mockAddressIndexStorage) DeleteContractVerification(ctx context.Context, address common.Address) error {
+	return nil
+}
+
 func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 	logger := zap.NewNop()
 	ctx := context.Background()
