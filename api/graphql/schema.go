@@ -6,6 +6,7 @@ import (
 
 	abiDecoder "github.com/0xmhha/indexer-go/abi"
 	"github.com/0xmhha/indexer-go/storage"
+	"github.com/0xmhha/indexer-go/verifier"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
@@ -16,6 +17,7 @@ type Schema struct {
 	storage    storage.Storage
 	logger     *zap.Logger
 	abiDecoder *abiDecoder.Decoder
+	verifier   verifier.Verifier
 }
 
 // NewSchema creates a new GraphQL schema
@@ -809,4 +811,9 @@ func (s *Schema) loadStoredABIs(ctx context.Context) error {
 	)
 
 	return nil
+}
+
+// SetVerifier sets the contract verifier for the schema
+func (s *Schema) SetVerifier(v verifier.Verifier) {
+	s.verifier = v
 }

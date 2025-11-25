@@ -6,8 +6,10 @@
 1. [API 엔드포인트](#api-엔드포인트)
 2. [Search API](#search-api)
 3. [Top Miners API](#top-miners-api)
-4. [기타 Historical API](#기타-historical-api)
-5. [에러 처리](#에러-처리)
+4. [Token Balance API](#token-balance-api)
+5. [Address Balance API](#address-balance-api)
+6. [기타 Historical API](#기타-historical-api)
+7. [에러 처리](#에러-처리)
 
 ---
 
@@ -499,6 +501,619 @@ function TopMinersComponent() {
 
 ---
 
+## Token Balance API
+
+토큰 잔액 조회 API로 ERC20, ERC721, ERC1155 토큰의 잔액과 메타데이터를 조회할 수 있습니다. **Phase 2에서 name, symbol, decimals, metadata 필드와 tokenType 필터가 추가되었습니다.**
+
+### Query
+
+```graphql
+query TokenBalances($address: Address!, $tokenType: String) {
+  tokenBalances(address: $address, tokenType: $tokenType) {
+    contractAddress
+    tokenType
+    balance
+    tokenId
+    name
+    symbol
+    decimals
+    metadata
+  }
+}
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| address | Address | Yes | 조회할 주소 (지갑 주소) |
+| tokenType | String | No | 토큰 타입 필터 ("ERC20", "ERC721", "ERC1155") |
+
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| contractAddress | Address | 토큰 컨트랙트 주소 |
+| tokenType | String | 토큰 표준 타입 (ERC20, ERC721, ERC1155) |
+| balance | BigInt | 토큰 잔액 (ERC20: 소수점 없는 원본 값, ERC721: 1 또는 0, ERC1155: 수량) |
+| tokenId | BigInt | 토큰 ID (ERC721/ERC1155만 해당, ERC20은 null) |
+| name | String | 토큰 이름 (예: "Wrapped Ether") |
+| symbol | String | 토큰 심볼 (예: "WETH") |
+| decimals | Int | 소수점 자리수 (ERC20만 해당, 기본값: 18) |
+| metadata | String | 토큰 메타데이터 JSON (ERC721/ERC1155의 경우 NFT 메타데이터) |
+
+### Request Examples
+
+#### 1. 모든 토큰 잔액 조회
+```json
+{
+  "query": "query TokenBalances($address: Address!) { tokenBalances(address: $address) { contractAddress tokenType balance tokenId name symbol decimals metadata } }",
+  "variables": {
+    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+  }
+}
+```
+
+#### 2. ERC20 토큰만 조회
+```json
+{
+  "query": "query TokenBalances($address: Address!, $tokenType: String) { tokenBalances(address: $address, tokenType: $tokenType) { contractAddress tokenType balance name symbol decimals } }",
+  "variables": {
+    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+    "tokenType": "ERC20"
+  }
+}
+```
+
+#### 3. ERC721 NFT만 조회
+```json
+{
+  "query": "query TokenBalances($address: Address!, $tokenType: String) { tokenBalances(address: $address, tokenType: $tokenType) { contractAddress tokenType tokenId name metadata } }",
+  "variables": {
+    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+    "tokenType": "ERC721"
+  }
+}
+```
+
+#### 4. 특정 컨트랙트의 토큰만 조회 (클라이언트 필터링)
+```typescript
+// GraphQL에서는 contractAddress 필터를 지원하지 않으므로 클라이언트에서 필터링
+const filteredTokens = data.tokenBalances.filter(
+  token => token.contractAddress === "0x1234..."
+);
+```
+
+### Response Example
+
+```json
+{
+  "data": {
+    "tokenBalances": [
+      {
+        "contractAddress": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "tokenType": "ERC20",
+        "balance": "5000000000000000000",
+        "tokenId": null,
+        "name": "Wrapped Ether",
+        "symbol": "WETH",
+        "decimals": 18,
+        "metadata": null
+      },
+      {
+        "contractAddress": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "tokenType": "ERC20",
+        "balance": "10000000",
+        "tokenId": null,
+        "name": "USD Coin",
+        "symbol": "USDC",
+        "decimals": 6,
+        "metadata": null
+      },
+      {
+        "contractAddress": "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D",
+        "tokenType": "ERC721",
+        "balance": "1",
+        "tokenId": "1234",
+        "name": "Bored Ape Yacht Club",
+        "symbol": "BAYC",
+        "decimals": null,
+        "metadata": "{\"name\":\"Bored Ape #1234\",\"image\":\"ipfs://...\",\"attributes\":[...]}"
+      },
+      {
+        "contractAddress": "0xd07dc4262BCDbf85190C01c996b4C06a461d2430",
+        "tokenType": "ERC1155",
+        "balance": "10",
+        "tokenId": "5678",
+        "name": "Rarible",
+        "symbol": "RARI",
+        "decimals": null,
+        "metadata": "{\"name\":\"Artwork #5678\",\"image\":\"ipfs://...\",\"description\":\"...\"}"
+      }
+    ]
+  }
+}
+```
+
+### Frontend Integration Example (React + Apollo Client)
+
+```typescript
+import { useQuery, gql } from '@apollo/client';
+import { formatUnits } from 'ethers';
+
+const TOKEN_BALANCES_QUERY = gql`
+  query TokenBalances($address: Address!, $tokenType: String) {
+    tokenBalances(address: $address, tokenType: $tokenType) {
+      contractAddress
+      tokenType
+      balance
+      tokenId
+      name
+      symbol
+      decimals
+      metadata
+    }
+  }
+`;
+
+interface TokenBalance {
+  contractAddress: string;
+  tokenType: 'ERC20' | 'ERC721' | 'ERC1155';
+  balance: string;
+  tokenId: string | null;
+  name: string;
+  symbol: string;
+  decimals: number | null;
+  metadata: string | null;
+}
+
+function TokenBalancesComponent({ address }: { address: string }) {
+  const [tokenTypeFilter, setTokenTypeFilter] = useState<string>('');
+
+  const { loading, error, data } = useQuery<{ tokenBalances: TokenBalance[] }>(
+    TOKEN_BALANCES_QUERY,
+    {
+      variables: {
+        address,
+        tokenType: tokenTypeFilter || undefined
+      }
+    }
+  );
+
+  const formatBalance = (token: TokenBalance) => {
+    if (token.tokenType === 'ERC20' && token.decimals) {
+      // ERC20: Format with decimals
+      return formatUnits(token.balance, token.decimals);
+    } else if (token.tokenType === 'ERC721') {
+      // ERC721: Show token ID
+      return `Token #${token.tokenId}`;
+    } else if (token.tokenType === 'ERC1155') {
+      // ERC1155: Show quantity and token ID
+      return `${token.balance}x Token #${token.tokenId}`;
+    }
+    return token.balance;
+  };
+
+  const parseMetadata = (metadataJson: string | null) => {
+    if (!metadataJson) return null;
+    try {
+      return JSON.parse(metadataJson);
+    } catch {
+      return null;
+    }
+  };
+
+  return (
+    <div>
+      <h2>Token Balances</h2>
+
+      {/* Token Type Filter */}
+      <div className="filters">
+        <label>
+          Token Type:
+          <select
+            value={tokenTypeFilter}
+            onChange={(e) => setTokenTypeFilter(e.target.value)}
+          >
+            <option value="">All Types</option>
+            <option value="ERC20">ERC20 Tokens</option>
+            <option value="ERC721">ERC721 NFTs</option>
+            <option value="ERC1155">ERC1155 Tokens</option>
+          </select>
+        </label>
+      </div>
+
+      {loading && <div>Loading token balances...</div>}
+      {error && <div>Error: {error.message}</div>}
+
+      {data && (
+        <div className="token-list">
+          {data.tokenBalances.length === 0 ? (
+            <div>No tokens found for this address</div>
+          ) : (
+            data.tokenBalances.map((token) => {
+              const metadata = parseMetadata(token.metadata);
+
+              return (
+                <div key={`${token.contractAddress}-${token.tokenId || '0'}`} className="token-card">
+                  {/* Token Header */}
+                  <div className="token-header">
+                    <h3>{token.name || 'Unknown Token'}</h3>
+                    <span className="token-type-badge">{token.tokenType}</span>
+                  </div>
+
+                  {/* Token Info */}
+                  <div className="token-info">
+                    <div>
+                      <strong>Symbol:</strong> {token.symbol || 'N/A'}
+                    </div>
+                    <div>
+                      <strong>Balance:</strong> {formatBalance(token)}
+                    </div>
+                    <div>
+                      <strong>Contract:</strong>{' '}
+                      <a href={`/address/${token.contractAddress}`}>
+                        {token.contractAddress.slice(0, 10)}...
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* NFT Metadata (ERC721/ERC1155) */}
+                  {metadata && (token.tokenType === 'ERC721' || token.tokenType === 'ERC1155') && (
+                    <div className="nft-metadata">
+                      {metadata.image && (
+                        <img
+                          src={metadata.image.replace('ipfs://', 'https://ipfs.io/ipfs/')}
+                          alt={metadata.name}
+                          className="nft-image"
+                        />
+                      )}
+                      {metadata.description && (
+                        <p className="nft-description">{metadata.description}</p>
+                      )}
+                      {metadata.attributes && (
+                        <div className="nft-attributes">
+                          {metadata.attributes.map((attr: any, idx: number) => (
+                            <div key={idx} className="attribute">
+                              <span className="trait-type">{attr.trait_type}:</span>
+                              <span className="trait-value">{attr.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### UI Design Recommendations
+
+#### 1. Token List View
+- **ERC20 토큰**: 이름, 심볼, 포맷된 잔액, 달러 환산 가치
+- **ERC721 NFTs**: 썸네일 이미지, 컬렉션 이름, 토큰 ID
+- **ERC1155 토큰**: 썸네일, 수량, 토큰 ID
+- 타입별 필터 탭 또는 드롭다운
+
+#### 2. Token Card Design
+- **헤더**: 토큰 이름 + 타입 뱃지 (ERC20/ERC721/ERC1155)
+- **메인 정보**: 잔액, 심볼, 컨트랙트 주소
+- **NFT 메타데이터**: 이미지, 설명, 속성 (ERC721/ERC1155만)
+- **액션 버튼**: "View on Explorer", "Send Token" (future)
+
+#### 3. Grouping and Sorting
+- **그룹핑**: 토큰 타입별 (ERC20 / NFTs)
+- **정렬 옵션**:
+  - Balance (high to low)
+  - Token name (A-Z)
+  - Recently received
+- **검색**: 토큰 이름, 심볼, 컨트랙트 주소로 필터링
+
+#### 4. Performance Optimization
+- **이미지 레이지 로딩**: NFT 이미지는 뷰포트에 들어올 때만 로드
+- **메타데이터 캐싱**: IPFS 메타데이터는 로컬 캐시 활용
+- **가상화**: 토큰이 많을 경우 react-window 사용
+
+#### 5. Error Handling
+- 메타데이터 로드 실패 시 기본 이미지 표시
+- IPFS 게이트웨이 실패 시 대체 게이트웨이 시도
+- 소수점 변환 오류 시 원본 값 표시
+
+---
+
+## Address Balance API
+
+주소의 네이티브 ETH 잔액을 조회하는 API입니다. **트랜잭션 처리 시 자동으로 잔액 변화를 추적합니다.**
+
+### Query
+
+```graphql
+query AddressBalance($address: Address!, $blockNumber: BigInt) {
+  addressBalance(address: $address, blockNumber: $blockNumber)
+}
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| address | Address | Yes | 조회할 주소 |
+| blockNumber | BigInt | No | 특정 블록 높이의 잔액 조회 (생략 시 최신 잔액) |
+
+### Response
+
+반환값은 Wei 단위의 BigInt 문자열입니다 (1 ETH = 10^18 Wei).
+
+### Balance Tracking Implementation
+
+네이티브 잔액 추적은 블록 인덱싱 중 자동으로 수행됩니다:
+
+- **송신자 잔액**: `-(value + gas cost)` (트랜잭션 값 + 가스 비용 차감)
+- **수신자 잔액**: `+value` (트랜잭션 값 증가)
+- **가스 비용 계산**: `gasUsed * gasPrice`
+- **컨트랙트 생성**: 컨트랙트 주소로 값 이전
+
+### Request Examples
+
+#### 1. 최신 잔액 조회
+```json
+{
+  "query": "query AddressBalance($address: Address!) { addressBalance(address: $address) }",
+  "variables": {
+    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+  }
+}
+```
+
+#### 2. 특정 블록의 과거 잔액 조회
+```json
+{
+  "query": "query AddressBalance($address: Address!, $blockNumber: BigInt) { addressBalance(address: $address, blockNumber: $blockNumber) }",
+  "variables": {
+    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+    "blockNumber": "1000"
+  }
+}
+```
+
+### Response Example
+
+```json
+{
+  "data": {
+    "addressBalance": "5000000000000000000"
+  }
+}
+```
+
+이 값은 5 ETH를 의미합니다 (5 * 10^18 Wei).
+
+### Balance History Query
+
+잔액 변화 내역을 조회하려면 `balanceHistory` 쿼리를 사용하세요:
+
+```graphql
+query BalanceHistory($address: Address!, $fromBlock: BigInt, $toBlock: BigInt, $limit: Int) {
+  balanceHistory(
+    address: $address
+    fromBlock: $fromBlock
+    toBlock: $toBlock
+    limit: $limit
+  ) {
+    nodes {
+      blockNumber
+      balance
+      delta
+      txHash
+    }
+    totalCount
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+```
+
+### Frontend Integration Example (React + Apollo Client)
+
+```typescript
+import { useQuery, gql } from '@apollo/client';
+import { formatEther } from 'ethers';
+
+const ADDRESS_BALANCE_QUERY = gql`
+  query AddressBalance($address: Address!, $blockNumber: BigInt) {
+    addressBalance(address: $address, blockNumber: $blockNumber)
+  }
+`;
+
+const BALANCE_HISTORY_QUERY = gql`
+  query BalanceHistory($address: Address!, $limit: Int) {
+    balanceHistory(address: $address, limit: $limit) {
+      nodes {
+        blockNumber
+        balance
+        delta
+        txHash
+      }
+      totalCount
+    }
+  }
+`;
+
+interface BalanceHistoryNode {
+  blockNumber: string;
+  balance: string;
+  delta: string;
+  txHash: string;
+}
+
+function AddressBalanceComponent({ address }: { address: string }) {
+  const [selectedBlock, setSelectedBlock] = useState<string>('');
+
+  // Current balance query
+  const { loading: balanceLoading, data: balanceData } = useQuery<{ addressBalance: string }>(
+    ADDRESS_BALANCE_QUERY,
+    {
+      variables: {
+        address,
+        blockNumber: selectedBlock || undefined
+      }
+    }
+  );
+
+  // Balance history query
+  const { loading: historyLoading, data: historyData } = useQuery<{
+    balanceHistory: {
+      nodes: BalanceHistoryNode[];
+      totalCount: number;
+    };
+  }>(BALANCE_HISTORY_QUERY, {
+    variables: {
+      address,
+      limit: 20
+    }
+  });
+
+  const formatBalance = (weiValue: string) => {
+    return `${formatEther(weiValue)} ETH`;
+  };
+
+  const formatDelta = (deltaWei: string) => {
+    const value = formatEther(deltaWei);
+    const isPositive = !deltaWei.startsWith('-');
+    return `${isPositive ? '+' : ''}${value} ETH`;
+  };
+
+  return (
+    <div>
+      <h2>Address Balance</h2>
+      <p className="address-display">{address}</p>
+
+      {/* Current Balance Display */}
+      <div className="balance-card">
+        <h3>Current Balance</h3>
+        {balanceLoading ? (
+          <div>Loading...</div>
+        ) : balanceData ? (
+          <div className="balance-value">
+            {formatBalance(balanceData.addressBalance)}
+          </div>
+        ) : (
+          <div>No balance data available</div>
+        )}
+
+        {/* Historical Balance Selector */}
+        <div className="block-selector">
+          <label>
+            View balance at block:
+            <input
+              type="text"
+              value={selectedBlock}
+              onChange={(e) => setSelectedBlock(e.target.value)}
+              placeholder="Leave empty for latest"
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Balance History */}
+      <div className="balance-history">
+        <h3>Balance History</h3>
+        {historyLoading ? (
+          <div>Loading history...</div>
+        ) : historyData && historyData.balanceHistory.nodes.length > 0 ? (
+          <>
+            <p>Total changes: {historyData.balanceHistory.totalCount}</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Block</th>
+                  <th>Balance</th>
+                  <th>Change</th>
+                  <th>Transaction</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyData.balanceHistory.nodes.map((node) => (
+                  <tr key={`${node.blockNumber}-${node.txHash}`}>
+                    <td>
+                      <a href={`/block/${node.blockNumber}`}>#{node.blockNumber}</a>
+                    </td>
+                    <td>{formatBalance(node.balance)}</td>
+                    <td className={node.delta.startsWith('-') ? 'negative' : 'positive'}>
+                      {formatDelta(node.delta)}
+                    </td>
+                    <td>
+                      <a href={`/tx/${node.txHash}`}>
+                        {node.txHash.slice(0, 10)}...
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <div>No balance history available</div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+### UI Design Recommendations
+
+#### 1. Balance Display
+- **큰 글씨**: 현재 잔액을 눈에 띄게 표시
+- **USD 환산**: ETH 가격 API 연동하여 달러 환산 표시
+- **과거 잔액 조회**: 블록 번호 입력으로 과거 잔액 확인
+
+#### 2. Balance History Timeline
+- **타임라인 뷰**: 시간순으로 잔액 변화 표시
+- **차트**: 잔액 변화를 그래프로 시각화 (Line chart)
+- **색상 코딩**:
+  - 증가(+): 녹색
+  - 감소(-): 빨간색
+- **트랜잭션 링크**: 각 변화의 원인이 된 트랜잭션으로 링크
+
+#### 3. Statistics
+- **Total received**: 총 수신 금액
+- **Total sent**: 총 발신 금액
+- **Net change**: 순 변화량
+- **Transaction count**: 트랜잭션 수
+
+### Important Notes
+
+⚠️ **잔액 추적은 새로운 기능입니다.** 기존 인덱스된 블록에는 잔액 데이터가 없을 수 있습니다.
+
+**잔액 데이터를 채우는 방법:**
+
+1. **새로운 인덱싱 시작**:
+   ```bash
+   ./indexer --clear-data --start-height 0
+   ```
+
+2. **진행 중인 인덱싱**: 새로 인덱스되는 블록부터 자동으로 잔액 추적이 활성화됩니다.
+
+3. **Production 환경**:
+   - 기존 데이터를 유지하면서 잔액 추적을 활성화하려면 별도의 마이그레이션 스크립트가 필요합니다.
+   - 또는 과거 블록을 재인덱싱하여 잔액 데이터를 채울 수 있습니다.
+
+**쿼리 결과 확인:**
+- 잔액이 "0"으로 반환되는 경우, 해당 블록이 아직 재인덱싱되지 않았을 수 있습니다.
+- `balanceHistory` 쿼리로 잔액 변화가 추적되고 있는지 확인하세요.
+
+---
+
 ## 기타 Historical API
 
 ### 1. Block Count
@@ -515,14 +1130,7 @@ query {
 }
 ```
 
-### 3. Address Balance (Historical)
-```graphql
-query AddressBalance($address: Address!, $blockNumber: BigInt) {
-  addressBalance(address: $address, blockNumber: $blockNumber)
-}
-```
-
-### 4. Balance History
+### 3. Balance History
 ```graphql
 query BalanceHistory($address: Address!, $fromBlock: BigInt, $toBlock: BigInt, $limit: Int, $offset: Int) {
   balanceHistory(
@@ -698,31 +1306,6 @@ curl -X POST http://localhost:8080/graphql \
     "query": "query TopMiners($limit: Int) { topMiners(limit: $limit) { address blockCount percentage } }",
     "variables": {"limit": 5}
   }'
-```
-
----
-
-## 다음 개선 예정 (Phase 2)
-
-### Token Balance API 개선
-- 추가 필드: name, symbol, decimals, metadata
-- tokenType 필터 파라미터 추가
-- ERC20/ERC721/ERC1155 타입별 필터링
-
-### 예상 쿼리 (개발 예정)
-```graphql
-query TokenBalances($address: Address!, $tokenType: String) {
-  tokenBalances(address: $address, tokenType: $tokenType) {
-    contractAddress
-    tokenType
-    balance
-    tokenID
-    name
-    symbol
-    decimals
-    metadata
-  }
-}
 ```
 
 ---

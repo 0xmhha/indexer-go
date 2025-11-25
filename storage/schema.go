@@ -91,6 +91,10 @@ const (
 
 	// ABI data prefixes
 	prefixABI = "/data/abi/"
+
+	// Contract verification data prefixes
+	prefixContractVerification = "/data/verification/"
+	prefixIdxVerifiedContracts = "/index/verification/verified/"
 )
 
 // Metadata keys
@@ -807,4 +811,28 @@ func ABIKey(address common.Address) []byte {
 // ABIKeyPrefix returns the prefix for all ABIs
 func ABIKeyPrefix() []byte {
 	return []byte(prefixABI)
+}
+
+// ========== Contract Verification Keys ==========
+
+// ContractVerificationKey returns the key for storing contract verification data
+// Format: /data/verification/{address}
+func ContractVerificationKey(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixContractVerification, address.Hex()))
+}
+
+// ContractVerificationKeyPrefix returns the prefix for all verified contracts
+func ContractVerificationKeyPrefix() []byte {
+	return []byte(prefixContractVerification)
+}
+
+// VerifiedContractIndexKey returns the index key for verified contracts list
+// Format: /index/verification/verified/{verifiedAt_timestamp}/{address}
+func VerifiedContractIndexKey(verifiedAt int64, address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%020d/%s", prefixIdxVerifiedContracts, verifiedAt, address.Hex()))
+}
+
+// VerifiedContractIndexKeyPrefix returns the prefix for all verified contracts index
+func VerifiedContractIndexKeyPrefix() []byte {
+	return []byte(prefixIdxVerifiedContracts)
 }

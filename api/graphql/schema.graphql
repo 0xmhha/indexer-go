@@ -538,6 +538,9 @@ type Query {
   # Get contract creation information by contract address
   contractCreation(address: Address!): ContractCreation
 
+  # Get contract verification information by contract address
+  contractVerification(address: Address!): ContractVerification
+
   # Get contracts created by a specific address
   contractsByCreator(
     creator: Address!
@@ -1237,6 +1240,42 @@ type ContractCreation {
   bytecodeSize: Int!
 }
 
+# ContractVerification represents verified contract source code
+type ContractVerification {
+  # Contract address
+  address: Address!
+
+  # Whether the contract is verified
+  isVerified: Boolean!
+
+  # Contract name
+  name: String
+
+  # Solidity compiler version (e.g., "0.8.20")
+  compilerVersion: String
+
+  # Whether optimization was enabled during compilation
+  optimizationEnabled: Boolean
+
+  # Number of optimization runs
+  optimizationRuns: Int
+
+  # Verified source code
+  sourceCode: String
+
+  # Contract ABI (JSON string)
+  abi: String
+
+  # Constructor arguments (encoded)
+  constructorArguments: String
+
+  # Verification timestamp
+  verifiedAt: String
+
+  # License type (e.g., "MIT", "GPL-3.0")
+  licenseType: String
+}
+
 # InternalTransaction represents an internal call during transaction execution
 type InternalTransaction {
   # Original transaction hash
@@ -1356,4 +1395,19 @@ type ERC721TransferConnection {
   nodes: [ERC721Transfer!]!
   totalCount: Int!
   pageInfo: PageInfo!
+}
+
+# Mutation type for write operations
+type Mutation {
+  # Verify a contract's source code
+  verifyContract(
+    address: Address!
+    sourceCode: String!
+    compilerVersion: String!
+    optimizationEnabled: Boolean!
+    optimizationRuns: Int
+    constructorArguments: String
+    contractName: String
+    licenseType: String
+  ): ContractVerification!
 }

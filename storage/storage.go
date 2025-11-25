@@ -107,6 +107,8 @@ type Storage interface {
 	ABIReader
 	ABIWriter
 	SearchReader
+	ContractVerificationReader
+	ContractVerificationWriter
 
 	// Close closes the storage and releases resources
 	Close() error
