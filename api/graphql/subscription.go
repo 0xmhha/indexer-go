@@ -289,6 +289,10 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 			c.sendError(id, err.Error())
 			return
 		}
+	case "chainConfig":
+		eventType = events.EventTypeChainConfig
+	case "validatorSet":
+		eventType = events.EventTypeValidatorSet
 	default:
 		c.sendError(id, "unknown subscription type")
 		return
@@ -376,9 +380,10 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				"timestamp": blockEvent.CreatedAt.Unix(),
 				"txCount":   blockEvent.TxCount,
 			}
-			// Add parentHash if block is available
+			// Add parentHash and miner if block is available
 			if blockEvent.Block != nil {
 				blockData["parentHash"] = blockEvent.Block.ParentHash().Hex()
+				blockData["miner"] = blockEvent.Block.Coinbase().Hex()
 			}
 			payload = map[string]interface{}{
 				"data": map[string]interface{}{
@@ -464,6 +469,41 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				},
 			}
 		}
+
+	case "chainConfig":
+		if configEvent, ok := event.(*events.ChainConfigEvent); ok {
+			configData := map[string]interface{}{
+				"blockNumber": configEvent.BlockNumber,
+				"blockHash":   configEvent.BlockHash.Hex(),
+				"parameter":   configEvent.Parameter,
+				"oldValue":    configEvent.OldValue,
+				"newValue":    configEvent.NewValue,
+			}
+			payload = map[string]interface{}{
+				"data": map[string]interface{}{
+					"chainConfig": configData,
+				},
+			}
+		}
+
+	case "validatorSet":
+		if validatorEvent, ok := event.(*events.ValidatorSetEvent); ok {
+			validatorData := map[string]interface{}{
+				"blockNumber":      validatorEvent.BlockNumber,
+				"blockHash":        validatorEvent.BlockHash.Hex(),
+				"changeType":       validatorEvent.ChangeType,
+				"validator":        validatorEvent.Validator.Hex(),
+				"validatorSetSize": validatorEvent.ValidatorSetSize,
+			}
+			if validatorEvent.ValidatorInfo != "" {
+				validatorData["validatorInfo"] = validatorEvent.ValidatorInfo
+			}
+			payload = map[string]interface{}{
+				"data": map[string]interface{}{
+					"validatorSet": validatorData,
+				},
+			}
+		}
 	}
 
 	if payload != nil {
@@ -476,6 +516,12 @@ func (c *subscriptionClient) parseSubscriptionType(query string) string {
 	// Simple parsing - check for subscription keywords
 	if contains(query, "newPendingTransactions") {
 		return "newPendingTransactions"
+	}
+	if contains(query, "validatorSet") {
+		return "validatorSet"
+	}
+	if contains(query, "chainConfig") {
+		return "chainConfig"
 	}
 	if contains(query, "newBlock") {
 		return "newBlock"

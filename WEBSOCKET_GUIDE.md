@@ -91,6 +91,7 @@ function subscribeToBlocks(ws) {
             timestamp
             txCount
             parentHash
+            miner
           }
         }
       `
@@ -111,7 +112,8 @@ function subscribeToBlocks(ws) {
         "hash": "0xabc...",
         "timestamp": 1234567890,
         "txCount": 150,
-        "parentHash": "0xdef..."
+        "parentHash": "0xdef...",
+        "miner": "0x123..."
       }
     }
   }
@@ -269,6 +271,107 @@ subscribeToContractLogs(ws, '0x...token-address...', transferSignature);
   }
 }
 ```
+
+---
+
+### 2-5. 체인 설정 변경 구독 (chainConfig)
+
+```javascript
+function subscribeToChainConfig(ws) {
+  const subscriptionId = 'chainconfig-sub-1';
+
+  ws.send(JSON.stringify({
+    id: subscriptionId,
+    type: 'subscribe',
+    payload: {
+      query: `
+        subscription {
+          chainConfig {
+            blockNumber
+            blockHash
+            parameter
+            oldValue
+            newValue
+          }
+        }
+      `
+    }
+  }));
+}
+```
+
+**수신 데이터 형식**:
+```json
+{
+  "id": "chainconfig-sub-1",
+  "type": "next",
+  "payload": {
+    "data": {
+      "chainConfig": {
+        "blockNumber": 12345,
+        "blockHash": "0xabc...",
+        "parameter": "gasLimit",
+        "oldValue": "8000000",
+        "newValue": "10000000"
+      }
+    }
+  }
+}
+```
+
+---
+
+### 2-6. Validator 변경 구독 (validatorSet)
+
+```javascript
+function subscribeToValidatorSet(ws) {
+  const subscriptionId = 'validator-sub-1';
+
+  ws.send(JSON.stringify({
+    id: subscriptionId,
+    type: 'subscribe',
+    payload: {
+      query: `
+        subscription {
+          validatorSet {
+            blockNumber
+            blockHash
+            changeType
+            validator
+            validatorSetSize
+            validatorInfo
+          }
+        }
+      `
+    }
+  }));
+}
+```
+
+**수신 데이터 형식**:
+```json
+{
+  "id": "validator-sub-1",
+  "type": "next",
+  "payload": {
+    "data": {
+      "validatorSet": {
+        "blockNumber": 12345,
+        "blockHash": "0xabc...",
+        "changeType": "added",
+        "validator": "0x123...",
+        "validatorSetSize": 5,
+        "validatorInfo": ""
+      }
+    }
+  }
+}
+```
+
+**changeType 값**:
+- `"added"`: Validator가 추가됨
+- `"removed"`: Validator가 제거됨
+- `"updated"`: Validator 정보가 업데이트됨
 
 ---
 
@@ -517,9 +620,11 @@ ws.onclose = () => console.log('🔌 Disconnected');
 
 | 구독 타입 | 상태 | 설명 |
 |---------|------|------|
-| `newBlock` | ✅ 지원 | 새로운 블록 생성 시 실시간 전송 |
-| `newTransaction` | ✅ 지원 | 모든 트랜잭션 실시간 전송 |
+| `newBlock` | ✅ 지원 | 새로운 블록 생성 시 실시간 전송 (miner 필드 포함) |
+| `newTransaction` | ✅ 지원 | 모든 트랜잭션 실시간 전송 (from/to 필터 지원) |
 | `logs` | ✅ 지원 | 컨트랙트 이벤트 로그 (필터 지원) |
+| `chainConfig` | ✅ 지원 | 체인 설정 변경 이벤트 (예: gasLimit, chainId 변경) |
+| `validatorSet` | ✅ 지원 | Validator 추가/제거/변경 이벤트 |
 | `newPendingTransactions` | ⚠️ 미완성 | 타입만 정의됨 (mempool 미지원) |
 
 ---
@@ -803,9 +908,7 @@ setTimeout(() => {
 
 ## 15. 현재 알려진 제약사항
 
-1. **트랜잭션 필터 미지원**: `newTransaction`에서 `variables.filter` 사용 불가
-2. **Pending 트랜잭션 미지원**: `newPendingTransactions`는 동작하지 않음
-3. **시스템 이벤트 미지원**: 체인 설정, Validator 변경 구독 불가
+1. **Pending 트랜잭션 미지원**: `newPendingTransactions`는 동작하지 않음 (mempool 미구현)
 
 ---
 

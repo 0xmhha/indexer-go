@@ -19,6 +19,12 @@ const (
 
 	// EventTypeLog represents a log event emitted from receipts
 	EventTypeLog EventType = "log"
+
+	// EventTypeChainConfig represents a chain configuration change event
+	EventTypeChainConfig EventType = "chainConfig"
+
+	// EventTypeValidatorSet represents a validator set change event
+	EventTypeValidatorSet EventType = "validatorSet"
 )
 
 // Event is the base interface for all blockchain events
@@ -165,5 +171,103 @@ func NewLogEvent(log *types.Log) *LogEvent {
 	return &LogEvent{
 		Log:       log,
 		CreatedAt: time.Now(),
+	}
+}
+
+// ChainConfigEvent represents a chain configuration change event
+type ChainConfigEvent struct {
+	// Block number where the config change occurred
+	BlockNumber uint64
+
+	// Block hash
+	BlockHash common.Hash
+
+	// Config parameter that changed (e.g., "gasLimit", "difficulty", "chainId")
+	Parameter string
+
+	// Old value (JSON encoded)
+	OldValue string
+
+	// New value (JSON encoded)
+	NewValue string
+
+	// Timestamp when this event was created
+	CreatedAt time.Time
+}
+
+// Type implements Event interface
+func (e *ChainConfigEvent) Type() EventType {
+	return EventTypeChainConfig
+}
+
+// Timestamp implements Event interface
+func (e *ChainConfigEvent) Timestamp() time.Time {
+	return e.CreatedAt
+}
+
+// NewChainConfigEvent creates a new chain config change event
+func NewChainConfigEvent(blockNumber uint64, blockHash common.Hash, parameter, oldValue, newValue string) *ChainConfigEvent {
+	return &ChainConfigEvent{
+		BlockNumber: blockNumber,
+		BlockHash:   blockHash,
+		Parameter:   parameter,
+		OldValue:    oldValue,
+		NewValue:    newValue,
+		CreatedAt:   time.Now(),
+	}
+}
+
+// ValidatorSetEvent represents a validator set change event
+type ValidatorSetEvent struct {
+	// Block number where the validator set change occurred
+	BlockNumber uint64
+
+	// Block hash
+	BlockHash common.Hash
+
+	// Change type: "added", "removed", "updated"
+	ChangeType string
+
+	// Validator address that was added/removed/updated
+	Validator common.Address
+
+	// Additional validator info (optional, JSON encoded)
+	// May include: voting power, commission rate, etc.
+	ValidatorInfo string
+
+	// Current validator set size after this change
+	ValidatorSetSize int
+
+	// Timestamp when this event was created
+	CreatedAt time.Time
+}
+
+// Type implements Event interface
+func (e *ValidatorSetEvent) Type() EventType {
+	return EventTypeValidatorSet
+}
+
+// Timestamp implements Event interface
+func (e *ValidatorSetEvent) Timestamp() time.Time {
+	return e.CreatedAt
+}
+
+// NewValidatorSetEvent creates a new validator set change event
+func NewValidatorSetEvent(
+	blockNumber uint64,
+	blockHash common.Hash,
+	changeType string,
+	validator common.Address,
+	validatorInfo string,
+	validatorSetSize int,
+) *ValidatorSetEvent {
+	return &ValidatorSetEvent{
+		BlockNumber:      blockNumber,
+		BlockHash:        blockHash,
+		ChangeType:       changeType,
+		Validator:        validator,
+		ValidatorInfo:    validatorInfo,
+		ValidatorSetSize: validatorSetSize,
+		CreatedAt:        time.Now(),
 	}
 }

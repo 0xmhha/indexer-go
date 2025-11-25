@@ -301,6 +301,9 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 						zap.Uint("log_index", uint(logEntry.Index)),
 					)
 				}
+
+				// Detect system events from logs
+				f.detectSystemEvents(block, logEntry)
 			}
 		}
 	}
@@ -1323,4 +1326,81 @@ func (f *Fetcher) GetOptimalBatchSize() int {
 		return f.optimizer.GetRecommendedBatchSize()
 	}
 	return f.config.BatchSize
+}
+
+// detectSystemEvents detects and publishes system events from logs
+func (f *Fetcher) detectSystemEvents(block *types.Block, log *types.Log) {
+	if f.eventBus == nil {
+		return
+	}
+
+	// Check if this is a GovValidator contract event
+	if log.Address != events.GovValidatorAddress {
+		return
+	}
+
+	if len(log.Topics) == 0 {
+		return
+	}
+
+	eventSig := log.Topics[0]
+
+	// Detect validator set changes
+	switch eventSig {
+	case events.EventSigMemberAdded:
+		// MemberAdded(address,uint256,uint32)
+		if len(log.Topics) >= 2 {
+			validatorAddr := common.BytesToAddress(log.Topics[1].Bytes())
+
+			validatorEvent := events.NewValidatorSetEvent(
+				block.NumberU64(),
+				block.Hash(),
+				"added",
+				validatorAddr,
+				"", // validator info from data field if needed
+				0,  // set size would need to be tracked separately
+			)
+
+			if !f.eventBus.Publish(validatorEvent) {
+				f.logger.Warn("Failed to publish validator set event (channel full)",
+					zap.String("type", "added"),
+					zap.String("validator", validatorAddr.Hex()),
+					zap.Uint64("block", block.NumberU64()),
+				)
+			} else {
+				f.logger.Info("Validator added",
+					zap.String("validator", validatorAddr.Hex()),
+					zap.Uint64("block", block.NumberU64()),
+				)
+			}
+		}
+
+	case events.EventSigMemberRemoved:
+		// MemberRemoved(address,uint256,uint32)
+		if len(log.Topics) >= 2 {
+			validatorAddr := common.BytesToAddress(log.Topics[1].Bytes())
+
+			validatorEvent := events.NewValidatorSetEvent(
+				block.NumberU64(),
+				block.Hash(),
+				"removed",
+				validatorAddr,
+				"", // validator info from data field if needed
+				0,  // set size would need to be tracked separately
+			)
+
+			if !f.eventBus.Publish(validatorEvent) {
+				f.logger.Warn("Failed to publish validator set event (channel full)",
+					zap.String("type", "removed"),
+					zap.String("validator", validatorAddr.Hex()),
+					zap.Uint64("block", block.NumberU64()),
+				)
+			} else {
+				f.logger.Info("Validator removed",
+					zap.String("validator", validatorAddr.Hex()),
+					zap.Uint64("block", block.NumberU64()),
+				)
+			}
+		}
+	}
 }
