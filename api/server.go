@@ -67,9 +67,12 @@ func NewServer(config *Config, logger *zap.Logger, store storage.Storage) (*Serv
 // SetEventBus sets the EventBus for the server (optional)
 func (s *Server) SetEventBus(bus *events.EventBus) {
 	s.eventBus = bus
-	// Also set EventBus for GraphQL Subscription server
-	if s.gqlSubServer != nil {
-		s.gqlSubServer.SetEventBus(bus)
+
+	// Initialize GraphQL Subscription server now that EventBus is available
+	if s.config.EnableGraphQL && bus != nil && s.gqlSubServer == nil {
+		s.gqlSubServer = graphql.NewSubscriptionServer(bus, s.logger)
+		s.router.Get("/graphql/ws", s.gqlSubServer.Handler())
+		s.logger.Info("GraphQL subscriptions enabled", zap.String("path", "/graphql/ws"))
 	}
 }
 
@@ -178,10 +181,8 @@ func (s *Server) setupRoutes() {
 			s.logger.Info("GraphQL playground enabled", zap.String("path", s.config.GraphQLPlaygroundPath))
 		}
 
-		// Create GraphQL Subscription server (WebSocket)
-		s.gqlSubServer = graphql.NewSubscriptionServer(s.eventBus, s.logger)
-		s.router.Get("/graphql/ws", s.gqlSubServer.Handler())
-		s.logger.Info("GraphQL subscriptions enabled", zap.String("path", "/graphql/ws"))
+		// Note: GraphQL Subscription server will be initialized in SetEventBus()
+		// when EventBus becomes available
 	}
 
 	// JSON-RPC endpoints
