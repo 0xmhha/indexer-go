@@ -132,7 +132,12 @@ func TestWebSocketBlockSubscription_Integration(t *testing.T) {
 		t.Fatal("Payload is not a map")
 	}
 
-	newBlock, ok := payload["newBlock"].(map[string]interface{})
+	data, ok := payload["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("data is not a map")
+	}
+
+	newBlock, ok := data["newBlock"].(map[string]interface{})
 	if !ok {
 		t.Fatal("newBlock is not a map")
 	}
@@ -173,7 +178,8 @@ func TestWebSocketBlockSubscription_Integration(t *testing.T) {
 	}
 
 	payload2 := receivedMsg2["payload"].(map[string]interface{})
-	newBlock2 := payload2["newBlock"].(map[string]interface{})
+	data2 := payload2["data"].(map[string]interface{})
+	newBlock2 := data2["newBlock"].(map[string]interface{})
 	blockNumber2 := newBlock2["number"].(float64)
 
 	if blockNumber2 != 12346 {
@@ -270,7 +276,8 @@ func TestWebSocketTransactionSubscription(t *testing.T) {
 
 	// Verify
 	payload := msg["payload"].(map[string]interface{})
-	newTx := payload["newTransaction"].(map[string]interface{})
+	data := payload["data"].(map[string]interface{})
+	newTx := data["newTransaction"].(map[string]interface{})
 
 	if newTx["hash"].(string) != tx.Hash().Hex() {
 		t.Errorf("Hash mismatch: %v != %v", newTx["hash"], tx.Hash().Hex())
@@ -367,7 +374,8 @@ func TestWebSocketLogSubscription(t *testing.T) {
 
 	// Verify
 	payload := msg["payload"].(map[string]interface{})
-	log := payload["logs"].(map[string]interface{})
+	data := payload["data"].(map[string]interface{})
+	log := data["logs"].(map[string]interface{})
 
 	receivedAddress := log["address"].(string)
 	if !strings.EqualFold(receivedAddress, targetAddress) {
@@ -578,6 +586,123 @@ func TestWebSocketInvalidSubscription(t *testing.T) {
 	}
 
 	t.Log("✅ Invalid subscription correctly rejected!")
+}
+
+// TestWebSocketTransactionFilter tests transaction filtering by from/to addresses
+func TestWebSocketTransactionFilter(t *testing.T) {
+	// Setup EventBus
+	eventBus := events.NewEventBus(1000, 100)
+	go eventBus.Run()
+	defer eventBus.Stop()
+
+	// Setup subscription server
+	logger, _ := zap.NewDevelopment()
+	subServer := NewSubscriptionServer(eventBus, logger)
+
+	// Setup HTTP test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		subServer.ServeHTTP(w, r)
+	}))
+	defer server.Close()
+
+	// Connect WebSocket client
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	header := http.Header{}
+	header.Add("Sec-WebSocket-Protocol", "graphql-transport-ws")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// Connection init
+	conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
+	var ack map[string]interface{}
+	conn.ReadJSON(&ack)
+	if ack["type"] != "connection_ack" {
+		t.Fatalf("Expected connection_ack, got: %v", ack)
+	}
+
+	// Test addresses for filtering
+	testFromAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	testToAddr := common.HexToAddress("0x2222222222222222222222222222222222222222")
+
+	t.Logf("Test from address: %s", testFromAddr.Hex())
+	t.Logf("Test to address: %s", testToAddr.Hex())
+
+	// Subscribe with from address filter
+	conn.WriteJSON(map[string]interface{}{
+		"id":   "tx-filter-1",
+		"type": "subscribe",
+		"payload": map[string]interface{}{
+			"query": `subscription { newTransaction { hash from to } }`,
+			"variables": map[string]interface{}{
+				"filter": map[string]interface{}{
+					"from": testFromAddr.Hex(),
+				},
+			},
+		},
+	})
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Publish matching transaction (from matches filter)
+	matchingTx := createTestTransaction()
+	txEvent := events.NewTransactionEvent(
+		matchingTx,
+		12345,
+		common.HexToHash("0xblock123"),
+		0,
+		testFromAddr,
+		nil,
+	)
+	eventBus.Publish(txEvent)
+
+	// Should receive matching transaction
+	var receivedMsg map[string]interface{}
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	err = conn.ReadJSON(&receivedMsg)
+	if err != nil {
+		t.Fatalf("Failed to receive message: %v", err)
+	}
+
+	if receivedMsg["type"] != "next" {
+		t.Errorf("Expected type 'next', got: %v", receivedMsg["type"])
+	}
+
+	payload := receivedMsg["payload"].(map[string]interface{})
+	data := payload["data"].(map[string]interface{})
+	txData := data["newTransaction"].(map[string]interface{})
+	fromAddr := txData["from"].(string)
+
+	if !strings.EqualFold(fromAddr, testFromAddr.Hex()) {
+		t.Errorf("Expected from address %s, got: %s", testFromAddr.Hex(), fromAddr)
+	}
+
+	t.Log("✅ Received matching transaction")
+
+	// Publish non-matching transaction (different from address)
+	otherAddr := common.HexToAddress("0x3333333333333333333333333333333333333333")
+	nonMatchingTx := createTestTransaction()
+	txEvent2 := events.NewTransactionEvent(
+		nonMatchingTx,
+		12346,
+		common.HexToHash("0xblock124"),
+		0,
+		otherAddr,
+		nil,
+	)
+	eventBus.Publish(txEvent2)
+
+	// Should NOT receive non-matching transaction (timeout expected)
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	err = conn.ReadJSON(&receivedMsg)
+	if err == nil {
+		t.Errorf("Should not receive non-matching transaction, but got: %v", receivedMsg)
+	}
+
+	t.Log("✅ Non-matching transaction correctly filtered!")
+	t.Log("✅ Transaction filter test passed!")
 }
 
 // TestEventBusStats verifies EventBus statistics tracking

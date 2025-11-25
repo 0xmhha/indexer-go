@@ -50,7 +50,8 @@ ws.onmessage = (event) => {
 
     case 'next':
       // 실제 데이터 수신
-      console.log('Data:', message.payload);
+      console.log('Data:', message.payload.data);
+      // 예: message.payload.data.newBlock, message.payload.data.newTransaction 등
       break;
 
     case 'error':
@@ -104,12 +105,14 @@ function subscribeToBlocks(ws) {
   "id": "block-sub-1",
   "type": "next",
   "payload": {
-    "newBlock": {
-      "number": 12345,
-      "hash": "0xabc...",
-      "timestamp": 1234567890,
-      "txCount": 150,
-      "parentHash": "0xdef..."
+    "data": {
+      "newBlock": {
+        "number": 12345,
+        "hash": "0xabc...",
+        "timestamp": 1234567890,
+        "txCount": 150,
+        "parentHash": "0xdef..."
+      }
     }
   }
 }
@@ -149,12 +152,14 @@ function subscribeToTransactions(ws) {
   "id": "tx-sub-1",
   "type": "next",
   "payload": {
-    "newTransaction": {
-      "hash": "0x123...",
-      "from": "0xabc...",
-      "to": "0xdef...",
-      "value": "1000000000000000000",
-      "blockNumber": 12345
+    "data": {
+      "newTransaction": {
+        "hash": "0x123...",
+        "from": "0xabc...",
+        "to": "0xdef...",
+        "value": "1000000000000000000",
+        "blockNumber": 12345
+      }
     }
   }
 }
@@ -162,11 +167,10 @@ function subscribeToTransactions(ws) {
 
 ---
 
-### 2-3. 특정 계정 트랜잭션 구독 (필터 사용)
+### 2-3. 특정 계정 트랜잭션 구독 (필터 사용) ✅
 
-**현재 미지원** - 프론트엔드에서 필터를 전달할 수 있지만, 백엔드에서 트랜잭션 필터를 파싱하지 않습니다.
+**지원됨** - from/to 주소 기반 트랜잭션 필터링을 지원합니다.
 
-**필요한 형식** (구현 후):
 ```javascript
 function subscribeToAccountTransactions(ws, accountAddress) {
   ws.send(JSON.stringify({
@@ -174,8 +178,8 @@ function subscribeToAccountTransactions(ws, accountAddress) {
     type: 'subscribe',
     payload: {
       query: `
-        subscription($filter: TransactionFilterInput) {
-          newTransaction(filter: $filter) {
+        subscription {
+          newTransaction {
             hash
             from
             to
@@ -186,7 +190,9 @@ function subscribeToAccountTransactions(ws, accountAddress) {
       `,
       variables: {
         filter: {
-          addresses: [accountAddress]  // from 또는 to가 이 주소인 트랜잭션
+          from: accountAddress  // from 주소가 accountAddress인 트랜잭션만
+          // 또는 to: accountAddress  // to 주소가 accountAddress인 트랜잭션만
+          // 또는 둘 다 지정 가능
         }
       }
     }
@@ -244,19 +250,21 @@ subscribeToContractLogs(ws, '0x...token-address...', transferSignature);
   "id": "log-sub-1",
   "type": "next",
   "payload": {
-    "logs": {
-      "address": "0x123...",
-      "topics": [
-        "0xddf252ad...",
-        "0x000...from",
-        "0x000...to"
-      ],
-      "data": "0x...",
-      "blockNumber": 12345,
-      "transactionHash": "0xabc...",
-      "transactionIndex": 5,
-      "logIndex": 2,
-      "removed": false
+    "data": {
+      "logs": {
+        "address": "0x123...",
+        "topics": [
+          "0xddf252ad...",
+          "0x000...from",
+          "0x000...to"
+        ],
+        "data": "0x...",
+        "blockNumber": 12345,
+        "transactionHash": "0xabc...",
+        "transactionIndex": 5,
+        "logIndex": 2,
+        "removed": false
+      }
     }
   }
 }
@@ -377,7 +385,7 @@ function useBlockSubscription() {
         }));
       } else if (message.type === 'next') {
         // 데이터 수신
-        setBlock(message.payload.newBlock);
+        setBlock(message.payload.data.newBlock);
       } else if (message.type === 'error') {
         setError(message.payload);
       }

@@ -275,6 +275,11 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 		eventType = events.EventTypeBlock
 	case "newTransaction":
 		eventType = events.EventTypeTransaction
+		filter, err = buildTransactionFilter(sub.Variables["filter"])
+		if err != nil {
+			c.sendError(id, err.Error())
+			return
+		}
 	case "newPendingTransactions":
 		eventType = events.EventTypeTransaction
 	case "logs":
@@ -376,7 +381,9 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				blockData["parentHash"] = blockEvent.Block.ParentHash().Hex()
 			}
 			payload = map[string]interface{}{
-				"newBlock": blockData,
+				"data": map[string]interface{}{
+					"newBlock": blockData,
+				},
 			}
 		}
 
@@ -393,7 +400,9 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				txData["to"] = txEvent.To.Hex()
 			}
 			payload = map[string]interface{}{
-				"newTransaction": txData,
+				"data": map[string]interface{}{
+					"newTransaction": txData,
+				},
 			}
 		}
 
@@ -424,7 +433,9 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				pendingData["type"] = "0x0"
 			}
 			payload = map[string]interface{}{
-				"newPendingTransactions": pendingData,
+				"data": map[string]interface{}{
+					"newPendingTransactions": pendingData,
+				},
 			}
 		}
 
@@ -448,7 +459,9 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				logData["blockHash"] = logEvent.Log.BlockHash.Hex()
 			}
 			payload = map[string]interface{}{
-				"logs": logData,
+				"data": map[string]interface{}{
+					"logs": logData,
+				},
 			}
 		}
 	}
@@ -488,6 +501,62 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func buildTransactionFilter(raw interface{}) (*events.Filter, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	filterMap, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid transaction filter format")
+	}
+
+	filter := events.NewFilter()
+
+	// Parse from addresses
+	if fromVal, ok := filterMap["from"]; ok {
+		addresses, err := parseAddressList(fromVal)
+		if err != nil {
+			return nil, fmt.Errorf("invalid from address: %w", err)
+		}
+		filter.FromAddresses = addresses
+	}
+
+	// Parse to addresses
+	if toVal, ok := filterMap["to"]; ok {
+		addresses, err := parseAddressList(toVal)
+		if err != nil {
+			return nil, fmt.Errorf("invalid to address: %w", err)
+		}
+		filter.ToAddresses = addresses
+	}
+
+	// Parse block range
+	if fromBlockVal, ok := filterMap["fromBlock"]; ok {
+		blockNum, err := parseUint64Value(fromBlockVal)
+		if err != nil {
+			return nil, fmt.Errorf("invalid fromBlock: %w", err)
+		}
+		filter.FromBlock = blockNum
+	}
+	if toBlockVal, ok := filterMap["toBlock"]; ok {
+		blockNum, err := parseUint64Value(toBlockVal)
+		if err != nil {
+			return nil, fmt.Errorf("invalid toBlock: %w", err)
+		}
+		filter.ToBlock = blockNum
+	}
+
+	if filter.IsEmpty() {
+		return nil, nil
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+
+	return filter, nil
 }
 
 func buildLogFilter(raw interface{}) (*events.Filter, error) {
