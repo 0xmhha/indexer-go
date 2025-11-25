@@ -2,7 +2,7 @@
 
 > 미구현 기능 및 향후 개발 계획
 
-**Last Updated**: 2025-11-24 (이벤트 필터 시스템, ABI 디코딩, Analytics API, Fetcher 최적화 완료)
+**Last Updated**: 2025-11-25 (Balance Indexing, GraphQL 스키마 업데이트, Frontend API 가이드 완료)
 **Status**: 핵심 기능 완료, Medium Priority 작업 완료, 추가 고급 기능 개발 예정
 
 ---
@@ -157,7 +157,7 @@
 **우선순위**: Low
 
 - [x] Magic Number 제거 (constants 패키지로 정리 완료 - 2025-11-21)
-- [ ] 주소별 베이스 코인 잔액 추적 (NativeCoinAdapter)
+- [x] 주소별 베이스 코인 잔액 추적 (Balance Indexing 구현 완료 - 2025-11-25)
 - [ ] WebSocket 재연결 로직 구현
 - [ ] Storage 테스트 커버리지 90% 달성
 - [ ] Client SDK 개발 (별도 프로젝트)
@@ -228,6 +228,32 @@
 
 ## 최근 완료 작업
 
+### 2025-11-25
+- ✅ **Balance Indexing 구현** - 네이티브 ETH 잔액 자동 추적
+  - ✅ processBalanceTracking 함수 구현 - 트랜잭션 처리 시 자동으로 잔액 변화 추적
+  - ✅ 송신자 잔액 차감 - (value + gas cost) 계산 및 적용
+  - ✅ 수신자 잔액 증가 - value 전송량 추적
+  - ✅ 컨트랙트 생성 처리 - 컨트랙트 주소로의 값 이전 지원
+  - ✅ 통합 테스트 작성 - TestProcessBalanceTracking with signed transactions
+  - ✅ HistoricalWriter 인터페이스 구현 - UpdateBalance, SetBalance, SetBlockTimestamp
+- ✅ **GraphQL 스키마 업데이트** - API 문서와 실제 구현 동기화
+  - ✅ MinerStats 타입 필드 추가 - lastBlockTime, percentage, totalRewards
+  - ✅ TokenBalance 타입 필드 추가 - name, symbol, decimals, metadata
+  - ✅ topMiners 쿼리 파라미터 추가 - fromBlock, toBlock
+  - ✅ tokenBalances 쿼리 파라미터 추가 - tokenType 필터링
+- ✅ **Frontend API 가이드 문서화** - Token Balance & Address Balance API
+  - ✅ Token Balance API 섹션 추가 - 8개 필드 전체 문서화 (326줄)
+  - ✅ Address Balance API 섹션 추가 - 네이티브 잔액 추적 가이드 (284줄)
+  - ✅ React 통합 예제 작성 - TypeScript, Apollo Client, ethers.js
+  - ✅ UI 디자인 권장사항 - NFT 메타데이터, 차트, 타임라인
+  - ✅ 재인덱싱 안내 추가 - --clear-data 플래그 사용 가이드
+- ✅ **프론트엔드 요청사항 처리** - 모든 API 이미 구현됨 확인
+  - ✅ Issue #1 확인 - addressBalance BigInt 처리 정상 (balance.String() 사용)
+  - ✅ Issue #2 해결 - contractAddress 필드 이미 존재 (프론트엔드에서 사용 가능)
+  - ✅ Search API 확인 - 이미 완전히 구현됨
+  - ✅ Top Miners API 확인 - 모든 필드 구현 완료
+  - ✅ Token Balance API 확인 - 메타데이터 포함 완전 구현
+
 ### 2025-11-24
 - ✅ **Fetcher 최적화 시스템 구현** - 지능형 적응형 최적화 및 대용량 블록 처리
   - ✅ RPC Metrics 수집 - 응답 시간, 에러율, 처리량 실시간 추적 (슬라이딩 윈도우)
@@ -268,4 +294,4 @@
 **Status**: ✅ 프로덕션 준비 완료
 **Core Features**: 100% 완료
 **Advanced Features**: 예정
-**Last Updated**: 2025-11-24
+**Last Updated**: 2025-11-25
