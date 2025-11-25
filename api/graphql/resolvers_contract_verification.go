@@ -24,6 +24,21 @@ type verificationParams struct {
 	licenseType          string
 }
 
+// ContractVerificationResponse represents the GraphQL response for contract verification
+type ContractVerificationResponse struct {
+	Address              string `json:"address"`
+	IsVerified           bool   `json:"isVerified"`
+	Name                 string `json:"name,omitempty"`
+	CompilerVersion      string `json:"compilerVersion,omitempty"`
+	OptimizationEnabled  bool   `json:"optimizationEnabled,omitempty"`
+	OptimizationRuns     int    `json:"optimizationRuns,omitempty"`
+	SourceCode           string `json:"sourceCode,omitempty"`
+	ABI                  string `json:"abi,omitempty"`
+	ConstructorArguments string `json:"constructorArguments,omitempty"`
+	VerifiedAt           string `json:"verifiedAt,omitempty"`
+	LicenseType          string `json:"licenseType,omitempty"`
+}
+
 // resolveContractVerification handles the contractVerification query
 func (s *Schema) resolveContractVerification(params graphql.ResolveParams) (interface{}, error) {
 	ctx := params.Context
@@ -52,9 +67,9 @@ func (s *Schema) resolveContractVerification(params graphql.ResolveParams) (inte
 	if err != nil {
 		if err == storage.ErrNotFound {
 			// Return unverified contract result
-			return map[string]interface{}{
-				"address":    address.Hex(),
-				"isVerified": false,
+			return &ContractVerificationResponse{
+				Address:    address.Hex(),
+				IsVerified: false,
 			}, nil
 		}
 		s.logger.Error("failed to get contract verification",
@@ -64,21 +79,7 @@ func (s *Schema) resolveContractVerification(params graphql.ResolveParams) (inte
 	}
 
 	// Convert to GraphQL format
-	result := map[string]interface{}{
-		"address":              verification.Address.Hex(),
-		"isVerified":           verification.IsVerified,
-		"name":                 verification.Name,
-		"compilerVersion":      verification.CompilerVersion,
-		"optimizationEnabled":  verification.OptimizationEnabled,
-		"optimizationRuns":     verification.OptimizationRuns,
-		"sourceCode":           verification.SourceCode,
-		"abi":                  verification.ABI,
-		"constructorArguments": verification.ConstructorArguments,
-		"verifiedAt":           verification.VerifiedAt.Format(time.RFC3339),
-		"licenseType":          verification.LicenseType,
-	}
-
-	return result, nil
+	return toVerificationResponse(verification), nil
 }
 
 // resolveVerifyContract handles the verifyContract mutation
@@ -125,7 +126,7 @@ func (s *Schema) resolveVerifyContract(params graphql.ResolveParams) (interface{
 		zap.String("compiler", vParams.compilerVersion))
 
 	// Return verification result
-	return buildVerificationResponse(verification), nil
+	return toVerificationResponse(verification), nil
 }
 
 // extractVerificationParams extracts and validates parameters from GraphQL params
@@ -267,19 +268,19 @@ func (s *Schema) storeVerificationResult(
 	return verification, nil
 }
 
-// buildVerificationResponse builds the GraphQL response from verification data
-func buildVerificationResponse(verification *storage.ContractVerification) map[string]interface{} {
-	return map[string]interface{}{
-		"address":              verification.Address.Hex(),
-		"isVerified":           verification.IsVerified,
-		"name":                 verification.Name,
-		"compilerVersion":      verification.CompilerVersion,
-		"optimizationEnabled":  verification.OptimizationEnabled,
-		"optimizationRuns":     verification.OptimizationRuns,
-		"sourceCode":           verification.SourceCode,
-		"abi":                  verification.ABI,
-		"constructorArguments": verification.ConstructorArguments,
-		"verifiedAt":           verification.VerifiedAt.Format(time.RFC3339),
-		"licenseType":          verification.LicenseType,
+// toVerificationResponse converts storage.ContractVerification to GraphQL response
+func toVerificationResponse(verification *storage.ContractVerification) *ContractVerificationResponse {
+	return &ContractVerificationResponse{
+		Address:              verification.Address.Hex(),
+		IsVerified:           verification.IsVerified,
+		Name:                 verification.Name,
+		CompilerVersion:      verification.CompilerVersion,
+		OptimizationEnabled:  verification.OptimizationEnabled,
+		OptimizationRuns:     verification.OptimizationRuns,
+		SourceCode:           verification.SourceCode,
+		ABI:                  verification.ABI,
+		ConstructorArguments: verification.ConstructorArguments,
+		VerifiedAt:           verification.VerifiedAt.Format(time.RFC3339),
+		LicenseType:          verification.LicenseType,
 	}
 }
