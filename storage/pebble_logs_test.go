@@ -600,3 +600,5 @@ func TestPebbleStorage_Logs_ReadOnly(t *testing.T) {
 		t.Errorf("IndexLog() on read-only storage error = %v, want ErrReadOnly", err)
 	}
 }
+
+

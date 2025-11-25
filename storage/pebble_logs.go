@@ -283,7 +283,7 @@ func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address commo
 		key := string(iter.Key())
 		var blockNum uint64
 		var txIndex, logIndex uint
-		if _, err := fmt.Sscanf(key[len(string(prefix)):], "/%020d/%06d/%06d", &blockNum, &txIndex, &logIndex); err != nil {
+		if _, err := fmt.Sscanf(key[len(string(prefix)):], "%020d/%06d/%06d", &blockNum, &txIndex, &logIndex); err != nil {
 			continue
 		}
 
@@ -352,7 +352,7 @@ func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Ha
 		key := string(iter.Key())
 		var blockNum uint64
 		var txIndex, logIndex uint
-		if _, err := fmt.Sscanf(key[len(string(prefix)):], "/%020d/%06d/%06d", &blockNum, &txIndex, &logIndex); err != nil {
+		if _, err := fmt.Sscanf(key[len(string(prefix)):], "%020d/%06d/%06d", &blockNum, &txIndex, &logIndex); err != nil {
 			continue
 		}
 
