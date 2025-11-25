@@ -221,12 +221,12 @@
 
 ### Medium
 - WebSocket 재연결 로직 미구현 (클라이언트 측에서 처리 필요)
-- newPendingTransactions 구독 미완성 (mempool 미지원)
 
 ### Low
 - Storage 테스트 커버리지 86.8% (목표 90%)
 - Client SDK 미제공 (별도 프로젝트로 분리 예정)
 - ChainConfig 변경 이벤트 자동 감지 미구현 (수동 이벤트 발행 필요)
+- newPendingTransactions RPC 서버 의존성 (RPC 서버가 subscription 지원 필요)
 
 ## 최근 완료 작업
 
@@ -265,6 +265,15 @@
   - ✅ WEBSOCKET_GUIDE.md 업데이트 - miner, chainConfig, validatorSet 문서화
   - ✅ 통합 테스트 통과 - 모든 WebSocket 테스트 (7/7) 성공
   - ✅ GraphQL-WS 프로토콜 준수 - payload.data 래퍼 정확히 구현
+- ✅ **newPendingTransactions 구독 구현** - Mempool의 대기 중인 트랜잭션 실시간 구독
+  - ✅ SubscribePendingTransactions() 추가 - Client에 RPC subscription 메서드 구현
+  - ✅ StartPendingTxSubscription() 구현 - Fetcher에 pending tx 감지 및 발행 로직 추가
+  - ✅ RPC EthSubscribe 활용 - newPendingTransactions WebSocket subscription
+  - ✅ 실시간 트랜잭션 감지 - Transaction 해시 수신 시 전체 트랜잭션 정보 조회
+  - ✅ EventBus 통합 - Pending tx를 TransactionEvent로 변환하여 실시간 발행
+  - ✅ Graceful error handling - 별도 goroutine에서 실행, 에러 채널로 관리
+  - ✅ WEBSOCKET_GUIDE.md 업데이트 - Section 2-7 추가, 사용법 및 주의사항 문서화
+  - ✅ 제약사항 업데이트 - RPC 서버 subscription 지원 필요성 명시
 
 ### 2025-11-24
 - ✅ **Fetcher 최적화 시스템 구현** - 지능형 적응형 최적화 및 대용량 블록 처리
