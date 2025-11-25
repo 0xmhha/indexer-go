@@ -43,6 +43,11 @@ type Config struct {
 	// EnableWebSocket enables WebSocket subscriptions
 	EnableWebSocket bool
 
+	// EnableWebSocketKeepAlive enables WebSocket keep-alive (ping/pong)
+	// When enabled, server sends ping every 54 seconds with 60 second timeout
+	// Default: false
+	EnableWebSocketKeepAlive bool
+
 	// GraphQLPath is the GraphQL endpoint path (default: /graphql)
 	GraphQLPath string
 
@@ -81,10 +86,11 @@ func DefaultConfig() *Config {
 		EnableCORS:            true,
 		AllowedOrigins:        []string{"*"},
 		MaxHeaderBytes:        constants.DefaultMaxHeaderBytes,
-		EnableGraphQL:         true,
-		EnableJSONRPC:         true,
-		EnableWebSocket:       true,
-		GraphQLPath:           constants.DefaultGraphQLPath,
+		EnableGraphQL:            true,
+		EnableJSONRPC:            true,
+		EnableWebSocket:          true,
+		EnableWebSocketKeepAlive: false, // Disabled by default
+		GraphQLPath:              constants.DefaultGraphQLPath,
 		GraphQLPlaygroundPath: constants.DefaultGraphQLPlaygroundPath,
 		JSONRPCPath:           constants.DefaultJSONRPCPath,
 		WebSocketPath:         constants.DefaultWebSocketPath,

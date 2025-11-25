@@ -181,9 +181,11 @@ func (s *Server) setupRoutes() {
 		}
 
 		// Create GraphQL Subscription server (EventBus will be set later via SetEventBus)
-		s.gqlSubServer = graphql.NewSubscriptionServer(nil, s.logger)
+		s.gqlSubServer = graphql.NewSubscriptionServer(nil, s.logger, s.config.EnableWebSocketKeepAlive)
 		s.router.Get("/graphql/ws", s.gqlSubServer.Handler())
-		s.logger.Info("GraphQL subscriptions endpoint registered", zap.String("path", "/graphql/ws"))
+		s.logger.Info("GraphQL subscriptions endpoint registered",
+			zap.String("path", "/graphql/ws"),
+			zap.Bool("keep_alive", s.config.EnableWebSocketKeepAlive))
 	}
 
 	// JSON-RPC endpoints

@@ -27,16 +27,18 @@ const (
 
 // SubscriptionServer handles GraphQL subscriptions over WebSocket
 type SubscriptionServer struct {
-	eventBus *events.EventBus
-	logger   *zap.Logger
-	upgrader websocket.Upgrader
+	eventBus        *events.EventBus
+	logger          *zap.Logger
+	upgrader        websocket.Upgrader
+	enableKeepAlive bool
 }
 
 // NewSubscriptionServer creates a new subscription server
-func NewSubscriptionServer(eventBus *events.EventBus, logger *zap.Logger) *SubscriptionServer {
+func NewSubscriptionServer(eventBus *events.EventBus, logger *zap.Logger, enableKeepAlive bool) *SubscriptionServer {
 	return &SubscriptionServer{
-		eventBus: eventBus,
-		logger:   logger,
+		eventBus:        eventBus,
+		logger:          logger,
+		enableKeepAlive: enableKeepAlive,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -72,13 +74,14 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	client := &subscriptionClient{
-		server:        s,
-		conn:          conn,
-		send:          make(chan []byte, 256),
-		subscriptions: make(map[string]*clientSubscription),
-		logger:        s.logger,
-		ctx:           ctx,
-		cancel:        cancel,
+		server:          s,
+		conn:            conn,
+		send:            make(chan []byte, 256),
+		subscriptions:   make(map[string]*clientSubscription),
+		logger:          s.logger,
+		ctx:             ctx,
+		cancel:          cancel,
+		enableKeepAlive: s.enableKeepAlive,
 	}
 
 	go client.writePump()
@@ -87,14 +90,15 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // subscriptionClient represents a WebSocket client for subscriptions
 type subscriptionClient struct {
-	server        *SubscriptionServer
-	conn          *websocket.Conn
-	send          chan []byte
-	subscriptions map[string]*clientSubscription // id -> subscription
-	mu            sync.RWMutex
-	logger        *zap.Logger
-	ctx           context.Context
-	cancel        context.CancelFunc
+	server          *SubscriptionServer
+	conn            *websocket.Conn
+	send            chan []byte
+	subscriptions   map[string]*clientSubscription // id -> subscription
+	mu              sync.RWMutex
+	logger          *zap.Logger
+	ctx             context.Context
+	cancel          context.CancelFunc
+	enableKeepAlive bool
 }
 
 // clientSubscription holds subscription state
@@ -152,9 +156,18 @@ func (c *subscriptionClient) readPump() {
 
 // writePump writes messages to the WebSocket connection
 func (c *subscriptionClient) writePump() {
-	ticker := time.NewTicker(pingPeriod)
+	var ticker *time.Ticker
+	if c.enableKeepAlive {
+		ticker = time.NewTicker(pingPeriod)
+		c.logger.Debug("WebSocket keep-alive enabled",
+			zap.Duration("ping_period", pingPeriod),
+			zap.Duration("pong_wait", pongWait))
+	}
+
 	defer func() {
-		ticker.Stop()
+		if ticker != nil {
+			ticker.Stop()
+		}
 		c.conn.Close()
 	}()
 
@@ -171,11 +184,19 @@ func (c *subscriptionClient) writePump() {
 				return
 			}
 
-		case <-ticker.C:
+		case <-func() <-chan time.Time {
+			if c.enableKeepAlive && ticker != nil {
+				return ticker.C
+			}
+			// Return a channel that never sends if keep-alive is disabled
+			return make(<-chan time.Time)
+		}():
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				c.logger.Debug("ping failed", zap.Error(err))
 				return
 			}
+			c.logger.Debug("sent ping message")
 		}
 	}
 }

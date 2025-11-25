@@ -47,14 +47,15 @@ type IndexerConfig struct {
 
 // APIConfig holds API server configuration
 type APIConfig struct {
-	Enabled         bool     `yaml:"enabled"`
-	Host            string   `yaml:"host"`
-	Port            int      `yaml:"port"`
-	EnableGraphQL   bool     `yaml:"enable_graphql"`
-	EnableJSONRPC   bool     `yaml:"enable_jsonrpc"`
-	EnableWebSocket bool     `yaml:"enable_websocket"`
-	EnableCORS      bool     `yaml:"enable_cors"`
-	AllowedOrigins  []string `yaml:"allowed_origins"`
+	Enabled                  bool     `yaml:"enabled"`
+	Host                     string   `yaml:"host"`
+	Port                     int      `yaml:"port"`
+	EnableGraphQL            bool     `yaml:"enable_graphql"`
+	EnableJSONRPC            bool     `yaml:"enable_jsonrpc"`
+	EnableWebSocket          bool     `yaml:"enable_websocket"`
+	EnableWebSocketKeepAlive bool     `yaml:"enable_websocket_keepalive"`
+	EnableCORS               bool     `yaml:"enable_cors"`
+	AllowedOrigins           []string `yaml:"allowed_origins"`
 }
 
 // NewConfig creates a new Config with default values
@@ -195,6 +196,13 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_API_WEBSOCKET: %w", err)
 		}
 		c.API.EnableWebSocket = val
+	}
+	if enableWebSocketKeepAlive := os.Getenv("INDEXER_API_WEBSOCKET_KEEPALIVE"); enableWebSocketKeepAlive != "" {
+		val, err := strconv.ParseBool(enableWebSocketKeepAlive)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_WEBSOCKET_KEEPALIVE: %w", err)
+		}
+		c.API.EnableWebSocketKeepAlive = val
 	}
 	if enableCORS := os.Getenv("INDEXER_API_CORS_ENABLED"); enableCORS != "" {
 		val, err := strconv.ParseBool(enableCORS)

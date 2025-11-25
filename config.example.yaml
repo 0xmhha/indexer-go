@@ -46,6 +46,10 @@ api:
   enable_jsonrpc: true
   # Enable WebSocket subscriptions
   enable_websocket: true
+  # Enable WebSocket keep-alive (ping/pong)
+  # When enabled, server sends ping every 54 seconds with 60 second timeout
+  # Default: false (disabled)
+  enable_websocket_keepalive: false
 
   # Enable CORS (Cross-Origin Resource Sharing)
   enable_cors: true
