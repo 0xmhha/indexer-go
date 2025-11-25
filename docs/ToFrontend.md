@@ -699,6 +699,264 @@ ws.onopen = () => console.log('✅ WebSocket 연결 성공');
 ws.onerror = (err) => console.error('❌ WebSocket 에러:', err);
 ```
 
+#### WebSocket 재연결 로직 (Reconnection Logic)
+
+서버는 ping/pong을 통한 연결 유지를 지원합니다 (54초마다 ping, 60초 timeout). 클라이언트에서도 자동 재연결을 구현하세요.
+
+**Apollo Client 재연결 설정:**
+
+```javascript
+import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { createClient } from 'graphql-ws';
+
+const wsClient = createClient({
+  url: 'ws://localhost:8080/graphql/ws',
+
+  // 재연결 설정
+  retryAttempts: Infinity,  // 무한 재시도
+  retryWait: async (retries) => {
+    // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
+    const delay = Math.min(1000 * Math.pow(2, retries), 30000);
+    await new Promise(resolve => setTimeout(resolve, delay));
+  },
+
+  // Keep-alive (ping/pong)
+  keepAlive: 10000,  // 10초마다 ping 전송
+
+  // 연결 이벤트 핸들러
+  on: {
+    connected: () => console.log('✅ WebSocket connected'),
+    closed: () => console.warn('⚠️ WebSocket closed'),
+    error: (error) => console.error('❌ WebSocket error:', error),
+    connecting: () => console.log('🔄 WebSocket connecting...'),
+  },
+
+  // 연결 파라미터 (인증 토큰 등)
+  connectionParams: {
+    // authToken: 'your-auth-token',
+  },
+});
+
+const wsLink = new GraphQLWsLink(wsClient);
+```
+
+**수동 재연결 구현 (vanilla JS):**
+
+```javascript
+class WebSocketManager {
+  constructor(url) {
+    this.url = url;
+    this.ws = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectDelay = 30000;
+    this.subscriptions = new Map();
+    this.connect();
+  }
+
+  connect() {
+    console.log('🔄 Connecting to WebSocket...');
+    this.ws = new WebSocket(this.url, 'graphql-transport-ws');
+
+    this.ws.onopen = () => {
+      console.log('✅ WebSocket connected');
+      this.reconnectAttempts = 0;
+
+      // Connection init
+      this.send({ type: 'connection_init' });
+
+      // Resubscribe all previous subscriptions
+      this.resubscribe();
+    };
+
+    this.ws.onclose = (event) => {
+      console.warn('⚠️ WebSocket closed', event.code, event.reason);
+      this.scheduleReconnect();
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('❌ WebSocket error', error);
+    };
+
+    this.ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      this.handleMessage(message);
+    };
+  }
+
+  scheduleReconnect() {
+    // Exponential backoff
+    const delay = Math.min(
+      1000 * Math.pow(2, this.reconnectAttempts),
+      this.maxReconnectDelay
+    );
+
+    this.reconnectAttempts++;
+    console.log(`🔄 Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})...`);
+
+    setTimeout(() => this.connect(), delay);
+  }
+
+  send(message) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+    }
+  }
+
+  subscribe(id, query, callback) {
+    this.subscriptions.set(id, { query, callback });
+    this.send({
+      id,
+      type: 'subscribe',
+      payload: { query }
+    });
+  }
+
+  resubscribe() {
+    // Reconnect 후 모든 subscription 복원
+    for (const [id, { query, callback }] of this.subscriptions.entries()) {
+      this.send({
+        id,
+        type: 'subscribe',
+        payload: { query }
+      });
+    }
+  }
+
+  handleMessage(message) {
+    if (message.type === 'next' && message.id) {
+      const sub = this.subscriptions.get(message.id);
+      if (sub) {
+        sub.callback(message.payload);
+      }
+    }
+  }
+
+  unsubscribe(id) {
+    this.send({ id, type: 'complete' });
+    this.subscriptions.delete(id);
+  }
+}
+
+// 사용 예시
+const wsManager = new WebSocketManager('ws://localhost:8080/graphql/ws');
+
+// Subscription 등록
+wsManager.subscribe(
+  'block-sub',
+  'subscription { newBlock { number hash timestamp } }',
+  (data) => {
+    console.log('New block:', data);
+  }
+);
+```
+
+**React Hook 재연결 로직:**
+
+```javascript
+import { useEffect, useRef, useState } from 'react';
+
+function useWebSocketWithReconnect(url, subscriptionQuery) {
+  const [data, setData] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const wsRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+
+  const connect = () => {
+    const ws = new WebSocket(url, 'graphql-transport-ws');
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('✅ Connected');
+      setIsConnected(true);
+      reconnectAttemptsRef.current = 0;
+
+      // Connection init
+      ws.send(JSON.stringify({ type: 'connection_init' }));
+    };
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+
+      if (message.type === 'connection_ack') {
+        // Subscribe after connection ack
+        ws.send(JSON.stringify({
+          id: '1',
+          type: 'subscribe',
+          payload: { query: subscriptionQuery }
+        }));
+      } else if (message.type === 'next') {
+        setData(message.payload.data);
+      }
+    };
+
+    ws.onclose = () => {
+      console.warn('⚠️ Disconnected');
+      setIsConnected(false);
+
+      // Exponential backoff reconnect
+      const delay = Math.min(
+        1000 * Math.pow(2, reconnectAttemptsRef.current),
+        30000
+      );
+      reconnectAttemptsRef.current++;
+
+      reconnectTimeoutRef.current = setTimeout(connect, delay);
+    };
+
+    ws.onerror = (error) => {
+      console.error('❌ WebSocket error', error);
+    };
+  };
+
+  useEffect(() => {
+    connect();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
+  }, [url, subscriptionQuery]);
+
+  return { data, isConnected };
+}
+
+// 사용 예시
+function BlockMonitor() {
+  const { data, isConnected } = useWebSocketWithReconnect(
+    'ws://localhost:8080/graphql/ws',
+    'subscription { newBlock { number hash timestamp } }'
+  );
+
+  return (
+    <div>
+      <div>Status: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}</div>
+      {data && <div>Block: {data.newBlock?.number}</div>}
+    </div>
+  );
+}
+```
+
+**재연결 Best Practices:**
+
+1. **Exponential Backoff**: 재연결 시도 간격을 점진적으로 늘림 (1s → 2s → 4s → 8s → max 30s)
+2. **Subscription 복원**: 재연결 후 이전 subscription 자동 재등록
+3. **상태 표시**: UI에 연결 상태 표시 (🟢 Connected / 🔴 Disconnected)
+4. **최대 재시도**: 무한 재시도 또는 합리적인 최대 횟수 설정
+5. **Keep-Alive**: 10초마다 ping 전송으로 idle connection 방지
+6. **Graceful Degradation**: 연결 끊김 시에도 기본 기능 유지
+
+**서버 지원 사항:**
+
+✅ **Ping/Pong**: 서버는 54초마다 자동으로 ping 전송, 60초 timeout
+✅ **Graceful Close**: 서버는 적절한 close frame 전송
+✅ **Application-level Ping**: GraphQL-WS 프로토콜의 ping/pong 메시지 지원
+✅ **Connection Tracking**: 각 연결의 상태 및 로그 추적
+
 ---
 
 ### WebSocket 구독 확장 (적용 완료)
@@ -725,6 +983,189 @@ subscription PendingTxStream {
 - `type`은 `0x0`, `0x2`, `0x16` 등 Ethereum typed transaction 값입니다.
 - `gasPrice`는 Legacy/1559 공통, 1559 타입은 `maxFeePerGas`, `maxPriorityFeePerGas`를 함께 조회하세요.
 - 트랜잭션이 아직 블록에 포함되지 않았으므로 `blockNumber` 대신 `nonce`와 `gas` 정보로 UI를 구성하면 됩니다.
+
+**React 통합 예제:**
+
+```javascript
+import { useSubscription, gql } from '@apollo/client';
+import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+
+const PENDING_TX_SUBSCRIPTION = gql`
+  subscription OnNewPendingTransaction {
+    newPendingTransactions {
+      hash
+      from
+      to
+      value
+      nonce
+      gas
+      type
+      gasPrice
+      maxFeePerGas
+      maxPriorityFeePerGas
+    }
+  }
+`;
+
+function PendingTransactionMonitor() {
+  const { data, loading, error } = useSubscription(PENDING_TX_SUBSCRIPTION);
+  const [pendingTxs, setPendingTxs] = useState([]);
+
+  useEffect(() => {
+    if (data?.newPendingTransactions) {
+      const tx = data.newPendingTransactions;
+      // 최신 10개만 유지 (Stable-One은 블록 생성이 빠름)
+      setPendingTxs(prev => [tx, ...prev].slice(0, 10));
+    }
+  }, [data]);
+
+  if (loading) return <p>펜딩 트랜잭션 구독 중...</p>;
+  if (error) return <p>에러: {error.message}</p>;
+
+  return (
+    <div className="pending-tx-monitor">
+      <h2>실시간 Pending 트랜잭션</h2>
+      <div className="tx-list">
+        {pendingTxs.map((tx, index) => (
+          <div key={tx.hash} className="tx-card">
+            <div className="tx-header">
+              <span className="tx-type">
+                {tx.type === '0x16' ? '🎫 Fee Delegated' :
+                 tx.type === '0x2' ? '⚡ EIP-1559' :
+                 '📝 Legacy'}
+              </span>
+              <span className="tx-age">{index === 0 ? 'Just now' : `${index}s ago`}</span>
+            </div>
+
+            <div className="tx-info">
+              <div className="tx-hash">
+                <a href={`/tx/${tx.hash}`} target="_blank" rel="noopener noreferrer">
+                  {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
+                </a>
+              </div>
+
+              <div className="tx-parties">
+                <span className="from">
+                  From: {tx.from.slice(0, 8)}...{tx.from.slice(-6)}
+                </span>
+                {tx.to && (
+                  <span className="to">
+                    To: {tx.to.slice(0, 8)}...{tx.to.slice(-6)}
+                  </span>
+                )}
+                {!tx.to && <span className="contract-creation">📄 Contract Creation</span>}
+              </div>
+
+              <div className="tx-value">
+                <strong>{ethers.formatEther(tx.value || '0')} ETH</strong>
+              </div>
+
+              <div className="tx-gas">
+                Gas: {parseInt(tx.gas).toLocaleString()}
+                {tx.type === '0x2' && tx.maxFeePerGas && (
+                  <span> @ {ethers.formatUnits(tx.maxFeePerGas, 'gwei')} Gwei</span>
+                )}
+                {tx.type === '0x0' && tx.gasPrice && (
+                  <span> @ {ethers.formatUnits(tx.gasPrice, 'gwei')} Gwei</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+**주소별 필터링 예제:**
+
+특정 주소의 pending 트랜잭션만 모니터링:
+
+```javascript
+function AddressPendingTxMonitor({ address }) {
+  const { data } = useSubscription(PENDING_TX_SUBSCRIPTION);
+  const [myPendingTxs, setMyPendingTxs] = useState([]);
+
+  useEffect(() => {
+    if (data?.newPendingTransactions) {
+      const tx = data.newPendingTransactions;
+      // 내 주소와 관련된 트랜잭션만 필터링
+      if (tx.from.toLowerCase() === address.toLowerCase() ||
+          tx.to?.toLowerCase() === address.toLowerCase()) {
+        setMyPendingTxs(prev => [tx, ...prev].slice(0, 20));
+      }
+    }
+  }, [data, address]);
+
+  return (
+    <div>
+      <h3>내 Pending 트랜잭션 ({myPendingTxs.length})</h3>
+      {myPendingTxs.map(tx => (
+        <div key={tx.hash}>
+          <span>{tx.from === address.toLowerCase() ? '📤 Sent' : '📥 Received'}</span>
+          <span>{ethers.formatEther(tx.value)} ETH</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+**실시간 TPS (Transactions Per Second) 계산:**
+
+```javascript
+function RealtimeTPS() {
+  const { data } = useSubscription(PENDING_TX_SUBSCRIPTION);
+  const [txCount, setTxCount] = useState(0);
+  const [tps, setTps] = useState(0);
+
+  useEffect(() => {
+    if (data?.newPendingTransactions) {
+      setTxCount(prev => prev + 1);
+    }
+  }, [data]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTps(txCount);
+      setTxCount(0);
+    }, 1000); // 1초마다 TPS 계산
+
+    return () => clearInterval(interval);
+  }, [txCount]);
+
+  return (
+    <div className="tps-meter">
+      <h4>실시간 TPS</h4>
+      <div className="tps-value">{tps}</div>
+      <div className="tps-label">transactions/sec</div>
+    </div>
+  );
+}
+```
+
+**중요 사항:**
+
+⚠️ **Stable-One 블록 생성 시간**: 1-2초로 매우 빠르므로 pending 상태가 짧습니다.
+- Pending 트랜잭션이 수신된 후 1-2초 내에 블록에 포함될 가능성이 높습니다.
+- UI에서는 "Pending" → "Confirming" → "Confirmed" 상태 전환을 빠르게 처리해야 합니다.
+- 너무 많은 pending tx를 저장하지 말고, 최신 10-20개만 유지하세요.
+
+📊 **UI 권장사항:**
+1. **실시간 피드**: 최신 pending 트랜잭션을 상단에 표시, 자동 스크롤
+2. **상태 인디케이터**: "⏳ Pending" → "✅ Confirmed" 애니메이션
+3. **트랜잭션 타입 뱃지**: Fee Delegated, EIP-1559, Legacy 구분 표시
+4. **필터링 옵션**: 주소, 트랜잭션 타입, 최소 값 기준 필터
+5. **알림**: 내 주소 관련 pending tx 발생 시 알림
+
+🎯 **사용 사례:**
+- 실시간 네트워크 활동 모니터링
+- 내 지갑 트랜잭션 즉시 감지
+- 트랜잭션 브로드캐스트 후 즉각 확인
+- 네트워크 혼잡도 측정 (TPS 차트)
+- 가스 가격 추이 실시간 분석
 
 #### 2. `logs` 구독 & 필터 변수 예시
 

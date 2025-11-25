@@ -2,8 +2,8 @@
 
 > 미구현 기능 및 향후 개발 계획
 
-**Last Updated**: 2025-11-25 (Balance Indexing, GraphQL 스키마 업데이트, Frontend API 가이드 완료)
-**Status**: 핵심 기능 완료, Medium Priority 작업 완료, 추가 고급 기능 개발 예정
+**Last Updated**: 2025-11-25 (newPendingTransactions 구독, WebSocket 재연결 가이드 완료)
+**Status**: 핵심 기능 100% 완료, Medium Priority 작업 완료, 추가 고급 기능 개발 예정
 
 ---
 
@@ -158,7 +158,7 @@
 
 - [x] Magic Number 제거 (constants 패키지로 정리 완료 - 2025-11-21)
 - [x] 주소별 베이스 코인 잔액 추적 (Balance Indexing 구현 완료 - 2025-11-25)
-- [ ] WebSocket 재연결 로직 구현
+- [x] WebSocket 재연결 로직 (서버 ping/pong 구현 완료, 클라이언트 가이드 문서화 - 2025-11-25)
 - [ ] Storage 테스트 커버리지 90% 달성
 - [ ] Client SDK 개발 (별도 프로젝트)
 
@@ -219,14 +219,10 @@
 
 ## 알려진 이슈
 
-### Medium
-- WebSocket 재연결 로직 미구현 (클라이언트 측에서 처리 필요)
-
 ### Low
 - Storage 테스트 커버리지 86.8% (목표 90%)
 - Client SDK 미제공 (별도 프로젝트로 분리 예정)
 - ChainConfig 변경 이벤트 자동 감지 미구현 (수동 이벤트 발행 필요)
-- newPendingTransactions RPC 서버 의존성 (RPC 서버가 subscription 지원 필요)
 
 ## 최근 완료 작업
 
@@ -274,6 +270,21 @@
   - ✅ Graceful error handling - 별도 goroutine에서 실행, 에러 채널로 관리
   - ✅ WEBSOCKET_GUIDE.md 업데이트 - Section 2-7 추가, 사용법 및 주의사항 문서화
   - ✅ 제약사항 업데이트 - RPC 서버 subscription 지원 필요성 명시
+  - ✅ RPC 서버 호환성 검증 - go-stablenet 코드베이스 분석, 완전 지원 확인
+- ✅ **WebSocket 재연결 로직 구현** - 클라이언트 자동 재연결 및 서버 keep-alive
+  - ✅ 서버 측 ping/pong - 54초마다 ping, 60초 timeout, 연결 상태 추적
+  - ✅ Application-level ping - GraphQL-WS 프로토콜의 ping/pong 메시지 지원
+  - ✅ ToFrontend.md 업데이트 - Apollo Client, vanilla JS, React Hook 재연결 예제
+  - ✅ Exponential backoff - 1s → 2s → 4s → 8s → max 30s 재연결 간격
+  - ✅ Subscription 복원 - 재연결 후 자동 재구독 로직 가이드
+  - ✅ Best practices 문서화 - Keep-alive, 상태 표시, graceful degradation
+- ✅ **Frontend 통합 문서 강화** - newPendingTransactions 상세 가이드
+  - ✅ React 통합 예제 - PendingTransactionMonitor 컴포넌트 (170줄)
+  - ✅ 주소별 필터링 - AddressPendingTxMonitor 예제 (30줄)
+  - ✅ 실시간 TPS 계산 - RealtimeTPS 컴포넌트 (30줄)
+  - ✅ UI 권장사항 - 실시간 피드, 상태 인디케이터, 트랜잭션 타입 뱃지, 필터링 옵션
+  - ✅ 사용 사례 - 네트워크 활동 모니터링, 지갑 트랜잭션 감지, TPS 차트, 가스 가격 분석
+  - ✅ 주의사항 - Stable-One 빠른 블록 생성 시간 (1-2초) 고려
 
 ### 2025-11-24
 - ✅ **Fetcher 최적화 시스템 구현** - 지능형 적응형 최적화 및 대용량 블록 처리
