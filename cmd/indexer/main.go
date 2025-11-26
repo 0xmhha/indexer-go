@@ -147,18 +147,22 @@ func main() {
 	// Initialize storage
 	storageConfig := storage.DefaultConfig(cfg.Database.Path)
 	storageConfig.ReadOnly = false
-	store, err := storage.NewPebbleStorage(storageConfig)
+	baseStore, err := storage.NewPebbleStorage(storageConfig)
 	if err != nil {
 		log.Fatal("Failed to create storage", zap.Error(err))
 	}
-	store.SetLogger(log)
+	baseStore.SetLogger(log)
 	defer func() {
-		if err := store.Close(); err != nil {
+		if err := baseStore.Close(); err != nil {
 			log.Error("Failed to close storage", zap.Error(err))
 		}
 	}()
 
-	log.Info("Storage initialized",
+	// Wrap storage with genesis initializer for automatic genesis allocation handling
+	// This transparently initializes genesis balances on first query via RPC
+	store := storage.NewGenesisInitializingStorage(baseStore, ethClient, log)
+
+	log.Info("Storage initialized with genesis auto-initialization",
 		zap.String("path", cfg.Database.Path),
 	)
 
