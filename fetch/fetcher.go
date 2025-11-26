@@ -155,16 +155,75 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 
 // FetchBlock fetches a single block and its receipts and stores them
 func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
+	// Fetch block and receipts with retry logic
 	startTime := time.Now()
+	block, receipts, hadError, err := f.fetchBlockAndReceiptsWithRetry(ctx, height, startTime)
+	if err != nil {
+		return err
+	}
+
+	// Record successful fetch metrics
+	if !hadError {
+		f.metrics.RecordRequest(time.Since(startTime), false, false)
+	}
+
+	// Store block
+	if err := f.storage.SetBlock(ctx, block); err != nil {
+		return fmt.Errorf("failed to store block %d: %w", height, err)
+	}
+
+	// Process metadata and indexing
+	if err := f.processBlockMetadata(ctx, block, receipts, height); err != nil {
+		return err
+	}
+
+	// Publish block event
+	if f.eventBus != nil {
+		blockEvent := events.NewBlockEvent(block)
+		if !f.eventBus.Publish(blockEvent) {
+			f.logger.Warn("Failed to publish block event (channel full)",
+				zap.Uint64("height", height),
+			)
+		}
+	}
+
+	// Store receipts and index logs
+	if err := f.storeAndProcessReceipts(ctx, block, receipts, height); err != nil {
+		return err
+	}
+
+	// Publish transaction and log events
+	if f.eventBus != nil {
+		f.publishBlockEvents(block, receipts, height)
+	}
+
+	// Update latest height
+	if err := f.storage.SetLatestHeight(ctx, height); err != nil {
+		return fmt.Errorf("failed to update latest height to %d: %w", height, err)
+	}
+
+	// Record metrics and log success
+	f.metrics.RecordBlockProcessed(len(receipts))
+	f.logger.Info("Successfully indexed block",
+		zap.Uint64("height", height),
+		zap.String("hash", block.Hash().Hex()),
+		zap.Int("txs", len(block.Transactions())),
+		zap.Int("receipts", len(receipts)),
+	)
+
+	return nil
+}
+
+// fetchBlockAndReceiptsWithRetry fetches block and receipts with exponential backoff retry logic
+func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uint64, startTime time.Time) (*types.Block, types.Receipts, bool, error) {
 	var block *types.Block
 	var receipts types.Receipts
 	var err error
 	var hadError bool
 
-	// Retry logic for fetching block with exponential backoff
+	// Retry logic with exponential backoff
 	for attempt := 0; attempt <= f.config.MaxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff: delay = baseDelay * 2^(attempt-1)
 			backoffDelay := f.config.RetryDelay * time.Duration(1<<uint(attempt-1))
 			f.logger.Warn("Retrying block fetch",
 				zap.Uint64("height", height),
@@ -184,10 +243,9 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 				zap.Int("attempt", attempt),
 				zap.Error(err),
 			)
-			// Record metrics for failed request
 			f.metrics.RecordRequest(time.Since(startTime), true, false)
 			if attempt == f.config.MaxRetries {
-				return fmt.Errorf("failed to fetch block %d after %d attempts: %w", height, f.config.MaxRetries, err)
+				return nil, nil, hadError, fmt.Errorf("failed to fetch block %d after %d attempts: %w", height, f.config.MaxRetries, err)
 			}
 			continue
 		}
@@ -201,10 +259,9 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 				zap.Int("attempt", attempt),
 				zap.Error(err),
 			)
-			// Record metrics for failed request
 			f.metrics.RecordRequest(time.Since(startTime), true, false)
 			if attempt == f.config.MaxRetries {
-				return fmt.Errorf("failed to fetch receipts for block %d after %d attempts: %w", height, f.config.MaxRetries, err)
+				return nil, nil, hadError, fmt.Errorf("failed to fetch receipts for block %d after %d attempts: %w", height, f.config.MaxRetries, err)
 			}
 			continue
 		}
@@ -213,16 +270,11 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		break
 	}
 
-	// Record successful fetch metrics if no errors occurred
-	if !hadError {
-		f.metrics.RecordRequest(time.Since(startTime), false, false)
-	}
+	return block, receipts, hadError, nil
+}
 
-	// Store block
-	if err := f.storage.SetBlock(ctx, block); err != nil {
-		return fmt.Errorf("failed to store block %d: %w", height, err)
-	}
-
+// processBlockMetadata processes WBFT metadata, address indexing, balance tracking, and genesis initialization
+func (f *Fetcher) processBlockMetadata(ctx context.Context, block *types.Block, receipts types.Receipts, height uint64) error {
 	// Process WBFT metadata
 	if err := f.processWBFTMetadata(ctx, block); err != nil {
 		return fmt.Errorf("failed to process WBFT metadata for block %d: %w", height, err)
@@ -249,17 +301,11 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		}
 	}
 
-	// Publish block event if EventBus is configured
-	if f.eventBus != nil {
-		blockEvent := events.NewBlockEvent(block)
-		if !f.eventBus.Publish(blockEvent) {
-			f.logger.Warn("Failed to publish block event (channel full)",
-				zap.Uint64("height", height),
-			)
-		}
-	}
+	return nil
+}
 
-	// Store receipts and index logs
+// storeAndProcessReceipts stores receipts and indexes logs using appropriate processing strategy
+func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, block *types.Block, receipts types.Receipts, height uint64) error {
 	// Use large block processor for blocks exceeding threshold
 	if f.largeBlockProcessor.ShouldProcessInBatches(block, receipts) {
 		f.logger.Info("Using parallel processing for large block",
@@ -281,7 +327,6 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 							zap.Int("logs", len(receipt.Logs)),
 							zap.Error(err),
 						)
-						// Continue processing - system contract parsing failure shouldn't block block indexing
 					}
 				}
 			}
@@ -301,7 +346,6 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 						zap.Int("logs", len(receipt.Logs)),
 						zap.Error(err),
 					)
-					// Continue processing - log indexing failure shouldn't block block indexing
 				}
 			}
 
@@ -313,81 +357,69 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 						zap.Int("logs", len(receipt.Logs)),
 						zap.Error(err),
 					)
-					// Continue processing - system contract parsing failure shouldn't block block indexing
 				}
 			}
 		}
 	}
-
-	// Publish transaction and log events if EventBus is configured
-	if f.eventBus != nil {
-		transactions := block.Transactions()
-		for i, tx := range transactions {
-			// Find matching receipt
-			var receipt *types.Receipt
-			for _, r := range receipts {
-				if r.TxHash == tx.Hash() {
-					receipt = r
-					break
-				}
-			}
-
-			// Create transaction event
-			txEvent := events.NewTransactionEvent(
-				tx,
-				block.NumberU64(),
-				block.Hash(),
-				uint(i),
-				getTransactionSender(tx),
-				receipt,
-			)
-
-			if !f.eventBus.Publish(txEvent) {
-				f.logger.Warn("Failed to publish transaction event (channel full)",
-					zap.String("tx_hash", tx.Hash().Hex()),
-					zap.Uint64("block", height),
-				)
-			}
-		}
-
-		for _, receipt := range receipts {
-			if receipt == nil {
-				continue
-			}
-			for _, logEntry := range receipt.Logs {
-				if logEntry == nil {
-					continue
-				}
-				logEvent := events.NewLogEvent(logEntry)
-				if !f.eventBus.Publish(logEvent) {
-					f.logger.Warn("Failed to publish log event (channel full)",
-						zap.String("tx_hash", logEntry.TxHash.Hex()),
-						zap.Uint64("block", logEntry.BlockNumber),
-						zap.Uint("log_index", uint(logEntry.Index)),
-					)
-				}
-
-				// Detect system events from logs
-				f.detectSystemEvents(block, logEntry)
-			}
-		}
-	}
-
-	if err := f.storage.SetLatestHeight(ctx, height); err != nil {
-		return fmt.Errorf("failed to update latest height to %d: %w", height, err)
-	}
-
-	// Record block processing metrics
-	f.metrics.RecordBlockProcessed(len(receipts))
-
-	f.logger.Info("Successfully indexed block",
-		zap.Uint64("height", height),
-		zap.String("hash", block.Hash().Hex()),
-		zap.Int("txs", len(block.Transactions())),
-		zap.Int("receipts", len(receipts)),
-	)
 
 	return nil
+}
+
+// publishBlockEvents publishes transaction and log events to the event bus
+func (f *Fetcher) publishBlockEvents(block *types.Block, receipts types.Receipts, height uint64) {
+	transactions := block.Transactions()
+
+	// Publish transaction events
+	for i, tx := range transactions {
+		// Find matching receipt
+		var receipt *types.Receipt
+		for _, r := range receipts {
+			if r.TxHash == tx.Hash() {
+				receipt = r
+				break
+			}
+		}
+
+		// Create and publish transaction event
+		txEvent := events.NewTransactionEvent(
+			tx,
+			block.NumberU64(),
+			block.Hash(),
+			uint(i),
+			getTransactionSender(tx),
+			receipt,
+		)
+
+		if !f.eventBus.Publish(txEvent) {
+			f.logger.Warn("Failed to publish transaction event (channel full)",
+				zap.String("tx_hash", tx.Hash().Hex()),
+				zap.Uint64("block", height),
+			)
+		}
+	}
+
+	// Publish log events
+	for _, receipt := range receipts {
+		if receipt == nil {
+			continue
+		}
+		for _, logEntry := range receipt.Logs {
+			if logEntry == nil {
+				continue
+			}
+			logEvent := events.NewLogEvent(logEntry)
+			if !f.eventBus.Publish(logEvent) {
+				f.logger.Warn("Failed to publish log event (channel full)",
+					zap.String("tx_hash", logEntry.TxHash.Hex()),
+					zap.Uint64("block", logEntry.BlockNumber),
+					zap.Uint("log_index", uint(logEntry.Index)),
+				)
+			}
+
+			// Detect system events from logs
+			f.detectSystemEvents(block, logEntry)
+		}
+	}
 }
 
 // FetchRange fetches a range of blocks sequentially
