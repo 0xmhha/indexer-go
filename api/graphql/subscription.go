@@ -314,6 +314,14 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 		eventType = events.EventTypeChainConfig
 	case "validatorSet":
 		eventType = events.EventTypeValidatorSet
+	case "consensusBlock":
+		eventType = events.EventTypeConsensusBlock
+	case "consensusFork":
+		eventType = events.EventTypeConsensusFork
+	case "consensusValidatorChange":
+		eventType = events.EventTypeConsensusValidatorChange
+	case "consensusError":
+		eventType = events.EventTypeConsensusError
 	default:
 		c.sendError(id, "unknown subscription type")
 		return
@@ -525,6 +533,139 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				},
 			}
 		}
+
+	case "consensusBlock":
+		if consensusEvent, ok := event.(*events.ConsensusBlockEvent); ok {
+			consensusData := map[string]interface{}{
+				"blockNumber":         consensusEvent.BlockNumber,
+				"blockHash":           consensusEvent.BlockHash.Hex(),
+				"timestamp":           consensusEvent.BlockTimestamp,
+				"round":               consensusEvent.Round,
+				"prevRound":           consensusEvent.PrevRound,
+				"roundChanged":        consensusEvent.RoundChanged,
+				"proposer":            consensusEvent.Proposer.Hex(),
+				"validatorCount":      consensusEvent.ValidatorCount,
+				"prepareCount":        consensusEvent.PrepareCount,
+				"commitCount":         consensusEvent.CommitCount,
+				"participationRate":   consensusEvent.ParticipationRate,
+				"missedValidatorRate": consensusEvent.MissedValidatorRate,
+				"isEpochBoundary":     consensusEvent.IsEpochBoundary,
+			}
+			if consensusEvent.EpochNumber != nil {
+				consensusData["epochNumber"] = *consensusEvent.EpochNumber
+			}
+			if consensusEvent.EpochValidators != nil {
+				validators := make([]string, len(consensusEvent.EpochValidators))
+				for i, v := range consensusEvent.EpochValidators {
+					validators[i] = v.Hex()
+				}
+				consensusData["epochValidators"] = validators
+			}
+			payload = map[string]interface{}{
+				"data": map[string]interface{}{
+					"consensusBlock": consensusData,
+				},
+			}
+		}
+
+	case "consensusFork":
+		if forkEvent, ok := event.(*events.ConsensusForkEvent); ok {
+			forkData := map[string]interface{}{
+				"forkBlockNumber": forkEvent.ForkBlockNumber,
+				"forkBlockHash":   forkEvent.ForkBlockHash.Hex(),
+				"chain1Hash":      forkEvent.Chain1Hash.Hex(),
+				"chain1Height":    forkEvent.Chain1Height,
+				"chain1Weight":    forkEvent.Chain1Weight,
+				"chain2Hash":      forkEvent.Chain2Hash.Hex(),
+				"chain2Height":    forkEvent.Chain2Height,
+				"chain2Weight":    forkEvent.Chain2Weight,
+				"resolved":        forkEvent.Resolved,
+				"winningChain":    forkEvent.WinningChain,
+				"detectedAt":      forkEvent.DetectedAt.Unix(),
+				"detectionLag":    forkEvent.DetectionLag,
+			}
+			payload = map[string]interface{}{
+				"data": map[string]interface{}{
+					"consensusFork": forkData,
+				},
+			}
+		}
+
+	case "consensusValidatorChange":
+		if changeEvent, ok := event.(*events.ConsensusValidatorChangeEvent); ok {
+			changeData := map[string]interface{}{
+				"blockNumber":            changeEvent.BlockNumber,
+				"blockHash":              changeEvent.BlockHash.Hex(),
+				"timestamp":              changeEvent.BlockTimestamp,
+				"epochNumber":            changeEvent.EpochNumber,
+				"isEpochBoundary":        changeEvent.IsEpochBoundary,
+				"changeType":             changeEvent.ChangeType,
+				"previousValidatorCount": changeEvent.PreviousValidatorCount,
+				"newValidatorCount":      changeEvent.NewValidatorCount,
+			}
+			if len(changeEvent.AddedValidators) > 0 {
+				added := make([]string, len(changeEvent.AddedValidators))
+				for i, v := range changeEvent.AddedValidators {
+					added[i] = v.Hex()
+				}
+				changeData["addedValidators"] = added
+			}
+			if len(changeEvent.RemovedValidators) > 0 {
+				removed := make([]string, len(changeEvent.RemovedValidators))
+				for i, v := range changeEvent.RemovedValidators {
+					removed[i] = v.Hex()
+				}
+				changeData["removedValidators"] = removed
+			}
+			if len(changeEvent.ValidatorSet) > 0 {
+				validators := make([]string, len(changeEvent.ValidatorSet))
+				for i, v := range changeEvent.ValidatorSet {
+					validators[i] = v.Hex()
+				}
+				changeData["validatorSet"] = validators
+			}
+			if changeEvent.AdditionalInfo != "" {
+				changeData["additionalInfo"] = changeEvent.AdditionalInfo
+			}
+			payload = map[string]interface{}{
+				"data": map[string]interface{}{
+					"consensusValidatorChange": changeData,
+				},
+			}
+		}
+
+	case "consensusError":
+		if errorEvent, ok := event.(*events.ConsensusErrorEvent); ok {
+			errorData := map[string]interface{}{
+				"blockNumber":        errorEvent.BlockNumber,
+				"blockHash":          errorEvent.BlockHash.Hex(),
+				"timestamp":          errorEvent.BlockTimestamp,
+				"errorType":          errorEvent.ErrorType,
+				"severity":           errorEvent.Severity,
+				"errorMessage":       errorEvent.ErrorMessage,
+				"round":              errorEvent.Round,
+				"expectedValidators": errorEvent.ExpectedValidators,
+				"actualSigners":      errorEvent.ActualSigners,
+				"participationRate":  errorEvent.ParticipationRate,
+				"consensusImpacted":  errorEvent.ConsensusImpacted,
+				"recoveryTime":       errorEvent.RecoveryTime,
+			}
+			if len(errorEvent.MissedValidators) > 0 {
+				missed := make([]string, len(errorEvent.MissedValidators))
+				for i, v := range errorEvent.MissedValidators {
+					missed[i] = v.Hex()
+				}
+				errorData["missedValidators"] = missed
+			}
+			if errorEvent.ErrorDetails != "" {
+				errorData["errorDetails"] = errorEvent.ErrorDetails
+			}
+			payload = map[string]interface{}{
+				"data": map[string]interface{}{
+					"consensusError": errorData,
+				},
+			}
+		}
 	}
 
 	if payload != nil {
@@ -534,9 +675,21 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 
 // parseSubscriptionType extracts subscription type from query
 func (c *subscriptionClient) parseSubscriptionType(query string) string {
-	// Simple parsing - check for subscription keywords
+	// Simple parsing - check for subscription keywords (order matters: more specific first)
 	if contains(query, "newPendingTransactions") {
 		return "newPendingTransactions"
+	}
+	if contains(query, "consensusValidatorChange") {
+		return "consensusValidatorChange"
+	}
+	if contains(query, "consensusBlock") {
+		return "consensusBlock"
+	}
+	if contains(query, "consensusFork") {
+		return "consensusFork"
+	}
+	if contains(query, "consensusError") {
+		return "consensusError"
 	}
 	if contains(query, "validatorSet") {
 		return "validatorSet"

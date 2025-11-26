@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -242,6 +243,87 @@ func (m *mockStorage) DeleteContractVerification(ctx context.Context, address co
 	return nil
 }
 
+// SystemContractReader implementation
+func (m *mockStorage) GetTotalSupply(ctx context.Context) (*big.Int, error) {
+	return big.NewInt(0), nil
+}
+
+func (m *mockStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, minter common.Address, limit, offset int) ([]*storage.MintEvent, error) {
+	return []*storage.MintEvent{}, nil
+}
+
+func (m *mockStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, burner common.Address, limit, offset int) ([]*storage.BurnEvent, error) {
+	return []*storage.BurnEvent{}, nil
+}
+
+func (m *mockStorage) GetActiveMinters(ctx context.Context) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockStorage) GetMinterAllowance(ctx context.Context, minter common.Address) (*big.Int, error) {
+	return big.NewInt(0), nil
+}
+
+func (m *mockStorage) GetMinterHistory(ctx context.Context, minter common.Address) ([]*storage.MinterConfigEvent, error) {
+	return []*storage.MinterConfigEvent{}, nil
+}
+
+func (m *mockStorage) GetActiveValidators(ctx context.Context) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockStorage) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.GasTipUpdateEvent, error) {
+	return []*storage.GasTipUpdateEvent{}, nil
+}
+
+func (m *mockStorage) GetValidatorHistory(ctx context.Context, validator common.Address) ([]*storage.ValidatorChangeEvent, error) {
+	return []*storage.ValidatorChangeEvent{}, nil
+}
+
+func (m *mockStorage) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.MinterConfigEvent, error) {
+	return []*storage.MinterConfigEvent{}, nil
+}
+
+func (m *mockStorage) GetEmergencyPauseHistory(ctx context.Context, contract common.Address) ([]*storage.EmergencyPauseEvent, error) {
+	return []*storage.EmergencyPauseEvent{}, nil
+}
+
+func (m *mockStorage) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock uint64, status storage.ProposalStatus) ([]*storage.DepositMintProposal, error) {
+	return []*storage.DepositMintProposal{}, nil
+}
+
+func (m *mockStorage) GetBurnHistory(ctx context.Context, fromBlock, toBlock uint64, user common.Address) ([]*storage.BurnEvent, error) {
+	return []*storage.BurnEvent{}, nil
+}
+
+func (m *mockStorage) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockStorage) GetBlacklistHistory(ctx context.Context, address common.Address) ([]*storage.BlacklistEvent, error) {
+	return []*storage.BlacklistEvent{}, nil
+}
+
+func (m *mockStorage) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
+	return []common.Address{}, nil
+}
+
+func (m *mockStorage) GetProposals(ctx context.Context, contract common.Address, status storage.ProposalStatus, limit, offset int) ([]*storage.Proposal, error) {
+	return []*storage.Proposal{}, nil
+}
+
+func (m *mockStorage) GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*storage.Proposal, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*storage.ProposalVote, error) {
+	return []*storage.ProposalVote{}, nil
+}
+
+func (m *mockStorage) GetMemberHistory(ctx context.Context, contract common.Address) ([]*storage.MemberChangeEvent, error) {
+	return []*storage.MemberChangeEvent{}, nil
+}
+
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
 }
@@ -421,6 +503,87 @@ func (m *mockStorageWithErrors) SetContractVerification(ctx context.Context, ver
 
 func (m *mockStorageWithErrors) DeleteContractVerification(ctx context.Context, address common.Address) error {
 	return fmt.Errorf("storage error")
+}
+
+// SystemContractReader implementation
+func (m *mockStorageWithErrors) GetTotalSupply(ctx context.Context) (*big.Int, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, minter common.Address, limit, offset int) ([]*storage.MintEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, burner common.Address, limit, offset int) ([]*storage.BurnEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetActiveMinters(ctx context.Context) ([]common.Address, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetMinterAllowance(ctx context.Context, minter common.Address) (*big.Int, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetMinterHistory(ctx context.Context, minter common.Address) ([]*storage.MinterConfigEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetActiveValidators(ctx context.Context) ([]common.Address, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.GasTipUpdateEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetValidatorHistory(ctx context.Context, validator common.Address) ([]*storage.ValidatorChangeEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.MinterConfigEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetEmergencyPauseHistory(ctx context.Context, contract common.Address) ([]*storage.EmergencyPauseEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock uint64, status storage.ProposalStatus) ([]*storage.DepositMintProposal, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetBurnHistory(ctx context.Context, fromBlock, toBlock uint64, user common.Address) ([]*storage.BurnEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetBlacklistHistory(ctx context.Context, address common.Address) ([]*storage.BlacklistEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetProposals(ctx context.Context, contract common.Address, status storage.ProposalStatus, limit, offset int) ([]*storage.Proposal, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*storage.Proposal, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*storage.ProposalVote, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetMemberHistory(ctx context.Context, contract common.Address) ([]*storage.MemberChangeEvent, error) {
+	return nil, fmt.Errorf("storage error")
 }
 
 func TestGraphQLHandler(t *testing.T) {

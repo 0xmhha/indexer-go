@@ -1217,6 +1217,188 @@ type ValidatorSigningActivityConnection {
   pageInfo: PageInfo!
 }
 
+# ========== Enhanced Consensus Types ==========
+
+# ConsensusData represents complete consensus information for a block
+type ConsensusData {
+  # Block identification
+  blockNumber: BigInt!
+  blockHash: Hash!
+
+  # Round information
+  round: Int!
+  prevRound: Int!
+  roundChanged: Boolean!
+
+  # Validator participation
+  proposer: Address!
+  validators: [Address!]!
+  prepareSigners: [Address!]!
+  commitSigners: [Address!]!
+
+  # Participation metrics
+  prepareCount: Int!
+  commitCount: Int!
+  missedPrepare: [Address!]!
+  missedCommit: [Address!]!
+
+  # Additional data
+  vanityData: Bytes
+  randaoReveal: Bytes
+  gasTip: BigInt
+
+  # Epoch information
+  epochInfo: EpochData
+  isEpochBoundary: Boolean!
+
+  # Metadata
+  timestamp: BigInt!
+
+  # Calculated metrics
+  participationRate: Float!
+  isHealthy: Boolean!
+}
+
+# EpochData represents enhanced epoch information
+type EpochData {
+  # Epoch number
+  epochNumber: BigInt!
+
+  # Validator and candidate counts
+  validatorCount: Int!
+  candidateCount: Int!
+
+  # Validators in this epoch
+  validators: [ValidatorInfoDetailed!]!
+
+  # Candidates for next epoch
+  candidates: [CandidateInfo!]!
+}
+
+# ValidatorInfoDetailed represents detailed validator information
+type ValidatorInfoDetailed {
+  # Validator address
+  address: Address!
+
+  # Validator index in the set
+  index: Int!
+
+  # BLS public key
+  blsPubKey: Bytes
+}
+
+# CandidateInfo represents a validator candidate
+type CandidateInfo {
+  # Candidate address
+  address: Address!
+
+  # Diligence score (0-2,000,000)
+  diligence: BigInt!
+}
+
+# ValidatorStats represents enhanced validator statistics
+type ValidatorStats {
+  # Validator address
+  address: Address!
+
+  # Block production
+  totalBlocks: BigInt!
+  blocksProposed: BigInt!
+
+  # Participation metrics
+  preparesSigned: BigInt!
+  commitsSigned: BigInt!
+  preparesMissed: BigInt!
+  commitsMissed: BigInt!
+  participationRate: Float!
+
+  # Recent activity tracking
+  lastProposedBlock: BigInt
+  lastCommittedBlock: BigInt
+  lastSeenBlock: BigInt
+}
+
+# ValidatorParticipation provides detailed participation data over a range
+type ValidatorParticipation {
+  # Validator address
+  address: Address!
+
+  # Block range
+  startBlock: BigInt!
+  endBlock: BigInt!
+
+  # Aggregated statistics
+  totalBlocks: BigInt!
+  blocksProposed: BigInt!
+  blocksCommitted: BigInt!
+  blocksMissed: BigInt!
+  participationRate: Float!
+
+  # Per-block breakdown
+  blocks: [BlockParticipation!]!
+}
+
+# BlockParticipation represents a validator's participation in a specific block
+type BlockParticipation {
+  blockNumber: BigInt!
+  wasProposer: Boolean!
+  signedPrepare: Boolean!
+  signedCommit: Boolean!
+  round: Int!
+}
+
+# RoundAnalysis provides statistical analysis of round changes
+type RoundAnalysis {
+  # Block range
+  startBlock: BigInt!
+  endBlock: BigInt!
+
+  # Statistics
+  totalBlocks: BigInt!
+  blocksWithRoundChange: BigInt!
+  roundChangeRate: Float!
+  averageRound: Float!
+  maxRound: Int!
+
+  # Round distribution
+  roundDistribution: [RoundDistribution!]!
+}
+
+# RoundDistribution shows the distribution of blocks by round number
+type RoundDistribution {
+  round: Int!
+  count: BigInt!
+  percentage: Float!
+}
+
+# ValidatorSet represents the active validator set at a specific point
+type ValidatorSet {
+  blockNumber: BigInt!
+  epochNumber: BigInt
+  validators: [Address!]!
+  count: Int!
+}
+
+# ValidatorActivity tracks real-time validator activity
+type ValidatorActivity {
+  address: Address!
+  isActive: Boolean!
+  isOnline: Boolean!
+  lastSeen: BigInt!
+  blocksAgo: BigInt!
+  currentStreak: BigInt!
+}
+
+# ValidatorChange represents a change in validator set at epoch boundary
+type ValidatorChange {
+  epochNumber: BigInt!
+  blockNumber: BigInt!
+  previousValidators: [Address!]!
+  newValidators: [Address!]!
+  addedValidators: [Address!]!
+  removedValidators: [Address!]!
+}
+
 # ========== Address Indexing Types ==========
 
 # ContractCreation represents a contract creation event

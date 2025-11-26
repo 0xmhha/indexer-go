@@ -107,6 +107,7 @@ type Storage interface {
 	ABIReader
 	ABIWriter
 	SearchReader
+	SystemContractReader
 	ContractVerificationReader
 	ContractVerificationWriter
 

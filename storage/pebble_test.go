@@ -1899,7 +1899,7 @@ func TestPebbleStorage_GetBlockCount(t *testing.T) {
 	ctx := context.Background()
 	pebbleStorage := storage.(*PebbleStorage)
 
-	// Test initial count (no blocks)
+	// Test initial count (no blocks) - should return 0 when no latest height is set
 	count, err := pebbleStorage.GetBlockCount(ctx)
 	if err != nil {
 		t.Fatalf("GetBlockCount() error = %v", err)
@@ -1908,11 +1908,11 @@ func TestPebbleStorage_GetBlockCount(t *testing.T) {
 		t.Errorf("GetBlockCount() = %d, want 0", count)
 	}
 
-	// Store count manually
-	countValue := EncodeUint64(5)
-	pebbleStorage.db.Set(BlockCountKey(), countValue, nil)
+	// Set latest height to 4 (blocks 0-4, total 5 blocks)
+	heightValue := EncodeUint64(4)
+	pebbleStorage.db.Set(LatestHeightKey(), heightValue, nil)
 
-	// Test retrieval
+	// Test retrieval - should return height + 1
 	count, err = pebbleStorage.GetBlockCount(ctx)
 	if err != nil {
 		t.Fatalf("GetBlockCount() error = %v", err)
@@ -1921,9 +1921,9 @@ func TestPebbleStorage_GetBlockCount(t *testing.T) {
 		t.Errorf("GetBlockCount() = %d, want 5", count)
 	}
 
-	// Store larger count
-	countValue = EncodeUint64(1000000)
-	pebbleStorage.db.Set(BlockCountKey(), countValue, nil)
+	// Set larger height
+	heightValue = EncodeUint64(999999)
+	pebbleStorage.db.Set(LatestHeightKey(), heightValue, nil)
 
 	count, err = pebbleStorage.GetBlockCount(ctx)
 	if err != nil {

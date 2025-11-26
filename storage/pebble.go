@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -243,6 +244,19 @@ func (s *PebbleStorage) SetBlock(ctx context.Context, block *types.Block) error 
 		return fmt.Errorf("failed to set block hash index: %w", err)
 	}
 
+	// Store all transactions in the block
+	transactions := block.Transactions()
+	for txIndex, tx := range transactions {
+		location := &TxLocation{
+			BlockHeight: height,
+			TxIndex:     uint64(txIndex),
+			BlockHash:   block.Hash(),
+		}
+		if err := s.SetTransaction(ctx, tx, location); err != nil {
+			return fmt.Errorf("failed to store transaction %d in block %d: %w", txIndex, height, err)
+		}
+	}
+
 	return nil
 }
 
@@ -321,6 +335,15 @@ func (s *PebbleStorage) SetTransaction(ctx context.Context, tx *types.Transactio
 	// Write transaction hash index
 	if err := s.db.Set(TransactionHashIndexKey(tx.Hash()), locEncoded, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set transaction index: %w", err)
+	}
+
+	// Update transaction count
+	count, err := s.GetTransactionCount(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get current transaction count: %w", err)
+	}
+	if err := s.db.Set(TransactionCountKey(), EncodeUint64(count+1), pebble.Sync); err != nil {
+		return fmt.Errorf("failed to update transaction count: %w", err)
 	}
 
 	return nil
@@ -656,6 +679,7 @@ type pebbleBatch struct {
 	storage *PebbleStorage
 	batch   *pebble.Batch
 	count   int
+	txCount uint64 // Number of transactions added in this batch
 	closed  bool
 	mu      sync.Mutex
 }
@@ -705,6 +729,24 @@ func (b *pebbleBatch) SetBlock(ctx context.Context, block *types.Block) error {
 	}
 
 	b.count += 2
+
+	// Store all transactions in the block
+	transactions := block.Transactions()
+	for txIndex, tx := range transactions {
+		location := &TxLocation{
+			BlockHeight: height,
+			TxIndex:     uint64(txIndex),
+			BlockHash:   block.Hash(),
+		}
+		// Unlock before calling SetTransaction to avoid deadlock
+		b.mu.Unlock()
+		err := b.SetTransaction(ctx, tx, location)
+		b.mu.Lock()
+		if err != nil {
+			return fmt.Errorf("failed to store transaction %d in block %d: %w", txIndex, height, err)
+		}
+	}
+
 	return nil
 }
 
@@ -734,6 +776,7 @@ func (b *pebbleBatch) SetTransaction(ctx context.Context, tx *types.Transaction,
 		return err
 	}
 	b.count += 2
+	b.txCount++ // Increment transaction count
 	return nil
 }
 
@@ -844,6 +887,20 @@ func (b *pebbleBatch) Commit() error {
 		return ErrClosed
 	}
 
+	// Update transaction count if transactions were added
+	if b.txCount > 0 {
+		// Get current transaction count
+		currentCount, err := b.storage.GetTransactionCount(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to get current transaction count: %w", err)
+		}
+		// Add the new count to batch
+		newCount := currentCount + b.txCount
+		if err := b.batch.Set(TransactionCountKey(), EncodeUint64(newCount), nil); err != nil {
+			return fmt.Errorf("failed to update transaction count: %w", err)
+		}
+	}
+
 	return b.batch.Commit(pebble.Sync)
 }
 
@@ -854,6 +911,7 @@ func (b *pebbleBatch) Reset() {
 
 	b.batch.Reset()
 	b.count = 0
+	b.txCount = 0
 }
 
 // Count returns the number of operations in the batch
@@ -1197,21 +1255,17 @@ func (s *PebbleStorage) GetBlockCount(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
-	value, closer, err := s.db.Get(BlockCountKey())
+	// Get latest block height
+	height, err := s.GetLatestHeight(ctx)
 	if err != nil {
-		if err == pebble.ErrNotFound {
+		if err == ErrNotFound {
 			return 0, nil // No blocks indexed yet
 		}
-		return 0, fmt.Errorf("failed to get block count: %w", err)
-	}
-	defer closer.Close()
-
-	count, err := DecodeUint64(value)
-	if err != nil {
-		return 0, fmt.Errorf("failed to decode block count: %w", err)
+		return 0, fmt.Errorf("failed to get latest height: %w", err)
 	}
 
-	return count, nil
+	// Block count is height + 1 (blocks are indexed from 0)
+	return height + 1, nil
 }
 
 // GetTransactionCount returns the total number of indexed transactions
@@ -1235,6 +1289,44 @@ func (s *PebbleStorage) GetTransactionCount(ctx context.Context) (uint64, error)
 	}
 
 	return count, nil
+}
+
+// InitializeTransactionCount scans all blocks and initializes the transaction count
+// This is useful for migrating existing databases that don't have the transaction count set
+func (s *PebbleStorage) InitializeTransactionCount(ctx context.Context) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return err
+	}
+
+	// Get latest height
+	latestHeight, err := s.GetLatestHeight(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get latest height: %w", err)
+	}
+
+	// Count all transactions by iterating through blocks
+	totalTxCount := uint64(0)
+	for height := uint64(0); height <= latestHeight; height++ {
+		block, err := s.GetBlock(ctx, height)
+		if err != nil {
+			if err == ErrNotFound {
+				continue // Skip missing blocks
+			}
+			return fmt.Errorf("failed to get block %d: %w", height, err)
+		}
+
+		totalTxCount += uint64(len(block.Transactions()))
+	}
+
+	// Set the transaction count
+	if err := s.db.Set(TransactionCountKey(), EncodeUint64(totalTxCount), pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set transaction count: %w", err)
+	}
+
+	return nil
 }
 
 // GetTopMiners returns the top miners by block count
@@ -2028,9 +2120,80 @@ func (s *PebbleStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock ui
 		return nil, err
 	}
 
-	// This is a simplified implementation - in production, would need proper iteration
-	// TODO: Implement proper iteration over block range
-	return nil, fmt.Errorf("GetMintEvents not yet implemented")
+	// Use minter-specific index if minter is specified, otherwise scan all mint events
+	var keyPrefix []byte
+	var lowerBound, upperBound []byte
+
+	if minter != (common.Address{}) {
+		// Use minter index for efficient filtering
+		keyPrefix = MintMinterIndexKeyPrefix(minter)
+		lowerBound = MintMinterIndexKey(minter, fromBlock)
+		upperBound = MintMinterIndexKey(minter, toBlock+1)
+	} else {
+		// Scan all mint events in block range
+		keyPrefix = MintEventKeyPrefix()
+		lowerBound = []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), fromBlock))
+		upperBound = []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), toBlock+1))
+	}
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var events []*MintEvent
+	count := 0
+	skipped := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip offset items
+		if skipped < offset {
+			skipped++
+			continue
+		}
+
+		// Check limit
+		if limit > 0 && count >= limit {
+			break
+		}
+
+		// If using index, get actual event data
+		var eventData []byte
+		if minter != (common.Address{}) {
+			// Index value contains the actual event key
+			eventKey := iter.Value()
+			data, closer, err := s.db.Get(eventKey)
+			if err != nil {
+				if err == pebble.ErrNotFound {
+					continue
+				}
+				return nil, fmt.Errorf("failed to get mint event: %w", err)
+			}
+			eventData = data
+			closer.Close()
+		} else {
+			eventData = iter.Value()
+		}
+
+		// Decode event
+		event := &MintEvent{}
+		if err := json.Unmarshal(eventData, event); err != nil {
+			return nil, fmt.Errorf("failed to decode mint event: %w", err)
+		}
+
+		events = append(events, event)
+		count++
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return events, nil
 }
 
 // GetBurnEvents returns burn events within a block range
@@ -2039,9 +2202,78 @@ func (s *PebbleStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock ui
 		return nil, err
 	}
 
-	// This is a simplified implementation - in production, would need proper iteration
-	// TODO: Implement proper iteration over block range
-	return nil, fmt.Errorf("GetBurnEvents not yet implemented")
+	// Use burner-specific index if burner is specified, otherwise scan all burn events
+	var lowerBound, upperBound []byte
+
+	if burner != (common.Address{}) {
+		// Use burner index for efficient filtering
+		lowerBound = BurnBurnerIndexKey(burner, fromBlock)
+		upperBound = BurnBurnerIndexKey(burner, toBlock+1)
+	} else {
+		// Scan all burn events in block range
+		keyPrefix := BurnEventKeyPrefix()
+		lowerBound = []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), fromBlock))
+		upperBound = []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), toBlock+1))
+	}
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var events []*BurnEvent
+	count := 0
+	skipped := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip offset items
+		if skipped < offset {
+			skipped++
+			continue
+		}
+
+		// Check limit
+		if limit > 0 && count >= limit {
+			break
+		}
+
+		// If using index, get actual event data
+		var eventData []byte
+		if burner != (common.Address{}) {
+			// Index value contains the actual event key
+			eventKey := iter.Value()
+			data, closer, err := s.db.Get(eventKey)
+			if err != nil {
+				if err == pebble.ErrNotFound {
+					continue
+				}
+				return nil, fmt.Errorf("failed to get burn event: %w", err)
+			}
+			eventData = data
+			closer.Close()
+		} else {
+			eventData = iter.Value()
+		}
+
+		// Decode event
+		event := &BurnEvent{}
+		if err := json.Unmarshal(eventData, event); err != nil {
+			return nil, fmt.Errorf("failed to decode burn event: %w", err)
+		}
+
+		events = append(events, event)
+		count++
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return events, nil
 }
 
 // GetActiveMinters returns list of active minters
@@ -2101,8 +2333,30 @@ func (s *PebbleStorage) GetMinterHistory(ctx context.Context, minter common.Addr
 		return nil, err
 	}
 
-	// TODO: Implement proper iteration over minter config events
-	return nil, fmt.Errorf("GetMinterHistory not yet implemented")
+	keyPrefix := MinterConfigEventKeyPrefix(minter)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var events []*MinterConfigEvent
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &MinterConfigEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode minter config event: %w", err)
+		}
+		events = append(events, event)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return events, nil
 }
 
 // GetActiveValidators returns list of active validators
@@ -2143,8 +2397,33 @@ func (s *PebbleStorage) GetGasTipHistory(ctx context.Context, fromBlock, toBlock
 		return nil, err
 	}
 
-	// TODO: Implement proper iteration over block range
-	return nil, fmt.Errorf("GetGasTipHistory not yet implemented")
+	keyPrefix := GasTipUpdateEventKeyPrefix()
+	lowerBound := []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), fromBlock))
+	upperBound := []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), toBlock+1))
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var events []*GasTipUpdateEvent
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &GasTipUpdateEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode gas tip event: %w", err)
+		}
+		events = append(events, event)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return events, nil
 }
 
 // GetValidatorHistory returns validator change history
@@ -2153,8 +2432,30 @@ func (s *PebbleStorage) GetValidatorHistory(ctx context.Context, validator commo
 		return nil, err
 	}
 
-	// TODO: Implement proper iteration over validator change events
-	return nil, fmt.Errorf("GetValidatorHistory not yet implemented")
+	keyPrefix := ValidatorChangeEventKeyPrefix(validator)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var events []*ValidatorChangeEvent
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &ValidatorChangeEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode validator change event: %w", err)
+		}
+		events = append(events, event)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return events, nil
 }
 
 // GetMinterConfigHistory returns minter configuration history
@@ -2163,8 +2464,36 @@ func (s *PebbleStorage) GetMinterConfigHistory(ctx context.Context, fromBlock, t
 		return nil, err
 	}
 
-	// TODO: Implement proper iteration over block range
-	return nil, fmt.Errorf("GetMinterConfigHistory not yet implemented")
+	// Scan all minters' config events in the block range
+	// This requires iterating through all minter config events since keys are organized by minter
+	keyPrefix := []byte(prefixSysMinterConfig)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var events []*MinterConfigEvent
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &MinterConfigEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode minter config event: %w", err)
+		}
+
+		// Filter by block range
+		if event.BlockNumber >= fromBlock && event.BlockNumber <= toBlock {
+			events = append(events, event)
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return events, nil
 }
 
 // GetEmergencyPauseHistory returns emergency pause event history
@@ -2173,8 +2502,30 @@ func (s *PebbleStorage) GetEmergencyPauseHistory(ctx context.Context, contract c
 		return nil, err
 	}
 
-	// TODO: Implement proper iteration over emergency pause events
-	return nil, fmt.Errorf("GetEmergencyPauseHistory not yet implemented")
+	keyPrefix := EmergencyPauseEventKeyPrefix(contract)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var events []*EmergencyPauseEvent
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &EmergencyPauseEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode emergency pause event: %w", err)
+		}
+		events = append(events, event)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return events, nil
 }
 
 // GetDepositMintProposals returns deposit mint proposals
@@ -2183,8 +2534,37 @@ func (s *PebbleStorage) GetDepositMintProposals(ctx context.Context, fromBlock, 
 		return nil, err
 	}
 
-	// TODO: Implement proper iteration with status filter
-	return nil, fmt.Errorf("GetDepositMintProposals not yet implemented")
+	// Scan all deposit mint proposals
+	keyPrefix := []byte(prefixSysDepositMint)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var proposals []*DepositMintProposal
+	for iter.First(); iter.Valid(); iter.Next() {
+		proposal := &DepositMintProposal{}
+		if err := json.Unmarshal(iter.Value(), proposal); err != nil {
+			return nil, fmt.Errorf("failed to decode deposit mint proposal: %w", err)
+		}
+
+		// Filter by block range and status
+		if proposal.BlockNumber >= fromBlock && proposal.BlockNumber <= toBlock {
+			if status == ProposalStatusAll || proposal.Status == status {
+				proposals = append(proposals, proposal)
+			}
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return proposals, nil
 }
 
 // GetBurnHistory returns burn event history
@@ -2193,8 +2573,8 @@ func (s *PebbleStorage) GetBurnHistory(ctx context.Context, fromBlock, toBlock u
 		return nil, err
 	}
 
-	// TODO: Implement proper iteration with user filter
-	return nil, fmt.Errorf("GetBurnHistory not yet implemented")
+	// Use GetBurnEvents which already implements this functionality
+	return s.GetBurnEvents(ctx, fromBlock, toBlock, user, 0, 0)
 }
 
 // GetBlacklistedAddresses returns list of blacklisted addresses
@@ -2235,8 +2615,30 @@ func (s *PebbleStorage) GetBlacklistHistory(ctx context.Context, address common.
 		return nil, err
 	}
 
-	// TODO: Implement proper iteration over blacklist events
-	return nil, fmt.Errorf("GetBlacklistHistory not yet implemented")
+	keyPrefix := BlacklistEventKeyPrefix(address)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var events []*BlacklistEvent
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &BlacklistEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode blacklist event: %w", err)
+		}
+		events = append(events, event)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return events, nil
 }
 
 // GetAuthorizedAccounts returns list of authorized accounts
@@ -2245,8 +2647,14 @@ func (s *PebbleStorage) GetAuthorizedAccounts(ctx context.Context) ([]common.Add
 		return nil, err
 	}
 
-	// TODO: Implement authorized accounts query
-	return nil, fmt.Errorf("GetAuthorizedAccounts not yet implemented")
+	// NOTE: Authorized accounts tracking is not yet implemented in the storage layer
+	// The event parsers log these events but don't store them yet
+	// This would require:
+	// 1. Adding AuthorizedAccountEvent type to storage/types.go
+	// 2. Adding schema keys for authorized account index
+	// 3. Implementing storage methods in parseAuthorizedAccountAdded/RemovedEvent
+	// For now, return empty list instead of error for API compatibility
+	return []common.Address{}, nil
 }
 
 // GetProposals returns proposals with optional status filter
@@ -2370,8 +2778,30 @@ func (s *PebbleStorage) GetMemberHistory(ctx context.Context, contract common.Ad
 		return nil, err
 	}
 
-	// TODO: Implement proper iteration over member change events
-	return nil, fmt.Errorf("GetMemberHistory not yet implemented")
+	keyPrefix := MemberChangeEventKeyPrefix(contract)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var events []*MemberChangeEvent
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &MemberChangeEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode member change event: %w", err)
+		}
+		events = append(events, event)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return events, nil
 }
 
 // GetGasStatsByBlockRange returns gas usage statistics for a block range

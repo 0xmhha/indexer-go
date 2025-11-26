@@ -96,6 +96,20 @@ var (
 	validatorSigningStatsConnectionType    *graphql.Object
 	validatorSigningActivityConnectionType *graphql.Object
 
+	// Enhanced consensus types
+	consensusDataType          *graphql.Object
+	validatorStatsType         *graphql.Object
+	validatorParticipationType *graphql.Object
+	blockParticipationType     *graphql.Object
+	roundAnalysisType          *graphql.Object
+	roundDistributionType      *graphql.Object
+	validatorSetType           *graphql.Object
+	validatorActivityType      *graphql.Object
+	validatorChangeType        *graphql.Object
+	epochDataType              *graphql.Object
+	validatorInfoEnhancedType  *graphql.Object
+	candidateInfoType          *graphql.Object
+
 	// Address indexing types
 	contractCreationType              *graphql.Object
 	internalTransactionType           *graphql.Object
@@ -1453,6 +1467,332 @@ func initTypes() {
 			},
 			"pageInfo": &graphql.Field{
 				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// ========== Enhanced Consensus Types ==========
+
+	// ValidatorInfoEnhanced type (for EpochData)
+	validatorInfoEnhancedType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorInfoDetailed",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"index": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"blsPubKey": &graphql.Field{
+				Type: bytesType,
+			},
+		},
+	})
+
+	// CandidateInfo type
+	candidateInfoType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "CandidateInfo",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"diligence": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// EpochData type (enhanced)
+	epochDataType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "EpochData",
+		Fields: graphql.Fields{
+			"epochNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"validatorCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"candidateCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"validators": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(validatorInfoEnhancedType))),
+			},
+			"candidates": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(candidateInfoType))),
+			},
+		},
+	})
+
+	// ConsensusData type
+	consensusDataType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ConsensusData",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blockHash": &graphql.Field{
+				Type: graphql.NewNonNull(hashType),
+			},
+			"round": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"prevRound": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"roundChanged": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"proposer": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"validators": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+			"prepareSigners": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+			"commitSigners": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+			"prepareCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"commitCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"missedPrepare": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+			"missedCommit": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+			"vanityData": &graphql.Field{
+				Type: bytesType,
+			},
+			"randaoReveal": &graphql.Field{
+				Type: bytesType,
+			},
+			"gasTip": &graphql.Field{
+				Type: bigIntType,
+			},
+			"epochInfo": &graphql.Field{
+				Type: epochDataType,
+			},
+			"isEpochBoundary": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"timestamp": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"participationRate": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Float),
+			},
+			"isHealthy": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+		},
+	})
+
+	// BlockParticipation type
+	blockParticipationType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BlockParticipation",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"wasProposer": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"signedPrepare": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"signedCommit": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"round": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+		},
+	})
+
+	// ValidatorParticipation type
+	validatorParticipationType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorParticipation",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"startBlock": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"endBlock": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"totalBlocks": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blocksProposed": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blocksCommitted": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blocksMissed": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"participationRate": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Float),
+			},
+			"blocks": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(blockParticipationType))),
+			},
+		},
+	})
+
+	// ValidatorStats type (enhanced)
+	validatorStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorStats",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"totalBlocks": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blocksProposed": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"preparesSigned": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"commitsSigned": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"preparesMissed": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"commitsMissed": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"participationRate": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Float),
+			},
+			"lastProposedBlock": &graphql.Field{
+				Type: bigIntType,
+			},
+			"lastCommittedBlock": &graphql.Field{
+				Type: bigIntType,
+			},
+			"lastSeenBlock": &graphql.Field{
+				Type: bigIntType,
+			},
+		},
+	})
+
+	// RoundDistribution type
+	roundDistributionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "RoundDistribution",
+		Fields: graphql.Fields{
+			"round": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"count": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"percentage": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Float),
+			},
+		},
+	})
+
+	// RoundAnalysis type
+	roundAnalysisType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "RoundAnalysis",
+		Fields: graphql.Fields{
+			"startBlock": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"endBlock": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"totalBlocks": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blocksWithRoundChange": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"roundChangeRate": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Float),
+			},
+			"averageRound": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Float),
+			},
+			"maxRound": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"roundDistribution": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(roundDistributionType))),
+			},
+		},
+	})
+
+	// ValidatorSet type
+	validatorSetType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorSet",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"validators": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+			"epochNumber": &graphql.Field{
+				Type: bigIntType,
+			},
+		},
+	})
+
+	// ValidatorActivity type
+	validatorActivityType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorActivity",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"isActive": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"lastSeenBlock": &graphql.Field{
+				Type: bigIntType,
+			},
+			"lastProposedBlock": &graphql.Field{
+				Type: bigIntType,
+			},
+			"recentParticipationRate": &graphql.Field{
+				Type: graphql.Float,
+			},
+		},
+	})
+
+	// ValidatorChange type
+	validatorChangeType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ValidatorChange",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"epochNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"added": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+			"removed": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+			},
+			"totalValidators": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
 			},
 		},
 	})

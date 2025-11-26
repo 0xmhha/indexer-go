@@ -13,7 +13,8 @@ import (
 type ProposalStatus uint8
 
 const (
-	ProposalStatusNone ProposalStatus = iota
+	ProposalStatusAll      ProposalStatus = 0xFF // Special value for querying all statuses
+	ProposalStatusNone     ProposalStatus = iota
 	ProposalStatusVoting
 	ProposalStatusApproved
 	ProposalStatusExecuted

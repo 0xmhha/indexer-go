@@ -596,6 +596,78 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 				Resolve: s.resolveBlockSigners,
 			},
 
+			// Enhanced Consensus Data Queries
+			"consensusData": &graphql.Field{
+				Type: consensusDataType,
+				Args: graphql.FieldConfigArgument{
+					"blockNumber": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveConsensusData,
+			},
+			"validatorStats": &graphql.Field{
+				Type: validatorStatsType,
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveValidatorStats,
+			},
+			"validatorParticipation": &graphql.Field{
+				Type: validatorParticipationType,
+				Args: graphql.FieldConfigArgument{
+					"address": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(addressType),
+					},
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveValidatorParticipation,
+			},
+			"allValidatorStats": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(validatorStatsType))),
+				Args: graphql.FieldConfigArgument{
+					"fromBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"toBlock": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+					"pagination": &graphql.ArgumentConfig{
+						Type: paginationInputType,
+					},
+				},
+				Resolve: s.resolveAllValidatorStats,
+			},
+			"epochData": &graphql.Field{
+				Type: epochDataType,
+				Args: graphql.FieldConfigArgument{
+					"epochNumber": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(bigIntType),
+					},
+				},
+				Resolve: s.resolveEpochData,
+			},
+			"latestEpochData": &graphql.Field{
+				Type:    epochDataType,
+				Resolve: s.resolveLatestEpochData,
+			},
+
 			// Address Indexing Queries
 			"contractCreation": &graphql.Field{
 				Type: contractCreationType,

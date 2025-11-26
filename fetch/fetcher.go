@@ -13,7 +13,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/events"
 	"github.com/0xmhha/indexer-go/internal/constants"
-	"github.com/0xmhha/indexer-go/storage"
+	storagepkg "github.com/0xmhha/indexer-go/storage"
 )
 
 // Client defines the interface for RPC client operations
@@ -93,14 +93,15 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
-	client              Client
-	storage             Storage
-	config              *Config
-	logger              *zap.Logger
-	eventBus            *events.EventBus
-	metrics             *RPCMetrics
-	optimizer           *AdaptiveOptimizer
-	largeBlockProcessor *LargeBlockProcessor
+	client                   Client
+	storage                  Storage
+	config                   *Config
+	logger                   *zap.Logger
+	eventBus                 *events.EventBus
+	metrics                  *RPCMetrics
+	optimizer                *AdaptiveOptimizer
+	largeBlockProcessor      *LargeBlockProcessor
+	systemContractEventParser *events.SystemContractEventParser
 }
 
 // NewFetcher creates a new Fetcher instance
@@ -130,15 +131,25 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		)
 	}
 
+	// Initialize system contract event parser
+	var systemContractEventParser *events.SystemContractEventParser
+	if scWriter, ok := storage.(storagepkg.SystemContractWriter); ok {
+		systemContractEventParser = events.NewSystemContractEventParser(scWriter, logger)
+		logger.Info("System contract event parser initialized")
+	} else {
+		logger.Warn("Storage does not support system contract event parsing - continuing without it")
+	}
+
 	return &Fetcher{
-		client:              client,
-		storage:             storage,
-		config:              config,
-		logger:              logger,
-		eventBus:            eventBus,
-		metrics:             metrics,
-		optimizer:           optimizer,
-		largeBlockProcessor: largeBlockProcessor,
+		client:                   client,
+		storage:                  storage,
+		config:                   config,
+		logger:                   logger,
+		eventBus:                 eventBus,
+		metrics:                  metrics,
+		optimizer:                optimizer,
+		largeBlockProcessor:      largeBlockProcessor,
+		systemContractEventParser: systemContractEventParser,
 	}
 }
 
@@ -259,6 +270,22 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		if err := f.largeBlockProcessor.ProcessReceiptsParallel(ctx, block, receipts); err != nil {
 			return fmt.Errorf("failed to process large block receipts: %w", err)
 		}
+
+		// Parse system contract events from large block receipts
+		if f.systemContractEventParser != nil {
+			for _, receipt := range receipts {
+				if len(receipt.Logs) > 0 {
+					if err := f.systemContractEventParser.ParseAndIndexLogs(ctx, receipt.Logs); err != nil {
+						f.logger.Warn("failed to parse system contract events",
+							zap.String("tx", receipt.TxHash.Hex()),
+							zap.Int("logs", len(receipt.Logs)),
+							zap.Error(err),
+						)
+						// Continue processing - system contract parsing failure shouldn't block block indexing
+					}
+				}
+			}
+		}
 	} else {
 		// Standard sequential processing for normal blocks
 		for _, receipt := range receipts {
@@ -267,7 +294,7 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 			}
 
 			// Index logs from this receipt
-			if logWriter, ok := f.storage.(storage.LogWriter); ok && len(receipt.Logs) > 0 {
+			if logWriter, ok := f.storage.(storagepkg.LogWriter); ok && len(receipt.Logs) > 0 {
 				if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
 					f.logger.Warn("failed to index logs",
 						zap.String("tx", receipt.TxHash.Hex()),
@@ -275,6 +302,18 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 						zap.Error(err),
 					)
 					// Continue processing - log indexing failure shouldn't block block indexing
+				}
+			}
+
+			// Parse system contract events from this receipt
+			if f.systemContractEventParser != nil && len(receipt.Logs) > 0 {
+				if err := f.systemContractEventParser.ParseAndIndexLogs(ctx, receipt.Logs); err != nil {
+					f.logger.Warn("failed to parse system contract events",
+						zap.String("tx", receipt.TxHash.Hex()),
+						zap.Int("logs", len(receipt.Logs)),
+						zap.Error(err),
+					)
+					// Continue processing - system contract parsing failure shouldn't block block indexing
 				}
 			}
 		}
@@ -536,7 +575,7 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 					}
 
 					// Index logs from this receipt
-					if logWriter, ok := f.storage.(storage.LogWriter); ok && len(receipt.Logs) > 0 {
+					if logWriter, ok := f.storage.(storagepkg.LogWriter); ok && len(receipt.Logs) > 0 {
 						if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
 							f.logger.Warn("failed to index logs",
 								zap.String("tx", receipt.TxHash.Hex()),
@@ -964,14 +1003,14 @@ func getTransactionSender(tx *types.Transaction) common.Address {
 // processWBFTMetadata parses and stores WBFT consensus metadata from block header
 func (f *Fetcher) processWBFTMetadata(ctx context.Context, block *types.Block) error {
 	// Check if storage implements WBFTWriter
-	wbftWriter, ok := f.storage.(storage.WBFTWriter)
+	wbftWriter, ok := f.storage.(storagepkg.WBFTWriter)
 	if !ok {
 		// Storage doesn't support WBFT metadata - skip silently
 		return nil
 	}
 
 	// Parse WBFT Extra from block header
-	wbftExtra, err := storage.ParseWBFTExtra(block.Header())
+	wbftExtra, err := storagepkg.ParseWBFTExtra(block.Header())
 	if err != nil {
 		// Log warning but don't fail the entire block indexing
 		f.logger.Warn("Failed to parse WBFT extra",
@@ -996,11 +1035,11 @@ func (f *Fetcher) processWBFTMetadata(ctx context.Context, block *types.Block) e
 
 	// Extract and save validator signing activities
 	if wbftExtra.EpochInfo != nil && len(wbftExtra.EpochInfo.Candidates) > 0 {
-		var signingActivities []*storage.ValidatorSigningActivity
+		var signingActivities []*storagepkg.ValidatorSigningActivity
 
 		// Extract prepare signers
 		if wbftExtra.PreparedSeal != nil {
-			preparers, err := storage.ExtractSigners(
+			preparers, err := storagepkg.ExtractSigners(
 				wbftExtra.PreparedSeal.Sealers,
 				wbftExtra.EpochInfo.Validators,
 				wbftExtra.EpochInfo.Candidates,
@@ -1013,7 +1052,7 @@ func (f *Fetcher) processWBFTMetadata(ctx context.Context, block *types.Block) e
 			} else {
 				// Create signing activities for preparers
 				for i, validator := range wbftExtra.EpochInfo.Candidates {
-					activity := &storage.ValidatorSigningActivity{
+					activity := &storagepkg.ValidatorSigningActivity{
 						BlockNumber:      wbftExtra.BlockNumber,
 						BlockHash:        wbftExtra.BlockHash,
 						ValidatorAddress: validator.Address,
@@ -1030,7 +1069,7 @@ func (f *Fetcher) processWBFTMetadata(ctx context.Context, block *types.Block) e
 
 		// Extract commit signers
 		if wbftExtra.CommittedSeal != nil {
-			committers, err := storage.ExtractSigners(
+			committers, err := storagepkg.ExtractSigners(
 				wbftExtra.CommittedSeal.Sealers,
 				wbftExtra.EpochInfo.Validators,
 				wbftExtra.EpochInfo.Candidates,
@@ -1078,7 +1117,7 @@ func containsAddress(addresses []common.Address, target common.Address) bool {
 // processAddressIndexing parses and stores address indexing data from block and receipts
 func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block, receipts types.Receipts) error {
 	// Check if storage implements AddressIndexWriter
-	addressWriter, ok := f.storage.(storage.AddressIndexWriter)
+	addressWriter, ok := f.storage.(storagepkg.AddressIndexWriter)
 	if !ok {
 		// Storage doesn't support address indexing - skip silently
 		return nil
@@ -1105,7 +1144,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 		// 1. Contract Creation Detection
 		// Contract creation is indicated by tx.To() == nil
 		if tx.To() == nil && receipt.ContractAddress != (common.Address{}) {
-			creation := &storage.ContractCreation{
+			creation := &storagepkg.ContractCreation{
 				ContractAddress: receipt.ContractAddress,
 				Creator:         getTransactionSender(tx),
 				TransactionHash: tx.Hash(),
@@ -1132,7 +1171,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 
 			// Check if this is a Transfer event
 			// Transfer event topic: keccak256("Transfer(address,address,uint256)")
-			if log.Topics[0].Hex() != storage.ERC20TransferTopic {
+			if log.Topics[0].Hex() != storagepkg.ERC20TransferTopic {
 				continue
 			}
 
@@ -1150,7 +1189,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 				to := common.BytesToAddress(log.Topics[2].Bytes())
 				value := new(big.Int).SetBytes(log.Data)
 
-				transfer := &storage.ERC20Transfer{
+				transfer := &storagepkg.ERC20Transfer{
 					ContractAddress: log.Address,
 					From:            from,
 					To:              to,
@@ -1176,7 +1215,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 				to := common.BytesToAddress(log.Topics[2].Bytes())
 				tokenId := new(big.Int).SetBytes(log.Topics[3].Bytes())
 
-				transfer := &storage.ERC721Transfer{
+				transfer := &storagepkg.ERC721Transfer{
 					ContractAddress: log.Address,
 					From:            from,
 					To:              to,
@@ -1210,7 +1249,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 
 // ensureAddressBalanceInitialized checks if an address has balance history,
 // and if not, fetches the current balance from RPC and initializes it
-func (f *Fetcher) ensureAddressBalanceInitialized(ctx context.Context, histReader storage.HistoricalReader, histWriter storage.HistoricalWriter, addr common.Address, blockNumber uint64) error {
+func (f *Fetcher) ensureAddressBalanceInitialized(ctx context.Context, histReader storagepkg.HistoricalReader, histWriter storagepkg.HistoricalWriter, addr common.Address, blockNumber uint64) error {
 	// Check if address already has balance history
 	currentBalance, err := histReader.GetAddressBalance(ctx, addr, 0)
 	if err != nil {
@@ -1273,12 +1312,12 @@ func (f *Fetcher) ensureAddressBalanceInitialized(ctx context.Context, histReade
 // but haven't participated in any transactions yet
 func (f *Fetcher) initializeGenesisBalances(ctx context.Context, block *types.Block) error {
 	// Check if storage supports balance tracking
-	histWriter, ok := f.storage.(storage.HistoricalWriter)
+	histWriter, ok := f.storage.(storagepkg.HistoricalWriter)
 	if !ok {
 		return nil // Storage doesn't support balance tracking - skip
 	}
 
-	histReader, ok := f.storage.(storage.HistoricalReader)
+	histReader, ok := f.storage.(storagepkg.HistoricalReader)
 	if !ok {
 		return nil // Storage doesn't support balance history - skip
 	}
@@ -1343,14 +1382,14 @@ func (f *Fetcher) initializeGenesisBalances(ctx context.Context, block *types.Bl
 // processBalanceTracking tracks native balance changes from ETH transfers
 func (f *Fetcher) processBalanceTracking(ctx context.Context, block *types.Block, receipts types.Receipts) error {
 	// Check if storage implements HistoricalWriter
-	histWriter, ok := f.storage.(storage.HistoricalWriter)
+	histWriter, ok := f.storage.(storagepkg.HistoricalWriter)
 	if !ok {
 		// Storage doesn't support balance tracking - skip silently
 		return nil
 	}
 
 	// Also check for HistoricalReader (needed to check if address is initialized)
-	histReader, ok := f.storage.(storage.HistoricalReader)
+	histReader, ok := f.storage.(storagepkg.HistoricalReader)
 	if !ok {
 		// Storage doesn't support historical reading - skip silently
 		return nil

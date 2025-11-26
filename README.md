@@ -5,73 +5,28 @@
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**indexer-go**는 Stable-One 블록체인의 블록 및 트랜잭션 데이터를 실시간으로 인덱싱하고, GraphQL 및 JSON-RPC API를 통해 효율적으로 쿼리할 수 있게 해주는 고성능 인덱서입니다.
-
----
-
-## 🚀 Features
-
-### Core Indexing
-- ✅ **Ethereum JSON-RPC 기반** - go-ethereum (ethclient) 사용
-- ✅ **병렬 인덱싱** - Worker pool을 통한 고속 인덱싱 (80-150 블록/초)
-- ✅ **완전한 데이터** - Block + Transaction + Receipt 인덱싱
-- ✅ **임베디드 DB** - PebbleDB (LevelDB 호환)
-- ✅ **EIP 지원** - EIP-1559, EIP-4844 등 최신 EIP
-- ✅ **Fee Delegation** - WEMIX 특화 수수료 대납 기능
-
-### APIs
-- ✅ **GraphQL API** - 유연한 쿼리 및 필터링
-- ✅ **JSON-RPC 2.0 API** - 표준 호환 API
-- ✅ **WebSocket 구독** - 실시간 블록/트랜잭션 알림
-
-### Event Subscription System ⚡ NEW
-- ✅ **Ultra High-Performance** - 100M+ events/sec, sub-microsecond latency
-- ✅ **Massive Scalability** - 10,000+ concurrent subscribers
-- ✅ **Flexible Filtering** - Address, value range, block range filters
-- ✅ **Zero Allocations** - No memory allocations for core operations
-- ✅ **Prometheus Metrics** - Production-ready monitoring
-- ✅ **Real-time Statistics** - Per-subscriber event tracking
+**indexer-go** is a high-performance indexer that indexes Stable-One blockchain blocks and transaction data in real-time, enabling efficient querying through GraphQL and JSON-RPC APIs.
 
 ---
 
 ## 📊 Architecture
 
 ```
-┌─────────────────┐
-│  Stable-One     │
-│  Node (RPC)     │
-└────────┬────────┘
-         │ ethclient
+Stable-One Node (RPC)
          ↓
-┌─────────────────┐
-│  Client Layer   │  ← Ethereum JSON-RPC
-└────────┬────────┘
-         │
+    Client Layer (ethclient)
          ↓
-┌─────────────────┐      ┌──────────────────────┐
-│  Fetcher        │─────→│  EventBus            │
-│  (Worker Pool)  │      │  (Pub/Sub)           │
-└────────┬────────┘      │  • 100M+ events/sec  │
-         │               │  • 10K+ subscribers   │
-         ↓               └──────────┬───────────┘
-┌─────────────────┐                │
-│  Storage        │                │
-│  (PebbleDB)     │                │
-└────────┬────────┘                │
-         │                         │
-         ↓                         ↓
-┌─────────────────────────────────────────────┐
-│  API Server                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │ GraphQL  │  │ JSON-RPC │  │  Events  │  │
-│  │   API    │  │   API    │  │   API    │  │
-│  └──────────┘  └──────────┘  └──────────┘  │
-│  ┌──────────────────────┐  ┌────────────┐  │
-│  │  WebSocket Subscribe │  │ Prometheus │  │
-│  └──────────────────────┘  │  Metrics   │  │
-│                             └────────────┘  │
-└─────────────────────────────────────────────┘
+    Fetcher (Worker Pool) ──→ EventBus (Pub/Sub)
+         ↓                          ↓
+    Storage (PebbleDB)              ↓
+         ↓                          ↓
+    ┌─────────────────────────────────────┐
+    │  API Server                         │
+    │  GraphQL │ JSON-RPC │ WebSocket     │
+    └─────────────────────────────────────┘
 ```
+
+> 📖 See detailed architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ---
 
@@ -542,19 +497,7 @@ make lint
 
 ### Project structure
 
-```
-indexer-go/
-├── cmd/                # Entry points
-├── client/             # Ethereum RPC client
-├── fetch/              # Blockchain data fetcher
-├── storage/            # Database layer (PebbleDB)
-├── events/             # Event subscription system
-├── serve/              # API server (GraphQL, JSON-RPC)
-├── types/              # Common types
-├── internal/           # Internal packages
-├── docs/               # Documentation
-└── scripts/            # Build & utility scripts
-```
+> 📖 See project structure: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ### Run locally
 
@@ -630,6 +573,7 @@ make bench
 ## 📚 Documentation
 
 ### Core Documentation
+- 📄 [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and internals
 - 📄 [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) - Detailed implementation plan
 - 📄 [STABLE_ONE_TECHNICAL_ANALYSIS.md](docs/STABLE_ONE_TECHNICAL_ANALYSIS.md) - Stable-One chain analysis
 - 📄 [API_REFERENCE.md](docs/API_REFERENCE.md) - Complete API reference (TBD)
@@ -709,8 +653,10 @@ docker run -d \
   --name indexer-go \
   -p 8080:8080 \
   -v $(pwd)/data:/data \
-  -e INDEXER_REMOTE=http://stable-one-node:8545 \
+  -e INDEXER_REMOTE=http://host.docker.internal:8545 \
   indexer-go:latest
+
+# For Linux, add: --add-host=host.docker.internal:host-gateway
 ```
 
 ### Docker Compose
@@ -725,8 +671,10 @@ services:
     volumes:
       - ./data:/data
     environment:
-      INDEXER_REMOTE: http://stable-one-node:8545
+      INDEXER_REMOTE: http://host.docker.internal:8545
       INDEXER_LOG_LEVEL: info
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # For Linux
     restart: unless-stopped
 ```
 
@@ -760,14 +708,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 Email: support@example.com
-- 💬 Discord: [Join our server](https://discord.gg/example)
 - 🐛 Issues: [GitHub Issues](https://github.com/your-org/indexer-go/issues)
 
 ---
 
-**Status**: 🚀 Production Ready (Core Features + Event Subscription + Historical API)
-
 **Version**: 0.7.1
-
-**Last Updated**: 2025-11-19
