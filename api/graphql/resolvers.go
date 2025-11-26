@@ -226,8 +226,32 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 		nodes[i] = s.blockToMap(block)
 	}
 
-	// Calculate pagination info
-	totalCount := len(filteredBlocks)
+	// Calculate total count based on filters
+	var totalCount int
+	hasTimestampFilter := timestampFrom > 0 || timestampTo > 0
+	hasMinerFilter := miner != nil
+
+	if !hasTimestampFilter && !hasMinerFilter {
+		// No filters applied (or only block number range) - use actual total count
+		if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+			// Use storage method for accurate total block count
+			count, err := histStorage.GetBlockCount(ctx)
+			if err == nil {
+				totalCount = int(count)
+			} else {
+				// Fallback: use latest height + 1
+				totalCount = int(latestHeight + 1)
+			}
+		} else {
+			// Fallback: use latest height + 1
+			totalCount = int(latestHeight + 1)
+		}
+	} else {
+		// Filters applied - totalCount represents filtered results in current range
+		// Note: This is the count within the queried range, not the total across all blocks
+		totalCount = len(filteredBlocks)
+	}
+
 	hasNextPage := endBlock < numberTo
 	hasPreviousPage := offset > 0
 
@@ -426,22 +450,45 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 		}
 	}
 
+	// Calculate total count based on filters
+	var totalCount int
+	hasFilters := fromAddr != nil || toAddr != nil || txType != nil
+
+	if !hasFilters {
+		// No filters applied - use actual total transaction count
+		if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+			count, err := histStorage.GetTransactionCount(ctx)
+			if err == nil {
+				totalCount = int(count)
+			} else {
+				// Fallback: use filtered count from queried range
+				totalCount = len(filteredTxs)
+			}
+		} else {
+			// Fallback: use filtered count from queried range
+			totalCount = len(filteredTxs)
+		}
+	} else {
+		// Filters applied - totalCount represents filtered results in current range
+		// Note: Due to block range limitation (max 1000), this may not reflect total across all blocks
+		totalCount = len(filteredTxs)
+	}
+
 	// Apply pagination
-	totalCount := len(filteredTxs)
 	start := offset
 	end := offset + limit
 
-	if start > totalCount {
-		start = totalCount
+	if start > len(filteredTxs) {
+		start = len(filteredTxs)
 	}
-	if end > totalCount {
-		end = totalCount
+	if end > len(filteredTxs) {
+		end = len(filteredTxs)
 	}
 
 	paginatedTxs := filteredTxs[start:end]
 
 	// Calculate pagination info
-	hasNextPage := end < totalCount
+	hasNextPage := end < len(filteredTxs)
 	hasPreviousPage := offset > 0
 
 	var startCursor, endCursor interface{}

@@ -20,7 +20,7 @@ func TestNewSubscriptionServer(t *testing.T) {
 	go eventBus.Run()
 	defer eventBus.Stop()
 
-	server := NewSubscriptionServer(eventBus, logger)
+	server := NewSubscriptionServer(eventBus, logger, true)
 	if server == nil {
 		t.Fatal("expected non-nil server")
 	}
@@ -32,7 +32,7 @@ func TestNewSubscriptionServer(t *testing.T) {
 
 func TestSubscriptionServer_SetEventBus(t *testing.T) {
 	logger := zap.NewNop()
-	server := NewSubscriptionServer(nil, logger)
+	server := NewSubscriptionServer(nil, logger, true)
 
 	if server.eventBus != nil {
 		t.Error("expected nil eventBus initially")
@@ -51,7 +51,7 @@ func TestSubscriptionServer_SetEventBus(t *testing.T) {
 
 func TestSubscriptionServer_HandlerWithoutEventBus(t *testing.T) {
 	logger := zap.NewNop()
-	server := NewSubscriptionServer(nil, logger)
+	server := NewSubscriptionServer(nil, logger, true)
 
 	req := httptest.NewRequest("GET", "/graphql/ws", nil)
 	rec := httptest.NewRecorder()
@@ -69,7 +69,7 @@ func TestSubscriptionServer_WebSocketConnection(t *testing.T) {
 	go eventBus.Run()
 	defer eventBus.Stop()
 
-	server := NewSubscriptionServer(eventBus, logger)
+	server := NewSubscriptionServer(eventBus, logger, true)
 	ts := httptest.NewServer(http.HandlerFunc(server.ServeHTTP))
 	defer ts.Close()
 
@@ -105,7 +105,7 @@ func TestSubscriptionServer_Subscribe(t *testing.T) {
 	go eventBus.Run()
 	defer eventBus.Stop()
 
-	server := NewSubscriptionServer(eventBus, logger)
+	server := NewSubscriptionServer(eventBus, logger, true)
 	ts := httptest.NewServer(http.HandlerFunc(server.ServeHTTP))
 	defer ts.Close()
 
@@ -154,7 +154,7 @@ func TestSubscriptionServer_PingPong(t *testing.T) {
 	go eventBus.Run()
 	defer eventBus.Stop()
 
-	server := NewSubscriptionServer(eventBus, logger)
+	server := NewSubscriptionServer(eventBus, logger, true)
 	ts := httptest.NewServer(http.HandlerFunc(server.ServeHTTP))
 	defer ts.Close()
 

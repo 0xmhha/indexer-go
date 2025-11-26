@@ -72,9 +72,20 @@ func (s *Schema) resolveBlocksByTimeRange(p graphql.ResolveParams) (interface{},
 		nodes[i] = s.blockToMap(block)
 	}
 
+	// Note: totalCount represents blocks returned in this page
+	// To get the true total count of blocks in the time range, we would need
+	// a separate CountBlocksByTimeRange method in storage (performance optimization for future)
+	totalCount := len(blocks)
+
+	// For more accurate totalCount when no pagination is applied
+	if limit >= constants.DefaultMaxPaginationLimit && offset == 0 {
+		// User requested maximum limit - totalCount is likely accurate for the range
+		totalCount = len(blocks)
+	}
+
 	return map[string]interface{}{
 		"nodes":      nodes,
-		"totalCount": len(blocks),
+		"totalCount": totalCount,
 		"pageInfo": map[string]interface{}{
 			"hasNextPage":     len(blocks) == limit,
 			"hasPreviousPage": offset > 0,

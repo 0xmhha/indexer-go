@@ -25,7 +25,7 @@ func TestWebSocketBlockSubscription_Integration(t *testing.T) {
 
 	// 2. Setup Subscription Server
 	logger, _ := zap.NewDevelopment()
-	subServer := NewSubscriptionServer(eventBus, logger)
+	subServer := NewSubscriptionServer(eventBus, logger, true)
 
 	// 3. Setup HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +209,7 @@ func TestWebSocketTransactionSubscription(t *testing.T) {
 	defer eventBus.Stop()
 
 	logger, _ := zap.NewDevelopment()
-	subServer := NewSubscriptionServer(eventBus, logger)
+	subServer := NewSubscriptionServer(eventBus, logger, true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		subServer.ServeHTTP(w, r)
@@ -299,7 +299,7 @@ func TestWebSocketLogSubscription(t *testing.T) {
 	defer eventBus.Stop()
 
 	logger, _ := zap.NewDevelopment()
-	subServer := NewSubscriptionServer(eventBus, logger)
+	subServer := NewSubscriptionServer(eventBus, logger, true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		subServer.ServeHTTP(w, r)
@@ -398,7 +398,7 @@ func TestWebSocketMultipleSubscriptions(t *testing.T) {
 	defer eventBus.Stop()
 
 	logger, _ := zap.NewDevelopment()
-	subServer := NewSubscriptionServer(eventBus, logger)
+	subServer := NewSubscriptionServer(eventBus, logger, true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		subServer.ServeHTTP(w, r)
@@ -511,7 +511,7 @@ func createTestTransaction() *types.Transaction {
 func TestWebSocketErrorHandling(t *testing.T) {
 	// Setup without EventBus
 	logger, _ := zap.NewDevelopment()
-	subServer := NewSubscriptionServer(nil, logger)
+	subServer := NewSubscriptionServer(nil, logger, true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		subServer.ServeHTTP(w, r)
@@ -542,7 +542,7 @@ func TestWebSocketInvalidSubscription(t *testing.T) {
 	defer eventBus.Stop()
 
 	logger, _ := zap.NewDevelopment()
-	subServer := NewSubscriptionServer(eventBus, logger)
+	subServer := NewSubscriptionServer(eventBus, logger, true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		subServer.ServeHTTP(w, r)
@@ -597,7 +597,7 @@ func TestWebSocketTransactionFilter(t *testing.T) {
 
 	// Setup subscription server
 	logger, _ := zap.NewDevelopment()
-	subServer := NewSubscriptionServer(eventBus, logger)
+	subServer := NewSubscriptionServer(eventBus, logger, true)
 
 	// Setup HTTP test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -754,7 +754,7 @@ func BenchmarkWebSocketThroughput(b *testing.B) {
 	defer eventBus.Stop()
 
 	logger, _ := zap.NewDevelopment()
-	subServer := NewSubscriptionServer(eventBus, logger)
+	subServer := NewSubscriptionServer(eventBus, logger, true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		subServer.ServeHTTP(w, r)
