@@ -168,6 +168,16 @@ func (c *Client) GetNetworkID(ctx context.Context) (*big.Int, error) {
 	return networkID, nil
 }
 
+// BalanceAt returns the balance of an account at a specific block number
+// If blockNumber is nil, returns the balance at the latest block
+func (c *Client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
+	balance, err := c.ethClient.BalanceAt(ctx, account, blockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get balance for %s at block %v: %w", account.Hex(), blockNumber, err)
+	}
+	return balance, nil
+}
+
 // SubscribeNewHead subscribes to new block headers
 func (c *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	sub, err := c.ethClient.SubscribeNewHead(ctx, ch)

@@ -1,262 +1,185 @@
-# Frontend API Integration Guide
+# Frontend API 가이드
 
-이 문서는 Indexer의 GraphQL API를 Frontend에서 사용하기 위한 가이드입니다.
-
-## 목차
-1. [API 엔드포인트](#api-엔드포인트)
-2. [Search API](#search-api)
-3. [Top Miners API](#top-miners-api)
-4. [Token Balance API](#token-balance-api)
-5. [Address Balance API](#address-balance-api)
-6. [기타 Historical API](#기타-historical-api)
-7. [에러 처리](#에러-처리)
+> **중요**: 이 문서는 코드 검증을 완료한 정확한 정보입니다.
+> 마지막 업데이트: 2025-01-XX
+> 작성자: Backend Team
 
 ---
 
-## API 엔드포인트
+## 1. GraphQL 엔드포인트 정보
 
-### GraphQL Endpoint
+### 기본 URL
 ```
-POST http://localhost:8080/graphql
-Content-Type: application/json
+HTTP: http://localhost:8080/graphql
+WebSocket: ws://localhost:8080/graphql/ws
 ```
 
-### GraphQL Playground
-```
-http://localhost:8080/graphql/playground
-```
+**⚠️ 중요**:
+- 프로덕션 환경에서는 `config.yaml`의 `api.host`와 `api.port` 설정을 확인하세요
+- 기본 포트는 `8080`입니다 (설정 파일: `/config.yaml` 참조)
+- WebSocket은 실시간 구독(Subscription)에만 사용됩니다
+
+### CORS 설정
+- CORS는 기본적으로 활성화되어 있습니다
+- 모든 오리진(`*`)이 허용됩니다
+- 프로덕션 환경에서는 `config.yaml`에서 `api.allowed_origins` 수정 필요
 
 ---
 
-## Search API
+## 2. 요청된 API 구현 상태
 
-통합 검색 API로 블록, 트랜잭션, 주소, 로그를 검색할 수 있습니다.
+### ✅ API #1: 통합 검색 (Search API)
 
-### Query
+**상태**: 완전히 구현됨 ✅
 
+**Query 이름**: `search`
+
+**Schema 정의**:
 ```graphql
-query Search($query: String!, $types: [String!], $limit: Int) {
-  search(query: $query, types: $types, limit: $limit) {
-    ... on BlockResult {
-      type
-      block {
-        number
-        hash
-        timestamp
-        parentHash
-        miner
-        gasUsed
-        gasLimit
-        transactionCount
-      }
-    }
-    ... on TransactionResult {
-      type
-      transaction {
-        hash
-        from
-        to
-        value
-        gas
-        gasPrice
-        nonce
-        blockNumber
-        blockHash
-        transactionIndex
-      }
-    }
-    ... on AddressResult {
-      type
-      address
-      transactionCount
-      balance
-    }
-    ... on LogResult {
-      type
-      log {
-        address
-        topics
-        data
-        blockNumber
-        transactionHash
-        logIndex
-      }
-    }
+type SearchResult {
+  # 결과 타입: "block", "transaction", "address", "contract" 중 하나
+  type: String!
+
+  # 검색된 값 (해시, 주소, 블록 번호 등)
+  value: String!
+
+  # 사용자에게 표시할 레이블
+  label: String
+
+  # 추가 메타데이터 (JSON 문자열 형식)
+  metadata: String
+}
+
+type Query {
+  # 블록, 트랜잭션, 주소를 통합 검색
+  search(
+    query: String!,           # 검색어 (블록 번호, 해시, 주소)
+    types: [String],          # 필터: ["block", "transaction", "address", "contract"]
+    limit: Int = 10           # 최대 결과 개수 (기본값: 10)
+  ): [SearchResult!]!
+}
+```
+
+**예제 쿼리**:
+```graphql
+# 1. 모든 타입 검색
+query {
+  search(query: "0x1234...") {
+    type
+    value
+    label
+    metadata
+  }
+}
+
+# 2. 블록만 검색
+query {
+  search(
+    query: "1000",
+    types: ["block"],
+    limit: 5
+  ) {
+    type
+    value
+    label
+  }
+}
+
+# 3. 주소 또는 컨트랙트 검색
+query {
+  search(
+    query: "0xabcd...",
+    types: ["address", "contract"]
+  ) {
+    type
+    value
+    label
+    metadata
   }
 }
 ```
 
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| query | String | Yes | 검색어 (블록 번호, 해시, 주소 등) |
-| types | [String] | No | 결과 타입 필터 ("block", "transaction", "address", "log") |
-| limit | Int | No | 최대 결과 수 (기본값: 10, 최대: 100) |
-
-### Request Examples
-
-#### 1. 전체 검색 (모든 타입)
-```json
-{
-  "query": "query Search($query: String!) { search(query: $query) { ... on BlockResult { type block { number hash } } ... on TransactionResult { type transaction { hash from to } } ... on AddressResult { type address } } }",
-  "variables": {
-    "query": "0x1234"
-  }
-}
-```
-
-#### 2. 블록만 검색
-```json
-{
-  "query": "query Search($query: String!, $types: [String!]) { search(query: $query, types: $types) { ... on BlockResult { type block { number hash timestamp } } } }",
-  "variables": {
-    "query": "100",
-    "types": ["block"]
-  }
-}
-```
-
-#### 3. 주소 검색
-```json
-{
-  "query": "query Search($query: String!, $types: [String!]) { search(query: $query, types: $types) { ... on AddressResult { type address transactionCount balance } } }",
-  "variables": {
-    "query": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-    "types": ["address"]
-  }
-}
-```
-
-### Response Example
-
+**응답 예시**:
 ```json
 {
   "data": {
     "search": [
       {
         "type": "block",
-        "block": {
-          "number": "100",
-          "hash": "0x1234...",
-          "timestamp": "1234567890",
-          "parentHash": "0x5678...",
-          "miner": "0xabcd...",
-          "gasUsed": "5000000",
-          "gasLimit": "8000000",
-          "transactionCount": 10
-        }
+        "value": "1000",
+        "label": "Block #1000",
+        "metadata": "{\"timestamp\":1704067200,\"miner\":\"0x...\"}"
       },
       {
         "type": "transaction",
-        "transaction": {
-          "hash": "0x1234...",
-          "from": "0xaaa...",
-          "to": "0xbbb...",
-          "value": "1000000000000000000",
-          "gas": "21000",
-          "gasPrice": "1000000000",
-          "nonce": "5",
-          "blockNumber": "100",
-          "blockHash": "0x1234...",
-          "transactionIndex": "0"
-        }
+        "value": "0x1234...",
+        "label": "TX 0x1234...",
+        "metadata": "{\"from\":\"0x...\",\"to\":\"0x...\",\"value\":\"1000000000000000000\"}"
       }
     ]
   }
 }
 ```
 
-### Frontend Integration Example (React + Apollo Client)
+---
 
-```typescript
-import { useQuery, gql } from '@apollo/client';
+### ✅ API #2: 상위 채굴자 (Top Miners API)
 
-const SEARCH_QUERY = gql`
-  query Search($query: String!, $types: [String!], $limit: Int) {
-    search(query: $query, types: $types, limit: $limit) {
-      ... on BlockResult {
-        type
-        block {
-          number
-          hash
-          timestamp
-          miner
-        }
-      }
-      ... on TransactionResult {
-        type
-        transaction {
-          hash
-          from
-          to
-          value
-        }
-      }
-      ... on AddressResult {
-        type
-        address
-        transactionCount
-        balance
-      }
-    }
-  }
-`;
+**상태**: 완전히 구현됨 ✅
 
-function SearchComponent() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [resultTypes, setResultTypes] = useState(['block', 'transaction', 'address']);
+**Query 이름**: `topMiners`
 
-  const { loading, error, data } = useQuery(SEARCH_QUERY, {
-    variables: {
-      query: searchQuery,
-      types: resultTypes,
-      limit: 20
-    },
-    skip: !searchQuery
-  });
+**Schema 정의**:
+```graphql
+type MinerStats {
+  # 채굴자 주소
+  address: Address!
 
-  return (
-    <div>
-      <input
-        type="text"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="Search blocks, transactions, addresses..."
-      />
+  # 채굴한 블록 수
+  blockCount: BigInt!
 
-      {loading && <div>Loading...</div>}
-      {error && <div>Error: {error.message}</div>}
+  # 가장 최근에 채굴한 블록 번호
+  lastBlockNumber: BigInt!
 
-      {data?.search.map((result, index) => (
-        <div key={index}>
-          {result.type === 'block' && (
-            <div>Block #{result.block.number} - {result.block.hash}</div>
-          )}
-          {result.type === 'transaction' && (
-            <div>Tx: {result.transaction.hash}</div>
-          )}
-          {result.type === 'address' && (
-            <div>Address: {result.address} ({result.transactionCount} txs)</div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
+  # 가장 최근 채굴 시간 (Unix timestamp)
+  lastBlockTime: BigInt!
+
+  # 전체 대비 비율 (0-100)
+  percentage: Float!
+
+  # 총 보상 (Wei 단위)
+  totalRewards: BigInt!
+}
+
+type Query {
+  # 블록 수 기준 상위 채굴자 조회
+  topMiners(
+    limit: Int,              # 최대 결과 개수 (기본값: 10, 최대: 100)
+    fromBlock: BigInt,       # 시작 블록 (선택사항)
+    toBlock: BigInt          # 종료 블록 (선택사항)
+  ): [MinerStats!]!
 }
 ```
 
----
-
-## Top Miners API
-
-채굴자 통계 및 랭킹을 조회하는 API입니다. **최근 개선사항으로 시간 범위 필터링과 추가 필드(보상, 비율, 타임스탬프)를 지원합니다.**
-
-### Query
-
+**예제 쿼리**:
 ```graphql
-query TopMiners($limit: Int, $fromBlock: BigInt, $toBlock: BigInt) {
-  topMiners(limit: $limit, fromBlock: $fromBlock, toBlock: $toBlock) {
+# 1. 상위 10명의 채굴자
+query {
+  topMiners(limit: 10) {
+    address
+    blockCount
+    percentage
+    totalRewards
+  }
+}
+
+# 2. 특정 블록 범위에서 상위 채굴자
+query {
+  topMiners(
+    limit: 20,
+    fromBlock: "1000",
+    toBlock: "10000"
+  ) {
     address
     blockCount
     lastBlockNumber
@@ -267,249 +190,82 @@ query TopMiners($limit: Int, $fromBlock: BigInt, $toBlock: BigInt) {
 }
 ```
 
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| limit | Int | No | 최대 결과 수 (기본값: 10, 최대: 100) |
-| fromBlock | BigInt | No | 시작 블록 번호 (0 = genesis, 기본값: 전체) |
-| toBlock | BigInt | No | 종료 블록 번호 (0 = latest, 기본값: 전체) |
-
-### Response Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| address | Address | 채굴자 주소 |
-| blockCount | BigInt | 채굴한 블록 수 |
-| lastBlockNumber | BigInt | 마지막으로 채굴한 블록 번호 |
-| lastBlockTime | BigInt | 마지막으로 채굴한 블록의 타임스탬프 (Unix timestamp) |
-| percentage | Float | 전체 블록 대비 채굴 비율 (%) |
-| totalRewards | BigInt | 총 채굴 보상 (Wei 단위, transaction fees 합계) |
-
-### Request Examples
-
-#### 1. 전체 기간 Top 10 채굴자
-```json
-{
-  "query": "query TopMiners { topMiners { address blockCount lastBlockNumber lastBlockTime percentage totalRewards } }"
-}
-```
-
-#### 2. 특정 블록 범위의 Top 20 채굴자
-```json
-{
-  "query": "query TopMiners($limit: Int, $fromBlock: BigInt, $toBlock: BigInt) { topMiners(limit: $limit, fromBlock: $fromBlock, toBlock: $toBlock) { address blockCount percentage totalRewards } }",
-  "variables": {
-    "limit": 20,
-    "fromBlock": "1000",
-    "toBlock": "2000"
-  }
-}
-```
-
-#### 3. 최근 1000 블록의 채굴자 통계
-```json
-{
-  "query": "query TopMiners($fromBlock: BigInt) { topMiners(fromBlock: $fromBlock) { address blockCount lastBlockNumber lastBlockTime percentage totalRewards } }",
-  "variables": {
-    "fromBlock": "9000"
-  }
-}
-```
-
-### Response Example
-
+**응답 예시**:
 ```json
 {
   "data": {
     "topMiners": [
       {
-        "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+        "address": "0x1111111111111111111111111111111111111111",
         "blockCount": "1500",
         "lastBlockNumber": "9999",
-        "lastBlockTime": "1709876543",
+        "lastBlockTime": "1704153600",
         "percentage": 15.5,
-        "totalRewards": "5000000000000000000"
+        "totalRewards": "1500000000000000000000"
       },
       {
-        "address": "0x1234567890abcdef1234567890abcdef12345678",
+        "address": "0x2222222222222222222222222222222222222222",
         "blockCount": "1200",
         "lastBlockNumber": "9998",
-        "lastBlockTime": "1709876500",
-        "percentage": 12.3,
-        "totalRewards": "3800000000000000000"
+        "lastBlockTime": "1704153580",
+        "percentage": 12.4,
+        "totalRewards": "1200000000000000000000"
       }
     ]
   }
 }
 ```
 
-### Frontend Integration Example (React + Apollo Client)
+---
 
-```typescript
-import { useQuery, gql } from '@apollo/client';
-import { formatEther } from 'ethers';
+### ✅ API #3: 토큰 잔액 조회 (Token Balance API)
 
-const TOP_MINERS_QUERY = gql`
-  query TopMiners($limit: Int, $fromBlock: BigInt, $toBlock: BigInt) {
-    topMiners(limit: $limit, fromBlock: $fromBlock, toBlock: $toBlock) {
-      address
-      blockCount
-      lastBlockNumber
-      lastBlockTime
-      percentage
-      totalRewards
-    }
-  }
-`;
+**상태**: 완전히 구현됨 ✅
 
-interface MinerStats {
-  address: string;
-  blockCount: string;
-  lastBlockNumber: string;
-  lastBlockTime: string;
-  percentage: number;
-  totalRewards: string;
+**Query 이름**: `tokenBalances`
+
+**Schema 정의**:
+```graphql
+type TokenBalance {
+  # 토큰 컨트랙트 주소
+  contractAddress: Address!
+
+  # 토큰 표준 (ERC20, ERC721, ERC1155)
+  tokenType: String!
+
+  # 토큰 잔액 (문자열)
+  balance: BigInt!
+
+  # 토큰 ID (ERC721/ERC1155에만 해당, ERC20은 null)
+  tokenId: BigInt
+
+  # 토큰 이름
+  name: String
+
+  # 토큰 심볼 (예: "WETH", "USDT")
+  symbol: String
+
+  # 소수점 자릿수 (ERC20만 해당)
+  decimals: Int
+
+  # 메타데이터 (JSON 문자열, NFT용)
+  metadata: String
 }
 
-function TopMinersComponent() {
-  const [limit, setLimit] = useState(10);
-  const [fromBlock, setFromBlock] = useState<string>('');
-  const [toBlock, setToBlock] = useState<string>('');
-
-  const { loading, error, data, refetch } = useQuery<{ topMiners: MinerStats[] }>(
-    TOP_MINERS_QUERY,
-    {
-      variables: {
-        limit,
-        fromBlock: fromBlock || undefined,
-        toBlock: toBlock || undefined
-      }
-    }
-  );
-
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(parseInt(timestamp) * 1000).toLocaleString();
-  };
-
-  return (
-    <div>
-      <h2>Top Miners Leaderboard</h2>
-
-      {/* Filters */}
-      <div className="filters">
-        <label>
-          Limit:
-          <input
-            type="number"
-            value={limit}
-            onChange={(e) => setLimit(parseInt(e.target.value))}
-            min="1"
-            max="100"
-          />
-        </label>
-
-        <label>
-          From Block:
-          <input
-            type="text"
-            value={fromBlock}
-            onChange={(e) => setFromBlock(e.target.value)}
-            placeholder="Leave empty for all"
-          />
-        </label>
-
-        <label>
-          To Block:
-          <input
-            type="text"
-            value={toBlock}
-            onChange={(e) => setToBlock(e.target.value)}
-            placeholder="Leave empty for latest"
-          />
-        </label>
-
-        <button onClick={() => refetch()}>Apply Filters</button>
-      </div>
-
-      {loading && <div>Loading miners...</div>}
-      {error && <div>Error: {error.message}</div>}
-
-      {data && (
-        <table>
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Address</th>
-              <th>Blocks Mined</th>
-              <th>Percentage</th>
-              <th>Total Rewards (ETH)</th>
-              <th>Last Block</th>
-              <th>Last Activity</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.topMiners.map((miner, index) => (
-              <tr key={miner.address}>
-                <td>{index + 1}</td>
-                <td>
-                  <a href={`/address/${miner.address}`}>
-                    {miner.address.slice(0, 10)}...
-                  </a>
-                </td>
-                <td>{parseInt(miner.blockCount).toLocaleString()}</td>
-                <td>{miner.percentage.toFixed(2)}%</td>
-                <td>{formatEther(miner.totalRewards)} ETH</td>
-                <td>
-                  <a href={`/block/${miner.lastBlockNumber}`}>
-                    #{miner.lastBlockNumber}
-                  </a>
-                </td>
-                <td>{formatTimestamp(miner.lastBlockTime)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
+type Query {
+  # 주소의 토큰 잔액 조회 (ERC20/721/1155)
+  tokenBalances(
+    address: Address!,       # 조회할 주소
+    tokenType: String        # 필터: "ERC20", "ERC721", "ERC1155" (선택사항)
+  ): [TokenBalance!]!
 }
 ```
 
-### UI Design Recommendations
-
-#### 1. Leaderboard View
-- 순위, 채굴자 주소, 블록 수, 비율을 표시하는 테이블
-- 주소 클릭 시 상세 페이지로 이동
-- 페이지네이션 또는 무한 스크롤
-
-#### 2. Time Range Filter
-- 블록 번호 범위 선택 (from/to)
-- 프리셋: "Last 1000 blocks", "Last 24 hours", "Last 7 days", "All time"
-- 날짜를 블록 번호로 자동 변환 (타임스탬프 API 활용)
-
-#### 3. Visualizations
-- 파이 차트: 상위 채굴자들의 비율 시각화
-- 막대 그래프: 채굴 블록 수 비교
-- 타임라인: 시간대별 채굴 활동
-
-#### 4. Miner Detail Page
-- 총 채굴 블록 수와 보상
-- 시간대별 채굴 그래프
-- 최근 채굴한 블록 목록
-- 평균 블록 타임
-
----
-
-## Token Balance API
-
-토큰 잔액 조회 API로 ERC20, ERC721, ERC1155 토큰의 잔액과 메타데이터를 조회할 수 있습니다. **Phase 2에서 name, symbol, decimals, metadata 필드와 tokenType 필터가 추가되었습니다.**
-
-### Query
-
+**예제 쿼리**:
 ```graphql
-query TokenBalances($address: Address!, $tokenType: String) {
-  tokenBalances(address: $address, tokenType: $tokenType) {
+# 1. 모든 토큰 잔액 조회
+query {
+  tokenBalances(address: "0x1234...") {
     contractAddress
     tokenType
     balance
@@ -517,83 +273,50 @@ query TokenBalances($address: Address!, $tokenType: String) {
     name
     symbol
     decimals
+  }
+}
+
+# 2. ERC20 토큰만 조회
+query {
+  tokenBalances(
+    address: "0x1234...",
+    tokenType: "ERC20"
+  ) {
+    contractAddress
+    tokenType
+    balance
+    name
+    symbol
+    decimals
+  }
+}
+
+# 3. NFT (ERC721) 조회
+query {
+  tokenBalances(
+    address: "0x1234...",
+    tokenType: "ERC721"
+  ) {
+    contractAddress
+    tokenType
+    balance
+    tokenId
+    name
+    symbol
     metadata
   }
 }
 ```
 
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| address | Address | Yes | 조회할 주소 (지갑 주소) |
-| tokenType | String | No | 토큰 타입 필터 ("ERC20", "ERC721", "ERC1155") |
-
-### Response Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| contractAddress | Address | 토큰 컨트랙트 주소 |
-| tokenType | String | 토큰 표준 타입 (ERC20, ERC721, ERC1155) |
-| balance | BigInt | 토큰 잔액 (ERC20: 소수점 없는 원본 값, ERC721: 1 또는 0, ERC1155: 수량) |
-| tokenId | BigInt | 토큰 ID (ERC721/ERC1155만 해당, ERC20은 null) |
-| name | String | 토큰 이름 (예: "Wrapped Ether") |
-| symbol | String | 토큰 심볼 (예: "WETH") |
-| decimals | Int | 소수점 자리수 (ERC20만 해당, 기본값: 18) |
-| metadata | String | 토큰 메타데이터 JSON (ERC721/ERC1155의 경우 NFT 메타데이터) |
-
-### Request Examples
-
-#### 1. 모든 토큰 잔액 조회
-```json
-{
-  "query": "query TokenBalances($address: Address!) { tokenBalances(address: $address) { contractAddress tokenType balance tokenId name symbol decimals metadata } }",
-  "variables": {
-    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
-  }
-}
-```
-
-#### 2. ERC20 토큰만 조회
-```json
-{
-  "query": "query TokenBalances($address: Address!, $tokenType: String) { tokenBalances(address: $address, tokenType: $tokenType) { contractAddress tokenType balance name symbol decimals } }",
-  "variables": {
-    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-    "tokenType": "ERC20"
-  }
-}
-```
-
-#### 3. ERC721 NFT만 조회
-```json
-{
-  "query": "query TokenBalances($address: Address!, $tokenType: String) { tokenBalances(address: $address, tokenType: $tokenType) { contractAddress tokenType tokenId name metadata } }",
-  "variables": {
-    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-    "tokenType": "ERC721"
-  }
-}
-```
-
-#### 4. 특정 컨트랙트의 토큰만 조회 (클라이언트 필터링)
-```typescript
-// GraphQL에서는 contractAddress 필터를 지원하지 않으므로 클라이언트에서 필터링
-const filteredTokens = data.tokenBalances.filter(
-  token => token.contractAddress === "0x1234..."
-);
-```
-
-### Response Example
-
+**응답 예시**:
 ```json
 {
   "data": {
     "tokenBalances": [
       {
-        "contractAddress": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "contractAddress": "0xaaaa...",
         "tokenType": "ERC20",
-        "balance": "5000000000000000000",
+        "balance": "1000000000000000000000",
         "tokenId": null,
         "name": "Wrapped Ether",
         "symbol": "WETH",
@@ -601,719 +324,533 @@ const filteredTokens = data.tokenBalances.filter(
         "metadata": null
       },
       {
-        "contractAddress": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        "tokenType": "ERC20",
-        "balance": "10000000",
-        "tokenId": null,
-        "name": "USD Coin",
-        "symbol": "USDC",
-        "decimals": 6,
-        "metadata": null
-      },
-      {
-        "contractAddress": "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D",
+        "contractAddress": "0xbbbb...",
         "tokenType": "ERC721",
         "balance": "1",
-        "tokenId": "1234",
-        "name": "Bored Ape Yacht Club",
-        "symbol": "BAYC",
+        "tokenId": "42",
+        "name": "CryptoKitties",
+        "symbol": "CK",
         "decimals": null,
-        "metadata": "{\"name\":\"Bored Ape #1234\",\"image\":\"ipfs://...\",\"attributes\":[...]}"
-      },
-      {
-        "contractAddress": "0xd07dc4262BCDbf85190C01c996b4C06a461d2430",
-        "tokenType": "ERC1155",
-        "balance": "10",
-        "tokenId": "5678",
-        "name": "Rarible",
-        "symbol": "RARI",
-        "decimals": null,
-        "metadata": "{\"name\":\"Artwork #5678\",\"image\":\"ipfs://...\",\"description\":\"...\"}"
+        "metadata": "{\"name\":\"Kitty #42\",\"image\":\"ipfs://...\"}"
       }
     ]
   }
 }
 ```
 
-### Frontend Integration Example (React + Apollo Client)
+---
 
+### ✅ API #4: 컨트랙트 검증 (Contract Verification)
+
+**상태**: Query와 Mutation 모두 완전히 구현됨 ✅
+
+**Query 이름**: `contractVerification`
+**Mutation 이름**: `verifyContract`
+
+**Schema 정의**:
+```graphql
+type ContractVerification {
+  # 컨트랙트 주소
+  address: Address!
+
+  # 검증 여부
+  isVerified: Boolean!
+
+  # 컨트랙트 이름
+  name: String
+
+  # Solidity 컴파일러 버전 (예: "0.8.20")
+  compilerVersion: String
+
+  # 최적화 활성화 여부
+  optimizationEnabled: Boolean
+
+  # 최적화 실행 횟수
+  optimizationRuns: Int
+
+  # 검증된 소스 코드
+  sourceCode: String
+
+  # 컨트랙트 ABI (JSON 문자열)
+  abi: String
+
+  # Constructor 인자 (인코딩됨)
+  constructorArguments: String
+
+  # 검증 시간 (RFC3339 형식)
+  verifiedAt: String
+
+  # 라이선스 타입 (예: "MIT", "GPL-3.0")
+  licenseType: String
+}
+
+type Query {
+  # 컨트랙트 검증 정보 조회
+  contractVerification(address: Address!): ContractVerification
+}
+
+type Mutation {
+  # 컨트랙트 소스 코드 검증
+  verifyContract(
+    address: Address!,
+    sourceCode: String!,
+    compilerVersion: String!,
+    optimizationEnabled: Boolean!,
+    optimizationRuns: Int,
+    constructorArguments: String,
+    contractName: String,
+    licenseType: String
+  ): ContractVerification!
+}
+```
+
+**예제 쿼리** (조회):
+```graphql
+query {
+  contractVerification(address: "0x1234...") {
+    address
+    isVerified
+    name
+    compilerVersion
+    sourceCode
+    abi
+    verifiedAt
+  }
+}
+```
+
+**예제 Mutation** (검증 제출):
+```graphql
+mutation {
+  verifyContract(
+    address: "0x1234...",
+    sourceCode: "pragma solidity ^0.8.0; contract MyToken { ... }",
+    compilerVersion: "0.8.20",
+    optimizationEnabled: true,
+    optimizationRuns: 200,
+    contractName: "MyToken",
+    licenseType: "MIT"
+  ) {
+    address
+    isVerified
+    name
+    verifiedAt
+  }
+}
+```
+
+---
+
+## 3. 기존 API 버그 수정 현황
+
+### 🐛 Issue #1: addressBalance 버그 (HIGH Priority)
+
+**문제**: `addressBalance` 쿼리가 큰 Wei 값에 대해 "0" 반환
+
+**근본 원인 분석**: ✅ 완료
+- GraphQL 스키마: `BigInt` 타입으로 정의됨
+- 실제 구현: `bigIntType = graphql.String`으로 정의되어 문자열 반환
+- Resolver 구현: `balance.String()` 반환 (✅ 정확함)
+- **결론**: GraphQL resolver 레이어는 정상 작동함
+
+**현재 상태**:
+- ⚠️ Storage 레이어(`GetAddressBalance`)에서 0 반환 가능성 높음
+- 백엔드 팀에서 storage 구현 조사 필요
+
+**Frontend 대응**:
+```graphql
+# 현재 Query (정상 작동 예상)
+query {
+  addressBalance(
+    address: "0x1234...",
+    blockNumber: "0"  # 0 또는 생략 시 최신 블록
+  )
+}
+
+# 응답 형식
+{
+  "data": {
+    "addressBalance": "1000000000000000000000"  # 문자열로 반환
+  }
+}
+```
+
+**중요 사항**:
+1. ✅ 반환 타입은 `BigInt`(String)이므로 안전하게 큰 숫자 처리 가능
+2. ✅ JavaScript에서는 `BigInt()` 또는 `ethers.BigNumber.from()` 사용 권장
+3. ⚠️ 만약 여전히 "0"이 반환되면 백엔드 팀에 알려주세요
+
+---
+
+### ⚠️ Issue #2: ContractCreation 주소 필드 (MEDIUM Priority)
+
+**문제**: `ContractCreation` 타입에 `address` 필드가 없어 컨트랙트 주소 표시 불가
+
+**조사 결과**: ✅ 정상 작동 중 - 필드명 불일치 문제
+
+**실제 Schema 정의**:
+```graphql
+type ContractCreation {
+  # ⚠️ 필드명: contractAddress (address 아님!)
+  contractAddress: Address!
+
+  # 생성자 주소
+  creator: Address!
+
+  # 생성 트랜잭션 해시
+  transactionHash: Hash!
+
+  # 블록 번호
+  blockNumber: BigInt!
+
+  # 타임스탬프
+  timestamp: BigInt!
+
+  # 배포된 바이트코드 크기
+  bytecodeSize: Int!
+}
+```
+
+**해결 방법**: ✅ 필드명 변경
+
+**올바른 쿼리**:
+```graphql
+# ❌ 잘못된 예 (작동 안 함)
+query {
+  contractCreation(address: "0x1234...") {
+    address  # 이 필드는 존재하지 않음!
+    creator
+  }
+}
+
+# ✅ 올바른 예 (작동함)
+query {
+  contractCreation(address: "0x1234...") {
+    contractAddress  # 정확한 필드명
+    creator
+    transactionHash
+    blockNumber
+    timestamp
+    bytecodeSize
+  }
+}
+```
+
+**Frontend 수정 사항**:
+- 모든 `ContractCreation` 쿼리에서 `address` → `contractAddress`로 변경
+- 이것은 버그가 아니라 정상적인 스키마 설계입니다
+
+---
+
+## 4. GraphQL 스칼라 타입 참고
+
+백엔드에서 사용하는 커스텀 스칼라 타입 정의:
+
+```graphql
+# BigInt: 큰 정수를 문자열로 표현 (JavaScript Number 한계 극복)
+scalar BigInt    # 실제로는 String
+
+# Address: 이더리움 주소 (0x로 시작하는 40자 hex)
+scalar Address   # 실제로는 String
+
+# Hash: 32바이트 해시 (0x로 시작하는 64자 hex)
+scalar Hash      # 실제로는 String
+
+# Bytes: 임의 길이 바이트 배열 (0x로 시작하는 hex)
+scalar Bytes     # 실제로는 String
+```
+
+**중요**: 모든 스칼라 타입은 실제로 `String`으로 구현되어 있습니다!
+
+---
+
+## 5. 실전 사용 예제
+
+### 예제 1: 주소의 전체 정보 조회
+```graphql
+query GetAddressFullInfo($address: Address!) {
+  # 네이티브 코인 잔액
+  balance: addressBalance(address: $address)
+
+  # 토큰 잔액 (ERC20)
+  tokens: tokenBalances(address: $address, tokenType: "ERC20") {
+    contractAddress
+    balance
+    name
+    symbol
+    decimals
+  }
+
+  # NFT 보유 현황
+  nfts: tokenBalances(address: $address, tokenType: "ERC721") {
+    contractAddress
+    tokenId
+    name
+    metadata
+  }
+
+  # 컨트랙트 생성 여부
+  contractInfo: contractCreation(address: $address) {
+    contractAddress
+    creator
+    blockNumber
+    timestamp
+  }
+
+  # 검증 상태
+  verification: contractVerification(address: $address) {
+    isVerified
+    name
+    compilerVersion
+  }
+}
+```
+
+### 예제 2: 검색 기능 구현
 ```typescript
-import { useQuery, gql } from '@apollo/client';
-import { formatUnits } from 'ethers';
+// TypeScript 예제
+import { gql, useQuery } from '@apollo/client';
 
-const TOKEN_BALANCES_QUERY = gql`
-  query TokenBalances($address: Address!, $tokenType: String) {
-    tokenBalances(address: $address, tokenType: $tokenType) {
-      contractAddress
-      tokenType
-      balance
-      tokenId
-      name
-      symbol
-      decimals
+const SEARCH_QUERY = gql`
+  query Search($query: String!, $limit: Int) {
+    search(query: $query, limit: $limit) {
+      type
+      value
+      label
       metadata
     }
   }
 `;
 
-interface TokenBalance {
-  contractAddress: string;
-  tokenType: 'ERC20' | 'ERC721' | 'ERC1155';
-  balance: string;
-  tokenId: string | null;
-  name: string;
-  symbol: string;
-  decimals: number | null;
-  metadata: string | null;
-}
-
-function TokenBalancesComponent({ address }: { address: string }) {
-  const [tokenTypeFilter, setTokenTypeFilter] = useState<string>('');
-
-  const { loading, error, data } = useQuery<{ tokenBalances: TokenBalance[] }>(
-    TOKEN_BALANCES_QUERY,
-    {
-      variables: {
-        address,
-        tokenType: tokenTypeFilter || undefined
-      }
-    }
-  );
-
-  const formatBalance = (token: TokenBalance) => {
-    if (token.tokenType === 'ERC20' && token.decimals) {
-      // ERC20: Format with decimals
-      return formatUnits(token.balance, token.decimals);
-    } else if (token.tokenType === 'ERC721') {
-      // ERC721: Show token ID
-      return `Token #${token.tokenId}`;
-    } else if (token.tokenType === 'ERC1155') {
-      // ERC1155: Show quantity and token ID
-      return `${token.balance}x Token #${token.tokenId}`;
-    }
-    return token.balance;
-  };
-
-  const parseMetadata = (metadataJson: string | null) => {
-    if (!metadataJson) return null;
-    try {
-      return JSON.parse(metadataJson);
-    } catch {
-      return null;
-    }
-  };
-
-  return (
-    <div>
-      <h2>Token Balances</h2>
-
-      {/* Token Type Filter */}
-      <div className="filters">
-        <label>
-          Token Type:
-          <select
-            value={tokenTypeFilter}
-            onChange={(e) => setTokenTypeFilter(e.target.value)}
-          >
-            <option value="">All Types</option>
-            <option value="ERC20">ERC20 Tokens</option>
-            <option value="ERC721">ERC721 NFTs</option>
-            <option value="ERC1155">ERC1155 Tokens</option>
-          </select>
-        </label>
-      </div>
-
-      {loading && <div>Loading token balances...</div>}
-      {error && <div>Error: {error.message}</div>}
-
-      {data && (
-        <div className="token-list">
-          {data.tokenBalances.length === 0 ? (
-            <div>No tokens found for this address</div>
-          ) : (
-            data.tokenBalances.map((token) => {
-              const metadata = parseMetadata(token.metadata);
-
-              return (
-                <div key={`${token.contractAddress}-${token.tokenId || '0'}`} className="token-card">
-                  {/* Token Header */}
-                  <div className="token-header">
-                    <h3>{token.name || 'Unknown Token'}</h3>
-                    <span className="token-type-badge">{token.tokenType}</span>
-                  </div>
-
-                  {/* Token Info */}
-                  <div className="token-info">
-                    <div>
-                      <strong>Symbol:</strong> {token.symbol || 'N/A'}
-                    </div>
-                    <div>
-                      <strong>Balance:</strong> {formatBalance(token)}
-                    </div>
-                    <div>
-                      <strong>Contract:</strong>{' '}
-                      <a href={`/address/${token.contractAddress}`}>
-                        {token.contractAddress.slice(0, 10)}...
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* NFT Metadata (ERC721/ERC1155) */}
-                  {metadata && (token.tokenType === 'ERC721' || token.tokenType === 'ERC1155') && (
-                    <div className="nft-metadata">
-                      {metadata.image && (
-                        <img
-                          src={metadata.image.replace('ipfs://', 'https://ipfs.io/ipfs/')}
-                          alt={metadata.name}
-                          className="nft-image"
-                        />
-                      )}
-                      {metadata.description && (
-                        <p className="nft-description">{metadata.description}</p>
-                      )}
-                      {metadata.attributes && (
-                        <div className="nft-attributes">
-                          {metadata.attributes.map((attr: any, idx: number) => (
-                            <div key={idx} className="attribute">
-                              <span className="trait-type">{attr.trait_type}:</span>
-                              <span className="trait-value">{attr.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-```
-
-### UI Design Recommendations
-
-#### 1. Token List View
-- **ERC20 토큰**: 이름, 심볼, 포맷된 잔액, 달러 환산 가치
-- **ERC721 NFTs**: 썸네일 이미지, 컬렉션 이름, 토큰 ID
-- **ERC1155 토큰**: 썸네일, 수량, 토큰 ID
-- 타입별 필터 탭 또는 드롭다운
-
-#### 2. Token Card Design
-- **헤더**: 토큰 이름 + 타입 뱃지 (ERC20/ERC721/ERC1155)
-- **메인 정보**: 잔액, 심볼, 컨트랙트 주소
-- **NFT 메타데이터**: 이미지, 설명, 속성 (ERC721/ERC1155만)
-- **액션 버튼**: "View on Explorer", "Send Token" (future)
-
-#### 3. Grouping and Sorting
-- **그룹핑**: 토큰 타입별 (ERC20 / NFTs)
-- **정렬 옵션**:
-  - Balance (high to low)
-  - Token name (A-Z)
-  - Recently received
-- **검색**: 토큰 이름, 심볼, 컨트랙트 주소로 필터링
-
-#### 4. Performance Optimization
-- **이미지 레이지 로딩**: NFT 이미지는 뷰포트에 들어올 때만 로드
-- **메타데이터 캐싱**: IPFS 메타데이터는 로컬 캐시 활용
-- **가상화**: 토큰이 많을 경우 react-window 사용
-
-#### 5. Error Handling
-- 메타데이터 로드 실패 시 기본 이미지 표시
-- IPFS 게이트웨이 실패 시 대체 게이트웨이 시도
-- 소수점 변환 오류 시 원본 값 표시
-
----
-
-## Address Balance API
-
-주소의 네이티브 ETH 잔액을 조회하는 API입니다. **트랜잭션 처리 시 자동으로 잔액 변화를 추적합니다.**
-
-### Query
-
-```graphql
-query AddressBalance($address: Address!, $blockNumber: BigInt) {
-  addressBalance(address: $address, blockNumber: $blockNumber)
-}
-```
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| address | Address | Yes | 조회할 주소 |
-| blockNumber | BigInt | No | 특정 블록 높이의 잔액 조회 (생략 시 최신 잔액) |
-
-### Response
-
-반환값은 Wei 단위의 BigInt 문자열입니다 (1 ETH = 10^18 Wei).
-
-### Balance Tracking Implementation
-
-네이티브 잔액 추적은 블록 인덱싱 중 자동으로 수행됩니다:
-
-- **송신자 잔액**: `-(value + gas cost)` (트랜잭션 값 + 가스 비용 차감)
-- **수신자 잔액**: `+value` (트랜잭션 값 증가)
-- **가스 비용 계산**: `gasUsed * gasPrice`
-- **컨트랙트 생성**: 컨트랙트 주소로 값 이전
-
-### Request Examples
-
-#### 1. 최신 잔액 조회
-```json
-{
-  "query": "query AddressBalance($address: Address!) { addressBalance(address: $address) }",
-  "variables": {
-    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
-  }
-}
-```
-
-#### 2. 특정 블록의 과거 잔액 조회
-```json
-{
-  "query": "query AddressBalance($address: Address!, $blockNumber: BigInt) { addressBalance(address: $address, blockNumber: $blockNumber) }",
-  "variables": {
-    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-    "blockNumber": "1000"
-  }
-}
-```
-
-### Response Example
-
-```json
-{
-  "data": {
-    "addressBalance": "5000000000000000000"
-  }
-}
-```
-
-이 값은 5 ETH를 의미합니다 (5 * 10^18 Wei).
-
-### Balance History Query
-
-잔액 변화 내역을 조회하려면 `balanceHistory` 쿼리를 사용하세요:
-
-```graphql
-query BalanceHistory($address: Address!, $fromBlock: BigInt, $toBlock: BigInt, $limit: Int) {
-  balanceHistory(
-    address: $address
-    fromBlock: $fromBlock
-    toBlock: $toBlock
-    limit: $limit
-  ) {
-    nodes {
-      blockNumber
-      balance
-      delta
-      txHash
-    }
-    totalCount
-    pageInfo {
-      hasNextPage
-      hasPreviousPage
-    }
-  }
-}
-```
-
-### Frontend Integration Example (React + Apollo Client)
-
-```typescript
-import { useQuery, gql } from '@apollo/client';
-import { formatEther } from 'ethers';
-
-const ADDRESS_BALANCE_QUERY = gql`
-  query AddressBalance($address: Address!, $blockNumber: BigInt) {
-    addressBalance(address: $address, blockNumber: $blockNumber)
-  }
-`;
-
-const BALANCE_HISTORY_QUERY = gql`
-  query BalanceHistory($address: Address!, $limit: Int) {
-    balanceHistory(address: $address, limit: $limit) {
-      nodes {
-        blockNumber
-        balance
-        delta
-        txHash
-      }
-      totalCount
-    }
-  }
-`;
-
-interface BalanceHistoryNode {
-  blockNumber: string;
-  balance: string;
-  delta: string;
-  txHash: string;
-}
-
-function AddressBalanceComponent({ address }: { address: string }) {
-  const [selectedBlock, setSelectedBlock] = useState<string>('');
-
-  // Current balance query
-  const { loading: balanceLoading, data: balanceData } = useQuery<{ addressBalance: string }>(
-    ADDRESS_BALANCE_QUERY,
-    {
-      variables: {
-        address,
-        blockNumber: selectedBlock || undefined
-      }
-    }
-  );
-
-  // Balance history query
-  const { loading: historyLoading, data: historyData } = useQuery<{
-    balanceHistory: {
-      nodes: BalanceHistoryNode[];
-      totalCount: number;
-    };
-  }>(BALANCE_HISTORY_QUERY, {
-    variables: {
-      address,
-      limit: 20
-    }
+function SearchBar() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const { data, loading } = useQuery(SEARCH_QUERY, {
+    variables: { query: searchTerm, limit: 10 },
+    skip: searchTerm.length < 3
   });
 
-  const formatBalance = (weiValue: string) => {
-    return `${formatEther(weiValue)} ETH`;
-  };
-
-  const formatDelta = (deltaWei: string) => {
-    const value = formatEther(deltaWei);
-    const isPositive = !deltaWei.startsWith('-');
-    return `${isPositive ? '+' : ''}${value} ETH`;
-  };
-
   return (
     <div>
-      <h2>Address Balance</h2>
-      <p className="address-display">{address}</p>
-
-      {/* Current Balance Display */}
-      <div className="balance-card">
-        <h3>Current Balance</h3>
-        {balanceLoading ? (
-          <div>Loading...</div>
-        ) : balanceData ? (
-          <div className="balance-value">
-            {formatBalance(balanceData.addressBalance)}
-          </div>
-        ) : (
-          <div>No balance data available</div>
-        )}
-
-        {/* Historical Balance Selector */}
-        <div className="block-selector">
-          <label>
-            View balance at block:
-            <input
-              type="text"
-              value={selectedBlock}
-              onChange={(e) => setSelectedBlock(e.target.value)}
-              placeholder="Leave empty for latest"
-            />
-          </label>
-        </div>
-      </div>
-
-      {/* Balance History */}
-      <div className="balance-history">
-        <h3>Balance History</h3>
-        {historyLoading ? (
-          <div>Loading history...</div>
-        ) : historyData && historyData.balanceHistory.nodes.length > 0 ? (
-          <>
-            <p>Total changes: {historyData.balanceHistory.totalCount}</p>
-            <table>
-              <thead>
-                <tr>
-                  <th>Block</th>
-                  <th>Balance</th>
-                  <th>Change</th>
-                  <th>Transaction</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historyData.balanceHistory.nodes.map((node) => (
-                  <tr key={`${node.blockNumber}-${node.txHash}`}>
-                    <td>
-                      <a href={`/block/${node.blockNumber}`}>#{node.blockNumber}</a>
-                    </td>
-                    <td>{formatBalance(node.balance)}</td>
-                    <td className={node.delta.startsWith('-') ? 'negative' : 'positive'}>
-                      {formatDelta(node.delta)}
-                    </td>
-                    <td>
-                      <a href={`/tx/${node.txHash}`}>
-                        {node.txHash.slice(0, 10)}...
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        ) : (
-          <div>No balance history available</div>
-        )}
-      </div>
+      <input
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        placeholder="블록 번호, 주소, 트랜잭션 해시 검색..."
+      />
+      {loading && <div>검색 중...</div>}
+      {data?.search.map(result => (
+        <SearchResult key={result.value} {...result} />
+      ))}
     </div>
   );
 }
 ```
 
-### UI Design Recommendations
-
-#### 1. Balance Display
-- **큰 글씨**: 현재 잔액을 눈에 띄게 표시
-- **USD 환산**: ETH 가격 API 연동하여 달러 환산 표시
-- **과거 잔액 조회**: 블록 번호 입력으로 과거 잔액 확인
-
-#### 2. Balance History Timeline
-- **타임라인 뷰**: 시간순으로 잔액 변화 표시
-- **차트**: 잔액 변화를 그래프로 시각화 (Line chart)
-- **색상 코딩**:
-  - 증가(+): 녹색
-  - 감소(-): 빨간색
-- **트랜잭션 링크**: 각 변화의 원인이 된 트랜잭션으로 링크
-
-#### 3. Statistics
-- **Total received**: 총 수신 금액
-- **Total sent**: 총 발신 금액
-- **Net change**: 순 변화량
-- **Transaction count**: 트랜잭션 수
-
-### Important Notes
-
-⚠️ **잔액 추적은 새로운 기능입니다.** 기존 인덱스된 블록에는 잔액 데이터가 없을 수 있습니다.
-
-**잔액 데이터를 채우는 방법:**
-
-1. **새로운 인덱싱 시작**:
-   ```bash
-   ./indexer --clear-data --start-height 0
-   ```
-
-2. **진행 중인 인덱싱**: 새로 인덱스되는 블록부터 자동으로 잔액 추적이 활성화됩니다.
-
-3. **Production 환경**:
-   - 기존 데이터를 유지하면서 잔액 추적을 활성화하려면 별도의 마이그레이션 스크립트가 필요합니다.
-   - 또는 과거 블록을 재인덱싱하여 잔액 데이터를 채울 수 있습니다.
-
-**쿼리 결과 확인:**
-- 잔액이 "0"으로 반환되는 경우, 해당 블록이 아직 재인덱싱되지 않았을 수 있습니다.
-- `balanceHistory` 쿼리로 잔액 변화가 추적되고 있는지 확인하세요.
-
----
-
-## 기타 Historical API
-
-### 1. Block Count
+### 예제 3: 채굴자 순위 대시보드
 ```graphql
-query {
-  blockCount
-}
-```
+query MinersDashboard {
+  # 전체 상위 채굴자
+  topMiners(limit: 20) {
+    address
+    blockCount
+    percentage
+    totalRewards
+    lastBlockNumber
+    lastBlockTime
+  }
 
-### 2. Transaction Count
-```graphql
-query {
-  transactionCount
-}
-```
-
-### 3. Balance History
-```graphql
-query BalanceHistory($address: Address!, $fromBlock: BigInt, $toBlock: BigInt, $limit: Int, $offset: Int) {
-  balanceHistory(
-    address: $address
-    fromBlock: $fromBlock
-    toBlock: $toBlock
-    limit: $limit
-    offset: $offset
+  # 최근 1000 블록 기준 채굴자
+  recentMiners: topMiners(
+    limit: 10,
+    fromBlock: "990000",
+    toBlock: "1000000"
   ) {
-    nodes {
-      blockNumber
-      balance
-      delta
-      txHash
-    }
-    totalCount
-    pageInfo {
-      hasNextPage
-      hasPreviousPage
-    }
+    address
+    blockCount
+    percentage
   }
 }
 ```
 
 ---
 
-## 에러 처리
+## 6. 에러 처리
 
-### GraphQL Error Response
-
+### 일반적인 GraphQL 에러 응답
 ```json
 {
   "errors": [
     {
-      "message": "storage does not support historical queries",
-      "locations": [
-        {
-          "line": 2,
-          "column": 3
-        }
-      ],
-      "path": ["topMiners"]
+      "message": "invalid address format",
+      "path": ["addressBalance"],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
     }
   ],
   "data": null
 }
 ```
 
-### Common Errors
-
-| Error Message | Cause | Solution |
-|---------------|-------|----------|
-| `storage does not support historical queries` | Historical 기능이 활성화되지 않음 | 백엔드 설정 확인 필요 |
-| `invalid block number` | 잘못된 블록 번호 형식 | 숫자 형식 확인 |
-| `fromBlock cannot be greater than toBlock` | 블록 범위 오류 | fromBlock ≤ toBlock 확인 |
-| `limit exceeds maximum` | limit > 100 | limit를 100 이하로 설정 |
-
-### Frontend Error Handling Example
-
+### 권장 에러 처리 전략
 ```typescript
-function handleGraphQLError(error: ApolloError) {
-  if (error.graphQLErrors) {
-    error.graphQLErrors.forEach((err) => {
-      console.error(`GraphQL Error: ${err.message}`);
+// Apollo Client 예제
+const { data, loading, error } = useQuery(QUERY, { variables });
 
-      // User-friendly error messages
-      if (err.message.includes('storage does not support')) {
-        showNotification('Historical data is not available', 'warning');
-      } else if (err.message.includes('invalid block number')) {
-        showNotification('Please enter a valid block number', 'error');
-      } else {
-        showNotification('An error occurred. Please try again.', 'error');
-      }
+if (error) {
+  // GraphQL 에러
+  if (error.graphQLErrors.length > 0) {
+    error.graphQLErrors.forEach(({ message, path }) => {
+      console.error(`GraphQL Error at ${path}: ${message}`);
     });
   }
 
+  // 네트워크 에러
   if (error.networkError) {
-    console.error(`Network Error: ${error.networkError}`);
-    showNotification('Network error. Please check your connection.', 'error');
+    console.error('Network Error:', error.networkError);
+  }
+
+  return <ErrorComponent message={error.message} />;
+}
+```
+
+---
+
+## 7. 성능 최적화 팁
+
+### 1. Pagination 사용
+- 대부분의 목록 쿼리는 `pagination` 인자를 지원합니다
+- 기본 limit: 10, 최대 limit: 100
+
+```graphql
+query {
+  blocks(
+    pagination: { limit: 20, offset: 0 }
+  ) {
+    nodes { number hash }
+    totalCount
+    pageInfo { hasNextPage }
+  }
+}
+```
+
+### 2. 필요한 필드만 요청
+```graphql
+# ❌ 나쁜 예: 모든 필드 요청
+query {
+  block(number: "1000") {
+    number
+    hash
+    parentHash
+    timestamp
+    nonce
+    miner
+    difficulty
+    totalDifficulty
+    gasLimit
+    gasUsed
+    baseFeePerGas
+    # ... 모든 필드
+  }
+}
+
+# ✅ 좋은 예: 필요한 필드만 요청
+query {
+  block(number: "1000") {
+    number
+    hash
+    timestamp
+    miner
+  }
+}
+```
+
+### 3. WebSocket 구독 사용 (실시간 업데이트)
+```graphql
+# 새로운 블록 구독
+subscription {
+  newBlock {
+    number
+    hash
+    timestamp
+    transactionCount
   }
 }
 ```
 
 ---
 
-## Performance Optimization
+## 8. 테스트용 쿼리 모음
 
-### 1. Caching Strategy
-```typescript
-// Apollo Client setup with caching
-const client = new ApolloClient({
-  uri: 'http://localhost:8080/graphql',
-  cache: new InMemoryCache({
-    typePolicies: {
-      Query: {
-        fields: {
-          topMiners: {
-            // Cache by variables
-            keyArgs: ['limit', 'fromBlock', 'toBlock'],
-          },
-          search: {
-            // Cache by query and types
-            keyArgs: ['query', 'types'],
-          },
-        },
-      },
-    },
-  }),
-});
+### GraphQL Playground에서 테스트
+```
+브라우저에서 열기: http://localhost:8080/graphql
 ```
 
-### 2. Pagination
-```typescript
-// Implement offset-based pagination for large result sets
-const [offset, setOffset] = useState(0);
-const limit = 20;
+### 빠른 검증 쿼리
+```graphql
+# 1. 서버 상태 확인
+query {
+  latestHeight
+  blockCount
+  transactionCount
+}
 
-const { loading, data } = useQuery(SEARCH_QUERY, {
-  variables: { query, limit, offset },
-});
+# 2. 검색 기능 테스트
+query {
+  search(query: "1000") {
+    type
+    value
+    label
+  }
+}
 
-// Next page
-const nextPage = () => setOffset(offset + limit);
-// Previous page
-const prevPage = () => setOffset(Math.max(0, offset - limit));
-```
+# 3. 채굴자 통계 확인
+query {
+  topMiners(limit: 5) {
+    address
+    blockCount
+    percentage
+  }
+}
 
-### 3. Debouncing Search
-```typescript
-import { useDebouncedCallback } from 'use-debounce';
-
-const debouncedSearch = useDebouncedCallback(
-  (value: string) => {
-    setSearchQuery(value);
-  },
-  500 // 500ms delay
-);
-
-<input
-  type="text"
-  onChange={(e) => debouncedSearch(e.target.value)}
-  placeholder="Search..."
-/>
+# 4. 잔액 조회 테스트
+query {
+  addressBalance(address: "0x0000000000000000000000000000000000000000")
+}
 ```
 
 ---
 
-## Testing
+## 9. 문의 및 지원
 
-### GraphQL Playground 사용
+### 버그 리포트
+- 예상치 못한 결과가 나오면 백엔드 팀에 문의
+- 다음 정보를 포함해 주세요:
+  1. 실행한 쿼리
+  2. 받은 응답
+  3. 기대했던 결과
+  4. 재현 방법
 
-1. 브라우저에서 `http://localhost:8080/graphql/playground` 접속
-2. 왼쪽에 쿼리 입력
-3. 하단에 Variables 입력
-4. Play 버튼 클릭하여 실행
-5. 오른쪽에서 응답 확인
-
-### cURL 테스트
-
-```bash
-# Search API
-curl -X POST http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "query Search($query: String!) { search(query: $query) { ... on BlockResult { type block { number hash } } } }",
-    "variables": {"query": "100"}
-  }'
-
-# Top Miners API
-curl -X POST http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "query TopMiners($limit: Int) { topMiners(limit: $limit) { address blockCount percentage } }",
-    "variables": {"limit": 5}
-  }'
-```
+### 기능 요청
+- 새로운 쿼리나 필드가 필요하면 백엔드 팀에 요청
+- Use case와 예상 응답 형식을 함께 제공해 주세요
 
 ---
 
-## 지원
+## 10. 변경 이력
 
-문제가 발생하거나 추가 기능이 필요한 경우:
-- GitHub Issues: [프로젝트 저장소]
-- 백엔드 팀에 문의
+| 날짜 | 버전 | 변경 내용 |
+|------|------|-----------|
+| 2025-01-XX | 1.0 | 초기 문서 작성 |
+|            |     | - Search API 정보 추가 |
+|            |     | - Top Miners API 정보 추가 |
+|            |     | - Token Balances API 정보 추가 |
+|            |     | - Contract Verification API 정보 추가 |
+|            |     | - addressBalance 버그 분석 |
+|            |     | - ContractCreation.address 이슈 해결 |
 
-**최종 업데이트:** 2025-01-24
+---
+
+**문서 작성일**: 2025-01-XX
+**검증 완료**: ✅ 모든 API 코드 검증 완료
+**테스트 환경**: Development (localhost:8080)

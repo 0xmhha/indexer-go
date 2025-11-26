@@ -22,6 +22,7 @@ type Client interface {
 	GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error)
 	GetBlockReceipts(ctx context.Context, blockNumber uint64) (types.Receipts, error)
 	GetTransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
+	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
 	Close()
 }
 
@@ -224,6 +225,17 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	// Process native balance tracking
 	if err := f.processBalanceTracking(ctx, block, receipts); err != nil {
 		return fmt.Errorf("failed to process balance tracking for block %d: %w", height, err)
+	}
+
+	// Initialize genesis allocation balances (block 0 only)
+	if height == 0 {
+		if err := f.initializeGenesisBalances(ctx, block); err != nil {
+			f.logger.Warn("Failed to initialize genesis balances",
+				zap.Uint64("height", height),
+				zap.Error(err),
+			)
+			// Don't fail the entire block processing for genesis balance initialization
+		}
 	}
 
 	// Publish block event if EventBus is configured
@@ -1196,12 +1208,151 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 	return nil
 }
 
+// ensureAddressBalanceInitialized checks if an address has balance history,
+// and if not, fetches the current balance from RPC and initializes it
+func (f *Fetcher) ensureAddressBalanceInitialized(ctx context.Context, histReader storage.HistoricalReader, histWriter storage.HistoricalWriter, addr common.Address, blockNumber uint64) error {
+	// Check if address already has balance history
+	currentBalance, err := histReader.GetAddressBalance(ctx, addr, 0)
+	if err != nil {
+		return fmt.Errorf("failed to check address balance: %w", err)
+	}
+
+	// If balance is non-zero, address is already initialized
+	if currentBalance.Sign() != 0 {
+		return nil
+	}
+
+	// Check if there's any balance history (even if balance is 0)
+	history, err := histReader.GetBalanceHistory(ctx, addr, 0, blockNumber, 1, 0)
+	if err != nil {
+		return fmt.Errorf("failed to check balance history: %w", err)
+	}
+
+	// If there's history, address is already initialized (balance might legitimately be 0)
+	if len(history) > 0 {
+		return nil
+	}
+
+	// No history found - this is the first time we see this address
+	// Fetch the actual balance from RPC at the block BEFORE this transaction
+	var rpcBlockNumber *big.Int
+	if blockNumber > 0 {
+		rpcBlockNumber = new(big.Int).SetUint64(blockNumber - 1)
+	} else {
+		// Genesis block - use block 0
+		rpcBlockNumber = big.NewInt(0)
+	}
+
+	rpcBalance, err := f.client.BalanceAt(ctx, addr, rpcBlockNumber)
+	if err != nil {
+		// Log warning but don't fail - balance tracking is best-effort
+		f.logger.Warn("Failed to fetch initial balance from RPC, starting from 0",
+			zap.String("address", addr.Hex()),
+			zap.Uint64("block", blockNumber),
+			zap.Error(err),
+		)
+		// Set initial balance to 0
+		rpcBalance = big.NewInt(0)
+	}
+
+	// Initialize the balance
+	if rpcBalance.Sign() > 0 {
+		f.logger.Debug("Initializing address balance from RPC",
+			zap.String("address", addr.Hex()),
+			zap.Uint64("block", blockNumber),
+			zap.String("balance", rpcBalance.String()),
+		)
+	}
+
+	// Set the initial balance
+	return histWriter.SetBalance(ctx, addr, blockNumber, rpcBalance)
+}
+
+// initializeGenesisBalances initializes balances for addresses in genesis allocation
+// This is called only for block 0 to handle addresses that received initial balance
+// but haven't participated in any transactions yet
+func (f *Fetcher) initializeGenesisBalances(ctx context.Context, block *types.Block) error {
+	// Check if storage supports balance tracking
+	histWriter, ok := f.storage.(storage.HistoricalWriter)
+	if !ok {
+		return nil // Storage doesn't support balance tracking - skip
+	}
+
+	histReader, ok := f.storage.(storage.HistoricalReader)
+	if !ok {
+		return nil // Storage doesn't support balance history - skip
+	}
+
+	// Get the block miner (validator) - this is typically a genesis allocation address
+	miner := block.Coinbase()
+
+	// Check if miner balance is already initialized
+	currentBalance, err := histReader.GetAddressBalance(ctx, miner, 0)
+	if err != nil {
+		return fmt.Errorf("failed to check miner balance: %w", err)
+	}
+
+	// If miner already has a balance recorded, skip initialization
+	if currentBalance.Sign() != 0 {
+		f.logger.Debug("Genesis miner balance already initialized",
+			zap.String("miner", miner.Hex()),
+			zap.String("balance", currentBalance.String()),
+		)
+		return nil
+	}
+
+	// Check if there's any balance history for miner
+	history, err := histReader.GetBalanceHistory(ctx, miner, 0, 0, 1, 0)
+	if err != nil {
+		return fmt.Errorf("failed to check miner balance history: %w", err)
+	}
+
+	// If there's already history, skip initialization
+	if len(history) > 0 {
+		f.logger.Debug("Genesis miner already has balance history",
+			zap.String("miner", miner.Hex()),
+		)
+		return nil
+	}
+
+	// Fetch the actual balance from RPC at block 0
+	rpcBalance, err := f.client.BalanceAt(ctx, miner, big.NewInt(0))
+	if err != nil {
+		f.logger.Warn("Failed to fetch genesis miner balance from RPC",
+			zap.String("miner", miner.Hex()),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	// Initialize the balance if non-zero
+	if rpcBalance.Sign() > 0 {
+		f.logger.Info("Initializing genesis allocation balance",
+			zap.String("address", miner.Hex()),
+			zap.String("balance", rpcBalance.String()),
+		)
+
+		if err := histWriter.SetBalance(ctx, miner, 0, rpcBalance); err != nil {
+			return fmt.Errorf("failed to set genesis miner balance: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // processBalanceTracking tracks native balance changes from ETH transfers
 func (f *Fetcher) processBalanceTracking(ctx context.Context, block *types.Block, receipts types.Receipts) error {
 	// Check if storage implements HistoricalWriter
 	histWriter, ok := f.storage.(storage.HistoricalWriter)
 	if !ok {
 		// Storage doesn't support balance tracking - skip silently
+		return nil
+	}
+
+	// Also check for HistoricalReader (needed to check if address is initialized)
+	histReader, ok := f.storage.(storage.HistoricalReader)
+	if !ok {
+		// Storage doesn't support historical reading - skip silently
 		return nil
 	}
 
@@ -1244,6 +1395,16 @@ func (f *Fetcher) processBalanceTracking(ctx context.Context, block *types.Block
 		}
 		totalDeduction := new(big.Int).Add(value, gasCost)
 
+		// Ensure sender address balance is initialized from RPC if first time seeing it
+		if err := f.ensureAddressBalanceInitialized(ctx, histReader, histWriter, from, blockNumber); err != nil {
+			f.logger.Warn("Failed to initialize sender balance",
+				zap.String("address", from.Hex()),
+				zap.Uint64("block", blockNumber),
+				zap.Error(err),
+			)
+			// Continue - balance tracking is best-effort
+		}
+
 		// Update sender balance (deduct value + gas)
 		senderDelta := new(big.Int).Neg(totalDeduction)
 		if err := histWriter.UpdateBalance(ctx, from, blockNumber, senderDelta, tx.Hash()); err != nil {
@@ -1266,6 +1427,16 @@ func (f *Fetcher) processBalanceTracking(ctx context.Context, block *types.Block
 		}
 
 		if to != nil && value.Sign() > 0 {
+			// Ensure receiver address balance is initialized from RPC if first time seeing it
+			if err := f.ensureAddressBalanceInitialized(ctx, histReader, histWriter, *to, blockNumber); err != nil {
+				f.logger.Warn("Failed to initialize receiver balance",
+					zap.String("address", to.Hex()),
+					zap.Uint64("block", blockNumber),
+					zap.Error(err),
+				)
+				// Continue - balance tracking is best-effort
+			}
+
 			// Only update if there's actual value transfer
 			if err := histWriter.UpdateBalance(ctx, *to, blockNumber, value, tx.Hash()); err != nil {
 				f.logger.Warn("Failed to update receiver balance",

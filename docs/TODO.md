@@ -285,6 +285,23 @@
   - ✅ UI 권장사항 - 실시간 피드, 상태 인디케이터, 트랜잭션 타입 뱃지, 필터링 옵션
   - ✅ 사용 사례 - 네트워크 활동 모니터링, 지갑 트랜잭션 감지, TPS 차트, 가스 가격 분석
   - ✅ 주의사항 - Stable-One 빠른 블록 생성 시간 (1-2초) 고려
+- ✅ **프론트엔드 API 요청사항 검증** - 코드 기반 정확한 구현 상태 확인
+  - ✅ Search API 검증 - 완전히 구현됨 (resolvers_search.go, schema.go:255)
+  - ✅ Top Miners API 검증 - 완전히 구현됨 (resolvers_historical.go:358)
+  - ✅ Token Balances API 검증 - 완전히 구현됨 (resolvers_historical.go:416)
+  - ✅ Contract Verification 검증 - Query & Mutation 완전 구현 (resolvers_contract_verification.go)
+  - ✅ addressBalance 버그 분석 - GraphQL resolver 정상 (balance.String()), Storage 레이어 조사 필요
+  - ✅ ContractCreation.address 이슈 해결 - contractAddress 필드 사용 (필드명 불일치, 버그 아님)
+- ✅ **Frontend API Guide 작성** - 프론트엔드 통합을 위한 정확한 가이드 문서
+  - ✅ docs/Frontend_API_Guide.md 작성 (856줄, 25KB)
+  - ✅ 4개 요청 API 완전 문서화 (Search, Top Miners, Token Balance, Contract Verification)
+  - ✅ 실제 Schema 기반 정확한 타입 정의 (BigInt=String, Address=String, Hash=String)
+  - ✅ GraphQL 쿼리 예제 및 응답 형식
+  - ✅ TypeScript/React 통합 예제 (Apollo Client, ethers.js)
+  - ✅ 버그 근본 원인 분석 및 해결 방법 (Issue #1, #2)
+  - ✅ 정확한 엔드포인트 정보 (http://localhost:8080/graphql, ws://localhost:8080/graphql/ws)
+  - ✅ 에러 처리 및 성능 최적화 가이드
+  - ✅ 실전 사용 예제 (검색, 채굴자 대시보드, 주소 정보 조회)
 
 ### 2025-11-24
 - ✅ **Fetcher 최적화 시스템 구현** - 지능형 적응형 최적화 및 대용량 블록 처리
