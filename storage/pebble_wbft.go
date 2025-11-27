@@ -224,7 +224,7 @@ func (s *PebbleStorage) GetAllValidatorsSigningStats(ctx context.Context, fromBl
 	for _, stats := range statsMap {
 		totalBlocks := stats.PrepareSignCount + stats.PrepareMissCount
 		if totalBlocks > 0 {
-			stats.SigningRate = float64(stats.PrepareSignCount) / float64(totalBlocks) * 100
+			stats.SigningRate = float64(stats.PrepareSignCount) / float64(totalBlocks) * constants.PercentageMultiplier
 		}
 		result = append(result, stats)
 	}
@@ -544,7 +544,7 @@ func DecodeEpochInfo(data []byte) (*EpochInfo, error) {
 
 	candidates := make([]Candidate, len(epochInfoRLP.Candidates))
 	for i, c := range epochInfoRLP.Candidates {
-		if len(c.Addr) != 20 {
+		if len(c.Addr) != common.AddressLength {
 			return nil, fmt.Errorf("invalid candidate address length: %d", len(c.Addr))
 		}
 		var addr common.Address

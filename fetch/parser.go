@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
+	consensustypes "github.com/0xmhha/indexer-go/types/consensus"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"go.uber.org/zap"
-
-	consensustypes "github.com/0xmhha/indexer-go/types/consensus"
 )
 
 const (
@@ -170,8 +170,8 @@ func (p *WBFTParser) ExtractSignersFromSeal(
 	// The sealers field is a bitmap indicating which validators signed
 	// Each byte contains 8 bits, each bit represents a validator
 	for i, validator := range validators {
-		byteIndex := i / 8
-		bitIndex := uint(i % 8)
+		byteIndex := i / constants.BitsPerByte
+		bitIndex := uint(i % constants.BitsPerByte)
 
 		if byteIndex >= len(seal.Sealers) {
 			break
@@ -193,8 +193,8 @@ func (p *WBFTParser) ParseEpochInfo(header *types.Header, epochInfoRaw *consensu
 	}
 
 	// Calculate epoch number from block number
-	// This is a simplified calculation - actual epoch calculation may differ
-	epochNumber := header.Number.Uint64() / 1000 // Placeholder: 1000 blocks per epoch
+	// The chain stores EpochInfo at epoch boundary blocks (e.g., block 10, 20, 30 with epoch length 10)
+	epochNumber := header.Number.Uint64() / constants.DefaultEpochLength
 
 	epochData := &consensustypes.EpochData{
 		EpochNumber:    epochNumber,
@@ -301,8 +301,8 @@ func DecodeSealersFromBitmap(bitmap []byte, totalValidators int) []int {
 	indices := make([]int, 0)
 
 	for i := 0; i < totalValidators; i++ {
-		byteIndex := i / 8
-		bitIndex := uint(i % 8)
+		byteIndex := i / constants.BitsPerByte
+		bitIndex := uint(i % constants.BitsPerByte)
 
 		if byteIndex >= len(bitmap) {
 			break
@@ -320,7 +320,7 @@ func DecodeSealersFromBitmap(bitmap []byte, totalValidators int) []int {
 // into a bitmap for the sealers field
 func EncodeSealersToBitmap(indices []int, totalValidators int) []byte {
 	// Calculate required bytes for bitmap
-	bitmapSize := (totalValidators + 7) / 8
+	bitmapSize := (totalValidators + constants.BitsPerByte - 1) / constants.BitsPerByte
 	bitmap := make([]byte, bitmapSize)
 
 	for _, index := range indices {
@@ -328,8 +328,8 @@ func EncodeSealersToBitmap(indices []int, totalValidators int) []byte {
 			continue
 		}
 
-		byteIndex := index / 8
-		bitIndex := uint(index % 8)
+		byteIndex := index / constants.BitsPerByte
+		bitIndex := uint(index % constants.BitsPerByte)
 
 		bitmap[byteIndex] |= 1 << bitIndex
 	}

@@ -5,6 +5,7 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -181,8 +182,15 @@ func ParseWBFTExtra(header *types.Header) (*WBFTBlockExtra, error) {
 
 	// Convert EpochInfo
 	if wbftExtraRLP.EpochInfo != nil {
+		// Calculate epoch number based on block number
+		// The chain stores EpochInfo at epoch boundary blocks (e.g., block 10, 20, 30 with epoch length 10)
+		// The EpochInfo at block N contains information for epoch N/epochLength
+		blockNumber := header.Number.Uint64()
+		epochNumber := blockNumber / constants.DefaultEpochLength
+
 		epochInfo := &EpochInfo{
-			BlockNumber:   header.Number.Uint64(),
+			EpochNumber:   epochNumber,
+			BlockNumber:   blockNumber,
 			Validators:    wbftExtraRLP.EpochInfo.Validators,
 			BLSPublicKeys: wbftExtraRLP.EpochInfo.BLSPublicKeys,
 		}
@@ -190,10 +198,10 @@ func ParseWBFTExtra(header *types.Header) (*WBFTBlockExtra, error) {
 		// Convert candidates
 		candidates := make([]Candidate, len(wbftExtraRLP.EpochInfo.Candidates))
 		for i, c := range wbftExtraRLP.EpochInfo.Candidates {
-			if len(c.Addr) != 20 {
+			if len(c.Addr) != common.AddressLength {
 				return nil, fmt.Errorf("invalid candidate address length: %d", len(c.Addr))
 			}
-			var addr [20]byte
+			var addr [common.AddressLength]byte
 			copy(addr[:], c.Addr)
 			candidates[i] = Candidate{
 				Address:   addr,
@@ -219,8 +227,8 @@ func ExtractSigners(sealers []byte, validators []uint32, candidates []Candidate)
 
 	// Iterate through each bit in the bitmap
 	for byteIdx := 0; byteIdx < len(sealers); byteIdx++ {
-		for bitIdx := 0; bitIdx < 8; bitIdx++ {
-			validatorIdx := byteIdx*8 + bitIdx
+		for bitIdx := 0; bitIdx < constants.BitsPerByte; bitIdx++ {
+			validatorIdx := byteIdx*constants.BitsPerByte + bitIdx
 
 			// Check if this validator index is in the validators list
 			if validatorIdx >= len(validators) {

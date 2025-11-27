@@ -181,6 +181,18 @@ const (
 	BytesPerGB = 1024 * BytesPerMB
 )
 
+// Math Constants
+const (
+	// PercentageMultiplier is used for converting fractions to percentages
+	PercentageMultiplier = 100
+)
+
+// Bitmap Constants
+const (
+	// BitsPerByte is the number of bits in a byte
+	BitsPerByte = 8
+)
+
 // Gas Constants
 const (
 	// DefaultGasLimit is a typical gas limit for standard transactions
@@ -203,6 +215,10 @@ const (
 
 	// DefaultBlockTime is the typical block time (can vary by chain)
 	DefaultBlockTime = 12 * time.Second
+
+	// DefaultEpochLength is the default number of blocks per epoch
+	// This matches the default epoch length in go-stablenet/consensus/wbft/config.go
+	DefaultEpochLength = 10
 )
 
 // Retry and Backoff Constants
