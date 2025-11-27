@@ -128,7 +128,8 @@ func init() {
 	initTypes()
 }
 
-func initTypes() {
+// initCoreTypes initializes core blockchain types (Block, Transaction, Receipt, Log)
+func initCoreTypes() {
 	// AccessListEntry type
 	accessListEntryType = graphql.NewObject(graphql.ObjectConfig{
 		Name: "AccessListEntry",
@@ -398,7 +399,10 @@ func initTypes() {
 			},
 		},
 	})
+}
 
+// initConnectionTypes initializes connection/pagination types
+func initConnectionTypes() {
 	// PageInfo type
 	pageInfoType = graphql.NewObject(graphql.ObjectConfig{
 		Name: "PageInfo",
@@ -465,6 +469,55 @@ func initTypes() {
 			},
 		},
 	})
+}
+
+// initHistoricalDataTypes initializes historical balance tracking types
+func initHistoricalDataTypes() {
+	// BalanceSnapshot type
+	balanceSnapshotType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BalanceSnapshot",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"balance": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"delta": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionHash": &graphql.Field{
+				Type: hashType,
+			},
+		},
+	})
+
+	// BalanceHistoryConnection type
+	balanceHistoryConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BalanceHistoryConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(balanceSnapshotType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+}
+
+func initTypes() {
+	// Initialize core blockchain types
+	initCoreTypes()
+
+	// Initialize connection/pagination types
+	initConnectionTypes()
+
+	// Initialize historical data types
+	initHistoricalDataTypes()
 
 	// Input types
 	blockFilterType = graphql.NewInputObject(graphql.InputObjectConfig{
@@ -559,41 +612,6 @@ func initTypes() {
 			},
 			"successOnly": &graphql.InputObjectFieldConfig{
 				Type: graphql.Boolean,
-			},
-		},
-	})
-
-	// BalanceSnapshot type
-	balanceSnapshotType = graphql.NewObject(graphql.ObjectConfig{
-		Name: "BalanceSnapshot",
-		Fields: graphql.Fields{
-			"blockNumber": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"balance": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"delta": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"transactionHash": &graphql.Field{
-				Type: hashType,
-			},
-		},
-	})
-
-	// BalanceHistoryConnection type
-	balanceHistoryConnectionType = graphql.NewObject(graphql.ObjectConfig{
-		Name: "BalanceHistoryConnection",
-		Fields: graphql.Fields{
-			"nodes": &graphql.Field{
-				Type: graphql.NewList(graphql.NewNonNull(balanceSnapshotType)),
-			},
-			"totalCount": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Int),
-			},
-			"pageInfo": &graphql.Field{
-				Type: graphql.NewNonNull(pageInfoType),
 			},
 		},
 	})
