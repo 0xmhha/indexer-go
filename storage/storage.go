@@ -110,6 +110,8 @@ type Storage interface {
 	SystemContractReader
 	ContractVerificationReader
 	ContractVerificationWriter
+	WBFTReader
+	WBFTWriter
 
 	// Close closes the storage and releases resources
 	Close() error

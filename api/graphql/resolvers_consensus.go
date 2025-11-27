@@ -26,14 +26,48 @@ func (s *Schema) resolveConsensusData(p graphql.ResolveParams) (interface{}, err
 		return nil, fmt.Errorf("invalid block number format: %w", err)
 	}
 
-	// Get PebbleStorage and create ConsensusStorage
-	pebbleStorage, ok := s.storage.(*storage.PebbleStorage)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support consensus operations")
+	// Get WBFT block extra - now available directly through Storage interface
+	wbftExtra, err := s.storage.GetWBFTBlockExtra(ctx, blockNumber)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, nil
+		}
+		s.logger.Error("failed to get WBFT block extra",
+			zap.Uint64("blockNumber", blockNumber),
+			zap.Error(err))
+		return nil, err
 	}
 
-	consensusStorage := storage.NewConsensusStorage(pebbleStorage, s.logger)
-	data, err := consensusStorage.GetConsensusData(ctx, blockNumber)
+	// Get block for proposer (coinbase)
+	block, err := s.storage.GetBlock(ctx, blockNumber)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, nil
+		}
+		s.logger.Error("failed to get block",
+			zap.Uint64("blockNumber", blockNumber),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// Get epoch info
+	latestEpoch, err := s.storage.GetLatestEpochInfo(ctx)
+	if err == nil && latestEpoch != nil {
+		wbftExtra.EpochInfo = latestEpoch
+	}
+
+	// Get block signers
+	prepareSigners, commitSigners, err := s.storage.GetBlockSigners(ctx, blockNumber)
+	if err != nil {
+		s.logger.Warn("Failed to get block signers",
+			zap.Uint64("block_number", blockNumber),
+			zap.Error(err))
+		prepareSigners = []common.Address{}
+		commitSigners = []common.Address{}
+	}
+
+	// Convert to ConsensusData
+	data := s.wbftExtraToConsensusData(wbftExtra, block.Header().Coinbase, prepareSigners, commitSigners)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return nil, nil
@@ -77,13 +111,8 @@ func (s *Schema) resolveValidatorStats(p graphql.ResolveParams) (interface{}, er
 		return nil, fmt.Errorf("invalid toBlock format: %w", err)
 	}
 
-	pebbleStorage, ok := s.storage.(*storage.PebbleStorage)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support consensus operations")
-	}
-
-	consensusStorage := storage.NewConsensusStorage(pebbleStorage, s.logger)
-	stats, err := consensusStorage.GetValidatorStats(ctx, address, fromBlock, toBlock)
+	// Get validator signing stats directly through Storage interface
+	signingStats, err := s.storage.GetValidatorSigningStats(ctx, address, fromBlock, toBlock)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return nil, nil
@@ -95,6 +124,17 @@ func (s *Schema) resolveValidatorStats(p graphql.ResolveParams) (interface{}, er
 			zap.Error(err))
 		return nil, err
 	}
+
+	// Convert storage ValidatorSigningStats to consensus ValidatorStats
+	stats := &consensustypes.ValidatorStats{
+		Address:        signingStats.ValidatorAddress,
+		TotalBlocks:    toBlock - fromBlock + 1,
+		PreparesSigned: signingStats.PrepareSignCount,
+		CommitsSigned:  signingStats.CommitSignCount,
+		PreparesMissed: signingStats.PrepareMissCount,
+		CommitsMissed:  signingStats.CommitMissCount,
+	}
+	stats.CalculateParticipationRate()
 
 	return s.validatorStatsToMap(stats), nil
 }
@@ -441,4 +481,86 @@ func (s *Schema) epochDataToMap(epoch *consensustypes.EpochData) map[string]inte
 		"validators":     validators,
 		"candidates":     candidates,
 	}
+}
+
+// wbftExtraToConsensusData converts WBFTBlockExtra to ConsensusData
+// This replicates the logic from storage/consensus.go for GraphQL use
+func (s *Schema) wbftExtraToConsensusData(
+	extra *storage.WBFTBlockExtra,
+	proposer common.Address,
+	prepareSigners, commitSigners []common.Address,
+) *consensustypes.ConsensusData {
+	// Extract validators from epoch info if available
+	var validators []common.Address
+	if extra.EpochInfo != nil && len(extra.EpochInfo.Candidates) > 0 {
+		validators = make([]common.Address, 0, len(extra.EpochInfo.Validators))
+		for _, validatorIndex := range extra.EpochInfo.Validators {
+			if int(validatorIndex) < len(extra.EpochInfo.Candidates) {
+				validators = append(validators, extra.EpochInfo.Candidates[validatorIndex].Address)
+			}
+		}
+	}
+
+	data := &consensustypes.ConsensusData{
+		BlockNumber:    extra.BlockNumber,
+		BlockHash:      extra.BlockHash,
+		Round:          extra.Round,
+		PrevRound:      extra.PrevRound,
+		RoundChanged:   extra.Round > 0,
+		Proposer:       proposer,
+		Validators:     validators,
+		PrepareSigners: prepareSigners,
+		CommitSigners:  commitSigners,
+		PrepareCount:   len(prepareSigners),
+		CommitCount:    len(commitSigners),
+		RandaoReveal:   extra.RandaoReveal,
+		GasTip:         extra.GasTip,
+		Timestamp:      extra.Timestamp,
+	}
+
+	// Calculate missed validators
+	data.CalculateMissedValidators()
+
+	// Convert epoch info if present
+	if extra.EpochInfo != nil {
+		epochData := &consensustypes.EpochData{
+			EpochNumber:    extra.EpochInfo.EpochNumber,
+			ValidatorCount: len(extra.EpochInfo.Validators),
+			CandidateCount: len(extra.EpochInfo.Candidates),
+			Validators:     make([]consensustypes.ValidatorInfo, 0, len(extra.EpochInfo.Validators)),
+			Candidates:     make([]consensustypes.CandidateInfo, 0, len(extra.EpochInfo.Candidates)),
+		}
+
+		// Convert validators
+		for i, validatorIndex := range extra.EpochInfo.Validators {
+			if int(validatorIndex) >= len(extra.EpochInfo.Candidates) {
+				continue
+			}
+
+			candidate := extra.EpochInfo.Candidates[validatorIndex]
+			var blsPubKey []byte
+			if i < len(extra.EpochInfo.BLSPublicKeys) {
+				blsPubKey = extra.EpochInfo.BLSPublicKeys[i]
+			}
+
+			epochData.Validators = append(epochData.Validators, consensustypes.ValidatorInfo{
+				Address:   candidate.Address,
+				Index:     validatorIndex,
+				BLSPubKey: blsPubKey,
+			})
+		}
+
+		// Convert candidates
+		for _, candidate := range extra.EpochInfo.Candidates {
+			epochData.Candidates = append(epochData.Candidates, consensustypes.CandidateInfo{
+				Address:   candidate.Address,
+				Diligence: candidate.Diligence,
+			})
+		}
+
+		data.EpochInfo = epochData
+		data.IsEpochBoundary = true
+	}
+
+	return data
 }
