@@ -1116,6 +1116,14 @@ func (s *Schema) resolveProposals(p graphql.ResolveParams) (interface{}, error) 
 		status = parseProposalStatus(statusStr)
 	}
 
+	// Parse proposer (optional) - will be filtered client-side
+	var proposer common.Address
+	var hasProposerFilter bool
+	if proposerStr, ok := filter["proposer"].(string); ok && proposerStr != "" {
+		proposer = common.HexToAddress(proposerStr)
+		hasProposerFilter = true
+	}
+
 	// Get pagination parameters
 	limit := constants.DefaultPaginationLimit
 	offset := 0
@@ -1151,6 +1159,10 @@ func (s *Schema) resolveProposals(p graphql.ResolveParams) (interface{}, error) 
 
 	var nodes []map[string]interface{}
 	for _, proposal := range proposals {
+		// Apply proposer filter if specified
+		if hasProposerFilter && proposal.Proposer != proposer {
+			continue
+		}
 		nodes = append(nodes, s.proposalToMap(proposal))
 	}
 
@@ -1357,10 +1369,13 @@ func (s *Schema) resolveMintEvents(p graphql.ResolveParams) (interface{}, error)
 		toBlock = parsed
 	}
 
-	// Parse optional minter address
+	// Parse optional minter address (support both 'minter' and 'address' fields)
 	var minter common.Address
 	if minterStr, ok := filter["minter"].(string); ok && minterStr != "" {
 		minter = common.HexToAddress(minterStr)
+	} else if addressStr, ok := filter["address"].(string); ok && addressStr != "" {
+		// Support 'address' as alias for 'minter'
+		minter = common.HexToAddress(addressStr)
 	}
 
 	// Pagination
@@ -1427,10 +1442,13 @@ func (s *Schema) resolveBurnEvents(p graphql.ResolveParams) (interface{}, error)
 		toBlock = parsed
 	}
 
-	// Parse optional burner address
+	// Parse optional burner address (support both 'burner' and 'address' fields)
 	var burner common.Address
 	if burnerStr, ok := filter["burner"].(string); ok && burnerStr != "" {
 		burner = common.HexToAddress(burnerStr)
+	} else if addressStr, ok := filter["address"].(string); ok && addressStr != "" {
+		// Support 'address' as alias for 'burner'
+		burner = common.HexToAddress(addressStr)
 	}
 
 	// Pagination

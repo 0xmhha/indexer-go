@@ -519,6 +519,27 @@ func initTypes() {
 	// Initialize historical data types
 	initHistoricalDataTypes()
 
+	// Initialize input/filter types
+	initInputTypes()
+
+	// Initialize statistics and analytics types
+	initStatsTypes()
+
+	// Initialize governance and system contract types
+	initGovernanceTypes()
+
+	// Initialize consensus/WBFT types
+	initConsensusTypes()
+
+	// Initialize token transfer types
+	initTokenTypes()
+
+	// Initialize miscellaneous types
+	initMiscTypes()
+}
+
+// initInputTypes initializes GraphQL input types for filtering and pagination
+func initInputTypes() {
 	// Input types
 	blockFilterType = graphql.NewInputObject(graphql.InputObjectConfig{
 		Name: "BlockFilter",
@@ -615,7 +636,10 @@ func initTypes() {
 			},
 		},
 	})
+}
 
+// initStatsTypes initializes GraphQL types for statistics and analytics
+func initStatsTypes() {
 	// MinerStats type
 	minerStatsType = graphql.NewObject(graphql.ObjectConfig{
 		Name: "MinerStats",
@@ -822,7 +846,10 @@ func initTypes() {
 			},
 		},
 	})
+}
 
+// initGovernanceTypes initializes GraphQL types for governance and system contracts
+func initGovernanceTypes() {
 	// ProposalStatus enum
 	proposalStatusEnumType = graphql.NewEnum(graphql.EnumConfig{
 		Name: "ProposalStatus",
@@ -1210,6 +1237,10 @@ func initTypes() {
 			"toBlock": &graphql.InputObjectFieldConfig{
 				Type: bigIntType,
 			},
+			"address": &graphql.InputObjectFieldConfig{
+				Type:        addressType,
+				Description: "Filter by address (minter or burner)",
+			},
 			"minter": &graphql.InputObjectFieldConfig{
 				Type: addressType,
 			},
@@ -1234,6 +1265,10 @@ func initTypes() {
 			"status": &graphql.InputObjectFieldConfig{
 				Type:        proposalStatusEnumType,
 				Description: "Filter by proposal status. If not provided, returns proposals with any status.",
+			},
+			"proposer": &graphql.InputObjectFieldConfig{
+				Type:        addressType,
+				Description: "Filter by proposer address. If not provided, returns proposals from all proposers.",
 			},
 		},
 	})
@@ -1285,7 +1320,10 @@ func initTypes() {
 			},
 		},
 	})
+}
 
+// initConsensusTypes initializes GraphQL types for WBFT consensus
+func initConsensusTypes() {
 	// ========== WBFT Consensus Types ==========
 
 	// WBFTAggregatedSeal type
@@ -1890,7 +1928,10 @@ func initTypes() {
 			},
 		},
 	})
+}
 
+// initTokenTypes initializes GraphQL types for token transfers (ERC20, ERC721)
+func initTokenTypes() {
 	// ERC20Transfer type
 	erc20TransferType = graphql.NewObject(graphql.ObjectConfig{
 		Name: "ERC20Transfer",
@@ -2013,7 +2054,10 @@ func initTypes() {
 			},
 		},
 	})
+}
 
+// initMiscTypes initializes miscellaneous GraphQL types
+func initMiscTypes() {
 	// Contract verification type
 	contractVerificationType = graphql.NewObject(graphql.ObjectConfig{
 		Name: "ContractVerification",
