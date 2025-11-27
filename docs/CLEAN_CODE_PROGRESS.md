@@ -92,47 +92,67 @@ func initTypes() {
 
 ---
 
-## 🔄 Remaining Work
-
-### Phase 1-3: api/graphql/schema.go ⏳ **PENDING**
+### Phase 1-3: api/graphql/schema.go ✅ **COMPLETED**
 
 **Problem**: 878-line NewSchema() function (925 lines accounting for file structure)
 
-**Recommended Solution**: Builder Pattern
+**Solution**: Builder Pattern
 
-**Proposed Structure**:
+**Implementation**:
 ```go
 type SchemaBuilder struct {
-    store    storage.Storage
-    logger   *zap.Logger
-    queries  graphql.Fields
-    mutations graphql.Fields
+    schema        *Schema
+    queries       graphql.Fields
+    mutations     graphql.Fields
     subscriptions graphql.Fields
 }
 
 func NewSchemaBuilder(store, logger) *SchemaBuilder { ... }
 
 func (b *SchemaBuilder) WithCoreQueries() *SchemaBuilder { ... }
+func (b *SchemaBuilder) WithHistoricalQueries() *SchemaBuilder { ... }
 func (b *SchemaBuilder) WithAnalyticsQueries() *SchemaBuilder { ... }
 func (b *SchemaBuilder) WithSystemContractQueries() *SchemaBuilder { ... }
 func (b *SchemaBuilder) WithConsensusQueries() *SchemaBuilder { ... }
-
+func (b *SchemaBuilder) WithAddressIndexingQueries() *SchemaBuilder { ... }
+func (b *SchemaBuilder) WithSubscriptions() *SchemaBuilder { ... }
+func (b *SchemaBuilder) WithMutations() *SchemaBuilder { ... }
 func (b *SchemaBuilder) Build() (*Schema, error) { ... }
 
-// Usage
+// Final NewSchema - 12 lines
 func NewSchema(store, logger) (*Schema, error) {
     return NewSchemaBuilder(store, logger).
         WithCoreQueries().
+        WithHistoricalQueries().
         WithAnalyticsQueries().
         WithSystemContractQueries().
         WithConsensusQueries().
+        WithAddressIndexingQueries().
+        WithSubscriptions().
+        WithMutations().
         Build()
 }
 ```
 
-**Estimated Effort**: 3-4 hours
+**Metrics**:
+- **NewSchema() size**: 878 lines → 12 lines (99% reduction)
+- **Builder methods**: 8 focused methods (12-17 queries each)
+- **Testability**: Not testable → Fully testable (individual builders)
+- **SRP compliance**: Violated → Compliant
+- **Functions created**: 9 builder methods + Build()
+
+**Commit**: `668793e` - "refactor: apply Builder pattern to GraphQL schema construction"
+
+**Benefits**:
+- ✅ Modular schema construction with clear separation
+- ✅ Easy to add/modify query categories
+- ✅ Fluent interface for clean composition
+- ✅ Individual builder methods are testable
+- ✅ API compatibility maintained
 
 ---
+
+## 🔄 Remaining Work
 
 ### Phase 2-1: storage/pebble.go ⏳ **PENDING**
 
@@ -239,23 +259,23 @@ storage/
 |-------|------|--------|-------|--------|
 | 1-1 | cmd/indexer/main.go | ✅ Complete | 290 → 50 | 2h |
 | 1-2 | api/graphql/types.go | 📋 Documented | 1,905 | 4-6h |
-| 1-3 | api/graphql/schema.go | ⏳ Pending | 878 | 3-4h |
+| 1-3 | api/graphql/schema.go | ✅ Complete | 878 → 12 | 3h |
 | 2-1 | storage/pebble.go | ⏳ Pending | 3,364 | 8-12h |
-| 2-2 | fetch/fetcher.go | ⏳ Pending | 235 | 2-3h |
+| 2-2 | fetch/fetcher.go | ✅ Complete | 235 → 60 | 2h |
 | 2-3 | storage/schema.go | ⏳ Pending | 120 funcs | 4-6h |
 
 ### By Status
 
-- ✅ **Completed**: 1 task (Phase 1-1)
+- ✅ **Completed**: 3 tasks (Phase 1-1, 1-3, 2-2)
 - 📋 **Documented**: 1 task (Phase 1-2)
-- ⏳ **Pending**: 4 tasks (Phase 1-3, Phase 2)
+- ⏳ **Pending**: 2 tasks (Phase 2-1, 2-3)
 
 ### Metrics
 
 - **Total Lines to Refactor**: 6,672 lines
-- **Lines Refactored**: 290 lines (4%)
+- **Lines Refactored**: 1,403 lines (21%)
 - **Lines Documented**: 1,905 lines (29%)
-- **Remaining Work**: 4,477 lines (67%)
+- **Remaining Work**: 3,364 lines (50%)
 
 ---
 
@@ -347,8 +367,18 @@ storage/
 - **Message**: "docs: add refactoring guide for api/graphql/types.go"
 - **Files Changed**: 1 file created, 418 insertions(+)
 
+### Phase 1-3: schema.go Builder Pattern
+- **Commit**: `668793e`
+- **Message**: "refactor: apply Builder pattern to GraphQL schema construction"
+- **Files Changed**: 1 file, 932 insertions(+), 851 deletions(-)
+
+### Phase 2-2: fetcher.go Extract Method
+- **Commit**: `e1decfd`
+- **Message**: "refactor: extract FetchBlock into focused helper methods"
+- **Files Changed**: 1 file, 257 insertions(+), 197 deletions(-)
+
 ---
 
 **Last Updated**: 2025-11-26
 **Next Review**: After Phase 1-2 implementation
-**Status**: 🟡 In Progress (1/6 complete, 1/6 documented)
+**Status**: 🟢 Good Progress (3/6 complete, 1/6 documented, 2/6 remaining)
