@@ -1224,13 +1224,16 @@ func initTypes() {
 
 	// ProposalFilter input type
 	proposalFilterType = graphql.NewInputObject(graphql.InputObjectConfig{
-		Name: "ProposalFilter",
+		Name:        "ProposalFilter",
+		Description: "Filter criteria for querying proposals. All fields are optional.",
 		Fields: graphql.InputObjectConfigFieldMap{
 			"contract": &graphql.InputObjectFieldConfig{
-				Type: graphql.NewNonNull(addressType),
+				Type:        addressType, // Nullable - allows querying all proposals
+				Description: "Filter by contract address. If not provided, returns proposals from all contracts.",
 			},
 			"status": &graphql.InputObjectFieldConfig{
-				Type: proposalStatusEnumType,
+				Type:        proposalStatusEnumType,
+				Description: "Filter by proposal status. If not provided, returns proposals with any status.",
 			},
 		},
 	})
