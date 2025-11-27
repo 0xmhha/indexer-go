@@ -404,10 +404,10 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 	case "newBlock":
 		if blockEvent, ok := event.(*events.BlockEvent); ok {
 			blockData := map[string]interface{}{
-				"number":    blockEvent.Number,
-				"hash":      blockEvent.Hash.Hex(),
-				"timestamp": blockEvent.CreatedAt.Unix(),
-				"txCount":   blockEvent.TxCount,
+				"number":           blockEvent.Number,
+				"hash":             blockEvent.Hash.Hex(),
+				"timestamp":        blockEvent.CreatedAt.Unix(),
+				"transactionCount": blockEvent.TxCount,
 			}
 			// Add parentHash and miner if block is available
 			if blockEvent.Block != nil {

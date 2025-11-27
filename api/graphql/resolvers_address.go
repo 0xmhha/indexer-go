@@ -112,7 +112,7 @@ func (s *Schema) resolveContractsByCreator(p graphql.ResolveParams) (interface{}
 // resolveInternalTransactions resolves internal transactions for a transaction hash
 func (s *Schema) resolveInternalTransactions(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
-	txHashStr, ok := p.Args["txHash"].(string)
+	txHashStr, ok := p.Args["transactionHash"].(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid transaction hash")
 	}
@@ -210,7 +210,7 @@ func (s *Schema) resolveInternalTransactionsByAddress(p graphql.ResolveParams) (
 // resolveERC20Transfer resolves ERC20 transfer by transaction hash and log index
 func (s *Schema) resolveERC20Transfer(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
-	txHashStr, ok := p.Args["txHash"].(string)
+	txHashStr, ok := p.Args["transactionHash"].(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid transaction hash")
 	}
@@ -364,7 +364,7 @@ func (s *Schema) resolveERC20TransfersByAddress(p graphql.ResolveParams) (interf
 // resolveERC721Transfer resolves ERC721 transfer by transaction hash and log index
 func (s *Schema) resolveERC721Transfer(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
-	txHashStr, ok := p.Args["txHash"].(string)
+	txHashStr, ok := p.Args["transactionHash"].(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid transaction hash")
 	}

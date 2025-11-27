@@ -147,15 +147,13 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
 
+	// Store original filter values to determine pagination mode
+	hasNumberFilter := numberFrom != 0 || numberTo != 0
+
 	// Set default range if not specified
 	if numberFrom == 0 && numberTo == 0 {
-		if latestHeight >= uint64(offset+limit-1) {
-			numberFrom = latestHeight - uint64(offset+limit-1)
-			numberTo = latestHeight - uint64(offset)
-		} else {
-			numberFrom = 0
-			numberTo = latestHeight
-		}
+		numberFrom = 0
+		numberTo = latestHeight
 	} else if numberTo == 0 {
 		numberTo = latestHeight
 	}
@@ -165,26 +163,56 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("invalid block range: numberFrom (%d) > numberTo (%d)", numberFrom, numberTo)
 	}
 
-	// Adjust range based on offset and limit
-	rangeSize := numberTo - numberFrom + 1
-	if uint64(offset) >= rangeSize {
-		// Offset beyond available blocks
-		return map[string]interface{}{
-			"nodes":      []interface{}{},
-			"totalCount": 0,
-			"pageInfo": map[string]interface{}{
-				"hasNextPage":     false,
-				"hasPreviousPage": offset > 0,
-				"startCursor":     nil,
-				"endCursor":       nil,
-			},
-		}, nil
-	}
+	// Calculate start and end blocks for pagination
+	var startBlock, endBlock uint64
 
-	startBlock := numberFrom + uint64(offset)
-	endBlock := startBlock + uint64(limit) - 1
-	if endBlock > numberTo {
-		endBlock = numberTo
+	if !hasNumberFilter {
+		// Default query (no number filter): return blocks in reverse order (latest first)
+		// offset=0, limit=20 → blocks [latestHeight, latestHeight-19]
+		// offset=20, limit=20 → blocks [latestHeight-20, latestHeight-39]
+		if latestHeight >= uint64(offset) {
+			endBlock = latestHeight - uint64(offset)
+		} else {
+			// Offset beyond available blocks
+			return map[string]interface{}{
+				"nodes":      []interface{}{},
+				"totalCount": 0,
+				"pageInfo": map[string]interface{}{
+					"hasNextPage":     false,
+					"hasPreviousPage": offset > 0,
+					"startCursor":     nil,
+					"endCursor":       nil,
+				},
+			}, nil
+		}
+
+		if endBlock >= uint64(limit-1) {
+			startBlock = endBlock - uint64(limit) + 1
+		} else {
+			startBlock = 0
+		}
+	} else {
+		// Filtered query: return blocks in range with forward pagination
+		rangeSize := numberTo - numberFrom + 1
+		if uint64(offset) >= rangeSize {
+			// Offset beyond available blocks in range
+			return map[string]interface{}{
+				"nodes":      []interface{}{},
+				"totalCount": 0,
+				"pageInfo": map[string]interface{}{
+					"hasNextPage":     false,
+					"hasPreviousPage": offset > 0,
+					"startCursor":     nil,
+					"endCursor":       nil,
+				},
+			}, nil
+		}
+
+		startBlock = numberFrom + uint64(offset)
+		endBlock = startBlock + uint64(limit) - 1
+		if endBlock > numberTo {
+			endBlock = numberTo
+		}
 	}
 
 	// Fetch blocks
@@ -252,8 +280,17 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 		totalCount = len(filteredBlocks)
 	}
 
-	hasNextPage := endBlock < numberTo
-	hasPreviousPage := offset > 0
+	// Calculate pagination info based on query mode
+	var hasNextPage, hasPreviousPage bool
+	if !hasNumberFilter {
+		// Reverse order: hasNextPage means there are older blocks
+		hasNextPage = startBlock > 0
+		hasPreviousPage = offset > 0
+	} else {
+		// Forward order: hasNextPage means there are more blocks in range
+		hasNextPage = endBlock < numberTo
+		hasPreviousPage = offset > 0
+	}
 
 	var startCursor, endCursor interface{}
 	if len(filteredBlocks) > 0 {
@@ -932,6 +969,30 @@ func (s *Schema) resolveActiveMinters(p graphql.ResolveParams) (interface{}, err
 	return result, nil
 }
 
+// resolveActiveMinterAddresses resolves the list of active minter addresses only
+func (s *Schema) resolveActiveMinterAddresses(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	minters, err := reader.GetActiveMinters(ctx)
+	if err != nil {
+		s.logger.Error("failed to get active minter addresses", zap.Error(err))
+		return nil, err
+	}
+
+	// Convert to hex string addresses
+	var result []string
+	for _, minter := range minters {
+		result = append(result, minter.Hex())
+	}
+
+	return result, nil
+}
+
 // resolveMinterAllowance resolves the allowance for a specific minter
 func (s *Schema) resolveMinterAllowance(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
@@ -984,6 +1045,30 @@ func (s *Schema) resolveActiveValidators(p graphql.ResolveParams) (interface{}, 
 	return result, nil
 }
 
+// resolveActiveValidatorAddresses resolves the list of active validator addresses only
+func (s *Schema) resolveActiveValidatorAddresses(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	validators, err := reader.GetActiveValidators(ctx)
+	if err != nil {
+		s.logger.Error("failed to get active validator addresses", zap.Error(err))
+		return nil, err
+	}
+
+	// Convert to hex string addresses
+	var result []string
+	for _, validator := range validators {
+		result = append(result, validator.Hex())
+	}
+
+	return result, nil
+}
+
 // resolveBlacklistedAddresses resolves the list of blacklisted addresses
 func (s *Schema) resolveBlacklistedAddresses(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
@@ -1017,11 +1102,13 @@ func (s *Schema) resolveProposals(p graphql.ResolveParams) (interface{}, error) 
 		return nil, fmt.Errorf("invalid filter")
 	}
 
-	contractStr, ok := filter["contract"].(string)
-	if !ok {
-		return nil, fmt.Errorf("contract address is required")
+	// Parse contract (optional - if not provided, queries all contracts)
+	contract := common.Address{} // Zero address queries all contracts
+	contractStr := ""
+	if contractVal, ok := filter["contract"].(string); ok {
+		contractStr = contractVal
+		contract = common.HexToAddress(contractStr)
 	}
-	contract := common.HexToAddress(contractStr)
 
 	// Parse status (optional)
 	status := storage.ProposalStatusNone
@@ -1052,8 +1139,12 @@ func (s *Schema) resolveProposals(p graphql.ResolveParams) (interface{}, error) 
 
 	proposals, err := reader.GetProposals(ctx, contract, status, limit, offset)
 	if err != nil {
+		logContract := contractStr
+		if logContract == "" {
+			logContract = "all"
+		}
 		s.logger.Error("failed to get proposals",
-			zap.String("contract", contractStr),
+			zap.String("contract", logContract),
 			zap.Error(err))
 		return nil, err
 	}
@@ -1610,6 +1701,74 @@ func (s *Schema) resolveDepositMintProposals(p graphql.ResolveParams) (interface
 	var result []map[string]interface{}
 	for _, proposal := range proposals {
 		result = append(result, s.depositMintProposalToMap(proposal))
+	}
+
+	return result, nil
+}
+
+// Phase 2.3: Add missing system contract query resolvers
+
+// resolveMinterConfigHistory resolves minter configuration change history across all minters
+func (s *Schema) resolveMinterConfigHistory(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	filter, ok := p.Args["filter"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid filter")
+	}
+
+	// Parse block range
+	var fromBlock, toBlock uint64
+	if fb, ok := filter["fromBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(fb, 10, 64)
+		fromBlock = parsed
+	}
+	if tb, ok := filter["toBlock"].(string); ok {
+		parsed, _ := strconv.ParseUint(tb, 10, 64)
+		toBlock = parsed
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetMinterConfigHistory(ctx, fromBlock, toBlock)
+	if err != nil {
+		s.logger.Error("failed to get minter config history",
+			zap.Uint64("fromBlock", fromBlock),
+			zap.Uint64("toBlock", toBlock),
+			zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, event := range events {
+		result = append(result, s.minterConfigEventToMap(event))
+	}
+
+	return result, nil
+}
+
+// resolveAuthorizedAccounts resolves list of authorized accounts from GovCouncil
+func (s *Schema) resolveAuthorizedAccounts(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	accounts, err := reader.GetAuthorizedAccounts(ctx)
+	if err != nil {
+		s.logger.Error("failed to get authorized accounts", zap.Error(err))
+		return nil, err
+	}
+
+	// Convert addresses to hex strings
+	var result []string
+	for _, account := range accounts {
+		result = append(result, account.Hex())
 	}
 
 	return result, nil

@@ -154,10 +154,10 @@ func TestWebSocketBlockSubscription_Integration(t *testing.T) {
 		t.Errorf("Expected hash %s, got: %v", testBlock.Hash().Hex(), newBlock["hash"])
 	}
 
-	// Check txCount
-	txCount, ok := newBlock["txCount"].(float64)
-	if !ok || txCount != 0 {
-		t.Errorf("Expected txCount 0, got: %v", newBlock["txCount"])
+	// Check transactionCount
+	transactionCount, ok := newBlock["transactionCount"].(float64)
+	if !ok || transactionCount != 0 {
+		t.Errorf("Expected transactionCount 0, got: %v", newBlock["transactionCount"])
 	}
 
 	t.Log("✅ Block data verified!")

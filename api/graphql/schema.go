@@ -395,6 +395,11 @@ func (b *SchemaBuilder) WithSystemContractQueries() *SchemaBuilder {
 		Type:    graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(minterInfoType))),
 		Resolve: s.resolveActiveMinters,
 	}
+	b.queries["activeMinterAddresses"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+		Description: "Returns only the addresses of active minters (simplified version of activeMinters)",
+		Resolve:     s.resolveActiveMinterAddresses,
+	}
 	b.queries["minterAllowance"] = &graphql.Field{
 		Type: graphql.NewNonNull(bigIntType),
 		Args: graphql.FieldConfigArgument{
@@ -407,6 +412,11 @@ func (b *SchemaBuilder) WithSystemContractQueries() *SchemaBuilder {
 	b.queries["activeValidators"] = &graphql.Field{
 		Type:    graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(validatorInfoType))),
 		Resolve: s.resolveActiveValidators,
+	}
+	b.queries["activeValidatorAddresses"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+		Description: "Returns only the addresses of active validators (simplified version of activeValidators)",
+		Resolve:     s.resolveActiveValidatorAddresses,
 	}
 	b.queries["blacklistedAddresses"] = &graphql.Field{
 		Type:    graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
@@ -536,6 +546,36 @@ func (b *SchemaBuilder) WithSystemContractQueries() *SchemaBuilder {
 		Resolve: s.resolveDepositMintProposals,
 	}
 
+	// Phase 2.3: Add missing system contract queries
+	b.queries["minterConfigHistory"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(minterConfigEventType))),
+		Description: "Returns minter configuration change history across all minters in a block range",
+		Args: graphql.FieldConfigArgument{
+			"filter": &graphql.ArgumentConfig{
+				Type: graphql.NewNonNull(systemContractEventFilterType),
+			},
+		},
+		Resolve: s.resolveMinterConfigHistory,
+	}
+	b.queries["burnHistory"] = &graphql.Field{
+		Type:        graphql.NewNonNull(burnEventConnectionType),
+		Description: "Alias for burnEvents - returns token burn history",
+		Args: graphql.FieldConfigArgument{
+			"filter": &graphql.ArgumentConfig{
+				Type: graphql.NewNonNull(systemContractEventFilterType),
+			},
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveBurnEvents, // Reuse existing resolver
+	}
+	b.queries["authorizedAccounts"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
+		Description: "Returns list of authorized accounts from GovCouncil contract",
+		Resolve:     s.resolveAuthorizedAccounts,
+	}
+
 	return b
 }
 
@@ -551,6 +591,21 @@ func (b *SchemaBuilder) WithConsensusQueries() *SchemaBuilder {
 			},
 		},
 		Resolve: s.resolveWBFTBlockExtra,
+	}
+	// Alias for frontend compatibility
+	b.queries["wbftBlock"] = &graphql.Field{
+		Type:        wbftBlockExtraType,
+		Description: "Alias for wbftBlockExtra - returns WBFT block consensus data",
+		Args: graphql.FieldConfigArgument{
+			"number": &graphql.ArgumentConfig{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			// Map 'number' argument to 'blockNumber' for the resolver
+			p.Args["blockNumber"] = p.Args["number"]
+			return s.resolveWBFTBlockExtra(p)
+		},
 	}
 	b.queries["wbftBlockExtraByHash"] = &graphql.Field{
 		Type: wbftBlockExtraType,
@@ -570,9 +625,30 @@ func (b *SchemaBuilder) WithConsensusQueries() *SchemaBuilder {
 		},
 		Resolve: s.resolveEpochInfo,
 	}
+	// Alias for frontend compatibility
+	b.queries["epochByNumber"] = &graphql.Field{
+		Type:        epochInfoType,
+		Description: "Alias for epochInfo - returns epoch information by epoch number",
+		Args: graphql.FieldConfigArgument{
+			"number": &graphql.ArgumentConfig{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			// Map 'number' argument to 'epochNumber' for the resolver
+			p.Args["epochNumber"] = p.Args["number"]
+			return s.resolveEpochInfo(p)
+		},
+	}
 	b.queries["latestEpochInfo"] = &graphql.Field{
 		Type:    epochInfoType,
 		Resolve: s.resolveLatestEpochInfo,
+	}
+	// Alias for frontend compatibility
+	b.queries["latestEpochData"] = &graphql.Field{
+		Type:        epochInfoType,
+		Description: "Alias for latestEpochInfo - returns the latest epoch information",
+		Resolve:     s.resolveLatestEpochInfo,
 	}
 	b.queries["validatorSigningStats"] = &graphql.Field{
 		Type: validatorSigningStatsType,
@@ -591,6 +667,23 @@ func (b *SchemaBuilder) WithConsensusQueries() *SchemaBuilder {
 	}
 	b.queries["allValidatorsSigningStats"] = &graphql.Field{
 		Type: graphql.NewNonNull(validatorSigningStatsConnectionType),
+		Args: graphql.FieldConfigArgument{
+			"fromBlock": &graphql.ArgumentConfig{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"toBlock": &graphql.ArgumentConfig{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveAllValidatorsSigningStats,
+	}
+	// Alias for frontend compatibility
+	b.queries["allValidatorStats"] = &graphql.Field{
+		Type:        graphql.NewNonNull(validatorSigningStatsConnectionType),
+		Description: "Alias for allValidatorsSigningStats - returns signing statistics for all validators",
 		Args: graphql.FieldConfigArgument{
 			"fromBlock": &graphql.ArgumentConfig{
 				Type: graphql.NewNonNull(bigIntType),
@@ -733,7 +826,7 @@ func (b *SchemaBuilder) WithAddressIndexingQueries() *SchemaBuilder {
 	b.queries["internalTransactions"] = &graphql.Field{
 		Type: graphql.NewList(graphql.NewNonNull(internalTransactionType)),
 		Args: graphql.FieldConfigArgument{
-			"txHash": &graphql.ArgumentConfig{
+			"transactionHash": &graphql.ArgumentConfig{
 				Type: graphql.NewNonNull(hashType),
 			},
 		},
@@ -757,7 +850,7 @@ func (b *SchemaBuilder) WithAddressIndexingQueries() *SchemaBuilder {
 	b.queries["erc20Transfer"] = &graphql.Field{
 		Type: erc20TransferType,
 		Args: graphql.FieldConfigArgument{
-			"txHash": &graphql.ArgumentConfig{
+			"transactionHash": &graphql.ArgumentConfig{
 				Type: graphql.NewNonNull(hashType),
 			},
 			"logIndex": &graphql.ArgumentConfig{
@@ -796,7 +889,7 @@ func (b *SchemaBuilder) WithAddressIndexingQueries() *SchemaBuilder {
 	b.queries["erc721Transfer"] = &graphql.Field{
 		Type: erc721TransferType,
 		Args: graphql.FieldConfigArgument{
-			"txHash": &graphql.ArgumentConfig{
+			"transactionHash": &graphql.ArgumentConfig{
 				Type: graphql.NewNonNull(hashType),
 			},
 			"logIndex": &graphql.ArgumentConfig{
