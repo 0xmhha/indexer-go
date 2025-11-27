@@ -52,43 +52,54 @@ func main() → run() → NewApp() → App.Run() → App.Shutdown()
 
 ---
 
-### Phase 1-2: api/graphql/types.go 📋 **DOCUMENTED**
+### Phase 1-2: api/graphql/types.go 🔄 **PARTIAL (3/8 categories)**
 
 **Problem**: 1,905-line initTypes() function
 
 **Solution**: Extract Type Categories Pattern
 
-**Status**: Refactoring guide created at `docs/REFACTORING_TYPES_GO.md`
+**Status**: Partial implementation complete, 5 categories remaining
 
-**Strategy**:
+**Implementation**:
 ```go
-// Target Structure
+// Current Structure
 func initTypes() {
-    initCoreTypes()              // ~200 lines
-    initConnectionTypes()        // ~100 lines
-    initHistoricalDataTypes()    // ~100 lines
-    initAnalyticsTypes()         // ~300 lines
-    initSystemContractTypes()    // ~500 lines
-    initConsensusTypes()         // ~400 lines
-    initInputTypes()             // ~300 lines
+    initCoreTypes()              // ✅ ~270 lines - COMPLETE
+    initConnectionTypes()        // ✅ ~70 lines - COMPLETE
+    initHistoricalDataTypes()    // ✅ ~35 lines - COMPLETE
+    initAnalyticsTypes()         // ⏳ ~200 lines - PENDING
+    initSystemContractTypes()    // ⏳ ~500 lines - PENDING
+    initConsensusTypes()         // ⏳ ~400 lines - PENDING
+    initInputTypes()             // ⏳ ~300 lines - PENDING
+    initAddressIndexingTypes()   // ⏳ ~150 lines - PENDING
 }
 ```
 
-**Type Categories Identified**:
-1. Core Types (7 types)
-2. Connection/Pagination Types (4 types)
-3. Historical Data Types (2 types)
-4. Analytics Types (7 types)
-5. System Contract Types (17 types)
-6. WBFT Consensus Types (9 types)
-7. Input/Filter Types (7 types)
+**Completed Categories (3/8)**:
+1. ✅ Core Types (7 types): Block, Transaction, Receipt, Log, AccessListEntry, FeePayerSignature, DecodedLog
+2. ✅ Connection/Pagination Types (4 types): PageInfo, BlockConnection, TransactionConnection, LogConnection
+3. ✅ Historical Data Types (2 types): BalanceSnapshot, BalanceHistoryConnection
 
-**Commit**: `142ad9e` - "docs: add refactoring guide for api/graphql/types.go"
+**Remaining Categories (5/8)**:
+4. ⏳ Analytics Types (8 types): MinerStats, TokenBalance, SearchResult, GasStats, AddressGasStats, NetworkMetrics, AddressActivityStats, ContractVerification
+5. ⏳ System Contract Types (17 types): Proposal, MintEvent, BurnEvent, MinterConfigEvent, etc.
+6. ⏳ Consensus Types (21 types): WBFTBlockExtra, EpochInfo, ValidatorStats, etc.
+7. ⏳ Input/Filter Types (7 types): BlockFilter, TransactionFilter, LogFilter, PaginationInput, etc.
+8. ⏳ Address Indexing Types (8 types): ContractCreation, InternalTransaction, ERC20Transfer, ERC721Transfer, etc.
+
+**Metrics**:
+- **initTypes() size**: 1,905 lines → 1,541 lines (364 lines extracted, 19% reduction)
+- **Functions created**: 3 category functions
+- **Build status**: ✅ Verified successful
+
+**Commits**:
+- `142ad9e` - "docs: add refactoring guide for api/graphql/types.go"
+- `3f38c1c` - "refactor(graphql): extract Core, Connection, and Historical types from initTypes()"
 
 **Next Steps**:
-- Implement extraction following documented pattern
-- Test schema introspection after each category extraction
-- Estimated effort: 4-6 hours
+- Complete remaining 5 category extractions (~1,541 lines)
+- Test GraphQL schema introspection after completion
+- Estimated remaining effort: 3-4 hours
 
 ---
 
@@ -258,7 +269,7 @@ storage/
 | Phase | Task | Status | Lines | Effort |
 |-------|------|--------|-------|--------|
 | 1-1 | cmd/indexer/main.go | ✅ Complete | 290 → 50 | 2h |
-| 1-2 | api/graphql/types.go | 📋 Documented | 1,905 | 4-6h |
+| 1-2 | api/graphql/types.go | 🔄 Partial (3/8) | 1,905 → 1,541 | 2h / 6h total |
 | 1-3 | api/graphql/schema.go | ✅ Complete | 878 → 12 | 3h |
 | 2-1 | storage/pebble.go | ⏳ Pending | 3,364 | 8-12h |
 | 2-2 | fetch/fetcher.go | ✅ Complete | 235 → 60 | 2h |
@@ -267,15 +278,15 @@ storage/
 ### By Status
 
 - ✅ **Completed**: 3 tasks (Phase 1-1, 1-3, 2-2)
-- 📋 **Documented**: 1 task (Phase 1-2)
+- 🔄 **Partial**: 1 task (Phase 1-2: 3/8 categories, 19% reduction)
 - ⏳ **Pending**: 2 tasks (Phase 2-1, 2-3)
 
 ### Metrics
 
 - **Total Lines to Refactor**: 6,672 lines
-- **Lines Refactored**: 1,403 lines (21%)
-- **Lines Documented**: 1,905 lines (29%)
-- **Remaining Work**: 3,364 lines (50%)
+- **Lines Refactored**: 1,767 lines (26.5%) ← +364 from Phase 1-2 partial
+- **Lines Remaining in Phase 1-2**: 1,541 lines (23%)
+- **Remaining Work**: 5,405 lines (81%) - includes Phase 1-2 completion + Phase 2-1 + Phase 2-3
 
 ---
 
