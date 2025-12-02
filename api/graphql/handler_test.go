@@ -324,6 +324,52 @@ func (m *mockStorage) GetMemberHistory(ctx context.Context, contract common.Addr
 	return []*storage.MemberChangeEvent{}, nil
 }
 
+// WBFTReader methods for mockStorage
+func (m *mockStorage) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*storage.WBFTBlockExtra, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*storage.WBFTBlockExtra, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) (*storage.EpochInfo, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) GetLatestEpochInfo(ctx context.Context) (*storage.EpochInfo, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) GetValidatorSigningStats(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64) (*storage.ValidatorSigningStats, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) GetAllValidatorsSigningStats(ctx context.Context, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningStats, error) {
+	return []*storage.ValidatorSigningStats{}, nil
+}
+
+func (m *mockStorage) GetValidatorSigningActivity(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningActivity, error) {
+	return []*storage.ValidatorSigningActivity{}, nil
+}
+
+func (m *mockStorage) GetBlockSigners(ctx context.Context, blockNumber uint64) (preparers []common.Address, committers []common.Address, err error) {
+	return []common.Address{}, []common.Address{}, nil
+}
+
+// WBFTWriter methods for mockStorage
+func (m *mockStorage) SaveWBFTBlockExtra(ctx context.Context, extra *storage.WBFTBlockExtra) error {
+	return nil
+}
+
+func (m *mockStorage) SaveEpochInfo(ctx context.Context, epochInfo *storage.EpochInfo) error {
+	return nil
+}
+
+func (m *mockStorage) UpdateValidatorSigningStats(ctx context.Context, blockNumber uint64, signingActivities []*storage.ValidatorSigningActivity) error {
+	return nil
+}
+
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
 }
@@ -584,6 +630,52 @@ func (m *mockStorageWithErrors) GetProposalVotes(ctx context.Context, contract c
 
 func (m *mockStorageWithErrors) GetMemberHistory(ctx context.Context, contract common.Address) ([]*storage.MemberChangeEvent, error) {
 	return nil, fmt.Errorf("storage error")
+}
+
+// WBFTReader methods for mockStorageWithErrors
+func (m *mockStorageWithErrors) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*storage.WBFTBlockExtra, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*storage.WBFTBlockExtra, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetEpochInfo(ctx context.Context, epochNumber uint64) (*storage.EpochInfo, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetLatestEpochInfo(ctx context.Context) (*storage.EpochInfo, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetValidatorSigningStats(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64) (*storage.ValidatorSigningStats, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetAllValidatorsSigningStats(ctx context.Context, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningStats, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetValidatorSigningActivity(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningActivity, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetBlockSigners(ctx context.Context, blockNumber uint64) (preparers []common.Address, committers []common.Address, err error) {
+	return nil, nil, fmt.Errorf("storage error")
+}
+
+// WBFTWriter methods for mockStorageWithErrors
+func (m *mockStorageWithErrors) SaveWBFTBlockExtra(ctx context.Context, extra *storage.WBFTBlockExtra) error {
+	return fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) SaveEpochInfo(ctx context.Context, epochInfo *storage.EpochInfo) error {
+	return fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) UpdateValidatorSigningStats(ctx context.Context, blockNumber uint64, signingActivities []*storage.ValidatorSigningActivity) error {
+	return fmt.Errorf("storage error")
 }
 
 func TestGraphQLHandler(t *testing.T) {
