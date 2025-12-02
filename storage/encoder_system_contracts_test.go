@@ -457,14 +457,16 @@ func TestEncodeDecode_EmergencyPauseEvent(t *testing.T) {
 
 func TestEncodeDecode_DepositMintProposal(t *testing.T) {
 	proposal := &DepositMintProposal{
-		ProposalID:  big.NewInt(42),
-		To:          common.HexToAddress("0xRECIPIENT1234567890123456789012345678"),
-		Amount:      big.NewInt(1000000000000000000), // 1 ETH
-		DepositID:   "deposit-12345",
-		Status:      ProposalStatusVoting,
-		BlockNumber: 12345,
-		TxHash:      common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
-		Timestamp:   1234567890,
+		ProposalID:    big.NewInt(42),
+		Requester:     common.HexToAddress("0xREQUESTER12345678901234567890123456"),
+		Beneficiary:   common.HexToAddress("0xBENEFICIARY1234567890123456789012345"),
+		Amount:        big.NewInt(1000000000000000000), // 1 ETH
+		DepositID:     "deposit-12345",
+		BankReference: "bank-ref-001",
+		Status:        ProposalStatusVoting,
+		BlockNumber:   12345,
+		TxHash:        common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+		Timestamp:     1234567890,
 	}
 
 	// Encode
@@ -476,9 +478,11 @@ func TestEncodeDecode_DepositMintProposal(t *testing.T) {
 	decoded, err := DecodeDepositMintProposal(encoded)
 	require.NoError(t, err)
 	assert.Equal(t, proposal.ProposalID.String(), decoded.ProposalID.String())
-	assert.Equal(t, proposal.To, decoded.To)
+	assert.Equal(t, proposal.Requester, decoded.Requester)
+	assert.Equal(t, proposal.Beneficiary, decoded.Beneficiary)
 	assert.Equal(t, proposal.Amount.String(), decoded.Amount.String())
 	assert.Equal(t, proposal.DepositID, decoded.DepositID)
+	assert.Equal(t, proposal.BankReference, decoded.BankReference)
 	assert.Equal(t, proposal.Status, decoded.Status)
 	assert.Equal(t, proposal.BlockNumber, decoded.BlockNumber)
 	assert.Equal(t, proposal.TxHash, decoded.TxHash)

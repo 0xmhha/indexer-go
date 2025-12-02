@@ -325,6 +325,43 @@ type Subscription {
 
   # Subscribe to new logs matching a filter
   logs(filter: LogFilter!): Log!
+
+  # Subscribe to system contract events
+  # Filter by contract address to receive events only from specific contracts
+  systemContractEvents(filter: SystemContractSubscriptionFilter): SystemContractEventMessage!
+}
+
+# Filter for system contract event subscription
+input SystemContractSubscriptionFilter {
+  # Filter by contract address (optional, receives all if not specified)
+  contract: Address
+
+  # Filter by specific event types (optional, receives all if not specified)
+  eventTypes: [String!]
+}
+
+# Real-time system contract event message
+type SystemContractEventMessage {
+  # Contract address that emitted the event
+  contract: Address!
+
+  # Event name (e.g., "Mint", "Burn", "ProposalCreated")
+  eventName: String!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Log index in the transaction
+  logIndex: Int!
+
+  # Event-specific data as JSON string
+  data: String!
+
+  # Timestamp when the event was detected
+  timestamp: BigInt!
 }
 
 # Query root type
@@ -493,6 +530,17 @@ type Query {
     filter: SystemContractEventFilter!
     status: ProposalStatus
   ): [DepositMintProposal!]!
+
+  # Get max proposals per member update history
+  maxProposalsUpdateHistory(
+    contract: Address!
+  ): [MaxProposalsUpdateEvent!]!
+
+  # Get proposal execution skipped events
+  proposalExecutionSkippedEvents(
+    contract: Address!
+    proposalId: BigInt
+  ): [ProposalExecutionSkippedEvent!]!
 
   # ========== WBFT Consensus Queries ==========
 
@@ -964,19 +1012,70 @@ type EmergencyPauseEvent {
   timestamp: BigInt!
 }
 
+# MaxProposalsUpdateEvent represents max proposals per member update from GovBase
+type MaxProposalsUpdateEvent {
+  # Contract address
+  contract: Address!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Old maximum proposals per member
+  oldMax: BigInt!
+
+  # New maximum proposals per member
+  newMax: BigInt!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# ProposalExecutionSkippedEvent represents skipped proposal execution from GovCouncil
+type ProposalExecutionSkippedEvent {
+  # Contract address
+  contract: Address!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  transactionHash: Hash!
+
+  # Account address related to the skipped execution
+  account: Address!
+
+  # Proposal ID
+  proposalId: BigInt!
+
+  # Reason for skipping (e.g., ALREADY_BLACKLISTED, NOT_IN_BLACKLIST)
+  reason: String!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
 # DepositMintProposal represents a deposit mint proposal from GovMinter
 type DepositMintProposal {
   # Proposal ID
   proposalId: BigInt!
 
-  # Recipient address
-  to: Address!
+  # Requester address (member who proposed the mint)
+  requester: Address!
+
+  # Beneficiary address (recipient of minted tokens)
+  beneficiary: Address!
 
   # Mint amount
   amount: BigInt!
 
-  # Deposit ID
+  # Deposit ID (may be empty as indexed string is hashed)
   depositId: String!
+
+  # Bank reference number
+  bankReference: String!
 
   # Proposal status
   status: ProposalStatus!

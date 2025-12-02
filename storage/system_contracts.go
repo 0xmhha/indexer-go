@@ -163,13 +163,36 @@ type EmergencyPauseEvent struct {
 
 // DepositMintProposal represents a deposit mint proposal from GovMinter
 type DepositMintProposal struct {
-	ProposalID  *big.Int
-	To          common.Address
-	Amount      *big.Int
-	DepositID   string
-	Status      ProposalStatus
+	ProposalID    *big.Int
+	Requester     common.Address // The member who proposed the mint
+	Beneficiary   common.Address // The recipient of minted tokens
+	Amount        *big.Int
+	DepositID     string // Note: indexed string is hashed in topics, may need proposal lookup
+	BankReference string
+	Status        ProposalStatus
+	BlockNumber   uint64
+	TxHash        common.Hash
+	Timestamp     uint64
+}
+
+// MaxProposalsUpdateEvent represents MaxProposalsPerMemberUpdated event from GovBase
+type MaxProposalsUpdateEvent struct {
+	Contract    common.Address
 	BlockNumber uint64
 	TxHash      common.Hash
+	OldMax      uint64
+	NewMax      uint64
+	Timestamp   uint64
+}
+
+// ProposalExecutionSkippedEvent represents ProposalExecutionSkipped event from GovCouncil
+type ProposalExecutionSkippedEvent struct {
+	Contract    common.Address
+	BlockNumber uint64
+	TxHash      common.Hash
+	Account     common.Address
+	ProposalID  *big.Int
+	Reason      string
 	Timestamp   uint64
 }
 
@@ -229,6 +252,8 @@ type SystemContractWriter interface {
 	StoreMemberChangeEvent(ctx context.Context, event *MemberChangeEvent) error
 	StoreEmergencyPauseEvent(ctx context.Context, event *EmergencyPauseEvent) error
 	StoreDepositMintProposal(ctx context.Context, proposal *DepositMintProposal) error
+	StoreMaxProposalsUpdateEvent(ctx context.Context, event *MaxProposalsUpdateEvent) error
+	StoreProposalExecutionSkippedEvent(ctx context.Context, event *ProposalExecutionSkippedEvent) error
 	UpdateTotalSupply(ctx context.Context, delta *big.Int) error
 	UpdateActiveMinter(ctx context.Context, minter common.Address, allowance *big.Int, active bool) error
 	UpdateActiveValidator(ctx context.Context, validator common.Address, active bool) error

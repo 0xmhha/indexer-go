@@ -182,14 +182,16 @@ func TestPebbleStorage_SystemContractEvents(t *testing.T) {
 
 	t.Run("DepositMintProposal", func(t *testing.T) {
 		proposal := &DepositMintProposal{
-			ProposalID:  big.NewInt(4),
-			To:          common.HexToAddress("0xeeee"),
-			Amount:      big.NewInt(5000),
-			DepositID:   "deposit-456",
-			Status:      ProposalStatusVoting,
-			BlockNumber: 110,
-			TxHash:      common.HexToHash("0x111"),
-			Timestamp:   1234567899,
+			ProposalID:    big.NewInt(4),
+			Requester:     common.HexToAddress("0xdddd"),
+			Beneficiary:   common.HexToAddress("0xeeee"),
+			Amount:        big.NewInt(5000),
+			DepositID:     "deposit-456",
+			BankReference: "BANK-REF-001",
+			Status:        ProposalStatusVoting,
+			BlockNumber:   110,
+			TxHash:        common.HexToHash("0x111"),
+			Timestamp:     1234567899,
 		}
 
 		err := storage.StoreDepositMintProposal(ctx, proposal)

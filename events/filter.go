@@ -41,6 +41,10 @@ type Filter struct {
 	// a position in the topics array and behaves like the eth_subscribe semantics:
 	// nil/empty means wildcard, otherwise an OR match against provided hashes.
 	Topics [][]common.Hash
+
+	// CustomData stores arbitrary filter data for specialized event types
+	// Used by system contract events to filter by event types
+	CustomData map[string]interface{}
 }
 
 // NewFilter creates a new empty filter
@@ -181,9 +185,61 @@ func (f *Filter) Match(event Event) bool {
 		return f.MatchTransaction(e)
 	case *LogEvent:
 		return f.MatchLog(e)
+	case *SystemContractEvent:
+		return f.MatchSystemContract(e)
 	default:
 		return false
 	}
+}
+
+// MatchSystemContract checks if a system contract event matches this filter
+func (f *Filter) MatchSystemContract(event *SystemContractEvent) bool {
+	if event == nil {
+		return false
+	}
+
+	// Check block number range
+	if f.FromBlock > 0 && event.BlockNumber < f.FromBlock {
+		return false
+	}
+	if f.ToBlock > 0 && event.BlockNumber > f.ToBlock {
+		return false
+	}
+
+	// Check contract address filter
+	if len(f.Addresses) > 0 {
+		matched := false
+		for _, addr := range f.Addresses {
+			if event.Contract == addr {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	// Check event types filter from CustomData
+	if f.CustomData != nil {
+		if eventTypesVal, ok := f.CustomData["eventTypes"]; ok {
+			eventTypes, ok := eventTypesVal.([]string)
+			if ok && len(eventTypes) > 0 {
+				matched := false
+				for _, et := range eventTypes {
+					if string(event.EventName) == et {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					return false
+				}
+			}
+		}
+	}
+
+	return true
 }
 
 // IsEmpty returns true if the filter has no conditions set
@@ -195,7 +251,8 @@ func (f *Filter) IsEmpty() bool {
 		f.MaxValue == nil &&
 		f.FromBlock == 0 &&
 		f.ToBlock == 0 &&
-		len(f.Topics) == 0
+		len(f.Topics) == 0 &&
+		len(f.CustomData) == 0
 }
 
 // Clone creates a deep copy of the filter

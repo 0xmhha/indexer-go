@@ -25,6 +25,9 @@ const (
 
 	// EventTypeValidatorSet represents a validator set change event
 	EventTypeValidatorSet EventType = "validatorSet"
+
+	// EventTypeSystemContract represents a system contract event
+	EventTypeSystemContract EventType = "systemContract"
 )
 
 // Event is the base interface for all blockchain events
@@ -269,5 +272,110 @@ func NewValidatorSetEvent(
 		ValidatorInfo:    validatorInfo,
 		ValidatorSetSize: validatorSetSize,
 		CreatedAt:        time.Now(),
+	}
+}
+
+// SystemContractEventType represents the specific type of system contract event
+type SystemContractEventType string
+
+const (
+	// Governance events
+	SystemContractEventProposalCreated           SystemContractEventType = "ProposalCreated"
+	SystemContractEventProposalVoted             SystemContractEventType = "ProposalVoted"
+	SystemContractEventProposalApproved          SystemContractEventType = "ProposalApproved"
+	SystemContractEventProposalRejected          SystemContractEventType = "ProposalRejected"
+	SystemContractEventProposalExecuted          SystemContractEventType = "ProposalExecuted"
+	SystemContractEventProposalFailed            SystemContractEventType = "ProposalFailed"
+	SystemContractEventProposalExpired           SystemContractEventType = "ProposalExpired"
+	SystemContractEventProposalCancelled         SystemContractEventType = "ProposalCancelled"
+	SystemContractEventProposalExecutionSkipped  SystemContractEventType = "ProposalExecutionSkipped"
+	SystemContractEventMaxProposalsUpdated       SystemContractEventType = "MaxProposalsPerMemberUpdated"
+
+	// Member events
+	SystemContractEventMemberAdded   SystemContractEventType = "MemberAdded"
+	SystemContractEventMemberRemoved SystemContractEventType = "MemberRemoved"
+	SystemContractEventMemberChanged SystemContractEventType = "MemberChanged"
+	SystemContractEventQuorumUpdated SystemContractEventType = "QuorumUpdated"
+
+	// Token events (NativeCoinAdapter)
+	SystemContractEventMint                 SystemContractEventType = "Mint"
+	SystemContractEventBurn                 SystemContractEventType = "Burn"
+	SystemContractEventMinterConfigured     SystemContractEventType = "MinterConfigured"
+	SystemContractEventMinterRemoved        SystemContractEventType = "MinterRemoved"
+	SystemContractEventMasterMinterChanged  SystemContractEventType = "MasterMinterChanged"
+
+	// GovValidator events
+	SystemContractEventGasTipUpdated       SystemContractEventType = "GasTipUpdated"
+	SystemContractEventValidatorAdded      SystemContractEventType = "ValidatorAdded"
+	SystemContractEventValidatorRemoved    SystemContractEventType = "ValidatorRemoved"
+
+	// GovMasterMinter events
+	SystemContractEventMaxMinterAllowanceUpdated SystemContractEventType = "MaxMinterAllowanceUpdated"
+	SystemContractEventEmergencyPaused           SystemContractEventType = "EmergencyPaused"
+	SystemContractEventEmergencyUnpaused         SystemContractEventType = "EmergencyUnpaused"
+
+	// GovMinter events
+	SystemContractEventDepositMintProposed SystemContractEventType = "DepositMintProposed"
+	SystemContractEventBurnPrepaid         SystemContractEventType = "BurnPrepaid"
+	SystemContractEventBurnExecuted        SystemContractEventType = "BurnExecuted"
+
+	// GovCouncil events
+	SystemContractEventAddressBlacklisted       SystemContractEventType = "AddressBlacklisted"
+	SystemContractEventAddressUnblacklisted     SystemContractEventType = "AddressUnblacklisted"
+	SystemContractEventAuthorizedAccountAdded   SystemContractEventType = "AuthorizedAccountAdded"
+	SystemContractEventAuthorizedAccountRemoved SystemContractEventType = "AuthorizedAccountRemoved"
+)
+
+// SystemContractEvent represents an event emitted by a system contract
+type SystemContractEvent struct {
+	// Contract address that emitted the event
+	Contract common.Address
+
+	// Specific event type
+	EventName SystemContractEventType
+
+	// Block number
+	BlockNumber uint64
+
+	// Transaction hash
+	TxHash common.Hash
+
+	// Log index in the transaction
+	LogIndex uint
+
+	// Event data as key-value pairs (JSON serializable)
+	Data map[string]interface{}
+
+	// Timestamp when this event was created
+	CreatedAt time.Time
+}
+
+// Type implements Event interface
+func (e *SystemContractEvent) Type() EventType {
+	return EventTypeSystemContract
+}
+
+// Timestamp implements Event interface
+func (e *SystemContractEvent) Timestamp() time.Time {
+	return e.CreatedAt
+}
+
+// NewSystemContractEvent creates a new system contract event
+func NewSystemContractEvent(
+	contract common.Address,
+	eventName SystemContractEventType,
+	blockNumber uint64,
+	txHash common.Hash,
+	logIndex uint,
+	data map[string]interface{},
+) *SystemContractEvent {
+	return &SystemContractEvent{
+		Contract:    contract,
+		EventName:   eventName,
+		BlockNumber: blockNumber,
+		TxHash:      txHash,
+		LogIndex:    logIndex,
+		Data:        data,
+		CreatedAt:   time.Now(),
 	}
 }

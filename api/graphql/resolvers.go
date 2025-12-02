@@ -1904,9 +1904,11 @@ func (s *Schema) emergencyPauseEventToMap(event *storage.EmergencyPauseEvent) ma
 func (s *Schema) depositMintProposalToMap(proposal *storage.DepositMintProposal) map[string]interface{} {
 	return map[string]interface{}{
 		"proposalId":      proposal.ProposalID.String(),
-		"to":              proposal.To.Hex(),
+		"requester":       proposal.Requester.Hex(),
+		"beneficiary":     proposal.Beneficiary.Hex(),
 		"amount":          proposal.Amount.String(),
 		"depositId":       proposal.DepositID,
+		"bankReference":   proposal.BankReference,
 		"status":          proposalStatusToString(proposal.Status),
 		"blockNumber":     fmt.Sprintf("%d", proposal.BlockNumber),
 		"transactionHash": proposal.TxHash.Hex(),

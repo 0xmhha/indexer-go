@@ -34,7 +34,8 @@ var (
 
 // Event signatures for GovBase (common governance events)
 var (
-	EventSigProposalCreated   = crypto.Keccak256Hash([]byte("ProposalCreated(uint256,address,bytes32,bytes,uint256,uint256,uint256)"))
+	// ProposalCreated(uint256 indexed proposalId, address indexed proposer, bytes32 actionType, uint256 memberVersion, uint256 requiredApprovals, bytes callData)
+	EventSigProposalCreated   = crypto.Keccak256Hash([]byte("ProposalCreated(uint256,address,bytes32,uint256,uint256,bytes)"))
 	EventSigProposalVoted     = crypto.Keccak256Hash([]byte("ProposalVoted(uint256,address,bool,uint256,uint256)"))
 	EventSigProposalApproved  = crypto.Keccak256Hash([]byte("ProposalApproved(uint256,address,uint256,uint256)"))
 	EventSigProposalRejected  = crypto.Keccak256Hash([]byte("ProposalRejected(uint256,address,uint256,uint256)"))
@@ -46,6 +47,8 @@ var (
 	EventSigMemberRemoved     = crypto.Keccak256Hash([]byte("MemberRemoved(address,uint256,uint32)"))
 	EventSigMemberChanged     = crypto.Keccak256Hash([]byte("MemberChanged(address,address)"))
 	EventSigQuorumUpdated     = crypto.Keccak256Hash([]byte("QuorumUpdated(uint32,uint32)"))
+	// MaxProposalsPerMemberUpdated(uint256 oldMax, uint256 newMax)
+	EventSigMaxProposalsPerMemberUpdated = crypto.Keccak256Hash([]byte("MaxProposalsPerMemberUpdated(uint256,uint256)"))
 )
 
 // Event signatures for GovValidator
@@ -62,7 +65,8 @@ var (
 
 // Event signatures for GovMinter
 var (
-	EventSigDepositMintProposed = crypto.Keccak256Hash([]byte("DepositMintProposed(uint256,address,uint256,string)"))
+	// DepositMintProposed(uint256 indexed proposalId, string indexed depositId, address indexed requester, address beneficiary, uint256 amount, string bankReference)
+	EventSigDepositMintProposed = crypto.Keccak256Hash([]byte("DepositMintProposed(uint256,string,address,address,uint256,string)"))
 	EventSigBurnPrepaid         = crypto.Keccak256Hash([]byte("BurnPrepaid(address,uint256)"))
 	EventSigBurnExecuted        = crypto.Keccak256Hash([]byte("BurnExecuted(address,uint256,string)"))
 )
@@ -73,12 +77,15 @@ var (
 	EventSigAddressUnblacklisted     = crypto.Keccak256Hash([]byte("AddressUnblacklisted(address,uint256)"))
 	EventSigAuthorizedAccountAdded   = crypto.Keccak256Hash([]byte("AuthorizedAccountAdded(address,uint256)"))
 	EventSigAuthorizedAccountRemoved = crypto.Keccak256Hash([]byte("AuthorizedAccountRemoved(address,uint256)"))
+	// ProposalExecutionSkipped(address indexed account, uint256 indexed proposalId, string reason)
+	EventSigProposalExecutionSkipped = crypto.Keccak256Hash([]byte("ProposalExecutionSkipped(address,uint256,string)"))
 )
 
 // SystemContractEventParser parses and indexes system contract events
 type SystemContractEventParser struct {
-	storage storage.SystemContractWriter
-	logger  *zap.Logger
+	storage  storage.SystemContractWriter
+	logger   *zap.Logger
+	eventBus *EventBus
 }
 
 // NewSystemContractEventParser creates a new system contract event parser
@@ -87,6 +94,29 @@ func NewSystemContractEventParser(storage storage.SystemContractWriter, logger *
 		storage: storage,
 		logger:  logger,
 	}
+}
+
+// SetEventBus sets the event bus for publishing system contract events
+func (p *SystemContractEventParser) SetEventBus(eventBus *EventBus) {
+	p.eventBus = eventBus
+}
+
+// publishEvent publishes a system contract event to the event bus
+func (p *SystemContractEventParser) publishEvent(contract common.Address, eventName SystemContractEventType, log *types.Log, data map[string]interface{}) {
+	if p.eventBus == nil {
+		return
+	}
+
+	event := NewSystemContractEvent(
+		contract,
+		eventName,
+		log.BlockNumber,
+		log.TxHash,
+		log.Index,
+		data,
+	)
+
+	p.eventBus.Publish(event)
 }
 
 // ParseAndIndexLogs parses and indexes multiple logs
@@ -157,6 +187,8 @@ func (p *SystemContractEventParser) parseAndIndexLog(ctx context.Context, log *t
 		return p.parseMemberChangedEvent(ctx, log)
 	case EventSigQuorumUpdated:
 		return p.parseQuorumUpdatedEvent(ctx, log)
+	case EventSigMaxProposalsPerMemberUpdated:
+		return p.parseMaxProposalsPerMemberUpdatedEvent(ctx, log)
 
 	// GovValidator events
 	case EventSigGasTipUpdated:
@@ -187,6 +219,8 @@ func (p *SystemContractEventParser) parseAndIndexLog(ctx context.Context, log *t
 		return p.parseAuthorizedAccountAddedEvent(ctx, log)
 	case EventSigAuthorizedAccountRemoved:
 		return p.parseAuthorizedAccountRemovedEvent(ctx, log)
+	case EventSigProposalExecutionSkipped:
+		return p.parseProposalExecutionSkippedEvent(ctx, log)
 
 	default:
 		// Unknown event, skip silently
@@ -214,12 +248,16 @@ func (p *SystemContractEventParser) parseMintEvent(ctx context.Context, log *typ
 		return fmt.Errorf("invalid Mint event: expected 32 bytes data, got %d", len(log.Data))
 	}
 
+	minter := common.BytesToAddress(log.Topics[1].Bytes())
+	to := common.BytesToAddress(log.Topics[2].Bytes())
+	amount := new(big.Int).SetBytes(log.Data)
+
 	event := &storage.MintEvent{
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
-		Minter:      common.BytesToAddress(log.Topics[1].Bytes()),
-		To:          common.BytesToAddress(log.Topics[2].Bytes()),
-		Amount:      new(big.Int).SetBytes(log.Data),
+		Minter:      minter,
+		To:          to,
+		Amount:      amount,
 		Timestamp:   0, // Will be set by storage layer
 	}
 
@@ -228,9 +266,16 @@ func (p *SystemContractEventParser) parseMintEvent(ctx context.Context, log *typ
 	}
 
 	// Update total supply
-	if err := p.storage.UpdateTotalSupply(ctx, event.Amount); err != nil {
+	if err := p.storage.UpdateTotalSupply(ctx, amount); err != nil {
 		return fmt.Errorf("failed to update total supply: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventMint, log, map[string]interface{}{
+		"minter": minter.Hex(),
+		"to":     to.Hex(),
+		"amount": amount.String(),
+	})
 
 	return nil
 }
@@ -265,6 +310,12 @@ func (p *SystemContractEventParser) parseBurnEvent(ctx context.Context, log *typ
 		return fmt.Errorf("failed to update total supply: %w", err)
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventBurn, log, map[string]interface{}{
+		"burner": event.Burner.Hex(),
+		"amount": amount.String(),
+	})
+
 	return nil
 }
 
@@ -298,6 +349,12 @@ func (p *SystemContractEventParser) parseMinterConfiguredEvent(ctx context.Conte
 		return fmt.Errorf("failed to update active minter: %w", err)
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventMinterConfigured, log, map[string]interface{}{
+		"minter":    minter.Hex(),
+		"allowance": allowance.String(),
+	})
+
 	return nil
 }
 
@@ -327,67 +384,74 @@ func (p *SystemContractEventParser) parseMinterRemovedEvent(ctx context.Context,
 		return fmt.Errorf("failed to update active minter: %w", err)
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventMinterRemoved, log, map[string]interface{}{
+		"minter": minter.Hex(),
+	})
+
 	return nil
 }
 
 // parseMasterMinterChangedEvent parses MasterMinterChanged(address indexed newMasterMinter)
 func (p *SystemContractEventParser) parseMasterMinterChangedEvent(ctx context.Context, log *types.Log) error {
+	newMasterMinter := common.BytesToAddress(log.Topics[1].Bytes())
+
 	// This event is informational only, no storage action needed for now
 	// Could be extended in the future to track master minter history
 	p.logger.Debug("master minter changed",
-		zap.String("newMasterMinter", common.BytesToAddress(log.Topics[1].Bytes()).Hex()),
+		zap.String("newMasterMinter", newMasterMinter.Hex()),
 		zap.Uint64("blockNumber", log.BlockNumber))
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventMasterMinterChanged, log, map[string]interface{}{
+		"newMasterMinter": newMasterMinter.Hex(),
+	})
+
 	return nil
 }
 
 // Placeholder parsers for other events (to be implemented)
 // These will be implemented in subsequent iterations
 
-// parseProposalCreatedEvent parses ProposalCreated(uint256 indexed proposalId, address indexed proposer, bytes32 indexed actionType, bytes callData, uint256 memberVersion, uint256 requiredApprovals, uint256 createdAt)
+// parseProposalCreatedEvent parses ProposalCreated(uint256 indexed proposalId, address indexed proposer, bytes32 actionType, uint256 memberVersion, uint256 requiredApprovals, bytes callData)
 func (p *SystemContractEventParser) parseProposalCreatedEvent(ctx context.Context, log *types.Log) error {
-	if len(log.Topics) != 4 {
-		return fmt.Errorf("invalid ProposalCreated event: expected 4 topics, got %d", len(log.Topics))
+	if len(log.Topics) != 3 {
+		return fmt.Errorf("invalid ProposalCreated event: expected 3 topics, got %d", len(log.Topics))
 	}
 
 	// Parse topics
+	// Topics[0] = event signature
+	// Topics[1] = proposalId (indexed)
+	// Topics[2] = proposer (indexed)
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
 	proposer := common.BytesToAddress(log.Topics[2].Bytes())
-	var actionType [32]byte
-	copy(actionType[:], log.Topics[3].Bytes())
 
-	// Parse data (callData is dynamic, followed by 3 uint256s)
+	// Parse data: actionType (32 bytes) + memberVersion (32 bytes) + requiredApprovals (32 bytes) + callData offset (32 bytes) + callData
 	if len(log.Data) < 128 {
-		return fmt.Errorf("invalid ProposalCreated event: data too short")
+		return fmt.Errorf("invalid ProposalCreated event: data too short, got %d bytes", len(log.Data))
 	}
 
-	// Find where callData ends by reading its offset and length
-	callDataOffset := new(big.Int).SetBytes(log.Data[0:32]).Uint64()
-	if callDataOffset >= uint64(len(log.Data)) {
-		return fmt.Errorf("invalid callData offset")
-	}
-	callDataLength := new(big.Int).SetBytes(log.Data[callDataOffset : callDataOffset+32]).Uint64()
-	callDataStart := callDataOffset + 32
-	callDataEnd := callDataStart + callDataLength
+	// actionType: bytes32 at offset 0
+	var actionType [32]byte
+	copy(actionType[:], log.Data[0:32])
 
-	// Pad to 32-byte boundary
-	if callDataLength%32 != 0 {
-		callDataEnd += 32 - (callDataLength % 32)
-	}
+	// memberVersion: uint256 at offset 32
+	memberVersion := new(big.Int).SetBytes(log.Data[32:64])
 
+	// requiredApprovals: uint256 at offset 64
+	requiredApprovals := uint32(new(big.Int).SetBytes(log.Data[64:96]).Uint64())
+
+	// callData: dynamic bytes starting at offset pointed by data[96:128]
+	callDataOffset := new(big.Int).SetBytes(log.Data[96:128]).Uint64()
 	var callData []byte
-	if callDataEnd <= uint64(len(log.Data)) {
-		callData = log.Data[callDataStart : callDataStart+callDataLength]
+	if callDataOffset < uint64(len(log.Data)) && callDataOffset+32 <= uint64(len(log.Data)) {
+		callDataLength := new(big.Int).SetBytes(log.Data[callDataOffset : callDataOffset+32]).Uint64()
+		callDataStart := callDataOffset + 32
+		callDataEnd := callDataStart + callDataLength
+		if callDataEnd <= uint64(len(log.Data)) {
+			callData = log.Data[callDataStart:callDataEnd]
+		}
 	}
-
-	// After dynamic callData, we have: memberVersion, requiredApprovals, createdAt
-	staticDataStart := callDataEnd
-	if staticDataStart+96 > uint64(len(log.Data)) {
-		return fmt.Errorf("invalid ProposalCreated event: not enough data for static fields")
-	}
-
-	memberVersion := new(big.Int).SetBytes(log.Data[staticDataStart : staticDataStart+32])
-	requiredApprovals := uint32(new(big.Int).SetBytes(log.Data[staticDataStart+32 : staticDataStart+64]).Uint64())
-	createdAt := new(big.Int).SetBytes(log.Data[staticDataStart+64 : staticDataStart+96]).Uint64()
 
 	proposal := &storage.Proposal{
 		Contract:          log.Address,
@@ -400,7 +464,7 @@ func (p *SystemContractEventParser) parseProposalCreatedEvent(ctx context.Contex
 		Approved:          0,
 		Rejected:          0,
 		Status:            storage.ProposalStatusVoting,
-		CreatedAt:         createdAt,
+		CreatedAt:         0, // Will be set from block timestamp by storage layer
 		ExecutedAt:        nil,
 		BlockNumber:       log.BlockNumber,
 		TxHash:            log.TxHash,
@@ -409,6 +473,15 @@ func (p *SystemContractEventParser) parseProposalCreatedEvent(ctx context.Contex
 	if err := p.storage.StoreProposal(ctx, proposal); err != nil {
 		return fmt.Errorf("failed to store proposal: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventProposalCreated, log, map[string]interface{}{
+		"proposalId":        proposalID.String(),
+		"proposer":          proposer.Hex(),
+		"actionType":        common.Bytes2Hex(actionType[:]),
+		"memberVersion":     memberVersion.String(),
+		"requiredApprovals": requiredApprovals,
+	})
 
 	return nil
 }
@@ -442,6 +515,13 @@ func (p *SystemContractEventParser) parseProposalVotedEvent(ctx context.Context,
 		return fmt.Errorf("failed to store proposal vote: %w", err)
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventProposalVoted, log, map[string]interface{}{
+		"proposalId": proposalID.String(),
+		"voter":      voter.Hex(),
+		"approval":   approval,
+	})
+
 	return nil
 }
 
@@ -452,11 +532,18 @@ func (p *SystemContractEventParser) parseProposalApprovedEvent(ctx context.Conte
 	}
 
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
+	approver := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Approved
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusApproved, 0); err != nil {
 		return fmt.Errorf("failed to update proposal status: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventProposalApproved, log, map[string]interface{}{
+		"proposalId": proposalID.String(),
+		"approver":   approver.Hex(),
+	})
 
 	return nil
 }
@@ -468,11 +555,18 @@ func (p *SystemContractEventParser) parseProposalRejectedEvent(ctx context.Conte
 	}
 
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
+	rejector := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Rejected
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusRejected, 0); err != nil {
 		return fmt.Errorf("failed to update proposal status: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventProposalRejected, log, map[string]interface{}{
+		"proposalId": proposalID.String(),
+		"rejector":   rejector.Hex(),
+	})
 
 	return nil
 }
@@ -484,11 +578,25 @@ func (p *SystemContractEventParser) parseProposalExecutedEvent(ctx context.Conte
 	}
 
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
+	executor := common.BytesToAddress(log.Topics[2].Bytes())
+
+	// Parse success from data
+	var success bool
+	if len(log.Data) >= 32 {
+		success = new(big.Int).SetBytes(log.Data[0:32]).Uint64() != 0
+	}
 
 	// Update proposal status to Executed with current block number as execution time
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusExecuted, log.BlockNumber); err != nil {
 		return fmt.Errorf("failed to update proposal status: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventProposalExecuted, log, map[string]interface{}{
+		"proposalId": proposalID.String(),
+		"executor":   executor.Hex(),
+		"success":    success,
+	})
 
 	return nil
 }
@@ -500,11 +608,18 @@ func (p *SystemContractEventParser) parseProposalFailedEvent(ctx context.Context
 	}
 
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
+	executor := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Failed
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusFailed, log.BlockNumber); err != nil {
 		return fmt.Errorf("failed to update proposal status: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventProposalFailed, log, map[string]interface{}{
+		"proposalId": proposalID.String(),
+		"executor":   executor.Hex(),
+	})
 
 	return nil
 }
@@ -516,11 +631,18 @@ func (p *SystemContractEventParser) parseProposalExpiredEvent(ctx context.Contex
 	}
 
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
+	executor := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Expired
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusExpired, 0); err != nil {
 		return fmt.Errorf("failed to update proposal status: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventProposalExpired, log, map[string]interface{}{
+		"proposalId": proposalID.String(),
+		"executor":   executor.Hex(),
+	})
 
 	return nil
 }
@@ -532,11 +654,18 @@ func (p *SystemContractEventParser) parseProposalCancelledEvent(ctx context.Cont
 	}
 
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
+	canceller := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Cancelled
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusCancelled, 0); err != nil {
 		return fmt.Errorf("failed to update proposal status: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventProposalCancelled, log, map[string]interface{}{
+		"proposalId": proposalID.String(),
+		"canceller":  canceller.Hex(),
+	})
 
 	return nil
 }
@@ -577,6 +706,13 @@ func (p *SystemContractEventParser) parseMemberAddedEvent(ctx context.Context, l
 		}
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventMemberAdded, log, map[string]interface{}{
+		"member":       member.Hex(),
+		"totalMembers": totalMembers,
+		"newQuorum":    newQuorum,
+	})
+
 	return nil
 }
 
@@ -615,6 +751,13 @@ func (p *SystemContractEventParser) parseMemberRemovedEvent(ctx context.Context,
 			return fmt.Errorf("failed to update active validator: %w", err)
 		}
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventMemberRemoved, log, map[string]interface{}{
+		"member":       member.Hex(),
+		"totalMembers": totalMembers,
+		"newQuorum":    newQuorum,
+	})
 
 	return nil
 }
@@ -668,6 +811,12 @@ func (p *SystemContractEventParser) parseMemberChangedEvent(ctx context.Context,
 		}
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventMemberChanged, log, map[string]interface{}{
+		"oldMember": oldMember.Hex(),
+		"newMember": newMember.Hex(),
+	})
+
 	return nil
 }
 
@@ -675,15 +824,23 @@ func (p *SystemContractEventParser) parseMemberChangedEvent(ctx context.Context,
 func (p *SystemContractEventParser) parseQuorumUpdatedEvent(ctx context.Context, log *types.Log) error {
 	// This event is informational only, quorum updates are tracked via MemberAdded/Removed
 	// Log for debugging purposes
+	var oldQuorum, newQuorum uint32
 	if len(log.Data) >= 64 {
-		oldQuorum := uint32(new(big.Int).SetBytes(log.Data[0:32]).Uint64())
-		newQuorum := uint32(new(big.Int).SetBytes(log.Data[32:64]).Uint64())
+		oldQuorum = uint32(new(big.Int).SetBytes(log.Data[0:32]).Uint64())
+		newQuorum = uint32(new(big.Int).SetBytes(log.Data[32:64]).Uint64())
 		p.logger.Debug("quorum updated",
 			zap.String("contract", log.Address.Hex()),
 			zap.Uint32("oldQuorum", oldQuorum),
 			zap.Uint32("newQuorum", newQuorum),
 			zap.Uint64("blockNumber", log.BlockNumber))
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventQuorumUpdated, log, map[string]interface{}{
+		"oldQuorum": oldQuorum,
+		"newQuorum": newQuorum,
+	})
+
 	return nil
 }
 
@@ -713,20 +870,43 @@ func (p *SystemContractEventParser) parseGasTipUpdatedEvent(ctx context.Context,
 		return fmt.Errorf("failed to store gas tip update event: %w", err)
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventGasTipUpdated, log, map[string]interface{}{
+		"oldTip":  oldTip.String(),
+		"newTip":  newTip.String(),
+		"updater": updater.Hex(),
+	})
+
 	return nil
 }
 
 // parseMaxMinterAllowanceUpdatedEvent parses MaxMinterAllowanceUpdated(uint256 oldLimit, uint256 newLimit)
 func (p *SystemContractEventParser) parseMaxMinterAllowanceUpdatedEvent(ctx context.Context, log *types.Log) error {
 	// This event is informational only, no storage action needed
+	var oldLimit, newLimit *big.Int
 	if len(log.Data) >= 64 {
-		oldLimit := new(big.Int).SetBytes(log.Data[0:32])
-		newLimit := new(big.Int).SetBytes(log.Data[32:64])
+		oldLimit = new(big.Int).SetBytes(log.Data[0:32])
+		newLimit = new(big.Int).SetBytes(log.Data[32:64])
 		p.logger.Debug("max minter allowance updated",
 			zap.String("oldLimit", oldLimit.String()),
 			zap.String("newLimit", newLimit.String()),
 			zap.Uint64("blockNumber", log.BlockNumber))
 	}
+
+	// Publish event to EventBus
+	oldLimitStr := "0"
+	newLimitStr := "0"
+	if oldLimit != nil {
+		oldLimitStr = oldLimit.String()
+	}
+	if newLimit != nil {
+		newLimitStr = newLimit.String()
+	}
+	p.publishEvent(log.Address, SystemContractEventMaxMinterAllowanceUpdated, log, map[string]interface{}{
+		"oldLimit": oldLimitStr,
+		"newLimit": newLimitStr,
+	})
+
 	return nil
 }
 
@@ -750,6 +930,11 @@ func (p *SystemContractEventParser) parseEmergencyPausedEvent(ctx context.Contex
 	if err := p.storage.StoreEmergencyPauseEvent(ctx, event); err != nil {
 		return fmt.Errorf("failed to store emergency pause event: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventEmergencyPaused, log, map[string]interface{}{
+		"proposalId": proposalID.String(),
+	})
 
 	return nil
 }
@@ -775,51 +960,77 @@ func (p *SystemContractEventParser) parseEmergencyUnpausedEvent(ctx context.Cont
 		return fmt.Errorf("failed to store emergency pause event: %w", err)
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventEmergencyUnpaused, log, map[string]interface{}{
+		"proposalId": proposalID.String(),
+	})
+
 	return nil
 }
 
-// parseDepositMintProposedEvent parses DepositMintProposed(uint256 indexed proposalId, address indexed to, uint256 indexed amount, string depositId)
+// parseDepositMintProposedEvent parses DepositMintProposed(uint256 indexed proposalId, string indexed depositId, address indexed requester, address beneficiary, uint256 amount, string bankReference)
 func (p *SystemContractEventParser) parseDepositMintProposedEvent(ctx context.Context, log *types.Log) error {
 	if len(log.Topics) != 4 {
 		return fmt.Errorf("invalid DepositMintProposed event: expected 4 topics, got %d", len(log.Topics))
 	}
 
+	// Parse topics
+	// Topics[0] = event signature
+	// Topics[1] = proposalId (indexed uint256)
+	// Topics[2] = depositId hash (indexed string becomes keccak256 hash, not directly usable)
+	// Topics[3] = requester (indexed address)
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
-	to := common.BytesToAddress(log.Topics[2].Bytes())
-	amount := new(big.Int).SetBytes(log.Topics[3].Bytes())
+	// depositIdHash := log.Topics[2] // Indexed string is hashed, we need to parse from data or use hash
+	requester := common.BytesToAddress(log.Topics[3].Bytes())
 
-	// Parse depositId from data (string is dynamic)
-	var depositID string
-	if len(log.Data) > 0 {
-		// First 32 bytes: offset to string
-		// Second 32 bytes: length of string
-		// Remaining bytes: string data
-		if len(log.Data) >= 64 {
-			offset := new(big.Int).SetBytes(log.Data[0:32]).Uint64()
-			if offset+32 <= uint64(len(log.Data)) {
-				length := new(big.Int).SetBytes(log.Data[offset : offset+32]).Uint64()
-				dataStart := offset + 32
-				if dataStart+length <= uint64(len(log.Data)) {
-					depositID = string(log.Data[dataStart : dataStart+length])
-				}
-			}
+	// Parse data: beneficiary (address padded to 32 bytes) + amount (uint256) + bankReference offset + depositId (from callData)
+	if len(log.Data) < 96 {
+		return fmt.Errorf("invalid DepositMintProposed event: data too short, got %d bytes", len(log.Data))
+	}
+
+	// beneficiary: address at offset 0 (padded to 32 bytes)
+	beneficiary := common.BytesToAddress(log.Data[12:32])
+
+	// amount: uint256 at offset 32
+	amount := new(big.Int).SetBytes(log.Data[32:64])
+
+	// bankReference: dynamic string starting at offset pointed by data[64:96]
+	var bankReference string
+	bankRefOffset := new(big.Int).SetBytes(log.Data[64:96]).Uint64()
+	if bankRefOffset < uint64(len(log.Data)) && bankRefOffset+32 <= uint64(len(log.Data)) {
+		bankRefLength := new(big.Int).SetBytes(log.Data[bankRefOffset : bankRefOffset+32]).Uint64()
+		bankRefStart := bankRefOffset + 32
+		bankRefEnd := bankRefStart + bankRefLength
+		if bankRefEnd <= uint64(len(log.Data)) {
+			bankReference = string(log.Data[bankRefStart:bankRefEnd])
 		}
 	}
 
 	proposal := &storage.DepositMintProposal{
-		ProposalID:  proposalID,
-		To:          to,
-		Amount:      amount,
-		DepositID:   depositID,
-		Status:      storage.ProposalStatusVoting,
-		BlockNumber: log.BlockNumber,
-		TxHash:      log.TxHash,
-		Timestamp:   0, // Will be set by storage layer
+		ProposalID:    proposalID,
+		Requester:     requester,
+		Beneficiary:   beneficiary,
+		Amount:        amount,
+		DepositID:     "", // Indexed string is hashed in topics, need to track via proposal lookup
+		BankReference: bankReference,
+		Status:        storage.ProposalStatusVoting,
+		BlockNumber:   log.BlockNumber,
+		TxHash:        log.TxHash,
+		Timestamp:     0, // Will be set by storage layer
 	}
 
 	if err := p.storage.StoreDepositMintProposal(ctx, proposal); err != nil {
 		return fmt.Errorf("failed to store deposit mint proposal: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventDepositMintProposed, log, map[string]interface{}{
+		"proposalId":    proposalID.String(),
+		"requester":     requester.Hex(),
+		"beneficiary":   beneficiary.Hex(),
+		"amount":        amount.String(),
+		"bankReference": bankReference,
+	})
 
 	return nil
 }
@@ -841,6 +1052,12 @@ func (p *SystemContractEventParser) parseBurnPrepaidEvent(ctx context.Context, l
 		zap.String("user", user.Hex()),
 		zap.String("amount", amount.String()),
 		zap.Uint64("blockNumber", log.BlockNumber))
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventBurnPrepaid, log, map[string]interface{}{
+		"user":   user.Hex(),
+		"amount": amount.String(),
+	})
 
 	return nil
 }
@@ -891,6 +1108,13 @@ func (p *SystemContractEventParser) parseBurnExecutedEvent(ctx context.Context, 
 		return fmt.Errorf("failed to update total supply: %w", err)
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventBurnExecuted, log, map[string]interface{}{
+		"from":         from.Hex(),
+		"amount":       amount.String(),
+		"withdrawalId": withdrawalID,
+	})
+
 	return nil
 }
 
@@ -920,6 +1144,12 @@ func (p *SystemContractEventParser) parseAddressBlacklistedEvent(ctx context.Con
 	if err := p.storage.UpdateBlacklistStatus(ctx, account, true); err != nil {
 		return fmt.Errorf("failed to update blacklist status: %w", err)
 	}
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventAddressBlacklisted, log, map[string]interface{}{
+		"account":    account.Hex(),
+		"proposalId": proposalID.String(),
+	})
 
 	return nil
 }
@@ -951,6 +1181,12 @@ func (p *SystemContractEventParser) parseAddressUnblacklistedEvent(ctx context.C
 		return fmt.Errorf("failed to update blacklist status: %w", err)
 	}
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventAddressUnblacklisted, log, map[string]interface{}{
+		"account":    account.Hex(),
+		"proposalId": proposalID.String(),
+	})
+
 	return nil
 }
 
@@ -968,6 +1204,12 @@ func (p *SystemContractEventParser) parseAuthorizedAccountAddedEvent(ctx context
 		zap.String("account", account.Hex()),
 		zap.String("proposalId", proposalID.String()),
 		zap.Uint64("blockNumber", log.BlockNumber))
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventAuthorizedAccountAdded, log, map[string]interface{}{
+		"account":    account.Hex(),
+		"proposalId": proposalID.String(),
+	})
 
 	// Could be extended to track authorized accounts in the future
 	return nil
@@ -988,6 +1230,105 @@ func (p *SystemContractEventParser) parseAuthorizedAccountRemovedEvent(ctx conte
 		zap.String("proposalId", proposalID.String()),
 		zap.Uint64("blockNumber", log.BlockNumber))
 
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventAuthorizedAccountRemoved, log, map[string]interface{}{
+		"account":    account.Hex(),
+		"proposalId": proposalID.String(),
+	})
+
 	// Could be extended to track authorized accounts in the future
+	return nil
+}
+
+// parseMaxProposalsPerMemberUpdatedEvent parses MaxProposalsPerMemberUpdated(uint256 oldMax, uint256 newMax)
+func (p *SystemContractEventParser) parseMaxProposalsPerMemberUpdatedEvent(ctx context.Context, log *types.Log) error {
+	if len(log.Topics) != 1 {
+		return fmt.Errorf("invalid MaxProposalsPerMemberUpdated event: expected 1 topic, got %d", len(log.Topics))
+	}
+	if len(log.Data) != 64 {
+		return fmt.Errorf("invalid MaxProposalsPerMemberUpdated event: expected 64 bytes data, got %d", len(log.Data))
+	}
+
+	oldMax := new(big.Int).SetBytes(log.Data[0:32]).Uint64()
+	newMax := new(big.Int).SetBytes(log.Data[32:64]).Uint64()
+
+	event := &storage.MaxProposalsUpdateEvent{
+		Contract:    log.Address,
+		BlockNumber: log.BlockNumber,
+		TxHash:      log.TxHash,
+		OldMax:      oldMax,
+		NewMax:      newMax,
+		Timestamp:   0, // Will be set by storage layer
+	}
+
+	if err := p.storage.StoreMaxProposalsUpdateEvent(ctx, event); err != nil {
+		return fmt.Errorf("failed to store max proposals update event: %w", err)
+	}
+
+	p.logger.Debug("max proposals per member updated",
+		zap.String("contract", log.Address.Hex()),
+		zap.Uint64("oldMax", oldMax),
+		zap.Uint64("newMax", newMax),
+		zap.Uint64("blockNumber", log.BlockNumber))
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventMaxProposalsUpdated, log, map[string]interface{}{
+		"oldMax": oldMax,
+		"newMax": newMax,
+	})
+
+	return nil
+}
+
+// parseProposalExecutionSkippedEvent parses ProposalExecutionSkipped(address indexed account, uint256 indexed proposalId, string reason)
+func (p *SystemContractEventParser) parseProposalExecutionSkippedEvent(ctx context.Context, log *types.Log) error {
+	if len(log.Topics) != 3 {
+		return fmt.Errorf("invalid ProposalExecutionSkipped event: expected 3 topics, got %d", len(log.Topics))
+	}
+
+	account := common.BytesToAddress(log.Topics[1].Bytes())
+	proposalID := new(big.Int).SetBytes(log.Topics[2].Bytes())
+
+	// Parse reason from data (dynamic string)
+	var reason string
+	if len(log.Data) >= 64 {
+		// First 32 bytes: offset to string
+		offset := new(big.Int).SetBytes(log.Data[0:32]).Uint64()
+		if offset+32 <= uint64(len(log.Data)) {
+			length := new(big.Int).SetBytes(log.Data[offset : offset+32]).Uint64()
+			dataStart := offset + 32
+			if dataStart+length <= uint64(len(log.Data)) {
+				reason = string(log.Data[dataStart : dataStart+length])
+			}
+		}
+	}
+
+	event := &storage.ProposalExecutionSkippedEvent{
+		Contract:    log.Address,
+		BlockNumber: log.BlockNumber,
+		TxHash:      log.TxHash,
+		Account:     account,
+		ProposalID:  proposalID,
+		Reason:      reason,
+		Timestamp:   0, // Will be set by storage layer
+	}
+
+	if err := p.storage.StoreProposalExecutionSkippedEvent(ctx, event); err != nil {
+		return fmt.Errorf("failed to store proposal execution skipped event: %w", err)
+	}
+
+	p.logger.Debug("proposal execution skipped",
+		zap.String("account", account.Hex()),
+		zap.String("proposalId", proposalID.String()),
+		zap.String("reason", reason),
+		zap.Uint64("blockNumber", log.BlockNumber))
+
+	// Publish event to EventBus
+	p.publishEvent(log.Address, SystemContractEventProposalExecutionSkipped, log, map[string]interface{}{
+		"account":    account.Hex(),
+		"proposalId": proposalID.String(),
+		"reason":     reason,
+	})
+
 	return nil
 }
