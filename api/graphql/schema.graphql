@@ -329,6 +329,18 @@ type Subscription {
   # Subscribe to system contract events
   # Filter by contract address to receive events only from specific contracts
   systemContractEvents(filter: SystemContractSubscriptionFilter): SystemContractEventMessage!
+
+  # Subscribe to events from dynamically registered contracts
+  dynamicContractEvents(filter: DynamicContractSubscriptionFilter): DynamicContractEvent!
+}
+
+# Filter for dynamic contract event subscription
+input DynamicContractSubscriptionFilter {
+  # Filter by contract address
+  contract: Address
+
+  # Filter by event names
+  eventNames: [String!]
 }
 
 # Filter for system contract event subscription
@@ -639,6 +651,20 @@ type Query {
 
   # Get current owner of an NFT token
   erc721Owner(token: Address!, tokenId: BigInt!): Address
+
+  # ========== Dynamic Contract Queries ==========
+
+  # Get a registered contract by address
+  registeredContract(address: Address!): RegisteredContract
+
+  # Get all registered contracts
+  registeredContracts: [RegisteredContract!]!
+
+  # Get events from a registered contract
+  dynamicContractEvents(
+    filter: DynamicContractEventFilter!
+    pagination: PaginationInput
+  ): [DynamicContractEvent!]!
 }
 
 # Block connection for pagination
@@ -1678,6 +1704,85 @@ type ERC721TransferConnection {
   pageInfo: PageInfo!
 }
 
+# Registered Contract for dynamic event parsing
+type RegisteredContract {
+  # Contract address
+  address: Address!
+
+  # Contract name
+  name: String!
+
+  # Contract ABI (JSON string)
+  abi: String!
+
+  # Registration timestamp
+  registeredAt: BigInt!
+
+  # Block number when registered
+  blockNumber: BigInt!
+
+  # Whether the contract is verified
+  isVerified: Boolean!
+
+  # List of event names in the ABI
+  events: [String!]!
+}
+
+# Input for registering a contract
+input RegisterContractInput {
+  # Contract address
+  address: Address!
+
+  # Human-readable contract name
+  name: String!
+
+  # Contract ABI JSON string
+  abi: String!
+
+  # Block number to start parsing from
+  blockNumber: BigInt
+}
+
+# Dynamic contract event
+type DynamicContractEvent {
+  # Contract address
+  contract: Address!
+
+  # Contract name
+  contractName: String!
+
+  # Event name
+  eventName: String!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  txHash: Hash!
+
+  # Log index
+  logIndex: Int!
+
+  # Event data as JSON string
+  data: String!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# Filter for dynamic contract events
+input DynamicContractEventFilter {
+  # Filter by contract address
+  contract: Address
+
+  # Filter by event names
+  eventNames: [String!]
+
+  # Filter by block range
+  fromBlock: BigInt
+  toBlock: BigInt
+}
+
 # Mutation type for write operations
 type Mutation {
   # Verify a contract's source code
@@ -1691,4 +1796,10 @@ type Mutation {
     contractName: String
     licenseType: String
   ): ContractVerification!
+
+  # Register a contract for dynamic event parsing
+  registerContract(input: RegisterContractInput!): RegisteredContract!
+
+  # Unregister a contract from dynamic event parsing
+  unregisterContract(address: Address!): Boolean!
 }
