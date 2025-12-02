@@ -17,7 +17,10 @@ type ParserRegistry struct {
 	parsers map[common.Address]ContractParser
 
 	// ABI-based parsers indexed by address
-	abiParsers map[common.Address]*ContractABI
+	abiParsers map[common.Address]*ABILogParser
+
+	// ABI data indexed by address (for info queries)
+	abiData map[common.Address]*ContractABI
 
 	// Event handlers indexed by event name
 	handlers map[string][]EventHandler
@@ -36,7 +39,8 @@ type ParserRegistry struct {
 func NewParserRegistry(eventBus *EventBus) *ParserRegistry {
 	return &ParserRegistry{
 		parsers:         make(map[common.Address]ContractParser),
-		abiParsers:      make(map[common.Address]*ContractABI),
+		abiParsers:      make(map[common.Address]*ABILogParser),
+		abiData:         make(map[common.Address]*ContractABI),
 		handlers:        make(map[string][]EventHandler),
 		storageHandlers: make(map[string][]StorageHandler),
 		eventBus:        eventBus,
@@ -67,7 +71,10 @@ func (r *ParserRegistry) RegisterABI(contractABI *ContractABI) error {
 		return fmt.Errorf("ABI already registered for address: %s", addr.Hex())
 	}
 
-	r.abiParsers[addr] = contractABI
+	// Store ABI data for queries
+	r.abiData[addr] = contractABI
+	// Create parser with single responsibility (parsing only)
+	r.abiParsers[addr] = NewABILogParser(contractABI)
 	return nil
 }
 
@@ -87,6 +94,7 @@ func (r *ParserRegistry) UnregisterParser(address common.Address) {
 
 	delete(r.parsers, address)
 	delete(r.abiParsers, address)
+	delete(r.abiData, address)
 }
 
 // RegisterHandler registers an event handler for a specific event type
@@ -129,7 +137,7 @@ func (r *ParserRegistry) GetABI(address common.Address) (*ContractABI, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	abi, ok := r.abiParsers[address]
+	abi, ok := r.abiData[address]
 	return abi, ok
 }
 
@@ -145,9 +153,11 @@ func (r *ParserRegistry) ParseLog(ctx context.Context, log *types.Log) (*ParsedE
 		}
 	}
 
-	// Try ABI parser
-	if abi, ok := r.abiParsers[log.Address]; ok {
-		return abi.ParseLog(log)
+	// Try ABI parser (uses ABILogParser with single responsibility)
+	if parser, ok := r.abiParsers[log.Address]; ok {
+		if parser.CanParse(log) {
+			return parser.Parse(log)
+		}
 	}
 
 	return nil, fmt.Errorf("no parser registered for address: %s", log.Address.Hex())
@@ -191,6 +201,7 @@ func (r *ParserRegistry) StoreEvent(ctx context.Context, event *ParsedEvent) err
 }
 
 // ProcessLog parses, handles, and stores a log in one operation
+// Uses Pipeline pattern for clean separation of concerns (SRP compliance)
 func (r *ParserRegistry) ProcessLog(ctx context.Context, log *types.Log) (*ParsedEvent, error) {
 	// Parse the log
 	event, err := r.ParseLog(ctx, log)
@@ -198,30 +209,26 @@ func (r *ParserRegistry) ProcessLog(ctx context.Context, log *types.Log) (*Parse
 		return nil, err
 	}
 
-	// Handle the event
-	if err := r.HandleEvent(ctx, event); err != nil {
+	// Build and execute pipeline
+	pipeline := r.buildPipeline()
+	if err := pipeline.Execute(ctx, event); err != nil {
 		return nil, err
-	}
-
-	// Store the event
-	if err := r.StoreEvent(ctx, event); err != nil {
-		return nil, err
-	}
-
-	// Publish to EventBus
-	if r.eventBus != nil {
-		sysEvent := NewSystemContractEvent(
-			event.ContractAddress,
-			SystemContractEventType(event.EventName),
-			event.BlockNumber,
-			event.TxHash,
-			event.LogIndex,
-			event.Data,
-		)
-		r.eventBus.Publish(sysEvent)
 	}
 
 	return event, nil
+}
+
+// buildPipeline creates the event processing pipeline
+// Each stage has single responsibility (SRP)
+func (r *ParserRegistry) buildPipeline() *EventPipeline {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return NewPipelineBuilder().
+		WithHandler(r.handlers, r.defaultHandler).
+		WithStorage(r.storageHandlers).
+		WithPublish(r.eventBus).
+		Build()
 }
 
 // ListRegisteredContracts returns all registered contract addresses
@@ -239,7 +246,7 @@ func (r *ParserRegistry) ListRegisteredContracts() []common.Address {
 		}
 	}
 
-	for addr := range r.abiParsers {
+	for addr := range r.abiData {
 		if !seen[addr] {
 			addresses = append(addresses, addr)
 			seen[addr] = true
@@ -264,7 +271,7 @@ func (r *ParserRegistry) GetContractInfo(address common.Address) *ContractInfo {
 		info.HasCustomParser = true
 	}
 
-	if abi, ok := r.abiParsers[address]; ok {
+	if abi, ok := r.abiData[address]; ok {
 		info.Name = abi.Name
 		info.HasABI = true
 		for _, eventName := range abi.EventSigs {

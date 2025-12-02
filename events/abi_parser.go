@@ -11,6 +11,7 @@ import (
 // ABIParser implements ContractParser using a dynamic ABI
 type ABIParser struct {
 	contractABI *ContractABI
+	logParser   *ABILogParser
 	eventBus    *EventBus
 }
 
@@ -18,6 +19,7 @@ type ABIParser struct {
 func NewABIParser(contractABI *ContractABI, eventBus *EventBus) *ABIParser {
 	return &ABIParser{
 		contractABI: contractABI,
+		logParser:   NewABILogParser(contractABI),
 		eventBus:    eventBus,
 	}
 }
@@ -55,7 +57,7 @@ func (p *ABIParser) CanParse(log *types.Log) bool {
 
 // Parse parses a log entry using the ABI
 func (p *ABIParser) Parse(ctx context.Context, log *types.Log) (*ParsedEvent, error) {
-	return p.contractABI.ParseLog(log)
+	return p.logParser.Parse(log)
 }
 
 // ABIParserFactory creates ABIParser instances from ABI JSON

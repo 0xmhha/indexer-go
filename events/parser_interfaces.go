@@ -78,7 +78,7 @@ type EventField struct {
 	Value   interface{}
 }
 
-// ContractABI holds ABI information for a verified contract
+// ContractABI holds ABI information for a verified contract (Pure Data Structure)
 type ContractABI struct {
 	Address     common.Address
 	Name        string
@@ -114,18 +114,34 @@ func (c *ContractABI) GetEventName(topic0 common.Hash) (string, bool) {
 	return name, ok
 }
 
-// ParseLog parses a log entry using this contract's ABI
-func (c *ContractABI) ParseLog(log *types.Log) (*ParsedEvent, error) {
+// GetEvent returns the ABI event definition for a given event name
+func (c *ContractABI) GetEvent(eventName string) (abi.Event, bool) {
+	event, ok := c.ABI.Events[eventName]
+	return event, ok
+}
+
+// ABILogParser handles parsing of logs using ContractABI (Single Responsibility: Parsing Only)
+type ABILogParser struct {
+	abi *ContractABI
+}
+
+// NewABILogParser creates a new ABI log parser
+func NewABILogParser(contractABI *ContractABI) *ABILogParser {
+	return &ABILogParser{abi: contractABI}
+}
+
+// Parse parses a log entry using the ABI
+func (p *ABILogParser) Parse(log *types.Log) (*ParsedEvent, error) {
 	if len(log.Topics) == 0 {
 		return nil, fmt.Errorf("log has no topics")
 	}
 
-	eventName, ok := c.GetEventName(log.Topics[0])
+	eventName, ok := p.abi.GetEventName(log.Topics[0])
 	if !ok {
 		return nil, fmt.Errorf("unknown event signature: %s", log.Topics[0].Hex())
 	}
 
-	event, ok := c.ABI.Events[eventName]
+	event, ok := p.abi.GetEvent(eventName)
 	if !ok {
 		return nil, fmt.Errorf("event %s not found in ABI", eventName)
 	}
@@ -164,7 +180,7 @@ func (c *ContractABI) ParseLog(log *types.Log) (*ParsedEvent, error) {
 
 	return &ParsedEvent{
 		ContractAddress: log.Address,
-		ContractName:    c.Name,
+		ContractName:    p.abi.Name,
 		EventName:       eventName,
 		EventSig:        log.Topics[0],
 		BlockNumber:     log.BlockNumber,
@@ -173,6 +189,18 @@ func (c *ContractABI) ParseLog(log *types.Log) (*ParsedEvent, error) {
 		Data:            data,
 		RawLog:          log,
 	}, nil
+}
+
+// CanParse checks if this parser can handle the given log
+func (p *ABILogParser) CanParse(log *types.Log) bool {
+	if log.Address != p.abi.Address {
+		return false
+	}
+	if len(log.Topics) == 0 {
+		return false
+	}
+	_, ok := p.abi.GetEventName(log.Topics[0])
+	return ok
 }
 
 // parseIndexedTopic parses an indexed topic based on its type
