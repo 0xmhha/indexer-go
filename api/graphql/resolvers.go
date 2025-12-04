@@ -310,6 +310,129 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	}, nil
 }
 
+// resolveBlocksRange resolves blocks in a specific range (optimized for frontend catch-up)
+// Returns blocks from startNumber to endNumber (inclusive) with a maximum of 100 blocks
+func (s *Schema) resolveBlocksRange(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	// Parse start and end block numbers
+	startNumberStr, ok := p.Args["startNumber"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid startNumber")
+	}
+	endNumberStr, ok := p.Args["endNumber"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid endNumber")
+	}
+
+	startNumber, err := strconv.ParseUint(startNumberStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid startNumber format: %w", err)
+	}
+	endNumber, err := strconv.ParseUint(endNumberStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid endNumber format: %w", err)
+	}
+
+	// Validate range
+	if startNumber > endNumber {
+		return nil, fmt.Errorf("startNumber (%d) cannot be greater than endNumber (%d)", startNumber, endNumber)
+	}
+
+	// Limit range to 100 blocks for performance
+	const maxRange = 100
+	if endNumber-startNumber+1 > maxRange {
+		endNumber = startNumber + maxRange - 1
+		s.logger.Warn("blocksRange request limited to 100 blocks",
+			zap.Uint64("requestedStart", startNumber),
+			zap.Uint64("adjustedEnd", endNumber))
+	}
+
+	// Get latest height for sync status
+	latestHeight, err := s.storage.GetLatestHeight(ctx)
+	if err != nil {
+		s.logger.Error("failed to get latest height", zap.Error(err))
+		return nil, fmt.Errorf("failed to get latest height: %w", err)
+	}
+
+	// Adjust endNumber if it exceeds latest height
+	if endNumber > latestHeight {
+		endNumber = latestHeight
+	}
+
+	// Check if there are no blocks to return
+	if startNumber > latestHeight {
+		return map[string]interface{}{
+			"blocks":       []interface{}{},
+			"startNumber":  fmt.Sprintf("%d", startNumber),
+			"endNumber":    fmt.Sprintf("%d", startNumber),
+			"count":        0,
+			"hasMore":      false,
+			"latestHeight": fmt.Sprintf("%d", latestHeight),
+		}, nil
+	}
+
+	// Parse optional flags
+	includeTransactions := true // default to include
+	if it, ok := p.Args["includeTransactions"].(bool); ok {
+		includeTransactions = it
+	}
+	includeReceipts := false // default to not include for performance
+	if ir, ok := p.Args["includeReceipts"].(bool); ok {
+		includeReceipts = ir
+	}
+
+	// Fetch blocks in range
+	blocks := make([]interface{}, 0, endNumber-startNumber+1)
+	for blockNum := startNumber; blockNum <= endNumber; blockNum++ {
+		block, err := s.storage.GetBlock(ctx, blockNum)
+		if err != nil {
+			s.logger.Warn("failed to get block in range",
+				zap.Uint64("blockNumber", blockNum),
+				zap.Error(err))
+			continue // Skip missing blocks
+		}
+
+		blockMap := s.blockToMap(block)
+
+		// Optionally exclude transactions for lighter response
+		if !includeTransactions {
+			blockMap["transactions"] = []interface{}{}
+		} else if includeReceipts {
+			// If receipts are requested, enhance transactions with receipt data
+			txs := block.Transactions()
+			enhancedTxs := make([]interface{}, 0, len(txs))
+			for i, tx := range txs {
+				txMap := s.transactionToMap(tx, &storage.TxLocation{
+					BlockHeight: blockNum,
+					TxIndex:     uint64(i),
+				})
+				// Get receipt for this transaction
+				receipt, err := s.storage.GetReceipt(ctx, tx.Hash())
+				if err == nil && receipt != nil {
+					txMap["receipt"] = s.receiptToMap(receipt)
+				}
+				enhancedTxs = append(enhancedTxs, txMap)
+			}
+			blockMap["transactions"] = enhancedTxs
+		}
+
+		blocks = append(blocks, blockMap)
+	}
+
+	// Determine if there are more blocks available
+	hasMore := endNumber < latestHeight
+
+	return map[string]interface{}{
+		"blocks":       blocks,
+		"startNumber":  fmt.Sprintf("%d", startNumber),
+		"endNumber":    fmt.Sprintf("%d", endNumber),
+		"count":        len(blocks),
+		"hasMore":      hasMore,
+		"latestHeight": fmt.Sprintf("%d", latestHeight),
+	}, nil
+}
+
 // resolveTransaction resolves a transaction by hash
 func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
@@ -327,7 +450,55 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 		return nil, err
 	}
 
-	return s.transactionToMap(tx, location), nil
+	result := s.transactionToMap(tx, location)
+
+	// Fetch and include receipt data for status determination
+	receipt, err := s.storage.GetReceipt(ctx, hash)
+	if err == nil && receipt != nil {
+		// Derive missing receipt fields from block and transaction context
+		if location != nil {
+			block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
+			if blockErr == nil && block != nil {
+				// Set receipt block info
+				receipt.BlockNumber = big.NewInt(int64(location.BlockHeight))
+				receipt.BlockHash = location.BlockHash
+				receipt.TransactionIndex = uint(location.TxIndex)
+
+				// Calculate GasUsed
+				if location.TxIndex == 0 {
+					receipt.GasUsed = receipt.CumulativeGasUsed
+				} else {
+					txs := block.Transactions()
+					if int(location.TxIndex) > 0 && int(location.TxIndex) <= len(txs) {
+						prevTxHash := txs[location.TxIndex-1].Hash()
+						prevReceipt, prevErr := s.storage.GetReceipt(ctx, prevTxHash)
+						if prevErr == nil && prevReceipt != nil {
+							receipt.GasUsed = receipt.CumulativeGasUsed - prevReceipt.CumulativeGasUsed
+						}
+					}
+				}
+
+				// Calculate effective gas price
+				baseFee := block.BaseFee()
+				if baseFee != nil && tx.Type() == types.DynamicFeeTxType {
+					tipCap := tx.GasTipCap()
+					feeCap := tx.GasFeeCap()
+					if tipCap != nil && feeCap != nil {
+						effectiveGasPrice := new(big.Int).Add(baseFee, tipCap)
+						if effectiveGasPrice.Cmp(feeCap) > 0 {
+							effectiveGasPrice = feeCap
+						}
+						receipt.EffectiveGasPrice = effectiveGasPrice
+					}
+				} else if tx.GasPrice() != nil {
+					receipt.EffectiveGasPrice = tx.GasPrice()
+				}
+			}
+		}
+		result["receipt"] = s.receiptToMap(receipt)
+	}
+
+	return result, nil
 }
 
 // resolveTransactions resolves transactions with filtering and pagination
@@ -400,14 +571,12 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 	}
 
 	// Set default range if not specified
+	// When no filter is specified, search from block 0 to find all transactions
+	// This ensures we don't miss transactions in early blocks
 	if blockNumberFrom == 0 && blockNumberTo == 0 {
-		if latestHeight >= uint64(limit-1) {
-			blockNumberFrom = latestHeight - uint64(limit-1)
-			blockNumberTo = latestHeight
-		} else {
-			blockNumberFrom = 0
-			blockNumberTo = latestHeight
-		}
+		// No filter specified - fetch from block 0
+		blockNumberFrom = 0
+		blockNumberTo = latestHeight
 	} else if blockNumberTo == 0 {
 		blockNumberTo = latestHeight
 	}
@@ -485,6 +654,12 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 
 			filteredTxs = append(filteredTxs, s.transactionToMap(tx, location))
 		}
+	}
+
+	// Reverse for DESC order (newest transactions first)
+	// This is the default sorting behavior - most recent transactions appear first
+	for i, j := 0, len(filteredTxs)-1; i < j; i, j = i+1, j-1 {
+		filteredTxs[i], filteredTxs[j] = filteredTxs[j], filteredTxs[i]
 	}
 
 	// Calculate total count based on filters
@@ -666,6 +841,65 @@ func (s *Schema) resolveReceipt(p graphql.ResolveParams) (interface{}, error) {
 		return nil, err
 	}
 
+	// Get transaction to find block info for deriving missing receipt fields
+	tx, location, err := s.storage.GetTransaction(ctx, hash)
+	if err != nil {
+		s.logger.Warn("failed to get transaction for receipt context",
+			zap.String("hash", hashStr),
+			zap.Error(err))
+		// Still return basic receipt data
+		return s.receiptToMap(receipt), nil
+	}
+
+	// Get block to derive additional fields
+	var baseFee *big.Int
+	if location != nil {
+		block, err := s.storage.GetBlock(ctx, location.BlockHeight)
+		if err == nil && block != nil {
+			baseFee = block.BaseFee()
+			// Set receipt block info from location
+			receipt.BlockNumber = big.NewInt(int64(location.BlockHeight))
+			receipt.BlockHash = location.BlockHash
+			receipt.TransactionIndex = uint(location.TxIndex)
+
+			// Calculate GasUsed from CumulativeGasUsed
+			// GasUsed = current.CumulativeGasUsed - previous.CumulativeGasUsed
+			if location.TxIndex == 0 {
+				// First transaction in block: gasUsed = cumulativeGasUsed
+				receipt.GasUsed = receipt.CumulativeGasUsed
+			} else {
+				// Get previous transaction's receipt to calculate gas used
+				txs := block.Transactions()
+				if int(location.TxIndex) > 0 && int(location.TxIndex) <= len(txs) {
+					prevTxHash := txs[location.TxIndex-1].Hash()
+					prevReceipt, err := s.storage.GetReceipt(ctx, prevTxHash)
+					if err == nil && prevReceipt != nil {
+						receipt.GasUsed = receipt.CumulativeGasUsed - prevReceipt.CumulativeGasUsed
+					}
+				}
+			}
+		}
+	}
+
+	// Calculate effective gas price
+	if tx != nil {
+		if baseFee != nil && tx.Type() == types.DynamicFeeTxType {
+			// EIP-1559: effectiveGasPrice = min(baseFee + tipCap, feeCap)
+			tipCap := tx.GasTipCap()
+			feeCap := tx.GasFeeCap()
+			if tipCap != nil && feeCap != nil {
+				effectiveGasPrice := new(big.Int).Add(baseFee, tipCap)
+				if effectiveGasPrice.Cmp(feeCap) > 0 {
+					effectiveGasPrice = feeCap
+				}
+				receipt.EffectiveGasPrice = effectiveGasPrice
+			}
+		} else if tx.GasPrice() != nil {
+			// Legacy/AccessList tx: effectiveGasPrice = gasPrice
+			receipt.EffectiveGasPrice = tx.GasPrice()
+		}
+	}
+
 	return s.receiptToMap(receipt), nil
 }
 
@@ -682,6 +916,15 @@ func (s *Schema) resolveReceiptsByBlock(p graphql.ResolveParams) (interface{}, e
 		return nil, fmt.Errorf("invalid block number format: %w", err)
 	}
 
+	// Get block for deriving receipt fields
+	block, err := s.storage.GetBlock(ctx, number)
+	if err != nil {
+		s.logger.Error("failed to get block",
+			zap.Uint64("number", number),
+			zap.Error(err))
+		return nil, fmt.Errorf("failed to get block: %w", err)
+	}
+
 	receipts, err := s.storage.GetReceiptsByBlockNumber(ctx, number)
 	if err != nil {
 		s.logger.Error("failed to get receipts by block",
@@ -690,8 +933,41 @@ func (s *Schema) resolveReceiptsByBlock(p graphql.ResolveParams) (interface{}, e
 		return nil, err
 	}
 
+	// Derive missing fields for each receipt
+	baseFee := block.BaseFee()
+	txs := block.Transactions()
+
 	result := make([]interface{}, len(receipts))
 	for i, receipt := range receipts {
+		// Set block info
+		receipt.BlockNumber = big.NewInt(int64(number))
+		receipt.BlockHash = block.Hash()
+
+		// Calculate GasUsed
+		if i == 0 {
+			receipt.GasUsed = receipt.CumulativeGasUsed
+		} else if i > 0 && receipts[i-1] != nil {
+			receipt.GasUsed = receipt.CumulativeGasUsed - receipts[i-1].CumulativeGasUsed
+		}
+
+		// Calculate effective gas price from transaction
+		if i < len(txs) {
+			tx := txs[i]
+			if baseFee != nil && tx.Type() == types.DynamicFeeTxType {
+				tipCap := tx.GasTipCap()
+				feeCap := tx.GasFeeCap()
+				if tipCap != nil && feeCap != nil {
+					effectiveGasPrice := new(big.Int).Add(baseFee, tipCap)
+					if effectiveGasPrice.Cmp(feeCap) > 0 {
+						effectiveGasPrice = feeCap
+					}
+					receipt.EffectiveGasPrice = effectiveGasPrice
+				}
+			} else if tx.GasPrice() != nil {
+				receipt.EffectiveGasPrice = tx.GasPrice()
+			}
+		}
+
 		result[i] = s.receiptToMap(receipt)
 	}
 
@@ -781,14 +1057,12 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 	}
 
 	// Set default range if not specified
+	// When no filter is specified, search from block 0 to find all logs
+	// This ensures we don't miss logs in early blocks
 	if blockNumberFrom == 0 && blockNumberTo == 0 {
-		if latestHeight >= uint64(limit-1) {
-			blockNumberFrom = latestHeight - uint64(limit-1)
-			blockNumberTo = latestHeight
-		} else {
-			blockNumberFrom = 0
-			blockNumberTo = latestHeight
-		}
+		// No filter specified - fetch from block 0
+		blockNumberFrom = 0
+		blockNumberTo = latestHeight
 	} else if blockNumberTo == 0 {
 		blockNumberTo = latestHeight
 	}

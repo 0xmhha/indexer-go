@@ -74,6 +74,14 @@ func (m *mockStorage) IndexLog(ctx context.Context, log *types.Log) error {
 	return nil
 }
 
+func (m *mockStorage) HasReceipt(ctx context.Context, hash common.Hash) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStorage) GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
+	return nil, nil
+}
+
 func TestNewServer(t *testing.T) {
 	tests := []struct {
 		name    string

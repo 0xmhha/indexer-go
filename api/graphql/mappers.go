@@ -1,9 +1,9 @@
 package graphql
 
 import (
-	"encoding/json"
 	"fmt"
 
+	"github.com/0xmhha/indexer-go/abi"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -82,21 +82,66 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 		return nil
 	}
 
-	v, r, sigS := tx.RawSignatureValues()
+	// Handle nil location
+	var blockNumber string
+	var blockHash string
+	var txIndex int
+	if location != nil {
+		blockNumber = fmt.Sprintf("%d", location.BlockHeight)
+		blockHash = location.BlockHash.Hex()
+		txIndex = int(location.TxIndex)
+	} else {
+		blockNumber = "0"
+		blockHash = "0x0000000000000000000000000000000000000000000000000000000000000000"
+		txIndex = 0
+	}
 
-	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-	if err != nil {
-		s.logger.Warn("failed to get transaction sender", zap.Error(err))
+	// Handle signature values (can be nil for some tx types)
+	v, r, sigS := tx.RawSignatureValues()
+	var vStr, rStr, sStr string
+	if v != nil {
+		vStr = v.String()
+	} else {
+		vStr = "0"
+	}
+	if r != nil {
+		rStr = fmt.Sprintf("0x%x", r.Bytes())
+	} else {
+		rStr = "0x0"
+	}
+	if sigS != nil {
+		sStr = fmt.Sprintf("0x%x", sigS.Bytes())
+	} else {
+		sStr = "0x0"
+	}
+
+	// Handle potentially nil ChainId for sender derivation
+	var from common.Address
+	chainId := tx.ChainId()
+	if chainId != nil {
+		var err error
+		from, err = types.Sender(types.LatestSignerForChainID(chainId), tx)
+		if err != nil {
+			s.logger.Warn("failed to get transaction sender", zap.Error(err))
+		}
+	}
+
+	// Handle potentially nil Value
+	var valueStr string
+	if tx.Value() != nil {
+		valueStr = tx.Value().String()
+	} else {
+		valueStr = "0"
 	}
 
 	result := map[string]interface{}{
 		"hash":                 tx.Hash().Hex(),
-		"blockNumber":          fmt.Sprintf("%d", location.BlockHeight),
-		"blockHash":            location.BlockHash.Hex(),
-		"transactionIndex":     int(location.TxIndex),
+		"blockNumber":          blockNumber,
+		"blockHash":            blockHash,
+		"transactionIndex":     txIndex,
 		"from":                 from.Hex(),
 		"to":                   nil,
-		"value":                tx.Value().String(),
+		"value":                valueStr,
 		"gas":                  fmt.Sprintf("%d", tx.Gas()),
 		"gasPrice":             nil,
 		"maxFeePerGas":         nil,
@@ -104,9 +149,9 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 		"type":                 int(tx.Type()),
 		"input":                fmt.Sprintf("0x%x", tx.Data()),
 		"nonce":                fmt.Sprintf("%d", tx.Nonce()),
-		"v":                    v.String(),
-		"r":                    fmt.Sprintf("0x%x", r.Bytes()),
-		"s":                    fmt.Sprintf("0x%x", sigS.Bytes()),
+		"v":                    vStr,
+		"r":                    rStr,
+		"s":                    sStr,
 		"chainId":              nil,
 		"accessList":           nil,
 		"receipt":              nil,
@@ -192,15 +237,30 @@ func (s *Schema) receiptToMap(receipt *types.Receipt) map[string]interface{} {
 		logs[i] = s.logToMap(log)
 	}
 
+	// Handle potentially nil fields
+	var blockNumber string
+	if receipt.BlockNumber != nil {
+		blockNumber = fmt.Sprintf("%d", receipt.BlockNumber.Uint64())
+	} else {
+		blockNumber = "0"
+	}
+
+	var effectiveGasPrice string
+	if receipt.EffectiveGasPrice != nil {
+		effectiveGasPrice = receipt.EffectiveGasPrice.String()
+	} else {
+		effectiveGasPrice = "0"
+	}
+
 	result := map[string]interface{}{
 		"transactionHash":   receipt.TxHash.Hex(),
-		"blockNumber":       fmt.Sprintf("%d", receipt.BlockNumber.Uint64()),
+		"blockNumber":       blockNumber,
 		"blockHash":         receipt.BlockHash.Hex(),
 		"transactionIndex":  int(receipt.TransactionIndex),
 		"contractAddress":   nil,
 		"gasUsed":           fmt.Sprintf("%d", receipt.GasUsed),
 		"cumulativeGasUsed": fmt.Sprintf("%d", receipt.CumulativeGasUsed),
-		"effectiveGasPrice": receipt.EffectiveGasPrice.String(),
+		"effectiveGasPrice": effectiveGasPrice,
 		"status":            int(receipt.Status),
 		"logs":              logs,
 		"logsBloom":         fmt.Sprintf("0x%x", receipt.Bloom[:]),
@@ -214,6 +274,7 @@ func (s *Schema) receiptToMap(receipt *types.Receipt) map[string]interface{} {
 }
 
 // logToMap converts a log to a GraphQL-friendly map
+// Always attempts to decode using known event signatures
 func (s *Schema) logToMap(log *types.Log) map[string]interface{} {
 	if log == nil {
 		return nil
@@ -224,7 +285,7 @@ func (s *Schema) logToMap(log *types.Log) map[string]interface{} {
 		topics[i] = topic.Hex()
 	}
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"address":          log.Address.Hex(),
 		"topics":           topics,
 		"data":             fmt.Sprintf("0x%x", log.Data),
@@ -234,10 +295,42 @@ func (s *Schema) logToMap(log *types.Log) map[string]interface{} {
 		"transactionIndex": int(log.TxIndex),
 		"logIndex":         int(log.Index),
 		"removed":          log.Removed,
+		"decoded":          nil,
+	}
+
+	// Try to decode using known event signatures
+	if decoded := abi.DecodeKnownEvent(log); decoded != nil {
+		result["decoded"] = decodedEventLogToMap(decoded)
+	}
+
+	return result
+}
+
+// decodedEventLogToMap converts a DecodedEventLog to a GraphQL-friendly map
+func decodedEventLogToMap(decoded *abi.DecodedEventLog) map[string]interface{} {
+	if decoded == nil {
+		return nil
+	}
+
+	params := make([]interface{}, len(decoded.Params))
+	for i, param := range decoded.Params {
+		params[i] = map[string]interface{}{
+			"name":    param.Name,
+			"type":    param.Type,
+			"value":   param.Value,
+			"indexed": param.Indexed,
+		}
+	}
+
+	return map[string]interface{}{
+		"eventName":      decoded.EventName,
+		"eventSignature": decoded.EventSignature,
+		"params":         params,
 	}
 }
 
 // logToMapWithDecode converts a log to a GraphQL-friendly map with optional decoding
+// Uses contract ABI if available, otherwise falls back to known event signatures
 func (s *Schema) logToMapWithDecode(log *types.Log, decode bool) map[string]interface{} {
 	if log == nil {
 		return nil
@@ -258,22 +351,37 @@ func (s *Schema) logToMapWithDecode(log *types.Log, decode bool) map[string]inte
 		"transactionIndex": int(log.TxIndex),
 		"logIndex":         int(log.Index),
 		"removed":          log.Removed,
+		"decoded":          nil,
 	}
 
-	// Optionally decode the log if ABI is available
-	if decode && s.abiDecoder.HasABI(log.Address) {
-		decoded, err := s.abiDecoder.DecodeLog(log)
-		if err == nil {
-			// Serialize args to JSON string for GraphQL
-			argsJSON, jsonErr := json.Marshal(decoded.Args)
-			if jsonErr == nil {
-				result["decoded"] = map[string]interface{}{
-					"eventName": decoded.EventName,
-					"args":      string(argsJSON),
+	if decode {
+		// 1. Try contract-specific ABI first (if available)
+		if s.abiDecoder != nil && s.abiDecoder.HasABI(log.Address) {
+			decoded, err := s.abiDecoder.DecodeLog(log)
+			if err == nil {
+				// Convert to new format with structured params
+				params := make([]interface{}, 0)
+				for name, value := range decoded.Args {
+					params = append(params, map[string]interface{}{
+						"name":    name,
+						"type":    "unknown", // ABI decoder doesn't provide type info in args
+						"value":   fmt.Sprintf("%v", value),
+						"indexed": false, // Would need to track this separately
+					})
 				}
+				result["decoded"] = map[string]interface{}{
+					"eventName":      decoded.EventName,
+					"eventSignature": decoded.EventName, // Full signature not available from basic decoder
+					"params":         params,
+				}
+				return result
 			}
 		}
-		// Silently ignore decode errors - not all logs may be decodable
+
+		// 2. Fall back to known event signatures
+		if knownDecoded := abi.DecodeKnownEvent(log); knownDecoded != nil {
+			result["decoded"] = decodedEventLogToMap(knownDecoded)
+		}
 	}
 
 	return result

@@ -22,6 +22,31 @@ type Client struct {
 	logger    *zap.Logger
 }
 
+// BatchReceiptError represents an error for a single receipt in a batch operation
+type BatchReceiptError struct {
+	TxHash common.Hash
+	Error  error
+}
+
+// BatchReceiptResult contains the results of a batch receipt fetch operation
+type BatchReceiptResult struct {
+	Receipts      []*types.Receipt    // Successfully fetched receipts (nil for failed ones)
+	Errors        []BatchReceiptError // List of errors encountered
+	SuccessCount  int                 // Number of successfully fetched receipts
+	FailureCount  int                 // Number of failed fetches
+	TotalRequests int                 // Total number of requests made
+}
+
+// HasErrors returns true if any errors occurred during the batch operation
+func (r *BatchReceiptResult) HasErrors() bool {
+	return len(r.Errors) > 0
+}
+
+// AllSucceeded returns true if all receipts were fetched successfully
+func (r *BatchReceiptResult) AllSucceeded() bool {
+	return r.FailureCount == 0
+}
+
 // Config holds client configuration
 type Config struct {
 	Endpoint string
@@ -89,6 +114,16 @@ func (c *Client) Close() {
 	if c.ethClient != nil {
 		c.ethClient.Close()
 	}
+}
+
+// EthClient returns the underlying ethclient.Client
+func (c *Client) EthClient() *ethclient.Client {
+	return c.ethClient
+}
+
+// RPCClient returns the underlying rpc.Client
+func (c *Client) RPCClient() *rpc.Client {
+	return c.rpcClient
 }
 
 // GetLatestBlockNumber returns the latest block number
@@ -221,20 +256,25 @@ func (c *Client) BatchGetBlocks(ctx context.Context, numbers []uint64) ([]*types
 	return blocks, nil
 }
 
-// BatchGetReceipts fetches multiple transaction receipts in a single batch request
-func (c *Client) BatchGetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
-	if len(hashes) == 0 {
-		return nil, nil
+// BatchGetReceiptsWithDetails fetches multiple transaction receipts and returns detailed results
+// including partial successes and individual error tracking
+func (c *Client) BatchGetReceiptsWithDetails(ctx context.Context, hashes []common.Hash) (*BatchReceiptResult, error) {
+	result := &BatchReceiptResult{
+		Receipts:      make([]*types.Receipt, len(hashes)),
+		Errors:        make([]BatchReceiptError, 0),
+		TotalRequests: len(hashes),
 	}
 
-	receipts := make([]*types.Receipt, len(hashes))
-	batch := make([]rpc.BatchElem, len(hashes))
+	if len(hashes) == 0 {
+		return result, nil
+	}
 
+	batch := make([]rpc.BatchElem, len(hashes))
 	for i, hash := range hashes {
 		batch[i] = rpc.BatchElem{
 			Method: "eth_getTransactionReceipt",
 			Args:   []interface{}{hash},
-			Result: &receipts[i],
+			Result: &result.Receipts[i],
 		}
 	}
 
@@ -242,17 +282,61 @@ func (c *Client) BatchGetReceipts(ctx context.Context, hashes []common.Hash) ([]
 		return nil, fmt.Errorf("batch call failed: %w", err)
 	}
 
-	// Check for individual errors
+	// Check for individual errors and track them
 	for i, elem := range batch {
 		if elem.Error != nil {
-			c.logger.Error("failed to fetch receipt in batch",
+			c.logger.Warn("failed to fetch receipt in batch",
 				zap.String("tx_hash", hashes[i].Hex()),
 				zap.Error(elem.Error))
-			return nil, fmt.Errorf("failed to fetch receipt for %s: %w", hashes[i].Hex(), elem.Error)
+			result.Errors = append(result.Errors, BatchReceiptError{
+				TxHash: hashes[i],
+				Error:  elem.Error,
+			})
+			result.Receipts[i] = nil
+			result.FailureCount++
+		} else if result.Receipts[i] == nil {
+			// Receipt not found (transaction might be pending or non-existent)
+			c.logger.Debug("receipt not found in batch",
+				zap.String("tx_hash", hashes[i].Hex()))
+			result.Errors = append(result.Errors, BatchReceiptError{
+				TxHash: hashes[i],
+				Error:  fmt.Errorf("receipt not found"),
+			})
+			result.FailureCount++
+		} else {
+			result.SuccessCount++
 		}
 	}
 
-	return receipts, nil
+	c.logger.Debug("batch receipt fetch completed",
+		zap.Int("total", result.TotalRequests),
+		zap.Int("success", result.SuccessCount),
+		zap.Int("failed", result.FailureCount),
+	)
+
+	return result, nil
+}
+
+// BatchGetReceipts fetches multiple transaction receipts in a single batch request
+// Returns an error if any receipt fails to fetch (use BatchGetReceiptsWithDetails for partial results)
+func (c *Client) BatchGetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+
+	result, err := c.BatchGetReceiptsWithDetails(ctx, hashes)
+	if err != nil {
+		return nil, err
+	}
+
+	// For backward compatibility, return error if any receipt failed
+	if result.HasErrors() {
+		// Return the first error for backward compatibility
+		firstErr := result.Errors[0]
+		return nil, fmt.Errorf("failed to fetch receipt for %s: %w", firstErr.TxHash.Hex(), firstErr.Error)
+	}
+
+	return result.Receipts, nil
 }
 
 // SubscribePendingTransactions subscribes to pending transaction hashes

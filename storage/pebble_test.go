@@ -710,7 +710,7 @@ func TestPebbleStorage_Receipt_WithLogs(t *testing.T) {
 		CumulativeGasUsed: 50000,
 		Bloom:             types.Bloom{},
 		Logs:              []*types.Log{log1},
-		TxHash:            common.HexToHash("0xwithlogs"),
+		TxHash:            common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
 		GasUsed:           30000,
 	}
 
@@ -1950,9 +1950,10 @@ func TestPebbleStorage_GetTransactionCount(t *testing.T) {
 		t.Errorf("GetTransactionCount() = %d, want 0", count)
 	}
 
-	// Store count manually
+	// Store count manually (also update atomic counter since GetTransactionCount uses cache)
 	countValue := EncodeUint64(10)
 	pebbleStorage.db.Set(TransactionCountKey(), countValue, nil)
+	pebbleStorage.txCount.Store(10) // Update cache to match
 
 	// Test retrieval
 	count, err = pebbleStorage.GetTransactionCount(ctx)
@@ -1963,9 +1964,10 @@ func TestPebbleStorage_GetTransactionCount(t *testing.T) {
 		t.Errorf("GetTransactionCount() = %d, want 10", count)
 	}
 
-	// Store larger count
+	// Store larger count (also update atomic counter)
 	countValue = EncodeUint64(5000000)
 	pebbleStorage.db.Set(TransactionCountKey(), countValue, nil)
+	pebbleStorage.txCount.Store(5000000) // Update cache to match
 
 	count, err = pebbleStorage.GetTransactionCount(ctx)
 	if err != nil {
@@ -3074,11 +3076,12 @@ func TestPebbleBatch_SetReceipt(t *testing.T) {
 
 		tx := createTestTransaction(1)
 		receipt := &types.Receipt{
-			TxHash:           tx.Hash(),
-			Status:           types.ReceiptStatusSuccessful,
-			BlockNumber:      big.NewInt(10),
-			TransactionIndex: 0,
-			GasUsed:          21000,
+			TxHash:            tx.Hash(),
+			Status:            types.ReceiptStatusSuccessful,
+			BlockNumber:       big.NewInt(10),
+			TransactionIndex:  0,
+			GasUsed:           21000,
+			CumulativeGasUsed: 21000,
 		}
 
 		err := batch.SetReceipt(ctx, receipt)
@@ -3136,11 +3139,12 @@ func TestPebbleBatch_SetReceipts(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			tx := createTestTransaction(uint64(i))
 			receipt := &types.Receipt{
-				TxHash:           tx.Hash(),
-				Status:           types.ReceiptStatusSuccessful,
-				BlockNumber:      big.NewInt(10),
-				TransactionIndex: uint(i),
-				GasUsed:          21000,
+				TxHash:            tx.Hash(),
+				Status:            types.ReceiptStatusSuccessful,
+				BlockNumber:       big.NewInt(10),
+				TransactionIndex:  uint(i),
+				GasUsed:           21000,
+				CumulativeGasUsed: uint64((i + 1) * 21000),
 			}
 			receipts = append(receipts, receipt)
 		}
@@ -3868,11 +3872,12 @@ func TestPebbleStorage_GetReceipt_Success(t *testing.T) {
 	// Create and store receipt
 	tx := createTestTransaction(1)
 	receipt := &types.Receipt{
-		TxHash:           tx.Hash(),
-		Status:           types.ReceiptStatusSuccessful,
-		BlockNumber:      big.NewInt(10),
-		TransactionIndex: 0,
-		GasUsed:          21000,
+		TxHash:            tx.Hash(),
+		Status:            types.ReceiptStatusSuccessful,
+		BlockNumber:       big.NewInt(10),
+		TransactionIndex:  0,
+		GasUsed:           21000,
+		CumulativeGasUsed: 21000,
 	}
 
 	if err := pebbleStorage.SetReceipt(ctx, receipt); err != nil {
@@ -3900,11 +3905,12 @@ func TestPebbleStorage_SetReceipts_Success(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		tx := createTestTransaction(uint64(i))
 		receipt := &types.Receipt{
-			TxHash:           tx.Hash(),
-			Status:           types.ReceiptStatusSuccessful,
-			BlockNumber:      big.NewInt(10),
-			TransactionIndex: uint(i),
-			GasUsed:          21000,
+			TxHash:            tx.Hash(),
+			Status:            types.ReceiptStatusSuccessful,
+			BlockNumber:       big.NewInt(10),
+			TransactionIndex:  uint(i),
+			GasUsed:           21000,
+			CumulativeGasUsed: uint64((i + 1) * 21000),
 		}
 		receipts = append(receipts, receipt)
 	}

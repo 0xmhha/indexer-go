@@ -37,6 +37,33 @@ func IsSystemContract(addr common.Address) bool {
 	return SystemContractAddresses[addr]
 }
 
+// SystemContractTokenMetadata contains pre-defined metadata for system contracts
+// This is used to provide meaningful names/symbols for tokens issued by system contracts
+type SystemContractTokenMetadata struct {
+	Name     string
+	Symbol   string
+	Decimals int
+}
+
+// SystemContractTokenMetadataMap maps system contract addresses to their token metadata
+var SystemContractTokenMetadataMap = map[common.Address]SystemContractTokenMetadata{
+	// NativeCoinAdapter (0x1000) - Native coin wrapper (ERC20 compatible)
+	NativeCoinAdapterAddress: {
+		Name:     "STABLEONE",
+		Symbol:   "STONE",
+		Decimals: 18,
+	},
+}
+
+// GetSystemContractTokenMetadata returns token metadata for a system contract
+// Returns nil if the address is not a system contract with token metadata
+func GetSystemContractTokenMetadata(addr common.Address) *SystemContractTokenMetadata {
+	if metadata, ok := SystemContractTokenMetadataMap[addr]; ok {
+		return &metadata
+	}
+	return nil
+}
+
 // NativeCoinAdapter (0x1000) event signatures
 var (
 	// ERC-20 standard events

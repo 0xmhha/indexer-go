@@ -301,3 +301,41 @@ func DefaultTransactionFilter() *TransactionFilter {
 		SuccessOnly: false,
 	}
 }
+
+// FeeDelegationStats represents overall fee delegation statistics
+type FeeDelegationStats struct {
+	// TotalFeeDelegatedTxs is the total number of fee delegation transactions
+	TotalFeeDelegatedTxs uint64
+	// TotalFeesSaved is the total fees saved by users (paid by fee payers) in wei
+	TotalFeesSaved *big.Int
+	// AdoptionRate is the percentage of fee delegation transactions vs total transactions
+	AdoptionRate float64
+	// AvgFeeSaved is the average fee saved per fee delegation transaction in wei
+	AvgFeeSaved *big.Int
+}
+
+// FeePayerStats represents statistics for a single fee payer
+type FeePayerStats struct {
+	// Address is the fee payer address
+	Address common.Address
+	// TxCount is the number of transactions sponsored by this fee payer
+	TxCount uint64
+	// TotalFeesPaid is the total fees paid by this fee payer in wei
+	TotalFeesPaid *big.Int
+	// Percentage is the percentage of total fee delegation transactions
+	Percentage float64
+}
+
+// FeeDelegationReader provides read access to fee delegation statistics
+type FeeDelegationReader interface {
+	// GetFeeDelegationStats returns overall fee delegation statistics
+	// If fromBlock and toBlock are both 0, returns all-time statistics
+	GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*FeeDelegationStats, error)
+
+	// GetTopFeePayers returns the top fee payers by transaction count
+	// If fromBlock and toBlock are both 0, returns all-time statistics
+	GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]FeePayerStats, uint64, error)
+
+	// GetFeePayerStats returns statistics for a specific fee payer
+	GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*FeePayerStats, error)
+}

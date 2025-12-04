@@ -562,8 +562,8 @@ func TestHistoricalResolversErrorPaths(t *testing.T) {
 		}
 	})
 
-	t.Run("NotHistoricalStorage", func(t *testing.T) {
-		// Use regular mockStorage without historical methods
+	t.Run("HistoricalStorage_BlockCount", func(t *testing.T) {
+		// mockStorage now implements HistoricalReader as part of Storage interface
 		regularStore := &mockStorage{
 			latestHeight: 100,
 			blocks:       make(map[uint64]*types.Block),
@@ -578,8 +578,8 @@ func TestHistoricalResolversErrorPaths(t *testing.T) {
 		query := `{ blockCount }`
 		result := handler.ExecuteQuery(query, nil)
 
-		if len(result.Errors) == 0 {
-			t.Error("expected error when storage does not support historical queries")
+		if len(result.Errors) > 0 {
+			t.Errorf("expected no error, got: %v", result.Errors)
 		}
 	})
 }

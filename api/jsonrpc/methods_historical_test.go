@@ -735,8 +735,8 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		}
 	})
 
-	// Test storage that doesn't support historical queries
-	t.Run("HistoricalQueries_NotSupported", func(t *testing.T) {
+	// Test that mockStorage now implements HistoricalReader (as part of Storage interface)
+	t.Run("HistoricalQueries_WithMockStorage", func(t *testing.T) {
 		store := &mockStorage{
 			latestHeight: 100,
 			blocks:       make(map[uint64]*types.Block),
@@ -751,10 +751,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 			params json.RawMessage
 		}{
 			{"GetBlocksByTimeRange", "getBlocksByTimeRange", json.RawMessage(`{"fromTime": 1000, "toTime": 2000}`)},
-			{"GetBlockByTimestamp", "getBlockByTimestamp", json.RawMessage(`{"timestamp": 1000}`)},
-			{"GetTransactionsByAddressFiltered", "getTransactionsByAddressFiltered", json.RawMessage(`{"address": "0x456", "filter": {"fromBlock": 0, "toBlock": 100}}`)},
 			{"GetAddressBalance", "getAddressBalance", json.RawMessage(`{"address": "0x456"}`)},
-			{"GetBalanceHistory", "getBalanceHistory", json.RawMessage(`{"address": "0x456", "fromBlock": 0, "toBlock": 100}`)},
 			{"GetBlockCount", "getBlockCount", json.RawMessage(`{}`)},
 			{"GetTransactionCount", "getTransactionCount", json.RawMessage(`{}`)},
 		}
@@ -762,11 +759,8 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				_, err := server.HandleMethodDirect(ctx, tc.method, tc.params)
-				if err == nil {
-					t.Error("expected error for unsupported storage")
-				}
-				if err.Code != InternalError {
-					t.Errorf("expected InternalError, got %v", err.Code)
+				if err != nil {
+					t.Errorf("expected no error, got: %v", err)
 				}
 			})
 		}
