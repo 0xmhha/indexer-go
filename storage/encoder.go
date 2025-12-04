@@ -102,32 +102,78 @@ func DecodeReceipt(data []byte) (*types.Receipt, error) {
 	return &receipt, nil
 }
 
-// EncodeLog encodes a log using RLP
+// storedLog is a custom struct for storing logs with all metadata fields
+// The standard types.Log RLP encoding excludes metadata fields (BlockNumber, TxHash, etc.)
+// because they have `rlp:"-"` tags
+type storedLog struct {
+	// Core fields (included in consensus)
+	Address common.Address
+	Topics  []common.Hash
+	Data    []byte
+
+	// Metadata fields (excluded from RLP in types.Log but we need to store them)
+	BlockNumber uint64
+	TxHash      common.Hash
+	TxIndex     uint
+	BlockHash   common.Hash
+	Index       uint
+	Removed     bool
+}
+
+// EncodeLog encodes a log using RLP with all metadata fields preserved
+// Note: The standard types.Log RLP encoding excludes BlockNumber, TxHash, TxIndex,
+// BlockHash, Index, and Removed fields. We use a custom struct to include them.
 func EncodeLog(log *types.Log) ([]byte, error) {
 	if log == nil {
 		return nil, fmt.Errorf("log cannot be nil")
 	}
 
+	// Convert to our storage format that includes all fields
+	stored := storedLog{
+		Address:     log.Address,
+		Topics:      log.Topics,
+		Data:        log.Data,
+		BlockNumber: log.BlockNumber,
+		TxHash:      log.TxHash,
+		TxIndex:     log.TxIndex,
+		BlockHash:   log.BlockHash,
+		Index:       log.Index,
+		Removed:     log.Removed,
+	}
+
 	var buf bytes.Buffer
-	if err := rlp.Encode(&buf, log); err != nil {
+	if err := rlp.Encode(&buf, stored); err != nil {
 		return nil, fmt.Errorf("failed to encode log: %w", err)
 	}
 
 	return buf.Bytes(), nil
 }
 
-// DecodeLog decodes a log from RLP
+// DecodeLog decodes a log from RLP with all metadata fields restored
 func DecodeLog(data []byte) (*types.Log, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("data cannot be empty")
 	}
 
-	var log types.Log
-	if err := rlp.DecodeBytes(data, &log); err != nil {
+	var stored storedLog
+	if err := rlp.DecodeBytes(data, &stored); err != nil {
 		return nil, fmt.Errorf("failed to decode log: %w", err)
 	}
 
-	return &log, nil
+	// Convert back to types.Log
+	log := &types.Log{
+		Address:     stored.Address,
+		Topics:      stored.Topics,
+		Data:        stored.Data,
+		BlockNumber: stored.BlockNumber,
+		TxHash:      stored.TxHash,
+		TxIndex:     stored.TxIndex,
+		BlockHash:   stored.BlockHash,
+		Index:       stored.Index,
+		Removed:     stored.Removed,
+	}
+
+	return log, nil
 }
 
 // EncodeTxLocation encodes a TxLocation using RLP
