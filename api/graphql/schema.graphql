@@ -332,6 +332,140 @@ type Subscription {
 
   # Subscribe to events from dynamically registered contracts
   dynamicContractEvents(filter: DynamicContractSubscriptionFilter): DynamicContractEvent!
+
+  # Subscribe to new consensus block events with validator participation data
+  consensusBlock: ConsensusBlockSub!
+
+  # Subscribe to chain fork detection events
+  consensusFork: ConsensusForkSub!
+
+  # Subscribe to validator set change events at epoch boundaries
+  consensusValidatorChange: ConsensusValidatorChangeSub!
+
+  # Subscribe to consensus errors and anomalies (round changes, low participation)
+  consensusError: ConsensusErrorSub!
+}
+
+# Real-time consensus block data from subscription
+type ConsensusBlockSub {
+  # Block number
+  blockNumber: BigInt!
+  # Block hash
+  blockHash: Hash!
+  # Block timestamp
+  timestamp: BigInt!
+  # Consensus round number
+  round: Int!
+  # Previous round number
+  prevRound: Int!
+  # Whether round changed from 0
+  roundChanged: Boolean!
+  # Block proposer address
+  proposer: Address!
+  # Total number of validators
+  validatorCount: Int!
+  # Number of prepare signatures
+  prepareCount: Int!
+  # Number of commit signatures
+  commitCount: Int!
+  # Validator participation rate (0-100)
+  participationRate: Float!
+  # Rate of validators who missed commit (0-100)
+  missedValidatorRate: Float!
+  # Whether this block is at epoch boundary
+  isEpochBoundary: Boolean!
+  # Epoch number (only at epoch boundaries)
+  epochNumber: BigInt
+  # Validator addresses for the epoch (only at epoch boundaries)
+  epochValidators: [Address!]
+}
+
+# Chain fork detection event from subscription
+type ConsensusForkSub {
+  # Block number where fork occurred
+  forkBlockNumber: BigInt!
+  # Hash of the fork block
+  forkBlockHash: Hash!
+  # Hash of chain 1 tip
+  chain1Hash: Hash!
+  # Height of chain 1
+  chain1Height: BigInt!
+  # Total weight/difficulty of chain 1
+  chain1Weight: String!
+  # Hash of chain 2 tip
+  chain2Hash: Hash!
+  # Height of chain 2
+  chain2Height: BigInt!
+  # Total weight/difficulty of chain 2
+  chain2Weight: String!
+  # Whether the fork has been resolved
+  resolved: Boolean!
+  # Winning chain (1 or 2, 0 if unresolved)
+  winningChain: Int!
+  # Unix timestamp when fork was detected
+  detectedAt: BigInt!
+  # Blocks between fork and detection
+  detectionLag: BigInt!
+}
+
+# Validator set change event from subscription
+type ConsensusValidatorChangeSub {
+  # Block number where change occurred
+  blockNumber: BigInt!
+  # Block hash
+  blockHash: Hash!
+  # Block timestamp
+  timestamp: BigInt!
+  # Epoch number
+  epochNumber: BigInt!
+  # Whether this is an epoch boundary
+  isEpochBoundary: Boolean!
+  # Type of change: added, removed, replaced, reordered
+  changeType: String!
+  # Previous validator count
+  previousValidatorCount: Int!
+  # New validator count
+  newValidatorCount: Int!
+  # Addresses of added validators
+  addedValidators: [Address!]
+  # Addresses of removed validators
+  removedValidators: [Address!]
+  # Current validator set after change
+  validatorSet: [Address!]
+  # Additional information (JSON encoded)
+  additionalInfo: String
+}
+
+# Consensus error or anomaly event from subscription
+type ConsensusErrorSub {
+  # Block number where error occurred
+  blockNumber: BigInt!
+  # Block hash
+  blockHash: Hash!
+  # Block timestamp
+  timestamp: BigInt!
+  # Error type: round_change, missed_validators, low_participation, etc.
+  errorType: String!
+  # Severity level: critical, high, medium, low
+  severity: String!
+  # Human-readable error message
+  errorMessage: String!
+  # Consensus round number
+  round: Int!
+  # Expected number of validators
+  expectedValidators: Int!
+  # Actual number of signers
+  actualSigners: Int!
+  # Current participation rate (0-100)
+  participationRate: Float!
+  # Whether consensus was impacted
+  consensusImpacted: Boolean!
+  # Blocks until recovery (0 if not applicable)
+  recoveryTime: BigInt!
+  # Addresses of validators who missed
+  missedValidators: [Address!]
+  # Additional error details (JSON encoded)
+  errorDetails: String
 }
 
 # Filter for dynamic contract event subscription
@@ -389,6 +523,16 @@ type Query {
 
   # Get blocks with optional filtering and pagination
   blocks(filter: BlockFilter, pagination: PaginationInput): BlockConnection!
+
+  # Get blocks in a specific range (optimized for frontend catch-up)
+  # Returns blocks from startNumber to endNumber (inclusive)
+  # Maximum range is 100 blocks per request
+  blocksRange(
+    startNumber: BigInt!
+    endNumber: BigInt!
+    includeTransactions: Boolean
+    includeReceipts: Boolean
+  ): BlockRangeResult!
 
   # Get a transaction by hash
   transaction(hash: Hash!): Transaction
@@ -665,6 +809,53 @@ type Query {
     filter: DynamicContractEventFilter!
     pagination: PaginationInput
   ): [DynamicContractEvent!]!
+
+  # ========== RPC Proxy Queries (Real-time Chain Data) ==========
+
+  # Get live balance directly from chain RPC (real-time, not from indexed storage)
+  liveBalance(
+    address: Address!
+    blockNumber: BigInt
+  ): LiveBalanceResult!
+
+  # Execute a read-only contract call via RPC proxy
+  contractCall(
+    address: Address!
+    method: String!
+    params: String
+    abi: String
+  ): ContractCallResult!
+
+  # Get real-time transaction status from chain
+  transactionStatus(txHash: Hash!): TransactionStatusResult!
+
+  # Get internal transactions using debug_traceTransaction RPC
+  internalTransactionsRPC(txHash: Hash!): InternalTransactionsRPCResult!
+
+  # Get RPC proxy service metrics
+  rpcProxyMetrics: RPCProxyMetrics!
+
+  # ========== Fee Delegation Queries ==========
+
+  # Get overall fee delegation statistics
+  feeDelegationStats(
+    fromBlock: BigInt
+    toBlock: BigInt
+  ): FeeDelegationStats!
+
+  # Get top fee payers by transaction count
+  topFeePayers(
+    limit: Int
+    fromBlock: BigInt
+    toBlock: BigInt
+  ): TopFeePayersResult!
+
+  # Get statistics for a specific fee payer
+  feePayerStats(
+    address: Address!
+    fromBlock: BigInt
+    toBlock: BigInt
+  ): FeePayerStats!
 }
 
 # Block connection for pagination
@@ -677,6 +868,28 @@ type BlockConnection {
 
   # Page info
   pageInfo: PageInfo!
+}
+
+# Block range result for efficient bulk data transfer
+# Used for frontend catch-up scenarios
+type BlockRangeResult {
+  # List of blocks in the range
+  blocks: [Block!]!
+
+  # Start block number in the result
+  startNumber: BigInt!
+
+  # End block number in the result
+  endNumber: BigInt!
+
+  # Number of blocks returned
+  count: Int!
+
+  # Whether there are more blocks after endNumber
+  hasMore: Boolean!
+
+  # Latest known block height (for sync status)
+  latestHeight: BigInt!
 }
 
 # Transaction connection for pagination
@@ -1781,6 +1994,136 @@ input DynamicContractEventFilter {
   # Filter by block range
   fromBlock: BigInt
   toBlock: BigInt
+}
+
+# ========== RPC Proxy Types ==========
+
+# Live balance result from chain RPC
+type LiveBalanceResult {
+  # Account address
+  address: Address!
+  # Account balance in wei
+  balance: BigInt!
+  # Block number at which balance was queried
+  blockNumber: BigInt!
+}
+
+# Contract call result
+type ContractCallResult {
+  # Decoded result (if ABI available)
+  result: String
+  # Raw hex result
+  rawResult: String!
+  # Whether the result was successfully decoded
+  decoded: Boolean!
+}
+
+# Transaction status result
+type TransactionStatusResult {
+  # Transaction hash
+  txHash: Hash!
+  # Current status (pending, success, failed, not_found, confirmed)
+  status: String!
+  # Block number (if mined)
+  blockNumber: BigInt
+  # Block hash (if mined)
+  blockHash: Hash
+  # Number of confirmations
+  confirmations: BigInt!
+  # Gas used (if mined)
+  gasUsed: BigInt
+}
+
+# Internal transactions result from RPC
+type InternalTransactionsRPCResult {
+  # Transaction hash
+  txHash: Hash!
+  # List of internal transactions
+  internalTransactions: [InternalTransactionRPC!]!
+  # Total count
+  totalCount: Int!
+}
+
+# Internal transaction from RPC trace
+type InternalTransactionRPC {
+  # Call type (CALL, CREATE, DELEGATECALL, etc.)
+  type: String!
+  # From address
+  from: Address!
+  # To address
+  to: Address!
+  # Value transferred
+  value: BigInt!
+  # Gas provided
+  gas: BigInt!
+  # Gas used
+  gasUsed: BigInt!
+  # Input data
+  input: String!
+  # Output data
+  output: String!
+  # Error message if failed
+  error: String
+  # Call depth
+  depth: Int!
+  # Trace address (path in call tree)
+  traceAddress: [Int!]!
+}
+
+# RPC Proxy service metrics
+type RPCProxyMetrics {
+  # Total number of requests processed
+  totalRequests: BigInt!
+  # Number of successful requests
+  successfulRequests: BigInt!
+  # Number of failed requests
+  failedRequests: BigInt!
+  # Number of cache hits
+  cacheHits: BigInt!
+  # Number of cache misses
+  cacheMisses: BigInt!
+  # Average response latency in milliseconds
+  averageLatency: BigInt!
+  # Current request queue depth
+  queueDepth: Int!
+  # Number of active workers
+  activeWorkers: Int!
+  # Circuit breaker state (closed, open, half-open)
+  circuitState: String!
+}
+
+# ========== Fee Delegation Types ==========
+
+# Overall fee delegation statistics
+type FeeDelegationStats {
+  # Total number of fee delegation transactions
+  totalFeeDelegatedTxs: BigInt!
+  # Total fees saved by users (paid by fee payers) in wei
+  totalFeesSaved: BigInt!
+  # Percentage of fee delegation transactions vs total transactions
+  adoptionRate: Float!
+  # Average fee saved per fee delegation transaction in wei
+  avgFeeSaved: BigInt!
+}
+
+# Statistics for a single fee payer
+type FeePayerStats {
+  # Fee payer address
+  address: Address!
+  # Number of transactions sponsored by this fee payer
+  txCount: BigInt!
+  # Total fees paid by this fee payer in wei
+  totalFeesPaid: BigInt!
+  # Percentage of total fee delegation transactions
+  percentage: Float!
+}
+
+# Top fee payers result with pagination info
+type TopFeePayersResult {
+  # List of fee payer statistics
+  nodes: [FeePayerStats!]!
+  # Total count of unique fee payers
+  totalCount: BigInt!
 }
 
 # Mutation type for write operations

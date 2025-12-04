@@ -23,6 +23,9 @@ var (
 	// Log type
 	logType *graphql.Object
 
+	// DecodedParam type
+	decodedParamType *graphql.Object
+
 	// DecodedLog type
 	decodedLogType *graphql.Object
 
@@ -37,6 +40,9 @@ var (
 
 	// BlockConnection type
 	blockConnectionType *graphql.Object
+
+	// BlockRangeResult type for efficient bulk data transfer
+	blockRangeResultType *graphql.Object
 
 	// TransactionConnection type
 	transactionConnectionType *graphql.Object
@@ -110,6 +116,12 @@ var (
 	validatorInfoEnhancedType  *graphql.Object
 	candidateInfoType          *graphql.Object
 
+	// Consensus subscription types
+	consensusBlockSubType           *graphql.Object
+	consensusForkSubType            *graphql.Object
+	consensusValidatorChangeSubType *graphql.Object
+	consensusErrorSubType           *graphql.Object
+
 	// Address indexing types
 	contractCreationType              *graphql.Object
 	internalTransactionType           *graphql.Object
@@ -160,17 +172,46 @@ func initCoreTypes() {
 		},
 	})
 
+	// DecodedParam type - represents a decoded event parameter
+	decodedParamType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "DecodedParam",
+		Description: "A decoded event parameter",
+		Fields: graphql.Fields{
+			"name": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Parameter name (e.g., 'from', 'to', 'value')",
+			},
+			"type": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Solidity type (e.g., 'address', 'uint256', 'bytes32')",
+			},
+			"value": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Decoded value as string",
+			},
+			"indexed": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether this parameter is indexed",
+			},
+		},
+	})
+
 	// DecodedLog type - represents decoded event log data
 	decodedLogType = graphql.NewObject(graphql.ObjectConfig{
-		Name: "DecodedLog",
+		Name:        "DecodedLog",
+		Description: "Decoded event log with structured parameters",
 		Fields: graphql.Fields{
 			"eventName": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
-				Description: "Name of the decoded event",
+				Description: "Name of the decoded event (e.g., 'Transfer')",
 			},
-			"args": &graphql.Field{
-				Type:        graphql.String, // JSON string of arguments
-				Description: "Decoded event arguments as JSON",
+			"eventSignature": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Full event signature (e.g., 'Transfer(address,address,uint256)')",
+			},
+			"params": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(decodedParamType))),
+				Description: "Array of decoded parameters",
 			},
 		},
 	})
@@ -434,6 +475,37 @@ func initConnectionTypes() {
 			},
 			"pageInfo": &graphql.Field{
 				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// BlockRangeResult type for efficient bulk data transfer
+	blockRangeResultType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "BlockRangeResult",
+		Fields: graphql.Fields{
+			"blocks": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(blockType))),
+				Description: "List of blocks in the range",
+			},
+			"startNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Start block number in the result",
+			},
+			"endNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "End block number in the result",
+			},
+			"count": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of blocks returned",
+			},
+			"hasMore": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether there are more blocks after endNumber",
+			},
+			"latestHeight": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Latest known block height for sync status",
 			},
 		},
 	})
@@ -1852,6 +1924,252 @@ func initConsensusTypes() {
 			},
 			"totalValidators": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.Int),
+			},
+		},
+	})
+
+	// ========== Consensus Subscription Types ==========
+
+	// ConsensusBlockSub type - for consensusBlock subscription
+	consensusBlockSubType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "ConsensusBlockSub",
+		Description: "Real-time consensus block data from subscription",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number",
+			},
+			"blockHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Block hash",
+			},
+			"timestamp": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block timestamp",
+			},
+			"round": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Consensus round number",
+			},
+			"prevRound": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Previous round number",
+			},
+			"roundChanged": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether round changed from 0",
+			},
+			"proposer": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Block proposer address",
+			},
+			"validatorCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total number of validators",
+			},
+			"prepareCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of prepare signatures",
+			},
+			"commitCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of commit signatures",
+			},
+			"participationRate": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Float),
+				Description: "Validator participation rate (0-100)",
+			},
+			"missedValidatorRate": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Float),
+				Description: "Rate of validators who missed commit (0-100)",
+			},
+			"isEpochBoundary": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether this block is at epoch boundary",
+			},
+			"epochNumber": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Epoch number (only at epoch boundaries)",
+			},
+			"epochValidators": &graphql.Field{
+				Type:        graphql.NewList(graphql.NewNonNull(addressType)),
+				Description: "Validator addresses for the epoch (only at epoch boundaries)",
+			},
+		},
+	})
+
+	// ConsensusForkSub type - for consensusFork subscription
+	consensusForkSubType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "ConsensusForkSub",
+		Description: "Chain fork detection event from subscription",
+		Fields: graphql.Fields{
+			"forkBlockNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number where fork occurred",
+			},
+			"forkBlockHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Hash of the fork block",
+			},
+			"chain1Hash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Hash of chain 1 tip",
+			},
+			"chain1Height": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Height of chain 1",
+			},
+			"chain1Weight": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Total weight/difficulty of chain 1",
+			},
+			"chain2Hash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Hash of chain 2 tip",
+			},
+			"chain2Height": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Height of chain 2",
+			},
+			"chain2Weight": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Total weight/difficulty of chain 2",
+			},
+			"resolved": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether the fork has been resolved",
+			},
+			"winningChain": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Winning chain (1 or 2, 0 if unresolved)",
+			},
+			"detectedAt": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Unix timestamp when fork was detected",
+			},
+			"detectionLag": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Blocks between fork and detection",
+			},
+		},
+	})
+
+	// ConsensusValidatorChangeSub type - for consensusValidatorChange subscription
+	consensusValidatorChangeSubType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "ConsensusValidatorChangeSub",
+		Description: "Validator set change event from subscription",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number where change occurred",
+			},
+			"blockHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Block hash",
+			},
+			"timestamp": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block timestamp",
+			},
+			"epochNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Epoch number",
+			},
+			"isEpochBoundary": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether this is an epoch boundary",
+			},
+			"changeType": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Type of change: added, removed, replaced, reordered",
+			},
+			"previousValidatorCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Previous validator count",
+			},
+			"newValidatorCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "New validator count",
+			},
+			"addedValidators": &graphql.Field{
+				Type:        graphql.NewList(graphql.NewNonNull(addressType)),
+				Description: "Addresses of added validators",
+			},
+			"removedValidators": &graphql.Field{
+				Type:        graphql.NewList(graphql.NewNonNull(addressType)),
+				Description: "Addresses of removed validators",
+			},
+			"validatorSet": &graphql.Field{
+				Type:        graphql.NewList(graphql.NewNonNull(addressType)),
+				Description: "Current validator set after change",
+			},
+			"additionalInfo": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Additional information (JSON encoded)",
+			},
+		},
+	})
+
+	// ConsensusErrorSub type - for consensusError subscription
+	consensusErrorSubType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "ConsensusErrorSub",
+		Description: "Consensus error or anomaly event from subscription",
+		Fields: graphql.Fields{
+			"blockNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number where error occurred",
+			},
+			"blockHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Block hash",
+			},
+			"timestamp": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block timestamp",
+			},
+			"errorType": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Error type: round_change, missed_validators, low_participation, etc.",
+			},
+			"severity": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Severity level: critical, high, medium, low",
+			},
+			"errorMessage": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Human-readable error message",
+			},
+			"round": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Consensus round number",
+			},
+			"expectedValidators": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Expected number of validators",
+			},
+			"actualSigners": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Actual number of signers",
+			},
+			"participationRate": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Float),
+				Description: "Current participation rate (0-100)",
+			},
+			"consensusImpacted": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether consensus was impacted",
+			},
+			"recoveryTime": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Blocks until recovery (0 if not applicable)",
+			},
+			"missedValidators": &graphql.Field{
+				Type:        graphql.NewList(graphql.NewNonNull(addressType)),
+				Description: "Addresses of validators who missed",
+			},
+			"errorDetails": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Additional error details (JSON encoded)",
 			},
 		},
 	})

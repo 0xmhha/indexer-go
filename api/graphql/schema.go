@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	abiDecoder "github.com/0xmhha/indexer-go/abi"
+	"github.com/0xmhha/indexer-go/rpcproxy"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/0xmhha/indexer-go/verifier"
 	"github.com/graphql-go/graphql"
@@ -18,6 +19,7 @@ type Schema struct {
 	logger     *zap.Logger
 	abiDecoder *abiDecoder.Decoder
 	verifier   verifier.Verifier
+	rpcProxy   *rpcproxy.Proxy
 }
 
 // SchemaBuilder helps construct a GraphQL schema using the Builder pattern
@@ -79,6 +81,31 @@ func (b *SchemaBuilder) WithCoreQueries() *SchemaBuilder {
 			},
 		},
 		Resolve: s.resolveBlocks,
+	}
+	b.queries["blocksRange"] = &graphql.Field{
+		Type:        graphql.NewNonNull(blockRangeResultType),
+		Description: "Get blocks in a specific range (optimized for frontend catch-up). Maximum 100 blocks per request.",
+		Args: graphql.FieldConfigArgument{
+			"startNumber": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Starting block number (inclusive)",
+			},
+			"endNumber": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Ending block number (inclusive)",
+			},
+			"includeTransactions": &graphql.ArgumentConfig{
+				Type:         graphql.Boolean,
+				Description:  "Include transaction data in response (default: true)",
+				DefaultValue: true,
+			},
+			"includeReceipts": &graphql.ArgumentConfig{
+				Type:         graphql.Boolean,
+				Description:  "Include receipt data for each transaction (default: false)",
+				DefaultValue: false,
+			},
+		},
+		Resolve: s.resolveBlocksRange,
 	}
 	b.queries["transaction"] = &graphql.Field{
 		Type: transactionType,
@@ -970,6 +997,24 @@ func (b *SchemaBuilder) WithSubscriptions() *SchemaBuilder {
 		Description: "Subscribe to new logs matching a filter",
 	}
 
+	// Consensus subscriptions
+	b.subscriptions["consensusBlock"] = &graphql.Field{
+		Type:        graphql.NewNonNull(consensusBlockSubType),
+		Description: "Subscribe to new consensus block events with validator participation data",
+	}
+	b.subscriptions["consensusFork"] = &graphql.Field{
+		Type:        graphql.NewNonNull(consensusForkSubType),
+		Description: "Subscribe to chain fork detection events",
+	}
+	b.subscriptions["consensusValidatorChange"] = &graphql.Field{
+		Type:        graphql.NewNonNull(consensusValidatorChangeSubType),
+		Description: "Subscribe to validator set change events at epoch boundaries",
+	}
+	b.subscriptions["consensusError"] = &graphql.Field{
+		Type:        graphql.NewNonNull(consensusErrorSubType),
+		Description: "Subscribe to consensus errors and anomalies (round changes, low participation)",
+	}
+
 	return b
 }
 
@@ -1017,6 +1062,22 @@ func (b *SchemaBuilder) WithMutations() *SchemaBuilder {
 		Resolve:     s.resolveVerifyContract,
 	}
 
+	return b
+}
+
+// WithRPCProxy sets the RPC proxy service for the schema
+func (b *SchemaBuilder) WithRPCProxy(proxy *rpcproxy.Proxy) *SchemaBuilder {
+	b.schema.rpcProxy = proxy
+	return b
+}
+
+// WithRPCProxyQueries adds RPC proxy related queries (contractCall, transactionStatus, internalTransactionsRPC)
+func (b *SchemaBuilder) WithRPCProxyQueries() *SchemaBuilder {
+	builder := &schemaBuilder{
+		schema:  b.schema,
+		queries: b.queries,
+	}
+	builder.buildRPCProxyQueries()
 	return b
 }
 
@@ -1069,9 +1130,20 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 		WithSystemContractQueries().
 		WithConsensusQueries().
 		WithAddressIndexingQueries().
+		WithFeeDelegationQueries().
 		WithSubscriptions().
 		WithMutations().
 		Build()
+}
+
+// WithFeeDelegationQueries adds fee delegation related queries
+func (b *SchemaBuilder) WithFeeDelegationQueries() *SchemaBuilder {
+	builder := &schemaBuilder{
+		schema:  b.schema,
+		queries: b.queries,
+	}
+	builder.buildFeeDelegationQueries()
+	return b
 }
 
 // Schema returns the GraphQL schema

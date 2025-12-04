@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +28,10 @@ type PebbleStorage struct {
 	// Maps address -> next sequence number
 	addrSeqMu sync.RWMutex
 	addrSeq   map[common.Address]uint64
+
+	// Transaction count cache to avoid per-transaction reads
+	txCount      atomic.Uint64
+	txCountReady atomic.Bool
 }
 
 // NewPebbleStorage creates a new PebbleDB storage
@@ -75,7 +80,36 @@ func NewPebbleStorage(cfg *Config) (*PebbleStorage, error) {
 		return nil, fmt.Errorf("failed to load address sequences: %w", err)
 	}
 
+	// Load transaction count into cache
+	if err := storage.loadTransactionCount(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to load transaction count: %w", err)
+	}
+
 	return storage, nil
+}
+
+// loadTransactionCount loads the current transaction count into cache
+func (s *PebbleStorage) loadTransactionCount() error {
+	value, closer, err := s.db.Get(TransactionCountKey())
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			s.txCount.Store(0)
+			s.txCountReady.Store(true)
+			return nil
+		}
+		return fmt.Errorf("failed to get transaction count: %w", err)
+	}
+	defer closer.Close()
+
+	count, err := DecodeUint64(value)
+	if err != nil {
+		return fmt.Errorf("failed to decode transaction count: %w", err)
+	}
+
+	s.txCount.Store(count)
+	s.txCountReady.Store(true)
+	return nil
 }
 
 // SetLogger sets the logger for the storage
@@ -162,7 +196,16 @@ func (s *PebbleStorage) SetLatestHeight(ctx context.Context, height uint64) erro
 	}
 
 	value := EncodeUint64(height)
-	return s.db.Set(LatestHeightKey(), value, pebble.Sync)
+	// Use NoSync for performance - caller can use Sync() if needed
+	return s.db.Set(LatestHeightKey(), value, pebble.NoSync)
+}
+
+// Sync forces a sync of all pending writes to disk
+func (s *PebbleStorage) Sync() error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	return s.db.Flush()
 }
 
 // GetBlock returns a block by height
@@ -233,14 +276,14 @@ func (s *PebbleStorage) SetBlock(ctx context.Context, block *types.Block) error 
 
 	height := block.Number().Uint64()
 
-	// Store block data
-	if err := s.db.Set(BlockKey(height), encoded, pebble.Sync); err != nil {
+	// Store block data - use NoSync for performance
+	if err := s.db.Set(BlockKey(height), encoded, pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to set block: %w", err)
 	}
 
 	// Store block hash index
 	heightBytes := EncodeUint64(height)
-	if err := s.db.Set(BlockHashIndexKey(block.Hash()), heightBytes, pebble.Sync); err != nil {
+	if err := s.db.Set(BlockHashIndexKey(block.Hash()), heightBytes, pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to set block hash index: %w", err)
 	}
 
@@ -258,6 +301,106 @@ func (s *PebbleStorage) SetBlock(ctx context.Context, block *types.Block) error 
 	}
 
 	return nil
+}
+
+// SetBlockWithReceipts stores a block with all its receipts in a single batch operation
+// This is the high-performance method for indexing - uses single sync at end
+func (s *PebbleStorage) SetBlockWithReceipts(ctx context.Context, block *types.Block, receipts []*types.Receipt) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return err
+	}
+
+	if block == nil {
+		return fmt.Errorf("block cannot be nil")
+	}
+
+	// Build receipt map for O(1) lookup
+	receiptMap := make(map[common.Hash]*types.Receipt, len(receipts))
+	for _, receipt := range receipts {
+		if receipt != nil {
+			receiptMap[receipt.TxHash] = receipt
+		}
+	}
+
+	batch := s.db.NewBatch()
+	defer batch.Close()
+
+	// Encode and add block
+	encoded, err := EncodeBlock(block)
+	if err != nil {
+		return fmt.Errorf("failed to encode block: %w", err)
+	}
+
+	height := block.Number().Uint64()
+	if err := batch.Set(BlockKey(height), encoded, nil); err != nil {
+		return fmt.Errorf("failed to set block: %w", err)
+	}
+
+	heightBytes := EncodeUint64(height)
+	if err := batch.Set(BlockHashIndexKey(block.Hash()), heightBytes, nil); err != nil {
+		return fmt.Errorf("failed to set block hash index: %w", err)
+	}
+
+	// Add all transactions and their receipts
+	transactions := block.Transactions()
+	txCountDelta := uint64(len(transactions))
+
+	for txIndex, tx := range transactions {
+		// Encode transaction
+		txEncoded, err := EncodeTransaction(tx)
+		if err != nil {
+			return fmt.Errorf("failed to encode transaction: %w", err)
+		}
+
+		location := &TxLocation{
+			BlockHeight: height,
+			TxIndex:     uint64(txIndex),
+			BlockHash:   block.Hash(),
+		}
+		locEncoded, err := EncodeTxLocation(location)
+		if err != nil {
+			return fmt.Errorf("failed to encode location: %w", err)
+		}
+
+		if err := batch.Set(TransactionKey(height, uint64(txIndex)), txEncoded, nil); err != nil {
+			return fmt.Errorf("failed to set transaction: %w", err)
+		}
+		if err := batch.Set(TransactionHashIndexKey(tx.Hash()), locEncoded, nil); err != nil {
+			return fmt.Errorf("failed to set transaction index: %w", err)
+		}
+
+		// Add receipt if available
+		if receipt, ok := receiptMap[tx.Hash()]; ok {
+			if err := validateReceipt(receipt); err != nil {
+				return fmt.Errorf("invalid receipt for tx %s: %w", tx.Hash().Hex(), err)
+			}
+
+			receiptEncoded, err := EncodeReceipt(receipt)
+			if err != nil {
+				return fmt.Errorf("failed to encode receipt: %w", err)
+			}
+			if err := batch.Set(ReceiptKey(tx.Hash()), receiptEncoded, nil); err != nil {
+				return fmt.Errorf("failed to set receipt: %w", err)
+			}
+		}
+	}
+
+	// Update transaction count atomically
+	newCount := s.txCount.Add(txCountDelta)
+	if err := batch.Set(TransactionCountKey(), EncodeUint64(newCount), nil); err != nil {
+		return fmt.Errorf("failed to update transaction count: %w", err)
+	}
+
+	// Update latest height
+	if err := batch.Set(LatestHeightKey(), heightBytes, nil); err != nil {
+		return fmt.Errorf("failed to set latest height: %w", err)
+	}
+
+	// Single Sync at the end
+	return batch.Commit(pebble.Sync)
 }
 
 // GetTransaction returns a transaction and its location by hash
@@ -327,22 +470,19 @@ func (s *PebbleStorage) SetTransaction(ctx context.Context, tx *types.Transactio
 		return fmt.Errorf("failed to encode location: %w", err)
 	}
 
-	// Write transaction data
-	if err := s.db.Set(TransactionKey(location.BlockHeight, location.TxIndex), encoded, pebble.Sync); err != nil {
+	// Write transaction data - use NoSync for performance
+	if err := s.db.Set(TransactionKey(location.BlockHeight, location.TxIndex), encoded, pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to set transaction: %w", err)
 	}
 
 	// Write transaction hash index
-	if err := s.db.Set(TransactionHashIndexKey(tx.Hash()), locEncoded, pebble.Sync); err != nil {
+	if err := s.db.Set(TransactionHashIndexKey(tx.Hash()), locEncoded, pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to set transaction index: %w", err)
 	}
 
-	// Update transaction count
-	count, err := s.GetTransactionCount(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get current transaction count: %w", err)
-	}
-	if err := s.db.Set(TransactionCountKey(), EncodeUint64(count+1), pebble.Sync); err != nil {
+	// Update transaction count using atomic counter (avoid DB read)
+	newCount := s.txCount.Add(1)
+	if err := s.db.Set(TransactionCountKey(), EncodeUint64(newCount), pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to update transaction count: %w", err)
 	}
 
@@ -413,7 +553,8 @@ func (s *PebbleStorage) AddTransactionToAddressIndex(ctx context.Context, addr c
 	s.addrSeqMu.Unlock()
 
 	key := AddressTransactionKey(addr, seq)
-	return s.db.Set(key, txHash[:], pebble.Sync)
+	// Use NoSync for performance - caller should use Sync() or batch commit for durability
+	return s.db.Set(key, txHash[:], pebble.NoSync)
 }
 
 // GetReceipt returns a transaction receipt by hash
@@ -443,6 +584,32 @@ func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*type
 	return receipt, nil
 }
 
+// validateReceipt validates a receipt before storage
+func validateReceipt(receipt *types.Receipt) error {
+	if receipt == nil {
+		return fmt.Errorf("%w: receipt cannot be nil", ErrInvalidReceipt)
+	}
+
+	// Check that TxHash is set (not zero hash)
+	var zeroHash common.Hash
+	if receipt.TxHash == zeroHash {
+		return fmt.Errorf("%w: transaction hash is not set", ErrInvalidReceipt)
+	}
+
+	// Check status is valid (0 = failed, 1 = success)
+	if receipt.Status > 1 {
+		return fmt.Errorf("%w: invalid status %d (expected 0 or 1)", ErrInvalidReceipt, receipt.Status)
+	}
+
+	// Check that CumulativeGasUsed is at least GasUsed
+	if receipt.CumulativeGasUsed < receipt.GasUsed {
+		return fmt.Errorf("%w: cumulative gas used (%d) is less than gas used (%d)",
+			ErrInvalidReceipt, receipt.CumulativeGasUsed, receipt.GasUsed)
+	}
+
+	return nil
+}
+
 // SetReceipt stores a transaction receipt
 func (s *PebbleStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
 	if err := s.ensureNotClosed(); err != nil {
@@ -452,8 +619,9 @@ func (s *PebbleStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) 
 		return err
 	}
 
-	if receipt == nil {
-		return fmt.Errorf("receipt cannot be nil")
+	// Validate receipt before storing
+	if err := validateReceipt(receipt); err != nil {
+		return err
 	}
 
 	encoded, err := EncodeReceipt(receipt)
@@ -461,10 +629,9 @@ func (s *PebbleStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) 
 		return fmt.Errorf("failed to encode receipt: %w", err)
 	}
 
-	// Note: TxHash might not be set on receipt, using zero hash for now
-	// In practice, caller should ensure TxHash is set
 	txHash := receipt.TxHash
-	return s.db.Set(ReceiptKey(txHash), encoded, pebble.Sync)
+	// Use NoSync for performance - caller should use Sync() or batch commit for durability
+	return s.db.Set(ReceiptKey(txHash), encoded, pebble.NoSync)
 }
 
 // GetReceipts returns multiple receipts by transaction hashes (batch operation)
@@ -560,6 +727,49 @@ func (s *PebbleStorage) SetReceipts(ctx context.Context, receipts []*types.Recei
 	}
 
 	return batch.Commit()
+}
+
+// HasReceipt checks if a receipt exists for a transaction
+func (s *PebbleStorage) HasReceipt(ctx context.Context, hash common.Hash) (bool, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return false, err
+	}
+
+	_, closer, err := s.db.Get(ReceiptKey(hash))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check receipt: %w", err)
+	}
+	closer.Close()
+	return true, nil
+}
+
+// GetMissingReceipts returns transaction hashes that have no stored receipts for a block
+func (s *PebbleStorage) GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	// Get the block to find all transactions
+	block, err := s.GetBlock(ctx, blockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block: %w", err)
+	}
+
+	var missing []common.Hash
+	for _, tx := range block.Transactions() {
+		exists, err := s.HasReceipt(ctx, tx.Hash())
+		if err != nil {
+			return nil, fmt.Errorf("failed to check receipt for tx %s: %w", tx.Hash().Hex(), err)
+		}
+		if !exists {
+			missing = append(missing, tx.Hash())
+		}
+	}
+
+	return missing, nil
 }
 
 // GetBlocks returns multiple blocks by height range
@@ -789,6 +999,11 @@ func (b *pebbleBatch) SetReceipt(ctx context.Context, receipt *types.Receipt) er
 		return ErrClosed
 	}
 
+	// Validate receipt before adding to batch
+	if err := validateReceipt(receipt); err != nil {
+		return err
+	}
+
 	encoded, err := EncodeReceipt(receipt)
 	if err != nil {
 		return fmt.Errorf("failed to encode receipt: %w", err)
@@ -887,16 +1102,13 @@ func (b *pebbleBatch) Commit() error {
 		return ErrClosed
 	}
 
-	// Update transaction count if transactions were added
+	// Update transaction count using atomic counter for performance
 	if b.txCount > 0 {
-		// Get current transaction count
-		currentCount, err := b.storage.GetTransactionCount(context.Background())
-		if err != nil {
-			return fmt.Errorf("failed to get current transaction count: %w", err)
-		}
-		// Add the new count to batch
-		newCount := currentCount + b.txCount
+		// Use atomic Add for lock-free counter update
+		newCount := b.storage.txCount.Add(b.txCount)
 		if err := b.batch.Set(TransactionCountKey(), EncodeUint64(newCount), nil); err != nil {
+			// Rollback atomic counter on error
+			b.storage.txCount.Add(^(b.txCount - 1)) // Subtract txCount
 			return fmt.Errorf("failed to update transaction count: %w", err)
 		}
 	}
@@ -1269,11 +1481,18 @@ func (s *PebbleStorage) GetBlockCount(ctx context.Context) (uint64, error) {
 }
 
 // GetTransactionCount returns the total number of indexed transactions
+// Uses cached atomic counter for high performance
 func (s *PebbleStorage) GetTransactionCount(ctx context.Context) (uint64, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return 0, err
 	}
 
+	// Use atomic counter if ready (much faster than DB read)
+	if s.txCountReady.Load() {
+		return s.txCount.Load(), nil
+	}
+
+	// Fallback to DB read if counter not initialized
 	value, closer, err := s.db.Get(TransactionCountKey())
 	if err != nil {
 		if err == pebble.ErrNotFound {
@@ -1325,6 +1544,10 @@ func (s *PebbleStorage) InitializeTransactionCount(ctx context.Context) error {
 	if err := s.db.Set(TransactionCountKey(), EncodeUint64(totalTxCount), pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set transaction count: %w", err)
 	}
+
+	// Update atomic counter
+	s.txCount.Store(totalTxCount)
+	s.txCountReady.Store(true)
 
 	return nil
 }
@@ -1521,10 +1744,18 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 				TokenType:       "ERC20", // TODO: Detect actual token type (ERC721, ERC1155)
 				Balance:         balance,
 				TokenID:         "",  // Empty for ERC20
-				Name:            "",  // TODO: Query from contract
-				Symbol:          "",  // TODO: Query from contract
-				Decimals:        nil, // TODO: Query from contract
+				Name:            "",  // Default empty
+				Symbol:          "",  // Default empty
+				Decimals:        nil, // Default nil
 				Metadata:        "",  // TODO: Add metadata support
+			}
+
+			// Apply system contract token metadata if available
+			if metadata := GetSystemContractTokenMetadata(contract); metadata != nil {
+				tb.Name = metadata.Name
+				tb.Symbol = metadata.Symbol
+				decimals := metadata.Decimals
+				tb.Decimals = &decimals
 			}
 
 			// Apply tokenType filter if specified
@@ -3361,4 +3592,301 @@ func detectQueryType(query string) string {
 
 	// Default to address for shorter queries (partial address search could be implemented)
 	return "address"
+}
+
+// FeeDelegateDynamicFeeTxType is the transaction type for fee delegation (0x16 = 22)
+const FeeDelegateDynamicFeeTxType = 22
+
+// GetFeeDelegationStats returns overall fee delegation statistics
+func (s *PebbleStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*FeeDelegationStats, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	// Get block range
+	latestHeight, err := s.GetLatestHeight(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest height: %w", err)
+	}
+
+	if toBlock == 0 || toBlock > latestHeight {
+		toBlock = latestHeight
+	}
+
+	stats := &FeeDelegationStats{
+		TotalFeeDelegatedTxs: 0,
+		TotalFeesSaved:       big.NewInt(0),
+		AdoptionRate:         0,
+		AvgFeeSaved:          big.NewInt(0),
+	}
+
+	var totalTxCount uint64
+
+	// Iterate through blocks in the range
+	for height := fromBlock; height <= toBlock; height++ {
+		block, err := s.GetBlock(ctx, height)
+		if err != nil {
+			continue
+		}
+		if block == nil {
+			continue
+		}
+
+		txs := block.Transactions()
+		totalTxCount += uint64(len(txs))
+
+		for i, tx := range txs {
+			// Check if this is a fee delegation transaction
+			if tx.Type() == FeeDelegateDynamicFeeTxType {
+				stats.TotalFeeDelegatedTxs++
+
+				// Get receipt to calculate fee
+				receipt, err := s.GetReceipt(ctx, tx.Hash())
+				if err != nil || receipt == nil {
+					continue
+				}
+
+				// Calculate fee: gasUsed * effectiveGasPrice
+				var fee *big.Int
+				if receipt.EffectiveGasPrice != nil {
+					fee = new(big.Int).Mul(
+						big.NewInt(int64(receipt.GasUsed)),
+						receipt.EffectiveGasPrice,
+					)
+				} else {
+					// Fallback: calculate from block baseFee + tip
+					baseFee := block.BaseFee()
+					if baseFee != nil && tx.GasTipCap() != nil {
+						effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
+						if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
+							effectiveGasPrice = tx.GasFeeCap()
+						}
+						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
+					} else if tx.GasPrice() != nil {
+						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
+					}
+				}
+
+				if fee != nil {
+					stats.TotalFeesSaved.Add(stats.TotalFeesSaved, fee)
+				}
+
+				_ = i // Suppress unused variable warning
+			}
+		}
+	}
+
+	// Calculate adoption rate
+	if totalTxCount > 0 {
+		stats.AdoptionRate = float64(stats.TotalFeeDelegatedTxs) / float64(totalTxCount) * 100
+	}
+
+	// Calculate average fee saved
+	if stats.TotalFeeDelegatedTxs > 0 {
+		stats.AvgFeeSaved = new(big.Int).Div(stats.TotalFeesSaved, big.NewInt(int64(stats.TotalFeeDelegatedTxs)))
+	}
+
+	return stats, nil
+}
+
+// GetTopFeePayers returns the top fee payers by transaction count
+func (s *PebbleStorage) GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]FeePayerStats, uint64, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, 0, err
+	}
+
+	// Get block range
+	latestHeight, err := s.GetLatestHeight(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get latest height: %w", err)
+	}
+
+	if toBlock == 0 || toBlock > latestHeight {
+		toBlock = latestHeight
+	}
+
+	if limit <= 0 {
+		limit = 10
+	}
+
+	// Map to aggregate fee payer stats
+	feePayerMap := make(map[common.Address]*FeePayerStats)
+	var totalFeeDelegationTxs uint64
+
+	// Iterate through blocks in the range
+	for height := fromBlock; height <= toBlock; height++ {
+		block, err := s.GetBlock(ctx, height)
+		if err != nil {
+			continue
+		}
+		if block == nil {
+			continue
+		}
+
+		for _, tx := range block.Transactions() {
+			// Check if this is a fee delegation transaction
+			if tx.Type() == FeeDelegateDynamicFeeTxType {
+				totalFeeDelegationTxs++
+
+				// Get fee payer address
+				feePayer := tx.FeePayer()
+				if feePayer == nil {
+					continue
+				}
+
+				// Initialize or update fee payer stats
+				if _, exists := feePayerMap[*feePayer]; !exists {
+					feePayerMap[*feePayer] = &FeePayerStats{
+						Address:       *feePayer,
+						TxCount:       0,
+						TotalFeesPaid: big.NewInt(0),
+						Percentage:    0,
+					}
+				}
+
+				feePayerMap[*feePayer].TxCount++
+
+				// Get receipt to calculate fee
+				receipt, err := s.GetReceipt(ctx, tx.Hash())
+				if err != nil || receipt == nil {
+					continue
+				}
+
+				// Calculate fee
+				var fee *big.Int
+				if receipt.EffectiveGasPrice != nil {
+					fee = new(big.Int).Mul(
+						big.NewInt(int64(receipt.GasUsed)),
+						receipt.EffectiveGasPrice,
+					)
+				} else {
+					baseFee := block.BaseFee()
+					if baseFee != nil && tx.GasTipCap() != nil {
+						effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
+						if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
+							effectiveGasPrice = tx.GasFeeCap()
+						}
+						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
+					} else if tx.GasPrice() != nil {
+						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
+					}
+				}
+
+				if fee != nil {
+					feePayerMap[*feePayer].TotalFeesPaid.Add(feePayerMap[*feePayer].TotalFeesPaid, fee)
+				}
+			}
+		}
+	}
+
+	// Convert map to slice and calculate percentages
+	feePayers := make([]FeePayerStats, 0, len(feePayerMap))
+	for _, stats := range feePayerMap {
+		if totalFeeDelegationTxs > 0 {
+			stats.Percentage = float64(stats.TxCount) / float64(totalFeeDelegationTxs) * 100
+		}
+		feePayers = append(feePayers, *stats)
+	}
+
+	// Sort by transaction count (descending)
+	sort.Slice(feePayers, func(i, j int) bool {
+		return feePayers[i].TxCount > feePayers[j].TxCount
+	})
+
+	// Apply limit
+	totalCount := uint64(len(feePayers))
+	if len(feePayers) > limit {
+		feePayers = feePayers[:limit]
+	}
+
+	return feePayers, totalCount, nil
+}
+
+// GetFeePayerStats returns statistics for a specific fee payer
+func (s *PebbleStorage) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*FeePayerStats, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	// Get block range
+	latestHeight, err := s.GetLatestHeight(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest height: %w", err)
+	}
+
+	if toBlock == 0 || toBlock > latestHeight {
+		toBlock = latestHeight
+	}
+
+	stats := &FeePayerStats{
+		Address:       feePayer,
+		TxCount:       0,
+		TotalFeesPaid: big.NewInt(0),
+		Percentage:    0,
+	}
+
+	var totalFeeDelegationTxs uint64
+
+	// Iterate through blocks in the range
+	for height := fromBlock; height <= toBlock; height++ {
+		block, err := s.GetBlock(ctx, height)
+		if err != nil {
+			continue
+		}
+		if block == nil {
+			continue
+		}
+
+		for _, tx := range block.Transactions() {
+			// Check if this is a fee delegation transaction
+			if tx.Type() == FeeDelegateDynamicFeeTxType {
+				totalFeeDelegationTxs++
+
+				// Check if this transaction's fee payer matches
+				txFeePayer := tx.FeePayer()
+				if txFeePayer == nil || *txFeePayer != feePayer {
+					continue
+				}
+
+				stats.TxCount++
+
+				// Get receipt to calculate fee
+				receipt, err := s.GetReceipt(ctx, tx.Hash())
+				if err != nil || receipt == nil {
+					continue
+				}
+
+				// Calculate fee
+				var fee *big.Int
+				if receipt.EffectiveGasPrice != nil {
+					fee = new(big.Int).Mul(
+						big.NewInt(int64(receipt.GasUsed)),
+						receipt.EffectiveGasPrice,
+					)
+				} else {
+					baseFee := block.BaseFee()
+					if baseFee != nil && tx.GasTipCap() != nil {
+						effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
+						if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
+							effectiveGasPrice = tx.GasFeeCap()
+						}
+						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
+					} else if tx.GasPrice() != nil {
+						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
+					}
+				}
+
+				if fee != nil {
+					stats.TotalFeesPaid.Add(stats.TotalFeesPaid, fee)
+				}
+			}
+		}
+	}
+
+	// Calculate percentage
+	if totalFeeDelegationTxs > 0 {
+		stats.Percentage = float64(stats.TxCount) / float64(totalFeeDelegationTxs) * 100
+	}
+
+	return stats, nil
 }

@@ -27,6 +27,9 @@ var (
 
 	// ErrReadOnly is returned when attempting to write to a read-only storage
 	ErrReadOnly = errors.New("storage is read-only")
+
+	// ErrInvalidReceipt is returned when a receipt fails validation
+	ErrInvalidReceipt = errors.New("invalid receipt")
 )
 
 // Reader provides read-only access to blockchain data
@@ -67,6 +70,12 @@ type Reader interface {
 
 	// HasTransaction checks if a transaction exists
 	HasTransaction(ctx context.Context, hash common.Hash) (bool, error)
+
+	// HasReceipt checks if a receipt exists for a transaction
+	HasReceipt(ctx context.Context, hash common.Hash) (bool, error)
+
+	// GetMissingReceipts returns transaction hashes that have no stored receipts for a block
+	GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error)
 }
 
 // Writer provides write access to blockchain data
@@ -112,6 +121,9 @@ type Storage interface {
 	ContractVerificationWriter
 	WBFTReader
 	WBFTWriter
+	FeeDelegationReader
+	HistoricalReader
+	HistoricalWriter
 
 	// Close closes the storage and releases resources
 	Close() error
