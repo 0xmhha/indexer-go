@@ -16,6 +16,7 @@ import (
 	"github.com/0xmhha/indexer-go/fetch"
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/logger"
+	"github.com/0xmhha/indexer-go/rpcproxy"
 	"github.com/0xmhha/indexer-go/storage"
 	"go.uber.org/zap"
 )
@@ -36,6 +37,7 @@ type App struct {
 	eventBus  *events.EventBus
 	fetcher   *fetch.Fetcher
 	apiServer *api.Server
+	rpcProxy  *rpcproxy.Proxy
 
 	// Runtime flags
 	enableGapMode bool
@@ -291,6 +293,13 @@ func (a *App) initStorage(ctx context.Context) error {
 		zap.String("path", a.config.Database.Path),
 	)
 
+	// Initialize system contract verifications if enabled
+	if a.config.SystemContracts.Enabled && a.config.SystemContracts.SourcePath != "" {
+		if err := a.initSystemContractVerifications(ctx); err != nil {
+			a.logger.Warn("Failed to initialize system contract verifications", zap.Error(err))
+		}
+	}
+
 	// Log latest indexed height
 	latestHeight, err := a.storage.GetLatestHeight(ctx)
 	if err != nil {
@@ -306,6 +315,28 @@ func (a *App) initStorage(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// initSystemContractVerifications initializes system contract verifications
+func (a *App) initSystemContractVerifications(ctx context.Context) error {
+	// Cast storage to required interfaces
+	writer, ok := a.storage.(storage.ContractVerificationWriter)
+	if !ok {
+		return fmt.Errorf("storage does not support contract verification writes")
+	}
+
+	reader, ok := a.storage.(storage.ContractVerificationReader)
+	if !ok {
+		return fmt.Errorf("storage does not support contract verification reads")
+	}
+
+	config := &storage.SystemContractVerificationConfig{
+		SourcePath:       a.config.SystemContracts.SourcePath,
+		IncludeAbstracts: a.config.SystemContracts.IncludeAbstracts,
+		Logger:           a.logger,
+	}
+
+	return storage.InitSystemContractVerifications(ctx, writer, reader, config)
 }
 
 // initEventBus initializes the event bus
@@ -347,6 +378,11 @@ func (a *App) initFetcher() {
 func (a *App) initAPIServer() error {
 	a.logger.Info("Initializing API server...")
 
+	// Initialize RPC Proxy for contract call queries
+	if err := a.initRPCProxy(); err != nil {
+		a.logger.Warn("Failed to initialize RPC Proxy, contract call queries will be disabled", zap.Error(err))
+	}
+
 	apiConfig := &api.Config{
 		Host:                  a.config.API.Host,
 		Port:                  a.config.API.Port,
@@ -366,7 +402,11 @@ func (a *App) initAPIServer() error {
 		ShutdownTimeout:       30 * time.Second,
 	}
 
-	apiServer, err := api.NewServer(apiConfig, a.logger, a.storage)
+	// Create API server with optional RPC Proxy
+	serverOpts := &api.ServerOptions{
+		RPCProxy: a.rpcProxy,
+	}
+	apiServer, err := api.NewServerWithOptions(apiConfig, a.logger, a.storage, serverOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create API server: %w", err)
 	}
@@ -386,6 +426,33 @@ func (a *App) initAPIServer() error {
 		zap.Bool("graphql", apiConfig.EnableGraphQL),
 		zap.Bool("jsonrpc", apiConfig.EnableJSONRPC),
 		zap.Bool("websocket", apiConfig.EnableWebSocket),
+		zap.Bool("rpc_proxy", a.rpcProxy != nil),
+	)
+
+	return nil
+}
+
+// initRPCProxy initializes the RPC Proxy for contract call queries
+func (a *App) initRPCProxy() error {
+	// Create RPC Proxy configuration
+	proxyConfig := rpcproxy.DefaultConfig()
+
+	// Get underlying eth and rpc clients from the indexer client
+	ethClient := a.client.EthClient()
+	rpcClient := a.client.RPCClient()
+
+	// Create RPC Proxy
+	proxy := rpcproxy.NewProxy(ethClient, rpcClient, a.storage, proxyConfig, a.logger)
+
+	// Start the proxy (starts worker pool)
+	if err := proxy.Start(); err != nil {
+		return fmt.Errorf("failed to start RPC proxy: %w", err)
+	}
+
+	a.rpcProxy = proxy
+	a.logger.Info("RPC Proxy initialized",
+		zap.String("endpoint", a.config.RPC.Endpoint),
+		zap.Int("workers", proxyConfig.Worker.NumWorkers),
 	)
 
 	return nil
@@ -416,6 +483,12 @@ func (a *App) Shutdown() {
 		if err := a.apiServer.Stop(shutdownCtx); err != nil {
 			a.logger.Error("Failed to stop API server gracefully", zap.Error(err))
 		}
+	}
+
+	// Stop RPC Proxy
+	if a.rpcProxy != nil {
+		a.rpcProxy.Stop()
+		a.logger.Info("RPC Proxy stopped")
 	}
 
 	// Stop EventBus

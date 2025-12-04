@@ -13,11 +13,12 @@ import (
 
 // Config holds all configuration for the indexer
 type Config struct {
-	RPC      RPCConfig      `yaml:"rpc"`
-	Database DatabaseConfig `yaml:"database"`
-	Log      LogConfig      `yaml:"log"`
-	Indexer  IndexerConfig  `yaml:"indexer"`
-	API      APIConfig      `yaml:"api"`
+	RPC             RPCConfig             `yaml:"rpc"`
+	Database        DatabaseConfig        `yaml:"database"`
+	Log             LogConfig             `yaml:"log"`
+	Indexer         IndexerConfig         `yaml:"indexer"`
+	API             APIConfig             `yaml:"api"`
+	SystemContracts SystemContractsConfig `yaml:"system_contracts"`
 }
 
 // RPCConfig holds RPC client configuration
@@ -30,6 +31,17 @@ type RPCConfig struct {
 type DatabaseConfig struct {
 	Path     string `yaml:"path"`
 	ReadOnly bool   `yaml:"readonly"`
+}
+
+// SystemContractsConfig holds system contracts verification configuration
+type SystemContractsConfig struct {
+	// Enabled determines whether to initialize system contract verifications
+	Enabled bool `yaml:"enabled"`
+	// SourcePath is the path to the directory containing v1/*.sol files
+	// e.g., "/path/to/go-stablenet/systemcontracts/solidity"
+	SourcePath string `yaml:"source_path"`
+	// IncludeAbstracts determines whether to include abstract contracts in the source code
+	IncludeAbstracts bool `yaml:"include_abstracts"`
 }
 
 // LogConfig holds logging configuration
@@ -223,6 +235,25 @@ func (c *Config) LoadFromEnv() error {
 			origins = []string{"*"}
 		}
 		c.API.AllowedOrigins = origins
+	}
+
+	// System contracts configuration
+	if enabled := os.Getenv("INDEXER_SYSTEM_CONTRACTS_ENABLED"); enabled != "" {
+		val, err := strconv.ParseBool(enabled)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_SYSTEM_CONTRACTS_ENABLED: %w", err)
+		}
+		c.SystemContracts.Enabled = val
+	}
+	if sourcePath := os.Getenv("INDEXER_SYSTEM_CONTRACTS_SOURCE_PATH"); sourcePath != "" {
+		c.SystemContracts.SourcePath = sourcePath
+	}
+	if includeAbstracts := os.Getenv("INDEXER_SYSTEM_CONTRACTS_INCLUDE_ABSTRACTS"); includeAbstracts != "" {
+		val, err := strconv.ParseBool(includeAbstracts)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_SYSTEM_CONTRACTS_INCLUDE_ABSTRACTS: %w", err)
+		}
+		c.SystemContracts.IncludeAbstracts = val
 	}
 
 	return nil
