@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/0xmhha/indexer-go/rpcproxy"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/graphql-go/graphql"
 	graphqlhandler "github.com/graphql-go/handler"
@@ -17,9 +18,36 @@ type Handler struct {
 	logger  *zap.Logger
 }
 
+// HandlerOptions contains optional configuration for the GraphQL handler
+type HandlerOptions struct {
+	RPCProxy *rpcproxy.Proxy
+}
+
 // NewHandler creates a new GraphQL handler
 func NewHandler(store storage.Storage, logger *zap.Logger) (*Handler, error) {
-	schema, err := NewSchema(store, logger)
+	return NewHandlerWithOptions(store, logger, nil)
+}
+
+// NewHandlerWithOptions creates a new GraphQL handler with optional configurations
+func NewHandlerWithOptions(store storage.Storage, logger *zap.Logger, opts *HandlerOptions) (*Handler, error) {
+	builder := NewSchemaBuilder(store, logger).
+		WithCoreQueries().
+		WithHistoricalQueries().
+		WithAnalyticsQueries().
+		WithSystemContractQueries().
+		WithConsensusQueries().
+		WithAddressIndexingQueries().
+		WithFeeDelegationQueries().
+		WithSubscriptions().
+		WithMutations()
+
+	// Add RPC Proxy queries if proxy is provided
+	if opts != nil && opts.RPCProxy != nil {
+		builder = builder.WithRPCProxy(opts.RPCProxy).WithRPCProxyQueries()
+		logger.Info("GraphQL RPC Proxy queries enabled")
+	}
+
+	schema, err := builder.Build()
 	if err != nil {
 		return nil, err
 	}

@@ -12,6 +12,7 @@ import (
 	apimiddleware "github.com/0xmhha/indexer-go/api/middleware"
 	"github.com/0xmhha/indexer-go/api/websocket"
 	"github.com/0xmhha/indexer-go/events"
+	"github.com/0xmhha/indexer-go/rpcproxy"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -29,10 +30,21 @@ type Server struct {
 	server       *http.Server
 	wsServer     *websocket.Server
 	gqlSubServer *graphql.SubscriptionServer
+	rpcProxy     *rpcproxy.Proxy
+}
+
+// ServerOptions contains optional configuration for the API server
+type ServerOptions struct {
+	RPCProxy *rpcproxy.Proxy
 }
 
 // NewServer creates a new API server
 func NewServer(config *Config, logger *zap.Logger, store storage.Storage) (*Server, error) {
+	return NewServerWithOptions(config, logger, store, nil)
+}
+
+// NewServerWithOptions creates a new API server with optional configurations
+func NewServerWithOptions(config *Config, logger *zap.Logger, store storage.Storage, opts *ServerOptions) (*Server, error) {
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
@@ -43,6 +55,12 @@ func NewServer(config *Config, logger *zap.Logger, store storage.Storage) (*Serv
 		logger:  logger,
 		storage: store,
 		router:  chi.NewRouter(),
+	}
+
+	// Set optional RPC Proxy before setting up routes
+	if opts != nil && opts.RPCProxy != nil {
+		s.rpcProxy = opts.RPCProxy
+		logger.Info("RPC Proxy configured for API server")
 	}
 
 	// Setup middleware
@@ -73,6 +91,12 @@ func (s *Server) SetEventBus(bus *events.EventBus) {
 		s.gqlSubServer.SetEventBus(bus)
 		s.logger.Info("EventBus set for GraphQL subscriptions")
 	}
+}
+
+// SetRPCProxy sets the RPC Proxy for the server (enables contract call queries)
+func (s *Server) SetRPCProxy(proxy *rpcproxy.Proxy) {
+	s.rpcProxy = proxy
+	s.logger.Info("RPC Proxy set for API server")
 }
 
 // setupMiddleware configures the middleware stack
@@ -170,8 +194,11 @@ func (s *Server) setupRoutes() {
 	if s.config.EnableGraphQL {
 		s.logger.Info("GraphQL API enabled", zap.String("path", s.config.GraphQLPath))
 
-		// Create GraphQL handler
-		graphqlHandler, err := graphql.NewHandler(s.storage, s.logger)
+		// Create GraphQL handler with optional RPC Proxy
+		opts := &graphql.HandlerOptions{
+			RPCProxy: s.rpcProxy,
+		}
+		graphqlHandler, err := graphql.NewHandlerWithOptions(s.storage, s.logger, opts)
 		if err != nil {
 			s.logger.Error("failed to create GraphQL handler", zap.Error(err))
 		} else {
