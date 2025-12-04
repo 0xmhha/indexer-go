@@ -197,6 +197,59 @@ func (p *LargeBlockProcessor) processAddressIndexing(
 	blockTime uint64,
 	addressWriter storage.AddressIndexWriter,
 ) error {
+	// Fee Delegation transaction type constant
+	const FeeDelegateDynamicFeeTxType = 22
+
+	// 0. Index transaction addresses (from, to, feePayer) for transactionsByAddress query
+	if storageWriter, ok := p.storage.(storage.Writer); ok {
+		txHash := tx.Hash()
+
+		// Index 'from' address
+		from := getTransactionSender(tx)
+		if from != (common.Address{}) {
+			if err := storageWriter.AddTransactionToAddressIndex(ctx, from, txHash); err != nil {
+				p.logger.Warn("Failed to index transaction for from address",
+					zap.Uint64("block", blockNumber),
+					zap.String("tx", txHash.Hex()),
+					zap.String("from", from.Hex()),
+					zap.Error(err),
+				)
+			}
+		}
+
+		// Index 'to' address (if not contract creation)
+		if tx.To() != nil {
+			to := *tx.To()
+			if to != from { // Avoid duplicate indexing for self-transfers
+				if err := storageWriter.AddTransactionToAddressIndex(ctx, to, txHash); err != nil {
+					p.logger.Warn("Failed to index transaction for to address",
+						zap.Uint64("block", blockNumber),
+						zap.String("tx", txHash.Hex()),
+						zap.String("to", to.Hex()),
+						zap.Error(err),
+					)
+				}
+			}
+		}
+
+		// Index 'feePayer' address for Fee Delegation transactions (type 0x16)
+		if tx.Type() == FeeDelegateDynamicFeeTxType {
+			if feePayer := tx.FeePayer(); feePayer != nil {
+				// Avoid duplicate indexing if feePayer is same as from or to
+				if *feePayer != from && (tx.To() == nil || *feePayer != *tx.To()) {
+					if err := storageWriter.AddTransactionToAddressIndex(ctx, *feePayer, txHash); err != nil {
+						p.logger.Warn("Failed to index transaction for feePayer address",
+							zap.Uint64("block", blockNumber),
+							zap.String("tx", txHash.Hex()),
+							zap.String("feePayer", feePayer.Hex()),
+							zap.Error(err),
+						)
+					}
+				}
+			}
+		}
+	}
+
 	// 1. Contract Creation Detection
 	if tx.To() == nil && receipt.ContractAddress != (common.Address{}) {
 		creation := &storage.ContractCreation{

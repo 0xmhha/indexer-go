@@ -48,6 +48,8 @@ type Storage interface {
 	SetBlock(ctx context.Context, block *types.Block) error
 	SetReceipt(ctx context.Context, receipt *types.Receipt) error
 	HasBlock(ctx context.Context, height uint64) (bool, error)
+	HasReceipt(ctx context.Context, hash common.Hash) (bool, error)
+	GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error)
 	Close() error
 }
 
@@ -369,16 +371,13 @@ func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, block *types.Bloc
 func (f *Fetcher) publishBlockEvents(block *types.Block, receipts types.Receipts, height uint64) {
 	transactions := block.Transactions()
 
+	// Build receipt map for O(1) lookup (avoids O(n²) matching)
+	receiptMap := buildReceiptMap(receipts)
+
 	// Publish transaction events
 	for i, tx := range transactions {
-		// Find matching receipt
-		var receipt *types.Receipt
-		for _, r := range receipts {
-			if r.TxHash == tx.Hash() {
-				receipt = r
-				break
-			}
-		}
+		// O(1) receipt lookup
+		receipt := receiptMap[tx.Hash()]
 
 		// Create and publish transaction event
 		txEvent := events.NewTransactionEvent(
@@ -622,15 +621,11 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 				// Publish transaction events if EventBus is configured
 				if f.eventBus != nil {
 					transactions := res.block.Transactions()
+					// Build receipt map for O(1) lookup (avoids O(n²) matching)
+					receiptMap := buildReceiptMap(res.receipts)
 					for i, tx := range transactions {
-						// Find matching receipt
-						var receipt *types.Receipt
-						for _, r := range res.receipts {
-							if r.TxHash == tx.Hash() {
-								receipt = r
-								break
-							}
-						}
+						// O(1) receipt lookup
+						receipt := receiptMap[tx.Hash()]
 
 						// Create transaction event
 						txEvent := events.NewTransactionEvent(
@@ -986,6 +981,171 @@ func (f *Fetcher) FillGaps(ctx context.Context, gaps []GapRange) error {
 	return nil
 }
 
+// ReceiptGapInfo contains information about missing receipts for a block
+type ReceiptGapInfo struct {
+	BlockNumber     uint64
+	MissingReceipts []common.Hash
+}
+
+// DetectReceiptGaps scans stored blocks for missing receipts
+func (f *Fetcher) DetectReceiptGaps(ctx context.Context, startHeight, endHeight uint64) ([]ReceiptGapInfo, error) {
+	f.logger.Info("Scanning for receipt gaps",
+		zap.Uint64("start", startHeight),
+		zap.Uint64("end", endHeight),
+	)
+
+	var gaps []ReceiptGapInfo
+
+	for height := startHeight; height <= endHeight; height++ {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return gaps, ctx.Err()
+		default:
+		}
+
+		// Check if block exists first
+		exists, err := f.storage.HasBlock(ctx, height)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check block %d: %w", height, err)
+		}
+		if !exists {
+			// Block doesn't exist, skip (will be caught by DetectGaps)
+			continue
+		}
+
+		// Check for missing receipts in this block
+		missingReceipts, err := f.storage.GetMissingReceipts(ctx, height)
+		if err != nil {
+			f.logger.Warn("failed to check missing receipts",
+				zap.Uint64("height", height),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		if len(missingReceipts) > 0 {
+			gaps = append(gaps, ReceiptGapInfo{
+				BlockNumber:     height,
+				MissingReceipts: missingReceipts,
+			})
+		}
+
+		// Log progress periodically
+		if (height-startHeight+1)%1000 == 0 {
+			f.logger.Debug("Receipt gap detection progress",
+				zap.Uint64("current", height),
+				zap.Uint64("end", endHeight),
+				zap.Int("blocks_with_missing_receipts", len(gaps)),
+			)
+		}
+	}
+
+	totalMissing := 0
+	for _, gap := range gaps {
+		totalMissing += len(gap.MissingReceipts)
+	}
+
+	f.logger.Info("Receipt gap detection completed",
+		zap.Int("blocks_with_missing_receipts", len(gaps)),
+		zap.Int("total_missing_receipts", totalMissing),
+		zap.Uint64("start", startHeight),
+		zap.Uint64("end", endHeight),
+	)
+
+	return gaps, nil
+}
+
+// FillReceiptGap fetches and stores missing receipts for a single block
+func (f *Fetcher) FillReceiptGap(ctx context.Context, gap ReceiptGapInfo) error {
+	f.logger.Info("Filling receipt gap",
+		zap.Uint64("block", gap.BlockNumber),
+		zap.Int("missing_count", len(gap.MissingReceipts)),
+	)
+
+	// Fetch receipts from RPC
+	receipts, err := f.client.GetBlockReceipts(ctx, gap.BlockNumber)
+	if err != nil {
+		return fmt.Errorf("failed to fetch receipts for block %d: %w", gap.BlockNumber, err)
+	}
+
+	// Create a map for quick lookup
+	receiptMap := make(map[common.Hash]*types.Receipt)
+	for _, receipt := range receipts {
+		receiptMap[receipt.TxHash] = receipt
+	}
+
+	// Store only the missing receipts
+	storedCount := 0
+	for _, txHash := range gap.MissingReceipts {
+		receipt, exists := receiptMap[txHash]
+		if !exists {
+			f.logger.Warn("receipt not found from RPC",
+				zap.String("tx_hash", txHash.Hex()),
+				zap.Uint64("block", gap.BlockNumber),
+			)
+			continue
+		}
+
+		if err := f.storage.SetReceipt(ctx, receipt); err != nil {
+			return fmt.Errorf("failed to store receipt for tx %s: %w", txHash.Hex(), err)
+		}
+		storedCount++
+	}
+
+	f.logger.Info("Receipt gap filled",
+		zap.Uint64("block", gap.BlockNumber),
+		zap.Int("stored", storedCount),
+		zap.Int("expected", len(gap.MissingReceipts)),
+	)
+
+	return nil
+}
+
+// FillReceiptGaps fills all detected receipt gaps
+func (f *Fetcher) FillReceiptGaps(ctx context.Context, gaps []ReceiptGapInfo) error {
+	if len(gaps) == 0 {
+		f.logger.Info("No receipt gaps to fill")
+		return nil
+	}
+
+	totalMissing := 0
+	for _, gap := range gaps {
+		totalMissing += len(gap.MissingReceipts)
+	}
+
+	f.logger.Info("Starting receipt gap filling",
+		zap.Int("blocks_with_gaps", len(gaps)),
+		zap.Int("total_missing_receipts", totalMissing),
+	)
+
+	for i, gap := range gaps {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		f.logger.Debug("Filling receipt gap",
+			zap.Int("gap_num", i+1),
+			zap.Int("total_gaps", len(gaps)),
+			zap.Uint64("block", gap.BlockNumber),
+			zap.Int("missing", len(gap.MissingReceipts)),
+		)
+
+		if err := f.FillReceiptGap(ctx, gap); err != nil {
+			return fmt.Errorf("failed to fill receipt gap for block %d: %w", gap.BlockNumber, err)
+		}
+	}
+
+	f.logger.Info("All receipt gaps filled successfully",
+		zap.Int("blocks_processed", len(gaps)),
+		zap.Int("receipts_recovered", totalMissing),
+	)
+
+	return nil
+}
+
 // RunWithGapRecovery starts the fetcher with automatic gap detection and recovery
 func (f *Fetcher) RunWithGapRecovery(ctx context.Context) error {
 	f.logger.Info("Starting fetcher with gap recovery enabled",
@@ -1001,15 +1161,30 @@ func (f *Fetcher) RunWithGapRecovery(ctx context.Context) error {
 			zap.Uint64("end", latestHeight),
 		)
 
+		// Check for block gaps
 		gaps, err := f.DetectGaps(ctx, f.config.StartHeight, latestHeight)
 		if err != nil {
-			f.logger.Error("Failed to detect gaps", zap.Error(err))
+			f.logger.Error("Failed to detect block gaps", zap.Error(err))
 		} else if len(gaps) > 0 {
-			f.logger.Info("Found gaps in existing data, filling them first",
+			f.logger.Info("Found block gaps in existing data, filling them first",
 				zap.Int("gap_count", len(gaps)),
 			)
 			if err := f.FillGaps(ctx, gaps); err != nil {
-				f.logger.Error("Failed to fill gaps", zap.Error(err))
+				f.logger.Error("Failed to fill block gaps", zap.Error(err))
+				// Continue anyway - gaps will be retried later
+			}
+		}
+
+		// Check for receipt gaps (blocks exist but receipts missing)
+		receiptGaps, err := f.DetectReceiptGaps(ctx, f.config.StartHeight, latestHeight)
+		if err != nil {
+			f.logger.Error("Failed to detect receipt gaps", zap.Error(err))
+		} else if len(receiptGaps) > 0 {
+			f.logger.Info("Found receipt gaps in existing data, filling them",
+				zap.Int("blocks_with_missing_receipts", len(receiptGaps)),
+			)
+			if err := f.FillReceiptGaps(ctx, receiptGaps); err != nil {
+				f.logger.Error("Failed to fill receipt gaps", zap.Error(err))
 				// Continue anyway - gaps will be retried later
 			}
 		}
@@ -1017,6 +1192,18 @@ func (f *Fetcher) RunWithGapRecovery(ctx context.Context) error {
 
 	// Run normal fetching loop
 	return f.Run(ctx)
+}
+
+// buildReceiptMap creates a map for O(1) receipt lookup by transaction hash
+// This avoids O(n²) complexity when matching transactions to receipts
+func buildReceiptMap(receipts types.Receipts) map[common.Hash]*types.Receipt {
+	receiptMap := make(map[common.Hash]*types.Receipt, len(receipts))
+	for _, receipt := range receipts {
+		if receipt != nil {
+			receiptMap[receipt.TxHash] = receipt
+		}
+	}
+	return receiptMap
 }
 
 // getTransactionSender extracts the sender address from a transaction
@@ -1133,7 +1320,140 @@ func (f *Fetcher) processWBFTMetadata(ctx context.Context, block *types.Block) e
 		zap.Bool("has_epoch_info", wbftExtra.EpochInfo != nil),
 	)
 
+	// Publish ConsensusBlockEvent to EventBus for WebSocket subscriptions
+	if f.eventBus != nil {
+		f.publishConsensusBlockEvent(block, wbftExtra)
+	}
+
 	return nil
+}
+
+// publishConsensusBlockEvent creates and publishes a ConsensusBlockEvent
+func (f *Fetcher) publishConsensusBlockEvent(block *types.Block, wbftExtra *storagepkg.WBFTBlockExtra) {
+	// Calculate validator counts
+	validatorCount := 0
+	prepareCount := 0
+	commitCount := 0
+
+	if wbftExtra.EpochInfo != nil {
+		validatorCount = len(wbftExtra.EpochInfo.Candidates)
+	}
+
+	if wbftExtra.PreparedSeal != nil && wbftExtra.PreparedSeal.Sealers != nil {
+		prepareCount = countBitsInBitmap(wbftExtra.PreparedSeal.Sealers)
+	}
+
+	if wbftExtra.CommittedSeal != nil && wbftExtra.CommittedSeal.Sealers != nil {
+		commitCount = countBitsInBitmap(wbftExtra.CommittedSeal.Sealers)
+	}
+
+	// Calculate participation rate
+	participationRate := 0.0
+	missedValidatorRate := 0.0
+	if validatorCount > 0 {
+		participationRate = float64(commitCount) / float64(validatorCount) * 100.0
+		missedValidatorRate = float64(validatorCount-commitCount) / float64(validatorCount) * 100.0
+	}
+
+	// Determine epoch boundary and extract epoch info
+	isEpochBoundary := wbftExtra.EpochInfo != nil && len(wbftExtra.EpochInfo.Validators) > 0
+	var epochNumber *uint64
+	var epochValidators []common.Address
+
+	if isEpochBoundary && wbftExtra.EpochInfo != nil {
+		epochNum := wbftExtra.EpochInfo.EpochNumber
+		epochNumber = &epochNum
+		// Extract validator addresses from candidates using validator indices
+		for _, idx := range wbftExtra.EpochInfo.Validators {
+			if int(idx) < len(wbftExtra.EpochInfo.Candidates) {
+				epochValidators = append(epochValidators, wbftExtra.EpochInfo.Candidates[idx].Address)
+			}
+		}
+	}
+
+	// Create consensus block event
+	consensusEvent := events.NewConsensusBlockEvent(
+		wbftExtra.BlockNumber,
+		wbftExtra.BlockHash,
+		wbftExtra.Timestamp,
+		wbftExtra.Round,
+		wbftExtra.PrevRound,
+		block.Coinbase(),
+		validatorCount,
+		prepareCount,
+		commitCount,
+		participationRate,
+		missedValidatorRate,
+		isEpochBoundary,
+		epochNumber,
+		epochValidators,
+	)
+
+	// Publish to EventBus
+	if !f.eventBus.Publish(consensusEvent) {
+		f.logger.Warn("Failed to publish consensus block event (channel full)",
+			zap.Uint64("height", block.NumberU64()),
+		)
+	}
+
+	// Publish consensus error event if round changed (round > 0)
+	if wbftExtra.Round > 0 {
+		f.publishConsensusErrorEvent(block, wbftExtra, "round_change", "medium",
+			fmt.Sprintf("Consensus required %d rounds to finalize block", wbftExtra.Round+1),
+			validatorCount, commitCount, participationRate)
+	}
+
+	// Publish consensus error event if low participation (< 67%)
+	if participationRate < 67.0 && validatorCount > 0 {
+		f.publishConsensusErrorEvent(block, wbftExtra, "low_participation", "high",
+			fmt.Sprintf("Low validator participation: %.2f%%", participationRate),
+			validatorCount, commitCount, participationRate)
+	}
+}
+
+// publishConsensusErrorEvent creates and publishes a ConsensusErrorEvent
+func (f *Fetcher) publishConsensusErrorEvent(block *types.Block, wbftExtra *storagepkg.WBFTBlockExtra,
+	errorType, severity, errorMessage string, expectedValidators, actualSigners int, participationRate float64) {
+
+	// Extract missed validators
+	var missedValidators []common.Address
+	if wbftExtra.EpochInfo != nil && wbftExtra.CommittedSeal != nil {
+		committers, err := storagepkg.ExtractSigners(
+			wbftExtra.CommittedSeal.Sealers,
+			wbftExtra.EpochInfo.Validators,
+			wbftExtra.EpochInfo.Candidates,
+		)
+		if err == nil {
+			for _, candidate := range wbftExtra.EpochInfo.Candidates {
+				if !containsAddress(committers, candidate.Address) {
+					missedValidators = append(missedValidators, candidate.Address)
+				}
+			}
+		}
+	}
+
+	errorEvent := events.NewConsensusErrorEvent(
+		wbftExtra.BlockNumber,
+		wbftExtra.BlockHash,
+		wbftExtra.Timestamp,
+		errorType,
+		severity,
+		errorMessage,
+		wbftExtra.Round,
+		expectedValidators,
+		actualSigners,
+		missedValidators,
+		participationRate,
+		false, // consensusImpacted - block was still finalized
+		nil,   // errorDetails
+	)
+
+	if !f.eventBus.Publish(errorEvent) {
+		f.logger.Warn("Failed to publish consensus error event (channel full)",
+			zap.Uint64("height", block.NumberU64()),
+			zap.String("errorType", errorType),
+		)
+	}
 }
 
 // containsAddress checks if an address is in a slice of addresses
@@ -1146,6 +1466,19 @@ func containsAddress(addresses []common.Address, target common.Address) bool {
 	return false
 }
 
+// countBitsInBitmap counts the number of set bits in a bitmap byte slice
+func countBitsInBitmap(bitmap []byte) int {
+	count := 0
+	for _, b := range bitmap {
+		// Count bits using Brian Kernighan's algorithm
+		for b != 0 {
+			count++
+			b &= b - 1
+		}
+	}
+	return count
+}
+
 // processAddressIndexing parses and stores address indexing data from block and receipts
 func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block, receipts types.Receipts) error {
 	// Check if storage implements AddressIndexWriter
@@ -1155,22 +1488,75 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 		return nil
 	}
 
+	// Check if storage implements Writer for transaction address indexing
+	storageWriter, hasWriter := f.storage.(storagepkg.Writer)
+
 	blockNumber := block.NumberU64()
 	blockTime := block.Time()
 	transactions := block.Transactions()
 
+	// Build receipt map for O(1) lookup (avoids O(n²) matching)
+	receiptMap := buildReceiptMap(receipts)
+
+	// Fee Delegation transaction type constant
+	const FeeDelegateDynamicFeeTxType = 22
+
 	// Process each transaction and its receipt
 	for _, tx := range transactions {
-		// Find matching receipt
-		var receipt *types.Receipt
-		for _, r := range receipts {
-			if r.TxHash == tx.Hash() {
-				receipt = r
-				break
-			}
-		}
+		// O(1) receipt lookup
+		receipt := receiptMap[tx.Hash()]
 		if receipt == nil {
 			continue
+		}
+
+		// 0. Index transaction addresses (from, to, feePayer) for transactionsByAddress query
+		if hasWriter {
+			txHash := tx.Hash()
+
+			// Index 'from' address
+			from := getTransactionSender(tx)
+			if from != (common.Address{}) {
+				if err := storageWriter.AddTransactionToAddressIndex(ctx, from, txHash); err != nil {
+					f.logger.Warn("Failed to index transaction for from address",
+						zap.Uint64("block", blockNumber),
+						zap.String("tx", txHash.Hex()),
+						zap.String("from", from.Hex()),
+						zap.Error(err),
+					)
+				}
+			}
+
+			// Index 'to' address (if not contract creation)
+			if tx.To() != nil {
+				to := *tx.To()
+				if to != from { // Avoid duplicate indexing for self-transfers
+					if err := storageWriter.AddTransactionToAddressIndex(ctx, to, txHash); err != nil {
+						f.logger.Warn("Failed to index transaction for to address",
+							zap.Uint64("block", blockNumber),
+							zap.String("tx", txHash.Hex()),
+							zap.String("to", to.Hex()),
+							zap.Error(err),
+						)
+					}
+				}
+			}
+
+			// Index 'feePayer' address for Fee Delegation transactions (type 0x16)
+			if tx.Type() == FeeDelegateDynamicFeeTxType {
+				if feePayer := tx.FeePayer(); feePayer != nil {
+					// Avoid duplicate indexing if feePayer is same as from or to
+					if *feePayer != from && (tx.To() == nil || *feePayer != *tx.To()) {
+						if err := storageWriter.AddTransactionToAddressIndex(ctx, *feePayer, txHash); err != nil {
+							f.logger.Warn("Failed to index transaction for feePayer address",
+								zap.Uint64("block", blockNumber),
+								zap.String("tx", txHash.Hex()),
+								zap.String("feePayer", feePayer.Hex()),
+								zap.Error(err),
+							)
+						}
+					}
+				}
+			}
 		}
 
 		// 1. Contract Creation Detection
@@ -1430,16 +1816,13 @@ func (f *Fetcher) processBalanceTracking(ctx context.Context, block *types.Block
 	blockNumber := block.NumberU64()
 	transactions := block.Transactions()
 
+	// Build receipt map for O(1) lookup (avoids O(n²) matching)
+	receiptMap := buildReceiptMap(receipts)
+
 	// Track balance changes for each transaction
 	for _, tx := range transactions {
-		// Find matching receipt
-		var receipt *types.Receipt
-		for _, r := range receipts {
-			if r.TxHash == tx.Hash() {
-				receipt = r
-				break
-			}
-		}
+		// O(1) receipt lookup
+		receipt := receiptMap[tx.Hash()]
 		if receipt == nil {
 			continue
 		}

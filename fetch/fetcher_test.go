@@ -149,6 +149,26 @@ func (m *mockStorage) HasBlock(ctx context.Context, height uint64) (bool, error)
 	return ok, nil
 }
 
+func (m *mockStorage) HasReceipt(ctx context.Context, hash common.Hash) (bool, error) {
+	_, ok := m.receipts[hash]
+	return ok, nil
+}
+
+func (m *mockStorage) GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
+	block, ok := m.blocks[blockNumber]
+	if !ok {
+		return nil, fmt.Errorf("block not found")
+	}
+
+	var missing []common.Hash
+	for _, tx := range block.Transactions() {
+		if _, ok := m.receipts[tx.Hash()]; !ok {
+			missing = append(missing, tx.Hash())
+		}
+	}
+	return missing, nil
+}
+
 // Legacy methods for backward compatibility with existing tests
 func (m *mockStorage) GetBlockByHeight(height uint64) (*types.Block, error) {
 	return m.GetBlock(context.Background(), height)

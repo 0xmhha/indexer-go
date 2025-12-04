@@ -111,8 +111,14 @@ func (s *Schema) resolveValidatorStats(p graphql.ResolveParams) (interface{}, er
 		return nil, fmt.Errorf("invalid toBlock format: %w", err)
 	}
 
-	// Get validator signing stats directly through Storage interface
-	signingStats, err := s.storage.GetValidatorSigningStats(ctx, address, fromBlock, toBlock)
+	// Use ConsensusStorage to aggregate stats from individual signing activities
+	pebbleStorage, ok := s.storage.(*storage.PebbleStorage)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support consensus operations")
+	}
+
+	consensusStorage := storage.NewConsensusStorage(pebbleStorage, s.logger)
+	stats, err := consensusStorage.GetValidatorStats(ctx, address, fromBlock, toBlock)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return nil, nil
@@ -124,17 +130,6 @@ func (s *Schema) resolveValidatorStats(p graphql.ResolveParams) (interface{}, er
 			zap.Error(err))
 		return nil, err
 	}
-
-	// Convert storage ValidatorSigningStats to consensus ValidatorStats
-	stats := &consensustypes.ValidatorStats{
-		Address:        signingStats.ValidatorAddress,
-		TotalBlocks:    toBlock - fromBlock + 1,
-		PreparesSigned: signingStats.PrepareSignCount,
-		CommitsSigned:  signingStats.CommitSignCount,
-		PreparesMissed: signingStats.PrepareMissCount,
-		CommitsMissed:  signingStats.CommitMissCount,
-	}
-	stats.CalculateParticipationRate()
 
 	return s.validatorStatsToMap(stats), nil
 }
