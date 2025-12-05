@@ -209,17 +209,10 @@ const (
 const (
 	// GenesisBlockNumber is the block number of the genesis block
 	GenesisBlockNumber = 0
-
-	// DefaultConfirmationBlocks is the default number of confirmations to consider a block final
-	DefaultConfirmationBlocks = 12
-
-	// DefaultBlockTime is the typical block time (can vary by chain)
-	DefaultBlockTime = 12 * time.Second
-
-	// DefaultEpochLength is the default number of blocks per epoch
-	// This matches the default epoch length in go-stablenet/consensus/wbft/config.go
-	DefaultEpochLength = 10
 )
+
+// Note: Chain-specific constants like DefaultEpochLength, DefaultConfirmationBlocks,
+// DefaultBlockTime, QuorumNumerator/Denominator are now in chain.go
 
 // Retry and Backoff Constants
 const (

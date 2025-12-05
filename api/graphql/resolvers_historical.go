@@ -371,7 +371,7 @@ func (s *Schema) resolveTopMiners(p graphql.ResolveParams) (interface{}, error) 
 	ctx := p.Context
 
 	// Get limit parameter
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	if l, ok := p.Args["limit"].(int); ok && l > 0 {
 		limit = l
 		if limit > 100 {
@@ -670,7 +670,7 @@ func (s *Schema) resolveTopAddressesByGasUsed(p graphql.ResolveParams) (interfac
 	ctx := p.Context
 
 	// Parse limit
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	if l, ok := p.Args["limit"].(int); ok && l > 0 {
 		limit = l
 		if limit > 100 {
@@ -734,7 +734,7 @@ func (s *Schema) resolveTopAddressesByTxCount(p graphql.ResolveParams) (interfac
 	ctx := p.Context
 
 	// Parse limit
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	if l, ok := p.Args["limit"].(int); ok && l > 0 {
 		limit = l
 		if limit > 100 {

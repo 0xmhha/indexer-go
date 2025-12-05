@@ -5,80 +5,67 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
 )
 
-// System contract addresses
+// Re-export system contract addresses from constants package for backward compatibility
 var (
-	NativeCoinAdapterAddress = common.HexToAddress("0x1000")
-	GovValidatorAddress      = common.HexToAddress("0x1001")
-	GovMasterMinterAddress   = common.HexToAddress("0x1002")
-	GovMinterAddress         = common.HexToAddress("0x1003")
-	GovCouncilAddress        = common.HexToAddress("0x1004")
+	NativeCoinAdapterAddress = constants.NativeCoinAdapterAddress
+	GovValidatorAddress      = constants.GovValidatorAddress
+	GovMasterMinterAddress   = constants.GovMasterMinterAddress
+	GovMinterAddress         = constants.GovMinterAddress
+	GovCouncilAddress        = constants.GovCouncilAddress
 )
 
-// Event signatures for NativeCoinAdapter
+// Re-export event signatures from constants package for backward compatibility
 var (
-	EventSigMint                = crypto.Keccak256Hash([]byte("Mint(address,address,uint256)"))
-	EventSigBurn                = crypto.Keccak256Hash([]byte("Burn(address,uint256)"))
-	EventSigMinterConfigured    = crypto.Keccak256Hash([]byte("MinterConfigured(address,uint256)"))
-	EventSigMinterRemoved       = crypto.Keccak256Hash([]byte("MinterRemoved(address)"))
-	EventSigMasterMinterChanged = crypto.Keccak256Hash([]byte("MasterMinterChanged(address)"))
-	EventSigTransfer            = crypto.Keccak256Hash([]byte("Transfer(address,address,uint256)"))
-	EventSigApproval            = crypto.Keccak256Hash([]byte("Approval(address,address,uint256)"))
-)
+	// NativeCoinAdapter events
+	EventSigMint                = constants.EventSigMint
+	EventSigBurn                = constants.EventSigBurn
+	EventSigMinterConfigured    = constants.EventSigMinterConfigured
+	EventSigMinterRemoved       = constants.EventSigMinterRemoved
+	EventSigMasterMinterChanged = constants.EventSigMasterMinterChanged
+	EventSigTransfer            = constants.EventSigTransfer
+	EventSigApproval            = constants.EventSigApproval
 
-// Event signatures for GovBase (common governance events)
-var (
-	// ProposalCreated(uint256 indexed proposalId, address indexed proposer, bytes32 actionType, uint256 memberVersion, uint256 requiredApprovals, bytes callData)
-	EventSigProposalCreated   = crypto.Keccak256Hash([]byte("ProposalCreated(uint256,address,bytes32,uint256,uint256,bytes)"))
-	EventSigProposalVoted     = crypto.Keccak256Hash([]byte("ProposalVoted(uint256,address,bool,uint256,uint256)"))
-	EventSigProposalApproved  = crypto.Keccak256Hash([]byte("ProposalApproved(uint256,address,uint256,uint256)"))
-	EventSigProposalRejected  = crypto.Keccak256Hash([]byte("ProposalRejected(uint256,address,uint256,uint256)"))
-	EventSigProposalExecuted  = crypto.Keccak256Hash([]byte("ProposalExecuted(uint256,address,bool)"))
-	EventSigProposalFailed    = crypto.Keccak256Hash([]byte("ProposalFailed(uint256,address,bytes)"))
-	EventSigProposalExpired   = crypto.Keccak256Hash([]byte("ProposalExpired(uint256,address)"))
-	EventSigProposalCancelled = crypto.Keccak256Hash([]byte("ProposalCancelled(uint256,address)"))
-	EventSigMemberAdded       = crypto.Keccak256Hash([]byte("MemberAdded(address,uint256,uint32)"))
-	EventSigMemberRemoved     = crypto.Keccak256Hash([]byte("MemberRemoved(address,uint256,uint32)"))
-	EventSigMemberChanged     = crypto.Keccak256Hash([]byte("MemberChanged(address,address)"))
-	EventSigQuorumUpdated     = crypto.Keccak256Hash([]byte("QuorumUpdated(uint32,uint32)"))
-	// MaxProposalsPerMemberUpdated(uint256 oldMax, uint256 newMax)
-	EventSigMaxProposalsPerMemberUpdated = crypto.Keccak256Hash([]byte("MaxProposalsPerMemberUpdated(uint256,uint256)"))
-)
+	// GovBase events
+	EventSigProposalCreated              = constants.EventSigProposalCreated
+	EventSigProposalVoted                = constants.EventSigProposalVoted
+	EventSigProposalApproved             = constants.EventSigProposalApproved
+	EventSigProposalRejected             = constants.EventSigProposalRejected
+	EventSigProposalExecuted             = constants.EventSigProposalExecuted
+	EventSigProposalFailed               = constants.EventSigProposalFailed
+	EventSigProposalExpired              = constants.EventSigProposalExpired
+	EventSigProposalCancelled            = constants.EventSigProposalCancelled
+	EventSigMemberAdded                  = constants.EventSigMemberAdded
+	EventSigMemberRemoved                = constants.EventSigMemberRemoved
+	EventSigMemberChanged                = constants.EventSigMemberChanged
+	EventSigQuorumUpdated                = constants.EventSigQuorumUpdated
+	EventSigMaxProposalsPerMemberUpdated = constants.EventSigMaxProposalsPerMemberUpdated
 
-// Event signatures for GovValidator
-var (
-	EventSigGasTipUpdated = crypto.Keccak256Hash([]byte("GasTipUpdated(uint256,uint256,address)"))
-)
+	// GovValidator events
+	EventSigGasTipUpdated = constants.EventSigGasTipUpdated
 
-// Event signatures for GovMasterMinter
-var (
-	EventSigMaxMinterAllowanceUpdated = crypto.Keccak256Hash([]byte("MaxMinterAllowanceUpdated(uint256,uint256)"))
-	EventSigEmergencyPaused           = crypto.Keccak256Hash([]byte("EmergencyPaused(uint256)"))
-	EventSigEmergencyUnpaused         = crypto.Keccak256Hash([]byte("EmergencyUnpaused(uint256)"))
-)
+	// GovMasterMinter events
+	EventSigMaxMinterAllowanceUpdated = constants.EventSigMaxMinterAllowanceUpdated
+	EventSigEmergencyPaused           = constants.EventSigEmergencyPaused
+	EventSigEmergencyUnpaused         = constants.EventSigEmergencyUnpaused
 
-// Event signatures for GovMinter
-var (
-	// DepositMintProposed(uint256 indexed proposalId, string indexed depositId, address indexed requester, address beneficiary, uint256 amount, string bankReference)
-	EventSigDepositMintProposed = crypto.Keccak256Hash([]byte("DepositMintProposed(uint256,string,address,address,uint256,string)"))
-	EventSigBurnPrepaid         = crypto.Keccak256Hash([]byte("BurnPrepaid(address,uint256)"))
-	EventSigBurnExecuted        = crypto.Keccak256Hash([]byte("BurnExecuted(address,uint256,string)"))
-)
+	// GovMinter events
+	EventSigDepositMintProposed = constants.EventSigDepositMintProposed
+	EventSigBurnPrepaid         = constants.EventSigBurnPrepaid
+	EventSigBurnExecuted        = constants.EventSigBurnExecuted
 
-// Event signatures for GovCouncil
-var (
-	EventSigAddressBlacklisted       = crypto.Keccak256Hash([]byte("AddressBlacklisted(address,uint256)"))
-	EventSigAddressUnblacklisted     = crypto.Keccak256Hash([]byte("AddressUnblacklisted(address,uint256)"))
-	EventSigAuthorizedAccountAdded   = crypto.Keccak256Hash([]byte("AuthorizedAccountAdded(address,uint256)"))
-	EventSigAuthorizedAccountRemoved = crypto.Keccak256Hash([]byte("AuthorizedAccountRemoved(address,uint256)"))
-	// ProposalExecutionSkipped(address indexed account, uint256 indexed proposalId, string reason)
-	EventSigProposalExecutionSkipped = crypto.Keccak256Hash([]byte("ProposalExecutionSkipped(address,uint256,string)"))
+	// GovCouncil events
+	EventSigAddressBlacklisted       = constants.EventSigAddressBlacklisted
+	EventSigAddressUnblacklisted     = constants.EventSigAddressUnblacklisted
+	EventSigAuthorizedAccountAdded   = constants.EventSigAuthorizedAccountAdded
+	EventSigAuthorizedAccountRemoved = constants.EventSigAuthorizedAccountRemoved
+	EventSigProposalExecutionSkipped = constants.EventSigProposalExecutionSkipped
 )
 
 // SystemContractEventParser parses and indexes system contract events
@@ -230,11 +217,7 @@ func (p *SystemContractEventParser) parseAndIndexLog(ctx context.Context, log *t
 
 // isSystemContract checks if an address is a system contract
 func isSystemContract(addr common.Address) bool {
-	return addr == NativeCoinAdapterAddress ||
-		addr == GovValidatorAddress ||
-		addr == GovMasterMinterAddress ||
-		addr == GovMinterAddress ||
-		addr == GovCouncilAddress
+	return constants.IsSystemContract(addr)
 }
 
 // NativeCoinAdapter event parsers

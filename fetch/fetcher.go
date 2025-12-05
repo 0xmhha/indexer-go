@@ -14,6 +14,7 @@ import (
 	"github.com/0xmhha/indexer-go/events"
 	"github.com/0xmhha/indexer-go/internal/constants"
 	storagepkg "github.com/0xmhha/indexer-go/storage"
+	"github.com/0xmhha/indexer-go/types/chain"
 )
 
 // Client defines the interface for RPC client operations
@@ -95,15 +96,20 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
-	client                   Client
-	storage                  Storage
-	config                   *Config
-	logger                   *zap.Logger
-	eventBus                 *events.EventBus
-	metrics                  *RPCMetrics
-	optimizer                *AdaptiveOptimizer
-	largeBlockProcessor      *LargeBlockProcessor
+	client                    Client
+	storage                   Storage
+	config                    *Config
+	logger                    *zap.Logger
+	eventBus                  *events.EventBus
+	metrics                   *RPCMetrics
+	optimizer                 *AdaptiveOptimizer
+	largeBlockProcessor       *LargeBlockProcessor
 	systemContractEventParser *events.SystemContractEventParser
+
+	// chainAdapter provides chain-specific operations (optional)
+	// When set, the fetcher will use the adapter for consensus parsing
+	// and system contract event handling instead of hardcoded logic.
+	chainAdapter chain.Adapter
 }
 
 // NewFetcher creates a new Fetcher instance
@@ -143,16 +149,50 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 	}
 
 	return &Fetcher{
-		client:                   client,
-		storage:                  storage,
-		config:                   config,
-		logger:                   logger,
-		eventBus:                 eventBus,
-		metrics:                  metrics,
-		optimizer:                optimizer,
-		largeBlockProcessor:      largeBlockProcessor,
+		client:                    client,
+		storage:                   storage,
+		config:                    config,
+		logger:                    logger,
+		eventBus:                  eventBus,
+		metrics:                   metrics,
+		optimizer:                 optimizer,
+		largeBlockProcessor:       largeBlockProcessor,
 		systemContractEventParser: systemContractEventParser,
 	}
+}
+
+// NewFetcherWithAdapter creates a new Fetcher instance with a chain adapter.
+// The chain adapter provides chain-specific operations for consensus parsing
+// and system contract event handling.
+func NewFetcherWithAdapter(client Client, storage Storage, config *Config, logger *zap.Logger, eventBus *events.EventBus, adapter chain.Adapter) *Fetcher {
+	fetcher := NewFetcher(client, storage, config, logger, eventBus)
+	fetcher.chainAdapter = adapter
+
+	if adapter != nil {
+		logger.Info("Fetcher initialized with chain adapter",
+			zap.String("chain_type", string(adapter.Info().ChainType)),
+			zap.String("consensus_type", string(adapter.Info().ConsensusType)),
+		)
+	}
+
+	return fetcher
+}
+
+// SetChainAdapter sets the chain adapter for the fetcher.
+// This allows setting the adapter after construction.
+func (f *Fetcher) SetChainAdapter(adapter chain.Adapter) {
+	f.chainAdapter = adapter
+	if adapter != nil {
+		f.logger.Info("Chain adapter set",
+			zap.String("chain_type", string(adapter.Info().ChainType)),
+			zap.String("consensus_type", string(adapter.Info().ConsensusType)),
+		)
+	}
+}
+
+// GetChainAdapter returns the current chain adapter (may be nil).
+func (f *Fetcher) GetChainAdapter() chain.Adapter {
+	return f.chainAdapter
 }
 
 // FetchBlock fetches a single block and its receipts and stores them
@@ -1973,6 +2013,79 @@ func (f *Fetcher) detectSystemEvents(block *types.Block, log *types.Log) {
 		return
 	}
 
+	// Use chain adapter's system contracts handler if available
+	if f.chainAdapter != nil && f.chainAdapter.SystemContracts() != nil {
+		f.detectSystemEventsWithAdapter(block, log)
+		return
+	}
+
+	// Fallback to hardcoded logic for backward compatibility
+	f.detectSystemEventsLegacy(block, log)
+}
+
+// detectSystemEventsWithAdapter uses the chain adapter to detect system events
+func (f *Fetcher) detectSystemEventsWithAdapter(block *types.Block, log *types.Log) {
+	systemContracts := f.chainAdapter.SystemContracts()
+
+	// Check if this is a system contract
+	if !systemContracts.IsSystemContract(log.Address) {
+		return
+	}
+
+	if len(log.Topics) == 0 {
+		return
+	}
+
+	// Parse the system contract event
+	scEvent, err := systemContracts.ParseSystemContractEvent(log)
+	if err != nil {
+		f.logger.Debug("Failed to parse system contract event",
+			zap.String("contract", log.Address.Hex()),
+			zap.Error(err),
+		)
+		return
+	}
+
+	// Handle validator set changes
+	if scEvent.EventName == "MemberAdded" || scEvent.EventName == "MemberRemoved" {
+		var validatorAddr common.Address
+		if member, ok := scEvent.Data["member"].(common.Address); ok {
+			validatorAddr = member
+		} else if len(log.Topics) >= 2 {
+			validatorAddr = common.BytesToAddress(log.Topics[1].Bytes())
+		}
+
+		changeType := "added"
+		if scEvent.EventName == "MemberRemoved" {
+			changeType = "removed"
+		}
+
+		validatorEvent := events.NewValidatorSetEvent(
+			block.NumberU64(),
+			block.Hash(),
+			changeType,
+			validatorAddr,
+			"",
+			0,
+		)
+
+		if !f.eventBus.Publish(validatorEvent) {
+			f.logger.Warn("Failed to publish validator set event (channel full)",
+				zap.String("type", changeType),
+				zap.String("validator", validatorAddr.Hex()),
+				zap.Uint64("block", block.NumberU64()),
+			)
+		} else {
+			f.logger.Info("Validator "+changeType,
+				zap.String("validator", validatorAddr.Hex()),
+				zap.Uint64("block", block.NumberU64()),
+			)
+		}
+	}
+}
+
+// detectSystemEventsLegacy uses hardcoded logic for backward compatibility
+func (f *Fetcher) detectSystemEventsLegacy(block *types.Block, log *types.Log) {
 	// Check if this is a GovValidator contract event
 	if log.Address != events.GovValidatorAddress {
 		return

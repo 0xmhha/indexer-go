@@ -736,7 +736,7 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 	address := common.HexToAddress(addressStr)
 
 	// Get pagination parameters with validation
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
@@ -985,7 +985,7 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 	}
 
 	// Get pagination parameters with validation
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
@@ -1653,7 +1653,7 @@ func (s *Schema) resolveMintEvents(p graphql.ResolveParams) (interface{}, error)
 	}
 
 	// Pagination
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {
@@ -1726,7 +1726,7 @@ func (s *Schema) resolveBurnEvents(p graphql.ResolveParams) (interface{}, error)
 	}
 
 	// Pagination
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	offset := 0
 	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
 		if l, ok := pagination["limit"].(int); ok && l > 0 {

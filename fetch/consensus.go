@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/events"
+	"github.com/0xmhha/indexer-go/internal/constants"
 	consensustypes "github.com/0xmhha/indexer-go/types/consensus"
 )
 
@@ -495,7 +496,7 @@ func (cf *ConsensusFetcher) checkAndPublishConsensusErrors(consensusData *consen
 
 	// Check for low participation
 	participationRate := consensusData.ParticipationRate()
-	if participationRate < 66.7 { // Less than 2/3 participation
+	if participationRate < constants.DefaultMinParticipationRate { // Less than 2/3 participation
 		severity := "high"
 		if participationRate < 50.0 {
 			severity = "critical"

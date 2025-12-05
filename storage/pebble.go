@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -1559,7 +1560,7 @@ func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, 
 	}
 
 	if limit <= 0 {
-		limit = 10 // Default limit
+		limit = constants.DefaultPaginationLimit // Default limit
 	}
 
 	// Get the latest height to know how many blocks to scan
@@ -3169,7 +3170,7 @@ func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int,
 	}
 
 	if limit <= 0 {
-		limit = 10
+		limit = constants.DefaultPaginationLimit
 	}
 
 	if fromBlock > toBlock {
@@ -3260,7 +3261,7 @@ func (s *PebbleStorage) GetTopAddressesByTxCount(ctx context.Context, limit int,
 	}
 
 	if limit <= 0 {
-		limit = 10
+		limit = constants.DefaultPaginationLimit
 	}
 
 	if fromBlock > toBlock {
@@ -3413,7 +3414,7 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 	}
 
 	if limit <= 0 {
-		limit = 10
+		limit = constants.DefaultPaginationLimit
 	}
 
 	var results []SearchResult
@@ -3706,7 +3707,7 @@ func (s *PebbleStorage) GetTopFeePayers(ctx context.Context, limit int, fromBloc
 	}
 
 	if limit <= 0 {
-		limit = 10
+		limit = constants.DefaultPaginationLimit
 	}
 
 	// Map to aggregate fee payer stats

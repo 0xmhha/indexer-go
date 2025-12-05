@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
@@ -58,7 +59,7 @@ func (s *Schema) resolveTopFeePayers(p graphql.ResolveParams) (interface{}, erro
 	ctx := p.Context
 
 	// Parse parameters
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	if limitArg, ok := p.Args["limit"].(int); ok && limitArg > 0 {
 		limit = limitArg
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/storage"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -31,7 +32,7 @@ func (s *Schema) resolveSearch(params graphql.ResolveParams) (interface{}, error
 	}
 
 	// Extract limit (default: 10)
-	limit := 10
+	limit := constants.DefaultPaginationLimit
 	if limitArg, ok := params.Args["limit"].(int); ok && limitArg > 0 {
 		limit = limitArg
 	}
