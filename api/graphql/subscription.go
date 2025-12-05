@@ -334,12 +334,27 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 		return
 	}
 
+	// Parse replayLast parameter
+	replayLast := parseReplayLast(sub.Variables["replayLast"])
+
 	// Create subscription ID
 	subID := events.SubscriptionID(id)
-	eventSub := c.server.eventBus.Subscribe(subID, []events.EventType{eventType}, filter, 100)
+	opts := events.SubscribeOptions{
+		ChannelSize: 100,
+		ReplayLast:  replayLast,
+	}
+	eventSub := c.server.eventBus.SubscribeWithOptions(subID, []events.EventType{eventType}, filter, opts)
 	if eventSub == nil {
 		c.sendError(id, "failed to create subscription")
 		return
+	}
+
+	if replayLast > 0 {
+		c.logger.Info("subscription with replay",
+			zap.String("id", id),
+			zap.String("type", subType),
+			zap.Int("replayLast", replayLast),
+		)
 	}
 
 	// Create context for this subscription
@@ -961,6 +976,38 @@ func parseAddress(value string) (common.Address, error) {
 		return common.Address{}, fmt.Errorf("invalid address: %s", value)
 	}
 	return common.HexToAddress(value), nil
+}
+
+// parseReplayLast parses the replayLast parameter from subscription variables
+// Returns 0 if not specified or invalid, capped at 100 maximum
+func parseReplayLast(value interface{}) int {
+	if value == nil {
+		return 0
+	}
+
+	var replayLast int
+
+	switch v := value.(type) {
+	case float64:
+		// JSON numbers are decoded as float64
+		replayLast = int(v)
+	case int:
+		replayLast = v
+	case int64:
+		replayLast = int(v)
+	default:
+		return 0
+	}
+
+	// Validate range: must be positive and capped at 100
+	if replayLast < 0 {
+		return 0
+	}
+	if replayLast > 100 {
+		return 100
+	}
+
+	return replayLast
 }
 
 func parseTopicEntry(entry interface{}) ([]common.Hash, error) {

@@ -2,7 +2,7 @@
 
 > 미구현 기능 및 향후 개발 계획
 
-**Last Updated**: 2025-11-26
+**Last Updated**: 2025-12-05
 **Status**: 핵심 기능 100% 완료, Low Priority 작업 예정
 
 ---
@@ -124,15 +124,20 @@
 
 ## 참고 문서
 
-### 구현 완료된 기능 문서
-- [ToFrontend.md](./ToFrontend.md) - Frontend API 통합 가이드 (모든 구현된 API)
-- [SYSTEM_CONTRACTS_EVENTS_DESIGN.md](./SYSTEM_CONTRACTS_EVENTS_DESIGN.md) - System Contracts 설계
-- [EVENT_SUBSCRIPTION_API.md](./EVENT_SUBSCRIPTION_API.md) - WebSocket Subscription API
-- [OPERATIONS_GUIDE.md](./OPERATIONS_GUIDE.md) - 운영 가이드
+### 설계 및 구조
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - 시스템 아키텍처 (Chain Adapters, Consensus Plugins, Storage Backend)
+- [EVENT_SUBSCRIPTION_API.md](./EVENT_SUBSCRIPTION_API.md) - Event Subscription API (Replay 기능 포함)
+- [FRONTEND_SUBSCRIPTION_GUIDE.md](./FRONTEND_SUBSCRIPTION_GUIDE.md) - Frontend GraphQL Subscription 가이드
 
-### 기술 분석 문서
-- [STABLE_ONE_TECHNICAL_ANALYSIS.md](./STABLE_ONE_TECHNICAL_ANALYSIS.md) - Stable-One 체인 분석
-- [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) - 전체 구현 계획 (참고용)
+### 운영 및 모니터링
+- [OPERATIONS_GUIDE.md](./OPERATIONS_GUIDE.md) - 운영 가이드
+- [DOCKER_SETUP.md](./DOCKER_SETUP.md) - Docker 설정 가이드
+- [METRICS_MONITORING.md](./METRICS_MONITORING.md) - Prometheus 메트릭 가이드
+
+### 테스트 및 참고
+- [TESTING.md](./TESTING.md) - 테스트 가이드
+- [KNOWN_ISSUES.md](./KNOWN_ISSUES.md) - 알려진 이슈 및 해결 상태
+- [STABLE_ONE_TECHNICAL_ANALYSIS.md](./STABLE_ONE_TECHNICAL_ANALYSIS.md) - Stable-One 체인 기술 분석
 - [README.md](../README.md) - 프로젝트 개요
 
 ---
@@ -149,4 +154,4 @@
 **Status**: ✅ 프로덕션 준비 완료, Low Priority 작업 예정
 **Core Features**: 100% 완료
 **Advanced Features**: Notification, Scaling, Operations
-**Last Updated**: 2025-11-26
+**Last Updated**: 2025-12-05

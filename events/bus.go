@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+// Default configuration values
+const (
+	// DefaultEventHistorySize is the default number of events to keep in history
+	DefaultEventHistorySize = 100
+)
+
 // SubscriptionID is a unique identifier for a subscription
 type SubscriptionID string
 
@@ -23,6 +29,25 @@ type SubscriptionStats struct {
 
 	// CreatedAt is when the subscription was created
 	CreatedAt time.Time
+}
+
+// SubscribeOptions configures subscription behavior
+type SubscribeOptions struct {
+	// ReplayLast replays the last N events matching the subscription criteria
+	// Set to 0 to disable replay (default)
+	ReplayLast int
+
+	// ChannelSize is the buffer size for the subscription channel
+	// Default is 100 if not specified
+	ChannelSize int
+}
+
+// DefaultSubscribeOptions returns default subscription options
+func DefaultSubscribeOptions() SubscribeOptions {
+	return SubscribeOptions{
+		ReplayLast:  0,
+		ChannelSize: 100,
+	}
 }
 
 // Subscription represents a client subscription to events
@@ -47,6 +72,12 @@ type Subscription struct {
 	Stats SubscriptionStats
 }
 
+// eventHistoryEntry stores an event with metadata for replay
+type eventHistoryEntry struct {
+	event     Event
+	timestamp time.Time
+}
+
 // EventBus is the central message broker for blockchain events
 type EventBus struct {
 	// subscribers is the registry of active subscriptions
@@ -56,12 +87,6 @@ type EventBus struct {
 	// publishCh is the channel for publishing events
 	publishCh chan Event
 
-	// subscribeCh is the channel for new subscription requests
-	subscribeCh chan *Subscription
-
-	// unsubscribeCh is the channel for unsubscribe requests
-	unsubscribeCh chan SubscriptionID
-
 	// done signals when the event bus should stop
 	done chan struct{}
 
@@ -70,6 +95,12 @@ type EventBus struct {
 
 	// cancel is the cancel function for the event bus
 	cancel context.CancelFunc
+
+	// eventHistory is a ring buffer storing recent events for replay
+	eventHistory     []eventHistoryEntry
+	eventHistorySize int
+	eventHistoryIdx  int
+	eventHistoryMu   sync.RWMutex
 
 	// stats tracks event bus statistics
 	stats struct {
@@ -83,17 +114,28 @@ type EventBus struct {
 }
 
 // NewEventBus creates a new EventBus with the given buffer sizes
+// subscribeBufferSize is kept for backward compatibility but no longer used
 func NewEventBus(publishBufferSize, subscribeBufferSize int) *EventBus {
+	return NewEventBusWithHistory(publishBufferSize, DefaultEventHistorySize)
+}
+
+// NewEventBusWithHistory creates a new EventBus with configurable history size
+func NewEventBusWithHistory(publishBufferSize, historySize int) *EventBus {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	if historySize <= 0 {
+		historySize = DefaultEventHistorySize
+	}
+
 	return &EventBus{
-		subscribers:   make(map[SubscriptionID]*Subscription),
-		publishCh:     make(chan Event, publishBufferSize),
-		subscribeCh:   make(chan *Subscription, subscribeBufferSize),
-		unsubscribeCh: make(chan SubscriptionID, subscribeBufferSize),
-		done:          make(chan struct{}),
-		ctx:           ctx,
-		cancel:        cancel,
+		subscribers:      make(map[SubscriptionID]*Subscription),
+		publishCh:        make(chan Event, publishBufferSize),
+		done:             make(chan struct{}),
+		ctx:              ctx,
+		cancel:           cancel,
+		eventHistory:     make([]eventHistoryEntry, historySize),
+		eventHistorySize: historySize,
+		eventHistoryIdx:  0,
 	}
 }
 
@@ -115,36 +157,12 @@ func (eb *EventBus) Run() {
 			eb.closeAllSubscriptions()
 			return
 
-		case sub := <-eb.subscribeCh:
-			// Handle new subscription
-			eb.mu.Lock()
-			eb.subscribers[sub.ID] = sub
-			eb.mu.Unlock()
-
-			// Update metrics
-			if eb.metrics != nil {
-				eb.metrics.RecordSubscription()
-				eb.updateSubscriberMetrics()
-			}
-
-		case subID := <-eb.unsubscribeCh:
-			// Handle unsubscribe
-			eb.mu.Lock()
-			if sub, exists := eb.subscribers[subID]; exists {
-				close(sub.Channel)
-				delete(eb.subscribers, subID)
-			}
-			eb.mu.Unlock()
-
-			// Update metrics
-			if eb.metrics != nil {
-				eb.metrics.RecordUnsubscription()
-				eb.updateSubscriberMetrics()
-			}
-
 		case event := <-eb.publishCh:
 			// Handle event publishing
 			eb.stats.totalEvents.Add(1)
+
+			// Store in history for replay
+			eb.storeEventInHistory(event)
 
 			// Record metrics
 			if eb.metrics != nil {
@@ -154,6 +172,62 @@ func (eb *EventBus) Run() {
 			eb.broadcastEvent(event)
 		}
 	}
+}
+
+// storeEventInHistory stores an event in the ring buffer for replay
+func (eb *EventBus) storeEventInHistory(event Event) {
+	eb.eventHistoryMu.Lock()
+	defer eb.eventHistoryMu.Unlock()
+
+	eb.eventHistory[eb.eventHistoryIdx] = eventHistoryEntry{
+		event:     event,
+		timestamp: time.Now(),
+	}
+	eb.eventHistoryIdx = (eb.eventHistoryIdx + 1) % eb.eventHistorySize
+}
+
+// getRecentEvents returns the last N events matching the given criteria
+// Events are returned in chronological order (oldest first)
+func (eb *EventBus) getRecentEvents(n int, eventTypes map[EventType]bool, filter *Filter) []Event {
+	eb.eventHistoryMu.RLock()
+	defer eb.eventHistoryMu.RUnlock()
+
+	if n <= 0 || n > eb.eventHistorySize {
+		n = eb.eventHistorySize
+	}
+
+	// Collect matching events
+	var matched []Event
+
+	// Start from the oldest entry and work forward
+	for i := 0; i < eb.eventHistorySize; i++ {
+		idx := (eb.eventHistoryIdx + i) % eb.eventHistorySize
+		entry := eb.eventHistory[idx]
+
+		// Skip empty entries
+		if entry.event == nil {
+			continue
+		}
+
+		// Check event type
+		if !eventTypes[entry.event.Type()] {
+			continue
+		}
+
+		// Apply filter if present
+		if filter != nil && !filter.Match(entry.event) {
+			continue
+		}
+
+		matched = append(matched, entry.event)
+	}
+
+	// Return only the last N events
+	if len(matched) > n {
+		matched = matched[len(matched)-n:]
+	}
+
+	return matched
 }
 
 // broadcastEvent sends an event to all interested subscribers
@@ -274,7 +348,25 @@ func (eb *EventBus) Publish(event Event) bool {
 // Subscribe creates a new subscription for the given event types
 // Returns a Subscription that can be used to receive events
 // filter can be nil for no filtering
+// This method is synchronous - the subscription is active immediately upon return
 func (eb *EventBus) Subscribe(id SubscriptionID, eventTypes []EventType, filter *Filter, channelSize int) *Subscription {
+	return eb.SubscribeWithOptions(id, eventTypes, filter, SubscribeOptions{
+		ChannelSize: channelSize,
+		ReplayLast:  0,
+	})
+}
+
+// SubscribeWithOptions creates a new subscription with configurable options
+// This method is synchronous - the subscription is active immediately upon return
+// If ReplayLast > 0, matching historical events will be delivered first
+func (eb *EventBus) SubscribeWithOptions(id SubscriptionID, eventTypes []EventType, filter *Filter, opts SubscribeOptions) *Subscription {
+	// Check if bus is stopped
+	select {
+	case <-eb.ctx.Done():
+		return nil
+	default:
+	}
+
 	// Validate filter if provided
 	if filter != nil {
 		if err := filter.Validate(); err != nil {
@@ -291,8 +383,14 @@ func (eb *EventBus) Subscribe(id SubscriptionID, eventTypes []EventType, filter 
 		eventTypeMap[et] = true
 	}
 
-	// Create subscription context
-	ctx, cancel := context.WithCancel(eb.ctx)
+	// Apply default channel size
+	channelSize := opts.ChannelSize
+	if channelSize <= 0 {
+		channelSize = 100
+	}
+
+	// Create subscription context for cancellation
+	_, cancel := context.WithCancel(eb.ctx)
 
 	sub := &Subscription{
 		ID:         id,
@@ -305,26 +403,63 @@ func (eb *EventBus) Subscribe(id SubscriptionID, eventTypes []EventType, filter 
 		},
 	}
 
-	// Send subscribe request
-	select {
-	case eb.subscribeCh <- sub:
-		return sub
-	case <-ctx.Done():
-		close(sub.Channel)
-		return nil
+	// Synchronously register the subscription
+	// This ensures the subscription is active before returning
+	eb.mu.Lock()
+	eb.subscribers[id] = sub
+	eb.mu.Unlock()
+
+	// Update metrics
+	if eb.metrics != nil {
+		eb.metrics.RecordSubscription()
+		eb.updateSubscriberMetrics()
+	}
+
+	// Replay historical events if requested
+	if opts.ReplayLast > 0 {
+		eb.replayEventsToSubscriber(sub, opts.ReplayLast)
+	}
+
+	return sub
+}
+
+// replayEventsToSubscriber sends historical events to a subscriber
+func (eb *EventBus) replayEventsToSubscriber(sub *Subscription, count int) {
+	events := eb.getRecentEvents(count, sub.EventTypes, sub.Filter)
+
+	for _, event := range events {
+		select {
+		case sub.Channel <- event:
+			sub.Stats.EventsReceived.Add(1)
+			sub.Stats.LastEventTime.Store(time.Now().UnixNano())
+		default:
+			// Channel full, skip replay event
+			sub.Stats.EventsDropped.Add(1)
+		}
 	}
 }
 
 // Unsubscribe removes a subscription
+// This method is synchronous - the subscription is removed immediately
 func (eb *EventBus) Unsubscribe(id SubscriptionID) {
-	select {
-	case eb.unsubscribeCh <- id:
-	case <-eb.ctx.Done():
+	eb.mu.Lock()
+	if sub, exists := eb.subscribers[id]; exists {
+		close(sub.Channel)
+		if sub.CancelFunc != nil {
+			sub.CancelFunc()
+		}
+		delete(eb.subscribers, id)
+	}
+	eb.mu.Unlock()
+
+	// Update metrics
+	if eb.metrics != nil {
+		eb.metrics.RecordUnsubscription()
+		eb.updateSubscriberMetrics()
 	}
 }
 
 // updateSubscriberMetrics updates subscriber count metrics
-// Must be called with mu held or from within Run()
 func (eb *EventBus) updateSubscriberMetrics() {
 	if eb.metrics == nil {
 		return
@@ -351,7 +486,6 @@ func (eb *EventBus) updateSubscriberMetrics() {
 
 	// Update channel sizes
 	eb.metrics.UpdatePublishChannelSize(len(eb.publishCh))
-	eb.metrics.UpdateSubscribeChannelSize(len(eb.subscribeCh))
 }
 
 // SubscriberInfo contains information about a subscriber

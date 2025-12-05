@@ -313,37 +313,47 @@ input PaginationInput {
 }
 
 # Subscription root type for real-time updates
+# All subscriptions support optional replayLast parameter to receive recent historical events
 type Subscription {
   # Subscribe to new blocks as they are indexed
-  newBlock: Block!
+  # replayLast: Number of recent blocks to replay immediately upon subscription (max 100)
+  newBlock(replayLast: Int): Block!
 
   # Subscribe to new transactions as they are indexed
-  newTransaction: Transaction!
+  # replayLast: Number of recent transactions to replay immediately upon subscription (max 100)
+  newTransaction(replayLast: Int): Transaction!
 
   # Subscribe to new pending transactions (if available)
   newPendingTransactions(limit: Int): Transaction!
 
   # Subscribe to new logs matching a filter
-  logs(filter: LogFilter!): Log!
+  # replayLast: Number of recent logs to replay immediately upon subscription (max 100)
+  logs(filter: LogFilter!, replayLast: Int): Log!
 
   # Subscribe to system contract events
   # Filter by contract address to receive events only from specific contracts
-  systemContractEvents(filter: SystemContractSubscriptionFilter): SystemContractEventMessage!
+  # replayLast: Number of recent events to replay immediately upon subscription (max 100)
+  systemContractEvents(filter: SystemContractSubscriptionFilter, replayLast: Int): SystemContractEventMessage!
 
   # Subscribe to events from dynamically registered contracts
-  dynamicContractEvents(filter: DynamicContractSubscriptionFilter): DynamicContractEvent!
+  # replayLast: Number of recent events to replay immediately upon subscription (max 100)
+  dynamicContractEvents(filter: DynamicContractSubscriptionFilter, replayLast: Int): DynamicContractEvent!
 
   # Subscribe to new consensus block events with validator participation data
-  consensusBlock: ConsensusBlockSub!
+  # replayLast: Number of recent consensus blocks to replay immediately upon subscription (max 100)
+  consensusBlock(replayLast: Int): ConsensusBlockSub!
 
   # Subscribe to chain fork detection events
-  consensusFork: ConsensusForkSub!
+  # replayLast: Number of recent fork events to replay immediately upon subscription (max 100)
+  consensusFork(replayLast: Int): ConsensusForkSub!
 
   # Subscribe to validator set change events at epoch boundaries
-  consensusValidatorChange: ConsensusValidatorChangeSub!
+  # replayLast: Number of recent validator changes to replay immediately upon subscription (max 100)
+  consensusValidatorChange(replayLast: Int): ConsensusValidatorChangeSub!
 
   # Subscribe to consensus errors and anomalies (round changes, low participation)
-  consensusError: ConsensusErrorSub!
+  # replayLast: Number of recent errors to replay immediately upon subscription (max 100)
+  consensusError(replayLast: Int): ConsensusErrorSub!
 }
 
 # Real-time consensus block data from subscription

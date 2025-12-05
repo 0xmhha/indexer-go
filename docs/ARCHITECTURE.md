@@ -16,20 +16,32 @@
 
 ```
 indexer-go/
-├── cmd/indexer/main.go     # 진입점
-├── api/                    # API 레이어
-│   ├── graphql/           # GraphQL 구현
-│   ├── jsonrpc/           # JSON-RPC 구현
-│   └── websocket/         # WebSocket 구현
-├── fetch/                  # 데이터 수집 엔진
-│   ├── fetcher.go         # 메인 인덱싱 로직
-│   ├── optimizer.go       # 성능 자동 최적화
-│   └── consensus.go       # 컨센서스 데이터 수집
-├── storage/               # 저장소 레이어 (Pebble DB)
-├── types/                 # 데이터 타입 정의
-├── client/                # 이더리움 RPC 클라이언트
-├── events/                # 이벤트 버스 (실시간 알림)
-└── internal/config/       # 설정 관리
+├── cmd/indexer/main.go      # 진입점
+├── api/                     # API 레이어
+│   ├── graphql/            # GraphQL 구현
+│   ├── jsonrpc/            # JSON-RPC 구현
+│   └── websocket/          # WebSocket 구현
+├── adapters/                # 체인 어댑터 (확장 가능)
+│   ├── evm/                # 범용 EVM 어댑터
+│   └── stableone/          # StableOne 전용 어댑터
+├── consensus/               # 컨센서스 플러그인 시스템
+│   ├── registry.go         # 플러그인 레지스트리
+│   └── wbft/               # WBFT 파서 구현
+├── fetch/                   # 데이터 수집 엔진
+│   ├── fetcher.go          # 메인 인덱싱 로직
+│   ├── optimizer.go        # 성능 자동 최적화
+│   └── consensus.go        # 컨센서스 데이터 수집
+├── storage/                 # 저장소 레이어
+│   ├── backend.go          # 백엔드 인터페이스
+│   ├── pebble_backend.go   # PebbleDB 백엔드
+│   └── pebble.go           # 고수준 스토리지 구현
+├── types/                   # 데이터 타입 정의
+│   └── chain/              # 체인 어댑터 인터페이스
+├── client/                  # 이더리움 RPC 클라이언트
+├── events/                  # 이벤트 버스 (실시간 알림)
+└── internal/
+    ├── config/             # 설정 관리
+    └── constants/          # 상수 정의 (체인, 시스템 컨트랙트)
 ```
 
 ---
@@ -98,10 +110,118 @@ type Writer interface {
 
 실시간 알림을 위한 **Pub/Sub 시스템**
 
+**특징:**
+- **동기식 구독 등록** - 구독 즉시 활성화 (race condition 방지)
+- **이벤트 히스토리** - 최근 이벤트 버퍼링 (기본 100개)
+- **Replay 기능** - 구독 시 과거 이벤트 즉시 수신 가능
+
 **이벤트 타입:**
-- `EVENT_NEW_BLOCK` - 새 블록 인덱싱됨
-- `EVENT_NEW_TRANSACTION` - 새 트랜잭션 인덱싱됨
-- `EVENT_NEW_LOGS` - 새 로그 발생
+- `EventTypeBlock` - 새 블록 인덱싱됨
+- `EventTypeTransaction` - 새 트랜잭션 인덱싱됨
+- `EventTypeLog` - 새 로그 발생
+- `EventTypeConsensusBlock` - 컨센서스 블록 데이터
+- `EventTypeSystemContract` - 시스템 컨트랙트 이벤트
+
+**구독 API:**
+```go
+// 기본 구독
+sub := eventBus.Subscribe(id, eventTypes, filter, channelSize)
+
+// Replay 옵션 포함
+sub := eventBus.SubscribeWithOptions(id, eventTypes, filter, SubscribeOptions{
+    ChannelSize: 100,
+    ReplayLast:  10,  // 최근 10개 이벤트 즉시 수신
+})
+```
+
+---
+
+## Extensible Architecture
+
+### 5. Chain Adapters (`adapters/`)
+
+다양한 체인 지원을 위한 **플러그 가능한 어댑터 시스템**
+
+```
+┌─────────────────────────────────────────────┐
+│              chain.Adapter                   │
+│  (types/chain/interfaces.go)                │
+├─────────────────────────────────────────────┤
+│  - BlockFetcher: 블록 데이터 수집            │
+│  - TransactionParser: 트랜잭션 파싱          │
+│  - ConsensusParser: 컨센서스 데이터 파싱      │
+│  - SystemContractsHandler: 시스템 이벤트 처리 │
+└─────────────────────────────────────────────┘
+          △                    △
+          │                    │
+┌─────────┴─────────┐ ┌───────┴────────┐
+│   evm.Adapter     │ │ stableone.Adapter │
+│   (범용 EVM)       │ │ (WBFT + 시스템컨트랙트) │
+└───────────────────┘ └──────────────────┘
+```
+
+**새 체인 추가 방법:**
+```go
+// 1. chain.Adapter 인터페이스 구현
+type MyChainAdapter struct { ... }
+
+// 2. Fetcher에 어댑터 설정
+fetcher.SetChainAdapter(myAdapter)
+```
+
+### 6. Consensus Plugins (`consensus/`)
+
+다양한 컨센서스 메커니즘을 위한 **플러그인 레지스트리**
+
+```go
+// 자동 등록 (init 함수)
+import _ "github.com/0xmhha/indexer-go/consensus/wbft"
+
+// 플러그인 사용
+parser, _ := consensus.Get(chain.ConsensusTypeWBFT, config, logger)
+```
+
+**지원 컨센서스:**
+- `WBFT` - Weighted Byzantine Fault Tolerance (StableOne)
+
+**새 컨센서스 추가 방법:**
+```go
+// consensus/mycons/register.go
+func init() {
+    consensus.MustRegister(chain.ConsensusTypeMycons, Factory, metadata)
+}
+```
+
+### 7. Storage Backend (`storage/backend.go`)
+
+다양한 스토리지 엔진을 위한 **백엔드 추상화**
+
+```
+┌─────────────────────────────────────┐
+│        Storage Interface            │  ← 고수준 블록체인 연산
+│  (Reader, Writer, LogReader, etc.)  │
+├─────────────────────────────────────┤
+│        PebbleStorage                │  ← 전체 Storage 구현
+├─────────────────────────────────────┤
+│        Backend Interface            │  ← 저수준 KV 연산
+│  (Get, Set, Delete, Iterator)       │
+├─────────────────────────────────────┤
+│     PebbleBackend / Future DBs      │  ← 백엔드 구현체
+└─────────────────────────────────────┘
+```
+
+**Backend 인터페이스:**
+```go
+type Backend interface {
+    Get(key []byte) ([]byte, error)
+    Set(key, value []byte) error
+    Delete(key []byte) error
+    Has(key []byte) (bool, error)
+    NewIterator(start, end []byte) Iterator
+    NewBatch() BackendBatch
+    Close() error
+}
+```
 
 ---
 
@@ -404,19 +524,33 @@ subscription {
 | File | Purpose |
 |------|---------|
 | `cmd/indexer/main.go` | 진입점, 초기화 |
+| **Fetch** | |
 | `fetch/fetcher.go` | 인덱싱 엔진 |
 | `fetch/optimizer.go` | 성능 자동 최적화 |
 | `fetch/consensus.go` | 컨센서스 데이터 수집 |
+| **Storage** | |
 | `storage/storage.go` | 스토리지 인터페이스 |
+| `storage/backend.go` | 백엔드 인터페이스 |
+| `storage/pebble_backend.go` | PebbleDB 백엔드 |
 | `storage/pebble.go` | Pebble DB 구현 |
-| `storage/schema.go` | 키 인코딩 스키마 |
+| **API** | |
 | `api/server.go` | HTTP 서버 |
 | `api/graphql/schema.graphql` | GraphQL 스키마 |
 | `api/graphql/resolvers_*.go` | GraphQL 리졸버 |
-| `events/bus.go` | 이벤트 시스템 |
+| `api/graphql/subscription.go` | WebSocket 구독 |
+| **Events** | |
+| `events/bus.go` | 이벤트 버스 (동기 등록, Replay) |
+| **Adapters** | |
+| `types/chain/interfaces.go` | 체인 어댑터 인터페이스 |
+| `adapters/evm/adapter.go` | 범용 EVM 어댑터 |
+| `adapters/stableone/adapter.go` | StableOne 어댑터 |
+| **Consensus** | |
+| `consensus/registry.go` | 컨센서스 플러그인 레지스트리 |
+| `consensus/wbft/parser.go` | WBFT 파서 |
+| **Other** | |
 | `client/client.go` | RPC 클라이언트 |
 | `types/types.go` | 핵심 타입 정의 |
-| `types/consensus/` | 컨센서스 타입 |
+| `internal/constants/` | 체인/시스템컨트랙트 상수 |
 
 ---
 

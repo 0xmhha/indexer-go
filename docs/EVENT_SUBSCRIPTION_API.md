@@ -2,7 +2,7 @@
 
 Detailed reference for the Event Subscription System, covering API usage, filtering, metrics, and operational guidance.
 
-**Last Updated**: 2025-11-20
+**Last Updated**: 2025-12-05
 
 ---
 
@@ -14,6 +14,7 @@ Detailed reference for the Event Subscription System, covering API usage, filter
 - [Event Types](#event-types)
 - [Filters](#filters)
 - [Subscription Management](#subscription-management)
+- [Replay Feature](#replay-feature)
 - [Metrics & Monitoring](#metrics--monitoring)
 - [Error Handling](#error-handling)
 - [Best Practices](#best-practices)
@@ -24,6 +25,8 @@ Detailed reference for the Event Subscription System, covering API usage, filter
 
 The Event Subscription System provides a high-performance, real-time event delivery mechanism for blockchain data. It supports:
 
+- **Synchronous subscription registration** - Subscriptions are active immediately after Subscribe() returns (race condition 방지)
+- **Event history & Replay** - Subscribe with `replayLast` to receive recent events immediately
 - **100M+ events/sec** throughput
 - **Sub-microsecond** latency
 - **10,000+ concurrent** subscribers
@@ -120,6 +123,51 @@ sub := bus.Subscribe(
     []events.EventType{events.EventTypeBlock},
     nil,
     100,
+)
+```
+
+---
+
+### SubscribeWithOptions
+
+Creates a new subscription with advanced options including replay.
+
+```go
+func (eb *EventBus) SubscribeWithOptions(
+    id SubscriptionID,
+    eventTypes []EventType,
+    filter *Filter,
+    opts SubscribeOptions,
+) *Subscription
+```
+
+**SubscribeOptions Structure**:
+```go
+type SubscribeOptions struct {
+    ChannelSize int  // Size of the event channel buffer (default: 100)
+    ReplayLast  int  // Number of recent events to replay immediately (0 = no replay)
+}
+```
+
+**Parameters**:
+- `id` (SubscriptionID): Unique identifier for this subscription
+- `eventTypes` ([]EventType): Array of event types to subscribe to
+- `filter` (*Filter): Optional filter (nil for no filtering)
+- `opts` (SubscribeOptions): Advanced options including channel size and replay count
+
+**Returns**: `*Subscription` or `nil` if invalid filter
+
+**Example**:
+```go
+// Subscribe with replay - receive last 10 events immediately
+sub := bus.SubscribeWithOptions(
+    "block-monitor",
+    []events.EventType{events.EventTypeBlock},
+    nil,
+    events.SubscribeOptions{
+        ChannelSize: 100,
+        ReplayLast:  10,  // Receive last 10 blocks immediately
+    },
 )
 ```
 
@@ -508,6 +556,83 @@ cancel()
 
 ---
 
+## Replay Feature
+
+### Overview
+
+The Replay feature allows subscribers to receive recent historical events immediately upon subscription. This solves the "cold start" problem where new subscribers would otherwise see no data until the next event occurs.
+
+### Use Cases
+
+1. **Dashboard Initial Load**: Display recent blocks/transactions immediately
+2. **Reconnection Recovery**: Catch up on missed events after network disconnection
+3. **Real-time Monitoring**: Start monitoring with recent context
+
+### Usage
+
+```go
+// Subscribe with replay - receive last 20 blocks immediately
+sub := bus.SubscribeWithOptions(
+    "dashboard",
+    []events.EventType{events.EventTypeBlock},
+    nil,
+    events.SubscribeOptions{
+        ChannelSize: 100,
+        ReplayLast:  20,
+    },
+)
+
+// Events arrive in order: [oldest replay event] → ... → [newest replay event] → [live events]
+for event := range sub.Channel {
+    handleEvent(event)
+}
+```
+
+### GraphQL Subscriptions with Replay
+
+All GraphQL subscriptions support the `replayLast` parameter:
+
+```graphql
+subscription {
+  newBlock(replayLast: 10) {
+    number
+    hash
+    timestamp
+    transactionCount
+  }
+}
+```
+
+**Supported Subscriptions**:
+- `newBlock(replayLast: Int)`
+- `newTransaction(replayLast: Int)`
+- `logs(filter: LogFilter!, replayLast: Int)`
+- `systemContractEvents(filter: ..., replayLast: Int)`
+- `dynamicContractEvents(filter: ..., replayLast: Int)`
+- `consensusBlock(replayLast: Int)`
+- `consensusFork(replayLast: Int)`
+- `consensusValidatorChange(replayLast: Int)`
+- `consensusError(replayLast: Int)`
+
+### Configuration
+
+| Parameter | Default | Max | Description |
+|-----------|---------|-----|-------------|
+| `replayLast` | 0 | 100 | Number of recent events to replay |
+
+### Important Notes
+
+1. **Event Order**: Replay events are delivered oldest-first, followed by live events
+2. **Duplicate Handling**: Replay and live events may overlap - client should deduplicate by event ID/hash
+3. **Filter Application**: Replay events are filtered using the same filter as live events
+4. **History Limit**: EventBus maintains a configurable history buffer (default: 100 events per type)
+
+### Frontend Integration
+
+See [FRONTEND_SUBSCRIPTION_GUIDE.md](./FRONTEND_SUBSCRIPTION_GUIDE.md) for detailed frontend integration examples.
+
+---
+
 ## Metrics & Monitoring
 
 ### Enable Metrics
@@ -677,5 +802,6 @@ go func() {
 
 ## See Also
 
+- [FRONTEND_SUBSCRIPTION_GUIDE.md](./FRONTEND_SUBSCRIPTION_GUIDE.md) - Frontend integration guide with replay examples
 - [METRICS_MONITORING.md](./METRICS_MONITORING.md) - Prometheus metrics guide
-- [EVENT_SUBSCRIPTION_DESIGN.md](./EVENT_SUBSCRIPTION_DESIGN.md) - Architecture design
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture overview
