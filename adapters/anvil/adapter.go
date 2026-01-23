@@ -9,7 +9,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/adapters/evm"
 	"github.com/0xmhha/indexer-go/consensus"
-	_ "github.com/0xmhha/indexer-go/consensus/poa" // Register PoA parser
+	"github.com/0xmhha/indexer-go/consensus/poa"
 	"github.com/0xmhha/indexer-go/types/chain"
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.uber.org/zap"
@@ -94,9 +94,11 @@ func NewAdapter(client evm.Client, config *Config, logger *zap.Logger) (*Adapter
 	}
 	consensusParser, err := consensus.Get(chain.ConsensusTypePoA, consensusConfig, logger)
 	if err != nil {
-		logger.Warn("Failed to get PoA parser from registry, consensus parsing disabled",
+		logger.Warn("Failed to get PoA parser from registry, using fallback parser",
 			zap.Error(err),
 		)
+		// Fallback: create PoA parser directly
+		consensusParser = poa.NewParser(logger)
 	}
 	adapter.consensusParser = consensusParser
 

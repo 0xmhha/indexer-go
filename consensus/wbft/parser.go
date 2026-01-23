@@ -72,6 +72,11 @@ func (p *Parser) ParseConsensusData(block *types.Block) (*chain.ConsensusData, e
 		validators = []common.Address{}
 	}
 
+	// Cache validators for later lookup via GetValidators()
+	if len(validators) > 0 {
+		p.CacheValidators(header.Number.Uint64(), validators)
+	}
+
 	// Extract commit signers
 	commitSigners, err := p.ExtractSignersFromSeal(wbftExtra.CommittedSeal, validators)
 	if err != nil {
@@ -120,14 +125,28 @@ func (p *Parser) ParseConsensusData(block *types.Block) (*chain.ConsensusData, e
 
 // GetValidators returns the current validator set at a specific block
 func (p *Parser) GetValidators(ctx context.Context, blockNumber uint64) ([]common.Address, error) {
-	// Check cache first
+	// Check exact block cache first
 	if validators, ok := p.validatorCache[blockNumber]; ok {
 		return validators, nil
 	}
 
-	// Note: In a real implementation, this would need access to the client
-	// to fetch the block and extract validators. For now, return empty.
-	return nil, fmt.Errorf("validator lookup requires block data - use ParseConsensusData with block")
+	// Find the nearest cached block (validator set is valid until next epoch boundary)
+	var nearestBlock uint64
+	var nearestValidators []common.Address
+	for cachedBlock, validators := range p.validatorCache {
+		// Find the highest cached block that is <= requested block
+		if cachedBlock <= blockNumber && cachedBlock > nearestBlock {
+			nearestBlock = cachedBlock
+			nearestValidators = validators
+		}
+	}
+
+	if nearestValidators != nil {
+		return nearestValidators, nil
+	}
+
+	// No cached validators found - need to parse blocks first
+	return nil, fmt.Errorf("no cached validators for block %d - call ParseConsensusData on earlier blocks first", blockNumber)
 }
 
 // IsEpochBoundary checks if the block is an epoch boundary

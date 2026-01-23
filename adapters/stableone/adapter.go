@@ -9,7 +9,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/adapters/evm"
 	"github.com/0xmhha/indexer-go/consensus"
-	_ "github.com/0xmhha/indexer-go/consensus/wbft" // Register WBFT parser
+	"github.com/0xmhha/indexer-go/consensus/wbft"
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/types/chain"
 	"github.com/ethereum/go-ethereum/common"
@@ -83,9 +83,11 @@ func NewAdapter(client evm.Client, config *Config, logger *zap.Logger) *Adapter 
 	}
 	consensusParser, err := consensus.Get(chain.ConsensusTypeWBFT, consensusConfig, logger)
 	if err != nil {
-		logger.Error("Failed to get WBFT parser from registry, using nil",
+		logger.Warn("Failed to get WBFT parser from registry, using fallback parser",
 			zap.Error(err),
 		)
+		// Fallback: create WBFT parser directly
+		consensusParser = wbft.NewParser(config.EpochLength, logger)
 	}
 	adapter.consensusParser = consensusParser
 

@@ -29,12 +29,19 @@ var _ chain.ConsensusParser = (*Parser)(nil)
 // Parser implements chain.ConsensusParser for PoA/Clique consensus
 type Parser struct {
 	logger *zap.Logger
+	// signerCache stores known signers from parsed blocks
+	// In PoA, these are the validators that have signed blocks
+	signerCache map[common.Address]bool
+	// blockSigners maps block numbers to their signers
+	blockSigners map[uint64]common.Address
 }
 
 // NewParser creates a new PoA consensus parser
 func NewParser(logger *zap.Logger) *Parser {
 	return &Parser{
-		logger: logger,
+		logger:       logger,
+		signerCache:  make(map[common.Address]bool),
+		blockSigners: make(map[uint64]common.Address),
 	}
 }
 
@@ -62,6 +69,12 @@ func (p *Parser) ParseConsensusData(block *types.Block) (*chain.ConsensusData, e
 		signer = common.Address{}
 	}
 
+	// Cache the signer for GetValidators() lookups
+	if signer != (common.Address{}) {
+		p.signerCache[signer] = true
+		p.blockSigners[block.NumberU64()] = signer
+	}
+
 	// Build consensus data
 	consensusData := &chain.ConsensusData{
 		ConsensusType:     chain.ConsensusTypePoA,
@@ -84,13 +97,29 @@ func (p *Parser) ParseConsensusData(block *types.Block) (*chain.ConsensusData, e
 }
 
 // GetValidators returns the validator set at a specific block
-// For PoA, this would need to be configured or fetched from contract
-// Anvil typically runs with a single signer
+// For PoA, validators are typically configured at genesis.
+// This returns all known signers discovered from parsed blocks.
 func (p *Parser) GetValidators(ctx context.Context, blockNumber uint64) ([]common.Address, error) {
-	// In Anvil/Clique, validators are typically configured at genesis
-	// Without additional config, we can't determine the full validator set
-	// Return empty slice - callers should use per-block signer info instead
-	return []common.Address{}, nil
+	// Return all known signers from parsed blocks
+	// In PoA, the validator set is typically fixed at genesis,
+	// but we can infer it from blocks we've seen
+	validators := make([]common.Address, 0, len(p.signerCache))
+	for signer := range p.signerCache {
+		validators = append(validators, signer)
+	}
+	return validators, nil
+}
+
+// GetBlockSigner returns the signer for a specific block if known
+func (p *Parser) GetBlockSigner(blockNumber uint64) (common.Address, bool) {
+	signer, ok := p.blockSigners[blockNumber]
+	return signer, ok
+}
+
+// ClearCache clears the signer cache
+func (p *Parser) ClearCache() {
+	p.signerCache = make(map[common.Address]bool)
+	p.blockSigners = make(map[uint64]common.Address)
 }
 
 // IsEpochBoundary checks if the block is an epoch boundary
