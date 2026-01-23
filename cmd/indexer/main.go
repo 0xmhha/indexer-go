@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/0xmhha/indexer-go/adapters/detector"
+	"github.com/0xmhha/indexer-go/adapters/factory"
 	"github.com/0xmhha/indexer-go/api"
 	"github.com/0xmhha/indexer-go/client"
 	"github.com/0xmhha/indexer-go/events"
@@ -18,6 +20,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/logger"
 	"github.com/0xmhha/indexer-go/rpcproxy"
 	"github.com/0xmhha/indexer-go/storage"
+	"github.com/0xmhha/indexer-go/types/chain"
 	"go.uber.org/zap"
 )
 
@@ -30,17 +33,20 @@ var (
 
 // App encapsulates all application components and lifecycle
 type App struct {
-	config    *config.Config
-	logger    *zap.Logger
-	client    *client.Client
-	storage   storage.Storage
-	eventBus  *events.EventBus
-	fetcher   *fetch.Fetcher
-	apiServer *api.Server
-	rpcProxy  *rpcproxy.Proxy
+	config       *config.Config
+	logger       *zap.Logger
+	client       *client.Client
+	chainAdapter chain.Adapter
+	nodeInfo     *detector.NodeInfo
+	storage      storage.Storage
+	eventBus     *events.EventBus
+	fetcher      *fetch.Fetcher
+	apiServer    *api.Server
+	rpcProxy     *rpcproxy.Proxy
 
 	// Runtime flags
-	enableGapMode bool
+	enableGapMode   bool
+	forceAdapterType string
 }
 
 func main() {
@@ -87,7 +93,7 @@ func run() error {
 	}
 
 	// Create and initialize application
-	app, err := NewApp(cfg, log, flags.enableGapMode)
+	app, err := NewApp(cfg, log, flags.enableGapMode, flags.forceAdapterType)
 	if err != nil {
 		return fmt.Errorf("failed to create application: %w", err)
 	}
@@ -125,23 +131,24 @@ func run() error {
 
 // Flags holds all command-line flag values
 type Flags struct {
-	configFile      string
-	showVersion     bool
-	rpcEndpoint     string
-	dbPath          string
-	startHeight     uint64
-	workers         int
-	batchSize       int
-	logLevel        string
-	logFormat       string
-	enableGapMode   bool
-	clearData       bool
-	enableAPI       bool
-	apiHost         string
-	apiPort         int
-	enableGraphQL   bool
-	enableJSONRPC   bool
-	enableWebSocket bool
+	configFile       string
+	showVersion      bool
+	rpcEndpoint      string
+	dbPath           string
+	startHeight      uint64
+	workers          int
+	batchSize        int
+	logLevel         string
+	logFormat        string
+	enableGapMode    bool
+	clearData        bool
+	enableAPI        bool
+	apiHost          string
+	apiPort          int
+	enableGraphQL    bool
+	enableJSONRPC    bool
+	enableWebSocket  bool
+	forceAdapterType string // Force specific adapter type: anvil, stableone, evm
 }
 
 // parseFlags parses command-line flags
@@ -168,6 +175,9 @@ func parseFlags() *Flags {
 	flag.BoolVar(&f.enableJSONRPC, "jsonrpc", false, "Enable JSON-RPC API")
 	flag.BoolVar(&f.enableWebSocket, "websocket", false, "Enable WebSocket API")
 
+	// Chain adapter flags
+	flag.StringVar(&f.forceAdapterType, "adapter", "", "Force specific adapter type (anvil, stableone, evm). Auto-detected if empty")
+
 	flag.Parse()
 	return f
 }
@@ -193,6 +203,11 @@ func loadAndValidateConfig(flags *Flags) (*config.Config, error) {
 
 // logStartupInfo logs startup information
 func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
+	adapterInfo := "auto-detect"
+	if flags.forceAdapterType != "" {
+		adapterInfo = flags.forceAdapterType + " (forced)"
+	}
+
 	log.Info("Starting indexer",
 		zap.String("version", version),
 		zap.String("commit", commit),
@@ -204,15 +219,17 @@ func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
 		zap.Int("batch_size", cfg.Indexer.ChunkSize),
 		zap.Bool("gap_recovery", flags.enableGapMode),
 		zap.Bool("clear_data", flags.clearData),
+		zap.String("adapter", adapterInfo),
 	)
 }
 
 // NewApp creates and initializes a new application instance
-func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool) (*App, error) {
+func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapterType string) (*App, error) {
 	app := &App{
-		config:        cfg,
-		logger:        log,
-		enableGapMode: enableGapMode,
+		config:           cfg,
+		logger:           log,
+		enableGapMode:    enableGapMode,
+		forceAdapterType: forceAdapterType,
 	}
 
 	ctx := context.Background()
@@ -248,7 +265,7 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool) (*App, erro
 	return app, nil
 }
 
-// initClient initializes the Ethereum client
+// initClient initializes the Ethereum client and detects node type
 func (a *App) initClient() error {
 	ethClient, err := client.NewClient(&client.Config{
 		Endpoint: a.config.RPC.Endpoint,
@@ -261,6 +278,33 @@ func (a *App) initClient() error {
 
 	a.client = ethClient
 	a.logger.Info("Connected to Ethereum node", zap.String("endpoint", a.config.RPC.Endpoint))
+
+	// Create chain adapter using factory with auto-detection
+	ctx := context.Background()
+	factoryConfig := factory.DefaultConfig(a.config.RPC.Endpoint)
+	factoryConfig.ForceAdapterType = a.forceAdapterType
+
+	adapterFactory := factory.NewFactory(factoryConfig, a.logger)
+	result, err := adapterFactory.Create(ctx)
+	if err != nil {
+		a.logger.Warn("Failed to create chain adapter, using generic EVM behavior",
+			zap.Error(err),
+		)
+		// Continue without adapter - generic EVM behavior will be used
+		return nil
+	}
+
+	a.chainAdapter = result.Adapter
+	a.nodeInfo = result.NodeInfo
+
+	a.logger.Info("Chain adapter initialized",
+		zap.String("adapter_type", result.AdapterType),
+		zap.String("node_type", string(result.NodeInfo.Type)),
+		zap.Uint64("chain_id", result.NodeInfo.ChainID),
+		zap.Bool("is_local", result.NodeInfo.IsLocal),
+		zap.String("consensus_type", string(a.chainAdapter.Info().ConsensusType)),
+	)
+
 	return nil
 }
 
@@ -366,12 +410,22 @@ func (a *App) initFetcher() {
 		NumWorkers:  a.config.Indexer.Workers,
 	}
 
-	a.fetcher = fetch.NewFetcher(a.client, a.storage, fetcherConfig, a.logger, a.eventBus)
-
-	a.logger.Info("Fetcher initialized",
-		zap.Duration("retry_delay", retryDelay),
-		zap.Int("batch_size", a.config.Indexer.ChunkSize),
-	)
+	// Create fetcher with chain adapter if available
+	if a.chainAdapter != nil {
+		a.fetcher = fetch.NewFetcherWithAdapter(a.client, a.storage, fetcherConfig, a.logger, a.eventBus, a.chainAdapter)
+		a.logger.Info("Fetcher initialized with chain adapter",
+			zap.Duration("retry_delay", retryDelay),
+			zap.Int("batch_size", a.config.Indexer.ChunkSize),
+			zap.String("adapter_type", string(a.chainAdapter.Info().ChainType)),
+			zap.String("consensus_type", string(a.chainAdapter.Info().ConsensusType)),
+		)
+	} else {
+		a.fetcher = fetch.NewFetcher(a.client, a.storage, fetcherConfig, a.logger, a.eventBus)
+		a.logger.Info("Fetcher initialized (generic EVM mode)",
+			zap.Duration("retry_delay", retryDelay),
+			zap.Int("batch_size", a.config.Indexer.ChunkSize),
+		)
+	}
 }
 
 // initAPIServer initializes the API server
@@ -494,6 +548,13 @@ func (a *App) Shutdown() {
 	// Stop EventBus
 	if a.eventBus != nil {
 		a.eventBus.Stop()
+	}
+
+	// Close chain adapter
+	if a.chainAdapter != nil {
+		if err := a.chainAdapter.Close(); err != nil {
+			a.logger.Error("Failed to close chain adapter", zap.Error(err))
+		}
 	}
 
 	// Close storage
