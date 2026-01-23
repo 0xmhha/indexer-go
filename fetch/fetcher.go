@@ -276,8 +276,12 @@ func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uin
 			time.Sleep(backoffDelay)
 		}
 
-		// Fetch block
-		block, err = f.client.GetBlockByNumber(ctx, height)
+		// Fetch block - use chain adapter if available (for EIP-4844 compatibility)
+		if f.chainAdapter != nil {
+			block, err = f.chainAdapter.BlockFetcher().GetBlockByNumber(ctx, height)
+		} else {
+			block, err = f.client.GetBlockByNumber(ctx, height)
+		}
 		if err != nil {
 			hadError = true
 			f.logger.Error("Failed to fetch block",
@@ -292,8 +296,12 @@ func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uin
 			continue
 		}
 
-		// Fetch receipts
-		receipts, err = f.client.GetBlockReceipts(ctx, height)
+		// Fetch receipts - use chain adapter if available
+		if f.chainAdapter != nil {
+			receipts, err = f.chainAdapter.BlockFetcher().GetBlockReceipts(ctx, height)
+		} else {
+			receipts, err = f.client.GetBlockReceipts(ctx, height)
+		}
 		if err != nil {
 			hadError = true
 			f.logger.Error("Failed to fetch receipts",
@@ -760,8 +768,12 @@ func (f *Fetcher) fetchBlockJob(ctx context.Context, height uint64) *jobResult {
 		default:
 		}
 
-		// Fetch block
-		block, err = f.client.GetBlockByNumber(ctx, height)
+		// Fetch block - use chain adapter if available (for EIP-4844 compatibility)
+		if f.chainAdapter != nil {
+			block, err = f.chainAdapter.BlockFetcher().GetBlockByNumber(ctx, height)
+		} else {
+			block, err = f.client.GetBlockByNumber(ctx, height)
+		}
 		if err != nil {
 			f.logger.Error("Failed to fetch block",
 				zap.Uint64("height", height),
@@ -777,8 +789,12 @@ func (f *Fetcher) fetchBlockJob(ctx context.Context, height uint64) *jobResult {
 			continue
 		}
 
-		// Fetch receipts
-		receipts, err = f.client.GetBlockReceipts(ctx, height)
+		// Fetch receipts - use chain adapter if available
+		if f.chainAdapter != nil {
+			receipts, err = f.chainAdapter.BlockFetcher().GetBlockReceipts(ctx, height)
+		} else {
+			receipts, err = f.client.GetBlockReceipts(ctx, height)
+		}
 		if err != nil {
 			f.logger.Error("Failed to fetch receipts",
 				zap.Uint64("height", height),
@@ -1261,6 +1277,15 @@ func getTransactionSender(tx *types.Transaction) common.Address {
 
 // processWBFTMetadata parses and stores WBFT consensus metadata from block header
 func (f *Fetcher) processWBFTMetadata(ctx context.Context, block *types.Block) error {
+	// Check if chain adapter indicates non-WBFT consensus - skip silently
+	if f.chainAdapter != nil {
+		info := f.chainAdapter.Info()
+		if info != nil && info.ConsensusType != chain.ConsensusTypeWBFT {
+			// Not a WBFT chain, skip WBFT metadata processing
+			return nil
+		}
+	}
+
 	// Check if storage implements WBFTWriter
 	wbftWriter, ok := f.storage.(storagepkg.WBFTWriter)
 	if !ok {
