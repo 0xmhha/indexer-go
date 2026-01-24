@@ -10,17 +10,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/0xmhha/indexer-go/adapters/detector"
-	"github.com/0xmhha/indexer-go/adapters/factory"
-	"github.com/0xmhha/indexer-go/api"
-	"github.com/0xmhha/indexer-go/client"
-	"github.com/0xmhha/indexer-go/events"
-	"github.com/0xmhha/indexer-go/fetch"
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/logger"
-	"github.com/0xmhha/indexer-go/rpcproxy"
-	"github.com/0xmhha/indexer-go/storage"
-	"github.com/0xmhha/indexer-go/types/chain"
+	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
+	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
+	"github.com/0xmhha/indexer-go/pkg/api"
+	"github.com/0xmhha/indexer-go/pkg/client"
+	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/fetch"
+	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
+	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"go.uber.org/zap"
 )
 
@@ -45,7 +45,7 @@ type App struct {
 	rpcProxy     *rpcproxy.Proxy
 
 	// Runtime flags
-	enableGapMode   bool
+	enableGapMode    bool
 	forceAdapterType string
 }
 

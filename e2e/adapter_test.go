@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xmhha/indexer-go/adapters/detector"
-	"github.com/0xmhha/indexer-go/adapters/factory"
 	"github.com/0xmhha/indexer-go/e2e/anvil"
-	"github.com/0xmhha/indexer-go/types/chain"
+	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
+	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
+	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )

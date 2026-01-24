@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/0xmhha/indexer-go/adapters/factory"
+	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
