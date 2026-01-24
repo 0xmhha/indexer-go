@@ -230,9 +230,10 @@ func parseRawBlock(raw json.RawMessage) (*types.Block, error) {
 		txs[i] = tx.tx
 	}
 
-	// Create block with transactions
+	// Create block with transactions and withdrawals
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{
 		Transactions: txs,
+		Withdrawals:  body.Withdrawals,
 	})
 
 	return block, nil
