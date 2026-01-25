@@ -24,10 +24,13 @@ go.work.sum
 build/
 bin/
 dist/
+indexer
 
 # Development data directories
 data/
 dev-data/
+data-anvil/
+data-sepolia/
 *.db
 *.pebble/
 

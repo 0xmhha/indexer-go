@@ -1,0 +1,51 @@
+# Ethereum Sepolia Testnet Configuration
+# =======================================
+# Use this config to connect to Ethereum Sepolia testnet.
+#
+# Public RPC endpoints (no API key required):
+#   - https://ethereum-sepolia-rpc.publicnode.com
+#   - https://rpc.sepolia.org
+#   - https://sepolia.drpc.org
+#
+# For better performance, use your own RPC endpoint:
+#   - Infura: https://sepolia.infura.io/v3/YOUR_API_KEY
+#   - Alchemy: https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
+#
+# Usage:
+#   go run ./cmd/indexer --config configs/config-sepolia.yaml
+#
+# Verified compatibility:
+#   - Geth v1.16.7+ (PoS consensus)
+#   - Chain ID: 11155111
+
+rpc:
+  endpoint: "https://ethereum-sepolia-rpc.publicnode.com"
+  timeout: 30s
+
+database:
+  path: "./data-sepolia"
+  readonly: false
+
+log:
+  level: "debug"
+  format: "console"
+
+indexer:
+  workers: 5
+  chunk_size: 5
+  # Adjust start_height to a recent block for faster initial sync
+  # Check current block: curl -s -X POST -H "Content-Type: application/json" \
+  #   --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+  #   https://ethereum-sepolia-rpc.publicnode.com | jq -r '.result'
+  start_height: 0
+
+api:
+  enabled: true
+  host: "localhost"
+  port: 8081
+  enable_graphql: true
+  enable_jsonrpc: true
+  enable_websocket: true
+  enable_cors: true
+  allowed_origins:
+    - "*"

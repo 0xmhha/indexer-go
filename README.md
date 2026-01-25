@@ -145,7 +145,53 @@ ws.onmessage = (event) => {
 };
 ```
 
-### 6. Subscribe to Real-Time Events
+### 6. Testing with Different Networks
+
+The indexer supports multiple EVM-compatible networks through auto-detection. Pre-configured configs are available in the `configs/` directory.
+
+#### Anvil (Local Development)
+
+[Anvil](https://book.getfoundry.sh/anvil/) is a local Ethereum node for development and testing.
+
+```bash
+# Terminal 1: Start Anvil with 2-second block time
+anvil --block-time 2
+
+# Terminal 2: Start indexer with Anvil config
+go run ./cmd/indexer --config configs/config-anvil.yaml
+
+# Optional: Send a test transaction
+cast send --from 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
+  --value 1ether \
+  --rpc-url http://127.0.0.1:8545
+```
+
+#### Ethereum Sepolia Testnet
+
+Connect to Ethereum Sepolia testnet using public RPC endpoints.
+
+```bash
+# Start indexer with Sepolia config
+go run ./cmd/indexer --config configs/config-sepolia.yaml
+
+# Check current Sepolia block height
+curl -s -X POST -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+  https://ethereum-sepolia-rpc.publicnode.com | jq -r '.result'
+```
+
+#### Supported Networks
+
+| Network | Adapter | Chain ID | Config |
+|---------|---------|----------|--------|
+| Anvil (local) | anvil | 31337 | `configs/config-anvil.yaml` |
+| Ethereum Sepolia | evm (geth) | 11155111 | `configs/config-sepolia.yaml` |
+| Stable-One | stableone | custom | `config.yaml` |
+| Any EVM chain | auto-detect | any | custom config |
+
+### 7. Subscribe to Real-Time Events
 
 ```go
 package main
@@ -204,7 +250,7 @@ func main() {
 }
 ```
 
-### 7. Monitor with Prometheus
+### 8. Monitor with Prometheus
 
 ```bash
 # Check system health with EventBus statistics
