@@ -102,3 +102,6 @@ release/
 *.tar.gz
 *.zip
 .claude/
+
+# Serena MCP cache
+.serena/
