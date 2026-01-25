@@ -2,7 +2,7 @@
 
 > High-performance blockchain indexer for Stable-One (Ethereum-based) chain
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **indexer-go** is a high-performance indexer that indexes Stable-One blockchain blocks and transaction data in real-time, enabling efficient querying through GraphQL and JSON-RPC APIs.
@@ -46,14 +46,14 @@ Stable-One Node (RPC)
 
 ### Prerequisites
 
-- Go 1.21 or higher
+- Go 1.24 or higher
 - Access to Stable-One RPC endpoint
 
 ### Build from source
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/indexer-go.git
+git clone https://github.com/0xmhha/indexer-go.git
 cd indexer-go
 
 # Install dependencies
@@ -300,9 +300,13 @@ Logging Flags:
   --log-level string        Log level: debug, info, warn, error (default: "info")
   --log-format string       Log format: json, console (default: "json")
 
+Chain Adapter Flags:
+  --adapter string          Force specific adapter type (anvil, stableone, evm). Auto-detected if empty
+
 Other Flags:
   --config string           Path to configuration file (YAML) (default: "config.yaml")
   --version                 Show version information and exit
+  --clear-data              Clear (delete) the data folder before starting
 ```
 
 ### Environment variables (Optional)
@@ -582,8 +586,6 @@ go run ./cmd start \
 | Memory allocations | Minimal | **Zero** |
 | Subscriber delivery | <100µs | **8.5 ns/op** |
 
-See [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) for detailed performance analysis.
-
 ### Optimization tips
 
 - **Worker pool size**: Adjust `--max-slots` based on RPC node capacity
@@ -620,14 +622,11 @@ make bench
 
 ### Core Documentation
 - 📄 [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and internals
-- 📄 [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) - Detailed implementation plan
 - 📄 [STABLE_ONE_TECHNICAL_ANALYSIS.md](docs/STABLE_ONE_TECHNICAL_ANALYSIS.md) - Stable-One chain analysis
-- 📄 [API_REFERENCE.md](docs/API_REFERENCE.md) - Complete API reference (TBD)
 
 ### Event Subscription System
 - 📄 [EVENT_SUBSCRIPTION_API.md](docs/EVENT_SUBSCRIPTION_API.md) - Complete Event Subscription API reference
 - 📄 [METRICS_MONITORING.md](docs/METRICS_MONITORING.md) - Prometheus metrics and monitoring guide
-- 📄 [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) - Performance benchmarks and analysis
 
 ### Production Deployment
 - 📄 [OPERATIONS_GUIDE.md](docs/OPERATIONS_GUIDE.md) - Production deployment and operations guide
@@ -754,7 +753,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 🐛 Issues: [GitHub Issues](https://github.com/your-org/indexer-go/issues)
+- 🐛 Issues: [GitHub Issues](https://github.com/0xmhha/indexer-go/issues)
 
 ---
 
