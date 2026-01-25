@@ -140,6 +140,27 @@ func (m *mockStorage) Close() error {
 	return nil
 }
 
+// KVStore interface methods
+func (m *mockStorage) Put(ctx context.Context, key, value []byte) error {
+	return nil
+}
+
+func (m *mockStorage) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) Delete(ctx context.Context, key []byte) error {
+	return nil
+}
+
+func (m *mockStorage) Iterate(ctx context.Context, prefix []byte, fn func(key, value []byte) bool) error {
+	return nil
+}
+
+func (m *mockStorage) Has(ctx context.Context, key []byte) (bool, error) {
+	return false, nil
+}
+
 func (m *mockStorage) NewBatch() storage.Batch {
 	return nil
 }
@@ -1468,6 +1489,27 @@ func (m *mockStorageWithErrors) GetFeePayerStats(ctx context.Context, feePayer c
 	return nil, storage.ErrNotFound
 }
 
+// KVStore interface methods for mockStorageWithErrors
+func (m *mockStorageWithErrors) Put(ctx context.Context, key, value []byte) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) Delete(ctx context.Context, key []byte) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) Iterate(ctx context.Context, prefix []byte, fn func(key, value []byte) bool) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) Has(ctx context.Context, key []byte) (bool, error) {
+	return false, storage.ErrNotFound
+}
+
 // mockStorageWithNonNotFoundErrors returns non-ErrNotFound errors to test logging paths
 type mockStorageWithNonNotFoundErrors struct {
 }
@@ -1865,6 +1907,27 @@ func (m *mockStorageWithNonNotFoundErrors) GetTopFeePayers(ctx context.Context, 
 
 func (m *mockStorageWithNonNotFoundErrors) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
 	return nil, fmt.Errorf("database connection failed")
+}
+
+// KVStore interface methods for mockStorageWithNonNotFoundErrors
+func (m *mockStorageWithNonNotFoundErrors) Put(ctx context.Context, key, value []byte) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) Delete(ctx context.Context, key []byte) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) Iterate(ctx context.Context, prefix []byte, fn func(key, value []byte) bool) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) Has(ctx context.Context, key []byte) (bool, error) {
+	return false, fmt.Errorf("database connection failed")
 }
 
 func TestJSONRPCServerEdgeCases(t *testing.T) {
