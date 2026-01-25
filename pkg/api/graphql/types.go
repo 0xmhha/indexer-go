@@ -608,6 +608,12 @@ func initTypes() {
 
 	// Initialize miscellaneous types
 	initMiscTypes()
+
+	// Initialize multi-chain types
+	initMultiChainTypes()
+
+	// Initialize watchlist types
+	initWatchlistTypes()
 }
 
 // initInputTypes initializes GraphQL input types for filtering and pagination

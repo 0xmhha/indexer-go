@@ -836,3 +836,165 @@ func VerifiedContractIndexKey(verifiedAt int64, address common.Address) []byte {
 func VerifiedContractIndexKeyPrefix() []byte {
 	return []byte(prefixIdxVerifiedContracts)
 }
+
+// ========== Chain-Scoped Key Functions ==========
+// These functions create keys with chain-specific prefixes for multi-chain support.
+// Format: /chain/{chainID}/...
+
+const (
+	prefixChain = "/chain/"
+)
+
+// ChainPrefix returns the prefix for all data belonging to a specific chain
+// Format: /chain/{chainID}/
+func ChainPrefix(chainID string) string {
+	return fmt.Sprintf("%s%s", prefixChain, chainID)
+}
+
+// ChainKeyPrefix returns the full prefix for chain-scoped keys
+// Format: /chain/{chainID}/
+func ChainKeyPrefix(chainID string) []byte {
+	return []byte(ChainPrefix(chainID) + "/")
+}
+
+// ChainLatestHeightKey returns the chain-scoped key for latest indexed height
+// Format: /chain/{chainID}/meta/lh
+func ChainLatestHeightKey(chainID string) []byte {
+	return []byte(fmt.Sprintf("%s%s/meta/lh", prefixChain, chainID))
+}
+
+// ChainBlockKey returns the chain-scoped key for storing a block
+// Format: /chain/{chainID}/data/blocks/{height}
+func ChainBlockKey(chainID string, height uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/data/blocks/%d", prefixChain, chainID, height))
+}
+
+// ChainTransactionKey returns the chain-scoped key for storing a transaction
+// Format: /chain/{chainID}/data/txs/{height}/{index}
+func ChainTransactionKey(chainID string, height uint64, txIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/data/txs/%d/%d", prefixChain, chainID, height, txIndex))
+}
+
+// ChainReceiptKey returns the chain-scoped key for storing a receipt
+// Format: /chain/{chainID}/data/receipts/{txHash}
+func ChainReceiptKey(chainID string, txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/data/receipts/%s", prefixChain, chainID, txHash.Hex()))
+}
+
+// ChainLogKey returns the chain-scoped key for storing a log
+// Format: /chain/{chainID}/data/logs/{blockNumber}/{txIndex}/{logIndex}
+func ChainLogKey(chainID string, blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/data/logs/%020d/%06d/%06d", prefixChain, chainID, blockNumber, txIndex, logIndex))
+}
+
+// ChainTxHashIndexKey returns the chain-scoped key for tx hash index
+// Format: /chain/{chainID}/index/txh/{txHash}
+func ChainTxHashIndexKey(chainID string, txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/index/txh/%s", prefixChain, chainID, txHash.Hex()))
+}
+
+// ChainBlockHashIndexKey returns the chain-scoped key for block hash index
+// Format: /chain/{chainID}/index/blockh/{blockHash}
+func ChainBlockHashIndexKey(chainID string, blockHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/index/blockh/%s", prefixChain, chainID, blockHash.Hex()))
+}
+
+// ChainAddressTransactionKey returns the chain-scoped key for address tx index
+// Format: /chain/{chainID}/index/addr/{address}/{seq}
+func ChainAddressTransactionKey(chainID string, addr common.Address, seq uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/index/addr/%s/%020d", prefixChain, chainID, addr.Hex(), seq))
+}
+
+// ChainBlockCountKey returns the chain-scoped key for block count
+// Format: /chain/{chainID}/meta/bc
+func ChainBlockCountKey(chainID string) []byte {
+	return []byte(fmt.Sprintf("%s%s/meta/bc", prefixChain, chainID))
+}
+
+// ChainTransactionCountKey returns the chain-scoped key for transaction count
+// Format: /chain/{chainID}/meta/tc
+func ChainTransactionCountKey(chainID string) []byte {
+	return []byte(fmt.Sprintf("%s%s/meta/tc", prefixChain, chainID))
+}
+
+// ChainBlockKeyPrefix returns the prefix for chain-scoped blocks
+// Format: /chain/{chainID}/data/blocks/
+func ChainBlockKeyPrefix(chainID string) []byte {
+	return []byte(fmt.Sprintf("%s%s/data/blocks/", prefixChain, chainID))
+}
+
+// ChainLogKeyPrefix returns the prefix for chain-scoped logs
+// Format: /chain/{chainID}/data/logs/
+func ChainLogKeyPrefix(chainID string) []byte {
+	return []byte(fmt.Sprintf("%s%s/data/logs/", prefixChain, chainID))
+}
+
+// ChainAddressIndexKeyPrefix returns the prefix for chain-scoped address index
+// Format: /chain/{chainID}/index/addr/{address}/
+func ChainAddressIndexKeyPrefix(chainID string, addr common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/index/addr/%s/", prefixChain, chainID, addr.Hex()))
+}
+
+// ChainLogAddressIndexKey returns the chain-scoped key for log address index
+// Format: /chain/{chainID}/index/logs/addr/{address}/{blockNumber}/{txIndex}/{logIndex}
+func ChainLogAddressIndexKey(chainID string, address common.Address, blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/index/logs/addr/%s/%020d/%06d/%06d", prefixChain, chainID, address.Hex(), blockNumber, txIndex, logIndex))
+}
+
+// ChainLogAddressIndexKeyPrefix returns the prefix for chain-scoped log address index
+// Format: /chain/{chainID}/index/logs/addr/{address}/
+func ChainLogAddressIndexKeyPrefix(chainID string, address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/index/logs/addr/%s/", prefixChain, chainID, address.Hex()))
+}
+
+// ChainLogTopic0IndexKey returns the chain-scoped key for log topic0 index
+// Format: /chain/{chainID}/index/logs/topic0/{topic}/{blockNumber}/{txIndex}/{logIndex}
+func ChainLogTopic0IndexKey(chainID string, topic common.Hash, blockNumber uint64, txIndex uint, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/index/logs/topic0/%s/%020d/%06d/%06d", prefixChain, chainID, topic.Hex(), blockNumber, txIndex, logIndex))
+}
+
+// ChainLogTopic0IndexKeyPrefix returns the prefix for chain-scoped log topic0 index
+// Format: /chain/{chainID}/index/logs/topic0/{topic}/
+func ChainLogTopic0IndexKeyPrefix(chainID string, topic common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/index/logs/topic0/%s/", prefixChain, chainID, topic.Hex()))
+}
+
+// ChainERC20TransferKey returns the chain-scoped key for ERC20 transfer
+// Format: /chain/{chainID}/data/erc20/transfer/{txHash}/{logIndex}
+func ChainERC20TransferKey(chainID string, txHash common.Hash, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/data/erc20/transfer/%s/%06d", prefixChain, chainID, txHash.Hex(), logIndex))
+}
+
+// ChainERC721TransferKey returns the chain-scoped key for ERC721 transfer
+// Format: /chain/{chainID}/data/erc721/transfer/{txHash}/{logIndex}
+func ChainERC721TransferKey(chainID string, txHash common.Hash, logIndex uint) []byte {
+	return []byte(fmt.Sprintf("%s%s/data/erc721/transfer/%s/%06d", prefixChain, chainID, txHash.Hex(), logIndex))
+}
+
+// ParseChainKey extracts chainID from a chain-scoped key
+// Returns chainID and the remaining key parts, or error if not a chain key
+func ParseChainKey(key []byte) (string, string, error) {
+	keyStr := string(key)
+	if !strings.HasPrefix(keyStr, prefixChain) {
+		return "", "", fmt.Errorf("not a chain-scoped key: %s", keyStr)
+	}
+
+	// Remove /chain/ prefix
+	remaining := strings.TrimPrefix(keyStr, prefixChain)
+
+	// Find the next / to get chainID
+	idx := strings.Index(remaining, "/")
+	if idx < 0 {
+		return "", "", fmt.Errorf("invalid chain key format: %s", keyStr)
+	}
+
+	chainID := remaining[:idx]
+	rest := remaining[idx:]
+
+	return chainID, rest, nil
+}
+
+// IsChainKey checks if a key is chain-scoped
+func IsChainKey(key []byte) bool {
+	return HasPrefix(key, []byte(prefixChain))
+}

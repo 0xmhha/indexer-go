@@ -13,6 +13,219 @@ scalar Address
 # Hash represents a 32-byte hash (0x...)
 scalar Hash
 
+# DateTime represents a timestamp in RFC3339 format
+scalar DateTime
+
+# JSON represents arbitrary JSON data
+scalar JSON
+
+# ========== Multi-Chain Types ==========
+
+# ChainStatus represents the status of a chain instance
+enum ChainStatus {
+  REGISTERED
+  STARTING
+  SYNCING
+  ACTIVE
+  STOPPING
+  STOPPED
+  ERROR
+}
+
+# Chain represents a blockchain instance managed by the indexer
+type Chain {
+  # Unique chain identifier
+  id: ID!
+
+  # Human-readable chain name
+  name: String!
+
+  # Chain ID (EVM chain ID)
+  chainId: BigInt!
+
+  # RPC endpoint URL
+  rpcEndpoint: String!
+
+  # WebSocket endpoint URL (optional)
+  wsEndpoint: String
+
+  # Adapter type (auto, evm, stableone, anvil)
+  adapterType: String!
+
+  # Current chain status
+  status: ChainStatus!
+
+  # Sync progress information
+  syncProgress: SyncProgress
+
+  # Health check status
+  health: HealthStatus
+
+  # Whether the chain is enabled
+  enabled: Boolean!
+
+  # Latest indexed block height
+  latestHeight: BigInt
+
+  # Start block height for indexing
+  startHeight: BigInt!
+
+  # Registration timestamp
+  registeredAt: DateTime!
+}
+
+# SyncProgress represents the synchronization progress of a chain
+type SyncProgress {
+  # Current indexed block height
+  currentBlock: BigInt!
+
+  # Target block height (latest on chain)
+  targetBlock: BigInt!
+
+  # Sync progress percentage (0-100)
+  percentage: Float!
+
+  # Estimated time to sync completion in seconds
+  estimatedTimeRemaining: BigInt
+
+  # Blocks per second sync rate
+  blocksPerSecond: Float!
+
+  # Whether the chain is fully synced
+  isSynced: Boolean!
+}
+
+# HealthStatus represents the health of a chain connection
+type HealthStatus {
+  # Whether the chain is healthy
+  isHealthy: Boolean!
+
+  # Last successful heartbeat timestamp
+  lastHeartbeat: DateTime
+
+  # Current latency to RPC endpoint in milliseconds
+  latencyMs: BigInt
+
+  # Number of consecutive failures
+  consecutiveFailures: Int!
+
+  # Last error message (if any)
+  lastError: String
+
+  # Connection uptime percentage
+  uptimePercentage: Float!
+}
+
+# ========== Address Watchlist Types ==========
+
+# WatchEventType represents the type of watch event
+enum WatchEventType {
+  TX_FROM
+  TX_TO
+  ERC20_TRANSFER
+  ERC721_TRANSFER
+  LOG
+}
+
+# WatchedAddress represents an address being monitored
+type WatchedAddress {
+  # Unique watchlist entry ID
+  id: ID!
+
+  # Monitored address
+  address: Address!
+
+  # Chain ID this address is monitored on
+  chainId: String!
+
+  # User-provided label
+  label: String
+
+  # Event filter configuration
+  filter: WatchFilter!
+
+  # Creation timestamp
+  createdAt: DateTime!
+
+  # Statistics about this watched address
+  stats: WatchStats
+
+  # Recent events for this address
+  recentEvents(limit: Int): [WatchEvent!]!
+}
+
+# WatchFilter defines which events to monitor for an address
+type WatchFilter {
+  # Monitor transactions where address is sender
+  txFrom: Boolean!
+
+  # Monitor transactions where address is recipient
+  txTo: Boolean!
+
+  # Monitor ERC20 Transfer events
+  erc20: Boolean!
+
+  # Monitor ERC721 Transfer events
+  erc721: Boolean!
+
+  # Monitor all logs emitted by address
+  logs: Boolean!
+
+  # Minimum transaction value filter (in wei)
+  minValue: BigInt
+}
+
+# WatchStats provides statistics about a watched address
+type WatchStats {
+  # Total number of events captured
+  totalEvents: BigInt!
+
+  # Number of events in last 24 hours
+  eventsLast24h: BigInt!
+
+  # Last event timestamp
+  lastEventAt: DateTime
+}
+
+# WatchEvent represents an event captured for a watched address
+type WatchEvent {
+  # Unique event ID
+  id: ID!
+
+  # Watched address ID this event belongs to
+  addressId: String!
+
+  # Chain ID where event occurred
+  chainId: String!
+
+  # Type of event
+  eventType: WatchEventType!
+
+  # Block number
+  blockNumber: BigInt!
+
+  # Transaction hash
+  txHash: Hash!
+
+  # Log index (for log events)
+  logIndex: Int
+
+  # Event data (JSON encoded)
+  data: JSON!
+
+  # Event timestamp
+  timestamp: DateTime!
+}
+
+# BlockWithChain represents a block with its chain context
+type BlockWithChain {
+  # Chain ID
+  chainId: String!
+
+  # Block data
+  block: Block!
+}
+
 # Block represents an Ethereum block
 type Block {
   # Block number (height)
@@ -241,6 +454,67 @@ type BalanceSnapshot {
   transactionHash: Hash
 }
 
+# ========== Multi-Chain Input Types ==========
+
+# Input for registering a new chain
+input RegisterChainInput {
+  # Human-readable chain name
+  name: String!
+
+  # RPC endpoint URL
+  rpcEndpoint: String!
+
+  # WebSocket endpoint URL (optional)
+  wsEndpoint: String
+
+  # Chain ID (EVM chain ID)
+  chainId: BigInt!
+
+  # Adapter type (auto, evm, stableone, anvil)
+  adapterType: String
+
+  # Start block height for indexing
+  startHeight: BigInt
+}
+
+# ========== Watchlist Input Types ==========
+
+# Input for watching an address
+input WatchAddressInput {
+  # Address to monitor
+  address: Address!
+
+  # Chain ID to monitor on
+  chainId: String!
+
+  # User-provided label
+  label: String
+
+  # Event filter configuration
+  filter: WatchFilterInput!
+}
+
+# Input for watch filter configuration
+input WatchFilterInput {
+  # Monitor transactions where address is sender
+  txFrom: Boolean!
+
+  # Monitor transactions where address is recipient
+  txTo: Boolean!
+
+  # Monitor ERC20 Transfer events
+  erc20: Boolean!
+
+  # Monitor ERC721 Transfer events
+  erc721: Boolean!
+
+  # Monitor all logs emitted by address
+  logs: Boolean!
+
+  # Minimum transaction value filter (in wei)
+  minValue: BigInt
+}
+
 # Filter input for querying blocks
 input BlockFilter {
   # Filter by number range
@@ -315,6 +589,25 @@ input PaginationInput {
 # Subscription root type for real-time updates
 # All subscriptions support optional replayLast parameter to receive recent historical events
 type Subscription {
+  # ========== Multi-Chain Subscriptions ==========
+
+  # Subscribe to chain status updates
+  chainStatus(chainId: ID!): Chain!
+
+  # Subscribe to new blocks from multiple chains
+  # chainIds: Filter by specific chain IDs (receives all if not specified)
+  newBlockMultiChain(chainIds: [String!]): BlockWithChain!
+
+  # ========== Watchlist Subscriptions ==========
+
+  # Subscribe to events for a specific watched address
+  watchedAddressEvents(addressId: ID!): WatchEvent!
+
+  # Subscribe to all watch events for a chain
+  watchedAddressEventsByChain(chainId: String!): WatchEvent!
+
+  # ========== Existing Subscriptions ==========
+
   # Subscribe to new blocks as they are indexed
   # replayLast: Number of recent blocks to replay immediately upon subscription (max 100)
   newBlock(replayLast: Int): Block!
@@ -522,6 +815,36 @@ type SystemContractEventMessage {
 
 # Query root type
 type Query {
+  # ========== Multi-Chain Queries ==========
+
+  # Get all registered chains
+  chains: [Chain!]!
+
+  # Get a chain by ID
+  chain(id: ID!): Chain
+
+  # Get chain health status
+  chainHealth(id: ID!): HealthStatus
+
+  # ========== Watchlist Queries ==========
+
+  # Get all watched addresses with optional filtering
+  watchedAddresses(chainId: String, limit: Int, offset: Int): [WatchedAddress!]!
+
+  # Get a watched address by ID
+  watchedAddress(id: ID!): WatchedAddress
+
+  # Get recent watch events with optional filtering
+  watchEvents(
+    addressId: ID
+    chainId: String
+    eventType: WatchEventType
+    limit: Int
+    offset: Int
+  ): [WatchEvent!]!
+
+  # ========== Existing Queries ==========
+
   # Get the latest indexed block height
   latestHeight: BigInt!
 
@@ -945,6 +1268,46 @@ type PageInfo {
 type BalanceHistoryConnection {
   # List of balance snapshots
   nodes: [BalanceSnapshot!]!
+
+  # Total count
+  totalCount: Int!
+
+  # Page info
+  pageInfo: PageInfo!
+}
+
+# ========== Multi-Chain Connection Types ==========
+
+# Chain connection for pagination
+type ChainConnection {
+  # List of chains
+  nodes: [Chain!]!
+
+  # Total count
+  totalCount: Int!
+
+  # Page info
+  pageInfo: PageInfo!
+}
+
+# ========== Watchlist Connection Types ==========
+
+# Watched address connection for pagination
+type WatchedAddressConnection {
+  # List of watched addresses
+  nodes: [WatchedAddress!]!
+
+  # Total count
+  totalCount: Int!
+
+  # Page info
+  pageInfo: PageInfo!
+}
+
+# Watch event connection for pagination
+type WatchEventConnection {
+  # List of watch events
+  nodes: [WatchEvent!]!
 
   # Total count
   totalCount: Int!
@@ -2138,6 +2501,33 @@ type TopFeePayersResult {
 
 # Mutation type for write operations
 type Mutation {
+  # ========== Multi-Chain Mutations ==========
+
+  # Register a new chain for indexing
+  registerChain(input: RegisterChainInput!): Chain!
+
+  # Start indexing a registered chain
+  startChain(id: ID!): Chain!
+
+  # Stop indexing a chain
+  stopChain(id: ID!): Chain!
+
+  # Unregister a chain (must be stopped first)
+  unregisterChain(id: ID!): Boolean!
+
+  # ========== Watchlist Mutations ==========
+
+  # Watch an address for events
+  watchAddress(input: WatchAddressInput!): WatchedAddress!
+
+  # Stop watching an address
+  unwatchAddress(id: ID!): Boolean!
+
+  # Update watch filter for an address
+  updateWatchFilter(id: ID!, filter: WatchFilterInput!): WatchedAddress!
+
+  # ========== Existing Mutations ==========
+
   # Verify a contract's source code
   verifyContract(
     address: Address!

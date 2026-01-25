@@ -19,6 +19,9 @@ type Config struct {
 	Indexer         IndexerConfig         `yaml:"indexer"`
 	API             APIConfig             `yaml:"api"`
 	SystemContracts SystemContractsConfig `yaml:"system_contracts"`
+	MultiChain      MultiChainConfig      `yaml:"multichain"`
+	Watchlist       WatchlistConfig       `yaml:"watchlist"`
+	Resilience      ResilienceConfig      `yaml:"resilience"`
 }
 
 // RPCConfig holds RPC client configuration
@@ -70,6 +73,110 @@ type APIConfig struct {
 	AllowedOrigins           []string `yaml:"allowed_origins"`
 }
 
+// MultiChainConfig holds configuration for multi-chain support
+type MultiChainConfig struct {
+	// Enabled indicates whether multi-chain mode is active
+	Enabled bool `yaml:"enabled"`
+	// Chains is the list of chain configurations
+	Chains []ChainConfig `yaml:"chains"`
+	// HealthCheckInterval is how often to check chain health
+	HealthCheckInterval time.Duration `yaml:"health_check_interval"`
+	// MaxUnhealthyDuration is how long a chain can be unhealthy before stopping
+	MaxUnhealthyDuration time.Duration `yaml:"max_unhealthy_duration"`
+	// AutoRestart indicates whether to automatically restart failed chains
+	AutoRestart bool `yaml:"auto_restart"`
+	// AutoRestartDelay is the delay before auto-restarting a failed chain
+	AutoRestartDelay time.Duration `yaml:"auto_restart_delay"`
+}
+
+// ChainConfig defines the configuration for a single blockchain connection
+type ChainConfig struct {
+	// ID is a unique identifier for this chain instance
+	ID string `yaml:"id"`
+	// Name is a human-readable name for the chain
+	Name string `yaml:"name"`
+	// RPCEndpoint is the HTTP(S) JSON-RPC endpoint URL
+	RPCEndpoint string `yaml:"rpc_endpoint"`
+	// WSEndpoint is the optional WebSocket endpoint URL
+	WSEndpoint string `yaml:"ws_endpoint,omitempty"`
+	// ChainID is the numeric chain ID
+	ChainID uint64 `yaml:"chain_id"`
+	// AdapterType specifies which adapter to use: "auto", "evm", "stableone", "anvil"
+	AdapterType string `yaml:"adapter_type"`
+	// StartHeight is the block height to start indexing from
+	StartHeight uint64 `yaml:"start_height"`
+	// Enabled indicates whether this chain should be active
+	Enabled bool `yaml:"enabled"`
+	// Workers is the number of concurrent fetch workers
+	Workers int `yaml:"workers,omitempty"`
+	// BatchSize is the number of blocks to fetch per batch
+	BatchSize int `yaml:"batch_size,omitempty"`
+	// RPCTimeout is the timeout for RPC calls
+	RPCTimeout time.Duration `yaml:"rpc_timeout,omitempty"`
+}
+
+// WatchlistConfig holds configuration for the address watchlist service
+type WatchlistConfig struct {
+	// Enabled indicates whether the watchlist service is active
+	Enabled bool `yaml:"enabled"`
+	// BloomFilter holds bloom filter configuration
+	BloomFilter BloomFilterConfig `yaml:"bloom_filter"`
+	// History holds event history configuration
+	History HistoryConfig `yaml:"history"`
+}
+
+// BloomFilterConfig holds bloom filter optimization settings
+type BloomFilterConfig struct {
+	// ExpectedItems is the expected number of addresses to monitor
+	ExpectedItems int `yaml:"expected_items"`
+	// FalsePositiveRate is the target false positive rate
+	FalsePositiveRate float64 `yaml:"false_positive_rate"`
+}
+
+// HistoryConfig holds event history retention settings
+type HistoryConfig struct {
+	// RetentionPeriod is how long to keep historical events
+	RetentionPeriod time.Duration `yaml:"retention"`
+}
+
+// ResilienceConfig holds WebSocket resilience configuration
+type ResilienceConfig struct {
+	// Enabled indicates whether WebSocket resilience is active
+	Enabled bool `yaml:"enabled"`
+	// Session holds session management configuration
+	Session SessionConfig `yaml:"session"`
+	// EventCache holds event cache configuration
+	EventCache EventCacheConfig `yaml:"event_cache"`
+}
+
+// SessionConfig holds session management settings
+type SessionConfig struct {
+	// TTL is the session time-to-live
+	TTL time.Duration `yaml:"ttl"`
+	// CleanupPeriod is how often to clean up expired sessions
+	CleanupPeriod time.Duration `yaml:"cleanup_period"`
+}
+
+// EventCacheConfig holds event cache settings
+type EventCacheConfig struct {
+	// Window is the time window for event caching (for replay)
+	Window time.Duration `yaml:"window"`
+	// Backend is the cache storage backend: "pebble" or "redis"
+	Backend string `yaml:"backend"`
+	// Redis holds Redis-specific configuration (if backend is "redis")
+	Redis *RedisConfig `yaml:"redis,omitempty"`
+}
+
+// RedisConfig holds Redis connection settings
+type RedisConfig struct {
+	// Addr is the Redis server address
+	Addr string `yaml:"addr"`
+	// Password is the optional Redis password
+	Password string `yaml:"password,omitempty"`
+	// DB is the Redis database number
+	DB int `yaml:"db"`
+}
+
 // NewConfig creates a new Config with default values
 func NewConfig() *Config {
 	cfg := &Config{}
@@ -109,6 +216,42 @@ func (c *Config) SetDefaults() {
 	}
 	if c.API.AllowedOrigins == nil {
 		c.API.AllowedOrigins = []string{"*"}
+	}
+
+	// MultiChain defaults
+	if c.MultiChain.HealthCheckInterval == 0 {
+		c.MultiChain.HealthCheckInterval = 30 * time.Second
+	}
+	if c.MultiChain.MaxUnhealthyDuration == 0 {
+		c.MultiChain.MaxUnhealthyDuration = 5 * time.Minute
+	}
+	if c.MultiChain.AutoRestartDelay == 0 {
+		c.MultiChain.AutoRestartDelay = 30 * time.Second
+	}
+
+	// Watchlist defaults
+	if c.Watchlist.BloomFilter.ExpectedItems == 0 {
+		c.Watchlist.BloomFilter.ExpectedItems = 100000
+	}
+	if c.Watchlist.BloomFilter.FalsePositiveRate == 0 {
+		c.Watchlist.BloomFilter.FalsePositiveRate = 0.0001
+	}
+	if c.Watchlist.History.RetentionPeriod == 0 {
+		c.Watchlist.History.RetentionPeriod = 720 * time.Hour // 30 days
+	}
+
+	// Resilience defaults
+	if c.Resilience.Session.TTL == 0 {
+		c.Resilience.Session.TTL = 24 * time.Hour
+	}
+	if c.Resilience.Session.CleanupPeriod == 0 {
+		c.Resilience.Session.CleanupPeriod = time.Hour
+	}
+	if c.Resilience.EventCache.Window == 0 {
+		c.Resilience.EventCache.Window = time.Hour
+	}
+	if c.Resilience.EventCache.Backend == "" {
+		c.Resilience.EventCache.Backend = "pebble"
 	}
 }
 

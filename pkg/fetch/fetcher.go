@@ -40,6 +40,12 @@ type Subscription interface {
 	Unsubscribe()
 }
 
+// BlockProcessor defines an interface for processing blocks after indexing
+// This is used by external modules like watchlist to hook into block processing
+type BlockProcessor interface {
+	ProcessBlock(ctx context.Context, chainID string, block *types.Block, receipts []*types.Receipt) error
+}
+
 // Storage defines the interface for storage operations
 type Storage interface {
 	GetLatestHeight(ctx context.Context) (uint64, error)
@@ -110,6 +116,14 @@ type Fetcher struct {
 	// When set, the fetcher will use the adapter for consensus parsing
 	// and system contract event handling instead of hardcoded logic.
 	chainAdapter chain.Adapter
+
+	// chainID is the chain identifier for multi-chain support
+	chainID string
+
+	// blockProcessors are called after block processing to allow external modules
+	// (like watchlist) to react to new blocks
+	blockProcessors []BlockProcessor
+	processorMu     sync.RWMutex
 }
 
 // NewFetcher creates a new Fetcher instance
@@ -195,6 +209,60 @@ func (f *Fetcher) GetChainAdapter() chain.Adapter {
 	return f.chainAdapter
 }
 
+// SetChainID sets the chain identifier for multi-chain support
+func (f *Fetcher) SetChainID(chainID string) {
+	f.chainID = chainID
+}
+
+// GetChainID returns the chain identifier
+func (f *Fetcher) GetChainID() string {
+	return f.chainID
+}
+
+// AddBlockProcessor adds a block processor to be called after each block is indexed
+// Block processors receive the block and receipts to process (e.g., watchlist, analytics)
+func (f *Fetcher) AddBlockProcessor(processor BlockProcessor) {
+	f.processorMu.Lock()
+	defer f.processorMu.Unlock()
+	f.blockProcessors = append(f.blockProcessors, processor)
+	f.logger.Info("Block processor added", zap.Int("total_processors", len(f.blockProcessors)))
+}
+
+// RemoveBlockProcessor removes a block processor
+func (f *Fetcher) RemoveBlockProcessor(processor BlockProcessor) {
+	f.processorMu.Lock()
+	defer f.processorMu.Unlock()
+	for i, p := range f.blockProcessors {
+		if p == processor {
+			f.blockProcessors = append(f.blockProcessors[:i], f.blockProcessors[i+1:]...)
+			break
+		}
+	}
+}
+
+// processBlockWithProcessors calls all registered block processors
+func (f *Fetcher) processBlockWithProcessors(ctx context.Context, block *types.Block, receipts types.Receipts) {
+	f.processorMu.RLock()
+	processors := make([]BlockProcessor, len(f.blockProcessors))
+	copy(processors, f.blockProcessors)
+	f.processorMu.RUnlock()
+
+	// Convert receipts to slice of pointers
+	receiptPtrs := make([]*types.Receipt, len(receipts))
+	for i, r := range receipts {
+		receiptPtrs[i] = r
+	}
+
+	for _, processor := range processors {
+		if err := processor.ProcessBlock(ctx, f.chainID, block, receiptPtrs); err != nil {
+			f.logger.Warn("Block processor failed",
+				zap.Error(err),
+				zap.Uint64("height", block.NumberU64()),
+			)
+		}
+	}
+}
+
 // FetchBlock fetches a single block and its receipts and stores them
 func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	// Fetch block and receipts with retry logic
@@ -238,6 +306,9 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	if f.eventBus != nil {
 		f.publishBlockEvents(block, receipts, height)
 	}
+
+	// Process block with external processors (e.g., watchlist)
+	f.processBlockWithProcessors(ctx, block, receipts)
 
 	// Update latest height
 	if err := f.storage.SetLatestHeight(ctx, height); err != nil {

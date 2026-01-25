@@ -471,6 +471,27 @@ func (m *mockStorage) GetFeePayerStats(ctx context.Context, feePayer common.Addr
 	}, nil
 }
 
+// KVStore methods for mockStorage
+func (m *mockStorage) Put(ctx context.Context, key, value []byte) error {
+	return nil
+}
+
+func (m *mockStorage) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) Delete(ctx context.Context, key []byte) error {
+	return nil
+}
+
+func (m *mockStorage) Iterate(ctx context.Context, prefix []byte, fn func(key, value []byte) bool) error {
+	return nil
+}
+
+func (m *mockStorage) Has(ctx context.Context, key []byte) (bool, error) {
+	return false, nil
+}
+
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
 }
@@ -868,6 +889,27 @@ func (m *mockStorageWithErrors) GetTopFeePayers(ctx context.Context, limit int, 
 
 func (m *mockStorageWithErrors) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
 	return nil, fmt.Errorf("storage error")
+}
+
+// KVStore methods for mockStorageWithErrors
+func (m *mockStorageWithErrors) Put(ctx context.Context, key, value []byte) error {
+	return fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) Delete(ctx context.Context, key []byte) error {
+	return fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) Iterate(ctx context.Context, prefix []byte, fn func(key, value []byte) bool) error {
+	return fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) Has(ctx context.Context, key []byte) (bool, error) {
+	return false, fmt.Errorf("storage error")
 }
 
 func TestGraphQLHandler(t *testing.T) {

@@ -106,6 +106,28 @@ type Writer interface {
 	DeleteBlock(ctx context.Context, height uint64) error
 }
 
+// KVStore provides raw key-value storage operations
+// Used by modules that need direct storage access (e.g., watchlist, resilience)
+type KVStore interface {
+	// Put stores a value with the given key
+	Put(ctx context.Context, key, value []byte) error
+
+	// Get retrieves a value by key
+	// Returns ErrNotFound if key doesn't exist
+	Get(ctx context.Context, key []byte) ([]byte, error)
+
+	// Delete removes a key-value pair
+	Delete(ctx context.Context, key []byte) error
+
+	// Iterate iterates over keys with the given prefix
+	// The callback receives key and value for each matching entry
+	// Return false from the callback to stop iteration
+	Iterate(ctx context.Context, prefix []byte, fn func(key, value []byte) bool) error
+
+	// Has checks if a key exists
+	Has(ctx context.Context, key []byte) (bool, error)
+}
+
 // Storage combines Reader and Writer interfaces
 // Follows Dependency Inversion Principle - depend on abstraction
 type Storage interface {
@@ -124,6 +146,7 @@ type Storage interface {
 	FeeDelegationReader
 	HistoricalReader
 	HistoricalWriter
+	KVStore
 
 	// Close closes the storage and releases resources
 	Close() error

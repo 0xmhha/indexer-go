@@ -146,6 +146,125 @@ func (s *PebbleStorage) Close() error {
 	return nil
 }
 
+// ============================================================================
+// KVStore interface implementation
+// ============================================================================
+
+// Put stores a value with the given key
+func (s *PebbleStorage) Put(ctx context.Context, key, value []byte) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return err
+	}
+
+	return s.db.Set(key, value, pebble.Sync)
+}
+
+// Get retrieves a value by key
+func (s *PebbleStorage) Get(ctx context.Context, key []byte) ([]byte, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	value, closer, err := s.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	// Copy the value as it's only valid until closer.Close()
+	result := make([]byte, len(value))
+	copy(result, value)
+	return result, nil
+}
+
+// Delete removes a key-value pair
+func (s *PebbleStorage) Delete(ctx context.Context, key []byte) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return err
+	}
+
+	return s.db.Delete(key, pebble.Sync)
+}
+
+// Iterate iterates over keys with the given prefix
+func (s *PebbleStorage) Iterate(ctx context.Context, prefix []byte, fn func(key, value []byte) bool) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: prefixUpperBound(prefix),
+	})
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Make copies of key and value as they're only valid until the next iteration
+		key := make([]byte, len(iter.Key()))
+		copy(key, iter.Key())
+		value := make([]byte, len(iter.Value()))
+		copy(value, iter.Value())
+
+		if !fn(key, value) {
+			break
+		}
+	}
+
+	return iter.Error()
+}
+
+// Has checks if a key exists
+func (s *PebbleStorage) Has(ctx context.Context, key []byte) (bool, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return false, err
+	}
+
+	_, closer, err := s.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	closer.Close()
+	return true, nil
+}
+
+// prefixUpperBound returns the upper bound for prefix iteration
+func prefixUpperBound(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	upper := make([]byte, len(prefix))
+	copy(upper, prefix)
+	for i := len(upper) - 1; i >= 0; i-- {
+		if upper[i] < 0xff {
+			upper[i]++
+			return upper[:i+1]
+		}
+	}
+	return nil // All 0xff, no upper bound
+}
+
 // NewBatch creates a new batch for atomic writes
 func (s *PebbleStorage) NewBatch() Batch {
 	return &pebbleBatch{

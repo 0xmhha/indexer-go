@@ -18,6 +18,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
+	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
@@ -43,6 +44,9 @@ type App struct {
 	fetcher      *fetch.Fetcher
 	apiServer    *api.Server
 	rpcProxy     *rpcproxy.Proxy
+
+	// Multi-chain support
+	multichainManager *multichain.Manager
 
 	// Runtime flags
 	enableGapMode    bool
@@ -234,26 +238,45 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 
 	ctx := context.Background()
 
-	// Initialize Ethereum client
-	if err := app.initClient(); err != nil {
+	// Initialize storage first (needed by both single and multi-chain modes)
+	if err := app.initStorageOnly(ctx); err != nil {
 		return nil, err
 	}
 
-	// Test connection and get chain ID
-	if err := app.testConnection(ctx); err != nil {
-		return nil, err
-	}
-
-	// Initialize storage
-	if err := app.initStorage(ctx); err != nil {
-		return nil, err
-	}
-
-	// Initialize EventBus
+	// Initialize EventBus (shared across all chains)
 	app.initEventBus()
 
-	// Initialize fetcher
-	app.initFetcher()
+	// Check if multichain mode is enabled
+	if cfg.MultiChain.Enabled && len(cfg.MultiChain.Chains) > 0 {
+		log.Info("Multi-chain mode enabled",
+			zap.Int("configured_chains", len(cfg.MultiChain.Chains)),
+		)
+
+		if err := app.initMultiChainManager(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize multi-chain manager: %w", err)
+		}
+	} else {
+		// Single chain mode (legacy)
+		log.Info("Single-chain mode")
+
+		// Initialize Ethereum client
+		if err := app.initClient(); err != nil {
+			return nil, err
+		}
+
+		// Test connection and get chain ID
+		if err := app.testConnection(ctx); err != nil {
+			return nil, err
+		}
+
+		// Complete storage initialization with client
+		if err := app.completeStorageInit(ctx); err != nil {
+			return nil, err
+		}
+
+		// Initialize fetcher
+		app.initFetcher()
+	}
 
 	// Initialize API server if enabled
 	if cfg.API.Enabled {
@@ -319,8 +342,9 @@ func (a *App) testConnection(ctx context.Context) error {
 	return nil
 }
 
-// initStorage initializes the storage layer
-func (a *App) initStorage(ctx context.Context) error {
+// initStorageOnly initializes only the base storage layer without genesis initialization
+// This is used when multichain mode is enabled (each chain handles its own genesis)
+func (a *App) initStorageOnly(ctx context.Context) error {
 	storageConfig := storage.DefaultConfig(a.config.Database.Path)
 	storageConfig.ReadOnly = false
 
@@ -330,12 +354,25 @@ func (a *App) initStorage(ctx context.Context) error {
 	}
 	baseStore.SetLogger(a.logger)
 
-	// Wrap storage with genesis initializer
-	a.storage = storage.NewGenesisInitializingStorage(baseStore, a.client, a.logger)
+	// For multichain mode, use base storage directly
+	// For single chain mode, we'll wrap it with genesis initializer later
+	a.storage = baseStore
 
-	a.logger.Info("Storage initialized with genesis auto-initialization",
+	a.logger.Info("Base storage initialized",
 		zap.String("path", a.config.Database.Path),
 	)
+
+	return nil
+}
+
+// completeStorageInit completes storage initialization for single-chain mode
+// This wraps storage with genesis initializer and runs additional setup
+func (a *App) completeStorageInit(ctx context.Context) error {
+	// Wrap storage with genesis initializer (needs client)
+	if pebbleStore, ok := a.storage.(*storage.PebbleStorage); ok {
+		a.storage = storage.NewGenesisInitializingStorage(pebbleStore, a.client, a.logger)
+		a.logger.Info("Storage wrapped with genesis auto-initialization")
+	}
 
 	// Initialize system contract verifications if enabled
 	if a.config.SystemContracts.Enabled && a.config.SystemContracts.SourcePath != "" {
@@ -359,6 +396,14 @@ func (a *App) initStorage(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// initStorage initializes the storage layer (legacy method for compatibility)
+func (a *App) initStorage(ctx context.Context) error {
+	if err := a.initStorageOnly(ctx); err != nil {
+		return err
+	}
+	return a.completeStorageInit(ctx)
 }
 
 // initSystemContractVerifications initializes system contract verifications
@@ -392,6 +437,48 @@ func (a *App) initEventBus() {
 		zap.Int("publish_buffer", 1000),
 		zap.Int("subscribe_buffer", 100),
 	)
+}
+
+// initMultiChainManager initializes the multi-chain manager
+func (a *App) initMultiChainManager(ctx context.Context) error {
+	// Convert config chains to multichain ChainConfigs
+	chainConfigs := make([]multichain.ChainConfig, 0, len(a.config.MultiChain.Chains))
+	for _, cc := range a.config.MultiChain.Chains {
+		chainConfigs = append(chainConfigs, multichain.ChainConfig{
+			ID:          cc.ID,
+			Name:        cc.Name,
+			RPCEndpoint: cc.RPCEndpoint,
+			WSEndpoint:  cc.WSEndpoint,
+			ChainID:     cc.ChainID,
+			AdapterType: cc.AdapterType,
+			StartHeight: cc.StartHeight,
+			Enabled:     cc.Enabled,
+			Workers:     a.config.Indexer.Workers,
+			BatchSize:   a.config.Indexer.ChunkSize,
+			RPCTimeout:  a.config.RPC.Timeout,
+		})
+	}
+
+	managerConfig := &multichain.ManagerConfig{
+		Enabled:             true,
+		Chains:              chainConfigs,
+		HealthCheckInterval: a.config.MultiChain.HealthCheckInterval,
+		MaxUnhealthyDuration: a.config.MultiChain.MaxUnhealthyDuration,
+		AutoRestart:         a.config.MultiChain.AutoRestart,
+		AutoRestartDelay:    a.config.MultiChain.AutoRestartDelay,
+	}
+
+	manager, err := multichain.NewManager(managerConfig, a.storage, a.eventBus, a.logger)
+	if err != nil {
+		return fmt.Errorf("failed to create multi-chain manager: %w", err)
+	}
+
+	a.multichainManager = manager
+	a.logger.Info("Multi-chain manager created",
+		zap.Int("chains", len(chainConfigs)),
+	)
+
+	return nil
 }
 
 // initFetcher initializes the block fetcher
@@ -516,6 +603,19 @@ func (a *App) initRPCProxy() error {
 func (a *App) Run(ctx context.Context) error {
 	a.logger.Info("Starting indexing...")
 
+	// Multi-chain mode
+	if a.multichainManager != nil {
+		a.logger.Info("Starting multi-chain manager")
+		if err := a.multichainManager.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start multi-chain manager: %w", err)
+		}
+
+		// Block until context is cancelled
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	// Single-chain mode (legacy)
 	if a.enableGapMode {
 		a.logger.Info("Starting with gap recovery enabled")
 		return a.fetcher.RunWithGapRecovery(ctx)
@@ -529,11 +629,11 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) Shutdown() {
 	a.logger.Info("Shutting down application components...")
 
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	// Stop API server
 	if a.apiServer != nil {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
 		if err := a.apiServer.Stop(shutdownCtx); err != nil {
 			a.logger.Error("Failed to stop API server gracefully", zap.Error(err))
 		}
@@ -545,12 +645,20 @@ func (a *App) Shutdown() {
 		a.logger.Info("RPC Proxy stopped")
 	}
 
+	// Stop multi-chain manager if running
+	if a.multichainManager != nil {
+		if err := a.multichainManager.Stop(shutdownCtx); err != nil {
+			a.logger.Error("Failed to stop multi-chain manager gracefully", zap.Error(err))
+		}
+		a.logger.Info("Multi-chain manager stopped")
+	}
+
 	// Stop EventBus
 	if a.eventBus != nil {
 		a.eventBus.Stop()
 	}
 
-	// Close chain adapter
+	// Close chain adapter (single-chain mode only)
 	if a.chainAdapter != nil {
 		if err := a.chainAdapter.Close(); err != nil {
 			a.logger.Error("Failed to close chain adapter", zap.Error(err))
@@ -564,7 +672,7 @@ func (a *App) Shutdown() {
 		}
 	}
 
-	// Close client
+	// Close client (single-chain mode only)
 	if a.client != nil {
 		a.client.Close()
 	}
@@ -574,7 +682,19 @@ func (a *App) Shutdown() {
 
 	// Log final statistics
 	ctx := context.Background()
-	if a.storage != nil {
+	if a.multichainManager != nil {
+		// Multi-chain mode: log stats for each chain
+		metrics := a.multichainManager.GetMetrics()
+		for chainID, m := range metrics {
+			a.logger.Info("Chain statistics",
+				zap.String("chainId", chainID),
+				zap.Uint64("blocksIndexed", m.BlocksIndexed),
+				zap.Uint64("txsIndexed", m.TransactionsIndexed),
+				zap.Uint64("logsIndexed", m.LogsIndexed),
+			)
+		}
+	} else if a.storage != nil {
+		// Single-chain mode
 		finalHeight, err := a.storage.GetLatestHeight(ctx)
 		if err == nil {
 			a.logger.Info("Final statistics", zap.Uint64("latest_height", finalHeight))

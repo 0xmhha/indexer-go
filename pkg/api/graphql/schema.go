@@ -5,9 +5,11 @@ import (
 	"fmt"
 
 	abiDecoder "github.com/0xmhha/indexer-go/pkg/abi"
+	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
+	"github.com/0xmhha/indexer-go/pkg/watchlist"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
@@ -20,6 +22,10 @@ type Schema struct {
 	abiDecoder *abiDecoder.Decoder
 	verifier   verifier.Verifier
 	rpcProxy   *rpcproxy.Proxy
+
+	// Multi-chain and watchlist services
+	chainManager     *multichain.Manager
+	watchlistService watchlist.Service
 }
 
 // SchemaBuilder helps construct a GraphQL schema using the Builder pattern
@@ -1078,6 +1084,197 @@ func (b *SchemaBuilder) WithRPCProxyQueries() *SchemaBuilder {
 		queries: b.queries,
 	}
 	builder.buildRPCProxyQueries()
+	return b
+}
+
+// WithMultiChainQueries adds multi-chain management queries and mutations
+func (b *SchemaBuilder) WithMultiChainQueries() *SchemaBuilder {
+	s := b.schema
+
+	// Queries
+	b.queries["chains"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(chainType))),
+		Description: "Get all registered chains",
+		Resolve:     s.resolveChains,
+	}
+	b.queries["chain"] = &graphql.Field{
+		Type:        chainType,
+		Description: "Get a specific chain by ID",
+		Args: graphql.FieldConfigArgument{
+			"id": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.ID),
+				Description: "Chain identifier",
+			},
+		},
+		Resolve: s.resolveChain,
+	}
+	b.queries["chainHealth"] = &graphql.Field{
+		Type:        healthStatusType,
+		Description: "Get health status of a chain",
+		Args: graphql.FieldConfigArgument{
+			"id": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.ID),
+				Description: "Chain identifier",
+			},
+		},
+		Resolve: s.resolveChainHealth,
+	}
+
+	// Mutations
+	b.mutations["registerChain"] = &graphql.Field{
+		Type:        graphql.NewNonNull(chainType),
+		Description: "Register a new chain",
+		Args: graphql.FieldConfigArgument{
+			"input": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(registerChainInputType),
+				Description: "Chain registration details",
+			},
+		},
+		Resolve: s.resolveRegisterChain,
+	}
+	b.mutations["startChain"] = &graphql.Field{
+		Type:        graphql.NewNonNull(chainType),
+		Description: "Start a registered chain",
+		Args: graphql.FieldConfigArgument{
+			"id": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.ID),
+				Description: "Chain identifier",
+			},
+		},
+		Resolve: s.resolveStartChain,
+	}
+	b.mutations["stopChain"] = &graphql.Field{
+		Type:        graphql.NewNonNull(chainType),
+		Description: "Stop a running chain",
+		Args: graphql.FieldConfigArgument{
+			"id": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.ID),
+				Description: "Chain identifier",
+			},
+		},
+		Resolve: s.resolveStopChain,
+	}
+	b.mutations["unregisterChain"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.Boolean),
+		Description: "Unregister a chain (must be stopped first)",
+		Args: graphql.FieldConfigArgument{
+			"id": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.ID),
+				Description: "Chain identifier",
+			},
+		},
+		Resolve: s.resolveUnregisterChain,
+	}
+
+	return b
+}
+
+// WithWatchlistQueries adds watchlist management queries and mutations
+func (b *SchemaBuilder) WithWatchlistQueries() *SchemaBuilder {
+	s := b.schema
+
+	// Queries
+	b.queries["watchedAddresses"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(watchedAddressType))),
+		Description: "Get all watched addresses with optional filtering",
+		Args: graphql.FieldConfigArgument{
+			"chainId": &graphql.ArgumentConfig{
+				Type:        graphql.String,
+				Description: "Filter by chain ID",
+			},
+			"limit": &graphql.ArgumentConfig{
+				Type:         graphql.Int,
+				DefaultValue: 100,
+				Description:  "Maximum number of results",
+			},
+			"offset": &graphql.ArgumentConfig{
+				Type:         graphql.Int,
+				DefaultValue: 0,
+				Description:  "Pagination offset",
+			},
+		},
+		Resolve: s.resolveWatchedAddresses,
+	}
+	b.queries["watchedAddress"] = &graphql.Field{
+		Type:        watchedAddressType,
+		Description: "Get a specific watched address by ID",
+		Args: graphql.FieldConfigArgument{
+			"id": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.ID),
+				Description: "Watched address identifier",
+			},
+		},
+		Resolve: s.resolveWatchedAddress,
+	}
+	b.queries["watchEvents"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(watchEventType))),
+		Description: "Get watch events with optional filtering",
+		Args: graphql.FieldConfigArgument{
+			"addressId": &graphql.ArgumentConfig{
+				Type:        graphql.ID,
+				Description: "Filter by watched address ID",
+			},
+			"chainId": &graphql.ArgumentConfig{
+				Type:        graphql.String,
+				Description: "Filter by chain ID",
+			},
+			"eventType": &graphql.ArgumentConfig{
+				Type:        watchEventTypeEnumType,
+				Description: "Filter by event type",
+			},
+			"limit": &graphql.ArgumentConfig{
+				Type:         graphql.Int,
+				DefaultValue: 100,
+				Description:  "Maximum number of results",
+			},
+			"offset": &graphql.ArgumentConfig{
+				Type:         graphql.Int,
+				DefaultValue: 0,
+				Description:  "Pagination offset",
+			},
+		},
+		Resolve: s.resolveWatchEvents,
+	}
+
+	// Mutations
+	b.mutations["watchAddress"] = &graphql.Field{
+		Type:        graphql.NewNonNull(watchedAddressType),
+		Description: "Add an address to the watchlist",
+		Args: graphql.FieldConfigArgument{
+			"input": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(watchAddressInputType),
+				Description: "Watch address details",
+			},
+		},
+		Resolve: s.resolveWatchAddress,
+	}
+	b.mutations["unwatchAddress"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.Boolean),
+		Description: "Remove an address from the watchlist",
+		Args: graphql.FieldConfigArgument{
+			"id": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.ID),
+				Description: "Watched address identifier",
+			},
+		},
+		Resolve: s.resolveUnwatchAddress,
+	}
+	b.mutations["updateWatchFilter"] = &graphql.Field{
+		Type:        graphql.NewNonNull(watchedAddressType),
+		Description: "Update the filter for a watched address",
+		Args: graphql.FieldConfigArgument{
+			"id": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.ID),
+				Description: "Watched address identifier",
+			},
+			"filter": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(watchFilterInputType),
+				Description: "New filter configuration",
+			},
+		},
+		Resolve: s.resolveUpdateWatchFilter,
+	}
+
 	return b
 }
 
