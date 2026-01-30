@@ -3,6 +3,7 @@ package multichain
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -431,5 +432,363 @@ func TestManagerStartChainRequiresStorage(t *testing.T) {
 	err = manager.StartChain(ctx, "test-chain")
 	if err != ErrStorageRequired {
 		t.Errorf("expected ErrStorageRequired, got %v", err)
+	}
+}
+
+func TestManagerWaitForSync(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	config := DefaultManagerConfig()
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	t.Run("times out with no healthy chains", func(t *testing.T) {
+		// Register a chain (won't be healthy)
+		chainConfig := &ChainConfig{
+			ID:          "wait-sync-chain",
+			Name:        "Wait Sync Chain",
+			RPCEndpoint: "http://localhost:8545",
+			ChainID:     1,
+		}
+		ctx := context.Background()
+		_, _ = manager.RegisterChain(ctx, chainConfig)
+
+		// WaitForSync should timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		err := manager.WaitForSync(ctx)
+		if err != context.DeadlineExceeded {
+			t.Errorf("expected context.DeadlineExceeded, got %v", err)
+		}
+	})
+}
+
+func TestManagerCheckAndRestartFailedChains(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	config := &ManagerConfig{
+		Enabled:             false,
+		AutoRestart:         true,
+		AutoRestartDelay:    10 * time.Millisecond, // Short delay for testing
+		HealthCheckInterval: 50 * time.Millisecond,
+	}
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	ctx := context.Background()
+
+	// Register a chain
+	chainConfig := &ChainConfig{
+		ID:          "restart-test-chain",
+		Name:        "Restart Test Chain",
+		RPCEndpoint: "http://localhost:8545",
+		ChainID:     1,
+	}
+	_, _ = manager.RegisterChain(ctx, chainConfig)
+
+	// Get the instance and set to error state
+	instance, _ := manager.GetChain("restart-test-chain")
+	instance.setError(ErrClientInitFailed)
+
+	// Wait for auto-restart delay
+	time.Sleep(20 * time.Millisecond)
+
+	// Set context for manager
+	manager.ctx, manager.cancelFunc = context.WithCancel(ctx)
+	defer manager.cancelFunc()
+
+	// Call checkAndRestartFailedChains
+	manager.checkAndRestartFailedChains()
+
+	// The chain should attempt restart (will fail due to no storage, but that's expected)
+	// Just verify no panic and the function completes
+}
+
+func TestManagerCheckAndRestartFailedChains_DelayNotElapsed(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	config := &ManagerConfig{
+		Enabled:             false,
+		AutoRestart:         true,
+		AutoRestartDelay:    5 * time.Second, // Long delay - won't be reached
+		HealthCheckInterval: 50 * time.Millisecond,
+	}
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	ctx := context.Background()
+
+	// Register a chain
+	chainConfig := &ChainConfig{
+		ID:          "delay-test-chain",
+		Name:        "Delay Test Chain",
+		RPCEndpoint: "http://localhost:8545",
+		ChainID:     1,
+	}
+	_, _ = manager.RegisterChain(ctx, chainConfig)
+
+	// Get the instance and set to error state
+	instance, _ := manager.GetChain("delay-test-chain")
+	instance.setError(ErrClientInitFailed)
+
+	// Don't wait for auto-restart delay
+
+	// Set context for manager
+	manager.ctx, manager.cancelFunc = context.WithCancel(ctx)
+	defer manager.cancelFunc()
+
+	// Save the status before calling checkAndRestartFailedChains
+	statusBefore := instance.Status()
+
+	// Call checkAndRestartFailedChains - should skip due to delay not elapsed
+	manager.checkAndRestartFailedChains()
+
+	// Status should still be error (no restart attempted)
+	if instance.Status() != statusBefore {
+		t.Errorf("expected status to remain %v, got %v", statusBefore, instance.Status())
+	}
+}
+
+func TestManagerCheckAndRestartFailedChains_NoErrorChains(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	config := &ManagerConfig{
+		Enabled:             false,
+		AutoRestart:         true,
+		AutoRestartDelay:    10 * time.Millisecond,
+		HealthCheckInterval: 50 * time.Millisecond,
+	}
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	ctx := context.Background()
+
+	// Register a chain but don't set to error
+	chainConfig := &ChainConfig{
+		ID:          "no-error-chain",
+		Name:        "No Error Chain",
+		RPCEndpoint: "http://localhost:8545",
+		ChainID:     1,
+	}
+	_, _ = manager.RegisterChain(ctx, chainConfig)
+
+	// Set context for manager
+	manager.ctx, manager.cancelFunc = context.WithCancel(ctx)
+	defer manager.cancelFunc()
+
+	// Call checkAndRestartFailedChains - should do nothing (no error chains)
+	manager.checkAndRestartFailedChains()
+
+	// Chain should still be registered status
+	instance, _ := manager.GetChain("no-error-chain")
+	if instance.Status() != StatusRegistered {
+		t.Errorf("expected status registered, got %v", instance.Status())
+	}
+}
+
+func TestManagerAutoRestartMonitor(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+
+	config := &ManagerConfig{
+		Enabled:             false,
+		AutoRestart:         true,
+		AutoRestartDelay:    10 * time.Millisecond,
+		HealthCheckInterval: 50 * time.Millisecond,
+	}
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	manager.ctx = ctx
+
+	// Start auto-restart monitor
+	manager.runningWg.Add(1)
+	go manager.autoRestartMonitor()
+
+	// Let it run for a couple ticks
+	time.Sleep(120 * time.Millisecond)
+
+	// Cancel to stop
+	cancel()
+
+	// Wait for completion with timeout
+	done := make(chan struct{})
+	go func() {
+		manager.runningWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success
+	case <-time.After(time.Second):
+		t.Fatal("autoRestartMonitor did not stop")
+	}
+}
+
+func TestManagerStartWithAutoRestart(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
+
+	config := &ManagerConfig{
+		Enabled:             false,
+		AutoRestart:         true,
+		AutoRestartDelay:    time.Second,
+		HealthCheckInterval: time.Second,
+	}
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	// Start should launch auto-restart monitor
+	err := manager.Start(ctx)
+	if err != nil {
+		t.Fatalf("start failed: %v", err)
+	}
+
+	// Give it time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop
+	err = manager.Stop(ctx)
+	if err != nil {
+		t.Errorf("stop failed: %v", err)
+	}
+}
+
+func TestManagerStartWithChains(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
+
+	config := &ManagerConfig{
+		Enabled: true,
+		Chains: []ChainConfig{
+			{
+				ID:          "auto-start-chain",
+				Name:        "Auto Start Chain",
+				RPCEndpoint: "http://localhost:8545",
+				ChainID:     1,
+				Enabled:     true,
+			},
+		},
+		HealthCheckInterval: time.Second,
+	}
+
+	// Create manager with nil storage (chains will fail to start but shouldn't panic)
+	manager, err := NewManager(config, nil, nil, logger)
+	if err != nil {
+		t.Fatalf("failed to create manager: %v", err)
+	}
+
+	// Start should attempt to start all enabled chains
+	err = manager.Start(ctx)
+	if err != nil {
+		t.Errorf("start failed: %v", err)
+	}
+
+	// Verify chain was registered
+	if manager.ChainCount() != 1 {
+		t.Errorf("expected 1 chain registered, got %d", manager.ChainCount())
+	}
+
+	// Cleanup
+	manager.Stop(ctx)
+}
+
+func TestManagerUnregisterRunningChain(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
+
+	config := DefaultManagerConfig()
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	chainConfig := &ChainConfig{
+		ID:          "unregister-running-chain",
+		Name:        "Unregister Running Chain",
+		RPCEndpoint: "http://localhost:8545",
+		ChainID:     1,
+	}
+
+	// Register chain
+	_, err := manager.RegisterChain(ctx, chainConfig)
+	if err != nil {
+		t.Fatalf("failed to register chain: %v", err)
+	}
+
+	// Manually set to syncing status
+	instance, _ := manager.GetChain("unregister-running-chain")
+	instance.setStatus(StatusSyncing)
+
+	// Unregister should stop the chain first
+	err = manager.UnregisterChain(ctx, "unregister-running-chain")
+	if err != nil {
+		t.Errorf("unregister failed: %v", err)
+	}
+
+	// Verify unregistered
+	if manager.ChainCount() != 0 {
+		t.Error("chain should be unregistered")
+	}
+}
+
+func TestManagerStopWithRunningChains(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
+
+	config := DefaultManagerConfig()
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	// Register multiple chains
+	for i := 0; i < 3; i++ {
+		chainConfig := &ChainConfig{
+			ID:          "stop-chain-" + string(rune('A'+i)),
+			Name:        "Stop Chain",
+			RPCEndpoint: "http://localhost:8545",
+			ChainID:     uint64(i + 1),
+		}
+		_, _ = manager.RegisterChain(ctx, chainConfig)
+	}
+
+	// Start manager
+	err := manager.Start(ctx)
+	if err != nil {
+		t.Fatalf("start failed: %v", err)
+	}
+
+	// Stop should stop all chains
+	err = manager.Stop(ctx)
+	if err != nil {
+		t.Errorf("stop failed: %v", err)
+	}
+
+	// Verify all stopped
+	for _, info := range manager.ListChains() {
+		if info.Status != StatusStopped {
+			t.Errorf("chain %s should be stopped, got %v", info.ID, info.Status)
+		}
+	}
+}
+
+func TestManagerStopWithTimeout(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
+
+	config := &ManagerConfig{
+		Enabled:             false,
+		AutoRestart:         true,
+		HealthCheckInterval: time.Second,
+	}
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	// Start manager
+	err := manager.Start(ctx)
+	if err != nil {
+		t.Fatalf("start failed: %v", err)
+	}
+
+	// Give time for goroutines to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop with short timeout
+	stopCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+
+	err = manager.Stop(stopCtx)
+	if err != nil {
+		t.Errorf("stop failed: %v", err)
 	}
 }
