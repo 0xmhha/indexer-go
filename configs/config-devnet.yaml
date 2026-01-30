@@ -1,0 +1,42 @@
+# Anvil Local Development Configuration
+# ======================================
+# Use this config for local development and testing with Anvil (Foundry).
+#
+# Prerequisites:
+#   1. Install Foundry: https://book.getfoundry.sh/getting-started/installation
+#   2. Start Anvil: anvil --block-time 2
+#
+# Usage:
+#   go run ./cmd/indexer --config configs/config-anvil.yaml
+#
+# Verified compatibility:
+#   - Anvil v1.5.1+
+#   - Chain ID: 31337
+
+rpc:
+  endpoint: "http://127.0.0.1:8501"
+  timeout: 30s
+
+database:
+  path: "./data-devnet"
+  readonly: false
+
+log:
+  level: "debug"
+  format: "console"
+
+indexer:
+  workers: 10
+  chunk_size: 10
+  start_height: 0
+
+api:
+  enabled: true
+  host: "localhost"
+  port: 8080
+  enable_graphql: true
+  enable_jsonrpc: true
+  enable_websocket: true
+  enable_cors: true
+  allowed_origins:
+    - "*"

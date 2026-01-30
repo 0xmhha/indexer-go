@@ -40,6 +40,25 @@ type Subscription interface {
 	Unsubscribe()
 }
 
+// FeeDelegationMeta contains fee delegation metadata for a transaction
+// This is copied from factory package to avoid circular import
+type FeeDelegationMeta struct {
+	TxHash       common.Hash
+	BlockNumber  uint64
+	OriginalType uint8
+	FeePayer     common.Address
+	FeePayerV    *big.Int
+	FeePayerR    *big.Int
+	FeePayerS    *big.Int
+}
+
+// FeeDelegationClient is an optional interface for clients that support
+// extracting fee delegation metadata from blocks
+type FeeDelegationClient interface {
+	// GetBlockWithFeeDelegationMeta retrieves a block along with fee delegation metadata
+	GetBlockWithFeeDelegationMeta(ctx context.Context, number uint64) (*types.Block, []*FeeDelegationMeta, error)
+}
+
 // BlockProcessor defines an interface for processing blocks after indexing
 // This is used by external modules like watchlist to hook into block processing
 type BlockProcessor interface {
@@ -58,6 +77,12 @@ type Storage interface {
 	HasReceipt(ctx context.Context, hash common.Hash) (bool, error)
 	GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error)
 	Close() error
+}
+
+// FeeDelegationStorage is an optional interface for storages that support
+// storing fee delegation transaction metadata
+type FeeDelegationStorage interface {
+	SetFeeDelegationTxMeta(ctx context.Context, meta *storagepkg.FeeDelegationTxMeta) error
 }
 
 // Config holds fetcher configuration
@@ -287,6 +312,15 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		return err
 	}
 
+	// Process fee delegation metadata
+	if err := f.processFeeDelegationMetadata(ctx, height); err != nil {
+		// Log but don't fail block processing
+		f.logger.Warn("Fee delegation metadata processing failed",
+			zap.Uint64("height", height),
+			zap.Error(err),
+		)
+	}
+
 	// Publish block event
 	if f.eventBus != nil {
 		blockEvent := events.NewBlockEvent(block)
@@ -392,6 +426,61 @@ func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uin
 	}
 
 	return block, receipts, hadError, nil
+}
+
+// processFeeDelegationMetadata extracts and stores fee delegation metadata for a block
+func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, height uint64) error {
+	// Check if storage supports fee delegation
+	fdStorage, ok := f.storage.(FeeDelegationStorage)
+	if !ok {
+		return nil // Storage doesn't support fee delegation, skip silently
+	}
+
+	// Check if client supports fee delegation metadata extraction
+	fdClient, ok := f.client.(FeeDelegationClient)
+	if !ok {
+		return nil // Client doesn't support fee delegation metadata extraction, skip silently
+	}
+
+	// Fetch block with fee delegation metadata
+	_, metas, err := fdClient.GetBlockWithFeeDelegationMeta(ctx, height)
+	if err != nil {
+		f.logger.Warn("Failed to fetch fee delegation metadata",
+			zap.Uint64("height", height),
+			zap.Error(err),
+		)
+		return nil // Don't fail block processing for fee delegation metadata extraction failure
+	}
+
+	// Store each fee delegation metadata
+	for _, meta := range metas {
+		storageMeta := &storagepkg.FeeDelegationTxMeta{
+			TxHash:       meta.TxHash,
+			BlockNumber:  meta.BlockNumber,
+			OriginalType: meta.OriginalType,
+			FeePayer:     meta.FeePayer,
+			FeePayerV:    meta.FeePayerV,
+			FeePayerR:    meta.FeePayerR,
+			FeePayerS:    meta.FeePayerS,
+		}
+		if err := fdStorage.SetFeeDelegationTxMeta(ctx, storageMeta); err != nil {
+			f.logger.Warn("Failed to store fee delegation metadata",
+				zap.String("txHash", meta.TxHash.Hex()),
+				zap.Uint64("height", height),
+				zap.Error(err),
+			)
+			// Continue processing other metadata even if one fails
+		}
+	}
+
+	if len(metas) > 0 {
+		f.logger.Debug("Stored fee delegation metadata",
+			zap.Uint64("height", height),
+			zap.Int("count", len(metas)),
+		)
+	}
+
+	return nil
 }
 
 // processBlockMetadata processes WBFT metadata, address indexing, balance tracking, and genesis initialization
@@ -706,6 +795,14 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 				// Process native balance tracking
 				if err := f.processBalanceTracking(ctx, res.block, res.receipts); err != nil {
 					return fmt.Errorf("failed to process balance tracking for block %d: %w", nextHeight, err)
+				}
+
+				// Process fee delegation metadata
+				if err := f.processFeeDelegationMetadata(ctx, nextHeight); err != nil {
+					f.logger.Warn("Fee delegation metadata processing failed",
+						zap.Uint64("height", nextHeight),
+						zap.Error(err),
+					)
 				}
 
 				// Publish block event if EventBus is configured

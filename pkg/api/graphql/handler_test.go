@@ -12,8 +12,15 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 	"go.uber.org/zap"
 )
+
+// uint256FromBig converts a big.Int to uint256.Int
+func uint256FromBig(b *big.Int) *uint256.Int {
+	u, _ := uint256.FromBig(b)
+	return u
+}
 
 // mockStorage is a mock implementation of storage.Storage for testing
 type mockStorage struct {
@@ -471,6 +478,18 @@ func (m *mockStorage) GetFeePayerStats(ctx context.Context, feePayer common.Addr
 	}, nil
 }
 
+func (m *mockStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
+	return []common.Hash{}, nil
+}
+
+func (m *mockStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *storage.FeeDelegationTxMeta) error {
+	return nil
+}
+
 // KVStore methods for mockStorage
 func (m *mockStorage) Put(ctx context.Context, key, value []byte) error {
 	return nil
@@ -889,6 +908,18 @@ func (m *mockStorageWithErrors) GetTopFeePayers(ctx context.Context, limit int, 
 
 func (m *mockStorageWithErrors) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
 	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) SetFeeDelegationTxMeta(ctx context.Context, meta *storage.FeeDelegationTxMeta) error {
+	return fmt.Errorf("storage error")
 }
 
 // KVStore methods for mockStorageWithErrors
@@ -1614,6 +1645,69 @@ func TestGraphQLMappers(t *testing.T) {
 		}
 		if len(accessListResult) != 1 {
 			t.Errorf("expected 1 access list entry, got %d", len(accessListResult))
+		}
+	})
+
+	t.Run("TransactionToMap_SetCodeTx", func(t *testing.T) {
+		to := common.HexToAddress("0x789")
+		authList := []types.SetCodeAuthorization{
+			{
+				ChainID: *uint256FromBig(common.Big1),
+				Address: common.HexToAddress("0xdead"),
+				Nonce:   1,
+				V:       0,
+				R:       *uint256FromBig(common.Big1),
+				S:       *uint256FromBig(common.Big2),
+			},
+		}
+		tx := types.NewTx(&types.SetCodeTx{
+			ChainID:    uint256FromBig(common.Big1),
+			Nonce:      0,
+			GasTipCap:  uint256FromBig(common.Big1),
+			GasFeeCap:  uint256FromBig(common.Big2),
+			Gas:        21000,
+			To:         to,
+			Value:      uint256FromBig(common.Big1),
+			Data:       []byte{},
+			AccessList: nil,
+			AuthList:   authList,
+		})
+		location := &storage.TxLocation{
+			BlockHeight: 1,
+			BlockHash:   common.HexToHash("0x123"),
+			TxIndex:     0,
+		}
+		txMap := schema.transactionToMap(tx, location)
+
+		if txMap == nil {
+			t.Error("expected txMap to be non-nil")
+		}
+		if txMap["type"].(int) != 4 {
+			t.Errorf("expected type 4 (SetCodeTx), got %v", txMap["type"])
+		}
+		if txMap["authorizationList"] == nil {
+			t.Error("expected authorizationList for EIP-7702 tx")
+		}
+		authListResult, ok := txMap["authorizationList"].([]interface{})
+		if !ok {
+			t.Error("expected authorizationList to be an array")
+		}
+		if len(authListResult) != 1 {
+			t.Errorf("expected 1 authorization entry, got %d", len(authListResult))
+		}
+		// Check the authorization entry fields
+		authEntry, ok := authListResult[0].(map[string]interface{})
+		if !ok {
+			t.Error("expected authorization entry to be a map")
+		}
+		if authEntry["address"] == nil {
+			t.Error("expected address field in authorization")
+		}
+		if authEntry["nonce"] == nil {
+			t.Error("expected nonce field in authorization")
+		}
+		if authEntry["yParity"] == nil {
+			t.Error("expected yParity field in authorization")
 		}
 	})
 

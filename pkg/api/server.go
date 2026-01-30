@@ -7,13 +7,16 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/api/etherscan"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/api/websocket"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -22,20 +25,24 @@ import (
 
 // Server represents the API server
 type Server struct {
-	config       *Config
-	logger       *zap.Logger
-	storage      storage.Storage
-	eventBus     *events.EventBus
-	router       *chi.Mux
-	server       *http.Server
-	wsServer     *websocket.Server
-	gqlSubServer *graphql.SubscriptionServer
-	rpcProxy     *rpcproxy.Proxy
+	config              *Config
+	logger              *zap.Logger
+	storage             storage.Storage
+	eventBus            *events.EventBus
+	router              *chi.Mux
+	server              *http.Server
+	wsServer            *websocket.Server
+	gqlSubServer        *graphql.SubscriptionServer
+	rpcProxy            *rpcproxy.Proxy
+	verifier            verifier.Verifier
+	notificationService notifications.Service
 }
 
 // ServerOptions contains optional configuration for the API server
 type ServerOptions struct {
-	RPCProxy *rpcproxy.Proxy
+	RPCProxy            *rpcproxy.Proxy
+	Verifier            verifier.Verifier
+	NotificationService notifications.Service
 }
 
 // NewServer creates a new API server
@@ -61,6 +68,18 @@ func NewServerWithOptions(config *Config, logger *zap.Logger, store storage.Stor
 	if opts != nil && opts.RPCProxy != nil {
 		s.rpcProxy = opts.RPCProxy
 		logger.Info("RPC Proxy configured for API server")
+	}
+
+	// Set optional Verifier for Etherscan API
+	if opts != nil && opts.Verifier != nil {
+		s.verifier = opts.Verifier
+		logger.Info("Verifier configured for Etherscan API")
+	}
+
+	// Set optional Notification Service
+	if opts != nil && opts.NotificationService != nil {
+		s.notificationService = opts.NotificationService
+		logger.Info("Notification service configured for API server")
 	}
 
 	// Setup middleware
@@ -97,6 +116,12 @@ func (s *Server) SetEventBus(bus *events.EventBus) {
 func (s *Server) SetRPCProxy(proxy *rpcproxy.Proxy) {
 	s.rpcProxy = proxy
 	s.logger.Info("RPC Proxy set for API server")
+}
+
+// SetNotificationService sets the notification service for the server
+func (s *Server) SetNotificationService(service notifications.Service) {
+	s.notificationService = service
+	s.logger.Info("Notification service set for API server")
 }
 
 // setupMiddleware configures the middleware stack
@@ -194,9 +219,10 @@ func (s *Server) setupRoutes() {
 	if s.config.EnableGraphQL {
 		s.logger.Info("GraphQL API enabled", zap.String("path", s.config.GraphQLPath))
 
-		// Create GraphQL handler with optional RPC Proxy
+		// Create GraphQL handler with optional RPC Proxy and Notification Service
 		opts := &graphql.HandlerOptions{
-			RPCProxy: s.rpcProxy,
+			RPCProxy:            s.rpcProxy,
+			NotificationService: s.notificationService,
 		}
 		graphqlHandler, err := graphql.NewHandlerWithOptions(s.storage, s.logger, opts)
 		if err != nil {
@@ -221,8 +247,21 @@ func (s *Server) setupRoutes() {
 
 		// Create JSON-RPC handler
 		jsonrpcServer := jsonrpc.NewServer(s.storage, s.logger)
+
+		// Set notification service if available
+		if s.notificationService != nil {
+			jsonrpcServer.SetNotificationService(s.notificationService)
+			s.logger.Info("Notification service configured for JSON-RPC")
+		}
+
 		s.router.Post(s.config.JSONRPCPath, jsonrpcServer.ServeHTTP)
 	}
+
+	// Etherscan-compatible API endpoints (for Forge verification)
+	etherscanHandler := etherscan.NewHandler(s.storage, s.verifier, s.logger)
+	s.router.Get("/api", etherscanHandler.ServeHTTP)
+	s.router.Post("/api", etherscanHandler.ServeHTTP)
+	s.logger.Info("Etherscan-compatible API enabled", zap.String("path", "/api"))
 }
 
 // HealthResponse represents the health check response

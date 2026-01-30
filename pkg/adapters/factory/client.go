@@ -72,16 +72,27 @@ func (c *EVMClient) GetBlockByHash(ctx context.Context, hash common.Hash) (*type
 
 // getBlockByNumberRaw fetches a block using raw RPC and custom parsing
 func (c *EVMClient) getBlockByNumberRaw(ctx context.Context, number uint64) (*types.Block, error) {
+	block, _, err := c.getBlockByNumberRawWithMetas(ctx, number)
+	return block, err
+}
+
+// getBlockByNumberRawWithMetas fetches a block and extracts fee delegation metadata
+func (c *EVMClient) getBlockByNumberRawWithMetas(ctx context.Context, number uint64) (*types.Block, []*FeeDelegationMeta, error) {
 	var raw json.RawMessage
 	err := c.rpcClient.CallContext(ctx, &raw, "eth_getBlockByNumber", toBlockNumArg(big.NewInt(int64(number))), true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(raw) == 0 || string(raw) == "null" {
-		return nil, ethereum.NotFound
+		return nil, nil, ethereum.NotFound
 	}
 
-	return parseRawBlock(raw)
+	return parseRawBlockWithMetas(raw)
+}
+
+// GetBlockWithFeeDelegationMeta retrieves a block by number along with fee delegation metadata
+func (c *EVMClient) GetBlockWithFeeDelegationMeta(ctx context.Context, number uint64) (*types.Block, []*FeeDelegationMeta, error) {
+	return c.getBlockByNumberRawWithMetas(ctx, number)
 }
 
 // getBlockByHashRaw fetches a block by hash using raw RPC and custom parsing
@@ -106,10 +117,31 @@ type rpcBlock struct {
 	Withdrawals  []*types.Withdrawal `json:"withdrawals,omitempty"`
 }
 
+// FeeDelegateDynamicFeeTxType is the StableNet-specific fee delegation transaction type
+const FeeDelegateDynamicFeeTxType = 0x16
+
+// FeeDelegationMeta contains fee delegation metadata for a transaction
+type FeeDelegationMeta struct {
+	TxHash       common.Hash
+	BlockNumber  uint64
+	OriginalType uint8
+	FeePayer     common.Address
+	FeePayerV    *big.Int
+	FeePayerR    *big.Int
+	FeePayerS    *big.Int
+}
+
 // rpcTransaction is a helper for parsing transactions
 type rpcTransaction struct {
 	tx *types.Transaction
 	txExtraInfo
+	// originalType stores the original transaction type for custom types like 0x16
+	// This is needed because go-ethereum doesn't support StableNet's Fee Delegation type
+	originalType *uint8
+	// feePayer stores the fee payer address for Fee Delegation transactions
+	feePayer *common.Address
+	// feePayerV, feePayerR, feePayerS store the fee payer signature
+	feePayerV, feePayerR, feePayerS *big.Int
 }
 
 type txExtraInfo struct {
@@ -118,11 +150,184 @@ type txExtraInfo struct {
 	From        *common.Address `json:"from,omitempty"`
 }
 
+// IsFeeDelegation returns true if this transaction is a Fee Delegation transaction (type 0x16)
+func (tx *rpcTransaction) IsFeeDelegation() bool {
+	return tx.originalType != nil && *tx.originalType == FeeDelegateDynamicFeeTxType
+}
+
+// FeePayer returns the fee payer address for Fee Delegation transactions
+func (tx *rpcTransaction) FeePayer() *common.Address {
+	return tx.feePayer
+}
+
+// FeePayerSignature returns the fee payer signature (V, R, S) for Fee Delegation transactions
+func (tx *rpcTransaction) FeePayerSignature() (*big.Int, *big.Int, *big.Int) {
+	return tx.feePayerV, tx.feePayerR, tx.feePayerS
+}
+
+// OriginalType returns the original transaction type (useful for custom types like 0x16)
+func (tx *rpcTransaction) OriginalType() uint8 {
+	if tx.originalType != nil {
+		return *tx.originalType
+	}
+	return tx.tx.Type()
+}
+
+// feeDelegationTxJSON is used to parse StableNet Fee Delegation transactions (type 0x16)
+// Since go-ethereum doesn't support this type, we parse it manually and convert to DynamicFeeTx
+type feeDelegationTxJSON struct {
+	Type                 hexutil.Uint64  `json:"type"`
+	ChainID              *hexutil.Big    `json:"chainId"`
+	Nonce                *hexutil.Uint64 `json:"nonce"`
+	GasTipCap            *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	GasFeeCap            *hexutil.Big    `json:"maxFeePerGas"`
+	Gas                  *hexutil.Uint64 `json:"gas"`
+	To                   *common.Address `json:"to"`
+	Value                *hexutil.Big    `json:"value"`
+	Data                 *hexutil.Bytes  `json:"input"`
+	AccessList           types.AccessList `json:"accessList"`
+	V                    *hexutil.Big    `json:"v"`
+	R                    *hexutil.Big    `json:"r"`
+	S                    *hexutil.Big    `json:"s"`
+	// Fee Delegation specific fields
+	FeePayer             *common.Address `json:"feePayer"`
+	FeePayerSignatures   []feePayerSig   `json:"feePayerSignatures"`
+}
+
+type feePayerSig struct {
+	V *hexutil.Big `json:"v"`
+	R *hexutil.Big `json:"r"`
+	S *hexutil.Big `json:"s"`
+}
+
 func (tx *rpcTransaction) UnmarshalJSON(msg []byte) error {
 	if err := json.Unmarshal(msg, &tx.txExtraInfo); err != nil {
 		return err
 	}
-	return json.Unmarshal(msg, &tx.tx)
+
+	// First, try standard go-ethereum unmarshalling
+	if err := json.Unmarshal(msg, &tx.tx); err == nil {
+		return nil
+	}
+
+	// If standard unmarshalling fails, check if it's a Fee Delegation transaction (type 0x16)
+	var txType struct {
+		Type hexutil.Uint64 `json:"type"`
+	}
+	if err := json.Unmarshal(msg, &txType); err != nil {
+		return fmt.Errorf("failed to parse transaction type: %w", err)
+	}
+
+	if uint64(txType.Type) == FeeDelegateDynamicFeeTxType {
+		// Parse Fee Delegation transaction and convert to DynamicFeeTx
+		return tx.unmarshalFeeDelegationTx(msg)
+	}
+
+	// Unknown transaction type
+	return fmt.Errorf("unsupported transaction type: 0x%x", txType.Type)
+}
+
+// unmarshalFeeDelegationTx parses a StableNet Fee Delegation transaction (type 0x16)
+// and converts it to a DynamicFeeTx (type 0x02) for compatibility with go-ethereum
+// The original type (0x16) and fee payer information are preserved in the rpcTransaction struct
+func (tx *rpcTransaction) unmarshalFeeDelegationTx(msg []byte) error {
+	var fdTx feeDelegationTxJSON
+	if err := json.Unmarshal(msg, &fdTx); err != nil {
+		return fmt.Errorf("failed to parse fee delegation transaction: %w", err)
+	}
+
+	// Store the original transaction type
+	originalType := uint8(FeeDelegateDynamicFeeTxType)
+	tx.originalType = &originalType
+
+	// Store fee payer information
+	tx.feePayer = fdTx.FeePayer
+	if len(fdTx.FeePayerSignatures) > 0 {
+		sig := fdTx.FeePayerSignatures[0]
+		if sig.V != nil {
+			tx.feePayerV = (*big.Int)(sig.V)
+		}
+		if sig.R != nil {
+			tx.feePayerR = (*big.Int)(sig.R)
+		}
+		if sig.S != nil {
+			tx.feePayerS = (*big.Int)(sig.S)
+		}
+	}
+
+	// Convert to DynamicFeeTx (type 0x02) - the closest standard type
+	var to *common.Address
+	if fdTx.To != nil {
+		to = fdTx.To
+	}
+
+	var data []byte
+	if fdTx.Data != nil {
+		data = *fdTx.Data
+	}
+
+	var nonce uint64
+	if fdTx.Nonce != nil {
+		nonce = uint64(*fdTx.Nonce)
+	}
+
+	var gas uint64
+	if fdTx.Gas != nil {
+		gas = uint64(*fdTx.Gas)
+	}
+
+	var chainID *big.Int
+	if fdTx.ChainID != nil {
+		chainID = (*big.Int)(fdTx.ChainID)
+	}
+
+	var gasTipCap *big.Int
+	if fdTx.GasTipCap != nil {
+		gasTipCap = (*big.Int)(fdTx.GasTipCap)
+	}
+
+	var gasFeeCap *big.Int
+	if fdTx.GasFeeCap != nil {
+		gasFeeCap = (*big.Int)(fdTx.GasFeeCap)
+	}
+
+	var value *big.Int
+	if fdTx.Value != nil {
+		value = (*big.Int)(fdTx.Value)
+	} else {
+		value = big.NewInt(0)
+	}
+
+	var v, r, s *big.Int
+	if fdTx.V != nil {
+		v = (*big.Int)(fdTx.V)
+	}
+	if fdTx.R != nil {
+		r = (*big.Int)(fdTx.R)
+	}
+	if fdTx.S != nil {
+		s = (*big.Int)(fdTx.S)
+	}
+
+	// Create a DynamicFeeTx with the parsed data
+	// We use types.NewTx to properly wrap it as a Transaction
+	dynamicTx := &types.DynamicFeeTx{
+		ChainID:    chainID,
+		Nonce:      nonce,
+		GasTipCap:  gasTipCap,
+		GasFeeCap:  gasFeeCap,
+		Gas:        gas,
+		To:         to,
+		Value:      value,
+		Data:       data,
+		AccessList: fdTx.AccessList,
+		V:          v,
+		R:          r,
+		S:          s,
+	}
+
+	tx.tx = types.NewTx(dynamicTx)
+	return nil
 }
 
 // rpcHeader is a helper struct for parsing header with flexible EIP-4844 fields
@@ -175,16 +380,22 @@ func (f *flexibleUint64) UnmarshalJSON(data []byte) error {
 
 // parseRawBlock parses a raw JSON block into types.Block
 func parseRawBlock(raw json.RawMessage) (*types.Block, error) {
+	block, _, err := parseRawBlockWithMetas(raw)
+	return block, err
+}
+
+// parseRawBlockWithMetas parses a raw JSON block into types.Block and extracts fee delegation metadata
+func parseRawBlockWithMetas(raw json.RawMessage) (*types.Block, []*FeeDelegationMeta, error) {
 	// Parse header
 	var head rpcHeader
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return nil, fmt.Errorf("failed to parse header: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse header: %w", err)
 	}
 
 	// Parse block body
 	var body rpcBlock
 	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, fmt.Errorf("failed to parse block body: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse block body: %w", err)
 	}
 
 	// Convert to types.Header
@@ -224,10 +435,27 @@ func parseRawBlock(raw json.RawMessage) (*types.Block, error) {
 		header.ParentBeaconRoot = head.ParentBeaconRoot
 	}
 
-	// Extract transactions
+	// Extract transactions and fee delegation metadata
 	txs := make([]*types.Transaction, len(body.Transactions))
+	var feeDelegationMetas []*FeeDelegationMeta
+	blockNumber := header.Number.Uint64()
+
 	for i, tx := range body.Transactions {
 		txs[i] = tx.tx
+
+		// Extract fee delegation metadata if this is a fee delegation transaction
+		if tx.IsFeeDelegation() && tx.feePayer != nil {
+			meta := &FeeDelegationMeta{
+				TxHash:       tx.tx.Hash(),
+				BlockNumber:  blockNumber,
+				OriginalType: *tx.originalType,
+				FeePayer:     *tx.feePayer,
+				FeePayerV:    tx.feePayerV,
+				FeePayerR:    tx.feePayerR,
+				FeePayerS:    tx.feePayerS,
+			}
+			feeDelegationMetas = append(feeDelegationMetas, meta)
+		}
 	}
 
 	// Create block with transactions and withdrawals
@@ -236,7 +464,7 @@ func parseRawBlock(raw json.RawMessage) (*types.Block, error) {
 		Withdrawals:  body.Withdrawals,
 	})
 
-	return block, nil
+	return block, feeDelegationMetas, nil
 }
 
 // GetBlockReceipts retrieves all receipts for a block

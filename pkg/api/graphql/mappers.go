@@ -158,6 +158,8 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 		// Fee Delegation fields (type 0x16 = 22)
 		"feePayer":           nil,
 		"feePayerSignatures": nil,
+		// EIP-7702 SetCode fields (type 0x04 = 4)
+		"authorizationList": nil,
 	}
 
 	if tx.To() != nil {
@@ -195,6 +197,31 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 			}
 		}
 		result["accessList"] = accessListMap
+	}
+
+	// EIP-7702 SetCode transaction (type 0x04 = 4)
+	if tx.Type() == types.SetCodeTxType {
+		authList := tx.SetCodeAuthorizations()
+		if len(authList) > 0 {
+			authListMap := make([]interface{}, len(authList))
+			for i, auth := range authList {
+				authEntry := map[string]interface{}{
+					"chainId":   auth.ChainID.String(),
+					"address":   auth.Address.Hex(),
+					"nonce":     fmt.Sprintf("%d", auth.Nonce),
+					"yParity":   int(auth.V),
+					"r":         fmt.Sprintf("0x%x", auth.R.Bytes()),
+					"s":         fmt.Sprintf("0x%x", auth.S.Bytes()),
+					"authority": nil,
+				}
+				// Try to derive authority address
+				if authority, err := auth.Authority(); err == nil {
+					authEntry["authority"] = authority.Hex()
+				}
+				authListMap[i] = authEntry
+			}
+			result["authorizationList"] = authListMap
+		}
 	}
 
 	// Fee Delegation transaction (type 0x16 = 22)

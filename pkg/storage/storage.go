@@ -144,6 +144,7 @@ type Storage interface {
 	WBFTReader
 	WBFTWriter
 	FeeDelegationReader
+	FeeDelegationWriter
 	HistoricalReader
 	HistoricalWriter
 	KVStore

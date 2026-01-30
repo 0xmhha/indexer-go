@@ -474,6 +474,18 @@ func (m *mockStorage) GetFeePayerStats(ctx context.Context, feePayer common.Addr
 	}, nil
 }
 
+func (m *mockStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
+	return []common.Hash{}, nil
+}
+
+func (m *mockStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *storage.FeeDelegationTxMeta) error {
+	return nil
+}
+
 // mockStorageWithData extends mockStorage with transaction and receipt data
 type mockStorageWithData struct {
 	*mockStorage
@@ -1489,6 +1501,18 @@ func (m *mockStorageWithErrors) GetFeePayerStats(ctx context.Context, feePayer c
 	return nil, storage.ErrNotFound
 }
 
+func (m *mockStorageWithErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SetFeeDelegationTxMeta(ctx context.Context, meta *storage.FeeDelegationTxMeta) error {
+	return storage.ErrNotFound
+}
+
 // KVStore interface methods for mockStorageWithErrors
 func (m *mockStorageWithErrors) Put(ctx context.Context, key, value []byte) error {
 	return storage.ErrNotFound
@@ -1907,6 +1931,18 @@ func (m *mockStorageWithNonNotFoundErrors) GetTopFeePayers(ctx context.Context, 
 
 func (m *mockStorageWithNonNotFoundErrors) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
 	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetFeeDelegationTxMeta(ctx context.Context, meta *storage.FeeDelegationTxMeta) error {
+	return fmt.Errorf("database connection failed")
 }
 
 // KVStore interface methods for mockStorageWithNonNotFoundErrors

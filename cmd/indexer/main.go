@@ -19,6 +19,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
+	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
@@ -47,6 +48,9 @@ type App struct {
 
 	// Multi-chain support
 	multichainManager *multichain.Manager
+
+	// Notification system
+	notificationService notifications.Service
 
 	// Runtime flags
 	enableGapMode    bool
@@ -246,6 +250,11 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 	// Initialize EventBus (shared across all chains)
 	app.initEventBus()
 
+	// Initialize notification service if enabled
+	if err := app.initNotificationService(); err != nil {
+		return nil, fmt.Errorf("failed to initialize notification service: %w", err)
+	}
+
 	// Check if multichain mode is enabled
 	if cfg.MultiChain.Enabled && len(cfg.MultiChain.Chains) > 0 {
 		log.Info("Multi-chain mode enabled",
@@ -439,6 +448,98 @@ func (a *App) initEventBus() {
 	)
 }
 
+// initNotificationService initializes the notification service if enabled
+func (a *App) initNotificationService() error {
+	if !a.config.Notifications.Enabled {
+		a.logger.Debug("Notification service disabled")
+		return nil
+	}
+
+	// Convert config to notification service config
+	notifConfig := &notifications.Config{
+		Enabled: a.config.Notifications.Enabled,
+		Webhook: notifications.WebhookConfig{
+			Enabled:         a.config.Notifications.Webhook.Enabled,
+			Timeout:         a.config.Notifications.Webhook.Timeout,
+			MaxRetries:      a.config.Notifications.Webhook.MaxRetries,
+			MaxConcurrent:   a.config.Notifications.Webhook.MaxConcurrent,
+			AllowedHosts:    a.config.Notifications.Webhook.AllowedHosts,
+			SignatureHeader: a.config.Notifications.Webhook.SignatureHeader,
+		},
+		Email: notifications.EmailConfig{
+			Enabled:            a.config.Notifications.Email.Enabled,
+			SMTPHost:           a.config.Notifications.Email.SMTPHost,
+			SMTPPort:           a.config.Notifications.Email.SMTPPort,
+			SMTPUsername:       a.config.Notifications.Email.SMTPUsername,
+			SMTPPassword:       a.config.Notifications.Email.SMTPPassword,
+			FromAddress:        a.config.Notifications.Email.FromAddress,
+			FromName:           a.config.Notifications.Email.FromName,
+			UseTLS:             a.config.Notifications.Email.UseTLS,
+			MaxRecipients:      a.config.Notifications.Email.MaxRecipients,
+			RateLimitPerMinute: a.config.Notifications.Email.RateLimitPerMinute,
+		},
+		Slack: notifications.SlackConfig{
+			Enabled:            a.config.Notifications.Slack.Enabled,
+			Timeout:            a.config.Notifications.Slack.Timeout,
+			MaxRetries:         a.config.Notifications.Slack.MaxRetries,
+			DefaultUsername:    a.config.Notifications.Slack.DefaultUsername,
+			DefaultIconEmoji:   a.config.Notifications.Slack.DefaultIconEmoji,
+			RateLimitPerMinute: a.config.Notifications.Slack.RateLimitPerMinute,
+		},
+		Retry: notifications.RetryConfig{
+			MaxAttempts:  a.config.Notifications.Retry.MaxAttempts,
+			InitialDelay: a.config.Notifications.Retry.InitialDelay,
+			MaxDelay:     a.config.Notifications.Retry.MaxDelay,
+			Multiplier:   a.config.Notifications.Retry.Multiplier,
+		},
+		Queue: notifications.QueueConfig{
+			BufferSize:    a.config.Notifications.Queue.BufferSize,
+			Workers:       a.config.Notifications.Queue.Workers,
+			BatchSize:     a.config.Notifications.Queue.BatchSize,
+			FlushInterval: a.config.Notifications.Queue.FlushInterval,
+		},
+		Storage: notifications.StorageConfig{
+			HistoryRetention:        a.config.Notifications.Storage.HistoryRetention,
+			MaxSettingsPerUser:      a.config.Notifications.Storage.MaxSettingsPerUser,
+			MaxPendingNotifications: a.config.Notifications.Storage.MaxPendingNotifications,
+		},
+	}
+
+	// Get KVStore from storage for notification persistence
+	kvStore, ok := a.storage.(storage.KVStore)
+	if !ok {
+		return fmt.Errorf("storage does not implement KVStore interface")
+	}
+
+	// Create notification storage
+	notifStorage := notifications.NewPebbleStorage(kvStore)
+
+	// Create notification service
+	service := notifications.NewService(notifConfig, notifStorage, a.eventBus, a.logger)
+
+	// Register handlers
+	if notifConfig.Webhook.Enabled {
+		service.RegisterHandler(notifications.NewWebhookHandler(&notifConfig.Webhook, a.logger))
+	}
+	if notifConfig.Email.Enabled {
+		service.RegisterHandler(notifications.NewEmailHandler(&notifConfig.Email, a.logger))
+	}
+	if notifConfig.Slack.Enabled {
+		service.RegisterHandler(notifications.NewSlackHandler(&notifConfig.Slack, a.logger))
+	}
+
+	a.notificationService = service
+
+	a.logger.Info("Notification service initialized",
+		zap.Bool("webhook_enabled", notifConfig.Webhook.Enabled),
+		zap.Bool("email_enabled", notifConfig.Email.Enabled),
+		zap.Bool("slack_enabled", notifConfig.Slack.Enabled),
+		zap.Int("worker_count", notifConfig.Queue.Workers),
+	)
+
+	return nil
+}
+
 // initMultiChainManager initializes the multi-chain manager
 func (a *App) initMultiChainManager(ctx context.Context) error {
 	// Convert config chains to multichain ChainConfigs
@@ -543,9 +644,10 @@ func (a *App) initAPIServer() error {
 		ShutdownTimeout:       30 * time.Second,
 	}
 
-	// Create API server with optional RPC Proxy
+	// Create API server with optional RPC Proxy and Notification Service
 	serverOpts := &api.ServerOptions{
-		RPCProxy: a.rpcProxy,
+		RPCProxy:            a.rpcProxy,
+		NotificationService: a.notificationService,
 	}
 	apiServer, err := api.NewServerWithOptions(apiConfig, a.logger, a.storage, serverOpts)
 	if err != nil {
@@ -568,6 +670,7 @@ func (a *App) initAPIServer() error {
 		zap.Bool("jsonrpc", apiConfig.EnableJSONRPC),
 		zap.Bool("websocket", apiConfig.EnableWebSocket),
 		zap.Bool("rpc_proxy", a.rpcProxy != nil),
+		zap.Bool("notifications", a.notificationService != nil),
 	)
 
 	return nil
@@ -603,6 +706,14 @@ func (a *App) initRPCProxy() error {
 func (a *App) Run(ctx context.Context) error {
 	a.logger.Info("Starting indexing...")
 
+	// Start notification service if enabled
+	if a.notificationService != nil {
+		if err := a.notificationService.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start notification service: %w", err)
+		}
+		a.logger.Info("Notification service started")
+	}
+
 	// Multi-chain mode
 	if a.multichainManager != nil {
 		a.logger.Info("Starting multi-chain manager")
@@ -631,6 +742,14 @@ func (a *App) Shutdown() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	// Stop notification service
+	if a.notificationService != nil {
+		if err := a.notificationService.Stop(shutdownCtx); err != nil {
+			a.logger.Error("Failed to stop notification service gracefully", zap.Error(err))
+		}
+		a.logger.Info("Notification service stopped")
+	}
 
 	// Stop API server
 	if a.apiServer != nil {

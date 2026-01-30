@@ -326,6 +326,25 @@ type FeePayerStats struct {
 	Percentage float64
 }
 
+// FeeDelegationTxMeta stores metadata for Fee Delegation transactions (type 0x16)
+// This is stored separately because go-ethereum doesn't support the Fee Delegation type
+type FeeDelegationTxMeta struct {
+	// TxHash is the transaction hash
+	TxHash common.Hash
+	// BlockNumber is the block number containing this transaction
+	BlockNumber uint64
+	// OriginalType is the original transaction type (0x16 for Fee Delegation)
+	OriginalType uint8
+	// FeePayer is the address that paid the gas fee
+	FeePayer common.Address
+	// FeePayerV is the V value of fee payer signature
+	FeePayerV *big.Int
+	// FeePayerR is the R value of fee payer signature
+	FeePayerR *big.Int
+	// FeePayerS is the S value of fee payer signature
+	FeePayerS *big.Int
+}
+
 // FeeDelegationReader provides read access to fee delegation statistics
 type FeeDelegationReader interface {
 	// GetFeeDelegationStats returns overall fee delegation statistics
@@ -338,4 +357,17 @@ type FeeDelegationReader interface {
 
 	// GetFeePayerStats returns statistics for a specific fee payer
 	GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*FeePayerStats, error)
+
+	// GetFeeDelegationTxMeta returns fee delegation metadata for a transaction
+	// Returns nil if the transaction is not a fee delegation transaction
+	GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*FeeDelegationTxMeta, error)
+
+	// GetFeeDelegationTxsByFeePayer returns transaction hashes of fee delegation txs by fee payer
+	GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error)
+}
+
+// FeeDelegationWriter provides write access to fee delegation data
+type FeeDelegationWriter interface {
+	// SetFeeDelegationTxMeta stores fee delegation metadata for a transaction
+	SetFeeDelegationTxMeta(ctx context.Context, meta *FeeDelegationTxMeta) error
 }

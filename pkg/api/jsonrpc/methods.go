@@ -202,6 +202,31 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.listContractABIs(ctx, params)
 	case "decodeLog":
 		return h.decodeLog(ctx, params)
+	// Notification methods
+	case "notification_getSettings":
+		return h.getNotificationSettings(ctx, params)
+	case "notification_getSetting":
+		return h.getNotificationSetting(ctx, params)
+	case "notification_createSetting":
+		return h.createNotificationSetting(ctx, params)
+	case "notification_updateSetting":
+		return h.updateNotificationSetting(ctx, params)
+	case "notification_deleteSetting":
+		return h.deleteNotificationSetting(ctx, params)
+	case "notification_list":
+		return h.getNotifications(ctx, params)
+	case "notification_get":
+		return h.getNotification(ctx, params)
+	case "notification_getStats":
+		return h.getNotificationStats(ctx, params)
+	case "notification_getHistory":
+		return h.getDeliveryHistory(ctx, params)
+	case "notification_test":
+		return h.testNotificationSetting(ctx, params)
+	case "notification_retry":
+		return h.retryNotification(ctx, params)
+	case "notification_cancel":
+		return h.cancelNotification(ctx, params)
 	default:
 		return nil, NewError(MethodNotFound, fmt.Sprintf("method '%s' not found", method), nil)
 	}
@@ -463,6 +488,26 @@ func (h *Handler) transactionToJSON(tx *types.Transaction, location *storage.TxL
 			}
 		}
 		result["accessList"] = accessListJSON
+	}
+
+	// EIP-7702 SetCode transaction (type 0x04 = 4)
+	if tx.Type() == types.SetCodeTxType {
+		authList := tx.SetCodeAuthorizations()
+		if len(authList) > 0 {
+			authListJSON := make([]interface{}, len(authList))
+			for i, auth := range authList {
+				authEntry := map[string]interface{}{
+					"chainId": fmt.Sprintf("0x%x", auth.ChainID.Bytes()),
+					"address": auth.Address.Hex(),
+					"nonce":   fmt.Sprintf("0x%x", auth.Nonce),
+					"yParity": fmt.Sprintf("0x%x", auth.V),
+					"r":       fmt.Sprintf("0x%x", auth.R.Bytes()),
+					"s":       fmt.Sprintf("0x%x", auth.S.Bytes()),
+				}
+				authListJSON[i] = authEntry
+			}
+			result["authorizationList"] = authListJSON
+		}
 	}
 
 	// Fee Delegation transaction (type 0x16 = 22)

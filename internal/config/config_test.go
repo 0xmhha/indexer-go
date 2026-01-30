@@ -56,6 +56,15 @@ func TestConfigValidation(t *testing.T) {
 					Workers:   100,
 					ChunkSize: 100,
 				},
+				EventBus: EventBusConfig{
+					Type:              "local",
+					PublishBufferSize: 1000,
+					HistorySize:       100,
+				},
+				Node: NodeConfig{
+					ID:   "test-node",
+					Role: "all",
+				},
 			},
 			wantErr: false,
 		},

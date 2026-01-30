@@ -3714,19 +3714,6 @@ func detectQueryType(query string) string {
 	return "address"
 }
 
-// FeeDelegateDynamicFeeTxType is the transaction type for fee delegation (0x16 = 22)
-// This is a StableNet-specific transaction type
-const FeeDelegateDynamicFeeTxType = 22
-
-// getFeePayer extracts fee payer from transaction if available
-// Returns nil for standard go-ethereum (Fee Delegation is StableNet-specific)
-// TODO: Implement proper extraction when using go-stablenet client
-func getFeePayer(tx *types.Transaction) *common.Address {
-	// Standard go-ethereum doesn't have FeePayer method
-	// Fee Delegation is only available on StableNet
-	return nil
-}
-
 // GetFeeDelegationStats returns overall fee delegation statistics
 func (s *PebbleStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*FeeDelegationStats, error) {
 	if err := s.ensureNotClosed(); err != nil {
@@ -3765,43 +3752,44 @@ func (s *PebbleStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, to
 		txs := block.Transactions()
 		totalTxCount += uint64(len(txs))
 
-		for i, tx := range txs {
-			// Check if this is a fee delegation transaction
-			if tx.Type() == FeeDelegateDynamicFeeTxType {
-				stats.TotalFeeDelegatedTxs++
+		for _, tx := range txs {
+			// Check if this transaction has fee delegation metadata
+			meta, err := s.GetFeeDelegationTxMeta(ctx, tx.Hash())
+			if err != nil || meta == nil {
+				continue // Not a fee delegation transaction
+			}
 
-				// Get receipt to calculate fee
-				receipt, err := s.GetReceipt(ctx, tx.Hash())
-				if err != nil || receipt == nil {
-					continue
-				}
+			stats.TotalFeeDelegatedTxs++
 
-				// Calculate fee: gasUsed * effectiveGasPrice
-				var fee *big.Int
-				if receipt.EffectiveGasPrice != nil {
-					fee = new(big.Int).Mul(
-						big.NewInt(int64(receipt.GasUsed)),
-						receipt.EffectiveGasPrice,
-					)
-				} else {
-					// Fallback: calculate from block baseFee + tip
-					baseFee := block.BaseFee()
-					if baseFee != nil && tx.GasTipCap() != nil {
-						effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
-						if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
-							effectiveGasPrice = tx.GasFeeCap()
-						}
-						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
-					} else if tx.GasPrice() != nil {
-						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
+			// Get receipt to calculate fee
+			receipt, err := s.GetReceipt(ctx, tx.Hash())
+			if err != nil || receipt == nil {
+				continue
+			}
+
+			// Calculate fee: gasUsed * effectiveGasPrice
+			var fee *big.Int
+			if receipt.EffectiveGasPrice != nil {
+				fee = new(big.Int).Mul(
+					big.NewInt(int64(receipt.GasUsed)),
+					receipt.EffectiveGasPrice,
+				)
+			} else {
+				// Fallback: calculate from block baseFee + tip
+				baseFee := block.BaseFee()
+				if baseFee != nil && tx.GasTipCap() != nil {
+					effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
+					if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
+						effectiveGasPrice = tx.GasFeeCap()
 					}
+					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
+				} else if tx.GasPrice() != nil {
+					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
 				}
+			}
 
-				if fee != nil {
-					stats.TotalFeesSaved.Add(stats.TotalFeesSaved, fee)
-				}
-
-				_ = i // Suppress unused variable warning
+			if fee != nil {
+				stats.TotalFeesSaved.Add(stats.TotalFeesSaved, fee)
 			}
 		}
 	}
@@ -3854,57 +3842,55 @@ func (s *PebbleStorage) GetTopFeePayers(ctx context.Context, limit int, fromBloc
 		}
 
 		for _, tx := range block.Transactions() {
-			// Check if this is a fee delegation transaction
-			if tx.Type() == FeeDelegateDynamicFeeTxType {
-				totalFeeDelegationTxs++
+			// Check if this transaction has fee delegation metadata
+			meta, err := s.GetFeeDelegationTxMeta(ctx, tx.Hash())
+			if err != nil || meta == nil {
+				continue // Not a fee delegation transaction
+			}
 
-				// Get fee payer address
-				feePayer := getFeePayer(tx)
-				if feePayer == nil {
-					continue
+			totalFeeDelegationTxs++
+			feePayer := meta.FeePayer
+
+			// Initialize or update fee payer stats
+			if _, exists := feePayerMap[feePayer]; !exists {
+				feePayerMap[feePayer] = &FeePayerStats{
+					Address:       feePayer,
+					TxCount:       0,
+					TotalFeesPaid: big.NewInt(0),
+					Percentage:    0,
 				}
+			}
 
-				// Initialize or update fee payer stats
-				if _, exists := feePayerMap[*feePayer]; !exists {
-					feePayerMap[*feePayer] = &FeePayerStats{
-						Address:       *feePayer,
-						TxCount:       0,
-						TotalFeesPaid: big.NewInt(0),
-						Percentage:    0,
+			feePayerMap[feePayer].TxCount++
+
+			// Get receipt to calculate fee
+			receipt, err := s.GetReceipt(ctx, tx.Hash())
+			if err != nil || receipt == nil {
+				continue
+			}
+
+			// Calculate fee
+			var fee *big.Int
+			if receipt.EffectiveGasPrice != nil {
+				fee = new(big.Int).Mul(
+					big.NewInt(int64(receipt.GasUsed)),
+					receipt.EffectiveGasPrice,
+				)
+			} else {
+				baseFee := block.BaseFee()
+				if baseFee != nil && tx.GasTipCap() != nil {
+					effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
+					if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
+						effectiveGasPrice = tx.GasFeeCap()
 					}
+					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
+				} else if tx.GasPrice() != nil {
+					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
 				}
+			}
 
-				feePayerMap[*feePayer].TxCount++
-
-				// Get receipt to calculate fee
-				receipt, err := s.GetReceipt(ctx, tx.Hash())
-				if err != nil || receipt == nil {
-					continue
-				}
-
-				// Calculate fee
-				var fee *big.Int
-				if receipt.EffectiveGasPrice != nil {
-					fee = new(big.Int).Mul(
-						big.NewInt(int64(receipt.GasUsed)),
-						receipt.EffectiveGasPrice,
-					)
-				} else {
-					baseFee := block.BaseFee()
-					if baseFee != nil && tx.GasTipCap() != nil {
-						effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
-						if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
-							effectiveGasPrice = tx.GasFeeCap()
-						}
-						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
-					} else if tx.GasPrice() != nil {
-						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
-					}
-				}
-
-				if fee != nil {
-					feePayerMap[*feePayer].TotalFeesPaid.Add(feePayerMap[*feePayer].TotalFeesPaid, fee)
-				}
+			if fee != nil {
+				feePayerMap[feePayer].TotalFeesPaid.Add(feePayerMap[feePayer].TotalFeesPaid, fee)
 			}
 		}
 	}
@@ -3968,47 +3954,49 @@ func (s *PebbleStorage) GetFeePayerStats(ctx context.Context, feePayer common.Ad
 		}
 
 		for _, tx := range block.Transactions() {
-			// Check if this is a fee delegation transaction
-			if tx.Type() == FeeDelegateDynamicFeeTxType {
-				totalFeeDelegationTxs++
+			// Check if this transaction has fee delegation metadata
+			meta, err := s.GetFeeDelegationTxMeta(ctx, tx.Hash())
+			if err != nil || meta == nil {
+				continue // Not a fee delegation transaction
+			}
 
-				// Check if this transaction's fee payer matches
-				txFeePayer := getFeePayer(tx)
-				if txFeePayer == nil || *txFeePayer != feePayer {
-					continue
-				}
+			totalFeeDelegationTxs++
 
-				stats.TxCount++
+			// Check if this transaction's fee payer matches
+			if meta.FeePayer != feePayer {
+				continue
+			}
 
-				// Get receipt to calculate fee
-				receipt, err := s.GetReceipt(ctx, tx.Hash())
-				if err != nil || receipt == nil {
-					continue
-				}
+			stats.TxCount++
 
-				// Calculate fee
-				var fee *big.Int
-				if receipt.EffectiveGasPrice != nil {
-					fee = new(big.Int).Mul(
-						big.NewInt(int64(receipt.GasUsed)),
-						receipt.EffectiveGasPrice,
-					)
-				} else {
-					baseFee := block.BaseFee()
-					if baseFee != nil && tx.GasTipCap() != nil {
-						effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
-						if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
-							effectiveGasPrice = tx.GasFeeCap()
-						}
-						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
-					} else if tx.GasPrice() != nil {
-						fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
+			// Get receipt to calculate fee
+			receipt, err := s.GetReceipt(ctx, tx.Hash())
+			if err != nil || receipt == nil {
+				continue
+			}
+
+			// Calculate fee
+			var fee *big.Int
+			if receipt.EffectiveGasPrice != nil {
+				fee = new(big.Int).Mul(
+					big.NewInt(int64(receipt.GasUsed)),
+					receipt.EffectiveGasPrice,
+				)
+			} else {
+				baseFee := block.BaseFee()
+				if baseFee != nil && tx.GasTipCap() != nil {
+					effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
+					if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
+						effectiveGasPrice = tx.GasFeeCap()
 					}
+					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
+				} else if tx.GasPrice() != nil {
+					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
 				}
+			}
 
-				if fee != nil {
-					stats.TotalFeesPaid.Add(stats.TotalFeesPaid, fee)
-				}
+			if fee != nil {
+				stats.TotalFeesPaid.Add(stats.TotalFeesPaid, fee)
 			}
 		}
 	}
@@ -4019,4 +4007,123 @@ func (s *PebbleStorage) GetFeePayerStats(ctx context.Context, feePayer common.Ad
 	}
 
 	return stats, nil
+}
+
+// ============================================================================
+// FeeDelegationWriter interface implementation
+// ============================================================================
+
+// SetFeeDelegationTxMeta stores fee delegation metadata for a transaction
+func (s *PebbleStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *FeeDelegationTxMeta) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return err
+	}
+
+	if meta == nil {
+		return fmt.Errorf("meta cannot be nil")
+	}
+
+	// Serialize metadata
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fee delegation meta: %w", err)
+	}
+
+	// Store metadata by tx hash
+	key := FeeDelegationMetaKey(meta.TxHash)
+	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to store fee delegation meta: %w", err)
+	}
+
+	// Create index by fee payer
+	indexKey := FeeDelegationPayerIndexKey(meta.FeePayer, meta.BlockNumber, meta.TxHash)
+	if err := s.db.Set(indexKey, meta.TxHash.Bytes(), pebble.Sync); err != nil {
+		return fmt.Errorf("failed to store fee payer index: %w", err)
+	}
+
+	return nil
+}
+
+// GetFeeDelegationTxMeta returns fee delegation metadata for a transaction
+// Returns nil if the transaction is not a fee delegation transaction
+func (s *PebbleStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*FeeDelegationTxMeta, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	key := FeeDelegationMetaKey(txHash)
+	value, closer, err := s.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil // Not a fee delegation tx
+		}
+		return nil, fmt.Errorf("failed to get fee delegation meta: %w", err)
+	}
+	defer closer.Close()
+
+	var meta FeeDelegationTxMeta
+	if err := json.Unmarshal(value, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal fee delegation meta: %w", err)
+	}
+
+	return &meta, nil
+}
+
+// GetFeeDelegationTxsByFeePayer returns transaction hashes of fee delegation txs by fee payer
+func (s *PebbleStorage) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	prefix := FeeDelegationPayerPrefix(feePayer)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: prefixUpperBound(prefix),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var hashes []common.Hash
+	skipped := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		// Handle offset
+		if skipped < offset {
+			skipped++
+			continue
+		}
+
+		// Get tx hash from value
+		if len(iter.Value()) == 32 {
+			hash := common.BytesToHash(iter.Value())
+			hashes = append(hashes, hash)
+		}
+
+		// Check limit
+		if len(hashes) >= limit {
+			break
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return hashes, nil
 }

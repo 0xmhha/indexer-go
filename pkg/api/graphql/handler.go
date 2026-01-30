@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/graphql-go/graphql"
@@ -20,7 +21,8 @@ type Handler struct {
 
 // HandlerOptions contains optional configuration for the GraphQL handler
 type HandlerOptions struct {
-	RPCProxy *rpcproxy.Proxy
+	RPCProxy            *rpcproxy.Proxy
+	NotificationService notifications.Service
 }
 
 // NewHandler creates a new GraphQL handler
@@ -45,6 +47,12 @@ func NewHandlerWithOptions(store storage.Storage, logger *zap.Logger, opts *Hand
 	if opts != nil && opts.RPCProxy != nil {
 		builder = builder.WithRPCProxy(opts.RPCProxy).WithRPCProxyQueries()
 		logger.Info("GraphQL RPC Proxy queries enabled")
+	}
+
+	// Add notification queries if notification service is provided
+	if opts != nil && opts.NotificationService != nil {
+		builder = builder.WithNotificationService(opts.NotificationService).WithNotificationQueries()
+		logger.Info("GraphQL Notification queries enabled")
 	}
 
 	schema, err := builder.Build()

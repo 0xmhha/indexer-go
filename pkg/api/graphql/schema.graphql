@@ -321,7 +321,7 @@ type Transaction {
   # Max priority fee per gas (EIP-1559)
   maxPriorityFeePerGas: BigInt
 
-  # Transaction type (0x00, 0x02, 0x03, 0x16)
+  # Transaction type (0x00=Legacy, 0x01=AccessList, 0x02=DynamicFee, 0x03=Blob, 0x04=SetCode, 0x16=FeeDelegation)
   type: Int!
 
   # Input data
@@ -353,6 +353,9 @@ type Transaction {
 
   # Fee payer signatures (Fee Delegation, type 0x16)
   feePayerSignatures: [FeePayerSignature!]
+
+  # Authorization list for SetCode transactions (EIP-7702, type 0x04)
+  authorizationList: [SetCodeAuthorization!]
 }
 
 # FeePayerSignature represents a fee payer signature in Fee Delegation transactions
@@ -365,6 +368,30 @@ type FeePayerSignature {
 
   # S signature value
   s: Bytes!
+}
+
+# SetCodeAuthorization represents an EIP-7702 authorization for SetCode transactions (type 0x04)
+type SetCodeAuthorization {
+  # Chain ID for replay protection
+  chainId: BigInt!
+
+  # Address that will have code installed
+  address: Address!
+
+  # Nonce of the authorizer account
+  nonce: BigInt!
+
+  # Y parity of signature (0 or 1)
+  yParity: Int!
+
+  # R signature value
+  r: Bytes!
+
+  # S signature value
+  s: Bytes!
+
+  # Derived authority address (signer of this authorization)
+  authority: Address
 }
 
 # AccessListEntry represents an access list entry

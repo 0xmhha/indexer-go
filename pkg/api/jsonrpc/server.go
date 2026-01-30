@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"go.uber.org/zap"
 )
@@ -165,4 +166,9 @@ func (s *Server) writeErrorResponse(w http.ResponseWriter, id interface{}, rpcEr
 // HandleMethodDirect directly handles a method call (for testing)
 func (s *Server) HandleMethodDirect(ctx context.Context, method string, params json.RawMessage) (interface{}, *Error) {
 	return s.handler.HandleMethod(ctx, method, params)
+}
+
+// SetNotificationService sets the notification service for JSON-RPC handlers
+func (s *Server) SetNotificationService(service notifications.Service) {
+	s.handler.SetNotificationService(service)
 }

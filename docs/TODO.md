@@ -2,8 +2,8 @@
 
 > 미구현 기능 및 향후 개발 계획
 
-**Last Updated**: 2025-12-05
-**Status**: 핵심 기능 100% 완료, Low Priority 작업 예정
+**Last Updated**: 2026-01-30
+**Status**: 핵심 기능 100% 완료, Notification System 완료, Low Priority 작업 예정
 
 ---
 
@@ -19,31 +19,49 @@
 - Address Indexing API (Contract Creation, Internal Tx, ERC20/ERC721)
 - 이벤트 필터 시스템 (Topic 필터링, ABI 디코딩)
 - Analytics API (Gas 통계, TPS, Top Addresses)
+- Notification System (Webhook, Email, Slack)
 
-**미구현 기능**: Notification System, Horizontal Scaling, Performance & Operations, 테스트 커버리지 개선
+**미구현 기능**: Horizontal Scaling, Performance & Operations, 테스트 커버리지 개선
+
+---
+
+## 완료된 기능
+
+### 1. ~~Notification System~~ ✅ 완료
+**우선순위**: Low
+**예상 소요**: 1주
+**상태**: ✅ 완료 (100%)
+
+**완료된 항목:**
+- [x] Webhook 통합
+  - [x] Webhook 핸들러 구현 (`pkg/notifications/webhook.go`)
+  - [x] 이벤트 전달 시스템
+  - [x] 재시도 로직 (exponential backoff)
+  - [x] HMAC 서명 지원
+- [x] Email 알림
+  - [x] SMTP 설정 및 연동 (`pkg/notifications/email.go`)
+  - [x] 이메일 템플릿 시스템
+  - [x] Rate limiting
+  - [x] TLS 지원
+- [x] Slack 통합
+  - [x] Slack webhook 연동 (`pkg/notifications/slack.go`)
+  - [x] 알림 포맷팅 (Rich message with attachments)
+  - [x] Rate limiting
+- [x] 스토리지 레이어
+  - [x] PebbleDB 스토리지 구현 (`pkg/notifications/storage.go`)
+  - [x] 알림 설정 CRUD
+  - [x] 배달 이력 관리
+  - [x] 통계 추적
+- [x] Main App 통합
+  - [x] 설정 파일 통합 (`internal/config/config.go`)
+  - [x] 서비스 라이프사이클 통합 (`cmd/indexer/main.go`)
+- [x] API 구현
+  - [x] GraphQL mutations/queries (`pkg/api/graphql/resolvers_notification.go`, `types_notification.go`)
+  - [x] JSON-RPC methods (`pkg/api/jsonrpc/methods_notification.go`)
 
 ---
 
 ## 미구현 기능
-
-### 1. Notification System
-**우선순위**: Low
-**예상 소요**: 2-3주
-
-- [ ] Webhook 통합
-  - [ ] Webhook 설정 API (CRUD)
-  - [ ] 이벤트 전달 시스템
-  - [ ] 재시도 로직 (exponential backoff)
-  - [ ] Webhook 상태 모니터링
-- [ ] Email 알림
-  - [ ] SMTP 설정 및 연동
-  - [ ] 이메일 템플릿 시스템
-  - [ ] 구독 관리 API
-  - [ ] 이메일 큐 및 배치 전송
-- [ ] Slack 통합
-  - [ ] Slack webhook 연동
-  - [ ] 알림 포맷팅 (Rich message)
-  - [ ] 채널 관리 및 라우팅
 
 ### 2. Horizontal Scaling
 **우선순위**: Low
@@ -96,23 +114,27 @@
 
 ## 우선순위 요약
 
+### ✅ 완료
+1. ~~**Notification System**~~ - Webhook, Email, Slack ✅
+
 ### Low Priority (6개월+)
-1. **Notification System** - Webhook, Email, Slack
-2. **Horizontal Scaling** - Redis Pub/Sub, Kafka
-3. **Performance & Operations** - Rate limiting, Caching, Monitoring
-4. **테스트 커버리지 개선** - Storage 90% 목표
-5. **Client SDK** - 별도 프로젝트로 분리 예정
+1. **Horizontal Scaling** - Redis Pub/Sub, Kafka
+2. **Performance & Operations** - Rate limiting, Caching, Monitoring
+3. **테스트 커버리지 개선** - Storage 90% 목표
+4. **Client SDK** - 별도 프로젝트로 분리 예정
 
 ---
 
 ## 개발 로드맵
+
+### ✅ 완료 (2026-01)
+- [x] Notification System (Webhook, Email, Slack)
 
 ### Q1 2026 (1-3월)
 - [ ] Storage 테스트 커버리지 90% 달성
 - [ ] 성능 모니터링 기반 구축 (Prometheus, Grafana)
 
 ### Q2 2026 (4-6월)
-- [ ] Notification System (Webhook, Email)
 - [ ] Rate Limiting/Caching 고도화
 
 ### Q3 2026+ (장기)
@@ -136,8 +158,7 @@
 
 ### 테스트 및 참고
 - [TESTING.md](./TESTING.md) - 테스트 가이드
-- [KNOWN_ISSUES.md](./KNOWN_ISSUES.md) - 알려진 이슈 및 해결 상태
-- [STABLE_ONE_TECHNICAL_ANALYSIS.md](./STABLE_ONE_TECHNICAL_ANALYSIS.md) - Stable-One 체인 기술 분석
+- [CONTRACT_VERIFICATION_GUIDE.md](./CONTRACT_VERIFICATION_GUIDE.md) - 컨트랙트 검증 가이드
 - [README.md](../README.md) - 프로젝트 개요
 
 ---
@@ -151,7 +172,8 @@
 
 ---
 
-**Status**: ✅ 프로덕션 준비 완료, Low Priority 작업 예정
+**Status**: ✅ 프로덕션 준비 완료, Notification System 완료
 **Core Features**: 100% 완료
-**Advanced Features**: Notification, Scaling, Operations
-**Last Updated**: 2025-12-05
+**Notification System**: ✅ 완료
+**Remaining**: Scaling, Operations, Test Coverage
+**Last Updated**: 2026-01-30
