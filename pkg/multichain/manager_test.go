@@ -353,3 +353,83 @@ func TestManagerUnregisterNonexistent(t *testing.T) {
 		t.Errorf("expected ErrChainNotFound, got %v", err)
 	}
 }
+
+func TestManagerStartChainNotFound(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
+
+	config := DefaultManagerConfig()
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	err := manager.StartChain(ctx, "nonexistent")
+	if err != ErrChainNotFound {
+		t.Errorf("expected ErrChainNotFound, got %v", err)
+	}
+}
+
+func TestManagerStopChainNotFound(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
+
+	config := DefaultManagerConfig()
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	err := manager.StopChain(ctx, "nonexistent")
+	if err != ErrChainNotFound {
+		t.Errorf("expected ErrChainNotFound, got %v", err)
+	}
+}
+
+func TestManagerStopChainRegistered(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
+
+	config := DefaultManagerConfig()
+	manager, _ := NewManager(config, nil, nil, logger)
+
+	chainConfig := &ChainConfig{
+		ID:          "test-chain",
+		Name:        "Test Chain",
+		RPCEndpoint: "http://localhost:8545",
+		ChainID:     1,
+	}
+
+	// Register chain (without starting it)
+	_, err := manager.RegisterChain(ctx, chainConfig)
+	if err != nil {
+		t.Fatalf("failed to register chain: %v", err)
+	}
+
+	// StopChain on registered (not started) chain
+	err = manager.StopChain(ctx, "test-chain")
+	if err != nil {
+		t.Errorf("stop chain should succeed on registered chain: %v", err)
+	}
+}
+
+func TestManagerStartChainRequiresStorage(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	ctx := context.Background()
+
+	config := DefaultManagerConfig()
+	manager, _ := NewManager(config, nil, nil, logger) // nil storage
+
+	chainConfig := &ChainConfig{
+		ID:          "test-chain",
+		Name:        "Test Chain",
+		RPCEndpoint: "http://localhost:8545",
+		ChainID:     1,
+	}
+
+	// Register chain
+	_, err := manager.RegisterChain(ctx, chainConfig)
+	if err != nil {
+		t.Fatalf("failed to register chain: %v", err)
+	}
+
+	// StartChain should fail due to nil storage
+	err = manager.StartChain(ctx, "test-chain")
+	if err != ErrStorageRequired {
+		t.Errorf("expected ErrStorageRequired, got %v", err)
+	}
+}
