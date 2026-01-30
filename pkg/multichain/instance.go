@@ -75,6 +75,12 @@ func (ci *ChainInstance) Start(ctx context.Context) error {
 	ci.setStatusLocked(StatusStarting)
 	ci.statusMu.Unlock()
 
+	// Validate required dependencies
+	if ci.Storage == nil {
+		ci.setError(ErrStorageRequired)
+		return ErrStorageRequired
+	}
+
 	// Create instance-specific context
 	ci.ctx, ci.cancelFunc = context.WithCancel(ctx)
 
@@ -208,11 +214,13 @@ func (ci *ChainInstance) HealthCheck(ctx context.Context) *HealthStatus {
 		} else {
 			status.LatestHeight = latestHeight
 
-			// Get indexed height from storage
-			indexedHeight, err := ci.Storage.GetLatestHeight(ctx)
-			if err == nil {
-				status.IndexedHeight = indexedHeight
-				status.SyncLag = latestHeight - indexedHeight
+			// Get indexed height from storage (only if storage is available)
+			if ci.Storage != nil {
+				indexedHeight, err := ci.Storage.GetLatestHeight(ctx)
+				if err == nil {
+					status.IndexedHeight = indexedHeight
+					status.SyncLag = latestHeight - indexedHeight
+				}
 			}
 
 			// Consider healthy if sync lag is reasonable and RPC is responsive
@@ -311,18 +319,22 @@ func (ci *ChainInstance) runFetcher() {
 
 	ci.logger.Info("fetcher started")
 
-	// Subscribe to block events to track metrics
-	subID := events.SubscriptionID("chain-" + ci.Config.ID + "-metrics")
-	sub := ci.EventBus.Subscribe(
-		subID,
-		[]events.EventType{events.EventTypeBlock, events.EventTypeTransaction, events.EventTypeLog},
-		nil,
-		100,
-	)
-	defer ci.EventBus.Unsubscribe(subID)
+	// Subscribe to block events to track metrics (only if EventBus is available)
+	if ci.EventBus != nil {
+		subID := events.SubscriptionID("chain-" + ci.Config.ID + "-metrics")
+		sub := ci.EventBus.Subscribe(
+			subID,
+			[]events.EventType{events.EventTypeBlock, events.EventTypeTransaction, events.EventTypeLog},
+			nil,
+			100,
+		)
+		defer ci.EventBus.Unsubscribe(subID)
 
-	// Start metrics tracking goroutine
-	go ci.trackMetrics(sub)
+		// Start metrics tracking goroutine
+		go ci.trackMetrics(sub)
+	} else {
+		ci.logger.Warn("EventBus not available, metrics tracking disabled")
+	}
 
 	// Run the fetcher with gap recovery
 	if err := ci.Fetcher.RunWithGapRecovery(ci.ctx); err != nil {

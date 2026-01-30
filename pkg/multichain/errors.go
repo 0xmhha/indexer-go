@@ -18,6 +18,7 @@ var (
 	ErrAdapterInitFailed  = errors.New("failed to initialize adapter")
 	ErrFetcherInitFailed  = errors.New("failed to initialize fetcher")
 	ErrStorageInitFailed  = errors.New("failed to initialize storage")
+	ErrStorageRequired    = errors.New("storage is required to start chain")
 
 	// Configuration errors
 	ErrInvalidConfig     = errors.New("invalid configuration")
