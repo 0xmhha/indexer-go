@@ -25,6 +25,7 @@ type Config struct {
 	Notifications   NotificationsConfig   `yaml:"notifications"`
 	EventBus        EventBusConfig        `yaml:"eventbus"`
 	Node            NodeConfig            `yaml:"node"`
+	Verifier        VerifierConfig        `yaml:"verifier"`
 }
 
 // RPCConfig holds RPC client configuration
@@ -280,6 +281,22 @@ type NodeConfig struct {
 	Role string `yaml:"role"`
 	// Priority is used for leader election (higher = more likely to be leader)
 	Priority int `yaml:"priority"`
+}
+
+// VerifierConfig holds contract verification configuration
+type VerifierConfig struct {
+	// Enabled indicates whether contract verification is active
+	Enabled bool `yaml:"enabled"`
+	// SolcBinDir is the directory for Solidity compiler binaries
+	SolcBinDir string `yaml:"solc_bin_dir"`
+	// SolcCacheDir is the directory for caching compiled results
+	SolcCacheDir string `yaml:"solc_cache_dir"`
+	// MaxCompilationTime is the maximum time for a single compilation (in seconds)
+	MaxCompilationTime int `yaml:"max_compilation_time"`
+	// AutoDownload automatically downloads missing compiler versions
+	AutoDownload bool `yaml:"auto_download"`
+	// AllowMetadataVariance allows metadata hash differences in bytecode comparison
+	AllowMetadataVariance bool `yaml:"allow_metadata_variance"`
 }
 
 // NotificationsConfig holds notification service configuration
@@ -608,6 +625,19 @@ func (c *Config) SetDefaults() {
 	if c.Node.Priority == 0 {
 		c.Node.Priority = 1
 	}
+
+	// Verifier defaults
+	if c.Verifier.SolcBinDir == "" {
+		c.Verifier.SolcBinDir = "./solc-bin"
+	}
+	if c.Verifier.SolcCacheDir == "" {
+		c.Verifier.SolcCacheDir = "./solc-cache"
+	}
+	if c.Verifier.MaxCompilationTime == 0 {
+		c.Verifier.MaxCompilationTime = 30 // 30 seconds
+	}
+	// AllowMetadataVariance defaults to true for compatibility
+	// (can be explicitly set to false in config)
 }
 
 // LoadFromEnv loads configuration from environment variables

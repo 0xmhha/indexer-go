@@ -16,6 +16,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
 	"github.com/0xmhha/indexer-go/pkg/api"
 	"github.com/0xmhha/indexer-go/pkg/client"
+	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
@@ -23,6 +24,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
+	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"go.uber.org/zap"
 )
 
@@ -51,6 +53,9 @@ type App struct {
 
 	// Notification system
 	notificationService notifications.Service
+
+	// Contract verification
+	contractVerifier verifier.Verifier
 
 	// Runtime flags
 	enableGapMode    bool
@@ -625,6 +630,11 @@ func (a *App) initAPIServer() error {
 		a.logger.Warn("Failed to initialize RPC Proxy, contract call queries will be disabled", zap.Error(err))
 	}
 
+	// Initialize Contract Verifier for Etherscan-compatible API
+	if err := a.initContractVerifier(); err != nil {
+		a.logger.Warn("Failed to initialize Contract Verifier, contract verification will be disabled", zap.Error(err))
+	}
+
 	apiConfig := &api.Config{
 		Host:                  a.config.API.Host,
 		Port:                  a.config.API.Port,
@@ -644,10 +654,11 @@ func (a *App) initAPIServer() error {
 		ShutdownTimeout:       30 * time.Second,
 	}
 
-	// Create API server with optional RPC Proxy and Notification Service
+	// Create API server with optional RPC Proxy, Notification Service, and Verifier
 	serverOpts := &api.ServerOptions{
 		RPCProxy:            a.rpcProxy,
 		NotificationService: a.notificationService,
+		Verifier:            a.contractVerifier,
 	}
 	apiServer, err := api.NewServerWithOptions(apiConfig, a.logger, a.storage, serverOpts)
 	if err != nil {
@@ -671,6 +682,7 @@ func (a *App) initAPIServer() error {
 		zap.Bool("websocket", apiConfig.EnableWebSocket),
 		zap.Bool("rpc_proxy", a.rpcProxy != nil),
 		zap.Bool("notifications", a.notificationService != nil),
+		zap.Bool("verifier", a.contractVerifier != nil),
 	)
 
 	return nil
@@ -697,6 +709,55 @@ func (a *App) initRPCProxy() error {
 	a.logger.Info("RPC Proxy initialized",
 		zap.String("endpoint", a.config.RPC.Endpoint),
 		zap.Int("workers", proxyConfig.Worker.NumWorkers),
+	)
+
+	return nil
+}
+
+// initContractVerifier initializes the contract verification service
+func (a *App) initContractVerifier() error {
+	if !a.config.Verifier.Enabled {
+		a.logger.Debug("Contract verifier disabled")
+		return nil
+	}
+
+	if a.client == nil {
+		a.logger.Warn("Cannot initialize contract verifier: no client available")
+		return nil
+	}
+
+	// Create compiler configuration
+	compilerCfg := &compiler.Config{
+		BinDir:             a.config.Verifier.SolcBinDir,
+		CacheDir:           a.config.Verifier.SolcCacheDir,
+		MaxCompilationTime: a.config.Verifier.MaxCompilationTime,
+		CacheEnabled:       true,
+		AutoDownload:       a.config.Verifier.AutoDownload,
+	}
+
+	// Create Solidity compiler
+	solcCompiler, err := compiler.NewSolcCompiler(compilerCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create Solidity compiler: %w", err)
+	}
+
+	// Create verifier configuration
+	verifierCfg := verifier.DefaultConfig(solcCompiler, a.client.EthClient())
+	verifierCfg.AllowMetadataVariance = a.config.Verifier.AllowMetadataVariance
+
+	// Create contract verifier
+	contractVerifier, err := verifier.NewContractVerifier(verifierCfg)
+	if err != nil {
+		solcCompiler.Close()
+		return fmt.Errorf("failed to create contract verifier: %w", err)
+	}
+
+	a.contractVerifier = contractVerifier
+
+	a.logger.Info("Contract verifier initialized",
+		zap.String("solc_bin_dir", a.config.Verifier.SolcBinDir),
+		zap.Bool("auto_download", a.config.Verifier.AutoDownload),
+		zap.Bool("allow_metadata_variance", a.config.Verifier.AllowMetadataVariance),
 	)
 
 	return nil
@@ -762,6 +823,14 @@ func (a *App) Shutdown() {
 	if a.rpcProxy != nil {
 		a.rpcProxy.Stop()
 		a.logger.Info("RPC Proxy stopped")
+	}
+
+	// Close Contract Verifier
+	if a.contractVerifier != nil {
+		if err := a.contractVerifier.Close(); err != nil {
+			a.logger.Error("Failed to close contract verifier", zap.Error(err))
+		}
+		a.logger.Info("Contract verifier stopped")
 	}
 
 	// Stop multi-chain manager if running
