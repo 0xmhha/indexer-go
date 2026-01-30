@@ -264,3 +264,216 @@ func TestNewLogEvent(t *testing.T) {
 		t.Errorf("expected type %s", EventTypeLog)
 	}
 }
+
+func TestChainConfigEvent_Interface(t *testing.T) {
+	blockNumber := uint64(1000)
+	blockHash := common.HexToHash("0xblock")
+	parameter := "gasLimit"
+	oldValue := "10000000"
+	newValue := "20000000"
+
+	event := NewChainConfigEvent(blockNumber, blockHash, parameter, oldValue, newValue)
+
+	// Test Event interface implementation
+	if event.Type() != EventTypeChainConfig {
+		t.Errorf("expected type %s, got %s", EventTypeChainConfig, event.Type())
+	}
+
+	if event.Timestamp().IsZero() {
+		t.Error("timestamp should not be zero")
+	}
+
+	// Test ChainConfigEvent fields
+	if event.BlockNumber != blockNumber {
+		t.Errorf("expected block number %d, got %d", blockNumber, event.BlockNumber)
+	}
+
+	if event.BlockHash != blockHash {
+		t.Errorf("expected block hash %s, got %s", blockHash.Hex(), event.BlockHash.Hex())
+	}
+
+	if event.Parameter != parameter {
+		t.Errorf("expected parameter %s, got %s", parameter, event.Parameter)
+	}
+
+	if event.OldValue != oldValue {
+		t.Errorf("expected old value %s, got %s", oldValue, event.OldValue)
+	}
+
+	if event.NewValue != newValue {
+		t.Errorf("expected new value %s, got %s", newValue, event.NewValue)
+	}
+}
+
+func TestValidatorSetEvent_Interface(t *testing.T) {
+	blockNumber := uint64(2000)
+	blockHash := common.HexToHash("0xvalidator")
+	changeType := "added"
+	validator := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	validatorInfo := `{"name":"validator1","power":100}`
+	validatorSetSize := 10
+
+	event := NewValidatorSetEvent(blockNumber, blockHash, changeType, validator, validatorInfo, validatorSetSize)
+
+	// Test Event interface implementation
+	if event.Type() != EventTypeValidatorSet {
+		t.Errorf("expected type %s, got %s", EventTypeValidatorSet, event.Type())
+	}
+
+	if event.Timestamp().IsZero() {
+		t.Error("timestamp should not be zero")
+	}
+
+	// Test ValidatorSetEvent fields
+	if event.BlockNumber != blockNumber {
+		t.Errorf("expected block number %d, got %d", blockNumber, event.BlockNumber)
+	}
+
+	if event.BlockHash != blockHash {
+		t.Errorf("expected block hash %s, got %s", blockHash.Hex(), event.BlockHash.Hex())
+	}
+
+	if event.ChangeType != changeType {
+		t.Errorf("expected change type %s, got %s", changeType, event.ChangeType)
+	}
+
+	if event.Validator != validator {
+		t.Errorf("expected validator %s, got %s", validator.Hex(), event.Validator.Hex())
+	}
+
+	if event.ValidatorInfo != validatorInfo {
+		t.Errorf("expected validator info %s, got %s", validatorInfo, event.ValidatorInfo)
+	}
+
+	if event.ValidatorSetSize != validatorSetSize {
+		t.Errorf("expected validator set size %d, got %d", validatorSetSize, event.ValidatorSetSize)
+	}
+}
+
+func TestSystemContractEvent_Interface(t *testing.T) {
+	contract := common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")
+	eventName := SystemContractEventMint
+	blockNumber := uint64(3000)
+	txHash := common.HexToHash("0xtxhash")
+	logIndex := uint(5)
+	data := map[string]interface{}{
+		"to":     "0x1234",
+		"amount": "1000000000000000000",
+	}
+
+	event := NewSystemContractEvent(contract, eventName, blockNumber, txHash, logIndex, data)
+
+	// Test Event interface implementation
+	if event.Type() != EventTypeSystemContract {
+		t.Errorf("expected type %s, got %s", EventTypeSystemContract, event.Type())
+	}
+
+	if event.Timestamp().IsZero() {
+		t.Error("timestamp should not be zero")
+	}
+
+	// Test SystemContractEvent fields
+	if event.Contract != contract {
+		t.Errorf("expected contract %s, got %s", contract.Hex(), event.Contract.Hex())
+	}
+
+	if event.EventName != eventName {
+		t.Errorf("expected event name %s, got %s", eventName, event.EventName)
+	}
+
+	if event.BlockNumber != blockNumber {
+		t.Errorf("expected block number %d, got %d", blockNumber, event.BlockNumber)
+	}
+
+	if event.TxHash != txHash {
+		t.Errorf("expected tx hash %s, got %s", txHash.Hex(), event.TxHash.Hex())
+	}
+
+	if event.LogIndex != logIndex {
+		t.Errorf("expected log index %d, got %d", logIndex, event.LogIndex)
+	}
+
+	if event.Data["to"] != data["to"] {
+		t.Errorf("expected data[to] %v, got %v", data["to"], event.Data["to"])
+	}
+}
+
+func TestSystemContractEventTypes(t *testing.T) {
+	// Test various system contract event types
+	eventTypes := []SystemContractEventType{
+		SystemContractEventProposalCreated,
+		SystemContractEventProposalVoted,
+		SystemContractEventProposalApproved,
+		SystemContractEventProposalRejected,
+		SystemContractEventProposalExecuted,
+		SystemContractEventProposalFailed,
+		SystemContractEventProposalExpired,
+		SystemContractEventProposalCancelled,
+		SystemContractEventMemberAdded,
+		SystemContractEventMemberRemoved,
+		SystemContractEventMint,
+		SystemContractEventBurn,
+		SystemContractEventValidatorAdded,
+		SystemContractEventValidatorRemoved,
+	}
+
+	for _, eventType := range eventTypes {
+		event := NewSystemContractEvent(
+			common.Address{},
+			eventType,
+			100,
+			common.Hash{},
+			0,
+			nil,
+		)
+
+		if event.EventName != eventType {
+			t.Errorf("expected event type %s, got %s", eventType, event.EventName)
+		}
+
+		if event.Type() != EventTypeSystemContract {
+			t.Errorf("expected type %s for %s", EventTypeSystemContract, eventType)
+		}
+	}
+}
+
+func TestAllEventTypes_Interface(t *testing.T) {
+	// Comprehensive test ensuring all event types properly implement the Event interface
+	events := []Event{
+		NewBlockEvent(types.NewBlockWithHeader(&types.Header{Number: big.NewInt(1)})),
+		NewTransactionEvent(
+			types.NewTransaction(0, common.Address{}, big.NewInt(0), 21000, big.NewInt(1), nil),
+			1, common.Hash{}, 0, common.Address{}, nil,
+		),
+		NewLogEvent(&types.Log{}),
+		NewChainConfigEvent(1, common.Hash{}, "param", "old", "new"),
+		NewValidatorSetEvent(1, common.Hash{}, "added", common.Address{}, "{}", 1),
+		NewSystemContractEvent(common.Address{}, SystemContractEventMint, 1, common.Hash{}, 0, nil),
+	}
+
+	expectedTypes := []EventType{
+		EventTypeBlock,
+		EventTypeTransaction,
+		EventTypeLog,
+		EventTypeChainConfig,
+		EventTypeValidatorSet,
+		EventTypeSystemContract,
+	}
+
+	for i, event := range events {
+		// Test Type() method
+		if event.Type() != expectedTypes[i] {
+			t.Errorf("event %d: expected type %s, got %s", i, expectedTypes[i], event.Type())
+		}
+
+		// Test Timestamp() method returns non-zero time
+		if event.Timestamp().IsZero() {
+			t.Errorf("event %d: timestamp should not be zero", i)
+		}
+
+		// Ensure timestamp is recent (within last second)
+		if time.Since(event.Timestamp()) > time.Second {
+			t.Errorf("event %d: timestamp is not recent", i)
+		}
+	}
+}

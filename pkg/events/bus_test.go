@@ -351,3 +351,15 @@ func TestEventBus_ConcurrentOperations(t *testing.T) {
 		t.Errorf("expected %d total events, got %d", publishCount, totalEvents)
 	}
 }
+
+func TestDefaultSubscribeOptions(t *testing.T) {
+	opts := DefaultSubscribeOptions()
+
+	if opts.ReplayLast != 0 {
+		t.Errorf("expected ReplayLast 0, got %d", opts.ReplayLast)
+	}
+
+	if opts.ChannelSize != 100 {
+		t.Errorf("expected ChannelSize 100, got %d", opts.ChannelSize)
+	}
+}
