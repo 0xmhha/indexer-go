@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/trie"
 	"go.uber.org/zap"
 )
 
@@ -4005,4 +4006,2000 @@ func TestPebbleStorage_GetLatestHeight_NotSet(t *testing.T) {
 	}
 	// Height should be 0 for fresh storage
 	_ = height // Just accessing the value is enough
+}
+
+// ============================================================================
+// KVStore Interface Tests (Put, Get, Delete, Has, Iterate)
+// ============================================================================
+
+func TestPebbleStorage_Put(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("Put success", func(t *testing.T) {
+		key := []byte("test-key-1")
+		value := []byte("test-value-1")
+
+		err := pebbleStorage.Put(ctx, key, value)
+		if err != nil {
+			t.Errorf("Put() error = %v", err)
+		}
+
+		// Verify by Get
+		retrieved, err := pebbleStorage.Get(ctx, key)
+		if err != nil {
+			t.Errorf("Get() error = %v", err)
+		}
+		if string(retrieved) != string(value) {
+			t.Errorf("Get() = %v, want %v", string(retrieved), string(value))
+		}
+	})
+
+	t.Run("Put empty value", func(t *testing.T) {
+		key := []byte("test-key-empty")
+		value := []byte{}
+
+		err := pebbleStorage.Put(ctx, key, value)
+		if err != nil {
+			t.Errorf("Put() error = %v", err)
+		}
+
+		retrieved, err := pebbleStorage.Get(ctx, key)
+		if err != nil {
+			t.Errorf("Get() error = %v", err)
+		}
+		if len(retrieved) != 0 {
+			t.Errorf("Get() = %v, want empty", retrieved)
+		}
+	})
+
+	t.Run("Put overwrite", func(t *testing.T) {
+		key := []byte("test-key-overwrite")
+		value1 := []byte("original-value")
+		value2 := []byte("new-value")
+
+		err := pebbleStorage.Put(ctx, key, value1)
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+
+		err = pebbleStorage.Put(ctx, key, value2)
+		if err != nil {
+			t.Errorf("Put() overwrite error = %v", err)
+		}
+
+		retrieved, err := pebbleStorage.Get(ctx, key)
+		if err != nil {
+			t.Errorf("Get() error = %v", err)
+		}
+		if string(retrieved) != string(value2) {
+			t.Errorf("Get() = %v, want %v", string(retrieved), string(value2))
+		}
+	})
+}
+
+func TestPebbleStorage_Put_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	err = pebbleStorage.Put(ctx, []byte("key"), []byte("value"))
+	if err == nil {
+		t.Error("Put() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_Put_ReadOnly(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-readonly-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// First create storage normally
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	pebbleStorage.Close()
+
+	// Reopen as read-only
+	cfg.ReadOnly = true
+	pebbleStorage, err = NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to open storage read-only: %v", err)
+	}
+	defer pebbleStorage.Close()
+
+	ctx := context.Background()
+	err = pebbleStorage.Put(ctx, []byte("key"), []byte("value"))
+	if err == nil {
+		t.Error("Put() on read-only storage should return error")
+	}
+}
+
+func TestPebbleStorage_Get(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("Get existing key", func(t *testing.T) {
+		key := []byte("get-test-key")
+		value := []byte("get-test-value")
+
+		err := pebbleStorage.Put(ctx, key, value)
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+
+		retrieved, err := pebbleStorage.Get(ctx, key)
+		if err != nil {
+			t.Errorf("Get() error = %v", err)
+		}
+		if string(retrieved) != string(value) {
+			t.Errorf("Get() = %v, want %v", string(retrieved), string(value))
+		}
+	})
+
+	t.Run("Get non-existent key", func(t *testing.T) {
+		_, err := pebbleStorage.Get(ctx, []byte("non-existent-key"))
+		if err != ErrNotFound {
+			t.Errorf("Get() error = %v, want ErrNotFound", err)
+		}
+	})
+}
+
+func TestPebbleStorage_Get_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.Get(ctx, []byte("key"))
+	if err == nil {
+		t.Error("Get() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_Delete(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("Delete existing key", func(t *testing.T) {
+		key := []byte("delete-test-key")
+		value := []byte("delete-test-value")
+
+		err := pebbleStorage.Put(ctx, key, value)
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+
+		// Verify key exists
+		_, err = pebbleStorage.Get(ctx, key)
+		if err != nil {
+			t.Fatalf("Get() before delete error = %v", err)
+		}
+
+		// Delete the key
+		err = pebbleStorage.Delete(ctx, key)
+		if err != nil {
+			t.Errorf("Delete() error = %v", err)
+		}
+
+		// Verify key no longer exists
+		_, err = pebbleStorage.Get(ctx, key)
+		if err != ErrNotFound {
+			t.Errorf("Get() after delete error = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("Delete non-existent key", func(t *testing.T) {
+		// Deleting non-existent key should not error in PebbleDB
+		err := pebbleStorage.Delete(ctx, []byte("non-existent-delete-key"))
+		if err != nil {
+			t.Errorf("Delete() non-existent key error = %v", err)
+		}
+	})
+}
+
+func TestPebbleStorage_Delete_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	err = pebbleStorage.Delete(ctx, []byte("key"))
+	if err == nil {
+		t.Error("Delete() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_Delete_ReadOnly(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-readonly-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// First create storage normally
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	pebbleStorage.Close()
+
+	// Reopen as read-only
+	cfg.ReadOnly = true
+	pebbleStorage, err = NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to open storage read-only: %v", err)
+	}
+	defer pebbleStorage.Close()
+
+	ctx := context.Background()
+	err = pebbleStorage.Delete(ctx, []byte("key"))
+	if err == nil {
+		t.Error("Delete() on read-only storage should return error")
+	}
+}
+
+func TestPebbleStorage_Has(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("Has existing key", func(t *testing.T) {
+		key := []byte("has-test-key")
+		value := []byte("has-test-value")
+
+		err := pebbleStorage.Put(ctx, key, value)
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+
+		exists, err := pebbleStorage.Has(ctx, key)
+		if err != nil {
+			t.Errorf("Has() error = %v", err)
+		}
+		if !exists {
+			t.Error("Has() = false, want true")
+		}
+	})
+
+	t.Run("Has non-existent key", func(t *testing.T) {
+		exists, err := pebbleStorage.Has(ctx, []byte("non-existent-has-key"))
+		if err != nil {
+			t.Errorf("Has() error = %v", err)
+		}
+		if exists {
+			t.Error("Has() = true, want false")
+		}
+	})
+}
+
+func TestPebbleStorage_Has_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.Has(ctx, []byte("key"))
+	if err == nil {
+		t.Error("Has() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_Iterate(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("Iterate with prefix", func(t *testing.T) {
+		// Set up test data
+		prefix := []byte("iter-test/")
+		testData := map[string]string{
+			"iter-test/key1": "value1",
+			"iter-test/key2": "value2",
+			"iter-test/key3": "value3",
+			"other-prefix/key": "other-value",
+		}
+
+		for k, v := range testData {
+			err := pebbleStorage.Put(ctx, []byte(k), []byte(v))
+			if err != nil {
+				t.Fatalf("Put() error = %v", err)
+			}
+		}
+
+		// Iterate over prefix
+		var count int
+		var keys []string
+		err := pebbleStorage.Iterate(ctx, prefix, func(key, value []byte) bool {
+			count++
+			keys = append(keys, string(key))
+			return true // continue iteration
+		})
+		if err != nil {
+			t.Errorf("Iterate() error = %v", err)
+		}
+
+		if count != 3 {
+			t.Errorf("Iterate() count = %d, want 3", count)
+		}
+	})
+
+	t.Run("Iterate with early stop", func(t *testing.T) {
+		prefix := []byte("stop-test/")
+		for i := 0; i < 5; i++ {
+			key := fmt.Sprintf("stop-test/key%d", i)
+			err := pebbleStorage.Put(ctx, []byte(key), []byte("value"))
+			if err != nil {
+				t.Fatalf("Put() error = %v", err)
+			}
+		}
+
+		var count int
+		err := pebbleStorage.Iterate(ctx, prefix, func(key, value []byte) bool {
+			count++
+			return count < 2 // stop after 2 items
+		})
+		if err != nil {
+			t.Errorf("Iterate() error = %v", err)
+		}
+
+		if count != 2 {
+			t.Errorf("Iterate() stopped at count = %d, want 2", count)
+		}
+	})
+
+	t.Run("Iterate with empty prefix", func(t *testing.T) {
+		// Empty prefix should iterate all keys
+		var count int
+		err := pebbleStorage.Iterate(ctx, []byte{}, func(key, value []byte) bool {
+			count++
+			return true
+		})
+		if err != nil {
+			t.Errorf("Iterate() error = %v", err)
+		}
+
+		// Should have at least the keys we added in previous tests
+		if count < 1 {
+			t.Errorf("Iterate() with empty prefix count = %d, want > 0", count)
+		}
+	})
+
+	t.Run("Iterate with context cancellation", func(t *testing.T) {
+		cancelCtx, cancel := context.WithCancel(ctx)
+		cancel() // Cancel immediately
+
+		// Add some test data
+		for i := 0; i < 3; i++ {
+			key := fmt.Sprintf("cancel-test/key%d", i)
+			_ = pebbleStorage.Put(ctx, []byte(key), []byte("value"))
+		}
+
+		err := pebbleStorage.Iterate(cancelCtx, []byte("cancel-test/"), func(key, value []byte) bool {
+			return true
+		})
+		if err == nil || !errors.Is(err, context.Canceled) {
+			t.Errorf("Iterate() with cancelled context should return context.Canceled, got %v", err)
+		}
+	})
+}
+
+func TestPebbleStorage_Iterate_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	err = pebbleStorage.Iterate(ctx, []byte("prefix"), func(key, value []byte) bool {
+		return true
+	})
+	if err == nil {
+		t.Error("Iterate() on closed storage should return error")
+	}
+}
+
+func TestPrefixUpperBound(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefix   []byte
+		expected []byte
+	}{
+		{
+			name:     "empty prefix",
+			prefix:   []byte{},
+			expected: nil,
+		},
+		{
+			name:     "simple prefix",
+			prefix:   []byte("test"),
+			expected: []byte("tesu"), // 't' becomes 'u'
+		},
+		{
+			name:     "prefix ending with 0xff",
+			prefix:   []byte{0x01, 0xff},
+			expected: []byte{0x02},
+		},
+		{
+			name:     "all 0xff",
+			prefix:   []byte{0xff, 0xff, 0xff},
+			expected: nil,
+		},
+		{
+			name:     "single byte",
+			prefix:   []byte{0x00},
+			expected: []byte{0x01},
+		},
+		{
+			name:     "prefix with multiple 0xff at end",
+			prefix:   []byte{0x01, 0xff, 0xff},
+			expected: []byte{0x02},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := prefixUpperBound(tt.prefix)
+			if string(result) != string(tt.expected) {
+				t.Errorf("prefixUpperBound(%v) = %v, want %v", tt.prefix, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPebbleStorage_Sync(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Write some data
+	err := pebbleStorage.Put(ctx, []byte("sync-test"), []byte("value"))
+	if err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+
+	// Call Sync (takes no arguments)
+	err = pebbleStorage.Sync()
+	if err != nil {
+		t.Errorf("Sync() error = %v", err)
+	}
+	_ = ctx // ctx is used in Put
+}
+
+func TestPebbleStorage_Sync_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	err = pebbleStorage.Sync()
+	if err == nil {
+		t.Error("Sync() on closed storage should return error")
+	}
+}
+
+// ============================================================================
+// HasReceipt and GetMissingReceipts Tests
+// ============================================================================
+
+func TestPebbleStorage_HasReceipt(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Create a test block with transaction
+	block := createTestBlockWithTransactions(1, 1)
+	tx := block.Transactions()[0]
+
+	// Store block first
+	err := pebbleStorage.SetBlock(ctx, block)
+	if err != nil {
+		t.Fatalf("SetBlock() error = %v", err)
+	}
+
+	t.Run("HasReceipt - not found", func(t *testing.T) {
+		exists, err := pebbleStorage.HasReceipt(ctx, tx.Hash())
+		if err != nil {
+			t.Errorf("HasReceipt() error = %v", err)
+		}
+		if exists {
+			t.Error("HasReceipt() = true, want false for missing receipt")
+		}
+	})
+
+	t.Run("HasReceipt - found after storing", func(t *testing.T) {
+		// Store a receipt
+		receipt := &types.Receipt{
+			Type:              types.LegacyTxType,
+			Status:            types.ReceiptStatusSuccessful,
+			CumulativeGasUsed: 21000,
+			Bloom:             types.Bloom{},
+			Logs:              []*types.Log{},
+			TxHash:            tx.Hash(),
+			GasUsed:           21000,
+			BlockNumber:       block.Number(),
+			BlockHash:         block.Hash(),
+			TransactionIndex:  0,
+		}
+
+		err := pebbleStorage.SetReceipt(ctx, receipt)
+		if err != nil {
+			t.Fatalf("SetReceipt() error = %v", err)
+		}
+
+		exists, err := pebbleStorage.HasReceipt(ctx, tx.Hash())
+		if err != nil {
+			t.Errorf("HasReceipt() error = %v", err)
+		}
+		if !exists {
+			t.Error("HasReceipt() = false, want true for stored receipt")
+		}
+	})
+}
+
+func TestPebbleStorage_HasReceipt_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.HasReceipt(ctx, common.Hash{})
+	if err == nil {
+		t.Error("HasReceipt() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetMissingReceipts(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	// Create a test block with multiple transactions
+	block := createTestBlockWithTransactions(1, 3)
+
+	// Store block first
+	err := pebbleStorage.SetBlock(ctx, block)
+	if err != nil {
+		t.Fatalf("SetBlock() error = %v", err)
+	}
+
+	t.Run("All receipts missing", func(t *testing.T) {
+		missing, err := pebbleStorage.GetMissingReceipts(ctx, 1)
+		if err != nil {
+			t.Errorf("GetMissingReceipts() error = %v", err)
+		}
+
+		if len(missing) != len(block.Transactions()) {
+			t.Errorf("GetMissingReceipts() = %d hashes, want %d", len(missing), len(block.Transactions()))
+		}
+	})
+
+	t.Run("Some receipts present", func(t *testing.T) {
+		// Store receipt for first transaction only
+		tx := block.Transactions()[0]
+		receipt := &types.Receipt{
+			Type:              types.LegacyTxType,
+			Status:            types.ReceiptStatusSuccessful,
+			CumulativeGasUsed: 21000,
+			Bloom:             types.Bloom{},
+			Logs:              []*types.Log{},
+			TxHash:            tx.Hash(),
+			GasUsed:           21000,
+			BlockNumber:       block.Number(),
+			BlockHash:         block.Hash(),
+			TransactionIndex:  0,
+		}
+
+		err := pebbleStorage.SetReceipt(ctx, receipt)
+		if err != nil {
+			t.Fatalf("SetReceipt() error = %v", err)
+		}
+
+		missing, err := pebbleStorage.GetMissingReceipts(ctx, 1)
+		if err != nil {
+			t.Errorf("GetMissingReceipts() error = %v", err)
+		}
+
+		// Should be missing transactions minus the one we stored
+		expectedMissing := len(block.Transactions()) - 1
+		if len(missing) != expectedMissing {
+			t.Errorf("GetMissingReceipts() = %d hashes, want %d", len(missing), expectedMissing)
+		}
+	})
+}
+
+func TestPebbleStorage_GetMissingReceipts_BlockNotFound(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	_, err := pebbleStorage.GetMissingReceipts(ctx, 999)
+	if err == nil {
+		t.Error("GetMissingReceipts() for non-existent block should return error")
+	}
+}
+
+func TestPebbleStorage_GetMissingReceipts_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.GetMissingReceipts(ctx, 1)
+	if err == nil {
+		t.Error("GetMissingReceipts() on closed storage should return error")
+	}
+}
+
+// Helper function to create block with transactions
+func createTestBlockWithTransactions(height uint64, txCount int) *types.Block {
+	// Create transactions
+	txs := make([]*types.Transaction, txCount)
+	for i := 0; i < txCount; i++ {
+		txs[i] = createTestTransaction(uint64(i))
+	}
+
+	header := &types.Header{
+		ParentHash:  common.Hash{},
+		UncleHash:   types.EmptyUncleHash,
+		Coinbase:    common.Address{},
+		Root:        common.Hash{},
+		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash: types.EmptyReceiptsHash,
+		Bloom:       types.Bloom{},
+		Difficulty:  big.NewInt(0),
+		Number:      big.NewInt(int64(height)),
+		GasLimit:    5000000,
+		GasUsed:     21000 * uint64(txCount),
+		Time:        1234567890 + height,
+		Extra:       []byte{},
+		MixDigest:   common.Hash{},
+		Nonce:       types.BlockNonce{},
+	}
+	return types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs})
+}
+
+// ============================================================================
+// SetBlockWithReceipts Tests
+// ============================================================================
+
+func TestPebbleStorage_SetBlockWithReceipts(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("block with receipts", func(t *testing.T) {
+		block := createTestBlockWithTransactions(1, 2)
+		txs := block.Transactions()
+
+		// Create receipts for the transactions
+		receipts := make([]*types.Receipt, len(txs))
+		for i, tx := range txs {
+			receipts[i] = &types.Receipt{
+				Type:              0,
+				Status:            types.ReceiptStatusSuccessful,
+				CumulativeGasUsed: uint64(21000 * (i + 1)),
+				TxHash:            tx.Hash(),
+				BlockNumber:       block.Number(),
+				TransactionIndex:  uint(i),
+			}
+		}
+
+		err := pebbleStorage.SetBlockWithReceipts(ctx, block, receipts)
+		if err != nil {
+			t.Fatalf("SetBlockWithReceipts() error = %v", err)
+		}
+
+		// Verify block was stored
+		storedBlock, err := pebbleStorage.GetBlock(ctx, 1)
+		if err != nil {
+			t.Errorf("GetBlock() error = %v", err)
+		}
+		if storedBlock == nil {
+			t.Error("GetBlock() returned nil")
+		}
+
+		// Verify transactions were stored
+		for _, tx := range txs {
+			storedTx, _, err := pebbleStorage.GetTransaction(ctx, tx.Hash())
+			if err != nil {
+				t.Errorf("GetTransaction() error = %v", err)
+			}
+			if storedTx == nil {
+				t.Errorf("Transaction %s not found", tx.Hash().Hex())
+			}
+		}
+
+		// Verify receipts were stored
+		for _, tx := range txs {
+			receipt, err := pebbleStorage.GetReceipt(ctx, tx.Hash())
+			if err != nil {
+				t.Errorf("GetReceipt() error = %v", err)
+			}
+			if receipt == nil {
+				t.Errorf("Receipt for tx %s not found", tx.Hash().Hex())
+			}
+		}
+	})
+
+	t.Run("nil block", func(t *testing.T) {
+		err := pebbleStorage.SetBlockWithReceipts(ctx, nil, nil)
+		if err == nil {
+			t.Error("SetBlockWithReceipts() should fail for nil block")
+		}
+	})
+
+	t.Run("block without receipts", func(t *testing.T) {
+		block := createTestBlockWithTransactions(2, 1)
+
+		err := pebbleStorage.SetBlockWithReceipts(ctx, block, nil)
+		if err != nil {
+			t.Fatalf("SetBlockWithReceipts() error = %v", err)
+		}
+
+		// Verify block was stored
+		storedBlock, err := pebbleStorage.GetBlock(ctx, 2)
+		if err != nil {
+			t.Errorf("GetBlock() error = %v", err)
+		}
+		if storedBlock == nil {
+			t.Error("GetBlock() returned nil")
+		}
+	})
+}
+
+func TestPebbleStorage_SetBlockWithReceipts_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-setblockwithreceipts-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	block := createTestBlock(1)
+	err = pebbleStorage.SetBlockWithReceipts(ctx, block, nil)
+	if err == nil {
+		t.Error("SetBlockWithReceipts() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_SetBlockWithReceipts_ReadOnly(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-setblockwithreceipts-ro-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// First create a writable storage to initialize the database
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	pebbleStorage.Close()
+
+	// Now open in read-only mode
+	roCfg := DefaultConfig(tmpDir)
+	roCfg.ReadOnly = true
+	roStorage, err := NewPebbleStorage(roCfg)
+	if err != nil {
+		t.Fatalf("Failed to create read-only storage: %v", err)
+	}
+	defer roStorage.Close()
+
+	ctx := context.Background()
+	block := createTestBlock(1)
+	err = roStorage.SetBlockWithReceipts(ctx, block, nil)
+	if err == nil {
+		t.Error("SetBlockWithReceipts() on read-only storage should return error")
+	}
+}
+
+// ============================================================================
+// Minter and Validator Query Tests
+// ============================================================================
+
+func TestPebbleStorage_GetActiveMinters(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("empty minters list", func(t *testing.T) {
+		minters, err := pebbleStorage.GetActiveMinters(ctx)
+		if err != nil {
+			t.Errorf("GetActiveMinters() error = %v", err)
+		}
+		if len(minters) != 0 {
+			t.Errorf("GetActiveMinters() = %d minters, want 0", len(minters))
+		}
+	})
+
+	t.Run("with stored minters", func(t *testing.T) {
+		// Store some minter records
+		minter1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
+		minter2 := common.HexToAddress("0x2222222222222222222222222222222222222222")
+
+		key1 := MinterActiveIndexKey(minter1)
+		key2 := MinterActiveIndexKey(minter2)
+
+		err := pebbleStorage.Put(ctx, key1, EncodeBigInt(big.NewInt(1000000)))
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+		err = pebbleStorage.Put(ctx, key2, EncodeBigInt(big.NewInt(2000000)))
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+
+		minters, err := pebbleStorage.GetActiveMinters(ctx)
+		if err != nil {
+			t.Errorf("GetActiveMinters() error = %v", err)
+		}
+		if len(minters) != 2 {
+			t.Errorf("GetActiveMinters() = %d minters, want 2", len(minters))
+		}
+	})
+}
+
+func TestPebbleStorage_GetActiveMinters_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getactiveminters-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.GetActiveMinters(ctx)
+	if err == nil {
+		t.Error("GetActiveMinters() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetMinterAllowance(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	minter := common.HexToAddress("0x3333333333333333333333333333333333333333")
+
+	t.Run("non-existent minter returns zero", func(t *testing.T) {
+		allowance, err := pebbleStorage.GetMinterAllowance(ctx, minter)
+		if err != nil {
+			t.Errorf("GetMinterAllowance() error = %v", err)
+		}
+		if allowance.Cmp(big.NewInt(0)) != 0 {
+			t.Errorf("GetMinterAllowance() = %s, want 0", allowance.String())
+		}
+	})
+
+	t.Run("existing minter returns allowance", func(t *testing.T) {
+		expectedAllowance := big.NewInt(5000000)
+		key := MinterActiveIndexKey(minter)
+		err := pebbleStorage.Put(ctx, key, EncodeBigInt(expectedAllowance))
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+
+		allowance, err := pebbleStorage.GetMinterAllowance(ctx, minter)
+		if err != nil {
+			t.Errorf("GetMinterAllowance() error = %v", err)
+		}
+		if allowance.Cmp(expectedAllowance) != 0 {
+			t.Errorf("GetMinterAllowance() = %s, want %s", allowance.String(), expectedAllowance.String())
+		}
+	})
+}
+
+func TestPebbleStorage_GetMinterAllowance_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getminterallowance-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	minter := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetMinterAllowance(ctx, minter)
+	if err == nil {
+		t.Error("GetMinterAllowance() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetMinterHistory(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	minter := common.HexToAddress("0x4444444444444444444444444444444444444444")
+
+	t.Run("empty history", func(t *testing.T) {
+		history, err := pebbleStorage.GetMinterHistory(ctx, minter)
+		if err != nil {
+			t.Errorf("GetMinterHistory() error = %v", err)
+		}
+		if len(history) != 0 {
+			t.Errorf("GetMinterHistory() = %d events, want 0", len(history))
+		}
+	})
+}
+
+func TestPebbleStorage_GetMinterHistory_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getminterhistory-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	minter := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetMinterHistory(ctx, minter)
+	if err == nil {
+		t.Error("GetMinterHistory() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetActiveValidators(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("empty validators list", func(t *testing.T) {
+		validators, err := pebbleStorage.GetActiveValidators(ctx)
+		if err != nil {
+			t.Errorf("GetActiveValidators() error = %v", err)
+		}
+		if len(validators) != 0 {
+			t.Errorf("GetActiveValidators() = %d validators, want 0", len(validators))
+		}
+	})
+
+	t.Run("with stored validators", func(t *testing.T) {
+		validator1 := common.HexToAddress("0x5555555555555555555555555555555555555555")
+		validator2 := common.HexToAddress("0x6666666666666666666666666666666666666666")
+
+		key1 := ValidatorActiveIndexKey(validator1)
+		key2 := ValidatorActiveIndexKey(validator2)
+
+		err := pebbleStorage.Put(ctx, key1, []byte("active"))
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+		err = pebbleStorage.Put(ctx, key2, []byte("active"))
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+
+		validators, err := pebbleStorage.GetActiveValidators(ctx)
+		if err != nil {
+			t.Errorf("GetActiveValidators() error = %v", err)
+		}
+		if len(validators) != 2 {
+			t.Errorf("GetActiveValidators() = %d validators, want 2", len(validators))
+		}
+	})
+}
+
+func TestPebbleStorage_GetActiveValidators_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getactivevalidators-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.GetActiveValidators(ctx)
+	if err == nil {
+		t.Error("GetActiveValidators() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetGasTipHistory(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("empty history", func(t *testing.T) {
+		history, err := pebbleStorage.GetGasTipHistory(ctx, 0, 100)
+		if err != nil {
+			t.Errorf("GetGasTipHistory() error = %v", err)
+		}
+		if len(history) != 0 {
+			t.Errorf("GetGasTipHistory() = %d events, want 0", len(history))
+		}
+	})
+}
+
+func TestPebbleStorage_GetGasTipHistory_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getgastiphistory-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.GetGasTipHistory(ctx, 0, 100)
+	if err == nil {
+		t.Error("GetGasTipHistory() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetValidatorHistory(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	validator := common.HexToAddress("0x7777777777777777777777777777777777777777")
+
+	t.Run("empty history", func(t *testing.T) {
+		history, err := pebbleStorage.GetValidatorHistory(ctx, validator)
+		if err != nil {
+			t.Errorf("GetValidatorHistory() error = %v", err)
+		}
+		if len(history) != 0 {
+			t.Errorf("GetValidatorHistory() = %d events, want 0", len(history))
+		}
+	})
+}
+
+func TestPebbleStorage_GetValidatorHistory_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getvalidatorhistory-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	validator := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetValidatorHistory(ctx, validator)
+	if err == nil {
+		t.Error("GetValidatorHistory() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetMinterConfigHistory(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("empty history", func(t *testing.T) {
+		history, err := pebbleStorage.GetMinterConfigHistory(ctx, 0, 100)
+		if err != nil {
+			t.Errorf("GetMinterConfigHistory() error = %v", err)
+		}
+		if len(history) != 0 {
+			t.Errorf("GetMinterConfigHistory() = %d events, want 0", len(history))
+		}
+	})
+}
+
+func TestPebbleStorage_GetMinterConfigHistory_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getminterconfighistory-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.GetMinterConfigHistory(ctx, 0, 100)
+	if err == nil {
+		t.Error("GetMinterConfigHistory() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetEmergencyPauseHistory(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	contract := common.HexToAddress("0xdddddddddddddddddddddddddddddddddddddddd")
+
+	t.Run("empty history", func(t *testing.T) {
+		history, err := pebbleStorage.GetEmergencyPauseHistory(ctx, contract)
+		if err != nil {
+			t.Errorf("GetEmergencyPauseHistory() error = %v", err)
+		}
+		if len(history) != 0 {
+			t.Errorf("GetEmergencyPauseHistory() = %d events, want 0", len(history))
+		}
+	})
+}
+
+func TestPebbleStorage_GetEmergencyPauseHistory_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getemergencypausehistory-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	contract := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetEmergencyPauseHistory(ctx, contract)
+	if err == nil {
+		t.Error("GetEmergencyPauseHistory() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetDepositMintProposals(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("empty proposals", func(t *testing.T) {
+		proposals, err := pebbleStorage.GetDepositMintProposals(ctx, 0, 100, ProposalStatusAll)
+		if err != nil {
+			t.Errorf("GetDepositMintProposals() error = %v", err)
+		}
+		if len(proposals) != 0 {
+			t.Errorf("GetDepositMintProposals() = %d proposals, want 0", len(proposals))
+		}
+	})
+}
+
+func TestPebbleStorage_GetDepositMintProposals_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getdepositmintproposals-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.GetDepositMintProposals(ctx, 0, 100, ProposalStatusAll)
+	if err == nil {
+		t.Error("GetDepositMintProposals() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetBurnHistory(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	account := common.HexToAddress("0x8888888888888888888888888888888888888888")
+
+	t.Run("empty history", func(t *testing.T) {
+		history, err := pebbleStorage.GetBurnHistory(ctx, 0, 100, account)
+		if err != nil {
+			t.Errorf("GetBurnHistory() error = %v", err)
+		}
+		if len(history) != 0 {
+			t.Errorf("GetBurnHistory() = %d events, want 0", len(history))
+		}
+	})
+}
+
+func TestPebbleStorage_GetBurnHistory_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getburnhistory-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	account := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetBurnHistory(ctx, 0, 100, account)
+	if err == nil {
+		t.Error("GetBurnHistory() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetBlacklistedAddresses(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("empty blacklist", func(t *testing.T) {
+		addresses, err := pebbleStorage.GetBlacklistedAddresses(ctx)
+		if err != nil {
+			t.Errorf("GetBlacklistedAddresses() error = %v", err)
+		}
+		if len(addresses) != 0 {
+			t.Errorf("GetBlacklistedAddresses() = %d addresses, want 0", len(addresses))
+		}
+	})
+
+	t.Run("with stored blacklisted addresses", func(t *testing.T) {
+		addr1 := common.HexToAddress("0x9999999999999999999999999999999999999999")
+		addr2 := common.HexToAddress("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+
+		key1 := BlacklistActiveIndexKey(addr1)
+		key2 := BlacklistActiveIndexKey(addr2)
+
+		err := pebbleStorage.Put(ctx, key1, []byte("1"))
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+		err = pebbleStorage.Put(ctx, key2, []byte("1"))
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+
+		addresses, err := pebbleStorage.GetBlacklistedAddresses(ctx)
+		if err != nil {
+			t.Errorf("GetBlacklistedAddresses() error = %v", err)
+		}
+		if len(addresses) != 2 {
+			t.Errorf("GetBlacklistedAddresses() = %d addresses, want 2", len(addresses))
+		}
+	})
+}
+
+func TestPebbleStorage_GetBlacklistedAddresses_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getblacklistedaddresses-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.GetBlacklistedAddresses(ctx)
+	if err == nil {
+		t.Error("GetBlacklistedAddresses() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetBlacklistHistory(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	addr := common.HexToAddress("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+
+	t.Run("empty history", func(t *testing.T) {
+		history, err := pebbleStorage.GetBlacklistHistory(ctx, addr)
+		if err != nil {
+			t.Errorf("GetBlacklistHistory() error = %v", err)
+		}
+		if len(history) != 0 {
+			t.Errorf("GetBlacklistHistory() = %d events, want 0", len(history))
+		}
+	})
+}
+
+func TestPebbleStorage_GetBlacklistHistory_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getblacklisthistory-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetBlacklistHistory(ctx, addr)
+	if err == nil {
+		t.Error("GetBlacklistHistory() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetAuthorizedAccounts(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("empty authorized accounts", func(t *testing.T) {
+		accounts, err := pebbleStorage.GetAuthorizedAccounts(ctx)
+		if err != nil {
+			t.Errorf("GetAuthorizedAccounts() error = %v", err)
+		}
+		if len(accounts) != 0 {
+			t.Errorf("GetAuthorizedAccounts() = %d accounts, want 0", len(accounts))
+		}
+	})
+}
+
+func TestPebbleStorage_GetAuthorizedAccounts_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getauthorizedaccounts-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.GetAuthorizedAccounts(ctx)
+	if err == nil {
+		t.Error("GetAuthorizedAccounts() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetProposals(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	contract := common.HexToAddress("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+
+	t.Run("empty proposals", func(t *testing.T) {
+		proposals, err := pebbleStorage.GetProposals(ctx, contract, ProposalStatusAll, 100, 0)
+		if err != nil {
+			t.Errorf("GetProposals() error = %v", err)
+		}
+		if len(proposals) != 0 {
+			t.Errorf("GetProposals() = %d proposals, want 0", len(proposals))
+		}
+	})
+}
+
+func TestPebbleStorage_GetProposals_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getproposals-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	contract := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetProposals(ctx, contract, ProposalStatusAll, 100, 0)
+	if err == nil {
+		t.Error("GetProposals() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetProposalById(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	contract := common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
+
+	t.Run("non-existent proposal", func(t *testing.T) {
+		proposal, err := pebbleStorage.GetProposalById(ctx, contract, big.NewInt(999))
+		if err != nil {
+			t.Errorf("GetProposalById() error = %v", err)
+		}
+		if proposal != nil {
+			t.Error("GetProposalById() should return nil for non-existent proposal")
+		}
+	})
+}
+
+func TestPebbleStorage_GetProposalById_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getproposalbyid-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	contract := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetProposalById(ctx, contract, big.NewInt(1))
+	if err == nil {
+		t.Error("GetProposalById() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetProposalVotes(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	contract := common.HexToAddress("0x0000000000000000000000000000000000000001")
+
+	t.Run("empty votes", func(t *testing.T) {
+		votes, err := pebbleStorage.GetProposalVotes(ctx, contract, big.NewInt(1))
+		if err != nil {
+			t.Errorf("GetProposalVotes() error = %v", err)
+		}
+		if len(votes) != 0 {
+			t.Errorf("GetProposalVotes() = %d votes, want 0", len(votes))
+		}
+	})
+}
+
+func TestPebbleStorage_GetProposalVotes_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getproposalvotes-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	contract := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetProposalVotes(ctx, contract, big.NewInt(1))
+	if err == nil {
+		t.Error("GetProposalVotes() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetMemberHistory(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	member := common.HexToAddress("0xcccccccccccccccccccccccccccccccccccccccc")
+
+	t.Run("empty history", func(t *testing.T) {
+		history, err := pebbleStorage.GetMemberHistory(ctx, member)
+		if err != nil {
+			t.Errorf("GetMemberHistory() error = %v", err)
+		}
+		if len(history) != 0 {
+			t.Errorf("GetMemberHistory() = %d events, want 0", len(history))
+		}
+	})
+}
+
+func TestPebbleStorage_GetMemberHistory_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-getmemberhistory-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	member := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	_, err = pebbleStorage.GetMemberHistory(ctx, member)
+	if err == nil {
+		t.Error("GetMemberHistory() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_IndexSystemContractEvent(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	contractAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+
+	t.Run("index single event - returns error for direct call", func(t *testing.T) {
+		log := &types.Log{
+			Address:     contractAddr,
+			Topics:      []common.Hash{EventSigTransfer, common.HexToHash("0x1"), common.HexToHash("0x2")},
+			Data:        []byte("test data"),
+			BlockNumber: 100,
+			TxHash:      common.HexToHash("0xabcd"),
+			TxIndex:     0,
+			BlockHash:   common.HexToHash("0x1234"),
+			Index:       0,
+		}
+		err := pebbleStorage.IndexSystemContractEvent(ctx, log)
+		// This function should not be called directly but from events package
+		if err == nil {
+			t.Error("IndexSystemContractEvent() should return error when called directly")
+		}
+	})
+
+	t.Run("index nil log", func(t *testing.T) {
+		err := pebbleStorage.IndexSystemContractEvent(ctx, nil)
+		// Should return error for direct call
+		if err == nil {
+			t.Error("IndexSystemContractEvent(nil) should return error when called directly")
+		}
+	})
+}
+
+func TestPebbleStorage_IndexSystemContractEvent_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-indexsysevent-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	log := &types.Log{
+		Address:     common.HexToAddress("0x1234"),
+		Topics:      []common.Hash{EventSigTransfer},
+		BlockNumber: 100,
+	}
+	err = pebbleStorage.IndexSystemContractEvent(ctx, log)
+	if err == nil {
+		t.Error("IndexSystemContractEvent() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_IndexSystemContractEvent_ReadOnly(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-indexsysevent-readonly-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	pebbleStorage.Close()
+
+	// Reopen in read-only mode
+	cfg.ReadOnly = true
+	pebbleStorage, err = NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create read-only storage: %v", err)
+	}
+	defer pebbleStorage.Close()
+
+	ctx := context.Background()
+	log := &types.Log{
+		Address:     common.HexToAddress("0x1234"),
+		Topics:      []common.Hash{EventSigTransfer},
+		BlockNumber: 100,
+	}
+	err = pebbleStorage.IndexSystemContractEvent(ctx, log)
+	if err == nil {
+		t.Error("IndexSystemContractEvent() on read-only storage should return error")
+	}
+}
+
+func TestPebbleStorage_IndexSystemContractEvents(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+	contractAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+
+	t.Run("index multiple events - returns error for direct call", func(t *testing.T) {
+		logs := []*types.Log{
+			{
+				Address:     contractAddr,
+				Topics:      []common.Hash{EventSigTransfer, common.HexToHash("0x1"), common.HexToHash("0x2")},
+				Data:        []byte("data1"),
+				BlockNumber: 100,
+				TxHash:      common.HexToHash("0xabcd"),
+				Index:       0,
+			},
+			{
+				Address:     contractAddr,
+				Topics:      []common.Hash{EventSigMint, common.HexToHash("0x3")},
+				Data:        []byte("data2"),
+				BlockNumber: 101,
+				TxHash:      common.HexToHash("0xef01"),
+				Index:       0,
+			},
+		}
+		err := pebbleStorage.IndexSystemContractEvents(ctx, logs)
+		// This function should not be called directly but from events package
+		if err == nil {
+			t.Error("IndexSystemContractEvents() should return error when called directly")
+		}
+	})
+
+	t.Run("index empty logs", func(t *testing.T) {
+		err := pebbleStorage.IndexSystemContractEvents(ctx, []*types.Log{})
+		// Empty logs is ok
+		if err != nil {
+			t.Errorf("IndexSystemContractEvents([]) error = %v", err)
+		}
+	})
+
+	t.Run("index nil logs", func(t *testing.T) {
+		err := pebbleStorage.IndexSystemContractEvents(ctx, nil)
+		// Nil logs is ok
+		if err != nil {
+			t.Errorf("IndexSystemContractEvents(nil) error = %v", err)
+		}
+	})
+}
+
+func TestPebbleStorage_IndexSystemContractEvents_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-indexsysevents-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	logs := []*types.Log{
+		{
+			Address:     common.HexToAddress("0x1234"),
+			Topics:      []common.Hash{EventSigTransfer},
+			BlockNumber: 100,
+		},
+	}
+	err = pebbleStorage.IndexSystemContractEvents(ctx, logs)
+	if err == nil {
+		t.Error("IndexSystemContractEvents() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_InitializeTransactionCount(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("initialize transaction count - requires latest height", func(t *testing.T) {
+		// First call without setting latest height should fail
+		err := pebbleStorage.InitializeTransactionCount(ctx)
+		if err == nil {
+			t.Error("InitializeTransactionCount() without latest height should return error")
+		}
+	})
+
+	t.Run("initialize transaction count - with latest height set", func(t *testing.T) {
+		// Set up latest height first
+		err := pebbleStorage.SetLatestHeight(ctx, 10)
+		if err != nil {
+			t.Fatalf("SetLatestHeight() error = %v", err)
+		}
+		// Now initialize should work
+		err = pebbleStorage.InitializeTransactionCount(ctx)
+		if err != nil {
+			t.Errorf("InitializeTransactionCount() error = %v", err)
+		}
+	})
+}
+
+func TestPebbleStorage_InitializeTransactionCount_ClosedStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-inittxcount-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	err = pebbleStorage.InitializeTransactionCount(ctx)
+	if err == nil {
+		t.Error("InitializeTransactionCount() on closed storage should return error")
+	}
+}
+
+func TestPebbleStorage_InitializeTransactionCount_ReadOnly(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-inittxcount-readonly-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	pebbleStorage.Close()
+
+	// Reopen in read-only mode
+	cfg.ReadOnly = true
+	pebbleStorage, err = NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create read-only storage: %v", err)
+	}
+	defer pebbleStorage.Close()
+
+	ctx := context.Background()
+	err = pebbleStorage.InitializeTransactionCount(ctx)
+	if err == nil {
+		t.Error("InitializeTransactionCount() on read-only storage should return error")
+	}
+}
+
+func TestPebbleStorage_GetTotalSupply_Basic(t *testing.T) {
+	storage, cleanup := setupTestStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	pebbleStorage := storage.(*PebbleStorage)
+
+	t.Run("get total supply", func(t *testing.T) {
+		supply, err := pebbleStorage.GetTotalSupply(ctx)
+		if err != nil {
+			t.Errorf("GetTotalSupply() error = %v", err)
+		}
+		// Should return zero for non-existent token
+		if supply == nil {
+			t.Error("GetTotalSupply() should return non-nil value")
+		}
+	})
+}
+
+func TestPebbleStorage_GetTotalSupply_ClosedStorage_Basic(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pebble-gettotalsupply-closed-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := DefaultConfig(tmpDir)
+	pebbleStorage, err := NewPebbleStorage(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	pebbleStorage.Close()
+
+	ctx := context.Background()
+	_, err = pebbleStorage.GetTotalSupply(ctx)
+	if err == nil {
+		t.Error("GetTotalSupply() on closed storage should return error")
+	}
 }

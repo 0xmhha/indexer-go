@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -278,6 +279,371 @@ func TestGlobalBackendRegistry(t *testing.T) {
 
 	if !found {
 		t.Error("Expected PebbleDB in supported backends list")
+	}
+}
+
+func TestDefaultBackendConfig(t *testing.T) {
+	config := DefaultBackendConfig(BackendTypePebble, "/data/pebble")
+
+	if config.Type != BackendTypePebble {
+		t.Errorf("expected type %s, got %s", BackendTypePebble, config.Type)
+	}
+	if config.Path != "/data/pebble" {
+		t.Errorf("expected path '/data/pebble', got '%s'", config.Path)
+	}
+	if config.Cache != 128 {
+		t.Errorf("expected cache 128, got %d", config.Cache)
+	}
+	if config.MaxOpenFiles != 1000 {
+		t.Errorf("expected MaxOpenFiles 1000, got %d", config.MaxOpenFiles)
+	}
+	if config.WriteBuffer != 64 {
+		t.Errorf("expected WriteBuffer 64, got %d", config.WriteBuffer)
+	}
+	if config.ReadOnly {
+		t.Error("expected ReadOnly to be false")
+	}
+	if config.Options == nil {
+		t.Error("Options should be initialized")
+	}
+}
+
+func TestBackendRegistry_GetMetadata(t *testing.T) {
+	registry := NewBackendRegistry()
+
+	mockFactory := func(config *BackendConfig, logger *zap.Logger) (Backend, error) {
+		return &mockBackend{backendType: config.Type}, nil
+	}
+
+	metadata := &BackendMetadata{
+		Name:        "Test Backend",
+		Description: "A test backend",
+		Version:     "1.0.0",
+		Features:    []string{"feature1", "feature2"},
+	}
+
+	// Register with metadata
+	err := registry.Register(BackendTypeMemory, mockFactory, metadata)
+	if err != nil {
+		t.Fatalf("Failed to register: %v", err)
+	}
+
+	// Get metadata
+	meta, exists := registry.GetMetadata(BackendTypeMemory)
+	if !exists {
+		t.Error("Expected metadata to exist")
+	}
+	if meta.Name != "Test Backend" {
+		t.Errorf("expected name 'Test Backend', got '%s'", meta.Name)
+	}
+	if meta.Version != "1.0.0" {
+		t.Errorf("expected version '1.0.0', got '%s'", meta.Version)
+	}
+	if len(meta.Features) != 2 {
+		t.Errorf("expected 2 features, got %d", len(meta.Features))
+	}
+
+	// Get metadata for unregistered type
+	_, exists = registry.GetMetadata(BackendTypeRocksDB)
+	if exists {
+		t.Error("Expected no metadata for unregistered type")
+	}
+}
+
+func TestRegisterBackend(t *testing.T) {
+	// Note: This uses the global registry
+	mockFactory := func(config *BackendConfig, logger *zap.Logger) (Backend, error) {
+		return &mockBackend{backendType: config.Type}, nil
+	}
+
+	// First registration should succeed (or already exist from other tests)
+	err := RegisterBackend("test-backend", mockFactory, nil)
+	// If it already exists, that's okay - we're just testing the function works
+	if err != nil && !HasBackend("test-backend") {
+		t.Errorf("RegisterBackend failed: %v", err)
+	}
+}
+
+func TestCreateBackend(t *testing.T) {
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "create-backend-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := &BackendConfig{
+		Type:         BackendTypePebble,
+		Path:         filepath.Join(tmpDir, "testdb"),
+		Cache:        8,
+		MaxOpenFiles: 100,
+		WriteBuffer:  4,
+	}
+
+	backend, err := CreateBackend(config, zap.NewNop())
+	if err != nil {
+		t.Fatalf("CreateBackend failed: %v", err)
+	}
+	defer backend.Close()
+
+	if backend.Type() != BackendTypePebble {
+		t.Errorf("Expected backend type %s, got %s", BackendTypePebble, backend.Type())
+	}
+}
+
+func TestPebbleBackend_Type(t *testing.T) {
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "pebble-type-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := &BackendConfig{
+		Type:         BackendTypePebble,
+		Path:         filepath.Join(tmpDir, "testdb"),
+		Cache:        8,
+		MaxOpenFiles: 100,
+		WriteBuffer:  4,
+	}
+
+	backend, err := NewPebbleBackend(config, zap.NewNop())
+	if err != nil {
+		t.Fatalf("Failed to create pebble backend: %v", err)
+	}
+	defer backend.Close()
+
+	if backend.Type() != BackendTypePebble {
+		t.Errorf("Expected type %s, got %s", BackendTypePebble, backend.Type())
+	}
+}
+
+func TestPebbleBackend_GetDB(t *testing.T) {
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "pebble-getdb-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := &BackendConfig{
+		Type:         BackendTypePebble,
+		Path:         filepath.Join(tmpDir, "testdb"),
+		Cache:        8,
+		MaxOpenFiles: 100,
+		WriteBuffer:  4,
+	}
+
+	backend, err := NewPebbleBackend(config, zap.NewNop())
+	if err != nil {
+		t.Fatalf("Failed to create pebble backend: %v", err)
+	}
+	defer backend.Close()
+
+	db := backend.GetDB()
+	if db == nil {
+		t.Error("Expected non-nil database")
+	}
+}
+
+func TestPebbleIterator_KeyValue(t *testing.T) {
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "pebble-keyvalue-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := &BackendConfig{
+		Type:         BackendTypePebble,
+		Path:         filepath.Join(tmpDir, "testdb"),
+		Cache:        8,
+		MaxOpenFiles: 100,
+		WriteBuffer:  4,
+	}
+
+	backend, err := NewPebbleBackend(config, zap.NewNop())
+	if err != nil {
+		t.Fatalf("Failed to create pebble backend: %v", err)
+	}
+	defer backend.Close()
+
+	// Insert test data
+	testKey := []byte("test-key")
+	testValue := []byte("test-value")
+	if err := backend.Set(testKey, testValue); err != nil {
+		t.Fatalf("Failed to set key: %v", err)
+	}
+
+	// Create iterator
+	iter := backend.NewIterator([]byte("test"), []byte("tesu"))
+	defer iter.Close()
+
+	if !iter.Valid() {
+		t.Fatal("Expected iterator to be valid")
+	}
+
+	// Test Key method
+	key := iter.Key()
+	if string(key) != "test-key" {
+		t.Errorf("Expected key 'test-key', got '%s'", key)
+	}
+
+	// Test Value method
+	value := iter.Value()
+	if string(value) != "test-value" {
+		t.Errorf("Expected value 'test-value', got '%s'", value)
+	}
+}
+
+func TestPebbleBatch_DeleteResetClose(t *testing.T) {
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "pebble-batch-ops-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := &BackendConfig{
+		Type:         BackendTypePebble,
+		Path:         filepath.Join(tmpDir, "testdb"),
+		Cache:        8,
+		MaxOpenFiles: 100,
+		WriteBuffer:  4,
+	}
+
+	backend, err := NewPebbleBackend(config, zap.NewNop())
+	if err != nil {
+		t.Fatalf("Failed to create pebble backend: %v", err)
+	}
+	defer backend.Close()
+
+	// First, set up some data
+	if err := backend.Set([]byte("key1"), []byte("value1")); err != nil {
+		t.Fatalf("Failed to set key: %v", err)
+	}
+
+	// Create batch with Delete operation
+	batch := backend.NewBatch()
+
+	// Test Delete in batch
+	if err := batch.Delete([]byte("key1")); err != nil {
+		t.Fatalf("batch Delete failed: %v", err)
+	}
+
+	if batch.Count() != 1 {
+		t.Errorf("Expected batch count 1 after Delete, got %d", batch.Count())
+	}
+
+	// Test Reset
+	batch.Reset()
+	if batch.Count() != 0 {
+		t.Errorf("Expected batch count 0 after Reset, got %d", batch.Count())
+	}
+
+	// Add some operations and test Close without Commit
+	batch.Set([]byte("key2"), []byte("value2"))
+	if err := batch.Close(); err != nil {
+		t.Errorf("batch Close failed: %v", err)
+	}
+
+	// Verify key2 was not committed (batch was closed without commit)
+	exists, err := backend.Has([]byte("key2"))
+	if err != nil {
+		t.Fatalf("Has failed: %v", err)
+	}
+	if exists {
+		t.Error("Expected key2 to not exist (batch was closed without commit)")
+	}
+
+	// Verify key1 still exists (delete was reset)
+	exists, err = backend.Has([]byte("key1"))
+	if err != nil {
+		t.Fatalf("Has failed: %v", err)
+	}
+	if !exists {
+		t.Error("Expected key1 to still exist (delete was reset)")
+	}
+}
+
+func TestMustRegister_Panic(t *testing.T) {
+	registry := NewBackendRegistry()
+
+	mockFactory := func(config *BackendConfig, logger *zap.Logger) (Backend, error) {
+		return &mockBackend{}, nil
+	}
+
+	// First registration should succeed
+	registry.MustRegister(BackendTypeMemory, mockFactory, nil)
+
+	// Second registration should panic
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic for duplicate MustRegister")
+		}
+	}()
+
+	registry.MustRegister(BackendTypeMemory, mockFactory, nil)
+}
+
+func TestNewStorageWithBackend_Pebble(t *testing.T) {
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "storage-with-backend-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := DefaultConfig(filepath.Join(tmpDir, "testdb"))
+	ctx := context.Background()
+
+	storage, err := NewStorageWithBackend(ctx, BackendTypePebble, config, zap.NewNop())
+	if err != nil {
+		t.Fatalf("NewStorageWithBackend failed: %v", err)
+	}
+	defer storage.Close()
+
+	// Verify storage works
+	if storage == nil {
+		t.Fatal("Expected non-nil storage")
+	}
+}
+
+func TestNewStorageWithBackend_UnsupportedType(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "storage-unsupported-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := DefaultConfig(filepath.Join(tmpDir, "testdb"))
+	ctx := context.Background()
+
+	_, err = NewStorageWithBackend(ctx, "unsupported", config, zap.NewNop())
+	if err == nil {
+		t.Error("Expected error for unsupported backend type")
+	}
+}
+
+func TestNewStorage(t *testing.T) {
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "new-storage-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := DefaultConfig(filepath.Join(tmpDir, "testdb"))
+
+	storage, err := NewStorage(config)
+	if err != nil {
+		t.Fatalf("NewStorage failed: %v", err)
+	}
+	defer storage.Close()
+
+	// Verify storage works
+	if storage == nil {
+		t.Fatal("Expected non-nil storage")
 	}
 }
 
