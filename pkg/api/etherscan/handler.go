@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -231,10 +232,16 @@ func (h *Handler) processVerification(
 		return
 	}
 
+	// Extract contract name from "path/to/file.sol:ContractName" format
+	storedName := contractName
+	if idx := strings.LastIndex(contractName, ":"); idx != -1 {
+		storedName = contractName[idx+1:]
+	}
+
 	verification := &storage.ContractVerification{
 		Address:              address,
 		IsVerified:           true,
-		Name:                 contractName,
+		Name:                 storedName,
 		CompilerVersion:      compilerVersion,
 		OptimizationEnabled:  optimizationUsed,
 		OptimizationRuns:     optimizationRuns,
