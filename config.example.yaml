@@ -56,3 +56,18 @@ api:
   # Allowed origins for CORS (use ["*"] to allow all)
   allowed_origins:
     - "*"
+
+# Contract Verifier Configuration (for Etherscan-compatible API)
+verifier:
+  # Enable contract verification service
+  enabled: true
+  # Directory for Solidity compiler binaries
+  solc_bin_dir: "./solc-bin"
+  # Directory for caching compiled results
+  solc_cache_dir: "./solc-cache"
+  # Maximum compilation time in seconds
+  max_compilation_time: 30
+  # Automatically download missing compiler versions
+  auto_download: true
+  # Allow metadata hash differences in bytecode comparison
+  allow_metadata_variance: true

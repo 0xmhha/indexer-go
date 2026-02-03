@@ -40,3 +40,12 @@ api:
   enable_cors: true
   allowed_origins:
     - "*"
+
+# Contract Verifier Configuration (for Etherscan-compatible API)
+verifier:
+  enabled: true
+  solc_bin_dir: "./solc-bin"
+  solc_cache_dir: "./solc-cache"
+  max_compilation_time: 30
+  auto_download: true
+  allow_metadata_variance: true
