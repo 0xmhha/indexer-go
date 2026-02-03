@@ -201,21 +201,15 @@ func (v *ContractVerifier) GetDeployedBytecode(ctx context.Context, address comm
 }
 
 // CompareBytecode compares deployed and compiled bytecode
+// Note: eth_getCode returns runtime bytecode, which does NOT include constructor arguments.
+// Constructor arguments are only in creation bytecode (deployment transaction).
+// Therefore, we compare runtime bytecode directly without removing constructor args.
 func (v *ContractVerifier) CompareBytecode(deployed, compiled, constructorArgs string) (bool, error) {
 	// Remove 0x prefix if present
 	deployed = strings.TrimPrefix(deployed, "0x")
 	compiled = strings.TrimPrefix(compiled, "0x")
-	constructorArgs = strings.TrimPrefix(constructorArgs, "0x")
-
-	// The deployed bytecode may include constructor arguments at the end
-	// and may have metadata hash differences
-	if constructorArgs != "" {
-		// Remove constructor arguments from deployed bytecode
-		if !strings.HasSuffix(deployed, constructorArgs) {
-			return false, ErrInvalidConstructorArgs
-		}
-		deployed = deployed[:len(deployed)-len(constructorArgs)]
-	}
+	// Note: constructorArgs is not used for runtime bytecode comparison
+	// It's kept in the signature for API compatibility
 
 	// Direct comparison
 	if deployed == compiled {

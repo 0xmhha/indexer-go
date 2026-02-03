@@ -58,6 +58,11 @@ func (s *SolcCompiler) Compile(ctx context.Context, opts *CompilationOptions) (*
 
 	solcPath := s.getCompilerPath(opts.CompilerVersion)
 
+	// Check if source code is Standard JSON Input format
+	if s.isStandardJsonInput(opts.SourceCode) {
+		return s.compileWithStandardJson(ctx, solcPath, opts)
+	}
+
 	tmpDir, sourceFile, err := s.prepareSourceFile(opts.SourceCode)
 	if err != nil {
 		return nil, err
@@ -84,6 +89,137 @@ func (s *SolcCompiler) Compile(ctx context.Context, opts *CompilationOptions) (*
 	result.CompilerVersion = opts.CompilerVersion
 
 	return result, nil
+}
+
+// isStandardJsonInput checks if the source code is in Standard JSON Input format
+func (s *SolcCompiler) isStandardJsonInput(sourceCode string) bool {
+	trimmed := strings.TrimSpace(sourceCode)
+	if !strings.HasPrefix(trimmed, "{") {
+		return false
+	}
+	// Quick check for Standard JSON Input markers
+	return strings.Contains(trimmed, `"language"`) && strings.Contains(trimmed, `"sources"`)
+}
+
+// compileWithStandardJson compiles using Standard JSON Input format
+func (s *SolcCompiler) compileWithStandardJson(ctx context.Context, solcPath string, opts *CompilationOptions) (*CompilationResult, error) {
+	compileCtx, cancel := s.createCompilationContext(ctx, opts)
+	if cancel != nil {
+		defer cancel()
+	}
+
+	// Execute solc with --standard-json flag
+	cmd := exec.CommandContext(compileCtx, solcPath, "--standard-json")
+	cmd.Stdin = strings.NewReader(opts.SourceCode)
+
+	output, err := cmd.Output()
+	if err != nil {
+		if compileCtx.Err() == context.DeadlineExceeded {
+			return nil, ErrTimeout
+		}
+		// For standard-json, errors are usually in the output JSON
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("%w: %s", ErrCompilationFailed, string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("%w: %v", ErrCompilationFailed, err)
+	}
+
+	return s.parseStandardJsonOutput(output, opts.ContractName)
+}
+
+// parseStandardJsonOutput parses the Standard JSON Output from solc
+func (s *SolcCompiler) parseStandardJsonOutput(output []byte, contractName string) (*CompilationResult, error) {
+	var jsonOutput struct {
+		Errors []struct {
+			Severity string `json:"severity"`
+			Message  string `json:"message"`
+		} `json:"errors"`
+		Contracts map[string]map[string]struct {
+			Abi      json.RawMessage `json:"abi"`
+			Evm      struct {
+				Bytecode struct {
+					Object string `json:"object"`
+				} `json:"bytecode"`
+				DeployedBytecode struct {
+					Object string `json:"object"`
+				} `json:"deployedBytecode"`
+			} `json:"evm"`
+			Metadata string `json:"metadata"`
+		} `json:"contracts"`
+	}
+
+	if err := json.Unmarshal(output, &jsonOutput); err != nil {
+		return nil, fmt.Errorf("failed to parse Standard JSON output: %w", err)
+	}
+
+	// Check for compilation errors
+	for _, e := range jsonOutput.Errors {
+		if e.Severity == "error" {
+			return nil, fmt.Errorf("%w: %s", ErrCompilationFailed, e.Message)
+		}
+	}
+
+	if len(jsonOutput.Contracts) == 0 {
+		return nil, fmt.Errorf("no contracts found in compilation output")
+	}
+
+	// Helper function to convert ABI to string
+	abiToString := func(abi json.RawMessage) string {
+		if len(abi) == 0 {
+			return ""
+		}
+		return string(abi)
+	}
+
+	// Parse contractName - it may be in "path/to/file.sol:ContractName" format
+	var targetFileName, targetContractName string
+	if contractName != "" {
+		if idx := strings.LastIndex(contractName, ":"); idx != -1 {
+			// Format: "src/tokens/wKRC.sol:wKRC"
+			targetFileName = contractName[:idx]
+			targetContractName = contractName[idx+1:]
+		} else {
+			// Just contract name
+			targetContractName = contractName
+		}
+	}
+
+	// Find the requested contract
+	for fileName, contracts := range jsonOutput.Contracts {
+		for name, contract := range contracts {
+			// If contract name is specified, match it
+			if targetContractName != "" {
+				// Match by exact contract name
+				if name != targetContractName {
+					continue
+				}
+				// If file name is also specified, match it too
+				if targetFileName != "" && fileName != targetFileName {
+					continue
+				}
+			}
+			// Use deployedBytecode for verification (runtime code, not creation code)
+			return &CompilationResult{
+				Bytecode: contract.Evm.DeployedBytecode.Object,
+				ABI:      abiToString(contract.Abi),
+				Metadata: contract.Metadata,
+			}, nil
+		}
+	}
+
+	// If no specific contract found, return the first one
+	for _, contracts := range jsonOutput.Contracts {
+		for _, contract := range contracts {
+			// Use deployedBytecode for verification (runtime code, not creation code)
+			return &CompilationResult{
+				Bytecode: contract.Evm.DeployedBytecode.Object,
+				ABI:      abiToString(contract.Abi),
+				Metadata: contract.Metadata,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("contract %s not found in compilation output", contractName)
 }
 
 // validateCompilationOptions validates the compilation options
@@ -186,9 +322,9 @@ func (s *SolcCompiler) executeSolcCommand(ctx context.Context, solcPath string, 
 func (s *SolcCompiler) parseCompilationOutput(output []byte, contractName string) (*CompilationResult, error) {
 	var jsonOutput struct {
 		Contracts map[string]struct {
-			Abi      string `json:"abi"`
-			Bin      string `json:"bin"`
-			Metadata string `json:"metadata"`
+			Abi      json.RawMessage `json:"abi"`
+			Bin      string          `json:"bin"`
+			Metadata string          `json:"metadata"`
 		} `json:"contracts"`
 	}
 
@@ -200,13 +336,27 @@ func (s *SolcCompiler) parseCompilationOutput(output []byte, contractName string
 		return nil, fmt.Errorf("no contracts found in compilation output")
 	}
 
+	// Helper function to convert ABI to string
+	abiToString := func(abi json.RawMessage) string {
+		if len(abi) == 0 {
+			return ""
+		}
+		// If it's already a string (quoted), unquote it
+		var strAbi string
+		if err := json.Unmarshal(abi, &strAbi); err == nil {
+			return strAbi
+		}
+		// Otherwise return raw JSON (array format)
+		return string(abi)
+	}
+
 	// If contract name is specified, find that specific contract
 	if contractName != "" {
 		for key, contract := range jsonOutput.Contracts {
 			if strings.Contains(key, contractName) {
 				return &CompilationResult{
 					Bytecode: contract.Bin,
-					ABI:      contract.Abi,
+					ABI:      abiToString(contract.Abi),
 					Metadata: contract.Metadata,
 				}, nil
 			}
@@ -218,7 +368,7 @@ func (s *SolcCompiler) parseCompilationOutput(output []byte, contractName string
 	for _, contract := range jsonOutput.Contracts {
 		return &CompilationResult{
 			Bytecode: contract.Bin,
-			ABI:      contract.Abi,
+			ABI:      abiToString(contract.Abi),
 			Metadata: contract.Metadata,
 		}, nil
 	}
