@@ -147,7 +147,12 @@ type Storage interface {
 	FeeDelegationWriter
 	HistoricalReader
 	HistoricalWriter
+	TokenMetadataReader
+	TokenMetadataWriter
 	KVStore
+
+	// SetTokenMetadataFetcher sets the fetcher for on-demand token metadata lookups
+	SetTokenMetadataFetcher(fetcher TokenMetadataFetcher)
 
 	// Close closes the storage and releases resources
 	Close() error

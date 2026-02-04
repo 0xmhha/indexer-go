@@ -360,6 +360,31 @@ func (m *mockStorage) SetBalance(ctx context.Context, addr common.Address, block
 	return nil
 }
 
+// TokenMetadataReader interface
+func (m *mockStorage) GetTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
+	return nil, storage.ErrNotFound
+}
+func (m *mockStorage) ListTokensByStandard(ctx context.Context, standard storage.TokenStandard, limit, offset int) ([]*storage.TokenMetadata, error) {
+	return nil, nil
+}
+func (m *mockStorage) GetTokensCount(ctx context.Context, standard storage.TokenStandard) (int, error) {
+	return 0, nil
+}
+func (m *mockStorage) SearchTokens(ctx context.Context, query string, limit int) ([]*storage.TokenMetadata, error) {
+	return nil, nil
+}
+
+// TokenMetadataWriter interface
+func (m *mockStorage) SaveTokenMetadata(ctx context.Context, metadata *storage.TokenMetadata) error {
+	return nil
+}
+func (m *mockStorage) DeleteTokenMetadata(ctx context.Context, address common.Address) error {
+	return nil
+}
+
+func (m *mockStorage) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
+}
+
 // Verify that mockStorage implements storage.Storage
 var _ storage.Storage = (*mockStorage)(nil)
 

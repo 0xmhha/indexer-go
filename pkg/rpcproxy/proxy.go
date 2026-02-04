@@ -413,6 +413,67 @@ func (p *Proxy) GetBalance(ctx context.Context, req *BalanceRequest) (*BalanceRe
 	return response, nil
 }
 
+// GetCode returns the bytecode at an address to check if it's a contract
+func (p *Proxy) GetCode(ctx context.Context, req *CodeRequest) (*CodeResponse, error) {
+	// Check rate limit
+	if !p.rateLimiter.Allow() {
+		return nil, ErrRateLimited
+	}
+
+	// Check circuit breaker
+	if !p.circuitBreaker.Allow() {
+		return nil, ErrCircuitOpen
+	}
+
+	// Build cache key
+	blockStr := "latest"
+	if req.BlockNumber != nil {
+		blockStr = req.BlockNumber.String()
+	}
+	cacheKey := p.keyBuilder.Balance(req.Address.Hex()+"_code", blockStr) // reuse balance key builder
+
+	// Check cache
+	if cached, ok := p.cache.Get(cacheKey); ok {
+		return cached.(*CodeResponse), nil
+	}
+
+	start := time.Now()
+
+	// Get code from chain RPC
+	code, err := p.ethClient.CodeAt(ctx, req.Address, req.BlockNumber)
+	if err != nil {
+		p.circuitBreaker.RecordFailure()
+		return nil, fmt.Errorf("failed to get code: %w", err)
+	}
+
+	p.circuitBreaker.RecordSuccess()
+	p.recordLatency(time.Since(start))
+
+	// Get block number for response
+	var blockNumber uint64
+	if req.BlockNumber != nil {
+		blockNumber = req.BlockNumber.Uint64()
+	} else {
+		// Get latest block number
+		currentBlock, err := p.ethClient.BlockNumber(ctx)
+		if err == nil {
+			blockNumber = currentBlock
+		}
+	}
+
+	response := &CodeResponse{
+		Address:     req.Address,
+		Code:        code,
+		IsContract:  len(code) > 0,
+		BlockNumber: blockNumber,
+	}
+
+	// Cache with immutable TTL (code doesn't change for existing contracts)
+	p.cache.Set(cacheKey, response, p.config.Cache.ImmutableTTL)
+
+	return response, nil
+}
+
 // GetInternalTransactions returns internal transactions for a tx hash
 func (p *Proxy) GetInternalTransactions(ctx context.Context, txHash common.Hash) (*InternalTransactionResponse, error) {
 	// Check rate limit

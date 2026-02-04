@@ -511,6 +511,35 @@ func (m *mockStorage) Has(ctx context.Context, key []byte) (bool, error) {
 	return false, nil
 }
 
+// TokenMetadataReader methods for mockStorage
+func (m *mockStorage) GetTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) ListTokensByStandard(ctx context.Context, standard storage.TokenStandard, limit, offset int) ([]*storage.TokenMetadata, error) {
+	return []*storage.TokenMetadata{}, nil
+}
+
+func (m *mockStorage) GetTokensCount(ctx context.Context, standard storage.TokenStandard) (int, error) {
+	return 0, nil
+}
+
+func (m *mockStorage) SearchTokens(ctx context.Context, query string, limit int) ([]*storage.TokenMetadata, error) {
+	return []*storage.TokenMetadata{}, nil
+}
+
+// TokenMetadataWriter methods for mockStorage
+func (m *mockStorage) SaveTokenMetadata(ctx context.Context, metadata *storage.TokenMetadata) error {
+	return nil
+}
+
+func (m *mockStorage) DeleteTokenMetadata(ctx context.Context, address common.Address) error {
+	return nil
+}
+
+func (m *mockStorage) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
+}
+
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
 }
@@ -941,6 +970,35 @@ func (m *mockStorageWithErrors) Iterate(ctx context.Context, prefix []byte, fn f
 
 func (m *mockStorageWithErrors) Has(ctx context.Context, key []byte) (bool, error) {
 	return false, fmt.Errorf("storage error")
+}
+
+// TokenMetadataReader methods for mockStorageWithErrors
+func (m *mockStorageWithErrors) GetTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) ListTokensByStandard(ctx context.Context, standard storage.TokenStandard, limit, offset int) ([]*storage.TokenMetadata, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetTokensCount(ctx context.Context, standard storage.TokenStandard) (int, error) {
+	return 0, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) SearchTokens(ctx context.Context, query string, limit int) ([]*storage.TokenMetadata, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+// TokenMetadataWriter methods for mockStorageWithErrors
+func (m *mockStorageWithErrors) SaveTokenMetadata(ctx context.Context, metadata *storage.TokenMetadata) error {
+	return fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) DeleteTokenMetadata(ctx context.Context, address common.Address) error {
+	return fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
 }
 
 func TestGraphQLHandler(t *testing.T) {

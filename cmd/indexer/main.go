@@ -23,6 +23,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/token"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"go.uber.org/zap"
@@ -618,6 +619,21 @@ func (a *App) initFetcher() {
 			zap.Duration("retry_delay", retryDelay),
 			zap.Int("batch_size", a.config.Indexer.ChunkSize),
 		)
+	}
+
+	// Add token block processor for automatic token metadata indexing
+	tokenProcessor := token.NewBlockProcessorFromEthClient(a.client.EthClient(), a.storage, a.logger)
+	a.fetcher.AddBlockProcessor(tokenProcessor)
+	a.logger.Info("Token block processor added to fetcher")
+
+	// Set up on-demand token metadata fetcher for storage
+	// This allows GetTokenBalances to fetch metadata for tokens not yet indexed
+	tokenMetadataFetcher := token.NewStorageTokenMetadataFetcherFromEthClient(a.client.EthClient(), a.logger)
+	if tokenMetadataFetcher != nil {
+		a.storage.SetTokenMetadataFetcher(tokenMetadataFetcher)
+		a.logger.Info("Token metadata fetcher configured for on-demand fetching")
+	} else {
+		a.logger.Warn("Failed to create token metadata fetcher - on-demand fetching will be disabled")
 	}
 }
 

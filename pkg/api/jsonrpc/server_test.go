@@ -486,6 +486,35 @@ func (m *mockStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *storage.
 	return nil
 }
 
+// TokenMetadataReader methods
+func (m *mockStorage) GetTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorage) ListTokensByStandard(ctx context.Context, standard storage.TokenStandard, limit, offset int) ([]*storage.TokenMetadata, error) {
+	return []*storage.TokenMetadata{}, nil
+}
+
+func (m *mockStorage) GetTokensCount(ctx context.Context, standard storage.TokenStandard) (int, error) {
+	return 0, nil
+}
+
+func (m *mockStorage) SearchTokens(ctx context.Context, query string, limit int) ([]*storage.TokenMetadata, error) {
+	return []*storage.TokenMetadata{}, nil
+}
+
+// TokenMetadataWriter methods
+func (m *mockStorage) SaveTokenMetadata(ctx context.Context, metadata *storage.TokenMetadata) error {
+	return nil
+}
+
+func (m *mockStorage) DeleteTokenMetadata(ctx context.Context, address common.Address) error {
+	return nil
+}
+
+func (m *mockStorage) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
+}
+
 // mockStorageWithData extends mockStorage with transaction and receipt data
 type mockStorageWithData struct {
 	*mockStorage
@@ -1534,6 +1563,35 @@ func (m *mockStorageWithErrors) Has(ctx context.Context, key []byte) (bool, erro
 	return false, storage.ErrNotFound
 }
 
+// TokenMetadataReader interface methods for mockStorageWithErrors
+func (m *mockStorageWithErrors) GetTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) ListTokensByStandard(ctx context.Context, standard storage.TokenStandard, limit, offset int) ([]*storage.TokenMetadata, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) GetTokensCount(ctx context.Context, standard storage.TokenStandard) (int, error) {
+	return 0, storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SearchTokens(ctx context.Context, query string, limit int) ([]*storage.TokenMetadata, error) {
+	return nil, storage.ErrNotFound
+}
+
+// TokenMetadataWriter interface methods for mockStorageWithErrors
+func (m *mockStorageWithErrors) SaveTokenMetadata(ctx context.Context, metadata *storage.TokenMetadata) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) DeleteTokenMetadata(ctx context.Context, address common.Address) error {
+	return storage.ErrNotFound
+}
+
+func (m *mockStorageWithErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
+}
+
 // mockStorageWithNonNotFoundErrors returns non-ErrNotFound errors to test logging paths
 type mockStorageWithNonNotFoundErrors struct {
 }
@@ -1964,6 +2022,35 @@ func (m *mockStorageWithNonNotFoundErrors) Iterate(ctx context.Context, prefix [
 
 func (m *mockStorageWithNonNotFoundErrors) Has(ctx context.Context, key []byte) (bool, error) {
 	return false, fmt.Errorf("database connection failed")
+}
+
+// TokenMetadataReader interface methods for mockStorageWithNonNotFoundErrors
+func (m *mockStorageWithNonNotFoundErrors) GetTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) ListTokensByStandard(ctx context.Context, standard storage.TokenStandard, limit, offset int) ([]*storage.TokenMetadata, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetTokensCount(ctx context.Context, standard storage.TokenStandard) (int, error) {
+	return 0, fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SearchTokens(ctx context.Context, query string, limit int) ([]*storage.TokenMetadata, error) {
+	return nil, fmt.Errorf("database connection failed")
+}
+
+// TokenMetadataWriter interface methods for mockStorageWithNonNotFoundErrors
+func (m *mockStorageWithNonNotFoundErrors) SaveTokenMetadata(ctx context.Context, metadata *storage.TokenMetadata) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) DeleteTokenMetadata(ctx context.Context, address common.Address) error {
+	return fmt.Errorf("database connection failed")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
 }
 
 func TestJSONRPCServerEdgeCases(t *testing.T) {

@@ -77,6 +77,7 @@ const (
 	prefixIdxERC721From       = "/index/erc721/from/"
 	prefixIdxERC721To         = "/index/erc721/to/"
 	prefixIdxERC721TokenOwner = "/index/erc721/tokenowner/"
+	prefixIdxERC721Owner      = "/index/erc721/owner/" // Reverse index: owner -> NFTs
 
 	// Event log data prefixes
 	prefixLogs = "/data/logs/"
@@ -110,6 +111,14 @@ const (
 	prefixIdxNotificationStatus   = "/index/notification/status/"
 	prefixIdxNotificationSetting  = "/index/notification/setting/"
 	prefixIdxNotificationPending  = "/index/notification/pending/"
+
+	// Token metadata data prefixes
+	prefixTokenMetadata = "/data/token/metadata/"
+
+	// Token metadata index prefixes
+	prefixIdxTokenStandard = "/index/token/standard/"
+	prefixIdxTokenSymbol   = "/index/token/symbol/"
+	prefixIdxTokenName     = "/index/token/name/"
 )
 
 // Metadata keys
@@ -726,6 +735,17 @@ func ERC721ToIndexKeyPrefix(to common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%s/", prefixIdxERC721To, to.Hex()))
 }
 
+// ERC721OwnerIndexKey returns the index key for NFTs by owner address
+// Format: /index/erc721/owner/{ownerAddress}/{contractAddress}/{tokenId}
+func ERC721OwnerIndexKey(owner common.Address, contractAddress common.Address, tokenId string) []byte {
+	return []byte(fmt.Sprintf("%s%s/%s/%s", prefixIdxERC721Owner, owner.Hex(), contractAddress.Hex(), tokenId))
+}
+
+// ERC721OwnerIndexKeyPrefix returns the prefix for NFTs by owner address
+func ERC721OwnerIndexKeyPrefix(owner common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxERC721Owner, owner.Hex()))
+}
+
 // ========== Event Log Key Functions ==========
 
 // LogKey returns the key for storing a log entry
@@ -1103,4 +1123,55 @@ func NotificationPendingIndexKey(nextRetry int64, id string) []byte {
 // NotificationPendingIndexKeyPrefix returns the prefix for all pending notifications
 func NotificationPendingIndexKeyPrefix() []byte {
 	return []byte(prefixIdxNotificationPending)
+}
+
+// ========== Token Metadata Key Functions ==========
+
+// TokenMetadataKey returns the key for storing token metadata
+// Format: /data/token/metadata/{address}
+func TokenMetadataKey(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixTokenMetadata, address.Hex()))
+}
+
+// TokenMetadataKeyPrefix returns the prefix for all token metadata
+func TokenMetadataKeyPrefix() []byte {
+	return []byte(prefixTokenMetadata)
+}
+
+// TokenStandardIndexKey returns the index key for tokens by standard
+// Format: /index/token/standard/{standard}/{address}
+func TokenStandardIndexKey(standard string, address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/%s", prefixIdxTokenStandard, standard, address.Hex()))
+}
+
+// TokenStandardIndexKeyPrefix returns the prefix for tokens by standard
+func TokenStandardIndexKeyPrefix(standard string) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxTokenStandard, standard))
+}
+
+// TokenSymbolIndexKey returns the index key for tokens by symbol (lowercase for case-insensitive search)
+// Format: /index/token/symbol/{symbol_lowercase}/{address}
+func TokenSymbolIndexKey(symbol string, address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/%s", prefixIdxTokenSymbol, strings.ToLower(symbol), address.Hex()))
+}
+
+// TokenSymbolIndexKeyPrefix returns the prefix for tokens by symbol
+func TokenSymbolIndexKeyPrefix(symbol string) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxTokenSymbol, strings.ToLower(symbol)))
+}
+
+// TokenNameIndexKey returns the index key for tokens by name (lowercase for case-insensitive search)
+// Format: /index/token/name/{name_lowercase}/{address}
+func TokenNameIndexKey(name string, address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/%s", prefixIdxTokenName, strings.ToLower(name), address.Hex()))
+}
+
+// TokenNameIndexKeyPrefix returns the prefix for tokens by name
+func TokenNameIndexKeyPrefix(name string) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxTokenName, strings.ToLower(name)))
+}
+
+// TokenSearchIndexKeyPrefix returns the prefix for all token search indexes (name + symbol combined)
+func TokenSearchIndexKeyPrefix() []byte {
+	return []byte(prefixIdxTokenName)
 }

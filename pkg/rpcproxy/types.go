@@ -131,6 +131,20 @@ type BalanceResponse struct {
 	BlockNumber uint64         `json:"blockNumber"`
 }
 
+// CodeRequest represents a code query request
+type CodeRequest struct {
+	Address     common.Address `json:"address"`
+	BlockNumber *big.Int       `json:"blockNumber,omitempty"` // nil for latest
+}
+
+// CodeResponse represents a code query response
+type CodeResponse struct {
+	Address     common.Address `json:"address"`
+	Code        []byte         `json:"code"`
+	IsContract  bool           `json:"isContract"`
+	BlockNumber uint64         `json:"blockNumber"`
+}
+
 // CacheConfig holds cache configuration
 type CacheConfig struct {
 	// MaxSize is the maximum number of entries in the cache

@@ -839,6 +839,15 @@ func (b *SchemaBuilder) WithConsensusQueries() *SchemaBuilder {
 func (b *SchemaBuilder) WithAddressIndexingQueries() *SchemaBuilder {
 	s := b.schema
 
+	b.queries["addressOverview"] = &graphql.Field{
+		Type: graphql.NewNonNull(addressOverviewType),
+		Args: graphql.FieldConfigArgument{
+			"address": &graphql.ArgumentConfig{
+				Type: graphql.NewNonNull(addressType),
+			},
+		},
+		Resolve: s.resolveAddressOverview,
+	}
 	b.queries["contractCreation"] = &graphql.Field{
 		Type: contractCreationType,
 		Args: graphql.FieldConfigArgument{
@@ -847,6 +856,15 @@ func (b *SchemaBuilder) WithAddressIndexingQueries() *SchemaBuilder {
 			},
 		},
 		Resolve: s.resolveContractCreation,
+	}
+	b.queries["contracts"] = &graphql.Field{
+		Type: contractCreationConnectionType,
+		Args: graphql.FieldConfigArgument{
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveContracts,
 	}
 	b.queries["contractsByCreator"] = &graphql.Field{
 		Type: contractCreationConnectionType,
@@ -973,6 +991,19 @@ func (b *SchemaBuilder) WithAddressIndexingQueries() *SchemaBuilder {
 			},
 		},
 		Resolve: s.resolveERC721Owner,
+	}
+	b.queries["nftsByOwner"] = &graphql.Field{
+		Type:        graphql.NewNonNull(nftOwnershipConnectionType),
+		Description: "Get all NFTs owned by a specific address",
+		Args: graphql.FieldConfigArgument{
+			"owner": &graphql.ArgumentConfig{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveNFTsByOwner,
 	}
 
 	return b

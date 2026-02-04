@@ -33,6 +33,10 @@ type PebbleStorage struct {
 	// Transaction count cache to avoid per-transaction reads
 	txCount      atomic.Uint64
 	txCountReady atomic.Bool
+
+	// Optional token metadata fetcher for on-demand fetching from chain
+	// When set, GetTokenBalances will fetch metadata from chain if not found in DB
+	tokenMetadataFetcher TokenMetadataFetcher
 }
 
 // NewPebbleStorage creates a new PebbleDB storage
@@ -116,6 +120,12 @@ func (s *PebbleStorage) loadTransactionCount() error {
 // SetLogger sets the logger for the storage
 func (s *PebbleStorage) SetLogger(logger *zap.Logger) {
 	s.logger = logger
+}
+
+// SetTokenMetadataFetcher sets the token metadata fetcher for on-demand fetching
+// When set, GetTokenBalances will fetch metadata from chain if not found in DB
+func (s *PebbleStorage) SetTokenMetadataFetcher(fetcher TokenMetadataFetcher) {
+	s.tokenMetadataFetcher = fetcher
 }
 
 // ensureNotClosed checks if storage is closed
@@ -1870,12 +1880,43 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 				Metadata:        "",  // TODO: Add metadata support
 			}
 
-			// Apply system contract token metadata if available
+			// Apply token metadata if available
+			// Priority: 1) System contract metadata, 2) Database, 3) On-demand fetch from chain
 			if metadata := GetSystemContractTokenMetadata(contract); metadata != nil {
+				// 1. System contract token metadata (hardcoded)
 				tb.Name = metadata.Name
 				tb.Symbol = metadata.Symbol
 				decimals := metadata.Decimals
 				tb.Decimals = &decimals
+			} else if dbMetadata, err := s.GetTokenMetadata(ctx, contract); err == nil && dbMetadata != nil {
+				// 2. Database token metadata
+				tb.Name = dbMetadata.Name
+				tb.Symbol = dbMetadata.Symbol
+				decimals := int(dbMetadata.Decimals)
+				tb.Decimals = &decimals
+			} else if s.tokenMetadataFetcher != nil {
+				// 3. On-demand fetch from chain and cache
+				if fetchedMetadata, err := s.tokenMetadataFetcher.FetchTokenMetadata(ctx, contract); err == nil && fetchedMetadata != nil {
+					tb.Name = fetchedMetadata.Name
+					tb.Symbol = fetchedMetadata.Symbol
+					decimals := int(fetchedMetadata.Decimals)
+					tb.Decimals = &decimals
+
+					// Cache the fetched metadata for future queries
+					if saveErr := s.SaveTokenMetadata(ctx, fetchedMetadata); saveErr != nil {
+						s.logger.Warn("Failed to cache fetched token metadata",
+							zap.String("contract", contract.Hex()),
+							zap.Error(saveErr),
+						)
+					} else {
+						s.logger.Info("Cached on-demand fetched token metadata",
+							zap.String("contract", contract.Hex()),
+							zap.String("name", fetchedMetadata.Name),
+							zap.String("symbol", fetchedMetadata.Symbol),
+							zap.Uint8("decimals", fetchedMetadata.Decimals),
+						)
+					}
+				}
 			}
 
 			// Apply tokenType filter if specified

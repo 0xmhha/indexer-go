@@ -164,6 +164,18 @@ func (m *mockAddressIndexStorage) GetERC721Owner(ctx context.Context, tokenAddre
 	return common.Address{}, storage.ErrNotFound
 }
 
+func (m *mockAddressIndexStorage) ListContracts(ctx context.Context, limit, offset int) ([]*storage.ContractCreation, error) {
+	return []*storage.ContractCreation{}, nil
+}
+
+func (m *mockAddressIndexStorage) GetContractsCount(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *mockAddressIndexStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*storage.NFTOwnership, error) {
+	return []*storage.NFTOwnership{}, nil
+}
+
 // Contract verification methods
 func (m *mockAddressIndexStorage) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
 	return nil, storage.ErrNotFound
