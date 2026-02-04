@@ -58,6 +58,13 @@ type ERC721Transfer struct {
 	Timestamp       uint64         `json:"timestamp"`       // 시각
 }
 
+// NFTOwnership represents an NFT owned by an address
+type NFTOwnership struct {
+	ContractAddress common.Address `json:"contractAddress"` // NFT 컨트랙트 주소
+	TokenId         *big.Int       `json:"tokenId"`         // 토큰 ID
+	Owner           common.Address `json:"owner"`           // 소유자 주소
+}
+
 // AddressIndexReader defines read operations for address indexing
 type AddressIndexReader interface {
 	// Contract Creation queries
@@ -69,6 +76,13 @@ type AddressIndexReader interface {
 	// GetContractsByCreator retrieves contracts created by a specific address with pagination.
 	// Returns empty slice if no contracts found.
 	GetContractsByCreator(ctx context.Context, creator common.Address, limit, offset int) ([]common.Address, error)
+
+	// ListContracts retrieves all deployed contracts with pagination.
+	// Returns contracts sorted by deployment block number (descending).
+	ListContracts(ctx context.Context, limit, offset int) ([]*ContractCreation, error)
+
+	// GetContractsCount returns the total number of deployed contracts.
+	GetContractsCount(ctx context.Context) (int, error)
 
 	// Internal Transaction queries
 	//
@@ -112,6 +126,10 @@ type AddressIndexReader interface {
 	// GetERC721Owner retrieves the current owner of a specific NFT token.
 	// Returns ErrNotFound if the token has not been transferred or does not exist.
 	GetERC721Owner(ctx context.Context, tokenAddress common.Address, tokenId *big.Int) (common.Address, error)
+
+	// GetNFTsByOwner retrieves all NFTs owned by a specific address with pagination.
+	// Returns empty slice if no NFTs found.
+	GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*NFTOwnership, error)
 }
 
 // AddressIndexWriter defines write operations for address indexing

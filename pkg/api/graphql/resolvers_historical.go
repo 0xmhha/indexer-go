@@ -464,9 +464,9 @@ func (s *Schema) resolveTokenBalances(p graphql.ResolveParams) (interface{}, err
 	result := make([]map[string]interface{}, len(balances))
 	for i, balance := range balances {
 		r := map[string]interface{}{
-			"contractAddress": balance.ContractAddress.Hex(),
-			"tokenType":       balance.TokenType,
-			"balance":         balance.Balance.String(),
+			"address":   balance.ContractAddress.Hex(),
+			"tokenType": balance.TokenType,
+			"balance":   balance.Balance.String(),
 		}
 
 		// Add tokenId if not empty

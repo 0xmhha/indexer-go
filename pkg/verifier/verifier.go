@@ -174,8 +174,8 @@ func (v *ContractVerifier) Verify(ctx context.Context, req *VerificationRequest)
 	result.ABI = compileResult.ABI
 	result.Metadata = compileResult.Metadata
 
-	// Compare bytecode
-	match, err := v.CompareBytecode(deployedBytecode, compileResult.Bytecode, req.ConstructorArguments)
+	// Compare bytecode with immutable references support
+	match, err := v.CompareBytecodeWithImmutables(deployedBytecode, compileResult.Bytecode, compileResult.ImmutableReferences)
 	if err != nil {
 		result.Error = err
 		return result, err
@@ -224,6 +224,80 @@ func (v *ContractVerifier) CompareBytecode(deployed, compiled, constructorArgs s
 	return false, nil
 }
 
+// CompareBytecodeWithImmutables compares bytecode accounting for immutable variable differences
+// Immutable variables are embedded directly into bytecode at deployment, causing differences
+// between compiled and deployed bytecode at specific positions.
+func (v *ContractVerifier) CompareBytecodeWithImmutables(deployed, compiled string, immutableRefs map[string][]compiler.ImmutableReference) (bool, error) {
+	deployed = strings.TrimPrefix(deployed, "0x")
+	compiled = strings.TrimPrefix(compiled, "0x")
+
+	// Direct comparison first
+	if deployed == compiled {
+		return true, nil
+	}
+
+	// Strip metadata from both
+	deployedWithoutMeta := v.stripMetadata(deployed)
+	compiledWithoutMeta := v.stripMetadata(compiled)
+
+	// If no immutable references, fall back to similarity comparison
+	if len(immutableRefs) == 0 {
+		return v.compareBytecodeWithoutMetadata(deployed, compiled)
+	}
+
+	// Mask immutable positions in both bytecodes
+	// Note: positions are in bytes, but bytecode string is hex (2 chars per byte)
+	deployedMasked := v.maskImmutablePositions(deployedWithoutMeta, immutableRefs)
+	compiledMasked := v.maskImmutablePositions(compiledWithoutMeta, immutableRefs)
+
+	// Compare masked bytecodes
+	if deployedMasked == compiledMasked {
+		return true, nil
+	}
+
+	// If still not equal, calculate similarity as fallback
+	similarity := v.calculateSimilarity(deployedMasked, compiledMasked)
+	fmt.Printf("[DEBUG] Immutable-masked similarity: %.4f (threshold: %.4f)\n", similarity, MinBytecodeSimilarityThreshold)
+
+	return similarity > MinBytecodeSimilarityThreshold, nil
+}
+
+// maskImmutablePositions replaces immutable variable positions with placeholder characters
+// This allows comparing bytecode that differs only in immutable values
+func (v *ContractVerifier) maskImmutablePositions(bytecode string, immutableRefs map[string][]compiler.ImmutableReference) string {
+	if len(immutableRefs) == 0 {
+		return bytecode
+	}
+
+	// Convert bytecode string to byte slice for manipulation
+	masked := []byte(bytecode)
+
+	// Collect all positions to mask
+	for _, refs := range immutableRefs {
+		for _, ref := range refs {
+			// Convert byte position to hex string position (multiply by 2)
+			startHex := ref.Start * 2
+			lengthHex := ref.Length * 2
+			endHex := startHex + lengthHex
+
+			// Ensure we don't go out of bounds
+			if endHex > len(masked) {
+				endHex = len(masked)
+			}
+			if startHex >= len(masked) {
+				continue
+			}
+
+			// Replace immutable positions with 'XX' pattern (represents masked bytes)
+			for i := startHex; i < endHex; i++ {
+				masked[i] = 'X'
+			}
+		}
+	}
+
+	return string(masked)
+}
+
 // compareBytecodeWithoutMetadata compares bytecode ignoring metadata hash
 // Solidity appends metadata at the end of bytecode with the pattern:
 // 0xa165627a7a72305820{32-byte-hash}0029
@@ -234,6 +308,10 @@ func (v *ContractVerifier) compareBytecodeWithoutMetadata(deployed, compiled str
 	deployedWithoutMeta := v.stripMetadata(deployed)
 	compiledWithoutMeta := v.stripMetadata(compiled)
 
+	// Debug logging
+	fmt.Printf("[DEBUG] Deployed length: %d, without meta: %d\n", len(deployed), len(deployedWithoutMeta))
+	fmt.Printf("[DEBUG] Compiled length: %d, without meta: %d\n", len(compiled), len(compiledWithoutMeta))
+
 	// Compare bytecode without metadata
 	if deployedWithoutMeta == compiledWithoutMeta {
 		return true, nil
@@ -241,6 +319,7 @@ func (v *ContractVerifier) compareBytecodeWithoutMetadata(deployed, compiled str
 
 	// Calculate similarity ratio
 	similarity := v.calculateSimilarity(deployedWithoutMeta, compiledWithoutMeta)
+	fmt.Printf("[DEBUG] Similarity: %.4f (threshold: %.4f)\n", similarity, MinBytecodeSimilarityThreshold)
 
 	// If similarity is high enough, consider it a match
 	return similarity > MinBytecodeSimilarityThreshold, nil

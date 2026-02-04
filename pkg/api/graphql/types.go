@@ -124,13 +124,16 @@ var (
 
 	// Address indexing types
 	contractCreationType              *graphql.Object
+	addressOverviewType               *graphql.Object
 	internalTransactionType           *graphql.Object
 	erc20TransferType                 *graphql.Object
 	erc721TransferType                *graphql.Object
+	nftOwnershipType                  *graphql.Object
 	contractCreationConnectionType    *graphql.Object
 	internalTransactionConnectionType *graphql.Object
 	erc20TransferConnectionType       *graphql.Object
 	erc721TransferConnectionType      *graphql.Object
+	nftOwnershipConnectionType        *graphql.Object
 
 	// Contract verification types
 	contractVerificationType *graphql.Object
@@ -600,20 +603,23 @@ func initTypes() {
 	// Initialize governance and system contract types
 	initGovernanceTypes()
 
-	// Initialize consensus/WBFT types
+	// Initialize miscellaneous types (must be before consensus types due to contractVerificationType dependency)
+	initMiscTypes()
+
+	// Initialize consensus/WBFT types (uses contractVerificationType from initMiscTypes)
 	initConsensusTypes()
 
 	// Initialize token transfer types
 	initTokenTypes()
-
-	// Initialize miscellaneous types
-	initMiscTypes()
 
 	// Initialize multi-chain types
 	initMultiChainTypes()
 
 	// Initialize watchlist types
 	initWatchlistTypes()
+
+	// Initialize token metadata types (for contract metadata, not transfers)
+	initTokenMetadataTypes()
 }
 
 // initInputTypes initializes GraphQL input types for filtering and pagination
@@ -750,7 +756,7 @@ func initStatsTypes() {
 	tokenBalanceType = graphql.NewObject(graphql.ObjectConfig{
 		Name: "TokenBalance",
 		Fields: graphql.Fields{
-			"contractAddress": &graphql.Field{
+			"address": &graphql.Field{
 				Type:        graphql.NewNonNull(addressType),
 				Description: "The token contract address",
 			},
@@ -2189,6 +2195,9 @@ func initConsensusTypes() {
 			"contractAddress": &graphql.Field{
 				Type: graphql.NewNonNull(addressType),
 			},
+			"name": &graphql.Field{
+				Type: graphql.String, // nullable - only available if contract is verified
+			},
 			"creator": &graphql.Field{
 				Type: graphql.NewNonNull(addressType),
 			},
@@ -2203,6 +2212,52 @@ func initConsensusTypes() {
 			},
 			"bytecodeSize": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.Int),
+			},
+		},
+	})
+
+	// AddressOverview type - comprehensive summary of an address
+	addressOverviewType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "AddressOverview",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"isContract": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Boolean),
+			},
+			"balance": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"transactionCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"sentCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"receivedCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"internalTxCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"erc20TokenCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"erc721TokenCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"contractInfo": &graphql.Field{
+				Type: contractCreationType,
+			},
+			"verificationInfo": &graphql.Field{
+				Type: contractVerificationType,
+			},
+			"firstSeen": &graphql.Field{
+				Type: bigIntType,
+			},
+			"lastSeen": &graphql.Field{
+				Type: bigIntType,
 			},
 		},
 	})
@@ -2318,6 +2373,26 @@ func initTokenTypes() {
 		},
 	})
 
+	// NFTOwnership type
+	nftOwnershipType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "NFTOwnership",
+		Description: "Represents an NFT owned by an address",
+		Fields: graphql.Fields{
+			"contractAddress": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "NFT contract address",
+			},
+			"tokenId": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Token ID",
+			},
+			"owner": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Owner address",
+			},
+		},
+	})
+
 	// Connection types
 	contractCreationConnectionType = graphql.NewObject(graphql.ObjectConfig{
 		Name: "ContractCreationConnection",
@@ -2369,6 +2444,23 @@ func initTokenTypes() {
 		Fields: graphql.Fields{
 			"nodes": &graphql.Field{
 				Type: graphql.NewList(graphql.NewNonNull(erc721TransferType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// NFTOwnershipConnection type
+	nftOwnershipConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "NFTOwnershipConnection",
+		Description: "Paginated list of NFTs owned by an address",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewList(graphql.NewNonNull(nftOwnershipType)),
 			},
 			"totalCount": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.Int),

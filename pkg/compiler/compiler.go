@@ -24,6 +24,12 @@ var (
 	ErrTimeout = errors.New("compilation timeout")
 )
 
+// ImmutableReference represents a single immutable variable reference position
+type ImmutableReference struct {
+	Start  int `json:"start"`
+	Length int `json:"length"`
+}
+
 // CompilationResult represents the result of a successful compilation
 type CompilationResult struct {
 	// Bytecode is the compiled contract bytecode (without 0x prefix)
@@ -34,6 +40,9 @@ type CompilationResult struct {
 	Metadata string
 	// CompilerVersion is the version of the compiler used
 	CompilerVersion string
+	// ImmutableReferences maps AST node IDs to positions in bytecode where immutable values are stored
+	// Key is the AST node ID (as string), value is array of positions
+	ImmutableReferences map[string][]ImmutableReference
 }
 
 // CompilationOptions represents options for contract compilation

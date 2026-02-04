@@ -162,6 +162,108 @@ func (s *PebbleStorage) SaveContractCreation(ctx context.Context, creation *Cont
 	return nil
 }
 
+// ListContracts retrieves all deployed contracts with pagination.
+// Returns contracts sorted by deployment block number (descending - newest first).
+func (s *PebbleStorage) ListContracts(ctx context.Context, limit, offset int) ([]*ContractCreation, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	// Validate pagination parameters
+	if limit <= 0 {
+		limit = constants.DefaultPaginationLimit
+	}
+	if limit > constants.DefaultMaxPaginationLimit {
+		limit = constants.DefaultMaxPaginationLimit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Use block index for reverse chronological order
+	// /index/contract/block/{blockNumber}/{contractAddress}
+	prefix := []byte(prefixIdxContractBlock)
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	// Collect all contract addresses first (to sort by block descending)
+	var contractAddrs []common.Address
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		value := iter.Value()
+		if len(value) > 0 {
+			addr := common.BytesToAddress(value)
+			contractAddrs = append(contractAddrs, addr)
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	// Apply pagination
+	start := offset
+	if start >= len(contractAddrs) {
+		return []*ContractCreation{}, nil
+	}
+	end := start + limit
+	if end > len(contractAddrs) {
+		end = len(contractAddrs)
+	}
+
+	paginatedAddrs := contractAddrs[start:end]
+
+	// Fetch full contract creation info for each address
+	contracts := make([]*ContractCreation, 0, len(paginatedAddrs))
+	for _, addr := range paginatedAddrs {
+		creation, err := s.GetContractCreation(ctx, addr)
+		if err != nil {
+			s.logger.Warn("failed to get contract creation details",
+				zap.String("address", addr.Hex()),
+				zap.Error(err))
+			continue
+		}
+		contracts = append(contracts, creation)
+	}
+
+	return contracts, nil
+}
+
+// GetContractsCount returns the total number of deployed contracts.
+func (s *PebbleStorage) GetContractsCount(ctx context.Context) (int, error) {
+	if s.closed.Load() {
+		return 0, ErrClosed
+	}
+
+	prefix := []byte(prefixContractCreation)
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		count++
+	}
+
+	if err := iter.Error(); err != nil {
+		return 0, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return count, nil
+}
+
 // ========== ERC20 Transfer Implementation ==========
 
 // GetERC20Transfer retrieves a specific ERC20 transfer by transaction hash and log index.
@@ -625,6 +727,104 @@ func (s *PebbleStorage) GetERC721Owner(ctx context.Context, tokenAddress common.
 	return owner, nil
 }
 
+// GetNFTsByOwner retrieves all NFTs owned by a specific address with pagination.
+// Returns empty slice if no NFTs found.
+func (s *PebbleStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*NFTOwnership, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	// Validate pagination parameters
+	if limit <= 0 {
+		limit = constants.DefaultPaginationLimit
+	}
+	if limit > constants.DefaultMaxPaginationLimit {
+		limit = constants.DefaultMaxPaginationLimit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	prefix := ERC721OwnerIndexKeyPrefix(owner)
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	nfts := make([]*NFTOwnership, 0, limit)
+	count := 0
+	skipped := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip offset items
+		if skipped < offset {
+			skipped++
+			continue
+		}
+
+		// Check limit
+		if count >= limit {
+			break
+		}
+
+		// Parse the key to extract contractAddress and tokenId
+		// Key format: /index/erc721/owner/{ownerAddress}/{contractAddress}/{tokenId}
+		key := string(iter.Key())
+		prefixStr := string(prefix)
+		remaining := key[len(prefixStr):]
+
+		// Find the separator between contractAddress and tokenId
+		parts := splitNFTKey(remaining)
+		if len(parts) < 2 {
+			s.logger.Warn("Invalid NFT owner index key", zap.String("key", key))
+			continue
+		}
+
+		contractAddress := common.HexToAddress(parts[0])
+		tokenId, ok := new(big.Int).SetString(parts[1], 10)
+		if !ok {
+			s.logger.Warn("Invalid tokenId in NFT owner index key", zap.String("key", key), zap.String("tokenId", parts[1]))
+			continue
+		}
+
+		nfts = append(nfts, &NFTOwnership{
+			ContractAddress: contractAddress,
+			TokenId:         tokenId,
+			Owner:           owner,
+		})
+		count++
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return nfts, nil
+}
+
+// splitNFTKey splits the remaining key into contractAddress and tokenId
+// Input: "0x123.../123"
+// Output: ["0x123...", "123"]
+func splitNFTKey(remaining string) []string {
+	// Find the last "/" to split contractAddress and tokenId
+	lastSlash := -1
+	for i := len(remaining) - 1; i >= 0; i-- {
+		if remaining[i] == '/' {
+			lastSlash = i
+			break
+		}
+	}
+	if lastSlash <= 0 {
+		return nil
+	}
+	return []string{remaining[:lastSlash], remaining[lastSlash+1:]}
+}
+
 // SaveERC721Transfer saves an ERC721 NFT transfer.
 // Also updates the current owner index for the token.
 // Returns error if storage operation fails.
@@ -681,10 +881,32 @@ func (s *PebbleStorage) SaveERC721Transfer(ctx context.Context, transfer *ERC721
 		return fmt.Errorf("failed to save to index: %w", err)
 	}
 
-	// Update current owner
+	// Update current owner (token -> owner mapping)
 	ownerKey := ERC721TokenOwnerKey(transfer.ContractAddress, transfer.TokenId.String())
 	if err := batch.Set(ownerKey, transfer.To.Bytes(), pebble.Sync); err != nil {
 		return fmt.Errorf("failed to save owner index: %w", err)
+	}
+
+	// Update owner-to-NFT reverse index
+	// Remove old owner's index entry (if not minting from zero address)
+	zeroAddress := common.Address{}
+	if transfer.From != zeroAddress {
+		oldOwnerIndexKey := ERC721OwnerIndexKey(transfer.From, transfer.ContractAddress, transfer.TokenId.String())
+		if err := batch.Delete(oldOwnerIndexKey, pebble.Sync); err != nil {
+			s.logger.Warn("Failed to delete old owner index",
+				zap.String("from", transfer.From.Hex()),
+				zap.String("contract", transfer.ContractAddress.Hex()),
+				zap.String("tokenId", transfer.TokenId.String()),
+				zap.Error(err))
+		}
+	}
+
+	// Add new owner's index entry (if not burning to zero address)
+	if transfer.To != zeroAddress {
+		newOwnerIndexKey := ERC721OwnerIndexKey(transfer.To, transfer.ContractAddress, transfer.TokenId.String())
+		if err := batch.Set(newOwnerIndexKey, []byte{1}, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to save new owner index: %w", err)
+		}
 	}
 
 	// Commit batch

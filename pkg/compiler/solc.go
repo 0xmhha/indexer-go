@@ -141,7 +141,8 @@ func (s *SolcCompiler) parseStandardJsonOutput(output []byte, contractName strin
 					Object string `json:"object"`
 				} `json:"bytecode"`
 				DeployedBytecode struct {
-					Object string `json:"object"`
+					Object              string                         `json:"object"`
+					ImmutableReferences map[string][]ImmutableReference `json:"immutableReferences"`
 				} `json:"deployedBytecode"`
 			} `json:"evm"`
 			Metadata string `json:"metadata"`
@@ -200,9 +201,10 @@ func (s *SolcCompiler) parseStandardJsonOutput(output []byte, contractName strin
 			}
 			// Use deployedBytecode for verification (runtime code, not creation code)
 			return &CompilationResult{
-				Bytecode: contract.Evm.DeployedBytecode.Object,
-				ABI:      abiToString(contract.Abi),
-				Metadata: contract.Metadata,
+				Bytecode:            contract.Evm.DeployedBytecode.Object,
+				ABI:                 abiToString(contract.Abi),
+				Metadata:            contract.Metadata,
+				ImmutableReferences: contract.Evm.DeployedBytecode.ImmutableReferences,
 			}, nil
 		}
 	}
@@ -212,9 +214,10 @@ func (s *SolcCompiler) parseStandardJsonOutput(output []byte, contractName strin
 		for _, contract := range contracts {
 			// Use deployedBytecode for verification (runtime code, not creation code)
 			return &CompilationResult{
-				Bytecode: contract.Evm.DeployedBytecode.Object,
-				ABI:      abiToString(contract.Abi),
-				Metadata: contract.Metadata,
+				Bytecode:            contract.Evm.DeployedBytecode.Object,
+				ABI:                 abiToString(contract.Abi),
+				Metadata:            contract.Metadata,
+				ImmutableReferences: contract.Evm.DeployedBytecode.ImmutableReferences,
 			}, nil
 		}
 	}

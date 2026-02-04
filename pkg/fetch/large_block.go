@@ -23,6 +23,9 @@ type LargeBlockProcessor struct {
 	largeBlockThreshold uint64 // Gas limit threshold for "large" blocks
 	receiptBatchSize    int    // Number of receipts to process in each batch
 	maxReceiptWorkers   int    // Maximum number of workers for parallel receipt processing
+
+	// tokenIndexer is called when a new contract is deployed to index token metadata
+	tokenIndexer TokenIndexer
 }
 
 // NewLargeBlockProcessor creates a new large block processor
@@ -34,6 +37,11 @@ func NewLargeBlockProcessor(storage Storage, logger *zap.Logger) *LargeBlockProc
 		receiptBatchSize:    100,      // Process 100 receipts per batch
 		maxReceiptWorkers:   10,       // Use up to 10 workers for receipt processing
 	}
+}
+
+// SetTokenIndexer sets the token indexer for the large block processor
+func (p *LargeBlockProcessor) SetTokenIndexer(indexer TokenIndexer) {
+	p.tokenIndexer = indexer
 }
 
 // IsLargeBlock returns true if the block's gas used exceeds the large block threshold
@@ -269,6 +277,16 @@ func (p *LargeBlockProcessor) processAddressIndexing(
 
 		if err := addressWriter.SaveContractCreation(ctx, creation); err != nil {
 			return fmt.Errorf("failed to save contract creation: %w", err)
+		}
+
+		// Index token metadata if this is a token contract
+		if p.tokenIndexer != nil {
+			if err := p.tokenIndexer.IndexToken(ctx, receipt.ContractAddress, blockNumber); err != nil {
+				p.logger.Debug("Failed to index token metadata (may not be a token contract)",
+					zap.String("contract", receipt.ContractAddress.Hex()),
+					zap.Error(err),
+				)
+			}
 		}
 	}
 

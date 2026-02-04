@@ -1099,11 +1099,17 @@ type Query {
 
   # ========== Address Indexing Queries ==========
 
+  # Get comprehensive overview of an address (balance, tx counts, contract info, etc.)
+  addressOverview(address: Address!): AddressOverview!
+
   # Get contract creation information by contract address
   contractCreation(address: Address!): ContractCreation
 
   # Get contract verification information by contract address
   contractVerification(address: Address!): ContractVerification
+
+  # Get all deployed contracts with pagination (newest first)
+  contracts(pagination: PaginationInput): ContractCreationConnection!
 
   # Get contracts created by a specific address
   contractsByCreator(
@@ -1155,6 +1161,12 @@ type Query {
 
   # Get current owner of an NFT token
   erc721Owner(token: Address!, tokenId: BigInt!): Address
+
+  # Get all NFTs owned by a specific address
+  nftsByOwner(
+    owner: Address!
+    pagination: PaginationInput
+  ): NFTOwnershipConnection!
 
   # ========== Dynamic Contract Queries ==========
 
@@ -1216,6 +1228,26 @@ type Query {
     fromBlock: BigInt
     toBlock: BigInt
   ): FeePayerStats!
+
+  # ========== Token Metadata Queries ==========
+
+  # Get token metadata by contract address
+  tokenMetadata(address: Address!): TokenMetadata
+
+  # List tokens with optional standard filter and pagination
+  tokens(
+    standard: TokenStandard
+    pagination: PaginationInput
+  ): TokenMetadataConnection!
+
+  # Search tokens by name or symbol
+  searchTokens(
+    query: String!
+    limit: Int
+  ): [TokenMetadata!]!
+
+  # Get token count by standard
+  tokenCount(standard: TokenStandard): Int!
 }
 
 # Block connection for pagination
@@ -1367,7 +1399,7 @@ type MinerStats {
 # TokenBalance represents a token balance for an address
 type TokenBalance {
   # Token contract address
-  contractAddress: Address!
+  address: Address!
 
   # Token standard (ERC20, ERC721, ERC1155)
   tokenType: String!
@@ -1389,6 +1421,48 @@ type TokenBalance {
 
   # Token metadata (JSON string, for NFTs)
   metadata: String
+}
+
+# AddressOverview provides a comprehensive summary of an address
+type AddressOverview {
+  # The address being queried
+  address: Address!
+
+  # Whether this address is a contract
+  isContract: Boolean!
+
+  # Native coin balance (in Wei)
+  balance: BigInt!
+
+  # Total transaction count (sent + received)
+  transactionCount: Int!
+
+  # Sent transaction count
+  sentCount: Int!
+
+  # Received transaction count
+  receivedCount: Int!
+
+  # Internal transaction count
+  internalTxCount: Int!
+
+  # ERC20 token balance count (number of different tokens held)
+  erc20TokenCount: Int!
+
+  # ERC721 NFT count (number of NFTs owned)
+  erc721TokenCount: Int!
+
+  # Contract creation info (if this is a contract)
+  contractInfo: ContractCreation
+
+  # Contract verification status (if this is a contract)
+  verificationInfo: ContractVerification
+
+  # First seen timestamp (first transaction involving this address)
+  firstSeen: BigInt
+
+  # Last seen timestamp (last transaction involving this address)
+  lastSeen: BigInt
 }
 
 # ========== System Contract Types ==========
@@ -2144,6 +2218,9 @@ type ContractCreation {
   # Created contract address
   contractAddress: Address!
 
+  # Contract name (from verification data, null if not verified)
+  name: String
+
   # Creator address
   creator: Address!
 
@@ -2313,6 +2390,25 @@ type ERC20TransferConnection {
 
 type ERC721TransferConnection {
   nodes: [ERC721Transfer!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+# NFTOwnership represents an NFT owned by an address
+type NFTOwnership {
+  # NFT contract address
+  contractAddress: Address!
+
+  # Token ID
+  tokenId: BigInt!
+
+  # Owner address
+  owner: Address!
+}
+
+# NFTOwnershipConnection for paginated NFT ownership queries
+type NFTOwnershipConnection {
+  nodes: [NFTOwnership!]!
   totalCount: Int!
   pageInfo: PageInfo!
 }
@@ -2524,6 +2620,70 @@ type TopFeePayersResult {
   nodes: [FeePayerStats!]!
   # Total count of unique fee payers
   totalCount: BigInt!
+}
+
+# ========== Token Metadata Types ==========
+
+# Token standard enum
+enum TokenStandard {
+  UNKNOWN
+  ERC20
+  ERC721
+  ERC1155
+}
+
+# Token metadata represents cached information about a token contract
+type TokenMetadata {
+  # Token contract address
+  address: Address!
+
+  # Detected token standard
+  standard: TokenStandard!
+
+  # Token name (from name() function)
+  name: String
+
+  # Token symbol (from symbol() function)
+  symbol: String
+
+  # Number of decimals (ERC20 only, 0 for NFTs)
+  decimals: Int!
+
+  # Total supply (ERC20 only)
+  totalSupply: BigInt
+
+  # Base URI for token metadata (ERC721/ERC1155)
+  baseURI: String
+
+  # Block height when the token was first detected
+  detectedAt: BigInt!
+
+  # Timestamp when metadata was created
+  createdAt: DateTime!
+
+  # Timestamp when metadata was last updated
+  updatedAt: DateTime!
+
+  # Whether the contract supports ERC-165 interface detection
+  supportsERC165: Boolean!
+
+  # Whether the contract supports metadata extension
+  supportsMetadata: Boolean!
+
+  # Whether ERC721 contract supports enumerable extension
+  supportsEnumerable: Boolean
+}
+
+# Token metadata connection for pagination
+type TokenMetadataConnection {
+  # List of token metadata
+  nodes: [TokenMetadata!]!
+
+  # Total count
+  totalCount: Int!
+
+  # Page info
+  pageInfo: PageInfo!
 }
 
 # Mutation type for write operations

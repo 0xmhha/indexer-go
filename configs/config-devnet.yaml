@@ -21,6 +21,11 @@ database:
   path: "./data-devnet"
   readonly: false
 
+# Storage options for address indexing
+# Address indexing enables contract tracking, token balances, and transfer history
+storage:
+  address_indexing: true
+
 log:
   level: "debug"
   format: "console"

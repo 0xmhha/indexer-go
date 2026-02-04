@@ -65,6 +65,14 @@ type BlockProcessor interface {
 	ProcessBlock(ctx context.Context, chainID string, block *types.Block, receipts []*types.Receipt) error
 }
 
+// TokenIndexer defines an interface for indexing token metadata
+// This is called when a new contract is deployed to detect and store token metadata
+type TokenIndexer interface {
+	// IndexToken detects if the contract is a token and fetches/stores its metadata
+	// Returns nil if the contract is not a token or if metadata cannot be fetched
+	IndexToken(ctx context.Context, address common.Address, blockHeight uint64) error
+}
+
 // Storage defines the interface for storage operations
 type Storage interface {
 	GetLatestHeight(ctx context.Context) (uint64, error)
@@ -149,6 +157,9 @@ type Fetcher struct {
 	// (like watchlist) to react to new blocks
 	blockProcessors []BlockProcessor
 	processorMu     sync.RWMutex
+
+	// tokenIndexer is called when a new contract is deployed to index token metadata
+	tokenIndexer TokenIndexer
 }
 
 // NewFetcher creates a new Fetcher instance
@@ -242,6 +253,17 @@ func (f *Fetcher) SetChainID(chainID string) {
 // GetChainID returns the chain identifier
 func (f *Fetcher) GetChainID() string {
 	return f.chainID
+}
+
+// SetTokenIndexer sets the token indexer to be called when contracts are deployed
+// This enables automatic detection and indexing of token metadata (name, symbol, decimals)
+func (f *Fetcher) SetTokenIndexer(indexer TokenIndexer) {
+	f.tokenIndexer = indexer
+	// Also set on large block processor for consistency
+	if f.largeBlockProcessor != nil {
+		f.largeBlockProcessor.SetTokenIndexer(indexer)
+	}
+	f.logger.Info("Token indexer configured")
 }
 
 // AddBlockProcessor adds a block processor to be called after each block is indexed
@@ -508,6 +530,15 @@ func (f *Fetcher) processBlockMetadata(ctx context.Context, block *types.Block, 
 				zap.Error(err),
 			)
 			// Don't fail the entire block processing for genesis balance initialization
+		}
+
+		// Initialize genesis token metadata for system contracts
+		if err := f.initializeGenesisTokenMetadata(ctx); err != nil {
+			f.logger.Warn("Failed to initialize genesis token metadata",
+				zap.Uint64("height", height),
+				zap.Error(err),
+			)
+			// Don't fail the entire block processing for genesis token initialization
 		}
 	}
 
@@ -1818,6 +1849,16 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 					zap.Error(err),
 				)
 			}
+
+			// Index token metadata if this is a token contract
+			if f.tokenIndexer != nil {
+				if err := f.tokenIndexer.IndexToken(ctx, receipt.ContractAddress, blockNumber); err != nil {
+					f.logger.Debug("Failed to index token metadata (may not be a token contract)",
+						zap.String("contract", receipt.ContractAddress.Hex()),
+						zap.Error(err),
+					)
+				}
+			}
 		}
 
 		// 2. Parse ERC20/ERC721 Transfer Events from Logs
@@ -2032,6 +2073,68 @@ func (f *Fetcher) initializeGenesisBalances(ctx context.Context, block *types.Bl
 			return fmt.Errorf("failed to set genesis miner balance: %w", err)
 		}
 	}
+
+	return nil
+}
+
+// initializeGenesisTokenMetadata indexes token metadata for genesis system contracts
+// This is called only for block 0 to ensure system contracts deployed at genesis
+// have their token metadata properly indexed.
+func (f *Fetcher) initializeGenesisTokenMetadata(ctx context.Context) error {
+	// Check if we have a chain adapter with system contracts
+	if f.chainAdapter == nil {
+		f.logger.Debug("No chain adapter available, skipping genesis token metadata initialization")
+		return nil
+	}
+
+	systemContracts := f.chainAdapter.SystemContracts()
+	if systemContracts == nil {
+		f.logger.Debug("No system contracts handler available, skipping genesis token metadata initialization")
+		return nil
+	}
+
+	// Check if we have a token indexer
+	if f.tokenIndexer == nil {
+		f.logger.Debug("No token indexer available, skipping genesis token metadata initialization")
+		return nil
+	}
+
+	// Get all system contract addresses
+	addresses := systemContracts.GetSystemContractAddresses()
+	if len(addresses) == 0 {
+		f.logger.Debug("No system contract addresses found")
+		return nil
+	}
+
+	f.logger.Info("Indexing genesis system contract token metadata",
+		zap.Int("contract_count", len(addresses)),
+	)
+
+	// Index token metadata for each system contract
+	var indexed, skipped int
+	for _, addr := range addresses {
+		// Use block height 0 for genesis contracts
+		if err := f.tokenIndexer.IndexToken(ctx, addr, 0); err != nil {
+			f.logger.Debug("Failed to index genesis contract token metadata (may not be a token)",
+				zap.String("address", addr.Hex()),
+				zap.String("name", systemContracts.GetSystemContractName(addr)),
+				zap.Error(err),
+			)
+			skipped++
+		} else {
+			f.logger.Info("Indexed genesis system contract token metadata",
+				zap.String("address", addr.Hex()),
+				zap.String("name", systemContracts.GetSystemContractName(addr)),
+			)
+			indexed++
+		}
+	}
+
+	f.logger.Info("Completed genesis token metadata initialization",
+		zap.Int("indexed", indexed),
+		zap.Int("skipped", skipped),
+		zap.Int("total", len(addresses)),
+	)
 
 	return nil
 }
