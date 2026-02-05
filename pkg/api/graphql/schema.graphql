@@ -306,6 +306,9 @@ type Transaction {
   # To address (null for contract creation)
   to: Address
 
+  # Contract address created by this transaction (null if not a contract creation)
+  contractAddress: Address
+
   # Value transferred
   value: BigInt!
 

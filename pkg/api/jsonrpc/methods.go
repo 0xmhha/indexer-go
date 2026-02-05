@@ -467,6 +467,7 @@ func (h *Handler) transactionToJSON(tx *types.Transaction, location *storage.TxL
 		"input":            fmt.Sprintf("0x%x", tx.Data()),
 		"nonce":            fmt.Sprintf("0x%x", tx.Nonce()),
 		"to":               nil,
+		"contractAddress":  nil,
 		"transactionIndex": fmt.Sprintf("0x%x", location.TxIndex),
 		"value":            fmt.Sprintf("0x%x", tx.Value()),
 		"type":             fmt.Sprintf("0x%x", tx.Type()),
@@ -477,6 +478,14 @@ func (h *Handler) transactionToJSON(tx *types.Transaction, location *storage.TxL
 
 	if tx.To() != nil {
 		result["to"] = tx.To().Hex()
+	} else {
+		// Contract creation transaction - look up the receipt to get the contract address
+		if h.storage != nil {
+			receipt, err := h.storage.GetReceipt(context.Background(), tx.Hash())
+			if err == nil && receipt != nil && receipt.ContractAddress != (common.Address{}) {
+				result["contractAddress"] = receipt.ContractAddress.Hex()
+			}
+		}
 	}
 
 	// EIP-1559 fields

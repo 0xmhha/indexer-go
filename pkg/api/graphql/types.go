@@ -325,6 +325,10 @@ func initCoreTypes() {
 			"to": &graphql.Field{
 				Type: addressType,
 			},
+			"contractAddress": &graphql.Field{
+				Type:        addressType,
+				Description: "Contract address created by this transaction (null if not a contract creation)",
+			},
 			"value": &graphql.Field{
 				Type: graphql.NewNonNull(bigIntType),
 			},

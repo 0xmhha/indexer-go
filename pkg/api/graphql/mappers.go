@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/0xmhha/indexer-go/pkg/abi"
@@ -141,6 +142,7 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 		"transactionIndex":     txIndex,
 		"from":                 from.Hex(),
 		"to":                   nil,
+		"contractAddress":      nil,
 		"value":                valueStr,
 		"gas":                  fmt.Sprintf("%d", tx.Gas()),
 		"gasPrice":             nil,
@@ -164,6 +166,14 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 
 	if tx.To() != nil {
 		result["to"] = tx.To().Hex()
+	} else {
+		// Contract creation transaction - look up the receipt to get the contract address
+		if s.storage != nil {
+			receipt, err := s.storage.GetReceipt(context.Background(), tx.Hash())
+			if err == nil && receipt != nil && receipt.ContractAddress != (common.Address{}) {
+				result["contractAddress"] = receipt.ContractAddress.Hex()
+			}
+		}
 	}
 
 	if tx.GasPrice() != nil {
