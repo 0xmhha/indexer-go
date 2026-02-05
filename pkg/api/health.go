@@ -96,7 +96,7 @@ type HealthChecker struct {
 	kafkaProducer *eventbus.KafkaProducer
 
 	// Health states
-	lastCheck      time.Time
+	lastCheck      time.Time //nolint:unused
 	componentState map[string]string
 }
 
@@ -297,7 +297,7 @@ func (hc *HealthChecker) LivenessHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status": "alive",
 		})
 	}
@@ -330,12 +330,12 @@ func (hc *HealthChecker) ReadinessHandler() http.HandlerFunc {
 
 		if ready {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "ready",
 			})
 		} else {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "not_ready",
 				"reasons": reasons,
 			})
@@ -351,12 +351,12 @@ func (hc *HealthChecker) StartupHandler(startupComplete *bool) http.HandlerFunc 
 
 		if startupComplete != nil && *startupComplete {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"status": "started",
 			})
 		} else {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"status": "starting",
 			})
 		}
@@ -378,6 +378,6 @@ func (hc *HealthChecker) DetailedHealthHandler() http.HandlerFunc {
 		}
 
 		w.WriteHeader(status)
-		json.NewEncoder(w).Encode(health)
+		_ = json.NewEncoder(w).Encode(health)
 	}
 }

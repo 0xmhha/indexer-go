@@ -292,7 +292,7 @@ func (cm *ConnectionManager) DeliverEvent(ctx context.Context, sessionID string,
 	case active.SendChan <- data:
 		event.Delivered = true
 		// Update delivered status in cache (best effort)
-		cm.eventCache.Store(ctx, event)
+		_ = cm.eventCache.Store(ctx, event)
 	default:
 		cm.logger.Warn("Send channel full, event cached for retry",
 			zap.String("session_id", sessionID),

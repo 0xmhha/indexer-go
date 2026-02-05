@@ -195,9 +195,7 @@ type WebhookPayload struct {
 // This can be used by webhook recipients to verify the authenticity of the request.
 func VerifyWebhookSignature(payload []byte, signature, secret string) bool {
 	// Remove "sha256=" prefix if present
-	if strings.HasPrefix(signature, "sha256=") {
-		signature = strings.TrimPrefix(signature, "sha256=")
-	}
+	signature = strings.TrimPrefix(signature, "sha256=")
 
 	expected, err := hex.DecodeString(signature)
 	if err != nil {

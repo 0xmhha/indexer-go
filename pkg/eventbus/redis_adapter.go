@@ -58,7 +58,7 @@ type RedisEventBus struct {
 	}
 
 	// mu protects subscriptions
-	mu sync.RWMutex
+	mu sync.RWMutex //nolint:unused
 
 	// startTime is when the event bus was created
 	startTime time.Time

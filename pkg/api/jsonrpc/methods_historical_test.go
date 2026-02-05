@@ -264,7 +264,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getBlocksByTimeRange", params)
 		if err == nil {
-			t.Error("expected error for missing parameters")
+			t.Fatal("expected error for missing parameters")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -280,7 +280,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{"fromTime": "invalid", "toTime": 2000}`)
 		_, err := server.HandleMethodDirect(ctx, "getBlocksByTimeRange", params)
 		if err == nil {
-			t.Error("expected error for invalid time format")
+			t.Fatal("expected error for invalid time format")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -334,7 +334,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getBlockByTimestamp", params)
 		if err == nil {
-			t.Error("expected error for missing timestamp")
+			t.Fatal("expected error for missing timestamp")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -431,7 +431,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getTransactionsByAddressFiltered", params)
 		if err == nil {
-			t.Error("expected error for missing parameters")
+			t.Fatal("expected error for missing parameters")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -447,7 +447,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{"address": "0x456"}`)
 		_, err := server.HandleMethodDirect(ctx, "getTransactionsByAddressFiltered", params)
 		if err == nil {
-			t.Error("expected error for missing filter")
+			t.Fatal("expected error for missing filter")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -507,7 +507,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getAddressBalance", params)
 		if err == nil {
-			t.Error("expected error for missing address")
+			t.Fatal("expected error for missing address")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -523,7 +523,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{"address": "0x456", "blockNumber": "invalid"}`)
 		_, err := server.HandleMethodDirect(ctx, "getAddressBalance", params)
 		if err == nil {
-			t.Error("expected error for invalid block number")
+			t.Fatal("expected error for invalid block number")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -657,7 +657,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getBalanceHistory", params)
 		if err == nil {
-			t.Error("expected error for missing parameters")
+			t.Fatal("expected error for missing parameters")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -673,7 +673,7 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{"address": "0x456"}`)
 		_, err := server.HandleMethodDirect(ctx, "getBalanceHistory", params)
 		if err == nil {
-			t.Error("expected error for missing block parameters")
+			t.Fatal("expected error for missing block parameters")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)

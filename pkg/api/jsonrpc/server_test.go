@@ -774,7 +774,7 @@ func TestJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getBlock", params)
 		if err == nil {
-			t.Error("expected error for missing block number")
+			t.Fatal("expected error for missing block number")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams error, got %v", err.Code)
@@ -785,7 +785,7 @@ func TestJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{"number": true}`)
 		_, err := server.HandleMethodDirect(ctx, "getBlock", params)
 		if err == nil {
-			t.Error("expected error for invalid number type")
+			t.Fatal("expected error for invalid number type")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams error, got %v", err.Code)
@@ -812,7 +812,7 @@ func TestJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getBlockByHash", params)
 		if err == nil {
-			t.Error("expected error for missing hash")
+			t.Fatal("expected error for missing hash")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams error, got %v", err.Code)
@@ -831,7 +831,7 @@ func TestJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getTxResult", params)
 		if err == nil {
-			t.Error("expected error for missing hash")
+			t.Fatal("expected error for missing hash")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams error, got %v", err.Code)
@@ -850,7 +850,7 @@ func TestJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getTxReceipt", params)
 		if err == nil {
-			t.Error("expected error for missing hash")
+			t.Fatal("expected error for missing hash")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams error, got %v", err.Code)
@@ -924,7 +924,7 @@ func TestJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := errorServer.HandleMethodDirect(ctx, "getLatestHeight", params)
 		if err == nil {
-			t.Error("expected error when storage fails")
+			t.Fatal("expected error when storage fails")
 		}
 		if err.Code != InternalError {
 			t.Errorf("expected InternalError, got %v", err.Code)
@@ -976,7 +976,7 @@ func TestJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{"hash": "invalid-hash"}`)
 		_, err := server.HandleMethodDirect(ctx, "getBlock", params)
 		if err == nil {
-			t.Error("expected error for invalid hash format")
+			t.Fatal("expected error for invalid hash format")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -2348,7 +2348,7 @@ func TestJSONRPCErrorLogging(t *testing.T) {
 		params := json.RawMessage(`{"number": 1}`)
 		_, err := server.HandleMethodDirect(ctx, "getBlock", params)
 		if err == nil {
-			t.Error("expected error")
+			t.Fatal("expected error")
 		}
 		if err.Code != InternalError {
 			t.Errorf("expected InternalError, got %v", err.Code)
@@ -2359,7 +2359,7 @@ func TestJSONRPCErrorLogging(t *testing.T) {
 		params := json.RawMessage(`{"hash": "0x123"}`)
 		_, err := server.HandleMethodDirect(ctx, "getBlockByHash", params)
 		if err == nil {
-			t.Error("expected error")
+			t.Fatal("expected error")
 		}
 		if err.Code != InternalError {
 			t.Errorf("expected InternalError, got %v", err.Code)
@@ -2370,7 +2370,7 @@ func TestJSONRPCErrorLogging(t *testing.T) {
 		params := json.RawMessage(`{"hash": "0x123"}`)
 		_, err := server.HandleMethodDirect(ctx, "getTxResult", params)
 		if err == nil {
-			t.Error("expected error")
+			t.Fatal("expected error")
 		}
 		if err.Code != InternalError {
 			t.Errorf("expected InternalError, got %v", err.Code)
@@ -2381,7 +2381,7 @@ func TestJSONRPCErrorLogging(t *testing.T) {
 		params := json.RawMessage(`{"hash": "0x123"}`)
 		_, err := server.HandleMethodDirect(ctx, "getTxReceipt", params)
 		if err == nil {
-			t.Error("expected error")
+			t.Fatal("expected error")
 		}
 		if err.Code != InternalError {
 			t.Errorf("expected InternalError, got %v", err.Code)

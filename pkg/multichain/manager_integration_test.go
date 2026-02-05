@@ -187,7 +187,7 @@ func TestIntegration_HealthCheckMonitoring(t *testing.T) {
 	if err := manager.Start(ctx); err != nil {
 		t.Fatalf("Failed to start manager: %v", err)
 	}
-	defer manager.Stop(ctx)
+	defer func() { _ = manager.Stop(ctx) }()
 
 	// Run health check
 	statuses := manager.HealthCheck(ctx)

@@ -1,6 +1,7 @@
 package poa
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -299,7 +300,7 @@ func TestFactory(t *testing.T) {
 func TestParser_GetValidators(t *testing.T) {
 	parser := NewParser(zap.NewNop())
 
-	validators, err := parser.GetValidators(nil, 100)
+	validators, err := parser.GetValidators(context.Background(), 100)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}

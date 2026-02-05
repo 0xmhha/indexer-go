@@ -806,7 +806,7 @@ func TestPebbleStorage_GetReceipts_PartialNotFound(t *testing.T) {
 		TxHash:            hash1,
 		GasUsed:           21000,
 	}
-	storage.SetReceipt(ctx, receipt1)
+	_ = storage.SetReceipt(ctx, receipt1)
 
 	// Try to get multiple receipts including non-existent ones
 	hashes := []common.Hash{
@@ -823,7 +823,7 @@ func TestPebbleStorage_GetReceipts_PartialNotFound(t *testing.T) {
 	}
 
 	// But receipts slice should contain what was found (nil for missing)
-	if receipts != nil && len(receipts) > 0 {
+	if len(receipts) > 0 {
 		if receipts[0] == nil {
 			t.Error("First receipt should not be nil")
 		}
@@ -1506,8 +1506,8 @@ func TestPebbleStorage_BatchReset(t *testing.T) {
 	defer batch.Close()
 
 	// Add some operations
-	batch.SetLatestHeight(ctx, 100)
-	batch.SetBlock(ctx, createTestBlock(1))
+	_ = batch.SetLatestHeight(ctx, 100)
+	_ = batch.SetBlock(ctx, createTestBlock(1))
 
 	initialCount := batch.Count()
 	if initialCount == 0 {
@@ -1657,7 +1657,7 @@ func TestPebbleStorage_ReadOnly(t *testing.T) {
 	ctx := context.Background()
 
 	block := createTestBlock(100)
-	storage.SetBlock(ctx, block)
+	_ = storage.SetBlock(ctx, block)
 	storage.Close()
 
 	// Open in read-only mode
@@ -1733,7 +1733,7 @@ func BenchmarkPebbleStorage_SetBlock(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		storage.SetBlock(ctx, block)
+		_ = storage.SetBlock(ctx, block)
 	}
 }
 
@@ -1747,11 +1747,11 @@ func BenchmarkPebbleStorage_GetBlock(b *testing.B) {
 
 	ctx := context.Background()
 	block := createTestBlock(100)
-	storage.SetBlock(ctx, block)
+	_ = storage.SetBlock(ctx, block)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		storage.GetBlock(ctx, 100)
+		_, _ = storage.GetBlock(ctx, 100)
 	}
 }
 
@@ -1911,7 +1911,7 @@ func TestPebbleStorage_GetBlockCount(t *testing.T) {
 
 	// Set latest height to 4 (blocks 0-4, total 5 blocks)
 	heightValue := EncodeUint64(4)
-	pebbleStorage.db.Set(LatestHeightKey(), heightValue, nil)
+	_ = pebbleStorage.db.Set(LatestHeightKey(), heightValue, nil)
 
 	// Test retrieval - should return height + 1
 	count, err = pebbleStorage.GetBlockCount(ctx)
@@ -1924,7 +1924,7 @@ func TestPebbleStorage_GetBlockCount(t *testing.T) {
 
 	// Set larger height
 	heightValue = EncodeUint64(999999)
-	pebbleStorage.db.Set(LatestHeightKey(), heightValue, nil)
+	_ = pebbleStorage.db.Set(LatestHeightKey(), heightValue, nil)
 
 	count, err = pebbleStorage.GetBlockCount(ctx)
 	if err != nil {
@@ -1953,7 +1953,7 @@ func TestPebbleStorage_GetTransactionCount(t *testing.T) {
 
 	// Store count manually (also update atomic counter since GetTransactionCount uses cache)
 	countValue := EncodeUint64(10)
-	pebbleStorage.db.Set(TransactionCountKey(), countValue, nil)
+	_ = pebbleStorage.db.Set(TransactionCountKey(), countValue, nil)
 	pebbleStorage.txCount.Store(10) // Update cache to match
 
 	// Test retrieval
@@ -1967,7 +1967,7 @@ func TestPebbleStorage_GetTransactionCount(t *testing.T) {
 
 	// Store larger count (also update atomic counter)
 	countValue = EncodeUint64(5000000)
-	pebbleStorage.db.Set(TransactionCountKey(), countValue, nil)
+	_ = pebbleStorage.db.Set(TransactionCountKey(), countValue, nil)
 	pebbleStorage.txCount.Store(5000000) // Update cache to match
 
 	count, err = pebbleStorage.GetTransactionCount(ctx)
@@ -3974,10 +3974,8 @@ func TestPebbleStorage_AddTransactionToAddressIndex_Success(t *testing.T) {
 	addr := common.HexToAddress("0xcccc")
 
 	// Add multiple transactions to index
-	var hashes []common.Hash
 	for i := 0; i < 3; i++ {
 		tx := createTestTransaction(uint64(i))
-		hashes = append(hashes, tx.Hash())
 		if err := pebbleStorage.AddTransactionToAddressIndex(ctx, addr, tx.Hash()); err != nil {
 			t.Fatalf("AddTransactionToAddressIndex(%d) error = %v", i, err)
 		}

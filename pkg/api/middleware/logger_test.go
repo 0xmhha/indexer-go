@@ -14,7 +14,7 @@ func TestLogger(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("test response"))
+		_, _ = w.Write([]byte("test response"))
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -63,7 +63,7 @@ func TestLoggerWithLevel(t *testing.T) {
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				w.Write([]byte(tt.expectedBody))
+				_, _ = w.Write([]byte(tt.expectedBody))
 			})
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)

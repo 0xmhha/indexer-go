@@ -300,7 +300,7 @@ func BenchmarkParseBlockKey(b *testing.B) {
 	key := BlockKey(123456)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ParseBlockKey(key)
+		_, _ = ParseBlockKey(key)
 	}
 }
 

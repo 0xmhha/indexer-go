@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -119,6 +120,36 @@ const (
 	prefixIdxTokenStandard = "/index/token/standard/"
 	prefixIdxTokenSymbol   = "/index/token/symbol/"
 	prefixIdxTokenName     = "/index/token/name/"
+
+	// === Token Holder Data Prefixes ===
+	// Token holder balance data
+	prefixTokenHolder = "/data/token/holder/"
+	// Token holder stats
+	prefixTokenHolderStats = "/data/token/holderstats/"
+
+	// === Token Holder Index Prefixes ===
+	// Index by token address (sorted by balance descending)
+	prefixIdxTokenHolderByToken = "/index/token/holder/token/"
+	// Index by holder address (for lookup by holder)
+	prefixIdxTokenHolderByHolder = "/index/token/holder/holder/"
+
+	// === EIP-7702 SetCode Data Prefixes ===
+	// Primary storage for SetCode authorization records
+	prefixSetCodeAuth = "/data/setcode/auth/"
+	// Delegation state per address
+	prefixSetCodeDelegation = "/data/setcode/delegation/"
+	// SetCode stats per address
+	prefixSetCodeStats = "/data/setcode/stats/"
+
+	// === EIP-7702 SetCode Index Prefixes ===
+	// Index by target address (who received delegation)
+	prefixIdxSetCodeTarget = "/index/setcode/target/"
+	// Index by authority address (who signed delegation)
+	prefixIdxSetCodeAuthority = "/index/setcode/authority/"
+	// Index by block number (for block-level queries)
+	prefixIdxSetCodeBlock = "/index/setcode/block/"
+	// Index by transaction hash (for tx-level queries)
+	prefixIdxSetCodeTx = "/index/setcode/tx/"
 )
 
 // Metadata keys
@@ -1174,4 +1205,151 @@ func TokenNameIndexKeyPrefix(name string) []byte {
 // TokenSearchIndexKeyPrefix returns the prefix for all token search indexes (name + symbol combined)
 func TokenSearchIndexKeyPrefix() []byte {
 	return []byte(prefixIdxTokenName)
+}
+
+// ========== EIP-7702 SetCode Key Functions ==========
+
+// SetCodeAuthorizationKey returns the key for storing a SetCode authorization record
+// Format: /data/setcode/auth/{txHash}/{authIndex}
+func SetCodeAuthorizationKey(txHash common.Hash, authIndex int) []byte {
+	return []byte(fmt.Sprintf("%s%s/%04d", prefixSetCodeAuth, txHash.Hex(), authIndex))
+}
+
+// SetCodeAuthorizationKeyPrefix returns the prefix for all authorizations in a transaction
+// Format: /data/setcode/auth/{txHash}/
+func SetCodeAuthorizationKeyPrefix(txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixSetCodeAuth, txHash.Hex()))
+}
+
+// SetCodeAuthKeyPrefix returns the prefix for all SetCode authorization data
+func SetCodeAuthKeyPrefix() []byte {
+	return []byte(prefixSetCodeAuth)
+}
+
+// SetCodeDelegationStateKey returns the key for storing delegation state
+// Format: /data/setcode/delegation/{address}
+func SetCodeDelegationStateKey(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixSetCodeDelegation, address.Hex()))
+}
+
+// SetCodeDelegationStateKeyPrefix returns the prefix for all delegation states
+func SetCodeDelegationStateKeyPrefix() []byte {
+	return []byte(prefixSetCodeDelegation)
+}
+
+// SetCodeStatsKey returns the key for storing SetCode stats
+// Format: /data/setcode/stats/{address}
+func SetCodeStatsKey(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixSetCodeStats, address.Hex()))
+}
+
+// SetCodeStatsKeyPrefix returns the prefix for all SetCode stats
+func SetCodeStatsKeyPrefix() []byte {
+	return []byte(prefixSetCodeStats)
+}
+
+// SetCodeTargetIndexKey returns the index key for querying by target address
+// Format: /index/setcode/target/{address}/{blockNumber:016x}/{txIndex:08x}/{authIndex:04x}
+func SetCodeTargetIndexKey(target common.Address, blockNumber uint64, txIndex uint64, authIndex int) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%08x/%04x",
+		prefixIdxSetCodeTarget, target.Hex(), blockNumber, txIndex, authIndex))
+}
+
+// SetCodeTargetIndexKeyPrefix returns the prefix for querying by target address
+// Format: /index/setcode/target/{address}/
+func SetCodeTargetIndexKeyPrefix(target common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxSetCodeTarget, target.Hex()))
+}
+
+// SetCodeAuthorityIndexKey returns the index key for querying by authority address
+// Format: /index/setcode/authority/{address}/{blockNumber:016x}/{txIndex:08x}/{authIndex:04x}
+func SetCodeAuthorityIndexKey(authority common.Address, blockNumber uint64, txIndex uint64, authIndex int) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%08x/%04x",
+		prefixIdxSetCodeAuthority, authority.Hex(), blockNumber, txIndex, authIndex))
+}
+
+// SetCodeAuthorityIndexKeyPrefix returns the prefix for querying by authority address
+// Format: /index/setcode/authority/{address}/
+func SetCodeAuthorityIndexKeyPrefix(authority common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxSetCodeAuthority, authority.Hex()))
+}
+
+// SetCodeBlockIndexKey returns the index key for querying by block number
+// Format: /index/setcode/block/{blockNumber:016x}/{txIndex:08x}/{authIndex:04x}
+func SetCodeBlockIndexKey(blockNumber uint64, txIndex uint64, authIndex int) []byte {
+	return []byte(fmt.Sprintf("%s%016x/%08x/%04x",
+		prefixIdxSetCodeBlock, blockNumber, txIndex, authIndex))
+}
+
+// SetCodeBlockIndexKeyPrefix returns the prefix for querying by block number
+// Format: /index/setcode/block/{blockNumber:016x}/
+func SetCodeBlockIndexKeyPrefix(blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%016x/", prefixIdxSetCodeBlock, blockNumber))
+}
+
+// SetCodeBlockIndexAllPrefix returns the prefix for all block indexes
+func SetCodeBlockIndexAllPrefix() []byte {
+	return []byte(prefixIdxSetCodeBlock)
+}
+
+// SetCodeTxIndexKey returns the index key for querying by transaction hash
+// Format: /index/setcode/tx/{txHash}/{authIndex:04x}
+func SetCodeTxIndexKey(txHash common.Hash, authIndex int) []byte {
+	return []byte(fmt.Sprintf("%s%s/%04x", prefixIdxSetCodeTx, txHash.Hex(), authIndex))
+}
+
+// SetCodeTxIndexKeyPrefix returns the prefix for querying by transaction hash
+// Format: /index/setcode/tx/{txHash}/
+func SetCodeTxIndexKeyPrefix(txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxSetCodeTx, txHash.Hex()))
+}
+
+// ========== Token Holder Key Functions ==========
+
+// TokenHolderKey returns the key for storing a token holder's balance
+// Format: /data/token/holder/{token}/{holder}
+func TokenHolderKey(token, holder common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/%s", prefixTokenHolder, token.Hex(), holder.Hex()))
+}
+
+// TokenHolderKeyPrefix returns the prefix for all holders of a token
+// Format: /data/token/holder/{token}/
+func TokenHolderKeyPrefix(token common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixTokenHolder, token.Hex()))
+}
+
+// TokenHolderStatsKey returns the key for storing token holder stats
+// Format: /data/token/holderstats/{token}
+func TokenHolderStatsKey(token common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixTokenHolderStats, token.Hex()))
+}
+
+// TokenHolderByTokenIndexKey returns the index key for sorting holders by balance
+// Format: /index/token/holder/token/{token}/{inverted_balance_hex}/{holder}
+// Balance is inverted (MaxUint256 - balance) for descending order iteration
+func TokenHolderByTokenIndexKey(token, holder common.Address, balance *big.Int) []byte {
+	// Invert balance for descending order (MaxUint256 - balance)
+	maxUint256 := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+	invertedBalance := new(big.Int).Sub(maxUint256, balance)
+	// Pad to 64 hex chars for consistent sorting
+	balanceHex := fmt.Sprintf("%064x", invertedBalance)
+	return []byte(fmt.Sprintf("%s%s/%s/%s", prefixIdxTokenHolderByToken, token.Hex(), balanceHex, holder.Hex()))
+}
+
+// TokenHolderByTokenIndexPrefix returns the prefix for iterating all holders of a token
+// Format: /index/token/holder/token/{token}/
+func TokenHolderByTokenIndexPrefix(token common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxTokenHolderByToken, token.Hex()))
+}
+
+// TokenHolderByHolderIndexKey returns the index key for looking up tokens by holder
+// Format: /index/token/holder/holder/{holder}/{token}
+func TokenHolderByHolderIndexKey(holder, token common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/%s", prefixIdxTokenHolderByHolder, holder.Hex(), token.Hex()))
+}
+
+// TokenHolderByHolderIndexPrefix returns the prefix for iterating all tokens held by an address
+// Format: /index/token/holder/holder/{holder}/
+func TokenHolderByHolderIndexPrefix(holder common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxTokenHolderByHolder, holder.Hex()))
 }

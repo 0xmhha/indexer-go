@@ -204,7 +204,7 @@ func TestManagerDoubleStart(t *testing.T) {
 	}
 
 	// Cleanup
-	manager.Stop(ctx)
+	_ = manager.Stop(ctx)
 }
 
 func TestManagerDoubleStop(t *testing.T) {
@@ -215,7 +215,7 @@ func TestManagerDoubleStop(t *testing.T) {
 	manager, _ := NewManager(config, nil, nil, logger)
 
 	// Start first
-	manager.Start(ctx)
+	_ = manager.Start(ctx)
 
 	// First stop
 	if err := manager.Stop(ctx); err != nil {

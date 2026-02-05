@@ -360,7 +360,7 @@ func BenchmarkEncodeBlock(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		EncodeBlock(block)
+		_, _ = EncodeBlock(block)
 	}
 }
 
@@ -387,7 +387,7 @@ func BenchmarkDecodeBlock(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		DecodeBlock(encoded)
+		_, _ = DecodeBlock(encoded)
 	}
 }
 

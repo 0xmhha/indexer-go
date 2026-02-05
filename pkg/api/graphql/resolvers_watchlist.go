@@ -227,6 +227,8 @@ func (s *Schema) resolveUpdateWatchFilter(p graphql.ResolveParams) (interface{},
 }
 
 // resolveRecentEventsField resolves the recentEvents field on WatchedAddress
+//
+//nolint:unused
 func (s *Schema) resolveRecentEventsField(p graphql.ResolveParams) (interface{}, error) {
 	if s.watchlistService == nil {
 		return []interface{}{}, nil

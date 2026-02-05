@@ -22,7 +22,7 @@ func TestRecovery(t *testing.T) {
 			name: "no panic",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("success"))
+				_, _ = w.Write([]byte("success"))
 			},
 			expectedStatus: http.StatusOK,
 			shouldPanic:    false,
@@ -66,7 +66,7 @@ func TestRecoveryWithWriter(t *testing.T) {
 	customErrorWriter := func(w http.ResponseWriter, r *http.Request, err interface{}) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"error":"custom error message"}`))
+		_, _ = w.Write([]byte(`{"error":"custom error message"}`))
 	}
 
 	middleware := RecoveryWithWriter(logger, customErrorWriter)

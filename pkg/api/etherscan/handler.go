@@ -129,7 +129,7 @@ func (h *Handler) handleVerifySourceCode(w http.ResponseWriter, r *http.Request)
 	// Parse optimization runs (default 200)
 	optimizationRuns := 200
 	if runs := r.FormValue("runs"); runs != "" {
-		fmt.Sscanf(runs, "%d", &optimizationRuns)
+		_, _ = fmt.Sscanf(runs, "%d", &optimizationRuns)
 	}
 
 	// Validate required fields
@@ -420,7 +420,7 @@ func (h *Handler) sendResponse(w http.ResponseWriter, status, message string, re
 		Message: message,
 		Result:  result,
 	}
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // boolToString converts bool to "1" or "0"

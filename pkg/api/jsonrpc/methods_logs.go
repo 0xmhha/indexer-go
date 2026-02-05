@@ -203,6 +203,8 @@ func (h *Handler) parseBlockNumber(blockParam interface{}) (uint64, error) {
 }
 
 // logToJSON converts a log to JSON-friendly format
+//
+//nolint:unused
 func (h *Handler) logToJSON(log *types.Log) map[string]interface{} {
 	return h.logToJSONWithDecode(log, false)
 }

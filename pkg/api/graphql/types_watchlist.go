@@ -21,8 +21,8 @@ var (
 	watchEventType *graphql.Object
 
 	// Connection types
-	watchedAddressConnectionType *graphql.Object
-	watchEventConnectionType     *graphql.Object
+	watchedAddressConnectionType *graphql.Object //nolint:unused
+	watchEventConnectionType     *graphql.Object //nolint:unused
 
 	// Input types
 	watchAddressInputType  *graphql.InputObject

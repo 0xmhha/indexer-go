@@ -112,7 +112,7 @@ func TestNewWithConfig(t *testing.T) {
 					t.Error("NewWithConfig() returned nil logger")
 					return
 				}
-				logger.Sync()
+				_ = logger.Sync()
 			}
 		})
 	}
@@ -262,10 +262,10 @@ func TestContextLogger(t *testing.T) {
 	// Should be able to use the retrieved logger
 	retrievedLogger.Info("test from context")
 
-	// Test with nil context
-	nilLogger := FromContext(nil)
-	if nilLogger == nil {
-		t.Error("FromContext(nil) should return nop logger, not nil")
+	// Test with empty context (no logger set) - should return fallback
+	emptyCtxLogger := FromContext(context.TODO())
+	if emptyCtxLogger == nil {
+		t.Error("FromContext with empty context should return fallback logger, not nil")
 	}
 }
 

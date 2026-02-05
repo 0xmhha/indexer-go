@@ -161,6 +161,26 @@ type AddressIndexWriter interface {
 	SaveERC721Transfer(ctx context.Context, transfer *ERC721Transfer) error
 }
 
+// AddressIndexReaderWriter combines AddressIndexReader and AddressIndexWriter
+type AddressIndexReaderWriter interface {
+	AddressIndexReader
+	AddressIndexWriter
+}
+
+// SetCodeIndexReaderWriter combines SetCodeIndexReader and SetCodeIndexWriter
+type SetCodeIndexReaderWriter interface {
+	SetCodeIndexReader
+	SetCodeIndexWriter
+}
+
+// FullAddressIndexer combines all address indexing interfaces including SetCode
+type FullAddressIndexer interface {
+	AddressIndexReader
+	AddressIndexWriter
+	SetCodeIndexReader
+	SetCodeIndexWriter
+}
+
 // ERC20 Transfer event topic (keccak256("Transfer(address,address,uint256)"))
 const ERC20TransferTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 

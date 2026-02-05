@@ -85,7 +85,8 @@ func TestAssertNotEqual(t *testing.T) {
 func TestAssertTrue(t *testing.T) {
 	// Should not fail with true condition
 	AssertTrue(t, true)
-	AssertTrue(t, 1 == 1)
+	a, b := 1, 1
+	AssertTrue(t, a == b)
 }
 
 // TestAssertFalse tests the AssertFalse helper

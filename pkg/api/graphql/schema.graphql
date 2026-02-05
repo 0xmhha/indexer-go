@@ -394,6 +394,57 @@ type SetCodeAuthorization {
   authority: Address
 }
 
+# SetCodeAuthorizationWithTx represents an EIP-7702 authorization with full transaction context
+type SetCodeAuthorizationWithTx {
+  # Transaction reference
+  txHash: Hash!
+  blockNumber: BigInt!
+  blockHash: Hash!
+  transactionIndex: Int!
+  authorizationIndex: Int!
+
+  # Authorization data
+  chainId: BigInt!
+  address: Address!
+  nonce: BigInt!
+  yParity: Int!
+  r: Bytes!
+  s: Bytes!
+  authority: Address
+
+  # Validation result
+  applied: Boolean!
+  error: String
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# SetCodeAuthorizationConnection for pagination
+type SetCodeAuthorizationConnection {
+  nodes: [SetCodeAuthorizationWithTx!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+# AddressSetCodeInfo provides SetCode-specific information for an address
+type AddressSetCodeInfo {
+  # Address being queried
+  address: Address!
+
+  # Delegation state
+  hasDelegation: Boolean!
+  delegationTarget: Address
+
+  # Activity counts
+  asTargetCount: Int!
+  asAuthorityCount: Int!
+
+  # Last activity
+  lastActivityBlock: BigInt
+  lastActivityTimestamp: BigInt
+}
+
 # AccessListEntry represents an access list entry
 type AccessListEntry {
   address: Address!
@@ -1248,6 +1299,49 @@ type Query {
 
   # Get token count by standard
   tokenCount(standard: TokenStandard): Int!
+
+  # ========== EIP-7702 SetCode Queries ==========
+
+  # Get a specific SetCode authorization by transaction hash and index
+  setCodeAuthorization(
+    txHash: Hash!
+    authIndex: Int!
+  ): SetCodeAuthorizationWithTx
+
+  # Get all SetCode authorizations in a transaction
+  setCodeAuthorizationsByTx(
+    txHash: Hash!
+  ): [SetCodeAuthorizationWithTx!]!
+
+  # Get SetCode authorizations where address is the target (received delegations)
+  setCodeAuthorizationsByTarget(
+    target: Address!
+    pagination: PaginationInput
+  ): SetCodeAuthorizationConnection!
+
+  # Get SetCode authorizations where address is the authority (signed delegations)
+  setCodeAuthorizationsByAuthority(
+    authority: Address!
+    pagination: PaginationInput
+  ): SetCodeAuthorizationConnection!
+
+  # Get SetCode information for an address
+  addressSetCodeInfo(
+    address: Address!
+  ): AddressSetCodeInfo!
+
+  # Get SetCode transactions in a block
+  setCodeTransactionsInBlock(
+    blockNumber: BigInt!
+  ): [Transaction!]!
+
+  # Get recent SetCode transactions (global)
+  recentSetCodeTransactions(
+    limit: Int
+  ): [Transaction!]!
+
+  # Get total SetCode transaction count
+  setCodeTransactionCount: Int!
 }
 
 # Block connection for pagination

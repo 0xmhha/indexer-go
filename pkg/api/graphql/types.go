@@ -107,11 +107,11 @@ var (
 	validatorStatsType         *graphql.Object
 	validatorParticipationType *graphql.Object
 	blockParticipationType     *graphql.Object
-	roundAnalysisType          *graphql.Object
+	roundAnalysisType          *graphql.Object //nolint:unused
 	roundDistributionType      *graphql.Object
-	validatorSetType           *graphql.Object
-	validatorActivityType      *graphql.Object
-	validatorChangeType        *graphql.Object
+	validatorSetType           *graphql.Object   //nolint:unused
+	validatorActivityType      *graphql.Object   //nolint:unused
+	validatorChangeType        *graphql.Object   //nolint:unused
 	epochDataType              *graphql.Object
 	validatorInfoEnhancedType  *graphql.Object
 	candidateInfoType          *graphql.Object
@@ -137,6 +137,12 @@ var (
 
 	// Contract verification types
 	contractVerificationType *graphql.Object
+
+	// EIP-7702 SetCode types
+	setCodeAuthorizationType           *graphql.Object
+	setCodeAuthorizationConnectionType *graphql.Object
+	addressSetCodeInfoType             *graphql.Object
+	setCodeStatsType                   *graphql.Object //nolint:unused
 )
 
 func init() {
@@ -606,6 +612,9 @@ func initTypes() {
 	// Initialize miscellaneous types (must be before consensus types due to contractVerificationType dependency)
 	initMiscTypes()
 
+	// Initialize token metadata types (must be before consensus types due to tokenMetadataType dependency in addressOverviewType)
+	initTokenMetadataTypes()
+
 	// Initialize consensus/WBFT types (uses contractVerificationType from initMiscTypes)
 	initConsensusTypes()
 
@@ -618,8 +627,8 @@ func initTypes() {
 	// Initialize watchlist types
 	initWatchlistTypes()
 
-	// Initialize token metadata types (for contract metadata, not transfers)
-	initTokenMetadataTypes()
+	// Initialize EIP-7702 SetCode types
+	initSetCodeTypes()
 }
 
 // initInputTypes initializes GraphQL input types for filtering and pagination
@@ -2259,6 +2268,40 @@ func initConsensusTypes() {
 			"lastSeen": &graphql.Field{
 				Type: bigIntType,
 			},
+			// New fields for enhanced address overview
+			"currentBalance": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Current balance from RPC (real-time)",
+			},
+			"nonce": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Current nonce (transaction count) from RPC",
+			},
+			"isToken": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether the address is a token contract",
+			},
+			"tokenMetadata": &graphql.Field{
+				Type:        tokenMetadataType,
+				Description: "Token metadata if the address is a token contract",
+			},
+			// EIP-7702 SetCode fields
+			"hasDelegation": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether the address has an active EIP-7702 delegation",
+			},
+			"delegationTarget": &graphql.Field{
+				Type:        addressType,
+				Description: "Target address of EIP-7702 delegation (if any)",
+			},
+			"asAuthorityCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of times this address was used as SetCode authority",
+			},
+			"asTargetCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of times this address was used as SetCode target",
+			},
 		},
 	})
 
@@ -2510,6 +2553,165 @@ func initMiscTypes() {
 			},
 			"licenseType": &graphql.Field{
 				Type: graphql.String,
+			},
+		},
+	})
+}
+
+// initSetCodeTypes initializes GraphQL types for EIP-7702 SetCode transactions
+func initSetCodeTypes() {
+	// SetCodeAuthorization type with transaction reference
+	setCodeAuthorizationType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "SetCodeAuthorizationWithTx",
+		Description: "EIP-7702 SetCode authorization with transaction context",
+		Fields: graphql.Fields{
+			"txHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Transaction hash containing this authorization",
+			},
+			"blockNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number",
+			},
+			"blockHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Block hash",
+			},
+			"transactionIndex": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Transaction index in block",
+			},
+			"authorizationIndex": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Index of this authorization in the transaction's authorization list",
+			},
+			"chainId": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Chain ID for replay protection",
+			},
+			"address": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Target address that will have code installed (delegation source)",
+			},
+			"nonce": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Nonce of the authorizer account",
+			},
+			"yParity": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Y parity of signature (0 or 1)",
+			},
+			"r": &graphql.Field{
+				Type:        graphql.NewNonNull(bytesType),
+				Description: "R signature value",
+			},
+			"s": &graphql.Field{
+				Type:        graphql.NewNonNull(bytesType),
+				Description: "S signature value",
+			},
+			"authority": &graphql.Field{
+				Type:        addressType,
+				Description: "Recovered signer address (authority who signed this authorization)",
+			},
+			"applied": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether this authorization was successfully applied",
+			},
+			"error": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Error message if authorization was not applied",
+			},
+			"timestamp": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block timestamp",
+			},
+		},
+	})
+
+	// SetCodeAuthorizationConnection for pagination
+	setCodeAuthorizationConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "SetCodeAuthorizationConnection",
+		Description: "Paginated list of SetCode authorizations",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(setCodeAuthorizationType))),
+				Description: "List of SetCode authorizations",
+			},
+			"totalCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total count of matching authorizations",
+			},
+			"pageInfo": &graphql.Field{
+				Type:        graphql.NewNonNull(pageInfoType),
+				Description: "Pagination information",
+			},
+		},
+	})
+
+	// AddressSetCodeInfo type for SetCode-specific address information
+	addressSetCodeInfoType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "AddressSetCodeInfo",
+		Description: "EIP-7702 SetCode information for an address",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "The address being queried",
+			},
+			"hasDelegation": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether this address currently has an active delegation",
+			},
+			"delegationTarget": &graphql.Field{
+				Type:        addressType,
+				Description: "Current delegation target address (if hasDelegation is true)",
+			},
+			"asTargetCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of times this address received delegation (as target)",
+			},
+			"asAuthorityCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of times this address signed authorization (as authority)",
+			},
+			"lastActivityBlock": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Block number of most recent SetCode activity",
+			},
+			"lastActivityTimestamp": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Timestamp of most recent SetCode activity",
+			},
+		},
+	})
+
+	// SetCodeStats type for global statistics
+	setCodeStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "SetCodeStats",
+		Description: "Global SetCode transaction statistics",
+		Fields: graphql.Fields{
+			"totalTransactions": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total number of SetCode transactions",
+			},
+			"totalAuthorizations": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total number of authorizations across all transactions",
+			},
+			"appliedCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of successfully applied authorizations",
+			},
+			"failedCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of failed authorizations",
+			},
+			"uniqueTargets": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of unique target addresses",
+			},
+			"uniqueAuthorities": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of unique authority addresses",
 			},
 		},
 	})

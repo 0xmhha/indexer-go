@@ -160,6 +160,9 @@ type Fetcher struct {
 
 	// tokenIndexer is called when a new contract is deployed to index token metadata
 	tokenIndexer TokenIndexer
+
+	// setCodeProcessor handles EIP-7702 SetCode transaction indexing
+	setCodeProcessor *SetCodeProcessor
 }
 
 // NewFetcher creates a new Fetcher instance
@@ -266,6 +269,16 @@ func (f *Fetcher) SetTokenIndexer(indexer TokenIndexer) {
 	f.logger.Info("Token indexer configured")
 }
 
+// SetSetCodeProcessor sets the SetCode processor for EIP-7702 transaction indexing
+func (f *Fetcher) SetSetCodeProcessor(processor *SetCodeProcessor) {
+	f.setCodeProcessor = processor
+	// Also set on large block processor for consistency
+	if f.largeBlockProcessor != nil {
+		f.largeBlockProcessor.SetSetCodeProcessor(processor)
+	}
+	f.logger.Info("SetCode processor configured")
+}
+
 // AddBlockProcessor adds a block processor to be called after each block is indexed
 // Block processors receive the block and receipts to process (e.g., watchlist, analytics)
 func (f *Fetcher) AddBlockProcessor(processor BlockProcessor) {
@@ -296,9 +309,7 @@ func (f *Fetcher) processBlockWithProcessors(ctx context.Context, block *types.B
 
 	// Convert receipts to slice of pointers
 	receiptPtrs := make([]*types.Receipt, len(receipts))
-	for i, r := range receipts {
-		receiptPtrs[i] = r
-	}
+	copy(receiptPtrs, receipts)
 
 	for _, processor := range processors {
 		if err := processor.ProcessBlock(ctx, f.chainID, block, receiptPtrs); err != nil {
@@ -1772,7 +1783,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 	}
 
 	// Process each transaction and its receipt
-	for _, tx := range transactions {
+	for txIdx, tx := range transactions {
 		// O(1) receipt lookup
 		receipt := receiptMap[tx.Hash()]
 		if receipt == nil {
@@ -1933,6 +1944,17 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 						zap.Error(err),
 					)
 				}
+			}
+		}
+
+		// 3. Process EIP-7702 SetCode Transactions
+		if f.setCodeProcessor != nil && tx.Type() == types.SetCodeTxType {
+			if err := f.setCodeProcessor.ProcessSetCodeTransaction(ctx, tx, receipt, block, uint64(txIdx)); err != nil {
+				f.logger.Warn("Failed to process SetCode transaction",
+					zap.Uint64("block", blockNumber),
+					zap.String("tx", tx.Hash().Hex()),
+					zap.Error(err),
+				)
 			}
 		}
 	}

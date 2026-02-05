@@ -630,7 +630,7 @@ func TestServiceStartWithStorage(t *testing.T) {
 	}
 
 	// Cleanup
-	service.Stop(ctx)
+	_ = service.Stop(ctx)
 }
 
 func TestServiceWatchAddress(t *testing.T) {
@@ -642,7 +642,7 @@ func TestServiceWatchAddress(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Watch an address
 	req := &WatchRequest{
@@ -687,7 +687,7 @@ func TestServiceWatchAddressInvalidAddress(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Try to watch a zero address
 	req := &WatchRequest{
@@ -710,7 +710,7 @@ func TestServiceWatchAddressNilFilter(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Watch with nil filter (should use default)
 	req := &WatchRequest{
@@ -738,7 +738,7 @@ func TestServiceWatchAddressDuplicate(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 	req := &WatchRequest{
@@ -768,7 +768,7 @@ func TestServiceGetWatchedAddress(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Watch an address
 	req := &WatchRequest{
@@ -799,7 +799,7 @@ func TestServiceGetWatchedAddressNotFound(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	_, err := service.GetWatchedAddress(ctx, "nonexistent")
 	if err != ErrAddressNotFound {
@@ -816,7 +816,7 @@ func TestServiceGetWatchedAddressByEthAddress(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 	req := &WatchRequest{
@@ -846,7 +846,7 @@ func TestServiceUnwatchAddress(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Watch an address
 	req := &WatchRequest{
@@ -878,7 +878,7 @@ func TestServiceUnwatchAddressNotFound(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	err := service.UnwatchAddress(ctx, "nonexistent")
 	if err != ErrAddressNotFound {
@@ -895,7 +895,7 @@ func TestServiceListWatchedAddresses(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Watch multiple addresses
 	for i := 0; i < 3; i++ {
@@ -930,7 +930,7 @@ func TestServiceListWatchedAddressesWithLimit(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Watch multiple addresses
 	for i := 0; i < 5; i++ {
@@ -939,7 +939,7 @@ func TestServiceListWatchedAddressesWithLimit(t *testing.T) {
 			Address: addr,
 			ChainID: "chain-1",
 		}
-		service.WatchAddress(ctx, req)
+		_, _ = service.WatchAddress(ctx, req)
 	}
 
 	// List with limit
@@ -965,7 +965,7 @@ func TestServiceSubscribe(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Watch an address
 	req := &WatchRequest{
@@ -995,7 +995,7 @@ func TestServiceSubscribeToNonexistent(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	sub := &Subscriber{}
 	_, err := service.Subscribe(ctx, "nonexistent", sub)
@@ -1013,7 +1013,7 @@ func TestServiceUnsubscribe(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Watch and subscribe
 	req := &WatchRequest{
@@ -1061,7 +1061,7 @@ func TestServiceProcessBlockNoWatchedAddresses(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Process block with no watched addresses - should return nil immediately
 	err := service.ProcessBlock(ctx, "chain-1", nil, nil)
@@ -1079,7 +1079,7 @@ func TestServiceGetRecentEvents(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Get recent events (empty)
 	events, err := service.GetRecentEvents(ctx, "addr-1", 10)
@@ -1101,7 +1101,7 @@ func TestServiceGetRecentEventsDefaultLimit(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Get with invalid limit (should use default)
 	events, err := service.GetRecentEvents(ctx, "addr-1", 0)
@@ -1125,7 +1125,7 @@ func TestServiceUnwatchAddressWithSubscribers(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("start failed: %v", err)
 	}
-	defer service.Stop(ctx)
+	defer func() { _ = service.Stop(ctx) }()
 
 	// Watch and subscribe
 	req := &WatchRequest{

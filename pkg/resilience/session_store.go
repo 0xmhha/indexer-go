@@ -162,15 +162,11 @@ func (s *PebbleSessionStore) Delete(ctx context.Context, sessionID string) error
 	}
 
 	if session != nil {
-		// Delete client index
-		if err := s.kv.Delete(ctx, sessionClientIndexKey(session.ClientID)); err != nil {
-			// Log but don't fail
-		}
+		// Delete client index (ignore errors)
+		_ = s.kv.Delete(ctx, sessionClientIndexKey(session.ClientID))
 
-		// Delete state index
-		if err := s.kv.Delete(ctx, sessionStateIndexKey(session.State, sessionID)); err != nil {
-			// Log but don't fail
-		}
+		// Delete state index (ignore errors)
+		_ = s.kv.Delete(ctx, sessionStateIndexKey(session.State, sessionID))
 	}
 
 	return nil
@@ -202,10 +198,8 @@ func (s *PebbleSessionStore) UpdateState(ctx context.Context, sessionID string, 
 
 	oldState := session.State
 
-	// Delete old state index
-	if err := s.kv.Delete(ctx, sessionStateIndexKey(oldState, sessionID)); err != nil {
-		// Log but continue
-	}
+	// Delete old state index (ignore errors)
+	_ = s.kv.Delete(ctx, sessionStateIndexKey(oldState, sessionID))
 
 	session.State = state
 	return s.Save(ctx, session)

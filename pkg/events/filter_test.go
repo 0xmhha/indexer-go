@@ -734,7 +734,7 @@ func TestFilter_Clone_NilValues(t *testing.T) {
 	clone := original.Clone()
 
 	if clone == nil {
-		t.Error("Clone should not be nil")
+		t.Fatal("Clone should not be nil")
 	}
 
 	if clone.MinValue != nil {

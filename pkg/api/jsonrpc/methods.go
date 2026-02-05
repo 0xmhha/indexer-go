@@ -202,6 +202,23 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.listContractABIs(ctx, params)
 	case "decodeLog":
 		return h.decodeLog(ctx, params)
+	// EIP-7702 SetCode methods
+	case "getSetCodeAuthorization":
+		return h.getSetCodeAuthorization(ctx, params)
+	case "getSetCodeAuthorizationsByTx":
+		return h.getSetCodeAuthorizationsByTx(ctx, params)
+	case "getSetCodeAuthorizationsByTarget":
+		return h.getSetCodeAuthorizationsByTarget(ctx, params)
+	case "getSetCodeAuthorizationsByAuthority":
+		return h.getSetCodeAuthorizationsByAuthority(ctx, params)
+	case "getAddressSetCodeInfo":
+		return h.getAddressSetCodeInfo(ctx, params)
+	case "getSetCodeTransactionsInBlock":
+		return h.getSetCodeTransactionsInBlock(ctx, params)
+	case "getRecentSetCodeTransactions":
+		return h.getRecentSetCodeTransactions(ctx, params)
+	case "getSetCodeTransactionCount":
+		return h.getSetCodeTransactionCount(ctx, params)
 	// Notification methods
 	case "notification_getSettings":
 		return h.getNotificationSettings(ctx, params)

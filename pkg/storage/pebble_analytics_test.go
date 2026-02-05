@@ -78,9 +78,9 @@ func TestPebbleStorage_GetTopMiners(t *testing.T) {
 
 	// Index blocks
 	for _, block := range blocks {
-		storage.SetBlock(ctx, block)
+		_ = storage.SetBlock(ctx, block)
 	}
-	storage.SetLatestHeight(ctx, 109)
+	_ = storage.SetLatestHeight(ctx, 109)
 
 	// Get top miners
 	miners, err := storage.GetTopMiners(ctx, 10, 100, 109)
@@ -139,9 +139,9 @@ func TestPebbleStorage_GetTopMiners_WithLimit(t *testing.T) {
 
 	// Create blocks for each miner
 	for i, miner := range miners {
-		storage.SetBlock(ctx, createTestBlockWithMiner(uint64(100+i), miner, 100000, uint64(1000+i)))
+		_ = storage.SetBlock(ctx, createTestBlockWithMiner(uint64(100+i), miner, 100000, uint64(1000+i)))
 	}
-	storage.SetLatestHeight(ctx, 104)
+	_ = storage.SetLatestHeight(ctx, 104)
 
 	// Get top 3 miners
 	topMiners, err := storage.GetTopMiners(ctx, 3, 100, 104)
@@ -163,8 +163,8 @@ func TestPebbleStorage_GetTopMiners_EmptyRange(t *testing.T) {
 
 	// Set some blocks
 	miner := common.HexToAddress("0x1111111111111111111111111111111111111111")
-	storage.SetBlock(ctx, createTestBlockWithMiner(100, miner, 100000, 1000))
-	storage.SetLatestHeight(ctx, 100)
+	_ = storage.SetBlock(ctx, createTestBlockWithMiner(100, miner, 100000, 1000))
+	_ = storage.SetLatestHeight(ctx, 100)
 
 	// Query range with no blocks
 	miners, err := storage.GetTopMiners(ctx, 10, 200, 300)
@@ -208,7 +208,7 @@ func TestPebbleStorage_GetGasStatsByBlockRange(t *testing.T) {
 		header.TxHash = types.DeriveSha(types.Transactions{tx}, trie.NewStackTrie(nil))
 		blockWithTx := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
 
-		storage.SetBlock(ctx, blockWithTx)
+		_ = storage.SetBlock(ctx, blockWithTx)
 
 		// Create receipt
 		receipt := &types.Receipt{
@@ -225,10 +225,10 @@ func TestPebbleStorage_GetGasStatsByBlockRange(t *testing.T) {
 			BlockNumber:       big.NewInt(int64(100 + i)),
 			TransactionIndex:  0,
 		}
-		storage.SetReceipt(ctx, receipt)
+		_ = storage.SetReceipt(ctx, receipt)
 	}
 
-	storage.SetLatestHeight(ctx, 104)
+	_ = storage.SetLatestHeight(ctx, 104)
 
 	// Get gas stats
 	stats, err := storage.GetGasStatsByBlockRange(ctx, 100, 104)
@@ -280,11 +280,11 @@ func TestPebbleStorage_GetNetworkMetrics(t *testing.T) {
 	// Create 10 blocks over 10 seconds (1 block per second)
 	for i := uint64(0); i < 10; i++ {
 		block := createTestBlockWithMiner(100+i, miner, 100000, 1000+i)
-		storage.SetBlock(ctx, block)
-		storage.SetBlockTimestamp(ctx, 1000+i, 100+i)
+		_ = storage.SetBlock(ctx, block)
+		_ = storage.SetBlockTimestamp(ctx, 1000+i, 100+i)
 	}
 
-	storage.SetLatestHeight(ctx, 109)
+	_ = storage.SetLatestHeight(ctx, 109)
 
 	// Get network metrics
 	metrics, err := storage.GetNetworkMetrics(ctx, 1000, 1009)
@@ -401,7 +401,7 @@ func TestPebbleStorage_GetTokenBalances_NoBalances(t *testing.T) {
 	ctx := context.Background()
 
 	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
-	storage.SetLatestHeight(ctx, 100)
+	_ = storage.SetLatestHeight(ctx, 100)
 
 	// Query without any token transfers
 	balances, err := storage.GetTokenBalances(ctx, addr, "")
@@ -423,8 +423,8 @@ func TestPebbleStorage_GetGasStatsByBlockRange_EmptyRange(t *testing.T) {
 
 	// Add a block
 	miner := common.HexToAddress("0x1111111111111111111111111111111111111111")
-	storage.SetBlock(ctx, createTestBlockWithMiner(100, miner, 100000, 1000))
-	storage.SetLatestHeight(ctx, 100)
+	_ = storage.SetBlock(ctx, createTestBlockWithMiner(100, miner, 100000, 1000))
+	_ = storage.SetLatestHeight(ctx, 100)
 
 	// Query range with no blocks
 	stats, err := storage.GetGasStatsByBlockRange(ctx, 200, 300)

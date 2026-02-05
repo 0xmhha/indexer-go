@@ -262,3 +262,13 @@ func (b *CacheKeyBuilder) TokenMetadata(address string, field string) string {
 func (b *CacheKeyBuilder) Balance(address string, block string) string {
 	return b.prefix + ":balance:" + address + ":" + block
 }
+
+// Nonce builds a cache key for nonce
+func (b *CacheKeyBuilder) Nonce(address string, block string) string {
+	return b.prefix + ":nonce:" + address + ":" + block
+}
+
+// Code builds a cache key for code
+func (b *CacheKeyBuilder) Code(address string, block string) string {
+	return b.prefix + ":code:" + address + ":" + block
+}

@@ -104,7 +104,7 @@ func TestPebbleStorage_HasABI(t *testing.T) {
 	}
 
 	// Set ABI for addr1
-	storage.SetABI(ctx, addr1, abiJSON)
+	_ = storage.SetABI(ctx, addr1, abiJSON)
 
 	// addr1 should have ABI
 	hasABI, err = storage.HasABI(ctx, addr1)
@@ -195,9 +195,9 @@ func TestPebbleStorage_ListABIs(t *testing.T) {
 	abiJSON2 := []byte(`[{"name":"func2","type":"function"}]`)
 	abiJSON3 := []byte(`[{"name":"func3","type":"function"}]`)
 
-	storage.SetABI(ctx, addr1, abiJSON1)
-	storage.SetABI(ctx, addr2, abiJSON2)
-	storage.SetABI(ctx, addr3, abiJSON3)
+	_ = storage.SetABI(ctx, addr1, abiJSON1)
+	_ = storage.SetABI(ctx, addr2, abiJSON2)
+	_ = storage.SetABI(ctx, addr3, abiJSON3)
 
 	// List all ABIs
 	addresses, err = storage.ListABIs(ctx)
@@ -368,7 +368,7 @@ func TestPebbleStorage_ABI_ReadOnly(t *testing.T) {
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 	abiJSON := []byte(`[{"name":"test","type":"function"}]`)
 
-	storage.SetABI(ctx, addr, abiJSON)
+	_ = storage.SetABI(ctx, addr, abiJSON)
 	storage.Close()
 
 	// Reopen as read-only

@@ -135,9 +135,9 @@ func TestPebbleStorage_GetLogsByBlock(t *testing.T) {
 	log2 := createTestLog(100, 0, 1, addr, []common.Hash{topic}, []byte{2})
 	log3 := createTestLog(101, 0, 0, addr, []common.Hash{topic}, []byte{3})
 
-	storage.IndexLog(ctx, log1)
-	storage.IndexLog(ctx, log2)
-	storage.IndexLog(ctx, log3)
+	_ = storage.IndexLog(ctx, log1)
+	_ = storage.IndexLog(ctx, log2)
+	_ = storage.IndexLog(ctx, log3)
 
 	// Get logs from block 100
 	logs, err := storage.GetLogsByBlock(ctx, 100)
@@ -185,9 +185,9 @@ func TestPebbleStorage_GetLogsByAddress(t *testing.T) {
 	log2 := createTestLog(101, 0, 0, addr1, []common.Hash{topic}, []byte{2})
 	log3 := createTestLog(102, 0, 0, addr2, []common.Hash{topic}, []byte{3})
 
-	storage.IndexLog(ctx, log1)
-	storage.IndexLog(ctx, log2)
-	storage.IndexLog(ctx, log3)
+	_ = storage.IndexLog(ctx, log1)
+	_ = storage.IndexLog(ctx, log2)
+	_ = storage.IndexLog(ctx, log3)
 
 	// Get logs from addr1
 	logs, err := storage.GetLogsByAddress(ctx, addr1, 100, 102)
@@ -236,9 +236,9 @@ func TestPebbleStorage_GetLogsByTopic(t *testing.T) {
 	log2 := createTestLog(101, 0, 0, addr, []common.Hash{topic0, topic2}, []byte{2})
 	log3 := createTestLog(102, 0, 0, addr, []common.Hash{topic1, topic2}, []byte{3})
 
-	storage.IndexLog(ctx, log1)
-	storage.IndexLog(ctx, log2)
-	storage.IndexLog(ctx, log3)
+	_ = storage.IndexLog(ctx, log1)
+	_ = storage.IndexLog(ctx, log2)
+	_ = storage.IndexLog(ctx, log3)
 
 	// Get logs by topic0 at position 0
 	logs, err := storage.GetLogsByTopic(ctx, topic0, 0, 100, 102)
@@ -290,13 +290,13 @@ func TestPebbleStorage_GetLogs(t *testing.T) {
 	log3 := createTestLog(102, 0, 0, addr2, []common.Hash{topic1, topic2}, []byte{3})
 	log4 := createTestLog(103, 0, 0, addr2, []common.Hash{topic0, topic1}, []byte{4})
 
-	storage.IndexLog(ctx, log1)
-	storage.IndexLog(ctx, log2)
-	storage.IndexLog(ctx, log3)
-	storage.IndexLog(ctx, log4)
+	_ = storage.IndexLog(ctx, log1)
+	_ = storage.IndexLog(ctx, log2)
+	_ = storage.IndexLog(ctx, log3)
+	_ = storage.IndexLog(ctx, log4)
 
 	// Set latest height for filter
-	storage.SetLatestHeight(ctx, 103)
+	_ = storage.SetLatestHeight(ctx, 103)
 
 	t.Run("filter by address", func(t *testing.T) {
 		filter := &LogFilter{
@@ -573,7 +573,7 @@ func TestPebbleStorage_Logs_ReadOnly(t *testing.T) {
 
 	ctx := context.Background()
 	log := createTestLog(100, 0, 0, common.Address{}, []common.Hash{}, []byte{1})
-	storage.IndexLog(ctx, log)
+	_ = storage.IndexLog(ctx, log)
 	storage.Close()
 
 	// Reopen as read-only

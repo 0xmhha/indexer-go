@@ -1,7 +1,6 @@
 package graphql
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1179,14 +1178,6 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 			"endCursor":       endCursor,
 		},
 	}, nil
-}
-
-// Helper function to convert context (placeholder for proper context usage)
-func getContext(p graphql.ResolveParams) context.Context {
-	if ctx, ok := p.Context.(context.Context); ok {
-		return ctx
-	}
-	return context.Background()
 }
 
 // ========== System Contract Resolvers ==========

@@ -111,7 +111,7 @@ func (h *Handler) PlaygroundHandler() http.HandlerFunc {
 `
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(playgroundHTML))
+		_, _ = w.Write([]byte(playgroundHTML))
 	}
 }
 

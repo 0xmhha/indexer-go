@@ -2518,7 +2518,6 @@ func (s *PebbleStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock ui
 
 	if minter != (common.Address{}) {
 		// Use minter index for efficient filtering
-		keyPrefix = MintMinterIndexKeyPrefix(minter)
 		lowerBound = MintMinterIndexKey(minter, fromBlock)
 		upperBound = MintMinterIndexKey(minter, toBlock+1)
 	} else {

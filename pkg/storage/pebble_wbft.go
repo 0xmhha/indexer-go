@@ -493,7 +493,7 @@ func EncodeWBFTAggregatedSeal(seal *WBFTAggregatedSeal) ([]byte, error) {
 
 // DecodeWBFTAggregatedSeal decodes RLP bytes to WBFTAggregatedSeal
 func DecodeWBFTAggregatedSeal(data []byte) (*WBFTAggregatedSeal, error) {
-	if data == nil || len(data) == 0 {
+	if len(data) == 0 {
 		return nil, nil
 	}
 
@@ -533,7 +533,7 @@ func EncodeEpochInfo(epochInfo *EpochInfo) ([]byte, error) {
 
 // DecodeEpochInfo decodes RLP bytes to EpochInfo
 func DecodeEpochInfo(data []byte) (*EpochInfo, error) {
-	if data == nil || len(data) == 0 {
+	if len(data) == 0 {
 		return nil, nil
 	}
 

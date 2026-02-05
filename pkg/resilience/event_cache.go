@@ -268,7 +268,7 @@ func (c *PebbleEventCache) Cleanup(ctx context.Context, olderThan time.Duration)
 			deletedCount++
 		}
 		// Delete index
-		c.kv.Delete(ctx, cacheIndexKey(item.sessionID, item.timestamp, item.eventID))
+		_ = c.kv.Delete(ctx, cacheIndexKey(item.sessionID, item.timestamp, item.eventID))
 	}
 
 	return deletedCount, nil
@@ -306,7 +306,7 @@ func (c *PebbleEventCache) DeleteBySession(ctx context.Context, sessionID string
 
 	// Delete all keys
 	for _, key := range toDelete {
-		c.kv.Delete(ctx, key)
+		_ = c.kv.Delete(ctx, key)
 	}
 
 	return nil

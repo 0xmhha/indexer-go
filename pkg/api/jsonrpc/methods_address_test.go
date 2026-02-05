@@ -265,7 +265,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 		params := json.RawMessage(`{}`)
 		_, err := server.HandleMethodDirect(ctx, "getContractCreation", params)
 		if err == nil {
-			t.Error("expected error for missing address")
+			t.Fatal("expected error for missing address")
 		}
 		if err.Code != InvalidParams {
 			t.Errorf("expected InvalidParams, got %v", err.Code)
@@ -641,7 +641,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				_, err := server.HandleMethodDirect(ctx, tc.method, tc.params)
 				if err == nil {
-					t.Error("expected error for unsupported storage")
+					t.Fatal("expected error for unsupported storage")
 				}
 				if err.Code != InternalError {
 					t.Errorf("expected InternalError, got %v", err.Code)

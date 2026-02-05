@@ -187,7 +187,7 @@ func TestSlackHandler_Deliver(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			receivedBody, _ = io.ReadAll(r.Body)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("ok"))
+			_, _ = w.Write([]byte("ok"))
 		}))
 		defer server.Close()
 
@@ -236,9 +236,9 @@ func TestSlackHandler_Deliver(t *testing.T) {
 		var message SlackMessage
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
-			json.Unmarshal(body, &message)
+			_ = json.Unmarshal(body, &message)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("ok"))
+			_, _ = w.Write([]byte("ok"))
 		}))
 		defer server.Close()
 
@@ -271,7 +271,7 @@ func TestSlackHandler_Deliver(t *testing.T) {
 	t.Run("server returns non-ok response", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("invalid_token"))
+			_, _ = w.Write([]byte("invalid_token"))
 		}))
 		defer server.Close()
 
@@ -295,7 +295,7 @@ func TestSlackHandler_Deliver(t *testing.T) {
 	t.Run("server error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("internal error"))
+			_, _ = w.Write([]byte("internal error"))
 		}))
 		defer server.Close()
 

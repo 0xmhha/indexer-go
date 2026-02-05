@@ -94,7 +94,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
-	defer log.Sync()
+	defer func() { _ = log.Sync() }()
 
 	// Log startup information
 	logStartupInfo(log, cfg, flags)
@@ -414,6 +414,8 @@ func (a *App) completeStorageInit(ctx context.Context) error {
 }
 
 // initStorage initializes the storage layer (legacy method for compatibility)
+//
+//nolint:unused
 func (a *App) initStorage(ctx context.Context) error {
 	if err := a.initStorageOnly(ctx); err != nil {
 		return err
@@ -837,7 +839,7 @@ func (a *App) Shutdown() {
 
 	// Stop RPC Proxy
 	if a.rpcProxy != nil {
-		a.rpcProxy.Stop()
+		_ = a.rpcProxy.Stop()
 		a.logger.Info("RPC Proxy stopped")
 	}
 

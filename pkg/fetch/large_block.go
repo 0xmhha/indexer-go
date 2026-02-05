@@ -26,6 +26,9 @@ type LargeBlockProcessor struct {
 
 	// tokenIndexer is called when a new contract is deployed to index token metadata
 	tokenIndexer TokenIndexer
+
+	// setCodeProcessor handles EIP-7702 SetCode transaction indexing
+	setCodeProcessor *SetCodeProcessor
 }
 
 // NewLargeBlockProcessor creates a new large block processor
@@ -42,6 +45,11 @@ func NewLargeBlockProcessor(storage Storage, logger *zap.Logger) *LargeBlockProc
 // SetTokenIndexer sets the token indexer for the large block processor
 func (p *LargeBlockProcessor) SetTokenIndexer(indexer TokenIndexer) {
 	p.tokenIndexer = indexer
+}
+
+// SetSetCodeProcessor sets the SetCode processor for EIP-7702 transaction indexing
+func (p *LargeBlockProcessor) SetSetCodeProcessor(processor *SetCodeProcessor) {
+	p.setCodeProcessor = processor
 }
 
 // IsLargeBlock returns true if the block's gas used exceeds the large block threshold
@@ -144,6 +152,12 @@ func (p *LargeBlockProcessor) processBatch(ctx context.Context, block *types.Blo
 	blockNumber := block.NumberU64()
 	transactions := block.Transactions()
 
+	// Build transaction index map for O(1) lookup
+	txIndexMap := make(map[common.Hash]uint64, len(transactions))
+	for i, tx := range transactions {
+		txIndexMap[tx.Hash()] = uint64(i)
+	}
+
 	for _, receipt := range receipts {
 		// Check context cancellation
 		select {
@@ -188,6 +202,18 @@ func (p *LargeBlockProcessor) processBatch(ctx context.Context, block *types.Blo
 						zap.Error(err),
 					)
 					// Continue processing
+				}
+
+				// Process EIP-7702 SetCode Transactions
+				if p.setCodeProcessor != nil && tx.Type() == types.SetCodeTxType {
+					txIdx := txIndexMap[tx.Hash()]
+					if err := p.setCodeProcessor.ProcessSetCodeTransaction(ctx, tx, receipt, block, txIdx); err != nil {
+						p.logger.Warn("Failed to process SetCode transaction",
+							zap.Uint64("block", blockNumber),
+							zap.String("tx", tx.Hash().Hex()),
+							zap.Error(err),
+						)
+					}
 				}
 			}
 		}

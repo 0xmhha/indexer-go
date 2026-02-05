@@ -184,9 +184,9 @@ func TestPebbleBackend_Batch(t *testing.T) {
 	batch := backend.NewBatch()
 
 	// Add operations
-	batch.Set([]byte("key1"), []byte("value1"))
-	batch.Set([]byte("key2"), []byte("value2"))
-	batch.Set([]byte("key3"), []byte("value3"))
+	_ = batch.Set([]byte("key1"), []byte("value1"))
+	_ = batch.Set([]byte("key2"), []byte("value2"))
+	_ = batch.Set([]byte("key3"), []byte("value3"))
 
 	if batch.Count() != 3 {
 		t.Errorf("Expected batch count 3, got %d", batch.Count())
@@ -542,7 +542,7 @@ func TestPebbleBatch_DeleteResetClose(t *testing.T) {
 	}
 
 	// Add some operations and test Close without Commit
-	batch.Set([]byte("key2"), []byte("value2"))
+	_ = batch.Set([]byte("key2"), []byte("value2"))
 	if err := batch.Close(); err != nil {
 		t.Errorf("batch Close failed: %v", err)
 	}

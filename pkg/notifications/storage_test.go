@@ -133,7 +133,7 @@ func TestPebbleStorage_DeleteSetting(t *testing.T) {
 	}
 
 	// Save
-	storage.SaveSetting(ctx, setting)
+	_ = storage.SaveSetting(ctx, setting)
 
 	// Verify exists
 	retrieved, _ := storage.GetSetting(ctx, "setting-to-delete")
@@ -167,7 +167,7 @@ func TestPebbleStorage_ListSettings(t *testing.T) {
 	}
 
 	for _, s := range settings {
-		storage.SaveSetting(ctx, s)
+		_ = storage.SaveSetting(ctx, s)
 	}
 
 	t.Run("list all", func(t *testing.T) {
@@ -296,7 +296,7 @@ func TestPebbleStorage_UpdateNotificationStatus(t *testing.T) {
 		CreatedAt: now,
 	}
 
-	storage.SaveNotification(ctx, notification)
+	_ = storage.SaveNotification(ctx, notification)
 
 	t.Run("update to sent", func(t *testing.T) {
 		err := storage.UpdateNotificationStatus(ctx, "notif-002", DeliveryStatusSent, "")
@@ -349,7 +349,7 @@ func TestPebbleStorage_ListNotifications(t *testing.T) {
 	}
 
 	for _, n := range notifications {
-		storage.SaveNotification(ctx, n)
+		_ = storage.SaveNotification(ctx, n)
 	}
 
 	t.Run("list all", func(t *testing.T) {
@@ -406,7 +406,7 @@ func TestPebbleStorage_GetPendingNotifications(t *testing.T) {
 	}
 
 	for _, n := range notifications {
-		storage.SaveNotification(ctx, n)
+		_ = storage.SaveNotification(ctx, n)
 	}
 
 	result, err := storage.GetPendingNotifications(ctx, 10)
@@ -531,10 +531,10 @@ func TestPebbleStorage_IncrementStats(t *testing.T) {
 		storage = NewPebbleStorage(store)
 
 		// 3 success, 1 failure = 75% success rate
-		storage.IncrementStats(ctx, "setting-002", true, 100)
-		storage.IncrementStats(ctx, "setting-002", true, 100)
-		storage.IncrementStats(ctx, "setting-002", true, 100)
-		storage.IncrementStats(ctx, "setting-002", false, 0)
+		_ = storage.IncrementStats(ctx, "setting-002", true, 100)
+		_ = storage.IncrementStats(ctx, "setting-002", true, 100)
+		_ = storage.IncrementStats(ctx, "setting-002", true, 100)
+		_ = storage.IncrementStats(ctx, "setting-002", false, 0)
 
 		stats, _ := storage.GetStats(ctx, "setting-002")
 		if stats.TotalSent != 3 {
@@ -579,7 +579,7 @@ func TestPebbleStorage_CleanupOldHistory(t *testing.T) {
 		}
 
 		for _, h := range histories {
-			storage.SaveDeliveryHistory(ctx, h)
+			_ = storage.SaveDeliveryHistory(ctx, h)
 		}
 
 		// CleanupOldHistory iterates over keys with prefix "/data/notification/history//"

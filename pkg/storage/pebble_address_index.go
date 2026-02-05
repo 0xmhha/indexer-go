@@ -349,7 +349,7 @@ func (s *PebbleStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddre
 		// Parse logIndex from the end of the key
 		keyStr := string(key)
 		var logIndex uint
-		fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
+		_, _ = fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
 
 		// Fetch the actual transfer data
 		transfer, err := s.GetERC20Transfer(ctx, txHash, logIndex)
@@ -433,7 +433,7 @@ func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address 
 		key := iter.Key()
 		keyStr := string(key)
 		var logIndex uint
-		fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
+		_, _ = fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
 
 		// Fetch the actual transfer data
 		transfer, err := s.GetERC20Transfer(ctx, txHash, logIndex)
@@ -599,7 +599,7 @@ func (s *PebbleStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddr
 		key := iter.Key()
 		keyStr := string(key)
 		var logIndex uint
-		fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
+		_, _ = fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
 
 		// Fetch the actual transfer data
 		transfer, err := s.GetERC721Transfer(ctx, txHash, logIndex)
@@ -682,7 +682,7 @@ func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address
 		key := iter.Key()
 		keyStr := string(key)
 		var logIndex uint
-		fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
+		_, _ = fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
 
 		// Fetch the actual transfer data
 		transfer, err := s.GetERC721Transfer(ctx, txHash, logIndex)

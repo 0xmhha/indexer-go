@@ -186,8 +186,8 @@ func (t *TestInstance) Stop() {
 	}
 
 	if t.cmd != nil && t.cmd.Process != nil {
-		t.cmd.Process.Kill()
-		t.cmd.Wait()
+		_ = t.cmd.Process.Kill()
+		_ = t.cmd.Wait()
 		t.cmd = nil
 	}
 

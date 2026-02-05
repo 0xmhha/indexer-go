@@ -413,6 +413,66 @@ func (p *Proxy) GetBalance(ctx context.Context, req *BalanceRequest) (*BalanceRe
 	return response, nil
 }
 
+// GetNonce returns the nonce (transaction count) of an address at a specific block
+func (p *Proxy) GetNonce(ctx context.Context, req *NonceRequest) (*NonceResponse, error) {
+	// Check rate limit
+	if !p.rateLimiter.Allow() {
+		return nil, ErrRateLimited
+	}
+
+	// Check circuit breaker
+	if !p.circuitBreaker.Allow() {
+		return nil, ErrCircuitOpen
+	}
+
+	// Build cache key
+	blockStr := "latest"
+	if req.BlockNumber != nil {
+		blockStr = req.BlockNumber.String()
+	}
+	cacheKey := p.keyBuilder.Nonce(req.Address.Hex(), blockStr)
+
+	// Check cache
+	if cached, ok := p.cache.Get(cacheKey); ok {
+		return cached.(*NonceResponse), nil
+	}
+
+	start := time.Now()
+
+	// Get nonce from chain RPC
+	nonce, err := p.ethClient.NonceAt(ctx, req.Address, req.BlockNumber)
+	if err != nil {
+		p.circuitBreaker.RecordFailure()
+		return nil, fmt.Errorf("failed to get nonce: %w", err)
+	}
+
+	p.circuitBreaker.RecordSuccess()
+	p.recordLatency(time.Since(start))
+
+	// Get block number for response
+	var blockNumber uint64
+	if req.BlockNumber != nil {
+		blockNumber = req.BlockNumber.Uint64()
+	} else {
+		// Get latest block number
+		currentBlock, err := p.ethClient.BlockNumber(ctx)
+		if err == nil {
+			blockNumber = currentBlock
+		}
+	}
+
+	response := &NonceResponse{
+		Address:     req.Address,
+		Nonce:       nonce,
+		BlockNumber: blockNumber,
+	}
+
+	// Cache with balance TTL (nonce changes with transactions, similar to balance)
+	p.cache.Set(cacheKey, response, p.config.Cache.BalanceTTL)
+
+	return response, nil
+}
+
 // GetCode returns the bytecode at an address to check if it's a contract
 func (p *Proxy) GetCode(ctx context.Context, req *CodeRequest) (*CodeResponse, error) {
 	// Check rate limit
@@ -430,7 +490,7 @@ func (p *Proxy) GetCode(ctx context.Context, req *CodeRequest) (*CodeResponse, e
 	if req.BlockNumber != nil {
 		blockStr = req.BlockNumber.String()
 	}
-	cacheKey := p.keyBuilder.Balance(req.Address.Hex()+"_code", blockStr) // reuse balance key builder
+	cacheKey := p.keyBuilder.Code(req.Address.Hex(), blockStr)
 
 	// Check cache
 	if cached, ok := p.cache.Get(cacheKey); ok {
@@ -545,12 +605,12 @@ func (p *Proxy) parseTraceResult(trace map[string]interface{}, traceAddr []int) 
 
 	gas := uint64(0)
 	if gasStr != "" {
-		fmt.Sscanf(strings.TrimPrefix(gasStr, "0x"), "%x", &gas)
+		_, _ = fmt.Sscanf(strings.TrimPrefix(gasStr, "0x"), "%x", &gas)
 	}
 
 	gasUsed := uint64(0)
 	if gasUsedStr != "" {
-		fmt.Sscanf(strings.TrimPrefix(gasUsedStr, "0x"), "%x", &gasUsed)
+		_, _ = fmt.Sscanf(strings.TrimPrefix(gasUsedStr, "0x"), "%x", &gasUsed)
 	}
 
 	// Add current call

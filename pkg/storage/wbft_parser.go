@@ -219,7 +219,7 @@ func ParseWBFTExtra(header *types.Header) (*WBFTBlockExtra, error) {
 // ExtractSigners extracts validator addresses from a WBFTAggregatedSeal bitmap
 // The Sealers field is a bitmap where each bit represents a validator index
 func ExtractSigners(sealers []byte, validators []uint32, candidates []Candidate) ([]common.Address, error) {
-	if sealers == nil || len(sealers) == 0 {
+	if len(sealers) == 0 {
 		return []common.Address{}, nil
 	}
 

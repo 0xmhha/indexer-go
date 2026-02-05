@@ -6,9 +6,13 @@ import (
 
 // Token types (initialized in initTokenTypes)
 var (
-	tokenStandardEnumType      *graphql.Enum
-	tokenMetadataType          *graphql.Object
+	tokenStandardEnumType       *graphql.Enum
+	tokenMetadataType           *graphql.Object
 	tokenMetadataConnectionType *graphql.Object
+	// Token holder types
+	tokenHolderType           *graphql.Object
+	tokenHolderConnectionType *graphql.Object
+	tokenHolderStatsType      *graphql.Object
 )
 
 // initTokenMetadataTypes initializes token metadata types (for contract metadata, not transfers)
@@ -113,6 +117,76 @@ func initTokenMetadataTypes() {
 			"pageInfo": &graphql.Field{
 				Type:        graphql.NewNonNull(pageInfoType),
 				Description: "Page info",
+			},
+		},
+	})
+
+	// ========== Token Holder Types ==========
+
+	// Token holder type
+	tokenHolderType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "TokenHolder",
+		Description: "Token holder with balance information",
+		Fields: graphql.Fields{
+			"tokenAddress": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Token contract address",
+			},
+			"holderAddress": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Holder address",
+			},
+			"balance": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Token balance",
+			},
+			"lastUpdatedBlock": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number when balance was last updated",
+			},
+		},
+	})
+
+	// Token holder connection type for pagination
+	tokenHolderConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "TokenHolderConnection",
+		Description: "Token holder connection for pagination",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(tokenHolderType))),
+				Description: "List of token holders",
+			},
+			"totalCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total count of holders",
+			},
+			"pageInfo": &graphql.Field{
+				Type:        graphql.NewNonNull(pageInfoType),
+				Description: "Page info",
+			},
+		},
+	})
+
+	// Token holder stats type
+	tokenHolderStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "TokenHolderStats",
+		Description: "Aggregate statistics for a token",
+		Fields: graphql.Fields{
+			"tokenAddress": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Token contract address",
+			},
+			"holderCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of unique holders",
+			},
+			"transferCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total number of transfers",
+			},
+			"lastActivityBlock": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Block number of last transfer activity",
 			},
 		},
 	})

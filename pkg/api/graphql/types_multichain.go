@@ -18,10 +18,10 @@ var (
 	healthStatusType *graphql.Object
 
 	// BlockWithChain type for multi-chain subscriptions
-	blockWithChainType *graphql.Object
+	blockWithChainType *graphql.Object //nolint:unused
 
 	// ChainConnection type
-	chainConnectionType *graphql.Object
+	chainConnectionType *graphql.Object //nolint:unused
 
 	// Input types
 	registerChainInputType *graphql.InputObject

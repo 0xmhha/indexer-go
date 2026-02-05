@@ -134,7 +134,7 @@ func TestIntegration_ConcurrentSessionAccess(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			sessionID := "concurrent-session-" + string(rune('A'+(idx%26))) + string(rune('0'+(idx/26)))
-			store.UpdateLastSeen(ctx, sessionID) // Ignore errors for non-existent sessions
+			_ = store.UpdateLastSeen(ctx, sessionID) // Ignore errors for non-existent sessions
 		}(i)
 	}
 
@@ -224,7 +224,7 @@ func TestIntegration_DisconnectedSessionTracking(t *testing.T) {
 			LastSeen:  time.Now(),
 			TTL:       24 * time.Hour,
 		}
-		store.Save(ctx, session)
+		_ = store.Save(ctx, session)
 	}
 
 	// Create disconnected sessions
@@ -237,7 +237,7 @@ func TestIntegration_DisconnectedSessionTracking(t *testing.T) {
 			LastSeen:  time.Now(),
 			TTL:       24 * time.Hour,
 		}
-		store.Save(ctx, session)
+		_ = store.Save(ctx, session)
 	}
 
 	// List disconnected sessions
@@ -331,7 +331,7 @@ func TestIntegration_EventCacheCleanup(t *testing.T) {
 			Timestamp: time.Now().Add(-2 * time.Hour), // 2 hours ago
 			Delivered: true,
 		}
-		cache.Store(ctx, event)
+		_ = cache.Store(ctx, event)
 	}
 
 	// Store recent events
@@ -344,7 +344,7 @@ func TestIntegration_EventCacheCleanup(t *testing.T) {
 			Timestamp: time.Now(),
 			Delivered: false,
 		}
-		cache.Store(ctx, event)
+		_ = cache.Store(ctx, event)
 	}
 
 	// Cleanup old events (older than 1 hour)
@@ -436,7 +436,7 @@ func TestIntegration_SessionStateTransitions(t *testing.T) {
 		TTL:       24 * time.Hour,
 	}
 
-	store.Save(ctx, session)
+	_ = store.Save(ctx, session)
 
 	// Verify active state
 	s, _ := store.Get(ctx, "state-test-session")
@@ -446,7 +446,7 @@ func TestIntegration_SessionStateTransitions(t *testing.T) {
 
 	// Transition to disconnected
 	session.State = SessionStateDisconnected
-	store.Save(ctx, session)
+	_ = store.Save(ctx, session)
 
 	s, _ = store.Get(ctx, "state-test-session")
 	if s.State != SessionStateDisconnected {
@@ -455,7 +455,7 @@ func TestIntegration_SessionStateTransitions(t *testing.T) {
 
 	// Transition to expired
 	session.State = SessionStateExpired
-	store.Save(ctx, session)
+	_ = store.Save(ctx, session)
 
 	s, _ = store.Get(ctx, "state-test-session")
 	if s.State != SessionStateExpired {
@@ -485,7 +485,7 @@ func TestIntegration_ReplayEventSequence(t *testing.T) {
 			Timestamp: time.Now().Add(time.Duration(i) * time.Millisecond),
 			Delivered: i < 10, // First 10 delivered
 		}
-		cache.Store(ctx, event)
+		_ = cache.Store(ctx, event)
 	}
 
 	// Simulate replay: get events after last delivered

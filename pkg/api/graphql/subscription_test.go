@@ -89,7 +89,7 @@ func TestSubscriptionServer_WebSocketConnection(t *testing.T) {
 
 	// Receive connection_ack
 	var ackMsg wsMessage
-	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	if err := conn.ReadJSON(&ackMsg); err != nil {
 		t.Fatalf("failed to read ack: %v", err)
 	}
@@ -119,12 +119,12 @@ func TestSubscriptionServer_Subscribe(t *testing.T) {
 
 	// Send connection_init
 	initMsg := wsMessage{Type: "connection_init"}
-	conn.WriteJSON(initMsg)
+	_ = conn.WriteJSON(initMsg)
 
 	// Read connection_ack
 	var ackMsg wsMessage
-	conn.SetReadDeadline(time.Now().Add(time.Second))
-	conn.ReadJSON(&ackMsg)
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+	_ = conn.ReadJSON(&ackMsg)
 
 	// Subscribe to newBlock
 	payload, _ := json.Marshal(subscribePayload{
@@ -174,7 +174,7 @@ func TestSubscriptionServer_PingPong(t *testing.T) {
 
 	// Receive pong
 	var pongMsg wsMessage
-	conn.SetReadDeadline(time.Now().Add(time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	if err := conn.ReadJSON(&pongMsg); err != nil {
 		t.Fatalf("failed to read pong: %v", err)
 	}

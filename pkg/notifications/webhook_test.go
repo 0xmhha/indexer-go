@@ -183,7 +183,7 @@ func TestWebhookHandler_Deliver(t *testing.T) {
 			receivedHeaders = r.Header
 			receivedBody, _ = io.ReadAll(r.Body)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":"ok"}`))
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
 		}))
 		defer server.Close()
 
@@ -299,7 +299,7 @@ func TestWebhookHandler_Deliver(t *testing.T) {
 	t.Run("server error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"error":"internal error"}`))
+			_, _ = w.Write([]byte(`{"error":"internal error"}`))
 		}))
 		defer server.Close()
 

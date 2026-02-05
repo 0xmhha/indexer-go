@@ -32,7 +32,7 @@ func (h *Handler) getNotificationSettings(ctx context.Context, params json.RawMe
 		Offset  int      `json:"offset,omitempty"`
 	}
 
-	if params != nil && len(params) > 0 {
+	if len(params) > 0 {
 		if err := json.Unmarshal(params, &input); err != nil {
 			return nil, NewError(InvalidParams, "invalid params", err.Error())
 		}
@@ -246,7 +246,7 @@ func (h *Handler) getNotifications(ctx context.Context, params json.RawMessage) 
 		Offset     int      `json:"offset,omitempty"`
 	}
 
-	if params != nil && len(params) > 0 {
+	if len(params) > 0 {
 		if err := json.Unmarshal(params, &input); err != nil {
 			return nil, NewError(InvalidParams, "invalid params", err.Error())
 		}
@@ -482,6 +482,8 @@ func parseJSONRPCDestination(input notificationDestInput) notifications.Destinat
 }
 
 // registerNotificationMethods registers all notification methods
+//
+//nolint:unused
 func registerNotificationMethods() map[string]func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
 	return map[string]func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error){
 		"notification_getSettings": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
@@ -542,6 +544,8 @@ func GetNotificationMethods() []string {
 }
 
 // validateNotificationType validates a notification type
+//
+//nolint:unused
 func validateNotificationType(t string) error {
 	switch notifications.NotificationType(t) {
 	case notifications.NotificationTypeWebhook,

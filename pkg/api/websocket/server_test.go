@@ -79,11 +79,11 @@ func TestWebSocketServer(t *testing.T) {
 		subReq := Message{Type: "subscribe"}
 		payload, _ := json.Marshal(SubscribeRequest{Type: SubscribeNewBlock})
 		subReq.Payload = payload
-		conn.WriteJSON(subReq)
+		_ = conn.WriteJSON(subReq)
 
 		// Read subscribe response
 		var resp Message
-		conn.ReadJSON(&resp)
+		_ = conn.ReadJSON(&resp)
 
 		// Unsubscribe
 		unsubReq := Message{Type: "unsubscribe"}
@@ -115,11 +115,11 @@ func TestWebSocketServer(t *testing.T) {
 		subReq := Message{Type: "subscribe"}
 		payload, _ := json.Marshal(SubscribeRequest{Type: SubscribeNewBlock})
 		subReq.Payload = payload
-		conn.WriteJSON(subReq)
+		_ = conn.WriteJSON(subReq)
 
 		// Read subscribe response
 		var resp Message
-		conn.ReadJSON(&resp)
+		_ = conn.ReadJSON(&resp)
 
 		// Broadcast an event
 		blockData := map[string]interface{}{
@@ -129,7 +129,7 @@ func TestWebSocketServer(t *testing.T) {
 		server.Hub().BroadcastNewBlock(blockData)
 
 		// Set read deadline
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 
 		// Read broadcasted event
 		if err := conn.ReadJSON(&resp); err != nil {
@@ -359,11 +359,11 @@ func TestWebSocketServer(t *testing.T) {
 		subReq := Message{Type: "subscribe"}
 		payload, _ := json.Marshal(SubscribeRequest{Type: SubscribeNewBlock})
 		subReq.Payload = payload
-		conn.WriteJSON(subReq)
+		_ = conn.WriteJSON(subReq)
 
 		// Read subscribe response
 		var resp Message
-		conn.ReadJSON(&resp)
+		_ = conn.ReadJSON(&resp)
 
 		// Send many broadcasts to test send buffer handling
 		for i := 0; i < 300; i++ {
@@ -376,7 +376,7 @@ func TestWebSocketServer(t *testing.T) {
 
 		// Try to read some messages (not all, as send buffer is 256)
 		messagesReceived := 0
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		for i := 0; i < 100; i++ {
 			if err := conn.ReadJSON(&resp); err != nil {
 				break
@@ -401,10 +401,10 @@ func TestWebSocketServer(t *testing.T) {
 		subReq := Message{Type: "subscribe"}
 		payload, _ := json.Marshal(SubscribeRequest{Type: SubscribeNewBlock})
 		subReq.Payload = payload
-		conn.WriteJSON(subReq)
+		_ = conn.WriteJSON(subReq)
 
 		var resp Message
-		conn.ReadJSON(&resp)
+		_ = conn.ReadJSON(&resp)
 
 		// Abruptly close the connection
 		conn.Close()
@@ -433,7 +433,7 @@ func TestWebSocketServer(t *testing.T) {
 
 		// Send a message and try to read response
 		subReq := Message{Type: "ping"}
-		conn.WriteJSON(subReq)
+		_ = conn.WriteJSON(subReq)
 
 		time.Sleep(200 * time.Millisecond)
 	})
@@ -535,11 +535,11 @@ func TestWebSocketEdgeCases(t *testing.T) {
 		subReq := Message{Type: "subscribe"}
 		payload, _ := json.Marshal(SubscribeRequest{Type: SubscribeNewTransaction})
 		subReq.Payload = payload
-		conn.WriteJSON(subReq)
+		_ = conn.WriteJSON(subReq)
 
 		// Read subscribe response
 		var resp Message
-		conn.ReadJSON(&resp)
+		_ = conn.ReadJSON(&resp)
 
 		// Broadcast a transaction event
 		txData := map[string]interface{}{
@@ -549,7 +549,7 @@ func TestWebSocketEdgeCases(t *testing.T) {
 		server.Hub().BroadcastNewTransaction(txData)
 
 		// Set read deadline
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 
 		// Read broadcasted event
 		if err := conn.ReadJSON(&resp); err != nil {
@@ -581,15 +581,15 @@ func TestWebSocketEdgeCases(t *testing.T) {
 		subReqBlock := Message{Type: "subscribe"}
 		payloadBlock, _ := json.Marshal(SubscribeRequest{Type: SubscribeNewBlock})
 		subReqBlock.Payload = payloadBlock
-		conn.WriteJSON(subReqBlock)
+		_ = conn.WriteJSON(subReqBlock)
 		var resp Message
-		conn.ReadJSON(&resp)
+		_ = conn.ReadJSON(&resp)
 
 		subReqTx := Message{Type: "subscribe"}
 		payloadTx, _ := json.Marshal(SubscribeRequest{Type: SubscribeNewTransaction})
 		subReqTx.Payload = payloadTx
-		conn.WriteJSON(subReqTx)
-		conn.ReadJSON(&resp)
+		_ = conn.WriteJSON(subReqTx)
+		_ = conn.ReadJSON(&resp)
 
 		// Give subscriptions time to register
 		time.Sleep(100 * time.Millisecond)
@@ -601,7 +601,7 @@ func TestWebSocketEdgeCases(t *testing.T) {
 
 		// Should receive both events
 		eventsReceived := 0
-		conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 		for i := 0; i < 3; i++ {
 			if err := conn.ReadJSON(&resp); err != nil {
 				break
@@ -627,16 +627,16 @@ func TestWebSocketEdgeCases(t *testing.T) {
 		subReq := Message{Type: "subscribe"}
 		payload, _ := json.Marshal(SubscribeRequest{Type: SubscribeNewBlock})
 		subReq.Payload = payload
-		conn.WriteJSON(subReq)
+		_ = conn.WriteJSON(subReq)
 		var resp Message
-		conn.ReadJSON(&resp)
+		_ = conn.ReadJSON(&resp)
 
 		// Broadcast both types
 		server.Hub().BroadcastNewBlock(map[string]interface{}{"number": "0x1"})
 		server.Hub().BroadcastNewTransaction(map[string]interface{}{"hash": "0xabc"})
 
 		// Should only receive block event
-		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 		messagesReceived := 0
 		for i := 0; i < 5; i++ {
 			if err := conn.ReadJSON(&resp); err != nil {

@@ -319,7 +319,7 @@ func (f *Filter) MatchLog(event *LogEvent) bool {
 
 	if len(f.Topics) > 0 {
 		for idx, topicSet := range f.Topics {
-			if topicSet == nil || len(topicSet) == 0 {
+			if len(topicSet) == 0 {
 				continue
 			}
 			if idx >= len(event.Log.Topics) {

@@ -145,6 +145,19 @@ type CodeResponse struct {
 	BlockNumber uint64         `json:"blockNumber"`
 }
 
+// NonceRequest represents a nonce (transaction count) query request
+type NonceRequest struct {
+	Address     common.Address `json:"address"`
+	BlockNumber *big.Int       `json:"blockNumber,omitempty"` // nil for latest
+}
+
+// NonceResponse represents a nonce query response
+type NonceResponse struct {
+	Address     common.Address `json:"address"`
+	Nonce       uint64         `json:"nonce"`
+	BlockNumber uint64         `json:"blockNumber"`
+}
+
 // CacheConfig holds cache configuration
 type CacheConfig struct {
 	// MaxSize is the maximum number of entries in the cache
@@ -280,6 +293,12 @@ type RPCProxyService interface {
 
 	// GetBalance returns the balance of an address at a specific block from the chain RPC
 	GetBalance(ctx context.Context, req *BalanceRequest) (*BalanceResponse, error)
+
+	// GetNonce returns the nonce (transaction count) of an address at a specific block from the chain RPC
+	GetNonce(ctx context.Context, req *NonceRequest) (*NonceResponse, error)
+
+	// GetCode returns the bytecode at an address to check if it's a contract
+	GetCode(ctx context.Context, req *CodeRequest) (*CodeResponse, error)
 
 	// GetMetrics returns current proxy metrics
 	GetMetrics() *Metrics

@@ -273,6 +273,7 @@ func chainInstanceToMap(instance *multichain.ChainInstance) map[string]interface
 	return result
 }
 
+//nolint:unused
 func syncProgressToMap(progress *multichain.SyncProgress) map[string]interface{} {
 	result := map[string]interface{}{
 		"currentBlock":    strconv.FormatUint(progress.CurrentHeight, 10),

@@ -114,7 +114,7 @@ func TestConnectionManager_HandleConnect_NewSessionAfterDisconnect(t *testing.T)
 	sessionID := session1.ID
 
 	// Disconnect the session
-	cm.HandleDisconnect(ctx, sessionID)
+	_ = cm.HandleDisconnect(ctx, sessionID)
 
 	// Reconnect with same client - creates new session because
 	// GetByClientID only returns Active sessions (by design for MemorySessionStore)
@@ -184,7 +184,7 @@ func TestConnectionManager_HandleReconnect(t *testing.T) {
 
 	// Create and disconnect session
 	session, _ := cm.HandleConnect(ctx, "client-1", sendChan)
-	cm.HandleDisconnect(ctx, session.ID)
+	_ = cm.HandleDisconnect(ctx, session.ID)
 
 	// Store some events while disconnected
 	event1 := &CachedEvent{
@@ -195,7 +195,7 @@ func TestConnectionManager_HandleReconnect(t *testing.T) {
 		Timestamp: time.Now(),
 		Delivered: false,
 	}
-	eventCache.Store(ctx, event1)
+	_ = eventCache.Store(ctx, event1)
 
 	// Reconnect
 	sendChan2 := make(chan []byte, 10)
@@ -319,7 +319,7 @@ func TestConnectionManager_ReplayEvents(t *testing.T) {
 		select {
 		case data := <-sendChan:
 			var msg map[string]any
-			json.Unmarshal(data, &msg)
+			_ = json.Unmarshal(data, &msg)
 			receivedTypes = append(receivedTypes, msg["type"].(string))
 		case <-time.After(time.Second):
 			t.Fatalf("timeout waiting for message %d", i)
@@ -441,14 +441,14 @@ func TestConnectionManager_GetActiveSessionCount(t *testing.T) {
 	sendChan1 := make(chan []byte, 10)
 	sendChan2 := make(chan []byte, 10)
 	session1, _ := cm.HandleConnect(ctx, "client-1", sendChan1)
-	cm.HandleConnect(ctx, "client-2", sendChan2)
+	_, _ = cm.HandleConnect(ctx, "client-2", sendChan2)
 
 	if count := cm.GetActiveSessionCount(); count != 2 {
 		t.Errorf("expected 2 active sessions, got %d", count)
 	}
 
 	// Disconnect one
-	cm.HandleDisconnect(ctx, session1.ID)
+	_ = cm.HandleDisconnect(ctx, session1.ID)
 
 	if count := cm.GetActiveSessionCount(); count != 1 {
 		t.Errorf("expected 1 active session after disconnect, got %d", count)

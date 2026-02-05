@@ -108,7 +108,7 @@ func TestWebSocketBlockSubscription_Integration(t *testing.T) {
 	t.Log("✅ Block event published to EventBus")
 
 	// 9. Wait for WebSocket message
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
 	var receivedMsg map[string]interface{}
 	if err := conn.ReadJSON(&receivedMsg); err != nil {
@@ -172,7 +172,7 @@ func TestWebSocketBlockSubscription_Integration(t *testing.T) {
 
 	// Receive second message
 	var receivedMsg2 map[string]interface{}
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	if err := conn.ReadJSON(&receivedMsg2); err != nil {
 		t.Fatalf("Failed to receive second message: %v", err)
 	}
@@ -228,12 +228,12 @@ func TestWebSocketTransactionSubscription(t *testing.T) {
 	defer conn.Close()
 
 	// Init
-	conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
+	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
 	var ack map[string]interface{}
-	conn.ReadJSON(&ack)
+	_ = conn.ReadJSON(&ack)
 
 	// Subscribe to transactions
-	conn.WriteJSON(map[string]interface{}{
+	_ = conn.WriteJSON(map[string]interface{}{
 		"id":   "tx-test",
 		"type": "subscribe",
 		"payload": map[string]interface{}{
@@ -268,7 +268,7 @@ func TestWebSocketTransactionSubscription(t *testing.T) {
 	}
 
 	// Receive
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	var msg map[string]interface{}
 	if err := conn.ReadJSON(&msg); err != nil {
 		t.Fatalf("Failed to receive tx message: %v", err)
@@ -318,13 +318,13 @@ func TestWebSocketLogSubscription(t *testing.T) {
 	defer conn.Close()
 
 	// Init
-	conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
+	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
 	var ack map[string]interface{}
-	conn.ReadJSON(&ack)
+	_ = conn.ReadJSON(&ack)
 
 	// Subscribe to logs with filter
 	targetAddress := "0x1234567890123456789012345678901234567890"
-	conn.WriteJSON(map[string]interface{}{
+	_ = conn.WriteJSON(map[string]interface{}{
 		"id":   "log-test",
 		"type": "subscribe",
 		"payload": map[string]interface{}{
@@ -366,7 +366,7 @@ func TestWebSocketLogSubscription(t *testing.T) {
 	}
 
 	// Receive
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	var msg map[string]interface{}
 	if err := conn.ReadJSON(&msg); err != nil {
 		t.Fatalf("Failed to receive log message: %v", err)
@@ -417,12 +417,12 @@ func TestWebSocketMultipleSubscriptions(t *testing.T) {
 	defer conn.Close()
 
 	// Init
-	conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
+	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
 	var ack map[string]interface{}
-	conn.ReadJSON(&ack)
+	_ = conn.ReadJSON(&ack)
 
 	// Subscribe to blocks
-	conn.WriteJSON(map[string]interface{}{
+	_ = conn.WriteJSON(map[string]interface{}{
 		"id":   "blocks",
 		"type": "subscribe",
 		"payload": map[string]interface{}{
@@ -431,7 +431,7 @@ func TestWebSocketMultipleSubscriptions(t *testing.T) {
 	})
 
 	// Subscribe to transactions
-	conn.WriteJSON(map[string]interface{}{
+	_ = conn.WriteJSON(map[string]interface{}{
 		"id":   "txs",
 		"type": "subscribe",
 		"payload": map[string]interface{}{
@@ -458,7 +458,7 @@ func TestWebSocketMultipleSubscriptions(t *testing.T) {
 
 	// Receive 2 messages
 	receivedCount := 0
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
 	for receivedCount < 2 {
 		var msg map[string]interface{}
@@ -561,12 +561,12 @@ func TestWebSocketInvalidSubscription(t *testing.T) {
 	defer conn.Close()
 
 	// Init
-	conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
+	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
 	var ack map[string]interface{}
-	conn.ReadJSON(&ack)
+	_ = conn.ReadJSON(&ack)
 
 	// Send invalid subscription
-	conn.WriteJSON(map[string]interface{}{
+	_ = conn.WriteJSON(map[string]interface{}{
 		"id":   "invalid-test",
 		"type": "subscribe",
 		"payload": map[string]interface{}{
@@ -575,7 +575,7 @@ func TestWebSocketInvalidSubscription(t *testing.T) {
 	})
 
 	// Should receive error
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	var msg map[string]interface{}
 	if err := conn.ReadJSON(&msg); err != nil {
 		t.Fatalf("Failed to receive error message: %v", err)
@@ -616,9 +616,9 @@ func TestWebSocketTransactionFilter(t *testing.T) {
 	defer conn.Close()
 
 	// Connection init
-	conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
+	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
 	var ack map[string]interface{}
-	conn.ReadJSON(&ack)
+	_ = conn.ReadJSON(&ack)
 	if ack["type"] != "connection_ack" {
 		t.Fatalf("Expected connection_ack, got: %v", ack)
 	}
@@ -631,7 +631,7 @@ func TestWebSocketTransactionFilter(t *testing.T) {
 	t.Logf("Test to address: %s", testToAddr.Hex())
 
 	// Subscribe with from address filter
-	conn.WriteJSON(map[string]interface{}{
+	_ = conn.WriteJSON(map[string]interface{}{
 		"id":   "tx-filter-1",
 		"type": "subscribe",
 		"payload": map[string]interface{}{
@@ -660,7 +660,7 @@ func TestWebSocketTransactionFilter(t *testing.T) {
 
 	// Should receive matching transaction
 	var receivedMsg map[string]interface{}
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	err = conn.ReadJSON(&receivedMsg)
 	if err != nil {
 		t.Fatalf("Failed to receive message: %v", err)
@@ -695,7 +695,7 @@ func TestWebSocketTransactionFilter(t *testing.T) {
 	eventBus.Publish(txEvent2)
 
 	// Should NOT receive non-matching transaction (timeout expected)
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	err = conn.ReadJSON(&receivedMsg)
 	if err == nil {
 		t.Errorf("Should not receive non-matching transaction, but got: %v", receivedMsg)
@@ -768,11 +768,11 @@ func BenchmarkWebSocketThroughput(b *testing.B) {
 	conn, _, _ := websocket.DefaultDialer.Dial(wsURL, header)
 	defer conn.Close()
 
-	conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
+	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
 	var ack map[string]interface{}
-	conn.ReadJSON(&ack)
+	_ = conn.ReadJSON(&ack)
 
-	conn.WriteJSON(map[string]interface{}{
+	_ = conn.WriteJSON(map[string]interface{}{
 		"id":   "bench",
 		"type": "subscribe",
 		"payload": map[string]interface{}{

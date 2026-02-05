@@ -1270,7 +1270,7 @@ func TestNotificationService_StartStop(t *testing.T) {
 
 		stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		service2.Stop(stopCtx)
+		_ = service2.Stop(stopCtx)
 	})
 
 	t.Run("stop not running service", func(t *testing.T) {

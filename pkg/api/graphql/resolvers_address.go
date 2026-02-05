@@ -42,6 +42,15 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 		"verificationInfo": nil,
 		"firstSeen":        nil,
 		"lastSeen":         nil,
+		// New fields
+		"currentBalance":    nil,
+		"nonce":             nil,
+		"isToken":           false,
+		"tokenMetadata":     nil,
+		"hasDelegation":     false,
+		"delegationTarget":  nil,
+		"asAuthorityCount":  0,
+		"asTargetCount":     0,
 	}
 
 	// Get balance from historical reader
@@ -184,6 +193,51 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 				"abi":                  verification.ABI,
 				"constructorArguments": verification.ConstructorArguments,
 			}
+		}
+	}
+
+	// === New fields for enhanced address overview ===
+
+	// Get current balance and nonce from RPC
+	if s.rpcProxy != nil {
+		// Current balance (real-time from RPC)
+		balanceResp, err := s.rpcProxy.GetBalance(ctx, &rpcproxy.BalanceRequest{Address: address})
+		if err == nil && balanceResp != nil {
+			overview["currentBalance"] = balanceResp.Balance.String()
+		}
+
+		// Nonce (transaction count from RPC)
+		nonceResp, err := s.rpcProxy.GetNonce(ctx, &rpcproxy.NonceRequest{Address: address})
+		if err == nil && nonceResp != nil {
+			overview["nonce"] = fmt.Sprintf("%d", nonceResp.Nonce)
+		}
+	}
+
+	// Get token metadata
+	if tokenReader, ok := s.storage.(storage.TokenMetadataReader); ok {
+		tokenMetadata, err := tokenReader.GetTokenMetadata(ctx, address)
+		if err == nil && tokenMetadata != nil {
+			overview["isToken"] = true
+			overview["tokenMetadata"] = mapTokenMetadata(tokenMetadata)
+		}
+	}
+
+	// Get EIP-7702 SetCode information
+	if setCodeReader, ok := s.storage.(storage.SetCodeIndexReader); ok {
+		// Delegation state
+		delegationState, err := setCodeReader.GetAddressDelegationState(ctx, address)
+		if err == nil && delegationState != nil {
+			overview["hasDelegation"] = delegationState.HasDelegation
+			if delegationState.DelegationTarget != nil {
+				overview["delegationTarget"] = delegationState.DelegationTarget.Hex()
+			}
+		}
+
+		// SetCode stats
+		stats, err := setCodeReader.GetAddressSetCodeStats(ctx, address)
+		if err == nil && stats != nil {
+			overview["asAuthorityCount"] = stats.AsAuthorityCount
+			overview["asTargetCount"] = stats.AsTargetCount
 		}
 	}
 
@@ -863,6 +917,8 @@ func (s *Schema) resolveNFTsByOwner(p graphql.ResolveParams) (interface{}, error
 // ========== Helper mapper functions ==========
 
 // contractCreationToMap converts ContractCreation to a map (without name lookup)
+//
+//nolint:unused
 func (s *Schema) contractCreationToMap(creation *storage.ContractCreation) map[string]interface{} {
 	return map[string]interface{}{
 		"contractAddress": creation.ContractAddress.Hex(),

@@ -81,7 +81,7 @@ func RateLimit(ratePerSecond float64, burst int, logger *zap.Logger) func(http.H
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Retry-After", "1")
 				w.WriteHeader(http.StatusTooManyRequests)
-				w.Write([]byte(`{"error":"rate limit exceeded","message":"too many requests, please retry later"}`))
+				_, _ = w.Write([]byte(`{"error":"rate limit exceeded","message":"too many requests, please retry later"}`))
 				return
 			}
 

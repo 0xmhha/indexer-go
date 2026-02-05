@@ -1379,30 +1379,24 @@ func TestGraphQLResolvers(t *testing.T) {
 		query := `{ blockByHash(hash: "invalid") { number } }`
 		result := handler.ExecuteQuery(query, nil)
 
-		// Should handle invalid hash gracefully
-		if len(result.Errors) > 0 {
-			// Error is acceptable for invalid hash
-		}
+		// Should handle invalid hash gracefully - error is acceptable
+		_ = result.Errors
 	})
 
 	t.Run("ResolveTransaction_InvalidHash", func(t *testing.T) {
 		query := `{ transaction(hash: "invalid") { hash } }`
 		result := handler.ExecuteQuery(query, nil)
 
-		// Should handle invalid hash gracefully
-		if len(result.Errors) > 0 {
-			// Error is acceptable for invalid hash
-		}
+		// Should handle invalid hash gracefully - error is acceptable
+		_ = result.Errors
 	})
 
 	t.Run("ResolveReceipt_InvalidHash", func(t *testing.T) {
 		query := `{ receipt(transactionHash: "invalid") { status } }`
 		result := handler.ExecuteQuery(query, nil)
 
-		// Should handle invalid hash gracefully
-		if len(result.Errors) > 0 {
-			// Error is acceptable for invalid hash
-		}
+		// Should handle invalid hash gracefully - error is acceptable
+		_ = result.Errors
 	})
 
 	t.Run("ResolveReceiptsByBlock_InvalidNumber", func(t *testing.T) {

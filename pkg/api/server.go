@@ -300,7 +300,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleVersion handles the version endpoint
@@ -323,7 +323,7 @@ func (s *Server) handleSubscribers(w http.ResponseWriter, r *http.Request) {
 	// Check if EventBus is configured
 	if s.eventBus == nil {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error": "EventBus not configured",
 		})
 		return
@@ -338,7 +338,7 @@ func (s *Server) handleSubscribers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // Start starts the API server
