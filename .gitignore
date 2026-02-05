@@ -110,6 +110,9 @@ release/
 # Serena MCP cache
 .serena/
 
+# Claude Code documentation
+claudedocs/
+
 # Solidity compiler binaries and cache
 solc-bin/
 solc-cache/
