@@ -9,7 +9,7 @@
 
 ---
 
-## 📊 Architecture
+## Architecture
 
 ```
 Stable-One Node (RPC)
@@ -26,11 +26,11 @@ Stable-One Node (RPC)
     └─────────────────────────────────────┘
 ```
 
-> 📖 See detailed architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+> See detailed architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Language**: Go 1.21+
 - **Ethereum**: [go-ethereum](https://github.com/ethereum/go-ethereum) (ethclient, types, RLP)
@@ -42,7 +42,7 @@ Stable-One Node (RPC)
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
@@ -76,7 +76,7 @@ go build -ldflags "-s -w \
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Start indexing (indexer only)
 
@@ -291,7 +291,7 @@ The `--reindex` option is useful when:
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 Configuration can be provided through (in order of priority):
 1. Command-line flags (highest priority)
@@ -434,7 +434,7 @@ export INDEXER_CHUNK_SIZE=1
 
 ---
 
-## 📖 API Documentation
+## API Documentation
 
 ### GraphQL API
 
@@ -554,7 +554,7 @@ subscription {
 
 ---
 
-## 🔧 Development
+## Development
 
 ### Setup development environment
 
@@ -577,7 +577,7 @@ make lint
 
 ### Project structure
 
-> 📖 See project structure: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+> See project structure: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ### Run locally
 
@@ -594,7 +594,7 @@ go run ./cmd start \
 
 ---
 
-## 📈 Performance
+## Performance
 
 ### Benchmarks
 
@@ -608,7 +608,7 @@ go run ./cmd start \
 
 ### Event Subscription Performance
 
-| Metric | Target | Achieved ✅ |
+| Metric | Target | Achieved |
 |--------|--------|-------------|
 | Event throughput | 1,000 events/s | **100M+ events/s** |
 | Delivery latency | <10ms | **Sub-microsecond** |
@@ -627,7 +627,7 @@ go run ./cmd start \
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
@@ -648,22 +648,22 @@ make bench
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 ### Core Documentation
-- 📄 [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and internals
-- 📄 [STABLE_ONE_TECHNICAL_ANALYSIS.md](docs/STABLE_ONE_TECHNICAL_ANALYSIS.md) - Stable-One chain analysis
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and internals
+- [STABLE_ONE_TECHNICAL_ANALYSIS.md](docs/STABLE_ONE_TECHNICAL_ANALYSIS.md) - Stable-One chain analysis
 
 ### Event Subscription System
-- 📄 [EVENT_SUBSCRIPTION_API.md](docs/EVENT_SUBSCRIPTION_API.md) - Complete Event Subscription API reference
-- 📄 [METRICS_MONITORING.md](docs/METRICS_MONITORING.md) - Prometheus metrics and monitoring guide
+- [EVENT_SUBSCRIPTION_API.md](docs/EVENT_SUBSCRIPTION_API.md) - Complete Event Subscription API reference
+- [METRICS_MONITORING.md](docs/METRICS_MONITORING.md) - Prometheus metrics and monitoring guide
 
 ### Production Deployment
-- 📄 [OPERATIONS_GUIDE.md](docs/OPERATIONS_GUIDE.md) - Production deployment and operations guide
+- [OPERATIONS_GUIDE.md](docs/OPERATIONS_GUIDE.md) - Production deployment and operations guide
 
 ---
 
-## 🚀 Production Deployment
+## Production Deployment
 
 ### Quick Deploy
 
@@ -713,7 +713,7 @@ See [OPERATIONS_GUIDE.md](docs/OPERATIONS_GUIDE.md) for complete deployment docu
 
 ---
 
-## 🐳 Docker
+## Docker
 
 ### Build image
 
@@ -755,7 +755,7 @@ services:
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
@@ -767,13 +767,13 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for de
 
 ---
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Inspired by [tx-indexer](https://github.com/gnolang/tx-indexer) (Gno chain indexer)
 - Built with [go-ethereum](https://github.com/ethereum/go-ethereum)
@@ -781,9 +781,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 📞 Support
+## Support
 
-- 🐛 Issues: [GitHub Issues](https://github.com/0xmhha/indexer-go/issues)
+- Issues: [GitHub Issues](https://github.com/0xmhha/indexer-go/issues)
 
 ---
 
