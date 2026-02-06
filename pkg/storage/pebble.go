@@ -156,6 +156,97 @@ func (s *PebbleStorage) Close() error {
 	return nil
 }
 
+// DeleteByPrefix deletes all keys with the given prefix
+// Returns the number of deleted keys
+func (s *PebbleStorage) DeleteByPrefix(prefix []byte) (int64, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return 0, err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return 0, err
+	}
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: incrementPrefix(prefix),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	batch := s.db.NewBatch()
+	defer batch.Close()
+
+	var count int64
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		if err := batch.Delete(key, nil); err != nil {
+			return count, fmt.Errorf("failed to delete key: %w", err)
+		}
+		count++
+
+		// Commit batch periodically to avoid memory issues
+		if count%10000 == 0 {
+			if err := batch.Commit(pebble.NoSync); err != nil {
+				return count, fmt.Errorf("failed to commit batch: %w", err)
+			}
+			batch.Reset()
+		}
+	}
+
+	// Commit remaining deletes
+	if batch.Count() > 0 {
+		if err := batch.Commit(pebble.NoSync); err != nil {
+			return count, fmt.Errorf("failed to commit final batch: %w", err)
+		}
+	}
+
+	return count, nil
+}
+
+// CountByPrefix counts all keys with the given prefix
+func (s *PebbleStorage) CountByPrefix(prefix []byte) (int64, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return 0, err
+	}
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: incrementPrefix(prefix),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var count int64
+	for iter.First(); iter.Valid(); iter.Next() {
+		count++
+	}
+
+	return count, nil
+}
+
+// incrementPrefix returns a prefix that is one greater than the input
+// Used for creating upper bounds in range scans
+func incrementPrefix(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	result := make([]byte, len(prefix))
+	copy(result, prefix)
+	for i := len(result) - 1; i >= 0; i-- {
+		if result[i] < 0xff {
+			result[i]++
+			return result
+		}
+		result[i] = 0
+	}
+	// All bytes were 0xff, extend with a null byte
+	return append(result, 0)
+}
+
 // ============================================================================
 // KVStore interface implementation
 // ============================================================================

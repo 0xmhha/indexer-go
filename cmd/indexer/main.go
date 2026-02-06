@@ -106,6 +106,13 @@ func run() error {
 		}
 	}
 
+	// Reindex: clear blockchain data while preserving verification data
+	if flags.reindex && !flags.clearData {
+		if err := reindexData(cfg.Database.Path, log); err != nil {
+			return fmt.Errorf("failed to reindex data: %w", err)
+		}
+	}
+
 	// Create and initialize application
 	app, err := NewApp(cfg, log, flags.enableGapMode, flags.forceAdapterType)
 	if err != nil {
@@ -156,6 +163,7 @@ type Flags struct {
 	logFormat        string
 	enableGapMode    bool
 	clearData        bool
+	reindex          bool // Clear blockchain data only, preserving verification data
 	enableAPI        bool
 	apiHost          string
 	apiPort          int
@@ -180,6 +188,7 @@ func parseFlags() *Flags {
 	flag.StringVar(&f.logFormat, "log-format", "", "Log format (json, console)")
 	flag.BoolVar(&f.enableGapMode, "gap-recovery", false, "Enable gap detection and recovery at startup")
 	flag.BoolVar(&f.clearData, "clear-data", false, "Clear (delete) the data folder before starting")
+	flag.BoolVar(&f.reindex, "reindex", false, "Clear blockchain data only, preserving verification data (ABIs, source code, verification status)")
 
 	// API server flags
 	flag.BoolVar(&f.enableAPI, "api", false, "Enable API server")
@@ -233,6 +242,7 @@ func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
 		zap.Int("batch_size", cfg.Indexer.ChunkSize),
 		zap.Bool("gap_recovery", flags.enableGapMode),
 		zap.Bool("clear_data", flags.clearData),
+		zap.Bool("reindex", flags.reindex),
 		zap.String("adapter", adapterInfo),
 	)
 }
@@ -1023,5 +1033,117 @@ func clearDataFolder(path string, log *zap.Logger) error {
 	}
 
 	log.Info("Data folder cleared successfully", zap.String("path", path))
+	return nil
+}
+
+// reindexData clears blockchain data while preserving verification data (ABIs, source code, verification status)
+func reindexData(path string, log *zap.Logger) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Info("Data folder does not exist, nothing to reindex", zap.String("path", path))
+			return nil
+		}
+		return fmt.Errorf("failed to stat data folder: %w", err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("data path is not a directory: %s", path)
+	}
+
+	log.Warn("Reindexing: clearing blockchain data while preserving verification data", zap.String("path", path))
+
+	// Open Pebble database
+	storageConfig := storage.DefaultConfig(path)
+	storageConfig.ReadOnly = false
+	db, err := storage.NewPebbleStorage(storageConfig)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	// Prefixes to preserve (verification data)
+	preservePrefixes := []string{
+		"/data/abi/",
+		"/data/verification/",
+		"/index/verification/",
+	}
+
+	// Prefixes to delete (blockchain/indexing data)
+	deletePrefixes := []string{
+		// Data prefixes
+		"/data/blocks/",
+		"/data/txs/",
+		"/data/receipts/",
+		"/data/contractaddr/",
+		"/data/logs/",
+		"/data/internal/",
+		"/data/contract/",
+		"/data/erc20/",
+		"/data/erc721/",
+		"/data/syscontracts/",
+		"/data/wbft/",
+		"/data/token/",
+		"/data/setcode/",
+		"/data/feedelegation/",
+		"/data/notification/",
+		// Index prefixes (except /index/verification/)
+		"/index/txh/",
+		"/index/addr/",
+		"/index/blockh/",
+		"/index/time/",
+		"/index/balance/",
+		"/index/syscontracts/",
+		"/index/wbft/",
+		"/index/contract/",
+		"/index/internal/",
+		"/index/erc20/",
+		"/index/erc721/",
+		"/index/logs/",
+		"/index/feedelegation/",
+		"/index/notification/",
+		"/index/token/",
+		"/index/setcode/",
+		// Metadata prefixes
+		"/meta/",
+		// Multi-chain prefixes
+		"/chain/",
+	}
+
+	var deletedCount int64
+	var preservedCount int64
+
+	// Delete data with specified prefixes
+	for _, prefix := range deletePrefixes {
+		count, err := db.DeleteByPrefix([]byte(prefix))
+		if err != nil {
+			log.Warn("Failed to delete prefix", zap.String("prefix", prefix), zap.Error(err))
+			continue
+		}
+		if count > 0 {
+			log.Debug("Deleted keys with prefix", zap.String("prefix", prefix), zap.Int64("count", count))
+			deletedCount += count
+		}
+	}
+
+	// Log preserved prefixes info
+	for _, prefix := range preservePrefixes {
+		count, err := db.CountByPrefix([]byte(prefix))
+		if err != nil {
+			log.Warn("Failed to count preserved prefix", zap.String("prefix", prefix), zap.Error(err))
+			continue
+		}
+		if count > 0 {
+			log.Info("Preserved keys with prefix", zap.String("prefix", prefix), zap.Int64("count", count))
+			preservedCount += count
+		}
+	}
+
+	log.Info("Reindex completed",
+		zap.Int64("deleted_keys", deletedCount),
+		zap.Int64("preserved_keys", preservedCount),
+		zap.String("path", path),
+	)
+
 	return nil
 }
