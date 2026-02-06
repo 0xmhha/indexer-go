@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -426,11 +425,7 @@ func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, 
 		return nil, err
 	}
 
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit // Default limit
-	}
-
-	// Get the latest height to know how many blocks to scan
+	// Get the latest height
 	latestHeight, err := s.GetLatestHeight(ctx)
 	if err != nil {
 		if err == ErrNotFound {
@@ -440,98 +435,19 @@ func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, 
 	}
 
 	// Determine block range
-	startBlock := fromBlock
-	endBlock := toBlock
-	if toBlock == 0 || toBlock > latestHeight {
-		endBlock = latestHeight
-	}
-	if fromBlock > endBlock {
+	startBlock, endBlock, valid := determineBlockRange(fromBlock, toBlock, latestHeight)
+	if !valid {
 		return []MinerStats{}, nil
 	}
 
 	// Aggregate miner stats
-	minerMap := make(map[common.Address]*MinerStats)
-	totalBlocks := uint64(0)
+	minerMap, totalBlocks := s.aggregateMinerStats(ctx, startBlock, endBlock)
 
-	// Scan blocks in range - calculate everything in one pass
-	for height := startBlock; height <= endBlock; height++ {
-		block, err := s.GetBlock(ctx, height)
-		if err != nil {
-			continue // Skip missing blocks
-		}
+	// Calculate percentages
+	calculateMinerPercentages(minerMap, totalBlocks)
 
-		totalBlocks++
-		miner := block.Coinbase()
-
-		stats, exists := minerMap[miner]
-		if !exists {
-			stats = &MinerStats{
-				Address:         miner,
-				BlockCount:      0,
-				LastBlockNumber: 0,
-				LastBlockTime:   0,
-				Percentage:      0,
-				TotalRewards:    big.NewInt(0),
-			}
-			minerMap[miner] = stats
-		}
-
-		stats.BlockCount++
-		if height > stats.LastBlockNumber {
-			stats.LastBlockNumber = height
-			stats.LastBlockTime = block.Time()
-		}
-
-		// Calculate transaction fees for this block
-		// Create transaction map for O(1) lookup
-		txMap := make(map[common.Hash]*types.Transaction)
-		for _, tx := range block.Transactions() {
-			txMap[tx.Hash()] = tx
-		}
-
-		// Get receipts and calculate fees
-		receipts, err := s.GetReceiptsByBlockNumber(ctx, height)
-		if err == nil {
-			for _, receipt := range receipts {
-				if receipt.GasUsed > 0 {
-					// O(1) lookup instead of O(n) search
-					if tx, found := txMap[receipt.TxHash]; found {
-						fee := new(big.Int).Mul(tx.GasPrice(), big.NewInt(int64(receipt.GasUsed)))
-						stats.TotalRewards.Add(stats.TotalRewards, fee)
-					}
-				}
-			}
-		}
-	}
-
-	// Calculate percentage
-	for _, stats := range minerMap {
-		if totalBlocks > 0 {
-			stats.Percentage = float64(stats.BlockCount) / float64(totalBlocks) * 100.0
-		}
-	}
-
-	// Convert map to slice
-	result := make([]MinerStats, 0, len(minerMap))
-	for _, stats := range minerMap {
-		result = append(result, *stats)
-	}
-
-	// Sort by block count (descending)
-	for i := 0; i < len(result); i++ {
-		for j := i + 1; j < len(result); j++ {
-			if result[j].BlockCount > result[i].BlockCount {
-				result[i], result[j] = result[j], result[i]
-			}
-		}
-	}
-
-	// Apply limit
-	if len(result) > limit {
-		result = result[:limit]
-	}
-
-	return result, nil
+	// Sort and apply limit
+	return sortAndLimitMinerStats(minerMap, limit), nil
 }
 
 // ============================================================================

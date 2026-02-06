@@ -3,9 +3,11 @@ package eventbus
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -109,11 +111,11 @@ func NewRedisEventBus(cfg config.EventBusRedisConfig, nodeID string, opts ...Opt
 func (eb *RedisEventBus) createClient() error {
 	var tlsConfig *tls.Config
 	if eb.config.TLS.Enabled {
-		tlsConfig = &tls.Config{
-			InsecureSkipVerify: eb.config.TLS.InsecureSkipVerify,
-			ServerName:         eb.config.TLS.ServerName,
+		var err error
+		tlsConfig, err = eb.buildTLSConfig()
+		if err != nil {
+			return fmt.Errorf("failed to build TLS config: %w", err)
 		}
-		// TODO: Load certificates from files if configured
 	}
 
 	if eb.config.ClusterMode {
@@ -143,6 +145,52 @@ func (eb *RedisEventBus) createClient() error {
 	}
 
 	return nil
+}
+
+// buildTLSConfig creates a TLS configuration from the config settings
+func (eb *RedisEventBus) buildTLSConfig() (*tls.Config, error) {
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: eb.config.TLS.InsecureSkipVerify,
+		ServerName:         eb.config.TLS.ServerName,
+	}
+
+	// Load CA certificate if specified
+	if eb.config.TLS.CAFile != "" {
+		caCert, err := os.ReadFile(eb.config.TLS.CAFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CA certificate file %s: %w", eb.config.TLS.CAFile, err)
+		}
+
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			return nil, fmt.Errorf("failed to parse CA certificate from %s", eb.config.TLS.CAFile)
+		}
+		tlsConfig.RootCAs = caCertPool
+
+		eb.logger.Info("loaded CA certificate", "file", eb.config.TLS.CAFile)
+	}
+
+	// Load client certificate and key if both are specified
+	if eb.config.TLS.CertFile != "" && eb.config.TLS.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(eb.config.TLS.CertFile, eb.config.TLS.KeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load client certificate/key pair: %w", err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+
+		eb.logger.Info("loaded client certificate",
+			"cert_file", eb.config.TLS.CertFile,
+			"key_file", eb.config.TLS.KeyFile,
+		)
+	} else if eb.config.TLS.CertFile != "" || eb.config.TLS.KeyFile != "" {
+		// Warn if only one of cert/key is provided
+		eb.logger.Warn("both cert_file and key_file must be specified for client certificate authentication",
+			"cert_file", eb.config.TLS.CertFile,
+			"key_file", eb.config.TLS.KeyFile,
+		)
+	}
+
+	return tlsConfig, nil
 }
 
 // Connect establishes connection to Redis

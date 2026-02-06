@@ -29,11 +29,12 @@ type ChainInstance struct {
 	EventBus *events.EventBus  // Global event bus (shared across chains)
 
 	// State
-	status      ChainStatus
-	statusMu    sync.RWMutex
-	startedAt   *time.Time
-	lastError   error
-	lastErrorAt *time.Time
+	status       ChainStatus
+	statusMu     sync.RWMutex
+	registeredAt time.Time  // When the chain was registered
+	startedAt    *time.Time // When the chain was started (nil if never started)
+	lastError    error
+	lastErrorAt  *time.Time
 
 	// Metrics (atomic for concurrent access)
 	blocksIndexed       atomic.Uint64
@@ -57,11 +58,12 @@ func NewChainInstance(
 	logger *zap.Logger,
 ) *ChainInstance {
 	return &ChainInstance{
-		Config:   cfg,
-		Storage:  globalStorage,
-		EventBus: globalEventBus,
-		status:   StatusRegistered,
-		logger:   logger.With(zap.String("chain", cfg.ID)),
+		Config:       cfg,
+		Storage:      globalStorage,
+		EventBus:     globalEventBus,
+		status:       StatusRegistered,
+		registeredAt: time.Now(),
+		logger:       logger.With(zap.String("chain", cfg.ID)),
 	}
 }
 
@@ -170,6 +172,11 @@ func (ci *ChainInstance) Status() ChainStatus {
 	return ci.status
 }
 
+// RegisteredAt returns the time when the chain was registered.
+func (ci *ChainInstance) RegisteredAt() time.Time {
+	return ci.registeredAt
+}
+
 // Info returns the chain info.
 func (ci *ChainInstance) Info() *ChainInfo {
 	ci.statusMu.RLock()
@@ -184,6 +191,7 @@ func (ci *ChainInstance) Info() *ChainInfo {
 		AdapterType: ci.Config.AdapterType,
 		Status:      ci.status,
 		StartHeight: ci.Config.StartHeight,
+		CreatedAt:   ci.registeredAt,
 		StartedAt:   ci.startedAt,
 	}
 }

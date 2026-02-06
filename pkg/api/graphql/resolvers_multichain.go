@@ -253,7 +253,7 @@ func chainInstanceToMap(instance *multichain.ChainInstance) map[string]interface
 		"adapterType":  config.AdapterType,
 		"status":       string(status),
 		"startHeight":  strconv.FormatUint(config.StartHeight, 10),
-		"registeredAt": time.Now().Format(time.RFC3339), // TODO: Store actual registration time
+		"registeredAt": instance.RegisteredAt().Format(time.RFC3339),
 		"enabled":      config.Enabled,
 	}
 
