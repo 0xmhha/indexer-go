@@ -390,3 +390,36 @@ func (g *GenesisInitializingStorage) GetNFTsByOwner(ctx context.Context, owner c
 	}
 	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
 }
+
+// ============================================================================
+// AddressIndexWriter interface delegation
+// These methods delegate to the underlying storage if it implements AddressIndexWriter.
+// ============================================================================
+
+func (g *GenesisInitializingStorage) SaveContractCreation(ctx context.Context, creation *ContractCreation) error {
+	if writer, ok := g.Storage.(AddressIndexWriter); ok {
+		return writer.SaveContractCreation(ctx, creation)
+	}
+	return fmt.Errorf("storage does not implement AddressIndexWriter")
+}
+
+func (g *GenesisInitializingStorage) SaveInternalTransactions(ctx context.Context, txHash common.Hash, internals []*InternalTransaction) error {
+	if writer, ok := g.Storage.(AddressIndexWriter); ok {
+		return writer.SaveInternalTransactions(ctx, txHash, internals)
+	}
+	return fmt.Errorf("storage does not implement AddressIndexWriter")
+}
+
+func (g *GenesisInitializingStorage) SaveERC20Transfer(ctx context.Context, transfer *ERC20Transfer) error {
+	if writer, ok := g.Storage.(AddressIndexWriter); ok {
+		return writer.SaveERC20Transfer(ctx, transfer)
+	}
+	return fmt.Errorf("storage does not implement AddressIndexWriter")
+}
+
+func (g *GenesisInitializingStorage) SaveERC721Transfer(ctx context.Context, transfer *ERC721Transfer) error {
+	if writer, ok := g.Storage.(AddressIndexWriter); ok {
+		return writer.SaveERC721Transfer(ctx, transfer)
+	}
+	return fmt.Errorf("storage does not implement AddressIndexWriter")
+}
