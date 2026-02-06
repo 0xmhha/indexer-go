@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/cockroachdb/pebble"
@@ -1998,13 +1999,13 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 		if balance.Sign() > 0 {
 			tb := TokenBalance{
 				ContractAddress: contract,
-				TokenType:       "ERC20", // TODO: Detect actual token type (ERC721, ERC1155)
+				TokenType:       string(TokenStandardERC20), // Default to ERC20, updated from metadata below
 				Balance:         balance,
-				TokenID:         "",  // Empty for ERC20
-				Name:            "",  // Default empty
-				Symbol:          "",  // Default empty
-				Decimals:        nil, // Default nil
-				Metadata:        "",  // TODO: Add metadata support
+				TokenID:         "", // Empty for ERC20
+				Name:            "", // Default empty
+				Symbol:          "", // Default empty
+				Decimals:        nil,
+				Metadata:        "",
 			}
 
 			// Apply token metadata if available
@@ -2021,6 +2022,12 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 				tb.Symbol = dbMetadata.Symbol
 				decimals := int(dbMetadata.Decimals)
 				tb.Decimals = &decimals
+				// Set token type from stored standard
+				if dbMetadata.Standard != "" {
+					tb.TokenType = string(dbMetadata.Standard)
+				}
+				// Build metadata JSON with additional info
+				tb.Metadata = buildTokenMetadataJSON(dbMetadata)
 			} else if s.tokenMetadataFetcher != nil {
 				// 3. On-demand fetch from chain and cache
 				if fetchedMetadata, err := s.tokenMetadataFetcher.FetchTokenMetadata(ctx, contract); err == nil && fetchedMetadata != nil {
@@ -2028,6 +2035,12 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 					tb.Symbol = fetchedMetadata.Symbol
 					decimals := int(fetchedMetadata.Decimals)
 					tb.Decimals = &decimals
+					// Set token type from fetched standard
+					if fetchedMetadata.Standard != "" {
+						tb.TokenType = string(fetchedMetadata.Standard)
+					}
+					// Build metadata JSON with additional info
+					tb.Metadata = buildTokenMetadataJSON(fetchedMetadata)
 
 					// Cache the fetched metadata for future queries
 					if saveErr := s.SaveTokenMetadata(ctx, fetchedMetadata); saveErr != nil {
@@ -2054,6 +2067,47 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 	}
 
 	return result, nil
+}
+
+// buildTokenMetadataJSON creates a JSON string with additional token metadata
+func buildTokenMetadataJSON(metadata *TokenMetadata) string {
+	if metadata == nil {
+		return ""
+	}
+
+	// Build metadata map with available fields
+	metaMap := make(map[string]interface{})
+
+	if metadata.BaseURI != "" {
+		metaMap["baseURI"] = metadata.BaseURI
+	}
+	if metadata.TotalSupply != nil && metadata.TotalSupply.Sign() > 0 {
+		metaMap["totalSupply"] = metadata.TotalSupply.String()
+	}
+	if metadata.SupportsERC165 {
+		metaMap["supportsERC165"] = true
+	}
+	if metadata.SupportsMetadata {
+		metaMap["supportsMetadata"] = true
+	}
+	if metadata.SupportsEnumerable {
+		metaMap["supportsEnumerable"] = true
+	}
+	if !metadata.CreatedAt.IsZero() {
+		metaMap["createdAt"] = metadata.CreatedAt.Format(time.RFC3339)
+	}
+
+	// Return empty string if no additional metadata
+	if len(metaMap) == 0 {
+		return ""
+	}
+
+	// Serialize to JSON
+	jsonBytes, err := json.Marshal(metaMap)
+	if err != nil {
+		return ""
+	}
+	return string(jsonBytes)
 }
 
 // SetBlockTimestamp indexes a block by timestamp

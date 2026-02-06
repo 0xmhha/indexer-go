@@ -233,9 +233,9 @@ T-012 (Fee Delegation) ──── go-stablenet 의존성 선행 필요
 ## Checklist
 
 - [x] T-001: Debug Print 문 제거 (2026-02-06 완료)
-- [ ] T-002: Token Type 감지 구현
-- [ ] T-003: Token Metadata 지원 추가
-- [ ] T-004: Notification 상세 필터 매칭 구현
+- [x] T-002: Token Type 감지 구현 (2026-02-06 완료)
+- [x] T-003: Token Metadata 지원 추가 (2026-02-06 완료)
+- [x] T-004: Notification 상세 필터 매칭 구현 (2026-02-06 완료)
 - [ ] T-005: pebble.go 파일 분리
 - [ ] T-006: fetcher.go 파일 분리
 - [ ] T-007: 긴 함수 리팩토링

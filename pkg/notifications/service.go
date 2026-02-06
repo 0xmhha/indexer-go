@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -356,8 +357,125 @@ func (s *NotificationService) convertEventType(eventType events.EventType) Event
 
 // matchesFilter checks if an event matches the notification filter.
 func (s *NotificationService) matchesFilter(filter *NotifyFilter, event events.Event) bool {
-	// TODO: Implement detailed filter matching
-	// For now, accept all events
+	// If no filter specified, accept all events
+	if filter == nil {
+		return true
+	}
+
+	switch e := event.(type) {
+	case *events.TransactionEvent:
+		return s.matchesTransactionFilter(filter, e)
+	case *events.LogEvent:
+		return s.matchesLogFilter(filter, e)
+	case *events.BlockEvent:
+		// Block events pass through if no specific address filter
+		// or if miner address matches
+		if len(filter.Addresses) > 0 && e.Block != nil {
+			miner := e.Block.Coinbase()
+			return containsAddress(filter.Addresses, miner)
+		}
+		return true
+	default:
+		return true
+	}
+}
+
+// matchesTransactionFilter checks if a transaction event matches the filter.
+func (s *NotificationService) matchesTransactionFilter(filter *NotifyFilter, e *events.TransactionEvent) bool {
+	// Check address filter
+	if len(filter.Addresses) > 0 {
+		matchedAddress := false
+		// Check if From or To address matches any filter address
+		if containsAddress(filter.Addresses, e.From) {
+			matchedAddress = true
+		}
+		if e.To != nil && containsAddress(filter.Addresses, *e.To) {
+			matchedAddress = true
+		}
+		if !matchedAddress {
+			return false
+		}
+	}
+
+	// Check minimum value filter
+	if filter.MinValue != nil && *filter.MinValue != "" {
+		minValue, ok := new(big.Int).SetString(*filter.MinValue, 10)
+		if ok {
+			txValue, valueOk := new(big.Int).SetString(e.Value, 10)
+			if valueOk && txValue.Cmp(minValue) < 0 {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// matchesLogFilter checks if a log event matches the filter.
+func (s *NotificationService) matchesLogFilter(filter *NotifyFilter, e *events.LogEvent) bool {
+	if e.Log == nil {
+		return false
+	}
+
+	// Check address filter (log contract address)
+	if len(filter.Addresses) > 0 {
+		if !containsAddress(filter.Addresses, e.Log.Address) {
+			return false
+		}
+	}
+
+	// Check topics filter
+	if len(filter.Topics) > 0 {
+		if !matchesTopics(filter.Topics, e.Log.Topics) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// containsAddress checks if an address is in the list.
+func containsAddress(addresses []common.Address, addr common.Address) bool {
+	for _, a := range addresses {
+		if a == addr {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesTopics checks if log topics match the filter topics.
+// Filter topics use the same format as eth_getLogs:
+// - Empty array at position matches any topic
+// - Non-empty array at position must match one of the values
+func matchesTopics(filterTopics [][]common.Hash, logTopics []common.Hash) bool {
+	for i, topicOptions := range filterTopics {
+		// If we've exhausted log topics, no match
+		if i >= len(logTopics) {
+			// Unless filter topic is empty (wildcard)
+			if len(topicOptions) > 0 {
+				return false
+			}
+			continue
+		}
+
+		// Empty array means any topic matches
+		if len(topicOptions) == 0 {
+			continue
+		}
+
+		// Check if log topic matches any of the filter options
+		matched := false
+		for _, opt := range topicOptions {
+			if opt == logTopics[i] {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
 	return true
 }
 
