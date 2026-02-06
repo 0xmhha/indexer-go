@@ -155,7 +155,7 @@ fmt.Printf("[DEBUG] Similarity: %.4f (threshold: %.4f)\n", similarity, MinByteco
     - BLSVerifier 인터페이스를 통한 전체 암호화 검증 지원
     - VerifySealWithBLS() 메서드 추가
 
-### T-010: Pending Transaction 추적 구현
+### T-010: Pending Transaction 추적 구현 ✅
 - **파일**: `pkg/api/jsonrpc/filter_manager.go:276`
 - **현재**: 미구현
 - **작업**:
@@ -164,6 +164,21 @@ fmt.Printf("[DEBUG] Similarity: %.4f (threshold: %.4f)\n", similarity, MinByteco
   - 구독 알림
 - **예상 시간**: 6시간
 - **담당**: -
+- **완료**: 2026-02-06
+- **변경 사항**:
+  - `pkg/api/jsonrpc/pending_pool.go` 신규 생성 (331줄)
+    - PendingPool 구조체: pending tx 추적 및 TTL 기반 자동 정리
+    - EventBus 구독을 통한 실시간 pending tx 수신
+    - AddTransaction, RemoveTransaction, GetTransactionsSince 메서드
+    - 최대 크기 초과 시 oldest 트랜잭션 자동 evict
+  - `pkg/api/jsonrpc/filter_manager.go` 수정
+    - Filter에 LastPendingTxIndex 필드 추가
+    - FilterManager에 pendingPool 필드 추가
+    - NewFilterManagerWithPendingPool 생성자 추가
+    - GetPendingTransactionsSinceLastPoll 구현
+  - `pkg/api/jsonrpc/pending_pool_test.go` 신규 생성 (282줄)
+    - PendingPool 단위 테스트
+    - FilterManager + PendingPool 통합 테스트
 
 ---
 
@@ -286,7 +301,7 @@ T-012 (Fee Delegation) ──── go-stablenet 의존성 선행 필요
 - [x] T-007: 긴 함수 리팩토링 (2026-02-06 완료)
 - [x] T-008: 매직 넘버 상수화 (2026-02-06 완료)
 - [x] T-009: BLS 서명 검증 구현 (2026-02-06 완료)
-- [ ] T-010: Pending Transaction 추적 구현
+- [x] T-010: Pending Transaction 추적 구현 (2026-02-06 완료)
 - [ ] T-011: Kafka EventBus 구현
 - [ ] T-012: Fee Delegation 지원
 - [x] T-013: Redis TLS 인증서 로드 구현 (2026-02-06 완료)

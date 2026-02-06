@@ -36,6 +36,9 @@ type Filter struct {
 	// LastPollBlock tracks the last block checked for changes
 	LastPollBlock uint64
 
+	// LastPendingTxIndex tracks the last pending tx index seen (for PendingTxFilterType)
+	LastPendingTxIndex uint64
+
 	// CreatedAt is when the filter was created
 	CreatedAt time.Time
 
@@ -55,6 +58,9 @@ type FilterManager struct {
 	cleanupDone chan struct{}
 	ctx         context.Context
 	cancel      context.CancelFunc
+
+	// pendingPool tracks pending transactions for PendingTxFilterType filters
+	pendingPool *PendingPool
 }
 
 // NewFilterManager creates a new filter manager
@@ -75,6 +81,20 @@ func NewFilterManager(timeout time.Duration) *FilterManager {
 	return fm
 }
 
+// NewFilterManagerWithPendingPool creates a new filter manager with pending transaction support
+func NewFilterManagerWithPendingPool(timeout time.Duration, pendingPool *PendingPool) *FilterManager {
+	fm := NewFilterManager(timeout)
+	fm.pendingPool = pendingPool
+	return fm
+}
+
+// SetPendingPool sets the pending transaction pool
+func (fm *FilterManager) SetPendingPool(pool *PendingPool) {
+	fm.mu.Lock()
+	defer fm.mu.Unlock()
+	fm.pendingPool = pool
+}
+
 // NewFilter creates a new filter and returns its ID
 func (fm *FilterManager) NewFilter(filterType FilterType, logFilter *storage.LogFilter, lastBlock uint64, decode bool) string {
 	fm.mu.Lock()
@@ -91,6 +111,11 @@ func (fm *FilterManager) NewFilter(filterType FilterType, logFilter *storage.Log
 		CreatedAt:     now,
 		LastPollAt:    now,
 		Decode:        decode,
+	}
+
+	// For pending transaction filters, initialize the last index to current pool index
+	if filterType == PendingTxFilterType && fm.pendingPool != nil {
+		filter.LastPendingTxIndex = fm.pendingPool.CurrentIndex()
 	}
 
 	fm.filters[id] = filter
@@ -143,6 +168,9 @@ func (fm *FilterManager) FilterCount() int {
 func (fm *FilterManager) Close() {
 	fm.cancel()
 	<-fm.cleanupDone
+
+	// Note: PendingPool should be closed separately if created externally
+	// Only close if owned by FilterManager
 }
 
 // generateID generates a unique filter ID
@@ -261,8 +289,8 @@ func (fm *FilterManager) GetBlockHashesSinceLastPoll(ctx context.Context, store 
 	return hashes, currentHeight, nil
 }
 
-// GetPendingTransactionsSinceLastPoll returns new pending transactions
-// Note: This is a placeholder as we don't track pending transactions yet
+// GetPendingTransactionsSinceLastPoll returns new pending transactions since the last poll
+// Returns pending transaction hashes that have been seen since the filter's last poll
 func (fm *FilterManager) GetPendingTransactionsSinceLastPoll(ctx context.Context, store storage.Storage, filterID string) ([]common.Hash, error) {
 	filter, exists := fm.GetFilter(filterID)
 	if !exists {
@@ -273,7 +301,45 @@ func (fm *FilterManager) GetPendingTransactionsSinceLastPoll(ctx context.Context
 		return nil, nil
 	}
 
-	// TODO: Implement pending transaction tracking
-	// For now, return empty list
-	return []common.Hash{}, nil
+	// Check if pending pool is configured
+	fm.mu.RLock()
+	pool := fm.pendingPool
+	fm.mu.RUnlock()
+
+	if pool == nil {
+		// No pending pool configured, return empty list
+		return []common.Hash{}, nil
+	}
+
+	// Get transactions since the last poll index
+	hashes, newIndex := pool.GetTransactionsSince(filter.LastPendingTxIndex)
+
+	// Update the filter's last pending tx index
+	fm.UpdateLastPendingTxIndex(filterID, newIndex)
+
+	return hashes, nil
+}
+
+// UpdateLastPendingTxIndex updates the last seen pending tx index for a filter
+func (fm *FilterManager) UpdateLastPendingTxIndex(id string, index uint64) {
+	fm.mu.Lock()
+	defer fm.mu.Unlock()
+
+	if filter, exists := fm.filters[id]; exists {
+		filter.LastPendingTxIndex = index
+		filter.LastPollAt = time.Now()
+	}
+}
+
+// GetPendingPoolSize returns the number of pending transactions in the pool
+// Returns 0 if no pending pool is configured
+func (fm *FilterManager) GetPendingPoolSize() int {
+	fm.mu.RLock()
+	pool := fm.pendingPool
+	fm.mu.RUnlock()
+
+	if pool == nil {
+		return 0
+	}
+	return pool.Size()
 }
