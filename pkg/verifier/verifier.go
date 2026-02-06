@@ -257,7 +257,6 @@ func (v *ContractVerifier) CompareBytecodeWithImmutables(deployed, compiled stri
 
 	// If still not equal, calculate similarity as fallback
 	similarity := v.calculateSimilarity(deployedMasked, compiledMasked)
-	fmt.Printf("[DEBUG] Immutable-masked similarity: %.4f (threshold: %.4f)\n", similarity, MinBytecodeSimilarityThreshold)
 
 	return similarity > MinBytecodeSimilarityThreshold, nil
 }
@@ -308,10 +307,6 @@ func (v *ContractVerifier) compareBytecodeWithoutMetadata(deployed, compiled str
 	deployedWithoutMeta := v.stripMetadata(deployed)
 	compiledWithoutMeta := v.stripMetadata(compiled)
 
-	// Debug logging
-	fmt.Printf("[DEBUG] Deployed length: %d, without meta: %d\n", len(deployed), len(deployedWithoutMeta))
-	fmt.Printf("[DEBUG] Compiled length: %d, without meta: %d\n", len(compiled), len(compiledWithoutMeta))
-
 	// Compare bytecode without metadata
 	if deployedWithoutMeta == compiledWithoutMeta {
 		return true, nil
@@ -319,7 +314,6 @@ func (v *ContractVerifier) compareBytecodeWithoutMetadata(deployed, compiled str
 
 	// Calculate similarity ratio
 	similarity := v.calculateSimilarity(deployedWithoutMeta, compiledWithoutMeta)
-	fmt.Printf("[DEBUG] Similarity: %.4f (threshold: %.4f)\n", similarity, MinBytecodeSimilarityThreshold)
 
 	// If similarity is high enough, consider it a match
 	return similarity > MinBytecodeSimilarityThreshold, nil
