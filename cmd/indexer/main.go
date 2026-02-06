@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/internal/logger"
 	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
 	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
@@ -457,12 +458,12 @@ func (a *App) initSystemContractVerifications(ctx context.Context) error {
 
 // initEventBus initializes the event bus
 func (a *App) initEventBus() {
-	a.eventBus = events.NewEventBus(1000, 100)
+	a.eventBus = events.NewEventBus(constants.DefaultPublishBufferSize, constants.DefaultSubscribeBufferSize)
 	go a.eventBus.Run()
 
 	a.logger.Info("EventBus initialized",
-		zap.Int("publish_buffer", 1000),
-		zap.Int("subscribe_buffer", 100),
+		zap.Int("publish_buffer", constants.DefaultPublishBufferSize),
+		zap.Int("subscribe_buffer", constants.DefaultSubscribeBufferSize),
 	)
 }
 
@@ -666,20 +667,20 @@ func (a *App) initAPIServer() error {
 	apiConfig := &api.Config{
 		Host:                  a.config.API.Host,
 		Port:                  a.config.API.Port,
-		ReadTimeout:           15 * time.Second,
-		WriteTimeout:          15 * time.Second,
-		IdleTimeout:           60 * time.Second,
+		ReadTimeout:           constants.DefaultReadTimeout,
+		WriteTimeout:          constants.DefaultWriteTimeout,
+		IdleTimeout:           constants.DefaultIdleTimeout,
 		EnableCORS:            a.config.API.EnableCORS,
 		AllowedOrigins:        a.config.API.AllowedOrigins,
-		MaxHeaderBytes:        1 << 20,
+		MaxHeaderBytes:        constants.DefaultMaxHeaderBytes,
 		EnableGraphQL:         a.config.API.EnableGraphQL,
 		EnableJSONRPC:         a.config.API.EnableJSONRPC,
 		EnableWebSocket:       a.config.API.EnableWebSocket,
-		GraphQLPath:           "/graphql",
-		GraphQLPlaygroundPath: "/playground",
-		JSONRPCPath:           "/rpc",
-		WebSocketPath:         "/ws",
-		ShutdownTimeout:       30 * time.Second,
+		GraphQLPath:           constants.DefaultGraphQLPath,
+		GraphQLPlaygroundPath: constants.DefaultGraphQLPlaygroundPath,
+		JSONRPCPath:           constants.DefaultJSONRPCPath,
+		WebSocketPath:         constants.DefaultWebSocketPath,
+		ShutdownTimeout:       constants.DefaultShutdownTimeout,
 	}
 
 	// Create API server with optional RPC Proxy, Notification Service, and Verifier

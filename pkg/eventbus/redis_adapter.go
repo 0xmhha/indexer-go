@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/redis/go-redis/v9"
 )
@@ -79,7 +80,7 @@ func NewRedisEventBus(cfg config.EventBusRedisConfig, nodeID string, opts ...Opt
 	ctx, cancel := context.WithCancel(context.Background())
 
 	eb := &RedisEventBus{
-		localBus:      NewLocalEventBusWithConfig(1000, 100),
+		localBus:      NewLocalEventBusWithConfig(constants.DefaultPublishBufferSize, constants.DefaultSubscribeBufferSize),
 		config:        cfg,
 		serializer:    NewJSONSerializer(),
 		nodeID:        nodeID,

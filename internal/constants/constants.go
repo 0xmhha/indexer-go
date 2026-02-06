@@ -167,6 +167,12 @@ const (
 
 	// DefaultEventTimeout is the default event delivery timeout
 	DefaultEventTimeout = 5 * time.Second
+
+	// DefaultPublishBufferSize is the default publish channel buffer size
+	DefaultPublishBufferSize = 1000
+
+	// DefaultSubscribeBufferSize is the default subscribe channel buffer size
+	DefaultSubscribeBufferSize = 100
 )
 
 // Size Constants

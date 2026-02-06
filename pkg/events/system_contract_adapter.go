@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -267,7 +268,7 @@ func (f *SystemContractParserFactory) RegisterAllParsers(registry *ParserRegistr
 
 // SetupDynamicParser creates and configures a DynamicEventParser with all system contracts
 func SetupDynamicParser(storage storage.SystemContractWriter, logger *zap.Logger) *DynamicEventParser {
-	eventBus := NewEventBus(1000, 100)
+	eventBus := NewEventBus(constants.DefaultPublishBufferSize, constants.DefaultSubscribeBufferSize)
 	parser := NewDynamicEventParser(eventBus)
 
 	factory := NewSystemContractParserFactory(storage, logger, eventBus)
