@@ -236,10 +236,10 @@ T-012 (Fee Delegation) ──── go-stablenet 의존성 선행 필요
 - [x] T-002: Token Type 감지 구현 (2026-02-06 완료)
 - [x] T-003: Token Metadata 지원 추가 (2026-02-06 완료)
 - [x] T-004: Notification 상세 필터 매칭 구현 (2026-02-06 완료)
-- [ ] T-005: pebble.go 파일 분리
-- [ ] T-006: fetcher.go 파일 분리
+- [ ] T-005: pebble.go 파일 분리 (대규모 리팩토링 - 별도 세션 권장)
+- [ ] T-006: fetcher.go 파일 분리 (대규모 리팩토링 - 별도 세션 권장)
 - [ ] T-007: 긴 함수 리팩토링
-- [ ] T-008: 매직 넘버 상수화
+- [x] T-008: 매직 넘버 상수화 (2026-02-06 완료)
 - [ ] T-009: BLS 서명 검증 구현
 - [ ] T-010: Pending Transaction 추적 구현
 - [ ] T-011: Kafka EventBus 구현
