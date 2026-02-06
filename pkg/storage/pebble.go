@@ -3663,6 +3663,12 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 				}
 				if tx.To() != nil {
 					metadata["to"] = tx.To().Hex()
+				} else {
+					// Contract creation transaction - get contract address from receipt
+					receipt, err := s.GetReceipt(ctx, tx.Hash())
+					if err == nil && receipt != nil && receipt.ContractAddress != (common.Address{}) {
+						metadata["contractAddress"] = receipt.ContractAddress.Hex()
+					}
 				}
 				results = append(results, SearchResult{
 					Type:     "transaction",
