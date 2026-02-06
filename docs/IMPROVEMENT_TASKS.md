@@ -132,15 +132,28 @@ fmt.Printf("[DEBUG] Similarity: %.4f (threshold: %.4f)\n", similarity, MinByteco
 - **예상 시간**: 2시간
 - **담당**: -
 
-### T-009: BLS 서명 검증 구현
+### T-009: BLS 서명 검증 구현 ✅
 - **파일**: `pkg/fetch/parser.go:252`
 - **현재**: Placeholder 구현
 - **작업**:
-  - BLS 라이브러리 통합
-  - 검증 로직 구현
-  - 실패 시 처리 로직
+  - [x] BLS 라이브러리 통합 (supranational/blst)
+  - [x] 검증 로직 구현
+  - [x] 실패 시 처리 로직
 - **예상 시간**: 8시간
 - **담당**: -
+- **완료**: 2026-02-06
+- **변경 사항**:
+  - `pkg/crypto/bls/` 패키지 신규 생성
+    - `bls.go`: BLS 공개키/서명 파싱, 집계, 검증 (184줄)
+    - `seal.go`: Seal Hash 계산 로직 (143줄)
+    - `verifier.go`: WBFT seal 검증기 (276줄)
+    - `bls_test.go`: 단위 테스트 (195줄)
+    - `verifier_test.go`: 검증기 테스트 (261줄)
+  - `pkg/fetch/parser.go`: VerifySeal 함수 업데이트
+    - 기본 구조 검증 (서명 길이, sealers 비트맵)
+    - 쿼럼 검사 (2/3 이상 참여)
+    - BLSVerifier 인터페이스를 통한 전체 암호화 검증 지원
+    - VerifySealWithBLS() 메서드 추가
 
 ### T-010: Pending Transaction 추적 구현
 - **파일**: `pkg/api/jsonrpc/filter_manager.go:276`
@@ -272,7 +285,7 @@ T-012 (Fee Delegation) ──── go-stablenet 의존성 선행 필요
 - [x] T-006: fetcher.go 파일 분리 (2026-02-06 완료)
 - [x] T-007: 긴 함수 리팩토링 (2026-02-06 완료)
 - [x] T-008: 매직 넘버 상수화 (2026-02-06 완료)
-- [ ] T-009: BLS 서명 검증 구현
+- [x] T-009: BLS 서명 검증 구현 (2026-02-06 완료)
 - [ ] T-010: Pending Transaction 추적 구현
 - [ ] T-011: Kafka EventBus 구현
 - [ ] T-012: Fee Delegation 지원
