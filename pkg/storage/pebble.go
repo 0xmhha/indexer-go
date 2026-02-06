@@ -515,6 +515,13 @@ func (s *PebbleStorage) SetBlockWithReceipts(ctx context.Context, block *types.B
 			if err := batch.Set(ReceiptKey(tx.Hash()), receiptEncoded, nil); err != nil {
 				return fmt.Errorf("failed to set receipt: %w", err)
 			}
+
+			// Store ContractAddress separately (not included in RLP encoding)
+			if receipt.ContractAddress != (common.Address{}) {
+				if err := batch.Set(ContractAddressKey(tx.Hash()), receipt.ContractAddress.Bytes(), nil); err != nil {
+					return fmt.Errorf("failed to set contract address: %w", err)
+				}
+			}
 		}
 	}
 
@@ -711,6 +718,16 @@ func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*type
 	// from the key used to store the receipt
 	receipt.TxHash = hash
 
+	// ContractAddress is not part of RLP encoding, retrieve it separately
+	contractAddrValue, contractAddrCloser, err := s.db.Get(ContractAddressKey(hash))
+	if err == nil {
+		defer contractAddrCloser.Close()
+		if len(contractAddrValue) == common.AddressLength {
+			receipt.ContractAddress = common.BytesToAddress(contractAddrValue)
+		}
+	}
+	// Ignore error - ContractAddress is optional (only for contract creation txs)
+
 	return receipt, nil
 }
 
@@ -761,7 +778,18 @@ func (s *PebbleStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) 
 
 	txHash := receipt.TxHash
 	// Use NoSync for performance - caller should use Sync() or batch commit for durability
-	return s.db.Set(ReceiptKey(txHash), encoded, pebble.NoSync)
+	if err := s.db.Set(ReceiptKey(txHash), encoded, pebble.NoSync); err != nil {
+		return err
+	}
+
+	// Store ContractAddress separately (not included in RLP encoding)
+	if receipt.ContractAddress != (common.Address{}) {
+		if err := s.db.Set(ContractAddressKey(txHash), receipt.ContractAddress.Bytes(), pebble.NoSync); err != nil {
+			return fmt.Errorf("failed to store contract address: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // GetReceipts returns multiple receipts by transaction hashes (batch operation)
@@ -1142,6 +1170,14 @@ func (b *pebbleBatch) SetReceipt(ctx context.Context, receipt *types.Receipt) er
 	if err := b.batch.Set(ReceiptKey(receipt.TxHash), encoded, nil); err != nil {
 		return err
 	}
+
+	// Store ContractAddress separately (not included in RLP encoding)
+	if receipt.ContractAddress != (common.Address{}) {
+		if err := b.batch.Set(ContractAddressKey(receipt.TxHash), receipt.ContractAddress.Bytes(), nil); err != nil {
+			return err
+		}
+	}
+
 	b.count++
 	return nil
 }

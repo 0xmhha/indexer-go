@@ -19,9 +19,10 @@ const (
 	prefixBlocks    = "/data/blocks/"
 	prefixTxs       = "/data/txs/"
 	prefixReceipts  = "/data/receipts/"
-	prefixTxHash    = "/index/txh/"
-	prefixAddr      = "/index/addr/"
-	prefixBlockHash = "/index/blockh/"
+	prefixTxHash       = "/index/txh/"
+	prefixAddr         = "/index/addr/"
+	prefixBlockHash    = "/index/blockh/"
+	prefixContractAddr = "/data/contractaddr/"
 
 	// System contracts data prefixes
 	prefixSysContracts    = "/data/syscontracts/"
@@ -181,6 +182,12 @@ func TransactionKey(height uint64, txIndex uint64) []byte {
 // Format: /data/receipts/{txhash}
 func ReceiptKey(txHash common.Hash) []byte {
 	return []byte(fmt.Sprintf("%s%s", prefixReceipts, txHash.Hex()))
+}
+
+// ContractAddressKey returns the key for storing contract address created by a transaction
+// Format: /data/contractaddr/{txhash}
+func ContractAddressKey(txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixContractAddr, txHash.Hex()))
 }
 
 // TransactionHashIndexKey returns the key for transaction hash index
