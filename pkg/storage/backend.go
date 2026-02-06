@@ -196,7 +196,11 @@ func (r *BackendRegistry) Register(backendType BackendType, factory BackendFacto
 	return nil
 }
 
-// MustRegister registers a backend factory and panics on error
+// MustRegister registers a backend factory and panics on error.
+//
+// Deprecated: Use Register() with proper error handling instead.
+// This function is preserved for backwards compatibility but new code should
+// use Register() and handle errors appropriately (e.g., log.Fatal for init()).
 func (r *BackendRegistry) MustRegister(backendType BackendType, factory BackendFactory, metadata *BackendMetadata) {
 	if err := r.Register(backendType, factory, metadata); err != nil {
 		panic(fmt.Sprintf("failed to register storage backend: %v", err))
@@ -253,7 +257,11 @@ func RegisterBackend(backendType BackendType, factory BackendFactory, metadata *
 	return GlobalBackendRegistry().Register(backendType, factory, metadata)
 }
 
-// MustRegisterBackend registers a backend factory and panics on error
+// MustRegisterBackend registers a backend factory and panics on error.
+//
+// Deprecated: Use RegisterBackend() with proper error handling instead.
+// This function is preserved for backwards compatibility but new code should
+// use RegisterBackend() and handle errors appropriately (e.g., log.Fatal for init()).
 func MustRegisterBackend(backendType BackendType, factory BackendFactory, metadata *BackendMetadata) {
 	GlobalBackendRegistry().MustRegister(backendType, factory, metadata)
 }

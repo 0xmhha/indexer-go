@@ -115,7 +115,11 @@ func (f *Factory) createHybrid(ctx context.Context) (EventBus, error) {
 	return f.createLocal()
 }
 
-// MustCreate creates an EventBus or panics on error
+// MustCreate creates an EventBus or panics on error.
+//
+// Deprecated: Use Create() or CreateWithContext() with proper error handling instead.
+// This function is preserved for backwards compatibility but new code should
+// use the error-returning versions and handle errors appropriately.
 func (f *Factory) MustCreate() EventBus {
 	eb, err := f.Create()
 	if err != nil {

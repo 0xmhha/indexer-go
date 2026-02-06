@@ -95,8 +95,11 @@ func (r *Registry) Register(consensusType chain.ConsensusType, factory ParserFac
 	return nil
 }
 
-// MustRegister registers a parser factory and panics on error
-// This is useful for init() functions
+// MustRegister registers a parser factory and panics on error.
+//
+// Deprecated: Use Register() with proper error handling instead.
+// This function is preserved for backwards compatibility but new code should
+// use Register() and handle errors appropriately (e.g., log.Fatal for init()).
 func (r *Registry) MustRegister(consensusType chain.ConsensusType, factory ParserFactory, metadata *ParserMetadata) {
 	if err := r.Register(consensusType, factory, metadata); err != nil {
 		panic(fmt.Sprintf("failed to register consensus parser: %v", err))
@@ -175,7 +178,11 @@ func Register(consensusType chain.ConsensusType, factory ParserFactory, metadata
 	return Global().Register(consensusType, factory, metadata)
 }
 
-// MustRegister registers a parser factory to the global registry and panics on error
+// MustRegister registers a parser factory to the global registry and panics on error.
+//
+// Deprecated: Use Register() with proper error handling instead.
+// This function is preserved for backwards compatibility but new code should
+// use Register() and handle errors appropriately (e.g., log.Fatal for init()).
 func MustRegister(consensusType chain.ConsensusType, factory ParserFactory, metadata *ParserMetadata) {
 	Global().MustRegister(consensusType, factory, metadata)
 }

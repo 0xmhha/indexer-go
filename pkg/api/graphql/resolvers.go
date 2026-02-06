@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -76,237 +77,111 @@ func (s *Schema) resolveBlockByHash(p graphql.ResolveParams) (interface{}, error
 
 // resolveBlocks resolves blocks with filtering and pagination
 func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
+	ctx := extractContext(p.Context)
+	pagination := parsePaginationParams(p, 0)
+	filter := parseBlockFilter(p)
 
-	// Get pagination parameters with defaults
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit // Maximum limit to prevent resource exhaustion
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
-
-	// Parse filter parameters
-	var numberFrom, numberTo uint64
-	var timestampFrom, timestampTo uint64
-	var miner *common.Address
-
-	if filter, ok := p.Args["filter"].(map[string]interface{}); ok {
-		if nf, ok := filter["numberFrom"].(string); ok {
-			if n, err := strconv.ParseUint(nf, 10, 64); err == nil {
-				numberFrom = n
-			}
-		}
-		if nt, ok := filter["numberTo"].(string); ok {
-			if n, err := strconv.ParseUint(nt, 10, 64); err == nil {
-				numberTo = n
-			}
-		}
-		if tf, ok := filter["timestampFrom"].(string); ok {
-			if t, err := strconv.ParseUint(tf, 10, 64); err == nil {
-				timestampFrom = t
-			}
-		}
-		if tt, ok := filter["timestampTo"].(string); ok {
-			if t, err := strconv.ParseUint(tt, 10, 64); err == nil {
-				timestampTo = t
-			}
-		}
-		if m, ok := filter["miner"].(string); ok {
-			addr := common.HexToAddress(m)
-			miner = &addr
-		}
-	}
-
-	// Determine block range
+	// Get latest height
 	latestHeight, err := s.storage.GetLatestHeight(ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			// No blocks indexed yet
-			return map[string]interface{}{
-				"nodes":      []interface{}{},
-				"totalCount": 0,
-				"pageInfo": map[string]interface{}{
-					"hasNextPage":     false,
-					"hasPreviousPage": false,
-					"startCursor":     nil,
-					"endCursor":       nil,
-				},
-			}, nil
+			return emptyConnection(false), nil
 		}
 		s.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
 
-	// Store original filter values to determine pagination mode
-	hasNumberFilter := numberFrom != 0 || numberTo != 0
-
 	// Set default range if not specified
-	if numberFrom == 0 && numberTo == 0 {
-		numberFrom = 0
-		numberTo = latestHeight
-	} else if numberTo == 0 {
-		numberTo = latestHeight
+	if !filter.hasNumberFilter() {
+		filter.NumberTo = latestHeight
+	} else if filter.NumberTo == 0 {
+		filter.NumberTo = latestHeight
 	}
 
 	// Validate range
-	if numberFrom > numberTo {
-		return nil, fmt.Errorf("invalid block range: numberFrom (%d) > numberTo (%d)", numberFrom, numberTo)
+	if filter.NumberFrom > filter.NumberTo {
+		return nil, fmt.Errorf("invalid block range: numberFrom (%d) > numberTo (%d)", filter.NumberFrom, filter.NumberTo)
 	}
 
-	// Calculate start and end blocks for pagination
-	var startBlock, endBlock uint64
-
-	if !hasNumberFilter {
-		// Default query (no number filter): return blocks in reverse order (latest first)
-		// offset=0, limit=20 → blocks [latestHeight, latestHeight-19]
-		// offset=20, limit=20 → blocks [latestHeight-20, latestHeight-39]
-		if latestHeight >= uint64(offset) {
-			endBlock = latestHeight - uint64(offset)
-		} else {
-			// Offset beyond available blocks
-			return map[string]interface{}{
-				"nodes":      []interface{}{},
-				"totalCount": 0,
-				"pageInfo": map[string]interface{}{
-					"hasNextPage":     false,
-					"hasPreviousPage": offset > 0,
-					"startCursor":     nil,
-					"endCursor":       nil,
-				},
-			}, nil
-		}
-
-		if endBlock >= uint64(limit-1) {
-			startBlock = endBlock - uint64(limit) + 1
-		} else {
-			startBlock = 0
-		}
-	} else {
-		// Filtered query: return blocks in range with forward pagination
-		rangeSize := numberTo - numberFrom + 1
-		if uint64(offset) >= rangeSize {
-			// Offset beyond available blocks in range
-			return map[string]interface{}{
-				"nodes":      []interface{}{},
-				"totalCount": 0,
-				"pageInfo": map[string]interface{}{
-					"hasNextPage":     false,
-					"hasPreviousPage": offset > 0,
-					"startCursor":     nil,
-					"endCursor":       nil,
-				},
-			}, nil
-		}
-
-		startBlock = numberFrom + uint64(offset)
-		endBlock = startBlock + uint64(limit) - 1
-		if endBlock > numberTo {
-			endBlock = numberTo
-		}
+	// Calculate block range based on pagination mode
+	blockRange, ok := s.calculateBlockRange(filter, latestHeight, pagination)
+	if !ok {
+		return emptyConnection(pagination.Offset > 0), nil
 	}
 
-	// Fetch blocks
-	blocks, err := s.storage.GetBlocks(ctx, startBlock, endBlock)
+	// Fetch and filter blocks
+	blocks, err := s.storage.GetBlocks(ctx, blockRange.StartBlock, blockRange.EndBlock)
 	if err != nil {
 		s.logger.Error("failed to get blocks",
-			zap.Uint64("startBlock", startBlock),
-			zap.Uint64("endBlock", endBlock),
+			zap.Uint64("startBlock", blockRange.StartBlock),
+			zap.Uint64("endBlock", blockRange.EndBlock),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to get blocks: %w", err)
 	}
 
-	// Apply filtering
-	filteredBlocks := make([]*types.Block, 0, len(blocks))
-	for _, block := range blocks {
-		if block == nil {
-			continue
-		}
+	filteredBlocks := filterBlocks(blocks, filter)
+	nodes := s.blocksToNodes(filteredBlocks)
+	totalCount := s.calculateBlockTotalCount(ctx, filter, filteredBlocks, latestHeight)
 
-		// Filter by timestamp
-		if timestampFrom > 0 && block.Time() < timestampFrom {
-			continue
-		}
-		if timestampTo > 0 && block.Time() > timestampTo {
-			continue
-		}
+	return s.buildBlockConnectionResponse(filteredBlocks, nodes, totalCount, filter, blockRange, pagination), nil
+}
 
-		// Filter by miner
-		if miner != nil && block.Coinbase() != *miner {
-			continue
-		}
-
-		filteredBlocks = append(filteredBlocks, block)
+// calculateBlockRange calculates the block range for pagination
+func (s *Schema) calculateBlockRange(filter BlockFilter, latestHeight uint64, pagination PaginationParams) (BlockRange, bool) {
+	if !filter.hasNumberFilter() {
+		return calculateBlockRangeReverse(latestHeight, pagination.Offset, pagination.Limit)
 	}
+	return calculateBlockRangeForward(filter.NumberFrom, filter.NumberTo, pagination.Offset, pagination.Limit)
+}
 
-	// Convert to maps
-	nodes := make([]interface{}, len(filteredBlocks))
-	for i, block := range filteredBlocks {
+// blocksToNodes converts blocks to GraphQL nodes
+func (s *Schema) blocksToNodes(blocks []*types.Block) []interface{} {
+	nodes := make([]interface{}, len(blocks))
+	for i, block := range blocks {
 		nodes[i] = s.blockToMap(block)
 	}
+	return nodes
+}
 
-	// Calculate total count based on filters
-	var totalCount int
-	hasTimestampFilter := timestampFrom > 0 || timestampTo > 0
-	hasMinerFilter := miner != nil
-
-	if !hasTimestampFilter && !hasMinerFilter {
-		// No filters applied (or only block number range) - use actual total count
-		if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
-			// Use storage method for accurate total block count
-			count, err := histStorage.GetBlockCount(ctx)
-			if err == nil {
-				totalCount = int(count)
-			} else {
-				// Fallback: use latest height + 1
-				totalCount = int(latestHeight + 1)
-			}
-		} else {
-			// Fallback: use latest height + 1
-			totalCount = int(latestHeight + 1)
-		}
-	} else {
-		// Filters applied - totalCount represents filtered results in current range
-		// Note: This is the count within the queried range, not the total across all blocks
-		totalCount = len(filteredBlocks)
+// calculateBlockTotalCount calculates total count based on filters
+func (s *Schema) calculateBlockTotalCount(ctx context.Context, filter BlockFilter, filteredBlocks []*types.Block, latestHeight uint64) int {
+	if filter.hasTimestampFilter() || filter.hasMinerFilter() {
+		return len(filteredBlocks)
 	}
 
-	// Calculate pagination info based on query mode
+	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+		if count, err := histStorage.GetBlockCount(ctx); err == nil {
+			return int(count)
+		}
+	}
+	return int(latestHeight + 1)
+}
+
+// buildBlockConnectionResponse builds the GraphQL connection response for blocks
+func (s *Schema) buildBlockConnectionResponse(blocks []*types.Block, nodes []interface{}, totalCount int, filter BlockFilter, blockRange BlockRange, pagination PaginationParams) map[string]interface{} {
 	var hasNextPage, hasPreviousPage bool
-	if !hasNumberFilter {
-		// Reverse order: hasNextPage means there are older blocks
-		hasNextPage = startBlock > 0
-		hasPreviousPage = offset > 0
+	if !filter.hasNumberFilter() {
+		hasNextPage = blockRange.StartBlock > 0
+		hasPreviousPage = pagination.Offset > 0
 	} else {
-		// Forward order: hasNextPage means there are more blocks in range
-		hasNextPage = endBlock < numberTo
-		hasPreviousPage = offset > 0
+		hasNextPage = blockRange.EndBlock < filter.NumberTo
+		hasPreviousPage = pagination.Offset > 0
 	}
 
 	var startCursor, endCursor interface{}
-	if len(filteredBlocks) > 0 {
-		startCursor = fmt.Sprintf("%d", filteredBlocks[0].NumberU64())
-		endCursor = fmt.Sprintf("%d", filteredBlocks[len(filteredBlocks)-1].NumberU64())
+	if len(blocks) > 0 {
+		startCursor = fmt.Sprintf("%d", blocks[0].NumberU64())
+		endCursor = fmt.Sprintf("%d", blocks[len(blocks)-1].NumberU64())
 	}
 
-	return map[string]interface{}{
-		"nodes":      nodes,
-		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     hasNextPage,
-			"hasPreviousPage": hasPreviousPage,
-			"startCursor":     startCursor,
-			"endCursor":       endCursor,
-		},
-	}, nil
+	return buildConnectionResponse(ConnectionResponse{
+		Nodes:           nodes,
+		TotalCount:      totalCount,
+		HasNextPage:     hasNextPage,
+		HasPreviousPage: hasPreviousPage,
+		StartCursor:     startCursor,
+		EndCursor:       endCursor,
+	})
 }
 
 // resolveBlocksRange resolves blocks in a specific range (optimized for frontend catch-up)
@@ -502,106 +377,64 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 
 // resolveTransactions resolves transactions with filtering and pagination
 func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
+	ctx := extractContext(p.Context)
+	pagination := parsePaginationParams(p, 0)
+	filter := parseTransactionFilter(p)
 
-	// Get pagination parameters with defaults
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit // Maximum limit to prevent resource exhaustion
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
-
-	// Parse filter parameters
-	var blockNumberFrom, blockNumberTo uint64
-	var fromAddr, toAddr *common.Address
-	var txType *int
-
-	if filter, ok := p.Args["filter"].(map[string]interface{}); ok {
-		if bnf, ok := filter["blockNumberFrom"].(string); ok {
-			if bn, err := strconv.ParseUint(bnf, 10, 64); err == nil {
-				blockNumberFrom = bn
-			}
-		}
-		if bnt, ok := filter["blockNumberTo"].(string); ok {
-			if bn, err := strconv.ParseUint(bnt, 10, 64); err == nil {
-				blockNumberTo = bn
-			}
-		}
-		if from, ok := filter["from"].(string); ok {
-			addr := common.HexToAddress(from)
-			fromAddr = &addr
-		}
-		if to, ok := filter["to"].(string); ok {
-			addr := common.HexToAddress(to)
-			toAddr = &addr
-		}
-		if t, ok := filter["type"].(int); ok {
-			txType = &t
-		}
-	}
-
-	// Determine block range
+	// Get latest height
 	latestHeight, err := s.storage.GetLatestHeight(ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			// No blocks indexed yet
-			return map[string]interface{}{
-				"nodes":      []interface{}{},
-				"totalCount": 0,
-				"pageInfo": map[string]interface{}{
-					"hasNextPage":     false,
-					"hasPreviousPage": false,
-					"startCursor":     nil,
-					"endCursor":       nil,
-				},
-			}, nil
+			return emptyConnection(false), nil
 		}
 		s.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
 
-	// Set default range if not specified
-	// When no filter is specified, search from block 0 to find all transactions
-	// This ensures we don't miss transactions in early blocks
-	if blockNumberFrom == 0 && blockNumberTo == 0 {
-		// No filter specified - fetch from block 0
-		blockNumberFrom = 0
-		blockNumberTo = latestHeight
-	} else if blockNumberTo == 0 {
-		blockNumberTo = latestHeight
+	// Set default and validate block range
+	blockFrom, blockTo := s.normalizeBlockRange(filter.BlockNumberFrom, filter.BlockNumberTo, latestHeight)
+	if blockFrom > blockTo {
+		return nil, fmt.Errorf("invalid block range: blockNumberFrom (%d) > blockNumberTo (%d)", blockFrom, blockTo)
 	}
 
-	// Validate range
-	if blockNumberFrom > blockNumberTo {
-		return nil, fmt.Errorf("invalid block range: blockNumberFrom (%d) > blockNumberTo (%d)", blockNumberFrom, blockNumberTo)
-	}
-
-	// Limit range to prevent excessive queries
-	maxRange := uint64(1000)
-	if blockNumberTo-blockNumberFrom > maxRange {
-		blockNumberTo = blockNumberFrom + maxRange
-	}
-
-	// Fetch blocks in range
-	blocks, err := s.storage.GetBlocks(ctx, blockNumberFrom, blockNumberTo)
+	// Fetch blocks and filter transactions
+	blocks, err := s.storage.GetBlocks(ctx, blockFrom, blockTo)
 	if err != nil {
 		s.logger.Error("failed to get blocks",
-			zap.Uint64("blockNumberFrom", blockNumberFrom),
-			zap.Uint64("blockNumberTo", blockNumberTo),
+			zap.Uint64("blockNumberFrom", blockFrom),
+			zap.Uint64("blockNumberTo", blockTo),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to get blocks: %w", err)
 	}
 
-	// Collect and filter transactions
+	filteredTxs := s.filterTransactionsFromBlocks(blocks, filter)
+	reverseSlice(filteredTxs) // DESC order (newest first)
+
+	totalCount := s.calculateTxTotalCount(ctx, filter, filteredTxs)
+	paginatedTxs := applyPagination(filteredTxs, pagination.Offset, pagination.Limit)
+
+	return s.buildTxConnectionResponse(paginatedTxs, totalCount, len(filteredTxs), pagination), nil
+}
+
+// normalizeBlockRange sets default block range and limits to prevent excessive queries
+func (s *Schema) normalizeBlockRange(from, to, latestHeight uint64) (uint64, uint64) {
+	if from == 0 && to == 0 {
+		to = latestHeight
+	} else if to == 0 {
+		to = latestHeight
+	}
+
+	// Limit range to prevent excessive queries
+	const maxRange = uint64(1000)
+	if to-from > maxRange {
+		to = from + maxRange
+	}
+
+	return from, to
+}
+
+// filterTransactionsFromBlocks filters transactions from blocks based on filter criteria
+func (s *Schema) filterTransactionsFromBlocks(blocks []*types.Block, filter TransactionFilter) []map[string]interface{} {
 	var filteredTxs []map[string]interface{}
 
 	for _, block := range blocks {
@@ -609,40 +442,9 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 			continue
 		}
 
-		txs := block.Transactions()
-		for i, tx := range txs {
-			// Apply filters
-			if txType != nil && int(tx.Type()) != *txType {
+		for i, tx := range block.Transactions() {
+			if !s.matchesTransactionFilter(tx, filter) {
 				continue
-			}
-
-			// Get signer for this transaction's chain
-			var signer types.Signer
-			if tx.ChainId() != nil {
-				signer = types.LatestSignerForChainID(tx.ChainId())
-			} else {
-				// Fallback for legacy transactions without chain ID
-				signer = types.HomesteadSigner{}
-			}
-
-			// Get from address
-			from, err := types.Sender(signer, tx)
-			if err != nil {
-				s.logger.Warn("failed to get transaction sender",
-					zap.String("txHash", tx.Hash().Hex()),
-					zap.Error(err))
-				continue
-			}
-
-			if fromAddr != nil && from != *fromAddr {
-				continue
-			}
-
-			if toAddr != nil {
-				txTo := tx.To()
-				if txTo == nil || *txTo != *toAddr {
-					continue
-				}
 			}
 
 			location := &storage.TxLocation{
@@ -650,78 +452,97 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 				BlockHash:   block.Hash(),
 				TxIndex:     uint64(i),
 			}
-
 			filteredTxs = append(filteredTxs, s.transactionToMap(tx, location))
 		}
 	}
 
-	// Reverse for DESC order (newest transactions first)
-	// This is the default sorting behavior - most recent transactions appear first
-	for i, j := 0, len(filteredTxs)-1; i < j; i, j = i+1, j-1 {
-		filteredTxs[i], filteredTxs[j] = filteredTxs[j], filteredTxs[i]
+	return filteredTxs
+}
+
+// matchesTransactionFilter checks if a transaction matches the filter criteria
+func (s *Schema) matchesTransactionFilter(tx *types.Transaction, filter TransactionFilter) bool {
+	if filter.TxType != nil && int(tx.Type()) != *filter.TxType {
+		return false
 	}
 
-	// Calculate total count based on filters
-	var totalCount int
-	hasFilters := fromAddr != nil || toAddr != nil || txType != nil
-
-	if !hasFilters {
-		// No filters applied - use actual total transaction count
-		if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
-			count, err := histStorage.GetTransactionCount(ctx)
-			if err == nil {
-				totalCount = int(count)
-			} else {
-				// Fallback: use filtered count from queried range
-				totalCount = len(filteredTxs)
-			}
-		} else {
-			// Fallback: use filtered count from queried range
-			totalCount = len(filteredTxs)
-		}
+	// Get signer and from address
+	var signer types.Signer
+	if tx.ChainId() != nil {
+		signer = types.LatestSignerForChainID(tx.ChainId())
 	} else {
-		// Filters applied - totalCount represents filtered results in current range
-		// Note: Due to block range limitation (max 1000), this may not reflect total across all blocks
-		totalCount = len(filteredTxs)
+		signer = types.HomesteadSigner{}
 	}
 
-	// Apply pagination
-	start := offset
-	end := offset + limit
-
-	if start > len(filteredTxs) {
-		start = len(filteredTxs)
-	}
-	if end > len(filteredTxs) {
-		end = len(filteredTxs)
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		s.logger.Warn("failed to get transaction sender",
+			zap.String("txHash", tx.Hash().Hex()),
+			zap.Error(err))
+		return false
 	}
 
-	paginatedTxs := filteredTxs[start:end]
+	if filter.From != nil && from != *filter.From {
+		return false
+	}
 
-	// Calculate pagination info
-	hasNextPage := end < len(filteredTxs)
-	hasPreviousPage := offset > 0
+	if filter.To != nil {
+		txTo := tx.To()
+		if txTo == nil || *txTo != *filter.To {
+			return false
+		}
+	}
+
+	return true
+}
+
+// calculateTxTotalCount calculates total transaction count based on filters
+func (s *Schema) calculateTxTotalCount(ctx context.Context, filter TransactionFilter, filteredTxs []map[string]interface{}) int {
+	if filter.hasAddressFilter() {
+		return len(filteredTxs)
+	}
+
+	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+		if count, err := histStorage.GetTransactionCount(ctx); err == nil {
+			return int(count)
+		}
+	}
+	return len(filteredTxs)
+}
+
+// buildTxConnectionResponse builds the GraphQL connection response for transactions
+func (s *Schema) buildTxConnectionResponse(txs []map[string]interface{}, totalCount, totalFiltered int, pagination PaginationParams) map[string]interface{} {
+	end := pagination.Offset + pagination.Limit
+	if end > totalFiltered {
+		end = totalFiltered
+	}
 
 	var startCursor, endCursor interface{}
-	if len(paginatedTxs) > 0 {
-		if txHash, ok := paginatedTxs[0]["hash"].(string); ok {
-			startCursor = txHash
+	if len(txs) > 0 {
+		if hash, ok := txs[0]["hash"].(string); ok {
+			startCursor = hash
 		}
-		if txHash, ok := paginatedTxs[len(paginatedTxs)-1]["hash"].(string); ok {
-			endCursor = txHash
+		if hash, ok := txs[len(txs)-1]["hash"].(string); ok {
+			endCursor = hash
 		}
 	}
 
-	return map[string]interface{}{
-		"nodes":      paginatedTxs,
-		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     hasNextPage,
-			"hasPreviousPage": hasPreviousPage,
-			"startCursor":     startCursor,
-			"endCursor":       endCursor,
-		},
-	}, nil
+	return buildConnectionResponse(ConnectionResponse{
+		Nodes:           toInterfaceSlice(txs),
+		TotalCount:      totalCount,
+		HasNextPage:     end < totalFiltered,
+		HasPreviousPage: pagination.Offset > 0,
+		StartCursor:     startCursor,
+		EndCursor:       endCursor,
+	})
+}
+
+// toInterfaceSlice converts []map[string]interface{} to []interface{}
+func toInterfaceSlice(maps []map[string]interface{}) []interface{} {
+	result := make([]interface{}, len(maps))
+	for i, m := range maps {
+		result[i] = m
+	}
+	return result
 }
 
 // resolveTransactionsByAddress resolves transactions by address
@@ -975,122 +796,60 @@ func (s *Schema) resolveReceiptsByBlock(p graphql.ResolveParams) (interface{}, e
 
 // resolveLogs resolves logs with filtering and pagination
 func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
+	ctx := extractContext(p.Context)
+	decode := s.getDecodeParam(p)
+	pagination := parsePaginationParams(p, 100)
 
-	// Get decode parameter
-	decode := false
-	if d, ok := p.Args["decode"].(bool); ok {
-		decode = d
+	filter, err := parseLogFilter(p)
+	if err != nil {
+		return nil, err
 	}
 
-	// Get pagination parameters with validation
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > 100 {
-				limit = 100 // Maximum limit to prevent resource exhaustion
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
-
-	// Parse required filter parameters
-	filter, ok := p.Args["filter"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("filter is required")
-	}
-
-	var logAddress *common.Address
-	var topics []common.Hash
-	var blockNumberFrom, blockNumberTo uint64
-
-	if addr, ok := filter["address"].(string); ok {
-		address := common.HexToAddress(addr)
-		logAddress = &address
-	}
-
-	if topicsInterface, ok := filter["topics"].([]interface{}); ok {
-		topics = make([]common.Hash, 0, len(topicsInterface))
-		for _, t := range topicsInterface {
-			if topicStr, ok := t.(string); ok {
-				topics = append(topics, common.HexToHash(topicStr))
-			}
-		}
-	}
-
-	if bnf, ok := filter["blockNumberFrom"].(string); ok {
-		if bn, err := strconv.ParseUint(bnf, 10, 64); err == nil {
-			blockNumberFrom = bn
-		}
-	}
-
-	if bnt, ok := filter["blockNumberTo"].(string); ok {
-		if bn, err := strconv.ParseUint(bnt, 10, 64); err == nil {
-			blockNumberTo = bn
-		}
-	}
-
-	// Determine block range
+	// Get latest height
 	latestHeight, err := s.storage.GetLatestHeight(ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			// No blocks indexed yet
-			return map[string]interface{}{
-				"nodes":      []interface{}{},
-				"totalCount": 0,
-				"pageInfo": map[string]interface{}{
-					"hasNextPage":     false,
-					"hasPreviousPage": false,
-					"startCursor":     nil,
-					"endCursor":       nil,
-				},
-			}, nil
+			return emptyConnection(false), nil
 		}
 		s.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
 
-	// Set default range if not specified
-	// When no filter is specified, search from block 0 to find all logs
-	// This ensures we don't miss logs in early blocks
-	if blockNumberFrom == 0 && blockNumberTo == 0 {
-		// No filter specified - fetch from block 0
-		blockNumberFrom = 0
-		blockNumberTo = latestHeight
-	} else if blockNumberTo == 0 {
-		blockNumberTo = latestHeight
+	// Set default and validate block range
+	blockFrom, blockTo := s.normalizeBlockRange(filter.BlockNumberFrom, filter.BlockNumberTo, latestHeight)
+	if blockFrom > blockTo {
+		return nil, fmt.Errorf("invalid block range: blockNumberFrom (%d) > blockNumberTo (%d)", blockFrom, blockTo)
 	}
 
-	// Validate range
-	if blockNumberFrom > blockNumberTo {
-		return nil, fmt.Errorf("invalid block range: blockNumberFrom (%d) > blockNumberTo (%d)", blockNumberFrom, blockNumberTo)
-	}
+	// Collect and filter logs
+	filteredLogs := s.collectLogsFromBlockRange(ctx, blockFrom, blockTo, filter, decode)
 
-	// Limit range to prevent excessive queries
-	maxRange := uint64(1000)
-	if blockNumberTo-blockNumberFrom > maxRange {
-		blockNumberTo = blockNumberFrom + maxRange
-	}
+	totalCount := len(filteredLogs)
+	paginatedLogs := applyPagination(filteredLogs, pagination.Offset, pagination.Limit)
 
-	// Collect logs from receipts in the block range
+	return s.buildLogConnectionResponse(paginatedLogs, totalCount, pagination), nil
+}
+
+// getDecodeParam extracts the decode parameter from GraphQL args
+func (s *Schema) getDecodeParam(p graphql.ResolveParams) bool {
+	if d, ok := p.Args["decode"].(bool); ok {
+		return d
+	}
+	return false
+}
+
+// collectLogsFromBlockRange collects logs from receipts in the block range
+func (s *Schema) collectLogsFromBlockRange(ctx context.Context, blockFrom, blockTo uint64, filter LogFilter, decode bool) []map[string]interface{} {
 	var filteredLogs []map[string]interface{}
 
-	for blockNum := blockNumberFrom; blockNum <= blockNumberTo; blockNum++ {
+	for blockNum := blockFrom; blockNum <= blockTo; blockNum++ {
 		receipts, err := s.storage.GetReceiptsByBlockNumber(ctx, blockNum)
 		if err != nil {
-			if errors.Is(err, storage.ErrNotFound) {
-				// Block has no receipts, continue
-				continue
+			if !errors.Is(err, storage.ErrNotFound) {
+				s.logger.Error("failed to get receipts for block",
+					zap.Uint64("blockNumber", blockNum),
+					zap.Error(err))
 			}
-			s.logger.Error("failed to get receipts for block",
-				zap.Uint64("blockNumber", blockNum),
-				zap.Error(err))
-			// Continue with other blocks instead of failing completely
 			continue
 		}
 
@@ -1100,84 +859,47 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 			}
 
 			for _, log := range receipt.Logs {
-				if log == nil {
-					continue
+				if filter.matchesLog(log) {
+					filteredLogs = append(filteredLogs, s.logToMapWithDecode(log, decode))
 				}
-
-				// Apply address filter
-				if logAddress != nil && log.Address != *logAddress {
-					continue
-				}
-
-				// Apply topics filter
-				if len(topics) > 0 {
-					matchesTopics := false
-					for _, filterTopic := range topics {
-						for _, logTopic := range log.Topics {
-							if filterTopic == logTopic {
-								matchesTopics = true
-								break
-							}
-						}
-						if matchesTopics {
-							break
-						}
-					}
-					if !matchesTopics {
-						continue
-					}
-				}
-
-				filteredLogs = append(filteredLogs, s.logToMapWithDecode(log, decode))
 			}
 		}
 	}
 
-	// Apply pagination
-	totalCount := len(filteredLogs)
-	start := offset
-	end := offset + limit
+	return filteredLogs
+}
 
-	if start > totalCount {
-		start = totalCount
-	}
+// buildLogConnectionResponse builds the GraphQL connection response for logs
+func (s *Schema) buildLogConnectionResponse(logs []map[string]interface{}, totalCount int, pagination PaginationParams) map[string]interface{} {
+	end := pagination.Offset + pagination.Limit
 	if end > totalCount {
 		end = totalCount
 	}
 
-	paginatedLogs := filteredLogs[start:end]
-
-	// Calculate pagination info
-	hasNextPage := end < totalCount
-	hasPreviousPage := offset > 0
-
 	var startCursor, endCursor interface{}
-	if len(paginatedLogs) > 0 {
-		firstLog := paginatedLogs[0]
-		if txHash, ok := firstLog["transactionHash"].(string); ok {
-			if logIndex, ok := firstLog["logIndex"].(int); ok {
-				startCursor = fmt.Sprintf("%s:%d", txHash, logIndex)
-			}
-		}
-
-		lastLog := paginatedLogs[len(paginatedLogs)-1]
-		if txHash, ok := lastLog["transactionHash"].(string); ok {
-			if logIndex, ok := lastLog["logIndex"].(int); ok {
-				endCursor = fmt.Sprintf("%s:%d", txHash, logIndex)
-			}
-		}
+	if len(logs) > 0 {
+		startCursor = s.buildLogCursor(logs[0])
+		endCursor = s.buildLogCursor(logs[len(logs)-1])
 	}
 
-	return map[string]interface{}{
-		"nodes":      paginatedLogs,
-		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     hasNextPage,
-			"hasPreviousPage": hasPreviousPage,
-			"startCursor":     startCursor,
-			"endCursor":       endCursor,
-		},
-	}, nil
+	return buildConnectionResponse(ConnectionResponse{
+		Nodes:           toInterfaceSlice(logs),
+		TotalCount:      totalCount,
+		HasNextPage:     end < totalCount,
+		HasPreviousPage: pagination.Offset > 0,
+		StartCursor:     startCursor,
+		EndCursor:       endCursor,
+	})
+}
+
+// buildLogCursor builds a cursor string for a log entry
+func (s *Schema) buildLogCursor(log map[string]interface{}) interface{} {
+	if txHash, ok := log["transactionHash"].(string); ok {
+		if logIndex, ok := log["logIndex"].(int); ok {
+			return fmt.Sprintf("%s:%d", txHash, logIndex)
+		}
+	}
+	return nil
 }
 
 // ========== System Contract Resolvers ==========

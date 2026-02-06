@@ -296,8 +296,11 @@ func CreateAdapterWithConfig(ctx context.Context, config *Config, logger *zap.Lo
 	return factory.Create(ctx)
 }
 
-// MustCreateAdapter creates an adapter and panics on error
-// Useful for testing and initialization
+// MustCreateAdapter creates an adapter and panics on error.
+//
+// Deprecated: Use CreateAdapter() or CreateAdapterWithConfig() with proper error handling instead.
+// This function is preserved for backwards compatibility but new code should
+// use the error-returning versions and handle errors appropriately.
 func MustCreateAdapter(ctx context.Context, rpcEndpoint string, logger *zap.Logger) *CreateResult {
 	result, err := CreateAdapter(ctx, rpcEndpoint, logger)
 	if err != nil {

@@ -97,14 +97,18 @@ fmt.Printf("[DEBUG] Similarity: %.4f (threshold: %.4f)\n", similarity, MinByteco
 
 ### T-007: 긴 함수 리팩토링
 - **대상 함수**:
-  | 파일 | 함수 | 현재 | 목표 |
-  |------|------|------|------|
-  | `resolvers.go` | `resolveBlocks()` | 233줄 | <50줄 |
-  | `resolvers.go` | `resolveTransactions()` | 222줄 | <50줄 |
-  | `resolvers.go` | `resolveLogs()` | 205줄 | <50줄 |
-  | `pebble.go` | `GetTokenBalances()` | 131줄 | <50줄 |
-  | `pebble.go` | `GetTopMiners()` | 112줄 | <50줄 |
-- **예상 시간**: 8시간
+  | 파일 | 함수 | 이전 | 현재 | 목표 | 상태 |
+  |------|------|------|------|------|------|
+  | `resolvers.go` | `resolveBlocks()` | 233줄 | ~50줄 | <50줄 | ✅ 완료 |
+  | `resolvers.go` | `resolveTransactions()` | 222줄 | ~38줄 | <50줄 | ✅ 완료 |
+  | `resolvers.go` | `resolveLogs()` | 205줄 | ~35줄 | <50줄 | ✅ 완료 |
+  | `pebble_token.go` | `GetTokenBalances()` | 143줄 | 143줄 | <50줄 | ⏳ 미완료 |
+  | `pebble_historical.go` | `GetTopMiners()` | 112줄 | 112줄 | <50줄 | ⏳ 미완료 |
+- **리팩토링 내용**:
+  - `resolver_helpers.go` 파일 추가 (393줄): 재사용 가능한 헬퍼 함수들
+  - 파싱, 필터링, 응답 구성 로직을 별도 함수로 분리
+  - `extractContext`, `parsePaginationParams`, `parseBlockFilter` 등 공통 로직 추출
+- **예상 시간**: 8시간 (GraphQL: 4시간 완료, Storage: 4시간 남음)
 - **담당**: -
 
 ### T-008: 매직 넘버 상수화
@@ -184,7 +188,7 @@ fmt.Printf("[DEBUG] Similarity: %.4f (threshold: %.4f)\n", similarity, MinByteco
 - **예상 시간**: 2시간
 - **담당**: -
 
-### T-015: Panic을 Error Return으로 변경
+### T-015: Panic을 Error Return으로 변경 ✅
 - **파일**:
   - `pkg/consensus/registry.go:102`
   - `pkg/eventbus/factory.go:122`
@@ -196,6 +200,11 @@ fmt.Printf("[DEBUG] Similarity: %.4f (threshold: %.4f)\n", similarity, MinByteco
   - 호출자에서 에러 처리
 - **예상 시간**: 4시간
 - **담당**: -
+- **완료**: 2026-02-06
+- **변경 사항**:
+  - `MustXxx` 함수에 Deprecated 주석 추가 (error-returning 버전 사용 권장)
+  - `init()` 함수들을 `Register()` + `log.Fatal()` 패턴으로 변경
+  - 수정 파일: `poa/register.go`, `wbft/register.go`, `pebble_backend.go`
 
 ---
 
@@ -238,7 +247,7 @@ T-012 (Fee Delegation) ──── go-stablenet 의존성 선행 필요
 - [x] T-004: Notification 상세 필터 매칭 구현 (2026-02-06 완료)
 - [ ] T-005: pebble.go 파일 분리 (대규모 리팩토링 - 별도 세션 권장)
 - [ ] T-006: fetcher.go 파일 분리 (대규모 리팩토링 - 별도 세션 권장)
-- [ ] T-007: 긴 함수 리팩토링
+- [~] T-007: 긴 함수 리팩토링 (GraphQL resolvers 완료, Storage 함수 미완료)
 - [x] T-008: 매직 넘버 상수화 (2026-02-06 완료)
 - [ ] T-009: BLS 서명 검증 구현
 - [ ] T-010: Pending Transaction 추적 구현
@@ -246,4 +255,4 @@ T-012 (Fee Delegation) ──── go-stablenet 의존성 선행 필요
 - [ ] T-012: Fee Delegation 지원
 - [ ] T-013: Redis TLS 인증서 로드 구현
 - [ ] T-014: Multichain 등록 시간 저장
-- [ ] T-015: Panic을 Error Return으로 변경
+- [x] T-015: Panic을 Error Return으로 변경 (2026-02-06 완료)

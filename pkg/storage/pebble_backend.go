@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/cockroachdb/pebble"
 	"go.uber.org/zap"
@@ -209,7 +210,7 @@ func (b *PebbleBatch) Close() error {
 
 func init() {
 	// Register PebbleDB backend with the global registry
-	MustRegisterBackend(
+	if err := RegisterBackend(
 		BackendTypePebble,
 		func(config *BackendConfig, logger *zap.Logger) (Backend, error) {
 			return NewPebbleBackend(config, logger)
@@ -225,5 +226,7 @@ func init() {
 				"snapshots",
 			},
 		},
-	)
+	); err != nil {
+		log.Fatalf("failed to register PebbleDB storage backend: %v", err)
+	}
 }

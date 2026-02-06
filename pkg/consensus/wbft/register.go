@@ -1,6 +1,8 @@
 package wbft
 
 import (
+	"log"
+
 	"github.com/0xmhha/indexer-go/pkg/consensus"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"go.uber.org/zap"
@@ -8,7 +10,7 @@ import (
 
 func init() {
 	// Register WBFT parser with the global registry
-	consensus.MustRegister(
+	if err := consensus.Register(
 		chain.ConsensusTypeWBFT,
 		Factory,
 		&consensus.ParserMetadata{
@@ -19,7 +21,9 @@ func init() {
 				chain.ChainTypeEVM,
 			},
 		},
-	)
+	); err != nil {
+		log.Fatalf("failed to register WBFT consensus parser: %v", err)
+	}
 }
 
 // Factory creates a new WBFT parser instance
