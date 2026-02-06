@@ -263,6 +263,32 @@ curl http://localhost:8080/subscribers
 curl http://localhost:8080/metrics
 ```
 
+### 9. Data Management
+
+```bash
+# Clear all data and start fresh
+./build/indexer-go --config config.yaml --clear-data
+
+# Re-index blockchain while preserving contract verification data
+# This keeps ABIs, source code, and verification status intact
+./build/indexer-go --config config.yaml --reindex
+```
+
+The `--reindex` option is useful when:
+- You need to re-sync blockchain data due to data corruption
+- You want to rebuild indexes without losing verified contract information
+- Upgrading the indexer requires a fresh re-index
+
+**Data preserved with `--reindex`:**
+- `/data/abi/` - Contract ABIs
+- `/data/verification/` - Contract source code and verification metadata
+- `/index/verification/` - Verified contracts index
+
+**Data cleared with `--reindex`:**
+- Blocks, transactions, receipts, logs
+- Address indexes, token transfers
+- All other blockchain-derived data
+
 ---
 
 ## ⚙️ Configuration
@@ -303,10 +329,14 @@ Logging Flags:
 Chain Adapter Flags:
   --adapter string          Force specific adapter type (anvil, stableone, evm). Auto-detected if empty
 
+Data Management Flags:
+  --clear-data              Clear (delete) the entire data folder before starting
+  --reindex                 Clear blockchain data only, preserving verification data
+                            (ABIs, source code, verification status)
+
 Other Flags:
   --config string           Path to configuration file (YAML) (default: "config.yaml")
   --version                 Show version information and exit
-  --clear-data              Clear (delete) the data folder before starting
 ```
 
 ### Environment variables (Optional)
