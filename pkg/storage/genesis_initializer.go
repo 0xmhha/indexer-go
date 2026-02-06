@@ -286,3 +286,107 @@ func (g *GenesisInitializingStorage) GetNetworkMetrics(ctx context.Context, from
 // - All other storage operations
 //
 // The wrapper only intercepts GetAddressBalance to add genesis initialization logic.
+
+// ============================================================================
+// AddressIndexReader interface delegation
+// These methods delegate to the underlying storage if it implements AddressIndexReader.
+// This is necessary because Go's type assertion checks the outer type, not embedded fields.
+// ============================================================================
+
+func (g *GenesisInitializingStorage) GetContractCreation(ctx context.Context, contractAddress common.Address) (*ContractCreation, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetContractCreation(ctx, contractAddress)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetContractsByCreator(ctx context.Context, creator common.Address, limit, offset int) ([]common.Address, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetContractsByCreator(ctx, creator, limit, offset)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) ListContracts(ctx context.Context, limit, offset int) ([]*ContractCreation, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.ListContracts(ctx, limit, offset)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetContractsCount(ctx context.Context) (int, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetContractsCount(ctx)
+	}
+	return 0, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetInternalTransactions(ctx context.Context, txHash common.Hash) ([]*InternalTransaction, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetInternalTransactions(ctx, txHash)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*InternalTransaction, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetInternalTransactionsByAddress(ctx, address, isFrom, limit, offset)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetERC20Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*ERC20Transfer, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetERC20Transfer(ctx, txHash, logIndex)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*ERC20Transfer, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetERC20TransfersByToken(ctx, tokenAddress, limit, offset)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*ERC20Transfer, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetERC20TransfersByAddress(ctx, address, isFrom, limit, offset)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetERC721Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*ERC721Transfer, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetERC721Transfer(ctx, txHash, logIndex)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*ERC721Transfer, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetERC721TransfersByToken(ctx, tokenAddress, limit, offset)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*ERC721Transfer, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetERC721TransfersByAddress(ctx, address, isFrom, limit, offset)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetERC721Owner(ctx context.Context, tokenAddress common.Address, tokenId *big.Int) (common.Address, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetERC721Owner(ctx, tokenAddress, tokenId)
+	}
+	return common.Address{}, fmt.Errorf("storage does not implement AddressIndexReader")
+}
+
+func (g *GenesisInitializingStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*NFTOwnership, error) {
+	if reader, ok := g.Storage.(AddressIndexReader); ok {
+		return reader.GetNFTsByOwner(ctx, owner, limit, offset)
+	}
+	return nil, fmt.Errorf("storage does not implement AddressIndexReader")
+}
