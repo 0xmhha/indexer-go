@@ -537,15 +537,20 @@ func (h *Handler) transactionToJSON(tx *types.Transaction, location *storage.TxL
 	}
 
 	// Fee Delegation transaction (type 0x16 = 22)
-	// NOTE: Fee Delegation is a StableNet-specific feature
-	// tx.FeePayer() and tx.RawFeePayerSignatureValues() are only available with go-stablenet
-	// TODO: Implement proper extraction when using go-stablenet client
+	// Fee payer metadata is stored separately by the fetcher and retrieved from storage
 	const FeeDelegateDynamicFeeTxType = 22
 	if tx.Type() == FeeDelegateDynamicFeeTxType {
-		// Fee Delegation fields are StableNet-specific, not available in standard go-ethereum
-		h.logger.Debug("Fee Delegation transaction detected (StableNet-specific)",
-			zap.String("hash", tx.Hash().Hex()),
-			zap.Uint8("type", uint8(tx.Type())))
+		if fdReader, ok := h.storage.(storage.FeeDelegationReader); ok {
+			if meta, err := fdReader.GetFeeDelegationTxMeta(context.Background(), tx.Hash()); err == nil && meta != nil {
+				result["feePayer"] = meta.FeePayer.Hex()
+				sig := map[string]interface{}{
+					"v": meta.FeePayerV.String(),
+					"r": fmt.Sprintf("0x%x", meta.FeePayerR),
+					"s": fmt.Sprintf("0x%x", meta.FeePayerS),
+				}
+				result["feePayerSignatures"] = []interface{}{sig}
+			}
+		}
 	}
 
 	return result
