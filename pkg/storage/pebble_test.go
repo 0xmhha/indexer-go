@@ -6001,3 +6001,160 @@ func TestPebbleStorage_GetTotalSupply_ClosedStorage_Basic(t *testing.T) {
 		t.Error("GetTotalSupply() on closed storage should return error")
 	}
 }
+
+func TestIncrementPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefix   []byte
+		expected []byte
+	}{
+		{"empty prefix", []byte{}, nil},
+		{"simple prefix", []byte("test"), []byte("tesu")},
+		{"single byte", []byte{0x00}, []byte{0x01}},
+		{"ending with 0xff", []byte{0x01, 0xff}, []byte{0x02, 0x00}},
+		{"all 0xff", []byte{0xff, 0xff}, []byte{0x00, 0x00, 0}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := incrementPrefix(tt.prefix)
+			if string(result) != string(tt.expected) {
+				t.Errorf("incrementPrefix(%v) = %v, want %v", tt.prefix, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPebbleStorage_DeleteByPrefix(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ps := s.(*PebbleStorage)
+	ctx := context.Background()
+
+	// Insert keys with a known prefix
+	prefix := []byte("/test/prefix/")
+	for i := 0; i < 5; i++ {
+		key := append([]byte{}, prefix...)
+		key = append(key, byte('0'+i))
+		err := ps.Put(ctx, key, []byte("value"))
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+	}
+
+	// Insert key with different prefix
+	err := ps.Put(ctx, []byte("/other/key"), []byte("other"))
+	if err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+
+	// Delete by prefix
+	count, err := ps.DeleteByPrefix(prefix)
+	if err != nil {
+		t.Fatalf("DeleteByPrefix() error = %v", err)
+	}
+	if count != 5 {
+		t.Errorf("DeleteByPrefix() count = %d, want 5", count)
+	}
+
+	// Verify keys are deleted
+	countAfter, err := ps.CountByPrefix(prefix)
+	if err != nil {
+		t.Fatalf("CountByPrefix() error = %v", err)
+	}
+	if countAfter != 0 {
+		t.Errorf("CountByPrefix() after delete = %d, want 0", countAfter)
+	}
+
+	// Verify other key still exists
+	has, err := ps.Has(ctx, []byte("/other/key"))
+	if err != nil {
+		t.Fatalf("Has() error = %v", err)
+	}
+	if !has {
+		t.Error("Other key should still exist")
+	}
+}
+
+func TestPebbleStorage_DeleteByPrefix_Empty(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ps := s.(*PebbleStorage)
+
+	count, err := ps.DeleteByPrefix([]byte("/nonexistent/"))
+	if err != nil {
+		t.Fatalf("DeleteByPrefix() error = %v", err)
+	}
+	if count != 0 {
+		t.Errorf("DeleteByPrefix() on empty = %d, want 0", count)
+	}
+}
+
+func TestPebbleStorage_CountByPrefix(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ps := s.(*PebbleStorage)
+	ctx := context.Background()
+
+	prefix := []byte("/count/test/")
+	for i := 0; i < 3; i++ {
+		key := append([]byte{}, prefix...)
+		key = append(key, byte('a'+i))
+		err := ps.Put(ctx, key, []byte("v"))
+		if err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+	}
+
+	count, err := ps.CountByPrefix(prefix)
+	if err != nil {
+		t.Fatalf("CountByPrefix() error = %v", err)
+	}
+	if count != 3 {
+		t.Errorf("CountByPrefix() = %d, want 3", count)
+	}
+}
+
+func TestPebbleStorage_CountByPrefix_Empty(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ps := s.(*PebbleStorage)
+
+	count, err := ps.CountByPrefix([]byte("/empty/"))
+	if err != nil {
+		t.Fatalf("CountByPrefix() error = %v", err)
+	}
+	if count != 0 {
+		t.Errorf("CountByPrefix() on empty = %d, want 0", count)
+	}
+}
+
+func TestPebbleStorage_DeleteByPrefix_ClosedStorage(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ps := s.(*PebbleStorage)
+	ps.Close()
+
+	_, err := ps.DeleteByPrefix([]byte("/test/"))
+	if err != ErrClosed {
+		t.Errorf("DeleteByPrefix() on closed = %v, want ErrClosed", err)
+	}
+}
+
+func TestPebbleStorage_CountByPrefix_ClosedStorage(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	ps := s.(*PebbleStorage)
+	ps.Close()
+
+	_, err := ps.CountByPrefix([]byte("/test/"))
+	if err != ErrClosed {
+		t.Errorf("CountByPrefix() on closed = %v, want ErrClosed", err)
+	}
+}
