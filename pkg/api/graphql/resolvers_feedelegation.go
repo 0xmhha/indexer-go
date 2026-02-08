@@ -30,6 +30,26 @@ func (s *Schema) resolveFeeDelegationStats(p graphql.ResolveParams) (interface{}
 		}
 	}
 
+	// Convert fromTime/toTime to block numbers (overrides fromBlock/toBlock)
+	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+		if fromTimeArg, ok := p.Args["fromTime"].(string); ok && fromTimeArg != "" {
+			if ft, success := new(big.Int).SetString(fromTimeArg, 10); success {
+				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
+				if err == nil && block != nil {
+					fromBlock = block.NumberU64()
+				}
+			}
+		}
+		if toTimeArg, ok := p.Args["toTime"].(string); ok && toTimeArg != "" {
+			if tt, success := new(big.Int).SetString(toTimeArg, 10); success {
+				block, err := histStorage.GetBlockByTimestamp(ctx, tt.Uint64())
+				if err == nil && block != nil {
+					toBlock = block.NumberU64()
+				}
+			}
+		}
+	}
+
 	// Cast storage to FeeDelegationReader
 	fdReader, ok := s.storage.(storage.FeeDelegationReader)
 	if !ok {
@@ -75,6 +95,26 @@ func (s *Schema) resolveTopFeePayers(p graphql.ResolveParams) (interface{}, erro
 	if toBlockArg, ok := p.Args["toBlock"].(string); ok && toBlockArg != "" {
 		if tb, success := new(big.Int).SetString(toBlockArg, 10); success {
 			toBlock = tb.Uint64()
+		}
+	}
+
+	// Convert fromTime/toTime to block numbers (overrides fromBlock/toBlock)
+	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+		if fromTimeArg, ok := p.Args["fromTime"].(string); ok && fromTimeArg != "" {
+			if ft, success := new(big.Int).SetString(fromTimeArg, 10); success {
+				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
+				if err == nil && block != nil {
+					fromBlock = block.NumberU64()
+				}
+			}
+		}
+		if toTimeArg, ok := p.Args["toTime"].(string); ok && toTimeArg != "" {
+			if tt, success := new(big.Int).SetString(toTimeArg, 10); success {
+				block, err := histStorage.GetBlockByTimestamp(ctx, tt.Uint64())
+				if err == nil && block != nil {
+					toBlock = block.NumberU64()
+				}
+			}
 		}
 	}
 
@@ -135,6 +175,26 @@ func (s *Schema) resolveFeePayerStats(p graphql.ResolveParams) (interface{}, err
 	if toBlockArg, ok := p.Args["toBlock"].(string); ok && toBlockArg != "" {
 		if tb, success := new(big.Int).SetString(toBlockArg, 10); success {
 			toBlock = tb.Uint64()
+		}
+	}
+
+	// Convert fromTime/toTime to block numbers (overrides fromBlock/toBlock)
+	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+		if fromTimeArg, ok := p.Args["fromTime"].(string); ok && fromTimeArg != "" {
+			if ft, success := new(big.Int).SetString(fromTimeArg, 10); success {
+				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
+				if err == nil && block != nil {
+					fromBlock = block.NumberU64()
+				}
+			}
+		}
+		if toTimeArg, ok := p.Args["toTime"].(string); ok && toTimeArg != "" {
+			if tt, success := new(big.Int).SetString(toTimeArg, 10); success {
+				block, err := histStorage.GetBlockByTimestamp(ctx, tt.Uint64())
+				if err == nil && block != nil {
+					toBlock = block.NumberU64()
+				}
+			}
 		}
 	}
 
@@ -242,6 +302,14 @@ func (b *schemaBuilder) buildFeeDelegationQueries() {
 				Type:        bigIntType,
 				Description: "Ending block number (optional)",
 			},
+			"fromTime": &graphql.ArgumentConfig{
+				Type:        bigIntType,
+				Description: "Start time filter (Unix timestamp, overrides fromBlock)",
+			},
+			"toTime": &graphql.ArgumentConfig{
+				Type:        bigIntType,
+				Description: "End time filter (Unix timestamp, overrides toBlock)",
+			},
 		},
 		Resolve: b.schema.resolveFeeDelegationStats,
 	}
@@ -263,6 +331,14 @@ func (b *schemaBuilder) buildFeeDelegationQueries() {
 				Type:        bigIntType,
 				Description: "Ending block number (optional)",
 			},
+			"fromTime": &graphql.ArgumentConfig{
+				Type:        bigIntType,
+				Description: "Start time filter (Unix timestamp, overrides fromBlock)",
+			},
+			"toTime": &graphql.ArgumentConfig{
+				Type:        bigIntType,
+				Description: "End time filter (Unix timestamp, overrides toBlock)",
+			},
 		},
 		Resolve: b.schema.resolveTopFeePayers,
 	}
@@ -282,6 +358,14 @@ func (b *schemaBuilder) buildFeeDelegationQueries() {
 			"toBlock": &graphql.ArgumentConfig{
 				Type:        bigIntType,
 				Description: "Ending block number (optional)",
+			},
+			"fromTime": &graphql.ArgumentConfig{
+				Type:        bigIntType,
+				Description: "Start time filter (Unix timestamp, overrides fromBlock)",
+			},
+			"toTime": &graphql.ArgumentConfig{
+				Type:        bigIntType,
+				Description: "End time filter (Unix timestamp, overrides toBlock)",
 			},
 		},
 		Resolve: b.schema.resolveFeePayerStats,

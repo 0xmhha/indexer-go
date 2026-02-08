@@ -282,6 +282,13 @@ func (m *mockStorage) GetBlockSigners(ctx context.Context, blockNumber uint64) (
 	return nil, nil, nil
 }
 
+func (m *mockStorage) GetEpochsList(ctx context.Context, limit, offset int) ([]*storage.EpochInfo, int, error) {
+	return []*storage.EpochInfo{}, 0, nil
+}
+func (m *mockStorage) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
+	return nil, nil
+}
+
 // WBFTWriter interface
 func (m *mockStorage) SaveWBFTBlockExtra(ctx context.Context, extra *storage.WBFTBlockExtra) error { return nil }
 func (m *mockStorage) SaveEpochInfo(ctx context.Context, epochInfo *storage.EpochInfo) error       { return nil }

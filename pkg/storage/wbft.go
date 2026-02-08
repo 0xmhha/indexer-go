@@ -59,6 +59,10 @@ type ValidatorSigningStats struct {
 	ToBlock   uint64
 	// Performance metrics
 	SigningRate float64 // (SignCount / TotalBlocks) * 100
+	// Block proposal metrics
+	BlocksProposed uint64  // Number of blocks proposed by this validator
+	TotalBlocks    uint64  // Total number of blocks in the query range (toBlock - fromBlock + 1)
+	ProposalRate   float64 // (BlocksProposed / TotalBlocks) * 100
 }
 
 // ValidatorSigningActivity represents a validator's signing activity for a specific block
@@ -98,6 +102,9 @@ type WBFTReader interface {
 
 	// GetBlockSigners returns list of validators who signed a specific block
 	GetBlockSigners(ctx context.Context, blockNumber uint64) (preparers []common.Address, committers []common.Address, err error)
+
+	// GetEpochsList returns a paginated list of epochs, ordered by epoch number descending
+	GetEpochsList(ctx context.Context, limit, offset int) ([]*EpochInfo, int, error)
 }
 
 // WBFTWriter defines write operations for WBFT metadata

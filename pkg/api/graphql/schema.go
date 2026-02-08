@@ -416,6 +416,16 @@ func (b *SchemaBuilder) WithAnalyticsQueries() *SchemaBuilder {
 		Description: "Get network activity metrics for a time range",
 		Resolve:     s.resolveNetworkMetrics,
 	}
+	b.queries["addressStats"] = &graphql.Field{
+		Type: graphql.NewNonNull(addressStatsType),
+		Args: graphql.FieldConfigArgument{
+			"address": &graphql.ArgumentConfig{
+				Type: graphql.NewNonNull(addressType),
+			},
+		},
+		Description: "Get aggregated statistics for an address",
+		Resolve:     s.resolveAddressStats,
+	}
 
 	return b
 }
@@ -686,6 +696,16 @@ func (b *SchemaBuilder) WithConsensusQueries() *SchemaBuilder {
 		Type:        epochInfoType,
 		Description: "Alias for latestEpochInfo - returns the latest epoch information",
 		Resolve:     s.resolveLatestEpochInfo,
+	}
+	b.queries["epochs"] = &graphql.Field{
+		Type:        graphql.NewNonNull(epochSummaryConnectionType),
+		Description: "Get paginated list of epochs (latest first)",
+		Args: graphql.FieldConfigArgument{
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveEpochs,
 	}
 	b.queries["validatorSigningStats"] = &graphql.Field{
 		Type: validatorSigningStatsType,

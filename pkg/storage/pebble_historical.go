@@ -191,6 +191,15 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 
 		// Apply filter
 		if filter.MatchTransaction(tx, receipt, location, addr) {
+			// Check fee delegation filter
+			if filter.IsFeeDelegated != nil {
+				meta, _ := s.GetFeeDelegationTxMeta(ctx, txHash)
+				isFD := (meta != nil)
+				if *filter.IsFeeDelegated != isFD {
+					continue
+				}
+			}
+
 			if count < offset {
 				count++
 				continue
@@ -542,4 +551,107 @@ func (s *PebbleStorage) SetBalance(ctx context.Context, addr common.Address, blo
 
 	// Use UpdateBalance
 	return s.UpdateBalance(ctx, addr, blockNumber, delta, common.Hash{})
+}
+
+// GetAddressStats returns aggregated statistics for an address
+func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address) (*AddressStats, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	stats := &AddressStats{
+		Address:            addr,
+		TotalGasCost:       big.NewInt(0),
+		TotalValueSent:     big.NewInt(0),
+		TotalValueReceived: big.NewInt(0),
+	}
+
+	uniqueAddresses := make(map[common.Address]bool)
+
+	// Iterate all transactions for this address
+	prefix := AddressTransactionKeyPrefix(addr)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: prefixUpperBound(prefix),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		txHash := common.BytesToHash(iter.Value())
+
+		tx, location, err := s.GetTransaction(ctx, txHash)
+		if err != nil {
+			continue
+		}
+
+		receipt, _ := s.GetReceipt(ctx, txHash)
+
+		// Extract sender
+		from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+		if err != nil {
+			continue
+		}
+
+		stats.TotalTransactions++
+
+		// Sent vs Received
+		if from == addr {
+			stats.SentCount++
+			stats.TotalValueSent.Add(stats.TotalValueSent, tx.Value())
+			if tx.To() != nil {
+				uniqueAddresses[*tx.To()] = true
+			}
+		}
+		to := tx.To()
+		if to != nil && *to == addr {
+			stats.ReceivedCount++
+			stats.TotalValueReceived.Add(stats.TotalValueReceived, tx.Value())
+			uniqueAddresses[from] = true
+		}
+
+		// Success vs Failed
+		if receipt != nil {
+			if receipt.Status == types.ReceiptStatusSuccessful {
+				stats.SuccessCount++
+			} else {
+				stats.FailedCount++
+			}
+			stats.TotalGasUsed += receipt.GasUsed
+
+			// Gas cost = gasUsed * effectiveGasPrice
+			if receipt.EffectiveGasPrice != nil {
+				cost := new(big.Int).Mul(
+					new(big.Int).SetUint64(receipt.GasUsed),
+					receipt.EffectiveGasPrice,
+				)
+				stats.TotalGasCost.Add(stats.TotalGasCost, cost)
+			}
+		}
+
+		// Contract interaction (has input data and a target address)
+		if to != nil && len(tx.Data()) > 0 {
+			stats.ContractInteractionCount++
+		}
+
+		// Timestamps
+		if location != nil {
+			block, err := s.GetBlock(ctx, location.BlockHeight)
+			if err == nil && block != nil {
+				ts := block.Header().Time
+				if stats.FirstTransactionTimestamp == 0 || ts < stats.FirstTransactionTimestamp {
+					stats.FirstTransactionTimestamp = ts
+				}
+				if ts > stats.LastTransactionTimestamp {
+					stats.LastTransactionTimestamp = ts
+				}
+			}
+		}
+	}
+
+	stats.UniqueAddressCount = uint64(len(uniqueAddresses))
+
+	return stats, nil
 }

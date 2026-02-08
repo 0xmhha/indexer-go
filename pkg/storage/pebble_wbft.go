@@ -120,6 +120,8 @@ func (s *PebbleStorage) GetValidatorSigningStats(ctx context.Context, validatorA
 		return nil, err
 	}
 
+	totalBlocksInRange := toBlock - fromBlock + 1
+
 	key := WBFTValidatorStatsKey(validatorAddress, fromBlock, toBlock)
 	value, closer, err := s.db.Get(key)
 	if err != nil {
@@ -129,11 +131,7 @@ func (s *PebbleStorage) GetValidatorSigningStats(ctx context.Context, validatorA
 				ValidatorAddress: validatorAddress,
 				FromBlock:        fromBlock,
 				ToBlock:          toBlock,
-				PrepareSignCount: 0,
-				PrepareMissCount: 0,
-				CommitSignCount:  0,
-				CommitMissCount:  0,
-				SigningRate:      0,
+				TotalBlocks:      totalBlocksInRange,
 			}, nil
 		}
 		return nil, fmt.Errorf("failed to get validator signing stats: %w", err)
@@ -143,6 +141,23 @@ func (s *PebbleStorage) GetValidatorSigningStats(ctx context.Context, validatorA
 	var stats ValidatorSigningStats
 	if err := json.Unmarshal(value, &stats); err != nil {
 		return nil, fmt.Errorf("failed to decode validator signing stats: %w", err)
+	}
+
+	// Compute proposer stats from block headers
+	stats.TotalBlocks = totalBlocksInRange
+	var blocksProposed uint64
+	for blockNum := fromBlock; blockNum <= toBlock; blockNum++ {
+		block, err := s.GetBlock(ctx, blockNum)
+		if err != nil || block == nil {
+			continue
+		}
+		if block.Header().Coinbase == validatorAddress {
+			blocksProposed++
+		}
+	}
+	stats.BlocksProposed = blocksProposed
+	if totalBlocksInRange > 0 {
+		stats.ProposalRate = float64(blocksProposed) / float64(totalBlocksInRange) * constants.PercentageMultiplier
 	}
 
 	return &stats, nil
@@ -219,12 +234,29 @@ func (s *PebbleStorage) GetAllValidatorsSigningStats(ctx context.Context, fromBl
 		return nil, fmt.Errorf("failed to iterate validator activities: %w", err)
 	}
 
-	// Calculate signing rates and convert to slice
+	// Calculate proposer counts by scanning block headers
+	totalBlocksInRange := toBlock - fromBlock + 1
+	proposerCounts := make(map[common.Address]uint64)
+	for blockNum := fromBlock; blockNum <= toBlock; blockNum++ {
+		block, err := s.GetBlock(ctx, blockNum)
+		if err != nil || block == nil {
+			continue
+		}
+		proposer := block.Header().Coinbase
+		proposerCounts[proposer]++
+	}
+
+	// Calculate signing rates, proposal stats, and convert to slice
 	result := make([]*ValidatorSigningStats, 0, len(statsMap))
 	for _, stats := range statsMap {
-		totalBlocks := stats.PrepareSignCount + stats.PrepareMissCount
-		if totalBlocks > 0 {
-			stats.SigningRate = float64(stats.PrepareSignCount) / float64(totalBlocks) * constants.PercentageMultiplier
+		activityCount := stats.PrepareSignCount + stats.PrepareMissCount
+		if activityCount > 0 {
+			stats.SigningRate = float64(stats.PrepareSignCount) / float64(activityCount) * constants.PercentageMultiplier
+		}
+		stats.TotalBlocks = totalBlocksInRange
+		stats.BlocksProposed = proposerCounts[stats.ValidatorAddress]
+		if totalBlocksInRange > 0 {
+			stats.ProposalRate = float64(stats.BlocksProposed) / float64(totalBlocksInRange) * constants.PercentageMultiplier
 		}
 		result = append(result, stats)
 	}
@@ -371,6 +403,56 @@ func (s *PebbleStorage) GetBlockSigners(ctx context.Context, blockNumber uint64)
 	}
 
 	return preparers, committers, nil
+}
+
+// GetEpochsList returns a paginated list of epochs, ordered by epoch number descending
+func (s *PebbleStorage) GetEpochsList(ctx context.Context, limit, offset int) ([]*EpochInfo, int, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, 0, err
+	}
+
+	prefix := WBFTEpochKeyPrefix()
+	upperBound := prefixUpperBound(prefix)
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	// Collect all epochs in reverse order (latest first)
+	// Note: keyLatestEpoch is at "/meta/wbft/latest_epoch" (different prefix),
+	// so it won't appear in this prefix scan.
+	var allEpochs []*EpochInfo
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		var epochInfo EpochInfo
+		if err := json.Unmarshal(iter.Value(), &epochInfo); err != nil {
+			s.logger.Warn("failed to decode epoch info", zap.Error(err))
+			continue
+		}
+		allEpochs = append(allEpochs, &epochInfo)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, 0, fmt.Errorf("failed to iterate epochs: %w", err)
+	}
+
+	totalCount := len(allEpochs)
+
+	// Apply offset/limit
+	if offset >= totalCount {
+		return []*EpochInfo{}, totalCount, nil
+	}
+
+	end := offset + limit
+	if end > totalCount {
+		end = totalCount
+	}
+
+	return allEpochs[offset:end], totalCount, nil
 }
 
 // SaveWBFTBlockExtra saves WBFT consensus metadata for a block

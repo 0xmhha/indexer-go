@@ -105,7 +105,23 @@ func (s *Schema) resolveEpochInfo(p graphql.ResolveParams) (interface{}, error) 
 		return nil, err
 	}
 
-	return s.epochInfoToMap(epochInfo), nil
+	result := s.epochInfoToMap(epochInfo)
+
+	// Add previousEpochValidatorCount
+	if epochInfo.EpochNumber > 0 {
+		prevEpoch, err := wbftReader.GetEpochInfo(ctx, epochInfo.EpochNumber-1)
+		if err == nil && prevEpoch != nil {
+			result["previousEpochValidatorCount"] = len(prevEpoch.Validators)
+		}
+	}
+
+	// Add timestamp from the epoch boundary block
+	block, err := s.storage.GetBlock(ctx, epochInfo.BlockNumber)
+	if err == nil && block != nil {
+		result["timestamp"] = fmt.Sprintf("%d", block.Header().Time)
+	}
+
+	return result, nil
 }
 
 // resolveLatestEpochInfo resolves the most recent epoch information
@@ -128,7 +144,68 @@ func (s *Schema) resolveLatestEpochInfo(p graphql.ResolveParams) (interface{}, e
 		return nil, err
 	}
 
-	return s.epochInfoToMap(epochInfo), nil
+	result := s.epochInfoToMap(epochInfo)
+
+	// Add previousEpochValidatorCount
+	if epochInfo.EpochNumber > 0 {
+		prevEpoch, err := wbftReader.GetEpochInfo(ctx, epochInfo.EpochNumber-1)
+		if err == nil && prevEpoch != nil {
+			result["previousEpochValidatorCount"] = len(prevEpoch.Validators)
+		}
+	}
+
+	// Add timestamp from the epoch boundary block
+	block, err := s.storage.GetBlock(ctx, epochInfo.BlockNumber)
+	if err == nil && block != nil {
+		result["timestamp"] = fmt.Sprintf("%d", block.Header().Time)
+	}
+
+	return result, nil
+}
+
+// resolveEpochs resolves a paginated list of epochs
+func (s *Schema) resolveEpochs(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	wbftReader, ok := s.storage.(storage.WBFTReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support WBFT metadata")
+	}
+
+	pagination := parsePaginationParams(p, 0)
+
+	epochs, totalCount, err := wbftReader.GetEpochsList(ctx, pagination.Limit, pagination.Offset)
+	if err != nil {
+		s.logger.Error("failed to get epochs list", zap.Error(err))
+		return nil, err
+	}
+
+	nodes := make([]interface{}, len(epochs))
+	for i, epoch := range epochs {
+		node := map[string]interface{}{
+			"epochNumber":    fmt.Sprintf("%d", epoch.EpochNumber),
+			"blockNumber":    fmt.Sprintf("%d", epoch.BlockNumber),
+			"validatorCount": len(epoch.Validators),
+			"candidateCount": len(epoch.Candidates),
+		}
+
+		// Fetch timestamp from the epoch boundary block
+		block, err := s.storage.GetBlock(ctx, epoch.BlockNumber)
+		if err == nil && block != nil {
+			node["timestamp"] = fmt.Sprintf("%d", block.Header().Time)
+		}
+
+		nodes[i] = node
+	}
+
+	return map[string]interface{}{
+		"nodes":      nodes,
+		"totalCount": totalCount,
+		"pageInfo": map[string]interface{}{
+			"hasNextPage":     len(epochs) == pagination.Limit,
+			"hasPreviousPage": pagination.Offset > 0,
+		},
+	}, nil
 }
 
 // resolveValidatorSigningStats resolves signing statistics for a specific validator
@@ -455,11 +532,13 @@ func (s *Schema) epochInfoToMap(info *storage.EpochInfo) map[string]interface{} 
 	}
 
 	return map[string]interface{}{
-		"epochNumber":   fmt.Sprintf("%d", info.EpochNumber),
-		"blockNumber":   fmt.Sprintf("%d", info.BlockNumber),
-		"candidates":    candidates,
-		"validators":    validators,
-		"blsPublicKeys": blsPublicKeys,
+		"epochNumber":    fmt.Sprintf("%d", info.EpochNumber),
+		"blockNumber":    fmt.Sprintf("%d", info.BlockNumber),
+		"candidates":     candidates,
+		"validators":     validators,
+		"blsPublicKeys":  blsPublicKeys,
+		"validatorCount": len(info.Validators),
+		"candidateCount": len(info.Candidates),
 	}
 }
 
@@ -475,6 +554,9 @@ func (s *Schema) validatorSigningStatsToMap(stats *storage.ValidatorSigningStats
 		"fromBlock":        fmt.Sprintf("%d", stats.FromBlock),
 		"toBlock":          fmt.Sprintf("%d", stats.ToBlock),
 		"signingRate":      stats.SigningRate,
+		"blocksProposed":   fmt.Sprintf("%d", stats.BlocksProposed),
+		"totalBlocks":      fmt.Sprintf("%d", stats.TotalBlocks),
+		"proposalRate":     stats.ProposalRate,
 	}
 }
 

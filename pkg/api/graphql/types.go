@@ -56,6 +56,7 @@ var (
 	logFilterType                   *graphql.InputObject
 	paginationInputType             *graphql.InputObject
 	historicalTransactionFilterType *graphql.InputObject
+	transactionDirectionEnum        *graphql.Enum
 
 	// Historical data types
 	balanceSnapshotType          *graphql.Object
@@ -69,6 +70,7 @@ var (
 	networkMetricsType       *graphql.Object
 	addressActivityStatsType *graphql.Object
 	searchResultType         *graphql.Object
+	addressStatsType         *graphql.Object
 
 	// System contract types
 	proposalStatusEnumType        *graphql.Enum
@@ -101,6 +103,8 @@ var (
 	blockSignersType                       *graphql.Object
 	validatorSigningStatsConnectionType    *graphql.Object
 	validatorSigningActivityConnectionType *graphql.Object
+	epochSummaryType                       *graphql.Object
+	epochSummaryConnectionType             *graphql.Object
 
 	// Enhanced consensus types
 	consensusDataType          *graphql.Object
@@ -710,6 +714,25 @@ func initInputTypes() {
 		},
 	})
 
+	transactionDirectionEnum = graphql.NewEnum(graphql.EnumConfig{
+		Name:        "TransactionDirection",
+		Description: "Transaction direction filter",
+		Values: graphql.EnumValueConfigMap{
+			"SENT": &graphql.EnumValueConfig{
+				Value:       "SENT",
+				Description: "Transactions sent from the address",
+			},
+			"RECEIVED": &graphql.EnumValueConfig{
+				Value:       "RECEIVED",
+				Description: "Transactions received by the address",
+			},
+			"ALL": &graphql.EnumValueConfig{
+				Value:       "ALL",
+				Description: "All transactions (sent and received)",
+			},
+		},
+	})
+
 	historicalTransactionFilterType = graphql.NewInputObject(graphql.InputObjectConfig{
 		Name: "HistoricalTransactionFilter",
 		Fields: graphql.InputObjectConfigFieldMap{
@@ -730,6 +753,34 @@ func initInputTypes() {
 			},
 			"successOnly": &graphql.InputObjectFieldConfig{
 				Type: graphql.Boolean,
+			},
+			"isFeeDelegated": &graphql.InputObjectFieldConfig{
+				Type:        graphql.Boolean,
+				Description: "Filter by fee delegation status",
+			},
+			"methodId": &graphql.InputObjectFieldConfig{
+				Type:        graphql.String,
+				Description: "Filter by function selector (first 4 bytes of input data)",
+			},
+			"minGasUsed": &graphql.InputObjectFieldConfig{
+				Type:        bigIntType,
+				Description: "Filter by minimum gas used",
+			},
+			"maxGasUsed": &graphql.InputObjectFieldConfig{
+				Type:        bigIntType,
+				Description: "Filter by maximum gas used",
+			},
+			"direction": &graphql.InputObjectFieldConfig{
+				Type:        transactionDirectionEnum,
+				Description: "Filter by transaction direction (overrides txType)",
+			},
+			"fromTime": &graphql.InputObjectFieldConfig{
+				Type:        bigIntType,
+				Description: "Start time filter (Unix timestamp, overrides fromBlock)",
+			},
+			"toTime": &graphql.InputObjectFieldConfig{
+				Type:        bigIntType,
+				Description: "End time filter (Unix timestamp, overrides toBlock)",
 			},
 		},
 	})
@@ -940,6 +991,56 @@ func initStatsTypes() {
 			"firstActivityBlock": &graphql.Field{
 				Type:        graphql.NewNonNull(bigIntType),
 				Description: "First block with activity",
+			},
+		},
+	})
+
+	// AddressStats type
+	addressStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "AddressStats",
+		Description: "Aggregated statistics for an address",
+		Fields: graphql.Fields{
+			"address": &graphql.Field{
+				Type: graphql.NewNonNull(addressType),
+			},
+			"totalTransactions": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"sentCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"receivedCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"successCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"failedCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"totalGasUsed": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"totalGasCost": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"totalValueSent": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"totalValueReceived": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"contractInteractionCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"uniqueAddressCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"firstTransactionTimestamp": &graphql.Field{
+				Type: bigIntType,
+			},
+			"lastTransactionTimestamp": &graphql.Field{
+				Type: bigIntType,
 			},
 		},
 	})
@@ -1468,6 +1569,22 @@ func initConsensusTypes() {
 			"blsPublicKeys": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(bytesType))),
 			},
+			"validatorCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of validators in this epoch",
+			},
+			"candidateCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Number of candidates in this epoch",
+			},
+			"previousEpochValidatorCount": &graphql.Field{
+				Type:        graphql.Int,
+				Description: "Validator count from previous epoch (null for epoch 0)",
+			},
+			"timestamp": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Timestamp of the epoch boundary block",
+			},
 		},
 	})
 
@@ -1545,6 +1662,18 @@ func initConsensusTypes() {
 			"signingRate": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.Float),
 			},
+			"blocksProposed": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Number of blocks proposed by this validator",
+			},
+			"totalBlocks": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total number of blocks in the query range",
+			},
+			"proposalRate": &graphql.Field{
+				Type:        graphql.Float,
+				Description: "Block proposal rate percentage",
+			},
 		},
 	})
 
@@ -1617,6 +1746,44 @@ func initConsensusTypes() {
 		Fields: graphql.Fields{
 			"nodes": &graphql.Field{
 				Type: graphql.NewList(graphql.NewNonNull(validatorSigningActivityType)),
+			},
+			"totalCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"pageInfo": &graphql.Field{
+				Type: graphql.NewNonNull(pageInfoType),
+			},
+		},
+	})
+
+	// EpochSummary type (lightweight epoch data for list queries)
+	epochSummaryType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "EpochSummary",
+		Fields: graphql.Fields{
+			"epochNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"blockNumber": &graphql.Field{
+				Type: graphql.NewNonNull(bigIntType),
+			},
+			"validatorCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"candidateCount": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.Int),
+			},
+			"timestamp": &graphql.Field{
+				Type: bigIntType,
+			},
+		},
+	})
+
+	// EpochSummaryConnection type
+	epochSummaryConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "EpochSummaryConnection",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(epochSummaryType))),
 			},
 			"totalCount": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.Int),

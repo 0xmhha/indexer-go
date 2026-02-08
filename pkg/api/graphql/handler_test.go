@@ -372,6 +372,13 @@ func (m *mockStorage) GetBlockSigners(ctx context.Context, blockNumber uint64) (
 	return []common.Address{}, []common.Address{}, nil
 }
 
+func (m *mockStorage) GetEpochsList(ctx context.Context, limit, offset int) ([]*storage.EpochInfo, int, error) {
+	return []*storage.EpochInfo{}, 0, nil
+}
+func (m *mockStorage) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
+	return nil, nil
+}
+
 // WBFTWriter methods for mockStorage
 func (m *mockStorage) SaveWBFTBlockExtra(ctx context.Context, extra *storage.WBFTBlockExtra) error {
 	return nil
@@ -841,6 +848,13 @@ func (m *mockStorageWithErrors) GetValidatorSigningActivity(ctx context.Context,
 
 func (m *mockStorageWithErrors) GetBlockSigners(ctx context.Context, blockNumber uint64) (preparers []common.Address, committers []common.Address, err error) {
 	return nil, nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetEpochsList(ctx context.Context, limit, offset int) ([]*storage.EpochInfo, int, error) {
+	return nil, 0, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
+	return nil, fmt.Errorf("storage error")
 }
 
 // WBFTWriter methods for mockStorageWithErrors

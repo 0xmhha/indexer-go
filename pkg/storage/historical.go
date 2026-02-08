@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,6 +36,14 @@ type TransactionFilter struct {
 	TxType TransactionType
 	// SuccessOnly filters for successful transactions only
 	SuccessOnly bool
+	// IsFeeDelegated filters by fee delegation status (nil=ignore, true=fee delegated only, false=non-fee delegated only)
+	IsFeeDelegated *bool
+	// MethodID filters by function selector (first 4 bytes of input data, e.g., "0xa9059cbb")
+	MethodID string
+	// MinGasUsed is the minimum gas used filter (inclusive)
+	MinGasUsed *uint64
+	// MaxGasUsed is the maximum gas used filter (inclusive)
+	MaxGasUsed *uint64
 }
 
 // TransactionWithReceipt combines a transaction with its receipt and location
@@ -155,6 +164,38 @@ type AddressActivityStats struct {
 	FirstActivityBlock uint64
 }
 
+// AddressStats represents aggregated statistics for an address
+type AddressStats struct {
+	// Address is the address
+	Address common.Address
+	// TotalTransactions is the total number of transactions
+	TotalTransactions uint64
+	// SentCount is the number of sent transactions
+	SentCount uint64
+	// ReceivedCount is the number of received transactions
+	ReceivedCount uint64
+	// SuccessCount is the number of successful transactions
+	SuccessCount uint64
+	// FailedCount is the number of failed transactions
+	FailedCount uint64
+	// TotalGasUsed is the total gas used across all transactions
+	TotalGasUsed uint64
+	// TotalGasCost is the total gas cost in wei (gasUsed * effectiveGasPrice)
+	TotalGasCost *big.Int
+	// TotalValueSent is the total value sent in wei
+	TotalValueSent *big.Int
+	// TotalValueReceived is the total value received in wei
+	TotalValueReceived *big.Int
+	// ContractInteractionCount is the number of transactions interacting with contracts
+	ContractInteractionCount uint64
+	// UniqueAddressCount is the number of unique addresses interacted with
+	UniqueAddressCount uint64
+	// FirstTransactionTimestamp is the timestamp of the first transaction (0 if none)
+	FirstTransactionTimestamp uint64
+	// LastTransactionTimestamp is the timestamp of the last transaction (0 if none)
+	LastTransactionTimestamp uint64
+}
+
 // HistoricalReader provides read-only access to historical blockchain data
 type HistoricalReader interface {
 	// GetBlocksByTimeRange returns blocks within a time range
@@ -201,6 +242,9 @@ type HistoricalReader interface {
 
 	// GetNetworkMetrics returns network activity metrics for a time range
 	GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*NetworkMetrics, error)
+
+	// GetAddressStats returns aggregated statistics for an address
+	GetAddressStats(ctx context.Context, addr common.Address) (*AddressStats, error)
 }
 
 // HistoricalWriter provides write access for historical blockchain data
@@ -239,6 +283,12 @@ func (f *TransactionFilter) Validate() error {
 
 	if f.MaxValue != nil && f.MaxValue.Sign() < 0 {
 		return fmt.Errorf("maxValue cannot be negative")
+	}
+
+	if f.MinGasUsed != nil && f.MaxGasUsed != nil {
+		if *f.MinGasUsed > *f.MaxGasUsed {
+			return fmt.Errorf("minGasUsed cannot be greater than maxGasUsed")
+		}
 	}
 
 	return nil
@@ -285,6 +335,31 @@ func (f *TransactionFilter) MatchTransaction(tx *types.Transaction, receipt *typ
 	// Check success status
 	if f.SuccessOnly && (receipt == nil || receipt.Status != types.ReceiptStatusSuccessful) {
 		return false
+	}
+
+	// Check methodId
+	if f.MethodID != "" {
+		inputData := tx.Data()
+		if len(inputData) < 4 {
+			return false
+		}
+		txMethodID := fmt.Sprintf("0x%x", inputData[:4])
+		if !strings.EqualFold(txMethodID, f.MethodID) {
+			return false
+		}
+	}
+
+	// Check gas used range (skip transaction if receipt is nil when gas filter is set)
+	if f.MinGasUsed != nil || f.MaxGasUsed != nil {
+		if receipt == nil {
+			return false
+		}
+		if f.MinGasUsed != nil && receipt.GasUsed < *f.MinGasUsed {
+			return false
+		}
+		if f.MaxGasUsed != nil && receipt.GasUsed > *f.MaxGasUsed {
+			return false
+		}
 	}
 
 	return true

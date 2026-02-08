@@ -639,6 +639,13 @@ input LogFilter {
   blockNumberTo: BigInt
 }
 
+# Transaction direction filter
+enum TransactionDirection {
+  SENT
+  RECEIVED
+  ALL
+}
+
 # Filter input for historical transaction queries
 input HistoricalTransactionFilter {
   # Filter by block number range
@@ -656,6 +663,27 @@ input HistoricalTransactionFilter {
 
   # Filter by success status only
   successOnly: Boolean
+
+  # Filter by fee delegation status (true=fee delegated only, false=non-fee delegated only)
+  isFeeDelegated: Boolean
+
+  # Filter by function selector (first 4 bytes of input data, e.g., "0xa9059cbb")
+  methodId: String
+
+  # Filter by minimum gas used
+  minGasUsed: BigInt
+
+  # Filter by maximum gas used
+  maxGasUsed: BigInt
+
+  # Filter by transaction direction (overrides txType if both specified)
+  direction: TransactionDirection
+
+  # Start time filter (Unix timestamp, overrides fromBlock)
+  fromTime: BigInt
+
+  # End time filter (Unix timestamp, overrides toBlock)
+  toTime: BigInt
 }
 
 # Pagination input
@@ -1126,6 +1154,9 @@ type Query {
   # Get the most recent epoch information
   latestEpochInfo: EpochInfo
 
+  # Get paginated list of epochs (latest first)
+  epochs(pagination: PaginationInput): EpochSummaryConnection!
+
   # Get signing statistics for a specific validator
   validatorSigningStats(
     validatorAddress: Address!
@@ -1267,6 +1298,8 @@ type Query {
   feeDelegationStats(
     fromBlock: BigInt
     toBlock: BigInt
+    fromTime: BigInt
+    toTime: BigInt
   ): FeeDelegationStats!
 
   # Get top fee payers by transaction count
@@ -1274,6 +1307,8 @@ type Query {
     limit: Int
     fromBlock: BigInt
     toBlock: BigInt
+    fromTime: BigInt
+    toTime: BigInt
   ): TopFeePayersResult!
 
   # Get statistics for a specific fee payer
@@ -1281,7 +1316,12 @@ type Query {
     address: Address!
     fromBlock: BigInt
     toBlock: BigInt
+    fromTime: BigInt
+    toTime: BigInt
   ): FeePayerStats!
+
+  # Get aggregated statistics for an address
+  addressStats(address: Address!): AddressStats!
 
   # ========== Token Metadata Queries ==========
 
@@ -2003,6 +2043,18 @@ type EpochInfo {
 
   # BLS public keys for next epoch
   blsPublicKeys: [Bytes!]!
+
+  # Number of validators in this epoch
+  validatorCount: Int!
+
+  # Number of candidates in this epoch
+  candidateCount: Int!
+
+  # Validator count from previous epoch (null for epoch 0)
+  previousEpochValidatorCount: Int
+
+  # Timestamp of the epoch boundary block
+  timestamp: BigInt
 }
 
 # WBFTBlockExtra represents WBFT consensus metadata for a block
@@ -2072,6 +2124,15 @@ type ValidatorSigningStats {
 
   # Signing rate percentage
   signingRate: Float!
+
+  # Number of blocks proposed by this validator
+  blocksProposed: BigInt!
+
+  # Total number of blocks in the query range
+  totalBlocks: BigInt!
+
+  # Block proposal rate percentage
+  proposalRate: Float
 }
 
 # ValidatorSigningActivity represents a validator's signing activity for a specific block
@@ -2122,6 +2183,21 @@ type ValidatorSigningStatsConnection {
 
 type ValidatorSigningActivityConnection {
   nodes: [ValidatorSigningActivity!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+# Epoch summary (lightweight, for list queries)
+type EpochSummary {
+  epochNumber: BigInt!
+  blockNumber: BigInt!
+  validatorCount: Int!
+  candidateCount: Int!
+  timestamp: BigInt
+}
+
+type EpochSummaryConnection {
+  nodes: [EpochSummary!]!
   totalCount: Int!
   pageInfo: PageInfo!
 }
@@ -2683,6 +2759,40 @@ type RPCProxyMetrics {
   activeWorkers: Int!
   # Circuit breaker state (closed, open, half-open)
   circuitState: String!
+}
+
+# ========== Address Stats Types ==========
+
+# AddressStats represents aggregated statistics for an address
+type AddressStats {
+  # Address being queried
+  address: Address!
+  # Total number of transactions
+  totalTransactions: Int!
+  # Number of sent transactions
+  sentCount: Int!
+  # Number of received transactions
+  receivedCount: Int!
+  # Number of successful transactions
+  successCount: Int!
+  # Number of failed transactions
+  failedCount: Int!
+  # Total gas used across all transactions
+  totalGasUsed: BigInt!
+  # Total gas cost in wei (gasUsed * effectiveGasPrice)
+  totalGasCost: BigInt!
+  # Total value sent in wei
+  totalValueSent: BigInt!
+  # Total value received in wei
+  totalValueReceived: BigInt!
+  # Number of contract interactions
+  contractInteractionCount: Int!
+  # Number of unique addresses interacted with
+  uniqueAddressCount: Int!
+  # Timestamp of first transaction (null if no transactions)
+  firstTransactionTimestamp: BigInt
+  # Timestamp of last transaction (null if no transactions)
+  lastTransactionTimestamp: BigInt
 }
 
 # ========== Fee Delegation Types ==========

@@ -148,6 +148,26 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 		return nil, fmt.Errorf("failed to parse filter: %w", err)
 	}
 
+	// Convert fromTime/toTime to block numbers (overrides fromBlock/toBlock)
+	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+		if fromTimeStr, ok := filterArgs["fromTime"].(string); ok && fromTimeStr != "" {
+			if ft, success := new(big.Int).SetString(fromTimeStr, 10); success {
+				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
+				if err == nil && block != nil {
+					filter.FromBlock = block.NumberU64()
+				}
+			}
+		}
+		if toTimeStr, ok := filterArgs["toTime"].(string); ok && toTimeStr != "" {
+			if tt, success := new(big.Int).SetString(toTimeStr, 10); success {
+				block, err := histStorage.GetBlockByTimestamp(ctx, tt.Uint64())
+				if err == nil && block != nil {
+					filter.ToBlock = block.NumberU64()
+				}
+			}
+		}
+	}
+
 	// Get pagination parameters
 	limit := constants.DefaultPaginationLimit
 	offset := 0
@@ -557,6 +577,44 @@ func parseHistoricalTransactionFilter(args map[string]interface{}) (*storage.Tra
 		filter.SuccessOnly = successOnly
 	}
 
+	// Parse optional isFeeDelegated
+	if isFeeDelegated, ok := args["isFeeDelegated"].(bool); ok {
+		filter.IsFeeDelegated = &isFeeDelegated
+	}
+
+	// Parse optional methodId
+	if methodId, ok := args["methodId"].(string); ok && methodId != "" {
+		filter.MethodID = methodId
+	}
+
+	// Parse optional minGasUsed
+	if minGasUsedStr, ok := args["minGasUsed"].(string); ok && minGasUsedStr != "" {
+		gasUsed, err := strconv.ParseUint(minGasUsedStr, 10, 64)
+		if err == nil {
+			filter.MinGasUsed = &gasUsed
+		}
+	}
+
+	// Parse optional maxGasUsed
+	if maxGasUsedStr, ok := args["maxGasUsed"].(string); ok && maxGasUsedStr != "" {
+		gasUsed, err := strconv.ParseUint(maxGasUsedStr, 10, 64)
+		if err == nil {
+			filter.MaxGasUsed = &gasUsed
+		}
+	}
+
+	// Parse optional direction (overrides txType if both specified)
+	if direction, ok := args["direction"].(string); ok {
+		switch direction {
+		case "SENT":
+			filter.TxType = storage.TxTypeSent
+		case "RECEIVED":
+			filter.TxType = storage.TxTypeReceived
+		case "ALL":
+			filter.TxType = storage.TxTypeAll
+		}
+	}
+
 	return filter, nil
 }
 
@@ -840,4 +898,52 @@ func (s *Schema) resolveNetworkMetrics(p graphql.ResolveParams) (interface{}, er
 		"averageBlockSize":  fmt.Sprintf("%d", metrics.AverageBlockSize),
 		"timePeriod":        fmt.Sprintf("%d", metrics.TimePeriod),
 	}, nil
+}
+
+// resolveAddressStats resolves aggregated statistics for an address
+func (s *Schema) resolveAddressStats(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	addressStr, ok := p.Args["address"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid address")
+	}
+	address := common.HexToAddress(addressStr)
+
+	histStorage, ok := s.storage.(storage.HistoricalReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support historical queries")
+	}
+
+	stats, err := histStorage.GetAddressStats(ctx, address)
+	if err != nil {
+		s.logger.Error("failed to get address stats",
+			zap.String("address", addressStr),
+			zap.Error(err))
+		return nil, err
+	}
+
+	result := map[string]interface{}{
+		"address":                  stats.Address.Hex(),
+		"totalTransactions":        int(stats.TotalTransactions),
+		"sentCount":                int(stats.SentCount),
+		"receivedCount":            int(stats.ReceivedCount),
+		"successCount":             int(stats.SuccessCount),
+		"failedCount":              int(stats.FailedCount),
+		"totalGasUsed":             fmt.Sprintf("%d", stats.TotalGasUsed),
+		"totalGasCost":             stats.TotalGasCost.String(),
+		"totalValueSent":           stats.TotalValueSent.String(),
+		"totalValueReceived":       stats.TotalValueReceived.String(),
+		"contractInteractionCount": int(stats.ContractInteractionCount),
+		"uniqueAddressCount":       int(stats.UniqueAddressCount),
+	}
+
+	if stats.FirstTransactionTimestamp > 0 {
+		result["firstTransactionTimestamp"] = fmt.Sprintf("%d", stats.FirstTransactionTimestamp)
+	}
+	if stats.LastTransactionTimestamp > 0 {
+		result["lastTransactionTimestamp"] = fmt.Sprintf("%d", stats.LastTransactionTimestamp)
+	}
+
+	return result, nil
 }
