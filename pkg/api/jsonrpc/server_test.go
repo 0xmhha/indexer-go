@@ -522,6 +522,14 @@ func (m *mockStorage) DeleteTokenMetadata(ctx context.Context, address common.Ad
 func (m *mockStorage) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
 }
 
+func (m *mockStorage) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
+	return nil, nil
+}
+
 // mockStorageWithData extends mockStorage with transaction and receipt data
 type mockStorageWithData struct {
 	*mockStorage
@@ -1606,6 +1614,14 @@ func (m *mockStorageWithErrors) DeleteTokenMetadata(ctx context.Context, address
 func (m *mockStorageWithErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
 }
 
+func (m *mockStorageWithErrors) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
+	return nil, fmt.Errorf("mock error")
+}
+
+func (m *mockStorageWithErrors) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
+	return nil, fmt.Errorf("mock error")
+}
+
 // mockStorageWithNonNotFoundErrors returns non-ErrNotFound errors to test logging paths
 type mockStorageWithNonNotFoundErrors struct {
 }
@@ -2072,6 +2088,14 @@ func (m *mockStorageWithNonNotFoundErrors) DeleteTokenMetadata(ctx context.Conte
 }
 
 func (m *mockStorageWithNonNotFoundErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
+	return nil, fmt.Errorf("non-not-found error")
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
+	return nil, fmt.Errorf("non-not-found error")
 }
 
 func TestJSONRPCServerEdgeCases(t *testing.T) {

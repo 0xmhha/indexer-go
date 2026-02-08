@@ -547,6 +547,14 @@ func (m *mockStorage) DeleteTokenMetadata(ctx context.Context, address common.Ad
 func (m *mockStorage) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
 }
 
+func (m *mockStorage) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
+	return nil, nil
+}
+
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
 }
@@ -1013,6 +1021,14 @@ func (m *mockStorageWithErrors) DeleteTokenMetadata(ctx context.Context, address
 }
 
 func (m *mockStorageWithErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
+}
+
+func (m *mockStorageWithErrors) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+func (m *mockStorageWithErrors) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
+	return nil, fmt.Errorf("storage error")
 }
 
 func TestGraphQLHandler(t *testing.T) {

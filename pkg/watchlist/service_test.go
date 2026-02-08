@@ -392,6 +392,14 @@ func (m *mockStorage) DeleteTokenMetadata(ctx context.Context, address common.Ad
 func (m *mockStorage) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
 }
 
+func (m *mockStorage) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
+	return nil, nil
+}
+
 // Verify that mockStorage implements storage.Storage
 var _ storage.Storage = (*mockStorage)(nil)
 
