@@ -38,7 +38,8 @@ const (
 	prefixSysEmergency    = "/data/syscontracts/emergency/"
 	prefixSysDepositMint     = "/data/syscontracts/depositmint/"
 	prefixSysMaxProposals    = "/data/syscontracts/maxproposals/"
-	prefixSysProposalSkipped = "/data/syscontracts/proposalskipped/"
+	prefixSysProposalSkipped    = "/data/syscontracts/proposalskipped/"
+	prefixSysAuthorizedAccounts = "/data/syscontracts/authorizedaccounts/"
 
 	// WBFT data prefixes
 	prefixWBFT                  = "/data/wbft/"
@@ -434,6 +435,17 @@ func ProposalExecutionSkippedEventKey(contract common.Address, blockNumber, txIn
 // ProposalExecutionSkippedEventKeyPrefix returns the prefix for proposal execution skipped events by contract
 func ProposalExecutionSkippedEventKeyPrefix(contract common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%s/", prefixSysProposalSkipped, contract.Hex()))
+}
+
+// AuthorizedAccountEventKey returns the key for an authorized account event
+// Format: /data/syscontracts/authorizedaccounts/{contract}/{blockNumber}/{txIndex}
+func AuthorizedAccountEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%d", prefixSysAuthorizedAccounts, contract.Hex(), blockNumber, txIndex))
+}
+
+// AuthorizedAccountEventKeyPrefix returns the prefix for authorized account events by contract
+func AuthorizedAccountEventKeyPrefix(contract common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixSysAuthorizedAccounts, contract.Hex()))
 }
 
 // System contract index key functions

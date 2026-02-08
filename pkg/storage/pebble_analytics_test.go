@@ -178,9 +178,89 @@ func TestPebbleStorage_GetTopMiners_EmptyRange(t *testing.T) {
 }
 
 func TestPebbleStorage_GetTokenBalances(t *testing.T) {
-	t.Skip("TODO: Fix this test - requires block with actual transactions")
-	// This test needs to be rewritten to include transactions in the block
-	// GetReceiptsByBlockNumber requires transactions in the block to find receipts
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	storage := s.(*PebbleStorage)
+	ctx := context.Background()
+
+	// Create a block with a signed transaction
+	privateKey, _ := crypto.GenerateKey()
+	to := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	tx, err := createSignedTransaction(0, to, big.NewInt(1000), big.NewInt(1000000000), privateKey)
+	if err != nil {
+		t.Fatalf("Failed to create transaction: %v", err)
+	}
+
+	// Build block with the transaction
+	header := &types.Header{
+		Number:      big.NewInt(0),
+		GasLimit:    5000000,
+		Time:        1234567890,
+		Difficulty:  big.NewInt(0),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+		Extra:       []byte{},
+	}
+	block := types.NewBlock(header, &types.Body{Transactions: []*types.Transaction{tx}}, nil, trie.NewStackTrie(nil))
+	if err := storage.SetBlock(ctx, block); err != nil {
+		t.Fatalf("SetBlock() error = %v", err)
+	}
+
+	// Create recipient address
+	recipient := common.HexToAddress("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	signer := types.NewEIP155Signer(big.NewInt(1))
+	sender, _ := types.Sender(signer, tx)
+
+	// Create receipt with ERC20 Transfer log: sender -> recipient, 1000 tokens
+	tokenContract := common.HexToAddress("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
+	transferValue := big.NewInt(1000)
+	valueBytes := common.LeftPadBytes(transferValue.Bytes(), 32)
+
+	receipt := &types.Receipt{
+		Type:              types.LegacyTxType,
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 21000,
+		TxHash:            tx.Hash(),
+		GasUsed:           21000,
+		Logs: []*types.Log{
+			{
+				Address: tokenContract,
+				Topics: []common.Hash{
+					common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"), // Transfer topic
+					common.BytesToHash(common.LeftPadBytes(sender.Bytes(), 32)),                           // from
+					common.BytesToHash(common.LeftPadBytes(recipient.Bytes(), 32)),                        // to
+				},
+				Data: valueBytes,
+			},
+		},
+	}
+	if err := storage.SetReceipt(ctx, receipt); err != nil {
+		t.Fatalf("SetReceipt() error = %v", err)
+	}
+
+	// Set latest height
+	if err := storage.SetLatestHeight(ctx, 0); err != nil {
+		t.Fatalf("SetLatestHeight() error = %v", err)
+	}
+
+	// Query token balances for the recipient
+	balances, err := storage.GetTokenBalances(ctx, recipient, "")
+	if err != nil {
+		t.Fatalf("GetTokenBalances() error = %v", err)
+	}
+
+	if len(balances) != 1 {
+		t.Fatalf("GetTokenBalances() returned %d balances, want 1", len(balances))
+	}
+
+	if balances[0].ContractAddress != tokenContract {
+		t.Errorf("ContractAddress = %s, want %s", balances[0].ContractAddress.Hex(), tokenContract.Hex())
+	}
+	if balances[0].Balance.Cmp(transferValue) != 0 {
+		t.Errorf("Balance = %s, want %s", balances[0].Balance.String(), transferValue.String())
+	}
 }
 
 func TestPebbleStorage_GetGasStatsByBlockRange(t *testing.T) {

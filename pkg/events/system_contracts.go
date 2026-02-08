@@ -1188,13 +1188,25 @@ func (p *SystemContractEventParser) parseAuthorizedAccountAddedEvent(ctx context
 		zap.String("proposalId", proposalID.String()),
 		zap.Uint64("blockNumber", log.BlockNumber))
 
+	// Store event in storage
+	event := &storage.AuthorizedAccountEvent{
+		Contract:    log.Address,
+		BlockNumber: log.BlockNumber,
+		TxHash:      log.TxHash,
+		Account:     account,
+		ProposalID:  proposalID,
+		Action:      "added",
+	}
+	if err := p.storage.StoreAuthorizedAccountEvent(ctx, event); err != nil {
+		return fmt.Errorf("failed to store authorized account added event: %w", err)
+	}
+
 	// Publish event to EventBus
 	p.publishEvent(log.Address, SystemContractEventAuthorizedAccountAdded, log, map[string]interface{}{
 		"account":    account.Hex(),
 		"proposalId": proposalID.String(),
 	})
 
-	// Could be extended to track authorized accounts in the future
 	return nil
 }
 
@@ -1213,13 +1225,25 @@ func (p *SystemContractEventParser) parseAuthorizedAccountRemovedEvent(ctx conte
 		zap.String("proposalId", proposalID.String()),
 		zap.Uint64("blockNumber", log.BlockNumber))
 
+	// Store event in storage
+	event := &storage.AuthorizedAccountEvent{
+		Contract:    log.Address,
+		BlockNumber: log.BlockNumber,
+		TxHash:      log.TxHash,
+		Account:     account,
+		ProposalID:  proposalID,
+		Action:      "removed",
+	}
+	if err := p.storage.StoreAuthorizedAccountEvent(ctx, event); err != nil {
+		return fmt.Errorf("failed to store authorized account removed event: %w", err)
+	}
+
 	// Publish event to EventBus
 	p.publishEvent(log.Address, SystemContractEventAuthorizedAccountRemoved, log, map[string]interface{}{
 		"account":    account.Hex(),
 		"proposalId": proposalID.String(),
 	})
 
-	// Could be extended to track authorized accounts in the future
 	return nil
 }
 

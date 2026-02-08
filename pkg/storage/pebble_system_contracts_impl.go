@@ -1034,20 +1034,66 @@ func (s *PebbleStorage) GetBlacklistHistory(ctx context.Context, address common.
 	return events, nil
 }
 
-// GetAuthorizedAccounts returns list of authorized accounts
+// StoreAuthorizedAccountEvent stores an authorized account added/removed event
+func (s *PebbleStorage) StoreAuthorizedAccountEvent(ctx context.Context, event *AuthorizedAccountEvent) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to marshal authorized account event: %w", err)
+	}
+
+	key := AuthorizedAccountEventKey(event.Contract, event.BlockNumber, 0)
+	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to store authorized account event: %w", err)
+	}
+
+	return nil
+}
+
+// GetAuthorizedAccounts returns list of authorized accounts by replaying add/remove events
 func (s *PebbleStorage) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
 
-	// NOTE: Authorized accounts tracking is not yet implemented in the storage layer
-	// The event parsers log these events but don't store them yet
-	// This would require:
-	// 1. Adding AuthorizedAccountEvent type to storage/types.go
-	// 2. Adding schema keys for authorized account index
-	// 3. Implementing storage methods in parseAuthorizedAccountAdded/RemovedEvent
-	// For now, return empty list instead of error for API compatibility
-	return []common.Address{}, nil
+	// Scan all authorized account events for GovCouncil contract and replay to derive current state
+	keyPrefix := AuthorizedAccountEventKeyPrefix(GovCouncilAddress)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	// Replay events in order to derive current authorized accounts set
+	accountSet := make(map[common.Address]bool)
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &AuthorizedAccountEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode authorized account event: %w", err)
+		}
+		if event.Action == "added" {
+			accountSet[event.Account] = true
+		} else if event.Action == "removed" {
+			delete(accountSet, event.Account)
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	accounts := make([]common.Address, 0, len(accountSet))
+	for addr := range accountSet {
+		accounts = append(accounts, addr)
+	}
+
+	return accounts, nil
 }
 
 // GetProposals returns proposals with optional status filter

@@ -196,6 +196,17 @@ type ProposalExecutionSkippedEvent struct {
 	Timestamp   uint64
 }
 
+// AuthorizedAccountEvent represents AuthorizedAccountAdded/Removed events
+type AuthorizedAccountEvent struct {
+	Contract    common.Address
+	BlockNumber uint64
+	TxHash      common.Hash
+	Account     common.Address
+	ProposalID  *big.Int
+	Action      string // "added" or "removed"
+	Timestamp   uint64
+}
+
 // SystemContractReader provides read-only access to system contract events
 type SystemContractReader interface {
 	// NativeCoinAdapter queries
@@ -258,6 +269,7 @@ type SystemContractWriter interface {
 	StoreDepositMintProposal(ctx context.Context, proposal *DepositMintProposal) error
 	StoreMaxProposalsUpdateEvent(ctx context.Context, event *MaxProposalsUpdateEvent) error
 	StoreProposalExecutionSkippedEvent(ctx context.Context, event *ProposalExecutionSkippedEvent) error
+	StoreAuthorizedAccountEvent(ctx context.Context, event *AuthorizedAccountEvent) error
 	UpdateTotalSupply(ctx context.Context, delta *big.Int) error
 	UpdateActiveMinter(ctx context.Context, minter common.Address, allowance *big.Int, active bool) error
 	UpdateActiveValidator(ctx context.Context, validator common.Address, active bool) error
