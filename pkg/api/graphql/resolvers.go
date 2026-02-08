@@ -1930,3 +1930,100 @@ func (s *Schema) depositMintProposalToMap(proposal *storage.DepositMintProposal)
 		"timestamp":       fmt.Sprintf("%d", proposal.Timestamp),
 	}
 }
+
+// resolveMaxProposalsUpdateHistory resolves max proposals per member update history
+func (s *Schema) resolveMaxProposalsUpdateHistory(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	contractStr, ok := p.Args["contract"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid contract address")
+	}
+
+	contract := common.HexToAddress(contractStr)
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetMaxProposalsUpdateHistory(ctx, contract)
+	if err != nil {
+		s.logger.Error("failed to get max proposals update history",
+			zap.String("contract", contractStr),
+			zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, event := range events {
+		result = append(result, map[string]interface{}{
+			"contract":        event.Contract.Hex(),
+			"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
+			"transactionHash": event.TxHash.Hex(),
+			"oldMax":          int(event.OldMax),
+			"newMax":          int(event.NewMax),
+			"timestamp":       fmt.Sprintf("%d", event.Timestamp),
+		})
+	}
+
+	if result == nil {
+		result = []map[string]interface{}{}
+	}
+
+	return result, nil
+}
+
+// resolveProposalExecutionSkippedEvents resolves proposal execution skipped events
+func (s *Schema) resolveProposalExecutionSkippedEvents(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	contractStr, ok := p.Args["contract"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid contract address")
+	}
+
+	contract := common.HexToAddress(contractStr)
+
+	var proposalID *big.Int
+	if pidStr, ok := p.Args["proposalId"].(string); ok && pidStr != "" {
+		proposalID = new(big.Int)
+		proposalID.SetString(pidStr, 10)
+	}
+
+	reader, ok := s.storage.(storage.SystemContractReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	}
+
+	events, err := reader.GetProposalExecutionSkippedEvents(ctx, contract, proposalID)
+	if err != nil {
+		s.logger.Error("failed to get proposal execution skipped events",
+			zap.String("contract", contractStr),
+			zap.Error(err))
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for _, event := range events {
+		pidStr := "0"
+		if event.ProposalID != nil {
+			pidStr = event.ProposalID.String()
+		}
+		result = append(result, map[string]interface{}{
+			"contract":        event.Contract.Hex(),
+			"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
+			"transactionHash": event.TxHash.Hex(),
+			"account":         event.Account.Hex(),
+			"proposalId":      pidStr,
+			"reason":          event.Reason,
+			"timestamp":       fmt.Sprintf("%d", event.Timestamp),
+		})
+	}
+
+	if result == nil {
+		result = []map[string]interface{}{}
+	}
+
+	return result, nil
+}

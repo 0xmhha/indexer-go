@@ -36,7 +36,9 @@ const (
 	prefixSysMember       = "/data/syscontracts/member/"
 	prefixSysGasTip       = "/data/syscontracts/gastip/"
 	prefixSysEmergency    = "/data/syscontracts/emergency/"
-	prefixSysDepositMint  = "/data/syscontracts/depositmint/"
+	prefixSysDepositMint     = "/data/syscontracts/depositmint/"
+	prefixSysMaxProposals    = "/data/syscontracts/maxproposals/"
+	prefixSysProposalSkipped = "/data/syscontracts/proposalskipped/"
 
 	// WBFT data prefixes
 	prefixWBFT                  = "/data/wbft/"
@@ -410,6 +412,28 @@ func EmergencyPauseEventKey(contract common.Address, blockNumber, txIndex uint64
 // Format: /data/syscontracts/depositmint/{proposalId}
 func DepositMintProposalKey(proposalId string) []byte {
 	return []byte(fmt.Sprintf("%s%s", prefixSysDepositMint, proposalId))
+}
+
+// MaxProposalsUpdateEventKey returns the key for storing a max proposals update event
+// Format: /data/syscontracts/maxproposals/{contract}/{blockNumber}/{txIndex}
+func MaxProposalsUpdateEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%d", prefixSysMaxProposals, contract.Hex(), blockNumber, txIndex))
+}
+
+// MaxProposalsUpdateEventKeyPrefix returns the prefix for max proposals update events by contract
+func MaxProposalsUpdateEventKeyPrefix(contract common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixSysMaxProposals, contract.Hex()))
+}
+
+// ProposalExecutionSkippedEventKey returns the key for storing a proposal execution skipped event
+// Format: /data/syscontracts/proposalskipped/{contract}/{blockNumber}/{txIndex}
+func ProposalExecutionSkippedEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%d", prefixSysProposalSkipped, contract.Hex(), blockNumber, txIndex))
+}
+
+// ProposalExecutionSkippedEventKeyPrefix returns the prefix for proposal execution skipped events by contract
+func ProposalExecutionSkippedEventKeyPrefix(contract common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixSysProposalSkipped, contract.Hex()))
 }
 
 // System contract index key functions

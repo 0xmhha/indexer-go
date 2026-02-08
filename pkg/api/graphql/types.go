@@ -84,8 +84,10 @@ var (
 	validatorChangeEventType      *graphql.Object
 	memberChangeEventType         *graphql.Object
 	emergencyPauseEventType       *graphql.Object
-	depositMintProposalType       *graphql.Object
-	minterInfoType                *graphql.Object
+	depositMintProposalType            *graphql.Object
+	maxProposalsUpdateEventType        *graphql.Object
+	proposalExecutionSkippedEventType  *graphql.Object
+	minterInfoType                     *graphql.Object
 	validatorInfoType             *graphql.Object
 	systemContractEventFilterType *graphql.InputObject
 	proposalFilterType            *graphql.InputObject
@@ -1463,6 +1465,72 @@ func initGovernanceTypes() {
 			},
 			"timestamp": &graphql.Field{
 				Type: graphql.NewNonNull(bigIntType),
+			},
+		},
+	})
+
+	// MaxProposalsUpdateEvent type
+	maxProposalsUpdateEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "MaxProposalsUpdateEvent",
+		Fields: graphql.Fields{
+			"contract": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Contract address",
+			},
+			"blockNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number",
+			},
+			"transactionHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Transaction hash",
+			},
+			"oldMax": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Previous max proposals per member",
+			},
+			"newMax": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "New max proposals per member",
+			},
+			"timestamp": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Event timestamp",
+			},
+		},
+	})
+
+	// ProposalExecutionSkippedEvent type
+	proposalExecutionSkippedEventType = graphql.NewObject(graphql.ObjectConfig{
+		Name: "ProposalExecutionSkippedEvent",
+		Fields: graphql.Fields{
+			"contract": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Contract address",
+			},
+			"blockNumber": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number",
+			},
+			"transactionHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Transaction hash",
+			},
+			"account": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Account that triggered the skip",
+			},
+			"proposalId": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Proposal ID",
+			},
+			"reason": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Reason for skipping execution",
+			},
+			"timestamp": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Event timestamp",
 			},
 		},
 	})

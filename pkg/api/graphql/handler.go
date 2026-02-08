@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
@@ -21,8 +22,9 @@ type Handler struct {
 
 // HandlerOptions contains optional configuration for the GraphQL handler
 type HandlerOptions struct {
-	RPCProxy            *rpcproxy.Proxy
-	NotificationService notifications.Service
+	RPCProxy                    *rpcproxy.Proxy
+	NotificationService         notifications.Service
+	ContractRegistrationService *events.ContractRegistrationService
 }
 
 // NewHandler creates a new GraphQL handler
@@ -54,6 +56,12 @@ func NewHandlerWithOptions(store storage.Storage, logger *zap.Logger, opts *Hand
 	if opts != nil && opts.NotificationService != nil {
 		builder = builder.WithNotificationService(opts.NotificationService).WithNotificationQueries()
 		logger.Info("GraphQL Notification queries enabled")
+	}
+
+	// Add dynamic contract queries if contract registration service is provided
+	if opts != nil && opts.ContractRegistrationService != nil {
+		builder = builder.WithContractRegistrationService(opts.ContractRegistrationService).WithDynamicContractQueries()
+		logger.Info("GraphQL Dynamic Contract queries enabled")
 	}
 
 	schema, err := builder.Build()

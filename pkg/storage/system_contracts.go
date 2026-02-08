@@ -229,6 +229,10 @@ type SystemContractReader interface {
 	GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*Proposal, error)
 	GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*ProposalVote, error)
 	GetMemberHistory(ctx context.Context, contract common.Address) ([]*MemberChangeEvent, error)
+
+	// GovBase governance queries
+	GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*MaxProposalsUpdateEvent, error)
+	GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*ProposalExecutionSkippedEvent, error)
 }
 
 // SystemContractWriter provides write access for system contract event indexing

@@ -14,8 +14,8 @@ import (
 // Ensure PebbleStorage implements SystemContractReader
 var _ SystemContractReader = (*PebbleStorage)(nil)
 
-// Note: SystemContractWriter compile-time check omitted because StoreMaxProposalsUpdateEvent
-// is not yet implemented (same as before this refactoring)
+// Ensure PebbleStorage implements SystemContractWriter
+var _ SystemContractWriter = (*PebbleStorage)(nil)
 
 // ============================================================================
 // System Contract Writer Methods
@@ -1195,4 +1195,118 @@ func (s *PebbleStorage) GetMemberHistory(ctx context.Context, contract common.Ad
 	}
 
 	return events, nil
+}
+
+// StoreMaxProposalsUpdateEvent stores a max proposals per member update event
+func (s *PebbleStorage) StoreMaxProposalsUpdateEvent(ctx context.Context, event *MaxProposalsUpdateEvent) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return err
+	}
+
+	txIndex := uint64(0)
+	key := MaxProposalsUpdateEventKey(event.Contract, event.BlockNumber, txIndex)
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to encode max proposals update event: %w", err)
+	}
+
+	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to store max proposals update event: %w", err)
+	}
+
+	return nil
+}
+
+// StoreProposalExecutionSkippedEvent stores a proposal execution skipped event
+func (s *PebbleStorage) StoreProposalExecutionSkippedEvent(ctx context.Context, event *ProposalExecutionSkippedEvent) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return err
+	}
+
+	txIndex := uint64(0)
+	key := ProposalExecutionSkippedEventKey(event.Contract, event.BlockNumber, txIndex)
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to encode proposal execution skipped event: %w", err)
+	}
+
+	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to store proposal execution skipped event: %w", err)
+	}
+
+	return nil
+}
+
+// GetMaxProposalsUpdateHistory returns max proposals per member update history for a contract
+func (s *PebbleStorage) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*MaxProposalsUpdateEvent, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	keyPrefix := MaxProposalsUpdateEventKeyPrefix(contract)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var results []*MaxProposalsUpdateEvent
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &MaxProposalsUpdateEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode max proposals update event: %w", err)
+		}
+		results = append(results, event)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return results, nil
+}
+
+// GetProposalExecutionSkippedEvents returns proposal execution skipped events for a contract
+func (s *PebbleStorage) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*ProposalExecutionSkippedEvent, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+
+	keyPrefix := ProposalExecutionSkippedEventKeyPrefix(contract)
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: keyPrefix,
+		UpperBound: append(keyPrefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var results []*ProposalExecutionSkippedEvent
+	for iter.First(); iter.Valid(); iter.Next() {
+		event := &ProposalExecutionSkippedEvent{}
+		if err := json.Unmarshal(iter.Value(), event); err != nil {
+			return nil, fmt.Errorf("failed to decode proposal execution skipped event: %w", err)
+		}
+		// Filter by proposalID if specified
+		if proposalID != nil && event.ProposalID != nil && event.ProposalID.Cmp(proposalID) != 0 {
+			continue
+		}
+		results = append(results, event)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return results, nil
 }
