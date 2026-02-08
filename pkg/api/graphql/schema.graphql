@@ -1054,6 +1054,46 @@ type Query {
     tokenType: String
   ): [TokenBalance!]!
 
+  # Unified search across blocks, transactions, and addresses
+  search(
+    query: String!
+    types: [String!]
+    limit: Int
+  ): [SearchResult!]!
+
+  # Get gas usage statistics for a block range
+  gasStats(
+    fromBlock: BigInt!
+    toBlock: BigInt!
+  ): GasStats
+
+  # Get gas usage statistics for a specific address
+  addressGasStats(
+    address: Address!
+    fromBlock: BigInt!
+    toBlock: BigInt!
+  ): AddressGasStats
+
+  # Get top addresses by total gas used
+  topAddressesByGasUsed(
+    limit: Int
+    fromBlock: BigInt!
+    toBlock: BigInt!
+  ): [AddressGasStats!]!
+
+  # Get top addresses by transaction count
+  topAddressesByTxCount(
+    limit: Int
+    fromBlock: BigInt!
+    toBlock: BigInt!
+  ): [AddressActivityStats!]!
+
+  # Get network activity metrics for a time range
+  networkMetrics(
+    fromTime: BigInt!
+    toTime: BigInt!
+  ): NetworkMetrics
+
   # ========== System Contract Queries ==========
 
   # Get current total supply of native coin
@@ -1073,6 +1113,9 @@ type Query {
 
   # Get list of active minters
   activeMinters: [MinterInfo!]!
+
+  # Get only the addresses of active minters (simplified version of activeMinters)
+  activeMinterAddresses: [Address!]!
 
   # Get minter allowance for a specific minter
   minterAllowance(minter: Address!): BigInt!
@@ -1094,6 +1137,9 @@ type Query {
 
   # Get list of active validators
   activeValidators: [ValidatorInfo!]!
+
+  # Get only the addresses of active validators (simplified version of activeValidators)
+  activeValidatorAddresses: [Address!]!
 
   # Get validator change history
   validatorHistory(
@@ -1166,11 +1212,17 @@ type Query {
   # Get WBFT consensus metadata for a block by hash
   wbftBlockExtraByHash(blockHash: Hash!): WBFTBlockExtra
 
+  # Alias for wbftBlockExtra - returns WBFT block consensus data
+  wbftBlock(number: BigInt!): WBFTBlockExtra
+
   # Get epoch information for a specific epoch
   epochInfo(epochNumber: BigInt!): EpochInfo
 
   # Get the most recent epoch information
   latestEpochInfo: EpochInfo
+
+  # Alias for epochInfo - returns epoch information by epoch number
+  epochByNumber(number: BigInt!): EpochInfo
 
   # Get paginated list of epochs (latest first)
   epochs(pagination: PaginationInput): EpochSummaryConnection!
@@ -1432,6 +1484,30 @@ type Query {
 
   # Get total SetCode transaction count
   setCodeTransactionCount: Int!
+
+  # ========== Notification Queries ==========
+
+  # List all notification settings
+  notificationSettings(
+    filter: NotificationSettingsFilterInput
+  ): [NotificationSetting!]!
+
+  # Get a notification setting by ID
+  notificationSetting(id: ID!): NotificationSetting
+
+  # List notifications with optional filtering
+  notifications(
+    filter: NotificationsFilterInput
+  ): [Notification!]!
+
+  # Get a notification by ID
+  notification(id: ID!): Notification
+
+  # Get statistics for a notification setting
+  notificationStats(settingId: ID!): NotificationStats
+
+  # Get delivery history for a notification
+  deliveryHistory(notificationId: ID!): [DeliveryHistory!]!
 }
 
 # Block connection for pagination
@@ -2857,6 +2933,80 @@ type AddressStats {
   lastTransactionTimestamp: BigInt
 }
 
+# ========== Search & Analytics Types ==========
+
+# SearchResult represents a unified search result
+type SearchResult {
+  # Type of result: block, transaction, address, or contract
+  type: String!
+  # The matched value (hash, address, or block number)
+  value: String!
+  # Human-readable display label
+  label: String
+  # Additional metadata as JSON string
+  metadata: String
+}
+
+# GasStats represents gas usage statistics for a block range
+type GasStats {
+  # Total gas used in the range
+  totalGasUsed: BigInt!
+  # Total gas limit in the range
+  totalGasLimit: BigInt!
+  # Average gas used per block
+  averageGasUsed: BigInt!
+  # Average gas price
+  averageGasPrice: BigInt!
+  # Number of blocks in the range
+  blockCount: BigInt!
+  # Number of transactions in the range
+  transactionCount: BigInt!
+}
+
+# AddressGasStats represents gas usage statistics for a specific address
+type AddressGasStats {
+  # The address
+  address: Address!
+  # Total gas used by this address
+  totalGasUsed: BigInt!
+  # Number of transactions
+  transactionCount: BigInt!
+  # Average gas per transaction
+  averageGasPerTx: BigInt!
+  # Total fees paid (gas * gasPrice)
+  totalFeesPaid: BigInt!
+}
+
+# AddressActivityStats represents activity statistics for an address
+type AddressActivityStats {
+  # The address
+  address: Address!
+  # Total number of transactions
+  transactionCount: BigInt!
+  # Total gas used
+  totalGasUsed: BigInt!
+  # Most recent block with activity
+  lastActivityBlock: BigInt!
+  # First block with activity
+  firstActivityBlock: BigInt!
+}
+
+# NetworkMetrics represents network activity metrics for a time range
+type NetworkMetrics {
+  # Transactions per second
+  tps: Float!
+  # Average block time in seconds
+  blockTime: Float!
+  # Total number of blocks
+  totalBlocks: BigInt!
+  # Total number of transactions
+  totalTransactions: BigInt!
+  # Average block size in gas
+  averageBlockSize: BigInt!
+  # Time period for this metric (in seconds)
+  timePeriod: BigInt!
+}
+
 # ========== Fee Delegation Types ==========
 
 # Overall fee delegation statistics
@@ -2955,6 +3105,247 @@ type TokenMetadataConnection {
   pageInfo: PageInfo!
 }
 
+# ========== Notification Types ==========
+
+# Notification delivery type
+enum NotificationType {
+  WEBHOOK
+  EMAIL
+  SLACK
+}
+
+# Event type that triggers notification
+enum NotificationEventType {
+  BLOCK
+  TRANSACTION
+  LOG
+  CONTRACT_CREATION
+  TOKEN_TRANSFER
+}
+
+# Notification delivery status
+enum NotificationStatus {
+  PENDING
+  RETRYING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+# Notification delivery destination configuration
+type NotificationDestination {
+  # Webhook URL for delivery
+  webhookURL: String
+  # Webhook HMAC secret (masked)
+  webhookSecret: String
+  # Email recipients
+  emailTo: [String]
+  # Email subject template
+  emailSubject: String
+  # Slack webhook URL
+  slackWebhookURL: String
+  # Slack channel
+  slackChannel: String
+  # Slack bot username
+  slackUsername: String
+}
+
+# Filter configuration for notifications
+type NotificationFilter {
+  # Filter by contract/account addresses
+  addresses: [Address]
+  # Filter by log topics
+  topics: [[Hash]]
+  # Minimum transaction value filter
+  minValue: BigInt
+}
+
+# Notification setting configuration
+type NotificationSetting {
+  # Setting unique identifier
+  id: ID!
+  # Setting name
+  name: String!
+  # Notification type
+  type: NotificationType!
+  # Whether the setting is enabled
+  enabled: Boolean!
+  # Event types that trigger notifications
+  eventTypes: [NotificationEventType!]!
+  # Optional filter configuration
+  filter: NotificationFilter
+  # Delivery destination configuration
+  destination: NotificationDestination!
+  # Creation timestamp
+  createdAt: String!
+  # Last update timestamp
+  updatedAt: String!
+}
+
+# Notification statistics for a setting
+type NotificationStats {
+  # Setting identifier
+  settingId: ID!
+  # Total notifications sent
+  totalSent: Int!
+  # Total notifications failed
+  totalFailed: Int!
+  # Success rate percentage
+  successRate: Float!
+  # Average delivery time in milliseconds
+  avgDeliveryMs: Float!
+  # Last successful delivery timestamp
+  lastSentAt: String
+  # Last failed delivery timestamp
+  lastFailedAt: String
+}
+
+# Notification record
+type Notification {
+  # Notification unique identifier
+  id: ID!
+  # Associated setting identifier
+  settingId: ID!
+  # Notification type
+  type: NotificationType!
+  # Event type that triggered the notification
+  eventType: NotificationEventType!
+  # Delivery status
+  status: NotificationStatus!
+  # Number of retry attempts
+  retryCount: Int!
+  # Error message if failed
+  error: String
+  # Associated block number
+  blockNumber: BigInt
+  # Associated block hash
+  blockHash: Hash
+  # Creation timestamp
+  createdAt: String!
+  # Delivery timestamp
+  sentAt: String
+  # Next retry timestamp
+  nextRetry: String
+}
+
+# Notification delivery history record
+type DeliveryHistory {
+  # Notification identifier
+  notificationId: ID!
+  # Setting identifier
+  settingId: ID!
+  # Attempt number
+  attempt: Int!
+  # Whether delivery succeeded
+  success: Boolean!
+  # HTTP status code
+  statusCode: Int
+  # Error message if failed
+  error: String
+  # Delivery duration in milliseconds
+  durationMs: Int!
+  # Delivery timestamp
+  timestamp: String!
+}
+
+# Notification delivery result
+type DeliveryResult {
+  # Whether delivery succeeded
+  success: Boolean!
+  # HTTP status code
+  statusCode: Int
+  # Error message if failed
+  error: String
+  # Delivery duration in milliseconds
+  durationMs: Int!
+}
+
+# ========== Notification Input Types ==========
+
+# Input for notification destination configuration
+input NotificationDestinationInput {
+  # Webhook URL for delivery
+  webhookURL: String
+  # Webhook HMAC secret
+  webhookSecret: String
+  # Email recipients
+  emailTo: [String]
+  # Email subject template
+  emailSubject: String
+  # Slack webhook URL
+  slackWebhookURL: String
+  # Slack channel
+  slackChannel: String
+  # Slack bot username
+  slackUsername: String
+}
+
+# Input for notification filter configuration
+input NotificationFilterInput {
+  # Filter by contract/account addresses
+  addresses: [Address]
+  # Filter by log topics
+  topics: [[String]]
+  # Minimum transaction value filter
+  minValue: String
+}
+
+# Input for creating a notification setting
+input CreateNotificationSettingInput {
+  # Setting name
+  name: String!
+  # Notification type
+  type: NotificationType!
+  # Whether the setting is enabled
+  enabled: Boolean
+  # Event types that trigger notifications
+  eventTypes: [NotificationEventType!]!
+  # Optional filter configuration
+  filter: NotificationFilterInput
+  # Delivery destination configuration
+  destination: NotificationDestinationInput!
+}
+
+# Input for updating a notification setting
+input UpdateNotificationSettingInput {
+  # Setting name
+  name: String
+  # Whether the setting is enabled
+  enabled: Boolean
+  # Event types that trigger notifications
+  eventTypes: [NotificationEventType!]
+  # Optional filter configuration
+  filter: NotificationFilterInput
+  # Delivery destination configuration
+  destination: NotificationDestinationInput
+}
+
+# Filter for listing notification settings
+input NotificationSettingsFilterInput {
+  # Filter by notification types
+  types: [NotificationType]
+  # Filter by enabled status
+  enabled: Boolean
+  # Maximum results
+  limit: Int
+  # Pagination offset
+  offset: Int
+}
+
+# Filter for listing notifications
+input NotificationsFilterInput {
+  # Filter by setting ID
+  settingId: ID
+  # Filter by status
+  status: [NotificationStatus]
+  # Filter by event types
+  eventTypes: [NotificationEventType]
+  # Maximum results
+  limit: Int
+  # Pagination offset
+  offset: Int
+}
+
 # Mutation type for write operations
 type Mutation {
   # ========== Multi-Chain Mutations ==========
@@ -3001,4 +3392,24 @@ type Mutation {
 
   # Unregister a contract from dynamic event parsing
   unregisterContract(address: Address!): Boolean!
+
+  # ========== Notification Mutations ==========
+
+  # Create a new notification setting
+  createNotificationSetting(input: CreateNotificationSettingInput!): NotificationSetting!
+
+  # Update an existing notification setting
+  updateNotificationSetting(id: ID!, input: UpdateNotificationSettingInput!): NotificationSetting!
+
+  # Delete a notification setting
+  deleteNotificationSetting(id: ID!): Boolean!
+
+  # Test a notification setting by sending a sample notification
+  testNotificationSetting(id: ID!): DeliveryResult!
+
+  # Retry a failed notification
+  retryNotification(id: ID!): Boolean!
+
+  # Cancel a pending notification
+  cancelNotification(id: ID!): Boolean!
 }
