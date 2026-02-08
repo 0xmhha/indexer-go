@@ -1159,6 +1159,17 @@ func initGovernanceTypes() {
 			"withdrawalId": &graphql.Field{
 				Type: graphql.String,
 			},
+			// Alias for frontend compatibility
+			"burnTxId": &graphql.Field{
+				Type:        graphql.String,
+				Description: "Alias for withdrawalId - burn transaction identifier",
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					if source, ok := p.Source.(map[string]interface{}); ok {
+						return source["withdrawalId"], nil
+					}
+					return nil, nil
+				},
+			},
 		},
 	})
 
@@ -1172,6 +1183,17 @@ func initGovernanceTypes() {
 			"transactionHash": &graphql.Field{
 				Type: graphql.NewNonNull(hashType),
 			},
+			// Alias for frontend compatibility
+			"txHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Alias for transactionHash",
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					if source, ok := p.Source.(map[string]interface{}); ok {
+						return source["transactionHash"], nil
+					}
+					return nil, nil
+				},
+			},
 			"minter": &graphql.Field{
 				Type: graphql.NewNonNull(addressType),
 			},
@@ -1180,6 +1202,18 @@ func initGovernanceTypes() {
 			},
 			"action": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.String),
+			},
+			// Derived field for frontend compatibility
+			"isActive": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether the minter is active (derived from action field)",
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					if source, ok := p.Source.(map[string]interface{}); ok {
+						action, _ := source["action"].(string)
+						return action != "removed", nil
+					}
+					return false, nil
+				},
 			},
 			"timestamp": &graphql.Field{
 				Type: graphql.NewNonNull(bigIntType),

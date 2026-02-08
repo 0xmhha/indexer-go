@@ -692,12 +692,6 @@ func (b *SchemaBuilder) WithConsensusQueries() *SchemaBuilder {
 		Type:    epochInfoType,
 		Resolve: s.resolveLatestEpochInfo,
 	}
-	// Alias for frontend compatibility
-	b.queries["latestEpochData"] = &graphql.Field{
-		Type:        epochInfoType,
-		Description: "Alias for latestEpochInfo - returns the latest epoch information",
-		Resolve:     s.resolveLatestEpochInfo,
-	}
 	b.queries["epochs"] = &graphql.Field{
 		Type:        graphql.NewNonNull(epochSummaryConnectionType),
 		Description: "Get paginated list of epochs (latest first)",
@@ -725,23 +719,6 @@ func (b *SchemaBuilder) WithConsensusQueries() *SchemaBuilder {
 	}
 	b.queries["allValidatorsSigningStats"] = &graphql.Field{
 		Type: graphql.NewNonNull(validatorSigningStatsConnectionType),
-		Args: graphql.FieldConfigArgument{
-			"fromBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveAllValidatorsSigningStats,
-	}
-	// Alias for frontend compatibility
-	b.queries["allValidatorStats"] = &graphql.Field{
-		Type:        graphql.NewNonNull(validatorSigningStatsConnectionType),
-		Description: "Alias for allValidatorsSigningStats - returns signing statistics for all validators",
 		Args: graphql.FieldConfigArgument{
 			"fromBlock": &graphql.ArgumentConfig{
 				Type: graphql.NewNonNull(bigIntType),

@@ -1077,6 +1077,18 @@ type Query {
   # Get minter configuration history
   minterHistory(minter: Address!): [MinterConfigEvent!]!
 
+  # Get minter configuration change history across all minters in a block range
+  minterConfigHistory(filter: SystemContractEventFilter!): [MinterConfigEvent!]!
+
+  # Get token burn history (alias for burnEvents)
+  burnHistory(
+    filter: SystemContractEventFilter!
+    pagination: PaginationInput
+  ): BurnEventConnection!
+
+  # Get list of authorized accounts from GovCouncil contract
+  authorizedAccounts: [Address!]!
+
   # Get list of active validators
   activeValidators: [ValidatorInfo!]!
 
@@ -1184,6 +1196,35 @@ type Query {
 
   # Get list of validators who signed a specific block
   blockSigners(blockNumber: BigInt!): BlockSigners
+
+  # ========== Enhanced Consensus Queries ==========
+
+  # Get complete consensus information for a specific block
+  consensusData(blockNumber: BigInt!): ConsensusData
+
+  # Get enhanced validator statistics over a block range
+  validatorStats(address: Address!, fromBlock: BigInt!, toBlock: BigInt!): ValidatorStats
+
+  # Get detailed validator participation over a block range
+  validatorParticipation(
+    address: Address!
+    fromBlock: BigInt!
+    toBlock: BigInt!
+    pagination: PaginationInput
+  ): ValidatorParticipation
+
+  # Get enhanced statistics for all validators in a block range
+  allValidatorStats(
+    fromBlock: BigInt!
+    toBlock: BigInt!
+    pagination: PaginationInput
+  ): [ValidatorStats!]!
+
+  # Get enhanced epoch data by epoch number
+  epochData(epochNumber: BigInt!): EpochData
+
+  # Get the latest enhanced epoch data
+  latestEpochData: EpochData
 
   # ========== Address Indexing Queries ==========
 
@@ -1665,6 +1706,9 @@ type BurnEvent {
 
   # Withdrawal ID (for GovMinter)
   withdrawalId: String
+
+  # Alias for withdrawalId (frontend compatibility)
+  burnTxId: String
 }
 
 # MinterConfigEvent represents minter configuration changes
@@ -1681,8 +1725,14 @@ type MinterConfigEvent {
   # Minter allowance
   allowance: BigInt!
 
+  # Alias for transactionHash (frontend compatibility)
+  txHash: Hash!
+
   # Action (configured or removed)
   action: String!
+
+  # Whether the minter is active (derived from action)
+  isActive: Boolean!
 
   # Timestamp
   timestamp: BigInt!
