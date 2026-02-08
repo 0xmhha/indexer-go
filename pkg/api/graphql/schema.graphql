@@ -282,6 +282,9 @@ type Block {
   # Transaction count
   transactionCount: Int!
 
+  # Alias for transactionCount (frontend compatibility)
+  txCount: Int!
+
   # Uncle blocks (ommers)
   uncles: [Hash!]!
 }
@@ -1097,7 +1100,7 @@ type Query {
 
   # Get governance proposals
   proposals(
-    filter: ProposalFilter!
+    filter: ProposalFilter
     pagination: PaginationInput
   ): ProposalConnection!
 
@@ -1624,6 +1627,9 @@ type MintEvent {
   # Transaction hash
   transactionHash: Hash!
 
+  # Alias for transactionHash (frontend compatibility)
+  txHash: Hash!
+
   # Minter address
   minter: Address!
 
@@ -1644,6 +1650,9 @@ type BurnEvent {
 
   # Transaction hash
   transactionHash: Hash!
+
+  # Alias for transactionHash (frontend compatibility)
+  txHash: Hash!
 
   # Burner address
   burner: Address!

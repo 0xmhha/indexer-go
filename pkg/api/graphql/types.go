@@ -438,6 +438,17 @@ func initCoreTypes() {
 			"transactionCount": &graphql.Field{
 				Type: graphql.NewNonNull(graphql.Int),
 			},
+			// Alias for frontend compatibility (subscription uses txCount)
+			"txCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Alias for transactionCount",
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					if source, ok := p.Source.(map[string]interface{}); ok {
+						return source["transactionCount"], nil
+					}
+					return 0, nil
+				},
+			},
 			"uncles": &graphql.Field{
 				Type: graphql.NewList(graphql.NewNonNull(hashType)),
 			},
@@ -1089,6 +1100,17 @@ func initGovernanceTypes() {
 			"transactionHash": &graphql.Field{
 				Type: graphql.NewNonNull(hashType),
 			},
+			// Alias for frontend compatibility
+			"txHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Alias for transactionHash",
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					if source, ok := p.Source.(map[string]interface{}); ok {
+						return source["transactionHash"], nil
+					}
+					return nil, nil
+				},
+			},
 			"minter": &graphql.Field{
 				Type: graphql.NewNonNull(addressType),
 			},
@@ -1113,6 +1135,17 @@ func initGovernanceTypes() {
 			},
 			"transactionHash": &graphql.Field{
 				Type: graphql.NewNonNull(hashType),
+			},
+			// Alias for frontend compatibility
+			"txHash": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Alias for transactionHash",
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					if source, ok := p.Source.(map[string]interface{}); ok {
+						return source["transactionHash"], nil
+					}
+					return nil, nil
+				},
 			},
 			"burner": &graphql.Field{
 				Type: graphql.NewNonNull(addressType),

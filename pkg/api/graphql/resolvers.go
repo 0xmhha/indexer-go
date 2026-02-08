@@ -91,8 +91,12 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
 
+	// Track whether user explicitly specified a number range filter
+	// Must be checked BEFORE mutating filter.NumberTo below
+	userRequestedRange := filter.hasNumberFilter()
+
 	// Set default range if not specified
-	if !filter.hasNumberFilter() {
+	if !userRequestedRange {
 		filter.NumberTo = latestHeight
 	} else if filter.NumberTo == 0 {
 		filter.NumberTo = latestHeight
@@ -104,7 +108,9 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	}
 
 	// Calculate block range based on pagination mode
-	blockRange, ok := s.calculateBlockRange(filter, latestHeight, pagination)
+	// Default queries (no user filter) use reverse order (latest blocks first)
+	// User-filtered queries use forward order
+	blockRange, ok := s.calculateBlockRange(filter, latestHeight, pagination, userRequestedRange)
 	if !ok {
 		return emptyConnection(pagination.Offset > 0), nil
 	}
@@ -123,12 +129,14 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	nodes := s.blocksToNodes(filteredBlocks)
 	totalCount := s.calculateBlockTotalCount(ctx, filter, filteredBlocks, latestHeight)
 
-	return s.buildBlockConnectionResponse(filteredBlocks, nodes, totalCount, filter, blockRange, pagination), nil
+	reverseOrder := !userRequestedRange
+	return s.buildBlockConnectionResponse(filteredBlocks, nodes, totalCount, filter, blockRange, pagination, reverseOrder), nil
 }
 
 // calculateBlockRange calculates the block range for pagination
-func (s *Schema) calculateBlockRange(filter BlockFilter, latestHeight uint64, pagination PaginationParams) (BlockRange, bool) {
-	if !filter.hasNumberFilter() {
+// userRequestedRange indicates whether the user explicitly specified a number range filter
+func (s *Schema) calculateBlockRange(filter BlockFilter, latestHeight uint64, pagination PaginationParams, userRequestedRange bool) (BlockRange, bool) {
+	if !userRequestedRange {
 		return calculateBlockRangeReverse(latestHeight, pagination.Offset, pagination.Limit)
 	}
 	return calculateBlockRangeForward(filter.NumberFrom, filter.NumberTo, pagination.Offset, pagination.Limit)
@@ -158,9 +166,10 @@ func (s *Schema) calculateBlockTotalCount(ctx context.Context, filter BlockFilte
 }
 
 // buildBlockConnectionResponse builds the GraphQL connection response for blocks
-func (s *Schema) buildBlockConnectionResponse(blocks []*types.Block, nodes []interface{}, totalCount int, filter BlockFilter, blockRange BlockRange, pagination PaginationParams) map[string]interface{} {
+// reverseOrder indicates default (no filter) pagination where latest blocks come first
+func (s *Schema) buildBlockConnectionResponse(blocks []*types.Block, nodes []interface{}, totalCount int, filter BlockFilter, blockRange BlockRange, pagination PaginationParams, reverseOrder bool) map[string]interface{} {
 	var hasNextPage, hasPreviousPage bool
-	if !filter.hasNumberFilter() {
+	if reverseOrder {
 		hasNextPage = blockRange.StartBlock > 0
 		hasPreviousPage = pagination.Offset > 0
 	} else {
@@ -1083,10 +1092,10 @@ func (s *Schema) resolveBlacklistedAddresses(p graphql.ResolveParams) (interface
 func (s *Schema) resolveProposals(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	// Parse filter
-	filter, ok := p.Args["filter"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid filter")
+	// Parse filter (optional - nil means no filter)
+	filter, _ := p.Args["filter"].(map[string]interface{})
+	if filter == nil {
+		filter = map[string]interface{}{}
 	}
 
 	// Parse contract (optional - if not provided, queries all contracts)

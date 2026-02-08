@@ -473,7 +473,8 @@ func (b *SchemaBuilder) WithSystemContractQueries() *SchemaBuilder {
 		Type: graphql.NewNonNull(proposalConnectionType),
 		Args: graphql.FieldConfigArgument{
 			"filter": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(proposalFilterType),
+				Type:        proposalFilterType,
+				Description: "Optional filter criteria. If not provided, returns all proposals.",
 			},
 			"pagination": &graphql.ArgumentConfig{
 				Type: paginationInputType,
