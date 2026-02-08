@@ -234,10 +234,14 @@ func (p *LargeBlockProcessor) processAddressIndexing(
 	// Fee Delegation transaction type constant (StableNet-specific)
 	const FeeDelegateDynamicFeeTxType = 22
 
-	// getFeePayer extracts fee payer from transaction if available
-	// Returns nil for standard go-ethereum (Fee Delegation is StableNet-specific)
+	// getFeePayer extracts fee payer from stored fee delegation metadata
 	getFeePayer := func(tx *types.Transaction) *common.Address {
-		return nil // TODO: Implement when using go-stablenet client
+		if fdReader, ok := p.storage.(storage.FeeDelegationReader); ok {
+			if meta, err := fdReader.GetFeeDelegationTxMeta(ctx, tx.Hash()); err == nil && meta != nil {
+				return &meta.FeePayer
+			}
+		}
+		return nil
 	}
 
 	// 0. Index transaction addresses (from, to, feePayer) for transactionsByAddress query
