@@ -194,19 +194,23 @@ fmt.Printf("[DEBUG] Similarity: %.4f (threshold: %.4f)\n", similarity, MinByteco
 - **예상 시간**: 16시간
 - **담당**: -
 
-### T-012: Fee Delegation 지원 (go-stablenet)
+### T-012: Fee Delegation 지원 (go-stablenet) ✅
 - **파일**:
-  - `pkg/fetch/fetcher.go:1782`
-  - `pkg/fetch/large_block.go:240`
-  - `pkg/api/jsonrpc/methods.go:542`
-  - `pkg/api/graphql/mappers.go:240`
-- **현재**: go-stablenet 클라이언트 필요
+  - `pkg/fetch/fetcher_indexing.go` - getFeePayer 스토리지 조회
+  - `pkg/fetch/large_block.go` - getFeePayer 스토리지 조회
+  - `pkg/api/jsonrpc/methods.go` - FeeDelegationReader 스토리지 조회
+  - `pkg/api/graphql/mappers.go` - FeeDelegationReader 스토리지 조회
 - **작업**:
-  - go-stablenet 의존성 추가
-  - Fee Delegation 메타데이터 추출
-  - API 응답 포함
+  - go-stablenet 의존성 없이 스토리지 기반 접근으로 해결
+  - FeeDelegationReader 인터페이스를 통해 저장된 메타데이터 조회
+  - feePayer, feePayerSignatures (v, r, s) 필드 반환
 - **예상 시간**: 16시간
 - **담당**: -
+- **완료**: 2026-02-08
+- **변경 사항**:
+  - Fetcher가 블록 처리 시 FeeDelegationClient로 메타데이터를 스토리지에 저장
+  - GraphQL mappers, JSON-RPC methods, fetcher_indexing, large_block 모두 FeeDelegationReader로 조회
+  - go-stablenet 직접 의존성 불필요
 
 ### T-013: Redis TLS 인증서 로드 구현 ✅
 - **파일**: `pkg/eventbus/redis_adapter.go:115`
@@ -303,7 +307,7 @@ T-012 (Fee Delegation) ──── go-stablenet 의존성 선행 필요
 - [x] T-009: BLS 서명 검증 구현 (2026-02-06 완료)
 - [x] T-010: Pending Transaction 추적 구현 (2026-02-06 완료)
 - [ ] T-011: Kafka EventBus 구현
-- [ ] T-012: Fee Delegation 지원
+- [x] T-012: Fee Delegation 지원 (2026-02-08 완료, 스토리지 기반)
 - [x] T-013: Redis TLS 인증서 로드 구현 (2026-02-06 완료)
 - [x] T-014: Multichain 등록 시간 저장 (2026-02-06 완료)
 - [x] T-015: Panic을 Error Return으로 변경 (2026-02-06 완료)

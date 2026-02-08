@@ -405,3 +405,126 @@ func TestPebbleStorage_GetBurnEvents(t *testing.T) {
 		assert.True(t, len(events) >= 0)
 	}
 }
+
+func TestPebbleStorage_MaxProposalsUpdateEvent(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pebble_maxproposals_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	cfg := DefaultConfig(tempDir)
+	storage, err := NewPebbleStorage(cfg)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+	contract := common.HexToAddress("0x0000000000000000000000000000000000001004")
+
+	t.Run("StoreAndGet", func(t *testing.T) {
+		events := []*MaxProposalsUpdateEvent{
+			{Contract: contract, BlockNumber: 100, TxHash: common.HexToHash("0xaa"), OldMax: 5, NewMax: 10, Timestamp: 1000},
+			{Contract: contract, BlockNumber: 200, TxHash: common.HexToHash("0xbb"), OldMax: 10, NewMax: 15, Timestamp: 2000},
+		}
+
+		for _, e := range events {
+			require.NoError(t, storage.StoreMaxProposalsUpdateEvent(ctx, e))
+		}
+
+		history, err := storage.GetMaxProposalsUpdateHistory(ctx, contract)
+		require.NoError(t, err)
+		require.Len(t, history, 2)
+		assert.Equal(t, uint64(5), history[0].OldMax)
+		assert.Equal(t, uint64(10), history[0].NewMax)
+		assert.Equal(t, uint64(10), history[1].OldMax)
+		assert.Equal(t, uint64(15), history[1].NewMax)
+	})
+
+	t.Run("EmptyHistory", func(t *testing.T) {
+		other := common.HexToAddress("0x9999999999999999999999999999999999999999")
+		history, err := storage.GetMaxProposalsUpdateHistory(ctx, other)
+		require.NoError(t, err)
+		assert.Empty(t, history)
+	})
+}
+
+func TestPebbleStorage_ProposalExecutionSkippedEvent(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pebble_proposalskipped_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	cfg := DefaultConfig(tempDir)
+	storage, err := NewPebbleStorage(cfg)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+	contract := common.HexToAddress("0x0000000000000000000000000000000000001004")
+
+	t.Run("StoreAndGetAll", func(t *testing.T) {
+		events := []*ProposalExecutionSkippedEvent{
+			{Contract: contract, BlockNumber: 100, TxHash: common.HexToHash("0xcc"), Account: common.HexToAddress("0x1111"), ProposalID: big.NewInt(1), Reason: "quorum not met", Timestamp: 1000},
+			{Contract: contract, BlockNumber: 200, TxHash: common.HexToHash("0xdd"), Account: common.HexToAddress("0x2222"), ProposalID: big.NewInt(2), Reason: "expired", Timestamp: 2000},
+		}
+
+		for _, e := range events {
+			require.NoError(t, storage.StoreProposalExecutionSkippedEvent(ctx, e))
+		}
+
+		// Get all (nil proposalID)
+		results, err := storage.GetProposalExecutionSkippedEvents(ctx, contract, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+	})
+
+	t.Run("FilterByProposalID", func(t *testing.T) {
+		results, err := storage.GetProposalExecutionSkippedEvents(ctx, contract, big.NewInt(1))
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.Equal(t, "quorum not met", results[0].Reason)
+	})
+
+	t.Run("NoMatch", func(t *testing.T) {
+		results, err := storage.GetProposalExecutionSkippedEvents(ctx, contract, big.NewInt(999))
+		require.NoError(t, err)
+		assert.Empty(t, results)
+	})
+}
+
+func TestPebbleStorage_AuthorizedAccountEvent(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "pebble_authaccount_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	cfg := DefaultConfig(tempDir)
+	storage, err := NewPebbleStorage(cfg)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	acct1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	acct2 := common.HexToAddress("0x2222222222222222222222222222222222222222")
+
+	t.Run("AddAccounts", func(t *testing.T) {
+		require.NoError(t, storage.StoreAuthorizedAccountEvent(ctx, &AuthorizedAccountEvent{
+			Contract: GovCouncilAddress, BlockNumber: 100, Account: acct1, ProposalID: big.NewInt(1), Action: "added",
+		}))
+		require.NoError(t, storage.StoreAuthorizedAccountEvent(ctx, &AuthorizedAccountEvent{
+			Contract: GovCouncilAddress, BlockNumber: 200, Account: acct2, ProposalID: big.NewInt(2), Action: "added",
+		}))
+
+		accounts, err := storage.GetAuthorizedAccounts(ctx)
+		require.NoError(t, err)
+		require.Len(t, accounts, 2)
+	})
+
+	t.Run("RemoveAccount", func(t *testing.T) {
+		require.NoError(t, storage.StoreAuthorizedAccountEvent(ctx, &AuthorizedAccountEvent{
+			Contract: GovCouncilAddress, BlockNumber: 300, Account: acct1, ProposalID: big.NewInt(3), Action: "removed",
+		}))
+
+		accounts, err := storage.GetAuthorizedAccounts(ctx)
+		require.NoError(t, err)
+		require.Len(t, accounts, 1)
+		assert.Equal(t, acct2, accounts[0])
+	})
+}
