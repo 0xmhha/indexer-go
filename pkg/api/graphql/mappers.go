@@ -18,13 +18,16 @@ func (s *Schema) blockToMap(block *types.Block) map[string]interface{} {
 	}
 
 	txs := block.Transactions()
+	blockTimestamp := fmt.Sprintf("%d", block.Header().Time)
 	transactions := make([]interface{}, len(txs))
 	for i, tx := range txs {
-		transactions[i] = s.transactionToMap(tx, &storage.TxLocation{
+		txMap := s.transactionToMap(tx, &storage.TxLocation{
 			BlockHeight: block.NumberU64(),
 			BlockHash:   block.Hash(),
 			TxIndex:     uint64(i),
 		})
+		txMap["blockTimestamp"] = blockTimestamp
+		transactions[i] = txMap
 	}
 
 	uncles := block.Uncles()
@@ -157,6 +160,7 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 		"chainId":              nil,
 		"accessList":           nil,
 		"receipt":              nil,
+		"blockTimestamp":       nil,
 		// Fee Delegation fields (type 0x16 = 22)
 		"feePayer":           nil,
 		"feePayerSignatures": nil,

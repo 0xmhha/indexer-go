@@ -298,6 +298,7 @@ func (s *Schema) resolveSetCodeTransactionsInBlock(p graphql.ResolveParams) (int
 
 	// Fetch transactions
 	result := make([]interface{}, 0, len(txHashes))
+	blockTimestamps := make(map[uint64]string)
 	for txHash := range txHashes {
 		tx, location, err := s.storage.GetTransaction(ctx, txHash)
 		if err != nil {
@@ -307,7 +308,20 @@ func (s *Schema) resolveSetCodeTransactionsInBlock(p graphql.ResolveParams) (int
 			continue
 		}
 		if tx != nil {
-			result = append(result, s.transactionToMap(tx, location))
+			txMap := s.transactionToMap(tx, location)
+			if location != nil {
+				if ts, ok := blockTimestamps[location.BlockHeight]; ok {
+					txMap["blockTimestamp"] = ts
+				} else {
+					block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
+					if blockErr == nil && block != nil {
+						ts = fmt.Sprintf("%d", block.Header().Time)
+						blockTimestamps[location.BlockHeight] = ts
+						txMap["blockTimestamp"] = ts
+					}
+				}
+			}
+			result = append(result, txMap)
 		}
 	}
 
@@ -354,6 +368,7 @@ func (s *Schema) resolveRecentSetCodeTransactions(p graphql.ResolveParams) (inte
 
 	// Fetch transactions
 	result := make([]interface{}, 0, len(txHashes))
+	blockTimestamps2 := make(map[uint64]string)
 	for _, txHash := range txHashes {
 		tx, location, err := s.storage.GetTransaction(ctx, txHash)
 		if err != nil {
@@ -363,7 +378,20 @@ func (s *Schema) resolveRecentSetCodeTransactions(p graphql.ResolveParams) (inte
 			continue
 		}
 		if tx != nil {
-			result = append(result, s.transactionToMap(tx, location))
+			txMap := s.transactionToMap(tx, location)
+			if location != nil {
+				if ts, ok := blockTimestamps2[location.BlockHeight]; ok {
+					txMap["blockTimestamp"] = ts
+				} else {
+					block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
+					if blockErr == nil && block != nil {
+						ts = fmt.Sprintf("%d", block.Header().Time)
+						blockTimestamps2[location.BlockHeight] = ts
+						txMap["blockTimestamp"] = ts
+					}
+				}
+			}
+			result = append(result, txMap)
 		}
 	}
 

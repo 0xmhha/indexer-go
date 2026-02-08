@@ -284,12 +284,14 @@ func (s *Schema) resolveBlocksRange(p graphql.ResolveParams) (interface{}, error
 		} else if includeReceipts {
 			// If receipts are requested, enhance transactions with receipt data
 			txs := block.Transactions()
+			blockTs := fmt.Sprintf("%d", block.Header().Time)
 			enhancedTxs := make([]interface{}, 0, len(txs))
 			for i, tx := range txs {
 				txMap := s.transactionToMap(tx, &storage.TxLocation{
 					BlockHeight: blockNum,
 					TxIndex:     uint64(i),
 				})
+				txMap["blockTimestamp"] = blockTs
 				// Get receipt for this transaction
 				receipt, err := s.storage.GetReceipt(ctx, tx.Hash())
 				if err == nil && receipt != nil {
@@ -342,6 +344,7 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 		if location != nil {
 			block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
 			if blockErr == nil && block != nil {
+				result["blockTimestamp"] = fmt.Sprintf("%d", block.Header().Time)
 				// Set receipt block info
 				receipt.BlockNumber = big.NewInt(int64(location.BlockHeight))
 				receipt.BlockHash = location.BlockHash
@@ -461,7 +464,9 @@ func (s *Schema) filterTransactionsFromBlocks(blocks []*types.Block, filter Tran
 				BlockHash:   block.Hash(),
 				TxIndex:     uint64(i),
 			}
-			filteredTxs = append(filteredTxs, s.transactionToMap(tx, location))
+			txMap := s.transactionToMap(tx, location)
+			txMap["blockTimestamp"] = fmt.Sprintf("%d", block.Header().Time)
+			filteredTxs = append(filteredTxs, txMap)
 		}
 	}
 
@@ -597,6 +602,7 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 
 	// Convert transaction hashes to full transaction objects
 	nodes := make([]interface{}, 0, len(txHashes))
+	blockTimestamps := make(map[uint64]string) // cache block timestamps
 	for _, txHash := range txHashes {
 		tx, location, err := s.storage.GetTransaction(ctx, txHash)
 		if err != nil {
@@ -619,7 +625,20 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 			continue
 		}
 
-		nodes = append(nodes, s.transactionToMap(tx, location))
+		txMap := s.transactionToMap(tx, location)
+		if location != nil {
+			if ts, ok := blockTimestamps[location.BlockHeight]; ok {
+				txMap["blockTimestamp"] = ts
+			} else {
+				block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
+				if blockErr == nil && block != nil {
+					ts = fmt.Sprintf("%d", block.Header().Time)
+					blockTimestamps[location.BlockHeight] = ts
+					txMap["blockTimestamp"] = ts
+				}
+			}
+		}
+		nodes = append(nodes, txMap)
 	}
 
 	// Calculate pagination info

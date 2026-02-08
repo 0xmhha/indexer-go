@@ -375,6 +375,10 @@ func initCoreTypes() {
 			"receipt": &graphql.Field{
 				Type: receiptType,
 			},
+			"blockTimestamp": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Timestamp of the block containing this transaction",
+			},
 			// Fee Delegation fields (type 0x16)
 			"feePayer": &graphql.Field{
 				Type:        addressType,

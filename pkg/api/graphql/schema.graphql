@@ -354,6 +354,9 @@ type Transaction {
   # Transaction receipt
   receipt: Receipt
 
+  # Timestamp of the block containing this transaction
+  blockTimestamp: BigInt
+
   # Fee payer address (Fee Delegation, type 0x16)
   feePayer: Address
 

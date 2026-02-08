@@ -199,10 +199,23 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 
 	// Convert to maps
 	nodes := make([]interface{}, len(txsWithReceipts))
+	blockTimestamps := make(map[uint64]string) // cache block timestamps
 	for i, txr := range txsWithReceipts {
 		txMap := s.transactionToMap(txr.Transaction, txr.Location)
 		if txr.Receipt != nil {
 			txMap["receipt"] = s.receiptToMap(txr.Receipt)
+		}
+		if txr.Location != nil {
+			if ts, ok := blockTimestamps[txr.Location.BlockHeight]; ok {
+				txMap["blockTimestamp"] = ts
+			} else {
+				block, blockErr := s.storage.GetBlock(ctx, txr.Location.BlockHeight)
+				if blockErr == nil && block != nil {
+					ts = fmt.Sprintf("%d", block.Header().Time)
+					blockTimestamps[txr.Location.BlockHeight] = ts
+					txMap["blockTimestamp"] = ts
+				}
+			}
 		}
 		nodes[i] = txMap
 	}
