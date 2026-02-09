@@ -141,7 +141,8 @@ var (
 	contractVerificationType *graphql.Object
 
 	// EIP-7702 SetCode types
-	setCodeAuthorizationType           *graphql.Object
+	setCodeAuthBaseType                *graphql.Object // SetCodeAuthorization (basic, for Transaction.authorizationList)
+	setCodeAuthorizationType           *graphql.Object // SetCodeAuthorizationWithTx (extended, with tx context)
 	setCodeAuthorizationConnectionType *graphql.Object
 	addressSetCodeInfoType             *graphql.Object
 )
@@ -2774,6 +2775,48 @@ func initMiscTypes() {
 
 // initSetCodeTypes initializes GraphQL types for EIP-7702 SetCode transactions
 func initSetCodeTypes() {
+	// SetCodeAuthorization base type (used in Transaction.authorizationList)
+	setCodeAuthBaseType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "SetCodeAuthorization",
+		Description: "EIP-7702 SetCode authorization entry",
+		Fields: graphql.Fields{
+			"chainId": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Chain ID for replay protection",
+			},
+			"address": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Delegate target contract address",
+			},
+			"nonce": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Authorization nonce",
+			},
+			"yParity": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Y parity of signature (0 or 1)",
+			},
+			"r": &graphql.Field{
+				Type:        graphql.NewNonNull(bytesType),
+				Description: "R signature value",
+			},
+			"s": &graphql.Field{
+				Type:        graphql.NewNonNull(bytesType),
+				Description: "S signature value",
+			},
+			"authority": &graphql.Field{
+				Type:        addressType,
+				Description: "Recovered signer address (authority who signed this authorization)",
+			},
+		},
+	})
+
+	// Add authorizationList field to Transaction type
+	transactionType.AddFieldConfig("authorizationList", &graphql.Field{
+		Type:        graphql.NewList(graphql.NewNonNull(setCodeAuthBaseType)),
+		Description: "Authorization list for EIP-7702 SetCode transactions (type 0x04)",
+	})
+
 	// SetCodeAuthorization type with transaction reference
 	setCodeAuthorizationType = graphql.NewObject(graphql.ObjectConfig{
 		Name:        "SetCodeAuthorizationWithTx",
