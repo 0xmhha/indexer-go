@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/ethereum/go-ethereum/common"
@@ -121,7 +122,7 @@ func (h *Handler) handleVerifySourceCode(w http.ResponseWriter, r *http.Request)
 	addressStr := r.FormValue("contractaddress")
 	sourceCode := r.FormValue("sourceCode")
 	contractName := r.FormValue("contractname")
-	compilerVersion := r.FormValue("compilerversion")
+	compilerVersion := compiler.NormalizeVersion(r.FormValue("compilerversion"))
 	optimizationUsed := r.FormValue("optimizationUsed") == "1"
 	constructorArgs := r.FormValue("constructorArguments")
 	licenseType := r.FormValue("licenseType")

@@ -253,6 +253,13 @@ func (s *SolcCompiler) validateCompilationOptions(opts *CompilationOptions) erro
 	return nil
 }
 
+// NormalizeVersion normalizes a compiler version string to the canonical format.
+// It strips the leading "v" prefix commonly sent by Etherscan-compatible APIs
+// (e.g., "v0.8.28+commit.7893614a" → "0.8.28+commit.7893614a").
+func NormalizeVersion(version string) string {
+	return strings.TrimPrefix(version, "v")
+}
+
 // validateVersion checks that the version string is a valid solc version format
 // and does not contain path traversal or shell metacharacters.
 func validateVersion(version string) error {

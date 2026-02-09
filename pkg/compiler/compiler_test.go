@@ -113,6 +113,35 @@ func TestNewSolcCompiler_InvalidConfig(t *testing.T) {
 	assert.Nil(t, sc)
 }
 
+// ========== Version Normalization ==========
+
+func TestNormalizeVersion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"v0.8.28+commit.7893614a", "0.8.28+commit.7893614a"},
+		{"v0.8.20", "0.8.20"},
+		{"0.8.20", "0.8.20"},
+		{"0.8.20+commit.a1b2c3d4", "0.8.20+commit.a1b2c3d4"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := NormalizeVersion(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestNormalizeVersion_ThenValidate(t *testing.T) {
+	// Etherscan API format should work after normalization
+	version := NormalizeVersion("v0.8.28+commit.7893614a")
+	err := validateVersion(version)
+	assert.NoError(t, err)
+}
+
 // ========== Version Validation (T-020) ==========
 
 func TestValidateVersion(t *testing.T) {
