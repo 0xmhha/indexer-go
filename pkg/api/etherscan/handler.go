@@ -129,7 +129,11 @@ func (h *Handler) handleVerifySourceCode(w http.ResponseWriter, r *http.Request)
 	// Parse optimization runs (default 200)
 	optimizationRuns := 200
 	if runs := r.FormValue("runs"); runs != "" {
-		_, _ = fmt.Sscanf(runs, "%d", &optimizationRuns)
+		if _, err := fmt.Sscanf(runs, "%d", &optimizationRuns); err != nil {
+			h.logger.Warn("failed to parse optimization runs, using default",
+				zap.String("runs", runs),
+				zap.Error(err))
+		}
 	}
 
 	// Validate required fields

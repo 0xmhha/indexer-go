@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -63,11 +64,26 @@ func TestRateLimiter_Cleanup(t *testing.T) {
 		t.Errorf("expected 3 limiters, got %d", limiter.LimiterCount())
 	}
 
-	// Cleanup
+	// Cleanup should NOT remove fresh entries (TTL-based)
+	limiter.CleanupLimiters()
+
+	if limiter.LimiterCount() != 3 {
+		t.Errorf("expected 3 limiters after cleanup (entries are fresh), got %d", limiter.LimiterCount())
+	}
+
+	// Manually age the entries past the TTL
+	limiter.mu.Lock()
+	staleTime := time.Now().Add(-limiter.cleanupTTL - time.Minute)
+	for _, entry := range limiter.limiters {
+		entry.lastAccess = staleTime
+	}
+	limiter.mu.Unlock()
+
+	// Cleanup should now remove stale entries
 	limiter.CleanupLimiters()
 
 	if limiter.LimiterCount() != 0 {
-		t.Errorf("expected 0 limiters after cleanup, got %d", limiter.LimiterCount())
+		t.Errorf("expected 0 limiters after cleanup of stale entries, got %d", limiter.LimiterCount())
 	}
 }
 

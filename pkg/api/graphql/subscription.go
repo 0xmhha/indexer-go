@@ -72,6 +72,8 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		zap.String("subprotocol", conn.Subprotocol()),
 	)
 
+	// Note: context.Background() is correct here because WebSocket connections
+	// outlive the HTTP request - r.Context() would cancel when the handler returns.
 	ctx, cancel := context.WithCancel(context.Background())
 	client := &subscriptionClient{
 		server:          s,

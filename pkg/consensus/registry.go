@@ -95,17 +95,6 @@ func (r *Registry) Register(consensusType chain.ConsensusType, factory ParserFac
 	return nil
 }
 
-// MustRegister registers a parser factory and panics on error.
-//
-// Deprecated: Use Register() with proper error handling instead.
-// This function is preserved for backwards compatibility but new code should
-// use Register() and handle errors appropriately (e.g., log.Fatal for init()).
-func (r *Registry) MustRegister(consensusType chain.ConsensusType, factory ParserFactory, metadata *ParserMetadata) {
-	if err := r.Register(consensusType, factory, metadata); err != nil {
-		panic(fmt.Sprintf("failed to register consensus parser: %v", err))
-	}
-}
-
 // Get creates a new consensus parser instance
 func (r *Registry) Get(consensusType chain.ConsensusType, config *Config, logger *zap.Logger) (chain.ConsensusParser, error) {
 	r.mu.RLock()
@@ -176,15 +165,6 @@ func (r *Registry) Clear() {
 // Register adds a consensus parser factory to the global registry
 func Register(consensusType chain.ConsensusType, factory ParserFactory, metadata *ParserMetadata) error {
 	return Global().Register(consensusType, factory, metadata)
-}
-
-// MustRegister registers a parser factory to the global registry and panics on error.
-//
-// Deprecated: Use Register() with proper error handling instead.
-// This function is preserved for backwards compatibility but new code should
-// use Register() and handle errors appropriately (e.g., log.Fatal for init()).
-func MustRegister(consensusType chain.ConsensusType, factory ParserFactory, metadata *ParserMetadata) {
-	Global().MustRegister(consensusType, factory, metadata)
 }
 
 // Get creates a new consensus parser instance from the global registry

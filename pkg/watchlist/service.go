@@ -272,7 +272,7 @@ func (s *WatchlistService) ListWatchedAddresses(ctx context.Context, filter *Lis
 	}
 
 	// Iterate over addresses
-	var addresses []*WatchedAddress
+	addresses := make([]*WatchedAddress, 0, filter.Limit)
 	count := 0
 	skipped := 0
 
@@ -457,7 +457,7 @@ func (s *WatchlistService) GetRecentEvents(ctx context.Context, addressID string
 
 	// Iterate over event index for this address
 	prefix := EventIndexKeyPrefix(addressID)
-	var eventsList []*WatchEvent
+	eventsList := make([]*WatchEvent, 0, limit)
 
 	err := s.storage.Iterate(ctx, prefix, func(key, value []byte) bool {
 		if len(eventsList) >= limit {

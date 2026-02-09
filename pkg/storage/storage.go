@@ -47,6 +47,9 @@ type Reader interface {
 	// GetTransaction returns a transaction and its location by hash
 	GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *TxLocation, error)
 
+	// GetTransactions returns multiple transactions and their locations by hash (batch operation)
+	GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*TxLocation, error)
+
 	// GetTransactionsByAddress returns transactions for an address with pagination
 	GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error)
 

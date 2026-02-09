@@ -60,6 +60,14 @@ func (m *mockStorage) GetTransaction(ctx context.Context, hash common.Hash) (*ty
 	}
 	return nil, nil, storage.ErrNotFound
 }
+func (m *mockStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*storage.TxLocation, error) {
+	txs := make([]*types.Transaction, len(hashes))
+	locs := make([]*storage.TxLocation, len(hashes))
+	for i, h := range hashes {
+		txs[i], locs[i], _ = m.GetTransaction(ctx, h)
+	}
+	return txs, locs, nil
+}
 
 func (m *mockStorage) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	if receipt, ok := m.receipts[hash]; ok {
@@ -572,6 +580,9 @@ func (m *mockStorageWithErrors) GetBlockByHash(ctx context.Context, hash common.
 }
 
 func (m *mockStorageWithErrors) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *storage.TxLocation, error) {
+	return nil, nil, storage.ErrNotFound
+}
+func (m *mockStorageWithErrors) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*storage.TxLocation, error) {
 	return nil, nil, storage.ErrNotFound
 }
 

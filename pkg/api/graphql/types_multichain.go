@@ -17,12 +17,6 @@ var (
 	// HealthStatus type
 	healthStatusType *graphql.Object
 
-	// BlockWithChain type for multi-chain subscriptions
-	blockWithChainType *graphql.Object //nolint:unused
-
-	// ChainConnection type
-	chainConnectionType *graphql.Object //nolint:unused
-
 	// Input types
 	registerChainInputType *graphql.InputObject
 )
@@ -184,39 +178,6 @@ func initMultiChainTypes() {
 			"registeredAt": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
 				Description: "Registration timestamp (RFC3339)",
-			},
-		},
-	})
-
-	// BlockWithChain type for multi-chain subscriptions
-	blockWithChainType = graphql.NewObject(graphql.ObjectConfig{
-		Name:        "BlockWithChain",
-		Description: "Block with associated chain information",
-		Fields: graphql.Fields{
-			"chainId": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.String),
-				Description: "Chain identifier",
-			},
-			"block": &graphql.Field{
-				Type:        graphql.NewNonNull(blockType),
-				Description: "Block data",
-			},
-		},
-	})
-
-	// ChainConnection type for pagination
-	chainConnectionType = graphql.NewObject(graphql.ObjectConfig{
-		Name:        "ChainConnection",
-		Description: "Paginated chain list",
-		Fields: graphql.Fields{
-			"nodes": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(chainType))),
-			},
-			"totalCount": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Int),
-			},
-			"pageInfo": &graphql.Field{
-				Type: graphql.NewNonNull(pageInfoType),
 			},
 		},
 	})

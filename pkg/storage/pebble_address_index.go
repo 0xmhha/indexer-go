@@ -349,7 +349,10 @@ func (s *PebbleStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddre
 		// Parse logIndex from the end of the key
 		keyStr := string(key)
 		var logIndex uint
-		_, _ = fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
+		if n, err := fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex); n == 0 || err != nil {
+			s.logger.Warn("Failed to parse logIndex from key", zap.String("key", keyStr), zap.Error(err))
+			continue
+		}
 
 		// Fetch the actual transfer data
 		transfer, err := s.GetERC20Transfer(ctx, txHash, logIndex)
@@ -433,7 +436,10 @@ func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address 
 		key := iter.Key()
 		keyStr := string(key)
 		var logIndex uint
-		_, _ = fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
+		if n, err := fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex); n == 0 || err != nil {
+			s.logger.Warn("Failed to parse logIndex from key", zap.String("key", keyStr), zap.Error(err))
+			continue
+		}
 
 		// Fetch the actual transfer data
 		transfer, err := s.GetERC20Transfer(ctx, txHash, logIndex)
@@ -599,7 +605,10 @@ func (s *PebbleStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddr
 		key := iter.Key()
 		keyStr := string(key)
 		var logIndex uint
-		_, _ = fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
+		if n, err := fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex); n == 0 || err != nil {
+			s.logger.Warn("Failed to parse logIndex from key", zap.String("key", keyStr), zap.Error(err))
+			continue
+		}
 
 		// Fetch the actual transfer data
 		transfer, err := s.GetERC721Transfer(ctx, txHash, logIndex)
@@ -682,7 +691,10 @@ func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address
 		key := iter.Key()
 		keyStr := string(key)
 		var logIndex uint
-		_, _ = fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex)
+		if n, err := fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex); n == 0 || err != nil {
+			s.logger.Warn("Failed to parse logIndex from key", zap.String("key", keyStr), zap.Error(err))
+			continue
+		}
 
 		// Fetch the actual transfer data
 		transfer, err := s.GetERC721Transfer(ctx, txHash, logIndex)
@@ -937,7 +949,7 @@ func (s *PebbleStorage) GetInternalTransactions(ctx context.Context, txHash comm
 	}
 	defer iter.Close()
 
-	internals := make([]*InternalTransaction, 0)
+	internals := make([]*InternalTransaction, 0, 16)
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		value := iter.Value()

@@ -154,6 +154,22 @@ func (s *Server) setupMiddleware() {
 		)
 	}
 
+	// API key authentication middleware (if enabled)
+	if s.config.EnableAPIKeyAuth {
+		authCfg := apimiddleware.AuthConfig{
+			APIKeys: s.config.APIKeys,
+			AllowedPaths: map[string]bool{
+				"/health":  true,
+				"/version": true,
+				"/metrics": true,
+			},
+		}
+		s.router.Use(apimiddleware.APIKeyAuth(authCfg, s.logger))
+		s.logger.Info("API key authentication enabled",
+			zap.Int("configured_keys", len(s.config.APIKeys)),
+		)
+	}
+
 	// Custom CORS middleware that adds headers to ALL responses
 	if s.config.EnableCORS {
 		s.router.Use(func(next http.Handler) http.Handler {

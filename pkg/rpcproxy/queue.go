@@ -66,7 +66,11 @@ func (pq *PriorityQueue) Dequeue() (*Request, bool) {
 		return nil, false
 	}
 
-	req := heap.Pop(&pq.items).(*Request)
+	item := heap.Pop(&pq.items)
+	req, ok := item.(*Request)
+	if !ok {
+		return nil, false
+	}
 	pq.dequeued++
 	return req, true
 }
@@ -81,7 +85,11 @@ func (pq *PriorityQueue) TryDequeue() (*Request, bool) {
 		return nil, false
 	}
 
-	req := heap.Pop(&pq.items).(*Request)
+	item := heap.Pop(&pq.items)
+	req, ok := item.(*Request)
+	if !ok {
+		return nil, false
+	}
 	pq.dequeued++
 	return req, true
 }
@@ -123,7 +131,11 @@ func (pq *PriorityQueue) DequeueWithTimeout(timeout time.Duration) (*Request, bo
 		return nil, false
 	}
 
-	req := heap.Pop(&pq.items).(*Request)
+	item := heap.Pop(&pq.items)
+	req, ok := item.(*Request)
+	if !ok {
+		return nil, false
+	}
 	pq.dequeued++
 	return req, true
 }
@@ -165,7 +177,11 @@ func (pq *PriorityQueue) Drain() []*Request {
 
 	result := make([]*Request, 0, pq.items.Len())
 	for pq.items.Len() > 0 {
-		req := heap.Pop(&pq.items).(*Request)
+		item := heap.Pop(&pq.items)
+		req, ok := item.(*Request)
+		if !ok {
+			continue
+		}
 		result = append(result, req)
 	}
 	return result
@@ -190,7 +206,9 @@ func (h requestHeap) Swap(i, j int) {
 }
 
 func (h *requestHeap) Push(x interface{}) {
-	*h = append(*h, x.(*Request))
+	if req, ok := x.(*Request); ok {
+		*h = append(*h, req)
+	}
 }
 
 func (h *requestHeap) Pop() interface{} {

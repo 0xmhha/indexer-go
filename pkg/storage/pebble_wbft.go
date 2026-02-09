@@ -299,7 +299,7 @@ func (s *PebbleStorage) GetValidatorSigningActivity(ctx context.Context, validat
 	}
 	defer iter.Close()
 
-	result := make([]*ValidatorSigningActivity, 0)
+	result := make([]*ValidatorSigningActivity, 0, 32)
 	count := 0
 
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -351,7 +351,7 @@ func (s *PebbleStorage) GetBlockSigners(ctx context.Context, blockNumber uint64)
 	}
 	defer prepareIter.Close()
 
-	preparers = make([]common.Address, 0)
+	preparers = make([]common.Address, 0, 32)
 	for prepareIter.First(); prepareIter.Valid(); prepareIter.Next() {
 		// Key format: /index/wbft/signers/prepare/{blockNumber}/{validator}
 		// Extract validator address from key
@@ -382,7 +382,7 @@ func (s *PebbleStorage) GetBlockSigners(ctx context.Context, blockNumber uint64)
 	}
 	defer commitIter.Close()
 
-	committers = make([]common.Address, 0)
+	committers = make([]common.Address, 0, 32)
 	for commitIter.First(); commitIter.Valid(); commitIter.Next() {
 		// Key format: /index/wbft/signers/commit/{blockNumber}/{validator}
 		// Extract validator address from key

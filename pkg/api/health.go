@@ -96,7 +96,6 @@ type HealthChecker struct {
 	kafkaProducer *eventbus.KafkaProducer
 
 	// Health states
-	lastCheck      time.Time //nolint:unused
 	componentState map[string]string
 }
 

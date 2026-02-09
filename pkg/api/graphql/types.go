@@ -113,11 +113,7 @@ var (
 	validatorStatsType         *graphql.Object
 	validatorParticipationType *graphql.Object
 	blockParticipationType     *graphql.Object
-	roundAnalysisType          *graphql.Object //nolint:unused
 	roundDistributionType      *graphql.Object
-	validatorSetType           *graphql.Object   //nolint:unused
-	validatorActivityType      *graphql.Object   //nolint:unused
-	validatorChangeType        *graphql.Object   //nolint:unused
 	epochDataType              *graphql.Object
 	validatorInfoEnhancedType  *graphql.Object
 	candidateInfoType          *graphql.Object
@@ -148,7 +144,6 @@ var (
 	setCodeAuthorizationType           *graphql.Object
 	setCodeAuthorizationConnectionType *graphql.Object
 	addressSetCodeInfoType             *graphql.Object
-	setCodeStatsType                   *graphql.Object //nolint:unused
 )
 
 func init() {
@@ -2168,97 +2163,6 @@ func initConsensusTypes() {
 		},
 	})
 
-	// RoundAnalysis type
-	roundAnalysisType = graphql.NewObject(graphql.ObjectConfig{
-		Name: "RoundAnalysis",
-		Fields: graphql.Fields{
-			"startBlock": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"endBlock": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"totalBlocks": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"blocksWithRoundChange": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"roundChangeRate": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Float),
-			},
-			"averageRound": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Float),
-			},
-			"maxRound": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Int),
-			},
-			"roundDistribution": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(roundDistributionType))),
-			},
-		},
-	})
-
-	// ValidatorSet type
-	validatorSetType = graphql.NewObject(graphql.ObjectConfig{
-		Name: "ValidatorSet",
-		Fields: graphql.Fields{
-			"blockNumber": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"validators": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
-			},
-			"epochNumber": &graphql.Field{
-				Type: bigIntType,
-			},
-		},
-	})
-
-	// ValidatorActivity type
-	validatorActivityType = graphql.NewObject(graphql.ObjectConfig{
-		Name: "ValidatorActivity",
-		Fields: graphql.Fields{
-			"address": &graphql.Field{
-				Type: graphql.NewNonNull(addressType),
-			},
-			"isActive": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Boolean),
-			},
-			"lastSeenBlock": &graphql.Field{
-				Type: bigIntType,
-			},
-			"lastProposedBlock": &graphql.Field{
-				Type: bigIntType,
-			},
-			"recentParticipationRate": &graphql.Field{
-				Type: graphql.Float,
-			},
-		},
-	})
-
-	// ValidatorChange type
-	validatorChangeType = graphql.NewObject(graphql.ObjectConfig{
-		Name: "ValidatorChange",
-		Fields: graphql.Fields{
-			"blockNumber": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"epochNumber": &graphql.Field{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"added": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
-			},
-			"removed": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
-			},
-			"totalValidators": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Int),
-			},
-		},
-	})
-
 	// ========== Consensus Subscription Types ==========
 
 	// ConsensusBlockSub type - for consensusBlock subscription
@@ -2994,35 +2898,4 @@ func initSetCodeTypes() {
 		},
 	})
 
-	// SetCodeStats type for global statistics
-	setCodeStatsType = graphql.NewObject(graphql.ObjectConfig{
-		Name:        "SetCodeStats",
-		Description: "Global SetCode transaction statistics",
-		Fields: graphql.Fields{
-			"totalTransactions": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.Int),
-				Description: "Total number of SetCode transactions",
-			},
-			"totalAuthorizations": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.Int),
-				Description: "Total number of authorizations across all transactions",
-			},
-			"appliedCount": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.Int),
-				Description: "Number of successfully applied authorizations",
-			},
-			"failedCount": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.Int),
-				Description: "Number of failed authorizations",
-			},
-			"uniqueTargets": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.Int),
-				Description: "Number of unique target addresses",
-			},
-			"uniqueAuthorities": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.Int),
-				Description: "Number of unique authority addresses",
-			},
-		},
-	})
 }

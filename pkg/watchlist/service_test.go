@@ -99,6 +99,9 @@ func (m *mockStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*ty
 func (m *mockStorage) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *storage.TxLocation, error) {
 	return nil, nil, storage.ErrNotFound
 }
+func (m *mockStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*storage.TxLocation, error) {
+	return nil, nil, nil
+}
 func (m *mockStorage) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
 	return nil, nil
 }

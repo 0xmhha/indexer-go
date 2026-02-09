@@ -1,53 +1,92 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
+	"strings"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
 
-// RateLimiter provides IP-based rate limiting
+// RateLimiter provides IP-based rate limiting with automatic cleanup
 type RateLimiter struct {
-	limiters map[string]*rate.Limiter
-	mu       sync.RWMutex
-	rate     rate.Limit
-	burst    int
-	logger   *zap.Logger
+	limiters   map[string]*limiterEntry
+	mu         sync.RWMutex
+	rate       rate.Limit
+	burst      int
+	logger     *zap.Logger
+	cleanupTTL time.Duration
 }
 
-// NewRateLimiter creates a new rate limiter
+// limiterEntry wraps a rate.Limiter with last-access tracking
+type limiterEntry struct {
+	limiter    *rate.Limiter
+	lastAccess time.Time
+}
+
+// NewRateLimiter creates a new rate limiter with automatic cleanup
 func NewRateLimiter(ratePerSecond float64, burst int, logger *zap.Logger) *RateLimiter {
-	return &RateLimiter{
-		limiters: make(map[string]*rate.Limiter),
-		rate:     rate.Limit(ratePerSecond),
-		burst:    burst,
-		logger:   logger,
+	rl := &RateLimiter{
+		limiters:   make(map[string]*limiterEntry, 256),
+		rate:       rate.Limit(ratePerSecond),
+		burst:      burst,
+		logger:     logger,
+		cleanupTTL: 10 * time.Minute,
+	}
+	go rl.autoCleanup()
+	return rl
+}
+
+// autoCleanup periodically removes stale limiter entries
+func (rl *RateLimiter) autoCleanup() {
+	ticker := time.NewTicker(rl.cleanupTTL)
+	defer ticker.Stop()
+	for range ticker.C {
+		rl.cleanupStaleLimiters()
+	}
+}
+
+// cleanupStaleLimiters removes limiters that haven't been accessed within the TTL
+func (rl *RateLimiter) cleanupStaleLimiters() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	cutoff := time.Now().Add(-rl.cleanupTTL)
+	for ip, entry := range rl.limiters {
+		if entry.lastAccess.Before(cutoff) {
+			delete(rl.limiters, ip)
+		}
 	}
 }
 
 // getLimiter returns the rate limiter for a given IP
 func (rl *RateLimiter) getLimiter(ip string) *rate.Limiter {
 	rl.mu.RLock()
-	limiter, exists := rl.limiters[ip]
+	entry, exists := rl.limiters[ip]
 	rl.mu.RUnlock()
 
 	if exists {
-		return limiter
+		entry.lastAccess = time.Now()
+		return entry.limiter
 	}
 
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	limiter, exists = rl.limiters[ip]
+	entry, exists = rl.limiters[ip]
 	if exists {
-		return limiter
+		entry.lastAccess = time.Now()
+		return entry.limiter
 	}
 
-	limiter = rate.NewLimiter(rl.rate, rl.burst)
-	rl.limiters[ip] = limiter
+	limiter := rate.NewLimiter(rl.rate, rl.burst)
+	rl.limiters[ip] = &limiterEntry{
+		limiter:    limiter,
+		lastAccess: time.Now(),
+	}
 
 	return limiter
 }
@@ -63,14 +102,7 @@ func RateLimit(ratePerSecond float64, burst int, logger *zap.Logger) func(http.H
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := r.RemoteAddr
-
-			// Use X-Forwarded-For or X-Real-IP if available
-			if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-				ip = xff
-			} else if xri := r.Header.Get("X-Real-IP"); xri != "" {
-				ip = xri
-			}
+			ip := extractClientIP(r)
 
 			if !limiter.Allow(ip) {
 				logger.Warn("rate limit exceeded",
@@ -91,14 +123,8 @@ func RateLimit(ratePerSecond float64, burst int, logger *zap.Logger) func(http.H
 }
 
 // CleanupLimiters removes old limiters to prevent memory leaks
-// This should be called periodically in production
 func (rl *RateLimiter) CleanupLimiters() {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	// Simple cleanup: remove all limiters
-	// In production, you might want to track last access time
-	rl.limiters = make(map[string]*rate.Limiter)
+	rl.cleanupStaleLimiters()
 }
 
 // LimiterCount returns the number of active limiters
@@ -106,4 +132,32 @@ func (rl *RateLimiter) LimiterCount() int {
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
 	return len(rl.limiters)
+}
+
+// extractClientIP extracts the real client IP from the request.
+// It validates X-Forwarded-For and X-Real-IP headers to prevent spoofing.
+func extractClientIP(r *http.Request) string {
+	// Try X-Forwarded-For first (take the first/leftmost IP)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.SplitN(xff, ",", 2)
+		ip := strings.TrimSpace(parts[0])
+		if parsedIP := net.ParseIP(ip); parsedIP != nil {
+			return ip
+		}
+	}
+
+	// Try X-Real-IP
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		ip := strings.TrimSpace(xri)
+		if parsedIP := net.ParseIP(ip); parsedIP != nil {
+			return ip
+		}
+	}
+
+	// Fall back to RemoteAddr (strip port)
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

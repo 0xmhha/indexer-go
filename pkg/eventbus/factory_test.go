@@ -65,7 +65,7 @@ func TestFactory_CreateRedis_NotEnabled(t *testing.T) {
 	assert.Equal(t, EventBusTypeLocal, eb.Type())
 }
 
-func TestFactory_CreateKafka_NotImplemented(t *testing.T) {
+func TestFactory_CreateKafka_Enabled(t *testing.T) {
 	cfg := &config.Config{
 		EventBus: config.EventBusConfig{
 			Type: "kafka",
@@ -73,7 +73,12 @@ func TestFactory_CreateKafka_NotImplemented(t *testing.T) {
 				Enabled: true,
 				Brokers: []string{"localhost:9092"},
 				Topic:   "test",
+				GroupID: "test-group",
 			},
+		},
+		Node: config.NodeConfig{
+			ID:   "test-node",
+			Role: "all",
 		},
 	}
 	cfg.SetDefaults()
@@ -83,15 +88,15 @@ func TestFactory_CreateKafka_NotImplemented(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, eb)
-	// Falls back to local since Kafka is not implemented
-	assert.Equal(t, EventBusTypeLocal, eb.Type())
+	// Should create a KafkaEventBus (may be in degraded mode if broker is unreachable)
+	assert.Equal(t, EventBusTypeKafka, eb.Type())
 }
 
-func TestFactory_CreateHybrid(t *testing.T) {
+func TestFactory_CreateKafka_NotEnabled(t *testing.T) {
 	cfg := &config.Config{
 		EventBus: config.EventBusConfig{
-			Type: "hybrid",
-			Redis: config.EventBusRedisConfig{
+			Type: "kafka",
+			Kafka: config.EventBusKafkaConfig{
 				Enabled: false,
 			},
 		},
@@ -103,8 +108,61 @@ func TestFactory_CreateHybrid(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, eb)
-	// Falls back to local when Redis is not enabled
+	// Should fall back to local when Kafka is not enabled
 	assert.Equal(t, EventBusTypeLocal, eb.Type())
+}
+
+func TestFactory_CreateHybrid(t *testing.T) {
+	cfg := &config.Config{
+		EventBus: config.EventBusConfig{
+			Type: "hybrid",
+			Redis: config.EventBusRedisConfig{
+				Enabled: false,
+			},
+			Kafka: config.EventBusKafkaConfig{
+				Enabled: false,
+			},
+		},
+	}
+	cfg.SetDefaults()
+
+	factory := NewFactory(cfg)
+	eb, err := factory.Create()
+
+	require.NoError(t, err)
+	require.NotNil(t, eb)
+	// Falls back to local when neither Redis nor Kafka is enabled
+	assert.Equal(t, EventBusTypeLocal, eb.Type())
+}
+
+func TestFactory_CreateHybrid_KafkaFallback(t *testing.T) {
+	cfg := &config.Config{
+		EventBus: config.EventBusConfig{
+			Type: "hybrid",
+			Redis: config.EventBusRedisConfig{
+				Enabled: false,
+			},
+			Kafka: config.EventBusKafkaConfig{
+				Enabled: true,
+				Brokers: []string{"localhost:9092"},
+				Topic:   "test",
+				GroupID: "test-group",
+			},
+		},
+		Node: config.NodeConfig{
+			ID:   "test-node",
+			Role: "all",
+		},
+	}
+	cfg.SetDefaults()
+
+	factory := NewFactory(cfg)
+	eb, err := factory.Create()
+
+	require.NoError(t, err)
+	require.NotNil(t, eb)
+	// Should use Kafka when Redis is not enabled but Kafka is
+	assert.Equal(t, EventBusTypeKafka, eb.Type())
 }
 
 func TestFactory_InvalidType(t *testing.T) {
@@ -132,12 +190,12 @@ func TestFactory_MustCreate_Success(t *testing.T) {
 
 	factory := NewFactory(cfg)
 
-	// Should not panic
-	eb := factory.MustCreate()
+	eb, err := factory.Create()
+	require.NoError(t, err)
 	require.NotNil(t, eb)
 }
 
-func TestFactory_MustCreate_Panic(t *testing.T) {
+func TestFactory_Create_InvalidType(t *testing.T) {
 	cfg := &config.Config{
 		EventBus: config.EventBusConfig{
 			Type: "invalid",
@@ -146,9 +204,8 @@ func TestFactory_MustCreate_Panic(t *testing.T) {
 
 	factory := NewFactory(cfg)
 
-	assert.Panics(t, func() {
-		factory.MustCreate()
-	})
+	_, err := factory.Create()
+	assert.Error(t, err)
 }
 
 func TestNewEventBus_Convenience(t *testing.T) {

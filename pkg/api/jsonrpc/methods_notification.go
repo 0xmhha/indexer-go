@@ -3,7 +3,6 @@ package jsonrpc
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/ethereum/go-ethereum/common"
@@ -481,50 +480,6 @@ func parseJSONRPCDestination(input notificationDestInput) notifications.Destinat
 	}
 }
 
-// registerNotificationMethods registers all notification methods
-//
-//nolint:unused
-func registerNotificationMethods() map[string]func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-	return map[string]func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error){
-		"notification_getSettings": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.getNotificationSettings(ctx, params)
-		},
-		"notification_getSetting": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.getNotificationSetting(ctx, params)
-		},
-		"notification_createSetting": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.createNotificationSetting(ctx, params)
-		},
-		"notification_updateSetting": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.updateNotificationSetting(ctx, params)
-		},
-		"notification_deleteSetting": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.deleteNotificationSetting(ctx, params)
-		},
-		"notification_list": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.getNotifications(ctx, params)
-		},
-		"notification_get": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.getNotification(ctx, params)
-		},
-		"notification_getStats": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.getNotificationStats(ctx, params)
-		},
-		"notification_getHistory": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.getDeliveryHistory(ctx, params)
-		},
-		"notification_test": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.testNotificationSetting(ctx, params)
-		},
-		"notification_retry": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.retryNotification(ctx, params)
-		},
-		"notification_cancel": func(ctx context.Context, h *Handler, params json.RawMessage) (interface{}, *Error) {
-			return h.cancelNotification(ctx, params)
-		},
-	}
-}
-
 // GetNotificationMethods returns a helper message about available notification methods
 func GetNotificationMethods() []string {
 	return []string{
@@ -543,16 +498,3 @@ func GetNotificationMethods() []string {
 	}
 }
 
-// validateNotificationType validates a notification type
-//
-//nolint:unused
-func validateNotificationType(t string) error {
-	switch notifications.NotificationType(t) {
-	case notifications.NotificationTypeWebhook,
-		notifications.NotificationTypeEmail,
-		notifications.NotificationTypeSlack:
-		return nil
-	default:
-		return fmt.Errorf("invalid notification type: %s", t)
-	}
-}

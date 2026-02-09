@@ -600,30 +600,27 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 		txHashes = txHashes[:limit]
 	}
 
-	// Convert transaction hashes to full transaction objects
+	// Batch fetch all transactions
+	txs, locs, batchErr := s.storage.GetTransactions(ctx, txHashes)
+	if batchErr != nil && !errors.Is(batchErr, storage.ErrNotFound) {
+		s.logger.Error("failed to batch get transactions",
+			zap.String("address", addressStr),
+			zap.Error(batchErr))
+	}
+
+	// Convert transaction results to full transaction objects
 	nodes := make([]interface{}, 0, len(txHashes))
 	blockTimestamps := make(map[uint64]string) // cache block timestamps
-	for _, txHash := range txHashes {
-		tx, location, err := s.storage.GetTransaction(ctx, txHash)
-		if err != nil {
-			if errors.Is(err, storage.ErrNotFound) {
-				s.logger.Warn("transaction hash not found in storage",
-					zap.String("txHash", txHash.Hex()),
-					zap.String("address", addressStr))
-				continue
-			}
-			s.logger.Error("failed to get transaction",
-				zap.String("txHash", txHash.Hex()),
-				zap.Error(err))
-			// Continue with other transactions instead of failing completely
-			continue
-		}
-
+	for i, tx := range txs {
 		if tx == nil {
-			s.logger.Warn("transaction is nil",
-				zap.String("txHash", txHash.Hex()))
+			if batchErr != nil {
+				s.logger.Warn("transaction not found in batch",
+					zap.String("txHash", txHashes[i].Hex()),
+					zap.String("address", addressStr))
+			}
 			continue
 		}
+		location := locs[i]
 
 		txMap := s.transactionToMap(tx, location)
 		if location != nil {

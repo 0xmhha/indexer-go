@@ -28,7 +28,7 @@ func NewHandler(store storage.Storage, logger *zap.Logger) *Handler {
 	h := &Handler{
 		storage:       store,
 		logger:        logger,
-		filterManager: NewFilterManager(5 * time.Minute), // 5 minute filter timeout
+		filterManager: NewFilterManager(context.Background(), 5*time.Minute), // 5 minute filter timeout
 		abiDecoder:    abiDecoder.NewDecoder(),
 	}
 

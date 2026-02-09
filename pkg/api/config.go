@@ -73,6 +73,15 @@ type Config struct {
 	// RateLimitBurst is the maximum burst size
 	// Default: 2000 (allows temporary spikes)
 	RateLimitBurst int
+
+	// EnableAPIKeyAuth enables API key authentication middleware
+	// When enabled, all API endpoints (except health/metrics/version) require a valid API key
+	// Default: false (disabled for development)
+	EnableAPIKeyAuth bool
+
+	// APIKeys maps valid API keys to their labels (for logging/identification)
+	// Example: {"sk-abc123": "frontend-app", "sk-def456": "admin-dashboard"}
+	APIKeys map[string]string
 }
 
 // DefaultConfig returns a default API server configuration
@@ -98,6 +107,7 @@ func DefaultConfig() *Config {
 		EnableRateLimit:          false, // Disabled by default for development
 		RateLimitPerSecond:       constants.DefaultRateLimitPerSecond,
 		RateLimitBurst:           constants.DefaultRateLimitBurst,
+		EnableAPIKeyAuth:         false, // Disabled by default for development
 	}
 }
 
@@ -128,6 +138,11 @@ func (c *Config) Validate() error {
 	// At least one API must be enabled
 	if !c.EnableGraphQL && !c.EnableJSONRPC && !c.EnableWebSocket {
 		return errors.New("at least one API (GraphQL, JSON-RPC, or WebSocket) must be enabled")
+	}
+
+	// Validate API key auth configuration
+	if c.EnableAPIKeyAuth && len(c.APIKeys) == 0 {
+		return errors.New("API key auth is enabled but no API keys are configured")
 	}
 
 	return nil

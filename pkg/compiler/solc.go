@@ -9,10 +9,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
 )
+
+// versionRegex validates solc version strings (e.g., "0.8.20", "0.8.20+commit.a1b2c3d4")
+var versionRegex = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(\+commit\.[0-9a-fA-F]+)?$`)
 
 // SolcCompiler implements the Compiler interface using solc binary
 type SolcCompiler struct {
@@ -57,6 +61,9 @@ func (s *SolcCompiler) Compile(ctx context.Context, opts *CompilationOptions) (*
 	}
 
 	solcPath := s.getCompilerPath(opts.CompilerVersion)
+	if err := s.validateSolcPath(solcPath); err != nil {
+		return nil, err
+	}
 
 	// Check if source code is Standard JSON Input format
 	if s.isStandardJsonInput(opts.SourceCode) {
@@ -239,6 +246,35 @@ func (s *SolcCompiler) validateCompilationOptions(opts *CompilationOptions) erro
 		return fmt.Errorf("compiler version cannot be empty")
 	}
 
+	if err := validateVersion(opts.CompilerVersion); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateVersion checks that the version string is a valid solc version format
+// and does not contain path traversal or shell metacharacters.
+func validateVersion(version string) error {
+	if !versionRegex.MatchString(version) {
+		return fmt.Errorf("%w: version must match semver format (e.g., 0.8.20): %q", ErrInvalidVersion, version)
+	}
+	return nil
+}
+
+// validateSolcPath verifies the resolved solc binary path is within the expected BinDir.
+func (s *SolcCompiler) validateSolcPath(solcPath string) error {
+	absPath, err := filepath.Abs(solcPath)
+	if err != nil {
+		return fmt.Errorf("%w: failed to resolve path: %v", ErrCompilerNotFound, err)
+	}
+	absBinDir, err := filepath.Abs(s.config.BinDir)
+	if err != nil {
+		return fmt.Errorf("%w: failed to resolve bin dir: %v", ErrCompilerNotFound, err)
+	}
+	if !strings.HasPrefix(absPath, absBinDir+string(filepath.Separator)) {
+		return fmt.Errorf("%w: resolved path %q is outside bin directory %q", ErrCompilerNotFound, absPath, absBinDir)
+	}
 	return nil
 }
 
@@ -420,6 +456,10 @@ func (s *SolcCompiler) ListVersions() ([]string, error) {
 
 // DownloadVersion downloads a specific compiler version
 func (s *SolcCompiler) DownloadVersion(ctx context.Context, version string) error {
+	if err := validateVersion(version); err != nil {
+		return err
+	}
+
 	// Determine platform
 	platform := runtime.GOOS
 	if platform != "linux" && platform != "darwin" && platform != "windows" {
@@ -446,7 +486,8 @@ func (s *SolcCompiler) DownloadVersion(ctx context.Context, version string) erro
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	httpClient := &http.Client{Timeout: 120 * time.Second}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download compiler: %w", err)
 	}

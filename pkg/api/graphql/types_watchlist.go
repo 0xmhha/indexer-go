@@ -20,10 +20,6 @@ var (
 	// WatchEvent type
 	watchEventType *graphql.Object
 
-	// Connection types
-	watchedAddressConnectionType *graphql.Object //nolint:unused
-	watchEventConnectionType     *graphql.Object //nolint:unused
-
 	// Input types
 	watchAddressInputType  *graphql.InputObject
 	watchFilterInputType   *graphql.InputObject
@@ -213,40 +209,6 @@ func initWatchlistTypes() {
 			"timestamp": &graphql.Field{
 				Type:        graphql.NewNonNull(graphql.String),
 				Description: "Event timestamp (RFC3339)",
-			},
-		},
-	})
-
-	// WatchedAddressConnection type
-	watchedAddressConnectionType = graphql.NewObject(graphql.ObjectConfig{
-		Name:        "WatchedAddressConnection",
-		Description: "Paginated watched address list",
-		Fields: graphql.Fields{
-			"nodes": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(watchedAddressType))),
-			},
-			"totalCount": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Int),
-			},
-			"pageInfo": &graphql.Field{
-				Type: graphql.NewNonNull(pageInfoType),
-			},
-		},
-	})
-
-	// WatchEventConnection type
-	watchEventConnectionType = graphql.NewObject(graphql.ObjectConfig{
-		Name:        "WatchEventConnection",
-		Description: "Paginated watch event list",
-		Fields: graphql.Fields{
-			"nodes": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(watchEventType))),
-			},
-			"totalCount": &graphql.Field{
-				Type: graphql.NewNonNull(graphql.Int),
-			},
-			"pageInfo": &graphql.Field{
-				Type: graphql.NewNonNull(pageInfoType),
 			},
 		},
 	})

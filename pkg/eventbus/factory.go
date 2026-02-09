@@ -91,41 +91,52 @@ func (f *Factory) createRedis(ctx context.Context) (EventBus, error) {
 }
 
 // createKafka creates a Kafka EventBus
-func (f *Factory) createKafka(_ context.Context) (EventBus, error) {
+func (f *Factory) createKafka(ctx context.Context) (EventBus, error) {
 	if !f.config.EventBus.Kafka.Enabled {
 		f.logger.Warn("kafka event bus requested but not enabled, falling back to local")
 		return f.createLocal()
 	}
 
-	// TODO: Implement Kafka EventBus
-	f.logger.Warn("Kafka event bus not yet implemented, falling back to local")
-	return f.createLocal()
+	f.logger.Info("creating Kafka event bus",
+		"brokers", f.config.EventBus.Kafka.Brokers,
+		"topic", f.config.EventBus.Kafka.Topic,
+		"group_id", f.config.EventBus.Kafka.GroupID,
+	)
+
+	eb, err := NewKafkaEventBus(f.config.EventBus.Kafka, f.config.Node.ID)
+	if err != nil {
+		f.logger.Error("failed to create Kafka event bus", "error", err)
+		return nil, err
+	}
+
+	// Connect with timeout
+	connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if err := eb.Connect(connectCtx); err != nil {
+		f.logger.Error("failed to connect to Kafka", "error", err)
+		// Return with fallback to local-only mode
+		f.logger.Warn("Kafka connection failed, Kafka features disabled")
+		return eb, nil // Return anyway, it will operate in degraded mode
+	}
+
+	return eb, nil
 }
 
 // createHybrid creates a hybrid EventBus (local + Redis + optional Kafka)
 func (f *Factory) createHybrid(ctx context.Context) (EventBus, error) {
 	f.logger.Info("creating hybrid event bus")
 
-	// For hybrid mode, prefer Redis if enabled
+	// For hybrid mode, prefer Redis if enabled, then Kafka
 	if f.config.EventBus.Redis.Enabled {
 		return f.createRedis(ctx)
+	}
+	if f.config.EventBus.Kafka.Enabled {
+		return f.createKafka(ctx)
 	}
 
 	// Fall back to local
 	return f.createLocal()
-}
-
-// MustCreate creates an EventBus or panics on error.
-//
-// Deprecated: Use Create() or CreateWithContext() with proper error handling instead.
-// This function is preserved for backwards compatibility but new code should
-// use the error-returning versions and handle errors appropriately.
-func (f *Factory) MustCreate() EventBus {
-	eb, err := f.Create()
-	if err != nil {
-		panic(fmt.Sprintf("failed to create event bus: %v", err))
-	}
-	return eb
 }
 
 // NewEventBus is a convenience function that creates an EventBus based on configuration

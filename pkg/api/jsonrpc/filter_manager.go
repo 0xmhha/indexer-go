@@ -63,9 +63,10 @@ type FilterManager struct {
 	pendingPool *PendingPool
 }
 
-// NewFilterManager creates a new filter manager
-func NewFilterManager(timeout time.Duration) *FilterManager {
-	ctx, cancel := context.WithCancel(context.Background())
+// NewFilterManager creates a new filter manager.
+// The provided parent context controls the lifecycle of background goroutines.
+func NewFilterManager(parentCtx context.Context, timeout time.Duration) *FilterManager {
+	ctx, cancel := context.WithCancel(parentCtx)
 	fm := &FilterManager{
 		filters:     make(map[string]*Filter),
 		nextID:      1,
@@ -82,8 +83,8 @@ func NewFilterManager(timeout time.Duration) *FilterManager {
 }
 
 // NewFilterManagerWithPendingPool creates a new filter manager with pending transaction support
-func NewFilterManagerWithPendingPool(timeout time.Duration, pendingPool *PendingPool) *FilterManager {
-	fm := NewFilterManager(timeout)
+func NewFilterManagerWithPendingPool(parentCtx context.Context, timeout time.Duration, pendingPool *PendingPool) *FilterManager {
+	fm := NewFilterManager(parentCtx, timeout)
 	fm.pendingPool = pendingPool
 	return fm
 }

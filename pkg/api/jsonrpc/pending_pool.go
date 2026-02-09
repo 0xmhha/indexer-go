@@ -71,8 +71,9 @@ type PendingPool struct {
 	subscription *events.Subscription
 }
 
-// NewPendingPool creates a new pending transaction pool
-func NewPendingPool(maxSize int, ttl time.Duration) *PendingPool {
+// NewPendingPool creates a new pending transaction pool.
+// The provided parent context controls the lifecycle of background goroutines.
+func NewPendingPool(parentCtx context.Context, maxSize int, ttl time.Duration) *PendingPool {
 	if maxSize <= 0 {
 		maxSize = DefaultPendingPoolSize
 	}
@@ -80,7 +81,7 @@ func NewPendingPool(maxSize int, ttl time.Duration) *PendingPool {
 		ttl = DefaultPendingTxTTL
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parentCtx)
 
 	pool := &PendingPool{
 		transactions: make([]common.Hash, 0, maxSize),

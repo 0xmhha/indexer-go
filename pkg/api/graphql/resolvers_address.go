@@ -128,16 +128,19 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 	if err == nil {
 		overview["transactionCount"] = len(txHashes)
 
+		// Batch fetch all transactions
+		txs, locations, _ := s.storage.GetTransactions(ctx, txHashes)
+
 		// Count sent vs received
 		sentCount := 0
 		receivedCount := 0
 		var firstSeen, lastSeen uint64
 
-		for _, txHash := range txHashes {
-			tx, location, err := s.storage.GetTransaction(ctx, txHash)
-			if err != nil {
+		for i, tx := range txs {
+			if tx == nil {
 				continue
 			}
+			location := locations[i]
 
 			// Update first/last seen
 			if location != nil {
@@ -915,21 +918,6 @@ func (s *Schema) resolveNFTsByOwner(p graphql.ResolveParams) (interface{}, error
 }
 
 // ========== Helper mapper functions ==========
-
-// contractCreationToMap converts ContractCreation to a map (without name lookup)
-//
-//nolint:unused
-func (s *Schema) contractCreationToMap(creation *storage.ContractCreation) map[string]interface{} {
-	return map[string]interface{}{
-		"contractAddress": creation.ContractAddress.Hex(),
-		"name":            nil,
-		"creator":         creation.Creator.Hex(),
-		"transactionHash": creation.TransactionHash.Hex(),
-		"blockNumber":     fmt.Sprintf("%d", creation.BlockNumber),
-		"timestamp":       fmt.Sprintf("%d", creation.Timestamp),
-		"bytecodeSize":    creation.BytecodeSize,
-	}
-}
 
 // contractCreationToMapWithName converts ContractCreation to a map with contract name from verification
 func (s *Schema) contractCreationToMapWithName(creation *storage.ContractCreation) map[string]interface{} {

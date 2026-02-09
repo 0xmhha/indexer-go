@@ -226,47 +226,6 @@ func (s *Schema) resolveUpdateWatchFilter(p graphql.ResolveParams) (interface{},
 	return watchedAddressToMap(newAddr), nil
 }
 
-// resolveRecentEventsField resolves the recentEvents field on WatchedAddress
-//
-//nolint:unused
-func (s *Schema) resolveRecentEventsField(p graphql.ResolveParams) (interface{}, error) {
-	if s.watchlistService == nil {
-		return []interface{}{}, nil
-	}
-
-	source, ok := p.Source.(map[string]interface{})
-	if !ok {
-		return []interface{}{}, nil
-	}
-
-	addressID, ok := source["id"].(string)
-	if !ok {
-		return []interface{}{}, nil
-	}
-
-	limit := 10
-	if l, ok := p.Args["limit"].(int); ok {
-		limit = l
-	}
-
-	ctx := p.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	events, err := s.watchlistService.GetRecentEvents(ctx, addressID, limit)
-	if err != nil {
-		return []interface{}{}, nil
-	}
-
-	result := make([]map[string]interface{}, 0, len(events))
-	for _, event := range events {
-		result = append(result, watchEventToMap(event))
-	}
-
-	return result, nil
-}
-
 // Helper functions
 
 func watchedAddressToMap(addr *watchlist.WatchedAddress) map[string]interface{} {

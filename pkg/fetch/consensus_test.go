@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/events"
 	consensustypes "github.com/0xmhha/indexer-go/pkg/types/consensus"
 )
 
@@ -312,4 +313,80 @@ func TestConsensusFetcher_ExtractWBFTExtra(t *testing.T) {
 	assert.NotNil(t, extra.PreparedSeal)
 	assert.NotNil(t, extra.CommittedSeal)
 	assert.NotNil(t, extra.EpochInfo)
+}
+
+func TestConsensusFetcher_GetConsensusData_BlockNotFound(t *testing.T) {
+	logger := zap.NewNop()
+	client := newMockClient()
+	fetcher := NewConsensusFetcher(client, logger)
+
+	// Block 999 not in mock client
+	_, err := fetcher.GetConsensusData(context.Background(), 999)
+	assert.Error(t, err)
+}
+
+func TestConsensusFetcher_GetConsensusData_InvalidExtra(t *testing.T) {
+	logger := zap.NewNop()
+	client := newMockClient()
+	fetcher := NewConsensusFetcher(client, logger)
+
+	// Block with short extra data (invalid WBFT)
+	header := &types.Header{
+		Number: big.NewInt(100),
+		Extra:  make([]byte, 16), // Too short
+	}
+	block := types.NewBlockWithHeader(header)
+	client.blocks[100] = block
+
+	_, err := fetcher.GetConsensusData(context.Background(), 100)
+	assert.Error(t, err)
+}
+
+func TestConsensusFetcher_GetConsensusData_WithEventBus(t *testing.T) {
+	logger := zap.NewNop()
+	client := newMockClient()
+	fetcher := NewConsensusFetcher(client, logger)
+
+	// Create and set EventBus
+	bus := events.NewEventBus(100, 100)
+	fetcher.SetEventBus(bus)
+
+	validators := []common.Address{
+		common.HexToAddress("0x1111111111111111111111111111111111111111"),
+		common.HexToAddress("0x2222222222222222222222222222222222222222"),
+		common.HexToAddress("0x3333333333333333333333333333333333333333"),
+		common.HexToAddress("0x4444444444444444444444444444444444444444"),
+	}
+
+	// Round 0 with epoch boundary - covers publishConsensusBlockEvent + publishValidatorChangeEvent
+	block := createTestBlock(100, 0, validators)
+	client.blocks[100] = block
+
+	cd, err := fetcher.GetConsensusData(context.Background(), 100)
+	require.NoError(t, err)
+	assert.NotNil(t, cd)
+	assert.True(t, cd.IsEpochBoundary)
+}
+
+func TestConsensusFetcher_GetConsensusData_WithEventBus_RoundChange(t *testing.T) {
+	logger := zap.NewNop()
+	client := newMockClient()
+	fetcher := NewConsensusFetcher(client, logger)
+
+	bus := events.NewEventBus(100, 100)
+	fetcher.SetEventBus(bus)
+
+	validators := []common.Address{
+		common.HexToAddress("0x1111111111111111111111111111111111111111"),
+		common.HexToAddress("0x2222222222222222222222222222222222222222"),
+		common.HexToAddress("0x3333333333333333333333333333333333333333"),
+	}
+
+	// Round > 0 triggers checkAndPublishConsensusErrors (round_change)
+	block := createTestBlock(200, 2, validators)
+	client.blocks[200] = block
+
+	cd, err := fetcher.GetConsensusData(context.Background(), 200)
+	require.NoError(t, err)
+	assert.True(t, cd.RoundChanged)
 }

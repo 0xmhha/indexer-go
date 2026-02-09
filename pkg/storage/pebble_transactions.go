@@ -52,6 +52,35 @@ func (s *PebbleStorage) GetTransaction(ctx context.Context, hash common.Hash) (*
 	return tx, location, nil
 }
 
+// GetTransactions returns multiple transactions and their locations by hash (batch operation)
+func (s *PebbleStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*TxLocation, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, nil, err
+	}
+
+	txs := make([]*types.Transaction, len(hashes))
+	locations := make([]*TxLocation, len(hashes))
+	var firstError error
+
+	for i, hash := range hashes {
+		tx, loc, err := s.GetTransaction(ctx, hash)
+		if err != nil {
+			if firstError == nil {
+				firstError = err
+			}
+			continue
+		}
+		txs[i] = tx
+		locations[i] = loc
+	}
+
+	if firstError != nil {
+		return txs, locations, firstError
+	}
+
+	return txs, locations, nil
+}
+
 // SetTransaction stores a transaction with its location
 func (s *PebbleStorage) SetTransaction(ctx context.Context, tx *types.Transaction, location *TxLocation) error {
 	if err := s.ensureNotClosed(); err != nil {

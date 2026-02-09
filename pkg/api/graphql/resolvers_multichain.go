@@ -273,23 +273,6 @@ func chainInstanceToMap(instance *multichain.ChainInstance) map[string]interface
 	return result
 }
 
-//nolint:unused
-func syncProgressToMap(progress *multichain.SyncProgress) map[string]interface{} {
-	result := map[string]interface{}{
-		"currentBlock":    strconv.FormatUint(progress.CurrentHeight, 10),
-		"targetBlock":     strconv.FormatUint(progress.LatestHeight, 10),
-		"percentage":      progress.PercentComplete,
-		"blocksPerSecond": progress.BlocksPerSecond,
-		"isSynced":        progress.PercentComplete >= 99.9,
-	}
-
-	if progress.EstimatedTimeRemaining > 0 {
-		result["estimatedTimeRemaining"] = strconv.FormatInt(int64(progress.EstimatedTimeRemaining.Seconds()), 10)
-	}
-
-	return result
-}
-
 func healthStatusToMap(health *multichain.HealthStatus) map[string]interface{} {
 	result := map[string]interface{}{
 		"isHealthy":           health.IsHealthy,

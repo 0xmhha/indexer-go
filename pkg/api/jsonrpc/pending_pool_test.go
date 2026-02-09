@@ -1,6 +1,7 @@
 package jsonrpc
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 
 func TestNewPendingPool(t *testing.T) {
 	t.Run("default values", func(t *testing.T) {
-		pool := NewPendingPool(0, 0)
+		pool := NewPendingPool(context.Background(),0, 0)
 		defer pool.Close()
 
 		assert.Equal(t, DefaultPendingPoolSize, pool.maxSize)
@@ -23,7 +24,7 @@ func TestNewPendingPool(t *testing.T) {
 	})
 
 	t.Run("custom values", func(t *testing.T) {
-		pool := NewPendingPool(100, 10*time.Second)
+		pool := NewPendingPool(context.Background(),100, 10*time.Second)
 		defer pool.Close()
 
 		assert.Equal(t, 100, pool.maxSize)
@@ -32,7 +33,7 @@ func TestNewPendingPool(t *testing.T) {
 }
 
 func TestPendingPoolAddTransaction(t *testing.T) {
-	pool := NewPendingPool(10, 5*time.Minute)
+	pool := NewPendingPool(context.Background(),10, 5*time.Minute)
 	defer pool.Close()
 
 	t.Run("add single transaction", func(t *testing.T) {
@@ -52,7 +53,7 @@ func TestPendingPoolAddTransaction(t *testing.T) {
 
 	t.Run("add duplicate transaction", func(t *testing.T) {
 		// Create a new pool for this test
-		dupPool := NewPendingPool(10, 5*time.Minute)
+		dupPool := NewPendingPool(context.Background(),10, 5*time.Minute)
 		defer dupPool.Close()
 
 		tx := createTestTx(100)
@@ -66,7 +67,7 @@ func TestPendingPoolAddTransaction(t *testing.T) {
 	})
 
 	t.Run("pool overflow evicts oldest", func(t *testing.T) {
-		smallPool := NewPendingPool(3, 5*time.Minute)
+		smallPool := NewPendingPool(context.Background(),3, 5*time.Minute)
 		defer smallPool.Close()
 
 		// Add 4 transactions to a pool of size 3
@@ -93,7 +94,7 @@ func TestPendingPoolAddTransaction(t *testing.T) {
 }
 
 func TestPendingPoolRemoveTransaction(t *testing.T) {
-	pool := NewPendingPool(10, 5*time.Minute)
+	pool := NewPendingPool(context.Background(),10, 5*time.Minute)
 	defer pool.Close()
 
 	tx1 := createTestTx(1)
@@ -122,7 +123,7 @@ func TestPendingPoolRemoveTransaction(t *testing.T) {
 }
 
 func TestPendingPoolGetTransactionsSince(t *testing.T) {
-	pool := NewPendingPool(100, 5*time.Minute)
+	pool := NewPendingPool(context.Background(),100, 5*time.Minute)
 	defer pool.Close()
 
 	// Add 5 transactions
@@ -151,7 +152,7 @@ func TestPendingPoolGetTransactionsSince(t *testing.T) {
 }
 
 func TestPendingPoolGetAllTransactions(t *testing.T) {
-	pool := NewPendingPool(100, 5*time.Minute)
+	pool := NewPendingPool(context.Background(),100, 5*time.Minute)
 	defer pool.Close()
 
 	var expectedHashes []common.Hash
@@ -170,7 +171,7 @@ func TestPendingPoolGetAllTransactions(t *testing.T) {
 
 func TestPendingPoolCleanup(t *testing.T) {
 	// Create pool with very short TTL
-	pool := NewPendingPool(100, 50*time.Millisecond)
+	pool := NewPendingPool(context.Background(),100, 50*time.Millisecond)
 	defer pool.Close()
 
 	tx := createTestTx(1)
@@ -185,10 +186,10 @@ func TestPendingPoolCleanup(t *testing.T) {
 }
 
 func TestFilterManagerWithPendingPool(t *testing.T) {
-	pool := NewPendingPool(100, 5*time.Minute)
+	pool := NewPendingPool(context.Background(),100, 5*time.Minute)
 	defer pool.Close()
 
-	fm := NewFilterManagerWithPendingPool(5*time.Minute, pool)
+	fm := NewFilterManagerWithPendingPool(context.Background(), 5*time.Minute, pool)
 	defer fm.Close()
 
 	// Add some pending transactions
@@ -241,7 +242,7 @@ func TestFilterManagerWithPendingPool(t *testing.T) {
 }
 
 func TestFilterManagerWithoutPendingPool(t *testing.T) {
-	fm := NewFilterManager(5 * time.Minute)
+	fm := NewFilterManager(context.Background(), 5*time.Minute)
 	defer fm.Close()
 
 	filterID := fm.NewFilter(PendingTxFilterType, nil, 0, false)

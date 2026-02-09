@@ -14,8 +14,6 @@ import (
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/compress"
 	"github.com/segmentio/kafka-go/sasl"
-	"github.com/segmentio/kafka-go/sasl/plain"
-	"github.com/segmentio/kafka-go/sasl/scram"
 )
 
 // KafkaProducer handles event streaming to Kafka
@@ -170,27 +168,7 @@ func (kp *KafkaProducer) Connect(ctx context.Context) error {
 
 // createSASLMechanism creates the appropriate SASL mechanism
 func (kp *KafkaProducer) createSASLMechanism() (sasl.Mechanism, error) {
-	switch kp.config.SASLMechanism {
-	case "PLAIN":
-		return plain.Mechanism{
-			Username: kp.config.SASLUsername,
-			Password: kp.config.SASLPassword,
-		}, nil
-	case "SCRAM-SHA-256":
-		mechanism, err := scram.Mechanism(scram.SHA256, kp.config.SASLUsername, kp.config.SASLPassword)
-		if err != nil {
-			return nil, err
-		}
-		return mechanism, nil
-	case "SCRAM-SHA-512":
-		mechanism, err := scram.Mechanism(scram.SHA512, kp.config.SASLUsername, kp.config.SASLPassword)
-		if err != nil {
-			return nil, err
-		}
-		return mechanism, nil
-	default:
-		return nil, fmt.Errorf("unsupported SASL mechanism: %s", kp.config.SASLMechanism)
-	}
+	return createKafkaSASLMechanism(kp.config)
 }
 
 // Disconnect closes the connection to Kafka

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -87,8 +88,8 @@ func TestBackendRegistry_SupportedTypes(t *testing.T) {
 	}
 
 	// Register multiple types
-	registry.MustRegister(BackendTypeMemory, mockFactory, nil)
-	registry.MustRegister(BackendTypeRocksDB, mockFactory, nil)
+	require.NoError(t, registry.Register(BackendTypeMemory, mockFactory, nil))
+	require.NoError(t, registry.Register(BackendTypeRocksDB, mockFactory, nil))
 
 	types := registry.SupportedTypes()
 	if len(types) != 2 {
@@ -566,7 +567,7 @@ func TestPebbleBatch_DeleteResetClose(t *testing.T) {
 	}
 }
 
-func TestMustRegister_Panic(t *testing.T) {
+func TestRegister_DuplicateReturnsError(t *testing.T) {
 	registry := NewBackendRegistry()
 
 	mockFactory := func(config *BackendConfig, logger *zap.Logger) (Backend, error) {
@@ -574,16 +575,11 @@ func TestMustRegister_Panic(t *testing.T) {
 	}
 
 	// First registration should succeed
-	registry.MustRegister(BackendTypeMemory, mockFactory, nil)
+	require.NoError(t, registry.Register(BackendTypeMemory, mockFactory, nil))
 
-	// Second registration should panic
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for duplicate MustRegister")
-		}
-	}()
-
-	registry.MustRegister(BackendTypeMemory, mockFactory, nil)
+	// Second registration should return error
+	err := registry.Register(BackendTypeMemory, mockFactory, nil)
+	require.Error(t, err)
 }
 
 func TestNewStorageWithBackend_Pebble(t *testing.T) {

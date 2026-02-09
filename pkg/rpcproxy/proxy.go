@@ -128,8 +128,9 @@ func (p *Proxy) ContractCall(ctx context.Context, req *ContractCallRequest) (*Co
 
 	// Check cache
 	if cached, ok := p.cache.Get(cacheKey); ok {
-		resp := cached.(*ContractCallResponse)
-		return resp, nil
+		if resp, ok := cached.(*ContractCallResponse); ok {
+			return resp, nil
+		}
 	}
 
 	// Get ABI
@@ -258,10 +259,11 @@ func (p *Proxy) GetTransactionStatus(ctx context.Context, txHash common.Hash) (*
 	// Check cache (short TTL for pending transactions)
 	cacheKey := p.keyBuilder.TransactionStatus(txHash.Hex())
 	if cached, ok := p.cache.Get(cacheKey); ok {
-		resp := cached.(*TransactionStatusResponse)
-		// Don't return cached pending status
-		if resp.Status != TxStatusPending {
-			return resp, nil
+		if resp, ok := cached.(*TransactionStatusResponse); ok {
+			// Don't return cached pending status
+			if resp.Status != TxStatusPending {
+				return resp, nil
+			}
 		}
 	}
 
@@ -374,7 +376,9 @@ func (p *Proxy) GetBalance(ctx context.Context, req *BalanceRequest) (*BalanceRe
 
 	// Check cache
 	if cached, ok := p.cache.Get(cacheKey); ok {
-		return cached.(*BalanceResponse), nil
+		if resp, ok := cached.(*BalanceResponse); ok {
+			return resp, nil
+		}
 	}
 
 	start := time.Now()
@@ -434,7 +438,9 @@ func (p *Proxy) GetNonce(ctx context.Context, req *NonceRequest) (*NonceResponse
 
 	// Check cache
 	if cached, ok := p.cache.Get(cacheKey); ok {
-		return cached.(*NonceResponse), nil
+		if resp, ok := cached.(*NonceResponse); ok {
+			return resp, nil
+		}
 	}
 
 	start := time.Now()
@@ -494,7 +500,9 @@ func (p *Proxy) GetCode(ctx context.Context, req *CodeRequest) (*CodeResponse, e
 
 	// Check cache
 	if cached, ok := p.cache.Get(cacheKey); ok {
-		return cached.(*CodeResponse), nil
+		if resp, ok := cached.(*CodeResponse); ok {
+			return resp, nil
+		}
 	}
 
 	start := time.Now()
@@ -549,7 +557,9 @@ func (p *Proxy) GetInternalTransactions(ctx context.Context, txHash common.Hash)
 	// Check cache (internal txs are immutable once confirmed)
 	cacheKey := p.keyBuilder.InternalTransactions(txHash.Hex())
 	if cached, ok := p.cache.Get(cacheKey); ok {
-		return cached.(*InternalTransactionResponse), nil
+		if resp, ok := cached.(*InternalTransactionResponse); ok {
+			return resp, nil
+		}
 	}
 
 	start := time.Now()
@@ -600,17 +610,23 @@ func (p *Proxy) parseTraceResult(trace map[string]interface{}, traceAddr []int) 
 
 	value := new(big.Int)
 	if valueStr != "" {
-		value.SetString(strings.TrimPrefix(valueStr, "0x"), 16)
+		if _, ok := value.SetString(strings.TrimPrefix(valueStr, "0x"), 16); !ok {
+			p.logger.Warn("failed to parse trace value", zap.String("value", valueStr))
+		}
 	}
 
 	gas := uint64(0)
 	if gasStr != "" {
-		_, _ = fmt.Sscanf(strings.TrimPrefix(gasStr, "0x"), "%x", &gas)
+		if n, err := fmt.Sscanf(strings.TrimPrefix(gasStr, "0x"), "%x", &gas); n == 0 || err != nil {
+			p.logger.Warn("failed to parse trace gas", zap.String("gas", gasStr), zap.Error(err))
+		}
 	}
 
 	gasUsed := uint64(0)
 	if gasUsedStr != "" {
-		_, _ = fmt.Sscanf(strings.TrimPrefix(gasUsedStr, "0x"), "%x", &gasUsed)
+		if n, err := fmt.Sscanf(strings.TrimPrefix(gasUsedStr, "0x"), "%x", &gasUsed); n == 0 || err != nil {
+			p.logger.Warn("failed to parse trace gasUsed", zap.String("gasUsed", gasUsedStr), zap.Error(err))
+		}
 	}
 
 	// Add current call
@@ -652,16 +668,28 @@ func (p *Proxy) handleRequest(ctx context.Context, req *Request) *Response {
 
 	switch req.Type {
 	case RequestTypeContractCall:
-		payload := req.Payload.(*ContractCallRequest)
-		data, err = p.ContractCall(ctx, payload)
+		payload, ok := req.Payload.(*ContractCallRequest)
+		if !ok {
+			err = ErrInvalidRequest
+		} else {
+			data, err = p.ContractCall(ctx, payload)
+		}
 
 	case RequestTypeTransactionStatus:
-		payload := req.Payload.(*TransactionStatusRequest)
-		data, err = p.GetTransactionStatus(ctx, payload.TxHash)
+		payload, ok := req.Payload.(*TransactionStatusRequest)
+		if !ok {
+			err = ErrInvalidRequest
+		} else {
+			data, err = p.GetTransactionStatus(ctx, payload.TxHash)
+		}
 
 	case RequestTypeInternalTransaction:
-		payload := req.Payload.(*InternalTransactionRequest)
-		data, err = p.GetInternalTransactions(ctx, payload.TxHash)
+		payload, ok := req.Payload.(*InternalTransactionRequest)
+		if !ok {
+			err = ErrInvalidRequest
+		} else {
+			data, err = p.GetInternalTransactions(ctx, payload.TxHash)
+		}
 
 	default:
 		err = ErrInvalidRequest
@@ -796,7 +824,9 @@ func (p *Proxy) GetMetrics() *Metrics {
 // GetIPRateLimiter returns or creates a rate limiter for an IP
 func (p *Proxy) GetIPRateLimiter(ip string) *rate.Limiter {
 	if limiter, ok := p.ipLimiters.Load(ip); ok {
-		return limiter.(*rate.Limiter)
+		if rl, ok := limiter.(*rate.Limiter); ok {
+			return rl
+		}
 	}
 
 	limiter := rate.NewLimiter(rate.Limit(p.config.RateLimit.PerIPRequestsPerSecond), p.config.RateLimit.BurstSize/10)

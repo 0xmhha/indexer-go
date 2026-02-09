@@ -45,7 +45,10 @@ func tokenHolderToJSON(h *TokenHolder) *TokenHolderJSON {
 func tokenHolderFromJSON(j *TokenHolderJSON) *TokenHolder {
 	balance := big.NewInt(0)
 	if j.Balance != "" {
-		balance, _ = new(big.Int).SetString(j.Balance, 10)
+		parsed, ok := new(big.Int).SetString(j.Balance, 10)
+		if ok {
+			balance = parsed
+		}
 	}
 	return &TokenHolder{
 		TokenAddress:  common.HexToAddress(j.TokenAddress),

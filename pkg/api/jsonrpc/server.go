@@ -33,11 +33,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Limit request body size to prevent memory exhaustion (2MB)
+	const maxRequestBodySize = 2 << 20 // 2 MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
+
 	// Read request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.logger.Error("failed to read request body", zap.Error(err))
-		s.writeErrorResponse(w, nil, NewError(ParseError, "failed to read request", err.Error()))
+		s.writeErrorResponse(w, nil, NewError(ParseError, "request body too large or unreadable", err.Error()))
 		return
 	}
 	defer r.Body.Close()
@@ -106,6 +110,16 @@ func (s *Server) handleBatchRequest(w http.ResponseWriter, r *http.Request, body
 	// Empty batch is invalid
 	if len(batch) == 0 {
 		s.writeErrorResponse(w, nil, NewError(InvalidRequest, "empty batch", nil))
+		return
+	}
+
+	// Limit batch size to prevent DoS via large batch arrays
+	const maxBatchSize = 100
+	if len(batch) > maxBatchSize {
+		s.logger.Warn("batch request too large",
+			zap.Int("batch_size", len(batch)),
+			zap.Int("max_batch_size", maxBatchSize))
+		s.writeErrorResponse(w, nil, NewError(InvalidRequest, "batch too large (max 100 requests)", nil))
 		return
 	}
 

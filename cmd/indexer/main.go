@@ -850,7 +850,9 @@ func (a *App) Shutdown() {
 
 	// Stop RPC Proxy
 	if a.rpcProxy != nil {
-		_ = a.rpcProxy.Stop()
+		if err := a.rpcProxy.Stop(); err != nil {
+			a.logger.Error("Failed to stop RPC Proxy gracefully", zap.Error(err))
+		}
 		a.logger.Info("RPC Proxy stopped")
 	}
 

@@ -7,6 +7,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// DefaultMaxClients is the maximum number of concurrent WebSocket clients
+	DefaultMaxClients = 10000
+)
+
 // Hub maintains the set of active clients and broadcasts messages to them
 type Hub struct {
 	// Registered clients
@@ -22,6 +27,12 @@ type Hub struct {
 	// Broadcast events to clients
 	broadcast chan *Event
 
+	// done signals the Run goroutine to exit
+	done chan struct{}
+
+	// maxClients limits concurrent connections to prevent unbounded growth
+	maxClients int
+
 	logger *zap.Logger
 }
 
@@ -32,20 +43,32 @@ func NewHub(logger *zap.Logger) *Hub {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan *Event, 256),
+		done:       make(chan struct{}),
+		maxClients: DefaultMaxClients,
 		logger:     logger,
 	}
 }
 
-// Run runs the hub
+// Run runs the hub event loop. It exits when Stop() is called.
 func (h *Hub) Run() {
 	for {
 		select {
+		case <-h.done:
+			return
+
 		case client := <-h.register:
 			h.mu.Lock()
+			if len(h.clients) >= h.maxClients {
+				h.mu.Unlock()
+				h.logger.Warn("max clients reached, rejecting connection",
+					zap.Int("max_clients", h.maxClients))
+				close(client.send)
+				continue
+			}
 			h.clients[client] = true
 			h.mu.Unlock()
 			h.logger.Info("client registered",
-				zap.Int("total_clients", len(h.clients)))
+				zap.Int("total_clients", h.ClientCount()))
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -55,7 +78,7 @@ func (h *Hub) Run() {
 			}
 			h.mu.Unlock()
 			h.logger.Info("client unregistered",
-				zap.Int("total_clients", len(h.clients)))
+				zap.Int("total_clients", h.ClientCount()))
 
 		case event := <-h.broadcast:
 			h.broadcastEvent(event)
@@ -140,8 +163,12 @@ func (h *Hub) ClientCount() int {
 	return len(h.clients)
 }
 
-// Stop stops the hub and closes all client connections
+// Stop stops the hub and closes all client connections.
+// It signals the Run goroutine to exit and cleans up all clients.
 func (h *Hub) Stop() {
+	// Signal Run() to exit
+	close(h.done)
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

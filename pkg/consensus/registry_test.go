@@ -7,6 +7,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -86,8 +87,8 @@ func TestRegistry_SupportedTypes(t *testing.T) {
 	}
 
 	// Register multiple types
-	registry.MustRegister(chain.ConsensusTypeWBFT, mockFactory, nil)
-	registry.MustRegister(chain.ConsensusTypePoA, mockFactory, nil)
+	require.NoError(t, registry.Register(chain.ConsensusTypeWBFT, mockFactory, nil))
+	require.NoError(t, registry.Register(chain.ConsensusTypePoA, mockFactory, nil))
 
 	types := registry.SupportedTypes()
 	if len(types) != 2 {
@@ -127,7 +128,7 @@ func TestRegistry_Metadata(t *testing.T) {
 		},
 	}
 
-	registry.MustRegister(chain.ConsensusTypeWBFT, mockFactory, metadata)
+	require.NoError(t, registry.Register(chain.ConsensusTypeWBFT, mockFactory, metadata))
 
 	// Get metadata
 	gotMeta, exists := registry.GetMetadata(chain.ConsensusTypeWBFT)
@@ -151,7 +152,7 @@ func TestRegistry_Unregister(t *testing.T) {
 		return &mockParser{}, nil
 	}
 
-	registry.MustRegister(chain.ConsensusTypeWBFT, mockFactory, nil)
+	require.NoError(t, registry.Register(chain.ConsensusTypeWBFT, mockFactory, nil))
 
 	if !registry.Has(chain.ConsensusTypeWBFT) {
 		t.Error("Expected WBFT to be registered")

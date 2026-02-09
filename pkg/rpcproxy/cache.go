@@ -181,7 +181,10 @@ func (c *Cache) removeEntry(entry *CacheEntry) {
 func (c *Cache) evictOldest() {
 	oldest := c.lru.Back()
 	if oldest != nil {
-		entry := oldest.Value.(*CacheEntry)
+		entry, ok := oldest.Value.(*CacheEntry)
+		if !ok {
+			return
+		}
 		c.removeEntry(entry)
 		c.evictions++
 	}

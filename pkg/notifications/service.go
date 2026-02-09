@@ -591,7 +591,11 @@ func (s *NotificationService) processNotification(notification *Notification) {
 
 	// Update status to sending
 	notification.Status = DeliveryStatusRetrying
-	_ = s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusRetrying, "")
+	if err := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusRetrying, ""); err != nil {
+		s.logger.Warn("failed to update notification status to retrying",
+			zap.String("notification_id", notification.ID),
+			zap.Error(err))
+	}
 
 	// Deliver notification
 	start := time.Now()
@@ -606,7 +610,11 @@ func (s *NotificationService) processNotification(notification *Notification) {
 		Result:         result,
 		Timestamp:      time.Now(),
 	}
-	_ = s.storage.SaveDeliveryHistory(s.ctx, history)
+	if err := s.storage.SaveDeliveryHistory(s.ctx, history); err != nil {
+		s.logger.Warn("failed to save delivery history",
+			zap.String("notification_id", notification.ID),
+			zap.Error(err))
+	}
 
 	if err != nil || (result != nil && !result.Success) {
 		s.handleDeliveryFailure(notification, result, err)
@@ -621,8 +629,16 @@ func (s *NotificationService) handleDeliverySuccess(notification *Notification, 
 	notification.Status = DeliveryStatusSent
 	notification.SentAt = &now
 
-	_ = s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusSent, "")
-	_ = s.storage.IncrementStats(s.ctx, notification.SettingID, true, durationMs)
+	if err := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusSent, ""); err != nil {
+		s.logger.Warn("failed to update notification status to sent",
+			zap.String("notification_id", notification.ID),
+			zap.Error(err))
+	}
+	if err := s.storage.IncrementStats(s.ctx, notification.SettingID, true, durationMs); err != nil {
+		s.logger.Warn("failed to increment notification stats",
+			zap.String("setting_id", notification.SettingID),
+			zap.Error(err))
+	}
 
 	s.logger.Debug("notification delivered",
 		zap.String("notification_id", notification.ID),
@@ -643,8 +659,16 @@ func (s *NotificationService) handleDeliveryFailure(notification *Notification, 
 
 	if notification.RetryCount >= s.config.Retry.MaxAttempts {
 		notification.Status = DeliveryStatusFailed
-		_ = s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusFailed, errMsg)
-		_ = s.storage.IncrementStats(s.ctx, notification.SettingID, false, 0)
+		if stErr := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusFailed, errMsg); stErr != nil {
+			s.logger.Warn("failed to update notification status to failed",
+				zap.String("notification_id", notification.ID),
+				zap.Error(stErr))
+		}
+		if stErr := s.storage.IncrementStats(s.ctx, notification.SettingID, false, 0); stErr != nil {
+			s.logger.Warn("failed to increment failure stats",
+				zap.String("setting_id", notification.SettingID),
+				zap.Error(stErr))
+		}
 		s.logger.Warn("notification delivery failed permanently",
 			zap.String("notification_id", notification.ID),
 			zap.Int("attempts", notification.RetryCount),
@@ -655,7 +679,11 @@ func (s *NotificationService) handleDeliveryFailure(notification *Notification, 
 		nextRetry := time.Now().Add(delay)
 		notification.NextRetry = &nextRetry
 		notification.Status = DeliveryStatusRetrying
-		_ = s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusRetrying, errMsg)
+		if stErr := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusRetrying, errMsg); stErr != nil {
+			s.logger.Warn("failed to update notification status to retrying",
+				zap.String("notification_id", notification.ID),
+				zap.Error(stErr))
+		}
 		s.logger.Debug("scheduling notification retry",
 			zap.String("notification_id", notification.ID),
 			zap.Int("attempt", notification.RetryCount),

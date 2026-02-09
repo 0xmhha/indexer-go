@@ -77,10 +77,18 @@ func (s *Schema) resolveDynamicContractEvents(p graphql.ResolveParams) (interfac
 			}
 		}
 		if fb, ok := filter["fromBlock"].(string); ok {
-			fromBlock, _ = strconv.ParseUint(fb, 10, 64)
+			parsed, err := strconv.ParseUint(fb, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid fromBlock value %q: %w", fb, err)
+			}
+			fromBlock = parsed
 		}
 		if tb, ok := filter["toBlock"].(string); ok {
-			toBlock, _ = strconv.ParseUint(tb, 10, 64)
+			parsed, err := strconv.ParseUint(tb, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid toBlock value %q: %w", tb, err)
+			}
+			toBlock = parsed
 		}
 	}
 
@@ -230,7 +238,11 @@ func (s *Schema) resolveRegisterContract(p graphql.ResolveParams) (interface{}, 
 
 	var blockNumber uint64
 	if bn, ok := input["blockNumber"].(string); ok {
-		blockNumber, _ = strconv.ParseUint(bn, 10, 64)
+		parsed, err := strconv.ParseUint(bn, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid blockNumber value %q: %w", bn, err)
+		}
+		blockNumber = parsed
 	}
 
 	reg, err := s.contractRegistrationService.RegisterContract(p.Context, events.RegisterContractInput{

@@ -36,7 +36,13 @@ func (s *PebbleStorage) GetLogs(ctx context.Context, filter *LogFilter) ([]*type
 		toBlock = latestHeight
 	}
 
-	var logs []*types.Log
+	// Enforce maximum block range to prevent memory exhaustion
+	const maxBlockRange = 10000
+	if toBlock-filter.FromBlock > maxBlockRange {
+		return nil, fmt.Errorf("block range too large: %d blocks (max %d)", toBlock-filter.FromBlock, maxBlockRange)
+	}
+
+	logs := make([]*types.Log, 0, 64)
 
 	// Strategy 1: If specific addresses are provided, use address index
 	if len(filter.Addresses) > 0 {
@@ -98,7 +104,7 @@ func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) 
 	}
 	defer iter.Close()
 
-	var logs []*types.Log
+	logs := make([]*types.Log, 0, 32)
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		// Value is empty, we need to get the actual log data
@@ -276,7 +282,7 @@ func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address commo
 	}
 	defer iter.Close()
 
-	var logs []*types.Log
+	logs := make([]*types.Log, 0, 32)
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		// Parse key to extract block, tx, log indexes
@@ -345,7 +351,7 @@ func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Ha
 	}
 	defer iter.Close()
 
-	var logs []*types.Log
+	logs := make([]*types.Log, 0, 32)
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		// Parse key to extract block, tx, log indexes
