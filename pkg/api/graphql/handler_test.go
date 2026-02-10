@@ -563,6 +563,20 @@ func (m *mockStorage) GetProposalExecutionSkippedEvents(ctx context.Context, con
 	return nil, nil
 }
 
+// SetCodeIndexWriter stubs (Reader stubs are in resolvers_extended_test.go)
+func (m *mockStorage) SaveSetCodeAuthorization(ctx context.Context, record *storage.SetCodeAuthorizationRecord) error {
+	return nil
+}
+func (m *mockStorage) SaveSetCodeAuthorizations(ctx context.Context, records []*storage.SetCodeAuthorizationRecord) error {
+	return nil
+}
+func (m *mockStorage) UpdateAddressDelegationState(ctx context.Context, state *storage.AddressDelegationState) error {
+	return nil
+}
+func (m *mockStorage) IncrementSetCodeStats(ctx context.Context, address common.Address, asTarget, asAuthority bool, blockNumber uint64) error {
+	return nil
+}
+
 // mockStorageWithErrors returns errors for testing error paths
 type mockStorageWithErrors struct {
 }
@@ -1040,6 +1054,55 @@ func (m *mockStorageWithErrors) GetMaxProposalsUpdateHistory(ctx context.Context
 
 func (m *mockStorageWithErrors) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
 	return nil, fmt.Errorf("storage error")
+}
+
+// SetCodeIndexReader stubs
+func (m *mockStorageWithErrors) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*storage.SetCodeAuthorizationRecord, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*storage.SetCodeAuthorizationRecord, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*storage.SetCodeAuthorizationRecord, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*storage.AddressSetCodeStats, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetAddressDelegationState(ctx context.Context, address common.Address) (*storage.AddressDelegationState, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsCountByTarget(ctx context.Context, target common.Address) (int, error) {
+	return 0, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsCountByAuthority(ctx context.Context, authority common.Address) (int, error) {
+	return 0, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetSetCodeTransactionCount(ctx context.Context) (int, error) {
+	return 0, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*storage.SetCodeAuthorizationRecord, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+// SetCodeIndexWriter stubs
+func (m *mockStorageWithErrors) SaveSetCodeAuthorization(ctx context.Context, record *storage.SetCodeAuthorizationRecord) error {
+	return fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) SaveSetCodeAuthorizations(ctx context.Context, records []*storage.SetCodeAuthorizationRecord) error {
+	return fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) UpdateAddressDelegationState(ctx context.Context, state *storage.AddressDelegationState) error {
+	return fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) IncrementSetCodeStats(ctx context.Context, address common.Address, asTarget, asAuthority bool, blockNumber uint64) error {
+	return fmt.Errorf("storage error")
 }
 
 func TestGraphQLHandler(t *testing.T) {
