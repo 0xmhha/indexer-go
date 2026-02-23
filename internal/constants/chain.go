@@ -110,10 +110,10 @@ const (
 // Native Token Constants (StableOne specific)
 const (
 	// DefaultNativeTokenName is the name of the native token
-	DefaultNativeTokenName = "STABLEONE"
+	DefaultNativeTokenName = "WKRC"
 
 	// DefaultNativeTokenSymbol is the symbol of the native token
-	DefaultNativeTokenSymbol = "STONE"
+	DefaultNativeTokenSymbol = "WKRC"
 
 	// DefaultNativeTokenDecimals is the decimal places of the native token
 	DefaultNativeTokenDecimals = 18

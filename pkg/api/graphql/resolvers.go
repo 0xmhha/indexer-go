@@ -428,16 +428,23 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 	return s.buildTxConnectionResponse(paginatedTxs, totalCount, len(filteredTxs), pagination), nil
 }
 
-// normalizeBlockRange sets default block range and limits to prevent excessive queries
+// normalizeBlockRange sets default block range and applies safety limits.
+// For explicit ranges, it caps at maxRange to prevent excessive queries.
+// For default queries (no range specified), it scans all blocks to ensure
+// all transactions are discoverable regardless of which blocks contain them.
 func (s *Schema) normalizeBlockRange(from, to, latestHeight uint64) (uint64, uint64) {
 	if from == 0 && to == 0 {
+		// Default: scan entire chain so all transactions are reachable
 		to = latestHeight
-	} else if to == 0 {
+		return from, to
+	}
+
+	if to == 0 {
 		to = latestHeight
 	}
 
-	// Limit range to prevent excessive queries
-	const maxRange = uint64(1000)
+	// Only apply maxRange limit when user specifies an explicit range
+	const maxRange = uint64(10000)
 	if to-from > maxRange {
 		to = from + maxRange
 	}
