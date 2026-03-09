@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**indexer-go** is a high-performance indexer that indexes Stable-One blockchain blocks and transaction data in real-time, enabling efficient querying through GraphQL and JSON-RPC APIs.
+**indexer-go** is a high-performance indexer that indexes Stable-One blockchain blocks and transaction data in real-time, enabling efficient querying through GraphQL and JSON-RPC APIs. Supports advanced Ethereum features including EIP-7702 SetCode delegations and EIP-4337 Account Abstraction (UserOperations, Bundlers, Paymasters).
 
 ---
 
@@ -17,9 +17,17 @@ Stable-One Node (RPC)
     Client Layer (ethclient)
          ↓
     Fetcher (Worker Pool) ──→ EventBus (Pub/Sub)
-         ↓                          ↓
-    Storage (PebbleDB)              ↓
-         ↓                          ↓
+         │
+    ┌────┼────────────────────────┐
+    │    ├─ Address Indexing      │
+    │    ├─ Token Transfers       │
+    │    ├─ SetCode Processor     │  Processors
+    │    ├─ UserOp Processor      │
+    │    └─ Fee Delegation        │
+    └────┬────────────────────────┘
+         ↓
+    Storage (PebbleDB)
+         ↓
     ┌─────────────────────────────────────┐
     │  API Server                         │
     │  GraphQL │ JSON-RPC │ WebSocket     │
@@ -30,12 +38,45 @@ Stable-One Node (RPC)
 
 ---
 
+## Features
+
+### Core Indexing
+- Real-time block, transaction, receipt, and log indexing
+- Address-based transaction indexing with balance tracking
+- Token metadata (ERC-20/ERC-721) auto-detection and indexing
+- Token holder tracking with balance-sorted queries
+- Fee delegation metadata indexing
+- Historical balance snapshots
+
+### EIP-7702 SetCode Delegation
+- SetCode authorization record indexing
+- Delegation state tracking per address
+- Query by target, authority, block, or transaction
+- Authorization statistics per address
+
+### EIP-4337 Account Abstraction
+- **UserOperation** event indexing from EntryPoint contracts
+- **Bundler** tracking — who submitted `handleOps` transactions, aggregated stats
+- **Paymaster** tracking — gas sponsorship records, aggregated stats
+- **Account Deployment** tracking via factory contracts
+- **Revert Reason** capture for failed UserOperations (`UserOperationRevertReason`, `PostOpRevertReason`)
+- Configurable EntryPoint addresses or automatic detection by event signature
+- Full GraphQL query support: by hash, sender, bundler, paymaster, block, factory
+
+### System & Infrastructure
+- Multi-chain support with auto-detection (Stable-One, Anvil, Ethereum, any EVM)
+- WBFT consensus monitoring and validator tracking
+- Contract verification (Solidity source code)
+- Real-time event subscription via EventBus (Pub/Sub)
+- Prometheus metrics and health monitoring
+- Gap detection and recovery
+
 ## Tech Stack
 
-- **Language**: Go 1.21+
+- **Language**: Go 1.24+ (toolchain 1.24.9)
 - **Ethereum**: [go-ethereum](https://github.com/ethereum/go-ethereum) (ethclient, types, RLP)
 - **Database**: [PebbleDB](https://github.com/cockroachdb/pebble)
-- **GraphQL**: [gqlgen](https://github.com/99designs/gqlgen)
+- **GraphQL**: [graphql-go](https://github.com/graphql-go/graphql)
 - **HTTP**: [chi](https://github.com/go-chi/chi)
 - **WebSocket**: [gorilla/websocket](https://github.com/gorilla/websocket)
 - **Logging**: [zap](https://github.com/uber-go/zap)
@@ -287,6 +328,8 @@ The `--reindex` option is useful when:
 **Data cleared with `--reindex`:**
 - Blocks, transactions, receipts, logs
 - Address indexes, token transfers
+- SetCode delegations and indexes
+- Account Abstraction data (UserOps, bundler/paymaster stats, deployments)
 - All other blockchain-derived data
 
 ---
@@ -406,6 +449,15 @@ api:
   enable_cors: true
   allowed_origins:
     - "*"
+
+# EIP-4337 Account Abstraction indexing
+account_abstraction:
+  enabled: true
+  # Known EntryPoint contract addresses (optional)
+  # If empty, auto-detects by event signature matching
+  entry_point_addresses:
+    - "0x0000000071727De22E5E9d8BAf0edAc6f37da032"  # EntryPoint v0.7
+    - "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"  # EntryPoint v0.6
 ```
 
 See [`config.example.yaml`](config.example.yaml) for a complete example.
@@ -485,6 +537,144 @@ query {
     from
     to
     value
+  }
+}
+```
+
+#### EIP-4337 Account Abstraction Queries
+
+```graphql
+# Get a UserOperation by hash
+query {
+  userOp(userOpHash: "0xabc...") {
+    userOpHash
+    sender
+    bundler
+    paymaster
+    success
+    actualGasCost
+    entryPoint
+    blockNumber
+    timestamp
+  }
+}
+
+# Get all UserOperations by sender (smart account)
+query {
+  userOpsBySender(sender: "0x1234...", pagination: { limit: 10, offset: 0 }) {
+    nodes {
+      userOpHash
+      success
+      actualGasCost
+      paymaster
+      bundler
+    }
+    totalCount
+    pageInfo { hasNextPage }
+  }
+}
+
+# Get UserOperations bundled by a specific bundler
+query {
+  userOpsByBundler(bundler: "0x5678...") {
+    nodes { userOpHash sender success actualGasCost }
+    totalCount
+  }
+}
+
+# Get UserOperations sponsored by a paymaster
+query {
+  userOpsByPaymaster(paymaster: "0x9abc...") {
+    nodes { userOpHash sender success actualGasCost }
+    totalCount
+  }
+}
+
+# Get bundler aggregated statistics
+query {
+  bundlerStats(bundler: "0x5678...") {
+    address
+    totalOps
+    successfulOps
+    failedOps
+    totalGasSponsored
+    lastActivityBlock
+  }
+}
+
+# Get paymaster aggregated statistics
+query {
+  paymasterStats(paymaster: "0x9abc...") {
+    address
+    totalOps
+    successfulOps
+    failedOps
+    totalGasSponsored
+  }
+}
+
+# Get account deployment by UserOp hash
+query {
+  accountDeployment(userOpHash: "0xabc...") {
+    sender
+    factory
+    paymaster
+    blockNumber
+  }
+}
+
+# Get revert reason for a failed UserOp
+query {
+  userOpRevert(userOpHash: "0xdef...") {
+    sender
+    revertReason
+    revertType
+  }
+}
+
+# Get recent UserOperations
+query {
+  recentUserOps(limit: 20) {
+    userOpHash
+    sender
+    success
+    bundler
+    paymaster
+    blockNumber
+  }
+}
+
+# Total UserOperation count
+query {
+  userOpCount
+}
+```
+
+#### EIP-7702 SetCode Queries
+
+```graphql
+# Get SetCode authorizations by target address
+query {
+  setCodeAuthorizationsByTarget(target: "0x1234...") {
+    nodes {
+      txHash
+      address
+      authority
+      applied
+      blockNumber
+    }
+    totalCount
+  }
+}
+
+# Get address SetCode info (delegation status)
+query {
+  addressSetCodeInfo(address: "0x1234...") {
+    address
+    hasDelegation
+    delegationTarget
+    asTargetCount
+    asAuthorityCount
   }
 }
 ```
@@ -650,16 +840,10 @@ make bench
 
 ## Documentation
 
-### Core Documentation
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and internals
-- [STABLE_ONE_TECHNICAL_ANALYSIS.md](docs/STABLE_ONE_TECHNICAL_ANALYSIS.md) - Stable-One chain analysis
-
-### Event Subscription System
-- [EVENT_SUBSCRIPTION_API.md](docs/EVENT_SUBSCRIPTION_API.md) - Complete Event Subscription API reference
-- [METRICS_MONITORING.md](docs/METRICS_MONITORING.md) - Prometheus metrics and monitoring guide
-
-### Production Deployment
-- [OPERATIONS_GUIDE.md](docs/OPERATIONS_GUIDE.md) - Production deployment and operations guide
+- [QUICKSTART.md](docs/QUICKSTART.md) - 빠른 시작 가이드
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - 시스템 아키텍처 및 코드 구조
+- [API.md](docs/API.md) - GraphQL, JSON-RPC, WebSocket API 레퍼런스
+- [CONFIG.md](docs/CONFIG.md) - 전체 설정 옵션 가이드
 
 ---
 
@@ -787,4 +971,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Version**: 0.7.1
+**Version**: 0.8.0

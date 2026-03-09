@@ -145,6 +145,14 @@ var (
 	setCodeAuthorizationType           *graphql.Object // SetCodeAuthorizationWithTx (extended, with tx context)
 	setCodeAuthorizationConnectionType *graphql.Object
 	addressSetCodeInfoType             *graphql.Object
+
+	// EIP-4337 Account Abstraction types
+	userOperationType           *graphql.Object
+	userOperationConnectionType *graphql.Object
+	accountDeployedType         *graphql.Object
+	userOpRevertType            *graphql.Object
+	bundlerStatsType            *graphql.Object
+	paymasterStatsType          *graphql.Object
 )
 
 func init() {
@@ -650,6 +658,9 @@ func initTypes() {
 
 	// Initialize EIP-7702 SetCode types
 	initSetCodeTypes()
+
+	// Initialize EIP-4337 Account Abstraction types
+	initUserOpTypes()
 }
 
 // initInputTypes initializes GraphQL input types for filtering and pagination

@@ -24,8 +24,9 @@ type Config struct {
 	Resilience      ResilienceConfig      `yaml:"resilience"`
 	Notifications   NotificationsConfig   `yaml:"notifications"`
 	EventBus        EventBusConfig        `yaml:"eventbus"`
-	Node            NodeConfig            `yaml:"node"`
-	Verifier        VerifierConfig        `yaml:"verifier"`
+	Node                NodeConfig                `yaml:"node"`
+	Verifier            VerifierConfig            `yaml:"verifier"`
+	AccountAbstraction  AccountAbstractionConfig  `yaml:"account_abstraction"`
 }
 
 // RPCConfig holds RPC client configuration
@@ -297,6 +298,15 @@ type VerifierConfig struct {
 	AutoDownload bool `yaml:"auto_download"`
 	// AllowMetadataVariance allows metadata hash differences in bytecode comparison
 	AllowMetadataVariance bool `yaml:"allow_metadata_variance"`
+}
+
+// AccountAbstractionConfig holds EIP-4337 Account Abstraction indexing configuration
+type AccountAbstractionConfig struct {
+	// Enabled indicates whether AA event indexing is active
+	Enabled bool `yaml:"enabled"`
+	// EntryPointAddresses is a list of known EntryPoint contract addresses
+	// If empty, the processor will detect EntryPoint events by signature matching
+	EntryPointAddresses []string `yaml:"entry_point_addresses"`
 }
 
 // NotificationsConfig holds notification service configuration

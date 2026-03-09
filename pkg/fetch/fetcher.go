@@ -175,6 +175,9 @@ type Fetcher struct {
 
 	// setCodeProcessor handles EIP-7702 SetCode transaction indexing
 	setCodeProcessor *SetCodeProcessor
+
+	// userOpProcessor handles EIP-4337 UserOperation event indexing
+	userOpProcessor *UserOpProcessor
 }
 
 // NewFetcher creates a new Fetcher instance
@@ -289,6 +292,16 @@ func (f *Fetcher) SetSetCodeProcessor(processor *SetCodeProcessor) {
 		f.largeBlockProcessor.SetSetCodeProcessor(processor)
 	}
 	f.logger.Info("SetCode processor configured")
+}
+
+// SetUserOpProcessor sets the UserOp processor for EIP-4337 event indexing
+func (f *Fetcher) SetUserOpProcessor(processor *UserOpProcessor) {
+	f.userOpProcessor = processor
+	// Also set on large block processor for consistency
+	if f.largeBlockProcessor != nil {
+		f.largeBlockProcessor.SetUserOpProcessor(processor)
+	}
+	f.logger.Info("UserOp processor configured")
 }
 
 // AddBlockProcessor adds a block processor to be called after each block is indexed

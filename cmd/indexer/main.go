@@ -1088,6 +1088,7 @@ func reindexData(path string, log *zap.Logger) error {
 		"/data/wbft/",
 		"/data/token/",
 		"/data/setcode/",
+		"/data/aa/",
 		"/data/feedelegation/",
 		"/data/notification/",
 		// Index prefixes (except /index/verification/)
@@ -1107,6 +1108,7 @@ func reindexData(path string, log *zap.Logger) error {
 		"/index/notification/",
 		"/index/token/",
 		"/index/setcode/",
+		"/index/aa/",
 		// Metadata prefixes
 		"/meta/",
 		// Multi-chain prefixes

@@ -29,6 +29,9 @@ type LargeBlockProcessor struct {
 
 	// setCodeProcessor handles EIP-7702 SetCode transaction indexing
 	setCodeProcessor *SetCodeProcessor
+
+	// userOpProcessor handles EIP-4337 UserOperation event indexing
+	userOpProcessor *UserOpProcessor
 }
 
 // NewLargeBlockProcessor creates a new large block processor
@@ -50,6 +53,11 @@ func (p *LargeBlockProcessor) SetTokenIndexer(indexer TokenIndexer) {
 // SetSetCodeProcessor sets the SetCode processor for EIP-7702 transaction indexing
 func (p *LargeBlockProcessor) SetSetCodeProcessor(processor *SetCodeProcessor) {
 	p.setCodeProcessor = processor
+}
+
+// SetUserOpProcessor sets the UserOp processor for EIP-4337 event indexing
+func (p *LargeBlockProcessor) SetUserOpProcessor(processor *UserOpProcessor) {
+	p.userOpProcessor = processor
 }
 
 // IsLargeBlock returns true if the block's gas used exceeds the large block threshold
@@ -216,6 +224,20 @@ func (p *LargeBlockProcessor) processBatch(ctx context.Context, block *types.Blo
 					}
 				}
 			}
+		}
+	}
+
+	// Process EIP-4337 UserOperation events (block-level)
+	if p.userOpProcessor != nil {
+		txByHash := make(map[common.Hash]*types.Transaction, len(block.Transactions()))
+		for _, tx := range block.Transactions() {
+			txByHash[tx.Hash()] = tx
+		}
+		if err := p.userOpProcessor.ProcessBlockReceipts(ctx, block, receipts, txByHash); err != nil {
+			p.logger.Warn("Failed to process UserOperation events",
+				zap.Uint64("block", blockNumber),
+				zap.Error(err),
+			)
 		}
 	}
 

@@ -1150,6 +1150,175 @@ func (b *SchemaBuilder) WithSetCodeQueries() *SchemaBuilder {
 	return b
 }
 
+// WithUserOpQueries adds EIP-4337 Account Abstraction queries
+func (b *SchemaBuilder) WithUserOpQueries() *SchemaBuilder {
+	s := b.schema
+
+	b.queries["userOp"] = &graphql.Field{
+		Type:        userOperationType,
+		Description: "Get a UserOperation by its hash",
+		Args: graphql.FieldConfigArgument{
+			"userOpHash": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "UserOperation hash",
+			},
+		},
+		Resolve: s.resolveUserOp,
+	}
+
+	b.queries["userOpsByTx"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(userOperationType))),
+		Description: "Get all UserOperations in a transaction",
+		Args: graphql.FieldConfigArgument{
+			"txHash": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Transaction hash",
+			},
+		},
+		Resolve: s.resolveUserOpsByTx,
+	}
+
+	b.queries["userOpsBySender"] = &graphql.Field{
+		Type:        graphql.NewNonNull(userOperationConnectionType),
+		Description: "Get UserOperations by sender (smart account) address",
+		Args: graphql.FieldConfigArgument{
+			"sender": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Sender address",
+			},
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveUserOpsBySender,
+	}
+
+	b.queries["userOpsByBundler"] = &graphql.Field{
+		Type:        graphql.NewNonNull(userOperationConnectionType),
+		Description: "Get UserOperations bundled by a specific bundler",
+		Args: graphql.FieldConfigArgument{
+			"bundler": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Bundler address",
+			},
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveUserOpsByBundler,
+	}
+
+	b.queries["userOpsByPaymaster"] = &graphql.Field{
+		Type:        graphql.NewNonNull(userOperationConnectionType),
+		Description: "Get UserOperations sponsored by a specific paymaster",
+		Args: graphql.FieldConfigArgument{
+			"paymaster": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Paymaster address",
+			},
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveUserOpsByPaymaster,
+	}
+
+	b.queries["userOpsByBlock"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(userOperationType))),
+		Description: "Get all UserOperations in a specific block",
+		Args: graphql.FieldConfigArgument{
+			"blockNumber": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number",
+			},
+		},
+		Resolve: s.resolveUserOpsByBlock,
+	}
+
+	b.queries["accountDeployment"] = &graphql.Field{
+		Type:        accountDeployedType,
+		Description: "Get account deployment info by UserOperation hash",
+		Args: graphql.FieldConfigArgument{
+			"userOpHash": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "UserOperation hash",
+			},
+		},
+		Resolve: s.resolveAccountDeployment,
+	}
+
+	b.queries["accountDeploymentsByFactory"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(accountDeployedType))),
+		Description: "Get account deployments by factory address",
+		Args: graphql.FieldConfigArgument{
+			"factory": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Factory address",
+			},
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveAccountDeploymentsByFactory,
+	}
+
+	b.queries["userOpRevert"] = &graphql.Field{
+		Type:        userOpRevertType,
+		Description: "Get revert reason for a UserOperation",
+		Args: graphql.FieldConfigArgument{
+			"userOpHash": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "UserOperation hash",
+			},
+		},
+		Resolve: s.resolveUserOpRevert,
+	}
+
+	b.queries["bundlerStats"] = &graphql.Field{
+		Type:        graphql.NewNonNull(bundlerStatsType),
+		Description: "Get aggregated statistics for a bundler",
+		Args: graphql.FieldConfigArgument{
+			"bundler": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Bundler address",
+			},
+		},
+		Resolve: s.resolveBundlerStats,
+	}
+
+	b.queries["paymasterStats"] = &graphql.Field{
+		Type:        graphql.NewNonNull(paymasterStatsType),
+		Description: "Get aggregated statistics for a paymaster",
+		Args: graphql.FieldConfigArgument{
+			"paymaster": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Paymaster address",
+			},
+		},
+		Resolve: s.resolvePaymasterStats,
+	}
+
+	b.queries["userOpCount"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.Int),
+		Description: "Get total count of indexed UserOperations",
+		Resolve:     s.resolveUserOpCount,
+	}
+
+	b.queries["recentUserOps"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(userOperationType))),
+		Description: "Get most recent UserOperations",
+		Args: graphql.FieldConfigArgument{
+			"limit": &graphql.ArgumentConfig{
+				Type:        graphql.Int,
+				Description: "Maximum number of results (max: 100, default: 10)",
+			},
+		},
+		Resolve: s.resolveRecentUserOps,
+	}
+
+	return b
+}
+
 // WithSubscriptions adds GraphQL subscriptions
 func (b *SchemaBuilder) WithSubscriptions() *SchemaBuilder {
 	b.subscriptions["newBlock"] = &graphql.Field{
@@ -1727,6 +1896,7 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 		WithConsensusQueries().
 		WithAddressIndexingQueries().
 		WithSetCodeQueries().
+		WithUserOpQueries().
 		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
 		WithTokenHolderQueries().

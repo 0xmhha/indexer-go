@@ -403,6 +403,128 @@ func (m *mockStorage) GetProposalExecutionSkippedEvents(ctx context.Context, con
 	return nil, nil
 }
 
+// SetCodeIndexReader stubs
+func (m *mockStorage) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*storage.SetCodeAuthorizationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*storage.SetCodeAuthorizationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*storage.SetCodeAuthorizationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*storage.AddressSetCodeStats, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetAddressDelegationState(ctx context.Context, address common.Address) (*storage.AddressDelegationState, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetSetCodeAuthorizationsCountByTarget(ctx context.Context, target common.Address) (int, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetSetCodeAuthorizationsCountByAuthority(ctx context.Context, authority common.Address) (int, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetSetCodeTransactionCount(ctx context.Context) (int, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*storage.SetCodeAuthorizationRecord, error) {
+	panic("not implemented")
+}
+
+// SetCodeIndexWriter stubs
+func (m *mockStorage) SaveSetCodeAuthorization(ctx context.Context, record *storage.SetCodeAuthorizationRecord) error {
+	panic("not implemented")
+}
+func (m *mockStorage) SaveSetCodeAuthorizations(ctx context.Context, records []*storage.SetCodeAuthorizationRecord) error {
+	panic("not implemented")
+}
+func (m *mockStorage) UpdateAddressDelegationState(ctx context.Context, state *storage.AddressDelegationState) error {
+	panic("not implemented")
+}
+func (m *mockStorage) IncrementSetCodeStats(ctx context.Context, address common.Address, asTarget, asAuthority bool, blockNumber uint64) error {
+	panic("not implemented")
+}
+
+// UserOpIndexReader stubs
+func (m *mockStorage) GetUserOp(ctx context.Context, userOpHash common.Hash) (*storage.UserOperationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*storage.UserOperationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*storage.UserOperationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpsByEntryPoint(ctx context.Context, entryPoint common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetAccountDeployment(ctx context.Context, userOpHash common.Hash) (*storage.AccountDeployedRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetAccountDeploymentsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*storage.AccountDeployedRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpRevert(ctx context.Context, userOpHash common.Hash) (*storage.UserOpRevertRecord, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetBundlerStats(ctx context.Context, bundler common.Address) (*storage.BundlerStats, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*storage.PaymasterStats, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpCount(ctx context.Context) (int, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpsCountBySender(ctx context.Context, sender common.Address) (int, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpsCountByBundler(ctx context.Context, bundler common.Address) (int, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetUserOpsCountByPaymaster(ctx context.Context, paymaster common.Address) (int, error) {
+	panic("not implemented")
+}
+func (m *mockStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*storage.UserOperationRecord, error) {
+	panic("not implemented")
+}
+
+// UserOpIndexWriter stubs
+func (m *mockStorage) SaveUserOp(ctx context.Context, record *storage.UserOperationRecord) error {
+	panic("not implemented")
+}
+func (m *mockStorage) SaveUserOps(ctx context.Context, records []*storage.UserOperationRecord) error {
+	panic("not implemented")
+}
+func (m *mockStorage) SaveAccountDeployed(ctx context.Context, record *storage.AccountDeployedRecord) error {
+	panic("not implemented")
+}
+func (m *mockStorage) SaveUserOpRevert(ctx context.Context, record *storage.UserOpRevertRecord) error {
+	panic("not implemented")
+}
+func (m *mockStorage) IncrementBundlerStats(ctx context.Context, bundler common.Address, success bool, gasCost *big.Int, blockNumber uint64) error {
+	panic("not implemented")
+}
+func (m *mockStorage) IncrementPaymasterStats(ctx context.Context, paymaster common.Address, success bool, gasCost *big.Int, blockNumber uint64) error {
+	panic("not implemented")
+}
+
 // Verify that mockStorage implements storage.Storage
 var _ storage.Storage = (*mockStorage)(nil)
 

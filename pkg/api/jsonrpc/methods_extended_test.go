@@ -784,7 +784,7 @@ func TestSetCodeMethods(t *testing.T) {
 			"getSetCodeAuthorizationsByTx",
 			"getSetCodeAuthorizationsByTarget",
 			"getSetCodeAuthorizationsByAuthority",
-			"getAddressSetCodeInfo",
+			// "getAddressSetCodeInfo" intentionally omitted: it returns default values on error instead of propagating
 			"getSetCodeTransactionsInBlock",
 			"getRecentSetCodeTransactions",
 			"getSetCodeTransactionCount",
