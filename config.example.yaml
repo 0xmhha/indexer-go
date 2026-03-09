@@ -15,6 +15,11 @@ database:
   # Open database in read-only mode
   readonly: false
 
+# Storage Configuration
+storage:
+  # Enable address indexing for contract tracking, token balances, and transfer history
+  address_indexing: false
+
 # Logging Configuration
 log:
   # Log level: debug, info, warn, error

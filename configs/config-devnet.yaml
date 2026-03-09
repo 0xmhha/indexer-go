@@ -7,7 +7,7 @@
 #   2. Start Anvil: anvil --block-time 2
 #
 # Usage:
-#   go run ./cmd/indexer --config configs/config-anvil.yaml
+#   go run ./cmd/indexer --config configs/config-devnet.yaml
 #
 # Verified compatibility:
 #   - Anvil v1.5.1+
@@ -42,6 +42,7 @@ api:
   enable_graphql: true
   enable_jsonrpc: true
   enable_websocket: true
+  enable_websocket_keepalive: false
   enable_cors: true
   allowed_origins:
     - "*"
