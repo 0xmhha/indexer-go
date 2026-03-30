@@ -116,3 +116,5 @@ claudedocs/
 # Solidity compiler binaries and cache
 solc-bin/
 solc-cache/
+
+.claude/settings.local.json
