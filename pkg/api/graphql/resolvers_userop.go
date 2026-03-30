@@ -366,6 +366,76 @@ func (s *Schema) resolveRecentUserOps(p graphql.ResolveParams) (interface{}, err
 	return userOpsToSlice(records), nil
 }
 
+// resolveAllBundlers resolves paginated list of all known bundlers
+func (s *Schema) resolveAllBundlers(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	limit, offset := extractPagination(p)
+
+	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support UserOp queries")
+	}
+
+	stats, err := reader.GetAllBundlerStats(ctx, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get all bundler stats", zap.Error(err))
+		return nil, err
+	}
+
+	totalCount, _ := reader.GetAllBundlerStatsCount(ctx)
+
+	nodes := make([]interface{}, len(stats))
+	for i, stat := range stats {
+		nodes[i] = bundlerStatsToMap(stat)
+	}
+
+	return map[string]interface{}{
+		"nodes":      nodes,
+		"totalCount": totalCount,
+		"pageInfo": map[string]interface{}{
+			"hasNextPage": offset+limit < totalCount,
+			"offset":      offset,
+			"limit":       limit,
+		},
+	}, nil
+}
+
+// resolveAllPaymasters resolves paginated list of all known paymasters
+func (s *Schema) resolveAllPaymasters(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	limit, offset := extractPagination(p)
+
+	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support UserOp queries")
+	}
+
+	stats, err := reader.GetAllPaymasterStats(ctx, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to get all paymaster stats", zap.Error(err))
+		return nil, err
+	}
+
+	totalCount, _ := reader.GetAllPaymasterStatsCount(ctx)
+
+	nodes := make([]interface{}, len(stats))
+	for i, stat := range stats {
+		nodes[i] = paymasterStatsToMap(stat)
+	}
+
+	return map[string]interface{}{
+		"nodes":      nodes,
+		"totalCount": totalCount,
+		"pageInfo": map[string]interface{}{
+			"hasNextPage": offset+limit < totalCount,
+			"offset":      offset,
+			"limit":       limit,
+		},
+	}, nil
+}
+
 // ========== Helper conversion functions ==========
 
 func userOpToMap(r *storagepkg.UserOperationRecord) map[string]interface{} {

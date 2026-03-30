@@ -151,8 +151,10 @@ var (
 	userOperationConnectionType *graphql.Object
 	accountDeployedType         *graphql.Object
 	userOpRevertType            *graphql.Object
-	bundlerStatsType            *graphql.Object
-	paymasterStatsType          *graphql.Object
+	bundlerStatsType               *graphql.Object
+	paymasterStatsType             *graphql.Object
+	bundlerStatsConnectionType     *graphql.Object
+	paymasterStatsConnectionType   *graphql.Object
 )
 
 func init() {

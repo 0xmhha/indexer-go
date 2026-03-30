@@ -241,4 +241,43 @@ func initUserOpTypes() {
 			},
 		},
 	})
+
+	// Connection types for paginated list queries
+	bundlerStatsConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "BundlerStatsConnection",
+		Description: "Paginated list of bundler statistics",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(bundlerStatsType))),
+				Description: "List of bundler statistics",
+			},
+			"totalCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total count of known bundlers",
+			},
+			"pageInfo": &graphql.Field{
+				Type:        graphql.NewNonNull(pageInfoType),
+				Description: "Pagination information",
+			},
+		},
+	})
+
+	paymasterStatsConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "PaymasterStatsConnection",
+		Description: "Paginated list of paymaster statistics",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(paymasterStatsType))),
+				Description: "List of paymaster statistics",
+			},
+			"totalCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total count of known paymasters",
+			},
+			"pageInfo": &graphql.Field{
+				Type:        graphql.NewNonNull(pageInfoType),
+				Description: "Pagination information",
+			},
+		},
+	})
 }

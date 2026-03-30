@@ -149,6 +149,20 @@ type UserOpIndexReader interface {
 
 	// GetRecentUserOps retrieves the most recent UserOperations.
 	GetRecentUserOps(ctx context.Context, limit int) ([]*UserOperationRecord, error)
+
+	// GetAllBundlerStats retrieves all bundler statistics with pagination.
+	// Results are ordered by total ops descending.
+	GetAllBundlerStats(ctx context.Context, limit, offset int) ([]*BundlerStats, error)
+
+	// GetAllBundlerStatsCount returns the total count of known bundlers.
+	GetAllBundlerStatsCount(ctx context.Context) (int, error)
+
+	// GetAllPaymasterStats retrieves all paymaster statistics with pagination.
+	// Results are ordered by total ops descending.
+	GetAllPaymasterStats(ctx context.Context, limit, offset int) ([]*PaymasterStats, error)
+
+	// GetAllPaymasterStatsCount returns the total count of known paymasters.
+	GetAllPaymasterStatsCount(ctx context.Context) (int, error)
 }
 
 // UserOpIndexWriter defines write operations for EIP-4337 UserOperation indexing

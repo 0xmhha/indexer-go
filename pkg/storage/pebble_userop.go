@@ -540,6 +540,154 @@ func (s *PebbleStorage) IncrementPaymasterStats(ctx context.Context, paymaster c
 	return nil
 }
 
+// ========== Bundler/Paymaster List Queries ==========
+
+// GetAllBundlerStats retrieves all bundler statistics with pagination.
+// Scans the bundler stats prefix, deserializes all entries, sorts by totalOps desc,
+// then applies offset/limit pagination.
+func (s *PebbleStorage) GetAllBundlerStats(ctx context.Context, limit, offset int) ([]*BundlerStats, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	limit, offset = normalizePagination(limit, offset)
+	prefix := AABundlerStatsAllPrefix()
+
+	// Collect all bundler stats
+	all, err := s.scanAllStats(prefix, func(data []byte) (interface{}, error) {
+		var stats BundlerStats
+		if err := json.Unmarshal(data, &stats); err != nil {
+			return nil, err
+		}
+		return &stats, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan bundler stats: %w", err)
+	}
+
+	// Sort by totalOps descending
+	result := make([]*BundlerStats, 0, len(all))
+	for _, item := range all {
+		result = append(result, item.(*BundlerStats))
+	}
+	sortBundlerStatsByTotalOps(result)
+
+	// Apply pagination
+	if offset >= len(result) {
+		return []*BundlerStats{}, nil
+	}
+	end := offset + limit
+	if end > len(result) {
+		end = len(result)
+	}
+	return result[offset:end], nil
+}
+
+// GetAllBundlerStatsCount returns the total count of known bundlers.
+func (s *PebbleStorage) GetAllBundlerStatsCount(ctx context.Context) (int, error) {
+	if s.closed.Load() {
+		return 0, ErrClosed
+	}
+
+	prefix := AABundlerStatsAllPrefix()
+	return s.countByPrefix(prefix)
+}
+
+// GetAllPaymasterStats retrieves all paymaster statistics with pagination.
+func (s *PebbleStorage) GetAllPaymasterStats(ctx context.Context, limit, offset int) ([]*PaymasterStats, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	limit, offset = normalizePagination(limit, offset)
+	prefix := AAPaymasterStatsAllPrefix()
+
+	all, err := s.scanAllStats(prefix, func(data []byte) (interface{}, error) {
+		var stats PaymasterStats
+		if err := json.Unmarshal(data, &stats); err != nil {
+			return nil, err
+		}
+		return &stats, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan paymaster stats: %w", err)
+	}
+
+	result := make([]*PaymasterStats, 0, len(all))
+	for _, item := range all {
+		result = append(result, item.(*PaymasterStats))
+	}
+	sortPaymasterStatsByTotalOps(result)
+
+	if offset >= len(result) {
+		return []*PaymasterStats{}, nil
+	}
+	end := offset + limit
+	if end > len(result) {
+		end = len(result)
+	}
+	return result[offset:end], nil
+}
+
+// GetAllPaymasterStatsCount returns the total count of known paymasters.
+func (s *PebbleStorage) GetAllPaymasterStatsCount(ctx context.Context) (int, error) {
+	if s.closed.Load() {
+		return 0, ErrClosed
+	}
+
+	prefix := AAPaymasterStatsAllPrefix()
+	return s.countByPrefix(prefix)
+}
+
+// scanAllStats iterates all entries under a prefix and deserializes each.
+func (s *PebbleStorage) scanAllStats(prefix []byte, unmarshal func([]byte) (interface{}, error)) ([]interface{}, error) {
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: prefixUpperBound(prefix),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var results []interface{}
+	for iter.First(); iter.Valid(); iter.Next() {
+		valueCopy := make([]byte, len(iter.Value()))
+		copy(valueCopy, iter.Value())
+
+		item, err := unmarshal(valueCopy)
+		if err != nil {
+			s.logger.Warn("failed to unmarshal stats entry", zap.Error(err))
+			continue
+		}
+		results = append(results, item)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return results, nil
+}
+
+// sortBundlerStatsByTotalOps sorts bundler stats by total ops descending.
+func sortBundlerStatsByTotalOps(stats []*BundlerStats) {
+	for i := 1; i < len(stats); i++ {
+		for j := i; j > 0 && stats[j].TotalOps > stats[j-1].TotalOps; j-- {
+			stats[j], stats[j-1] = stats[j-1], stats[j]
+		}
+	}
+}
+
+// sortPaymasterStatsByTotalOps sorts paymaster stats by total ops descending.
+func sortPaymasterStatsByTotalOps(stats []*PaymasterStats) {
+	for i := 1; i < len(stats); i++ {
+		for j := i; j > 0 && stats[j].TotalOps > stats[j-1].TotalOps; j-- {
+			stats[j], stats[j-1] = stats[j-1], stats[j]
+		}
+	}
+}
+
 // ========== Internal Helper Methods ==========
 
 // writeUserOpToBatch writes a UserOp record and all its indexes to a batch.

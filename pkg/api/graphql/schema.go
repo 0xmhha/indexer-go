@@ -1316,6 +1316,28 @@ func (b *SchemaBuilder) WithUserOpQueries() *SchemaBuilder {
 		Resolve: s.resolveRecentUserOps,
 	}
 
+	b.queries["allBundlers"] = &graphql.Field{
+		Type:        graphql.NewNonNull(bundlerStatsConnectionType),
+		Description: "Get paginated list of all known bundlers with statistics",
+		Args: graphql.FieldConfigArgument{
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveAllBundlers,
+	}
+
+	b.queries["allPaymasters"] = &graphql.Field{
+		Type:        graphql.NewNonNull(paymasterStatsConnectionType),
+		Description: "Get paginated list of all known paymasters with statistics",
+		Args: graphql.FieldConfigArgument{
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveAllPaymasters,
+	}
+
 	return b
 }
 
