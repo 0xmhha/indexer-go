@@ -762,6 +762,11 @@ type Subscription {
   # Subscribe to consensus errors and anomalies (round changes, low participation)
   # replayLast: Number of recent errors to replay immediately upon subscription (max 100)
   consensusError(replayLast: Int): ConsensusErrorSub!
+
+  # ========== ERC-4337 Account Abstraction Subscriptions ==========
+
+  # Subscribe to new UserOperations as they are indexed
+  newUserOperation: UserOperation!
 }
 
 # Real-time consensus block data from subscription
@@ -926,6 +931,54 @@ type SystemContractEventMessage {
 
   # Timestamp when the event was detected
   timestamp: BigInt!
+}
+
+# ========== ERC-7579 Module Types ==========
+
+enum ModuleType {
+  VALIDATOR
+  EXECUTOR
+  FALLBACK
+  HOOK
+}
+
+type InstalledModule {
+  account: Address!
+  module: Address!
+  moduleType: String!
+  installedAt: BigInt!
+  installedTx: Hash!
+  active: Boolean!
+  removedAt: BigInt
+  removedTx: Hash
+  timestamp: BigInt!
+}
+
+type InstalledModuleConnection {
+  nodes: [InstalledModule!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+type ModuleStats {
+  module: Address!
+  moduleType: String!
+  totalInstalls: BigInt!
+  activeInstalls: BigInt!
+}
+
+type ModuleStatsConnection {
+  nodes: [ModuleStats!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+type AccountModules {
+  account: Address!
+  validators: [InstalledModule!]!
+  executors: [InstalledModule!]!
+  fallbacks: [InstalledModule!]!
+  hooks: [InstalledModule!]!
 }
 
 # Query root type
@@ -1485,6 +1538,23 @@ type Query {
   # Get total SetCode transaction count
   setCodeTransactionCount: Int!
 
+  # ========== ERC-7579 Module Queries ==========
+
+  # Get all modules for a smart account, grouped by type
+  accountModules(address: String!): AccountModules!
+
+  # Get installed modules with optional filtering
+  installedModules(account: String, moduleType: String, pagination: PaginationInput): InstalledModuleConnection!
+
+  # Get aggregate statistics for a module contract
+  moduleStats(module: String!): ModuleStats
+
+  # List all module stats with pagination
+  listModuleStats(pagination: PaginationInput): ModuleStatsConnection!
+
+  # Get total count of module events
+  moduleEventCount: Int!
+
   # ========== Notification Queries ==========
 
   # List all notification settings
@@ -1508,6 +1578,44 @@ type Query {
 
   # Get delivery history for a notification
   deliveryHistory(notificationId: ID!): [DeliveryHistory!]!
+
+  # ========== ERC-4337 Account Abstraction Queries ==========
+
+  # Get a specific UserOperation by hash
+  userOperation(hash: String!): UserOperation
+
+  # Get UserOperations with optional sender filter and pagination
+  userOperations(pagination: PaginationInput, sender: String): UserOperationConnection!
+
+  # Get UserOperations by sender address
+  userOperationsBySender(sender: String!, pagination: PaginationInput): UserOperationConnection!
+
+  # Get bundler list with pagination
+  bundlers(pagination: PaginationInput): BundlerStatsConnection!
+
+  # Get a specific bundler's stats
+  bundler(address: String!): BundlerStats
+
+  # Get factory list with pagination
+  factories(pagination: PaginationInput): FactoryStatsConnection!
+
+  # Get a specific factory's stats
+  factory(address: String!): FactoryStats
+
+  # Get paymaster list with pagination
+  paymasters(pagination: PaginationInput): PaymasterStatsConnection!
+
+  # Get a specific paymaster's stats
+  paymaster(address: String!): PaymasterStats
+
+  # Get smart account list with pagination
+  smartAccounts(pagination: PaginationInput): SmartAccountConnection!
+
+  # Get a specific smart account
+  smartAccount(address: String!): SmartAccount
+
+  # Get total UserOperation count
+  userOperationCount: Int!
 }
 
 # Block connection for pagination
@@ -3412,4 +3520,101 @@ type Mutation {
 
   # Cancel a pending notification
   cancelNotification(id: ID!): Boolean!
+}
+
+# ========== ERC-4337 Account Abstraction Types ==========
+
+# UserOperation represents an ERC-4337 UserOperation that was included in a bundle
+type UserOperation {
+  hash: Hash!
+  sender: Address!
+  nonce: BigInt!
+  callData: Bytes!
+  callGasLimit: BigInt!
+  verificationGasLimit: BigInt!
+  preVerificationGas: BigInt!
+  maxFeePerGas: BigInt!
+  maxPriorityFeePerGas: BigInt!
+  signature: Bytes!
+  entryPoint: Address!
+  entryPointVersion: String!
+  transactionHash: Hash!
+  blockNumber: BigInt!
+  blockHash: Hash!
+  bundleIndex: Int!
+  bundler: Address!
+  factory: Address
+  paymaster: Address
+  status: Boolean!
+  revertReason: Bytes
+  gasUsed: BigInt!
+  actualGasCost: BigInt!
+  sponsorType: String!
+  userLogsStartIndex: Int!
+  userLogsCount: Int!
+  timestamp: BigInt!
+}
+
+# Paginated list of UserOperations
+type UserOperationConnection {
+  nodes: [UserOperation!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+# Bundler statistics
+type BundlerStats {
+  address: Address!
+  totalBundles: BigInt!
+  totalOps: BigInt!
+}
+
+# Paginated list of bundler stats
+type BundlerStatsConnection {
+  nodes: [BundlerStats!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+# Factory statistics
+type FactoryStats {
+  address: Address!
+  totalAccounts: BigInt!
+}
+
+# Paginated list of factory stats
+type FactoryStatsConnection {
+  nodes: [FactoryStats!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+# Paymaster statistics
+type PaymasterStats {
+  address: Address!
+  totalOps: BigInt!
+}
+
+# Paginated list of paymaster stats
+type PaymasterStatsConnection {
+  nodes: [PaymasterStats!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
+}
+
+# Smart contract account (ERC-4337)
+type SmartAccount {
+  address: Address!
+  creationOpHash: Hash
+  creationTxHash: Hash
+  creationTimestamp: BigInt
+  factory: Address
+  totalOps: BigInt!
+}
+
+# Paginated list of smart accounts
+type SmartAccountConnection {
+  nodes: [SmartAccount!]!
+  totalCount: Int!
+  pageInfo: PageInfo!
 }
