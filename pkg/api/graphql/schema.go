@@ -1150,192 +1150,73 @@ func (b *SchemaBuilder) WithSetCodeQueries() *SchemaBuilder {
 	return b
 }
 
-// WithUserOpQueries adds EIP-4337 Account Abstraction queries
-func (b *SchemaBuilder) WithUserOpQueries() *SchemaBuilder {
+// WithModuleQueries adds ERC-7579 Module queries
+func (b *SchemaBuilder) WithModuleQueries() *SchemaBuilder {
 	s := b.schema
 
-	b.queries["userOp"] = &graphql.Field{
-		Type:        userOperationType,
-		Description: "Get a UserOperation by its hash",
+	// Account modules (grouped by type)
+	b.queries["accountModules"] = &graphql.Field{
+		Type:        graphql.NewNonNull(accountModulesType),
+		Description: "Get all modules installed on a smart account, grouped by type",
 		Args: graphql.FieldConfigArgument{
-			"userOpHash": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(hashType),
-				Description: "UserOperation hash",
+			"address": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Smart account address",
 			},
 		},
-		Resolve: s.resolveUserOp,
+		Resolve: s.resolveAccountModules,
 	}
 
-	b.queries["userOpsByTx"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(userOperationType))),
-		Description: "Get all UserOperations in a transaction",
+	// Installed modules (filterable, paginated)
+	b.queries["installedModules"] = &graphql.Field{
+		Type:        graphql.NewNonNull(installedModuleConnectionType),
+		Description: "Get installed modules with optional filtering by account or module type",
 		Args: graphql.FieldConfigArgument{
-			"txHash": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(hashType),
-				Description: "Transaction hash",
+			"account": &graphql.ArgumentConfig{
+				Type:        graphql.String,
+				Description: "Filter by smart account address",
 			},
-		},
-		Resolve: s.resolveUserOpsByTx,
-	}
-
-	b.queries["userOpsBySender"] = &graphql.Field{
-		Type:        graphql.NewNonNull(userOperationConnectionType),
-		Description: "Get UserOperations by sender (smart account) address",
-		Args: graphql.FieldConfigArgument{
-			"sender": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(addressType),
-				Description: "Sender address",
+			"moduleType": &graphql.ArgumentConfig{
+				Type:        graphql.String,
+				Description: "Filter by module type (VALIDATOR, EXECUTOR, FALLBACK, HOOK)",
 			},
 			"pagination": &graphql.ArgumentConfig{
 				Type: paginationInputType,
 			},
 		},
-		Resolve: s.resolveUserOpsBySender,
+		Resolve: s.resolveInstalledModules,
 	}
 
-	b.queries["userOpsByBundler"] = &graphql.Field{
-		Type:        graphql.NewNonNull(userOperationConnectionType),
-		Description: "Get UserOperations bundled by a specific bundler",
+	// Module stats
+	b.queries["moduleStats"] = &graphql.Field{
+		Type:        moduleStatsType,
+		Description: "Get aggregate statistics for a module contract",
 		Args: graphql.FieldConfigArgument{
-			"bundler": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(addressType),
-				Description: "Bundler address",
+			"module": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Module contract address",
 			},
+		},
+		Resolve: s.resolveModuleStats,
+	}
+
+	// List module stats (paginated)
+	b.queries["listModuleStats"] = &graphql.Field{
+		Type:        graphql.NewNonNull(moduleStatsConnectionType),
+		Description: "List all module stats with pagination",
+		Args: graphql.FieldConfigArgument{
 			"pagination": &graphql.ArgumentConfig{
 				Type: paginationInputType,
 			},
 		},
-		Resolve: s.resolveUserOpsByBundler,
+		Resolve: s.resolveListModuleStats,
 	}
 
-	b.queries["userOpsByPaymaster"] = &graphql.Field{
-		Type:        graphql.NewNonNull(userOperationConnectionType),
-		Description: "Get UserOperations sponsored by a specific paymaster",
-		Args: graphql.FieldConfigArgument{
-			"paymaster": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(addressType),
-				Description: "Paymaster address",
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveUserOpsByPaymaster,
-	}
-
-	b.queries["userOpsByBlock"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(userOperationType))),
-		Description: "Get all UserOperations in a specific block",
-		Args: graphql.FieldConfigArgument{
-			"blockNumber": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(bigIntType),
-				Description: "Block number",
-			},
-		},
-		Resolve: s.resolveUserOpsByBlock,
-	}
-
-	b.queries["accountDeployment"] = &graphql.Field{
-		Type:        accountDeployedType,
-		Description: "Get account deployment info by UserOperation hash",
-		Args: graphql.FieldConfigArgument{
-			"userOpHash": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(hashType),
-				Description: "UserOperation hash",
-			},
-		},
-		Resolve: s.resolveAccountDeployment,
-	}
-
-	b.queries["accountDeploymentsByFactory"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(accountDeployedType))),
-		Description: "Get account deployments by factory address",
-		Args: graphql.FieldConfigArgument{
-			"factory": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(addressType),
-				Description: "Factory address",
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveAccountDeploymentsByFactory,
-	}
-
-	b.queries["userOpRevert"] = &graphql.Field{
-		Type:        userOpRevertType,
-		Description: "Get revert reason for a UserOperation",
-		Args: graphql.FieldConfigArgument{
-			"userOpHash": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(hashType),
-				Description: "UserOperation hash",
-			},
-		},
-		Resolve: s.resolveUserOpRevert,
-	}
-
-	b.queries["bundlerStats"] = &graphql.Field{
-		Type:        graphql.NewNonNull(bundlerStatsType),
-		Description: "Get aggregated statistics for a bundler",
-		Args: graphql.FieldConfigArgument{
-			"bundler": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(addressType),
-				Description: "Bundler address",
-			},
-		},
-		Resolve: s.resolveBundlerStats,
-	}
-
-	b.queries["paymasterStats"] = &graphql.Field{
-		Type:        graphql.NewNonNull(paymasterStatsType),
-		Description: "Get aggregated statistics for a paymaster",
-		Args: graphql.FieldConfigArgument{
-			"paymaster": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(addressType),
-				Description: "Paymaster address",
-			},
-		},
-		Resolve: s.resolvePaymasterStats,
-	}
-
-	b.queries["userOpCount"] = &graphql.Field{
+	// Module event count
+	b.queries["moduleEventCount"] = &graphql.Field{
 		Type:        graphql.NewNonNull(graphql.Int),
-		Description: "Get total count of indexed UserOperations",
-		Resolve:     s.resolveUserOpCount,
-	}
-
-	b.queries["recentUserOps"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(userOperationType))),
-		Description: "Get most recent UserOperations",
-		Args: graphql.FieldConfigArgument{
-			"limit": &graphql.ArgumentConfig{
-				Type:        graphql.Int,
-				Description: "Maximum number of results (max: 100, default: 10)",
-			},
-		},
-		Resolve: s.resolveRecentUserOps,
-	}
-
-	b.queries["allBundlers"] = &graphql.Field{
-		Type:        graphql.NewNonNull(bundlerStatsConnectionType),
-		Description: "Get paginated list of all known bundlers with statistics",
-		Args: graphql.FieldConfigArgument{
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveAllBundlers,
-	}
-
-	b.queries["allPaymasters"] = &graphql.Field{
-		Type:        graphql.NewNonNull(paymasterStatsConnectionType),
-		Description: "Get paginated list of all known paymasters with statistics",
-		Args: graphql.FieldConfigArgument{
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveAllPaymasters,
+		Description: "Get the total count of module events (installs and uninstalls)",
+		Resolve:     s.resolveModuleEventCount,
 	}
 
 	return b
@@ -1918,6 +1799,7 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 		WithConsensusQueries().
 		WithAddressIndexingQueries().
 		WithSetCodeQueries().
+		WithModuleQueries().
 		WithUserOpQueries().
 		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
@@ -1925,6 +1807,296 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 		WithSubscriptions().
 		WithMutations().
 		Build()
+}
+
+// WithUserOpQueries adds ERC-4337 Account Abstraction queries
+func (b *SchemaBuilder) WithUserOpQueries() *SchemaBuilder {
+	s := b.schema
+
+	// UserOperation type
+	userOperationType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "UserOperation",
+		Description: "ERC-4337 UserOperation included in a bundle",
+		Fields: graphql.Fields{
+			"hash":                 &graphql.Field{Type: graphql.NewNonNull(hashType)},
+			"sender":               &graphql.Field{Type: graphql.NewNonNull(addressType)},
+			"nonce":                &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"callData":             &graphql.Field{Type: graphql.NewNonNull(bytesType)},
+			"callGasLimit":         &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"verificationGasLimit": &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"preVerificationGas":   &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"maxFeePerGas":         &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"maxPriorityFeePerGas": &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"signature":            &graphql.Field{Type: graphql.NewNonNull(bytesType)},
+			"entryPoint":           &graphql.Field{Type: graphql.NewNonNull(addressType)},
+			"entryPointVersion":    &graphql.Field{Type: graphql.NewNonNull(graphql.String)},
+			"transactionHash":      &graphql.Field{Type: graphql.NewNonNull(hashType)},
+			"blockNumber":          &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"blockHash":            &graphql.Field{Type: graphql.NewNonNull(hashType)},
+			"bundleIndex":          &graphql.Field{Type: graphql.NewNonNull(graphql.Int)},
+			"bundler":              &graphql.Field{Type: graphql.NewNonNull(addressType)},
+			"factory":              &graphql.Field{Type: addressType},
+			"paymaster":            &graphql.Field{Type: addressType},
+			"status":               &graphql.Field{Type: graphql.NewNonNull(graphql.Boolean)},
+			"revertReason":         &graphql.Field{Type: bytesType},
+			"gasUsed":              &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"actualGasCost":        &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"sponsorType":          &graphql.Field{Type: graphql.NewNonNull(graphql.String)},
+			"userLogsStartIndex":   &graphql.Field{Type: graphql.NewNonNull(graphql.Int)},
+			"userLogsCount":        &graphql.Field{Type: graphql.NewNonNull(graphql.Int)},
+			"timestamp":            &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+		},
+	})
+
+	// UserOperationConnection type
+	userOperationConnectionType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "UserOperationConnection",
+		Description: "Paginated list of UserOperations",
+		Fields: graphql.Fields{
+			"nodes":      &graphql.Field{Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(userOperationType)))},
+			"totalCount": &graphql.Field{Type: graphql.NewNonNull(graphql.Int)},
+			"pageInfo":   &graphql.Field{Type: graphql.NewNonNull(pageInfoType)},
+		},
+	})
+
+	// BundlerStats type
+	bundlerStatsType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "BundlerStats",
+		Description: "Bundler statistics",
+		Fields: graphql.Fields{
+			"address":      &graphql.Field{Type: graphql.NewNonNull(addressType)},
+			"totalBundles": &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+			"totalOps":     &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+		},
+	})
+
+	bundlerStatsConnectionType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "BundlerStatsConnection",
+		Description: "Paginated list of bundler stats",
+		Fields: graphql.Fields{
+			"nodes":      &graphql.Field{Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(bundlerStatsType)))},
+			"totalCount": &graphql.Field{Type: graphql.NewNonNull(graphql.Int)},
+			"pageInfo":   &graphql.Field{Type: graphql.NewNonNull(pageInfoType)},
+		},
+	})
+
+	// FactoryStats type
+	factoryStatsType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "FactoryStats",
+		Description: "Factory statistics",
+		Fields: graphql.Fields{
+			"address":       &graphql.Field{Type: graphql.NewNonNull(addressType)},
+			"totalAccounts": &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+		},
+	})
+
+	factoryStatsConnectionType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "FactoryStatsConnection",
+		Description: "Paginated list of factory stats",
+		Fields: graphql.Fields{
+			"nodes":      &graphql.Field{Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(factoryStatsType)))},
+			"totalCount": &graphql.Field{Type: graphql.NewNonNull(graphql.Int)},
+			"pageInfo":   &graphql.Field{Type: graphql.NewNonNull(pageInfoType)},
+		},
+	})
+
+	// PaymasterStats type
+	paymasterStatsType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "PaymasterStats",
+		Description: "Paymaster statistics",
+		Fields: graphql.Fields{
+			"address":  &graphql.Field{Type: graphql.NewNonNull(addressType)},
+			"totalOps": &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+		},
+	})
+
+	paymasterStatsConnectionType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "PaymasterStatsConnection",
+		Description: "Paginated list of paymaster stats",
+		Fields: graphql.Fields{
+			"nodes":      &graphql.Field{Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(paymasterStatsType)))},
+			"totalCount": &graphql.Field{Type: graphql.NewNonNull(graphql.Int)},
+			"pageInfo":   &graphql.Field{Type: graphql.NewNonNull(pageInfoType)},
+		},
+	})
+
+	// SmartAccount type
+	smartAccountType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "SmartAccount",
+		Description: "ERC-4337 smart contract account",
+		Fields: graphql.Fields{
+			"address":           &graphql.Field{Type: graphql.NewNonNull(addressType)},
+			"creationOpHash":    &graphql.Field{Type: hashType},
+			"creationTxHash":    &graphql.Field{Type: hashType},
+			"creationTimestamp": &graphql.Field{Type: bigIntType},
+			"factory":           &graphql.Field{Type: addressType},
+			"totalOps":          &graphql.Field{Type: graphql.NewNonNull(bigIntType)},
+		},
+	})
+
+	smartAccountConnectionType := graphql.NewObject(graphql.ObjectConfig{
+		Name:        "SmartAccountConnection",
+		Description: "Paginated list of smart accounts",
+		Fields: graphql.Fields{
+			"nodes":      &graphql.Field{Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(smartAccountType)))},
+			"totalCount": &graphql.Field{Type: graphql.NewNonNull(graphql.Int)},
+			"pageInfo":   &graphql.Field{Type: graphql.NewNonNull(pageInfoType)},
+		},
+	})
+
+	// Query: userOperation(hash)
+	b.queries["userOperation"] = &graphql.Field{
+		Type:        userOperationType,
+		Description: "Get a specific UserOperation by hash",
+		Args: graphql.FieldConfigArgument{
+			"hash": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "UserOperation hash",
+			},
+		},
+		Resolve: s.resolveUserOperation,
+	}
+
+	// Query: userOperations(pagination, sender)
+	b.queries["userOperations"] = &graphql.Field{
+		Type:        graphql.NewNonNull(userOperationConnectionType),
+		Description: "Get UserOperations with optional sender filter",
+		Args: graphql.FieldConfigArgument{
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+			"sender": &graphql.ArgumentConfig{
+				Type:        graphql.String,
+				Description: "Filter by sender address",
+			},
+		},
+		Resolve: s.resolveUserOperations,
+	}
+
+	// Query: userOperationsBySender(sender, pagination)
+	b.queries["userOperationsBySender"] = &graphql.Field{
+		Type:        graphql.NewNonNull(userOperationConnectionType),
+		Description: "Get UserOperations by sender address",
+		Args: graphql.FieldConfigArgument{
+			"sender": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Sender address",
+			},
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveUserOperationsByAddress,
+	}
+
+	// Query: bundlers(pagination)
+	b.queries["bundlers"] = &graphql.Field{
+		Type:        graphql.NewNonNull(bundlerStatsConnectionType),
+		Description: "Get bundler list with pagination",
+		Args: graphql.FieldConfigArgument{
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveBundlers,
+	}
+
+	// Query: bundler(address)
+	b.queries["bundler"] = &graphql.Field{
+		Type:        bundlerStatsType,
+		Description: "Get a specific bundler's stats",
+		Args: graphql.FieldConfigArgument{
+			"address": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Bundler address",
+			},
+		},
+		Resolve: s.resolveBundler,
+	}
+
+	// Query: factories(pagination)
+	b.queries["factories"] = &graphql.Field{
+		Type:        graphql.NewNonNull(factoryStatsConnectionType),
+		Description: "Get factory list with pagination",
+		Args: graphql.FieldConfigArgument{
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveFactories,
+	}
+
+	// Query: factory(address)
+	b.queries["factory"] = &graphql.Field{
+		Type:        factoryStatsType,
+		Description: "Get a specific factory's stats",
+		Args: graphql.FieldConfigArgument{
+			"address": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Factory address",
+			},
+		},
+		Resolve: s.resolveFactory,
+	}
+
+	// Query: paymasters(pagination)
+	b.queries["paymasters"] = &graphql.Field{
+		Type:        graphql.NewNonNull(paymasterStatsConnectionType),
+		Description: "Get paymaster list with pagination",
+		Args: graphql.FieldConfigArgument{
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolvePaymasters,
+	}
+
+	// Query: paymaster(address)
+	b.queries["paymaster"] = &graphql.Field{
+		Type:        paymasterStatsType,
+		Description: "Get a specific paymaster's stats",
+		Args: graphql.FieldConfigArgument{
+			"address": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Paymaster address",
+			},
+		},
+		Resolve: s.resolvePaymaster,
+	}
+
+	// Query: smartAccounts(pagination)
+	b.queries["smartAccounts"] = &graphql.Field{
+		Type:        graphql.NewNonNull(smartAccountConnectionType),
+		Description: "Get smart account list with pagination",
+		Args: graphql.FieldConfigArgument{
+			"pagination": &graphql.ArgumentConfig{
+				Type: paginationInputType,
+			},
+		},
+		Resolve: s.resolveSmartAccounts,
+	}
+
+	// Query: smartAccount(address)
+	b.queries["smartAccount"] = &graphql.Field{
+		Type:        smartAccountType,
+		Description: "Get a specific smart account",
+		Args: graphql.FieldConfigArgument{
+			"address": &graphql.ArgumentConfig{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Smart account address",
+			},
+		},
+		Resolve: s.resolveSmartAccount,
+	}
+
+	// Query: userOperationCount
+	b.queries["userOperationCount"] = &graphql.Field{
+		Type:        graphql.NewNonNull(graphql.Int),
+		Description: "Get total UserOperation count",
+		Resolve:     s.resolveUserOpCount,
+	}
+
+	return b
 }
 
 // WithFeeDelegationQueries adds fee delegation related queries

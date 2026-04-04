@@ -1,24 +1,63 @@
 package graphql
 
 import (
-	"encoding/hex"
 	"fmt"
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/userop"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
 
-// resolveUserOp resolves a UserOperation by its hash
-func (s *Schema) resolveUserOp(p graphql.ResolveParams) (interface{}, error) {
+// resolveUserOperation resolves a single UserOperation by its hash
+func (s *Schema) resolveUserOperation(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	hashStr, ok := p.Args["userOpHash"].(string)
+	hashStr, ok := p.Args["hash"].(string)
 	if !ok {
-		return nil, fmt.Errorf("invalid userOpHash")
+		return nil, fmt.Errorf("invalid hash")
+	}
+
+	opHash := common.HexToHash(hashStr)
+
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support UserOp queries")
+	}
+
+	op, err := userOpReader.GetUserOp(ctx, opHash)
+	if err != nil {
+		if err == storagepkg.ErrNotFound {
+			return nil, nil
+		}
+		s.logger.Error("failed to get UserOperation",
+			zap.String("hash", hashStr),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return s.userOpToMap(op), nil
+}
+
+// resolveUserOperations resolves a paginated list of UserOperations with optional sender filter
+func (s *Schema) resolveUserOperations(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	limit := constants.DefaultPaginationLimit
+	offset := 0
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok && l > 0 {
+			limit = l
+			if limit > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
+			}
+		}
+		if o, ok := pagination["offset"].(int); ok && o >= 0 {
+			offset = o
+		}
 	}
 
 	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
@@ -26,518 +65,480 @@ func (s *Schema) resolveUserOp(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("storage does not support UserOp queries")
 	}
 
-	record, err := userOpReader.GetUserOp(ctx, common.HexToHash(hashStr))
-	if err != nil {
-		if err == storagepkg.ErrNotFound {
-			return nil, nil
+	// If sender filter is provided, use GetUserOpsBySender
+	if senderStr, ok := p.Args["sender"].(string); ok && senderStr != "" {
+		sender := common.HexToAddress(senderStr)
+		ops, err := userOpReader.GetUserOpsBySender(ctx, sender, limit, offset)
+		if err != nil {
+			s.logger.Error("failed to get UserOperations by sender",
+				zap.String("sender", senderStr),
+				zap.Error(err))
+			return nil, err
 		}
-		s.logger.Error("failed to get UserOp", zap.String("hash", hashStr), zap.Error(err))
-		return nil, err
+		return s.userOpConnectionResult(ops, limit, offset), nil
 	}
 
-	return userOpToMap(record), nil
-}
-
-// resolveUserOpsByTx resolves all UserOps in a transaction
-func (s *Schema) resolveUserOpsByTx(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	txHashStr, ok := p.Args["txHash"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid txHash")
-	}
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
-
-	records, err := reader.GetUserOpsByTx(ctx, common.HexToHash(txHashStr))
+	// Otherwise return recent UserOps
+	ops, err := userOpReader.GetRecentUserOps(ctx, limit)
 	if err != nil {
-		s.logger.Error("failed to get UserOps by tx", zap.String("txHash", txHashStr), zap.Error(err))
+		s.logger.Error("failed to get recent UserOperations",
+			zap.Error(err))
 		return nil, err
 	}
 
-	return userOpsToSlice(records), nil
+	// Apply offset manually for recent ops
+	if offset > 0 && offset < len(ops) {
+		ops = ops[offset:]
+	} else if offset >= len(ops) {
+		ops = nil
+	}
+	if len(ops) > limit {
+		ops = ops[:limit]
+	}
+
+	return s.userOpConnectionResult(ops, limit, offset), nil
 }
 
-// resolveUserOpsBySender resolves UserOps by sender address with pagination
-func (s *Schema) resolveUserOpsBySender(p graphql.ResolveParams) (interface{}, error) {
+// resolveUserOperationsByAddress resolves UserOperations by sender address
+func (s *Schema) resolveUserOperationsByAddress(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	addrStr, ok := p.Args["sender"].(string)
+	senderStr, ok := p.Args["sender"].(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid sender address")
 	}
 
-	limit, offset := extractPagination(p)
+	sender := common.HexToAddress(senderStr)
 
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	limit := constants.DefaultPaginationLimit
+	offset := 0
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok && l > 0 {
+			limit = l
+			if limit > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
+			}
+		}
+		if o, ok := pagination["offset"].(int); ok && o >= 0 {
+			offset = o
+		}
+	}
+
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support UserOp queries")
 	}
 
-	sender := common.HexToAddress(addrStr)
-	records, err := reader.GetUserOpsBySender(ctx, sender, limit, offset)
+	ops, err := userOpReader.GetUserOpsBySender(ctx, sender, limit, offset)
 	if err != nil {
-		s.logger.Error("failed to get UserOps by sender", zap.String("sender", addrStr), zap.Error(err))
+		s.logger.Error("failed to get UserOperations by sender",
+			zap.String("sender", senderStr),
+			zap.Error(err))
 		return nil, err
 	}
 
-	totalCount, _ := reader.GetUserOpsCountBySender(ctx, sender)
+	return s.userOpConnectionResult(ops, limit, offset), nil
+}
+
+// resolveBundlers resolves a paginated list of bundler stats
+func (s *Schema) resolveBundlers(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	limit := constants.DefaultPaginationLimit
+	offset := 0
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok && l > 0 {
+			limit = l
+			if limit > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
+			}
+		}
+		if o, ok := pagination["offset"].(int); ok && o >= 0 {
+			offset = o
+		}
+	}
+
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support UserOp queries")
+	}
+
+	bundlers, err := userOpReader.ListBundlers(ctx, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to list bundlers", zap.Error(err))
+		return nil, err
+	}
+
+	nodes := make([]interface{}, len(bundlers))
+	for i, b := range bundlers {
+		nodes[i] = map[string]interface{}{
+			"address":      b.Address.Hex(),
+			"totalBundles": strconv.FormatUint(b.TotalBundles, 10),
+			"totalOps":     strconv.FormatUint(b.TotalOps, 10),
+		}
+	}
 
 	return map[string]interface{}{
-		"nodes":      userOpsToSlice(records),
-		"totalCount": totalCount,
+		"nodes":      nodes,
+		"totalCount": len(nodes),
 		"pageInfo": map[string]interface{}{
-			"hasNextPage": offset+limit < totalCount,
-			"offset":      offset,
-			"limit":       limit,
+			"hasNextPage":     len(nodes) == limit,
+			"hasPreviousPage": offset > 0,
+			"startCursor":     nil,
+			"endCursor":       nil,
 		},
 	}, nil
 }
 
-// resolveUserOpsByBundler resolves UserOps by bundler address with pagination
-func (s *Schema) resolveUserOpsByBundler(p graphql.ResolveParams) (interface{}, error) {
+// resolveBundler resolves a single bundler's stats by address
+func (s *Schema) resolveBundler(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	addrStr, ok := p.Args["bundler"].(string)
+	addressStr, ok := p.Args["address"].(string)
 	if !ok {
-		return nil, fmt.Errorf("invalid bundler address")
+		return nil, fmt.Errorf("invalid address")
 	}
 
-	limit, offset := extractPagination(p)
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support UserOp queries")
 	}
 
-	bundler := common.HexToAddress(addrStr)
-	records, err := reader.GetUserOpsByBundler(ctx, bundler, limit, offset)
+	stats, err := userOpReader.GetBundlerStats(ctx, common.HexToAddress(addressStr))
 	if err != nil {
-		s.logger.Error("failed to get UserOps by bundler", zap.String("bundler", addrStr), zap.Error(err))
+		s.logger.Error("failed to get bundler stats", zap.String("address", addressStr), zap.Error(err))
 		return nil, err
 	}
 
-	totalCount, _ := reader.GetUserOpsCountByBundler(ctx, bundler)
+	return map[string]interface{}{
+		"address":      stats.Address.Hex(),
+		"totalBundles": strconv.FormatUint(stats.TotalBundles, 10),
+		"totalOps":     strconv.FormatUint(stats.TotalOps, 10),
+	}, nil
+}
+
+// resolveFactories resolves a paginated list of factory stats
+func (s *Schema) resolveFactories(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	limit := constants.DefaultPaginationLimit
+	offset := 0
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok && l > 0 {
+			limit = l
+			if limit > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
+			}
+		}
+		if o, ok := pagination["offset"].(int); ok && o >= 0 {
+			offset = o
+		}
+	}
+
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support UserOp queries")
+	}
+
+	factories, err := userOpReader.ListFactories(ctx, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to list factories", zap.Error(err))
+		return nil, err
+	}
+
+	nodes := make([]interface{}, len(factories))
+	for i, f := range factories {
+		nodes[i] = map[string]interface{}{
+			"address":       f.Address.Hex(),
+			"totalAccounts": strconv.FormatUint(f.TotalAccounts, 10),
+		}
+	}
 
 	return map[string]interface{}{
-		"nodes":      userOpsToSlice(records),
-		"totalCount": totalCount,
+		"nodes":      nodes,
+		"totalCount": len(nodes),
 		"pageInfo": map[string]interface{}{
-			"hasNextPage": offset+limit < totalCount,
-			"offset":      offset,
-			"limit":       limit,
+			"hasNextPage":     len(nodes) == limit,
+			"hasPreviousPage": offset > 0,
+			"startCursor":     nil,
+			"endCursor":       nil,
 		},
 	}, nil
 }
 
-// resolveUserOpsByPaymaster resolves UserOps by paymaster address with pagination
-func (s *Schema) resolveUserOpsByPaymaster(p graphql.ResolveParams) (interface{}, error) {
+// resolveFactory resolves a single factory's stats by address
+func (s *Schema) resolveFactory(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	addrStr, ok := p.Args["paymaster"].(string)
+	addressStr, ok := p.Args["address"].(string)
 	if !ok {
-		return nil, fmt.Errorf("invalid paymaster address")
+		return nil, fmt.Errorf("invalid address")
 	}
 
-	limit, offset := extractPagination(p)
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support UserOp queries")
 	}
 
-	paymaster := common.HexToAddress(addrStr)
-	records, err := reader.GetUserOpsByPaymaster(ctx, paymaster, limit, offset)
+	stats, err := userOpReader.GetFactoryStats(ctx, common.HexToAddress(addressStr))
 	if err != nil {
-		s.logger.Error("failed to get UserOps by paymaster", zap.String("paymaster", addrStr), zap.Error(err))
+		s.logger.Error("failed to get factory stats", zap.String("address", addressStr), zap.Error(err))
 		return nil, err
 	}
 
-	totalCount, _ := reader.GetUserOpsCountByPaymaster(ctx, paymaster)
+	return map[string]interface{}{
+		"address":       stats.Address.Hex(),
+		"totalAccounts": strconv.FormatUint(stats.TotalAccounts, 10),
+	}, nil
+}
+
+// resolvePaymasters resolves a paginated list of paymaster stats
+func (s *Schema) resolvePaymasters(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	limit := constants.DefaultPaginationLimit
+	offset := 0
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok && l > 0 {
+			limit = l
+			if limit > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
+			}
+		}
+		if o, ok := pagination["offset"].(int); ok && o >= 0 {
+			offset = o
+		}
+	}
+
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support UserOp queries")
+	}
+
+	paymasters, err := userOpReader.ListPaymasters(ctx, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to list paymasters", zap.Error(err))
+		return nil, err
+	}
+
+	nodes := make([]interface{}, len(paymasters))
+	for i, pm := range paymasters {
+		nodes[i] = map[string]interface{}{
+			"address":  pm.Address.Hex(),
+			"totalOps": strconv.FormatUint(pm.TotalOps, 10),
+		}
+	}
 
 	return map[string]interface{}{
-		"nodes":      userOpsToSlice(records),
-		"totalCount": totalCount,
+		"nodes":      nodes,
+		"totalCount": len(nodes),
 		"pageInfo": map[string]interface{}{
-			"hasNextPage": offset+limit < totalCount,
-			"offset":      offset,
-			"limit":       limit,
+			"hasNextPage":     len(nodes) == limit,
+			"hasPreviousPage": offset > 0,
+			"startCursor":     nil,
+			"endCursor":       nil,
 		},
 	}, nil
 }
 
-// resolveUserOpsByBlock resolves all UserOps in a specific block
-func (s *Schema) resolveUserOpsByBlock(p graphql.ResolveParams) (interface{}, error) {
+// resolvePaymaster resolves a single paymaster's stats by address
+func (s *Schema) resolvePaymaster(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	blockNumStr, ok := p.Args["blockNumber"].(string)
+	addressStr, ok := p.Args["address"].(string)
 	if !ok {
-		return nil, fmt.Errorf("invalid blockNumber")
+		return nil, fmt.Errorf("invalid address")
 	}
 
-	blockNumber, err := strconv.ParseUint(blockNumStr, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid blockNumber: %w", err)
-	}
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support UserOp queries")
 	}
 
-	records, err := reader.GetUserOpsByBlock(ctx, blockNumber)
+	stats, err := userOpReader.GetPaymasterStats(ctx, common.HexToAddress(addressStr))
 	if err != nil {
-		s.logger.Error("failed to get UserOps by block", zap.Uint64("block", blockNumber), zap.Error(err))
+		s.logger.Error("failed to get paymaster stats", zap.String("address", addressStr), zap.Error(err))
 		return nil, err
 	}
 
-	return userOpsToSlice(records), nil
+	return map[string]interface{}{
+		"address":  stats.Address.Hex(),
+		"totalOps": strconv.FormatUint(stats.TotalOps, 10),
+	}, nil
 }
 
-// resolveAccountDeployment resolves an account deployment by userOpHash
-func (s *Schema) resolveAccountDeployment(p graphql.ResolveParams) (interface{}, error) {
+// resolveSmartAccounts resolves a paginated list of smart accounts
+func (s *Schema) resolveSmartAccounts(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	hashStr, ok := p.Args["userOpHash"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid userOpHash")
+	limit := constants.DefaultPaginationLimit
+	offset := 0
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok && l > 0 {
+			limit = l
+			if limit > constants.DefaultMaxPaginationLimit {
+				limit = constants.DefaultMaxPaginationLimit
+			}
+		}
+		if o, ok := pagination["offset"].(int); ok && o >= 0 {
+			offset = o
+		}
 	}
 
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support UserOp queries")
 	}
 
-	record, err := reader.GetAccountDeployment(ctx, common.HexToHash(hashStr))
+	accounts, err := userOpReader.ListSmartAccounts(ctx, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to list smart accounts", zap.Error(err))
+		return nil, err
+	}
+
+	nodes := make([]interface{}, len(accounts))
+	for i, a := range accounts {
+		nodes[i] = s.smartAccountToMap(a)
+	}
+
+	return map[string]interface{}{
+		"nodes":      nodes,
+		"totalCount": len(nodes),
+		"pageInfo": map[string]interface{}{
+			"hasNextPage":     len(nodes) == limit,
+			"hasPreviousPage": offset > 0,
+			"startCursor":     nil,
+			"endCursor":       nil,
+		},
+	}, nil
+}
+
+// resolveSmartAccount resolves a single smart account by address
+func (s *Schema) resolveSmartAccount(p graphql.ResolveParams) (interface{}, error) {
+	ctx := p.Context
+
+	addressStr, ok := p.Args["address"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid address")
+	}
+
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	if !ok {
+		return nil, fmt.Errorf("storage does not support UserOp queries")
+	}
+
+	account, err := userOpReader.GetSmartAccount(ctx, common.HexToAddress(addressStr))
 	if err != nil {
 		if err == storagepkg.ErrNotFound {
 			return nil, nil
 		}
-		s.logger.Error("failed to get account deployment", zap.String("hash", hashStr), zap.Error(err))
+		s.logger.Error("failed to get smart account", zap.String("address", addressStr), zap.Error(err))
 		return nil, err
 	}
 
-	return accountDeployedToMap(record), nil
+	return s.smartAccountToMap(account), nil
 }
 
-// resolveAccountDeploymentsByFactory resolves deployments by factory address
-func (s *Schema) resolveAccountDeploymentsByFactory(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	addrStr, ok := p.Args["factory"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid factory address")
-	}
-
-	limit, offset := extractPagination(p)
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
-
-	records, err := reader.GetAccountDeploymentsByFactory(ctx, common.HexToAddress(addrStr), limit, offset)
-	if err != nil {
-		s.logger.Error("failed to get deployments by factory", zap.String("factory", addrStr), zap.Error(err))
-		return nil, err
-	}
-
-	result := make([]interface{}, len(records))
-	for i, r := range records {
-		result[i] = accountDeployedToMap(r)
-	}
-
-	return result, nil
-}
-
-// resolveUserOpRevert resolves a revert reason by userOpHash
-func (s *Schema) resolveUserOpRevert(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	hashStr, ok := p.Args["userOpHash"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid userOpHash")
-	}
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
-
-	record, err := reader.GetUserOpRevert(ctx, common.HexToHash(hashStr))
-	if err != nil {
-		if err == storagepkg.ErrNotFound {
-			return nil, nil
-		}
-		s.logger.Error("failed to get UserOp revert", zap.String("hash", hashStr), zap.Error(err))
-		return nil, err
-	}
-
-	return userOpRevertToMap(record), nil
-}
-
-// resolveBundlerStats resolves aggregated stats for a bundler
-func (s *Schema) resolveBundlerStats(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	addrStr, ok := p.Args["bundler"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid bundler address")
-	}
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
-
-	stats, err := reader.GetBundlerStats(ctx, common.HexToAddress(addrStr))
-	if err != nil {
-		s.logger.Error("failed to get bundler stats", zap.String("bundler", addrStr), zap.Error(err))
-		return nil, err
-	}
-
-	return bundlerStatsToMap(stats), nil
-}
-
-// resolvePaymasterStats resolves aggregated stats for a paymaster
-func (s *Schema) resolvePaymasterStats(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	addrStr, ok := p.Args["paymaster"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid paymaster address")
-	}
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
-
-	stats, err := reader.GetPaymasterStats(ctx, common.HexToAddress(addrStr))
-	if err != nil {
-		s.logger.Error("failed to get paymaster stats", zap.String("paymaster", addrStr), zap.Error(err))
-		return nil, err
-	}
-
-	return paymasterStatsToMap(stats), nil
-}
-
-// resolveUserOpCount resolves total UserOp count
+// resolveUserOpCount resolves the total count of UserOperations
 func (s *Schema) resolveUserOpCount(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
+	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support UserOp queries")
 	}
 
-	count, err := reader.GetUserOpCount(ctx)
+	count, err := userOpReader.GetUserOpCount(ctx)
 	if err != nil {
-		s.logger.Error("failed to get UserOp count", zap.Error(err))
+		s.logger.Error("failed to get UserOperation count", zap.Error(err))
 		return nil, err
 	}
 
 	return count, nil
 }
 
-// resolveRecentUserOps resolves most recent UserOps
-func (s *Schema) resolveRecentUserOps(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
+// ========== Helper Functions ==========
 
-	limit := constants.DefaultPaginationLimit
-	if l, ok := p.Args["limit"].(int); ok && l > 0 {
-		limit = l
+// userOpToMap converts a UserOperation to a GraphQL map
+func (s *Schema) userOpToMap(op *userop.UserOperation) map[string]interface{} {
+	result := map[string]interface{}{
+		"hash":                 op.Hash.Hex(),
+		"sender":               op.Sender.Hex(),
+		"nonce":                op.Nonce,
+		"callData":             "0x" + common.Bytes2Hex(op.CallData),
+		"callGasLimit":         op.CallGasLimit,
+		"verificationGasLimit": op.VerificationGasLimit,
+		"preVerificationGas":   op.PreVerificationGas,
+		"maxFeePerGas":         op.MaxFeePerGas,
+		"maxPriorityFeePerGas": op.MaxPriorityFeePerGas,
+		"signature":            "0x" + common.Bytes2Hex(op.Signature),
+		"entryPoint":           op.EntryPoint.Hex(),
+		"entryPointVersion":    op.EntryPointVersion,
+		"transactionHash":      op.TransactionHash.Hex(),
+		"blockNumber":          strconv.FormatUint(op.BlockNumber, 10),
+		"blockHash":            op.BlockHash.Hex(),
+		"bundleIndex":          int(op.BundleIndex),
+		"bundler":              op.Bundler.Hex(),
+		"status":               op.Status,
+		"gasUsed":              op.GasUsed,
+		"actualGasCost":        op.ActualGasCost,
+		"sponsorType":          string(op.SponsorType),
+		"userLogsStartIndex":   int(op.UserLogsStartIndex),
+		"userLogsCount":        int(op.UserLogsCount),
+		"timestamp":            strconv.FormatInt(op.Timestamp.Unix(), 10),
 	}
 
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
+	if op.Factory != nil {
+		result["factory"] = op.Factory.Hex()
+	}
+	if op.Paymaster != nil {
+		result["paymaster"] = op.Paymaster.Hex()
+	}
+	if len(op.RevertReason) > 0 {
+		result["revertReason"] = "0x" + common.Bytes2Hex(op.RevertReason)
 	}
 
-	records, err := reader.GetRecentUserOps(ctx, limit)
-	if err != nil {
-		s.logger.Error("failed to get recent UserOps", zap.Error(err))
-		return nil, err
-	}
-
-	return userOpsToSlice(records), nil
-}
-
-// resolveAllBundlers resolves paginated list of all known bundlers
-func (s *Schema) resolveAllBundlers(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	limit, offset := extractPagination(p)
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
-
-	stats, err := reader.GetAllBundlerStats(ctx, limit, offset)
-	if err != nil {
-		s.logger.Error("failed to get all bundler stats", zap.Error(err))
-		return nil, err
-	}
-
-	totalCount, _ := reader.GetAllBundlerStatsCount(ctx)
-
-	nodes := make([]interface{}, len(stats))
-	for i, stat := range stats {
-		nodes[i] = bundlerStatsToMap(stat)
-	}
-
-	return map[string]interface{}{
-		"nodes":      nodes,
-		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage": offset+limit < totalCount,
-			"offset":      offset,
-			"limit":       limit,
-		},
-	}, nil
-}
-
-// resolveAllPaymasters resolves paginated list of all known paymasters
-func (s *Schema) resolveAllPaymasters(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	limit, offset := extractPagination(p)
-
-	reader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
-
-	stats, err := reader.GetAllPaymasterStats(ctx, limit, offset)
-	if err != nil {
-		s.logger.Error("failed to get all paymaster stats", zap.Error(err))
-		return nil, err
-	}
-
-	totalCount, _ := reader.GetAllPaymasterStatsCount(ctx)
-
-	nodes := make([]interface{}, len(stats))
-	for i, stat := range stats {
-		nodes[i] = paymasterStatsToMap(stat)
-	}
-
-	return map[string]interface{}{
-		"nodes":      nodes,
-		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage": offset+limit < totalCount,
-			"offset":      offset,
-			"limit":       limit,
-		},
-	}, nil
-}
-
-// ========== Helper conversion functions ==========
-
-func userOpToMap(r *storagepkg.UserOperationRecord) map[string]interface{} {
-	return map[string]interface{}{
-		"userOpHash":            r.UserOpHash.Hex(),
-		"txHash":                r.TxHash.Hex(),
-		"blockNumber":           strconv.FormatUint(r.BlockNumber, 10),
-		"blockHash":             r.BlockHash.Hex(),
-		"txIndex":               int(r.TxIndex),
-		"logIndex":              int(r.LogIndex),
-		"sender":                r.Sender.Hex(),
-		"paymaster":             r.Paymaster.Hex(),
-		"nonce":                 r.Nonce.String(),
-		"success":               r.Success,
-		"actualGasCost":         r.ActualGasCost.String(),
-		"actualUserOpFeePerGas": r.ActualUserOpFeePerGas.String(),
-		"bundler":               r.Bundler.Hex(),
-		"entryPoint":            r.EntryPoint.Hex(),
-		"timestamp":             strconv.FormatInt(r.Timestamp.Unix(), 10),
-	}
-}
-
-func userOpsToSlice(records []*storagepkg.UserOperationRecord) []interface{} {
-	result := make([]interface{}, len(records))
-	for i, r := range records {
-		result[i] = userOpToMap(r)
-	}
 	return result
 }
 
-func accountDeployedToMap(r *storagepkg.AccountDeployedRecord) map[string]interface{} {
-	return map[string]interface{}{
-		"userOpHash":  r.UserOpHash.Hex(),
-		"sender":      r.Sender.Hex(),
-		"factory":     r.Factory.Hex(),
-		"paymaster":   r.Paymaster.Hex(),
-		"txHash":      r.TxHash.Hex(),
-		"blockNumber": strconv.FormatUint(r.BlockNumber, 10),
-		"logIndex":    int(r.LogIndex),
-		"timestamp":   strconv.FormatInt(r.Timestamp.Unix(), 10),
+// smartAccountToMap converts a SmartAccount to a GraphQL map
+func (s *Schema) smartAccountToMap(account *userop.SmartAccount) map[string]interface{} {
+	result := map[string]interface{}{
+		"address":  account.Address.Hex(),
+		"totalOps": strconv.FormatUint(account.TotalOps, 10),
 	}
+
+	if account.CreationOpHash != nil {
+		result["creationOpHash"] = account.CreationOpHash.Hex()
+	}
+	if account.CreationTxHash != nil {
+		result["creationTxHash"] = account.CreationTxHash.Hex()
+	}
+	if account.CreationTimestamp != nil {
+		result["creationTimestamp"] = strconv.FormatInt(account.CreationTimestamp.Unix(), 10)
+	}
+	if account.Factory != nil {
+		result["factory"] = account.Factory.Hex()
+	}
+
+	return result
 }
 
-func userOpRevertToMap(r *storagepkg.UserOpRevertRecord) map[string]interface{} {
+// userOpConnectionResult creates a standard connection result for UserOperations
+func (s *Schema) userOpConnectionResult(ops []*userop.UserOperation, limit, offset int) map[string]interface{} {
+	nodes := make([]interface{}, len(ops))
+	for i, op := range ops {
+		nodes[i] = s.userOpToMap(op)
+	}
+
 	return map[string]interface{}{
-		"userOpHash":   r.UserOpHash.Hex(),
-		"sender":       r.Sender.Hex(),
-		"nonce":        r.Nonce.String(),
-		"revertReason": "0x" + hex.EncodeToString(r.RevertReason),
-		"txHash":       r.TxHash.Hex(),
-		"blockNumber":  strconv.FormatUint(r.BlockNumber, 10),
-		"logIndex":     int(r.LogIndex),
-		"revertType":   r.RevertType,
-		"timestamp":    strconv.FormatInt(r.Timestamp.Unix(), 10),
+		"nodes":      nodes,
+		"totalCount": len(nodes),
+		"pageInfo": map[string]interface{}{
+			"hasNextPage":     len(nodes) == limit,
+			"hasPreviousPage": offset > 0,
+			"startCursor":     nil,
+			"endCursor":       nil,
+		},
 	}
-}
-
-func bundlerStatsToMap(s *storagepkg.BundlerStats) map[string]interface{} {
-	gasSponsored := "0"
-	if s.TotalGasSponsored != nil {
-		gasSponsored = s.TotalGasSponsored.String()
-	}
-	return map[string]interface{}{
-		"address":           s.Address.Hex(),
-		"totalOps":          s.TotalOps,
-		"successfulOps":     s.SuccessfulOps,
-		"failedOps":         s.FailedOps,
-		"totalGasSponsored": gasSponsored,
-		"lastActivityBlock": strconv.FormatUint(s.LastActivityBlock, 10),
-		"lastActivityTime":  strconv.FormatInt(s.LastActivityTime.Unix(), 10),
-	}
-}
-
-func paymasterStatsToMap(s *storagepkg.PaymasterStats) map[string]interface{} {
-	gasSponsored := "0"
-	if s.TotalGasSponsored != nil {
-		gasSponsored = s.TotalGasSponsored.String()
-	}
-	return map[string]interface{}{
-		"address":           s.Address.Hex(),
-		"totalOps":          s.TotalOps,
-		"successfulOps":     s.SuccessfulOps,
-		"failedOps":         s.FailedOps,
-		"totalGasSponsored": gasSponsored,
-		"lastActivityBlock": strconv.FormatUint(s.LastActivityBlock, 10),
-		"lastActivityTime":  strconv.FormatInt(s.LastActivityTime.Unix(), 10),
-	}
-}
-
-// extractPagination extracts limit and offset from GraphQL pagination args
-func extractPagination(p graphql.ResolveParams) (int, int) {
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-		}
-		if o, ok := pagination["offset"].(int); ok && o > 0 {
-			offset = o
-		}
-	}
-
-	return limit, offset
 }

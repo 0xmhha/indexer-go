@@ -225,14 +225,10 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 		}
 	}
 
-	// 4. Process EIP-4337 UserOperation events (block-level, all receipts)
+	// 4. Process ERC-4337 UserOperations from block
 	if f.userOpProcessor != nil {
-		txByHash := make(map[common.Hash]*types.Transaction, len(transactions))
-		for _, tx := range transactions {
-			txByHash[tx.Hash()] = tx
-		}
-		if err := f.userOpProcessor.ProcessBlockReceipts(ctx, block, receipts, txByHash); err != nil {
-			f.logger.Warn("Failed to process UserOperation events",
+		if err := f.userOpProcessor.ProcessUserOpsFromBlock(ctx, block, receipts); err != nil {
+			f.logger.Warn("Failed to process ERC-4337 UserOperations",
 				zap.Uint64("block", blockNumber),
 				zap.Error(err),
 			)

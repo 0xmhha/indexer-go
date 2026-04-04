@@ -155,35 +155,45 @@ const (
 	// Index by transaction hash (for tx-level queries)
 	prefixIdxSetCodeTx = "/index/setcode/tx/"
 
-	// === EIP-4337 Account Abstraction Data Prefixes ===
-	// Primary storage for UserOperation records
-	prefixAAUserOp = "/data/aa/userop/"
-	// Account deployment records
-	prefixAADeploy = "/data/aa/deploy/"
-	// UserOperation revert reason records
-	prefixAARevert = "/data/aa/revert/"
-	// Bundler aggregated statistics
-	prefixAABundlerStats = "/data/aa/bundlerstats/"
-	// Paymaster aggregated statistics
-	prefixAAPaymasterStats = "/data/aa/paymasterstats/"
+	// === ERC-7579 Module Data Prefixes ===
+	// Primary storage for installed module records
+	prefixModule = "/data/module/"
+	// Module aggregate stats per module address
+	prefixModuleStats = "/data/module/stats/"
 
-	// === EIP-4337 Account Abstraction Index Prefixes ===
+	// === ERC-7579 Module Index Prefixes ===
+	// Index by account address (which smart account installed the module)
+	prefixIdxModuleAccount = "/index/module/account/"
+	// Index by module type (validator, executor, fallback, hook)
+	prefixIdxModuleType = "/index/module/type/"
+	// Index by block number (for chronological queries)
+	prefixIdxModuleBlock = "/index/module/block/"
+
+	// === ERC-4337 Account Abstraction Data Prefixes ===
+	// Primary storage for UserOperation records
+	prefixUserOp = "/data/userop/"
+	// Bundler statistics
+	prefixBundlerStats = "/data/bundler/stats/"
+	// Factory statistics
+	prefixFactoryStats = "/data/factory/stats/"
+	// Paymaster statistics
+	prefixPaymasterStats = "/data/paymaster/stats/"
+	// Smart account records
+	prefixSmartAccount = "/data/smartaccount/"
+
+	// === ERC-4337 Account Abstraction Index Prefixes ===
 	// Index by sender address
-	prefixIdxAASender = "/index/aa/sender/"
+	prefixIdxUserOpSender = "/index/userop/sender/"
 	// Index by bundler address
-	prefixIdxAABundler = "/index/aa/bundler/"
+	prefixIdxUserOpBundler = "/index/userop/bundler/"
 	// Index by paymaster address
-	prefixIdxAAPaymaster = "/index/aa/paymaster/"
+	prefixIdxUserOpPaymaster = "/index/userop/paymaster/"
+	// Index by factory address
+	prefixIdxUserOpFactory = "/index/userop/factory/"
 	// Index by block number
-	prefixIdxAABlock = "/index/aa/block/"
-	// Index by EntryPoint address
-	prefixIdxAAEntryPoint = "/index/aa/entrypoint/"
-	// Index by factory address (for account deployments)
-	prefixIdxAAFactory = "/index/aa/factory/"
+	prefixIdxUserOpBlock = "/index/userop/block/"
 	// Index by transaction hash
-	prefixIdxAATx = "/index/aa/tx/"
-	// Recent UserOps index (sorted by block number descending)
-	prefixIdxAARecent = "/index/aa/recent/"
+	prefixIdxUserOpTx = "/index/userop/tx/"
 )
 
 // Metadata keys
@@ -1427,170 +1437,212 @@ func TokenHolderByHolderIndexPrefix(holder common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%s/", prefixIdxTokenHolderByHolder, holder.Hex()))
 }
 
-// ========== EIP-4337 Account Abstraction Key Functions ==========
+// ========== ERC-7579 Module Key Functions ==========
 
-// --- UserOp Data Keys ---
-
-// AAUserOpKey returns the primary key for a UserOperation record
-// Format: /data/aa/userop/{userOpHash}
-func AAUserOpKey(userOpHash common.Hash) []byte {
-	return []byte(fmt.Sprintf("%s%s", prefixAAUserOp, userOpHash.Hex()))
+// ModuleKey returns the key for storing an installed module record
+// Format: /data/module/{account}/{module}
+func ModuleKey(account, module common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/%s", prefixModule, account.Hex(), module.Hex()))
 }
 
-// AAUserOpAllPrefix returns the prefix for all UserOperation records
-func AAUserOpAllPrefix() []byte {
-	return []byte(prefixAAUserOp)
+// ModuleKeyPrefix returns the prefix for all modules of an account
+// Format: /data/module/{account}/
+func ModuleKeyPrefix(account common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixModule, account.Hex()))
 }
 
-// AADeployKey returns the primary key for an account deployment record
-// Format: /data/aa/deploy/{userOpHash}
-func AADeployKey(userOpHash common.Hash) []byte {
-	return []byte(fmt.Sprintf("%s%s", prefixAADeploy, userOpHash.Hex()))
+// ModuleAllPrefix returns the prefix for all module data
+func ModuleAllPrefix() []byte {
+	return []byte(prefixModule)
 }
 
-// AADeployAllPrefix returns the prefix for all account deployment records
-func AADeployAllPrefix() []byte {
-	return []byte(prefixAADeploy)
+// ModuleStatsKey returns the key for storing module aggregate stats
+// Format: /data/module/stats/{module}
+func ModuleStatsKey(module common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixModuleStats, module.Hex()))
 }
 
-// AARevertKey returns the primary key for a UserOp revert reason record
-// Format: /data/aa/revert/{userOpHash}
-func AARevertKey(userOpHash common.Hash) []byte {
-	return []byte(fmt.Sprintf("%s%s", prefixAARevert, userOpHash.Hex()))
+// ModuleStatsKeyPrefix returns the prefix for all module stats
+func ModuleStatsKeyPrefix() []byte {
+	return []byte(prefixModuleStats)
 }
 
-// AARevertAllPrefix returns the prefix for all UserOp revert records
-func AARevertAllPrefix() []byte {
-	return []byte(prefixAARevert)
+// ModuleAccountIndexKey returns the index key for querying by account address
+// Format: /index/module/account/{account}/{blockNumber:016x}/{module}
+func ModuleAccountIndexKey(account common.Address, blockNumber uint64, module common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%s", prefixIdxModuleAccount, account.Hex(), blockNumber, module.Hex()))
 }
 
-// AABundlerStatsKey returns the key for bundler aggregated statistics
-// Format: /data/aa/bundlerstats/{address}
-func AABundlerStatsKey(bundler common.Address) []byte {
-	return []byte(fmt.Sprintf("%s%s", prefixAABundlerStats, bundler.Hex()))
+// ModuleAccountIndexKeyPrefix returns the prefix for querying by account address
+// Format: /index/module/account/{account}/
+func ModuleAccountIndexKeyPrefix(account common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxModuleAccount, account.Hex()))
 }
 
-// AABundlerStatsAllPrefix returns the prefix for all bundler stats
-func AABundlerStatsAllPrefix() []byte {
-	return []byte(prefixAABundlerStats)
+// ModuleTypeIndexKey returns the index key for querying by module type
+// Format: /index/module/type/{moduleType:02x}/{blockNumber:016x}/{account}/{module}
+func ModuleTypeIndexKey(moduleType ModuleType, blockNumber uint64, account, module common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%02x/%016x/%s/%s", prefixIdxModuleType, uint8(moduleType), blockNumber, account.Hex(), module.Hex()))
 }
 
-// AAPaymasterStatsKey returns the key for paymaster aggregated statistics
-// Format: /data/aa/paymasterstats/{address}
-func AAPaymasterStatsKey(paymaster common.Address) []byte {
-	return []byte(fmt.Sprintf("%s%s", prefixAAPaymasterStats, paymaster.Hex()))
+// ModuleTypeIndexKeyPrefix returns the prefix for querying by module type
+// Format: /index/module/type/{moduleType:02x}/
+func ModuleTypeIndexKeyPrefix(moduleType ModuleType) []byte {
+	return []byte(fmt.Sprintf("%s%02x/", prefixIdxModuleType, uint8(moduleType)))
 }
 
-// AAPaymasterStatsAllPrefix returns the prefix for all paymaster stats
-func AAPaymasterStatsAllPrefix() []byte {
-	return []byte(prefixAAPaymasterStats)
+// ModuleBlockIndexKey returns the index key for querying by block number
+// Format: /index/module/block/{blockNumber:016x}/{account}/{module}
+func ModuleBlockIndexKey(blockNumber uint64, account, module common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%016x/%s/%s", prefixIdxModuleBlock, blockNumber, account.Hex(), module.Hex()))
 }
 
-// --- UserOp Index Keys ---
-
-// AASenderIndexKey returns the index key for querying UserOps by sender
-// Format: /index/aa/sender/{sender}/{blockNumber:016x}/{logIndex:08x}
-// Block number is inverted for descending order (newest first)
-func AASenderIndexKey(sender common.Address, blockNumber uint64, logIndex uint64) []byte {
-	invertedBlock := ^blockNumber
-	return []byte(fmt.Sprintf("%s%s/%016x/%08x", prefixIdxAASender, sender.Hex(), invertedBlock, logIndex))
+// ModuleBlockIndexKeyPrefix returns the prefix for querying by block number
+// Format: /index/module/block/{blockNumber:016x}/
+func ModuleBlockIndexKeyPrefix(blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%016x/", prefixIdxModuleBlock, blockNumber))
 }
 
-// AASenderIndexPrefix returns the prefix for all UserOps by a sender
-// Format: /index/aa/sender/{sender}/
-func AASenderIndexPrefix(sender common.Address) []byte {
-	return []byte(fmt.Sprintf("%s%s/", prefixIdxAASender, sender.Hex()))
+// ModuleBlockIndexAllPrefix returns the prefix for all block indexes
+func ModuleBlockIndexAllPrefix() []byte {
+	return []byte(prefixIdxModuleBlock)
 }
 
-// AABundlerIndexKey returns the index key for querying UserOps by bundler
-// Format: /index/aa/bundler/{bundler}/{blockNumber:016x}/{logIndex:08x}
-func AABundlerIndexKey(bundler common.Address, blockNumber uint64, logIndex uint64) []byte {
-	invertedBlock := ^blockNumber
-	return []byte(fmt.Sprintf("%s%s/%016x/%08x", prefixIdxAABundler, bundler.Hex(), invertedBlock, logIndex))
+// ========== ERC-4337 UserOp Key Functions ==========
+
+// UserOpKey returns the key for storing a UserOperation record
+// Format: /data/userop/{opHash}
+func UserOpKey(opHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixUserOp, opHash.Hex()))
 }
 
-// AABundlerIndexPrefix returns the prefix for all UserOps by a bundler
-// Format: /index/aa/bundler/{bundler}/
-func AABundlerIndexPrefix(bundler common.Address) []byte {
-	return []byte(fmt.Sprintf("%s%s/", prefixIdxAABundler, bundler.Hex()))
+// UserOpKeyPrefix returns the prefix for all UserOperation data
+func UserOpKeyPrefix() []byte {
+	return []byte(prefixUserOp)
 }
 
-// AAPaymasterIndexKey returns the index key for querying UserOps by paymaster
-// Format: /index/aa/paymaster/{paymaster}/{blockNumber:016x}/{logIndex:08x}
-func AAPaymasterIndexKey(paymaster common.Address, blockNumber uint64, logIndex uint64) []byte {
-	invertedBlock := ^blockNumber
-	return []byte(fmt.Sprintf("%s%s/%016x/%08x", prefixIdxAAPaymaster, paymaster.Hex(), invertedBlock, logIndex))
+// BundlerStatsKey returns the key for storing bundler statistics
+// Format: /data/bundler/stats/{address}
+func BundlerStatsKey(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixBundlerStats, address.Hex()))
 }
 
-// AAPaymasterIndexPrefix returns the prefix for all UserOps by a paymaster
-// Format: /index/aa/paymaster/{paymaster}/
-func AAPaymasterIndexPrefix(paymaster common.Address) []byte {
-	return []byte(fmt.Sprintf("%s%s/", prefixIdxAAPaymaster, paymaster.Hex()))
+// BundlerStatsKeyPrefix returns the prefix for all bundler stats
+func BundlerStatsKeyPrefix() []byte {
+	return []byte(prefixBundlerStats)
 }
 
-// AABlockIndexKey returns the index key for querying UserOps by block number
-// Format: /index/aa/block/{blockNumber:016x}/{logIndex:08x}
-func AABlockIndexKey(blockNumber uint64, logIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%016x/%08x", prefixIdxAABlock, blockNumber, logIndex))
+// FactoryStatsKey returns the key for storing factory statistics
+// Format: /data/factory/stats/{address}
+func FactoryStatsKey(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixFactoryStats, address.Hex()))
 }
 
-// AABlockIndexPrefix returns the prefix for all UserOps in a block
-// Format: /index/aa/block/{blockNumber:016x}/
-func AABlockIndexPrefix(blockNumber uint64) []byte {
-	return []byte(fmt.Sprintf("%s%016x/", prefixIdxAABlock, blockNumber))
+// FactoryStatsKeyPrefix returns the prefix for all factory stats
+func FactoryStatsKeyPrefix() []byte {
+	return []byte(prefixFactoryStats)
 }
 
-// AABlockIndexAllPrefix returns the prefix for all block indexes
-func AABlockIndexAllPrefix() []byte {
-	return []byte(prefixIdxAABlock)
+// PaymasterStatsKey returns the key for storing paymaster statistics
+// Format: /data/paymaster/stats/{address}
+func PaymasterStatsKey(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixPaymasterStats, address.Hex()))
 }
 
-// AAEntryPointIndexKey returns the index key for querying UserOps by EntryPoint
-// Format: /index/aa/entrypoint/{entryPoint}/{blockNumber:016x}/{logIndex:08x}
-func AAEntryPointIndexKey(entryPoint common.Address, blockNumber uint64, logIndex uint64) []byte {
-	invertedBlock := ^blockNumber
-	return []byte(fmt.Sprintf("%s%s/%016x/%08x", prefixIdxAAEntryPoint, entryPoint.Hex(), invertedBlock, logIndex))
+// PaymasterStatsKeyPrefix returns the prefix for all paymaster stats
+func PaymasterStatsKeyPrefix() []byte {
+	return []byte(prefixPaymasterStats)
 }
 
-// AAEntryPointIndexPrefix returns the prefix for all UserOps by an EntryPoint
-// Format: /index/aa/entrypoint/{entryPoint}/
-func AAEntryPointIndexPrefix(entryPoint common.Address) []byte {
-	return []byte(fmt.Sprintf("%s%s/", prefixIdxAAEntryPoint, entryPoint.Hex()))
+// SmartAccountKey returns the key for storing a smart account record
+// Format: /data/smartaccount/{address}
+func SmartAccountKey(address common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s", prefixSmartAccount, address.Hex()))
 }
 
-// AAFactoryIndexKey returns the index key for querying deployments by factory
-// Format: /index/aa/factory/{factory}/{blockNumber:016x}/{logIndex:08x}
-func AAFactoryIndexKey(factory common.Address, blockNumber uint64, logIndex uint64) []byte {
-	invertedBlock := ^blockNumber
-	return []byte(fmt.Sprintf("%s%s/%016x/%08x", prefixIdxAAFactory, factory.Hex(), invertedBlock, logIndex))
+// SmartAccountKeyPrefix returns the prefix for all smart account data
+func SmartAccountKeyPrefix() []byte {
+	return []byte(prefixSmartAccount)
 }
 
-// AAFactoryIndexPrefix returns the prefix for all deployments by a factory
-// Format: /index/aa/factory/{factory}/
-func AAFactoryIndexPrefix(factory common.Address) []byte {
-	return []byte(fmt.Sprintf("%s%s/", prefixIdxAAFactory, factory.Hex()))
+// UserOpSenderIndexKey returns the index key for querying by sender address
+// Format: /index/userop/sender/{address}/{blockNumber:016x}/{bundleIndex:08x}
+func UserOpSenderIndexKey(sender common.Address, blockNumber uint64, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%08x",
+		prefixIdxUserOpSender, sender.Hex(), blockNumber, bundleIndex))
 }
 
-// AATxIndexKey returns the index key for querying UserOps by transaction hash
-// Format: /index/aa/tx/{txHash}/{logIndex:08x}
-func AATxIndexKey(txHash common.Hash, logIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%08x", prefixIdxAATx, txHash.Hex(), logIndex))
+// UserOpSenderIndexKeyPrefix returns the prefix for querying by sender address
+// Format: /index/userop/sender/{address}/
+func UserOpSenderIndexKeyPrefix(sender common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxUserOpSender, sender.Hex()))
 }
 
-// AATxIndexPrefix returns the prefix for all UserOps in a transaction
-// Format: /index/aa/tx/{txHash}/
-func AATxIndexPrefix(txHash common.Hash) []byte {
-	return []byte(fmt.Sprintf("%s%s/", prefixIdxAATx, txHash.Hex()))
+// UserOpBundlerIndexKey returns the index key for querying by bundler address
+// Format: /index/userop/bundler/{address}/{blockNumber:016x}/{bundleIndex:08x}
+func UserOpBundlerIndexKey(bundler common.Address, blockNumber uint64, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%08x",
+		prefixIdxUserOpBundler, bundler.Hex(), blockNumber, bundleIndex))
 }
 
-// AARecentIndexKey returns the index key for recent UserOps (newest first)
-// Format: /index/aa/recent/{invertedBlockNumber:016x}/{logIndex:08x}
-func AARecentIndexKey(blockNumber uint64, logIndex uint64) []byte {
-	invertedBlock := ^blockNumber
-	return []byte(fmt.Sprintf("%s%016x/%08x", prefixIdxAARecent, invertedBlock, logIndex))
+// UserOpBundlerIndexKeyPrefix returns the prefix for querying by bundler address
+// Format: /index/userop/bundler/{address}/
+func UserOpBundlerIndexKeyPrefix(bundler common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxUserOpBundler, bundler.Hex()))
 }
 
-// AARecentIndexAllPrefix returns the prefix for all recent UserOp indexes
-func AARecentIndexAllPrefix() []byte {
-	return []byte(prefixIdxAARecent)
+// UserOpPaymasterIndexKey returns the index key for querying by paymaster address
+// Format: /index/userop/paymaster/{address}/{blockNumber:016x}/{bundleIndex:08x}
+func UserOpPaymasterIndexKey(paymaster common.Address, blockNumber uint64, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%08x",
+		prefixIdxUserOpPaymaster, paymaster.Hex(), blockNumber, bundleIndex))
+}
+
+// UserOpPaymasterIndexKeyPrefix returns the prefix for querying by paymaster address
+// Format: /index/userop/paymaster/{address}/
+func UserOpPaymasterIndexKeyPrefix(paymaster common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxUserOpPaymaster, paymaster.Hex()))
+}
+
+// UserOpFactoryIndexKey returns the index key for querying by factory address
+// Format: /index/userop/factory/{address}/{blockNumber:016x}/{bundleIndex:08x}
+func UserOpFactoryIndexKey(factory common.Address, blockNumber uint64, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%08x",
+		prefixIdxUserOpFactory, factory.Hex(), blockNumber, bundleIndex))
+}
+
+// UserOpFactoryIndexKeyPrefix returns the prefix for querying by factory address
+// Format: /index/userop/factory/{address}/
+func UserOpFactoryIndexKeyPrefix(factory common.Address) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxUserOpFactory, factory.Hex()))
+}
+
+// UserOpBlockIndexKey returns the index key for querying by block number
+// Format: /index/userop/block/{blockNumber:016x}/{bundleIndex:08x}
+func UserOpBlockIndexKey(blockNumber uint64, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%016x/%08x",
+		prefixIdxUserOpBlock, blockNumber, bundleIndex))
+}
+
+// UserOpBlockIndexKeyPrefix returns the prefix for querying by block number
+// Format: /index/userop/block/{blockNumber:016x}/
+func UserOpBlockIndexKeyPrefix(blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%016x/", prefixIdxUserOpBlock, blockNumber))
+}
+
+// UserOpBlockIndexAllPrefix returns the prefix for all block indexes
+func UserOpBlockIndexAllPrefix() []byte {
+	return []byte(prefixIdxUserOpBlock)
+}
+
+// UserOpTxIndexKey returns the index key for querying by transaction hash
+// Format: /index/userop/tx/{txHash}/{bundleIndex:08x}
+func UserOpTxIndexKey(txHash common.Hash, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%s/%08x", prefixIdxUserOpTx, txHash.Hex(), bundleIndex))
+}
+
+// UserOpTxIndexKeyPrefix returns the prefix for querying by transaction hash
+// Format: /index/userop/tx/{txHash}/
+func UserOpTxIndexKeyPrefix(txHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("%s%s/", prefixIdxUserOpTx, txHash.Hex()))
 }

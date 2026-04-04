@@ -30,7 +30,7 @@ type LargeBlockProcessor struct {
 	// setCodeProcessor handles EIP-7702 SetCode transaction indexing
 	setCodeProcessor *SetCodeProcessor
 
-	// userOpProcessor handles EIP-4337 UserOperation event indexing
+	// userOpProcessor handles ERC-4337 UserOperation indexing
 	userOpProcessor *UserOpProcessor
 }
 
@@ -55,7 +55,7 @@ func (p *LargeBlockProcessor) SetSetCodeProcessor(processor *SetCodeProcessor) {
 	p.setCodeProcessor = processor
 }
 
-// SetUserOpProcessor sets the UserOp processor for EIP-4337 event indexing
+// SetUserOpProcessor sets the UserOp processor for ERC-4337 UserOperation indexing
 func (p *LargeBlockProcessor) SetUserOpProcessor(processor *UserOpProcessor) {
 	p.userOpProcessor = processor
 }
@@ -227,14 +227,10 @@ func (p *LargeBlockProcessor) processBatch(ctx context.Context, block *types.Blo
 		}
 	}
 
-	// Process EIP-4337 UserOperation events (block-level)
+	// Process ERC-4337 UserOperations from the entire block
 	if p.userOpProcessor != nil {
-		txByHash := make(map[common.Hash]*types.Transaction, len(block.Transactions()))
-		for _, tx := range block.Transactions() {
-			txByHash[tx.Hash()] = tx
-		}
-		if err := p.userOpProcessor.ProcessBlockReceipts(ctx, block, receipts, txByHash); err != nil {
-			p.logger.Warn("Failed to process UserOperation events",
+		if err := p.userOpProcessor.ProcessUserOpsFromBlock(ctx, block, receipts); err != nil {
+			p.logger.Warn("Failed to process ERC-4337 UserOperations",
 				zap.Uint64("block", blockNumber),
 				zap.Error(err),
 			)

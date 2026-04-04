@@ -146,15 +146,14 @@ var (
 	setCodeAuthorizationConnectionType *graphql.Object
 	addressSetCodeInfoType             *graphql.Object
 
-	// EIP-4337 Account Abstraction types
-	userOperationType           *graphql.Object
-	userOperationConnectionType *graphql.Object
-	accountDeployedType         *graphql.Object
-	userOpRevertType            *graphql.Object
-	bundlerStatsType               *graphql.Object
-	paymasterStatsType             *graphql.Object
-	bundlerStatsConnectionType     *graphql.Object
-	paymasterStatsConnectionType   *graphql.Object
+	// ERC-7579 Module types
+	moduleTypeEnum                 *graphql.Enum
+	installedModuleType            *graphql.Object
+	installedModuleConnectionType  *graphql.Object
+	moduleStatsType                *graphql.Object
+	moduleStatsConnectionType      *graphql.Object
+	accountModulesType             *graphql.Object
+
 )
 
 func init() {
@@ -661,8 +660,9 @@ func initTypes() {
 	// Initialize EIP-7702 SetCode types
 	initSetCodeTypes()
 
-	// Initialize EIP-4337 Account Abstraction types
-	initUserOpTypes()
+	// Initialize ERC-7579 Module types
+	initModuleTypes()
+
 }
 
 // initInputTypes initializes GraphQL input types for filtering and pagination
@@ -2954,4 +2954,167 @@ func initSetCodeTypes() {
 		},
 	})
 
+}
+
+// initModuleTypes initializes ERC-7579 Module types
+func initModuleTypes() {
+	// ModuleType enum
+	moduleTypeEnum = graphql.NewEnum(graphql.EnumConfig{
+		Name:        "ModuleType",
+		Description: "ERC-7579 module type",
+		Values: graphql.EnumValueConfigMap{
+			"VALIDATOR": &graphql.EnumValueConfig{
+				Value:       "VALIDATOR",
+				Description: "Validator module (type 1) - validates user operations",
+			},
+			"EXECUTOR": &graphql.EnumValueConfig{
+				Value:       "EXECUTOR",
+				Description: "Executor module (type 2) - executes operations on behalf of the account",
+			},
+			"FALLBACK": &graphql.EnumValueConfig{
+				Value:       "FALLBACK",
+				Description: "Fallback module (type 3) - handles fallback calls",
+			},
+			"HOOK": &graphql.EnumValueConfig{
+				Value:       "HOOK",
+				Description: "Hook module (type 4) - provides pre/post execution hooks",
+			},
+		},
+	})
+
+	// InstalledModule type
+	installedModuleType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "InstalledModule",
+		Description: "A module installed on an ERC-7579 modular smart account",
+		Fields: graphql.Fields{
+			"account": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Smart account address",
+			},
+			"module": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Module contract address",
+			},
+			"moduleType": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Module type (validator, executor, fallback, hook)",
+			},
+			"installedAt": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Block number when the module was installed",
+			},
+			"installedTx": &graphql.Field{
+				Type:        graphql.NewNonNull(hashType),
+				Description: "Transaction hash of the install event",
+			},
+			"active": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Boolean),
+				Description: "Whether the module is currently active",
+			},
+			"removedAt": &graphql.Field{
+				Type:        bigIntType,
+				Description: "Block number when the module was removed (null if still active)",
+			},
+			"removedTx": &graphql.Field{
+				Type:        hashType,
+				Description: "Transaction hash of the uninstall event (null if still active)",
+			},
+			"timestamp": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Timestamp of the install event",
+			},
+		},
+	})
+
+	// InstalledModuleConnection for pagination
+	installedModuleConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "InstalledModuleConnection",
+		Description: "Paginated list of installed modules",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(installedModuleType))),
+				Description: "List of installed modules",
+			},
+			"totalCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total count of matching modules",
+			},
+			"pageInfo": &graphql.Field{
+				Type:        graphql.NewNonNull(pageInfoType),
+				Description: "Pagination information",
+			},
+		},
+	})
+
+	// ModuleStats type
+	moduleStatsType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "ModuleStats",
+		Description: "Aggregate statistics for a module contract",
+		Fields: graphql.Fields{
+			"module": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Module contract address",
+			},
+			"moduleType": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.String),
+				Description: "Module type (validator, executor, fallback, hook)",
+			},
+			"totalInstalls": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Total number of installations across all accounts",
+			},
+			"activeInstalls": &graphql.Field{
+				Type:        graphql.NewNonNull(bigIntType),
+				Description: "Number of currently active installations",
+			},
+		},
+	})
+
+	// ModuleStatsConnection for pagination
+	moduleStatsConnectionType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "ModuleStatsConnection",
+		Description: "Paginated list of module stats",
+		Fields: graphql.Fields{
+			"nodes": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(moduleStatsType))),
+				Description: "List of module stats",
+			},
+			"totalCount": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.Int),
+				Description: "Total count",
+			},
+			"pageInfo": &graphql.Field{
+				Type:        graphql.NewNonNull(pageInfoType),
+				Description: "Pagination information",
+			},
+		},
+	})
+
+	// AccountModules type
+	accountModulesType = graphql.NewObject(graphql.ObjectConfig{
+		Name:        "AccountModules",
+		Description: "All modules installed on a smart account, grouped by type",
+		Fields: graphql.Fields{
+			"account": &graphql.Field{
+				Type:        graphql.NewNonNull(addressType),
+				Description: "Smart account address",
+			},
+			"validators": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(installedModuleType))),
+				Description: "Validator modules",
+			},
+			"executors": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(installedModuleType))),
+				Description: "Executor modules",
+			},
+			"fallbacks": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(installedModuleType))),
+				Description: "Fallback modules",
+			},
+			"hooks": &graphql.Field{
+				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(installedModuleType))),
+				Description: "Hook modules",
+			},
+		},
+	})
 }

@@ -176,7 +176,7 @@ type Fetcher struct {
 	// setCodeProcessor handles EIP-7702 SetCode transaction indexing
 	setCodeProcessor *SetCodeProcessor
 
-	// userOpProcessor handles EIP-4337 UserOperation event indexing
+	// userOpProcessor handles ERC-4337 UserOperation indexing
 	userOpProcessor *UserOpProcessor
 }
 
@@ -294,7 +294,7 @@ func (f *Fetcher) SetSetCodeProcessor(processor *SetCodeProcessor) {
 	f.logger.Info("SetCode processor configured")
 }
 
-// SetUserOpProcessor sets the UserOp processor for EIP-4337 event indexing
+// SetUserOpProcessor sets the UserOp processor for ERC-4337 UserOperation indexing
 func (f *Fetcher) SetUserOpProcessor(processor *UserOpProcessor) {
 	f.userOpProcessor = processor
 	// Also set on large block processor for consistency

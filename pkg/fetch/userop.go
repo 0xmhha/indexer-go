@@ -2,344 +2,370 @@ package fetch
 
 import (
 	"context"
+	"encoding/hex"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
 
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/userop"
 )
 
-// EIP-4337 EntryPoint event signatures
-var (
-	// UserOperationEvent(bytes32 indexed userOpHash, address indexed sender, address indexed paymaster, uint256 nonce, bool success, uint256 actualGasCost, uint256 actualGasUsed)
-	userOperationEventSig = crypto.Keccak256Hash([]byte("UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)"))
-
-	// AccountDeployed(bytes32 indexed userOpHash, address indexed sender, address factory, address paymaster)
-	accountDeployedSig = crypto.Keccak256Hash([]byte("AccountDeployed(bytes32,address,address,address)"))
-
-	// UserOperationRevertReason(bytes32 indexed userOpHash, address indexed sender, uint256 nonce, bytes revertReason)
-	userOperationRevertReasonSig = crypto.Keccak256Hash([]byte("UserOperationRevertReason(bytes32,address,uint256,bytes)"))
-
-	// PostOpRevertReason(bytes32 indexed userOpHash, address indexed sender, uint256 nonce, bytes revertReason)
-	postOpRevertReasonSig = crypto.Keccak256Hash([]byte("PostOpRevertReason(bytes32,address,uint256,bytes)"))
-)
-
-// UserOpIndexer defines the interface for indexing EIP-4337 UserOperations
+// UserOpIndexer defines the interface for indexing ERC-4337 UserOperations
 type UserOpIndexer interface {
 	storagepkg.UserOpIndexWriter
+	storagepkg.UserOpIndexReader
 }
 
-// UserOpProcessor handles processing of EIP-4337 UserOperation events from EntryPoint contracts
+// UserOpProcessor handles processing of ERC-4337 UserOperations from blocks
 type UserOpProcessor struct {
-	logger           *zap.Logger
-	storage          UserOpIndexer
-	entryPointAddrs  map[common.Address]bool
-	detectBySelector bool // if true, also detect EntryPoint by event signature matching
+	logger  *zap.Logger
+	storage UserOpIndexer
 }
 
 // NewUserOpProcessor creates a new UserOp processor
-func NewUserOpProcessor(logger *zap.Logger, storage UserOpIndexer, entryPointAddresses []common.Address) *UserOpProcessor {
-	addrs := make(map[common.Address]bool, len(entryPointAddresses))
-	for _, addr := range entryPointAddresses {
-		addrs[addr] = true
-	}
-
+func NewUserOpProcessor(logger *zap.Logger, storage UserOpIndexer) *UserOpProcessor {
 	return &UserOpProcessor{
-		logger:           logger.Named("userop"),
-		storage:          storage,
-		entryPointAddrs:  addrs,
-		detectBySelector: len(entryPointAddresses) == 0,
+		logger:  logger.Named("userop"),
+		storage: storage,
 	}
 }
 
-// ProcessBlockReceipts processes all receipts in a block for EIP-4337 events
-func (p *UserOpProcessor) ProcessBlockReceipts(
+// ProcessUserOpsFromBlock processes all ERC-4337 UserOperations from a block's receipts.
+// It scans all transaction receipts for known EntryPoint event logs and extracts UserOp data.
+func (p *UserOpProcessor) ProcessUserOpsFromBlock(
 	ctx context.Context,
 	block *types.Block,
-	receipts []*types.Receipt,
-	txByHash map[common.Hash]*types.Transaction,
+	receipts types.Receipts,
 ) error {
 	blockNumber := block.NumberU64()
+	blockHash := block.Hash()
 	blockTime := time.Unix(int64(block.Time()), 0)
 
-	var userOps []*storagepkg.UserOperationRecord
-
+	transactions := block.Transactions()
+	receiptMap := make(map[common.Hash]*types.Receipt, len(receipts))
 	for _, receipt := range receipts {
-		tx, ok := txByHash[receipt.TxHash]
-		if !ok {
+		if receipt != nil {
+			receiptMap[receipt.TxHash] = receipt
+		}
+	}
+
+	var allOps []*userop.UserOperation
+	bundlerTxCounts := make(map[common.Address]int) // Track bundles per bundler in this block
+
+	for _, tx := range transactions {
+		receipt, ok := receiptMap[tx.Hash()]
+		if !ok || receipt == nil {
 			continue
 		}
 
-		// Get bundler address (tx.From via signer recovery)
-		bundler := getBundlerAddress(tx, block)
+		// Check if this transaction contains any EntryPoint events
+		entryPointAddr, version := p.detectEntryPointTx(receipt)
+		if entryPointAddr == (common.Address{}) {
+			continue
+		}
 
-		for _, log := range receipt.Logs {
-			if len(log.Topics) == 0 {
-				continue
+		// Extract bundler (tx.From())
+		bundler := getTransactionSender(tx)
+
+		// Track that this bundler submitted a bundle
+		bundlerTxCounts[bundler]++
+
+		// Parse UserOperationEvent logs from this receipt
+		ops := p.parseUserOpsFromReceipt(receipt, entryPointAddr, version, bundler, blockNumber, blockHash, blockTime)
+		allOps = append(allOps, ops...)
+	}
+
+	if len(allOps) == 0 {
+		return nil
+	}
+
+	// Save all UserOps in batch
+	if err := p.storage.SaveUserOps(ctx, allOps); err != nil {
+		p.logger.Error("Failed to save UserOperations",
+			zap.Uint64("blockNumber", blockNumber),
+			zap.Int("count", len(allOps)),
+			zap.Error(err))
+		return err
+	}
+
+	// Update stats for bundlers, paymasters, factories, and smart accounts
+	if err := p.updateStats(ctx, allOps, bundlerTxCounts); err != nil {
+		p.logger.Warn("Failed to update ERC-4337 stats",
+			zap.Uint64("blockNumber", blockNumber),
+			zap.Error(err))
+		// Don't fail block processing for stats errors
+	}
+
+	p.logger.Info("Indexed ERC-4337 UserOperations",
+		zap.Uint64("blockNumber", blockNumber),
+		zap.Int("userOpCount", len(allOps)))
+
+	return nil
+}
+
+// detectEntryPointTx checks if a transaction receipt contains any known EntryPoint events.
+// Returns the EntryPoint address and version if found.
+func (p *UserOpProcessor) detectEntryPointTx(receipt *types.Receipt) (common.Address, string) {
+	for _, log := range receipt.Logs {
+		if len(log.Topics) > 0 && log.Topics[0] == userop.UserOperationEventSig {
+			if v := userop.GetEntryPointVersion(log.Address); v != "" {
+				return log.Address, v
+			}
+		}
+	}
+	return common.Address{}, ""
+}
+
+// parseUserOpsFromReceipt extracts UserOperation records from a receipt's logs.
+func (p *UserOpProcessor) parseUserOpsFromReceipt(
+	receipt *types.Receipt,
+	entryPoint common.Address,
+	epVersion string,
+	bundler common.Address,
+	blockNumber uint64,
+	blockHash common.Hash,
+	blockTime time.Time,
+) []*userop.UserOperation {
+	var ops []*userop.UserOperation
+
+	// Collect AccountDeployed events for factory detection
+	accountDeployedMap := make(map[common.Hash]*accountDeployedInfo)
+	// Collect revert reasons
+	revertReasonMap := make(map[common.Hash][]byte)
+
+	for _, log := range receipt.Logs {
+		if log.Address != entryPoint || len(log.Topics) == 0 {
+			continue
+		}
+
+		switch log.Topics[0] {
+		case userop.AccountDeployedSig:
+			if len(log.Topics) >= 3 && len(log.Data) >= 64 {
+				opHash := log.Topics[1]
+				info := &accountDeployedInfo{}
+				// factory is first 32-byte word in data (padded address)
+				factoryAddr := common.BytesToAddress(log.Data[12:32])
+				if factoryAddr != (common.Address{}) {
+					info.factory = &factoryAddr
+				}
+				// paymaster is second 32-byte word in data
+				paymasterAddr := common.BytesToAddress(log.Data[44:64])
+				if paymasterAddr != (common.Address{}) {
+					info.paymaster = &paymasterAddr
+				}
+				accountDeployedMap[opHash] = info
 			}
 
-			// Check if this log is from a known EntryPoint
-			if !p.isEntryPointLog(log) {
-				continue
-			}
-
-			switch log.Topics[0] {
-			case userOperationEventSig:
-				record, err := p.parseUserOperationEvent(log, receipt, block, bundler, blockTime)
-				if err != nil {
-					p.logger.Warn("failed to parse UserOperationEvent",
-						zap.Uint64("block", blockNumber),
-						zap.String("tx", receipt.TxHash.Hex()),
-						zap.Uint("logIndex", log.Index),
-						zap.Error(err))
-					continue
-				}
-				userOps = append(userOps, record)
-
-			case accountDeployedSig:
-				if err := p.processAccountDeployed(ctx, log, receipt, blockNumber, blockTime); err != nil {
-					p.logger.Warn("failed to process AccountDeployed",
-						zap.Uint64("block", blockNumber),
-						zap.String("tx", receipt.TxHash.Hex()),
-						zap.Error(err))
-				}
-
-			case userOperationRevertReasonSig:
-				if err := p.processRevertReason(ctx, log, receipt, blockNumber, blockTime, storagepkg.UserOpRevertTypeExecution); err != nil {
-					p.logger.Warn("failed to process UserOperationRevertReason",
-						zap.Uint64("block", blockNumber),
-						zap.String("tx", receipt.TxHash.Hex()),
-						zap.Error(err))
-				}
-
-			case postOpRevertReasonSig:
-				if err := p.processRevertReason(ctx, log, receipt, blockNumber, blockTime, storagepkg.UserOpRevertTypePostOp); err != nil {
-					p.logger.Warn("failed to process PostOpRevertReason",
-						zap.Uint64("block", blockNumber),
-						zap.String("tx", receipt.TxHash.Hex()),
-						zap.Error(err))
+		case userop.UserOperationRevertReasonSig:
+			if len(log.Topics) >= 3 && len(log.Data) >= 64 {
+				opHash := log.Topics[1]
+				// Data layout: nonce (32 bytes) + offset (32 bytes) + length (32 bytes) + revert reason bytes
+				if len(log.Data) >= 96 {
+					// ABI decode: skip nonce (32) + offset (32) + length (32), then read bytes
+					length := new(big.Int).SetBytes(log.Data[64:96]).Uint64()
+					if uint64(len(log.Data)) >= 96+length {
+						revertReasonMap[opHash] = log.Data[96 : 96+length]
+					}
 				}
 			}
 		}
 	}
 
-	// Batch save all UserOps
-	if len(userOps) > 0 {
-		if err := p.storage.SaveUserOps(ctx, userOps); err != nil {
-			return err
+	// Now parse UserOperationEvent logs
+	var bundleIndex uint32
+	for _, log := range receipt.Logs {
+		if log.Address != entryPoint || len(log.Topics) == 0 {
+			continue
 		}
 
-		// Update bundler and paymaster stats
-		for _, op := range userOps {
-			if err := p.storage.IncrementBundlerStats(ctx, op.Bundler, op.Success, op.ActualGasCost, op.BlockNumber); err != nil {
-				p.logger.Warn("failed to increment bundler stats",
-					zap.String("bundler", op.Bundler.Hex()),
-					zap.Error(err))
-			}
-
-			if op.Paymaster != (common.Address{}) {
-				if err := p.storage.IncrementPaymasterStats(ctx, op.Paymaster, op.Success, op.ActualGasCost, op.BlockNumber); err != nil {
-					p.logger.Warn("failed to increment paymaster stats",
-						zap.String("paymaster", op.Paymaster.Hex()),
-						zap.Error(err))
-				}
-			}
+		if log.Topics[0] != userop.UserOperationEventSig {
+			continue
 		}
 
-		p.logger.Debug("processed UserOperations",
-			zap.Uint64("block", blockNumber),
-			zap.Int("count", len(userOps)))
+		// UserOperationEvent(bytes32 indexed userOpHash, address indexed sender, address indexed paymaster, uint256 nonce, bool success, uint256 actualGasCost, uint256 actualGasUsed)
+		if len(log.Topics) < 4 || len(log.Data) < 128 {
+			p.logger.Warn("Invalid UserOperationEvent log",
+				zap.String("txHash", receipt.TxHash.Hex()),
+				zap.Int("logIndex", int(log.Index)))
+			continue
+		}
+
+		opHash := log.Topics[1]
+		sender := common.BytesToAddress(log.Topics[2].Bytes())
+		paymasterAddr := common.BytesToAddress(log.Topics[3].Bytes())
+
+		// Decode data: nonce (32) + success (32) + actualGasCost (32) + actualGasUsed (32)
+		nonce := new(big.Int).SetBytes(log.Data[0:32])
+		success := new(big.Int).SetBytes(log.Data[32:64]).Uint64() != 0
+		actualGasCost := new(big.Int).SetBytes(log.Data[64:96])
+		actualGasUsed := new(big.Int).SetBytes(log.Data[96:128])
+
+		// Determine paymaster
+		var paymaster *common.Address
+		if paymasterAddr != (common.Address{}) {
+			paymaster = &paymasterAddr
+		}
+
+		// Determine factory from AccountDeployed event
+		var factory *common.Address
+		if info, ok := accountDeployedMap[opHash]; ok {
+			factory = info.factory
+		}
+
+		// Determine sponsor type
+		sponsorType := userop.DetermineSponsorType(paymaster)
+
+		op := &userop.UserOperation{
+			Hash:              common.Hash(opHash),
+			Sender:            sender,
+			Nonce:             nonce.String(),
+			CallData:          nil, // Not available from events
+			CallGasLimit:      "0",
+			VerificationGasLimit: "0",
+			PreVerificationGas:   "0",
+			MaxFeePerGas:         "0",
+			MaxPriorityFeePerGas: "0",
+			Signature:            nil,
+			EntryPoint:           entryPoint,
+			EntryPointVersion:    epVersion,
+			TransactionHash:      receipt.TxHash,
+			BlockNumber:          blockNumber,
+			BlockHash:            blockHash,
+			BundleIndex:          bundleIndex,
+			Bundler:              bundler,
+			Factory:              factory,
+			Paymaster:            paymaster,
+			Status:               success,
+			GasUsed:              actualGasUsed.String(),
+			ActualGasCost:        actualGasCost.String(),
+			SponsorType:          sponsorType,
+			UserLogsStartIndex:   uint32(log.Index),
+			UserLogsCount:        1,
+			Timestamp:            blockTime,
+		}
+
+		// Attach revert reason if present
+		if reason, ok := revertReasonMap[opHash]; ok {
+			op.RevertReason = reason
+		}
+
+		ops = append(ops, op)
+		bundleIndex++
+	}
+
+	return ops
+}
+
+// updateStats updates bundler, paymaster, factory, and smart account statistics.
+func (p *UserOpProcessor) updateStats(
+	ctx context.Context,
+	ops []*userop.UserOperation,
+	bundlerTxCounts map[common.Address]int,
+) error {
+	// Update bundler stats
+	for bundler, bundleCount := range bundlerTxCounts {
+		stats, err := p.storage.GetBundlerStats(ctx, bundler)
+		if err != nil {
+			p.logger.Warn("Failed to get bundler stats", zap.String("address", bundler.Hex()), zap.Error(err))
+			stats = &userop.BundlerStats{Address: bundler}
+		}
+		stats.TotalBundles += uint64(bundleCount)
+		// Count ops for this bundler
+		for _, op := range ops {
+			if op.Bundler == bundler {
+				stats.TotalOps++
+			}
+		}
+		if err := p.storage.UpdateBundlerStats(ctx, stats); err != nil {
+			p.logger.Warn("Failed to update bundler stats", zap.String("address", bundler.Hex()), zap.Error(err))
+		}
+	}
+
+	// Track unique paymasters and factories in this batch
+	paymasterOps := make(map[common.Address]uint64)
+	factoryAccounts := make(map[common.Address]map[common.Address]bool)
+
+	for _, op := range ops {
+		// Paymaster stats
+		if op.Paymaster != nil && *op.Paymaster != (common.Address{}) {
+			paymasterOps[*op.Paymaster]++
+		}
+
+		// Factory stats
+		if op.Factory != nil && *op.Factory != (common.Address{}) {
+			if factoryAccounts[*op.Factory] == nil {
+				factoryAccounts[*op.Factory] = make(map[common.Address]bool)
+			}
+			factoryAccounts[*op.Factory][op.Sender] = true
+		}
+
+		// Update smart account
+		account, err := p.storage.GetSmartAccount(ctx, op.Sender)
+		if err != nil {
+			// New smart account
+			account = &userop.SmartAccount{
+				Address:  op.Sender,
+				TotalOps: 0,
+			}
+		}
+		account.TotalOps++
+
+		// Set creation info if this is an account deployment
+		if op.Factory != nil && account.CreationOpHash == nil {
+			opHash := op.Hash
+			txHash := op.TransactionHash
+			ts := op.Timestamp
+			account.CreationOpHash = &opHash
+			account.CreationTxHash = &txHash
+			account.CreationTimestamp = &ts
+			account.Factory = op.Factory
+		}
+
+		if err := p.storage.SaveSmartAccount(ctx, account); err != nil {
+			p.logger.Warn("Failed to save smart account",
+				zap.String("address", op.Sender.Hex()),
+				zap.Error(err))
+		}
+	}
+
+	// Update paymaster stats
+	for pm, count := range paymasterOps {
+		stats, err := p.storage.GetPaymasterStats(ctx, pm)
+		if err != nil {
+			p.logger.Warn("Failed to get paymaster stats", zap.String("address", pm.Hex()), zap.Error(err))
+			stats = &userop.PaymasterStats{Address: pm}
+		}
+		stats.TotalOps += count
+		if err := p.storage.UpdatePaymasterStats(ctx, stats); err != nil {
+			p.logger.Warn("Failed to update paymaster stats", zap.String("address", pm.Hex()), zap.Error(err))
+		}
+	}
+
+	// Update factory stats
+	for factory, accounts := range factoryAccounts {
+		stats, err := p.storage.GetFactoryStats(ctx, factory)
+		if err != nil {
+			p.logger.Warn("Failed to get factory stats", zap.String("address", factory.Hex()), zap.Error(err))
+			stats = &userop.FactoryStats{Address: factory}
+		}
+		stats.TotalAccounts += uint64(len(accounts))
+		if err := p.storage.UpdateFactoryStats(ctx, stats); err != nil {
+			p.logger.Warn("Failed to update factory stats", zap.String("address", factory.Hex()), zap.Error(err))
+		}
 	}
 
 	return nil
 }
 
-// isEntryPointLog checks if a log is from a known EntryPoint contract.
-// If no EntryPoint addresses are configured, uses event signature detection.
-func (p *UserOpProcessor) isEntryPointLog(log *types.Log) bool {
-	if len(p.entryPointAddrs) > 0 {
-		return p.entryPointAddrs[log.Address]
-	}
-
-	// Fallback: detect by event signature
-	if p.detectBySelector && len(log.Topics) > 0 {
-		switch log.Topics[0] {
-		case userOperationEventSig, accountDeployedSig, userOperationRevertReasonSig, postOpRevertReasonSig:
-			return true
-		}
-	}
-
-	return false
+// accountDeployedInfo holds parsed AccountDeployed event data
+type accountDeployedInfo struct {
+	factory   *common.Address
+	paymaster *common.Address
 }
 
-// parseUserOperationEvent parses a UserOperationEvent log into a record.
-// Event: UserOperationEvent(bytes32 indexed userOpHash, address indexed sender, address indexed paymaster, uint256 nonce, bool success, uint256 actualGasCost, uint256 actualGasUsed)
-func (p *UserOpProcessor) parseUserOperationEvent(
-	log *types.Log,
-	receipt *types.Receipt,
-	block *types.Block,
-	bundler common.Address,
-	blockTime time.Time,
-) (*storagepkg.UserOperationRecord, error) {
-	if len(log.Topics) < 4 {
-		return nil, errInsufficientTopics{expected: 4, got: len(log.Topics)}
-	}
-
-	userOpHash := log.Topics[1]
-	sender := common.BytesToAddress(log.Topics[2].Bytes())
-	paymaster := common.BytesToAddress(log.Topics[3].Bytes())
-
-	// Decode non-indexed data: nonce (uint256), success (bool), actualGasCost (uint256), actualGasUsed (uint256)
-	if len(log.Data) < 128 {
-		return nil, errInsufficientData{expected: 128, got: len(log.Data)}
-	}
-
-	nonce := new(big.Int).SetBytes(log.Data[0:32])
-	success := new(big.Int).SetBytes(log.Data[32:64]).Sign() != 0
-	actualGasCost := new(big.Int).SetBytes(log.Data[64:96])
-	actualUserOpFeePerGas := new(big.Int).SetBytes(log.Data[96:128])
-
-	return &storagepkg.UserOperationRecord{
-		UserOpHash:            userOpHash,
-		TxHash:                receipt.TxHash,
-		BlockNumber:           block.NumberU64(),
-		BlockHash:             block.Hash(),
-		TxIndex:               uint64(receipt.TransactionIndex),
-		LogIndex:              uint64(log.Index),
-		Sender:                sender,
-		Paymaster:             paymaster,
-		Nonce:                 nonce,
-		Success:               success,
-		ActualGasCost:         actualGasCost,
-		ActualUserOpFeePerGas: actualUserOpFeePerGas,
-		Bundler:               bundler,
-		EntryPoint:            log.Address,
-		Timestamp:             blockTime,
-	}, nil
-}
-
-// processAccountDeployed parses and saves an AccountDeployed event.
-// Event: AccountDeployed(bytes32 indexed userOpHash, address indexed sender, address factory, address paymaster)
-func (p *UserOpProcessor) processAccountDeployed(
-	ctx context.Context,
-	log *types.Log,
-	receipt *types.Receipt,
-	blockNumber uint64,
-	blockTime time.Time,
-) error {
-	if len(log.Topics) < 3 {
-		return errInsufficientTopics{expected: 3, got: len(log.Topics)}
-	}
-
-	userOpHash := log.Topics[1]
-	sender := common.BytesToAddress(log.Topics[2].Bytes())
-
-	// Non-indexed: factory (address), paymaster (address)
-	if len(log.Data) < 64 {
-		return errInsufficientData{expected: 64, got: len(log.Data)}
-	}
-
-	factory := common.BytesToAddress(log.Data[12:32])
-	paymaster := common.BytesToAddress(log.Data[44:64])
-
-	record := &storagepkg.AccountDeployedRecord{
-		UserOpHash:  userOpHash,
-		Sender:      sender,
-		Factory:     factory,
-		Paymaster:   paymaster,
-		TxHash:      receipt.TxHash,
-		BlockNumber: blockNumber,
-		LogIndex:    uint64(log.Index),
-		Timestamp:   blockTime,
-	}
-
-	return p.storage.SaveAccountDeployed(ctx, record)
-}
-
-// processRevertReason parses and saves a revert reason event.
-// Event: UserOperationRevertReason(bytes32 indexed userOpHash, address indexed sender, uint256 nonce, bytes revertReason)
-// Event: PostOpRevertReason(bytes32 indexed userOpHash, address indexed sender, uint256 nonce, bytes revertReason)
-func (p *UserOpProcessor) processRevertReason(
-	ctx context.Context,
-	log *types.Log,
-	receipt *types.Receipt,
-	blockNumber uint64,
-	blockTime time.Time,
-	revertType string,
-) error {
-	if len(log.Topics) < 3 {
-		return errInsufficientTopics{expected: 3, got: len(log.Topics)}
-	}
-
-	userOpHash := log.Topics[1]
-	sender := common.BytesToAddress(log.Topics[2].Bytes())
-
-	// Non-indexed: nonce (uint256), revertReason (bytes)
-	// ABI encoding: nonce(32) + offset(32) + length(32) + data(variable)
-	if len(log.Data) < 96 {
-		return errInsufficientData{expected: 96, got: len(log.Data)}
-	}
-
-	nonce := new(big.Int).SetBytes(log.Data[0:32])
-
-	// Decode dynamic bytes: offset at [32:64], length at offset, data follows
-	var revertReason []byte
-	offset := new(big.Int).SetBytes(log.Data[32:64]).Uint64()
-	if offset+32 <= uint64(len(log.Data)) {
-		length := new(big.Int).SetBytes(log.Data[offset : offset+32]).Uint64()
-		dataStart := offset + 32
-		if dataStart+length <= uint64(len(log.Data)) {
-			revertReason = make([]byte, length)
-			copy(revertReason, log.Data[dataStart:dataStart+length])
-		}
-	}
-
-	record := &storagepkg.UserOpRevertRecord{
-		UserOpHash:   userOpHash,
-		Sender:       sender,
-		Nonce:        nonce,
-		RevertReason: revertReason,
-		TxHash:       receipt.TxHash,
-		BlockNumber:  blockNumber,
-		LogIndex:     uint64(log.Index),
-		RevertType:   revertType,
-		Timestamp:    blockTime,
-	}
-
-	return p.storage.SaveUserOpRevert(ctx, record)
-}
-
-// getBundlerAddress recovers the sender (bundler) of the transaction.
-func getBundlerAddress(tx *types.Transaction, block *types.Block) common.Address {
-	signer := types.LatestSignerForChainID(tx.ChainId())
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		return common.Address{}
-	}
-	return from
-}
-
-// Error helpers
-type errInsufficientTopics struct {
-	expected, got int
-}
-
-func (e errInsufficientTopics) Error() string {
-	return "insufficient log topics: expected " + intStr(e.expected) + ", got " + intStr(e.got)
-}
-
-type errInsufficientData struct {
-	expected, got int
-}
-
-func (e errInsufficientData) Error() string {
-	return "insufficient log data: expected " + intStr(e.expected) + " bytes, got " + intStr(e.got)
-}
-
-func intStr(n int) string {
-	return big.NewInt(int64(n)).String()
-}
+// Ensure hex import is used
+var _ = hex.EncodeToString

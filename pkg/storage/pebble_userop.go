@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
-	"time"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/userop"
 )
 
 // Compile-time check to ensure PebbleStorage implements UserOp interfaces
@@ -20,13 +19,13 @@ var _ UserOpIndexWriter = (*PebbleStorage)(nil)
 
 // ========== UserOp Read Operations ==========
 
-// GetUserOp retrieves a UserOperation by its hash.
-func (s *PebbleStorage) GetUserOp(ctx context.Context, userOpHash common.Hash) (*UserOperationRecord, error) {
+// GetUserOp retrieves a specific UserOperation by its hash.
+func (s *PebbleStorage) GetUserOp(ctx context.Context, opHash common.Hash) (*userop.UserOperation, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
 	}
 
-	key := AAUserOpKey(userOpHash)
+	key := UserOpKey(opHash)
 	value, closer, err := s.db.Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
@@ -36,193 +35,95 @@ func (s *PebbleStorage) GetUserOp(ctx context.Context, userOpHash common.Hash) (
 	}
 	defer closer.Close()
 
-	var record UserOperationRecord
-	if err := json.Unmarshal(value, &record); err != nil {
+	var op userop.UserOperation
+	if err := json.Unmarshal(value, &op); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal userop: %w", err)
 	}
 
-	return &record, nil
+	return &op, nil
 }
 
 // GetUserOpsByTx retrieves all UserOperations in a transaction.
-func (s *PebbleStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*UserOperationRecord, error) {
+func (s *PebbleStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
 	}
 
-	prefix := AATxIndexPrefix(txHash)
-	return s.getUserOpsByIndex(prefix)
+	prefix := UserOpTxIndexKeyPrefix(txHash)
+	return s.getUserOpsByIndex(ctx, prefix)
 }
 
-// GetUserOpsBySender retrieves UserOperations by sender address.
-func (s *PebbleStorage) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*UserOperationRecord, error) {
+// GetUserOpsBySender retrieves UserOperations sent by a specific address.
+func (s *PebbleStorage) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
-	prefix := AASenderIndexPrefix(sender)
-	return s.getUserOpsByIndexPaginated(prefix, limit, offset)
+	prefix := UserOpSenderIndexKeyPrefix(sender)
+	return s.getUserOpsByIndexPaginated(ctx, prefix, limit, offset)
 }
 
-// GetUserOpsByBundler retrieves UserOperations by bundler address.
-func (s *PebbleStorage) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*UserOperationRecord, error) {
+// GetUserOpsByBundler retrieves UserOperations bundled by a specific address.
+func (s *PebbleStorage) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
-	prefix := AABundlerIndexPrefix(bundler)
-	return s.getUserOpsByIndexPaginated(prefix, limit, offset)
-}
-
-// GetUserOpsByPaymaster retrieves UserOperations by paymaster address.
-func (s *PebbleStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*UserOperationRecord, error) {
-	if s.closed.Load() {
-		return nil, ErrClosed
-	}
-
-	limit, offset = normalizePagination(limit, offset)
-	prefix := AAPaymasterIndexPrefix(paymaster)
-	return s.getUserOpsByIndexPaginated(prefix, limit, offset)
+	prefix := UserOpBundlerIndexKeyPrefix(bundler)
+	return s.getUserOpsByIndexPaginated(ctx, prefix, limit, offset)
 }
 
 // GetUserOpsByBlock retrieves all UserOperations in a specific block.
-func (s *PebbleStorage) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*UserOperationRecord, error) {
+func (s *PebbleStorage) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
 	}
 
-	prefix := AABlockIndexPrefix(blockNumber)
-	return s.getUserOpsByIndex(prefix)
+	prefix := UserOpBlockIndexKeyPrefix(blockNumber)
+	return s.getUserOpsByIndex(ctx, prefix)
 }
 
-// GetUserOpsByEntryPoint retrieves UserOperations by EntryPoint address.
-func (s *PebbleStorage) GetUserOpsByEntryPoint(ctx context.Context, entryPoint common.Address, limit, offset int) ([]*UserOperationRecord, error) {
+// GetUserOpsByPaymaster retrieves UserOperations sponsored by a specific paymaster.
+func (s *PebbleStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
-	prefix := AAEntryPointIndexPrefix(entryPoint)
-	return s.getUserOpsByIndexPaginated(prefix, limit, offset)
+	prefix := UserOpPaymasterIndexKeyPrefix(paymaster)
+	return s.getUserOpsByIndexPaginated(ctx, prefix, limit, offset)
 }
 
-// GetAccountDeployment retrieves an account deployment record by userOpHash.
-func (s *PebbleStorage) GetAccountDeployment(ctx context.Context, userOpHash common.Hash) (*AccountDeployedRecord, error) {
-	if s.closed.Load() {
-		return nil, ErrClosed
-	}
-
-	key := AADeployKey(userOpHash)
-	value, closer, err := s.db.Get(key)
-	if err != nil {
-		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("failed to get account deployment: %w", err)
-	}
-	defer closer.Close()
-
-	var record AccountDeployedRecord
-	if err := json.Unmarshal(value, &record); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal account deployment: %w", err)
-	}
-
-	return &record, nil
-}
-
-// GetAccountDeploymentsByFactory retrieves deployments by factory address.
-func (s *PebbleStorage) GetAccountDeploymentsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*AccountDeployedRecord, error) {
+// GetUserOpsByFactory retrieves UserOperations that deployed accounts via a specific factory.
+func (s *PebbleStorage) GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
-	prefix := AAFactoryIndexPrefix(factory)
-
-	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var records []*AccountDeployedRecord
-	skipped := 0
-	collected := 0
-
-	for iter.First(); iter.Valid() && collected < limit; iter.Next() {
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		userOpHash := common.BytesToHash(iter.Value())
-		record, err := s.GetAccountDeployment(ctx, userOpHash)
-		if err != nil {
-			s.logger.Warn("failed to get account deployment from index",
-				zap.String("userOpHash", userOpHash.Hex()),
-				zap.Error(err))
-			continue
-		}
-		records = append(records, record)
-		collected++
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return records, nil
+	prefix := UserOpFactoryIndexKeyPrefix(factory)
+	return s.getUserOpsByIndexPaginated(ctx, prefix, limit, offset)
 }
 
-// GetUserOpRevert retrieves a revert reason by userOpHash.
-func (s *PebbleStorage) GetUserOpRevert(ctx context.Context, userOpHash common.Hash) (*UserOpRevertRecord, error) {
+// GetBundlerStats retrieves statistics for a bundler address.
+func (s *PebbleStorage) GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
 	}
 
-	key := AARevertKey(userOpHash)
+	key := BundlerStatsKey(bundler)
 	value, closer, err := s.db.Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("failed to get userop revert: %w", err)
-	}
-	defer closer.Close()
-
-	var record UserOpRevertRecord
-	if err := json.Unmarshal(value, &record); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal userop revert: %w", err)
-	}
-
-	return &record, nil
-}
-
-// GetBundlerStats retrieves aggregated statistics for a bundler.
-func (s *PebbleStorage) GetBundlerStats(ctx context.Context, bundler common.Address) (*BundlerStats, error) {
-	if s.closed.Load() {
-		return nil, ErrClosed
-	}
-
-	key := AABundlerStatsKey(bundler)
-	value, closer, err := s.db.Get(key)
-	if err != nil {
-		if err == pebble.ErrNotFound {
-			return &BundlerStats{
-				Address:           bundler,
-				TotalGasSponsored: new(big.Int),
-			}, nil
+			return &userop.BundlerStats{Address: bundler}, nil
 		}
 		return nil, fmt.Errorf("failed to get bundler stats: %w", err)
 	}
 	defer closer.Close()
 
-	var stats BundlerStats
+	var stats userop.BundlerStats
 	if err := json.Unmarshal(value, &stats); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal bundler stats: %w", err)
 	}
@@ -230,31 +131,127 @@ func (s *PebbleStorage) GetBundlerStats(ctx context.Context, bundler common.Addr
 	return &stats, nil
 }
 
-// GetPaymasterStats retrieves aggregated statistics for a paymaster.
-func (s *PebbleStorage) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*PaymasterStats, error) {
+// GetFactoryStats retrieves statistics for a factory address.
+func (s *PebbleStorage) GetFactoryStats(ctx context.Context, factory common.Address) (*userop.FactoryStats, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
 	}
 
-	key := AAPaymasterStatsKey(paymaster)
+	key := FactoryStatsKey(factory)
 	value, closer, err := s.db.Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return &PaymasterStats{
-				Address:           paymaster,
-				TotalGasSponsored: new(big.Int),
-			}, nil
+			return &userop.FactoryStats{Address: factory}, nil
+		}
+		return nil, fmt.Errorf("failed to get factory stats: %w", err)
+	}
+	defer closer.Close()
+
+	var stats userop.FactoryStats
+	if err := json.Unmarshal(value, &stats); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal factory stats: %w", err)
+	}
+
+	return &stats, nil
+}
+
+// GetPaymasterStats retrieves statistics for a paymaster address.
+func (s *PebbleStorage) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*userop.PaymasterStats, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	key := PaymasterStatsKey(paymaster)
+	value, closer, err := s.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &userop.PaymasterStats{Address: paymaster}, nil
 		}
 		return nil, fmt.Errorf("failed to get paymaster stats: %w", err)
 	}
 	defer closer.Close()
 
-	var stats PaymasterStats
+	var stats userop.PaymasterStats
 	if err := json.Unmarshal(value, &stats); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal paymaster stats: %w", err)
 	}
 
 	return &stats, nil
+}
+
+// GetSmartAccount retrieves a smart account by address.
+func (s *PebbleStorage) GetSmartAccount(ctx context.Context, address common.Address) (*userop.SmartAccount, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	key := SmartAccountKey(address)
+	value, closer, err := s.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to get smart account: %w", err)
+	}
+	defer closer.Close()
+
+	var account userop.SmartAccount
+	if err := json.Unmarshal(value, &account); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal smart account: %w", err)
+	}
+
+	return &account, nil
+}
+
+// GetRecentUserOps retrieves the most recent UserOperations.
+func (s *PebbleStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*userop.UserOperation, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	if limit <= 0 {
+		limit = constants.DefaultPaginationLimit
+	}
+	if limit > constants.DefaultMaxPaginationLimit {
+		limit = constants.DefaultMaxPaginationLimit
+	}
+
+	prefix := UserOpBlockIndexAllPrefix()
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var ops []*userop.UserOperation
+	count := 0
+
+	// Iterate in reverse order (newest first)
+	for iter.Last(); iter.Valid() && count < limit; iter.Prev() {
+		value := iter.Value()
+		if len(value) >= 32 {
+			opHash := common.BytesToHash(value[:32])
+			op, err := s.GetUserOp(ctx, opHash)
+			if err != nil {
+				s.logger.Warn("failed to get userop from index",
+					zap.String("opHash", opHash.Hex()),
+					zap.Error(err))
+				continue
+			}
+			ops = append(ops, op)
+			count++
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return ops, nil
 }
 
 // GetUserOpCount returns the total count of UserOperations indexed.
@@ -263,567 +260,11 @@ func (s *PebbleStorage) GetUserOpCount(ctx context.Context) (int, error) {
 		return 0, ErrClosed
 	}
 
-	prefix := AAUserOpAllPrefix()
-	return s.countByPrefix(prefix)
-}
-
-// GetUserOpsCountBySender returns the count of UserOperations for a sender.
-func (s *PebbleStorage) GetUserOpsCountBySender(ctx context.Context, sender common.Address) (int, error) {
-	if s.closed.Load() {
-		return 0, ErrClosed
-	}
-
-	prefix := AASenderIndexPrefix(sender)
-	return s.countByPrefix(prefix)
-}
-
-// GetUserOpsCountByBundler returns the count of UserOperations for a bundler.
-func (s *PebbleStorage) GetUserOpsCountByBundler(ctx context.Context, bundler common.Address) (int, error) {
-	if s.closed.Load() {
-		return 0, ErrClosed
-	}
-
-	prefix := AABundlerIndexPrefix(bundler)
-	return s.countByPrefix(prefix)
-}
-
-// GetUserOpsCountByPaymaster returns the count of UserOperations for a paymaster.
-func (s *PebbleStorage) GetUserOpsCountByPaymaster(ctx context.Context, paymaster common.Address) (int, error) {
-	if s.closed.Load() {
-		return 0, ErrClosed
-	}
-
-	prefix := AAPaymasterIndexPrefix(paymaster)
-	return s.countByPrefix(prefix)
-}
-
-// GetRecentUserOps retrieves the most recent UserOperations.
-func (s *PebbleStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*UserOperationRecord, error) {
-	if s.closed.Load() {
-		return nil, ErrClosed
-	}
-
-	limit, _ = normalizePagination(limit, 0)
-	prefix := AARecentIndexAllPrefix()
+	prefix := UserOpKeyPrefix()
 
 	iter, err := s.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var records []*UserOperationRecord
-	collected := 0
-
-	// Keys are already sorted newest-first (inverted block number)
-	for iter.First(); iter.Valid() && collected < limit; iter.Next() {
-		userOpHash := common.BytesToHash(iter.Value())
-		record, err := s.GetUserOp(ctx, userOpHash)
-		if err != nil {
-			s.logger.Warn("failed to get userop from recent index",
-				zap.String("userOpHash", userOpHash.Hex()),
-				zap.Error(err))
-			continue
-		}
-		records = append(records, record)
-		collected++
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return records, nil
-}
-
-// ========== UserOp Write Operations ==========
-
-// SaveUserOp saves a UserOperation record with all necessary indexes.
-func (s *PebbleStorage) SaveUserOp(ctx context.Context, record *UserOperationRecord) error {
-	if s.closed.Load() {
-		return ErrClosed
-	}
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal userop: %w", err)
-	}
-
-	batch := s.db.NewBatch()
-	defer batch.Close()
-
-	if err := s.writeUserOpToBatch(batch, record, data); err != nil {
-		return err
-	}
-
-	if err := batch.Commit(pebble.Sync); err != nil {
-		return fmt.Errorf("failed to commit userop: %w", err)
-	}
-
-	s.logger.Debug("saved userop",
-		zap.String("userOpHash", record.UserOpHash.Hex()),
-		zap.String("sender", record.Sender.Hex()),
-		zap.Bool("success", record.Success))
-
-	return nil
-}
-
-// SaveUserOps saves multiple UserOperation records in a batch.
-func (s *PebbleStorage) SaveUserOps(ctx context.Context, records []*UserOperationRecord) error {
-	if s.closed.Load() {
-		return ErrClosed
-	}
-
-	if len(records) == 0 {
-		return nil
-	}
-
-	batch := s.db.NewBatch()
-	defer batch.Close()
-
-	for _, record := range records {
-		data, err := json.Marshal(record)
-		if err != nil {
-			return fmt.Errorf("failed to marshal userop: %w", err)
-		}
-
-		if err := s.writeUserOpToBatch(batch, record, data); err != nil {
-			return err
-		}
-	}
-
-	if err := batch.Commit(pebble.Sync); err != nil {
-		return fmt.Errorf("failed to commit userops batch: %w", err)
-	}
-
-	s.logger.Debug("saved userops batch",
-		zap.Int("count", len(records)))
-
-	return nil
-}
-
-// SaveAccountDeployed saves an account deployment record.
-func (s *PebbleStorage) SaveAccountDeployed(ctx context.Context, record *AccountDeployedRecord) error {
-	if s.closed.Load() {
-		return ErrClosed
-	}
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal account deployment: %w", err)
-	}
-
-	batch := s.db.NewBatch()
-	defer batch.Close()
-
-	// 1. Save the primary record keyed by userOpHash
-	key := AADeployKey(record.UserOpHash)
-	if err := batch.Set(key, data, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set account deployment: %w", err)
-	}
-
-	// 2. Create factory index
-	indexValue := record.UserOpHash.Bytes()
-	factoryKey := AAFactoryIndexKey(record.Factory, record.BlockNumber, record.LogIndex)
-	if err := batch.Set(factoryKey, indexValue, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set factory index: %w", err)
-	}
-
-	if err := batch.Commit(pebble.Sync); err != nil {
-		return fmt.Errorf("failed to commit account deployment: %w", err)
-	}
-
-	s.logger.Debug("saved account deployment",
-		zap.String("userOpHash", record.UserOpHash.Hex()),
-		zap.String("sender", record.Sender.Hex()),
-		zap.String("factory", record.Factory.Hex()))
-
-	return nil
-}
-
-// SaveUserOpRevert saves a UserOperation revert reason record.
-func (s *PebbleStorage) SaveUserOpRevert(ctx context.Context, record *UserOpRevertRecord) error {
-	if s.closed.Load() {
-		return ErrClosed
-	}
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal userop revert: %w", err)
-	}
-
-	key := AARevertKey(record.UserOpHash)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set userop revert: %w", err)
-	}
-
-	s.logger.Debug("saved userop revert",
-		zap.String("userOpHash", record.UserOpHash.Hex()),
-		zap.String("sender", record.Sender.Hex()),
-		zap.String("revertType", record.RevertType))
-
-	return nil
-}
-
-// IncrementBundlerStats increments bundler statistics.
-func (s *PebbleStorage) IncrementBundlerStats(ctx context.Context, bundler common.Address, success bool, gasCost *big.Int, blockNumber uint64) error {
-	if s.closed.Load() {
-		return ErrClosed
-	}
-
-	stats, err := s.GetBundlerStats(ctx, bundler)
-	if err != nil {
-		return fmt.Errorf("failed to get bundler stats: %w", err)
-	}
-
-	stats.TotalOps++
-	if success {
-		stats.SuccessfulOps++
-	} else {
-		stats.FailedOps++
-	}
-	if gasCost != nil && stats.TotalGasSponsored != nil {
-		stats.TotalGasSponsored = new(big.Int).Add(stats.TotalGasSponsored, gasCost)
-	}
-	stats.LastActivityBlock = blockNumber
-	stats.LastActivityTime = time.Now()
-
-	data, err := json.Marshal(stats)
-	if err != nil {
-		return fmt.Errorf("failed to marshal bundler stats: %w", err)
-	}
-
-	key := AABundlerStatsKey(bundler)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set bundler stats: %w", err)
-	}
-
-	return nil
-}
-
-// IncrementPaymasterStats increments paymaster statistics.
-func (s *PebbleStorage) IncrementPaymasterStats(ctx context.Context, paymaster common.Address, success bool, gasCost *big.Int, blockNumber uint64) error {
-	if s.closed.Load() {
-		return ErrClosed
-	}
-
-	stats, err := s.GetPaymasterStats(ctx, paymaster)
-	if err != nil {
-		return fmt.Errorf("failed to get paymaster stats: %w", err)
-	}
-
-	stats.TotalOps++
-	if success {
-		stats.SuccessfulOps++
-	} else {
-		stats.FailedOps++
-	}
-	if gasCost != nil && stats.TotalGasSponsored != nil {
-		stats.TotalGasSponsored = new(big.Int).Add(stats.TotalGasSponsored, gasCost)
-	}
-	stats.LastActivityBlock = blockNumber
-	stats.LastActivityTime = time.Now()
-
-	data, err := json.Marshal(stats)
-	if err != nil {
-		return fmt.Errorf("failed to marshal paymaster stats: %w", err)
-	}
-
-	key := AAPaymasterStatsKey(paymaster)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set paymaster stats: %w", err)
-	}
-
-	return nil
-}
-
-// ========== Bundler/Paymaster List Queries ==========
-
-// GetAllBundlerStats retrieves all bundler statistics with pagination.
-// Scans the bundler stats prefix, deserializes all entries, sorts by totalOps desc,
-// then applies offset/limit pagination.
-func (s *PebbleStorage) GetAllBundlerStats(ctx context.Context, limit, offset int) ([]*BundlerStats, error) {
-	if s.closed.Load() {
-		return nil, ErrClosed
-	}
-
-	limit, offset = normalizePagination(limit, offset)
-	prefix := AABundlerStatsAllPrefix()
-
-	// Collect all bundler stats
-	all, err := s.scanAllStats(prefix, func(data []byte) (interface{}, error) {
-		var stats BundlerStats
-		if err := json.Unmarshal(data, &stats); err != nil {
-			return nil, err
-		}
-		return &stats, nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan bundler stats: %w", err)
-	}
-
-	// Sort by totalOps descending
-	result := make([]*BundlerStats, 0, len(all))
-	for _, item := range all {
-		result = append(result, item.(*BundlerStats))
-	}
-	sortBundlerStatsByTotalOps(result)
-
-	// Apply pagination
-	if offset >= len(result) {
-		return []*BundlerStats{}, nil
-	}
-	end := offset + limit
-	if end > len(result) {
-		end = len(result)
-	}
-	return result[offset:end], nil
-}
-
-// GetAllBundlerStatsCount returns the total count of known bundlers.
-func (s *PebbleStorage) GetAllBundlerStatsCount(ctx context.Context) (int, error) {
-	if s.closed.Load() {
-		return 0, ErrClosed
-	}
-
-	prefix := AABundlerStatsAllPrefix()
-	return s.countByPrefix(prefix)
-}
-
-// GetAllPaymasterStats retrieves all paymaster statistics with pagination.
-func (s *PebbleStorage) GetAllPaymasterStats(ctx context.Context, limit, offset int) ([]*PaymasterStats, error) {
-	if s.closed.Load() {
-		return nil, ErrClosed
-	}
-
-	limit, offset = normalizePagination(limit, offset)
-	prefix := AAPaymasterStatsAllPrefix()
-
-	all, err := s.scanAllStats(prefix, func(data []byte) (interface{}, error) {
-		var stats PaymasterStats
-		if err := json.Unmarshal(data, &stats); err != nil {
-			return nil, err
-		}
-		return &stats, nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan paymaster stats: %w", err)
-	}
-
-	result := make([]*PaymasterStats, 0, len(all))
-	for _, item := range all {
-		result = append(result, item.(*PaymasterStats))
-	}
-	sortPaymasterStatsByTotalOps(result)
-
-	if offset >= len(result) {
-		return []*PaymasterStats{}, nil
-	}
-	end := offset + limit
-	if end > len(result) {
-		end = len(result)
-	}
-	return result[offset:end], nil
-}
-
-// GetAllPaymasterStatsCount returns the total count of known paymasters.
-func (s *PebbleStorage) GetAllPaymasterStatsCount(ctx context.Context) (int, error) {
-	if s.closed.Load() {
-		return 0, ErrClosed
-	}
-
-	prefix := AAPaymasterStatsAllPrefix()
-	return s.countByPrefix(prefix)
-}
-
-// scanAllStats iterates all entries under a prefix and deserializes each.
-func (s *PebbleStorage) scanAllStats(prefix []byte, unmarshal func([]byte) (interface{}, error)) ([]interface{}, error) {
-	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var results []interface{}
-	for iter.First(); iter.Valid(); iter.Next() {
-		valueCopy := make([]byte, len(iter.Value()))
-		copy(valueCopy, iter.Value())
-
-		item, err := unmarshal(valueCopy)
-		if err != nil {
-			s.logger.Warn("failed to unmarshal stats entry", zap.Error(err))
-			continue
-		}
-		results = append(results, item)
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return results, nil
-}
-
-// sortBundlerStatsByTotalOps sorts bundler stats by total ops descending.
-func sortBundlerStatsByTotalOps(stats []*BundlerStats) {
-	for i := 1; i < len(stats); i++ {
-		for j := i; j > 0 && stats[j].TotalOps > stats[j-1].TotalOps; j-- {
-			stats[j], stats[j-1] = stats[j-1], stats[j]
-		}
-	}
-}
-
-// sortPaymasterStatsByTotalOps sorts paymaster stats by total ops descending.
-func sortPaymasterStatsByTotalOps(stats []*PaymasterStats) {
-	for i := 1; i < len(stats); i++ {
-		for j := i; j > 0 && stats[j].TotalOps > stats[j-1].TotalOps; j-- {
-			stats[j], stats[j-1] = stats[j-1], stats[j]
-		}
-	}
-}
-
-// ========== Internal Helper Methods ==========
-
-// writeUserOpToBatch writes a UserOp record and all its indexes to a batch.
-func (s *PebbleStorage) writeUserOpToBatch(batch *pebble.Batch, record *UserOperationRecord, data []byte) error {
-	indexValue := record.UserOpHash.Bytes()
-
-	// 1. Primary record
-	key := AAUserOpKey(record.UserOpHash)
-	if err := batch.Set(key, data, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set userop: %w", err)
-	}
-
-	// 2. Sender index
-	senderKey := AASenderIndexKey(record.Sender, record.BlockNumber, record.LogIndex)
-	if err := batch.Set(senderKey, indexValue, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set sender index: %w", err)
-	}
-
-	// 3. Bundler index
-	bundlerKey := AABundlerIndexKey(record.Bundler, record.BlockNumber, record.LogIndex)
-	if err := batch.Set(bundlerKey, indexValue, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set bundler index: %w", err)
-	}
-
-	// 4. Paymaster index (only if paymaster is set)
-	if record.Paymaster != (common.Address{}) {
-		paymasterKey := AAPaymasterIndexKey(record.Paymaster, record.BlockNumber, record.LogIndex)
-		if err := batch.Set(paymasterKey, indexValue, pebble.Sync); err != nil {
-			return fmt.Errorf("failed to set paymaster index: %w", err)
-		}
-	}
-
-	// 5. Block index
-	blockKey := AABlockIndexKey(record.BlockNumber, record.LogIndex)
-	if err := batch.Set(blockKey, indexValue, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set block index: %w", err)
-	}
-
-	// 6. EntryPoint index
-	entryPointKey := AAEntryPointIndexKey(record.EntryPoint, record.BlockNumber, record.LogIndex)
-	if err := batch.Set(entryPointKey, indexValue, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set entrypoint index: %w", err)
-	}
-
-	// 7. Tx index
-	txKey := AATxIndexKey(record.TxHash, record.LogIndex)
-	if err := batch.Set(txKey, indexValue, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set tx index: %w", err)
-	}
-
-	// 8. Recent index (newest first via inverted block number)
-	recentKey := AARecentIndexKey(record.BlockNumber, record.LogIndex)
-	if err := batch.Set(recentKey, indexValue, pebble.Sync); err != nil {
-		return fmt.Errorf("failed to set recent index: %w", err)
-	}
-
-	return nil
-}
-
-// getUserOpsByIndex retrieves all UserOps pointed to by an index prefix (no pagination).
-func (s *PebbleStorage) getUserOpsByIndex(prefix []byte) ([]*UserOperationRecord, error) {
-	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var records []*UserOperationRecord
-	for iter.First(); iter.Valid(); iter.Next() {
-		userOpHash := common.BytesToHash(iter.Value())
-		record, err := s.GetUserOp(context.Background(), userOpHash)
-		if err != nil {
-			s.logger.Warn("failed to get userop from index",
-				zap.String("userOpHash", userOpHash.Hex()),
-				zap.Error(err))
-			continue
-		}
-		records = append(records, record)
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return records, nil
-}
-
-// getUserOpsByIndexPaginated retrieves UserOps with pagination from an index.
-// Index keys are already sorted (newest first via inverted block numbers).
-func (s *PebbleStorage) getUserOpsByIndexPaginated(prefix []byte, limit, offset int) ([]*UserOperationRecord, error) {
-	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var records []*UserOperationRecord
-	skipped := 0
-	collected := 0
-
-	for iter.First(); iter.Valid() && collected < limit; iter.Next() {
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		userOpHash := common.BytesToHash(iter.Value())
-		record, err := s.GetUserOp(context.Background(), userOpHash)
-		if err != nil {
-			s.logger.Warn("failed to get userop from index",
-				zap.String("userOpHash", userOpHash.Hex()),
-				zap.Error(err))
-			continue
-		}
-		records = append(records, record)
-		collected++
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return records, nil
-}
-
-// countByPrefix counts entries under a prefix.
-func (s *PebbleStorage) countByPrefix(prefix []byte) (int, error) {
-	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
+		UpperBound: append(prefix, 0xff),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
@@ -842,7 +283,445 @@ func (s *PebbleStorage) countByPrefix(prefix []byte) (int, error) {
 	return count, nil
 }
 
-// normalizePagination applies default limits and bounds.
+// ListBundlers retrieves bundler stats with pagination.
+func (s *PebbleStorage) ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	limit, offset = normalizePagination(limit, offset)
+	prefix := BundlerStatsKeyPrefix()
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var all []*userop.BundlerStats
+	for iter.First(); iter.Valid(); iter.Next() {
+		var stats userop.BundlerStats
+		if err := json.Unmarshal(iter.Value(), &stats); err != nil {
+			s.logger.Warn("failed to unmarshal bundler stats",
+				zap.String("key", string(iter.Key())),
+				zap.Error(err))
+			continue
+		}
+		all = append(all, &stats)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	// Apply pagination
+	start := offset
+	if start >= len(all) {
+		return []*userop.BundlerStats{}, nil
+	}
+	end := start + limit
+	if end > len(all) {
+		end = len(all)
+	}
+
+	return all[start:end], nil
+}
+
+// ListFactories retrieves factory stats with pagination.
+func (s *PebbleStorage) ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	limit, offset = normalizePagination(limit, offset)
+	prefix := FactoryStatsKeyPrefix()
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var all []*userop.FactoryStats
+	for iter.First(); iter.Valid(); iter.Next() {
+		var stats userop.FactoryStats
+		if err := json.Unmarshal(iter.Value(), &stats); err != nil {
+			s.logger.Warn("failed to unmarshal factory stats",
+				zap.String("key", string(iter.Key())),
+				zap.Error(err))
+			continue
+		}
+		all = append(all, &stats)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	start := offset
+	if start >= len(all) {
+		return []*userop.FactoryStats{}, nil
+	}
+	end := start + limit
+	if end > len(all) {
+		end = len(all)
+	}
+
+	return all[start:end], nil
+}
+
+// ListPaymasters retrieves paymaster stats with pagination.
+func (s *PebbleStorage) ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	limit, offset = normalizePagination(limit, offset)
+	prefix := PaymasterStatsKeyPrefix()
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var all []*userop.PaymasterStats
+	for iter.First(); iter.Valid(); iter.Next() {
+		var stats userop.PaymasterStats
+		if err := json.Unmarshal(iter.Value(), &stats); err != nil {
+			s.logger.Warn("failed to unmarshal paymaster stats",
+				zap.String("key", string(iter.Key())),
+				zap.Error(err))
+			continue
+		}
+		all = append(all, &stats)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	start := offset
+	if start >= len(all) {
+		return []*userop.PaymasterStats{}, nil
+	}
+	end := start + limit
+	if end > len(all) {
+		end = len(all)
+	}
+
+	return all[start:end], nil
+}
+
+// ListSmartAccounts retrieves smart accounts with pagination.
+func (s *PebbleStorage) ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	limit, offset = normalizePagination(limit, offset)
+	prefix := SmartAccountKeyPrefix()
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var all []*userop.SmartAccount
+	for iter.First(); iter.Valid(); iter.Next() {
+		var account userop.SmartAccount
+		if err := json.Unmarshal(iter.Value(), &account); err != nil {
+			s.logger.Warn("failed to unmarshal smart account",
+				zap.String("key", string(iter.Key())),
+				zap.Error(err))
+			continue
+		}
+		all = append(all, &account)
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	start := offset
+	if start >= len(all) {
+		return []*userop.SmartAccount{}, nil
+	}
+	end := start + limit
+	if end > len(all) {
+		end = len(all)
+	}
+
+	return all[start:end], nil
+}
+
+// ========== UserOp Write Operations ==========
+
+// SaveUserOp saves a UserOperation record.
+func (s *PebbleStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation) error {
+	if s.closed.Load() {
+		return ErrClosed
+	}
+
+	data, err := json.Marshal(op)
+	if err != nil {
+		return fmt.Errorf("failed to marshal userop: %w", err)
+	}
+
+	batch := s.db.NewBatch()
+	defer batch.Close()
+
+	// 1. Save the primary record
+	key := UserOpKey(op.Hash)
+	if err := batch.Set(key, data, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set userop: %w", err)
+	}
+
+	// Index value: opHash (32 bytes)
+	indexValue := op.Hash.Bytes()
+
+	// 2. Create sender index
+	senderKey := UserOpSenderIndexKey(op.Sender, op.BlockNumber, op.BundleIndex)
+	if err := batch.Set(senderKey, indexValue, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set sender index: %w", err)
+	}
+
+	// 3. Create bundler index
+	bundlerKey := UserOpBundlerIndexKey(op.Bundler, op.BlockNumber, op.BundleIndex)
+	if err := batch.Set(bundlerKey, indexValue, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set bundler index: %w", err)
+	}
+
+	// 4. Create block index
+	blockKey := UserOpBlockIndexKey(op.BlockNumber, op.BundleIndex)
+	if err := batch.Set(blockKey, indexValue, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set block index: %w", err)
+	}
+
+	// 5. Create tx index
+	txKey := UserOpTxIndexKey(op.TransactionHash, op.BundleIndex)
+	if err := batch.Set(txKey, indexValue, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set tx index: %w", err)
+	}
+
+	// 6. Create paymaster index (if paymaster exists)
+	if op.Paymaster != nil && *op.Paymaster != (common.Address{}) {
+		pmKey := UserOpPaymasterIndexKey(*op.Paymaster, op.BlockNumber, op.BundleIndex)
+		if err := batch.Set(pmKey, indexValue, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to set paymaster index: %w", err)
+		}
+	}
+
+	// 7. Create factory index (if factory exists)
+	if op.Factory != nil && *op.Factory != (common.Address{}) {
+		factoryKey := UserOpFactoryIndexKey(*op.Factory, op.BlockNumber, op.BundleIndex)
+		if err := batch.Set(factoryKey, indexValue, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to set factory index: %w", err)
+		}
+	}
+
+	// Commit batch
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return fmt.Errorf("failed to commit userop: %w", err)
+	}
+
+	s.logger.Debug("saved userop",
+		zap.String("opHash", op.Hash.Hex()),
+		zap.String("sender", op.Sender.Hex()),
+		zap.String("bundler", op.Bundler.Hex()),
+		zap.Bool("status", op.Status))
+
+	return nil
+}
+
+// SaveUserOps saves multiple UserOperation records in a batch.
+func (s *PebbleStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOperation) error {
+	if s.closed.Load() {
+		return ErrClosed
+	}
+
+	if len(ops) == 0 {
+		return nil
+	}
+
+	batch := s.db.NewBatch()
+	defer batch.Close()
+
+	for _, op := range ops {
+		data, err := json.Marshal(op)
+		if err != nil {
+			return fmt.Errorf("failed to marshal userop: %w", err)
+		}
+
+		// 1. Save the primary record
+		key := UserOpKey(op.Hash)
+		if err := batch.Set(key, data, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to set userop: %w", err)
+		}
+
+		indexValue := op.Hash.Bytes()
+
+		// 2. Create sender index
+		senderKey := UserOpSenderIndexKey(op.Sender, op.BlockNumber, op.BundleIndex)
+		if err := batch.Set(senderKey, indexValue, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to set sender index: %w", err)
+		}
+
+		// 3. Create bundler index
+		bundlerKey := UserOpBundlerIndexKey(op.Bundler, op.BlockNumber, op.BundleIndex)
+		if err := batch.Set(bundlerKey, indexValue, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to set bundler index: %w", err)
+		}
+
+		// 4. Create block index
+		blockKey := UserOpBlockIndexKey(op.BlockNumber, op.BundleIndex)
+		if err := batch.Set(blockKey, indexValue, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to set block index: %w", err)
+		}
+
+		// 5. Create tx index
+		txKey := UserOpTxIndexKey(op.TransactionHash, op.BundleIndex)
+		if err := batch.Set(txKey, indexValue, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to set tx index: %w", err)
+		}
+
+		// 6. Create paymaster index
+		if op.Paymaster != nil && *op.Paymaster != (common.Address{}) {
+			pmKey := UserOpPaymasterIndexKey(*op.Paymaster, op.BlockNumber, op.BundleIndex)
+			if err := batch.Set(pmKey, indexValue, pebble.Sync); err != nil {
+				return fmt.Errorf("failed to set paymaster index: %w", err)
+			}
+		}
+
+		// 7. Create factory index
+		if op.Factory != nil && *op.Factory != (common.Address{}) {
+			factoryKey := UserOpFactoryIndexKey(*op.Factory, op.BlockNumber, op.BundleIndex)
+			if err := batch.Set(factoryKey, indexValue, pebble.Sync); err != nil {
+				return fmt.Errorf("failed to set factory index: %w", err)
+			}
+		}
+	}
+
+	// Commit batch
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return fmt.Errorf("failed to commit userop batch: %w", err)
+	}
+
+	s.logger.Debug("saved userop batch",
+		zap.Int("count", len(ops)))
+
+	return nil
+}
+
+// UpdateBundlerStats updates statistics for a bundler address.
+func (s *PebbleStorage) UpdateBundlerStats(ctx context.Context, stats *userop.BundlerStats) error {
+	if s.closed.Load() {
+		return ErrClosed
+	}
+
+	data, err := json.Marshal(stats)
+	if err != nil {
+		return fmt.Errorf("failed to marshal bundler stats: %w", err)
+	}
+
+	key := BundlerStatsKey(stats.Address)
+	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set bundler stats: %w", err)
+	}
+
+	s.logger.Debug("updated bundler stats",
+		zap.String("address", stats.Address.Hex()),
+		zap.Uint64("totalBundles", stats.TotalBundles),
+		zap.Uint64("totalOps", stats.TotalOps))
+
+	return nil
+}
+
+// UpdateFactoryStats updates statistics for a factory address.
+func (s *PebbleStorage) UpdateFactoryStats(ctx context.Context, stats *userop.FactoryStats) error {
+	if s.closed.Load() {
+		return ErrClosed
+	}
+
+	data, err := json.Marshal(stats)
+	if err != nil {
+		return fmt.Errorf("failed to marshal factory stats: %w", err)
+	}
+
+	key := FactoryStatsKey(stats.Address)
+	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set factory stats: %w", err)
+	}
+
+	s.logger.Debug("updated factory stats",
+		zap.String("address", stats.Address.Hex()),
+		zap.Uint64("totalAccounts", stats.TotalAccounts))
+
+	return nil
+}
+
+// UpdatePaymasterStats updates statistics for a paymaster address.
+func (s *PebbleStorage) UpdatePaymasterStats(ctx context.Context, stats *userop.PaymasterStats) error {
+	if s.closed.Load() {
+		return ErrClosed
+	}
+
+	data, err := json.Marshal(stats)
+	if err != nil {
+		return fmt.Errorf("failed to marshal paymaster stats: %w", err)
+	}
+
+	key := PaymasterStatsKey(stats.Address)
+	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set paymaster stats: %w", err)
+	}
+
+	s.logger.Debug("updated paymaster stats",
+		zap.String("address", stats.Address.Hex()),
+		zap.Uint64("totalOps", stats.TotalOps))
+
+	return nil
+}
+
+// SaveSmartAccount saves or updates a smart account record.
+func (s *PebbleStorage) SaveSmartAccount(ctx context.Context, account *userop.SmartAccount) error {
+	if s.closed.Load() {
+		return ErrClosed
+	}
+
+	data, err := json.Marshal(account)
+	if err != nil {
+		return fmt.Errorf("failed to marshal smart account: %w", err)
+	}
+
+	key := SmartAccountKey(account.Address)
+	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to set smart account: %w", err)
+	}
+
+	s.logger.Debug("saved smart account",
+		zap.String("address", account.Address.Hex()),
+		zap.Uint64("totalOps", account.TotalOps))
+
+	return nil
+}
+
+// ========== Internal Helpers ==========
+
+// normalizePagination applies default limits and bounds to pagination parameters
 func normalizePagination(limit, offset int) (int, int) {
 	if limit <= 0 {
 		limit = constants.DefaultPaginationLimit
@@ -854,4 +733,88 @@ func normalizePagination(limit, offset int) (int, int) {
 		offset = 0
 	}
 	return limit, offset
+}
+
+// getUserOpsByIndex retrieves all UserOps referenced by an index prefix (no pagination)
+func (s *PebbleStorage) getUserOpsByIndex(ctx context.Context, prefix []byte) ([]*userop.UserOperation, error) {
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var ops []*userop.UserOperation
+	for iter.First(); iter.Valid(); iter.Next() {
+		value := iter.Value()
+		if len(value) >= 32 {
+			opHash := common.BytesToHash(value[:32])
+			op, err := s.GetUserOp(ctx, opHash)
+			if err != nil {
+				s.logger.Warn("failed to get userop from index",
+					zap.String("opHash", opHash.Hex()),
+					zap.Error(err))
+				continue
+			}
+			ops = append(ops, op)
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	return ops, nil
+}
+
+// getUserOpsByIndexPaginated retrieves UserOps from an index with reverse iteration and pagination
+func (s *PebbleStorage) getUserOpsByIndexPaginated(ctx context.Context, prefix []byte, limit, offset int) ([]*userop.UserOperation, error) {
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	// Collect all op hashes (reverse order for newest first)
+	var opHashes []common.Hash
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		value := iter.Value()
+		if len(value) >= 32 {
+			opHashes = append(opHashes, common.BytesToHash(value[:32]))
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	// Apply pagination
+	start := offset
+	if start >= len(opHashes) {
+		return []*userop.UserOperation{}, nil
+	}
+	end := start + limit
+	if end > len(opHashes) {
+		end = len(opHashes)
+	}
+
+	// Fetch full records
+	ops := make([]*userop.UserOperation, 0, end-start)
+	for _, opHash := range opHashes[start:end] {
+		op, err := s.GetUserOp(ctx, opHash)
+		if err != nil {
+			s.logger.Warn("failed to get userop",
+				zap.String("opHash", opHash.Hex()),
+				zap.Error(err))
+			continue
+		}
+		ops = append(ops, op)
+	}
+
+	return ops, nil
 }
