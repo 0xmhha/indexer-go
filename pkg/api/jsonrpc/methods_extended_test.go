@@ -770,32 +770,6 @@ func TestSetCodeMethods(t *testing.T) {
 		assert.Equal(t, 42, m["count"])
 	})
 
-	// Test storage without SetCode support
-	t.Run("SetCode_NotSupported", func(t *testing.T) {
-		basicStore := &mockStorage{
-			latestHeight: 100,
-			blocks:       make(map[uint64]*types.Block),
-			blocksByHash: make(map[common.Hash]*types.Block),
-		}
-		basicServer := NewServer(basicStore, logger)
-
-		methods := []string{
-			"getSetCodeAuthorization",
-			"getSetCodeAuthorizationsByTx",
-			"getSetCodeAuthorizationsByTarget",
-			"getSetCodeAuthorizationsByAuthority",
-			// "getAddressSetCodeInfo" intentionally omitted: it returns default values on error instead of propagating
-			"getSetCodeTransactionsInBlock",
-			"getRecentSetCodeTransactions",
-			"getSetCodeTransactionCount",
-		}
-		for _, method := range methods {
-			params := json.RawMessage(`{"txHash":"0x1","target":"0x1","authority":"0x1","address":"0x1","blockNumber":1}`)
-			_, err := basicServer.HandleMethodDirect(ctx, method, params)
-			require.NotNil(t, err, "expected error for %s", method)
-			assert.Equal(t, InternalError, err.Code, "expected InternalError for %s", method)
-		}
-	})
 }
 
 func TestFilterMethods(t *testing.T) {

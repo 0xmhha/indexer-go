@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/userop"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
@@ -578,76 +579,113 @@ func (m *mockStorage) IncrementSetCodeStats(ctx context.Context, address common.
 }
 
 // UserOpIndexReader stubs
-func (m *mockStorage) GetUserOp(ctx context.Context, userOpHash common.Hash) (*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetUserOp(ctx context.Context, opHash common.Hash) (*userop.UserOperation, error) {
+	return nil, storage.ErrNotFound
 }
-func (m *mockStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error) {
+	return nil, nil
 }
-func (m *mockStorage) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+	return nil, nil
 }
-func (m *mockStorage) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+	return nil, nil
 }
-func (m *mockStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error) {
+	return nil, nil
 }
-func (m *mockStorage) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+	return nil, nil
 }
-func (m *mockStorage) GetUserOpsByEntryPoint(ctx context.Context, entryPoint common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+	return nil, nil
 }
-func (m *mockStorage) GetAccountDeployment(ctx context.Context, userOpHash common.Hash) (*storage.AccountDeployedRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error) {
+	return nil, storage.ErrNotFound
 }
-func (m *mockStorage) GetAccountDeploymentsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*storage.AccountDeployedRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetFactoryStats(ctx context.Context, factory common.Address) (*userop.FactoryStats, error) {
+	return nil, storage.ErrNotFound
 }
-func (m *mockStorage) GetUserOpRevert(ctx context.Context, userOpHash common.Hash) (*storage.UserOpRevertRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*userop.PaymasterStats, error) {
+	return nil, storage.ErrNotFound
 }
-func (m *mockStorage) GetBundlerStats(ctx context.Context, bundler common.Address) (*storage.BundlerStats, error) {
-	panic("not implemented")
+func (m *mockStorage) GetSmartAccount(ctx context.Context, address common.Address) (*userop.SmartAccount, error) {
+	return nil, storage.ErrNotFound
 }
-func (m *mockStorage) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*storage.PaymasterStats, error) {
-	panic("not implemented")
+func (m *mockStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*userop.UserOperation, error) {
+	return nil, nil
 }
 func (m *mockStorage) GetUserOpCount(ctx context.Context) (int, error) {
-	panic("not implemented")
+	return 0, nil
 }
-func (m *mockStorage) GetUserOpsCountBySender(ctx context.Context, sender common.Address) (int, error) {
-	panic("not implemented")
+func (m *mockStorage) ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
+	return nil, nil
 }
-func (m *mockStorage) GetUserOpsCountByBundler(ctx context.Context, bundler common.Address) (int, error) {
-	panic("not implemented")
+func (m *mockStorage) ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
+	return nil, nil
 }
-func (m *mockStorage) GetUserOpsCountByPaymaster(ctx context.Context, paymaster common.Address) (int, error) {
-	panic("not implemented")
+func (m *mockStorage) ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
+	return nil, nil
 }
-func (m *mockStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorage) ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
+	return nil, nil
 }
 
 // UserOpIndexWriter stubs
-func (m *mockStorage) SaveUserOp(ctx context.Context, record *storage.UserOperationRecord) error {
-	panic("not implemented")
+func (m *mockStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation) error {
+	return nil
 }
-func (m *mockStorage) SaveUserOps(ctx context.Context, records []*storage.UserOperationRecord) error {
-	panic("not implemented")
+func (m *mockStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOperation) error {
+	return nil
 }
-func (m *mockStorage) SaveAccountDeployed(ctx context.Context, record *storage.AccountDeployedRecord) error {
-	panic("not implemented")
+func (m *mockStorage) UpdateBundlerStats(ctx context.Context, stats *userop.BundlerStats) error {
+	return nil
 }
-func (m *mockStorage) SaveUserOpRevert(ctx context.Context, record *storage.UserOpRevertRecord) error {
-	panic("not implemented")
+func (m *mockStorage) UpdateFactoryStats(ctx context.Context, stats *userop.FactoryStats) error {
+	return nil
 }
-func (m *mockStorage) IncrementBundlerStats(ctx context.Context, bundler common.Address, success bool, gasCost *big.Int, blockNumber uint64) error {
-	panic("not implemented")
+func (m *mockStorage) UpdatePaymasterStats(ctx context.Context, stats *userop.PaymasterStats) error {
+	return nil
 }
-func (m *mockStorage) IncrementPaymasterStats(ctx context.Context, paymaster common.Address, success bool, gasCost *big.Int, blockNumber uint64) error {
-	panic("not implemented")
+func (m *mockStorage) SaveSmartAccount(ctx context.Context, account *userop.SmartAccount) error {
+	return nil
+}
+
+// ModuleIndexReader stubs
+func (m *mockStorage) GetInstalledModule(ctx context.Context, account, module common.Address) (*storage.InstalledModule, error) {
+	return nil, storage.ErrNotFound
+}
+func (m *mockStorage) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*storage.InstalledModule, error) {
+	return nil, nil
+}
+func (m *mockStorage) GetModulesByType(ctx context.Context, moduleType storage.ModuleType, limit, offset int) ([]*storage.InstalledModule, error) {
+	return nil, nil
+}
+func (m *mockStorage) GetModuleStats(ctx context.Context, module common.Address) (*storage.ModuleStats, error) {
+	return nil, storage.ErrNotFound
+}
+func (m *mockStorage) GetAccountModules(ctx context.Context, account common.Address) (*storage.AccountModules, error) {
+	return nil, storage.ErrNotFound
+}
+func (m *mockStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([]*storage.InstalledModule, error) {
+	return nil, nil
+}
+func (m *mockStorage) GetModuleEventCount(ctx context.Context) (int, error) {
+	return 0, nil
+}
+func (m *mockStorage) ListModuleStats(ctx context.Context, limit, offset int) ([]*storage.ModuleStats, error) {
+	return nil, nil
+}
+
+// ModuleIndexWriter stubs
+func (m *mockStorage) SaveInstalledModule(ctx context.Context, record *storage.InstalledModule) error {
+	return nil
+}
+func (m *mockStorage) RemoveModule(ctx context.Context, account, module common.Address, blockNumber uint64, txHash common.Hash) error {
+	return nil
+}
+func (m *mockStorage) UpdateModuleStats(ctx context.Context, stats *storage.ModuleStats) error {
+	return nil
 }
 
 // mockStorageWithErrors returns errors for testing error paths
@@ -1179,76 +1217,113 @@ func (m *mockStorageWithErrors) IncrementSetCodeStats(ctx context.Context, addre
 }
 
 // UserOpIndexReader stubs for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetUserOp(ctx context.Context, userOpHash common.Hash) (*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetUserOp(ctx context.Context, opHash common.Hash) (*userop.UserOperation, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpsByEntryPoint(ctx context.Context, entryPoint common.Address, limit, offset int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetAccountDeployment(ctx context.Context, userOpHash common.Hash) (*storage.AccountDeployedRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetAccountDeploymentsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*storage.AccountDeployedRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetFactoryStats(ctx context.Context, factory common.Address) (*userop.FactoryStats, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpRevert(ctx context.Context, userOpHash common.Hash) (*storage.UserOpRevertRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*userop.PaymasterStats, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetBundlerStats(ctx context.Context, bundler common.Address) (*storage.BundlerStats, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetSmartAccount(ctx context.Context, address common.Address) (*userop.SmartAccount, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*storage.PaymasterStats, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) GetRecentUserOps(ctx context.Context, limit int) ([]*userop.UserOperation, error) {
+	return nil, fmt.Errorf("storage error")
 }
 func (m *mockStorageWithErrors) GetUserOpCount(ctx context.Context) (int, error) {
-	panic("not implemented")
+	return 0, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpsCountBySender(ctx context.Context, sender common.Address) (int, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpsCountByBundler(ctx context.Context, bundler common.Address) (int, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetUserOpsCountByPaymaster(ctx context.Context, paymaster common.Address) (int, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
+	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetRecentUserOps(ctx context.Context, limit int) ([]*storage.UserOperationRecord, error) {
-	panic("not implemented")
+func (m *mockStorageWithErrors) ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
+	return nil, fmt.Errorf("storage error")
 }
 
 // UserOpIndexWriter stubs for mockStorageWithErrors
-func (m *mockStorageWithErrors) SaveUserOp(ctx context.Context, record *storage.UserOperationRecord) error {
-	panic("not implemented")
+func (m *mockStorageWithErrors) SaveUserOp(ctx context.Context, op *userop.UserOperation) error {
+	return fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) SaveUserOps(ctx context.Context, records []*storage.UserOperationRecord) error {
-	panic("not implemented")
+func (m *mockStorageWithErrors) SaveUserOps(ctx context.Context, ops []*userop.UserOperation) error {
+	return fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) SaveAccountDeployed(ctx context.Context, record *storage.AccountDeployedRecord) error {
-	panic("not implemented")
+func (m *mockStorageWithErrors) UpdateBundlerStats(ctx context.Context, stats *userop.BundlerStats) error {
+	return fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) SaveUserOpRevert(ctx context.Context, record *storage.UserOpRevertRecord) error {
-	panic("not implemented")
+func (m *mockStorageWithErrors) UpdateFactoryStats(ctx context.Context, stats *userop.FactoryStats) error {
+	return fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) IncrementBundlerStats(ctx context.Context, bundler common.Address, success bool, gasCost *big.Int, blockNumber uint64) error {
-	panic("not implemented")
+func (m *mockStorageWithErrors) UpdatePaymasterStats(ctx context.Context, stats *userop.PaymasterStats) error {
+	return fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) IncrementPaymasterStats(ctx context.Context, paymaster common.Address, success bool, gasCost *big.Int, blockNumber uint64) error {
-	panic("not implemented")
+func (m *mockStorageWithErrors) SaveSmartAccount(ctx context.Context, account *userop.SmartAccount) error {
+	return fmt.Errorf("storage error")
+}
+
+// ModuleIndexReader stubs for mockStorageWithErrors
+func (m *mockStorageWithErrors) GetInstalledModule(ctx context.Context, account, module common.Address) (*storage.InstalledModule, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*storage.InstalledModule, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetModulesByType(ctx context.Context, moduleType storage.ModuleType, limit, offset int) ([]*storage.InstalledModule, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetModuleStats(ctx context.Context, module common.Address) (*storage.ModuleStats, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetAccountModules(ctx context.Context, account common.Address) (*storage.AccountModules, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetRecentModuleEvents(ctx context.Context, limit int) ([]*storage.InstalledModule, error) {
+	return nil, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) GetModuleEventCount(ctx context.Context) (int, error) {
+	return 0, fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) ListModuleStats(ctx context.Context, limit, offset int) ([]*storage.ModuleStats, error) {
+	return nil, fmt.Errorf("storage error")
+}
+
+// ModuleIndexWriter stubs for mockStorageWithErrors
+func (m *mockStorageWithErrors) SaveInstalledModule(ctx context.Context, record *storage.InstalledModule) error {
+	return fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) RemoveModule(ctx context.Context, account, module common.Address, blockNumber uint64, txHash common.Hash) error {
+	return fmt.Errorf("storage error")
+}
+func (m *mockStorageWithErrors) UpdateModuleStats(ctx context.Context, stats *storage.ModuleStats) error {
+	return fmt.Errorf("storage error")
 }
 
 func TestGraphQLHandler(t *testing.T) {
