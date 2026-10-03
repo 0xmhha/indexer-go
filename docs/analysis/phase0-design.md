@@ -457,3 +457,17 @@ golden 키 공간은 바뀌지 않았다. 한 세션으로 색인할 때는 처�
 남은 일은 다음과 같다.
 - P0-13에서 기본값을 true로 바꾸고, P0-14에서 옛 경로를 지운다.
 - `FetchRangeConcurrent`의 고루틴 누수(C1)는 P0-3에서 고친다.
+
+### P0-9: genesis wrapper 제거 (10/3, F1 수정, 새로 찾은 D11 수정)
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/storage/genesis_balance.go` | wrapper의 유일한 동작(잔액이 0이고 이력이 없는 초기 블록 주소에 대해 RPC로 genesis 잔액을 조회해 저장)을 `PebbleStorage.SetGenesisBalanceResolver`와 공개 `GetAddressBalance`로 옮겼다. 쓰기 함수(`UpdateBalance`, `SetBalance`)는 조회 없는 내부 `getAddressBalance`를 쓴다(wrapper 시절과 같다). 블록 트랜잭션 안에서 불리면 같은 batch에 쓰고, 밖에서 불리면 `writeMu`를 잡는다. "이미 조회한 주소" 기억은 블록 트랜잭션 안에서는 staging했다가 commit할 때 반영한다. wrapper는 rollback해도 기억이 남아, 같은 프로세스에서 재시도하면 초기화를 건너뛰었다 |
+| wrapper 삭제 | `genesis_initializer.go`를 지웠다. `main.go`는 `GenesisBalanceConfigurer` 인터페이스로 resolver를 설정한다(`*PebbleStorage` 단언 제거) |
+| `ConsensusStorage` | 구체 타입 대신 `ConsensusBackend`(`Reader` + `WBFTReader` + `WBFTWriter`)를 받는다. GraphQL의 `*storage.PebbleStorage` 단언 5곳을 없앴다. 이제 운영 코드에 `*PebbleStorage` 타입 단언이 없다 |
+| D11 수정 | 시스템 컨트랙트 조회 10개가 쓸 때와 같은 decoder(`Decode…`)를 쓰도록 고쳤다. `TestSystemContractEventsRoundTrip`이 9종을 저장·조회한다. 수정 전 코드로 돌리면 9개 모두 실패하는 것을 확인했다 |
+| `cmd/indexer/graphql_golden_test.go` | 운영 GraphQL 스키마로 `mintEvents`, `burnEvents`, `allValidatorsSigningStats`를 조회해 `testdata/golden/graphql.json`과 비교한다 |
+
+golden 키 공간은 의도한 세 키만 늘었다. `/data/syscontracts/mint/…`, `/data/syscontracts/burn/…`, `/index/syscontracts/total_supply/…`다. 시스템 컨트랙트 파서가 다시 동작하기 때문이다. genesis 처리를 옮긴 뒤에도 다른 키는 바뀌지 않았다.
+
+**기존 불안정 시험.** `pkg/resilience`의 `TestConnectionManager_GetActiveSessionCount`가 가끔 실패한다(이번 브랜치 10회 중 4회, 변경 전 커밋 10회 중 2회). 메모리 저장소를 쓰는 시험이라 이번 변경과는 무관하다. 이 패키지는 운영 배선에 연결되어 있지 않으므로, R1-2에서 연결하거나 지울 때 함께 정리한다.

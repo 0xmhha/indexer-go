@@ -222,7 +222,10 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 }
 
 // GetAddressBalance returns the balance of an address at a specific block
-func (s *PebbleStorage) GetAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error) {
+// getAddressBalance reads the stored balance without the lazy genesis lookup
+// done by GetAddressBalance. Writers use it so that updating a balance never
+// triggers an RPC call or a nested write.
+func (s *PebbleStorage) getAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -486,7 +489,7 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	}
 
 	// Get current balance
-	currentBalance, err := s.GetAddressBalance(ctx, addr, 0) // Get latest
+	currentBalance, err := s.getAddressBalance(ctx, addr, 0) // Get latest
 	if err != nil {
 		return fmt.Errorf("failed to get current balance: %w", err)
 	}
@@ -541,7 +544,7 @@ func (s *PebbleStorage) SetBalance(ctx context.Context, addr common.Address, blo
 	}
 
 	// Get current balance to calculate delta
-	currentBalance, err := s.GetAddressBalance(ctx, addr, 0)
+	currentBalance, err := s.getAddressBalance(ctx, addr, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get current balance: %w", err)
 	}

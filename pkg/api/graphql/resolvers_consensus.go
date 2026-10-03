@@ -112,12 +112,7 @@ func (s *Schema) resolveValidatorStats(p graphql.ResolveParams) (interface{}, er
 	}
 
 	// Use ConsensusStorage to aggregate stats from individual signing activities
-	pebbleStorage, ok := s.storage.(*storage.PebbleStorage)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support consensus operations")
-	}
-
-	consensusStorage := storage.NewConsensusStorage(pebbleStorage, s.logger)
+	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
 	stats, err := consensusStorage.GetValidatorStats(ctx, address, fromBlock, toBlock)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -180,12 +175,7 @@ func (s *Schema) resolveValidatorParticipation(p graphql.ResolveParams) (interfa
 		}
 	}
 
-	pebbleStorage, ok := s.storage.(*storage.PebbleStorage)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support consensus operations")
-	}
-
-	consensusStorage := storage.NewConsensusStorage(pebbleStorage, s.logger)
+	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
 	participation, err := consensusStorage.GetValidatorParticipation(ctx, address, fromBlock, toBlock, limit, offset)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -242,12 +232,7 @@ func (s *Schema) resolveAllValidatorStats(p graphql.ResolveParams) (interface{},
 		}
 	}
 
-	pebbleStorage, ok := s.storage.(*storage.PebbleStorage)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support consensus operations")
-	}
-
-	consensusStorage := storage.NewConsensusStorage(pebbleStorage, s.logger)
+	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
 	statsMap, err := consensusStorage.GetAllValidatorStats(ctx, fromBlock, toBlock, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to get all validator stats",
@@ -279,12 +264,7 @@ func (s *Schema) resolveEpochData(p graphql.ResolveParams) (interface{}, error) 
 		return nil, fmt.Errorf("invalid epoch number format: %w", err)
 	}
 
-	pebbleStorage, ok := s.storage.(*storage.PebbleStorage)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support consensus operations")
-	}
-
-	consensusStorage := storage.NewConsensusStorage(pebbleStorage, s.logger)
+	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
 	epochData, err := consensusStorage.GetEpochInfo(ctx, epochNumber)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -303,12 +283,7 @@ func (s *Schema) resolveEpochData(p graphql.ResolveParams) (interface{}, error) 
 func (s *Schema) resolveLatestEpochData(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	pebbleStorage, ok := s.storage.(*storage.PebbleStorage)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support consensus operations")
-	}
-
-	consensusStorage := storage.NewConsensusStorage(pebbleStorage, s.logger)
+	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
 	epochData, err := consensusStorage.GetLatestEpochInfo(ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {

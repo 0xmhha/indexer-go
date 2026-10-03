@@ -21,6 +21,11 @@ type PebbleStorage struct {
 	// writeMu serializes block transactions (single writer). See BeginBlock.
 	writeMu sync.Mutex
 
+	// Lazy genesis allocation lookup (see SetGenesisBalanceResolver).
+	genesisMu     sync.Mutex
+	genesisClient RPCClient
+	genesisTried  map[common.Address]bool
+
 	// Address transaction sequence counters
 	// Maps address -> next sequence number
 	addrSeqMu sync.RWMutex

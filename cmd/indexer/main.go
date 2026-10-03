@@ -395,9 +395,9 @@ func (a *App) initStorageOnly(ctx context.Context) error {
 // This wraps storage with genesis initializer and runs additional setup
 func (a *App) completeStorageInit(ctx context.Context) error {
 	// Wrap storage with genesis initializer (needs client)
-	if pebbleStore, ok := a.storage.(*storage.PebbleStorage); ok {
-		a.storage = storage.NewGenesisInitializingStorage(pebbleStore, a.client, a.logger)
-		a.logger.Info("Storage wrapped with genesis auto-initialization")
+	if g, ok := a.storage.(storage.GenesisBalanceConfigurer); ok {
+		g.SetGenesisBalanceResolver(a.client)
+		a.logger.Info("Genesis balance auto-initialization enabled")
 	}
 
 	// Initialize system contract verifications if enabled

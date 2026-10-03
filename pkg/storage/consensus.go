@@ -13,12 +13,20 @@ import (
 // ConsensusStorage provides consensus data storage operations
 // This bridges the gap between fetch/consensus types and storage types
 type ConsensusStorage struct {
-	storage *PebbleStorage
+	storage ConsensusBackend
 	logger  *zap.Logger
 }
 
+// ConsensusBackend is the storage ConsensusStorage reads and writes. Any
+// Storage satisfies it, so callers need no concrete storage type.
+type ConsensusBackend interface {
+	Reader
+	WBFTReader
+	WBFTWriter
+}
+
 // NewConsensusStorage creates a new ConsensusStorage instance
-func NewConsensusStorage(storage *PebbleStorage, logger *zap.Logger) *ConsensusStorage {
+func NewConsensusStorage(storage ConsensusBackend, logger *zap.Logger) *ConsensusStorage {
 	return &ConsensusStorage{
 		storage: storage,
 		logger:  logger,

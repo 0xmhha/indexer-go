@@ -38,7 +38,9 @@ type BlockTx struct {
 	batch   *pebble.Batch
 	seqNext map[common.Address]uint64 // staged next sequence per address
 	txDelta uint64                    // staged transaction count increment
-	done    bool
+	// genesisSeen records lazy genesis lookups made in this block.
+	genesisSeen map[common.Address]bool
+	done        bool
 }
 
 // BeginBlock opens a block transaction and returns a context bound to it.
@@ -87,6 +89,7 @@ func (tx *BlockTx) Commit() error {
 	if tx.txDelta > 0 {
 		tx.s.txCount.Add(tx.txDelta)
 	}
+	tx.publishGenesisTried()
 	return nil
 }
 

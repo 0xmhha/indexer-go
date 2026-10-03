@@ -1,0 +1,32 @@
+{
+  "allValidatorsSigningStats": {
+    "allValidatorsSigningStats": {
+      "totalCount": 0
+    }
+  },
+  "burnEvents": {
+    "burnEvents": {
+      "nodes": [
+        {
+          "amount": "7000000000000000000",
+          "blockNumber": "6",
+          "burner": "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
+        }
+      ],
+      "totalCount": 1
+    }
+  },
+  "mintEvents": {
+    "mintEvents": {
+      "nodes": [
+        {
+          "amount": "50000000000000000000",
+          "blockNumber": "6",
+          "minter": "0x0000000000000000000000000000000000001003",
+          "to": "0x1efF47bc3a10a45D4B230B5d10E37751FE6AA718"
+        }
+      ],
+      "totalCount": 1
+    }
+  }
+}

@@ -573,8 +573,8 @@ func (s *PebbleStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock ui
 		}
 
 		// Decode event
-		event := &MintEvent{}
-		if err := json.Unmarshal(eventData, event); err != nil {
+		event, err := DecodeMintEvent(eventData)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode mint event: %w", err)
 		}
 
@@ -653,8 +653,8 @@ func (s *PebbleStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock ui
 		}
 
 		// Decode event
-		event := &BurnEvent{}
-		if err := json.Unmarshal(eventData, event); err != nil {
+		event, err := DecodeBurnEvent(eventData)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode burn event: %w", err)
 		}
 
@@ -738,8 +738,8 @@ func (s *PebbleStorage) GetMinterHistory(ctx context.Context, minter common.Addr
 
 	var events []*MinterConfigEvent
 	for iter.First(); iter.Valid(); iter.Next() {
-		event := &MinterConfigEvent{}
-		if err := json.Unmarshal(iter.Value(), event); err != nil {
+		event, err := DecodeMinterConfigEvent(iter.Value())
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode minter config event: %w", err)
 		}
 		events = append(events, event)
@@ -805,8 +805,8 @@ func (s *PebbleStorage) GetGasTipHistory(ctx context.Context, fromBlock, toBlock
 
 	var events []*GasTipUpdateEvent
 	for iter.First(); iter.Valid(); iter.Next() {
-		event := &GasTipUpdateEvent{}
-		if err := json.Unmarshal(iter.Value(), event); err != nil {
+		event, err := DecodeGasTipUpdateEvent(iter.Value())
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode gas tip event: %w", err)
 		}
 		events = append(events, event)
@@ -837,8 +837,8 @@ func (s *PebbleStorage) GetValidatorHistory(ctx context.Context, validator commo
 
 	var events []*ValidatorChangeEvent
 	for iter.First(); iter.Valid(); iter.Next() {
-		event := &ValidatorChangeEvent{}
-		if err := json.Unmarshal(iter.Value(), event); err != nil {
+		event, err := DecodeValidatorChangeEvent(iter.Value())
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode validator change event: %w", err)
 		}
 		events = append(events, event)
@@ -871,8 +871,8 @@ func (s *PebbleStorage) GetMinterConfigHistory(ctx context.Context, fromBlock, t
 
 	var events []*MinterConfigEvent
 	for iter.First(); iter.Valid(); iter.Next() {
-		event := &MinterConfigEvent{}
-		if err := json.Unmarshal(iter.Value(), event); err != nil {
+		event, err := DecodeMinterConfigEvent(iter.Value())
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode minter config event: %w", err)
 		}
 
@@ -907,8 +907,8 @@ func (s *PebbleStorage) GetEmergencyPauseHistory(ctx context.Context, contract c
 
 	var events []*EmergencyPauseEvent
 	for iter.First(); iter.Valid(); iter.Next() {
-		event := &EmergencyPauseEvent{}
-		if err := json.Unmarshal(iter.Value(), event); err != nil {
+		event, err := DecodeEmergencyPauseEvent(iter.Value())
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode emergency pause event: %w", err)
 		}
 		events = append(events, event)
@@ -940,8 +940,8 @@ func (s *PebbleStorage) GetDepositMintProposals(ctx context.Context, fromBlock, 
 
 	var proposals []*DepositMintProposal
 	for iter.First(); iter.Valid(); iter.Next() {
-		proposal := &DepositMintProposal{}
-		if err := json.Unmarshal(iter.Value(), proposal); err != nil {
+		proposal, err := DecodeDepositMintProposal(iter.Value())
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode deposit mint proposal: %w", err)
 		}
 
@@ -1020,8 +1020,8 @@ func (s *PebbleStorage) GetBlacklistHistory(ctx context.Context, address common.
 
 	var events []*BlacklistEvent
 	for iter.First(); iter.Valid(); iter.Next() {
-		event := &BlacklistEvent{}
-		if err := json.Unmarshal(iter.Value(), event); err != nil {
+		event, err := DecodeBlacklistEvent(iter.Value())
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode blacklist event: %w", err)
 		}
 		events = append(events, event)
@@ -1229,8 +1229,8 @@ func (s *PebbleStorage) GetMemberHistory(ctx context.Context, contract common.Ad
 
 	var events []*MemberChangeEvent
 	for iter.First(); iter.Valid(); iter.Next() {
-		event := &MemberChangeEvent{}
-		if err := json.Unmarshal(iter.Value(), event); err != nil {
+		event, err := DecodeMemberChangeEvent(iter.Value())
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode member change event: %w", err)
 		}
 		events = append(events, event)
