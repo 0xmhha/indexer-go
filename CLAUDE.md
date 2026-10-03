@@ -23,7 +23,7 @@ pkg/
     websocket/                  /ws hub (not fed by the indexer yet)
   events/                       In-process EventBus used in production
   eventbus/                     Local/Redis/Kafka adapters (not wired in main.go)
-  fetch/                        Block ingestion (sequential live loop; worker pool only for gap fill)
+  fetch/                        Block ingestion (sequential live loop, one storage transaction per block; worker pool only for gap fill)
   storage/                      PebbleDB storage (interfaces and implementation in one package)
   multichain/                   Multi-chain orchestration (chains share storage keys; do not enable)
   resilience/                   Session/event cache (not wired)
@@ -53,7 +53,7 @@ make docker-build   # Container image
 - **EventBus**: `main.go` uses `events.NewEventBus` directly; subscriptions read `sub.Channel` (not `sub.Events()`)
   - Publishing is non-blocking; events are dropped when a buffer is full
   - `pkg/eventbus` (Redis, Kafka, factory with local degradation) exists but is not wired
-- **Storage**: PebbleDB. Block writes are currently separate, non-atomic writes; an atomic per-block commit is planned (Phase 0)
+- **Storage**: PebbleDB. Each block is indexed in one block transaction (`BeginBlock`, indexed batch bound to ctx; all access goes through `s.kv(ctx)`). `indexer.atomic_block: false` selects the legacy path until it is removed
 - **Fetcher**: Live indexing processes blocks sequentially by polling; the worker pool (`indexer.workers`) is used only by gap recovery
 - **Adapter**: Detects the node type and selects an adapter; `--adapter` forces one
 
@@ -109,5 +109,5 @@ Known config issues: `database.readonly` and several sections (`eventbus`, `node
 
 - Framework refactoring plan: `docs/analysis/refactoring-plan.md`
 - Phase 0 design and progress: `docs/analysis/phase0-design.md`
-- Known defects with data impact: address sequence reset on restart (D1), non-atomic block writes (D2), non-idempotent reprocessing (D3), gap recovery cursor rewind (D10)
-- Unwired features: EIP-7702 SetCode, ERC-4337 UserOp, ERC-7579 modules and fee delegation have processors but are not registered in `main.go`
+- Phase 0 fixed address sequence reset (D1), non-atomic block writes (D2), non-idempotent reprocessing (D3), gap recovery cursor rewind (D10), the storage wrapper hiding features (F1), unwired SetCode/UserOp/Module/fee delegation (F2) and system contract decoding (D11). Existing databases need a reindex
+- Open: out-of-order gap filling corrupts order-dependent state (D12); multi-chain mode shares storage keys (D4) and still uses the legacy path

@@ -113,6 +113,9 @@ type Config struct {
 	// EnableAdaptiveOptimization enables automatic adjustment of worker count and batch size
 	EnableAdaptiveOptimization bool
 
+	// RPCTimeout bounds each RPC call made while indexing (0 = no limit).
+	RPCTimeout time.Duration
+
 	// AtomicBlock indexes each block in one storage transaction (cursor
 	// included) and publishes its events after commit.
 	AtomicBlock bool
@@ -533,6 +536,9 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 
 	totalBlocks := end - start + 1
 
+	// Cancel workers and the producer on any early return below.
+	ctx, cancel := context.WithCancel(ctx)
+
 	// Create channels for job distribution and result collection
 	jobs := make(chan uint64, numWorkers)
 	results := make(chan *jobResult, numWorkers)
@@ -545,16 +551,17 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 			defer wg.Done()
 			for height := range jobs {
 				// Check context cancellation
-				select {
-				case <-ctx.Done():
-					results <- &jobResult{height: height, err: ctx.Err()}
+				if ctx.Err() != nil {
 					return
-				default:
 				}
 
 				// Fetch block and receipts with retry logic
 				result := f.fetchBlockJob(ctx, height)
-				results <- result
+				select {
+				case results <- result:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}(i)
 	}
@@ -576,6 +583,15 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 	go func() {
 		wg.Wait()
 		close(results)
+	}()
+
+	// On every return: stop the workers and the producer, then drain the
+	// results channel (closed after all workers exit) so no goroutine is left
+	// blocked on a send.
+	defer func() {
+		cancel()
+		for range results {
+		}
 	}()
 
 	// Collect results and store blocks in order
@@ -760,10 +776,12 @@ func (f *Fetcher) Run(ctx context.Context) error {
 		}
 
 		// Get latest block from chain
-		latestChainBlock, err := f.client.GetLatestBlockNumber(ctx)
+		latestChainBlock, err := f.latestBlockNumber(ctx)
 		if err != nil {
 			f.logger.Error("Failed to get latest block number", zap.Error(err))
-			time.Sleep(f.config.RetryDelay)
+			if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -773,7 +791,9 @@ func (f *Fetcher) Run(ctx context.Context) error {
 				zap.Uint64("next_height", nextHeight),
 				zap.Uint64("latest_chain_block", latestChainBlock),
 			)
-			time.Sleep(f.config.RetryDelay)
+			if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -792,7 +812,9 @@ func (f *Fetcher) Run(ctx context.Context) error {
 
 		if err := f.FetchRange(ctx, nextHeight, batchEnd); err != nil {
 			f.logger.Error("Failed to fetch batch", zap.Error(err))
-			time.Sleep(f.config.RetryDelay)
+			if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
+				return err
+			}
 			continue
 		}
 

@@ -306,7 +306,7 @@ func (f *Fetcher) ensureAddressBalanceInitialized(ctx context.Context, histReade
 		rpcBlockNumber = big.NewInt(0)
 	}
 
-	rpcBalance, err := f.client.BalanceAt(ctx, addr, rpcBlockNumber)
+	rpcBalance, err := f.balanceAt(ctx, addr, rpcBlockNumber)
 	if err != nil {
 		// Log warning but don't fail - balance tracking is best-effort
 		f.logger.Warn("Failed to fetch initial balance from RPC, starting from 0",
@@ -379,7 +379,7 @@ func (f *Fetcher) initializeGenesisBalances(ctx context.Context, block *types.Bl
 	}
 
 	// Fetch the actual balance from RPC at block 0
-	rpcBalance, err := f.client.BalanceAt(ctx, miner, big.NewInt(0))
+	rpcBalance, err := f.balanceAt(ctx, miner, big.NewInt(0))
 	if err != nil {
 		f.logger.Warn("Failed to fetch genesis miner balance from RPC",
 			zap.String("miner", miner.Hex()),

@@ -510,3 +510,12 @@ golden 키 공간은 의도한 세 키만 늘었다. `/data/syscontracts/mint/�
 **남은 것.**
 - 멀티체인 경로(`multichain/instance.go`)는 fetch 설정을 따로 만들므로 아직 기존 경로를 쓴다. 멀티체인은 P0-12에서 시작을 막을 예정이라 이번에는 바꾸지 않았다.
 - P0-14에서 한 릴리스 뒤 기존 경로, 스위치, `LargeBlockProcessor`의 쓰기 부분을 지운다.
+
+### P0-3: 고루틴 수명과 RPC timeout (10/3, C1·C4 수정)
+
+| 결함 | 수정 | 시험 |
+|---|---|---|
+| C1 `FetchRangeConcurrent` 고루틴 누수 | 함수 안에서 취소 가능한 context를 만든다. 반환할 때 취소한 뒤 결과 채널을 끝까지 비운다. worker는 결과를 보낼 때도 취소를 확인한다 | `TestFetchRangeConcurrentDoesNotLeakOnError`. 수정 전 코드에서는 worker 32개로 고루틴 34개가 남아 실패했다 |
+| C4 context를 무시하는 sleep | `time.Sleep` 5곳(수집 루프 3곳, 재시도 backoff 2곳)을 `sleepCtx`로 바꿨다. 취소되면 `ctx.Err()`를 돌려준다 | `TestSleepCtxStopsOnCancel`, `TestRunStopsPromptlyWhileWaiting`. 수정 전 코드에서는 대기 1시간 설정에서 취소한 뒤에도 멈추지 않았다 |
+| C4 RPC timeout 없음 | `Config.RPCTimeout`(`rpc.timeout`에서 가져옴)으로 블록·receipt·최신 높이·잔액 조회를 호출마다 제한한다. 조회 코드의 중복도 `getBlock`, `getReceipts`로 합쳤다 | `TestRPCTimeoutBoundsCalls` |
+| 기존 race(시험용 mock) | `mockClient`의 실패 횟수 카운터를 잠금으로 보호했다 | `go test -race ./pkg/fetch`가 처음으로 통과했다 |
