@@ -1,0 +1,166 @@
+NODES {'package': 42, 'method': 1737, 'type': 520, 'func': 763, 'interface': 94, 'iface_method': 815}
+EDGES {'call': 2583, 'contains': 3929, 'ext_import': 79, 'iface_call': 635, 'implements': 156, 'import': 103, 'ref': 7896}
+
+PKG | own | closureLOC | closurePkgs | fanin | fanout | heavy-ext
+cmd/indexer | 1154 | 75574 | 34 | 0 | 17 | client_golang,graphql,handler,kafka-go,pebble,v9
+pkg/api | 937 | 72995 | 31 | 1 | 12 | client_golang,graphql,handler,kafka-go,pebble,v9
+pkg/api/graphql | 18527 | 61316 | 24 | 1 | 11 | client_golang,graphql,handler,pebble
+pkg/multichain | 1385 | 34442 | 17 | 2 | 6 | client_golang,pebble
+pkg/api/jsonrpc | 5632 | 32529 | 7 | 1 | 5 | client_golang,pebble
+pkg/fetch | 5886 | 29682 | 7 | 2 | 7 | client_golang,pebble
+pkg/eventbus | 2617 | 27127 | 6 | 1 | 3 | client_golang,kafka-go,pebble,v9
+pkg/notifications | 2756 | 26182 | 5 | 4 | 2 | client_golang,pebble
+pkg/watchlist | 1736 | 25162 | 5 | 1 | 2 | client_golang,pebble
+pkg/events | 4994 | 23426 | 4 | 9 | 2 | client_golang,pebble
+pkg/rpcproxy | 2089 | 20521 | 4 | 3 | 1 | pebble
+pkg/api/etherscan | 437 | 19920 | 6 | 1 | 3 | pebble
+pkg/token | 1274 | 19706 | 4 | 1 | 1 | pebble
+pkg/resilience | 1158 | 19590 | 4 | 0 | 1 | pebble
+pkg/storage | 17152 | 18432 | 3 | 13 | 3 | pebble
+e2e/anvil | 333 | 4772 | 11 | 0 | 1 | 
+pkg/adapters/factory | 839 | 4439 | 10 | 3 | 5 | 
+pkg/adapters/stableone | 484 | 2852 | 6 | 1 | 5 | 
+pkg/consensus/wbft | 476 | 2077 | 4 | 1 | 4 | 
+pkg/crypto/bls | 676 | 1813 | 2 | 0 | 2 | 
+internal/config | 1084 | 1685 | 1 | 2 | 1 | 
+pkg/adapters/anvil | 251 | 1220 | 4 | 1 | 4 | 
+pkg/verifier | 389 | 1051 | 1 | 4 | 1 | 
+pkg/abi | 715 | 715 | 0 | 2 | 0 | 
+pkg/consensus/poa | 214 | 678 | 2 | 1 | 2 | 
+pkg/compiler | 662 | 662 | 0 | 3 | 0 | 
+internal/constants | 601 | 601 | 0 | 12 | 0 | 
+pkg/adapters/evm | 291 | 575 | 1 | 3 | 1 | 
+pkg/types/consensus | 536 | 536 | 0 | 5 | 0 | 
+pkg/api/websocket | 525 | 525 | 0 | 1 | 0 | 
+pkg/consensus | 180 | 464 | 1 | 4 | 1 | 
+pkg/api/middleware | 447 | 447 | 0 | 1 | 0 | 
+pkg/client | 357 | 357 | 0 | 2 | 0 | 
+pkg/types/chain | 284 | 284 | 0 | 10 | 0 | 
+pkg/adapters/detector | 283 | 283 | 0 | 2 | 0 | 
+pkg/price | 258 | 258 | 0 | 0 | 0 | 
+internal/testutil | 180 | 180 | 0 | 0 | 0 | 
+internal/logger | 151 | 151 | 0 | 1 | 0 | 
+pkg/userop | 143 | 143 | 0 | 3 | 0 | 
+pkg/types | 89 | 89 | 0 | 0 | 0 | 
+pkg/module | 86 | 86 | 0 | 1 | 0 | 
+e2e | 0 | 0 | 0 | 0 | 0 | 
+
+CONCURRENCY per pkg (go/select/chanops/makechan/locks/sleeps/atomics/sprintf/json)
+pkg/eventbus [10, 5, 10, 2, 7, 0, 128, 6, 16]
+pkg/multichain [6, 7, 14, 2, 18, 0, 16, 3, 0]
+pkg/fetch [5, 12, 21, 5, 19, 5, 0, 5, 0]
+pkg/notifications [5, 6, 11, 2, 12, 0, 0, 36, 16]
+cmd/indexer [3, 1, 4, 2, 0, 1, 0, 0, 0]
+pkg/api/graphql [3, 3, 5, 2, 3, 0, 0, 193, 11]
+pkg/api/jsonrpc [3, 3, 8, 2, 18, 0, 0, 102, 64]
+pkg/api/websocket [3, 6, 13, 5, 8, 0, 0, 0, 8]
+pkg/rpcproxy [3, 5, 8, 2, 31, 0, 14, 3, 1]
+pkg/api/etherscan [1, 0, 0, 0, 3, 0, 0, 2, 0]
+pkg/api/middleware [1, 0, 0, 0, 4, 0, 0, 0, 0]
+pkg/resilience [1, 5, 6, 0, 8, 0, 0, 8, 12]
+e2e/anvil [0, 1, 1, 0, 0, 2, 0, 8, 0]
+pkg/abi [0, 0, 0, 0, 0, 0, 0, 2, 2]
+pkg/adapters/factory [0, 0, 0, 1, 0, 0, 0, 0, 8]
+pkg/api [0, 0, 0, 0, 5, 0, 0, 1, 0]
+pkg/client [0, 0, 0, 1, 0, 0, 0, 1, 0]
+pkg/compiler [0, 0, 0, 0, 0, 0, 0, 5, 3]
+pkg/consensus [0, 0, 0, 0, 7, 0, 0, 0, 0]
+pkg/events [0, 6, 8, 3, 31, 0, 30, 0, 5]
+pkg/storage [0, 2, 2, 0, 21, 0, 162, 204, 76]
+pkg/watchlist [0, 0, 0, 0, 23, 0, 0, 18, 7]
+
+TOP FUNCS
+910 pkg/api/graphql.initConsensusTypes pkg/api/graphql/types.go
+594 pkg/api/graphql.initGovernanceTypes pkg/api/graphql/types.go
+319 pkg/api/graphql.initCoreTypes pkg/api/graphql/types.go
+300 pkg/api/graphql.(subscriptionClient).handleEvent pkg/api/graphql/subscription.go
+295 internal/config.(Config).LoadFromEnv internal/config/config.go
+288 pkg/api/graphql.(SchemaBuilder).WithUserOpQueries pkg/api/graphql/schema.go
+260 pkg/api/graphql.(schemaBuilder).buildRPCProxyQueries pkg/api/graphql/resolvers_rpcproxy.go
+258 pkg/api/graphql.initStatsTypes pkg/api/graphql/types.go
+244 pkg/api/graphql.initWatchlistTypes pkg/api/graphql/types_watchlist.go
+228 pkg/api/graphql.(Schema).resolveAddressOverview pkg/api/graphql/resolvers_address.go
+225 pkg/fetch.(Fetcher).processAddressIndexing pkg/fetch/fetcher_indexing.go
+224 internal/config.(Config).SetDefaults internal/config/config.go
+219 pkg/api/graphql.(SchemaBuilder).WithSystemContractQueries pkg/api/graphql/schema.go
+215 pkg/fetch.(Fetcher).FetchRangeConcurrent pkg/fetch/fetcher.go
+204 pkg/api/graphql.(SchemaBuilder).WithConsensusQueries pkg/api/graphql/schema.go
+
+TOP TYPES by method set
+238 pkg/storage.PebbleStorage
+213 pkg/api/graphql.Schema
+170 pkg/storage.GenesisInitializingStorage
+84 pkg/api/jsonrpc.Handler
+45 pkg/fetch.Fetcher
+35 pkg/notifications.NotificationService
+34 pkg/events.SystemContractEventParser
+25 pkg/eventbus.RedisEventBus
+23 pkg/api/graphql.SchemaBuilder
+23 pkg/eventbus.KafkaEventBus
+
+INTERFACES per pkg
+43 pkg/storage
+13 pkg/fetch
+7 pkg/events
+7 pkg/types/consensus
+6 pkg/types/chain
+5 pkg/eventbus
+3 pkg/notifications
+2 pkg/resilience
+2 pkg/token
+1 pkg/adapters/evm
+1 pkg/compiler
+1 pkg/price
+1 pkg/rpcproxy
+1 pkg/verifier
+1 pkg/watchlist
+
+LARGEST INTERFACES
+152 pkg/storage.Storage
+43 pkg/storage.SystemContractStorage
+33 pkg/storage.FullAddressIndexer
+23 pkg/fetch.UserOpIndexer
+22 pkg/storage.SystemContractReader
+21 pkg/storage.SystemContractWriter
+18 pkg/eventbus.DistributedEventBus
+18 pkg/storage.AddressIndexReaderWriter
+
+CONCRETE ASSERTIONS
+pkg/storage/pebble_logs.go:179 *pkg/storage.pebbleBatch
+pkg/storage/pebble_logs.go:199 *pkg/storage.pebbleBatch
+pkg/rpcproxy/cache.go:184 *pkg/rpcproxy.CacheEntry
+pkg/rpcproxy/proxy.go:131 *pkg/rpcproxy.ContractCallResponse
+pkg/rpcproxy/proxy.go:262 *pkg/rpcproxy.TransactionStatusResponse
+pkg/rpcproxy/proxy.go:379 *pkg/rpcproxy.BalanceResponse
+pkg/rpcproxy/proxy.go:441 *pkg/rpcproxy.NonceResponse
+pkg/rpcproxy/proxy.go:503 *pkg/rpcproxy.CodeResponse
+pkg/rpcproxy/proxy.go:560 *pkg/rpcproxy.InternalTransactionResponse
+pkg/rpcproxy/proxy.go:671 *pkg/rpcproxy.ContractCallRequest
+pkg/rpcproxy/proxy.go:679 *pkg/rpcproxy.TransactionStatusRequest
+pkg/rpcproxy/proxy.go:687 *pkg/rpcproxy.InternalTransactionRequest
+pkg/rpcproxy/queue.go:70 *pkg/rpcproxy.Request
+pkg/rpcproxy/queue.go:89 *pkg/rpcproxy.Request
+pkg/rpcproxy/queue.go:135 *pkg/rpcproxy.Request
+pkg/rpcproxy/queue.go:181 *pkg/rpcproxy.Request
+pkg/rpcproxy/queue.go:209 *pkg/rpcproxy.Request
+pkg/api/graphql/resolvers_consensus.go:115 *pkg/storage.PebbleStorage
+pkg/api/graphql/resolvers_consensus.go:183 *pkg/storage.PebbleStorage
+pkg/api/graphql/resolvers_consensus.go:245 *pkg/storage.PebbleStorage
+pkg/api/graphql/resolvers_consensus.go:282 *pkg/storage.PebbleStorage
+pkg/api/graphql/resolvers_consensus.go:306 *pkg/storage.PebbleStorage
+pkg/api/graphql/subscription.go:428 *pkg/events.BlockEvent
+pkg/api/graphql/subscription.go:448 *pkg/events.TransactionEvent
+pkg/api/graphql/subscription.go:467 *pkg/events.TransactionEvent
+pkg/api/graphql/subscription.go:500 *pkg/events.LogEvent
+pkg/api/graphql/subscription.go:526 *pkg/events.ChainConfigEvent
+pkg/api/graphql/subscription.go:542 *pkg/events.ValidatorSetEvent
+pkg/api/graphql/subscription.go:561 *pkg/events.ConsensusBlockEvent
+pkg/api/graphql/subscription.go:595 *pkg/events.ConsensusForkEvent
+pkg/api/graphql/subscription.go:618 *pkg/events.ConsensusValidatorChangeEvent
+pkg/api/graphql/subscription.go:661 *pkg/events.ConsensusErrorEvent
+pkg/api/graphql/subscription.go:694 *pkg/events.SystemContractEvent
+pkg/api/jsonrpc/pending_pool.go:139 *pkg/events.TransactionEvent
+pkg/api/health.go:120 *pkg/eventbus.RedisEventBus
+cmd/indexer/main.go:398 *pkg/storage.PebbleStorage
+
+KVStore iface calls from outside storage {'pkg/notifications': 21, 'pkg/resilience': 23, 'pkg/watchlist': 15} 59

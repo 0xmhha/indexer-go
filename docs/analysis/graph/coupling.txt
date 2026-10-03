@@ -1,0 +1,130 @@
+STORAGE INTERFACE CONSUMERS
+cmd/indexer | ContractVerificationReader, ContractVerificationWriter, KVStore, Storage | concrete: PebbleStorage
+pkg/api | Storage | concrete: -
+pkg/api/etherscan | ContractVerificationReader, ContractVerificationWriter, Storage | concrete: -
+pkg/api/graphql | AddressIndexReader, ContractVerificationReader, ContractVerificationWriter, FeeDelegationReader, HistoricalReader, ModuleIndexReader, SearchReader, SetCodeIndexReader, Storage, SystemContractReader, TokenHolderIndexReader, TokenMetadataReader, UserOpIndexReader, WBFTReader | concrete: PebbleStorage
+pkg/api/jsonrpc | AddressIndexReader, FeeDelegationReader, HistoricalReader, SetCodeIndexReader, Storage, SystemContractReader, WBFTReader | concrete: -
+pkg/events | SystemContractWriter | concrete: -
+pkg/fetch | AddressIndexWriter, FeeDelegationReader, HistoricalReader, HistoricalWriter, LogWriter, ModuleIndexReader, ModuleIndexWriter, SetCodeIndexWriter, SystemContractWriter, UserOpIndexReader, UserOpIndexWriter, WBFTWriter, Writer | concrete: -
+pkg/multichain | Storage | concrete: -
+pkg/notifications | KVStore | concrete: -
+pkg/resilience | KVStore | concrete: -
+pkg/rpcproxy | ContractVerificationReader | concrete: -
+pkg/token | Storage, TokenMetadataReader, TokenMetadataWriter | concrete: -
+pkg/watchlist | Storage | concrete: -
+
+MERMAID
+graph TD
+  cmd_indexer["cmd/indexer"] --> internal_config["internal/config"]
+  cmd_indexer["cmd/indexer"] --> internal_constants["internal/constants"]
+  cmd_indexer["cmd/indexer"] --> internal_logger["internal/logger"]
+  cmd_indexer["cmd/indexer"] --> pkg_adapters_detector["pkg/adapters/detector"]
+  cmd_indexer["cmd/indexer"] --> pkg_adapters_factory["pkg/adapters/factory"]
+  cmd_indexer["cmd/indexer"] --> pkg_api["pkg/api"]
+  cmd_indexer["cmd/indexer"] --> pkg_client["pkg/client"]
+  cmd_indexer["cmd/indexer"] --> pkg_compiler["pkg/compiler"]
+  cmd_indexer["cmd/indexer"] --> pkg_events["pkg/events"]
+  cmd_indexer["cmd/indexer"] --> pkg_fetch["pkg/fetch"]
+  cmd_indexer["cmd/indexer"] --> pkg_multichain["pkg/multichain"]
+  cmd_indexer["cmd/indexer"] --> pkg_notifications["pkg/notifications"]
+  cmd_indexer["cmd/indexer"] --> pkg_rpcproxy["pkg/rpcproxy"]
+  cmd_indexer["cmd/indexer"] --> pkg_storage["pkg/storage"]
+  cmd_indexer["cmd/indexer"] --> pkg_token["pkg/token"]
+  cmd_indexer["cmd/indexer"] --> pkg_types_chain["pkg/types/chain"]
+  cmd_indexer["cmd/indexer"] --> pkg_verifier["pkg/verifier"]
+  internal_config["internal/config"] --> internal_constants["internal/constants"]
+  pkg_adapters_anvil["pkg/adapters/anvil"] --> pkg_adapters_evm["pkg/adapters/evm"]
+  pkg_adapters_anvil["pkg/adapters/anvil"] --> pkg_consensus["pkg/consensus"]
+  pkg_adapters_anvil["pkg/adapters/anvil"] --> pkg_consensus_poa["pkg/consensus/poa"]
+  pkg_adapters_anvil["pkg/adapters/anvil"] --> pkg_types_chain["pkg/types/chain"]
+  pkg_adapters_evm["pkg/adapters/evm"] --> pkg_types_chain["pkg/types/chain"]
+  pkg_adapters_factory["pkg/adapters/factory"] --> pkg_adapters_anvil["pkg/adapters/anvil"]
+  pkg_adapters_factory["pkg/adapters/factory"] --> pkg_adapters_detector["pkg/adapters/detector"]
+  pkg_adapters_factory["pkg/adapters/factory"] --> pkg_adapters_evm["pkg/adapters/evm"]
+  pkg_adapters_factory["pkg/adapters/factory"] --> pkg_adapters_stableone["pkg/adapters/stableone"]
+  pkg_adapters_factory["pkg/adapters/factory"] --> pkg_types_chain["pkg/types/chain"]
+  pkg_adapters_stableone["pkg/adapters/stableone"] --> internal_constants["internal/constants"]
+  pkg_adapters_stableone["pkg/adapters/stableone"] --> pkg_adapters_evm["pkg/adapters/evm"]
+  pkg_adapters_stableone["pkg/adapters/stableone"] --> pkg_consensus["pkg/consensus"]
+  pkg_adapters_stableone["pkg/adapters/stableone"] --> pkg_consensus_wbft["pkg/consensus/wbft"]
+  pkg_adapters_stableone["pkg/adapters/stableone"] --> pkg_types_chain["pkg/types/chain"]
+  pkg_api["pkg/api"] --> internal_constants["internal/constants"]
+  pkg_api["pkg/api"] --> pkg_api_etherscan["pkg/api/etherscan"]
+  pkg_api["pkg/api"] --> pkg_api_graphql["pkg/api/graphql"]
+  pkg_api["pkg/api"] --> pkg_api_jsonrpc["pkg/api/jsonrpc"]
+  pkg_api["pkg/api"] --> pkg_api_middleware["pkg/api/middleware"]
+  pkg_api["pkg/api"] --> pkg_api_websocket["pkg/api/websocket"]
+  pkg_api["pkg/api"] --> pkg_eventbus["pkg/eventbus"]
+  pkg_api["pkg/api"] --> pkg_events["pkg/events"]
+  pkg_api["pkg/api"] --> pkg_notifications["pkg/notifications"]
+  pkg_api["pkg/api"] --> pkg_rpcproxy["pkg/rpcproxy"]
+  pkg_api["pkg/api"] --> pkg_storage["pkg/storage"]
+  pkg_api["pkg/api"] --> pkg_verifier["pkg/verifier"]
+  pkg_api_etherscan["pkg/api/etherscan"] --> pkg_compiler["pkg/compiler"]
+  pkg_api_etherscan["pkg/api/etherscan"] --> pkg_storage["pkg/storage"]
+  pkg_api_etherscan["pkg/api/etherscan"] --> pkg_verifier["pkg/verifier"]
+  pkg_api_graphql["pkg/api/graphql"] --> internal_constants["internal/constants"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_abi["pkg/abi"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_events["pkg/events"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_multichain["pkg/multichain"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_notifications["pkg/notifications"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_rpcproxy["pkg/rpcproxy"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_storage["pkg/storage"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_types_consensus["pkg/types/consensus"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_userop["pkg/userop"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_verifier["pkg/verifier"]
+  pkg_api_graphql["pkg/api/graphql"] --> pkg_watchlist["pkg/watchlist"]
+  pkg_api_jsonrpc["pkg/api/jsonrpc"] --> internal_constants["internal/constants"]
+  pkg_api_jsonrpc["pkg/api/jsonrpc"] --> pkg_abi["pkg/abi"]
+  pkg_api_jsonrpc["pkg/api/jsonrpc"] --> pkg_events["pkg/events"]
+  pkg_api_jsonrpc["pkg/api/jsonrpc"] --> pkg_notifications["pkg/notifications"]
+  pkg_api_jsonrpc["pkg/api/jsonrpc"] --> pkg_storage["pkg/storage"]
+  pkg_consensus["pkg/consensus"] --> pkg_types_chain["pkg/types/chain"]
+  pkg_consensus_poa["pkg/consensus/poa"] --> pkg_consensus["pkg/consensus"]
+  pkg_consensus_poa["pkg/consensus/poa"] --> pkg_types_chain["pkg/types/chain"]
+  pkg_consensus_wbft["pkg/consensus/wbft"] --> internal_constants["internal/constants"]
+  pkg_consensus_wbft["pkg/consensus/wbft"] --> pkg_consensus["pkg/consensus"]
+  pkg_consensus_wbft["pkg/consensus/wbft"] --> pkg_types_chain["pkg/types/chain"]
+  pkg_consensus_wbft["pkg/consensus/wbft"] --> pkg_types_consensus["pkg/types/consensus"]
+  pkg_crypto_bls["pkg/crypto/bls"] --> internal_constants["internal/constants"]
+  pkg_crypto_bls["pkg/crypto/bls"] --> pkg_types_consensus["pkg/types/consensus"]
+  pkg_eventbus["pkg/eventbus"] --> internal_config["internal/config"]
+  pkg_eventbus["pkg/eventbus"] --> internal_constants["internal/constants"]
+  pkg_eventbus["pkg/eventbus"] --> pkg_events["pkg/events"]
+  pkg_events["pkg/events"] --> internal_constants["internal/constants"]
+  pkg_events["pkg/events"] --> pkg_storage["pkg/storage"]
+  pkg_fetch["pkg/fetch"] --> internal_constants["internal/constants"]
+  pkg_fetch["pkg/fetch"] --> pkg_events["pkg/events"]
+  pkg_fetch["pkg/fetch"] --> pkg_module["pkg/module"]
+  pkg_fetch["pkg/fetch"] --> pkg_storage["pkg/storage"]
+  pkg_fetch["pkg/fetch"] --> pkg_types_chain["pkg/types/chain"]
+  pkg_fetch["pkg/fetch"] --> pkg_types_consensus["pkg/types/consensus"]
+  pkg_fetch["pkg/fetch"] --> pkg_userop["pkg/userop"]
+  pkg_multichain["pkg/multichain"] --> pkg_adapters_factory["pkg/adapters/factory"]
+  pkg_multichain["pkg/multichain"] --> pkg_client["pkg/client"]
+  pkg_multichain["pkg/multichain"] --> pkg_events["pkg/events"]
+  pkg_multichain["pkg/multichain"] --> pkg_fetch["pkg/fetch"]
+  pkg_multichain["pkg/multichain"] --> pkg_storage["pkg/storage"]
+  pkg_multichain["pkg/multichain"] --> pkg_types_chain["pkg/types/chain"]
+  pkg_notifications["pkg/notifications"] --> pkg_events["pkg/events"]
+  pkg_notifications["pkg/notifications"] --> pkg_storage["pkg/storage"]
+  pkg_resilience["pkg/resilience"] --> pkg_storage["pkg/storage"]
+  pkg_rpcproxy["pkg/rpcproxy"] --> pkg_storage["pkg/storage"]
+  pkg_storage["pkg/storage"] --> internal_constants["internal/constants"]
+  pkg_storage["pkg/storage"] --> pkg_types_consensus["pkg/types/consensus"]
+  pkg_storage["pkg/storage"] --> pkg_userop["pkg/userop"]
+  pkg_token["pkg/token"] --> pkg_storage["pkg/storage"]
+  pkg_verifier["pkg/verifier"] --> pkg_compiler["pkg/compiler"]
+  pkg_watchlist["pkg/watchlist"] --> pkg_events["pkg/events"]
+  pkg_watchlist["pkg/watchlist"] --> pkg_storage["pkg/storage"]
+
+DECL CLOSURES
+pkg/fetch.(Fetcher).FillGaps (321, 7479, [('pkg/fetch', 119), ('pkg/events', 116), ('pkg/storage', 65), ('pkg/types/chain', 12), ('pkg/userop', 8), ('internal/constants', 1)])
+pkg/fetch.(Fetcher).Run (321, 7479, [('pkg/fetch', 119), ('pkg/events', 116), ('pkg/storage', 65), ('pkg/types/chain', 12), ('pkg/userop', 8), ('internal/constants', 1)])
+pkg/api/middleware.RateLimit (11, 128, [('pkg/api/middleware', 11)])
+pkg/abi.NewDecoder (13, 215, [('pkg/abi', 13)])
+pkg/eventbus.NewLocalEventBus (88, 1127, [('pkg/events', 63), ('pkg/eventbus', 25)])
+pkg/events.NewEventBus (64, 944, [('pkg/events', 64)])
+pkg/fetch.NewFetcher (327, 7594, [('pkg/fetch', 124), ('pkg/events', 117), ('pkg/storage', 65), ('pkg/types/chain', 12), ('pkg/userop', 8), ('internal/constants', 1)])
+pkg/adapters/factory.NewFactory (211, 2523, [('pkg/adapters/factory', 44), ('pkg/adapters/stableone', 31), ('pkg/adapters/evm', 27), ('pkg/adapters/anvil', 23), ('pkg/consensus/wbft', 20), ('pkg/consensus', 15)])
+pkg/token.NewDetector (9, 193, [('pkg/token', 9)])
