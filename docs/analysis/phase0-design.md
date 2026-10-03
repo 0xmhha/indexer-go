@@ -489,3 +489,24 @@ golden 키 공간은 의도한 세 키만 늘었다. `/data/syscontracts/mint/�
 연결하면서 결함 둘을 함께 찾았다.
 - **결정성 결함.** SetCode 상태·통계의 `updatedAt`, `lastActivityTime`이 처리 시각(`time.Now()`)이었다. 같은 체인을 다시 색인하면 값이 달라져 결정성·crash 시험이 실패했다. 호출하는 쪽에서 블록 시각을 넣게 했고, 통계는 같은 트랜잭션에 이미 저장된 블록 헤더의 시각을 읽는다(`blockTimeOrNow`). 비용은 SetCode 기록마다 블록 읽기 한 번이다. 토큰 메타데이터의 같은 결함은 golden에서 정규화로 피하고 있으며 아직 고치지 않았다.
 - **D12(새 결함).** gap을 뒤의 블록보다 나중에 채우면, 처리 순서에 따라 결과가 달라지는 상태가 틀어진다. 시험에서는 블록 11의 모듈 해제가 블록 9의 설치보다 먼저 처리되어 최종 상태가 "활성"으로 남았다. 원자적 경로는 새 gap을 만들지 않지만, 기존 DB의 gap을 채울 때는 남는다. gap 시험의 비교에서는 순서 의존 prefix(`/index/addr/`, `/index/balance/`, `/data/module/`)를 이유와 함께 뺐다.
+
+### P0-13: 원자적 경로를 기본값으로 (10/3)
+
+**성능 확인(3.10절 기준: 새 경로가 옛 경로의 1.2배 이내).** `cmd/indexer/ingest_bench_test.go`의 `BenchmarkIngest`로 측정했다. 운영 배선(`NewApp`)으로 가짜 체인을 색인하고, `FetchRange` 시간만 잰다. 부하 시나리오는 `testchain.BuildLoad`로 만들었다.
+
+| 경우 (블록 202개) | 기존 경로 | 원자적 경로 |
+|---|---|---|
+| regular: 블록당 트랜잭션 50개, 절반은 ERC-20 transfer (총 10,001개) | 179.1초, 180.3초 | 2.7초, 3.2초, 4.1초 |
+| large_block: 위에 트랜잭션 1,200개 블록 하나 추가 (총 11,151개). 기존 경로는 이 블록을 병렬 worker로 처리한다 | 190.9초, 226.2초 | 2.6초, 5.5초 |
+
+원자적 경로가 약 40~70배 빠르다. 기준을 충분히 통과한다. 큰 블록의 병렬 처리를 없앤 영향도 보이지 않는다. 기존 경로가 느린 원인은 블록마다 동기 쓰기(fsync)를 여러 번 하는 것으로 추정한다(transfer, 잔액 갱신, 로그 색인이 각각 Sync). 원자적 경로는 블록마다 fsync를 한 번 한다. 이 추정은 프로파일로 확인하지 않았다. 측정 환경은 macOS(arm64) 로컬 디스크이고, 가짜 체인의 RPC 비용은 두 경로에 똑같이 들어간다.
+
+**전환.**
+- `NewConfig`가 `indexer.atomic_block`을 true로 둔다. 설정 파일의 `atomic_block: false`나 `INDEXER_ATOMIC_BLOCK=false`로 기존 경로를 고를 수 있다(`TestAtomicBlockDefault`).
+- 시험 harness의 기본 경로를 원자적 경로로 바꿨다. `TestLegacyPathMatchesGolden`은 되돌리기 경로인 기존 경로가 같은 키 공간을 내는지 계속 확인한다.
+- `docs/CONFIG.md`에 키와 환경 변수, `account_abstraction.enabled` 기본값을 적었다.
+- golden 키 공간과 GraphQL golden은 바뀌지 않았다.
+
+**남은 것.**
+- 멀티체인 경로(`multichain/instance.go`)는 fetch 설정을 따로 만들므로 아직 기존 경로를 쓴다. 멀티체인은 P0-12에서 시작을 막을 예정이라 이번에는 바꾸지 않았다.
+- P0-14에서 한 릴리스 뒤 기존 경로, 스위치, `LargeBlockProcessor`의 쓰기 부분을 지운다.

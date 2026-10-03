@@ -328,3 +328,14 @@ func (c *Chain) balanceAt(a common.Address, n uint64) *big.Int {
 	}
 	return new(big.Int)
 }
+
+// TxCount returns the number of transactions in all built blocks.
+func (c *Chain) TxCount() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	n := 0
+	for _, b := range c.blocks {
+		n += len(b.Block.Transactions())
+	}
+	return n
+}

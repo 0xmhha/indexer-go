@@ -63,8 +63,9 @@ type IndexerConfig struct {
 	Workers     int    `yaml:"workers"`
 	ChunkSize   int    `yaml:"chunk_size"`
 	StartHeight uint64 `yaml:"start_height"`
-	// AtomicBlock indexes each block in one storage transaction. It will
-	// become the default once verified (phase0-design.md P0-13).
+	// AtomicBlock indexes each block in one storage transaction (default
+	// true). Setting it to false selects the legacy write path, which is
+	// kept for one release as a fallback and then removed.
 	AtomicBlock bool `yaml:"atomic_block"`
 }
 
@@ -429,6 +430,9 @@ func NewConfig() *Config {
 	// SetDefaults, because SetDefaults runs again after the file is loaded
 	// and cannot tell an omitted bool from an explicit false.
 	cfg.AccountAbstraction.Enabled = true
+	// Same reasoning: atomic block indexing is the default, and an explicit
+	// false in the file or INDEXER_ATOMIC_BLOCK=false selects the legacy path.
+	cfg.Indexer.AtomicBlock = true
 	return cfg
 }
 

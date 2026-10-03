@@ -28,3 +28,22 @@ func TestAccountAbstractionDefault(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, cfg.AccountAbstraction.Enabled, "explicit false must disable it")
 }
+
+// TestAtomicBlockDefault checks atomic block indexing is the default and
+// that the legacy path can still be selected explicitly.
+func TestAtomicBlockDefault(t *testing.T) {
+	base := "rpc:\n  endpoint: \"http://127.0.0.1:8545\"\ndatabase:\n  path: \"/tmp/indexer-test\"\n"
+
+	cfg, err := Load(writeConfig(t, base))
+	require.NoError(t, err)
+	require.True(t, cfg.Indexer.AtomicBlock)
+
+	cfg, err = Load(writeConfig(t, base+"indexer:\n  atomic_block: false\n"))
+	require.NoError(t, err)
+	require.False(t, cfg.Indexer.AtomicBlock)
+
+	t.Setenv("INDEXER_ATOMIC_BLOCK", "false")
+	cfg, err = Load(writeConfig(t, base))
+	require.NoError(t, err)
+	require.False(t, cfg.Indexer.AtomicBlock, "environment overrides the default")
+}

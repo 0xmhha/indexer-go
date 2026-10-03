@@ -34,14 +34,17 @@ var (
 	allModes   = []ingestMode{legacyMode, atomicMode}
 )
 
+// defaultMode is the production default write path.
+var defaultMode = atomicMode
+
 // startApp builds the production single-chain wiring (NewApp) against srv
-// with the database at dir, using the legacy write path. The caller must call
-// app.Shutdown.
+// with the database at dir, using the default write path. The caller must
+// call app.Shutdown.
 func startApp(t *testing.T, srv *testchain.Server, dir string) *App {
-	return startAppMode(t, srv, dir, legacyMode)
+	return startAppMode(t, srv, dir, defaultMode)
 }
 
-func startAppMode(t *testing.T, srv *testchain.Server, dir string, mode ingestMode) *App {
+func startAppMode(t testing.TB, srv *testchain.Server, dir string, mode ingestMode) *App {
 	t.Helper()
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = srv.URL()
@@ -60,7 +63,7 @@ func startAppMode(t *testing.T, srv *testchain.Server, dir string, mode ingestMo
 // does (FetchRange), and shuts it down cleanly.
 func runSession(t *testing.T, srv *testchain.Server, dir string, from, to uint64) {
 	t.Helper()
-	runSessionMode(t, srv, dir, from, to, legacyMode)
+	runSessionMode(t, srv, dir, from, to, defaultMode)
 }
 
 func runSessionMode(t *testing.T, srv *testchain.Server, dir string, from, to uint64, mode ingestMode) {
@@ -76,7 +79,7 @@ func runSessionMode(t *testing.T, srv *testchain.Server, dir string, from, to ui
 // indexScenario indexes every scenario block in one session and returns the
 // database directory.
 func indexScenario(t *testing.T, sc *testchain.Scenario) string {
-	return indexScenarioMode(t, sc, legacyMode)
+	return indexScenarioMode(t, sc, defaultMode)
 }
 
 func indexScenarioMode(t *testing.T, sc *testchain.Scenario, mode ingestMode) string {
@@ -159,12 +162,12 @@ func TestIndexIsDeterministic(t *testing.T) {
 	require.Empty(t, testchain.DiffKeyspace(first, second, 20))
 }
 
-// TestAtomicPathMatchesGolden is the verification step of the strangler
-// switch: indexing through the atomic path must produce exactly the keyspace
-// pinned for the legacy path on a clean run.
-func TestAtomicPathMatchesGolden(t *testing.T) {
-	legacy := dumpScenarioIndex(t)
-	atomic := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), atomicMode))
-	diff := testchain.DiffKeyspace(legacy, atomic, 0)
-	require.Empty(t, diff, "atomic path differs from legacy: %v", testchain.SummarizeDiff(diff))
+// TestLegacyPathMatchesGolden keeps the fallback path honest until it is
+// removed: on a clean run the legacy path must produce exactly the keyspace
+// of the default (atomic) path.
+func TestLegacyPathMatchesGolden(t *testing.T) {
+	atomic := dumpScenarioIndex(t)
+	legacy := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), legacyMode))
+	diff := testchain.DiffKeyspace(atomic, legacy, 0)
+	require.Empty(t, diff, "legacy path differs from the default path: %v", testchain.SummarizeDiff(diff))
 }

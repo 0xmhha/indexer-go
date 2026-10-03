@@ -223,3 +223,54 @@ func erc20Transfer(token, from, to common.Address, amount *big.Int) *types.Log {
 func erc721Transfer(token, from, to common.Address, id *big.Int) *types.Log {
 	return &types.Log{Address: token, Topics: []common.Hash{SigTransfer, addrTopic(from), addrTopic(to), common.BigToHash(id)}}
 }
+
+// BuildLoad builds a throughput scenario: blocks of txsPerBlock transactions
+// (alternating native transfers and ERC-20 transfers among a few accounts),
+// plus one block of largeBlockTxs transactions in the middle when it is
+// positive. More than 1000 receipts in a block triggers the legacy path's
+// parallel large-block processing, so both paths can be compared on it.
+func BuildLoad(blocks, txsPerBlock, largeBlockTxs int) *Scenario {
+	accts := make([]Account, 8)
+	alloc := map[common.Address]*big.Int{}
+	for i := range accts {
+		accts[i] = NewAccount(uint64(100 + i))
+		alloc[accts[i].Address] = ether(1_000_000)
+	}
+	ch := NewChain(DefaultChainID, alloc)
+	sc := &Scenario{Chain: ch, Accounts: accts}
+	gp := big.NewInt(1_000_000_000)
+
+	sender := accts[0]
+	sc.ERC20 = crypto.CreateAddress(sender.Address, ch.NextNonce(sender.Address))
+	ch.SetCode(sc.ERC20, selectorsCode("a9059cbb", "70a08231", "18160ddd", "06fdde03", "95d89b41", "313ce567"))
+	ch.SetContract(sc.ERC20, ContractMock{
+		"06fdde03": abiString("Load Token"),
+		"95d89b41": abiString("LT"),
+		"313ce567": word(big.NewInt(18)),
+		"18160ddd": word(ether(1_000_000_000)),
+	})
+	ch.AddBlock(TxSpec{From: sender, Tx: &types.LegacyTx{Gas: 500000, GasPrice: gp, Data: []byte{0x60, 0x80}}, GasUsed: 400000, Creates: true})
+
+	block := func(n int) []TxSpec {
+		specs := make([]TxSpec, 0, n)
+		for i := 0; i < n; i++ {
+			from := accts[i%4]
+			to := accts[4+i%4]
+			if i%2 == 0 {
+				specs = append(specs, TxSpec{From: from, Tx: &types.LegacyTx{To: &to.Address, Value: big.NewInt(int64(1000 + i)), Gas: 21000, GasPrice: gp}})
+				continue
+			}
+			specs = append(specs, TxSpec{From: from, Tx: &types.LegacyTx{To: &sc.ERC20, Gas: 60000, GasPrice: gp}, GasUsed: 21000,
+				Logs: []*types.Log{erc20Transfer(sc.ERC20, from.Address, to.Address, big.NewInt(int64(1+i)))}})
+		}
+		return specs
+	}
+	for b := 0; b < blocks; b++ {
+		if largeBlockTxs > 0 && b == blocks/2 {
+			ch.AddBlock(block(largeBlockTxs)...)
+			continue
+		}
+		ch.AddBlock(block(txsPerBlock)...)
+	}
+	return sc
+}
