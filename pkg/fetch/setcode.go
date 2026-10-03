@@ -102,6 +102,7 @@ func (p *SetCodeProcessor) ProcessSetCodeTransaction(
 				Address:           record.AuthorityAddress,
 				LastUpdatedBlock:  blockNumber,
 				LastUpdatedTxHash: txHash,
+				UpdatedAt:         blockTime, // block time keeps reindexing deterministic
 			}
 
 			// Check if this is clearing delegation (target is zero address)

@@ -90,10 +90,13 @@ func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, height uint6
 		return nil // Storage doesn't support fee delegation, skip silently
 	}
 
-	// Check if client supports fee delegation metadata extraction
-	fdClient, ok := f.client.(FeeDelegationClient)
-	if !ok {
-		return nil // Client doesn't support fee delegation metadata extraction, skip silently
+	// Check if a client supporting fee delegation metadata extraction is set
+	fdClient := f.fdClient
+	if fdClient == nil {
+		var ok bool
+		if fdClient, ok = f.client.(FeeDelegationClient); !ok {
+			return nil // Client doesn't support fee delegation metadata extraction, skip silently
+		}
 	}
 
 	// Fetch block with fee delegation metadata

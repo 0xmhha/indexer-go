@@ -424,6 +424,11 @@ type StorageNotificationConfig struct {
 func NewConfig() *Config {
 	cfg := &Config{}
 	cfg.SetDefaults()
+	// Account abstraction indexing is on unless a config file sets
+	// account_abstraction.enabled: false. This is set here, not in
+	// SetDefaults, because SetDefaults runs again after the file is loaded
+	// and cannot tell an omitted bool from an explicit false.
+	cfg.AccountAbstraction.Enabled = true
 	return cfg
 }
 

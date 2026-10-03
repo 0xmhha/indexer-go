@@ -621,7 +621,9 @@ func (s *PebbleStorage) UpdateAddressDelegationState(ctx context.Context, state 
 		return ErrClosed
 	}
 
-	state.UpdatedAt = time.Now()
+	if state.UpdatedAt.IsZero() {
+		state.UpdatedAt = time.Now()
+	}
 
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -660,7 +662,7 @@ func (s *PebbleStorage) IncrementSetCodeStats(ctx context.Context, address commo
 		stats.AsAuthorityCount++
 	}
 	stats.LastActivityBlock = blockNumber
-	stats.LastActivityTime = time.Now()
+	stats.LastActivityTime = s.blockTimeOrNow(ctx, blockNumber)
 
 	// Save updated stats
 	data, err := json.Marshal(stats)
@@ -681,4 +683,15 @@ func (s *PebbleStorage) IncrementSetCodeStats(ctx context.Context, address commo
 		zap.Int("authorityCount", stats.AsAuthorityCount))
 
 	return nil
+}
+
+// blockTimeOrNow returns the timestamp of a stored block, so values derived
+// while indexing a block do not depend on when indexing ran. Within a block
+// transaction the block written earlier in the same transaction is visible.
+// It falls back to the wall clock only when the block is not stored.
+func (s *PebbleStorage) blockTimeOrNow(ctx context.Context, height uint64) time.Time {
+	if blk, err := s.GetBlock(ctx, height); err == nil {
+		return time.Unix(int64(blk.Time()), 0)
+	}
+	return time.Now()
 }

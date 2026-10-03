@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/pkg/adapters/evm"
+	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -120,16 +121,8 @@ type rpcBlock struct {
 // FeeDelegateDynamicFeeTxType is the StableNet-specific fee delegation transaction type
 const FeeDelegateDynamicFeeTxType = 0x16
 
-// FeeDelegationMeta contains fee delegation metadata for a transaction
-type FeeDelegationMeta struct {
-	TxHash       common.Hash
-	BlockNumber  uint64
-	OriginalType uint8
-	FeePayer     common.Address
-	FeePayerV    *big.Int
-	FeePayerR    *big.Int
-	FeePayerS    *big.Int
-}
+// FeeDelegationMeta contains fee delegation metadata for a transaction.
+type FeeDelegationMeta = chain.FeeDelegationMeta
 
 // rpcTransaction is a helper for parsing transactions
 type rpcTransaction struct {

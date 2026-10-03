@@ -142,12 +142,14 @@ func TestGapRecoveryDoesNotReprocess(t *testing.T) {
 			}
 			checkDefect(t, mode, "D10", len(extra) == 0, extra...)
 
-			// Per-address sequences follow processing order, so blocks filled
-			// later legitimately get different sequence numbers than in a
-			// single run. Everything else must match on the atomic path.
+			// State that depends on processing order differs when a gap is
+			// filled after later blocks: per-address sequences, and module
+			// install state (here the uninstall at block 11 is processed
+			// before the install at block 9). This is defect D12; the atomic
+			// path itself never creates gaps. Everything else must match.
 			if mode.atomic {
 				diff := testchain.DiffKeyspace(want, dumpDir(t, dir), 0)
-				rest := excludePrefixes(diff, "/index/balance/", "/index/addr/")
+				rest := excludePrefixes(diff, "/index/balance/", "/index/addr/", "/data/module/")
 				require.Empty(t, rest, testchain.SummarizeDiff(rest))
 			}
 		})

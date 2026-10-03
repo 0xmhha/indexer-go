@@ -21,7 +21,8 @@ const goldenGraphQL = "testdata/golden/graphql.json"
 // graphqlGoldenQueries are read through the production GraphQL schema after
 // indexing the reference scenario. They cover features that the removed
 // storage wrapper used to disable (system contract events, consensus
-// queries that type-asserted the concrete storage).
+// queries that type-asserted the concrete storage) and the feature
+// processors connected later.
 var graphqlGoldenQueries = []struct {
 	name  string
 	query string
@@ -29,6 +30,11 @@ var graphqlGoldenQueries = []struct {
 	{"mintEvents", `{ mintEvents(filter: {fromBlock: "0", toBlock: "20"}) { totalCount nodes { blockNumber minter to amount } } }`},
 	{"burnEvents", `{ burnEvents(filter: {fromBlock: "0", toBlock: "20"}) { totalCount nodes { blockNumber burner amount } } }`},
 	{"allValidatorsSigningStats", `{ allValidatorsSigningStats(fromBlock: "0", toBlock: "20") { totalCount } }`},
+	// Processors connected in P0-10 (EIP-7702, ERC-4337, ERC-7579).
+	{"setCodeTransactionCount", `{ setCodeTransactionCount }`},
+	{"userOperationCount", `{ userOperationCount }`},
+	{"moduleEventCount", `{ moduleEventCount }`},
+	{"installedModules", `{ installedModules(account: "0x00000000000000000000000000000000000AA001") { totalCount nodes { module moduleType installedAt active removedAt } } }`},
 }
 
 // TestGraphQLGolden pins API results for the reference scenario.

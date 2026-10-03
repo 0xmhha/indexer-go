@@ -471,3 +471,21 @@ golden 키 공간은 바뀌지 않았다. 한 세션으로 색인할 때는 처�
 golden 키 공간은 의도한 세 키만 늘었다. `/data/syscontracts/mint/…`, `/data/syscontracts/burn/…`, `/index/syscontracts/total_supply/…`다. 시스템 컨트랙트 파서가 다시 동작하기 때문이다. genesis 처리를 옮긴 뒤에도 다른 키는 바뀌지 않았다.
 
 **기존 불안정 시험.** `pkg/resilience`의 `TestConnectionManager_GetActiveSessionCount`가 가끔 실패한다(이번 브랜치 10회 중 4회, 변경 전 커밋 10회 중 2회). 메모리 저장소를 쓰는 시험이라 이번 변경과는 무관하다. 이 패키지는 운영 배선에 연결되어 있지 않으므로, R1-2에서 연결하거나 지울 때 함께 정리한다.
+
+### P0-10: 미연결 기능 연결 (10/3, F2 수정)
+
+| 기능 | 연결 방법 | 켜고 끄기 |
+|---|---|---|
+| EIP-7702 SetCode | `main.go`의 `registerFeatureProcessors`가 저장소가 `SetCodeIndexer`를 구현하면 처리기를 등록한다 | 항상 켬(type 4 트랜잭션이 있을 때만 동작) |
+| ERC-4337 UserOp | 같은 함수에서 `UserOpIndexer`일 때 등록한다 | `account_abstraction.enabled`. 기본값은 true다. `NewConfig`에서 넣으므로 설정 파일에서 키를 생략하면 켜지고, `false`를 명시하면 꺼진다(`TestAccountAbstractionDefault`). `entry_point_addresses`는 아직 처리기가 지원하지 않아 경고만 남긴다 |
+| ERC-7579 Module | `Fetcher.SetModuleProcessor`를 추가하고, 주소 색인 처리의 UserOp 다음에 호출한다 | `account_abstraction.enabled` |
+| fee delegation | `FeeDelegationMeta`를 `pkg/types/chain`으로 옮기고 `fetch`·`factory`에서는 type alias로 가리킨다. 그래서 `factory.EVMClient`가 `fetch.FeeDelegationClient`를 만족한다(`main.go`에 컴파일 시점 확인). `Fetcher.SetFeeDelegationClient`로 주입한다 | 노드 감지 결과가 StableOne일 때만 |
+
+검증 결과는 다음과 같다.
+- golden 키 공간에 SetCode·UserOp·Module(번들러 통계, 스마트 계정 포함) 키 20개가 추가되었다. 기존 키 변화는 없다.
+- GraphQL golden에 `setCodeTransactionCount`, `userOperationCount`, `moduleEventCount`(각 1)와 `installedModules`(블록 9 설치, 블록 11 해제, 비활성)를 추가했다. 해제는 새 이벤트가 아니라 설치 기록을 비활성으로 바꾸는 설계라 개수는 1이 맞다.
+- fee delegation은 시나리오로 검증하지 못했다. StableNet 노드 감지와 type 0x16 JSON이 필요하기 때문이다. 대신 `TestFeeDelegationClientIsUsed`로 주입한 클라이언트를 쓰고 메타가 저장되는지 확인했다. 실제 노드에서 어느 클라이언트가 0x16 블록을 decode하는지는 여전히 7절의 확인 항목이다.
+
+연결하면서 결함 둘을 함께 찾았다.
+- **결정성 결함.** SetCode 상태·통계의 `updatedAt`, `lastActivityTime`이 처리 시각(`time.Now()`)이었다. 같은 체인을 다시 색인하면 값이 달라져 결정성·crash 시험이 실패했다. 호출하는 쪽에서 블록 시각을 넣게 했고, 통계는 같은 트랜잭션에 이미 저장된 블록 헤더의 시각을 읽는다(`blockTimeOrNow`). 비용은 SetCode 기록마다 블록 읽기 한 번이다. 토큰 메타데이터의 같은 결함은 golden에서 정규화로 피하고 있으며 아직 고치지 않았다.
+- **D12(새 결함).** gap을 뒤의 블록보다 나중에 채우면, 처리 순서에 따라 결과가 달라지는 상태가 틀어진다. 시험에서는 블록 11의 모듈 해제가 블록 9의 설치보다 먼저 처리되어 최종 상태가 "활성"으로 남았다. 원자적 경로는 새 gap을 만들지 않지만, 기존 DB의 gap을 채울 때는 남는다. gap 시험의 비교에서는 순서 의존 prefix(`/index/addr/`, `/index/balance/`, `/data/module/`)를 이유와 함께 뺐다.

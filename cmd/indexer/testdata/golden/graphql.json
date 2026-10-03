@@ -16,6 +16,20 @@
       "totalCount": 1
     }
   },
+  "installedModules": {
+    "installedModules": {
+      "nodes": [
+        {
+          "active": false,
+          "installedAt": "9",
+          "module": "0x00000000000000000000000000000000000BB001",
+          "moduleType": "validator",
+          "removedAt": "11"
+        }
+      ],
+      "totalCount": 1
+    }
+  },
   "mintEvents": {
     "mintEvents": {
       "nodes": [
@@ -28,5 +42,14 @@
       ],
       "totalCount": 1
     }
+  },
+  "moduleEventCount": {
+    "moduleEventCount": 1
+  },
+  "setCodeTransactionCount": {
+    "setCodeTransactionCount": 1
+  },
+  "userOperationCount": {
+    "userOperationCount": 1
   }
 }

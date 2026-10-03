@@ -44,17 +44,8 @@ type Subscription interface {
 	Unsubscribe()
 }
 
-// FeeDelegationMeta contains fee delegation metadata for a transaction
-// This is copied from factory package to avoid circular import
-type FeeDelegationMeta struct {
-	TxHash       common.Hash
-	BlockNumber  uint64
-	OriginalType uint8
-	FeePayer     common.Address
-	FeePayerV    *big.Int
-	FeePayerR    *big.Int
-	FeePayerS    *big.Int
-}
+// FeeDelegationMeta contains fee delegation metadata for a transaction.
+type FeeDelegationMeta = chain.FeeDelegationMeta
 
 // FeeDelegationClient is an optional interface for clients that support
 // extracting fee delegation metadata from blocks
@@ -182,6 +173,13 @@ type Fetcher struct {
 
 	// userOpProcessor handles ERC-4337 UserOperation indexing
 	userOpProcessor *UserOpProcessor
+
+	// moduleProcessor handles ERC-7579 module install/uninstall indexing
+	moduleProcessor *ModuleProcessor
+
+	// fdClient extracts StableNet fee delegation metadata. When nil the
+	// fetcher falls back to checking whether its main client supports it.
+	fdClient FeeDelegationClient
 
 	// txr opens per-block storage transactions (nil if the storage cannot).
 	txr storagepkg.BlockTransactor
@@ -323,6 +321,19 @@ func (f *Fetcher) SetUserOpProcessor(processor *UserOpProcessor) {
 		f.largeBlockProcessor.SetUserOpProcessor(processor)
 	}
 	f.logger.Info("UserOp processor configured")
+}
+
+// SetModuleProcessor sets the processor for ERC-7579 module events.
+func (f *Fetcher) SetModuleProcessor(processor *ModuleProcessor) {
+	f.moduleProcessor = processor
+	f.logger.Info("Module processor configured")
+}
+
+// SetFeeDelegationClient sets the client used to extract fee delegation
+// metadata (StableNet type 0x16 transactions).
+func (f *Fetcher) SetFeeDelegationClient(client FeeDelegationClient) {
+	f.fdClient = client
+	f.logger.Info("Fee delegation client configured")
 }
 
 // AddBlockProcessor adds a block processor to be called after each block is indexed

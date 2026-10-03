@@ -161,6 +161,7 @@ graph TD
 | D4 | [치명] (멀티체인을 켤 때) | 모든 체인이 저장소 하나의 같은 키(`LatestHeightKey`, 블록 키 등)에 쓴다. `Chain*Key`는 정의만 있고 쓰이지 않는다 | `multichain/instance.go:28`, `schema.go:1011-1059` | [High] |
 | D10 | [치명] | gap 복구가 블록마다 `SetLatestHeight(높이)`를 무조건 기록한다. 그래서 커서가 gap 끝으로 되돌아가고, 이어지는 `Run`이 gap 뒤의 이미 색인된 블록을 모두 다시 처리한다. 재처리는 멱등이 아니므로(D3) `--gap-recovery`로 시작할 때 gap이 있으면 데이터가 오염된다 | `fetcher_gaps.go:320-365`, `fetcher.go:645`, `fetcher_processing.go:322-350` | [High] |
 | D11 | [중요] | 시스템 컨트랙트 조회 10개(Mint, Burn, MinterHistory, MinterConfigHistory, GasTip, Validator, EmergencyPause, DepositMint, Blacklist, MemberHistory)가 데이터를 RLP·이진 형식으로 쓰고 JSON으로 읽는다. 데이터가 한 건이라도 있으면 조회가 decode 오류로 실패한다. F1 때문에 데이터가 저장되지 않아 드러나지 않았다. P0-9에서 발견해 수정했다 | `pebble_system_contracts_impl.go` | [High] |
+| D12 | [중요] | gap을 뒤에 있는 블록보다 나중에 채우면, 처리 순서에 따라 결과가 달라지는 상태가 틀어진다. 잔액 이력 순서, 모듈 설치·해제 상태(해제가 설치보다 먼저 처리되어 최종 상태가 "활성"으로 남음) 등이다. 원자적 경로는 커서를 연속으로만 전진시켜 새 gap을 만들지 않지만, 기존 DB의 gap을 채우는 경우에는 남는다. 순서 보장은 R2-2(스케줄러)에서, 기존 DB는 재색인으로 해결한다 | `fetcher_gaps.go`, 순서에 의존하는 처리기들 | [High] |
 | D5 | [중요] | 로그 색인, 주소·잔액 색인, 블록 처리기, 시스템 컨트랙트 파서의 실패를 경고 로그로만 남긴다. 커서는 그대로 전진해서 색인에 빈칸이 영구히 남는다 | `fetcher_processing.go`, `fetcher_indexing.go` | [Mid] |
 | D6 | [중요] | gap 복구 경로(`FetchRangeConcurrent`)는 시스템 컨트랙트 파싱, 로그 이벤트, 블록 처리기를 건너뛴다. 복구한 블록은 라이브 블록보다 덜 색인된다 | `fetcher.go:476-690` | [Mid] |
 | D7 | [중요] | 큰 블록은 주소 색인, transfer, SetCode, UserOp 처리를 두 번 한다 | `large_block.go:194-235` | [Mid] |

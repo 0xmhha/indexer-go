@@ -253,6 +253,16 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 		}
 	}
 
+	// 5. Process ERC-7579 module install/uninstall events
+	if f.moduleProcessor != nil {
+		if err := f.moduleProcessor.ProcessModuleEventsFromBlock(ctx, block, receipts); err != nil {
+			f.logger.Warn("Failed to process ERC-7579 module events",
+				zap.Uint64("block", blockNumber),
+				zap.Error(err),
+			)
+		}
+	}
+
 	f.logger.Debug("Processed address indexing",
 		zap.Uint64("height", blockNumber),
 		zap.Int("transactions", len(transactions)),

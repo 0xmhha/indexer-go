@@ -635,6 +635,8 @@ func (a *App) initFetcher() {
 		)
 	}
 
+	a.registerFeatureProcessors()
+
 	// Add token block processor for automatic token metadata indexing
 	tokenProcessor := token.NewBlockProcessorFromEthClient(a.client.EthClient(), a.storage, a.logger)
 	a.fetcher.AddBlockProcessor(tokenProcessor)
@@ -1152,4 +1154,31 @@ func reindexData(path string, log *zap.Logger) error {
 	)
 
 	return nil
+}
+
+// The StableNet RPC client must satisfy the fetcher's fee delegation
+// interface; this fails to compile if their metadata types drift apart.
+var _ fetch.FeeDelegationClient = (*factory.EVMClient)(nil)
+
+// registerFeatureProcessors connects the optional per-feature processors to
+// the fetcher. Each is registered only when the storage supports its index.
+func (a *App) registerFeatureProcessors() {
+	if s, ok := a.storage.(fetch.SetCodeIndexer); ok {
+		a.fetcher.SetSetCodeProcessor(fetch.NewSetCodeProcessor(a.logger, s))
+	}
+	if a.config.AccountAbstraction.Enabled {
+		if s, ok := a.storage.(fetch.UserOpIndexer); ok {
+			a.fetcher.SetUserOpProcessor(fetch.NewUserOpProcessor(a.logger, s))
+		}
+		if s, ok := a.storage.(fetch.ModuleIndexer); ok {
+			a.fetcher.SetModuleProcessor(fetch.NewModuleProcessor(a.logger, s))
+		}
+		if len(a.config.AccountAbstraction.EntryPointAddresses) > 0 {
+			a.logger.Warn("account_abstraction.entry_point_addresses is not supported yet; known EntryPoint addresses are used")
+		}
+	}
+	// Fee delegation (type 0x16) exists only on StableNet nodes.
+	if a.nodeInfo != nil && a.nodeInfo.Type == detector.NodeTypeStableOne {
+		a.fetcher.SetFeeDelegationClient(factory.NewEVMClient(a.client.RPCClient()))
+	}
 }
