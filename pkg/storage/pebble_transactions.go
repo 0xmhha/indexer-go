@@ -120,7 +120,7 @@ func (s *PebbleStorage) SetTransaction(ctx context.Context, tx *types.Transactio
 	}
 
 	// Update transaction count using atomic counter (avoid DB read)
-	newCount := s.txCount.Add(1)
+	newCount := s.addTxCount(ctx, 1)
 	if err := s.kv(ctx).Set(TransactionCountKey(), EncodeUint64(newCount), pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to update transaction count: %w", err)
 	}
@@ -186,10 +186,10 @@ func (s *PebbleStorage) AddTransactionToAddressIndex(ctx context.Context, addr c
 	}
 
 	// Get next sequence number for this address
-	s.addrSeqMu.Lock()
-	seq := s.addrSeq[addr]
-	s.addrSeq[addr]++
-	s.addrSeqMu.Unlock()
+	seq, err := s.nextAddrSeq(ctx, addr)
+	if err != nil {
+		return err
+	}
 
 	key := AddressTransactionKey(addr, seq)
 	// Use NoSync for performance - caller should use Sync() or batch commit for durability

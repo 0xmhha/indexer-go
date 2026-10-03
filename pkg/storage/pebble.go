@@ -18,6 +18,9 @@ type PebbleStorage struct {
 	logger *zap.Logger
 	closed atomic.Bool
 
+	// writeMu serializes block transactions (single writer). See BeginBlock.
+	writeMu sync.Mutex
+
 	// Address transaction sequence counters
 	// Maps address -> next sequence number
 	addrSeqMu sync.RWMutex
@@ -70,12 +73,6 @@ func NewPebbleStorage(cfg *Config) (*PebbleStorage, error) {
 		config:  cfg,
 		logger:  logger,
 		addrSeq: make(map[common.Address]uint64),
-	}
-
-	// Load address sequences from database
-	if err := storage.loadAddressSequences(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to load address sequences: %w", err)
 	}
 
 	// Load transaction count into cache
@@ -375,12 +372,4 @@ func (s *PebbleStorage) Compact(ctx context.Context, start, end []byte) error {
 	}
 
 	return s.db.Compact(start, end, true)
-}
-
-// loadAddressSequences loads address sequence counters from database
-func (s *PebbleStorage) loadAddressSequences() error {
-	// For now, we'll initialize sequences to 0
-	// In production, we should scan the database to find the max sequence for each address
-	// This is acceptable for initial implementation
-	return nil
 }

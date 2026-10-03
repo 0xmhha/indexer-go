@@ -18,7 +18,6 @@ import (
 // is noticed. The PR that fixes a defect removes its id, and from then on the
 // same test requires correct behaviour.
 var knownDefects = map[string]string{
-	"D1":  "address sequence restarts at 0 after restart and overwrites index entries (fix: R0-3)",
 	"D3":  "reprocessing an indexed block is not idempotent (balance deltas, address index, tx count) (fix: R0-4)",
 	"D10": "gap recovery rewinds the cursor and reprocesses already indexed blocks (fix: R0-4)",
 }

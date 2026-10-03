@@ -173,10 +173,10 @@ func (b *pebbleBatch) AddTransactionToAddressIndex(ctx context.Context, addr com
 		return ErrClosed
 	}
 
-	b.storage.addrSeqMu.Lock()
-	seq := b.storage.addrSeq[addr]
-	b.storage.addrSeq[addr]++
-	b.storage.addrSeqMu.Unlock()
+	seq, err := b.storage.nextAddrSeq(b.ctx, addr)
+	if err != nil {
+		return err
+	}
 
 	key := AddressTransactionKey(addr, seq)
 	if err := b.batch.Set(key, txHash[:], nil); err != nil {
@@ -243,10 +243,10 @@ func (b *pebbleBatch) Commit() error {
 	// Update transaction count using atomic counter for performance
 	if b.txCount > 0 {
 		// Use atomic Add for lock-free counter update
-		newCount := b.storage.txCount.Add(b.txCount)
+		newCount := b.storage.addTxCount(b.ctx, b.txCount)
 		if err := b.batch.Set(TransactionCountKey(), EncodeUint64(newCount), nil); err != nil {
-			// Rollback atomic counter on error
-			b.storage.txCount.Add(^(b.txCount - 1)) // Subtract txCount
+			// Rollback counter on error
+			b.storage.subTxCount(b.ctx, b.txCount)
 			return fmt.Errorf("failed to update transaction count: %w", err)
 		}
 	}

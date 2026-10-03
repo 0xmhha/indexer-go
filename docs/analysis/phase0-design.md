@@ -415,3 +415,23 @@ GraphQL `transactions`/`logs`는 범위를 주지 않으면 0..latest 전체 블
 동작 변화가 없다는 것은 `TestGoldenKeyspace`(키 공간 전체가 그대로)로 확인했다. 결함 재현 시험 셋도 그대로 D1·D3·D10을 재현한다. `kv(ctx)`에 batch를 묶는 코드는 아직 없다. 묶는 일은 P0-6(`BeginBlock`)에서 한다.
 
 **race 검사.** `go test -race`로 돌리면 `pkg/fetch`의 `TestFetchRangeConcurrentWithRetry`, `TestFetchRangeConcurrentMaxRetries`가 실패한다. 변경 전 커밋(`5baff64`)에서도 똑같이 실패하므로 원래 있던 문제다. 원인은 시험용 `mockClient.GetBlockByNumber`가 호출 카운터를 잠금 없이 동시에 쓰는 것이다. 고루틴 수명을 다루는 P0-3에서 함께 고친다.
+
+### P0-6: 블록 트랜잭션 (10/3)
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/storage/block_tx.go` | `BlockTransactor`, `BeginBlock`/`Commit`/`Rollback`. indexed batch를 ctx에 묶고, `writeMu`로 writer를 하나로 제한한다. `Commit`은 `pebble.Sync`로 한 번에 쓴 뒤 staging한 메모리 상태를 반영한다. `Rollback`은 `Commit` 뒤에 불러도 아무 일도 하지 않는다 |
+| 메모리 상태 staging | 주소 sequence(`nextAddrSeq`)와 트랜잭션 수(`addTxCount`/`subTxCount`)를 바꾸던 5곳을 helper로 바꿨다. 블록 트랜잭션 안에서는 바뀐 값을 `BlockTx`에 모아 두었다가 commit할 때만 반영한다 |
+| `pkg/storage/block_tx_test.go` | commit 반영, rollback 뒤 흔적 없음, rollback한 블록을 다시 처리하면 같은 키, writer 하나 제한, 중첩 거부, 트랜잭션 밖 쓰기는 지금처럼 즉시 반영 |
+
+수집 경로는 아직 `BeginBlock`을 쓰지 않는다. 연결은 P0-8에서 한다. 소스 검사 시험의 허용 목록에 `BeginBlock`을 추가했다(batch를 만드는 자리라 DB를 직접 써야 한다).
+
+### P0-7: 주소 sequence 복원 (10/3, D1 수정)
+
+| 산출물 | 내용 |
+|---|---|
+| `nextAddrSeq` / `restoreAddrSeq` | 프로세스에서 주소를 처음 보면, 주소 색인과 잔액 이력 두 prefix의 마지막 sequence 키를 역방향 seek로 찾아 최대값 + 1부터 이어간다. 20자리 숫자가 아닌 키는 건너뛴다. 디스크 읽기가 실패하면 0부터 시작하지 않고 오류를 돌려준다. 블록 트랜잭션 안에서는 batch를 읽으므로 같은 블록의 앞선 쓰기도 반영된다 |
+| `loadAddressSequences` | 빈 함수를 지웠다 |
+| 시험 | `TestAddrSeqRestoredAfterReopen`, `TestAddrSeqRestoreUsesHighestOfBothPrefixes`. `knownDefects`에서 D1을 지웠다. 이제 `TestRestartPreservesIndex`는 세 세션으로 나눈 결과가 한 번에 색인한 결과와 완전히 같아야 통과하고, 실제로 통과한다 |
+
+golden 키 공간은 바뀌지 않았다. 한 세션으로 색인할 때는 처음부터 sequence가 0이므로 복원 결과가 같다.

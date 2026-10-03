@@ -512,10 +512,10 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	}
 
 	// Get next sequence number (simple counter, could be optimized)
-	s.addrSeqMu.Lock()
-	seq := s.addrSeq[addr]
-	s.addrSeq[addr]++
-	s.addrSeqMu.Unlock()
+	seq, err := s.nextAddrSeq(ctx, addr)
+	if err != nil {
+		return err
+	}
 
 	// Store history entry
 	if err := s.kv(ctx).Set(AddressBalanceKey(addr, seq), encoded, pebble.Sync); err != nil {

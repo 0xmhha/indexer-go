@@ -23,6 +23,7 @@ type blockTxKey struct{}
 type blockTxBinding struct {
 	owner *PebbleStorage
 	batch *pebble.Batch
+	tx    *BlockTx // nil when only a batch is bound (tests)
 }
 
 // kv returns the store that reads and writes for ctx should use: the batch of

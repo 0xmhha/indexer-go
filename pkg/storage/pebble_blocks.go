@@ -246,7 +246,7 @@ func (s *PebbleStorage) SetBlockWithReceipts(ctx context.Context, block *types.B
 	}
 
 	// Update transaction count atomically
-	newCount := s.txCount.Add(txCountDelta)
+	newCount := s.addTxCount(ctx, txCountDelta)
 	if err := batch.Set(TransactionCountKey(), EncodeUint64(newCount), nil); err != nil {
 		return fmt.Errorf("failed to update transaction count: %w", err)
 	}
