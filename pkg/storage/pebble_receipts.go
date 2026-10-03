@@ -19,7 +19,7 @@ func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*type
 		return nil, err
 	}
 
-	value, closer, err := s.db.Get(ReceiptKey(hash))
+	value, closer, err := s.kv(ctx).Get(ReceiptKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -38,7 +38,7 @@ func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*type
 	receipt.TxHash = hash
 
 	// ContractAddress is not part of RLP encoding, retrieve it separately
-	contractAddrValue, contractAddrCloser, err := s.db.Get(ContractAddressKey(hash))
+	contractAddrValue, contractAddrCloser, err := s.kv(ctx).Get(ContractAddressKey(hash))
 	if err == nil {
 		defer contractAddrCloser.Close()
 		if len(contractAddrValue) == common.AddressLength {
@@ -97,13 +97,13 @@ func (s *PebbleStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) 
 
 	txHash := receipt.TxHash
 	// Use NoSync for performance - caller should use Sync() or batch commit for durability
-	if err := s.db.Set(ReceiptKey(txHash), encoded, pebble.NoSync); err != nil {
+	if err := s.kv(ctx).Set(ReceiptKey(txHash), encoded, pebble.NoSync); err != nil {
 		return err
 	}
 
 	// Store ContractAddress separately (not included in RLP encoding)
 	if receipt.ContractAddress != (common.Address{}) {
-		if err := s.db.Set(ContractAddressKey(txHash), receipt.ContractAddress.Bytes(), pebble.NoSync); err != nil {
+		if err := s.kv(ctx).Set(ContractAddressKey(txHash), receipt.ContractAddress.Bytes(), pebble.NoSync); err != nil {
 			return fmt.Errorf("failed to store contract address: %w", err)
 		}
 	}
@@ -194,7 +194,7 @@ func (s *PebbleStorage) SetReceipts(ctx context.Context, receipts []*types.Recei
 		return err
 	}
 
-	batch := s.NewBatch()
+	batch := s.newBatchCtx(ctx)
 	defer batch.Close()
 
 	for _, receipt := range receipts {
@@ -212,7 +212,7 @@ func (s *PebbleStorage) HasReceipt(ctx context.Context, hash common.Hash) (bool,
 		return false, err
 	}
 
-	_, closer, err := s.db.Get(ReceiptKey(hash))
+	_, closer, err := s.kv(ctx).Get(ReceiptKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return false, nil

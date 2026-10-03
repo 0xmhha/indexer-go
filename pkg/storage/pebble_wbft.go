@@ -24,7 +24,7 @@ func (s *PebbleStorage) GetWBFTBlockExtra(ctx context.Context, blockNumber uint6
 	}
 
 	key := WBFTBlockExtraKey(blockNumber)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -49,7 +49,7 @@ func (s *PebbleStorage) GetWBFTBlockExtraByHash(ctx context.Context, blockHash c
 
 	// Get block number from block hash index
 	blockNumKey := BlockHashIndexKey(blockHash)
-	blockNumValue, closer, err := s.db.Get(blockNumKey)
+	blockNumValue, closer, err := s.kv(ctx).Get(blockNumKey)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -73,7 +73,7 @@ func (s *PebbleStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) (*
 	}
 
 	key := WBFTEpochKey(epochNumber)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -97,7 +97,7 @@ func (s *PebbleStorage) GetLatestEpochInfo(ctx context.Context) (*EpochInfo, err
 	}
 
 	// Get latest epoch number
-	value, closer, err := s.db.Get(LatestEpochKey())
+	value, closer, err := s.kv(ctx).Get(LatestEpochKey())
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -123,7 +123,7 @@ func (s *PebbleStorage) GetValidatorSigningStats(ctx context.Context, validatorA
 	totalBlocksInRange := toBlock - fromBlock + 1
 
 	key := WBFTValidatorStatsKey(validatorAddress, fromBlock, toBlock)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			// Return empty stats if not found
@@ -179,7 +179,7 @@ func (s *PebbleStorage) GetAllValidatorsSigningStats(ctx context.Context, fromBl
 
 	// Scan all validator activity records to aggregate stats
 	prefix := WBFTValidatorActivityAllKeyPrefix()
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -290,7 +290,7 @@ func (s *PebbleStorage) GetValidatorSigningActivity(ctx context.Context, validat
 	}
 
 	prefix := WBFTValidatorActivityKeyPrefix(validatorAddress)
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -342,7 +342,7 @@ func (s *PebbleStorage) GetBlockSigners(ctx context.Context, blockNumber uint64)
 
 	// Get prepare signers
 	preparePrefix := WBFTSignerPrepareIndexKeyPrefix(blockNumber)
-	prepareIter, err := s.db.NewIter(&pebble.IterOptions{
+	prepareIter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: preparePrefix,
 		UpperBound: append(preparePrefix, 0xff),
 	})
@@ -373,7 +373,7 @@ func (s *PebbleStorage) GetBlockSigners(ctx context.Context, blockNumber uint64)
 
 	// Get commit signers
 	commitPrefix := WBFTSignerCommitIndexKeyPrefix(blockNumber)
-	commitIter, err := s.db.NewIter(&pebble.IterOptions{
+	commitIter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: commitPrefix,
 		UpperBound: append(commitPrefix, 0xff),
 	})
@@ -414,7 +414,7 @@ func (s *PebbleStorage) GetEpochsList(ctx context.Context, limit, offset int) ([
 	prefix := WBFTEpochKeyPrefix()
 	upperBound := prefixUpperBound(prefix)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: upperBound,
 	})
@@ -472,7 +472,7 @@ func (s *PebbleStorage) SaveWBFTBlockExtra(ctx context.Context, extra *WBFTBlock
 	}
 
 	key := WBFTBlockExtraKey(extra.BlockNumber)
-	if err := s.db.Set(key, value, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, value, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to save WBFT block extra: %w", err)
 	}
 
@@ -497,13 +497,13 @@ func (s *PebbleStorage) SaveEpochInfo(ctx context.Context, epochInfo *EpochInfo)
 
 	// Save epoch info
 	key := WBFTEpochKey(epochInfo.EpochNumber)
-	if err := s.db.Set(key, value, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, value, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to save epoch info: %w", err)
 	}
 
 	// Update latest epoch
 	latestEpochValue := EncodeUint64(epochInfo.EpochNumber)
-	if err := s.db.Set(LatestEpochKey(), latestEpochValue, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(LatestEpochKey(), latestEpochValue, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to update latest epoch: %w", err)
 	}
 
@@ -520,7 +520,7 @@ func (s *PebbleStorage) UpdateValidatorSigningStats(ctx context.Context, blockNu
 		return err
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	for _, activity := range signingActivities {
@@ -550,7 +550,7 @@ func (s *PebbleStorage) UpdateValidatorSigningStats(ctx context.Context, blockNu
 		}
 	}
 
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit validator signing stats: %w", err)
 	}
 

@@ -18,7 +18,7 @@ func (s *PebbleStorage) GetContractVerification(ctx context.Context, address com
 	}
 
 	key := ContractVerificationKey(address)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -46,7 +46,7 @@ func (s *PebbleStorage) IsContractVerified(ctx context.Context, address common.A
 	}
 
 	key := ContractVerificationKey(address)
-	_, closer, err := s.db.Get(key)
+	_, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return false, nil
@@ -72,7 +72,7 @@ func (s *PebbleStorage) ListVerifiedContracts(ctx context.Context, limit, offset
 	}
 
 	prefix := VerifiedContractIndexKeyPrefix()
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -134,7 +134,7 @@ func (s *PebbleStorage) CountVerifiedContracts(ctx context.Context) (int, error)
 	}
 
 	prefix := VerifiedContractIndexKeyPrefix()
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -178,13 +178,13 @@ func (s *PebbleStorage) SetContractVerification(ctx context.Context, verificatio
 
 	// Store verification data
 	key := ContractVerificationKey(verification.Address)
-	if err := s.db.Set(key, data, nil); err != nil {
+	if err := s.kv(ctx).Set(key, data, nil); err != nil {
 		return fmt.Errorf("failed to set contract verification: %w", err)
 	}
 
 	// Store index entry for listing verified contracts
 	indexKey := VerifiedContractIndexKey(verification.VerifiedAt.Unix(), verification.Address)
-	if err := s.db.Set(indexKey, []byte{1}, nil); err != nil {
+	if err := s.kv(ctx).Set(indexKey, []byte{1}, nil); err != nil {
 		return fmt.Errorf("failed to set verified contract index: %w", err)
 	}
 
@@ -211,13 +211,13 @@ func (s *PebbleStorage) DeleteContractVerification(ctx context.Context, address 
 
 	// Delete verification data
 	key := ContractVerificationKey(address)
-	if err := s.db.Delete(key, nil); err != nil {
+	if err := s.kv(ctx).Delete(key, nil); err != nil {
 		return fmt.Errorf("failed to delete contract verification: %w", err)
 	}
 
 	// Delete index entry
 	indexKey := VerifiedContractIndexKey(verification.VerifiedAt.Unix(), address)
-	if err := s.db.Delete(indexKey, nil); err != nil {
+	if err := s.kv(ctx).Delete(indexKey, nil); err != nil {
 		return fmt.Errorf("failed to delete verified contract index: %w", err)
 	}
 

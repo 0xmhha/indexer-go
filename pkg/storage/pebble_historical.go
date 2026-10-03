@@ -29,7 +29,7 @@ func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTi
 	}
 
 	// Create iterator for timestamp range
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: BlockTimestampKey(fromTime, 0),
 		UpperBound: BlockTimestampKey(toTime+1, 0),
 	})
@@ -86,7 +86,7 @@ func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint6
 	}
 
 	// Binary search for closest timestamp
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: BlockTimestampKeyPrefix(),
 	})
 	if err != nil {
@@ -149,7 +149,7 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 	copy(upperBound, prefix)
 	upperBound = append(upperBound, 0xff)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: upperBound,
 	})
@@ -229,7 +229,7 @@ func (s *PebbleStorage) GetAddressBalance(ctx context.Context, addr common.Addre
 
 	// If blockNumber is 0, get latest balance
 	if blockNumber == 0 {
-		value, closer, err := s.db.Get(AddressBalanceLatestKey(addr))
+		value, closer, err := s.kv(ctx).Get(AddressBalanceLatestKey(addr))
 		if err != nil {
 			if err == pebble.ErrNotFound {
 				return big.NewInt(0), nil // No balance recorded
@@ -247,7 +247,7 @@ func (s *PebbleStorage) GetAddressBalance(ctx context.Context, addr common.Addre
 	copy(upperBound, prefix)
 	upperBound = append(upperBound, 0xff)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: upperBound,
 	})
@@ -294,7 +294,7 @@ func (s *PebbleStorage) GetBalanceHistory(ctx context.Context, addr common.Addre
 	copy(upperBound, prefix)
 	upperBound = append(upperBound, 0xff)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: upperBound,
 	})
@@ -369,7 +369,7 @@ func (s *PebbleStorage) GetTransactionCount(ctx context.Context) (uint64, error)
 	}
 
 	// Fallback to DB read if counter not initialized
-	value, closer, err := s.db.Get(TransactionCountKey())
+	value, closer, err := s.kv(ctx).Get(TransactionCountKey())
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return 0, nil // No transactions indexed yet
@@ -417,7 +417,7 @@ func (s *PebbleStorage) InitializeTransactionCount(ctx context.Context) error {
 	}
 
 	// Set the transaction count
-	if err := s.db.Set(TransactionCountKey(), EncodeUint64(totalTxCount), pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(TransactionCountKey(), EncodeUint64(totalTxCount), pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set transaction count: %w", err)
 	}
 
@@ -473,7 +473,7 @@ func (s *PebbleStorage) SetBlockTimestamp(ctx context.Context, timestamp uint64,
 	}
 
 	value := EncodeUint64(height)
-	return s.db.Set(BlockTimestampKey(timestamp, height), value, pebble.Sync)
+	return s.kv(ctx).Set(BlockTimestampKey(timestamp, height), value, pebble.Sync)
 }
 
 // UpdateBalance updates the balance for an address at a specific block
@@ -518,13 +518,13 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	s.addrSeqMu.Unlock()
 
 	// Store history entry
-	if err := s.db.Set(AddressBalanceKey(addr, seq), encoded, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(AddressBalanceKey(addr, seq), encoded, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set balance history: %w", err)
 	}
 
 	// Update latest balance
 	balanceBytes := EncodeBigInt(newBalance)
-	if err := s.db.Set(AddressBalanceLatestKey(addr), balanceBytes, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(AddressBalanceLatestKey(addr), balanceBytes, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set latest balance: %w", err)
 	}
 
@@ -570,7 +570,7 @@ func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address
 
 	// Iterate all transactions for this address
 	prefix := AddressTransactionKeyPrefix(addr)
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})

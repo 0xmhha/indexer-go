@@ -95,7 +95,7 @@ func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) 
 	copy(upperBound, prefix)
 	upperBound = append(upperBound, 0xff)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: upperBound,
 	})
@@ -118,7 +118,7 @@ func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) 
 
 		// Get log data
 		logKey := LogKey(blockNumber, txIndex, logIndex)
-		logData, closer, err := s.db.Get(logKey)
+		logData, closer, err := s.kv(ctx).Get(logKey)
 		if err != nil {
 			continue // Skip missing logs
 		}
@@ -172,11 +172,11 @@ func (s *PebbleStorage) IndexLogs(ctx context.Context, logs []*types.Log) error 
 		return err
 	}
 
-	batch := s.NewBatch()
+	batch := s.newBatchCtx(ctx)
 	defer batch.Close()
 
 	for _, log := range logs {
-		if err := s.indexLogToBatch(batch.(*pebbleBatch), log); err != nil {
+		if err := s.indexLogToBatch(batch, log); err != nil {
 			return fmt.Errorf("failed to index log: %w", err)
 		}
 	}
@@ -193,10 +193,10 @@ func (s *PebbleStorage) IndexLog(ctx context.Context, log *types.Log) error {
 		return err
 	}
 
-	batch := s.NewBatch()
+	batch := s.newBatchCtx(ctx)
 	defer batch.Close()
 
-	if err := s.indexLogToBatch(batch.(*pebbleBatch), log); err != nil {
+	if err := s.indexLogToBatch(batch, log); err != nil {
 		return err
 	}
 
@@ -273,7 +273,7 @@ func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address commo
 	startKey := LogAddressIndexKey(address, fromBlock, 0, 0)
 	endKey := LogAddressIndexKey(address, toBlock+1, 0, 0)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: startKey,
 		UpperBound: endKey,
 	})
@@ -295,7 +295,7 @@ func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address commo
 
 		// Get log data
 		logKey := LogKey(blockNum, txIndex, logIndex)
-		logData, closer, err := s.db.Get(logKey)
+		logData, closer, err := s.kv(ctx).Get(logKey)
 		if err != nil {
 			continue
 		}
@@ -342,7 +342,7 @@ func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Ha
 		return nil, fmt.Errorf("invalid topic index: %d", topicIndex)
 	}
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: startKey,
 		UpperBound: endKey,
 	})
@@ -364,7 +364,7 @@ func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Ha
 
 		// Get log data
 		logKey := LogKey(blockNum, txIndex, logIndex)
-		logData, closer, err := s.db.Get(logKey)
+		logData, closer, err := s.kv(ctx).Get(logKey)
 		if err != nil {
 			continue
 		}

@@ -253,7 +253,7 @@ func (s *PebbleStorage) Put(ctx context.Context, key, value []byte) error {
 		return err
 	}
 
-	return s.db.Set(key, value, pebble.Sync)
+	return s.kv(ctx).Set(key, value, pebble.Sync)
 }
 
 // Get retrieves a value by key
@@ -262,7 +262,7 @@ func (s *PebbleStorage) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -286,7 +286,7 @@ func (s *PebbleStorage) Delete(ctx context.Context, key []byte) error {
 		return err
 	}
 
-	return s.db.Delete(key, pebble.Sync)
+	return s.kv(ctx).Delete(key, pebble.Sync)
 }
 
 // Iterate iterates over keys with the given prefix
@@ -295,7 +295,7 @@ func (s *PebbleStorage) Iterate(ctx context.Context, prefix []byte, fn func(key,
 		return err
 	}
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})
@@ -332,7 +332,7 @@ func (s *PebbleStorage) Has(ctx context.Context, key []byte) (bool, error) {
 		return false, err
 	}
 
-	_, closer, err := s.db.Get(key)
+	_, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return false, nil

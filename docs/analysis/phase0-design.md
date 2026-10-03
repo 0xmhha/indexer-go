@@ -400,3 +400,18 @@ GraphQL `transactions`/`logs`는 범위를 주지 않으면 0..latest 전체 블
 | `TestGapRecoveryDoesNotReprocess`(D10) | 6~9를 비워 두고 `RunWithGapRecovery`의 시작 단계(감지 → 채움 → 커서부터 재개)를 실행한다. 블록별 RPC 조회 횟수를 센다 | 블록 10~20이 각각 두 번 조회·처리된다 |
 
 **순서 변경.** 중간 crash 시험(T-crash, D2)은 PR 5(`kv(ctx)` 경로) 뒤로 옮긴다. 설계에서는 그 전까지 파일 시스템 수준 오류 주입을 쓰기로 했다. 그런데 Pebble의 NoSync 쓰기는 WAL 버퍼를 백그라운드에서 flush한다. 그래서 파일 시스템에서 오류를 주입하면 어느 쓰기까지 남는지가 실행마다 달라져 재현이 결정적이지 않다. `kv(ctx)`가 생기면 그 경로를 감싸 "k번째 쓰기부터 모두 실패"를 결정적으로 주입할 수 있다. 그 사이 D3 재현은 위의 재처리 시험이 맡는다. crash가 결과적으로 일으키는 피해가 "커서가 기록되지 않은 블록의 재처리"이기 때문이다.
+
+### P0-5: 저장소 접근을 kv(ctx)로 모으기 (10/3)
+
+작업 단위 이름을 GitHub PR 번호와 구분하려고 이 절부터 "PR n" 대신 "P0-n"으로 적는다. 4절 표의 순서 번호와 같다.
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/storage/kv.go` | `kv(ctx)`, `newBatch(ctx)`, `commitBatch(ctx, …)`, `newBatchCtx(ctx)`. ctx에 이 저장소 인스턴스의 batch가 묶여 있으면 그 batch로, 아니면 DB로 보낸다. 묶인 batch가 있으면 메서드 안의 batch는 `Apply`로 합친다. 닫는 일은 호출자의 `defer Close()`가 맡는다 |
+| 저장소 메서드 17개 파일 | ctx가 있는 함수 안의 `s.db.Get/Set/Delete/NewIter/NewBatch`와 그 batch의 `Commit`을 바꿨다(227곳). `Batch` wrapper(`IndexLogs` 등 4곳)도 ctx를 받아 같은 경로로 commit한다. `updateHolderCountInBatch`에 ctx를 추가했다 |
+| `pkg/storage/kv_routing_test.go` | 소스 검사 시험. 허용 목록(라우팅 자체, 시작할 때 카운터 로드, 재색인용 prefix 삭제·집계, 공개 `NewBatch`) 밖에서 `s.db`를 직접 읽고 쓰면 실패한다. 위반 코드를 임시로 넣어 실패하는지 확인했다 |
+| `pkg/storage/kv_test.go` | 동작 시험. 직접 쓰기(`SetBlock`), wrapper batch(`IndexLogs`), 메서드 내부 batch(`SaveTokenMetadata`)가 묶인 batch에 들어가는지, commit 전에는 DB에 보이지 않는지, 같은 ctx로 읽으면 보이는지, commit 뒤 반영되는지, 다른 인스턴스의 batch는 무시되는지 확인한다 |
+
+동작 변화가 없다는 것은 `TestGoldenKeyspace`(키 공간 전체가 그대로)로 확인했다. 결함 재현 시험 셋도 그대로 D1·D3·D10을 재현한다. `kv(ctx)`에 batch를 묶는 코드는 아직 없다. 묶는 일은 P0-6(`BeginBlock`)에서 한다.
+
+**race 검사.** `go test -race`로 돌리면 `pkg/fetch`의 `TestFetchRangeConcurrentWithRetry`, `TestFetchRangeConcurrentMaxRetries`가 실패한다. 변경 전 커밋(`5baff64`)에서도 똑같이 실패하므로 원래 있던 문제다. 원인은 시험용 `mockClient.GetBlockByNumber`가 호출 카운터를 잠금 없이 동시에 쓰는 것이다. 고루틴 수명을 다루는 P0-3에서 함께 고친다.

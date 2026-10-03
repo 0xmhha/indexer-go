@@ -86,7 +86,7 @@ func (s *PebbleStorage) GetTokenMetadata(ctx context.Context, address common.Add
 	}
 
 	key := TokenMetadataKey(address)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -118,13 +118,13 @@ func (s *PebbleStorage) SaveTokenMetadata(ctx context.Context, metadata *TokenMe
 		// Delete old indexes if name/symbol changed
 		if oldMetadata.Name != metadata.Name && oldMetadata.Name != "" {
 			oldNameKey := TokenNameIndexKey(oldMetadata.Name, metadata.Address)
-			if err := s.db.Delete(oldNameKey, pebble.Sync); err != nil && err != pebble.ErrNotFound {
+			if err := s.kv(ctx).Delete(oldNameKey, pebble.Sync); err != nil && err != pebble.ErrNotFound {
 				s.logger.Warn("Failed to delete old name index", zap.Error(err))
 			}
 		}
 		if oldMetadata.Symbol != metadata.Symbol && oldMetadata.Symbol != "" {
 			oldSymbolKey := TokenSymbolIndexKey(oldMetadata.Symbol, metadata.Address)
-			if err := s.db.Delete(oldSymbolKey, pebble.Sync); err != nil && err != pebble.ErrNotFound {
+			if err := s.kv(ctx).Delete(oldSymbolKey, pebble.Sync); err != nil && err != pebble.ErrNotFound {
 				s.logger.Warn("Failed to delete old symbol index", zap.Error(err))
 			}
 		}
@@ -138,7 +138,7 @@ func (s *PebbleStorage) SaveTokenMetadata(ctx context.Context, metadata *TokenMe
 	}
 
 	// Use batch for atomic writes
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// Save main data
@@ -169,7 +169,7 @@ func (s *PebbleStorage) SaveTokenMetadata(ctx context.Context, metadata *TokenMe
 		}
 	}
 
-	return batch.Commit(pebble.Sync)
+	return s.commitBatch(ctx, batch, pebble.Sync)
 }
 
 // DeleteTokenMetadata removes token metadata by address
@@ -190,7 +190,7 @@ func (s *PebbleStorage) DeleteTokenMetadata(ctx context.Context, address common.
 		return err
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// Delete main data
@@ -221,7 +221,7 @@ func (s *PebbleStorage) DeleteTokenMetadata(ctx context.Context, address common.
 		}
 	}
 
-	return batch.Commit(pebble.Sync)
+	return s.commitBatch(ctx, batch, pebble.Sync)
 }
 
 // ListTokensByStandard retrieves tokens filtered by standard with pagination
@@ -239,7 +239,7 @@ func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard Token
 		prefix = TokenMetadataKeyPrefix()
 	}
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})
@@ -309,7 +309,7 @@ func (s *PebbleStorage) GetTokensCount(ctx context.Context, standard TokenStanda
 		prefix = TokenMetadataKeyPrefix()
 	}
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})
@@ -346,7 +346,7 @@ func (s *PebbleStorage) SearchTokens(ctx context.Context, query string, limit in
 
 	// Search by name prefix
 	namePrefix := TokenNameIndexKeyPrefix(query)
-	nameIter, err := s.db.NewIter(&pebble.IterOptions{
+	nameIter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: namePrefix,
 		UpperBound: prefixUpperBound(namePrefix),
 	})
@@ -377,7 +377,7 @@ func (s *PebbleStorage) SearchTokens(ctx context.Context, query string, limit in
 	// Search by symbol prefix
 	if limit <= 0 || len(tokens) < limit {
 		symbolPrefix := TokenSymbolIndexKeyPrefix(query)
-		symbolIter, err := s.db.NewIter(&pebble.IterOptions{
+		symbolIter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 			LowerBound: symbolPrefix,
 			UpperBound: prefixUpperBound(symbolPrefix),
 		})

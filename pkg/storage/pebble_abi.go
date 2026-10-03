@@ -17,7 +17,7 @@ func (s *PebbleStorage) GetABI(ctx context.Context, address common.Address) ([]b
 	}
 
 	key := ABIKey(address)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -40,7 +40,7 @@ func (s *PebbleStorage) HasABI(ctx context.Context, address common.Address) (boo
 	}
 
 	key := ABIKey(address)
-	_, closer, err := s.db.Get(key)
+	_, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return false, nil
@@ -59,7 +59,7 @@ func (s *PebbleStorage) ListABIs(ctx context.Context) ([]common.Address, error) 
 	}
 
 	prefix := ABIKeyPrefix()
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -106,7 +106,7 @@ func (s *PebbleStorage) SetABI(ctx context.Context, address common.Address, abiJ
 	}
 
 	key := ABIKey(address)
-	if err := s.db.Set(key, abiJSON, nil); err != nil {
+	if err := s.kv(ctx).Set(key, abiJSON, nil); err != nil {
 		return fmt.Errorf("failed to set ABI: %w", err)
 	}
 
@@ -123,7 +123,7 @@ func (s *PebbleStorage) DeleteABI(ctx context.Context, address common.Address) e
 	}
 
 	key := ABIKey(address)
-	if err := s.db.Delete(key, nil); err != nil {
+	if err := s.kv(ctx).Delete(key, nil); err != nil {
 		return fmt.Errorf("failed to delete ABI: %w", err)
 	}
 

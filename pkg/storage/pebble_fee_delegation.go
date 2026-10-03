@@ -340,13 +340,13 @@ func (s *PebbleStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *FeeDel
 
 	// Store metadata by tx hash
 	key := FeeDelegationMetaKey(meta.TxHash)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to store fee delegation meta: %w", err)
 	}
 
 	// Create index by fee payer
 	indexKey := FeeDelegationPayerIndexKey(meta.FeePayer, meta.BlockNumber, meta.TxHash)
-	if err := s.db.Set(indexKey, meta.TxHash.Bytes(), pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(indexKey, meta.TxHash.Bytes(), pebble.Sync); err != nil {
 		return fmt.Errorf("failed to store fee payer index: %w", err)
 	}
 
@@ -361,7 +361,7 @@ func (s *PebbleStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash commo
 	}
 
 	key := FeeDelegationMetaKey(txHash)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, nil // Not a fee delegation tx
@@ -389,7 +389,7 @@ func (s *PebbleStorage) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePa
 	}
 
 	prefix := FeeDelegationPayerPrefix(feePayer)
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})

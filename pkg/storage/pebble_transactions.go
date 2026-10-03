@@ -20,7 +20,7 @@ func (s *PebbleStorage) GetTransaction(ctx context.Context, hash common.Hash) (*
 	}
 
 	// Get transaction location
-	locValue, closer, err := s.db.Get(TransactionHashIndexKey(hash))
+	locValue, closer, err := s.kv(ctx).Get(TransactionHashIndexKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, nil, ErrNotFound
@@ -35,7 +35,7 @@ func (s *PebbleStorage) GetTransaction(ctx context.Context, hash common.Hash) (*
 	}
 
 	// Get transaction data
-	txValue, closer, err := s.db.Get(TransactionKey(location.BlockHeight, location.TxIndex))
+	txValue, closer, err := s.kv(ctx).Get(TransactionKey(location.BlockHeight, location.TxIndex))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, nil, ErrNotFound
@@ -110,18 +110,18 @@ func (s *PebbleStorage) SetTransaction(ctx context.Context, tx *types.Transactio
 	}
 
 	// Write transaction data - use NoSync for performance
-	if err := s.db.Set(TransactionKey(location.BlockHeight, location.TxIndex), encoded, pebble.NoSync); err != nil {
+	if err := s.kv(ctx).Set(TransactionKey(location.BlockHeight, location.TxIndex), encoded, pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to set transaction: %w", err)
 	}
 
 	// Write transaction hash index
-	if err := s.db.Set(TransactionHashIndexKey(tx.Hash()), locEncoded, pebble.NoSync); err != nil {
+	if err := s.kv(ctx).Set(TransactionHashIndexKey(tx.Hash()), locEncoded, pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to set transaction index: %w", err)
 	}
 
 	// Update transaction count using atomic counter (avoid DB read)
 	newCount := s.txCount.Add(1)
-	if err := s.db.Set(TransactionCountKey(), EncodeUint64(newCount), pebble.NoSync); err != nil {
+	if err := s.kv(ctx).Set(TransactionCountKey(), EncodeUint64(newCount), pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to update transaction count: %w", err)
 	}
 
@@ -141,7 +141,7 @@ func (s *PebbleStorage) GetTransactionsByAddress(ctx context.Context, addr commo
 	copy(upperBound, prefix)
 	upperBound = append(upperBound, 0xff)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: upperBound,
 	})
@@ -193,7 +193,7 @@ func (s *PebbleStorage) AddTransactionToAddressIndex(ctx context.Context, addr c
 
 	key := AddressTransactionKey(addr, seq)
 	// Use NoSync for performance - caller should use Sync() or batch commit for durability
-	return s.db.Set(key, txHash[:], pebble.NoSync)
+	return s.kv(ctx).Set(key, txHash[:], pebble.NoSync)
 }
 
 // HasTransaction checks if a transaction exists
@@ -202,7 +202,7 @@ func (s *PebbleStorage) HasTransaction(ctx context.Context, hash common.Hash) (b
 		return false, err
 	}
 
-	_, closer, err := s.db.Get(TransactionHashIndexKey(hash))
+	_, closer, err := s.kv(ctx).Get(TransactionHashIndexKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return false, nil

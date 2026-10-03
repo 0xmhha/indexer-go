@@ -27,7 +27,7 @@ func (s *PebbleStorage) GetContractCreation(ctx context.Context, contractAddress
 	}
 
 	key := ContractCreationKey(contractAddress)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -64,7 +64,7 @@ func (s *PebbleStorage) GetContractsByCreator(ctx context.Context, creator commo
 
 	prefix := ContractCreatorIndexKeyPrefix(creator)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -127,7 +127,7 @@ func (s *PebbleStorage) SaveContractCreation(ctx context.Context, creation *Cont
 		return fmt.Errorf("transaction hash cannot be zero")
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// Encode contract creation data
@@ -155,7 +155,7 @@ func (s *PebbleStorage) SaveContractCreation(ctx context.Context, creation *Cont
 	}
 
 	// Commit batch
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit contract creation batch: %w", err)
 	}
 
@@ -184,7 +184,7 @@ func (s *PebbleStorage) ListContracts(ctx context.Context, limit, offset int) ([
 	// /index/contract/block/{blockNumber}/{contractAddress}
 	prefix := []byte(prefixIdxContractBlock)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -243,7 +243,7 @@ func (s *PebbleStorage) GetContractsCount(ctx context.Context) (int, error) {
 
 	prefix := []byte(prefixContractCreation)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -274,7 +274,7 @@ func (s *PebbleStorage) GetERC20Transfer(ctx context.Context, txHash common.Hash
 	}
 
 	key := ERC20TransferKey(txHash, logIndex)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -310,7 +310,7 @@ func (s *PebbleStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddre
 
 	prefix := ERC20TokenIndexKeyPrefix(tokenAddress)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -399,7 +399,7 @@ func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address 
 		prefix = ERC20ToIndexKeyPrefix(address)
 	}
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -481,7 +481,7 @@ func (s *PebbleStorage) SaveERC20Transfer(ctx context.Context, transfer *ERC20Tr
 		return fmt.Errorf("value cannot be nil")
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// Encode transfer data
@@ -515,7 +515,7 @@ func (s *PebbleStorage) SaveERC20Transfer(ctx context.Context, transfer *ERC20Tr
 	}
 
 	// Commit batch
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit ERC20 transfer batch: %w", err)
 	}
 
@@ -532,7 +532,7 @@ func (s *PebbleStorage) GetERC721Transfer(ctx context.Context, txHash common.Has
 	}
 
 	key := ERC721TransferKey(txHash, logIndex)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -568,7 +568,7 @@ func (s *PebbleStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddr
 
 	prefix := ERC721TokenIndexKeyPrefix(tokenAddress)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -654,7 +654,7 @@ func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address
 		prefix = ERC721ToIndexKeyPrefix(address)
 	}
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -726,7 +726,7 @@ func (s *PebbleStorage) GetERC721Owner(ctx context.Context, tokenAddress common.
 	}
 
 	key := ERC721TokenOwnerKey(tokenAddress, tokenId.String())
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return common.Address{}, ErrNotFound
@@ -759,7 +759,7 @@ func (s *PebbleStorage) GetNFTsByOwner(ctx context.Context, owner common.Address
 
 	prefix := ERC721OwnerIndexKeyPrefix(owner)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -860,7 +860,7 @@ func (s *PebbleStorage) SaveERC721Transfer(ctx context.Context, transfer *ERC721
 		return fmt.Errorf("tokenId cannot be nil")
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// Encode transfer data
@@ -922,7 +922,7 @@ func (s *PebbleStorage) SaveERC721Transfer(ctx context.Context, transfer *ERC721
 	}
 
 	// Commit batch
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit ERC721 transfer batch: %w", err)
 	}
 
@@ -940,7 +940,7 @@ func (s *PebbleStorage) GetInternalTransactions(ctx context.Context, txHash comm
 
 	prefix := InternalTransactionKeyPrefix(txHash)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -999,7 +999,7 @@ func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, ad
 		prefix = InternalTxToIndexKeyPrefix(address)
 	}
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -1091,7 +1091,7 @@ func (s *PebbleStorage) SaveInternalTransactions(ctx context.Context, txHash com
 		return nil
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	for _, internal := range internals {
@@ -1136,7 +1136,7 @@ func (s *PebbleStorage) SaveInternalTransactions(ctx context.Context, txHash com
 	}
 
 	// Commit batch
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit internal transactions batch: %w", err)
 	}
 

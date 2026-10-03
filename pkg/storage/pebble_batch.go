@@ -17,6 +17,7 @@ var _ Batch = (*pebbleBatch)(nil)
 type pebbleBatch struct {
 	storage *PebbleStorage
 	batch   *pebble.Batch
+	ctx     context.Context // nil: commit to the DB; see newBatchCtx
 	count   int
 	txCount uint64 // Number of transactions added in this batch
 	closed  bool
@@ -250,7 +251,7 @@ func (b *pebbleBatch) Commit() error {
 		}
 	}
 
-	return b.batch.Commit(pebble.Sync)
+	return b.storage.commitBatch(b.ctx, b.batch, pebble.Sync)
 }
 
 // Reset clears all operations in the batch
