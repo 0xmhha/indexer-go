@@ -63,6 +63,9 @@ type IndexerConfig struct {
 	Workers     int    `yaml:"workers"`
 	ChunkSize   int    `yaml:"chunk_size"`
 	StartHeight uint64 `yaml:"start_height"`
+	// AtomicBlock indexes each block in one storage transaction. It will
+	// become the default once verified (phase0-design.md P0-13).
+	AtomicBlock bool `yaml:"atomic_block"`
 }
 
 // APIConfig holds API server configuration
@@ -706,6 +709,13 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_START_HEIGHT: %w", err)
 		}
 		c.Indexer.StartHeight = val
+	}
+	if atomic := os.Getenv("INDEXER_ATOMIC_BLOCK"); atomic != "" {
+		val, err := strconv.ParseBool(atomic)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_ATOMIC_BLOCK: %w", err)
+		}
+		c.Indexer.AtomicBlock = val
 	}
 
 	// API configuration

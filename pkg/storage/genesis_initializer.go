@@ -423,3 +423,13 @@ func (g *GenesisInitializingStorage) SaveERC721Transfer(ctx context.Context, tra
 	}
 	return fmt.Errorf("storage does not implement AddressIndexWriter")
 }
+
+// BeginBlock delegates to the wrapped storage. Without it the wrapper would
+// hide BlockTransactor and the fetcher would fall back to the legacy path.
+func (g *GenesisInitializingStorage) BeginBlock(ctx context.Context) (context.Context, *BlockTx, error) {
+	txr, ok := g.Storage.(BlockTransactor)
+	if !ok {
+		return ctx, nil, fmt.Errorf("wrapped storage does not support block transactions")
+	}
+	return txr.BeginBlock(ctx)
+}

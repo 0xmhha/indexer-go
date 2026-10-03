@@ -70,6 +70,9 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 						zap.String("from", from.Hex()),
 						zap.Error(err),
 					)
+					if f.strictStorageErrors {
+						return fmt.Errorf("failed to index transaction for from address: %w", err)
+					}
 				}
 			}
 
@@ -84,6 +87,9 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 							zap.String("to", to.Hex()),
 							zap.Error(err),
 						)
+						if f.strictStorageErrors {
+							return fmt.Errorf("failed to index transaction for to address: %w", err)
+						}
 					}
 				}
 			}
@@ -100,6 +106,9 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 								zap.String("feePayer", feePayer.Hex()),
 								zap.Error(err),
 							)
+							if f.strictStorageErrors {
+								return fmt.Errorf("failed to index transaction for feePayer address: %w", err)
+							}
 						}
 					}
 				}
@@ -125,6 +134,9 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 					zap.String("contract", receipt.ContractAddress.Hex()),
 					zap.Error(err),
 				)
+				if f.strictStorageErrors {
+					return fmt.Errorf("failed to save contract creation: %w", err)
+				}
 			}
 
 			// Index token metadata if this is a token contract
@@ -182,6 +194,9 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 						zap.String("token", log.Address.Hex()),
 						zap.Error(err),
 					)
+					if f.strictStorageErrors {
+						return fmt.Errorf("failed to save ERC20 transfer: %w", err)
+					}
 				}
 
 			} else if len(log.Topics) == 4 {
@@ -209,6 +224,9 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 						zap.String("tokenId", tokenId.String()),
 						zap.Error(err),
 					)
+					if f.strictStorageErrors {
+						return fmt.Errorf("failed to save ERC721 transfer: %w", err)
+					}
 				}
 			}
 		}

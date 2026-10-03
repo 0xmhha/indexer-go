@@ -22,9 +22,26 @@ var updateGolden = flag.Bool("update", false, "rewrite golden files")
 
 const goldenKeyspace = "testdata/golden/keyspace.txt"
 
+// ingestMode selects the fetcher's block write path.
+type ingestMode struct {
+	name   string
+	atomic bool
+}
+
+var (
+	legacyMode = ingestMode{name: "legacy", atomic: false}
+	atomicMode = ingestMode{name: "atomic", atomic: true}
+	allModes   = []ingestMode{legacyMode, atomicMode}
+)
+
 // startApp builds the production single-chain wiring (NewApp) against srv
-// with the database at dir. The caller must call app.Shutdown.
+// with the database at dir, using the legacy write path. The caller must call
+// app.Shutdown.
 func startApp(t *testing.T, srv *testchain.Server, dir string) *App {
+	return startAppMode(t, srv, dir, legacyMode)
+}
+
+func startAppMode(t *testing.T, srv *testchain.Server, dir string, mode ingestMode) *App {
 	t.Helper()
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = srv.URL()
@@ -32,6 +49,7 @@ func startApp(t *testing.T, srv *testchain.Server, dir string) *App {
 	cfg.Database.Path = dir
 	cfg.API.Enabled = false
 	cfg.Indexer.StartHeight = 0
+	cfg.Indexer.AtomicBlock = mode.atomic
 
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
@@ -42,7 +60,12 @@ func startApp(t *testing.T, srv *testchain.Server, dir string) *App {
 // does (FetchRange), and shuts it down cleanly.
 func runSession(t *testing.T, srv *testchain.Server, dir string, from, to uint64) {
 	t.Helper()
-	app := startApp(t, srv, dir)
+	runSessionMode(t, srv, dir, from, to, legacyMode)
+}
+
+func runSessionMode(t *testing.T, srv *testchain.Server, dir string, from, to uint64, mode ingestMode) {
+	t.Helper()
+	app := startAppMode(t, srv, dir, mode)
 	defer app.Shutdown()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -53,12 +76,16 @@ func runSession(t *testing.T, srv *testchain.Server, dir string, from, to uint64
 // indexScenario indexes every scenario block in one session and returns the
 // database directory.
 func indexScenario(t *testing.T, sc *testchain.Scenario) string {
+	return indexScenarioMode(t, sc, legacyMode)
+}
+
+func indexScenarioMode(t *testing.T, sc *testchain.Scenario, mode ingestMode) string {
 	t.Helper()
 	srv := testchain.NewServer(sc.Chain)
 	t.Cleanup(srv.Close)
 
 	dir := filepath.Join(t.TempDir(), "db")
-	runSession(t, srv, dir, 0, sc.Chain.Head())
+	runSessionMode(t, srv, dir, 0, sc.Chain.Head(), mode)
 
 	require.Empty(t, srv.UnknownMethods(), "indexer called RPC methods the test chain does not implement")
 	return dir
@@ -130,4 +157,14 @@ func TestIndexIsDeterministic(t *testing.T) {
 	first := dumpScenarioIndex(t)
 	second := dumpScenarioIndex(t)
 	require.Empty(t, testchain.DiffKeyspace(first, second, 20))
+}
+
+// TestAtomicPathMatchesGolden is the verification step of the strangler
+// switch: indexing through the atomic path must produce exactly the keyspace
+// pinned for the legacy path on a clean run.
+func TestAtomicPathMatchesGolden(t *testing.T) {
+	legacy := dumpScenarioIndex(t)
+	atomic := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), atomicMode))
+	diff := testchain.DiffKeyspace(legacy, atomic, 0)
+	require.Empty(t, diff, "atomic path differs from legacy: %v", testchain.SummarizeDiff(diff))
 }

@@ -37,7 +37,7 @@ func (f *Fetcher) publishBlockEvents(block *types.Block, receipts types.Receipts
 			receipt,
 		)
 
-		if !f.eventBus.Publish(txEvent) {
+		if !f.publish(txEvent) {
 			f.logger.Warn("Failed to publish transaction event (channel full)",
 				zap.String("tx_hash", tx.Hash().Hex()),
 				zap.Uint64("block", height),
@@ -55,7 +55,7 @@ func (f *Fetcher) publishBlockEvents(block *types.Block, receipts types.Receipts
 				continue
 			}
 			logEvent := events.NewLogEvent(logEntry)
-			if !f.eventBus.Publish(logEvent) {
+			if !f.publish(logEvent) {
 				f.logger.Warn("Failed to publish log event (channel full)",
 					zap.String("tx_hash", logEntry.TxHash.Hex()),
 					zap.Uint64("block", logEntry.BlockNumber),
@@ -131,7 +131,7 @@ func (f *Fetcher) detectSystemEventsWithAdapter(block *types.Block, log *types.L
 			0,
 		)
 
-		if !f.eventBus.Publish(validatorEvent) {
+		if !f.publish(validatorEvent) {
 			f.logger.Warn("Failed to publish validator set event (channel full)",
 				zap.String("type", changeType),
 				zap.String("validator", validatorAddr.Hex()),
@@ -175,7 +175,7 @@ func (f *Fetcher) detectSystemEventsLegacy(block *types.Block, log *types.Log) {
 				0,  // set size would need to be tracked separately
 			)
 
-			if !f.eventBus.Publish(validatorEvent) {
+			if !f.publish(validatorEvent) {
 				f.logger.Warn("Failed to publish validator set event (channel full)",
 					zap.String("type", "added"),
 					zap.String("validator", validatorAddr.Hex()),
@@ -203,7 +203,7 @@ func (f *Fetcher) detectSystemEventsLegacy(block *types.Block, log *types.Log) {
 				0,  // set size would need to be tracked separately
 			)
 
-			if !f.eventBus.Publish(validatorEvent) {
+			if !f.publish(validatorEvent) {
 				f.logger.Warn("Failed to publish validator set event (channel full)",
 					zap.String("type", "removed"),
 					zap.String("validator", validatorAddr.Hex()),

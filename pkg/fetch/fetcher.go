@@ -122,6 +122,10 @@ type Config struct {
 	// EnableAdaptiveOptimization enables automatic adjustment of worker count and batch size
 	EnableAdaptiveOptimization bool
 
+	// AtomicBlock indexes each block in one storage transaction (cursor
+	// included) and publishes its events after commit.
+	AtomicBlock bool
+
 	// OptimizerConfig holds configuration for adaptive optimization (optional)
 	OptimizerConfig *OptimizerConfig
 }
@@ -178,6 +182,16 @@ type Fetcher struct {
 
 	// userOpProcessor handles ERC-4337 UserOperation indexing
 	userOpProcessor *UserOpProcessor
+
+	// txr opens per-block storage transactions (nil if the storage cannot).
+	txr storagepkg.BlockTransactor
+	// strictStorageErrors makes storage write failures abort the block
+	// instead of being logged. It is on in atomic mode.
+	strictStorageErrors bool
+	// pendingEvents buffers events while a block transaction is open.
+	pendingEvents *[]events.Event
+	// beforeCommitHook is a fault-injection point for tests.
+	beforeCommitHook func(height uint64) error
 }
 
 // NewFetcher creates a new Fetcher instance
@@ -216,6 +230,11 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		logger.Warn("Storage does not support system contract event parsing - continuing without it")
 	}
 
+	txr, _ := storage.(storagepkg.BlockTransactor)
+	if config.AtomicBlock && txr == nil {
+		logger.Warn("Atomic block indexing requested but storage does not support block transactions; using legacy path")
+	}
+
 	return &Fetcher{
 		client:                    client,
 		storage:                   storage,
@@ -226,6 +245,8 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		optimizer:                 optimizer,
 		largeBlockProcessor:       largeBlockProcessor,
 		systemContractEventParser: systemContractEventParser,
+		txr:                       txr,
+		strictStorageErrors:       config.AtomicBlock && txr != nil,
 	}
 }
 
@@ -364,6 +385,12 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		f.metrics.RecordRequest(time.Since(startTime), false, false)
 	}
 
+	if f.atomic() {
+		return f.indexBlock(ctx, block, receipts)
+	}
+
+	// Legacy path: separate writes, removed after the atomic path is the
+	// default for a release (phase0-design.md P0-14).
 	// Store block
 	if err := f.storage.SetBlock(ctx, block); err != nil {
 		return fmt.Errorf("failed to store block %d: %w", height, err)
@@ -557,6 +584,19 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 		// Process results in sequential order
 		for {
 			if res, ok := resultMap[nextHeight]; ok {
+				if f.atomic() {
+					if err := f.indexBlock(ctx, res.block, res.receipts); err != nil {
+						return err
+					}
+					delete(resultMap, nextHeight)
+					processedCount++
+					nextHeight++
+					if nextHeight > end {
+						break
+					}
+					continue
+				}
+
 				// Store block
 				if err := f.storage.SetBlock(ctx, res.block); err != nil {
 					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)

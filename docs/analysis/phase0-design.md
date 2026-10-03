@@ -435,3 +435,25 @@ GraphQL `transactions`/`logs`는 범위를 주지 않으면 0..latest 전체 블
 | 시험 | `TestAddrSeqRestoredAfterReopen`, `TestAddrSeqRestoreUsesHighestOfBothPrefixes`. `knownDefects`에서 D1을 지웠다. 이제 `TestRestartPreservesIndex`는 세 세션으로 나눈 결과가 한 번에 색인한 결과와 완전히 같아야 통과하고, 실제로 통과한다 |
 
 golden 키 공간은 바뀌지 않았다. 한 세션으로 색인할 때는 처음부터 sequence가 0이므로 복원 결과가 같다.
+
+### P0-8: 원자적 indexBlock (10/3, D2·D3·D10 수정, 스위치 뒤)
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/fetch/index_block.go` | `indexBlock`. 블록 하나의 모든 쓰기와 커서를 `BeginBlock` 트랜잭션 하나로 commit한다. 이벤트는 버퍼에 모았다가 commit 뒤에 발행한다(`f.publish`). 라이브 수집(`FetchBlock`)과 gap 복구(`FetchRangeConcurrent`의 순서대로 commit하는 부분)가 같은 함수를 쓴다 |
+| 커서 | `advanceCursor`가 저장된 값보다 클 때만 올린다. gap을 채워도 커서가 되돌아가지 않는다(D10) |
+| 이미 저장된 블록 | 같은 높이에 같은 hash가 있으면 건너뛴다. hash가 다르면 `ErrBlockConflict`로 멈춘다(reorg 처리는 R2-4). **설계와 달라진 점**: 설계에서는 원자성만으로 재처리가 멱등해진다고 보았다. 그런데 이미 commit된 블록을 다시 처리하면(재색인, 수동 범위 지정 등) 잔액 delta와 주소 색인이 여전히 중복된다. 그래서 이 규칙을 넣었다 |
+| 오류 처리 | 원자적 경로(`strictStorageErrors`)에서는 저장 쓰기 실패 8곳이 블록 실패가 된다. 대상은 주소 색인 3곳, 컨트랙트 생성, ERC-20·721 transfer, 로그 색인, fee delegation 저장이다. 체인 데이터 해석이나 RPC 보강 실패(WBFT 해석, 시스템 컨트랙트 파서, 잔액 초기화 RPC, 블록 처리기, SetCode·UserOp 처리기, 잔액 갱신)는 여전히 경고로 남긴다. 잘못된 데이터 하나로 수집 전체가 멈추지 않게 하려는 것이다. 이 부분은 D5의 남은 과제다 |
+| 큰 블록 | 원자적 경로는 receipt를 항상 순차로 처리한다(`storeReceiptsSequential`). batch는 동시 쓰기에 안전하지 않고, 병렬 경로는 같은 데이터를 두 번 색인했다(D7) |
+| 스위치 | `indexer.atomic_block`(환경 변수 `INDEXER_ATOMIC_BLOCK`), 기본값 false. genesis wrapper가 `BeginBlock`을 위임하도록 했다(그러지 않으면 wrapper가 이 기능을 가린다) |
+| 시험용 지점 | `Fetcher.SetBeforeCommitHook`. commit 직전에 오류를 내서 crash를 흉내 낸다 |
+
+검증 결과는 다음과 같다(`cmd/indexer`).
+- `TestAtomicPathMatchesGolden`: 원자적 경로로 깨끗하게 색인한 키 공간이 기존 golden과 같다.
+- 결함 재현 시험을 두 경로로 돌린다. `knownDefects`는 경로별로 관리한다. 기존 경로는 D3·D10을 계속 재현하고, 원자적 경로는 D1·D3·D10 모두 정상이다.
+- `TestCrashBeforeCommitRecovers`: 블록 0, 2, 6, 8, 13, 20의 commit 직전에 crash를 넣고 재시작했다. 여섯 경우 모두 최종 키 공간이 golden과 같다. 원자적 경로에서는 블록 안 어느 지점의 crash든 "commit 전 crash"와 같다. commit 전에는 아무것도 DB에 반영되지 않기 때문이다(`TestBoundBatchCapturesWrites`, `TestBlockTxRollbackLeavesNoTrace`).
+- gap 복구 뒤 키 공간은 주소 색인·잔액 이력을 빼고 golden과 같다. 이 두 prefix의 sequence는 처리 순서를 따르므로, 나중에 채운 블록은 번호가 다르게 매겨지는 것이 정상이다.
+
+남은 일은 다음과 같다.
+- P0-13에서 기본값을 true로 바꾸고, P0-14에서 옛 경로를 지운다.
+- `FetchRangeConcurrent`의 고루틴 누수(C1)는 P0-3에서 고친다.

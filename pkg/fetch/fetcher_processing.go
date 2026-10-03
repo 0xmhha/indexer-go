@@ -123,6 +123,9 @@ func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, height uint6
 				zap.Uint64("height", height),
 				zap.Error(err),
 			)
+			if f.strictStorageErrors {
+				return fmt.Errorf("failed to store fee delegation metadata: %w", err)
+			}
 			// Continue processing other metadata even if one fails
 		}
 	}
@@ -205,32 +208,44 @@ func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, block *types.Bloc
 			}
 		}
 	} else {
-		// Standard sequential processing for normal blocks
-		for _, receipt := range receipts {
-			if err := f.storage.SetReceipt(ctx, receipt); err != nil {
-				return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
-			}
+		if err := f.storeReceiptsSequential(ctx, receipts); err != nil {
+			return err
+		}
+	}
 
-			// Index logs from this receipt
-			if logWriter, ok := f.storage.(storagepkg.LogWriter); ok && len(receipt.Logs) > 0 {
-				if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
-					f.logger.Warn("failed to index logs",
-						zap.String("tx", receipt.TxHash.Hex()),
-						zap.Int("logs", len(receipt.Logs)),
-						zap.Error(err),
-					)
+	return nil
+}
+
+// storeReceiptsSequential stores receipts, indexes their logs and parses
+// system contract events one receipt at a time.
+func (f *Fetcher) storeReceiptsSequential(ctx context.Context, receipts types.Receipts) error {
+	for _, receipt := range receipts {
+		if err := f.storage.SetReceipt(ctx, receipt); err != nil {
+			return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
+		}
+
+		// Index logs from this receipt
+		if logWriter, ok := f.storage.(storagepkg.LogWriter); ok && len(receipt.Logs) > 0 {
+			if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
+				f.logger.Warn("failed to index logs",
+					zap.String("tx", receipt.TxHash.Hex()),
+					zap.Int("logs", len(receipt.Logs)),
+					zap.Error(err),
+				)
+				if f.strictStorageErrors {
+					return fmt.Errorf("failed to index logs: %w", err)
 				}
 			}
+		}
 
-			// Parse system contract events from this receipt
-			if f.systemContractEventParser != nil && len(receipt.Logs) > 0 {
-				if err := f.systemContractEventParser.ParseAndIndexLogs(ctx, receipt.Logs); err != nil {
-					f.logger.Warn("failed to parse system contract events",
-						zap.String("tx", receipt.TxHash.Hex()),
-						zap.Int("logs", len(receipt.Logs)),
-						zap.Error(err),
-					)
-				}
+		// Parse system contract events from this receipt
+		if f.systemContractEventParser != nil && len(receipt.Logs) > 0 {
+			if err := f.systemContractEventParser.ParseAndIndexLogs(ctx, receipt.Logs); err != nil {
+				f.logger.Warn("failed to parse system contract events",
+					zap.String("tx", receipt.TxHash.Hex()),
+					zap.Int("logs", len(receipt.Logs)),
+					zap.Error(err),
+				)
 			}
 		}
 	}

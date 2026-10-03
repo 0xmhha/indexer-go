@@ -197,7 +197,7 @@ func (f *Fetcher) publishConsensusBlockEvent(block *types.Block, wbftExtra *stor
 	)
 
 	// Publish to EventBus
-	if !f.eventBus.Publish(consensusEvent) {
+	if !f.publish(consensusEvent) {
 		f.logger.Warn("Failed to publish consensus block event (channel full)",
 			zap.Uint64("height", block.NumberU64()),
 		)
@@ -255,7 +255,7 @@ func (f *Fetcher) publishConsensusErrorEvent(block *types.Block, wbftExtra *stor
 		nil,   // errorDetails
 	)
 
-	if !f.eventBus.Publish(errorEvent) {
+	if !f.publish(errorEvent) {
 		f.logger.Warn("Failed to publish consensus error event (channel full)",
 			zap.Uint64("height", block.NumberU64()),
 			zap.String("errorType", errorType),

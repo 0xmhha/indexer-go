@@ -615,6 +615,7 @@ func (a *App) initFetcher() {
 		MaxRetries:  3,
 		RetryDelay:  retryDelay,
 		NumWorkers:  a.config.Indexer.Workers,
+		AtomicBlock: a.config.Indexer.AtomicBlock,
 	}
 
 	// Create fetcher with chain adapter if available
