@@ -58,6 +58,7 @@ type ParsedEvent struct {
 	EventSig    common.Hash
 	BlockNumber uint64
 	TxHash      common.Hash
+	TxIndex     uint
 	LogIndex    uint
 
 	// Parsed data as key-value pairs
@@ -185,6 +186,7 @@ func (p *ABILogParser) Parse(log *types.Log) (*ParsedEvent, error) {
 		EventSig:        log.Topics[0],
 		BlockNumber:     log.BlockNumber,
 		TxHash:          log.TxHash,
+		TxIndex:         log.TxIndex,
 		LogIndex:        log.Index,
 		Data:            data,
 		RawLog:          log,

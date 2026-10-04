@@ -22,7 +22,7 @@ func TestBurnEventKey(t *testing.T) {
 func TestMinterConfigEventKey(t *testing.T) {
 	minter := common.HexToAddress("0xMINTER1234567890123456789012345678901234")
 
-	key := MinterConfigEventKey(minter, 12345)
+	key := MinterConfigEventKey(minter, 12345, 0)
 	assert.NotNil(t, key)
 	assert.True(t, len(key) > 0)
 }
@@ -30,7 +30,7 @@ func TestMinterConfigEventKey(t *testing.T) {
 func TestValidatorChangeEventKey(t *testing.T) {
 	validator := common.HexToAddress("0xVALIDATOR12345678901234567890123456789")
 
-	key := ValidatorChangeEventKey(validator, 12345)
+	key := ValidatorChangeEventKey(validator, 12345, 0)
 	assert.NotNil(t, key)
 	assert.True(t, len(key) > 0)
 }
@@ -55,7 +55,7 @@ func TestProposalVoteKey(t *testing.T) {
 func TestBlacklistEventKey(t *testing.T) {
 	account := common.HexToAddress("0xACCOUNT123456789012345678901234567890")
 
-	key := BlacklistEventKey(account, 12345)
+	key := BlacklistEventKey(account, 12345, 0)
 	assert.NotNil(t, key)
 	assert.True(t, len(key) > 0)
 }
@@ -91,7 +91,7 @@ func TestDepositMintProposalKey(t *testing.T) {
 func TestMintMinterIndexKey(t *testing.T) {
 	minter := common.HexToAddress("0xMINTER1234567890123456789012345678901234")
 
-	key := MintMinterIndexKey(minter, 12345)
+	key := MintMinterIndexKey(minter, 12345, 0, 0)
 	assert.NotNil(t, key)
 	assert.True(t, len(key) > 0)
 }
@@ -99,7 +99,7 @@ func TestMintMinterIndexKey(t *testing.T) {
 func TestBurnBurnerIndexKey(t *testing.T) {
 	burner := common.HexToAddress("0xBURNER1234567890123456789012345678901234")
 
-	key := BurnBurnerIndexKey(burner, 12345)
+	key := BurnBurnerIndexKey(burner, 12345, 0, 0)
 	assert.NotNil(t, key)
 	assert.True(t, len(key) > 0)
 }

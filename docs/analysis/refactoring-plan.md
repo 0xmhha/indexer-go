@@ -170,6 +170,8 @@ graph TD
 | D18 | [중요] | `GetBlockByTimestamp`의 iterator에 상한이 없어, 마지막 블록보다 늦은 timestamp를 찾으면 timestamp 색인 밖의 다음 키(`/meta/...`)를 높이로 읽어 엉뚱한 블록을 돌려줬다. schema 키를 추가하면서 드러났고, 상한을 넣어 고쳤다 | `pkg/storage/pebble_historical.go` | [High] |
 | D19 | [중요] | 잔액 추적이 가스비를 `gasUsed × tx.GasPrice()`로 계산했다. EIP-1559 계열 거래에서 `GasPrice()`는 fee cap이라 실제 지불액(receipt의 `effectiveGasPrice`)보다 크게 차감했고, type 0x16의 가스를 fee payer가 아니라 송신자에게 차감했다. S4에서 receipt의 실제 가격으로, 부담자는 fee payer로 고쳤다. live 체인의 0x16 거래 6건에서 계정별 기록 변화량이 기대값과 같다 | `pkg/fetch/fetcher_indexing.go` | [High] |
 | D20 | [중요] | 주소별 거래 색인과 잔액 이력이 주소 하나당 순번 카운터 하나를 함께 썼다(`nextAddrSeq`). 그래서 한쪽을 끄거나 나중에 켜면 다른 쪽 키의 번호가 바뀌었다. 기능을 따로 켜고 끄거나 나중에 그 기능만 다시 처리(backfill, R2-7)할 수 없는 구조였다. 기능 레지스트리 F5에서 기능마다 꺼 보는 시험으로 드러났고, 카운터를 키 묶음별로 나눠 고쳤다(schema v2는 배포 전이라 같은 버전에서 바꿨다) | `pkg/storage/block_tx.go` | [High] |
+| D21 | [치명] (StableNet) | 시스템 컨트랙트 이벤트 키에 log 위치가 없었다. mint·burn·가스 팁·멤버 변경·긴급 정지·제안 수 상한·실행 건너뜀·권한 계정 이벤트는 거래 인덱스(일부는 log 인덱스까지)를 코드에서 0으로 고정했다. minter 설정·검증자 변경·blacklist는 (주소, 블록)만 썼다. 그래서 같은 블록에서 같은 종류의 이벤트가 두 번 나오면 앞 이벤트가 덮어써져 사라졌다. 이벤트에 거래·log 인덱스를 담고 키를 (블록, log 위치)로 바꿔 고쳤다 | `pkg/storage/pebble_system_contracts_impl.go`, `schema.go` | [High] |
+| D22 | [중요] (StableNet) | minter·burner로 거른 mint·burn 조회는 `/index/syscontracts/mint_minter/`·`burn_burner/` 색인을 읽는데, 이 색인을 쓰는 코드가 없었다. 그래서 거른 조회는 항상 빈 결과였다. 이벤트를 저장할 때 색인도 쓰도록 고쳤다 | `pkg/storage/pebble_system_contracts_impl.go` | [High] |
 | D5 | [중요] | 로그 색인, 주소·잔액 색인, 블록 처리기, 시스템 컨트랙트 파서의 실패를 경고 로그로만 남긴다. 커서는 그대로 전진해서 색인에 빈칸이 영구히 남는다 | `fetcher_processing.go`, `fetcher_indexing.go` | [Mid] |
 | D6 | [중요] | gap 복구 경로(`FetchRangeConcurrent`)는 시스템 컨트랙트 파싱, 로그 이벤트, 블록 처리기를 건너뛴다. 복구한 블록은 라이브 블록보다 덜 색인된다 | `fetcher.go:476-690` | [Mid] |
 | D7 | [중요] | 큰 블록은 주소 색인, transfer, SetCode, UserOp 처리를 두 번 한다 | `large_block.go:194-235` | [Mid] |
@@ -509,3 +511,11 @@ graph LR
 - 정적 분석과 코드 정독에 근거했다. 부하 시험, 프로파일링, testnet 실행은 하지 않았다.
 - [Mid] 항목은 정독 보고만 있고 이번에 다시 확인하지 않았다. Phase 0에 착수하기 전에 R0-1, R0-2 시험으로 재현해 확정해야 한다.
 - 그래프의 호출 폐포는 인터페이스 호출의 실제 구현을 따라가지 않아서 실제보다 작게 나올 수 있다(graph/README.md).
+
+---
+
+## 11. R1-3 진행 기록 (10/5)
+
+**K1: 숫자 키의 정렬(완료).** 블록·거래 키와 시스템 컨트랙트 이벤트 키의 숫자가 고정 자릿수가 아니었다(`/data/blocks/10`이 `/data/blocks/2`보다 앞). 그래서 iterator로 읽으면 같은 블록 안의 거래 10이 거래 2보다 먼저 나왔다. 모든 숫자 부분을 고정 자릿수(높이 20자리, 거래·log 6자리, 상태 3자리)로 바꿨다. `TestNumericKeysSortNumerically`는 숫자로 만드는 키 18종에 자릿수 경계값과 무작위 값을 넣어, 바이트 순서와 숫자 순서가 같은지 확인한다. 예전 형식의 `BlockKey`로 바꾸면 실패하는 것도 확인했다. 이 작업 중에 시스템 컨트랙트 이벤트 덮어쓰기(D21)와 minter·burner 색인 누락(D22)을 찾아 고쳤다. schema v2가 배포 전이라 버전은 올리지 않았다.
+
+**K2: 이진 인코딩(결정 필요).** 키를 사람이 읽을 수 있는 문자열에서 고정 길이 이진값으로 바꾸면 키가 짧아진다. 주소 hex(42바이트)는 20바이트, 높이(20바이트)는 8바이트가 된다. 비교도 빨라진다. 대신 golden 파일, DB 덤프, 운영 중 키 확인을 사람이 읽기 어려워진다. 그리고 키 함수 235개와 해석 코드를 모두 바꿔야 한다. 정렬 문제는 K1로 해결되었으므로, K2는 성능 측정(키 크기가 DB 크기와 조회 시간에 주는 영향)을 먼저 하고 정하는 것을 권장한다.

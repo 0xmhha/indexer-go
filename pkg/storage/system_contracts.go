@@ -52,6 +52,8 @@ func (s ProposalStatus) String() string {
 type MintEvent struct {
 	BlockNumber uint64
 	TxHash      common.Hash
+	TxIndex     uint
+	LogIndex    uint // position of the event log in its block
 	Minter      common.Address
 	To          common.Address
 	Amount      *big.Int
@@ -62,6 +64,8 @@ type MintEvent struct {
 type BurnEvent struct {
 	BlockNumber uint64
 	TxHash      common.Hash
+	TxIndex     uint
+	LogIndex    uint // position of the event log in its block
 	Burner      common.Address
 	Amount      *big.Int
 	Timestamp   uint64
@@ -73,6 +77,7 @@ type BurnEvent struct {
 type MinterConfigEvent struct {
 	BlockNumber uint64
 	TxHash      common.Hash
+	LogIndex    uint // position of the event log in its block; with BlockNumber it identifies the event
 	Minter      common.Address
 	Allowance   *big.Int
 	Action      string // "configured" or "removed"
@@ -112,6 +117,7 @@ type ProposalVote struct {
 type GasTipUpdateEvent struct {
 	BlockNumber uint64
 	TxHash      common.Hash
+	LogIndex    uint // position of the event log in its block; with BlockNumber it identifies the event
 	OldTip      *big.Int
 	NewTip      *big.Int
 	Updater     common.Address
@@ -122,6 +128,7 @@ type GasTipUpdateEvent struct {
 type BlacklistEvent struct {
 	BlockNumber uint64
 	TxHash      common.Hash
+	LogIndex    uint // position of the event log in its block; with BlockNumber it identifies the event
 	Account     common.Address
 	Action      string // "blacklisted" or "unblacklisted"
 	ProposalID  *big.Int
@@ -132,6 +139,7 @@ type BlacklistEvent struct {
 type ValidatorChangeEvent struct {
 	BlockNumber  uint64
 	TxHash       common.Hash
+	LogIndex     uint // position of the event log in its block; with BlockNumber it identifies the event
 	Validator    common.Address
 	Action       string // "added", "removed", "changed"
 	OldValidator *common.Address
@@ -143,6 +151,7 @@ type MemberChangeEvent struct {
 	Contract     common.Address
 	BlockNumber  uint64
 	TxHash       common.Hash
+	LogIndex     uint // position of the event log in its block; with BlockNumber it identifies the event
 	Member       common.Address
 	Action       string // "added", "removed", "changed"
 	OldMember    *common.Address
@@ -156,6 +165,7 @@ type EmergencyPauseEvent struct {
 	Contract    common.Address
 	BlockNumber uint64
 	TxHash      common.Hash
+	LogIndex    uint // position of the event log in its block; with BlockNumber it identifies the event
 	ProposalID  *big.Int
 	Action      string // "paused" or "unpaused"
 	Timestamp   uint64
@@ -180,6 +190,7 @@ type MaxProposalsUpdateEvent struct {
 	Contract    common.Address
 	BlockNumber uint64
 	TxHash      common.Hash
+	LogIndex    uint // position of the event log in its block; with BlockNumber it identifies the event
 	OldMax      uint64
 	NewMax      uint64
 	Timestamp   uint64
@@ -190,6 +201,7 @@ type ProposalExecutionSkippedEvent struct {
 	Contract    common.Address
 	BlockNumber uint64
 	TxHash      common.Hash
+	LogIndex    uint // position of the event log in its block; with BlockNumber it identifies the event
 	Account     common.Address
 	ProposalID  *big.Int
 	Reason      string
@@ -201,6 +213,7 @@ type AuthorizedAccountEvent struct {
 	Contract    common.Address
 	BlockNumber uint64
 	TxHash      common.Hash
+	LogIndex    uint // position of the event log in its block; with BlockNumber it identifies the event
 	Account     common.Address
 	ProposalID  *big.Int
 	Action      string // "added" or "removed"

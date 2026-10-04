@@ -403,14 +403,14 @@ func BurnEventKey(blockNumber, txIndex, logIndex uint64) []byte {
 
 // MinterConfigEventKey returns the key for storing a minter config event
 // Format: /data/syscontracts/minterconfig/{minter}/{blockNumber}
-func MinterConfigEventKey(minter common.Address, blockNumber uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d", prefixSysMinterConfig, minter.Hex(), blockNumber))
+func MinterConfigEventKey(minter common.Address, blockNumber, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysMinterConfig, minter.Hex(), blockNumber, logIndex))
 }
 
 // ValidatorChangeEventKey returns the key for storing a validator change event
 // Format: /data/syscontracts/validator/{validator}/{blockNumber}
-func ValidatorChangeEventKey(validator common.Address, blockNumber uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d", prefixSysValidator, validator.Hex(), blockNumber))
+func ValidatorChangeEventKey(validator common.Address, blockNumber, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysValidator, validator.Hex(), blockNumber, logIndex))
 }
 
 // ProposalKey returns the key for storing a proposal
@@ -427,26 +427,26 @@ func ProposalVoteKey(contract common.Address, proposalId string, voter common.Ad
 
 // BlacklistEventKey returns the key for storing a blacklist event
 // Format: /data/syscontracts/blacklist/{address}/{blockNumber}
-func BlacklistEventKey(address common.Address, blockNumber uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d", prefixSysBlacklist, address.Hex(), blockNumber))
+func BlacklistEventKey(address common.Address, blockNumber, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysBlacklist, address.Hex(), blockNumber, logIndex))
 }
 
 // MemberChangeEventKey returns the key for storing a member change event
 // Format: /data/syscontracts/member/{contract}/{blockNumber}/{txIndex}
-func MemberChangeEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysMember, contract.Hex(), blockNumber, txIndex))
+func MemberChangeEventKey(contract common.Address, blockNumber, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysMember, contract.Hex(), blockNumber, logIndex))
 }
 
 // GasTipUpdateEventKey returns the key for storing a gas tip update event
 // Format: /data/syscontracts/gastip/{blockNumber}/{txIndex}
-func GasTipUpdateEventKey(blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%020d/%06d", prefixSysGasTip, blockNumber, txIndex))
+func GasTipUpdateEventKey(blockNumber, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%020d/%06d", prefixSysGasTip, blockNumber, logIndex))
 }
 
 // EmergencyPauseEventKey returns the key for storing an emergency pause event
 // Format: /data/syscontracts/emergency/{contract}/{blockNumber}/{txIndex}
-func EmergencyPauseEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysEmergency, contract.Hex(), blockNumber, txIndex))
+func EmergencyPauseEventKey(contract common.Address, blockNumber, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysEmergency, contract.Hex(), blockNumber, logIndex))
 }
 
 // DepositMintProposalKey returns the key for storing a deposit mint proposal
@@ -457,8 +457,8 @@ func DepositMintProposalKey(proposalId string) []byte {
 
 // MaxProposalsUpdateEventKey returns the key for storing a max proposals update event
 // Format: /data/syscontracts/maxproposals/{contract}/{blockNumber}/{txIndex}
-func MaxProposalsUpdateEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysMaxProposals, contract.Hex(), blockNumber, txIndex))
+func MaxProposalsUpdateEventKey(contract common.Address, blockNumber, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysMaxProposals, contract.Hex(), blockNumber, logIndex))
 }
 
 // MaxProposalsUpdateEventKeyPrefix returns the prefix for max proposals update events by contract
@@ -468,8 +468,8 @@ func MaxProposalsUpdateEventKeyPrefix(contract common.Address) []byte {
 
 // ProposalExecutionSkippedEventKey returns the key for storing a proposal execution skipped event
 // Format: /data/syscontracts/proposalskipped/{contract}/{blockNumber}/{txIndex}
-func ProposalExecutionSkippedEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysProposalSkipped, contract.Hex(), blockNumber, txIndex))
+func ProposalExecutionSkippedEventKey(contract common.Address, blockNumber, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysProposalSkipped, contract.Hex(), blockNumber, logIndex))
 }
 
 // ProposalExecutionSkippedEventKeyPrefix returns the prefix for proposal execution skipped events by contract
@@ -479,8 +479,8 @@ func ProposalExecutionSkippedEventKeyPrefix(contract common.Address) []byte {
 
 // AuthorizedAccountEventKey returns the key for an authorized account event
 // Format: /data/syscontracts/authorizedaccounts/{contract}/{blockNumber}/{txIndex}
-func AuthorizedAccountEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysAuthorizedAccounts, contract.Hex(), blockNumber, txIndex))
+func AuthorizedAccountEventKey(contract common.Address, blockNumber, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysAuthorizedAccounts, contract.Hex(), blockNumber, logIndex))
 }
 
 // AuthorizedAccountEventKeyPrefix returns the prefix for authorized account events by contract
@@ -492,14 +492,26 @@ func AuthorizedAccountEventKeyPrefix(contract common.Address) []byte {
 
 // MintMinterIndexKey returns the index key for mints by minter
 // Format: /index/syscontracts/mint_minter/{minter}/{blockNumber}
-func MintMinterIndexKey(minter common.Address, blockNumber uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d", prefixIdxMintMinter, minter.Hex(), blockNumber))
+func MintMinterIndexKey(minter common.Address, blockNumber, txIndex, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d/%06d", prefixIdxMintMinter, minter.Hex(), blockNumber, txIndex, logIndex))
+}
+
+// MintMinterIndexBound returns the first possible mint index key of minter at
+// blockNumber, for range scans.
+func MintMinterIndexBound(minter common.Address, blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/", prefixIdxMintMinter, minter.Hex(), blockNumber))
 }
 
 // BurnBurnerIndexKey returns the index key for burns by burner
 // Format: /index/syscontracts/burn_burner/{burner}/{blockNumber}
-func BurnBurnerIndexKey(burner common.Address, blockNumber uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d", prefixIdxBurnBurner, burner.Hex(), blockNumber))
+func BurnBurnerIndexKey(burner common.Address, blockNumber, txIndex, logIndex uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d/%06d", prefixIdxBurnBurner, burner.Hex(), blockNumber, txIndex, logIndex))
+}
+
+// BurnBurnerIndexBound returns the first possible burn index key of burner at
+// blockNumber, for range scans.
+func BurnBurnerIndexBound(burner common.Address, blockNumber uint64) []byte {
+	return []byte(fmt.Sprintf("%s%s/%020d/", prefixIdxBurnBurner, burner.Hex(), blockNumber))
 }
 
 // ProposalStatusIndexKey returns the index key for proposals by status

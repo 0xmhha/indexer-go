@@ -30,13 +30,7 @@ func (s *PebbleStorage) StoreMintEvent(ctx context.Context, event *MintEvent) er
 		return err
 	}
 
-	// Find the transaction and log index
-	// For now, use a simple counter approach
-	// In production, this should be derived from the actual log index
-	txIndex := uint64(0)
-	logIndex := uint64(0)
-
-	key := MintEventKey(event.BlockNumber, txIndex, logIndex)
+	key := MintEventKey(event.BlockNumber, uint64(event.TxIndex), uint64(event.LogIndex))
 	data, err := EncodeMintEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode mint event: %w", err)
@@ -44,6 +38,11 @@ func (s *PebbleStorage) StoreMintEvent(ctx context.Context, event *MintEvent) er
 
 	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to store mint event: %w", err)
+	}
+	// Index by minter for minter-filtered queries; the value is the event key.
+	idx := MintMinterIndexKey(event.Minter, event.BlockNumber, uint64(event.TxIndex), uint64(event.LogIndex))
+	if err := s.kv(ctx).Set(idx, key, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to index mint event: %w", err)
 	}
 
 	return nil
@@ -58,10 +57,7 @@ func (s *PebbleStorage) StoreBurnEvent(ctx context.Context, event *BurnEvent) er
 		return err
 	}
 
-	txIndex := uint64(0)
-	logIndex := uint64(0)
-
-	key := BurnEventKey(event.BlockNumber, txIndex, logIndex)
+	key := BurnEventKey(event.BlockNumber, uint64(event.TxIndex), uint64(event.LogIndex))
 	data, err := EncodeBurnEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode burn event: %w", err)
@@ -69,6 +65,11 @@ func (s *PebbleStorage) StoreBurnEvent(ctx context.Context, event *BurnEvent) er
 
 	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to store burn event: %w", err)
+	}
+	// Index by burner for burner-filtered queries; the value is the event key.
+	idx := BurnBurnerIndexKey(event.Burner, event.BlockNumber, uint64(event.TxIndex), uint64(event.LogIndex))
+	if err := s.kv(ctx).Set(idx, key, pebble.Sync); err != nil {
+		return fmt.Errorf("failed to index burn event: %w", err)
 	}
 
 	return nil
@@ -83,7 +84,7 @@ func (s *PebbleStorage) StoreMinterConfigEvent(ctx context.Context, event *Minte
 		return err
 	}
 
-	key := MinterConfigEventKey(event.Minter, event.BlockNumber)
+	key := MinterConfigEventKey(event.Minter, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeMinterConfigEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode minter config event: %w", err)
@@ -208,9 +209,7 @@ func (s *PebbleStorage) StoreGasTipUpdateEvent(ctx context.Context, event *GasTi
 		return err
 	}
 
-	txIndex := uint64(0)
-
-	key := GasTipUpdateEventKey(event.BlockNumber, txIndex)
+	key := GasTipUpdateEventKey(event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeGasTipUpdateEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode gas tip update event: %w", err)
@@ -232,7 +231,7 @@ func (s *PebbleStorage) StoreBlacklistEvent(ctx context.Context, event *Blacklis
 		return err
 	}
 
-	key := BlacklistEventKey(event.Account, event.BlockNumber)
+	key := BlacklistEventKey(event.Account, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeBlacklistEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode blacklist event: %w", err)
@@ -254,7 +253,7 @@ func (s *PebbleStorage) StoreValidatorChangeEvent(ctx context.Context, event *Va
 		return err
 	}
 
-	key := ValidatorChangeEventKey(event.Validator, event.BlockNumber)
+	key := ValidatorChangeEventKey(event.Validator, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeValidatorChangeEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode validator change event: %w", err)
@@ -276,9 +275,7 @@ func (s *PebbleStorage) StoreMemberChangeEvent(ctx context.Context, event *Membe
 		return err
 	}
 
-	txIndex := uint64(0)
-
-	key := MemberChangeEventKey(event.Contract, event.BlockNumber, txIndex)
+	key := MemberChangeEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeMemberChangeEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode member change event: %w", err)
@@ -300,9 +297,7 @@ func (s *PebbleStorage) StoreEmergencyPauseEvent(ctx context.Context, event *Eme
 		return err
 	}
 
-	txIndex := uint64(0)
-
-	key := EmergencyPauseEventKey(event.Contract, event.BlockNumber, txIndex)
+	key := EmergencyPauseEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeEmergencyPauseEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode emergency pause event: %w", err)
@@ -520,8 +515,8 @@ func (s *PebbleStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock ui
 
 	if minter != (common.Address{}) {
 		// Use minter index for efficient filtering
-		lowerBound = MintMinterIndexKey(minter, fromBlock)
-		upperBound = MintMinterIndexKey(minter, toBlock+1)
+		lowerBound = MintMinterIndexBound(minter, fromBlock)
+		upperBound = MintMinterIndexBound(minter, toBlock+1)
 	} else {
 		// Scan all mint events in block range
 		keyPrefix = MintEventKeyPrefix()
@@ -600,8 +595,8 @@ func (s *PebbleStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock ui
 
 	if burner != (common.Address{}) {
 		// Use burner index for efficient filtering
-		lowerBound = BurnBurnerIndexKey(burner, fromBlock)
-		upperBound = BurnBurnerIndexKey(burner, toBlock+1)
+		lowerBound = BurnBurnerIndexBound(burner, fromBlock)
+		upperBound = BurnBurnerIndexBound(burner, toBlock+1)
 	} else {
 		// Scan all burn events in block range
 		keyPrefix := BurnEventKeyPrefix()
@@ -1045,7 +1040,7 @@ func (s *PebbleStorage) StoreAuthorizedAccountEvent(ctx context.Context, event *
 		return fmt.Errorf("failed to marshal authorized account event: %w", err)
 	}
 
-	key := AuthorizedAccountEventKey(event.Contract, event.BlockNumber, 0)
+	key := AuthorizedAccountEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
 	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to store authorized account event: %w", err)
 	}
@@ -1252,8 +1247,7 @@ func (s *PebbleStorage) StoreMaxProposalsUpdateEvent(ctx context.Context, event 
 		return err
 	}
 
-	txIndex := uint64(0)
-	key := MaxProposalsUpdateEventKey(event.Contract, event.BlockNumber, txIndex)
+	key := MaxProposalsUpdateEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
 	data, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode max proposals update event: %w", err)
@@ -1275,8 +1269,7 @@ func (s *PebbleStorage) StoreProposalExecutionSkippedEvent(ctx context.Context, 
 		return err
 	}
 
-	txIndex := uint64(0)
-	key := ProposalExecutionSkippedEventKey(event.Contract, event.BlockNumber, txIndex)
+	key := ProposalExecutionSkippedEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
 	data, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode proposal execution skipped event: %w", err)

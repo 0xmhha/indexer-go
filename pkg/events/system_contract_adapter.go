@@ -223,6 +223,7 @@ func (a *SystemContractParserAdapter) Parse(ctx context.Context, log *types.Log)
 		EventSig:        log.Topics[0],
 		BlockNumber:     log.BlockNumber,
 		TxHash:          log.TxHash,
+		TxIndex:         log.TxIndex,
 		LogIndex:        log.Index,
 		RawLog:          log,
 	}, nil
