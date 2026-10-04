@@ -7,7 +7,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/pkg/chains"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -52,36 +51,20 @@ func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uin
 	return nil, hadError, fmt.Errorf("failed to fetch block %d: no attempts", height)
 }
 
-// processFeeDelegationMetadata extracts and stores fee delegation metadata for a block
+// processFeeDelegationMetadata extracts and stores fee delegation metadata
+// for blocks read through the legacy client, by fetching the block again
+// through a fee delegation aware client. Blocks decoded by a chain profile
+// carry the fee payer themselves and are handled by the
+// stablenet.fee_delegation feature. Removed with the legacy client path.
 func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, fb *fetchedBlock) error {
+	if f.src != nil {
+		return nil
+	}
 	height := fb.height()
 	// Check if storage supports fee delegation
 	fdStorage, ok := f.storage.(FeeDelegationStorage)
 	if !ok {
 		return nil // Storage doesn't support fee delegation, skip silently
-	}
-
-	// Blocks decoded by a chain profile carry the fee payer themselves.
-	if f.src != nil {
-		for _, tx := range fb.block.Transactions {
-			fd, ok := chains.FeeDelegationOf(tx)
-			if !ok {
-				continue
-			}
-			meta := &storagepkg.FeeDelegationTxMeta{
-				TxHash:       tx.Hash,
-				BlockNumber:  height,
-				OriginalType: tx.Type,
-				FeePayer:     fd.Payer,
-				FeePayerV:    fd.V,
-				FeePayerR:    fd.R,
-				FeePayerS:    fd.S,
-			}
-			if err := fdStorage.SetFeeDelegationTxMeta(ctx, meta); err != nil {
-				return fmt.Errorf("failed to store fee delegation metadata for %s: %w", tx.Hash.Hex(), err)
-			}
-		}
-		return nil
 	}
 
 	// Check if a client supporting fee delegation metadata extraction is set
@@ -188,21 +171,6 @@ func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, fb *fetchedBlock)
 		if err := f.largeBlockProcessor.ProcessReceiptsParallel(ctx, block, receipts); err != nil {
 			return fmt.Errorf("failed to process large block receipts: %w", err)
 		}
-
-		// Parse system contract events from large block receipts
-		if f.systemContractEventParser != nil {
-			for _, receipt := range receipts {
-				if len(receipt.Logs) > 0 {
-					if err := f.systemContractEventParser.ParseAndIndexLogs(ctx, receipt.Logs); err != nil {
-						f.logger.Warn("failed to parse system contract events",
-							zap.String("tx", receipt.TxHash.Hex()),
-							zap.Int("logs", len(receipt.Logs)),
-							zap.Error(err),
-						)
-					}
-				}
-			}
-		}
 	} else {
 		if err := f.storeReceiptsSequential(ctx, fb); err != nil {
 			return err
@@ -238,17 +206,6 @@ func (f *Fetcher) storeReceiptsSequential(ctx context.Context, fb *fetchedBlock)
 				if f.strictStorageErrors {
 					return fmt.Errorf("failed to index logs: %w", err)
 				}
-			}
-		}
-
-		// Parse system contract events from this receipt
-		if f.systemContractEventParser != nil && len(receipt.Logs) > 0 {
-			if err := f.systemContractEventParser.ParseAndIndexLogs(ctx, receipt.Logs); err != nil {
-				f.logger.Warn("failed to parse system contract events",
-					zap.String("tx", receipt.TxHash.Hex()),
-					zap.Int("logs", len(receipt.Logs)),
-					zap.Error(err),
-				)
 			}
 		}
 	}

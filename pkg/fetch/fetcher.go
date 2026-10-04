@@ -147,15 +147,14 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
-	client                    Client
-	storage                   Storage
-	config                    *Config
-	logger                    *zap.Logger
-	eventBus                  *events.EventBus
-	metrics                   *RPCMetrics
-	optimizer                 *AdaptiveOptimizer
-	largeBlockProcessor       *LargeBlockProcessor
-	systemContractEventParser *events.SystemContractEventParser
+	client              Client
+	storage             Storage
+	config              *Config
+	logger              *zap.Logger
+	eventBus            *events.EventBus
+	metrics             *RPCMetrics
+	optimizer           *AdaptiveOptimizer
+	largeBlockProcessor *LargeBlockProcessor
 
 	// chainAdapter provides chain-specific operations (optional)
 	// When set, the fetcher will use the adapter for consensus parsing
@@ -231,32 +230,22 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		)
 	}
 
-	// Initialize system contract event parser
-	var systemContractEventParser *events.SystemContractEventParser
-	if scWriter, ok := storage.(storagepkg.SystemContractWriter); ok {
-		systemContractEventParser = events.NewSystemContractEventParser(scWriter, logger)
-		logger.Info("System contract event parser initialized")
-	} else {
-		logger.Warn("Storage does not support system contract event parsing - continuing without it")
-	}
-
 	txr, _ := storage.(storagepkg.BlockTransactor)
 	if config.AtomicBlock && txr == nil {
 		logger.Warn("Atomic block indexing requested but storage does not support block transactions; using legacy path")
 	}
 
 	return &Fetcher{
-		client:                    client,
-		storage:                   storage,
-		config:                    config,
-		logger:                    logger,
-		eventBus:                  eventBus,
-		metrics:                   metrics,
-		optimizer:                 optimizer,
-		largeBlockProcessor:       largeBlockProcessor,
-		systemContractEventParser: systemContractEventParser,
-		txr:                       txr,
-		strictStorageErrors:       config.AtomicBlock && txr != nil,
+		client:              client,
+		storage:             storage,
+		config:              config,
+		logger:              logger,
+		eventBus:            eventBus,
+		metrics:             metrics,
+		optimizer:           optimizer,
+		largeBlockProcessor: largeBlockProcessor,
+		txr:                 txr,
+		strictStorageErrors: config.AtomicBlock && txr != nil,
 	}
 }
 

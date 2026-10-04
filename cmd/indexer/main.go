@@ -23,7 +23,9 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/wbft" // stablenet.wbft feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/feedelegation"   // stablenet.fee_delegation feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/systemcontracts" // stablenet.system_contracts feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/wbft"            // stablenet.wbft feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"

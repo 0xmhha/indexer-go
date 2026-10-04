@@ -15,6 +15,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/features/stablenet/systemcontracts"
 )
 
 // Regenerate with: go test ./cmd/indexer -run TestGolden -update
@@ -64,6 +65,7 @@ func startAppAt(t testing.TB, endpoint, dir string, mode ingestMode) *App {
 	cfg.Indexer.StartHeight = 0
 	cfg.Indexer.AtomicBlock = mode.atomic
 	cfg.Indexer.ProfileSource = !mode.clientSource
+	enableTestChainFeatures(cfg)
 
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
@@ -191,4 +193,15 @@ func TestClientSourceMatchesGolden(t *testing.T) {
 	client := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), clientMode))
 	diff := testchain.DiffKeyspace(profile, client, 0)
 	require.Empty(t, diff, "client source differs from the profile source: %v", testchain.SummarizeDiff(diff))
+}
+
+// enableTestChainFeatures turns on the StableNet features whose data the test
+// chain produces although it reports a plain Geth node: its scenario emits
+// StableNet system contract events.
+func enableTestChainFeatures(cfg *config.Config) {
+	on := true
+	if cfg.Features == nil {
+		cfg.Features = map[string]config.FeatureConfig{}
+	}
+	cfg.Features[systemcontracts.Name] = config.FeatureConfig{Enabled: &on}
 }

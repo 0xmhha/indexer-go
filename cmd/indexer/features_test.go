@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/feature"
+	"github.com/0xmhha/indexer-go/pkg/features/stablenet/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/features/stablenet/wbft"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -46,7 +48,7 @@ func startAppFeatures(t *testing.T, srv *testchain.Server, dir string, features 
 	cfg.RPC.Timeout = 5 * time.Second
 	cfg.Database.Path = dir
 	cfg.API.Enabled = false
-	cfg.Features = map[string]config.FeatureConfig{}
+	enableTestChainFeatures(cfg)
 	for name, on := range features {
 		on := on
 		cfg.Features[name] = config.FeatureConfig{Enabled: &on}
@@ -94,7 +96,7 @@ func TestWBFTFeatureOnNonWBFTChain(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "db")
 	app, err := startAppFeatures(t, srv, dir, map[string]bool{wbft.Name: true})
 	require.NoError(t, err)
-	require.Equal(t, []string{wbft.Name}, app.fetcherFeatures())
+	require.Contains(t, app.fetcherFeatures(), wbft.Name)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, app.fetcher.FetchRange(ctx, 0, sc.Chain.Head()))
@@ -105,3 +107,41 @@ func TestWBFTFeatureOnNonWBFTChain(t *testing.T) {
 }
 
 func (a *App) fetcherFeatures() []string { return a.features.Features() }
+
+// TestSystemContractsFeatureOff requires the system contract data of the
+// test chain to disappear, and only it, when stablenet.system_contracts is
+// turned off: the feature is the only writer of those keys.
+func TestSystemContractsFeatureOff(t *testing.T) {
+	sc := testchain.BuildDefault()
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+	dir := filepath.Join(t.TempDir(), "db")
+	app, err := startAppFeatures(t, srv, dir, map[string]bool{systemcontracts.Name: false})
+	require.NoError(t, err)
+	require.NotContains(t, app.fetcherFeatures(), systemcontracts.Name)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	require.NoError(t, app.fetcher.FetchRange(ctx, 0, sc.Chain.Head()))
+	app.Shutdown()
+
+	with := dumpScenarioIndex(t)
+	require.Positive(t, prefixCount(with, "/data/syscontracts/"))
+	without := dumpDir(t, dir)
+	require.Zero(t, prefixCount(without, "/data/syscontracts/")+prefixCount(without, "/index/syscontracts/"))
+	require.Empty(t, testchain.DiffKeyspace(
+		excludeEntries(with, "/data/syscontracts/", "/index/syscontracts/"), without, 0))
+}
+
+func excludeEntries(es []testchain.Entry, prefixes ...string) []testchain.Entry {
+	var out []testchain.Entry
+next:
+	for _, e := range es {
+		for _, p := range prefixes {
+			if strings.HasPrefix(string(e.Key), p) {
+				continue next
+			}
+		}
+		out = append(out, e)
+	}
+	return out
+}

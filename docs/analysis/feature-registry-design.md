@@ -136,3 +136,22 @@ type BlockHandler interface {
 - `TestWBFTFeatureOnNonWBFTChain`: 가짜 체인에서 `stablenet.wbft`를 켜도 저장 결과가 golden과 같다.
 - keyspace·GraphQL golden, 기존 경로 동등성 시험이 그대로 통과한다. 전체 시험은 기존부터 불안정한 `pkg/resilience` 시험 하나를 빼고 통과한다.
 - live StableNet(블록 0~19721): `TestLiveStableNet`에서 WBFT 키 20,283개가 기능 경로로 색인되고, 중단 후 재시작한 결과가 같다. `TestLiveStableNetIdentity`(블록 0~19091)도 통과한다.
+
+### F4: 시스템 컨트랙트와 fee delegation (10/5)
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/features/stablenet/systemcontracts` | `stablenet.system_contracts`. receipt마다 시스템 컨트랙트 이벤트를 색인한다(기존 파서를 그대로 쓴다). GovValidator의 `MemberAdded`·`MemberRemoved`를 검증자 집합 이벤트로 발행한다 |
+| `pkg/features/stablenet/feedelegation` | `stablenet.fee_delegation`. 프로필이 붙인 fee payer 정보(`chains.FeeDelegationOf`)로 fee delegation 메타를 저장한다 |
+| 수집기 | 시스템 컨트랙트 파서와 시스템 이벤트 감지(`detectSystemEvents*`)를 지웠다. 프로필 경로의 fee delegation 메타 생성을 지웠다. 기존 클라이언트 경로의 재조회(`processFeeDelegationMetadata`)는 S5까지 남는다 |
+| 시험 | 가짜 체인은 일반 Geth 노드로 보고하지만 StableNet 시스템 컨트랙트 이벤트를 낸다. 그래서 golden 시험은 `stablenet.system_contracts`를 명시적으로 켠다. `TestSystemContractsFeatureOff`는 기능을 끄면 `/data/syscontracts/`·`/index/syscontracts/` 키만 빠지고 나머지는 golden과 같은지 확인한다 |
+
+**동작 변경.**
+- 시스템 컨트랙트 이벤트 색인이 StableNet 프로필로 감지되었거나 설정으로 켰을 때만 돈다. 예전에는 저장 계층이 지원하면 모든 체인에서 돌았다(5절 결정).
+- 검증자 집합 이벤트의 블록 hash가 체인 값이다. 예전에는 go-ethereum 규칙으로 다시 계산해 StableNet에서 틀렸다(D16의 남은 누출).
+- 검증자 집합 이벤트는 GovValidator 주소와 이벤트 서명으로 판단한다. 예전에는 adapter가 있으면 adapter의 시스템 컨트랙트 해석기를 썼다. StableNet에서는 같은 주소와 이벤트를 본다.
+- 기존 비원자 경로의 범위 수집(`FetchRangeConcurrent`)은 시스템 컨트랙트 이벤트를 색인하지 않았다. 이제는 기능으로 돈다.
+
+**검증.** 전체 시험이 통과했다. live StableNet(블록 0~21432)에서 fee delegation 메타 6건이 기능 경로로 저장되고(`TestLiveStableNet`, `TestLiveStableNetIdentity`의 메타·fee payer 색인 확인), 중단 후 재시작한 결과가 같다.
+
+**남긴 것.** 범용 수집기에 남은 StableNet 전용 코드는 기존 클라이언트 경로의 fee delegation 재조회와 large block 처리기의 fee payer 조회다. 둘 다 S5에서 기존 경로와 함께 지운다. 다음 단계(F5)는 주소·잔액·토큰·AA 기능이다.
