@@ -30,6 +30,7 @@ type Server struct {
 	calls      map[string]int
 	unknown    map[string]int
 	blockLoads map[uint64]int // eth_getBlockByNumber with an explicit number
+	disabled   map[string]bool
 }
 
 // NewServer starts an HTTP JSON-RPC server for chain. Close it when done.
@@ -40,6 +41,7 @@ func NewServer(chain *Chain) *Server {
 		calls:         map[string]int{},
 		unknown:       map[string]int{},
 		blockLoads:    map[uint64]int{},
+		disabled:      map[string]bool{},
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.serveHTTP))
 	return s
@@ -53,6 +55,14 @@ func (s *Server) Close() { s.srv.Close() }
 
 // SetClientVersion changes the web3_clientVersion answer (adapter detection).
 func (s *Server) SetClientVersion(v string) { s.clientVersion = v }
+
+// DisableMethod makes the server answer method as "not available", like a
+// node that does not implement it.
+func (s *Server) DisableMethod(method string) {
+	s.mu.Lock()
+	s.disabled[method] = true
+	s.mu.Unlock()
+}
 
 // UnknownMethods lists methods that were called but are not implemented.
 // Tests can assert it is empty to notice new RPC dependencies.
@@ -149,9 +159,14 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handle(req rpcRequest) rpcResponse {
 	s.mu.Lock()
 	s.calls[req.Method]++
+	disabled := s.disabled[req.Method]
 	s.mu.Unlock()
 
 	resp := rpcResponse{JSONRPC: "2.0", ID: req.ID}
+	if disabled {
+		resp.Error = errNotFound
+		return resp
+	}
 	result, err := s.dispatch(req)
 	if err != nil {
 		resp.Error = err
