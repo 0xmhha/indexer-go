@@ -298,13 +298,20 @@ func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
 }
 
 // NewApp creates and initializes a new application instance
-func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapterType string) (*App, error) {
+func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapterType string) (_ *App, err error) {
 	app := &App{
 		config:           cfg,
 		logger:           log,
 		enableGapMode:    enableGapMode,
 		forceAdapterType: forceAdapterType,
 	}
+	// A failed start releases what it opened (the database lock above all),
+	// so the caller can retry in the same process.
+	defer func() {
+		if err != nil {
+			app.closeAfterFailedStart()
+		}
+	}()
 
 	ctx := context.Background()
 
@@ -713,19 +720,32 @@ func (a *App) initFetcher(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	pipeline, err := feature.Build(enabled, feature.Deps{
+	deps := feature.Deps{
 		Storage:   a.storage,
 		Logger:    a.logger,
 		Profile:   profile,
 		Publish:   a.fetcher.Publish,
 		BalanceAt: a.fetcher.BalanceAt,
-	})
+	}
+	pipeline, err := feature.Build(enabled, deps)
 	if err != nil {
 		return err
 	}
 	a.fetcher.SetFeatures(pipeline)
 	a.features = pipeline
 	a.logger.Info("Features enabled", zap.Strings("features", pipeline.Features()))
+
+	// Old blocks are processed for newly enabled features before ingest
+	// starts; events are not published for them.
+	backfillDeps := deps
+	backfillDeps.Publish = func(events.Event) bool { return true }
+	backfill, err := feature.Build(enabled, backfillDeps)
+	if err != nil {
+		return err
+	}
+	if err := a.reconcileFeatures(ctx, pipeline.Features(), backfill); err != nil {
+		return err
+	}
 
 	a.registerFeatureProcessors()
 
@@ -1274,4 +1294,73 @@ func (a *App) featureOverrides() map[string]bool {
 		}
 	}
 	return overrides
+}
+
+// closeAfterFailedStart releases the resources NewApp opened before failing.
+func (a *App) closeAfterFailedStart() {
+	if a.eventBus != nil {
+		a.eventBus.Stop()
+	}
+	if a.chainAdapter != nil {
+		_ = a.chainAdapter.Close()
+	}
+	if a.storage != nil {
+		if err := a.storage.Close(); err != nil {
+			a.logger.Error("Failed to close storage after failed start", zap.Error(err))
+		}
+	}
+	if a.client != nil {
+		a.client.Close()
+	}
+}
+
+// backfillCommitHook is a fault-injection point for tests: it runs before
+// each backfill block commits.
+var backfillCommitHook func(height uint64) error
+
+// reconcileFeatures records which features process new blocks and backfills
+// features that were enabled after blocks were indexed (feature registry
+// design, section 8). It runs before ingest starts.
+func (a *App) reconcileFeatures(ctx context.Context, enabled []string, backfill *feature.Pipeline) error {
+	fs, ok := a.storage.(storage.FeatureStateStore)
+	if !ok {
+		return nil
+	}
+	states, err := fs.FeatureStates(ctx)
+	if err != nil {
+		return err
+	}
+	latest, err := a.storage.GetLatestHeight(ctx)
+	hasData := err == nil
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		return err
+	}
+
+	writes, jobs := feature.Reconcile(enabled, states, latest, hasData)
+	for name, st := range writes {
+		if !st.Active {
+			a.logger.Warn("Feature disabled; its data stops at the current height", zap.String("feature", name), zap.Uint64("through", st.Through))
+		}
+		if err := fs.SetFeatureState(ctx, name, st); err != nil {
+			return err
+		}
+	}
+	if backfillCommitHook != nil {
+		a.fetcher.SetBeforeCommitHook(backfillCommitHook)
+		defer a.fetcher.SetBeforeCommitHook(nil)
+	}
+	for _, job := range jobs {
+		a.logger.Info("Backfilling feature", zap.String("feature", job.Feature), zap.Uint64("from", job.From), zap.Uint64("to", job.To))
+		name := job.Feature
+		progress := func(ctx context.Context, h uint64) error {
+			return fs.SetFeatureState(ctx, name, storage.FeatureState{Through: h})
+		}
+		if err := a.fetcher.Backfill(ctx, backfill.Only(name), job.From, job.To, progress); err != nil {
+			return fmt.Errorf("backfill %s: %w", name, err)
+		}
+		if err := fs.SetFeatureState(ctx, name, storage.FeatureState{Active: true}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

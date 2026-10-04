@@ -106,7 +106,8 @@ func TestWBFTFeatureOnNonWBFTChain(t *testing.T) {
 	require.NoError(t, app.fetcher.FetchRange(ctx, 0, sc.Chain.Head()))
 	app.Shutdown()
 
-	diff := testchain.DiffKeyspace(dumpScenarioIndex(t), dumpDir(t, dir), 0)
+	// Apart from its own state key, the feature leaves no trace.
+	diff := testchain.DiffKeyspace(dumpScenarioIndex(t), excludeEntries(dumpDir(t, dir), "/meta/features/"+wbft.Name), 0)
 	require.Empty(t, diff, testchain.SummarizeDiff(diff))
 }
 
@@ -148,7 +149,9 @@ func TestFeatureOffRemovesOnlyItsKeys(t *testing.T) {
 			}
 			require.Positive(t, n, "the scenario exercises %s", name)
 			without := dumpDir(t, dir)
-			diff := testchain.DiffKeyspace(excludeEntries(with, prefixes...), without, 0)
+			// The feature's state key is absent too: it never ran.
+			ignored := append([]string{"/meta/features/" + name}, prefixes...)
+			diff := testchain.DiffKeyspace(excludeEntries(with, ignored...), without, 0)
 			require.Empty(t, diff, testchain.SummarizeDiff(diff))
 		})
 	}

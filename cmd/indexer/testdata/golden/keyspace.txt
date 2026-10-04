@@ -367,6 +367,13 @@
 /index/userop/bundler/0xe1AB8145F7E55DC933d51a18c793F901A3A0b276/0000000000000008/00000000 32 b6d59b4ed3b9ef74
 /index/userop/sender/0x00000000000000000000000000000000000aA001/0000000000000008/00000000 32 b6d59b4ed3b9ef74
 /index/userop/tx/0xf8963a7c5d0b254b4d06c3f937133ee5573de4d87256bf783be2b83cb3c36459/00000000 32 b6d59b4ed3b9ef74
+/meta/features/aa.eip7702 27 a3f3126da7d65d7e
+/meta/features/aa.erc4337 27 a3f3126da7d65d7e
+/meta/features/aa.erc7579 27 a3f3126da7d65d7e
+/meta/features/address.index 27 a3f3126da7d65d7e
+/meta/features/balance.native 27 a3f3126da7d65d7e
+/meta/features/stablenet.system_contracts 27 a3f3126da7d65d7e
+/meta/features/token.transfers 27 a3f3126da7d65d7e
 /meta/lh 8 22a264ee63bc826a
 /meta/schema 8 cd04a4754498e06d
 /meta/tc 8 1209fe3bc3497e47
