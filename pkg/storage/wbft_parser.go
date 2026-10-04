@@ -90,17 +90,20 @@ func (qst *WBFTExtraRLP) EncodeRLP(w io.Writer) error {
 
 // DecodeRLP implements rlp.Decoder
 func (qst *WBFTExtraRLP) DecodeRLP(s *rlp.Stream) error {
+	// The rlp:"nil" tags match go-stablenet's WBFTExtra.DecodeRLP: absent
+	// seals, gas tip and epoch info are encoded as empty values. Without
+	// them every real header failed to decode and no WBFT data was stored.
 	var wbftExtra struct {
 		VanityData        []byte
 		RandaoReveal      []byte
 		PrevRound         uint32
-		PrevPreparedSeal  *WBFTAggregatedSealRLP
-		PrevCommittedSeal *WBFTAggregatedSealRLP
+		PrevPreparedSeal  *WBFTAggregatedSealRLP `rlp:"nil"`
+		PrevCommittedSeal *WBFTAggregatedSealRLP `rlp:"nil"`
 		Round             uint32
-		PreparedSeal      *WBFTAggregatedSealRLP
-		CommittedSeal     *WBFTAggregatedSealRLP
-		GasTip            *big.Int
-		EpochInfo         *EpochInfoRLP
+		PreparedSeal      *WBFTAggregatedSealRLP `rlp:"nil"`
+		CommittedSeal     *WBFTAggregatedSealRLP `rlp:"nil"`
+		GasTip            *big.Int               `rlp:"nil"`
+		EpochInfo         *EpochInfoRLP          `rlp:"nil"`
 	}
 
 	if err := s.Decode(&wbftExtra); err != nil {

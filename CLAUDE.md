@@ -110,4 +110,5 @@ Known config issues: `database.readonly` and several sections (`eventbus`, `node
 - Framework refactoring plan: `docs/analysis/refactoring-plan.md`
 - Phase 0 design and progress: `docs/analysis/phase0-design.md`
 - Phase 0 fixed address sequence reset (D1), non-atomic block writes (D2), non-idempotent reprocessing (D3), gap recovery cursor rewind (D10), the storage wrapper hiding features (F1), unwired SetCode/UserOp/Module/fee delegation (F2) and system contract decoding (D11). Existing databases need a reindex
-- Open: out-of-order gap filling corrupts order-dependent state (D12); multi-chain mode shares storage keys (D4) and still uses the legacy path
+- Open: StableNet fee delegation (type 0x16) transactions are stored under the inner transaction hash and their receipts cannot be decoded (D13); out-of-order gap filling corrupts order-dependent state (D12); multi-chain mode shares storage keys (D4) and is rejected at startup
+- Live verification against a local go-stablenet network: `TestLiveStableNet` (runs only with `INDEXER_LIVE_RPC`)

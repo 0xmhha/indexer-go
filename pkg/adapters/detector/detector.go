@@ -197,7 +197,8 @@ func (d *Detector) parseClientVersion(version string) NodeType {
 	}
 
 	// StableOne: "stableone/v1.0.0", "go-stablenet"
-	if strings.Contains(lowerVersion, "stableone") || strings.Contains(lowerVersion, "stablenet") {
+	// go-stablenet builds report "Gstable/v1.1.0-stable-..." (binary gstable).
+	if strings.Contains(lowerVersion, "stableone") || strings.Contains(lowerVersion, "stablenet") || strings.Contains(lowerVersion, "gstable") {
 		return NodeTypeStableOne
 	}
 

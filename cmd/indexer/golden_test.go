@@ -46,8 +46,14 @@ func startApp(t *testing.T, srv *testchain.Server, dir string) *App {
 
 func startAppMode(t testing.TB, srv *testchain.Server, dir string, mode ingestMode) *App {
 	t.Helper()
+	return startAppAt(t, srv.URL(), dir, mode)
+}
+
+// startAppAt is startAppMode for any RPC endpoint (for example a live node).
+func startAppAt(t testing.TB, endpoint, dir string, mode ingestMode) *App {
+	t.Helper()
 	cfg := config.NewConfig()
-	cfg.RPC.Endpoint = srv.URL()
+	cfg.RPC.Endpoint = endpoint
 	cfg.RPC.Timeout = 5 * time.Second
 	cfg.Database.Path = dir
 	cfg.API.Enabled = false

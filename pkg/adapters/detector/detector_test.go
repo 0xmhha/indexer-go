@@ -119,6 +119,7 @@ func TestParseClientVersion(t *testing.T) {
 		// StableOne
 		{"StableOne standard", "StableOne/v1.0.0", NodeTypeStableOne},
 		{"go-stablenet", "go-stablenet/v1.0.0", NodeTypeStableOne},
+		{"gstable binary", "Gstable/v1.1.0-stable-740526d0/darwin-arm64/go1.25.2", NodeTypeStableOne},
 		// Hardhat
 		{"Hardhat Network", "HardhatNetwork/2.22.0", NodeTypeHardhat},
 		{"hardhat lowercase", "hardhat/1.0.0", NodeTypeHardhat},

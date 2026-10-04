@@ -568,3 +568,22 @@ P0-4에서 고친 Etherscan 시험이 한 번 실패했다. 검증 고루틴이 
 - 깊은 offset 거부를 확인했다. 수정 전 코드에서는 거부하지 않았다.
 
 **단점.** 필터가 있는 목록에서는 `totalCount`가 하한값이 되므로, 화면의 전체 페이지 수가 처음에는 작게 보이다가 뒤로 넘길수록 늘어난다. 드문 필터(일치 건수가 적은 주소)는 일치 건을 찾을 때까지 블록을 계속 읽으므로, 최악의 경우 시간은 지금과 같다. 다만 메모리는 한 페이지 분량으로 제한된다. 주소 색인을 쓰는 조회로 바꾸는 일은 Phase 1의 keyset 페이지(R1-5)에서 한다.
+
+### 실제 StableNet 노드 검증 (10/3)
+
+설계 6절의 위험("가짜 서버로 통과해도 실제 노드에서 다를 수 있다")과 7절의 확인 항목(fee delegation decode 경로)을 확인하려고 실제 노드로 시험했다. 로컬에서 go-stablenet 네트워크를 띄웠다(`go-stablenet` `740526d`, `Gstable v1.1.0`, 검증자 3, chainbench).
+- macOS의 유닉스 소켓 경로 제한 때문에 노드 설정에서 IPC를 껐다.
+- fee delegation을 받으려면 Applepie가 필요해서 genesis에 `applepieBlock: 0`을 넣었다.
+- 체인에는 일반 전송과 fee delegation(type 0x16) 전송을 각 6건 보냈다. 보낸 도구는 scratchpad의 `txgen`이고, go-stablenet의 `FeeDelegateDynamicFeeTx`와 `NewFeeDelegateSigner`를 쓴다.
+
+시험은 `cmd/indexer/live_stablenet_test.go`(`TestLiveStableNet`)이다. `INDEXER_LIVE_RPC`가 있을 때만 돌고, 평소의 `go test`에서는 건너뛴다. 이 시험은 노드 감지, WBFT 데이터 저장, 그리고 "끝까지 한 번 색인"과 "세 지점에서 commit 전 crash 뒤 재시작"의 키 공간 비교를 확인한다. `INDEXER_LIVE_FD_TXS`를 주면 fee delegation 메타도 확인한다.
+
+결과(블록 0~788, 키 2,593개):
+- **원자적 경로의 crash 복구**: 두 방식의 키 공간이 같다(WBFT 데이터 포함).
+- **D14 노드 감지 실패를 찾아 고쳤다.** 실제 client version `Gstable/…`을 Unknown으로 분류해 StableOne adapter가 선택되지 않았다. 감지 규칙에 `gstable`을 추가하고 시험 케이스를 더했다. 기존 시험은 `go-stablenet/v1.0.0`이라는 문자열을 가정하고 있었다.
+- **D15 WBFT 해석 실패를 찾아 고쳤다.** 모든 header가 RLP decode에 실패해 WBFT 데이터가 저장되지 않았다. `WBFTExtraRLP.DecodeRLP`의 지역 구조체에 go-stablenet과 같은 `rlp:"nil"` 태그를 붙였다. 수정 후 블록 0~788의 WBFT 키가 810개 저장된다. 회귀 시험 `TestParseWBFTExtraLiveHeaders`는 실제 header 두 개(genesis, 블록 5)를 벡터로 쓴다. 수정 전 코드에서는 실패한다. 원인을 찾는 동안 바깥 구조체의 태그와 seal codec을 고치는 방향으로 잘못 짚었는데, 그 변경은 모두 되돌리고 최소 수정만 남겼다.
+- **D13 fee delegation hash 불일치를 찾았고, 아직 고치지 않았다.** 노드가 보고하는 hash(`0xd63d…`, type 0x16)로는 트랜잭션을 찾을 수 없고, receipt는 decode에 실패한다. indexer가 만든 안쪽 hash(`0x271f…`)로는 트랜잭션이 있지만 receipt가 없다. upstream go-ethereum 타입에 type 0x16이 없기 때문에 생기는 문제라, 표현 방식을 정하는 설계 결정이 필요하다(아래).
+
+**D13 수정 방향(결정 필요).**
+1. 바깥 hash를 정식 hash로 쓴다. 트랜잭션 위치 색인과 메타를 바깥 hash로 저장하고, receipt는 type을 2로 바꿔 저장하되 원래 type은 메타에 남긴다. 기존 API 형태를 유지할 수 있다. 단점은 저장된 트랜잭션 본문(안쪽 tx)의 hash와 색인 hash가 달라서, 본문으로 hash를 다시 계산하는 코드가 있으면 틀린다는 것이다.
+2. go-stablenet의 types 패키지를 의존성으로 바꿔(replace) type 0x16을 그대로 저장한다. 표현은 정확해진다. 단점은 go-ethereum fork에 묶여 다른 EVM 체인 지원(G1)과 충돌한다는 것이다.
