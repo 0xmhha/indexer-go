@@ -517,7 +517,7 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	}
 
 	// Get next sequence number (simple counter, could be optimized)
-	seq, err := s.nextAddrSeq(ctx, addr)
+	seq, err := s.nextAddrSeq(ctx, seqBalance, addr)
 	if err != nil {
 		return err
 	}

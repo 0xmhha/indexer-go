@@ -173,7 +173,7 @@ func (b *pebbleBatch) AddTransactionToAddressIndex(ctx context.Context, addr com
 		return ErrClosed
 	}
 
-	seq, err := b.storage.nextAddrSeq(b.ctx, addr)
+	seq, err := b.storage.nextAddrSeq(b.ctx, seqAddrTx, addr)
 	if err != nil {
 		return err
 	}

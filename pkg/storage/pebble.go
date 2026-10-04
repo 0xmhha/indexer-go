@@ -29,7 +29,7 @@ type PebbleStorage struct {
 	// Address transaction sequence counters
 	// Maps address -> next sequence number
 	addrSeqMu sync.RWMutex
-	addrSeq   map[common.Address]uint64
+	addrSeq   map[seqKey]uint64
 
 	// Transaction count cache to avoid per-transaction reads
 	txCount      atomic.Uint64
@@ -77,7 +77,7 @@ func NewPebbleStorage(cfg *Config) (*PebbleStorage, error) {
 		db:      db,
 		config:  cfg,
 		logger:  logger,
-		addrSeq: make(map[common.Address]uint64),
+		addrSeq: make(map[seqKey]uint64),
 	}
 
 	if err := storage.checkSchema(); err != nil {

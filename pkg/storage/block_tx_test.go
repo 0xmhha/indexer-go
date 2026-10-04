@@ -18,7 +18,7 @@ var (
 func addrSeqOf(s *PebbleStorage, a common.Address) uint64 {
 	s.addrSeqMu.RLock()
 	defer s.addrSeqMu.RUnlock()
-	return s.addrSeq[a]
+	return s.addrSeq[seqKey{seqAddrTx, a}]
 }
 
 // writeBlock performs the writes of a small "block" through ctx.
@@ -171,24 +171,33 @@ func TestAddrSeqRestoredAfterReopen(t *testing.T) {
 	}
 }
 
-// TestAddrSeqRestoreUsesHighestOfBothPrefixes checks that the shared counter
-// resumes after the highest sequence in either the address index or the
-// balance history.
-func TestAddrSeqRestoreUsesHighestOfBothPrefixes(t *testing.T) {
+// TestAddrSeqFamiliesAreIndependent checks that the address transaction
+// index and the balance history number their keys separately (D20), and
+// that each counter resumes after its own highest stored sequence.
+func TestAddrSeqFamiliesAreIndependent(t *testing.T) {
 	s := newTestPebble(t)
 	require.NoError(t, s.db.Set(AddressTransactionKey(txAddrA, 3), txHash1.Bytes(), nil))
 	require.NoError(t, s.db.Set(AddressBalanceKey(txAddrA, 7), []byte("x"), nil))
 
-	seq, err := s.nextAddrSeq(context.Background(), txAddrA)
+	seq, err := s.nextAddrSeq(context.Background(), seqAddrTx, txAddrA)
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), seq, "the balance history does not advance the transaction index")
+	seq, err = s.nextAddrSeq(context.Background(), seqBalance, txAddrA)
 	require.NoError(t, err)
 	require.Equal(t, uint64(8), seq)
+	seq, err = s.nextAddrSeq(context.Background(), seqAddrTx, txAddrA)
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), seq)
 
 	ctx, tx, err := s.BeginBlock(context.Background())
 	require.NoError(t, err)
 	defer tx.Rollback()
 	other := common.HexToAddress("0x00000000000000000000000000000000000000B2")
 	require.NoError(t, s.db.Set(AddressBalanceKey(other, 4), []byte("x"), nil))
-	seq, err = s.nextAddrSeq(ctx, other)
+	seq, err = s.nextAddrSeq(ctx, seqBalance, other)
 	require.NoError(t, err)
 	require.Equal(t, uint64(5), seq, "restore also works inside a block transaction")
+	seq, err = s.nextAddrSeq(ctx, seqAddrTx, other)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), seq)
 }

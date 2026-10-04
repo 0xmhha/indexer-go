@@ -169,6 +169,7 @@ graph TD
 | D17 | [중요] | receipt를 go-ethereum 합의 인코딩(status, 누적 가스, bloom, 로그 본문)으로 저장해 나머지 필드를 버렸다. 그래서 API의 receipt `transactionIndex`가 항상 0이었고, 로그의 `blockNumber`·`logIndex`·`transactionIndex`도 0이었다. schema v2(모델 인코딩)에서 고쳤고, GraphQL golden의 `receiptsByBlock`으로 고정했다 | `pkg/storage/encoder.go` | [High] |
 | D18 | [중요] | `GetBlockByTimestamp`의 iterator에 상한이 없어, 마지막 블록보다 늦은 timestamp를 찾으면 timestamp 색인 밖의 다음 키(`/meta/...`)를 높이로 읽어 엉뚱한 블록을 돌려줬다. schema 키를 추가하면서 드러났고, 상한을 넣어 고쳤다 | `pkg/storage/pebble_historical.go` | [High] |
 | D19 | [중요] | 잔액 추적이 가스비를 `gasUsed × tx.GasPrice()`로 계산했다. EIP-1559 계열 거래에서 `GasPrice()`는 fee cap이라 실제 지불액(receipt의 `effectiveGasPrice`)보다 크게 차감했고, type 0x16의 가스를 fee payer가 아니라 송신자에게 차감했다. S4에서 receipt의 실제 가격으로, 부담자는 fee payer로 고쳤다. live 체인의 0x16 거래 6건에서 계정별 기록 변화량이 기대값과 같다 | `pkg/fetch/fetcher_indexing.go` | [High] |
+| D20 | [중요] | 주소별 거래 색인과 잔액 이력이 주소 하나당 순번 카운터 하나를 함께 썼다(`nextAddrSeq`). 그래서 한쪽을 끄거나 나중에 켜면 다른 쪽 키의 번호가 바뀌었다. 기능을 따로 켜고 끄거나 나중에 그 기능만 다시 처리(backfill, R2-7)할 수 없는 구조였다. 기능 레지스트리 F5에서 기능마다 꺼 보는 시험으로 드러났고, 카운터를 키 묶음별로 나눠 고쳤다(schema v2는 배포 전이라 같은 버전에서 바꿨다) | `pkg/storage/block_tx.go` | [High] |
 | D5 | [중요] | 로그 색인, 주소·잔액 색인, 블록 처리기, 시스템 컨트랙트 파서의 실패를 경고 로그로만 남긴다. 커서는 그대로 전진해서 색인에 빈칸이 영구히 남는다 | `fetcher_processing.go`, `fetcher_indexing.go` | [Mid] |
 | D6 | [중요] | gap 복구 경로(`FetchRangeConcurrent`)는 시스템 컨트랙트 파싱, 로그 이벤트, 블록 처리기를 건너뛴다. 복구한 블록은 라이브 블록보다 덜 색인된다 | `fetcher.go:476-690` | [Mid] |
 | D7 | [중요] | 큰 블록은 주소 색인, transfer, SetCode, UserOp 처리를 두 번 한다 | `large_block.go:194-235` | [Mid] |

@@ -36,8 +36,8 @@ type BlockTransactor interface {
 type BlockTx struct {
 	s       *PebbleStorage
 	batch   *pebble.Batch
-	seqNext map[common.Address]uint64 // staged next sequence per address
-	txDelta uint64                    // staged transaction count increment
+	seqNext map[seqKey]uint64 // staged next sequence per counter
+	txDelta uint64            // staged transaction count increment
 	// genesisSeen records lazy genesis lookups made in this block.
 	genesisSeen map[common.Address]bool
 	done        bool
@@ -60,7 +60,7 @@ func (s *PebbleStorage) BeginBlock(ctx context.Context) (context.Context, *Block
 	tx := &BlockTx{
 		s:       s,
 		batch:   s.db.NewIndexedBatch(),
-		seqNext: map[common.Address]uint64{},
+		seqNext: map[seqKey]uint64{},
 	}
 	bound := context.WithValue(ctx, blockTxKey{}, &blockTxBinding{owner: s, batch: tx.batch, tx: tx})
 	return bound, tx, nil
@@ -81,8 +81,8 @@ func (tx *BlockTx) Commit() error {
 	}
 	if len(tx.seqNext) > 0 {
 		tx.s.addrSeqMu.Lock()
-		for addr, next := range tx.seqNext {
-			tx.s.addrSeq[addr] = next
+		for k, next := range tx.seqNext {
+			tx.s.addrSeq[k] = next
 		}
 		tx.s.addrSeqMu.Unlock()
 	}
@@ -117,59 +117,78 @@ func (s *PebbleStorage) boundTx(ctx context.Context) *BlockTx {
 	return nil
 }
 
-// nextAddrSeq returns the sequence number for the next per-address entry
-// (address transaction index and balance history share one counter) and
-// advances it. Inside a block transaction the advance is staged.
+// seqFamily names one per-address counter. Each family numbers its own
+// keys, so indexes written by different features do not shift each other's
+// keys (D20).
+type seqFamily uint8
+
+const (
+	seqAddrTx  seqFamily = iota // address transaction index (/index/addr/)
+	seqBalance                  // balance history (/index/balance/.../history/)
+)
+
+func (f seqFamily) prefix(addr common.Address) []byte {
+	if f == seqBalance {
+		return AddressBalanceKeyPrefix(addr)
+	}
+	return AddressTransactionKeyPrefix(addr)
+}
+
+type seqKey struct {
+	family seqFamily
+	addr   common.Address
+}
+
+// nextAddrSeq returns the sequence number for the next entry of family for
+// addr and advances it. Inside a block transaction the advance is staged.
 //
-// The first time an address is seen in this process its counter is restored
-// from disk, so entries written before a restart are never overwritten.
-func (s *PebbleStorage) nextAddrSeq(ctx context.Context, addr common.Address) (uint64, error) {
+// The first time a counter is used in this process it is restored from
+// disk, so entries written before a restart are never overwritten.
+func (s *PebbleStorage) nextAddrSeq(ctx context.Context, family seqFamily, addr common.Address) (uint64, error) {
+	k := seqKey{family, addr}
 	if tx := s.boundTx(ctx); tx != nil {
-		next, ok := tx.seqNext[addr]
+		next, ok := tx.seqNext[k]
 		if !ok {
 			s.addrSeqMu.RLock()
-			next, ok = s.addrSeq[addr]
+			next, ok = s.addrSeq[k]
 			s.addrSeqMu.RUnlock()
 		}
 		if !ok {
-			restored, err := s.restoreAddrSeq(ctx, addr)
+			restored, err := s.restoreAddrSeq(ctx, family, addr)
 			if err != nil {
 				return 0, err
 			}
 			next = restored
 		}
-		tx.seqNext[addr] = next + 1
+		tx.seqNext[k] = next + 1
 		return next, nil
 	}
 
 	s.addrSeqMu.Lock()
 	defer s.addrSeqMu.Unlock()
-	next, ok := s.addrSeq[addr]
+	next, ok := s.addrSeq[k]
 	if !ok {
-		restored, err := s.restoreAddrSeq(ctx, addr)
+		restored, err := s.restoreAddrSeq(ctx, family, addr)
 		if err != nil {
 			return 0, err
 		}
 		next = restored
 	}
-	s.addrSeq[addr] = next + 1
+	s.addrSeq[k] = next + 1
 	return next, nil
 }
 
-// restoreAddrSeq returns one past the highest sequence stored for addr in
-// either per-address prefix, or 0 when there is none.
-func (s *PebbleStorage) restoreAddrSeq(ctx context.Context, addr common.Address) (uint64, error) {
-	var next uint64
-	for _, prefix := range [][]byte{AddressTransactionKeyPrefix(addr), AddressBalanceKeyPrefix(addr)} {
-		last, found, err := s.lastSeqUnder(ctx, prefix)
-		if err != nil {
-			return 0, fmt.Errorf("restore address sequence for %s: %w", addr.Hex(), err)
-		}
-		if found && last+1 > next {
-			next = last + 1
-		}
+// restoreAddrSeq returns one past the highest sequence stored under the
+// family's prefix for addr, or 0 when there is none.
+func (s *PebbleStorage) restoreAddrSeq(ctx context.Context, family seqFamily, addr common.Address) (uint64, error) {
+	last, found, err := s.lastSeqUnder(ctx, family.prefix(addr))
+	if err != nil {
+		return 0, fmt.Errorf("restore address sequence for %s: %w", addr.Hex(), err)
 	}
-	return next, nil
+	if !found {
+		return 0, nil
+	}
+	return last + 1, nil
 }
 
 // lastSeqUnder finds the highest "%020d" sequence key directly under prefix,

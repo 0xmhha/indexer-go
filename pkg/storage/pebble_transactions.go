@@ -164,7 +164,7 @@ func (s *PebbleStorage) AddTransactionToAddressIndex(ctx context.Context, addr c
 	}
 
 	// Get next sequence number for this address
-	seq, err := s.nextAddrSeq(ctx, addr)
+	seq, err := s.nextAddrSeq(ctx, seqAddrTx, addr)
 	if err != nil {
 		return err
 	}
