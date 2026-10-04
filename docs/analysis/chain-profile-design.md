@@ -260,3 +260,23 @@ CP-1과 CP-2는 기존 코드에 영향 없이 새 패키지로 만들 수 있�
 **R1-3(이진 키)은 뒤로 미룬다.** schema v2 값 형식과 이진 키를 함께 바꾸면 재색인이 한 번으로 끝나지만 S3의 변경 폭이 두 배가 된다. 아직 배포 전 브랜치이므로 S3은 값 형식만 바꾸고, 이진 키는 S5 뒤 배포 전에 별도 단계로 넣는다. 단점은 키를 바꿀 때 저장 계층 시험을 한 번 더 손봐야 한다는 점이다.
 
 **임시 다리의 한계.** S3~CP-5 사이에 API는 모델에서 변환한 `types` 값을 읽는다. 이 기간에는 API 응답의 StableNet 블록 hash와 0x16 트랜잭션 hash가 여전히 go-ethereum 규칙으로 다시 계산된다. 저장된 색인과 조회 키는 맞지만 응답 필드는 CP-5에서 맞춰진다.
+
+### S1~S3: 소스 계층, 모델 저장 인코딩, 저장 계층 넓히기 (10/4)
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/source` | `web3_clientVersion`·`eth_chainId`로 프로필을 감지하고, `eth_getBlockByNumber`의 원시 JSON을 프로필로 decode한다. receipt는 `eth_getBlockReceipts`로 받고, 노드가 지원하지 않으면 한 번 확인한 뒤 트랜잭션별 batch 조회로 바꾼다. receipt 수, 순서, 트랜잭션 hash, 블록 hash가 블록과 맞지 않으면 `ErrInconsistentReceipts`로 거부한다 |
+| `pkg/core/model/codec.go` | 버전 바이트(1) + RLP. 선택 값은 원소 0~1개 리스트로 인코딩해 nil과 0을 구분한다. 확장 필드는 `RegisterExtCodec`으로 등록한 codec으로 저장하고, codec이 없는 확장은 조용히 버리지 않고 저장을 거부한다(`ErrUnknownExtension`) |
+| 모델 보강 | `Block.Uncles`(uncle hash), `Block.Withdrawals`를 추가했다. 처음 설계에서 빠져 있어 저장하면 유실될 값이었다 |
+| `pkg/storage` | 블록·트랜잭션·receipt를 모델 인코딩으로 저장한다(schema v2). `ModelReader`·`ModelWriter`(`SetModelBlock`, `SetModelReceipt`, `GetModel*`)를 추가했다. 기존 `SetBlock`·`SetTransaction`·`SetReceipt`도 모델로 바꾼 뒤 같은 쓰기 경로를 지나가므로 쓰기 코드는 하나다. 기존 읽기 메서드는 `model_bridge.go`에서 go-ethereum 타입으로 바꿔 돌려준다(CP-5에서 지운다) |
+| `/meta/schema` | 빈 DB는 2로 기록한다. 표시가 없는데 데이터가 있으면 schema 1로 보고, 다른 버전이면 `ErrSchemaMismatch`로 열기를 거부한다 |
+
+검증 결과는 다음과 같다.
+- 가짜 체인의 기준·부하 시나리오 전 블록에서 `encode → decode → encode` 결과가 바이트 단위로 같다. fee delegation 확장 필드(fee payer, 서명, 안쪽 hash)는 저장 후에도 보존된다.
+- 실제 StableNet 블록 33을 `SetModelBlock`으로 저장하면 WBFT hash로 블록을 찾을 수 있고, type 0x16 트랜잭션과 receipt도 정식 hash로 찾을 수 있다(D13·D16의 저장 쪽 해결). 다만 수집 경로는 아직 이 메서드를 쓰지 않는다(S4).
+- keyspace golden은 키 집합이 그대로이다. 값이 바뀐 키는 블록 21개, 트랜잭션 26개, receipt 26개이고, 새로 생긴 키는 `/meta/schema` 하나다.
+- GraphQL golden에 `receiptsByBlock`(블록 1~6)을 추가했다. v1과 v2를 비교하면 v2에서 receipt `transactionIndex`와 로그 위치 필드가 실제 값으로 바뀐다(D17). 나머지 golden 결과는 같다.
+- 스키마 키를 추가하자 `GetBlockByTimestamp`가 틀린 블록을 돌려줬다. iterator에 상한이 없었던 기존 결함이었고, 상한을 넣어 고쳤다(D18).
+- 전체 시험이 통과했다.
+
+**성능상 단점.** 기존 수집 경로가 `types` 메서드로 쓰는 동안에는 트랜잭션마다 송신자를 복구해 모델에 넣는다(go-ethereum이 tx 객체에 캐시하므로 블록과 트랜잭션 기록에서 두 번 계산하지는 않는다). S4에서 수집 경로가 모델을 직접 쓰면 이 비용은 프로필 decode 한 번으로 줄어든다.

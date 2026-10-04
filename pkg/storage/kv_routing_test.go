@@ -19,6 +19,8 @@ var directDBAllowed = map[string]bool{
 	"newBatch":             true, // routing
 	"BeginBlock":           true, // creates the block transaction batch
 	"loadTransactionCount": true, // startup
+	"checkSchema":          true, // startup
+	"isEmpty":              true, // startup
 	"DeleteByPrefix":       true, // reindex tooling
 	"CountByPrefix":        true, // reindex tooling
 	"NewBatch":             true, // exported Batch API, commits to the DB

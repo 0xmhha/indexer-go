@@ -7,6 +7,8 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 )
 
 // ============================================================================
@@ -96,36 +98,12 @@ func (s *PebbleStorage) SetTransaction(ctx context.Context, tx *types.Transactio
 	if location == nil {
 		return fmt.Errorf("location cannot be nil")
 	}
-
-	// Encode transaction
-	encoded, err := EncodeTransaction(tx)
+	m, err := gethconv.TxFromGeth(tx)
 	if err != nil {
 		return fmt.Errorf("failed to encode transaction: %w", err)
 	}
-
-	// Encode location
-	locEncoded, err := EncodeTxLocation(location)
-	if err != nil {
-		return fmt.Errorf("failed to encode location: %w", err)
-	}
-
-	// Write transaction data - use NoSync for performance
-	if err := s.kv(ctx).Set(TransactionKey(location.BlockHeight, location.TxIndex), encoded, pebble.NoSync); err != nil {
-		return fmt.Errorf("failed to set transaction: %w", err)
-	}
-
-	// Write transaction hash index
-	if err := s.kv(ctx).Set(TransactionHashIndexKey(tx.Hash()), locEncoded, pebble.NoSync); err != nil {
-		return fmt.Errorf("failed to set transaction index: %w", err)
-	}
-
-	// Update transaction count using atomic counter (avoid DB read)
-	newCount := s.addTxCount(ctx, 1)
-	if err := s.kv(ctx).Set(TransactionCountKey(), EncodeUint64(newCount), pebble.NoSync); err != nil {
-		return fmt.Errorf("failed to update transaction count: %w", err)
-	}
-
-	return nil
+	m.BlockHash, m.BlockNumber, m.Index = location.BlockHash, location.BlockHeight, uint(location.TxIndex)
+	return s.setModelTransaction(ctx, m, location)
 }
 
 // GetTransactionsByAddress returns transactions for an address with pagination

@@ -80,6 +80,11 @@ func NewPebbleStorage(cfg *Config) (*PebbleStorage, error) {
 		addrSeq: make(map[common.Address]uint64),
 	}
 
+	if err := storage.checkSchema(); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	// Load transaction count into cache
 	if err := storage.loadTransactionCount(); err != nil {
 		db.Close()

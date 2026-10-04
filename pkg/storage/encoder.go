@@ -9,6 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 )
 
 // TxLocation represents the location of a transaction in the blockchain
@@ -18,88 +21,66 @@ type TxLocation struct {
 	BlockHash   common.Hash
 }
 
-// EncodeBlock encodes a block using RLP
+// EncodeBlock encodes a block in the model encoding (schema v2).
 func EncodeBlock(block *types.Block) ([]byte, error) {
 	if block == nil {
 		return nil, fmt.Errorf("block cannot be nil")
 	}
-
-	var buf bytes.Buffer
-	if err := rlp.Encode(&buf, block); err != nil {
+	m, err := gethconv.BlockFromGeth(block)
+	if err != nil {
 		return nil, fmt.Errorf("failed to encode block: %w", err)
 	}
-
-	return buf.Bytes(), nil
+	return model.EncodeBlock(m)
 }
 
-// DecodeBlock decodes a block from RLP
+// DecodeBlock decodes a block written by EncodeBlock or EncodeModelBlock.
 func DecodeBlock(data []byte) (*types.Block, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("data cannot be empty")
-	}
-
-	var block types.Block
-	if err := rlp.DecodeBytes(data, &block); err != nil {
+	m, err := model.DecodeBlock(data)
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode block: %w", err)
 	}
-
-	return &block, nil
+	return gethconv.BlockToGeth(m)
 }
 
-// EncodeTransaction encodes a transaction using RLP
+// EncodeTransaction encodes a transaction in the model encoding (schema v2).
 func EncodeTransaction(tx *types.Transaction) ([]byte, error) {
 	if tx == nil {
 		return nil, fmt.Errorf("transaction cannot be nil")
 	}
-
-	var buf bytes.Buffer
-	if err := rlp.Encode(&buf, tx); err != nil {
+	m, err := gethconv.TxFromGeth(tx)
+	if err != nil {
 		return nil, fmt.Errorf("failed to encode transaction: %w", err)
 	}
-
-	return buf.Bytes(), nil
+	return model.EncodeTransaction(m)
 }
 
-// DecodeTransaction decodes a transaction from RLP
+// DecodeTransaction decodes a transaction written by EncodeTransaction or
+// EncodeModelTransaction.
 func DecodeTransaction(data []byte) (*types.Transaction, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("data cannot be empty")
-	}
-
-	var tx types.Transaction
-	if err := rlp.DecodeBytes(data, &tx); err != nil {
+	m, err := model.DecodeTransaction(data)
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode transaction: %w", err)
 	}
-
-	return &tx, nil
+	return gethconv.TxToGeth(m)
 }
 
-// EncodeReceipt encodes a receipt using RLP
+// EncodeReceipt encodes a receipt in the model encoding (schema v2). Unlike
+// the consensus encoding used before, it keeps gas used, effective gas price,
+// the contract address and the log positions.
 func EncodeReceipt(receipt *types.Receipt) ([]byte, error) {
 	if receipt == nil {
 		return nil, fmt.Errorf("receipt cannot be nil")
 	}
-
-	var buf bytes.Buffer
-	if err := rlp.Encode(&buf, receipt); err != nil {
-		return nil, fmt.Errorf("failed to encode receipt: %w", err)
-	}
-
-	return buf.Bytes(), nil
+	return model.EncodeReceipt(gethconv.ReceiptFromGeth(receipt))
 }
 
-// DecodeReceipt decodes a receipt from RLP
+// DecodeReceipt decodes a receipt written by EncodeReceipt.
 func DecodeReceipt(data []byte) (*types.Receipt, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("data cannot be empty")
-	}
-
-	var receipt types.Receipt
-	if err := rlp.DecodeBytes(data, &receipt); err != nil {
+	m, err := model.DecodeReceipt(data)
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode receipt: %w", err)
 	}
-
-	return &receipt, nil
+	return gethconv.ReceiptToGeth(m), nil
 }
 
 // storedLog is a custom struct for storing logs with all metadata fields

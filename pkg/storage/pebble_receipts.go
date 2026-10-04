@@ -7,6 +7,8 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 )
 
 // ============================================================================
@@ -76,39 +78,13 @@ func validateReceipt(receipt *types.Receipt) error {
 	return nil
 }
 
-// SetReceipt stores a transaction receipt
+// SetReceipt stores a transaction receipt. It converts the receipt to the
+// model and stores it like SetModelReceipt.
 func (s *PebbleStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
-	// Validate receipt before storing
 	if err := validateReceipt(receipt); err != nil {
 		return err
 	}
-
-	encoded, err := EncodeReceipt(receipt)
-	if err != nil {
-		return fmt.Errorf("failed to encode receipt: %w", err)
-	}
-
-	txHash := receipt.TxHash
-	// Use NoSync for performance - caller should use Sync() or batch commit for durability
-	if err := s.kv(ctx).Set(ReceiptKey(txHash), encoded, pebble.NoSync); err != nil {
-		return err
-	}
-
-	// Store ContractAddress separately (not included in RLP encoding)
-	if receipt.ContractAddress != (common.Address{}) {
-		if err := s.kv(ctx).Set(ContractAddressKey(txHash), receipt.ContractAddress.Bytes(), pebble.NoSync); err != nil {
-			return fmt.Errorf("failed to store contract address: %w", err)
-		}
-	}
-
-	return nil
+	return s.SetModelReceipt(ctx, gethconv.ReceiptFromGeth(receipt))
 }
 
 // GetReceipts returns multiple receipts by transaction hashes (batch operation)

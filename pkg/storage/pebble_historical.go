@@ -85,9 +85,11 @@ func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint6
 		return nil, err
 	}
 
-	// Binary search for closest timestamp
+	// Binary search for closest timestamp. The upper bound keeps Last() and
+	// a seek past the newest timestamp inside the timestamp index.
 	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: BlockTimestampKeyPrefix(),
+		UpperBound: prefixUpperBound(BlockTimestampKeyPrefix()),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)

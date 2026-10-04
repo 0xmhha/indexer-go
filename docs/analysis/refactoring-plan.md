@@ -166,6 +166,8 @@ graph TD
 | D14 | [중요] (StableNet) | 노드 감지가 실제 go-stablenet 바이너리의 client version(`Gstable/v1.1.0-…`)을 알아보지 못했다. 그래서 StableOne adapter가 선택되지 않았고 fee delegation 처리도 꺼졌다. P0 검증 중 수정했다 | `pkg/adapters/detector/detector.go` | [High] |
 | D15 | [치명] (StableNet) | WBFT extra 해석이 실제 header에서 모두 실패해 WBFT 데이터(seal, 서명자, epoch)가 하나도 저장되지 않았다. `WBFTExtraRLP.DecodeRLP`가 go-stablenet에서 복사한 코드인데, 지역 구조체의 `rlp:"nil"` 태그가 빠져 있었다. P0 검증 중 수정했다 | `pkg/storage/wbft_parser.go` | [High] |
 | D16 | [치명] (StableNet) | 블록 hash를 go-ethereum 규칙(`header.Hash()`)으로 계산한다. StableNet(WBFT)은 현재 라운드의 seal을 비우고 round를 0으로 바꾼 header로 hash를 계산하므로, genesis를 뺀 모든 블록이 실제와 다른 hash로 저장된다. 블록 hash 색인으로 조회하면 실제 hash로는 찾을 수 없다. 체인 프로필 CP-2에서 규칙을 구현했고, 수집 경로에 연결하는 것은 CP-3이다 | `pkg/fetch`, `pkg/storage`(블록 hash 색인) | [High] |
+| D17 | [중요] | receipt를 go-ethereum 합의 인코딩(status, 누적 가스, bloom, 로그 본문)으로 저장해 나머지 필드를 버렸다. 그래서 API의 receipt `transactionIndex`가 항상 0이었고, 로그의 `blockNumber`·`logIndex`·`transactionIndex`도 0이었다. schema v2(모델 인코딩)에서 고쳤고, GraphQL golden의 `receiptsByBlock`으로 고정했다 | `pkg/storage/encoder.go` | [High] |
+| D18 | [중요] | `GetBlockByTimestamp`의 iterator에 상한이 없어, 마지막 블록보다 늦은 timestamp를 찾으면 timestamp 색인 밖의 다음 키(`/meta/...`)를 높이로 읽어 엉뚱한 블록을 돌려줬다. schema 키를 추가하면서 드러났고, 상한을 넣어 고쳤다 | `pkg/storage/pebble_historical.go` | [High] |
 | D5 | [중요] | 로그 색인, 주소·잔액 색인, 블록 처리기, 시스템 컨트랙트 파서의 실패를 경고 로그로만 남긴다. 커서는 그대로 전진해서 색인에 빈칸이 영구히 남는다 | `fetcher_processing.go`, `fetcher_indexing.go` | [Mid] |
 | D6 | [중요] | gap 복구 경로(`FetchRangeConcurrent`)는 시스템 컨트랙트 파싱, 로그 이벤트, 블록 처리기를 건너뛴다. 복구한 블록은 라이브 블록보다 덜 색인된다 | `fetcher.go:476-690` | [Mid] |
 | D7 | [중요] | 큰 블록은 주소 색인, transfer, SetCode, UserOp 처리를 두 번 한다 | `large_block.go:194-235` | [Mid] |

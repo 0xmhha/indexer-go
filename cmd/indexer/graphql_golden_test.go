@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,6 +36,18 @@ var graphqlGoldenQueries = []struct {
 	{"userOperationCount", `{ userOperationCount }`},
 	{"moduleEventCount", `{ moduleEventCount }`},
 	{"installedModules", `{ installedModules(account: "0x00000000000000000000000000000000000AA001") { totalCount nodes { module moduleType installedAt active removedAt } } }`},
+	// Stored receipt fields (schema v2 keeps what the consensus encoding dropped).
+	{"receiptsByBlock", `{ ` + receiptsByBlockFields(1, 6) + ` }`},
+}
+
+// receiptsByBlockFields queries the receipts of blocks from..to, one alias per
+// block.
+func receiptsByBlockFields(from, to int) string {
+	var q string
+	for n := from; n <= to; n++ {
+		q += fmt.Sprintf(`b%d: receiptsByBlock(blockNumber: "%d") { transactionHash blockNumber blockHash transactionIndex contractAddress gasUsed cumulativeGasUsed effectiveGasPrice status logs { address logIndex transactionIndex blockNumber } } `, n, n)
+	}
+	return q
 }
 
 // TestGraphQLGolden pins API results for the reference scenario.

@@ -7,6 +7,8 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 )
 
 // ============================================================================
@@ -106,51 +108,17 @@ func (s *PebbleStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*
 	return s.GetBlock(ctx, height)
 }
 
-// SetBlock stores a block
+// SetBlock stores a block. It converts the block to the model and stores it
+// like SetModelBlock.
 func (s *PebbleStorage) SetBlock(ctx context.Context, block *types.Block) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
 	if block == nil {
 		return fmt.Errorf("block cannot be nil")
 	}
-
-	encoded, err := EncodeBlock(block)
+	m, err := gethconv.BlockFromGeth(block)
 	if err != nil {
 		return fmt.Errorf("failed to encode block: %w", err)
 	}
-
-	height := block.Number().Uint64()
-
-	// Store block data - use NoSync for performance
-	if err := s.kv(ctx).Set(BlockKey(height), encoded, pebble.NoSync); err != nil {
-		return fmt.Errorf("failed to set block: %w", err)
-	}
-
-	// Store block hash index
-	heightBytes := EncodeUint64(height)
-	if err := s.kv(ctx).Set(BlockHashIndexKey(block.Hash()), heightBytes, pebble.NoSync); err != nil {
-		return fmt.Errorf("failed to set block hash index: %w", err)
-	}
-
-	// Store all transactions in the block
-	transactions := block.Transactions()
-	for txIndex, tx := range transactions {
-		location := &TxLocation{
-			BlockHeight: height,
-			TxIndex:     uint64(txIndex),
-			BlockHash:   block.Hash(),
-		}
-		if err := s.SetTransaction(ctx, tx, location); err != nil {
-			return fmt.Errorf("failed to store transaction %d in block %d: %w", txIndex, height, err)
-		}
-	}
-
-	return nil
+	return s.SetModelBlock(ctx, m)
 }
 
 // SetBlockWithReceipts stores a block with all its receipts in a single batch operation
