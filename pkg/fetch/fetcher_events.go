@@ -16,30 +16,25 @@ import (
 // ============================================================================
 
 // publishBlockEvents publishes transaction and log events to the event bus
-func (f *Fetcher) publishBlockEvents(block *types.Block, receipts types.Receipts, height uint64) {
-	transactions := block.Transactions()
+func (f *Fetcher) publishBlockEvents(fb *fetchedBlock) {
+	block, receipts, height := fb.geth, fb.gethReceipts, fb.height()
 
-	// Build receipt map for O(1) lookup (avoids O(n²) matching)
-	receiptMap := buildReceiptMap(receipts)
-
-	// Publish transaction events
-	for i, tx := range transactions {
-		// O(1) receipt lookup
-		receipt := receiptMap[tx.Hash()]
-
-		// Create and publish transaction event
+	// Publish transaction events. Hashes and the sender come from the model:
+	// the go-ethereum view of a fee delegation transaction has another hash.
+	for _, p := range fb.transactions() {
 		txEvent := events.NewTransactionEvent(
-			tx,
-			block.NumberU64(),
-			block.Hash(),
-			uint(i),
-			getTransactionSender(tx),
-			receipt,
+			p.gethTx,
+			height,
+			fb.block.Hash,
+			uint(p.index),
+			p.tx.From,
+			p.gethReceipt,
 		)
+		txEvent.Hash = p.tx.Hash
 
 		if !f.publish(txEvent) {
 			f.logger.Warn("Failed to publish transaction event (channel full)",
-				zap.String("tx_hash", tx.Hash().Hex()),
+				zap.String("tx_hash", p.tx.Hash.Hex()),
 				zap.Uint64("block", height),
 			)
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -40,15 +41,16 @@ func TestFeeDelegationClientIsUsed(t *testing.T) {
 
 	f := NewFetcher(newMockClient(), store, &Config{BatchSize: 1, MaxRetries: 1, NumWorkers: 1}, zap.NewNop(), nil)
 	ctx := context.Background()
+	fb := &fetchedBlock{block: &model.Block{Number: 5}}
 
 	// Without an injected client nothing is extracted: mockClient lacks it.
-	require.NoError(t, f.processFeeDelegationMetadata(ctx, 5))
+	require.NoError(t, f.processFeeDelegationMetadata(ctx, fb))
 	none, err := store.GetFeeDelegationTxMeta(ctx, txHash)
 	require.NoError(t, err)
 	require.Nil(t, none, "nil, nil means not a fee delegation tx")
 
 	f.SetFeeDelegationClient(stub)
-	require.NoError(t, f.processFeeDelegationMetadata(ctx, 5))
+	require.NoError(t, f.processFeeDelegationMetadata(ctx, fb))
 	require.Equal(t, 1, stub.calls)
 
 	got, err := store.GetFeeDelegationTxMeta(ctx, txHash)

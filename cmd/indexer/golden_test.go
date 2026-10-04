@@ -22,16 +22,20 @@ var updateGolden = flag.Bool("update", false, "rewrite golden files")
 
 const goldenKeyspace = "testdata/golden/keyspace.txt"
 
-// ingestMode selects the fetcher's block write path.
+// ingestMode selects the fetcher's block read and write paths.
 type ingestMode struct {
 	name   string
 	atomic bool
+	// clientSource reads blocks through the legacy go-ethereum client
+	// instead of the chain profile source.
+	clientSource bool
 }
 
 var (
-	legacyMode = ingestMode{name: "legacy", atomic: false}
+	legacyMode = ingestMode{name: "legacy", atomic: false, clientSource: true}
+	clientMode = ingestMode{name: "client", atomic: true, clientSource: true}
 	atomicMode = ingestMode{name: "atomic", atomic: true}
-	allModes   = []ingestMode{legacyMode, atomicMode}
+	allModes   = []ingestMode{legacyMode, clientMode, atomicMode}
 )
 
 // defaultMode is the production default write path.
@@ -59,6 +63,7 @@ func startAppAt(t testing.TB, endpoint, dir string, mode ingestMode) *App {
 	cfg.API.Enabled = false
 	cfg.Indexer.StartHeight = 0
 	cfg.Indexer.AtomicBlock = mode.atomic
+	cfg.Indexer.ProfileSource = !mode.clientSource
 
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
@@ -176,4 +181,14 @@ func TestLegacyPathMatchesGolden(t *testing.T) {
 	legacy := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), legacyMode))
 	diff := testchain.DiffKeyspace(atomic, legacy, 0)
 	require.Empty(t, diff, "legacy path differs from the default path: %v", testchain.SummarizeDiff(diff))
+}
+
+// TestClientSourceMatchesGolden does the same for the go-ethereum client
+// read path: on an EVM chain it must store exactly what the chain profile
+// source stores.
+func TestClientSourceMatchesGolden(t *testing.T) {
+	profile := dumpScenarioIndex(t)
+	client := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), clientMode))
+	diff := testchain.DiffKeyspace(profile, client, 0)
+	require.Empty(t, diff, "client source differs from the profile source: %v", testchain.SummarizeDiff(diff))
 }

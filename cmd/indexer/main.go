@@ -16,6 +16,8 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
 	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
 	"github.com/0xmhha/indexer-go/pkg/api"
+	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"       // generic EVM chain profile
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet" // StableNet chain profile
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/events"
@@ -23,6 +25,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
+	"github.com/0xmhha/indexer-go/pkg/source"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/token"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
@@ -337,7 +340,9 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 		}
 
 		// Initialize fetcher
-		app.initFetcher()
+		if err := app.initFetcher(ctx); err != nil {
+			return nil, err
+		}
 	}
 
 	// Initialize API server if enabled
@@ -638,7 +643,7 @@ func (a *App) initMultiChainManager(ctx context.Context) error {
 }
 
 // initFetcher initializes the block fetcher
-func (a *App) initFetcher() {
+func (a *App) initFetcher(ctx context.Context) error {
 	// Real-time mode: Use shorter RetryDelay for batch_size=1
 	retryDelay := time.Second * 5
 	if a.config.Indexer.ChunkSize == 1 {
@@ -672,6 +677,18 @@ func (a *App) initFetcher() {
 		)
 	}
 
+	if a.config.Indexer.ProfileSource {
+		src, err := source.Detect(ctx, a.client.RPCClient())
+		if err != nil {
+			return fmt.Errorf("detect chain profile: %w", err)
+		}
+		a.fetcher.SetSource(src)
+		a.logger.Info("Reading blocks through chain profile",
+			zap.String("profile", src.Profile().ID()),
+			zap.Strings("features", src.Profile().Features()),
+		)
+	}
+
 	a.registerFeatureProcessors()
 
 	// Add token block processor for automatic token metadata indexing
@@ -688,6 +705,7 @@ func (a *App) initFetcher() {
 	} else {
 		a.logger.Warn("Failed to create token metadata fetcher - on-demand fetching will be disabled")
 	}
+	return nil
 }
 
 // initAPIServer initializes the API server

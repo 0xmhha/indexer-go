@@ -280,3 +280,32 @@ CP-1과 CP-2는 기존 코드에 영향 없이 새 패키지로 만들 수 있�
 - 전체 시험이 통과했다.
 
 **성능상 단점.** 기존 수집 경로가 `types` 메서드로 쓰는 동안에는 트랜잭션마다 송신자를 복구해 모델에 넣는다(go-ethereum이 tx 객체에 캐시하므로 블록과 트랜잭션 기록에서 두 번 계산하지는 않는다). S4에서 수집 경로가 모델을 직접 쓰면 이 비용은 프로필 decode 한 번으로 줄어든다.
+
+### S4: 수집기를 모델로 옮기기 (10/4)
+
+**구조.** 수집기는 블록 하나를 `fetchedBlock`으로 다룬다. 이 값은 모델(블록, receipt)과 go-ethereum 보기를 함께 들고 있다. 모델은 저장과, 정체성을 담는 색인(블록 hash, 트랜잭션 hash, fee payer)에 쓴다. go-ethereum 보기는 아직 모델로 옮기지 않은 기능 처리기(로그 기반 토큰·시스템 컨트랙트·모듈, watchlist)에 쓴다. 두 보기의 트랜잭션과 receipt는 인덱스로 맞춰 둔다.
+
+| 바뀐 곳 | 내용 |
+|---|---|
+| 읽기 | `indexer.profile_source`(기본 true, `INDEXER_PROFILE_SOURCE`)가 켜져 있으면 시작할 때 `source.Detect`로 프로필을 고르고 `pkg/source`로 읽는다. 감지에 실패하면 조용히 기존 경로로 바꾸지 않고 시작을 멈춘다. 끄면 기존 go-ethereum 클라이언트로 읽고 그 결과를 모델로 바꾼다 |
+| 쓰기 | 블록·트랜잭션·receipt는 `SetModelBlock`·`SetModelReceipt`로 쓴다. 이미 저장된 블록인지는 모델의 hash로 비교한다 |
+| 주소 색인 | from·to·fee payer와 컨트랙트 생성 기록을 모델에서 가져온다. fee payer는 프로필이 붙인 확장에서 읽고, 기존 경로에서는 저장된 fee delegation 메타를 쓴다 |
+| 잔액 추적 | 가스비를 receipt의 `effectiveGasPrice`로 계산하고 fee payer에게 차감한다. 송신자에게서는 value만 뺀다(D19) |
+| fee delegation 메타 | 프로필 경로에서는 블록을 다시 받지 않고 모델의 확장에서 만든다(`factory.EVMClient` 재조회를 쓰지 않는다) |
+| WBFT, setcode, userop, 이벤트 | 저장하거나 내보내는 블록 hash와 트랜잭션 hash를 모델에서 가져온다. setcode·userop 처리기에 블록 번호·hash·시각을 직접 받는 변형(`ProcessSetCodeTransactionAt`, `ProcessUserOps`)을 추가했다 |
+| `pkg/core/gethconv` | 저장 계층에 있던 go-ethereum ↔ 모델 변환을 수집기와 함께 쓰도록 옮겼다 |
+
+검증 결과는 다음과 같다.
+- 가짜 체인에서 기본 경로(프로필 소스)와 기존 클라이언트 경로의 keyspace가 같고(`TestClientSourceMatchesGolden`), keyspace·GraphQL golden도 바뀌지 않았다.
+- `TestLiveStableNetIdentity`(새 시험, `INDEXER_LIVE_RPC`가 있을 때만 실행): 로컬 go-stablenet 블록 0~1265에서 모든 블록을 노드 hash로, 트랜잭션 12건과 receipt를 노드 hash로 찾는다. fee delegation 6건의 메타와 fee payer 주소 색인이 있고, 블록별 로그 수가 receipt와 같다. go-ethereum 규칙으로 계산한 블록 hash 1,265개와 안쪽 hash 6개는 DB의 어떤 키와 값에도 없다. 안쪽 hash를 일부러 보존한 트랜잭션 자신의 확장 필드만 예외로 둔다. 0x16 거래마다 기록된 잔액 변화는 fee payer가 `-gasUsed × effectiveGasPrice`, 송신자가 `-value`다.
+- 같은 시험을 기존 클라이언트 경로로 돌리면 블록 1을 노드 hash로 찾지 못해 실패한다. 시험이 D16을 잡아낸다는 확인이다.
+- 계정 전체 잔액은 노드 값과 비교하지 않았다. 이 체인의 fee payer는 validator이기도 해서 블록 보상과 가스 수입을 받는데, 인덱서는 그 수입을 추적하지 않기 때문이다(기존 한계).
+- 전체 시험, 변경 패키지의 race 검사, 기존 `TestLiveStableNet`(중단 후 재시작 동등성)이 통과했다.
+
+**성능.** `BenchmarkIngest`(3회)에서 일반 블록은 차이가 없다(프로필 2.4~2.7초, 클라이언트 2.4~2.7초). 1,200건짜리 대형 블록이 섞이면 프로필 경로가 3.5~4.3초로 클라이언트 경로(2.7~3.4초)보다 약 20% 느리다. 프로필이 hash와 송신자를 검증한 뒤 go-ethereum 보기를 다시 만드는 중복 비용으로 보며, 처리기를 모델로 옮겨 보기를 없애면 줄어든다.
+
+**남긴 것.**
+- S5: 기존 클라이언트 경로(`profile_source: false`)와 `factory.EVMClient`의 fee delegation 재조회 코드, 비원자 경로를 지운다. 한 릴리스 동안은 대체 경로로 둔다.
+- 로그 기반 처리기와 watchlist·토큰 처리기는 아직 go-ethereum 보기를 쓴다. 로그의 hash는 모델에서 오므로 맞지만, 이 처리기들이 `block.Hash()`를 쓰는 곳이 있으면 StableNet에서 틀린다. live 시험의 DB 전체 검사로는 나오지 않았지만, 로컬 체인에 EIP-7702·ERC-4337·모듈 거래가 없어 그 경로는 실제 데이터로 확인하지 못했다.
+- fee delegation 메타 생성과 fee payer 조회가 `pkg/fetch`에서 `pkg/chains/stablenet`을 직접 부른다. 체인별 기능 모듈 구조(CP-4 후반)에서 프로필 쪽으로 옮긴다.
+- API 응답의 hash 필드는 CP-5에서 맞춘다.

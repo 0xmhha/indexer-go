@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -17,7 +19,7 @@ import (
 // ============================================================================
 
 // processAddressIndexing parses and stores address indexing data from block and receipts
-func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block, receipts types.Receipts) error {
+func (f *Fetcher) processAddressIndexing(ctx context.Context, fb *fetchedBlock) error {
 	// Check if storage implements AddressIndexWriter
 	addressWriter, ok := f.storage.(storagepkg.AddressIndexWriter)
 	if !ok {
@@ -28,40 +30,22 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 	// Check if storage implements Writer for transaction address indexing
 	storageWriter, hasWriter := f.storage.(storagepkg.Writer)
 
-	blockNumber := block.NumberU64()
-	blockTime := block.Time()
-	transactions := block.Transactions()
+	block := fb.geth
+	blockNumber := fb.height()
+	blockTime := fb.block.Time
+	pairs := fb.transactions()
 
-	// Build receipt map for O(1) lookup (avoids O(n²) matching)
-	receiptMap := buildReceiptMap(receipts)
-
-	// Fee Delegation transaction type constant (StableNet-specific)
-	const FeeDelegateDynamicFeeTxType = 22
-
-	// getFeePayer extracts fee payer from stored fee delegation metadata
-	getFeePayer := func(tx *types.Transaction) *common.Address {
-		if fdReader, ok := f.storage.(storagepkg.FeeDelegationReader); ok {
-			if meta, err := fdReader.GetFeeDelegationTxMeta(ctx, tx.Hash()); err == nil && meta != nil {
-				return &meta.FeePayer
-			}
-		}
-		return nil
-	}
-
-	// Process each transaction and its receipt
-	for txIdx, tx := range transactions {
-		// O(1) receipt lookup
-		receipt := receiptMap[tx.Hash()]
-		if receipt == nil {
-			continue
-		}
+	// Process each transaction and its receipt. Hashes and addresses come
+	// from the model so they match the chain (fee delegation keeps its own
+	// hash and fee payer).
+	for _, p := range pairs {
+		tx, receipt := p.tx, p.receipt
+		txHash := tx.Hash
 
 		// 0. Index transaction addresses (from, to, feePayer) for transactionsByAddress query
 		if hasWriter {
-			txHash := tx.Hash()
-
 			// Index 'from' address
-			from := getTransactionSender(tx)
+			from := tx.From
 			if from != (common.Address{}) {
 				if err := storageWriter.AddTransactionToAddressIndex(ctx, from, txHash); err != nil {
 					f.logger.Warn("Failed to index transaction for from address",
@@ -77,8 +61,8 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 			}
 
 			// Index 'to' address (if not contract creation)
-			if tx.To() != nil {
-				to := *tx.To()
+			if tx.To != nil {
+				to := *tx.To
 				if to != from { // Avoid duplicate indexing for self-transfers
 					if err := storageWriter.AddTransactionToAddressIndex(ctx, to, txHash); err != nil {
 						f.logger.Warn("Failed to index transaction for to address",
@@ -94,21 +78,19 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 				}
 			}
 
-			// Index 'feePayer' address for Fee Delegation transactions (type 0x16)
-			if tx.Type() == FeeDelegateDynamicFeeTxType {
-				if feePayer := getFeePayer(tx); feePayer != nil {
-					// Avoid duplicate indexing if feePayer is same as from or to
-					if *feePayer != from && (tx.To() == nil || *feePayer != *tx.To()) {
-						if err := storageWriter.AddTransactionToAddressIndex(ctx, *feePayer, txHash); err != nil {
-							f.logger.Warn("Failed to index transaction for feePayer address",
-								zap.Uint64("block", blockNumber),
-								zap.String("tx", txHash.Hex()),
-								zap.String("feePayer", feePayer.Hex()),
-								zap.Error(err),
-							)
-							if f.strictStorageErrors {
-								return fmt.Errorf("failed to index transaction for feePayer address: %w", err)
-							}
+			// Index the fee payer of fee delegation transactions (StableNet type 0x16)
+			if feePayer, ok := f.delegatedFeePayer(ctx, tx); ok {
+				// Avoid duplicate indexing if feePayer is same as from or to
+				if feePayer != from && (tx.To == nil || feePayer != *tx.To) {
+					if err := storageWriter.AddTransactionToAddressIndex(ctx, feePayer, txHash); err != nil {
+						f.logger.Warn("Failed to index transaction for feePayer address",
+							zap.Uint64("block", blockNumber),
+							zap.String("tx", txHash.Hex()),
+							zap.String("feePayer", feePayer.Hex()),
+							zap.Error(err),
+						)
+						if f.strictStorageErrors {
+							return fmt.Errorf("failed to index transaction for feePayer address: %w", err)
 						}
 					}
 				}
@@ -117,21 +99,22 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 
 		// 1. Contract Creation Detection
 		// Contract creation is indicated by tx.To() == nil
-		if tx.To() == nil && receipt.ContractAddress != (common.Address{}) {
+		if tx.To == nil && receipt.ContractAddress != nil {
+			contractAddress := *receipt.ContractAddress
 			creation := &storagepkg.ContractCreation{
-				ContractAddress: receipt.ContractAddress,
-				Creator:         getTransactionSender(tx),
-				TransactionHash: tx.Hash(),
+				ContractAddress: contractAddress,
+				Creator:         tx.From,
+				TransactionHash: txHash,
 				BlockNumber:     blockNumber,
 				Timestamp:       blockTime,
-				BytecodeSize:    len(receipt.ContractAddress.Bytes()), // This is simplified
+				BytecodeSize:    len(contractAddress.Bytes()), // This is simplified
 			}
 
 			if err := addressWriter.SaveContractCreation(ctx, creation); err != nil {
 				f.logger.Warn("Failed to save contract creation",
 					zap.Uint64("block", blockNumber),
-					zap.String("tx", tx.Hash().Hex()),
-					zap.String("contract", receipt.ContractAddress.Hex()),
+					zap.String("tx", txHash.Hex()),
+					zap.String("contract", contractAddress.Hex()),
 					zap.Error(err),
 				)
 				if f.strictStorageErrors {
@@ -141,9 +124,9 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 
 			// Index token metadata if this is a token contract
 			if f.tokenIndexer != nil {
-				if err := f.tokenIndexer.IndexToken(ctx, receipt.ContractAddress, blockNumber); err != nil {
+				if err := f.tokenIndexer.IndexToken(ctx, contractAddress, blockNumber); err != nil {
 					f.logger.Debug("Failed to index token metadata (may not be a token contract)",
-						zap.String("contract", receipt.ContractAddress.Hex()),
+						zap.String("contract", contractAddress.Hex()),
 						zap.Error(err),
 					)
 				}
@@ -151,7 +134,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 		}
 
 		// 2. Parse ERC20/ERC721 Transfer Events from Logs
-		for _, log := range receipt.Logs {
+		for _, log := range p.gethReceipt.Logs {
 			if log == nil || len(log.Topics) == 0 {
 				continue
 			}
@@ -190,7 +173,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 				if err := addressWriter.SaveERC20Transfer(ctx, transfer); err != nil {
 					f.logger.Warn("Failed to save ERC20 transfer",
 						zap.Uint64("block", blockNumber),
-						zap.String("tx", tx.Hash().Hex()),
+						zap.String("tx", txHash.Hex()),
 						zap.String("token", log.Address.Hex()),
 						zap.Error(err),
 					)
@@ -219,7 +202,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 				if err := addressWriter.SaveERC721Transfer(ctx, transfer); err != nil {
 					f.logger.Warn("Failed to save ERC721 transfer",
 						zap.Uint64("block", blockNumber),
-						zap.String("tx", tx.Hash().Hex()),
+						zap.String("tx", txHash.Hex()),
 						zap.String("token", log.Address.Hex()),
 						zap.String("tokenId", tokenId.String()),
 						zap.Error(err),
@@ -232,11 +215,11 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 		}
 
 		// 3. Process EIP-7702 SetCode Transactions
-		if f.setCodeProcessor != nil && tx.Type() == types.SetCodeTxType {
-			if err := f.setCodeProcessor.ProcessSetCodeTransaction(ctx, tx, receipt, block, uint64(txIdx)); err != nil {
+		if f.setCodeProcessor != nil && tx.Type == types.SetCodeTxType {
+			if err := f.setCodeProcessor.ProcessSetCodeTransactionAt(ctx, p.gethTx, p.gethReceipt, blockNumber, fb.block.Hash, blockTime, uint64(p.index)); err != nil {
 				f.logger.Warn("Failed to process SetCode transaction",
 					zap.Uint64("block", blockNumber),
-					zap.String("tx", tx.Hash().Hex()),
+					zap.String("tx", txHash.Hex()),
 					zap.Error(err),
 				)
 			}
@@ -245,7 +228,11 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 
 	// 4. Process ERC-4337 UserOperations from block
 	if f.userOpProcessor != nil {
-		if err := f.userOpProcessor.ProcessUserOpsFromBlock(ctx, block, receipts); err != nil {
+		bundles := make([]UserOpBundle, 0, len(pairs))
+		for _, p := range pairs {
+			bundles = append(bundles, UserOpBundle{Sender: p.tx.From, Receipt: p.gethReceipt})
+		}
+		if err := f.userOpProcessor.ProcessUserOps(ctx, blockNumber, fb.block.Hash, blockTime, bundles); err != nil {
 			f.logger.Warn("Failed to process ERC-4337 UserOperations",
 				zap.Uint64("block", blockNumber),
 				zap.Error(err),
@@ -255,7 +242,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 
 	// 5. Process ERC-7579 module install/uninstall events
 	if f.moduleProcessor != nil {
-		if err := f.moduleProcessor.ProcessModuleEventsFromBlock(ctx, block, receipts); err != nil {
+		if err := f.moduleProcessor.ProcessModuleEventsFromBlock(ctx, block, fb.gethReceipts); err != nil {
 			f.logger.Warn("Failed to process ERC-7579 module events",
 				zap.Uint64("block", blockNumber),
 				zap.Error(err),
@@ -265,7 +252,7 @@ func (f *Fetcher) processAddressIndexing(ctx context.Context, block *types.Block
 
 	f.logger.Debug("Processed address indexing",
 		zap.Uint64("height", blockNumber),
-		zap.Int("transactions", len(transactions)),
+		zap.Int("transactions", len(fb.block.Transactions)),
 	)
 
 	return nil
@@ -465,8 +452,11 @@ func (f *Fetcher) initializeGenesisTokenMetadata(ctx context.Context) error {
 	return nil
 }
 
-// processBalanceTracking tracks native balance changes from ETH transfers
-func (f *Fetcher) processBalanceTracking(ctx context.Context, block *types.Block, receipts types.Receipts) error {
+// processBalanceTracking tracks native balance changes from transfers and
+// gas payments. The sender pays the value; the gas (gas used times the
+// effective gas price from the receipt) is paid by the fee payer of a fee
+// delegation transaction, otherwise by the sender.
+func (f *Fetcher) processBalanceTracking(ctx context.Context, fb *fetchedBlock) error {
 	// Check if storage implements HistoricalWriter
 	histWriter, ok := f.storage.(storagepkg.HistoricalWriter)
 	if !ok {
@@ -481,102 +471,99 @@ func (f *Fetcher) processBalanceTracking(ctx context.Context, block *types.Block
 		return nil
 	}
 
-	blockNumber := block.NumberU64()
-	transactions := block.Transactions()
+	blockNumber := fb.height()
 
-	// Build receipt map for O(1) lookup (avoids O(n²) matching)
-	receiptMap := buildReceiptMap(receipts)
-
-	// Track balance changes for each transaction
-	for _, tx := range transactions {
-		// O(1) receipt lookup
-		receipt := receiptMap[tx.Hash()]
-		if receipt == nil {
-			continue
+	// debit and credit apply one balance change, initializing the account
+	// from RPC the first time it is seen. Balance tracking is best-effort:
+	// failures are logged and indexing continues.
+	apply := func(addr common.Address, delta *big.Int, txHash common.Hash, what string) {
+		if err := f.ensureAddressBalanceInitialized(ctx, histReader, histWriter, addr, blockNumber); err != nil {
+			f.logger.Warn("Failed to initialize "+what+" balance",
+				zap.String("address", addr.Hex()),
+				zap.Uint64("block", blockNumber),
+				zap.Error(err),
+			)
 		}
+		if err := histWriter.UpdateBalance(ctx, addr, blockNumber, delta, txHash); err != nil {
+			f.logger.Warn("Failed to update "+what+" balance",
+				zap.Uint64("block", blockNumber),
+				zap.String("tx", txHash.Hex()),
+				zap.String("address", addr.Hex()),
+				zap.String("delta", delta.String()),
+				zap.Error(err),
+			)
+		}
+	}
 
-		// Get sender address
-		from := getTransactionSender(tx)
+	pairs := fb.transactions()
+	for _, p := range pairs {
+		tx, receipt := p.tx, p.receipt
+		from := tx.From
 		if from == (common.Address{}) {
 			// Cannot determine sender, skip
 			continue
 		}
 
-		// Calculate gas cost (gas used * effective gas price)
-		gasUsed := new(big.Int).SetUint64(receipt.GasUsed)
-		gasPrice := tx.GasPrice()
+		gasPrice := receipt.EffectiveGasPrice
 		if gasPrice == nil {
-			gasPrice = big.NewInt(0)
+			gasPrice = tx.GasPrice
 		}
-		gasCost := new(big.Int).Mul(gasUsed, gasPrice)
-
-		// Calculate total deduction from sender: value + gas cost
-		value := tx.Value()
+		gasCost := new(big.Int)
+		if gasPrice != nil {
+			gasCost.Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
+		}
+		value := tx.Value
 		if value == nil {
-			value = big.NewInt(0)
-		}
-		totalDeduction := new(big.Int).Add(value, gasCost)
-
-		// Ensure sender address balance is initialized from RPC if first time seeing it
-		if err := f.ensureAddressBalanceInitialized(ctx, histReader, histWriter, from, blockNumber); err != nil {
-			f.logger.Warn("Failed to initialize sender balance",
-				zap.String("address", from.Hex()),
-				zap.Uint64("block", blockNumber),
-				zap.Error(err),
-			)
-			// Continue - balance tracking is best-effort
+			value = new(big.Int)
 		}
 
-		// Update sender balance (deduct value + gas)
-		senderDelta := new(big.Int).Neg(totalDeduction)
-		if err := histWriter.UpdateBalance(ctx, from, blockNumber, senderDelta, tx.Hash()); err != nil {
-			f.logger.Warn("Failed to update sender balance",
-				zap.Uint64("block", blockNumber),
-				zap.String("tx", tx.Hash().Hex()),
-				zap.String("from", from.Hex()),
-				zap.String("delta", senderDelta.String()),
-				zap.Error(err),
-			)
-			// Continue processing - balance tracking failure shouldn't block indexing
+		payer := from
+		if feePayer, ok := f.delegatedFeePayer(ctx, tx); ok {
+			payer = feePayer
+		}
+		if payer == from {
+			apply(from, new(big.Int).Neg(new(big.Int).Add(value, gasCost)), tx.Hash, "sender")
+		} else {
+			if value.Sign() > 0 {
+				apply(from, new(big.Int).Neg(value), tx.Hash, "sender")
+			}
+			apply(payer, new(big.Int).Neg(gasCost), tx.Hash, "fee payer")
 		}
 
-		// Update receiver balance (add value only, not gas)
-		// Note: For contract creation, tx.To() is nil, so receiver is the contract address
-		to := tx.To()
-		if to == nil && receipt.ContractAddress != (common.Address{}) {
-			// Contract creation - credit the contract address
-			to = &receipt.ContractAddress
+		// Credit the receiver with the value (not the gas). For contract
+		// creation the receiver is the new contract.
+		to := tx.To
+		if to == nil && receipt.ContractAddress != nil {
+			to = receipt.ContractAddress
 		}
-
 		if to != nil && value.Sign() > 0 {
-			// Ensure receiver address balance is initialized from RPC if first time seeing it
-			if err := f.ensureAddressBalanceInitialized(ctx, histReader, histWriter, *to, blockNumber); err != nil {
-				f.logger.Warn("Failed to initialize receiver balance",
-					zap.String("address", to.Hex()),
-					zap.Uint64("block", blockNumber),
-					zap.Error(err),
-				)
-				// Continue - balance tracking is best-effort
-			}
-
-			// Only update if there's actual value transfer
-			if err := histWriter.UpdateBalance(ctx, *to, blockNumber, value, tx.Hash()); err != nil {
-				f.logger.Warn("Failed to update receiver balance",
-					zap.Uint64("block", blockNumber),
-					zap.String("tx", tx.Hash().Hex()),
-					zap.String("to", to.Hex()),
-					zap.String("delta", value.String()),
-					zap.Error(err),
-				)
-				// Continue processing
-			}
+			apply(*to, value, tx.Hash, "receiver")
 		}
 	}
 
 	f.logger.Debug("Processed balance tracking",
 		zap.Uint64("height", blockNumber),
-		zap.Int("transactions", len(transactions)),
+		zap.Int("transactions", len(pairs)),
 	)
 
 	return nil
+}
+
+// delegatedFeePayer returns the account paying gas for tx when it is not the
+// sender. Blocks decoded by the StableNet profile carry it on the
+// transaction; blocks read through the legacy client fall back to the stored
+// fee delegation metadata.
+func (f *Fetcher) delegatedFeePayer(ctx context.Context, tx *model.Transaction) (common.Address, bool) {
+	if fd, ok := stablenet.FeeDelegationOf(tx); ok {
+		return fd.FeePayer, true
+	}
+	if tx.Type != stablenet.FeeDelegationTxType {
+		return common.Address{}, false
+	}
+	if fdReader, ok := f.storage.(storagepkg.FeeDelegationReader); ok {
+		if meta, err := fdReader.GetFeeDelegationTxMeta(ctx, tx.Hash); err == nil && meta != nil {
+			return meta.FeePayer, true
+		}
+	}
+	return common.Address{}, false
 }

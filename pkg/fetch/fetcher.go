@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/source"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 )
@@ -179,6 +180,10 @@ type Fetcher struct {
 
 	// moduleProcessor handles ERC-7579 module install/uninstall indexing
 	moduleProcessor *ModuleProcessor
+
+	// src, when set, reads blocks as raw JSON decoded by the chain profile
+	// instead of through client (chain profile design, CP-3).
+	src *source.Source
 
 	// fdClient extracts StableNet fee delegation metadata. When nil the
 	// fetcher falls back to checking whether its main client supports it.
@@ -389,7 +394,7 @@ func (f *Fetcher) processBlockWithProcessors(ctx context.Context, block *types.B
 func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	// Fetch block and receipts with retry logic
 	startTime := time.Now()
-	block, receipts, hadError, err := f.fetchBlockAndReceiptsWithRetry(ctx, height, startTime)
+	fb, hadError, err := f.fetchBlockAndReceiptsWithRetry(ctx, height, startTime)
 	if err != nil {
 		return err
 	}
@@ -400,23 +405,24 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	}
 
 	if f.atomic() {
-		return f.indexBlock(ctx, block, receipts)
+		return f.indexBlock(ctx, fb)
 	}
 
 	// Legacy path: separate writes, removed after the atomic path is the
 	// default for a release (phase0-design.md P0-14).
+	block, receipts := fb.geth, fb.gethReceipts
 	// Store block
 	if err := f.storage.SetBlock(ctx, block); err != nil {
 		return fmt.Errorf("failed to store block %d: %w", height, err)
 	}
 
 	// Process metadata and indexing
-	if err := f.processBlockMetadata(ctx, block, receipts, height); err != nil {
+	if err := f.processBlockMetadata(ctx, fb); err != nil {
 		return err
 	}
 
 	// Process fee delegation metadata
-	if err := f.processFeeDelegationMetadata(ctx, height); err != nil {
+	if err := f.processFeeDelegationMetadata(ctx, fb); err != nil {
 		// Log but don't fail block processing
 		f.logger.Warn("Fee delegation metadata processing failed",
 			zap.Uint64("height", height),
@@ -435,13 +441,13 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	}
 
 	// Store receipts and index logs
-	if err := f.storeAndProcessReceipts(ctx, block, receipts, height); err != nil {
+	if err := f.storeAndProcessReceipts(ctx, fb); err != nil {
 		return err
 	}
 
 	// Publish transaction and log events
 	if f.eventBus != nil {
-		f.publishBlockEvents(block, receipts, height)
+		f.publishBlockEvents(fb)
 	}
 
 	// Process block with external processors (e.g., watchlist)
@@ -507,10 +513,9 @@ func (f *Fetcher) FetchRange(ctx context.Context, start, end uint64) error {
 
 // jobResult holds the result of fetching a single block
 type jobResult struct {
-	height   uint64
-	block    *types.Block
-	receipts types.Receipts
-	err      error
+	height uint64
+	block  *fetchedBlock
+	err    error
 }
 
 // FetchRangeConcurrent fetches a range of blocks concurrently using a worker pool
@@ -612,7 +617,7 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 		for {
 			if res, ok := resultMap[nextHeight]; ok {
 				if f.atomic() {
-					if err := f.indexBlock(ctx, res.block, res.receipts); err != nil {
+					if err := f.indexBlock(ctx, res.block); err != nil {
 						return err
 					}
 					delete(resultMap, nextHeight)
@@ -624,28 +629,31 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 					continue
 				}
 
+				fb := res.block
+				block, receipts := fb.geth, fb.gethReceipts
+
 				// Store block
-				if err := f.storage.SetBlock(ctx, res.block); err != nil {
+				if err := f.storage.SetBlock(ctx, block); err != nil {
 					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)
 				}
 
 				// Process WBFT metadata
-				if err := f.processWBFTMetadata(ctx, res.block); err != nil {
+				if err := f.processWBFTMetadata(ctx, fb); err != nil {
 					return fmt.Errorf("failed to process WBFT metadata for block %d: %w", nextHeight, err)
 				}
 
 				// Process address indexing (contract creation, token transfers)
-				if err := f.processAddressIndexing(ctx, res.block, res.receipts); err != nil {
+				if err := f.processAddressIndexing(ctx, fb); err != nil {
 					return fmt.Errorf("failed to process address indexing for block %d: %w", nextHeight, err)
 				}
 
 				// Process native balance tracking
-				if err := f.processBalanceTracking(ctx, res.block, res.receipts); err != nil {
+				if err := f.processBalanceTracking(ctx, fb); err != nil {
 					return fmt.Errorf("failed to process balance tracking for block %d: %w", nextHeight, err)
 				}
 
 				// Process fee delegation metadata
-				if err := f.processFeeDelegationMetadata(ctx, nextHeight); err != nil {
+				if err := f.processFeeDelegationMetadata(ctx, fb); err != nil {
 					f.logger.Warn("Fee delegation metadata processing failed",
 						zap.Uint64("height", nextHeight),
 						zap.Error(err),
@@ -654,7 +662,7 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 
 				// Publish block event if EventBus is configured
 				if f.eventBus != nil {
-					blockEvent := events.NewBlockEvent(res.block)
+					blockEvent := events.NewBlockEvent(block)
 					if !f.eventBus.Publish(blockEvent) {
 						f.logger.Warn("Failed to publish block event (channel full)",
 							zap.Uint64("height", nextHeight),
@@ -663,7 +671,7 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 				}
 
 				// Store receipts and index logs
-				for _, receipt := range res.receipts {
+				for _, receipt := range receipts {
 					if err := f.storage.SetReceipt(ctx, receipt); err != nil {
 						return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
 					}
@@ -683,9 +691,9 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 
 				// Publish transaction events if EventBus is configured
 				if f.eventBus != nil {
-					transactions := res.block.Transactions()
+					transactions := block.Transactions()
 					// Build receipt map for O(1) lookup (avoids O(n²) matching)
-					receiptMap := buildReceiptMap(res.receipts)
+					receiptMap := buildReceiptMap(receipts)
 					for i, tx := range transactions {
 						// O(1) receipt lookup
 						receipt := receiptMap[tx.Hash()]
@@ -693,8 +701,8 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 						// Create transaction event
 						txEvent := events.NewTransactionEvent(
 							tx,
-							res.block.NumberU64(),
-							res.block.Hash(),
+							block.NumberU64(),
+							block.Hash(),
 							uint(i),
 							getTransactionSender(tx),
 							receipt,
@@ -715,9 +723,9 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 
 				f.logger.Debug("Stored block",
 					zap.Uint64("height", nextHeight),
-					zap.String("hash", res.block.Hash().Hex()),
-					zap.Int("txs", len(res.block.Transactions())),
-					zap.Int("receipts", len(res.receipts)),
+					zap.String("hash", block.Hash().Hex()),
+					zap.Int("txs", len(block.Transactions())),
+					zap.Int("receipts", len(receipts)),
 				)
 
 				// Clean up and move to next height

@@ -67,6 +67,11 @@ type IndexerConfig struct {
 	// true). Setting it to false selects the legacy write path, which is
 	// kept for one release as a fallback and then removed.
 	AtomicBlock bool `yaml:"atomic_block"`
+	// ProfileSource reads blocks as raw JSON decoded by the node's chain
+	// profile (default true), so chain-specific transaction types and block
+	// hash rules are kept. Setting it to false selects the legacy
+	// go-ethereum client path, kept for one release as a fallback.
+	ProfileSource bool `yaml:"profile_source"`
 }
 
 // APIConfig holds API server configuration
@@ -433,6 +438,7 @@ func NewConfig() *Config {
 	// Same reasoning: atomic block indexing is the default, and an explicit
 	// false in the file or INDEXER_ATOMIC_BLOCK=false selects the legacy path.
 	cfg.Indexer.AtomicBlock = true
+	cfg.Indexer.ProfileSource = true
 	// WebSocket keep-alive pings keep idle subscribers connected; it can be
 	// disabled with api.enable_websocket_keepalive: false.
 	cfg.API.EnableWebSocketKeepAlive = true
@@ -728,6 +734,13 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_ATOMIC_BLOCK: %w", err)
 		}
 		c.Indexer.AtomicBlock = val
+	}
+	if v := os.Getenv("INDEXER_PROFILE_SOURCE"); v != "" {
+		val, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_PROFILE_SOURCE: %w", err)
+		}
+		c.Indexer.ProfileSource = val
 	}
 
 	// API configuration

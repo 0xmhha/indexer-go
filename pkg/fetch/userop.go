@@ -41,26 +41,45 @@ func (p *UserOpProcessor) ProcessUserOpsFromBlock(
 	block *types.Block,
 	receipts types.Receipts,
 ) error {
-	blockNumber := block.NumberU64()
-	blockHash := block.Hash()
-	blockTime := time.Unix(int64(block.Time()), 0)
-
-	transactions := block.Transactions()
 	receiptMap := make(map[common.Hash]*types.Receipt, len(receipts))
 	for _, receipt := range receipts {
 		if receipt != nil {
 			receiptMap[receipt.TxHash] = receipt
 		}
 	}
+	var bundles []UserOpBundle
+	for _, tx := range block.Transactions() {
+		if receipt, ok := receiptMap[tx.Hash()]; ok && receipt != nil {
+			bundles = append(bundles, UserOpBundle{Sender: getTransactionSender(tx), Receipt: receipt})
+		}
+	}
+	return p.ProcessUserOps(ctx, block.NumberU64(), block.Hash(), block.Time(), bundles)
+}
+
+// UserOpBundle is one transaction of a block that may carry UserOperations:
+// its sender (the bundler) and its receipt.
+type UserOpBundle struct {
+	Sender  common.Address
+	Receipt *types.Receipt
+}
+
+// ProcessUserOps processes the UserOperations of a block given by number,
+// hash and time, so the caller supplies the hash the chain reports (the
+// go-ethereum block hash is wrong for WBFT blocks, D16).
+func (p *UserOpProcessor) ProcessUserOps(
+	ctx context.Context,
+	blockNumber uint64,
+	blockHash common.Hash,
+	blockTimestamp uint64,
+	txs []UserOpBundle,
+) error {
+	blockTime := time.Unix(int64(blockTimestamp), 0)
 
 	var allOps []*userop.UserOperation
 	bundlerTxCounts := make(map[common.Address]int) // Track bundles per bundler in this block
 
-	for _, tx := range transactions {
-		receipt, ok := receiptMap[tx.Hash()]
-		if !ok || receipt == nil {
-			continue
-		}
+	for _, t := range txs {
+		receipt := t.Receipt
 
 		// Check if this transaction contains any EntryPoint events
 		entryPointAddr, version := p.detectEntryPointTx(receipt)
@@ -68,8 +87,7 @@ func (p *UserOpProcessor) ProcessUserOpsFromBlock(
 			continue
 		}
 
-		// Extract bundler (tx.From())
-		bundler := getTransactionSender(tx)
+		bundler := t.Sender
 
 		// Track that this bundler submitted a bundle
 		bundlerTxCounts[bundler]++

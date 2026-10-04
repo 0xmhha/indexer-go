@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/events"
@@ -51,16 +51,16 @@ func (f *Fetcher) publish(ev events.Event) bool {
 //   - The cursor only moves forward, so filling a gap below it does not
 //     rewind it.
 //   - Events are published only after the transaction commits.
-func (f *Fetcher) indexBlock(ctx context.Context, block *types.Block, receipts types.Receipts) error {
-	height := block.NumberU64()
+func (f *Fetcher) indexBlock(ctx context.Context, fb *fetchedBlock) error {
+	height := fb.height()
 
-	stored, err := f.storage.GetBlock(ctx, height)
+	storedHash, err := f.storedBlockHash(ctx, height)
 	switch {
-	case err == nil && stored.Hash() == block.Hash():
+	case err == nil && storedHash == fb.block.Hash:
 		f.logger.Debug("Block already indexed, skipping", zap.Uint64("height", height))
 		return f.advanceCursorOnly(ctx, height)
 	case err == nil:
-		return fmt.Errorf("%w: height %d stored %s fetched %s", ErrBlockConflict, height, stored.Hash().Hex(), block.Hash().Hex())
+		return fmt.Errorf("%w: height %d stored %s fetched %s", ErrBlockConflict, height, storedHash.Hex(), fb.block.Hash.Hex())
 	case !errors.Is(err, storagepkg.ErrNotFound):
 		return fmt.Errorf("check stored block %d: %w", height, err)
 	}
@@ -75,7 +75,7 @@ func (f *Fetcher) indexBlock(ctx context.Context, block *types.Block, receipts t
 	f.pendingEvents = &pending
 	defer func() { f.pendingEvents = nil }()
 
-	if err := f.applyBlock(txCtx, block, receipts); err != nil {
+	if err := f.applyBlock(txCtx, fb); err != nil {
 		return err
 	}
 	if err := f.advanceCursor(txCtx, height); err != nil {
@@ -100,44 +100,77 @@ func (f *Fetcher) indexBlock(ctx context.Context, block *types.Block, receipts t
 		}
 	}
 
-	f.metrics.RecordBlockProcessed(len(receipts))
+	f.metrics.RecordBlockProcessed(len(fb.receipts))
 	f.logger.Info("Successfully indexed block",
 		zap.Uint64("height", height),
-		zap.String("hash", block.Hash().Hex()),
-		zap.Int("txs", len(block.Transactions())),
-		zap.Int("receipts", len(receipts)),
+		zap.String("hash", fb.block.Hash.Hex()),
+		zap.Int("txs", len(fb.block.Transactions)),
+		zap.Int("receipts", len(fb.receipts)),
 	)
 	return nil
+}
+
+// storedBlockHash returns the hash of the block stored at height, as the
+// chain reports it when the storage keeps the model.
+func (f *Fetcher) storedBlockHash(ctx context.Context, height uint64) (common.Hash, error) {
+	if mr, ok := f.storage.(storagepkg.ModelReader); ok {
+		b, err := mr.GetModelBlock(ctx, height)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		return b.Hash, nil
+	}
+	b, err := f.storage.GetBlock(ctx, height)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return b.Hash(), nil
 }
 
 // applyBlock performs every write for one block. It must run inside a block
 // transaction (ctx from BeginBlock). Storage write failures abort the block;
 // failures of external enrichment (RPC lookups, token metadata) are logged.
-func (f *Fetcher) applyBlock(ctx context.Context, block *types.Block, receipts types.Receipts) error {
-	height := block.NumberU64()
+func (f *Fetcher) applyBlock(ctx context.Context, fb *fetchedBlock) error {
+	height := fb.height()
 
-	if err := f.storage.SetBlock(ctx, block); err != nil {
+	if err := f.storeBlock(ctx, fb); err != nil {
 		return fmt.Errorf("failed to store block %d: %w", height, err)
 	}
-	if err := f.processBlockMetadata(ctx, block, receipts, height); err != nil {
+	if err := f.processBlockMetadata(ctx, fb); err != nil {
 		return err
 	}
-	if err := f.processFeeDelegationMetadata(ctx, height); err != nil {
+	if err := f.processFeeDelegationMetadata(ctx, fb); err != nil {
 		f.logger.Warn("Fee delegation metadata processing failed",
 			zap.Uint64("height", height),
 			zap.Error(err),
 		)
 	}
-	f.publish(events.NewBlockEvent(block))
+	f.publish(f.blockEvent(fb))
 
 	// Receipts are always processed sequentially here: a block batch must
 	// not be written from several goroutines.
-	if err := f.storeReceiptsSequential(ctx, receipts); err != nil {
+	if err := f.storeReceiptsSequential(ctx, fb); err != nil {
 		return err
 	}
-	f.publishBlockEvents(block, receipts, height)
-	f.processBlockWithProcessors(ctx, block, receipts)
+	f.publishBlockEvents(fb)
+	f.processBlockWithProcessors(ctx, fb.geth, fb.gethReceipts)
 	return nil
+}
+
+// storeBlock stores the block and its transactions, as the model when the
+// storage supports it so they are kept under the hashes the chain reports.
+func (f *Fetcher) storeBlock(ctx context.Context, fb *fetchedBlock) error {
+	if mw, ok := f.storage.(storagepkg.ModelWriter); ok {
+		return mw.SetModelBlock(ctx, fb.block)
+	}
+	return f.storage.SetBlock(ctx, fb.geth)
+}
+
+// blockEvent builds the block event with the chain's block hash.
+func (f *Fetcher) blockEvent(fb *fetchedBlock) *events.BlockEvent {
+	ev := events.NewBlockEvent(fb.geth)
+	ev.Hash = fb.block.Hash
+	return ev
 }
 
 // advanceCursor sets the latest height to height if it is higher than the

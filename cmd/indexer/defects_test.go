@@ -26,6 +26,7 @@ var knownDefects = map[string]map[string]string{
 		"D3":  "reprocessing an indexed block is not idempotent (balance deltas, address index, tx count)",
 		"D10": "gap recovery rewinds the cursor and reprocesses already indexed blocks",
 	},
+	clientMode.name: {},
 	atomicMode.name: {},
 }
 

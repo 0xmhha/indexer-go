@@ -18,7 +18,8 @@ import (
 // ============================================================================
 
 // processWBFTMetadata parses and stores WBFT consensus metadata from block header
-func (f *Fetcher) processWBFTMetadata(ctx context.Context, block *types.Block) error {
+func (f *Fetcher) processWBFTMetadata(ctx context.Context, fb *fetchedBlock) error {
+	block := fb.geth
 	// Check if chain adapter indicates non-WBFT consensus - skip silently
 	if f.chainAdapter != nil {
 		info := f.chainAdapter.Info()
@@ -41,11 +42,14 @@ func (f *Fetcher) processWBFTMetadata(ctx context.Context, block *types.Block) e
 		// Log warning but don't fail the entire block indexing
 		f.logger.Warn("Failed to parse WBFT extra",
 			zap.Uint64("height", block.NumberU64()),
-			zap.String("hash", block.Hash().Hex()),
+			zap.String("hash", fb.block.Hash.Hex()),
 			zap.Error(err),
 		)
 		return nil
 	}
+	// The go-ethereum view recomputes the hash with the Ethereum rule; WBFT
+	// blocks are identified by the hash the chain reports (D16).
+	wbftExtra.BlockHash = fb.block.Hash
 
 	// Save WBFT block extra
 	if err := wbftWriter.SaveWBFTBlockExtra(ctx, wbftExtra); err != nil {

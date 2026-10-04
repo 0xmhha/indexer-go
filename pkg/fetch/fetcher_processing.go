@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -16,10 +16,7 @@ import (
 // ============================================================================
 
 // fetchBlockAndReceiptsWithRetry fetches block and receipts with exponential backoff retry logic
-func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uint64, startTime time.Time) (*types.Block, types.Receipts, bool, error) {
-	var block *types.Block
-	var receipts types.Receipts
-	var err error
+func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uint64, startTime time.Time) (*fetchedBlock, bool, error) {
 	var hadError bool
 
 	// Retry logic with exponential backoff
@@ -33,55 +30,58 @@ func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uin
 				zap.Duration("backoff_delay", backoffDelay),
 			)
 			if err := sleepCtx(ctx, backoffDelay); err != nil {
-				return nil, nil, true, err
+				return nil, true, err
 			}
 		}
 
-		// Fetch block - use chain adapter if available (for EIP-4844 compatibility)
-		block, err = f.getBlock(ctx, height)
-		if err != nil {
-			hadError = true
-			f.logger.Error("Failed to fetch block",
-				zap.Uint64("height", height),
-				zap.Int("attempt", attempt),
-				zap.Error(err),
-			)
-			f.metrics.RecordRequest(time.Since(startTime), true, false)
-			if attempt == f.config.MaxRetries {
-				return nil, nil, hadError, fmt.Errorf("failed to fetch block %d after %d attempts: %w", height, f.config.MaxRetries, err)
-			}
-			continue
+		fb, err := f.fetchOnce(ctx, height)
+		if err == nil {
+			return fb, hadError, nil
 		}
-
-		// Fetch receipts - use chain adapter if available
-		receipts, err = f.getReceipts(ctx, height)
-		if err != nil {
-			hadError = true
-			f.logger.Error("Failed to fetch receipts",
-				zap.Uint64("height", height),
-				zap.Int("attempt", attempt),
-				zap.Error(err),
-			)
-			f.metrics.RecordRequest(time.Since(startTime), true, false)
-			if attempt == f.config.MaxRetries {
-				return nil, nil, hadError, fmt.Errorf("failed to fetch receipts for block %d after %d attempts: %w", height, f.config.MaxRetries, err)
-			}
-			continue
+		hadError = true
+		f.logger.Error("Failed to fetch block",
+			zap.Uint64("height", height),
+			zap.Int("attempt", attempt),
+			zap.Error(err),
+		)
+		f.metrics.RecordRequest(time.Since(startTime), true, false)
+		if attempt == f.config.MaxRetries {
+			return nil, hadError, fmt.Errorf("failed to fetch block %d after %d attempts: %w", height, f.config.MaxRetries, err)
 		}
-
-		// Success - break retry loop
-		break
 	}
-
-	return block, receipts, hadError, nil
+	return nil, hadError, fmt.Errorf("failed to fetch block %d: no attempts", height)
 }
 
 // processFeeDelegationMetadata extracts and stores fee delegation metadata for a block
-func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, height uint64) error {
+func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, fb *fetchedBlock) error {
+	height := fb.height()
 	// Check if storage supports fee delegation
 	fdStorage, ok := f.storage.(FeeDelegationStorage)
 	if !ok {
 		return nil // Storage doesn't support fee delegation, skip silently
+	}
+
+	// Blocks decoded by a chain profile carry the fee payer themselves.
+	if f.src != nil {
+		for _, tx := range fb.block.Transactions {
+			fd, ok := stablenet.FeeDelegationOf(tx)
+			if !ok {
+				continue
+			}
+			meta := &storagepkg.FeeDelegationTxMeta{
+				TxHash:       tx.Hash,
+				BlockNumber:  height,
+				OriginalType: tx.Type,
+				FeePayer:     fd.FeePayer,
+				FeePayerV:    fd.V,
+				FeePayerR:    fd.R,
+				FeePayerS:    fd.S,
+			}
+			if err := fdStorage.SetFeeDelegationTxMeta(ctx, meta); err != nil {
+				return fmt.Errorf("failed to store fee delegation metadata for %s: %w", tx.Hash.Hex(), err)
+			}
+		}
+		return nil
 	}
 
 	// Check if a client supporting fee delegation metadata extraction is set
@@ -138,19 +138,22 @@ func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, height uint6
 }
 
 // processBlockMetadata processes WBFT metadata, address indexing, balance tracking, and genesis initialization
-func (f *Fetcher) processBlockMetadata(ctx context.Context, block *types.Block, receipts types.Receipts, height uint64) error {
+func (f *Fetcher) processBlockMetadata(ctx context.Context, fb *fetchedBlock) error {
+	height := fb.height()
+	block := fb.geth
+
 	// Process WBFT metadata
-	if err := f.processWBFTMetadata(ctx, block); err != nil {
+	if err := f.processWBFTMetadata(ctx, fb); err != nil {
 		return fmt.Errorf("failed to process WBFT metadata for block %d: %w", height, err)
 	}
 
 	// Process address indexing (contract creation, token transfers)
-	if err := f.processAddressIndexing(ctx, block, receipts); err != nil {
+	if err := f.processAddressIndexing(ctx, fb); err != nil {
 		return fmt.Errorf("failed to process address indexing for block %d: %w", height, err)
 	}
 
 	// Process native balance tracking
-	if err := f.processBalanceTracking(ctx, block, receipts); err != nil {
+	if err := f.processBalanceTracking(ctx, fb); err != nil {
 		return fmt.Errorf("failed to process balance tracking for block %d: %w", height, err)
 	}
 
@@ -178,7 +181,8 @@ func (f *Fetcher) processBlockMetadata(ctx context.Context, block *types.Block, 
 }
 
 // storeAndProcessReceipts stores receipts and indexes logs using appropriate processing strategy
-func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, block *types.Block, receipts types.Receipts, height uint64) error {
+func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, fb *fetchedBlock) error {
+	block, receipts, height := fb.geth, fb.gethReceipts, fb.height()
 	// Use large block processor for blocks exceeding threshold
 	if f.largeBlockProcessor.ShouldProcessInBatches(block, receipts) {
 		f.logger.Info("Using parallel processing for large block",
@@ -205,7 +209,7 @@ func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, block *types.Bloc
 			}
 		}
 	} else {
-		if err := f.storeReceiptsSequential(ctx, receipts); err != nil {
+		if err := f.storeReceiptsSequential(ctx, fb); err != nil {
 			return err
 		}
 	}
@@ -215,9 +219,16 @@ func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, block *types.Bloc
 
 // storeReceiptsSequential stores receipts, indexes their logs and parses
 // system contract events one receipt at a time.
-func (f *Fetcher) storeReceiptsSequential(ctx context.Context, receipts types.Receipts) error {
-	for _, receipt := range receipts {
-		if err := f.storage.SetReceipt(ctx, receipt); err != nil {
+func (f *Fetcher) storeReceiptsSequential(ctx context.Context, fb *fetchedBlock) error {
+	mw, modelStore := f.storage.(storagepkg.ModelWriter)
+	for i, receipt := range fb.gethReceipts {
+		var err error
+		if modelStore {
+			err = mw.SetModelReceipt(ctx, fb.receipts[i])
+		} else {
+			err = f.storage.SetReceipt(ctx, receipt)
+		}
+		if err != nil {
 			return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
 		}
 
@@ -252,11 +263,6 @@ func (f *Fetcher) storeReceiptsSequential(ctx context.Context, receipts types.Re
 
 // fetchBlockJob fetches a single block and its receipts with retry logic
 func (f *Fetcher) fetchBlockJob(ctx context.Context, height uint64) *jobResult {
-	var block *types.Block
-	var receipts types.Receipts
-	var err error
-
-	// Retry logic for fetching block with exponential backoff
 	for attempt := 0; attempt <= f.config.MaxRetries; attempt++ {
 		if attempt > 0 {
 			// Exponential backoff: delay = baseDelay * 2^(attempt-1)
@@ -279,50 +285,23 @@ func (f *Fetcher) fetchBlockJob(ctx context.Context, height uint64) *jobResult {
 		default:
 		}
 
-		// Fetch block - use chain adapter if available (for EIP-4844 compatibility)
-		block, err = f.getBlock(ctx, height)
-		if err != nil {
-			f.logger.Error("Failed to fetch block",
-				zap.Uint64("height", height),
-				zap.Int("attempt", attempt),
-				zap.Error(err),
-			)
-			if attempt == f.config.MaxRetries {
-				return &jobResult{
-					height: height,
-					err:    fmt.Errorf("failed to fetch block after %d attempts: %w", f.config.MaxRetries, err),
-				}
-			}
-			continue
+		fb, err := f.fetchOnce(ctx, height)
+		if err == nil {
+			return &jobResult{height: height, block: fb}
 		}
-
-		// Fetch receipts - use chain adapter if available
-		receipts, err = f.getReceipts(ctx, height)
-		if err != nil {
-			f.logger.Error("Failed to fetch receipts",
-				zap.Uint64("height", height),
-				zap.Int("attempt", attempt),
-				zap.Error(err),
-			)
-			if attempt == f.config.MaxRetries {
-				return &jobResult{
-					height: height,
-					err:    fmt.Errorf("failed to fetch receipts after %d attempts: %w", f.config.MaxRetries, err),
-				}
+		f.logger.Error("Failed to fetch block",
+			zap.Uint64("height", height),
+			zap.Int("attempt", attempt),
+			zap.Error(err),
+		)
+		if attempt == f.config.MaxRetries {
+			return &jobResult{
+				height: height,
+				err:    fmt.Errorf("failed to fetch block after %d attempts: %w", f.config.MaxRetries, err),
 			}
-			continue
 		}
-
-		// Success - break retry loop
-		break
 	}
-
-	return &jobResult{
-		height:   height,
-		block:    block,
-		receipts: receipts,
-		err:      nil,
-	}
+	return &jobResult{height: height, err: fmt.Errorf("failed to fetch block %d: no attempts", height)}
 }
 
 // GetNextHeight determines the next block height to fetch
