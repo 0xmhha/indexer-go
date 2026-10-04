@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
+	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -550,14 +550,14 @@ func (f *Fetcher) processBalanceTracking(ctx context.Context, fb *fetchedBlock) 
 }
 
 // delegatedFeePayer returns the account paying gas for tx when it is not the
-// sender. Blocks decoded by the StableNet profile carry it on the
-// transaction; blocks read through the legacy client fall back to the stored
-// fee delegation metadata.
+// sender. Blocks decoded by a chain profile carry it on the transaction
+// (chains.FeeDelegationOf); blocks read through the legacy client fall back
+// to the stored fee delegation metadata.
 func (f *Fetcher) delegatedFeePayer(ctx context.Context, tx *model.Transaction) (common.Address, bool) {
-	if fd, ok := stablenet.FeeDelegationOf(tx); ok {
-		return fd.FeePayer, true
+	if fd, ok := chains.FeeDelegationOf(tx); ok {
+		return fd.Payer, true
 	}
-	if tx.Type != stablenet.FeeDelegationTxType {
+	if !chains.IsFeeDelegationType(tx.Type) {
 		return common.Address{}, false
 	}
 	if fdReader, ok := f.storage.(storagepkg.FeeDelegationReader); ok {

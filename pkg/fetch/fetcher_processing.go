@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
+	"github.com/0xmhha/indexer-go/pkg/chains"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -64,7 +64,7 @@ func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, fb *fetchedB
 	// Blocks decoded by a chain profile carry the fee payer themselves.
 	if f.src != nil {
 		for _, tx := range fb.block.Transactions {
-			fd, ok := stablenet.FeeDelegationOf(tx)
+			fd, ok := chains.FeeDelegationOf(tx)
 			if !ok {
 				continue
 			}
@@ -72,7 +72,7 @@ func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, fb *fetchedB
 				TxHash:       tx.Hash,
 				BlockNumber:  height,
 				OriginalType: tx.Type,
-				FeePayer:     fd.FeePayer,
+				FeePayer:     fd.Payer,
 				FeePayerV:    fd.V,
 				FeePayerR:    fd.R,
 				FeePayerS:    fd.S,

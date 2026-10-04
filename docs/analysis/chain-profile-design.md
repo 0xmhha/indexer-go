@@ -332,3 +332,20 @@ CP-1과 CP-2는 기존 코드에 영향 없이 새 패키지로 만들 수 있�
 - watchlist 처리기(`pkg/watchlist`)는 go-ethereum 보기로 블록 hash를 계산한다. 현재 연결되어 있지 않아 이번 범위에서 뺐다. 연결할 때 모델로 옮겨야 한다.
 - 이벤트 페이로드(`events.BlockEvent.Block`, `TransactionEvent.Tx`)는 아직 go-ethereum 타입이다. hash 필드는 모델 값이지만 페이로드에서 hash를 다시 계산하는 구독자가 생기면 틀린다.
 - `gethconv`(임시 다리)는 저장 계층의 go-ethereum 메서드, 기존 클라이언트 경로, 남은 처리기가 쓰므로 아직 지우지 못한다. S5와 처리기 이전이 끝나면 지운다.
+
+### 체인 결합 제거: fee delegation 등록 방식 (10/5)
+
+**문제.** S4와 CP-5에서 범용 수집기(`pkg/fetch`)와 API(`pkg/api/graphql`, `pkg/api/jsonrpc`)가 fee payer를 알아내려고 `pkg/chains/stablenet`을 직접 import했다. 다른 체인에 비슷한 기능(가스 대납)이 생기면 범용 코드를 고쳐야 하는 구조였다.
+
+**바꾼 것.**
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/chains/feedelegation.go` | 체인 중립 등록 방식. `FeeDelegationScheme{Name, Types, Of}`를 `RegisterFeeDelegation`으로 등록하고, 범용 코드는 `FeeDelegationOf`, `IsFeeDelegationType`, `GasPayer`만 부른다. 이름이나 거래 type이 겹치면 등록할 때 panic한다 |
+| `pkg/chains/stablenet` | `init`에서 type 0x16 방식을 등록한다. `stablenet.FeeDelegationOf`는 프로필 전용 접근자로 남는다 |
+| `pkg/fetch`, `pkg/api` | `pkg/chains`의 함수만 쓴다. 기존 경로용 메타 조회 fallback은 `IsFeeDelegationType`으로 판단한다 |
+| `TestChainNeutralPackagesDoNotImportProfiles` | `pkg/fetch`, `pkg/api`, `pkg/source`가 `pkg/chains/<프로필>`을 import하면 실패한다. 위반 import를 임시로 넣어 실패하는 것을 확인했다 |
+
+프로필은 `main.go`의 blank import로 연결된다. 프로필을 연결하지 않은 바이너리(또는 시험)에서는 0x16 거래가 fee delegation으로 인식되지 않는다. 이 점은 프로필 감지와 같은 방식이다.
+
+**남긴 것.** WBFT 메타데이터 처리(`fetcher_consensus.go`가 `storage.ParseWBFTExtra`를 부른다)와 시스템 컨트랙트 이벤트 처리는 아직 범용 수집기 안에 있다. 이 둘은 블록 단위 처리기를 등록하는 구조가 필요하다. 그래서 기능 레지스트리(refactoring-plan R2-5)와 기능 모듈 이전(R2-6)에서 함께 옮긴다.

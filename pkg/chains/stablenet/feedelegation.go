@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 
+	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/chains/evm"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 )
@@ -51,6 +52,17 @@ type feeDelegationRecord struct {
 }
 
 func init() {
+	chains.RegisterFeeDelegation(chains.FeeDelegationScheme{
+		Name:  ID,
+		Types: []uint8{FeeDelegationTxType},
+		Of: func(tx *model.Transaction) (*chains.FeeDelegation, bool) {
+			fd, ok := FeeDelegationOf(tx)
+			if !ok {
+				return nil, false
+			}
+			return &chains.FeeDelegation{Payer: fd.FeePayer, V: fd.V, R: fd.R, S: fd.S}, true
+		},
+	})
 	model.RegisterExtCodec(feeDelegationKey, model.ExtCodec{
 		Encode: func(v any) ([]byte, error) {
 			fd, ok := v.(*FeeDelegation)

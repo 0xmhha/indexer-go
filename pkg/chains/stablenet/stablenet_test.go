@@ -228,3 +228,17 @@ func TestFeeDelegationSurvivesStorageEncoding(t *testing.T) {
 	_, ok = stablenet.FeeDelegationOf(got.Transactions[0])
 	require.False(t, ok)
 }
+
+func TestFeeDelegationIsRegisteredWithChains(t *testing.T) {
+	v := loadVectors(t)
+	b, err := stablenet.New().DecodeBlock(v.Blocks["33"])
+	require.NoError(t, err)
+
+	require.True(t, chains.IsFeeDelegationType(stablenet.FeeDelegationTxType))
+	fdTx := b.Transactions[1]
+	fd, ok := chains.FeeDelegationOf(fdTx)
+	require.True(t, ok)
+	require.Equal(t, stablenet.FeePayerOf(fdTx), fd.Payer)
+	require.Equal(t, fd.Payer, chains.GasPayer(fdTx))
+	require.Equal(t, b.Transactions[0].From, chains.GasPayer(b.Transactions[0]))
+}
