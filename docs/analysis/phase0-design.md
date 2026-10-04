@@ -534,3 +534,21 @@ golden 키 공간은 의도한 세 키만 늘었다. `/data/syscontracts/mint/�
 **기존 시험 race.** `pkg/events`의 `TestMetrics_FilteredEvents`가 race 검사에서 가끔 실패했다(변경 전 커밋 5회 중 1회). 원인은 시험 코드의 카운터를 잠금 없이 쓰는 것이었고, atomic으로 바꿨다. 별도 프로세스로 10회 돌려 실패 0회를 확인했다. 한 프로세스에서 `-count`를 2 이상 주면 Prometheus metric 중복 등록으로 panic이 나는데, 이것은 원래 시험 구조의 문제라 이번에는 고치지 않았다.
 
 **Etherscan 검증 상태 race(새로 찾음).** race 검사에서 `pkg/api/etherscan`이 실패했다(변경 전 커밋 3회 중 3회). 원인은 운영 코드에 있었다. 검증 상태 조회가 잠금 안에서 job 포인터만 꺼내고, 잠금을 푼 뒤 상태 필드를 읽었다. 그 사이 백그라운드 검증 고루틴이 같은 필드를 쓴다. 상태와 메시지를 잠금 안에서 복사하도록 고쳤고, 시험도 같은 방식으로 읽게 했다. race 검사 5회 모두 통과했다. 그 시험은 job이 아직 "Pending"이라고 가정한다. 검증 고루틴이 아주 빨리 끝나면 불안정해질 수 있다(5회 중 실패 없음).
+
+### P0-12: 설정 정리와 멀티체인 차단 (10/3, F4·D4 임시 조치)
+
+| 항목 | 수정 | 시험 |
+|---|---|---|
+| CLI 기본값이 설정 파일을 덮음 | 플래그 파싱을 `parseFlagsFrom`(FlagSet)으로 바꾸고 `fs.Visit`으로 명시한 플래그만 기록한다. `applyFlags`와 `applyAPIFlags`는 명시한 플래그만 적용한다 | `TestFlagsOnlyOverrideWhenGiven`(파일의 workers 7 유지, `--workers 3` 적용) |
+| bool 플래그로 끌 수 없음 | 명시한 값을 그대로 적용한다 | 같은 시험(`--api=false`) |
+| 검증이 플래그 적용 전 | `config.LoadUnvalidated`를 추가했다. `main`은 플래그를 적용한 뒤 `Validate`를 부른다. `config.Load`는 그대로 검증까지 한다 | `TestFlagsCanSupplyRequiredValues` |
+| 기본 설정 파일이 없으면 오류 | `--config`를 주지 않았고 `config.yaml`이 없으면 파일 없이 시작한다. 명시한 파일이 없으면 지금처럼 오류다 | `TestDefaultConfigFileIsOptional` |
+| D4 멀티체인 | 체인이 설정된 채로 켜면 시작을 거부한다 | `TestStartupRejectsUnsafeModes/multichain` |
+| `database.readonly` 무시 | 켜면 시작을 거부한다 | `TestStartupRejectsUnsafeModes/readonly` |
+| 무시되는 설정 | `Config.UnsupportedSettings`가 목록을 만들고, 시작 로그에 경고로 남긴다 | `TestUnsupportedSettings` |
+
+이 시험들은 새 함수(`parseFlagsFrom`, `LoadUnvalidated`)를 쓰므로 수정 전 코드에서는 돌릴 수 없다. 수정 전 동작은 코드를 읽어 판단했다.
+
+`docs/CONFIG.md`의 우선순위, CLI, 멀티체인 절에 바뀐 동작을 적었다.
+
+P0-4에서 고친 Etherscan 시험이 한 번 실패했다. 검증 고루틴이 먼저 끝나 상태가 "Pending"이 아니었던 경우다. 이 시험은 job 생성을 확인하는 것이 목적이므로, 상태가 알려진 세 값 중 하나인지만 확인하도록 바꿨다(race 검사와 함께 10회 통과).

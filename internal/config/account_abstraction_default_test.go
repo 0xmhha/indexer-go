@@ -47,3 +47,14 @@ func TestAtomicBlockDefault(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, cfg.Indexer.AtomicBlock, "environment overrides the default")
 }
+
+func TestUnsupportedSettings(t *testing.T) {
+	cfg := NewConfig()
+	require.Empty(t, cfg.UnsupportedSettings(), "defaults must not warn")
+
+	cfg.EventBus.Type = "kafka"
+	cfg.Watchlist.Enabled = true
+	cfg.Resilience.Enabled = true
+	cfg.AccountAbstraction.EntryPointAddresses = []string{"0x01"}
+	require.Len(t, cfg.UnsupportedSettings(), 4)
+}

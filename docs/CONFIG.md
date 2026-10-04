@@ -9,6 +9,14 @@
 3. **환경변수**
 4. **CLI 플래그** (최우선)
 
+CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 기본값(예: `--workers`의 100)은 설정 파일 값을 덮지 않는다. bool 플래그는 끄는 쪽으로도 쓸 수 있다(`--api=false`). 설정 검증은 플래그를 적용한 뒤에 하므로, 설정 파일에 없는 필수값(`rpc.endpoint`, `database.path`)을 플래그로 줄 수 있다. `--config`를 주지 않았고 `config.yaml`도 없으면 기본값, 환경 변수, 플래그만으로 시작한다. `--config`로 지정한 파일이 없으면 오류다.
+
+다음 설정은 시작할 때 거부된다.
+- `multichain.enabled: true`(체인이 하나라도 있을 때): 모든 체인이 같은 저장 키를 써서 서로 덮어쓰는 결함이 있다. 체인별 저장 공간을 나누는 작업 뒤에 다시 연다.
+- `database.readonly: true`: 수집기는 써야 한다. API 전용 실행은 별도 작업으로 계획되어 있다.
+
+다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.*`, `watchlist.enabled`, `resilience.enabled`, `account_abstraction.entry_point_addresses`.
+
 ---
 
 ## config.yaml (권장)
@@ -114,6 +122,8 @@ eventbus:
 ```
 
 ### Multi-Chain
+
+> 현재 비활성화되어 있다. 체인이 설정된 상태로 `enabled: true`이면 시작을 거부한다(모든 체인이 같은 저장 키를 써서 데이터가 섞이는 결함 때문).
 
 ```yaml
 multichain:
@@ -224,7 +234,7 @@ node:
   --db string               데이터베이스 경로
 
 # 인덱서
-  --workers int             병렬 워커 수 (default: 100)
+  --workers int             병렬 워커 수 (명시했을 때만 indexer.workers를 덮음)
   --batch-size int          배치당 블록 수 (default: 100)
   --start-height uint       시작 블록 높이 (default: 0)
   --gap-recovery            갭 감지 및 복구 활성화

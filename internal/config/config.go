@@ -1080,6 +1080,20 @@ func (c *Config) Validate() error {
 // 3. Load from environment variables (override file)
 // 4. Validate
 func Load(configFile string) (*Config, error) {
+	cfg, err := LoadUnvalidated(configFile)
+	if err != nil {
+		return nil, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+	return cfg, nil
+}
+
+// LoadUnvalidated loads defaults, the config file and environment variables
+// without validating, so that command-line flags can still supply required
+// values before Validate runs.
+func LoadUnvalidated(configFile string) (*Config, error) {
 	cfg := NewConfig()
 
 	// Load from file if provided
@@ -1097,10 +1111,24 @@ func Load(configFile string) (*Config, error) {
 	// Set defaults for any missing values
 	cfg.SetDefaults()
 
-	// Validate configuration
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
-	}
-
 	return cfg, nil
+}
+
+// UnsupportedSettings lists settings that are read but have no effect yet,
+// so startup can warn instead of silently ignoring them.
+func (c *Config) UnsupportedSettings() []string {
+	var out []string
+	if c.EventBus.Type != "" && c.EventBus.Type != "local" {
+		out = append(out, fmt.Sprintf("eventbus.type=%q is not wired; the in-process event bus is used (node.* settings are ignored too)", c.EventBus.Type))
+	}
+	if c.Watchlist.Enabled {
+		out = append(out, "watchlist.enabled is not wired; the watchlist service does not run")
+	}
+	if c.Resilience.Enabled {
+		out = append(out, "resilience.enabled is not wired; session persistence and event replay do not run")
+	}
+	if len(c.AccountAbstraction.EntryPointAddresses) > 0 {
+		out = append(out, "account_abstraction.entry_point_addresses is not supported yet; known EntryPoint addresses are used")
+	}
+	return out
 }

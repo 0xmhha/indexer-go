@@ -97,6 +97,10 @@ func run() error {
 	}
 	defer func() { _ = log.Sync() }()
 
+	for _, msg := range cfg.UnsupportedSettings() {
+		log.Warn("Unsupported setting ignored", zap.String("detail", msg))
+	}
+
 	// Log startup information
 	logStartupInfo(log, cfg, flags)
 
@@ -172,52 +176,84 @@ type Flags struct {
 	enableJSONRPC    bool
 	enableWebSocket  bool
 	forceAdapterType string // Force specific adapter type: anvil, stableone, evm
+
+	// set records the flags given on the command line. Only those override
+	// the configuration, so flag defaults never replace config values and
+	// boolean flags can switch features off as well as on.
+	set map[string]bool
 }
 
-// parseFlags parses command-line flags
+// parseFlags parses the process command line.
 func parseFlags() *Flags {
-	f := &Flags{}
+	f, err := parseFlagsFrom(os.Args[1:], flag.ExitOnError)
+	if err != nil {
+		// unreachable with ExitOnError
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	return f
+}
 
-	flag.StringVar(&f.configFile, "config", "config.yaml", "Path to configuration file (YAML)")
-	flag.BoolVar(&f.showVersion, "version", false, "Show version information and exit")
-	flag.StringVar(&f.rpcEndpoint, "rpc", "", "Ethereum RPC endpoint URL")
-	flag.StringVar(&f.dbPath, "db", "", "Database path")
-	flag.Uint64Var(&f.startHeight, "start-height", 0, "Block height to start indexing from")
-	flag.IntVar(&f.workers, "workers", 100, "Number of concurrent workers")
-	flag.IntVar(&f.batchSize, "batch-size", 0, "Number of blocks per batch (0 = use config.yaml)")
-	flag.StringVar(&f.logLevel, "log-level", "", "Log level (debug, info, warn, error)")
-	flag.StringVar(&f.logFormat, "log-format", "", "Log format (json, console)")
-	flag.BoolVar(&f.enableGapMode, "gap-recovery", false, "Enable gap detection and recovery at startup")
-	flag.BoolVar(&f.clearData, "clear-data", false, "Clear (delete) the data folder before starting")
-	flag.BoolVar(&f.reindex, "reindex", false, "Clear blockchain data only, preserving verification data (ABIs, source code, verification status)")
+// parseFlagsFrom parses args with a fresh flag set (testable).
+func parseFlagsFrom(args []string, onError flag.ErrorHandling) (*Flags, error) {
+	f := &Flags{set: map[string]bool{}}
+	fs := flag.NewFlagSet("indexer", onError)
+
+	fs.StringVar(&f.configFile, "config", "config.yaml", "Path to configuration file (YAML)")
+	fs.BoolVar(&f.showVersion, "version", false, "Show version information and exit")
+	fs.StringVar(&f.rpcEndpoint, "rpc", "", "Ethereum RPC endpoint URL")
+	fs.StringVar(&f.dbPath, "db", "", "Database path")
+	fs.Uint64Var(&f.startHeight, "start-height", 0, "Block height to start indexing from")
+	fs.IntVar(&f.workers, "workers", 100, "Number of concurrent workers")
+	fs.IntVar(&f.batchSize, "batch-size", 0, "Number of blocks per batch (0 = use config.yaml)")
+	fs.StringVar(&f.logLevel, "log-level", "", "Log level (debug, info, warn, error)")
+	fs.StringVar(&f.logFormat, "log-format", "", "Log format (json, console)")
+	fs.BoolVar(&f.enableGapMode, "gap-recovery", false, "Enable gap detection and recovery at startup")
+	fs.BoolVar(&f.clearData, "clear-data", false, "Clear (delete) the data folder before starting")
+	fs.BoolVar(&f.reindex, "reindex", false, "Clear blockchain data only, preserving verification data (ABIs, source code, verification status)")
 
 	// API server flags
-	flag.BoolVar(&f.enableAPI, "api", false, "Enable API server")
-	flag.StringVar(&f.apiHost, "api-host", "", "API server host")
-	flag.IntVar(&f.apiPort, "api-port", 0, "API server port")
-	flag.BoolVar(&f.enableGraphQL, "graphql", false, "Enable GraphQL API")
-	flag.BoolVar(&f.enableJSONRPC, "jsonrpc", false, "Enable JSON-RPC API")
-	flag.BoolVar(&f.enableWebSocket, "websocket", false, "Enable WebSocket API")
+	fs.BoolVar(&f.enableAPI, "api", false, "Enable API server")
+	fs.StringVar(&f.apiHost, "api-host", "", "API server host")
+	fs.IntVar(&f.apiPort, "api-port", 0, "API server port")
+	fs.BoolVar(&f.enableGraphQL, "graphql", false, "Enable GraphQL API")
+	fs.BoolVar(&f.enableJSONRPC, "jsonrpc", false, "Enable JSON-RPC API")
+	fs.BoolVar(&f.enableWebSocket, "websocket", false, "Enable WebSocket API")
 
 	// Chain adapter flags
-	flag.StringVar(&f.forceAdapterType, "adapter", "", "Force specific adapter type (anvil, stableone, evm). Auto-detected if empty")
+	fs.StringVar(&f.forceAdapterType, "adapter", "", "Force specific adapter type (anvil, stableone, evm). Auto-detected if empty")
 
-	flag.Parse()
-	return f
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	fs.Visit(func(fl *flag.Flag) { f.set[fl.Name] = true })
+	return f, nil
 }
 
 // loadAndValidateConfig loads configuration and applies flags
 func loadAndValidateConfig(flags *Flags) (*config.Config, error) {
-	cfg, err := loadConfig(flags.configFile)
+	// The default config path is optional: without --config and without
+	// config.yaml, defaults, environment variables and flags are used.
+	// An explicitly given --config must exist.
+	configFile := flags.configFile
+	if !flags.set["config"] {
+		if _, statErr := os.Stat(configFile); errors.Is(statErr, os.ErrNotExist) {
+			configFile = ""
+		}
+	}
+	cfg, err := config.LoadUnvalidated(configFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Override config with command-line flags
-	applyFlags(cfg, flags.rpcEndpoint, flags.dbPath, flags.startHeight, flags.workers, flags.batchSize, flags.logLevel, flags.logFormat)
-	applyAPIFlags(cfg, flags.enableAPI, flags.apiHost, flags.apiPort, flags.enableGraphQL, flags.enableJSONRPC, flags.enableWebSocket)
+	// Override config with flags given on the command line, then validate,
+	// so that flags can supply values the file leaves out.
+	applyFlags(cfg, flags)
+	applyAPIFlags(cfg, flags)
 
-	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
 	if err := validateConfig(cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -930,60 +966,51 @@ func (a *App) Shutdown() {
 	a.logger.Info("Application stopped")
 }
 
-// loadConfig loads configuration from YAML file
-func loadConfig(configFile string) (*config.Config, error) {
-	cfg, err := config.Load(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
+// applyFlags applies command-line flags that were given explicitly.
+func applyFlags(cfg *config.Config, f *Flags) {
+	if f.set["rpc"] {
+		cfg.RPC.Endpoint = f.rpcEndpoint
 	}
-
-	return cfg, nil
-}
-
-// applyFlags applies command-line flags to configuration
-func applyFlags(cfg *config.Config, rpcEndpoint, dbPath string, startHeight uint64, workers, batchSize int, logLevel, logFormat string) {
-	if rpcEndpoint != "" {
-		cfg.RPC.Endpoint = rpcEndpoint
+	if f.set["db"] {
+		cfg.Database.Path = f.dbPath
 	}
-	if dbPath != "" {
-		cfg.Database.Path = dbPath
+	if f.set["start-height"] {
+		cfg.Indexer.StartHeight = f.startHeight
 	}
-	if startHeight > 0 {
-		cfg.Indexer.StartHeight = startHeight
+	if f.set["workers"] {
+		cfg.Indexer.Workers = f.workers
 	}
-	if workers > 0 {
-		cfg.Indexer.Workers = workers
+	if f.set["batch-size"] {
+		cfg.Indexer.ChunkSize = f.batchSize
 	}
-	if batchSize > 0 {
-		cfg.Indexer.ChunkSize = batchSize
+	if f.set["log-level"] {
+		cfg.Log.Level = f.logLevel
 	}
-	if logLevel != "" {
-		cfg.Log.Level = logLevel
-	}
-	if logFormat != "" {
-		cfg.Log.Format = logFormat
+	if f.set["log-format"] {
+		cfg.Log.Format = f.logFormat
 	}
 }
 
-// applyAPIFlags applies API-related command-line flags to configuration
-func applyAPIFlags(cfg *config.Config, enableAPI bool, apiHost string, apiPort int, enableGraphQL, enableJSONRPC, enableWebSocket bool) {
-	if enableAPI {
-		cfg.API.Enabled = true
+// applyAPIFlags applies API-related command-line flags that were given
+// explicitly. Boolean flags apply both ways (--api=false disables the API).
+func applyAPIFlags(cfg *config.Config, f *Flags) {
+	if f.set["api"] {
+		cfg.API.Enabled = f.enableAPI
 	}
-	if apiHost != "" {
-		cfg.API.Host = apiHost
+	if f.set["api-host"] {
+		cfg.API.Host = f.apiHost
 	}
-	if apiPort > 0 {
-		cfg.API.Port = apiPort
+	if f.set["api-port"] {
+		cfg.API.Port = f.apiPort
 	}
-	if enableGraphQL {
-		cfg.API.EnableGraphQL = true
+	if f.set["graphql"] {
+		cfg.API.EnableGraphQL = f.enableGraphQL
 	}
-	if enableJSONRPC {
-		cfg.API.EnableJSONRPC = true
+	if f.set["jsonrpc"] {
+		cfg.API.EnableJSONRPC = f.enableJSONRPC
 	}
-	if enableWebSocket {
-		cfg.API.EnableWebSocket = true
+	if f.set["websocket"] {
+		cfg.API.EnableWebSocket = f.enableWebSocket
 	}
 }
 
@@ -1000,6 +1027,12 @@ func validateConfig(cfg *config.Config) error {
 	}
 	if cfg.Indexer.ChunkSize <= 0 {
 		return fmt.Errorf("batch size must be positive")
+	}
+	if cfg.MultiChain.Enabled && len(cfg.MultiChain.Chains) > 0 {
+		return fmt.Errorf("multichain mode is disabled: all chains would share the same storage keys and overwrite each other (refactoring plan D4, R2-8)")
+	}
+	if cfg.Database.ReadOnly {
+		return fmt.Errorf("database.readonly is not supported: the indexer must write; an API-only role is planned (refactoring plan R4-1)")
 	}
 	return nil
 }
@@ -1174,9 +1207,6 @@ func (a *App) registerFeatureProcessors() {
 		}
 		if s, ok := a.storage.(fetch.ModuleIndexer); ok {
 			a.fetcher.SetModuleProcessor(fetch.NewModuleProcessor(a.logger, s))
-		}
-		if len(a.config.AccountAbstraction.EntryPointAddresses) > 0 {
-			a.logger.Warn("account_abstraction.entry_point_addresses is not supported yet; known EntryPoint addresses are used")
 		}
 	}
 	// Fee delegation (type 0x16) exists only on StableNet nodes.
