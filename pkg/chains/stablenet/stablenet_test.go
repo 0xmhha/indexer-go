@@ -17,6 +17,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/chains/evm"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 )
 
 // liveVectors were captured from a local go-stablenet network (Gstable
@@ -198,4 +199,32 @@ func TestSyntheticFeeDelegation(t *testing.T) {
 		_, err := stablenet.DecodeFeeDelegationTx(raw)
 		require.ErrorContains(t, err, "feePayer")
 	})
+}
+
+func TestFeeDelegationSurvivesStorageEncoding(t *testing.T) {
+	v := loadVectors(t)
+	b, err := stablenet.New().DecodeBlock(v.Blocks["33"])
+	require.NoError(t, err)
+
+	enc, err := model.EncodeBlock(b)
+	require.NoError(t, err)
+	got, err := model.DecodeBlock(enc)
+	require.NoError(t, err)
+	require.Equal(t, b.Hash, got.Hash)
+
+	want, _ := stablenet.FeeDelegationOf(b.Transactions[1])
+	tx := got.Transactions[1]
+	fd, ok := stablenet.FeeDelegationOf(tx)
+	require.True(t, ok)
+	require.Equal(t, want.FeePayer, fd.FeePayer)
+	require.Zero(t, want.V.Cmp(fd.V))
+	require.Zero(t, want.R.Cmp(fd.R))
+	require.Zero(t, want.S.Cmp(fd.S))
+	require.Equal(t, want.SenderHash, fd.SenderHash)
+	require.Equal(t, b.Transactions[1].Hash, tx.Hash)
+	require.Equal(t, b.Transactions[1].Raw, tx.Raw)
+	require.Equal(t, uint8(stablenet.FeeDelegationTxType), tx.Type)
+
+	_, ok = stablenet.FeeDelegationOf(got.Transactions[0])
+	require.False(t, ok)
 }

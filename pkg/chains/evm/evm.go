@@ -95,9 +95,11 @@ func (p *Profile) Features() []string               { return append([]string(nil
 
 // rpcBlock carries the parts of a block response that are not header fields.
 type rpcBlock struct {
-	Hash         common.Hash       `json:"hash"`
-	Size         *hexutil.Uint64   `json:"size"`
-	Transactions []json.RawMessage `json:"transactions"`
+	Hash         common.Hash         `json:"hash"`
+	Size         *hexutil.Uint64     `json:"size"`
+	Transactions []json.RawMessage   `json:"transactions"`
+	Uncles       []common.Hash       `json:"uncles"`
+	Withdrawals  []*types.Withdrawal `json:"withdrawals"`
 }
 
 // DecodeBlock implements chains.Profile.
@@ -120,6 +122,13 @@ func (p *Profile) DecodeBlock(raw json.RawMessage) (*model.Block, error) {
 	b.Hash = body.Hash
 	if body.Size != nil {
 		b.Size = uint64(*body.Size)
+	}
+	b.Uncles = body.Uncles
+	if body.Withdrawals != nil {
+		b.Withdrawals = make([]model.Withdrawal, 0, len(body.Withdrawals))
+		for _, w := range body.Withdrawals {
+			b.Withdrawals = append(b.Withdrawals, model.Withdrawal{Index: w.Index, Validator: w.Validator, Address: w.Address, Amount: w.Amount})
+		}
 	}
 	b.Transactions = make([]*model.Transaction, 0, len(body.Transactions))
 	for i, rawTx := range body.Transactions {
@@ -184,6 +193,17 @@ func FromGethTx(tx *types.Transaction) (*model.Transaction, error) {
 	if err != nil {
 		return nil, fmt.Errorf("recover sender of %s: %w", tx.Hash().Hex(), err)
 	}
+	m, err := ConvertGethTx(tx)
+	if err != nil {
+		return nil, err
+	}
+	m.From = from
+	return m, nil
+}
+
+// ConvertGethTx converts a go-ethereum transaction to the model without
+// recovering the sender (From is left zero).
+func ConvertGethTx(tx *types.Transaction) (*model.Transaction, error) {
 	raw, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("encode %s: %w", tx.Hash().Hex(), err)
@@ -193,7 +213,6 @@ func FromGethTx(tx *types.Transaction) (*model.Transaction, error) {
 		Hash:      tx.Hash(),
 		Type:      tx.Type(),
 		Nonce:     tx.Nonce(),
-		From:      from,
 		To:        tx.To(),
 		Value:     tx.Value(),
 		Gas:       tx.Gas(),

@@ -43,7 +43,17 @@ type Block struct {
 	Size             uint64
 
 	Transactions []*Transaction
+	Uncles       []common.Hash // uncle block hashes, in order
+	Withdrawals  []Withdrawal  // nil when the block has no withdrawals list
 	Ext          Extensions
+}
+
+// Withdrawal is an EIP-4895 validator withdrawal.
+type Withdrawal struct {
+	Index     uint64
+	Validator uint64
+	Address   common.Address
+	Amount    uint64 // in gwei
 }
 
 // Transaction is a chain-neutral transaction.

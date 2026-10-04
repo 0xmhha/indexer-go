@@ -42,6 +42,33 @@ type FeeDelegation struct {
 
 var feeDelegationKey = model.NewExtKey("stablenet.fee_delegation")
 
+// feeDelegationRecord is the stored form of FeeDelegation. Fields may only be
+// appended.
+type feeDelegationRecord struct {
+	FeePayer   common.Address
+	V, R, S    *big.Int
+	SenderHash common.Hash
+}
+
+func init() {
+	model.RegisterExtCodec(feeDelegationKey, model.ExtCodec{
+		Encode: func(v any) ([]byte, error) {
+			fd, ok := v.(*FeeDelegation)
+			if !ok {
+				return nil, fmt.Errorf("stablenet: fee delegation extension holds %T", v)
+			}
+			return rlp.EncodeToBytes(&feeDelegationRecord{fd.FeePayer, fd.V, fd.R, fd.S, fd.SenderHash})
+		},
+		Decode: func(data []byte) (any, error) {
+			var r feeDelegationRecord
+			if err := rlp.DecodeBytes(data, &r); err != nil {
+				return nil, err
+			}
+			return &FeeDelegation{FeePayer: r.FeePayer, V: r.V, R: r.R, S: r.S, SenderHash: r.SenderHash}, nil
+		},
+	})
+}
+
 // FeeDelegationOf returns the fee delegation data of tx, if it has any.
 func FeeDelegationOf(tx *model.Transaction) (*FeeDelegation, bool) {
 	fd, ok := tx.Ext.Get(feeDelegationKey).(*FeeDelegation)
