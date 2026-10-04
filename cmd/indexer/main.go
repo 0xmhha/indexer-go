@@ -686,6 +686,7 @@ func (a *App) initAPIServer() error {
 		WebSocketPath:         constants.DefaultWebSocketPath,
 		ShutdownTimeout:       constants.DefaultShutdownTimeout,
 	}
+	apiConfig.EnableWebSocketKeepAlive = a.config.API.EnableWebSocketKeepAlive
 
 	// Create API server with optional RPC Proxy, Notification Service, and Verifier
 	serverOpts := &api.ServerOptions{

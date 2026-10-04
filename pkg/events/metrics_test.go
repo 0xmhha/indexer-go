@@ -2,6 +2,7 @@ package events
 
 import (
 	"math/big"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -183,10 +184,10 @@ func TestMetrics_FilteredEvents(t *testing.T) {
 	}
 
 	// Drain channel
-	received := 0
+	var received atomic.Int32 // written by the drain goroutine, read below
 	go func() {
 		for range sub.Channel {
-			received++
+			received.Add(1)
 		}
 	}()
 
@@ -206,8 +207,8 @@ func TestMetrics_FilteredEvents(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify only 1 event was received (the matching one)
-	if received != 1 {
-		t.Errorf("expected 1 received event, got %d", received)
+	if got := received.Load(); got != 1 {
+		t.Errorf("expected 1 received event, got %d", got)
 	}
 
 	// Cleanup

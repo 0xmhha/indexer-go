@@ -519,3 +519,18 @@ golden 키 공간은 의도한 세 키만 늘었다. `/data/syscontracts/mint/�
 | C4 context를 무시하는 sleep | `time.Sleep` 5곳(수집 루프 3곳, 재시도 backoff 2곳)을 `sleepCtx`로 바꿨다. 취소되면 `ctx.Err()`를 돌려준다 | `TestSleepCtxStopsOnCancel`, `TestRunStopsPromptlyWhileWaiting`. 수정 전 코드에서는 대기 1시간 설정에서 취소한 뒤에도 멈추지 않았다 |
 | C4 RPC timeout 없음 | `Config.RPCTimeout`(`rpc.timeout`에서 가져옴)으로 블록·receipt·최신 높이·잔액 조회를 호출마다 제한한다. 조회 코드의 중복도 `getBlock`, `getReceipts`로 합쳤다 | `TestRPCTimeoutBoundsCalls` |
 | 기존 race(시험용 mock) | `mockClient`의 실패 횟수 카운터를 잠금으로 보호했다 | `go test -race ./pkg/fetch`가 처음으로 통과했다 |
+
+### P0-4: WebSocket·이벤트 버스 (10/3, C2·C3·C5 수정)
+
+| 결함 | 수정 | 수정 전 코드에서의 시험 결과 |
+|---|---|---|
+| C2-1 구독 ID 충돌 | 연결마다 무작위 `connID`를 만들고 버스에는 `connID/클라이언트ID`로 등록·해제한다. 클라이언트에게는 계속 원래 ID로 응답한다 | `TestSubscriptionIDsAreScopedPerConnection` 실패: B가 같은 ID로 구독하자 A가 이벤트를 받지 못했다 |
+| C2-2 닫힌 채널에 send | `close(c.send)`를 없앴다. 쓰기 고루틴은 연결 context가 끝나면 close frame을 보내고 끝낸다. 보내는 쪽은 context 종료를 먼저 확인한다 | `TestSendAfterCleanupDoesNotPanic` 실패: panic |
+| C2-3 keepalive | `api.enable_websocket_keepalive`를 API 설정까지 전달하고, 기본값을 true로 했다(`NewConfig`). keepalive를 끄면 읽기 deadline도 걸지 않는다. 그래서 ping 없이 60초 뒤 끊기는 문제가 없다 | 시험 없음. 60초 대기가 필요해 코드 확인으로만 판단했다 |
+| C3 재귀 RLock | `GetSubscriberInfo`를 잠금을 잡는 겉 함수와 잠금 없는 `subscriberInfoLocked`로 나눴다. `GetAllSubscriberInfo`는 후자를 쓴다 | `TestGetAllSubscriberInfoUnderWriters` 실패: deadlock(40초 timeout) |
+| C5 `/ws` hub | broadcast에서 느린 클라이언트를 map에서 지울 때 쓰기 잠금을 잡는다 | 시험 없음 |
+| C5 rate limiter | `lastAccess`를 atomic 값(UnixNano)으로 바꿨다 | 시험 없음. 기존 시험을 새 타입에 맞췄다 |
+
+**기존 시험 race.** `pkg/events`의 `TestMetrics_FilteredEvents`가 race 검사에서 가끔 실패했다(변경 전 커밋 5회 중 1회). 원인은 시험 코드의 카운터를 잠금 없이 쓰는 것이었고, atomic으로 바꿨다. 별도 프로세스로 10회 돌려 실패 0회를 확인했다. 한 프로세스에서 `-count`를 2 이상 주면 Prometheus metric 중복 등록으로 panic이 나는데, 이것은 원래 시험 구조의 문제라 이번에는 고치지 않았다.
+
+**Etherscan 검증 상태 race(새로 찾음).** race 검사에서 `pkg/api/etherscan`이 실패했다(변경 전 커밋 3회 중 3회). 원인은 운영 코드에 있었다. 검증 상태 조회가 잠금 안에서 job 포인터만 꺼내고, 잠금을 푼 뒤 상태 필드를 읽었다. 그 사이 백그라운드 검증 고루틴이 같은 필드를 쓴다. 상태와 메시지를 잠금 안에서 복사하도록 고쳤고, 시험도 같은 방식으로 읽게 했다. race 검사 5회 모두 통과했다. 그 시험은 job이 아직 "Pending"이라고 가정한다. 검증 고루틴이 아주 빨리 끝나면 불안정해질 수 있다(5회 중 실패 없음).

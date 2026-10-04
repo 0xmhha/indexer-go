@@ -433,6 +433,9 @@ func NewConfig() *Config {
 	// Same reasoning: atomic block indexing is the default, and an explicit
 	// false in the file or INDEXER_ATOMIC_BLOCK=false selects the legacy path.
 	cfg.Indexer.AtomicBlock = true
+	// WebSocket keep-alive pings keep idle subscribers connected; it can be
+	// disabled with api.enable_websocket_keepalive: false.
+	cfg.API.EnableWebSocketKeepAlive = true
 	return cfg
 }
 

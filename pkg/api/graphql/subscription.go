@@ -2,6 +2,8 @@ package graphql
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -84,6 +86,7 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx:             ctx,
 		cancel:          cancel,
 		enableKeepAlive: s.enableKeepAlive,
+		connID:          newConnID(),
 	}
 
 	go client.writePump()
@@ -101,6 +104,22 @@ type subscriptionClient struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	enableKeepAlive bool
+	// connID scopes client-chosen subscription ids on the shared event bus,
+	// so two connections using the same id ("1") do not collide.
+	connID string
+}
+
+// busID returns the event bus id for a client subscription id.
+func (c *subscriptionClient) busID(id string) events.SubscriptionID {
+	return events.SubscriptionID(c.connID + "/" + id)
+}
+
+func newConnID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
 }
 
 // clientSubscription holds subscription state
@@ -133,11 +152,16 @@ func (c *subscriptionClient) readPump() {
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error {
-		c.logger.Debug("received pong message")
-		return c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	})
+	// A read deadline is only meaningful when the server pings: pongs extend
+	// it. Without keep-alive an idle subscriber would be dropped after
+	// pongWait even though it is healthy.
+	if c.enableKeepAlive {
+		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		c.conn.SetPongHandler(func(string) error {
+			c.logger.Debug("received pong message")
+			return c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		})
+	}
 
 	for {
 		_, message, err := c.conn.ReadMessage()
@@ -174,13 +198,13 @@ func (c *subscriptionClient) writePump() {
 
 	for {
 		select {
-		case message, ok := <-c.send:
+		case <-c.ctx.Done():
 			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if !ok {
-				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
+			_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+			return
 
+		case message := <-c.send:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
@@ -339,7 +363,7 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 	replayLast := parseReplayLast(sub.Variables["replayLast"])
 
 	// Create subscription ID
-	subID := events.SubscriptionID(id)
+	subID := c.busID(id)
 	opts := events.SubscribeOptions{
 		ChannelSize: 100,
 		ReplayLast:  replayLast,
@@ -405,7 +429,7 @@ func (c *subscriptionClient) handleComplete(id string) {
 		sub.cancelFunc()
 		// Unsubscribe from EventBus
 		if c.server.eventBus != nil {
-			c.server.eventBus.Unsubscribe(events.SubscriptionID(id))
+			c.server.eventBus.Unsubscribe(c.busID(id))
 		}
 		delete(c.subscriptions, id)
 	}
@@ -1100,6 +1124,8 @@ func (c *subscriptionClient) sendMessage(msg wsMessage) {
 	)
 
 	select {
+	case <-c.ctx.Done():
+		return // connection closing; the send channel is never closed
 	case c.send <- data:
 	default:
 		c.logger.Warn("send buffer full, dropping message",
@@ -1156,12 +1182,13 @@ func (c *subscriptionClient) cleanup() {
 				zap.String("type", sub.subType),
 			)
 			sub.cancelFunc()
-			c.server.eventBus.Unsubscribe(events.SubscriptionID(id))
+			c.server.eventBus.Unsubscribe(c.busID(id))
 		}
 	}
 
+	// c.send is not closed: event loops may still be sending. writePump
+	// stops on c.ctx, which was cancelled above.
 	c.subscriptions = make(map[string]*clientSubscription)
-	close(c.send)
 	c.logger.Info("WebSocket client cleanup completed")
 }
 

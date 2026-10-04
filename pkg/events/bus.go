@@ -504,7 +504,13 @@ type SubscriberInfo struct {
 func (eb *EventBus) GetSubscriberInfo(id SubscriptionID) *SubscriberInfo {
 	eb.mu.RLock()
 	defer eb.mu.RUnlock()
+	return eb.subscriberInfoLocked(id)
+}
 
+// subscriberInfoLocked builds SubscriberInfo; the caller holds eb.mu.
+// Taking the read lock again here would deadlock when a writer is waiting
+// (sync.RWMutex does not allow recursive read locking).
+func (eb *EventBus) subscriberInfoLocked(id SubscriptionID) *SubscriberInfo {
 	sub, exists := eb.subscribers[id]
 	if !exists {
 		return nil
@@ -542,7 +548,7 @@ func (eb *EventBus) GetAllSubscriberInfo() []SubscriberInfo {
 
 	infos := make([]SubscriberInfo, 0, len(eb.subscribers))
 	for id := range eb.subscribers {
-		if info := eb.GetSubscriberInfo(id); info != nil {
+		if info := eb.subscriberInfoLocked(id); info != nil {
 			infos = append(infos, *info)
 		}
 	}

@@ -280,9 +280,15 @@ func TestHandleVerifySourceCode_ReturnsGUID(t *testing.T) {
 	// Job should exist
 	h.jobsMu.RLock()
 	job, exists := h.jobs[guid]
+	var status string
+	if exists {
+		status = job.Status // read under the lock; the worker may update it
+	}
 	h.jobsMu.RUnlock()
 	assert.True(t, exists)
-	assert.Equal(t, "Pending", job.Status)
+	// The verification goroutine may already have finished, so the job can
+	// be past "Pending" by the time it is read.
+	assert.Contains(t, []string{"Pending", "Pass", "Fail"}, status)
 }
 
 // --- handleCheckVerifyStatus tests ---

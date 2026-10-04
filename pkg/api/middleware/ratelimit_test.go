@@ -75,7 +75,7 @@ func TestRateLimiter_Cleanup(t *testing.T) {
 	limiter.mu.Lock()
 	staleTime := time.Now().Add(-limiter.cleanupTTL - time.Minute)
 	for _, entry := range limiter.limiters {
-		entry.lastAccess = staleTime
+		entry.lastAccess.Store(staleTime.UnixNano())
 	}
 	limiter.mu.Unlock()
 
