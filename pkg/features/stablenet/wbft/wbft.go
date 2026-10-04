@@ -1,64 +1,81 @@
-package fetch
+// Package wbft is the stablenet.wbft feature: it stores WBFT consensus data
+// from each block header (round, seals, epoch info, validator signing
+// statistics) and publishes consensus events.
+package wbft
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/feature"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
-	"github.com/0xmhha/indexer-go/pkg/types/chain"
 )
 
-// ============================================================================
-// WBFT Consensus Metadata Methods
-// ============================================================================
+// Name is the feature name.
+const Name = "stablenet.wbft"
 
-// processWBFTMetadata parses and stores WBFT consensus metadata from block header
-func (f *Fetcher) processWBFTMetadata(ctx context.Context, fb *fetchedBlock) error {
-	block := fb.geth
-	// Check if chain adapter indicates non-WBFT consensus - skip silently
-	if f.chainAdapter != nil {
-		info := f.chainAdapter.Info()
-		if info != nil && info.ConsensusType != chain.ConsensusTypeWBFT {
-			// Not a WBFT chain, skip WBFT metadata processing
-			return nil
-		}
-	}
+type wbftFeature struct{}
 
-	// Check if storage implements WBFTWriter
-	wbftWriter, ok := f.storage.(storagepkg.WBFTWriter)
+func (wbftFeature) Name() string       { return Name }
+func (wbftFeature) Requires() []string { return nil }
+
+func (wbftFeature) Register(r feature.Registrar) error {
+	d := r.Deps()
+	w, ok := d.Storage.(storagepkg.WBFTWriter)
 	if !ok {
-		// Storage doesn't support WBFT metadata - skip silently
-		return nil
+		return fmt.Errorf("storage does not support WBFT data")
 	}
+	logger := d.Logger
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	r.OnBlock(&handler{writer: w, logger: logger, publishFn: d.Publish})
+	return nil
+}
 
-	// Parse WBFT Extra from block header
-	wbftExtra, err := storagepkg.ParseWBFTExtra(block.Header())
+func init() { feature.Register(wbftFeature{}) }
+
+type handler struct {
+	writer    storagepkg.WBFTWriter
+	logger    *zap.Logger
+	publishFn func(events.Event) bool
+}
+
+func (h *handler) publish(ev events.Event) bool {
+	if h.publishFn == nil {
+		return true
+	}
+	return h.publishFn(ev)
+}
+
+// HandleBlock parses the WBFT extra data of the block header and stores it.
+// A header that is not WBFT (for example genesis) is logged and skipped.
+func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
+	wbftExtra, err := storagepkg.ParseWBFTExtra(b.Geth.Header())
 	if err != nil {
-		// Log warning but don't fail the entire block indexing
-		f.logger.Warn("Failed to parse WBFT extra",
-			zap.Uint64("height", block.NumberU64()),
-			zap.String("hash", fb.block.Hash.Hex()),
+		h.logger.Warn("Failed to parse WBFT extra",
+			zap.Uint64("height", b.Model.Number),
+			zap.String("hash", b.Model.Hash.Hex()),
 			zap.Error(err),
 		)
 		return nil
 	}
 	// The go-ethereum view recomputes the hash with the Ethereum rule; WBFT
 	// blocks are identified by the hash the chain reports (D16).
-	wbftExtra.BlockHash = fb.block.Hash
+	wbftExtra.BlockHash = b.Model.Hash
 
 	// Save WBFT block extra
-	if err := wbftWriter.SaveWBFTBlockExtra(ctx, wbftExtra); err != nil {
+	if err := h.writer.SaveWBFTBlockExtra(ctx, wbftExtra); err != nil {
 		return fmt.Errorf("failed to save WBFT block extra: %w", err)
 	}
 
 	// Save epoch info if present
 	if wbftExtra.EpochInfo != nil {
-		if err := wbftWriter.SaveEpochInfo(ctx, wbftExtra.EpochInfo); err != nil {
+		if err := h.writer.SaveEpochInfo(ctx, wbftExtra.EpochInfo); err != nil {
 			return fmt.Errorf("failed to save epoch info: %w", err)
 		}
 	}
@@ -75,8 +92,8 @@ func (f *Fetcher) processWBFTMetadata(ctx context.Context, fb *fetchedBlock) err
 				wbftExtra.EpochInfo.Candidates,
 			)
 			if err != nil {
-				f.logger.Warn("Failed to extract prepare signers",
-					zap.Uint64("height", block.NumberU64()),
+				h.logger.Warn("Failed to extract prepare signers",
+					zap.Uint64("height", b.Model.Number),
 					zap.Error(err),
 				)
 			} else {
@@ -105,8 +122,8 @@ func (f *Fetcher) processWBFTMetadata(ctx context.Context, fb *fetchedBlock) err
 				wbftExtra.EpochInfo.Candidates,
 			)
 			if err != nil {
-				f.logger.Warn("Failed to extract commit signers",
-					zap.Uint64("height", block.NumberU64()),
+				h.logger.Warn("Failed to extract commit signers",
+					zap.Uint64("height", b.Model.Number),
 					zap.Error(err),
 				)
 			} else {
@@ -119,28 +136,24 @@ func (f *Fetcher) processWBFTMetadata(ctx context.Context, fb *fetchedBlock) err
 
 		// Save validator signing activities
 		if len(signingActivities) > 0 {
-			if err := wbftWriter.UpdateValidatorSigningStats(ctx, wbftExtra.BlockNumber, signingActivities); err != nil {
+			if err := h.writer.UpdateValidatorSigningStats(ctx, wbftExtra.BlockNumber, signingActivities); err != nil {
 				return fmt.Errorf("failed to update validator signing stats: %w", err)
 			}
 		}
 	}
 
-	f.logger.Debug("Processed WBFT metadata",
-		zap.Uint64("height", block.NumberU64()),
+	h.logger.Debug("Processed WBFT metadata",
+		zap.Uint64("height", b.Model.Number),
 		zap.Uint32("round", wbftExtra.Round),
 		zap.Bool("has_epoch_info", wbftExtra.EpochInfo != nil),
 	)
 
-	// Publish ConsensusBlockEvent to EventBus for WebSocket subscriptions
-	if f.eventBus != nil {
-		f.publishConsensusBlockEvent(block, wbftExtra)
-	}
-
+	h.publishConsensusBlockEvent(b, wbftExtra)
 	return nil
 }
 
 // publishConsensusBlockEvent creates and publishes a ConsensusBlockEvent
-func (f *Fetcher) publishConsensusBlockEvent(block *types.Block, wbftExtra *storagepkg.WBFTBlockExtra) {
+func (h *handler) publishConsensusBlockEvent(b *feature.Block, wbftExtra *storagepkg.WBFTBlockExtra) {
 	// Calculate validator counts
 	validatorCount := 0
 	prepareCount := 0
@@ -189,7 +202,7 @@ func (f *Fetcher) publishConsensusBlockEvent(block *types.Block, wbftExtra *stor
 		wbftExtra.Timestamp,
 		wbftExtra.Round,
 		wbftExtra.PrevRound,
-		block.Coinbase(),
+		b.Model.Miner,
 		validatorCount,
 		prepareCount,
 		commitCount,
@@ -201,29 +214,29 @@ func (f *Fetcher) publishConsensusBlockEvent(block *types.Block, wbftExtra *stor
 	)
 
 	// Publish to EventBus
-	if !f.publish(consensusEvent) {
-		f.logger.Warn("Failed to publish consensus block event (channel full)",
-			zap.Uint64("height", block.NumberU64()),
+	if !h.publish(consensusEvent) {
+		h.logger.Warn("Failed to publish consensus block event (channel full)",
+			zap.Uint64("height", b.Model.Number),
 		)
 	}
 
 	// Publish consensus error event if round changed (round > 0)
 	if wbftExtra.Round > 0 {
-		f.publishConsensusErrorEvent(block, wbftExtra, "round_change", "medium",
+		h.publishConsensusErrorEvent(b, wbftExtra, "round_change", "medium",
 			fmt.Sprintf("Consensus required %d rounds to finalize block", wbftExtra.Round+1),
 			validatorCount, commitCount, participationRate)
 	}
 
 	// Publish consensus error event if low participation (< 67%)
 	if participationRate < 67.0 && validatorCount > 0 {
-		f.publishConsensusErrorEvent(block, wbftExtra, "low_participation", "high",
+		h.publishConsensusErrorEvent(b, wbftExtra, "low_participation", "high",
 			fmt.Sprintf("Low validator participation: %.2f%%", participationRate),
 			validatorCount, commitCount, participationRate)
 	}
 }
 
 // publishConsensusErrorEvent creates and publishes a ConsensusErrorEvent
-func (f *Fetcher) publishConsensusErrorEvent(block *types.Block, wbftExtra *storagepkg.WBFTBlockExtra,
+func (h *handler) publishConsensusErrorEvent(b *feature.Block, wbftExtra *storagepkg.WBFTBlockExtra,
 	errorType, severity, errorMessage string, expectedValidators, actualSigners int, participationRate float64) {
 
 	// Extract missed validators
@@ -259,9 +272,9 @@ func (f *Fetcher) publishConsensusErrorEvent(block *types.Block, wbftExtra *stor
 		nil,   // errorDetails
 	)
 
-	if !f.publish(errorEvent) {
-		f.logger.Warn("Failed to publish consensus error event (channel full)",
-			zap.Uint64("height", block.NumberU64()),
+	if !h.publish(errorEvent) {
+		h.logger.Warn("Failed to publish consensus error event (channel full)",
+			zap.Uint64("height", b.Model.Number),
 			zap.String("errorType", errorType),
 		)
 	}

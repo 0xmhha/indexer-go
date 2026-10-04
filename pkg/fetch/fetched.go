@@ -9,6 +9,8 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/source"
 )
 
@@ -116,4 +118,26 @@ func (fb *fetchedBlock) transactions() []txWithReceipt {
 		})
 	}
 	return out
+}
+
+// SetFeatures sets the handlers of the enabled features. They run for every
+// block after its core data is stored, inside the block's transaction.
+func (f *Fetcher) SetFeatures(p *feature.Pipeline) {
+	f.features = p
+}
+
+// Publish sends an event to subscribers. While a block is being indexed the
+// event is held back until the block commits.
+func (f *Fetcher) Publish(ev events.Event) bool {
+	return f.publish(ev)
+}
+
+// runFeatures runs the enabled features' handlers for fb.
+func (f *Fetcher) runFeatures(ctx context.Context, fb *fetchedBlock) error {
+	if f.features == nil {
+		return nil
+	}
+	return f.features.HandleBlock(ctx, &feature.Block{
+		Model: fb.block, Receipts: fb.receipts, Geth: fb.geth, GethReceipts: fb.gethReceipts,
+	})
 }

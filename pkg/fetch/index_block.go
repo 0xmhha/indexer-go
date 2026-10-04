@@ -152,6 +152,9 @@ func (f *Fetcher) applyBlock(ctx context.Context, fb *fetchedBlock) error {
 	if err := f.storeReceiptsSequential(ctx, fb); err != nil {
 		return err
 	}
+	if err := f.runFeatures(ctx, fb); err != nil {
+		return fmt.Errorf("block %d: %w", height, err)
+	}
 	f.publishBlockEvents(fb)
 	f.processBlockWithProcessors(ctx, fb.geth, fb.gethReceipts)
 	return nil

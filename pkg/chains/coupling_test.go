@@ -13,7 +13,7 @@ import (
 // chainNeutral lists packages (relative to pkg/) that must work for every
 // chain. They may use pkg/chains and pkg/core but not a specific chain
 // profile; chain behaviour reaches them through registries in pkg/chains.
-var chainNeutral = []string{"fetch", "api", "source"}
+var chainNeutral = []string{"fetch", "api", "source", "feature"}
 
 // TestChainNeutralPackagesDoNotImportProfiles keeps chain-specific code in
 // the profiles (chain profile design, section 3).

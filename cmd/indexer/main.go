@@ -16,11 +16,14 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
 	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
 	"github.com/0xmhha/indexer-go/pkg/api"
+	"github.com/0xmhha/indexer-go/pkg/chains"
 	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"       // generic EVM chain profile
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet" // StableNet chain profile
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/feature"
+	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/wbft" // stablenet.wbft feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
@@ -47,6 +50,7 @@ type App struct {
 	client       *client.Client
 	chainAdapter chain.Adapter
 	nodeInfo     *detector.NodeInfo
+	features     *feature.Pipeline // enabled features, in execution order
 	storage      storage.Storage
 	eventBus     *events.EventBus
 	fetcher      *fetch.Fetcher
@@ -677,17 +681,44 @@ func (a *App) initFetcher(ctx context.Context) error {
 		)
 	}
 
-	if a.config.Indexer.ProfileSource {
-		src, err := source.Detect(ctx, a.client.RPCClient())
-		if err != nil {
-			return fmt.Errorf("detect chain profile: %w", err)
-		}
-		a.fetcher.SetSource(src)
-		a.logger.Info("Reading blocks through chain profile",
-			zap.String("profile", src.Profile().ID()),
-			zap.Strings("features", src.Profile().Features()),
-		)
+	// The chain profile decodes blocks (profile_source) and gives the
+	// default features. Without profile_source a failed detection only
+	// leaves the features to the configuration.
+	var profile chains.Profile
+	src, err := source.Detect(ctx, a.client.RPCClient())
+	switch {
+	case err == nil:
+		profile = src.Profile()
+	case a.config.Indexer.ProfileSource:
+		return fmt.Errorf("detect chain profile: %w", err)
+	default:
+		a.logger.Warn("Chain profile detection failed; using configured features only", zap.Error(err))
 	}
+	if a.config.Indexer.ProfileSource {
+		a.fetcher.SetSource(src)
+		a.logger.Info("Reading blocks through chain profile", zap.String("profile", profile.ID()))
+	}
+
+	var defaults []string
+	if profile != nil {
+		defaults = profile.Features()
+	}
+	enabled, err := feature.Enabled(defaults, a.config.FeatureOverrides())
+	if err != nil {
+		return err
+	}
+	pipeline, err := feature.Build(enabled, feature.Deps{
+		Storage: a.storage,
+		Logger:  a.logger,
+		Profile: profile,
+		Publish: a.fetcher.Publish,
+	})
+	if err != nil {
+		return err
+	}
+	a.fetcher.SetFeatures(pipeline)
+	a.features = pipeline
+	a.logger.Info("Features enabled", zap.Strings("features", pipeline.Features()))
 
 	a.registerFeatureProcessors()
 

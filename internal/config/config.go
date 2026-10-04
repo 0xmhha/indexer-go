@@ -27,6 +27,26 @@ type Config struct {
 	Node                NodeConfig                `yaml:"node"`
 	Verifier            VerifierConfig            `yaml:"verifier"`
 	AccountAbstraction  AccountAbstractionConfig  `yaml:"account_abstraction"`
+	// Features turns registered features on or off (pkg/feature). Features
+	// not listed keep the chain profile's default.
+	Features map[string]FeatureConfig `yaml:"features"`
+}
+
+// FeatureConfig configures one feature.
+type FeatureConfig struct {
+	Enabled *bool `yaml:"enabled"`
+}
+
+// FeatureOverrides returns the features explicitly turned on (true) or off
+// (false) by the configuration.
+func (c *Config) FeatureOverrides() map[string]bool {
+	out := map[string]bool{}
+	for name, fc := range c.Features {
+		if fc.Enabled != nil {
+			out[name] = *fc.Enabled
+		}
+	}
+	return out
 }
 
 // RPCConfig holds RPC client configuration
@@ -741,6 +761,21 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_PROFILE_SOURCE: %w", err)
 		}
 		c.Indexer.ProfileSource = val
+	}
+	// INDEXER_FEATURES=name1,-name2 turns name1 on and name2 off.
+	if v := os.Getenv("INDEXER_FEATURES"); v != "" {
+		if c.Features == nil {
+			c.Features = map[string]FeatureConfig{}
+		}
+		for _, item := range strings.Split(v, ",") {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			on := !strings.HasPrefix(item, "-")
+			name := strings.TrimPrefix(item, "-")
+			c.Features[name] = FeatureConfig{Enabled: &on}
+		}
 	}
 
 	// API configuration

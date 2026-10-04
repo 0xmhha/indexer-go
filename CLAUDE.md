@@ -56,6 +56,8 @@ make docker-build   # Container image
 - **Storage**: PebbleDB. Each block is indexed in one block transaction (`BeginBlock`, indexed batch bound to ctx; all access goes through `s.kv(ctx)`). `indexer.atomic_block: false` selects the legacy path until it is removed
 - **Fetcher**: Live indexing processes blocks sequentially by polling; the worker pool (`indexer.workers`) is used only by gap recovery
 - **Adapter**: Detects the node type and selects an adapter; `--adapter` forces one
+- **Chain profiles** (`pkg/chains`): decode raw blocks into the chain-neutral model; chain-specific behaviour reaches chain-neutral code (`pkg/fetch`, `pkg/api`, `pkg/source`, `pkg/feature`) only through registries in `pkg/chains` (enforced by a test)
+- **Features** (`pkg/feature`, `pkg/features/...`): optional per-block handlers that run inside the block transaction. Defaults come from the chain profile; override with `features.<name>.enabled` or `INDEXER_FEATURES=name,-name`. Migrated so far: `stablenet.wbft` (`docs/analysis/feature-registry-design.md`)
 
 ### Configuration
 

@@ -142,11 +142,6 @@ func (f *Fetcher) processBlockMetadata(ctx context.Context, fb *fetchedBlock) er
 	height := fb.height()
 	block := fb.geth
 
-	// Process WBFT metadata
-	if err := f.processWBFTMetadata(ctx, fb); err != nil {
-		return fmt.Errorf("failed to process WBFT metadata for block %d: %w", height, err)
-	}
-
 	// Process address indexing (contract creation, token transfers)
 	if err := f.processAddressIndexing(ctx, fb); err != nil {
 		return fmt.Errorf("failed to process address indexing for block %d: %w", height, err)

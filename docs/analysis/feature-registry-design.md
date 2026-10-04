@@ -109,3 +109,30 @@ type BlockHandler interface {
 - 등록부가 전역이다. 시험끼리 같은 이름을 등록하면 충돌하므로, 시험용 기능은 이름에 시험 이름을 붙여야 한다.
 - 기능이 받는 `feature.Block`이 go-ethereum 보기를 포함한다. 처리기를 모델로 옮기면 보기를 지울 수 있지만, 그때까지는 공개 계약에 임시 필드가 들어 있다.
 - F2~F5 동안은 일부 처리기는 기능으로, 일부는 수집기 안에서 돈다. 그동안은 실행 순서를 두 곳에서 봐야 한다.
+
+---
+
+## 7. 진행 기록
+
+**결정(10/5).** 따로 지시가 없어 5절의 권장안 네 가지로 진행한다. 기능 패키지는 `pkg/features/...`에 두고, 꺼진 의존이 있으면 시작을 멈춘다. 이미 색인된 DB에서 기능을 켜면 경고만 하고, 시스템 컨트랙트 기능은 StableNet에서만 켠다.
+
+### F1~F3 (10/5)
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/feature` | `Feature`, `Registrar`, `BlockHandler`, 전역 등록부(`Register`), `Resolve`(의존 기능을 먼저, 나머지는 이름순. 등록되지 않은 이름, 꺼진 의존, 순환은 오류), `Build`/`Pipeline`(처리기를 순서대로 실행하고 첫 오류에서 멈춤), `Enabled`(프로필 기본값 + 설정 덮어쓰기. 아직 옮기지 않아 등록되지 않은 기본값은 건너뛰고, 설정에 쓴 이름은 등록되어 있어야 한다) |
+| 설정 | `features: { <name>: { enabled: true\|false } }`, `INDEXER_FEATURES=name1,-name2` |
+| 수집기 | `SetFeatures`. 켜진 기능의 처리기를 core 저장(블록·거래·receipt·로그) 다음에, 블록 트랜잭션 안에서 부른다. 원자 경로와 비원자 경로 모두. 처리기가 실패하면 그 블록은 저장되지 않는다. 기능이 발행한 이벤트는 commit 뒤에 전달된다(`Fetcher.Publish`) |
+| `main.go` | 프로필을 항상 감지한다(`profile_source: false`여도 기본 기능을 정하려고). 켤 기능을 계산하고 처리기를 만들어 수집기에 건다. 시작 로그에 켜진 기능을 남긴다 |
+| `pkg/features/stablenet/wbft` | 수집기의 WBFT 처리(`fetcher_consensus.go`)를 옮겼다. 저장 계층이 `WBFTWriter`가 아니면 등록할 때 오류다. 수집기에서 WBFT 코드와 adapter 합의 종류 검사를 지웠다. 이제 StableNet 프로필의 기본 기능일 때만 돈다 |
+| 결합 시험 | `pkg/feature`도 특정 체인 프로필을 import하지 못한다 |
+
+**동작 변경.** 예전에는 adapter가 없거나 합의 종류가 WBFT이면 WBFT 처리가 돌았다. 지금은 `stablenet.wbft`가 켜져 있을 때만 돈다. 즉 StableNet 프로필로 감지되었거나 설정으로 켰을 때다. 일반 EVM 체인에서는 헤더 해석을 시도하다 경고를 남기던 일이 없어진다.
+
+검증 결과는 다음과 같다.
+- `pkg/feature` 단위 시험(race 포함): 순서가 입력 순서와 상관없이 같다. 꺼진 의존, 등록되지 않은 이름, 순환을 거부한다. 첫 오류에서 멈춘다. 이름이 겹치면 panic한다.
+- `TestUnknownFeatureStopsStartup`: 등록되지 않은 기능을 설정하면 `NewApp`이 실패한다.
+- `TestFeatureFailureAbortsBlock`: 블록 3에서 실패하는 시험용 기능을 켜면 수집이 그 오류로 멈추고, 커서는 2이며 블록 3은 저장되지 않는다.
+- `TestWBFTFeatureOnNonWBFTChain`: 가짜 체인에서 `stablenet.wbft`를 켜도 저장 결과가 golden과 같다.
+- keyspace·GraphQL golden, 기존 경로 동등성 시험이 그대로 통과한다. 전체 시험은 기존부터 불안정한 `pkg/resilience` 시험 하나를 빼고 통과한다.
+- live StableNet(블록 0~19721): `TestLiveStableNet`에서 WBFT 키 20,283개가 기능 경로로 색인되고, 중단 후 재시작한 결과가 같다. `TestLiveStableNetIdentity`(블록 0~19091)도 통과한다.

@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/source"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
@@ -180,6 +181,9 @@ type Fetcher struct {
 
 	// moduleProcessor handles ERC-7579 module install/uninstall indexing
 	moduleProcessor *ModuleProcessor
+
+	// features runs the handlers of the enabled features for every block.
+	features *feature.Pipeline
 
 	// src, when set, reads blocks as raw JSON decoded by the chain profile
 	// instead of through client (chain profile design, CP-3).
@@ -444,6 +448,9 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	if err := f.storeAndProcessReceipts(ctx, fb); err != nil {
 		return err
 	}
+	if err := f.runFeatures(ctx, fb); err != nil {
+		return fmt.Errorf("block %d: %w", height, err)
+	}
 
 	// Publish transaction and log events
 	if f.eventBus != nil {
@@ -637,11 +644,6 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)
 				}
 
-				// Process WBFT metadata
-				if err := f.processWBFTMetadata(ctx, fb); err != nil {
-					return fmt.Errorf("failed to process WBFT metadata for block %d: %w", nextHeight, err)
-				}
-
 				// Process address indexing (contract creation, token transfers)
 				if err := f.processAddressIndexing(ctx, fb); err != nil {
 					return fmt.Errorf("failed to process address indexing for block %d: %w", nextHeight, err)
@@ -687,6 +689,10 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 							// Continue processing - log indexing failure shouldn't block block indexing
 						}
 					}
+				}
+
+				if err := f.runFeatures(ctx, fb); err != nil {
+					return fmt.Errorf("block %d: %w", nextHeight, err)
 				}
 
 				// Publish transaction events if EventBus is configured
