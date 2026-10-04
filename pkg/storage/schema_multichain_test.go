@@ -51,7 +51,7 @@ func TestChainLatestHeightKey(t *testing.T) {
 
 func TestChainBlockKey(t *testing.T) {
 	result := ChainBlockKey("mainnet", 12345)
-	expected := "/chain/mainnet/data/blocks/12345"
+	expected := "/chain/mainnet/data/blocks/00000000000000012345"
 	if string(result) != expected {
 		t.Errorf("ChainBlockKey() = %q, want %q", string(result), expected)
 	}
@@ -59,7 +59,7 @@ func TestChainBlockKey(t *testing.T) {
 
 func TestChainTransactionKey(t *testing.T) {
 	result := ChainTransactionKey("mainnet", 12345, 3)
-	expected := "/chain/mainnet/data/txs/12345/3"
+	expected := "/chain/mainnet/data/txs/00000000000000012345/000003"
 	if string(result) != expected {
 		t.Errorf("ChainTransactionKey() = %q, want %q", string(result), expected)
 	}

@@ -212,13 +212,13 @@ func LatestHeightKey() []byte {
 // BlockKey returns the key for storing a block at given height
 // Format: /data/blocks/{height}
 func BlockKey(height uint64) []byte {
-	return []byte(fmt.Sprintf("%s%d", prefixBlocks, height))
+	return []byte(fmt.Sprintf("%s%020d", prefixBlocks, height))
 }
 
 // TransactionKey returns the key for storing a transaction
 // Format: /data/txs/{height}/{index}
 func TransactionKey(height uint64, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%d/%d", prefixTxs, height, txIndex))
+	return []byte(fmt.Sprintf("%s%020d/%06d", prefixTxs, height, txIndex))
 }
 
 // ReceiptKey returns the key for storing a transaction receipt
@@ -392,13 +392,13 @@ func IsIndexKey(key []byte) bool {
 // MintEventKey returns the key for storing a mint event
 // Format: /data/syscontracts/mint/{blockNumber}/{txIndex}/{logIndex}
 func MintEventKey(blockNumber, txIndex, logIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%020d/%d/%d", prefixSysMint, blockNumber, txIndex, logIndex))
+	return []byte(fmt.Sprintf("%s%020d/%06d/%06d", prefixSysMint, blockNumber, txIndex, logIndex))
 }
 
 // BurnEventKey returns the key for storing a burn event
 // Format: /data/syscontracts/burn/{blockNumber}/{txIndex}/{logIndex}
 func BurnEventKey(blockNumber, txIndex, logIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%020d/%d/%d", prefixSysBurn, blockNumber, txIndex, logIndex))
+	return []byte(fmt.Sprintf("%s%020d/%06d/%06d", prefixSysBurn, blockNumber, txIndex, logIndex))
 }
 
 // MinterConfigEventKey returns the key for storing a minter config event
@@ -434,19 +434,19 @@ func BlacklistEventKey(address common.Address, blockNumber uint64) []byte {
 // MemberChangeEventKey returns the key for storing a member change event
 // Format: /data/syscontracts/member/{contract}/{blockNumber}/{txIndex}
 func MemberChangeEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%d", prefixSysMember, contract.Hex(), blockNumber, txIndex))
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysMember, contract.Hex(), blockNumber, txIndex))
 }
 
 // GasTipUpdateEventKey returns the key for storing a gas tip update event
 // Format: /data/syscontracts/gastip/{blockNumber}/{txIndex}
 func GasTipUpdateEventKey(blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%020d/%d", prefixSysGasTip, blockNumber, txIndex))
+	return []byte(fmt.Sprintf("%s%020d/%06d", prefixSysGasTip, blockNumber, txIndex))
 }
 
 // EmergencyPauseEventKey returns the key for storing an emergency pause event
 // Format: /data/syscontracts/emergency/{contract}/{blockNumber}/{txIndex}
 func EmergencyPauseEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%d", prefixSysEmergency, contract.Hex(), blockNumber, txIndex))
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysEmergency, contract.Hex(), blockNumber, txIndex))
 }
 
 // DepositMintProposalKey returns the key for storing a deposit mint proposal
@@ -458,7 +458,7 @@ func DepositMintProposalKey(proposalId string) []byte {
 // MaxProposalsUpdateEventKey returns the key for storing a max proposals update event
 // Format: /data/syscontracts/maxproposals/{contract}/{blockNumber}/{txIndex}
 func MaxProposalsUpdateEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%d", prefixSysMaxProposals, contract.Hex(), blockNumber, txIndex))
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysMaxProposals, contract.Hex(), blockNumber, txIndex))
 }
 
 // MaxProposalsUpdateEventKeyPrefix returns the prefix for max proposals update events by contract
@@ -469,7 +469,7 @@ func MaxProposalsUpdateEventKeyPrefix(contract common.Address) []byte {
 // ProposalExecutionSkippedEventKey returns the key for storing a proposal execution skipped event
 // Format: /data/syscontracts/proposalskipped/{contract}/{blockNumber}/{txIndex}
 func ProposalExecutionSkippedEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%d", prefixSysProposalSkipped, contract.Hex(), blockNumber, txIndex))
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysProposalSkipped, contract.Hex(), blockNumber, txIndex))
 }
 
 // ProposalExecutionSkippedEventKeyPrefix returns the prefix for proposal execution skipped events by contract
@@ -480,7 +480,7 @@ func ProposalExecutionSkippedEventKeyPrefix(contract common.Address) []byte {
 // AuthorizedAccountEventKey returns the key for an authorized account event
 // Format: /data/syscontracts/authorizedaccounts/{contract}/{blockNumber}/{txIndex}
 func AuthorizedAccountEventKey(contract common.Address, blockNumber, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/%020d/%d", prefixSysAuthorizedAccounts, contract.Hex(), blockNumber, txIndex))
+	return []byte(fmt.Sprintf("%s%s/%020d/%06d", prefixSysAuthorizedAccounts, contract.Hex(), blockNumber, txIndex))
 }
 
 // AuthorizedAccountEventKeyPrefix returns the prefix for authorized account events by contract
@@ -505,7 +505,7 @@ func BurnBurnerIndexKey(burner common.Address, blockNumber uint64) []byte {
 // ProposalStatusIndexKey returns the index key for proposals by status
 // Format: /index/syscontracts/proposal_status/{contract}/{status}/{proposalId}
 func ProposalStatusIndexKey(contract common.Address, status uint8, proposalId string) []byte {
-	return []byte(fmt.Sprintf("%s%s/%d/%s", prefixIdxProposalStatus, contract.Hex(), status, proposalId))
+	return []byte(fmt.Sprintf("%s%s/%03d/%s", prefixIdxProposalStatus, contract.Hex(), status, proposalId))
 }
 
 // BlacklistActiveIndexKey returns the index key for active blacklist
@@ -595,7 +595,7 @@ func BurnBurnerIndexKeyPrefix(burner common.Address) []byte {
 
 // ProposalStatusIndexKeyPrefix returns the prefix for proposal status index by contract and status
 func ProposalStatusIndexKeyPrefix(contract common.Address, status uint8) []byte {
-	return []byte(fmt.Sprintf("%s%s/%d/", prefixIdxProposalStatus, contract.Hex(), status))
+	return []byte(fmt.Sprintf("%s%s/%03d/", prefixIdxProposalStatus, contract.Hex(), status))
 }
 
 // BlacklistActiveIndexKeyPrefix returns the prefix for all active blacklist indexes
@@ -1015,13 +1015,13 @@ func ChainLatestHeightKey(chainID string) []byte {
 // ChainBlockKey returns the chain-scoped key for storing a block
 // Format: /chain/{chainID}/data/blocks/{height}
 func ChainBlockKey(chainID string, height uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/data/blocks/%d", prefixChain, chainID, height))
+	return []byte(fmt.Sprintf("%s%s/data/blocks/%020d", prefixChain, chainID, height))
 }
 
 // ChainTransactionKey returns the chain-scoped key for storing a transaction
 // Format: /chain/{chainID}/data/txs/{height}/{index}
 func ChainTransactionKey(chainID string, height uint64, txIndex uint64) []byte {
-	return []byte(fmt.Sprintf("%s%s/data/txs/%d/%d", prefixChain, chainID, height, txIndex))
+	return []byte(fmt.Sprintf("%s%s/data/txs/%020d/%06d", prefixChain, chainID, height, txIndex))
 }
 
 // ChainReceiptKey returns the chain-scoped key for storing a receipt
