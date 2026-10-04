@@ -319,7 +319,7 @@ func (h *Handler) getSetCodeTransactionsInBlock(ctx context.Context, params json
 	// Fetch transactions
 	result := make([]interface{}, 0, len(txHashes))
 	for txHash := range txHashes {
-		tx, location, err := h.storage.GetTransaction(ctx, txHash)
+		tx, location, err := h.models().GetModelTransaction(ctx, txHash)
 		if err != nil {
 			h.logger.Warn("failed to get transaction",
 				zap.String("txHash", txHash.Hex()),
@@ -378,7 +378,7 @@ func (h *Handler) getRecentSetCodeTransactions(ctx context.Context, params json.
 	// Fetch transactions
 	result := make([]interface{}, 0, len(txHashes))
 	for _, txHash := range txHashes {
-		tx, location, err := h.storage.GetTransaction(ctx, txHash)
+		tx, location, err := h.models().GetModelTransaction(ctx, txHash)
 		if err != nil {
 			h.logger.Warn("failed to get transaction",
 				zap.String("txHash", txHash.Hex()),

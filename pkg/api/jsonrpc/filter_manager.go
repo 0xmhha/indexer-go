@@ -277,14 +277,16 @@ func (fm *FilterManager) GetBlockHashesSinceLastPoll(ctx context.Context, store 
 	// Get block hashes for new blocks
 	var hashes []common.Hash
 	for blockNum := filter.LastPollBlock + 1; blockNum <= currentHeight; blockNum++ {
-		block, err := store.GetBlock(ctx, blockNum)
+		// The model keeps the hash the chain reports (go-ethereum's
+		// recomputed hash is wrong for WBFT blocks).
+		block, err := storage.AsModelReader(store).GetModelBlock(ctx, blockNum)
 		if err != nil {
 			if err == storage.ErrNotFound {
 				continue
 			}
 			return nil, 0, err
 		}
-		hashes = append(hashes, block.Hash())
+		hashes = append(hashes, block.Hash)
 	}
 
 	return hashes, currentHeight, nil

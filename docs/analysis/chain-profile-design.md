@@ -309,3 +309,26 @@ CP-1과 CP-2는 기존 코드에 영향 없이 새 패키지로 만들 수 있�
 - 로그 기반 처리기와 watchlist·토큰 처리기는 아직 go-ethereum 보기를 쓴다. 로그의 hash는 모델에서 오므로 맞지만, 이 처리기들이 `block.Hash()`를 쓰는 곳이 있으면 StableNet에서 틀린다. live 시험의 DB 전체 검사로는 나오지 않았지만, 로컬 체인에 EIP-7702·ERC-4337·모듈 거래가 없어 그 경로는 실제 데이터로 확인하지 못했다.
 - fee delegation 메타 생성과 fee payer 조회가 `pkg/fetch`에서 `pkg/chains/stablenet`을 직접 부른다. 체인별 기능 모듈 구조(CP-4 후반)에서 프로필 쪽으로 옮긴다.
 - API 응답의 hash 필드는 CP-5에서 맞춘다.
+
+### CP-5: API가 모델을 읽는다 (10/4)
+
+**범위.** receipt와 로그는 S3부터 저장된 hash를 그대로 돌려주므로 이미 맞았다. 틀린 값은 블록 hash, 그리고 거래의 hash·type·from·feePayer였다. 모두 API가 go-ethereum 타입을 받아 hash를 다시 계산하거나 송신자를 다시 복구하던 곳에서 나왔다. 그래서 블록과 거래를 읽는 곳과 그 매퍼만 모델로 옮겼다.
+
+| 바뀐 곳 | 내용 |
+|---|---|
+| `storage.AsModelReader` | 모델을 저장하는 storage는 그대로 쓰고, 아니면 go-ethereum 값을 모델로 바꿔 읽는다. API 시험의 mock storage가 그대로 동작한다. `GetModelBlocks`(범위 읽기, 없는 높이는 건너뜀)를 추가했다 |
+| GraphQL | `blockToMap`·`transactionToMap`이 모델을 받는다. 블록·거래·주소별 거래·범위·최근 거래·setcode·historical 조회가 모델을 읽는다. go-ethereum 블록이나 거래를 돌려주는 historical 조회는 높이와 위치로 모델을 다시 찾는다. 0x16 거래의 hash는 go-ethereum 규칙으로는 찾을 수 없기 때문이다 |
+| JSON-RPC | `getBlock`·`getBlockByHash`·`getTxResult`, historical·setcode 조회, 블록 필터(`eth_newBlockFilter`)가 모델의 hash를 쓴다 |
+| receipt 보정 제거 | GraphQL `receipt`·`receiptsByBlock`·`transaction`이 `gasUsed`, `effectiveGasPrice`, 블록 정보를 다시 계산하던 코드를 지웠다. 이 코드는 receipt 필드를 버리던 기존 저장 방식(D17)을 메우려던 것이었다. 그런데 블록 hash를 go-ethereum 규칙 값으로 덮어써 StableNet에서는 오히려 틀린 값을 냈다. 이제 저장된 receipt를 그대로 돌려준다 |
+| fee payer | 거래에 붙은 확장 정보에서 먼저 읽고, 없으면 기존 경로가 저장한 메타를 읽는다. 응답 형식(`feePayer`, `feePayerSignatures`)은 그대로다 |
+
+검증 결과는 다음과 같다.
+- `TestLiveStableNetIdentity`에 API 확인을 넣었다. 로컬 go-stablenet 블록 0~7331 전부에서 GraphQL `block`과 JSON-RPC `getBlock`의 hash가 노드 값과 같다. 거래 12건 모두에서 GraphQL `transaction`과 JSON-RPC `getTxResult`의 hash·type·from이 노드 값과 같고, 0x16 거래 6건의 feePayer도 노드 값과 같다.
+- 같은 시험을 이전 API 코드로 돌리면 GraphQL 블록 1의 hash가 go-ethereum 규칙 값으로 나와 실패한다.
+- GraphQL golden에서는 값 하나가 바뀌었다. 블록 1 거래의 `effectiveGasPrice`가 API가 계산하던 1000000001에서 receipt에 저장된 2000000000으로 바뀌었다. 실제 노드에서는 receipt 값이 기준이다. 다만 가짜 체인이 `effectiveGasPrice`를 fee cap으로 보고하는 것은 현실과 다르다. 가짜 체인을 실제 규칙(`min(baseFee + tip, feeCap)`)에 맞추는 일은 잔액 golden이 함께 바뀌므로 따로 한다.
+- API 시험(race 포함), 저장 계층 시험, 전체 시험, `TestLiveStableNet`이 통과했다.
+
+**남긴 것.**
+- watchlist 처리기(`pkg/watchlist`)는 go-ethereum 보기로 블록 hash를 계산한다. 현재 연결되어 있지 않아 이번 범위에서 뺐다. 연결할 때 모델로 옮겨야 한다.
+- 이벤트 페이로드(`events.BlockEvent.Block`, `TransactionEvent.Tx`)는 아직 go-ethereum 타입이다. hash 필드는 모델 값이지만 페이로드에서 hash를 다시 계산하는 구독자가 생기면 틀린다.
+- `gethconv`(임시 다리)는 저장 계층의 go-ethereum 메서드, 기존 클라이언트 경로, 남은 처리기가 쓰므로 아직 지우지 못한다. S5와 처리기 이전이 끝나면 지운다.

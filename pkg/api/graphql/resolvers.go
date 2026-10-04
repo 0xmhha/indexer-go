@@ -8,6 +8,8 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -44,7 +46,7 @@ func (s *Schema) resolveBlock(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("invalid block number format: %w", err)
 	}
 
-	block, err := s.storage.GetBlock(ctx, number)
+	block, err := s.models().GetModelBlock(ctx, number)
 	if err != nil {
 		s.logger.Error("failed to get block",
 			zap.Uint64("number", number),
@@ -64,7 +66,7 @@ func (s *Schema) resolveBlockByHash(p graphql.ResolveParams) (interface{}, error
 	}
 
 	hash := common.HexToHash(hashStr)
-	block, err := s.storage.GetBlockByHash(ctx, hash)
+	block, err := s.models().GetModelBlockByHash(ctx, hash)
 	if err != nil {
 		s.logger.Error("failed to get block by hash",
 			zap.String("hash", hashStr),
@@ -116,7 +118,7 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	}
 
 	// Fetch and filter blocks
-	blocks, err := s.storage.GetBlocks(ctx, blockRange.StartBlock, blockRange.EndBlock)
+	blocks, err := s.models().GetModelBlocks(ctx, blockRange.StartBlock, blockRange.EndBlock)
 	if err != nil {
 		s.logger.Error("failed to get blocks",
 			zap.Uint64("startBlock", blockRange.StartBlock),
@@ -143,7 +145,7 @@ func (s *Schema) calculateBlockRange(filter BlockFilter, latestHeight uint64, pa
 }
 
 // blocksToNodes converts blocks to GraphQL nodes
-func (s *Schema) blocksToNodes(blocks []*types.Block) []interface{} {
+func (s *Schema) blocksToNodes(blocks []*model.Block) []interface{} {
 	nodes := make([]interface{}, len(blocks))
 	for i, block := range blocks {
 		nodes[i] = s.blockToMap(block)
@@ -152,7 +154,7 @@ func (s *Schema) blocksToNodes(blocks []*types.Block) []interface{} {
 }
 
 // calculateBlockTotalCount calculates total count based on filters
-func (s *Schema) calculateBlockTotalCount(ctx context.Context, filter BlockFilter, filteredBlocks []*types.Block, latestHeight uint64) int {
+func (s *Schema) calculateBlockTotalCount(ctx context.Context, filter BlockFilter, filteredBlocks []*model.Block, latestHeight uint64) int {
 	if filter.hasTimestampFilter() || filter.hasMinerFilter() {
 		return len(filteredBlocks)
 	}
@@ -167,7 +169,7 @@ func (s *Schema) calculateBlockTotalCount(ctx context.Context, filter BlockFilte
 
 // buildBlockConnectionResponse builds the GraphQL connection response for blocks
 // reverseOrder indicates default (no filter) pagination where latest blocks come first
-func (s *Schema) buildBlockConnectionResponse(blocks []*types.Block, nodes []interface{}, totalCount int, filter BlockFilter, blockRange BlockRange, pagination PaginationParams, reverseOrder bool) map[string]interface{} {
+func (s *Schema) buildBlockConnectionResponse(blocks []*model.Block, nodes []interface{}, totalCount int, filter BlockFilter, blockRange BlockRange, pagination PaginationParams, reverseOrder bool) map[string]interface{} {
 	var hasNextPage, hasPreviousPage bool
 	if reverseOrder {
 		hasNextPage = blockRange.StartBlock > 0
@@ -179,8 +181,8 @@ func (s *Schema) buildBlockConnectionResponse(blocks []*types.Block, nodes []int
 
 	var startCursor, endCursor interface{}
 	if len(blocks) > 0 {
-		startCursor = fmt.Sprintf("%d", blocks[0].NumberU64())
-		endCursor = fmt.Sprintf("%d", blocks[len(blocks)-1].NumberU64())
+		startCursor = fmt.Sprintf("%d", blocks[0].Number)
+		endCursor = fmt.Sprintf("%d", blocks[len(blocks)-1].Number)
 	}
 
 	return buildConnectionResponse(ConnectionResponse{
@@ -268,7 +270,7 @@ func (s *Schema) resolveBlocksRange(p graphql.ResolveParams) (interface{}, error
 	// Fetch blocks in range
 	blocks := make([]interface{}, 0, endNumber-startNumber+1)
 	for blockNum := startNumber; blockNum <= endNumber; blockNum++ {
-		block, err := s.storage.GetBlock(ctx, blockNum)
+		block, err := s.models().GetModelBlock(ctx, blockNum)
 		if err != nil {
 			s.logger.Warn("failed to get block in range",
 				zap.Uint64("blockNumber", blockNum),
@@ -283,17 +285,17 @@ func (s *Schema) resolveBlocksRange(p graphql.ResolveParams) (interface{}, error
 			blockMap["transactions"] = []interface{}{}
 		} else if includeReceipts {
 			// If receipts are requested, enhance transactions with receipt data
-			txs := block.Transactions()
-			blockTs := fmt.Sprintf("%d", block.Header().Time)
-			enhancedTxs := make([]interface{}, 0, len(txs))
-			for i, tx := range txs {
+			blockTs := fmt.Sprintf("%d", block.Time)
+			enhancedTxs := make([]interface{}, 0, len(block.Transactions))
+			for i, tx := range block.Transactions {
 				txMap := s.transactionToMap(tx, &storage.TxLocation{
 					BlockHeight: blockNum,
+					BlockHash:   block.Hash,
 					TxIndex:     uint64(i),
 				})
 				txMap["blockTimestamp"] = blockTs
 				// Get receipt for this transaction
-				receipt, err := s.storage.GetReceipt(ctx, tx.Hash())
+				receipt, err := s.storage.GetReceipt(ctx, tx.Hash)
 				if err == nil && receipt != nil {
 					txMap["receipt"] = s.receiptToMap(receipt)
 				}
@@ -327,7 +329,7 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 	}
 
 	hash := common.HexToHash(hashStr)
-	tx, location, err := s.storage.GetTransaction(ctx, hash)
+	tx, location, err := s.models().GetModelTransaction(ctx, hash)
 	if err != nil {
 		s.logger.Error("failed to get transaction",
 			zap.String("hash", hashStr),
@@ -336,51 +338,15 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 	}
 
 	result := s.transactionToMap(tx, location)
+	if location != nil {
+		if block, err := s.models().GetModelBlock(ctx, location.BlockHeight); err == nil && block != nil {
+			result["blockTimestamp"] = fmt.Sprintf("%d", block.Time)
+		}
+	}
 
-	// Fetch and include receipt data for status determination
+	// Include the stored receipt for status determination
 	receipt, err := s.storage.GetReceipt(ctx, hash)
 	if err == nil && receipt != nil {
-		// Derive missing receipt fields from block and transaction context
-		if location != nil {
-			block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
-			if blockErr == nil && block != nil {
-				result["blockTimestamp"] = fmt.Sprintf("%d", block.Header().Time)
-				// Set receipt block info
-				receipt.BlockNumber = big.NewInt(int64(location.BlockHeight))
-				receipt.BlockHash = location.BlockHash
-				receipt.TransactionIndex = uint(location.TxIndex)
-
-				// Calculate GasUsed
-				if location.TxIndex == 0 {
-					receipt.GasUsed = receipt.CumulativeGasUsed
-				} else {
-					txs := block.Transactions()
-					if int(location.TxIndex) > 0 && int(location.TxIndex) <= len(txs) {
-						prevTxHash := txs[location.TxIndex-1].Hash()
-						prevReceipt, prevErr := s.storage.GetReceipt(ctx, prevTxHash)
-						if prevErr == nil && prevReceipt != nil {
-							receipt.GasUsed = receipt.CumulativeGasUsed - prevReceipt.CumulativeGasUsed
-						}
-					}
-				}
-
-				// Calculate effective gas price
-				baseFee := block.BaseFee()
-				if baseFee != nil && tx.Type() == types.DynamicFeeTxType {
-					tipCap := tx.GasTipCap()
-					feeCap := tx.GasFeeCap()
-					if tipCap != nil && feeCap != nil {
-						effectiveGasPrice := new(big.Int).Add(baseFee, tipCap)
-						if effectiveGasPrice.Cmp(feeCap) > 0 {
-							effectiveGasPrice = feeCap
-						}
-						receipt.EffectiveGasPrice = effectiveGasPrice
-					}
-				} else if tx.GasPrice() != nil {
-					receipt.EffectiveGasPrice = tx.GasPrice()
-				}
-			}
-		}
 		result["receipt"] = s.receiptToMap(receipt)
 	}
 
@@ -416,7 +382,7 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 	}
 
 	// Fetch blocks and filter transactions
-	blocks, err := s.storage.GetBlocks(ctx, blockFrom, blockTo)
+	blocks, err := s.models().GetModelBlocks(ctx, blockFrom, blockTo)
 	if err != nil {
 		s.logger.Error("failed to get blocks",
 			zap.Uint64("blockNumberFrom", blockFrom),
@@ -459,7 +425,7 @@ func (s *Schema) normalizeBlockRange(from, to, latestHeight uint64) (uint64, uin
 }
 
 // filterTransactionsFromBlocks filters transactions from blocks based on filter criteria
-func (s *Schema) filterTransactionsFromBlocks(blocks []*types.Block, filter TransactionFilter) []map[string]interface{} {
+func (s *Schema) filterTransactionsFromBlocks(blocks []*model.Block, filter TransactionFilter) []map[string]interface{} {
 	var filteredTxs []map[string]interface{}
 
 	for _, block := range blocks {
@@ -467,18 +433,18 @@ func (s *Schema) filterTransactionsFromBlocks(blocks []*types.Block, filter Tran
 			continue
 		}
 
-		for i, tx := range block.Transactions() {
+		for i, tx := range block.Transactions {
 			if !s.matchesTransactionFilter(tx, filter) {
 				continue
 			}
 
 			location := &storage.TxLocation{
-				BlockHeight: block.NumberU64(),
-				BlockHash:   block.Hash(),
+				BlockHeight: block.Number,
+				BlockHash:   block.Hash,
 				TxIndex:     uint64(i),
 			}
 			txMap := s.transactionToMap(tx, location)
-			txMap["blockTimestamp"] = fmt.Sprintf("%d", block.Header().Time)
+			txMap["blockTimestamp"] = fmt.Sprintf("%d", block.Time)
 			filteredTxs = append(filteredTxs, txMap)
 		}
 	}
@@ -487,38 +453,18 @@ func (s *Schema) filterTransactionsFromBlocks(blocks []*types.Block, filter Tran
 }
 
 // matchesTransactionFilter checks if a transaction matches the filter criteria
-func (s *Schema) matchesTransactionFilter(tx *types.Transaction, filter TransactionFilter) bool {
-	if filter.TxType != nil && int(tx.Type()) != *filter.TxType {
+func (s *Schema) matchesTransactionFilter(tx *model.Transaction, filter TransactionFilter) bool {
+	if filter.TxType != nil && int(tx.Type) != *filter.TxType {
 		return false
 	}
-
-	// Get signer and from address
-	var signer types.Signer
-	if tx.ChainId() != nil {
-		signer = types.LatestSignerForChainID(tx.ChainId())
-	} else {
-		signer = types.HomesteadSigner{}
-	}
-
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		s.logger.Warn("failed to get transaction sender",
-			zap.String("txHash", tx.Hash().Hex()),
-			zap.Error(err))
+	if filter.From != nil && tx.From != *filter.From {
 		return false
 	}
-
-	if filter.From != nil && from != *filter.From {
-		return false
-	}
-
 	if filter.To != nil {
-		txTo := tx.To()
-		if txTo == nil || *txTo != *filter.To {
+		if tx.To == nil || *tx.To != *filter.To {
 			return false
 		}
 	}
-
 	return true
 }
 
@@ -613,36 +559,33 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 		txHashes = txHashes[:limit]
 	}
 
-	// Batch fetch all transactions
-	txs, locs, batchErr := s.storage.GetTransactions(ctx, txHashes)
-	if batchErr != nil && !errors.Is(batchErr, storage.ErrNotFound) {
-		s.logger.Error("failed to batch get transactions",
-			zap.String("address", addressStr),
-			zap.Error(batchErr))
-	}
-
 	// Convert transaction results to full transaction objects
 	nodes := make([]interface{}, 0, len(txHashes))
 	blockTimestamps := make(map[uint64]string) // cache block timestamps
-	for i, tx := range txs {
-		if tx == nil {
-			if batchErr != nil {
-				s.logger.Warn("transaction not found in batch",
-					zap.String("txHash", txHashes[i].Hex()),
+	for _, txHash := range txHashes {
+		tx, location, err := s.models().GetModelTransaction(ctx, txHash)
+		if err != nil {
+			if !errors.Is(err, storage.ErrNotFound) {
+				s.logger.Error("failed to get transaction",
+					zap.String("txHash", txHash.Hex()),
+					zap.String("address", addressStr),
+					zap.Error(err))
+			} else {
+				s.logger.Warn("transaction not found",
+					zap.String("txHash", txHash.Hex()),
 					zap.String("address", addressStr))
 			}
 			continue
 		}
-		location := locs[i]
 
 		txMap := s.transactionToMap(tx, location)
 		if location != nil {
 			if ts, ok := blockTimestamps[location.BlockHeight]; ok {
 				txMap["blockTimestamp"] = ts
 			} else {
-				block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
+				block, blockErr := s.models().GetModelBlock(ctx, location.BlockHeight)
 				if blockErr == nil && block != nil {
-					ts = fmt.Sprintf("%d", block.Header().Time)
+					ts = fmt.Sprintf("%d", block.Time)
 					blockTimestamps[location.BlockHeight] = ts
 					txMap["blockTimestamp"] = ts
 				}
@@ -682,7 +625,8 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 	}, nil
 }
 
-// resolveReceipt resolves a receipt by transaction hash
+// resolveReceipt resolves a receipt by transaction hash. Stored receipts
+// are complete (storage schema v2), so they are returned as stored.
 func (s *Schema) resolveReceipt(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 	hashStr, ok := p.Args["transactionHash"].(string)
@@ -697,65 +641,6 @@ func (s *Schema) resolveReceipt(p graphql.ResolveParams) (interface{}, error) {
 			zap.String("hash", hashStr),
 			zap.Error(err))
 		return nil, err
-	}
-
-	// Get transaction to find block info for deriving missing receipt fields
-	tx, location, err := s.storage.GetTransaction(ctx, hash)
-	if err != nil {
-		s.logger.Warn("failed to get transaction for receipt context",
-			zap.String("hash", hashStr),
-			zap.Error(err))
-		// Still return basic receipt data
-		return s.receiptToMap(receipt), nil
-	}
-
-	// Get block to derive additional fields
-	var baseFee *big.Int
-	if location != nil {
-		block, err := s.storage.GetBlock(ctx, location.BlockHeight)
-		if err == nil && block != nil {
-			baseFee = block.BaseFee()
-			// Set receipt block info from location
-			receipt.BlockNumber = big.NewInt(int64(location.BlockHeight))
-			receipt.BlockHash = location.BlockHash
-			receipt.TransactionIndex = uint(location.TxIndex)
-
-			// Calculate GasUsed from CumulativeGasUsed
-			// GasUsed = current.CumulativeGasUsed - previous.CumulativeGasUsed
-			if location.TxIndex == 0 {
-				// First transaction in block: gasUsed = cumulativeGasUsed
-				receipt.GasUsed = receipt.CumulativeGasUsed
-			} else {
-				// Get previous transaction's receipt to calculate gas used
-				txs := block.Transactions()
-				if int(location.TxIndex) > 0 && int(location.TxIndex) <= len(txs) {
-					prevTxHash := txs[location.TxIndex-1].Hash()
-					prevReceipt, err := s.storage.GetReceipt(ctx, prevTxHash)
-					if err == nil && prevReceipt != nil {
-						receipt.GasUsed = receipt.CumulativeGasUsed - prevReceipt.CumulativeGasUsed
-					}
-				}
-			}
-		}
-	}
-
-	// Calculate effective gas price
-	if tx != nil {
-		if baseFee != nil && tx.Type() == types.DynamicFeeTxType {
-			// EIP-1559: effectiveGasPrice = min(baseFee + tipCap, feeCap)
-			tipCap := tx.GasTipCap()
-			feeCap := tx.GasFeeCap()
-			if tipCap != nil && feeCap != nil {
-				effectiveGasPrice := new(big.Int).Add(baseFee, tipCap)
-				if effectiveGasPrice.Cmp(feeCap) > 0 {
-					effectiveGasPrice = feeCap
-				}
-				receipt.EffectiveGasPrice = effectiveGasPrice
-			}
-		} else if tx.GasPrice() != nil {
-			// Legacy/AccessList tx: effectiveGasPrice = gasPrice
-			receipt.EffectiveGasPrice = tx.GasPrice()
-		}
 	}
 
 	return s.receiptToMap(receipt), nil
@@ -774,15 +659,6 @@ func (s *Schema) resolveReceiptsByBlock(p graphql.ResolveParams) (interface{}, e
 		return nil, fmt.Errorf("invalid block number format: %w", err)
 	}
 
-	// Get block for deriving receipt fields
-	block, err := s.storage.GetBlock(ctx, number)
-	if err != nil {
-		s.logger.Error("failed to get block",
-			zap.Uint64("number", number),
-			zap.Error(err))
-		return nil, fmt.Errorf("failed to get block: %w", err)
-	}
-
 	receipts, err := s.storage.GetReceiptsByBlockNumber(ctx, number)
 	if err != nil {
 		s.logger.Error("failed to get receipts by block",
@@ -791,41 +667,8 @@ func (s *Schema) resolveReceiptsByBlock(p graphql.ResolveParams) (interface{}, e
 		return nil, err
 	}
 
-	// Derive missing fields for each receipt
-	baseFee := block.BaseFee()
-	txs := block.Transactions()
-
 	result := make([]interface{}, len(receipts))
 	for i, receipt := range receipts {
-		// Set block info
-		receipt.BlockNumber = big.NewInt(int64(number))
-		receipt.BlockHash = block.Hash()
-
-		// Calculate GasUsed
-		if i == 0 {
-			receipt.GasUsed = receipt.CumulativeGasUsed
-		} else if i > 0 && receipts[i-1] != nil {
-			receipt.GasUsed = receipt.CumulativeGasUsed - receipts[i-1].CumulativeGasUsed
-		}
-
-		// Calculate effective gas price from transaction
-		if i < len(txs) {
-			tx := txs[i]
-			if baseFee != nil && tx.Type() == types.DynamicFeeTxType {
-				tipCap := tx.GasTipCap()
-				feeCap := tx.GasFeeCap()
-				if tipCap != nil && feeCap != nil {
-					effectiveGasPrice := new(big.Int).Add(baseFee, tipCap)
-					if effectiveGasPrice.Cmp(feeCap) > 0 {
-						effectiveGasPrice = feeCap
-					}
-					receipt.EffectiveGasPrice = effectiveGasPrice
-				}
-			} else if tx.GasPrice() != nil {
-				receipt.EffectiveGasPrice = tx.GasPrice()
-			}
-		}
-
 		result[i] = s.receiptToMap(receipt)
 	}
 
@@ -2041,4 +1884,39 @@ func (s *Schema) resolveProposalExecutionSkippedEvents(p graphql.ResolveParams) 
 	}
 
 	return result, nil
+}
+
+// models reads blocks and transactions as the chain-neutral model, so hashes,
+// transaction types and senders are the ones the chain reports.
+func (s *Schema) models() storage.ModelReader {
+	return storage.AsModelReader(s.storage)
+}
+
+// modelBlockOf returns the stored model of a block another reader returned
+// as a go-ethereum block, falling back to converting it.
+func (s *Schema) modelBlockOf(ctx context.Context, b *types.Block) *model.Block {
+	if b == nil {
+		return nil
+	}
+	if m, err := s.models().GetModelBlock(ctx, b.NumberU64()); err == nil {
+		return m
+	}
+	m, _ := gethconv.BlockFromGeth(b)
+	return m
+}
+
+// modelTxAt returns the stored model of a transaction another reader
+// returned as a go-ethereum transaction. It is looked up by position: the
+// go-ethereum hash of a chain-specific type differs from the chain's.
+func (s *Schema) modelTxAt(ctx context.Context, tx *types.Transaction, loc *storage.TxLocation) *model.Transaction {
+	if loc != nil {
+		if b, err := s.models().GetModelBlock(ctx, loc.BlockHeight); err == nil && int(loc.TxIndex) < len(b.Transactions) {
+			return b.Transactions[loc.TxIndex]
+		}
+	}
+	if tx == nil {
+		return nil
+	}
+	m, _ := gethconv.TxFromGeth(tx)
+	return m
 }

@@ -9,11 +9,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/userop"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -1838,7 +1841,7 @@ func TestGraphQLMappers(t *testing.T) {
 			GasUsed:    5000000,
 		}
 		block := types.NewBlockWithHeader(header)
-		blockMap := schema.blockToMap(block)
+		blockMap := schema.blockToMap(blockModel(t, block))
 
 		if blockMap == nil {
 			t.Error("expected blockMap to be non-nil")
@@ -1865,7 +1868,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -1936,7 +1939,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -1966,7 +1969,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -2008,7 +2011,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -2054,7 +2057,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -2167,4 +2170,19 @@ func TestGraphQLMappers(t *testing.T) {
 			t.Error("expected contractAddress field")
 		}
 	})
+}
+
+// blockModel and txModel convert test fixtures to the model the mappers take.
+func blockModel(t *testing.T, b *types.Block) *model.Block {
+	t.Helper()
+	m, err := gethconv.BlockFromGeth(b)
+	require.NoError(t, err)
+	return m
+}
+
+func txModel(t *testing.T, tx *types.Transaction) *model.Transaction {
+	t.Helper()
+	m, err := gethconv.TxFromGeth(tx)
+	require.NoError(t, err)
+	return m
 }

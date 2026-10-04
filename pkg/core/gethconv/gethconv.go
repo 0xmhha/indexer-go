@@ -203,3 +203,19 @@ func ReceiptsToGeth(rs []*model.Receipt) types.Receipts {
 	}
 	return out
 }
+
+// AuthToGeth converts an EIP-7702 authorization, for example to recover its
+// authority.
+func AuthToGeth(a model.SetCodeAuthorization) types.SetCodeAuthorization {
+	out := types.SetCodeAuthorization{Address: a.Address, Nonce: a.Nonce, V: a.V}
+	if a.ChainID != nil {
+		out.ChainID.SetFromBig(a.ChainID)
+	}
+	if a.R != nil {
+		out.R.SetFromBig(a.R)
+	}
+	if a.S != nil {
+		out.S.SetFromBig(a.S)
+	}
+	return out
+}

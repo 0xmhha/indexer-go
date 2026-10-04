@@ -65,7 +65,7 @@
         "blockNumber": "1",
         "contractAddress": null,
         "cumulativeGasUsed": "42000",
-        "effectiveGasPrice": "1000000001",
+        "effectiveGasPrice": "2000000000",
         "gasUsed": "21000",
         "logs": [],
         "status": 1,

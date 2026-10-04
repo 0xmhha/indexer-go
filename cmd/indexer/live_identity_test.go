@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"math/big"
 	"fmt"
 	"os"
@@ -15,9 +16,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/api/graphql"
+	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/source"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -57,6 +62,10 @@ func TestLiveStableNetIdentity(t *testing.T) {
 
 	mr, ok := app.storage.(storage.ModelReader)
 	require.True(t, ok)
+	gql, err := graphql.NewHandler(app.storage, zap.NewNop())
+	require.NoError(t, err)
+	rpcAPI := jsonrpc.NewHandler(app.storage, zap.NewNop())
+	defer rpcAPI.Close()
 	fdReader, ok := app.storage.(storage.FeeDelegationReader)
 	require.True(t, ok)
 	logReader, ok := app.storage.(storage.LogReader)
@@ -91,8 +100,18 @@ func TestLiveStableNetIdentity(t *testing.T) {
 			wrong[g.Hash()] = "Ethereum-rule hash of block " + b.Hash.Hex()
 		}
 
+		// The APIs report the chain's block hash (CP-5).
+		res := gql.ExecuteQuery(fmt.Sprintf(`{ block(number: "%d") { hash transactions { hash } } }`, n), nil)
+		require.Empty(t, res.Errors)
+		gb := res.Data.(map[string]interface{})["block"].(map[string]interface{})
+		require.Equal(t, b.Hash.Hex(), gb["hash"], "GraphQL block %d hash", n)
+		rb, rerr := rpcAPI.HandleMethod(ctx, "getBlock", json.RawMessage(fmt.Sprintf(`{"number":%d}`, n)))
+		require.Nil(t, rerr)
+		require.Equal(t, b.Hash.Hex(), rb.(map[string]interface{})["hash"], "JSON-RPC block %d hash", n)
+
 		blockLogs := 0
 		for i, tx := range b.Transactions {
+			checkTxAPIs(t, ctx, gql, rpcAPI, tx)
 			txs++
 			got, loc, err := mr.GetModelTransaction(ctx, tx.Hash)
 			require.NoError(t, err, "tx %s", tx.Hash.Hex())
@@ -182,4 +201,32 @@ func keyFamily(k []byte) string {
 		return string(k)
 	}
 	return "/" + parts[1] + "/" + parts[2]
+}
+
+// checkTxAPIs requires GraphQL and JSON-RPC to report tx as the chain does:
+// its hash, type, sender and, for fee delegation, its fee payer.
+func checkTxAPIs(t *testing.T, ctx context.Context, gql *graphql.Handler, rpcAPI *jsonrpc.Handler, tx *model.Transaction) {
+	t.Helper()
+	feePayer := any(nil)
+	if fd, ok := stablenet.FeeDelegationOf(tx); ok {
+		feePayer = fd.FeePayer.Hex()
+	}
+
+	res := gql.ExecuteQuery(fmt.Sprintf(`{ transaction(hash: "%s") { hash type from feePayer } }`, tx.Hash.Hex()), nil)
+	require.Empty(t, res.Errors)
+	g := res.Data.(map[string]interface{})["transaction"].(map[string]interface{})
+	require.Equal(t, tx.Hash.Hex(), g["hash"])
+	require.EqualValues(t, tx.Type, g["type"])
+	require.Equal(t, tx.From.Hex(), g["from"])
+	require.Equal(t, feePayer, g["feePayer"], "GraphQL fee payer of %s", tx.Hash.Hex())
+
+	r, rerr := rpcAPI.HandleMethod(ctx, "getTxResult", json.RawMessage(fmt.Sprintf(`{"hash":"%s"}`, tx.Hash.Hex())))
+	require.Nil(t, rerr)
+	j := r.(map[string]interface{})
+	require.Equal(t, tx.Hash.Hex(), j["hash"])
+	require.Equal(t, fmt.Sprintf("0x%x", tx.Type), j["type"])
+	require.Equal(t, tx.From.Hex(), j["from"])
+	if feePayer != nil {
+		require.Equal(t, feePayer, j["feePayer"], "JSON-RPC fee payer of %s", tx.Hash.Hex())
+	}
 }

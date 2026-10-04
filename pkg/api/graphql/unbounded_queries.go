@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -36,14 +36,14 @@ func (s *Schema) recentTransactions(ctx context.Context, filter TransactionFilte
 
 	var collected []map[string]interface{}
 	for h := int64(latestHeight); h >= 0 && len(collected) < need; h-- {
-		block, err := s.storage.GetBlock(ctx, uint64(h))
+		block, err := s.models().GetModelBlock(ctx, uint64(h))
 		if err != nil {
 			if errors.Is(err, storage.ErrNotFound) {
 				continue
 			}
 			return nil, fmt.Errorf("failed to get block %d: %w", h, err)
 		}
-		matches := s.filterTransactionsFromBlocks([]*types.Block{block}, filter)
+		matches := s.filterTransactionsFromBlocks([]*model.Block{block}, filter)
 		reverseSlice(matches)
 		collected = append(collected, matches...)
 	}

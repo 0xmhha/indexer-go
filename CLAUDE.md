@@ -110,6 +110,6 @@ Known config issues: `database.readonly` and several sections (`eventbus`, `node
 - Framework refactoring plan: `docs/analysis/refactoring-plan.md`
 - Phase 0 design and progress: `docs/analysis/phase0-design.md`
 - Phase 0 fixed address sequence reset (D1), non-atomic block writes (D2), non-idempotent reprocessing (D3), gap recovery cursor rewind (D10), the storage wrapper hiding features (F1), unwired SetCode/UserOp/Module/fee delegation (F2) and system contract decoding (D11). Existing databases need a reindex
-- Blocks are read as raw JSON and decoded by the chain profile (`pkg/chains`, `pkg/source`) and stored as the chain-neutral model (`pkg/core/model`, storage schema v2): StableNet fee delegation (D13) and WBFT block hashes (D16) are kept as the chain reports them. API responses still go through go-ethereum types until CP-5 (`docs/analysis/chain-profile-design.md`)
+- Blocks are read as raw JSON and decoded by the chain profile (`pkg/chains`, `pkg/source`) and stored as the chain-neutral model (`pkg/core/model`, storage schema v2): StableNet fee delegation (D13) and WBFT block hashes (D16) are kept as the chain reports them, in storage and in GraphQL/JSON-RPC responses (`docs/analysis/chain-profile-design.md`)
 - Open: out-of-order gap filling corrupts order-dependent state (D12); multi-chain mode shares storage keys (D4) and is rejected at startup
 - Live verification against a local go-stablenet network: `TestLiveStableNet` (runs only with `INDEXER_LIVE_RPC`)

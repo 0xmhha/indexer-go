@@ -8,6 +8,7 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 )
 
@@ -17,6 +18,9 @@ import (
 type ModelReader interface {
 	GetModelBlock(ctx context.Context, height uint64) (*model.Block, error)
 	GetModelBlockByHash(ctx context.Context, hash common.Hash) (*model.Block, error)
+	// GetModelBlocks returns the stored blocks in [start, end]; missing
+	// heights are skipped.
+	GetModelBlocks(ctx context.Context, start, end uint64) ([]*model.Block, error)
 	GetModelTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *TxLocation, error)
 	GetModelReceipt(ctx context.Context, hash common.Hash) (*model.Receipt, error)
 }
@@ -216,4 +220,97 @@ func (s *PebbleStorage) GetModelReceipt(ctx context.Context, hash common.Hash) (
 		return nil, fmt.Errorf("failed to decode receipt: %w", err)
 	}
 	return r, nil
+}
+
+// GetModelBlocks implements ModelReader.
+func (s *PebbleStorage) GetModelBlocks(ctx context.Context, start, end uint64) ([]*model.Block, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+	if end < start {
+		return nil, nil
+	}
+	blocks := make([]*model.Block, 0, end-start+1)
+	for h := start; h <= end; h++ {
+		b, err := s.GetModelBlock(ctx, h)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get block %d: %w", h, err)
+		}
+		blocks = append(blocks, b)
+	}
+	return blocks, nil
+}
+
+// AsModelReader returns r itself when it stores the model, and otherwise a
+// ModelReader that converts r's go-ethereum values. The conversion cannot
+// restore chain-specific data, so it is only for readers that never held
+// it (test doubles, other backends).
+func AsModelReader(r Reader) ModelReader {
+	if mr, ok := r.(ModelReader); ok {
+		return mr
+	}
+	return gethModelReader{r}
+}
+
+type gethModelReader struct{ r Reader }
+
+func (g gethModelReader) GetModelBlock(ctx context.Context, height uint64) (*model.Block, error) {
+	b, err := g.r.GetBlock(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+	return gethconv.BlockFromGeth(b)
+}
+
+func (g gethModelReader) GetModelBlockByHash(ctx context.Context, hash common.Hash) (*model.Block, error) {
+	b, err := g.r.GetBlockByHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	return gethconv.BlockFromGeth(b)
+}
+
+func (g gethModelReader) GetModelBlocks(ctx context.Context, start, end uint64) ([]*model.Block, error) {
+	bs, err := g.r.GetBlocks(ctx, start, end)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*model.Block, 0, len(bs))
+	for _, b := range bs {
+		if b == nil {
+			continue
+		}
+		m, err := gethconv.BlockFromGeth(b)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+func (g gethModelReader) GetModelTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *TxLocation, error) {
+	tx, loc, err := g.r.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, nil, err
+	}
+	m, err := gethconv.TxFromGeth(tx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if loc != nil {
+		m.BlockHash, m.BlockNumber, m.Index = loc.BlockHash, loc.BlockHeight, uint(loc.TxIndex)
+	}
+	return m, loc, nil
+}
+
+func (g gethModelReader) GetModelReceipt(ctx context.Context, hash common.Hash) (*model.Receipt, error) {
+	r, err := g.r.GetReceipt(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	return gethconv.ReceiptFromGeth(r), nil
 }
