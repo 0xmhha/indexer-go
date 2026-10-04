@@ -201,3 +201,23 @@ CP-1과 CP-2는 기존 코드에 영향 없이 새 패키지로 만들 수 있�
 - **명세를 직접 구현하므로** go-stablenet이 type 0x16을 바꾸면 따라가야 한다. 시험 벡터를 노드 버전마다 다시 수집하는 절차가 필요하다.
 - 이 문서의 type 0x16 명세는 go-stablenet v1.1.0 코드를 읽어 정리한 것이다. 노드 dev 브랜치(`740526d`)와의 차이는 확인하지 않았다. CP-2의 벡터 시험이 실제 노드와의 일치를 판정한다.
 - 라이선스 판단(LGPL 코드를 읽고 독립 구현하는 것)은 법무 확인 대상이다.
+
+---
+
+## 9. 진행 기록
+
+### CP-1: 중립 모델, 프로필 SPI, EVM 프로필 (10/4)
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/core/model` | `Block`, `Transaction`, `Receipt`, `Log`, `Signature`, `AccessTuple`, `SetCodeAuthorization`. 체인 고유 필드는 `Extensions`(`*ExtKey`로 키를 정해 식별자 단위로 비교하므로 이름이 겹쳐도 충돌하지 않는다)에 담는다. 트랜잭션의 `Type`은 체인 값 그대로이고, `Raw`에 정식 인코딩을 남긴다. 어느 프로필도 모르는 타입은 `Opaque`로 표시한다 |
+| `pkg/chains` | `Profile` SPI(`ID`, `Detect`, `DecodeBlock`, `DecodeReceipts`, `Features`), 우선순위가 있는 레지스트리, `Detect`, `Lookup`. 같은 id를 두 번 등록하면 panic(배선 오류)이다 |
+| `pkg/chains/evm` | 범용 EVM 프로필(id `evm`, 우선순위 0, 모든 노드를 받는 fallback). 표준 타입은 upstream go-ethereum을 codec으로만 써서 decode한다. 트랜잭션 hash와 송신자를 다시 계산해 노드 값과 비교하고, 다르면 `ErrHashMismatch`/`ErrSenderMismatch`로 블록을 실패시킨다. 블록 hash도 header로 다시 계산해 비교하며, 끌 수 있다(`WithHeaderHashCheck`). 체인 고유 타입은 `WithTxDecoder`로 등록한 decoder가 우선한다. 아무도 모르는 타입은 노드가 보고한 hash와 송신자로 opaque 저장한다 |
+
+검증 결과(`pkg/chains/evm/evm_test.go`, `pkg/chains/profile_test.go`, race 검사 포함)는 다음과 같다.
+- `TestDecodeMatchesGoEthereum`: 기준 시나리오(블록 21개, legacy·dynamic fee·SetCode 포함)와 부하 시나리오(블록 12개)의 모든 블록에서, 모델의 블록 hash, 트랜잭션 hash·타입·송신자·필드·정식 인코딩, receipt·로그가 `ethclient`가 decode한 값과 같다.
+- 모르는 타입 opaque 저장, hash·송신자·블록 hash 위조 거부, 체인 고유 decoder 우선 적용, 감지 우선순위와 fallback을 확인했다.
+
+기존 코드는 아직 이 패키지들을 쓰지 않는다. 연결은 CP-3에서 한다.
+
+**CP-2 전에 확인할 것.** 실제 StableNet header로 계산한 hash가 노드 hash와 같은지 확인해야 한다. 같지 않으면 StableNet 프로필에서 header hash 검사를 끄거나 StableNet 규칙으로 계산해야 한다.
