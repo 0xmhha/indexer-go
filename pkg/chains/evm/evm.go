@@ -40,6 +40,7 @@ type Profile struct {
 	features         []string
 	txDecoders       map[uint8]TxDecoder
 	verifyHeaderHash bool
+	headerHash       func(*types.Header) common.Hash
 }
 
 // Option configures a Profile.
@@ -62,6 +63,12 @@ func WithTxDecoder(typ uint8, d TxDecoder) Option {
 // header carries fields go-ethereum does not hash must disable it.
 func WithHeaderHashCheck(on bool) Option { return func(p *Profile) { p.verifyHeaderHash = on } }
 
+// WithHeaderHasher sets the rule that computes a block hash from its header,
+// for chains whose consensus hashes a filtered header (for example WBFT).
+func WithHeaderHasher(f func(*types.Header) common.Hash) Option {
+	return func(p *Profile) { p.headerHash = f }
+}
+
 // New returns an EVM-based profile.
 func New(id string, opts ...Option) *Profile {
 	p := &Profile{
@@ -69,6 +76,7 @@ func New(id string, opts ...Option) *Profile {
 		detect:           func(chains.NodeInfo) bool { return true },
 		txDecoders:       map[uint8]TxDecoder{},
 		verifyHeaderHash: true,
+		headerHash:       (*types.Header).Hash,
 	}
 	for _, o := range opts {
 		o(p)
@@ -102,8 +110,10 @@ func (p *Profile) DecodeBlock(raw json.RawMessage) (*model.Block, error) {
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, fmt.Errorf("evm: decode block: %w", err)
 	}
-	if p.verifyHeaderHash && head.Hash() != body.Hash {
-		return nil, fmt.Errorf("%w: block %d header %s reported %s", ErrHashMismatch, head.Number, head.Hash().Hex(), body.Hash.Hex())
+	if p.verifyHeaderHash {
+		if h := p.headerHash(&head); h != body.Hash {
+			return nil, fmt.Errorf("%w: block %d header %s reported %s", ErrHashMismatch, head.Number, h.Hex(), body.Hash.Hex())
+		}
 	}
 
 	b := headerToModel(&head)

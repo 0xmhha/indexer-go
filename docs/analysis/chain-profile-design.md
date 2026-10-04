@@ -221,3 +221,24 @@ CP-1과 CP-2는 기존 코드에 영향 없이 새 패키지로 만들 수 있�
 기존 코드는 아직 이 패키지들을 쓰지 않는다. 연결은 CP-3에서 한다.
 
 **CP-2 전에 확인할 것.** 실제 StableNet header로 계산한 hash가 노드 hash와 같은지 확인해야 한다. 같지 않으면 StableNet 프로필에서 header hash 검사를 끄거나 StableNet 규칙으로 계산해야 한다.
+
+### CP-2: StableNet 프로필 (10/4)
+
+**설계와 달라진 점: 블록 hash 규칙(D16).** CP-1의 확인 항목대로 실제 StableNet header를 범용 EVM 프로필로 해석해 보니, genesis를 뺀 모든 블록에서 블록 hash가 노드 값과 달랐다. go-stablenet은 difficulty가 1인 WBFT header의 hash를 계산할 때 extra에서 `PreparedSeal`·`CommittedSeal`을 비우고 `Round`를 0으로 바꾼다. 서명이 붙기 전 header의 hash다. 기존 indexer도 go-ethereum 규칙을 써서, StableNet 블록을 모두 실제와 다른 hash로 색인해 왔다(refactoring-plan.md D16). 그래서 이 규칙을 StableNet 프로필에 넣었다.
+
+| 산출물 | 내용 |
+|---|---|
+| `pkg/chains/evm` | `WithHeaderHasher`: 블록 hash 계산 규칙을 체인별로 바꾸는 연결점 |
+| `pkg/chains/stablenet/header.go` | `HeaderHash`: WBFT header면 extra를 원소 단위(`rlp.RawValue`)로 풀어 round·seal 두 개만 바꾸고 나머지는 바이트 그대로 다시 인코딩한 뒤 hash한다 |
+| `pkg/chains/stablenet/feedelegation.go` | type 0x16 codec(4절 명세의 독립 구현). 정식 인코딩을 다시 만들어 hash를 검증하고, 송신자를 안쪽 EIP-1559 서명으로, fee payer를 fv·fr·fs 서명으로 복원해 선언된 fee payer와 비교한다. 결과는 `Type: 0x16`, 노드 hash, `Raw`로 저장한다. fee payer 정보는 `FeeDelegationOf`로 꺼낸다. 가스비 부담자를 알려 주는 `FeePayerOf`도 둔다(잔액 추적이 쓸 연결점) |
+| `pkg/chains/stablenet/profile.go` | 프로필(id `stablenet`, 우선순위 100). 감지 규칙은 `gstable`·`stablenet`·`stableone`이다. 기본 기능은 `stablenet.system_contracts`, `stablenet.fee_delegation`, `stablenet.wbft` |
+| `testdata/live_vectors.json` | 로컬 go-stablenet 네트워크에서 수집한 벡터: 블록 0·1·5·33·100의 전체 JSON, 블록 33 트랜잭션의 `eth_getRawTransactionByHash`, 블록 33 receipt |
+
+검증 결과는 다음과 같다(race 검사 포함).
+- `TestHeaderHashMatchesLiveBlocks`: 벡터 블록 5개의 hash가 모두 노드 값과 같다. go-ethereum 규칙으로 계산한 값은 genesis를 뺀 4개 모두에서 다르다(D16을 시험으로 고정).
+- `TestDecodeLiveFeeDelegationBlock`: 블록 33의 두 트랜잭션(type 2, type 0x16) 모두 hash·타입·송신자가 노드 값과 같다. 다시 인코딩한 바이트가 노드의 원본 인코딩과 바이트 단위로 같다. fee payer는 노드의 `feePayer`와 같고 송신자와 다르다. receipt의 type 0x16도 그대로 유지되고, receipt는 정식 hash로 트랜잭션과 연결된다.
+- `TestSyntheticFeeDelegation`: 키로 직접 서명한 합성 트랜잭션으로 정상, 컨트랙트 생성(`to` 없음), 다른 키의 fee payer 서명(`ErrFeePayerMismatch`), 필드 누락 거부를 확인했다.
+- 범용 EVM 프로필은 StableNet 블록을 hash 불일치로 거부하고, 감지는 `Gstable/…`을 StableNet으로 고른다.
+- 실행 중인 노드의 블록 0~1039 전체와 receipt를 StableNet 프로필로 해석했다. 모든 블록 hash가 검증되었고 fee delegation 6건도 검증되었다. 이 확인은 임시 시험으로 했고 저장소에 남기지 않았다.
+
+**남긴 것.** WBFT extra 해석기(`storage/wbft_parser.go`)를 프로필로 옮기는 일은 저장소 쪽 코드와 함께 바뀌어야 해서 CP-4로 미룬다. 기존 수집 경로는 여전히 `ethclient`를 쓰므로 D13·D16은 CP-3에서 수집 경로를 프로필로 바꿔야 실제로 해결된다.
