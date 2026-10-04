@@ -23,9 +23,13 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
+	"github.com/0xmhha/indexer-go/pkg/features/aa"
+	_ "github.com/0xmhha/indexer-go/pkg/features/address"                   // address.index feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/balance"                   // balance.native feature
 	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/feedelegation"   // stablenet.fee_delegation feature
 	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/systemcontracts" // stablenet.system_contracts feature
 	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/wbft"            // stablenet.wbft feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/token"                     // token.transfers feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
@@ -701,19 +705,20 @@ func (a *App) initFetcher(ctx context.Context) error {
 		a.logger.Info("Reading blocks through chain profile", zap.String("profile", profile.ID()))
 	}
 
-	var defaults []string
+	defaults := feature.Defaults()
 	if profile != nil {
-		defaults = profile.Features()
+		defaults = append(defaults, profile.Features()...)
 	}
-	enabled, err := feature.Enabled(defaults, a.config.FeatureOverrides())
+	enabled, err := feature.Enabled(defaults, a.featureOverrides())
 	if err != nil {
 		return err
 	}
 	pipeline, err := feature.Build(enabled, feature.Deps{
-		Storage: a.storage,
-		Logger:  a.logger,
-		Profile: profile,
-		Publish: a.fetcher.Publish,
+		Storage:   a.storage,
+		Logger:    a.logger,
+		Profile:   profile,
+		Publish:   a.fetcher.Publish,
+		BalanceAt: a.fetcher.BalanceAt,
 	})
 	if err != nil {
 		return err
@@ -1246,22 +1251,27 @@ func reindexData(path string, log *zap.Logger) error {
 // interface; this fails to compile if their metadata types drift apart.
 var _ fetch.FeeDelegationClient = (*factory.EVMClient)(nil)
 
-// registerFeatureProcessors connects the optional per-feature processors to
-// the fetcher. Each is registered only when the storage supports its index.
+// registerFeatureProcessors connects the legacy client's fee delegation
+// re-fetch. It is removed with the legacy client path; every other
+// per-block processor is a feature (pkg/features).
 func (a *App) registerFeatureProcessors() {
-	if s, ok := a.storage.(fetch.SetCodeIndexer); ok {
-		a.fetcher.SetSetCodeProcessor(fetch.NewSetCodeProcessor(a.logger, s))
-	}
-	if a.config.AccountAbstraction.Enabled {
-		if s, ok := a.storage.(fetch.UserOpIndexer); ok {
-			a.fetcher.SetUserOpProcessor(fetch.NewUserOpProcessor(a.logger, s))
-		}
-		if s, ok := a.storage.(fetch.ModuleIndexer); ok {
-			a.fetcher.SetModuleProcessor(fetch.NewModuleProcessor(a.logger, s))
-		}
-	}
 	// Fee delegation (type 0x16) exists only on StableNet nodes.
 	if a.nodeInfo != nil && a.nodeInfo.Type == detector.NodeTypeStableOne {
 		a.fetcher.SetFeeDelegationClient(factory.NewEVMClient(a.client.RPCClient()))
 	}
+}
+
+// featureOverrides returns the configured feature overrides. The older
+// account_abstraction.enabled: false still turns off the ERC-4337 and
+// ERC-7579 features unless the features section names them.
+func (a *App) featureOverrides() map[string]bool {
+	overrides := a.config.FeatureOverrides()
+	if !a.config.AccountAbstraction.Enabled {
+		for _, name := range []string{aa.ERC4337, aa.ERC7579} {
+			if _, set := overrides[name]; !set {
+				overrides[name] = false
+			}
+		}
+	}
+	return overrides
 }

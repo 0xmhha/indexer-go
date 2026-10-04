@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +43,7 @@ func TestLiveStableNet(t *testing.T) {
 	head, err := ec.BlockNumber(ctx)
 	require.NoError(t, err)
 	ec.Close()
+	head = liveHead(t, head)
 	t.Logf("indexing blocks 0..%d from %s", head, rpc)
 
 	// Run A: straight through.
@@ -99,4 +101,21 @@ func prefixCount(es []testchain.Entry, prefix string) int {
 		}
 	}
 	return n
+}
+
+// liveHead caps the indexed range of the live tests. A local network keeps
+// producing blocks, so indexing up to its head makes the tests slower every
+// run. INDEXER_LIVE_MAX_HEIGHT sets the cap (default 3000; 0 means no cap).
+func liveHead(t *testing.T, head uint64) uint64 {
+	t.Helper()
+	limit := uint64(3000)
+	if v := os.Getenv("INDEXER_LIVE_MAX_HEIGHT"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		require.NoError(t, err, "INDEXER_LIVE_MAX_HEIGHT")
+		limit = n
+	}
+	if limit > 0 && head > limit {
+		return limit
+	}
+	return head
 }

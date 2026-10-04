@@ -14,8 +14,12 @@ import (
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/feature"
+	"github.com/0xmhha/indexer-go/pkg/features/aa"
+	"github.com/0xmhha/indexer-go/pkg/features/address"
+	"github.com/0xmhha/indexer-go/pkg/features/balance"
 	"github.com/0xmhha/indexer-go/pkg/features/stablenet/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/features/stablenet/wbft"
+	"github.com/0xmhha/indexer-go/pkg/features/token"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -108,28 +112,46 @@ func TestWBFTFeatureOnNonWBFTChain(t *testing.T) {
 
 func (a *App) fetcherFeatures() []string { return a.features.Features() }
 
-// TestSystemContractsFeatureOff requires the system contract data of the
-// test chain to disappear, and only it, when stablenet.system_contracts is
-// turned off: the feature is the only writer of those keys.
-func TestSystemContractsFeatureOff(t *testing.T) {
-	sc := testchain.BuildDefault()
-	srv := testchain.NewServer(sc.Chain)
-	defer srv.Close()
-	dir := filepath.Join(t.TempDir(), "db")
-	app, err := startAppFeatures(t, srv, dir, map[string]bool{systemcontracts.Name: false})
-	require.NoError(t, err)
-	require.NotContains(t, app.fetcherFeatures(), systemcontracts.Name)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	require.NoError(t, app.fetcher.FetchRange(ctx, 0, sc.Chain.Head()))
-	app.Shutdown()
+// featureKeys lists, per feature, the key prefixes only that feature
+// writes. Turning a feature off must remove exactly its keys and leave every
+// other key and value of the reference scenario unchanged, so features can
+// be enabled independently (and, later, backfilled).
+var featureKeys = map[string][]string{
+	address.Name:         {"/index/addr/", "/data/contract/", "/index/contract/"},
+	balance.Name:         {"/index/balance/"},
+	token.TransfersName:  {"/data/erc20/", "/index/erc20/", "/data/erc721/", "/index/erc721/"},
+	aa.EIP7702:           {"/data/setcode/", "/index/setcode/"},
+	aa.ERC4337:           {"/data/userop/", "/index/userop/", "/data/bundler/", "/data/smartaccount/"},
+	aa.ERC7579:           {"/data/module/", "/index/module/"},
+	systemcontracts.Name: {"/data/syscontracts/", "/index/syscontracts/"},
+}
 
+func TestFeatureOffRemovesOnlyItsKeys(t *testing.T) {
 	with := dumpScenarioIndex(t)
-	require.Positive(t, prefixCount(with, "/data/syscontracts/"))
-	without := dumpDir(t, dir)
-	require.Zero(t, prefixCount(without, "/data/syscontracts/")+prefixCount(without, "/index/syscontracts/"))
-	require.Empty(t, testchain.DiffKeyspace(
-		excludeEntries(with, "/data/syscontracts/", "/index/syscontracts/"), without, 0))
+	for name, prefixes := range featureKeys {
+		t.Run(name, func(t *testing.T) {
+			sc := testchain.BuildDefault()
+			srv := testchain.NewServer(sc.Chain)
+			defer srv.Close()
+			dir := filepath.Join(t.TempDir(), "db")
+			app, err := startAppFeatures(t, srv, dir, map[string]bool{name: false})
+			require.NoError(t, err)
+			require.NotContains(t, app.fetcherFeatures(), name)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			require.NoError(t, app.fetcher.FetchRange(ctx, 0, sc.Chain.Head()))
+			app.Shutdown()
+
+			n := 0
+			for _, p := range prefixes {
+				n += prefixCount(with, p)
+			}
+			require.Positive(t, n, "the scenario exercises %s", name)
+			without := dumpDir(t, dir)
+			diff := testchain.DiffKeyspace(excludeEntries(with, prefixes...), without, 0)
+			require.Empty(t, diff, testchain.SummarizeDiff(diff))
+		})
+	}
 }
 
 func excludeEntries(es []testchain.Entry, prefixes ...string) []testchain.Entry {

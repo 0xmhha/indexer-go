@@ -122,62 +122,23 @@ func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, fb *fetchedB
 
 // processBlockMetadata processes WBFT metadata, address indexing, balance tracking, and genesis initialization
 func (f *Fetcher) processBlockMetadata(ctx context.Context, fb *fetchedBlock) error {
-	height := fb.height()
-	block := fb.geth
-
-	// Process address indexing (contract creation, token transfers)
-	if err := f.processAddressIndexing(ctx, fb); err != nil {
-		return fmt.Errorf("failed to process address indexing for block %d: %w", height, err)
-	}
-
-	// Process native balance tracking
-	if err := f.processBalanceTracking(ctx, fb); err != nil {
-		return fmt.Errorf("failed to process balance tracking for block %d: %w", height, err)
-	}
-
-	// Initialize genesis allocation balances (block 0 only)
-	if height == 0 {
-		if err := f.initializeGenesisBalances(ctx, block); err != nil {
-			f.logger.Warn("Failed to initialize genesis balances",
-				zap.Uint64("height", height),
-				zap.Error(err),
-			)
-			// Don't fail the entire block processing for genesis balance initialization
-		}
-
+	// Address indexing, balances and the other per-block indexes are
+	// features (pkg/features); they run after the core data is stored.
+	if fb.height() == 0 {
 		// Initialize genesis token metadata for system contracts
 		if err := f.initializeGenesisTokenMetadata(ctx); err != nil {
 			f.logger.Warn("Failed to initialize genesis token metadata",
-				zap.Uint64("height", height),
+				zap.Uint64("height", 0),
 				zap.Error(err),
 			)
-			// Don't fail the entire block processing for genesis token initialization
 		}
 	}
-
 	return nil
 }
 
 // storeAndProcessReceipts stores receipts and indexes logs using appropriate processing strategy
 func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, fb *fetchedBlock) error {
-	block, receipts, height := fb.geth, fb.gethReceipts, fb.height()
-	// Use large block processor for blocks exceeding threshold
-	if f.largeBlockProcessor.ShouldProcessInBatches(block, receipts) {
-		f.logger.Info("Using parallel processing for large block",
-			zap.Uint64("height", height),
-			zap.Uint64("gas_used", block.GasUsed()),
-			zap.Int("receipt_count", len(receipts)),
-		)
-		if err := f.largeBlockProcessor.ProcessReceiptsParallel(ctx, block, receipts); err != nil {
-			return fmt.Errorf("failed to process large block receipts: %w", err)
-		}
-	} else {
-		if err := f.storeReceiptsSequential(ctx, fb); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return f.storeReceiptsSequential(ctx, fb)
 }
 
 // storeReceiptsSequential stores receipts, indexes their logs and parses

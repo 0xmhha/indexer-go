@@ -55,6 +55,7 @@ func TestLiveStableNetIdentity(t *testing.T) {
 	require.Equal(t, stablenet.ID, src.Profile().ID())
 	head, err := src.Head(ctx)
 	require.NoError(t, err)
+	head = liveHead(t, head)
 
 	dir := filepath.Join(t.TempDir(), "db")
 	app := startAppAt(t, endpoint, dir, atomicMode)

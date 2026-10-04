@@ -155,3 +155,32 @@ type BlockHandler interface {
 **검증.** 전체 시험이 통과했다. live StableNet(블록 0~21432)에서 fee delegation 메타 6건이 기능 경로로 저장되고(`TestLiveStableNet`, `TestLiveStableNetIdentity`의 메타·fee payer 색인 확인), 중단 후 재시작한 결과가 같다.
 
 **남긴 것.** 범용 수집기에 남은 StableNet 전용 코드는 기존 클라이언트 경로의 fee delegation 재조회와 large block 처리기의 fee payer 조회다. 둘 다 S5에서 기존 경로와 함께 지운다. 다음 단계(F5)는 주소·잔액·토큰·AA 기능이다.
+
+### F5: 주소·잔액·토큰·AA (10/5)
+
+| 기능 | 패키지 | 하는 일 | 기본값 |
+|---|---|---|---|
+| `address.index` | `pkg/features/address` | 거래를 송신자·수신자·fee payer 주소로 색인하고 컨트랙트 생성을 기록한다 | 모든 체인에서 켬 |
+| `balance.native` | `pkg/features/balance` | native 잔액 이력. 처음 보는 계정은 노드 잔액으로 시작하고, 블록 0에서는 miner의 genesis 잔액을 기록한다 | 모든 체인에서 켬 |
+| `token.transfers` | `pkg/features/token` | ERC-20·ERC-721 Transfer 색인 | 모든 체인에서 켬 |
+| `aa.eip7702`, `aa.erc4337`, `aa.erc7579` | `pkg/features/aa` | SetCode 인가, UserOperation, 모듈. 처리기 본체는 아직 `pkg/fetch`에 있고 기능은 그것을 연결한다 | 모든 체인에서 켬. 예전 설정 `account_abstraction.enabled: false`는 `features`에 따로 쓰지 않았으면 `aa.erc4337`·`aa.erc7579`를 끈다 |
+
+등록부에는 `DefaultOn`(모든 체인에서 기본으로 켜는 기능), `Deps.BalanceAt`(노드 잔액 조회), `Block.Transactions`(거래와 receipt 짝짓기), `DelegatedFeePayer`(fee payer 조회 공용 함수)를 더했다. 수집기에는 core 저장과 기존 경로의 fee delegation 재조회, 실행되지 않는 genesis 토큰 메타 초기화만 남았다.
+
+**바뀐 동작.**
+- 저장 쓰기 실패가 기존 비원자 경로에서도 블록을 중단한다. 예전에는 비원자 경로에서는 로그만 남겼다.
+- 기존 비원자 경로의 대형 블록 병렬 처리(`LargeBlockProcessor`)를 쓰지 않는다. 이 처리기는 주소·transfer 색인을 따로 구현한 사본이라, 기능과 함께 돌면 같은 거래를 두 번 색인한다. 원자 경로는 원래 이 처리기를 쓰지 않았다. 타입과 시험은 S5까지 남긴다.
+
+**옮기지 않은 것.** 운영 코드에서 `SetTokenIndexer`를 부르는 곳이 없어서, 컨트랙트 생성 때 토큰 메타를 색인하는 코드와 genesis 토큰 메타 초기화는 실제로 돈 적이 없다. 토큰 메타는 따로 등록된 토큰 블록 처리기(`AddBlockProcessor`)가 맡는다. 그래서 이 경로는 기능으로 옮기지 않고 기록만 남긴다. 토큰 메타 기능(`token.metadata`)은 블록 처리기 연결 방식과 함께 정리한다.
+
+**새로 찾은 결함(D20).** 기능을 하나씩 꺼 보니, `address.index`를 끄면 잔액 이력 키가 바뀌고 `balance.native`를 끄면 주소 색인 키가 바뀌었다. 두 색인이 주소별 순번 카운터 하나를 함께 썼기 때문이다. 이대로면 기능을 나중에 켜서 그 기능만 처리(backfill)했을 때 처음부터 켠 DB와 결과가 달라진다. 카운터를 키 묶음별로 나눴다. 재시작할 때는 각 묶음의 키에서만 순번을 복원한다. keyspace golden에서는 주소 색인 19개, 잔액 이력 19개의 키 번호가 바뀌었고, 값의 모음과 키 수는 그대로다.
+
+**검증.**
+- `TestFeatureOffRemovesOnlyItsKeys`: 7개 기능(`address.index`, `balance.native`, `token.transfers`, `aa.*` 3개, `stablenet.system_contracts`)을 하나씩 끄면 그 기능의 키 접두어만 빠지고 나머지 키와 값은 기준 시나리오와 같다. 각 기능의 키가 시나리오에 실제로 있는지도 확인한다.
+- `TestAddrSeqFamiliesAreIndependent`: 두 카운터가 서로를 밀지 않고, 각자의 최고 순번에서 다시 시작한다.
+- keyspace golden(순번 변경 반영), GraphQL golden, 기존 경로와 클라이언트 경로 동등성, 재시작·재처리·gap·crash 시험이 통과했다.
+- 전체 시험이 통과했다. live StableNet(블록 0~3000, 아래 상한)에서 `TestLiveStableNet`과 `TestLiveStableNetIdentity`가 통과했다.
+
+**성능.** 처음 측정에서는 `BenchmarkIngest` 일반 블록의 원자 경로가 3.0~3.1초로, 이전(2.4~2.7초)보다 느렸다. 여러 기능이 블록마다 거래와 receipt 짝을 따로 만들고 있어서, 블록당 한 번만 계산하도록 `Block.Transactions`에 캐시를 넣었다. 그 뒤에는 2.55~2.73초로 이전과 같은 범위다. 로컬 체인 노드가 같은 기계에서 돌고 있어 측정 잡음이 크다.
+
+**live 시험 범위 상한.** 로컬 체인이 계속 블록을 만들어 live 시험이 매번 느려졌다. 블록 25,122개까지 자란 체인에서 `TestLiveStableNet`이 시험 안의 5분 제한을 넘겼다. 그래서 두 live 시험은 기본으로 블록 3000까지만 색인한다. `INDEXER_LIVE_MAX_HEIGHT`로 바꿀 수 있고, 0이면 상한이 없다. fee delegation 거래(블록 25~33)는 이 범위 안에 있다.

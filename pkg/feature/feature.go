@@ -8,10 +8,12 @@ package feature
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
@@ -43,6 +45,8 @@ type Block struct {
 
 	Geth         *types.Block
 	GethReceipts types.Receipts
+
+	txs []TxWithReceipt // Transactions, computed once
 }
 
 // BlockHandler processes one block. It runs inside the block's storage
@@ -66,6 +70,90 @@ type Deps struct {
 	// Publish sends an event to subscribers. Events published while a block
 	// is processed are delivered only after the block commits.
 	Publish func(events.Event) bool
+	// BalanceAt reads an account's native balance from the node at a block
+	// (nil means latest), with the indexer's RPC timeout.
+	BalanceAt func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
+}
+
+// DefaultOn is implemented by features that are enabled on every chain
+// unless configured off (the explorer defaults of refactoring plan 5.3).
+type DefaultOn interface {
+	DefaultOn() bool
+}
+
+// Defaults returns the registered features that are on by default.
+func Defaults() []string {
+	mu.RLock()
+	defer mu.RUnlock()
+	var out []string
+	for n, f := range features {
+		if d, ok := f.(DefaultOn); ok && d.DefaultOn() {
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// TxWithReceipt is one transaction of a block with its receipt, in both
+// views.
+type TxWithReceipt struct {
+	Index       int
+	Tx          *model.Transaction
+	Receipt     *model.Receipt
+	GethTx      *types.Transaction
+	GethReceipt *types.Receipt
+}
+
+// Transactions pairs each transaction with its receipt by the chain's
+// transaction hash. Transactions without a receipt are left out.
+func (b *Block) Transactions() []TxWithReceipt {
+	if b.txs == nil {
+		b.txs = b.pairTransactions()
+	}
+	return b.txs
+}
+
+func (b *Block) pairTransactions() []TxWithReceipt {
+	byHash := make(map[common.Hash]int, len(b.Receipts))
+	for i, r := range b.Receipts {
+		byHash[r.TxHash] = i
+	}
+	var gethTxs types.Transactions
+	if b.Geth != nil {
+		gethTxs = b.Geth.Transactions()
+	}
+	out := make([]TxWithReceipt, 0, len(b.Model.Transactions))
+	for i, tx := range b.Model.Transactions {
+		ri, ok := byHash[tx.Hash]
+		if !ok || i >= len(gethTxs) || ri >= len(b.GethReceipts) {
+			continue
+		}
+		out = append(out, TxWithReceipt{
+			Index: i, Tx: tx, Receipt: b.Receipts[ri],
+			GethTx: gethTxs[i], GethReceipt: b.GethReceipts[ri],
+		})
+	}
+	return out
+}
+
+// DelegatedFeePayer returns the account paying gas for tx when it is not the
+// sender: from the transaction when a chain profile decoded it
+// (chains.FeeDelegationOf), otherwise from fee delegation metadata stored by
+// the legacy ingest path.
+func DelegatedFeePayer(ctx context.Context, st storage.Storage, tx *model.Transaction) (common.Address, bool) {
+	if fd, ok := chains.FeeDelegationOf(tx); ok {
+		return fd.Payer, true
+	}
+	if !chains.IsFeeDelegationType(tx.Type) {
+		return common.Address{}, false
+	}
+	if r, ok := st.(storage.FeeDelegationReader); ok {
+		if meta, err := r.GetFeeDelegationTxMeta(ctx, tx.Hash); err == nil && meta != nil {
+			return meta.FeePayer, true
+		}
+	}
+	return common.Address{}, false
 }
 
 // Registrar is what a feature attaches to.

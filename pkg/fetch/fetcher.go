@@ -172,15 +172,6 @@ type Fetcher struct {
 	// tokenIndexer is called when a new contract is deployed to index token metadata
 	tokenIndexer TokenIndexer
 
-	// setCodeProcessor handles EIP-7702 SetCode transaction indexing
-	setCodeProcessor *SetCodeProcessor
-
-	// userOpProcessor handles ERC-4337 UserOperation indexing
-	userOpProcessor *UserOpProcessor
-
-	// moduleProcessor handles ERC-7579 module install/uninstall indexing
-	moduleProcessor *ModuleProcessor
-
 	// features runs the handlers of the enabled features for every block.
 	features *feature.Pipeline
 
@@ -302,32 +293,6 @@ func (f *Fetcher) SetTokenIndexer(indexer TokenIndexer) {
 		f.largeBlockProcessor.SetTokenIndexer(indexer)
 	}
 	f.logger.Info("Token indexer configured")
-}
-
-// SetSetCodeProcessor sets the SetCode processor for EIP-7702 transaction indexing
-func (f *Fetcher) SetSetCodeProcessor(processor *SetCodeProcessor) {
-	f.setCodeProcessor = processor
-	// Also set on large block processor for consistency
-	if f.largeBlockProcessor != nil {
-		f.largeBlockProcessor.SetSetCodeProcessor(processor)
-	}
-	f.logger.Info("SetCode processor configured")
-}
-
-// SetUserOpProcessor sets the UserOp processor for ERC-4337 UserOperation indexing
-func (f *Fetcher) SetUserOpProcessor(processor *UserOpProcessor) {
-	f.userOpProcessor = processor
-	// Also set on large block processor for consistency
-	if f.largeBlockProcessor != nil {
-		f.largeBlockProcessor.SetUserOpProcessor(processor)
-	}
-	f.logger.Info("UserOp processor configured")
-}
-
-// SetModuleProcessor sets the processor for ERC-7579 module events.
-func (f *Fetcher) SetModuleProcessor(processor *ModuleProcessor) {
-	f.moduleProcessor = processor
-	f.logger.Info("Module processor configured")
 }
 
 // SetFeeDelegationClient sets the client used to extract fee delegation
@@ -631,16 +596,6 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 				// Store block
 				if err := f.storage.SetBlock(ctx, block); err != nil {
 					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)
-				}
-
-				// Process address indexing (contract creation, token transfers)
-				if err := f.processAddressIndexing(ctx, fb); err != nil {
-					return fmt.Errorf("failed to process address indexing for block %d: %w", nextHeight, err)
-				}
-
-				// Process native balance tracking
-				if err := f.processBalanceTracking(ctx, fb); err != nil {
-					return fmt.Errorf("failed to process balance tracking for block %d: %w", nextHeight, err)
 				}
 
 				// Process fee delegation metadata

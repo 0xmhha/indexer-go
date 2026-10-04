@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -140,4 +141,10 @@ func (f *Fetcher) runFeatures(ctx context.Context, fb *fetchedBlock) error {
 	return f.features.HandleBlock(ctx, &feature.Block{
 		Model: fb.block, Receipts: fb.receipts, Geth: fb.geth, GethReceipts: fb.gethReceipts,
 	})
+}
+
+// BalanceAt reads an account's native balance from the node at a block,
+// bounded by the RPC timeout.
+func (f *Fetcher) BalanceAt(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error) {
+	return f.balanceAt(ctx, addr, block)
 }

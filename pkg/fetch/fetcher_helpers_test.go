@@ -105,12 +105,6 @@ func TestFetcher_SetTokenIndexer(t *testing.T) {
 	}
 }
 
-func TestFetcher_SetSetCodeProcessor(t *testing.T) {
-	f := newTestFetcherForHelpers(t)
-	f.SetSetCodeProcessor(nil)
-	// Just verify no panic
-}
-
 func TestFetcher_AddRemoveBlockProcessor(t *testing.T) {
 	f := newTestFetcherForHelpers(t)
 	p := &mockBlockProcessor{}
