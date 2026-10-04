@@ -403,6 +403,12 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
 
+	// Without a block range, read only as many recent blocks as the page
+	// needs instead of loading the whole chain.
+	if filter.BlockNumberFrom == 0 && filter.BlockNumberTo == 0 {
+		return s.recentTransactions(ctx, filter, pagination, latestHeight)
+	}
+
 	// Set default and validate block range
 	blockFrom, blockTo := s.normalizeBlockRange(filter.BlockNumberFrom, filter.BlockNumberTo, latestHeight)
 	if blockFrom > blockTo {
@@ -845,6 +851,11 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 		}
 		s.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
+	}
+
+	// Without a block range, read only as many blocks as the page needs.
+	if filter.BlockNumberFrom == 0 && filter.BlockNumberTo == 0 {
+		return s.earliestLogs(ctx, filter, pagination, latestHeight, decode)
 	}
 
 	// Set default and validate block range
