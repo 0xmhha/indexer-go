@@ -24,7 +24,7 @@ go.work.sum
 build/
 bin/
 dist/
-indexer
+/indexer
 
 # Development data directories
 data/

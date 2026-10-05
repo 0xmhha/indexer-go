@@ -85,7 +85,7 @@ func (s *PebbleStorage) GetTokenHolders(ctx context.Context, token common.Addres
 	}
 
 	prefix := TokenHolderByTokenIndexPrefix(token)
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})
@@ -148,7 +148,7 @@ func (s *PebbleStorage) GetTokenHolderCount(ctx context.Context, token common.Ad
 
 	// Fallback: count by iterating (slower)
 	prefix := TokenHolderByTokenIndexPrefix(token)
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})
@@ -190,7 +190,7 @@ func (s *PebbleStorage) GetTokenHolderStats(ctx context.Context, token common.Ad
 	}
 
 	key := TokenHolderStatsKey(token)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -214,7 +214,7 @@ func (s *PebbleStorage) GetHolderTokens(ctx context.Context, holder common.Addre
 	}
 
 	prefix := TokenHolderByHolderIndexPrefix(holder)
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})
@@ -276,7 +276,7 @@ func (s *PebbleStorage) UpdateTokenHolder(ctx context.Context, holder *TokenHold
 	oldHolder, err := s.getTokenHolder(ctx, holder.TokenAddress, holder.HolderAddress)
 	hasOldHolder := err == nil && oldHolder != nil
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// Delete old index if exists
@@ -303,12 +303,12 @@ func (s *PebbleStorage) UpdateTokenHolder(ctx context.Context, holder *TokenHold
 
 		// Update holder count (decrement)
 		if hasOldHolder {
-			if err := s.updateHolderCountInBatch(batch, holder.TokenAddress, -1); err != nil {
+			if err := s.updateHolderCountInBatch(ctx, batch, holder.TokenAddress, -1); err != nil {
 				return err
 			}
 		}
 
-		return batch.Commit(pebble.Sync)
+		return s.commitBatch(ctx, batch, pebble.Sync)
 	}
 
 	// Save holder data
@@ -337,12 +337,12 @@ func (s *PebbleStorage) UpdateTokenHolder(ctx context.Context, holder *TokenHold
 
 	// Update holder count (increment) if this is a new holder
 	if !hasOldHolder {
-		if err := s.updateHolderCountInBatch(batch, holder.TokenAddress, 1); err != nil {
+		if err := s.updateHolderCountInBatch(ctx, batch, holder.TokenAddress, 1); err != nil {
 			return err
 		}
 	}
 
-	return batch.Commit(pebble.Sync)
+	return s.commitBatch(ctx, batch, pebble.Sync)
 }
 
 // UpdateTokenHolderStats updates the statistics for a token
@@ -361,7 +361,7 @@ func (s *PebbleStorage) UpdateTokenHolderStats(ctx context.Context, stats *Token
 	}
 
 	key := TokenHolderStatsKey(stats.TokenAddress)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set token holder stats: %w", err)
 	}
 
@@ -448,7 +448,7 @@ func (s *PebbleStorage) ProcessERC20TransferForHolders(ctx context.Context, tran
 // getTokenHolder retrieves a single token holder record
 func (s *PebbleStorage) getTokenHolder(ctx context.Context, token, holder common.Address) (*TokenHolder, error) {
 	key := TokenHolderKey(token, holder)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -466,10 +466,10 @@ func (s *PebbleStorage) getTokenHolder(ctx context.Context, token, holder common
 }
 
 // updateHolderCountInBatch updates the holder count in a batch
-func (s *PebbleStorage) updateHolderCountInBatch(batch *pebble.Batch, token common.Address, delta int) error {
+func (s *PebbleStorage) updateHolderCountInBatch(ctx context.Context, batch *pebble.Batch, token common.Address, delta int) error {
 	// Get current stats
 	key := TokenHolderStatsKey(token)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 
 	var stats *TokenHolderStats
 	if err == nil {

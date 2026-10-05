@@ -13,6 +13,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
 	"github.com/0xmhha/indexer-go/pkg/adapters/evm"
 	"github.com/0xmhha/indexer-go/pkg/adapters/stableone"
+	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.uber.org/zap"
@@ -29,6 +30,10 @@ type Config struct {
 	// ForceAdapterType forces a specific adapter type instead of auto-detection
 	// Values: "anvil", "stableone", "evm", "" (auto-detect)
 	ForceAdapterType string
+
+	// Profile is the chain profile in use (optional). When it has an
+	// adapter, that adapter is created whatever the node detection says.
+	Profile chains.Profile
 
 	// ChainID overrides the detected chain ID (optional)
 	ChainID *big.Int
@@ -118,6 +123,8 @@ func (f *Factory) Create(ctx context.Context) (*CreateResult, error) {
 		}
 	}
 
+	f.followProfile(nodeInfo)
+
 	// Create adapter based on detected type
 	result, err := f.createByNodeType(ctx, client, rpcClient, nodeInfo)
 	if err != nil {
@@ -126,6 +133,17 @@ func (f *Factory) Create(ctx context.Context) (*CreateResult, error) {
 
 	result.NodeInfo = nodeInfo
 	return result, nil
+}
+
+// followProfile sets the node type to the adapter of the configured chain
+// profile, if it has one, so the adapter and the profile agree.
+func (f *Factory) followProfile(nodeInfo *detector.NodeInfo) {
+	if f.config.Profile == nil {
+		return
+	}
+	if t, ok := detector.ProfileNodeType(f.config.Profile); ok {
+		nodeInfo.Type = t
+	}
 }
 
 // createForced creates an adapter of the forced type
@@ -148,6 +166,7 @@ func (f *Factory) createForced(ctx context.Context, client *EVMClient, rpcClient
 	default:
 		nodeInfo.Type = detector.NodeTypeUnknown
 	}
+	f.followProfile(nodeInfo)
 
 	result, err := f.createByNodeType(ctx, client, rpcClient, nodeInfo)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -23,8 +24,10 @@ type RateLimiter struct {
 
 // limiterEntry wraps a rate.Limiter with last-access tracking
 type limiterEntry struct {
-	limiter    *rate.Limiter
-	lastAccess time.Time
+	limiter *rate.Limiter
+	// lastAccess is UnixNano. It is updated on every request without the
+	// map lock, so it must be atomic.
+	lastAccess atomic.Int64
 }
 
 // NewRateLimiter creates a new rate limiter with automatic cleanup
@@ -55,7 +58,7 @@ func (rl *RateLimiter) cleanupStaleLimiters() {
 	defer rl.mu.Unlock()
 	cutoff := time.Now().Add(-rl.cleanupTTL)
 	for ip, entry := range rl.limiters {
-		if entry.lastAccess.Before(cutoff) {
+		if time.Unix(0, entry.lastAccess.Load()).Before(cutoff) {
 			delete(rl.limiters, ip)
 		}
 	}
@@ -68,7 +71,7 @@ func (rl *RateLimiter) getLimiter(ip string) *rate.Limiter {
 	rl.mu.RUnlock()
 
 	if exists {
-		entry.lastAccess = time.Now()
+		entry.lastAccess.Store(time.Now().UnixNano())
 		return entry.limiter
 	}
 
@@ -78,15 +81,14 @@ func (rl *RateLimiter) getLimiter(ip string) *rate.Limiter {
 	// Double-check after acquiring write lock
 	entry, exists = rl.limiters[ip]
 	if exists {
-		entry.lastAccess = time.Now()
+		entry.lastAccess.Store(time.Now().UnixNano())
 		return entry.limiter
 	}
 
 	limiter := rate.NewLimiter(rl.rate, rl.burst)
-	rl.limiters[ip] = &limiterEntry{
-		limiter:    limiter,
-		lastAccess: time.Now(),
-	}
+	entry = &limiterEntry{limiter: limiter}
+	entry.lastAccess.Store(time.Now().UnixNano())
+	rl.limiters[ip] = entry
 
 	return limiter
 }

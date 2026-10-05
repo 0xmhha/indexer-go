@@ -7,6 +7,8 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 )
 
 // ============================================================================
@@ -19,7 +21,7 @@ func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*type
 		return nil, err
 	}
 
-	value, closer, err := s.db.Get(ReceiptKey(hash))
+	value, closer, err := s.kv(ctx).Get(ReceiptKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -38,7 +40,7 @@ func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*type
 	receipt.TxHash = hash
 
 	// ContractAddress is not part of RLP encoding, retrieve it separately
-	contractAddrValue, contractAddrCloser, err := s.db.Get(ContractAddressKey(hash))
+	contractAddrValue, contractAddrCloser, err := s.kv(ctx).Get(ContractAddressKey(hash))
 	if err == nil {
 		defer contractAddrCloser.Close()
 		if len(contractAddrValue) == common.AddressLength {
@@ -76,39 +78,13 @@ func validateReceipt(receipt *types.Receipt) error {
 	return nil
 }
 
-// SetReceipt stores a transaction receipt
+// SetReceipt stores a transaction receipt. It converts the receipt to the
+// model and stores it like SetModelReceipt.
 func (s *PebbleStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
-	// Validate receipt before storing
 	if err := validateReceipt(receipt); err != nil {
 		return err
 	}
-
-	encoded, err := EncodeReceipt(receipt)
-	if err != nil {
-		return fmt.Errorf("failed to encode receipt: %w", err)
-	}
-
-	txHash := receipt.TxHash
-	// Use NoSync for performance - caller should use Sync() or batch commit for durability
-	if err := s.db.Set(ReceiptKey(txHash), encoded, pebble.NoSync); err != nil {
-		return err
-	}
-
-	// Store ContractAddress separately (not included in RLP encoding)
-	if receipt.ContractAddress != (common.Address{}) {
-		if err := s.db.Set(ContractAddressKey(txHash), receipt.ContractAddress.Bytes(), pebble.NoSync); err != nil {
-			return fmt.Errorf("failed to store contract address: %w", err)
-		}
-	}
-
-	return nil
+	return s.SetModelReceipt(ctx, gethconv.ReceiptFromGeth(receipt))
 }
 
 // GetReceipts returns multiple receipts by transaction hashes (batch operation)
@@ -160,24 +136,23 @@ func (s *PebbleStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumbe
 		return nil, err
 	}
 
-	// Get the block to find all transactions
-	block, err := s.GetBlock(ctx, blockNumber)
+	// The block's transaction hashes as the chain reports them
+	hashes, err := s.blockTxHashes(ctx, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
-	txs := block.Transactions()
-	receipts := make([]*types.Receipt, 0, len(txs))
+	receipts := make([]*types.Receipt, 0, len(hashes))
 
 	// Get receipt for each transaction
-	for _, tx := range txs {
-		receipt, err := s.GetReceipt(ctx, tx.Hash())
+	for _, hash := range hashes {
+		receipt, err := s.GetReceipt(ctx, hash)
 		if err != nil {
 			if err == ErrNotFound {
 				// Skip missing receipts
 				continue
 			}
-			return nil, fmt.Errorf("failed to get receipt for tx %s: %w", tx.Hash().Hex(), err)
+			return nil, fmt.Errorf("failed to get receipt for tx %s: %w", hash.Hex(), err)
 		}
 		receipts = append(receipts, receipt)
 	}
@@ -194,7 +169,7 @@ func (s *PebbleStorage) SetReceipts(ctx context.Context, receipts []*types.Recei
 		return err
 	}
 
-	batch := s.NewBatch()
+	batch := s.newBatchCtx(ctx)
 	defer batch.Close()
 
 	for _, receipt := range receipts {
@@ -212,7 +187,7 @@ func (s *PebbleStorage) HasReceipt(ctx context.Context, hash common.Hash) (bool,
 		return false, err
 	}
 
-	_, closer, err := s.db.Get(ReceiptKey(hash))
+	_, closer, err := s.kv(ctx).Get(ReceiptKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return false, nil
@@ -229,20 +204,20 @@ func (s *PebbleStorage) GetMissingReceipts(ctx context.Context, blockNumber uint
 		return nil, err
 	}
 
-	// Get the block to find all transactions
-	block, err := s.GetBlock(ctx, blockNumber)
+	// The block's transaction hashes as the chain reports them
+	hashes, err := s.blockTxHashes(ctx, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
 	var missing []common.Hash
-	for _, tx := range block.Transactions() {
-		exists, err := s.HasReceipt(ctx, tx.Hash())
+	for _, hash := range hashes {
+		exists, err := s.HasReceipt(ctx, hash)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check receipt for tx %s: %w", tx.Hash().Hex(), err)
+			return nil, fmt.Errorf("failed to check receipt for tx %s: %w", hash.Hex(), err)
 		}
 		if !exists {
-			missing = append(missing, tx.Hash())
+			missing = append(missing, hash)
 		}
 	}
 

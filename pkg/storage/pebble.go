@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -18,10 +19,18 @@ type PebbleStorage struct {
 	logger *zap.Logger
 	closed atomic.Bool
 
+	// writeMu serializes block transactions (single writer). See BeginBlock.
+	writeMu sync.Mutex
+
+	// Lazy genesis allocation lookup (see SetGenesisBalanceResolver).
+	genesisMu     sync.Mutex
+	genesisClient RPCClient
+	genesisTried  map[common.Address]bool
+
 	// Address transaction sequence counters
 	// Maps address -> next sequence number
 	addrSeqMu sync.RWMutex
-	addrSeq   map[common.Address]uint64
+	addrSeq   map[seqKey]uint64
 
 	// Transaction count cache to avoid per-transaction reads
 	txCount      atomic.Uint64
@@ -69,13 +78,12 @@ func NewPebbleStorage(cfg *Config) (*PebbleStorage, error) {
 		db:      db,
 		config:  cfg,
 		logger:  logger,
-		addrSeq: make(map[common.Address]uint64),
+		addrSeq: make(map[seqKey]uint64),
 	}
 
-	// Load address sequences from database
-	if err := storage.loadAddressSequences(); err != nil {
+	if err := storage.checkSchema(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to load address sequences: %w", err)
+		return nil, err
 	}
 
 	// Load transaction count into cache
@@ -253,7 +261,7 @@ func (s *PebbleStorage) Put(ctx context.Context, key, value []byte) error {
 		return err
 	}
 
-	return s.db.Set(key, value, pebble.Sync)
+	return s.kv(ctx).Set(key, value, pebble.Sync)
 }
 
 // Get retrieves a value by key
@@ -262,7 +270,7 @@ func (s *PebbleStorage) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -286,7 +294,7 @@ func (s *PebbleStorage) Delete(ctx context.Context, key []byte) error {
 		return err
 	}
 
-	return s.db.Delete(key, pebble.Sync)
+	return s.kv(ctx).Delete(key, pebble.Sync)
 }
 
 // Iterate iterates over keys with the given prefix
@@ -295,7 +303,7 @@ func (s *PebbleStorage) Iterate(ctx context.Context, prefix []byte, fn func(key,
 		return err
 	}
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})
@@ -332,7 +340,7 @@ func (s *PebbleStorage) Has(ctx context.Context, key []byte) (bool, error) {
 		return false, err
 	}
 
-	_, closer, err := s.db.Get(key)
+	_, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return false, nil
@@ -342,6 +350,47 @@ func (s *PebbleStorage) Has(ctx context.Context, key []byte) (bool, error) {
 	closer.Close()
 	return true, nil
 }
+
+// Scan implements KV.
+func (s *PebbleStorage) Scan(ctx context.Context, lower, upper []byte, reverse bool, fn func(key, value []byte) bool) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{LowerBound: lower, UpperBound: upper})
+	if err != nil {
+		return err
+	}
+	valid := iter.First()
+	next := iter.Next
+	if reverse {
+		valid = iter.Last()
+		next = iter.Prev
+	}
+	for ; valid; valid = next() {
+		if err := ctx.Err(); err != nil {
+			_ = iter.Close()
+			return err
+		}
+		if !fn(append([]byte(nil), iter.Key()...), append([]byte(nil), iter.Value()...)) {
+			break
+		}
+	}
+	return errors.Join(iter.Error(), iter.Close())
+}
+
+// NewCursor implements KV.
+func (s *PebbleStorage) NewCursor(ctx context.Context, lower, upper []byte) (Cursor, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+	return s.kv(ctx).NewIter(&pebble.IterOptions{LowerBound: lower, UpperBound: upper})
+}
+
+var _ KV = (*PebbleStorage)(nil)
+
+// PrefixEnd returns the smallest key greater than every key with the
+// prefix (the exclusive upper bound of a prefix scan), or nil if none.
+func PrefixEnd(prefix []byte) []byte { return prefixUpperBound(prefix) }
 
 // prefixUpperBound returns the upper bound for prefix iteration
 func prefixUpperBound(prefix []byte) []byte {
@@ -375,12 +424,4 @@ func (s *PebbleStorage) Compact(ctx context.Context, start, end []byte) error {
 	}
 
 	return s.db.Compact(start, end, true)
-}
-
-// loadAddressSequences loads address sequence counters from database
-func (s *PebbleStorage) loadAddressSequences() error {
-	// For now, we'll initialize sequences to 0
-	// In production, we should scan the database to find the max sequence for each address
-	// This is acceptable for initial implementation
-	return nil
 }

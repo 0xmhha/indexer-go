@@ -66,10 +66,10 @@ func (s *Schema) resolveBlocksByTimeRange(p graphql.ResolveParams) (interface{},
 		return nil, err
 	}
 
-	// Convert blocks to maps
+	// Convert blocks to maps, read as the model for the chain's hashes
 	nodes := make([]interface{}, len(blocks))
 	for i, block := range blocks {
-		nodes[i] = s.blockToMap(block)
+		nodes[i] = s.blockToMap(s.modelBlockOf(ctx, block))
 	}
 
 	// Note: totalCount represents blocks returned in this page
@@ -123,7 +123,7 @@ func (s *Schema) resolveBlockByTimestamp(p graphql.ResolveParams) (interface{}, 
 		return nil, err
 	}
 
-	return s.blockToMap(block), nil
+	return s.blockToMap(s.modelBlockOf(ctx, block)), nil
 }
 
 // resolveTransactionsByAddressFiltered resolves filtered transactions for an address
@@ -201,7 +201,7 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 	nodes := make([]interface{}, len(txsWithReceipts))
 	blockTimestamps := make(map[uint64]string) // cache block timestamps
 	for i, txr := range txsWithReceipts {
-		txMap := s.transactionToMap(txr.Transaction, txr.Location)
+		txMap := s.transactionToMap(s.modelTxAt(ctx, txr.Transaction, txr.Location), txr.Location)
 		if txr.Receipt != nil {
 			txMap["receipt"] = s.receiptToMap(txr.Receipt)
 		}
@@ -209,9 +209,9 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 			if ts, ok := blockTimestamps[txr.Location.BlockHeight]; ok {
 				txMap["blockTimestamp"] = ts
 			} else {
-				block, blockErr := s.storage.GetBlock(ctx, txr.Location.BlockHeight)
+				block, blockErr := s.models().GetModelBlock(ctx, txr.Location.BlockHeight)
 				if blockErr == nil && block != nil {
-					ts = fmt.Sprintf("%d", block.Header().Time)
+					ts = fmt.Sprintf("%d", block.Time)
 					blockTimestamps[txr.Location.BlockHeight] = ts
 					txMap["blockTimestamp"] = ts
 				}

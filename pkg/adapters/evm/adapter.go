@@ -64,7 +64,6 @@ type Adapter struct {
 	logger            *zap.Logger
 	blockFetcher      *BlockFetcher
 	transactionParser *TransactionParser
-	consensusParser   chain.ConsensusParser // Optional, can be set by extending adapters
 	systemContracts   chain.SystemContractsHandler
 }
 
@@ -117,16 +116,6 @@ func (a *Adapter) BlockFetcher() chain.BlockFetcher {
 // TransactionParser returns the transaction parsing interface
 func (a *Adapter) TransactionParser() chain.TransactionParser {
 	return a.transactionParser
-}
-
-// ConsensusParser returns the consensus parser (nil for generic EVM)
-func (a *Adapter) ConsensusParser() chain.ConsensusParser {
-	return a.consensusParser
-}
-
-// SetConsensusParser allows extending adapters to set a custom consensus parser
-func (a *Adapter) SetConsensusParser(parser chain.ConsensusParser) {
-	a.consensusParser = parser
 }
 
 // SystemContracts returns the system contracts handler (nil for generic EVM)

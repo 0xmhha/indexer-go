@@ -9,11 +9,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/userop"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -267,138 +270,8 @@ func (m *mockStorage) DeleteContractVerification(ctx context.Context, address co
 	return nil
 }
 
-// SystemContractReader implementation
-func (m *mockStorage) GetTotalSupply(ctx context.Context) (*big.Int, error) {
-	return big.NewInt(0), nil
-}
-
-func (m *mockStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, minter common.Address, limit, offset int) ([]*storage.MintEvent, error) {
-	return []*storage.MintEvent{}, nil
-}
-
-func (m *mockStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, burner common.Address, limit, offset int) ([]*storage.BurnEvent, error) {
-	return []*storage.BurnEvent{}, nil
-}
-
-func (m *mockStorage) GetActiveMinters(ctx context.Context) ([]common.Address, error) {
-	return []common.Address{}, nil
-}
-
-func (m *mockStorage) GetMinterAllowance(ctx context.Context, minter common.Address) (*big.Int, error) {
-	return big.NewInt(0), nil
-}
-
-func (m *mockStorage) GetMinterHistory(ctx context.Context, minter common.Address) ([]*storage.MinterConfigEvent, error) {
-	return []*storage.MinterConfigEvent{}, nil
-}
-
-func (m *mockStorage) GetActiveValidators(ctx context.Context) ([]common.Address, error) {
-	return []common.Address{}, nil
-}
-
-func (m *mockStorage) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.GasTipUpdateEvent, error) {
-	return []*storage.GasTipUpdateEvent{}, nil
-}
-
-func (m *mockStorage) GetValidatorHistory(ctx context.Context, validator common.Address) ([]*storage.ValidatorChangeEvent, error) {
-	return []*storage.ValidatorChangeEvent{}, nil
-}
-
-func (m *mockStorage) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.MinterConfigEvent, error) {
-	return []*storage.MinterConfigEvent{}, nil
-}
-
-func (m *mockStorage) GetEmergencyPauseHistory(ctx context.Context, contract common.Address) ([]*storage.EmergencyPauseEvent, error) {
-	return []*storage.EmergencyPauseEvent{}, nil
-}
-
-func (m *mockStorage) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock uint64, status storage.ProposalStatus) ([]*storage.DepositMintProposal, error) {
-	return []*storage.DepositMintProposal{}, nil
-}
-
-func (m *mockStorage) GetBurnHistory(ctx context.Context, fromBlock, toBlock uint64, user common.Address) ([]*storage.BurnEvent, error) {
-	return []*storage.BurnEvent{}, nil
-}
-
-func (m *mockStorage) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, error) {
-	return []common.Address{}, nil
-}
-
-func (m *mockStorage) GetBlacklistHistory(ctx context.Context, address common.Address) ([]*storage.BlacklistEvent, error) {
-	return []*storage.BlacklistEvent{}, nil
-}
-
-func (m *mockStorage) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
-	return []common.Address{}, nil
-}
-
-func (m *mockStorage) GetProposals(ctx context.Context, contract common.Address, status storage.ProposalStatus, limit, offset int) ([]*storage.Proposal, error) {
-	return []*storage.Proposal{}, nil
-}
-
-func (m *mockStorage) GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*storage.Proposal, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*storage.ProposalVote, error) {
-	return []*storage.ProposalVote{}, nil
-}
-
-func (m *mockStorage) GetMemberHistory(ctx context.Context, contract common.Address) ([]*storage.MemberChangeEvent, error) {
-	return []*storage.MemberChangeEvent{}, nil
-}
-
-// WBFTReader methods for mockStorage
-func (m *mockStorage) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*storage.WBFTBlockExtra, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*storage.WBFTBlockExtra, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) (*storage.EpochInfo, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetLatestEpochInfo(ctx context.Context) (*storage.EpochInfo, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetValidatorSigningStats(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64) (*storage.ValidatorSigningStats, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetAllValidatorsSigningStats(ctx context.Context, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningStats, error) {
-	return []*storage.ValidatorSigningStats{}, nil
-}
-
-func (m *mockStorage) GetValidatorSigningActivity(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningActivity, error) {
-	return []*storage.ValidatorSigningActivity{}, nil
-}
-
-func (m *mockStorage) GetBlockSigners(ctx context.Context, blockNumber uint64) (preparers []common.Address, committers []common.Address, err error) {
-	return []common.Address{}, []common.Address{}, nil
-}
-
-func (m *mockStorage) GetEpochsList(ctx context.Context, limit, offset int) ([]*storage.EpochInfo, int, error) {
-	return []*storage.EpochInfo{}, 0, nil
-}
 func (m *mockStorage) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
 	return nil, nil
-}
-
-// WBFTWriter methods for mockStorage
-func (m *mockStorage) SaveWBFTBlockExtra(ctx context.Context, extra *storage.WBFTBlockExtra) error {
-	return nil
-}
-
-func (m *mockStorage) SaveEpochInfo(ctx context.Context, epochInfo *storage.EpochInfo) error {
-	return nil
-}
-
-func (m *mockStorage) UpdateValidatorSigningStats(ctx context.Context, blockNumber uint64, signingActivities []*storage.ValidatorSigningActivity) error {
-	return nil
 }
 
 // HistoricalReader methods for mockStorage
@@ -472,27 +345,6 @@ func (m *mockStorage) SetBalance(ctx context.Context, addr common.Address, block
 }
 
 // FeeDelegationReader methods for mockStorage
-func (m *mockStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*storage.FeeDelegationStats, error) {
-	return &storage.FeeDelegationStats{
-		TotalFeeDelegatedTxs: 0,
-		TotalFeesSaved:       big.NewInt(0),
-		AdoptionRate:         0.0,
-		AvgFeeSaved:          big.NewInt(0),
-	}, nil
-}
-
-func (m *mockStorage) GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.FeePayerStats, uint64, error) {
-	return []storage.FeePayerStats{}, 0, nil
-}
-
-func (m *mockStorage) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
-	return &storage.FeePayerStats{
-		Address:       feePayer,
-		TxCount:       0,
-		TotalFeesPaid: big.NewInt(0),
-		Percentage:    0.0,
-	}, nil
-}
 
 func (m *mockStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
 	return nil, storage.ErrNotFound
@@ -554,14 +406,6 @@ func (m *mockStorage) DeleteTokenMetadata(ctx context.Context, address common.Ad
 }
 
 func (m *mockStorage) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
-}
-
-func (m *mockStorage) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
-	return nil, nil
-}
-
-func (m *mockStorage) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
-	return nil, nil
 }
 
 // SetCodeIndexWriter stubs (Reader stubs are in resolvers_extended_test.go)
@@ -880,138 +724,8 @@ func (m *mockStorageWithErrors) DeleteContractVerification(ctx context.Context, 
 	return fmt.Errorf("storage error")
 }
 
-// SystemContractReader implementation
-func (m *mockStorageWithErrors) GetTotalSupply(ctx context.Context) (*big.Int, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, minter common.Address, limit, offset int) ([]*storage.MintEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, burner common.Address, limit, offset int) ([]*storage.BurnEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetActiveMinters(ctx context.Context) ([]common.Address, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetMinterAllowance(ctx context.Context, minter common.Address) (*big.Int, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetMinterHistory(ctx context.Context, minter common.Address) ([]*storage.MinterConfigEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetActiveValidators(ctx context.Context) ([]common.Address, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.GasTipUpdateEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetValidatorHistory(ctx context.Context, validator common.Address) ([]*storage.ValidatorChangeEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.MinterConfigEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetEmergencyPauseHistory(ctx context.Context, contract common.Address) ([]*storage.EmergencyPauseEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock uint64, status storage.ProposalStatus) ([]*storage.DepositMintProposal, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetBurnHistory(ctx context.Context, fromBlock, toBlock uint64, user common.Address) ([]*storage.BurnEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetBlacklistHistory(ctx context.Context, address common.Address) ([]*storage.BlacklistEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetProposals(ctx context.Context, contract common.Address, status storage.ProposalStatus, limit, offset int) ([]*storage.Proposal, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*storage.Proposal, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*storage.ProposalVote, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetMemberHistory(ctx context.Context, contract common.Address) ([]*storage.MemberChangeEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-// WBFTReader methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*storage.WBFTBlockExtra, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*storage.WBFTBlockExtra, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetEpochInfo(ctx context.Context, epochNumber uint64) (*storage.EpochInfo, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetLatestEpochInfo(ctx context.Context) (*storage.EpochInfo, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetValidatorSigningStats(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64) (*storage.ValidatorSigningStats, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetAllValidatorsSigningStats(ctx context.Context, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningStats, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetValidatorSigningActivity(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningActivity, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetBlockSigners(ctx context.Context, blockNumber uint64) (preparers []common.Address, committers []common.Address, err error) {
-	return nil, nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetEpochsList(ctx context.Context, limit, offset int) ([]*storage.EpochInfo, int, error) {
-	return nil, 0, fmt.Errorf("storage error")
-}
 func (m *mockStorageWithErrors) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
 	return nil, fmt.Errorf("storage error")
-}
-
-// WBFTWriter methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) SaveWBFTBlockExtra(ctx context.Context, extra *storage.WBFTBlockExtra) error {
-	return fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) SaveEpochInfo(ctx context.Context, epochInfo *storage.EpochInfo) error {
-	return fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) UpdateValidatorSigningStats(ctx context.Context, blockNumber uint64, signingActivities []*storage.ValidatorSigningActivity) error {
-	return fmt.Errorf("storage error")
 }
 
 // HistoricalReader methods for mockStorageWithErrors
@@ -1085,17 +799,6 @@ func (m *mockStorageWithErrors) SetBalance(ctx context.Context, addr common.Addr
 }
 
 // FeeDelegationReader methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*storage.FeeDelegationStats, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.FeePayerStats, uint64, error) {
-	return nil, 0, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
-	return nil, fmt.Errorf("storage error")
-}
 
 func (m *mockStorageWithErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
 	return nil, fmt.Errorf("storage error")
@@ -1157,14 +860,6 @@ func (m *mockStorageWithErrors) DeleteTokenMetadata(ctx context.Context, address
 }
 
 func (m *mockStorageWithErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
-}
-
-func (m *mockStorageWithErrors) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
-	return nil, fmt.Errorf("storage error")
 }
 
 // SetCodeIndexReader stubs
@@ -1838,7 +1533,7 @@ func TestGraphQLMappers(t *testing.T) {
 			GasUsed:    5000000,
 		}
 		block := types.NewBlockWithHeader(header)
-		blockMap := schema.blockToMap(block)
+		blockMap := schema.blockToMap(blockModel(t, block))
 
 		if blockMap == nil {
 			t.Error("expected blockMap to be non-nil")
@@ -1865,7 +1560,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -1936,7 +1631,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -1966,7 +1661,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -2008,7 +1703,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -2054,7 +1749,7 @@ func TestGraphQLMappers(t *testing.T) {
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
-		txMap := schema.transactionToMap(tx, location)
+		txMap := schema.transactionToMap(txModel(t, tx), location)
 
 		if txMap == nil {
 			t.Error("expected txMap to be non-nil")
@@ -2167,4 +1862,19 @@ func TestGraphQLMappers(t *testing.T) {
 			t.Error("expected contractAddress field")
 		}
 	})
+}
+
+// blockModel and txModel convert test fixtures to the model the mappers take.
+func blockModel(t *testing.T, b *types.Block) *model.Block {
+	t.Helper()
+	m, err := gethconv.BlockFromGeth(b)
+	require.NoError(t, err)
+	return m
+}
+
+func txModel(t *testing.T, tx *types.Transaction) *model.Transaction {
+	t.Helper()
+	m, err := gethconv.TxFromGeth(tx)
+	require.NoError(t, err)
+	return m
 }

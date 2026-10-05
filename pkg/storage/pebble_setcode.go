@@ -26,7 +26,7 @@ func (s *PebbleStorage) GetSetCodeAuthorization(ctx context.Context, txHash comm
 	}
 
 	key := SetCodeAuthorizationKey(txHash, authIndex)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -51,7 +51,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash
 
 	prefix := SetCodeAuthorizationKeyPrefix(txHash)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -98,7 +98,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, ta
 
 	prefix := SetCodeTargetIndexKeyPrefix(target)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -176,7 +176,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context,
 
 	prefix := SetCodeAuthorityIndexKeyPrefix(authority)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -244,7 +244,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blo
 
 	prefix := SetCodeBlockIndexKeyPrefix(blockNumber)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -289,7 +289,7 @@ func (s *PebbleStorage) GetAddressSetCodeStats(ctx context.Context, address comm
 	}
 
 	key := SetCodeStatsKey(address)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			// Return zero-value stats
@@ -316,7 +316,7 @@ func (s *PebbleStorage) GetAddressDelegationState(ctx context.Context, address c
 	}
 
 	key := SetCodeDelegationStateKey(address)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			// Return state with no delegation
@@ -345,7 +345,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsCountByTarget(ctx context.Contex
 
 	prefix := SetCodeTargetIndexKeyPrefix(target)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -374,7 +374,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsCountByAuthority(ctx context.Con
 
 	prefix := SetCodeAuthorityIndexKeyPrefix(authority)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -403,7 +403,7 @@ func (s *PebbleStorage) GetSetCodeTransactionCount(ctx context.Context) (int, er
 
 	prefix := SetCodeAuthKeyPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -439,7 +439,7 @@ func (s *PebbleStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limi
 
 	prefix := SetCodeBlockIndexAllPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -495,7 +495,7 @@ func (s *PebbleStorage) SaveSetCodeAuthorization(ctx context.Context, record *Se
 		return fmt.Errorf("failed to marshal setcode authorization: %w", err)
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// 1. Save the primary record
@@ -534,7 +534,7 @@ func (s *PebbleStorage) SaveSetCodeAuthorization(ctx context.Context, record *Se
 	}
 
 	// Commit batch
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit setcode authorization: %w", err)
 	}
 
@@ -558,7 +558,7 @@ func (s *PebbleStorage) SaveSetCodeAuthorizations(ctx context.Context, records [
 		return nil
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	for _, record := range records {
@@ -605,7 +605,7 @@ func (s *PebbleStorage) SaveSetCodeAuthorizations(ctx context.Context, records [
 	}
 
 	// Commit batch
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit setcode authorizations batch: %w", err)
 	}
 
@@ -621,7 +621,9 @@ func (s *PebbleStorage) UpdateAddressDelegationState(ctx context.Context, state 
 		return ErrClosed
 	}
 
-	state.UpdatedAt = time.Now()
+	if state.UpdatedAt.IsZero() {
+		state.UpdatedAt = time.Now()
+	}
 
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -629,7 +631,7 @@ func (s *PebbleStorage) UpdateAddressDelegationState(ctx context.Context, state 
 	}
 
 	key := SetCodeDelegationStateKey(state.Address)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set delegation state: %w", err)
 	}
 
@@ -660,7 +662,7 @@ func (s *PebbleStorage) IncrementSetCodeStats(ctx context.Context, address commo
 		stats.AsAuthorityCount++
 	}
 	stats.LastActivityBlock = blockNumber
-	stats.LastActivityTime = time.Now()
+	stats.LastActivityTime = s.blockTimeOrNow(ctx, blockNumber)
 
 	// Save updated stats
 	data, err := json.Marshal(stats)
@@ -669,7 +671,7 @@ func (s *PebbleStorage) IncrementSetCodeStats(ctx context.Context, address commo
 	}
 
 	key := SetCodeStatsKey(address)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set setcode stats: %w", err)
 	}
 
@@ -681,4 +683,15 @@ func (s *PebbleStorage) IncrementSetCodeStats(ctx context.Context, address commo
 		zap.Int("authorityCount", stats.AsAuthorityCount))
 
 	return nil
+}
+
+// blockTimeOrNow returns the timestamp of a stored block, so values derived
+// while indexing a block do not depend on when indexing ran. Within a block
+// transaction the block written earlier in the same transaction is visible.
+// It falls back to the wall clock only when the block is not stored.
+func (s *PebbleStorage) blockTimeOrNow(ctx context.Context, height uint64) time.Time {
+	if blk, err := s.GetBlock(ctx, height); err == nil {
+		return time.Unix(int64(blk.Time()), 0)
+	}
+	return time.Now()
 }

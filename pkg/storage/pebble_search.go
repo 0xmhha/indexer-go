@@ -8,7 +8,6 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Ensure PebbleStorage implements SearchReader
@@ -95,37 +94,35 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 		// Try as transaction hash
 		if isTypeAllowed("transaction") && len(results) < limit {
 			hash := common.HexToHash(query)
-			tx, location, err := s.GetTransaction(ctx, hash)
+			// The model keeps the hash, sender and type the chain reports.
+			tx, location, err := s.GetModelTransaction(ctx, hash)
 			if err == nil && tx != nil && location != nil {
-				// Get sender address from transaction
-				from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-				if err != nil {
-					// If we can't get sender, skip this result
-					from = common.Address{}
+				value := "0"
+				if tx.Value != nil {
+					value = tx.Value.String()
 				}
-
 				metadata := map[string]interface{}{
-					"hash":        tx.Hash().Hex(),
-					"from":        from.Hex(),
+					"hash":        tx.Hash.Hex(),
+					"from":        tx.From.Hex(),
 					"to":          "",
 					"blockNumber": location.BlockHeight,
 					"blockHash":   location.BlockHash.Hex(),
-					"value":       tx.Value().String(),
-					"gas":         tx.Gas(),
+					"value":       value,
+					"gas":         tx.Gas,
 				}
-				if tx.To() != nil {
-					metadata["to"] = tx.To().Hex()
+				if tx.To != nil {
+					metadata["to"] = tx.To.Hex()
 				} else {
 					// Contract creation transaction - get contract address from receipt
-					receipt, err := s.GetReceipt(ctx, tx.Hash())
+					receipt, err := s.GetReceipt(ctx, tx.Hash)
 					if err == nil && receipt != nil && receipt.ContractAddress != (common.Address{}) {
 						metadata["contractAddress"] = receipt.ContractAddress.Hex()
 					}
 				}
 				results = append(results, SearchResult{
 					Type:     "transaction",
-					Value:    tx.Hash().Hex(),
-					Label:    fmt.Sprintf("Transaction %s", tx.Hash().Hex()[:10]+"..."),
+					Value:    tx.Hash.Hex(),
+					Label:    fmt.Sprintf("Transaction %s", tx.Hash.Hex()[:10]+"..."),
 					Metadata: metadata,
 				})
 			}

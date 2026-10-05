@@ -79,10 +79,6 @@ type Adapter interface {
 	// TransactionParser returns the transaction parsing interface
 	TransactionParser() TransactionParser
 
-	// ConsensusParser returns the consensus data parser (optional)
-	// Returns nil if the chain doesn't have special consensus data
-	ConsensusParser() ConsensusParser
-
 	// SystemContracts returns the system contracts handler (optional)
 	// Returns nil if the chain doesn't have system contracts
 	SystemContracts() SystemContractsHandler
@@ -180,48 +176,6 @@ type EventData struct {
 	// Decoded event data (if ABI available)
 	EventName string
 	Decoded   map[string]interface{}
-}
-
-// =============================================================================
-// Consensus Parsing Interface
-// =============================================================================
-
-// ConsensusParser defines the interface for parsing consensus-specific data.
-// This is optional and only needed for chains with special consensus mechanisms.
-type ConsensusParser interface {
-	// ConsensusType returns the type of consensus this parser handles
-	ConsensusType() ConsensusType
-
-	// ParseConsensusData extracts consensus information from a block
-	ParseConsensusData(block *types.Block) (*ConsensusData, error)
-
-	// GetValidators returns the current validator set (if applicable)
-	GetValidators(ctx context.Context, blockNumber uint64) ([]common.Address, error)
-
-	// IsEpochBoundary checks if the block is an epoch boundary
-	IsEpochBoundary(block *types.Block) bool
-}
-
-// ConsensusData holds parsed consensus information
-type ConsensusData struct {
-	// Common consensus fields
-	ConsensusType     ConsensusType
-	BlockNumber       uint64
-	BlockHash         common.Hash
-	ProposerAddress   common.Address
-	ParticipationRate float64
-
-	// Validator information
-	ValidatorCount   int
-	SignedValidators []common.Address
-
-	// Epoch information (for PoS/BFT chains)
-	IsEpochBoundary bool
-	EpochNumber     *uint64
-	EpochValidators []common.Address
-
-	// Chain-specific data (WBFT, Tendermint, etc.)
-	ExtraData interface{}
 }
 
 // =============================================================================

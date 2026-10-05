@@ -26,7 +26,7 @@ func (s *PebbleStorage) GetUserOp(ctx context.Context, opHash common.Hash) (*use
 	}
 
 	key := UserOpKey(opHash)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -114,7 +114,7 @@ func (s *PebbleStorage) GetBundlerStats(ctx context.Context, bundler common.Addr
 	}
 
 	key := BundlerStatsKey(bundler)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return &userop.BundlerStats{Address: bundler}, nil
@@ -138,7 +138,7 @@ func (s *PebbleStorage) GetFactoryStats(ctx context.Context, factory common.Addr
 	}
 
 	key := FactoryStatsKey(factory)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return &userop.FactoryStats{Address: factory}, nil
@@ -162,7 +162,7 @@ func (s *PebbleStorage) GetPaymasterStats(ctx context.Context, paymaster common.
 	}
 
 	key := PaymasterStatsKey(paymaster)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return &userop.PaymasterStats{Address: paymaster}, nil
@@ -186,7 +186,7 @@ func (s *PebbleStorage) GetSmartAccount(ctx context.Context, address common.Addr
 	}
 
 	key := SmartAccountKey(address)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -218,7 +218,7 @@ func (s *PebbleStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*use
 
 	prefix := UserOpBlockIndexAllPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -262,7 +262,7 @@ func (s *PebbleStorage) GetUserOpCount(ctx context.Context) (int, error) {
 
 	prefix := UserOpKeyPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -292,7 +292,7 @@ func (s *PebbleStorage) ListBundlers(ctx context.Context, limit, offset int) ([]
 	limit, offset = normalizePagination(limit, offset)
 	prefix := BundlerStatsKeyPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -339,7 +339,7 @@ func (s *PebbleStorage) ListFactories(ctx context.Context, limit, offset int) ([
 	limit, offset = normalizePagination(limit, offset)
 	prefix := FactoryStatsKeyPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -385,7 +385,7 @@ func (s *PebbleStorage) ListPaymasters(ctx context.Context, limit, offset int) (
 	limit, offset = normalizePagination(limit, offset)
 	prefix := PaymasterStatsKeyPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -431,7 +431,7 @@ func (s *PebbleStorage) ListSmartAccounts(ctx context.Context, limit, offset int
 	limit, offset = normalizePagination(limit, offset)
 	prefix := SmartAccountKeyPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -481,7 +481,7 @@ func (s *PebbleStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation
 		return fmt.Errorf("failed to marshal userop: %w", err)
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// 1. Save the primary record
@@ -534,7 +534,7 @@ func (s *PebbleStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation
 	}
 
 	// Commit batch
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit userop: %w", err)
 	}
 
@@ -557,7 +557,7 @@ func (s *PebbleStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOpera
 		return nil
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	for _, op := range ops {
@@ -616,7 +616,7 @@ func (s *PebbleStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOpera
 	}
 
 	// Commit batch
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit userop batch: %w", err)
 	}
 
@@ -638,7 +638,7 @@ func (s *PebbleStorage) UpdateBundlerStats(ctx context.Context, stats *userop.Bu
 	}
 
 	key := BundlerStatsKey(stats.Address)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set bundler stats: %w", err)
 	}
 
@@ -662,7 +662,7 @@ func (s *PebbleStorage) UpdateFactoryStats(ctx context.Context, stats *userop.Fa
 	}
 
 	key := FactoryStatsKey(stats.Address)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set factory stats: %w", err)
 	}
 
@@ -685,7 +685,7 @@ func (s *PebbleStorage) UpdatePaymasterStats(ctx context.Context, stats *userop.
 	}
 
 	key := PaymasterStatsKey(stats.Address)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set paymaster stats: %w", err)
 	}
 
@@ -708,7 +708,7 @@ func (s *PebbleStorage) SaveSmartAccount(ctx context.Context, account *userop.Sm
 	}
 
 	key := SmartAccountKey(account.Address)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set smart account: %w", err)
 	}
 
@@ -737,7 +737,7 @@ func normalizePagination(limit, offset int) (int, int) {
 
 // getUserOpsByIndex retrieves all UserOps referenced by an index prefix (no pagination)
 func (s *PebbleStorage) getUserOpsByIndex(ctx context.Context, prefix []byte) ([]*userop.UserOperation, error) {
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -771,7 +771,7 @@ func (s *PebbleStorage) getUserOpsByIndex(ctx context.Context, prefix []byte) ([
 
 // getUserOpsByIndexPaginated retrieves UserOps from an index with reverse iteration and pagination
 func (s *PebbleStorage) getUserOpsByIndexPaginated(ctx context.Context, prefix []byte, limit, offset int) ([]*userop.UserOperation, error) {
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})

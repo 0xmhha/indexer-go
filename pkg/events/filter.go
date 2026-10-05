@@ -3,6 +3,7 @@ package events
 import (
 	"fmt"
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -43,7 +44,7 @@ type Filter struct {
 	Topics [][]common.Hash
 
 	// CustomData stores arbitrary filter data for specialized event types
-	// Used by system contract events to filter by event types
+	// Used by contract events to filter by event name ("eventTypes")
 	CustomData map[string]interface{}
 }
 
@@ -185,24 +186,32 @@ func (f *Filter) Match(event Event) bool {
 		return f.MatchTransaction(e)
 	case *LogEvent:
 		return f.MatchLog(e)
-	case *SystemContractEvent:
-		return f.MatchSystemContract(e)
+	case *ReorgEvent:
+		return true // concerns every subscriber of the type
+	case SourcedEvent:
+		return f.MatchContractEvent(e)
 	default:
 		return false
 	}
 }
 
-// MatchSystemContract checks if a system contract event matches this filter
-func (f *Filter) MatchSystemContract(event *SystemContractEvent) bool {
+// MatchContractEvent checks if a contract event matches this filter: the
+// block range, the emitting contract (Addresses) and the event name
+// (CustomData["eventTypes"]).
+func (f *Filter) MatchContractEvent(event SourcedEvent) bool {
 	if event == nil {
 		return false
 	}
-
-	// Check block number range
-	if f.FromBlock > 0 && event.BlockNumber < f.FromBlock {
+	if v := reflect.ValueOf(event); v.Kind() == reflect.Pointer && v.IsNil() {
 		return false
 	}
-	if f.ToBlock > 0 && event.BlockNumber > f.ToBlock {
+	contract, name, block := event.Source()
+
+	// Check block number range
+	if f.FromBlock > 0 && block < f.FromBlock {
+		return false
+	}
+	if f.ToBlock > 0 && block > f.ToBlock {
 		return false
 	}
 
@@ -210,7 +219,7 @@ func (f *Filter) MatchSystemContract(event *SystemContractEvent) bool {
 	if len(f.Addresses) > 0 {
 		matched := false
 		for _, addr := range f.Addresses {
-			if event.Contract == addr {
+			if contract == addr {
 				matched = true
 				break
 			}
@@ -227,7 +236,7 @@ func (f *Filter) MatchSystemContract(event *SystemContractEvent) bool {
 			if ok && len(eventTypes) > 0 {
 				matched := false
 				for _, et := range eventTypes {
-					if string(event.EventName) == et {
+					if name == et {
 						matched = true
 						break
 					}

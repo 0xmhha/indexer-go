@@ -105,8 +105,10 @@ func (h *Hub) broadcastEvent(event *Event) {
 		return
 	}
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	// Write lock: slow clients are removed from the map below, and map
+	// writes under a read lock race with ClientCount readers.
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	sentCount := 0
 	for client := range h.clients {

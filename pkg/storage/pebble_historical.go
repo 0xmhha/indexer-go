@@ -2,12 +2,15 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/chains"
 )
 
 // Ensure PebbleStorage implements HistoricalReader and HistoricalWriter
@@ -29,7 +32,7 @@ func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTi
 	}
 
 	// Create iterator for timestamp range
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: BlockTimestampKey(fromTime, 0),
 		UpperBound: BlockTimestampKey(toTime+1, 0),
 	})
@@ -85,9 +88,11 @@ func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint6
 		return nil, err
 	}
 
-	// Binary search for closest timestamp
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	// Binary search for closest timestamp. The upper bound keeps Last() and
+	// a seek past the newest timestamp inside the timestamp index.
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: BlockTimestampKeyPrefix(),
+		UpperBound: prefixUpperBound(BlockTimestampKeyPrefix()),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
@@ -149,7 +154,7 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 	copy(upperBound, prefix)
 	upperBound = append(upperBound, 0xff)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: upperBound,
 	})
@@ -222,14 +227,17 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 }
 
 // GetAddressBalance returns the balance of an address at a specific block
-func (s *PebbleStorage) GetAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error) {
+// getAddressBalance reads the stored balance without the lazy genesis lookup
+// done by GetAddressBalance. Writers use it so that updating a balance never
+// triggers an RPC call or a nested write.
+func (s *PebbleStorage) getAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
 
 	// If blockNumber is 0, get latest balance
 	if blockNumber == 0 {
-		value, closer, err := s.db.Get(AddressBalanceLatestKey(addr))
+		value, closer, err := s.kv(ctx).Get(AddressBalanceLatestKey(addr))
 		if err != nil {
 			if err == pebble.ErrNotFound {
 				return big.NewInt(0), nil // No balance recorded
@@ -247,7 +255,7 @@ func (s *PebbleStorage) GetAddressBalance(ctx context.Context, addr common.Addre
 	copy(upperBound, prefix)
 	upperBound = append(upperBound, 0xff)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: upperBound,
 	})
@@ -294,7 +302,7 @@ func (s *PebbleStorage) GetBalanceHistory(ctx context.Context, addr common.Addre
 	copy(upperBound, prefix)
 	upperBound = append(upperBound, 0xff)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: upperBound,
 	})
@@ -369,7 +377,7 @@ func (s *PebbleStorage) GetTransactionCount(ctx context.Context) (uint64, error)
 	}
 
 	// Fallback to DB read if counter not initialized
-	value, closer, err := s.db.Get(TransactionCountKey())
+	value, closer, err := s.kv(ctx).Get(TransactionCountKey())
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return 0, nil // No transactions indexed yet
@@ -417,7 +425,7 @@ func (s *PebbleStorage) InitializeTransactionCount(ctx context.Context) error {
 	}
 
 	// Set the transaction count
-	if err := s.db.Set(TransactionCountKey(), EncodeUint64(totalTxCount), pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(TransactionCountKey(), EncodeUint64(totalTxCount), pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set transaction count: %w", err)
 	}
 
@@ -473,7 +481,7 @@ func (s *PebbleStorage) SetBlockTimestamp(ctx context.Context, timestamp uint64,
 	}
 
 	value := EncodeUint64(height)
-	return s.db.Set(BlockTimestampKey(timestamp, height), value, pebble.Sync)
+	return s.kv(ctx).Set(BlockTimestampKey(timestamp, height), value, pebble.Sync)
 }
 
 // UpdateBalance updates the balance for an address at a specific block
@@ -486,7 +494,7 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	}
 
 	// Get current balance
-	currentBalance, err := s.GetAddressBalance(ctx, addr, 0) // Get latest
+	currentBalance, err := s.getAddressBalance(ctx, addr, 0) // Get latest
 	if err != nil {
 		return fmt.Errorf("failed to get current balance: %w", err)
 	}
@@ -494,7 +502,7 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	// Calculate new balance
 	newBalance := new(big.Int).Add(currentBalance, delta)
 	if newBalance.Sign() < 0 {
-		return fmt.Errorf("balance cannot be negative")
+		return fmt.Errorf("%w: %s at block %d (%s %+d)", ErrNegativeBalance, addr.Hex(), blockNumber, currentBalance, delta)
 	}
 
 	// Create snapshot
@@ -512,23 +520,38 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	}
 
 	// Get next sequence number (simple counter, could be optimized)
-	s.addrSeqMu.Lock()
-	seq := s.addrSeq[addr]
-	s.addrSeq[addr]++
-	s.addrSeqMu.Unlock()
+	seq, err := s.nextAddrSeq(ctx, seqBalance, addr)
+	if err != nil {
+		return err
+	}
 
 	// Store history entry
-	if err := s.db.Set(AddressBalanceKey(addr, seq), encoded, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(AddressBalanceKey(addr, seq), encoded, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set balance history: %w", err)
 	}
 
 	// Update latest balance
 	balanceBytes := EncodeBigInt(newBalance)
-	if err := s.db.Set(AddressBalanceLatestKey(addr), balanceBytes, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(AddressBalanceLatestKey(addr), balanceBytes, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set latest balance: %w", err)
 	}
 
 	return nil
+}
+
+// HasBalanceRecord reports whether any balance was recorded for addr.
+func (s *PebbleStorage) HasBalanceRecord(ctx context.Context, addr common.Address) (bool, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return false, err
+	}
+	_, closer, err := s.kv(ctx).Get(AddressBalanceLatestKey(addr))
+	if errors.Is(err, pebble.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, closer.Close()
 }
 
 // SetBalance sets the balance for an address at a specific block
@@ -541,7 +564,7 @@ func (s *PebbleStorage) SetBalance(ctx context.Context, addr common.Address, blo
 	}
 
 	// Get current balance to calculate delta
-	currentBalance, err := s.GetAddressBalance(ctx, addr, 0)
+	currentBalance, err := s.getAddressBalance(ctx, addr, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get current balance: %w", err)
 	}
@@ -570,7 +593,7 @@ func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address
 
 	// Iterate all transactions for this address
 	prefix := AddressTransactionKeyPrefix(addr)
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: prefixUpperBound(prefix),
 	})
@@ -582,65 +605,69 @@ func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address
 	for iter.First(); iter.Valid(); iter.Next() {
 		txHash := common.BytesToHash(iter.Value())
 
-		tx, location, err := s.GetTransaction(ctx, txHash)
+		// The model keeps the sender and hash the chain reports, and the
+		// fee payer of fee delegation transactions.
+		tx, location, err := s.GetModelTransaction(ctx, txHash)
 		if err != nil {
 			continue
 		}
-
 		receipt, _ := s.GetReceipt(ctx, txHash)
-
-		// Extract sender
-		from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-		if err != nil {
-			continue
+		from := tx.From
+		value := tx.Value
+		if value == nil {
+			value = new(big.Int)
 		}
+		succeeded := receipt != nil && receipt.Status == types.ReceiptStatusSuccessful
 
 		stats.TotalTransactions++
 
-		// Sent vs Received
+		// Sent vs Received. A failed transaction moves no value.
+		to := tx.To
 		if from == addr {
 			stats.SentCount++
-			stats.TotalValueSent.Add(stats.TotalValueSent, tx.Value())
-			if tx.To() != nil {
-				uniqueAddresses[*tx.To()] = true
+			if succeeded {
+				stats.TotalValueSent.Add(stats.TotalValueSent, value)
+			}
+			if to != nil {
+				uniqueAddresses[*to] = true
 			}
 		}
-		to := tx.To()
 		if to != nil && *to == addr {
 			stats.ReceivedCount++
-			stats.TotalValueReceived.Add(stats.TotalValueReceived, tx.Value())
+			if succeeded {
+				stats.TotalValueReceived.Add(stats.TotalValueReceived, value)
+			}
 			uniqueAddresses[from] = true
 		}
 
 		// Success vs Failed
 		if receipt != nil {
-			if receipt.Status == types.ReceiptStatusSuccessful {
+			if succeeded {
 				stats.SuccessCount++
 			} else {
 				stats.FailedCount++
 			}
-			stats.TotalGasUsed += receipt.GasUsed
-
-			// Gas cost = gasUsed * effectiveGasPrice
-			if receipt.EffectiveGasPrice != nil {
-				cost := new(big.Int).Mul(
-					new(big.Int).SetUint64(receipt.GasUsed),
-					receipt.EffectiveGasPrice,
-				)
-				stats.TotalGasCost.Add(stats.TotalGasCost, cost)
+			// Gas is counted for the account that paid it: the sender, or
+			// the fee payer of a fee delegation transaction.
+			if chains.GasPayer(tx) == addr {
+				stats.TotalGasUsed += receipt.GasUsed
+				if receipt.EffectiveGasPrice != nil {
+					cost := new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), receipt.EffectiveGasPrice)
+					stats.TotalGasCost.Add(stats.TotalGasCost, cost)
+				}
 			}
 		}
 
 		// Contract interaction (has input data and a target address)
-		if to != nil && len(tx.Data()) > 0 {
+		if to != nil && len(tx.Input) > 0 {
 			stats.ContractInteractionCount++
 		}
 
 		// Timestamps
 		if location != nil {
-			block, err := s.GetBlock(ctx, location.BlockHeight)
+			block, err := s.GetModelBlock(ctx, location.BlockHeight)
 			if err == nil && block != nil {
-				ts := block.Header().Time
+				ts := block.Time
 				if stats.FirstTransactionTimestamp == 0 || ts < stats.FirstTransactionTimestamp {
 					stats.FirstTransactionTimestamp = ts
 				}

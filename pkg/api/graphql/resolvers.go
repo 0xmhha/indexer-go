@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -44,7 +45,7 @@ func (s *Schema) resolveBlock(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("invalid block number format: %w", err)
 	}
 
-	block, err := s.storage.GetBlock(ctx, number)
+	block, err := s.models().GetModelBlock(ctx, number)
 	if err != nil {
 		s.logger.Error("failed to get block",
 			zap.Uint64("number", number),
@@ -64,7 +65,7 @@ func (s *Schema) resolveBlockByHash(p graphql.ResolveParams) (interface{}, error
 	}
 
 	hash := common.HexToHash(hashStr)
-	block, err := s.storage.GetBlockByHash(ctx, hash)
+	block, err := s.models().GetModelBlockByHash(ctx, hash)
 	if err != nil {
 		s.logger.Error("failed to get block by hash",
 			zap.String("hash", hashStr),
@@ -116,7 +117,7 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	}
 
 	// Fetch and filter blocks
-	blocks, err := s.storage.GetBlocks(ctx, blockRange.StartBlock, blockRange.EndBlock)
+	blocks, err := s.models().GetModelBlocks(ctx, blockRange.StartBlock, blockRange.EndBlock)
 	if err != nil {
 		s.logger.Error("failed to get blocks",
 			zap.Uint64("startBlock", blockRange.StartBlock),
@@ -143,7 +144,7 @@ func (s *Schema) calculateBlockRange(filter BlockFilter, latestHeight uint64, pa
 }
 
 // blocksToNodes converts blocks to GraphQL nodes
-func (s *Schema) blocksToNodes(blocks []*types.Block) []interface{} {
+func (s *Schema) blocksToNodes(blocks []*model.Block) []interface{} {
 	nodes := make([]interface{}, len(blocks))
 	for i, block := range blocks {
 		nodes[i] = s.blockToMap(block)
@@ -152,7 +153,7 @@ func (s *Schema) blocksToNodes(blocks []*types.Block) []interface{} {
 }
 
 // calculateBlockTotalCount calculates total count based on filters
-func (s *Schema) calculateBlockTotalCount(ctx context.Context, filter BlockFilter, filteredBlocks []*types.Block, latestHeight uint64) int {
+func (s *Schema) calculateBlockTotalCount(ctx context.Context, filter BlockFilter, filteredBlocks []*model.Block, latestHeight uint64) int {
 	if filter.hasTimestampFilter() || filter.hasMinerFilter() {
 		return len(filteredBlocks)
 	}
@@ -167,7 +168,7 @@ func (s *Schema) calculateBlockTotalCount(ctx context.Context, filter BlockFilte
 
 // buildBlockConnectionResponse builds the GraphQL connection response for blocks
 // reverseOrder indicates default (no filter) pagination where latest blocks come first
-func (s *Schema) buildBlockConnectionResponse(blocks []*types.Block, nodes []interface{}, totalCount int, filter BlockFilter, blockRange BlockRange, pagination PaginationParams, reverseOrder bool) map[string]interface{} {
+func (s *Schema) buildBlockConnectionResponse(blocks []*model.Block, nodes []interface{}, totalCount int, filter BlockFilter, blockRange BlockRange, pagination PaginationParams, reverseOrder bool) map[string]interface{} {
 	var hasNextPage, hasPreviousPage bool
 	if reverseOrder {
 		hasNextPage = blockRange.StartBlock > 0
@@ -179,8 +180,8 @@ func (s *Schema) buildBlockConnectionResponse(blocks []*types.Block, nodes []int
 
 	var startCursor, endCursor interface{}
 	if len(blocks) > 0 {
-		startCursor = fmt.Sprintf("%d", blocks[0].NumberU64())
-		endCursor = fmt.Sprintf("%d", blocks[len(blocks)-1].NumberU64())
+		startCursor = fmt.Sprintf("%d", blocks[0].Number)
+		endCursor = fmt.Sprintf("%d", blocks[len(blocks)-1].Number)
 	}
 
 	return buildConnectionResponse(ConnectionResponse{
@@ -268,7 +269,7 @@ func (s *Schema) resolveBlocksRange(p graphql.ResolveParams) (interface{}, error
 	// Fetch blocks in range
 	blocks := make([]interface{}, 0, endNumber-startNumber+1)
 	for blockNum := startNumber; blockNum <= endNumber; blockNum++ {
-		block, err := s.storage.GetBlock(ctx, blockNum)
+		block, err := s.models().GetModelBlock(ctx, blockNum)
 		if err != nil {
 			s.logger.Warn("failed to get block in range",
 				zap.Uint64("blockNumber", blockNum),
@@ -283,17 +284,17 @@ func (s *Schema) resolveBlocksRange(p graphql.ResolveParams) (interface{}, error
 			blockMap["transactions"] = []interface{}{}
 		} else if includeReceipts {
 			// If receipts are requested, enhance transactions with receipt data
-			txs := block.Transactions()
-			blockTs := fmt.Sprintf("%d", block.Header().Time)
-			enhancedTxs := make([]interface{}, 0, len(txs))
-			for i, tx := range txs {
+			blockTs := fmt.Sprintf("%d", block.Time)
+			enhancedTxs := make([]interface{}, 0, len(block.Transactions))
+			for i, tx := range block.Transactions {
 				txMap := s.transactionToMap(tx, &storage.TxLocation{
 					BlockHeight: blockNum,
+					BlockHash:   block.Hash,
 					TxIndex:     uint64(i),
 				})
 				txMap["blockTimestamp"] = blockTs
 				// Get receipt for this transaction
-				receipt, err := s.storage.GetReceipt(ctx, tx.Hash())
+				receipt, err := s.storage.GetReceipt(ctx, tx.Hash)
 				if err == nil && receipt != nil {
 					txMap["receipt"] = s.receiptToMap(receipt)
 				}
@@ -327,7 +328,7 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 	}
 
 	hash := common.HexToHash(hashStr)
-	tx, location, err := s.storage.GetTransaction(ctx, hash)
+	tx, location, err := s.models().GetModelTransaction(ctx, hash)
 	if err != nil {
 		s.logger.Error("failed to get transaction",
 			zap.String("hash", hashStr),
@@ -336,51 +337,15 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 	}
 
 	result := s.transactionToMap(tx, location)
+	if location != nil {
+		if block, err := s.models().GetModelBlock(ctx, location.BlockHeight); err == nil && block != nil {
+			result["blockTimestamp"] = fmt.Sprintf("%d", block.Time)
+		}
+	}
 
-	// Fetch and include receipt data for status determination
+	// Include the stored receipt for status determination
 	receipt, err := s.storage.GetReceipt(ctx, hash)
 	if err == nil && receipt != nil {
-		// Derive missing receipt fields from block and transaction context
-		if location != nil {
-			block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
-			if blockErr == nil && block != nil {
-				result["blockTimestamp"] = fmt.Sprintf("%d", block.Header().Time)
-				// Set receipt block info
-				receipt.BlockNumber = big.NewInt(int64(location.BlockHeight))
-				receipt.BlockHash = location.BlockHash
-				receipt.TransactionIndex = uint(location.TxIndex)
-
-				// Calculate GasUsed
-				if location.TxIndex == 0 {
-					receipt.GasUsed = receipt.CumulativeGasUsed
-				} else {
-					txs := block.Transactions()
-					if int(location.TxIndex) > 0 && int(location.TxIndex) <= len(txs) {
-						prevTxHash := txs[location.TxIndex-1].Hash()
-						prevReceipt, prevErr := s.storage.GetReceipt(ctx, prevTxHash)
-						if prevErr == nil && prevReceipt != nil {
-							receipt.GasUsed = receipt.CumulativeGasUsed - prevReceipt.CumulativeGasUsed
-						}
-					}
-				}
-
-				// Calculate effective gas price
-				baseFee := block.BaseFee()
-				if baseFee != nil && tx.Type() == types.DynamicFeeTxType {
-					tipCap := tx.GasTipCap()
-					feeCap := tx.GasFeeCap()
-					if tipCap != nil && feeCap != nil {
-						effectiveGasPrice := new(big.Int).Add(baseFee, tipCap)
-						if effectiveGasPrice.Cmp(feeCap) > 0 {
-							effectiveGasPrice = feeCap
-						}
-						receipt.EffectiveGasPrice = effectiveGasPrice
-					}
-				} else if tx.GasPrice() != nil {
-					receipt.EffectiveGasPrice = tx.GasPrice()
-				}
-			}
-		}
 		result["receipt"] = s.receiptToMap(receipt)
 	}
 
@@ -403,6 +368,12 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
 
+	// Without a block range, read only as many recent blocks as the page
+	// needs instead of loading the whole chain.
+	if filter.BlockNumberFrom == 0 && filter.BlockNumberTo == 0 {
+		return s.recentTransactions(ctx, filter, pagination, latestHeight)
+	}
+
 	// Set default and validate block range
 	blockFrom, blockTo := s.normalizeBlockRange(filter.BlockNumberFrom, filter.BlockNumberTo, latestHeight)
 	if blockFrom > blockTo {
@@ -410,7 +381,7 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 	}
 
 	// Fetch blocks and filter transactions
-	blocks, err := s.storage.GetBlocks(ctx, blockFrom, blockTo)
+	blocks, err := s.models().GetModelBlocks(ctx, blockFrom, blockTo)
 	if err != nil {
 		s.logger.Error("failed to get blocks",
 			zap.Uint64("blockNumberFrom", blockFrom),
@@ -453,7 +424,7 @@ func (s *Schema) normalizeBlockRange(from, to, latestHeight uint64) (uint64, uin
 }
 
 // filterTransactionsFromBlocks filters transactions from blocks based on filter criteria
-func (s *Schema) filterTransactionsFromBlocks(blocks []*types.Block, filter TransactionFilter) []map[string]interface{} {
+func (s *Schema) filterTransactionsFromBlocks(blocks []*model.Block, filter TransactionFilter) []map[string]interface{} {
 	var filteredTxs []map[string]interface{}
 
 	for _, block := range blocks {
@@ -461,18 +432,18 @@ func (s *Schema) filterTransactionsFromBlocks(blocks []*types.Block, filter Tran
 			continue
 		}
 
-		for i, tx := range block.Transactions() {
+		for i, tx := range block.Transactions {
 			if !s.matchesTransactionFilter(tx, filter) {
 				continue
 			}
 
 			location := &storage.TxLocation{
-				BlockHeight: block.NumberU64(),
-				BlockHash:   block.Hash(),
+				BlockHeight: block.Number,
+				BlockHash:   block.Hash,
 				TxIndex:     uint64(i),
 			}
 			txMap := s.transactionToMap(tx, location)
-			txMap["blockTimestamp"] = fmt.Sprintf("%d", block.Header().Time)
+			txMap["blockTimestamp"] = fmt.Sprintf("%d", block.Time)
 			filteredTxs = append(filteredTxs, txMap)
 		}
 	}
@@ -481,38 +452,18 @@ func (s *Schema) filterTransactionsFromBlocks(blocks []*types.Block, filter Tran
 }
 
 // matchesTransactionFilter checks if a transaction matches the filter criteria
-func (s *Schema) matchesTransactionFilter(tx *types.Transaction, filter TransactionFilter) bool {
-	if filter.TxType != nil && int(tx.Type()) != *filter.TxType {
+func (s *Schema) matchesTransactionFilter(tx *model.Transaction, filter TransactionFilter) bool {
+	if filter.TxType != nil && int(tx.Type) != *filter.TxType {
 		return false
 	}
-
-	// Get signer and from address
-	var signer types.Signer
-	if tx.ChainId() != nil {
-		signer = types.LatestSignerForChainID(tx.ChainId())
-	} else {
-		signer = types.HomesteadSigner{}
-	}
-
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		s.logger.Warn("failed to get transaction sender",
-			zap.String("txHash", tx.Hash().Hex()),
-			zap.Error(err))
+	if filter.From != nil && tx.From != *filter.From {
 		return false
 	}
-
-	if filter.From != nil && from != *filter.From {
-		return false
-	}
-
 	if filter.To != nil {
-		txTo := tx.To()
-		if txTo == nil || *txTo != *filter.To {
+		if tx.To == nil || *tx.To != *filter.To {
 			return false
 		}
 	}
-
 	return true
 }
 
@@ -607,36 +558,33 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 		txHashes = txHashes[:limit]
 	}
 
-	// Batch fetch all transactions
-	txs, locs, batchErr := s.storage.GetTransactions(ctx, txHashes)
-	if batchErr != nil && !errors.Is(batchErr, storage.ErrNotFound) {
-		s.logger.Error("failed to batch get transactions",
-			zap.String("address", addressStr),
-			zap.Error(batchErr))
-	}
-
 	// Convert transaction results to full transaction objects
 	nodes := make([]interface{}, 0, len(txHashes))
 	blockTimestamps := make(map[uint64]string) // cache block timestamps
-	for i, tx := range txs {
-		if tx == nil {
-			if batchErr != nil {
-				s.logger.Warn("transaction not found in batch",
-					zap.String("txHash", txHashes[i].Hex()),
+	for _, txHash := range txHashes {
+		tx, location, err := s.models().GetModelTransaction(ctx, txHash)
+		if err != nil {
+			if !errors.Is(err, storage.ErrNotFound) {
+				s.logger.Error("failed to get transaction",
+					zap.String("txHash", txHash.Hex()),
+					zap.String("address", addressStr),
+					zap.Error(err))
+			} else {
+				s.logger.Warn("transaction not found",
+					zap.String("txHash", txHash.Hex()),
 					zap.String("address", addressStr))
 			}
 			continue
 		}
-		location := locs[i]
 
 		txMap := s.transactionToMap(tx, location)
 		if location != nil {
 			if ts, ok := blockTimestamps[location.BlockHeight]; ok {
 				txMap["blockTimestamp"] = ts
 			} else {
-				block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
+				block, blockErr := s.models().GetModelBlock(ctx, location.BlockHeight)
 				if blockErr == nil && block != nil {
-					ts = fmt.Sprintf("%d", block.Header().Time)
+					ts = fmt.Sprintf("%d", block.Time)
 					blockTimestamps[location.BlockHeight] = ts
 					txMap["blockTimestamp"] = ts
 				}
@@ -676,7 +624,8 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 	}, nil
 }
 
-// resolveReceipt resolves a receipt by transaction hash
+// resolveReceipt resolves a receipt by transaction hash. Stored receipts
+// are complete (storage schema v2), so they are returned as stored.
 func (s *Schema) resolveReceipt(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 	hashStr, ok := p.Args["transactionHash"].(string)
@@ -691,65 +640,6 @@ func (s *Schema) resolveReceipt(p graphql.ResolveParams) (interface{}, error) {
 			zap.String("hash", hashStr),
 			zap.Error(err))
 		return nil, err
-	}
-
-	// Get transaction to find block info for deriving missing receipt fields
-	tx, location, err := s.storage.GetTransaction(ctx, hash)
-	if err != nil {
-		s.logger.Warn("failed to get transaction for receipt context",
-			zap.String("hash", hashStr),
-			zap.Error(err))
-		// Still return basic receipt data
-		return s.receiptToMap(receipt), nil
-	}
-
-	// Get block to derive additional fields
-	var baseFee *big.Int
-	if location != nil {
-		block, err := s.storage.GetBlock(ctx, location.BlockHeight)
-		if err == nil && block != nil {
-			baseFee = block.BaseFee()
-			// Set receipt block info from location
-			receipt.BlockNumber = big.NewInt(int64(location.BlockHeight))
-			receipt.BlockHash = location.BlockHash
-			receipt.TransactionIndex = uint(location.TxIndex)
-
-			// Calculate GasUsed from CumulativeGasUsed
-			// GasUsed = current.CumulativeGasUsed - previous.CumulativeGasUsed
-			if location.TxIndex == 0 {
-				// First transaction in block: gasUsed = cumulativeGasUsed
-				receipt.GasUsed = receipt.CumulativeGasUsed
-			} else {
-				// Get previous transaction's receipt to calculate gas used
-				txs := block.Transactions()
-				if int(location.TxIndex) > 0 && int(location.TxIndex) <= len(txs) {
-					prevTxHash := txs[location.TxIndex-1].Hash()
-					prevReceipt, err := s.storage.GetReceipt(ctx, prevTxHash)
-					if err == nil && prevReceipt != nil {
-						receipt.GasUsed = receipt.CumulativeGasUsed - prevReceipt.CumulativeGasUsed
-					}
-				}
-			}
-		}
-	}
-
-	// Calculate effective gas price
-	if tx != nil {
-		if baseFee != nil && tx.Type() == types.DynamicFeeTxType {
-			// EIP-1559: effectiveGasPrice = min(baseFee + tipCap, feeCap)
-			tipCap := tx.GasTipCap()
-			feeCap := tx.GasFeeCap()
-			if tipCap != nil && feeCap != nil {
-				effectiveGasPrice := new(big.Int).Add(baseFee, tipCap)
-				if effectiveGasPrice.Cmp(feeCap) > 0 {
-					effectiveGasPrice = feeCap
-				}
-				receipt.EffectiveGasPrice = effectiveGasPrice
-			}
-		} else if tx.GasPrice() != nil {
-			// Legacy/AccessList tx: effectiveGasPrice = gasPrice
-			receipt.EffectiveGasPrice = tx.GasPrice()
-		}
 	}
 
 	return s.receiptToMap(receipt), nil
@@ -768,15 +658,6 @@ func (s *Schema) resolveReceiptsByBlock(p graphql.ResolveParams) (interface{}, e
 		return nil, fmt.Errorf("invalid block number format: %w", err)
 	}
 
-	// Get block for deriving receipt fields
-	block, err := s.storage.GetBlock(ctx, number)
-	if err != nil {
-		s.logger.Error("failed to get block",
-			zap.Uint64("number", number),
-			zap.Error(err))
-		return nil, fmt.Errorf("failed to get block: %w", err)
-	}
-
 	receipts, err := s.storage.GetReceiptsByBlockNumber(ctx, number)
 	if err != nil {
 		s.logger.Error("failed to get receipts by block",
@@ -785,41 +666,8 @@ func (s *Schema) resolveReceiptsByBlock(p graphql.ResolveParams) (interface{}, e
 		return nil, err
 	}
 
-	// Derive missing fields for each receipt
-	baseFee := block.BaseFee()
-	txs := block.Transactions()
-
 	result := make([]interface{}, len(receipts))
 	for i, receipt := range receipts {
-		// Set block info
-		receipt.BlockNumber = big.NewInt(int64(number))
-		receipt.BlockHash = block.Hash()
-
-		// Calculate GasUsed
-		if i == 0 {
-			receipt.GasUsed = receipt.CumulativeGasUsed
-		} else if i > 0 && receipts[i-1] != nil {
-			receipt.GasUsed = receipt.CumulativeGasUsed - receipts[i-1].CumulativeGasUsed
-		}
-
-		// Calculate effective gas price from transaction
-		if i < len(txs) {
-			tx := txs[i]
-			if baseFee != nil && tx.Type() == types.DynamicFeeTxType {
-				tipCap := tx.GasTipCap()
-				feeCap := tx.GasFeeCap()
-				if tipCap != nil && feeCap != nil {
-					effectiveGasPrice := new(big.Int).Add(baseFee, tipCap)
-					if effectiveGasPrice.Cmp(feeCap) > 0 {
-						effectiveGasPrice = feeCap
-					}
-					receipt.EffectiveGasPrice = effectiveGasPrice
-				}
-			} else if tx.GasPrice() != nil {
-				receipt.EffectiveGasPrice = tx.GasPrice()
-			}
-		}
-
 		result[i] = s.receiptToMap(receipt)
 	}
 
@@ -845,6 +693,11 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 		}
 		s.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
+	}
+
+	// Without a block range, read only as many blocks as the page needs.
+	if filter.BlockNumberFrom == 0 && filter.BlockNumberTo == 0 {
+		return s.earliestLogs(ctx, filter, pagination, latestHeight, decode)
 	}
 
 	// Set default and validate block range
@@ -934,1100 +787,37 @@ func (s *Schema) buildLogCursor(log map[string]interface{}) interface{} {
 	return nil
 }
 
-// ========== System Contract Resolvers ==========
-
-// resolveTotalSupply resolves the current total supply
-func (s *Schema) resolveTotalSupply(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	// Cast storage to SystemContractReader
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	supply, err := reader.GetTotalSupply(ctx)
-	if err != nil {
-		s.logger.Error("failed to get total supply", zap.Error(err))
-		return nil, err
-	}
-
-	return supply.String(), nil
+// models reads blocks and transactions as the chain-neutral model, so hashes,
+// transaction types and senders are the ones the chain reports.
+func (s *Schema) models() storage.ModelReader {
+	return storage.AsModelReader(s.storage)
 }
 
-// resolveActiveMinters resolves the list of active minters
-func (s *Schema) resolveActiveMinters(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+// modelBlockOf returns the stored model of a block another reader returned
+// as a go-ethereum block, falling back to converting it.
+func (s *Schema) modelBlockOf(ctx context.Context, b *types.Block) *model.Block {
+	if b == nil {
+		return nil
 	}
-
-	minters, err := reader.GetActiveMinters(ctx)
-	if err != nil {
-		s.logger.Error("failed to get active minters", zap.Error(err))
-		return nil, err
+	if m, err := s.models().GetModelBlock(ctx, b.NumberU64()); err == nil {
+		return m
 	}
-
-	var result []map[string]interface{}
-	for _, minter := range minters {
-		allowance, err := reader.GetMinterAllowance(ctx, minter)
-		if err != nil {
-			s.logger.Warn("failed to get minter allowance", zap.String("minter", minter.Hex()), zap.Error(err))
-			continue
-		}
-
-		result = append(result, map[string]interface{}{
-			"address":   minter.Hex(),
-			"allowance": allowance.String(),
-			"isActive":  true,
-		})
-	}
-
-	return result, nil
-}
-
-// resolveActiveMinterAddresses resolves the list of active minter addresses only
-func (s *Schema) resolveActiveMinterAddresses(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	minters, err := reader.GetActiveMinters(ctx)
-	if err != nil {
-		s.logger.Error("failed to get active minter addresses", zap.Error(err))
-		return nil, err
-	}
-
-	// Convert to hex string addresses
-	var result []string
-	for _, minter := range minters {
-		result = append(result, minter.Hex())
-	}
-
-	return result, nil
-}
-
-// resolveMinterAllowance resolves the allowance for a specific minter
-func (s *Schema) resolveMinterAllowance(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	minterStr, ok := p.Args["minter"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid minter address")
-	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	minter := common.HexToAddress(minterStr)
-	allowance, err := reader.GetMinterAllowance(ctx, minter)
-	if err != nil {
-		s.logger.Error("failed to get minter allowance",
-			zap.String("minter", minterStr),
-			zap.Error(err))
-		return nil, err
-	}
-
-	return allowance.String(), nil
-}
-
-// resolveActiveValidators resolves the list of active validators
-func (s *Schema) resolveActiveValidators(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	validators, err := reader.GetActiveValidators(ctx)
-	if err != nil {
-		s.logger.Error("failed to get active validators", zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, validator := range validators {
-		result = append(result, map[string]interface{}{
-			"address":  validator.Hex(),
-			"isActive": true,
-		})
-	}
-
-	return result, nil
-}
-
-// resolveActiveValidatorAddresses resolves the list of active validator addresses only
-func (s *Schema) resolveActiveValidatorAddresses(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	validators, err := reader.GetActiveValidators(ctx)
-	if err != nil {
-		s.logger.Error("failed to get active validator addresses", zap.Error(err))
-		return nil, err
-	}
-
-	// Convert to hex string addresses
-	var result []string
-	for _, validator := range validators {
-		result = append(result, validator.Hex())
-	}
-
-	return result, nil
-}
-
-// resolveBlacklistedAddresses resolves the list of blacklisted addresses
-func (s *Schema) resolveBlacklistedAddresses(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	addresses, err := reader.GetBlacklistedAddresses(ctx)
-	if err != nil {
-		s.logger.Error("failed to get blacklisted addresses", zap.Error(err))
-		return nil, err
-	}
-
-	var result []string
-	for _, addr := range addresses {
-		result = append(result, addr.Hex())
-	}
-
-	return result, nil
-}
-
-// resolveProposals resolves governance proposals with filtering
-func (s *Schema) resolveProposals(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	// Parse filter (optional - nil means no filter)
-	filter, _ := p.Args["filter"].(map[string]interface{})
-	if filter == nil {
-		filter = map[string]interface{}{}
-	}
-
-	// Parse contract (optional - if not provided, queries all contracts)
-	contract := common.Address{} // Zero address queries all contracts
-	contractStr := ""
-	if contractVal, ok := filter["contract"].(string); ok {
-		contractStr = contractVal
-		contract = common.HexToAddress(contractStr)
-	}
-
-	// Parse status (optional)
-	status := storage.ProposalStatusNone
-	if statusStr, ok := filter["status"].(string); ok {
-		status = parseProposalStatus(statusStr)
-	}
-
-	// Parse proposer (optional) - will be filtered client-side
-	var proposer common.Address
-	var hasProposerFilter bool
-	if proposerStr, ok := filter["proposer"].(string); ok && proposerStr != "" {
-		proposer = common.HexToAddress(proposerStr)
-		hasProposerFilter = true
-	}
-
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	proposals, err := reader.GetProposals(ctx, contract, status, limit, offset)
-	if err != nil {
-		logContract := contractStr
-		if logContract == "" {
-			logContract = "all"
-		}
-		s.logger.Error("failed to get proposals",
-			zap.String("contract", logContract),
-			zap.Error(err))
-		return nil, err
-	}
-
-	var nodes []map[string]interface{}
-	for _, proposal := range proposals {
-		// Apply proposer filter if specified
-		if hasProposerFilter && proposal.Proposer != proposer {
-			continue
-		}
-		nodes = append(nodes, s.proposalToMap(proposal))
-	}
-
-	return map[string]interface{}{
-		"nodes":      nodes,
-		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) >= limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
-	}, nil
-}
-
-// resolveProposal resolves a specific proposal by ID
-func (s *Schema) resolveProposal(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	contractStr, ok := p.Args["contract"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid contract address")
-	}
-
-	proposalIdStr, ok := p.Args["proposalId"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid proposal ID")
-	}
-
-	contract := common.HexToAddress(contractStr)
-	proposalId, success := new(big.Int).SetString(proposalIdStr, 10)
-	if !success {
-		return nil, fmt.Errorf("invalid proposal ID format")
-	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	proposal, err := reader.GetProposalById(ctx, contract, proposalId)
-	if err != nil {
-		s.logger.Error("failed to get proposal",
-			zap.String("contract", contractStr),
-			zap.String("proposalId", proposalIdStr),
-			zap.Error(err))
-		return nil, err
-	}
-
-	if proposal == nil {
-		return nil, nil
-	}
-
-	return s.proposalToMap(proposal), nil
-}
-
-// resolveProposalVotes resolves votes for a specific proposal
-func (s *Schema) resolveProposalVotes(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	contractStr, ok := p.Args["contract"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid contract address")
-	}
-
-	proposalIdStr, ok := p.Args["proposalId"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid proposal ID")
-	}
-
-	contract := common.HexToAddress(contractStr)
-	proposalId, success := new(big.Int).SetString(proposalIdStr, 10)
-	if !success {
-		return nil, fmt.Errorf("invalid proposal ID format")
-	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	votes, err := reader.GetProposalVotes(ctx, contract, proposalId)
-	if err != nil {
-		s.logger.Error("failed to get proposal votes",
-			zap.String("contract", contractStr),
-			zap.String("proposalId", proposalIdStr),
-			zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, vote := range votes {
-		result = append(result, s.proposalVoteToMap(vote))
-	}
-
-	return result, nil
-}
-
-// Helper function to convert Proposal to map
-func (s *Schema) proposalToMap(proposal *storage.Proposal) map[string]interface{} {
-	m := map[string]interface{}{
-		"contract":          proposal.Contract.Hex(),
-		"proposalId":        proposal.ProposalID.String(),
-		"proposer":          proposal.Proposer.Hex(),
-		"actionType":        common.Bytes2Hex(proposal.ActionType[:]),
-		"callData":          common.Bytes2Hex(proposal.CallData),
-		"memberVersion":     proposal.MemberVersion.String(),
-		"requiredApprovals": int(proposal.RequiredApprovals),
-		"approved":          int(proposal.Approved),
-		"rejected":          int(proposal.Rejected),
-		"status":            proposalStatusToString(proposal.Status),
-		"createdAt":         fmt.Sprintf("%d", proposal.CreatedAt),
-		"blockNumber":       fmt.Sprintf("%d", proposal.BlockNumber),
-		"transactionHash":   proposal.TxHash.Hex(),
-	}
-
-	if proposal.ExecutedAt != nil {
-		m["executedAt"] = fmt.Sprintf("%d", *proposal.ExecutedAt)
-	} else {
-		m["executedAt"] = nil
-	}
-
+	m, _ := gethconv.BlockFromGeth(b)
 	return m
 }
 
-// Helper function to convert ProposalVote to map
-func (s *Schema) proposalVoteToMap(vote *storage.ProposalVote) map[string]interface{} {
-	return map[string]interface{}{
-		"contract":        vote.Contract.Hex(),
-		"proposalId":      vote.ProposalID.String(),
-		"voter":           vote.Voter.Hex(),
-		"approval":        vote.Approval,
-		"blockNumber":     fmt.Sprintf("%d", vote.BlockNumber),
-		"transactionHash": vote.TxHash.Hex(),
-		"timestamp":       fmt.Sprintf("%d", vote.Timestamp),
-	}
-}
-
-// Helper function to parse ProposalStatus from string
-func parseProposalStatus(statusStr string) storage.ProposalStatus {
-	switch statusStr {
-	case "NONE":
-		return storage.ProposalStatusNone
-	case "VOTING":
-		return storage.ProposalStatusVoting
-	case "APPROVED":
-		return storage.ProposalStatusApproved
-	case "EXECUTED":
-		return storage.ProposalStatusExecuted
-	case "CANCELLED":
-		return storage.ProposalStatusCancelled
-	case "EXPIRED":
-		return storage.ProposalStatusExpired
-	case "FAILED":
-		return storage.ProposalStatusFailed
-	case "REJECTED":
-		return storage.ProposalStatusRejected
-	default:
-		return storage.ProposalStatusNone
-	}
-}
-
-// Helper function to convert ProposalStatus to string
-func proposalStatusToString(status storage.ProposalStatus) string {
-	switch status {
-	case storage.ProposalStatusNone:
-		return "NONE"
-	case storage.ProposalStatusVoting:
-		return "VOTING"
-	case storage.ProposalStatusApproved:
-		return "APPROVED"
-	case storage.ProposalStatusExecuted:
-		return "EXECUTED"
-	case storage.ProposalStatusCancelled:
-		return "CANCELLED"
-	case storage.ProposalStatusExpired:
-		return "EXPIRED"
-	case storage.ProposalStatusFailed:
-		return "FAILED"
-	case storage.ProposalStatusRejected:
-		return "REJECTED"
-	default:
-		return "NONE"
-	}
-}
-
-// resolveMintEvents resolves mint events with filtering and pagination
-func (s *Schema) resolveMintEvents(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	filter, ok := p.Args["filter"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid filter")
-	}
-
-	// Parse block range
-	var fromBlock, toBlock uint64
-	if fb, ok := filter["fromBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(fb, 10, 64)
-		fromBlock = parsed
-	}
-	if tb, ok := filter["toBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(tb, 10, 64)
-		toBlock = parsed
-	}
-
-	// Parse optional minter address (support both 'minter' and 'address' fields)
-	var minter common.Address
-	if minterStr, ok := filter["minter"].(string); ok && minterStr != "" {
-		minter = common.HexToAddress(minterStr)
-	} else if addressStr, ok := filter["address"].(string); ok && addressStr != "" {
-		// Support 'address' as alias for 'minter'
-		minter = common.HexToAddress(addressStr)
-	}
-
-	// Pagination
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > 100 {
-				limit = 100
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
+// modelTxAt returns the stored model of a transaction another reader
+// returned as a go-ethereum transaction. It is looked up by position: the
+// go-ethereum hash of a chain-specific type differs from the chain's.
+func (s *Schema) modelTxAt(ctx context.Context, tx *types.Transaction, loc *storage.TxLocation) *model.Transaction {
+	if loc != nil {
+		if b, err := s.models().GetModelBlock(ctx, loc.BlockHeight); err == nil && int(loc.TxIndex) < len(b.Transactions) {
+			return b.Transactions[loc.TxIndex]
 		}
 	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
+	if tx == nil {
+		return nil
 	}
-
-	events, err := reader.GetMintEvents(ctx, fromBlock, toBlock, minter, limit, offset)
-	if err != nil {
-		s.logger.Error("failed to get mint events", zap.Error(err))
-		return nil, err
-	}
-
-	var nodes []map[string]interface{}
-	for _, event := range events {
-		nodes = append(nodes, s.mintEventToMap(event))
-	}
-
-	return map[string]interface{}{
-		"nodes":      nodes,
-		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) >= limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
-	}, nil
-}
-
-// resolveBurnEvents resolves burn events with filtering and pagination
-func (s *Schema) resolveBurnEvents(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	filter, ok := p.Args["filter"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid filter")
-	}
-
-	// Parse block range
-	var fromBlock, toBlock uint64
-	if fb, ok := filter["fromBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(fb, 10, 64)
-		fromBlock = parsed
-	}
-	if tb, ok := filter["toBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(tb, 10, 64)
-		toBlock = parsed
-	}
-
-	// Parse optional burner address (support both 'burner' and 'address' fields)
-	var burner common.Address
-	if burnerStr, ok := filter["burner"].(string); ok && burnerStr != "" {
-		burner = common.HexToAddress(burnerStr)
-	} else if addressStr, ok := filter["address"].(string); ok && addressStr != "" {
-		// Support 'address' as alias for 'burner'
-		burner = common.HexToAddress(addressStr)
-	}
-
-	// Pagination
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > 100 {
-				limit = 100
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetBurnEvents(ctx, fromBlock, toBlock, burner, limit, offset)
-	if err != nil {
-		s.logger.Error("failed to get burn events", zap.Error(err))
-		return nil, err
-	}
-
-	var nodes []map[string]interface{}
-	for _, event := range events {
-		nodes = append(nodes, s.burnEventToMap(event))
-	}
-
-	return map[string]interface{}{
-		"nodes":      nodes,
-		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) >= limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
-	}, nil
-}
-
-// resolveMinterHistory resolves minter configuration history
-func (s *Schema) resolveMinterHistory(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	minterStr, ok := p.Args["minter"].(string)
-	if !ok {
-		return nil, fmt.Errorf("minter address is required")
-	}
-	minter := common.HexToAddress(minterStr)
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetMinterHistory(ctx, minter)
-	if err != nil {
-		s.logger.Error("failed to get minter history", zap.String("minter", minterStr), zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, event := range events {
-		result = append(result, s.minterConfigEventToMap(event))
-	}
-
-	return result, nil
-}
-
-// resolveValidatorHistory resolves validator change history
-func (s *Schema) resolveValidatorHistory(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	validatorStr, ok := p.Args["validator"].(string)
-	if !ok {
-		return nil, fmt.Errorf("validator address is required")
-	}
-	validator := common.HexToAddress(validatorStr)
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetValidatorHistory(ctx, validator)
-	if err != nil {
-		s.logger.Error("failed to get validator history", zap.String("validator", validatorStr), zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, event := range events {
-		result = append(result, s.validatorChangeEventToMap(event))
-	}
-
-	return result, nil
-}
-
-// resolveGasTipHistory resolves gas tip update history
-func (s *Schema) resolveGasTipHistory(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	filter, ok := p.Args["filter"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid filter")
-	}
-
-	// Parse block range
-	var fromBlock, toBlock uint64
-	if fb, ok := filter["fromBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(fb, 10, 64)
-		fromBlock = parsed
-	}
-	if tb, ok := filter["toBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(tb, 10, 64)
-		toBlock = parsed
-	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetGasTipHistory(ctx, fromBlock, toBlock)
-	if err != nil {
-		s.logger.Error("failed to get gas tip history", zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, event := range events {
-		result = append(result, s.gasTipUpdateEventToMap(event))
-	}
-
-	return result, nil
-}
-
-// resolveBlacklistHistory resolves blacklist change history
-func (s *Schema) resolveBlacklistHistory(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	addressStr, ok := p.Args["address"].(string)
-	if !ok {
-		return nil, fmt.Errorf("address is required")
-	}
-	address := common.HexToAddress(addressStr)
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetBlacklistHistory(ctx, address)
-	if err != nil {
-		s.logger.Error("failed to get blacklist history", zap.String("address", addressStr), zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, event := range events {
-		result = append(result, s.blacklistEventToMap(event))
-	}
-
-	return result, nil
-}
-
-// resolveMemberHistory resolves member change history
-func (s *Schema) resolveMemberHistory(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	contractStr, ok := p.Args["contract"].(string)
-	if !ok {
-		return nil, fmt.Errorf("contract address is required")
-	}
-	contract := common.HexToAddress(contractStr)
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetMemberHistory(ctx, contract)
-	if err != nil {
-		s.logger.Error("failed to get member history", zap.String("contract", contractStr), zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, event := range events {
-		result = append(result, s.memberChangeEventToMap(event))
-	}
-
-	return result, nil
-}
-
-// resolveEmergencyPauseHistory resolves emergency pause history
-func (s *Schema) resolveEmergencyPauseHistory(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	contractStr, ok := p.Args["contract"].(string)
-	if !ok {
-		return nil, fmt.Errorf("contract address is required")
-	}
-	contract := common.HexToAddress(contractStr)
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetEmergencyPauseHistory(ctx, contract)
-	if err != nil {
-		s.logger.Error("failed to get emergency pause history", zap.String("contract", contractStr), zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, event := range events {
-		result = append(result, s.emergencyPauseEventToMap(event))
-	}
-
-	return result, nil
-}
-
-// resolveDepositMintProposals resolves deposit mint proposals
-func (s *Schema) resolveDepositMintProposals(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	filter, ok := p.Args["filter"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid filter")
-	}
-
-	// Parse block range
-	var fromBlock, toBlock uint64
-	if fb, ok := filter["fromBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(fb, 10, 64)
-		fromBlock = parsed
-	}
-	if tb, ok := filter["toBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(tb, 10, 64)
-		toBlock = parsed
-	}
-
-	// Parse optional status filter
-	status := storage.ProposalStatusNone
-	if statusStr, ok := filter["status"].(string); ok && statusStr != "" {
-		status = parseProposalStatus(statusStr)
-	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	proposals, err := reader.GetDepositMintProposals(ctx, fromBlock, toBlock, status)
-	if err != nil {
-		s.logger.Error("failed to get deposit mint proposals", zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, proposal := range proposals {
-		result = append(result, s.depositMintProposalToMap(proposal))
-	}
-
-	return result, nil
-}
-
-// Phase 2.3: Add missing system contract query resolvers
-
-// resolveMinterConfigHistory resolves minter configuration change history across all minters
-func (s *Schema) resolveMinterConfigHistory(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	filter, ok := p.Args["filter"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid filter")
-	}
-
-	// Parse block range
-	var fromBlock, toBlock uint64
-	if fb, ok := filter["fromBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(fb, 10, 64)
-		fromBlock = parsed
-	}
-	if tb, ok := filter["toBlock"].(string); ok {
-		parsed, _ := strconv.ParseUint(tb, 10, 64)
-		toBlock = parsed
-	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetMinterConfigHistory(ctx, fromBlock, toBlock)
-	if err != nil {
-		s.logger.Error("failed to get minter config history",
-			zap.Uint64("fromBlock", fromBlock),
-			zap.Uint64("toBlock", toBlock),
-			zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, event := range events {
-		result = append(result, s.minterConfigEventToMap(event))
-	}
-
-	return result, nil
-}
-
-// resolveAuthorizedAccounts resolves list of authorized accounts from GovCouncil
-func (s *Schema) resolveAuthorizedAccounts(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	accounts, err := reader.GetAuthorizedAccounts(ctx)
-	if err != nil {
-		s.logger.Error("failed to get authorized accounts", zap.Error(err))
-		return nil, err
-	}
-
-	// Convert addresses to hex strings
-	var result []string
-	for _, account := range accounts {
-		result = append(result, account.Hex())
-	}
-
-	return result, nil
-}
-
-// Helper function to convert MintEvent to map
-func (s *Schema) mintEventToMap(event *storage.MintEvent) map[string]interface{} {
-	return map[string]interface{}{
-		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-		"transactionHash": event.TxHash.Hex(),
-		"minter":          event.Minter.Hex(),
-		"to":              event.To.Hex(),
-		"amount":          event.Amount.String(),
-		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-	}
-}
-
-// Helper function to convert BurnEvent to map
-func (s *Schema) burnEventToMap(event *storage.BurnEvent) map[string]interface{} {
-	m := map[string]interface{}{
-		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-		"transactionHash": event.TxHash.Hex(),
-		"burner":          event.Burner.Hex(),
-		"amount":          event.Amount.String(),
-		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-	}
-	if event.WithdrawalID != "" {
-		m["withdrawalId"] = event.WithdrawalID
-	}
+	m, _ := gethconv.TxFromGeth(tx)
 	return m
-}
-
-// Helper function to convert MinterConfigEvent to map
-func (s *Schema) minterConfigEventToMap(event *storage.MinterConfigEvent) map[string]interface{} {
-	return map[string]interface{}{
-		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-		"transactionHash": event.TxHash.Hex(),
-		"minter":          event.Minter.Hex(),
-		"allowance":       event.Allowance.String(),
-		"action":          event.Action,
-		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-	}
-}
-
-// Helper function to convert ValidatorChangeEvent to map
-func (s *Schema) validatorChangeEventToMap(event *storage.ValidatorChangeEvent) map[string]interface{} {
-	m := map[string]interface{}{
-		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-		"transactionHash": event.TxHash.Hex(),
-		"validator":       event.Validator.Hex(),
-		"action":          event.Action,
-		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-	}
-	if event.OldValidator != nil {
-		m["oldValidator"] = event.OldValidator.Hex()
-	}
-	return m
-}
-
-// Helper function to convert GasTipUpdateEvent to map
-func (s *Schema) gasTipUpdateEventToMap(event *storage.GasTipUpdateEvent) map[string]interface{} {
-	return map[string]interface{}{
-		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-		"transactionHash": event.TxHash.Hex(),
-		"oldTip":          event.OldTip.String(),
-		"newTip":          event.NewTip.String(),
-		"updater":         event.Updater.Hex(),
-		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-	}
-}
-
-// Helper function to convert BlacklistEvent to map
-func (s *Schema) blacklistEventToMap(event *storage.BlacklistEvent) map[string]interface{} {
-	return map[string]interface{}{
-		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-		"transactionHash": event.TxHash.Hex(),
-		"account":         event.Account.Hex(),
-		"action":          event.Action,
-		"proposalId":      event.ProposalID.String(),
-		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-	}
-}
-
-// Helper function to convert MemberChangeEvent to map
-func (s *Schema) memberChangeEventToMap(event *storage.MemberChangeEvent) map[string]interface{} {
-	m := map[string]interface{}{
-		"contract":        event.Contract.Hex(),
-		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-		"transactionHash": event.TxHash.Hex(),
-		"member":          event.Member.Hex(),
-		"action":          event.Action,
-		"totalMembers":    fmt.Sprintf("%d", event.TotalMembers),
-		"newQuorum":       int(event.NewQuorum),
-		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-	}
-	if event.OldMember != nil {
-		m["oldMember"] = event.OldMember.Hex()
-	}
-	return m
-}
-
-// Helper function to convert EmergencyPauseEvent to map
-func (s *Schema) emergencyPauseEventToMap(event *storage.EmergencyPauseEvent) map[string]interface{} {
-	return map[string]interface{}{
-		"contract":        event.Contract.Hex(),
-		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-		"transactionHash": event.TxHash.Hex(),
-		"proposalId":      event.ProposalID.String(),
-		"action":          event.Action,
-		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-	}
-}
-
-// Helper function to convert DepositMintProposal to map
-func (s *Schema) depositMintProposalToMap(proposal *storage.DepositMintProposal) map[string]interface{} {
-	return map[string]interface{}{
-		"proposalId":      proposal.ProposalID.String(),
-		"requester":       proposal.Requester.Hex(),
-		"beneficiary":     proposal.Beneficiary.Hex(),
-		"amount":          proposal.Amount.String(),
-		"depositId":       proposal.DepositID,
-		"bankReference":   proposal.BankReference,
-		"status":          proposalStatusToString(proposal.Status),
-		"blockNumber":     fmt.Sprintf("%d", proposal.BlockNumber),
-		"transactionHash": proposal.TxHash.Hex(),
-		"timestamp":       fmt.Sprintf("%d", proposal.Timestamp),
-	}
-}
-
-// resolveMaxProposalsUpdateHistory resolves max proposals per member update history
-func (s *Schema) resolveMaxProposalsUpdateHistory(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	contractStr, ok := p.Args["contract"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid contract address")
-	}
-
-	contract := common.HexToAddress(contractStr)
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetMaxProposalsUpdateHistory(ctx, contract)
-	if err != nil {
-		s.logger.Error("failed to get max proposals update history",
-			zap.String("contract", contractStr),
-			zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, event := range events {
-		result = append(result, map[string]interface{}{
-			"contract":        event.Contract.Hex(),
-			"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-			"transactionHash": event.TxHash.Hex(),
-			"oldMax":          int(event.OldMax),
-			"newMax":          int(event.NewMax),
-			"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-		})
-	}
-
-	if result == nil {
-		result = []map[string]interface{}{}
-	}
-
-	return result, nil
-}
-
-// resolveProposalExecutionSkippedEvents resolves proposal execution skipped events
-func (s *Schema) resolveProposalExecutionSkippedEvents(p graphql.ResolveParams) (interface{}, error) {
-	ctx := p.Context
-
-	contractStr, ok := p.Args["contract"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid contract address")
-	}
-
-	contract := common.HexToAddress(contractStr)
-
-	var proposalID *big.Int
-	if pidStr, ok := p.Args["proposalId"].(string); ok && pidStr != "" {
-		proposalID = new(big.Int)
-		proposalID.SetString(pidStr, 10)
-	}
-
-	reader, ok := s.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement SystemContractReader")
-	}
-
-	events, err := reader.GetProposalExecutionSkippedEvents(ctx, contract, proposalID)
-	if err != nil {
-		s.logger.Error("failed to get proposal execution skipped events",
-			zap.String("contract", contractStr),
-			zap.Error(err))
-		return nil, err
-	}
-
-	var result []map[string]interface{}
-	for _, event := range events {
-		pidStr := "0"
-		if event.ProposalID != nil {
-			pidStr = event.ProposalID.String()
-		}
-		result = append(result, map[string]interface{}{
-			"contract":        event.Contract.Hex(),
-			"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
-			"transactionHash": event.TxHash.Hex(),
-			"account":         event.Account.Hex(),
-			"proposalId":      pidStr,
-			"reason":          event.Reason,
-			"timestamp":       fmt.Sprintf("%d", event.Timestamp),
-		})
-	}
-
-	if result == nil {
-		result = []map[string]interface{}{}
-	}
-
-	return result, nil
 }

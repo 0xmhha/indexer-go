@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"time"
 
 	abiDecoder "github.com/0xmhha/indexer-go/pkg/abi"
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -114,27 +117,6 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.getBlockCount(ctx, params)
 	case "getTransactionCount":
 		return h.getTransactionCount(ctx, params)
-	// System contract methods
-	case "getTotalSupply":
-		return h.getTotalSupply(ctx, params)
-	case "getActiveMinters":
-		return h.getActiveMinters(ctx, params)
-	case "getMinterAllowance":
-		return h.getMinterAllowance(ctx, params)
-	case "getActiveValidators":
-		return h.getActiveValidators(ctx, params)
-	case "getBlacklistedAddresses":
-		return h.getBlacklistedAddresses(ctx, params)
-	case "getProposal":
-		return h.getProposal(ctx, params)
-	case "getProposals":
-		return h.getProposals(ctx, params)
-	case "getProposalVotes":
-		return h.getProposalVotes(ctx, params)
-	case "getMintEvents":
-		return h.getMintEvents(ctx, params)
-	case "getBurnEvents":
-		return h.getBurnEvents(ctx, params)
 	// Address indexing methods
 	case "getContractCreation":
 		return h.getContractCreation(ctx, params)
@@ -158,23 +140,6 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.getERC721TransfersByAddress(ctx, params)
 	case "getERC721Owner":
 		return h.getERC721Owner(ctx, params)
-	// WBFT consensus methods
-	case "getWBFTBlockExtra":
-		return h.getWBFTBlockExtra(ctx, params)
-	case "getWBFTBlockExtraByHash":
-		return h.getWBFTBlockExtraByHash(ctx, params)
-	case "getEpochInfo":
-		return h.getEpochInfo(ctx, params)
-	case "getLatestEpochInfo":
-		return h.getLatestEpochInfo(ctx, params)
-	case "getValidatorSigningStats":
-		return h.getValidatorSigningStats(ctx, params)
-	case "getAllValidatorsSigningStats":
-		return h.getAllValidatorsSigningStats(ctx, params)
-	case "getValidatorSigningActivity":
-		return h.getValidatorSigningActivity(ctx, params)
-	case "getBlockSigners":
-		return h.getBlockSigners(ctx, params)
 	// Ethereum-compatible log filtering methods
 	case "eth_getLogs":
 		return h.ethGetLogs(ctx, params)
@@ -245,6 +210,9 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 	case "notification_cancel":
 		return h.cancelNotification(ctx, params)
 	default:
+		if fn, ok := registeredMethod(method); ok {
+			return fn(ctx, MethodDeps{Storage: h.storage, Logger: h.logger}, params)
+		}
 		return nil, NewError(MethodNotFound, fmt.Sprintf("method '%s' not found", method), nil)
 	}
 }
@@ -296,7 +264,7 @@ func (h *Handler) getBlock(ctx context.Context, params json.RawMessage) (interfa
 		return nil, NewError(InvalidParams, "block number must be a string or number", nil)
 	}
 
-	block, err := h.storage.GetBlock(ctx, blockNumber)
+	block, err := h.models().GetModelBlock(ctx, blockNumber)
 	if err != nil {
 		if err == storage.ErrNotFound {
 			return nil, NewError(InternalError, "block not found", nil)
@@ -323,7 +291,7 @@ func (h *Handler) getBlockByHash(ctx context.Context, params json.RawMessage) (i
 	}
 
 	hash := common.HexToHash(p.Hash)
-	block, err := h.storage.GetBlockByHash(ctx, hash)
+	block, err := h.models().GetModelBlockByHash(ctx, hash)
 	if err != nil {
 		if err == storage.ErrNotFound {
 			return nil, NewError(InternalError, "block not found", nil)
@@ -350,7 +318,7 @@ func (h *Handler) getTxResult(ctx context.Context, params json.RawMessage) (inte
 	}
 
 	hash := common.HexToHash(p.Hash)
-	tx, location, err := h.storage.GetTransaction(ctx, hash)
+	tx, location, err := h.models().GetModelTransaction(ctx, hash)
 	if err != nil {
 		if err == storage.ErrNotFound {
 			return nil, NewError(InternalError, "transaction not found", nil)
@@ -389,121 +357,120 @@ func (h *Handler) getTxReceipt(ctx context.Context, params json.RawMessage) (int
 	return h.receiptToJSON(receipt), nil
 }
 
-// blockToJSON converts a block to JSON-friendly format
-func (h *Handler) blockToJSON(block *types.Block) map[string]interface{} {
-	header := block.Header()
-
-	txs := block.Transactions()
-	transactions := make([]interface{}, len(txs))
-	for i, tx := range txs {
-		transactions[i] = tx.Hash().Hex()
+// blockToJSON converts a block to JSON-friendly format. Hashes are the ones
+// the chain reports.
+func (h *Handler) blockToJSON(block *model.Block) map[string]interface{} {
+	transactions := make([]interface{}, len(block.Transactions))
+	for i, tx := range block.Transactions {
+		transactions[i] = tx.Hash.Hex()
 	}
 
-	uncles := block.Uncles()
-	uncleHashes := make([]interface{}, len(uncles))
-	for i, uncle := range uncles {
-		uncleHashes[i] = uncle.Hash().Hex()
+	uncleHashes := make([]interface{}, len(block.Uncles))
+	for i, uncle := range block.Uncles {
+		uncleHashes[i] = uncle.Hex()
+	}
+
+	difficulty := block.Difficulty
+	if difficulty == nil {
+		difficulty = new(big.Int)
 	}
 
 	result := map[string]interface{}{
-		"number":           fmt.Sprintf("0x%x", block.NumberU64()),
-		"hash":             block.Hash().Hex(),
-		"parentHash":       header.ParentHash.Hex(),
-		"nonce":            fmt.Sprintf("0x%x", header.Nonce.Uint64()),
-		"sha3Uncles":       header.UncleHash.Hex(),
-		"logsBloom":        fmt.Sprintf("0x%x", header.Bloom[:]),
-		"transactionsRoot": header.TxHash.Hex(),
-		"stateRoot":        header.Root.Hex(),
-		"receiptsRoot":     header.ReceiptHash.Hex(),
-		"miner":            header.Coinbase.Hex(),
-		"difficulty":       fmt.Sprintf("0x%x", header.Difficulty),
-		"totalDifficulty":  nil, // Not available in types.Block
-		"extraData":        fmt.Sprintf("0x%x", header.Extra),
-		"size":             fmt.Sprintf("0x%x", block.Size()),
-		"gasLimit":         fmt.Sprintf("0x%x", header.GasLimit),
-		"gasUsed":          fmt.Sprintf("0x%x", header.GasUsed),
-		"timestamp":        fmt.Sprintf("0x%x", header.Time),
+		"number":           fmt.Sprintf("0x%x", block.Number),
+		"hash":             block.Hash.Hex(),
+		"parentHash":       block.ParentHash.Hex(),
+		"nonce":            fmt.Sprintf("0x%x", block.Nonce),
+		"sha3Uncles":       block.UncleHash.Hex(),
+		"logsBloom":        fmt.Sprintf("0x%x", types.BytesToBloom(block.Bloom).Bytes()),
+		"transactionsRoot": block.TxRoot.Hex(),
+		"stateRoot":        block.StateRoot.Hex(),
+		"receiptsRoot":     block.ReceiptRoot.Hex(),
+		"miner":            block.Miner.Hex(),
+		"difficulty":       fmt.Sprintf("0x%x", difficulty),
+		"totalDifficulty":  nil, // not tracked
+		"extraData":        fmt.Sprintf("0x%x", block.Extra),
+		"size":             fmt.Sprintf("0x%x", block.Size),
+		"gasLimit":         fmt.Sprintf("0x%x", block.GasLimit),
+		"gasUsed":          fmt.Sprintf("0x%x", block.GasUsed),
+		"timestamp":        fmt.Sprintf("0x%x", block.Time),
 		"transactions":     transactions,
 		"uncles":           uncleHashes,
 	}
 
-	// EIP-1559: Base fee per gas
-	if header.BaseFee != nil {
-		result["baseFeePerGas"] = fmt.Sprintf("0x%x", header.BaseFee)
+	if block.BaseFee != nil {
+		result["baseFeePerGas"] = fmt.Sprintf("0x%x", block.BaseFee)
 	}
-
-	// Post-Shanghai: Withdrawals root
-	if header.WithdrawalsHash != nil {
-		result["withdrawalsRoot"] = header.WithdrawalsHash.Hex()
+	if block.WithdrawalsRoot != nil {
+		result["withdrawalsRoot"] = block.WithdrawalsRoot.Hex()
 	}
-
-	// EIP-4844: Blob gas fields
-	if header.BlobGasUsed != nil {
-		result["blobGasUsed"] = fmt.Sprintf("0x%x", *header.BlobGasUsed)
+	if block.BlobGasUsed != nil {
+		result["blobGasUsed"] = fmt.Sprintf("0x%x", *block.BlobGasUsed)
 	}
-	if header.ExcessBlobGas != nil {
-		result["excessBlobGas"] = fmt.Sprintf("0x%x", *header.ExcessBlobGas)
+	if block.ExcessBlobGas != nil {
+		result["excessBlobGas"] = fmt.Sprintf("0x%x", *block.ExcessBlobGas)
 	}
 
 	return result
 }
 
-// transactionToJSON converts a transaction to JSON-friendly format
-func (h *Handler) transactionToJSON(tx *types.Transaction, location *storage.TxLocation) map[string]interface{} {
-	v, r, s := tx.RawSignatureValues()
-
-	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-	if err != nil {
-		h.logger.Warn("failed to get transaction sender", zap.Error(err))
+// transactionToJSON converts a transaction to JSON-friendly format. The
+// hash, type and sender are the ones the chain reports.
+func (h *Handler) transactionToJSON(tx *model.Transaction, location *storage.TxLocation) map[string]interface{} {
+	if location == nil {
+		location = &storage.TxLocation{}
 	}
-
 	result := map[string]interface{}{
 		"blockHash":        location.BlockHash.Hex(),
 		"blockNumber":      fmt.Sprintf("0x%x", location.BlockHeight),
-		"from":             from.Hex(),
-		"gas":              fmt.Sprintf("0x%x", tx.Gas()),
-		"gasPrice":         fmt.Sprintf("0x%x", tx.GasPrice()),
-		"hash":             tx.Hash().Hex(),
-		"input":            fmt.Sprintf("0x%x", tx.Data()),
-		"nonce":            fmt.Sprintf("0x%x", tx.Nonce()),
+		"from":             tx.From.Hex(),
+		"gas":              fmt.Sprintf("0x%x", tx.Gas),
+		"gasPrice":         fmt.Sprintf("0x%x", orZero(tx.GasPrice)),
+		"hash":             tx.Hash.Hex(),
+		"input":            fmt.Sprintf("0x%x", tx.Input),
+		"nonce":            fmt.Sprintf("0x%x", tx.Nonce),
 		"to":               nil,
 		"contractAddress":  nil,
 		"transactionIndex": fmt.Sprintf("0x%x", location.TxIndex),
-		"value":            fmt.Sprintf("0x%x", tx.Value()),
-		"type":             fmt.Sprintf("0x%x", tx.Type()),
-		"v":                fmt.Sprintf("0x%x", v),
-		"r":                fmt.Sprintf("0x%x", r),
-		"s":                fmt.Sprintf("0x%x", s),
+		"value":            fmt.Sprintf("0x%x", orZero(tx.Value)),
+		"type":             fmt.Sprintf("0x%x", tx.Type),
+		"v":                fmt.Sprintf("0x%x", orZero(tx.Signature.V)),
+		"r":                fmt.Sprintf("0x%x", orZero(tx.Signature.R)),
+		"s":                fmt.Sprintf("0x%x", orZero(tx.Signature.S)),
 	}
 
-	if tx.To() != nil {
-		result["to"] = tx.To().Hex()
+	if tx.To != nil {
+		result["to"] = tx.To.Hex()
 	} else {
 		// Contract creation transaction - look up the receipt to get the contract address
 		if h.storage != nil {
-			receipt, err := h.storage.GetReceipt(context.Background(), tx.Hash())
+			receipt, err := h.storage.GetReceipt(context.Background(), tx.Hash)
 			if err == nil && receipt != nil && receipt.ContractAddress != (common.Address{}) {
 				result["contractAddress"] = receipt.ContractAddress.Hex()
 			}
 		}
 	}
 
-	// EIP-1559 fields
-	if tx.Type() >= types.DynamicFeeTxType {
-		result["maxFeePerGas"] = fmt.Sprintf("0x%x", tx.GasFeeCap())
-		result["maxPriorityFeePerGas"] = fmt.Sprintf("0x%x", tx.GasTipCap())
+	// EIP-1559 fields (and later fee-market types). Like nodes, a mined
+	// transaction reports the price it paid as gasPrice (its receipt's
+	// effective gas price), not its fee cap.
+	if tx.Type >= types.DynamicFeeTxType {
+		result["maxFeePerGas"] = fmt.Sprintf("0x%x", orZero(tx.GasFeeCap))
+		result["maxPriorityFeePerGas"] = fmt.Sprintf("0x%x", orZero(tx.GasTipCap))
+		if h.storage != nil && location.BlockHash != (common.Hash{}) {
+			if receipt, err := h.storage.GetReceipt(context.Background(), tx.Hash); err == nil && receipt != nil && receipt.EffectiveGasPrice != nil {
+				result["gasPrice"] = fmt.Sprintf("0x%x", receipt.EffectiveGasPrice)
+			}
+		}
 	}
 
-	// Chain ID
-	if tx.ChainId() != nil {
-		result["chainId"] = fmt.Sprintf("0x%x", tx.ChainId())
+	if tx.ChainID != nil {
+		result["chainId"] = fmt.Sprintf("0x%x", tx.ChainID)
 	}
 
-	// Access list for EIP-2930 and EIP-1559
-	if tx.Type() >= types.AccessListTxType {
-		accessList := tx.AccessList()
-		accessListJSON := make([]interface{}, len(accessList))
-		for i, entry := range accessList {
+	// Access list for EIP-2930 and later typed transactions
+	if tx.Type >= types.AccessListTxType {
+		accessListJSON := make([]interface{}, len(tx.AccessList))
+		for i, entry := range tx.AccessList {
 			storageKeys := make([]interface{}, len(entry.StorageKeys))
 			for j, key := range entry.StorageKeys {
 				storageKeys[j] = key.Hex()
@@ -517,43 +484,82 @@ func (h *Handler) transactionToJSON(tx *types.Transaction, location *storage.TxL
 	}
 
 	// EIP-7702 SetCode transaction (type 0x04 = 4)
-	if tx.Type() == types.SetCodeTxType {
-		authList := tx.SetCodeAuthorizations()
-		if len(authList) > 0 {
-			authListJSON := make([]interface{}, len(authList))
-			for i, auth := range authList {
-				authEntry := map[string]interface{}{
-					"chainId": fmt.Sprintf("0x%x", auth.ChainID.Bytes()),
-					"address": auth.Address.Hex(),
-					"nonce":   fmt.Sprintf("0x%x", auth.Nonce),
-					"yParity": fmt.Sprintf("0x%x", auth.V),
-					"r":       fmt.Sprintf("0x%x", auth.R.Bytes()),
-					"s":       fmt.Sprintf("0x%x", auth.S.Bytes()),
-				}
-				authListJSON[i] = authEntry
+	if tx.Type == types.SetCodeTxType && len(tx.AuthList) > 0 {
+		authListJSON := make([]interface{}, len(tx.AuthList))
+		for i, auth := range tx.AuthList {
+			authListJSON[i] = map[string]interface{}{
+				"chainId": fmt.Sprintf("0x%x", orZero(auth.ChainID).Bytes()),
+				"address": auth.Address.Hex(),
+				"nonce":   fmt.Sprintf("0x%x", auth.Nonce),
+				"yParity": fmt.Sprintf("0x%x", auth.V),
+				"r":       fmt.Sprintf("0x%x", orZero(auth.R).Bytes()),
+				"s":       fmt.Sprintf("0x%x", orZero(auth.S).Bytes()),
 			}
-			result["authorizationList"] = authListJSON
 		}
+		result["authorizationList"] = authListJSON
 	}
 
-	// Fee Delegation transaction (type 0x16 = 22)
-	// Fee payer metadata is stored separately by the fetcher and retrieved from storage
-	const FeeDelegateDynamicFeeTxType = 22
-	if tx.Type() == FeeDelegateDynamicFeeTxType {
-		if fdReader, ok := h.storage.(storage.FeeDelegationReader); ok {
-			if meta, err := fdReader.GetFeeDelegationTxMeta(context.Background(), tx.Hash()); err == nil && meta != nil {
-				result["feePayer"] = meta.FeePayer.Hex()
-				sig := map[string]interface{}{
-					"v": meta.FeePayerV.String(),
-					"r": fmt.Sprintf("0x%x", meta.FeePayerR),
-					"s": fmt.Sprintf("0x%x", meta.FeePayerS),
-				}
-				result["feePayerSignatures"] = []interface{}{sig}
-			}
-		}
+	// Fee Delegation transaction (type 0x16 = 22). fv/fr/fs are the node's
+	// field names; feePayerSignatures is kept for existing clients.
+	if feePayer, v, r, s, ok := h.feeDelegation(tx); ok {
+		result["feePayer"] = feePayer.Hex()
+		result["fv"] = fmt.Sprintf("0x%x", orZero(v))
+		result["fr"] = fmt.Sprintf("0x%x", orZero(r))
+		result["fs"] = fmt.Sprintf("0x%x", orZero(s))
+		result["feePayerSignatures"] = []interface{}{map[string]interface{}{
+			"v": v.String(),
+			"r": fmt.Sprintf("0x%x", r),
+			"s": fmt.Sprintf("0x%x", s),
+		}}
 	}
 
 	return result
+}
+
+// feeDelegation returns the fee payer and its signature of a fee delegation
+// transaction: from the transaction itself when the chain profile decoded
+// it, otherwise from the metadata stored by the legacy ingest path.
+func (h *Handler) feeDelegation(tx *model.Transaction) (common.Address, *big.Int, *big.Int, *big.Int, bool) {
+	fd, ok := storage.FeeDelegationOf(context.Background(), h.storage, tx)
+	if !ok {
+		return common.Address{}, nil, nil, nil, false
+	}
+	return fd.Payer, fd.V, fd.R, fd.S, true
+}
+
+// models reads blocks and transactions as the chain-neutral model.
+func (h *Handler) models() storage.ModelReader {
+	return storage.AsModelReader(h.storage)
+}
+
+// modelBlockOf returns the stored model of a block another reader returned
+// as a go-ethereum block, falling back to converting it.
+func (h *Handler) modelBlockOf(ctx context.Context, b *types.Block) *model.Block {
+	if m, err := h.models().GetModelBlock(ctx, b.NumberU64()); err == nil {
+		return m
+	}
+	m, _ := gethconv.BlockFromGeth(b)
+	return m
+}
+
+// modelTxAt returns the stored model of a transaction another reader
+// returned as a go-ethereum transaction, looked up by position because the
+// go-ethereum hash of a chain-specific type differs from the chain's.
+func (h *Handler) modelTxAt(ctx context.Context, tx *types.Transaction, loc *storage.TxLocation) *model.Transaction {
+	if loc != nil {
+		if b, err := h.models().GetModelBlock(ctx, loc.BlockHeight); err == nil && int(loc.TxIndex) < len(b.Transactions) {
+			return b.Transactions[loc.TxIndex]
+		}
+	}
+	m, _ := gethconv.TxFromGeth(tx)
+	return m
+}
+
+func orZero(x *big.Int) *big.Int {
+	if x == nil {
+		return new(big.Int)
+	}
+	return x
 }
 
 // receiptToJSON converts a receipt to JSON-friendly format

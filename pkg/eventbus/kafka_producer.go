@@ -255,8 +255,9 @@ func (kp *KafkaProducer) getPartitionKey(event events.Event) string {
 		if e.Log != nil {
 			return fmt.Sprintf("log:%s:%d", e.Log.Address.Hex(), e.Log.Index)
 		}
-	case *events.SystemContractEvent:
-		return fmt.Sprintf("syscontract:%s", e.Contract.Hex())
+	case events.SourcedEvent:
+		contract, _, _ := e.Source()
+		return fmt.Sprintf("contract:%s", contract.Hex())
 	}
 	return string(event.Type())
 }

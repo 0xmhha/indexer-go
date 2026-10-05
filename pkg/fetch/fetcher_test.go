@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,19 @@ type mockClient struct {
 	receipts    map[common.Hash]types.Receipts
 	latestBlock uint64
 	failCount   int // for testing retry logic
+	mu          sync.Mutex
+}
+
+// takeFailure consumes one injected failure. The fetcher calls the client
+// from several workers, so the counter is guarded.
+func (m *mockClient) takeFailure() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.failCount > 0 {
+		m.failCount--
+		return true
+	}
+	return false
 }
 
 func newMockClient() *mockClient {
@@ -31,16 +45,14 @@ func newMockClient() *mockClient {
 }
 
 func (m *mockClient) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
-	if m.failCount > 0 {
-		m.failCount--
+	if m.takeFailure() {
 		return 0, fmt.Errorf("mock error")
 	}
 	return m.latestBlock, nil
 }
 
 func (m *mockClient) GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error) {
-	if m.failCount > 0 {
-		m.failCount--
+	if m.takeFailure() {
 		return nil, fmt.Errorf("mock error")
 	}
 	block, ok := m.blocks[number]
@@ -51,8 +63,7 @@ func (m *mockClient) GetBlockByNumber(ctx context.Context, number uint64) (*type
 }
 
 func (m *mockClient) GetBlockReceipts(ctx context.Context, blockNumber uint64) (types.Receipts, error) {
-	if m.failCount > 0 {
-		m.failCount--
+	if m.takeFailure() {
 		return nil, fmt.Errorf("mock error")
 	}
 	block, ok := m.blocks[blockNumber]

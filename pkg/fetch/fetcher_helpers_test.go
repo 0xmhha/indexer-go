@@ -105,12 +105,6 @@ func TestFetcher_SetTokenIndexer(t *testing.T) {
 	}
 }
 
-func TestFetcher_SetSetCodeProcessor(t *testing.T) {
-	f := newTestFetcherForHelpers(t)
-	f.SetSetCodeProcessor(nil)
-	// Just verify no panic
-}
-
 func TestFetcher_AddRemoveBlockProcessor(t *testing.T) {
 	f := newTestFetcherForHelpers(t)
 	p := &mockBlockProcessor{}
@@ -260,6 +254,5 @@ func (m *mockChainAdapter) Info() *chain.ChainInfo {
 }
 func (m *mockChainAdapter) BlockFetcher() chain.BlockFetcher               { return nil }
 func (m *mockChainAdapter) TransactionParser() chain.TransactionParser     { return nil }
-func (m *mockChainAdapter) ConsensusParser() chain.ConsensusParser         { return nil }
 func (m *mockChainAdapter) SystemContracts() chain.SystemContractsHandler  { return nil }
 func (m *mockChainAdapter) Close() error                                   { return nil }

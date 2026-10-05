@@ -11,6 +11,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/chains"
 )
 
 // NodeType represents the type of blockchain node
@@ -196,9 +198,12 @@ func (d *Detector) parseClientVersion(version string) NodeType {
 		return NodeTypeGanache
 	}
 
-	// StableOne: "stableone/v1.0.0", "go-stablenet"
-	if strings.Contains(lowerVersion, "stableone") || strings.Contains(lowerVersion, "stablenet") {
-		return NodeTypeStableOne
+	// A chain profile that accepts the node and has an adapter decides
+	// (pkg/chains detection rules, so adapters and profiles agree).
+	if p, err := chains.Detect(chains.NodeInfo{ClientVersion: version}); err == nil {
+		if t, ok := ProfileNodeType(p); ok {
+			return t
+		}
 	}
 
 	// Geth: "Geth/v1.10.0-stable", "go-ethereum"
@@ -207,6 +212,23 @@ func (d *Detector) parseClientVersion(version string) NodeType {
 	}
 
 	return NodeTypeUnknown
+}
+
+// adapterTypes are the node types with a dedicated adapter that a chain
+// profile can be named after.
+var adapterTypes = []NodeType{NodeTypeAnvil, NodeTypeStableOne}
+
+// ProfileNodeType returns the node type of the adapter for a chain profile:
+// the adapter type one of the profile's names (id or alias) matches.
+func ProfileNodeType(p chains.Profile) (NodeType, bool) {
+	for _, name := range chains.Names(p) {
+		for _, t := range adapterTypes {
+			if NodeType(name) == t {
+				return t, true
+			}
+		}
+	}
+	return "", false
 }
 
 // supportsAnvilMethods checks if Anvil-specific RPC methods are available

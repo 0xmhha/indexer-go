@@ -258,138 +258,8 @@ func (m *mockStorage) DeleteContractVerification(ctx context.Context, address co
 	return nil
 }
 
-// SystemContractReader methods
-func (m *mockStorage) GetTotalSupply(ctx context.Context) (*big.Int, error) {
-	return big.NewInt(0), nil
-}
-
-func (m *mockStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, minter common.Address, limit, offset int) ([]*storage.MintEvent, error) {
-	return []*storage.MintEvent{}, nil
-}
-
-func (m *mockStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, burner common.Address, limit, offset int) ([]*storage.BurnEvent, error) {
-	return []*storage.BurnEvent{}, nil
-}
-
-func (m *mockStorage) GetActiveMinters(ctx context.Context) ([]common.Address, error) {
-	return []common.Address{}, nil
-}
-
-func (m *mockStorage) GetMinterAllowance(ctx context.Context, minter common.Address) (*big.Int, error) {
-	return big.NewInt(0), nil
-}
-
-func (m *mockStorage) GetMinterHistory(ctx context.Context, minter common.Address) ([]*storage.MinterConfigEvent, error) {
-	return []*storage.MinterConfigEvent{}, nil
-}
-
-func (m *mockStorage) GetActiveValidators(ctx context.Context) ([]common.Address, error) {
-	return []common.Address{}, nil
-}
-
-func (m *mockStorage) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.GasTipUpdateEvent, error) {
-	return []*storage.GasTipUpdateEvent{}, nil
-}
-
-func (m *mockStorage) GetValidatorHistory(ctx context.Context, validator common.Address) ([]*storage.ValidatorChangeEvent, error) {
-	return []*storage.ValidatorChangeEvent{}, nil
-}
-
-func (m *mockStorage) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.MinterConfigEvent, error) {
-	return []*storage.MinterConfigEvent{}, nil
-}
-
-func (m *mockStorage) GetEmergencyPauseHistory(ctx context.Context, contract common.Address) ([]*storage.EmergencyPauseEvent, error) {
-	return []*storage.EmergencyPauseEvent{}, nil
-}
-
-func (m *mockStorage) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock uint64, status storage.ProposalStatus) ([]*storage.DepositMintProposal, error) {
-	return []*storage.DepositMintProposal{}, nil
-}
-
-func (m *mockStorage) GetBurnHistory(ctx context.Context, fromBlock, toBlock uint64, user common.Address) ([]*storage.BurnEvent, error) {
-	return []*storage.BurnEvent{}, nil
-}
-
-func (m *mockStorage) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, error) {
-	return []common.Address{}, nil
-}
-
-func (m *mockStorage) GetBlacklistHistory(ctx context.Context, address common.Address) ([]*storage.BlacklistEvent, error) {
-	return []*storage.BlacklistEvent{}, nil
-}
-
-func (m *mockStorage) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
-	return []common.Address{}, nil
-}
-
-func (m *mockStorage) GetProposals(ctx context.Context, contract common.Address, status storage.ProposalStatus, limit, offset int) ([]*storage.Proposal, error) {
-	return []*storage.Proposal{}, nil
-}
-
-func (m *mockStorage) GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*storage.Proposal, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*storage.ProposalVote, error) {
-	return []*storage.ProposalVote{}, nil
-}
-
-func (m *mockStorage) GetMemberHistory(ctx context.Context, contract common.Address) ([]*storage.MemberChangeEvent, error) {
-	return []*storage.MemberChangeEvent{}, nil
-}
-
-// WBFTReader methods
-func (m *mockStorage) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*storage.WBFTBlockExtra, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*storage.WBFTBlockExtra, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) (*storage.EpochInfo, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetLatestEpochInfo(ctx context.Context) (*storage.EpochInfo, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetValidatorSigningStats(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64) (*storage.ValidatorSigningStats, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorage) GetAllValidatorsSigningStats(ctx context.Context, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningStats, error) {
-	return []*storage.ValidatorSigningStats{}, nil
-}
-
-func (m *mockStorage) GetValidatorSigningActivity(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningActivity, error) {
-	return []*storage.ValidatorSigningActivity{}, nil
-}
-
-func (m *mockStorage) GetBlockSigners(ctx context.Context, blockNumber uint64) (preparers []common.Address, committers []common.Address, err error) {
-	return []common.Address{}, []common.Address{}, nil
-}
-
-func (m *mockStorage) GetEpochsList(ctx context.Context, limit, offset int) ([]*storage.EpochInfo, int, error) {
-	return []*storage.EpochInfo{}, 0, nil
-}
 func (m *mockStorage) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
 	return nil, nil
-}
-
-// WBFTWriter methods
-func (m *mockStorage) SaveWBFTBlockExtra(ctx context.Context, extra *storage.WBFTBlockExtra) error {
-	return nil
-}
-
-func (m *mockStorage) SaveEpochInfo(ctx context.Context, epochInfo *storage.EpochInfo) error {
-	return nil
-}
-
-func (m *mockStorage) UpdateValidatorSigningStats(ctx context.Context, blockNumber uint64, signingActivities []*storage.ValidatorSigningActivity) error {
-	return nil
 }
 
 // HistoricalReader methods
@@ -463,27 +333,6 @@ func (m *mockStorage) SetBalance(ctx context.Context, addr common.Address, block
 }
 
 // FeeDelegationReader methods
-func (m *mockStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*storage.FeeDelegationStats, error) {
-	return &storage.FeeDelegationStats{
-		TotalFeeDelegatedTxs: 0,
-		TotalFeesSaved:       big.NewInt(0),
-		AdoptionRate:         0.0,
-		AvgFeeSaved:          big.NewInt(0),
-	}, nil
-}
-
-func (m *mockStorage) GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.FeePayerStats, uint64, error) {
-	return []storage.FeePayerStats{}, 0, nil
-}
-
-func (m *mockStorage) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
-	return &storage.FeePayerStats{
-		Address:       feePayer,
-		TxCount:       0,
-		TotalFeesPaid: big.NewInt(0),
-		Percentage:    0.0,
-	}, nil
-}
 
 func (m *mockStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
 	return nil, storage.ErrNotFound
@@ -524,14 +373,6 @@ func (m *mockStorage) DeleteTokenMetadata(ctx context.Context, address common.Ad
 }
 
 func (m *mockStorage) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
-}
-
-func (m *mockStorage) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
-	return nil, nil
-}
-
-func (m *mockStorage) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
-	return nil, nil
 }
 
 // SetCodeIndexReader methods
@@ -1509,138 +1350,8 @@ func (m *mockStorageWithErrors) DeleteContractVerification(ctx context.Context, 
 	return storage.ErrNotFound
 }
 
-// SystemContractReader methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetTotalSupply(ctx context.Context) (*big.Int, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, minter common.Address, limit, offset int) ([]*storage.MintEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, burner common.Address, limit, offset int) ([]*storage.BurnEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetActiveMinters(ctx context.Context) ([]common.Address, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetMinterAllowance(ctx context.Context, minter common.Address) (*big.Int, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetMinterHistory(ctx context.Context, minter common.Address) ([]*storage.MinterConfigEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetActiveValidators(ctx context.Context) ([]common.Address, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.GasTipUpdateEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetValidatorHistory(ctx context.Context, validator common.Address) ([]*storage.ValidatorChangeEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.MinterConfigEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetEmergencyPauseHistory(ctx context.Context, contract common.Address) ([]*storage.EmergencyPauseEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock uint64, status storage.ProposalStatus) ([]*storage.DepositMintProposal, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetBurnHistory(ctx context.Context, fromBlock, toBlock uint64, user common.Address) ([]*storage.BurnEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetBlacklistHistory(ctx context.Context, address common.Address) ([]*storage.BlacklistEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetProposals(ctx context.Context, contract common.Address, status storage.ProposalStatus, limit, offset int) ([]*storage.Proposal, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*storage.Proposal, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*storage.ProposalVote, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetMemberHistory(ctx context.Context, contract common.Address) ([]*storage.MemberChangeEvent, error) {
-	return nil, storage.ErrNotFound
-}
-
-// WBFTReader methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*storage.WBFTBlockExtra, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*storage.WBFTBlockExtra, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetEpochInfo(ctx context.Context, epochNumber uint64) (*storage.EpochInfo, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetLatestEpochInfo(ctx context.Context) (*storage.EpochInfo, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetValidatorSigningStats(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64) (*storage.ValidatorSigningStats, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetAllValidatorsSigningStats(ctx context.Context, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningStats, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetValidatorSigningActivity(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningActivity, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetBlockSigners(ctx context.Context, blockNumber uint64) (preparers []common.Address, committers []common.Address, err error) {
-	return nil, nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetEpochsList(ctx context.Context, limit, offset int) ([]*storage.EpochInfo, int, error) {
-	return nil, 0, storage.ErrNotFound
-}
 func (m *mockStorageWithErrors) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
 	return nil, storage.ErrNotFound
-}
-
-// WBFTWriter methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) SaveWBFTBlockExtra(ctx context.Context, extra *storage.WBFTBlockExtra) error {
-	return storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) SaveEpochInfo(ctx context.Context, epochInfo *storage.EpochInfo) error {
-	return storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) UpdateValidatorSigningStats(ctx context.Context, blockNumber uint64, signingActivities []*storage.ValidatorSigningActivity) error {
-	return storage.ErrNotFound
 }
 
 // HistoricalReader methods for mockStorageWithErrors
@@ -1714,17 +1425,6 @@ func (m *mockStorageWithErrors) SetBalance(ctx context.Context, addr common.Addr
 }
 
 // FeeDelegationReader methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*storage.FeeDelegationStats, error) {
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.FeePayerStats, uint64, error) {
-	return nil, 0, storage.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
-	return nil, storage.ErrNotFound
-}
 
 func (m *mockStorageWithErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
 	return nil, storage.ErrNotFound
@@ -1786,14 +1486,6 @@ func (m *mockStorageWithErrors) DeleteTokenMetadata(ctx context.Context, address
 }
 
 func (m *mockStorageWithErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
-}
-
-func (m *mockStorageWithErrors) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
-	return nil, fmt.Errorf("mock error")
-}
-
-func (m *mockStorageWithErrors) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
-	return nil, fmt.Errorf("mock error")
 }
 
 // SetCodeIndexReader methods for mockStorageWithErrors
@@ -2160,138 +1852,8 @@ func (m *mockStorageWithNonNotFoundErrors) DeleteContractVerification(ctx contex
 	return fmt.Errorf("database connection failed")
 }
 
-// SystemContractReader methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) GetTotalSupply(ctx context.Context) (*big.Int, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, minter common.Address, limit, offset int) ([]*storage.MintEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, burner common.Address, limit, offset int) ([]*storage.BurnEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetActiveMinters(ctx context.Context) ([]common.Address, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetMinterAllowance(ctx context.Context, minter common.Address) (*big.Int, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetMinterHistory(ctx context.Context, minter common.Address) ([]*storage.MinterConfigEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetActiveValidators(ctx context.Context) ([]common.Address, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.GasTipUpdateEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetValidatorHistory(ctx context.Context, validator common.Address) ([]*storage.ValidatorChangeEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*storage.MinterConfigEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetEmergencyPauseHistory(ctx context.Context, contract common.Address) ([]*storage.EmergencyPauseEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock uint64, status storage.ProposalStatus) ([]*storage.DepositMintProposal, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetBurnHistory(ctx context.Context, fromBlock, toBlock uint64, user common.Address) ([]*storage.BurnEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetBlacklistHistory(ctx context.Context, address common.Address) ([]*storage.BlacklistEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetProposals(ctx context.Context, contract common.Address, status storage.ProposalStatus, limit, offset int) ([]*storage.Proposal, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*storage.Proposal, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*storage.ProposalVote, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetMemberHistory(ctx context.Context, contract common.Address) ([]*storage.MemberChangeEvent, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-// WBFTReader methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*storage.WBFTBlockExtra, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*storage.WBFTBlockExtra, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetEpochInfo(ctx context.Context, epochNumber uint64) (*storage.EpochInfo, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetLatestEpochInfo(ctx context.Context) (*storage.EpochInfo, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetValidatorSigningStats(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64) (*storage.ValidatorSigningStats, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetAllValidatorsSigningStats(ctx context.Context, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningStats, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetValidatorSigningActivity(ctx context.Context, validatorAddress common.Address, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningActivity, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetBlockSigners(ctx context.Context, blockNumber uint64) (preparers []common.Address, committers []common.Address, err error) {
-	return nil, nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetEpochsList(ctx context.Context, limit, offset int) ([]*storage.EpochInfo, int, error) {
-	return nil, 0, fmt.Errorf("database connection failed")
-}
 func (m *mockStorageWithNonNotFoundErrors) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
 	return nil, fmt.Errorf("database connection failed")
-}
-
-// WBFTWriter methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) SaveWBFTBlockExtra(ctx context.Context, extra *storage.WBFTBlockExtra) error {
-	return fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) SaveEpochInfo(ctx context.Context, epochInfo *storage.EpochInfo) error {
-	return fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) UpdateValidatorSigningStats(ctx context.Context, blockNumber uint64, signingActivities []*storage.ValidatorSigningActivity) error {
-	return fmt.Errorf("database connection failed")
 }
 
 // HistoricalReader methods for mockStorageWithNonNotFoundErrors
@@ -2365,17 +1927,6 @@ func (m *mockStorageWithNonNotFoundErrors) SetBalance(ctx context.Context, addr 
 }
 
 // FeeDelegationReader methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*storage.FeeDelegationStats, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.FeePayerStats, uint64, error) {
-	return nil, 0, fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
-	return nil, fmt.Errorf("database connection failed")
-}
 
 func (m *mockStorageWithNonNotFoundErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
 	return nil, fmt.Errorf("database connection failed")
@@ -2437,14 +1988,6 @@ func (m *mockStorageWithNonNotFoundErrors) DeleteTokenMetadata(ctx context.Conte
 }
 
 func (m *mockStorageWithNonNotFoundErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*storage.MaxProposalsUpdateEvent, error) {
-	return nil, fmt.Errorf("non-not-found error")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*storage.ProposalExecutionSkippedEvent, error) {
-	return nil, fmt.Errorf("non-not-found error")
 }
 
 // SetCodeIndexReader methods for mockStorageWithNonNotFoundErrors

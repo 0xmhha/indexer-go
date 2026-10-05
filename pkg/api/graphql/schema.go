@@ -42,6 +42,7 @@ type SchemaBuilder struct {
 	queries       graphql.Fields
 	mutations     graphql.Fields
 	subscriptions graphql.Fields
+	extended      bool // registered extensions applied (extension.go)
 }
 
 // NewSchemaBuilder creates a new schema builder
@@ -429,433 +430,6 @@ func (b *SchemaBuilder) WithAnalyticsQueries() *SchemaBuilder {
 		},
 		Description: "Get aggregated statistics for an address",
 		Resolve:     s.resolveAddressStats,
-	}
-
-	return b
-}
-
-// WithSystemContractQueries adds system contract related queries
-func (b *SchemaBuilder) WithSystemContractQueries() *SchemaBuilder {
-	s := b.schema
-
-	b.queries["totalSupply"] = &graphql.Field{
-		Type:    graphql.NewNonNull(bigIntType),
-		Resolve: s.resolveTotalSupply,
-	}
-	b.queries["activeMinters"] = &graphql.Field{
-		Type:    graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(minterInfoType))),
-		Resolve: s.resolveActiveMinters,
-	}
-	b.queries["activeMinterAddresses"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
-		Description: "Returns only the addresses of active minters (simplified version of activeMinters)",
-		Resolve:     s.resolveActiveMinterAddresses,
-	}
-	b.queries["minterAllowance"] = &graphql.Field{
-		Type: graphql.NewNonNull(bigIntType),
-		Args: graphql.FieldConfigArgument{
-			"minter": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-		},
-		Resolve: s.resolveMinterAllowance,
-	}
-	b.queries["activeValidators"] = &graphql.Field{
-		Type:    graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(validatorInfoType))),
-		Resolve: s.resolveActiveValidators,
-	}
-	b.queries["activeValidatorAddresses"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
-		Description: "Returns only the addresses of active validators (simplified version of activeValidators)",
-		Resolve:     s.resolveActiveValidatorAddresses,
-	}
-	b.queries["blacklistedAddresses"] = &graphql.Field{
-		Type:    graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
-		Resolve: s.resolveBlacklistedAddresses,
-	}
-	b.queries["proposals"] = &graphql.Field{
-		Type: graphql.NewNonNull(proposalConnectionType),
-		Args: graphql.FieldConfigArgument{
-			"filter": &graphql.ArgumentConfig{
-				Type:        proposalFilterType,
-				Description: "Optional filter criteria. If not provided, returns all proposals.",
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveProposals,
-	}
-	b.queries["proposal"] = &graphql.Field{
-		Type: proposalType,
-		Args: graphql.FieldConfigArgument{
-			"contract": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-			"proposalId": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: s.resolveProposal,
-	}
-	b.queries["proposalVotes"] = &graphql.Field{
-		Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(proposalVoteType))),
-		Args: graphql.FieldConfigArgument{
-			"contract": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-			"proposalId": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: s.resolveProposalVotes,
-	}
-	b.queries["mintEvents"] = &graphql.Field{
-		Type: graphql.NewNonNull(mintEventConnectionType),
-		Args: graphql.FieldConfigArgument{
-			"filter": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(systemContractEventFilterType),
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveMintEvents,
-	}
-	b.queries["burnEvents"] = &graphql.Field{
-		Type: graphql.NewNonNull(burnEventConnectionType),
-		Args: graphql.FieldConfigArgument{
-			"filter": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(systemContractEventFilterType),
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveBurnEvents,
-	}
-	b.queries["minterHistory"] = &graphql.Field{
-		Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(minterConfigEventType))),
-		Args: graphql.FieldConfigArgument{
-			"minter": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-		},
-		Resolve: s.resolveMinterHistory,
-	}
-	b.queries["validatorHistory"] = &graphql.Field{
-		Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(validatorChangeEventType))),
-		Args: graphql.FieldConfigArgument{
-			"validator": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-		},
-		Resolve: s.resolveValidatorHistory,
-	}
-	b.queries["gasTipHistory"] = &graphql.Field{
-		Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(gasTipUpdateEventType))),
-		Args: graphql.FieldConfigArgument{
-			"filter": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(systemContractEventFilterType),
-			},
-		},
-		Resolve: s.resolveGasTipHistory,
-	}
-	b.queries["blacklistHistory"] = &graphql.Field{
-		Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(blacklistEventType))),
-		Args: graphql.FieldConfigArgument{
-			"address": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-		},
-		Resolve: s.resolveBlacklistHistory,
-	}
-	b.queries["memberHistory"] = &graphql.Field{
-		Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(memberChangeEventType))),
-		Args: graphql.FieldConfigArgument{
-			"contract": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-		},
-		Resolve: s.resolveMemberHistory,
-	}
-	b.queries["emergencyPauseHistory"] = &graphql.Field{
-		Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(emergencyPauseEventType))),
-		Args: graphql.FieldConfigArgument{
-			"contract": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-		},
-		Resolve: s.resolveEmergencyPauseHistory,
-	}
-	b.queries["depositMintProposals"] = &graphql.Field{
-		Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(depositMintProposalType))),
-		Args: graphql.FieldConfigArgument{
-			"filter": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(systemContractEventFilterType),
-			},
-		},
-		Resolve: s.resolveDepositMintProposals,
-	}
-
-	// Phase 2.3: Add missing system contract queries
-	b.queries["minterConfigHistory"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(minterConfigEventType))),
-		Description: "Returns minter configuration change history across all minters in a block range",
-		Args: graphql.FieldConfigArgument{
-			"filter": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(systemContractEventFilterType),
-			},
-		},
-		Resolve: s.resolveMinterConfigHistory,
-	}
-	b.queries["burnHistory"] = &graphql.Field{
-		Type:        graphql.NewNonNull(burnEventConnectionType),
-		Description: "Alias for burnEvents - returns token burn history",
-		Args: graphql.FieldConfigArgument{
-			"filter": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(systemContractEventFilterType),
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveBurnEvents, // Reuse existing resolver
-	}
-	b.queries["authorizedAccounts"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(addressType))),
-		Description: "Returns list of authorized accounts from GovCouncil contract",
-		Resolve:     s.resolveAuthorizedAccounts,
-	}
-
-	b.queries["maxProposalsUpdateHistory"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(maxProposalsUpdateEventType))),
-		Description: "Returns max proposals per member update history for a governance contract",
-		Args: graphql.FieldConfigArgument{
-			"contract": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-		},
-		Resolve: s.resolveMaxProposalsUpdateHistory,
-	}
-	b.queries["proposalExecutionSkippedEvents"] = &graphql.Field{
-		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(proposalExecutionSkippedEventType))),
-		Description: "Returns proposal execution skipped events for a governance contract",
-		Args: graphql.FieldConfigArgument{
-			"contract": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-			"proposalId": &graphql.ArgumentConfig{
-				Type: bigIntType,
-			},
-		},
-		Resolve: s.resolveProposalExecutionSkippedEvents,
-	}
-
-	return b
-}
-
-// WithConsensusQueries adds WBFT consensus related queries
-func (b *SchemaBuilder) WithConsensusQueries() *SchemaBuilder {
-	s := b.schema
-
-	b.queries["wbftBlockExtra"] = &graphql.Field{
-		Type: wbftBlockExtraType,
-		Args: graphql.FieldConfigArgument{
-			"blockNumber": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: s.resolveWBFTBlockExtra,
-	}
-	// Alias for frontend compatibility
-	b.queries["wbftBlock"] = &graphql.Field{
-		Type:        wbftBlockExtraType,
-		Description: "Alias for wbftBlockExtra - returns WBFT block consensus data",
-		Args: graphql.FieldConfigArgument{
-			"number": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-			// Map 'number' argument to 'blockNumber' for the resolver
-			p.Args["blockNumber"] = p.Args["number"]
-			return s.resolveWBFTBlockExtra(p)
-		},
-	}
-	b.queries["wbftBlockExtraByHash"] = &graphql.Field{
-		Type: wbftBlockExtraType,
-		Args: graphql.FieldConfigArgument{
-			"blockHash": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(hashType),
-			},
-		},
-		Resolve: s.resolveWBFTBlockExtraByHash,
-	}
-	b.queries["epochInfo"] = &graphql.Field{
-		Type: epochInfoType,
-		Args: graphql.FieldConfigArgument{
-			"epochNumber": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: s.resolveEpochInfo,
-	}
-	// Alias for frontend compatibility
-	b.queries["epochByNumber"] = &graphql.Field{
-		Type:        epochInfoType,
-		Description: "Alias for epochInfo - returns epoch information by epoch number",
-		Args: graphql.FieldConfigArgument{
-			"number": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-			// Map 'number' argument to 'epochNumber' for the resolver
-			p.Args["epochNumber"] = p.Args["number"]
-			return s.resolveEpochInfo(p)
-		},
-	}
-	b.queries["latestEpochInfo"] = &graphql.Field{
-		Type:    epochInfoType,
-		Resolve: s.resolveLatestEpochInfo,
-	}
-	b.queries["epochs"] = &graphql.Field{
-		Type:        graphql.NewNonNull(epochSummaryConnectionType),
-		Description: "Get paginated list of epochs (latest first)",
-		Args: graphql.FieldConfigArgument{
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveEpochs,
-	}
-	b.queries["validatorSigningStats"] = &graphql.Field{
-		Type: validatorSigningStatsType,
-		Args: graphql.FieldConfigArgument{
-			"validatorAddress": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-			"fromBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: s.resolveValidatorSigningStats,
-	}
-	b.queries["allValidatorsSigningStats"] = &graphql.Field{
-		Type: graphql.NewNonNull(validatorSigningStatsConnectionType),
-		Args: graphql.FieldConfigArgument{
-			"fromBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveAllValidatorsSigningStats,
-	}
-	b.queries["validatorSigningActivity"] = &graphql.Field{
-		Type: graphql.NewNonNull(validatorSigningActivityConnectionType),
-		Args: graphql.FieldConfigArgument{
-			"validatorAddress": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-			"fromBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveValidatorSigningActivity,
-	}
-	b.queries["blockSigners"] = &graphql.Field{
-		Type: blockSignersType,
-		Args: graphql.FieldConfigArgument{
-			"blockNumber": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: s.resolveBlockSigners,
-	}
-	b.queries["consensusData"] = &graphql.Field{
-		Type: consensusDataType,
-		Args: graphql.FieldConfigArgument{
-			"blockNumber": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: s.resolveConsensusData,
-	}
-	b.queries["validatorStats"] = &graphql.Field{
-		Type: validatorStatsType,
-		Args: graphql.FieldConfigArgument{
-			"address": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-			"fromBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: s.resolveValidatorStats,
-	}
-	b.queries["validatorParticipation"] = &graphql.Field{
-		Type: validatorParticipationType,
-		Args: graphql.FieldConfigArgument{
-			"address": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(addressType),
-			},
-			"fromBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveValidatorParticipation,
-	}
-	b.queries["allValidatorStats"] = &graphql.Field{
-		Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(validatorStatsType))),
-		Args: graphql.FieldConfigArgument{
-			"fromBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-			"pagination": &graphql.ArgumentConfig{
-				Type: paginationInputType,
-			},
-		},
-		Resolve: s.resolveAllValidatorStats,
-	}
-	b.queries["epochData"] = &graphql.Field{
-		Type: epochDataType,
-		Args: graphql.FieldConfigArgument{
-			"epochNumber": &graphql.ArgumentConfig{
-				Type: graphql.NewNonNull(bigIntType),
-			},
-		},
-		Resolve: s.resolveEpochData,
-	}
-	b.queries["latestEpochData"] = &graphql.Field{
-		Type:    epochDataType,
-		Resolve: s.resolveLatestEpochData,
 	}
 
 	return b
@@ -1251,22 +825,9 @@ func (b *SchemaBuilder) WithSubscriptions() *SchemaBuilder {
 		Description: "Subscribe to new logs matching a filter",
 	}
 
-	// Consensus subscriptions
-	b.subscriptions["consensusBlock"] = &graphql.Field{
-		Type:        graphql.NewNonNull(consensusBlockSubType),
-		Description: "Subscribe to new consensus block events with validator participation data",
-	}
-	b.subscriptions["consensusFork"] = &graphql.Field{
-		Type:        graphql.NewNonNull(consensusForkSubType),
-		Description: "Subscribe to chain fork detection events",
-	}
-	b.subscriptions["consensusValidatorChange"] = &graphql.Field{
-		Type:        graphql.NewNonNull(consensusValidatorChangeSubType),
-		Description: "Subscribe to validator set change events at epoch boundaries",
-	}
-	b.subscriptions["consensusError"] = &graphql.Field{
-		Type:        graphql.NewNonNull(consensusErrorSubType),
-		Description: "Subscribe to consensus errors and anomalies (round changes, low participation)",
+	b.subscriptions["reorg"] = &graphql.Field{
+		Type:        graphql.NewNonNull(reorgType),
+		Description: "Subscribe to chain reorganizations the indexer rolled back. Logs of the removed blocks follow on the logs subscription with removed: true; the removed blocks stay queryable with orphanedBlock",
 	}
 
 	return b
@@ -1751,6 +1312,8 @@ func (b *SchemaBuilder) WithDynamicContractQueries() *SchemaBuilder {
 
 // Build constructs the final GraphQL schema
 func (b *SchemaBuilder) Build() (*Schema, error) {
+	b.applyExtensions()
+
 	// Load stored ABIs
 	if err := b.schema.loadStoredABIs(context.Background()); err != nil {
 		b.schema.logger.Warn("failed to load stored ABIs", zap.Error(err))
@@ -1795,15 +1358,13 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 		WithCoreQueries().
 		WithHistoricalQueries().
 		WithAnalyticsQueries().
-		WithSystemContractQueries().
-		WithConsensusQueries().
 		WithAddressIndexingQueries().
 		WithSetCodeQueries().
 		WithModuleQueries().
 		WithUserOpQueries().
-		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
 		WithTokenHolderQueries().
+		WithReorgQueries().
 		WithSubscriptions().
 		WithMutations().
 		Build()
@@ -2096,16 +1657,6 @@ func (b *SchemaBuilder) WithUserOpQueries() *SchemaBuilder {
 		Resolve:     s.resolveUserOpCount,
 	}
 
-	return b
-}
-
-// WithFeeDelegationQueries adds fee delegation related queries
-func (b *SchemaBuilder) WithFeeDelegationQueries() *SchemaBuilder {
-	builder := &schemaBuilder{
-		schema:  b.schema,
-		queries: b.queries,
-	}
-	builder.buildFeeDelegationQueries()
 	return b
 }
 

@@ -285,8 +285,14 @@ func (h *Handler) handleCheckVerifyStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Copy the fields under the lock: the verification goroutine updates
+	// them through updateJobStatus while this handler runs.
 	h.jobsMu.RLock()
 	job, exists := h.jobs[guid]
+	var status, message string
+	if exists {
+		status, message = job.Status, job.Message
+	}
 	h.jobsMu.RUnlock()
 
 	if !exists {
@@ -295,12 +301,12 @@ func (h *Handler) handleCheckVerifyStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	// Return status in Etherscan format
-	if job.Status == "Pending" {
-		h.sendResponse(w, "0", "Pending in queue", job.Message)
-	} else if job.Status == "Pass" {
-		h.sendResponse(w, "1", "Pass - Verified", job.Message)
+	if status == "Pending" {
+		h.sendResponse(w, "0", "Pending in queue", message)
+	} else if status == "Pass" {
+		h.sendResponse(w, "1", "Pass - Verified", message)
 	} else {
-		h.sendResponse(w, "0", "Fail - Unable to verify", job.Message)
+		h.sendResponse(w, "0", "Fail - Unable to verify", message)
 	}
 }
 

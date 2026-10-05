@@ -16,13 +16,32 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
 	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
 	"github.com/0xmhha/indexer-go/pkg/api"
+	"github.com/0xmhha/indexer-go/pkg/chains"
+	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"                                // generic EVM chain profile
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet"                          // StableNet chain profile
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus/api"            // StableNet WBFT consensus API
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/feedelegation"   // stablenet.fee_delegation feature
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts" // stablenet.system_contracts feature
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/wbft"            // stablenet.wbft feature
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation/api"        // StableNet fee delegation API
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts/api"      // StableNet system contract API
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/feature"
+	"github.com/0xmhha/indexer-go/pkg/features/aa"
+	_ "github.com/0xmhha/indexer-go/pkg/features/address" // address.index feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/balance" // balance.native feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/token"   // token.transfers feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
+	"github.com/0xmhha/indexer-go/pkg/source"
+	"github.com/0xmhha/indexer-go/pkg/source/era"
+	"github.com/0xmhha/indexer-go/pkg/source/replay"
+	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/token"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
@@ -44,11 +63,25 @@ type App struct {
 	client       *client.Client
 	chainAdapter chain.Adapter
 	nodeInfo     *detector.NodeInfo
+	// profile is the chain profile selected by --adapter or detected (nil if
+	// detection failed, see profileErr); profileSrc reads blocks with it.
+	profile    chains.Profile
+	profileSrc *sourcerpc.Source
+	profileErr error
+	features     *feature.Pipeline // enabled features, in execution order
 	storage      storage.Storage
 	eventBus     *events.EventBus
 	fetcher      *fetch.Fetcher
 	apiServer    *api.Server
 	rpcProxy     *rpcproxy.Proxy
+
+	// RPC archive (pkg/source/replay): a local endpoint that records calls to
+	// the node or replays a recorded archive.
+	rpcEndpoint *replay.Endpoint
+	rpcRecorder *replay.Writer
+	rpcReplay   *replay.Server
+	// eraSource serves history from era1 archives (source.era_dir).
+	eraSource *era.Source
 
 	// Multi-chain support
 	multichainManager *multichain.Manager
@@ -96,6 +129,10 @@ func run() error {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer func() { _ = log.Sync() }()
+
+	for _, msg := range cfg.UnsupportedSettings() {
+		log.Warn("Unsupported setting ignored", zap.String("detail", msg))
+	}
 
 	// Log startup information
 	logStartupInfo(log, cfg, flags)
@@ -172,52 +209,84 @@ type Flags struct {
 	enableJSONRPC    bool
 	enableWebSocket  bool
 	forceAdapterType string // Force specific adapter type: anvil, stableone, evm
+
+	// set records the flags given on the command line. Only those override
+	// the configuration, so flag defaults never replace config values and
+	// boolean flags can switch features off as well as on.
+	set map[string]bool
 }
 
-// parseFlags parses command-line flags
+// parseFlags parses the process command line.
 func parseFlags() *Flags {
-	f := &Flags{}
+	f, err := parseFlagsFrom(os.Args[1:], flag.ExitOnError)
+	if err != nil {
+		// unreachable with ExitOnError
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	return f
+}
 
-	flag.StringVar(&f.configFile, "config", "config.yaml", "Path to configuration file (YAML)")
-	flag.BoolVar(&f.showVersion, "version", false, "Show version information and exit")
-	flag.StringVar(&f.rpcEndpoint, "rpc", "", "Ethereum RPC endpoint URL")
-	flag.StringVar(&f.dbPath, "db", "", "Database path")
-	flag.Uint64Var(&f.startHeight, "start-height", 0, "Block height to start indexing from")
-	flag.IntVar(&f.workers, "workers", 100, "Number of concurrent workers")
-	flag.IntVar(&f.batchSize, "batch-size", 0, "Number of blocks per batch (0 = use config.yaml)")
-	flag.StringVar(&f.logLevel, "log-level", "", "Log level (debug, info, warn, error)")
-	flag.StringVar(&f.logFormat, "log-format", "", "Log format (json, console)")
-	flag.BoolVar(&f.enableGapMode, "gap-recovery", false, "Enable gap detection and recovery at startup")
-	flag.BoolVar(&f.clearData, "clear-data", false, "Clear (delete) the data folder before starting")
-	flag.BoolVar(&f.reindex, "reindex", false, "Clear blockchain data only, preserving verification data (ABIs, source code, verification status)")
+// parseFlagsFrom parses args with a fresh flag set (testable).
+func parseFlagsFrom(args []string, onError flag.ErrorHandling) (*Flags, error) {
+	f := &Flags{set: map[string]bool{}}
+	fs := flag.NewFlagSet("indexer", onError)
+
+	fs.StringVar(&f.configFile, "config", "config.yaml", "Path to configuration file (YAML)")
+	fs.BoolVar(&f.showVersion, "version", false, "Show version information and exit")
+	fs.StringVar(&f.rpcEndpoint, "rpc", "", "Ethereum RPC endpoint URL")
+	fs.StringVar(&f.dbPath, "db", "", "Database path")
+	fs.Uint64Var(&f.startHeight, "start-height", 0, "Block height to start indexing from")
+	fs.IntVar(&f.workers, "workers", 100, "Number of concurrent workers")
+	fs.IntVar(&f.batchSize, "batch-size", 0, "Number of blocks per batch (0 = use config.yaml)")
+	fs.StringVar(&f.logLevel, "log-level", "", "Log level (debug, info, warn, error)")
+	fs.StringVar(&f.logFormat, "log-format", "", "Log format (json, console)")
+	fs.BoolVar(&f.enableGapMode, "gap-recovery", false, "Enable gap detection and recovery at startup")
+	fs.BoolVar(&f.clearData, "clear-data", false, "Clear (delete) the data folder before starting")
+	fs.BoolVar(&f.reindex, "reindex", false, "Clear blockchain data only, preserving verification data (ABIs, source code, verification status)")
 
 	// API server flags
-	flag.BoolVar(&f.enableAPI, "api", false, "Enable API server")
-	flag.StringVar(&f.apiHost, "api-host", "", "API server host")
-	flag.IntVar(&f.apiPort, "api-port", 0, "API server port")
-	flag.BoolVar(&f.enableGraphQL, "graphql", false, "Enable GraphQL API")
-	flag.BoolVar(&f.enableJSONRPC, "jsonrpc", false, "Enable JSON-RPC API")
-	flag.BoolVar(&f.enableWebSocket, "websocket", false, "Enable WebSocket API")
+	fs.BoolVar(&f.enableAPI, "api", false, "Enable API server")
+	fs.StringVar(&f.apiHost, "api-host", "", "API server host")
+	fs.IntVar(&f.apiPort, "api-port", 0, "API server port")
+	fs.BoolVar(&f.enableGraphQL, "graphql", false, "Enable GraphQL API")
+	fs.BoolVar(&f.enableJSONRPC, "jsonrpc", false, "Enable JSON-RPC API")
+	fs.BoolVar(&f.enableWebSocket, "websocket", false, "Enable WebSocket API")
 
 	// Chain adapter flags
-	flag.StringVar(&f.forceAdapterType, "adapter", "", "Force specific adapter type (anvil, stableone, evm). Auto-detected if empty")
+	fs.StringVar(&f.forceAdapterType, "adapter", "", "Force specific adapter type (anvil, stableone, evm). Auto-detected if empty")
 
-	flag.Parse()
-	return f
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	fs.Visit(func(fl *flag.Flag) { f.set[fl.Name] = true })
+	return f, nil
 }
 
 // loadAndValidateConfig loads configuration and applies flags
 func loadAndValidateConfig(flags *Flags) (*config.Config, error) {
-	cfg, err := loadConfig(flags.configFile)
+	// The default config path is optional: without --config and without
+	// config.yaml, defaults, environment variables and flags are used.
+	// An explicitly given --config must exist.
+	configFile := flags.configFile
+	if !flags.set["config"] {
+		if _, statErr := os.Stat(configFile); errors.Is(statErr, os.ErrNotExist) {
+			configFile = ""
+		}
+	}
+	cfg, err := config.LoadUnvalidated(configFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Override config with command-line flags
-	applyFlags(cfg, flags.rpcEndpoint, flags.dbPath, flags.startHeight, flags.workers, flags.batchSize, flags.logLevel, flags.logFormat)
-	applyAPIFlags(cfg, flags.enableAPI, flags.apiHost, flags.apiPort, flags.enableGraphQL, flags.enableJSONRPC, flags.enableWebSocket)
+	// Override config with flags given on the command line, then validate,
+	// so that flags can supply values the file leaves out.
+	applyFlags(cfg, flags)
+	applyAPIFlags(cfg, flags)
 
-	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
 	if err := validateConfig(cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -249,15 +318,26 @@ func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
 }
 
 // NewApp creates and initializes a new application instance
-func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapterType string) (*App, error) {
+func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapterType string) (_ *App, err error) {
 	app := &App{
 		config:           cfg,
 		logger:           log,
 		enableGapMode:    enableGapMode,
 		forceAdapterType: forceAdapterType,
 	}
+	// A failed start releases what it opened (the database lock above all),
+	// so the caller can retry in the same process.
+	defer func() {
+		if err != nil {
+			app.closeAfterFailedStart()
+		}
+	}()
 
 	ctx := context.Background()
+
+	if err := app.startRPCArchive(); err != nil {
+		return nil, err
+	}
 
 	// Initialize storage first (needed by both single and multi-chain modes)
 	if err := app.initStorageOnly(ctx); err != nil {
@@ -301,7 +381,9 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 		}
 
 		// Initialize fetcher
-		app.initFetcher()
+		if err := app.initFetcher(ctx); err != nil {
+			return nil, err
+		}
 	}
 
 	// Initialize API server if enabled
@@ -328,10 +410,18 @@ func (a *App) initClient() error {
 	a.client = ethClient
 	a.logger.Info("Connected to Ethereum node", zap.String("endpoint", a.config.RPC.Endpoint))
 
-	// Create chain adapter using factory with auto-detection
+	// The chain profile: the one --adapter names, otherwise detected. The
+	// adapter factory follows it, so both agree on the chain.
 	ctx := context.Background()
+	a.profileSrc, a.profileErr = sourcerpc.Select(ctx, a.client.RPCClient(), a.forceAdapterType)
+	if a.profileErr == nil {
+		a.profile = a.profileSrc.Profile()
+	}
+
+	// Create chain adapter using factory with auto-detection
 	factoryConfig := factory.DefaultConfig(a.config.RPC.Endpoint)
 	factoryConfig.ForceAdapterType = a.forceAdapterType
+	factoryConfig.Profile = a.profile
 
 	adapterFactory := factory.NewFactory(factoryConfig, a.logger)
 	result, err := adapterFactory.Create(ctx)
@@ -395,9 +485,9 @@ func (a *App) initStorageOnly(ctx context.Context) error {
 // This wraps storage with genesis initializer and runs additional setup
 func (a *App) completeStorageInit(ctx context.Context) error {
 	// Wrap storage with genesis initializer (needs client)
-	if pebbleStore, ok := a.storage.(*storage.PebbleStorage); ok {
-		a.storage = storage.NewGenesisInitializingStorage(pebbleStore, a.client, a.logger)
-		a.logger.Info("Storage wrapped with genesis auto-initialization")
+	if g, ok := a.storage.(storage.GenesisBalanceConfigurer); ok {
+		g.SetGenesisBalanceResolver(a.client)
+		a.logger.Info("Genesis balance auto-initialization enabled")
 	}
 
 	// Initialize system contract verifications if enabled
@@ -447,23 +537,31 @@ func (a *App) initSystemContractVerifications(ctx context.Context) error {
 		return fmt.Errorf("storage does not support contract verification reads")
 	}
 
-	config := &storage.SystemContractVerificationConfig{
+	config := &systemcontracts.SystemContractVerificationConfig{
 		SourcePath:       a.config.SystemContracts.SourcePath,
 		IncludeAbstracts: a.config.SystemContracts.IncludeAbstracts,
 		Logger:           a.logger,
 	}
 
-	return storage.InitSystemContractVerifications(ctx, writer, reader, config)
+	return systemcontracts.InitSystemContractVerifications(ctx, writer, reader, config)
 }
 
 // initEventBus initializes the event bus
 func (a *App) initEventBus() {
-	a.eventBus = events.NewEventBus(constants.DefaultPublishBufferSize, constants.DefaultSubscribeBufferSize)
+	// A zero size (configuration built without defaults) would make the
+	// publish channel unbuffered and drop every event.
+	if a.config.EventBus.PublishBufferSize <= 0 {
+		a.config.EventBus.PublishBufferSize = constants.DefaultEventBusPublishBuffer
+	}
+	if a.config.EventBus.SubscriberBufferSize <= 0 {
+		a.config.EventBus.SubscriberBufferSize = constants.DefaultEventBusSubscriberBuffer
+	}
+	a.eventBus = events.NewEventBus(a.config.EventBus.PublishBufferSize, a.config.EventBus.SubscriberBufferSize)
 	go a.eventBus.Run()
 
 	a.logger.Info("EventBus initialized",
-		zap.Int("publish_buffer", constants.DefaultPublishBufferSize),
-		zap.Int("subscribe_buffer", constants.DefaultSubscribeBufferSize),
+		zap.Int("publish_buffer", a.config.EventBus.PublishBufferSize),
+		zap.Int("subscriber_buffer", a.config.EventBus.SubscriberBufferSize),
 	)
 }
 
@@ -602,7 +700,7 @@ func (a *App) initMultiChainManager(ctx context.Context) error {
 }
 
 // initFetcher initializes the block fetcher
-func (a *App) initFetcher() {
+func (a *App) initFetcher(ctx context.Context) error {
 	// Real-time mode: Use shorter RetryDelay for batch_size=1
 	retryDelay := time.Second * 5
 	if a.config.Indexer.ChunkSize == 1 {
@@ -610,11 +708,16 @@ func (a *App) initFetcher() {
 	}
 
 	fetcherConfig := &fetch.Config{
-		StartHeight: a.config.Indexer.StartHeight,
-		BatchSize:   a.config.Indexer.ChunkSize,
-		MaxRetries:  3,
-		RetryDelay:  retryDelay,
-		NumWorkers:  a.config.Indexer.Workers,
+		StartHeight:   a.config.Indexer.StartHeight,
+		BatchSize:     a.config.Indexer.ChunkSize,
+		MaxRetries:    3,
+		RetryDelay:    retryDelay,
+		NumWorkers:    a.config.Indexer.Workers,
+		AtomicBlock:   a.config.Indexer.AtomicBlock,
+		RPCTimeout:    a.config.RPC.Timeout,
+		PollInterval:  a.config.Indexer.PollInterval,
+		Finality:      a.config.Indexer.Finality,
+		Confirmations: a.config.Indexer.Confirmations,
 	}
 
 	// Create fetcher with chain adapter if available
@@ -634,6 +737,82 @@ func (a *App) initFetcher() {
 		)
 	}
 
+	// The chain profile decodes blocks (profile_source) and gives the
+	// default features. Without profile_source a failed detection only
+	// leaves the features to the configuration.
+	profile, src := a.profile, a.profileSrc
+	switch {
+	case a.profileErr == nil:
+	case a.config.Indexer.ProfileSource:
+		return fmt.Errorf("detect chain profile: %w", a.profileErr)
+	default:
+		a.logger.Warn("Chain profile detection failed; using configured features only", zap.Error(a.profileErr))
+	}
+	if a.config.Indexer.ProfileSource {
+		var blocks source.Source = src
+		if dir := a.config.Source.EraDir; dir != "" {
+			es, err := era.OpenDir(dir, profile)
+			if err != nil {
+				return fmt.Errorf("open era1 archives: %w", err)
+			}
+			a.eraSource = es
+			chained := &source.Chained{First: es, Then: src}
+			if err := chained.CheckJoin(ctx); err != nil {
+				return fmt.Errorf("era1 archives in %s: %w", dir, err)
+			}
+			blocks = chained
+			first, last := es.Range()
+			a.logger.Info("Reading history from era1 archives", zap.String("dir", dir), zap.Uint64("first", first), zap.Uint64("last", last))
+		}
+		a.fetcher.SetSource(blocks)
+		a.logger.Info("Reading blocks through chain profile", zap.String("profile", profile.ID()))
+	}
+
+	defaults := feature.Defaults()
+	if profile != nil {
+		defaults = append(defaults, profile.Features()...)
+	}
+	enabled, err := feature.Enabled(defaults, a.featureOverrides())
+	if err != nil {
+		return err
+	}
+	deps := feature.Deps{
+		Storage:   a.storage,
+		Logger:    a.logger,
+		Profile:   profile,
+		Publish:   a.fetcher.Publish,
+		BalanceAt: a.fetcher.BalanceAt,
+		BlockAt:   a.fetcher.BlockAt,
+	}
+	pipeline, err := feature.Build(enabled, deps)
+	if err != nil {
+		return err
+	}
+	a.fetcher.SetFeatures(pipeline)
+	a.features = pipeline
+	a.logger.Info("Features enabled", zap.Strings("features", pipeline.Features()))
+
+	// Old blocks are processed for newly enabled features before ingest
+	// starts; events are not published for them.
+	backfillDeps := deps
+	backfillDeps.Publish = func(events.Event) bool { return true }
+	backfill, err := feature.Build(enabled, backfillDeps)
+	if err != nil {
+		return err
+	}
+	if backfillCommitHook != nil {
+		a.fetcher.SetBeforeCommitHook(backfillCommitHook)
+		defer a.fetcher.SetBeforeCommitHook(nil)
+	}
+	if err := a.fetcher.CheckFinality(ctx); err != nil {
+		return err
+	}
+	if err := a.fetcher.Recover(ctx, pipeline.Features(), backfill); err != nil {
+		return err
+	}
+
+	a.registerFeatureProcessors()
+
 	// Add token block processor for automatic token metadata indexing
 	tokenProcessor := token.NewBlockProcessorFromEthClient(a.client.EthClient(), a.storage, a.logger)
 	a.fetcher.AddBlockProcessor(tokenProcessor)
@@ -648,6 +827,7 @@ func (a *App) initFetcher() {
 	} else {
 		a.logger.Warn("Failed to create token metadata fetcher - on-demand fetching will be disabled")
 	}
+	return nil
 }
 
 // initAPIServer initializes the API server
@@ -682,6 +862,7 @@ func (a *App) initAPIServer() error {
 		WebSocketPath:         constants.DefaultWebSocketPath,
 		ShutdownTimeout:       constants.DefaultShutdownTimeout,
 	}
+	apiConfig.EnableWebSocketKeepAlive = a.config.API.EnableWebSocketKeepAlive
 
 	// Create API server with optional RPC Proxy, Notification Service, and Verifier
 	serverOpts := &api.ServerOptions{
@@ -884,6 +1065,11 @@ func (a *App) Shutdown() {
 		}
 	}
 
+	// Stop the writer after its queued commands, before closing storage
+	if a.fetcher != nil {
+		a.fetcher.Close()
+	}
+
 	// Close storage
 	if a.storage != nil {
 		if err := a.storage.Close(); err != nil {
@@ -895,6 +1081,8 @@ func (a *App) Shutdown() {
 	if a.client != nil {
 		a.client.Close()
 	}
+	a.stopRPCArchive()
+	a.closeEraSource()
 
 	// Wait for graceful shutdown
 	time.Sleep(time.Second * 2)
@@ -925,60 +1113,51 @@ func (a *App) Shutdown() {
 	a.logger.Info("Application stopped")
 }
 
-// loadConfig loads configuration from YAML file
-func loadConfig(configFile string) (*config.Config, error) {
-	cfg, err := config.Load(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
+// applyFlags applies command-line flags that were given explicitly.
+func applyFlags(cfg *config.Config, f *Flags) {
+	if f.set["rpc"] {
+		cfg.RPC.Endpoint = f.rpcEndpoint
 	}
-
-	return cfg, nil
-}
-
-// applyFlags applies command-line flags to configuration
-func applyFlags(cfg *config.Config, rpcEndpoint, dbPath string, startHeight uint64, workers, batchSize int, logLevel, logFormat string) {
-	if rpcEndpoint != "" {
-		cfg.RPC.Endpoint = rpcEndpoint
+	if f.set["db"] {
+		cfg.Database.Path = f.dbPath
 	}
-	if dbPath != "" {
-		cfg.Database.Path = dbPath
+	if f.set["start-height"] {
+		cfg.Indexer.StartHeight = f.startHeight
 	}
-	if startHeight > 0 {
-		cfg.Indexer.StartHeight = startHeight
+	if f.set["workers"] {
+		cfg.Indexer.Workers = f.workers
 	}
-	if workers > 0 {
-		cfg.Indexer.Workers = workers
+	if f.set["batch-size"] {
+		cfg.Indexer.ChunkSize = f.batchSize
 	}
-	if batchSize > 0 {
-		cfg.Indexer.ChunkSize = batchSize
+	if f.set["log-level"] {
+		cfg.Log.Level = f.logLevel
 	}
-	if logLevel != "" {
-		cfg.Log.Level = logLevel
-	}
-	if logFormat != "" {
-		cfg.Log.Format = logFormat
+	if f.set["log-format"] {
+		cfg.Log.Format = f.logFormat
 	}
 }
 
-// applyAPIFlags applies API-related command-line flags to configuration
-func applyAPIFlags(cfg *config.Config, enableAPI bool, apiHost string, apiPort int, enableGraphQL, enableJSONRPC, enableWebSocket bool) {
-	if enableAPI {
-		cfg.API.Enabled = true
+// applyAPIFlags applies API-related command-line flags that were given
+// explicitly. Boolean flags apply both ways (--api=false disables the API).
+func applyAPIFlags(cfg *config.Config, f *Flags) {
+	if f.set["api"] {
+		cfg.API.Enabled = f.enableAPI
 	}
-	if apiHost != "" {
-		cfg.API.Host = apiHost
+	if f.set["api-host"] {
+		cfg.API.Host = f.apiHost
 	}
-	if apiPort > 0 {
-		cfg.API.Port = apiPort
+	if f.set["api-port"] {
+		cfg.API.Port = f.apiPort
 	}
-	if enableGraphQL {
-		cfg.API.EnableGraphQL = true
+	if f.set["graphql"] {
+		cfg.API.EnableGraphQL = f.enableGraphQL
 	}
-	if enableJSONRPC {
-		cfg.API.EnableJSONRPC = true
+	if f.set["jsonrpc"] {
+		cfg.API.EnableJSONRPC = f.enableJSONRPC
 	}
-	if enableWebSocket {
-		cfg.API.EnableWebSocket = true
+	if f.set["websocket"] {
+		cfg.API.EnableWebSocket = f.enableWebSocket
 	}
 }
 
@@ -995,6 +1174,12 @@ func validateConfig(cfg *config.Config) error {
 	}
 	if cfg.Indexer.ChunkSize <= 0 {
 		return fmt.Errorf("batch size must be positive")
+	}
+	if cfg.MultiChain.Enabled && len(cfg.MultiChain.Chains) > 0 {
+		return fmt.Errorf("multichain mode is disabled: all chains would share the same storage keys and overwrite each other (refactoring plan D4, R2-8)")
+	}
+	if cfg.Database.ReadOnly {
+		return fmt.Errorf("database.readonly is not supported: the indexer must write; an API-only role is planned (refactoring plan R4-1)")
 	}
 	return nil
 }
@@ -1065,55 +1250,11 @@ func reindexData(path string, log *zap.Logger) error {
 	}
 	defer db.Close()
 
-	// Prefixes to preserve (verification data)
-	preservePrefixes := []string{
-		"/data/abi/",
-		"/data/verification/",
-		"/index/verification/",
-	}
-
-	// Prefixes to delete (blockchain/indexing data)
-	deletePrefixes := []string{
-		// Data prefixes
-		"/data/blocks/",
-		"/data/txs/",
-		"/data/receipts/",
-		"/data/contractaddr/",
-		"/data/logs/",
-		"/data/internal/",
-		"/data/contract/",
-		"/data/erc20/",
-		"/data/erc721/",
-		"/data/syscontracts/",
-		"/data/wbft/",
-		"/data/token/",
-		"/data/setcode/",
-		"/data/aa/",
-		"/data/feedelegation/",
-		"/data/notification/",
-		// Index prefixes (except /index/verification/)
-		"/index/txh/",
-		"/index/addr/",
-		"/index/blockh/",
-		"/index/time/",
-		"/index/balance/",
-		"/index/syscontracts/",
-		"/index/wbft/",
-		"/index/contract/",
-		"/index/internal/",
-		"/index/erc20/",
-		"/index/erc721/",
-		"/index/logs/",
-		"/index/feedelegation/",
-		"/index/notification/",
-		"/index/token/",
-		"/index/setcode/",
-		"/index/aa/",
-		// Metadata prefixes
-		"/meta/",
-		// Multi-chain prefixes
-		"/chain/",
-	}
+	// Every prefix storing chain data is deleted; user data (contract
+	// verification) is preserved. Packages register their prefixes
+	// (storage.RegisterKeyspace), so new data cannot be missed here.
+	preservePrefixes := storage.PrefixesOf(storage.Preserved)
+	deletePrefixes := storage.PrefixesOf(storage.ChainData)
 
 	var deletedCount int64
 	var preservedCount int64
@@ -1152,3 +1293,118 @@ func reindexData(path string, log *zap.Logger) error {
 
 	return nil
 }
+
+// The StableNet RPC client must satisfy the fetcher's fee delegation
+// interface; this fails to compile if their metadata types drift apart.
+var _ fetch.FeeDelegationClient = (*factory.EVMClient)(nil)
+
+// registerFeatureProcessors connects the legacy client's fee delegation
+// re-fetch. It is removed with the legacy client path; every other
+// per-block processor is a feature (pkg/features).
+func (a *App) registerFeatureProcessors() {
+	// Fee delegation (type 0x16) exists only on StableNet nodes.
+	if a.nodeInfo != nil && a.nodeInfo.Type == detector.NodeTypeStableOne {
+		a.fetcher.SetFeeDelegationClient(factory.NewEVMClient(a.client.RPCClient()))
+	}
+}
+
+// featureOverrides returns the configured feature overrides. The older
+// account_abstraction.enabled: false still turns off the ERC-4337 and
+// ERC-7579 features unless the features section names them.
+func (a *App) featureOverrides() map[string]bool {
+	overrides := a.config.FeatureOverrides()
+	if !a.config.AccountAbstraction.Enabled {
+		for _, name := range []string{aa.ERC4337, aa.ERC7579} {
+			if _, set := overrides[name]; !set {
+				overrides[name] = false
+			}
+		}
+	}
+	return overrides
+}
+
+// closeAfterFailedStart releases the resources NewApp opened before failing.
+func (a *App) closeAfterFailedStart() {
+	if a.eventBus != nil {
+		a.eventBus.Stop()
+	}
+	if a.chainAdapter != nil {
+		_ = a.chainAdapter.Close()
+	}
+	if a.fetcher != nil {
+		a.fetcher.Close()
+	}
+	if a.storage != nil {
+		if err := a.storage.Close(); err != nil {
+			a.logger.Error("Failed to close storage after failed start", zap.Error(err))
+		}
+	}
+	if a.client != nil {
+		a.client.Close()
+	}
+	a.stopRPCArchive()
+	a.closeEraSource()
+}
+
+// closeEraSource closes the era1 archives.
+func (a *App) closeEraSource() {
+	if a.eraSource != nil {
+		_ = a.eraSource.Close()
+		a.eraSource = nil
+	}
+}
+
+// startRPCArchive puts a local endpoint between the indexer and the node:
+// a recording proxy (rpc.record_dir) or a replay of an archive
+// (rpc.endpoint: replay:///dir). Every RPC user then goes through it.
+func (a *App) startRPCArchive() error {
+	if dir, ok := replay.ParseEndpoint(a.config.RPC.Endpoint); ok {
+		archive, err := replay.Open(dir)
+		if err != nil {
+			return fmt.Errorf("open replay archive: %w", err)
+		}
+		a.rpcReplay = replay.NewServer(archive)
+		ep, err := replay.Serve(a.rpcReplay)
+		if err != nil {
+			return err
+		}
+		a.rpcEndpoint = ep
+		a.logger.Info("Replaying recorded RPC archive", zap.String("dir", dir),
+			zap.Uint64("first", archive.Manifest().First), zap.Uint64("last", archive.Manifest().Last))
+		a.config.RPC.Endpoint = ep.URL
+		return nil
+	}
+	if a.config.RPC.RecordDir != "" {
+		w, err := replay.NewWriter(a.config.RPC.RecordDir)
+		if err != nil {
+			return fmt.Errorf("open RPC record dir: %w", err)
+		}
+		ep, err := replay.Serve(replay.NewRecorder(a.config.RPC.Endpoint, w))
+		if err != nil {
+			_ = w.Close()
+			return err
+		}
+		a.rpcRecorder, a.rpcEndpoint = w, ep
+		a.logger.Info("Recording RPC calls", zap.String("dir", a.config.RPC.RecordDir))
+		a.config.RPC.Endpoint = ep.URL
+	}
+	return nil
+}
+
+// stopRPCArchive stops the local endpoint and finishes the recording.
+func (a *App) stopRPCArchive() {
+	if a.rpcEndpoint != nil {
+		_ = a.rpcEndpoint.Close()
+		a.rpcEndpoint = nil
+	}
+	if a.rpcRecorder != nil {
+		if err := a.rpcRecorder.Close(); err != nil {
+			a.logger.Error("Failed to finish RPC recording", zap.Error(err))
+		}
+		a.rpcRecorder = nil
+	}
+}
+
+// backfillCommitHook is a fault-injection point for tests: it runs before
+// each block commits during startup recovery (Fetcher.Recover).
+var backfillCommitHook func(height uint64) error

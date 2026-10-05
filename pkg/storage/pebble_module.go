@@ -25,7 +25,7 @@ func (s *PebbleStorage) GetInstalledModule(ctx context.Context, account, module 
 	}
 
 	key := ModuleKey(account, module)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -61,7 +61,7 @@ func (s *PebbleStorage) GetModulesByAccount(ctx context.Context, account common.
 
 	prefix := ModuleAccountIndexKeyPrefix(account)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -136,7 +136,7 @@ func (s *PebbleStorage) GetModulesByType(ctx context.Context, moduleType ModuleT
 
 	prefix := ModuleTypeIndexKeyPrefix(moduleType)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -199,7 +199,7 @@ func (s *PebbleStorage) GetModuleStats(ctx context.Context, module common.Addres
 	}
 
 	key := ModuleStatsKey(module)
-	value, closer, err := s.db.Get(key)
+	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			// Return zero-value stats
@@ -236,7 +236,7 @@ func (s *PebbleStorage) GetAccountModules(ctx context.Context, account common.Ad
 	// Get all modules for this account from primary storage
 	prefix := ModuleKeyPrefix(account)
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -288,7 +288,7 @@ func (s *PebbleStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([
 
 	prefix := ModuleBlockIndexAllPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -335,7 +335,7 @@ func (s *PebbleStorage) GetModuleEventCount(ctx context.Context) (int, error) {
 
 	prefix := ModuleBlockIndexAllPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -374,7 +374,7 @@ func (s *PebbleStorage) ListModuleStats(ctx context.Context, limit, offset int) 
 
 	prefix := ModuleStatsKeyPrefix()
 
-	iter, err := s.db.NewIter(&pebble.IterOptions{
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xff),
 	})
@@ -426,7 +426,7 @@ func (s *PebbleStorage) SaveInstalledModule(ctx context.Context, record *Install
 		return fmt.Errorf("failed to marshal installed module: %w", err)
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// 1. Save the primary record
@@ -459,7 +459,7 @@ func (s *PebbleStorage) SaveInstalledModule(ctx context.Context, record *Install
 	}
 
 	// Commit batch
-	if err := batch.Commit(pebble.Sync); err != nil {
+	if err := s.commitBatch(ctx, batch, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit installed module: %w", err)
 	}
 
@@ -498,7 +498,7 @@ func (s *PebbleStorage) RemoveModule(ctx context.Context, account, module common
 
 	// Save updated record
 	key := ModuleKey(account, module)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to update installed module: %w", err)
 	}
 
@@ -523,7 +523,7 @@ func (s *PebbleStorage) UpdateModuleStats(ctx context.Context, stats *ModuleStat
 	}
 
 	key := ModuleStatsKey(stats.Module)
-	if err := s.db.Set(key, data, pebble.Sync); err != nil {
+	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set module stats: %w", err)
 	}
 

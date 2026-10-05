@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // PipelineStage defines a single stage in the event processing pipeline
@@ -137,15 +138,15 @@ func (s *PublishStage) Process(ctx context.Context, event *ParsedEvent) error {
 		return nil
 	}
 
-	sysEvent := NewSystemContractEvent(
-		event.ContractAddress,
-		SystemContractEventType(event.EventName),
-		event.BlockNumber,
-		event.TxHash,
-		event.LogIndex,
-		event.Data,
-	)
-	s.eventBus.Publish(sysEvent)
+	s.eventBus.Publish(&ContractLogEvent{
+		Contract:    event.ContractAddress,
+		EventName:   event.EventName,
+		BlockNumber: event.BlockNumber,
+		TxHash:      event.TxHash,
+		LogIndex:    event.LogIndex,
+		Data:        event.Data,
+		CreatedAt:   time.Now(),
+	})
 
 	return nil
 }

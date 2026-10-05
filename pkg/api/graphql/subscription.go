@@ -2,6 +2,8 @@ package graphql
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -84,6 +86,7 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx:             ctx,
 		cancel:          cancel,
 		enableKeepAlive: s.enableKeepAlive,
+		connID:          newConnID(),
 	}
 
 	go client.writePump()
@@ -101,6 +104,22 @@ type subscriptionClient struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	enableKeepAlive bool
+	// connID scopes client-chosen subscription ids on the shared event bus,
+	// so two connections using the same id ("1") do not collide.
+	connID string
+}
+
+// busID returns the event bus id for a client subscription id.
+func (c *subscriptionClient) busID(id string) events.SubscriptionID {
+	return events.SubscriptionID(c.connID + "/" + id)
+}
+
+func newConnID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
 }
 
 // clientSubscription holds subscription state
@@ -133,11 +152,16 @@ func (c *subscriptionClient) readPump() {
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error {
-		c.logger.Debug("received pong message")
-		return c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	})
+	// A read deadline is only meaningful when the server pings: pongs extend
+	// it. Without keep-alive an idle subscriber would be dropped after
+	// pongWait even though it is healthy.
+	if c.enableKeepAlive {
+		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		c.conn.SetPongHandler(func(string) error {
+			c.logger.Debug("received pong message")
+			return c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		})
+	}
 
 	for {
 		_, message, err := c.conn.ReadMessage()
@@ -174,13 +198,13 @@ func (c *subscriptionClient) writePump() {
 
 	for {
 		select {
-		case message, ok := <-c.send:
+		case <-c.ctx.Done():
 			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if !ok {
-				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
+			_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+			return
 
+		case message := <-c.send:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
@@ -315,34 +339,31 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 		eventType = events.EventTypeChainConfig
 	case "validatorSet":
 		eventType = events.EventTypeValidatorSet
-	case "consensusBlock":
-		eventType = events.EventTypeConsensusBlock
-	case "consensusFork":
-		eventType = events.EventTypeConsensusFork
-	case "consensusValidatorChange":
-		eventType = events.EventTypeConsensusValidatorChange
-	case "consensusError":
-		eventType = events.EventTypeConsensusError
-	case "systemContractEvents":
-		eventType = events.EventTypeSystemContract
-		filter, err = buildSystemContractFilter(sub.Variables["filter"])
-		if err != nil {
-			c.sendError(id, err.Error())
+	case "reorg":
+		eventType = events.EventTypeReorg
+	default:
+		spec, ok := registeredSubscription(subType)
+		if !ok {
+			c.sendError(id, "unknown subscription type")
 			return
 		}
-	default:
-		c.sendError(id, "unknown subscription type")
-		return
+		eventType = spec.EventType
+		if spec.Filter != nil {
+			filter, err = spec.Filter(sub.Variables)
+			if err != nil {
+				c.sendError(id, err.Error())
+				return
+			}
+		}
 	}
 
 	// Parse replayLast parameter
 	replayLast := parseReplayLast(sub.Variables["replayLast"])
 
 	// Create subscription ID
-	subID := events.SubscriptionID(id)
+	subID := c.busID(id)
 	opts := events.SubscribeOptions{
-		ChannelSize: 100,
-		ReplayLast:  replayLast,
+		ReplayLast: replayLast, // channel size: the bus default (eventbus.subscriber_buffer_size)
 	}
 	eventSub := c.server.eventBus.SubscribeWithOptions(subID, []events.EventType{eventType}, filter, opts)
 	if eventSub == nil {
@@ -405,7 +426,7 @@ func (c *subscriptionClient) handleComplete(id string) {
 		sub.cancelFunc()
 		// Unsubscribe from EventBus
 		if c.server.eventBus != nil {
-			c.server.eventBus.Unsubscribe(events.SubscriptionID(id))
+			c.server.eventBus.Unsubscribe(c.busID(id))
 		}
 		delete(c.subscriptions, id)
 	}
@@ -557,160 +578,26 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 			}
 		}
 
-	case "consensusBlock":
-		if consensusEvent, ok := event.(*events.ConsensusBlockEvent); ok {
-			consensusData := map[string]interface{}{
-				"blockNumber":         consensusEvent.BlockNumber,
-				"blockHash":           consensusEvent.BlockHash.Hex(),
-				"timestamp":           consensusEvent.BlockTimestamp,
-				"round":               consensusEvent.Round,
-				"prevRound":           consensusEvent.PrevRound,
-				"roundChanged":        consensusEvent.RoundChanged,
-				"proposer":            consensusEvent.Proposer.Hex(),
-				"validatorCount":      consensusEvent.ValidatorCount,
-				"prepareCount":        consensusEvent.PrepareCount,
-				"commitCount":         consensusEvent.CommitCount,
-				"participationRate":   consensusEvent.ParticipationRate,
-				"missedValidatorRate": consensusEvent.MissedValidatorRate,
-				"isEpochBoundary":     consensusEvent.IsEpochBoundary,
-			}
-			if consensusEvent.EpochNumber != nil {
-				consensusData["epochNumber"] = *consensusEvent.EpochNumber
-			}
-			if consensusEvent.EpochValidators != nil {
-				validators := make([]string, len(consensusEvent.EpochValidators))
-				for i, v := range consensusEvent.EpochValidators {
-					validators[i] = v.Hex()
-				}
-				consensusData["epochValidators"] = validators
-			}
+	case "reorg":
+		if reorgEvent, ok := event.(*events.ReorgEvent); ok {
 			payload = map[string]interface{}{
 				"data": map[string]interface{}{
-					"consensusBlock": consensusData,
+					"reorg": reorgEventToMap(reorgEvent),
 				},
 			}
 		}
 
-	case "consensusFork":
-		if forkEvent, ok := event.(*events.ConsensusForkEvent); ok {
-			forkData := map[string]interface{}{
-				"forkBlockNumber": forkEvent.ForkBlockNumber,
-				"forkBlockHash":   forkEvent.ForkBlockHash.Hex(),
-				"chain1Hash":      forkEvent.Chain1Hash.Hex(),
-				"chain1Height":    forkEvent.Chain1Height,
-				"chain1Weight":    forkEvent.Chain1Weight,
-				"chain2Hash":      forkEvent.Chain2Hash.Hex(),
-				"chain2Height":    forkEvent.Chain2Height,
-				"chain2Weight":    forkEvent.Chain2Weight,
-				"resolved":        forkEvent.Resolved,
-				"winningChain":    forkEvent.WinningChain,
-				"detectedAt":      forkEvent.DetectedAt.Unix(),
-				"detectionLag":    forkEvent.DetectionLag,
-			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"consensusFork": forkData,
-				},
-			}
-		}
+	}
 
-	case "consensusValidatorChange":
-		if changeEvent, ok := event.(*events.ConsensusValidatorChangeEvent); ok {
-			changeData := map[string]interface{}{
-				"blockNumber":            changeEvent.BlockNumber,
-				"blockHash":              changeEvent.BlockHash.Hex(),
-				"timestamp":              changeEvent.BlockTimestamp,
-				"epochNumber":            changeEvent.EpochNumber,
-				"isEpochBoundary":        changeEvent.IsEpochBoundary,
-				"changeType":             changeEvent.ChangeType,
-				"previousValidatorCount": changeEvent.PreviousValidatorCount,
-				"newValidatorCount":      changeEvent.NewValidatorCount,
-			}
-			if len(changeEvent.AddedValidators) > 0 {
-				added := make([]string, len(changeEvent.AddedValidators))
-				for i, v := range changeEvent.AddedValidators {
-					added[i] = v.Hex()
+	if payload == nil {
+		if spec, ok := registeredSubscription(subType); ok && spec.Payload != nil {
+			if ev, ok := event.(events.Event); ok {
+				if value, ok := spec.Payload(ev); ok {
+					payload = map[string]interface{}{"data": map[string]interface{}{subType: value}}
 				}
-				changeData["addedValidators"] = added
-			}
-			if len(changeEvent.RemovedValidators) > 0 {
-				removed := make([]string, len(changeEvent.RemovedValidators))
-				for i, v := range changeEvent.RemovedValidators {
-					removed[i] = v.Hex()
-				}
-				changeData["removedValidators"] = removed
-			}
-			if len(changeEvent.ValidatorSet) > 0 {
-				validators := make([]string, len(changeEvent.ValidatorSet))
-				for i, v := range changeEvent.ValidatorSet {
-					validators[i] = v.Hex()
-				}
-				changeData["validatorSet"] = validators
-			}
-			if changeEvent.AdditionalInfo != "" {
-				changeData["additionalInfo"] = changeEvent.AdditionalInfo
-			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"consensusValidatorChange": changeData,
-				},
-			}
-		}
-
-	case "consensusError":
-		if errorEvent, ok := event.(*events.ConsensusErrorEvent); ok {
-			errorData := map[string]interface{}{
-				"blockNumber":        errorEvent.BlockNumber,
-				"blockHash":          errorEvent.BlockHash.Hex(),
-				"timestamp":          errorEvent.BlockTimestamp,
-				"errorType":          errorEvent.ErrorType,
-				"severity":           errorEvent.Severity,
-				"errorMessage":       errorEvent.ErrorMessage,
-				"round":              errorEvent.Round,
-				"expectedValidators": errorEvent.ExpectedValidators,
-				"actualSigners":      errorEvent.ActualSigners,
-				"participationRate":  errorEvent.ParticipationRate,
-				"consensusImpacted":  errorEvent.ConsensusImpacted,
-				"recoveryTime":       errorEvent.RecoveryTime,
-			}
-			if len(errorEvent.MissedValidators) > 0 {
-				missed := make([]string, len(errorEvent.MissedValidators))
-				for i, v := range errorEvent.MissedValidators {
-					missed[i] = v.Hex()
-				}
-				errorData["missedValidators"] = missed
-			}
-			if errorEvent.ErrorDetails != "" {
-				errorData["errorDetails"] = errorEvent.ErrorDetails
-			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"consensusError": errorData,
-				},
-			}
-		}
-
-	case "systemContractEvents":
-		if scEvent, ok := event.(*events.SystemContractEvent); ok {
-			// Serialize data to JSON string
-			dataJSON, _ := json.Marshal(scEvent.Data)
-			eventData := map[string]interface{}{
-				"contract":        scEvent.Contract.Hex(),
-				"eventName":       string(scEvent.EventName),
-				"blockNumber":     fmt.Sprintf("%d", scEvent.BlockNumber),
-				"transactionHash": scEvent.TxHash.Hex(),
-				"logIndex":        scEvent.LogIndex,
-				"data":            string(dataJSON),
-				"timestamp":       fmt.Sprintf("%d", scEvent.CreatedAt.Unix()),
-			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"systemContractEvents": eventData,
-				},
 			}
 		}
 	}
-
 	if payload != nil {
 		c.sendNext(id, payload)
 	}
@@ -719,23 +606,14 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 // parseSubscriptionType extracts subscription type from query
 func (c *subscriptionClient) parseSubscriptionType(query string) string {
 	// Simple parsing - check for subscription keywords (order matters: more specific first)
+	if name := registeredSubscriptionIn(query); name != "" {
+		return name
+	}
 	if contains(query, "newPendingTransactions") {
 		return "newPendingTransactions"
 	}
-	if contains(query, "systemContractEvents") {
-		return "systemContractEvents"
-	}
-	if contains(query, "consensusValidatorChange") {
-		return "consensusValidatorChange"
-	}
-	if contains(query, "consensusBlock") {
-		return "consensusBlock"
-	}
-	if contains(query, "consensusFork") {
-		return "consensusFork"
-	}
-	if contains(query, "consensusError") {
-		return "consensusError"
+	if contains(query, "reorg") {
+		return "reorg"
 	}
 	if contains(query, "validatorSet") {
 		return "validatorSet"
@@ -896,55 +774,6 @@ func buildLogFilter(raw interface{}) (*events.Filter, error) {
 	return filter, nil
 }
 
-func buildSystemContractFilter(raw interface{}) (*events.Filter, error) {
-	if raw == nil {
-		return nil, nil
-	}
-	filterMap, ok := raw.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid system contract filter format")
-	}
-
-	filter := events.NewFilter()
-
-	// Parse contract address filter
-	if contractVal, ok := filterMap["contract"]; ok {
-		contractStr, ok := contractVal.(string)
-		if !ok {
-			return nil, fmt.Errorf("contract must be a string")
-		}
-		address, err := parseAddress(contractStr)
-		if err != nil {
-			return nil, err
-		}
-		filter.Addresses = append(filter.Addresses, address)
-	}
-
-	// Parse event types filter (stored in custom data)
-	if eventTypesVal, ok := filterMap["eventTypes"]; ok {
-		eventTypesSlice, ok := eventTypesVal.([]interface{})
-		if ok && len(eventTypesSlice) > 0 {
-			eventTypes := make([]string, 0, len(eventTypesSlice))
-			for _, et := range eventTypesSlice {
-				if etStr, ok := et.(string); ok {
-					eventTypes = append(eventTypes, etStr)
-				}
-			}
-			if len(eventTypes) > 0 {
-				filter.CustomData = map[string]interface{}{
-					"eventTypes": eventTypes,
-				}
-			}
-		}
-	}
-
-	if filter.IsEmpty() {
-		return nil, nil
-	}
-
-	return filter, nil
-}
-
 func parseAddressList(value interface{}) ([]common.Address, error) {
 	switch v := value.(type) {
 	case []interface{}:
@@ -1100,6 +929,8 @@ func (c *subscriptionClient) sendMessage(msg wsMessage) {
 	)
 
 	select {
+	case <-c.ctx.Done():
+		return // connection closing; the send channel is never closed
 	case c.send <- data:
 	default:
 		c.logger.Warn("send buffer full, dropping message",
@@ -1156,12 +987,13 @@ func (c *subscriptionClient) cleanup() {
 				zap.String("type", sub.subType),
 			)
 			sub.cancelFunc()
-			c.server.eventBus.Unsubscribe(events.SubscriptionID(id))
+			c.server.eventBus.Unsubscribe(c.busID(id))
 		}
 	}
 
+	// c.send is not closed: event loops may still be sending. writePump
+	// stops on c.ctx, which was cancelled above.
 	c.subscriptions = make(map[string]*clientSubscription)
-	close(c.send)
 	c.logger.Info("WebSocket client cleanup completed")
 }
 

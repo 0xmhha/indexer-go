@@ -1,0 +1,130 @@
+package consensus
+
+import (
+	"math/big"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+)
+
+// ConsensusData represents parsed consensus information from a WBFT block
+// This is the primary data structure that aggregates all consensus-related information
+type ConsensusData struct {
+	// Block identification
+	BlockNumber uint64      `json:"blockNumber"`
+	BlockHash   common.Hash `json:"blockHash"`
+
+	// Round information
+	// Round = 0 means consensus succeeded on first try (optimal)
+	// Round > 0 means round changes occurred (consensus delay)
+	Round        uint32 `json:"round"`
+	PrevRound    uint32 `json:"prevRound"`
+	RoundChanged bool   `json:"roundChanged"` // Derived: Round > 0
+
+	// Validator participation
+	Proposer       common.Address   `json:"proposer"`       // Block proposer (from header.Coinbase)
+	Validators     []common.Address `json:"validators"`     // Active validator set for this block
+	PrepareSigners []common.Address `json:"prepareSigners"` // Validators who signed Prepare
+	CommitSigners  []common.Address `json:"commitSigners"`  // Validators who signed Commit
+
+	// Participation metrics
+	PrepareCount  int              `json:"prepareCount"`
+	CommitCount   int              `json:"commitCount"`
+	MissedPrepare []common.Address `json:"missedPrepare,omitempty"` // Validators - PrepareSigners
+	MissedCommit  []common.Address `json:"missedCommit,omitempty"`  // Validators - CommitSigners
+
+	// Raw consensus data
+	VanityData   []byte   `json:"vanityData,omitempty"`   // 32 bytes vanity data
+	RandaoReveal []byte   `json:"randaoReveal,omitempty"` // BLS signature for randomness
+	GasTip       *big.Int `json:"gasTip,omitempty"`       // Governance gas tip
+
+	// Epoch information (only present at epoch boundaries)
+	EpochInfo       *EpochData `json:"epochInfo,omitempty"`
+	IsEpochBoundary bool       `json:"isEpochBoundary"`
+
+	// Metadata
+	Timestamp uint64    `json:"timestamp"` // Block timestamp
+	ParsedAt  time.Time `json:"parsedAt"`  // When this data was parsed
+}
+
+// EpochData contains validator set information at epoch boundaries
+type EpochData struct {
+	EpochNumber    uint64          `json:"epochNumber"`
+	ValidatorCount int             `json:"validatorCount"`
+	Validators     []ValidatorInfo `json:"validators"`
+	CandidateCount int             `json:"candidateCount"`
+	Candidates     []CandidateInfo `json:"candidates,omitempty"`
+}
+
+// ValidatorInfo represents a single validator in the epoch
+type ValidatorInfo struct {
+	Address   common.Address `json:"address"`
+	Index     uint32         `json:"index"`               // Validator index in the set
+	BLSPubKey []byte         `json:"blsPubKey,omitempty"` // BLS public key
+}
+
+// CandidateInfo represents a candidate validator
+type CandidateInfo struct {
+	Address   common.Address `json:"address"`
+	Diligence uint64         `json:"diligence"` // Diligence score (0 - 2,000,000)
+}
+
+// BlockParticipation represents a validator's participation in a specific block
+type BlockParticipation struct {
+	BlockNumber   uint64 `json:"blockNumber"`
+	WasProposer   bool   `json:"wasProposer"`
+	SignedPrepare bool   `json:"signedPrepare"`
+	SignedCommit  bool   `json:"signedCommit"`
+	Round         uint32 `json:"round"`
+}
+
+// ParticipationRate calculates the participation rate percentage
+func (cd *ConsensusData) ParticipationRate() float64 {
+	if len(cd.Validators) == 0 {
+		return 0.0
+	}
+	return float64(cd.CommitCount) / float64(len(cd.Validators)) * 100.0
+}
+
+// IsHealthy returns true if consensus is operating normally
+// Healthy means: Round 0 and full participation (>= 2/3 validators)
+func (cd *ConsensusData) IsHealthy() bool {
+	if cd.Round > 0 {
+		return false // Round change indicates delay
+	}
+
+	// Check if we have quorum (>= 2/3 of validators)
+	requiredSigners := (len(cd.Validators) * 2 / 3) + 1
+	return cd.CommitCount >= requiredSigners
+}
+
+// CalculateMissedValidators computes which validators missed prepare/commit
+func (cd *ConsensusData) CalculateMissedValidators() {
+	if len(cd.Validators) == 0 {
+		return
+	}
+
+	// Create sets for efficient lookup
+	prepareSet := make(map[common.Address]bool)
+	for _, addr := range cd.PrepareSigners {
+		prepareSet[addr] = true
+	}
+
+	commitSet := make(map[common.Address]bool)
+	for _, addr := range cd.CommitSigners {
+		commitSet[addr] = true
+	}
+
+	// Find missed validators
+	cd.MissedPrepare = make([]common.Address, 0)
+	cd.MissedCommit = make([]common.Address, 0)
+
+	for _, validator := range cd.Validators {
+		if !prepareSet[validator] {
+			cd.MissedPrepare = append(cd.MissedPrepare, validator)
+		}
+		if !commitSet[validator] {
+			cd.MissedCommit = append(cd.MissedCommit, validator)
+		}
+	}
+}

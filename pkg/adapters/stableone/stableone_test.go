@@ -2,6 +2,7 @@ package stableone
 
 import (
 	"context"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
 	"math/big"
 	"testing"
 
@@ -63,7 +64,6 @@ func TestNewAdapter(t *testing.T) {
 
 	assert.NotNil(t, adapter)
 	assert.NotNil(t, adapter.Adapter) // embedded EVM adapter
-	assert.NotNil(t, adapter.consensusParser)
 	assert.NotNil(t, adapter.systemContracts)
 }
 
@@ -92,15 +92,6 @@ func TestAdapter_Info(t *testing.T) {
 	assert.Equal(t, constants.DefaultNativeTokenName, info.Name)
 	assert.Equal(t, constants.DefaultNativeTokenSymbol, info.NativeCurrency)
 	assert.Equal(t, constants.DefaultNativeTokenDecimals, info.Decimals)
-}
-
-// --- ConsensusParser tests ---
-
-func TestAdapter_ConsensusParser(t *testing.T) {
-	adapter := NewAdapter(&mockClient{}, nil, zap.NewNop())
-	cp := adapter.ConsensusParser()
-	assert.NotNil(t, cp)
-	assert.Equal(t, chain.ConsensusTypeWBFT, cp.ConsensusType())
 }
 
 // --- SystemContracts tests ---
@@ -157,11 +148,11 @@ func TestNewSystemContractsHandler(t *testing.T) {
 func TestIsSystemContract_True(t *testing.T) {
 	handler := NewSystemContractsHandler(zap.NewNop())
 
-	assert.True(t, handler.IsSystemContract(constants.NativeCoinAdapterAddress))
-	assert.True(t, handler.IsSystemContract(constants.GovValidatorAddress))
-	assert.True(t, handler.IsSystemContract(constants.GovMasterMinterAddress))
-	assert.True(t, handler.IsSystemContract(constants.GovMinterAddress))
-	assert.True(t, handler.IsSystemContract(constants.GovCouncilAddress))
+	assert.True(t, handler.IsSystemContract(systemcontracts.NativeCoinAdapterAddress))
+	assert.True(t, handler.IsSystemContract(systemcontracts.GovValidatorAddress))
+	assert.True(t, handler.IsSystemContract(systemcontracts.GovMasterMinterAddress))
+	assert.True(t, handler.IsSystemContract(systemcontracts.GovMinterAddress))
+	assert.True(t, handler.IsSystemContract(systemcontracts.GovCouncilAddress))
 }
 
 func TestIsSystemContract_False(t *testing.T) {
@@ -175,11 +166,11 @@ func TestIsSystemContract_False(t *testing.T) {
 func TestGetSystemContractName(t *testing.T) {
 	handler := NewSystemContractsHandler(zap.NewNop())
 
-	assert.Equal(t, "NativeCoinAdapter", handler.GetSystemContractName(constants.NativeCoinAdapterAddress))
-	assert.Equal(t, "GovValidator", handler.GetSystemContractName(constants.GovValidatorAddress))
-	assert.Equal(t, "GovMasterMinter", handler.GetSystemContractName(constants.GovMasterMinterAddress))
-	assert.Equal(t, "GovMinter", handler.GetSystemContractName(constants.GovMinterAddress))
-	assert.Equal(t, "GovCouncil", handler.GetSystemContractName(constants.GovCouncilAddress))
+	assert.Equal(t, "NativeCoinAdapter", handler.GetSystemContractName(systemcontracts.NativeCoinAdapterAddress))
+	assert.Equal(t, "GovValidator", handler.GetSystemContractName(systemcontracts.GovValidatorAddress))
+	assert.Equal(t, "GovMasterMinter", handler.GetSystemContractName(systemcontracts.GovMasterMinterAddress))
+	assert.Equal(t, "GovMinter", handler.GetSystemContractName(systemcontracts.GovMinterAddress))
+	assert.Equal(t, "GovCouncil", handler.GetSystemContractName(systemcontracts.GovCouncilAddress))
 }
 
 func TestGetSystemContractName_Unknown(t *testing.T) {
@@ -194,9 +185,9 @@ func TestGetSystemContractAddresses(t *testing.T) {
 	addrs := handler.GetSystemContractAddresses()
 
 	assert.Len(t, addrs, 5)
-	assert.Contains(t, addrs, constants.NativeCoinAdapterAddress)
-	assert.Contains(t, addrs, constants.GovValidatorAddress)
-	assert.Contains(t, addrs, constants.GovCouncilAddress)
+	assert.Contains(t, addrs, systemcontracts.NativeCoinAdapterAddress)
+	assert.Contains(t, addrs, systemcontracts.GovValidatorAddress)
+	assert.Contains(t, addrs, systemcontracts.GovCouncilAddress)
 }
 
 // --- GetContractType tests ---
@@ -204,11 +195,11 @@ func TestGetSystemContractAddresses(t *testing.T) {
 func TestGetContractType(t *testing.T) {
 	handler := NewSystemContractsHandler(zap.NewNop())
 
-	assert.Equal(t, "token", handler.GetContractType(constants.NativeCoinAdapterAddress))
-	assert.Equal(t, "governance", handler.GetContractType(constants.GovValidatorAddress))
-	assert.Equal(t, "governance", handler.GetContractType(constants.GovMasterMinterAddress))
-	assert.Equal(t, "minting", handler.GetContractType(constants.GovMinterAddress))
-	assert.Equal(t, "governance", handler.GetContractType(constants.GovCouncilAddress))
+	assert.Equal(t, "token", handler.GetContractType(systemcontracts.NativeCoinAdapterAddress))
+	assert.Equal(t, "governance", handler.GetContractType(systemcontracts.GovValidatorAddress))
+	assert.Equal(t, "governance", handler.GetContractType(systemcontracts.GovMasterMinterAddress))
+	assert.Equal(t, "minting", handler.GetContractType(systemcontracts.GovMinterAddress))
+	assert.Equal(t, "governance", handler.GetContractType(systemcontracts.GovCouncilAddress))
 	assert.Equal(t, "unknown", handler.GetContractType(common.HexToAddress("0xbeef")))
 }
 
@@ -243,7 +234,7 @@ func TestParseSystemContractEvent_NotSystemContract(t *testing.T) {
 func TestParseSystemContractEvent_NoTopics(t *testing.T) {
 	handler := NewSystemContractsHandler(zap.NewNop())
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
+		Address: systemcontracts.NativeCoinAdapterAddress,
 		Topics:  []common.Hash{},
 	}
 	_, err := handler.ParseSystemContractEvent(log)
@@ -262,8 +253,8 @@ func TestParseSystemContractEvent_Transfer(t *testing.T) {
 	valueBytes := common.LeftPadBytes(value.Bytes(), 32)
 
 	log := &types.Log{
-		Address:     constants.NativeCoinAdapterAddress,
-		Topics:      []common.Hash{constants.EventSigTransfer, addrToHash(from), addrToHash(to)},
+		Address:     systemcontracts.NativeCoinAdapterAddress,
+		Topics:      []common.Hash{systemcontracts.EventSigTransfer, addrToHash(from), addrToHash(to)},
 		Data:        valueBytes,
 		BlockNumber: 100,
 		TxHash:      common.HexToHash("0xtxhash"),
@@ -282,8 +273,8 @@ func TestParseSystemContractEvent_Transfer_InsufficientTopics(t *testing.T) {
 	handler := NewSystemContractsHandler(zap.NewNop())
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigTransfer}, // only 1 topic, need 3
+		Address: systemcontracts.NativeCoinAdapterAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigTransfer}, // only 1 topic, need 3
 	}
 
 	// Should still return event with basic info, just decode error logged
@@ -301,8 +292,8 @@ func TestParseSystemContractEvent_Mint(t *testing.T) {
 	amountBytes := common.LeftPadBytes(amount.Bytes(), 32)
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigMint, addrToHash(minter), addrToHash(to)},
+		Address: systemcontracts.NativeCoinAdapterAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigMint, addrToHash(minter), addrToHash(to)},
 		Data:    amountBytes,
 	}
 
@@ -320,8 +311,8 @@ func TestParseSystemContractEvent_Burn(t *testing.T) {
 	amountBytes := common.LeftPadBytes(amount.Bytes(), 32)
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigBurn, addrToHash(burner)},
+		Address: systemcontracts.NativeCoinAdapterAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigBurn, addrToHash(burner)},
 		Data:    amountBytes,
 	}
 
@@ -343,8 +334,8 @@ func TestParseSystemContractEvent_MemberAdded(t *testing.T) {
 	copy(data[32:64], common.LeftPadBytes(memberCount.Bytes(), 32))
 
 	log := &types.Log{
-		Address: constants.GovCouncilAddress,
-		Topics:  []common.Hash{constants.EventSigMemberAdded, addrToHash(member)},
+		Address: systemcontracts.GovCouncilAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigMemberAdded, addrToHash(member)},
 		Data:    data,
 	}
 
@@ -368,8 +359,8 @@ func TestParseSystemContractEvent_MemberRemoved(t *testing.T) {
 	copy(data[32:64], common.LeftPadBytes(memberCount.Bytes(), 32))
 
 	log := &types.Log{
-		Address: constants.GovCouncilAddress,
-		Topics:  []common.Hash{constants.EventSigMemberRemoved, addrToHash(member)},
+		Address: systemcontracts.GovCouncilAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigMemberRemoved, addrToHash(member)},
 		Data:    data,
 	}
 
@@ -386,8 +377,8 @@ func TestParseSystemContractEvent_ProposalCreated(t *testing.T) {
 	proposer := common.HexToAddress("0x6666")
 
 	log := &types.Log{
-		Address: constants.GovCouncilAddress,
-		Topics:  []common.Hash{constants.EventSigProposalCreated, common.BigToHash(proposalId), addrToHash(proposer)},
+		Address: systemcontracts.GovCouncilAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigProposalCreated, common.BigToHash(proposalId), addrToHash(proposer)},
 	}
 
 	event, err := handler.ParseSystemContractEvent(log)
@@ -407,8 +398,8 @@ func TestParseSystemContractEvent_ProposalVoted(t *testing.T) {
 	data[31] = 1
 
 	log := &types.Log{
-		Address: constants.GovCouncilAddress,
-		Topics:  []common.Hash{constants.EventSigProposalVoted, common.BigToHash(proposalId), addrToHash(voter)},
+		Address: systemcontracts.GovCouncilAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigProposalVoted, common.BigToHash(proposalId), addrToHash(voter)},
 		Data:    data,
 	}
 
@@ -428,8 +419,8 @@ func TestParseSystemContractEvent_ProposalExecuted(t *testing.T) {
 	data[31] = 1 // success = true
 
 	log := &types.Log{
-		Address: constants.GovCouncilAddress,
-		Topics:  []common.Hash{constants.EventSigProposalExecuted, common.BigToHash(proposalId), addrToHash(executor)},
+		Address: systemcontracts.GovCouncilAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigProposalExecuted, common.BigToHash(proposalId), addrToHash(executor)},
 		Data:    data,
 	}
 
@@ -447,8 +438,8 @@ func TestParseSystemContractEvent_AddressBlacklisted(t *testing.T) {
 	data := common.LeftPadBytes(proposalId.Bytes(), 32)
 
 	log := &types.Log{
-		Address: constants.GovCouncilAddress,
-		Topics:  []common.Hash{constants.EventSigAddressBlacklisted, addrToHash(account)},
+		Address: systemcontracts.GovCouncilAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigAddressBlacklisted, addrToHash(account)},
 		Data:    data,
 	}
 
@@ -466,8 +457,8 @@ func TestParseSystemContractEvent_AddressUnblacklisted(t *testing.T) {
 	data := common.LeftPadBytes(proposalId.Bytes(), 32)
 
 	log := &types.Log{
-		Address: constants.GovCouncilAddress,
-		Topics:  []common.Hash{constants.EventSigAddressUnblacklisted, addrToHash(account)},
+		Address: systemcontracts.GovCouncilAddress,
+		Topics:  []common.Hash{systemcontracts.EventSigAddressUnblacklisted, addrToHash(account)},
 		Data:    data,
 	}
 
@@ -480,7 +471,7 @@ func TestParseSystemContractEvent_UnknownEvent(t *testing.T) {
 	handler := NewSystemContractsHandler(zap.NewNop())
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
+		Address: systemcontracts.NativeCoinAdapterAddress,
 		Topics:  []common.Hash{common.HexToHash("0xunknownsig")},
 		Data:    []byte{0x01, 0x02, 0x03},
 	}
@@ -496,7 +487,7 @@ func TestParseSystemContractEvent_UnknownEvent(t *testing.T) {
 func TestGetTokenMetadata(t *testing.T) {
 	handler := NewSystemContractsHandler(zap.NewNop())
 
-	meta := handler.GetTokenMetadata(constants.NativeCoinAdapterAddress)
+	meta := handler.GetTokenMetadata(systemcontracts.NativeCoinAdapterAddress)
 	// May be nil if not configured, just ensure no panic
 	_ = meta
 }

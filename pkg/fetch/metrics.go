@@ -30,6 +30,10 @@ type RPCMetrics struct {
 	consecutiveErrors  uint64
 	maxConsecutiveErrs uint64
 
+	// Chain reorganizations rolled back, and blocks rolled back in total
+	reorgs        uint64
+	reorgedBlocks uint64
+
 	// Throughput tracking
 	blocksProcessed      uint64
 	receiptsProcessed    uint64
@@ -338,4 +342,19 @@ func (m *RPCMetrics) Reset() {
 	m.startTime = time.Now()
 	m.lastThroughputUpdate = time.Now()
 	m.currentThroughput = 0
+}
+
+// RecordReorg records a chain reorganization that rolled back depth blocks.
+func (m *RPCMetrics) RecordReorg(depth uint64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.reorgs++
+	m.reorgedBlocks += depth
+}
+
+// Reorgs returns the number of reorganizations and of rolled back blocks.
+func (m *RPCMetrics) Reorgs() (count, blocks uint64) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.reorgs, m.reorgedBlocks
 }

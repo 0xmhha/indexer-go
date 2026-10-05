@@ -137,21 +137,9 @@ func TestAdapter_TransactionParser(t *testing.T) {
 	assert.NotNil(t, tp)
 }
 
-func TestAdapter_ConsensusParser_Default(t *testing.T) {
-	adapter := NewAdapter(&mockClient{}, nil, zap.NewNop())
-	assert.Nil(t, adapter.ConsensusParser())
-}
-
 func TestAdapter_SystemContracts_Default(t *testing.T) {
 	adapter := NewAdapter(&mockClient{}, nil, zap.NewNop())
 	assert.Nil(t, adapter.SystemContracts())
-}
-
-func TestAdapter_SetConsensusParser(t *testing.T) {
-	adapter := NewAdapter(&mockClient{}, nil, zap.NewNop())
-	// Just test that it doesn't panic and can be retrieved
-	adapter.SetConsensusParser(nil)
-	assert.Nil(t, adapter.ConsensusParser())
 }
 
 func TestAdapter_GetClient(t *testing.T) {

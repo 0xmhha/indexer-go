@@ -39,6 +39,21 @@ func (p *SetCodeProcessor) ProcessSetCodeTransaction(
 	block *types.Block,
 	txIndex uint64,
 ) error {
+	return p.ProcessSetCodeTransactionAt(ctx, tx, receipt, block.NumberU64(), block.Hash(), block.Time(), txIndex)
+}
+
+// ProcessSetCodeTransactionAt is ProcessSetCodeTransaction with the block
+// given by number, hash and time, so the caller supplies the hash the chain
+// reports (the go-ethereum block hash is wrong for WBFT blocks, D16).
+func (p *SetCodeProcessor) ProcessSetCodeTransactionAt(
+	ctx context.Context,
+	tx *types.Transaction,
+	receipt *types.Receipt,
+	blockNumber uint64,
+	blockHash common.Hash,
+	blockTimestamp uint64,
+	txIndex uint64,
+) error {
 	// Only process SetCode transactions (type 0x04)
 	if tx.Type() != types.SetCodeTxType {
 		return nil
@@ -51,9 +66,7 @@ func (p *SetCodeProcessor) ProcessSetCodeTransaction(
 		return nil
 	}
 
-	blockNumber := block.NumberU64()
-	blockHash := block.Hash()
-	blockTime := time.Unix(int64(block.Time()), 0)
+	blockTime := time.Unix(int64(blockTimestamp), 0)
 	txHash := tx.Hash()
 
 	// Determine if the transaction was successful
@@ -102,6 +115,7 @@ func (p *SetCodeProcessor) ProcessSetCodeTransaction(
 				Address:           record.AuthorityAddress,
 				LastUpdatedBlock:  blockNumber,
 				LastUpdatedTxHash: txHash,
+				UpdatedAt:         blockTime, // block time keeps reindexing deterministic
 			}
 
 			// Check if this is clearing delegation (target is zero address)

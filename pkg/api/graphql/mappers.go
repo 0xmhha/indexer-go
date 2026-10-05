@@ -3,53 +3,59 @@ package graphql
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/0xmhha/indexer-go/pkg/abi"
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"go.uber.org/zap"
 )
 
-// blockToMap converts a block to a GraphQL-friendly map
-func (s *Schema) blockToMap(block *types.Block) map[string]interface{} {
+// blockToMap converts a block to a GraphQL-friendly map. Hashes are the ones
+// the chain reports.
+func (s *Schema) blockToMap(block *model.Block) map[string]interface{} {
 	if block == nil {
 		return nil
 	}
 
-	txs := block.Transactions()
-	blockTimestamp := fmt.Sprintf("%d", block.Header().Time)
-	transactions := make([]interface{}, len(txs))
-	for i, tx := range txs {
+	blockTimestamp := fmt.Sprintf("%d", block.Time)
+	transactions := make([]interface{}, len(block.Transactions))
+	for i, tx := range block.Transactions {
 		txMap := s.transactionToMap(tx, &storage.TxLocation{
-			BlockHeight: block.NumberU64(),
-			BlockHash:   block.Hash(),
+			BlockHeight: block.Number,
+			BlockHash:   block.Hash,
 			TxIndex:     uint64(i),
 		})
 		txMap["blockTimestamp"] = blockTimestamp
 		transactions[i] = txMap
 	}
 
-	uncles := block.Uncles()
-	uncleHashes := make([]interface{}, len(uncles))
-	for i, uncle := range uncles {
-		uncleHashes[i] = uncle.Hash().Hex()
+	uncleHashes := make([]interface{}, len(block.Uncles))
+	for i, uncle := range block.Uncles {
+		uncleHashes[i] = uncle.Hex()
+	}
+
+	difficulty := "0"
+	if block.Difficulty != nil {
+		difficulty = block.Difficulty.String()
 	}
 
 	result := map[string]interface{}{
-		"number":           fmt.Sprintf("%d", block.NumberU64()),
-		"hash":             block.Hash().Hex(),
-		"parentHash":       block.ParentHash().Hex(),
-		"timestamp":        fmt.Sprintf("%d", block.Time()),
-		"nonce":            fmt.Sprintf("0x%x", block.Nonce()),
-		"miner":            block.Coinbase().Hex(),
-		"difficulty":       block.Difficulty().String(),
-		"totalDifficulty":  nil, // Not available in types.Block
-		"gasLimit":         fmt.Sprintf("%d", block.GasLimit()),
-		"gasUsed":          fmt.Sprintf("%d", block.GasUsed()),
+		"number":           fmt.Sprintf("%d", block.Number),
+		"hash":             block.Hash.Hex(),
+		"parentHash":       block.ParentHash.Hex(),
+		"timestamp":        blockTimestamp,
+		"nonce":            fmt.Sprintf("0x%x", block.Nonce),
+		"miner":            block.Miner.Hex(),
+		"difficulty":       difficulty,
+		"totalDifficulty":  nil, // not tracked
+		"gasLimit":         fmt.Sprintf("%d", block.GasLimit),
+		"gasUsed":          fmt.Sprintf("%d", block.GasUsed),
 		"baseFeePerGas":    nil, // EIP-1559
-		"extraData":        fmt.Sprintf("0x%x", block.Extra()),
-		"size":             fmt.Sprintf("%d", block.Size()),
+		"extraData":        fmt.Sprintf("0x%x", block.Extra),
+		"size":             fmt.Sprintf("%d", block.Size),
 		"transactions":     transactions,
 		"transactionCount": len(transactions),
 		"uncles":           uncleHashes,
@@ -58,30 +64,26 @@ func (s *Schema) blockToMap(block *types.Block) map[string]interface{} {
 		"excessBlobGas":    nil, // EIP-4844
 	}
 
-	// EIP-1559: Base fee per gas
-	if baseFee := block.BaseFee(); baseFee != nil {
-		result["baseFeePerGas"] = baseFee.String()
+	if block.BaseFee != nil {
+		result["baseFeePerGas"] = block.BaseFee.String()
 	}
-
-	// Post-Shanghai: Withdrawals root
-	header := block.Header()
-	if header.WithdrawalsHash != nil {
-		result["withdrawalsRoot"] = header.WithdrawalsHash.Hex()
+	if block.WithdrawalsRoot != nil {
+		result["withdrawalsRoot"] = block.WithdrawalsRoot.Hex()
 	}
-
-	// EIP-4844: Blob gas fields
-	if header.BlobGasUsed != nil {
-		result["blobGasUsed"] = fmt.Sprintf("%d", *header.BlobGasUsed)
+	if block.BlobGasUsed != nil {
+		result["blobGasUsed"] = fmt.Sprintf("%d", *block.BlobGasUsed)
 	}
-	if header.ExcessBlobGas != nil {
-		result["excessBlobGas"] = fmt.Sprintf("%d", *header.ExcessBlobGas)
+	if block.ExcessBlobGas != nil {
+		result["excessBlobGas"] = fmt.Sprintf("%d", *block.ExcessBlobGas)
 	}
 
 	return result
 }
 
-// transactionToMap converts a transaction to a GraphQL-friendly map
-func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLocation) map[string]interface{} {
+// transactionToMap converts a transaction to a GraphQL-friendly map. The
+// hash, type and sender are the ones the chain reports, so a StableNet fee
+// delegation transaction appears as type 22 under its own hash.
+func (s *Schema) transactionToMap(tx *model.Transaction, location *storage.TxLocation) map[string]interface{} {
 	if tx == nil {
 		return nil
 	}
@@ -101,59 +103,38 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 	}
 
 	// Handle signature values (can be nil for some tx types)
-	v, r, sigS := tx.RawSignatureValues()
-	var vStr, rStr, sStr string
-	if v != nil {
+	vStr, rStr, sStr := "0", "0x0", "0x0"
+	if v := tx.Signature.V; v != nil {
 		vStr = v.String()
-	} else {
-		vStr = "0"
 	}
-	if r != nil {
+	if r := tx.Signature.R; r != nil {
 		rStr = fmt.Sprintf("0x%x", r.Bytes())
-	} else {
-		rStr = "0x0"
 	}
-	if sigS != nil {
+	if sigS := tx.Signature.S; sigS != nil {
 		sStr = fmt.Sprintf("0x%x", sigS.Bytes())
-	} else {
-		sStr = "0x0"
 	}
 
-	// Handle potentially nil ChainId for sender derivation
-	var from common.Address
-	chainId := tx.ChainId()
-	if chainId != nil {
-		var err error
-		from, err = types.Sender(types.LatestSignerForChainID(chainId), tx)
-		if err != nil {
-			s.logger.Warn("failed to get transaction sender", zap.Error(err))
-		}
-	}
-
-	// Handle potentially nil Value
-	var valueStr string
-	if tx.Value() != nil {
-		valueStr = tx.Value().String()
-	} else {
-		valueStr = "0"
+	valueStr := "0"
+	if tx.Value != nil {
+		valueStr = tx.Value.String()
 	}
 
 	result := map[string]interface{}{
-		"hash":                 tx.Hash().Hex(),
+		"hash":                 tx.Hash.Hex(),
 		"blockNumber":          blockNumber,
 		"blockHash":            blockHash,
 		"transactionIndex":     txIndex,
-		"from":                 from.Hex(),
+		"from":                 tx.From.Hex(),
 		"to":                   nil,
 		"contractAddress":      nil,
 		"value":                valueStr,
-		"gas":                  fmt.Sprintf("%d", tx.Gas()),
+		"gas":                  fmt.Sprintf("%d", tx.Gas),
 		"gasPrice":             nil,
 		"maxFeePerGas":         nil,
 		"maxPriorityFeePerGas": nil,
-		"type":                 int(tx.Type()),
-		"input":                fmt.Sprintf("0x%x", tx.Data()),
-		"nonce":                fmt.Sprintf("%d", tx.Nonce()),
+		"type":                 int(tx.Type),
+		"input":                fmt.Sprintf("0x%x", tx.Input),
+		"nonce":                fmt.Sprintf("%d", tx.Nonce),
 		"v":                    vStr,
 		"r":                    rStr,
 		"s":                    sStr,
@@ -168,39 +149,35 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 		"authorizationList": nil,
 	}
 
-	if tx.To() != nil {
-		result["to"] = tx.To().Hex()
+	if tx.To != nil {
+		result["to"] = tx.To.Hex()
 	} else {
 		// Contract creation transaction - look up the receipt to get the contract address
 		if s.storage != nil {
-			receipt, err := s.storage.GetReceipt(context.Background(), tx.Hash())
+			receipt, err := s.storage.GetReceipt(context.Background(), tx.Hash)
 			if err == nil && receipt != nil && receipt.ContractAddress != (common.Address{}) {
 				result["contractAddress"] = receipt.ContractAddress.Hex()
 			}
 		}
 	}
 
-	if tx.GasPrice() != nil {
-		result["gasPrice"] = tx.GasPrice().String()
+	if tx.GasPrice != nil {
+		result["gasPrice"] = tx.GasPrice.String()
+	}
+	if tx.GasFeeCap != nil {
+		result["maxFeePerGas"] = tx.GasFeeCap.String()
+	}
+	if tx.GasTipCap != nil {
+		result["maxPriorityFeePerGas"] = tx.GasTipCap.String()
+	}
+	if tx.ChainID != nil {
+		result["chainId"] = tx.ChainID.String()
 	}
 
-	if tx.GasFeeCap() != nil {
-		result["maxFeePerGas"] = tx.GasFeeCap().String()
-	}
-
-	if tx.GasTipCap() != nil {
-		result["maxPriorityFeePerGas"] = tx.GasTipCap().String()
-	}
-
-	if tx.ChainId() != nil {
-		result["chainId"] = tx.ChainId().String()
-	}
-
-	// Access list for EIP-2930 and EIP-1559 transactions
-	if tx.Type() >= types.AccessListTxType {
-		accessList := tx.AccessList()
-		accessListMap := make([]interface{}, len(accessList))
-		for i, entry := range accessList {
+	// Access list for EIP-2930 and later typed transactions
+	if tx.Type >= types.AccessListTxType {
+		accessListMap := make([]interface{}, len(tx.AccessList))
+		for i, entry := range tx.AccessList {
 			storageKeys := make([]interface{}, len(entry.StorageKeys))
 			for j, key := range entry.StorageKeys {
 				storageKeys[j] = key.Hex()
@@ -214,48 +191,64 @@ func (s *Schema) transactionToMap(tx *types.Transaction, location *storage.TxLoc
 	}
 
 	// EIP-7702 SetCode transaction (type 0x04 = 4)
-	if tx.Type() == types.SetCodeTxType {
-		authList := tx.SetCodeAuthorizations()
-		if len(authList) > 0 {
-			authListMap := make([]interface{}, len(authList))
-			for i, auth := range authList {
-				authEntry := map[string]interface{}{
-					"chainId":   auth.ChainID.String(),
-					"address":   auth.Address.Hex(),
-					"nonce":     fmt.Sprintf("%d", auth.Nonce),
-					"yParity":   int(auth.V),
-					"r":         fmt.Sprintf("0x%x", auth.R.Bytes()),
-					"s":         fmt.Sprintf("0x%x", auth.S.Bytes()),
-					"authority": nil,
-				}
-				// Try to derive authority address
-				if authority, err := auth.Authority(); err == nil {
-					authEntry["authority"] = authority.Hex()
-				}
-				authListMap[i] = authEntry
+	if tx.Type == types.SetCodeTxType && len(tx.AuthList) > 0 {
+		authListMap := make([]interface{}, len(tx.AuthList))
+		for i, auth := range tx.AuthList {
+			authEntry := map[string]interface{}{
+				"chainId":   bigString(auth.ChainID),
+				"address":   auth.Address.Hex(),
+				"nonce":     fmt.Sprintf("%d", auth.Nonce),
+				"yParity":   int(auth.V),
+				"r":         fmt.Sprintf("0x%x", bigBytes(auth.R)),
+				"s":         fmt.Sprintf("0x%x", bigBytes(auth.S)),
+				"authority": nil,
 			}
-			result["authorizationList"] = authListMap
+			// Try to derive authority address
+			gauth := gethconv.AuthToGeth(auth)
+			if authority, err := gauth.Authority(); err == nil {
+				authEntry["authority"] = authority.Hex()
+			}
+			authListMap[i] = authEntry
 		}
+		result["authorizationList"] = authListMap
 	}
 
 	// Fee Delegation transaction (type 0x16 = 22)
-	// Fee payer metadata is stored separately by the fetcher and retrieved from storage
-	const FeeDelegateDynamicFeeTxType = 22
-	if tx.Type() == FeeDelegateDynamicFeeTxType {
-		if fdReader, ok := s.storage.(storage.FeeDelegationReader); ok {
-			if meta, err := fdReader.GetFeeDelegationTxMeta(context.Background(), tx.Hash()); err == nil && meta != nil {
-				result["feePayer"] = meta.FeePayer.Hex()
-				sig := map[string]interface{}{
-					"v": meta.FeePayerV.String(),
-					"r": fmt.Sprintf("0x%x", meta.FeePayerR),
-					"s": fmt.Sprintf("0x%x", meta.FeePayerS),
-				}
-				result["feePayerSignatures"] = []interface{}{sig}
-			}
-		}
+	if feePayer, v, r, sig, ok := s.feeDelegation(tx); ok {
+		result["feePayer"] = feePayer.Hex()
+		result["feePayerSignatures"] = []interface{}{map[string]interface{}{
+			"v": v.String(),
+			"r": fmt.Sprintf("0x%x", r),
+			"s": fmt.Sprintf("0x%x", sig),
+		}}
 	}
 
 	return result
+}
+
+// feeDelegation returns the fee payer and its signature of a fee delegation
+// transaction: from the transaction itself when the chain profile decoded
+// it, otherwise from the metadata stored by the legacy ingest path.
+func (s *Schema) feeDelegation(tx *model.Transaction) (common.Address, *big.Int, *big.Int, *big.Int, bool) {
+	fd, ok := storage.FeeDelegationOf(context.Background(), s.storage, tx)
+	if !ok {
+		return common.Address{}, nil, nil, nil, false
+	}
+	return fd.Payer, fd.V, fd.R, fd.S, true
+}
+
+func bigString(x *big.Int) string {
+	if x == nil {
+		return "0"
+	}
+	return x.String()
+}
+
+func bigBytes(x *big.Int) []byte {
+	if x == nil {
+		return nil
+	}
+	return x.Bytes()
 }
 
 // receiptToMap converts a receipt to a GraphQL-friendly map

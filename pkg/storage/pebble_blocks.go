@@ -7,6 +7,8 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 )
 
 // ============================================================================
@@ -19,7 +21,7 @@ func (s *PebbleStorage) GetLatestHeight(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
-	value, closer, err := s.db.Get(LatestHeightKey())
+	value, closer, err := s.kv(ctx).Get(LatestHeightKey())
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return 0, ErrNotFound
@@ -47,7 +49,7 @@ func (s *PebbleStorage) SetLatestHeight(ctx context.Context, height uint64) erro
 
 	value := EncodeUint64(height)
 	// Use NoSync for performance - caller can use Sync() if needed
-	return s.db.Set(LatestHeightKey(), value, pebble.NoSync)
+	return s.kv(ctx).Set(LatestHeightKey(), value, pebble.NoSync)
 }
 
 // Sync forces a sync of all pending writes to disk
@@ -64,7 +66,7 @@ func (s *PebbleStorage) GetBlock(ctx context.Context, height uint64) (*types.Blo
 		return nil, err
 	}
 
-	value, closer, err := s.db.Get(BlockKey(height))
+	value, closer, err := s.kv(ctx).Get(BlockKey(height))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -88,7 +90,7 @@ func (s *PebbleStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*
 	}
 
 	// Get block height from hash index
-	value, closer, err := s.db.Get(BlockHashIndexKey(hash))
+	value, closer, err := s.kv(ctx).Get(BlockHashIndexKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, ErrNotFound
@@ -106,51 +108,17 @@ func (s *PebbleStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*
 	return s.GetBlock(ctx, height)
 }
 
-// SetBlock stores a block
+// SetBlock stores a block. It converts the block to the model and stores it
+// like SetModelBlock.
 func (s *PebbleStorage) SetBlock(ctx context.Context, block *types.Block) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
 	if block == nil {
 		return fmt.Errorf("block cannot be nil")
 	}
-
-	encoded, err := EncodeBlock(block)
+	m, err := gethconv.BlockFromGeth(block)
 	if err != nil {
 		return fmt.Errorf("failed to encode block: %w", err)
 	}
-
-	height := block.Number().Uint64()
-
-	// Store block data - use NoSync for performance
-	if err := s.db.Set(BlockKey(height), encoded, pebble.NoSync); err != nil {
-		return fmt.Errorf("failed to set block: %w", err)
-	}
-
-	// Store block hash index
-	heightBytes := EncodeUint64(height)
-	if err := s.db.Set(BlockHashIndexKey(block.Hash()), heightBytes, pebble.NoSync); err != nil {
-		return fmt.Errorf("failed to set block hash index: %w", err)
-	}
-
-	// Store all transactions in the block
-	transactions := block.Transactions()
-	for txIndex, tx := range transactions {
-		location := &TxLocation{
-			BlockHeight: height,
-			TxIndex:     uint64(txIndex),
-			BlockHash:   block.Hash(),
-		}
-		if err := s.SetTransaction(ctx, tx, location); err != nil {
-			return fmt.Errorf("failed to store transaction %d in block %d: %w", txIndex, height, err)
-		}
-	}
-
-	return nil
+	return s.SetModelBlock(ctx, m)
 }
 
 // SetBlockWithReceipts stores a block with all its receipts in a single batch operation
@@ -175,7 +143,7 @@ func (s *PebbleStorage) SetBlockWithReceipts(ctx context.Context, block *types.B
 		}
 	}
 
-	batch := s.db.NewBatch()
+	batch := s.newBatch(ctx)
 	defer batch.Close()
 
 	// Encode and add block
@@ -246,7 +214,7 @@ func (s *PebbleStorage) SetBlockWithReceipts(ctx context.Context, block *types.B
 	}
 
 	// Update transaction count atomically
-	newCount := s.txCount.Add(txCountDelta)
+	newCount := s.addTxCount(ctx, txCountDelta)
 	if err := batch.Set(TransactionCountKey(), EncodeUint64(newCount), nil); err != nil {
 		return fmt.Errorf("failed to update transaction count: %w", err)
 	}
@@ -257,7 +225,7 @@ func (s *PebbleStorage) SetBlockWithReceipts(ctx context.Context, block *types.B
 	}
 
 	// Single Sync at the end
-	return batch.Commit(pebble.Sync)
+	return s.commitBatch(ctx, batch, pebble.Sync)
 }
 
 // GetBlocks returns multiple blocks by height range
@@ -291,7 +259,7 @@ func (s *PebbleStorage) SetBlocks(ctx context.Context, blocks []*types.Block) er
 		return err
 	}
 
-	batch := s.NewBatch()
+	batch := s.newBatchCtx(ctx)
 	defer batch.Close()
 
 	for _, block := range blocks {
@@ -322,12 +290,12 @@ func (s *PebbleStorage) DeleteBlock(ctx context.Context, height uint64) error {
 	}
 
 	// Delete block hash index
-	if err := s.db.Delete(BlockHashIndexKey(block.Hash()), pebble.Sync); err != nil {
+	if err := s.kv(ctx).Delete(BlockHashIndexKey(block.Hash()), pebble.Sync); err != nil {
 		return fmt.Errorf("failed to delete block hash index: %w", err)
 	}
 
 	// Delete block data
-	return s.db.Delete(BlockKey(height), pebble.Sync)
+	return s.kv(ctx).Delete(BlockKey(height), pebble.Sync)
 }
 
 // HasBlock checks if a block exists at given height
@@ -336,7 +304,7 @@ func (s *PebbleStorage) HasBlock(ctx context.Context, height uint64) (bool, erro
 		return false, err
 	}
 
-	_, closer, err := s.db.Get(BlockKey(height))
+	_, closer, err := s.kv(ctx).Get(BlockKey(height))
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return false, nil

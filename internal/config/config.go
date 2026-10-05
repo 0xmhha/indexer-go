@@ -14,6 +14,7 @@ import (
 // Config holds all configuration for the indexer
 type Config struct {
 	RPC             RPCConfig             `yaml:"rpc"`
+	Source          SourceConfig          `yaml:"source"`
 	Database        DatabaseConfig        `yaml:"database"`
 	Log             LogConfig             `yaml:"log"`
 	Indexer         IndexerConfig         `yaml:"indexer"`
@@ -27,12 +28,45 @@ type Config struct {
 	Node                NodeConfig                `yaml:"node"`
 	Verifier            VerifierConfig            `yaml:"verifier"`
 	AccountAbstraction  AccountAbstractionConfig  `yaml:"account_abstraction"`
+	// Features turns registered features on or off (pkg/feature). Features
+	// not listed keep the chain profile's default.
+	Features map[string]FeatureConfig `yaml:"features"`
+}
+
+// FeatureConfig configures one feature.
+type FeatureConfig struct {
+	Enabled *bool `yaml:"enabled"`
+}
+
+// FeatureOverrides returns the features explicitly turned on (true) or off
+// (false) by the configuration.
+func (c *Config) FeatureOverrides() map[string]bool {
+	out := map[string]bool{}
+	for name, fc := range c.Features {
+		if fc.Enabled != nil {
+			out[name] = *fc.Enabled
+		}
+	}
+	return out
 }
 
 // RPCConfig holds RPC client configuration
 type RPCConfig struct {
+	// Endpoint is the node's JSON-RPC URL, or "replay:///dir" to serve a
+	// recorded archive instead of a node (pkg/source/replay).
 	Endpoint string        `yaml:"endpoint"`
 	Timeout  time.Duration `yaml:"timeout"`
+	// RecordDir, when set, records every JSON-RPC call to the node into an
+	// archive in this directory while indexing.
+	RecordDir string `yaml:"record_dir"`
+}
+
+// SourceConfig selects where block data comes from besides the node.
+type SourceConfig struct {
+	// EraDir, when set, reads the blocks held by the era1 archives in this
+	// directory (exported by the node client) from the files, and every
+	// later block from the node. Requires indexer.profile_source.
+	EraDir string `yaml:"era_dir"`
 }
 
 // DatabaseConfig holds database configuration
@@ -63,6 +97,27 @@ type IndexerConfig struct {
 	Workers     int    `yaml:"workers"`
 	ChunkSize   int    `yaml:"chunk_size"`
 	StartHeight uint64 `yaml:"start_height"`
+	// AtomicBlock indexes each block in one storage transaction (default
+	// true). Setting it to false selects the legacy write path, which is
+	// kept for one release as a fallback and then removed.
+	AtomicBlock bool `yaml:"atomic_block"`
+	// ProfileSource reads blocks as raw JSON decoded by the node's chain
+	// profile (default true), so chain-specific transaction types and block
+	// hash rules are kept. Setting it to false selects the legacy
+	// go-ethereum client path, kept for one release as a fallback.
+	ProfileSource bool `yaml:"profile_source"`
+	// PollInterval is how long the live loop waits before asking the node
+	// for a new head once it has caught up (default 50ms). It bounds the
+	// delay between a block appearing on the node and indexing starting.
+	PollInterval time.Duration `yaml:"poll_interval"`
+	// Finality selects how far the live loop indexes: "head" (default,
+	// newest block; reorganizations are rolled back), "confirmations"
+	// (head minus Confirmations) or "finalized" (the node's finalized
+	// block). Rollback stays active under every policy.
+	Finality string `yaml:"finality"`
+	// Confirmations is how many blocks behind the head the live loop stays
+	// with finality "confirmations".
+	Confirmations uint64 `yaml:"confirmations"`
 }
 
 // APIConfig holds API server configuration
@@ -188,6 +243,10 @@ type EventBusConfig struct {
 	Type string `yaml:"type"`
 	// PublishBufferSize is the size of the publish buffer
 	PublishBufferSize int `yaml:"publish_buffer_size"`
+	// SubscriberBufferSize is the channel size of each API subscription
+	// (GraphQL subscriptions, JSON-RPC pending pool). Events are dropped for
+	// a subscriber only when its channel is full.
+	SubscriberBufferSize int `yaml:"subscriber_buffer_size"`
 	// HistorySize is the number of events to keep in history for replay
 	HistorySize int `yaml:"history_size"`
 	// Redis holds Redis EventBus configuration
@@ -421,12 +480,27 @@ type StorageNotificationConfig struct {
 func NewConfig() *Config {
 	cfg := &Config{}
 	cfg.SetDefaults()
+	// Account abstraction indexing is on unless a config file sets
+	// account_abstraction.enabled: false. This is set here, not in
+	// SetDefaults, because SetDefaults runs again after the file is loaded
+	// and cannot tell an omitted bool from an explicit false.
+	cfg.AccountAbstraction.Enabled = true
+	// Same reasoning: atomic block indexing is the default, and an explicit
+	// false in the file or INDEXER_ATOMIC_BLOCK=false selects the legacy path.
+	cfg.Indexer.AtomicBlock = true
+	cfg.Indexer.ProfileSource = true
+	// WebSocket keep-alive pings keep idle subscribers connected; it can be
+	// disabled with api.enable_websocket_keepalive: false.
+	cfg.API.EnableWebSocketKeepAlive = true
 	return cfg
 }
 
 // SetDefaults sets default values for the configuration
 func (c *Config) SetDefaults() {
 	// RPC defaults
+	if c.Indexer.PollInterval == 0 {
+		c.Indexer.PollInterval = 50 * time.Millisecond
+	}
 	if c.RPC.Timeout == 0 {
 		c.RPC.Timeout = constants.DefaultQueryTimeout
 	}
@@ -570,7 +644,10 @@ func (c *Config) SetDefaults() {
 		c.EventBus.Type = "local"
 	}
 	if c.EventBus.PublishBufferSize == 0 {
-		c.EventBus.PublishBufferSize = 1000
+		c.EventBus.PublishBufferSize = constants.DefaultEventBusPublishBuffer
+	}
+	if c.EventBus.SubscriberBufferSize == 0 {
+		c.EventBus.SubscriberBufferSize = constants.DefaultEventBusSubscriberBuffer
 	}
 	if c.EventBus.HistorySize == 0 {
 		c.EventBus.HistorySize = 100
@@ -657,6 +734,29 @@ func (c *Config) LoadFromEnv() error {
 	if endpoint := os.Getenv("INDEXER_RPC_ENDPOINT"); endpoint != "" {
 		c.RPC.Endpoint = endpoint
 	}
+	if v := os.Getenv("INDEXER_FINALITY"); v != "" {
+		c.Indexer.Finality = v
+	}
+	if v := os.Getenv("INDEXER_CONFIRMATIONS"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_CONFIRMATIONS: %w", err)
+		}
+		c.Indexer.Confirmations = n
+	}
+	if v := os.Getenv("INDEXER_POLL_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_POLL_INTERVAL: %w", err)
+		}
+		c.Indexer.PollInterval = d
+	}
+	if v := os.Getenv("INDEXER_RPC_RECORD_DIR"); v != "" {
+		c.RPC.RecordDir = v
+	}
+	if v := os.Getenv("INDEXER_SOURCE_ERA_DIR"); v != "" {
+		c.Source.EraDir = v
+	}
 	if timeout := os.Getenv("INDEXER_RPC_TIMEOUT"); timeout != "" {
 		duration, err := time.ParseDuration(timeout)
 		if err != nil {
@@ -706,6 +806,35 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_START_HEIGHT: %w", err)
 		}
 		c.Indexer.StartHeight = val
+	}
+	if atomic := os.Getenv("INDEXER_ATOMIC_BLOCK"); atomic != "" {
+		val, err := strconv.ParseBool(atomic)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_ATOMIC_BLOCK: %w", err)
+		}
+		c.Indexer.AtomicBlock = val
+	}
+	if v := os.Getenv("INDEXER_PROFILE_SOURCE"); v != "" {
+		val, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_PROFILE_SOURCE: %w", err)
+		}
+		c.Indexer.ProfileSource = val
+	}
+	// INDEXER_FEATURES=name1,-name2 turns name1 on and name2 off.
+	if v := os.Getenv("INDEXER_FEATURES"); v != "" {
+		if c.Features == nil {
+			c.Features = map[string]FeatureConfig{}
+		}
+		for _, item := range strings.Split(v, ",") {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			on := !strings.HasPrefix(item, "-")
+			name := strings.TrimPrefix(item, "-")
+			c.Features[name] = FeatureConfig{Enabled: &on}
+		}
 	}
 
 	// API configuration
@@ -854,6 +983,13 @@ func (c *Config) LoadFromEnv() error {
 		}
 		c.EventBus.PublishBufferSize = val
 	}
+	if v := os.Getenv("INDEXER_EVENTBUS_SUBSCRIBER_BUFFER_SIZE"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_EVENTBUS_SUBSCRIBER_BUFFER_SIZE: %w", err)
+		}
+		c.EventBus.SubscriberBufferSize = val
+	}
 	if historySize := os.Getenv("INDEXER_EVENTBUS_HISTORY_SIZE"); historySize != "" {
 		val, err := strconv.Atoi(historySize)
 		if err != nil {
@@ -971,6 +1107,18 @@ func (c *Config) Validate() error {
 	if c.RPC.Timeout <= 0 {
 		return fmt.Errorf("RPC timeout must be positive")
 	}
+	if c.Source.EraDir != "" && !c.Indexer.ProfileSource {
+		return fmt.Errorf("source.era_dir requires indexer.profile_source")
+	}
+	switch c.Indexer.Finality {
+	case "", "head", "finalized":
+	case "confirmations":
+		if c.Indexer.Confirmations == 0 {
+			return fmt.Errorf("indexer.finality confirmations requires indexer.confirmations > 0")
+		}
+	default:
+		return fmt.Errorf("invalid indexer.finality %q, must be one of: head, confirmations, finalized", c.Indexer.Finality)
+	}
 
 	// Validate database configuration
 	if c.Database.Path == "" {
@@ -1058,6 +1206,20 @@ func (c *Config) Validate() error {
 // 3. Load from environment variables (override file)
 // 4. Validate
 func Load(configFile string) (*Config, error) {
+	cfg, err := LoadUnvalidated(configFile)
+	if err != nil {
+		return nil, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+	return cfg, nil
+}
+
+// LoadUnvalidated loads defaults, the config file and environment variables
+// without validating, so that command-line flags can still supply required
+// values before Validate runs.
+func LoadUnvalidated(configFile string) (*Config, error) {
 	cfg := NewConfig()
 
 	// Load from file if provided
@@ -1075,10 +1237,24 @@ func Load(configFile string) (*Config, error) {
 	// Set defaults for any missing values
 	cfg.SetDefaults()
 
-	// Validate configuration
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
-	}
-
 	return cfg, nil
+}
+
+// UnsupportedSettings lists settings that are read but have no effect yet,
+// so startup can warn instead of silently ignoring them.
+func (c *Config) UnsupportedSettings() []string {
+	var out []string
+	if c.EventBus.Type != "" && c.EventBus.Type != "local" {
+		out = append(out, fmt.Sprintf("eventbus.type=%q is not wired; the in-process event bus is used (node.* settings are ignored too)", c.EventBus.Type))
+	}
+	if c.Watchlist.Enabled {
+		out = append(out, "watchlist.enabled is not wired; the watchlist service does not run")
+	}
+	if c.Resilience.Enabled {
+		out = append(out, "resilience.enabled is not wired; session persistence and event replay do not run")
+	}
+	if len(c.AccountAbstraction.EntryPointAddresses) > 0 {
+		out = append(out, "account_abstraction.entry_point_addresses is not supported yet; known EntryPoint addresses are used")
+	}
+	return out
 }

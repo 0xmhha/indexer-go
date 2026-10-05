@@ -165,7 +165,6 @@ func TestNewAdapter(t *testing.T) {
 		adapter, err := NewAdapter(&mockEVMClient{}, nil, zap.NewNop())
 		require.NoError(t, err)
 		require.NotNil(t, adapter)
-		assert.NotNil(t, adapter.consensusParser)
 	})
 
 	t.Run("with custom config", func(t *testing.T) {
@@ -215,23 +214,6 @@ func TestAdapter_Info(t *testing.T) {
 	assert.Equal(t, "Anvil", info.Name)
 	assert.Equal(t, "ETH", info.NativeCurrency)
 	assert.Equal(t, DefaultNativeDecimals, info.Decimals)
-}
-
-func TestAdapter_ConsensusParser(t *testing.T) {
-	t.Run("with parser", func(t *testing.T) {
-		adapter, err := NewAdapter(&mockEVMClient{}, nil, zap.NewNop())
-		require.NoError(t, err)
-		assert.NotNil(t, adapter.ConsensusParser())
-	})
-
-	t.Run("nil parser", func(t *testing.T) {
-		adapter := &Adapter{
-			config:          DefaultConfig(),
-			logger:          zap.NewNop(),
-			consensusParser: nil,
-		}
-		assert.Nil(t, adapter.ConsensusParser())
-	})
 }
 
 func TestAdapter_SystemContracts(t *testing.T) {

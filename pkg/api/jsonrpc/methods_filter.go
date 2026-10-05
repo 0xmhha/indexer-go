@@ -134,6 +134,7 @@ func (h *Handler) ethNewFilter(ctx context.Context, params json.RawMessage) (int
 
 	// Create filter
 	filterID := h.filterManager.NewFilter(LogFilterType, filter, latestHeight, decode)
+	h.advanceFilter(ctx, filterID, latestHeight)
 
 	h.logger.Debug("created new log filter",
 		zap.String("id", filterID),
@@ -159,6 +160,7 @@ func (h *Handler) ethNewBlockFilter(ctx context.Context, params json.RawMessage)
 
 	// Create block filter (decode=false since block filters don't return logs)
 	filterID := h.filterManager.NewFilter(BlockFilterType, nil, latestHeight, false)
+	h.advanceFilter(ctx, filterID, latestHeight)
 
 	h.logger.Debug("created new block filter",
 		zap.String("id", filterID),
@@ -244,7 +246,7 @@ func (h *Handler) ethGetFilterChanges(ctx context.Context, params json.RawMessag
 		}
 
 		// Update last poll block
-		h.filterManager.UpdateLastPollBlock(filterID, currentHeight)
+		h.advanceFilter(ctx, filterID, currentHeight)
 
 		// Convert logs to JSON format with decode setting from filter
 		result := make([]interface{}, len(logs))
@@ -273,7 +275,7 @@ func (h *Handler) ethGetFilterChanges(ctx context.Context, params json.RawMessag
 		}
 
 		// Update last poll block
-		h.filterManager.UpdateLastPollBlock(filterID, currentHeight)
+		h.advanceFilter(ctx, filterID, currentHeight)
 
 		// Convert to hex strings
 		result := make([]string, len(hashes))
@@ -366,4 +368,15 @@ func (h *Handler) ethGetFilterLogs(ctx context.Context, params json.RawMessage) 
 	)
 
 	return result, nil
+}
+
+// advanceFilter records that a log or block filter has seen the canonical
+// chain up to height, with the block's hash so a later poll can tell
+// whether a reorganization removed it.
+func (h *Handler) advanceFilter(ctx context.Context, id string, height uint64) {
+	var hash common.Hash
+	if b, err := storage.AsModelReader(h.storage).GetModelBlock(ctx, height); err == nil {
+		hash = b.Hash
+	}
+	h.filterManager.SetPollPoint(id, height, hash)
 }

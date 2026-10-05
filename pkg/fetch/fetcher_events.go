@@ -16,30 +16,25 @@ import (
 // ============================================================================
 
 // publishBlockEvents publishes transaction and log events to the event bus
-func (f *Fetcher) publishBlockEvents(block *types.Block, receipts types.Receipts, height uint64) {
-	transactions := block.Transactions()
+func (f *Fetcher) publishBlockEvents(fb *fetchedBlock) {
+	receipts, height := fb.gethReceipts, fb.height()
 
-	// Build receipt map for O(1) lookup (avoids O(n²) matching)
-	receiptMap := buildReceiptMap(receipts)
-
-	// Publish transaction events
-	for i, tx := range transactions {
-		// O(1) receipt lookup
-		receipt := receiptMap[tx.Hash()]
-
-		// Create and publish transaction event
+	// Publish transaction events. Hashes and the sender come from the model:
+	// the go-ethereum view of a fee delegation transaction has another hash.
+	for _, p := range fb.transactions() {
 		txEvent := events.NewTransactionEvent(
-			tx,
-			block.NumberU64(),
-			block.Hash(),
-			uint(i),
-			getTransactionSender(tx),
-			receipt,
+			p.gethTx,
+			height,
+			fb.block.Hash,
+			uint(p.index),
+			p.tx.From,
+			p.gethReceipt,
 		)
+		txEvent.Hash = p.tx.Hash
 
-		if !f.eventBus.Publish(txEvent) {
+		if !f.publish(txEvent) {
 			f.logger.Warn("Failed to publish transaction event (channel full)",
-				zap.String("tx_hash", tx.Hash().Hex()),
+				zap.String("tx_hash", p.tx.Hash.Hex()),
 				zap.Uint64("block", height),
 			)
 		}
@@ -55,164 +50,11 @@ func (f *Fetcher) publishBlockEvents(block *types.Block, receipts types.Receipts
 				continue
 			}
 			logEvent := events.NewLogEvent(logEntry)
-			if !f.eventBus.Publish(logEvent) {
+			if !f.publish(logEvent) {
 				f.logger.Warn("Failed to publish log event (channel full)",
 					zap.String("tx_hash", logEntry.TxHash.Hex()),
 					zap.Uint64("block", logEntry.BlockNumber),
 					zap.Uint("log_index", uint(logEntry.Index)),
-				)
-			}
-
-			// Detect system events from logs
-			f.detectSystemEvents(block, logEntry)
-		}
-	}
-}
-
-// detectSystemEvents detects and publishes system events from logs
-func (f *Fetcher) detectSystemEvents(block *types.Block, log *types.Log) {
-	if f.eventBus == nil {
-		return
-	}
-
-	// Use chain adapter's system contracts handler if available
-	if f.chainAdapter != nil && f.chainAdapter.SystemContracts() != nil {
-		f.detectSystemEventsWithAdapter(block, log)
-		return
-	}
-
-	// Fallback to hardcoded logic for backward compatibility
-	f.detectSystemEventsLegacy(block, log)
-}
-
-// detectSystemEventsWithAdapter uses the chain adapter to detect system events
-func (f *Fetcher) detectSystemEventsWithAdapter(block *types.Block, log *types.Log) {
-	systemContracts := f.chainAdapter.SystemContracts()
-
-	// Check if this is a system contract
-	if !systemContracts.IsSystemContract(log.Address) {
-		return
-	}
-
-	if len(log.Topics) == 0 {
-		return
-	}
-
-	// Parse the system contract event
-	scEvent, err := systemContracts.ParseSystemContractEvent(log)
-	if err != nil {
-		f.logger.Debug("Failed to parse system contract event",
-			zap.String("contract", log.Address.Hex()),
-			zap.Error(err),
-		)
-		return
-	}
-
-	// Handle validator set changes
-	if scEvent.EventName == "MemberAdded" || scEvent.EventName == "MemberRemoved" {
-		var validatorAddr common.Address
-		if member, ok := scEvent.Data["member"].(common.Address); ok {
-			validatorAddr = member
-		} else if len(log.Topics) >= 2 {
-			validatorAddr = common.BytesToAddress(log.Topics[1].Bytes())
-		}
-
-		changeType := "added"
-		if scEvent.EventName == "MemberRemoved" {
-			changeType = "removed"
-		}
-
-		validatorEvent := events.NewValidatorSetEvent(
-			block.NumberU64(),
-			block.Hash(),
-			changeType,
-			validatorAddr,
-			"",
-			0,
-		)
-
-		if !f.eventBus.Publish(validatorEvent) {
-			f.logger.Warn("Failed to publish validator set event (channel full)",
-				zap.String("type", changeType),
-				zap.String("validator", validatorAddr.Hex()),
-				zap.Uint64("block", block.NumberU64()),
-			)
-		} else {
-			f.logger.Info("Validator "+changeType,
-				zap.String("validator", validatorAddr.Hex()),
-				zap.Uint64("block", block.NumberU64()),
-			)
-		}
-	}
-}
-
-// detectSystemEventsLegacy uses hardcoded logic for backward compatibility
-func (f *Fetcher) detectSystemEventsLegacy(block *types.Block, log *types.Log) {
-	// Check if this is a GovValidator contract event
-	if log.Address != events.GovValidatorAddress {
-		return
-	}
-
-	if len(log.Topics) == 0 {
-		return
-	}
-
-	eventSig := log.Topics[0]
-
-	// Detect validator set changes
-	switch eventSig {
-	case events.EventSigMemberAdded:
-		// MemberAdded(address,uint256,uint32)
-		if len(log.Topics) >= 2 {
-			validatorAddr := common.BytesToAddress(log.Topics[1].Bytes())
-
-			validatorEvent := events.NewValidatorSetEvent(
-				block.NumberU64(),
-				block.Hash(),
-				"added",
-				validatorAddr,
-				"", // validator info from data field if needed
-				0,  // set size would need to be tracked separately
-			)
-
-			if !f.eventBus.Publish(validatorEvent) {
-				f.logger.Warn("Failed to publish validator set event (channel full)",
-					zap.String("type", "added"),
-					zap.String("validator", validatorAddr.Hex()),
-					zap.Uint64("block", block.NumberU64()),
-				)
-			} else {
-				f.logger.Info("Validator added",
-					zap.String("validator", validatorAddr.Hex()),
-					zap.Uint64("block", block.NumberU64()),
-				)
-			}
-		}
-
-	case events.EventSigMemberRemoved:
-		// MemberRemoved(address,uint256,uint32)
-		if len(log.Topics) >= 2 {
-			validatorAddr := common.BytesToAddress(log.Topics[1].Bytes())
-
-			validatorEvent := events.NewValidatorSetEvent(
-				block.NumberU64(),
-				block.Hash(),
-				"removed",
-				validatorAddr,
-				"", // validator info from data field if needed
-				0,  // set size would need to be tracked separately
-			)
-
-			if !f.eventBus.Publish(validatorEvent) {
-				f.logger.Warn("Failed to publish validator set event (channel full)",
-					zap.String("type", "removed"),
-					zap.String("validator", validatorAddr.Hex()),
-					zap.Uint64("block", block.NumberU64()),
-				)
-			} else {
-				f.logger.Info("Validator removed",
-					zap.String("validator", validatorAddr.Hex()),
-					zap.Uint64("block", block.NumberU64()),
 				)
 			}
 		}

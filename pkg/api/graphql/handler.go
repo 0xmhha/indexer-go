@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -38,15 +39,13 @@ func NewHandlerWithOptions(store storage.Storage, logger *zap.Logger, opts *Hand
 		WithCoreQueries().
 		WithHistoricalQueries().
 		WithAnalyticsQueries().
-		WithSystemContractQueries().
-		WithConsensusQueries().
 		WithAddressIndexingQueries().
 		WithSetCodeQueries().
 		WithModuleQueries().
 		WithUserOpQueries().
-		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
 		WithTokenHolderQueries().
+		WithReorgQueries().
 		WithSubscriptions().
 		WithMutations()
 
@@ -133,6 +132,7 @@ func (h *Handler) ExecuteQuery(query string, variables map[string]interface{}) *
 		Schema:         h.schema.schema,
 		RequestString:  query,
 		VariableValues: variables,
+		Context:        context.Background(),
 	}
 	return graphql.Do(params)
 }

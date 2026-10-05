@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/feature"
+	"github.com/0xmhha/indexer-go/pkg/source"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 )
@@ -44,17 +47,8 @@ type Subscription interface {
 	Unsubscribe()
 }
 
-// FeeDelegationMeta contains fee delegation metadata for a transaction
-// This is copied from factory package to avoid circular import
-type FeeDelegationMeta struct {
-	TxHash       common.Hash
-	BlockNumber  uint64
-	OriginalType uint8
-	FeePayer     common.Address
-	FeePayerV    *big.Int
-	FeePayerR    *big.Int
-	FeePayerS    *big.Int
-}
+// FeeDelegationMeta contains fee delegation metadata for a transaction.
+type FeeDelegationMeta = chain.FeeDelegationMeta
 
 // FeeDelegationClient is an optional interface for clients that support
 // extracting fee delegation metadata from blocks
@@ -122,6 +116,24 @@ type Config struct {
 	// EnableAdaptiveOptimization enables automatic adjustment of worker count and batch size
 	EnableAdaptiveOptimization bool
 
+	// RPCTimeout bounds each RPC call made while indexing (0 = no limit).
+	RPCTimeout time.Duration
+
+	// PollInterval is how long the live loop waits before asking the node for
+	// a new head once caught up. 0 falls back to RetryDelay. It is separate
+	// from RetryDelay (the backoff after errors) so the head can be followed
+	// closely without retrying failures aggressively.
+	PollInterval time.Duration
+
+	// AtomicBlock indexes each block in one storage transaction (cursor
+	// included) and publishes its events after commit.
+	AtomicBlock bool
+
+	// Finality and Confirmations choose the live loop's target height
+	// (see targetHead). The zero value indexes up to the head.
+	Finality      string
+	Confirmations uint64
+
 	// OptimizerConfig holds configuration for adaptive optimization (optional)
 	OptimizerConfig *OptimizerConfig
 }
@@ -147,15 +159,13 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
-	client                    Client
-	storage                   Storage
-	config                    *Config
-	logger                    *zap.Logger
-	eventBus                  *events.EventBus
-	metrics                   *RPCMetrics
-	optimizer                 *AdaptiveOptimizer
-	largeBlockProcessor       *LargeBlockProcessor
-	systemContractEventParser *events.SystemContractEventParser
+	client              Client
+	storage             Storage
+	config              *Config
+	logger              *zap.Logger
+	eventBus            *events.EventBus
+	metrics             *RPCMetrics
+	optimizer           *AdaptiveOptimizer
 
 	// chainAdapter provides chain-specific operations (optional)
 	// When set, the fetcher will use the adapter for consensus parsing
@@ -173,11 +183,39 @@ type Fetcher struct {
 	// tokenIndexer is called when a new contract is deployed to index token metadata
 	tokenIndexer TokenIndexer
 
-	// setCodeProcessor handles EIP-7702 SetCode transaction indexing
-	setCodeProcessor *SetCodeProcessor
+	// features runs the handlers of the enabled features for every block.
+	features *feature.Pipeline
 
-	// userOpProcessor handles ERC-4337 UserOperation indexing
-	userOpProcessor *UserOpProcessor
+	// writerInst is the goroutine that changes indexed state (writer.go),
+	// started on first use.
+	writerOnce sync.Once
+	writerInst *writer
+
+	// Background work (online backfill), stopped by Close.
+	bgOnce   sync.Once
+	bgCtx    context.Context
+	bgCancel context.CancelFunc
+	bgWG     sync.WaitGroup
+
+	noFinalizedWarned time.Time // last "no finalized block" warning (finality.go)
+
+	// src, when set, reads blocks as raw JSON decoded by the chain profile
+	// instead of through client (chain profile design, CP-3).
+	src source.Source
+
+	// fdClient extracts StableNet fee delegation metadata. When nil the
+	// fetcher falls back to checking whether its main client supports it.
+	fdClient FeeDelegationClient
+
+	// txr opens per-block storage transactions (nil if the storage cannot).
+	txr storagepkg.BlockTransactor
+	// strictStorageErrors makes storage write failures abort the block
+	// instead of being logged. It is on in atomic mode.
+	strictStorageErrors bool
+	// pendingEvents buffers events while a block transaction is open.
+	pendingEvents *[]events.Event
+	// beforeCommitHook is a fault-injection point for tests.
+	beforeCommitHook func(height uint64) error
 }
 
 // NewFetcher creates a new Fetcher instance
@@ -185,9 +223,6 @@ type Fetcher struct {
 func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logger, eventBus *events.EventBus) *Fetcher {
 	// Initialize metrics tracker
 	metrics := NewRPCMetrics(constants.DefaultMetricsWindowSize, constants.DefaultRateLimitWindow)
-
-	// Initialize large block processor
-	largeBlockProcessor := NewLargeBlockProcessor(storage, logger)
 
 	// Initialize adaptive optimizer if enabled
 	var optimizer *AdaptiveOptimizer
@@ -207,25 +242,21 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		)
 	}
 
-	// Initialize system contract event parser
-	var systemContractEventParser *events.SystemContractEventParser
-	if scWriter, ok := storage.(storagepkg.SystemContractWriter); ok {
-		systemContractEventParser = events.NewSystemContractEventParser(scWriter, logger)
-		logger.Info("System contract event parser initialized")
-	} else {
-		logger.Warn("Storage does not support system contract event parsing - continuing without it")
+	txr, _ := storage.(storagepkg.BlockTransactor)
+	if config.AtomicBlock && txr == nil {
+		logger.Warn("Atomic block indexing requested but storage does not support block transactions; using legacy path")
 	}
 
 	return &Fetcher{
-		client:                    client,
-		storage:                   storage,
-		config:                    config,
-		logger:                    logger,
-		eventBus:                  eventBus,
-		metrics:                   metrics,
-		optimizer:                 optimizer,
-		largeBlockProcessor:       largeBlockProcessor,
-		systemContractEventParser: systemContractEventParser,
+		client:              client,
+		storage:             storage,
+		config:              config,
+		logger:              logger,
+		eventBus:            eventBus,
+		metrics:             metrics,
+		optimizer:           optimizer,
+		txr:                 txr,
+		strictStorageErrors: config.AtomicBlock && txr != nil,
 	}
 }
 
@@ -277,31 +308,14 @@ func (f *Fetcher) GetChainID() string {
 // This enables automatic detection and indexing of token metadata (name, symbol, decimals)
 func (f *Fetcher) SetTokenIndexer(indexer TokenIndexer) {
 	f.tokenIndexer = indexer
-	// Also set on large block processor for consistency
-	if f.largeBlockProcessor != nil {
-		f.largeBlockProcessor.SetTokenIndexer(indexer)
-	}
 	f.logger.Info("Token indexer configured")
 }
 
-// SetSetCodeProcessor sets the SetCode processor for EIP-7702 transaction indexing
-func (f *Fetcher) SetSetCodeProcessor(processor *SetCodeProcessor) {
-	f.setCodeProcessor = processor
-	// Also set on large block processor for consistency
-	if f.largeBlockProcessor != nil {
-		f.largeBlockProcessor.SetSetCodeProcessor(processor)
-	}
-	f.logger.Info("SetCode processor configured")
-}
-
-// SetUserOpProcessor sets the UserOp processor for ERC-4337 UserOperation indexing
-func (f *Fetcher) SetUserOpProcessor(processor *UserOpProcessor) {
-	f.userOpProcessor = processor
-	// Also set on large block processor for consistency
-	if f.largeBlockProcessor != nil {
-		f.largeBlockProcessor.SetUserOpProcessor(processor)
-	}
-	f.logger.Info("UserOp processor configured")
+// SetFeeDelegationClient sets the client used to extract fee delegation
+// metadata (StableNet type 0x16 transactions).
+func (f *Fetcher) SetFeeDelegationClient(client FeeDelegationClient) {
+	f.fdClient = client
+	f.logger.Info("Fee delegation client configured")
 }
 
 // AddBlockProcessor adds a block processor to be called after each block is indexed
@@ -354,7 +368,7 @@ func (f *Fetcher) processBlockWithProcessors(ctx context.Context, block *types.B
 func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	// Fetch block and receipts with retry logic
 	startTime := time.Now()
-	block, receipts, hadError, err := f.fetchBlockAndReceiptsWithRetry(ctx, height, startTime)
+	fb, hadError, err := f.fetchBlockAndReceiptsWithRetry(ctx, height, startTime)
 	if err != nil {
 		return err
 	}
@@ -364,18 +378,25 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		f.metrics.RecordRequest(time.Since(startTime), false, false)
 	}
 
+	if f.atomic() {
+		return f.indexBlock(ctx, fb)
+	}
+
+	// Legacy path: separate writes, removed after the atomic path is the
+	// default for a release (phase0-design.md P0-14).
+	block, receipts := fb.geth, fb.gethReceipts
 	// Store block
 	if err := f.storage.SetBlock(ctx, block); err != nil {
 		return fmt.Errorf("failed to store block %d: %w", height, err)
 	}
 
 	// Process metadata and indexing
-	if err := f.processBlockMetadata(ctx, block, receipts, height); err != nil {
+	if err := f.processBlockMetadata(ctx, fb); err != nil {
 		return err
 	}
 
 	// Process fee delegation metadata
-	if err := f.processFeeDelegationMetadata(ctx, height); err != nil {
+	if err := f.processFeeDelegationMetadata(ctx, fb); err != nil {
 		// Log but don't fail block processing
 		f.logger.Warn("Fee delegation metadata processing failed",
 			zap.Uint64("height", height),
@@ -394,13 +415,16 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 	}
 
 	// Store receipts and index logs
-	if err := f.storeAndProcessReceipts(ctx, block, receipts, height); err != nil {
+	if err := f.storeAndProcessReceipts(ctx, fb); err != nil {
 		return err
+	}
+	if err := f.runFeatures(ctx, fb); err != nil {
+		return fmt.Errorf("block %d: %w", height, err)
 	}
 
 	// Publish transaction and log events
 	if f.eventBus != nil {
-		f.publishBlockEvents(block, receipts, height)
+		f.publishBlockEvents(fb)
 	}
 
 	// Process block with external processors (e.g., watchlist)
@@ -466,10 +490,9 @@ func (f *Fetcher) FetchRange(ctx context.Context, start, end uint64) error {
 
 // jobResult holds the result of fetching a single block
 type jobResult struct {
-	height   uint64
-	block    *types.Block
-	receipts types.Receipts
-	err      error
+	height uint64
+	block  *fetchedBlock
+	err    error
 }
 
 // FetchRangeConcurrent fetches a range of blocks concurrently using a worker pool
@@ -495,6 +518,9 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 
 	totalBlocks := end - start + 1
 
+	// Cancel workers and the producer on any early return below.
+	ctx, cancel := context.WithCancel(ctx)
+
 	// Create channels for job distribution and result collection
 	jobs := make(chan uint64, numWorkers)
 	results := make(chan *jobResult, numWorkers)
@@ -507,16 +533,17 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 			defer wg.Done()
 			for height := range jobs {
 				// Check context cancellation
-				select {
-				case <-ctx.Done():
-					results <- &jobResult{height: height, err: ctx.Err()}
+				if ctx.Err() != nil {
 					return
-				default:
 				}
 
 				// Fetch block and receipts with retry logic
 				result := f.fetchBlockJob(ctx, height)
-				results <- result
+				select {
+				case results <- result:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}(i)
 	}
@@ -540,6 +567,15 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 		close(results)
 	}()
 
+	// On every return: stop the workers and the producer, then drain the
+	// results channel (closed after all workers exit) so no goroutine is left
+	// blocked on a send.
+	defer func() {
+		cancel()
+		for range results {
+		}
+	}()
+
 	// Collect results and store blocks in order
 	resultMap := make(map[uint64]*jobResult)
 	nextHeight := start
@@ -557,28 +593,29 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 		// Process results in sequential order
 		for {
 			if res, ok := resultMap[nextHeight]; ok {
+				if f.atomic() {
+					if err := f.indexBlock(ctx, res.block); err != nil {
+						return err
+					}
+					delete(resultMap, nextHeight)
+					processedCount++
+					nextHeight++
+					if nextHeight > end {
+						break
+					}
+					continue
+				}
+
+				fb := res.block
+				block, receipts := fb.geth, fb.gethReceipts
+
 				// Store block
-				if err := f.storage.SetBlock(ctx, res.block); err != nil {
+				if err := f.storage.SetBlock(ctx, block); err != nil {
 					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)
 				}
 
-				// Process WBFT metadata
-				if err := f.processWBFTMetadata(ctx, res.block); err != nil {
-					return fmt.Errorf("failed to process WBFT metadata for block %d: %w", nextHeight, err)
-				}
-
-				// Process address indexing (contract creation, token transfers)
-				if err := f.processAddressIndexing(ctx, res.block, res.receipts); err != nil {
-					return fmt.Errorf("failed to process address indexing for block %d: %w", nextHeight, err)
-				}
-
-				// Process native balance tracking
-				if err := f.processBalanceTracking(ctx, res.block, res.receipts); err != nil {
-					return fmt.Errorf("failed to process balance tracking for block %d: %w", nextHeight, err)
-				}
-
 				// Process fee delegation metadata
-				if err := f.processFeeDelegationMetadata(ctx, nextHeight); err != nil {
+				if err := f.processFeeDelegationMetadata(ctx, fb); err != nil {
 					f.logger.Warn("Fee delegation metadata processing failed",
 						zap.Uint64("height", nextHeight),
 						zap.Error(err),
@@ -587,7 +624,7 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 
 				// Publish block event if EventBus is configured
 				if f.eventBus != nil {
-					blockEvent := events.NewBlockEvent(res.block)
+					blockEvent := events.NewBlockEvent(block)
 					if !f.eventBus.Publish(blockEvent) {
 						f.logger.Warn("Failed to publish block event (channel full)",
 							zap.Uint64("height", nextHeight),
@@ -596,7 +633,7 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 				}
 
 				// Store receipts and index logs
-				for _, receipt := range res.receipts {
+				for _, receipt := range receipts {
 					if err := f.storage.SetReceipt(ctx, receipt); err != nil {
 						return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
 					}
@@ -614,11 +651,15 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 					}
 				}
 
+				if err := f.runFeatures(ctx, fb); err != nil {
+					return fmt.Errorf("block %d: %w", nextHeight, err)
+				}
+
 				// Publish transaction events if EventBus is configured
 				if f.eventBus != nil {
-					transactions := res.block.Transactions()
+					transactions := block.Transactions()
 					// Build receipt map for O(1) lookup (avoids O(n²) matching)
-					receiptMap := buildReceiptMap(res.receipts)
+					receiptMap := buildReceiptMap(receipts)
 					for i, tx := range transactions {
 						// O(1) receipt lookup
 						receipt := receiptMap[tx.Hash()]
@@ -626,8 +667,8 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 						// Create transaction event
 						txEvent := events.NewTransactionEvent(
 							tx,
-							res.block.NumberU64(),
-							res.block.Hash(),
+							block.NumberU64(),
+							block.Hash(),
 							uint(i),
 							getTransactionSender(tx),
 							receipt,
@@ -648,9 +689,9 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 
 				f.logger.Debug("Stored block",
 					zap.Uint64("height", nextHeight),
-					zap.String("hash", res.block.Hash().Hex()),
-					zap.Int("txs", len(res.block.Transactions())),
-					zap.Int("receipts", len(res.receipts)),
+					zap.String("hash", block.Hash().Hex()),
+					zap.Int("txs", len(block.Transactions())),
+					zap.Int("receipts", len(receipts)),
 				)
 
 				// Clean up and move to next height
@@ -708,21 +749,25 @@ func (f *Fetcher) Run(ctx context.Context) error {
 		default:
 		}
 
-		// Get latest block from chain
-		latestChainBlock, err := f.client.GetLatestBlockNumber(ctx)
+		// Get the highest block to index under the finality policy
+		latestChainBlock, ok, err := f.targetHead(ctx)
 		if err != nil {
-			f.logger.Error("Failed to get latest block number", zap.Error(err))
-			time.Sleep(f.config.RetryDelay)
+			f.logger.Error("Failed to get target block number", zap.Error(err))
+			if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
+				return err
+			}
 			continue
 		}
 
 		// Check if we're caught up
-		if nextHeight > latestChainBlock {
+		if !ok || nextHeight > latestChainBlock {
 			f.logger.Debug("Caught up with chain",
 				zap.Uint64("next_height", nextHeight),
 				zap.Uint64("latest_chain_block", latestChainBlock),
 			)
-			time.Sleep(f.config.RetryDelay)
+			if err := sleepCtx(ctx, f.pollInterval()); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -740,8 +785,23 @@ func (f *Fetcher) Run(ctx context.Context) error {
 		)
 
 		if err := f.FetchRange(ctx, nextHeight, batchEnd); err != nil {
+			var reorg *ReorgError
+			if errors.As(err, &reorg) {
+				fork, rerr := f.HandleReorg(ctx, reorg.Height)
+				if errors.Is(rerr, ErrReorgTooDeep) {
+					f.logger.Error("Stopping: reorganization cannot be rolled back; reindex", zap.Error(rerr))
+					return rerr
+				}
+				if rerr == nil {
+					nextHeight = fork + 1
+					continue
+				}
+				err = rerr
+			}
 			f.logger.Error("Failed to fetch batch", zap.Error(err))
-			time.Sleep(f.config.RetryDelay)
+			if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -777,4 +837,12 @@ func getTransactionSender(tx *types.Transaction) common.Address {
 		return common.Address{}
 	}
 	return from
+}
+
+// pollInterval is the wait between head checks once caught up.
+func (f *Fetcher) pollInterval() time.Duration {
+	if f.config.PollInterval > 0 {
+		return f.config.PollInterval
+	}
+	return f.config.RetryDelay
 }

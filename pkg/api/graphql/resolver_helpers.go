@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/graphql-go/graphql"
@@ -122,8 +123,8 @@ func (f *BlockFilter) hasMinerFilter() bool {
 }
 
 // filterBlocks filters blocks by timestamp and miner conditions
-func filterBlocks(blocks []*types.Block, filter BlockFilter) []*types.Block {
-	filtered := make([]*types.Block, 0, len(blocks))
+func filterBlocks(blocks []*model.Block, filter BlockFilter) []*model.Block {
+	filtered := make([]*model.Block, 0, len(blocks))
 
 	for _, block := range blocks {
 		if block == nil {
@@ -131,15 +132,15 @@ func filterBlocks(blocks []*types.Block, filter BlockFilter) []*types.Block {
 		}
 
 		// Filter by timestamp
-		if filter.TimestampFrom > 0 && block.Time() < filter.TimestampFrom {
+		if filter.TimestampFrom > 0 && block.Time < filter.TimestampFrom {
 			continue
 		}
-		if filter.TimestampTo > 0 && block.Time() > filter.TimestampTo {
+		if filter.TimestampTo > 0 && block.Time > filter.TimestampTo {
 			continue
 		}
 
 		// Filter by miner
-		if filter.Miner != nil && block.Coinbase() != *filter.Miner {
+		if filter.Miner != nil && block.Miner != *filter.Miner {
 			continue
 		}
 
