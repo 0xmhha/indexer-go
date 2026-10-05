@@ -9,6 +9,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 )
 
@@ -1344,6 +1345,79 @@ func TestReorgNotification(t *testing.T) {
 		}
 		if !strings.Contains(string(n.Payload.Data), common.HexToHash("0x09").Hex()) {
 			t.Fatalf("payload does not list the removed blocks: %s", n.Payload.Data)
+		}
+	}
+}
+
+// TestContractCreationAndTokenTransferNotifications: settings for contract
+// creations and token transfers are notified by transactions without a
+// recipient and by ERC-20/721 Transfer logs, except Transfer logs of a
+// native coin contract. A setting for the general type still gets them
+// under that type.
+func TestContractCreationAndTokenTransferNotifications(t *testing.T) {
+	logger := zap.NewNop()
+	config := DefaultConfig()
+	config.Enabled = true
+	storage := newMockStorage()
+	service := NewService(config, storage, events.NewEventBus(100, 100), logger)
+	service.RegisterHandler(NewWebhookHandler(nil, logger))
+	nonToken := common.HexToAddress("0x1000")
+	service.SetNonTokenTransferContracts(nonToken)
+
+	add := func(name string, types ...EventType) string {
+		s, err := service.CreateSetting(context.Background(), &NotificationSetting{
+			Name: name, Type: NotificationTypeWebhook, Enabled: true,
+			Destination: Destination{WebhookURL: "https://example.com/" + name},
+			EventTypes:  types,
+		})
+		if err != nil {
+			t.Fatalf("create setting %s: %v", name, err)
+		}
+		return s.ID
+	}
+	creations := add("creations", EventTypeContractCreation)
+	tokens := add("tokens", EventTypeTokenTransfer)
+	txs := add("txs", EventTypeTransaction)
+
+	notified := func() map[string][]EventType {
+		out := map[string][]EventType{}
+		for id, n := range storage.notifications {
+			out[n.SettingID] = append(out[n.SettingID], n.EventType)
+			delete(storage.notifications, id)
+		}
+		return out
+	}
+	to := common.HexToAddress("0xb0b")
+	transfer := func(addr common.Address, topics int) *events.LogEvent {
+		ts := []common.Hash{transferSig, {1}, {2}, {3}}[:topics]
+		return events.NewLogEvent(&ethtypes.Log{Address: addr, Topics: ts, BlockNumber: 5})
+	}
+
+	service.handleEvent(&events.TransactionEvent{Hash: common.HexToHash("0x01"), To: nil, Value: "0", CreatedAt: time.Now()})
+	got := notified()
+	if len(got[creations]) != 1 || got[creations][0] != EventTypeContractCreation || len(got[txs]) != 1 || got[txs][0] != EventTypeTransaction || len(got[tokens]) != 0 {
+		t.Fatalf("contract creation: %v", got)
+	}
+
+	service.handleEvent(&events.TransactionEvent{Hash: common.HexToHash("0x02"), To: &to, Value: "0", CreatedAt: time.Now()})
+	if got := notified(); len(got[creations]) != 0 || len(got[txs]) != 1 {
+		t.Fatalf("plain transaction: %v", got)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		event *events.LogEvent
+		token bool
+	}{
+		{"erc20", transfer(common.HexToAddress("0x7070"), 3), true},
+		{"erc721", transfer(common.HexToAddress("0x7071"), 4), true},
+		{"native coin", transfer(nonToken, 3), false},
+		{"other event", events.NewLogEvent(&ethtypes.Log{Address: to, Topics: []common.Hash{{9}, {1}, {2}}}), false},
+	} {
+		service.handleEvent(tc.event)
+		got := notified()
+		if tc.token != (len(got[tokens]) == 1 && got[tokens][0] == EventTypeTokenTransfer) {
+			t.Fatalf("%s: token transfer notifications %v", tc.name, got)
 		}
 	}
 }
