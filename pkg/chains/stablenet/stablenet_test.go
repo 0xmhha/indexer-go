@@ -187,17 +187,60 @@ func TestSyntheticFeeDelegation(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, tx.To)
 	})
+	t.Run("valid is not invalid", func(t *testing.T) {
+		tx, err := stablenet.DecodeFeeDelegationTx(synthFeeDelegationJSON(t, sender, payer, payer.addr, &to))
+		require.NoError(t, err)
+		fd, _ := stablenet.FeeDelegationOf(tx)
+		require.False(t, fd.Invalid)
+	})
+	// go-stablenet v1.0.0 checked the fee payer signature only in the
+	// transaction pool; blocks of that era can hold a transaction whose
+	// signature does not match. The declared fee payer was charged.
 	t.Run("fee payer signature from another key", func(t *testing.T) {
-		_, err := stablenet.DecodeFeeDelegationTx(synthFeeDelegationJSON(t, sender, other, payer.addr, &to))
-		require.ErrorIs(t, err, stablenet.ErrFeePayerMismatch)
+		before := stablenet.InvalidFeePayerSignatures()
+		tx, err := stablenet.DecodeFeeDelegationTx(synthFeeDelegationJSON(t, sender, other, payer.addr, &to))
+		require.NoError(t, err)
+		fd, ok := stablenet.FeeDelegationOf(tx)
+		require.True(t, ok)
+		require.True(t, fd.Invalid)
+		require.Equal(t, payer.addr, stablenet.FeePayerOf(tx), "the declared fee payer paid")
+		require.Greater(t, stablenet.InvalidFeePayerSignatures(), before)
+	})
+	t.Run("no fee payer declared", func(t *testing.T) {
+		chainID := big.NewInt(8283)
+		inner := &types.DynamicFeeTx{ChainID: chainID, Nonce: 1, GasTipCap: big.NewInt(2), GasFeeCap: big.NewInt(100), Gas: 21000, To: &to, Value: big.NewInt(1)}
+		signed := types.MustSignNewTx(sender.key, types.NewLondonSigner(chainID), inner)
+		sv, sr, ss := signed.RawSignatureValues()
+		senderFields := []any{chainID, inner.Nonce, inner.GasTipCap, inner.GasFeeCap, inner.Gas, to, inner.Value, []byte{}, types.AccessList{}, sv, sr, ss}
+		payload, err := rlp.EncodeToBytes([]any{senderFields, []byte{}, big.NewInt(0), big.NewInt(0), big.NewInt(0)})
+		require.NoError(t, err)
+		enc := append([]byte{0x16}, payload...)
+		raw, err := json.Marshal(map[string]any{
+			"type": "0x16", "hash": crypto.Keccak256Hash(enc), "from": sender.addr,
+			"chainId": (*hexutil.Big)(chainID), "nonce": hexutil.Uint64(1),
+			"maxPriorityFeePerGas": (*hexutil.Big)(inner.GasTipCap), "maxFeePerGas": (*hexutil.Big)(inner.GasFeeCap),
+			"gas": hexutil.Uint64(21000), "to": to, "value": (*hexutil.Big)(inner.Value), "input": hexutil.Bytes{},
+			"accessList": types.AccessList{}, "v": (*hexutil.Big)(sv), "r": (*hexutil.Big)(sr), "s": (*hexutil.Big)(ss),
+		})
+		require.NoError(t, err)
+		for name, decode := range map[string]func() (*model.Transaction, error){
+			"json":   func() (*model.Transaction, error) { return stablenet.DecodeFeeDelegationTx(raw) },
+			"binary": func() (*model.Transaction, error) { return stablenet.DecodeFeeDelegationTxBinary(enc) },
+		} {
+			tx, err := decode()
+			require.NoError(t, err, name)
+			fd, _ := stablenet.FeeDelegationOf(tx)
+			require.True(t, fd.Invalid, name)
+			require.Equal(t, sender.addr, stablenet.FeePayerOf(tx), "%s: the sender paid", name)
+		}
 	})
 	t.Run("missing field", func(t *testing.T) {
 		var obj map[string]any
 		require.NoError(t, json.Unmarshal(synthFeeDelegationJSON(t, sender, payer, payer.addr, &to), &obj))
-		delete(obj, "feePayer")
+		delete(obj, "nonce")
 		raw, _ := json.Marshal(obj)
 		_, err := stablenet.DecodeFeeDelegationTx(raw)
-		require.ErrorContains(t, err, "feePayer")
+		require.ErrorContains(t, err, "nonce")
 	})
 }
 

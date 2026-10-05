@@ -106,7 +106,7 @@ func requireSameReceipt(t *testing.T, want, got *model.Receipt, msg string, args
 	require.Equal(t, we, ge, append([]any{msg}, args...)...)
 }
 
-func TestDecodeFeeDelegationTxBinaryRejectsTampering(t *testing.T) {
+func TestDecodeFeeDelegationTxBinaryMarksBadFeePayerSignature(t *testing.T) {
 	v := loadVectors(t)
 	for _, h := range v.RawTransactions {
 		enc := hexutil.MustDecode(h)
@@ -117,8 +117,10 @@ func TestDecodeFeeDelegationTxBinaryRejectsTampering(t *testing.T) {
 		require.NoError(t, err)
 		bad := append([]byte(nil), enc...)
 		bad[len(bad)-1] ^= 1 // fee payer signature
-		_, err = stablenet.DecodeFeeDelegationTxBinary(bad)
-		require.Error(t, err)
+		tx, err := stablenet.DecodeFeeDelegationTxBinary(bad)
+		require.NoError(t, err, "accepted as go-stablenet v1.0.0 consensus did")
+		fd, _ := stablenet.FeeDelegationOf(tx)
+		require.True(t, fd.Invalid)
 		return
 	}
 	t.Fatal("no fee delegation transaction in the vectors")

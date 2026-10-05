@@ -28,7 +28,7 @@ type feeDelegationRLP struct {
 		AccessList types.AccessList
 		V, R, S    *big.Int
 	}
-	FeePayer   common.Address
+	FeePayer   *common.Address `rlp:"nil"`
 	FV, FR, FS *big.Int
 }
 

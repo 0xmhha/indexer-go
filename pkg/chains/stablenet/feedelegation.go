@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -30,16 +31,25 @@ import (
 //	feePayer  = ecrecover(keccak256(0x16 || rlp([sender, feePayer])), fv, fr, fs)
 const FeeDelegationTxType = 0x16
 
-// ErrFeePayerMismatch means the fee payer signature does not recover to the
-// declared fee payer.
-var ErrFeePayerMismatch = errors.New("stablenet: fee payer signature does not match fee payer")
-
 // FeeDelegation is the fee-payer part of a fee delegation transaction.
 type FeeDelegation struct {
-	FeePayer   common.Address
-	V, R, S    *big.Int    // fee payer signature
-	SenderHash common.Hash // EIP-1559 hash of the sender's inner transaction
+	FeePayer   common.Address // the account that paid the gas
+	V, R, S    *big.Int       // fee payer signature
+	SenderHash common.Hash    // EIP-1559 hash of the sender's inner transaction
+	// Invalid is set when the fee payer signature does not recover to the
+	// declared fee payer, or no fee payer is declared. go-stablenet v1.0.0
+	// checked the signature only in the transaction pool, so blocks of that
+	// era can hold such transactions; consensus then charged the declared
+	// fee payer, or the sender when none was declared (FeePayer says which).
+	Invalid bool
 }
+
+// invalidFeePayers counts decoded transactions with Invalid set.
+var invalidFeePayers atomic.Uint64
+
+// InvalidFeePayerSignatures returns how many fee delegation transactions
+// with an invalid fee payer signature were decoded by this process.
+func InvalidFeePayerSignatures() uint64 { return invalidFeePayers.Load() }
 
 var feeDelegationKey = model.NewExtKey("stablenet.fee_delegation")
 
@@ -49,6 +59,7 @@ type feeDelegationRecord struct {
 	FeePayer   common.Address
 	V, R, S    *big.Int
 	SenderHash common.Hash
+	Invalid    bool `rlp:"optional"`
 }
 
 func init() {
@@ -69,14 +80,14 @@ func init() {
 			if !ok {
 				return nil, fmt.Errorf("stablenet: fee delegation extension holds %T", v)
 			}
-			return rlp.EncodeToBytes(&feeDelegationRecord{fd.FeePayer, fd.V, fd.R, fd.S, fd.SenderHash})
+			return rlp.EncodeToBytes(&feeDelegationRecord{fd.FeePayer, fd.V, fd.R, fd.S, fd.SenderHash, fd.Invalid})
 		},
 		Decode: func(data []byte) (any, error) {
 			var r feeDelegationRecord
 			if err := rlp.DecodeBytes(data, &r); err != nil {
 				return nil, err
 			}
-			return &FeeDelegation{FeePayer: r.FeePayer, V: r.V, R: r.R, S: r.S, SenderHash: r.SenderHash}, nil
+			return &FeeDelegation{FeePayer: r.FeePayer, V: r.V, R: r.R, S: r.S, SenderHash: r.SenderHash, Invalid: r.Invalid}, nil
 		},
 	})
 }
@@ -135,12 +146,17 @@ func (j *feeDelegationJSON) missing() string {
 		return "input"
 	case j.V == nil || j.R == nil || j.S == nil:
 		return "v/r/s"
-	case j.FeePayer == nil:
-		return "feePayer"
-	case j.FV == nil || j.FR == nil || j.FS == nil:
-		return "fv/fr/fs"
 	}
+	// feePayer and fv/fr/fs may be absent: a transaction without a fee
+	// payer could be included before go-stablenet v1.1.0 (see Invalid).
 	return ""
+}
+
+func bigOrZero(b *hexutil.Big) *big.Int {
+	if b == nil {
+		return new(big.Int)
+	}
+	return (*big.Int)(b)
 }
 
 // DecodeFeeDelegationTx decodes a type 0x16 transaction object from an RPC
@@ -168,7 +184,7 @@ func DecodeFeeDelegationTx(raw json.RawMessage) (*model.Transaction, error) {
 		R:          (*big.Int)(j.R),
 		S:          (*big.Int)(j.S),
 	}
-	m, err := feeDelegationTx(inner, *j.FeePayer, (*big.Int)(j.FV), (*big.Int)(j.FR), (*big.Int)(j.FS))
+	m, err := feeDelegationTx(inner, j.FeePayer, bigOrZero(j.FV), bigOrZero(j.FR), bigOrZero(j.FS))
 	if err != nil {
 		return nil, err
 	}
@@ -184,14 +200,17 @@ func DecodeFeeDelegationTx(raw json.RawMessage) (*model.Transaction, error) {
 // feeDelegationTx builds the model of a fee delegation transaction from its
 // fields: it computes the canonical encoding and hash, recovers the sender
 // and checks that the fee payer signature recovers to the declared payer.
-func feeDelegationTx(inner *types.DynamicFeeTx, feePayer common.Address, fv, fr, fs *big.Int) (*model.Transaction, error) {
+// A failed check (or no declared payer) marks the transaction Invalid
+// instead of rejecting it: go-stablenet v1.0.0 included such transactions,
+// charging the declared payer, or the sender when none was declared.
+func feeDelegationTx(inner *types.DynamicFeeTx, feePayer *common.Address, fv, fr, fs *big.Int) (*model.Transaction, error) {
 	senderTx := types.NewTx(inner)
 	senderFields := []any{
 		inner.ChainID, inner.Nonce, inner.GasTipCap, inner.GasFeeCap, inner.Gas,
 		toField(inner.To), inner.Value, inner.Data, inner.AccessList,
 		inner.V, inner.R, inner.S,
 	}
-	payload, err := rlp.EncodeToBytes([]any{senderFields, feePayer, fv, fr, fs})
+	payload, err := rlp.EncodeToBytes([]any{senderFields, toField(feePayer), fv, fr, fs})
 	if err != nil {
 		return nil, fmt.Errorf("stablenet: encode fee delegation tx: %w", err)
 	}
@@ -203,17 +222,21 @@ func feeDelegationTx(inner *types.DynamicFeeTx, feePayer common.Address, fv, fr,
 		return nil, fmt.Errorf("stablenet: recover sender of %s: %w", hash.Hex(), err)
 	}
 
-	payerPayload, err := rlp.EncodeToBytes([]any{senderFields, feePayer})
-	if err != nil {
-		return nil, fmt.Errorf("stablenet: encode fee payer sighash: %w", err)
+	fd := &FeeDelegation{V: fv, R: fr, S: fs, SenderHash: senderTx.Hash()}
+	if feePayer == nil {
+		fd.FeePayer, fd.Invalid = from, true
+	} else {
+		fd.FeePayer = *feePayer
+		payerPayload, err := rlp.EncodeToBytes([]any{senderFields, *feePayer})
+		if err != nil {
+			return nil, fmt.Errorf("stablenet: encode fee payer sighash: %w", err)
+		}
+		payerHash := crypto.Keccak256Hash(append([]byte{FeeDelegationTxType}, payerPayload...))
+		payer, err := recoverAddress(payerHash, fv, fr, fs)
+		fd.Invalid = err != nil || payer != *feePayer
 	}
-	payerHash := crypto.Keccak256Hash(append([]byte{FeeDelegationTxType}, payerPayload...))
-	payer, err := recoverAddress(payerHash, fv, fr, fs)
-	if err != nil {
-		return nil, fmt.Errorf("stablenet: recover fee payer of %s: %w", hash.Hex(), err)
-	}
-	if payer != feePayer {
-		return nil, fmt.Errorf("%w: tx %s recovered %s declared %s", ErrFeePayerMismatch, hash.Hex(), payer.Hex(), feePayer.Hex())
+	if fd.Invalid {
+		invalidFeePayers.Add(1)
 	}
 
 	m := &model.Transaction{
@@ -235,17 +258,12 @@ func feeDelegationTx(inner *types.DynamicFeeTx, feePayer common.Address, fv, fr,
 	for _, t := range inner.AccessList {
 		m.AccessList = append(m.AccessList, model.AccessTuple{Address: t.Address, StorageKeys: t.StorageKeys})
 	}
-	m.Ext.Set(feeDelegationKey, &FeeDelegation{
-		FeePayer:   payer,
-		V:          fv,
-		R:          fr,
-		S:          fs,
-		SenderHash: senderTx.Hash(),
-	})
+	m.Ext.Set(feeDelegationKey, fd)
 	return m, nil
 }
 
-// toField encodes a missing recipient as the empty string, as RLP requires.
+// toField encodes a missing address (recipient, fee payer) as the empty
+// string, as go-stablenet's rlp:"nil" fields do.
 func toField(to *common.Address) any {
 	if to == nil {
 		return []byte{}
