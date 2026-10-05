@@ -9,6 +9,8 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/chains"
 )
 
 // Ensure PebbleStorage implements HistoricalReader and HistoricalWriter
@@ -603,65 +605,69 @@ func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address
 	for iter.First(); iter.Valid(); iter.Next() {
 		txHash := common.BytesToHash(iter.Value())
 
-		tx, location, err := s.GetTransaction(ctx, txHash)
+		// The model keeps the sender and hash the chain reports, and the
+		// fee payer of fee delegation transactions.
+		tx, location, err := s.GetModelTransaction(ctx, txHash)
 		if err != nil {
 			continue
 		}
-
 		receipt, _ := s.GetReceipt(ctx, txHash)
-
-		// Extract sender
-		from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-		if err != nil {
-			continue
+		from := tx.From
+		value := tx.Value
+		if value == nil {
+			value = new(big.Int)
 		}
+		succeeded := receipt != nil && receipt.Status == types.ReceiptStatusSuccessful
 
 		stats.TotalTransactions++
 
-		// Sent vs Received
+		// Sent vs Received. A failed transaction moves no value.
+		to := tx.To
 		if from == addr {
 			stats.SentCount++
-			stats.TotalValueSent.Add(stats.TotalValueSent, tx.Value())
-			if tx.To() != nil {
-				uniqueAddresses[*tx.To()] = true
+			if succeeded {
+				stats.TotalValueSent.Add(stats.TotalValueSent, value)
+			}
+			if to != nil {
+				uniqueAddresses[*to] = true
 			}
 		}
-		to := tx.To()
 		if to != nil && *to == addr {
 			stats.ReceivedCount++
-			stats.TotalValueReceived.Add(stats.TotalValueReceived, tx.Value())
+			if succeeded {
+				stats.TotalValueReceived.Add(stats.TotalValueReceived, value)
+			}
 			uniqueAddresses[from] = true
 		}
 
 		// Success vs Failed
 		if receipt != nil {
-			if receipt.Status == types.ReceiptStatusSuccessful {
+			if succeeded {
 				stats.SuccessCount++
 			} else {
 				stats.FailedCount++
 			}
-			stats.TotalGasUsed += receipt.GasUsed
-
-			// Gas cost = gasUsed * effectiveGasPrice
-			if receipt.EffectiveGasPrice != nil {
-				cost := new(big.Int).Mul(
-					new(big.Int).SetUint64(receipt.GasUsed),
-					receipt.EffectiveGasPrice,
-				)
-				stats.TotalGasCost.Add(stats.TotalGasCost, cost)
+			// Gas is counted for the account that paid it: the sender, or
+			// the fee payer of a fee delegation transaction.
+			if chains.GasPayer(tx) == addr {
+				stats.TotalGasUsed += receipt.GasUsed
+				if receipt.EffectiveGasPrice != nil {
+					cost := new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), receipt.EffectiveGasPrice)
+					stats.TotalGasCost.Add(stats.TotalGasCost, cost)
+				}
 			}
 		}
 
 		// Contract interaction (has input data and a target address)
-		if to != nil && len(tx.Data()) > 0 {
+		if to != nil && len(tx.Input) > 0 {
 			stats.ContractInteractionCount++
 		}
 
 		// Timestamps
 		if location != nil {
-			block, err := s.GetBlock(ctx, location.BlockHeight)
+			block, err := s.GetModelBlock(ctx, location.BlockHeight)
 			if err == nil && block != nil {
-				ts := block.Header().Time
+				ts := block.Time
 				if stats.FirstTransactionTimestamp == 0 || ts < stats.FirstTransactionTimestamp {
 					stats.FirstTransactionTimestamp = ts
 				}

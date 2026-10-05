@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
@@ -112,4 +113,39 @@ func TestNativeTransfersAreNotTokenTransfers(t *testing.T) {
 	got, err := r.GetERC20TransfersByToken(context.Background(), testchain.NativeCoinAdapterAddress, 100, 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
+}
+
+// TestAddressStatsCountPaidGasAndMovedValue: value counts only for
+// successful transactions and gas only for the account that paid it.
+func TestAddressStatsCountPaidGasAndMovedValue(t *testing.T) {
+	sc := testchain.BuildDefault()
+	app := indexAll(t, sc.Chain)
+	r := app.storage.(storage.HistoricalReader)
+
+	for _, acct := range sc.Accounts[:3] {
+		sent, received, gas := new(big.Int), new(big.Int), new(big.Int)
+		for n := uint64(0); n <= sc.Chain.Head(); n++ {
+			b := sc.Chain.Block(n)
+			for i, tx := range b.Block.Transactions() {
+				rc := b.Receipts[i]
+				from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+				require.NoError(t, err)
+				ok := rc.Status == types.ReceiptStatusSuccessful
+				if from == acct.Address {
+					gas.Add(gas, new(big.Int).Mul(new(big.Int).SetUint64(rc.GasUsed), rc.EffectiveGasPrice))
+					if ok {
+						sent.Add(sent, tx.Value())
+					}
+				}
+				if tx.To() != nil && *tx.To() == acct.Address && ok {
+					received.Add(received, tx.Value())
+				}
+			}
+		}
+		stats, err := r.GetAddressStats(context.Background(), acct.Address)
+		require.NoError(t, err)
+		require.Zero(t, sent.Cmp(stats.TotalValueSent), "%s sent", acct.Address.Hex())
+		require.Zero(t, received.Cmp(stats.TotalValueReceived), "%s received", acct.Address.Hex())
+		require.Zero(t, gas.Cmp(stats.TotalGasCost), "%s gas", acct.Address.Hex())
+	}
 }
