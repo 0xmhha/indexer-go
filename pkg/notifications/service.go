@@ -261,6 +261,7 @@ func (s *NotificationService) subscribeToEvents() error {
 		events.EventTypeBlock,
 		events.EventTypeTransaction,
 		events.EventTypeLog,
+		events.EventTypeReorg,
 	}
 
 	subID := events.SubscriptionID("notifications-" + uuid.New().String())
@@ -350,6 +351,8 @@ func (s *NotificationService) convertEventType(eventType events.EventType) Event
 		return EventTypeTransaction
 	case events.EventTypeLog:
 		return EventTypeLog
+	case events.EventTypeReorg:
+		return EventTypeReorg
 	default:
 		return EventType(eventType)
 	}
@@ -518,6 +521,10 @@ func (s *NotificationService) createPayload(event events.Event) (*EventPayload, 
 			blockNumber = e.Log.BlockNumber
 			blockHash = e.Log.BlockHash
 		}
+	case *events.ReorgEvent:
+		// The newest block both branches share.
+		blockNumber = e.ForkNumber
+		blockHash = e.ForkHash
 	}
 
 	// Serialize the event data

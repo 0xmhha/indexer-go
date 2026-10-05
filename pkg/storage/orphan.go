@@ -199,8 +199,58 @@ func (s *PebbleStorage) archiveOrphan(txCtx context.Context, tx *BlockTx, h uint
 		if err := set([]byte(keyOrphanSeq), seq[:]); err != nil {
 			return nil, err
 		}
+		if keep := s.orphanRetention.Load(); keep > 0 && rec.Seq > keep {
+			if err := s.pruneOrphans(txCtx, tx, rec.Seq-keep); err != nil {
+				return nil, fmt.Errorf("prune reorganization records: %w", err)
+			}
+		}
 	}
 	return ob, nil
+}
+
+// pruneOrphans deletes, in tx, the reorganization records numbered up to
+// cutoff and the blocks they archived. A block a later reorganization
+// archived again (its record names that reorganization) is kept, with its
+// height and transaction entries.
+func (s *PebbleStorage) pruneOrphans(txCtx context.Context, tx *BlockTx, cutoff uint64) error {
+	var records [][]byte
+	err := s.Scan(txCtx, []byte(prefixOrphanReorg), OrphanReorgKey(cutoff+1), false, func(_, value []byte) bool {
+		records = append(records, value)
+		return true
+	})
+	if err != nil {
+		return err
+	}
+	var del [][]byte
+	for _, raw := range records {
+		var rec Reorg
+		if err := rlp.DecodeBytes(raw, &rec); err != nil {
+			return fmt.Errorf("decode reorganization record: %w", err)
+		}
+		for _, ref := range rec.Removed {
+			ob, err := s.GetOrphanedBlock(txCtx, ref.Hash)
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if ob.ReorgSeq != rec.Seq {
+				continue // archived again by a later reorganization
+			}
+			del = append(del, OrphanBlockKey(ref.Hash), OrphanHeightKey(ref.Number, ref.Hash))
+			for _, t := range ob.Block.Transactions {
+				del = append(del, OrphanTxKey(t.Hash, ref.Hash))
+			}
+		}
+		del = append(del, OrphanReorgKey(rec.Seq))
+	}
+	for _, k := range del {
+		if err := tx.batch.Delete(k, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *PebbleStorage) lastReorgSeq(ctx context.Context) (uint64, error) {
@@ -243,6 +293,9 @@ func (s *PebbleStorage) GetReorgs(ctx context.Context, limit, offset int) ([]*Re
 	var out []*Reorg
 	for seq := int64(last) - int64(offset); seq >= 1 && (limit <= 0 || len(out) < limit); seq-- {
 		r, err := s.GetReorg(ctx, uint64(seq))
+		if errors.Is(err, ErrNotFound) {
+			break // older records were pruned (SetOrphanRetention)
+		}
 		if err != nil {
 			return nil, err
 		}

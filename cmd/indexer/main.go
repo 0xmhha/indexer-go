@@ -469,6 +469,7 @@ func (a *App) initStorageOnly(ctx context.Context) error {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
 	baseStore.SetLogger(a.logger)
+	baseStore.SetOrphanRetention(a.config.Indexer.OrphanRetention)
 
 	// For multichain mode, use base storage directly
 	// For single chain mode, we'll wrap it with genesis initializer later

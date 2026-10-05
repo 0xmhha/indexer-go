@@ -36,6 +36,9 @@ type PebbleStorage struct {
 	txCount      atomic.Uint64
 	txCountReady atomic.Bool
 
+	// orphanRetention is how many reorganization records are kept (0: all).
+	orphanRetention atomic.Uint64
+
 	// Optional token metadata fetcher for on-demand fetching from chain
 	// When set, GetTokenBalances will fetch metadata from chain if not found in DB
 	tokenMetadataFetcher TokenMetadataFetcher
@@ -121,6 +124,13 @@ func (s *PebbleStorage) loadTransactionCount() error {
 // SetLogger sets the logger for the storage
 func (s *PebbleStorage) SetLogger(logger *zap.Logger) {
 	s.logger = logger
+}
+
+// SetOrphanRetention sets how many reorganization records are kept with the
+// blocks they removed; older ones are deleted when a new one is recorded.
+// 0 keeps them all (the default).
+func (s *PebbleStorage) SetOrphanRetention(n uint64) {
+	s.orphanRetention.Store(n)
 }
 
 // SetTokenMetadataFetcher sets the token metadata fetcher for on-demand fetching

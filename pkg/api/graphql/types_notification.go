@@ -47,6 +47,10 @@ var notificationEventTypeEnumType = graphql.NewEnum(graphql.EnumConfig{
 			Value:       "token_transfer",
 			Description: "Token transfer event",
 		},
+		"REORG": &graphql.EnumValueConfig{
+			Value:       "reorg",
+			Description: "Chain reorganization: the indexer removed blocks (their logs follow as log events with removed: true)",
+		},
 	},
 })
 

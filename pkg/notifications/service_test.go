@@ -3,10 +3,12 @@ package notifications
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
@@ -821,6 +823,7 @@ func TestConvertEventType(t *testing.T) {
 		{events.EventTypeBlock, EventTypeBlock},
 		{events.EventTypeTransaction, EventTypeTransaction},
 		{events.EventTypeLog, EventTypeLog},
+		{events.EventTypeReorg, EventTypeReorg},
 		{events.EventType("unknown"), EventType("unknown")},
 	}
 
@@ -1300,4 +1303,47 @@ func TestNotificationService_StartStop(t *testing.T) {
 			t.Error("expected error with invalid config")
 		}
 	})
+}
+
+// TestReorgNotification: a setting for reorg events is notified when the
+// indexer rolls back blocks, with the fork block in the payload.
+func TestReorgNotification(t *testing.T) {
+	logger := zap.NewNop()
+	config := DefaultConfig()
+	config.Enabled = true
+	storage := newMockStorage()
+	service := NewService(config, storage, events.NewEventBus(100, 100), logger)
+	service.RegisterHandler(NewWebhookHandler(nil, logger))
+
+	setting, err := service.CreateSetting(context.Background(), &NotificationSetting{
+		Name:        "reorgs",
+		Type:        NotificationTypeWebhook,
+		Enabled:     true,
+		Destination: Destination{WebhookURL: "https://example.com/webhook"},
+		EventTypes:  []EventType{EventTypeReorg},
+	})
+	if err != nil {
+		t.Fatalf("create setting: %v", err)
+	}
+
+	fork := common.HexToHash("0xf0")
+	service.handleEvent(&events.ReorgEvent{
+		Seq: 1, ForkNumber: 7, ForkHash: fork, OldHead: 9,
+		Removed:   []events.BlockRef{{Number: 9, Hash: common.HexToHash("0x09")}, {Number: 8, Hash: common.HexToHash("0x08")}},
+		CreatedAt: time.Now(),
+	})
+	if len(storage.notifications) != 1 {
+		t.Fatalf("expected one notification, got %d", len(storage.notifications))
+	}
+	for _, n := range storage.notifications {
+		if n.SettingID != setting.ID || n.EventType != EventTypeReorg {
+			t.Fatalf("unexpected notification %+v", n)
+		}
+		if n.Payload.BlockNumber != 7 || n.Payload.BlockHash != fork {
+			t.Fatalf("payload fork = %d %s", n.Payload.BlockNumber, n.Payload.BlockHash.Hex())
+		}
+		if !strings.Contains(string(n.Payload.Data), common.HexToHash("0x09").Hex()) {
+			t.Fatalf("payload does not list the removed blocks: %s", n.Payload.Data)
+		}
+	}
 }

@@ -149,3 +149,86 @@ func TestRollbackArchivesAtomically(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(4), latest)
 }
+
+// TestOrphanRetentionPrunesOldReorgs keeps the newest two reorganization
+// records: older records are deleted with the blocks they archived, except
+// a block a later reorganization archived again.
+func TestOrphanRetentionPrunesOldReorgs(t *testing.T) {
+	s := newTestPebble(t)
+	s.SetOrphanRetention(2)
+	ctx := context.Background()
+	chain := indexOrphanTestChain(t, s, 5, 'a')
+	a5 := chain[5]
+
+	// indexAt stores b at height 5 on top of block 4, with its transaction.
+	indexAt := func(b *model.Block) {
+		txCtx, tx, err := s.BeginBlock(ctx)
+		require.NoError(t, err)
+		tx.SetHeight(5)
+		require.NoError(t, s.SetModelBlock(txCtx, b))
+		for _, x := range b.Transactions {
+			require.NoError(t, s.SetModelReceipt(txCtx, &model.Receipt{
+				Status: 1, CumulativeGasUsed: 21000, GasUsed: 21000, EffectiveGasPrice: big.NewInt(1),
+				TxHash: x.Hash, BlockHash: b.Hash, BlockNumber: 5, Bloom: make([]byte, 256),
+			}))
+		}
+		require.NoError(t, s.SetLatestHeight(txCtx, 5))
+		require.NoError(t, tx.Commit())
+	}
+	branch := func(tag byte) *model.Block {
+		to := common.Address{9}
+		hash := common.Hash{tag, 5, 1}
+		return &model.Block{
+			Hash: hash, ParentHash: chain[4].Hash, Number: 5, Difficulty: big.NewInt(0), BaseFee: big.NewInt(1),
+			Transactions: []*model.Transaction{{
+				Hash: common.Hash{tag, 5, 2}, To: &to, Value: big.NewInt(1), Gas: 21000,
+				GasPrice: big.NewInt(1), GasTipCap: big.NewInt(1), GasFeeCap: big.NewInt(1),
+				BlockHash: hash, BlockNumber: 5,
+			}},
+		}
+	}
+	rollback := func(seq uint64) {
+		r, err := s.RollbackTo(ctx, 4)
+		require.NoError(t, err)
+		require.Equal(t, seq, r.Seq)
+	}
+
+	rollback(1) // removes a5
+	b5 := branch('b')
+	indexAt(b5)
+	rollback(2) // removes b5
+	indexAt(a5)
+	rollback(3) // removes a5 again; record 1 is pruned
+
+	_, err := s.GetReorg(ctx, 1)
+	require.ErrorIs(t, err, ErrNotFound)
+	ob, err := s.GetOrphanedBlock(ctx, a5.Hash)
+	require.NoError(t, err, "a5 was archived again by record 3")
+	require.Equal(t, uint64(3), ob.ReorgSeq)
+	byTx, err := s.GetOrphanedTransaction(ctx, a5.Transactions[0].Hash)
+	require.NoError(t, err)
+	require.Len(t, byTx, 1)
+
+	c5 := branch('c')
+	indexAt(c5)
+	rollback(4) // removes c5; record 2 and b5 are pruned
+
+	_, err = s.GetOrphanedBlock(ctx, b5.Hash)
+	require.ErrorIs(t, err, ErrNotFound)
+	byTx, err = s.GetOrphanedTransaction(ctx, b5.Transactions[0].Hash)
+	require.NoError(t, err)
+	require.Empty(t, byTx)
+	at, err := s.GetOrphanedBlocksAt(ctx, 5)
+	require.NoError(t, err)
+	var hashes []common.Hash
+	for _, o := range at {
+		hashes = append(hashes, o.Block.Hash)
+	}
+	require.ElementsMatch(t, []common.Hash{a5.Hash, c5.Hash}, hashes)
+
+	reorgs, err := s.GetReorgs(ctx, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, reorgs, 2)
+	require.Equal(t, uint64(4), reorgs[0].Seq)
+	require.Equal(t, uint64(3), reorgs[1].Seq)
+}
