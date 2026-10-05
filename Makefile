@@ -1,4 +1,4 @@
-.PHONY: all build clean test lint coverage generate tools help
+.PHONY: all build clean test lint lint-install coverage generate tools help
 
 # Variables
 BINARY_NAME=indexer-go
@@ -20,6 +20,11 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 GOVET=$(GOCMD) vet
+
+# golangci-lint is built with the active Go toolchain: a binary built with an
+# older Go than the one compiling the code fails to analyze it.
+GOLANGCI_LINT_VERSION=v2.14.0
+GOLANGCI_LINT=$(shell $(GOCMD) env GOPATH)/bin/golangci-lint
 
 # Build flags with version information
 LDFLAGS=-ldflags "-s -w \
@@ -75,10 +80,15 @@ coverage:
 	@echo "Coverage report generated: coverage.html"
 
 ## lint: Run linter
-lint:
+lint: lint-install
 	@echo "Running linter..."
-	@which golangci-lint > /dev/null || (echo "golangci-lint not found. Install with: make tools" && exit 1)
-	golangci-lint run ./...
+	$(GOLANGCI_LINT) run ./...
+
+## lint-install: Install golangci-lint $(GOLANGCI_LINT_VERSION) built with the active Go toolchain
+lint-install:
+	@$(GOLANGCI_LINT) version 2>/dev/null | grep -q "version $(GOLANGCI_LINT_VERSION:v%=%) built with $$($(GOCMD) env GOVERSION) " || \
+		(echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION) with $$($(GOCMD) env GOVERSION)..." && \
+		GOBIN=$(dir $(GOLANGCI_LINT)) $(GOCMD) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION))
 
 ## fmt: Format code
 fmt:
@@ -116,7 +126,7 @@ mod-verify:
 tools:
 	@echo "Installing development tools..."
 	@which gqlgen > /dev/null || $(GOGET) github.com/99designs/gqlgen
-	@which golangci-lint > /dev/null || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+	@$(MAKE) lint-install
 	@echo "Tools installed"
 
 ## run: Run the indexer (dev)
