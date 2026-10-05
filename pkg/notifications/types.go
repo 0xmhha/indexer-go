@@ -26,6 +26,10 @@ const (
 	EventTypeLog              EventType = "log"
 	EventTypeContractCreation EventType = "contract_creation"
 	EventTypeTokenTransfer    EventType = "token_transfer"
+	// EventTypeReorg is a chain reorganization: the payload lists the
+	// removed blocks; their logs are also delivered as log events with
+	// removed set.
+	EventTypeReorg EventType = "reorg"
 )
 
 // DeliveryStatus represents the status of a notification delivery.
