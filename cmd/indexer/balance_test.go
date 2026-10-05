@@ -101,3 +101,15 @@ func TestStableNetGovernanceEvents(t *testing.T) {
 	require.Equal(t, sc.Accounts[3].Address, deposits[0].Beneficiary)
 	require.Equal(t, "bank-ref1", deposits[0].BankReference)
 }
+
+// TestNativeTransfersAreNotTokenTransfers: on StableNet every native value
+// move emits a NativeCoinAdapter Transfer event. They are native transfers
+// (in balance.native), not ERC-20 transfers of a token.
+func TestNativeTransfersAreNotTokenTransfers(t *testing.T) {
+	sc := testchain.BuildStableNet()
+	app := indexAll(t, sc.Chain)
+	r := app.storage.(storage.AddressIndexReader)
+	got, err := r.GetERC20TransfersByToken(context.Background(), testchain.NativeCoinAdapterAddress, 100, 0)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}

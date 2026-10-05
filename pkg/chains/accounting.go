@@ -40,6 +40,22 @@ type AccountingProfile interface {
 	NativeAccounting() NativeAccounting
 }
 
+// NativeCoinProfile is implemented by profiles whose native coin is also
+// exposed as a token contract that emits Transfer events for native value
+// moves (StableNet's NativeCoinAdapter). Those events are native transfers,
+// not token transfers.
+type NativeCoinProfile interface {
+	NativeCoinContract() (common.Address, bool)
+}
+
+// NativeCoinContract returns the profile's native coin contract, if any.
+func NativeCoinContract(p Profile) (common.Address, bool) {
+	if np, ok := p.(NativeCoinProfile); ok {
+		return np.NativeCoinContract()
+	}
+	return common.Address{}, false
+}
+
 // AccountingOf returns the profile's accounting rules, or the Ethereum rules
 // when the profile has none or is unknown.
 func AccountingOf(p Profile) NativeAccounting {

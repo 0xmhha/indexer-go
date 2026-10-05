@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -31,13 +32,21 @@ func (transfersFeature) Register(r feature.Registrar) error {
 	if !ok {
 		return fmt.Errorf("storage does not support token transfers")
 	}
-	r.OnBlock(&transfers{w: w})
+	t := &transfers{w: w}
+	t.nativeCoin, t.hasNativeCoin = chains.NativeCoinContract(r.Deps().Profile)
+	r.OnBlock(t)
 	return nil
 }
 
 func init() { feature.Register(transfersFeature{}) }
 
-type transfers struct{ w storagepkg.AddressIndexWriter }
+type transfers struct {
+	w storagepkg.AddressIndexWriter
+	// The chain's native coin contract: its Transfer events are native
+	// value moves (balance.native), not token transfers.
+	nativeCoin    common.Address
+	hasNativeCoin bool
+}
 
 // HandleBlock indexes Transfer(address,address,uint256) logs. The standard is
 // told apart by the number of topics: three for ERC-20 (value in data), four
@@ -46,6 +55,9 @@ func (t *transfers) HandleBlock(ctx context.Context, b *feature.Block) error {
 	for _, receipt := range b.GethReceipts {
 		for _, log := range receipt.Logs {
 			if log == nil || len(log.Topics) == 0 || log.Topics[0].Hex() != storagepkg.ERC20TransferTopic {
+				continue
+			}
+			if t.hasNativeCoin && log.Address == t.nativeCoin {
 				continue
 			}
 			switch len(log.Topics) {

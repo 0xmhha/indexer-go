@@ -49,6 +49,7 @@ type Profile struct {
 	effectiveGasPrice EffectiveGasPriceFunc
 
 	accounting chains.NativeAccounting
+	nativeCoin *common.Address
 }
 
 // Option configures a Profile.
@@ -81,6 +82,20 @@ func WithHeaderHasher(f func(*types.Header) common.Hash) Option {
 // (default: chains.EthereumAccounting).
 func WithNativeAccounting(a chains.NativeAccounting) Option {
 	return func(p *Profile) { p.accounting = a }
+}
+
+// WithNativeCoinContract declares the contract whose Transfer events report
+// native value moves (chains.NativeCoinProfile).
+func WithNativeCoinContract(addr common.Address) Option {
+	return func(p *Profile) { p.nativeCoin = &addr }
+}
+
+// NativeCoinContract implements chains.NativeCoinProfile.
+func (p *Profile) NativeCoinContract() (common.Address, bool) {
+	if p.nativeCoin == nil {
+		return common.Address{}, false
+	}
+	return *p.nativeCoin, true
 }
 
 // NativeAccounting implements chains.AccountingProfile.

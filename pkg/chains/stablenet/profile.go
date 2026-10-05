@@ -34,6 +34,7 @@ func New() *evm.Profile {
 		evm.WithBinaryTxDecoder(FeeDelegationTxType, DecodeFeeDelegationTxBinary),
 		evm.WithEffectiveGasPrice(EffectiveGasPrice),
 		evm.WithNativeAccounting(NewAccounting()),
+		evm.WithNativeCoinContract(NativeCoinAdapterAddress),
 	)
 }
 
