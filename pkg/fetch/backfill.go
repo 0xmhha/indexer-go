@@ -74,6 +74,14 @@ func (f *Fetcher) backfillBlock(ctx context.Context, p *feature.Pipeline, fb *fe
 			return fmt.Errorf("backfill: record progress at %d: %w", h, err)
 		}
 	}
+	// The block's undo record does not cover what the backfill wrote, so it
+	// can no longer be rolled back exactly; drop it so a reorg reaching this
+	// block stops instead of leaving the backfilled data behind.
+	if u, ok := f.storage.(undoDropper); ok {
+		if err := u.DropUndo(txCtx, h); err != nil {
+			return fmt.Errorf("backfill: drop undo of %d: %w", h, err)
+		}
+	}
 	if f.beforeCommitHook != nil {
 		if err := f.beforeCommitHook(h); err != nil {
 			return err
@@ -83,4 +91,8 @@ func (f *Fetcher) backfillBlock(ctx context.Context, p *feature.Pipeline, fb *fe
 		return fmt.Errorf("backfill: commit block %d: %w", h, err)
 	}
 	return nil
+}
+
+type undoDropper interface {
+	DropUndo(ctx context.Context, height uint64) error
 }

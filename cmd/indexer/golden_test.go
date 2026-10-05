@@ -124,6 +124,11 @@ var volatileJSONFields = map[string][]string{
 }
 
 func normalizeVolatile(key, value []byte) ([]byte, bool) {
+	// Undo records depend on how blocks were processed (restarts,
+	// backfills), not only on the chain; rollback tests check them.
+	if bytes.HasPrefix(key, []byte("/undo/")) {
+		return nil, false
+	}
 	for prefix, fields := range volatileJSONFields {
 		if !bytes.HasPrefix(key, []byte(prefix)) {
 			continue

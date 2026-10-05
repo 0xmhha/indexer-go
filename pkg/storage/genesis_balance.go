@@ -129,3 +129,11 @@ func (tx *BlockTx) publishGenesisTried() {
 		tx.s.genesisTried[addr] = true
 	}
 }
+
+// resetGenesisTried forgets which addresses had their genesis balance looked
+// up, so lookups undone by a rollback can happen again.
+func (s *PebbleStorage) resetGenesisTried() {
+	s.genesisMu.Lock()
+	s.genesisTried = make(map[common.Address]bool)
+	s.genesisMu.Unlock()
+}

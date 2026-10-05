@@ -339,3 +339,34 @@ func (c *Chain) TxCount() int {
 	}
 	return n
 }
+
+// Reorg drops every block above keep, as a chain reorganization does, so the
+// next AddBlock builds a competing block at keep+1. Nonces and balances return
+// to their state after block keep.
+func (c *Chain) Reorg(keep uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if keep >= uint64(len(c.blocks))-1 {
+		return
+	}
+	for _, b := range c.blocks[keep+1:] {
+		delete(c.byHash, b.Block.Hash())
+		for _, tx := range b.Block.Transactions() {
+			delete(c.txIndex, tx.Hash())
+		}
+	}
+	c.blocks = c.blocks[:keep+1]
+	c.balances = c.balances[:keep+1]
+	c.nonces = map[common.Address]uint64{}
+	for _, b := range c.blocks {
+		for _, tx := range b.Block.Transactions() {
+			from, err := types.Sender(types.LatestSignerForChainID(c.chainID), tx)
+			if err == nil {
+				c.nonces[from]++
+			}
+		}
+	}
+	if c.head > keep {
+		c.head = keep
+	}
+}

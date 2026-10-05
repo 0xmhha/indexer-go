@@ -41,6 +41,8 @@ type BlockTx struct {
 	// genesisSeen records lazy genesis lookups made in this block.
 	genesisSeen map[common.Address]bool
 	done        bool
+	// height, when set, makes Commit record the block's undo (undo.go).
+	height *uint64
 }
 
 // BeginBlock opens a block transaction and returns a context bound to it.
@@ -76,6 +78,9 @@ func (tx *BlockTx) Commit() error {
 	defer tx.s.writeMu.Unlock()
 	defer tx.batch.Close()
 
+	if err := tx.writeUndo(); err != nil {
+		return fmt.Errorf("record undo: %w", err)
+	}
 	if err := tx.batch.Commit(pebble.Sync); err != nil {
 		return err
 	}

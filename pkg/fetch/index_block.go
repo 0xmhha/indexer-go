@@ -13,9 +13,10 @@ import (
 )
 
 // ErrBlockConflict is returned when a block at an already indexed height has
-// a different hash than the stored one. Reorg handling is not implemented yet
-// (refactoring plan R2-4), so the fetcher stops instead of overwriting.
-var ErrBlockConflict = errors.New("fetch: stored block differs from fetched block (reorg handling not implemented)")
+// a different hash than the stored one. It is reported as a ReorgError (which
+// matches both errors.Is(err, ErrReorg) and this error) so the caller rolls
+// back instead of overwriting.
+var ErrBlockConflict = errors.New("fetch: stored block differs from fetched block")
 
 // atomic reports whether blocks are indexed with one storage transaction each.
 func (f *Fetcher) atomic() bool {
@@ -60,16 +61,20 @@ func (f *Fetcher) indexBlock(ctx context.Context, fb *fetchedBlock) error {
 		f.logger.Debug("Block already indexed, skipping", zap.Uint64("height", height))
 		return f.advanceCursorOnly(ctx, height)
 	case err == nil:
-		return fmt.Errorf("%w: height %d stored %s fetched %s", ErrBlockConflict, height, storedHash.Hex(), fb.block.Hash.Hex())
+		return fmt.Errorf("%w (height %d stored %s fetched %s): %w", ErrBlockConflict, height, storedHash.Hex(), fb.block.Hash.Hex(), &ReorgError{Height: height})
 	case !errors.Is(err, storagepkg.ErrNotFound):
 		return fmt.Errorf("check stored block %d: %w", height, err)
+	}
+	if err := f.checkParent(ctx, fb); err != nil {
+		return err
 	}
 
 	txCtx, tx, err := f.txr.BeginBlock(ctx)
 	if err != nil {
 		return fmt.Errorf("begin block %d: %w", height, err)
 	}
-	defer tx.Rollback() // no-op after Commit
+	tx.SetHeight(height) // record undo so a reorg can roll the block back
+	defer tx.Rollback()  // no-op after Commit
 
 	var pending []events.Event
 	f.pendingEvents = &pending

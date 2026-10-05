@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -769,6 +770,19 @@ func (f *Fetcher) Run(ctx context.Context) error {
 		)
 
 		if err := f.FetchRange(ctx, nextHeight, batchEnd); err != nil {
+			var reorg *ReorgError
+			if errors.As(err, &reorg) {
+				fork, rerr := f.HandleReorg(ctx, reorg.Height)
+				if errors.Is(rerr, ErrReorgTooDeep) {
+					f.logger.Error("Stopping: reorganization cannot be rolled back; reindex", zap.Error(rerr))
+					return rerr
+				}
+				if rerr == nil {
+					nextHeight = fork + 1
+					continue
+				}
+				err = rerr
+			}
 			f.logger.Error("Failed to fetch batch", zap.Error(err))
 			if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
 				return err

@@ -53,7 +53,7 @@ make docker-build   # Container image
 - **EventBus**: `main.go` uses `events.NewEventBus` directly; subscriptions read `sub.Channel` (not `sub.Events()`)
   - Publishing is non-blocking; events are dropped when a buffer is full
   - `pkg/eventbus` (Redis, Kafka, factory with local degradation) exists but is not wired
-- **Storage**: PebbleDB. Each block is indexed in one block transaction (`BeginBlock`, indexed batch bound to ctx; all access goes through `s.kv(ctx)`). `indexer.atomic_block: false` selects the legacy path until it is removed
+- **Storage**: PebbleDB. Each block is indexed in one block transaction (`BeginBlock`, indexed batch bound to ctx; all access goes through `s.kv(ctx)`). `indexer.atomic_block: false` selects the legacy path until it is removed. Each block's commit records undo (`/undo/<height>`, last 128 blocks); on a reorg the live loop rolls back to the fork point (`docs/analysis/reorg-design.md`)
 - **Fetcher**: Live indexing processes blocks sequentially by polling; the worker pool (`indexer.workers`) is used only by gap recovery
 - **Adapter**: Detects the node type and selects an adapter; `--adapter` forces one
 - **Chain profiles** (`pkg/chains`): decode raw blocks into the chain-neutral model; chain-specific behaviour reaches chain-neutral code (`pkg/fetch`, `pkg/api`, `pkg/source`, `pkg/feature`) only through registries in `pkg/chains` (enforced by a test)
