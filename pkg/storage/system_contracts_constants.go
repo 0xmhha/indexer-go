@@ -17,11 +17,6 @@ var (
 // SystemContractAddresses is a map for quick lookup
 var SystemContractAddresses = constants.SystemContractAddresses
 
-// IsSystemContract returns true if the address is a system contract
-func IsSystemContract(addr common.Address) bool {
-	return constants.IsSystemContract(addr)
-}
-
 // SystemContractTokenMetadata contains pre-defined metadata for system contracts
 type SystemContractTokenMetadata = constants.SystemContractTokenMetadata
 
@@ -82,8 +77,3 @@ var (
 
 // EventSignatureToName maps event signatures to human-readable names
 var EventSignatureToName = constants.EventSignatureToName
-
-// GetEventName returns the human-readable name for an event signature
-func GetEventName(sig common.Hash) string {
-	return constants.GetEventName(sig)
-}

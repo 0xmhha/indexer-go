@@ -9,7 +9,6 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Ensure PebbleStorage implements SystemContractReader
@@ -445,40 +444,6 @@ func (s *PebbleStorage) UpdateBlacklistStatus(ctx context.Context, address commo
 		// Remove from blacklist
 		if err := s.kv(ctx).Delete(key, pebble.Sync); err != nil {
 			return fmt.Errorf("failed to remove blacklist status: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// IndexSystemContractEvent indexes a single system contract event from a log
-// This is a placeholder implementation - actual parsing logic should be handled by events package
-func (s *PebbleStorage) IndexSystemContractEvent(ctx context.Context, log *types.Log) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
-	// This method should be called by the events package's SystemContractEventParser
-	// which will parse the log and call the appropriate Store* methods
-	return fmt.Errorf("IndexSystemContractEvent should be called from events package")
-}
-
-// IndexSystemContractEvents indexes multiple system contract events from logs (batch operation)
-func (s *PebbleStorage) IndexSystemContractEvents(ctx context.Context, logs []*types.Log) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
-	// Batch index all events
-	for _, log := range logs {
-		if err := s.IndexSystemContractEvent(ctx, log); err != nil {
-			return fmt.Errorf("failed to index event at block %d: %w", log.BlockNumber, err)
 		}
 	}
 

@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // ProposalStatus represents the status of a governance proposal
@@ -265,12 +264,6 @@ type SystemContractReader interface {
 
 // SystemContractWriter provides write access for system contract event indexing
 type SystemContractWriter interface {
-	// IndexSystemContractEvent indexes a single system contract event from a log
-	IndexSystemContractEvent(ctx context.Context, log *types.Log) error
-
-	// IndexSystemContractEvents indexes multiple system contract events from logs (batch operation)
-	IndexSystemContractEvents(ctx context.Context, logs []*types.Log) error
-
 	// Event storage methods
 	StoreMintEvent(ctx context.Context, event *MintEvent) error
 	StoreBurnEvent(ctx context.Context, event *BurnEvent) error

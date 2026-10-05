@@ -6,59 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func TestIsSystemContract(t *testing.T) {
-	tests := []struct {
-		name     string
-		addr     common.Address
-		expected bool
-	}{
-		{
-			name:     "NativeCoinAdapter is system contract",
-			addr:     NativeCoinAdapterAddress,
-			expected: true,
-		},
-		{
-			name:     "GovValidator is system contract",
-			addr:     GovValidatorAddress,
-			expected: true,
-		},
-		{
-			name:     "GovMasterMinter is system contract",
-			addr:     GovMasterMinterAddress,
-			expected: true,
-		},
-		{
-			name:     "GovMinter is system contract",
-			addr:     GovMinterAddress,
-			expected: true,
-		},
-		{
-			name:     "GovCouncil is system contract",
-			addr:     GovCouncilAddress,
-			expected: true,
-		},
-		{
-			name:     "random address is not system contract",
-			addr:     common.HexToAddress("0x1234567890123456789012345678901234567890"),
-			expected: false,
-		},
-		{
-			name:     "zero address is not system contract",
-			addr:     common.Address{},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := IsSystemContract(tt.addr)
-			if result != tt.expected {
-				t.Errorf("IsSystemContract(%s) = %v, want %v", tt.addr.Hex(), result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestGetSystemContractTokenMetadata(t *testing.T) {
 	// Test NativeCoinAdapter should have metadata
 	metadata := GetSystemContractTokenMetadata(NativeCoinAdapterAddress)
@@ -78,57 +25,6 @@ func TestGetSystemContractTokenMetadata(t *testing.T) {
 	metadata = GetSystemContractTokenMetadata(randomAddr)
 	if metadata != nil {
 		t.Error("random address should not have token metadata")
-	}
-}
-
-func TestGetEventName(t *testing.T) {
-	tests := []struct {
-		name        string
-		sig         common.Hash
-		shouldExist bool
-	}{
-		{
-			name:        "Transfer event",
-			sig:         EventSigTransfer,
-			shouldExist: true,
-		},
-		{
-			name:        "Approval event",
-			sig:         EventSigApproval,
-			shouldExist: true,
-		},
-		{
-			name:        "Mint event",
-			sig:         EventSigMint,
-			shouldExist: true,
-		},
-		{
-			name:        "Burn event",
-			sig:         EventSigBurn,
-			shouldExist: true,
-		},
-		{
-			name:        "ProposalCreated event",
-			sig:         EventSigProposalCreated,
-			shouldExist: true,
-		},
-		{
-			name:        "unknown event returns Unknown",
-			sig:         common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
-			shouldExist: true, // Returns "Unknown" for unknown events
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := GetEventName(tt.sig)
-			if tt.shouldExist && result == "" {
-				t.Errorf("GetEventName(%s) should return non-empty name", tt.sig.Hex())
-			}
-			if !tt.shouldExist && result != "" {
-				t.Errorf("GetEventName(%s) should return empty for unknown event, got %q", tt.sig.Hex(), result)
-			}
-		})
 	}
 }
 

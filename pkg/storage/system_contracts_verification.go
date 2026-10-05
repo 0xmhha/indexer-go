@@ -221,18 +221,3 @@ func loadAbstractContracts(abstractsPath string) (string, error) {
 
 	return combined, nil
 }
-
-// GetSystemContractInfo returns the system contract info for a given address
-func GetSystemContractInfo(address common.Address) *SystemContractInfo {
-	for _, info := range SystemContractInfoList {
-		if info.Address == address {
-			return &info
-		}
-	}
-	return nil
-}
-
-// IsSystemContractAddress returns true if the address is a system contract
-func IsSystemContractAddress(address common.Address) bool {
-	return GetSystemContractInfo(address) != nil
-}

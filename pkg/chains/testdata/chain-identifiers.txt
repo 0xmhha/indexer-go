@@ -14,12 +14,12 @@ pkg/consensus/wbft 121
 pkg/core/gethconv 3
 pkg/core/model 6
 pkg/eventbus 10
-pkg/events 286
+pkg/events 221
 pkg/feature 2
 pkg/features/address 1
 pkg/features/token 7
 pkg/fetch 37
 pkg/multichain 2
-pkg/storage 234
+pkg/storage 221
 pkg/types/chain 16
 pkg/types/consensus 22

@@ -54,12 +54,6 @@ func newMockWriter() *mockSystemContractWriter {
 	}
 }
 
-func (m *mockSystemContractWriter) IndexSystemContractEvent(_ context.Context, _ *types.Log) error {
-	return nil
-}
-func (m *mockSystemContractWriter) IndexSystemContractEvents(_ context.Context, _ []*types.Log) error {
-	return nil
-}
 func (m *mockSystemContractWriter) StoreMintEvent(_ context.Context, e *storage.MintEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
