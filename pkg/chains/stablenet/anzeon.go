@@ -27,10 +27,15 @@ var (
 const extraGasTip = 8
 
 // HeaderGasTip returns the gas tip in a WBFT header's extra data, or nil if
-// the extra data is not a WBFT extra.
+// the extra data is not a WBFT extra or carries no tip. An empty value is
+// no tip, not a zero tip (go-stablenet decodes the field with rlp:"nil"),
+// so the transaction's own tip applies.
 func HeaderGasTip(extra []byte) *big.Int {
 	var elems []rlp.RawValue
 	if err := rlp.DecodeBytes(extra, &elems); err != nil || len(elems) != extraFields {
+		return nil
+	}
+	if raw := elems[extraGasTip]; len(raw) == 1 && raw[0] == 0x80 {
 		return nil
 	}
 	tip := new(big.Int)

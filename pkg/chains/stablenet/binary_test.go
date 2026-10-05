@@ -142,6 +142,7 @@ func TestAnzeonEffectiveGasPrice(t *testing.T) {
 	block := &model.Block{BaseFee: big.NewInt(10), Extra: wbftExtra(t, big.NewInt(7))}
 
 	require.Equal(t, big.NewInt(7), stablenet.HeaderGasTip(block.Extra))
+	require.Nil(t, stablenet.HeaderGasTip(wbftExtra(t, nil)), "an empty tip is no tip")
 	require.Equal(t, big.NewInt(17), stablenet.EffectiveGasPrice(block, tx, plain), "header tip")
 	require.Equal(t, big.NewInt(13), stablenet.EffectiveGasPrice(block, tx, authorized), "own tip")
 	require.Equal(t, big.NewInt(13), stablenet.EffectiveGasPrice(&model.Block{BaseFee: big.NewInt(10)}, tx, plain), "no WBFT extra")
