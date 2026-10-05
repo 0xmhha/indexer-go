@@ -1,12 +1,10 @@
 package consensus
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestConsensusData_ParticipationRate(t *testing.T) {
@@ -179,84 +177,6 @@ func TestConsensusData_CalculateMissedValidators(t *testing.T) {
 			assert.ElementsMatch(t, tt.expectedMissedPrep, cd.MissedPrepare)
 			assert.ElementsMatch(t, tt.expectedMissedComm, cd.MissedCommit)
 		})
-	}
-}
-
-func TestWBFTExtra_Structure(t *testing.T) {
-	// Test that WBFTExtra structure can be properly initialized
-	extra := &WBFTExtra{
-		VanityData:   make([]byte, 32),
-		RandaoReveal: make([]byte, 96),
-		PrevRound:    0,
-		Round:        0,
-		GasTip:       big.NewInt(1000),
-		PrevPreparedSeal: &WBFTAggregatedSeal{
-			Sealers:   []byte{0xFF, 0xFF},
-			Signature: make([]byte, 96),
-		},
-		PrevCommittedSeal: &WBFTAggregatedSeal{
-			Sealers:   []byte{0xFF, 0xFF},
-			Signature: make([]byte, 96),
-		},
-		PreparedSeal: &WBFTAggregatedSeal{
-			Sealers:   []byte{0xFF, 0xFF},
-			Signature: make([]byte, 96),
-		},
-		CommittedSeal: &WBFTAggregatedSeal{
-			Sealers:   []byte{0xFF, 0xFF},
-			Signature: make([]byte, 96),
-		},
-		EpochInfo: &EpochInfoRaw{
-			Candidates: []*CandidateRaw{
-				{
-					Address:   common.HexToAddress("0x1111111111111111111111111111111111111111"),
-					Diligence: 1000000,
-				},
-			},
-			Validators:    []uint32{0, 1, 2, 3},
-			BLSPublicKeys: [][]byte{make([]byte, 48), make([]byte, 48)},
-		},
-	}
-
-	require.NotNil(t, extra)
-	assert.Equal(t, 32, len(extra.VanityData))
-	assert.Equal(t, 96, len(extra.RandaoReveal))
-	assert.Equal(t, uint32(0), extra.Round)
-	assert.Equal(t, big.NewInt(1000), extra.GasTip)
-	assert.NotNil(t, extra.PreparedSeal)
-	assert.NotNil(t, extra.CommittedSeal)
-	assert.NotNil(t, extra.EpochInfo)
-}
-
-func TestRoundAnalysis_Calculations(t *testing.T) {
-	analysis := &RoundAnalysis{
-		StartBlock:            100,
-		EndBlock:              200,
-		TotalBlocks:           100,
-		BlocksWithRoundChange: 25,
-		RoundDistribution: []RoundDistribution{
-			{Round: 0, Count: 75},
-			{Round: 1, Count: 20},
-			{Round: 2, Count: 5},
-		},
-	}
-
-	// Verify basic calculations
-	assert.Equal(t, uint64(100), analysis.TotalBlocks)
-	assert.Equal(t, uint64(25), analysis.BlocksWithRoundChange)
-
-	// Verify distribution sums to total
-	var totalCount uint64
-	for _, dist := range analysis.RoundDistribution {
-		totalCount += dist.Count
-	}
-	assert.Equal(t, analysis.TotalBlocks, totalCount)
-
-	// Calculate expected percentages
-	expectedPercentages := []float64{75.0, 20.0, 5.0}
-	for i, dist := range analysis.RoundDistribution {
-		expected := expectedPercentages[i]
-		assert.InDelta(t, expected, float64(dist.Count)/float64(analysis.TotalBlocks)*100, 0.01)
 	}
 }
 

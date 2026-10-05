@@ -8,7 +8,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/model"
-	consensustypes "github.com/0xmhha/indexer-go/pkg/types/consensus"
 )
 
 // ConsensusStorage provides consensus data storage operations
@@ -36,7 +35,7 @@ func NewConsensusStorage(storage ConsensusBackend, logger *zap.Logger) *Consensu
 
 // SaveConsensusData saves consensus data extracted from a block
 // This is the primary method for storing consensus information
-func (cs *ConsensusStorage) SaveConsensusData(ctx context.Context, data *consensustypes.ConsensusData) error {
+func (cs *ConsensusStorage) SaveConsensusData(ctx context.Context, data *ConsensusData) error {
 	if data == nil {
 		return fmt.Errorf("consensus data is nil")
 	}
@@ -76,7 +75,7 @@ func (cs *ConsensusStorage) SaveConsensusData(ctx context.Context, data *consens
 }
 
 // GetConsensusData retrieves consensus data for a specific block
-func (cs *ConsensusStorage) GetConsensusData(ctx context.Context, blockNumber uint64) (*consensustypes.ConsensusData, error) {
+func (cs *ConsensusStorage) GetConsensusData(ctx context.Context, blockNumber uint64) (*ConsensusData, error) {
 	// Get WBFT block extra
 	wbftExtra, err := cs.storage.GetWBFTBlockExtra(ctx, blockNumber)
 	if err != nil {
@@ -131,7 +130,7 @@ func (cs *ConsensusStorage) GetValidatorStats(
 	ctx context.Context,
 	validatorAddr common.Address,
 	fromBlock, toBlock uint64,
-) (*consensustypes.ValidatorStats, error) {
+) (*ValidatorStats, error) {
 	// Get signing activities for this validator in the range
 	activities, err := cs.storage.GetValidatorSigningActivity(ctx, validatorAddr, fromBlock, toBlock, 10000, 0)
 	if err != nil {
@@ -139,7 +138,7 @@ func (cs *ConsensusStorage) GetValidatorStats(
 	}
 
 	// Aggregate statistics from activities
-	stats := &consensustypes.ValidatorStats{
+	stats := &ValidatorStats{
 		Address:     validatorAddr,
 		TotalBlocks: uint64(len(activities)),
 	}
@@ -170,7 +169,7 @@ func (cs *ConsensusStorage) GetValidatorParticipation(
 	validatorAddr common.Address,
 	fromBlock, toBlock uint64,
 	limit, offset int,
-) (*consensustypes.ValidatorParticipation, error) {
+) (*ValidatorParticipation, error) {
 	// Get signing activity from storage
 	activities, err := cs.storage.GetValidatorSigningActivity(ctx, validatorAddr, fromBlock, toBlock, limit, offset)
 	if err != nil {
@@ -178,11 +177,11 @@ func (cs *ConsensusStorage) GetValidatorParticipation(
 	}
 
 	// Convert to ValidatorParticipation
-	participation := &consensustypes.ValidatorParticipation{
+	participation := &ValidatorParticipation{
 		Address:    validatorAddr,
 		StartBlock: fromBlock,
 		EndBlock:   toBlock,
-		Blocks:     make([]consensustypes.BlockParticipation, 0, len(activities)),
+		Blocks:     make([]BlockParticipation, 0, len(activities)),
 	}
 
 	var blocksProposed, blocksCommitted, blocksMissed uint64
@@ -192,7 +191,7 @@ func (cs *ConsensusStorage) GetValidatorParticipation(
 		// For now, we'll leave this as false and update in a separate pass if needed
 		wasProposer := false
 
-		participation.Blocks = append(participation.Blocks, consensustypes.BlockParticipation{
+		participation.Blocks = append(participation.Blocks, BlockParticipation{
 			BlockNumber:   activity.BlockNumber,
 			WasProposer:   wasProposer,
 			SignedPrepare: activity.SignedPrepare,
@@ -224,7 +223,7 @@ func (cs *ConsensusStorage) GetAllValidatorStats(
 	ctx context.Context,
 	fromBlock, toBlock uint64,
 	limit, offset int,
-) (map[common.Address]*consensustypes.ValidatorStats, error) {
+) (map[common.Address]*ValidatorStats, error) {
 	// Get all validators signing stats from storage
 	signingStatsList, err := cs.storage.GetAllValidatorsSigningStats(ctx, fromBlock, toBlock, limit, offset)
 	if err != nil {
@@ -232,10 +231,10 @@ func (cs *ConsensusStorage) GetAllValidatorStats(
 	}
 
 	// Convert to map of ValidatorStats
-	statsMap := make(map[common.Address]*consensustypes.ValidatorStats)
+	statsMap := make(map[common.Address]*ValidatorStats)
 
 	for _, signingStats := range signingStatsList {
-		stats := &consensustypes.ValidatorStats{
+		stats := &ValidatorStats{
 			Address:        signingStats.ValidatorAddress,
 			TotalBlocks:    toBlock - fromBlock + 1,
 			PreparesSigned: signingStats.PrepareSignCount,
@@ -252,7 +251,7 @@ func (cs *ConsensusStorage) GetAllValidatorStats(
 }
 
 // GetEpochInfo retrieves epoch information for a specific epoch
-func (cs *ConsensusStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) (*consensustypes.EpochData, error) {
+func (cs *ConsensusStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) (*EpochData, error) {
 	// Get epoch info from storage
 	epochInfo, err := cs.storage.GetEpochInfo(ctx, epochNumber)
 	if err != nil {
@@ -260,12 +259,12 @@ func (cs *ConsensusStorage) GetEpochInfo(ctx context.Context, epochNumber uint64
 	}
 
 	// Convert to EpochData
-	epochData := &consensustypes.EpochData{
+	epochData := &EpochData{
 		EpochNumber:    epochInfo.EpochNumber,
 		ValidatorCount: len(epochInfo.Validators),
 		CandidateCount: len(epochInfo.Candidates),
-		Validators:     make([]consensustypes.ValidatorInfo, 0, len(epochInfo.Validators)),
-		Candidates:     make([]consensustypes.CandidateInfo, 0, len(epochInfo.Candidates)),
+		Validators:     make([]ValidatorInfo, 0, len(epochInfo.Validators)),
+		Candidates:     make([]CandidateInfo, 0, len(epochInfo.Candidates)),
 	}
 
 	// Convert validators
@@ -280,7 +279,7 @@ func (cs *ConsensusStorage) GetEpochInfo(ctx context.Context, epochNumber uint64
 			blsPubKey = epochInfo.BLSPublicKeys[i]
 		}
 
-		epochData.Validators = append(epochData.Validators, consensustypes.ValidatorInfo{
+		epochData.Validators = append(epochData.Validators, ValidatorInfo{
 			Address:   candidate.Address,
 			Index:     validatorIndex,
 			BLSPubKey: blsPubKey,
@@ -289,17 +288,14 @@ func (cs *ConsensusStorage) GetEpochInfo(ctx context.Context, epochNumber uint64
 
 	// Convert candidates
 	for _, candidate := range epochInfo.Candidates {
-		epochData.Candidates = append(epochData.Candidates, consensustypes.CandidateInfo{
-			Address:   candidate.Address,
-			Diligence: candidate.Diligence,
-		})
+		epochData.Candidates = append(epochData.Candidates, CandidateInfo(candidate))
 	}
 
 	return epochData, nil
 }
 
 // GetLatestEpochInfo retrieves the most recent epoch information
-func (cs *ConsensusStorage) GetLatestEpochInfo(ctx context.Context) (*consensustypes.EpochData, error) {
+func (cs *ConsensusStorage) GetLatestEpochInfo(ctx context.Context) (*EpochData, error) {
 	epochInfo, err := cs.storage.GetLatestEpochInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest epoch info: %w", err)
@@ -312,7 +308,7 @@ func (cs *ConsensusStorage) GetLatestEpochInfo(ctx context.Context) (*consensust
 // Conversion helper functions
 
 // convertToWBFTBlockExtra converts ConsensusData to WBFTBlockExtra for storage
-func (cs *ConsensusStorage) convertToWBFTBlockExtra(data *consensustypes.ConsensusData) *WBFTBlockExtra {
+func (cs *ConsensusStorage) convertToWBFTBlockExtra(data *ConsensusData) *WBFTBlockExtra {
 	extra := &WBFTBlockExtra{
 		BlockNumber:  data.BlockNumber,
 		BlockHash:    data.BlockHash,
@@ -348,8 +344,8 @@ func (cs *ConsensusStorage) convertToConsensusData(
 	proposer common.Address,
 	validators []common.Address,
 	prepareSigners, commitSigners []common.Address,
-) *consensustypes.ConsensusData {
-	data := &consensustypes.ConsensusData{
+) *ConsensusData {
+	data := &ConsensusData{
 		BlockNumber:    extra.BlockNumber,
 		BlockHash:      extra.BlockHash,
 		Round:          extra.Round,
@@ -372,12 +368,12 @@ func (cs *ConsensusStorage) convertToConsensusData(
 	// Convert epoch info if present
 	if extra.EpochInfo != nil {
 		// Full epoch data conversion
-		epochData := &consensustypes.EpochData{
+		epochData := &EpochData{
 			EpochNumber:    extra.EpochInfo.EpochNumber,
 			ValidatorCount: len(extra.EpochInfo.Validators),
 			CandidateCount: len(extra.EpochInfo.Candidates),
-			Validators:     make([]consensustypes.ValidatorInfo, 0, len(extra.EpochInfo.Validators)),
-			Candidates:     make([]consensustypes.CandidateInfo, 0, len(extra.EpochInfo.Candidates)),
+			Validators:     make([]ValidatorInfo, 0, len(extra.EpochInfo.Validators)),
+			Candidates:     make([]CandidateInfo, 0, len(extra.EpochInfo.Candidates)),
 		}
 
 		// Convert validators
@@ -392,7 +388,7 @@ func (cs *ConsensusStorage) convertToConsensusData(
 				blsPubKey = extra.EpochInfo.BLSPublicKeys[i]
 			}
 
-			epochData.Validators = append(epochData.Validators, consensustypes.ValidatorInfo{
+			epochData.Validators = append(epochData.Validators, ValidatorInfo{
 				Address:   candidate.Address,
 				Index:     validatorIndex,
 				BLSPubKey: blsPubKey,
@@ -401,10 +397,7 @@ func (cs *ConsensusStorage) convertToConsensusData(
 
 		// Convert candidates
 		for _, candidate := range extra.EpochInfo.Candidates {
-			epochData.Candidates = append(epochData.Candidates, consensustypes.CandidateInfo{
-				Address:   candidate.Address,
-				Diligence: candidate.Diligence,
-			})
+			epochData.Candidates = append(epochData.Candidates, CandidateInfo(candidate))
 		}
 
 		data.EpochInfo = epochData
@@ -415,7 +408,7 @@ func (cs *ConsensusStorage) convertToConsensusData(
 }
 
 // convertToEpochInfo converts consensus EpochData to storage EpochInfo
-func (cs *ConsensusStorage) convertToEpochInfo(epochData *consensustypes.EpochData, blockNumber uint64) *EpochInfo {
+func (cs *ConsensusStorage) convertToEpochInfo(epochData *EpochData, blockNumber uint64) *EpochInfo {
 	epochInfo := &EpochInfo{
 		EpochNumber:   epochData.EpochNumber,
 		BlockNumber:   blockNumber,
@@ -442,7 +435,7 @@ func (cs *ConsensusStorage) convertToEpochInfo(epochData *consensustypes.EpochDa
 }
 
 // createSigningActivities creates ValidatorSigningActivity records from ConsensusData
-func (cs *ConsensusStorage) createSigningActivities(data *consensustypes.ConsensusData) []*ValidatorSigningActivity {
+func (cs *ConsensusStorage) createSigningActivities(data *ConsensusData) []*ValidatorSigningActivity {
 	activities := make([]*ValidatorSigningActivity, 0, len(data.Validators))
 
 	// Create sets for efficient lookup

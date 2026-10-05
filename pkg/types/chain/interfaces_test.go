@@ -103,39 +103,6 @@ func TestEventData_Fields(t *testing.T) {
 	assert.Len(t, ed.Decoded, 2)
 }
 
-// --- ConsensusData tests ---
-
-func TestConsensusData_Fields(t *testing.T) {
-	epochNum := uint64(5)
-	cd := &ConsensusData{
-		ConsensusType:     ConsensusTypeWBFT,
-		BlockNumber:       100,
-		BlockHash:         common.HexToHash("0xblock"),
-		ProposerAddress:   common.HexToAddress("0xproposer"),
-		ParticipationRate: 66.67,
-		ValidatorCount:    3,
-		SignedValidators:  []common.Address{common.HexToAddress("0x01"), common.HexToAddress("0x02")},
-		IsEpochBoundary:   true,
-		EpochNumber:       &epochNum,
-		EpochValidators:   []common.Address{common.HexToAddress("0x01")},
-	}
-
-	assert.Equal(t, ConsensusTypeWBFT, cd.ConsensusType)
-	assert.Equal(t, 3, cd.ValidatorCount)
-	assert.Len(t, cd.SignedValidators, 2)
-	assert.True(t, cd.IsEpochBoundary)
-	assert.Equal(t, uint64(5), *cd.EpochNumber)
-}
-
-func TestConsensusData_NilEpoch(t *testing.T) {
-	cd := &ConsensusData{
-		ConsensusType:   ConsensusTypePoS,
-		IsEpochBoundary: false,
-		EpochNumber:     nil,
-	}
-	assert.Nil(t, cd.EpochNumber)
-}
-
 // --- SystemContractEvent tests ---
 
 func TestSystemContractEvent_Fields(t *testing.T) {
@@ -181,7 +148,6 @@ type mockAdapter struct{}
 func (m *mockAdapter) Info() *ChainInfo                        { return &ChainInfo{} }
 func (m *mockAdapter) BlockFetcher() BlockFetcher              { return nil }
 func (m *mockAdapter) TransactionParser() TransactionParser    { return nil }
-func (m *mockAdapter) ConsensusParser() ConsensusParser        { return nil }
 func (m *mockAdapter) SystemContracts() SystemContractsHandler { return nil }
 func (m *mockAdapter) Close() error                            { return nil }
 
@@ -230,21 +196,6 @@ func (m *mockTransactionParser) GetContractAddress(_ *types.Transaction, _ *type
 
 func TestTransactionParser_InterfaceCompliance(t *testing.T) {
 	var _ TransactionParser = (*mockTransactionParser)(nil)
-}
-
-type mockConsensusParser struct{}
-
-func (m *mockConsensusParser) ConsensusType() ConsensusType { return ConsensusTypePoS }
-func (m *mockConsensusParser) ParseConsensusData(_ *types.Block) (*ConsensusData, error) {
-	return nil, nil
-}
-func (m *mockConsensusParser) GetValidators(_ context.Context, _ uint64) ([]common.Address, error) {
-	return nil, nil
-}
-func (m *mockConsensusParser) IsEpochBoundary(_ *types.Block) bool { return false }
-
-func TestConsensusParser_InterfaceCompliance(t *testing.T) {
-	var _ ConsensusParser = (*mockConsensusParser)(nil)
 }
 
 type mockSystemContractsHandler struct{}

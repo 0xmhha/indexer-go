@@ -8,7 +8,6 @@ import (
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
 	"github.com/0xmhha/indexer-go/pkg/storage"
-	consensustypes "github.com/0xmhha/indexer-go/pkg/types/consensus"
 	"github.com/ethereum/go-ethereum/common"
 	gql "github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -301,7 +300,7 @@ func (s *Schema) resolveLatestEpochData(p gql.ResolveParams) (interface{}, error
 // ========== Helper mapper functions ==========
 
 // consensusDataToMap converts ConsensusData to a map for GraphQL
-func (s *Schema) consensusDataToMap(data *consensustypes.ConsensusData) map[string]interface{} {
+func (s *Schema) consensusDataToMap(data *consensus.ConsensusData) map[string]interface{} {
 	m := map[string]interface{}{
 		"blockNumber":       fmt.Sprintf("%d", data.BlockNumber),
 		"blockHash":         data.BlockHash.Hex(),
@@ -373,7 +372,7 @@ func (s *Schema) consensusDataToMap(data *consensustypes.ConsensusData) map[stri
 }
 
 // validatorStatsToMap converts ValidatorStats to a map for GraphQL
-func (s *Schema) validatorStatsToMap(stats *consensustypes.ValidatorStats) map[string]interface{} {
+func (s *Schema) validatorStatsToMap(stats *consensus.ValidatorStats) map[string]interface{} {
 	m := map[string]interface{}{
 		"address":           stats.Address.Hex(),
 		"totalBlocks":       fmt.Sprintf("%d", stats.TotalBlocks),
@@ -401,7 +400,7 @@ func (s *Schema) validatorStatsToMap(stats *consensustypes.ValidatorStats) map[s
 }
 
 // validatorParticipationToMap converts ValidatorParticipation to a map for GraphQL
-func (s *Schema) validatorParticipationToMap(participation *consensustypes.ValidatorParticipation) map[string]interface{} {
+func (s *Schema) validatorParticipationToMap(participation *consensus.ValidatorParticipation) map[string]interface{} {
 	blocks := make([]interface{}, len(participation.Blocks))
 	for i, block := range participation.Blocks {
 		blocks[i] = map[string]interface{}{
@@ -427,7 +426,7 @@ func (s *Schema) validatorParticipationToMap(participation *consensustypes.Valid
 }
 
 // epochDataToMap converts EpochData to a map for GraphQL
-func (s *Schema) epochDataToMap(epoch *consensustypes.EpochData) map[string]interface{} {
+func (s *Schema) epochDataToMap(epoch *consensus.EpochData) map[string]interface{} {
 	validators := make([]interface{}, len(epoch.Validators))
 	for i, v := range epoch.Validators {
 		validators[i] = map[string]interface{}{
@@ -460,7 +459,7 @@ func (s *Schema) wbftExtraToConsensusData(
 	extra *consensus.WBFTBlockExtra,
 	proposer common.Address,
 	prepareSigners, commitSigners []common.Address,
-) *consensustypes.ConsensusData {
+) *consensus.ConsensusData {
 	// Extract validators from epoch info if available
 	var validators []common.Address
 	if extra.EpochInfo != nil && len(extra.EpochInfo.Candidates) > 0 {
@@ -472,7 +471,7 @@ func (s *Schema) wbftExtraToConsensusData(
 		}
 	}
 
-	data := &consensustypes.ConsensusData{
+	data := &consensus.ConsensusData{
 		BlockNumber:    extra.BlockNumber,
 		BlockHash:      extra.BlockHash,
 		Round:          extra.Round,
@@ -494,12 +493,12 @@ func (s *Schema) wbftExtraToConsensusData(
 
 	// Convert epoch info if present
 	if extra.EpochInfo != nil {
-		epochData := &consensustypes.EpochData{
+		epochData := &consensus.EpochData{
 			EpochNumber:    extra.EpochInfo.EpochNumber,
 			ValidatorCount: len(extra.EpochInfo.Validators),
 			CandidateCount: len(extra.EpochInfo.Candidates),
-			Validators:     make([]consensustypes.ValidatorInfo, 0, len(extra.EpochInfo.Validators)),
-			Candidates:     make([]consensustypes.CandidateInfo, 0, len(extra.EpochInfo.Candidates)),
+			Validators:     make([]consensus.ValidatorInfo, 0, len(extra.EpochInfo.Validators)),
+			Candidates:     make([]consensus.CandidateInfo, 0, len(extra.EpochInfo.Candidates)),
 		}
 
 		// Convert validators
@@ -514,7 +513,7 @@ func (s *Schema) wbftExtraToConsensusData(
 				blsPubKey = extra.EpochInfo.BLSPublicKeys[i]
 			}
 
-			epochData.Validators = append(epochData.Validators, consensustypes.ValidatorInfo{
+			epochData.Validators = append(epochData.Validators, consensus.ValidatorInfo{
 				Address:   candidate.Address,
 				Index:     validatorIndex,
 				BLSPubKey: blsPubKey,
@@ -523,10 +522,7 @@ func (s *Schema) wbftExtraToConsensusData(
 
 		// Convert candidates
 		for _, candidate := range extra.EpochInfo.Candidates {
-			epochData.Candidates = append(epochData.Candidates, consensustypes.CandidateInfo{
-				Address:   candidate.Address,
-				Diligence: candidate.Diligence,
-			})
+			epochData.Candidates = append(epochData.Candidates, consensus.CandidateInfo(candidate))
 		}
 
 		data.EpochInfo = epochData

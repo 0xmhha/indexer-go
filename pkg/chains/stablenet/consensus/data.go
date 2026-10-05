@@ -47,15 +47,6 @@ type ConsensusData struct {
 	ParsedAt  time.Time `json:"parsedAt"`  // When this data was parsed
 }
 
-// RoundInfo provides detailed information about consensus rounds
-type RoundInfo struct {
-	BlockNumber       uint64 `json:"blockNumber"`
-	FinalRound        uint32 `json:"finalRound"`                // The round that achieved consensus
-	TotalRoundChanges uint32 `json:"totalRoundChanges"`         // Number of round changes (FinalRound)
-	SuccessOnFirstTry bool   `json:"successOnFirstTry"`         // True if FinalRound == 0
-	ConsensusTimeMs   uint64 `json:"consensusTimeMs,omitempty"` // Time to consensus (if measurable)
-}
-
 // EpochData contains validator set information at epoch boundaries
 type EpochData struct {
 	EpochNumber    uint64          `json:"epochNumber"`
@@ -76,60 +67,6 @@ type ValidatorInfo struct {
 type CandidateInfo struct {
 	Address   common.Address `json:"address"`
 	Diligence uint64         `json:"diligence"` // Diligence score (0 - 2,000,000)
-}
-
-// WBFTAggregatedSeal represents an aggregated BLS signature seal
-// This corresponds to go-stablenet's WBFTAggregatedSeal structure
-type WBFTAggregatedSeal struct {
-	Sealers   []byte `json:"sealers"`   // Bitmap of participating validators
-	Signature []byte `json:"signature"` // BLS aggregated signature
-}
-
-// WBFTExtra represents the complete WBFT extra data structure
-// This corresponds to go-stablenet's WBFTExtra structure
-type WBFTExtra struct {
-	VanityData        []byte              `json:"vanityData"`        // 32 bytes vanity
-	RandaoReveal      []byte              `json:"randaoReveal"`      // BLS signature
-	PrevRound         uint32              `json:"prevRound"`         // Previous block's round
-	PrevPreparedSeal  *WBFTAggregatedSeal `json:"prevPreparedSeal"`  // Previous prepare seal
-	PrevCommittedSeal *WBFTAggregatedSeal `json:"prevCommittedSeal"` // Previous commit seal
-	Round             uint32              `json:"round"`             // Current round
-	PreparedSeal      *WBFTAggregatedSeal `json:"preparedSeal"`      // Current prepare seal
-	CommittedSeal     *WBFTAggregatedSeal `json:"committedSeal"`     // Current commit seal
-	GasTip            *big.Int            `json:"gasTip"`            // Governance gas tip
-	EpochInfo         *EpochInfoRaw       `json:"epochInfo"`         // Epoch boundary info
-}
-
-// EpochInfoRaw represents raw epoch information from block extra data
-type EpochInfoRaw struct {
-	Candidates    []*CandidateRaw `json:"candidates"`    // All candidate validators
-	Validators    []uint32        `json:"validators"`    // Active validator indices
-	BLSPublicKeys [][]byte        `json:"blsPublicKeys"` // BLS public keys
-}
-
-// CandidateRaw represents a raw candidate from epoch info
-type CandidateRaw struct {
-	Address   common.Address `json:"address"`
-	Diligence uint64         `json:"diligence"`
-}
-
-// RoundAnalysis provides statistical analysis of round changes over a range
-type RoundAnalysis struct {
-	StartBlock            uint64              `json:"startBlock"`
-	EndBlock              uint64              `json:"endBlock"`
-	TotalBlocks           uint64              `json:"totalBlocks"`
-	BlocksWithRoundChange uint64              `json:"blocksWithRoundChange"`
-	RoundChangeRate       float64             `json:"roundChangeRate"` // Percentage
-	AverageRound          float64             `json:"averageRound"`
-	MaxRound              uint32              `json:"maxRound"`
-	RoundDistribution     []RoundDistribution `json:"roundDistribution"`
-}
-
-// RoundDistribution shows the distribution of blocks by round number
-type RoundDistribution struct {
-	Round      uint32  `json:"round"`
-	Count      uint64  `json:"count"`
-	Percentage float64 `json:"percentage"`
 }
 
 // BlockParticipation represents a validator's participation in a specific block

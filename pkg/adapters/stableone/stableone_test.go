@@ -64,7 +64,6 @@ func TestNewAdapter(t *testing.T) {
 
 	assert.NotNil(t, adapter)
 	assert.NotNil(t, adapter.Adapter) // embedded EVM adapter
-	assert.NotNil(t, adapter.consensusParser)
 	assert.NotNil(t, adapter.systemContracts)
 }
 
@@ -93,15 +92,6 @@ func TestAdapter_Info(t *testing.T) {
 	assert.Equal(t, constants.DefaultNativeTokenName, info.Name)
 	assert.Equal(t, constants.DefaultNativeTokenSymbol, info.NativeCurrency)
 	assert.Equal(t, constants.DefaultNativeTokenDecimals, info.Decimals)
-}
-
-// --- ConsensusParser tests ---
-
-func TestAdapter_ConsensusParser(t *testing.T) {
-	adapter := NewAdapter(&mockClient{}, nil, zap.NewNop())
-	cp := adapter.ConsensusParser()
-	assert.NotNil(t, cp)
-	assert.Equal(t, chain.ConsensusTypeWBFT, cp.ConsensusType())
 }
 
 // --- SystemContracts tests ---

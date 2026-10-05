@@ -254,6 +254,5 @@ func (m *mockChainAdapter) Info() *chain.ChainInfo {
 }
 func (m *mockChainAdapter) BlockFetcher() chain.BlockFetcher               { return nil }
 func (m *mockChainAdapter) TransactionParser() chain.TransactionParser     { return nil }
-func (m *mockChainAdapter) ConsensusParser() chain.ConsensusParser         { return nil }
 func (m *mockChainAdapter) SystemContracts() chain.SystemContractsHandler  { return nil }
 func (m *mockChainAdapter) Close() error                                   { return nil }

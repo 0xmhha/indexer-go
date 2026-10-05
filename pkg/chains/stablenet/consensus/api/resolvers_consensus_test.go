@@ -8,7 +8,6 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
 	"github.com/0xmhha/indexer-go/pkg/storage"
-	consensustypes "github.com/0xmhha/indexer-go/pkg/types/consensus"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +27,7 @@ func setupTestConsensusStorage(t *testing.T) (*storage.PebbleStorage, *consensus
 }
 
 // createTestConsensusData creates sample consensus data for testing
-func createTestConsensusData() *consensustypes.ConsensusData {
+func createTestConsensusData() *consensus.ConsensusData {
 	validators := []common.Address{
 		common.HexToAddress("0x1111111111111111111111111111111111111111"),
 		common.HexToAddress("0x2222222222222222222222222222222222222222"),
@@ -36,7 +35,7 @@ func createTestConsensusData() *consensustypes.ConsensusData {
 		common.HexToAddress("0x4444444444444444444444444444444444444444"),
 	}
 
-	data := &consensustypes.ConsensusData{
+	data := &consensus.ConsensusData{
 		BlockNumber:     100,
 		BlockHash:       common.HexToHash("0xaabbcc"),
 		Round:           0,
@@ -52,17 +51,17 @@ func createTestConsensusData() *consensustypes.ConsensusData {
 		GasTip:          big.NewInt(1000),
 		Timestamp:       1000000,
 		IsEpochBoundary: true,
-		EpochInfo: &consensustypes.EpochData{
+		EpochInfo: &consensus.EpochData{
 			EpochNumber:    1,
 			ValidatorCount: 4,
 			CandidateCount: 4,
-			Validators: []consensustypes.ValidatorInfo{
+			Validators: []consensus.ValidatorInfo{
 				{Address: validators[0], Index: 0, BLSPubKey: make([]byte, 48)},
 				{Address: validators[1], Index: 1, BLSPubKey: make([]byte, 48)},
 				{Address: validators[2], Index: 2, BLSPubKey: make([]byte, 48)},
 				{Address: validators[3], Index: 3, BLSPubKey: make([]byte, 48)},
 			},
-			Candidates: []consensustypes.CandidateInfo{
+			Candidates: []consensus.CandidateInfo{
 				{Address: validators[0], Diligence: 1000000},
 				{Address: validators[1], Diligence: 900000},
 				{Address: validators[2], Diligence: 800000},
@@ -76,7 +75,7 @@ func createTestConsensusData() *consensustypes.ConsensusData {
 }
 
 // createBlockFromConsensusData creates a block from consensus data
-func createBlockFromConsensusData(data *consensustypes.ConsensusData) *types.Block {
+func createBlockFromConsensusData(data *consensus.ConsensusData) *types.Block {
 	header := &types.Header{
 		Number:   big.NewInt(int64(data.BlockNumber)),
 		Coinbase: data.Proposer,
@@ -170,7 +169,7 @@ func TestResolveValidatorStats(t *testing.T) {
 			commitSigners = validators
 		}
 
-		data := &consensustypes.ConsensusData{
+		data := &consensus.ConsensusData{
 			BlockNumber:    i,
 			BlockHash:      common.HexToHash("0xaa"),
 			Round:          0,
@@ -239,7 +238,7 @@ func TestResolveValidatorParticipation(t *testing.T) {
 
 	// Create blocks
 	for i := uint64(100); i <= 105; i++ {
-		data := &consensustypes.ConsensusData{
+		data := &consensus.ConsensusData{
 			BlockNumber:    i,
 			BlockHash:      common.HexToHash("0xbb"),
 			Round:          0,
@@ -325,7 +324,7 @@ func TestResolveAllValidatorStats(t *testing.T) {
 
 	// Create blocks
 	for i := uint64(100); i <= 105; i++ {
-		data := &consensustypes.ConsensusData{
+		data := &consensus.ConsensusData{
 			BlockNumber:    i,
 			BlockHash:      common.HexToHash("0xcc"),
 			Round:          0,
@@ -392,7 +391,7 @@ func TestResolveEpochData(t *testing.T) {
 	}
 
 	// Create consensus data with epoch info
-	data := &consensustypes.ConsensusData{
+	data := &consensus.ConsensusData{
 		BlockNumber:     1000,
 		BlockHash:       common.HexToHash("0xddee11"),
 		Round:           0,
@@ -404,11 +403,11 @@ func TestResolveEpochData(t *testing.T) {
 		CommitCount:     2,
 		Timestamp:       2000000,
 		IsEpochBoundary: true,
-		EpochInfo: &consensustypes.EpochData{
+		EpochInfo: &consensus.EpochData{
 			EpochNumber:    1,
 			ValidatorCount: 2,
 			CandidateCount: 3,
-			Validators: []consensustypes.ValidatorInfo{
+			Validators: []consensus.ValidatorInfo{
 				{
 					Address:   validators[0],
 					Index:     0,
@@ -420,7 +419,7 @@ func TestResolveEpochData(t *testing.T) {
 					BLSPubKey: make([]byte, 48),
 				},
 			},
-			Candidates: []consensustypes.CandidateInfo{
+			Candidates: []consensus.CandidateInfo{
 				{Address: validators[0], Diligence: 1000000},
 				{Address: validators[1], Diligence: 900000},
 				{Address: common.HexToAddress("0x3333333333333333333333333333333333333333"), Diligence: 800000},
@@ -495,19 +494,19 @@ func TestResolveLatestEpochData(t *testing.T) {
 	}
 
 	// Save epoch 1
-	data1 := &consensustypes.ConsensusData{
+	data1 := &consensus.ConsensusData{
 		BlockNumber:     1000,
 		BlockHash:       common.HexToHash("0xeee"),
 		IsEpochBoundary: true,
-		EpochInfo: &consensustypes.EpochData{
+		EpochInfo: &consensus.EpochData{
 			EpochNumber:    1,
 			ValidatorCount: 2,
 			CandidateCount: 2,
-			Validators: []consensustypes.ValidatorInfo{
+			Validators: []consensus.ValidatorInfo{
 				{Address: validators[0], Index: 0, BLSPubKey: make([]byte, 48)},
 				{Address: validators[1], Index: 1, BLSPubKey: make([]byte, 48)},
 			},
-			Candidates: []consensustypes.CandidateInfo{
+			Candidates: []consensus.CandidateInfo{
 				{Address: validators[0], Diligence: 1000000},
 				{Address: validators[1], Diligence: 900000},
 			},
@@ -521,19 +520,19 @@ func TestResolveLatestEpochData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Save epoch 2
-	data2 := &consensustypes.ConsensusData{
+	data2 := &consensus.ConsensusData{
 		BlockNumber:     2000,
 		BlockHash:       common.HexToHash("0xfff"),
 		IsEpochBoundary: true,
-		EpochInfo: &consensustypes.EpochData{
+		EpochInfo: &consensus.EpochData{
 			EpochNumber:    2,
 			ValidatorCount: 2,
 			CandidateCount: 2,
-			Validators: []consensustypes.ValidatorInfo{
+			Validators: []consensus.ValidatorInfo{
 				{Address: validators[0], Index: 0, BLSPubKey: make([]byte, 48)},
 				{Address: validators[1], Index: 1, BLSPubKey: make([]byte, 48)},
 			},
-			Candidates: []consensustypes.CandidateInfo{
+			Candidates: []consensus.CandidateInfo{
 				{Address: validators[0], Diligence: 1100000},
 				{Address: validators[1], Diligence: 950000},
 			},

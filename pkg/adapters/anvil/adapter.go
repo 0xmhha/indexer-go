@@ -8,8 +8,6 @@ import (
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/pkg/adapters/evm"
-	"github.com/0xmhha/indexer-go/pkg/consensus"
-	"github.com/0xmhha/indexer-go/pkg/consensus/poa"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.uber.org/zap"
@@ -58,10 +56,9 @@ func DefaultConfig() *Config {
 // It extends the base EVM adapter with PoA consensus and Anvil-specific features
 type Adapter struct {
 	*evm.Adapter
-	config          *Config
-	logger          *zap.Logger
-	consensusParser chain.ConsensusParser
-	rpcClient       *rpc.Client // For Anvil-specific RPC methods
+	config    *Config
+	logger    *zap.Logger
+	rpcClient *rpc.Client // For Anvil-specific RPC methods
 }
 
 // NewAdapter creates a new Anvil adapter
@@ -88,29 +85,9 @@ func NewAdapter(client evm.Client, config *Config, logger *zap.Logger) (*Adapter
 		logger:  logger,
 	}
 
-	// Get PoA consensus parser from registry
-	consensusConfig := &consensus.Config{
-		ChainID: config.ChainID.Uint64(),
-	}
-	consensusParser, err := consensus.Get(chain.ConsensusTypePoA, consensusConfig, logger)
-	if err != nil {
-		logger.Warn("Failed to get PoA parser from registry, using fallback parser",
-			zap.Error(err),
-		)
-		// Fallback: create PoA parser directly
-		consensusParser = poa.NewParser(logger)
-	}
-	adapter.consensusParser = consensusParser
-
-	// Set the consensus parser on the base adapter
-	if adapter.consensusParser != nil {
-		evmAdapter.SetConsensusParser(adapter.consensusParser)
-	}
-
 	logger.Info("Anvil adapter initialized",
 		zap.String("chain_id", config.ChainID.String()),
 		zap.Bool("anvil_features", config.EnableAnvilFeatures),
-		zap.Bool("consensus_parser", adapter.consensusParser != nil),
 	)
 
 	return adapter, nil
@@ -136,11 +113,6 @@ func (a *Adapter) Info() *chain.ChainInfo {
 		NativeCurrency: a.config.NativeCurrency,
 		Decimals:       DefaultNativeDecimals,
 	}
-}
-
-// ConsensusParser returns the PoA consensus parser
-func (a *Adapter) ConsensusParser() chain.ConsensusParser {
-	return a.consensusParser
 }
 
 // SystemContracts returns nil as Anvil doesn't have system contracts

@@ -4,16 +4,11 @@
 package stableone
 
 import (
-	"context"
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/adapters/evm"
-	"github.com/0xmhha/indexer-go/pkg/consensus"
-	"github.com/0xmhha/indexer-go/pkg/consensus/wbft"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 )
 
@@ -49,7 +44,6 @@ type Adapter struct {
 	*evm.Adapter
 	config          *Config
 	logger          *zap.Logger
-	consensusParser chain.ConsensusParser
 	systemContracts *SystemContractsHandler
 }
 
@@ -77,25 +71,10 @@ func NewAdapter(client evm.Client, config *Config, logger *zap.Logger) *Adapter 
 		logger:  logger,
 	}
 
-	// Get WBFT consensus parser from registry
-	consensusConfig := &consensus.Config{
-		EpochLength: config.EpochLength,
-	}
-	consensusParser, err := consensus.Get(chain.ConsensusTypeWBFT, consensusConfig, logger)
-	if err != nil {
-		logger.Warn("Failed to get WBFT parser from registry, using fallback parser",
-			zap.Error(err),
-		)
-		// Fallback: create WBFT parser directly
-		consensusParser = wbft.NewParser(config.EpochLength, logger)
-	}
-	adapter.consensusParser = consensusParser
-
 	// Initialize system contracts handler
 	adapter.systemContracts = NewSystemContractsHandler(logger)
 
-	// Set the consensus parser and system contracts on the base adapter
-	evmAdapter.SetConsensusParser(adapter.consensusParser)
+	// Set the system contracts on the base adapter
 	evmAdapter.SetSystemContracts(adapter.systemContracts)
 
 	return adapter
@@ -113,11 +92,6 @@ func (a *Adapter) Info() *chain.ChainInfo {
 	}
 }
 
-// ConsensusParser returns the WBFT consensus parser
-func (a *Adapter) ConsensusParser() chain.ConsensusParser {
-	return a.consensusParser
-}
-
 // SystemContracts returns the system contracts handler
 func (a *Adapter) SystemContracts() chain.SystemContractsHandler {
 	return a.systemContracts
@@ -126,17 +100,6 @@ func (a *Adapter) SystemContracts() chain.SystemContractsHandler {
 // GetEpochLength returns the configured epoch length
 func (a *Adapter) GetEpochLength() uint64 {
 	return a.config.EpochLength
-}
-
-// GetValidatorsAtBlock returns the validator set at a specific block
-// This is a convenience method that delegates to the consensus parser
-func (a *Adapter) GetValidatorsAtBlock(ctx context.Context, blockNumber uint64) ([]common.Address, error) {
-	return a.consensusParser.GetValidators(ctx, blockNumber)
-}
-
-// IsEpochBoundary checks if a block is an epoch boundary
-func (a *Adapter) IsEpochBoundary(block *types.Block) bool {
-	return a.consensusParser.IsEpochBoundary(block)
 }
 
 // GetEpochNumber returns the epoch number for a block
