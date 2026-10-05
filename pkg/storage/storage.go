@@ -142,6 +142,24 @@ type KV interface {
 	// order when reverse is set, until fn returns false. A nil upper means
 	// no upper bound. Keys and values passed to fn are copies.
 	Scan(ctx context.Context, lower, upper []byte, reverse bool, fn func(key, value []byte) bool) error
+	// NewCursor returns a cursor over the keys in [lower, upper) (a nil
+	// upper means no upper bound), bound to the block transaction in ctx
+	// like the other methods. The caller must close it.
+	NewCursor(ctx context.Context, lower, upper []byte) (Cursor, error)
+}
+
+// Cursor is a cursor over stored keys. Key and Value are valid until the
+// cursor moves.
+type Cursor interface {
+	First() bool
+	Last() bool
+	Next() bool
+	Prev() bool
+	Valid() bool
+	Key() []byte
+	Value() []byte
+	Error() error
+	Close() error
 }
 
 // Storage combines Reader and Writer interfaces
@@ -154,7 +172,6 @@ type Storage interface {
 	ABIReader
 	ABIWriter
 	SearchReader
-	SystemContractReader
 	ContractVerificationReader
 	ContractVerificationWriter
 	FeeDelegationReader

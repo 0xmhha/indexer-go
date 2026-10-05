@@ -1,4 +1,4 @@
-package events
+package systemcontracts
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -77,13 +78,13 @@ var (
 
 // SystemContractEventParser parses and indexes system contract events
 type SystemContractEventParser struct {
-	storage  storage.SystemContractWriter
+	storage  SystemContractWriter
 	logger   *zap.Logger
-	eventBus *EventBus
+	eventBus *events.EventBus
 }
 
 // NewSystemContractEventParser creates a new system contract event parser
-func NewSystemContractEventParser(storage storage.SystemContractWriter, logger *zap.Logger) *SystemContractEventParser {
+func NewSystemContractEventParser(storage SystemContractWriter, logger *zap.Logger) *SystemContractEventParser {
 	return &SystemContractEventParser{
 		storage: storage,
 		logger:  logger,
@@ -91,7 +92,7 @@ func NewSystemContractEventParser(storage storage.SystemContractWriter, logger *
 }
 
 // SetEventBus sets the event bus for publishing system contract events
-func (p *SystemContractEventParser) SetEventBus(eventBus *EventBus) {
+func (p *SystemContractEventParser) SetEventBus(eventBus *events.EventBus) {
 	p.eventBus = eventBus
 }
 
@@ -272,7 +273,7 @@ func (p *SystemContractEventParser) parseMintEvent(ctx context.Context, log *typ
 	to := common.BytesToAddress(log.Topics[2].Bytes())
 	amount := new(big.Int).SetBytes(log.Data)
 
-	event := &storage.MintEvent{
+	event := &MintEvent{
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
 		TxIndex:     log.TxIndex,
@@ -292,7 +293,7 @@ func (p *SystemContractEventParser) parseMintEvent(ctx context.Context, log *typ
 		return storageFailure(fmt.Errorf("failed to update total supply: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventMint, log, map[string]interface{}{
 		"minter": minter.Hex(),
 		"to":     to.Hex(),
@@ -313,7 +314,7 @@ func (p *SystemContractEventParser) parseBurnEvent(ctx context.Context, log *typ
 
 	amount := new(big.Int).SetBytes(log.Data)
 
-	event := &storage.BurnEvent{
+	event := &BurnEvent{
 		BlockNumber:  log.BlockNumber,
 		TxHash:       log.TxHash,
 		TxIndex:      log.TxIndex,
@@ -334,7 +335,7 @@ func (p *SystemContractEventParser) parseBurnEvent(ctx context.Context, log *typ
 		return storageFailure(fmt.Errorf("failed to update total supply: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventBurn, log, map[string]interface{}{
 		"burner": event.Burner.Hex(),
 		"amount": amount.String(),
@@ -355,7 +356,7 @@ func (p *SystemContractEventParser) parseMinterConfiguredEvent(ctx context.Conte
 	minter := common.BytesToAddress(log.Topics[1].Bytes())
 	allowance := new(big.Int).SetBytes(log.Data)
 
-	event := &storage.MinterConfigEvent{
+	event := &MinterConfigEvent{
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
 		LogIndex:    log.Index,
@@ -375,7 +376,7 @@ func (p *SystemContractEventParser) parseMinterConfiguredEvent(ctx context.Conte
 		return storageFailure(fmt.Errorf("failed to update active minter: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventMinterConfigured, log, map[string]interface{}{
 		"minter":    minter.Hex(),
 		"allowance": allowance.String(),
@@ -392,7 +393,7 @@ func (p *SystemContractEventParser) parseMinterRemovedEvent(ctx context.Context,
 
 	minter := common.BytesToAddress(log.Topics[1].Bytes())
 
-	event := &storage.MinterConfigEvent{
+	event := &MinterConfigEvent{
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
 		LogIndex:    log.Index,
@@ -412,7 +413,7 @@ func (p *SystemContractEventParser) parseMinterRemovedEvent(ctx context.Context,
 		return storageFailure(fmt.Errorf("failed to update active minter: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventMinterRemoved, log, map[string]interface{}{
 		"minter": minter.Hex(),
 	})
@@ -430,7 +431,7 @@ func (p *SystemContractEventParser) parseMasterMinterChangedEvent(ctx context.Co
 		zap.String("newMasterMinter", newMasterMinter.Hex()),
 		zap.Uint64("blockNumber", log.BlockNumber))
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventMasterMinterChanged, log, map[string]interface{}{
 		"newMasterMinter": newMasterMinter.Hex(),
 	})
@@ -481,7 +482,7 @@ func (p *SystemContractEventParser) parseProposalCreatedEvent(ctx context.Contex
 		}
 	}
 
-	proposal := &storage.Proposal{
+	proposal := &Proposal{
 		Contract:          log.Address,
 		ProposalID:        proposalID,
 		Proposer:          proposer,
@@ -491,7 +492,7 @@ func (p *SystemContractEventParser) parseProposalCreatedEvent(ctx context.Contex
 		RequiredApprovals: requiredApprovals,
 		Approved:          0,
 		Rejected:          0,
-		Status:            storage.ProposalStatusVoting,
+		Status:            ProposalStatusVoting,
 		CreatedAt:         0, // Will be set from block timestamp by storage layer
 		ExecutedAt:        nil,
 		BlockNumber:       log.BlockNumber,
@@ -502,7 +503,7 @@ func (p *SystemContractEventParser) parseProposalCreatedEvent(ctx context.Contex
 		return storageFailure(fmt.Errorf("failed to store proposal: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventProposalCreated, log, map[string]interface{}{
 		"proposalId":        proposalID.String(),
 		"proposer":          proposer.Hex(),
@@ -529,7 +530,7 @@ func (p *SystemContractEventParser) parseProposalVotedEvent(ctx context.Context,
 	// Parse data: approval (bool as uint256), approved count, rejected count
 	approval := new(big.Int).SetBytes(log.Data[0:32]).Uint64() != 0
 
-	vote := &storage.ProposalVote{
+	vote := &ProposalVote{
 		Contract:    log.Address,
 		ProposalID:  proposalID,
 		Voter:       voter,
@@ -543,7 +544,7 @@ func (p *SystemContractEventParser) parseProposalVotedEvent(ctx context.Context,
 		return storageFailure(fmt.Errorf("failed to store proposal vote: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventProposalVoted, log, map[string]interface{}{
 		"proposalId": proposalID.String(),
 		"voter":      voter.Hex(),
@@ -563,11 +564,11 @@ func (p *SystemContractEventParser) parseProposalApprovedEvent(ctx context.Conte
 	approver := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Approved
-	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusApproved, 0); err != nil {
+	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, ProposalStatusApproved, 0); err != nil {
 		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventProposalApproved, log, map[string]interface{}{
 		"proposalId": proposalID.String(),
 		"approver":   approver.Hex(),
@@ -586,11 +587,11 @@ func (p *SystemContractEventParser) parseProposalRejectedEvent(ctx context.Conte
 	rejector := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Rejected
-	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusRejected, 0); err != nil {
+	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, ProposalStatusRejected, 0); err != nil {
 		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventProposalRejected, log, map[string]interface{}{
 		"proposalId": proposalID.String(),
 		"rejector":   rejector.Hex(),
@@ -615,11 +616,11 @@ func (p *SystemContractEventParser) parseProposalExecutedEvent(ctx context.Conte
 	}
 
 	// Update proposal status to Executed with current block number as execution time
-	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusExecuted, log.BlockNumber); err != nil {
+	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, ProposalStatusExecuted, log.BlockNumber); err != nil {
 		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventProposalExecuted, log, map[string]interface{}{
 		"proposalId": proposalID.String(),
 		"executor":   executor.Hex(),
@@ -639,11 +640,11 @@ func (p *SystemContractEventParser) parseProposalFailedEvent(ctx context.Context
 	executor := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Failed
-	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusFailed, log.BlockNumber); err != nil {
+	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, ProposalStatusFailed, log.BlockNumber); err != nil {
 		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventProposalFailed, log, map[string]interface{}{
 		"proposalId": proposalID.String(),
 		"executor":   executor.Hex(),
@@ -662,11 +663,11 @@ func (p *SystemContractEventParser) parseProposalExpiredEvent(ctx context.Contex
 	executor := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Expired
-	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusExpired, 0); err != nil {
+	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, ProposalStatusExpired, 0); err != nil {
 		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventProposalExpired, log, map[string]interface{}{
 		"proposalId": proposalID.String(),
 		"executor":   executor.Hex(),
@@ -685,11 +686,11 @@ func (p *SystemContractEventParser) parseProposalCancelledEvent(ctx context.Cont
 	canceller := common.BytesToAddress(log.Topics[2].Bytes())
 
 	// Update proposal status to Cancelled
-	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusCancelled, 0); err != nil {
+	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, ProposalStatusCancelled, 0); err != nil {
 		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventProposalCancelled, log, map[string]interface{}{
 		"proposalId": proposalID.String(),
 		"canceller":  canceller.Hex(),
@@ -711,7 +712,7 @@ func (p *SystemContractEventParser) parseMemberAddedEvent(ctx context.Context, l
 	totalMembers := new(big.Int).SetBytes(log.Data[0:32]).Uint64()
 	newQuorum := uint32(new(big.Int).SetBytes(log.Data[32:64]).Uint64())
 
-	event := &storage.MemberChangeEvent{
+	event := &MemberChangeEvent{
 		Contract:     log.Address,
 		BlockNumber:  log.BlockNumber,
 		TxHash:       log.TxHash,
@@ -735,7 +736,7 @@ func (p *SystemContractEventParser) parseMemberAddedEvent(ctx context.Context, l
 		}
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventMemberAdded, log, map[string]interface{}{
 		"member":       member.Hex(),
 		"totalMembers": totalMembers,
@@ -758,7 +759,7 @@ func (p *SystemContractEventParser) parseMemberRemovedEvent(ctx context.Context,
 	totalMembers := new(big.Int).SetBytes(log.Data[0:32]).Uint64()
 	newQuorum := uint32(new(big.Int).SetBytes(log.Data[32:64]).Uint64())
 
-	event := &storage.MemberChangeEvent{
+	event := &MemberChangeEvent{
 		Contract:     log.Address,
 		BlockNumber:  log.BlockNumber,
 		TxHash:       log.TxHash,
@@ -782,7 +783,7 @@ func (p *SystemContractEventParser) parseMemberRemovedEvent(ctx context.Context,
 		}
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventMemberRemoved, log, map[string]interface{}{
 		"member":       member.Hex(),
 		"totalMembers": totalMembers,
@@ -801,7 +802,7 @@ func (p *SystemContractEventParser) parseMemberChangedEvent(ctx context.Context,
 	oldMember := common.BytesToAddress(log.Topics[1].Bytes())
 	newMember := common.BytesToAddress(log.Topics[2].Bytes())
 
-	event := &storage.MemberChangeEvent{
+	event := &MemberChangeEvent{
 		Contract:     log.Address,
 		BlockNumber:  log.BlockNumber,
 		TxHash:       log.TxHash,
@@ -829,7 +830,7 @@ func (p *SystemContractEventParser) parseMemberChangedEvent(ctx context.Context,
 		}
 
 		// Store as validator change event
-		validatorChangeEvent := &storage.ValidatorChangeEvent{
+		validatorChangeEvent := &ValidatorChangeEvent{
 			BlockNumber:  log.BlockNumber,
 			TxHash:       log.TxHash,
 			LogIndex:     log.Index,
@@ -843,7 +844,7 @@ func (p *SystemContractEventParser) parseMemberChangedEvent(ctx context.Context,
 		}
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventMemberChanged, log, map[string]interface{}{
 		"oldMember": oldMember.Hex(),
 		"newMember": newMember.Hex(),
@@ -867,7 +868,7 @@ func (p *SystemContractEventParser) parseQuorumUpdatedEvent(ctx context.Context,
 			zap.Uint64("blockNumber", log.BlockNumber))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventQuorumUpdated, log, map[string]interface{}{
 		"oldQuorum": oldQuorum,
 		"newQuorum": newQuorum,
@@ -889,7 +890,7 @@ func (p *SystemContractEventParser) parseGasTipUpdatedEvent(ctx context.Context,
 	newTip := new(big.Int).SetBytes(log.Data[32:64])
 	updater := common.BytesToAddress(log.Topics[1].Bytes())
 
-	event := &storage.GasTipUpdateEvent{
+	event := &GasTipUpdateEvent{
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
 		LogIndex:    log.Index,
@@ -903,7 +904,7 @@ func (p *SystemContractEventParser) parseGasTipUpdatedEvent(ctx context.Context,
 		return storageFailure(fmt.Errorf("failed to store gas tip update event: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventGasTipUpdated, log, map[string]interface{}{
 		"oldTip":  oldTip.String(),
 		"newTip":  newTip.String(),
@@ -926,7 +927,7 @@ func (p *SystemContractEventParser) parseMaxMinterAllowanceUpdatedEvent(ctx cont
 			zap.Uint64("blockNumber", log.BlockNumber))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	oldLimitStr := "0"
 	newLimitStr := "0"
 	if oldLimit != nil {
@@ -951,7 +952,7 @@ func (p *SystemContractEventParser) parseEmergencyPausedEvent(ctx context.Contex
 
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
 
-	event := &storage.EmergencyPauseEvent{
+	event := &EmergencyPauseEvent{
 		Contract:    log.Address,
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
@@ -965,7 +966,7 @@ func (p *SystemContractEventParser) parseEmergencyPausedEvent(ctx context.Contex
 		return storageFailure(fmt.Errorf("failed to store emergency pause event: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventEmergencyPaused, log, map[string]interface{}{
 		"proposalId": proposalID.String(),
 	})
@@ -981,7 +982,7 @@ func (p *SystemContractEventParser) parseEmergencyUnpausedEvent(ctx context.Cont
 
 	proposalID := new(big.Int).SetBytes(log.Topics[1].Bytes())
 
-	event := &storage.EmergencyPauseEvent{
+	event := &EmergencyPauseEvent{
 		Contract:    log.Address,
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
@@ -995,7 +996,7 @@ func (p *SystemContractEventParser) parseEmergencyUnpausedEvent(ctx context.Cont
 		return storageFailure(fmt.Errorf("failed to store emergency pause event: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventEmergencyUnpaused, log, map[string]interface{}{
 		"proposalId": proposalID.String(),
 	})
@@ -1041,14 +1042,14 @@ func (p *SystemContractEventParser) parseDepositMintProposedEvent(ctx context.Co
 		}
 	}
 
-	proposal := &storage.DepositMintProposal{
+	proposal := &DepositMintProposal{
 		ProposalID:    proposalID,
 		Requester:     requester,
 		Beneficiary:   beneficiary,
 		Amount:        amount,
 		DepositID:     "", // Indexed string is hashed in topics, need to track via proposal lookup
 		BankReference: bankReference,
-		Status:        storage.ProposalStatusVoting,
+		Status:        ProposalStatusVoting,
 		BlockNumber:   log.BlockNumber,
 		TxHash:        log.TxHash,
 		Timestamp:     0, // Will be set by storage layer
@@ -1058,7 +1059,7 @@ func (p *SystemContractEventParser) parseDepositMintProposedEvent(ctx context.Co
 		return storageFailure(fmt.Errorf("failed to store deposit mint proposal: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventDepositMintProposed, log, map[string]interface{}{
 		"proposalId":    proposalID.String(),
 		"requester":     requester.Hex(),
@@ -1088,7 +1089,7 @@ func (p *SystemContractEventParser) parseBurnPrepaidEvent(ctx context.Context, l
 		zap.String("amount", amount.String()),
 		zap.Uint64("blockNumber", log.BlockNumber))
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventBurnPrepaid, log, map[string]interface{}{
 		"user":   user.Hex(),
 		"amount": amount.String(),
@@ -1174,7 +1175,7 @@ func (p *SystemContractEventParser) parseBurnExecutedEvent(ctx context.Context, 
 		}
 	}
 
-	event := &storage.BurnEvent{
+	event := &BurnEvent{
 		BlockNumber:  log.BlockNumber,
 		TxHash:       log.TxHash,
 		TxIndex:      log.TxIndex,
@@ -1195,7 +1196,7 @@ func (p *SystemContractEventParser) parseBurnExecutedEvent(ctx context.Context, 
 		return storageFailure(fmt.Errorf("failed to update total supply: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventBurnExecuted, log, map[string]interface{}{
 		"from":         from.Hex(),
 		"amount":       amount.String(),
@@ -1214,7 +1215,7 @@ func (p *SystemContractEventParser) parseAddressBlacklistedEvent(ctx context.Con
 	account := common.BytesToAddress(log.Topics[1].Bytes())
 	proposalID := new(big.Int).SetBytes(log.Topics[2].Bytes())
 
-	event := &storage.BlacklistEvent{
+	event := &BlacklistEvent{
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
 		LogIndex:    log.Index,
@@ -1233,7 +1234,7 @@ func (p *SystemContractEventParser) parseAddressBlacklistedEvent(ctx context.Con
 		return storageFailure(fmt.Errorf("failed to update blacklist status: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventAddressBlacklisted, log, map[string]interface{}{
 		"account":    account.Hex(),
 		"proposalId": proposalID.String(),
@@ -1251,7 +1252,7 @@ func (p *SystemContractEventParser) parseAddressUnblacklistedEvent(ctx context.C
 	account := common.BytesToAddress(log.Topics[1].Bytes())
 	proposalID := new(big.Int).SetBytes(log.Topics[2].Bytes())
 
-	event := &storage.BlacklistEvent{
+	event := &BlacklistEvent{
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
 		LogIndex:    log.Index,
@@ -1270,7 +1271,7 @@ func (p *SystemContractEventParser) parseAddressUnblacklistedEvent(ctx context.C
 		return storageFailure(fmt.Errorf("failed to update blacklist status: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventAddressUnblacklisted, log, map[string]interface{}{
 		"account":    account.Hex(),
 		"proposalId": proposalID.String(),
@@ -1295,7 +1296,7 @@ func (p *SystemContractEventParser) parseAuthorizedAccountAddedEvent(ctx context
 		zap.Uint64("blockNumber", log.BlockNumber))
 
 	// Store event in storage
-	event := &storage.AuthorizedAccountEvent{
+	event := &AuthorizedAccountEvent{
 		Contract:    log.Address,
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
@@ -1308,7 +1309,7 @@ func (p *SystemContractEventParser) parseAuthorizedAccountAddedEvent(ctx context
 		return storageFailure(fmt.Errorf("failed to store authorized account added event: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventAuthorizedAccountAdded, log, map[string]interface{}{
 		"account":    account.Hex(),
 		"proposalId": proposalID.String(),
@@ -1333,7 +1334,7 @@ func (p *SystemContractEventParser) parseAuthorizedAccountRemovedEvent(ctx conte
 		zap.Uint64("blockNumber", log.BlockNumber))
 
 	// Store event in storage
-	event := &storage.AuthorizedAccountEvent{
+	event := &AuthorizedAccountEvent{
 		Contract:    log.Address,
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
@@ -1346,7 +1347,7 @@ func (p *SystemContractEventParser) parseAuthorizedAccountRemovedEvent(ctx conte
 		return storageFailure(fmt.Errorf("failed to store authorized account removed event: %w", err))
 	}
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventAuthorizedAccountRemoved, log, map[string]interface{}{
 		"account":    account.Hex(),
 		"proposalId": proposalID.String(),
@@ -1367,7 +1368,7 @@ func (p *SystemContractEventParser) parseMaxProposalsPerMemberUpdatedEvent(ctx c
 	oldMax := new(big.Int).SetBytes(log.Data[0:32]).Uint64()
 	newMax := new(big.Int).SetBytes(log.Data[32:64]).Uint64()
 
-	event := &storage.MaxProposalsUpdateEvent{
+	event := &MaxProposalsUpdateEvent{
 		Contract:    log.Address,
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
@@ -1387,7 +1388,7 @@ func (p *SystemContractEventParser) parseMaxProposalsPerMemberUpdatedEvent(ctx c
 		zap.Uint64("newMax", newMax),
 		zap.Uint64("blockNumber", log.BlockNumber))
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventMaxProposalsUpdated, log, map[string]interface{}{
 		"oldMax": oldMax,
 		"newMax": newMax,
@@ -1419,7 +1420,7 @@ func (p *SystemContractEventParser) parseProposalExecutionSkippedEvent(ctx conte
 		}
 	}
 
-	event := &storage.ProposalExecutionSkippedEvent{
+	event := &ProposalExecutionSkippedEvent{
 		Contract:    log.Address,
 		BlockNumber: log.BlockNumber,
 		TxHash:      log.TxHash,
@@ -1440,7 +1441,7 @@ func (p *SystemContractEventParser) parseProposalExecutionSkippedEvent(ctx conte
 		zap.String("reason", reason),
 		zap.Uint64("blockNumber", log.BlockNumber))
 
-	// Publish event to EventBus
+	// Publish event to events.EventBus
 	p.publishEvent(log.Address, SystemContractEventProposalExecutionSkipped, log, map[string]interface{}{
 		"account":    account.Hex(),
 		"proposalId": proposalID.String(),

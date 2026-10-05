@@ -39,7 +39,6 @@ func NewHandlerWithOptions(store storage.Storage, logger *zap.Logger, opts *Hand
 		WithCoreQueries().
 		WithHistoricalQueries().
 		WithAnalyticsQueries().
-		WithSystemContractQueries().
 		WithAddressIndexingQueries().
 		WithSetCodeQueries().
 		WithModuleQueries().

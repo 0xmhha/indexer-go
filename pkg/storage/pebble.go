@@ -378,6 +378,14 @@ func (s *PebbleStorage) Scan(ctx context.Context, lower, upper []byte, reverse b
 	return errors.Join(iter.Error(), iter.Close())
 }
 
+// NewCursor implements KV.
+func (s *PebbleStorage) NewCursor(ctx context.Context, lower, upper []byte) (Cursor, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, err
+	}
+	return s.kv(ctx).NewIter(&pebble.IterOptions{LowerBound: lower, UpperBound: upper})
+}
+
 var _ KV = (*PebbleStorage)(nil)
 
 // PrefixEnd returns the smallest key greater than every key with the

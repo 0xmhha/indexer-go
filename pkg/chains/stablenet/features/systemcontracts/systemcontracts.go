@@ -10,9 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
+	sc "github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Name is the feature name.
@@ -25,16 +25,16 @@ func (systemContractsFeature) Requires() []string { return nil }
 
 func (systemContractsFeature) Register(r feature.Registrar) error {
 	d := r.Deps()
-	w, ok := d.Storage.(storagepkg.SystemContractWriter)
-	if !ok {
-		return fmt.Errorf("storage does not support system contract events")
-	}
 	logger := d.Logger
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	store, err := sc.Open(d.Storage, logger)
+	if err != nil {
+		return err
+	}
 	r.OnBlock(&handler{
-		parser:    events.NewSystemContractEventParser(w, logger),
+		parser:    sc.NewSystemContractEventParser(store, logger),
 		logger:    logger,
 		publishFn: d.Publish,
 	})
@@ -44,7 +44,7 @@ func (systemContractsFeature) Register(r feature.Registrar) error {
 func init() { feature.Register(systemContractsFeature{}) }
 
 type handler struct {
-	parser    *events.SystemContractEventParser
+	parser    *sc.SystemContractEventParser
 	logger    *zap.Logger
 	publishFn func(events.Event) bool
 }
@@ -71,14 +71,14 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 // publishValidatorChange publishes MemberAdded and MemberRemoved events of the
 // GovValidator contract. The block hash comes from the model (D16).
 func (h *handler) publishValidatorChange(b *feature.Block, addr common.Address, topics []common.Hash) {
-	if h.publishFn == nil || addr != events.GovValidatorAddress || len(topics) < 2 {
+	if h.publishFn == nil || addr != sc.GovValidatorAddress || len(topics) < 2 {
 		return
 	}
 	var change string
 	switch topics[0] {
-	case events.EventSigMemberAdded:
+	case sc.EventSigMemberAdded:
 		change = "added"
-	case events.EventSigMemberRemoved:
+	case sc.EventSigMemberRemoved:
 		change = "removed"
 	default:
 		return

@@ -592,13 +592,13 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 	tests := []struct {
 		name   string
 		filter *Filter
-		event  *SystemContractEvent
+		event  *ContractLogEvent
 		want   bool
 	}{
 		{
 			name:   "empty filter matches",
 			filter: NewFilter(),
-			event:  NewSystemContractEvent(contractAddr, SystemContractEventMint, 100, common.Hash{}, 0, nil),
+			event:  &ContractLogEvent{Contract: contractAddr, EventName: "Mint", BlockNumber: 100},
 			want:   true,
 		},
 		{
@@ -606,7 +606,7 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 			filter: &Filter{
 				Addresses: []common.Address{contractAddr},
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventMint, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Mint", BlockNumber: 100},
 			want:  true,
 		},
 		{
@@ -614,7 +614,7 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 			filter: &Filter{
 				Addresses: []common.Address{altAddr},
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventMint, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Mint", BlockNumber: 100},
 			want:  false,
 		},
 		{
@@ -623,7 +623,7 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 				FromBlock: 50,
 				ToBlock:   150,
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventBurn, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Burn", BlockNumber: 100},
 			want:  true,
 		},
 		{
@@ -632,7 +632,7 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 				FromBlock: 150,
 				ToBlock:   200,
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventBurn, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Burn", BlockNumber: 100},
 			want:  false,
 		},
 		{
@@ -642,7 +642,7 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 				FromBlock: 50,
 				ToBlock:   150,
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventValidatorAdded, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "ValidatorAdded", BlockNumber: 100},
 			want:  true,
 		},
 		{
@@ -656,27 +656,27 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 			filter: &Filter{
 				ToBlock: 50,
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventBurn, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Burn", BlockNumber: 100},
 			want:  false,
 		},
 		{
 			name: "customData eventTypes filter matches",
 			filter: &Filter{
 				CustomData: map[string]any{
-					"eventTypes": []string{string(SystemContractEventMint), string(SystemContractEventBurn)},
+					"eventTypes": []string{"Mint", "Burn"},
 				},
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventMint, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Mint", BlockNumber: 100},
 			want:  true,
 		},
 		{
 			name: "customData eventTypes filter does not match",
 			filter: &Filter{
 				CustomData: map[string]any{
-					"eventTypes": []string{string(SystemContractEventBurn)},
+					"eventTypes": []string{"Burn"},
 				},
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventMint, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Mint", BlockNumber: 100},
 			want:  false,
 		},
 		{
@@ -686,7 +686,7 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 					"eventTypes": []string{},
 				},
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventMint, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Mint", BlockNumber: 100},
 			want:  true,
 		},
 		{
@@ -696,7 +696,7 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 					"eventTypes": "not-a-slice",
 				},
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventMint, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Mint", BlockNumber: 100},
 			want:  true, // invalid type is ignored, so it matches
 		},
 		{
@@ -706,7 +706,7 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 					"otherKey": "some value",
 				},
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventMint, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Mint", BlockNumber: 100},
 			want:  true,
 		},
 		{
@@ -714,7 +714,7 @@ func TestFilter_MatchContractEvent(t *testing.T) {
 			filter: &Filter{
 				Addresses: []common.Address{altAddr, contractAddr},
 			},
-			event: NewSystemContractEvent(contractAddr, SystemContractEventMint, 100, common.Hash{}, 0, nil),
+			event: &ContractLogEvent{Contract: contractAddr, EventName: "Mint", BlockNumber: 100},
 			want:  true,
 		},
 	}

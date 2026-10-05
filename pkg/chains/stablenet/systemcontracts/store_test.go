@@ -1,7 +1,8 @@
-package storage
+package systemcontracts
 
 import (
 	"context"
+	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 	"math/big"
 	"os"
 	"testing"
@@ -18,8 +19,8 @@ func TestPebbleStorage_SystemContractEvents(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create storage
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -204,8 +205,8 @@ func TestPebbleStorage_UpdateProposalStatus(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -242,8 +243,8 @@ func TestPebbleStorage_TotalSupply(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -270,8 +271,8 @@ func TestPebbleStorage_ActiveMinter(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -293,8 +294,8 @@ func TestPebbleStorage_ActiveValidator(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -315,8 +316,8 @@ func TestPebbleStorage_BlacklistStatus(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -337,8 +338,8 @@ func TestPebbleStorage_GetMintEvents(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -374,8 +375,8 @@ func TestPebbleStorage_GetBurnEvents(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -411,8 +412,8 @@ func TestPebbleStorage_MaxProposalsUpdateEvent(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -451,8 +452,8 @@ func TestPebbleStorage_ProposalExecutionSkippedEvent(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -494,8 +495,8 @@ func TestPebbleStorage_AuthorizedAccountEvent(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	cfg := DefaultConfig(tempDir)
-	storage, err := NewPebbleStorage(cfg)
+	cfg := storagepkg.DefaultConfig(tempDir)
+	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
 	defer storage.Close()
 

@@ -173,7 +173,7 @@ func TestGetPartitionKey_TransactionEvent(t *testing.T) {
 	assert.Equal(t, txHash.Hex(), key)
 }
 
-func TestGetPartitionKey_SystemContractEvent(t *testing.T) {
+func TestGetPartitionKey_ContractEvent(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		Brokers: []string{"localhost:9092"},
 		Topic:   "test",
@@ -182,7 +182,7 @@ func TestGetPartitionKey_SystemContractEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	contract := common.HexToAddress("0x1234")
-	event := &events.SystemContractEvent{Contract: contract}
+	event := &events.ContractLogEvent{Contract: contract}
 	key := kp.getPartitionKey(event)
 	assert.Contains(t, key, "contract:")
 }

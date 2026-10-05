@@ -1,6 +1,7 @@
 package eventbus
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -205,35 +206,42 @@ func TestJSONSerializer_ValidatorSetEvent(t *testing.T) {
 	assert.Equal(t, original.ValidatorSetSize, ve.ValidatorSetSize)
 }
 
-func TestJSONSerializer_SystemContractEvent(t *testing.T) {
-	s := NewJSONSerializer()
+// registryTestEvent is an event type the serializer knows only through a
+// registered codec.
+type registryTestEvent struct {
+	Name      string
+	CreatedAt time.Time
+}
 
-	original := &events.SystemContractEvent{
-		Contract:    common.HexToAddress("0xcccccccccccccccccccccccccccccccccccccccc"),
-		EventName:   events.SystemContractEventProposalCreated,
-		BlockNumber: 500,
-		TxHash:      common.HexToHash("0x9999"),
-		LogIndex:    2,
-		Data: map[string]interface{}{
-			"proposalId": "123",
-			"proposer":   "0xaaaa",
+const registryTestEventType events.EventType = "eventbusRegistryTest"
+
+func (e *registryTestEvent) Type() events.EventType { return registryTestEventType }
+func (e *registryTestEvent) Timestamp() time.Time   { return e.CreatedAt }
+
+func init() {
+	events.RegisterCodec(registryTestEventType, events.EventCodec{
+		Encode: func(ev events.Event) (interface{}, error) { return ev, nil },
+		Decode: func(data []byte) (events.Event, error) {
+			var e registryTestEvent
+			err := json.Unmarshal(data, &e)
+			return &e, err
 		},
-		CreatedAt: time.Now().Truncate(time.Millisecond),
-	}
+	})
+}
+
+func TestJSONSerializer_RegisteredCodec(t *testing.T) {
+	s := NewJSONSerializer()
+	original := &registryTestEvent{Name: "x", CreatedAt: time.Now().Truncate(time.Millisecond)}
 
 	data, err := s.Serialize(original)
 	require.NoError(t, err)
-
 	event, err := s.Deserialize(data)
 	require.NoError(t, err)
 
-	se, ok := event.(*events.SystemContractEvent)
+	got, ok := event.(*registryTestEvent)
 	require.True(t, ok)
-	assert.Equal(t, original.Contract, se.Contract)
-	assert.Equal(t, original.EventName, se.EventName)
-	assert.Equal(t, original.BlockNumber, se.BlockNumber)
-	assert.Equal(t, original.LogIndex, se.LogIndex)
-	assert.Equal(t, "123", se.Data["proposalId"])
+	assert.Equal(t, original.Name, got.Name)
+	assert.True(t, original.CreatedAt.Equal(got.CreatedAt))
 }
 
 func TestJSONSerializer_ReorgEvent(t *testing.T) {
@@ -322,10 +330,9 @@ func TestJSONSerializer_RoundTrip_AllEventTypes(t *testing.T) {
 			ChangeType:  "added",
 			CreatedAt:   time.Now(),
 		},
-		&events.SystemContractEvent{
-			BlockNumber: 6,
-			EventName:   events.SystemContractEventMemberAdded,
-			CreatedAt:   time.Now(),
+		&registryTestEvent{
+			Name:      "registered",
+			CreatedAt: time.Now(),
 		},
 	}
 

@@ -1,4 +1,4 @@
-package storage
+package systemcontracts
 
 import (
 	"context"
@@ -7,41 +7,62 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
+	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
-// Ensure PebbleStorage implements SystemContractReader
-var _ SystemContractReader = (*PebbleStorage)(nil)
+// Store reads and writes system contract data over the indexer's key-value
+// storage (bound to the block transaction through ctx while a block is
+// indexed).
+type Store struct {
+	db     storage.KV
+	logger *zap.Logger
+}
 
-// Ensure PebbleStorage implements SystemContractWriter
-var _ SystemContractWriter = (*PebbleStorage)(nil)
+// NewStore returns a system contract store over db.
+func NewStore(db storage.KV, logger *zap.Logger) *Store {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	return &Store{db: db, logger: logger}
+}
+
+// Open returns a system contract store over s, which must provide
+// key-value access (the Pebble storage does).
+func Open(s any, logger *zap.Logger) (*Store, error) {
+	db, ok := s.(storage.KV)
+	if !ok {
+		return nil, fmt.Errorf("storage %T does not support system contract data", s)
+	}
+	return NewStore(db, logger), nil
+}
+
+// Ensure Store implements SystemContractReader
+var _ SystemContractReader = (*Store)(nil)
+
+// Ensure Store implements SystemContractWriter
+var _ SystemContractWriter = (*Store)(nil)
 
 // ============================================================================
 // System Contract Writer Methods
 // ============================================================================
 
 // StoreMintEvent stores a mint event
-func (s *PebbleStorage) StoreMintEvent(ctx context.Context, event *MintEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreMintEvent(ctx context.Context, event *MintEvent) error {
 	key := MintEventKey(event.BlockNumber, uint64(event.TxIndex), uint64(event.LogIndex))
 	data, err := EncodeMintEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode mint event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store mint event: %w", err)
 	}
 	// Index by minter for minter-filtered queries; the value is the event key.
 	idx := MintMinterIndexKey(event.Minter, event.BlockNumber, uint64(event.TxIndex), uint64(event.LogIndex))
-	if err := s.kv(ctx).Set(idx, key, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, idx, key); err != nil {
 		return fmt.Errorf("failed to index mint event: %w", err)
 	}
 
@@ -49,26 +70,19 @@ func (s *PebbleStorage) StoreMintEvent(ctx context.Context, event *MintEvent) er
 }
 
 // StoreBurnEvent stores a burn event
-func (s *PebbleStorage) StoreBurnEvent(ctx context.Context, event *BurnEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreBurnEvent(ctx context.Context, event *BurnEvent) error {
 	key := BurnEventKey(event.BlockNumber, uint64(event.TxIndex), uint64(event.LogIndex))
 	data, err := EncodeBurnEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode burn event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store burn event: %w", err)
 	}
 	// Index by burner for burner-filtered queries; the value is the event key.
 	idx := BurnBurnerIndexKey(event.Burner, event.BlockNumber, uint64(event.TxIndex), uint64(event.LogIndex))
-	if err := s.kv(ctx).Set(idx, key, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, idx, key); err != nil {
 		return fmt.Errorf("failed to index burn event: %w", err)
 	}
 
@@ -76,21 +90,14 @@ func (s *PebbleStorage) StoreBurnEvent(ctx context.Context, event *BurnEvent) er
 }
 
 // StoreMinterConfigEvent stores a minter configuration event
-func (s *PebbleStorage) StoreMinterConfigEvent(ctx context.Context, event *MinterConfigEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreMinterConfigEvent(ctx context.Context, event *MinterConfigEvent) error {
 	key := MinterConfigEventKey(event.Minter, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeMinterConfigEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode minter config event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store minter config event: %w", err)
 	}
 
@@ -98,27 +105,20 @@ func (s *PebbleStorage) StoreMinterConfigEvent(ctx context.Context, event *Minte
 }
 
 // StoreProposal stores a governance proposal
-func (s *PebbleStorage) StoreProposal(ctx context.Context, proposal *Proposal) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreProposal(ctx context.Context, proposal *Proposal) error {
 	key := ProposalKey(proposal.Contract, proposal.ProposalID.String())
 	data, err := EncodeProposal(proposal)
 	if err != nil {
 		return fmt.Errorf("failed to encode proposal: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store proposal: %w", err)
 	}
 
 	// Store in status index
 	statusKey := ProposalStatusIndexKey(proposal.Contract, uint8(proposal.Status), proposal.ProposalID.String())
-	if err := s.kv(ctx).Set(statusKey, []byte{1}, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, statusKey, []byte{1}); err != nil {
 		return fmt.Errorf("failed to store proposal status index: %w", err)
 	}
 
@@ -126,25 +126,17 @@ func (s *PebbleStorage) StoreProposal(ctx context.Context, proposal *Proposal) e
 }
 
 // UpdateProposalStatus updates the status of a proposal
-func (s *PebbleStorage) UpdateProposalStatus(ctx context.Context, contract common.Address, proposalID *big.Int, status ProposalStatus, executedAt uint64) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) UpdateProposalStatus(ctx context.Context, contract common.Address, proposalID *big.Int, status ProposalStatus, executedAt uint64) error {
 	// Get existing proposal
 	key := ProposalKey(contract, proposalID.String())
-	data, closer, err := s.kv(ctx).Get(key)
-	if errors.Is(err, pebble.ErrNotFound) {
+	data, err := s.db.Get(ctx, key)
+	if errors.Is(err, storage.ErrNotFound) {
 		// Created before the index started, or its creation was not indexed.
-		return fmt.Errorf("proposal %s of %s: %w", proposalID, contract.Hex(), ErrNotFound)
+		return fmt.Errorf("proposal %s of %s: %w", proposalID, contract.Hex(), storage.ErrNotFound)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to get proposal: %w", err)
 	}
-	defer closer.Close()
 
 	proposal, err := DecodeProposal(data)
 	if err != nil {
@@ -153,7 +145,7 @@ func (s *PebbleStorage) UpdateProposalStatus(ctx context.Context, contract commo
 
 	// Remove old status index
 	oldStatusKey := ProposalStatusIndexKey(contract, uint8(proposal.Status), proposalID.String())
-	if err := s.kv(ctx).Delete(oldStatusKey, pebble.Sync); err != nil {
+	if err := s.db.Delete(ctx, oldStatusKey); err != nil {
 		return fmt.Errorf("failed to delete old status index: %w", err)
 	}
 
@@ -169,13 +161,13 @@ func (s *PebbleStorage) UpdateProposalStatus(ctx context.Context, contract commo
 		return fmt.Errorf("failed to encode updated proposal: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, updatedData, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, updatedData); err != nil {
 		return fmt.Errorf("failed to store updated proposal: %w", err)
 	}
 
 	// Add new status index
 	newStatusKey := ProposalStatusIndexKey(contract, uint8(status), proposalID.String())
-	if err := s.kv(ctx).Set(newStatusKey, []byte{1}, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, newStatusKey, []byte{1}); err != nil {
 		return fmt.Errorf("failed to store new status index: %w", err)
 	}
 
@@ -183,21 +175,14 @@ func (s *PebbleStorage) UpdateProposalStatus(ctx context.Context, contract commo
 }
 
 // StoreProposalVote stores a vote on a proposal
-func (s *PebbleStorage) StoreProposalVote(ctx context.Context, vote *ProposalVote) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreProposalVote(ctx context.Context, vote *ProposalVote) error {
 	key := ProposalVoteKey(vote.Contract, vote.ProposalID.String(), vote.Voter)
 	data, err := EncodeProposalVote(vote)
 	if err != nil {
 		return fmt.Errorf("failed to encode vote: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store vote: %w", err)
 	}
 
@@ -205,21 +190,14 @@ func (s *PebbleStorage) StoreProposalVote(ctx context.Context, vote *ProposalVot
 }
 
 // StoreGasTipUpdateEvent stores a gas tip update event
-func (s *PebbleStorage) StoreGasTipUpdateEvent(ctx context.Context, event *GasTipUpdateEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreGasTipUpdateEvent(ctx context.Context, event *GasTipUpdateEvent) error {
 	key := GasTipUpdateEventKey(event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeGasTipUpdateEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode gas tip update event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store gas tip update event: %w", err)
 	}
 
@@ -227,21 +205,14 @@ func (s *PebbleStorage) StoreGasTipUpdateEvent(ctx context.Context, event *GasTi
 }
 
 // StoreBlacklistEvent stores a blacklist event
-func (s *PebbleStorage) StoreBlacklistEvent(ctx context.Context, event *BlacklistEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreBlacklistEvent(ctx context.Context, event *BlacklistEvent) error {
 	key := BlacklistEventKey(event.Account, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeBlacklistEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode blacklist event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store blacklist event: %w", err)
 	}
 
@@ -249,21 +220,14 @@ func (s *PebbleStorage) StoreBlacklistEvent(ctx context.Context, event *Blacklis
 }
 
 // StoreValidatorChangeEvent stores a validator change event
-func (s *PebbleStorage) StoreValidatorChangeEvent(ctx context.Context, event *ValidatorChangeEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreValidatorChangeEvent(ctx context.Context, event *ValidatorChangeEvent) error {
 	key := ValidatorChangeEventKey(event.Validator, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeValidatorChangeEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode validator change event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store validator change event: %w", err)
 	}
 
@@ -271,21 +235,14 @@ func (s *PebbleStorage) StoreValidatorChangeEvent(ctx context.Context, event *Va
 }
 
 // StoreMemberChangeEvent stores a member change event
-func (s *PebbleStorage) StoreMemberChangeEvent(ctx context.Context, event *MemberChangeEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreMemberChangeEvent(ctx context.Context, event *MemberChangeEvent) error {
 	key := MemberChangeEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeMemberChangeEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode member change event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store member change event: %w", err)
 	}
 
@@ -293,21 +250,14 @@ func (s *PebbleStorage) StoreMemberChangeEvent(ctx context.Context, event *Membe
 }
 
 // StoreEmergencyPauseEvent stores an emergency pause event
-func (s *PebbleStorage) StoreEmergencyPauseEvent(ctx context.Context, event *EmergencyPauseEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreEmergencyPauseEvent(ctx context.Context, event *EmergencyPauseEvent) error {
 	key := EmergencyPauseEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
 	data, err := EncodeEmergencyPauseEvent(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode emergency pause event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store emergency pause event: %w", err)
 	}
 
@@ -315,21 +265,14 @@ func (s *PebbleStorage) StoreEmergencyPauseEvent(ctx context.Context, event *Eme
 }
 
 // StoreDepositMintProposal stores a deposit mint proposal
-func (s *PebbleStorage) StoreDepositMintProposal(ctx context.Context, proposal *DepositMintProposal) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreDepositMintProposal(ctx context.Context, proposal *DepositMintProposal) error {
 	key := DepositMintProposalKey(proposal.ProposalID.String())
 	data, err := EncodeDepositMintProposal(proposal)
 	if err != nil {
 		return fmt.Errorf("failed to encode deposit mint proposal: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store deposit mint proposal: %w", err)
 	}
 
@@ -337,34 +280,25 @@ func (s *PebbleStorage) StoreDepositMintProposal(ctx context.Context, proposal *
 }
 
 // UpdateTotalSupply updates the total supply
-func (s *PebbleStorage) UpdateTotalSupply(ctx context.Context, delta *big.Int) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) UpdateTotalSupply(ctx context.Context, delta *big.Int) error {
 	// Get current total supply
 	key := TotalSupplyKey()
-	data, closer, err := s.kv(ctx).Get(key)
+	data, err := s.db.Get(ctx, key)
 	if err != nil {
-		if err == pebble.ErrNotFound {
+		if errors.Is(err, storage.ErrNotFound) {
 			// Initialize to 0
-			data = EncodeBigInt(big.NewInt(0))
+			data = storage.EncodeBigInt(big.NewInt(0))
 		} else {
 			return fmt.Errorf("failed to get total supply: %w", err)
 		}
-	} else {
-		defer closer.Close()
 	}
 
-	currentSupply := DecodeBigInt(data)
+	currentSupply := storage.DecodeBigInt(data)
 	newSupply := new(big.Int).Add(currentSupply, delta)
 
 	// Store new total supply
-	newData := EncodeBigInt(newSupply)
-	if err := s.kv(ctx).Set(key, newData, pebble.Sync); err != nil {
+	newData := storage.EncodeBigInt(newSupply)
+	if err := s.db.Put(ctx, key, newData); err != nil {
 		return fmt.Errorf("failed to update total supply: %w", err)
 	}
 
@@ -372,25 +306,18 @@ func (s *PebbleStorage) UpdateTotalSupply(ctx context.Context, delta *big.Int) e
 }
 
 // UpdateActiveMinter updates the active minter status
-func (s *PebbleStorage) UpdateActiveMinter(ctx context.Context, minter common.Address, allowance *big.Int, active bool) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) UpdateActiveMinter(ctx context.Context, minter common.Address, allowance *big.Int, active bool) error {
 	key := MinterActiveIndexKey(minter)
 
 	if active {
 		// Store minter allowance
-		data := EncodeBigInt(allowance)
-		if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+		data := storage.EncodeBigInt(allowance)
+		if err := s.db.Put(ctx, key, data); err != nil {
 			return fmt.Errorf("failed to set active minter: %w", err)
 		}
 	} else {
 		// Remove minter
-		if err := s.kv(ctx).Delete(key, pebble.Sync); err != nil {
+		if err := s.db.Delete(ctx, key); err != nil {
 			return fmt.Errorf("failed to remove active minter: %w", err)
 		}
 	}
@@ -399,24 +326,17 @@ func (s *PebbleStorage) UpdateActiveMinter(ctx context.Context, minter common.Ad
 }
 
 // UpdateActiveValidator updates the active validator status
-func (s *PebbleStorage) UpdateActiveValidator(ctx context.Context, validator common.Address, active bool) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) UpdateActiveValidator(ctx context.Context, validator common.Address, active bool) error {
 	key := ValidatorActiveIndexKey(validator)
 
 	if active {
 		// Mark validator as active
-		if err := s.kv(ctx).Set(key, []byte{1}, pebble.Sync); err != nil {
+		if err := s.db.Put(ctx, key, []byte{1}); err != nil {
 			return fmt.Errorf("failed to set active validator: %w", err)
 		}
 	} else {
 		// Remove validator
-		if err := s.kv(ctx).Delete(key, pebble.Sync); err != nil {
+		if err := s.db.Delete(ctx, key); err != nil {
 			return fmt.Errorf("failed to remove active validator: %w", err)
 		}
 	}
@@ -425,24 +345,17 @@ func (s *PebbleStorage) UpdateActiveValidator(ctx context.Context, validator com
 }
 
 // UpdateBlacklistStatus updates the blacklist status of an address
-func (s *PebbleStorage) UpdateBlacklistStatus(ctx context.Context, address common.Address, blacklisted bool) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) UpdateBlacklistStatus(ctx context.Context, address common.Address, blacklisted bool) error {
 	key := BlacklistActiveIndexKey(address)
 
 	if blacklisted {
 		// Mark address as blacklisted
-		if err := s.kv(ctx).Set(key, []byte{1}, pebble.Sync); err != nil {
+		if err := s.db.Put(ctx, key, []byte{1}); err != nil {
 			return fmt.Errorf("failed to set blacklist status: %w", err)
 		}
 	} else {
 		// Remove from blacklist
-		if err := s.kv(ctx).Delete(key, pebble.Sync); err != nil {
+		if err := s.db.Delete(ctx, key); err != nil {
 			return fmt.Errorf("failed to remove blacklist status: %w", err)
 		}
 	}
@@ -455,30 +368,21 @@ func (s *PebbleStorage) UpdateBlacklistStatus(ctx context.Context, address commo
 // ============================================================================
 
 // GetTotalSupply returns the current total supply
-func (s *PebbleStorage) GetTotalSupply(ctx context.Context) (*big.Int, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetTotalSupply(ctx context.Context) (*big.Int, error) {
 	key := TotalSupplyKey()
-	data, closer, err := s.kv(ctx).Get(key)
+	data, err := s.db.Get(ctx, key)
 	if err != nil {
-		if err == pebble.ErrNotFound {
+		if errors.Is(err, storage.ErrNotFound) {
 			return big.NewInt(0), nil
 		}
 		return nil, fmt.Errorf("failed to get total supply: %w", err)
 	}
-	defer closer.Close()
 
-	return DecodeBigInt(data), nil
+	return storage.DecodeBigInt(data), nil
 }
 
 // GetMintEvents returns mint events within a block range
-func (s *PebbleStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, minter common.Address, limit, offset int) ([]*MintEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, minter common.Address, limit, offset int) ([]*MintEvent, error) {
 	// Use minter-specific index if minter is specified, otherwise scan all mint events
 	var keyPrefix []byte
 	var lowerBound, upperBound []byte
@@ -494,10 +398,7 @@ func (s *PebbleStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock ui
 		upperBound = []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), toBlock+1))
 	}
 
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: lowerBound,
-		UpperBound: upperBound,
-	})
+	iter, err := s.db.NewCursor(ctx, lowerBound, upperBound)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -524,15 +425,14 @@ func (s *PebbleStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock ui
 		if minter != (common.Address{}) {
 			// Index value contains the actual event key
 			eventKey := iter.Value()
-			data, closer, err := s.kv(ctx).Get(eventKey)
+			data, err := s.db.Get(ctx, eventKey)
 			if err != nil {
-				if err == pebble.ErrNotFound {
+				if errors.Is(err, storage.ErrNotFound) {
 					continue
 				}
 				return nil, fmt.Errorf("failed to get mint event: %w", err)
 			}
 			eventData = data
-			closer.Close()
 		} else {
 			eventData = iter.Value()
 		}
@@ -555,11 +455,7 @@ func (s *PebbleStorage) GetMintEvents(ctx context.Context, fromBlock, toBlock ui
 }
 
 // GetBurnEvents returns burn events within a block range
-func (s *PebbleStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, burner common.Address, limit, offset int) ([]*BurnEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, burner common.Address, limit, offset int) ([]*BurnEvent, error) {
 	// Use burner-specific index if burner is specified, otherwise scan all burn events
 	var lowerBound, upperBound []byte
 
@@ -574,10 +470,7 @@ func (s *PebbleStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock ui
 		upperBound = []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), toBlock+1))
 	}
 
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: lowerBound,
-		UpperBound: upperBound,
-	})
+	iter, err := s.db.NewCursor(ctx, lowerBound, upperBound)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -604,15 +497,14 @@ func (s *PebbleStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock ui
 		if burner != (common.Address{}) {
 			// Index value contains the actual event key
 			eventKey := iter.Value()
-			data, closer, err := s.kv(ctx).Get(eventKey)
+			data, err := s.db.Get(ctx, eventKey)
 			if err != nil {
-				if err == pebble.ErrNotFound {
+				if errors.Is(err, storage.ErrNotFound) {
 					continue
 				}
 				return nil, fmt.Errorf("failed to get burn event: %w", err)
 			}
 			eventData = data
-			closer.Close()
 		} else {
 			eventData = iter.Value()
 		}
@@ -635,16 +527,9 @@ func (s *PebbleStorage) GetBurnEvents(ctx context.Context, fromBlock, toBlock ui
 }
 
 // GetActiveMinters returns list of active minters
-func (s *PebbleStorage) GetActiveMinters(ctx context.Context) ([]common.Address, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetActiveMinters(ctx context.Context) ([]common.Address, error) {
 	keyPrefix := MinterActiveIndexKeyPrefix()
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -667,35 +552,23 @@ func (s *PebbleStorage) GetActiveMinters(ctx context.Context) ([]common.Address,
 }
 
 // GetMinterAllowance returns the allowance for a specific minter
-func (s *PebbleStorage) GetMinterAllowance(ctx context.Context, minter common.Address) (*big.Int, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetMinterAllowance(ctx context.Context, minter common.Address) (*big.Int, error) {
 	key := MinterActiveIndexKey(minter)
-	data, closer, err := s.kv(ctx).Get(key)
+	data, err := s.db.Get(ctx, key)
 	if err != nil {
-		if err == pebble.ErrNotFound {
+		if errors.Is(err, storage.ErrNotFound) {
 			return big.NewInt(0), nil
 		}
 		return nil, fmt.Errorf("failed to get minter allowance: %w", err)
 	}
-	defer closer.Close()
 
-	return DecodeBigInt(data), nil
+	return storage.DecodeBigInt(data), nil
 }
 
 // GetMinterHistory returns configuration history for a minter
-func (s *PebbleStorage) GetMinterHistory(ctx context.Context, minter common.Address) ([]*MinterConfigEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetMinterHistory(ctx context.Context, minter common.Address) ([]*MinterConfigEvent, error) {
 	keyPrefix := MinterConfigEventKeyPrefix(minter)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -718,16 +591,9 @@ func (s *PebbleStorage) GetMinterHistory(ctx context.Context, minter common.Addr
 }
 
 // GetActiveValidators returns list of active validators
-func (s *PebbleStorage) GetActiveValidators(ctx context.Context) ([]common.Address, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetActiveValidators(ctx context.Context) ([]common.Address, error) {
 	keyPrefix := ValidatorActiveIndexKeyPrefix()
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -750,19 +616,12 @@ func (s *PebbleStorage) GetActiveValidators(ctx context.Context) ([]common.Addre
 }
 
 // GetGasTipHistory returns gas tip update history
-func (s *PebbleStorage) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*GasTipUpdateEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*GasTipUpdateEvent, error) {
 	keyPrefix := GasTipUpdateEventKeyPrefix()
 	lowerBound := []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), fromBlock))
 	upperBound := []byte(fmt.Sprintf("%s%020d/", string(keyPrefix), toBlock+1))
 
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: lowerBound,
-		UpperBound: upperBound,
-	})
+	iter, err := s.db.NewCursor(ctx, lowerBound, upperBound)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -785,16 +644,9 @@ func (s *PebbleStorage) GetGasTipHistory(ctx context.Context, fromBlock, toBlock
 }
 
 // GetValidatorHistory returns validator change history
-func (s *PebbleStorage) GetValidatorHistory(ctx context.Context, validator common.Address) ([]*ValidatorChangeEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetValidatorHistory(ctx context.Context, validator common.Address) ([]*ValidatorChangeEvent, error) {
 	keyPrefix := ValidatorChangeEventKeyPrefix(validator)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -817,18 +669,11 @@ func (s *PebbleStorage) GetValidatorHistory(ctx context.Context, validator commo
 }
 
 // GetMinterConfigHistory returns minter configuration history
-func (s *PebbleStorage) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*MinterConfigEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock uint64) ([]*MinterConfigEvent, error) {
 	// Scan all minters' config events in the block range
 	// This requires iterating through all minter config events since keys are organized by minter
 	keyPrefix := []byte(prefixSysMinterConfig)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -855,16 +700,9 @@ func (s *PebbleStorage) GetMinterConfigHistory(ctx context.Context, fromBlock, t
 }
 
 // GetEmergencyPauseHistory returns emergency pause event history
-func (s *PebbleStorage) GetEmergencyPauseHistory(ctx context.Context, contract common.Address) ([]*EmergencyPauseEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetEmergencyPauseHistory(ctx context.Context, contract common.Address) ([]*EmergencyPauseEvent, error) {
 	keyPrefix := EmergencyPauseEventKeyPrefix(contract)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -887,17 +725,10 @@ func (s *PebbleStorage) GetEmergencyPauseHistory(ctx context.Context, contract c
 }
 
 // GetDepositMintProposals returns deposit mint proposals
-func (s *PebbleStorage) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock uint64, status ProposalStatus) ([]*DepositMintProposal, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock uint64, status ProposalStatus) ([]*DepositMintProposal, error) {
 	// Scan all deposit mint proposals
 	keyPrefix := []byte(prefixSysDepositMint)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -926,26 +757,15 @@ func (s *PebbleStorage) GetDepositMintProposals(ctx context.Context, fromBlock, 
 }
 
 // GetBurnHistory returns burn event history
-func (s *PebbleStorage) GetBurnHistory(ctx context.Context, fromBlock, toBlock uint64, user common.Address) ([]*BurnEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetBurnHistory(ctx context.Context, fromBlock, toBlock uint64, user common.Address) ([]*BurnEvent, error) {
 	// Use GetBurnEvents which already implements this functionality
 	return s.GetBurnEvents(ctx, fromBlock, toBlock, user, 0, 0)
 }
 
 // GetBlacklistedAddresses returns list of blacklisted addresses
-func (s *PebbleStorage) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, error) {
 	keyPrefix := BlacklistActiveIndexKeyPrefix()
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -968,16 +788,9 @@ func (s *PebbleStorage) GetBlacklistedAddresses(ctx context.Context) ([]common.A
 }
 
 // GetBlacklistHistory returns blacklist event history for an address
-func (s *PebbleStorage) GetBlacklistHistory(ctx context.Context, address common.Address) ([]*BlacklistEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetBlacklistHistory(ctx context.Context, address common.Address) ([]*BlacklistEvent, error) {
 	keyPrefix := BlacklistEventKeyPrefix(address)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -1000,18 +813,14 @@ func (s *PebbleStorage) GetBlacklistHistory(ctx context.Context, address common.
 }
 
 // StoreAuthorizedAccountEvent stores an authorized account added/removed event
-func (s *PebbleStorage) StoreAuthorizedAccountEvent(ctx context.Context, event *AuthorizedAccountEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreAuthorizedAccountEvent(ctx context.Context, event *AuthorizedAccountEvent) error {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal authorized account event: %w", err)
 	}
 
 	key := AuthorizedAccountEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store authorized account event: %w", err)
 	}
 
@@ -1019,17 +828,10 @@ func (s *PebbleStorage) StoreAuthorizedAccountEvent(ctx context.Context, event *
 }
 
 // GetAuthorizedAccounts returns list of authorized accounts by replaying add/remove events
-func (s *PebbleStorage) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, error) {
 	// Scan all authorized account events for GovCouncil contract and replay to derive current state
 	keyPrefix := AuthorizedAccountEventKeyPrefix(GovCouncilAddress)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -1062,16 +864,9 @@ func (s *PebbleStorage) GetAuthorizedAccounts(ctx context.Context) ([]common.Add
 }
 
 // GetProposals returns proposals with optional status filter
-func (s *PebbleStorage) GetProposals(ctx context.Context, contract common.Address, status ProposalStatus, limit, offset int) ([]*Proposal, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetProposals(ctx context.Context, contract common.Address, status ProposalStatus, limit, offset int) ([]*Proposal, error) {
 	keyPrefix := ProposalStatusIndexKeyPrefix(contract, uint8(status))
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -1098,13 +893,12 @@ func (s *PebbleStorage) GetProposals(ctx context.Context, contract common.Addres
 		proposalID := key[len(string(keyPrefix)):]
 
 		proposalKey := ProposalKey(contract, proposalID)
-		data, closer, err := s.kv(ctx).Get(proposalKey)
+		data, err := s.db.Get(ctx, proposalKey)
 		if err != nil {
 			continue // Skip if proposal not found
 		}
 
 		proposal, err := DecodeProposal(data)
-		closer.Close()
 		if err != nil {
 			continue // Skip if decode fails
 		}
@@ -1121,20 +915,15 @@ func (s *PebbleStorage) GetProposals(ctx context.Context, contract common.Addres
 }
 
 // GetProposalById returns a specific proposal by ID
-func (s *PebbleStorage) GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*Proposal, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetProposalById(ctx context.Context, contract common.Address, proposalId *big.Int) (*Proposal, error) {
 	key := ProposalKey(contract, proposalId.String())
-	data, closer, err := s.kv(ctx).Get(key)
+	data, err := s.db.Get(ctx, key)
 	if err != nil {
-		if err == pebble.ErrNotFound {
+		if errors.Is(err, storage.ErrNotFound) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get proposal: %w", err)
 	}
-	defer closer.Close()
 
 	proposal, err := DecodeProposal(data)
 	if err != nil {
@@ -1145,16 +934,9 @@ func (s *PebbleStorage) GetProposalById(ctx context.Context, contract common.Add
 }
 
 // GetProposalVotes returns votes for a specific proposal
-func (s *PebbleStorage) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*ProposalVote, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*ProposalVote, error) {
 	keyPrefix := ProposalVoteKeyPrefix(contract, proposalId.String())
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -1177,16 +959,9 @@ func (s *PebbleStorage) GetProposalVotes(ctx context.Context, contract common.Ad
 }
 
 // GetMemberHistory returns member change history for a contract
-func (s *PebbleStorage) GetMemberHistory(ctx context.Context, contract common.Address) ([]*MemberChangeEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetMemberHistory(ctx context.Context, contract common.Address) ([]*MemberChangeEvent, error) {
 	keyPrefix := MemberChangeEventKeyPrefix(contract)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -1209,21 +984,14 @@ func (s *PebbleStorage) GetMemberHistory(ctx context.Context, contract common.Ad
 }
 
 // StoreMaxProposalsUpdateEvent stores a max proposals per member update event
-func (s *PebbleStorage) StoreMaxProposalsUpdateEvent(ctx context.Context, event *MaxProposalsUpdateEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreMaxProposalsUpdateEvent(ctx context.Context, event *MaxProposalsUpdateEvent) error {
 	key := MaxProposalsUpdateEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
 	data, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode max proposals update event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store max proposals update event: %w", err)
 	}
 
@@ -1231,21 +999,14 @@ func (s *PebbleStorage) StoreMaxProposalsUpdateEvent(ctx context.Context, event 
 }
 
 // StoreProposalExecutionSkippedEvent stores a proposal execution skipped event
-func (s *PebbleStorage) StoreProposalExecutionSkippedEvent(ctx context.Context, event *ProposalExecutionSkippedEvent) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
+func (s *Store) StoreProposalExecutionSkippedEvent(ctx context.Context, event *ProposalExecutionSkippedEvent) error {
 	key := ProposalExecutionSkippedEventKey(event.Contract, event.BlockNumber, uint64(event.LogIndex))
 	data, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to encode proposal execution skipped event: %w", err)
 	}
 
-	if err := s.kv(ctx).Set(key, data, pebble.Sync); err != nil {
+	if err := s.db.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to store proposal execution skipped event: %w", err)
 	}
 
@@ -1253,16 +1014,9 @@ func (s *PebbleStorage) StoreProposalExecutionSkippedEvent(ctx context.Context, 
 }
 
 // GetMaxProposalsUpdateHistory returns max proposals per member update history for a contract
-func (s *PebbleStorage) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*MaxProposalsUpdateEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetMaxProposalsUpdateHistory(ctx context.Context, contract common.Address) ([]*MaxProposalsUpdateEvent, error) {
 	keyPrefix := MaxProposalsUpdateEventKeyPrefix(contract)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -1285,16 +1039,9 @@ func (s *PebbleStorage) GetMaxProposalsUpdateHistory(ctx context.Context, contra
 }
 
 // GetProposalExecutionSkippedEvents returns proposal execution skipped events for a contract
-func (s *PebbleStorage) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*ProposalExecutionSkippedEvent, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
+func (s *Store) GetProposalExecutionSkippedEvents(ctx context.Context, contract common.Address, proposalID *big.Int) ([]*ProposalExecutionSkippedEvent, error) {
 	keyPrefix := ProposalExecutionSkippedEventKeyPrefix(contract)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: keyPrefix,
-		UpperBound: append(keyPrefix, 0xff),
-	})
+	iter, err := s.db.NewCursor(ctx, keyPrefix, append(keyPrefix, 0xff))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}

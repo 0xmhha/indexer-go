@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -88,7 +89,7 @@ func TestNativeBalancesMatchChainStableNet(t *testing.T) {
 func TestStableNetGovernanceEvents(t *testing.T) {
 	sc := testchain.BuildStableNet()
 	app := indexAll(t, sc.Chain)
-	r := app.storage.(storage.SystemContractReader)
+	r := systemcontracts.NewStore(app.storage.(storage.KV), nil)
 	ctx := context.Background()
 
 	p, err := r.GetProposalById(ctx, testchain.GovMinter, big.NewInt(1))
@@ -96,7 +97,7 @@ func TestStableNetGovernanceEvents(t *testing.T) {
 	require.Equal(t, sc.Accounts[0].Address, p.Proposer)
 	require.Equal(t, []byte{0xde, 0xad, 0xbe, 0xef}, p.CallData)
 
-	deposits, err := r.GetDepositMintProposals(ctx, 0, sc.Chain.Head(), storage.ProposalStatusAll)
+	deposits, err := r.GetDepositMintProposals(ctx, 0, sc.Chain.Head(), systemcontracts.ProposalStatusAll)
 	require.NoError(t, err)
 	require.Len(t, deposits, 1)
 	require.Equal(t, sc.Accounts[3].Address, deposits[0].Beneficiary)

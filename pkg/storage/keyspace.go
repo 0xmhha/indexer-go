@@ -106,6 +106,5 @@ func init() {
 	RegisterKeyspace("verification", Preserved, "/data/abi/", "/data/verification/", "/index/verification/")
 	// StableNet data, still stored by this package (to be moved under
 	// pkg/chains/stablenet).
-	RegisterKeyspace("stablenet.system_contracts", ChainData, "/data/syscontracts/", "/index/syscontracts/")
 	RegisterKeyspace("stablenet.fee_delegation", ChainData, "/data/feedelegation/", "/index/feedelegation/")
 }

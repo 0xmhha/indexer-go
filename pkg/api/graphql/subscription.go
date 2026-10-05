@@ -341,13 +341,6 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 		eventType = events.EventTypeValidatorSet
 	case "reorg":
 		eventType = events.EventTypeReorg
-	case "systemContractEvents":
-		eventType = events.EventTypeSystemContract
-		filter, err = buildSystemContractFilter(sub.Variables["filter"])
-		if err != nil {
-			c.sendError(id, err.Error())
-			return
-		}
 	default:
 		spec, ok := registeredSubscription(subType)
 		if !ok {
@@ -594,25 +587,6 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 			}
 		}
 
-	case "systemContractEvents":
-		if scEvent, ok := event.(*events.SystemContractEvent); ok {
-			// Serialize data to JSON string
-			dataJSON, _ := json.Marshal(scEvent.Data)
-			eventData := map[string]interface{}{
-				"contract":        scEvent.Contract.Hex(),
-				"eventName":       string(scEvent.EventName),
-				"blockNumber":     fmt.Sprintf("%d", scEvent.BlockNumber),
-				"transactionHash": scEvent.TxHash.Hex(),
-				"logIndex":        scEvent.LogIndex,
-				"data":            string(dataJSON),
-				"timestamp":       fmt.Sprintf("%d", scEvent.CreatedAt.Unix()),
-			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"systemContractEvents": eventData,
-				},
-			}
-		}
 	}
 
 	if payload == nil {
@@ -637,9 +611,6 @@ func (c *subscriptionClient) parseSubscriptionType(query string) string {
 	}
 	if contains(query, "newPendingTransactions") {
 		return "newPendingTransactions"
-	}
-	if contains(query, "systemContractEvents") {
-		return "systemContractEvents"
 	}
 	if contains(query, "reorg") {
 		return "reorg"
@@ -798,55 +769,6 @@ func buildLogFilter(raw interface{}) (*events.Filter, error) {
 
 	if err := filter.Validate(); err != nil {
 		return nil, err
-	}
-
-	return filter, nil
-}
-
-func buildSystemContractFilter(raw interface{}) (*events.Filter, error) {
-	if raw == nil {
-		return nil, nil
-	}
-	filterMap, ok := raw.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid system contract filter format")
-	}
-
-	filter := events.NewFilter()
-
-	// Parse contract address filter
-	if contractVal, ok := filterMap["contract"]; ok {
-		contractStr, ok := contractVal.(string)
-		if !ok {
-			return nil, fmt.Errorf("contract must be a string")
-		}
-		address, err := parseAddress(contractStr)
-		if err != nil {
-			return nil, err
-		}
-		filter.Addresses = append(filter.Addresses, address)
-	}
-
-	// Parse event types filter (stored in custom data)
-	if eventTypesVal, ok := filterMap["eventTypes"]; ok {
-		eventTypesSlice, ok := eventTypesVal.([]interface{})
-		if ok && len(eventTypesSlice) > 0 {
-			eventTypes := make([]string, 0, len(eventTypesSlice))
-			for _, et := range eventTypesSlice {
-				if etStr, ok := et.(string); ok {
-					eventTypes = append(eventTypes, etStr)
-				}
-			}
-			if len(eventTypes) > 0 {
-				filter.CustomData = map[string]interface{}{
-					"eventTypes": eventTypes,
-				}
-			}
-		}
-	}
-
-	if filter.IsEmpty() {
-		return nil, nil
 	}
 
 	return filter, nil

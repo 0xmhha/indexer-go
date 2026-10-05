@@ -1,4 +1,4 @@
-package storage
+package systemcontracts
 
 import (
 	"bytes"
@@ -8,21 +8,21 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TestNumericKeysSortNumerically is the key ordering property of refactoring
-// plan R1-3: for every key built from numbers, byte order equals numeric
-// order, so iterating a prefix returns entries in block, transaction and log
-// order. Decimal numbers without fixed width broke this (block 10 sorted
-// before block 2, transaction 10 before transaction 2 in the same block).
+// TestNumericKeysSortNumerically: for every system contract key built from
+// numbers, byte order equals numeric order, so iterating a prefix returns
+// entries in block, transaction and log order (refactoring plan R1-3).
 func TestNumericKeysSortNumerically(t *testing.T) {
 	addr := common.HexToAddress("0x00000000000000000000000000000000000000A1")
 	keys := map[string]func(a, b, c uint64) []byte{
-		"Block":              func(a, _, _ uint64) []byte { return BlockKey(a) },
-		"Transaction":        func(a, b, _ uint64) []byte { return TransactionKey(a, b) },
-		"AddressTransaction": func(a, _, _ uint64) []byte { return AddressTransactionKey(addr, a) },
-		"AddressBalance":     func(a, _, _ uint64) []byte { return AddressBalanceKey(addr, a) },
-		"Log":                func(a, b, c uint64) []byte { return LogKey(a, uint(b), uint(c)) },
-		"ChainBlock":         func(a, _, _ uint64) []byte { return ChainBlockKey("c", a) },
-		"ChainTransaction":   func(a, b, _ uint64) []byte { return ChainTransactionKey("c", a, b) },
+		"MintEvent":                MintEventKey,
+		"BurnEvent":                BurnEventKey,
+		"MemberChangeEvent":        func(a, b, _ uint64) []byte { return MemberChangeEventKey(addr, a, b) },
+		"GasTipUpdateEvent":        func(a, b, _ uint64) []byte { return GasTipUpdateEventKey(a, b) },
+		"EmergencyPauseEvent":      func(a, b, _ uint64) []byte { return EmergencyPauseEventKey(addr, a, b) },
+		"MaxProposalsUpdateEvent":  func(a, b, _ uint64) []byte { return MaxProposalsUpdateEventKey(addr, a, b) },
+		"ProposalExecutionSkipped": func(a, b, _ uint64) []byte { return ProposalExecutionSkippedEventKey(addr, a, b) },
+		"AuthorizedAccountEvent":   func(a, b, _ uint64) []byte { return AuthorizedAccountEventKey(addr, a, b) },
+		"ProposalStatusIndex":      func(a, _, _ uint64) []byte { return ProposalStatusIndexKey(addr, uint8(a), "p") },
 	}
 	rnd := rand.New(rand.NewSource(1))
 	// Values around digit-count boundaries plus random ones.
@@ -48,6 +48,9 @@ func TestNumericKeysSortNumerically(t *testing.T) {
 	}
 	for name, key := range keys {
 		maxA := uint64(1 << 40)
+		if name == "ProposalStatusIndex" {
+			maxA = 255
+		}
 		for i := 0; i < 2000; i++ {
 			x := [3]uint64{pick(maxA), pick(99999), pick(99999)}
 			y := [3]uint64{pick(maxA), pick(99999), pick(99999)}

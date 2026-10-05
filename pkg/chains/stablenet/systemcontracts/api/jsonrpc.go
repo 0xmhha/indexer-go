@@ -1,4 +1,4 @@
-package jsonrpc
+package api
 
 import (
 	"context"
@@ -6,22 +6,23 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
+	sc "github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
 // getTotalSupply returns the current total supply of native coins
-func (h *Handler) getTotalSupply(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+func (h *rpcHandler) getTotalSupply(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	supply, err := reader.GetTotalSupply(ctx)
 	if err != nil {
 		h.logger.Error("failed to get total supply", zap.Error(err))
-		return nil, NewError(InternalError, "failed to get total supply", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get total supply", err.Error())
 	}
 
 	return map[string]interface{}{
@@ -30,16 +31,16 @@ func (h *Handler) getTotalSupply(ctx context.Context, params json.RawMessage) (i
 }
 
 // getActiveMinters returns all active minters and their allowances
-func (h *Handler) getActiveMinters(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+func (h *rpcHandler) getActiveMinters(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	minters, err := reader.GetActiveMinters(ctx)
 	if err != nil {
 		h.logger.Error("failed to get active minters", zap.Error(err))
-		return nil, NewError(InternalError, "failed to get active minters", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get active minters", err.Error())
 	}
 
 	result := make([]map[string]interface{}, 0, len(minters))
@@ -63,29 +64,29 @@ func (h *Handler) getActiveMinters(ctx context.Context, params json.RawMessage) 
 }
 
 // getMinterAllowance returns the allowance for a specific minter
-func (h *Handler) getMinterAllowance(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getMinterAllowance(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		Minter string `json:"minter"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.Minter == "" {
-		return nil, NewError(InvalidParams, "missing required parameter: minter", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: minter", nil)
 	}
 
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	minter := common.HexToAddress(p.Minter)
 	allowance, err := reader.GetMinterAllowance(ctx, minter)
 	if err != nil {
 		h.logger.Error("failed to get minter allowance", zap.String("minter", p.Minter), zap.Error(err))
-		return nil, NewError(InternalError, "failed to get minter allowance", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get minter allowance", err.Error())
 	}
 
 	return map[string]interface{}{
@@ -95,16 +96,16 @@ func (h *Handler) getMinterAllowance(ctx context.Context, params json.RawMessage
 }
 
 // getActiveValidators returns all active validators
-func (h *Handler) getActiveValidators(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+func (h *rpcHandler) getActiveValidators(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	validators, err := reader.GetActiveValidators(ctx)
 	if err != nil {
 		h.logger.Error("failed to get active validators", zap.Error(err))
-		return nil, NewError(InternalError, "failed to get active validators", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get active validators", err.Error())
 	}
 
 	result := make([]map[string]interface{}, 0, len(validators))
@@ -121,16 +122,16 @@ func (h *Handler) getActiveValidators(ctx context.Context, params json.RawMessag
 }
 
 // getBlacklistedAddresses returns all blacklisted addresses
-func (h *Handler) getBlacklistedAddresses(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+func (h *rpcHandler) getBlacklistedAddresses(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	addresses, err := reader.GetBlacklistedAddresses(ctx)
 	if err != nil {
 		h.logger.Error("failed to get blacklisted addresses", zap.Error(err))
-		return nil, NewError(InternalError, "failed to get blacklisted addresses", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get blacklisted addresses", err.Error())
 	}
 
 	result := make([]string, 0, len(addresses))
@@ -144,32 +145,32 @@ func (h *Handler) getBlacklistedAddresses(ctx context.Context, params json.RawMe
 }
 
 // getProposal returns a specific governance proposal
-func (h *Handler) getProposal(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getProposal(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		Contract   string `json:"contract"`
 		ProposalID string `json:"proposalId"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.Contract == "" {
-		return nil, NewError(InvalidParams, "missing required parameter: contract", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: contract", nil)
 	}
 	if p.ProposalID == "" {
-		return nil, NewError(InvalidParams, "missing required parameter: proposalId", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: proposalId", nil)
 	}
 
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	contract := common.HexToAddress(p.Contract)
 	proposalID, ok := new(big.Int).SetString(p.ProposalID, 10)
 	if !ok {
-		return nil, NewError(InvalidParams, "invalid proposal ID format", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid proposal ID format", nil)
 	}
 
 	proposal, err := reader.GetProposalById(ctx, contract, proposalID)
@@ -178,18 +179,18 @@ func (h *Handler) getProposal(ctx context.Context, params json.RawMessage) (inte
 			zap.String("contract", p.Contract),
 			zap.String("proposalId", p.ProposalID),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get proposal", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get proposal", err.Error())
 	}
 
 	if proposal == nil {
-		return nil, NewError(InternalError, "proposal not found", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "proposal not found", nil)
 	}
 
 	return h.proposalToJSON(proposal), nil
 }
 
 // getProposals returns governance proposals with filtering
-func (h *Handler) getProposals(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getProposals(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		Contract string `json:"contract"`
 		Status   string `json:"status,omitempty"`
@@ -198,11 +199,11 @@ func (h *Handler) getProposals(ctx context.Context, params json.RawMessage) (int
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.Contract == "" {
-		return nil, NewError(InvalidParams, "missing required parameter: contract", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: contract", nil)
 	}
 
 	// Default pagination
@@ -213,9 +214,9 @@ func (h *Handler) getProposals(ctx context.Context, params json.RawMessage) (int
 		p.Limit = 100
 	}
 
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	contract := common.HexToAddress(p.Contract)
@@ -227,7 +228,7 @@ func (h *Handler) getProposals(ctx context.Context, params json.RawMessage) (int
 			zap.String("contract", p.Contract),
 			zap.String("status", p.Status),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get proposals", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get proposals", err.Error())
 	}
 
 	result := make([]map[string]interface{}, 0, len(proposals))
@@ -242,32 +243,32 @@ func (h *Handler) getProposals(ctx context.Context, params json.RawMessage) (int
 }
 
 // getProposalVotes returns votes for a specific proposal
-func (h *Handler) getProposalVotes(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getProposalVotes(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		Contract   string `json:"contract"`
 		ProposalID string `json:"proposalId"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.Contract == "" {
-		return nil, NewError(InvalidParams, "missing required parameter: contract", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: contract", nil)
 	}
 	if p.ProposalID == "" {
-		return nil, NewError(InvalidParams, "missing required parameter: proposalId", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: proposalId", nil)
 	}
 
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	contract := common.HexToAddress(p.Contract)
 	proposalID, ok := new(big.Int).SetString(p.ProposalID, 10)
 	if !ok {
-		return nil, NewError(InvalidParams, "invalid proposal ID format", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid proposal ID format", nil)
 	}
 
 	votes, err := reader.GetProposalVotes(ctx, contract, proposalID)
@@ -276,7 +277,7 @@ func (h *Handler) getProposalVotes(ctx context.Context, params json.RawMessage) 
 			zap.String("contract", p.Contract),
 			zap.String("proposalId", p.ProposalID),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get proposal votes", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get proposal votes", err.Error())
 	}
 
 	result := make([]map[string]interface{}, 0, len(votes))
@@ -298,7 +299,7 @@ func (h *Handler) getProposalVotes(ctx context.Context, params json.RawMessage) 
 }
 
 // getMintEvents returns mint events with filtering
-func (h *Handler) getMintEvents(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getMintEvents(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		FromBlock uint64 `json:"fromBlock,omitempty"`
 		ToBlock   uint64 `json:"toBlock,omitempty"`
@@ -308,7 +309,7 @@ func (h *Handler) getMintEvents(ctx context.Context, params json.RawMessage) (in
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	// Default pagination
@@ -319,9 +320,9 @@ func (h *Handler) getMintEvents(ctx context.Context, params json.RawMessage) (in
 		p.Limit = 100
 	}
 
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	var minter common.Address
@@ -332,7 +333,7 @@ func (h *Handler) getMintEvents(ctx context.Context, params json.RawMessage) (in
 	events, err := reader.GetMintEvents(ctx, p.FromBlock, p.ToBlock, minter, p.Limit, p.Offset)
 	if err != nil {
 		h.logger.Error("failed to get mint events", zap.Error(err))
-		return nil, NewError(InternalError, "failed to get mint events", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get mint events", err.Error())
 	}
 
 	result := make([]map[string]interface{}, 0, len(events))
@@ -354,7 +355,7 @@ func (h *Handler) getMintEvents(ctx context.Context, params json.RawMessage) (in
 }
 
 // getBurnEvents returns burn events with filtering
-func (h *Handler) getBurnEvents(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getBurnEvents(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		FromBlock uint64 `json:"fromBlock,omitempty"`
 		ToBlock   uint64 `json:"toBlock,omitempty"`
@@ -364,7 +365,7 @@ func (h *Handler) getBurnEvents(ctx context.Context, params json.RawMessage) (in
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	// Default pagination
@@ -375,9 +376,9 @@ func (h *Handler) getBurnEvents(ctx context.Context, params json.RawMessage) (in
 		p.Limit = 100
 	}
 
-	reader, ok := h.storage.(storage.SystemContractReader)
-	if !ok {
-		return nil, NewError(InternalError, "system contract reader not available", nil)
+	reader := h.storage
+	if reader == nil {
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "system contract reader not available", nil)
 	}
 
 	var burner common.Address
@@ -388,7 +389,7 @@ func (h *Handler) getBurnEvents(ctx context.Context, params json.RawMessage) (in
 	events, err := reader.GetBurnEvents(ctx, p.FromBlock, p.ToBlock, burner, p.Limit, p.Offset)
 	if err != nil {
 		h.logger.Error("failed to get burn events", zap.Error(err))
-		return nil, NewError(InternalError, "failed to get burn events", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get burn events", err.Error())
 	}
 
 	result := make([]map[string]interface{}, 0, len(events))
@@ -413,7 +414,7 @@ func (h *Handler) getBurnEvents(ctx context.Context, params json.RawMessage) (in
 }
 
 // Helper function to convert Proposal to JSON
-func (h *Handler) proposalToJSON(proposal *storage.Proposal) map[string]interface{} {
+func (h *rpcHandler) proposalToJSON(proposal *sc.Proposal) map[string]interface{} {
 	result := map[string]interface{}{
 		"contract":          proposal.Contract.Hex(),
 		"proposalId":        proposal.ProposalID.String(),
@@ -438,49 +439,85 @@ func (h *Handler) proposalToJSON(proposal *storage.Proposal) map[string]interfac
 }
 
 // Helper function to parse ProposalStatus from string
-func parseProposalStatus(statusStr string) storage.ProposalStatus {
+func parseProposalStatus(statusStr string) sc.ProposalStatus {
 	switch statusStr {
 	case "none", "NONE":
-		return storage.ProposalStatusNone
+		return sc.ProposalStatusNone
 	case "voting", "VOTING":
-		return storage.ProposalStatusVoting
+		return sc.ProposalStatusVoting
 	case "approved", "APPROVED":
-		return storage.ProposalStatusApproved
+		return sc.ProposalStatusApproved
 	case "executed", "EXECUTED":
-		return storage.ProposalStatusExecuted
+		return sc.ProposalStatusExecuted
 	case "cancelled", "CANCELLED":
-		return storage.ProposalStatusCancelled
+		return sc.ProposalStatusCancelled
 	case "expired", "EXPIRED":
-		return storage.ProposalStatusExpired
+		return sc.ProposalStatusExpired
 	case "failed", "FAILED":
-		return storage.ProposalStatusFailed
+		return sc.ProposalStatusFailed
 	case "rejected", "REJECTED":
-		return storage.ProposalStatusRejected
+		return sc.ProposalStatusRejected
 	default:
-		return storage.ProposalStatusNone
+		return sc.ProposalStatusNone
 	}
 }
 
 // Helper function to convert ProposalStatus to string
-func proposalStatusToString(status storage.ProposalStatus) string {
+func proposalStatusToString(status sc.ProposalStatus) string {
 	switch status {
-	case storage.ProposalStatusNone:
+	case sc.ProposalStatusNone:
 		return "none"
-	case storage.ProposalStatusVoting:
+	case sc.ProposalStatusVoting:
 		return "voting"
-	case storage.ProposalStatusApproved:
+	case sc.ProposalStatusApproved:
 		return "approved"
-	case storage.ProposalStatusExecuted:
+	case sc.ProposalStatusExecuted:
 		return "executed"
-	case storage.ProposalStatusCancelled:
+	case sc.ProposalStatusCancelled:
 		return "cancelled"
-	case storage.ProposalStatusExpired:
+	case sc.ProposalStatusExpired:
 		return "expired"
-	case storage.ProposalStatusFailed:
+	case sc.ProposalStatusFailed:
 		return "failed"
-	case storage.ProposalStatusRejected:
+	case sc.ProposalStatusRejected:
 		return "rejected"
 	default:
 		return "none"
+	}
+}
+
+// rpcHandler serves the system contract JSON-RPC methods. storage is nil
+// when the indexer's storage cannot hold system contract data; the methods
+// then fail.
+type rpcHandler struct {
+	storage sc.SystemContractReader
+	logger  *zap.Logger
+}
+
+func newRPCHandler(d jsonrpc.MethodDeps) *rpcHandler {
+	h := &rpcHandler{logger: d.Logger}
+	if h.logger == nil {
+		h.logger = zap.NewNop()
+	}
+	h.storage = readerOf(d.Storage, h.logger)
+	return h
+}
+
+func registerMethods() {
+	for name, method := range map[string]func(*rpcHandler, context.Context, json.RawMessage) (interface{}, *jsonrpc.Error){
+		"getTotalSupply":          (*rpcHandler).getTotalSupply,
+		"getActiveMinters":        (*rpcHandler).getActiveMinters,
+		"getMinterAllowance":      (*rpcHandler).getMinterAllowance,
+		"getActiveValidators":     (*rpcHandler).getActiveValidators,
+		"getBlacklistedAddresses": (*rpcHandler).getBlacklistedAddresses,
+		"getProposal":             (*rpcHandler).getProposal,
+		"getProposals":            (*rpcHandler).getProposals,
+		"getProposalVotes":        (*rpcHandler).getProposalVotes,
+		"getMintEvents":           (*rpcHandler).getMintEvents,
+		"getBurnEvents":           (*rpcHandler).getBurnEvents,
+	} {
+		jsonrpc.RegisterMethod(name, func(ctx context.Context, d jsonrpc.MethodDeps, params json.RawMessage) (interface{}, *jsonrpc.Error) {
+			return method(newRPCHandler(d), ctx, params)
+		})
 	}
 }

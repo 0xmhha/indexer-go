@@ -1,35 +1,36 @@
-package events
+package systemcontracts
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/0xmhha/indexer-go/pkg/events"
+	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 	"math/big"
 	"testing"
 	"time"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 )
 
-// mockSystemContractWriter implements storage.SystemContractWriter for testing
+// mockSystemContractWriter implements SystemContractWriter for testing
 type mockSystemContractWriter struct {
-	mintEvents                []*storage.MintEvent
-	burnEvents                []*storage.BurnEvent
-	minterConfigEvents        []*storage.MinterConfigEvent
-	proposals                 []*storage.Proposal
-	proposalVotes             []*storage.ProposalVote
-	gasTipEvents              []*storage.GasTipUpdateEvent
-	blacklistEvents           []*storage.BlacklistEvent
-	memberChangeEvents        []*storage.MemberChangeEvent
-	emergencyPauseEvents      []*storage.EmergencyPauseEvent
-	depositMintProposals      []*storage.DepositMintProposal
-	maxProposalsEvents        []*storage.MaxProposalsUpdateEvent
-	proposalExecSkippedEvents []*storage.ProposalExecutionSkippedEvent
-	authorizedAccountEvents   []*storage.AuthorizedAccountEvent
+	mintEvents                []*MintEvent
+	burnEvents                []*BurnEvent
+	minterConfigEvents        []*MinterConfigEvent
+	proposals                 []*Proposal
+	proposalVotes             []*ProposalVote
+	gasTipEvents              []*GasTipUpdateEvent
+	blacklistEvents           []*BlacklistEvent
+	memberChangeEvents        []*MemberChangeEvent
+	emergencyPauseEvents      []*EmergencyPauseEvent
+	depositMintProposals      []*DepositMintProposal
+	maxProposalsEvents        []*MaxProposalsUpdateEvent
+	proposalExecSkippedEvents []*ProposalExecutionSkippedEvent
+	authorizedAccountEvents   []*AuthorizedAccountEvent
 	totalSupplyDelta          *big.Int
 	activeMinters             map[common.Address]bool
 	activeValidators          map[common.Address]bool
@@ -41,7 +42,7 @@ type mockSystemContractWriter struct {
 type proposalStatusUpdate struct {
 	contract   common.Address
 	proposalID *big.Int
-	status     storage.ProposalStatus
+	status     ProposalStatus
 	executedAt uint64
 }
 
@@ -54,101 +55,101 @@ func newMockWriter() *mockSystemContractWriter {
 	}
 }
 
-func (m *mockSystemContractWriter) StoreMintEvent(_ context.Context, e *storage.MintEvent) error {
+func (m *mockSystemContractWriter) StoreMintEvent(_ context.Context, e *MintEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.mintEvents = append(m.mintEvents, e)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreBurnEvent(_ context.Context, e *storage.BurnEvent) error {
+func (m *mockSystemContractWriter) StoreBurnEvent(_ context.Context, e *BurnEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.burnEvents = append(m.burnEvents, e)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreMinterConfigEvent(_ context.Context, e *storage.MinterConfigEvent) error {
+func (m *mockSystemContractWriter) StoreMinterConfigEvent(_ context.Context, e *MinterConfigEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.minterConfigEvents = append(m.minterConfigEvents, e)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreProposal(_ context.Context, p *storage.Proposal) error {
+func (m *mockSystemContractWriter) StoreProposal(_ context.Context, p *Proposal) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.proposals = append(m.proposals, p)
 	return nil
 }
-func (m *mockSystemContractWriter) UpdateProposalStatus(_ context.Context, contract common.Address, proposalID *big.Int, status storage.ProposalStatus, executedAt uint64) error {
+func (m *mockSystemContractWriter) UpdateProposalStatus(_ context.Context, contract common.Address, proposalID *big.Int, status ProposalStatus, executedAt uint64) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.proposalStatusUpdates = append(m.proposalStatusUpdates, proposalStatusUpdate{contract, proposalID, status, executedAt})
 	return nil
 }
-func (m *mockSystemContractWriter) StoreProposalVote(_ context.Context, v *storage.ProposalVote) error {
+func (m *mockSystemContractWriter) StoreProposalVote(_ context.Context, v *ProposalVote) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.proposalVotes = append(m.proposalVotes, v)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreGasTipUpdateEvent(_ context.Context, e *storage.GasTipUpdateEvent) error {
+func (m *mockSystemContractWriter) StoreGasTipUpdateEvent(_ context.Context, e *GasTipUpdateEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.gasTipEvents = append(m.gasTipEvents, e)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreBlacklistEvent(_ context.Context, e *storage.BlacklistEvent) error {
+func (m *mockSystemContractWriter) StoreBlacklistEvent(_ context.Context, e *BlacklistEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.blacklistEvents = append(m.blacklistEvents, e)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreValidatorChangeEvent(_ context.Context, _ *storage.ValidatorChangeEvent) error {
+func (m *mockSystemContractWriter) StoreValidatorChangeEvent(_ context.Context, _ *ValidatorChangeEvent) error {
 	return m.storeErr
 }
-func (m *mockSystemContractWriter) StoreMemberChangeEvent(_ context.Context, e *storage.MemberChangeEvent) error {
+func (m *mockSystemContractWriter) StoreMemberChangeEvent(_ context.Context, e *MemberChangeEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.memberChangeEvents = append(m.memberChangeEvents, e)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreEmergencyPauseEvent(_ context.Context, e *storage.EmergencyPauseEvent) error {
+func (m *mockSystemContractWriter) StoreEmergencyPauseEvent(_ context.Context, e *EmergencyPauseEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.emergencyPauseEvents = append(m.emergencyPauseEvents, e)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreDepositMintProposal(_ context.Context, p *storage.DepositMintProposal) error {
+func (m *mockSystemContractWriter) StoreDepositMintProposal(_ context.Context, p *DepositMintProposal) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.depositMintProposals = append(m.depositMintProposals, p)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreMaxProposalsUpdateEvent(_ context.Context, e *storage.MaxProposalsUpdateEvent) error {
+func (m *mockSystemContractWriter) StoreMaxProposalsUpdateEvent(_ context.Context, e *MaxProposalsUpdateEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.maxProposalsEvents = append(m.maxProposalsEvents, e)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreProposalExecutionSkippedEvent(_ context.Context, e *storage.ProposalExecutionSkippedEvent) error {
+func (m *mockSystemContractWriter) StoreProposalExecutionSkippedEvent(_ context.Context, e *ProposalExecutionSkippedEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
 	m.proposalExecSkippedEvents = append(m.proposalExecSkippedEvents, e)
 	return nil
 }
-func (m *mockSystemContractWriter) StoreAuthorizedAccountEvent(_ context.Context, e *storage.AuthorizedAccountEvent) error {
+func (m *mockSystemContractWriter) StoreAuthorizedAccountEvent(_ context.Context, e *AuthorizedAccountEvent) error {
 	if m.storeErr != nil {
 		return m.storeErr
 	}
@@ -202,7 +203,7 @@ func TestNewSystemContractEventParser(t *testing.T) {
 
 func TestSystemContractEventParser_SetEventBus(t *testing.T) {
 	parser, _ := newTestParser()
-	bus := NewEventBus(100, 100)
+	bus := events.NewEventBus(100, 100)
 	parser.SetEventBus(bus)
 	if parser.eventBus != bus {
 		t.Error("expected event bus to be set")
@@ -217,7 +218,7 @@ func TestSystemContractEventParser_PublishEvent_NilBus(t *testing.T) {
 
 func TestSystemContractEventParser_PublishEvent_WithBus(t *testing.T) {
 	parser, _ := newTestParser()
-	bus := NewEventBus(100, 100)
+	bus := events.NewEventBus(100, 100)
 	parser.SetEventBus(bus)
 	// Should not panic
 	parser.publishEvent(common.Address{}, SystemContractEventMint, &types.Log{}, map[string]interface{}{"test": "value"})
@@ -305,7 +306,7 @@ func TestParseAndIndexLogs_ReturnsStorageFailure(t *testing.T) {
 	}
 
 	// A vote on a proposal the index does not have is data, not a failure.
-	mock.storeErr = fmt.Errorf("proposal 7: %w", storage.ErrNotFound)
+	mock.storeErr = fmt.Errorf("proposal 7: %w", storagepkg.ErrNotFound)
 	approved := &types.Log{
 		Address: constants.GovMinterAddress,
 		Topics: []common.Hash{constants.EventSigProposalApproved, common.BigToHash(big.NewInt(7)),
@@ -343,10 +344,10 @@ func TestMinterConfiguredKeepsContract(t *testing.T) {
 // and the NativeCoinAdapter's EIP-3009 events.
 func TestRefundAndAuthorizationEventsArePublished(t *testing.T) {
 	parser, _ := newTestParser()
-	bus := NewEventBus(100, 100)
+	bus := events.NewEventBus(100, 100)
 	go bus.Run()
 	defer bus.Stop()
-	sub := bus.Subscribe("t", []EventType{EventTypeSystemContract}, nil, 10)
+	sub := bus.Subscribe("t", []events.EventType{EventTypeSystemContract}, nil, 10)
 	parser.SetEventBus(bus)
 
 	addrTopic := func(a string) common.Hash { return common.BytesToHash(common.HexToAddress(a).Bytes()) }
@@ -592,7 +593,7 @@ func TestParseProposalCreatedEvent(t *testing.T) {
 	if mock.proposals[0].Proposer != proposer {
 		t.Errorf("expected proposer %s", proposer.Hex())
 	}
-	if mock.proposals[0].Status != storage.ProposalStatusVoting {
+	if mock.proposals[0].Status != ProposalStatusVoting {
 		t.Errorf("expected status Voting")
 	}
 }
@@ -661,7 +662,7 @@ func TestParseProposalApprovedEvent(t *testing.T) {
 	if len(mock.proposalStatusUpdates) != 1 {
 		t.Fatalf("expected 1 status update")
 	}
-	if mock.proposalStatusUpdates[0].status != storage.ProposalStatusApproved {
+	if mock.proposalStatusUpdates[0].status != ProposalStatusApproved {
 		t.Errorf("expected Approved status")
 	}
 }
@@ -677,7 +678,7 @@ func TestParseProposalRejectedEvent(t *testing.T) {
 	}
 
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
-	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != storage.ProposalStatusRejected {
+	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusRejected {
 		t.Error("expected Rejected status update")
 	}
 }
@@ -694,7 +695,7 @@ func TestParseProposalExecutedEvent(t *testing.T) {
 	}
 
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
-	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != storage.ProposalStatusExecuted {
+	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusExecuted {
 		t.Error("expected Executed status update")
 	}
 }
@@ -710,7 +711,7 @@ func TestParseProposalFailedEvent(t *testing.T) {
 	}
 
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
-	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != storage.ProposalStatusFailed {
+	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusFailed {
 		t.Error("expected Failed status update")
 	}
 }
@@ -726,7 +727,7 @@ func TestParseProposalExpiredEvent(t *testing.T) {
 	}
 
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
-	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != storage.ProposalStatusExpired {
+	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusExpired {
 		t.Error("expected Expired status update")
 	}
 }
@@ -742,7 +743,7 @@ func TestParseProposalCancelledEvent(t *testing.T) {
 	}
 
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
-	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != storage.ProposalStatusCancelled {
+	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusCancelled {
 		t.Error("expected Cancelled status update")
 	}
 }
