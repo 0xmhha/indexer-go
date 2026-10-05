@@ -10,7 +10,6 @@ import (
 	"time"
 
 	abiDecoder "github.com/0xmhha/indexer-go/pkg/abi"
-	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
@@ -556,18 +555,11 @@ func (h *Handler) transactionToJSON(tx *model.Transaction, location *storage.TxL
 // transaction: from the transaction itself when the chain profile decoded
 // it, otherwise from the metadata stored by the legacy ingest path.
 func (h *Handler) feeDelegation(tx *model.Transaction) (common.Address, *big.Int, *big.Int, *big.Int, bool) {
-	if fd, ok := chains.FeeDelegationOf(tx); ok {
-		return fd.Payer, fd.V, fd.R, fd.S, true
-	}
-	if !chains.IsFeeDelegationType(tx.Type) {
+	fd, ok := storage.FeeDelegationOf(context.Background(), h.storage, tx)
+	if !ok {
 		return common.Address{}, nil, nil, nil, false
 	}
-	if fdReader, ok := h.storage.(storage.FeeDelegationReader); ok {
-		if meta, err := fdReader.GetFeeDelegationTxMeta(context.Background(), tx.Hash); err == nil && meta != nil {
-			return meta.FeePayer, meta.FeePayerV, meta.FeePayerR, meta.FeePayerS, true
-		}
-	}
-	return common.Address{}, nil, nil, nil, false
+	return fd.Payer, fd.V, fd.R, fd.S, true
 }
 
 // models reads blocks and transactions as the chain-neutral model.

@@ -145,16 +145,8 @@ func (b *Block) pairTransactions() []TxWithReceipt {
 // (chains.FeeDelegationOf), otherwise from fee delegation metadata stored by
 // the legacy ingest path.
 func DelegatedFeePayer(ctx context.Context, st storage.Storage, tx *model.Transaction) (common.Address, bool) {
-	if fd, ok := chains.FeeDelegationOf(tx); ok {
+	if fd, ok := storage.FeeDelegationOf(ctx, st, tx); ok {
 		return fd.Payer, true
-	}
-	if !chains.IsFeeDelegationType(tx.Type) {
-		return common.Address{}, false
-	}
-	if r, ok := st.(storage.FeeDelegationReader); ok {
-		if meta, err := r.GetFeeDelegationTxMeta(ctx, tx.Hash); err == nil && meta != nil {
-			return meta.FeePayer, true
-		}
 	}
 	return common.Address{}, false
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"math/big"
 	"sort"
 
@@ -432,4 +434,23 @@ func (s *PebbleStorage) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePa
 	}
 
 	return hashes, nil
+}
+
+// FeeDelegationOf returns the fee delegation of tx (fee payer and its
+// signature): from the transaction when the chain profile decoded it, or,
+// for transactions indexed by the legacy path, from the metadata stored
+// for it. store may be any storage; only FeeDelegationReader is used.
+func FeeDelegationOf(ctx context.Context, store any, tx *model.Transaction) (*chains.FeeDelegation, bool) {
+	if fd, ok := chains.FeeDelegationOf(tx); ok {
+		return fd, true
+	}
+	if !chains.IsFeeDelegationType(tx.Type) {
+		return nil, false
+	}
+	if r, ok := store.(FeeDelegationReader); ok {
+		if meta, err := r.GetFeeDelegationTxMeta(ctx, tx.Hash); err == nil && meta != nil {
+			return &chains.FeeDelegation{Payer: meta.FeePayer, V: meta.FeePayerV, R: meta.FeePayerR, S: meta.FeePayerS}, true
+		}
+	}
+	return nil, false
 }
