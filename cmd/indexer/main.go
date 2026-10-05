@@ -46,6 +46,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/token"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
@@ -369,6 +370,7 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 		if err := app.initClient(); err != nil {
 			return nil, err
 		}
+		app.configureNotificationsForChain()
 
 		// Test connection and get chain ID
 		if err := app.testConnection(ctx); err != nil {
@@ -564,6 +566,21 @@ func (a *App) initEventBus() {
 		zap.Int("publish_buffer", a.config.EventBus.PublishBufferSize),
 		zap.Int("subscriber_buffer", a.config.EventBus.SubscriberBufferSize),
 	)
+}
+
+// configureNotificationsForChain tells the notification service the chain
+// profile's native coin contract, whose Transfer logs are not token
+// transfers.
+func (a *App) configureNotificationsForChain() {
+	svc, ok := a.notificationService.(interface {
+		SetNonTokenTransferContracts(...common.Address)
+	})
+	if !ok || a.profile == nil {
+		return
+	}
+	if addr, ok := chains.NativeCoinContract(a.profile); ok {
+		svc.SetNonTokenTransferContracts(addr)
+	}
 }
 
 // initNotificationService initializes the notification service if enabled

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
@@ -116,6 +117,49 @@ type NotificationService struct {
 	wg        sync.WaitGroup
 
 	eventSub *events.Subscription
+
+	// nonTokenTransfer are contracts whose Transfer logs are not token
+	// transfers (a native coin exposed as a token contract).
+	nonTokenTransfer map[common.Address]bool
+}
+
+// SetNonTokenTransferContracts names contracts whose Transfer logs are not
+// token transfers, such as a native coin exposed as a token contract.
+func (s *NotificationService) SetNonTokenTransferContracts(addrs ...common.Address) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nonTokenTransfer = make(map[common.Address]bool, len(addrs))
+	for _, a := range addrs {
+		s.nonTokenTransfer[a] = true
+	}
+}
+
+// transferSig is the topic of ERC-20 and ERC-721 Transfer events.
+var transferSig = crypto.Keccak256Hash([]byte("Transfer(address,address,uint256)"))
+
+// eventKinds returns the notification event types an event belongs to,
+// most specific last: a transaction without a recipient is also a
+// contract creation, and an ERC-20 (3 topics) or ERC-721 (4 topics)
+// Transfer log, except from a SetNonTokenTransferContracts contract, also a
+// token transfer.
+func (s *NotificationService) eventKinds(event events.Event) []EventType {
+	kinds := []EventType{s.convertEventType(event.Type())}
+	switch e := event.(type) {
+	case *events.TransactionEvent:
+		if e.To == nil {
+			kinds = append(kinds, EventTypeContractCreation)
+		}
+	case *events.LogEvent:
+		if l := e.Log; l != nil && (len(l.Topics) == 3 || len(l.Topics) == 4) && l.Topics[0] == transferSig {
+			s.mu.RLock()
+			excluded := s.nonTokenTransfer[l.Address]
+			s.mu.RUnlock()
+			if !excluded {
+				kinds = append(kinds, EventTypeTokenTransfer)
+			}
+		}
+	}
+	return kinds
 }
 
 // NewService creates a new notification service.
@@ -308,9 +352,10 @@ func (s *NotificationService) handleEvent(event events.Event) {
 	}
 	s.mu.RUnlock()
 
+	kinds := s.eventKinds(event)
 	for _, setting := range settings {
-		if s.shouldNotify(setting, event) {
-			notification := s.createNotification(setting, event)
+		if kind, ok := s.shouldNotify(setting, event, kinds); ok {
+			notification := s.createNotification(setting, event, kind)
 			if notification != nil {
 				s.enqueueNotification(notification)
 			}
@@ -318,28 +363,30 @@ func (s *NotificationService) handleEvent(event events.Event) {
 	}
 }
 
-// shouldNotify checks if a setting should be notified for an event.
-func (s *NotificationService) shouldNotify(setting *NotificationSetting, event events.Event) bool {
-	eventType := s.convertEventType(event.Type())
-
-	// Check if event type is in the setting's event types
+// shouldNotify checks if a setting should be notified for an event of the
+// given kinds (eventKinds) and returns the kind it is notified as: the most
+// specific one the setting subscribes to.
+func (s *NotificationService) shouldNotify(setting *NotificationSetting, event events.Event, kinds []EventType) (EventType, bool) {
+	var eventType EventType
 	found := false
-	for _, et := range setting.EventTypes {
-		if et == eventType {
-			found = true
-			break
+	for i := len(kinds) - 1; i >= 0 && !found; i-- {
+		for _, et := range setting.EventTypes {
+			if et == kinds[i] {
+				eventType, found = kinds[i], true
+				break
+			}
 		}
 	}
 	if !found {
-		return false
+		return "", false
 	}
 
 	// Apply filters if present
 	if setting.Filter != nil {
-		return s.matchesFilter(setting.Filter, event)
+		return eventType, s.matchesFilter(setting.Filter, event)
 	}
 
-	return true
+	return eventType, true
 }
 
 // convertEventType converts internal event type to notification event type.
@@ -483,18 +530,19 @@ func matchesTopics(filterTopics [][]common.Hash, logTopics []common.Hash) bool {
 }
 
 // createNotification creates a notification from an event.
-func (s *NotificationService) createNotification(setting *NotificationSetting, event events.Event) *Notification {
+func (s *NotificationService) createNotification(setting *NotificationSetting, event events.Event, kind EventType) *Notification {
 	payload, err := s.createPayload(event)
 	if err != nil {
 		s.logger.Error("failed to create notification payload", zap.Error(err))
 		return nil
 	}
+	payload.EventType = kind
 
 	return &Notification{
 		ID:         uuid.New().String(),
 		SettingID:  setting.ID,
 		Type:       setting.Type,
-		EventType:  s.convertEventType(event.Type()),
+		EventType:  kind,
 		Payload:    payload,
 		Status:     DeliveryStatusPending,
 		RetryCount: 0,
