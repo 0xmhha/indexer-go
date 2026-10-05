@@ -15,7 +15,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/testchain"
-	"github.com/0xmhha/indexer-go/pkg/features/stablenet/systemcontracts"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
 )
 
 // Regenerate with: go test ./cmd/indexer -run TestGolden -update

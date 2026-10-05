@@ -22,6 +22,10 @@ func (transfersFeature) Name() string       { return TransfersName }
 func (transfersFeature) Requires() []string { return nil }
 func (transfersFeature) DefaultOn() bool    { return true }
 
+// token.transfers is order-dependent: ERC-721 transfers update the token's
+// current owner, so processing an older transfer after a newer one would
+// restore an old owner. It is therefore not feature.OrderIndependent.
+
 func (transfersFeature) Register(r feature.Registrar) error {
 	w, ok := r.Deps().Storage.(storagepkg.AddressIndexWriter)
 	if !ok {

@@ -24,6 +24,10 @@ type feeDelegationFeature struct{}
 func (feeDelegationFeature) Name() string       { return Name }
 func (feeDelegationFeature) Requires() []string { return nil }
 
+// OrderIndependent: entries are keyed by transaction and log, with no
+// running totals, so blocks can be processed in any order.
+func (feeDelegationFeature) OrderIndependent() bool { return true }
+
 func (feeDelegationFeature) Register(r feature.Registrar) error {
 	w, ok := r.Deps().Storage.(storagepkg.FeeDelegationWriter)
 	if !ok {

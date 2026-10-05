@@ -58,7 +58,7 @@ func fetchedFromGeth(b *types.Block, rs types.Receipts) (*fetchedBlock, error) {
 
 // SetSource makes the fetcher read blocks as raw JSON decoded by the node's
 // chain profile instead of through the go-ethereum client.
-func (f *Fetcher) SetSource(src *source.Source) {
+func (f *Fetcher) SetSource(src source.Source) {
 	f.src = src
 }
 

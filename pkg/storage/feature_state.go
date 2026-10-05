@@ -18,6 +18,17 @@ type FeatureState struct {
 	// Through is the last block the feature's data is complete for when it
 	// is not active (disabled, or backfill in progress).
 	Through uint64 `json:"through"`
+	// Gap, on an active feature, is a range of earlier blocks it has not
+	// processed yet: an order-independent feature enabled on an indexed
+	// database processes new blocks at once and fills the gap in the
+	// background (online backfill).
+	Gap *BlockRange `json:"gap,omitempty"`
+}
+
+// BlockRange is an inclusive range of block heights.
+type BlockRange struct {
+	From uint64 `json:"from"`
+	To   uint64 `json:"to"`
 }
 
 // FeatureStateStore keeps feature states.

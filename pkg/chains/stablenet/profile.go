@@ -1,6 +1,6 @@
 // Package stablenet is the chain profile for StableNet (go-stablenet,
 // WBFT consensus). It extends the EVM profile with the fee delegation
-// transaction type (0x16) and the WBFT block hash rule.
+// transaction type (0x16), the WBFT block hash rule and the Anzeon fee rule.
 package stablenet
 
 import (
@@ -31,6 +31,8 @@ func New() *evm.Profile {
 		evm.WithFeatures(defaultFeatures...),
 		evm.WithHeaderHasher(HeaderHash),
 		evm.WithTxDecoder(FeeDelegationTxType, DecodeFeeDelegationTx),
+		evm.WithBinaryTxDecoder(FeeDelegationTxType, DecodeFeeDelegationTxBinary),
+		evm.WithEffectiveGasPrice(EffectiveGasPrice),
 	)
 }
 

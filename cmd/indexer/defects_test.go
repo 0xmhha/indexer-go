@@ -110,9 +110,10 @@ func TestGapRecoveryDoesNotReprocess(t *testing.T) {
 
 			runSessionMode(t, srv, dir, 0, 5, mode)
 			runSessionMode(t, srv, dir, 10, head, mode) // blocks 6..9 are now a gap
-			srv.ResetBlockLoads()
 
 			app := startAppMode(t, srv, dir, mode)
+			// Count gap recovery only, not the startup reorg check.
+			srv.ResetBlockLoads()
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 

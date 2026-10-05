@@ -17,24 +17,27 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
 	"github.com/0xmhha/indexer-go/pkg/api"
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"       // generic EVM chain profile
-	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet" // StableNet chain profile
+	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"                                // generic EVM chain profile
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet"                          // StableNet chain profile
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/feedelegation"   // stablenet.fee_delegation feature
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts" // stablenet.system_contracts feature
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/wbft"            // stablenet.wbft feature
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
-	_ "github.com/0xmhha/indexer-go/pkg/features/address"                   // address.index feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/balance"                   // balance.native feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/feedelegation"   // stablenet.fee_delegation feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/systemcontracts" // stablenet.system_contracts feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/stablenet/wbft"            // stablenet.wbft feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/token"                     // token.transfers feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/address" // address.index feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/balance" // balance.native feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/token"   // token.transfers feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/source"
+	"github.com/0xmhha/indexer-go/pkg/source/era"
+	"github.com/0xmhha/indexer-go/pkg/source/replay"
+	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/token"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
@@ -62,6 +65,14 @@ type App struct {
 	fetcher      *fetch.Fetcher
 	apiServer    *api.Server
 	rpcProxy     *rpcproxy.Proxy
+
+	// RPC archive (pkg/source/replay): a local endpoint that records calls to
+	// the node or replays a recorded archive.
+	rpcEndpoint *replay.Endpoint
+	rpcRecorder *replay.Writer
+	rpcReplay   *replay.Server
+	// eraSource serves history from era1 archives (source.era_dir).
+	eraSource *era.Source
 
 	// Multi-chain support
 	multichainManager *multichain.Manager
@@ -314,6 +325,10 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 	}()
 
 	ctx := context.Background()
+
+	if err := app.startRPCArchive(); err != nil {
+		return nil, err
+	}
 
 	// Initialize storage first (needed by both single and multi-chain modes)
 	if err := app.initStorageOnly(ctx); err != nil {
@@ -699,7 +714,7 @@ func (a *App) initFetcher(ctx context.Context) error {
 	// default features. Without profile_source a failed detection only
 	// leaves the features to the configuration.
 	var profile chains.Profile
-	src, err := source.Detect(ctx, a.client.RPCClient())
+	src, err := sourcerpc.Detect(ctx, a.client.RPCClient())
 	switch {
 	case err == nil:
 		profile = src.Profile()
@@ -709,7 +724,22 @@ func (a *App) initFetcher(ctx context.Context) error {
 		a.logger.Warn("Chain profile detection failed; using configured features only", zap.Error(err))
 	}
 	if a.config.Indexer.ProfileSource {
-		a.fetcher.SetSource(src)
+		var blocks source.Source = src
+		if dir := a.config.Source.EraDir; dir != "" {
+			es, err := era.OpenDir(dir, profile)
+			if err != nil {
+				return fmt.Errorf("open era1 archives: %w", err)
+			}
+			a.eraSource = es
+			chained := &source.Chained{First: es, Then: src}
+			if err := chained.CheckJoin(ctx); err != nil {
+				return fmt.Errorf("era1 archives in %s: %w", dir, err)
+			}
+			blocks = chained
+			first, last := es.Range()
+			a.logger.Info("Reading history from era1 archives", zap.String("dir", dir), zap.Uint64("first", first), zap.Uint64("last", last))
+		}
+		a.fetcher.SetSource(blocks)
 		a.logger.Info("Reading blocks through chain profile", zap.String("profile", profile.ID()))
 	}
 
@@ -744,7 +774,11 @@ func (a *App) initFetcher(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := a.reconcileFeatures(ctx, pipeline.Features(), backfill); err != nil {
+	if backfillCommitHook != nil {
+		a.fetcher.SetBeforeCommitHook(backfillCommitHook)
+		defer a.fetcher.SetBeforeCommitHook(nil)
+	}
+	if err := a.fetcher.Recover(ctx, pipeline.Features(), backfill); err != nil {
 		return err
 	}
 
@@ -1002,6 +1036,11 @@ func (a *App) Shutdown() {
 		}
 	}
 
+	// Stop the writer after its queued commands, before closing storage
+	if a.fetcher != nil {
+		a.fetcher.Close()
+	}
+
 	// Close storage
 	if a.storage != nil {
 		if err := a.storage.Close(); err != nil {
@@ -1013,6 +1052,8 @@ func (a *App) Shutdown() {
 	if a.client != nil {
 		a.client.Close()
 	}
+	a.stopRPCArchive()
+	a.closeEraSource()
 
 	// Wait for graceful shutdown
 	time.Sleep(time.Second * 2)
@@ -1305,6 +1346,9 @@ func (a *App) closeAfterFailedStart() {
 	if a.chainAdapter != nil {
 		_ = a.chainAdapter.Close()
 	}
+	if a.fetcher != nil {
+		a.fetcher.Close()
+	}
 	if a.storage != nil {
 		if err := a.storage.Close(); err != nil {
 			a.logger.Error("Failed to close storage after failed start", zap.Error(err))
@@ -1313,55 +1357,69 @@ func (a *App) closeAfterFailedStart() {
 	if a.client != nil {
 		a.client.Close()
 	}
+	a.stopRPCArchive()
+	a.closeEraSource()
 }
 
-// backfillCommitHook is a fault-injection point for tests: it runs before
-// each backfill block commits.
-var backfillCommitHook func(height uint64) error
+// closeEraSource closes the era1 archives.
+func (a *App) closeEraSource() {
+	if a.eraSource != nil {
+		_ = a.eraSource.Close()
+		a.eraSource = nil
+	}
+}
 
-// reconcileFeatures records which features process new blocks and backfills
-// features that were enabled after blocks were indexed (feature registry
-// design, section 8). It runs before ingest starts.
-func (a *App) reconcileFeatures(ctx context.Context, enabled []string, backfill *feature.Pipeline) error {
-	fs, ok := a.storage.(storage.FeatureStateStore)
-	if !ok {
+// startRPCArchive puts a local endpoint between the indexer and the node:
+// a recording proxy (rpc.record_dir) or a replay of an archive
+// (rpc.endpoint: replay:///dir). Every RPC user then goes through it.
+func (a *App) startRPCArchive() error {
+	if dir, ok := replay.ParseEndpoint(a.config.RPC.Endpoint); ok {
+		archive, err := replay.Open(dir)
+		if err != nil {
+			return fmt.Errorf("open replay archive: %w", err)
+		}
+		a.rpcReplay = replay.NewServer(archive)
+		ep, err := replay.Serve(a.rpcReplay)
+		if err != nil {
+			return err
+		}
+		a.rpcEndpoint = ep
+		a.logger.Info("Replaying recorded RPC archive", zap.String("dir", dir),
+			zap.Uint64("first", archive.Manifest().First), zap.Uint64("last", archive.Manifest().Last))
+		a.config.RPC.Endpoint = ep.URL
 		return nil
 	}
-	states, err := fs.FeatureStates(ctx)
-	if err != nil {
-		return err
-	}
-	latest, err := a.storage.GetLatestHeight(ctx)
-	hasData := err == nil
-	if err != nil && !errors.Is(err, storage.ErrNotFound) {
-		return err
-	}
-
-	writes, jobs := feature.Reconcile(enabled, states, latest, hasData)
-	for name, st := range writes {
-		if !st.Active {
-			a.logger.Warn("Feature disabled; its data stops at the current height", zap.String("feature", name), zap.Uint64("through", st.Through))
+	if a.config.RPC.RecordDir != "" {
+		w, err := replay.NewWriter(a.config.RPC.RecordDir)
+		if err != nil {
+			return fmt.Errorf("open RPC record dir: %w", err)
 		}
-		if err := fs.SetFeatureState(ctx, name, st); err != nil {
+		ep, err := replay.Serve(replay.NewRecorder(a.config.RPC.Endpoint, w))
+		if err != nil {
+			_ = w.Close()
 			return err
 		}
-	}
-	if backfillCommitHook != nil {
-		a.fetcher.SetBeforeCommitHook(backfillCommitHook)
-		defer a.fetcher.SetBeforeCommitHook(nil)
-	}
-	for _, job := range jobs {
-		a.logger.Info("Backfilling feature", zap.String("feature", job.Feature), zap.Uint64("from", job.From), zap.Uint64("to", job.To))
-		name := job.Feature
-		progress := func(ctx context.Context, h uint64) error {
-			return fs.SetFeatureState(ctx, name, storage.FeatureState{Through: h})
-		}
-		if err := a.fetcher.Backfill(ctx, backfill.Only(name), job.From, job.To, progress); err != nil {
-			return fmt.Errorf("backfill %s: %w", name, err)
-		}
-		if err := fs.SetFeatureState(ctx, name, storage.FeatureState{Active: true}); err != nil {
-			return err
-		}
+		a.rpcRecorder, a.rpcEndpoint = w, ep
+		a.logger.Info("Recording RPC calls", zap.String("dir", a.config.RPC.RecordDir))
+		a.config.RPC.Endpoint = ep.URL
 	}
 	return nil
 }
+
+// stopRPCArchive stops the local endpoint and finishes the recording.
+func (a *App) stopRPCArchive() {
+	if a.rpcEndpoint != nil {
+		_ = a.rpcEndpoint.Close()
+		a.rpcEndpoint = nil
+	}
+	if a.rpcRecorder != nil {
+		if err := a.rpcRecorder.Close(); err != nil {
+			a.logger.Error("Failed to finish RPC recording", zap.Error(err))
+		}
+		a.rpcRecorder = nil
+	}
+}
+
+// backfillCommitHook is a fault-injection point for tests: it runs before
+// each block commits during startup recovery (Fetcher.Recover).
+var backfillCommitHook func(height uint64) error

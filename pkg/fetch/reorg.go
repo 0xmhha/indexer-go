@@ -98,7 +98,7 @@ func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) 
 		zap.Uint64("indexed_head", latest),
 		zap.Uint64("depth", latest-fork),
 	)
-	if err := rb.RollbackTo(ctx, fork); err != nil {
+	if err := f.rollbackTo(ctx, rb, fork); err != nil {
 		if errors.Is(err, storagepkg.ErrNoUndo) {
 			return 0, fmt.Errorf("%w: %v", ErrReorgTooDeep, err)
 		}
@@ -113,11 +113,7 @@ func (f *Fetcher) nodeBlockHash(ctx context.Context, height uint64) (common.Hash
 	rctx, cancel := f.rpcCtx(ctx)
 	defer cancel()
 	if f.src != nil {
-		b, err := f.src.Block(rctx, height)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		return b.Hash, nil
+		return f.src.HashAt(rctx, height)
 	}
 	b, err := f.getBlock(rctx, height)
 	if err != nil {

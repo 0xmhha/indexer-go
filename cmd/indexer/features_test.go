@@ -13,12 +13,12 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/wbft"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
 	"github.com/0xmhha/indexer-go/pkg/features/address"
 	"github.com/0xmhha/indexer-go/pkg/features/balance"
-	"github.com/0xmhha/indexer-go/pkg/features/stablenet/systemcontracts"
-	"github.com/0xmhha/indexer-go/pkg/features/stablenet/wbft"
 	"github.com/0xmhha/indexer-go/pkg/features/token"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )

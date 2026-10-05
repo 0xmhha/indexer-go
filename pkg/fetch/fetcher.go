@@ -182,9 +182,20 @@ type Fetcher struct {
 	// features runs the handlers of the enabled features for every block.
 	features *feature.Pipeline
 
+	// writerInst is the goroutine that changes indexed state (writer.go),
+	// started on first use.
+	writerOnce sync.Once
+	writerInst *writer
+
+	// Background work (online backfill), stopped by Close.
+	bgOnce   sync.Once
+	bgCtx    context.Context
+	bgCancel context.CancelFunc
+	bgWG     sync.WaitGroup
+
 	// src, when set, reads blocks as raw JSON decoded by the chain profile
 	// instead of through client (chain profile design, CP-3).
-	src *source.Source
+	src source.Source
 
 	// fdClient extracts StableNet fee delegation metadata. When nil the
 	// fetcher falls back to checking whether its main client supports it.

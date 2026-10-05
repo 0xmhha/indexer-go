@@ -14,6 +14,7 @@ import (
 // Config holds all configuration for the indexer
 type Config struct {
 	RPC             RPCConfig             `yaml:"rpc"`
+	Source          SourceConfig          `yaml:"source"`
 	Database        DatabaseConfig        `yaml:"database"`
 	Log             LogConfig             `yaml:"log"`
 	Indexer         IndexerConfig         `yaml:"indexer"`
@@ -51,8 +52,21 @@ func (c *Config) FeatureOverrides() map[string]bool {
 
 // RPCConfig holds RPC client configuration
 type RPCConfig struct {
+	// Endpoint is the node's JSON-RPC URL, or "replay:///dir" to serve a
+	// recorded archive instead of a node (pkg/source/replay).
 	Endpoint string        `yaml:"endpoint"`
 	Timeout  time.Duration `yaml:"timeout"`
+	// RecordDir, when set, records every JSON-RPC call to the node into an
+	// archive in this directory while indexing.
+	RecordDir string `yaml:"record_dir"`
+}
+
+// SourceConfig selects where block data comes from besides the node.
+type SourceConfig struct {
+	// EraDir, when set, reads the blocks held by the era1 archives in this
+	// directory (exported by the node client) from the files, and every
+	// later block from the node. Requires indexer.profile_source.
+	EraDir string `yaml:"era_dir"`
 }
 
 // DatabaseConfig holds database configuration
@@ -712,6 +726,12 @@ func (c *Config) LoadFromEnv() error {
 		}
 		c.Indexer.PollInterval = d
 	}
+	if v := os.Getenv("INDEXER_RPC_RECORD_DIR"); v != "" {
+		c.RPC.RecordDir = v
+	}
+	if v := os.Getenv("INDEXER_SOURCE_ERA_DIR"); v != "" {
+		c.Source.EraDir = v
+	}
 	if timeout := os.Getenv("INDEXER_RPC_TIMEOUT"); timeout != "" {
 		duration, err := time.ParseDuration(timeout)
 		if err != nil {
@@ -1054,6 +1074,9 @@ func (c *Config) Validate() error {
 	}
 	if c.RPC.Timeout <= 0 {
 		return fmt.Errorf("RPC timeout must be positive")
+	}
+	if c.Source.EraDir != "" && !c.Indexer.ProfileSource {
+		return fmt.Errorf("source.era_dir requires indexer.profile_source")
 	}
 
 	// Validate database configuration

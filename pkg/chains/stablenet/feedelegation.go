@@ -154,9 +154,8 @@ func DecodeFeeDelegationTx(raw json.RawMessage) (*model.Transaction, error) {
 		return nil, fmt.Errorf("stablenet: fee delegation tx %s: missing field %q", j.Hash.Hex(), f)
 	}
 
-	chainID := (*big.Int)(j.ChainID)
 	inner := &types.DynamicFeeTx{
-		ChainID:    chainID,
+		ChainID:    (*big.Int)(j.ChainID),
 		Nonce:      uint64(*j.Nonce),
 		GasTipCap:  (*big.Int)(j.TipCap),
 		GasFeeCap:  (*big.Int)(j.FeeCap),
@@ -169,48 +168,58 @@ func DecodeFeeDelegationTx(raw json.RawMessage) (*model.Transaction, error) {
 		R:          (*big.Int)(j.R),
 		S:          (*big.Int)(j.S),
 	}
-	senderTx := types.NewTx(inner)
+	m, err := feeDelegationTx(inner, *j.FeePayer, (*big.Int)(j.FV), (*big.Int)(j.FR), (*big.Int)(j.FS))
+	if err != nil {
+		return nil, err
+	}
+	if m.Hash != j.Hash {
+		return nil, fmt.Errorf("%w: fee delegation tx computed %s reported %s", evm.ErrHashMismatch, m.Hash.Hex(), j.Hash.Hex())
+	}
+	if j.From != nil && *j.From != m.From {
+		return nil, fmt.Errorf("%w: fee delegation tx %s recovered %s reported %s", evm.ErrSenderMismatch, m.Hash.Hex(), m.From.Hex(), j.From.Hex())
+	}
+	return m, nil
+}
 
+// feeDelegationTx builds the model of a fee delegation transaction from its
+// fields: it computes the canonical encoding and hash, recovers the sender
+// and checks that the fee payer signature recovers to the declared payer.
+func feeDelegationTx(inner *types.DynamicFeeTx, feePayer common.Address, fv, fr, fs *big.Int) (*model.Transaction, error) {
+	senderTx := types.NewTx(inner)
 	senderFields := []any{
 		inner.ChainID, inner.Nonce, inner.GasTipCap, inner.GasFeeCap, inner.Gas,
 		toField(inner.To), inner.Value, inner.Data, inner.AccessList,
 		inner.V, inner.R, inner.S,
 	}
-	payload, err := rlp.EncodeToBytes([]any{senderFields, *j.FeePayer, (*big.Int)(j.FV), (*big.Int)(j.FR), (*big.Int)(j.FS)})
+	payload, err := rlp.EncodeToBytes([]any{senderFields, feePayer, fv, fr, fs})
 	if err != nil {
 		return nil, fmt.Errorf("stablenet: encode fee delegation tx: %w", err)
 	}
 	encoding := append([]byte{FeeDelegationTxType}, payload...)
 	hash := crypto.Keccak256Hash(encoding)
-	if hash != j.Hash {
-		return nil, fmt.Errorf("%w: fee delegation tx computed %s reported %s", evm.ErrHashMismatch, hash.Hex(), j.Hash.Hex())
-	}
 
-	from, err := types.Sender(types.NewLondonSigner(chainID), senderTx)
+	from, err := types.Sender(types.NewLondonSigner(inner.ChainID), senderTx)
 	if err != nil {
 		return nil, fmt.Errorf("stablenet: recover sender of %s: %w", hash.Hex(), err)
 	}
-	if j.From != nil && *j.From != from {
-		return nil, fmt.Errorf("%w: fee delegation tx %s recovered %s reported %s", evm.ErrSenderMismatch, hash.Hex(), from.Hex(), j.From.Hex())
-	}
 
-	payerPayload, err := rlp.EncodeToBytes([]any{senderFields, *j.FeePayer})
+	payerPayload, err := rlp.EncodeToBytes([]any{senderFields, feePayer})
 	if err != nil {
 		return nil, fmt.Errorf("stablenet: encode fee payer sighash: %w", err)
 	}
 	payerHash := crypto.Keccak256Hash(append([]byte{FeeDelegationTxType}, payerPayload...))
-	payer, err := recoverAddress(payerHash, (*big.Int)(j.FV), (*big.Int)(j.FR), (*big.Int)(j.FS))
+	payer, err := recoverAddress(payerHash, fv, fr, fs)
 	if err != nil {
 		return nil, fmt.Errorf("stablenet: recover fee payer of %s: %w", hash.Hex(), err)
 	}
-	if payer != *j.FeePayer {
-		return nil, fmt.Errorf("%w: tx %s recovered %s declared %s", ErrFeePayerMismatch, hash.Hex(), payer.Hex(), j.FeePayer.Hex())
+	if payer != feePayer {
+		return nil, fmt.Errorf("%w: tx %s recovered %s declared %s", ErrFeePayerMismatch, hash.Hex(), payer.Hex(), feePayer.Hex())
 	}
 
 	m := &model.Transaction{
 		Hash:      hash,
 		Type:      FeeDelegationTxType,
-		ChainID:   chainID,
+		ChainID:   inner.ChainID,
 		Nonce:     inner.Nonce,
 		From:      from,
 		To:        inner.To,
@@ -228,9 +237,9 @@ func DecodeFeeDelegationTx(raw json.RawMessage) (*model.Transaction, error) {
 	}
 	m.Ext.Set(feeDelegationKey, &FeeDelegation{
 		FeePayer:   payer,
-		V:          (*big.Int)(j.FV),
-		R:          (*big.Int)(j.FR),
-		S:          (*big.Int)(j.FS),
+		V:          fv,
+		R:          fr,
+		S:          fs,
 		SenderHash: senderTx.Hash(),
 	})
 	return m, nil

@@ -70,4 +70,3 @@ func (f *Fetcher) initializeGenesisTokenMetadata(ctx context.Context) error {
 
 	return nil
 }
-

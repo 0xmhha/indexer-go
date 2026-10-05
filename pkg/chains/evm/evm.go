@@ -44,6 +44,9 @@ type Profile struct {
 	txDecoders       map[uint8]TxDecoder
 	verifyHeaderHash bool
 	headerHash       func(*types.Header) common.Hash
+
+	binaryTxDecoders  map[uint8]BinaryTxDecoder
+	effectiveGasPrice EffectiveGasPriceFunc
 }
 
 // Option configures a Profile.
@@ -80,6 +83,9 @@ func New(id string, opts ...Option) *Profile {
 		txDecoders:       map[uint8]TxDecoder{},
 		verifyHeaderHash: true,
 		headerHash:       (*types.Header).Hash,
+
+		binaryTxDecoders:  map[uint8]BinaryTxDecoder{},
+		effectiveGasPrice: LondonEffectiveGasPrice,
 	}
 	for _, o := range opts {
 		o(p)

@@ -43,78 +43,6 @@ func (f *Fetcher) publish(ev events.Event) bool {
 	return f.eventBus.Publish(ev)
 }
 
-// indexBlock stores one fetched block with all derived indexes and advances
-// the cursor in a single storage transaction. It is used by both the live
-// loop and gap recovery.
-//
-//   - A block whose hash is already stored at its height is skipped, so
-//     processing a block twice never changes storage.
-//   - The cursor only moves forward, so filling a gap below it does not
-//     rewind it.
-//   - Events are published only after the transaction commits.
-func (f *Fetcher) indexBlock(ctx context.Context, fb *fetchedBlock) error {
-	height := fb.height()
-
-	storedHash, err := f.storedBlockHash(ctx, height)
-	switch {
-	case err == nil && storedHash == fb.block.Hash:
-		f.logger.Debug("Block already indexed, skipping", zap.Uint64("height", height))
-		return f.advanceCursorOnly(ctx, height)
-	case err == nil:
-		return fmt.Errorf("%w (height %d stored %s fetched %s): %w", ErrBlockConflict, height, storedHash.Hex(), fb.block.Hash.Hex(), &ReorgError{Height: height})
-	case !errors.Is(err, storagepkg.ErrNotFound):
-		return fmt.Errorf("check stored block %d: %w", height, err)
-	}
-	if err := f.checkParent(ctx, fb); err != nil {
-		return err
-	}
-
-	txCtx, tx, err := f.txr.BeginBlock(ctx)
-	if err != nil {
-		return fmt.Errorf("begin block %d: %w", height, err)
-	}
-	tx.SetHeight(height) // record undo so a reorg can roll the block back
-	defer tx.Rollback()  // no-op after Commit
-
-	var pending []events.Event
-	f.pendingEvents = &pending
-	defer func() { f.pendingEvents = nil }()
-
-	if err := f.applyBlock(txCtx, fb); err != nil {
-		return err
-	}
-	if err := f.advanceCursor(txCtx, height); err != nil {
-		return err
-	}
-	if f.beforeCommitHook != nil {
-		if err := f.beforeCommitHook(height); err != nil {
-			return err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit block %d: %w", height, err)
-	}
-
-	f.pendingEvents = nil
-	for _, ev := range pending {
-		if !f.publish(ev) {
-			f.logger.Warn("Failed to publish event (channel full)",
-				zap.Uint64("height", height),
-				zap.String("type", string(ev.Type())),
-			)
-		}
-	}
-
-	f.metrics.RecordBlockProcessed(len(fb.receipts))
-	f.logger.Info("Successfully indexed block",
-		zap.Uint64("height", height),
-		zap.String("hash", fb.block.Hash.Hex()),
-		zap.Int("txs", len(fb.block.Transactions)),
-		zap.Int("receipts", len(fb.receipts)),
-	)
-	return nil
-}
-
 // storedBlockHash returns the hash of the block stored at height, as the
 // chain reports it when the storage keeps the model.
 func (f *Fetcher) storedBlockHash(ctx context.Context, height uint64) (common.Hash, error) {
@@ -195,18 +123,4 @@ func (f *Fetcher) advanceCursor(ctx context.Context, height uint64) error {
 		return fmt.Errorf("failed to update latest height to %d: %w", height, err)
 	}
 	return nil
-}
-
-// advanceCursorOnly moves the cursor for a skipped, already stored block in
-// its own small transaction.
-func (f *Fetcher) advanceCursorOnly(ctx context.Context, height uint64) error {
-	txCtx, tx, err := f.txr.BeginBlock(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := f.advanceCursor(txCtx, height); err != nil {
-		return err
-	}
-	return tx.Commit()
 }

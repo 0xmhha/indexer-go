@@ -56,43 +56,6 @@ func (f *Fetcher) Backfill(ctx context.Context, p *feature.Pipeline, from, to ui
 	return nil
 }
 
-func (f *Fetcher) backfillBlock(ctx context.Context, p *feature.Pipeline, fb *fetchedBlock, progress func(context.Context, uint64) error) error {
-	h := fb.height()
-	txCtx, tx, err := f.txr.BeginBlock(ctx)
-	if err != nil {
-		return fmt.Errorf("backfill: begin block %d: %w", h, err)
-	}
-	defer tx.Rollback() // no-op after Commit
-
-	if err := p.HandleBlock(txCtx, &feature.Block{
-		Model: fb.block, Receipts: fb.receipts, Geth: fb.geth, GethReceipts: fb.gethReceipts,
-	}); err != nil {
-		return fmt.Errorf("backfill: block %d: %w", h, err)
-	}
-	if progress != nil {
-		if err := progress(txCtx, h); err != nil {
-			return fmt.Errorf("backfill: record progress at %d: %w", h, err)
-		}
-	}
-	// The block's undo record does not cover what the backfill wrote, so it
-	// can no longer be rolled back exactly; drop it so a reorg reaching this
-	// block stops instead of leaving the backfilled data behind.
-	if u, ok := f.storage.(undoDropper); ok {
-		if err := u.DropUndo(txCtx, h); err != nil {
-			return fmt.Errorf("backfill: drop undo of %d: %w", h, err)
-		}
-	}
-	if f.beforeCommitHook != nil {
-		if err := f.beforeCommitHook(h); err != nil {
-			return err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("backfill: commit block %d: %w", h, err)
-	}
-	return nil
-}
-
 type undoDropper interface {
 	DropUndo(ctx context.Context, height uint64) error
 }

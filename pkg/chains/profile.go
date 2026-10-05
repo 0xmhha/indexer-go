@@ -35,6 +35,21 @@ type Profile interface {
 	Features() []string
 }
 
+// BinaryProfile is a profile that can also decode consensus (RLP) encodings,
+// as stored in history archives such as era1 files. Those hold no derived
+// receipt fields, so the profile computes them with its chain's rules.
+type BinaryProfile interface {
+	Profile
+	// DecodeBlockRLP converts a block's header and body RLP into the model,
+	// computing the block hash with the chain's header hash rule.
+	DecodeBlockRLP(header, body []byte) (*model.Block, error)
+	// DeriveReceipts converts the consensus encoding of a block's receipts
+	// (an RLP list) into the model and fills the fields derived from the
+	// block: transaction hash and type, block location, gas used, contract
+	// address, log positions and effective gas price.
+	DeriveReceipts(b *model.Block, receipts []byte) ([]*model.Receipt, error)
+}
+
 type registration struct {
 	profile  Profile
 	priority int

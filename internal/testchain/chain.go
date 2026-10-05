@@ -179,6 +179,7 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 	}
 
 	signer := types.LatestSignerForChainID(c.chainID)
+	baseFee := big.NewInt(1_000_000_000)
 	var (
 		txs      []*types.Transaction
 		receipts types.Receipts
@@ -194,6 +195,12 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 			gasUsed = 21000
 		}
 		cumGas += gasUsed
+		// London rule, as nodes report it: base fee plus tip, capped by the
+		// fee cap (legacy transactions pay their gas price).
+		price := new(big.Int).Add(tx.GasTipCap(), baseFee)
+		if price.Cmp(tx.GasFeeCap()) > 0 {
+			price = tx.GasFeeCap()
+		}
 		status := types.ReceiptStatusSuccessful
 		if s.Failed {
 			status = types.ReceiptStatusFailed
@@ -204,7 +211,7 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 			CumulativeGasUsed: cumGas,
 			TxHash:            tx.Hash(),
 			GasUsed:           gasUsed,
-			EffectiveGasPrice: tx.GasPrice(),
+			EffectiveGasPrice: price,
 			BlockNumber:       new(big.Int).SetUint64(number),
 			TransactionIndex:  uint(i),
 			Logs:              []*types.Log{},
@@ -227,8 +234,8 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 		txs = append(txs, tx)
 		receipts = append(receipts, r)
 
-		// Same balance rule the indexer applies: value + gasUsed * tx.GasPrice().
-		cost := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), tx.GasPrice())
+		// Same balance rule the indexer applies: value + gasUsed * effective gas price.
+		cost := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), price)
 		value := tx.Value()
 		if s.Failed {
 			value = new(big.Int)
@@ -251,7 +258,7 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 		GasUsed:    cumGas,
 		Time:       c.baseTime + number*2,
 		Extra:      extra,
-		BaseFee:    big.NewInt(1_000_000_000),
+		BaseFee:    baseFee,
 	}
 	blk := types.NewBlock(header, &types.Body{Transactions: txs}, receipts, trie.NewStackTrie(nil))
 	for _, r := range receipts {
@@ -313,6 +320,16 @@ func sub(state map[common.Address]*big.Int, a common.Address, v *big.Int) {
 // blockAt returns a visible block, or nil.
 func (c *Chain) blockAt(n uint64) *Block {
 	if n > c.head || n >= uint64(len(c.blocks)) {
+		return nil
+	}
+	return c.blocks[n]
+}
+
+// Block returns block n regardless of the head, or nil if it was not built.
+func (c *Chain) Block(n uint64) *Block {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if n >= uint64(len(c.blocks)) {
 		return nil
 	}
 	return c.blocks[n]

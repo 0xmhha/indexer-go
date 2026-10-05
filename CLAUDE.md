@@ -23,7 +23,9 @@ pkg/
     websocket/                  /ws hub (not fed by the indexer yet)
   events/                       In-process EventBus used in production
   eventbus/                     Local/Redis/Kafka adapters (not wired in main.go)
+  chains/                       Chain profiles; everything chain specific lives in chains/<chain>/ (decoding, features)
   fetch/                        Block ingestion (sequential live loop, one storage transaction per block; worker pool only for gap fill)
+  source/                       Block sources: rpc (node), era (era1 archives), replay (recorded JSON-RPC), Chained
   storage/                      PebbleDB storage (interfaces and implementation in one package)
   multichain/                   Multi-chain orchestration (chains share storage keys; do not enable)
   resilience/                   Session/event cache (not wired)
@@ -55,6 +57,8 @@ make docker-build   # Container image
   - `pkg/eventbus` (Redis, Kafka, factory with local degradation) exists but is not wired
 - **Storage**: PebbleDB. Each block is indexed in one block transaction (`BeginBlock`, indexed batch bound to ctx; all access goes through `s.kv(ctx)`). `indexer.atomic_block: false` selects the legacy path until it is removed. Each block's commit records undo (`/undo/<height>`, last 128 blocks); on a reorg the live loop rolls back to the fork point (`docs/analysis/reorg-design.md`)
 - **Fetcher**: Live indexing processes blocks sequentially by polling; the worker pool (`indexer.workers`) is used only by gap recovery
+  - All state changes (index block, rollback, backfill) run as commands on one writer goroutine (`pkg/fetch/writer.go`, the only caller of `BeginBlock`, enforced by a test). Startup recovery is `Fetcher.Recover`: reorg check, feature state, backfill (order-independent features backfill online in the background)
+- **Sources** (`pkg/source`): `rpc.endpoint: replay:///dir` replays an archive written with `rpc.record_dir`; `source.era_dir` reads the blocks held by era1 files (`gstable export-history`) from the files and later blocks from the node (requires `indexer.profile_source`; the archive must match the node's chain). Era1 receipts carry consensus fields only; the chain profile derives the rest (`chains.BinaryProfile`, StableNet uses the Anzeon effective gas price rule)
 - **Adapter**: Detects the node type and selects an adapter; `--adapter` forces one
 - **Chain profiles** (`pkg/chains`): decode raw blocks into the chain-neutral model; chain-specific behaviour reaches chain-neutral code (`pkg/fetch`, `pkg/api`, `pkg/source`, `pkg/feature`) only through registries in `pkg/chains` (enforced by a test)
 - **Features** (`pkg/feature`, `pkg/features/...`): optional per-block handlers that run inside the block transaction. Defaults come from the chain profile; override with `features.<name>.enabled` or `INDEXER_FEATURES=name,-name`. Features: `address.index`, `balance.native`, `token.transfers`, `aa.eip7702`, `aa.erc4337`, `aa.erc7579` (on by default) and `stablenet.wbft`, `stablenet.system_contracts`, `stablenet.fee_delegation` (on for StableNet). `account_abstraction.enabled: false` still turns off `aa.erc4337` and `aa.erc7579`. Enabling a feature on an indexed database backfills it from stored blocks before ingest starts (feature state under `/meta/features/`) (`docs/analysis/feature-registry-design.md`)
@@ -115,4 +119,4 @@ Known config issues: `database.readonly` and several sections (`eventbus`, `node
 - Phase 0 fixed address sequence reset (D1), non-atomic block writes (D2), non-idempotent reprocessing (D3), gap recovery cursor rewind (D10), the storage wrapper hiding features (F1), unwired SetCode/UserOp/Module/fee delegation (F2) and system contract decoding (D11). Existing databases need a reindex
 - Blocks are read as raw JSON and decoded by the chain profile (`pkg/chains`, `pkg/source`) and stored as the chain-neutral model (`pkg/core/model`, storage schema v2): StableNet fee delegation (D13) and WBFT block hashes (D16) are kept as the chain reports them, in storage and in GraphQL/JSON-RPC responses (`docs/analysis/chain-profile-design.md`)
 - Open: out-of-order gap filling corrupts order-dependent state (D12); multi-chain mode shares storage keys (D4) and is rejected at startup
-- Live verification against a local go-stablenet network: `TestLiveStableNet` (runs only with `INDEXER_LIVE_RPC`)
+- Live verification against a local go-stablenet network: `TestLiveStableNet` (runs only with `INDEXER_LIVE_RPC`); also `TestLiveRecordReplay`, `TestLiveEraSource` (needs `INDEXER_LIVE_ERA_DIR`) and `TestLiveHeadLatency` (needs `INDEXER_LIVE_LATENCY=1`)

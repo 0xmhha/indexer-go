@@ -23,7 +23,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
-	"github.com/0xmhha/indexer-go/pkg/source"
+	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -50,7 +50,7 @@ func TestLiveStableNetIdentity(t *testing.T) {
 	c, err := rpc.DialContext(ctx, endpoint)
 	require.NoError(t, err)
 	defer c.Close()
-	src, err := source.Detect(ctx, c)
+	src, err := sourcerpc.Detect(ctx, c)
 	require.NoError(t, err)
 	require.Equal(t, stablenet.ID, src.Profile().ID())
 	head, err := src.Head(ctx)

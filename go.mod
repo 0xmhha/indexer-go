@@ -9,6 +9,7 @@ require (
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/ethereum/go-ethereum v1.16.5
 	github.com/go-chi/chi/v5 v5.2.3
+	github.com/golang/snappy v1.0.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/graphql-go/graphql v0.8.1
 	github.com/graphql-go/handler v0.2.4
@@ -50,7 +51,6 @@ require (
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.16.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect

@@ -181,3 +181,36 @@ func TestRollbackLargeBlocks(t *testing.T) {
 	diff := testchain.DiffKeyspace(dumpDir(t, partial), dumpDir(t, dir), 0)
 	require.Empty(t, diff, testchain.SummarizeDiff(diff))
 }
+
+// TestRestartAfterReorgRecovers stops the indexer, reorganizes the chain
+// while it is down and starts it again: startup recovery must roll back to
+// the fork point before ingest, and the result must equal a fresh index of
+// the new chain.
+func TestRestartAfterReorgRecovers(t *testing.T) {
+	for _, mode := range []ingestMode{atomicMode, clientMode} {
+		t.Run(mode.name, func(t *testing.T) {
+			sc := testchain.BuildDefault()
+			srv := testchain.NewServer(sc.Chain)
+			defer srv.Close()
+			head := sc.Chain.Head()
+			dir := filepath.Join(t.TempDir(), "db")
+			runSessionMode(t, srv, dir, 0, head, mode)
+
+			reorgChain(sc, head-3, 5)
+			newHead := sc.Chain.Head()
+
+			app := startAppMode(t, srv, dir, mode) // runs startup recovery
+			ctx := context.Background()
+			latest, err := app.storage.GetLatestHeight(ctx)
+			require.NoError(t, err)
+			require.Equal(t, head-3, latest, "rolled back to the fork point before ingest")
+			require.NoError(t, app.fetcher.FetchRange(ctx, latest+1, newHead))
+			app.Shutdown()
+
+			fresh := filepath.Join(t.TempDir(), "fresh")
+			runSessionMode(t, srv, fresh, 0, newHead, mode)
+			diff := testchain.DiffKeyspace(dumpDir(t, fresh), dumpDir(t, dir), 0)
+			require.Empty(t, diff, testchain.SummarizeDiff(diff))
+		})
+	}
+}
