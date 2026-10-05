@@ -102,7 +102,7 @@ var (
 // GovBase common events (all Gov contracts)
 var (
 	// Proposal management events
-	EventSigProposalCreated   = crypto.Keccak256Hash([]byte("ProposalCreated(uint256,address,bytes32,bytes,uint256,uint256,uint256)"))
+	EventSigProposalCreated   = crypto.Keccak256Hash([]byte("ProposalCreated(uint256,address,bytes32,uint256,uint256,bytes)"))
 	EventSigProposalVoted     = crypto.Keccak256Hash([]byte("ProposalVoted(uint256,address,bool,uint256,uint256)"))
 	EventSigProposalApproved  = crypto.Keccak256Hash([]byte("ProposalApproved(uint256,address,uint256,uint256)"))
 	EventSigProposalRejected  = crypto.Keccak256Hash([]byte("ProposalRejected(uint256,address,uint256,uint256)"))
@@ -135,7 +135,7 @@ var (
 
 // GovMinter (0x1003) specific events
 var (
-	EventSigDepositMintProposed = crypto.Keccak256Hash([]byte("DepositMintProposed(uint256,address,uint256,string)"))
+	EventSigDepositMintProposed = crypto.Keccak256Hash([]byte("DepositMintProposed(uint256,string,address,address,uint256,string)"))
 	EventSigBurnPrepaid         = crypto.Keccak256Hash([]byte("BurnPrepaid(address,uint256)"))
 	EventSigBurnExecuted        = crypto.Keccak256Hash([]byte("BurnExecuted(address,uint256,string)"))
 )
