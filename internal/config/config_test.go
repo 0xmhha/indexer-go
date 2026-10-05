@@ -678,3 +678,21 @@ func TestFinalityConfig(t *testing.T) {
 		t.Fatal("invalid confirmations accepted")
 	}
 }
+
+func TestOrphanRetention(t *testing.T) {
+	cfg := NewConfig()
+	if cfg.Indexer.OrphanRetention != 1000 {
+		t.Fatalf("default orphan retention = %d, want 1000", cfg.Indexer.OrphanRetention)
+	}
+	t.Setenv("INDEXER_ORPHAN_RETENTION", "0")
+	if err := cfg.LoadFromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Indexer.OrphanRetention != 0 {
+		t.Fatalf("orphan retention = %d, want 0 (keep all)", cfg.Indexer.OrphanRetention)
+	}
+	t.Setenv("INDEXER_ORPHAN_RETENTION", "many")
+	if err := cfg.LoadFromEnv(); err == nil {
+		t.Fatal("expected an error for an invalid INDEXER_ORPHAN_RETENTION")
+	}
+}

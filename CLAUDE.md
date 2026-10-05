@@ -79,6 +79,7 @@ indexer:
   workers: 100
   poll_interval: 50ms   # head polling once caught up (head latency); separate from error retry delay
   finality: head        # head | confirmations (with confirmations: N) | finalized; head suits StableNet (WBFT is final on insertion)
+  orphan_retention: 1000 # reorganization records kept with their removed blocks; 0 keeps all
 eventbus:
   publish_buffer_size: 65536    # events are dropped only when buffers are full
   subscriber_buffer_size: 16384 # per API subscription

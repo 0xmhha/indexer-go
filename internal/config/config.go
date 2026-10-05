@@ -118,6 +118,10 @@ type IndexerConfig struct {
 	// Confirmations is how many blocks behind the head the live loop stays
 	// with finality "confirmations".
 	Confirmations uint64 `yaml:"confirmations"`
+	// OrphanRetention is how many reorganization records are kept with the
+	// blocks they removed (default 1000); older ones are deleted when a new
+	// reorganization is recorded. 0 keeps them all.
+	OrphanRetention uint64 `yaml:"orphan_retention"`
 }
 
 // APIConfig holds API server configuration
@@ -489,6 +493,7 @@ func NewConfig() *Config {
 	// false in the file or INDEXER_ATOMIC_BLOCK=false selects the legacy path.
 	cfg.Indexer.AtomicBlock = true
 	cfg.Indexer.ProfileSource = true
+	cfg.Indexer.OrphanRetention = 1000
 	// WebSocket keep-alive pings keep idle subscribers connected; it can be
 	// disabled with api.enable_websocket_keepalive: false.
 	cfg.API.EnableWebSocketKeepAlive = true
@@ -743,6 +748,13 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_CONFIRMATIONS: %w", err)
 		}
 		c.Indexer.Confirmations = n
+	}
+	if v := os.Getenv("INDEXER_ORPHAN_RETENTION"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_ORPHAN_RETENTION: %w", err)
+		}
+		c.Indexer.OrphanRetention = n
 	}
 	if v := os.Getenv("INDEXER_POLL_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
