@@ -1,5 +1,5 @@
 # Chain-specific identifiers and strings per package outside pkg/chains/<chain>/ (TestChainIdentifierLimits).
-cmd/indexer 22
+cmd/indexer 16
 internal/config 12
 internal/constants 48
 pkg/adapters/anvil 2
@@ -20,6 +20,6 @@ pkg/features/address 1
 pkg/features/token 7
 pkg/fetch 37
 pkg/multichain 2
-pkg/storage 616
+pkg/storage 626
 pkg/types/chain 16
 pkg/types/consensus 22

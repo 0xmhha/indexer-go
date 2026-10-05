@@ -1235,55 +1235,11 @@ func reindexData(path string, log *zap.Logger) error {
 	}
 	defer db.Close()
 
-	// Prefixes to preserve (verification data)
-	preservePrefixes := []string{
-		"/data/abi/",
-		"/data/verification/",
-		"/index/verification/",
-	}
-
-	// Prefixes to delete (blockchain/indexing data)
-	deletePrefixes := []string{
-		// Data prefixes
-		"/data/blocks/",
-		"/data/txs/",
-		"/data/receipts/",
-		"/data/contractaddr/",
-		"/data/logs/",
-		"/data/internal/",
-		"/data/contract/",
-		"/data/erc20/",
-		"/data/erc721/",
-		"/data/syscontracts/",
-		"/data/wbft/",
-		"/data/token/",
-		"/data/setcode/",
-		"/data/aa/",
-		"/data/feedelegation/",
-		"/data/notification/",
-		// Index prefixes (except /index/verification/)
-		"/index/txh/",
-		"/index/addr/",
-		"/index/blockh/",
-		"/index/time/",
-		"/index/balance/",
-		"/index/syscontracts/",
-		"/index/wbft/",
-		"/index/contract/",
-		"/index/internal/",
-		"/index/erc20/",
-		"/index/erc721/",
-		"/index/logs/",
-		"/index/feedelegation/",
-		"/index/notification/",
-		"/index/token/",
-		"/index/setcode/",
-		"/index/aa/",
-		// Metadata prefixes
-		"/meta/",
-		// Multi-chain prefixes
-		"/chain/",
-	}
+	// Every prefix storing chain data is deleted; user data (contract
+	// verification) is preserved. Packages register their prefixes
+	// (storage.RegisterKeyspace), so new data cannot be missed here.
+	preservePrefixes := storage.PrefixesOf(storage.Preserved)
+	deletePrefixes := storage.PrefixesOf(storage.ChainData)
 
 	var deletedCount int64
 	var preservedCount int64

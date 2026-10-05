@@ -7,6 +7,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
+	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Regenerate with: go test ./cmd/indexer -run TestGolden -update
@@ -232,4 +234,18 @@ func enableTestChainFeatures(cfg *config.Config) {
 		cfg.Features = map[string]config.FeatureConfig{}
 	}
 	cfg.Features[systemcontracts.Name] = config.FeatureConfig{Enabled: &on}
+}
+
+// TestGoldenKeysHaveRegisteredOwners requires every key the scenarios store
+// to fall under a registered keyspace prefix (storage.RegisterKeyspace), so
+// whole-database operations such as reindex know about it.
+func TestGoldenKeysHaveRegisteredOwners(t *testing.T) {
+	for _, file := range []string{goldenKeyspace, goldenKeyspaceStableNet} {
+		data, err := os.ReadFile(file)
+		require.NoError(t, err)
+		for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+			key := strings.Fields(line)[0]
+			require.NotEmpty(t, storage.KeyOwner(key), "%s: key %s has no registered keyspace", file, key)
+		}
+	}
 }
