@@ -70,6 +70,18 @@ func Detect(ctx context.Context, c *gethrpc.Client) (*Source, error) {
 	return New(c, p), nil
 }
 
+// Select returns a Source using the profile named name (an id or alias),
+// or the detected one when name is empty or names no profile (an adapter
+// type such as "anvil" that has no profile of its own).
+func Select(ctx context.Context, c *gethrpc.Client, name string) (*Source, error) {
+	if name != "" {
+		if p, ok := chains.Lookup(name); ok {
+			return New(c, p), nil
+		}
+	}
+	return Detect(ctx, c)
+}
+
 // Profile returns the profile the source decodes with.
 func (s *Source) Profile() chains.Profile { return s.profile }
 

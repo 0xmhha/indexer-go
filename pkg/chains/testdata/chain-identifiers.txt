@@ -3,7 +3,7 @@ cmd/indexer 22
 internal/config 12
 internal/constants 3
 pkg/adapters/anvil 2
-pkg/adapters/detector 5
+pkg/adapters/detector 3
 pkg/adapters/evm 8
 pkg/adapters/factory 74
 pkg/adapters/stableone 110

@@ -13,6 +13,9 @@ import (
 // ID is the StableNet profile id.
 const ID = "stablenet"
 
+// LegacyName is the former name of the chain, kept as an alias of ID.
+const LegacyName = "stableone"
+
 // Features StableNet enables by default (refactoring plan 5.3).
 var defaultFeatures = []string{"stablenet.system_contracts", "stablenet.fee_delegation", "stablenet.wbft"}
 
@@ -41,4 +44,7 @@ func New() *evm.Profile {
 func init() {
 	// Above the generic EVM fallback.
 	chains.Register(New(), 100)
+	// The chain was called StableOne; configurations and the --adapter flag
+	// still use that name.
+	chains.RegisterAlias(LegacyName, ID)
 }

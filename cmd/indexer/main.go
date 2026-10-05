@@ -63,6 +63,11 @@ type App struct {
 	client       *client.Client
 	chainAdapter chain.Adapter
 	nodeInfo     *detector.NodeInfo
+	// profile is the chain profile selected by --adapter or detected (nil if
+	// detection failed, see profileErr); profileSrc reads blocks with it.
+	profile    chains.Profile
+	profileSrc *sourcerpc.Source
+	profileErr error
 	features     *feature.Pipeline // enabled features, in execution order
 	storage      storage.Storage
 	eventBus     *events.EventBus
@@ -405,10 +410,18 @@ func (a *App) initClient() error {
 	a.client = ethClient
 	a.logger.Info("Connected to Ethereum node", zap.String("endpoint", a.config.RPC.Endpoint))
 
-	// Create chain adapter using factory with auto-detection
+	// The chain profile: the one --adapter names, otherwise detected. The
+	// adapter factory follows it, so both agree on the chain.
 	ctx := context.Background()
+	a.profileSrc, a.profileErr = sourcerpc.Select(ctx, a.client.RPCClient(), a.forceAdapterType)
+	if a.profileErr == nil {
+		a.profile = a.profileSrc.Profile()
+	}
+
+	// Create chain adapter using factory with auto-detection
 	factoryConfig := factory.DefaultConfig(a.config.RPC.Endpoint)
 	factoryConfig.ForceAdapterType = a.forceAdapterType
+	factoryConfig.Profile = a.profile
 
 	adapterFactory := factory.NewFactory(factoryConfig, a.logger)
 	result, err := adapterFactory.Create(ctx)
@@ -727,15 +740,13 @@ func (a *App) initFetcher(ctx context.Context) error {
 	// The chain profile decodes blocks (profile_source) and gives the
 	// default features. Without profile_source a failed detection only
 	// leaves the features to the configuration.
-	var profile chains.Profile
-	src, err := sourcerpc.Detect(ctx, a.client.RPCClient())
+	profile, src := a.profile, a.profileSrc
 	switch {
-	case err == nil:
-		profile = src.Profile()
+	case a.profileErr == nil:
 	case a.config.Indexer.ProfileSource:
-		return fmt.Errorf("detect chain profile: %w", err)
+		return fmt.Errorf("detect chain profile: %w", a.profileErr)
 	default:
-		a.logger.Warn("Chain profile detection failed; using configured features only", zap.Error(err))
+		a.logger.Warn("Chain profile detection failed; using configured features only", zap.Error(a.profileErr))
 	}
 	if a.config.Indexer.ProfileSource {
 		var blocks source.Source = src

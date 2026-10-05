@@ -58,6 +58,7 @@ type registration struct {
 var (
 	mu       sync.RWMutex
 	registry = map[string]registration{}
+	aliases  = map[string]string{} // alias -> profile id
 )
 
 // Register adds a profile. Higher priority profiles are tried first during
@@ -72,12 +73,41 @@ func Register(p Profile, priority int) {
 	registry[p.ID()] = registration{profile: p, priority: priority}
 }
 
-// Lookup returns the profile registered under id.
+// RegisterAlias adds another name for a profile, such as a former chain
+// name still used in configuration ("stableone" for "stablenet").
+// Registering an alias twice panics: it is a wiring bug.
+func RegisterAlias(alias, id string) {
+	mu.Lock()
+	defer mu.Unlock()
+	if _, dup := aliases[alias]; dup {
+		panic(fmt.Sprintf("chains: alias %q registered twice", alias))
+	}
+	aliases[alias] = id
+}
+
+// Lookup returns the profile registered under id or an alias of it.
 func Lookup(id string) (Profile, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
+	if target, ok := aliases[id]; ok {
+		id = target
+	}
 	r, ok := registry[id]
 	return r.profile, ok
+}
+
+// Names returns the id of p followed by its aliases, sorted.
+func Names(p Profile) []string {
+	mu.RLock()
+	defer mu.RUnlock()
+	var out []string
+	for alias, id := range aliases {
+		if id == p.ID() {
+			out = append(out, alias)
+		}
+	}
+	sort.Strings(out)
+	return append([]string{p.ID()}, out...)
 }
 
 // Detect returns the highest-priority profile that accepts the node.

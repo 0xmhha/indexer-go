@@ -13,6 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/chains"
+	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"       // generic profile, the detection fallback
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet" // StableNet profile, detected by client version
 )
 
 // ---- Mock JSON-RPC Server ----
@@ -472,4 +476,20 @@ func TestDetectFromRPCURL(t *testing.T) {
 		_, err := DetectFromRPCURL(context.Background(), "invalid://url", zap.NewNop())
 		assert.Error(t, err)
 	})
+}
+
+// TestProfileNodeType: the adapter follows the chain profile's names, so
+// the StableNet profile (alias "stableone") selects the StableOne adapter
+// and the generic profile none.
+func TestProfileNodeType(t *testing.T) {
+	sn, ok := chains.Lookup("stablenet")
+	require.True(t, ok)
+	got, ok := ProfileNodeType(sn)
+	require.True(t, ok)
+	assert.Equal(t, NodeTypeStableOne, got)
+
+	generic, ok := chains.Lookup("evm")
+	require.True(t, ok)
+	_, ok = ProfileNodeType(generic)
+	assert.False(t, ok)
 }

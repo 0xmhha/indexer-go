@@ -285,3 +285,10 @@ func TestFeeDelegationIsRegisteredWithChains(t *testing.T) {
 	require.Equal(t, fd.Payer, chains.GasPayer(fdTx))
 	require.Equal(t, b.Transactions[0].From, chains.GasPayer(b.Transactions[0]))
 }
+
+func TestLegacyNameSelectsProfile(t *testing.T) {
+	p, ok := chains.Lookup(stablenet.LegacyName)
+	require.True(t, ok)
+	require.Equal(t, stablenet.ID, p.ID())
+	require.Equal(t, []string{stablenet.ID, stablenet.LegacyName}, chains.Names(p))
+}
