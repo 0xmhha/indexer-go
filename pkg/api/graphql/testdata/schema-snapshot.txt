@@ -1,0 +1,1006 @@
+AccessListEntry.address(): String!
+AccessListEntry.storageKeys(): [String!]
+AccountModules.account(): String!
+AccountModules.executors(): [InstalledModule!]!
+AccountModules.fallbacks(): [InstalledModule!]!
+AccountModules.hooks(): [InstalledModule!]!
+AccountModules.validators(): [InstalledModule!]!
+AddressActivityStats.address(): String!
+AddressActivityStats.firstActivityBlock(): String!
+AddressActivityStats.lastActivityBlock(): String!
+AddressActivityStats.totalGasUsed(): String!
+AddressActivityStats.transactionCount(): String!
+AddressGasStats.address(): String!
+AddressGasStats.averageGasPerTx(): String!
+AddressGasStats.totalFeesPaid(): String!
+AddressGasStats.totalGasUsed(): String!
+AddressGasStats.transactionCount(): String!
+AddressOverview.address(): String!
+AddressOverview.asAuthorityCount(): Int!
+AddressOverview.asTargetCount(): Int!
+AddressOverview.balance(): String!
+AddressOverview.contractInfo(): ContractCreation
+AddressOverview.currentBalance(): String
+AddressOverview.delegationTarget(): String
+AddressOverview.erc20TokenCount(): Int!
+AddressOverview.erc721TokenCount(): Int!
+AddressOverview.firstSeen(): String
+AddressOverview.hasDelegation(): Boolean!
+AddressOverview.internalTxCount(): Int!
+AddressOverview.isContract(): Boolean!
+AddressOverview.isToken(): Boolean!
+AddressOverview.lastSeen(): String
+AddressOverview.nonce(): String
+AddressOverview.receivedCount(): Int!
+AddressOverview.sentCount(): Int!
+AddressOverview.tokenMetadata(): TokenMetadata
+AddressOverview.transactionCount(): Int!
+AddressOverview.verificationInfo(): ContractVerification
+AddressSetCodeInfo.address(): String!
+AddressSetCodeInfo.asAuthorityCount(): Int!
+AddressSetCodeInfo.asTargetCount(): Int!
+AddressSetCodeInfo.delegationTarget(): String
+AddressSetCodeInfo.hasDelegation(): Boolean!
+AddressSetCodeInfo.lastActivityBlock(): String
+AddressSetCodeInfo.lastActivityTimestamp(): String
+AddressStats.address(): String!
+AddressStats.contractInteractionCount(): Int!
+AddressStats.failedCount(): Int!
+AddressStats.firstTransactionTimestamp(): String
+AddressStats.lastTransactionTimestamp(): String
+AddressStats.receivedCount(): Int!
+AddressStats.sentCount(): Int!
+AddressStats.successCount(): Int!
+AddressStats.totalGasCost(): String!
+AddressStats.totalGasUsed(): String!
+AddressStats.totalTransactions(): Int!
+AddressStats.totalValueReceived(): String!
+AddressStats.totalValueSent(): String!
+AddressStats.uniqueAddressCount(): Int!
+BalanceHistoryConnection.nodes(): [BalanceSnapshot!]
+BalanceHistoryConnection.pageInfo(): PageInfo!
+BalanceHistoryConnection.totalCount(): Int!
+BalanceSnapshot.balance(): String!
+BalanceSnapshot.blockNumber(): String!
+BalanceSnapshot.delta(): String!
+BalanceSnapshot.transactionHash(): String
+BlacklistEvent.account(): String!
+BlacklistEvent.action(): String!
+BlacklistEvent.blockNumber(): String!
+BlacklistEvent.proposalId(): String!
+BlacklistEvent.timestamp(): String!
+BlacklistEvent.transactionHash(): String!
+Block.baseFeePerGas(): String
+Block.blobGasUsed(): String
+Block.difficulty(): String!
+Block.excessBlobGas(): String
+Block.extraData(): String!
+Block.gasLimit(): String!
+Block.gasUsed(): String!
+Block.hash(): String!
+Block.miner(): String!
+Block.nonce(): String!
+Block.number(): String!
+Block.parentHash(): String!
+Block.size(): String!
+Block.timestamp(): String!
+Block.totalDifficulty(): String
+Block.transactionCount(): Int!
+Block.transactions(): [Transaction!]
+Block.txCount(): Int!
+Block.uncles(): [String!]
+Block.withdrawalsRoot(): String
+BlockConnection.nodes(): [Block!]
+BlockConnection.pageInfo(): PageInfo!
+BlockConnection.totalCount(): Int!
+BlockFilter.miner: String
+BlockFilter.numberFrom: String
+BlockFilter.numberTo: String
+BlockFilter.timestampFrom: String
+BlockFilter.timestampTo: String
+BlockParticipation.blockNumber(): String!
+BlockParticipation.round(): Int!
+BlockParticipation.signedCommit(): Boolean!
+BlockParticipation.signedPrepare(): Boolean!
+BlockParticipation.wasProposer(): Boolean!
+BlockRangeResult.blocks(): [Block!]!
+BlockRangeResult.count(): Int!
+BlockRangeResult.endNumber(): String!
+BlockRangeResult.hasMore(): Boolean!
+BlockRangeResult.latestHeight(): String!
+BlockRangeResult.startNumber(): String!
+BlockRef.hash(): String!
+BlockRef.number(): String!
+BlockSigners.blockNumber(): String!
+BlockSigners.committers(): [String!]!
+BlockSigners.preparers(): [String!]!
+BundlerStats.address(): String!
+BundlerStats.totalBundles(): String!
+BundlerStats.totalOps(): String!
+BundlerStatsConnection.nodes(): [BundlerStats!]!
+BundlerStatsConnection.pageInfo(): PageInfo!
+BundlerStatsConnection.totalCount(): Int!
+BurnEvent.amount(): String!
+BurnEvent.blockNumber(): String!
+BurnEvent.burnTxId(): String
+BurnEvent.burner(): String!
+BurnEvent.timestamp(): String!
+BurnEvent.transactionHash(): String!
+BurnEvent.txHash(): String!
+BurnEvent.withdrawalId(): String
+BurnEventConnection.nodes(): [BurnEvent!]
+BurnEventConnection.pageInfo(): PageInfo!
+BurnEventConnection.totalCount(): Int!
+Candidate.address(): String!
+Candidate.diligence(): String!
+CandidateInfo.address(): String!
+CandidateInfo.diligence(): String!
+ConsensusBlockSub.blockHash(): String!
+ConsensusBlockSub.blockNumber(): String!
+ConsensusBlockSub.commitCount(): Int!
+ConsensusBlockSub.epochNumber(): String
+ConsensusBlockSub.epochValidators(): [String!]
+ConsensusBlockSub.isEpochBoundary(): Boolean!
+ConsensusBlockSub.missedValidatorRate(): Float!
+ConsensusBlockSub.participationRate(): Float!
+ConsensusBlockSub.prepareCount(): Int!
+ConsensusBlockSub.prevRound(): Int!
+ConsensusBlockSub.proposer(): String!
+ConsensusBlockSub.round(): Int!
+ConsensusBlockSub.roundChanged(): Boolean!
+ConsensusBlockSub.timestamp(): String!
+ConsensusBlockSub.validatorCount(): Int!
+ConsensusData.blockHash(): String!
+ConsensusData.blockNumber(): String!
+ConsensusData.commitCount(): Int!
+ConsensusData.commitSigners(): [String!]!
+ConsensusData.epochInfo(): EpochData
+ConsensusData.gasTip(): String
+ConsensusData.isEpochBoundary(): Boolean!
+ConsensusData.isHealthy(): Boolean!
+ConsensusData.missedCommit(): [String!]!
+ConsensusData.missedPrepare(): [String!]!
+ConsensusData.participationRate(): Float!
+ConsensusData.prepareCount(): Int!
+ConsensusData.prepareSigners(): [String!]!
+ConsensusData.prevRound(): Int!
+ConsensusData.proposer(): String!
+ConsensusData.randaoReveal(): String
+ConsensusData.round(): Int!
+ConsensusData.roundChanged(): Boolean!
+ConsensusData.timestamp(): String!
+ConsensusData.validators(): [String!]!
+ConsensusData.vanityData(): String
+ConsensusErrorSub.actualSigners(): Int!
+ConsensusErrorSub.blockHash(): String!
+ConsensusErrorSub.blockNumber(): String!
+ConsensusErrorSub.consensusImpacted(): Boolean!
+ConsensusErrorSub.errorDetails(): String
+ConsensusErrorSub.errorMessage(): String!
+ConsensusErrorSub.errorType(): String!
+ConsensusErrorSub.expectedValidators(): Int!
+ConsensusErrorSub.missedValidators(): [String!]
+ConsensusErrorSub.participationRate(): Float!
+ConsensusErrorSub.recoveryTime(): String!
+ConsensusErrorSub.round(): Int!
+ConsensusErrorSub.severity(): String!
+ConsensusErrorSub.timestamp(): String!
+ConsensusForkSub.chain1Hash(): String!
+ConsensusForkSub.chain1Height(): String!
+ConsensusForkSub.chain1Weight(): String!
+ConsensusForkSub.chain2Hash(): String!
+ConsensusForkSub.chain2Height(): String!
+ConsensusForkSub.chain2Weight(): String!
+ConsensusForkSub.detectedAt(): String!
+ConsensusForkSub.detectionLag(): String!
+ConsensusForkSub.forkBlockHash(): String!
+ConsensusForkSub.forkBlockNumber(): String!
+ConsensusForkSub.resolved(): Boolean!
+ConsensusForkSub.winningChain(): Int!
+ConsensusValidatorChangeSub.addedValidators(): [String!]
+ConsensusValidatorChangeSub.additionalInfo(): String
+ConsensusValidatorChangeSub.blockHash(): String!
+ConsensusValidatorChangeSub.blockNumber(): String!
+ConsensusValidatorChangeSub.changeType(): String!
+ConsensusValidatorChangeSub.epochNumber(): String!
+ConsensusValidatorChangeSub.isEpochBoundary(): Boolean!
+ConsensusValidatorChangeSub.newValidatorCount(): Int!
+ConsensusValidatorChangeSub.previousValidatorCount(): Int!
+ConsensusValidatorChangeSub.removedValidators(): [String!]
+ConsensusValidatorChangeSub.timestamp(): String!
+ConsensusValidatorChangeSub.validatorSet(): [String!]
+ContractCreation.blockNumber(): String!
+ContractCreation.bytecodeSize(): Int!
+ContractCreation.contractAddress(): String!
+ContractCreation.creator(): String!
+ContractCreation.name(): String
+ContractCreation.timestamp(): String!
+ContractCreation.transactionHash(): String!
+ContractCreationConnection.nodes(): [ContractCreation!]
+ContractCreationConnection.pageInfo(): PageInfo!
+ContractCreationConnection.totalCount(): Int!
+ContractVerification.abi(): String
+ContractVerification.address(): String!
+ContractVerification.compilerVersion(): String
+ContractVerification.constructorArguments(): String
+ContractVerification.isVerified(): Boolean!
+ContractVerification.licenseType(): String
+ContractVerification.name(): String
+ContractVerification.optimizationEnabled(): Boolean
+ContractVerification.optimizationRuns(): Int
+ContractVerification.sourceCode(): String
+ContractVerification.verifiedAt(): String
+DecodedLog.eventName(): String!
+DecodedLog.eventSignature(): String!
+DecodedLog.params(): [DecodedParam!]!
+DecodedParam.indexed(): Boolean!
+DecodedParam.name(): String!
+DecodedParam.type(): String!
+DecodedParam.value(): String!
+DepositMintProposal.amount(): String!
+DepositMintProposal.blockNumber(): String!
+DepositMintProposal.depositId(): String!
+DepositMintProposal.proposalId(): String!
+DepositMintProposal.status(): ProposalStatus!
+DepositMintProposal.timestamp(): String!
+DepositMintProposal.to(): String!
+DepositMintProposal.transactionHash(): String!
+ENUM ProposalStatus
+ENUM TokenStandard
+ENUM TransactionDirection
+ERC20Transfer.blockNumber(): String!
+ERC20Transfer.contractAddress(): String!
+ERC20Transfer.from(): String!
+ERC20Transfer.logIndex(): Int!
+ERC20Transfer.timestamp(): String!
+ERC20Transfer.to(): String!
+ERC20Transfer.transactionHash(): String!
+ERC20Transfer.value(): String!
+ERC20TransferConnection.nodes(): [ERC20Transfer!]
+ERC20TransferConnection.pageInfo(): PageInfo!
+ERC20TransferConnection.totalCount(): Int!
+ERC721Transfer.blockNumber(): String!
+ERC721Transfer.contractAddress(): String!
+ERC721Transfer.from(): String!
+ERC721Transfer.logIndex(): Int!
+ERC721Transfer.timestamp(): String!
+ERC721Transfer.to(): String!
+ERC721Transfer.tokenId(): String!
+ERC721Transfer.transactionHash(): String!
+ERC721TransferConnection.nodes(): [ERC721Transfer!]
+ERC721TransferConnection.pageInfo(): PageInfo!
+ERC721TransferConnection.totalCount(): Int!
+EmergencyPauseEvent.action(): String!
+EmergencyPauseEvent.blockNumber(): String!
+EmergencyPauseEvent.contract(): String!
+EmergencyPauseEvent.proposalId(): String!
+EmergencyPauseEvent.timestamp(): String!
+EmergencyPauseEvent.transactionHash(): String!
+EpochData.candidateCount(): Int!
+EpochData.candidates(): [CandidateInfo!]!
+EpochData.epochNumber(): String!
+EpochData.validatorCount(): Int!
+EpochData.validators(): [ValidatorInfoDetailed!]!
+EpochInfo.blockNumber(): String!
+EpochInfo.blsPublicKeys(): [String!]!
+EpochInfo.candidateCount(): Int!
+EpochInfo.candidates(): [Candidate!]!
+EpochInfo.epochNumber(): String!
+EpochInfo.previousEpochValidatorCount(): Int
+EpochInfo.timestamp(): String
+EpochInfo.validatorCount(): Int!
+EpochInfo.validators(): [Int!]!
+EpochSummary.blockNumber(): String!
+EpochSummary.candidateCount(): Int!
+EpochSummary.epochNumber(): String!
+EpochSummary.timestamp(): String
+EpochSummary.validatorCount(): Int!
+EpochSummaryConnection.nodes(): [EpochSummary!]!
+EpochSummaryConnection.pageInfo(): PageInfo!
+EpochSummaryConnection.totalCount(): Int!
+FactoryStats.address(): String!
+FactoryStats.totalAccounts(): String!
+FactoryStatsConnection.nodes(): [FactoryStats!]!
+FactoryStatsConnection.pageInfo(): PageInfo!
+FactoryStatsConnection.totalCount(): Int!
+FeeDelegationStats.adoptionRate(): Float!
+FeeDelegationStats.avgFeeSaved(): String!
+FeeDelegationStats.totalFeeDelegatedTxs(): String!
+FeeDelegationStats.totalFeesSaved(): String!
+FeePayerSignature.r(): String!
+FeePayerSignature.s(): String!
+FeePayerSignature.v(): String!
+FeePayerStats.address(): String!
+FeePayerStats.percentage(): Float!
+FeePayerStats.totalFeesPaid(): String!
+FeePayerStats.txCount(): String!
+GasStats.averageGasPrice(): String!
+GasStats.averageGasUsed(): String!
+GasStats.blockCount(): String!
+GasStats.totalGasLimit(): String!
+GasStats.totalGasUsed(): String!
+GasStats.transactionCount(): String!
+GasTipUpdateEvent.blockNumber(): String!
+GasTipUpdateEvent.newTip(): String!
+GasTipUpdateEvent.oldTip(): String!
+GasTipUpdateEvent.timestamp(): String!
+GasTipUpdateEvent.transactionHash(): String!
+GasTipUpdateEvent.updater(): String!
+HistoricalTransactionFilter.direction: TransactionDirection
+HistoricalTransactionFilter.fromBlock: String!
+HistoricalTransactionFilter.fromTime: String
+HistoricalTransactionFilter.isFeeDelegated: Boolean
+HistoricalTransactionFilter.maxGasUsed: String
+HistoricalTransactionFilter.maxValue: String
+HistoricalTransactionFilter.methodId: String
+HistoricalTransactionFilter.minGasUsed: String
+HistoricalTransactionFilter.minValue: String
+HistoricalTransactionFilter.successOnly: Boolean
+HistoricalTransactionFilter.toBlock: String!
+HistoricalTransactionFilter.toTime: String
+HistoricalTransactionFilter.txType: Int
+INPUT_OBJECT BlockFilter
+INPUT_OBJECT HistoricalTransactionFilter
+INPUT_OBJECT LogFilter
+INPUT_OBJECT PaginationInput
+INPUT_OBJECT ProposalFilter
+INPUT_OBJECT SystemContractEventFilter
+INPUT_OBJECT TransactionFilter
+InstalledModule.account(): String!
+InstalledModule.active(): Boolean!
+InstalledModule.installedAt(): String!
+InstalledModule.installedTx(): String!
+InstalledModule.module(): String!
+InstalledModule.moduleType(): String!
+InstalledModule.removedAt(): String
+InstalledModule.removedTx(): String
+InstalledModule.timestamp(): String!
+InstalledModuleConnection.nodes(): [InstalledModule!]!
+InstalledModuleConnection.pageInfo(): PageInfo!
+InstalledModuleConnection.totalCount(): Int!
+InternalTransaction.blockNumber(): String!
+InternalTransaction.depth(): Int!
+InternalTransaction.error(): String
+InternalTransaction.from(): String!
+InternalTransaction.gas(): String!
+InternalTransaction.gasUsed(): String!
+InternalTransaction.index(): Int!
+InternalTransaction.input(): String!
+InternalTransaction.output(): String!
+InternalTransaction.to(): String!
+InternalTransaction.transactionHash(): String!
+InternalTransaction.type(): String!
+InternalTransaction.value(): String!
+InternalTransactionConnection.nodes(): [InternalTransaction!]
+InternalTransactionConnection.pageInfo(): PageInfo!
+InternalTransactionConnection.totalCount(): Int!
+Log.address(): String!
+Log.blockHash(): String!
+Log.blockNumber(): String!
+Log.data(): String!
+Log.decoded(): DecodedLog
+Log.logIndex(): Int!
+Log.removed(): Boolean!
+Log.topics(): [String!]
+Log.transactionHash(): String!
+Log.transactionIndex(): Int!
+LogConnection.nodes(): [Log!]
+LogConnection.pageInfo(): PageInfo!
+LogConnection.totalCount(): Int!
+LogFilter.address: String
+LogFilter.blockNumberFrom: String
+LogFilter.blockNumberTo: String
+LogFilter.topics: [String]
+MaxProposalsUpdateEvent.blockNumber(): String!
+MaxProposalsUpdateEvent.contract(): String!
+MaxProposalsUpdateEvent.newMax(): Int!
+MaxProposalsUpdateEvent.oldMax(): Int!
+MaxProposalsUpdateEvent.timestamp(): String!
+MaxProposalsUpdateEvent.transactionHash(): String!
+MemberChangeEvent.action(): String!
+MemberChangeEvent.blockNumber(): String!
+MemberChangeEvent.contract(): String!
+MemberChangeEvent.member(): String!
+MemberChangeEvent.newQuorum(): Int!
+MemberChangeEvent.oldMember(): String
+MemberChangeEvent.timestamp(): String!
+MemberChangeEvent.totalMembers(): String!
+MemberChangeEvent.transactionHash(): String!
+MinerStats.address(): String!
+MinerStats.blockCount(): String!
+MinerStats.lastBlockNumber(): String!
+MinerStats.lastBlockTime(): String!
+MinerStats.percentage(): Float!
+MinerStats.totalRewards(): String!
+MintEvent.amount(): String!
+MintEvent.blockNumber(): String!
+MintEvent.minter(): String!
+MintEvent.timestamp(): String!
+MintEvent.to(): String!
+MintEvent.transactionHash(): String!
+MintEvent.txHash(): String!
+MintEventConnection.nodes(): [MintEvent!]
+MintEventConnection.pageInfo(): PageInfo!
+MintEventConnection.totalCount(): Int!
+MinterConfigEvent.action(): String!
+MinterConfigEvent.allowance(): String!
+MinterConfigEvent.blockNumber(): String!
+MinterConfigEvent.contract(): String
+MinterConfigEvent.isActive(): Boolean!
+MinterConfigEvent.minter(): String!
+MinterConfigEvent.timestamp(): String!
+MinterConfigEvent.transactionHash(): String!
+MinterConfigEvent.txHash(): String!
+MinterInfo.address(): String!
+MinterInfo.allowance(): String!
+MinterInfo.isActive(): Boolean!
+ModuleStats.activeInstalls(): String!
+ModuleStats.module(): String!
+ModuleStats.moduleType(): String!
+ModuleStats.totalInstalls(): String!
+ModuleStatsConnection.nodes(): [ModuleStats!]!
+ModuleStatsConnection.pageInfo(): PageInfo!
+ModuleStatsConnection.totalCount(): Int!
+Mutation.verifyContract(address: String!, compilerVersion: String!, constructorArguments: String, contractName: String, licenseType: String, optimizationEnabled: Boolean!, optimizationRuns: Int, sourceCode: String!): ContractVerification!
+NFTOwnership.contractAddress(): String!
+NFTOwnership.owner(): String!
+NFTOwnership.tokenId(): String!
+NFTOwnershipConnection.nodes(): [NFTOwnership!]
+NFTOwnershipConnection.pageInfo(): PageInfo!
+NFTOwnershipConnection.totalCount(): Int!
+NetworkMetrics.averageBlockSize(): String!
+NetworkMetrics.blockTime(): Float!
+NetworkMetrics.timePeriod(): String!
+NetworkMetrics.totalBlocks(): String!
+NetworkMetrics.totalTransactions(): String!
+NetworkMetrics.tps(): Float!
+OBJECT AccessListEntry
+OBJECT AccountModules
+OBJECT AddressActivityStats
+OBJECT AddressGasStats
+OBJECT AddressOverview
+OBJECT AddressSetCodeInfo
+OBJECT AddressStats
+OBJECT BalanceHistoryConnection
+OBJECT BalanceSnapshot
+OBJECT BlacklistEvent
+OBJECT Block
+OBJECT BlockConnection
+OBJECT BlockParticipation
+OBJECT BlockRangeResult
+OBJECT BlockRef
+OBJECT BlockSigners
+OBJECT BundlerStats
+OBJECT BundlerStatsConnection
+OBJECT BurnEvent
+OBJECT BurnEventConnection
+OBJECT Candidate
+OBJECT CandidateInfo
+OBJECT ConsensusBlockSub
+OBJECT ConsensusData
+OBJECT ConsensusErrorSub
+OBJECT ConsensusForkSub
+OBJECT ConsensusValidatorChangeSub
+OBJECT ContractCreation
+OBJECT ContractCreationConnection
+OBJECT ContractVerification
+OBJECT DecodedLog
+OBJECT DecodedParam
+OBJECT DepositMintProposal
+OBJECT ERC20Transfer
+OBJECT ERC20TransferConnection
+OBJECT ERC721Transfer
+OBJECT ERC721TransferConnection
+OBJECT EmergencyPauseEvent
+OBJECT EpochData
+OBJECT EpochInfo
+OBJECT EpochSummary
+OBJECT EpochSummaryConnection
+OBJECT FactoryStats
+OBJECT FactoryStatsConnection
+OBJECT FeeDelegationStats
+OBJECT FeePayerSignature
+OBJECT FeePayerStats
+OBJECT GasStats
+OBJECT GasTipUpdateEvent
+OBJECT InstalledModule
+OBJECT InstalledModuleConnection
+OBJECT InternalTransaction
+OBJECT InternalTransactionConnection
+OBJECT Log
+OBJECT LogConnection
+OBJECT MaxProposalsUpdateEvent
+OBJECT MemberChangeEvent
+OBJECT MinerStats
+OBJECT MintEvent
+OBJECT MintEventConnection
+OBJECT MinterConfigEvent
+OBJECT MinterInfo
+OBJECT ModuleStats
+OBJECT ModuleStatsConnection
+OBJECT Mutation
+OBJECT NFTOwnership
+OBJECT NFTOwnershipConnection
+OBJECT NetworkMetrics
+OBJECT OrphanedBlock
+OBJECT OrphanedTransaction
+OBJECT PageInfo
+OBJECT PaymasterStats
+OBJECT PaymasterStatsConnection
+OBJECT Proposal
+OBJECT ProposalConnection
+OBJECT ProposalExecutionSkippedEvent
+OBJECT ProposalVote
+OBJECT Query
+OBJECT Receipt
+OBJECT Reorg
+OBJECT SearchResult
+OBJECT SetCodeAuthorization
+OBJECT SetCodeAuthorizationConnection
+OBJECT SetCodeAuthorizationWithTx
+OBJECT SmartAccount
+OBJECT SmartAccountConnection
+OBJECT Subscription
+OBJECT TokenBalance
+OBJECT TokenHolder
+OBJECT TokenHolderConnection
+OBJECT TokenHolderStats
+OBJECT TokenMetadata
+OBJECT TokenMetadataConnection
+OBJECT TopFeePayersResult
+OBJECT Transaction
+OBJECT TransactionConnection
+OBJECT UserOperation
+OBJECT UserOperationConnection
+OBJECT ValidatorChangeEvent
+OBJECT ValidatorInfo
+OBJECT ValidatorInfoDetailed
+OBJECT ValidatorParticipation
+OBJECT ValidatorSigningActivity
+OBJECT ValidatorSigningActivityConnection
+OBJECT ValidatorSigningStats
+OBJECT ValidatorSigningStatsConnection
+OBJECT ValidatorStats
+OBJECT WBFTAggregatedSeal
+OBJECT WBFTBlockExtra
+OrphanedBlock.block(): Block!
+OrphanedBlock.receipts(): [Receipt!]!
+OrphanedBlock.reorg(): Reorg
+OrphanedTransaction.block(): BlockRef!
+OrphanedTransaction.receipt(): Receipt
+OrphanedTransaction.reincludedIn(): BlockRef
+OrphanedTransaction.reorgId(): String!
+OrphanedTransaction.transaction(): Transaction!
+PageInfo.endCursor(): String
+PageInfo.hasNextPage(): Boolean!
+PageInfo.hasPreviousPage(): Boolean!
+PageInfo.startCursor(): String
+PaginationInput.limit: Int
+PaginationInput.offset: Int
+PaymasterStats.address(): String!
+PaymasterStats.totalOps(): String!
+PaymasterStatsConnection.nodes(): [PaymasterStats!]!
+PaymasterStatsConnection.pageInfo(): PageInfo!
+PaymasterStatsConnection.totalCount(): Int!
+Proposal.actionType(): String!
+Proposal.approved(): Int!
+Proposal.blockNumber(): String!
+Proposal.callData(): String!
+Proposal.contract(): String!
+Proposal.createdAt(): String!
+Proposal.executedAt(): String
+Proposal.memberVersion(): String!
+Proposal.proposalId(): String!
+Proposal.proposer(): String!
+Proposal.rejected(): Int!
+Proposal.requiredApprovals(): Int!
+Proposal.status(): ProposalStatus!
+Proposal.transactionHash(): String!
+ProposalConnection.nodes(): [Proposal!]
+ProposalConnection.pageInfo(): PageInfo!
+ProposalConnection.totalCount(): Int!
+ProposalExecutionSkippedEvent.account(): String!
+ProposalExecutionSkippedEvent.blockNumber(): String!
+ProposalExecutionSkippedEvent.contract(): String!
+ProposalExecutionSkippedEvent.proposalId(): String!
+ProposalExecutionSkippedEvent.reason(): String!
+ProposalExecutionSkippedEvent.timestamp(): String!
+ProposalExecutionSkippedEvent.transactionHash(): String!
+ProposalFilter.contract: String
+ProposalFilter.proposer: String
+ProposalFilter.status: ProposalStatus
+ProposalStatus = APPROVED
+ProposalStatus = CANCELLED
+ProposalStatus = EXECUTED
+ProposalStatus = EXPIRED
+ProposalStatus = FAILED
+ProposalStatus = NONE
+ProposalStatus = REJECTED
+ProposalStatus = VOTING
+ProposalVote.approval(): Boolean!
+ProposalVote.blockNumber(): String!
+ProposalVote.contract(): String!
+ProposalVote.proposalId(): String!
+ProposalVote.timestamp(): String!
+ProposalVote.transactionHash(): String!
+ProposalVote.voter(): String!
+Query.accountModules(address: String!): AccountModules!
+Query.activeMinterAddresses(): [String!]!
+Query.activeMinters(): [MinterInfo!]!
+Query.activeValidatorAddresses(): [String!]!
+Query.activeValidators(): [ValidatorInfo!]!
+Query.addressBalance(address: String!, blockNumber: String): String!
+Query.addressGasStats(address: String!, fromBlock: String!, toBlock: String!): AddressGasStats
+Query.addressOverview(address: String!): AddressOverview!
+Query.addressSetCodeInfo(address: String!): AddressSetCodeInfo!
+Query.addressStats(address: String!): AddressStats!
+Query.allValidatorStats(fromBlock: String!, pagination: PaginationInput, toBlock: String!): [ValidatorStats!]!
+Query.allValidatorsSigningStats(fromBlock: String!, pagination: PaginationInput, toBlock: String!): ValidatorSigningStatsConnection!
+Query.authorizedAccounts(): [String!]!
+Query.balanceHistory(address: String!, fromBlock: String!, pagination: PaginationInput, toBlock: String!): BalanceHistoryConnection!
+Query.blacklistHistory(address: String!): [BlacklistEvent!]!
+Query.blacklistedAddresses(): [String!]!
+Query.block(number: String!): Block
+Query.blockByHash(hash: String!): Block
+Query.blockByTimestamp(timestamp: String!): Block
+Query.blockCount(): String!
+Query.blockSigners(blockNumber: String!): BlockSigners
+Query.blocks(filter: BlockFilter, pagination: PaginationInput): BlockConnection!
+Query.blocksByTimeRange(fromTime: String!, pagination: PaginationInput, toTime: String!): BlockConnection!
+Query.blocksRange(endNumber: String!, includeReceipts: Boolean, includeTransactions: Boolean, startNumber: String!): BlockRangeResult!
+Query.bundler(address: String!): BundlerStats
+Query.bundlers(pagination: PaginationInput): BundlerStatsConnection!
+Query.burnEvents(filter: SystemContractEventFilter!, pagination: PaginationInput): BurnEventConnection!
+Query.burnHistory(filter: SystemContractEventFilter!, pagination: PaginationInput): BurnEventConnection!
+Query.consensusData(blockNumber: String!): ConsensusData
+Query.contractCreation(address: String!): ContractCreation
+Query.contractVerification(address: String!): ContractVerification
+Query.contracts(pagination: PaginationInput): ContractCreationConnection
+Query.contractsByCreator(creator: String!, pagination: PaginationInput): ContractCreationConnection
+Query.depositMintProposals(filter: SystemContractEventFilter!): [DepositMintProposal!]!
+Query.emergencyPauseHistory(contract: String!): [EmergencyPauseEvent!]!
+Query.epochByNumber(number: String!): EpochInfo
+Query.epochData(epochNumber: String!): EpochData
+Query.epochInfo(epochNumber: String!): EpochInfo
+Query.epochs(pagination: PaginationInput): EpochSummaryConnection!
+Query.erc20Transfer(logIndex: Int!, transactionHash: String!): ERC20Transfer
+Query.erc20TransfersByAddress(address: String!, isFrom: Boolean!, pagination: PaginationInput): ERC20TransferConnection
+Query.erc20TransfersByToken(pagination: PaginationInput, token: String!): ERC20TransferConnection
+Query.erc721Owner(token: String!, tokenId: String!): String
+Query.erc721Transfer(logIndex: Int!, transactionHash: String!): ERC721Transfer
+Query.erc721TransfersByAddress(address: String!, isFrom: Boolean!, pagination: PaginationInput): ERC721TransferConnection
+Query.erc721TransfersByToken(pagination: PaginationInput, token: String!): ERC721TransferConnection
+Query.factories(pagination: PaginationInput): FactoryStatsConnection!
+Query.factory(address: String!): FactoryStats
+Query.feeDelegationStats(fromBlock: String, fromTime: String, toBlock: String, toTime: String): FeeDelegationStats
+Query.feePayerStats(address: String!, fromBlock: String, fromTime: String, toBlock: String, toTime: String): FeePayerStats
+Query.gasStats(fromBlock: String!, toBlock: String!): GasStats
+Query.gasTipHistory(filter: SystemContractEventFilter!): [GasTipUpdateEvent!]!
+Query.installedModules(account: String, moduleType: String, pagination: PaginationInput): InstalledModuleConnection!
+Query.internalTransactions(transactionHash: String!): [InternalTransaction!]
+Query.internalTransactionsByAddress(address: String!, isFrom: Boolean!, pagination: PaginationInput): InternalTransactionConnection
+Query.latestEpochData(): EpochData
+Query.latestEpochInfo(): EpochInfo
+Query.latestHeight(): String!
+Query.listModuleStats(pagination: PaginationInput): ModuleStatsConnection!
+Query.logs(decode: Boolean, filter: LogFilter!, pagination: PaginationInput): LogConnection!
+Query.maxProposalsUpdateHistory(contract: String!): [MaxProposalsUpdateEvent!]!
+Query.memberHistory(contract: String!): [MemberChangeEvent!]!
+Query.mintEvents(filter: SystemContractEventFilter!, pagination: PaginationInput): MintEventConnection!
+Query.minterAllowance(minter: String!): String!
+Query.minterConfigHistory(filter: SystemContractEventFilter!): [MinterConfigEvent!]!
+Query.minterHistory(minter: String!): [MinterConfigEvent!]!
+Query.moduleEventCount(): Int!
+Query.moduleStats(module: String!): ModuleStats
+Query.networkMetrics(fromTime: String!, toTime: String!): NetworkMetrics
+Query.nftsByOwner(owner: String!, pagination: PaginationInput): NFTOwnershipConnection!
+Query.orphanedBlock(hash: String!): OrphanedBlock
+Query.orphanedBlocks(number: String!): [OrphanedBlock!]!
+Query.orphanedTransaction(hash: String!): [OrphanedTransaction!]!
+Query.paymaster(address: String!): PaymasterStats
+Query.paymasters(pagination: PaginationInput): PaymasterStatsConnection!
+Query.proposal(contract: String!, proposalId: String!): Proposal
+Query.proposalExecutionSkippedEvents(contract: String!, proposalId: String): [ProposalExecutionSkippedEvent!]!
+Query.proposalVotes(contract: String!, proposalId: String!): [ProposalVote!]!
+Query.proposals(filter: ProposalFilter, pagination: PaginationInput): ProposalConnection!
+Query.receipt(transactionHash: String!): Receipt
+Query.receiptsByBlock(blockNumber: String!): [Receipt!]
+Query.recentSetCodeTransactions(limit: Int): [Transaction!]!
+Query.reorg(id: String!): Reorg
+Query.reorgs(limit: Int, offset: Int): [Reorg!]!
+Query.search(limit: Int, query: String!, types: [String]): [SearchResult!]!
+Query.searchTokens(limit: Int, query: String!): [TokenMetadata!]!
+Query.setCodeAuthorization(authIndex: Int!, txHash: String!): SetCodeAuthorizationWithTx
+Query.setCodeAuthorizationsByAuthority(authority: String!, pagination: PaginationInput): SetCodeAuthorizationConnection!
+Query.setCodeAuthorizationsByTarget(pagination: PaginationInput, target: String!): SetCodeAuthorizationConnection!
+Query.setCodeAuthorizationsByTx(txHash: String!): [SetCodeAuthorizationWithTx!]!
+Query.setCodeTransactionCount(): Int!
+Query.setCodeTransactionsInBlock(blockNumber: String!): [Transaction!]!
+Query.smartAccount(address: String!): SmartAccount
+Query.smartAccounts(pagination: PaginationInput): SmartAccountConnection!
+Query.tokenBalance(holder: String!, token: String!): String!
+Query.tokenBalances(address: String!, tokenType: String): [TokenBalance!]!
+Query.tokenCount(standard: TokenStandard): Int!
+Query.tokenHolderCount(token: String!): Int!
+Query.tokenHolderStats(token: String!): TokenHolderStats
+Query.tokenHolders(pagination: PaginationInput, token: String!): TokenHolderConnection!
+Query.tokenMetadata(address: String!): TokenMetadata
+Query.tokens(pagination: PaginationInput, standard: TokenStandard): TokenMetadataConnection!
+Query.topAddressesByGasUsed(fromBlock: String!, limit: Int, toBlock: String!): [AddressGasStats!]!
+Query.topAddressesByTxCount(fromBlock: String!, limit: Int, toBlock: String!): [AddressActivityStats!]!
+Query.topFeePayers(fromBlock: String, fromTime: String, limit: Int, toBlock: String, toTime: String): TopFeePayersResult
+Query.topMiners(fromBlock: String, limit: Int, toBlock: String): [MinerStats!]!
+Query.totalSupply(): String!
+Query.transaction(hash: String!): Transaction
+Query.transactionCount(): String!
+Query.transactions(filter: TransactionFilter, pagination: PaginationInput): TransactionConnection!
+Query.transactionsByAddress(address: String!, pagination: PaginationInput): TransactionConnection!
+Query.transactionsByAddressFiltered(address: String!, filter: HistoricalTransactionFilter!, pagination: PaginationInput): TransactionConnection!
+Query.userOperation(hash: String!): UserOperation
+Query.userOperationCount(): Int!
+Query.userOperations(pagination: PaginationInput, sender: String): UserOperationConnection!
+Query.userOperationsBySender(pagination: PaginationInput, sender: String!): UserOperationConnection!
+Query.validatorHistory(validator: String!): [ValidatorChangeEvent!]!
+Query.validatorParticipation(address: String!, fromBlock: String!, pagination: PaginationInput, toBlock: String!): ValidatorParticipation
+Query.validatorSigningActivity(fromBlock: String!, pagination: PaginationInput, toBlock: String!, validatorAddress: String!): ValidatorSigningActivityConnection!
+Query.validatorSigningStats(fromBlock: String!, toBlock: String!, validatorAddress: String!): ValidatorSigningStats
+Query.validatorStats(address: String!, fromBlock: String!, toBlock: String!): ValidatorStats
+Query.wbftBlock(number: String!): WBFTBlockExtra
+Query.wbftBlockExtra(blockNumber: String!): WBFTBlockExtra
+Query.wbftBlockExtraByHash(blockHash: String!): WBFTBlockExtra
+Receipt.blockHash(): String!
+Receipt.blockNumber(): String!
+Receipt.contractAddress(): String
+Receipt.cumulativeGasUsed(): String!
+Receipt.effectiveGasPrice(): String!
+Receipt.gasUsed(): String!
+Receipt.logs(): [Log!]
+Receipt.logsBloom(): String!
+Receipt.status(): Int!
+Receipt.transactionHash(): String!
+Receipt.transactionIndex(): Int!
+Reorg.depth(): Int!
+Reorg.detectedAt(): String!
+Reorg.forkHash(): String!
+Reorg.forkNumber(): String!
+Reorg.id(): String!
+Reorg.oldHead(): String!
+Reorg.removedBlocks(): [BlockRef!]!
+SCALAR Boolean
+SCALAR Float
+SCALAR Int
+SCALAR String
+SearchResult.label(): String
+SearchResult.metadata(): String
+SearchResult.type(): String!
+SearchResult.value(): String!
+SetCodeAuthorization.address(): String!
+SetCodeAuthorization.authority(): String
+SetCodeAuthorization.chainId(): String!
+SetCodeAuthorization.nonce(): String!
+SetCodeAuthorization.r(): String!
+SetCodeAuthorization.s(): String!
+SetCodeAuthorization.yParity(): Int!
+SetCodeAuthorizationConnection.nodes(): [SetCodeAuthorizationWithTx!]!
+SetCodeAuthorizationConnection.pageInfo(): PageInfo!
+SetCodeAuthorizationConnection.totalCount(): Int!
+SetCodeAuthorizationWithTx.address(): String!
+SetCodeAuthorizationWithTx.applied(): Boolean!
+SetCodeAuthorizationWithTx.authority(): String
+SetCodeAuthorizationWithTx.authorizationIndex(): Int!
+SetCodeAuthorizationWithTx.blockHash(): String!
+SetCodeAuthorizationWithTx.blockNumber(): String!
+SetCodeAuthorizationWithTx.chainId(): String!
+SetCodeAuthorizationWithTx.error(): String
+SetCodeAuthorizationWithTx.nonce(): String!
+SetCodeAuthorizationWithTx.r(): String!
+SetCodeAuthorizationWithTx.s(): String!
+SetCodeAuthorizationWithTx.timestamp(): String!
+SetCodeAuthorizationWithTx.transactionIndex(): Int!
+SetCodeAuthorizationWithTx.txHash(): String!
+SetCodeAuthorizationWithTx.yParity(): Int!
+SmartAccount.address(): String!
+SmartAccount.creationOpHash(): String
+SmartAccount.creationTimestamp(): String
+SmartAccount.creationTxHash(): String
+SmartAccount.factory(): String
+SmartAccount.totalOps(): String!
+SmartAccountConnection.nodes(): [SmartAccount!]!
+SmartAccountConnection.pageInfo(): PageInfo!
+SmartAccountConnection.totalCount(): Int!
+Subscription.consensusBlock(): ConsensusBlockSub!
+Subscription.consensusError(): ConsensusErrorSub!
+Subscription.consensusFork(): ConsensusForkSub!
+Subscription.consensusValidatorChange(): ConsensusValidatorChangeSub!
+Subscription.logs(filter: LogFilter!): Log!
+Subscription.newBlock(): Block!
+Subscription.newPendingTransactions(limit: Int): Transaction!
+Subscription.newTransaction(): Transaction!
+Subscription.reorg(): Reorg!
+SystemContractEventFilter.address: String
+SystemContractEventFilter.burner: String
+SystemContractEventFilter.fromBlock: String
+SystemContractEventFilter.minter: String
+SystemContractEventFilter.status: ProposalStatus
+SystemContractEventFilter.toBlock: String
+TokenBalance.address(): String!
+TokenBalance.balance(): String!
+TokenBalance.decimals(): Int
+TokenBalance.metadata(): String
+TokenBalance.name(): String
+TokenBalance.symbol(): String
+TokenBalance.tokenId(): String
+TokenBalance.tokenType(): String!
+TokenHolder.balance(): String!
+TokenHolder.holderAddress(): String!
+TokenHolder.lastUpdatedBlock(): String!
+TokenHolder.tokenAddress(): String!
+TokenHolderConnection.nodes(): [TokenHolder!]!
+TokenHolderConnection.pageInfo(): PageInfo!
+TokenHolderConnection.totalCount(): Int!
+TokenHolderStats.holderCount(): Int!
+TokenHolderStats.lastActivityBlock(): String
+TokenHolderStats.tokenAddress(): String!
+TokenHolderStats.transferCount(): Int!
+TokenMetadata.address(): String!
+TokenMetadata.baseURI(): String
+TokenMetadata.createdAt(): String!
+TokenMetadata.decimals(): Int!
+TokenMetadata.detectedAt(): String!
+TokenMetadata.name(): String
+TokenMetadata.standard(): TokenStandard!
+TokenMetadata.supportsERC165(): Boolean!
+TokenMetadata.supportsEnumerable(): Boolean
+TokenMetadata.supportsMetadata(): Boolean!
+TokenMetadata.symbol(): String
+TokenMetadata.totalSupply(): String
+TokenMetadata.updatedAt(): String!
+TokenMetadataConnection.nodes(): [TokenMetadata!]!
+TokenMetadataConnection.pageInfo(): PageInfo!
+TokenMetadataConnection.totalCount(): Int!
+TokenStandard = ERC1155
+TokenStandard = ERC20
+TokenStandard = ERC721
+TokenStandard = UNKNOWN
+TopFeePayersResult.nodes(): [FeePayerStats!]!
+TopFeePayersResult.totalCount(): String!
+Transaction.accessList(): [AccessListEntry!]
+Transaction.authorizationList(): [SetCodeAuthorization!]
+Transaction.blockHash(): String!
+Transaction.blockNumber(): String!
+Transaction.blockTimestamp(): String
+Transaction.chainId(): String
+Transaction.contractAddress(): String
+Transaction.feePayer(): String
+Transaction.feePayerSignatures(): [FeePayerSignature!]
+Transaction.from(): String!
+Transaction.gas(): String!
+Transaction.gasPrice(): String
+Transaction.hash(): String!
+Transaction.input(): String!
+Transaction.maxFeePerGas(): String
+Transaction.maxPriorityFeePerGas(): String
+Transaction.nonce(): String!
+Transaction.r(): String!
+Transaction.receipt(): Receipt
+Transaction.s(): String!
+Transaction.to(): String
+Transaction.transactionIndex(): Int!
+Transaction.type(): Int!
+Transaction.v(): String!
+Transaction.value(): String!
+TransactionConnection.nodes(): [Transaction!]
+TransactionConnection.pageInfo(): PageInfo!
+TransactionConnection.totalCount(): Int!
+TransactionDirection = ALL
+TransactionDirection = RECEIVED
+TransactionDirection = SENT
+TransactionFilter.blockNumberFrom: String
+TransactionFilter.blockNumberTo: String
+TransactionFilter.from: String
+TransactionFilter.to: String
+TransactionFilter.type: Int
+UserOperation.actualGasCost(): String!
+UserOperation.blockHash(): String!
+UserOperation.blockNumber(): String!
+UserOperation.bundleIndex(): Int!
+UserOperation.bundler(): String!
+UserOperation.callData(): String!
+UserOperation.callGasLimit(): String!
+UserOperation.entryPoint(): String!
+UserOperation.entryPointVersion(): String!
+UserOperation.factory(): String
+UserOperation.gasUsed(): String!
+UserOperation.hash(): String!
+UserOperation.maxFeePerGas(): String!
+UserOperation.maxPriorityFeePerGas(): String!
+UserOperation.nonce(): String!
+UserOperation.paymaster(): String
+UserOperation.preVerificationGas(): String!
+UserOperation.revertReason(): String
+UserOperation.sender(): String!
+UserOperation.signature(): String!
+UserOperation.sponsorType(): String!
+UserOperation.status(): Boolean!
+UserOperation.timestamp(): String!
+UserOperation.transactionHash(): String!
+UserOperation.userLogsCount(): Int!
+UserOperation.userLogsStartIndex(): Int!
+UserOperation.verificationGasLimit(): String!
+UserOperationConnection.nodes(): [UserOperation!]!
+UserOperationConnection.pageInfo(): PageInfo!
+UserOperationConnection.totalCount(): Int!
+ValidatorChangeEvent.action(): String!
+ValidatorChangeEvent.blockNumber(): String!
+ValidatorChangeEvent.oldValidator(): String
+ValidatorChangeEvent.timestamp(): String!
+ValidatorChangeEvent.transactionHash(): String!
+ValidatorChangeEvent.validator(): String!
+ValidatorInfo.address(): String!
+ValidatorInfo.isActive(): Boolean!
+ValidatorInfoDetailed.address(): String!
+ValidatorInfoDetailed.blsPubKey(): String
+ValidatorInfoDetailed.index(): Int!
+ValidatorParticipation.address(): String!
+ValidatorParticipation.blocks(): [BlockParticipation!]!
+ValidatorParticipation.blocksCommitted(): String!
+ValidatorParticipation.blocksMissed(): String!
+ValidatorParticipation.blocksProposed(): String!
+ValidatorParticipation.endBlock(): String!
+ValidatorParticipation.participationRate(): Float!
+ValidatorParticipation.startBlock(): String!
+ValidatorParticipation.totalBlocks(): String!
+ValidatorSigningActivity.blockHash(): String!
+ValidatorSigningActivity.blockNumber(): String!
+ValidatorSigningActivity.round(): Int!
+ValidatorSigningActivity.signedCommit(): Boolean!
+ValidatorSigningActivity.signedPrepare(): Boolean!
+ValidatorSigningActivity.timestamp(): String!
+ValidatorSigningActivity.validatorAddress(): String!
+ValidatorSigningActivity.validatorIndex(): Int!
+ValidatorSigningActivityConnection.nodes(): [ValidatorSigningActivity!]
+ValidatorSigningActivityConnection.pageInfo(): PageInfo!
+ValidatorSigningActivityConnection.totalCount(): Int!
+ValidatorSigningStats.blocksProposed(): String!
+ValidatorSigningStats.commitMissCount(): String!
+ValidatorSigningStats.commitSignCount(): String!
+ValidatorSigningStats.fromBlock(): String!
+ValidatorSigningStats.prepareMissCount(): String!
+ValidatorSigningStats.prepareSignCount(): String!
+ValidatorSigningStats.proposalRate(): Float
+ValidatorSigningStats.signingRate(): Float!
+ValidatorSigningStats.toBlock(): String!
+ValidatorSigningStats.totalBlocks(): String!
+ValidatorSigningStats.validatorAddress(): String!
+ValidatorSigningStats.validatorIndex(): Int!
+ValidatorSigningStatsConnection.nodes(): [ValidatorSigningStats!]
+ValidatorSigningStatsConnection.pageInfo(): PageInfo!
+ValidatorSigningStatsConnection.totalCount(): Int!
+ValidatorStats.address(): String!
+ValidatorStats.blocksProposed(): String!
+ValidatorStats.commitsMissed(): String!
+ValidatorStats.commitsSigned(): String!
+ValidatorStats.lastCommittedBlock(): String
+ValidatorStats.lastProposedBlock(): String
+ValidatorStats.lastSeenBlock(): String
+ValidatorStats.participationRate(): Float!
+ValidatorStats.preparesMissed(): String!
+ValidatorStats.preparesSigned(): String!
+ValidatorStats.totalBlocks(): String!
+WBFTAggregatedSeal.sealers(): String!
+WBFTAggregatedSeal.signature(): String!
+WBFTBlockExtra.blockHash(): String!
+WBFTBlockExtra.blockNumber(): String!
+WBFTBlockExtra.committedSeal(): WBFTAggregatedSeal
+WBFTBlockExtra.epochInfo(): EpochInfo
+WBFTBlockExtra.gasTip(): String
+WBFTBlockExtra.preparedSeal(): WBFTAggregatedSeal
+WBFTBlockExtra.prevCommittedSeal(): WBFTAggregatedSeal
+WBFTBlockExtra.prevPreparedSeal(): WBFTAggregatedSeal
+WBFTBlockExtra.prevRound(): Int!
+WBFTBlockExtra.randaoReveal(): String!
+WBFTBlockExtra.round(): Int!
+WBFTBlockExtra.timestamp(): String!
+schema mutationType: Mutation
+schema queryType: Query
+schema subscriptionType: Subscription
