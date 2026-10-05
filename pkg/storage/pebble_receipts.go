@@ -136,24 +136,23 @@ func (s *PebbleStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumbe
 		return nil, err
 	}
 
-	// Get the block to find all transactions
-	block, err := s.GetBlock(ctx, blockNumber)
+	// The block's transaction hashes as the chain reports them
+	hashes, err := s.blockTxHashes(ctx, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
-	txs := block.Transactions()
-	receipts := make([]*types.Receipt, 0, len(txs))
+	receipts := make([]*types.Receipt, 0, len(hashes))
 
 	// Get receipt for each transaction
-	for _, tx := range txs {
-		receipt, err := s.GetReceipt(ctx, tx.Hash())
+	for _, hash := range hashes {
+		receipt, err := s.GetReceipt(ctx, hash)
 		if err != nil {
 			if err == ErrNotFound {
 				// Skip missing receipts
 				continue
 			}
-			return nil, fmt.Errorf("failed to get receipt for tx %s: %w", tx.Hash().Hex(), err)
+			return nil, fmt.Errorf("failed to get receipt for tx %s: %w", hash.Hex(), err)
 		}
 		receipts = append(receipts, receipt)
 	}
@@ -205,20 +204,20 @@ func (s *PebbleStorage) GetMissingReceipts(ctx context.Context, blockNumber uint
 		return nil, err
 	}
 
-	// Get the block to find all transactions
-	block, err := s.GetBlock(ctx, blockNumber)
+	// The block's transaction hashes as the chain reports them
+	hashes, err := s.blockTxHashes(ctx, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
 	var missing []common.Hash
-	for _, tx := range block.Transactions() {
-		exists, err := s.HasReceipt(ctx, tx.Hash())
+	for _, hash := range hashes {
+		exists, err := s.HasReceipt(ctx, hash)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check receipt for tx %s: %w", tx.Hash().Hex(), err)
+			return nil, fmt.Errorf("failed to check receipt for tx %s: %w", hash.Hex(), err)
 		}
 		if !exists {
-			missing = append(missing, tx.Hash())
+			missing = append(missing, hash)
 		}
 	}
 

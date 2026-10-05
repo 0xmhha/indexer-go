@@ -47,7 +47,7 @@ func (s *PebbleStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, to
 
 	// Iterate through blocks in the range
 	for height := fromBlock; height <= toBlock; height++ {
-		block, err := s.GetBlock(ctx, height)
+		block, err := s.GetModelBlock(ctx, height)
 		if err != nil {
 			continue
 		}
@@ -55,12 +55,12 @@ func (s *PebbleStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, to
 			continue
 		}
 
-		txs := block.Transactions()
+		txs := block.Transactions
 		totalTxCount += uint64(len(txs))
 
 		for _, tx := range txs {
 			// Check if this transaction has fee delegation metadata
-			meta, err := s.GetFeeDelegationTxMeta(ctx, tx.Hash())
+			meta, err := s.GetFeeDelegationTxMeta(ctx, tx.Hash)
 			if err != nil || meta == nil {
 				continue // Not a fee delegation transaction
 			}
@@ -68,7 +68,7 @@ func (s *PebbleStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, to
 			stats.TotalFeeDelegatedTxs++
 
 			// Get receipt to calculate fee
-			receipt, err := s.GetReceipt(ctx, tx.Hash())
+			receipt, err := s.GetReceipt(ctx, tx.Hash)
 			if err != nil || receipt == nil {
 				continue
 			}
@@ -82,15 +82,15 @@ func (s *PebbleStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, to
 				)
 			} else {
 				// Fallback: calculate from block baseFee + tip
-				baseFee := block.BaseFee()
-				if baseFee != nil && tx.GasTipCap() != nil {
-					effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
-					if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
-						effectiveGasPrice = tx.GasFeeCap()
+				baseFee := block.BaseFee
+				if baseFee != nil && tx.GasTipCap != nil {
+					effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap)
+					if tx.GasFeeCap != nil && effectiveGasPrice.Cmp(tx.GasFeeCap) > 0 {
+						effectiveGasPrice = tx.GasFeeCap
 					}
 					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
-				} else if tx.GasPrice() != nil {
-					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
+				} else if tx.GasPrice != nil {
+					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice)
 				}
 			}
 
@@ -139,7 +139,7 @@ func (s *PebbleStorage) GetTopFeePayers(ctx context.Context, limit int, fromBloc
 
 	// Iterate through blocks in the range
 	for height := fromBlock; height <= toBlock; height++ {
-		block, err := s.GetBlock(ctx, height)
+		block, err := s.GetModelBlock(ctx, height)
 		if err != nil {
 			continue
 		}
@@ -147,9 +147,9 @@ func (s *PebbleStorage) GetTopFeePayers(ctx context.Context, limit int, fromBloc
 			continue
 		}
 
-		for _, tx := range block.Transactions() {
+		for _, tx := range block.Transactions {
 			// Check if this transaction has fee delegation metadata
-			meta, err := s.GetFeeDelegationTxMeta(ctx, tx.Hash())
+			meta, err := s.GetFeeDelegationTxMeta(ctx, tx.Hash)
 			if err != nil || meta == nil {
 				continue // Not a fee delegation transaction
 			}
@@ -170,7 +170,7 @@ func (s *PebbleStorage) GetTopFeePayers(ctx context.Context, limit int, fromBloc
 			feePayerMap[feePayer].TxCount++
 
 			// Get receipt to calculate fee
-			receipt, err := s.GetReceipt(ctx, tx.Hash())
+			receipt, err := s.GetReceipt(ctx, tx.Hash)
 			if err != nil || receipt == nil {
 				continue
 			}
@@ -183,15 +183,15 @@ func (s *PebbleStorage) GetTopFeePayers(ctx context.Context, limit int, fromBloc
 					receipt.EffectiveGasPrice,
 				)
 			} else {
-				baseFee := block.BaseFee()
-				if baseFee != nil && tx.GasTipCap() != nil {
-					effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
-					if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
-						effectiveGasPrice = tx.GasFeeCap()
+				baseFee := block.BaseFee
+				if baseFee != nil && tx.GasTipCap != nil {
+					effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap)
+					if tx.GasFeeCap != nil && effectiveGasPrice.Cmp(tx.GasFeeCap) > 0 {
+						effectiveGasPrice = tx.GasFeeCap
 					}
 					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
-				} else if tx.GasPrice() != nil {
-					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
+				} else if tx.GasPrice != nil {
+					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice)
 				}
 			}
 
@@ -251,7 +251,7 @@ func (s *PebbleStorage) GetFeePayerStats(ctx context.Context, feePayer common.Ad
 
 	// Iterate through blocks in the range
 	for height := fromBlock; height <= toBlock; height++ {
-		block, err := s.GetBlock(ctx, height)
+		block, err := s.GetModelBlock(ctx, height)
 		if err != nil {
 			continue
 		}
@@ -259,9 +259,9 @@ func (s *PebbleStorage) GetFeePayerStats(ctx context.Context, feePayer common.Ad
 			continue
 		}
 
-		for _, tx := range block.Transactions() {
+		for _, tx := range block.Transactions {
 			// Check if this transaction has fee delegation metadata
-			meta, err := s.GetFeeDelegationTxMeta(ctx, tx.Hash())
+			meta, err := s.GetFeeDelegationTxMeta(ctx, tx.Hash)
 			if err != nil || meta == nil {
 				continue // Not a fee delegation transaction
 			}
@@ -276,7 +276,7 @@ func (s *PebbleStorage) GetFeePayerStats(ctx context.Context, feePayer common.Ad
 			stats.TxCount++
 
 			// Get receipt to calculate fee
-			receipt, err := s.GetReceipt(ctx, tx.Hash())
+			receipt, err := s.GetReceipt(ctx, tx.Hash)
 			if err != nil || receipt == nil {
 				continue
 			}
@@ -289,15 +289,15 @@ func (s *PebbleStorage) GetFeePayerStats(ctx context.Context, feePayer common.Ad
 					receipt.EffectiveGasPrice,
 				)
 			} else {
-				baseFee := block.BaseFee()
-				if baseFee != nil && tx.GasTipCap() != nil {
-					effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap())
-					if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
-						effectiveGasPrice = tx.GasFeeCap()
+				baseFee := block.BaseFee
+				if baseFee != nil && tx.GasTipCap != nil {
+					effectiveGasPrice := new(big.Int).Add(baseFee, tx.GasTipCap)
+					if tx.GasFeeCap != nil && effectiveGasPrice.Cmp(tx.GasFeeCap) > 0 {
+						effectiveGasPrice = tx.GasFeeCap
 					}
 					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), effectiveGasPrice)
-				} else if tx.GasPrice() != nil {
-					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice())
+				} else if tx.GasPrice != nil {
+					fee = new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), tx.GasPrice)
 				}
 			}
 

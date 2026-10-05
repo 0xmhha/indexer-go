@@ -222,6 +222,23 @@ func (s *PebbleStorage) GetModelReceipt(ctx context.Context, hash common.Hash) (
 	return r, nil
 }
 
+// blockTxHashes returns the hashes of block height's transactions as the
+// chain reports them. Loops over a block's transactions that look up
+// receipts or metadata by hash must use these: the go-ethereum view of a
+// block (GetBlock) rebuilds types it cannot represent, such as StableNet
+// fee delegation (0x16), as another type with another hash.
+func (s *PebbleStorage) blockTxHashes(ctx context.Context, height uint64) ([]common.Hash, error) {
+	b, err := s.GetModelBlock(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]common.Hash, len(b.Transactions))
+	for i, tx := range b.Transactions {
+		out[i] = tx.Hash
+	}
+	return out, nil
+}
+
 // GetModelBlocks implements ModelReader.
 func (s *PebbleStorage) GetModelBlocks(ctx context.Context, start, end uint64) ([]*model.Block, error) {
 	if err := s.ensureNotClosed(); err != nil {

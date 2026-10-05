@@ -236,10 +236,17 @@ func (s *PebbleStorage) getOrCreateMinerStats(minerMap map[common.Address]*Miner
 
 // addBlockRewardsToStats calculates and adds transaction fees to miner stats
 func (s *PebbleStorage) addBlockRewardsToStats(ctx context.Context, block *types.Block, stats *MinerStats) {
-	// Create transaction map for O(1) lookup
-	txMap := make(map[common.Hash]*types.Transaction)
-	for _, tx := range block.Transactions() {
-		txMap[tx.Hash()] = tx
+	// Create transaction map for O(1) lookup, under the hashes the chain
+	// reports (the receipts' hashes)
+	mb, err := s.GetModelBlock(ctx, block.NumberU64())
+	if err != nil {
+		return
+	}
+	txMap := make(map[common.Hash]*big.Int, len(mb.Transactions))
+	for _, tx := range mb.Transactions {
+		if tx.GasPrice != nil {
+			txMap[tx.Hash] = tx.GasPrice
+		}
 	}
 
 	// Get receipts and calculate fees
@@ -250,8 +257,8 @@ func (s *PebbleStorage) addBlockRewardsToStats(ctx context.Context, block *types
 
 	for _, receipt := range receipts {
 		if receipt.GasUsed > 0 {
-			if tx, found := txMap[receipt.TxHash]; found {
-				fee := new(big.Int).Mul(tx.GasPrice(), big.NewInt(int64(receipt.GasUsed)))
+			if gasPrice, found := txMap[receipt.TxHash]; found {
+				fee := new(big.Int).Mul(gasPrice, big.NewInt(int64(receipt.GasUsed)))
 				stats.TotalRewards.Add(stats.TotalRewards, fee)
 			}
 		}
