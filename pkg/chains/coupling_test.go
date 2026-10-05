@@ -10,10 +10,22 @@ import (
 	"testing"
 )
 
-// chainNeutral lists packages (relative to pkg/) that must work for every
-// chain. They may use pkg/chains and pkg/core but not a specific chain
-// profile; chain behaviour reaches them through registries in pkg/chains.
-var chainNeutral = []string{"fetch", "api", "source", "feature"}
+// chainNeutral lists directories (relative to pkg/) that must work for
+// every chain. They may use pkg/chains and pkg/core but not a specific
+// chain profile; chain behaviour reaches them through registries in
+// pkg/chains and in the packages themselves (API, storage keyspace, event
+// codecs). The adapters (pkg/adapters) and the chain profiles are the
+// chain-specific code outside this list.
+var chainNeutral = []string{
+	"fetch", "api", "source", "feature", "features", "storage", "events", "eventbus",
+	"core", "types", "token", "abi", "client", "rpcproxy", "notifications", "watchlist",
+	"multichain", "resilience", "userop", "module", "verifier", "compiler", "price",
+	"../internal",
+}
+
+// genericProfile is the Ethereum profile; the neutral model's conversions
+// from go-ethereum types (pkg/core/gethconv) use its rules.
+const genericProfile = "github.com/0xmhha/indexer-go/pkg/chains/evm"
 
 // TestChainNeutralPackagesDoNotImportProfiles keeps chain-specific code in
 // the profiles (chain profile design, section 3).
@@ -32,7 +44,7 @@ func TestChainNeutralPackagesDoNotImportProfiles(t *testing.T) {
 			}
 			for _, imp := range f.Imports {
 				p, _ := strconv.Unquote(imp.Path.Value)
-				if strings.HasPrefix(p, profiles) {
+				if strings.HasPrefix(p, profiles) && p != genericProfile {
 					t.Errorf("%s imports chain profile %s", path, p)
 				}
 			}
