@@ -5,9 +5,11 @@
 package testchain
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,6 +43,12 @@ type TxSpec struct {
 	GasUsed uint64       // defaults to 21000
 	Logs    []*types.Log // address/topics/data only; positions are filled in
 	Creates bool         // contract creation: receipt carries ContractAddress
+
+	// StableNet mode only: native value moves inside the transaction
+	// (internal calls, mints, burns), and whether the sender is an
+	// authorized account (pays its own tip, ends with AuthorizedTxExecuted).
+	NativeTransfers []NativeTransfer
+	Authorized      bool
 }
 
 // Block is one built block with its receipts.
@@ -70,6 +78,9 @@ type Chain struct {
 
 	finalized   *uint64 // finalized/safe height; nil follows head
 	noFinalized bool    // the node does not know the finalized tag
+
+	coinbase common.Address   // header coinbase; receives tips
+	sn       *StableNetConfig // StableNet mode, or nil
 }
 
 type txLocation struct {
@@ -79,6 +90,10 @@ type txLocation struct {
 
 // NewChain creates a chain whose genesis allocates the given balances.
 func NewChain(chainID int64, alloc map[common.Address]*big.Int) *Chain {
+	return newChain(chainID, alloc, nil)
+}
+
+func newChain(chainID int64, alloc map[common.Address]*big.Int, sn *StableNetConfig) *Chain {
 	c := &Chain{
 		chainID:   big.NewInt(chainID),
 		byHash:    map[common.Hash]*Block{},
@@ -87,6 +102,10 @@ func NewChain(chainID int64, alloc map[common.Address]*big.Int) *Chain {
 		contracts: map[common.Address]ContractMock{},
 		code:      map[common.Address][]byte{},
 		baseTime:  1_700_000_000,
+		sn:        sn,
+	}
+	if sn != nil {
+		c.coinbase = sn.Coinbase
 	}
 	state := map[common.Address]*big.Int{}
 	for a, v := range alloc {
@@ -199,11 +218,9 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 		}
 		cumGas += gasUsed
 		// London rule, as nodes report it: base fee plus tip, capped by the
-		// fee cap (legacy transactions pay their gas price).
-		price := new(big.Int).Add(tx.GasTipCap(), baseFee)
-		if price.Cmp(tx.GasFeeCap()) > 0 {
-			price = tx.GasFeeCap()
-		}
+		// fee cap (legacy transactions pay their gas price). StableNet
+		// replaces the tip with the governance tip (Anzeon).
+		price := c.txPrice(tx, s, baseFee)
 		status := types.ReceiptStatusSuccessful
 		if s.Failed {
 			status = types.ReceiptStatusFailed
@@ -223,7 +240,9 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 			r.ContractAddress = crypto.CreateAddress(s.From.Address, tx.Nonce())
 		}
 		if !s.Failed {
-			for _, l := range s.Logs {
+			logs := c.nativeLogs(s.From.Address, createdOrTo(tx, r), tx.Value(), s)
+			logs = append(logs, s.Logs...)
+			for _, l := range logs {
 				cp := *l
 				cp.BlockNumber = number
 				cp.TxHash = tx.Hash()
@@ -233,27 +252,52 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 				r.Logs = append(r.Logs, &cp)
 			}
 		}
+		if s.Authorized && c.sn != nil {
+			// Emitted even when the transaction fails, as the last log.
+			r.Logs = append(r.Logs, &types.Log{
+				Address: AccountManagerAddress, Topics: []common.Hash{SigAuthorizedTxExecuted},
+				BlockNumber: number, TxHash: tx.Hash(), TxIndex: uint(i), Index: logIndex,
+			})
+			logIndex++
+		}
 		r.Bloom = types.CreateBloom(r)
 		txs = append(txs, tx)
 		receipts = append(receipts, r)
 
-		// Same balance rule the indexer applies: value + gasUsed * effective gas price.
+		// The chain's balance rules: the sender pays gasUsed * price and,
+		// if the transaction succeeds, the value (and internal moves); the
+		// coinbase receives the tip, gasUsed * (price - baseFee). The base
+		// fee is burned, or distributed in StableNet mode (settleBlock).
 		cost := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), price)
-		value := tx.Value()
-		if s.Failed {
-			value = new(big.Int)
+		sub(state, s.From.Address, cost)
+		tip := new(big.Int).Sub(price, baseFee)
+		if tip.Sign() > 0 {
+			add(state, c.coinbase, new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), tip))
 		}
-		sub(state, s.From.Address, new(big.Int).Add(cost, value))
-		if to := tx.To(); to != nil {
-			add(state, *to, value)
-		} else if s.Creates {
-			add(state, r.ContractAddress, value)
+		if !s.Failed {
+			value := tx.Value()
+			if to := createdOrTo(tx, r); to != nil && value.Sign() > 0 {
+				sub(state, s.From.Address, value)
+				add(state, *to, value)
+			}
+			for _, nt := range s.NativeTransfers {
+				if nt.From != (common.Address{}) {
+					sub(state, nt.From, nt.Value)
+				}
+				if nt.To != (common.Address{}) {
+					add(state, nt.To, nt.Value)
+				}
+			}
 		}
+	}
+	c.settleBlock(state, number, cumGas, baseFee, c.coinbase)
+	if c.sn != nil {
+		extra = c.headerExtra(number, extra)
 	}
 
 	header := &types.Header{
 		ParentHash: parent,
-		Coinbase:   common.Address{},
+		Coinbase:   c.coinbase,
 		Root:       common.Hash{},
 		Difficulty: big.NewInt(1),
 		Number:     new(big.Int).SetUint64(number),
@@ -281,6 +325,19 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 		c.balances = append(c.balances, state)
 	}
 	return b
+}
+
+// createdOrTo is the account a transaction's value goes to: its recipient,
+// or the created contract.
+func createdOrTo(tx *types.Transaction, r *types.Receipt) *common.Address {
+	if to := tx.To(); to != nil {
+		return to
+	}
+	if r.ContractAddress != (common.Address{}) {
+		addr := r.ContractAddress
+		return &addr
+	}
+	return nil
 }
 
 func withNonce(tx types.TxData, nonce uint64, chainID *big.Int) types.TxData {
@@ -364,6 +421,38 @@ func (c *Chain) balanceAt(a common.Address, n uint64) *big.Int {
 		return new(big.Int).Set(v)
 	}
 	return new(big.Int)
+}
+
+// BalanceAt returns an account's balance after block n (regardless of the
+// head), for comparing indexed balances with the chain's state.
+func (c *Chain) BalanceAt(a common.Address, n uint64) *big.Int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if n >= uint64(len(c.balances)) {
+		n = uint64(len(c.balances)) - 1
+	}
+	if v := c.balances[n][a]; v != nil {
+		return new(big.Int).Set(v)
+	}
+	return new(big.Int)
+}
+
+// Accounts returns every account that ever held a balance, sorted.
+func (c *Chain) Accounts() []common.Address {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	seen := map[common.Address]bool{}
+	for _, st := range c.balances {
+		for a := range st {
+			seen[a] = true
+		}
+	}
+	out := make([]common.Address, 0, len(seen))
+	for a := range seen {
+		out = append(out, a)
+	}
+	sort.Slice(out, func(i, j int) bool { return bytes.Compare(out[i][:], out[j][:]) < 0 })
+	return out
 }
 
 // TxCount returns the number of transactions in all built blocks.

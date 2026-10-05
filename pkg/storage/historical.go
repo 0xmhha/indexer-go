@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -257,6 +258,16 @@ type HistoricalWriter interface {
 
 	// SetBalance sets the balance for an address at a specific block
 	SetBalance(ctx context.Context, addr common.Address, blockNumber uint64, balance *big.Int) error
+}
+
+// ErrNegativeBalance is returned by UpdateBalance when a delta would make a
+// balance negative: the indexed balance has diverged from the chain.
+var ErrNegativeBalance = errors.New("storage: balance would become negative")
+
+// BalanceRecordChecker reports whether a balance was ever recorded for an
+// account, without the genesis lookup GetAddressBalance performs.
+type BalanceRecordChecker interface {
+	HasBalanceRecord(ctx context.Context, addr common.Address) (bool, error)
 }
 
 // HistoricalStorage combines historical read and write interfaces

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -499,7 +500,7 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	// Calculate new balance
 	newBalance := new(big.Int).Add(currentBalance, delta)
 	if newBalance.Sign() < 0 {
-		return fmt.Errorf("balance cannot be negative")
+		return fmt.Errorf("%w: %s at block %d (%s %+d)", ErrNegativeBalance, addr.Hex(), blockNumber, currentBalance, delta)
 	}
 
 	// Create snapshot
@@ -534,6 +535,21 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	}
 
 	return nil
+}
+
+// HasBalanceRecord reports whether any balance was recorded for addr.
+func (s *PebbleStorage) HasBalanceRecord(ctx context.Context, addr common.Address) (bool, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return false, err
+	}
+	_, closer, err := s.kv(ctx).Get(AddressBalanceLatestKey(addr))
+	if errors.Is(err, pebble.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, closer.Close()
 }
 
 // SetBalance sets the balance for an address at a specific block

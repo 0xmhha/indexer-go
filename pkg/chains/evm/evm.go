@@ -47,6 +47,8 @@ type Profile struct {
 
 	binaryTxDecoders  map[uint8]BinaryTxDecoder
 	effectiveGasPrice EffectiveGasPriceFunc
+
+	accounting chains.NativeAccounting
 }
 
 // Option configures a Profile.
@@ -73,6 +75,20 @@ func WithHeaderHashCheck(on bool) Option { return func(p *Profile) { p.verifyHea
 // for chains whose consensus hashes a filtered header (for example WBFT).
 func WithHeaderHasher(f func(*types.Header) common.Hash) Option {
 	return func(p *Profile) { p.headerHash = f }
+}
+
+// WithNativeAccounting sets the rules that derive native balance changes
+// (default: chains.EthereumAccounting).
+func WithNativeAccounting(a chains.NativeAccounting) Option {
+	return func(p *Profile) { p.accounting = a }
+}
+
+// NativeAccounting implements chains.AccountingProfile.
+func (p *Profile) NativeAccounting() chains.NativeAccounting {
+	if p.accounting == nil {
+		return chains.EthereumAccounting{}
+	}
+	return p.accounting
 }
 
 // New returns an EVM-based profile.

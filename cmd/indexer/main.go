@@ -767,6 +767,7 @@ func (a *App) initFetcher(ctx context.Context) error {
 		Profile:   profile,
 		Publish:   a.fetcher.Publish,
 		BalanceAt: a.fetcher.BalanceAt,
+		BlockAt:   a.fetcher.BlockAt,
 	}
 	pipeline, err := feature.Build(enabled, deps)
 	if err != nil {

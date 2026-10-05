@@ -73,6 +73,8 @@ type Deps struct {
 	// BalanceAt reads an account's native balance from the node at a block
 	// (nil means latest), with the indexer's RPC timeout.
 	BalanceAt func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
+	// BlockAt reads a block from the node (nil when unavailable).
+	BlockAt func(ctx context.Context, number uint64) (*model.Block, error)
 }
 
 // DefaultOn is implemented by features that are enabled on every chain

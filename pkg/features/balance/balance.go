@@ -4,12 +4,15 @@ package balance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -33,6 +36,10 @@ func (balanceFeature) Register(r feature.Registrar) error {
 	if !ok {
 		return fmt.Errorf("storage does not support balance history")
 	}
+	rc, ok := d.Storage.(storagepkg.BalanceRecordChecker)
+	if !ok {
+		return fmt.Errorf("storage does not support balance history")
+	}
 	if d.BalanceAt == nil {
 		return fmt.Errorf("no node balance reader")
 	}
@@ -40,80 +47,66 @@ func (balanceFeature) Register(r feature.Registrar) error {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	r.OnBlock(&handler{storage: d.Storage, w: w, r: rd, balanceAt: d.BalanceAt, logger: logger})
+	r.OnBlock(&handler{
+		storage: d.Storage, w: w, r: rd, records: rc,
+		accounting: chains.AccountingOf(d.Profile),
+		balanceAt:  d.BalanceAt, blockAt: d.BlockAt, logger: logger,
+	})
 	return nil
 }
 
 func init() { feature.Register(balanceFeature{}) }
 
 type handler struct {
-	storage   storagepkg.Storage
-	w         storagepkg.HistoricalWriter
-	r         storagepkg.HistoricalReader
-	balanceAt func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
-	logger    *zap.Logger
+	storage    storagepkg.Storage
+	w          storagepkg.HistoricalWriter
+	r          storagepkg.HistoricalReader
+	records    storagepkg.BalanceRecordChecker
+	accounting chains.NativeAccounting
+	balanceAt  func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
+	blockAt    func(ctx context.Context, number uint64) (*model.Block, error)
+	logger     *zap.Logger
 }
 
-// HandleBlock applies the balance changes of the block's transactions. The
-// sender pays the value; the gas (gas used times the receipt's effective gas
-// price) is paid by the fee payer of a fee delegation transaction, otherwise
-// by the sender. Balance tracking is best-effort: failures are logged.
+// HandleBlock applies the native balance changes of the block, as the chain
+// profile's accounting rules derive them (who pays gas, where the tip and
+// base fee go, which value moves are visible). An account seen for the
+// first time starts from the node's balance before the block. If a change
+// would make a balance negative, the indexed balance has diverged from the
+// chain: the account is reset to the node's balance after the block.
+// Balance tracking is best-effort: storage failures are logged.
 func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 	n := b.Model.Number
-	apply := func(addr common.Address, delta *big.Int, txHash common.Hash, what string) {
-		if err := h.ensureInitialized(ctx, addr, n); err != nil {
-			h.logger.Warn("Failed to initialize "+what+" balance",
-				zap.String("address", addr.Hex()), zap.Uint64("block", n), zap.Error(err))
-		}
-		if err := h.w.UpdateBalance(ctx, addr, n, delta, txHash); err != nil {
-			h.logger.Warn("Failed to update "+what+" balance",
-				zap.Uint64("block", n), zap.String("tx", txHash.Hex()),
-				zap.String("address", addr.Hex()), zap.String("delta", delta.String()), zap.Error(err))
-		}
+	deltas, err := h.accounting.NativeDeltas(ctx, b.Model, b.Receipts, env{h: h})
+	if err != nil {
+		return fmt.Errorf("native balance changes of block %d: %w", n, err)
 	}
 
-	for _, p := range b.Transactions() {
-		tx, receipt := p.Tx, p.Receipt
-		from := tx.From
-		if from == (common.Address{}) {
-			continue // sender unknown
+	initialized := map[common.Address]bool{}
+	diverged := map[common.Address]bool{}
+	for _, d := range mergeDeltas(deltas) {
+		if d.Delta.Sign() == 0 || diverged[d.Address] {
+			continue
 		}
-
-		gasPrice := receipt.EffectiveGasPrice
-		if gasPrice == nil {
-			gasPrice = tx.GasPrice
-		}
-		gasCost := new(big.Int)
-		if gasPrice != nil {
-			gasCost.Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
-		}
-		value := tx.Value
-		if value == nil {
-			value = new(big.Int)
-		}
-
-		payer := from
-		if feePayer, ok := feature.DelegatedFeePayer(ctx, h.storage, tx); ok {
-			payer = feePayer
-		}
-		if payer == from {
-			apply(from, new(big.Int).Neg(new(big.Int).Add(value, gasCost)), tx.Hash, "sender")
-		} else {
-			if value.Sign() > 0 {
-				apply(from, new(big.Int).Neg(value), tx.Hash, "sender")
+		if !initialized[d.Address] {
+			if err := h.ensureInitialized(ctx, d.Address, n); err != nil {
+				h.logger.Warn("Failed to initialize balance",
+					zap.String("address", d.Address.Hex()), zap.Uint64("block", n), zap.Error(err))
 			}
-			apply(payer, new(big.Int).Neg(gasCost), tx.Hash, "fee payer")
+			initialized[d.Address] = true
 		}
-
-		// The receiver gets the value (not the gas); for a contract creation
-		// the receiver is the new contract.
-		to := tx.To
-		if to == nil && receipt.ContractAddress != nil {
-			to = receipt.ContractAddress
+		err := h.w.UpdateBalance(ctx, d.Address, n, d.Delta, d.TxHash)
+		switch {
+		case errors.Is(err, storagepkg.ErrNegativeBalance):
+			diverged[d.Address] = true
+		case err != nil:
+			h.logger.Warn("Failed to update balance",
+				zap.Uint64("block", n), zap.String("tx", d.TxHash.Hex()), zap.String("reason", d.Reason),
+				zap.String("address", d.Address.Hex()), zap.String("delta", d.Delta.String()), zap.Error(err))
 		}
-		if to != nil && value.Sign() > 0 {
-			apply(*to, value, tx.Hash, "receiver")
-		}
+	}
+	for addr := range diverged {
+		h.resync(ctx, addr, n)
 	}
 
 	if n == 0 {
@@ -124,22 +117,69 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 	return nil
 }
 
+// mergeDeltas sums the changes of each account per transaction (gas and
+// value of the same transaction become one history entry), keeping the
+// order in which accounts first appear.
+func mergeDeltas(deltas []chains.BalanceDelta) []chains.BalanceDelta {
+	type key struct {
+		addr common.Address
+		tx   common.Hash
+	}
+	index := map[key]int{}
+	var out []chains.BalanceDelta
+	for _, d := range deltas {
+		k := key{d.Address, d.TxHash}
+		if i, ok := index[k]; ok {
+			out[i].Delta = new(big.Int).Add(out[i].Delta, d.Delta)
+			out[i].Reason += "+" + d.Reason
+			continue
+		}
+		index[k] = len(out)
+		d.Delta = new(big.Int).Set(d.Delta)
+		out = append(out, d)
+	}
+	return out
+}
+
+// resync resets a diverged account to the node's balance after block n.
+func (h *handler) resync(ctx context.Context, addr common.Address, n uint64) {
+	balance, err := h.balanceAt(ctx, addr, new(big.Int).SetUint64(n))
+	if err != nil {
+		h.logger.Warn("Indexed balance diverged and the node balance is unavailable",
+			zap.String("address", addr.Hex()), zap.Uint64("block", n), zap.Error(err))
+		return
+	}
+	h.logger.Warn("Indexed balance diverged from the chain; reset to the node balance",
+		zap.String("address", addr.Hex()), zap.Uint64("block", n), zap.String("balance", balance.String()))
+	if err := h.w.SetBalance(ctx, addr, n, balance); err != nil {
+		h.logger.Warn("Failed to reset balance", zap.String("address", addr.Hex()), zap.Error(err))
+	}
+}
+
+// env gives accounting rules the stored blocks, falling back to the node
+// for blocks before the index starts.
+type env struct{ h *handler }
+
+func (e env) Block(ctx context.Context, number uint64) (*model.Block, error) {
+	b, err := storagepkg.AsModelReader(e.h.storage).GetModelBlock(ctx, number)
+	if err == nil || !errors.Is(err, storagepkg.ErrNotFound) || e.h.blockAt == nil {
+		return b, err
+	}
+	return e.h.blockAt(ctx, number)
+}
+
 // ensureInitialized seeds the balance of an account seen for the first time
 // with the node's balance before this block.
 func (h *handler) ensureInitialized(ctx context.Context, addr common.Address, block uint64) error {
-	current, err := h.r.GetAddressBalance(ctx, addr, 0)
+	// The stored record only: GetAddressBalance would look the account up
+	// in genesis and start it from its genesis balance, missing every
+	// change before this block.
+	recorded, err := h.records.HasBalanceRecord(ctx, addr)
 	if err != nil {
 		return fmt.Errorf("failed to check address balance: %w", err)
 	}
-	if current.Sign() != 0 {
+	if recorded {
 		return nil
-	}
-	history, err := h.r.GetBalanceHistory(ctx, addr, 0, block, 1, 0)
-	if err != nil {
-		return fmt.Errorf("failed to check balance history: %w", err)
-	}
-	if len(history) > 0 {
-		return nil // initialized; the balance may legitimately be zero
 	}
 
 	at := big.NewInt(0)

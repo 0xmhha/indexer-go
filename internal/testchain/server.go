@@ -43,6 +43,9 @@ func NewServer(chain *Chain) *Server {
 		blockLoads:    map[uint64]int{},
 		disabled:      map[string]bool{},
 	}
+	if chain.StableNet() {
+		s.clientVersion = StableNetClientVersion
+	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.serveHTTP))
 	return s
 }

@@ -1,0 +1,103 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"math/big"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
+
+	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/storage"
+)
+
+// indexedBalanceAt returns the indexed balance of addr after block n and
+// whether the indexer has any record of addr up to n.
+func indexedBalanceAt(t *testing.T, r storage.HistoricalReader, addr common.Address, n uint64) (*big.Int, bool) {
+	t.Helper()
+	hist, err := r.GetBalanceHistory(context.Background(), addr, 0, n, 1<<20, 0)
+	require.NoError(t, err)
+	if len(hist) == 0 {
+		return nil, false
+	}
+	return hist[len(hist)-1].Balance, true
+}
+
+// requireChainBalances compares the indexed native balance history with the
+// chain's state after every block: every account the indexer tracks must
+// match, and an account it does not track must not have changed since
+// genesis.
+func requireChainBalances(t *testing.T, app *App, chain *testchain.Chain) {
+	t.Helper()
+	r := app.storage.(storage.HistoricalReader)
+	head := chain.Head()
+	var mismatches []string
+	for _, addr := range chain.Accounts() {
+		genesis := chain.BalanceAt(addr, 0)
+		for n := uint64(0); n <= head; n++ {
+			want := chain.BalanceAt(addr, n)
+			got, tracked := indexedBalanceAt(t, r, addr, n)
+			if tracked && got.Cmp(want) != 0 {
+				mismatches = append(mismatches, fmt.Sprintf("%s after block %d: indexed %s, chain %s", addr.Hex(), n, got, want))
+				break // the first divergence per account is enough
+			}
+			if !tracked && want.Cmp(genesis) != 0 {
+				mismatches = append(mismatches, fmt.Sprintf("%s after block %d: not tracked, chain changed to %s", addr.Hex(), n, want))
+				break
+			}
+		}
+	}
+	require.Empty(t, mismatches, "indexed native balances differ from the chain")
+}
+
+func indexAll(t *testing.T, chain *testchain.Chain) *App {
+	t.Helper()
+	srv := testchain.NewServer(chain)
+	t.Cleanup(srv.Close)
+	app := startApp(t, srv, filepath.Join(t.TempDir(), "db"))
+	t.Cleanup(app.Shutdown)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	require.NoError(t, app.fetcher.FetchRange(ctx, 0, chain.Head()))
+	return app
+}
+
+// TestNativeBalancesMatchChainEVM checks the generic EVM rules: failed
+// transactions move no value, the tip goes to the coinbase, the base fee is
+// burned.
+func TestNativeBalancesMatchChainEVM(t *testing.T) {
+	sc := testchain.BuildDefault()
+	requireChainBalances(t, indexAll(t, sc.Chain), sc.Chain)
+}
+
+// TestNativeBalancesMatchChainStableNet checks go-stablenet's rules: native
+// moves (including internal ones, mints and burns) from NativeCoinAdapter
+// Transfer logs, the governance tip, and base fee distribution to validators.
+func TestNativeBalancesMatchChainStableNet(t *testing.T) {
+	sc := testchain.BuildStableNet()
+	requireChainBalances(t, indexAll(t, sc.Chain), sc.Chain)
+}
+
+// TestStableNetGovernanceEvents indexes governance events with go-stablenet's
+// event layouts: the proposal and the deposit mint proposal must be stored.
+func TestStableNetGovernanceEvents(t *testing.T) {
+	sc := testchain.BuildStableNet()
+	app := indexAll(t, sc.Chain)
+	r := app.storage.(storage.SystemContractReader)
+	ctx := context.Background()
+
+	p, err := r.GetProposalById(ctx, testchain.GovMinter, big.NewInt(1))
+	require.NoError(t, err)
+	require.Equal(t, sc.Accounts[0].Address, p.Proposer)
+	require.Equal(t, []byte{0xde, 0xad, 0xbe, 0xef}, p.CallData)
+
+	deposits, err := r.GetDepositMintProposals(ctx, 0, sc.Chain.Head(), storage.ProposalStatusAll)
+	require.NoError(t, err)
+	require.Len(t, deposits, 1)
+	require.Equal(t, sc.Accounts[3].Address, deposits[0].Beneficiary)
+	require.Equal(t, "bank-ref1", deposits[0].BankReference)
+}

@@ -139,6 +139,16 @@ func (f *Fetcher) runFeatures(ctx context.Context, fb *fetchedBlock) error {
 	})
 }
 
+// BlockAt reads block n from the node as the model (for chain rules that
+// need earlier headers than the index holds).
+func (f *Fetcher) BlockAt(ctx context.Context, n uint64) (*model.Block, error) {
+	fb, err := f.fetchOnce(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	return fb.block, nil
+}
+
 // BalanceAt reads an account's native balance from the node at a block,
 // bounded by the RPC timeout.
 func (f *Fetcher) BalanceAt(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error) {

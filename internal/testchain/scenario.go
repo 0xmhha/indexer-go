@@ -19,6 +19,10 @@ var (
 	SigUserOperationEvent = crypto.Keccak256Hash([]byte("UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)"))
 	SigModuleInstalled    = crypto.Keccak256Hash([]byte("ModuleInstalled(uint256,address)"))
 	SigModuleUninstalled  = crypto.Keccak256Hash([]byte("ModuleUninstalled(uint256,address)"))
+
+	// go-stablenet governance events (systemcontracts/solidity).
+	SigProposalCreated     = crypto.Keccak256Hash([]byte("ProposalCreated(uint256,address,bytes32,uint256,uint256,bytes)"))
+	SigDepositMintProposed = crypto.Keccak256Hash([]byte("DepositMintProposed(uint256,string,address,address,uint256,string)"))
 )
 
 // Well-known addresses used by the scenario.
@@ -271,6 +275,95 @@ func BuildLoad(blocks, txsPerBlock, largeBlockTxs int) *Scenario {
 			continue
 		}
 		ch.AddBlock(block(txsPerBlock)...)
+	}
+	return sc
+}
+
+// StableNetScenario is BuildStableNet's chain plus its actors.
+type StableNetScenario struct {
+	Scenario
+	Contract   common.Address // contract that forwards native value
+	Authorized Account        // authorized account (pays its own tip)
+	Validators []Account      // WBFT candidates; Validators[0] is the coinbase
+}
+
+// BuildStableNet builds a chain in StableNet mode (go-stablenet rules):
+// native transfers emit NativeCoinAdapter Transfer logs, the governance tip
+// replaces transaction tips except for an authorized account, tips go to the
+// coinbase and base fees are distributed to validators by diligence across
+// several epochs. It covers top-level and internal native moves, a failed
+// transaction with value, contract creation with value, native mint and burn
+// and an authorized account.
+func BuildStableNet() *StableNetScenario {
+	accts := make([]Account, 5)
+	alloc := map[common.Address]*big.Int{}
+	for i := range accts {
+		accts[i] = NewAccount(uint64(200 + i))
+		alloc[accts[i].Address] = ether(1000)
+	}
+	a, b, c, d, auth := accts[0], accts[1], accts[2], accts[3], accts[4]
+	vals := []Account{NewAccount(300), NewAccount(301), NewAccount(302)}
+	cands := make([]Candidate, len(vals))
+	for i, v := range vals {
+		cands[i] = Candidate{Address: v.Address, Diligence: uint64(1_000_000 - 100_000*i)}
+	}
+	ch := NewStableNetChain(DefaultChainID, alloc, StableNetConfig{Coinbase: vals[0].Address, EpochLength: 4, Candidates: cands})
+	sc := &StableNetScenario{Scenario: Scenario{Chain: ch, Accounts: accts}, Authorized: auth, Validators: vals}
+
+	gp := big.NewInt(2_000_000_000)          // legacy: below base fee + governance tip
+	feeCap := big.NewInt(30_000_000_000_000) // dynamic: above it
+
+	// 1: native transfers, legacy and dynamic fee.
+	ch.AddBlock(
+		TxSpec{From: a, Tx: &types.LegacyTx{To: &b.Address, Value: ether(5), Gas: 21000, GasPrice: gp}},
+		TxSpec{From: a, Tx: &types.DynamicFeeTx{To: &c.Address, Value: ether(3), Gas: 21000, GasTipCap: big.NewInt(1), GasFeeCap: feeCap}},
+	)
+
+	// 2: contract creation with value.
+	sc.Contract = crypto.CreateAddress(a.Address, ch.NextNonce(a.Address))
+	ch.AddBlock(TxSpec{From: a, Tx: &types.LegacyTx{Value: ether(1), Gas: 300000, GasPrice: gp, Data: []byte{0x60, 0x80}}, GasUsed: 200000, Creates: true})
+
+	// 3: call with value; the contract forwards part of it to d (internal).
+	ch.AddBlock(TxSpec{From: b, Tx: &types.LegacyTx{To: &sc.Contract, Value: ether(2), Gas: 80000, GasPrice: gp}, GasUsed: 45000,
+		NativeTransfers: []NativeTransfer{{From: sc.Contract, To: d.Address, Value: ether(1)}}})
+
+	// 4: failed transaction with value: gas only, no Transfer log.
+	ch.AddBlock(TxSpec{From: a, Tx: &types.LegacyTx{To: &b.Address, Value: ether(2), Gas: 50000, GasPrice: gp}, GasUsed: 30000, Failed: true})
+
+	// 5: native mint to d and burn from a through the minter.
+	ch.AddBlock(TxSpec{From: a, Tx: &types.LegacyTx{To: &GovMinter, Gas: 100000, GasPrice: gp}, GasUsed: 70000,
+		NativeTransfers: []NativeTransfer{
+			{From: common.Address{}, To: d.Address, Value: ether(50)},
+			{From: a.Address, To: common.Address{}, Value: ether(7)},
+		},
+		Logs: []*types.Log{
+			{Address: NativeCoinAdapter, Topics: []common.Hash{SigMint, addrTopic(GovMinter), addrTopic(d.Address)}, Data: word(ether(50))},
+			{Address: NativeCoinAdapter, Topics: []common.Hash{SigBurn, addrTopic(a.Address)}, Data: word(ether(7))},
+		}})
+
+	// 6: governance: a proposal on the minter and a deposit mint proposal
+	// (event layouts of go-stablenet GovBase.sol and GovMinter.sol).
+	ch.AddBlock(TxSpec{From: a, Tx: &types.LegacyTx{To: &GovMinter, Gas: 200000, GasPrice: gp}, GasUsed: 150000,
+		Logs: []*types.Log{
+			{Address: GovMinter,
+				Topics: []common.Hash{SigProposalCreated, common.BigToHash(big.NewInt(1)), addrTopic(a.Address)},
+				Data: concat(crypto.Keccak256([]byte("ACTION_MINT")), word(big.NewInt(1)), word(big.NewInt(2)), word(big.NewInt(0x80)),
+					word(big.NewInt(4)), common.RightPadBytes([]byte{0xde, 0xad, 0xbe, 0xef}, 32))},
+			{Address: GovMinter,
+				Topics: []common.Hash{SigDepositMintProposed, common.BigToHash(big.NewInt(1)), crypto.Keccak256Hash([]byte("deposit-1")), addrTopic(a.Address)},
+				Data:   concat(addrWord(d.Address), word(ether(10)), word(big.NewInt(0x60)), word(big.NewInt(9)), common.RightPadBytes([]byte("bank-ref1"), 32))},
+		}})
+
+	// 7: authorized account pays its own tip.
+	ch.AddBlock(TxSpec{From: auth, Tx: &types.DynamicFeeTx{To: &b.Address, Value: ether(1), Gas: 21000, GasTipCap: big.NewInt(1_000_000_000), GasFeeCap: feeCap}, Authorized: true})
+
+	// 8..15: light and empty blocks across epoch boundaries.
+	for i := 0; i < 8; i++ {
+		if i%3 == 0 {
+			ch.AddBlock()
+			continue
+		}
+		ch.AddBlock(TxSpec{From: c, Tx: &types.LegacyTx{To: &a.Address, Value: big.NewInt(int64(1000 + i)), Gas: 21000, GasPrice: gp}})
 	}
 	return sc
 }
