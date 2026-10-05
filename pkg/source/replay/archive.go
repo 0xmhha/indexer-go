@@ -410,14 +410,15 @@ func readCalls(path string, into map[string]call) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-only
 	var r io.Reader = f
 	if strings.HasSuffix(path, ".gz") {
 		zr, err := gzip.NewReader(f)
 		if err != nil {
 			return fmt.Errorf("replay: %s: %w", path, err)
 		}
-		defer zr.Close()
+		// Corrupt data surfaces as a read error through the scanner.
+		defer func() { _ = zr.Close() }()
 		r = zr
 	}
 	sc := bufio.NewScanner(r)

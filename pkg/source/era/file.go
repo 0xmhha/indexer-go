@@ -57,7 +57,7 @@ func Open(path string) (*File, error) {
 	}
 	e, err := open(f)
 	if err != nil {
-		f.Close()
+		_ = f.Close() // read-only; the open error is the one to report
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return e, nil

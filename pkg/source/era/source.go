@@ -46,7 +46,7 @@ func OpenDir(dir string, profile chains.Profile) (*Source, error) {
 	for _, p := range paths {
 		f, err := Open(p)
 		if err != nil {
-			s.Close()
+			_ = s.Close() // read-only files; report the open error
 			return nil, err
 		}
 		s.files = append(s.files, f)
@@ -56,7 +56,7 @@ func OpenDir(dir string, profile chains.Profile) (*Source, error) {
 	next := s.first
 	for _, f := range s.files {
 		if f.Start() != next {
-			s.Close()
+			_ = s.Close() // read-only files; report the gap
 			return nil, fmt.Errorf("era: files in %s are not contiguous: expected block %d, file starts at %d", dir, next, f.Start())
 		}
 		next = f.Start() + f.Count()

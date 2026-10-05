@@ -127,10 +127,12 @@ func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64) error {
 		return err
 	}
 	var rec undoRecord
-	err = rlp.DecodeBytes(raw, &rec)
-	closer.Close()
-	if err != nil {
-		return fmt.Errorf("decode undo record %d: %w", h, err)
+	decErr := rlp.DecodeBytes(raw, &rec)
+	if err := closer.Close(); err != nil {
+		return fmt.Errorf("read undo record %d: %w", h, err)
+	}
+	if decErr != nil {
+		return fmt.Errorf("decode undo record %d: %w", h, decErr)
 	}
 	if !rec.Complete {
 		return fmt.Errorf("%w %d (incomplete)", ErrNoUndo, h)
@@ -185,10 +187,13 @@ func (s *PebbleStorage) checkUndo(ctx context.Context, h uint64) error {
 	if err != nil {
 		return err
 	}
-	defer closer.Close()
 	var rec undoRecord
-	if err := rlp.DecodeBytes(raw, &rec); err != nil {
-		return fmt.Errorf("decode undo record %d: %w", h, err)
+	decErr := rlp.DecodeBytes(raw, &rec)
+	if err := closer.Close(); err != nil {
+		return fmt.Errorf("read undo record %d: %w", h, err)
+	}
+	if decErr != nil {
+		return fmt.Errorf("decode undo record %d: %w", h, decErr)
 	}
 	if !rec.Complete {
 		return fmt.Errorf("%w %d (incomplete)", ErrNoUndo, h)
