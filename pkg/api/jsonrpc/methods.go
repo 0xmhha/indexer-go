@@ -486,10 +486,17 @@ func (h *Handler) transactionToJSON(tx *model.Transaction, location *storage.TxL
 		}
 	}
 
-	// EIP-1559 fields (and later fee-market types)
+	// EIP-1559 fields (and later fee-market types). Like nodes, a mined
+	// transaction reports the price it paid as gasPrice (its receipt's
+	// effective gas price), not its fee cap.
 	if tx.Type >= types.DynamicFeeTxType {
 		result["maxFeePerGas"] = fmt.Sprintf("0x%x", orZero(tx.GasFeeCap))
 		result["maxPriorityFeePerGas"] = fmt.Sprintf("0x%x", orZero(tx.GasTipCap))
+		if h.storage != nil && location.BlockHash != (common.Hash{}) {
+			if receipt, err := h.storage.GetReceipt(context.Background(), tx.Hash); err == nil && receipt != nil && receipt.EffectiveGasPrice != nil {
+				result["gasPrice"] = fmt.Sprintf("0x%x", receipt.EffectiveGasPrice)
+			}
+		}
 	}
 
 	if tx.ChainID != nil {
@@ -528,9 +535,13 @@ func (h *Handler) transactionToJSON(tx *model.Transaction, location *storage.TxL
 		result["authorizationList"] = authListJSON
 	}
 
-	// Fee Delegation transaction (type 0x16 = 22)
+	// Fee Delegation transaction (type 0x16 = 22). fv/fr/fs are the node's
+	// field names; feePayerSignatures is kept for existing clients.
 	if feePayer, v, r, s, ok := h.feeDelegation(tx); ok {
 		result["feePayer"] = feePayer.Hex()
+		result["fv"] = fmt.Sprintf("0x%x", orZero(v))
+		result["fr"] = fmt.Sprintf("0x%x", orZero(r))
+		result["fs"] = fmt.Sprintf("0x%x", orZero(s))
 		result["feePayerSignatures"] = []interface{}{map[string]interface{}{
 			"v": v.String(),
 			"r": fmt.Sprintf("0x%x", r),
