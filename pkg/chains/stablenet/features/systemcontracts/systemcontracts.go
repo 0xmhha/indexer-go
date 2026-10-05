@@ -1,6 +1,7 @@
 // Package systemcontracts is the stablenet.system_contracts feature: it
 // indexes events of StableNet's system contracts (mint, burn, governance,
-// blacklist and others) and publishes validator set changes.
+// blacklist and others) and publishes them, and validator set changes, to
+// the event bus.
 package systemcontracts
 
 import (
@@ -33,8 +34,10 @@ func (systemContractsFeature) Register(r feature.Registrar) error {
 	if err != nil {
 		return err
 	}
+	parser := sc.NewSystemContractEventParser(store, logger)
+	parser.SetPublisher(d.Publish)
 	r.OnBlock(&handler{
-		parser:    sc.NewSystemContractEventParser(store, logger),
+		parser:    parser,
 		logger:    logger,
 		publishFn: d.Publish,
 	})

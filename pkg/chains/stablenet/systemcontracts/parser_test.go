@@ -205,8 +205,18 @@ func TestSystemContractEventParser_SetEventBus(t *testing.T) {
 	parser, _ := newTestParser()
 	bus := events.NewEventBus(100, 100)
 	parser.SetEventBus(bus)
-	if parser.eventBus != bus {
+	if parser.publish == nil {
 		t.Error("expected event bus to be set")
+	}
+}
+
+func TestSystemContractEventParser_SetPublisher(t *testing.T) {
+	parser, _ := newTestParser()
+	var got []events.Event
+	parser.SetPublisher(func(ev events.Event) bool { got = append(got, ev); return true })
+	parser.publishEvent(common.Address{}, SystemContractEventMint, &types.Log{BlockNumber: 7}, nil)
+	if len(got) != 1 || got[0].(*SystemContractEvent).BlockNumber != 7 {
+		t.Fatalf("published %v", got)
 	}
 }
 

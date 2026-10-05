@@ -78,9 +78,9 @@ var (
 
 // SystemContractEventParser parses and indexes system contract events
 type SystemContractEventParser struct {
-	storage  SystemContractWriter
-	logger   *zap.Logger
-	eventBus *events.EventBus
+	storage SystemContractWriter
+	logger  *zap.Logger
+	publish func(events.Event) bool
 }
 
 // NewSystemContractEventParser creates a new system contract event parser
@@ -91,14 +91,25 @@ func NewSystemContractEventParser(storage SystemContractWriter, logger *zap.Logg
 	}
 }
 
-// SetEventBus sets the event bus for publishing system contract events
+// SetEventBus publishes system contract events to eventBus.
 func (p *SystemContractEventParser) SetEventBus(eventBus *events.EventBus) {
-	p.eventBus = eventBus
+	if eventBus == nil {
+		p.publish = nil
+		return
+	}
+	p.publish = eventBus.Publish
+}
+
+// SetPublisher sets the function system contract events are published
+// with, such as a feature's Deps.Publish, which delivers them after the
+// block commits.
+func (p *SystemContractEventParser) SetPublisher(publish func(events.Event) bool) {
+	p.publish = publish
 }
 
 // publishEvent publishes a system contract event to the event bus
 func (p *SystemContractEventParser) publishEvent(contract common.Address, eventName SystemContractEventType, log *types.Log, data map[string]interface{}) {
-	if p.eventBus == nil {
+	if p.publish == nil {
 		return
 	}
 
@@ -111,7 +122,7 @@ func (p *SystemContractEventParser) publishEvent(contract common.Address, eventN
 		data,
 	)
 
-	p.eventBus.Publish(event)
+	p.publish(event)
 }
 
 // ParseAndIndexLogs parses and indexes multiple logs
