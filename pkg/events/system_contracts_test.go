@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"testing"
@@ -15,25 +16,25 @@ import (
 
 // mockSystemContractWriter implements storage.SystemContractWriter for testing
 type mockSystemContractWriter struct {
-	mintEvents                    []*storage.MintEvent
-	burnEvents                    []*storage.BurnEvent
-	minterConfigEvents            []*storage.MinterConfigEvent
-	proposals                     []*storage.Proposal
-	proposalVotes                 []*storage.ProposalVote
-	gasTipEvents                  []*storage.GasTipUpdateEvent
-	blacklistEvents               []*storage.BlacklistEvent
-	memberChangeEvents            []*storage.MemberChangeEvent
-	emergencyPauseEvents          []*storage.EmergencyPauseEvent
-	depositMintProposals          []*storage.DepositMintProposal
-	maxProposalsEvents            []*storage.MaxProposalsUpdateEvent
-	proposalExecSkippedEvents     []*storage.ProposalExecutionSkippedEvent
-	authorizedAccountEvents       []*storage.AuthorizedAccountEvent
-	totalSupplyDelta              *big.Int
-	activeMinters                 map[common.Address]bool
-	activeValidators              map[common.Address]bool
-	blacklistStatus               map[common.Address]bool
-	proposalStatusUpdates         []proposalStatusUpdate
-	storeErr                      error
+	mintEvents                []*storage.MintEvent
+	burnEvents                []*storage.BurnEvent
+	minterConfigEvents        []*storage.MinterConfigEvent
+	proposals                 []*storage.Proposal
+	proposalVotes             []*storage.ProposalVote
+	gasTipEvents              []*storage.GasTipUpdateEvent
+	blacklistEvents           []*storage.BlacklistEvent
+	memberChangeEvents        []*storage.MemberChangeEvent
+	emergencyPauseEvents      []*storage.EmergencyPauseEvent
+	depositMintProposals      []*storage.DepositMintProposal
+	maxProposalsEvents        []*storage.MaxProposalsUpdateEvent
+	proposalExecSkippedEvents []*storage.ProposalExecutionSkippedEvent
+	authorizedAccountEvents   []*storage.AuthorizedAccountEvent
+	totalSupplyDelta          *big.Int
+	activeMinters             map[common.Address]bool
+	activeValidators          map[common.Address]bool
+	blacklistStatus           map[common.Address]bool
+	proposalStatusUpdates     []proposalStatusUpdate
+	storeErr                  error
 }
 
 type proposalStatusUpdate struct {
@@ -294,6 +295,33 @@ func TestParseAndIndexLogs_ContinuesOnError(t *testing.T) {
 	}
 }
 
+func TestParseAndIndexLogs_ReturnsStorageFailure(t *testing.T) {
+	parser, mock := newTestParser()
+	mock.storeErr = errors.New("disk full")
+	mint := &types.Log{
+		Address: constants.NativeCoinAdapterAddress,
+		Topics: []common.Hash{constants.EventSigMint,
+			common.BytesToHash(common.HexToAddress("0xaa").Bytes()), common.BytesToHash(common.HexToAddress("0xbb").Bytes())},
+		Data: common.LeftPadBytes(big.NewInt(1).Bytes(), 32),
+	}
+	// A block must not commit without an event it failed to store.
+	if err := parser.ParseAndIndexLogs(context.Background(), []*types.Log{mint}); err == nil {
+		t.Fatal("expected the storage failure to be returned")
+	}
+
+	// A vote on a proposal the index does not have is data, not a failure.
+	mock.storeErr = fmt.Errorf("proposal 7: %w", storage.ErrNotFound)
+	approved := &types.Log{
+		Address: constants.GovMinterAddress,
+		Topics: []common.Hash{constants.EventSigProposalApproved, common.BigToHash(big.NewInt(7)),
+			common.BytesToHash(common.HexToAddress("0xcc").Bytes())},
+		Data: append(common.LeftPadBytes([]byte{1}, 32), common.LeftPadBytes([]byte{2}, 32)...),
+	}
+	if err := parser.ParseAndIndexLogs(context.Background(), []*types.Log{approved}); err != nil {
+		t.Fatalf("missing proposal must be skipped: %v", err)
+	}
+}
+
 // ========== Mint Event Tests ==========
 
 func TestParseMintEvent(t *testing.T) {
@@ -538,7 +566,7 @@ func TestParseProposalVotedEvent(t *testing.T) {
 	voter := common.HexToAddress("0xaaaa")
 	// approval=true (uint256), approved=2 (uint256), rejected=1 (uint256)
 	data := make([]byte, 96)
-	copy(data[31:32], []byte{0x01}) // approval = true
+	copy(data[31:32], []byte{0x01})       // approval = true
 	copy(data[62:64], []byte{0x00, 0x02}) // approved = 2
 	copy(data[94:96], []byte{0x00, 0x01}) // rejected = 1
 
@@ -758,7 +786,7 @@ func TestParseGasTipUpdatedEvent(t *testing.T) {
 
 	updater := common.HexToAddress("0xaaaa")
 	data := make([]byte, 64)
-	copy(data[0:32], common.LeftPadBytes(big.NewInt(100).Bytes(), 32)) // oldTip
+	copy(data[0:32], common.LeftPadBytes(big.NewInt(100).Bytes(), 32))  // oldTip
 	copy(data[32:64], common.LeftPadBytes(big.NewInt(200).Bytes(), 32)) // newTip
 
 	log := &types.Log{
@@ -1020,7 +1048,7 @@ func TestParseMaxProposalsPerMemberUpdatedEvent(t *testing.T) {
 	ctx := context.Background()
 
 	data := make([]byte, 64)
-	copy(data[0:32], common.LeftPadBytes(big.NewInt(5).Bytes(), 32))  // oldMax = 5
+	copy(data[0:32], common.LeftPadBytes(big.NewInt(5).Bytes(), 32))   // oldMax = 5
 	copy(data[32:64], common.LeftPadBytes(big.NewInt(10).Bytes(), 32)) // newMax = 10
 
 	log := &types.Log{
@@ -1052,9 +1080,9 @@ func TestParseProposalExecutionSkippedEvent(t *testing.T) {
 
 	// Data: offset (32) + reason length (32) + reason data
 	data := make([]byte, 0, 128)
-	data = append(data, common.LeftPadBytes(big.NewInt(32).Bytes(), 32)...)      // offset
-	data = append(data, common.LeftPadBytes(big.NewInt(14).Bytes(), 32)...)      // length
-	data = append(data, common.RightPadBytes([]byte("already paused"), 32)...)   // reason
+	data = append(data, common.LeftPadBytes(big.NewInt(32).Bytes(), 32)...)    // offset
+	data = append(data, common.LeftPadBytes(big.NewInt(14).Bytes(), 32)...)    // length
+	data = append(data, common.RightPadBytes([]byte("already paused"), 32)...) // reason
 
 	log := &types.Log{
 		Address:     constants.GovCouncilAddress,

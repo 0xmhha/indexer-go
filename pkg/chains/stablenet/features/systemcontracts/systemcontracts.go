@@ -50,19 +50,16 @@ type handler struct {
 }
 
 // HandleBlock indexes the system contract events of every receipt and
-// publishes validator set changes. A log that cannot be parsed is logged and
-// skipped, as before the move from the fetcher.
+// publishes validator set changes. A log that cannot be decoded is logged
+// and skipped; a failure to store an event fails the block, so it is not
+// committed without the event.
 func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 	for _, receipt := range b.GethReceipts {
 		if len(receipt.Logs) == 0 {
 			continue
 		}
 		if err := h.parser.ParseAndIndexLogs(ctx, receipt.Logs); err != nil {
-			h.logger.Warn("failed to parse system contract events",
-				zap.String("tx", receipt.TxHash.Hex()),
-				zap.Int("logs", len(receipt.Logs)),
-				zap.Error(err),
-			)
+			return fmt.Errorf("index system contract events of %s: %w", receipt.TxHash.Hex(), err)
 		}
 		for _, l := range receipt.Logs {
 			h.publishValidatorChange(b, l.Address, l.Topics)

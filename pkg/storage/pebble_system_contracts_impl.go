@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -137,6 +138,10 @@ func (s *PebbleStorage) UpdateProposalStatus(ctx context.Context, contract commo
 	// Get existing proposal
 	key := ProposalKey(contract, proposalID.String())
 	data, closer, err := s.kv(ctx).Get(key)
+	if errors.Is(err, pebble.ErrNotFound) {
+		// Created before the index started, or its creation was not indexed.
+		return fmt.Errorf("proposal %s of %s: %w", proposalID, contract.Hex(), ErrNotFound)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to get proposal: %w", err)
 	}

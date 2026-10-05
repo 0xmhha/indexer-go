@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -107,19 +108,43 @@ func (p *SystemContractEventParser) publishEvent(contract common.Address, eventN
 }
 
 // ParseAndIndexLogs parses and indexes multiple logs
+//
+// A log that cannot be decoded (or refers to a proposal indexed before the
+// index started) is logged and skipped. A storage failure is returned: the
+// block must not commit without the event.
 func (p *SystemContractEventParser) ParseAndIndexLogs(ctx context.Context, logs []*types.Log) error {
 	for _, log := range logs {
 		if err := p.parseAndIndexLog(ctx, log); err != nil {
+			var sf *storeError
+			if errors.As(err, &sf) {
+				return fmt.Errorf("system contract event in %s log %d: %w", log.TxHash.Hex(), log.Index, err)
+			}
 			p.logger.Error("failed to parse system contract log",
 				zap.String("address", log.Address.Hex()),
 				zap.String("txHash", log.TxHash.Hex()),
 				zap.Uint64("blockNumber", log.BlockNumber),
 				zap.Error(err))
-			// Continue processing other logs
 			continue
 		}
 	}
 	return nil
+}
+
+// storeError marks a failure to write an event, as opposed to an event
+// that could not be decoded.
+type storeError struct{ err error }
+
+func (e *storeError) Error() string { return e.err.Error() }
+func (e *storeError) Unwrap() error { return e.err }
+
+// storageFailure marks err as a write failure, except a missing record
+// (storage.ErrNotFound, e.g. a vote on a proposal created before the index
+// started), which is a property of the data.
+func storageFailure(err error) error {
+	if errors.Is(err, storage.ErrNotFound) {
+		return err
+	}
+	return &storeError{err: err}
 }
 
 // parseAndIndexLog parses and indexes a single log
@@ -247,12 +272,12 @@ func (p *SystemContractEventParser) parseMintEvent(ctx context.Context, log *typ
 	}
 
 	if err := p.storage.StoreMintEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store mint event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store mint event: %w", err))
 	}
 
 	// Update total supply
 	if err := p.storage.UpdateTotalSupply(ctx, amount); err != nil {
-		return fmt.Errorf("failed to update total supply: %w", err)
+		return storageFailure(fmt.Errorf("failed to update total supply: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -288,13 +313,13 @@ func (p *SystemContractEventParser) parseBurnEvent(ctx context.Context, log *typ
 	}
 
 	if err := p.storage.StoreBurnEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store burn event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store burn event: %w", err))
 	}
 
 	// Update total supply (decrease)
 	negativeAmount := new(big.Int).Neg(amount)
 	if err := p.storage.UpdateTotalSupply(ctx, negativeAmount); err != nil {
-		return fmt.Errorf("failed to update total supply: %w", err)
+		return storageFailure(fmt.Errorf("failed to update total supply: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -329,12 +354,12 @@ func (p *SystemContractEventParser) parseMinterConfiguredEvent(ctx context.Conte
 	}
 
 	if err := p.storage.StoreMinterConfigEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store minter config event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store minter config event: %w", err))
 	}
 
 	// Update active minter index
 	if err := p.storage.UpdateActiveMinter(ctx, minter, allowance, true); err != nil {
-		return fmt.Errorf("failed to update active minter: %w", err)
+		return storageFailure(fmt.Errorf("failed to update active minter: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -365,12 +390,12 @@ func (p *SystemContractEventParser) parseMinterRemovedEvent(ctx context.Context,
 	}
 
 	if err := p.storage.StoreMinterConfigEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store minter config event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store minter config event: %w", err))
 	}
 
 	// Update active minter index (remove)
 	if err := p.storage.UpdateActiveMinter(ctx, minter, big.NewInt(0), false); err != nil {
-		return fmt.Errorf("failed to update active minter: %w", err)
+		return storageFailure(fmt.Errorf("failed to update active minter: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -460,7 +485,7 @@ func (p *SystemContractEventParser) parseProposalCreatedEvent(ctx context.Contex
 	}
 
 	if err := p.storage.StoreProposal(ctx, proposal); err != nil {
-		return fmt.Errorf("failed to store proposal: %w", err)
+		return storageFailure(fmt.Errorf("failed to store proposal: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -501,7 +526,7 @@ func (p *SystemContractEventParser) parseProposalVotedEvent(ctx context.Context,
 	}
 
 	if err := p.storage.StoreProposalVote(ctx, vote); err != nil {
-		return fmt.Errorf("failed to store proposal vote: %w", err)
+		return storageFailure(fmt.Errorf("failed to store proposal vote: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -525,7 +550,7 @@ func (p *SystemContractEventParser) parseProposalApprovedEvent(ctx context.Conte
 
 	// Update proposal status to Approved
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusApproved, 0); err != nil {
-		return fmt.Errorf("failed to update proposal status: %w", err)
+		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -548,7 +573,7 @@ func (p *SystemContractEventParser) parseProposalRejectedEvent(ctx context.Conte
 
 	// Update proposal status to Rejected
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusRejected, 0); err != nil {
-		return fmt.Errorf("failed to update proposal status: %w", err)
+		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -577,7 +602,7 @@ func (p *SystemContractEventParser) parseProposalExecutedEvent(ctx context.Conte
 
 	// Update proposal status to Executed with current block number as execution time
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusExecuted, log.BlockNumber); err != nil {
-		return fmt.Errorf("failed to update proposal status: %w", err)
+		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -601,7 +626,7 @@ func (p *SystemContractEventParser) parseProposalFailedEvent(ctx context.Context
 
 	// Update proposal status to Failed
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusFailed, log.BlockNumber); err != nil {
-		return fmt.Errorf("failed to update proposal status: %w", err)
+		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -624,7 +649,7 @@ func (p *SystemContractEventParser) parseProposalExpiredEvent(ctx context.Contex
 
 	// Update proposal status to Expired
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusExpired, 0); err != nil {
-		return fmt.Errorf("failed to update proposal status: %w", err)
+		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -647,7 +672,7 @@ func (p *SystemContractEventParser) parseProposalCancelledEvent(ctx context.Cont
 
 	// Update proposal status to Cancelled
 	if err := p.storage.UpdateProposalStatus(ctx, log.Address, proposalID, storage.ProposalStatusCancelled, 0); err != nil {
-		return fmt.Errorf("failed to update proposal status: %w", err)
+		return storageFailure(fmt.Errorf("failed to update proposal status: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -686,13 +711,13 @@ func (p *SystemContractEventParser) parseMemberAddedEvent(ctx context.Context, l
 	}
 
 	if err := p.storage.StoreMemberChangeEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store member change event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store member change event: %w", err))
 	}
 
 	// For validators, update active validator index
 	if log.Address == GovValidatorAddress {
 		if err := p.storage.UpdateActiveValidator(ctx, member, true); err != nil {
-			return fmt.Errorf("failed to update active validator: %w", err)
+			return storageFailure(fmt.Errorf("failed to update active validator: %w", err))
 		}
 	}
 
@@ -733,13 +758,13 @@ func (p *SystemContractEventParser) parseMemberRemovedEvent(ctx context.Context,
 	}
 
 	if err := p.storage.StoreMemberChangeEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store member change event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store member change event: %w", err))
 	}
 
 	// For validators, update active validator index
 	if log.Address == GovValidatorAddress {
 		if err := p.storage.UpdateActiveValidator(ctx, member, false); err != nil {
-			return fmt.Errorf("failed to update active validator: %w", err)
+			return storageFailure(fmt.Errorf("failed to update active validator: %w", err))
 		}
 	}
 
@@ -776,17 +801,17 @@ func (p *SystemContractEventParser) parseMemberChangedEvent(ctx context.Context,
 	}
 
 	if err := p.storage.StoreMemberChangeEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store member change event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store member change event: %w", err))
 	}
 
 	// For validators, update active validator index
 	if log.Address == GovValidatorAddress {
 		// Remove old, add new
 		if err := p.storage.UpdateActiveValidator(ctx, oldMember, false); err != nil {
-			return fmt.Errorf("failed to update active validator (old): %w", err)
+			return storageFailure(fmt.Errorf("failed to update active validator (old): %w", err))
 		}
 		if err := p.storage.UpdateActiveValidator(ctx, newMember, true); err != nil {
-			return fmt.Errorf("failed to update active validator (new): %w", err)
+			return storageFailure(fmt.Errorf("failed to update active validator (new): %w", err))
 		}
 
 		// Store as validator change event
@@ -800,7 +825,7 @@ func (p *SystemContractEventParser) parseMemberChangedEvent(ctx context.Context,
 			Timestamp:    0,
 		}
 		if err := p.storage.StoreValidatorChangeEvent(ctx, validatorChangeEvent); err != nil {
-			return fmt.Errorf("failed to store validator change event: %w", err)
+			return storageFailure(fmt.Errorf("failed to store validator change event: %w", err))
 		}
 	}
 
@@ -861,7 +886,7 @@ func (p *SystemContractEventParser) parseGasTipUpdatedEvent(ctx context.Context,
 	}
 
 	if err := p.storage.StoreGasTipUpdateEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store gas tip update event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store gas tip update event: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -923,7 +948,7 @@ func (p *SystemContractEventParser) parseEmergencyPausedEvent(ctx context.Contex
 	}
 
 	if err := p.storage.StoreEmergencyPauseEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store emergency pause event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store emergency pause event: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -953,7 +978,7 @@ func (p *SystemContractEventParser) parseEmergencyUnpausedEvent(ctx context.Cont
 	}
 
 	if err := p.storage.StoreEmergencyPauseEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store emergency pause event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store emergency pause event: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -1016,7 +1041,7 @@ func (p *SystemContractEventParser) parseDepositMintProposedEvent(ctx context.Co
 	}
 
 	if err := p.storage.StoreDepositMintProposal(ctx, proposal); err != nil {
-		return fmt.Errorf("failed to store deposit mint proposal: %w", err)
+		return storageFailure(fmt.Errorf("failed to store deposit mint proposal: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -1097,13 +1122,13 @@ func (p *SystemContractEventParser) parseBurnExecutedEvent(ctx context.Context, 
 	}
 
 	if err := p.storage.StoreBurnEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store burn event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store burn event: %w", err))
 	}
 
 	// Update total supply (decrease)
 	negativeAmount := new(big.Int).Neg(amount)
 	if err := p.storage.UpdateTotalSupply(ctx, negativeAmount); err != nil {
-		return fmt.Errorf("failed to update total supply: %w", err)
+		return storageFailure(fmt.Errorf("failed to update total supply: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -1136,12 +1161,12 @@ func (p *SystemContractEventParser) parseAddressBlacklistedEvent(ctx context.Con
 	}
 
 	if err := p.storage.StoreBlacklistEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store blacklist event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store blacklist event: %w", err))
 	}
 
 	// Update blacklist status index
 	if err := p.storage.UpdateBlacklistStatus(ctx, account, true); err != nil {
-		return fmt.Errorf("failed to update blacklist status: %w", err)
+		return storageFailure(fmt.Errorf("failed to update blacklist status: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -1173,12 +1198,12 @@ func (p *SystemContractEventParser) parseAddressUnblacklistedEvent(ctx context.C
 	}
 
 	if err := p.storage.StoreBlacklistEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store blacklist event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store blacklist event: %w", err))
 	}
 
 	// Update blacklist status index
 	if err := p.storage.UpdateBlacklistStatus(ctx, account, false); err != nil {
-		return fmt.Errorf("failed to update blacklist status: %w", err)
+		return storageFailure(fmt.Errorf("failed to update blacklist status: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -1216,7 +1241,7 @@ func (p *SystemContractEventParser) parseAuthorizedAccountAddedEvent(ctx context
 		Action:      "added",
 	}
 	if err := p.storage.StoreAuthorizedAccountEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store authorized account added event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store authorized account added event: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -1254,7 +1279,7 @@ func (p *SystemContractEventParser) parseAuthorizedAccountRemovedEvent(ctx conte
 		Action:      "removed",
 	}
 	if err := p.storage.StoreAuthorizedAccountEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store authorized account removed event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store authorized account removed event: %w", err))
 	}
 
 	// Publish event to EventBus
@@ -1289,7 +1314,7 @@ func (p *SystemContractEventParser) parseMaxProposalsPerMemberUpdatedEvent(ctx c
 	}
 
 	if err := p.storage.StoreMaxProposalsUpdateEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store max proposals update event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store max proposals update event: %w", err))
 	}
 
 	p.logger.Debug("max proposals per member updated",
@@ -1342,7 +1367,7 @@ func (p *SystemContractEventParser) parseProposalExecutionSkippedEvent(ctx conte
 	}
 
 	if err := p.storage.StoreProposalExecutionSkippedEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to store proposal execution skipped event: %w", err)
+		return storageFailure(fmt.Errorf("failed to store proposal execution skipped event: %w", err))
 	}
 
 	p.logger.Debug("proposal execution skipped",
