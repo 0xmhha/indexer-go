@@ -236,7 +236,7 @@ func (h *Handler) ethGetFilterChanges(ctx context.Context, params json.RawMessag
 	switch filter.Type {
 	case LogFilterType:
 		// Get new logs since last poll
-		logs, currentHeight, err := h.filterManager.GetLogsSinceLastPoll(ctx, h.storage, filterID)
+		logs, currentHeight, currentHash, err := h.filterManager.GetLogsSinceLastPoll(ctx, h.storage, filterID)
 		if err != nil {
 			h.logger.Error("failed to get filter changes",
 				zap.String("filterID", filterID),
@@ -245,8 +245,8 @@ func (h *Handler) ethGetFilterChanges(ctx context.Context, params json.RawMessag
 			return nil, NewError(InternalError, "failed to get logs", err.Error())
 		}
 
-		// Update last poll block
-		h.advanceFilter(ctx, filterID, currentHeight)
+		// Record the block the poll read up to
+		h.filterManager.SetPollPoint(filterID, currentHeight, currentHash)
 
 		// Convert logs to JSON format with decode setting from filter
 		result := make([]interface{}, len(logs))
@@ -265,7 +265,7 @@ func (h *Handler) ethGetFilterChanges(ctx context.Context, params json.RawMessag
 
 	case BlockFilterType:
 		// Get new block hashes since last poll
-		hashes, currentHeight, err := h.filterManager.GetBlockHashesSinceLastPoll(ctx, h.storage, filterID)
+		hashes, currentHeight, currentHash, err := h.filterManager.GetBlockHashesSinceLastPoll(ctx, h.storage, filterID)
 		if err != nil {
 			h.logger.Error("failed to get filter changes",
 				zap.String("filterID", filterID),
@@ -274,8 +274,8 @@ func (h *Handler) ethGetFilterChanges(ctx context.Context, params json.RawMessag
 			return nil, NewError(InternalError, "failed to get block hashes", err.Error())
 		}
 
-		// Update last poll block
-		h.advanceFilter(ctx, filterID, currentHeight)
+		// Record the block the poll read up to
+		h.filterManager.SetPollPoint(filterID, currentHeight, currentHash)
 
 		// Convert to hex strings
 		result := make([]string, len(hashes))

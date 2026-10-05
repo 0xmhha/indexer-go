@@ -319,98 +319,135 @@ func (fm *FilterManager) cleanup() {
 	}
 }
 
-// GetLogsSinceLastPoll returns new logs since the last poll for a log filter
-func (fm *FilterManager) GetLogsSinceLastPoll(ctx context.Context, store storage.Storage, filterID string) ([]*types.Log, uint64, error) {
-	filter, exists := fm.GetFilter(filterID)
-	if !exists {
-		return nil, 0, nil
-	}
+// maxPollAttempts bounds how often a poll is read again because the chain
+// changed while it was read.
+const maxPollAttempts = 3
 
-	if filter.Type != LogFilterType {
-		return nil, 0, nil
+// tip returns the latest indexed height and the hash of that block (zero
+// when there is none).
+func tip(ctx context.Context, store storage.Storage) (uint64, common.Hash, error) {
+	height, err := store.GetLatestHeight(ctx)
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		return 0, common.Hash{}, err
 	}
-
-	// Get current block height
-	currentHeight, err := store.GetLatestHeight(ctx)
-	if err != nil && err != storage.ErrNotFound {
-		return nil, 0, err
-	}
-
-	// Logs of blocks a reorganization removed since the last poll come
-	// first, marked removed; then the logs of the canonical blocks after
-	// the fork.
-	from, removed, err := reorgSince(ctx, store, filter)
-	if err != nil {
-		return nil, 0, err
-	}
-	logs := removedLogs(removed, filter.LogFilter)
-
-	// If no new blocks, return what was removed
-	if currentHeight <= from {
-		return logs, currentHeight, nil
-	}
-
-	// Create a filter for new blocks only
-	logFilter := &storage.LogFilter{
-		FromBlock: from + 1,
-		ToBlock:   currentHeight,
-		Addresses: filter.LogFilter.Addresses,
-		Topics:    filter.LogFilter.Topics,
-	}
-
-	// Get logs
-	added, err := store.GetLogs(ctx, logFilter)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return append(logs, added...), currentHeight, nil
+	hash, err := hashAt(ctx, store, height)
+	return height, hash, err
 }
 
-// GetBlockHashesSinceLastPoll returns new block hashes since the last poll for a block filter
-func (fm *FilterManager) GetBlockHashesSinceLastPoll(ctx context.Context, store storage.Storage, filterID string) ([]common.Hash, uint64, error) {
-	filter, exists := fm.GetFilter(filterID)
-	if !exists {
-		return nil, 0, nil
+// hashAt returns the hash of the stored block at height (zero if none).
+func hashAt(ctx context.Context, store storage.Storage, height uint64) (common.Hash, error) {
+	b, err := storage.AsModelReader(store).GetModelBlock(ctx, height)
+	if errors.Is(err, storage.ErrNotFound) {
+		return common.Hash{}, nil
 	}
-
-	if filter.Type != BlockFilterType {
-		return nil, 0, nil
-	}
-
-	// Get current block height
-	currentHeight, err := store.GetLatestHeight(ctx)
-	if err != nil && err != storage.ErrNotFound {
-		return nil, 0, err
-	}
-
-	// After a reorganization, report the new canonical blocks from the fork.
-	from, _, err := reorgSince(ctx, store, filter)
 	if err != nil {
-		return nil, 0, err
+		return common.Hash{}, err
 	}
+	return b.Hash, nil
+}
 
-	// If no new blocks, return empty
-	if currentHeight <= from {
-		return nil, currentHeight, nil
-	}
-
-	// Get block hashes for new blocks
-	var hashes []common.Hash
-	for blockNum := from + 1; blockNum <= currentHeight; blockNum++ {
-		// The model keeps the hash the chain reports (go-ethereum's
-		// recomputed hash is wrong for WBFT blocks).
-		block, err := storage.AsModelReader(store).GetModelBlock(ctx, blockNum)
+// readStable runs read for the chain up to the current tip and returns the
+// tip it read. A reorganization that completes while read runs replaces
+// the tip block, so the tip hash is checked again afterwards and the read is
+// repeated; the hash returned is the one read before, so if the chain still
+// changed, the next poll sees that block removed and reports from the fork.
+func readStable(ctx context.Context, store storage.Storage, read func(height uint64) error) (uint64, common.Hash, error) {
+	var (
+		height uint64
+		hash   common.Hash
+		err    error
+	)
+	for attempt := 0; attempt < maxPollAttempts; attempt++ {
+		if height, hash, err = tip(ctx, store); err != nil {
+			return 0, common.Hash{}, err
+		}
+		if err = read(height); err != nil {
+			return 0, common.Hash{}, err
+		}
+		after, err := hashAt(ctx, store, height)
 		if err != nil {
-			if err == storage.ErrNotFound {
+			return 0, common.Hash{}, err
+		}
+		if after == hash {
+			break
+		}
+	}
+	return height, hash, nil
+}
+
+// GetLogsSinceLastPoll returns new logs since the last poll for a log
+// filter, with the height and hash of the last block it read.
+func (fm *FilterManager) GetLogsSinceLastPoll(ctx context.Context, store storage.Storage, filterID string) ([]*types.Log, uint64, common.Hash, error) {
+	filter, exists := fm.GetFilter(filterID)
+	if !exists || filter.Type != LogFilterType {
+		return nil, 0, common.Hash{}, nil
+	}
+
+	var logs []*types.Log
+	height, hash, err := readStable(ctx, store, func(currentHeight uint64) error {
+		// Logs of blocks a reorganization removed since the last poll come
+		// first, marked removed; then the logs of the canonical blocks after
+		// the fork.
+		from, removed, err := reorgSince(ctx, store, filter)
+		if err != nil {
+			return err
+		}
+		logs = removedLogs(removed, filter.LogFilter)
+		if currentHeight <= from {
+			return nil
+		}
+		added, err := store.GetLogs(ctx, &storage.LogFilter{
+			FromBlock: from + 1,
+			ToBlock:   currentHeight,
+			Addresses: filter.LogFilter.Addresses,
+			Topics:    filter.LogFilter.Topics,
+		})
+		if err != nil {
+			return err
+		}
+		logs = append(logs, added...)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, common.Hash{}, err
+	}
+	return logs, height, hash, nil
+}
+
+// GetBlockHashesSinceLastPoll returns new block hashes since the last poll
+// for a block filter, with the height and hash of the last block it read.
+func (fm *FilterManager) GetBlockHashesSinceLastPoll(ctx context.Context, store storage.Storage, filterID string) ([]common.Hash, uint64, common.Hash, error) {
+	filter, exists := fm.GetFilter(filterID)
+	if !exists || filter.Type != BlockFilterType {
+		return nil, 0, common.Hash{}, nil
+	}
+
+	var hashes []common.Hash
+	height, hash, err := readStable(ctx, store, func(currentHeight uint64) error {
+		hashes = nil
+		// After a reorganization, report the new canonical blocks from the fork.
+		from, _, err := reorgSince(ctx, store, filter)
+		if err != nil {
+			return err
+		}
+		for blockNum := from + 1; blockNum <= currentHeight; blockNum++ {
+			// The model keeps the hash the chain reports (go-ethereum's
+			// recomputed hash is wrong for WBFT blocks).
+			block, err := storage.AsModelReader(store).GetModelBlock(ctx, blockNum)
+			if errors.Is(err, storage.ErrNotFound) {
 				continue
 			}
-			return nil, 0, err
+			if err != nil {
+				return err
+			}
+			hashes = append(hashes, block.Hash)
 		}
-		hashes = append(hashes, block.Hash)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, common.Hash{}, err
 	}
-
-	return hashes, currentHeight, nil
+	return hashes, height, hash, nil
 }
 
 // GetPendingTransactionsSinceLastPoll returns new pending transactions since the last poll
