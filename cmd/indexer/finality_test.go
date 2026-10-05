@@ -90,12 +90,31 @@ func TestFinalityFinalized(t *testing.T) {
 	requireStaysAt(t, app, head-1)
 }
 
-func TestFinalityFinalizedUnsupported(t *testing.T) {
-	sc := testchain.BuildDefault()
-	srv := testchain.NewServer(sc.Chain)
-	defer srv.Close()
-	sc.Chain.DisableFinalizedTag()
+// TestFinalityFinalizedNotYet: a node that has not finalized a block yet
+// (go-stablenet after a restart or while syncing) must not stop the
+// indexer: it waits, then follows once the node reports one.
+func TestFinalityFinalizedNotYet(t *testing.T) {
+	for name, disable := range map[string]func(*testchain.Chain){
+		"null":  (*testchain.Chain).DisableFinalizedTag,
+		"error": (*testchain.Chain).FailFinalizedTag, // go-stablenet
+	} {
+		t.Run(name, func(t *testing.T) {
+			sc := testchain.BuildDefault()
+			srv := testchain.NewServer(sc.Chain)
+			defer srv.Close()
+			head := sc.Chain.Head()
+			disable(sc.Chain)
 
-	_, err := startAppFinality(t, srv, "finalized", 0)
-	require.ErrorContains(t, err, `finality "finalized"`)
+			app, err := startAppFinality(t, srv, "finalized", 0)
+			require.NoError(t, err)
+			defer app.Shutdown()
+			stop := runLive(t, app)
+			defer stop()
+
+			time.Sleep(300 * time.Millisecond)
+			require.Zero(t, indexedHeight(t, app), "nothing is indexed without a finalized block")
+			sc.Chain.SetFinalized(head - 2)
+			requireStaysAt(t, app, head-2)
+		})
+	}
 }

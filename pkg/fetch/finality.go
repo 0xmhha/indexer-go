@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Finality policies (indexer.finality).
@@ -17,10 +18,15 @@ const (
 var ErrNoFinalized = errors.New("fetch: node does not report a finalized block")
 
 // FinalizedClient is implemented by clients that can read the node's
-// finalized block (the "finalized" block tag).
+// finalized block (the "finalized" block tag); ok is false when the node
+// has not finalized a block (or does not report finality).
 type FinalizedClient interface {
-	GetFinalizedBlockNumber(ctx context.Context) (uint64, error)
+	GetFinalizedBlockNumber(ctx context.Context) (n uint64, ok bool, err error)
 }
+
+// noFinalizedWarnEvery throttles the warning while the node reports no
+// finalized block.
+const noFinalizedWarnEvery = time.Minute
 
 // targetHead returns the highest block the live loop may index under the
 // finality policy. ok is false when no block qualifies yet (fewer blocks
@@ -46,9 +52,19 @@ func (f *Fetcher) targetHead(ctx context.Context) (target uint64, ok bool, err e
 		}
 		rctx, cancel := f.rpcCtx(ctx)
 		defer cancel()
-		n, err := fc.GetFinalizedBlockNumber(rctx)
+		n, ok, err := fc.GetFinalizedBlockNumber(rctx)
 		if err != nil {
 			return 0, false, err
+		}
+		if !ok {
+			// go-stablenet sets the finalized block only for blocks it
+			// receives from peers, so it can have none after a restart or
+			// while syncing: wait instead of failing.
+			if time.Since(f.noFinalizedWarned) > noFinalizedWarnEvery {
+				f.noFinalizedWarned = time.Now()
+				f.logger.Warn("Node reports no finalized block yet; waiting (indexer.finality: finalized)")
+			}
+			return 0, false, nil
 		}
 		return n, true, nil
 	default:
@@ -56,9 +72,10 @@ func (f *Fetcher) targetHead(ctx context.Context) (target uint64, ok bool, err e
 	}
 }
 
-// CheckFinality verifies at startup that the node supports the finality
-// policy, so an unsupported "finalized" tag stops the indexer instead of
-// leaving the live loop retrying forever.
+// CheckFinality verifies at startup that the finality policy can be
+// served: the client must be able to read the finalized block. A node that
+// has not finalized a block yet is accepted (the live loop waits and
+// warns).
 func (f *Fetcher) CheckFinality(ctx context.Context) error {
 	if _, _, err := f.targetHead(ctx); err != nil {
 		return fmt.Errorf("finality %q: %w", f.config.Finality, err)

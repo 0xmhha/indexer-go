@@ -198,6 +198,8 @@ type Fetcher struct {
 	bgCancel context.CancelFunc
 	bgWG     sync.WaitGroup
 
+	noFinalizedWarned time.Time // last "no finalized block" warning (finality.go)
+
 	// src, when set, reads blocks as raw JSON decoded by the chain profile
 	// instead of through client (chain profile design, CP-3).
 	src source.Source

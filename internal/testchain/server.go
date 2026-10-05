@@ -206,6 +206,9 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 		return (*hexutil.Big)(big.NewInt(1_000_000_000)), nil
 
 	case "eth_getBlockByNumber":
+		if c.finalizedError && isFinalityTag(req, 0) {
+			return nil, &rpcError{Code: -32000, Message: "finalized block not found"}
+		}
 		n, ok := s.blockNumberParam(req, 0)
 		if !ok {
 			return nil, nil
@@ -369,6 +372,14 @@ func (s *Server) blockParamNumberOrHash(req rpcRequest, i int) *Block {
 		return nil
 	}
 	return c.blockAt(n)
+}
+
+func isFinalityTag(req rpcRequest, i int) bool {
+	if len(req.Params) <= i {
+		return false
+	}
+	var tag string
+	return json.Unmarshal(req.Params[i], &tag) == nil && (tag == "finalized" || tag == "safe")
 }
 
 func isHexNumber(req rpcRequest, i int) bool {

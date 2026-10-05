@@ -76,8 +76,9 @@ type Chain struct {
 	head      uint64 // highest block visible over RPC
 	baseTime  uint64
 
-	finalized   *uint64 // finalized/safe height; nil follows head
-	noFinalized bool    // the node does not know the finalized tag
+	finalized      *uint64 // finalized/safe height; nil follows head
+	noFinalized    bool    // the node does not know the finalized tag
+	finalizedError bool    // ... and says so with an error, as go-stablenet does
 
 	coinbase common.Address   // header coinbase; receives tips
 	sn       *StableNetConfig // StableNet mode, or nil
@@ -392,6 +393,7 @@ func (c *Chain) SetFinalized(n uint64) {
 	defer c.mu.Unlock()
 	c.finalized = &n
 	c.noFinalized = false
+	c.finalizedError = false
 }
 
 // DisableFinalizedTag makes the node answer null for the finalized and safe
@@ -400,6 +402,16 @@ func (c *Chain) DisableFinalizedTag() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.noFinalized = true
+}
+
+// FailFinalizedTag makes the node answer the finalized and safe tags with a
+// "finalized block not found" error, as go-stablenet does before it has
+// finalized a block.
+func (c *Chain) FailFinalizedTag() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.noFinalized = true
+	c.finalizedError = true
 }
 
 // Block returns block n regardless of the head, or nil if it was not built.

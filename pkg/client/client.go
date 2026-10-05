@@ -2,8 +2,10 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -136,14 +138,19 @@ func (c *Client) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
 }
 
 // GetFinalizedBlockNumber returns the number of the node's finalized block
-// (the "finalized" block tag). Nodes without finality information answer
-// with no block, reported as ethereum.NotFound.
-func (c *Client) GetFinalizedBlockNumber(ctx context.Context) (uint64, error) {
+// (the "finalized" block tag); ok is false when the node has none. Nodes
+// answer that with no block (null) or, like go-stablenet before it has
+// finalized a block (after a restart, while syncing), with a "finalized
+// block not found" error.
+func (c *Client) GetFinalizedBlockNumber(ctx context.Context) (uint64, bool, error) {
 	h, err := c.ethClient.HeaderByNumber(ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
-	if err != nil {
-		return 0, fmt.Errorf("failed to get finalized block: %w", err)
+	if errors.Is(err, ethereum.NotFound) || (err != nil && strings.Contains(err.Error(), "finalized block not found")) {
+		return 0, false, nil
 	}
-	return h.Number.Uint64(), nil
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to get finalized block: %w", err)
+	}
+	return h.Number.Uint64(), true, nil
 }
 
 // GetBlockByNumber fetches a block by its number
