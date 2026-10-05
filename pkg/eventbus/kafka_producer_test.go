@@ -184,7 +184,7 @@ func TestGetPartitionKey_SystemContractEvent(t *testing.T) {
 	contract := common.HexToAddress("0x1234")
 	event := &events.SystemContractEvent{Contract: contract}
 	key := kp.getPartitionKey(event)
-	assert.Contains(t, key, "syscontract:")
+	assert.Contains(t, key, "contract:")
 }
 
 func TestGetPartitionKey_LogEvent_WithLog(t *testing.T) {

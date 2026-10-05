@@ -377,8 +377,8 @@ func (eb *RedisEventBus) getSubscriptionChannels() []string {
 		events.EventTypeLog,
 		events.EventTypeChainConfig,
 		events.EventTypeValidatorSet,
-		events.EventTypeSystemContract,
 	}
+	eventTypes = append(eventTypes, events.CodecTypes()...)
 
 	channels := make([]string, len(eventTypes))
 	for i, et := range eventTypes {

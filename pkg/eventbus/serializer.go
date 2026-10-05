@@ -88,17 +88,6 @@ type validatorSetEventData struct {
 	CreatedAt        time.Time      `json:"created_at"`
 }
 
-// systemContractEventData is the JSON representation of SystemContractEvent
-type systemContractEventData struct {
-	Contract    common.Address                 `json:"contract"`
-	EventName   events.SystemContractEventType `json:"event_name"`
-	BlockNumber uint64                         `json:"block_number"`
-	TxHash      common.Hash                    `json:"tx_hash"`
-	LogIndex    uint                           `json:"log_index"`
-	Data        map[string]interface{}         `json:"data"`
-	CreatedAt   time.Time                      `json:"created_at"`
-}
-
 // Serialize converts an event to JSON bytes
 func (s *JSONSerializer) Serialize(event events.Event) ([]byte, error) {
 	if event == nil {
@@ -163,20 +152,17 @@ func (s *JSONSerializer) Serialize(event events.Event) ([]byte, error) {
 			ValidatorSetSize: e.ValidatorSetSize,
 			CreatedAt:        e.CreatedAt,
 		})
-	case *events.SystemContractEvent:
-		data, err = json.Marshal(systemContractEventData{
-			Contract:    e.Contract,
-			EventName:   e.EventName,
-			BlockNumber: e.BlockNumber,
-			TxHash:      e.TxHash,
-			LogIndex:    e.LogIndex,
-			Data:        e.Data,
-			CreatedAt:   e.CreatedAt,
-		})
 	case *events.ReorgEvent:
 		data, err = json.Marshal(e) // plain fields only
 	default:
-		return nil, fmt.Errorf("%w: unknown event type %T", ErrInvalidEventType, event)
+		codec, ok := events.CodecOf(event.Type())
+		if !ok {
+			return nil, fmt.Errorf("%w: unknown event type %T", ErrInvalidEventType, event)
+		}
+		var v interface{}
+		if v, err = codec.Encode(event); err == nil {
+			data, err = json.Marshal(v)
+		}
 	}
 
 	if err != nil {
@@ -295,23 +281,16 @@ func (s *JSONSerializer) Deserialize(data []byte) (events.Event, error) {
 		}
 		return &e, nil
 
-	case events.EventTypeSystemContract:
-		var ed systemContractEventData
-		if err := json.Unmarshal(envelope.Data, &ed); err != nil {
+	default:
+		codec, ok := events.CodecOf(envelope.Type)
+		if !ok {
+			return nil, fmt.Errorf("%w: unknown event type %s", ErrInvalidEventType, envelope.Type)
+		}
+		event, err := codec.Decode(envelope.Data)
+		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrDeserializationFailed, err)
 		}
-		return &events.SystemContractEvent{
-			Contract:    ed.Contract,
-			EventName:   ed.EventName,
-			BlockNumber: ed.BlockNumber,
-			TxHash:      ed.TxHash,
-			LogIndex:    ed.LogIndex,
-			Data:        ed.Data,
-			CreatedAt:   ed.CreatedAt,
-		}, nil
-
-	default:
-		return nil, fmt.Errorf("%w: unknown event type %s", ErrInvalidEventType, envelope.Type)
+		return event, nil
 	}
 }
 

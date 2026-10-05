@@ -1,6 +1,8 @@
 package events
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -392,6 +394,48 @@ func (e *SystemContractEvent) Type() EventType {
 // Timestamp implements Event interface
 func (e *SystemContractEvent) Timestamp() time.Time {
 	return e.CreatedAt
+}
+
+// systemContractEventData is the JSON form of SystemContractEvent on event
+// buses that carry events between processes.
+type systemContractEventData struct {
+	Contract    common.Address          `json:"contract"`
+	EventName   SystemContractEventType `json:"event_name"`
+	BlockNumber uint64                  `json:"block_number"`
+	TxHash      common.Hash             `json:"tx_hash"`
+	LogIndex    uint                    `json:"log_index"`
+	Data        map[string]interface{}  `json:"data"`
+	CreatedAt   time.Time               `json:"created_at"`
+}
+
+func init() {
+	RegisterCodec(EventTypeSystemContract, EventCodec{
+		Encode: func(ev Event) (interface{}, error) {
+			e, ok := ev.(*SystemContractEvent)
+			if !ok {
+				return nil, fmt.Errorf("unexpected event %T", ev)
+			}
+			return systemContractEventData{
+				Contract: e.Contract, EventName: e.EventName, BlockNumber: e.BlockNumber,
+				TxHash: e.TxHash, LogIndex: e.LogIndex, Data: e.Data, CreatedAt: e.CreatedAt,
+			}, nil
+		},
+		Decode: func(data []byte) (Event, error) {
+			var ed systemContractEventData
+			if err := json.Unmarshal(data, &ed); err != nil {
+				return nil, err
+			}
+			return &SystemContractEvent{
+				Contract: ed.Contract, EventName: ed.EventName, BlockNumber: ed.BlockNumber,
+				TxHash: ed.TxHash, LogIndex: ed.LogIndex, Data: ed.Data, CreatedAt: ed.CreatedAt,
+			}, nil
+		},
+	})
+}
+
+// Source implements SourcedEvent.
+func (e *SystemContractEvent) Source() (common.Address, string, uint64) {
+	return e.Contract, string(e.EventName), e.BlockNumber
 }
 
 // NewSystemContractEvent creates a new system contract event

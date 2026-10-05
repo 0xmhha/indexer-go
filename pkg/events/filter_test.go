@@ -585,7 +585,7 @@ func TestFilter_Match(t *testing.T) {
 	}
 }
 
-func TestFilter_MatchSystemContract(t *testing.T) {
+func TestFilter_MatchContractEvent(t *testing.T) {
 	contractAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
 	altAddr := common.HexToAddress("0x2222222222222222222222222222222222222222")
 
@@ -721,8 +721,8 @@ func TestFilter_MatchSystemContract(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.filter.MatchSystemContract(tt.event); got != tt.want {
-				t.Errorf("MatchSystemContract() = %v, want %v", got, tt.want)
+			if got := tt.filter.MatchContractEvent(tt.event); got != tt.want {
+				t.Errorf("MatchContractEvent() = %v, want %v", got, tt.want)
 			}
 		})
 	}
