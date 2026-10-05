@@ -28,6 +28,10 @@ const (
 
 	// EventTypeSystemContract represents a system contract event
 	EventTypeSystemContract EventType = "systemContract"
+
+	// EventTypeReorg reports indexed blocks rolled back by a chain
+	// reorganization
+	EventTypeReorg EventType = "reorg"
 )
 
 // Event is the base interface for all blockchain events
@@ -176,6 +180,32 @@ func NewLogEvent(log *types.Log) *LogEvent {
 		CreatedAt: time.Now(),
 	}
 }
+
+// ReorgEvent reports that the indexer rolled back blocks that left the
+// chain. It is published after the rollback commits, followed by a LogEvent
+// with Removed set for every log of the removed blocks and then by the
+// events of the new branch. The removed blocks stay queryable as orphans
+// under the same sequence number.
+type ReorgEvent struct {
+	Seq        uint64 // reorganization record number
+	ForkNumber uint64 // newest block both branches share
+	ForkHash   common.Hash
+	OldHead    uint64     // indexed height before the rollback
+	Removed    []BlockRef // rolled-back blocks, newest first
+	CreatedAt  time.Time
+}
+
+// BlockRef identifies a block.
+type BlockRef struct {
+	Number uint64
+	Hash   common.Hash
+}
+
+// Type implements Event interface
+func (e *ReorgEvent) Type() EventType { return EventTypeReorg }
+
+// Timestamp implements Event interface
+func (e *ReorgEvent) Timestamp() time.Time { return e.CreatedAt }
 
 // ChainConfigEvent represents a chain configuration change event
 type ChainConfigEvent struct {

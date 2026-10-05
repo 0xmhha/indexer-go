@@ -42,6 +42,7 @@ func TestLiveHeadLatency(t *testing.T) {
 	cfg.Database.Path = filepath.Join(t.TempDir(), "db")
 	cfg.API.Enabled = false
 	cfg.Indexer.StartHeight = head
+	cfg.Indexer.Finality = os.Getenv("INDEXER_FINALITY") // empty: head
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
 
@@ -89,7 +90,10 @@ func TestLiveHeadLatency(t *testing.T) {
 	require.NotEmpty(t, lat, "the node produced no blocks")
 	sort.Slice(lat, func(i, j int) bool { return lat[i] < lat[j] })
 	p95 := lat[len(lat)*95/100]
-	t.Logf("poll %v: %d blocks, p50 %v p95 %v max %v", cfg.Indexer.PollInterval, len(lat),
+	t.Logf("finality %q poll %v: %d blocks, p50 %v p95 %v max %v", cfg.Indexer.Finality, cfg.Indexer.PollInterval, len(lat),
 		lat[len(lat)/2].Round(time.Millisecond), p95.Round(time.Millisecond), lat[len(lat)-1].Round(time.Millisecond))
-	require.LessOrEqual(t, p95, 100*time.Millisecond)
+	if cfg.Indexer.Finality == "" || cfg.Indexer.Finality == "head" {
+		// Other policies wait for confirmation by design and are only measured.
+		require.LessOrEqual(t, p95, 100*time.Millisecond)
+	}
 }

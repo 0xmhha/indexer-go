@@ -283,6 +283,42 @@ type LogFilter struct {
 	Topics [][]common.Hash
 }
 
+// Matches reports whether log satisfies the address and topic criteria
+// (the block range is not checked).
+func (f *LogFilter) Matches(log *types.Log) bool {
+	if len(f.Addresses) > 0 {
+		found := false
+		for _, a := range f.Addresses {
+			if a == log.Address {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	for i, options := range f.Topics {
+		if len(options) == 0 {
+			continue
+		}
+		if i >= len(log.Topics) {
+			return false
+		}
+		found := false
+		for _, o := range options {
+			if log.Topics[i] == o {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 // LogReader provides read access to event logs
 type LogReader interface {
 	// GetLogs returns logs matching the given filter

@@ -38,7 +38,7 @@ type SubscribeOptions struct {
 	ReplayLast int
 
 	// ChannelSize is the buffer size for the subscription channel
-	// Default is 100 if not specified
+	// Default is the bus's subscribe buffer size (100 unless configured)
 	ChannelSize int
 }
 
@@ -111,12 +111,21 @@ type EventBus struct {
 
 	// metrics holds Prometheus metrics (optional)
 	metrics *Metrics
+
+	// defaultChannelSize is the channel size of subscriptions that do not
+	// choose one
+	defaultChannelSize int
 }
 
-// NewEventBus creates a new EventBus with the given buffer sizes
-// subscribeBufferSize is kept for backward compatibility but no longer used
+// NewEventBus creates a new EventBus with the given buffer sizes.
+// subscribeBufferSize is the channel size of subscriptions that pass no size
+// (0); values <= 0 keep the default of 100.
 func NewEventBus(publishBufferSize, subscribeBufferSize int) *EventBus {
-	return NewEventBusWithHistory(publishBufferSize, DefaultEventHistorySize)
+	eb := NewEventBusWithHistory(publishBufferSize, DefaultEventHistorySize)
+	if subscribeBufferSize > 0 {
+		eb.defaultChannelSize = subscribeBufferSize
+	}
+	return eb
 }
 
 // NewEventBusWithHistory creates a new EventBus with configurable history size
@@ -136,6 +145,8 @@ func NewEventBusWithHistory(publishBufferSize, historySize int) *EventBus {
 		eventHistory:     make([]eventHistoryEntry, historySize),
 		eventHistorySize: historySize,
 		eventHistoryIdx:  0,
+
+		defaultChannelSize: 100,
 	}
 }
 
@@ -386,7 +397,7 @@ func (eb *EventBus) SubscribeWithOptions(id SubscriptionID, eventTypes []EventTy
 	// Apply default channel size
 	channelSize := opts.ChannelSize
 	if channelSize <= 0 {
-		channelSize = 100
+		channelSize = eb.defaultChannelSize
 	}
 
 	// Create subscription context for cancellation

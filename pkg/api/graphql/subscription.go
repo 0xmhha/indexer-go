@@ -343,6 +343,8 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 		eventType = events.EventTypeConsensusBlock
 	case "consensusFork":
 		eventType = events.EventTypeConsensusFork
+	case "reorg":
+		eventType = events.EventTypeReorg
 	case "consensusValidatorChange":
 		eventType = events.EventTypeConsensusValidatorChange
 	case "consensusError":
@@ -365,8 +367,7 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 	// Create subscription ID
 	subID := c.busID(id)
 	opts := events.SubscribeOptions{
-		ChannelSize: 100,
-		ReplayLast:  replayLast,
+		ReplayLast: replayLast, // channel size: the bus default (eventbus.subscriber_buffer_size)
 	}
 	eventSub := c.server.eventBus.SubscribeWithOptions(subID, []events.EventType{eventType}, filter, opts)
 	if eventSub == nil {
@@ -615,6 +616,15 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 			}
 		}
 
+	case "reorg":
+		if reorgEvent, ok := event.(*events.ReorgEvent); ok {
+			payload = map[string]interface{}{
+				"data": map[string]interface{}{
+					"reorg": reorgEventToMap(reorgEvent),
+				},
+			}
+		}
+
 	case "consensusFork":
 		if forkEvent, ok := event.(*events.ConsensusForkEvent); ok {
 			forkData := map[string]interface{}{
@@ -760,6 +770,9 @@ func (c *subscriptionClient) parseSubscriptionType(query string) string {
 	}
 	if contains(query, "consensusError") {
 		return "consensusError"
+	}
+	if contains(query, "reorg") {
+		return "reorg"
 	}
 	if contains(query, "validatorSet") {
 		return "validatorSet"

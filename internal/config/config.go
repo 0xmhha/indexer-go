@@ -110,6 +110,14 @@ type IndexerConfig struct {
 	// for a new head once it has caught up (default 50ms). It bounds the
 	// delay between a block appearing on the node and indexing starting.
 	PollInterval time.Duration `yaml:"poll_interval"`
+	// Finality selects how far the live loop indexes: "head" (default,
+	// newest block; reorganizations are rolled back), "confirmations"
+	// (head minus Confirmations) or "finalized" (the node's finalized
+	// block). Rollback stays active under every policy.
+	Finality string `yaml:"finality"`
+	// Confirmations is how many blocks behind the head the live loop stays
+	// with finality "confirmations".
+	Confirmations uint64 `yaml:"confirmations"`
 }
 
 // APIConfig holds API server configuration
@@ -235,6 +243,10 @@ type EventBusConfig struct {
 	Type string `yaml:"type"`
 	// PublishBufferSize is the size of the publish buffer
 	PublishBufferSize int `yaml:"publish_buffer_size"`
+	// SubscriberBufferSize is the channel size of each API subscription
+	// (GraphQL subscriptions, JSON-RPC pending pool). Events are dropped for
+	// a subscriber only when its channel is full.
+	SubscriberBufferSize int `yaml:"subscriber_buffer_size"`
 	// HistorySize is the number of events to keep in history for replay
 	HistorySize int `yaml:"history_size"`
 	// Redis holds Redis EventBus configuration
@@ -632,7 +644,10 @@ func (c *Config) SetDefaults() {
 		c.EventBus.Type = "local"
 	}
 	if c.EventBus.PublishBufferSize == 0 {
-		c.EventBus.PublishBufferSize = 1000
+		c.EventBus.PublishBufferSize = constants.DefaultEventBusPublishBuffer
+	}
+	if c.EventBus.SubscriberBufferSize == 0 {
+		c.EventBus.SubscriberBufferSize = constants.DefaultEventBusSubscriberBuffer
 	}
 	if c.EventBus.HistorySize == 0 {
 		c.EventBus.HistorySize = 100
@@ -718,6 +733,16 @@ func (c *Config) LoadFromEnv() error {
 	// RPC configuration
 	if endpoint := os.Getenv("INDEXER_RPC_ENDPOINT"); endpoint != "" {
 		c.RPC.Endpoint = endpoint
+	}
+	if v := os.Getenv("INDEXER_FINALITY"); v != "" {
+		c.Indexer.Finality = v
+	}
+	if v := os.Getenv("INDEXER_CONFIRMATIONS"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_CONFIRMATIONS: %w", err)
+		}
+		c.Indexer.Confirmations = n
 	}
 	if v := os.Getenv("INDEXER_POLL_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
@@ -958,6 +983,13 @@ func (c *Config) LoadFromEnv() error {
 		}
 		c.EventBus.PublishBufferSize = val
 	}
+	if v := os.Getenv("INDEXER_EVENTBUS_SUBSCRIBER_BUFFER_SIZE"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_EVENTBUS_SUBSCRIBER_BUFFER_SIZE: %w", err)
+		}
+		c.EventBus.SubscriberBufferSize = val
+	}
 	if historySize := os.Getenv("INDEXER_EVENTBUS_HISTORY_SIZE"); historySize != "" {
 		val, err := strconv.Atoi(historySize)
 		if err != nil {
@@ -1077,6 +1109,15 @@ func (c *Config) Validate() error {
 	}
 	if c.Source.EraDir != "" && !c.Indexer.ProfileSource {
 		return fmt.Errorf("source.era_dir requires indexer.profile_source")
+	}
+	switch c.Indexer.Finality {
+	case "", "head", "finalized":
+	case "confirmations":
+		if c.Indexer.Confirmations == 0 {
+			return fmt.Errorf("indexer.finality confirmations requires indexer.confirmations > 0")
+		}
+	default:
+		return fmt.Errorf("invalid indexer.finality %q, must be one of: head, confirmations, finalized", c.Indexer.Finality)
 	}
 
 	// Validate database configuration

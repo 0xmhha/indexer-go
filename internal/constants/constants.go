@@ -173,6 +173,16 @@ const (
 
 	// DefaultSubscribeBufferSize is the default subscribe channel buffer size
 	DefaultSubscribeBufferSize = 100
+
+	// DefaultEventBusPublishBuffer is the indexer's default publish channel
+	// size (eventbus.publish_buffer_size). A 1000-transaction block alone
+	// publishes over 2000 events; the buffer is sized so that slow
+	// subscribers do not make the bus drop events. Empty slots cost 16 bytes.
+	DefaultEventBusPublishBuffer = 65536
+
+	// DefaultEventBusSubscriberBuffer is the default channel size of API
+	// subscriptions (eventbus.subscriber_buffer_size).
+	DefaultEventBusSubscriberBuffer = 16384
 )
 
 // Size Constants

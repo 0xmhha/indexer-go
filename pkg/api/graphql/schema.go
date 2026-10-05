@@ -1256,6 +1256,10 @@ func (b *SchemaBuilder) WithSubscriptions() *SchemaBuilder {
 		Type:        graphql.NewNonNull(consensusBlockSubType),
 		Description: "Subscribe to new consensus block events with validator participation data",
 	}
+	b.subscriptions["reorg"] = &graphql.Field{
+		Type:        graphql.NewNonNull(reorgType),
+		Description: "Subscribe to chain reorganizations the indexer rolled back. Logs of the removed blocks follow on the logs subscription with removed: true; the removed blocks stay queryable with orphanedBlock",
+	}
 	b.subscriptions["consensusFork"] = &graphql.Field{
 		Type:        graphql.NewNonNull(consensusForkSubType),
 		Description: "Subscribe to chain fork detection events",
@@ -1804,6 +1808,7 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
 		WithTokenHolderQueries().
+		WithReorgQueries().
 		WithSubscriptions().
 		WithMutations().
 		Build()

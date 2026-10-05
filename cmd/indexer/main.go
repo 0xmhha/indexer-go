@@ -531,12 +531,20 @@ func (a *App) initSystemContractVerifications(ctx context.Context) error {
 
 // initEventBus initializes the event bus
 func (a *App) initEventBus() {
-	a.eventBus = events.NewEventBus(constants.DefaultPublishBufferSize, constants.DefaultSubscribeBufferSize)
+	// A zero size (configuration built without defaults) would make the
+	// publish channel unbuffered and drop every event.
+	if a.config.EventBus.PublishBufferSize <= 0 {
+		a.config.EventBus.PublishBufferSize = constants.DefaultEventBusPublishBuffer
+	}
+	if a.config.EventBus.SubscriberBufferSize <= 0 {
+		a.config.EventBus.SubscriberBufferSize = constants.DefaultEventBusSubscriberBuffer
+	}
+	a.eventBus = events.NewEventBus(a.config.EventBus.PublishBufferSize, a.config.EventBus.SubscriberBufferSize)
 	go a.eventBus.Run()
 
 	a.logger.Info("EventBus initialized",
-		zap.Int("publish_buffer", constants.DefaultPublishBufferSize),
-		zap.Int("subscribe_buffer", constants.DefaultSubscribeBufferSize),
+		zap.Int("publish_buffer", a.config.EventBus.PublishBufferSize),
+		zap.Int("subscriber_buffer", a.config.EventBus.SubscriberBufferSize),
 	)
 }
 
@@ -683,14 +691,16 @@ func (a *App) initFetcher(ctx context.Context) error {
 	}
 
 	fetcherConfig := &fetch.Config{
-		StartHeight:  a.config.Indexer.StartHeight,
-		BatchSize:    a.config.Indexer.ChunkSize,
-		MaxRetries:   3,
-		RetryDelay:   retryDelay,
-		NumWorkers:   a.config.Indexer.Workers,
-		AtomicBlock:  a.config.Indexer.AtomicBlock,
-		RPCTimeout:   a.config.RPC.Timeout,
-		PollInterval: a.config.Indexer.PollInterval,
+		StartHeight:   a.config.Indexer.StartHeight,
+		BatchSize:     a.config.Indexer.ChunkSize,
+		MaxRetries:    3,
+		RetryDelay:    retryDelay,
+		NumWorkers:    a.config.Indexer.Workers,
+		AtomicBlock:   a.config.Indexer.AtomicBlock,
+		RPCTimeout:    a.config.RPC.Timeout,
+		PollInterval:  a.config.Indexer.PollInterval,
+		Finality:      a.config.Indexer.Finality,
+		Confirmations: a.config.Indexer.Confirmations,
 	}
 
 	// Create fetcher with chain adapter if available
@@ -777,6 +787,9 @@ func (a *App) initFetcher(ctx context.Context) error {
 	if backfillCommitHook != nil {
 		a.fetcher.SetBeforeCommitHook(backfillCommitHook)
 		defer a.fetcher.SetBeforeCommitHook(nil)
+	}
+	if err := a.fetcher.CheckFinality(ctx); err != nil {
+		return err
 	}
 	if err := a.fetcher.Recover(ctx, pipeline.Features(), backfill); err != nil {
 		return err

@@ -173,6 +173,8 @@ func (s *JSONSerializer) Serialize(event events.Event) ([]byte, error) {
 			Data:        e.Data,
 			CreatedAt:   e.CreatedAt,
 		})
+	case *events.ReorgEvent:
+		data, err = json.Marshal(e) // plain fields only
 	default:
 		return nil, fmt.Errorf("%w: unknown event type %T", ErrInvalidEventType, event)
 	}
@@ -285,6 +287,13 @@ func (s *JSONSerializer) Deserialize(data []byte) (events.Event, error) {
 			ValidatorSetSize: ed.ValidatorSetSize,
 			CreatedAt:        ed.CreatedAt,
 		}, nil
+
+	case events.EventTypeReorg:
+		var e events.ReorgEvent
+		if err := json.Unmarshal(envelope.Data, &e); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrDeserializationFailed, err)
+		}
+		return &e, nil
 
 	case events.EventTypeSystemContract:
 		var ed systemContractEventData

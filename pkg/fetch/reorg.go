@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/events"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -52,8 +55,10 @@ func (f *Fetcher) checkParent(ctx context.Context, fb *fetchedBlock) error {
 }
 
 type rollbackStorage interface {
-	RollbackTo(ctx context.Context, to uint64) error
+	RollbackTo(ctx context.Context, to uint64) (*storagepkg.Reorg, error)
 }
+
+var _ rollbackStorage = (*storagepkg.PebbleStorage)(nil)
 
 // HandleReorg finds where the indexed chain and the node's chain fork, at or
 // below from, rolls the database back to that block and returns its height.
@@ -106,6 +111,38 @@ func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) 
 	}
 	f.metrics.RecordReorg(latest - fork)
 	return fork, nil
+}
+
+// publishReorg announces a committed rollback: the reorganization, then
+// every log of the removed blocks with Removed set (newest block first,
+// logs in reverse order, as go-ethereum's log subscriptions report them).
+func (f *Fetcher) publishReorg(r *storagepkg.Reorg) {
+	ev := &events.ReorgEvent{
+		Seq: r.Seq, ForkNumber: r.ForkNumber, ForkHash: r.ForkHash, OldHead: r.OldHead, CreatedAt: time.Now(),
+	}
+	for _, b := range r.Removed {
+		ev.Removed = append(ev.Removed, events.BlockRef{Number: b.Number, Hash: b.Hash})
+	}
+	if !f.publish(ev) {
+		f.logger.Warn("Failed to publish reorg event (channel full)", zap.Uint64("seq", r.Seq))
+	}
+	for _, ob := range r.Blocks {
+		for i := len(ob.Receipts) - 1; i >= 0; i-- {
+			logs := ob.Receipts[i].Logs
+			for j := len(logs) - 1; j >= 0; j-- {
+				l := logs[j]
+				removed := &types.Log{
+					Address: l.Address, Topics: l.Topics, Data: l.Data,
+					BlockNumber: l.BlockNumber, BlockHash: l.BlockHash, TxHash: l.TxHash,
+					TxIndex: l.TxIndex, Index: l.Index, Removed: true,
+				}
+				if !f.publish(events.NewLogEvent(removed)) {
+					f.logger.Warn("Failed to publish removed log event (channel full)",
+						zap.Uint64("block", l.BlockNumber), zap.Uint("log_index", l.Index))
+				}
+			}
+		}
+	}
 }
 
 // nodeBlockHash returns the hash of the node's block at height.

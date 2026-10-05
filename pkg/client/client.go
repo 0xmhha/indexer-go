@@ -135,6 +135,17 @@ func (c *Client) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
 	return blockNumber, nil
 }
 
+// GetFinalizedBlockNumber returns the number of the node's finalized block
+// (the "finalized" block tag). Nodes without finality information answer
+// with no block, reported as ethereum.NotFound.
+func (c *Client) GetFinalizedBlockNumber(ctx context.Context) (uint64, error) {
+	h, err := c.ethClient.HeaderByNumber(ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
+	if err != nil {
+		return 0, fmt.Errorf("failed to get finalized block: %w", err)
+	}
+	return h.Number.Uint64(), nil
+}
+
 // GetBlockByNumber fetches a block by its number
 func (c *Client) GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error) {
 	blockNum := new(big.Int).SetUint64(number)

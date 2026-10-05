@@ -129,6 +129,11 @@ type Config struct {
 	// included) and publishes its events after commit.
 	AtomicBlock bool
 
+	// Finality and Confirmations choose the live loop's target height
+	// (see targetHead). The zero value indexes up to the head.
+	Finality      string
+	Confirmations uint64
+
 	// OptimizerConfig holds configuration for adaptive optimization (optional)
 	OptimizerConfig *OptimizerConfig
 }
@@ -751,10 +756,10 @@ func (f *Fetcher) Run(ctx context.Context) error {
 		default:
 		}
 
-		// Get latest block from chain
-		latestChainBlock, err := f.latestBlockNumber(ctx)
+		// Get the highest block to index under the finality policy
+		latestChainBlock, ok, err := f.targetHead(ctx)
 		if err != nil {
-			f.logger.Error("Failed to get latest block number", zap.Error(err))
+			f.logger.Error("Failed to get target block number", zap.Error(err))
 			if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
 				return err
 			}
@@ -762,7 +767,7 @@ func (f *Fetcher) Run(ctx context.Context) error {
 		}
 
 		// Check if we're caught up
-		if nextHeight > latestChainBlock {
+		if !ok || nextHeight > latestChainBlock {
 			f.logger.Debug("Caught up with chain",
 				zap.Uint64("next_height", nextHeight),
 				zap.Uint64("latest_chain_block", latestChainBlock),

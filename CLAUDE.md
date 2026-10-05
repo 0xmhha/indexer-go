@@ -55,7 +55,7 @@ make docker-build   # Container image
 - **EventBus**: `main.go` uses `events.NewEventBus` directly; subscriptions read `sub.Channel` (not `sub.Events()`)
   - Publishing is non-blocking; events are dropped when a buffer is full
   - `pkg/eventbus` (Redis, Kafka, factory with local degradation) exists but is not wired
-- **Storage**: PebbleDB. Each block is indexed in one block transaction (`BeginBlock`, indexed batch bound to ctx; all access goes through `s.kv(ctx)`). `indexer.atomic_block: false` selects the legacy path until it is removed. Each block's commit records undo (`/undo/<height>`, last 128 blocks); on a reorg the live loop rolls back to the fork point (`docs/analysis/reorg-design.md`)
+- **Storage**: PebbleDB. Each block is indexed in one block transaction (`BeginBlock`, indexed batch bound to ctx; all access goes through `s.kv(ctx)`). `indexer.atomic_block: false` selects the legacy path until it is removed. Each block's commit records undo (`/undo/<height>`, last 128 blocks); on a reorg the live loop rolls back to the fork point, keeps the removed blocks as orphans (`/orphan/`, queryable with GraphQL `reorgs`/`orphanedBlock`/`orphanedTransaction`) and publishes a `reorg` event followed by the removed logs with `removed: true` (`docs/analysis/reorg-design.md`)
 - **Fetcher**: Live indexing processes blocks sequentially by polling; the worker pool (`indexer.workers`) is used only by gap recovery
   - All state changes (index block, rollback, backfill) run as commands on one writer goroutine (`pkg/fetch/writer.go`, the only caller of `BeginBlock`, enforced by a test). Startup recovery is `Fetcher.Recover`: reorg check, feature state, backfill (order-independent features backfill online in the background)
 - **Sources** (`pkg/source`): `rpc.endpoint: replay:///dir` replays an archive written with `rpc.record_dir`; `source.era_dir` reads the blocks held by era1 files (`gstable export-history`) from the files and later blocks from the node (requires `indexer.profile_source`; the archive must match the node's chain). Era1 receipts carry consensus fields only; the chain profile derives the rest (`chains.BinaryProfile`, StableNet uses the Anzeon effective gas price rule). Blob gas prices are not derived from era1 (left nil): they depend on the chain's blob schedule, which block data does not carry
@@ -73,6 +73,10 @@ rpc:
 indexer:
   workers: 100
   poll_interval: 50ms   # head polling once caught up (head latency); separate from error retry delay
+  finality: head        # head | confirmations (with confirmations: N) | finalized; head suits StableNet (WBFT is final on insertion)
+eventbus:
+  publish_buffer_size: 65536    # events are dropped only when buffers are full
+  subscriber_buffer_size: 16384 # per API subscription
 api:
   port: 8080
   enable_graphql: true
@@ -82,7 +86,7 @@ api:
 
 Pre-configured: `configs/config-{anvil,devnet,sepolia}.yaml`
 
-Known config issues: `database.readonly` and several sections (`eventbus`, `node`, `watchlist`, `resilience`, `account_abstraction`) are read but ignored. The `--workers` default overrides the YAML value.
+Known config issues: `database.readonly` and several sections (`eventbus` except the buffer sizes, `node`, `watchlist`, `resilience`, `account_abstraction`) are read but ignored. The `--workers` default overrides the YAML value.
 
 ### API Endpoints
 

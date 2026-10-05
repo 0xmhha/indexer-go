@@ -99,3 +99,35 @@ StableNet(WBFT)은 블록이 즉시 확정되므로 reorg가 없다. 일반 EVM 
 - G4: reorg 이벤트(되돌린 블록을 구독자에게 알림)와 확정 블록만 색인하는 정책(n confirmation, `finalized` 태그).
 - 기존 비원자 경로(`atomic_block: false`)는 undo를 쓰지 않으므로 reorg를 감지하지도 되돌리지도 않는다. 이 경로는 S5에서 지운다.
 - gap 복구 경로는 `ReorgError`를 받으면 오류로 끝난다. live 루프만 되돌린다.
+
+### G4 (10/5)
+
+**결정(사용자).**
+- reorg가 나면 노드는 이전 분기를 지운다. DApp이 이전 데이터와 바뀐 데이터를 함께 알 수 있도록, 되돌린 블록을 따로 보관하고 indexer로 다시 조회할 수 있게 한다.
+- 이벤트 버스는 구독자가 느려도 잃지 않을 만큼 크게 둔다. 그래도 넘치면 버리고, 구독으로 못 받은 데이터는 조회 API로 다시 읽는다.
+
+| 산출물 | 내용 |
+|---|---|
+| 되돌린 블록 보관 | `pkg/storage/orphan.go`. `RollbackTo`가 높이마다 되돌리는 트랜잭션 안에서, undo를 적용하기 전에 블록(거래 포함)과 receipt를 `/orphan/block/<hash>`에 보관하고 높이·거래 색인(`/orphan/height/`, `/orphan/tx/`)을 쓴다. 첫 트랜잭션에 reorg 기록(`/orphan/reorg/<순번>`: 갈라진 지점, 되돌리기 전 높이, 되돌린 블록 목록, 시각)을 쓴다. 블록은 정본 아니면 orphan 둘 중 하나에만 있다. orphan 키에는 undo가 없어 이후 되돌리기에도 남는다. 보관 기간은 무기한 |
+| reorg 이벤트 | `events.ReorgEvent`(`reorg`). writer의 되돌리기 명령이 commit 뒤 reorg 이벤트를 내고, 되돌린 블록의 로그를 `Removed=true`로 낸다(높은 블록부터, 로그 역순, go-ethereum과 같다). 그다음에 새 분기 블록이 색인된다. 분산 버스 직렬화에도 추가했다 |
+| GraphQL | 조회 `reorgs`, `reorg`, `orphanedBlocks`, `orphanedBlock`, `orphanedTransaction`(새 분기에 다시 들어갔으면 `reincludedIn`). 구독 `reorg`. `logs` 구독은 제거된 로그를 `removed: true`로 전달한다 |
+| JSON-RPC 필터 | 필터가 마지막으로 본 블록의 높이와 hash를 기억한다. 폴링 때 그 블록이 정본에서 빠졌으면 orphan의 parent hash를 따라 갈라진 지점을 찾고, 제거된 로그를 `removed: true`로 먼저 돌려준 뒤 새 분기 로그를 이어서 돌려준다. 버스 이벤트에 기대지 않아 전달 시점과 경합하지 않는다 |
+| 이벤트 버스 크기 | 발행 채널 65,536(`eventbus.publish_buffer_size`, 이전 1000이고 설정은 무시됐다), API 구독 채널 16,384(`eventbus.subscriber_buffer_size`, 이전 GraphQL 100, pending pool 256). 1000거래 블록 하나가 이벤트 2000개 이상을 낸다 |
+| finality 정책 | `indexer.finality`: `head`(기본) / `confirmations`(`indexer.confirmations`만큼 뒤) / `finalized`(노드의 finalized 태그). 시작할 때 노드가 정책을 지원하는지 확인한다. 어느 정책이든 되돌리기는 안전망으로 남는다 |
+
+**검증.**
+- `TestRollbackArchivesOrphans`: 되돌린 블록마다 거래·receipt·로그가 조회되고, 두 번째 reorg는 다음 순번을 받으며 앞의 orphan이 남는다.
+- `TestRollbackArchivesAtomically`: 되돌리는 도중 보관이 실패하면 각 블록은 정본 아니면 orphan 하나에만 있다.
+- `TestReorgEventsAndOrphans`: live 루프 reorg에서 구독자가 reorg 이벤트 → 제거된 로그 전부(`removed`) → 새 분기 순서로 받는다. GraphQL로 reorg와 제거된 블록·거래를 조회하고, 정본 keyspace는 새 체인을 처음부터 색인한 DB와 같다.
+- `TestReorgAndRemovedLogSubscriptions`: GraphQL ws의 `reorg` 구독과 필터가 걸린 `logs` 구독.
+- `TestFilterChangesAcrossReorg`: reorg 전에 만든 로그 필터가 제거된 로그와 새 분기 로그를 차례로 받고, 블록 필터는 새 분기 hash를 받는다.
+- `TestIdleSubscriberKeepsLargeBlockEvents`: 1000거래 4블록 동안 읽지 않는 구독자가 이벤트 6007개를 모두 받는다(이전 크기에서는 100개).
+- `TestFinalityConfirmations`, `TestFinalityFinalized`, `TestFinalityFinalizedUnsupported`.
+
+**StableNet의 finalized 태그.** go-stablenet은 `finalized`·`safe`를 `latest`와 같게 답하지만, 10초 동안 737번 물으면 31%는 한 블록 뒤였다. finalized 정책의 head 지연은 p95 1.088초(head 정책은 46ms)다. WBFT 블록은 들어오는 즉시 확정이므로 StableNet에는 기본(head)이 맞다.
+
+**남긴 것.**
+- 알림 서비스(`pkg/notifications`)는 reorg 이벤트를 다루지 않는다.
+- 새 분기가 색인한 높이보다 짧은 동안에는 live 루프가 reorg를 보지 못한다(새 블록의 parent hash로 찾기 때문). 실제 체인은 새 분기가 계속 자라므로 다음 블록에서 처리된다.
+- JSON-RPC 필터는 폴링에서 높이를 읽은 뒤 hash를 읽기 전에 reorg가 나면, 그 한 번은 제거된 로그 일부를 알리지 못할 수 있다(창은 수 µs).
+- orphan 보관을 지우는 정책은 필요할 때 설정으로 넣는다.

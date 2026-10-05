@@ -654,6 +654,9 @@ func initTypes() {
 	// Initialize multi-chain types
 	initMultiChainTypes()
 
+	// Initialize reorganization and orphaned block types (uses core types)
+	initReorgTypes()
+
 	// Initialize watchlist types
 	initWatchlistTypes()
 

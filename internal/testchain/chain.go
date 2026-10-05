@@ -67,6 +67,9 @@ type Chain struct {
 	code      map[common.Address][]byte
 	head      uint64 // highest block visible over RPC
 	baseTime  uint64
+
+	finalized   *uint64 // finalized/safe height; nil follows head
+	noFinalized bool    // the node does not know the finalized tag
 }
 
 type txLocation struct {
@@ -323,6 +326,23 @@ func (c *Chain) blockAt(n uint64) *Block {
 		return nil
 	}
 	return c.blocks[n]
+}
+
+// SetFinalized makes the finalized and safe tags answer block n (capped at
+// the head).
+func (c *Chain) SetFinalized(n uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.finalized = &n
+	c.noFinalized = false
+}
+
+// DisableFinalizedTag makes the node answer null for the finalized and safe
+// tags, as nodes without finality information do.
+func (c *Chain) DisableFinalizedTag() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.noFinalized = true
 }
 
 // Block returns block n regardless of the head, or nil if it was not built.

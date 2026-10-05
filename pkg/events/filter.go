@@ -187,6 +187,8 @@ func (f *Filter) Match(event Event) bool {
 		return f.MatchLog(e)
 	case *SystemContractEvent:
 		return f.MatchSystemContract(e)
+	case *ReorgEvent:
+		return true // concerns every subscriber of the type
 	default:
 		return false
 	}

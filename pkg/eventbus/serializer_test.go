@@ -236,6 +236,36 @@ func TestJSONSerializer_SystemContractEvent(t *testing.T) {
 	assert.Equal(t, "123", se.Data["proposalId"])
 }
 
+func TestJSONSerializer_ReorgEvent(t *testing.T) {
+	s := NewJSONSerializer()
+
+	original := &events.ReorgEvent{
+		Seq:        3,
+		ForkNumber: 100,
+		ForkHash:   common.HexToHash("0x01"),
+		OldHead:    102,
+		Removed: []events.BlockRef{
+			{Number: 102, Hash: common.HexToHash("0x02")},
+			{Number: 101, Hash: common.HexToHash("0x03")},
+		},
+		CreatedAt: time.Now().Truncate(time.Millisecond),
+	}
+
+	data, err := s.Serialize(original)
+	require.NoError(t, err)
+	event, err := s.Deserialize(data)
+	require.NoError(t, err)
+
+	re, ok := event.(*events.ReorgEvent)
+	require.True(t, ok)
+	assert.Equal(t, original.Seq, re.Seq)
+	assert.Equal(t, original.ForkNumber, re.ForkNumber)
+	assert.Equal(t, original.ForkHash, re.ForkHash)
+	assert.Equal(t, original.OldHead, re.OldHead)
+	assert.Equal(t, original.Removed, re.Removed)
+	assert.Equal(t, original.CreatedAt.UTC(), re.CreatedAt.UTC())
+}
+
 func TestJSONSerializer_ErrorCases(t *testing.T) {
 	s := NewJSONSerializer()
 

@@ -113,7 +113,7 @@ func (p *PendingPool) SubscribeToEventBus(bus *events.EventBus) {
 		events.SubscriptionID(PendingPoolSubscriptionID),
 		[]events.EventType{events.EventTypeTransaction},
 		nil, // No filter, we'll filter in the handler
-		256, // Buffer size
+		0,   // Buffer size: the bus default (eventbus.subscriber_buffer_size)
 	)
 
 	// Start processing events

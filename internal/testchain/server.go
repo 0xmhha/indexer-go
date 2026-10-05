@@ -308,7 +308,15 @@ func (s *Server) blockNumberParam(req rpcRequest, i int) (uint64, bool) {
 		return 0, false
 	}
 	switch tag {
-	case "latest", "pending", "safe", "finalized":
+	case "latest", "pending":
+		return c.head, true
+	case "safe", "finalized":
+		switch {
+		case c.noFinalized:
+			return 0, false
+		case c.finalized != nil && *c.finalized < c.head:
+			return *c.finalized, true
+		}
 		return c.head, true
 	case "earliest":
 		return 0, true

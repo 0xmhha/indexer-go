@@ -228,10 +228,19 @@ func (f *Fetcher) writeCursorOnly(ctx context.Context, height uint64) error {
 	return tx.Commit()
 }
 
-// rollbackTo rolls the database back to height `to` on the writer.
+// rollbackTo rolls the database back to height `to` on the writer and,
+// once the rollback committed, announces it (publishReorg) before any block
+// of the new branch is indexed.
 func (f *Fetcher) rollbackTo(ctx context.Context, rb rollbackStorage, to uint64) error {
 	return f.write().do(ctx, "rollback", func(ctx context.Context) error {
-		return rb.RollbackTo(ctx, to)
+		r, err := rb.RollbackTo(ctx, to)
+		if err != nil {
+			return err
+		}
+		if r != nil {
+			f.publishReorg(r)
+		}
+		return nil
 	})
 }
 

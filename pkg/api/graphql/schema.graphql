@@ -751,6 +751,11 @@ type Subscription {
   # replayLast: Number of recent consensus blocks to replay immediately upon subscription (max 100)
   consensusBlock(replayLast: Int): ConsensusBlockSub!
 
+  # Subscribe to chain reorganizations the indexer rolled back.
+  # Logs of the removed blocks follow on the logs subscription with removed: true.
+  # The removed blocks stay queryable with orphanedBlock.
+  reorg(replayLast: Int): Reorg!
+
   # Subscribe to chain fork detection events
   # replayLast: Number of recent fork events to replay immediately upon subscription (max 100)
   consensusFork(replayLast: Int): ConsensusForkSub!
@@ -804,6 +809,49 @@ type ConsensusBlockSub {
 }
 
 # Chain fork detection event from subscription
+# A block identified by number and hash
+type BlockRef {
+  number: BigInt!
+  hash: Hash!
+}
+
+# A chain reorganization the indexer rolled back
+type Reorg {
+  # Sequence number, increasing in the order reorganizations happened
+  id: BigInt!
+  # Newest block both branches share
+  forkNumber: BigInt!
+  forkHash: Hash!
+  # Indexed height before the rollback
+  oldHead: BigInt!
+  # Number of blocks rolled back
+  depth: Int!
+  # Rolled-back blocks, newest first
+  removedBlocks: [BlockRef!]!
+  # Unix time the rollback happened
+  detectedAt: BigInt!
+}
+
+# A block removed from the canonical chain by a reorganization, as it was indexed
+type OrphanedBlock {
+  block: Block!
+  # Receipts in transaction order
+  receipts: [Receipt!]!
+  # The reorganization that removed the block
+  reorg: Reorg
+}
+
+# A transaction of a removed block
+type OrphanedTransaction {
+  transaction: Transaction!
+  receipt: Receipt
+  # The removed block that held it
+  block: BlockRef!
+  reorgId: BigInt!
+  # The canonical block holding the transaction now, if it was included again
+  reincludedIn: BlockRef
+}
+
 type ConsensusForkSub {
   # Block number where fork occurred
   forkBlockNumber: BigInt!
@@ -983,6 +1031,23 @@ type AccountModules {
 
 # Query root type
 type Query {
+  # ========== Reorganization Queries ==========
+
+  # Chain reorganizations the indexer rolled back, newest first
+  reorgs(limit: Int = 20, offset: Int = 0): [Reorg!]!
+
+  # A reorganization by id
+  reorg(id: BigInt!): Reorg
+
+  # Blocks removed by reorganizations at a height
+  orphanedBlocks(number: BigInt!): [OrphanedBlock!]!
+
+  # A removed block by hash, as it was indexed
+  orphanedBlock(hash: Hash!): OrphanedBlock
+
+  # A transaction as it was in removed blocks (more than one if orphaned again)
+  orphanedTransaction(hash: Hash!): [OrphanedTransaction!]!
+
   # ========== Multi-Chain Queries ==========
 
   # Get all registered chains

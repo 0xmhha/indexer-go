@@ -95,54 +95,37 @@ func (tx *BlockTx) writeUndo() error {
 	return nil
 }
 
-// RollbackTo undoes the indexed blocks above height to, newest first, one
-// transaction per block, and returns the storage to the state it had after
-// block `to` committed. If any of those blocks has no complete undo record it
-// fails before changing anything.
-func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) error {
-	latest, err := s.GetLatestHeight(ctx)
-	if err != nil {
-		return err
-	}
-	for h := latest; h > to; h-- {
-		if err := s.checkUndo(ctx, h); err != nil {
-			return err
-		}
-	}
-	for h := latest; h > to; h-- {
-		if err := s.undoBlock(ctx, h); err != nil {
-			return err
-		}
-	}
-	s.resetCaches()
-	return nil
-}
-
-func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64) error {
+// undoBlock rolls back block h in one transaction, archiving it as an
+// orphan of reorg first (with the reorganization record when first).
+func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *Reorg, first bool) (*OrphanedBlock, error) {
 	raw, closer, err := s.kv(ctx).Get(UndoKey(h))
 	if errors.Is(err, pebble.ErrNotFound) {
-		return fmt.Errorf("%w %d", ErrNoUndo, h)
+		return nil, fmt.Errorf("%w %d", ErrNoUndo, h)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var rec undoRecord
 	decErr := rlp.DecodeBytes(raw, &rec)
 	if err := closer.Close(); err != nil {
-		return fmt.Errorf("read undo record %d: %w", h, err)
+		return nil, fmt.Errorf("read undo record %d: %w", h, err)
 	}
 	if decErr != nil {
-		return fmt.Errorf("decode undo record %d: %w", h, decErr)
+		return nil, fmt.Errorf("decode undo record %d: %w", h, decErr)
 	}
 	if !rec.Complete {
-		return fmt.Errorf("%w %d (incomplete)", ErrNoUndo, h)
+		return nil, fmt.Errorf("%w %d (incomplete)", ErrNoUndo, h)
 	}
 
-	_, tx, err := s.BeginBlock(ctx)
+	txCtx, tx, err := s.BeginBlock(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
+	ob, err := s.archiveOrphan(txCtx, tx, h, reorg, first)
+	if err != nil {
+		return nil, err
+	}
 	for i := len(rec.Entries) - 1; i >= 0; i-- {
 		e := rec.Entries[i]
 		if e.Existed {
@@ -151,13 +134,16 @@ func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64) error {
 			err = tx.batch.Delete(e.Key, nil)
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if err := tx.batch.Delete(UndoKey(h), nil); err != nil {
-		return err
+		return nil, err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return ob, nil
 }
 
 // resetCaches drops in-memory state derived from stored data, so it is read

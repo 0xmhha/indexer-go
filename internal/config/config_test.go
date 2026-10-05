@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/0xmhha/indexer-go/internal/constants"
 )
 
 // TestNewConfig tests creating a config with defaults
@@ -614,5 +616,65 @@ func TestLoadFromEnvInvalidStartHeight(t *testing.T) {
 	err := cfg.LoadFromEnv()
 	if err == nil {
 		t.Error("Expected error for invalid start height, got nil")
+	}
+}
+
+func TestEventBusBufferSizes(t *testing.T) {
+	cfg := NewConfig()
+	if cfg.EventBus.PublishBufferSize != constants.DefaultEventBusPublishBuffer ||
+		cfg.EventBus.SubscriberBufferSize != constants.DefaultEventBusSubscriberBuffer {
+		t.Fatalf("defaults: publish %d subscriber %d", cfg.EventBus.PublishBufferSize, cfg.EventBus.SubscriberBufferSize)
+	}
+
+	t.Setenv("INDEXER_EVENTBUS_PUBLISH_BUFFER_SIZE", "1234")
+	t.Setenv("INDEXER_EVENTBUS_SUBSCRIBER_BUFFER_SIZE", "567")
+	if err := cfg.LoadFromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EventBus.PublishBufferSize != 1234 || cfg.EventBus.SubscriberBufferSize != 567 {
+		t.Fatalf("env: publish %d subscriber %d", cfg.EventBus.PublishBufferSize, cfg.EventBus.SubscriberBufferSize)
+	}
+
+	t.Setenv("INDEXER_EVENTBUS_SUBSCRIBER_BUFFER_SIZE", "x")
+	if err := cfg.LoadFromEnv(); err == nil {
+		t.Fatal("invalid subscriber buffer size accepted")
+	}
+}
+
+func TestFinalityConfig(t *testing.T) {
+	cfg := NewConfig()
+	cfg.RPC.Endpoint = "http://localhost:8545"
+	cfg.Database.Path = t.TempDir()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("default finality rejected: %v", err)
+	}
+	for _, tc := range []struct {
+		finality      string
+		confirmations uint64
+		ok            bool
+	}{
+		{"head", 0, true},
+		{"finalized", 0, true},
+		{"confirmations", 12, true},
+		{"confirmations", 0, false},
+		{"safe", 0, false},
+	} {
+		cfg.Indexer.Finality, cfg.Indexer.Confirmations = tc.finality, tc.confirmations
+		if err := cfg.Validate(); (err == nil) != tc.ok {
+			t.Errorf("finality %q confirmations %d: err %v, want ok %v", tc.finality, tc.confirmations, err, tc.ok)
+		}
+	}
+
+	t.Setenv("INDEXER_FINALITY", "confirmations")
+	t.Setenv("INDEXER_CONFIRMATIONS", "6")
+	if err := cfg.LoadFromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Indexer.Finality != "confirmations" || cfg.Indexer.Confirmations != 6 {
+		t.Fatalf("env: finality %q confirmations %d", cfg.Indexer.Finality, cfg.Indexer.Confirmations)
+	}
+	t.Setenv("INDEXER_CONFIRMATIONS", "-1")
+	if err := cfg.LoadFromEnv(); err == nil {
+		t.Fatal("invalid confirmations accepted")
 	}
 }

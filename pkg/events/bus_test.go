@@ -363,3 +363,18 @@ func TestDefaultSubscribeOptions(t *testing.T) {
 		t.Errorf("expected ChannelSize 100, got %d", opts.ChannelSize)
 	}
 }
+
+func TestSubscribeUsesBusDefaultChannelSize(t *testing.T) {
+	eb := NewEventBus(10, 50)
+	sub := eb.Subscribe("default-size", []EventType{EventTypeBlock}, nil, 0)
+	if got := cap(sub.Channel); got != 50 {
+		t.Fatalf("channel size %d, want the bus default 50", got)
+	}
+	sub = eb.Subscribe("own-size", []EventType{EventTypeBlock}, nil, 7)
+	if got := cap(sub.Channel); got != 7 {
+		t.Fatalf("channel size %d, want 7", got)
+	}
+	if got := cap(NewEventBus(10, 0).Subscribe("unset", nil, nil, 0).Channel); got != 100 {
+		t.Fatalf("channel size %d, want 100 without a configured default", got)
+	}
+}
