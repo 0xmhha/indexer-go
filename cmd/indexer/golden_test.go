@@ -32,10 +32,6 @@ const (
 // ingestMode selects the fetcher's block read and write paths.
 type ingestMode struct {
 	name   string
-	atomic bool
-	// clientSource reads blocks through the legacy go-ethereum client
-	// instead of the chain profile source.
-	clientSource bool
 	// features overrides features (name -> enabled) on top of the test
 	// chain's defaults.
 	features map[string]bool
@@ -55,10 +51,8 @@ func orderIndependentOnly(mode ingestMode) ingestMode {
 }
 
 var (
-	legacyMode = ingestMode{name: "legacy", atomic: false, clientSource: true}
-	clientMode = ingestMode{name: "client", atomic: true, clientSource: true}
-	atomicMode = ingestMode{name: "atomic", atomic: true}
-	allModes   = []ingestMode{legacyMode, clientMode, atomicMode}
+	atomicMode = ingestMode{name: "atomic"}
+	allModes   = []ingestMode{atomicMode}
 )
 
 // defaultMode is the production default write path.
@@ -85,8 +79,6 @@ func startAppAt(t testing.TB, endpoint, dir string, mode ingestMode) *App {
 	cfg.Database.Path = dir
 	cfg.API.Enabled = false
 	cfg.Indexer.StartHeight = 0
-	cfg.Indexer.AtomicBlock = mode.atomic
-	cfg.Indexer.ProfileSource = !mode.clientSource
 	enableTestChainFeatures(cfg)
 	for name, on := range mode.features {
 		on := on
@@ -224,26 +216,6 @@ func TestIndexIsDeterministic(t *testing.T) {
 	first := dumpScenarioIndex(t)
 	second := dumpScenarioIndex(t)
 	require.Empty(t, testchain.DiffKeyspace(first, second, 20))
-}
-
-// TestLegacyPathMatchesGolden keeps the fallback path honest until it is
-// removed: on a clean run the legacy path must produce exactly the keyspace
-// of the default (atomic) path.
-func TestLegacyPathMatchesGolden(t *testing.T) {
-	atomic := dumpScenarioIndex(t)
-	legacy := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), legacyMode))
-	diff := testchain.DiffKeyspace(atomic, legacy, 0)
-	require.Empty(t, diff, "legacy path differs from the default path: %v", testchain.SummarizeDiff(diff))
-}
-
-// TestClientSourceMatchesGolden does the same for the go-ethereum client
-// read path: on an EVM chain it must store exactly what the chain profile
-// source stores.
-func TestClientSourceMatchesGolden(t *testing.T) {
-	profile := dumpScenarioIndex(t)
-	client := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), clientMode))
-	diff := testchain.DiffKeyspace(profile, client, 0)
-	require.Empty(t, diff, "client source differs from the profile source: %v", testchain.SummarizeDiff(diff))
 }
 
 // enableTestChainFeatures turns on the StableNet features whose data the test

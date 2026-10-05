@@ -7,6 +7,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/abi"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
@@ -227,10 +228,9 @@ func (s *Schema) transactionToMap(tx *model.Transaction, location *storage.TxLoc
 }
 
 // feeDelegation returns the fee payer and its signature of a fee delegation
-// transaction: from the transaction itself when the chain profile decoded
-// it, otherwise from the metadata stored by the legacy ingest path.
+// transaction, as the chain profile decoded it.
 func (s *Schema) feeDelegation(tx *model.Transaction) (common.Address, *big.Int, *big.Int, *big.Int, bool) {
-	fd, ok := storage.FeeDelegationOf(context.Background(), s.storage, tx)
+	fd, ok := chains.FeeDelegationOf(tx)
 	if !ok {
 		return common.Address{}, nil, nil, nil, false
 	}

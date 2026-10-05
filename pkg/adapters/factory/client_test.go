@@ -342,7 +342,7 @@ func TestParseRawBlockWithMetas_BasicBlock(t *testing.T) {
 		"uncles": []
 	}`
 
-	block, metas, err := parseRawBlockWithMetas(json.RawMessage(blockJSON))
+	block, err := parseRawBlockFull(json.RawMessage(blockJSON))
 	if err != nil {
 		t.Fatalf("failed to parse block: %v", err)
 	}
@@ -361,10 +361,6 @@ func TestParseRawBlockWithMetas_BasicBlock(t *testing.T) {
 
 	if len(block.Transactions()) != 0 {
 		t.Errorf("expected 0 transactions, got %d", len(block.Transactions()))
-	}
-
-	if len(metas) != 0 {
-		t.Errorf("expected 0 fee delegation metas, got %d", len(metas))
 	}
 }
 
@@ -393,7 +389,7 @@ func TestParseRawBlockWithMetas_WithEIP4844Fields(t *testing.T) {
 		"uncles": []
 	}`
 
-	block, _, err := parseRawBlockWithMetas(json.RawMessage(blockJSON))
+	block, err := parseRawBlockFull(json.RawMessage(blockJSON))
 	if err != nil {
 		t.Fatalf("failed to parse block: %v", err)
 	}
@@ -457,17 +453,13 @@ func TestParseRawBlockWithMetas_WithStandardTx(t *testing.T) {
 		"uncles": []
 	}`
 
-	block, metas, err := parseRawBlockWithMetas(json.RawMessage(blockJSON))
+	block, err := parseRawBlockFull(json.RawMessage(blockJSON))
 	if err != nil {
 		t.Fatalf("failed to parse block: %v", err)
 	}
 
 	if len(block.Transactions()) != 1 {
 		t.Fatalf("expected 1 transaction, got %d", len(block.Transactions()))
-	}
-
-	if len(metas) != 0 {
-		t.Errorf("expected 0 fee delegation metas for standard tx, got %d", len(metas))
 	}
 
 	tx := block.Transactions()[0]
@@ -535,7 +527,7 @@ func TestParseRawBlockWithMetas_WithFeeDelegationTx(t *testing.T) {
 		"uncles": []
 	}`
 
-	block, metas, err := parseRawBlockWithMetas(json.RawMessage(blockJSON))
+	block, err := parseRawBlockFull(json.RawMessage(blockJSON))
 	if err != nil {
 		t.Fatalf("failed to parse block: %v", err)
 	}
@@ -544,30 +536,10 @@ func TestParseRawBlockWithMetas_WithFeeDelegationTx(t *testing.T) {
 		t.Fatalf("expected 2 transactions, got %d", len(block.Transactions()))
 	}
 
-	// First tx is standard, no metadata
-	// Second tx is fee delegation, should have metadata
-	if len(metas) != 1 {
-		t.Fatalf("expected 1 fee delegation meta, got %d", len(metas))
-	}
-
-	meta := metas[0]
-	if meta.OriginalType != FeeDelegateDynamicFeeTxType {
-		t.Errorf("expected original type 0x16, got 0x%x", meta.OriginalType)
-	}
-	if meta.BlockNumber != 0x400 {
-		t.Errorf("expected block number 1024, got %d", meta.BlockNumber)
-	}
-	expectedFeePayer := common.HexToAddress("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-	if meta.FeePayer != expectedFeePayer {
-		t.Errorf("expected fee payer %s, got %s", expectedFeePayer.Hex(), meta.FeePayer.Hex())
-	}
-	if meta.FeePayerV == nil || meta.FeePayerV.Cmp(big.NewInt(0x1b)) != 0 {
-		t.Errorf("expected fee payer V=0x1b, got %v", meta.FeePayerV)
-	}
 }
 
 func TestParseRawBlockWithMetas_InvalidJSON(t *testing.T) {
-	_, _, err := parseRawBlockWithMetas(json.RawMessage(`{invalid}`))
+	_, err := parseRawBlockFull(json.RawMessage(`{invalid}`))
 	if err == nil {
 		t.Error("expected error for invalid JSON")
 	}
@@ -631,34 +603,6 @@ func TestToBlockNumArg(t *testing.T) {
 }
 
 // ========== FeeDelegationMeta Tests ==========
-
-func TestFeeDelegationMeta_Fields(t *testing.T) {
-	feePayer := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
-	txHash := common.HexToHash("0xabcdef")
-
-	meta := &FeeDelegationMeta{
-		TxHash:       txHash,
-		BlockNumber:  100,
-		OriginalType: FeeDelegateDynamicFeeTxType,
-		FeePayer:     feePayer,
-		FeePayerV:    big.NewInt(27),
-		FeePayerR:    big.NewInt(12345),
-		FeePayerS:    big.NewInt(67890),
-	}
-
-	if meta.TxHash != txHash {
-		t.Errorf("expected tx hash %s, got %s", txHash.Hex(), meta.TxHash.Hex())
-	}
-	if meta.BlockNumber != 100 {
-		t.Errorf("expected block 100, got %d", meta.BlockNumber)
-	}
-	if meta.OriginalType != 0x16 {
-		t.Errorf("expected type 0x16, got 0x%x", meta.OriginalType)
-	}
-	if meta.FeePayer != feePayer {
-		t.Errorf("expected fee payer %s, got %s", feePayer.Hex(), meta.FeePayer.Hex())
-	}
-}
 
 // ========== rpcTransaction Method Tests ==========
 

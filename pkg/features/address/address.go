@@ -62,7 +62,7 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 				return fmt.Errorf("index tx %s for recipient: %w", tx.Hash.Hex(), err)
 			}
 		}
-		if payer, ok := feature.DelegatedFeePayer(ctx, h.storage, tx); ok {
+		if payer, ok := feature.DelegatedFeePayer(tx); ok {
 			if payer != from && (tx.To == nil || payer != *tx.To) {
 				if err := h.txIndex.AddTransactionToAddressIndex(ctx, payer, tx.Hash); err != nil {
 					return fmt.Errorf("index tx %s for fee payer: %w", tx.Hash.Hex(), err)

@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/pkg/adapters/evm"
-	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -73,27 +72,15 @@ func (c *EVMClient) GetBlockByHash(ctx context.Context, hash common.Hash) (*type
 
 // getBlockByNumberRaw fetches a block using raw RPC and custom parsing
 func (c *EVMClient) getBlockByNumberRaw(ctx context.Context, number uint64) (*types.Block, error) {
-	block, _, err := c.getBlockByNumberRawWithMetas(ctx, number)
-	return block, err
-}
-
-// getBlockByNumberRawWithMetas fetches a block and extracts fee delegation metadata
-func (c *EVMClient) getBlockByNumberRawWithMetas(ctx context.Context, number uint64) (*types.Block, []*FeeDelegationMeta, error) {
 	var raw json.RawMessage
 	err := c.rpcClient.CallContext(ctx, &raw, "eth_getBlockByNumber", toBlockNumArg(big.NewInt(int64(number))), true)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil, ethereum.NotFound
+		return nil, ethereum.NotFound
 	}
-
-	return parseRawBlockWithMetas(raw)
-}
-
-// GetBlockWithFeeDelegationMeta retrieves a block by number along with fee delegation metadata
-func (c *EVMClient) GetBlockWithFeeDelegationMeta(ctx context.Context, number uint64) (*types.Block, []*FeeDelegationMeta, error) {
-	return c.getBlockByNumberRawWithMetas(ctx, number)
+	return parseRawBlockFull(raw)
 }
 
 // getBlockByHashRaw fetches a block by hash using raw RPC and custom parsing
@@ -120,9 +107,6 @@ type rpcBlock struct {
 
 // FeeDelegateDynamicFeeTxType is the StableNet-specific fee delegation transaction type
 const FeeDelegateDynamicFeeTxType = 0x16
-
-// FeeDelegationMeta contains fee delegation metadata for a transaction.
-type FeeDelegationMeta = chain.FeeDelegationMeta
 
 // rpcTransaction is a helper for parsing transactions
 type rpcTransaction struct {
@@ -373,22 +357,23 @@ func (f *flexibleUint64) UnmarshalJSON(data []byte) error {
 
 // parseRawBlock parses a raw JSON block into types.Block
 func parseRawBlock(raw json.RawMessage) (*types.Block, error) {
-	block, _, err := parseRawBlockWithMetas(raw)
+	block, err := parseRawBlockFull(raw)
 	return block, err
 }
 
-// parseRawBlockWithMetas parses a raw JSON block into types.Block and extracts fee delegation metadata
-func parseRawBlockWithMetas(raw json.RawMessage) (*types.Block, []*FeeDelegationMeta, error) {
+// parseRawBlockFull parses a raw JSON block, fee delegation transactions
+// included, into types.Block.
+func parseRawBlockFull(raw json.RawMessage) (*types.Block, error) {
 	// Parse header
 	var head rpcHeader
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return nil, nil, fmt.Errorf("failed to parse header: %w", err)
+		return nil, fmt.Errorf("failed to parse header: %w", err)
 	}
 
 	// Parse block body
 	var body rpcBlock
 	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, nil, fmt.Errorf("failed to parse block body: %w", err)
+		return nil, fmt.Errorf("failed to parse block body: %w", err)
 	}
 
 	// Convert to types.Header
@@ -428,27 +413,9 @@ func parseRawBlockWithMetas(raw json.RawMessage) (*types.Block, []*FeeDelegation
 		header.ParentBeaconRoot = head.ParentBeaconRoot
 	}
 
-	// Extract transactions and fee delegation metadata
 	txs := make([]*types.Transaction, len(body.Transactions))
-	var feeDelegationMetas []*FeeDelegationMeta
-	blockNumber := header.Number.Uint64()
-
 	for i, tx := range body.Transactions {
 		txs[i] = tx.tx
-
-		// Extract fee delegation metadata if this is a fee delegation transaction
-		if tx.IsFeeDelegation() && tx.feePayer != nil {
-			meta := &FeeDelegationMeta{
-				TxHash:       tx.tx.Hash(),
-				BlockNumber:  blockNumber,
-				OriginalType: *tx.originalType,
-				FeePayer:     *tx.feePayer,
-				FeePayerV:    tx.feePayerV,
-				FeePayerR:    tx.feePayerR,
-				FeePayerS:    tx.feePayerS,
-			}
-			feeDelegationMetas = append(feeDelegationMetas, meta)
-		}
 	}
 
 	// Create block with transactions and withdrawals
@@ -457,7 +424,7 @@ func parseRawBlockWithMetas(raw json.RawMessage) (*types.Block, []*FeeDelegation
 		Withdrawals:  body.Withdrawals,
 	})
 
-	return block, feeDelegationMetas, nil
+	return block, nil
 }
 
 // GetBlockReceipts retrieves all receipts for a block

@@ -149,14 +149,10 @@ func (f *Fetcher) publishReorg(r *storagepkg.Reorg) {
 func (f *Fetcher) nodeBlockHash(ctx context.Context, height uint64) (common.Hash, error) {
 	rctx, cancel := f.rpcCtx(ctx)
 	defer cancel()
-	if f.src != nil {
-		return f.src.HashAt(rctx, height)
+	if f.src == nil {
+		return common.Hash{}, errNoSource
 	}
-	b, err := f.getBlock(rctx, height)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return b.Hash(), nil
+	return f.src.HashAt(rctx, height)
 }
 
 // Reorgs returns how many reorganizations were rolled back and how many

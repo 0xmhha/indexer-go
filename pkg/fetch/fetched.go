@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -47,42 +48,32 @@ func fetchedFromModel(b *model.Block, rs []*model.Receipt) (*fetchedBlock, error
 	return &fetchedBlock{block: b, receipts: rs, geth: g, gethReceipts: gethconv.ReceiptsToGeth(rs)}, nil
 }
 
-// fetchedFromGeth wraps a block read through the legacy go-ethereum client.
-func fetchedFromGeth(b *types.Block, rs types.Receipts) (*fetchedBlock, error) {
-	m, err := gethconv.BlockFromGeth(b)
-	if err != nil {
-		return nil, fmt.Errorf("model of block %d: %w", b.NumberU64(), err)
-	}
-	return &fetchedBlock{block: m, receipts: gethconv.ReceiptsFromGeth(rs), geth: b, gethReceipts: rs}, nil
-}
+// errNoBlockTransactions is returned when the storage cannot index a block
+// in one transaction (storage.BlockTransactor).
+var errNoBlockTransactions = errors.New("fetch: storage does not support block transactions")
 
-// SetSource makes the fetcher read blocks as raw JSON decoded by the node's
-// chain profile instead of through the go-ethereum client.
+// errNoSource is returned when blocks are read before SetSource.
+var errNoSource = errors.New("fetch: no block source (SetSource)")
+
+// SetSource sets where the fetcher reads blocks: raw JSON from the node
+// decoded by its chain profile, or archives. It must be set before
+// indexing.
 func (f *Fetcher) SetSource(src source.Source) {
 	f.src = src
 }
 
 // fetchOnce reads one block and its receipts without retrying.
 func (f *Fetcher) fetchOnce(ctx context.Context, height uint64) (*fetchedBlock, error) {
-	if f.src != nil {
-		rctx, cancel := f.rpcCtx(ctx)
-		defer cancel()
-		b, rs, err := f.src.BlockWithReceipts(rctx, height)
-		if err != nil {
-			return nil, err
-		}
-		return fetchedFromModel(b, rs)
+	if f.src == nil {
+		return nil, errNoSource
 	}
-
-	block, err := f.getBlock(ctx, height)
+	rctx, cancel := f.rpcCtx(ctx)
+	defer cancel()
+	b, rs, err := f.src.BlockWithReceipts(rctx, height)
 	if err != nil {
-		return nil, fmt.Errorf("fetch block: %w", err)
+		return nil, err
 	}
-	receipts, err := f.getReceipts(ctx, height)
-	if err != nil {
-		return nil, fmt.Errorf("fetch receipts: %w", err)
-	}
-	return fetchedFromGeth(block, receipts)
+	return fetchedFromModel(b, rs)
 }
 
 // txWithReceipt is one transaction of a fetched block with its receipt, in

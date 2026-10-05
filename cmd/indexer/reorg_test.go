@@ -99,7 +99,7 @@ func reorgChain(sc *testchain.Scenario, keep uint64, n int) {
 // index the new branch, ending with exactly the storage of a database that
 // indexed the new chain from scratch.
 func TestLiveLoopRollsBackReorg(t *testing.T) {
-	for _, mode := range []ingestMode{atomicMode, clientMode} {
+	for _, mode := range allModes {
 		t.Run(mode.name, func(t *testing.T) {
 			sc := testchain.BuildDefault()
 			srv := testchain.NewServer(sc.Chain)
@@ -194,7 +194,7 @@ func TestRollbackLargeBlocks(t *testing.T) {
 // the fork point before ingest, and the result must equal a fresh index of
 // the new chain.
 func TestRestartAfterReorgRecovers(t *testing.T) {
-	for _, mode := range []ingestMode{atomicMode, clientMode} {
+	for _, mode := range allModes {
 		t.Run(mode.name, func(t *testing.T) {
 			sc := testchain.BuildDefault()
 			srv := testchain.NewServer(sc.Chain)

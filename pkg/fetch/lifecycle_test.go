@@ -99,9 +99,7 @@ func TestRPCTimeoutBoundsCalls(t *testing.T) {
 	f := newLifecycleFetcher(t, hangingClient{newMockClient()}, &Config{BatchSize: 1, MaxRetries: 1, NumWorkers: 1, RPCTimeout: 50 * time.Millisecond})
 
 	start := time.Now()
-	_, err := f.getBlock(context.Background(), 1)
-	require.True(t, errors.Is(err, context.DeadlineExceeded), "got %v", err)
-	_, err = f.balanceAt(context.Background(), common.Address{}, nil)
+	_, err := f.balanceAt(context.Background(), common.Address{}, nil)
 	require.True(t, errors.Is(err, context.DeadlineExceeded), "got %v", err)
 	require.Less(t, time.Since(start), time.Second)
 }

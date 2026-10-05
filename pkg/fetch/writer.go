@@ -145,6 +145,9 @@ func (f *Fetcher) Close() {
 //     rewind it.
 //   - Events are published only after the transaction commits.
 func (f *Fetcher) indexBlock(ctx context.Context, fb *fetchedBlock) error {
+	if f.txr == nil {
+		return errNoBlockTransactions
+	}
 	return f.write().do(ctx, "indexBlock", func(ctx context.Context) error {
 		return f.writeBlock(ctx, fb)
 	})
