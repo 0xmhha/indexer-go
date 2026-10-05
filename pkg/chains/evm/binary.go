@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
@@ -22,7 +23,7 @@ import (
 var _ chains.BinaryProfile = (*Profile)(nil)
 
 // ErrUnsupportedBinary means a binary block holds something the profile
-// cannot decode or derive without more chain information.
+// cannot decode (an unknown transaction type).
 var ErrUnsupportedBinary = errors.New("evm: unsupported in binary decoding")
 
 // BinaryTxDecoder decodes the canonical encoding (type byte followed by the
@@ -211,11 +212,6 @@ func (p *Profile) DeriveReceipts(b *model.Block, receipts []byte) ([]*model.Rece
 	var logIndex uint
 	for i, item := range items {
 		tx := b.Transactions[i]
-		if tx.Type == types.BlobTxType {
-			// The blob gas price depends on the fork schedule, which the
-			// profile does not know.
-			return nil, fmt.Errorf("%w: block %d has a blob transaction", ErrUnsupportedBinary, b.Number)
-		}
 		kind, val, _, err := rlp.Split(item)
 		if err != nil {
 			return nil, fmt.Errorf("evm: block %d receipt %d: %w", b.Number, i, err)
@@ -262,6 +258,13 @@ func (p *Profile) DeriveReceipts(b *model.Block, receipts []byte) ([]*model.Rece
 			logIndex++
 		}
 		r.EffectiveGasPrice = p.effectiveGasPrice(b, tx, r)
+		if tx.Type == types.BlobTxType {
+			// The blob gas used follows from the transaction. The blob gas
+			// price is not supported: it depends on the chain's blob
+			// schedule (update fraction per fork), which block data does not
+			// carry, so it is left nil.
+			r.BlobGasUsed = uint64(len(tx.BlobHashes)) * params.BlobTxBlobGasPerBlob
+		}
 		out[i] = r
 	}
 	return out, nil

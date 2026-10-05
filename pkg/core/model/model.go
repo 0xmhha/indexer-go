@@ -124,7 +124,7 @@ type Receipt struct {
 	GasUsed           uint64
 	EffectiveGasPrice *big.Int
 	BlobGasUsed       uint64
-	BlobGasPrice      *big.Int
+	BlobGasPrice      *big.Int // nil if the source cannot derive it (era1: unsupported)
 	ContractAddress   *common.Address
 	Bloom             []byte
 	Logs              []*Log
