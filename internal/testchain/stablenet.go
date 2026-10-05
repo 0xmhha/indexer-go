@@ -72,6 +72,13 @@ func NewStableNetChain(chainID int64, alloc map[common.Address]*big.Int, cfg Sta
 // StableNet reports whether the chain is in StableNet mode.
 func (c *Chain) StableNet() bool { return c.sn != nil }
 
+// StableNetConfig returns the StableNet mode configuration (nil otherwise).
+func (c *Chain) StableNetConfig() *StableNetConfig { return c.sn }
+
+// PrevRound is the round in which block n was finalized (recorded in block
+// n+1).
+func (cfg *StableNetConfig) PrevRound(n uint64) uint32 { return cfg.prevRound(n) }
+
 // epochInfoAt returns the candidates' diligence recorded in epoch block e.
 func (cfg *StableNetConfig) diligence(e uint64, i int) uint64 {
 	return cfg.Candidates[i].Diligence + e

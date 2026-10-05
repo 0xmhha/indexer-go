@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
@@ -40,17 +38,7 @@ var transferTopic = crypto.Keccak256Hash([]byte("Transfer(address,address,uint25
 // Accounting implements chains.NativeAccounting for StableNet.
 type Accounting struct {
 	NativeCoin common.Address
-
-	mu    sync.Mutex
-	epoch *epochCache
-}
-
-// epochCache remembers the newest epoch block seen while processing blocks
-// in order, so the next block's validator set needs no lookup.
-type epochCache struct {
-	after     common.Hash // hash of the last processed block
-	afterNum  uint64
-	epochInfo *epochInfo // epoch info valid for the block after it
+	epochs     EpochTracker
 }
 
 var _ chains.NativeAccounting = (*Accounting)(nil)
@@ -106,7 +94,7 @@ func (a *Accounting) nativeTransfer(l *model.Log) (from, to common.Address, valu
 // the epoch of block-1 by diligence; integer division leaves dust for the
 // coinbase.
 func (a *Accounting) baseFeeDistribution(ctx context.Context, b *model.Block, env chains.AccountingEnv) ([]chains.BalanceDelta, error) {
-	info, err := a.epochFor(ctx, b, env)
+	info, err := a.epochs.For(ctx, b, env)
 	if err != nil {
 		return nil, err
 	}
@@ -142,100 +130,4 @@ func (a *Accounting) baseFeeDistribution(ctx context.Context, b *model.Block, en
 		out = append(out, chains.BalanceDelta{Address: b.Miner, Delta: dust, Reason: "base fee dust"})
 	}
 	return out, nil
-}
-
-// epochFor returns the epoch info that applies to block b: the one recorded
-// in the last epoch block at or below b-1 (go-stablenet getEpochInfo). It
-// keeps the newest epoch info while blocks are processed in order and looks
-// back through earlier blocks otherwise (restart, gap, rollback).
-func (a *Accounting) epochFor(ctx context.Context, b *model.Block, env chains.AccountingEnv) (*epochInfo, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	var info *epochInfo
-	switch {
-	case b.Number == 0:
-		// Genesis: nothing to distribute.
-	case a.epoch != nil && a.epoch.afterNum == b.Number-1 && a.epoch.after == b.ParentHash:
-		info = a.epoch.epochInfo
-	default:
-		var err error
-		if info, err = a.lookBack(ctx, b.Number-1, env); err != nil {
-			return nil, err
-		}
-	}
-	// What the next block will use: this block's epoch info if it is an
-	// epoch block, otherwise the same as this block.
-	next := info
-	if own, err := ExtraEpochInfo(b.Extra); err != nil {
-		return nil, fmt.Errorf("stablenet: block %d: %w", b.Number, err)
-	} else if own != nil {
-		next = own
-	}
-	a.epoch = &epochCache{after: b.Hash, afterNum: b.Number, epochInfo: next}
-	return info, nil
-}
-
-// lookBack finds the newest block at or below n that carries epoch info.
-func (a *Accounting) lookBack(ctx context.Context, n uint64, env chains.AccountingEnv) (*epochInfo, error) {
-	if env == nil {
-		return nil, fmt.Errorf("stablenet: cannot read earlier blocks for epoch info")
-	}
-	for h := n; ; h-- {
-		blk, err := env.Block(ctx, h)
-		if err != nil {
-			return nil, fmt.Errorf("stablenet: read block %d for epoch info: %w", h, err)
-		}
-		info, err := ExtraEpochInfo(blk.Extra)
-		if err != nil {
-			return nil, fmt.Errorf("stablenet: block %d: %w", h, err)
-		}
-		if info != nil {
-			return info, nil
-		}
-		if h == 0 {
-			return nil, nil
-		}
-	}
-}
-
-// Reset forgets the remembered epoch (after a rollback).
-func (a *Accounting) Reset() {
-	a.mu.Lock()
-	a.epoch = nil
-	a.mu.Unlock()
-}
-
-// epochInfo is the EpochInfo element of WBFT extra data
-// (core/types/istanbul.go).
-type epochInfo struct {
-	Candidates    []*epochCandidate
-	Validators    []uint32
-	BLSPublicKeys [][]byte
-}
-
-type epochCandidate struct {
-	Addr      common.Address
-	Diligence uint64
-}
-
-// extraEpochInfo is the position of the epoch info in the WBFT extra list.
-const extraEpochInfo = 9
-
-// ExtraEpochInfo decodes the epoch info of WBFT extra data; it is nil for
-// blocks that are not epoch blocks and for extra data that is not WBFT.
-func ExtraEpochInfo(extra []byte) (*epochInfo, error) {
-	var elems []rlp.RawValue
-	if err := rlp.DecodeBytes(extra, &elems); err != nil || len(elems) != extraFields {
-		return nil, nil
-	}
-	raw := elems[extraEpochInfo]
-	if len(raw) == 1 && (raw[0] == 0xc0 || raw[0] == 0x80) {
-		return nil, nil // absent
-	}
-	var info epochInfo
-	if err := rlp.DecodeBytes(raw, &info); err != nil {
-		return nil, fmt.Errorf("decode WBFT epoch info: %w", err)
-	}
-	return &info, nil
 }

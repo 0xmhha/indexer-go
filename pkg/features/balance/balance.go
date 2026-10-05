@@ -12,7 +12,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -50,7 +49,7 @@ func (balanceFeature) Register(r feature.Registrar) error {
 	r.OnBlock(&handler{
 		storage: d.Storage, w: w, r: rd, records: rc,
 		accounting: chains.AccountingOf(d.Profile),
-		balanceAt:  d.BalanceAt, blockAt: d.BlockAt, logger: logger,
+		balanceAt:  d.BalanceAt, blocks: d.Blocks(), logger: logger,
 	})
 	return nil
 }
@@ -64,7 +63,7 @@ type handler struct {
 	records    storagepkg.BalanceRecordChecker
 	accounting chains.NativeAccounting
 	balanceAt  func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
-	blockAt    func(ctx context.Context, number uint64) (*model.Block, error)
+	blocks     chains.AccountingEnv
 	logger     *zap.Logger
 }
 
@@ -77,7 +76,7 @@ type handler struct {
 // Balance tracking is best-effort: storage failures are logged.
 func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 	n := b.Model.Number
-	deltas, err := h.accounting.NativeDeltas(ctx, b.Model, b.Receipts, env{h: h})
+	deltas, err := h.accounting.NativeDeltas(ctx, b.Model, b.Receipts, h.blocks)
 	if err != nil {
 		return fmt.Errorf("native balance changes of block %d: %w", n, err)
 	}
@@ -154,18 +153,6 @@ func (h *handler) resync(ctx context.Context, addr common.Address, n uint64) {
 	if err := h.w.SetBalance(ctx, addr, n, balance); err != nil {
 		h.logger.Warn("Failed to reset balance", zap.String("address", addr.Hex()), zap.Error(err))
 	}
-}
-
-// env gives accounting rules the stored blocks, falling back to the node
-// for blocks before the index starts.
-type env struct{ h *handler }
-
-func (e env) Block(ctx context.Context, number uint64) (*model.Block, error) {
-	b, err := storagepkg.AsModelReader(e.h.storage).GetModelBlock(ctx, number)
-	if err == nil || !errors.Is(err, storagepkg.ErrNotFound) || e.h.blockAt == nil {
-		return b, err
-	}
-	return e.h.blockAt(ctx, number)
 }
 
 // ensureInitialized seeds the balance of an account seen for the first time

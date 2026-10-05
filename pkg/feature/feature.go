@@ -7,6 +7,7 @@ package feature
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -359,4 +360,19 @@ func Enabled(defaults []string, overrides map[string]bool) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// Blocks returns a reader of earlier blocks for chain rules that need them
+// (for example the epoch a StableNet block belongs to): the index first,
+// the node for blocks before the index starts.
+func (d Deps) Blocks() chains.AccountingEnv { return depsBlocks{d} }
+
+type depsBlocks struct{ d Deps }
+
+func (b depsBlocks) Block(ctx context.Context, number uint64) (*model.Block, error) {
+	blk, err := storage.AsModelReader(b.d.Storage).GetModelBlock(ctx, number)
+	if err == nil || !errors.Is(err, storage.ErrNotFound) || b.d.BlockAt == nil {
+		return blk, err
+	}
+	return b.d.BlockAt(ctx, number)
 }
