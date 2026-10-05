@@ -1974,6 +1974,10 @@ type MinterConfigEvent {
   # Minter address
   minter: Address!
 
+  # Contract that emitted the event (NativeCoinAdapter or GovMasterMinter);
+  # null for records indexed before it was kept
+  contract: Address
+
   # Minter allowance
   allowance: BigInt!
 

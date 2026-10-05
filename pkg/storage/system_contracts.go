@@ -82,6 +82,10 @@ type MinterConfigEvent struct {
 	Allowance   *big.Int
 	Action      string // "configured" or "removed"
 	Timestamp   uint64
+	// Contract emitted the event: the NativeCoinAdapter (Mintable) and the
+	// GovMasterMinter both emit MinterConfigured and MinterRemoved for one
+	// configuration. Zero in records written before it was added.
+	Contract common.Address `rlp:"optional"`
 }
 
 // Proposal represents a governance proposal

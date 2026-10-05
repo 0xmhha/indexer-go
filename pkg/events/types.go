@@ -345,9 +345,13 @@ const (
 	SystemContractEventEmergencyUnpaused         SystemContractEventType = "EmergencyUnpaused"
 
 	// GovMinter events
-	SystemContractEventDepositMintProposed SystemContractEventType = "DepositMintProposed"
-	SystemContractEventBurnPrepaid         SystemContractEventType = "BurnPrepaid"
-	SystemContractEventBurnExecuted        SystemContractEventType = "BurnExecuted"
+	SystemContractEventDepositMintProposed   SystemContractEventType = "DepositMintProposed"
+	SystemContractEventBurnPrepaid           SystemContractEventType = "BurnPrepaid"
+	SystemContractEventBurnDepositRefunded   SystemContractEventType = "BurnDepositRefunded"
+	SystemContractEventBurnRefundClaimed     SystemContractEventType = "BurnRefundClaimed"
+	SystemContractEventAuthorizationUsed     SystemContractEventType = "AuthorizationUsed"
+	SystemContractEventAuthorizationCanceled SystemContractEventType = "AuthorizationCanceled"
+	SystemContractEventBurnExecuted          SystemContractEventType = "BurnExecuted"
 
 	// GovCouncil events
 	SystemContractEventAddressBlacklisted       SystemContractEventType = "AddressBlacklisted"

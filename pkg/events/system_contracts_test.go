@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/storage"
@@ -319,6 +320,63 @@ func TestParseAndIndexLogs_ReturnsStorageFailure(t *testing.T) {
 	}
 	if err := parser.ParseAndIndexLogs(context.Background(), []*types.Log{approved}); err != nil {
 		t.Fatalf("missing proposal must be skipped: %v", err)
+	}
+}
+
+// Both the NativeCoinAdapter and the GovMasterMinter emit MinterConfigured
+// for one configuration; the record keeps which contract emitted it.
+func TestMinterConfiguredKeepsContract(t *testing.T) {
+	parser, mock := newTestParser()
+	minter := common.HexToAddress("0xaa")
+	logFrom := func(addr common.Address, index uint) *types.Log {
+		return &types.Log{Address: addr, Index: index,
+			Topics: []common.Hash{constants.EventSigMinterConfigured, common.BytesToHash(minter.Bytes())},
+			Data:   common.LeftPadBytes(big.NewInt(100).Bytes(), 32)}
+	}
+	logs := []*types.Log{logFrom(constants.NativeCoinAdapterAddress, 0), logFrom(constants.GovMasterMinterAddress, 1)}
+	if err := parser.ParseAndIndexLogs(context.Background(), logs); err != nil {
+		t.Fatal(err)
+	}
+	if len(mock.minterConfigEvents) != 2 {
+		t.Fatalf("want 2 records, got %d", len(mock.minterConfigEvents))
+	}
+	if mock.minterConfigEvents[0].Contract != constants.NativeCoinAdapterAddress || mock.minterConfigEvents[1].Contract != constants.GovMasterMinterAddress {
+		t.Fatalf("contracts not kept: %v %v", mock.minterConfigEvents[0].Contract, mock.minterConfigEvents[1].Contract)
+	}
+}
+
+// TestRefundAndAuthorizationEventsArePublished covers GovMinter v2 refunds
+// and the NativeCoinAdapter's EIP-3009 events.
+func TestRefundAndAuthorizationEventsArePublished(t *testing.T) {
+	parser, _ := newTestParser()
+	bus := NewEventBus(100, 100)
+	go bus.Run()
+	defer bus.Stop()
+	sub := bus.Subscribe("t", []EventType{EventTypeSystemContract}, nil, 10)
+	parser.SetEventBus(bus)
+
+	addrTopic := func(a string) common.Hash { return common.BytesToHash(common.HexToAddress(a).Bytes()) }
+	amount := common.LeftPadBytes(big.NewInt(9).Bytes(), 32)
+	logs := []*types.Log{
+		{Address: constants.GovMinterAddress, Topics: []common.Hash{constants.EventSigBurnDepositRefunded, common.BigToHash(big.NewInt(3)), addrTopic("0xaa")}, Data: amount},
+		{Address: constants.GovMinterAddress, Topics: []common.Hash{constants.EventSigBurnRefundClaimed, addrTopic("0xaa")}, Data: amount},
+		{Address: constants.NativeCoinAdapterAddress, Topics: []common.Hash{constants.EventSigAuthorizationUsed, addrTopic("0xbb"), common.HexToHash("0x01")}},
+		{Address: constants.NativeCoinAdapterAddress, Topics: []common.Hash{constants.EventSigAuthorizationCanceled, addrTopic("0xbb"), common.HexToHash("0x02")}},
+	}
+	if err := parser.ParseAndIndexLogs(context.Background(), logs); err != nil {
+		t.Fatal(err)
+	}
+	want := []SystemContractEventType{SystemContractEventBurnDepositRefunded, SystemContractEventBurnRefundClaimed,
+		SystemContractEventAuthorizationUsed, SystemContractEventAuthorizationCanceled}
+	for i, w := range want {
+		select {
+		case ev := <-sub.Channel:
+			if got := ev.(*SystemContractEvent).EventName; got != w {
+				t.Fatalf("event %d: got %s, want %s", i, got, w)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("event %d (%s) not published", i, w)
+		}
 	}
 }
 

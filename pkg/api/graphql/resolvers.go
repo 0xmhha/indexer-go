@@ -1694,14 +1694,19 @@ func (s *Schema) burnEventToMap(event *storage.BurnEvent) map[string]interface{}
 
 // Helper function to convert MinterConfigEvent to map
 func (s *Schema) minterConfigEventToMap(event *storage.MinterConfigEvent) map[string]interface{} {
-	return map[string]interface{}{
+	m := map[string]interface{}{
 		"blockNumber":     fmt.Sprintf("%d", event.BlockNumber),
 		"transactionHash": event.TxHash.Hex(),
 		"minter":          event.Minter.Hex(),
+		"contract":        nil,
 		"allowance":       event.Allowance.String(),
 		"action":          event.Action,
 		"timestamp":       fmt.Sprintf("%d", event.Timestamp),
 	}
+	if event.Contract != (common.Address{}) {
+		m["contract"] = event.Contract.Hex()
+	}
+	return m
 }
 
 // Helper function to convert ValidatorChangeEvent to map

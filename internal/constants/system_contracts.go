@@ -138,6 +138,16 @@ var (
 	EventSigDepositMintProposed = crypto.Keccak256Hash([]byte("DepositMintProposed(uint256,string,address,address,uint256,string)"))
 	EventSigBurnPrepaid         = crypto.Keccak256Hash([]byte("BurnPrepaid(address,uint256)"))
 	EventSigBurnExecuted        = crypto.Keccak256Hash([]byte("BurnExecuted(address,uint256,string)"))
+	// GovMinter v2 (Boho hard fork): burn deposits of proposals that were
+	// not executed become refundable and are claimed by the requester.
+	EventSigBurnDepositRefunded = crypto.Keccak256Hash([]byte("BurnDepositRefunded(uint256,address,uint256)"))
+	EventSigBurnRefundClaimed   = crypto.Keccak256Hash([]byte("BurnRefundClaimed(address,uint256)"))
+)
+
+// NativeCoinAdapter (0x1000) EIP-3009 events
+var (
+	EventSigAuthorizationUsed     = crypto.Keccak256Hash([]byte("AuthorizationUsed(address,bytes32)"))
+	EventSigAuthorizationCanceled = crypto.Keccak256Hash([]byte("AuthorizationCanceled(address,bytes32)"))
 )
 
 // GovCouncil (0x1004) specific events
@@ -187,6 +197,12 @@ var EventSignatureToName = map[common.Hash]string{
 	EventSigDepositMintProposed: "DepositMintProposed",
 	EventSigBurnPrepaid:         "BurnPrepaid",
 	EventSigBurnExecuted:        "BurnExecuted",
+	EventSigBurnDepositRefunded: "BurnDepositRefunded",
+	EventSigBurnRefundClaimed:   "BurnRefundClaimed",
+
+	// NativeCoinAdapter EIP-3009
+	EventSigAuthorizationUsed:     "AuthorizationUsed",
+	EventSigAuthorizationCanceled: "AuthorizationCanceled",
 
 	// GovCouncil
 	EventSigAddressBlacklisted:       "AddressBlacklisted",

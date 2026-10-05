@@ -60,6 +60,12 @@ var (
 	EventSigDepositMintProposed = constants.EventSigDepositMintProposed
 	EventSigBurnPrepaid         = constants.EventSigBurnPrepaid
 	EventSigBurnExecuted        = constants.EventSigBurnExecuted
+	EventSigBurnDepositRefunded = constants.EventSigBurnDepositRefunded
+	EventSigBurnRefundClaimed   = constants.EventSigBurnRefundClaimed
+
+	// NativeCoinAdapter EIP-3009 events
+	EventSigAuthorizationUsed     = constants.EventSigAuthorizationUsed
+	EventSigAuthorizationCanceled = constants.EventSigAuthorizationCanceled
 
 	// GovCouncil events
 	EventSigAddressBlacklisted       = constants.EventSigAddressBlacklisted
@@ -221,6 +227,12 @@ func (p *SystemContractEventParser) parseAndIndexLog(ctx context.Context, log *t
 		return p.parseBurnPrepaidEvent(ctx, log)
 	case EventSigBurnExecuted:
 		return p.parseBurnExecutedEvent(ctx, log)
+	case EventSigBurnDepositRefunded:
+		return p.parseBurnDepositRefundedEvent(log)
+	case EventSigBurnRefundClaimed:
+		return p.parseBurnRefundClaimedEvent(log)
+	case EventSigAuthorizationUsed, EventSigAuthorizationCanceled:
+		return p.parseAuthorizationEvent(log)
 
 	// GovCouncil events
 	case EventSigAddressBlacklisted:
@@ -350,6 +362,7 @@ func (p *SystemContractEventParser) parseMinterConfiguredEvent(ctx context.Conte
 		Minter:      minter,
 		Allowance:   allowance,
 		Action:      "configured",
+		Contract:    log.Address,
 		Timestamp:   0, // Will be set by storage layer
 	}
 
@@ -386,6 +399,7 @@ func (p *SystemContractEventParser) parseMinterRemovedEvent(ctx context.Context,
 		Minter:      minter,
 		Allowance:   big.NewInt(0),
 		Action:      "removed",
+		Contract:    log.Address,
 		Timestamp:   0, // Will be set by storage layer
 	}
 
@@ -1080,6 +1094,56 @@ func (p *SystemContractEventParser) parseBurnPrepaidEvent(ctx context.Context, l
 		"amount": amount.String(),
 	})
 
+	return nil
+}
+
+// The following events are decoded and published but not stored, like
+// BurnPrepaid: the native value they concern moves through NativeCoinAdapter
+// Transfer logs (balance.native).
+
+// parseBurnDepositRefundedEvent parses
+// BurnDepositRefunded(uint256 indexed proposalId, address indexed requester, uint256 amount)
+// (GovMinter v2).
+func (p *SystemContractEventParser) parseBurnDepositRefundedEvent(log *types.Log) error {
+	if len(log.Topics) != 3 || len(log.Data) != 32 {
+		return fmt.Errorf("invalid BurnDepositRefunded event: %d topics, %d data bytes", len(log.Topics), len(log.Data))
+	}
+	p.publishEvent(log.Address, SystemContractEventBurnDepositRefunded, log, map[string]interface{}{
+		"proposalId": new(big.Int).SetBytes(log.Topics[1].Bytes()).String(),
+		"requester":  common.BytesToAddress(log.Topics[2].Bytes()).Hex(),
+		"amount":     new(big.Int).SetBytes(log.Data).String(),
+	})
+	return nil
+}
+
+// parseBurnRefundClaimedEvent parses
+// BurnRefundClaimed(address indexed requester, uint256 amount) (GovMinter v2).
+func (p *SystemContractEventParser) parseBurnRefundClaimedEvent(log *types.Log) error {
+	if len(log.Topics) != 2 || len(log.Data) != 32 {
+		return fmt.Errorf("invalid BurnRefundClaimed event: %d topics, %d data bytes", len(log.Topics), len(log.Data))
+	}
+	p.publishEvent(log.Address, SystemContractEventBurnRefundClaimed, log, map[string]interface{}{
+		"requester": common.BytesToAddress(log.Topics[1].Bytes()).Hex(),
+		"amount":    new(big.Int).SetBytes(log.Data).String(),
+	})
+	return nil
+}
+
+// parseAuthorizationEvent parses the EIP-3009 events of the
+// NativeCoinAdapter: AuthorizationUsed and AuthorizationCanceled
+// (address indexed authorizer, bytes32 indexed nonce).
+func (p *SystemContractEventParser) parseAuthorizationEvent(log *types.Log) error {
+	if len(log.Topics) != 3 {
+		return fmt.Errorf("invalid EIP-3009 authorization event: %d topics", len(log.Topics))
+	}
+	kind := SystemContractEventAuthorizationUsed
+	if log.Topics[0] == EventSigAuthorizationCanceled {
+		kind = SystemContractEventAuthorizationCanceled
+	}
+	p.publishEvent(log.Address, kind, log, map[string]interface{}{
+		"authorizer": common.BytesToAddress(log.Topics[1].Bytes()).Hex(),
+		"nonce":      log.Topics[2].Hex(),
+	})
 	return nil
 }
 

@@ -1215,6 +1215,10 @@ func initGovernanceTypes() {
 			"minter": &graphql.Field{
 				Type: graphql.NewNonNull(addressType),
 			},
+			"contract": &graphql.Field{
+				Type:        addressType,
+				Description: "Contract that emitted the event (NativeCoinAdapter or GovMasterMinter); null for records indexed before it was kept",
+			},
 			"allowance": &graphql.Field{
 				Type: graphql.NewNonNull(bigIntType),
 			},
