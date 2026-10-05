@@ -166,7 +166,6 @@ type Fetcher struct {
 	eventBus            *events.EventBus
 	metrics             *RPCMetrics
 	optimizer           *AdaptiveOptimizer
-	largeBlockProcessor *LargeBlockProcessor
 
 	// chainAdapter provides chain-specific operations (optional)
 	// When set, the fetcher will use the adapter for consensus parsing
@@ -225,9 +224,6 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 	// Initialize metrics tracker
 	metrics := NewRPCMetrics(constants.DefaultMetricsWindowSize, constants.DefaultRateLimitWindow)
 
-	// Initialize large block processor
-	largeBlockProcessor := NewLargeBlockProcessor(storage, logger)
-
 	// Initialize adaptive optimizer if enabled
 	var optimizer *AdaptiveOptimizer
 	if config.EnableAdaptiveOptimization {
@@ -259,7 +255,6 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		eventBus:            eventBus,
 		metrics:             metrics,
 		optimizer:           optimizer,
-		largeBlockProcessor: largeBlockProcessor,
 		txr:                 txr,
 		strictStorageErrors: config.AtomicBlock && txr != nil,
 	}
@@ -313,10 +308,6 @@ func (f *Fetcher) GetChainID() string {
 // This enables automatic detection and indexing of token metadata (name, symbol, decimals)
 func (f *Fetcher) SetTokenIndexer(indexer TokenIndexer) {
 	f.tokenIndexer = indexer
-	// Also set on large block processor for consistency
-	if f.largeBlockProcessor != nil {
-		f.largeBlockProcessor.SetTokenIndexer(indexer)
-	}
 	f.logger.Info("Token indexer configured")
 }
 
