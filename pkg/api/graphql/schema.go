@@ -42,6 +42,7 @@ type SchemaBuilder struct {
 	queries       graphql.Fields
 	mutations     graphql.Fields
 	subscriptions graphql.Fields
+	extended      bool // registered extensions applied (extension.go)
 }
 
 // NewSchemaBuilder creates a new schema builder
@@ -1755,6 +1756,8 @@ func (b *SchemaBuilder) WithDynamicContractQueries() *SchemaBuilder {
 
 // Build constructs the final GraphQL schema
 func (b *SchemaBuilder) Build() (*Schema, error) {
+	b.applyExtensions()
+
 	// Load stored ABIs
 	if err := b.schema.loadStoredABIs(context.Background()); err != nil {
 		b.schema.logger.Warn("failed to load stored ABIs", zap.Error(err))

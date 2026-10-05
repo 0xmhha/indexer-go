@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -349,6 +350,39 @@ func (s *PebbleStorage) Has(ctx context.Context, key []byte) (bool, error) {
 	closer.Close()
 	return true, nil
 }
+
+// Scan implements KV.
+func (s *PebbleStorage) Scan(ctx context.Context, lower, upper []byte, reverse bool, fn func(key, value []byte) bool) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{LowerBound: lower, UpperBound: upper})
+	if err != nil {
+		return err
+	}
+	valid := iter.First()
+	next := iter.Next
+	if reverse {
+		valid = iter.Last()
+		next = iter.Prev
+	}
+	for ; valid; valid = next() {
+		if err := ctx.Err(); err != nil {
+			_ = iter.Close()
+			return err
+		}
+		if !fn(append([]byte(nil), iter.Key()...), append([]byte(nil), iter.Value()...)) {
+			break
+		}
+	}
+	return errors.Join(iter.Error(), iter.Close())
+}
+
+var _ KV = (*PebbleStorage)(nil)
+
+// PrefixEnd returns the smallest key greater than every key with the
+// prefix (the exclusive upper bound of a prefix scan), or nil if none.
+func PrefixEnd(prefix []byte) []byte { return prefixUpperBound(prefix) }
 
 // prefixUpperBound returns the upper bound for prefix iteration
 func prefixUpperBound(prefix []byte) []byte {

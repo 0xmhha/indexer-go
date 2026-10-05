@@ -1,7 +1,9 @@
-package graphql
+package main
 
 import (
-	"flag"
+	"bufio"
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -11,12 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/api/graphql"
+	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
-var updateSchemaSnapshot = flag.Bool("update", false, "rewrite testdata/schema-snapshot.txt")
-
-const schemaSnapshot = "testdata/schema-snapshot.txt"
+// API snapshots, built with the production wiring of this binary (chain
+// packages register their API extensions when linked in).
+const (
+	schemaSnapshot  = "testdata/api/graphql-schema.txt"
+	methodsSnapshot = "testdata/api/jsonrpc-methods.txt"
+)
 
 const introspection = `{ __schema {
   queryType { name } mutationType { name } subscriptionType { name }
@@ -59,7 +66,7 @@ func TestSchemaSnapshot(t *testing.T) {
 	st, err := storage.NewPebbleStorage(storage.DefaultConfig(t.TempDir()))
 	require.NoError(t, err)
 	defer func() { _ = st.Close() }()
-	h, err := NewHandler(st, zap.NewNop())
+	h, err := graphql.NewHandler(st, zap.NewNop())
 	require.NoError(t, err)
 	res := h.ExecuteQuery(introspection, nil)
 	require.Empty(t, res.Errors)
@@ -99,11 +106,43 @@ func TestSchemaSnapshot(t *testing.T) {
 	sort.Strings(lines)
 	got := strings.Join(lines, "\n") + "\n"
 
-	if *updateSchemaSnapshot {
+	if *updateGolden {
 		require.NoError(t, os.WriteFile(schemaSnapshot, []byte(got), 0o644))
 		return
 	}
 	want, err := os.ReadFile(schemaSnapshot)
 	require.NoError(t, err, "missing snapshot; run with -update")
 	require.Equal(t, string(want), got)
+}
+
+// TestMethodsStayServed calls every method listed in testdata/api/jsonrpc-methods.txt:
+// none may answer "method not found", so moving handlers between packages
+// cannot drop a method unnoticed. Add new methods to the list.
+func TestMethodsStayServed(t *testing.T) {
+	f, err := os.Open(methodsSnapshot)
+	require.NoError(t, err)
+	defer func() { _ = f.Close() }()
+
+	st, err := storage.NewPebbleStorage(storage.DefaultConfig(t.TempDir()))
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+	srv := jsonrpc.NewServer(st, zap.NewNop())
+
+	sc := bufio.NewScanner(f)
+	n := 0
+	for sc.Scan() {
+		method := strings.TrimSpace(sc.Text())
+		if method == "" || strings.HasPrefix(method, "#") {
+			continue
+		}
+		n++
+		for _, params := range []string{"{}", "[]"} {
+			_, rpcErr := srv.HandleMethodDirect(context.Background(), method, json.RawMessage(params))
+			if rpcErr != nil {
+				require.NotEqual(t, jsonrpc.MethodNotFound, rpcErr.Code, "%s is no longer served", method)
+			}
+		}
+	}
+	require.NoError(t, sc.Err())
+	require.Greater(t, n, 0)
 }

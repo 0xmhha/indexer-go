@@ -357,8 +357,19 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 			return
 		}
 	default:
-		c.sendError(id, "unknown subscription type")
-		return
+		spec, ok := registeredSubscription(subType)
+		if !ok {
+			c.sendError(id, "unknown subscription type")
+			return
+		}
+		eventType = spec.EventType
+		if spec.Filter != nil {
+			filter, err = spec.Filter(sub.Variables)
+			if err != nil {
+				c.sendError(id, err.Error())
+				return
+			}
+		}
 	}
 
 	// Parse replayLast parameter
@@ -745,6 +756,15 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 		}
 	}
 
+	if payload == nil {
+		if spec, ok := registeredSubscription(subType); ok && spec.Payload != nil {
+			if ev, ok := event.(events.Event); ok {
+				if value, ok := spec.Payload(ev); ok {
+					payload = map[string]interface{}{"data": map[string]interface{}{subType: value}}
+				}
+			}
+		}
+	}
 	if payload != nil {
 		c.sendNext(id, payload)
 	}
@@ -753,6 +773,9 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 // parseSubscriptionType extracts subscription type from query
 func (c *subscriptionClient) parseSubscriptionType(query string) string {
 	// Simple parsing - check for subscription keywords (order matters: more specific first)
+	if name := registeredSubscriptionIn(query); name != "" {
+		return name
+	}
 	if contains(query, "newPendingTransactions") {
 		return "newPendingTransactions"
 	}
