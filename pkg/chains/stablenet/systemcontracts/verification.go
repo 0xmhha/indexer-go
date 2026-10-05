@@ -1,4 +1,4 @@
-package storage
+package systemcontracts
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // SystemContractInfo contains metadata for a system contract
@@ -75,7 +77,7 @@ type SystemContractVerificationConfig struct {
 
 // InitSystemContractVerifications initializes verification data for all system contracts
 // by reading source code from the specified path and storing it in the database
-func InitSystemContractVerifications(ctx context.Context, storage ContractVerificationWriter, reader ContractVerificationReader, config *SystemContractVerificationConfig) error {
+func InitSystemContractVerifications(ctx context.Context, writer storage.ContractVerificationWriter, reader storage.ContractVerificationReader, config *SystemContractVerificationConfig) error {
 	if config == nil {
 		return fmt.Errorf("config cannot be nil")
 	}
@@ -148,7 +150,7 @@ func InitSystemContractVerifications(ctx context.Context, storage ContractVerifi
 		}
 
 		// Create verification entry
-		verification := &ContractVerification{
+		verification := &storage.ContractVerification{
 			Address:             info.Address,
 			IsVerified:          true,
 			Name:                info.Name,
@@ -161,7 +163,7 @@ func InitSystemContractVerifications(ctx context.Context, storage ContractVerifi
 			LicenseType:         info.LicenseType,
 		}
 
-		if err := storage.SetContractVerification(ctx, verification); err != nil {
+		if err := writer.SetContractVerification(ctx, verification); err != nil {
 			logger.Error("Failed to store verification",
 				zap.String("name", info.Name),
 				zap.String("address", info.Address.Hex()),

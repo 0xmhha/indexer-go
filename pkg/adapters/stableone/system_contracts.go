@@ -2,9 +2,9 @@ package stableone
 
 import (
 	"fmt"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
 	"math/big"
 
-	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -34,37 +34,37 @@ func NewSystemContractsHandler(logger *zap.Logger) *SystemContractsHandler {
 
 	// Initialize contract names from constants
 	handler.contractNames = map[common.Address]string{
-		constants.NativeCoinAdapterAddress: "NativeCoinAdapter",
-		constants.GovValidatorAddress:      "GovValidator",
-		constants.GovMasterMinterAddress:   "GovMasterMinter",
-		constants.GovMinterAddress:         "GovMinter",
-		constants.GovCouncilAddress:        "GovCouncil",
+		systemcontracts.NativeCoinAdapterAddress: "NativeCoinAdapter",
+		systemcontracts.GovValidatorAddress:      "GovValidator",
+		systemcontracts.GovMasterMinterAddress:   "GovMasterMinter",
+		systemcontracts.GovMinterAddress:         "GovMinter",
+		systemcontracts.GovCouncilAddress:        "GovCouncil",
 	}
 
 	// Initialize event signatures from constants
-	handler.eventSigToName = constants.EventSignatureToName
+	handler.eventSigToName = systemcontracts.EventSignatureToName
 
 	return handler
 }
 
 // IsSystemContract checks if an address is a system contract
 func (h *SystemContractsHandler) IsSystemContract(addr common.Address) bool {
-	return constants.IsSystemContract(addr)
+	return systemcontracts.IsSystemContract(addr)
 }
 
 // GetSystemContractName returns the name of a system contract
 func (h *SystemContractsHandler) GetSystemContractName(addr common.Address) string {
-	return constants.GetSystemContractName(addr)
+	return systemcontracts.GetSystemContractName(addr)
 }
 
 // GetSystemContractAddresses returns all system contract addresses
 func (h *SystemContractsHandler) GetSystemContractAddresses() []common.Address {
 	return []common.Address{
-		constants.NativeCoinAdapterAddress,
-		constants.GovValidatorAddress,
-		constants.GovMasterMinterAddress,
-		constants.GovMinterAddress,
-		constants.GovCouncilAddress,
+		systemcontracts.NativeCoinAdapterAddress,
+		systemcontracts.GovValidatorAddress,
+		systemcontracts.GovMasterMinterAddress,
+		systemcontracts.GovMinterAddress,
+		systemcontracts.GovCouncilAddress,
 	}
 }
 
@@ -83,7 +83,7 @@ func (h *SystemContractsHandler) ParseSystemContractEvent(log *types.Log) (*chai
 	}
 
 	eventSig := log.Topics[0]
-	eventName := constants.GetEventName(eventSig)
+	eventName := systemcontracts.GetEventName(eventSig)
 
 	event := &chain.SystemContractEvent{
 		ContractAddress: log.Address,
@@ -312,8 +312,8 @@ func (h *SystemContractsHandler) decodeAddressUnblacklistedEvent(log *types.Log,
 }
 
 // GetTokenMetadata returns token metadata for a system contract (if applicable)
-func (h *SystemContractsHandler) GetTokenMetadata(addr common.Address) *constants.SystemContractTokenMetadata {
-	return constants.GetSystemContractTokenMetadata(addr)
+func (h *SystemContractsHandler) GetTokenMetadata(addr common.Address) *systemcontracts.SystemContractTokenMetadata {
+	return systemcontracts.GetSystemContractTokenMetadata(addr)
 }
 
 // GetEventABI returns the ABI for a specific event (for advanced decoding)
@@ -326,15 +326,15 @@ func (h *SystemContractsHandler) GetEventABI(eventName string) (*abi.Event, erro
 // GetContractType returns the type of system contract
 func (h *SystemContractsHandler) GetContractType(addr common.Address) string {
 	switch addr {
-	case constants.NativeCoinAdapterAddress:
+	case systemcontracts.NativeCoinAdapterAddress:
 		return "token"
-	case constants.GovValidatorAddress:
+	case systemcontracts.GovValidatorAddress:
 		return "governance"
-	case constants.GovMasterMinterAddress:
+	case systemcontracts.GovMasterMinterAddress:
 		return "governance"
-	case constants.GovMinterAddress:
+	case systemcontracts.GovMinterAddress:
 		return "minting"
-	case constants.GovCouncilAddress:
+	case systemcontracts.GovCouncilAddress:
 		return "governance"
 	default:
 		return "unknown"

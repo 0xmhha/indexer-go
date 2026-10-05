@@ -77,9 +77,9 @@ func (s *PebbleStorage) processReceiptTransfers(receipt *types.Receipt, addr com
 
 // applyTokenMetadata applies metadata to a TokenBalance from various sources
 func (s *PebbleStorage) applyTokenMetadata(ctx context.Context, tb *TokenBalance, contract common.Address) {
-	// Priority: 1) System contract metadata, 2) Database, 3) On-demand fetch from chain
-	if metadata := GetSystemContractTokenMetadata(contract); metadata != nil {
-		// 1. System contract token metadata (hardcoded)
+	// Priority: 1) Metadata the chain defines, 2) Database, 3) On-demand fetch from chain
+	if metadata, ok := knownToken(contract); ok {
+		// 1. Token metadata registered by the chain package
 		tb.Name = metadata.Name
 		tb.Symbol = metadata.Symbol
 		decimals := metadata.Decimals

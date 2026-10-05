@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -260,7 +259,7 @@ func TestParseAndIndexLogs_NoTopics(t *testing.T) {
 	parser, _ := newTestParser()
 	ctx := context.Background()
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
+		Address: NativeCoinAdapterAddress,
 		Topics:  []common.Hash{},
 	}
 	if err := parser.ParseAndIndexLogs(ctx, []*types.Log{log}); err != nil {
@@ -272,7 +271,7 @@ func TestParseAndIndexLogs_UnknownEvent(t *testing.T) {
 	parser, _ := newTestParser()
 	ctx := context.Background()
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
+		Address: NativeCoinAdapterAddress,
 		Topics:  []common.Hash{common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")},
 	}
 	// Unknown events are silently skipped
@@ -287,11 +286,11 @@ func TestParseAndIndexLogs_ContinuesOnError(t *testing.T) {
 
 	// Mint event with invalid data (wrong topic count) - will error but continue
 	invalidLog := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigMint}, // Missing indexed topics
+		Address: NativeCoinAdapterAddress,
+		Topics:  []common.Hash{EventSigMint}, // Missing indexed topics
 	}
 	validLog := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
+		Address: NativeCoinAdapterAddress,
 		Topics:  []common.Hash{common.HexToHash("0xffffffff")}, // Unknown, silently skipped
 	}
 
@@ -305,8 +304,8 @@ func TestParseAndIndexLogs_ReturnsStorageFailure(t *testing.T) {
 	parser, mock := newTestParser()
 	mock.storeErr = errors.New("disk full")
 	mint := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics: []common.Hash{constants.EventSigMint,
+		Address: NativeCoinAdapterAddress,
+		Topics: []common.Hash{EventSigMint,
 			common.BytesToHash(common.HexToAddress("0xaa").Bytes()), common.BytesToHash(common.HexToAddress("0xbb").Bytes())},
 		Data: common.LeftPadBytes(big.NewInt(1).Bytes(), 32),
 	}
@@ -318,8 +317,8 @@ func TestParseAndIndexLogs_ReturnsStorageFailure(t *testing.T) {
 	// A vote on a proposal the index does not have is data, not a failure.
 	mock.storeErr = fmt.Errorf("proposal 7: %w", storagepkg.ErrNotFound)
 	approved := &types.Log{
-		Address: constants.GovMinterAddress,
-		Topics: []common.Hash{constants.EventSigProposalApproved, common.BigToHash(big.NewInt(7)),
+		Address: GovMinterAddress,
+		Topics: []common.Hash{EventSigProposalApproved, common.BigToHash(big.NewInt(7)),
 			common.BytesToHash(common.HexToAddress("0xcc").Bytes())},
 		Data: append(common.LeftPadBytes([]byte{1}, 32), common.LeftPadBytes([]byte{2}, 32)...),
 	}
@@ -335,17 +334,17 @@ func TestMinterConfiguredKeepsContract(t *testing.T) {
 	minter := common.HexToAddress("0xaa")
 	logFrom := func(addr common.Address, index uint) *types.Log {
 		return &types.Log{Address: addr, Index: index,
-			Topics: []common.Hash{constants.EventSigMinterConfigured, common.BytesToHash(minter.Bytes())},
+			Topics: []common.Hash{EventSigMinterConfigured, common.BytesToHash(minter.Bytes())},
 			Data:   common.LeftPadBytes(big.NewInt(100).Bytes(), 32)}
 	}
-	logs := []*types.Log{logFrom(constants.NativeCoinAdapterAddress, 0), logFrom(constants.GovMasterMinterAddress, 1)}
+	logs := []*types.Log{logFrom(NativeCoinAdapterAddress, 0), logFrom(GovMasterMinterAddress, 1)}
 	if err := parser.ParseAndIndexLogs(context.Background(), logs); err != nil {
 		t.Fatal(err)
 	}
 	if len(mock.minterConfigEvents) != 2 {
 		t.Fatalf("want 2 records, got %d", len(mock.minterConfigEvents))
 	}
-	if mock.minterConfigEvents[0].Contract != constants.NativeCoinAdapterAddress || mock.minterConfigEvents[1].Contract != constants.GovMasterMinterAddress {
+	if mock.minterConfigEvents[0].Contract != NativeCoinAdapterAddress || mock.minterConfigEvents[1].Contract != GovMasterMinterAddress {
 		t.Fatalf("contracts not kept: %v %v", mock.minterConfigEvents[0].Contract, mock.minterConfigEvents[1].Contract)
 	}
 }
@@ -363,10 +362,10 @@ func TestRefundAndAuthorizationEventsArePublished(t *testing.T) {
 	addrTopic := func(a string) common.Hash { return common.BytesToHash(common.HexToAddress(a).Bytes()) }
 	amount := common.LeftPadBytes(big.NewInt(9).Bytes(), 32)
 	logs := []*types.Log{
-		{Address: constants.GovMinterAddress, Topics: []common.Hash{constants.EventSigBurnDepositRefunded, common.BigToHash(big.NewInt(3)), addrTopic("0xaa")}, Data: amount},
-		{Address: constants.GovMinterAddress, Topics: []common.Hash{constants.EventSigBurnRefundClaimed, addrTopic("0xaa")}, Data: amount},
-		{Address: constants.NativeCoinAdapterAddress, Topics: []common.Hash{constants.EventSigAuthorizationUsed, addrTopic("0xbb"), common.HexToHash("0x01")}},
-		{Address: constants.NativeCoinAdapterAddress, Topics: []common.Hash{constants.EventSigAuthorizationCanceled, addrTopic("0xbb"), common.HexToHash("0x02")}},
+		{Address: GovMinterAddress, Topics: []common.Hash{EventSigBurnDepositRefunded, common.BigToHash(big.NewInt(3)), addrTopic("0xaa")}, Data: amount},
+		{Address: GovMinterAddress, Topics: []common.Hash{EventSigBurnRefundClaimed, addrTopic("0xaa")}, Data: amount},
+		{Address: NativeCoinAdapterAddress, Topics: []common.Hash{EventSigAuthorizationUsed, addrTopic("0xbb"), common.HexToHash("0x01")}},
+		{Address: NativeCoinAdapterAddress, Topics: []common.Hash{EventSigAuthorizationCanceled, addrTopic("0xbb"), common.HexToHash("0x02")}},
 	}
 	if err := parser.ParseAndIndexLogs(context.Background(), logs); err != nil {
 		t.Fatal(err)
@@ -396,8 +395,8 @@ func TestParseMintEvent(t *testing.T) {
 	amount := big.NewInt(1000)
 
 	log := &types.Log{
-		Address:     constants.NativeCoinAdapterAddress,
-		Topics:      []common.Hash{constants.EventSigMint, common.BytesToHash(minter.Bytes()), common.BytesToHash(to.Bytes())},
+		Address:     NativeCoinAdapterAddress,
+		Topics:      []common.Hash{EventSigMint, common.BytesToHash(minter.Bytes()), common.BytesToHash(to.Bytes())},
 		Data:        common.LeftPadBytes(amount.Bytes(), 32),
 		BlockNumber: 100,
 		TxHash:      common.HexToHash("0xabc"),
@@ -429,8 +428,8 @@ func TestParseMintEvent_InvalidTopics(t *testing.T) {
 	ctx := context.Background()
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigMint}, // Missing indexed topics
+		Address: NativeCoinAdapterAddress,
+		Topics:  []common.Hash{EventSigMint}, // Missing indexed topics
 		Data:    common.LeftPadBytes(big.NewInt(1).Bytes(), 32),
 	}
 
@@ -446,8 +445,8 @@ func TestParseMintEvent_InvalidData(t *testing.T) {
 	to := common.HexToAddress("0xbbbb")
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigMint, common.BytesToHash(minter.Bytes()), common.BytesToHash(to.Bytes())},
+		Address: NativeCoinAdapterAddress,
+		Topics:  []common.Hash{EventSigMint, common.BytesToHash(minter.Bytes()), common.BytesToHash(to.Bytes())},
 		Data:    []byte{0x01, 0x02}, // Invalid data length
 	}
 
@@ -464,8 +463,8 @@ func TestParseBurnEvent(t *testing.T) {
 	amount := big.NewInt(500)
 
 	log := &types.Log{
-		Address:     constants.NativeCoinAdapterAddress,
-		Topics:      []common.Hash{constants.EventSigBurn, common.BytesToHash(burner.Bytes())},
+		Address:     NativeCoinAdapterAddress,
+		Topics:      []common.Hash{EventSigBurn, common.BytesToHash(burner.Bytes())},
 		Data:        common.LeftPadBytes(amount.Bytes(), 32),
 		BlockNumber: 200,
 	}
@@ -497,8 +496,8 @@ func TestParseMinterConfiguredEvent(t *testing.T) {
 	allowance := big.NewInt(10000)
 
 	log := &types.Log{
-		Address:     constants.NativeCoinAdapterAddress,
-		Topics:      []common.Hash{constants.EventSigMinterConfigured, common.BytesToHash(minter.Bytes())},
+		Address:     NativeCoinAdapterAddress,
+		Topics:      []common.Hash{EventSigMinterConfigured, common.BytesToHash(minter.Bytes())},
 		Data:        common.LeftPadBytes(allowance.Bytes(), 32),
 		BlockNumber: 300,
 	}
@@ -524,8 +523,8 @@ func TestParseMinterRemovedEvent(t *testing.T) {
 
 	minter := common.HexToAddress("0xaaaa")
 	log := &types.Log{
-		Address:     constants.NativeCoinAdapterAddress,
-		Topics:      []common.Hash{constants.EventSigMinterRemoved, common.BytesToHash(minter.Bytes())},
+		Address:     NativeCoinAdapterAddress,
+		Topics:      []common.Hash{EventSigMinterRemoved, common.BytesToHash(minter.Bytes())},
 		BlockNumber: 400,
 	}
 
@@ -547,8 +546,8 @@ func TestParseMasterMinterChangedEvent(t *testing.T) {
 
 	newMaster := common.HexToAddress("0xbbbb")
 	log := &types.Log{
-		Address:     constants.NativeCoinAdapterAddress,
-		Topics:      []common.Hash{constants.EventSigMasterMinterChanged, common.BytesToHash(newMaster.Bytes())},
+		Address:     NativeCoinAdapterAddress,
+		Topics:      []common.Hash{EventSigMasterMinterChanged, common.BytesToHash(newMaster.Bytes())},
 		BlockNumber: 500,
 	}
 
@@ -583,8 +582,8 @@ func TestParseProposalCreatedEvent(t *testing.T) {
 	data = append(data, callData...)
 
 	log := &types.Log{
-		Address:     constants.GovValidatorAddress,
-		Topics:      []common.Hash{constants.EventSigProposalCreated, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(proposer.Bytes())},
+		Address:     GovValidatorAddress,
+		Topics:      []common.Hash{EventSigProposalCreated, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(proposer.Bytes())},
 		Data:        data,
 		BlockNumber: 600,
 		TxHash:      common.HexToHash("0xdef"),
@@ -613,8 +612,8 @@ func TestParseProposalCreatedEvent_DataTooShort(t *testing.T) {
 	ctx := context.Background()
 
 	log := &types.Log{
-		Address: constants.GovValidatorAddress,
-		Topics:  []common.Hash{constants.EventSigProposalCreated, common.BytesToHash(big.NewInt(1).Bytes()), common.BytesToHash(common.Address{}.Bytes())},
+		Address: GovValidatorAddress,
+		Topics:  []common.Hash{EventSigProposalCreated, common.BytesToHash(big.NewInt(1).Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 		Data:    []byte{0x01}, // Too short
 	}
 
@@ -634,8 +633,8 @@ func TestParseProposalVotedEvent(t *testing.T) {
 	copy(data[94:96], []byte{0x00, 0x01}) // rejected = 1
 
 	log := &types.Log{
-		Address:     constants.GovValidatorAddress,
-		Topics:      []common.Hash{constants.EventSigProposalVoted, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(voter.Bytes())},
+		Address:     GovValidatorAddress,
+		Topics:      []common.Hash{EventSigProposalVoted, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(voter.Bytes())},
 		Data:        data,
 		BlockNumber: 700,
 	}
@@ -660,8 +659,8 @@ func TestParseProposalApprovedEvent(t *testing.T) {
 	approver := common.HexToAddress("0xaaaa")
 
 	log := &types.Log{
-		Address:     constants.GovValidatorAddress,
-		Topics:      []common.Hash{constants.EventSigProposalApproved, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(approver.Bytes())},
+		Address:     GovValidatorAddress,
+		Topics:      []common.Hash{EventSigProposalApproved, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(approver.Bytes())},
 		BlockNumber: 800,
 	}
 
@@ -683,8 +682,8 @@ func TestParseProposalRejectedEvent(t *testing.T) {
 
 	proposalID := big.NewInt(2)
 	log := &types.Log{
-		Address: constants.GovValidatorAddress,
-		Topics:  []common.Hash{constants.EventSigProposalRejected, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
+		Address: GovValidatorAddress,
+		Topics:  []common.Hash{EventSigProposalRejected, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 	}
 
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
@@ -699,8 +698,8 @@ func TestParseProposalExecutedEvent(t *testing.T) {
 
 	proposalID := big.NewInt(3)
 	log := &types.Log{
-		Address:     constants.GovValidatorAddress,
-		Topics:      []common.Hash{constants.EventSigProposalExecuted, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
+		Address:     GovValidatorAddress,
+		Topics:      []common.Hash{EventSigProposalExecuted, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 		BlockNumber: 900,
 	}
 
@@ -716,8 +715,8 @@ func TestParseProposalFailedEvent(t *testing.T) {
 
 	proposalID := big.NewInt(4)
 	log := &types.Log{
-		Address: constants.GovValidatorAddress,
-		Topics:  []common.Hash{constants.EventSigProposalFailed, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
+		Address: GovValidatorAddress,
+		Topics:  []common.Hash{EventSigProposalFailed, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 	}
 
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
@@ -732,8 +731,8 @@ func TestParseProposalExpiredEvent(t *testing.T) {
 
 	proposalID := big.NewInt(5)
 	log := &types.Log{
-		Address: constants.GovValidatorAddress,
-		Topics:  []common.Hash{constants.EventSigProposalExpired, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
+		Address: GovValidatorAddress,
+		Topics:  []common.Hash{EventSigProposalExpired, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 	}
 
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
@@ -748,8 +747,8 @@ func TestParseProposalCancelledEvent(t *testing.T) {
 
 	proposalID := big.NewInt(6)
 	log := &types.Log{
-		Address: constants.GovValidatorAddress,
-		Topics:  []common.Hash{constants.EventSigProposalCancelled, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
+		Address: GovValidatorAddress,
+		Topics:  []common.Hash{EventSigProposalCancelled, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 	}
 
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
@@ -771,8 +770,8 @@ func TestParseMemberAddedEvent(t *testing.T) {
 	copy(data[32:64], common.LeftPadBytes(big.NewInt(3).Bytes(), 32)) // newQuorum = 3
 
 	log := &types.Log{
-		Address:     constants.GovValidatorAddress,
-		Topics:      []common.Hash{constants.EventSigMemberAdded, common.BytesToHash(member.Bytes())},
+		Address:     GovValidatorAddress,
+		Topics:      []common.Hash{EventSigMemberAdded, common.BytesToHash(member.Bytes())},
 		Data:        data,
 		BlockNumber: 1000,
 	}
@@ -802,8 +801,8 @@ func TestParseMemberRemovedEvent(t *testing.T) {
 	copy(data[32:64], common.LeftPadBytes(big.NewInt(2).Bytes(), 32))
 
 	log := &types.Log{
-		Address:     constants.GovValidatorAddress,
-		Topics:      []common.Hash{constants.EventSigMemberRemoved, common.BytesToHash(member.Bytes())},
+		Address:     GovValidatorAddress,
+		Topics:      []common.Hash{EventSigMemberRemoved, common.BytesToHash(member.Bytes())},
 		Data:        data,
 		BlockNumber: 1100,
 	}
@@ -826,8 +825,8 @@ func TestParseMemberChangedEvent(t *testing.T) {
 	newMember := common.HexToAddress("0xdddd")
 
 	log := &types.Log{
-		Address:     constants.GovValidatorAddress,
-		Topics:      []common.Hash{constants.EventSigMemberChanged, common.BytesToHash(oldMember.Bytes()), common.BytesToHash(newMember.Bytes())},
+		Address:     GovValidatorAddress,
+		Topics:      []common.Hash{EventSigMemberChanged, common.BytesToHash(oldMember.Bytes()), common.BytesToHash(newMember.Bytes())},
 		BlockNumber: 1200,
 	}
 
@@ -853,8 +852,8 @@ func TestParseGasTipUpdatedEvent(t *testing.T) {
 	copy(data[32:64], common.LeftPadBytes(big.NewInt(200).Bytes(), 32)) // newTip
 
 	log := &types.Log{
-		Address:     constants.GovValidatorAddress,
-		Topics:      []common.Hash{constants.EventSigGasTipUpdated, common.BytesToHash(updater.Bytes())},
+		Address:     GovValidatorAddress,
+		Topics:      []common.Hash{EventSigGasTipUpdated, common.BytesToHash(updater.Bytes())},
 		Data:        data,
 		BlockNumber: 1300,
 	}
@@ -877,8 +876,8 @@ func TestParseEmergencyPausedEvent(t *testing.T) {
 
 	proposalID := big.NewInt(10)
 	log := &types.Log{
-		Address:     constants.GovMasterMinterAddress,
-		Topics:      []common.Hash{constants.EventSigEmergencyPaused, common.BytesToHash(proposalID.Bytes())},
+		Address:     GovMasterMinterAddress,
+		Topics:      []common.Hash{EventSigEmergencyPaused, common.BytesToHash(proposalID.Bytes())},
 		BlockNumber: 1400,
 	}
 
@@ -898,8 +897,8 @@ func TestParseEmergencyUnpausedEvent(t *testing.T) {
 
 	proposalID := big.NewInt(11)
 	log := &types.Log{
-		Address:     constants.GovMasterMinterAddress,
-		Topics:      []common.Hash{constants.EventSigEmergencyUnpaused, common.BytesToHash(proposalID.Bytes())},
+		Address:     GovMasterMinterAddress,
+		Topics:      []common.Hash{EventSigEmergencyUnpaused, common.BytesToHash(proposalID.Bytes())},
 		BlockNumber: 1500,
 	}
 
@@ -934,8 +933,8 @@ func TestParseDepositMintProposedEvent(t *testing.T) {
 	data = append(data, common.RightPadBytes([]byte("REF-001"), 32)...)     // bankRef data
 
 	log := &types.Log{
-		Address:     constants.GovMinterAddress,
-		Topics:      []common.Hash{constants.EventSigDepositMintProposed, common.BytesToHash(proposalID.Bytes()), depositIDHash, common.BytesToHash(requester.Bytes())},
+		Address:     GovMinterAddress,
+		Topics:      []common.Hash{EventSigDepositMintProposed, common.BytesToHash(proposalID.Bytes()), depositIDHash, common.BytesToHash(requester.Bytes())},
 		Data:        data,
 		BlockNumber: 1600,
 	}
@@ -963,8 +962,8 @@ func TestParseBurnPrepaidEvent(t *testing.T) {
 	amount := big.NewInt(300)
 
 	log := &types.Log{
-		Address:     constants.GovMinterAddress,
-		Topics:      []common.Hash{constants.EventSigBurnPrepaid, common.BytesToHash(user.Bytes())},
+		Address:     GovMinterAddress,
+		Topics:      []common.Hash{EventSigBurnPrepaid, common.BytesToHash(user.Bytes())},
 		Data:        common.LeftPadBytes(amount.Bytes(), 32),
 		BlockNumber: 1700,
 	}
@@ -989,8 +988,8 @@ func TestParseBurnExecutedEvent(t *testing.T) {
 	data = append(data, common.RightPadBytes([]byte("WD-001"), 32)...)      // withdrawalId
 
 	log := &types.Log{
-		Address:     constants.GovMinterAddress,
-		Topics:      []common.Hash{constants.EventSigBurnExecuted, common.BytesToHash(from.Bytes()), common.BytesToHash(amount.Bytes())},
+		Address:     GovMinterAddress,
+		Topics:      []common.Hash{EventSigBurnExecuted, common.BytesToHash(from.Bytes()), common.BytesToHash(amount.Bytes())},
 		Data:        data,
 		BlockNumber: 1800,
 	}
@@ -1015,8 +1014,8 @@ func TestParseAddressBlacklistedEvent(t *testing.T) {
 	proposalID := big.NewInt(30)
 
 	log := &types.Log{
-		Address:     constants.GovCouncilAddress,
-		Topics:      []common.Hash{constants.EventSigAddressBlacklisted, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
+		Address:     GovCouncilAddress,
+		Topics:      []common.Hash{EventSigAddressBlacklisted, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
 		BlockNumber: 1900,
 	}
 
@@ -1041,8 +1040,8 @@ func TestParseAddressUnblacklistedEvent(t *testing.T) {
 	proposalID := big.NewInt(31)
 
 	log := &types.Log{
-		Address:     constants.GovCouncilAddress,
-		Topics:      []common.Hash{constants.EventSigAddressUnblacklisted, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
+		Address:     GovCouncilAddress,
+		Topics:      []common.Hash{EventSigAddressUnblacklisted, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
 		BlockNumber: 2000,
 	}
 
@@ -1066,8 +1065,8 @@ func TestParseAuthorizedAccountAddedEvent(t *testing.T) {
 	proposalID := big.NewInt(40)
 
 	log := &types.Log{
-		Address:     constants.GovCouncilAddress,
-		Topics:      []common.Hash{constants.EventSigAuthorizedAccountAdded, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
+		Address:     GovCouncilAddress,
+		Topics:      []common.Hash{EventSigAuthorizedAccountAdded, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
 		BlockNumber: 2100,
 	}
 
@@ -1089,8 +1088,8 @@ func TestParseAuthorizedAccountRemovedEvent(t *testing.T) {
 	proposalID := big.NewInt(41)
 
 	log := &types.Log{
-		Address:     constants.GovCouncilAddress,
-		Topics:      []common.Hash{constants.EventSigAuthorizedAccountRemoved, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
+		Address:     GovCouncilAddress,
+		Topics:      []common.Hash{EventSigAuthorizedAccountRemoved, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
 		BlockNumber: 2200,
 	}
 
@@ -1115,8 +1114,8 @@ func TestParseMaxProposalsPerMemberUpdatedEvent(t *testing.T) {
 	copy(data[32:64], common.LeftPadBytes(big.NewInt(10).Bytes(), 32)) // newMax = 10
 
 	log := &types.Log{
-		Address:     constants.GovCouncilAddress,
-		Topics:      []common.Hash{constants.EventSigMaxProposalsPerMemberUpdated},
+		Address:     GovCouncilAddress,
+		Topics:      []common.Hash{EventSigMaxProposalsPerMemberUpdated},
 		Data:        data,
 		BlockNumber: 2300,
 	}
@@ -1148,8 +1147,8 @@ func TestParseProposalExecutionSkippedEvent(t *testing.T) {
 	data = append(data, common.RightPadBytes([]byte("already paused"), 32)...) // reason
 
 	log := &types.Log{
-		Address:     constants.GovCouncilAddress,
-		Topics:      []common.Hash{constants.EventSigProposalExecutionSkipped, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
+		Address:     GovCouncilAddress,
+		Topics:      []common.Hash{EventSigProposalExecutionSkipped, common.BytesToHash(account.Bytes()), common.BytesToHash(proposalID.Bytes())},
 		Data:        data,
 		BlockNumber: 2400,
 	}
@@ -1171,8 +1170,8 @@ func TestParseQuorumUpdatedEvent(t *testing.T) {
 	ctx := context.Background()
 
 	log := &types.Log{
-		Address:     constants.GovValidatorAddress,
-		Topics:      []common.Hash{constants.EventSigQuorumUpdated},
+		Address:     GovValidatorAddress,
+		Topics:      []common.Hash{EventSigQuorumUpdated},
 		Data:        make([]byte, 64), // oldQuorum + newQuorum
 		BlockNumber: 2500,
 	}
@@ -1192,8 +1191,8 @@ func TestParseMaxMinterAllowanceUpdatedEvent(t *testing.T) {
 	copy(data[56:64], big.NewInt(2000).Bytes())
 
 	log := &types.Log{
-		Address:     constants.GovMasterMinterAddress,
-		Topics:      []common.Hash{constants.EventSigMaxMinterAllowanceUpdated},
+		Address:     GovMasterMinterAddress,
+		Topics:      []common.Hash{EventSigMaxMinterAllowanceUpdated},
 		Data:        data,
 		BlockNumber: 2600,
 	}
@@ -1209,8 +1208,8 @@ func TestParseMaxMinterAllowanceUpdatedEvent_ShortData(t *testing.T) {
 	ctx := context.Background()
 
 	log := &types.Log{
-		Address:     constants.GovMasterMinterAddress,
-		Topics:      []common.Hash{constants.EventSigMaxMinterAllowanceUpdated},
+		Address:     GovMasterMinterAddress,
+		Topics:      []common.Hash{EventSigMaxMinterAllowanceUpdated},
 		Data:        []byte{0x01}, // Short data
 		BlockNumber: 2700,
 	}
@@ -1232,8 +1231,8 @@ func TestParseMintEvent_StorageError(t *testing.T) {
 	to := common.HexToAddress("0xbbbb")
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigMint, common.BytesToHash(minter.Bytes()), common.BytesToHash(to.Bytes())},
+		Address: NativeCoinAdapterAddress,
+		Topics:  []common.Hash{EventSigMint, common.BytesToHash(minter.Bytes()), common.BytesToHash(to.Bytes())},
 		Data:    common.LeftPadBytes(big.NewInt(100).Bytes(), 32),
 	}
 
@@ -1248,11 +1247,11 @@ func TestIsSystemContract(t *testing.T) {
 		addr     common.Address
 		expected bool
 	}{
-		{constants.NativeCoinAdapterAddress, true},
-		{constants.GovValidatorAddress, true},
-		{constants.GovMasterMinterAddress, true},
-		{constants.GovMinterAddress, true},
-		{constants.GovCouncilAddress, true},
+		{NativeCoinAdapterAddress, true},
+		{GovValidatorAddress, true},
+		{GovMasterMinterAddress, true},
+		{GovMinterAddress, true},
+		{GovCouncilAddress, true},
 		{common.HexToAddress("0xdead"), false},
 		{common.Address{}, false},
 	}
@@ -1272,8 +1271,8 @@ func TestParseBurnEvent_InvalidTopics(t *testing.T) {
 	ctx := context.Background()
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigBurn}, // Missing indexed topic
+		Address: NativeCoinAdapterAddress,
+		Topics:  []common.Hash{EventSigBurn}, // Missing indexed topic
 		Data:    common.LeftPadBytes(big.NewInt(1).Bytes(), 32),
 	}
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
@@ -1284,8 +1283,8 @@ func TestParseMinterConfiguredEvent_InvalidTopics(t *testing.T) {
 	ctx := context.Background()
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigMinterConfigured}, // Missing indexed topic
+		Address: NativeCoinAdapterAddress,
+		Topics:  []common.Hash{EventSigMinterConfigured}, // Missing indexed topic
 		Data:    common.LeftPadBytes(big.NewInt(1).Bytes(), 32),
 	}
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
@@ -1296,8 +1295,8 @@ func TestParseMinterRemovedEvent_InvalidTopics(t *testing.T) {
 	ctx := context.Background()
 
 	log := &types.Log{
-		Address: constants.NativeCoinAdapterAddress,
-		Topics:  []common.Hash{constants.EventSigMinterRemoved}, // Missing indexed topic
+		Address: NativeCoinAdapterAddress,
+		Topics:  []common.Hash{EventSigMinterRemoved}, // Missing indexed topic
 	}
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }
@@ -1307,8 +1306,8 @@ func TestParseEmergencyPausedEvent_InvalidTopics(t *testing.T) {
 	ctx := context.Background()
 
 	log := &types.Log{
-		Address: constants.GovMasterMinterAddress,
-		Topics:  []common.Hash{constants.EventSigEmergencyPaused}, // Missing indexed topic
+		Address: GovMasterMinterAddress,
+		Topics:  []common.Hash{EventSigEmergencyPaused}, // Missing indexed topic
 	}
 	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }

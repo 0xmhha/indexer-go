@@ -6,74 +6,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
-)
-
-// Re-export system contract addresses from constants package for backward compatibility
-var (
-	NativeCoinAdapterAddress = constants.NativeCoinAdapterAddress
-	GovValidatorAddress      = constants.GovValidatorAddress
-	GovMasterMinterAddress   = constants.GovMasterMinterAddress
-	GovMinterAddress         = constants.GovMinterAddress
-	GovCouncilAddress        = constants.GovCouncilAddress
-)
-
-// Re-export event signatures from constants package for backward compatibility
-var (
-	// NativeCoinAdapter events
-	EventSigMint                = constants.EventSigMint
-	EventSigBurn                = constants.EventSigBurn
-	EventSigMinterConfigured    = constants.EventSigMinterConfigured
-	EventSigMinterRemoved       = constants.EventSigMinterRemoved
-	EventSigMasterMinterChanged = constants.EventSigMasterMinterChanged
-	EventSigTransfer            = constants.EventSigTransfer
-	EventSigApproval            = constants.EventSigApproval
-
-	// GovBase events
-	EventSigProposalCreated              = constants.EventSigProposalCreated
-	EventSigProposalVoted                = constants.EventSigProposalVoted
-	EventSigProposalApproved             = constants.EventSigProposalApproved
-	EventSigProposalRejected             = constants.EventSigProposalRejected
-	EventSigProposalExecuted             = constants.EventSigProposalExecuted
-	EventSigProposalFailed               = constants.EventSigProposalFailed
-	EventSigProposalExpired              = constants.EventSigProposalExpired
-	EventSigProposalCancelled            = constants.EventSigProposalCancelled
-	EventSigMemberAdded                  = constants.EventSigMemberAdded
-	EventSigMemberRemoved                = constants.EventSigMemberRemoved
-	EventSigMemberChanged                = constants.EventSigMemberChanged
-	EventSigQuorumUpdated                = constants.EventSigQuorumUpdated
-	EventSigMaxProposalsPerMemberUpdated = constants.EventSigMaxProposalsPerMemberUpdated
-
-	// GovValidator events
-	EventSigGasTipUpdated = constants.EventSigGasTipUpdated
-
-	// GovMasterMinter events
-	EventSigMaxMinterAllowanceUpdated = constants.EventSigMaxMinterAllowanceUpdated
-	EventSigEmergencyPaused           = constants.EventSigEmergencyPaused
-	EventSigEmergencyUnpaused         = constants.EventSigEmergencyUnpaused
-
-	// GovMinter events
-	EventSigDepositMintProposed = constants.EventSigDepositMintProposed
-	EventSigBurnPrepaid         = constants.EventSigBurnPrepaid
-	EventSigBurnExecuted        = constants.EventSigBurnExecuted
-	EventSigBurnDepositRefunded = constants.EventSigBurnDepositRefunded
-	EventSigBurnRefundClaimed   = constants.EventSigBurnRefundClaimed
-
-	// NativeCoinAdapter EIP-3009 events
-	EventSigAuthorizationUsed     = constants.EventSigAuthorizationUsed
-	EventSigAuthorizationCanceled = constants.EventSigAuthorizationCanceled
-
-	// GovCouncil events
-	EventSigAddressBlacklisted       = constants.EventSigAddressBlacklisted
-	EventSigAddressUnblacklisted     = constants.EventSigAddressUnblacklisted
-	EventSigAuthorizedAccountAdded   = constants.EventSigAuthorizedAccountAdded
-	EventSigAuthorizedAccountRemoved = constants.EventSigAuthorizedAccountRemoved
-	EventSigProposalExecutionSkipped = constants.EventSigProposalExecutionSkipped
 )
 
 // SystemContractEventParser parses and indexes system contract events
@@ -266,7 +203,7 @@ func (p *SystemContractEventParser) parseAndIndexLog(ctx context.Context, log *t
 
 // isSystemContract checks if an address is a system contract
 func isSystemContract(addr common.Address) bool {
-	return constants.IsSystemContract(addr)
+	return IsSystemContract(addr)
 }
 
 // NativeCoinAdapter event parsers

@@ -1,8 +1,11 @@
-package constants
+package systemcontracts
 
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // System Contract Addresses for StableOne chain
@@ -65,10 +68,16 @@ type SystemContractTokenMetadata struct {
 // SystemContractTokenMetadataMap maps system contract addresses to their token metadata
 var SystemContractTokenMetadataMap = map[common.Address]SystemContractTokenMetadata{
 	NativeCoinAdapterAddress: {
-		Name:     DefaultNativeTokenName,
-		Symbol:   DefaultNativeTokenSymbol,
-		Decimals: DefaultNativeTokenDecimals,
+		Name:     constants.DefaultNativeTokenName,
+		Symbol:   constants.DefaultNativeTokenSymbol,
+		Decimals: constants.DefaultNativeTokenDecimals,
 	},
+}
+
+func init() {
+	for addr, m := range SystemContractTokenMetadataMap {
+		storage.RegisterKnownToken(addr, storage.KnownToken{Name: m.Name, Symbol: m.Symbol, Decimals: m.Decimals})
+	}
 }
 
 // GetSystemContractTokenMetadata returns token metadata for a system contract
