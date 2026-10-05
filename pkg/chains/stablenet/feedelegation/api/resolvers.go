@@ -1,18 +1,19 @@
-package graphql
+package api
 
 import (
 	"fmt"
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/graphql-go/graphql"
+	gql "github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
 
 // resolveFeeDelegationStats handles the feeDelegationStats query
-func (s *Schema) resolveFeeDelegationStats(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveFeeDelegationStats(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	// Parse optional block range parameters
@@ -50,10 +51,10 @@ func (s *Schema) resolveFeeDelegationStats(p graphql.ResolveParams) (interface{}
 		}
 	}
 
-	// Cast storage to FeeDelegationReader
-	fdReader, ok := s.storage.(storage.FeeDelegationReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement FeeDelegationReader")
+	// Fee delegation statistics
+	fdReader := s.stats
+	if fdReader == nil {
+		return nil, fmt.Errorf("storage does not support fee delegation statistics")
 	}
 
 	// Get fee delegation stats
@@ -75,7 +76,7 @@ func (s *Schema) resolveFeeDelegationStats(p graphql.ResolveParams) (interface{}
 }
 
 // resolveTopFeePayers handles the topFeePayers query
-func (s *Schema) resolveTopFeePayers(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveTopFeePayers(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	// Parse parameters
@@ -118,10 +119,10 @@ func (s *Schema) resolveTopFeePayers(p graphql.ResolveParams) (interface{}, erro
 		}
 	}
 
-	// Cast storage to FeeDelegationReader
-	fdReader, ok := s.storage.(storage.FeeDelegationReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement FeeDelegationReader")
+	// Fee delegation statistics
+	fdReader := s.stats
+	if fdReader == nil {
+		return nil, fmt.Errorf("storage does not support fee delegation statistics")
 	}
 
 	// Get top fee payers
@@ -153,7 +154,7 @@ func (s *Schema) resolveTopFeePayers(p graphql.ResolveParams) (interface{}, erro
 }
 
 // resolveFeePayerStats handles the feePayerStats query
-func (s *Schema) resolveFeePayerStats(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveFeePayerStats(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	// Parse address parameter
@@ -198,10 +199,10 @@ func (s *Schema) resolveFeePayerStats(p graphql.ResolveParams) (interface{}, err
 		}
 	}
 
-	// Cast storage to FeeDelegationReader
-	fdReader, ok := s.storage.(storage.FeeDelegationReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not implement FeeDelegationReader")
+	// Fee delegation statistics
+	fdReader := s.stats
+	if fdReader == nil {
+		return nil, fmt.Errorf("storage does not support fee delegation statistics")
 	}
 
 	// Get fee payer stats
@@ -223,151 +224,151 @@ func (s *Schema) resolveFeePayerStats(p graphql.ResolveParams) (interface{}, err
 	}, nil
 }
 
-// buildFeeDelegationQueries builds the fee delegation related GraphQL queries
-func (b *schemaBuilder) buildFeeDelegationQueries() {
+// addQueries adds the fee delegation queries.
+func addQueries(e *graphql.Extension, s *Schema) {
 	// FeeDelegationStats type
-	feeDelegationStatsType := graphql.NewObject(graphql.ObjectConfig{
+	feeDelegationStatsType := gql.NewObject(gql.ObjectConfig{
 		Name:        "FeeDelegationStats",
 		Description: "Overall fee delegation statistics",
-		Fields: graphql.Fields{
-			"totalFeeDelegatedTxs": &graphql.Field{
-				Type:        graphql.NewNonNull(bigIntType),
+		Fields: gql.Fields{
+			"totalFeeDelegatedTxs": &gql.Field{
+				Type:        gql.NewNonNull(graphql.BigIntType),
 				Description: "Total number of fee delegation transactions",
 			},
-			"totalFeesSaved": &graphql.Field{
-				Type:        graphql.NewNonNull(bigIntType),
+			"totalFeesSaved": &gql.Field{
+				Type:        gql.NewNonNull(graphql.BigIntType),
 				Description: "Total fees saved by users (paid by fee payers) in wei",
 			},
-			"adoptionRate": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.Float),
+			"adoptionRate": &gql.Field{
+				Type:        gql.NewNonNull(gql.Float),
 				Description: "Percentage of fee delegation transactions vs total transactions",
 			},
-			"avgFeeSaved": &graphql.Field{
-				Type:        graphql.NewNonNull(bigIntType),
+			"avgFeeSaved": &gql.Field{
+				Type:        gql.NewNonNull(graphql.BigIntType),
 				Description: "Average fee saved per fee delegation transaction in wei",
 			},
 		},
 	})
 
 	// FeePayerStats type
-	feePayerStatsType := graphql.NewObject(graphql.ObjectConfig{
+	feePayerStatsType := gql.NewObject(gql.ObjectConfig{
 		Name:        "FeePayerStats",
 		Description: "Statistics for a single fee payer",
-		Fields: graphql.Fields{
-			"address": &graphql.Field{
-				Type:        graphql.NewNonNull(addressType),
+		Fields: gql.Fields{
+			"address": &gql.Field{
+				Type:        gql.NewNonNull(graphql.AddressType),
 				Description: "Fee payer address",
 			},
-			"txCount": &graphql.Field{
-				Type:        graphql.NewNonNull(bigIntType),
+			"txCount": &gql.Field{
+				Type:        gql.NewNonNull(graphql.BigIntType),
 				Description: "Number of transactions sponsored by this fee payer",
 			},
-			"totalFeesPaid": &graphql.Field{
-				Type:        graphql.NewNonNull(bigIntType),
+			"totalFeesPaid": &gql.Field{
+				Type:        gql.NewNonNull(graphql.BigIntType),
 				Description: "Total fees paid by this fee payer in wei",
 			},
-			"percentage": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.Float),
+			"percentage": &gql.Field{
+				Type:        gql.NewNonNull(gql.Float),
 				Description: "Percentage of total fee delegation transactions",
 			},
 		},
 	})
 
 	// TopFeePayersResult type
-	topFeePayersResultType := graphql.NewObject(graphql.ObjectConfig{
+	topFeePayersResultType := gql.NewObject(gql.ObjectConfig{
 		Name:        "TopFeePayersResult",
 		Description: "Top fee payers result with pagination info",
-		Fields: graphql.Fields{
-			"nodes": &graphql.Field{
-				Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(feePayerStatsType))),
+		Fields: gql.Fields{
+			"nodes": &gql.Field{
+				Type:        gql.NewNonNull(gql.NewList(gql.NewNonNull(feePayerStatsType))),
 				Description: "List of fee payer statistics",
 			},
-			"totalCount": &graphql.Field{
-				Type:        graphql.NewNonNull(bigIntType),
+			"totalCount": &gql.Field{
+				Type:        gql.NewNonNull(graphql.BigIntType),
 				Description: "Total count of unique fee payers",
 			},
 		},
 	})
 
 	// Add queries
-	b.queries["feeDelegationStats"] = &graphql.Field{
+	e.AddQuery("feeDelegationStats", &gql.Field{
 		Type:        feeDelegationStatsType,
 		Description: "Get overall fee delegation statistics",
-		Args: graphql.FieldConfigArgument{
-			"fromBlock": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+		Args: gql.FieldConfigArgument{
+			"fromBlock": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "Starting block number (optional)",
 			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"toBlock": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "Ending block number (optional)",
 			},
-			"fromTime": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"fromTime": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "Start time filter (Unix timestamp, overrides fromBlock)",
 			},
-			"toTime": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"toTime": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "End time filter (Unix timestamp, overrides toBlock)",
 			},
 		},
-		Resolve: b.schema.resolveFeeDelegationStats,
-	}
+		Resolve: s.resolveFeeDelegationStats,
+	})
 
-	b.queries["topFeePayers"] = &graphql.Field{
+	e.AddQuery("topFeePayers", &gql.Field{
 		Type:        topFeePayersResultType,
 		Description: "Get top fee payers by transaction count",
-		Args: graphql.FieldConfigArgument{
-			"limit": &graphql.ArgumentConfig{
-				Type:         graphql.Int,
+		Args: gql.FieldConfigArgument{
+			"limit": &gql.ArgumentConfig{
+				Type:         gql.Int,
 				DefaultValue: 10,
 				Description:  "Maximum number of fee payers to return (default: 10)",
 			},
-			"fromBlock": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"fromBlock": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "Starting block number (optional)",
 			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"toBlock": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "Ending block number (optional)",
 			},
-			"fromTime": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"fromTime": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "Start time filter (Unix timestamp, overrides fromBlock)",
 			},
-			"toTime": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"toTime": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "End time filter (Unix timestamp, overrides toBlock)",
 			},
 		},
-		Resolve: b.schema.resolveTopFeePayers,
-	}
+		Resolve: s.resolveTopFeePayers,
+	})
 
-	b.queries["feePayerStats"] = &graphql.Field{
+	e.AddQuery("feePayerStats", &gql.Field{
 		Type:        feePayerStatsType,
 		Description: "Get statistics for a specific fee payer",
-		Args: graphql.FieldConfigArgument{
-			"address": &graphql.ArgumentConfig{
-				Type:        graphql.NewNonNull(addressType),
+		Args: gql.FieldConfigArgument{
+			"address": &gql.ArgumentConfig{
+				Type:        gql.NewNonNull(graphql.AddressType),
 				Description: "Fee payer address",
 			},
-			"fromBlock": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"fromBlock": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "Starting block number (optional)",
 			},
-			"toBlock": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"toBlock": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "Ending block number (optional)",
 			},
-			"fromTime": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"fromTime": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "Start time filter (Unix timestamp, overrides fromBlock)",
 			},
-			"toTime": &graphql.ArgumentConfig{
-				Type:        bigIntType,
+			"toTime": &gql.ArgumentConfig{
+				Type:        graphql.BigIntType,
 				Description: "End time filter (Unix timestamp, overrides toBlock)",
 			},
 		},
-		Resolve: b.schema.resolveFeePayerStats,
-	}
+		Resolve: s.resolveFeePayerStats,
+	})
 }

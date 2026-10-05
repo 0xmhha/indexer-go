@@ -341,12 +341,6 @@ func (m *richMockStorage) GetAddressStats(_ context.Context, addr common.Address
 	return &storage.AddressStats{Address: addr, TotalTransactions: 100, SentCount: 60, ReceivedCount: 40, SuccessCount: 95}, nil
 }
 
-// ---- Fee delegation overrides for richMockStorage ----
-
-func (m *richMockStorage) GetFeePayerStats(_ context.Context, addr common.Address, _, _ uint64) (*storage.FeePayerStats, error) {
-	return &storage.FeePayerStats{Address: addr, TxCount: 150, TotalFeesPaid: big.NewInt(5000000000000), Percentage: 25.5}, nil
-}
-
 // newRichTestHandler creates a handler with a rich mock returning actual data.
 func newRichTestHandler(t *testing.T) *Handler {
 	t.Helper()
@@ -381,7 +375,6 @@ func newRichTestHandlerFull(t *testing.T) *Handler {
 		WithSystemContractQueries().
 		WithAddressIndexingQueries().
 		WithSetCodeQueries().
-		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
 		WithTokenHolderQueries().
 		WithSubscriptions().
@@ -560,30 +553,6 @@ func TestSystemContractResolvers(t *testing.T) {
 				assert.NotEmpty(t, result.Errors, "expected error for %s", tc.name)
 			}
 			// Resolver ran without panic - coverage gained
-		})
-	}
-}
-
-// TestFeeDelegationResolvers tests fee delegation query resolvers.
-func TestFeeDelegationResolvers(t *testing.T) {
-	handler := newTestHandler(t)
-
-	tests := []struct {
-		name  string
-		query string
-	}{
-		{"feeDelegationStats", `{ feeDelegationStats { totalFeeDelegatedTxs totalFeesSaved adoptionRate avgFeeSaved } }`},
-		{"feeDelegationStats_withRange", `{ feeDelegationStats(fromBlock: "0", toBlock: "100") { totalFeeDelegatedTxs } }`},
-		{"topFeePayers", `{ topFeePayers { nodes { address txCount totalFeesPaid percentage } totalCount } }`},
-		{"topFeePayers_withLimit", `{ topFeePayers(limit: 5, fromBlock: "0", toBlock: "100") { nodes { address } } }`},
-		{"feePayerStats", `{ feePayerStats(address: "0x0000000000000000000000000000000000000001") { address txCount totalFeesPaid } }`},
-		{"feePayerStats_withRange", `{ feePayerStats(address: "0x0000000000000000000000000000000000000001", fromBlock: "0", toBlock: "100") { address } }`},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := handler.ExecuteQuery(tc.query, nil)
-			_ = result // Resolver ran, coverage gained
 		})
 	}
 }
@@ -767,7 +736,6 @@ func TestSchemaBuilder_Methods(t *testing.T) {
 		WithAnalyticsQueries().
 		WithSystemContractQueries().
 		WithAddressIndexingQueries().
-		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
 		WithTokenHolderQueries().
 		WithSetCodeQueries().
@@ -1269,14 +1237,4 @@ func TestHistoricalResolversWithRichData(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestFeeDelegationResolversWithData exercises fee delegation resolvers with actual data.
-func TestFeeDelegationResolversWithData(t *testing.T) {
-	handler := newRichTestHandler(t)
-
-	t.Run("feePayerStats_withData", func(t *testing.T) {
-		result := handler.ExecuteQuery(`{ feePayerStats(address: "0x0000000000000000000000000000000000000001") { address txCount totalFeesPaid percentage } }`, nil)
-		assert.Empty(t, result.Errors, "errors: %v", result.Errors)
-	})
 }

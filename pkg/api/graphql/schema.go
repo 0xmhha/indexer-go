@@ -1584,7 +1584,6 @@ func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
 		WithSetCodeQueries().
 		WithModuleQueries().
 		WithUserOpQueries().
-		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
 		WithTokenHolderQueries().
 		WithReorgQueries().
@@ -1880,16 +1879,6 @@ func (b *SchemaBuilder) WithUserOpQueries() *SchemaBuilder {
 		Resolve:     s.resolveUserOpCount,
 	}
 
-	return b
-}
-
-// WithFeeDelegationQueries adds fee delegation related queries
-func (b *SchemaBuilder) WithFeeDelegationQueries() *SchemaBuilder {
-	builder := &schemaBuilder{
-		schema:  b.schema,
-		queries: b.queries,
-	}
-	builder.buildFeeDelegationQueries()
 	return b
 }
 

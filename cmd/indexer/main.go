@@ -23,6 +23,7 @@ import (
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/feedelegation"   // stablenet.fee_delegation feature
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts" // stablenet.system_contracts feature
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/wbft"            // stablenet.wbft feature
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation/api"        // StableNet fee delegation API
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/events"

@@ -15,7 +15,7 @@ import (
 // type 2 and a fee delegation 0x16 transaction) and reads it back through
 // the paths that walk a block's transactions. The go-ethereum view of the
 // block rebuilds 0x16 as type 2 under another hash; these paths must use
-// the hash the chain reports, or the 0x16 receipt and metadata are missed.
+// the hash the chain reports, or the 0x16 receipt is missed.
 func TestLegacyReadsFindFeeDelegationTxs(t *testing.T) {
 	raw, err := os.ReadFile("../chains/stablenet/testdata/live_vectors.json")
 	require.NoError(t, err)
@@ -53,10 +53,6 @@ func TestLegacyReadsFindFeeDelegationTxs(t *testing.T) {
 	missing, err := s.GetMissingReceipts(ctx, 33)
 	require.NoError(t, err)
 	require.Empty(t, missing, "gap detection does not report the 0x16 receipt as missing")
-
-	stats, err := s.GetFeeDelegationStats(ctx, 33, 33)
-	require.NoError(t, err)
-	require.Equal(t, uint64(1), stats.TotalFeeDelegatedTxs)
 
 	found, err := s.Search(ctx, fdTx.Hash.Hex(), []string{"transaction"}, 10)
 	require.NoError(t, err)

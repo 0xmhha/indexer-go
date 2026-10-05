@@ -426,27 +426,6 @@ func (m *mockStorage) SetBalance(ctx context.Context, addr common.Address, block
 }
 
 // FeeDelegationReader methods for mockStorage
-func (m *mockStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*storage.FeeDelegationStats, error) {
-	return &storage.FeeDelegationStats{
-		TotalFeeDelegatedTxs: 0,
-		TotalFeesSaved:       big.NewInt(0),
-		AdoptionRate:         0.0,
-		AvgFeeSaved:          big.NewInt(0),
-	}, nil
-}
-
-func (m *mockStorage) GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.FeePayerStats, uint64, error) {
-	return []storage.FeePayerStats{}, 0, nil
-}
-
-func (m *mockStorage) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
-	return &storage.FeePayerStats{
-		Address:       feePayer,
-		TxCount:       0,
-		TotalFeesPaid: big.NewInt(0),
-		Percentage:    0.0,
-	}, nil
-}
 
 func (m *mockStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
 	return nil, storage.ErrNotFound
@@ -990,17 +969,6 @@ func (m *mockStorageWithErrors) SetBalance(ctx context.Context, addr common.Addr
 }
 
 // FeeDelegationReader methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*storage.FeeDelegationStats, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.FeePayerStats, uint64, error) {
-	return nil, 0, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
-	return nil, fmt.Errorf("storage error")
-}
 
 func (m *mockStorageWithErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
 	return nil, fmt.Errorf("storage error")

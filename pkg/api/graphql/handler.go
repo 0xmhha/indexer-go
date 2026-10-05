@@ -44,7 +44,6 @@ func NewHandlerWithOptions(store storage.Storage, logger *zap.Logger, opts *Hand
 		WithSetCodeQueries().
 		WithModuleQueries().
 		WithUserOpQueries().
-		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
 		WithTokenHolderQueries().
 		WithReorgQueries().

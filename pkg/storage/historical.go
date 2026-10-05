@@ -388,30 +388,6 @@ func DefaultTransactionFilter() *TransactionFilter {
 	}
 }
 
-// FeeDelegationStats represents overall fee delegation statistics
-type FeeDelegationStats struct {
-	// TotalFeeDelegatedTxs is the total number of fee delegation transactions
-	TotalFeeDelegatedTxs uint64
-	// TotalFeesSaved is the total fees saved by users (paid by fee payers) in wei
-	TotalFeesSaved *big.Int
-	// AdoptionRate is the percentage of fee delegation transactions vs total transactions
-	AdoptionRate float64
-	// AvgFeeSaved is the average fee saved per fee delegation transaction in wei
-	AvgFeeSaved *big.Int
-}
-
-// FeePayerStats represents statistics for a single fee payer
-type FeePayerStats struct {
-	// Address is the fee payer address
-	Address common.Address
-	// TxCount is the number of transactions sponsored by this fee payer
-	TxCount uint64
-	// TotalFeesPaid is the total fees paid by this fee payer in wei
-	TotalFeesPaid *big.Int
-	// Percentage is the percentage of total fee delegation transactions
-	Percentage float64
-}
-
 // FeeDelegationTxMeta stores metadata for Fee Delegation transactions (type 0x16)
 // This is stored separately because go-ethereum doesn't support the Fee Delegation type
 type FeeDelegationTxMeta struct {
@@ -431,19 +407,8 @@ type FeeDelegationTxMeta struct {
 	FeePayerS *big.Int
 }
 
-// FeeDelegationReader provides read access to fee delegation statistics
+// FeeDelegationReader provides read access to fee delegation metadata
 type FeeDelegationReader interface {
-	// GetFeeDelegationStats returns overall fee delegation statistics
-	// If fromBlock and toBlock are both 0, returns all-time statistics
-	GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*FeeDelegationStats, error)
-
-	// GetTopFeePayers returns the top fee payers by transaction count
-	// If fromBlock and toBlock are both 0, returns all-time statistics
-	GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]FeePayerStats, uint64, error)
-
-	// GetFeePayerStats returns statistics for a specific fee payer
-	GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*FeePayerStats, error)
-
 	// GetFeeDelegationTxMeta returns fee delegation metadata for a transaction
 	// Returns nil if the transaction is not a fee delegation transaction
 	GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*FeeDelegationTxMeta, error)

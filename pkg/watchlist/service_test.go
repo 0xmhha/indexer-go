@@ -264,16 +264,6 @@ func (m *mockStorage) GetAddressStats(ctx context.Context, addr common.Address) 
 	return nil, nil
 }
 
-// FeeDelegationReader interface
-func (m *mockStorage) GetFeeDelegationStats(ctx context.Context, fromBlock, toBlock uint64) (*storage.FeeDelegationStats, error) {
-	return nil, nil
-}
-func (m *mockStorage) GetTopFeePayers(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.FeePayerStats, uint64, error) {
-	return nil, 0, nil
-}
-func (m *mockStorage) GetFeePayerStats(ctx context.Context, feePayer common.Address, fromBlock, toBlock uint64) (*storage.FeePayerStats, error) {
-	return nil, nil
-}
 func (m *mockStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
 	return nil, nil
 }
