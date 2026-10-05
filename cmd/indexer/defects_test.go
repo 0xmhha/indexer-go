@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/fetch"
 )
 
 // knownDefects lists, per ingest path, data-integrity defects
@@ -97,11 +97,13 @@ func TestReprocessingIsIdempotent(t *testing.T) {
 
 // TestGapRecoveryDoesNotReprocess leaves blocks 6..9 unindexed, then performs
 // the startup sequence of RunWithGapRecovery (detect gaps, fill them, resume
-// from the cursor). Recovery must fetch only the missing blocks.
+// from the cursor). Recovery must fetch only the missing blocks. Gaps are
+// filled only when every enabled feature is order-independent (D12, see
+// TestGapBelowIndexedBlocksStops), so the order-dependent ones are off.
 func TestGapRecoveryDoesNotReprocess(t *testing.T) {
-	want := dumpScenarioIndex(t)
-	for _, mode := range allModes {
-		t.Run(mode.name, func(t *testing.T) {
+	for _, base := range allModes {
+		mode := orderIndependentOnly(base)
+		t.Run(base.name, func(t *testing.T) {
 			sc := testchain.BuildDefault()
 			srv := testchain.NewServer(sc.Chain)
 			defer srv.Close()
@@ -142,20 +144,48 @@ func TestGapRecoveryDoesNotReprocess(t *testing.T) {
 					extra = append(extra, fmt.Sprintf("block %d fetched %d times during recovery", h, loads[h]))
 				}
 			}
-			checkDefect(t, mode, "D10", len(extra) == 0, extra...)
+			checkDefect(t, base, "D10", len(extra) == 0, extra...)
 
-			// State that depends on processing order differs when a gap is
-			// filled after later blocks: per-address sequences, and module
-			// install state (here the uninstall at block 11 is processed
-			// before the install at block 9). This is defect D12; the atomic
-			// path itself never creates gaps. Everything else must match.
+			// The result equals indexing every block in one run.
 			if mode.atomic {
+				want := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), mode))
 				diff := testchain.DiffKeyspace(want, dumpDir(t, dir), 0)
-				rest := excludePrefixes(diff, "/index/balance/", "/index/addr/", "/data/module/")
-				require.Empty(t, rest, testchain.SummarizeDiff(rest))
+				require.Empty(t, diff, testchain.SummarizeDiff(diff))
 			}
 		})
 	}
+}
+
+// TestGapBelowIndexedBlocksStops: blocks missing below indexed blocks cannot
+// be indexed after them with order-dependent features enabled (balances,
+// address sequences and latest-state records such as module installs would
+// be computed out of order, defect D12). Gap recovery stops with
+// ErrGapBelowIndexed and leaves the database as it was; the database must be
+// reindexed.
+func TestGapBelowIndexedBlocksStops(t *testing.T) {
+	sc := testchain.BuildDefault()
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+	dir := filepath.Join(t.TempDir(), "db")
+	runSession(t, srv, dir, 0, 5)
+	runSession(t, srv, dir, 10, sc.Chain.Head()) // blocks 6..9 are now a gap
+	before := dumpDir(t, dir)
+
+	app := startApp(t, srv, dir)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	latest, err := app.storage.GetLatestHeight(ctx)
+	require.NoError(t, err)
+	gaps, err := app.fetcher.DetectGaps(ctx, 0, latest)
+	require.NoError(t, err)
+	require.Equal(t, []fetch.GapRange{{Start: 6, End: 9}}, gaps)
+	err = app.fetcher.FillGaps(ctx, gaps)
+	require.ErrorIs(t, err, fetch.ErrGapBelowIndexed)
+	require.ErrorContains(t, err, "reindex")
+	app.Shutdown()
+
+	diff := testchain.DiffKeyspace(before, dumpDir(t, dir), 0)
+	require.Empty(t, diff, testchain.SummarizeDiff(diff))
 }
 
 // TestCrashBeforeCommitRecovers aborts indexing right before a block's
@@ -197,21 +227,4 @@ func TestCrashBeforeCommitRecovers(t *testing.T) {
 			require.Empty(t, diff, testchain.SummarizeDiff(diff))
 		})
 	}
-}
-
-func excludePrefixes(lines []string, prefixes ...string) []string {
-	var out []string
-	for _, l := range lines {
-		keep := true
-		for _, p := range prefixes {
-			if len(l) > 2 && strings.HasPrefix(l[2:], p) {
-				keep = false
-				break
-			}
-		}
-		if keep {
-			out = append(out, l)
-		}
-	}
-	return out
 }
