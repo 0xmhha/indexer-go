@@ -68,6 +68,7 @@ rpc:
   endpoint: "http://127.0.0.1:8501"
 indexer:
   workers: 100
+  poll_interval: 50ms   # head polling once caught up (head latency); separate from error retry delay
 api:
   port: 8080
   enable_graphql: true

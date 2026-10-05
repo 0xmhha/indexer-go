@@ -89,6 +89,10 @@ func (s *Source) Block(ctx context.Context, n uint64) (*model.Block, error) {
 	if isNull(raw) {
 		return nil, fmt.Errorf("%w: %d", ErrNotFound, n)
 	}
+	return s.decodeBlock(n, raw)
+}
+
+func (s *Source) decodeBlock(n uint64, raw json.RawMessage) (*model.Block, error) {
 	b, err := s.profile.DecodeBlock(raw)
 	if err != nil {
 		return nil, fmt.Errorf("source: block %d: %w", n, err)
@@ -97,6 +101,82 @@ func (s *Source) Block(ctx context.Context, n uint64) (*model.Block, error) {
 		return nil, fmt.Errorf("source: asked for block %d, node returned %d", n, b.Number)
 	}
 	return b, nil
+}
+
+// BlockWithReceipts fetches block n and its receipts in one JSON-RPC batch
+// (one round trip). Receipts are checked as in Receipts. On nodes without
+// eth_getBlockReceipts it falls back to per-transaction receipts.
+func (s *Source) BlockWithReceipts(ctx context.Context, n uint64) (*model.Block, []*model.Receipt, error) {
+	if s.perTxReceipts.Load() {
+		b, err := s.Block(ctx, n)
+		if err != nil {
+			return nil, nil, err
+		}
+		rs, err := s.Receipts(ctx, b)
+		return b, rs, err
+	}
+
+	var rawBlock, rawReceipts json.RawMessage
+	num := hexutil.EncodeUint64(n)
+	batch := []rpc.BatchElem{
+		{Method: "eth_getBlockByNumber", Args: []any{num, true}, Result: &rawBlock},
+		{Method: "eth_getBlockReceipts", Args: []any{num}, Result: &rawReceipts},
+	}
+	if err := s.rpc.BatchCallContext(ctx, batch); err != nil {
+		return nil, nil, fmt.Errorf("source: block %d: %w", n, err)
+	}
+	if batch[0].Error != nil {
+		return nil, nil, fmt.Errorf("source: eth_getBlockByNumber %d: %w", n, batch[0].Error)
+	}
+	if isNull(rawBlock) {
+		return nil, nil, fmt.Errorf("%w: %d", ErrNotFound, n)
+	}
+	// Decode the receipts while the block decodes; they are checked
+	// against the block once both are done.
+	type decoded struct {
+		rs  []*model.Receipt
+		err error
+	}
+	var receiptsDone chan decoded
+	if batch[1].Error == nil && !isNull(rawReceipts) {
+		receiptsDone = make(chan decoded, 1)
+		go func() {
+			rs, err := s.profile.DecodeReceipts(rawReceipts)
+			receiptsDone <- decoded{rs, err}
+		}()
+	}
+	b, err := s.decodeBlock(n, rawBlock)
+	var pre *decoded
+	if receiptsDone != nil {
+		d := <-receiptsDone
+		pre = &d
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	unsupported := batch[1].Error != nil && isMethodNotFound(batch[1].Error)
+	if unsupported {
+		s.perTxReceipts.Store(true)
+	}
+	if len(b.Transactions) == 0 {
+		return b, nil, nil
+	}
+	switch {
+	case unsupported:
+		rs, err := s.Receipts(ctx, b)
+		return b, rs, err
+	case batch[1].Error != nil:
+		return nil, nil, fmt.Errorf("source: eth_getBlockReceipts %d: %w", n, batch[1].Error)
+	case isNull(rawReceipts):
+		// The node has the block but not yet its receipts: ask per block again.
+		rs, err := s.Receipts(ctx, b)
+		return b, rs, err
+	}
+	if pre.err != nil {
+		return nil, nil, fmt.Errorf("source: receipts of block %d: %w", b.Number, pre.err)
+	}
+	rs, err := checkReceipts(b, pre.rs)
+	return b, rs, err
 }
 
 // Receipts fetches the receipts of b and checks that they belong to it: one
@@ -109,10 +189,22 @@ func (s *Source) Receipts(ctx context.Context, b *model.Block) ([]*model.Receipt
 	if err != nil {
 		return nil, err
 	}
+	return s.decodeReceipts(b, raw)
+}
+
+// decodeReceipts decodes a block's receipts and checks that they belong to
+// it: one receipt per transaction, in order, with matching hashes.
+func (s *Source) decodeReceipts(b *model.Block, raw json.RawMessage) ([]*model.Receipt, error) {
 	rs, err := s.profile.DecodeReceipts(raw)
 	if err != nil {
 		return nil, fmt.Errorf("source: receipts of block %d: %w", b.Number, err)
 	}
+	return checkReceipts(b, rs)
+}
+
+// checkReceipts requires one receipt per transaction of b, in order, with
+// matching transaction and block hashes.
+func checkReceipts(b *model.Block, rs []*model.Receipt) ([]*model.Receipt, error) {
 	if len(rs) != len(b.Transactions) {
 		return nil, fmt.Errorf("%w: block %d has %d transactions, %d receipts", ErrInconsistentReceipts, b.Number, len(b.Transactions), len(rs))
 	}

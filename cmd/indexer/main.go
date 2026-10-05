@@ -668,13 +668,14 @@ func (a *App) initFetcher(ctx context.Context) error {
 	}
 
 	fetcherConfig := &fetch.Config{
-		StartHeight: a.config.Indexer.StartHeight,
-		BatchSize:   a.config.Indexer.ChunkSize,
-		MaxRetries:  3,
-		RetryDelay:  retryDelay,
-		NumWorkers:  a.config.Indexer.Workers,
-		AtomicBlock: a.config.Indexer.AtomicBlock,
-		RPCTimeout:  a.config.RPC.Timeout,
+		StartHeight:  a.config.Indexer.StartHeight,
+		BatchSize:    a.config.Indexer.ChunkSize,
+		MaxRetries:   3,
+		RetryDelay:   retryDelay,
+		NumWorkers:   a.config.Indexer.Workers,
+		AtomicBlock:  a.config.Indexer.AtomicBlock,
+		RPCTimeout:   a.config.RPC.Timeout,
+		PollInterval: a.config.Indexer.PollInterval,
 	}
 
 	// Create fetcher with chain adapter if available

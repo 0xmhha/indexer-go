@@ -158,3 +158,26 @@ func TestReorgBeyondUndoStops(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, head, latest, "nothing was rolled back or indexed on top")
 }
+
+// TestRollbackLargeBlocks covers blocks large enough that their undo records
+// are read on several cores.
+func TestRollbackLargeBlocks(t *testing.T) {
+	sc := testchain.BuildLoad(6, 300, 0)
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+	head := sc.Chain.Head()
+	j := head - 3
+
+	partial := filepath.Join(t.TempDir(), "partial")
+	runSession(t, srv, partial, 0, j)
+
+	dir := filepath.Join(t.TempDir(), "db")
+	app := startApp(t, srv, dir)
+	ctx := context.Background()
+	require.NoError(t, app.fetcher.FetchRange(ctx, 0, head))
+	require.NoError(t, app.storage.(rollbacker).RollbackTo(ctx, j))
+	app.Shutdown()
+
+	diff := testchain.DiffKeyspace(dumpDir(t, partial), dumpDir(t, dir), 0)
+	require.Empty(t, diff, testchain.SummarizeDiff(diff))
+}

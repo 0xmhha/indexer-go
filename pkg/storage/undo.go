@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
+	"sync"
+	"sync/atomic"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -72,18 +75,10 @@ func (tx *BlockTx) writeUndo() error {
 			continue
 		}
 		seen[string(key)] = true
-		e := undoEntry{Key: append([]byte(nil), key...)}
-		// Read the committed value, not the batch: the batch already holds
-		// this block's write.
-		prev, closer, err := tx.s.db.Get(key)
-		switch {
-		case err == nil:
-			e.Existed, e.Prev = true, append([]byte(nil), prev...)
-			closer.Close()
-		case !errors.Is(err, pebble.ErrNotFound):
-			return fmt.Errorf("read previous value: %w", err)
-		}
-		rec.Entries = append(rec.Entries, e)
+		rec.Entries = append(rec.Entries, undoEntry{Key: append([]byte(nil), key...)})
+	}
+	if err := tx.readPrevious(rec.Entries); err != nil {
+		return err
 	}
 	enc, err := rlp.EncodeToBytes(&rec)
 	if err != nil {
@@ -199,4 +194,53 @@ func (s *PebbleStorage) checkUndo(ctx context.Context, h uint64) error {
 		return fmt.Errorf("%w %d (incomplete)", ErrNoUndo, h)
 	}
 	return nil
+}
+
+// parallelUndoMin is the key count from which previous values are read on
+// several cores; a large block writes thousands of keys.
+const parallelUndoMin = 256
+
+// readPrevious fills each entry with the committed value of its key. It
+// reads the database, not the batch, which already holds this block's write.
+func (tx *BlockTx) readPrevious(entries []undoEntry) error {
+	read := func(e *undoEntry) error {
+		prev, closer, err := tx.s.db.Get(e.Key)
+		switch {
+		case err == nil:
+			e.Existed, e.Prev = true, append([]byte(nil), prev...)
+			return closer.Close()
+		case errors.Is(err, pebble.ErrNotFound):
+			return nil
+		default:
+			return fmt.Errorf("read previous value: %w", err)
+		}
+	}
+	if len(entries) < parallelUndoMin {
+		for i := range entries {
+			if err := read(&entries[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	workers := runtime.GOMAXPROCS(0)
+	errs := make([]error, workers)
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(entries) || errs[w] != nil {
+					return
+				}
+				errs[w] = read(&entries[i])
+			}
+		}(w)
+	}
+	wg.Wait()
+	return errors.Join(errs...)
 }

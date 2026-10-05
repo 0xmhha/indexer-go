@@ -92,6 +92,10 @@ type IndexerConfig struct {
 	// hash rules are kept. Setting it to false selects the legacy
 	// go-ethereum client path, kept for one release as a fallback.
 	ProfileSource bool `yaml:"profile_source"`
+	// PollInterval is how long the live loop waits before asking the node
+	// for a new head once it has caught up (default 50ms). It bounds the
+	// delay between a block appearing on the node and indexing starting.
+	PollInterval time.Duration `yaml:"poll_interval"`
 }
 
 // APIConfig holds API server configuration
@@ -468,6 +472,9 @@ func NewConfig() *Config {
 // SetDefaults sets default values for the configuration
 func (c *Config) SetDefaults() {
 	// RPC defaults
+	if c.Indexer.PollInterval == 0 {
+		c.Indexer.PollInterval = 50 * time.Millisecond
+	}
 	if c.RPC.Timeout == 0 {
 		c.RPC.Timeout = constants.DefaultQueryTimeout
 	}
@@ -697,6 +704,13 @@ func (c *Config) LoadFromEnv() error {
 	// RPC configuration
 	if endpoint := os.Getenv("INDEXER_RPC_ENDPOINT"); endpoint != "" {
 		c.RPC.Endpoint = endpoint
+	}
+	if v := os.Getenv("INDEXER_POLL_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_POLL_INTERVAL: %w", err)
+		}
+		c.Indexer.PollInterval = d
 	}
 	if timeout := os.Getenv("INDEXER_RPC_TIMEOUT"); timeout != "" {
 		duration, err := time.ParseDuration(timeout)

@@ -67,11 +67,7 @@ func (f *Fetcher) fetchOnce(ctx context.Context, height uint64) (*fetchedBlock, 
 	if f.src != nil {
 		rctx, cancel := f.rpcCtx(ctx)
 		defer cancel()
-		b, err := f.src.Block(rctx, height)
-		if err != nil {
-			return nil, err
-		}
-		rs, err := f.src.Receipts(rctx, b)
+		b, rs, err := f.src.BlockWithReceipts(rctx, height)
 		if err != nil {
 			return nil, err
 		}

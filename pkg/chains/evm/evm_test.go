@@ -205,3 +205,43 @@ func TestChainSpecificDecoderTakesPrecedence(t *testing.T) {
 	require.Equal(t, uint8(0x16), b.Transactions[0].Type)
 	require.Equal(t, uint(0), b.Transactions[0].Index, "position fields are filled by the profile")
 }
+
+// TestParallelDecodeMatchesGoEthereum covers blocks large enough to decode
+// their transactions on several cores: order, hashes and senders must match
+// go-ethereum exactly.
+func TestParallelDecodeMatchesGoEthereum(t *testing.T) {
+	sc := testchain.BuildLoad(3, 150, 0)
+	src := dial(t, sc)
+	p := evm.New("evm-test")
+	ctx := context.Background()
+	large := 0
+	for n := uint64(1); n <= sc.Chain.Head(); n++ {
+		got, err := p.DecodeBlock(src.block(t, n))
+		require.NoError(t, err)
+		want, err := src.ec.BlockByNumber(ctx, new(big.Int).SetUint64(n))
+		require.NoError(t, err)
+		require.Len(t, got.Transactions, len(want.Transactions()))
+		if len(got.Transactions) >= 150 {
+			large++
+		}
+		for i, wtx := range want.Transactions() {
+			checkTx(t, wtx, got.Transactions[i])
+			require.Equal(t, uint(i), got.Transactions[i].Index)
+		}
+	}
+	require.Positive(t, large, "the scenario has blocks above the parallel threshold")
+}
+
+func TestParallelDecodeReportsFailingTransaction(t *testing.T) {
+	sc := testchain.BuildLoad(1, 60, 0)
+	src := dial(t, sc)
+	var blk map[string]any
+	require.NoError(t, json.Unmarshal(src.block(t, sc.Chain.Head()), &blk))
+	txs := blk["transactions"].([]any)
+	txs[41].(map[string]any)["hash"] = "0x" + strings.Repeat("ab", 32) // forged
+	raw, err := json.Marshal(blk)
+	require.NoError(t, err)
+	_, err = evm.New("evm-test").DecodeBlock(raw)
+	require.ErrorIs(t, err, evm.ErrHashMismatch)
+	require.ErrorContains(t, err, "tx 41")
+}

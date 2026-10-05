@@ -189,3 +189,40 @@ func TestWrongBlockNumberIsRejected(t *testing.T) {
 	_, err := source.New(dial(t, url), stablenet.New()).Block(context.Background(), 34)
 	require.ErrorContains(t, err, "node returned 33")
 }
+
+// TestBlockWithReceiptsMatchesSeparateCalls requires the batched fetch to
+// return exactly what Block and Receipts return, in one round trip per block.
+func TestBlockWithReceiptsMatchesSeparateCalls(t *testing.T) {
+	sc, srv := fakeChain(t)
+	ctx := context.Background()
+	src := source.New(dial(t, srv.URL()), evm.New("evm-test"))
+	for n := uint64(0); n <= sc.Chain.Head(); n++ {
+		b, rs, err := src.BlockWithReceipts(ctx, n)
+		require.NoError(t, err)
+		want, err := src.Block(ctx, n)
+		require.NoError(t, err)
+		wantRs, err := src.Receipts(ctx, want)
+		require.NoError(t, err)
+		require.Equal(t, want.Hash, b.Hash)
+		require.Len(t, rs, len(wantRs))
+		for i := range rs {
+			require.Equal(t, wantRs[i].TxHash, rs[i].TxHash)
+			require.Equal(t, wantRs[i].GasUsed, rs[i].GasUsed)
+		}
+	}
+	_, _, err := src.BlockWithReceipts(ctx, sc.Chain.Head()+1)
+	require.ErrorIs(t, err, source.ErrNotFound)
+}
+
+func TestBlockWithReceiptsFallsBackToPerTransaction(t *testing.T) {
+	sc, srv := fakeChain(t)
+	ctx := context.Background()
+	srv.DisableMethod("eth_getBlockReceipts")
+	src := source.New(dial(t, srv.URL()), evm.New("evm-test"))
+	for n := uint64(0); n <= sc.Chain.Head(); n++ {
+		b, rs, err := src.BlockWithReceipts(ctx, n)
+		require.NoError(t, err)
+		require.Len(t, rs, len(b.Transactions))
+	}
+	require.Equal(t, 1, srv.Calls()["eth_getBlockReceipts"], "the unsupported method is tried once")
+}

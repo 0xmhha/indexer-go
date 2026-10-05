@@ -119,6 +119,12 @@ type Config struct {
 	// RPCTimeout bounds each RPC call made while indexing (0 = no limit).
 	RPCTimeout time.Duration
 
+	// PollInterval is how long the live loop waits before asking the node for
+	// a new head once caught up. 0 falls back to RetryDelay. It is separate
+	// from RetryDelay (the backoff after errors) so the head can be followed
+	// closely without retrying failures aggressively.
+	PollInterval time.Duration
+
 	// AtomicBlock indexes each block in one storage transaction (cursor
 	// included) and publishes its events after commit.
 	AtomicBlock bool
@@ -750,7 +756,7 @@ func (f *Fetcher) Run(ctx context.Context) error {
 				zap.Uint64("next_height", nextHeight),
 				zap.Uint64("latest_chain_block", latestChainBlock),
 			)
-			if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
+			if err := sleepCtx(ctx, f.pollInterval()); err != nil {
 				return err
 			}
 			continue
@@ -822,4 +828,12 @@ func getTransactionSender(tx *types.Transaction) common.Address {
 		return common.Address{}
 	}
 	return from
+}
+
+// pollInterval is the wait between head checks once caught up.
+func (f *Fetcher) pollInterval() time.Duration {
+	if f.config.PollInterval > 0 {
+		return f.config.PollInterval
+	}
+	return f.config.RetryDelay
 }

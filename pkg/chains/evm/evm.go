@@ -10,6 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -130,15 +133,14 @@ func (p *Profile) DecodeBlock(raw json.RawMessage) (*model.Block, error) {
 			b.Withdrawals = append(b.Withdrawals, model.Withdrawal{Index: w.Index, Validator: w.Validator, Address: w.Address, Amount: w.Amount})
 		}
 	}
-	b.Transactions = make([]*model.Transaction, 0, len(body.Transactions))
-	for i, rawTx := range body.Transactions {
-		tx, err := p.decodeTx(rawTx)
-		if err != nil {
-			return nil, fmt.Errorf("evm: block %d tx %d: %w", b.Number, i, err)
-		}
-		tx.BlockHash, tx.BlockNumber, tx.Index = b.Hash, b.Number, uint(i)
-		b.Transactions = append(b.Transactions, tx)
+	txs, err := p.decodeTxs(body.Transactions)
+	if err != nil {
+		return nil, fmt.Errorf("evm: block %d %w", b.Number, err)
 	}
+	for i, tx := range txs {
+		tx.BlockHash, tx.BlockNumber, tx.Index = b.Hash, b.Number, uint(i)
+	}
+	b.Transactions = txs
 	return b, nil
 }
 
@@ -320,13 +322,17 @@ func (p *Profile) DecodeReceipts(raw json.RawMessage) ([]*model.Receipt, error) 
 	if err := json.Unmarshal(raw, &items); err != nil {
 		return nil, fmt.Errorf("evm: decode receipts: %w", err)
 	}
-	out := make([]*model.Receipt, 0, len(items))
-	for i, item := range items {
+	out := make([]*model.Receipt, len(items))
+	err := parallelFor(len(items), func(i int) error {
 		var r types.Receipt
-		if err := r.UnmarshalJSON(item); err != nil {
-			return nil, fmt.Errorf("evm: receipt %d: %w", i, err)
+		if err := r.UnmarshalJSON(items[i]); err != nil {
+			return fmt.Errorf("evm: receipt %d: %w", i, err)
 		}
-		out = append(out, ReceiptToModel(&r))
+		out[i] = ReceiptToModel(&r)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -363,4 +369,68 @@ func ReceiptToModel(r *types.Receipt) *model.Receipt {
 		})
 	}
 	return m
+}
+
+// parallelDecodeMin is the transaction or receipt count from which a
+// block's items are decoded on several cores. Decoding is dominated by
+// signature recovery (tens of microseconds per transaction), so small blocks
+// stay sequential to avoid scheduling overhead.
+const parallelDecodeMin = 32
+
+// decodeTxs decodes a block's transactions, in parallel for large blocks.
+// Transactions are independent: each recovers and checks its own sender.
+func (p *Profile) decodeTxs(raws []json.RawMessage) ([]*model.Transaction, error) {
+	out := make([]*model.Transaction, len(raws))
+	err := parallelFor(len(raws), func(i int) error {
+		tx, err := p.decodeTx(raws[i])
+		if err != nil {
+			return fmt.Errorf("tx %d: %w", i, err)
+		}
+		out[i] = tx
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// parallelFor runs fn for 0..n-1, on several cores when n reaches
+// parallelDecodeMin, and returns the error of the lowest failing index.
+func parallelFor(n int, fn func(i int) error) error {
+	if n < parallelDecodeMin {
+		for i := 0; i < n; i++ {
+			if err := fn(i); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	workers := runtime.GOMAXPROCS(0)
+	if workers > n {
+		workers = n
+	}
+	errs := make([]error, n)
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= n {
+					return
+				}
+				errs[i] = fn(i)
+			}
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
