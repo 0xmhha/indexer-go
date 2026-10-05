@@ -1,10 +1,12 @@
-package events
+package consensus
 
 import (
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/events"
 )
 
 func TestConsensusBlockEvent_Interface(t *testing.T) {
@@ -458,7 +460,7 @@ func TestConsensusErrorEvent_NilErrorDetails(t *testing.T) {
 
 func TestAllConsensusEventTypes_Interface(t *testing.T) {
 	// Create one of each consensus event type
-	events := []Event{
+	evs := []events.Event{
 		NewConsensusBlockEvent(
 			100, common.Hash{}, uint64(time.Now().Unix()),
 			0, 0, common.Address{}, 5, 5, 5, 1.0, 0.0, false, nil, nil,
@@ -474,14 +476,14 @@ func TestAllConsensusEventTypes_Interface(t *testing.T) {
 		),
 	}
 
-	expectedTypes := []EventType{
+	expectedTypes := []events.EventType{
 		EventTypeConsensusBlock,
 		EventTypeConsensusFork,
 		EventTypeConsensusValidatorChange,
 		EventTypeConsensusError,
 	}
 
-	for i, event := range events {
+	for i, event := range evs {
 		// Test Type() method
 		if event.Type() != expectedTypes[i] {
 			t.Errorf("event %d: expected type %s, got %s", i, expectedTypes[i], event.Type())

@@ -258,26 +258,6 @@ func TestValidatorActiveIndexKeyPrefix(t *testing.T) {
 	assert.True(t, len(prefix) > 0)
 }
 
-func TestWBFTBlockExtraKeyPrefix(t *testing.T) {
-	prefix := WBFTBlockExtraKeyPrefix()
-	assert.NotNil(t, prefix)
-	assert.True(t, len(prefix) > 0)
-}
-
-func TestWBFTEpochKeyPrefix(t *testing.T) {
-	prefix := WBFTEpochKeyPrefix()
-	assert.NotNil(t, prefix)
-	assert.True(t, len(prefix) > 0)
-}
-
-func TestWBFTValidatorStatsKeyPrefix(t *testing.T) {
-	validator := common.HexToAddress("0xVALIDATOR12345678901234567890123456789")
-
-	prefix := WBFTValidatorStatsKeyPrefix(validator)
-	assert.NotNil(t, prefix)
-	assert.True(t, len(prefix) > 0)
-}
-
 func TestInternalTxToIndexKeyPrefix(t *testing.T) {
 	to := common.HexToAddress("0xTO12345678901234567890123456789012345678")
 

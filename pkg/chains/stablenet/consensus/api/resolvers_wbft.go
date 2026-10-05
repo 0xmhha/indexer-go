@@ -1,4 +1,4 @@
-package graphql
+package api
 
 import (
 	"errors"
@@ -6,14 +6,16 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/api/graphql"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/graphql-go/graphql"
+	gql "github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
 
 // resolveWBFTBlockExtra resolves WBFT consensus metadata for a block by number
-func (s *Schema) resolveWBFTBlockExtra(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveWBFTBlockExtra(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 	numberStr, ok := p.Args["blockNumber"].(string)
 	if !ok {
@@ -26,7 +28,7 @@ func (s *Schema) resolveWBFTBlockExtra(p graphql.ResolveParams) (interface{}, er
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := s.storage.(storage.WBFTReader)
+	wbftReader, ok := s.storage.(consensus.WBFTReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support WBFT metadata")
 	}
@@ -46,7 +48,7 @@ func (s *Schema) resolveWBFTBlockExtra(p graphql.ResolveParams) (interface{}, er
 }
 
 // resolveWBFTBlockExtraByHash resolves WBFT consensus metadata for a block by hash
-func (s *Schema) resolveWBFTBlockExtraByHash(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveWBFTBlockExtraByHash(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 	hashStr, ok := p.Args["blockHash"].(string)
 	if !ok {
@@ -56,7 +58,7 @@ func (s *Schema) resolveWBFTBlockExtraByHash(p graphql.ResolveParams) (interface
 	hash := common.HexToHash(hashStr)
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := s.storage.(storage.WBFTReader)
+	wbftReader, ok := s.storage.(consensus.WBFTReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support WBFT metadata")
 	}
@@ -76,7 +78,7 @@ func (s *Schema) resolveWBFTBlockExtraByHash(p graphql.ResolveParams) (interface
 }
 
 // resolveEpochInfo resolves epoch information for a specific epoch
-func (s *Schema) resolveEpochInfo(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveEpochInfo(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 	epochNumberStr, ok := p.Args["epochNumber"].(string)
 	if !ok {
@@ -89,7 +91,7 @@ func (s *Schema) resolveEpochInfo(p graphql.ResolveParams) (interface{}, error) 
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := s.storage.(storage.WBFTReader)
+	wbftReader, ok := s.storage.(consensus.WBFTReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support WBFT metadata")
 	}
@@ -116,20 +118,20 @@ func (s *Schema) resolveEpochInfo(p graphql.ResolveParams) (interface{}, error) 
 	}
 
 	// Add timestamp from the epoch boundary block
-	block, err := s.storage.GetBlock(ctx, epochInfo.BlockNumber)
+	block, err := s.storage.GetModelBlock(ctx, epochInfo.BlockNumber)
 	if err == nil && block != nil {
-		result["timestamp"] = fmt.Sprintf("%d", block.Header().Time)
+		result["timestamp"] = fmt.Sprintf("%d", block.Time)
 	}
 
 	return result, nil
 }
 
 // resolveLatestEpochInfo resolves the most recent epoch information
-func (s *Schema) resolveLatestEpochInfo(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveLatestEpochInfo(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := s.storage.(storage.WBFTReader)
+	wbftReader, ok := s.storage.(consensus.WBFTReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support WBFT metadata")
 	}
@@ -155,26 +157,26 @@ func (s *Schema) resolveLatestEpochInfo(p graphql.ResolveParams) (interface{}, e
 	}
 
 	// Add timestamp from the epoch boundary block
-	block, err := s.storage.GetBlock(ctx, epochInfo.BlockNumber)
+	block, err := s.storage.GetModelBlock(ctx, epochInfo.BlockNumber)
 	if err == nil && block != nil {
-		result["timestamp"] = fmt.Sprintf("%d", block.Header().Time)
+		result["timestamp"] = fmt.Sprintf("%d", block.Time)
 	}
 
 	return result, nil
 }
 
 // resolveEpochs resolves a paginated list of epochs
-func (s *Schema) resolveEpochs(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveEpochs(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	wbftReader, ok := s.storage.(storage.WBFTReader)
+	wbftReader, ok := s.storage.(consensus.WBFTReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support WBFT metadata")
 	}
 
-	pagination := parsePaginationParams(p, 0)
+	limit, offset := graphql.Pagination(p, 0)
 
-	epochs, totalCount, err := wbftReader.GetEpochsList(ctx, pagination.Limit, pagination.Offset)
+	epochs, totalCount, err := wbftReader.GetEpochsList(ctx, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to get epochs list", zap.Error(err))
 		return nil, err
@@ -190,9 +192,9 @@ func (s *Schema) resolveEpochs(p graphql.ResolveParams) (interface{}, error) {
 		}
 
 		// Fetch timestamp from the epoch boundary block
-		block, err := s.storage.GetBlock(ctx, epoch.BlockNumber)
+		block, err := s.storage.GetModelBlock(ctx, epoch.BlockNumber)
 		if err == nil && block != nil {
-			node["timestamp"] = fmt.Sprintf("%d", block.Header().Time)
+			node["timestamp"] = fmt.Sprintf("%d", block.Time)
 		}
 
 		nodes[i] = node
@@ -202,14 +204,14 @@ func (s *Schema) resolveEpochs(p graphql.ResolveParams) (interface{}, error) {
 		"nodes":      nodes,
 		"totalCount": totalCount,
 		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(epochs) == pagination.Limit,
-			"hasPreviousPage": pagination.Offset > 0,
+			"hasNextPage":     len(epochs) == limit,
+			"hasPreviousPage": offset > 0,
 		},
 	}, nil
 }
 
 // resolveValidatorSigningStats resolves signing statistics for a specific validator
-func (s *Schema) resolveValidatorSigningStats(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveValidatorSigningStats(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	validatorAddrStr, ok := p.Args["validatorAddress"].(string)
@@ -239,7 +241,7 @@ func (s *Schema) resolveValidatorSigningStats(p graphql.ResolveParams) (interfac
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := s.storage.(storage.WBFTReader)
+	wbftReader, ok := s.storage.(consensus.WBFTReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support WBFT metadata")
 	}
@@ -261,7 +263,7 @@ func (s *Schema) resolveValidatorSigningStats(p graphql.ResolveParams) (interfac
 }
 
 // resolveAllValidatorsSigningStats resolves signing statistics for all validators in a block range
-func (s *Schema) resolveAllValidatorsSigningStats(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveAllValidatorsSigningStats(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	fromBlockStr, ok := p.Args["fromBlock"].(string)
@@ -301,7 +303,7 @@ func (s *Schema) resolveAllValidatorsSigningStats(p graphql.ResolveParams) (inte
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := s.storage.(storage.WBFTReader)
+	wbftReader, ok := s.storage.(consensus.WBFTReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support WBFT metadata")
 	}
@@ -336,7 +338,7 @@ func (s *Schema) resolveAllValidatorsSigningStats(p graphql.ResolveParams) (inte
 }
 
 // resolveValidatorSigningActivity resolves detailed signing activity for a specific validator
-func (s *Schema) resolveValidatorSigningActivity(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveValidatorSigningActivity(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	validatorAddrStr, ok := p.Args["validatorAddress"].(string)
@@ -382,7 +384,7 @@ func (s *Schema) resolveValidatorSigningActivity(p graphql.ResolveParams) (inter
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := s.storage.(storage.WBFTReader)
+	wbftReader, ok := s.storage.(consensus.WBFTReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support WBFT metadata")
 	}
@@ -416,7 +418,7 @@ func (s *Schema) resolveValidatorSigningActivity(p graphql.ResolveParams) (inter
 }
 
 // resolveBlockSigners resolves list of validators who signed a specific block
-func (s *Schema) resolveBlockSigners(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveBlockSigners(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 	numberStr, ok := p.Args["blockNumber"].(string)
 	if !ok {
@@ -429,7 +431,7 @@ func (s *Schema) resolveBlockSigners(p graphql.ResolveParams) (interface{}, erro
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := s.storage.(storage.WBFTReader)
+	wbftReader, ok := s.storage.(consensus.WBFTReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support WBFT metadata")
 	}
@@ -466,7 +468,7 @@ func (s *Schema) resolveBlockSigners(p graphql.ResolveParams) (interface{}, erro
 // ========== Helper mapper functions ==========
 
 // wbftBlockExtraToMap converts WBFTBlockExtra to a map
-func (s *Schema) wbftBlockExtraToMap(extra *storage.WBFTBlockExtra) map[string]interface{} {
+func (s *Schema) wbftBlockExtraToMap(extra *consensus.WBFTBlockExtra) map[string]interface{} {
 	m := map[string]interface{}{
 		"blockNumber":  fmt.Sprintf("%d", extra.BlockNumber),
 		"blockHash":    extra.BlockHash.Hex(),
@@ -504,7 +506,7 @@ func (s *Schema) wbftBlockExtraToMap(extra *storage.WBFTBlockExtra) map[string]i
 }
 
 // wbftAggregatedSealToMap converts WBFTAggregatedSeal to a map
-func (s *Schema) wbftAggregatedSealToMap(seal *storage.WBFTAggregatedSeal) map[string]interface{} {
+func (s *Schema) wbftAggregatedSealToMap(seal *consensus.WBFTAggregatedSeal) map[string]interface{} {
 	return map[string]interface{}{
 		"sealers":   fmt.Sprintf("0x%x", seal.Sealers),
 		"signature": fmt.Sprintf("0x%x", seal.Signature),
@@ -512,7 +514,7 @@ func (s *Schema) wbftAggregatedSealToMap(seal *storage.WBFTAggregatedSeal) map[s
 }
 
 // epochInfoToMap converts EpochInfo to a map
-func (s *Schema) epochInfoToMap(info *storage.EpochInfo) map[string]interface{} {
+func (s *Schema) epochInfoToMap(info *consensus.EpochInfo) map[string]interface{} {
 	candidates := make([]interface{}, len(info.Candidates))
 	for i, c := range info.Candidates {
 		candidates[i] = map[string]interface{}{
@@ -543,7 +545,7 @@ func (s *Schema) epochInfoToMap(info *storage.EpochInfo) map[string]interface{} 
 }
 
 // validatorSigningStatsToMap converts ValidatorSigningStats to a map
-func (s *Schema) validatorSigningStatsToMap(stats *storage.ValidatorSigningStats) map[string]interface{} {
+func (s *Schema) validatorSigningStatsToMap(stats *consensus.ValidatorSigningStats) map[string]interface{} {
 	return map[string]interface{}{
 		"validatorAddress": stats.ValidatorAddress.Hex(),
 		"validatorIndex":   int(stats.ValidatorIndex),
@@ -561,7 +563,7 @@ func (s *Schema) validatorSigningStatsToMap(stats *storage.ValidatorSigningStats
 }
 
 // validatorSigningActivityToMap converts ValidatorSigningActivity to a map
-func (s *Schema) validatorSigningActivityToMap(activity *storage.ValidatorSigningActivity) map[string]interface{} {
+func (s *Schema) validatorSigningActivityToMap(activity *consensus.ValidatorSigningActivity) map[string]interface{} {
 	return map[string]interface{}{
 		"blockNumber":      fmt.Sprintf("%d", activity.BlockNumber),
 		"blockHash":        activity.BlockHash.Hex(),

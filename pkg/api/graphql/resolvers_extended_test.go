@@ -341,45 +341,6 @@ func (m *richMockStorage) GetAddressStats(_ context.Context, addr common.Address
 	return &storage.AddressStats{Address: addr, TotalTransactions: 100, SentCount: 60, ReceivedCount: 40, SuccessCount: 95}, nil
 }
 
-// ---- WBFT overrides for richMockStorage ----
-
-func (m *richMockStorage) GetWBFTBlockExtra(_ context.Context, blockNum uint64) (*storage.WBFTBlockExtra, error) {
-	return &storage.WBFTBlockExtra{
-		BlockNumber: blockNum, BlockHash: common.HexToHash("0xw1"), Round: 1,
-		PreparedSeal:  &storage.WBFTAggregatedSeal{Sealers: []byte{0xFF}, Signature: make([]byte, 96)},
-		CommittedSeal: &storage.WBFTAggregatedSeal{Sealers: []byte{0xFF}, Signature: make([]byte, 96)},
-		GasTip:        big.NewInt(100),
-		Timestamp:     1700000000,
-	}, nil
-}
-func (m *richMockStorage) GetEpochInfo(_ context.Context, _ uint64) (*storage.EpochInfo, error) {
-	return &storage.EpochInfo{EpochNumber: 1, BlockNumber: 100, Validators: []uint32{0, 1, 2}, Candidates: []storage.Candidate{{Address: common.HexToAddress("0x10"), Diligence: 999999}}}, nil
-}
-func (m *richMockStorage) GetLatestEpochInfo(_ context.Context) (*storage.EpochInfo, error) {
-	return &storage.EpochInfo{EpochNumber: 5, BlockNumber: 500, Validators: []uint32{0, 1}, Candidates: []storage.Candidate{{Address: common.HexToAddress("0x10"), Diligence: 999999}}}, nil
-}
-func (m *richMockStorage) GetValidatorSigningStats(_ context.Context, addr common.Address, _, _ uint64) (*storage.ValidatorSigningStats, error) {
-	return &storage.ValidatorSigningStats{ValidatorAddress: addr, PrepareSignCount: 90, PrepareMissCount: 10, CommitSignCount: 95, CommitMissCount: 5, FromBlock: 1, ToBlock: 100, SigningRate: 92.5, BlocksProposed: 10, TotalBlocks: 100, ProposalRate: 10.0}, nil
-}
-func (m *richMockStorage) GetAllValidatorsSigningStats(_ context.Context, _, _ uint64, _, _ int) ([]*storage.ValidatorSigningStats, error) {
-	return []*storage.ValidatorSigningStats{
-		{ValidatorAddress: common.HexToAddress("0x10"), PrepareSignCount: 90, CommitSignCount: 95, SigningRate: 92.5},
-	}, nil
-}
-func (m *richMockStorage) GetValidatorSigningActivity(_ context.Context, _ common.Address, _, _ uint64, _, _ int) ([]*storage.ValidatorSigningActivity, error) {
-	return []*storage.ValidatorSigningActivity{
-		{BlockNumber: 50, BlockHash: common.HexToHash("0xva1"), ValidatorAddress: common.HexToAddress("0x10"), ValidatorIndex: 0, SignedPrepare: true, SignedCommit: true, Round: 0, Timestamp: 1700000000},
-	}, nil
-}
-func (m *richMockStorage) GetBlockSigners(_ context.Context, _ uint64) ([]common.Address, []common.Address, error) {
-	return []common.Address{common.HexToAddress("0x10")}, []common.Address{common.HexToAddress("0x10"), common.HexToAddress("0x11")}, nil
-}
-func (m *richMockStorage) GetEpochsList(_ context.Context, _, _ int) ([]*storage.EpochInfo, int, error) {
-	return []*storage.EpochInfo{
-		{EpochNumber: 1, BlockNumber: 100, Validators: []uint32{0, 1}},
-	}, 5, nil
-}
-
 // ---- Fee delegation overrides for richMockStorage ----
 
 func (m *richMockStorage) GetFeePayerStats(_ context.Context, addr common.Address, _, _ uint64) (*storage.FeePayerStats, error) {
@@ -418,7 +379,6 @@ func newRichTestHandlerFull(t *testing.T) *Handler {
 		WithHistoricalQueries().
 		WithAnalyticsQueries().
 		WithSystemContractQueries().
-		WithConsensusQueries().
 		WithAddressIndexingQueries().
 		WithSetCodeQueries().
 		WithFeeDelegationQueries().
@@ -806,7 +766,6 @@ func TestSchemaBuilder_Methods(t *testing.T) {
 		WithHistoricalQueries().
 		WithAnalyticsQueries().
 		WithSystemContractQueries().
-		WithConsensusQueries().
 		WithAddressIndexingQueries().
 		WithFeeDelegationQueries().
 		WithTokenMetadataQueries().
@@ -1308,34 +1267,6 @@ func TestHistoricalResolversWithRichData(t *testing.T) {
 				require.True(t, ok)
 				tc.checkData(t, data)
 			}
-		})
-	}
-}
-
-// TestWBFTResolversWithData exercises WBFT consensus resolvers with actual data.
-func TestWBFTResolversWithData(t *testing.T) {
-	handler := newRichTestHandler(t)
-
-	tests := []struct {
-		name  string
-		query string
-	}{
-		{"wbftBlockExtra", `{ wbftBlockExtra(blockNumber: "1") { blockNumber round gasTip preparedSeal { signature } committedSeal { signature } } }`},
-		{"wbftBlock_alias", `{ wbftBlock(number: "1") { blockNumber round } }`},
-		{"epochInfo", `{ epochInfo(epochNumber: "1") { epochNumber blockNumber validators candidates { address diligence } } }`},
-		{"epochByNumber_alias", `{ epochByNumber(number: "1") { epochNumber } }`},
-		{"latestEpochInfo", `{ latestEpochInfo { epochNumber blockNumber } }`},
-		{"epochs", `{ epochs { nodes { epochNumber blockNumber } totalCount } }`},
-		{"validatorSigningStats", `{ validatorSigningStats(validatorAddress: "0x0000000000000000000000000000000000000010", fromBlock: "1", toBlock: "100") { validatorAddress prepareSignCount commitSignCount signingRate blocksProposed proposalRate } }`},
-		{"allValidatorsSigningStats", `{ allValidatorsSigningStats(fromBlock: "1", toBlock: "100") { nodes { validatorAddress signingRate } totalCount } }`},
-		{"validatorSigningActivity", `{ validatorSigningActivity(validatorAddress: "0x0000000000000000000000000000000000000010", fromBlock: "1", toBlock: "100") { nodes { blockNumber signedPrepare signedCommit round } totalCount } }`},
-		{"blockSigners", `{ blockSigners(blockNumber: "1") { preparers committers } }`},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := handler.ExecuteQuery(tc.query, nil)
-			assert.Empty(t, result.Errors, "unexpected errors for %s: %v", tc.name, result.Errors)
 		})
 	}
 }

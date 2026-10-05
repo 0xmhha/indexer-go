@@ -1,4 +1,4 @@
-package jsonrpc
+package api
 
 import (
 	"context"
@@ -8,23 +8,25 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
 // getWBFTBlockExtra returns WBFT consensus metadata for a block by number
-func (h *Handler) getWBFTBlockExtra(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getWBFTBlockExtra(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		BlockNumber interface{} `json:"blockNumber"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.BlockNumber == nil {
-		return nil, NewError(InvalidParams, "missing required parameter: blockNumber", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: blockNumber", nil)
 	}
 
 	// Parse block number
@@ -35,17 +37,17 @@ func (h *Handler) getWBFTBlockExtra(ctx context.Context, params json.RawMessage)
 	case string:
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, NewError(InvalidParams, "invalid block number format", err.Error())
+			return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid block number format", err.Error())
 		}
 		blockNumber = num
 	default:
-		return nil, NewError(InvalidParams, "block number must be string or number", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "block number must be string or number", nil)
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := h.storage.(storage.WBFTReader)
+	wbftReader, ok := h.storage.(consensus.WBFTReader)
 	if !ok {
-		return nil, NewError(InternalError, "storage does not support WBFT metadata", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "storage does not support WBFT metadata", nil)
 	}
 
 	extra, err := wbftReader.GetWBFTBlockExtra(ctx, blockNumber)
@@ -56,32 +58,32 @@ func (h *Handler) getWBFTBlockExtra(ctx context.Context, params json.RawMessage)
 		h.logger.Error("failed to get WBFT block extra",
 			zap.Uint64("blockNumber", blockNumber),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get WBFT block extra", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get WBFT block extra", err.Error())
 	}
 
 	return wbftBlockExtraToMap(extra), nil
 }
 
 // getWBFTBlockExtraByHash returns WBFT consensus metadata for a block by hash
-func (h *Handler) getWBFTBlockExtraByHash(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getWBFTBlockExtraByHash(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		BlockHash string `json:"blockHash"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.BlockHash == "" {
-		return nil, NewError(InvalidParams, "missing required parameter: blockHash", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: blockHash", nil)
 	}
 
 	hash := common.HexToHash(p.BlockHash)
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := h.storage.(storage.WBFTReader)
+	wbftReader, ok := h.storage.(consensus.WBFTReader)
 	if !ok {
-		return nil, NewError(InternalError, "storage does not support WBFT metadata", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "storage does not support WBFT metadata", nil)
 	}
 
 	extra, err := wbftReader.GetWBFTBlockExtraByHash(ctx, hash)
@@ -92,24 +94,24 @@ func (h *Handler) getWBFTBlockExtraByHash(ctx context.Context, params json.RawMe
 		h.logger.Error("failed to get WBFT block extra by hash",
 			zap.String("blockHash", p.BlockHash),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get WBFT block extra", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get WBFT block extra", err.Error())
 	}
 
 	return wbftBlockExtraToMap(extra), nil
 }
 
 // getEpochInfo returns epoch information for a specific epoch
-func (h *Handler) getEpochInfo(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getEpochInfo(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		EpochNumber interface{} `json:"epochNumber"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.EpochNumber == nil {
-		return nil, NewError(InvalidParams, "missing required parameter: epochNumber", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: epochNumber", nil)
 	}
 
 	// Parse epoch number
@@ -120,17 +122,17 @@ func (h *Handler) getEpochInfo(ctx context.Context, params json.RawMessage) (int
 	case string:
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, NewError(InvalidParams, "invalid epoch number format", err.Error())
+			return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid epoch number format", err.Error())
 		}
 		epochNumber = num
 	default:
-		return nil, NewError(InvalidParams, "epoch number must be string or number", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "epoch number must be string or number", nil)
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := h.storage.(storage.WBFTReader)
+	wbftReader, ok := h.storage.(consensus.WBFTReader)
 	if !ok {
-		return nil, NewError(InternalError, "storage does not support WBFT metadata", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "storage does not support WBFT metadata", nil)
 	}
 
 	epochInfo, err := wbftReader.GetEpochInfo(ctx, epochNumber)
@@ -141,20 +143,20 @@ func (h *Handler) getEpochInfo(ctx context.Context, params json.RawMessage) (int
 		h.logger.Error("failed to get epoch info",
 			zap.Uint64("epochNumber", epochNumber),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get epoch info", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get epoch info", err.Error())
 	}
 
 	return epochInfoToMap(epochInfo), nil
 }
 
 // getLatestEpochInfo returns the most recent epoch information
-func (h *Handler) getLatestEpochInfo(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getLatestEpochInfo(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	// No parameters needed
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := h.storage.(storage.WBFTReader)
+	wbftReader, ok := h.storage.(consensus.WBFTReader)
 	if !ok {
-		return nil, NewError(InternalError, "storage does not support WBFT metadata", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "storage does not support WBFT metadata", nil)
 	}
 
 	epochInfo, err := wbftReader.GetLatestEpochInfo(ctx)
@@ -163,14 +165,14 @@ func (h *Handler) getLatestEpochInfo(ctx context.Context, params json.RawMessage
 			return nil, nil
 		}
 		h.logger.Error("failed to get latest epoch info", zap.Error(err))
-		return nil, NewError(InternalError, "failed to get latest epoch info", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get latest epoch info", err.Error())
 	}
 
 	return epochInfoToMap(epochInfo), nil
 }
 
 // getValidatorSigningStats returns signing statistics for a specific validator
-func (h *Handler) getValidatorSigningStats(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getValidatorSigningStats(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		ValidatorAddress string      `json:"validatorAddress"`
 		FromBlock        interface{} `json:"fromBlock"`
@@ -178,17 +180,17 @@ func (h *Handler) getValidatorSigningStats(ctx context.Context, params json.RawM
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.ValidatorAddress == "" {
-		return nil, NewError(InvalidParams, "missing required parameter: validatorAddress", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: validatorAddress", nil)
 	}
 	if p.FromBlock == nil {
-		return nil, NewError(InvalidParams, "missing required parameter: fromBlock", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: fromBlock", nil)
 	}
 	if p.ToBlock == nil {
-		return nil, NewError(InvalidParams, "missing required parameter: toBlock", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: toBlock", nil)
 	}
 
 	validatorAddr := common.HexToAddress(p.ValidatorAddress)
@@ -201,11 +203,11 @@ func (h *Handler) getValidatorSigningStats(ctx context.Context, params json.RawM
 	case string:
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, NewError(InvalidParams, "invalid fromBlock format", err.Error())
+			return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid fromBlock format", err.Error())
 		}
 		fromBlock = num
 	default:
-		return nil, NewError(InvalidParams, "fromBlock must be string or number", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "fromBlock must be string or number", nil)
 	}
 
 	// Parse toBlock
@@ -216,17 +218,17 @@ func (h *Handler) getValidatorSigningStats(ctx context.Context, params json.RawM
 	case string:
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, NewError(InvalidParams, "invalid toBlock format", err.Error())
+			return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid toBlock format", err.Error())
 		}
 		toBlock = num
 	default:
-		return nil, NewError(InvalidParams, "toBlock must be string or number", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "toBlock must be string or number", nil)
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := h.storage.(storage.WBFTReader)
+	wbftReader, ok := h.storage.(consensus.WBFTReader)
 	if !ok {
-		return nil, NewError(InternalError, "storage does not support WBFT metadata", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "storage does not support WBFT metadata", nil)
 	}
 
 	stats, err := wbftReader.GetValidatorSigningStats(ctx, validatorAddr, fromBlock, toBlock)
@@ -239,14 +241,14 @@ func (h *Handler) getValidatorSigningStats(ctx context.Context, params json.RawM
 			zap.Uint64("fromBlock", fromBlock),
 			zap.Uint64("toBlock", toBlock),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get validator signing stats", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get validator signing stats", err.Error())
 	}
 
 	return validatorSigningStatsToMap(stats), nil
 }
 
 // getAllValidatorsSigningStats returns signing statistics for all validators in a block range
-func (h *Handler) getAllValidatorsSigningStats(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getAllValidatorsSigningStats(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		FromBlock  interface{}            `json:"fromBlock"`
 		ToBlock    interface{}            `json:"toBlock"`
@@ -254,14 +256,14 @@ func (h *Handler) getAllValidatorsSigningStats(ctx context.Context, params json.
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.FromBlock == nil {
-		return nil, NewError(InvalidParams, "missing required parameter: fromBlock", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: fromBlock", nil)
 	}
 	if p.ToBlock == nil {
-		return nil, NewError(InvalidParams, "missing required parameter: toBlock", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: toBlock", nil)
 	}
 
 	// Parse fromBlock
@@ -272,11 +274,11 @@ func (h *Handler) getAllValidatorsSigningStats(ctx context.Context, params json.
 	case string:
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, NewError(InvalidParams, "invalid fromBlock format", err.Error())
+			return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid fromBlock format", err.Error())
 		}
 		fromBlock = num
 	default:
-		return nil, NewError(InvalidParams, "fromBlock must be string or number", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "fromBlock must be string or number", nil)
 	}
 
 	// Parse toBlock
@@ -287,11 +289,11 @@ func (h *Handler) getAllValidatorsSigningStats(ctx context.Context, params json.
 	case string:
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, NewError(InvalidParams, "invalid toBlock format", err.Error())
+			return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid toBlock format", err.Error())
 		}
 		toBlock = num
 	default:
-		return nil, NewError(InvalidParams, "toBlock must be string or number", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "toBlock must be string or number", nil)
 	}
 
 	// Parse pagination
@@ -311,9 +313,9 @@ func (h *Handler) getAllValidatorsSigningStats(ctx context.Context, params json.
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := h.storage.(storage.WBFTReader)
+	wbftReader, ok := h.storage.(consensus.WBFTReader)
 	if !ok {
-		return nil, NewError(InternalError, "storage does not support WBFT metadata", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "storage does not support WBFT metadata", nil)
 	}
 
 	statsList, err := wbftReader.GetAllValidatorsSigningStats(ctx, fromBlock, toBlock, limit, offset)
@@ -322,7 +324,7 @@ func (h *Handler) getAllValidatorsSigningStats(ctx context.Context, params json.
 			zap.Uint64("fromBlock", fromBlock),
 			zap.Uint64("toBlock", toBlock),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get all validators signing stats", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get all validators signing stats", err.Error())
 	}
 
 	// Convert to maps
@@ -344,7 +346,7 @@ func (h *Handler) getAllValidatorsSigningStats(ctx context.Context, params json.
 }
 
 // getValidatorSigningActivity returns detailed signing activity for a specific validator
-func (h *Handler) getValidatorSigningActivity(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getValidatorSigningActivity(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		ValidatorAddress string                 `json:"validatorAddress"`
 		FromBlock        interface{}            `json:"fromBlock"`
@@ -353,17 +355,17 @@ func (h *Handler) getValidatorSigningActivity(ctx context.Context, params json.R
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.ValidatorAddress == "" {
-		return nil, NewError(InvalidParams, "missing required parameter: validatorAddress", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: validatorAddress", nil)
 	}
 	if p.FromBlock == nil {
-		return nil, NewError(InvalidParams, "missing required parameter: fromBlock", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: fromBlock", nil)
 	}
 	if p.ToBlock == nil {
-		return nil, NewError(InvalidParams, "missing required parameter: toBlock", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: toBlock", nil)
 	}
 
 	validatorAddr := common.HexToAddress(p.ValidatorAddress)
@@ -376,11 +378,11 @@ func (h *Handler) getValidatorSigningActivity(ctx context.Context, params json.R
 	case string:
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, NewError(InvalidParams, "invalid fromBlock format", err.Error())
+			return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid fromBlock format", err.Error())
 		}
 		fromBlock = num
 	default:
-		return nil, NewError(InvalidParams, "fromBlock must be string or number", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "fromBlock must be string or number", nil)
 	}
 
 	// Parse toBlock
@@ -391,11 +393,11 @@ func (h *Handler) getValidatorSigningActivity(ctx context.Context, params json.R
 	case string:
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, NewError(InvalidParams, "invalid toBlock format", err.Error())
+			return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid toBlock format", err.Error())
 		}
 		toBlock = num
 	default:
-		return nil, NewError(InvalidParams, "toBlock must be string or number", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "toBlock must be string or number", nil)
 	}
 
 	// Parse pagination
@@ -415,9 +417,9 @@ func (h *Handler) getValidatorSigningActivity(ctx context.Context, params json.R
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := h.storage.(storage.WBFTReader)
+	wbftReader, ok := h.storage.(consensus.WBFTReader)
 	if !ok {
-		return nil, NewError(InternalError, "storage does not support WBFT metadata", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "storage does not support WBFT metadata", nil)
 	}
 
 	activities, err := wbftReader.GetValidatorSigningActivity(ctx, validatorAddr, fromBlock, toBlock, limit, offset)
@@ -427,7 +429,7 @@ func (h *Handler) getValidatorSigningActivity(ctx context.Context, params json.R
 			zap.Uint64("fromBlock", fromBlock),
 			zap.Uint64("toBlock", toBlock),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get validator signing activity", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get validator signing activity", err.Error())
 	}
 
 	// Convert to maps
@@ -449,17 +451,17 @@ func (h *Handler) getValidatorSigningActivity(ctx context.Context, params json.R
 }
 
 // getBlockSigners returns list of validators who signed a specific block
-func (h *Handler) getBlockSigners(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
+func (h *rpcHandler) getBlockSigners(ctx context.Context, params json.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p struct {
 		BlockNumber interface{} `json:"blockNumber"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, NewError(InvalidParams, "invalid params", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid params", err.Error())
 	}
 
 	if p.BlockNumber == nil {
-		return nil, NewError(InvalidParams, "missing required parameter: blockNumber", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "missing required parameter: blockNumber", nil)
 	}
 
 	// Parse block number
@@ -470,17 +472,17 @@ func (h *Handler) getBlockSigners(ctx context.Context, params json.RawMessage) (
 	case string:
 		num, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, NewError(InvalidParams, "invalid block number format", err.Error())
+			return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "invalid block number format", err.Error())
 		}
 		blockNumber = num
 	default:
-		return nil, NewError(InvalidParams, "block number must be string or number", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InvalidParams, "block number must be string or number", nil)
 	}
 
 	// Check if storage implements WBFTReader
-	wbftReader, ok := h.storage.(storage.WBFTReader)
+	wbftReader, ok := h.storage.(consensus.WBFTReader)
 	if !ok {
-		return nil, NewError(InternalError, "storage does not support WBFT metadata", nil)
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "storage does not support WBFT metadata", nil)
 	}
 
 	preparers, committers, err := wbftReader.GetBlockSigners(ctx, blockNumber)
@@ -491,7 +493,7 @@ func (h *Handler) getBlockSigners(ctx context.Context, params json.RawMessage) (
 		h.logger.Error("failed to get block signers",
 			zap.Uint64("blockNumber", blockNumber),
 			zap.Error(err))
-		return nil, NewError(InternalError, "failed to get block signers", err.Error())
+		return nil, jsonrpc.NewError(jsonrpc.InternalError, "failed to get block signers", err.Error())
 	}
 
 	// Convert addresses to hex strings
@@ -515,7 +517,7 @@ func (h *Handler) getBlockSigners(ctx context.Context, params json.RawMessage) (
 // ========== Helper mapper functions ==========
 
 // wbftBlockExtraToMap converts WBFTBlockExtra to a map
-func wbftBlockExtraToMap(extra *storage.WBFTBlockExtra) map[string]interface{} {
+func wbftBlockExtraToMap(extra *consensus.WBFTBlockExtra) map[string]interface{} {
 	m := map[string]interface{}{
 		"blockNumber":  fmt.Sprintf("%d", extra.BlockNumber),
 		"blockHash":    extra.BlockHash.Hex(),
@@ -553,7 +555,7 @@ func wbftBlockExtraToMap(extra *storage.WBFTBlockExtra) map[string]interface{} {
 }
 
 // wbftAggregatedSealToMap converts WBFTAggregatedSeal to a map
-func wbftAggregatedSealToMap(seal *storage.WBFTAggregatedSeal) map[string]interface{} {
+func wbftAggregatedSealToMap(seal *consensus.WBFTAggregatedSeal) map[string]interface{} {
 	return map[string]interface{}{
 		"sealers":   fmt.Sprintf("0x%x", seal.Sealers),
 		"signature": fmt.Sprintf("0x%x", seal.Signature),
@@ -561,7 +563,7 @@ func wbftAggregatedSealToMap(seal *storage.WBFTAggregatedSeal) map[string]interf
 }
 
 // epochInfoToMap converts EpochInfo to a map
-func epochInfoToMap(info *storage.EpochInfo) map[string]interface{} {
+func epochInfoToMap(info *consensus.EpochInfo) map[string]interface{} {
 	candidates := make([]interface{}, len(info.Candidates))
 	for i, c := range info.Candidates {
 		candidates[i] = map[string]interface{}{
@@ -590,7 +592,7 @@ func epochInfoToMap(info *storage.EpochInfo) map[string]interface{} {
 }
 
 // validatorSigningStatsToMap converts ValidatorSigningStats to a map
-func validatorSigningStatsToMap(stats *storage.ValidatorSigningStats) map[string]interface{} {
+func validatorSigningStatsToMap(stats *consensus.ValidatorSigningStats) map[string]interface{} {
 	return map[string]interface{}{
 		"validatorAddress": stats.ValidatorAddress.Hex(),
 		"validatorIndex":   int(stats.ValidatorIndex),
@@ -605,7 +607,7 @@ func validatorSigningStatsToMap(stats *storage.ValidatorSigningStats) map[string
 }
 
 // validatorSigningActivityToMap converts ValidatorSigningActivity to a map
-func validatorSigningActivityToMap(activity *storage.ValidatorSigningActivity) map[string]interface{} {
+func validatorSigningActivityToMap(activity *consensus.ValidatorSigningActivity) map[string]interface{} {
 	return map[string]interface{}{
 		"blockNumber":      fmt.Sprintf("%d", activity.BlockNumber),
 		"blockHash":        activity.BlockHash.Hex(),
@@ -615,5 +617,34 @@ func validatorSigningActivityToMap(activity *storage.ValidatorSigningActivity) m
 		"signedCommit":     activity.SignedCommit,
 		"round":            int(activity.Round),
 		"timestamp":        fmt.Sprintf("%d", activity.Timestamp),
+	}
+}
+
+// rpcHandler serves the consensus JSON-RPC methods. storage is nil when the
+// indexer's storage cannot hold WBFT data; the methods then fail.
+type rpcHandler struct {
+	storage backend
+	logger  *zap.Logger
+}
+
+func newRPCHandler(d jsonrpc.MethodDeps) *rpcHandler {
+	s := newSchema(d.Storage, d.Logger)
+	return &rpcHandler{storage: s.storage, logger: s.logger}
+}
+
+func registerMethods() {
+	for name, method := range map[string]func(*rpcHandler, context.Context, json.RawMessage) (interface{}, *jsonrpc.Error){
+		"getWBFTBlockExtra":            (*rpcHandler).getWBFTBlockExtra,
+		"getWBFTBlockExtraByHash":      (*rpcHandler).getWBFTBlockExtraByHash,
+		"getEpochInfo":                 (*rpcHandler).getEpochInfo,
+		"getLatestEpochInfo":           (*rpcHandler).getLatestEpochInfo,
+		"getValidatorSigningStats":     (*rpcHandler).getValidatorSigningStats,
+		"getAllValidatorsSigningStats": (*rpcHandler).getAllValidatorsSigningStats,
+		"getValidatorSigningActivity":  (*rpcHandler).getValidatorSigningActivity,
+		"getBlockSigners":              (*rpcHandler).getBlockSigners,
+	} {
+		jsonrpc.RegisterMethod(name, func(ctx context.Context, d jsonrpc.MethodDeps, params json.RawMessage) (interface{}, *jsonrpc.Error) {
+			return method(newRPCHandler(d), ctx, params)
+		})
 	}
 }

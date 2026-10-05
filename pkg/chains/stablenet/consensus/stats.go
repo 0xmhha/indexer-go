@@ -1,4 +1,4 @@
-package storage
+package consensus
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	consensustypes "github.com/0xmhha/indexer-go/pkg/types/consensus"
 )
 
@@ -17,12 +18,12 @@ type ConsensusStorage struct {
 	logger  *zap.Logger
 }
 
-// ConsensusBackend is the storage ConsensusStorage reads and writes. Any
-// Storage satisfies it, so callers need no concrete storage type.
+// ConsensusBackend is the storage ConsensusStorage reads and writes (a
+// Store satisfies it).
 type ConsensusBackend interface {
-	Reader
 	WBFTReader
 	WBFTWriter
+	GetModelBlock(ctx context.Context, height uint64) (*model.Block, error)
 }
 
 // NewConsensusStorage creates a new ConsensusStorage instance
@@ -83,7 +84,7 @@ func (cs *ConsensusStorage) GetConsensusData(ctx context.Context, blockNumber ui
 	}
 
 	// Get block to extract proposer (coinbase)
-	block, err := cs.storage.GetBlock(ctx, blockNumber)
+	block, err := cs.storage.GetModelBlock(ctx, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
@@ -120,7 +121,7 @@ func (cs *ConsensusStorage) GetConsensusData(ctx context.Context, blockNumber ui
 	}
 
 	// Convert to ConsensusData
-	data := cs.convertToConsensusData(wbftExtra, block.Header().Coinbase, validators, prepareSigners, commitSigners)
+	data := cs.convertToConsensusData(wbftExtra, block.Miner, validators, prepareSigners, commitSigners)
 
 	return data, nil
 }

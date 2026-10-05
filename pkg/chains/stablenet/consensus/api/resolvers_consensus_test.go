@@ -1,47 +1,30 @@
-package graphql
+package api
 
 import (
 	"context"
 	"math/big"
-	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/pkg/api/graphql"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	consensustypes "github.com/0xmhha/indexer-go/pkg/types/consensus"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/graphql-go/graphql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
 // setupTestConsensusStorage creates a test consensus storage with sample data
-func setupTestConsensusStorage(t *testing.T) (*storage.PebbleStorage, *storage.ConsensusStorage, func()) {
-	tmpDir, err := os.MkdirTemp("", "consensus_api_test")
-	require.NoError(t, err)
-
-	cfg := &storage.Config{
-		Path:                  filepath.Join(tmpDir, "test.db"),
-		Cache:                 64,
-		CompactionConcurrency: 1,
-		MaxOpenFiles:          100,
-		WriteBuffer:           64,
-	}
-
-	pebbleStorage, err := storage.NewPebbleStorage(cfg)
+func setupTestConsensusStorage(t *testing.T) (*storage.PebbleStorage, *consensus.ConsensusStorage, func()) {
+	pebbleStorage, err := storage.NewPebbleStorage(storage.DefaultConfig(t.TempDir()))
 	require.NoError(t, err)
 
 	logger := zap.NewNop()
-	consensusStorage := storage.NewConsensusStorage(pebbleStorage, logger)
+	consensusStorage := consensus.NewConsensusStorage(consensus.NewStore(pebbleStorage, logger), logger)
 
-	cleanup := func() {
-		pebbleStorage.Close()
-		os.RemoveAll(tmpDir)
-	}
-
-	return pebbleStorage, consensusStorage, cleanup
+	return pebbleStorage, consensusStorage, func() { _ = pebbleStorage.Close() }
 }
 
 // createTestConsensusData creates sample consensus data for testing
@@ -119,7 +102,7 @@ func TestResolveConsensusData(t *testing.T) {
 
 	// Create schema
 	logger := zap.NewNop()
-	schema, err := NewSchema(pebbleStorage, logger)
+	schema, err := graphql.NewHandler(pebbleStorage, logger)
 	require.NoError(t, err)
 
 	// Test query
@@ -146,11 +129,7 @@ func TestResolveConsensusData(t *testing.T) {
 		}
 	`
 
-	result := graphql.Do(graphql.Params{
-		Schema:        schema.schema,
-		RequestString: query,
-		Context:       context.Background(),
-	})
+	result := schema.ExecuteQuery(query, nil)
 
 	require.Empty(t, result.Errors, "GraphQL query should not have errors")
 	require.NotNil(t, result.Data)
@@ -211,7 +190,7 @@ func TestResolveValidatorStats(t *testing.T) {
 
 	// Create schema
 	logger := zap.NewNop()
-	schema, err := NewSchema(pebbleStorage, logger)
+	schema, err := graphql.NewHandler(pebbleStorage, logger)
 	require.NoError(t, err)
 
 	// Test query for first validator
@@ -231,11 +210,7 @@ func TestResolveValidatorStats(t *testing.T) {
 		}
 	`
 
-	result := graphql.Do(graphql.Params{
-		Schema:        schema.schema,
-		RequestString: query,
-		Context:       context.Background(),
-	})
+	result := schema.ExecuteQuery(query, nil)
 
 	require.Empty(t, result.Errors, "GraphQL query should not have errors")
 	require.NotNil(t, result.Data)
@@ -284,7 +259,7 @@ func TestResolveValidatorParticipation(t *testing.T) {
 
 	// Create schema
 	logger := zap.NewNop()
-	schema, err := NewSchema(pebbleStorage, logger)
+	schema, err := graphql.NewHandler(pebbleStorage, logger)
 	require.NoError(t, err)
 
 	// Test query
@@ -312,11 +287,7 @@ func TestResolveValidatorParticipation(t *testing.T) {
 		}
 	`
 
-	result := graphql.Do(graphql.Params{
-		Schema:        schema.schema,
-		RequestString: query,
-		Context:       context.Background(),
-	})
+	result := schema.ExecuteQuery(query, nil)
 
 	require.Empty(t, result.Errors, "GraphQL query should not have errors")
 	require.NotNil(t, result.Data)
@@ -374,7 +345,7 @@ func TestResolveAllValidatorStats(t *testing.T) {
 
 	// Create schema
 	logger := zap.NewNop()
-	schema, err := NewSchema(pebbleStorage, logger)
+	schema, err := graphql.NewHandler(pebbleStorage, logger)
 	require.NoError(t, err)
 
 	// Test query
@@ -392,11 +363,7 @@ func TestResolveAllValidatorStats(t *testing.T) {
 		}
 	`
 
-	result := graphql.Do(graphql.Params{
-		Schema:        schema.schema,
-		RequestString: query,
-		Context:       context.Background(),
-	})
+	result := schema.ExecuteQuery(query, nil)
 
 	require.Empty(t, result.Errors, "GraphQL query should not have errors")
 	require.NotNil(t, result.Data)
@@ -466,7 +433,7 @@ func TestResolveEpochData(t *testing.T) {
 
 	// Create schema
 	logger := zap.NewNop()
-	schema, err := NewSchema(pebbleStorage, logger)
+	schema, err := graphql.NewHandler(pebbleStorage, logger)
 	require.NoError(t, err)
 
 	// Test query
@@ -489,11 +456,7 @@ func TestResolveEpochData(t *testing.T) {
 		}
 	`
 
-	result := graphql.Do(graphql.Params{
-		Schema:        schema.schema,
-		RequestString: query,
-		Context:       context.Background(),
-	})
+	result := schema.ExecuteQuery(query, nil)
 
 	require.Empty(t, result.Errors, "GraphQL query should not have errors")
 	require.NotNil(t, result.Data)
@@ -585,7 +548,7 @@ func TestResolveLatestEpochData(t *testing.T) {
 
 	// Create schema
 	logger := zap.NewNop()
-	schema, err := NewSchema(pebbleStorage, logger)
+	schema, err := graphql.NewHandler(pebbleStorage, logger)
 	require.NoError(t, err)
 
 	// Test query
@@ -602,11 +565,7 @@ func TestResolveLatestEpochData(t *testing.T) {
 		}
 	`
 
-	result := graphql.Do(graphql.Params{
-		Schema:        schema.schema,
-		RequestString: query,
-		Context:       context.Background(),
-	})
+	result := schema.ExecuteQuery(query, nil)
 
 	require.Empty(t, result.Errors, "GraphQL query should not have errors")
 	require.NotNil(t, result.Data)

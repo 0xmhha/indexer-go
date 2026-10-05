@@ -14,6 +14,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
@@ -29,27 +30,23 @@ func (wbftFeature) Requires() []string { return nil }
 
 func (wbftFeature) Register(r feature.Registrar) error {
 	d := r.Deps()
-	w, ok := d.Storage.(storagepkg.WBFTWriter)
-	if !ok {
-		return fmt.Errorf("storage does not support WBFT data")
-	}
-	rd, ok := d.Storage.(storagepkg.WBFTReader)
-	if !ok {
-		return fmt.Errorf("storage does not support WBFT data")
-	}
 	logger := d.Logger
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	r.OnBlock(&handler{writer: w, reader: rd, blocks: d.Blocks(), logger: logger, publishFn: d.Publish})
+	store, err := consensus.Open(d.Storage, logger)
+	if err != nil {
+		return err
+	}
+	r.OnBlock(&handler{writer: store, reader: store, blocks: d.Blocks(), logger: logger, publishFn: d.Publish})
 	return nil
 }
 
 func init() { feature.Register(wbftFeature{}) }
 
 type handler struct {
-	writer    storagepkg.WBFTWriter
-	reader    storagepkg.WBFTReader
+	writer    consensus.WBFTWriter
+	reader    consensus.WBFTReader
 	blocks    chains.AccountingEnv
 	epochs    stablenet.EpochTracker
 	logger    *zap.Logger
@@ -79,7 +76,7 @@ func (h *handler) publish(ev events.Event) bool {
 // A header that is not WBFT (for example genesis on some networks) is
 // logged and skipped.
 func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
-	wbftExtra, err := storagepkg.ParseWBFTExtra(b.Geth.Header())
+	wbftExtra, err := consensus.ParseWBFTExtra(b.Geth.Header())
 	if err != nil {
 		h.logger.Warn("Failed to parse WBFT extra",
 			zap.Uint64("height", b.Model.Number),
@@ -158,7 +155,7 @@ func (h *handler) epochNumber(ctx context.Context, height uint64) (uint64, error
 
 // recordParentSigning records who signed block N-1, from the Prev seals in
 // block N.
-func (h *handler) recordParentSigning(ctx context.Context, b *feature.Block, x *storagepkg.WBFTBlockExtra, parentEpoch *stablenet.EpochInfo) error {
+func (h *handler) recordParentSigning(ctx context.Context, b *feature.Block, x *consensus.WBFTBlockExtra, parentEpoch *stablenet.EpochInfo) error {
 	if b.Model.Number < 2 || parentEpoch == nil || (x.PrevPreparedSeal == nil && x.PrevCommittedSeal == nil) {
 		return nil // genesis is not sealed
 	}
@@ -170,9 +167,9 @@ func (h *handler) recordParentSigning(ctx context.Context, b *feature.Block, x *
 	if parent, err := h.blocks.Block(ctx, b.Model.Number-1); err == nil {
 		timestamp = parent.Time
 	}
-	activities := make([]*storagepkg.ValidatorSigningActivity, len(validators))
+	activities := make([]*consensus.ValidatorSigningActivity, len(validators))
 	for i, addr := range validators {
-		activities[i] = &storagepkg.ValidatorSigningActivity{
+		activities[i] = &consensus.ValidatorSigningActivity{
 			BlockNumber:      b.Model.Number - 1,
 			BlockHash:        b.Model.ParentHash,
 			ValidatorAddress: addr,
@@ -198,7 +195,7 @@ func sealed(bitmap []byte, i int) bool {
 // publishConsensusBlockEvent creates and publishes a ConsensusBlockEvent
 // The counts use this block's own (local) seals, as the node that served
 // the block saw them, against the validator set of the block's epoch.
-func (h *handler) publishConsensusBlockEvent(b *feature.Block, wbftExtra *storagepkg.WBFTBlockExtra, epoch *stablenet.EpochInfo) {
+func (h *handler) publishConsensusBlockEvent(b *feature.Block, wbftExtra *consensus.WBFTBlockExtra, epoch *stablenet.EpochInfo) {
 	var validators []common.Address
 	if epoch != nil {
 		validators, _ = epoch.ValidatorAddresses()
@@ -240,7 +237,7 @@ func (h *handler) publishConsensusBlockEvent(b *feature.Block, wbftExtra *storag
 	}
 
 	// Create consensus block event
-	consensusEvent := events.NewConsensusBlockEvent(
+	consensusEvent := consensus.NewConsensusBlockEvent(
 		wbftExtra.BlockNumber,
 		wbftExtra.BlockHash,
 		wbftExtra.Timestamp,
@@ -280,7 +277,7 @@ func (h *handler) publishConsensusBlockEvent(b *feature.Block, wbftExtra *storag
 }
 
 // publishConsensusErrorEvent creates and publishes a ConsensusErrorEvent
-func (h *handler) publishConsensusErrorEvent(b *feature.Block, wbftExtra *storagepkg.WBFTBlockExtra, validators []common.Address,
+func (h *handler) publishConsensusErrorEvent(b *feature.Block, wbftExtra *consensus.WBFTBlockExtra, validators []common.Address,
 	errorType, severity, errorMessage string, expectedValidators, actualSigners int, participationRate float64) {
 
 	// Validators of the block's epoch whose commit seal is missing
@@ -293,7 +290,7 @@ func (h *handler) publishConsensusErrorEvent(b *feature.Block, wbftExtra *storag
 		}
 	}
 
-	errorEvent := events.NewConsensusErrorEvent(
+	errorEvent := consensus.NewConsensusErrorEvent(
 		wbftExtra.BlockNumber,
 		wbftExtra.BlockHash,
 		wbftExtra.Timestamp,

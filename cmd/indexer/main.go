@@ -19,6 +19,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"                                // generic EVM chain profile
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet"                          // StableNet chain profile
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus/api"            // StableNet WBFT consensus API
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/feedelegation"   // stablenet.fee_delegation feature
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts" // stablenet.system_contracts feature
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/wbft"            // stablenet.wbft feature

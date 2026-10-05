@@ -1260,46 +1260,6 @@ func TestNotificationMethods(t *testing.T) {
 	}
 }
 
-func TestWBFTExtendedMethods(t *testing.T) {
-	logger := zap.NewNop()
-	ctx := context.Background()
-
-	store := &mockWBFTStorage{}
-	server := NewServer(store, logger)
-
-	t.Run("GetAllValidatorsSigningStats", func(t *testing.T) {
-		params := json.RawMessage(`{"fromBlock": 1, "toBlock": 200}`)
-		result, err := server.HandleMethodDirect(ctx, "getAllValidatorsSigningStats", params)
-		require.Nil(t, err)
-		require.NotNil(t, result)
-	})
-
-	t.Run("GetAllValidatorsSigningStats_MissingParams", func(t *testing.T) {
-		_, err := server.HandleMethodDirect(ctx, "getAllValidatorsSigningStats", json.RawMessage(`{}`))
-		require.NotNil(t, err)
-		assert.Equal(t, InvalidParams, err.Code)
-	})
-
-	t.Run("GetValidatorSigningActivity", func(t *testing.T) {
-		params := json.RawMessage(`{"validatorAddress": "0x1111111111111111111111111111111111111111", "fromBlock": 1, "toBlock": 200}`)
-		result, err := server.HandleMethodDirect(ctx, "getValidatorSigningActivity", params)
-		require.Nil(t, err)
-		require.NotNil(t, result)
-	})
-
-	t.Run("GetValidatorSigningActivity_MissingParams", func(t *testing.T) {
-		_, err := server.HandleMethodDirect(ctx, "getValidatorSigningActivity", json.RawMessage(`{}`))
-		require.NotNil(t, err)
-		assert.Equal(t, InvalidParams, err.Code)
-	})
-
-	t.Run("GetBlockSigners_MissingParams", func(t *testing.T) {
-		_, err := server.HandleMethodDirect(ctx, "getBlockSigners", json.RawMessage(`{}`))
-		require.NotNil(t, err)
-		assert.Equal(t, InvalidParams, err.Code)
-	})
-
-}
 
 func TestServerEdgeCases(t *testing.T) {
 	logger := zap.NewNop()

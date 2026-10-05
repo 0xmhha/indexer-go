@@ -1,4 +1,4 @@
-package graphql
+package api
 
 import (
 	"errors"
@@ -6,15 +6,16 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	consensustypes "github.com/0xmhha/indexer-go/pkg/types/consensus"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/graphql-go/graphql"
+	gql "github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
 
 // resolveConsensusData resolves complete consensus information for a specific block
-func (s *Schema) resolveConsensusData(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveConsensusData(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 	blockNumberStr, ok := p.Args["blockNumber"].(string)
 	if !ok {
@@ -39,7 +40,7 @@ func (s *Schema) resolveConsensusData(p graphql.ResolveParams) (interface{}, err
 	}
 
 	// Get block for proposer (coinbase)
-	block, err := s.storage.GetBlock(ctx, blockNumber)
+	block, err := s.storage.GetModelBlock(ctx, blockNumber)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return nil, nil
@@ -67,7 +68,7 @@ func (s *Schema) resolveConsensusData(p graphql.ResolveParams) (interface{}, err
 	}
 
 	// Convert to ConsensusData
-	data := s.wbftExtraToConsensusData(wbftExtra, block.Header().Coinbase, prepareSigners, commitSigners)
+	data := s.wbftExtraToConsensusData(wbftExtra, block.Miner, prepareSigners, commitSigners)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return nil, nil
@@ -82,7 +83,7 @@ func (s *Schema) resolveConsensusData(p graphql.ResolveParams) (interface{}, err
 }
 
 // resolveValidatorStats resolves statistics for a specific validator over a block range
-func (s *Schema) resolveValidatorStats(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveValidatorStats(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	addressStr, ok := p.Args["address"].(string)
@@ -112,7 +113,7 @@ func (s *Schema) resolveValidatorStats(p graphql.ResolveParams) (interface{}, er
 	}
 
 	// Use ConsensusStorage to aggregate stats from individual signing activities
-	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
+	consensusStorage := consensus.NewConsensusStorage(s.storage, s.logger)
 	stats, err := consensusStorage.GetValidatorStats(ctx, address, fromBlock, toBlock)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -130,7 +131,7 @@ func (s *Schema) resolveValidatorStats(p graphql.ResolveParams) (interface{}, er
 }
 
 // resolveValidatorParticipation resolves detailed participation information for a validator
-func (s *Schema) resolveValidatorParticipation(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveValidatorParticipation(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	addressStr, ok := p.Args["address"].(string)
@@ -175,7 +176,7 @@ func (s *Schema) resolveValidatorParticipation(p graphql.ResolveParams) (interfa
 		}
 	}
 
-	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
+	consensusStorage := consensus.NewConsensusStorage(s.storage, s.logger)
 	participation, err := consensusStorage.GetValidatorParticipation(ctx, address, fromBlock, toBlock, limit, offset)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -193,7 +194,7 @@ func (s *Schema) resolveValidatorParticipation(p graphql.ResolveParams) (interfa
 }
 
 // resolveAllValidatorStats resolves statistics for all validators in a block range
-func (s *Schema) resolveAllValidatorStats(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveAllValidatorStats(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	fromBlockStr, ok := p.Args["fromBlock"].(string)
@@ -232,7 +233,7 @@ func (s *Schema) resolveAllValidatorStats(p graphql.ResolveParams) (interface{},
 		}
 	}
 
-	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
+	consensusStorage := consensus.NewConsensusStorage(s.storage, s.logger)
 	statsMap, err := consensusStorage.GetAllValidatorStats(ctx, fromBlock, toBlock, limit, offset)
 	if err != nil {
 		s.logger.Error("failed to get all validator stats",
@@ -252,7 +253,7 @@ func (s *Schema) resolveAllValidatorStats(p graphql.ResolveParams) (interface{},
 }
 
 // resolveEpochData resolves epoch information for a specific epoch
-func (s *Schema) resolveEpochData(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveEpochData(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 	epochNumberStr, ok := p.Args["epochNumber"].(string)
 	if !ok {
@@ -264,7 +265,7 @@ func (s *Schema) resolveEpochData(p graphql.ResolveParams) (interface{}, error) 
 		return nil, fmt.Errorf("invalid epoch number format: %w", err)
 	}
 
-	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
+	consensusStorage := consensus.NewConsensusStorage(s.storage, s.logger)
 	epochData, err := consensusStorage.GetEpochInfo(ctx, epochNumber)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -280,10 +281,10 @@ func (s *Schema) resolveEpochData(p graphql.ResolveParams) (interface{}, error) 
 }
 
 // resolveLatestEpochData resolves the most recent epoch information
-func (s *Schema) resolveLatestEpochData(p graphql.ResolveParams) (interface{}, error) {
+func (s *Schema) resolveLatestEpochData(p gql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	consensusStorage := storage.NewConsensusStorage(s.storage, s.logger)
+	consensusStorage := consensus.NewConsensusStorage(s.storage, s.logger)
 	epochData, err := consensusStorage.GetLatestEpochInfo(ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -456,7 +457,7 @@ func (s *Schema) epochDataToMap(epoch *consensustypes.EpochData) map[string]inte
 // wbftExtraToConsensusData converts WBFTBlockExtra to ConsensusData
 // This replicates the logic from storage/consensus.go for GraphQL use
 func (s *Schema) wbftExtraToConsensusData(
-	extra *storage.WBFTBlockExtra,
+	extra *consensus.WBFTBlockExtra,
 	proposer common.Address,
 	prepareSigners, commitSigners []common.Address,
 ) *consensustypes.ConsensusData {

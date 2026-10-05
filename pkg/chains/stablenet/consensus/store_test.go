@@ -1,17 +1,20 @@
-package storage
+package consensus
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 func TestPebbleStorage_SaveGetWBFTBlockExtra(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	// Create WBFT block extra
@@ -24,13 +27,13 @@ func TestPebbleStorage_SaveGetWBFTBlockExtra(t *testing.T) {
 	}
 
 	// Save WBFT block extra
-	err := storage.SaveWBFTBlockExtra(ctx, extra)
+	err := st.SaveWBFTBlockExtra(ctx, extra)
 	if err != nil {
 		t.Fatalf("SaveWBFTBlockExtra() error = %v", err)
 	}
 
 	// Get WBFT block extra
-	retrieved, err := storage.GetWBFTBlockExtra(ctx, blockNumber)
+	retrieved, err := st.GetWBFTBlockExtra(ctx, blockNumber)
 	if err != nil {
 		t.Fatalf("GetWBFTBlockExtra() error = %v", err)
 	}
@@ -51,12 +54,12 @@ func TestPebbleStorage_GetWBFTBlockExtra_NotFound(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
-	_, err := storage.GetWBFTBlockExtra(ctx, 999)
-	if err != ErrNotFound {
-		t.Errorf("GetWBFTBlockExtra() error = %v, want ErrNotFound", err)
+	_, err := st.GetWBFTBlockExtra(ctx, 999)
+	if err != storage.ErrNotFound {
+		t.Errorf("GetWBFTBlockExtra() error = %v, want storage.ErrNotFound", err)
 	}
 }
 
@@ -64,7 +67,7 @@ func TestPebbleStorage_GetWBFTBlockExtraByHash(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	// Create and save block first (needed for hash index)
@@ -72,7 +75,7 @@ func TestPebbleStorage_GetWBFTBlockExtraByHash(t *testing.T) {
 
 	// Need to set block hash index
 	block := createTestBlockWithMiner(blockNumber, common.Address{}, 100000, 1000)
-	err := storage.SetBlock(ctx, block)
+	err := st.SetBlock(ctx, block)
 	if err != nil {
 		t.Fatalf("SetBlock() error = %v", err)
 	}
@@ -84,13 +87,13 @@ func TestPebbleStorage_GetWBFTBlockExtraByHash(t *testing.T) {
 		Round:       2,
 		Timestamp:   1000,
 	}
-	err = storage.SaveWBFTBlockExtra(ctx, extra)
+	err = st.SaveWBFTBlockExtra(ctx, extra)
 	if err != nil {
 		t.Fatalf("SaveWBFTBlockExtra() error = %v", err)
 	}
 
 	// Get by hash
-	retrieved, err := storage.GetWBFTBlockExtraByHash(ctx, block.Hash())
+	retrieved, err := st.GetWBFTBlockExtraByHash(ctx, block.Hash())
 	if err != nil {
 		t.Fatalf("GetWBFTBlockExtraByHash() error = %v", err)
 	}
@@ -107,7 +110,7 @@ func TestPebbleStorage_SaveGetEpochInfo(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	// Create epoch info
@@ -122,13 +125,13 @@ func TestPebbleStorage_SaveGetEpochInfo(t *testing.T) {
 	}
 
 	// Save epoch info
-	err := storage.SaveEpochInfo(ctx, epochInfo)
+	err := st.SaveEpochInfo(ctx, epochInfo)
 	if err != nil {
 		t.Fatalf("SaveEpochInfo() error = %v", err)
 	}
 
 	// Get epoch info
-	retrieved, err := storage.GetEpochInfo(ctx, epochNumber)
+	retrieved, err := st.GetEpochInfo(ctx, epochNumber)
 	if err != nil {
 		t.Fatalf("GetEpochInfo() error = %v", err)
 	}
@@ -149,12 +152,12 @@ func TestPebbleStorage_GetEpochInfo_NotFound(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
-	_, err := storage.GetEpochInfo(ctx, 999)
-	if err != ErrNotFound {
-		t.Errorf("GetEpochInfo() error = %v, want ErrNotFound", err)
+	_, err := st.GetEpochInfo(ctx, 999)
+	if err != storage.ErrNotFound {
+		t.Errorf("GetEpochInfo() error = %v, want storage.ErrNotFound", err)
 	}
 }
 
@@ -162,7 +165,7 @@ func TestPebbleStorage_GetLatestEpochInfo(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	// Save multiple epochs
@@ -173,14 +176,14 @@ func TestPebbleStorage_GetLatestEpochInfo(t *testing.T) {
 	}
 
 	for _, epoch := range epochs {
-		err := storage.SaveEpochInfo(ctx, epoch)
+		err := st.SaveEpochInfo(ctx, epoch)
 		if err != nil {
 			t.Fatalf("SaveEpochInfo() error = %v", err)
 		}
 	}
 
 	// Get latest epoch
-	latest, err := storage.GetLatestEpochInfo(ctx)
+	latest, err := st.GetLatestEpochInfo(ctx)
 	if err != nil {
 		t.Fatalf("GetLatestEpochInfo() error = %v", err)
 	}
@@ -195,12 +198,12 @@ func TestPebbleStorage_GetLatestEpochInfo_NotFound(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
-	_, err := storage.GetLatestEpochInfo(ctx)
-	if err != ErrNotFound {
-		t.Errorf("GetLatestEpochInfo() error = %v, want ErrNotFound", err)
+	_, err := st.GetLatestEpochInfo(ctx)
+	if err != storage.ErrNotFound {
+		t.Errorf("GetLatestEpochInfo() error = %v, want storage.ErrNotFound", err)
 	}
 }
 
@@ -208,7 +211,7 @@ func TestPebbleStorage_UpdateValidatorSigningStats(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	blockNumber := uint64(100)
@@ -234,13 +237,13 @@ func TestPebbleStorage_UpdateValidatorSigningStats(t *testing.T) {
 	}
 
 	// Update stats
-	err := storage.UpdateValidatorSigningStats(ctx, blockNumber, activities)
+	err := st.UpdateValidatorSigningStats(ctx, blockNumber, activities)
 	if err != nil {
 		t.Fatalf("UpdateValidatorSigningStats() error = %v", err)
 	}
 
 	// Get signing activity for validator1
-	activityList, err := storage.GetValidatorSigningActivity(ctx, validator1, blockNumber, blockNumber, 10, 0)
+	activityList, err := st.GetValidatorSigningActivity(ctx, validator1, blockNumber, blockNumber, 10, 0)
 	if err != nil {
 		t.Fatalf("GetValidatorSigningActivity() error = %v", err)
 	}
@@ -258,15 +261,15 @@ func TestPebbleStorage_GetValidatorSigningStats(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	validator := common.HexToAddress("0x1111111111111111111111111111111111111111")
 	fromBlock := uint64(100)
 	toBlock := uint64(110)
 
-	// Initially should return empty stats (not ErrNotFound)
-	stats, err := storage.GetValidatorSigningStats(ctx, validator, fromBlock, toBlock)
+	// Initially should return empty stats (not storage.ErrNotFound)
+	stats, err := st.GetValidatorSigningStats(ctx, validator, fromBlock, toBlock)
 	if err != nil {
 		t.Fatalf("GetValidatorSigningStats() error = %v", err)
 	}
@@ -284,7 +287,7 @@ func TestPebbleStorage_GetAllValidatorsSigningStats(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	// Add some activities
@@ -298,17 +301,17 @@ func TestPebbleStorage_GetAllValidatorsSigningStats(t *testing.T) {
 		{BlockNumber: 101, ValidatorAddress: validator2, SignedPrepare: true, SignedCommit: false},
 	}
 
-	err := storage.UpdateValidatorSigningStats(ctx, 100, activities1)
+	err := st.UpdateValidatorSigningStats(ctx, 100, activities1)
 	if err != nil {
 		t.Fatalf("UpdateValidatorSigningStats() error = %v", err)
 	}
-	err = storage.UpdateValidatorSigningStats(ctx, 101, activities2)
+	err = st.UpdateValidatorSigningStats(ctx, 101, activities2)
 	if err != nil {
 		t.Fatalf("UpdateValidatorSigningStats() error = %v", err)
 	}
 
 	// Get all stats
-	stats, err := storage.GetAllValidatorsSigningStats(ctx, 100, 110, 10, 0)
+	stats, err := st.GetAllValidatorsSigningStats(ctx, 100, 110, 10, 0)
 	if err != nil {
 		t.Fatalf("GetAllValidatorsSigningStats() error = %v", err)
 	}
@@ -322,7 +325,7 @@ func TestPebbleStorage_GetValidatorSigningActivity(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	validator := common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -338,14 +341,14 @@ func TestPebbleStorage_GetValidatorSigningActivity(t *testing.T) {
 				SignedCommit:     true,
 			},
 		}
-		err := storage.UpdateValidatorSigningStats(ctx, i, activities)
+		err := st.UpdateValidatorSigningStats(ctx, i, activities)
 		if err != nil {
 			t.Fatalf("UpdateValidatorSigningStats() error = %v", err)
 		}
 	}
 
 	// Get activity
-	activityList, err := storage.GetValidatorSigningActivity(ctx, validator, 100, 104, 10, 0)
+	activityList, err := st.GetValidatorSigningActivity(ctx, validator, 100, 104, 10, 0)
 	if err != nil {
 		t.Fatalf("GetValidatorSigningActivity() error = %v", err)
 	}
@@ -355,7 +358,7 @@ func TestPebbleStorage_GetValidatorSigningActivity(t *testing.T) {
 	}
 
 	// Test pagination
-	activityList, err = storage.GetValidatorSigningActivity(ctx, validator, 100, 104, 2, 0)
+	activityList, err = st.GetValidatorSigningActivity(ctx, validator, 100, 104, 2, 0)
 	if err != nil {
 		t.Fatalf("GetValidatorSigningActivity() with limit error = %v", err)
 	}
@@ -369,14 +372,14 @@ func TestPebbleStorage_GetBlockSigners(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	blockNumber := uint64(100)
 
 	// Create and save block with WBFT extra
 	block := createTestBlockWithMiner(blockNumber, common.Address{}, 100000, 1000)
-	err := storage.SetBlock(ctx, block)
+	err := st.SetBlock(ctx, block)
 	if err != nil {
 		t.Fatalf("SetBlock() error = %v", err)
 	}
@@ -388,13 +391,13 @@ func TestPebbleStorage_GetBlockSigners(t *testing.T) {
 		Round:       1,
 		Timestamp:   1000,
 	}
-	err = storage.SaveWBFTBlockExtra(ctx, extra)
+	err = st.SaveWBFTBlockExtra(ctx, extra)
 	if err != nil {
 		t.Fatalf("SaveWBFTBlockExtra() error = %v", err)
 	}
 
 	// Get block signers (should not error even if no signers)
-	preparers, committers, err := storage.GetBlockSigners(ctx, blockNumber)
+	preparers, committers, err := st.GetBlockSigners(ctx, blockNumber)
 	if err != nil {
 		t.Fatalf("GetBlockSigners() error = %v", err)
 	}
@@ -412,45 +415,45 @@ func TestPebbleStorage_WBFT_ClosedStorage(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 
-	storage := s.(*PebbleStorage)
+	st := s
 	ctx := context.Background()
 
 	// Close storage
-	storage.Close()
+	_ = st.Close()
 
-	// All operations should return ErrClosed
-	_, err := storage.GetWBFTBlockExtra(ctx, 100)
-	if err != ErrClosed {
-		t.Errorf("GetWBFTBlockExtra() on closed storage error = %v, want ErrClosed", err)
+	// All operations should return storage.ErrClosed
+	_, err := st.GetWBFTBlockExtra(ctx, 100)
+	if !errors.Is(err, storage.ErrClosed) {
+		t.Errorf("GetWBFTBlockExtra() on closed storage error = %v, want storage.ErrClosed", err)
 	}
 
-	_, err = storage.GetWBFTBlockExtraByHash(ctx, common.Hash{})
-	if err != ErrClosed {
-		t.Errorf("GetWBFTBlockExtraByHash() on closed storage error = %v, want ErrClosed", err)
+	_, err = st.GetWBFTBlockExtraByHash(ctx, common.Hash{})
+	if !errors.Is(err, storage.ErrClosed) {
+		t.Errorf("GetWBFTBlockExtraByHash() on closed storage error = %v, want storage.ErrClosed", err)
 	}
 
-	_, err = storage.GetEpochInfo(ctx, 1)
-	if err != ErrClosed {
-		t.Errorf("GetEpochInfo() on closed storage error = %v, want ErrClosed", err)
+	_, err = st.GetEpochInfo(ctx, 1)
+	if !errors.Is(err, storage.ErrClosed) {
+		t.Errorf("GetEpochInfo() on closed storage error = %v, want storage.ErrClosed", err)
 	}
 
-	_, err = storage.GetLatestEpochInfo(ctx)
-	if err != ErrClosed {
-		t.Errorf("GetLatestEpochInfo() on closed storage error = %v, want ErrClosed", err)
+	_, err = st.GetLatestEpochInfo(ctx)
+	if !errors.Is(err, storage.ErrClosed) {
+		t.Errorf("GetLatestEpochInfo() on closed storage error = %v, want storage.ErrClosed", err)
 	}
 
-	_, err = storage.GetValidatorSigningStats(ctx, common.Address{}, 0, 100)
-	if err != ErrClosed {
-		t.Errorf("GetValidatorSigningStats() on closed storage error = %v, want ErrClosed", err)
+	_, err = st.GetValidatorSigningStats(ctx, common.Address{}, 0, 100)
+	if !errors.Is(err, storage.ErrClosed) {
+		t.Errorf("GetValidatorSigningStats() on closed storage error = %v, want storage.ErrClosed", err)
 	}
 
-	err = storage.SaveWBFTBlockExtra(ctx, &WBFTBlockExtra{})
-	if err != ErrClosed {
-		t.Errorf("SaveWBFTBlockExtra() on closed storage error = %v, want ErrClosed", err)
+	err = st.SaveWBFTBlockExtra(ctx, &WBFTBlockExtra{})
+	if !errors.Is(err, storage.ErrClosed) {
+		t.Errorf("SaveWBFTBlockExtra() on closed storage error = %v, want storage.ErrClosed", err)
 	}
 
-	err = storage.SaveEpochInfo(ctx, &EpochInfo{})
-	if err != ErrClosed {
-		t.Errorf("SaveEpochInfo() on closed storage error = %v, want ErrClosed", err)
+	err = st.SaveEpochInfo(ctx, &EpochInfo{})
+	if !errors.Is(err, storage.ErrClosed) {
+		t.Errorf("SaveEpochInfo() on closed storage error = %v, want storage.ErrClosed", err)
 	}
 }

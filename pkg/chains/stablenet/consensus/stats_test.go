@@ -1,10 +1,8 @@
-package storage
+package consensus
 
 import (
 	"context"
 	"math/big"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -16,25 +14,12 @@ import (
 )
 
 func TestConsensusStorage_SaveAndGetConsensusData(t *testing.T) {
-	// Create temporary directory for test database
-	tmpDir, err := os.MkdirTemp("", "consensus_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Create storage
-	cfg := &Config{
-		Path:                  filepath.Join(tmpDir, "test.db"),
-		Cache:                 64,
-		CompactionConcurrency: 1,
-		MaxOpenFiles:          100,
-		WriteBuffer:           64,
-	}
-	pebbleStorage, err := NewPebbleStorage(cfg)
-	require.NoError(t, err)
+	pebbleStorage := newTestPebble(t)
 	defer pebbleStorage.Close()
+	var err error
 
 	logger := zap.NewNop()
-	cs := NewConsensusStorage(pebbleStorage, logger)
+	cs := NewConsensusStorage(NewStore(pebbleStorage, logger), logger)
 
 	// Create test consensus data
 	validators := []common.Address{
@@ -87,25 +72,12 @@ func TestConsensusStorage_SaveAndGetConsensusData(t *testing.T) {
 }
 
 func TestConsensusStorage_SaveConsensusDataWithEpoch(t *testing.T) {
-	// Create temporary directory for test database
-	tmpDir, err := os.MkdirTemp("", "consensus_epoch_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Create storage
-	cfg := &Config{
-		Path:                  filepath.Join(tmpDir, "test.db"),
-		Cache:                 64,
-		CompactionConcurrency: 1,
-		MaxOpenFiles:          100,
-		WriteBuffer:           64,
-	}
-	pebbleStorage, err := NewPebbleStorage(cfg)
-	require.NoError(t, err)
+	pebbleStorage := newTestPebble(t)
 	defer pebbleStorage.Close()
+	var err error
 
 	logger := zap.NewNop()
-	cs := NewConsensusStorage(pebbleStorage, logger)
+	cs := NewConsensusStorage(NewStore(pebbleStorage, logger), logger)
 
 	validators := []common.Address{
 		common.HexToAddress("0x1111111111111111111111111111111111111111"),
@@ -175,25 +147,12 @@ func TestConsensusStorage_SaveConsensusDataWithEpoch(t *testing.T) {
 }
 
 func TestConsensusStorage_GetValidatorStats(t *testing.T) {
-	// Create temporary directory for test database
-	tmpDir, err := os.MkdirTemp("", "validator_stats_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Create storage
-	cfg := &Config{
-		Path:                  filepath.Join(tmpDir, "test.db"),
-		Cache:                 64,
-		CompactionConcurrency: 1,
-		MaxOpenFiles:          100,
-		WriteBuffer:           64,
-	}
-	pebbleStorage, err := NewPebbleStorage(cfg)
-	require.NoError(t, err)
+	pebbleStorage := newTestPebble(t)
 	defer pebbleStorage.Close()
+	var err error
 
 	logger := zap.NewNop()
-	cs := NewConsensusStorage(pebbleStorage, logger)
+	cs := NewConsensusStorage(NewStore(pebbleStorage, logger), logger)
 
 	validators := []common.Address{
 		common.HexToAddress("0x1111111111111111111111111111111111111111"),
@@ -242,25 +201,12 @@ func TestConsensusStorage_GetValidatorStats(t *testing.T) {
 }
 
 func TestConsensusStorage_GetValidatorParticipation(t *testing.T) {
-	// Create temporary directory for test database
-	tmpDir, err := os.MkdirTemp("", "validator_participation_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Create storage
-	cfg := &Config{
-		Path:                  filepath.Join(tmpDir, "test.db"),
-		Cache:                 64,
-		CompactionConcurrency: 1,
-		MaxOpenFiles:          100,
-		WriteBuffer:           64,
-	}
-	pebbleStorage, err := NewPebbleStorage(cfg)
-	require.NoError(t, err)
+	pebbleStorage := newTestPebble(t)
 	defer pebbleStorage.Close()
+	var err error
 
 	logger := zap.NewNop()
-	cs := NewConsensusStorage(pebbleStorage, logger)
+	cs := NewConsensusStorage(NewStore(pebbleStorage, logger), logger)
 
 	validators := []common.Address{
 		common.HexToAddress("0x1111111111111111111111111111111111111111"),
@@ -303,25 +249,12 @@ func TestConsensusStorage_GetValidatorParticipation(t *testing.T) {
 }
 
 func TestConsensusStorage_GetAllValidatorStats(t *testing.T) {
-	// Create temporary directory for test database
-	tmpDir, err := os.MkdirTemp("", "all_validators_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Create storage
-	cfg := &Config{
-		Path:                  filepath.Join(tmpDir, "test.db"),
-		Cache:                 64,
-		CompactionConcurrency: 1,
-		MaxOpenFiles:          100,
-		WriteBuffer:           64,
-	}
-	pebbleStorage, err := NewPebbleStorage(cfg)
-	require.NoError(t, err)
+	pebbleStorage := newTestPebble(t)
 	defer pebbleStorage.Close()
+	var err error
 
 	logger := zap.NewNop()
-	cs := NewConsensusStorage(pebbleStorage, logger)
+	cs := NewConsensusStorage(NewStore(pebbleStorage, logger), logger)
 
 	validators := []common.Address{
 		common.HexToAddress("0x1111111111111111111111111111111111111111"),
@@ -367,25 +300,12 @@ func TestConsensusStorage_GetAllValidatorStats(t *testing.T) {
 }
 
 func TestConsensusStorage_GetLatestEpochInfo(t *testing.T) {
-	// Create temporary directory for test database
-	tmpDir, err := os.MkdirTemp("", "latest_epoch_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Create storage
-	cfg := &Config{
-		Path:                  filepath.Join(tmpDir, "test.db"),
-		Cache:                 64,
-		CompactionConcurrency: 1,
-		MaxOpenFiles:          100,
-		WriteBuffer:           64,
-	}
-	pebbleStorage, err := NewPebbleStorage(cfg)
-	require.NoError(t, err)
+	pebbleStorage := newTestPebble(t)
 	defer pebbleStorage.Close()
+	var err error
 
 	logger := zap.NewNop()
-	cs := NewConsensusStorage(pebbleStorage, logger)
+	cs := NewConsensusStorage(NewStore(pebbleStorage, logger), logger)
 
 	validators := []common.Address{
 		common.HexToAddress("0x1111111111111111111111111111111111111111"),

@@ -1,4 +1,4 @@
-package storage
+package consensus
 
 import (
 	"fmt"
@@ -250,4 +250,89 @@ func ExtractSigners(sealers []byte, validators []uint32, candidates []Candidate)
 	}
 
 	return signers, nil
+}
+
+// EncodeWBFTAggregatedSeal encodes WBFTAggregatedSeal to RLP bytes
+func EncodeWBFTAggregatedSeal(seal *WBFTAggregatedSeal) ([]byte, error) {
+	if seal == nil {
+		return nil, nil
+	}
+
+	sealRLP := &WBFTAggregatedSealRLP{
+		Sealers:   seal.Sealers,
+		Signature: seal.Signature,
+	}
+
+	return rlp.EncodeToBytes(sealRLP)
+}
+
+// DecodeWBFTAggregatedSeal decodes RLP bytes to WBFTAggregatedSeal
+func DecodeWBFTAggregatedSeal(data []byte) (*WBFTAggregatedSeal, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	var sealRLP WBFTAggregatedSealRLP
+	if err := rlp.DecodeBytes(data, &sealRLP); err != nil {
+		return nil, err
+	}
+
+	return &WBFTAggregatedSeal{
+		Sealers:   sealRLP.Sealers,
+		Signature: sealRLP.Signature,
+	}, nil
+}
+
+// EncodeEpochInfo encodes EpochInfo to RLP bytes
+func EncodeEpochInfo(epochInfo *EpochInfo) ([]byte, error) {
+	if epochInfo == nil {
+		return nil, nil
+	}
+
+	candidates := make([]*CandidateRLP, len(epochInfo.Candidates))
+	for i, c := range epochInfo.Candidates {
+		candidates[i] = &CandidateRLP{
+			Addr:      c.Address[:],
+			Diligence: c.Diligence,
+		}
+	}
+
+	epochInfoRLP := &EpochInfoRLP{
+		Candidates:    candidates,
+		Validators:    epochInfo.Validators,
+		BLSPublicKeys: epochInfo.BLSPublicKeys,
+	}
+
+	return rlp.EncodeToBytes(epochInfoRLP)
+}
+
+// DecodeEpochInfo decodes RLP bytes to EpochInfo
+func DecodeEpochInfo(data []byte) (*EpochInfo, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	var epochInfoRLP EpochInfoRLP
+	if err := rlp.DecodeBytes(data, &epochInfoRLP); err != nil {
+		return nil, err
+	}
+
+	candidates := make([]Candidate, len(epochInfoRLP.Candidates))
+	for i, c := range epochInfoRLP.Candidates {
+		if len(c.Addr) != common.AddressLength {
+			return nil, fmt.Errorf("invalid candidate address length: %d", len(c.Addr))
+		}
+		var addr common.Address
+		copy(addr[:], c.Addr)
+		candidates[i] = Candidate{
+			Address:   addr,
+			Diligence: c.Diligence,
+		}
+	}
+
+	return &EpochInfo{
+		Candidates:    candidates,
+		Validators:    epochInfoRLP.Validators,
+		BLSPublicKeys: epochInfoRLP.BLSPublicKeys,
+	}, nil
 }

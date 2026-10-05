@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
 )
 
 // TestWBFTSigningFromCanonicalSeals indexes the StableNet scenario, whose
@@ -19,7 +19,7 @@ import (
 func TestWBFTSigningFromCanonicalSeals(t *testing.T) {
 	sc := testchain.BuildStableNet()
 	app := indexAll(t, sc.Chain)
-	r := app.storage.(storage.WBFTReader)
+	r := consensus.NewStore(app.storage.(consensus.Backend), nil)
 	cfg := sc.Chain.StableNetConfig()
 	ctx := context.Background()
 

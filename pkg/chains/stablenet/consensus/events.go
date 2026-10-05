@@ -1,25 +1,27 @@
-package events
+package consensus
 
 import (
 	"encoding/json"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/events"
 )
 
 // Consensus event types
 const (
 	// EventTypeConsensusBlock represents a consensus finalization event
-	EventTypeConsensusBlock EventType = "consensusBlock"
+	EventTypeConsensusBlock events.EventType = "consensusBlock"
 
 	// EventTypeConsensusFork represents a chain fork detection event
-	EventTypeConsensusFork EventType = "consensusFork"
+	EventTypeConsensusFork events.EventType = "consensusFork"
 
 	// EventTypeConsensusValidatorChange represents a validator set change event
-	EventTypeConsensusValidatorChange EventType = "consensusValidatorChange"
+	EventTypeConsensusValidatorChange events.EventType = "consensusValidatorChange"
 
 	// EventTypeConsensusError represents a consensus error or anomaly event
-	EventTypeConsensusError EventType = "consensusError"
+	EventTypeConsensusError events.EventType = "consensusError"
 )
 
 // ConsensusBlockEvent represents a new block finalized with consensus data
@@ -54,7 +56,7 @@ type ConsensusBlockEvent struct {
 }
 
 // Type implements Event interface
-func (e *ConsensusBlockEvent) Type() EventType {
+func (e *ConsensusBlockEvent) Type() events.EventType {
 	return EventTypeConsensusBlock
 }
 
@@ -128,7 +130,7 @@ type ConsensusForkEvent struct {
 }
 
 // Type implements Event interface
-func (e *ConsensusForkEvent) Type() EventType {
+func (e *ConsensusForkEvent) Type() events.EventType {
 	return EventTypeConsensusFork
 }
 
@@ -201,7 +203,7 @@ type ConsensusValidatorChangeEvent struct {
 }
 
 // Type implements Event interface
-func (e *ConsensusValidatorChangeEvent) Type() EventType {
+func (e *ConsensusValidatorChangeEvent) Type() events.EventType {
 	return EventTypeConsensusValidatorChange
 }
 
@@ -281,7 +283,7 @@ type ConsensusErrorEvent struct {
 }
 
 // Type implements Event interface
-func (e *ConsensusErrorEvent) Type() EventType {
+func (e *ConsensusErrorEvent) Type() events.EventType {
 	return EventTypeConsensusError
 }
 

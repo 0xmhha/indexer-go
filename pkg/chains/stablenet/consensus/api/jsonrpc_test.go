@@ -1,4 +1,4 @@
-package jsonrpc
+package api
 
 import (
 	"context"
@@ -6,21 +6,25 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
+	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
 // Mock WBFT storage for testing
 type mockWBFTStorage struct {
-	storage.Storage
+	backend
 }
 
-func (m *mockWBFTStorage) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*storage.WBFTBlockExtra, error) {
+func (m *mockWBFTStorage) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*consensus.WBFTBlockExtra, error) {
 	if blockNumber == 0 {
 		return nil, storage.ErrNotFound
 	}
-	return &storage.WBFTBlockExtra{
+	return &consensus.WBFTBlockExtra{
 		BlockNumber:  blockNumber,
 		BlockHash:    common.HexToHash("0x1234"),
 		RandaoReveal: []byte{0x01, 0x02, 0x03},
@@ -31,8 +35,8 @@ func (m *mockWBFTStorage) GetWBFTBlockExtra(ctx context.Context, blockNumber uin
 	}, nil
 }
 
-func (m *mockWBFTStorage) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*storage.WBFTBlockExtra, error) {
-	return &storage.WBFTBlockExtra{
+func (m *mockWBFTStorage) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*consensus.WBFTBlockExtra, error) {
+	return &consensus.WBFTBlockExtra{
 		BlockNumber:  100,
 		BlockHash:    blockHash,
 		RandaoReveal: []byte{0x01, 0x02, 0x03},
@@ -42,14 +46,14 @@ func (m *mockWBFTStorage) GetWBFTBlockExtraByHash(ctx context.Context, blockHash
 	}, nil
 }
 
-func (m *mockWBFTStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) (*storage.EpochInfo, error) {
+func (m *mockWBFTStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) (*consensus.EpochInfo, error) {
 	if epochNumber == 0 {
 		return nil, storage.ErrNotFound
 	}
-	return &storage.EpochInfo{
+	return &consensus.EpochInfo{
 		EpochNumber: epochNumber,
 		BlockNumber: epochNumber * 100,
-		Candidates: []storage.Candidate{
+		Candidates: []consensus.Candidate{
 			{
 				Address:   common.HexToAddress("0x1111"),
 				Diligence: 100,
@@ -60,12 +64,12 @@ func (m *mockWBFTStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) 
 	}, nil
 }
 
-func (m *mockWBFTStorage) GetLatestEpochInfo(ctx context.Context) (*storage.EpochInfo, error) {
+func (m *mockWBFTStorage) GetLatestEpochInfo(ctx context.Context) (*consensus.EpochInfo, error) {
 	return m.GetEpochInfo(ctx, 10)
 }
 
-func (m *mockWBFTStorage) GetValidatorSigningStats(ctx context.Context, validator common.Address, fromBlock, toBlock uint64) (*storage.ValidatorSigningStats, error) {
-	return &storage.ValidatorSigningStats{
+func (m *mockWBFTStorage) GetValidatorSigningStats(ctx context.Context, validator common.Address, fromBlock, toBlock uint64) (*consensus.ValidatorSigningStats, error) {
+	return &consensus.ValidatorSigningStats{
 		ValidatorAddress: validator,
 		ValidatorIndex:   0,
 		PrepareSignCount: 100,
@@ -78,8 +82,8 @@ func (m *mockWBFTStorage) GetValidatorSigningStats(ctx context.Context, validato
 	}, nil
 }
 
-func (m *mockWBFTStorage) GetAllValidatorsSigningStats(ctx context.Context, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningStats, error) {
-	return []*storage.ValidatorSigningStats{
+func (m *mockWBFTStorage) GetAllValidatorsSigningStats(ctx context.Context, fromBlock, toBlock uint64, limit, offset int) ([]*consensus.ValidatorSigningStats, error) {
+	return []*consensus.ValidatorSigningStats{
 		{
 			ValidatorAddress: common.HexToAddress("0x1111"),
 			ValidatorIndex:   0,
@@ -94,8 +98,8 @@ func (m *mockWBFTStorage) GetAllValidatorsSigningStats(ctx context.Context, from
 	}, nil
 }
 
-func (m *mockWBFTStorage) GetValidatorSigningActivity(ctx context.Context, validator common.Address, fromBlock, toBlock uint64, limit, offset int) ([]*storage.ValidatorSigningActivity, error) {
-	return []*storage.ValidatorSigningActivity{
+func (m *mockWBFTStorage) GetValidatorSigningActivity(ctx context.Context, validator common.Address, fromBlock, toBlock uint64, limit, offset int) ([]*consensus.ValidatorSigningActivity, error) {
+	return []*consensus.ValidatorSigningActivity{
 		{
 			BlockNumber:      100,
 			BlockHash:        common.HexToHash("0x1234"),
@@ -121,20 +125,13 @@ func (m *mockWBFTStorage) GetBlockSigners(ctx context.Context, blockNumber uint6
 	return preparers, committers, nil
 }
 
-func (m *mockWBFTStorage) GetEpochsList(ctx context.Context, limit, offset int) ([]*storage.EpochInfo, int, error) {
-	return []*storage.EpochInfo{}, 0, nil
-}
-func (m *mockWBFTStorage) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
-	return nil, nil
-}
-
-func (m *mockWBFTStorage) ListABIs(ctx context.Context) ([]common.Address, error) {
-	return []common.Address{}, nil
+func (m *mockWBFTStorage) GetEpochsList(ctx context.Context, limit, offset int) ([]*consensus.EpochInfo, int, error) {
+	return []*consensus.EpochInfo{}, 0, nil
 }
 
 func TestGetWBFTBlockExtra(t *testing.T) {
 	logger := zap.NewNop()
-	handler := NewHandler(&mockWBFTStorage{}, logger)
+	handler := &rpcHandler{storage: &mockWBFTStorage{}, logger: logger}
 
 	tests := []struct {
 		name        string
@@ -193,7 +190,7 @@ func TestGetWBFTBlockExtra(t *testing.T) {
 
 func TestGetEpochInfo(t *testing.T) {
 	logger := zap.NewNop()
-	handler := NewHandler(&mockWBFTStorage{}, logger)
+	handler := &rpcHandler{storage: &mockWBFTStorage{}, logger: logger}
 
 	tests := []struct {
 		name        string
@@ -247,7 +244,7 @@ func TestGetEpochInfo(t *testing.T) {
 
 func TestGetLatestEpochInfo(t *testing.T) {
 	logger := zap.NewNop()
-	handler := NewHandler(&mockWBFTStorage{}, logger)
+	handler := &rpcHandler{storage: &mockWBFTStorage{}, logger: logger}
 
 	result, err := handler.getLatestEpochInfo(context.Background(), nil)
 	if err != nil {
@@ -270,7 +267,7 @@ func TestGetLatestEpochInfo(t *testing.T) {
 
 func TestGetValidatorSigningStats(t *testing.T) {
 	logger := zap.NewNop()
-	handler := NewHandler(&mockWBFTStorage{}, logger)
+	handler := &rpcHandler{storage: &mockWBFTStorage{}, logger: logger}
 
 	tests := []struct {
 		name        string
@@ -325,7 +322,7 @@ func TestGetValidatorSigningStats(t *testing.T) {
 
 func TestGetBlockSigners(t *testing.T) {
 	logger := zap.NewNop()
-	handler := NewHandler(&mockWBFTStorage{}, logger)
+	handler := &rpcHandler{storage: &mockWBFTStorage{}, logger: logger}
 
 	result, err := handler.getBlockSigners(context.Background(), json.RawMessage(`{"blockNumber": 100}`))
 	if err != nil {
@@ -354,4 +351,44 @@ func TestGetBlockSigners(t *testing.T) {
 	if !ok || len(committers) != 2 {
 		t.Error("expected 2 committers")
 	}
+}
+
+func TestWBFTExtendedMethods(t *testing.T) {
+	logger := zap.NewNop()
+	ctx := context.Background()
+
+	handler := &rpcHandler{storage: &mockWBFTStorage{}, logger: logger}
+
+	t.Run("GetAllValidatorsSigningStats", func(t *testing.T) {
+		params := json.RawMessage(`{"fromBlock": 1, "toBlock": 200}`)
+		result, err := handler.getAllValidatorsSigningStats(ctx, params)
+		require.Nil(t, err)
+		require.NotNil(t, result)
+	})
+
+	t.Run("GetAllValidatorsSigningStats_MissingParams", func(t *testing.T) {
+		_, err := handler.getAllValidatorsSigningStats(ctx, json.RawMessage(`{}`))
+		require.NotNil(t, err)
+		assert.Equal(t, jsonrpc.InvalidParams, err.Code)
+	})
+
+	t.Run("GetValidatorSigningActivity", func(t *testing.T) {
+		params := json.RawMessage(`{"validatorAddress": "0x1111111111111111111111111111111111111111", "fromBlock": 1, "toBlock": 200}`)
+		result, err := handler.getValidatorSigningActivity(ctx, params)
+		require.Nil(t, err)
+		require.NotNil(t, result)
+	})
+
+	t.Run("GetValidatorSigningActivity_MissingParams", func(t *testing.T) {
+		_, err := handler.getValidatorSigningActivity(ctx, json.RawMessage(`{}`))
+		require.NotNil(t, err)
+		assert.Equal(t, jsonrpc.InvalidParams, err.Code)
+	})
+
+	t.Run("GetBlockSigners_MissingParams", func(t *testing.T) {
+		_, err := handler.getBlockSigners(ctx, json.RawMessage(`{}`))
+		require.NotNil(t, err)
+		assert.Equal(t, jsonrpc.InvalidParams, err.Code)
+	})
+
 }

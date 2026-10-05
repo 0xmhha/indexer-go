@@ -157,8 +157,6 @@ type Storage interface {
 	SystemContractReader
 	ContractVerificationReader
 	ContractVerificationWriter
-	WBFTReader
-	WBFTWriter
 	FeeDelegationReader
 	FeeDelegationWriter
 	HistoricalReader
