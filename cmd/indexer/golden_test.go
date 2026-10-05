@@ -17,6 +17,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
+	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -35,6 +36,22 @@ type ingestMode struct {
 	// clientSource reads blocks through the legacy go-ethereum client
 	// instead of the chain profile source.
 	clientSource bool
+	// features overrides features (name -> enabled) on top of the test
+	// chain's defaults.
+	features map[string]bool
+}
+
+// orderIndependentOnly returns mode with every order-dependent feature the
+// test chain would run turned off.
+func orderIndependentOnly(mode ingestMode) ingestMode {
+	mode.name += "/order-independent"
+	mode.features = map[string]bool{}
+	for _, n := range append(feature.Defaults(), systemcontracts.Name) {
+		if !feature.IsOrderIndependent(n) {
+			mode.features[n] = false
+		}
+	}
+	return mode
 }
 
 var (
@@ -71,6 +88,10 @@ func startAppAt(t testing.TB, endpoint, dir string, mode ingestMode) *App {
 	cfg.Indexer.AtomicBlock = mode.atomic
 	cfg.Indexer.ProfileSource = !mode.clientSource
 	enableTestChainFeatures(cfg)
+	for name, on := range mode.features {
+		on := on
+		cfg.Features[name] = config.FeatureConfig{Enabled: &on}
+	}
 
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)

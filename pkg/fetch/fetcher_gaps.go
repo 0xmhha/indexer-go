@@ -2,11 +2,14 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/feature"
 )
 
 // ============================================================================
@@ -119,11 +122,40 @@ func (f *Fetcher) FillGap(ctx context.Context, gap GapRange) error {
 	return f.FetchRange(ctx, gap.Start, gap.End)
 }
 
-// FillGaps fills all detected gaps concurrently
+// ErrGapBelowIndexed reports missing blocks below blocks already indexed
+// while order-dependent features are enabled. Filling them now would apply
+// those features out of order (balances, address sequences, latest-state
+// records such as module installs would be wrong, defect D12); the database
+// must be reindexed instead.
+var ErrGapBelowIndexed = errors.New("missing blocks below indexed blocks")
+
+// orderDependentFeatures returns the enabled features whose result depends
+// on processing blocks in order.
+func (f *Fetcher) orderDependentFeatures() []string {
+	if f.features == nil {
+		return nil
+	}
+	var out []string
+	for _, n := range f.features.Features() {
+		if !feature.IsOrderIndependent(n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// FillGaps fills all detected gaps concurrently. Detected gaps lie below the
+// latest indexed block, so they are filled only if every enabled feature is
+// order-independent; otherwise it returns ErrGapBelowIndexed and writes
+// nothing.
 func (f *Fetcher) FillGaps(ctx context.Context, gaps []GapRange) error {
 	if len(gaps) == 0 {
 		f.logger.Info("No gaps to fill")
 		return nil
+	}
+	if names := f.orderDependentFeatures(); len(names) > 0 {
+		return fmt.Errorf("%w: blocks %d-%d (and %d gaps in all) cannot be indexed after later blocks with order-dependent features %v enabled; reindex the database",
+			ErrGapBelowIndexed, gaps[0].Start, gaps[0].End, len(gaps), names)
 	}
 
 	f.logger.Info("Starting gap filling",
@@ -340,6 +372,9 @@ func (f *Fetcher) RunWithGapRecovery(ctx context.Context) error {
 				zap.Int("gap_count", len(gaps)),
 			)
 			if err := f.FillGaps(ctx, gaps); err != nil {
+				if errors.Is(err, ErrGapBelowIndexed) {
+					return err
+				}
 				f.logger.Error("Failed to fill block gaps", zap.Error(err))
 				// Continue anyway - gaps will be retried later
 			}
