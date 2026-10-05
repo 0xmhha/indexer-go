@@ -21,7 +21,10 @@ import (
 // Regenerate with: go test ./cmd/indexer -run TestGolden -update
 var updateGolden = flag.Bool("update", false, "rewrite golden files")
 
-const goldenKeyspace = "testdata/golden/keyspace.txt"
+const (
+	goldenKeyspace          = "testdata/golden/keyspace.txt"
+	goldenKeyspaceStableNet = "testdata/golden/keyspace-stablenet.txt"
+)
 
 // ingestMode selects the fetcher's block read and write paths.
 type ingestMode struct {
@@ -170,6 +173,24 @@ func TestGoldenKeyspace(t *testing.T) {
 		return
 	}
 	want, err := os.ReadFile(goldenKeyspace)
+	require.NoError(t, err, "missing golden file; run with -update")
+	require.Equal(t, string(want), got.String())
+}
+
+// TestGoldenKeyspaceStableNet pins the storage contents of the StableNet
+// scenario (go-stablenet rules: NativeCoinAdapter Transfer logs, base fee
+// distribution, WBFT extra data and epochs, governance events).
+func TestGoldenKeyspaceStableNet(t *testing.T) {
+	entries := dumpDir(t, indexScenario(t, &testchain.BuildStableNet().Scenario))
+
+	var got bytes.Buffer
+	require.NoError(t, testchain.FormatKeyspace(&got, entries))
+
+	if *updateGolden {
+		require.NoError(t, os.WriteFile(goldenKeyspaceStableNet, got.Bytes(), 0o644))
+		return
+	}
+	want, err := os.ReadFile(goldenKeyspaceStableNet)
 	require.NoError(t, err, "missing golden file; run with -update")
 	require.Equal(t, string(want), got.String())
 }
