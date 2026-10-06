@@ -117,7 +117,7 @@ func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *Reorg, f
 		return nil, fmt.Errorf("%w %d (incomplete)", ErrNoUndo, h)
 	}
 
-	txCtx, tx, err := s.BeginBlock(ctx)
+	txCtx, tx, err := s.beginBlock(ctx)
 	if err != nil {
 		return nil, err
 	}

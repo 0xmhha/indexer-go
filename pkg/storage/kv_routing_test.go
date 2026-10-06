@@ -17,7 +17,7 @@ import (
 var directDBAllowed = map[string]bool{
 	"kv":                   true, // routing
 	"newBatch":             true, // routing
-	"BeginBlock":           true, // creates the block transaction batch
+	"beginBlock":           true, // creates the block transaction batch
 	"loadTransactionCount": true, // startup
 	"checkSchema":          true, // startup
 	"isEmpty":              true, // startup

@@ -12,14 +12,8 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
-
-// TxLocation represents the location of a transaction in the blockchain
-type TxLocation struct {
-	BlockHeight uint64
-	TxIndex     uint64
-	BlockHash   common.Hash
-}
 
 // EncodeBlock encodes a block in the model encoding (schema v2).
 func EncodeBlock(block *types.Block) ([]byte, error) {
@@ -333,3 +327,9 @@ func DecodeBigInt(data []byte) *big.Int {
 	}
 	return new(big.Int).SetBytes(data)
 }
+
+// Aliases of the ports moved to pkg/core/port (refactoring plan R1-1);
+// removed once every consumer uses the port package.
+type (
+	TxLocation = port.TxLocation
+)

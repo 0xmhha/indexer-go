@@ -7,6 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 var (
@@ -95,7 +97,7 @@ func TestBlockTxSingleWriter(t *testing.T) {
 	_, first, err := s.BeginBlock(context.Background())
 	require.NoError(t, err)
 
-	acquired := make(chan *BlockTx)
+	acquired := make(chan port.BlockTx)
 	go func() {
 		_, second, err := s.BeginBlock(context.Background())
 		if err != nil {
