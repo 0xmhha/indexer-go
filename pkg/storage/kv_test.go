@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/testutil"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // bindTestBatch binds an indexed batch to ctx the way a block transaction will.
@@ -55,7 +56,7 @@ func TestBoundBatchCapturesWrites(t *testing.T) {
 	}}))
 
 	tokenAddr := common.HexToAddress("0x00000000000000000000000000000000000000BB")
-	require.NoError(t, s.SaveTokenMetadata(ctx, &TokenMetadata{Address: tokenAddr, Standard: TokenStandardERC20, Name: "T"}))
+	require.NoError(t, s.SaveTokenMetadata(ctx, &port.TokenMetadata{Address: tokenAddr, Standard: port.TokenStandardERC20, Name: "T"}))
 
 	// Nothing is committed yet.
 	for _, prefix := range []string{"/data/blocks/", "/data/logs/", "/data/token/metadata/"} {

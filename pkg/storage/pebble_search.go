@@ -7,27 +7,28 @@ import (
 	"strings"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 // Ensure PebbleStorage implements SearchReader
-var _ SearchReader = (*PebbleStorage)(nil)
+var _ port.SearchReader = (*PebbleStorage)(nil)
 
 // Search performs a unified search across blocks, transactions, and addresses
-func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]SearchResult, error) {
+func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]port.SearchResult, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
 
 	if query == "" {
-		return []SearchResult{}, nil
+		return []port.SearchResult{}, nil
 	}
 
 	if limit <= 0 {
 		limit = constants.DefaultPaginationLimit
 	}
 
-	var results []SearchResult
+	var results []port.SearchResult
 	queryType := detectQueryType(query)
 
 	// Create a type filter map for quick lookup
@@ -60,7 +61,7 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 					"transactionCount": len(block.Transactions()),
 					"miner":            block.Coinbase().Hex(),
 				}
-				results = append(results, SearchResult{
+				results = append(results, port.SearchResult{
 					Type:     "block",
 					Value:    fmt.Sprintf("%d", blockNum),
 					Label:    fmt.Sprintf("Block #%d", blockNum),
@@ -82,7 +83,7 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 					"transactionCount": len(block.Transactions()),
 					"miner":            block.Coinbase().Hex(),
 				}
-				results = append(results, SearchResult{
+				results = append(results, port.SearchResult{
 					Type:     "block",
 					Value:    block.Hash().Hex(),
 					Label:    fmt.Sprintf("Block #%d", block.Number().Uint64()),
@@ -119,7 +120,7 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 						metadata["contractAddress"] = receipt.ContractAddress.Hex()
 					}
 				}
-				results = append(results, SearchResult{
+				results = append(results, port.SearchResult{
 					Type:     "transaction",
 					Value:    tx.Hash.Hex(),
 					Label:    fmt.Sprintf("Transaction %s", tx.Hash.Hex()[:10]+"..."),
@@ -148,7 +149,7 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 					metadata["transactionCount"] = len(txHashes)
 				}
 
-				results = append(results, SearchResult{
+				results = append(results, port.SearchResult{
 					Type:     "contract",
 					Value:    addr.Hex(),
 					Label:    fmt.Sprintf("Contract %s", addr.Hex()[:10]+"..."),
@@ -169,7 +170,7 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 				metadata["transactionCount"] = len(txHashes)
 			}
 
-			results = append(results, SearchResult{
+			results = append(results, port.SearchResult{
 				Type:     "address",
 				Value:    addr.Hex(),
 				Label:    fmt.Sprintf("Address %s", addr.Hex()[:10]+"..."),

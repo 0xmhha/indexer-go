@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ============================================================================
@@ -16,7 +17,7 @@ import (
 // ============================================================================
 
 // GetTransaction returns a transaction and its location by hash
-func (s *PebbleStorage) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *TxLocation, error) {
+func (s *PebbleStorage) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, nil, err
 	}
@@ -25,7 +26,7 @@ func (s *PebbleStorage) GetTransaction(ctx context.Context, hash common.Hash) (*
 	locValue, closer, err := s.kv(ctx).Get(TransactionHashIndexKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, nil, ErrNotFound
+			return nil, nil, port.ErrNotFound
 		}
 		return nil, nil, fmt.Errorf("failed to get transaction location: %w", err)
 	}
@@ -40,7 +41,7 @@ func (s *PebbleStorage) GetTransaction(ctx context.Context, hash common.Hash) (*
 	txValue, closer, err := s.kv(ctx).Get(TransactionKey(location.BlockHeight, location.TxIndex))
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, nil, ErrNotFound
+			return nil, nil, port.ErrNotFound
 		}
 		return nil, nil, fmt.Errorf("failed to get transaction: %w", err)
 	}
@@ -55,13 +56,13 @@ func (s *PebbleStorage) GetTransaction(ctx context.Context, hash common.Hash) (*
 }
 
 // GetTransactions returns multiple transactions and their locations by hash (batch operation)
-func (s *PebbleStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*TxLocation, error) {
+func (s *PebbleStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, nil, err
 	}
 
 	txs := make([]*types.Transaction, len(hashes))
-	locations := make([]*TxLocation, len(hashes))
+	locations := make([]*port.TxLocation, len(hashes))
 	var firstError error
 
 	for i, hash := range hashes {
@@ -84,7 +85,7 @@ func (s *PebbleStorage) GetTransactions(ctx context.Context, hashes []common.Has
 }
 
 // SetTransaction stores a transaction with its location
-func (s *PebbleStorage) SetTransaction(ctx context.Context, tx *types.Transaction, location *TxLocation) error {
+func (s *PebbleStorage) SetTransaction(ctx context.Context, tx *types.Transaction, location *port.TxLocation) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}

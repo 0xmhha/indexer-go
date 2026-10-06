@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Key prefixes for different data types
@@ -1052,13 +1054,13 @@ func ModuleAccountIndexKeyPrefix(account common.Address) []byte {
 
 // ModuleTypeIndexKey returns the index key for querying by module type
 // Format: /index/module/type/{moduleType:02x}/{blockNumber:016x}/{account}/{module}
-func ModuleTypeIndexKey(moduleType ModuleType, blockNumber uint64, account, module common.Address) []byte {
+func ModuleTypeIndexKey(moduleType port.ModuleType, blockNumber uint64, account, module common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%02x/%016x/%s/%s", prefixIdxModuleType, uint8(moduleType), blockNumber, account.Hex(), module.Hex()))
 }
 
 // ModuleTypeIndexKeyPrefix returns the prefix for querying by module type
 // Format: /index/module/type/{moduleType:02x}/
-func ModuleTypeIndexKeyPrefix(moduleType ModuleType) []byte {
+func ModuleTypeIndexKeyPrefix(moduleType port.ModuleType) []byte {
 	return []byte(fmt.Sprintf("%s%02x/", prefixIdxModuleType, uint8(moduleType)))
 }
 

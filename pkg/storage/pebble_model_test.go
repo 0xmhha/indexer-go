@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // TestModelStorageKeepsStableNetIdentity stores a block captured from
@@ -74,5 +75,5 @@ func TestModelReceiptValidation(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 	st := s.(*PebbleStorage)
-	require.ErrorIs(t, st.SetModelReceipt(context.Background(), nil), ErrInvalidReceipt)
+	require.ErrorIs(t, st.SetModelReceipt(context.Background(), nil), port.ErrInvalidReceipt)
 }

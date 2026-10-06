@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -229,9 +229,9 @@ func (m *mockStorage) GetAddressBalance(ctx context.Context, addr common.Address
 }
 
 // GetBalanceHistory returns empty history (implements HistoricalReader)
-func (m *mockStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]storage.BalanceSnapshot, error) {
+func (m *mockStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
 	// Return empty history to indicate no previous balance records
-	return []storage.BalanceSnapshot{}, nil
+	return []port.BalanceSnapshot{}, nil
 }
 
 // TestNewFetcher tests creating a new fetcher

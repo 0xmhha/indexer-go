@@ -12,6 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Helper to create a block with a specific miner
@@ -437,22 +439,22 @@ func TestPebbleStorage_Analytics_ClosedStorage(t *testing.T) {
 
 	// All analytics operations should return ErrClosed
 	_, err := storage.GetTopMiners(ctx, 10, 0, 100)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("GetTopMiners() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	_, err = storage.GetTokenBalances(ctx, addr, "")
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("GetTokenBalances() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	_, err = storage.GetGasStatsByBlockRange(ctx, 0, 100)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("GetGasStatsByBlockRange() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	_, err = storage.GetNetworkMetrics(ctx, 1000, 2000)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("GetNetworkMetrics() on closed storage error = %v, want ErrClosed", err)
 	}
 }

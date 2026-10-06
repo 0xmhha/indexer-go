@@ -9,9 +9,9 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // The writer is the single goroutine that changes indexed state. Indexing a
@@ -163,7 +163,7 @@ func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
 		return f.writeCursorOnly(ctx, height)
 	case err == nil:
 		return fmt.Errorf("%w (height %d stored %s fetched %s): %w", ErrBlockConflict, height, storedHash.Hex(), fb.block.Hash.Hex(), &ReorgError{Height: height})
-	case !errors.Is(err, storagepkg.ErrNotFound):
+	case !errors.Is(err, port.ErrNotFound):
 		return fmt.Errorf("check stored block %d: %w", height, err)
 	}
 	if err := f.checkParent(ctx, fb); err != nil {
@@ -234,7 +234,7 @@ func (f *Fetcher) writeCursorOnly(ctx context.Context, height uint64) error {
 // rollbackTo rolls the database back to height `to` on the writer and,
 // once the rollback committed, announces it (publishReorg) before any block
 // of the new branch is indexed.
-func (f *Fetcher) rollbackTo(ctx context.Context, rb rollbackStorage, to uint64) error {
+func (f *Fetcher) rollbackTo(ctx context.Context, rb port.Rollbacker, to uint64) error {
 	return f.write().do(ctx, "rollback", func(ctx context.Context) error {
 		r, err := rb.RollbackTo(ctx, to)
 		if err != nil {

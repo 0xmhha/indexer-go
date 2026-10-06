@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // TestFetcherInterfaceCheck simulates the exact interface check that fetcher.go does
@@ -16,7 +18,7 @@ func TestFetcherInterfaceCheck(t *testing.T) {
 	ctx := context.Background()
 
 	// This is exactly what fetch/fetcher.go does at line 1202
-	histWriter, ok := storageInterface.(HistoricalWriter)
+	histWriter, ok := storageInterface.(port.HistoricalWriter)
 	if !ok {
 		t.Fatal("❌ Interface check failed: storage does not implement HistoricalWriter")
 	}
@@ -70,7 +72,7 @@ func TestStorageInterfaceReturnsHistoricalWriter(t *testing.T) {
 	}
 
 	// Test 2: Check if Storage interface can be cast to HistoricalWriter
-	_, isHistWriter := storageInterface.(HistoricalWriter)
+	_, isHistWriter := storageInterface.(port.HistoricalWriter)
 	if !isHistWriter {
 		t.Error("❌ Storage cannot be cast to HistoricalWriter")
 	} else {
@@ -78,7 +80,7 @@ func TestStorageInterfaceReturnsHistoricalWriter(t *testing.T) {
 	}
 
 	// Test 3: Check if Storage interface can be cast to HistoricalStorage
-	_, isHistStorage := storageInterface.(HistoricalStorage)
+	_, isHistStorage := storageInterface.(port.HistoricalStorage)
 	if !isHistStorage {
 		t.Error("❌ Storage cannot be cast to HistoricalStorage")
 	} else {

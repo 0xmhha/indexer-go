@@ -6,6 +6,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // TestKnownTokenMetadataApplies: a token registered by a chain package
@@ -15,7 +17,7 @@ func TestKnownTokenMetadataApplies(t *testing.T) {
 	RegisterKnownToken(addr, KnownToken{Name: "Coin", Symbol: "CN", Decimals: 18})
 
 	s := newTestPebble(t)
-	tb := &TokenBalance{}
+	tb := &port.TokenBalance{}
 	s.applyTokenMetadata(context.Background(), tb, addr)
 	require.Equal(t, "Coin", tb.Name)
 	require.Equal(t, "CN", tb.Symbol)

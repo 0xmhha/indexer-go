@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -76,7 +77,7 @@ func (s *PebbleStorage) processReceiptTransfers(receipt *types.Receipt, addr com
 }
 
 // applyTokenMetadata applies metadata to a TokenBalance from various sources
-func (s *PebbleStorage) applyTokenMetadata(ctx context.Context, tb *TokenBalance, contract common.Address) {
+func (s *PebbleStorage) applyTokenMetadata(ctx context.Context, tb *port.TokenBalance, contract common.Address) {
 	// Priority: 1) Metadata the chain defines, 2) Database, 3) On-demand fetch from chain
 	if metadata, ok := knownToken(contract); ok {
 		// 1. Token metadata registered by the chain package
@@ -107,7 +108,7 @@ func (s *PebbleStorage) applyTokenMetadata(ctx context.Context, tb *TokenBalance
 }
 
 // fetchAndCacheTokenMetadata fetches token metadata from chain and caches it
-func (s *PebbleStorage) fetchAndCacheTokenMetadata(ctx context.Context, tb *TokenBalance, contract common.Address) {
+func (s *PebbleStorage) fetchAndCacheTokenMetadata(ctx context.Context, tb *port.TokenBalance, contract common.Address) {
 	fetchedMetadata, err := s.tokenMetadataFetcher.FetchTokenMetadata(ctx, contract)
 	if err != nil || fetchedMetadata == nil {
 		return
@@ -139,17 +140,17 @@ func (s *PebbleStorage) fetchAndCacheTokenMetadata(ctx context.Context, tb *Toke
 }
 
 // buildTokenBalanceResult builds the result slice from balance map with filtering
-func (s *PebbleStorage) buildTokenBalanceResult(ctx context.Context, balanceMap map[common.Address]*big.Int, tokenType string) []TokenBalance {
-	result := make([]TokenBalance, 0, len(balanceMap))
+func (s *PebbleStorage) buildTokenBalanceResult(ctx context.Context, balanceMap map[common.Address]*big.Int, tokenType string) []port.TokenBalance {
+	result := make([]port.TokenBalance, 0, len(balanceMap))
 
 	for contract, balance := range balanceMap {
 		if balance.Sign() <= 0 {
 			continue
 		}
 
-		tb := TokenBalance{
+		tb := port.TokenBalance{
 			ContractAddress: contract,
-			TokenType:       string(TokenStandardERC20),
+			TokenType:       string(port.TokenStandardERC20),
 			Balance:         balance,
 			TokenID:         "",
 			Name:            "",
@@ -190,8 +191,8 @@ func determineBlockRange(fromBlock, toBlock, latestHeight uint64) (start, end ui
 }
 
 // aggregateMinerStats scans blocks and aggregates miner statistics
-func (s *PebbleStorage) aggregateMinerStats(ctx context.Context, startBlock, endBlock uint64) (map[common.Address]*MinerStats, uint64) {
-	minerMap := make(map[common.Address]*MinerStats)
+func (s *PebbleStorage) aggregateMinerStats(ctx context.Context, startBlock, endBlock uint64) (map[common.Address]*port.MinerStats, uint64) {
+	minerMap := make(map[common.Address]*port.MinerStats)
 	totalBlocks := uint64(0)
 
 	for height := startBlock; height <= endBlock; height++ {
@@ -218,10 +219,10 @@ func (s *PebbleStorage) aggregateMinerStats(ctx context.Context, startBlock, end
 }
 
 // getOrCreateMinerStats gets or creates a MinerStats entry in the map
-func (s *PebbleStorage) getOrCreateMinerStats(minerMap map[common.Address]*MinerStats, miner common.Address) *MinerStats {
+func (s *PebbleStorage) getOrCreateMinerStats(minerMap map[common.Address]*port.MinerStats, miner common.Address) *port.MinerStats {
 	stats, exists := minerMap[miner]
 	if !exists {
-		stats = &MinerStats{
+		stats = &port.MinerStats{
 			Address:         miner,
 			BlockCount:      0,
 			LastBlockNumber: 0,
@@ -235,7 +236,7 @@ func (s *PebbleStorage) getOrCreateMinerStats(minerMap map[common.Address]*Miner
 }
 
 // addBlockRewardsToStats calculates and adds transaction fees to miner stats
-func (s *PebbleStorage) addBlockRewardsToStats(ctx context.Context, block *types.Block, stats *MinerStats) {
+func (s *PebbleStorage) addBlockRewardsToStats(ctx context.Context, block *types.Block, stats *port.MinerStats) {
 	// Create transaction map for O(1) lookup, under the hashes the chain
 	// reports (the receipts' hashes)
 	mb, err := s.GetModelBlock(ctx, block.NumberU64())
@@ -266,7 +267,7 @@ func (s *PebbleStorage) addBlockRewardsToStats(ctx context.Context, block *types
 }
 
 // calculateMinerPercentages calculates the percentage for each miner
-func calculateMinerPercentages(minerMap map[common.Address]*MinerStats, totalBlocks uint64) {
+func calculateMinerPercentages(minerMap map[common.Address]*port.MinerStats, totalBlocks uint64) {
 	if totalBlocks == 0 {
 		return
 	}
@@ -277,12 +278,12 @@ func calculateMinerPercentages(minerMap map[common.Address]*MinerStats, totalBlo
 }
 
 // sortAndLimitMinerStats converts map to sorted slice and applies limit
-func sortAndLimitMinerStats(minerMap map[common.Address]*MinerStats, limit int) []MinerStats {
+func sortAndLimitMinerStats(minerMap map[common.Address]*port.MinerStats, limit int) []port.MinerStats {
 	if limit <= 0 {
 		limit = constants.DefaultPaginationLimit
 	}
 
-	result := make([]MinerStats, 0, len(minerMap))
+	result := make([]port.MinerStats, 0, len(minerMap))
 	for _, stats := range minerMap {
 		result = append(result, *stats)
 	}

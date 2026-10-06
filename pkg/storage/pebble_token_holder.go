@@ -9,6 +9,8 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // TokenHolderJSON is a JSON-serializable version of TokenHolder
@@ -28,7 +30,7 @@ type TokenHolderStatsJSON struct {
 }
 
 // toJSON converts TokenHolder to JSON-serializable format
-func tokenHolderToJSON(h *TokenHolder) *TokenHolderJSON {
+func tokenHolderToJSON(h *port.TokenHolder) *TokenHolderJSON {
 	balance := "0"
 	if h.Balance != nil {
 		balance = h.Balance.String()
@@ -42,7 +44,7 @@ func tokenHolderToJSON(h *TokenHolder) *TokenHolderJSON {
 }
 
 // fromJSON converts JSON to TokenHolder
-func tokenHolderFromJSON(j *TokenHolderJSON) *TokenHolder {
+func tokenHolderFromJSON(j *TokenHolderJSON) *port.TokenHolder {
 	balance := big.NewInt(0)
 	if j.Balance != "" {
 		parsed, ok := new(big.Int).SetString(j.Balance, 10)
@@ -50,7 +52,7 @@ func tokenHolderFromJSON(j *TokenHolderJSON) *TokenHolder {
 			balance = parsed
 		}
 	}
-	return &TokenHolder{
+	return &port.TokenHolder{
 		TokenAddress:  common.HexToAddress(j.TokenAddress),
 		HolderAddress: common.HexToAddress(j.HolderAddress),
 		Balance:       balance,
@@ -59,7 +61,7 @@ func tokenHolderFromJSON(j *TokenHolderJSON) *TokenHolder {
 }
 
 // toJSON converts TokenHolderStats to JSON-serializable format
-func tokenHolderStatsToJSON(s *TokenHolderStats) *TokenHolderStatsJSON {
+func tokenHolderStatsToJSON(s *port.TokenHolderStats) *TokenHolderStatsJSON {
 	return &TokenHolderStatsJSON{
 		TokenAddress:   s.TokenAddress.Hex(),
 		HolderCount:    s.HolderCount,
@@ -69,8 +71,8 @@ func tokenHolderStatsToJSON(s *TokenHolderStats) *TokenHolderStatsJSON {
 }
 
 // fromJSON converts JSON to TokenHolderStats
-func tokenHolderStatsFromJSON(j *TokenHolderStatsJSON) *TokenHolderStats {
-	return &TokenHolderStats{
+func tokenHolderStatsFromJSON(j *TokenHolderStatsJSON) *port.TokenHolderStats {
+	return &port.TokenHolderStats{
 		TokenAddress:   common.HexToAddress(j.TokenAddress),
 		HolderCount:    j.HolderCount,
 		TransferCount:  j.TransferCount,
@@ -79,7 +81,7 @@ func tokenHolderStatsFromJSON(j *TokenHolderStatsJSON) *TokenHolderStats {
 }
 
 // GetTokenHolders retrieves token holders sorted by balance (descending) with pagination
-func (s *PebbleStorage) GetTokenHolders(ctx context.Context, token common.Address, limit, offset int) ([]*TokenHolder, error) {
+func (s *PebbleStorage) GetTokenHolders(ctx context.Context, token common.Address, limit, offset int) ([]*port.TokenHolder, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -94,7 +96,7 @@ func (s *PebbleStorage) GetTokenHolders(ctx context.Context, token common.Addres
 	}
 	defer iter.Close()
 
-	var holders []*TokenHolder
+	var holders []*port.TokenHolder
 	skipped := 0
 
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -184,7 +186,7 @@ func (s *PebbleStorage) GetTokenBalance(ctx context.Context, token, holder commo
 }
 
 // GetTokenHolderStats retrieves aggregate statistics for a token
-func (s *PebbleStorage) GetTokenHolderStats(ctx context.Context, token common.Address) (*TokenHolderStats, error) {
+func (s *PebbleStorage) GetTokenHolderStats(ctx context.Context, token common.Address) (*port.TokenHolderStats, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -193,7 +195,7 @@ func (s *PebbleStorage) GetTokenHolderStats(ctx context.Context, token common.Ad
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get token holder stats: %w", err)
 	}
@@ -208,7 +210,7 @@ func (s *PebbleStorage) GetTokenHolderStats(ctx context.Context, token common.Ad
 }
 
 // GetHolderTokens retrieves all tokens held by a specific address with pagination
-func (s *PebbleStorage) GetHolderTokens(ctx context.Context, holder common.Address, limit, offset int) ([]*TokenHolder, error) {
+func (s *PebbleStorage) GetHolderTokens(ctx context.Context, holder common.Address, limit, offset int) ([]*port.TokenHolder, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -223,7 +225,7 @@ func (s *PebbleStorage) GetHolderTokens(ctx context.Context, holder common.Addre
 	}
 	defer iter.Close()
 
-	var holders []*TokenHolder
+	var holders []*port.TokenHolder
 	skipped := 0
 
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -264,7 +266,7 @@ func (s *PebbleStorage) GetHolderTokens(ctx context.Context, holder common.Addre
 }
 
 // UpdateTokenHolder updates the balance for a token holder
-func (s *PebbleStorage) UpdateTokenHolder(ctx context.Context, holder *TokenHolder) error {
+func (s *PebbleStorage) UpdateTokenHolder(ctx context.Context, holder *port.TokenHolder) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}
@@ -346,7 +348,7 @@ func (s *PebbleStorage) UpdateTokenHolder(ctx context.Context, holder *TokenHold
 }
 
 // UpdateTokenHolderStats updates the statistics for a token
-func (s *PebbleStorage) UpdateTokenHolderStats(ctx context.Context, stats *TokenHolderStats) error {
+func (s *PebbleStorage) UpdateTokenHolderStats(ctx context.Context, stats *port.TokenHolderStats) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}
@@ -369,7 +371,7 @@ func (s *PebbleStorage) UpdateTokenHolderStats(ctx context.Context, stats *Token
 }
 
 // ProcessERC20TransferForHolders processes an ERC20 transfer event and updates holder balances
-func (s *PebbleStorage) ProcessERC20TransferForHolders(ctx context.Context, transfer *ERC20Transfer) error {
+func (s *PebbleStorage) ProcessERC20TransferForHolders(ctx context.Context, transfer *port.ERC20Transfer) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}
@@ -382,7 +384,7 @@ func (s *PebbleStorage) ProcessERC20TransferForHolders(ctx context.Context, tran
 		fromHolder, err := s.getTokenHolder(ctx, transfer.ContractAddress, transfer.From)
 		if err != nil {
 			// New holder with zero balance being subtracted - create with zero
-			fromHolder = &TokenHolder{
+			fromHolder = &port.TokenHolder{
 				TokenAddress:  transfer.ContractAddress,
 				HolderAddress: transfer.From,
 				Balance:       big.NewInt(0),
@@ -408,7 +410,7 @@ func (s *PebbleStorage) ProcessERC20TransferForHolders(ctx context.Context, tran
 		toHolder, err := s.getTokenHolder(ctx, transfer.ContractAddress, transfer.To)
 		if err != nil {
 			// New holder
-			toHolder = &TokenHolder{
+			toHolder = &port.TokenHolder{
 				TokenAddress:  transfer.ContractAddress,
 				HolderAddress: transfer.To,
 				Balance:       big.NewInt(0),
@@ -428,7 +430,7 @@ func (s *PebbleStorage) ProcessERC20TransferForHolders(ctx context.Context, tran
 	// Update transfer count in stats
 	stats, err := s.GetTokenHolderStats(ctx, transfer.ContractAddress)
 	if err != nil {
-		stats = &TokenHolderStats{
+		stats = &port.TokenHolderStats{
 			TokenAddress:   transfer.ContractAddress,
 			HolderCount:    0,
 			TransferCount:  0,
@@ -446,12 +448,12 @@ func (s *PebbleStorage) ProcessERC20TransferForHolders(ctx context.Context, tran
 }
 
 // getTokenHolder retrieves a single token holder record
-func (s *PebbleStorage) getTokenHolder(ctx context.Context, token, holder common.Address) (*TokenHolder, error) {
+func (s *PebbleStorage) getTokenHolder(ctx context.Context, token, holder common.Address) (*port.TokenHolder, error) {
 	key := TokenHolderKey(token, holder)
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get token holder: %w", err)
 	}
@@ -471,7 +473,7 @@ func (s *PebbleStorage) updateHolderCountInBatch(ctx context.Context, batch *peb
 	key := TokenHolderStatsKey(token)
 	value, closer, err := s.kv(ctx).Get(key)
 
-	var stats *TokenHolderStats
+	var stats *port.TokenHolderStats
 	if err == nil {
 		defer closer.Close()
 		var jsonData TokenHolderStatsJSON
@@ -481,7 +483,7 @@ func (s *PebbleStorage) updateHolderCountInBatch(ctx context.Context, batch *peb
 	}
 
 	if stats == nil {
-		stats = &TokenHolderStats{
+		stats = &port.TokenHolderStats{
 			TokenAddress:   token,
 			HolderCount:    0,
 			TransferCount:  0,

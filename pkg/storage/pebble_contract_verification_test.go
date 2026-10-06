@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 func TestPebbleStorage_SetGetContractVerification(t *testing.T) {
@@ -16,7 +18,7 @@ func TestPebbleStorage_SetGetContractVerification(t *testing.T) {
 	ctx := context.Background()
 
 	contractAddr := common.HexToAddress("0x1111111111111111111111111111111111111111")
-	verification := &ContractVerification{
+	verification := &port.ContractVerification{
 		Address:              contractAddr,
 		IsVerified:           true,
 		Name:                 "TestContract",
@@ -66,7 +68,7 @@ func TestPebbleStorage_GetContractVerification_NotFound(t *testing.T) {
 	nonExistentAddr := common.HexToAddress("0x9999999999999999999999999999999999999999")
 
 	_, err := storage.GetContractVerification(ctx, nonExistentAddr)
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Errorf("GetContractVerification() error = %v, want ErrNotFound", err)
 	}
 }
@@ -90,7 +92,7 @@ func TestPebbleStorage_IsContractVerified(t *testing.T) {
 	}
 
 	// Set verification
-	verification := &ContractVerification{
+	verification := &port.ContractVerification{
 		Address:         contractAddr,
 		IsVerified:      true,
 		Name:            "TestContract",
@@ -128,7 +130,7 @@ func TestPebbleStorage_ListVerifiedContracts(t *testing.T) {
 	}
 
 	for i, addr := range contracts {
-		verification := &ContractVerification{
+		verification := &port.ContractVerification{
 			Address:         addr,
 			IsVerified:      true,
 			Name:            "TestContract",
@@ -214,7 +216,7 @@ func TestPebbleStorage_CountVerifiedContracts(t *testing.T) {
 	}
 
 	for _, addr := range contracts {
-		verification := &ContractVerification{
+		verification := &port.ContractVerification{
 			Address:         addr,
 			IsVerified:      true,
 			Name:            "TestContract",
@@ -248,7 +250,7 @@ func TestPebbleStorage_DeleteContractVerification(t *testing.T) {
 	contractAddr := common.HexToAddress("0x4444444444444444444444444444444444444444")
 
 	// Set verification
-	verification := &ContractVerification{
+	verification := &port.ContractVerification{
 		Address:         contractAddr,
 		IsVerified:      true,
 		Name:            "TestContract",
@@ -287,7 +289,7 @@ func TestPebbleStorage_DeleteContractVerification(t *testing.T) {
 
 	// Getting should return ErrNotFound
 	_, err = storage.GetContractVerification(ctx, contractAddr)
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Errorf("GetContractVerification() error = %v, want ErrNotFound", err)
 	}
 }
@@ -305,32 +307,32 @@ func TestPebbleStorage_ContractVerification_ClosedStorage(t *testing.T) {
 
 	// All operations should return ErrClosed
 	_, err := storage.GetContractVerification(ctx, addr)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("GetContractVerification() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	_, err = storage.IsContractVerified(ctx, addr)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("IsContractVerified() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	_, err = storage.ListVerifiedContracts(ctx, 10, 0)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("ListVerifiedContracts() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	_, err = storage.CountVerifiedContracts(ctx)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("CountVerifiedContracts() on closed storage error = %v, want ErrClosed", err)
 	}
 
-	err = storage.SetContractVerification(ctx, &ContractVerification{Address: addr})
-	if err != ErrClosed {
+	err = storage.SetContractVerification(ctx, &port.ContractVerification{Address: addr})
+	if err != port.ErrClosed {
 		t.Errorf("SetContractVerification() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	err = storage.DeleteContractVerification(ctx, addr)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("DeleteContractVerification() on closed storage error = %v, want ErrClosed", err)
 	}
 }

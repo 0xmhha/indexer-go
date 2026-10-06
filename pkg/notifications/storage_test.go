@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// mockKVStore implements storage.KVStore for testing
+// mockKVStore implements port.KVStore for testing
 type mockKVStore struct {
 	data map[string][]byte
 }

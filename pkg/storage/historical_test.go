@@ -8,30 +8,32 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // TestTransactionFilter_Validate tests filter validation
 func TestTransactionFilter_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
-		filter  *TransactionFilter
+		filter  *port.TransactionFilter
 		wantErr bool
 	}{
 		{
 			name: "valid filter",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock:   0,
 				ToBlock:     1000,
 				MinValue:    big.NewInt(0),
 				MaxValue:    big.NewInt(1000),
-				TxType:      TxTypeAll,
+				TxType:      port.TxTypeAll,
 				SuccessOnly: false,
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid block range",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 1000,
 				ToBlock:   0,
 			},
@@ -39,7 +41,7 @@ func TestTransactionFilter_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid value range",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   1000,
 				MinValue:  big.NewInt(1000),
@@ -49,7 +51,7 @@ func TestTransactionFilter_Validate(t *testing.T) {
 		},
 		{
 			name: "negative min value",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   1000,
 				MinValue:  big.NewInt(-1),
@@ -58,7 +60,7 @@ func TestTransactionFilter_Validate(t *testing.T) {
 		},
 		{
 			name: "negative max value",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   1000,
 				MaxValue:  big.NewInt(-1),
@@ -79,7 +81,7 @@ func TestTransactionFilter_Validate(t *testing.T) {
 
 // TestDefaultTransactionFilter tests default filter
 func TestDefaultTransactionFilter(t *testing.T) {
-	filter := DefaultTransactionFilter()
+	filter := port.DefaultTransactionFilter()
 
 	if filter.FromBlock != 0 {
 		t.Errorf("FromBlock = %d, want 0", filter.FromBlock)
@@ -89,7 +91,7 @@ func TestDefaultTransactionFilter(t *testing.T) {
 		t.Errorf("ToBlock = %d, want max uint64", filter.ToBlock)
 	}
 
-	if filter.TxType != TxTypeAll {
+	if filter.TxType != port.TxTypeAll {
 		t.Errorf("TxType = %v, want TxTypeAll", filter.TxType)
 	}
 
@@ -106,11 +108,11 @@ func TestDefaultTransactionFilter(t *testing.T) {
 func TestBalanceSnapshot_EncodeDecode(t *testing.T) {
 	tests := []struct {
 		name     string
-		snapshot *BalanceSnapshot
+		snapshot *port.BalanceSnapshot
 	}{
 		{
 			name: "positive balance and delta",
-			snapshot: &BalanceSnapshot{
+			snapshot: &port.BalanceSnapshot{
 				BlockNumber: 1000,
 				Balance:     big.NewInt(123456789),
 				Delta:       big.NewInt(1000),
@@ -119,7 +121,7 @@ func TestBalanceSnapshot_EncodeDecode(t *testing.T) {
 		},
 		{
 			name: "negative delta",
-			snapshot: &BalanceSnapshot{
+			snapshot: &port.BalanceSnapshot{
 				BlockNumber: 2000,
 				Balance:     big.NewInt(999999),
 				Delta:       big.NewInt(-5000),
@@ -128,7 +130,7 @@ func TestBalanceSnapshot_EncodeDecode(t *testing.T) {
 		},
 		{
 			name: "zero balance",
-			snapshot: &BalanceSnapshot{
+			snapshot: &port.BalanceSnapshot{
 				BlockNumber: 3000,
 				Balance:     big.NewInt(0),
 				Delta:       big.NewInt(0),
@@ -137,7 +139,7 @@ func TestBalanceSnapshot_EncodeDecode(t *testing.T) {
 		},
 		{
 			name: "large balance",
-			snapshot: &BalanceSnapshot{
+			snapshot: &port.BalanceSnapshot{
 				BlockNumber: 4000,
 				Balance:     new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), // 1 ETH in wei
 				Delta:       new(big.Int).Exp(big.NewInt(10), big.NewInt(17), nil), // 0.1 ETH
@@ -331,7 +333,7 @@ func TestGetBlockByTimestamp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			block, err := storage.GetBlockByTimestamp(ctx, tt.timestamp)
 			if tt.expectNotFound {
-				if err != ErrNotFound {
+				if err != port.ErrNotFound {
 					t.Errorf("GetBlockByTimestamp() error = %v, want ErrNotFound", err)
 				}
 				return
@@ -531,238 +533,238 @@ func TestMatchTransaction(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		filter     *TransactionFilter
+		filter     *port.TransactionFilter
 		tx         *types.Transaction
 		receipt    *types.Receipt
-		location   *TxLocation
+		location   *port.TxLocation
 		targetAddr common.Address
 		wantMatch  bool
 	}{
 		{
 			name: "match all - sent transaction",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeAll,
+				TxType:    port.TxTypeAll,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  true,
 		},
 		{
 			name: "match all - received transaction",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeAll,
+				TxType:    port.TxTypeAll,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: toAddr,
 			wantMatch:  true,
 		},
 		{
 			name: "block range - below",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 100,
 				ToBlock:   200,
-				TxType:    TxTypeAll,
+				TxType:    port.TxTypeAll,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  false,
 		},
 		{
 			name: "block range - above",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeAll,
+				TxType:    port.TxTypeAll,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 150},
+			location:   &port.TxLocation{BlockHeight: 150},
 			targetAddr: fromAddr,
 			wantMatch:  false,
 		},
 		{
 			name: "sent type - from sender",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeSent,
+				TxType:    port.TxTypeSent,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  true,
 		},
 		{
 			name: "sent type - from receiver",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeSent,
+				TxType:    port.TxTypeSent,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: toAddr,
 			wantMatch:  false,
 		},
 		{
 			name: "received type - from receiver",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeReceived,
+				TxType:    port.TxTypeReceived,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: toAddr,
 			wantMatch:  true,
 		},
 		{
 			name: "received type - from sender",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeReceived,
+				TxType:    port.TxTypeReceived,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  false,
 		},
 		{
 			name: "min value - above",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeAll,
+				TxType:    port.TxTypeAll,
 				MinValue:  big.NewInt(500),
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  true,
 		},
 		{
 			name: "min value - below",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeAll,
+				TxType:    port.TxTypeAll,
 				MinValue:  big.NewInt(2000),
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  false,
 		},
 		{
 			name: "max value - below",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeAll,
+				TxType:    port.TxTypeAll,
 				MaxValue:  big.NewInt(2000),
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  true,
 		},
 		{
 			name: "max value - above",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeAll,
+				TxType:    port.TxTypeAll,
 				MaxValue:  big.NewInt(500),
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  false,
 		},
 		{
 			name: "success only - success",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock:   0,
 				ToBlock:     100,
-				TxType:      TxTypeAll,
+				TxType:      port.TxTypeAll,
 				SuccessOnly: true,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  true,
 		},
 		{
 			name: "success only - failed",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock:   0,
 				ToBlock:     100,
-				TxType:      TxTypeAll,
+				TxType:      port.TxTypeAll,
 				SuccessOnly: true,
 			},
 			tx:         sentTx,
 			receipt:    failedReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  false,
 		},
 		{
 			name: "success only - nil receipt",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock:   0,
 				ToBlock:     100,
-				TxType:      TxTypeAll,
+				TxType:      port.TxTypeAll,
 				SuccessOnly: true,
 			},
 			tx:         sentTx,
 			receipt:    nil,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  false,
 		},
 		{
 			name: "contract creation - received type",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeReceived,
+				TxType:    port.TxTypeReceived,
 			},
 			tx:         contractTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: fromAddr,
 			wantMatch:  false,
 		},
 		{
 			name: "all type - unrelated address",
-			filter: &TransactionFilter{
+			filter: &port.TransactionFilter{
 				FromBlock: 0,
 				ToBlock:   100,
-				TxType:    TxTypeAll,
+				TxType:    port.TxTypeAll,
 			},
 			tx:         sentTx,
 			receipt:    successReceipt,
-			location:   &TxLocation{BlockHeight: 50},
+			location:   &port.TxLocation{BlockHeight: 50},
 			targetAddr: common.HexToAddress("0x3333333333333333333333333333333333333333"),
 			wantMatch:  false,
 		},

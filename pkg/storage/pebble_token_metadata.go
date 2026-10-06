@@ -11,6 +11,8 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // TokenMetadataJSON is a JSON-serializable version of TokenMetadata
@@ -31,7 +33,7 @@ type TokenMetadataJSON struct {
 }
 
 // toJSON converts TokenMetadata to JSON-serializable format
-func tokenMetadataToJSON(m *TokenMetadata) *TokenMetadataJSON {
+func tokenMetadataToJSON(m *port.TokenMetadata) *TokenMetadataJSON {
 	var totalSupply string
 	if m.TotalSupply != nil {
 		totalSupply = m.TotalSupply.String()
@@ -55,16 +57,16 @@ func tokenMetadataToJSON(m *TokenMetadata) *TokenMetadataJSON {
 }
 
 // fromJSON converts JSON-serializable format to TokenMetadata
-func tokenMetadataFromJSON(j *TokenMetadataJSON) *TokenMetadata {
+func tokenMetadataFromJSON(j *TokenMetadataJSON) *port.TokenMetadata {
 	var totalSupply *big.Int
 	if j.TotalSupply != "" {
 		totalSupply = new(big.Int)
 		totalSupply.SetString(j.TotalSupply, 10)
 	}
 
-	return &TokenMetadata{
+	return &port.TokenMetadata{
 		Address:            common.HexToAddress(j.Address),
-		Standard:           TokenStandard(j.Standard),
+		Standard:           port.TokenStandard(j.Standard),
 		Name:               j.Name,
 		Symbol:             j.Symbol,
 		Decimals:           j.Decimals,
@@ -80,7 +82,7 @@ func tokenMetadataFromJSON(j *TokenMetadataJSON) *TokenMetadata {
 }
 
 // GetTokenMetadata retrieves token metadata by contract address
-func (s *PebbleStorage) GetTokenMetadata(ctx context.Context, address common.Address) (*TokenMetadata, error) {
+func (s *PebbleStorage) GetTokenMetadata(ctx context.Context, address common.Address) (*port.TokenMetadata, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -89,7 +91,7 @@ func (s *PebbleStorage) GetTokenMetadata(ctx context.Context, address common.Add
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get token metadata: %w", err)
 	}
@@ -104,7 +106,7 @@ func (s *PebbleStorage) GetTokenMetadata(ctx context.Context, address common.Add
 }
 
 // SaveTokenMetadata saves or updates token metadata
-func (s *PebbleStorage) SaveTokenMetadata(ctx context.Context, metadata *TokenMetadata) error {
+func (s *PebbleStorage) SaveTokenMetadata(ctx context.Context, metadata *port.TokenMetadata) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}
@@ -184,7 +186,7 @@ func (s *PebbleStorage) DeleteTokenMetadata(ctx context.Context, address common.
 	// Get existing metadata to delete indexes
 	metadata, err := s.GetTokenMetadata(ctx, address)
 	if err != nil {
-		if err == ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil // Already deleted
 		}
 		return err
@@ -225,13 +227,13 @@ func (s *PebbleStorage) DeleteTokenMetadata(ctx context.Context, address common.
 }
 
 // ListTokensByStandard retrieves tokens filtered by standard with pagination
-func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard TokenStandard, limit, offset int) ([]*TokenMetadata, error) {
+func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
 
 	var prefix []byte
-	if standard != "" && standard != TokenStandardUnknown {
+	if standard != "" && standard != port.TokenStandardUnknown {
 		// Use standard index
 		prefix = TokenStandardIndexKeyPrefix(string(standard))
 	} else {
@@ -248,7 +250,7 @@ func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard Token
 	}
 	defer iter.Close()
 
-	var tokens []*TokenMetadata
+	var tokens []*port.TokenMetadata
 	skipped := 0
 
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -264,7 +266,7 @@ func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard Token
 		}
 
 		var address common.Address
-		if standard != "" && standard != TokenStandardUnknown {
+		if standard != "" && standard != port.TokenStandardUnknown {
 			// Extract address from index key
 			keyStr := string(iter.Key())
 			parts := strings.Split(keyStr, "/")
@@ -297,13 +299,13 @@ func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard Token
 }
 
 // GetTokensCount returns the count of tokens, optionally filtered by standard
-func (s *PebbleStorage) GetTokensCount(ctx context.Context, standard TokenStandard) (int, error) {
+func (s *PebbleStorage) GetTokensCount(ctx context.Context, standard port.TokenStandard) (int, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return 0, err
 	}
 
 	var prefix []byte
-	if standard != "" && standard != TokenStandardUnknown {
+	if standard != "" && standard != port.TokenStandardUnknown {
 		prefix = TokenStandardIndexKeyPrefix(string(standard))
 	} else {
 		prefix = TokenMetadataKeyPrefix()
@@ -331,7 +333,7 @@ func (s *PebbleStorage) GetTokensCount(ctx context.Context, standard TokenStanda
 }
 
 // SearchTokens searches for tokens by name or symbol (case-insensitive partial match)
-func (s *PebbleStorage) SearchTokens(ctx context.Context, query string, limit int) ([]*TokenMetadata, error) {
+func (s *PebbleStorage) SearchTokens(ctx context.Context, query string, limit int) ([]*port.TokenMetadata, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -342,7 +344,7 @@ func (s *PebbleStorage) SearchTokens(ctx context.Context, query string, limit in
 
 	query = strings.ToLower(query)
 	addressSet := make(map[common.Address]bool)
-	var tokens []*TokenMetadata
+	var tokens []*port.TokenMetadata
 
 	// Search by name prefix
 	namePrefix := TokenNameIndexKeyPrefix(query)

@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/source"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/types/chain"
 )
 
@@ -186,7 +186,7 @@ type Fetcher struct {
 
 
 	// txr opens per-block storage transactions (nil if the storage cannot).
-	txr storagepkg.BlockTransactor
+	txr port.BlockTransactor
 	// pendingEvents buffers events while a block transaction is open.
 	pendingEvents *[]events.Event
 	// beforeCommitHook is a fault-injection point for tests.
@@ -219,7 +219,7 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 
 	// Blocks are indexed in one storage transaction each; a storage without
 	// block transactions cannot index (indexBlock fails).
-	txr, _ := storage.(storagepkg.BlockTransactor)
+	txr, _ := storage.(port.BlockTransactor)
 
 	return &Fetcher{
 		client:              client,

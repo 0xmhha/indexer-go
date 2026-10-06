@@ -11,32 +11,33 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Compile-time check to ensure PebbleStorage implements AddressIndexReader and AddressIndexWriter
-var _ AddressIndexReader = (*PebbleStorage)(nil)
-var _ AddressIndexWriter = (*PebbleStorage)(nil)
+var _ port.AddressIndexReader = (*PebbleStorage)(nil)
+var _ port.AddressIndexWriter = (*PebbleStorage)(nil)
 
 // ========== Contract Creation Implementation ==========
 
 // GetContractCreation retrieves contract creation information by contract address.
 // Returns ErrNotFound if the contract was not created or not indexed.
-func (s *PebbleStorage) GetContractCreation(ctx context.Context, contractAddress common.Address) (*ContractCreation, error) {
+func (s *PebbleStorage) GetContractCreation(ctx context.Context, contractAddress common.Address) (*port.ContractCreation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := ContractCreationKey(contractAddress)
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get contract creation: %w", err)
 	}
 	defer closer.Close()
 
-	var creation ContractCreation
+	var creation port.ContractCreation
 	if err := json.Unmarshal(value, &creation); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal contract creation: %w", err)
 	}
@@ -48,7 +49,7 @@ func (s *PebbleStorage) GetContractCreation(ctx context.Context, contractAddress
 // Returns empty slice if no contracts found.
 func (s *PebbleStorage) GetContractsByCreator(ctx context.Context, creator common.Address, limit, offset int) ([]common.Address, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	// Validate pagination parameters
@@ -107,9 +108,9 @@ func (s *PebbleStorage) GetContractsByCreator(ctx context.Context, creator commo
 
 // SaveContractCreation saves contract creation information.
 // Returns error if storage operation fails.
-func (s *PebbleStorage) SaveContractCreation(ctx context.Context, creation *ContractCreation) error {
+func (s *PebbleStorage) SaveContractCreation(ctx context.Context, creation *port.ContractCreation) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	if creation == nil {
@@ -164,9 +165,9 @@ func (s *PebbleStorage) SaveContractCreation(ctx context.Context, creation *Cont
 
 // ListContracts retrieves all deployed contracts with pagination.
 // Returns contracts sorted by deployment block number (descending - newest first).
-func (s *PebbleStorage) ListContracts(ctx context.Context, limit, offset int) ([]*ContractCreation, error) {
+func (s *PebbleStorage) ListContracts(ctx context.Context, limit, offset int) ([]*port.ContractCreation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	// Validate pagination parameters
@@ -210,7 +211,7 @@ func (s *PebbleStorage) ListContracts(ctx context.Context, limit, offset int) ([
 	// Apply pagination
 	start := offset
 	if start >= len(contractAddrs) {
-		return []*ContractCreation{}, nil
+		return []*port.ContractCreation{}, nil
 	}
 	end := start + limit
 	if end > len(contractAddrs) {
@@ -220,7 +221,7 @@ func (s *PebbleStorage) ListContracts(ctx context.Context, limit, offset int) ([
 	paginatedAddrs := contractAddrs[start:end]
 
 	// Fetch full contract creation info for each address
-	contracts := make([]*ContractCreation, 0, len(paginatedAddrs))
+	contracts := make([]*port.ContractCreation, 0, len(paginatedAddrs))
 	for _, addr := range paginatedAddrs {
 		creation, err := s.GetContractCreation(ctx, addr)
 		if err != nil {
@@ -238,7 +239,7 @@ func (s *PebbleStorage) ListContracts(ctx context.Context, limit, offset int) ([
 // GetContractsCount returns the total number of deployed contracts.
 func (s *PebbleStorage) GetContractsCount(ctx context.Context) (int, error) {
 	if s.closed.Load() {
-		return 0, ErrClosed
+		return 0, port.ErrClosed
 	}
 
 	prefix := []byte(prefixContractCreation)
@@ -268,22 +269,22 @@ func (s *PebbleStorage) GetContractsCount(ctx context.Context) (int, error) {
 
 // GetERC20Transfer retrieves a specific ERC20 transfer by transaction hash and log index.
 // Returns ErrNotFound if the transfer does not exist.
-func (s *PebbleStorage) GetERC20Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*ERC20Transfer, error) {
+func (s *PebbleStorage) GetERC20Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*port.ERC20Transfer, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := ERC20TransferKey(txHash, logIndex)
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get ERC20 transfer: %w", err)
 	}
 	defer closer.Close()
 
-	var transfer ERC20Transfer
+	var transfer port.ERC20Transfer
 	if err := json.Unmarshal(value, &transfer); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ERC20 transfer: %w", err)
 	}
@@ -292,9 +293,9 @@ func (s *PebbleStorage) GetERC20Transfer(ctx context.Context, txHash common.Hash
 }
 
 // GetERC20TransfersByToken retrieves ERC20 transfers for a specific token contract with pagination.
-func (s *PebbleStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*ERC20Transfer, error) {
+func (s *PebbleStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC20Transfer, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	// Validate pagination parameters
@@ -319,7 +320,7 @@ func (s *PebbleStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddre
 	}
 	defer iter.Close()
 
-	transfers := make([]*ERC20Transfer, 0, limit)
+	transfers := make([]*port.ERC20Transfer, 0, limit)
 	count := 0
 	skipped := 0
 
@@ -376,9 +377,9 @@ func (s *PebbleStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddre
 // GetERC20TransfersByAddress retrieves ERC20 transfers involving a specific address.
 // If isFrom is true, returns transfers where address is the sender.
 // If isFrom is false, returns transfers where address is the recipient.
-func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*ERC20Transfer, error) {
+func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC20Transfer, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	// Validate pagination parameters
@@ -408,7 +409,7 @@ func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address 
 	}
 	defer iter.Close()
 
-	transfers := make([]*ERC20Transfer, 0, limit)
+	transfers := make([]*port.ERC20Transfer, 0, limit)
 	count := 0
 	skipped := 0
 
@@ -461,9 +462,9 @@ func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address 
 
 // SaveERC20Transfer saves an ERC20 token transfer.
 // Returns error if storage operation fails.
-func (s *PebbleStorage) SaveERC20Transfer(ctx context.Context, transfer *ERC20Transfer) error {
+func (s *PebbleStorage) SaveERC20Transfer(ctx context.Context, transfer *port.ERC20Transfer) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	if transfer == nil {
@@ -526,22 +527,22 @@ func (s *PebbleStorage) SaveERC20Transfer(ctx context.Context, transfer *ERC20Tr
 
 // GetERC721Transfer retrieves a specific ERC721 transfer by transaction hash and log index.
 // Returns ErrNotFound if the transfer does not exist.
-func (s *PebbleStorage) GetERC721Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*ERC721Transfer, error) {
+func (s *PebbleStorage) GetERC721Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*port.ERC721Transfer, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := ERC721TransferKey(txHash, logIndex)
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get ERC721 transfer: %w", err)
 	}
 	defer closer.Close()
 
-	var transfer ERC721Transfer
+	var transfer port.ERC721Transfer
 	if err := json.Unmarshal(value, &transfer); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ERC721 transfer: %w", err)
 	}
@@ -550,9 +551,9 @@ func (s *PebbleStorage) GetERC721Transfer(ctx context.Context, txHash common.Has
 }
 
 // GetERC721TransfersByToken retrieves ERC721 transfers for a specific token contract with pagination.
-func (s *PebbleStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*ERC721Transfer, error) {
+func (s *PebbleStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC721Transfer, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	// Validate pagination parameters
@@ -577,7 +578,7 @@ func (s *PebbleStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddr
 	}
 	defer iter.Close()
 
-	transfers := make([]*ERC721Transfer, 0, limit)
+	transfers := make([]*port.ERC721Transfer, 0, limit)
 	count := 0
 	skipped := 0
 
@@ -631,9 +632,9 @@ func (s *PebbleStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddr
 // GetERC721TransfersByAddress retrieves ERC721 transfers involving a specific address.
 // If isFrom is true, returns transfers where address is the sender.
 // If isFrom is false, returns transfers where address is the recipient.
-func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*ERC721Transfer, error) {
+func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC721Transfer, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	// Validate pagination parameters
@@ -663,7 +664,7 @@ func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address
 	}
 	defer iter.Close()
 
-	transfers := make([]*ERC721Transfer, 0, limit)
+	transfers := make([]*port.ERC721Transfer, 0, limit)
 	count := 0
 	skipped := 0
 
@@ -718,7 +719,7 @@ func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address
 // Returns ErrNotFound if the token has not been transferred or does not exist.
 func (s *PebbleStorage) GetERC721Owner(ctx context.Context, tokenAddress common.Address, tokenId *big.Int) (common.Address, error) {
 	if s.closed.Load() {
-		return common.Address{}, ErrClosed
+		return common.Address{}, port.ErrClosed
 	}
 
 	if tokenId == nil {
@@ -729,7 +730,7 @@ func (s *PebbleStorage) GetERC721Owner(ctx context.Context, tokenAddress common.
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return common.Address{}, ErrNotFound
+			return common.Address{}, port.ErrNotFound
 		}
 		return common.Address{}, fmt.Errorf("failed to get ERC721 owner: %w", err)
 	}
@@ -741,9 +742,9 @@ func (s *PebbleStorage) GetERC721Owner(ctx context.Context, tokenAddress common.
 
 // GetNFTsByOwner retrieves all NFTs owned by a specific address with pagination.
 // Returns empty slice if no NFTs found.
-func (s *PebbleStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*NFTOwnership, error) {
+func (s *PebbleStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*port.NFTOwnership, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	// Validate pagination parameters
@@ -768,7 +769,7 @@ func (s *PebbleStorage) GetNFTsByOwner(ctx context.Context, owner common.Address
 	}
 	defer iter.Close()
 
-	nfts := make([]*NFTOwnership, 0, limit)
+	nfts := make([]*port.NFTOwnership, 0, limit)
 	count := 0
 	skipped := 0
 
@@ -804,7 +805,7 @@ func (s *PebbleStorage) GetNFTsByOwner(ctx context.Context, owner common.Address
 			continue
 		}
 
-		nfts = append(nfts, &NFTOwnership{
+		nfts = append(nfts, &port.NFTOwnership{
 			ContractAddress: contractAddress,
 			TokenId:         tokenId,
 			Owner:           owner,
@@ -840,9 +841,9 @@ func splitNFTKey(remaining string) []string {
 // SaveERC721Transfer saves an ERC721 NFT transfer.
 // Also updates the current owner index for the token.
 // Returns error if storage operation fails.
-func (s *PebbleStorage) SaveERC721Transfer(ctx context.Context, transfer *ERC721Transfer) error {
+func (s *PebbleStorage) SaveERC721Transfer(ctx context.Context, transfer *port.ERC721Transfer) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	if transfer == nil {
@@ -933,9 +934,9 @@ func (s *PebbleStorage) SaveERC721Transfer(ctx context.Context, transfer *ERC721
 
 // GetInternalTransactions retrieves all internal transactions for a given transaction hash.
 // Returns empty slice if no internal transactions found or tracing is disabled.
-func (s *PebbleStorage) GetInternalTransactions(ctx context.Context, txHash common.Hash) ([]*InternalTransaction, error) {
+func (s *PebbleStorage) GetInternalTransactions(ctx context.Context, txHash common.Hash) ([]*port.InternalTransaction, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	prefix := InternalTransactionKeyPrefix(txHash)
@@ -949,7 +950,7 @@ func (s *PebbleStorage) GetInternalTransactions(ctx context.Context, txHash comm
 	}
 	defer iter.Close()
 
-	internals := make([]*InternalTransaction, 0, 16)
+	internals := make([]*port.InternalTransaction, 0, 16)
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		value := iter.Value()
@@ -957,7 +958,7 @@ func (s *PebbleStorage) GetInternalTransactions(ctx context.Context, txHash comm
 			continue
 		}
 
-		var internal InternalTransaction
+		var internal port.InternalTransaction
 		if err := json.Unmarshal(value, &internal); err != nil {
 			s.logger.Warn("Failed to unmarshal internal transaction", zap.String("txHash", txHash.Hex()), zap.Error(err))
 			continue
@@ -976,9 +977,9 @@ func (s *PebbleStorage) GetInternalTransactions(ctx context.Context, txHash comm
 // GetInternalTransactionsByAddress retrieves internal transactions involving a specific address.
 // If isFrom is true, returns transactions where address is the caller.
 // If isFrom is false, returns transactions where address is the callee.
-func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*InternalTransaction, error) {
+func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.InternalTransaction, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	// Validate pagination parameters
@@ -1008,7 +1009,7 @@ func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, ad
 	}
 	defer iter.Close()
 
-	internals := make([]*InternalTransaction, 0, limit)
+	internals := make([]*port.InternalTransaction, 0, limit)
 	count := 0
 	skipped := 0
 	seenTxs := make(map[common.Hash]bool)
@@ -1077,9 +1078,9 @@ func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, ad
 // SaveInternalTransactions saves all internal transactions for a given transaction hash.
 // The internals slice must be ordered by execution order (index field).
 // Returns error if storage operation fails.
-func (s *PebbleStorage) SaveInternalTransactions(ctx context.Context, txHash common.Hash, internals []*InternalTransaction) error {
+func (s *PebbleStorage) SaveInternalTransactions(ctx context.Context, txHash common.Hash, internals []*port.InternalTransaction) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	if txHash == (common.Hash{}) {

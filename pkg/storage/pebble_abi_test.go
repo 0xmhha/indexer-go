@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 func TestPebbleStorage_SetABI(t *testing.T) {
@@ -79,7 +81,7 @@ func TestPebbleStorage_GetABI_NotFound(t *testing.T) {
 
 	// Get non-existent ABI
 	_, err := storage.GetABI(ctx, addr)
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Errorf("GetABI() error = %v, want ErrNotFound", err)
 	}
 }
@@ -166,7 +168,7 @@ func TestPebbleStorage_DeleteABI(t *testing.T) {
 
 	// GetABI should return ErrNotFound
 	_, err = storage.GetABI(ctx, addr)
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Errorf("GetABI() after deletion error = %v, want ErrNotFound", err)
 	}
 }
@@ -409,13 +411,13 @@ func TestPebbleStorage_ABI_ReadOnly(t *testing.T) {
 	// Should not be able to write
 	newABI := []byte(`[{"name":"new","type":"function"}]`)
 	err = roStorage.SetABI(ctx, addr, newABI)
-	if err != ErrReadOnly {
+	if err != port.ErrReadOnly {
 		t.Errorf("SetABI() on read-only storage error = %v, want ErrReadOnly", err)
 	}
 
 	// Should not be able to delete
 	err = roStorage.DeleteABI(ctx, addr)
-	if err != ErrReadOnly {
+	if err != port.ErrReadOnly {
 		t.Errorf("DeleteABI() on read-only storage error = %v, want ErrReadOnly", err)
 	}
 }
@@ -433,27 +435,27 @@ func TestPebbleStorage_ABI_ClosedStorage(t *testing.T) {
 
 	// All operations should return ErrClosed
 	err := storage.SetABI(ctx, addr, abiJSON)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("SetABI() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	_, err = storage.GetABI(ctx, addr)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("GetABI() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	_, err = storage.HasABI(ctx, addr)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("HasABI() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	_, err = storage.ListABIs(ctx)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("ListABIs() on closed storage error = %v, want ErrClosed", err)
 	}
 
 	err = storage.DeleteABI(ctx, addr)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("DeleteABI() on closed storage error = %v, want ErrClosed", err)
 	}
 }

@@ -9,12 +9,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // SetCodeIndexer defines the interface for indexing EIP-7702 SetCode transactions
 type SetCodeIndexer interface {
-	storagepkg.SetCodeIndexWriter
+	port.SetCodeIndexWriter
 }
 
 // SetCodeProcessor handles processing of EIP-7702 SetCode transactions
@@ -79,7 +79,7 @@ func (p *SetCodeProcessor) ProcessSetCodeTransactionAt(
 		zap.Bool("txSuccess", txSuccess))
 
 	// Extract and process each authorization
-	records := make([]*storagepkg.SetCodeAuthorizationRecord, 0, len(authList))
+	records := make([]*port.SetCodeAuthorizationRecord, 0, len(authList))
 
 	for i, auth := range authList {
 		record := p.extractAuthorizationRecord(
@@ -111,7 +111,7 @@ func (p *SetCodeProcessor) ProcessSetCodeTransactionAt(
 
 		// Update delegation state if authorization was applied successfully
 		if record.Applied {
-			state := &storagepkg.AddressDelegationState{
+			state := &port.AddressDelegationState{
 				Address:           record.AuthorityAddress,
 				LastUpdatedBlock:  blockNumber,
 				LastUpdatedTxHash: txHash,
@@ -162,8 +162,8 @@ func (p *SetCodeProcessor) extractAuthorizationRecord(
 	authIndex int,
 	blockTime time.Time,
 	txSuccess bool,
-) *storagepkg.SetCodeAuthorizationRecord {
-	record := &storagepkg.SetCodeAuthorizationRecord{
+) *port.SetCodeAuthorizationRecord {
+	record := &port.SetCodeAuthorizationRecord{
 		TxHash:        txHash,
 		BlockNumber:   blockNumber,
 		BlockHash:     blockHash,
@@ -187,7 +187,7 @@ func (p *SetCodeProcessor) extractAuthorizationRecord(
 			zap.Error(err))
 		record.AuthorityAddress = common.Address{}
 		record.Applied = false
-		record.Error = storagepkg.SetCodeErrRecoveryFailed
+		record.Error = port.SetCodeErrRecoveryFailed
 	} else {
 		record.AuthorityAddress = authority
 
@@ -219,12 +219,12 @@ func (p *SetCodeProcessor) validateAuthorization(
 
 	// Check for nonce overflow (2^64-1 is max)
 	if auth.Nonce == ^uint64(0) {
-		return storagepkg.SetCodeErrNonceOverflow
+		return port.SetCodeErrNonceOverflow
 	}
 
 	// Check signature components are valid (non-zero R and S)
 	if auth.R.IsZero() || auth.S.IsZero() {
-		return storagepkg.SetCodeErrInvalidSignature
+		return port.SetCodeErrInvalidSignature
 	}
 
 	// If the transaction failed, we can't determine the exact error
@@ -234,7 +234,7 @@ func (p *SetCodeProcessor) validateAuthorization(
 		return ""
 	}
 
-	return storagepkg.SetCodeErrNone
+	return port.SetCodeErrNone
 }
 
 // ProcessSetCodeTransactionBatch processes multiple SetCode transactions in a batch
@@ -269,7 +269,7 @@ func ExtractSetCodeAuthorizationsFromTx(
 	blockHash common.Hash,
 	txIndex uint64,
 	blockTime time.Time,
-) []*storagepkg.SetCodeAuthorizationRecord {
+) []*port.SetCodeAuthorizationRecord {
 	if tx.Type() != types.SetCodeTxType {
 		return nil
 	}
@@ -280,10 +280,10 @@ func ExtractSetCodeAuthorizationsFromTx(
 	}
 
 	txHash := tx.Hash()
-	records := make([]*storagepkg.SetCodeAuthorizationRecord, 0, len(authList))
+	records := make([]*port.SetCodeAuthorizationRecord, 0, len(authList))
 
 	for i, auth := range authList {
-		record := &storagepkg.SetCodeAuthorizationRecord{
+		record := &port.SetCodeAuthorizationRecord{
 			TxHash:        txHash,
 			BlockNumber:   blockNumber,
 			BlockHash:     blockHash,
@@ -384,7 +384,7 @@ type SetCodeTxStats struct {
 }
 
 // CalculateSetCodeTxStats calculates statistics from a list of authorization records
-func CalculateSetCodeTxStats(records []*storagepkg.SetCodeAuthorizationRecord) SetCodeTxStats {
+func CalculateSetCodeTxStats(records []*port.SetCodeAuthorizationRecord) SetCodeTxStats {
 	stats := SetCodeTxStats{}
 	if len(records) == 0 {
 		return stats

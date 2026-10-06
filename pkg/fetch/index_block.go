@@ -7,8 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // ErrBlockConflict is returned when a block at an already indexed height has
@@ -40,7 +40,7 @@ func (f *Fetcher) publish(ev events.Event) bool {
 // storedBlockHash returns the hash of the block stored at height, as the
 // chain reports it when the storage keeps the model.
 func (f *Fetcher) storedBlockHash(ctx context.Context, height uint64) (common.Hash, error) {
-	if mr, ok := f.storage.(storagepkg.ModelReader); ok {
+	if mr, ok := f.storage.(port.ModelReader); ok {
 		b, err := mr.GetModelBlock(ctx, height)
 		if err != nil {
 			return common.Hash{}, err
@@ -84,7 +84,7 @@ func (f *Fetcher) applyBlock(ctx context.Context, fb *fetchedBlock) error {
 // storeBlock stores the block and its transactions, as the model when the
 // storage supports it so they are kept under the hashes the chain reports.
 func (f *Fetcher) storeBlock(ctx context.Context, fb *fetchedBlock) error {
-	if mw, ok := f.storage.(storagepkg.ModelWriter); ok {
+	if mw, ok := f.storage.(port.ModelWriter); ok {
 		return mw.SetModelBlock(ctx, fb.block)
 	}
 	return f.storage.SetBlock(ctx, fb.geth)
@@ -101,7 +101,7 @@ func (f *Fetcher) blockEvent(fb *fetchedBlock) *events.BlockEvent {
 // stored one. Gap recovery therefore never moves the cursor backwards.
 func (f *Fetcher) advanceCursor(ctx context.Context, height uint64) error {
 	current, err := f.storage.GetLatestHeight(ctx)
-	if err != nil && !errors.Is(err, storagepkg.ErrNotFound) {
+	if err != nil && !errors.Is(err, port.ErrNotFound) {
 		return fmt.Errorf("read latest height: %w", err)
 	}
 	if err == nil && current >= height {

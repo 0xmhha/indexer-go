@@ -10,26 +10,27 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/userop"
 )
 
 // Compile-time check to ensure PebbleStorage implements UserOp interfaces
-var _ UserOpIndexReader = (*PebbleStorage)(nil)
-var _ UserOpIndexWriter = (*PebbleStorage)(nil)
+var _ port.UserOpIndexReader = (*PebbleStorage)(nil)
+var _ port.UserOpIndexWriter = (*PebbleStorage)(nil)
 
 // ========== UserOp Read Operations ==========
 
 // GetUserOp retrieves a specific UserOperation by its hash.
 func (s *PebbleStorage) GetUserOp(ctx context.Context, opHash common.Hash) (*userop.UserOperation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := UserOpKey(opHash)
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get userop: %w", err)
 	}
@@ -46,7 +47,7 @@ func (s *PebbleStorage) GetUserOp(ctx context.Context, opHash common.Hash) (*use
 // GetUserOpsByTx retrieves all UserOperations in a transaction.
 func (s *PebbleStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	prefix := UserOpTxIndexKeyPrefix(txHash)
@@ -56,7 +57,7 @@ func (s *PebbleStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) 
 // GetUserOpsBySender retrieves UserOperations sent by a specific address.
 func (s *PebbleStorage) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
@@ -67,7 +68,7 @@ func (s *PebbleStorage) GetUserOpsBySender(ctx context.Context, sender common.Ad
 // GetUserOpsByBundler retrieves UserOperations bundled by a specific address.
 func (s *PebbleStorage) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
@@ -78,7 +79,7 @@ func (s *PebbleStorage) GetUserOpsByBundler(ctx context.Context, bundler common.
 // GetUserOpsByBlock retrieves all UserOperations in a specific block.
 func (s *PebbleStorage) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	prefix := UserOpBlockIndexKeyPrefix(blockNumber)
@@ -88,7 +89,7 @@ func (s *PebbleStorage) GetUserOpsByBlock(ctx context.Context, blockNumber uint6
 // GetUserOpsByPaymaster retrieves UserOperations sponsored by a specific paymaster.
 func (s *PebbleStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
@@ -99,7 +100,7 @@ func (s *PebbleStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster com
 // GetUserOpsByFactory retrieves UserOperations that deployed accounts via a specific factory.
 func (s *PebbleStorage) GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
@@ -110,7 +111,7 @@ func (s *PebbleStorage) GetUserOpsByFactory(ctx context.Context, factory common.
 // GetBundlerStats retrieves statistics for a bundler address.
 func (s *PebbleStorage) GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := BundlerStatsKey(bundler)
@@ -134,7 +135,7 @@ func (s *PebbleStorage) GetBundlerStats(ctx context.Context, bundler common.Addr
 // GetFactoryStats retrieves statistics for a factory address.
 func (s *PebbleStorage) GetFactoryStats(ctx context.Context, factory common.Address) (*userop.FactoryStats, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := FactoryStatsKey(factory)
@@ -158,7 +159,7 @@ func (s *PebbleStorage) GetFactoryStats(ctx context.Context, factory common.Addr
 // GetPaymasterStats retrieves statistics for a paymaster address.
 func (s *PebbleStorage) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*userop.PaymasterStats, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := PaymasterStatsKey(paymaster)
@@ -182,14 +183,14 @@ func (s *PebbleStorage) GetPaymasterStats(ctx context.Context, paymaster common.
 // GetSmartAccount retrieves a smart account by address.
 func (s *PebbleStorage) GetSmartAccount(ctx context.Context, address common.Address) (*userop.SmartAccount, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := SmartAccountKey(address)
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get smart account: %w", err)
 	}
@@ -206,7 +207,7 @@ func (s *PebbleStorage) GetSmartAccount(ctx context.Context, address common.Addr
 // GetRecentUserOps retrieves the most recent UserOperations.
 func (s *PebbleStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*userop.UserOperation, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	if limit <= 0 {
@@ -257,7 +258,7 @@ func (s *PebbleStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*use
 // GetUserOpCount returns the total count of UserOperations indexed.
 func (s *PebbleStorage) GetUserOpCount(ctx context.Context) (int, error) {
 	if s.closed.Load() {
-		return 0, ErrClosed
+		return 0, port.ErrClosed
 	}
 
 	prefix := UserOpKeyPrefix()
@@ -286,7 +287,7 @@ func (s *PebbleStorage) GetUserOpCount(ctx context.Context) (int, error) {
 // ListBundlers retrieves bundler stats with pagination.
 func (s *PebbleStorage) ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
@@ -333,7 +334,7 @@ func (s *PebbleStorage) ListBundlers(ctx context.Context, limit, offset int) ([]
 // ListFactories retrieves factory stats with pagination.
 func (s *PebbleStorage) ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
@@ -379,7 +380,7 @@ func (s *PebbleStorage) ListFactories(ctx context.Context, limit, offset int) ([
 // ListPaymasters retrieves paymaster stats with pagination.
 func (s *PebbleStorage) ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
@@ -425,7 +426,7 @@ func (s *PebbleStorage) ListPaymasters(ctx context.Context, limit, offset int) (
 // ListSmartAccounts retrieves smart accounts with pagination.
 func (s *PebbleStorage) ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	limit, offset = normalizePagination(limit, offset)
@@ -473,7 +474,7 @@ func (s *PebbleStorage) ListSmartAccounts(ctx context.Context, limit, offset int
 // SaveUserOp saves a UserOperation record.
 func (s *PebbleStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	data, err := json.Marshal(op)
@@ -550,7 +551,7 @@ func (s *PebbleStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation
 // SaveUserOps saves multiple UserOperation records in a batch.
 func (s *PebbleStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOperation) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	if len(ops) == 0 {
@@ -629,7 +630,7 @@ func (s *PebbleStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOpera
 // UpdateBundlerStats updates statistics for a bundler address.
 func (s *PebbleStorage) UpdateBundlerStats(ctx context.Context, stats *userop.BundlerStats) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	data, err := json.Marshal(stats)
@@ -653,7 +654,7 @@ func (s *PebbleStorage) UpdateBundlerStats(ctx context.Context, stats *userop.Bu
 // UpdateFactoryStats updates statistics for a factory address.
 func (s *PebbleStorage) UpdateFactoryStats(ctx context.Context, stats *userop.FactoryStats) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	data, err := json.Marshal(stats)
@@ -676,7 +677,7 @@ func (s *PebbleStorage) UpdateFactoryStats(ctx context.Context, stats *userop.Fa
 // UpdatePaymasterStats updates statistics for a paymaster address.
 func (s *PebbleStorage) UpdatePaymasterStats(ctx context.Context, stats *userop.PaymasterStats) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	data, err := json.Marshal(stats)
@@ -699,7 +700,7 @@ func (s *PebbleStorage) UpdatePaymasterStats(ctx context.Context, stats *userop.
 // SaveSmartAccount saves or updates a smart account record.
 func (s *PebbleStorage) SaveSmartAccount(ctx context.Context, account *userop.SmartAccount) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	data, err := json.Marshal(account)

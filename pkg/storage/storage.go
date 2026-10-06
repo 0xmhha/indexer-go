@@ -10,28 +10,28 @@ import (
 // Storage combines Reader and Writer interfaces
 // Follows Dependency Inversion Principle - depend on abstraction
 type Storage interface {
-	Reader
-	Writer
-	LogReader
-	LogWriter
-	ABIReader
-	ABIWriter
-	SearchReader
-	ContractVerificationReader
-	ContractVerificationWriter
-	FeeDelegationReader
-	FeeDelegationWriter
-	HistoricalReader
-	HistoricalWriter
-	TokenMetadataReader
-	TokenMetadataWriter
-	SetCodeIndexReader
-	SetCodeIndexWriter
-	UserOpIndexReader
-	UserOpIndexWriter
+	port.Reader
+	port.Writer
+	port.LogReader
+	port.LogWriter
+	port.ABIReader
+	port.ABIWriter
+	port.SearchReader
+	port.ContractVerificationReader
+	port.ContractVerificationWriter
+	port.FeeDelegationReader
+	port.FeeDelegationWriter
+	port.HistoricalReader
+	port.HistoricalWriter
+	port.TokenMetadataReader
+	port.TokenMetadataWriter
+	port.SetCodeIndexReader
+	port.SetCodeIndexWriter
+	port.UserOpIndexReader
+	port.UserOpIndexWriter
 
 	// SetTokenMetadataFetcher sets the fetcher for on-demand token metadata lookups
-	SetTokenMetadataFetcher(fetcher TokenMetadataFetcher)
+	SetTokenMetadataFetcher(fetcher port.TokenMetadataFetcher)
 
 	// Close closes the storage and releases resources
 	Close() error
@@ -45,7 +45,7 @@ type Storage interface {
 
 // Batch provides atomic batch write operations
 type Batch interface {
-	Writer
+	port.Writer
 
 	// Commit writes all batched operations atomically
 	Commit() error
@@ -134,28 +134,3 @@ type Stats struct {
 	// CompactionCount is the number of compactions performed
 	CompactionCount uint64
 }
-
-// Aliases of the ports moved to pkg/core/port (refactoring plan R1-1);
-// removed once every consumer uses the port package.
-type (
-	Reader    = port.Reader
-	Writer    = port.Writer
-	KVStore   = port.KVStore
-	KV        = port.KV
-	Cursor    = port.Cursor
-	LogFilter = port.LogFilter
-	LogReader = port.LogReader
-	LogWriter = port.LogWriter
-	ABIReader = port.ABIReader
-	ABIWriter = port.ABIWriter
-)
-
-var (
-	ErrNotFound       = port.ErrNotFound
-	ErrInvalidKey     = port.ErrInvalidKey
-	ErrInvalidData    = port.ErrInvalidData
-	ErrClosed         = port.ErrClosed
-	ErrBatchTooLarge  = port.ErrBatchTooLarge
-	ErrReadOnly       = port.ErrReadOnly
-	ErrInvalidReceipt = port.ErrInvalidReceipt
-)

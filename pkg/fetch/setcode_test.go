@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 func TestNewSetCodeProcessor(t *testing.T) {
@@ -112,7 +112,7 @@ func TestCalculateSetCodeTxStats_Empty(t *testing.T) {
 		t.Error("expected zero stats for nil records")
 	}
 
-	stats = CalculateSetCodeTxStats([]*storagepkg.SetCodeAuthorizationRecord{})
+	stats = CalculateSetCodeTxStats([]*port.SetCodeAuthorizationRecord{})
 	if stats.TotalTransactions != 0 {
 		t.Error("expected zero stats for empty records")
 	}
@@ -126,7 +126,7 @@ func TestCalculateSetCodeTxStats_WithRecords(t *testing.T) {
 	auth1 := common.HexToAddress("0x333")
 	auth2 := common.HexToAddress("0x444")
 
-	records := []*storagepkg.SetCodeAuthorizationRecord{
+	records := []*port.SetCodeAuthorizationRecord{
 		{TxHash: txHash1, TargetAddress: target1, AuthorityAddress: auth1, Applied: true},
 		{TxHash: txHash1, TargetAddress: target2, AuthorityAddress: auth2, Applied: true},
 		{TxHash: txHash2, TargetAddress: target1, AuthorityAddress: auth1, Applied: false},
@@ -155,7 +155,7 @@ func TestCalculateSetCodeTxStats_WithRecords(t *testing.T) {
 }
 
 func TestCalculateSetCodeTxStats_ZeroAuthority(t *testing.T) {
-	records := []*storagepkg.SetCodeAuthorizationRecord{
+	records := []*port.SetCodeAuthorizationRecord{
 		{
 			TxHash:           common.HexToHash("0xaaa"),
 			TargetAddress:    common.HexToAddress("0x111"),

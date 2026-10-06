@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // indexOrphanTestChain stores blocks 0..n, each with one transaction whose
@@ -61,7 +62,7 @@ func TestRollbackArchivesOrphans(t *testing.T) {
 	require.Equal(t, uint64(2), r.ForkNumber)
 	require.Equal(t, blocks[2].Hash, r.ForkHash)
 	require.Equal(t, uint64(5), r.OldHead)
-	require.Equal(t, []BlockRef{{Number: 5, Hash: blocks[5].Hash}, {Number: 4, Hash: blocks[4].Hash}, {Number: 3, Hash: blocks[3].Hash}}, r.Removed)
+	require.Equal(t, []port.BlockRef{{Number: 5, Hash: blocks[5].Hash}, {Number: 4, Hash: blocks[4].Hash}, {Number: 3, Hash: blocks[3].Hash}}, r.Removed)
 	require.Len(t, r.Blocks, 3)
 
 	latest, err := s.GetLatestHeight(ctx)
@@ -69,7 +70,7 @@ func TestRollbackArchivesOrphans(t *testing.T) {
 	require.Equal(t, uint64(2), latest)
 	for h := uint64(3); h <= 5; h++ {
 		_, err := s.GetModelBlock(ctx, h)
-		require.ErrorIs(t, err, ErrNotFound, "block %d left the canonical index", h)
+		require.ErrorIs(t, err, port.ErrNotFound, "block %d left the canonical index", h)
 
 		ob, err := s.GetOrphanedBlock(ctx, blocks[h].Hash)
 		require.NoError(t, err)
@@ -124,7 +125,7 @@ func TestRollbackArchivesOrphans(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, r.Removed, got.Removed)
 	_, err = s.GetReorg(ctx, 3)
-	require.ErrorIs(t, err, ErrNotFound)
+	require.ErrorIs(t, err, port.ErrNotFound)
 }
 
 // TestRollbackArchivesAtomically makes archiving fail in the middle of a
@@ -201,7 +202,7 @@ func TestOrphanRetentionPrunesOldReorgs(t *testing.T) {
 	rollback(3) // removes a5 again; record 1 is pruned
 
 	_, err := s.GetReorg(ctx, 1)
-	require.ErrorIs(t, err, ErrNotFound)
+	require.ErrorIs(t, err, port.ErrNotFound)
 	ob, err := s.GetOrphanedBlock(ctx, a5.Hash)
 	require.NoError(t, err, "a5 was archived again by record 3")
 	require.Equal(t, uint64(3), ob.ReorgSeq)
@@ -214,7 +215,7 @@ func TestOrphanRetentionPrunesOldReorgs(t *testing.T) {
 	rollback(4) // removes c5; record 2 and b5 are pruned
 
 	_, err = s.GetOrphanedBlock(ctx, b5.Hash)
-	require.ErrorIs(t, err, ErrNotFound)
+	require.ErrorIs(t, err, port.ErrNotFound)
 	byTx, err = s.GetOrphanedTransaction(ctx, b5.Transactions[0].Hash)
 	require.NoError(t, err)
 	require.Empty(t, byTx)

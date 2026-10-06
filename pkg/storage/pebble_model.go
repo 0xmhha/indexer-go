@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	_ ModelReader = (*PebbleStorage)(nil)
-	_ ModelWriter = (*PebbleStorage)(nil)
+	_ port.ModelReader = (*PebbleStorage)(nil)
+	_ port.ModelWriter = (*PebbleStorage)(nil)
 )
 
 // SetModelBlock implements ModelWriter.
@@ -41,7 +41,7 @@ func (s *PebbleStorage) SetModelBlock(ctx context.Context, b *model.Block) error
 		return fmt.Errorf("failed to set block hash index: %w", err)
 	}
 	for i, tx := range b.Transactions {
-		loc := &TxLocation{BlockHeight: b.Number, TxIndex: uint64(i), BlockHash: b.Hash}
+		loc := &port.TxLocation{BlockHeight: b.Number, TxIndex: uint64(i), BlockHash: b.Hash}
 		if err := s.setModelTransaction(ctx, tx, loc); err != nil {
 			return fmt.Errorf("failed to store transaction %d in block %d: %w", i, b.Number, err)
 		}
@@ -50,7 +50,7 @@ func (s *PebbleStorage) SetModelBlock(ctx context.Context, b *model.Block) error
 }
 
 // setModelTransaction stores a transaction, its hash index and the count.
-func (s *PebbleStorage) setModelTransaction(ctx context.Context, tx *model.Transaction, loc *TxLocation) error {
+func (s *PebbleStorage) setModelTransaction(ctx context.Context, tx *model.Transaction, loc *port.TxLocation) error {
 	encoded, err := model.EncodeTransaction(tx)
 	if err != nil {
 		return fmt.Errorf("failed to encode transaction: %w", err)
@@ -103,13 +103,13 @@ func (s *PebbleStorage) SetModelReceipt(ctx context.Context, r *model.Receipt) e
 func validateModelReceipt(r *model.Receipt) error {
 	switch {
 	case r == nil:
-		return fmt.Errorf("%w: receipt cannot be nil", ErrInvalidReceipt)
+		return fmt.Errorf("%w: receipt cannot be nil", port.ErrInvalidReceipt)
 	case r.TxHash == common.Hash{}:
-		return fmt.Errorf("%w: transaction hash is not set", ErrInvalidReceipt)
+		return fmt.Errorf("%w: transaction hash is not set", port.ErrInvalidReceipt)
 	case r.Status > 1:
-		return fmt.Errorf("%w: invalid status %d (expected 0 or 1)", ErrInvalidReceipt, r.Status)
+		return fmt.Errorf("%w: invalid status %d (expected 0 or 1)", port.ErrInvalidReceipt, r.Status)
 	case r.CumulativeGasUsed < r.GasUsed:
-		return fmt.Errorf("%w: cumulative gas used (%d) is less than gas used (%d)", ErrInvalidReceipt, r.CumulativeGasUsed, r.GasUsed)
+		return fmt.Errorf("%w: cumulative gas used (%d) is less than gas used (%d)", port.ErrInvalidReceipt, r.CumulativeGasUsed, r.GasUsed)
 	}
 	return nil
 }
@@ -119,7 +119,7 @@ func (s *PebbleStorage) get(ctx context.Context, key []byte, what string) ([]byt
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get %s: %w", what, err)
 	}
@@ -160,7 +160,7 @@ func (s *PebbleStorage) GetModelBlockByHash(ctx context.Context, hash common.Has
 }
 
 // GetModelTransaction implements ModelReader.
-func (s *PebbleStorage) GetModelTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *TxLocation, error) {
+func (s *PebbleStorage) GetModelTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *port.TxLocation, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, nil, err
 	}
@@ -227,7 +227,7 @@ func (s *PebbleStorage) GetModelBlocks(ctx context.Context, start, end uint64) (
 	blocks := make([]*model.Block, 0, end-start+1)
 	for h := start; h <= end; h++ {
 		b, err := s.GetModelBlock(ctx, h)
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			continue
 		}
 		if err != nil {
@@ -242,14 +242,14 @@ func (s *PebbleStorage) GetModelBlocks(ctx context.Context, start, end uint64) (
 // ModelReader that converts r's go-ethereum values. The conversion cannot
 // restore chain-specific data, so it is only for readers that never held
 // it (test doubles, other backends).
-func AsModelReader(r Reader) ModelReader {
-	if mr, ok := r.(ModelReader); ok {
+func AsModelReader(r port.Reader) port.ModelReader {
+	if mr, ok := r.(port.ModelReader); ok {
 		return mr
 	}
 	return gethModelReader{r}
 }
 
-type gethModelReader struct{ r Reader }
+type gethModelReader struct{ r port.Reader }
 
 func (g gethModelReader) GetModelBlock(ctx context.Context, height uint64) (*model.Block, error) {
 	b, err := g.r.GetBlock(ctx, height)
@@ -286,7 +286,7 @@ func (g gethModelReader) GetModelBlocks(ctx context.Context, start, end uint64) 
 	return out, nil
 }
 
-func (g gethModelReader) GetModelTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *TxLocation, error) {
+func (g gethModelReader) GetModelTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *port.TxLocation, error) {
 	tx, loc, err := g.r.GetTransaction(ctx, hash)
 	if err != nil {
 		return nil, nil, err
@@ -308,10 +308,3 @@ func (g gethModelReader) GetModelReceipt(ctx context.Context, hash common.Hash) 
 	}
 	return gethconv.ReceiptFromGeth(r), nil
 }
-
-// Aliases of the ports moved to pkg/core/port (refactoring plan R1-1);
-// removed once every consumer uses the port package.
-type (
-	ModelReader = port.ModelReader
-	ModelWriter = port.ModelWriter
-)

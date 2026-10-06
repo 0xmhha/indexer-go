@@ -8,6 +8,8 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Ensure pebbleBatch implements Batch interface
@@ -30,7 +32,7 @@ func (b *pebbleBatch) SetLatestHeight(ctx context.Context, height uint64) error 
 	defer b.mu.Unlock()
 
 	if b.closed {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	value := EncodeUint64(height)
@@ -47,7 +49,7 @@ func (b *pebbleBatch) SetBlock(ctx context.Context, block *types.Block) error {
 	defer b.mu.Unlock()
 
 	if b.closed {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	encoded, err := EncodeBlock(block)
@@ -73,7 +75,7 @@ func (b *pebbleBatch) SetBlock(ctx context.Context, block *types.Block) error {
 	// Store all transactions in the block
 	transactions := block.Transactions()
 	for txIndex, tx := range transactions {
-		location := &TxLocation{
+		location := &port.TxLocation{
 			BlockHeight: height,
 			TxIndex:     uint64(txIndex),
 			BlockHash:   block.Hash(),
@@ -91,12 +93,12 @@ func (b *pebbleBatch) SetBlock(ctx context.Context, block *types.Block) error {
 }
 
 // SetTransaction adds set transaction operation to batch
-func (b *pebbleBatch) SetTransaction(ctx context.Context, tx *types.Transaction, location *TxLocation) error {
+func (b *pebbleBatch) SetTransaction(ctx context.Context, tx *types.Transaction, location *port.TxLocation) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	if b.closed {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	encoded, err := EncodeTransaction(tx)
@@ -126,7 +128,7 @@ func (b *pebbleBatch) SetReceipt(ctx context.Context, receipt *types.Receipt) er
 	defer b.mu.Unlock()
 
 	if b.closed {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	// Validate receipt before adding to batch
@@ -170,7 +172,7 @@ func (b *pebbleBatch) AddTransactionToAddressIndex(ctx context.Context, addr com
 	defer b.mu.Unlock()
 
 	if b.closed {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	seq, err := b.storage.nextAddrSeq(b.ctx, seqAddrTx, addr)
@@ -202,7 +204,7 @@ func (b *pebbleBatch) DeleteBlock(ctx context.Context, height uint64) error {
 	defer b.mu.Unlock()
 
 	if b.closed {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	// Get block to find its hash (need to unlock to call storage method)
@@ -211,7 +213,7 @@ func (b *pebbleBatch) DeleteBlock(ctx context.Context, height uint64) error {
 	b.mu.Lock()
 
 	if err != nil {
-		if err == ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil // Already deleted
 		}
 		return fmt.Errorf("failed to get block for deletion: %w", err)
@@ -237,7 +239,7 @@ func (b *pebbleBatch) Commit() error {
 	defer b.mu.Unlock()
 
 	if b.closed {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	// Update transaction count using atomic counter for performance

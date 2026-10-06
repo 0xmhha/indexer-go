@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // TestLegacyReadsFindFeeDelegationTxs stores live StableNet block 33 (a
@@ -40,7 +41,7 @@ func TestLegacyReadsFindFeeDelegationTxs(t *testing.T) {
 	fdTx := b.Transactions[1]
 	fd, ok := stablenet.FeeDelegationOf(fdTx)
 	require.True(t, ok)
-	require.NoError(t, s.SetFeeDelegationTxMeta(ctx, &FeeDelegationTxMeta{
+	require.NoError(t, s.SetFeeDelegationTxMeta(ctx, &port.FeeDelegationTxMeta{
 		TxHash: fdTx.Hash, BlockNumber: 33, OriginalType: stablenet.FeeDelegationTxType, FeePayer: fd.FeePayer,
 		FeePayerV: fd.V, FeePayerR: fd.R, FeePayerS: fd.S,
 	}))

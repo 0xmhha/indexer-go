@@ -49,7 +49,7 @@ func fetchedFromModel(b *model.Block, rs []*model.Receipt) (*fetchedBlock, error
 }
 
 // errNoBlockTransactions is returned when the storage cannot index a block
-// in one transaction (storage.BlockTransactor).
+// in one transaction (port.BlockTransactor).
 var errNoBlockTransactions = errors.New("fetch: storage does not support block transactions")
 
 // errNoSource is returned when blocks are read before SetSource.

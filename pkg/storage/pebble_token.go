@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ============================================================================
@@ -14,7 +16,7 @@ import (
 // ============================================================================
 
 // GetTokenBalances returns token balances for an address by scanning Transfer events
-func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]TokenBalance, error) {
+func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]port.TokenBalance, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -22,8 +24,8 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 	// Get the latest height
 	latestHeight, err := s.GetLatestHeight(ctx)
 	if err != nil {
-		if err == ErrNotFound {
-			return []TokenBalance{}, nil
+		if err == port.ErrNotFound {
+			return []port.TokenBalance{}, nil
 		}
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
@@ -39,7 +41,7 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 }
 
 // buildTokenMetadataJSON creates a JSON string with additional token metadata
-func buildTokenMetadataJSON(metadata *TokenMetadata) string {
+func buildTokenMetadataJSON(metadata *port.TokenMetadata) string {
 	if metadata == nil {
 		return ""
 	}

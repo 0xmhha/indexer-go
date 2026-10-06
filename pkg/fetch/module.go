@@ -10,14 +10,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	modulepkg "github.com/0xmhha/indexer-go/pkg/module"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // ModuleIndexer defines the interface for indexing ERC-7579 module events
 type ModuleIndexer interface {
-	storagepkg.ModuleIndexWriter
-	storagepkg.ModuleIndexReader
+	port.ModuleIndexWriter
+	port.ModuleIndexReader
 }
 
 // ModuleProcessor handles processing of ERC-7579 module install/uninstall events
@@ -110,7 +110,7 @@ func (p *ModuleProcessor) processModuleInstalled(
 
 	// Extract moduleTypeId from first 32 bytes
 	moduleTypeId := new(big.Int).SetBytes(log.Data[:32])
-	moduleType := storagepkg.ModuleType(moduleTypeId.Uint64())
+	moduleType := port.ModuleType(moduleTypeId.Uint64())
 
 	// Extract module address from next 32 bytes (left-padded to 32 bytes)
 	moduleAddr := common.BytesToAddress(log.Data[32:64])
@@ -118,7 +118,7 @@ func (p *ModuleProcessor) processModuleInstalled(
 	// Account is the log emitter
 	account := log.Address
 
-	record := &storagepkg.InstalledModule{
+	record := &port.InstalledModule{
 		Account:     account,
 		Module:      moduleAddr,
 		ModuleType:  moduleType,
@@ -140,7 +140,7 @@ func (p *ModuleProcessor) processModuleInstalled(
 			zap.String("module", moduleAddr.Hex()),
 			zap.Error(err))
 		// Create new stats
-		stats = &storagepkg.ModuleStats{
+		stats = &port.ModuleStats{
 			Module:     moduleAddr,
 			ModuleType: moduleType,
 		}
@@ -179,7 +179,7 @@ func (p *ModuleProcessor) processModuleUninstalled(
 
 	// Extract moduleTypeId from first 32 bytes
 	moduleTypeId := new(big.Int).SetBytes(log.Data[:32])
-	moduleType := storagepkg.ModuleType(moduleTypeId.Uint64())
+	moduleType := port.ModuleType(moduleTypeId.Uint64())
 
 	// Extract module address from next 32 bytes (left-padded to 32 bytes)
 	moduleAddr := common.BytesToAddress(log.Data[32:64])

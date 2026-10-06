@@ -7,18 +7,20 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Ensure PebbleStorage implements FeeDelegationReader and FeeDelegationWriter
-var _ FeeDelegationReader = (*PebbleStorage)(nil)
-var _ FeeDelegationWriter = (*PebbleStorage)(nil)
+var _ port.FeeDelegationReader = (*PebbleStorage)(nil)
+var _ port.FeeDelegationWriter = (*PebbleStorage)(nil)
 
 // ============================================================================
 // FeeDelegationWriter interface implementation
 // ============================================================================
 
 // SetFeeDelegationTxMeta stores fee delegation metadata for a transaction
-func (s *PebbleStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *FeeDelegationTxMeta) error {
+func (s *PebbleStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *port.FeeDelegationTxMeta) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}
@@ -53,7 +55,7 @@ func (s *PebbleStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *FeeDel
 
 // GetFeeDelegationTxMeta returns fee delegation metadata for a transaction
 // Returns nil if the transaction is not a fee delegation transaction
-func (s *PebbleStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*FeeDelegationTxMeta, error) {
+func (s *PebbleStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*port.FeeDelegationTxMeta, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -68,7 +70,7 @@ func (s *PebbleStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash commo
 	}
 	defer closer.Close()
 
-	var meta FeeDelegationTxMeta
+	var meta port.FeeDelegationTxMeta
 	if err := json.Unmarshal(value, &meta); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal fee delegation meta: %w", err)
 	}

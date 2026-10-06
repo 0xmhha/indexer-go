@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -55,18 +55,25 @@ func (a *EthClientAdapter) CodeAt(ctx context.Context, contract common.Address, 
 	return a.client.CodeAt(ctx, contract, blockNum)
 }
 
+// TokenMetadataStore is the storage the block processor reads and writes
+// token metadata in.
+type TokenMetadataStore interface {
+	port.TokenMetadataReader
+	port.TokenMetadataWriter
+}
+
 // BlockProcessor implements the fetch.BlockProcessor interface
 // to detect and index token metadata when new contracts are deployed
 type BlockProcessor struct {
 	detector *Detector
 	fetcher  *MetadataFetcher
-	storage  storage.TokenMetadataWriter
-	reader   storage.TokenMetadataReader
+	storage  port.TokenMetadataWriter
+	reader   port.TokenMetadataReader
 	logger   *zap.Logger
 }
 
 // NewBlockProcessor creates a new token block processor
-func NewBlockProcessor(client EthClient, stor storage.Storage, logger *zap.Logger) *BlockProcessor {
+func NewBlockProcessor(client EthClient, stor TokenMetadataStore, logger *zap.Logger) *BlockProcessor {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -82,7 +89,7 @@ func NewBlockProcessor(client EthClient, stor storage.Storage, logger *zap.Logge
 
 // NewBlockProcessorFromEthClient creates a new token block processor from an ethclient.Client
 // This is a convenience function for integrating with the standard go-ethereum client
-func NewBlockProcessorFromEthClient(ethClient *ethclient.Client, stor storage.Storage, logger *zap.Logger) *BlockProcessor {
+func NewBlockProcessorFromEthClient(ethClient *ethclient.Client, stor TokenMetadataStore, logger *zap.Logger) *BlockProcessor {
 	adapter := NewEthClientAdapter(ethClient)
 	return NewBlockProcessor(adapter, stor, logger)
 }
@@ -147,7 +154,7 @@ func (p *BlockProcessor) indexContractIfToken(ctx context.Context, address commo
 
 	// Create storage token metadata
 	now := time.Now()
-	metadata := &storage.TokenMetadata{
+	metadata := &port.TokenMetadata{
 		Address:            address,
 		Standard:           convertStandard(detection.Standard),
 		Name:               metadataResult.Name,
@@ -182,16 +189,16 @@ func (p *BlockProcessor) indexContractIfToken(ctx context.Context, address commo
 		zap.Uint64("blockNumber", blockNumber))
 }
 
-// convertStandard converts token.TokenStandard to storage.TokenStandard
-func convertStandard(standard TokenStandard) storage.TokenStandard {
+// convertStandard converts token.TokenStandard to port.TokenStandard
+func convertStandard(standard TokenStandard) port.TokenStandard {
 	switch standard {
 	case StandardERC20:
-		return storage.TokenStandardERC20
+		return port.TokenStandardERC20
 	case StandardERC721:
-		return storage.TokenStandardERC721
+		return port.TokenStandardERC721
 	case StandardERC1155:
-		return storage.TokenStandardERC1155
+		return port.TokenStandardERC1155
 	default:
-		return storage.TokenStandardUnknown
+		return port.TokenStandardUnknown
 	}
 }

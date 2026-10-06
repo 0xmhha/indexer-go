@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -42,7 +43,7 @@ func (f *Fetcher) checkParent(ctx context.Context, fb *fetchedBlock) error {
 		return nil
 	}
 	parent, err := f.storedBlockHash(ctx, h-1)
-	if errors.Is(err, storagepkg.ErrNotFound) {
+	if errors.Is(err, port.ErrNotFound) {
 		return nil
 	}
 	if err != nil {
@@ -54,17 +55,11 @@ func (f *Fetcher) checkParent(ctx context.Context, fb *fetchedBlock) error {
 	return nil
 }
 
-type rollbackStorage interface {
-	RollbackTo(ctx context.Context, to uint64) (*storagepkg.Reorg, error)
-}
-
-var _ rollbackStorage = (*storagepkg.PebbleStorage)(nil)
-
 // HandleReorg finds where the indexed chain and the node's chain fork, at or
 // below from, rolls the database back to that block and returns its height.
 // Indexing continues from the returned height + 1.
 func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) {
-	rb, ok := f.storage.(rollbackStorage)
+	rb, ok := f.storage.(port.Rollbacker)
 	if !ok {
 		return 0, fmt.Errorf("%w: storage cannot roll back", ErrReorgTooDeep)
 	}
@@ -79,7 +74,7 @@ func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) 
 	fork := from
 	for {
 		stored, storedErr := f.storedBlockHash(ctx, fork)
-		if storedErr != nil && !errors.Is(storedErr, storagepkg.ErrNotFound) {
+		if storedErr != nil && !errors.Is(storedErr, port.ErrNotFound) {
 			return 0, storedErr
 		}
 		onNode, err := f.nodeBlockHash(ctx, fork)
@@ -104,7 +99,7 @@ func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) 
 		zap.Uint64("depth", latest-fork),
 	)
 	if err := f.rollbackTo(ctx, rb, fork); err != nil {
-		if errors.Is(err, storagepkg.ErrNoUndo) {
+		if errors.Is(err, port.ErrNoUndo) {
 			return 0, fmt.Errorf("%w: %v", ErrReorgTooDeep, err)
 		}
 		return 0, fmt.Errorf("roll back to %d: %w", fork, err)
@@ -116,7 +111,7 @@ func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) 
 // publishReorg announces a committed rollback: the reorganization, then
 // every log of the removed blocks with Removed set (newest block first,
 // logs in reverse order, as go-ethereum's log subscriptions report them).
-func (f *Fetcher) publishReorg(r *storagepkg.Reorg) {
+func (f *Fetcher) publishReorg(r *port.Reorg) {
 	ev := &events.ReorgEvent{
 		Seq: r.Seq, ForkNumber: r.ForkNumber, ForkHash: r.ForkHash, OldHead: r.OldHead, CreatedAt: time.Now(),
 	}

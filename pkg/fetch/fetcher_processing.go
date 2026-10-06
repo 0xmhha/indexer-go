@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ============================================================================
@@ -70,7 +70,7 @@ func (f *Fetcher) processBlockMetadata(ctx context.Context, fb *fetchedBlock) er
 // storeReceiptsSequential stores receipts, indexes their logs and parses
 // system contract events one receipt at a time.
 func (f *Fetcher) storeReceiptsSequential(ctx context.Context, fb *fetchedBlock) error {
-	mw, modelStore := f.storage.(storagepkg.ModelWriter)
+	mw, modelStore := f.storage.(port.ModelWriter)
 	for i, receipt := range fb.gethReceipts {
 		var err error
 		if modelStore {
@@ -83,7 +83,7 @@ func (f *Fetcher) storeReceiptsSequential(ctx context.Context, fb *fetchedBlock)
 		}
 
 		// Index logs from this receipt
-		if logWriter, ok := f.storage.(storagepkg.LogWriter); ok && len(receipt.Logs) > 0 {
+		if logWriter, ok := f.storage.(port.LogWriter); ok && len(receipt.Logs) > 0 {
 			if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
 				return fmt.Errorf("failed to index logs of tx %s: %w", receipt.TxHash.Hex(), err)
 			}

@@ -7,6 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 func TestEncodeDecodeUint64(t *testing.T) {
@@ -63,11 +65,11 @@ func TestDecodeUint64_InvalidData(t *testing.T) {
 func TestEncodeDecodeTxLocation(t *testing.T) {
 	tests := []struct {
 		name string
-		loc  *TxLocation
+		loc  *port.TxLocation
 	}{
 		{
 			"genesis tx",
-			&TxLocation{
+			&port.TxLocation{
 				BlockHeight: 0,
 				TxIndex:     0,
 				BlockHash:   common.Hash{},
@@ -75,7 +77,7 @@ func TestEncodeDecodeTxLocation(t *testing.T) {
 		},
 		{
 			"regular tx",
-			&TxLocation{
+			&port.TxLocation{
 				BlockHeight: 1000,
 				TxIndex:     5,
 				BlockHash:   common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
@@ -83,7 +85,7 @@ func TestEncodeDecodeTxLocation(t *testing.T) {
 		},
 		{
 			"large values",
-			&TxLocation{
+			&port.TxLocation{
 				BlockHeight: 18446744073709551615,
 				TxIndex:     18446744073709551615,
 				BlockHash:   common.HexToHash("0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321"),

@@ -7,6 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Test helper to create a test log
@@ -115,7 +117,7 @@ func TestPebbleStorage_IndexLog_Errors(t *testing.T) {
 		storage.Close()
 		log := createTestLog(100, 0, 0, common.Address{}, []common.Hash{}, []byte{})
 		err := storage.IndexLog(ctx, log)
-		if err != ErrClosed {
+		if err != port.ErrClosed {
 			t.Errorf("IndexLog() on closed storage error = %v, want ErrClosed", err)
 		}
 	})
@@ -299,7 +301,7 @@ func TestPebbleStorage_GetLogs(t *testing.T) {
 	_ = storage.SetLatestHeight(ctx, 103)
 
 	t.Run("filter by address", func(t *testing.T) {
-		filter := &LogFilter{
+		filter := &port.LogFilter{
 			Addresses: []common.Address{addr1},
 			FromBlock: 100,
 			ToBlock:   103,
@@ -316,7 +318,7 @@ func TestPebbleStorage_GetLogs(t *testing.T) {
 	})
 
 	t.Run("filter by topic0", func(t *testing.T) {
-		filter := &LogFilter{
+		filter := &port.LogFilter{
 			Topics:    [][]common.Hash{{topic0}},
 			FromBlock: 100,
 			ToBlock:   103,
@@ -333,7 +335,7 @@ func TestPebbleStorage_GetLogs(t *testing.T) {
 	})
 
 	t.Run("filter by address and topics", func(t *testing.T) {
-		filter := &LogFilter{
+		filter := &port.LogFilter{
 			Addresses: []common.Address{addr1},
 			Topics:    [][]common.Hash{{topic0}},
 			FromBlock: 100,
@@ -351,7 +353,7 @@ func TestPebbleStorage_GetLogs(t *testing.T) {
 	})
 
 	t.Run("filter by block range", func(t *testing.T) {
-		filter := &LogFilter{
+		filter := &port.LogFilter{
 			FromBlock: 100,
 			ToBlock:   101,
 		}
@@ -367,7 +369,7 @@ func TestPebbleStorage_GetLogs(t *testing.T) {
 	})
 
 	t.Run("filter with multiple topic options", func(t *testing.T) {
-		filter := &LogFilter{
+		filter := &port.LogFilter{
 			Topics:    [][]common.Hash{{topic0, topic1}}, // Either topic0 OR topic1
 			FromBlock: 100,
 			ToBlock:   103,
@@ -392,7 +394,7 @@ func TestPebbleStorage_GetLogs(t *testing.T) {
 	})
 
 	t.Run("invalid block range", func(t *testing.T) {
-		filter := &LogFilter{
+		filter := &port.LogFilter{
 			FromBlock: 200,
 			ToBlock:   100,
 		}
@@ -596,7 +598,7 @@ func TestPebbleStorage_Logs_ReadOnly(t *testing.T) {
 	// Should not be able to write
 	newLog := createTestLog(101, 0, 0, common.Address{}, []common.Hash{}, []byte{2})
 	err = roStorage.IndexLog(ctx, newLog)
-	if err != ErrReadOnly {
+	if err != port.ErrReadOnly {
 		t.Errorf("IndexLog() on read-only storage error = %v, want ErrReadOnly", err)
 	}
 }

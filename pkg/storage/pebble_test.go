@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // setupTestStorage creates a temporary PebbleDB storage for testing
@@ -150,7 +152,7 @@ func TestPebbleStorage_LatestHeight(t *testing.T) {
 
 	// Should return ErrNotFound initially
 	height, err := storage.GetLatestHeight(ctx)
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Fatalf("GetLatestHeight() error = %v, want ErrNotFound", err)
 	}
 	if height != 0 {
@@ -243,7 +245,7 @@ func TestPebbleStorage_GetBlock_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := storage.GetBlock(ctx, 999)
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Errorf("GetBlock() error = %v, want ErrNotFound", err)
 	}
 }
@@ -280,7 +282,7 @@ func TestPebbleStorage_Transaction(t *testing.T) {
 
 	// Create test transaction
 	tx := createTestTransaction(0)
-	location := &TxLocation{
+	location := &port.TxLocation{
 		BlockHeight: 100,
 		TxIndex:     5,
 		BlockHash:   common.HexToHash("0xabcd"),
@@ -336,7 +338,7 @@ func TestPebbleStorage_GetTransaction_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, _, err := storage.GetTransaction(ctx, common.HexToHash("0xnonexistent"))
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Errorf("GetTransaction() error = %v, want ErrNotFound", err)
 	}
 }
@@ -360,7 +362,7 @@ func TestPebbleStorage_Transaction_DynamicFee(t *testing.T) {
 		Data:      []byte{},
 	})
 
-	location := &TxLocation{
+	location := &port.TxLocation{
 		BlockHeight: 200,
 		TxIndex:     0,
 		BlockHash:   common.HexToHash("0xblock200"),
@@ -417,7 +419,7 @@ func TestPebbleStorage_Transaction_AccessList(t *testing.T) {
 		AccessList: accessList,
 	})
 
-	location := &TxLocation{
+	location := &port.TxLocation{
 		BlockHeight: 300,
 		TxIndex:     1,
 		BlockHash:   common.HexToHash("0xblock300"),
@@ -461,7 +463,7 @@ func TestPebbleStorage_Transaction_WithData(t *testing.T) {
 		data,
 	)
 
-	location := &TxLocation{
+	location := &port.TxLocation{
 		BlockHeight: 400,
 		TxIndex:     2,
 		BlockHash:   common.HexToHash("0xblock400"),
@@ -645,7 +647,7 @@ func TestPebbleStorage_GetReceipt_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := storage.GetReceipt(ctx, common.HexToHash("0xnonexistent"))
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Errorf("GetReceipt() error = %v, want ErrNotFound", err)
 	}
 }
@@ -985,7 +987,7 @@ func TestPebbleStorage_Compact_Closed(t *testing.T) {
 
 	ctx := context.Background()
 	err := storage.Compact(ctx, nil, nil)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("Compact() on closed storage should return ErrClosed, got %v", err)
 	}
 }
@@ -1071,7 +1073,7 @@ func TestPebbleStorage_GetReceiptsByBlockNumber_NotFound(t *testing.T) {
 
 	// Try to get receipts for non-existent block
 	_, err := storage.GetReceiptsByBlockNumber(ctx, 999)
-	if !errors.Is(err, ErrNotFound) {
+	if !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("GetReceiptsByBlockNumber() for non-existent block should return ErrNotFound, got %v", err)
 	}
 }
@@ -1107,7 +1109,7 @@ func TestPebbleStorage_GetReceiptsByBlockNumber_Closed(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := storage.GetReceiptsByBlockNumber(ctx, 100)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("GetReceiptsByBlockNumber() on closed storage should return ErrClosed, got %v", err)
 	}
 }
@@ -1165,7 +1167,7 @@ func TestPebbleStorage_GetReceiptsByBlockHash_NotFound(t *testing.T) {
 	// Try to get receipts for non-existent block hash
 	nonExistentHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 	_, err := storage.GetReceiptsByBlockHash(ctx, nonExistentHash)
-	if !errors.Is(err, ErrNotFound) {
+	if !errors.Is(err, port.ErrNotFound) {
 		t.Errorf("GetReceiptsByBlockHash() for non-existent hash should return ErrNotFound, got %v", err)
 	}
 }
@@ -1178,7 +1180,7 @@ func TestPebbleStorage_GetReceiptsByBlockHash_Closed(t *testing.T) {
 	ctx := context.Background()
 	blockHash := common.HexToHash("0x1234")
 	_, err := storage.GetReceiptsByBlockHash(ctx, blockHash)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("GetReceiptsByBlockHash() on closed storage should return ErrClosed, got %v", err)
 	}
 }
@@ -1263,7 +1265,7 @@ func TestPebbleStorage_DeleteBlock_Closed(t *testing.T) {
 
 	ctx := context.Background()
 	err := storage.DeleteBlock(ctx, 100)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("DeleteBlock() on closed storage should return ErrClosed, got %v", err)
 	}
 }
@@ -1298,7 +1300,7 @@ func TestPebbleStorage_DeleteBlock_ReadOnly(t *testing.T) {
 
 	// Try to delete - should fail with ErrReadOnly
 	err = roStorage.DeleteBlock(ctx, 100)
-	if err != ErrReadOnly {
+	if err != port.ErrReadOnly {
 		t.Errorf("DeleteBlock() on read-only storage should return ErrReadOnly, got %v", err)
 	}
 }
@@ -1376,7 +1378,7 @@ func TestPebbleStorage_Batch(t *testing.T) {
 
 	// Blocks should not be visible before commit
 	_, err = storage.GetBlock(ctx, 100)
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Error("Blocks should not be visible before batch commit")
 	}
 
@@ -1425,7 +1427,7 @@ func TestPebbleStorage_BatchComprehensive(t *testing.T) {
 
 	// 3. SetTransaction
 	tx := createTestTransaction(0)
-	location := &TxLocation{
+	location := &port.TxLocation{
 		BlockHeight: 100,
 		TxIndex:     0,
 		BlockHash:   block.Hash(),
@@ -1642,7 +1644,7 @@ func TestPebbleStorage_Close(t *testing.T) {
 	// Operations after close should fail
 	ctx := context.Background()
 	_, err = storage.GetLatestHeight(ctx)
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("Operations after Close() should return ErrClosed, got %v", err)
 	}
 }
@@ -1679,7 +1681,7 @@ func TestPebbleStorage_ReadOnly(t *testing.T) {
 
 	// Write should fail
 	err = roStorage.SetBlock(ctx, createTestBlock(101))
-	if err != ErrReadOnly {
+	if err != port.ErrReadOnly {
 		t.Errorf("SetBlock() in read-only mode should return ErrReadOnly, got %v", err)
 	}
 }
@@ -2124,10 +2126,10 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered_Simple(t *testing.T) {
 	targetAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 	t.Run("empty address - no indexed transactions", func(t *testing.T) {
-		filter := &TransactionFilter{
+		filter := &port.TransactionFilter{
 			FromBlock: 0,
 			ToBlock:   ^uint64(0),
-			TxType:    TxTypeAll,
+			TxType:    port.TxTypeAll,
 		}
 		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, filter, 10, 0)
 		if err != nil {
@@ -2149,10 +2151,10 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered_Simple(t *testing.T) {
 	})
 
 	t.Run("invalid filter", func(t *testing.T) {
-		filter := &TransactionFilter{
+		filter := &port.TransactionFilter{
 			FromBlock: 100,
 			ToBlock:   0, // Invalid: from > to
-			TxType:    TxTypeAll,
+			TxType:    port.TxTypeAll,
 		}
 		_, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, filter, 10, 0)
 		if err == nil {
@@ -2222,7 +2224,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 		}
 
 		// Store transaction
-		txLocation := &TxLocation{
+		txLocation := &port.TxLocation{
 			BlockHash:   block.Hash(),
 			BlockHeight: i,
 			TxIndex:     0,
@@ -2249,10 +2251,10 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 	}
 
 	t.Run("sent filter - all transactions", func(t *testing.T) {
-		filter := &TransactionFilter{
+		filter := &port.TransactionFilter{
 			FromBlock: 0,
 			ToBlock:   ^uint64(0),
-			TxType:    TxTypeSent,
+			TxType:    port.TxTypeSent,
 		}
 		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
 		if err != nil {
@@ -2264,10 +2266,10 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 	})
 
 	t.Run("with limit", func(t *testing.T) {
-		filter := &TransactionFilter{
+		filter := &port.TransactionFilter{
 			FromBlock: 0,
 			ToBlock:   ^uint64(0),
-			TxType:    TxTypeSent,
+			TxType:    port.TxTypeSent,
 		}
 		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 2, 0)
 		if err != nil {
@@ -2279,10 +2281,10 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 	})
 
 	t.Run("with offset", func(t *testing.T) {
-		filter := &TransactionFilter{
+		filter := &port.TransactionFilter{
 			FromBlock: 0,
 			ToBlock:   ^uint64(0),
-			TxType:    TxTypeSent,
+			TxType:    port.TxTypeSent,
 		}
 		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 1)
 		if err != nil {
@@ -2294,10 +2296,10 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 	})
 
 	t.Run("with block filter", func(t *testing.T) {
-		filter := &TransactionFilter{
+		filter := &port.TransactionFilter{
 			FromBlock: 2,
 			ToBlock:   3,
-			TxType:    TxTypeSent,
+			TxType:    port.TxTypeSent,
 		}
 		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
 		if err != nil {
@@ -2309,10 +2311,10 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 	})
 
 	t.Run("with value filter", func(t *testing.T) {
-		filter := &TransactionFilter{
+		filter := &port.TransactionFilter{
 			FromBlock: 0,
 			ToBlock:   ^uint64(0),
-			TxType:    TxTypeSent,
+			TxType:    port.TxTypeSent,
 			MinValue:  big.NewInt(2000),
 		}
 		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
@@ -2325,10 +2327,10 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 	})
 
 	t.Run("invalid filter", func(t *testing.T) {
-		filter := &TransactionFilter{
+		filter := &port.TransactionFilter{
 			FromBlock: 100,
 			ToBlock:   0, // Invalid: from > to
-			TxType:    TxTypeSent,
+			TxType:    port.TxTypeSent,
 		}
 		_, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
 		if err == nil {
@@ -2338,10 +2340,10 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 
 	t.Run("no results - unknown address", func(t *testing.T) {
 		unknownAddr := common.HexToAddress("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-		filter := &TransactionFilter{
+		filter := &port.TransactionFilter{
 			FromBlock: 0,
 			ToBlock:   ^uint64(0),
-			TxType:    TxTypeSent,
+			TxType:    port.TxTypeSent,
 		}
 		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, unknownAddr, filter, 10, 0)
 		if err != nil {
@@ -2378,7 +2380,7 @@ func TestPebbleStorage_SetTransaction_ErrorCases(t *testing.T) {
 	pebbleStorage := storage.(*PebbleStorage)
 
 	t.Run("nil transaction", func(t *testing.T) {
-		location := &TxLocation{
+		location := &port.TxLocation{
 			BlockHash:   common.Hash{},
 			BlockHeight: 1,
 			TxIndex:     0,
@@ -2407,7 +2409,7 @@ func TestPebbleStorage_SetTransaction_ClosedStorage(t *testing.T) {
 	cleanup()
 
 	tx := createTestTransaction(0)
-	location := &TxLocation{
+	location := &port.TxLocation{
 		BlockHash:   common.Hash{},
 		BlockHeight: 1,
 		TxIndex:     0,
@@ -2594,7 +2596,7 @@ func TestPebbleStorage_GetTransaction_ErrorCases(t *testing.T) {
 		if err == nil {
 			t.Error("GetTransaction() should fail for non-existent transaction")
 		}
-		if err != ErrNotFound {
+		if err != port.ErrNotFound {
 			t.Errorf("GetTransaction() error = %v, want ErrNotFound", err)
 		}
 	})
@@ -3019,7 +3021,7 @@ func TestPebbleBatch_SetTransaction(t *testing.T) {
 		defer batch.Close()
 
 		tx := createTestTransaction(1)
-		location := &TxLocation{
+		location := &port.TxLocation{
 			BlockHeight: 10,
 			TxIndex:     0,
 		}
@@ -3053,7 +3055,7 @@ func TestPebbleBatch_SetTransaction(t *testing.T) {
 		batch.Close()
 
 		tx := createTestTransaction(2)
-		location := &TxLocation{
+		location := &port.TxLocation{
 			BlockHeight: 11,
 			TxIndex:     0,
 		}
@@ -3429,7 +3431,7 @@ func TestPebbleStorage_GetTransaction_NotFound_Extended(t *testing.T) {
 	// Try to get non-existent transaction
 	nonExistentHash := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 	tx, location, err := storage.GetTransaction(ctx, nonExistentHash)
-	if err != ErrNotFound {
+	if err != port.ErrNotFound {
 		t.Errorf("GetTransaction() error = %v, want ErrNotFound", err)
 	}
 	if tx != nil {
@@ -3449,7 +3451,7 @@ func TestPebbleStorage_SetTransaction_Success(t *testing.T) {
 
 	// Create and store a transaction
 	tx := createTestTransaction(1)
-	location := &TxLocation{
+	location := &port.TxLocation{
 		BlockHeight: 100,
 		TxIndex:     5,
 	}
@@ -3691,7 +3693,7 @@ func TestPebbleStorage_GetTransaction_SuccessfulRetrieval(t *testing.T) {
 	// Create multiple transactions
 	for i := uint64(1); i <= 3; i++ {
 		tx := createTestTransaction(i)
-		location := &TxLocation{
+		location := &port.TxLocation{
 			BlockHeight: i * 10,
 			TxIndex:     i - 1,
 		}
@@ -3726,7 +3728,7 @@ func TestPebbleStorage_HasTransaction_Success(t *testing.T) {
 
 	// Create and store a transaction
 	tx := createTestTransaction(1)
-	location := &TxLocation{BlockHeight: 10, TxIndex: 0}
+	location := &port.TxLocation{BlockHeight: 10, TxIndex: 0}
 	if err := pebbleStorage.SetTransaction(ctx, tx, location); err != nil {
 		t.Fatalf("SetTransaction() error = %v", err)
 	}
@@ -3999,7 +4001,7 @@ func TestPebbleStorage_GetLatestHeight_NotSet(t *testing.T) {
 
 	// On fresh storage, GetLatestHeight should return 0 or error
 	height, err := storage.GetLatestHeight(ctx)
-	if err != nil && err != ErrNotFound {
+	if err != nil && err != port.ErrNotFound {
 		t.Fatalf("GetLatestHeight() unexpected error = %v", err)
 	}
 	// Height should be 0 for fresh storage
@@ -4158,7 +4160,7 @@ func TestPebbleStorage_Get(t *testing.T) {
 
 	t.Run("Get non-existent key", func(t *testing.T) {
 		_, err := pebbleStorage.Get(ctx, []byte("non-existent-key"))
-		if err != ErrNotFound {
+		if err != port.ErrNotFound {
 			t.Errorf("Get() error = %v, want ErrNotFound", err)
 		}
 	})
@@ -4216,7 +4218,7 @@ func TestPebbleStorage_Delete(t *testing.T) {
 
 		// Verify key no longer exists
 		_, err = pebbleStorage.Get(ctx, key)
-		if err != ErrNotFound {
+		if err != port.ErrNotFound {
 			t.Errorf("Get() after delete error = %v, want ErrNotFound", err)
 		}
 	})
@@ -5131,7 +5133,7 @@ func TestPebbleStorage_DeleteByPrefix_ClosedStorage(t *testing.T) {
 	ps.Close()
 
 	_, err := ps.DeleteByPrefix([]byte("/test/"))
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("DeleteByPrefix() on closed = %v, want ErrClosed", err)
 	}
 }
@@ -5144,7 +5146,7 @@ func TestPebbleStorage_CountByPrefix_ClosedStorage(t *testing.T) {
 	ps.Close()
 
 	_, err := ps.CountByPrefix([]byte("/test/"))
-	if err != ErrClosed {
+	if err != port.ErrClosed {
 		t.Errorf("CountByPrefix() on closed = %v, want ErrClosed", err)
 	}
 }

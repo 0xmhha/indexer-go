@@ -10,31 +10,32 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Compile-time check to ensure PebbleStorage implements Module interfaces
-var _ ModuleIndexReader = (*PebbleStorage)(nil)
-var _ ModuleIndexWriter = (*PebbleStorage)(nil)
+var _ port.ModuleIndexReader = (*PebbleStorage)(nil)
+var _ port.ModuleIndexWriter = (*PebbleStorage)(nil)
 
 // ========== Module Read Operations ==========
 
 // GetInstalledModule retrieves a specific installed module by account and module address.
-func (s *PebbleStorage) GetInstalledModule(ctx context.Context, account, module common.Address) (*InstalledModule, error) {
+func (s *PebbleStorage) GetInstalledModule(ctx context.Context, account, module common.Address) (*port.InstalledModule, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := ModuleKey(account, module)
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get installed module: %w", err)
 	}
 	defer closer.Close()
 
-	var record InstalledModule
+	var record port.InstalledModule
 	if err := json.Unmarshal(value, &record); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal installed module: %w", err)
 	}
@@ -44,9 +45,9 @@ func (s *PebbleStorage) GetInstalledModule(ctx context.Context, account, module 
 
 // GetModulesByAccount retrieves all modules installed on a specific account.
 // Results are ordered by block number descending (newest first).
-func (s *PebbleStorage) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*InstalledModule, error) {
+func (s *PebbleStorage) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*port.InstalledModule, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	if limit <= 0 {
@@ -93,7 +94,7 @@ func (s *PebbleStorage) GetModulesByAccount(ctx context.Context, account common.
 	// Apply pagination
 	start := offset
 	if start >= len(refs) {
-		return []*InstalledModule{}, nil
+		return []*port.InstalledModule{}, nil
 	}
 	end := start + limit
 	if end > len(refs) {
@@ -101,7 +102,7 @@ func (s *PebbleStorage) GetModulesByAccount(ctx context.Context, account common.
 	}
 
 	// Fetch full records
-	records := make([]*InstalledModule, 0, end-start)
+	records := make([]*port.InstalledModule, 0, end-start)
 	for _, ref := range refs[start:end] {
 		record, err := s.GetInstalledModule(ctx, ref.account, ref.module)
 		if err != nil {
@@ -119,9 +120,9 @@ func (s *PebbleStorage) GetModulesByAccount(ctx context.Context, account common.
 
 // GetModulesByType retrieves modules by their type across all accounts.
 // Results are ordered by block number descending (newest first).
-func (s *PebbleStorage) GetModulesByType(ctx context.Context, moduleType ModuleType, limit, offset int) ([]*InstalledModule, error) {
+func (s *PebbleStorage) GetModulesByType(ctx context.Context, moduleType port.ModuleType, limit, offset int) ([]*port.InstalledModule, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	if limit <= 0 {
@@ -168,7 +169,7 @@ func (s *PebbleStorage) GetModulesByType(ctx context.Context, moduleType ModuleT
 	// Apply pagination
 	start := offset
 	if start >= len(refs) {
-		return []*InstalledModule{}, nil
+		return []*port.InstalledModule{}, nil
 	}
 	end := start + limit
 	if end > len(refs) {
@@ -176,7 +177,7 @@ func (s *PebbleStorage) GetModulesByType(ctx context.Context, moduleType ModuleT
 	}
 
 	// Fetch full records
-	records := make([]*InstalledModule, 0, end-start)
+	records := make([]*port.InstalledModule, 0, end-start)
 	for _, ref := range refs[start:end] {
 		record, err := s.GetInstalledModule(ctx, ref.account, ref.module)
 		if err != nil {
@@ -193,9 +194,9 @@ func (s *PebbleStorage) GetModulesByType(ctx context.Context, moduleType ModuleT
 }
 
 // GetModuleStats retrieves aggregate statistics for a module contract.
-func (s *PebbleStorage) GetModuleStats(ctx context.Context, module common.Address) (*ModuleStats, error) {
+func (s *PebbleStorage) GetModuleStats(ctx context.Context, module common.Address) (*port.ModuleStats, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := ModuleStatsKey(module)
@@ -203,7 +204,7 @@ func (s *PebbleStorage) GetModuleStats(ctx context.Context, module common.Addres
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			// Return zero-value stats
-			return &ModuleStats{
+			return &port.ModuleStats{
 				Module: module,
 			}, nil
 		}
@@ -211,7 +212,7 @@ func (s *PebbleStorage) GetModuleStats(ctx context.Context, module common.Addres
 	}
 	defer closer.Close()
 
-	var stats ModuleStats
+	var stats port.ModuleStats
 	if err := json.Unmarshal(value, &stats); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal module stats: %w", err)
 	}
@@ -220,17 +221,17 @@ func (s *PebbleStorage) GetModuleStats(ctx context.Context, module common.Addres
 }
 
 // GetAccountModules retrieves all modules for an account, grouped by type.
-func (s *PebbleStorage) GetAccountModules(ctx context.Context, account common.Address) (*AccountModules, error) {
+func (s *PebbleStorage) GetAccountModules(ctx context.Context, account common.Address) (*port.AccountModules, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
-	result := &AccountModules{
+	result := &port.AccountModules{
 		Account:    account,
-		Validators: []InstalledModule{},
-		Executors:  []InstalledModule{},
-		Fallbacks:  []InstalledModule{},
-		Hooks:      []InstalledModule{},
+		Validators: []port.InstalledModule{},
+		Executors:  []port.InstalledModule{},
+		Fallbacks:  []port.InstalledModule{},
+		Hooks:      []port.InstalledModule{},
 	}
 
 	// Get all modules for this account from primary storage
@@ -246,7 +247,7 @@ func (s *PebbleStorage) GetAccountModules(ctx context.Context, account common.Ad
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		var record InstalledModule
+		var record port.InstalledModule
 		if err := json.Unmarshal(iter.Value(), &record); err != nil {
 			s.logger.Warn("failed to unmarshal installed module",
 				zap.String("key", string(iter.Key())),
@@ -255,13 +256,13 @@ func (s *PebbleStorage) GetAccountModules(ctx context.Context, account common.Ad
 		}
 
 		switch record.ModuleType {
-		case ModuleTypeValidator:
+		case port.ModuleTypeValidator:
 			result.Validators = append(result.Validators, record)
-		case ModuleTypeExecutor:
+		case port.ModuleTypeExecutor:
 			result.Executors = append(result.Executors, record)
-		case ModuleTypeFallback:
+		case port.ModuleTypeFallback:
 			result.Fallbacks = append(result.Fallbacks, record)
-		case ModuleTypeHook:
+		case port.ModuleTypeHook:
 			result.Hooks = append(result.Hooks, record)
 		}
 	}
@@ -274,9 +275,9 @@ func (s *PebbleStorage) GetAccountModules(ctx context.Context, account common.Ad
 }
 
 // GetRecentModuleEvents retrieves the most recent module install/uninstall events.
-func (s *PebbleStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([]*InstalledModule, error) {
+func (s *PebbleStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([]*port.InstalledModule, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	if limit <= 0 {
@@ -297,7 +298,7 @@ func (s *PebbleStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([
 	}
 	defer iter.Close()
 
-	var records []*InstalledModule
+	var records []*port.InstalledModule
 	count := 0
 
 	// Iterate in reverse order (newest first)
@@ -330,7 +331,7 @@ func (s *PebbleStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([
 // GetModuleEventCount returns the total count of module events indexed.
 func (s *PebbleStorage) GetModuleEventCount(ctx context.Context) (int, error) {
 	if s.closed.Load() {
-		return 0, ErrClosed
+		return 0, port.ErrClosed
 	}
 
 	prefix := ModuleBlockIndexAllPrefix()
@@ -357,9 +358,9 @@ func (s *PebbleStorage) GetModuleEventCount(ctx context.Context) (int, error) {
 }
 
 // ListModuleStats retrieves module stats with pagination.
-func (s *PebbleStorage) ListModuleStats(ctx context.Context, limit, offset int) ([]*ModuleStats, error) {
+func (s *PebbleStorage) ListModuleStats(ctx context.Context, limit, offset int) ([]*port.ModuleStats, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	if limit <= 0 {
@@ -383,9 +384,9 @@ func (s *PebbleStorage) ListModuleStats(ctx context.Context, limit, offset int) 
 	}
 	defer iter.Close()
 
-	var allStats []*ModuleStats
+	var allStats []*port.ModuleStats
 	for iter.First(); iter.Valid(); iter.Next() {
-		var stats ModuleStats
+		var stats port.ModuleStats
 		if err := json.Unmarshal(iter.Value(), &stats); err != nil {
 			s.logger.Warn("failed to unmarshal module stats",
 				zap.String("key", string(iter.Key())),
@@ -402,7 +403,7 @@ func (s *PebbleStorage) ListModuleStats(ctx context.Context, limit, offset int) 
 	// Apply pagination
 	start := offset
 	if start >= len(allStats) {
-		return []*ModuleStats{}, nil
+		return []*port.ModuleStats{}, nil
 	}
 	end := start + limit
 	if end > len(allStats) {
@@ -415,9 +416,9 @@ func (s *PebbleStorage) ListModuleStats(ctx context.Context, limit, offset int) 
 // ========== Module Write Operations ==========
 
 // SaveInstalledModule saves a module installation record.
-func (s *PebbleStorage) SaveInstalledModule(ctx context.Context, record *InstalledModule) error {
+func (s *PebbleStorage) SaveInstalledModule(ctx context.Context, record *port.InstalledModule) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	// Marshal record
@@ -476,7 +477,7 @@ func (s *PebbleStorage) SaveInstalledModule(ctx context.Context, record *Install
 // RemoveModule marks a module as uninstalled.
 func (s *PebbleStorage) RemoveModule(ctx context.Context, account, module common.Address, blockNumber uint64, txHash common.Hash) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	// Load existing module record
@@ -512,9 +513,9 @@ func (s *PebbleStorage) RemoveModule(ctx context.Context, account, module common
 }
 
 // UpdateModuleStats updates the aggregate stats for a module.
-func (s *PebbleStorage) UpdateModuleStats(ctx context.Context, stats *ModuleStats) error {
+func (s *PebbleStorage) UpdateModuleStats(ctx context.Context, stats *port.ModuleStats) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	data, err := json.Marshal(stats)

@@ -12,9 +12,6 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
-// ErrBlockTxDone is returned when a finished block transaction is used again.
-var ErrBlockTxDone = port.ErrBlockTxDone
-
 var _ port.BlockTx = (*BlockTx)(nil)
 
 // BlockTx is an open block transaction. Every PebbleStorage call made with
@@ -80,7 +77,7 @@ func (s *PebbleStorage) beginBlock(ctx context.Context) (context.Context, *Block
 // publishes the staged in-memory state.
 func (tx *BlockTx) Commit() error {
 	if tx.done {
-		return ErrBlockTxDone
+		return port.ErrBlockTxDone
 	}
 	tx.done = true
 	defer tx.s.writeMu.Unlock()
@@ -246,7 +243,4 @@ func (s *PebbleStorage) subTxCount(ctx context.Context, n uint64) {
 	s.txCount.Add(^(n - 1))
 }
 
-// BlockTransactor is an alias of port.BlockTransactor (refactoring plan R1-1).
-type BlockTransactor = port.BlockTransactor
-
-var _ BlockTransactor = (*PebbleStorage)(nil)
+var _ port.BlockTransactor = (*PebbleStorage)(nil)

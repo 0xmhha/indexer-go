@@ -7,8 +7,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Backfill runs p's handlers for the stored blocks from..to, in order, one
@@ -21,7 +21,7 @@ func (f *Fetcher) Backfill(ctx context.Context, p *feature.Pipeline, from, to ui
 	if f.txr == nil {
 		return fmt.Errorf("backfill needs storage with block transactions")
 	}
-	mr, ok := f.storage.(storagepkg.ModelReader)
+	mr, ok := f.storage.(port.ModelReader)
 	if !ok {
 		return fmt.Errorf("backfill needs storage that keeps the chain-neutral model")
 	}

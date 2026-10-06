@@ -74,8 +74,8 @@ type orphanBlockRecord struct {
 // block `to` committed. Each rolled-back block is archived as an orphan in
 // its rollback transaction, and the first transaction records the
 // reorganization. If any block in the range has no complete undo record,
-// nothing is changed and the error wraps ErrNoUndo.
-func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) (*Reorg, error) {
+// nothing is changed and the error wraps port.ErrNoUndo.
+func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) (*port.Reorg, error) {
 	latest, err := s.GetLatestHeight(ctx)
 	if err != nil {
 		return nil, err
@@ -89,10 +89,10 @@ func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) (*Reorg, erro
 		}
 	}
 
-	rec := &Reorg{OldHead: latest, ForkNumber: to, DetectedAt: uint64(time.Now().Unix())}
+	rec := &port.Reorg{OldHead: latest, ForkNumber: to, DetectedAt: uint64(time.Now().Unix())}
 	if fork, err := s.GetModelBlock(ctx, to); err == nil {
 		rec.ForkHash = fork.Hash
-	} else if !errors.Is(err, ErrNotFound) {
+	} else if !errors.Is(err, port.ErrNotFound) {
 		return nil, fmt.Errorf("read fork block %d: %w", to, err)
 	}
 	for h := latest; h > to; h-- {
@@ -100,7 +100,7 @@ func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) (*Reorg, erro
 		if err != nil {
 			return nil, fmt.Errorf("read block %d to roll back: %w", h, err)
 		}
-		rec.Removed = append(rec.Removed, BlockRef{Number: h, Hash: b.Hash})
+		rec.Removed = append(rec.Removed, port.BlockRef{Number: h, Hash: b.Hash})
 	}
 	seq, err := s.lastReorgSeq(ctx)
 	if err != nil {
@@ -121,12 +121,12 @@ func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) (*Reorg, erro
 
 // archiveOrphan writes block h, about to be rolled back in tx, as an orphan
 // of reorganization rec, and the reorganization record itself when first.
-func (s *PebbleStorage) archiveOrphan(txCtx context.Context, tx *BlockTx, h uint64, rec *Reorg, first bool) (*OrphanedBlock, error) {
+func (s *PebbleStorage) archiveOrphan(txCtx context.Context, tx *BlockTx, h uint64, rec *port.Reorg, first bool) (*port.OrphanedBlock, error) {
 	b, err := s.GetModelBlock(txCtx, h)
 	if err != nil {
 		return nil, fmt.Errorf("read block %d to archive: %w", h, err)
 	}
-	ob := &OrphanedBlock{Block: b, ReorgSeq: rec.Seq}
+	ob := &port.OrphanedBlock{Block: b, ReorgSeq: rec.Seq}
 	stored := orphanBlockRecord{ReorgSeq: rec.Seq}
 	if stored.Block, err = model.EncodeBlock(b); err != nil {
 		return nil, fmt.Errorf("encode orphaned block %d: %w", h, err)
@@ -196,13 +196,13 @@ func (s *PebbleStorage) pruneOrphans(txCtx context.Context, tx *BlockTx, cutoff 
 	}
 	var del [][]byte
 	for _, raw := range records {
-		var rec Reorg
+		var rec port.Reorg
 		if err := rlp.DecodeBytes(raw, &rec); err != nil {
 			return fmt.Errorf("decode reorganization record: %w", err)
 		}
 		for _, ref := range rec.Removed {
 			ob, err := s.GetOrphanedBlock(txCtx, ref.Hash)
-			if errors.Is(err, ErrNotFound) {
+			if errors.Is(err, port.ErrNotFound) {
 				continue
 			}
 			if err != nil {
@@ -228,7 +228,7 @@ func (s *PebbleStorage) pruneOrphans(txCtx context.Context, tx *BlockTx, cutoff 
 
 func (s *PebbleStorage) lastReorgSeq(ctx context.Context) (uint64, error) {
 	v, err := s.get(ctx, []byte(keyOrphanSeq), "reorg sequence")
-	if errors.Is(err, ErrNotFound) {
+	if errors.Is(err, port.ErrNotFound) {
 		return 0, nil
 	}
 	if err != nil {
@@ -240,18 +240,21 @@ func (s *PebbleStorage) lastReorgSeq(ctx context.Context) (uint64, error) {
 	return binary.BigEndian.Uint64(v), nil
 }
 
-var _ OrphanReader = (*PebbleStorage)(nil)
+var (
+	_ port.OrphanReader = (*PebbleStorage)(nil)
+	_ port.Rollbacker   = (*PebbleStorage)(nil)
+)
 
 // GetReorgs implements OrphanReader.
-func (s *PebbleStorage) GetReorgs(ctx context.Context, limit, offset int) ([]*Reorg, error) {
+func (s *PebbleStorage) GetReorgs(ctx context.Context, limit, offset int) ([]*port.Reorg, error) {
 	last, err := s.lastReorgSeq(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var out []*Reorg
+	var out []*port.Reorg
 	for seq := int64(last) - int64(offset); seq >= 1 && (limit <= 0 || len(out) < limit); seq-- {
 		r, err := s.GetReorg(ctx, uint64(seq))
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			break // older records were pruned (SetOrphanRetention)
 		}
 		if err != nil {
@@ -263,12 +266,12 @@ func (s *PebbleStorage) GetReorgs(ctx context.Context, limit, offset int) ([]*Re
 }
 
 // GetReorg implements OrphanReader.
-func (s *PebbleStorage) GetReorg(ctx context.Context, seq uint64) (*Reorg, error) {
+func (s *PebbleStorage) GetReorg(ctx context.Context, seq uint64) (*port.Reorg, error) {
 	v, err := s.get(ctx, OrphanReorgKey(seq), "reorg record")
 	if err != nil {
 		return nil, err
 	}
-	var r Reorg
+	var r port.Reorg
 	if err := rlp.DecodeBytes(v, &r); err != nil {
 		return nil, fmt.Errorf("decode reorg record %d: %w", seq, err)
 	}
@@ -276,7 +279,7 @@ func (s *PebbleStorage) GetReorg(ctx context.Context, seq uint64) (*Reorg, error
 }
 
 // GetOrphanedBlock implements OrphanReader.
-func (s *PebbleStorage) GetOrphanedBlock(ctx context.Context, hash common.Hash) (*OrphanedBlock, error) {
+func (s *PebbleStorage) GetOrphanedBlock(ctx context.Context, hash common.Hash) (*port.OrphanedBlock, error) {
 	v, err := s.get(ctx, OrphanBlockKey(hash), "orphaned block")
 	if err != nil {
 		return nil, err
@@ -289,7 +292,7 @@ func (s *PebbleStorage) GetOrphanedBlock(ctx context.Context, hash common.Hash) 
 	if err != nil {
 		return nil, fmt.Errorf("decode orphaned block %s: %w", hash.Hex(), err)
 	}
-	ob := &OrphanedBlock{Block: b, ReorgSeq: rec.ReorgSeq}
+	ob := &port.OrphanedBlock{Block: b, ReorgSeq: rec.ReorgSeq}
 	for _, enc := range rec.Receipts {
 		r, err := model.DecodeReceipt(enc)
 		if err != nil {
@@ -301,18 +304,18 @@ func (s *PebbleStorage) GetOrphanedBlock(ctx context.Context, hash common.Hash) 
 }
 
 // GetOrphanedBlocksAt implements OrphanReader.
-func (s *PebbleStorage) GetOrphanedBlocksAt(ctx context.Context, height uint64) ([]*OrphanedBlock, error) {
+func (s *PebbleStorage) GetOrphanedBlocksAt(ctx context.Context, height uint64) ([]*port.OrphanedBlock, error) {
 	return s.orphansUnder(ctx, orphanHeightPrefix(height))
 }
 
 // GetOrphanedTransaction implements OrphanReader.
-func (s *PebbleStorage) GetOrphanedTransaction(ctx context.Context, txHash common.Hash) ([]*OrphanedBlock, error) {
+func (s *PebbleStorage) GetOrphanedTransaction(ctx context.Context, txHash common.Hash) ([]*port.OrphanedBlock, error) {
 	return s.orphansUnder(ctx, orphanTxPrefix(txHash))
 }
 
 // orphansUnder loads the orphaned blocks named by an index prefix whose keys
 // end in a block hash.
-func (s *PebbleStorage) orphansUnder(ctx context.Context, prefix []byte) ([]*OrphanedBlock, error) {
+func (s *PebbleStorage) orphansUnder(ctx context.Context, prefix []byte) ([]*port.OrphanedBlock, error) {
 	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: prefixUpperBound(prefix)})
 	if err != nil {
 		return nil, err
@@ -324,7 +327,7 @@ func (s *PebbleStorage) orphansUnder(ctx context.Context, prefix []byte) ([]*Orp
 	if err := errors.Join(iter.Error(), iter.Close()); err != nil {
 		return nil, err
 	}
-	out := make([]*OrphanedBlock, 0, len(hashes))
+	out := make([]*port.OrphanedBlock, 0, len(hashes))
 	for _, h := range hashes {
 		ob, err := s.GetOrphanedBlock(ctx, h)
 		if err != nil {
@@ -334,12 +337,3 @@ func (s *PebbleStorage) orphansUnder(ctx context.Context, prefix []byte) ([]*Orp
 	}
 	return out, nil
 }
-
-// Aliases of the ports moved to pkg/core/port (refactoring plan R1-1);
-// removed once every consumer uses the port package.
-type (
-	BlockRef      = port.BlockRef
-	Reorg         = port.Reorg
-	OrphanedBlock = port.OrphanedBlock
-	OrphanReader  = port.OrphanReader
-)
