@@ -370,7 +370,7 @@ Logging Flags:
   --log-format string       Log format: json, console (default: "json")
 
 Chain Adapter Flags:
-  --adapter string          Force specific adapter type (anvil, stableone, evm). Auto-detected if empty
+  --adapter string          Chain profile id or alias (stablenet, stableone, evm). Detected from the node if empty or not a profile
 
 Data Management Flags:
   --clear-data              Clear (delete) the entire data folder before starting

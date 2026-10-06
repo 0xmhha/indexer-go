@@ -14,8 +14,8 @@ import (
 // every chain. They may use pkg/chains and pkg/core but not a specific
 // chain profile; chain behaviour reaches them through registries in
 // pkg/chains and in the packages themselves (API, storage keyspace, event
-// codecs). The adapters (pkg/adapters) and the chain profiles are the
-// chain-specific code outside this list.
+// codecs). The chain profiles are the chain-specific code outside this
+// list.
 var chainNeutral = []string{
 	"fetch", "api", "source", "feature", "features", "storage", "events", "eventbus",
 	"core", "types", "token", "abi", "client", "rpcproxy", "notifications",

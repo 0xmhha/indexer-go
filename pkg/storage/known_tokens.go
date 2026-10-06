@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -37,4 +38,18 @@ func knownToken(addr common.Address) (KnownToken, bool) {
 	defer knownTokensMu.RUnlock()
 	t, ok := knownTokens[addr]
 	return t, ok
+}
+
+// KnownTokenAddresses returns the addresses of the registered token
+// contracts, sorted. They exist from genesis without a creation
+// transaction, so ingest indexes their metadata at block 0.
+func KnownTokenAddresses() []common.Address {
+	knownTokensMu.RLock()
+	defer knownTokensMu.RUnlock()
+	out := make([]common.Address, 0, len(knownTokens))
+	for a := range knownTokens {
+		out = append(out, a)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Cmp(out[j]) < 0 })
+	return out
 }

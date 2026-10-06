@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -207,11 +206,6 @@ func (t *TestInstance) RPCClient() *rpc.Client {
 // EthClient returns the ethclient
 func (t *TestInstance) EthClient() *ethclient.Client {
 	return t.ethClient
-}
-
-// CreateAdapter creates an adapter using the factory
-func (t *TestInstance) CreateAdapter(ctx context.Context) (*factory.CreateResult, error) {
-	return factory.CreateAdapter(ctx, t.rpcURL, t.logger)
 }
 
 // =============================================================================

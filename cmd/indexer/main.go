@@ -13,8 +13,6 @@ import (
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/internal/logger"
-	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
-	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
 	"github.com/0xmhha/indexer-go/pkg/api"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"                                // generic EVM chain profile
@@ -45,7 +43,6 @@ import (
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/token"
-	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
@@ -60,22 +57,20 @@ var (
 
 // App encapsulates all application components and lifecycle
 type App struct {
-	config       *config.Config
-	logger       *zap.Logger
-	client       *client.Client
-	chainAdapter chain.Adapter
-	nodeInfo     *detector.NodeInfo
+	config *config.Config
+	logger *zap.Logger
+	client *client.Client
 	// profile is the chain profile selected by --adapter or detected (nil if
 	// detection failed, see profileErr); profileSrc reads blocks with it.
 	profile    chains.Profile
 	profileSrc *sourcerpc.Source
 	profileErr error
-	features     *feature.Pipeline // enabled features, in execution order
-	storage      storage.Storage
-	eventBus     *events.EventBus
-	fetcher      *fetch.Fetcher
-	apiServer    *api.Server
-	rpcProxy     *rpcproxy.Proxy
+	features   *feature.Pipeline // enabled features, in execution order
+	storage    storage.Storage
+	eventBus   *events.EventBus
+	fetcher    *fetch.Fetcher
+	apiServer  *api.Server
+	rpcProxy   *rpcproxy.Proxy
 
 	// RPC archive (pkg/source/replay): a local endpoint that records calls to
 	// the node or replays a recorded archive.
@@ -210,7 +205,7 @@ type Flags struct {
 	enableGraphQL    bool
 	enableJSONRPC    bool
 	enableWebSocket  bool
-	forceAdapterType string // Force specific adapter type: anvil, stableone, evm
+	forceAdapterType string // chain profile id or alias (--adapter)
 
 	// set records the flags given on the command line. Only those override
 	// the configuration, so flag defaults never replace config values and
@@ -256,7 +251,7 @@ func parseFlagsFrom(args []string, onError flag.ErrorHandling) (*Flags, error) {
 	fs.BoolVar(&f.enableWebSocket, "websocket", false, "Enable WebSocket API")
 
 	// Chain adapter flags
-	fs.StringVar(&f.forceAdapterType, "adapter", "", "Force specific adapter type (anvil, stableone, evm). Auto-detected if empty")
+	fs.StringVar(&f.forceAdapterType, "adapter", "", "Chain profile id or alias (stablenet, stableone, evm). Detected from the node if empty or not a profile")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -298,9 +293,9 @@ func loadAndValidateConfig(flags *Flags) (*config.Config, error) {
 
 // logStartupInfo logs startup information
 func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
-	adapterInfo := "auto-detect"
+	profileInfo := "auto-detect"
 	if flags.forceAdapterType != "" {
-		adapterInfo = flags.forceAdapterType + " (forced)"
+		profileInfo = flags.forceAdapterType + " (forced)"
 	}
 
 	log.Info("Starting indexer",
@@ -315,7 +310,7 @@ func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
 		zap.Bool("gap_recovery", flags.enableGapMode),
 		zap.Bool("clear_data", flags.clearData),
 		zap.Bool("reindex", flags.reindex),
-		zap.String("adapter", adapterInfo),
+		zap.String("chain_profile", profileInfo),
 	)
 }
 
@@ -413,39 +408,13 @@ func (a *App) initClient() error {
 	a.client = ethClient
 	a.logger.Info("Connected to Ethereum node", zap.String("endpoint", a.config.RPC.Endpoint))
 
-	// The chain profile: the one --adapter names, otherwise detected. The
-	// adapter factory follows it, so both agree on the chain.
+	// The chain profile: the one --adapter names, otherwise detected.
 	ctx := context.Background()
 	a.profileSrc, a.profileErr = sourcerpc.Select(ctx, a.client.RPCClient(), a.forceAdapterType)
 	if a.profileErr == nil {
 		a.profile = a.profileSrc.Profile()
+		a.logger.Info("Chain profile selected", zap.String("profile", a.profile.ID()))
 	}
-
-	// Create chain adapter using factory with auto-detection
-	factoryConfig := factory.DefaultConfig(a.config.RPC.Endpoint)
-	factoryConfig.ForceAdapterType = a.forceAdapterType
-	factoryConfig.Profile = a.profile
-
-	adapterFactory := factory.NewFactory(factoryConfig, a.logger)
-	result, err := adapterFactory.Create(ctx)
-	if err != nil {
-		a.logger.Warn("Failed to create chain adapter, using generic EVM behavior",
-			zap.Error(err),
-		)
-		// Continue without adapter - generic EVM behavior will be used
-		return nil
-	}
-
-	a.chainAdapter = result.Adapter
-	a.nodeInfo = result.NodeInfo
-
-	a.logger.Info("Chain adapter initialized",
-		zap.String("adapter_type", result.AdapterType),
-		zap.String("node_type", string(result.NodeInfo.Type)),
-		zap.Uint64("chain_id", result.NodeInfo.ChainID),
-		zap.Bool("is_local", result.NodeInfo.IsLocal),
-		zap.String("consensus_type", string(a.chainAdapter.Info().ConsensusType)),
-	)
 
 	return nil
 }
@@ -738,22 +707,11 @@ func (a *App) initFetcher(ctx context.Context) error {
 		Confirmations: a.config.Indexer.Confirmations,
 	}
 
-	// Create fetcher with chain adapter if available
-	if a.chainAdapter != nil {
-		a.fetcher = fetch.NewFetcherWithAdapter(a.client, a.storage, fetcherConfig, a.logger, a.eventBus, a.chainAdapter)
-		a.logger.Info("Fetcher initialized with chain adapter",
-			zap.Duration("retry_delay", retryDelay),
-			zap.Int("batch_size", a.config.Indexer.ChunkSize),
-			zap.String("adapter_type", string(a.chainAdapter.Info().ChainType)),
-			zap.String("consensus_type", string(a.chainAdapter.Info().ConsensusType)),
-		)
-	} else {
-		a.fetcher = fetch.NewFetcher(a.client, a.storage, fetcherConfig, a.logger, a.eventBus)
-		a.logger.Info("Fetcher initialized (generic EVM mode)",
-			zap.Duration("retry_delay", retryDelay),
-			zap.Int("batch_size", a.config.Indexer.ChunkSize),
-		)
-	}
+	a.fetcher = fetch.NewFetcher(a.client, a.storage, fetcherConfig, a.logger, a.eventBus)
+	a.logger.Info("Fetcher initialized",
+		zap.Duration("retry_delay", retryDelay),
+		zap.Int("batch_size", a.config.Indexer.ChunkSize),
+	)
 
 	// The chain profile decodes blocks and gives the default features.
 	if a.profileErr != nil {
@@ -1064,13 +1022,6 @@ func (a *App) Shutdown() {
 		a.eventBus.Stop()
 	}
 
-	// Close chain adapter (single-chain mode only)
-	if a.chainAdapter != nil {
-		if err := a.chainAdapter.Close(); err != nil {
-			a.logger.Error("Failed to close chain adapter", zap.Error(err))
-		}
-	}
-
 	// Stop the writer after its queued commands, before closing storage
 	if a.fetcher != nil {
 		a.fetcher.Close()
@@ -1319,9 +1270,6 @@ func (a *App) featureOverrides() map[string]bool {
 func (a *App) closeAfterFailedStart() {
 	if a.eventBus != nil {
 		a.eventBus.Stop()
-	}
-	if a.chainAdapter != nil {
-		_ = a.chainAdapter.Close()
 	}
 	if a.fetcher != nil {
 		a.fetcher.Close()

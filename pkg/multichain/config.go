@@ -18,7 +18,8 @@ type ChainConfig struct {
 	WSEndpoint string `yaml:"ws_endpoint,omitempty" json:"wsEndpoint,omitempty"`
 	// ChainID is the numeric chain ID (e.g., 1 for Ethereum mainnet).
 	ChainID uint64 `yaml:"chain_id" json:"chainId"`
-	// AdapterType specifies which adapter to use: "auto", "evm", "stableone", "anvil".
+	// AdapterType names the chain profile: "auto" (detected from the node),
+	// "evm", "stableone" (StableNet) or "anvil" (detected).
 	AdapterType string `yaml:"adapter_type" json:"adapterType"`
 	// StartHeight is the block height to start indexing from (0 for genesis).
 	StartHeight uint64 `yaml:"start_height" json:"startHeight"`

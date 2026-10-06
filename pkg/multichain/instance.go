@@ -2,17 +2,15 @@ package multichain
 
 import (
 	"context"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/adapters/factory"
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
+	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/storage"
-	"github.com/0xmhha/indexer-go/pkg/types/chain"
 	"go.uber.org/zap"
 )
 
@@ -23,7 +21,7 @@ type ChainInstance struct {
 
 	// Core components
 	Client   *client.Client
-	Adapter  chain.Adapter
+	Source   *sourcerpc.Source // blocks decoded with the chain profile
 	Fetcher  *fetch.Fetcher
 	Storage  storage.Storage   // Shared storage with chain-scoped prefixing
 	EventBus *events.EventBus  // Global event bus (shared across chains)
@@ -97,8 +95,8 @@ func (ci *ChainInstance) Start(ctx context.Context) error {
 		return err
 	}
 
-	// Initialize adapter
-	if err := ci.initAdapter(ctx); err != nil {
+	// Select the chain profile and its block source
+	if err := ci.initSource(ctx); err != nil {
 		ci.setError(err)
 		return err
 	}
@@ -154,9 +152,6 @@ func (ci *ChainInstance) Stop(ctx context.Context) error {
 	}
 
 	// Clean up resources
-	if ci.Adapter != nil {
-		ci.Adapter.Close()
-	}
 	if ci.Client != nil {
 		ci.Client.Close()
 	}
@@ -275,27 +270,19 @@ func (ci *ChainInstance) initClient() error {
 	return nil
 }
 
-// initAdapter initializes the chain adapter.
-func (ci *ChainInstance) initAdapter(ctx context.Context) error {
-	factoryConfig := &factory.Config{
-		RPCEndpoint:      ci.Config.RPCEndpoint,
-		WSEndpoint:       ci.Config.WSEndpoint,
-		ForceAdapterType: ci.Config.AdapterType,
-		ChainID:          big.NewInt(int64(ci.Config.ChainID)),
+// initSource selects the chain profile (AdapterType names it; "auto"
+// detects it from the node) and the block source that decodes with it.
+func (ci *ChainInstance) initSource(ctx context.Context) error {
+	name := ci.Config.AdapterType
+	if name == "auto" {
+		name = ""
 	}
-
-	f := factory.NewFactory(factoryConfig, ci.logger)
-	result, err := f.Create(ctx)
+	src, err := sourcerpc.Select(ctx, ci.Client.RPCClient(), name)
 	if err != nil {
-		return NewChainError(ci.Config.ID, ErrAdapterInitFailed, err)
+		return NewChainError(ci.Config.ID, ErrSourceInitFailed, err)
 	}
-
-	ci.Adapter = result.Adapter
-	ci.logger.Info("adapter initialized",
-		zap.String("type", result.AdapterType),
-		zap.Uint64("chainId", result.NodeInfo.ChainID),
-	)
-
+	ci.Source = src
+	ci.logger.Info("chain profile selected", zap.String("profile", src.Profile().ID()))
 	return nil
 }
 
@@ -309,14 +296,8 @@ func (ci *ChainInstance) initFetcher() error {
 		RetryDelay:  time.Second,
 	}
 
-	ci.Fetcher = fetch.NewFetcherWithAdapter(
-		ci.Adapter.BlockFetcher(),
-		ci.Storage,
-		fetcherConfig,
-		ci.logger,
-		ci.EventBus,
-		ci.Adapter,
-	)
+	ci.Fetcher = fetch.NewFetcher(ci.Client, ci.Storage, fetcherConfig, ci.logger, ci.EventBus)
+	ci.Fetcher.SetSource(ci.Source)
 
 	return nil
 }

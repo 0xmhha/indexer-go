@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -9,9 +10,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/pkg/types/chain"
+	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // ============================================================================
@@ -41,57 +43,6 @@ func TestFetcher_SetGetChainID(t *testing.T) {
 	f.SetChainID("stable-mainnet")
 	if f.GetChainID() != "stable-mainnet" {
 		t.Errorf("expected stable-mainnet, got %s", f.GetChainID())
-	}
-}
-
-func TestFetcher_SetGetChainAdapter(t *testing.T) {
-	f := newTestFetcherForHelpers(t)
-
-	if f.GetChainAdapter() != nil {
-		t.Error("expected nil chain adapter initially")
-	}
-
-	adapter := &mockChainAdapter{}
-	f.SetChainAdapter(adapter)
-	if f.GetChainAdapter() == nil {
-		t.Error("expected chain adapter to be set")
-	}
-}
-
-func TestNewFetcherWithAdapter(t *testing.T) {
-	client := newMockClient()
-	storage := newMockStorage()
-	config := &Config{
-		StartHeight: 0,
-		BatchSize:   10,
-		MaxRetries:  3,
-		RetryDelay:  time.Second,
-	}
-	adapter := &mockChainAdapter{}
-	f := NewFetcherWithAdapter(client, storage, config, zap.NewNop(), nil, adapter)
-	if f == nil {
-		t.Fatal("expected non-nil fetcher")
-	}
-	if f.GetChainAdapter() == nil {
-		t.Error("expected chain adapter to be set")
-	}
-}
-
-func TestNewFetcherWithAdapter_NilAdapter(t *testing.T) {
-	client := newMockClient()
-	storage := newMockStorage()
-	config := &Config{
-		StartHeight: 0,
-		BatchSize:   10,
-		MaxRetries:  3,
-		RetryDelay:  time.Second,
-	}
-	f := NewFetcherWithAdapter(client, storage, config, zap.NewNop(), nil, nil)
-	if f == nil {
-		t.Fatal("expected non-nil fetcher")
-	}
-	if f.GetChainAdapter() != nil {
-		t.Error("expected nil chain adapter")
 	}
 }
 
@@ -242,17 +193,27 @@ func (m *mockBlockProcessor) ProcessBlock(ctx context.Context, chainID string, b
 	return nil
 }
 
-// mockChainAdapter implements chain.Adapter for testing
-type mockChainAdapter struct{}
-
-func (m *mockChainAdapter) Info() *chain.ChainInfo {
-	return &chain.ChainInfo{
-		ChainType:     chain.ChainTypeEVM,
-		ConsensusType: chain.ConsensusTypeWBFT,
-		Name:          "test",
-	}
+// recordingTokenIndexer records the contracts it is asked to index.
+type recordingTokenIndexer struct {
+	calls []string
 }
-func (m *mockChainAdapter) BlockFetcher() chain.BlockFetcher               { return nil }
-func (m *mockChainAdapter) TransactionParser() chain.TransactionParser     { return nil }
-func (m *mockChainAdapter) SystemContracts() chain.SystemContractsHandler  { return nil }
-func (m *mockChainAdapter) Close() error                                   { return nil }
+
+func (r *recordingTokenIndexer) IndexToken(_ context.Context, address common.Address, blockHeight uint64) error {
+	r.calls = append(r.calls, fmt.Sprintf("%s@%d", address.Hex(), blockHeight))
+	return nil
+}
+
+// TestInitializeGenesisTokenMetadata indexes the chain's known token
+// contracts at height 0.
+func TestInitializeGenesisTokenMetadata(t *testing.T) {
+	addr := common.HexToAddress("0x000000000000000000000000000000000000F00d")
+	storagepkg.RegisterKnownToken(addr, storagepkg.KnownToken{Name: "Test", Symbol: "TST", Decimals: 18})
+
+	f := newTestFetcherForHelpers(t)
+	require.NoError(t, f.initializeGenesisTokenMetadata(context.Background()), "no token indexer")
+
+	idx := &recordingTokenIndexer{}
+	f.SetTokenIndexer(idx)
+	require.NoError(t, f.initializeGenesisTokenMetadata(context.Background()))
+	require.Contains(t, idx.calls, addr.Hex()+"@0")
+}
