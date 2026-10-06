@@ -12,10 +12,11 @@ pkg/api/jsonrpc 8
 pkg/chains 15
 pkg/core/gethconv 3
 pkg/core/model 6
+pkg/core/port 16
 pkg/feature 2
 pkg/features/address 1
 pkg/features/token 7
 pkg/fetch 9
 pkg/multichain 2
-pkg/storage 53
+pkg/storage 45
 pkg/types/chain 11

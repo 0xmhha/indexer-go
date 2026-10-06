@@ -61,7 +61,7 @@ func TestRollbackArchivesOrphans(t *testing.T) {
 	require.Equal(t, uint64(2), r.ForkNumber)
 	require.Equal(t, blocks[2].Hash, r.ForkHash)
 	require.Equal(t, uint64(5), r.OldHead)
-	require.Equal(t, []BlockRef{{5, blocks[5].Hash}, {4, blocks[4].Hash}, {3, blocks[3].Hash}}, r.Removed)
+	require.Equal(t, []BlockRef{{Number: 5, Hash: blocks[5].Hash}, {Number: 4, Hash: blocks[4].Hash}, {Number: 3, Hash: blocks[3].Hash}}, r.Removed)
 	require.Len(t, r.Blocks, 3)
 
 	latest, err := s.GetLatestHeight(ctx)

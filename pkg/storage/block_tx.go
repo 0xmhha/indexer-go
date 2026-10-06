@@ -8,17 +8,14 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ErrBlockTxDone is returned when a finished block transaction is used again.
-var ErrBlockTxDone = errors.New("storage: block transaction already finished")
+var ErrBlockTxDone = port.ErrBlockTxDone
 
-// BlockTransactor is implemented by storages that can index one block
-// atomically. The fetcher uses it to make all writes for a block, including
-// the cursor, become durable together or not at all.
-type BlockTransactor interface {
-	BeginBlock(ctx context.Context) (context.Context, *BlockTx, error)
-}
+var _ port.BlockTx = (*BlockTx)(nil)
 
 // BlockTx is an open block transaction. Every PebbleStorage call made with
 // the context returned by BeginBlock reads and writes through one indexed
@@ -45,10 +42,21 @@ type BlockTx struct {
 	height *uint64
 }
 
-// BeginBlock opens a block transaction and returns a context bound to it.
-// The caller must call Commit or Rollback; deferring Rollback is safe because
-// it does nothing after Commit.
-func (s *PebbleStorage) BeginBlock(ctx context.Context) (context.Context, *BlockTx, error) {
+// BeginBlock implements port.BlockTransactor: it opens a block transaction
+// and returns a context bound to it. The caller must call Commit or
+// Rollback; deferring Rollback is safe because it does nothing after
+// Commit.
+func (s *PebbleStorage) BeginBlock(ctx context.Context) (context.Context, port.BlockTx, error) {
+	txCtx, tx, err := s.beginBlock(ctx)
+	if err != nil {
+		return txCtx, nil, err
+	}
+	return txCtx, tx, nil
+}
+
+// beginBlock is BeginBlock returning the concrete transaction, for storage
+// code that writes to its batch directly (rollback).
+func (s *PebbleStorage) beginBlock(ctx context.Context) (context.Context, *BlockTx, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return ctx, nil, err
 	}
@@ -237,5 +245,8 @@ func (s *PebbleStorage) subTxCount(ctx context.Context, n uint64) {
 	}
 	s.txCount.Add(^(n - 1))
 }
+
+// BlockTransactor is an alias of port.BlockTransactor (refactoring plan R1-1).
+type BlockTransactor = port.BlockTransactor
 
 var _ BlockTransactor = (*PebbleStorage)(nil)
