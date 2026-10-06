@@ -191,7 +191,6 @@ func testAddressIndex(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("InternalTransactionsOffsetCountsEntries", func(t *testing.T) {
-		knownDefect(t, "GetInternalTransactionsByAddress applies offset to transactions but limit to internal calls")
 		s := open[addressIndexStore](t, newStore)
 		saveInternals(t, s)
 		// A's calls are tx1[0], tx1[2], tx2[0]; pages of two must cover all.
