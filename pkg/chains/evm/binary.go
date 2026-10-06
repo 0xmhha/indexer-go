@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 )
 
@@ -183,7 +184,7 @@ func (p *Profile) decodeTxBinary(enc []byte) (*model.Transaction, error) {
 		}
 		return nil, err
 	}
-	return FromGethTx(&tx)
+	return gethconv.RecoverTx(&tx)
 }
 
 // receiptRLP is the consensus encoding of a receipt.

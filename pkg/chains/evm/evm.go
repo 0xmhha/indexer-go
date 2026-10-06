@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 )
 
@@ -208,7 +209,7 @@ func (p *Profile) decodeTx(raw json.RawMessage) (*model.Transaction, error) {
 		}
 		return nil, fmt.Errorf("decode type %d: %w", typ, err)
 	}
-	m, err := FromGethTx(&tx)
+	m, err := gethconv.RecoverTx(&tx)
 	if err != nil {
 		return nil, err
 	}
@@ -217,65 +218,6 @@ func (p *Profile) decodeTx(raw json.RawMessage) (*model.Transaction, error) {
 	}
 	if env.From != nil && *env.From != m.From {
 		return nil, fmt.Errorf("%w: tx %s recovered %s reported %s", ErrSenderMismatch, m.Hash.Hex(), m.From.Hex(), env.From.Hex())
-	}
-	return m, nil
-}
-
-// FromGethTx converts a go-ethereum transaction to the model, recovering the
-// sender. Chain profiles may reuse it for the standard part of their types.
-func FromGethTx(tx *types.Transaction) (*model.Transaction, error) {
-	var signer types.Signer = types.HomesteadSigner{}
-	if tx.Protected() {
-		signer = types.LatestSignerForChainID(tx.ChainId())
-	}
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		return nil, fmt.Errorf("recover sender of %s: %w", tx.Hash().Hex(), err)
-	}
-	m, err := ConvertGethTx(tx)
-	if err != nil {
-		return nil, err
-	}
-	m.From = from
-	return m, nil
-}
-
-// ConvertGethTx converts a go-ethereum transaction to the model without
-// recovering the sender (From is left zero).
-func ConvertGethTx(tx *types.Transaction) (*model.Transaction, error) {
-	raw, err := tx.MarshalBinary()
-	if err != nil {
-		return nil, fmt.Errorf("encode %s: %w", tx.Hash().Hex(), err)
-	}
-	v, r, s := tx.RawSignatureValues()
-	m := &model.Transaction{
-		Hash:      tx.Hash(),
-		Type:      tx.Type(),
-		Nonce:     tx.Nonce(),
-		To:        tx.To(),
-		Value:     tx.Value(),
-		Gas:       tx.Gas(),
-		GasPrice:  tx.GasPrice(),
-		GasTipCap: tx.GasTipCap(),
-		GasFeeCap: tx.GasFeeCap(),
-		Input:     tx.Data(),
-		Signature: model.Signature{V: v, R: r, S: s},
-		Raw:       raw,
-	}
-	if tx.Protected() {
-		m.ChainID = tx.ChainId()
-	}
-	for _, t := range tx.AccessList() {
-		m.AccessList = append(m.AccessList, model.AccessTuple{Address: t.Address, StorageKeys: t.StorageKeys})
-	}
-	for _, a := range tx.SetCodeAuthorizations() {
-		m.AuthList = append(m.AuthList, model.SetCodeAuthorization{
-			ChainID: a.ChainID.ToBig(), Address: a.Address, Nonce: a.Nonce, V: a.V, R: a.R.ToBig(), S: a.S.ToBig(),
-		})
-	}
-	if tx.Type() == types.BlobTxType {
-		m.BlobHashes = tx.BlobHashes()
-		m.BlobFeeCap = tx.BlobGasFeeCap()
 	}
 	return m, nil
 }
@@ -365,47 +307,13 @@ func (p *Profile) DecodeReceipts(raw json.RawMessage) ([]*model.Receipt, error) 
 		if err := r.UnmarshalJSON(items[i]); err != nil {
 			return fmt.Errorf("evm: receipt %d: %w", i, err)
 		}
-		out[i] = ReceiptToModel(&r)
+		out[i] = gethconv.ReceiptFromGeth(&r)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
-}
-
-// ReceiptToModel converts a go-ethereum receipt. The type number is copied as
-// reported; receipts of chain-specific types decode like EIP-1559 receipts.
-func ReceiptToModel(r *types.Receipt) *model.Receipt {
-	m := &model.Receipt{
-		Type:              r.Type,
-		Status:            r.Status,
-		CumulativeGasUsed: r.CumulativeGasUsed,
-		GasUsed:           r.GasUsed,
-		EffectiveGasPrice: r.EffectiveGasPrice,
-		BlobGasUsed:       r.BlobGasUsed,
-		BlobGasPrice:      r.BlobGasPrice,
-		Bloom:             r.Bloom.Bytes(),
-		TxHash:            r.TxHash,
-		TxIndex:           r.TransactionIndex,
-		BlockHash:         r.BlockHash,
-	}
-	if r.BlockNumber != nil {
-		m.BlockNumber = r.BlockNumber.Uint64()
-	}
-	if r.ContractAddress != (common.Address{}) {
-		addr := r.ContractAddress
-		m.ContractAddress = &addr
-	}
-	m.Logs = make([]*model.Log, 0, len(r.Logs))
-	for _, l := range r.Logs {
-		m.Logs = append(m.Logs, &model.Log{
-			Address: l.Address, Topics: l.Topics, Data: l.Data,
-			BlockNumber: l.BlockNumber, BlockHash: l.BlockHash, TxHash: l.TxHash,
-			TxIndex: l.TxIndex, Index: l.Index, Removed: l.Removed,
-		})
-	}
-	return m
 }
 
 // parallelDecodeMin is the transaction or receipt count from which a

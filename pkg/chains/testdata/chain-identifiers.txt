@@ -5,13 +5,11 @@ internal/constants 3
 pkg/adapters/anvil 2
 pkg/adapters/detector 3
 pkg/adapters/evm 8
-pkg/adapters/factory 52
+pkg/adapters/factory 45
 pkg/adapters/stableone 110
-pkg/api/graphql 24
-pkg/api/jsonrpc 8
+pkg/api/graphql 21
+pkg/api/jsonrpc 7
 pkg/chains 15
-pkg/core/gethconv 3
-pkg/core/model 6
 pkg/core/port 3
 pkg/feature 2
 pkg/features/address 1
