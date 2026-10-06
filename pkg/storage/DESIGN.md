@@ -1,5 +1,7 @@
 # Storage Layer Design
 
+> The interfaces described here now live in `pkg/core/port` (refactoring plan R1-1); `pkg/storage` holds the Pebble implementation and the `Storage` union used for assembly.
+
 ## Overview
 
 Storage layer provides persistent storage for blockchain data using PebbleDB with RLP encoding.
