@@ -345,20 +345,6 @@ func (m *mockStorage) SetBalance(ctx context.Context, addr common.Address, block
 	return nil
 }
 
-// FeeDelegationReader methods for mockStorage
-
-func (m *mockStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*port.FeeDelegationTxMeta, error) {
-	return nil, port.ErrNotFound
-}
-
-func (m *mockStorage) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
-	return []common.Hash{}, nil
-}
-
-func (m *mockStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *port.FeeDelegationTxMeta) error {
-	return nil
-}
-
 // KVStore methods for mockStorage
 func (m *mockStorage) Put(ctx context.Context, key, value []byte) error {
 	return nil
@@ -796,20 +782,6 @@ func (m *mockStorageWithErrors) UpdateBalance(ctx context.Context, addr common.A
 }
 
 func (m *mockStorageWithErrors) SetBalance(ctx context.Context, addr common.Address, blockNumber uint64, balance *big.Int) error {
-	return fmt.Errorf("storage error")
-}
-
-// FeeDelegationReader methods for mockStorageWithErrors
-
-func (m *mockStorageWithErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*port.FeeDelegationTxMeta, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
-	return nil, fmt.Errorf("storage error")
-}
-
-func (m *mockStorageWithErrors) SetFeeDelegationTxMeta(ctx context.Context, meta *port.FeeDelegationTxMeta) error {
 	return fmt.Errorf("storage error")
 }
 

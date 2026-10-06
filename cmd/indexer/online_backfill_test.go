@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
+	fdmeta "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 )
@@ -35,13 +36,16 @@ func (onlineFeature) Name() string           { return onlineFeatureName }
 func (onlineFeature) Requires() []string     { return nil }
 func (onlineFeature) OrderIndependent() bool { return true }
 func (onlineFeature) Register(r feature.Registrar) error {
-	w := r.Deps().Storage.(port.FeeDelegationWriter)
+	w, err := fdmeta.OpenMetaStore(r.Deps().Storage)
+	if err != nil {
+		return err
+	}
 	r.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
 		if int64(b.Model.Number) == onlineFailAt.Load() {
 			return errors.New("injected failure")
 		}
 		for _, tx := range b.Model.Transactions {
-			if err := w.SetFeeDelegationTxMeta(ctx, &port.FeeDelegationTxMeta{
+			if err := w.SetTxMeta(ctx, &fdmeta.TxMeta{
 				TxHash: tx.Hash, BlockNumber: b.Model.Number, OriginalType: tx.Type, FeePayer: tx.From,
 				FeePayerV: big.NewInt(0), FeePayerR: big.NewInt(0), FeePayerS: big.NewInt(0),
 			}); err != nil {

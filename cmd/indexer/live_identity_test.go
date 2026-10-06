@@ -21,6 +21,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
+	fdmeta "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -67,8 +68,8 @@ func TestLiveStableNetIdentity(t *testing.T) {
 	require.NoError(t, err)
 	rpcAPI := jsonrpc.NewHandler(app.storage, zap.NewNop())
 	defer rpcAPI.Close()
-	fdReader, ok := app.storage.(port.FeeDelegationReader)
-	require.True(t, ok)
+	fdReader, err := fdmeta.OpenMetaStore(app.storage)
+	require.NoError(t, err)
 	logReader, ok := app.storage.(port.LogReader)
 	require.True(t, ok)
 
@@ -135,7 +136,7 @@ func TestLiveStableNetIdentity(t *testing.T) {
 			changes = append(changes,
 				change{fd.FeePayer, n, tx.Hash, new(big.Int).Neg(gas), "fee payer"},
 				change{tx.From, n, tx.Hash, new(big.Int).Neg(tx.Value), "sender"})
-			meta, err := fdReader.GetFeeDelegationTxMeta(ctx, tx.Hash)
+			meta, err := fdReader.TxMeta(ctx, tx.Hash)
 			require.NoError(t, err)
 			require.NotNil(t, meta, "fee delegation meta of %s", tx.Hash.Hex())
 			require.Equal(t, fd.FeePayer, meta.FeePayer)

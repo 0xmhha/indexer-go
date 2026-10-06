@@ -19,8 +19,6 @@ type Storage interface {
 	port.SearchReader
 	port.ContractVerificationReader
 	port.ContractVerificationWriter
-	port.FeeDelegationReader
-	port.FeeDelegationWriter
 	port.HistoricalReader
 	port.HistoricalWriter
 	port.TokenMetadataReader

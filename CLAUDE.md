@@ -26,7 +26,7 @@ pkg/
   chains/                       Chain profiles and registries; everything chain specific lives in chains/<chain>/
     stablenet/                  StableNet profile: fee delegation (0x16), WBFT hash, Anzeon fees, native accounting
       consensus/, consensus/api/          WBFT store, parser, statistics, events; GraphQL/JSON-RPC extension
-      feedelegation/, feedelegation/api/  Fee delegation statistics; GraphQL extension
+      feedelegation/, feedelegation/api/  Fee delegation metadata store and statistics; GraphQL extension
       systemcontracts/, systemcontracts/api/  System contract events, store, constants; GraphQL/JSON-RPC extension
       features/                 stablenet.wbft, stablenet.fee_delegation, stablenet.system_contracts
   fetch/                        Block ingestion (sequential live loop, one storage transaction per block; worker pool only for gap fill)
