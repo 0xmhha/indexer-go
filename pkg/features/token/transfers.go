@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // TransfersName is the feature name.
@@ -28,7 +28,7 @@ func (transfersFeature) DefaultOn() bool    { return true }
 // restore an old owner. It is therefore not feature.OrderIndependent.
 
 func (transfersFeature) Register(r feature.Registrar) error {
-	w, ok := r.Deps().Storage.(storagepkg.AddressIndexWriter)
+	w, ok := r.Deps().Storage.(port.AddressIndexWriter)
 	if !ok {
 		return fmt.Errorf("storage does not support token transfers")
 	}
@@ -41,7 +41,7 @@ func (transfersFeature) Register(r feature.Registrar) error {
 func init() { feature.Register(transfersFeature{}) }
 
 type transfers struct {
-	w storagepkg.AddressIndexWriter
+	w port.AddressIndexWriter
 	// The chain's native coin contract: its Transfer events are native
 	// value moves (balance.native), not token transfers.
 	nativeCoin    common.Address
@@ -54,7 +54,7 @@ type transfers struct {
 func (t *transfers) HandleBlock(ctx context.Context, b *feature.Block) error {
 	for _, receipt := range b.GethReceipts {
 		for _, log := range receipt.Logs {
-			if log == nil || len(log.Topics) == 0 || log.Topics[0].Hex() != storagepkg.ERC20TransferTopic {
+			if log == nil || len(log.Topics) == 0 || log.Topics[0].Hex() != port.ERC20TransferTopic {
 				continue
 			}
 			if t.hasNativeCoin && log.Address == t.nativeCoin {
@@ -65,7 +65,7 @@ func (t *transfers) HandleBlock(ctx context.Context, b *feature.Block) error {
 				if len(log.Data) < 32 {
 					continue
 				}
-				if err := t.w.SaveERC20Transfer(ctx, &storagepkg.ERC20Transfer{
+				if err := t.w.SaveERC20Transfer(ctx, &port.ERC20Transfer{
 					ContractAddress: log.Address,
 					From:            common.BytesToAddress(log.Topics[1].Bytes()),
 					To:              common.BytesToAddress(log.Topics[2].Bytes()),
@@ -78,7 +78,7 @@ func (t *transfers) HandleBlock(ctx context.Context, b *feature.Block) error {
 					return fmt.Errorf("save ERC-20 transfer in %s: %w", log.TxHash.Hex(), err)
 				}
 			case 4:
-				if err := t.w.SaveERC721Transfer(ctx, &storagepkg.ERC721Transfer{
+				if err := t.w.SaveERC721Transfer(ctx, &port.ERC721Transfer{
 					ContractAddress: log.Address,
 					From:            common.BytesToAddress(log.Topics[1].Bytes()),
 					To:              common.BytesToAddress(log.Topics[2].Bytes()),

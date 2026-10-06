@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 func TestPebbleStorage_SaveGetWBFTBlockExtra(t *testing.T) {
@@ -58,8 +58,8 @@ func TestPebbleStorage_GetWBFTBlockExtra_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := st.GetWBFTBlockExtra(ctx, 999)
-	if err != storage.ErrNotFound {
-		t.Errorf("GetWBFTBlockExtra() error = %v, want storage.ErrNotFound", err)
+	if err != port.ErrNotFound {
+		t.Errorf("GetWBFTBlockExtra() error = %v, want port.ErrNotFound", err)
 	}
 }
 
@@ -156,8 +156,8 @@ func TestPebbleStorage_GetEpochInfo_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := st.GetEpochInfo(ctx, 999)
-	if err != storage.ErrNotFound {
-		t.Errorf("GetEpochInfo() error = %v, want storage.ErrNotFound", err)
+	if err != port.ErrNotFound {
+		t.Errorf("GetEpochInfo() error = %v, want port.ErrNotFound", err)
 	}
 }
 
@@ -202,8 +202,8 @@ func TestPebbleStorage_GetLatestEpochInfo_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := st.GetLatestEpochInfo(ctx)
-	if err != storage.ErrNotFound {
-		t.Errorf("GetLatestEpochInfo() error = %v, want storage.ErrNotFound", err)
+	if err != port.ErrNotFound {
+		t.Errorf("GetLatestEpochInfo() error = %v, want port.ErrNotFound", err)
 	}
 }
 
@@ -268,7 +268,7 @@ func TestPebbleStorage_GetValidatorSigningStats(t *testing.T) {
 	fromBlock := uint64(100)
 	toBlock := uint64(110)
 
-	// Initially should return empty stats (not storage.ErrNotFound)
+	// Initially should return empty stats (not port.ErrNotFound)
 	stats, err := st.GetValidatorSigningStats(ctx, validator, fromBlock, toBlock)
 	if err != nil {
 		t.Fatalf("GetValidatorSigningStats() error = %v", err)
@@ -421,39 +421,39 @@ func TestPebbleStorage_WBFT_ClosedStorage(t *testing.T) {
 	// Close storage
 	_ = st.Close()
 
-	// All operations should return storage.ErrClosed
+	// All operations should return port.ErrClosed
 	_, err := st.GetWBFTBlockExtra(ctx, 100)
-	if !errors.Is(err, storage.ErrClosed) {
-		t.Errorf("GetWBFTBlockExtra() on closed storage error = %v, want storage.ErrClosed", err)
+	if !errors.Is(err, port.ErrClosed) {
+		t.Errorf("GetWBFTBlockExtra() on closed storage error = %v, want port.ErrClosed", err)
 	}
 
 	_, err = st.GetWBFTBlockExtraByHash(ctx, common.Hash{})
-	if !errors.Is(err, storage.ErrClosed) {
-		t.Errorf("GetWBFTBlockExtraByHash() on closed storage error = %v, want storage.ErrClosed", err)
+	if !errors.Is(err, port.ErrClosed) {
+		t.Errorf("GetWBFTBlockExtraByHash() on closed storage error = %v, want port.ErrClosed", err)
 	}
 
 	_, err = st.GetEpochInfo(ctx, 1)
-	if !errors.Is(err, storage.ErrClosed) {
-		t.Errorf("GetEpochInfo() on closed storage error = %v, want storage.ErrClosed", err)
+	if !errors.Is(err, port.ErrClosed) {
+		t.Errorf("GetEpochInfo() on closed storage error = %v, want port.ErrClosed", err)
 	}
 
 	_, err = st.GetLatestEpochInfo(ctx)
-	if !errors.Is(err, storage.ErrClosed) {
-		t.Errorf("GetLatestEpochInfo() on closed storage error = %v, want storage.ErrClosed", err)
+	if !errors.Is(err, port.ErrClosed) {
+		t.Errorf("GetLatestEpochInfo() on closed storage error = %v, want port.ErrClosed", err)
 	}
 
 	_, err = st.GetValidatorSigningStats(ctx, common.Address{}, 0, 100)
-	if !errors.Is(err, storage.ErrClosed) {
-		t.Errorf("GetValidatorSigningStats() on closed storage error = %v, want storage.ErrClosed", err)
+	if !errors.Is(err, port.ErrClosed) {
+		t.Errorf("GetValidatorSigningStats() on closed storage error = %v, want port.ErrClosed", err)
 	}
 
 	err = st.SaveWBFTBlockExtra(ctx, &WBFTBlockExtra{})
-	if !errors.Is(err, storage.ErrClosed) {
-		t.Errorf("SaveWBFTBlockExtra() on closed storage error = %v, want storage.ErrClosed", err)
+	if !errors.Is(err, port.ErrClosed) {
+		t.Errorf("SaveWBFTBlockExtra() on closed storage error = %v, want port.ErrClosed", err)
 	}
 
 	err = st.SaveEpochInfo(ctx, &EpochInfo{})
-	if !errors.Is(err, storage.ErrClosed) {
-		t.Errorf("SaveEpochInfo() on closed storage error = %v, want storage.ErrClosed", err)
+	if !errors.Is(err, port.ErrClosed) {
+		t.Errorf("SaveEpochInfo() on closed storage error = %v, want port.ErrClosed", err)
 	}
 }

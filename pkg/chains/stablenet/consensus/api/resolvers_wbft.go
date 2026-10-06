@@ -8,7 +8,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	gql "github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -35,7 +35,7 @@ func (s *Schema) resolveWBFTBlockExtra(p gql.ResolveParams) (interface{}, error)
 
 	extra, err := wbftReader.GetWBFTBlockExtra(ctx, number)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get WBFT block extra",
@@ -65,7 +65,7 @@ func (s *Schema) resolveWBFTBlockExtraByHash(p gql.ResolveParams) (interface{}, 
 
 	extra, err := wbftReader.GetWBFTBlockExtraByHash(ctx, hash)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get WBFT block extra by hash",
@@ -98,7 +98,7 @@ func (s *Schema) resolveEpochInfo(p gql.ResolveParams) (interface{}, error) {
 
 	epochInfo, err := wbftReader.GetEpochInfo(ctx, epochNumber)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get epoch info",
@@ -138,7 +138,7 @@ func (s *Schema) resolveLatestEpochInfo(p gql.ResolveParams) (interface{}, error
 
 	epochInfo, err := wbftReader.GetLatestEpochInfo(ctx)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get latest epoch info",
@@ -248,7 +248,7 @@ func (s *Schema) resolveValidatorSigningStats(p gql.ResolveParams) (interface{},
 
 	stats, err := wbftReader.GetValidatorSigningStats(ctx, validatorAddr, fromBlock, toBlock)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get validator signing stats",
@@ -438,7 +438,7 @@ func (s *Schema) resolveBlockSigners(p gql.ResolveParams) (interface{}, error) {
 
 	preparers, committers, err := wbftReader.GetBlockSigners(ctx, number)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get block signers",

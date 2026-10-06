@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -93,10 +93,10 @@ func (e *storeError) Error() string { return e.err.Error() }
 func (e *storeError) Unwrap() error { return e.err }
 
 // storageFailure marks err as a write failure, except a missing record
-// (storage.ErrNotFound, e.g. a vote on a proposal created before the index
+// (port.ErrNotFound, e.g. a vote on a proposal created before the index
 // started), which is a property of the data.
 func storageFailure(err error) error {
-	if errors.Is(err, storage.ErrNotFound) {
+	if errors.Is(err, port.ErrNotFound) {
 		return err
 	}
 	return &storeError{err: err}

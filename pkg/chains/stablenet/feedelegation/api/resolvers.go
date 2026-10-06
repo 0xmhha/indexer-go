@@ -6,7 +6,6 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	gql "github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -32,7 +31,7 @@ func (s *Schema) resolveFeeDelegationStats(p gql.ResolveParams) (interface{}, er
 	}
 
 	// Convert fromTime/toTime to block numbers (overrides fromBlock/toBlock)
-	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+	if histStorage := s.history; histStorage != nil {
 		if fromTimeArg, ok := p.Args["fromTime"].(string); ok && fromTimeArg != "" {
 			if ft, success := new(big.Int).SetString(fromTimeArg, 10); success {
 				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
@@ -100,7 +99,7 @@ func (s *Schema) resolveTopFeePayers(p gql.ResolveParams) (interface{}, error) {
 	}
 
 	// Convert fromTime/toTime to block numbers (overrides fromBlock/toBlock)
-	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+	if histStorage := s.history; histStorage != nil {
 		if fromTimeArg, ok := p.Args["fromTime"].(string); ok && fromTimeArg != "" {
 			if ft, success := new(big.Int).SetString(fromTimeArg, 10); success {
 				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
@@ -180,7 +179,7 @@ func (s *Schema) resolveFeePayerStats(p gql.ResolveParams) (interface{}, error) 
 	}
 
 	// Convert fromTime/toTime to block numbers (overrides fromBlock/toBlock)
-	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
+	if histStorage := s.history; histStorage != nil {
 		if fromTimeArg, ok := p.Args["fromTime"].(string); ok && fromTimeArg != "" {
 			if ft, success := new(big.Int).SetString(fromTimeArg, 10); success {
 				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())

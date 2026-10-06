@@ -12,8 +12,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Name is the feature name.
@@ -27,15 +27,15 @@ func (balanceFeature) DefaultOn() bool    { return true }
 
 func (balanceFeature) Register(r feature.Registrar) error {
 	d := r.Deps()
-	w, ok := d.Storage.(storagepkg.HistoricalWriter)
+	w, ok := d.Storage.(port.HistoricalWriter)
 	if !ok {
 		return fmt.Errorf("storage does not support balance history")
 	}
-	rd, ok := d.Storage.(storagepkg.HistoricalReader)
+	rd, ok := d.Storage.(port.HistoricalReader)
 	if !ok {
 		return fmt.Errorf("storage does not support balance history")
 	}
-	rc, ok := d.Storage.(storagepkg.BalanceRecordChecker)
+	rc, ok := d.Storage.(port.BalanceRecordChecker)
 	if !ok {
 		return fmt.Errorf("storage does not support balance history")
 	}
@@ -47,7 +47,7 @@ func (balanceFeature) Register(r feature.Registrar) error {
 		logger = zap.NewNop()
 	}
 	r.OnBlock(&handler{
-		storage: d.Storage, w: w, r: rd, records: rc,
+		w: w, r: rd, records: rc,
 		accounting: chains.AccountingOf(d.Profile),
 		balanceAt:  d.BalanceAt, blocks: d.Blocks(), logger: logger,
 	})
@@ -57,10 +57,9 @@ func (balanceFeature) Register(r feature.Registrar) error {
 func init() { feature.Register(balanceFeature{}) }
 
 type handler struct {
-	storage    storagepkg.Storage
-	w          storagepkg.HistoricalWriter
-	r          storagepkg.HistoricalReader
-	records    storagepkg.BalanceRecordChecker
+	w          port.HistoricalWriter
+	r          port.HistoricalReader
+	records    port.BalanceRecordChecker
 	accounting chains.NativeAccounting
 	balanceAt  func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
 	blocks     chains.AccountingEnv
@@ -96,7 +95,7 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 		}
 		err := h.w.UpdateBalance(ctx, d.Address, n, d.Delta, d.TxHash)
 		switch {
-		case errors.Is(err, storagepkg.ErrNegativeBalance):
+		case errors.Is(err, port.ErrNegativeBalance):
 			diverged[d.Address] = true
 		case err != nil:
 			h.logger.Warn("Failed to update balance",

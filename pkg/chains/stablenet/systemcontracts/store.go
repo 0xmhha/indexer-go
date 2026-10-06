@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
+
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -17,12 +19,12 @@ import (
 // storage (bound to the block transaction through ctx while a block is
 // indexed).
 type Store struct {
-	db     storage.KV
+	db     port.KV
 	logger *zap.Logger
 }
 
 // NewStore returns a system contract store over db.
-func NewStore(db storage.KV, logger *zap.Logger) *Store {
+func NewStore(db port.KV, logger *zap.Logger) *Store {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -32,7 +34,7 @@ func NewStore(db storage.KV, logger *zap.Logger) *Store {
 // Open returns a system contract store over s, which must provide
 // key-value access (the Pebble storage does).
 func Open(s any, logger *zap.Logger) (*Store, error) {
-	db, ok := s.(storage.KV)
+	db, ok := s.(port.KV)
 	if !ok {
 		return nil, fmt.Errorf("storage %T does not support system contract data", s)
 	}
@@ -130,9 +132,9 @@ func (s *Store) UpdateProposalStatus(ctx context.Context, contract common.Addres
 	// Get existing proposal
 	key := ProposalKey(contract, proposalID.String())
 	data, err := s.db.Get(ctx, key)
-	if errors.Is(err, storage.ErrNotFound) {
+	if errors.Is(err, port.ErrNotFound) {
 		// Created before the index started, or its creation was not indexed.
-		return fmt.Errorf("proposal %s of %s: %w", proposalID, contract.Hex(), storage.ErrNotFound)
+		return fmt.Errorf("proposal %s of %s: %w", proposalID, contract.Hex(), port.ErrNotFound)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to get proposal: %w", err)
@@ -285,7 +287,7 @@ func (s *Store) UpdateTotalSupply(ctx context.Context, delta *big.Int) error {
 	key := TotalSupplyKey()
 	data, err := s.db.Get(ctx, key)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			// Initialize to 0
 			data = storage.EncodeBigInt(big.NewInt(0))
 		} else {
@@ -372,7 +374,7 @@ func (s *Store) GetTotalSupply(ctx context.Context) (*big.Int, error) {
 	key := TotalSupplyKey()
 	data, err := s.db.Get(ctx, key)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return big.NewInt(0), nil
 		}
 		return nil, fmt.Errorf("failed to get total supply: %w", err)
@@ -427,7 +429,7 @@ func (s *Store) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, mi
 			eventKey := iter.Value()
 			data, err := s.db.Get(ctx, eventKey)
 			if err != nil {
-				if errors.Is(err, storage.ErrNotFound) {
+				if errors.Is(err, port.ErrNotFound) {
 					continue
 				}
 				return nil, fmt.Errorf("failed to get mint event: %w", err)
@@ -499,7 +501,7 @@ func (s *Store) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, bu
 			eventKey := iter.Value()
 			data, err := s.db.Get(ctx, eventKey)
 			if err != nil {
-				if errors.Is(err, storage.ErrNotFound) {
+				if errors.Is(err, port.ErrNotFound) {
 					continue
 				}
 				return nil, fmt.Errorf("failed to get burn event: %w", err)
@@ -556,7 +558,7 @@ func (s *Store) GetMinterAllowance(ctx context.Context, minter common.Address) (
 	key := MinterActiveIndexKey(minter)
 	data, err := s.db.Get(ctx, key)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return big.NewInt(0), nil
 		}
 		return nil, fmt.Errorf("failed to get minter allowance: %w", err)
@@ -919,7 +921,7 @@ func (s *Store) GetProposalById(ctx context.Context, contract common.Address, pr
 	key := ProposalKey(contract, proposalId.String())
 	data, err := s.db.Get(ctx, key)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get proposal: %w", err)

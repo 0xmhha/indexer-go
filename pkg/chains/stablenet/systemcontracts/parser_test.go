@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 	"math/big"
 	"testing"
 	"time"
@@ -315,7 +315,7 @@ func TestParseAndIndexLogs_ReturnsStorageFailure(t *testing.T) {
 	}
 
 	// A vote on a proposal the index does not have is data, not a failure.
-	mock.storeErr = fmt.Errorf("proposal 7: %w", storagepkg.ErrNotFound)
+	mock.storeErr = fmt.Errorf("proposal 7: %w", port.ErrNotFound)
 	approved := &types.Log{
 		Address: GovMinterAddress,
 		Topics: []common.Hash{EventSigProposalApproved, common.BigToHash(big.NewInt(7)),

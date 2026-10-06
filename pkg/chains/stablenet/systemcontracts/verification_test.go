@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 func TestSystemContractInfoList(t *testing.T) {
@@ -69,18 +69,18 @@ func TestInitSystemContractVerifications_NonExistentPath(t *testing.T) {
 	}
 }
 
-// mockContractVerificationWriter implements storage.ContractVerificationWriter for testing
+// mockContractVerificationWriter implements port.ContractVerificationWriter for testing
 type mockContractVerificationWriter struct {
-	verifications map[common.Address]*storage.ContractVerification
+	verifications map[common.Address]*port.ContractVerification
 }
 
 func newMockContractVerificationWriter() *mockContractVerificationWriter {
 	return &mockContractVerificationWriter{
-		verifications: make(map[common.Address]*storage.ContractVerification),
+		verifications: make(map[common.Address]*port.ContractVerification),
 	}
 }
 
-func (m *mockContractVerificationWriter) SetContractVerification(ctx context.Context, v *storage.ContractVerification) error {
+func (m *mockContractVerificationWriter) SetContractVerification(ctx context.Context, v *port.ContractVerification) error {
 	m.verifications[v.Address] = v
 	return nil
 }
@@ -90,7 +90,7 @@ func (m *mockContractVerificationWriter) DeleteContractVerification(ctx context.
 	return nil
 }
 
-// mockContractVerificationReader implements storage.ContractVerificationReader for testing
+// mockContractVerificationReader implements port.ContractVerificationReader for testing
 type mockContractVerificationReader struct {
 	verified map[common.Address]bool
 }
@@ -105,7 +105,7 @@ func (m *mockContractVerificationReader) IsContractVerified(ctx context.Context,
 	return m.verified[addr], nil
 }
 
-func (m *mockContractVerificationReader) GetContractVerification(ctx context.Context, addr common.Address) (*storage.ContractVerification, error) {
+func (m *mockContractVerificationReader) GetContractVerification(ctx context.Context, addr common.Address) (*port.ContractVerification, error) {
 	return nil, nil
 }
 

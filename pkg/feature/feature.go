@@ -20,6 +20,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -64,7 +65,10 @@ func (f BlockHandlerFunc) HandleBlock(ctx context.Context, b *Block) error { ret
 
 // Deps are the services a feature may use.
 type Deps struct {
-	Storage storage.Storage
+	// Storage is the indexer's storage. A feature takes the ports it uses
+	// (pkg/core/port) by type assertion and fails to register when one is
+	// missing.
+	Storage port.Reader
 	Logger  *zap.Logger
 	// Profile is the chain profile of the node, or nil if it is unknown.
 	Profile chains.Profile
@@ -361,7 +365,7 @@ type depsBlocks struct{ d Deps }
 
 func (b depsBlocks) Block(ctx context.Context, number uint64) (*model.Block, error) {
 	blk, err := storage.AsModelReader(b.d.Storage).GetModelBlock(ctx, number)
-	if err == nil || !errors.Is(err, storage.ErrNotFound) || b.d.BlockAt == nil {
+	if err == nil || !errors.Is(err, port.ErrNotFound) || b.d.BlockAt == nil {
 		return blk, err
 	}
 	return b.d.BlockAt(ctx, number)

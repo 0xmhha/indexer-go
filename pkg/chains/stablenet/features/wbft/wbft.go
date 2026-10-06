@@ -15,9 +15,9 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Name is the feature name.
@@ -145,7 +145,7 @@ func (h *handler) epochNumber(ctx context.Context, height uint64) (uint64, error
 		return latest.EpochNumber + 1, nil
 	case err == nil && latest != nil && latest.BlockNumber == height:
 		return latest.EpochNumber, nil
-	case err != nil && !errors.Is(err, storagepkg.ErrNotFound):
+	case err != nil && !errors.Is(err, port.ErrNotFound):
 		return 0, fmt.Errorf("latest epoch: %w", err)
 	}
 	h.logger.Warn("No earlier epoch indexed; numbering the epoch from the default epoch length",

@@ -12,6 +12,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -19,8 +20,8 @@ import (
 // the block transaction through ctx while a block is indexed) and the
 // stored blocks.
 type Backend interface {
-	storage.KV
-	storage.ModelReader
+	port.KV
+	port.ModelReader
 }
 
 // Store reads and writes WBFT consensus data.
@@ -53,12 +54,12 @@ func Open(s any, logger *zap.Logger) (*Store, error) {
 }
 
 // getJSON decodes the value of key into v; a missing key is
-// storage.ErrNotFound.
+// port.ErrNotFound.
 func (s *Store) getJSON(ctx context.Context, key []byte, what string, v any) error {
 	raw, err := s.db.Get(ctx, key)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return storage.ErrNotFound
+		if errors.Is(err, port.ErrNotFound) {
+			return port.ErrNotFound
 		}
 		return fmt.Errorf("failed to get %s: %w", what, err)
 	}
@@ -98,8 +99,8 @@ func (s *Store) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*WBF
 func (s *Store) GetWBFTBlockExtraByHash(ctx context.Context, blockHash common.Hash) (*WBFTBlockExtra, error) {
 	raw, err := s.db.Get(ctx, storage.BlockHashIndexKey(blockHash))
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return nil, storage.ErrNotFound
+		if errors.Is(err, port.ErrNotFound) {
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get block number: %w", err)
 	}
@@ -123,8 +124,8 @@ func (s *Store) GetEpochInfo(ctx context.Context, epochNumber uint64) (*EpochInf
 func (s *Store) GetLatestEpochInfo(ctx context.Context) (*EpochInfo, error) {
 	raw, err := s.db.Get(ctx, LatestEpochKey())
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return nil, storage.ErrNotFound
+		if errors.Is(err, port.ErrNotFound) {
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get latest epoch: %w", err)
 	}
@@ -156,7 +157,7 @@ func (s *Store) GetValidatorSigningStats(ctx context.Context, validatorAddress c
 
 	var stats ValidatorSigningStats
 	err := s.getJSON(ctx, WBFTValidatorStatsKey(validatorAddress, fromBlock, toBlock), "validator signing stats", &stats)
-	if errors.Is(err, storage.ErrNotFound) {
+	if errors.Is(err, port.ErrNotFound) {
 		// Return empty stats if not found
 		return &ValidatorSigningStats{
 			ValidatorAddress: validatorAddress,
