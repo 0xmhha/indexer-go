@@ -18,7 +18,8 @@ var allowedInternal = map[string]bool{
 
 // TestPortsImportNoImplementation keeps the ports free of any storage
 // implementation (refactoring plan R1-1): no Pebble, no pkg/storage, no
-// chain profile; only the standard library, go-ethereum types and the
+// chain profile; only the standard library, go-ethereum's basic types
+// (common, not core/types: ports speak the chain-neutral model) and the
 // allowed module packages.
 func TestPortsImportNoImplementation(t *testing.T) {
 	entries, err := os.ReadDir(".")
@@ -40,7 +41,7 @@ func TestPortsImportNoImplementation(t *testing.T) {
 			switch {
 			case !strings.Contains(strings.SplitN(p, "/", 2)[0], "."):
 				// standard library
-			case strings.HasPrefix(p, "github.com/ethereum/go-ethereum/") && !strings.Contains(p, "/ethdb"):
+			case strings.HasPrefix(p, "github.com/ethereum/go-ethereum/") && !strings.Contains(p, "/ethdb") && p != "github.com/ethereum/go-ethereum/core/types":
 			case allowedInternal[p]:
 			default:
 				t.Errorf("%s imports %s", name, p)

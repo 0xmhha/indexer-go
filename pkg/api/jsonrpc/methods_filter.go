@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -376,7 +375,7 @@ func (h *Handler) ethGetFilterLogs(ctx context.Context, params json.RawMessage) 
 // whether a reorganization removed it.
 func (h *Handler) advanceFilter(ctx context.Context, id string, height uint64) {
 	var hash common.Hash
-	if b, err := storage.AsModelReader(h.storage).GetModelBlock(ctx, height); err == nil {
+	if b, err := h.storage.GetBlock(ctx, height); err == nil {
 		hash = b.Hash
 	}
 	h.filterManager.SetPollPoint(id, height, hash)

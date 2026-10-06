@@ -33,10 +33,10 @@ func TestLegacyReadsFindFeeDelegationTxs(t *testing.T) {
 
 	s := newTestPebble(t)
 	ctx := context.Background()
-	require.NoError(t, s.SetModelBlock(ctx, b))
+	require.NoError(t, s.SetBlock(ctx, b))
 	require.NoError(t, s.SetLatestHeight(ctx, 33))
 	for _, r := range rs {
-		require.NoError(t, s.SetModelReceipt(ctx, r))
+		require.NoError(t, s.SetReceipt(ctx, r))
 	}
 	fdTx := b.Transactions[1]
 	_, ok := stablenet.FeeDelegationOf(fdTx)

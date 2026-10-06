@@ -44,7 +44,7 @@ type FeePayerStats struct {
 // Backend is the storage the statistics read: stored blocks and receipts
 // and the indexed height.
 type Backend interface {
-	port.ModelReader
+	port.BlockReader
 	GetLatestHeight(ctx context.Context) (uint64, error)
 }
 
@@ -85,7 +85,7 @@ func (s *Stats) scan(ctx context.Context, fromBlock, toBlock uint64, fn func(spo
 	}
 	var total uint64
 	for height := fromBlock; height <= toBlock; height++ {
-		block, err := s.db.GetModelBlock(ctx, height)
+		block, err := s.db.GetBlock(ctx, height)
 		if err != nil || block == nil {
 			continue
 		}
@@ -104,7 +104,7 @@ func (s *Stats) scan(ctx context.Context, fromBlock, toBlock uint64, fn func(spo
 // fee returns gasUsed times the effective gas price of tx, or nil without a
 // receipt.
 func (s *Stats) fee(ctx context.Context, block *model.Block, tx *model.Transaction) *big.Int {
-	receipt, err := s.db.GetModelReceipt(ctx, tx.Hash)
+	receipt, err := s.db.GetReceipt(ctx, tx.Hash)
 	if err != nil || receipt == nil {
 		return nil
 	}

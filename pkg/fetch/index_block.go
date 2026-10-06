@@ -38,20 +38,13 @@ func (f *Fetcher) publish(ev events.Event) bool {
 }
 
 // storedBlockHash returns the hash of the block stored at height, as the
-// chain reports it when the storage keeps the model.
+// chain reports it.
 func (f *Fetcher) storedBlockHash(ctx context.Context, height uint64) (common.Hash, error) {
-	if mr, ok := f.storage.(port.ModelReader); ok {
-		b, err := mr.GetModelBlock(ctx, height)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		return b.Hash, nil
-	}
 	b, err := f.storage.GetBlock(ctx, height)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return b.Hash(), nil
+	return b.Hash, nil
 }
 
 // applyBlock performs every write for one block. It must run inside a block
@@ -81,13 +74,10 @@ func (f *Fetcher) applyBlock(ctx context.Context, fb *fetchedBlock) error {
 	return nil
 }
 
-// storeBlock stores the block and its transactions, as the model when the
-// storage supports it so they are kept under the hashes the chain reports.
+// storeBlock stores the block and its transactions under the hashes the
+// chain reports.
 func (f *Fetcher) storeBlock(ctx context.Context, fb *fetchedBlock) error {
-	if mw, ok := f.storage.(port.ModelWriter); ok {
-		return mw.SetModelBlock(ctx, fb.block)
-	}
-	return f.storage.SetBlock(ctx, fb.geth)
+	return f.storage.SetBlock(ctx, fb.block)
 }
 
 // blockEvent builds the block event with the chain's block hash.

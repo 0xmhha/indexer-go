@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -113,7 +115,7 @@ func (m *mockStorage) GetLatestHeight(ctx context.Context) (uint64, error) {
 	return m.latestHeight, nil
 }
 
-func (m *mockStorage) GetBlock(ctx context.Context, height uint64) (*types.Block, error) {
+func (m *mockStorage) gethGetBlock(ctx context.Context, height uint64) (*types.Block, error) {
 	block, ok := m.blocks[height]
 	if !ok {
 		return nil, fmt.Errorf("block not found")
@@ -121,7 +123,7 @@ func (m *mockStorage) GetBlock(ctx context.Context, height uint64) (*types.Block
 	return block, nil
 }
 
-func (m *mockStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+func (m *mockStorage) gethGetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	for _, block := range m.blocks {
 		if block.Hash() == hash {
 			return block, nil
@@ -130,7 +132,7 @@ func (m *mockStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*ty
 	return nil, fmt.Errorf("block not found")
 }
 
-func (m *mockStorage) SetBlock(ctx context.Context, block *types.Block) error {
+func (m *mockStorage) gethSetBlock(ctx context.Context, block *types.Block) error {
 	if m.readOnly {
 		return fmt.Errorf("storage is read-only")
 	}
@@ -147,7 +149,7 @@ func (m *mockStorage) SetLatestHeight(ctx context.Context, height uint64) error 
 	return nil
 }
 
-func (m *mockStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
+func (m *mockStorage) gethSetReceipt(ctx context.Context, receipt *types.Receipt) error {
 	if m.readOnly {
 		return fmt.Errorf("storage is read-only")
 	}
@@ -182,15 +184,15 @@ func (m *mockStorage) GetMissingReceipts(ctx context.Context, blockNumber uint64
 
 // Legacy methods for backward compatibility with existing tests
 func (m *mockStorage) GetBlockByHeight(height uint64) (*types.Block, error) {
-	return m.GetBlock(context.Background(), height)
+	return m.gethGetBlock(context.Background(), height)
 }
 
 func (m *mockStorage) PutBlock(block *types.Block) error {
-	return m.SetBlock(context.Background(), block)
+	return m.gethSetBlock(context.Background(), block)
 }
 
 func (m *mockStorage) PutReceipt(receipt *types.Receipt) error {
-	return m.SetReceipt(context.Background(), receipt)
+	return m.gethSetReceipt(context.Background(), receipt)
 }
 
 func (m *mockStorage) Close() error {
@@ -1063,4 +1065,50 @@ func TestProcessBalanceTracking(t *testing.T) {
 	t.Logf("  To: %s, Balance: %v", to.Hex(), receiverBalance)
 	t.Logf("  Value transferred: %v Wei", value)
 	t.Logf("  Gas cost: %v Wei", gasCost)
+}
+
+func (m *mockStorage) GetBlock(ctx context.Context, height uint64) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlock(ctx, height))
+}
+
+func (m *mockStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlockByHash(ctx, hash))
+}
+
+func (m *mockStorage) SetBlock(ctx context.Context, b *model.Block) error {
+	gb, err := gethconv.BlockToGeth(b)
+	if err != nil {
+		return err
+	}
+	return m.gethSetBlock(ctx, gb)
+}
+
+func (m *mockStorage) SetReceipt(ctx context.Context, r *model.Receipt) error {
+	return m.gethSetReceipt(ctx, gethconv.ReceiptToGeth(r))
+}
+
+func (m *mockStorage) GetBlocks(ctx context.Context, start, end uint64) ([]*model.Block, error) {
+	var out []*model.Block
+	for h := start; h <= end; h++ {
+		if b, ok := m.blocks[h]; ok {
+			mb, err := modelBlockOf(b, nil)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, mb)
+		}
+	}
+	return out, nil
+}
+
+func (m *mockStorage) GetTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *port.TxLocation, error) {
+	return nil, nil, port.ErrNotFound
+}
+
+func (m *mockStorage) GetReceipt(ctx context.Context, hash common.Hash) (*model.Receipt, error) {
+	r, ok := m.receipts[hash]
+	if !ok {
+		return nil, port.ErrNotFound
+	}
+	return modelReceiptOf(r, nil)
 }

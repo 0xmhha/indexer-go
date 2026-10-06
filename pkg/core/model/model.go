@@ -116,6 +116,12 @@ type SetCodeAuthorization struct {
 	R, S    *big.Int
 }
 
+// Receipt statuses (EIP-658).
+const (
+	ReceiptStatusFailed     = uint64(0)
+	ReceiptStatusSuccessful = uint64(1)
+)
+
 // Receipt is a chain-neutral transaction receipt.
 type Receipt struct {
 	Type              uint8

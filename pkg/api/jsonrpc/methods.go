@@ -14,7 +14,6 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -266,7 +265,7 @@ func (h *Handler) getBlock(ctx context.Context, params json.RawMessage) (interfa
 		return nil, NewError(InvalidParams, "block number must be a string or number", nil)
 	}
 
-	block, err := h.models().GetModelBlock(ctx, blockNumber)
+	block, err := h.storage.GetBlock(ctx, blockNumber)
 	if err != nil {
 		if err == port.ErrNotFound {
 			return nil, NewError(InternalError, "block not found", nil)
@@ -293,7 +292,7 @@ func (h *Handler) getBlockByHash(ctx context.Context, params json.RawMessage) (i
 	}
 
 	hash := common.HexToHash(p.Hash)
-	block, err := h.models().GetModelBlockByHash(ctx, hash)
+	block, err := h.storage.GetBlockByHash(ctx, hash)
 	if err != nil {
 		if err == port.ErrNotFound {
 			return nil, NewError(InternalError, "block not found", nil)
@@ -320,7 +319,7 @@ func (h *Handler) getTxResult(ctx context.Context, params json.RawMessage) (inte
 	}
 
 	hash := common.HexToHash(p.Hash)
-	tx, location, err := h.models().GetModelTransaction(ctx, hash)
+	tx, location, err := h.storage.GetTransaction(ctx, hash)
 	if err != nil {
 		if err == port.ErrNotFound {
 			return nil, NewError(InternalError, "transaction not found", nil)
@@ -356,7 +355,7 @@ func (h *Handler) getTxReceipt(ctx context.Context, params json.RawMessage) (int
 		return nil, NewError(InternalError, "failed to get receipt", err.Error())
 	}
 
-	return h.receiptToJSON(receipt), nil
+	return h.receiptToJSON(gethconv.ReceiptToGeth(receipt)), nil
 }
 
 // blockToJSON converts a block to JSON-friendly format. Hashes are the ones
@@ -446,7 +445,7 @@ func (h *Handler) transactionToJSON(tx *model.Transaction, location *port.TxLoca
 		// Contract creation transaction - look up the receipt to get the contract address
 		if h.storage != nil {
 			receipt, err := h.storage.GetReceipt(context.Background(), tx.Hash)
-			if err == nil && receipt != nil && receipt.ContractAddress != (common.Address{}) {
+			if err == nil && receipt != nil && receipt.ContractAddress != nil {
 				result["contractAddress"] = receipt.ContractAddress.Hex()
 			}
 		}
@@ -529,32 +528,6 @@ func (h *Handler) feeDelegation(tx *model.Transaction) (common.Address, *big.Int
 }
 
 // models reads blocks and transactions as the chain-neutral model.
-func (h *Handler) models() port.ModelReader {
-	return storage.AsModelReader(h.storage)
-}
-
-// modelBlockOf returns the stored model of a block another reader returned
-// as a go-ethereum block, falling back to converting it.
-func (h *Handler) modelBlockOf(ctx context.Context, b *types.Block) *model.Block {
-	if m, err := h.models().GetModelBlock(ctx, b.NumberU64()); err == nil {
-		return m
-	}
-	m, _ := gethconv.BlockFromGeth(b)
-	return m
-}
-
-// modelTxAt returns the stored model of a transaction another reader
-// returned as a go-ethereum transaction, looked up by position because the
-// go-ethereum hash of a chain-specific type differs from the chain's.
-func (h *Handler) modelTxAt(ctx context.Context, tx *types.Transaction, loc *port.TxLocation) *model.Transaction {
-	if loc != nil {
-		if b, err := h.models().GetModelBlock(ctx, loc.BlockHeight); err == nil && int(loc.TxIndex) < len(b.Transactions) {
-			return b.Transactions[loc.TxIndex]
-		}
-	}
-	m, _ := gethconv.TxFromGeth(tx)
-	return m
-}
 
 func orZero(x *big.Int) *big.Int {
 	if x == nil {

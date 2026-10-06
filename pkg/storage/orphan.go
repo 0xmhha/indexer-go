@@ -90,13 +90,13 @@ func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) (*port.Reorg,
 	}
 
 	rec := &port.Reorg{OldHead: latest, ForkNumber: to, DetectedAt: uint64(time.Now().Unix())}
-	if fork, err := s.GetModelBlock(ctx, to); err == nil {
+	if fork, err := s.GetBlock(ctx, to); err == nil {
 		rec.ForkHash = fork.Hash
 	} else if !errors.Is(err, port.ErrNotFound) {
 		return nil, fmt.Errorf("read fork block %d: %w", to, err)
 	}
 	for h := latest; h > to; h-- {
-		b, err := s.GetModelBlock(ctx, h)
+		b, err := s.GetBlock(ctx, h)
 		if err != nil {
 			return nil, fmt.Errorf("read block %d to roll back: %w", h, err)
 		}
@@ -122,7 +122,7 @@ func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) (*port.Reorg,
 // archiveOrphan writes block h, about to be rolled back in tx, as an orphan
 // of reorganization rec, and the reorganization record itself when first.
 func (s *PebbleStorage) archiveOrphan(txCtx context.Context, tx *BlockTx, h uint64, rec *port.Reorg, first bool) (*port.OrphanedBlock, error) {
-	b, err := s.GetModelBlock(txCtx, h)
+	b, err := s.GetBlock(txCtx, h)
 	if err != nil {
 		return nil, fmt.Errorf("read block %d to archive: %w", h, err)
 	}
@@ -132,7 +132,7 @@ func (s *PebbleStorage) archiveOrphan(txCtx context.Context, tx *BlockTx, h uint
 		return nil, fmt.Errorf("encode orphaned block %d: %w", h, err)
 	}
 	for _, t := range b.Transactions {
-		r, err := s.GetModelReceipt(txCtx, t.Hash)
+		r, err := s.GetReceipt(txCtx, t.Hash)
 		if err != nil {
 			return nil, fmt.Errorf("read receipt of %s in block %d: %w", t.Hash.Hex(), h, err)
 		}

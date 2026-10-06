@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 )
 
 // TransactionType represents the type of transaction relative to an address
@@ -50,9 +51,9 @@ type TransactionFilter struct {
 // TransactionWithReceipt combines a transaction with its receipt and location
 type TransactionWithReceipt struct {
 	// Transaction is the transaction data
-	Transaction *types.Transaction
+	Transaction *model.Transaction
 	// Receipt is the transaction receipt
-	Receipt *types.Receipt
+	Receipt *model.Receipt
 	// Location is the transaction location (block height, index)
 	Location *TxLocation
 }
@@ -200,10 +201,10 @@ type AddressStats struct {
 // HistoricalReader provides read-only access to historical blockchain data
 type HistoricalReader interface {
 	// GetBlocksByTimeRange returns blocks within a time range
-	GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error)
+	GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error)
 
 	// GetBlockByTimestamp returns the block closest to the given timestamp
-	GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error)
+	GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error)
 
 	// GetTransactionsByAddressFiltered returns filtered transactions for an address
 	GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *TransactionFilter, limit, offset int) ([]*TransactionWithReceipt, error)
@@ -306,19 +307,15 @@ func (f *TransactionFilter) Validate() error {
 }
 
 // MatchTransaction checks if a transaction matches the filter criteria
-func (f *TransactionFilter) MatchTransaction(tx *types.Transaction, receipt *types.Receipt, location *TxLocation, targetAddr common.Address) bool {
+func (f *TransactionFilter) MatchTransaction(tx *model.Transaction, receipt *model.Receipt, location *TxLocation, targetAddr common.Address) bool {
 	// Check block range
 	if location.BlockHeight < f.FromBlock || location.BlockHeight > f.ToBlock {
 		return false
 	}
 
-	// Check transaction type
-	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-	if err != nil {
-		return false
-	}
-
-	to := tx.To()
+	// Check transaction type: the sender as the chain reports it
+	from := tx.From
+	to := tx.To
 	switch f.TxType {
 	case TxTypeSent:
 		if from != targetAddr {
@@ -335,22 +332,22 @@ func (f *TransactionFilter) MatchTransaction(tx *types.Transaction, receipt *typ
 	}
 
 	// Check value range
-	if f.MinValue != nil && tx.Value().Cmp(f.MinValue) < 0 {
+	if f.MinValue != nil && valueOf(tx).Cmp(f.MinValue) < 0 {
 		return false
 	}
 
-	if f.MaxValue != nil && tx.Value().Cmp(f.MaxValue) > 0 {
+	if f.MaxValue != nil && valueOf(tx).Cmp(f.MaxValue) > 0 {
 		return false
 	}
 
 	// Check success status
-	if f.SuccessOnly && (receipt == nil || receipt.Status != types.ReceiptStatusSuccessful) {
+	if f.SuccessOnly && (receipt == nil || receipt.Status != model.ReceiptStatusSuccessful) {
 		return false
 	}
 
 	// Check methodId
 	if f.MethodID != "" {
-		inputData := tx.Data()
+		inputData := tx.Input
 		if len(inputData) < 4 {
 			return false
 		}
@@ -374,6 +371,14 @@ func (f *TransactionFilter) MatchTransaction(tx *types.Transaction, receipt *typ
 	}
 
 	return true
+}
+
+// valueOf returns the value a transaction transfers (zero when unset).
+func valueOf(tx *model.Transaction) *big.Int {
+	if tx.Value == nil {
+		return new(big.Int)
+	}
+	return tx.Value
 }
 
 // DefaultTransactionFilter returns a default filter with no restrictions

@@ -8,9 +8,9 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
@@ -23,7 +23,7 @@ var _ port.HistoricalWriter = (*PebbleStorage)(nil)
 // ============================================================================
 
 // GetBlocksByTimeRange returns blocks within a time range
-func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
+func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTi
 	}
 	defer iter.Close()
 
-	var blocks []*types.Block
+	var blocks []*model.Block
 	count := 0
 
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -84,7 +84,7 @@ func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTi
 }
 
 // GetBlockByTimestamp returns the block closest to the given timestamp
-func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
+func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 // isFeeDelegated reports whether a stored transaction has its gas paid by a
 // fee payer, as the chain profile decoded it (chains.FeeDelegationOf).
 func (s *PebbleStorage) isFeeDelegated(ctx context.Context, txHash common.Hash) (bool, error) {
-	tx, _, err := s.GetModelTransaction(ctx, txHash)
+	tx, _, err := s.GetTransaction(ctx, txHash)
 	if err != nil {
 		return false, fmt.Errorf("read transaction %s: %w", txHash.Hex(), err)
 	}
@@ -435,7 +435,7 @@ func (s *PebbleStorage) InitializeTransactionCount(ctx context.Context) error {
 			return fmt.Errorf("failed to get block %d: %w", height, err)
 		}
 
-		totalTxCount += uint64(len(block.Transactions()))
+		totalTxCount += uint64(len(block.Transactions))
 	}
 
 	// Set the transaction count
@@ -621,7 +621,7 @@ func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address
 
 		// The model keeps the sender and hash the chain reports, and the
 		// fee payer of fee delegation transactions.
-		tx, location, err := s.GetModelTransaction(ctx, txHash)
+		tx, location, err := s.GetTransaction(ctx, txHash)
 		if err != nil {
 			continue
 		}
@@ -631,7 +631,7 @@ func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address
 		if value == nil {
 			value = new(big.Int)
 		}
-		succeeded := receipt != nil && receipt.Status == types.ReceiptStatusSuccessful
+		succeeded := receipt != nil && receipt.Status == model.ReceiptStatusSuccessful
 
 		stats.TotalTransactions++
 
@@ -679,7 +679,7 @@ func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address
 
 		// Timestamps
 		if location != nil {
-			block, err := s.GetModelBlock(ctx, location.BlockHeight)
+			block, err := s.GetBlock(ctx, location.BlockHeight)
 			if err == nil && block != nil {
 				ts := block.Time
 				if stats.FirstTransactionTimestamp == 0 || ts < stats.FirstTransactionTimestamp {

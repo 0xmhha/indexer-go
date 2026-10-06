@@ -49,7 +49,7 @@ func TestConsensusStorage_SaveAndGetConsensusData(t *testing.T) {
 
 	// Create and save block (required by GetConsensusData)
 	block := createTestBlockWithMiner(100, consensusData.Proposer, 100000, consensusData.Timestamp)
-	err = pebbleStorage.SetBlock(context.Background(), block)
+	err = pebbleStorage.SetBlock(context.Background(), modelBlock(block))
 	require.NoError(t, err)
 
 	// Save consensus data

@@ -17,7 +17,7 @@ import (
 type backend interface {
 	consensus.WBFTReader
 	consensus.WBFTWriter
-	GetModelBlock(ctx context.Context, height uint64) (*model.Block, error)
+	GetBlock(ctx context.Context, height uint64) (*model.Block, error)
 }
 
 // Schema holds the resolvers of the consensus queries. storage is nil when

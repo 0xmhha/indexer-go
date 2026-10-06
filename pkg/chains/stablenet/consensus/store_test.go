@@ -75,7 +75,7 @@ func TestPebbleStorage_GetWBFTBlockExtraByHash(t *testing.T) {
 
 	// Need to set block hash index
 	block := createTestBlockWithMiner(blockNumber, common.Address{}, 100000, 1000)
-	err := st.SetBlock(ctx, block)
+	err := st.SetBlock(ctx, modelBlock(block))
 	if err != nil {
 		t.Fatalf("SetBlock() error = %v", err)
 	}
@@ -379,7 +379,7 @@ func TestPebbleStorage_GetBlockSigners(t *testing.T) {
 
 	// Create and save block with WBFT extra
 	block := createTestBlockWithMiner(blockNumber, common.Address{}, 100000, 1000)
-	err := st.SetBlock(ctx, block)
+	err := st.SetBlock(ctx, modelBlock(block))
 	if err != nil {
 		t.Fatalf("SetBlock() error = %v", err)
 	}

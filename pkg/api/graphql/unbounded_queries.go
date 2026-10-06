@@ -36,7 +36,7 @@ func (s *Schema) recentTransactions(ctx context.Context, filter TransactionFilte
 
 	var collected []map[string]interface{}
 	for h := int64(latestHeight); h >= 0 && len(collected) < need; h-- {
-		block, err := s.models().GetModelBlock(ctx, uint64(h))
+		block, err := s.storage.GetBlock(ctx, uint64(h))
 		if err != nil {
 			if errors.Is(err, port.ErrNotFound) {
 				continue

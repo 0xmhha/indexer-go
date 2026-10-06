@@ -118,7 +118,7 @@ func (s *Schema) resolveEpochInfo(p gql.ResolveParams) (interface{}, error) {
 	}
 
 	// Add timestamp from the epoch boundary block
-	block, err := s.storage.GetModelBlock(ctx, epochInfo.BlockNumber)
+	block, err := s.storage.GetBlock(ctx, epochInfo.BlockNumber)
 	if err == nil && block != nil {
 		result["timestamp"] = fmt.Sprintf("%d", block.Time)
 	}
@@ -157,7 +157,7 @@ func (s *Schema) resolveLatestEpochInfo(p gql.ResolveParams) (interface{}, error
 	}
 
 	// Add timestamp from the epoch boundary block
-	block, err := s.storage.GetModelBlock(ctx, epochInfo.BlockNumber)
+	block, err := s.storage.GetBlock(ctx, epochInfo.BlockNumber)
 	if err == nil && block != nil {
 		result["timestamp"] = fmt.Sprintf("%d", block.Time)
 	}
@@ -192,7 +192,7 @@ func (s *Schema) resolveEpochs(p gql.ResolveParams) (interface{}, error) {
 		}
 
 		// Fetch timestamp from the epoch boundary block
-		block, err := s.storage.GetModelBlock(ctx, epoch.BlockNumber)
+		block, err := s.storage.GetBlock(ctx, epoch.BlockNumber)
 		if err == nil && block != nil {
 			node["timestamp"] = fmt.Sprintf("%d", block.Time)
 		}

@@ -39,7 +39,7 @@ func (s *Schema) resolveConsensusData(p gql.ResolveParams) (interface{}, error) 
 	}
 
 	// Get block for proposer (coinbase)
-	block, err := s.storage.GetModelBlock(ctx, blockNumber)
+	block, err := s.storage.GetBlock(ctx, blockNumber)
 	if err != nil {
 		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil

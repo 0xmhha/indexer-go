@@ -6,10 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // FilterType represents the type of filter
@@ -179,9 +178,8 @@ func reorgSince(ctx context.Context, store port.QueryStore, filter *Filter) (uin
 	if filter.LastPollHash == (common.Hash{}) {
 		return filter.LastPollBlock, nil, nil
 	}
-	models := storage.AsModelReader(store)
 	canonical := func(n uint64, hash common.Hash) (bool, error) {
-		b, err := models.GetModelBlock(ctx, n)
+		b, err := store.GetBlock(ctx, n)
 		if errors.Is(err, port.ErrNotFound) {
 			return false, nil
 		}
@@ -232,14 +230,14 @@ func reorgSince(ctx context.Context, store port.QueryStore, filter *Filter) (uin
 
 // removedLogs returns the logs of removed blocks that match the filter,
 // marked removed, newest first (as go-ethereum reports them).
-func removedLogs(removed []*port.OrphanedBlock, filter *port.LogFilter) []*types.Log {
-	var out []*types.Log
+func removedLogs(removed []*port.OrphanedBlock, filter *port.LogFilter) []*model.Log {
+	var out []*model.Log
 	for _, ob := range removed {
 		for i := len(ob.Receipts) - 1; i >= 0; i-- {
 			logs := ob.Receipts[i].Logs
 			for j := len(logs) - 1; j >= 0; j-- {
 				l := logs[j]
-				log := &types.Log{
+				log := &model.Log{
 					Address: l.Address, Topics: l.Topics, Data: l.Data,
 					BlockNumber: l.BlockNumber, BlockHash: l.BlockHash, TxHash: l.TxHash,
 					TxIndex: l.TxIndex, Index: l.Index, Removed: true,
@@ -337,7 +335,7 @@ func tip(ctx context.Context, store port.QueryStore) (uint64, common.Hash, error
 
 // hashAt returns the hash of the stored block at height (zero if none).
 func hashAt(ctx context.Context, store port.QueryStore, height uint64) (common.Hash, error) {
-	b, err := storage.AsModelReader(store).GetModelBlock(ctx, height)
+	b, err := store.GetBlock(ctx, height)
 	if errors.Is(err, port.ErrNotFound) {
 		return common.Hash{}, nil
 	}
@@ -378,13 +376,13 @@ func readStable(ctx context.Context, store port.QueryStore, read func(height uin
 
 // GetLogsSinceLastPoll returns new logs since the last poll for a log
 // filter, with the height and hash of the last block it read.
-func (fm *FilterManager) GetLogsSinceLastPoll(ctx context.Context, store port.QueryStore, filterID string) ([]*types.Log, uint64, common.Hash, error) {
+func (fm *FilterManager) GetLogsSinceLastPoll(ctx context.Context, store port.QueryStore, filterID string) ([]*model.Log, uint64, common.Hash, error) {
 	filter, exists := fm.GetFilter(filterID)
 	if !exists || filter.Type != LogFilterType {
 		return nil, 0, common.Hash{}, nil
 	}
 
-	var logs []*types.Log
+	var logs []*model.Log
 	height, hash, err := readStable(ctx, store, func(currentHeight uint64) error {
 		// Logs of blocks a reorganization removed since the last poll come
 		// first, marked removed; then the logs of the canonical blocks after
@@ -434,7 +432,7 @@ func (fm *FilterManager) GetBlockHashesSinceLastPoll(ctx context.Context, store 
 		for blockNum := from + 1; blockNum <= currentHeight; blockNum++ {
 			// The model keeps the hash the chain reports (go-ethereum's
 			// recomputed hash is wrong for WBFT blocks).
-			block, err := storage.AsModelReader(store).GetModelBlock(ctx, blockNum)
+			block, err := store.GetBlock(ctx, blockNum)
 			if errors.Is(err, port.ErrNotFound) {
 				continue
 			}

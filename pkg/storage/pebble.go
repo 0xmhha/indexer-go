@@ -420,15 +420,6 @@ func prefixUpperBound(prefix []byte) []byte {
 	return nil // All 0xff, no upper bound
 }
 
-// NewBatch creates a new batch for atomic writes
-func (s *PebbleStorage) NewBatch() Batch {
-	return &pebbleBatch{
-		storage: s,
-		batch:   s.db.NewBatch(),
-		count:   0,
-	}
-}
-
 // Compact triggers manual compaction
 func (s *PebbleStorage) Compact(ctx context.Context, start, end []byte) error {
 	if err := s.ensureNotClosed(); err != nil {

@@ -6,9 +6,9 @@ import (
 	"sort"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 )
 
@@ -39,7 +39,7 @@ func (s *PebbleStorage) scanTransferEvents(ctx context.Context, addr common.Addr
 }
 
 // processReceiptTransfers processes a single receipt for Transfer events
-func (s *PebbleStorage) processReceiptTransfers(receipt *types.Receipt, addr common.Address, balanceMap map[common.Address]*big.Int) {
+func (s *PebbleStorage) processReceiptTransfers(receipt *model.Receipt, addr common.Address, balanceMap map[common.Address]*big.Int) {
 	for _, log := range receipt.Logs {
 		// Check if this is a Transfer event
 		if len(log.Topics) < 3 || log.Topics[0] != transferEventTopic {
@@ -202,14 +202,14 @@ func (s *PebbleStorage) aggregateMinerStats(ctx context.Context, startBlock, end
 		}
 
 		totalBlocks++
-		miner := block.Coinbase()
+		miner := block.Miner
 
 		stats := s.getOrCreateMinerStats(minerMap, miner)
 		stats.BlockCount++
 
 		if height > stats.LastBlockNumber {
 			stats.LastBlockNumber = height
-			stats.LastBlockTime = block.Time()
+			stats.LastBlockTime = block.Time
 		}
 
 		s.addBlockRewardsToStats(ctx, block, stats)
@@ -236,22 +236,18 @@ func (s *PebbleStorage) getOrCreateMinerStats(minerMap map[common.Address]*port.
 }
 
 // addBlockRewardsToStats calculates and adds transaction fees to miner stats
-func (s *PebbleStorage) addBlockRewardsToStats(ctx context.Context, block *types.Block, stats *port.MinerStats) {
+func (s *PebbleStorage) addBlockRewardsToStats(ctx context.Context, block *model.Block, stats *port.MinerStats) {
 	// Create transaction map for O(1) lookup, under the hashes the chain
 	// reports (the receipts' hashes)
-	mb, err := s.GetModelBlock(ctx, block.NumberU64())
-	if err != nil {
-		return
-	}
-	txMap := make(map[common.Hash]*big.Int, len(mb.Transactions))
-	for _, tx := range mb.Transactions {
+	txMap := make(map[common.Hash]*big.Int, len(block.Transactions))
+	for _, tx := range block.Transactions {
 		if tx.GasPrice != nil {
 			txMap[tx.Hash] = tx.GasPrice
 		}
 	}
 
 	// Get receipts and calculate fees
-	receipts, err := s.GetReceiptsByBlockNumber(ctx, block.NumberU64())
+	receipts, err := s.GetReceiptsByBlockNumber(ctx, block.Number)
 	if err != nil {
 		return
 	}

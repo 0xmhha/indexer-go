@@ -21,7 +21,7 @@ import (
 // stored blocks.
 type Backend interface {
 	port.KV
-	port.ModelReader
+	port.BlockReader
 }
 
 // Store reads and writes WBFT consensus data.
@@ -141,7 +141,7 @@ func (s *Store) GetLatestEpochInfo(ctx context.Context) (*EpochInfo, error) {
 func (s *Store) proposerCounts(ctx context.Context, from, to uint64) map[common.Address]uint64 {
 	counts := make(map[common.Address]uint64)
 	for n := from; n <= to; n++ {
-		if b, err := s.db.GetModelBlock(ctx, n); err == nil && b != nil {
+		if b, err := s.db.GetBlock(ctx, n); err == nil && b != nil {
 			counts[b.Miner]++
 		}
 		if n == to { // to may be the largest uint64
@@ -380,7 +380,7 @@ func (s *Store) UpdateValidatorSigningStats(ctx context.Context, blockNumber uin
 	return nil
 }
 
-// GetModelBlock returns a stored block (the proposer of WBFT data).
-func (s *Store) GetModelBlock(ctx context.Context, height uint64) (*model.Block, error) {
-	return s.db.GetModelBlock(ctx, height)
+// GetBlock returns a stored block (the proposer of WBFT data).
+func (s *Store) GetBlock(ctx context.Context, height uint64) (*model.Block, error) {
+	return s.db.GetBlock(ctx, height)
 }

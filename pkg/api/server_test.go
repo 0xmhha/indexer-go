@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
@@ -39,19 +41,19 @@ func (m *mockStorage) HasABI(ctx context.Context, address common.Address) (bool,
 	return false, nil
 }
 
-func (m *mockStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
+func (m *mockStorage) gethGetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 
-func (m *mockStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
+func (m *mockStorage) gethGetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 
-func (m *mockStorage) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (m *mockStorage) gethGetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 
-func (m *mockStorage) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (m *mockStorage) gethGetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 
@@ -67,11 +69,11 @@ func (m *mockStorage) DeleteLogsByBlock(ctx context.Context, blockNumber uint64)
 	return nil
 }
 
-func (m *mockStorage) IndexLogs(ctx context.Context, logs []*types.Log) error {
+func (m *mockStorage) gethIndexLogs(ctx context.Context, logs []*types.Log) error {
 	return nil
 }
 
-func (m *mockStorage) IndexLog(ctx context.Context, log *types.Log) error {
+func (m *mockStorage) gethIndexLog(ctx context.Context, log *types.Log) error {
 	return nil
 }
 
@@ -409,4 +411,28 @@ func TestConfigDefaults(t *testing.T) {
 	if config.Address() != expectedAddr {
 		t.Errorf("expected address %s, got %s", expectedAddr, config.Address())
 	}
+}
+
+func (m *mockStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogs(ctx, filter))
+}
+
+func (m *mockStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByBlock(ctx, blockNumber))
+}
+
+func (m *mockStorage) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByAddress(ctx, address, fromBlock, toBlock))
+}
+
+func (m *mockStorage) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByTopic(ctx, topic, topicIndex, fromBlock, toBlock))
+}
+
+func (m *mockStorage) IndexLogs(ctx context.Context, logs []*model.Log) error {
+	return m.gethIndexLogs(ctx, gethconv.LogsToGeth(logs))
+}
+
+func (m *mockStorage) IndexLog(ctx context.Context, log *model.Log) error {
+	return m.gethIndexLog(ctx, gethconv.LogToGeth(log))
 }

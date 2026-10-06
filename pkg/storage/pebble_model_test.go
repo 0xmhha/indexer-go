@@ -35,27 +35,27 @@ func TestModelStorageKeepsStableNetIdentity(t *testing.T) {
 	st := s.(*PebbleStorage)
 	ctx := context.Background()
 
-	require.NoError(t, st.SetModelBlock(ctx, b))
+	require.NoError(t, st.SetBlock(ctx, b))
 	for _, r := range rs {
-		require.NoError(t, st.SetModelReceipt(ctx, r))
+		require.NoError(t, st.SetReceipt(ctx, r))
 	}
 
-	got, err := st.GetModelBlockByHash(ctx, b.Hash)
+	got, err := st.GetBlockByHash(ctx, b.Hash)
 	require.NoError(t, err, "the block is found under its WBFT hash")
 	require.Equal(t, b.Hash, got.Hash)
-	byHeight, err := st.GetModelBlock(ctx, 33)
+	byHeight, err := st.GetBlock(ctx, 33)
 	require.NoError(t, err)
 	require.Equal(t, b.Hash, byHeight.Hash)
 
 	fdTx := b.Transactions[1]
-	tx, loc, err := st.GetModelTransaction(ctx, fdTx.Hash)
+	tx, loc, err := st.GetTransaction(ctx, fdTx.Hash)
 	require.NoError(t, err, "the fee delegation tx is found under its canonical hash")
 	require.Equal(t, uint8(stablenet.FeeDelegationTxType), tx.Type)
 	require.Equal(t, stablenet.FeePayerOf(fdTx), stablenet.FeePayerOf(tx))
 	require.Equal(t, uint64(1), loc.TxIndex)
 	require.Equal(t, b.Hash, loc.BlockHash)
 
-	r, err := st.GetModelReceipt(ctx, fdTx.Hash)
+	r, err := st.GetReceipt(ctx, fdTx.Hash)
 	require.NoError(t, err)
 	require.Equal(t, uint8(stablenet.FeeDelegationTxType), r.Type)
 	require.Equal(t, rs[1].GasUsed, r.GasUsed)
@@ -63,7 +63,7 @@ func TestModelStorageKeepsStableNetIdentity(t *testing.T) {
 	// Legacy readers still work through the bridge, with its known limits.
 	legacyTx, _, err := st.GetTransaction(ctx, fdTx.Hash)
 	require.NoError(t, err)
-	require.Equal(t, fdTx.Nonce, legacyTx.Nonce())
+	require.Equal(t, fdTx.Nonce, legacyTx.Nonce)
 	legacyReceipt, err := st.GetReceipt(ctx, fdTx.Hash)
 	require.NoError(t, err)
 	require.Equal(t, fdTx.Hash, legacyReceipt.TxHash)
@@ -75,5 +75,5 @@ func TestModelReceiptValidation(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
 	st := s.(*PebbleStorage)
-	require.ErrorIs(t, st.SetModelReceipt(context.Background(), nil), port.ErrInvalidReceipt)
+	require.ErrorIs(t, st.SetReceipt(context.Background(), nil), port.ErrInvalidReceipt)
 }

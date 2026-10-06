@@ -276,7 +276,7 @@ func (s *Schema) resolveSetCodeTransactionsInBlock(p graphql.ResolveParams) (int
 	result := make([]interface{}, 0, len(txHashes))
 	blockTimestamps := make(map[uint64]string)
 	for txHash := range txHashes {
-		tx, location, err := s.models().GetModelTransaction(ctx, txHash)
+		tx, location, err := s.storage.GetTransaction(ctx, txHash)
 		if err != nil {
 			s.logger.Warn("failed to get transaction",
 				zap.String("txHash", txHash.Hex()),
@@ -289,7 +289,7 @@ func (s *Schema) resolveSetCodeTransactionsInBlock(p graphql.ResolveParams) (int
 				if ts, ok := blockTimestamps[location.BlockHeight]; ok {
 					txMap["blockTimestamp"] = ts
 				} else {
-					block, blockErr := s.models().GetModelBlock(ctx, location.BlockHeight)
+					block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
 					if blockErr == nil && block != nil {
 						ts = fmt.Sprintf("%d", block.Time)
 						blockTimestamps[location.BlockHeight] = ts
@@ -342,7 +342,7 @@ func (s *Schema) resolveRecentSetCodeTransactions(p graphql.ResolveParams) (inte
 	result := make([]interface{}, 0, len(txHashes))
 	blockTimestamps2 := make(map[uint64]string)
 	for _, txHash := range txHashes {
-		tx, location, err := s.models().GetModelTransaction(ctx, txHash)
+		tx, location, err := s.storage.GetTransaction(ctx, txHash)
 		if err != nil {
 			s.logger.Warn("failed to get transaction",
 				zap.String("txHash", txHash.Hex()),
@@ -355,7 +355,7 @@ func (s *Schema) resolveRecentSetCodeTransactions(p graphql.ResolveParams) (inte
 				if ts, ok := blockTimestamps2[location.BlockHeight]; ok {
 					txMap["blockTimestamp"] = ts
 				} else {
-					block, blockErr := s.models().GetModelBlock(ctx, location.BlockHeight)
+					block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
 					if blockErr == nil && block != nil {
 						ts = fmt.Sprintf("%d", block.Time)
 						blockTimestamps2[location.BlockHeight] = ts

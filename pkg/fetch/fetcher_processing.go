@@ -70,15 +70,8 @@ func (f *Fetcher) processBlockMetadata(ctx context.Context, fb *fetchedBlock) er
 // storeReceiptsSequential stores receipts, indexes their logs and parses
 // system contract events one receipt at a time.
 func (f *Fetcher) storeReceiptsSequential(ctx context.Context, fb *fetchedBlock) error {
-	mw, modelStore := f.storage.(port.ModelWriter)
-	for i, receipt := range fb.gethReceipts {
-		var err error
-		if modelStore {
-			err = mw.SetModelReceipt(ctx, fb.receipts[i])
-		} else {
-			err = f.storage.SetReceipt(ctx, receipt)
-		}
-		if err != nil {
+	for _, receipt := range fb.receipts {
+		if err := f.storage.SetReceipt(ctx, receipt); err != nil {
 			return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
 		}
 

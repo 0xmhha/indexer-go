@@ -5,7 +5,8 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 )
 
 // Common errors
@@ -35,38 +36,29 @@ var (
 // Reader provides read-only access to blockchain data
 // Following Interface Segregation Principle - clients depend only on read methods
 type Reader interface {
+	BlockReader
+
 	// GetLatestHeight returns the latest indexed block height
 	GetLatestHeight(ctx context.Context) (uint64, error)
 
-	// GetBlock returns a block by height
-	GetBlock(ctx context.Context, height uint64) (*types.Block, error)
-
-	// GetBlockByHash returns a block by hash
-	GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
-
-	// GetTransaction returns a transaction and its location by hash
-	GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *TxLocation, error)
-
-	// GetTransactions returns multiple transactions and their locations by hash (batch operation)
-	GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*TxLocation, error)
+	// GetTransactions returns multiple transactions and their locations by
+	// hash (batch operation). A hash that cannot be read leaves nil entries;
+	// the first such error is returned with the partial result.
+	GetTransactions(ctx context.Context, hashes []common.Hash) ([]*model.Transaction, []*TxLocation, error)
 
 	// GetTransactionsByAddress returns transactions for an address with pagination
 	GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error)
 
-	// GetReceipt returns a transaction receipt by hash
-	GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error)
-
-	// GetReceipts returns multiple receipts by transaction hashes (batch operation)
-	GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error)
+	// GetReceipts returns multiple receipts by transaction hashes (batch
+	// operation), with the same partial-result rule as GetTransactions.
+	GetReceipts(ctx context.Context, hashes []common.Hash) ([]*model.Receipt, error)
 
 	// GetReceiptsByBlockHash returns all receipts for a block by block hash
-	GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error)
+	GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*model.Receipt, error)
 
-	// GetReceiptsByBlockNumber returns all receipts for a block by block number
-	GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error)
-
-	// GetBlocks returns multiple blocks by height range (batch operation)
-	GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error)
+	// GetReceiptsByBlockNumber returns the stored receipts of a block, in
+	// transaction order; missing receipts are skipped.
+	GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*model.Receipt, error)
 
 	// HasBlock checks if a block exists at given height
 	HasBlock(ctx context.Context, height uint64) (bool, error)
@@ -84,26 +76,13 @@ type Reader interface {
 // Writer provides write access to blockchain data
 // Following Interface Segregation Principle - separate write interface
 type Writer interface {
+	BlockWriter
+
 	// SetLatestHeight updates the latest indexed block height
 	SetLatestHeight(ctx context.Context, height uint64) error
 
-	// SetBlock stores a block
-	SetBlock(ctx context.Context, block *types.Block) error
-
-	// SetTransaction stores a transaction with its location
-	SetTransaction(ctx context.Context, tx *types.Transaction, location *TxLocation) error
-
-	// SetReceipt stores a transaction receipt
-	SetReceipt(ctx context.Context, receipt *types.Receipt) error
-
-	// SetReceipts stores multiple receipts atomically (batch operation)
-	SetReceipts(ctx context.Context, receipts []*types.Receipt) error
-
 	// AddTransactionToAddressIndex adds a transaction to an address index
 	AddTransactionToAddressIndex(ctx context.Context, addr common.Address, txHash common.Hash) error
-
-	// SetBlocks stores multiple blocks atomically (batch operation)
-	SetBlocks(ctx context.Context, blocks []*types.Block) error
 
 	// DeleteBlock removes a block (for reorganization handling)
 	DeleteBlock(ctx context.Context, height uint64) error
@@ -184,7 +163,7 @@ type LogFilter struct {
 
 // Matches reports whether log satisfies the address and topic criteria
 // (the block range is not checked).
-func (f *LogFilter) Matches(log *types.Log) bool {
+func (f *LogFilter) Matches(log *model.Log) bool {
 	if len(f.Addresses) > 0 {
 		found := false
 		for _, a := range f.Addresses {
@@ -221,25 +200,25 @@ func (f *LogFilter) Matches(log *types.Log) bool {
 // LogReader provides read access to event logs
 type LogReader interface {
 	// GetLogs returns logs matching the given filter
-	GetLogs(ctx context.Context, filter *LogFilter) ([]*types.Log, error)
+	GetLogs(ctx context.Context, filter *LogFilter) ([]*model.Log, error)
 
 	// GetLogsByBlock returns all logs in a specific block
-	GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error)
+	GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*model.Log, error)
 
 	// GetLogsByAddress returns logs emitted by a specific contract
-	GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error)
+	GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*model.Log, error)
 
 	// GetLogsByTopic returns logs with a specific topic at a specific position
-	GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error)
+	GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*model.Log, error)
 }
 
 // LogWriter provides write access to event logs
 type LogWriter interface {
 	// IndexLogs indexes logs from a receipt
-	IndexLogs(ctx context.Context, logs []*types.Log) error
+	IndexLogs(ctx context.Context, logs []*model.Log) error
 
 	// IndexLog indexes a single log
-	IndexLog(ctx context.Context, log *types.Log) error
+	IndexLog(ctx context.Context, log *model.Log) error
 }
 
 // ABIReader provides read access to contract ABIs

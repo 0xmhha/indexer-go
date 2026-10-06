@@ -62,7 +62,7 @@ func TestLiveStableNetIdentity(t *testing.T) {
 	app := startAppAt(t, endpoint, dir, atomicMode)
 	require.NoError(t, app.fetcher.FetchRange(ctx, 0, head))
 
-	mr, ok := app.storage.(port.ModelReader)
+	mr, ok := app.storage.(port.BlockReader)
 	require.True(t, ok)
 	gql, err := graphql.NewHandler(app.storage, zap.NewNop())
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestLiveStableNetIdentity(t *testing.T) {
 		rs, err := src.Receipts(ctx, b)
 		require.NoError(t, err)
 
-		stored, err := mr.GetModelBlockByHash(ctx, b.Hash)
+		stored, err := mr.GetBlockByHash(ctx, b.Hash)
 		require.NoError(t, err, "block %d by node hash %s", n, b.Hash.Hex())
 		require.Equal(t, n, stored.Number)
 		if g, err := gethconv.BlockToGeth(b); err == nil && g.Hash() != b.Hash {
@@ -115,12 +115,12 @@ func TestLiveStableNetIdentity(t *testing.T) {
 		for i, tx := range b.Transactions {
 			checkTxAPIs(t, ctx, gql, rpcAPI, tx)
 			txs++
-			got, loc, err := mr.GetModelTransaction(ctx, tx.Hash)
+			got, loc, err := mr.GetTransaction(ctx, tx.Hash)
 			require.NoError(t, err, "tx %s", tx.Hash.Hex())
 			require.Equal(t, tx.Type, got.Type)
 			require.Equal(t, uint64(i), loc.TxIndex)
 			require.Equal(t, b.Hash, loc.BlockHash)
-			r, err := mr.GetModelReceipt(ctx, tx.Hash)
+			r, err := mr.GetReceipt(ctx, tx.Hash)
 			require.NoError(t, err, "receipt %s", tx.Hash.Hex())
 			require.Equal(t, rs[i].GasUsed, r.GasUsed)
 			blockLogs += len(rs[i].Logs)

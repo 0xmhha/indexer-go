@@ -166,7 +166,7 @@ func (s *Schema) resolveOrphanedTransaction(p graphql.ResolveParams) (interface{
 
 	// Where the transaction is canonical now, if anywhere.
 	var reincluded interface{}
-	if _, loc, err := s.models().GetModelTransaction(p.Context, txHash); err == nil {
+	if _, loc, err := s.storage.GetTransaction(p.Context, txHash); err == nil {
 		reincluded = blockRefToMap(loc.BlockHeight, loc.BlockHash)
 	} else if !errors.Is(err, port.ErrNotFound) {
 		return nil, err

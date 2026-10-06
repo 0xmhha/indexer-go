@@ -93,7 +93,7 @@ func TestResolveConsensusData(t *testing.T) {
 
 	// Save a block so GetBlock works
 	block := createBlockFromConsensusData(testData)
-	err := pebbleStorage.SetBlock(context.Background(), block)
+	err := pebbleStorage.SetBlock(context.Background(), modelBlock(block))
 	require.NoError(t, err)
 
 	err = consensusStorage.SaveConsensusData(context.Background(), testData)

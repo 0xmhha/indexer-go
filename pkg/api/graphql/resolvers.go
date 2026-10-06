@@ -10,9 +10,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
@@ -46,7 +44,7 @@ func (s *Schema) resolveBlock(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("invalid block number format: %w", err)
 	}
 
-	block, err := s.models().GetModelBlock(ctx, number)
+	block, err := s.storage.GetBlock(ctx, number)
 	if err != nil {
 		s.logger.Error("failed to get block",
 			zap.Uint64("number", number),
@@ -66,7 +64,7 @@ func (s *Schema) resolveBlockByHash(p graphql.ResolveParams) (interface{}, error
 	}
 
 	hash := common.HexToHash(hashStr)
-	block, err := s.models().GetModelBlockByHash(ctx, hash)
+	block, err := s.storage.GetBlockByHash(ctx, hash)
 	if err != nil {
 		s.logger.Error("failed to get block by hash",
 			zap.String("hash", hashStr),
@@ -118,7 +116,7 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	}
 
 	// Fetch and filter blocks
-	blocks, err := s.models().GetModelBlocks(ctx, blockRange.StartBlock, blockRange.EndBlock)
+	blocks, err := s.storage.GetBlocks(ctx, blockRange.StartBlock, blockRange.EndBlock)
 	if err != nil {
 		s.logger.Error("failed to get blocks",
 			zap.Uint64("startBlock", blockRange.StartBlock),
@@ -268,7 +266,7 @@ func (s *Schema) resolveBlocksRange(p graphql.ResolveParams) (interface{}, error
 	// Fetch blocks in range
 	blocks := make([]interface{}, 0, endNumber-startNumber+1)
 	for blockNum := startNumber; blockNum <= endNumber; blockNum++ {
-		block, err := s.models().GetModelBlock(ctx, blockNum)
+		block, err := s.storage.GetBlock(ctx, blockNum)
 		if err != nil {
 			s.logger.Warn("failed to get block in range",
 				zap.Uint64("blockNumber", blockNum),
@@ -295,7 +293,7 @@ func (s *Schema) resolveBlocksRange(p graphql.ResolveParams) (interface{}, error
 				// Get receipt for this transaction
 				receipt, err := s.storage.GetReceipt(ctx, tx.Hash)
 				if err == nil && receipt != nil {
-					txMap["receipt"] = s.receiptToMap(receipt)
+					txMap["receipt"] = s.receiptToMap(gethconv.ReceiptToGeth(receipt))
 				}
 				enhancedTxs = append(enhancedTxs, txMap)
 			}
@@ -327,7 +325,7 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 	}
 
 	hash := common.HexToHash(hashStr)
-	tx, location, err := s.models().GetModelTransaction(ctx, hash)
+	tx, location, err := s.storage.GetTransaction(ctx, hash)
 	if err != nil {
 		s.logger.Error("failed to get transaction",
 			zap.String("hash", hashStr),
@@ -337,7 +335,7 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 
 	result := s.transactionToMap(tx, location)
 	if location != nil {
-		if block, err := s.models().GetModelBlock(ctx, location.BlockHeight); err == nil && block != nil {
+		if block, err := s.storage.GetBlock(ctx, location.BlockHeight); err == nil && block != nil {
 			result["blockTimestamp"] = fmt.Sprintf("%d", block.Time)
 		}
 	}
@@ -345,7 +343,7 @@ func (s *Schema) resolveTransaction(p graphql.ResolveParams) (interface{}, error
 	// Include the stored receipt for status determination
 	receipt, err := s.storage.GetReceipt(ctx, hash)
 	if err == nil && receipt != nil {
-		result["receipt"] = s.receiptToMap(receipt)
+		result["receipt"] = s.receiptToMap(gethconv.ReceiptToGeth(receipt))
 	}
 
 	return result, nil
@@ -380,7 +378,7 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 	}
 
 	// Fetch blocks and filter transactions
-	blocks, err := s.models().GetModelBlocks(ctx, blockFrom, blockTo)
+	blocks, err := s.storage.GetBlocks(ctx, blockFrom, blockTo)
 	if err != nil {
 		s.logger.Error("failed to get blocks",
 			zap.Uint64("blockNumberFrom", blockFrom),
@@ -559,7 +557,7 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 	nodes := make([]interface{}, 0, len(txHashes))
 	blockTimestamps := make(map[uint64]string) // cache block timestamps
 	for _, txHash := range txHashes {
-		tx, location, err := s.models().GetModelTransaction(ctx, txHash)
+		tx, location, err := s.storage.GetTransaction(ctx, txHash)
 		if err != nil {
 			if !errors.Is(err, port.ErrNotFound) {
 				s.logger.Error("failed to get transaction",
@@ -579,7 +577,7 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 			if ts, ok := blockTimestamps[location.BlockHeight]; ok {
 				txMap["blockTimestamp"] = ts
 			} else {
-				block, blockErr := s.models().GetModelBlock(ctx, location.BlockHeight)
+				block, blockErr := s.storage.GetBlock(ctx, location.BlockHeight)
 				if blockErr == nil && block != nil {
 					ts = fmt.Sprintf("%d", block.Time)
 					blockTimestamps[location.BlockHeight] = ts
@@ -639,7 +637,7 @@ func (s *Schema) resolveReceipt(p graphql.ResolveParams) (interface{}, error) {
 		return nil, err
 	}
 
-	return s.receiptToMap(receipt), nil
+	return s.receiptToMap(gethconv.ReceiptToGeth(receipt)), nil
 }
 
 // resolveReceiptsByBlock resolves receipts by block number
@@ -665,7 +663,7 @@ func (s *Schema) resolveReceiptsByBlock(p graphql.ResolveParams) (interface{}, e
 
 	result := make([]interface{}, len(receipts))
 	for i, receipt := range receipts {
-		result[i] = s.receiptToMap(receipt)
+		result[i] = s.receiptToMap(gethconv.ReceiptToGeth(receipt))
 	}
 
 	return result, nil
@@ -786,35 +784,3 @@ func (s *Schema) buildLogCursor(log map[string]interface{}) interface{} {
 
 // models reads blocks and transactions as the chain-neutral model, so hashes,
 // transaction types and senders are the ones the chain reports.
-func (s *Schema) models() port.ModelReader {
-	return storage.AsModelReader(s.storage)
-}
-
-// modelBlockOf returns the stored model of a block another reader returned
-// as a go-ethereum block, falling back to converting it.
-func (s *Schema) modelBlockOf(ctx context.Context, b *types.Block) *model.Block {
-	if b == nil {
-		return nil
-	}
-	if m, err := s.models().GetModelBlock(ctx, b.NumberU64()); err == nil {
-		return m
-	}
-	m, _ := gethconv.BlockFromGeth(b)
-	return m
-}
-
-// modelTxAt returns the stored model of a transaction another reader
-// returned as a go-ethereum transaction. It is looked up by position: the
-// go-ethereum hash of a chain-specific type differs from the chain's.
-func (s *Schema) modelTxAt(ctx context.Context, tx *types.Transaction, loc *port.TxLocation) *model.Transaction {
-	if loc != nil {
-		if b, err := s.models().GetModelBlock(ctx, loc.BlockHeight); err == nil && int(loc.TxIndex) < len(b.Transactions) {
-			return b.Transactions[loc.TxIndex]
-		}
-	}
-	if tx == nil {
-		return nil
-	}
-	m, _ := gethconv.TxFromGeth(tx)
-	return m
-}

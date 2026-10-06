@@ -36,7 +36,7 @@ func (s *Schema) resolveFeeDelegationStats(p gql.ResolveParams) (interface{}, er
 			if ft, success := new(big.Int).SetString(fromTimeArg, 10); success {
 				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
 				if err == nil && block != nil {
-					fromBlock = block.NumberU64()
+					fromBlock = block.Number
 				}
 			}
 		}
@@ -44,7 +44,7 @@ func (s *Schema) resolveFeeDelegationStats(p gql.ResolveParams) (interface{}, er
 			if tt, success := new(big.Int).SetString(toTimeArg, 10); success {
 				block, err := histStorage.GetBlockByTimestamp(ctx, tt.Uint64())
 				if err == nil && block != nil {
-					toBlock = block.NumberU64()
+					toBlock = block.Number
 				}
 			}
 		}
@@ -104,7 +104,7 @@ func (s *Schema) resolveTopFeePayers(p gql.ResolveParams) (interface{}, error) {
 			if ft, success := new(big.Int).SetString(fromTimeArg, 10); success {
 				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
 				if err == nil && block != nil {
-					fromBlock = block.NumberU64()
+					fromBlock = block.Number
 				}
 			}
 		}
@@ -112,7 +112,7 @@ func (s *Schema) resolveTopFeePayers(p gql.ResolveParams) (interface{}, error) {
 			if tt, success := new(big.Int).SetString(toTimeArg, 10); success {
 				block, err := histStorage.GetBlockByTimestamp(ctx, tt.Uint64())
 				if err == nil && block != nil {
-					toBlock = block.NumberU64()
+					toBlock = block.Number
 				}
 			}
 		}
@@ -184,7 +184,7 @@ func (s *Schema) resolveFeePayerStats(p gql.ResolveParams) (interface{}, error) 
 			if ft, success := new(big.Int).SetString(fromTimeArg, 10); success {
 				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
 				if err == nil && block != nil {
-					fromBlock = block.NumberU64()
+					fromBlock = block.Number
 				}
 			}
 		}
@@ -192,7 +192,7 @@ func (s *Schema) resolveFeePayerStats(p gql.ResolveParams) (interface{}, error) 
 			if tt, success := new(big.Int).SetString(toTimeArg, 10); success {
 				block, err := histStorage.GetBlockByTimestamp(ctx, tt.Uint64())
 				if err == nil && block != nil {
-					toBlock = block.NumberU64()
+					toBlock = block.Number
 				}
 			}
 		}

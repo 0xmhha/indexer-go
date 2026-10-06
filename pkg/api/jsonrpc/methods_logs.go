@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 )
 
@@ -52,7 +53,7 @@ func (h *Handler) ethGetLogs(ctx context.Context, params json.RawMessage) (inter
 			h.logger.Error("failed to get block by hash", zap.String("hash", *filterParam.BlockHash), zap.Error(err))
 			return nil, NewError(InternalError, "failed to get block", err.Error())
 		}
-		blockNum := block.Number().Uint64()
+		blockNum := block.Number
 		filter.FromBlock = blockNum
 		filter.ToBlock = blockNum
 	} else {
@@ -203,7 +204,7 @@ func (h *Handler) parseBlockNumber(blockParam interface{}) (uint64, error) {
 }
 
 // logToJSONWithDecode converts a log to JSON-friendly format with optional decoding
-func (h *Handler) logToJSONWithDecode(log *types.Log, decode bool) map[string]interface{} {
+func (h *Handler) logToJSONWithDecode(log *model.Log, decode bool) map[string]interface{} {
 	topics := make([]interface{}, len(log.Topics))
 	for i, topic := range log.Topics {
 		topics[i] = topic.Hex()
@@ -223,7 +224,7 @@ func (h *Handler) logToJSONWithDecode(log *types.Log, decode bool) map[string]in
 
 	// Optionally decode the log if ABI is available
 	if decode && h.abiDecoder.HasABI(log.Address) {
-		decoded, err := h.abiDecoder.DecodeLog(log)
+		decoded, err := h.abiDecoder.DecodeLog(gethconv.LogToGeth(log))
 		if err == nil {
 			result["decoded"] = map[string]interface{}{
 				"eventName": decoded.EventName,

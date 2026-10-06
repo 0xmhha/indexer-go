@@ -254,7 +254,7 @@ func TestGetBlocksByTimeRange(t *testing.T) {
 
 	// Store blocks and index timestamps
 	for _, block := range blocks {
-		if err := storage.SetBlock(ctx, block); err != nil {
+		if err := storage.SetBlock(ctx, modelBlock(block)); err != nil {
 			t.Fatalf("SetBlock() error = %v", err)
 		}
 		if err := storage.SetBlockTimestamp(ctx, block.Time(), block.Number().Uint64()); err != nil {
@@ -309,7 +309,7 @@ func TestGetBlockByTimestamp(t *testing.T) {
 
 	// Store blocks and index timestamps
 	for _, block := range blocks {
-		if err := storage.SetBlock(ctx, block); err != nil {
+		if err := storage.SetBlock(ctx, modelBlock(block)); err != nil {
 			t.Fatalf("SetBlock() error = %v", err)
 		}
 		if err := storage.SetBlockTimestamp(ctx, block.Time(), block.Number().Uint64()); err != nil {
@@ -343,8 +343,8 @@ func TestGetBlockByTimestamp(t *testing.T) {
 				t.Fatalf("GetBlockByTimestamp() error = %v", err)
 			}
 
-			if block.Number().Uint64() != tt.wantHeight {
-				t.Errorf("GetBlockByTimestamp() height = %d, want %d", block.Number().Uint64(), tt.wantHeight)
+			if block.Number != tt.wantHeight {
+				t.Errorf("GetBlockByTimestamp() height = %d, want %d", block.Number, tt.wantHeight)
 			}
 		})
 	}
@@ -772,7 +772,7 @@ func TestMatchTransaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.filter.MatchTransaction(tt.tx, tt.receipt, tt.location, tt.targetAddr)
+			result := tt.filter.MatchTransaction(modelTx(tt.tx), modelReceipt(tt.receipt), tt.location, tt.targetAddr)
 			if result != tt.wantMatch {
 				t.Errorf("MatchTransaction() = %v, want %v", result, tt.wantMatch)
 			}

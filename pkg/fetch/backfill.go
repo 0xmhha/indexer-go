@@ -7,7 +7,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/model"
-	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 )
 
@@ -21,21 +20,18 @@ func (f *Fetcher) Backfill(ctx context.Context, p *feature.Pipeline, from, to ui
 	if f.txr == nil {
 		return fmt.Errorf("backfill needs storage with block transactions")
 	}
-	mr, ok := f.storage.(port.ModelReader)
-	if !ok {
-		return fmt.Errorf("backfill needs storage that keeps the chain-neutral model")
-	}
+	mr := f.storage
 	for h := from; h <= to; h++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		b, err := mr.GetModelBlock(ctx, h)
+		b, err := mr.GetBlock(ctx, h)
 		if err != nil {
 			return fmt.Errorf("backfill: read block %d: %w", h, err)
 		}
 		rs := make([]*model.Receipt, 0, len(b.Transactions))
 		for _, tx := range b.Transactions {
-			r, err := mr.GetModelReceipt(ctx, tx.Hash)
+			r, err := mr.GetReceipt(ctx, tx.Hash)
 			if err != nil {
 				return fmt.Errorf("backfill: read receipt %s: %w", tx.Hash.Hex(), err)
 			}
