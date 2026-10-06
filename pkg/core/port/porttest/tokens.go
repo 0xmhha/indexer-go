@@ -149,7 +149,6 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("UnknownStandardIsAStandard", func(t *testing.T) {
-		knownDefect(t, "ListTokensByStandard and GetTokensCount treat the UNKNOWN standard as no filter")
 		s := open[tokenMetadataStore](t, newStore)
 		tokensSaveAll(t, s, tokensMetadataSet())
 		tokensSaveAll(t, s, []*port.TokenMetadata{tokensMetadata(tokensUnknown, port.TokenStandardUnknown, "Odd", "ODD")})
@@ -228,7 +227,6 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("SearchTokensPartialMatch", func(t *testing.T) {
-		knownDefect(t, "SearchTokens matches only a whole name or symbol, not part of one")
 		s := open[tokenMetadataStore](t, newStore)
 		tokensSaveAll(t, s, tokensMetadataSet())
 		for _, q := range []string{"stab", "coin", "able co", "usd", "SDX"} {
@@ -265,7 +263,6 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("SaveChangesStandard", func(t *testing.T) {
-		knownDefect(t, "saving a token under another standard keeps it listed and counted under the old one")
 		s := open[tokenMetadataStore](t, newStore)
 		tokensSaveAll(t, s, tokensMetadataSet())
 		require.NoError(t, s.SaveTokenMetadata(ctx, tokensMetadata(tokensERC20b, port.TokenStandardERC721, "Wrapped Ether", "WETH")))
@@ -301,7 +298,6 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("RejectsNil", func(t *testing.T) {
-		knownDefect(t, "SaveTokenMetadata(nil) panics instead of returning an error")
 		s := open[tokenMetadataStore](t, newStore)
 		var err error
 		require.NotPanics(t, func() { err = s.SaveTokenMetadata(ctx, nil) })
@@ -387,13 +383,9 @@ func testTokenHolderIndex(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("MissingStatsAreNil", func(t *testing.T) {
-		// The port documents a nil result; Pebble and its callers also
-		// report port.ErrNotFound, which the contract accepts.
 		s := open[tokenHolderStore](t, newStore)
 		stats, err := s.GetTokenHolderStats(ctx, tokensERC20a)
-		if err != nil {
-			assert.ErrorIs(t, err, port.ErrNotFound)
-		}
+		assert.ErrorIs(t, err, port.ErrNotFound)
 		assert.Nil(t, stats)
 	})
 
@@ -601,7 +593,6 @@ func testTokenHolderIndex(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("RejectsNil", func(t *testing.T) {
-		knownDefect(t, "UpdateTokenHolder, UpdateTokenHolderStats and ProcessERC20TransferForHolders panic on nil instead of returning an error")
 		s := open[tokenHolderStore](t, newStore)
 		var err error
 		require.NotPanics(t, func() { err = s.UpdateTokenHolder(ctx, nil) })

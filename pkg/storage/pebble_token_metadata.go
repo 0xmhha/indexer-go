@@ -113,6 +113,9 @@ func (s *PebbleStorage) SaveTokenMetadata(ctx context.Context, metadata *port.To
 	if err := s.ensureNotReadOnly(); err != nil {
 		return err
 	}
+	if metadata == nil {
+		return fmt.Errorf("token metadata cannot be nil")
+	}
 
 	// Check if we need to delete old indexes (for update case)
 	oldMetadata, err := s.GetTokenMetadata(ctx, metadata.Address)
@@ -147,6 +150,14 @@ func (s *PebbleStorage) SaveTokenMetadata(ctx context.Context, metadata *port.To
 	key := TokenMetadataKey(metadata.Address)
 	if err := batch.Set(key, data, nil); err != nil {
 		return fmt.Errorf("failed to set token metadata: %w", err)
+	}
+
+	// Delete the old standard index if the standard changed
+	if oldMetadata != nil && oldMetadata.Standard != metadata.Standard {
+		oldStandardKey := TokenStandardIndexKey(string(oldMetadata.Standard), metadata.Address)
+		if err := batch.Delete(oldStandardKey, nil); err != nil {
+			return fmt.Errorf("failed to delete old standard index: %w", err)
+		}
 	}
 
 	// Save standard index
@@ -233,7 +244,7 @@ func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard port.
 	}
 
 	var prefix []byte
-	if standard != "" && standard != port.TokenStandardUnknown {
+	if standard != "" {
 		// Use standard index
 		prefix = TokenStandardIndexKeyPrefix(string(standard))
 	} else {
@@ -266,7 +277,7 @@ func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard port.
 		}
 
 		var address common.Address
-		if standard != "" && standard != port.TokenStandardUnknown {
+		if standard != "" {
 			// Extract address from index key
 			keyStr := string(iter.Key())
 			parts := strings.Split(keyStr, "/")
@@ -305,7 +316,7 @@ func (s *PebbleStorage) GetTokensCount(ctx context.Context, standard port.TokenS
 	}
 
 	var prefix []byte
-	if standard != "" && standard != port.TokenStandardUnknown {
+	if standard != "" {
 		prefix = TokenStandardIndexKeyPrefix(string(standard))
 	} else {
 		prefix = TokenMetadataKeyPrefix()
@@ -346,25 +357,33 @@ func (s *PebbleStorage) SearchTokens(ctx context.Context, query string, limit in
 	addressSet := make(map[common.Address]bool)
 	var tokens []*port.TokenMetadata
 
-	// Search by name prefix
-	namePrefix := TokenNameIndexKeyPrefix(query)
-	nameIter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: namePrefix,
-		UpperBound: prefixUpperBound(namePrefix),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create name iterator: %w", err)
-	}
-
-	for nameIter.First(); nameIter.Valid(); nameIter.Next() {
+	// Scan the name index, then the symbol index, for keys whose lowercase
+	// name or symbol contains the query.
+	for _, prefix := range [][]byte{[]byte(prefixIdxTokenName), []byte(prefixIdxTokenSymbol)} {
 		if limit > 0 && len(tokens) >= limit {
 			break
 		}
 
-		keyStr := string(nameIter.Key())
-		parts := strings.Split(keyStr, "/")
-		if len(parts) > 0 {
-			address := common.HexToAddress(parts[len(parts)-1])
+		iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
+			LowerBound: prefix,
+			UpperBound: prefixUpperBound(prefix),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create token search iterator: %w", err)
+		}
+
+		for iter.First(); iter.Valid(); iter.Next() {
+			if limit > 0 && len(tokens) >= limit {
+				break
+			}
+
+			// Key format: {prefix}{name_or_symbol_lowercase}/{address}
+			keyStr := string(iter.Key()[len(prefix):])
+			sep := strings.LastIndex(keyStr, "/")
+			if sep < 0 || !strings.Contains(keyStr[:sep], query) {
+				continue
+			}
+			address := common.HexToAddress(keyStr[sep+1:])
 			if !addressSet[address] {
 				addressSet[address] = true
 				metadata, err := s.GetTokenMetadata(ctx, address)
@@ -373,39 +392,11 @@ func (s *PebbleStorage) SearchTokens(ctx context.Context, query string, limit in
 				}
 			}
 		}
-	}
-	nameIter.Close()
-
-	// Search by symbol prefix
-	if limit <= 0 || len(tokens) < limit {
-		symbolPrefix := TokenSymbolIndexKeyPrefix(query)
-		symbolIter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-			LowerBound: symbolPrefix,
-			UpperBound: prefixUpperBound(symbolPrefix),
-		})
+		err = iter.Error()
+		_ = iter.Close()
 		if err != nil {
-			return nil, fmt.Errorf("failed to create symbol iterator: %w", err)
+			return nil, fmt.Errorf("iterator error: %w", err)
 		}
-
-		for symbolIter.First(); symbolIter.Valid(); symbolIter.Next() {
-			if limit > 0 && len(tokens) >= limit {
-				break
-			}
-
-			keyStr := string(symbolIter.Key())
-			parts := strings.Split(keyStr, "/")
-			if len(parts) > 0 {
-				address := common.HexToAddress(parts[len(parts)-1])
-				if !addressSet[address] {
-					addressSet[address] = true
-					metadata, err := s.GetTokenMetadata(ctx, address)
-					if err == nil {
-						tokens = append(tokens, metadata)
-					}
-				}
-			}
-		}
-		symbolIter.Close()
 	}
 
 	return tokens, nil

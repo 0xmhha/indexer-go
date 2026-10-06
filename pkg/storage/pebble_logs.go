@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
@@ -37,6 +38,10 @@ func (s *PebbleStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]
 			return nil, fmt.Errorf("failed to get latest height: %w", err)
 		}
 		toBlock = latestHeight
+		if filter.FromBlock > toBlock {
+			// Nothing is indexed at or above FromBlock yet.
+			return []*model.Log{}, nil
+		}
 	}
 
 	// Enforce maximum block range to prevent memory exhaustion
@@ -48,23 +53,38 @@ func (s *PebbleStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]
 	logs := make([]*model.Log, 0, 64)
 
 	// Strategy 1: If specific addresses are provided, use address index
+	// Repeated options are skipped so that each log is returned once; logs
+	// from several options are sorted into chain order below.
+	sortLogs := false
 	if len(filter.Addresses) > 0 {
+		seen := make(map[common.Address]bool, len(filter.Addresses))
 		for _, addr := range filter.Addresses {
+			if seen[addr] {
+				continue
+			}
+			seen[addr] = true
 			addrLogs, err := s.getLogsByAddressRange(ctx, addr, filter.FromBlock, toBlock)
 			if err != nil {
 				return nil, err
 			}
 			logs = append(logs, addrLogs...)
 		}
+		sortLogs = len(seen) > 1
 	} else if len(filter.Topics) > 0 && len(filter.Topics[0]) > 0 {
 		// Strategy 2: If topic0 is specified, use topic0 index
+		seen := make(map[common.Hash]bool, len(filter.Topics[0]))
 		for _, topic := range filter.Topics[0] {
+			if seen[topic] {
+				continue
+			}
+			seen[topic] = true
 			topicLogs, err := s.getLogsByTopicRange(ctx, topic, 0, filter.FromBlock, toBlock)
 			if err != nil {
 				return nil, err
 			}
 			logs = append(logs, topicLogs...)
 		}
+		sortLogs = len(seen) > 1
 	} else {
 		// Strategy 3: Scan all logs in block range
 		for blockNum := filter.FromBlock; blockNum <= toBlock; blockNum++ {
@@ -74,6 +94,10 @@ func (s *PebbleStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]
 			}
 			logs = append(logs, blockLogs...)
 		}
+	}
+
+	if sortLogs {
+		sortLogsInChainOrder(logs)
 	}
 
 	// Apply topic filters
@@ -178,8 +202,11 @@ func (s *PebbleStorage) IndexLogs(ctx context.Context, logs []*model.Log) error 
 	batch := s.newBatchCtx(ctx)
 	defer batch.Close()
 
+	// written holds the logs indexed earlier in this batch, so that a later
+	// log at the same position replaces their index entries too.
+	written := make(map[logPosition]*model.Log, len(logs))
 	for _, log := range logs {
-		if err := s.indexLogToBatch(batch, log); err != nil {
+		if err := s.indexLogToBatch(ctx, batch, log, written); err != nil {
 			return fmt.Errorf("failed to index log: %w", err)
 		}
 	}
@@ -199,7 +226,7 @@ func (s *PebbleStorage) IndexLog(ctx context.Context, log *model.Log) error {
 	batch := s.newBatchCtx(ctx)
 	defer batch.Close()
 
-	if err := s.indexLogToBatch(batch, log); err != nil {
+	if err := s.indexLogToBatch(ctx, batch, log, nil); err != nil {
 		return err
 	}
 
@@ -208,10 +235,85 @@ func (s *PebbleStorage) IndexLog(ctx context.Context, log *model.Log) error {
 
 // ========== Internal Helper Methods ==========
 
-// indexLogToBatch adds log indexing operations to a batch
-func (s *PebbleStorage) indexLogToBatch(batch *pebbleBatch, log *model.Log) error {
+// logPosition identifies a log by its place in the chain.
+type logPosition struct {
+	block    uint64
+	txIndex  uint
+	logIndex uint
+}
+
+// sortLogsInChainOrder sorts logs by block number, transaction index and log
+// index.
+func sortLogsInChainOrder(logs []*model.Log) {
+	sort.Slice(logs, func(i, j int) bool {
+		a, b := logs[i], logs[j]
+		if a.BlockNumber != b.BlockNumber {
+			return a.BlockNumber < b.BlockNumber
+		}
+		if a.TxIndex != b.TxIndex {
+			return a.TxIndex < b.TxIndex
+		}
+		return a.Index < b.Index
+	})
+}
+
+// logIndexKeys returns the address and topic index keys of a log.
+func logIndexKeys(log *model.Log) [][]byte {
+	keys := [][]byte{LogAddressIndexKey(log.Address, log.BlockNumber, log.TxIndex, log.Index)}
+	topicKeys := []func(common.Hash, uint64, uint, uint) []byte{
+		LogTopic0IndexKey, LogTopic1IndexKey, LogTopic2IndexKey, LogTopic3IndexKey,
+	}
+	for i, topic := range log.Topics {
+		if i >= len(topicKeys) {
+			break
+		}
+		keys = append(keys, topicKeys[i](topic, log.BlockNumber, log.TxIndex, log.Index))
+	}
+	return keys
+}
+
+// deleteStaleLogIndexes deletes the address and topic index entries of the
+// log previously stored at the position of log. written holds the logs
+// indexed earlier in the same batch, which the store does not show yet; it
+// may be nil.
+func (s *PebbleStorage) deleteStaleLogIndexes(ctx context.Context, batch *pebbleBatch, log *model.Log, written map[logPosition]*model.Log) error {
+	pos := logPosition{log.BlockNumber, log.TxIndex, log.Index}
+	prev := written[pos]
+	if prev == nil {
+		data, closer, err := s.kv(ctx).Get(LogKey(log.BlockNumber, log.TxIndex, log.Index))
+		if err == pebble.ErrNotFound {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read stored log: %w", err)
+		}
+		prev, err = decodeModelLog(data)
+		_ = closer.Close()
+		if err != nil {
+			return fmt.Errorf("failed to decode stored log: %w", err)
+		}
+	}
+	for _, key := range logIndexKeys(prev) {
+		if err := batch.batch.Delete(key, nil); err != nil {
+			return fmt.Errorf("failed to delete stale log index: %w", err)
+		}
+	}
+	return nil
+}
+
+// indexLogToBatch adds log indexing operations to a batch, replacing the
+// index entries of a log previously stored at the same position. written
+// (may be nil) collects the logs indexed in the batch.
+func (s *PebbleStorage) indexLogToBatch(ctx context.Context, batch *pebbleBatch, log *model.Log, written map[logPosition]*model.Log) error {
 	if log == nil {
 		return fmt.Errorf("log cannot be nil")
+	}
+
+	if err := s.deleteStaleLogIndexes(ctx, batch, log, written); err != nil {
+		return err
+	}
+	if written != nil {
+		written[logPosition{log.BlockNumber, log.TxIndex, log.Index}] = log
 	}
 
 	// Encode log data

@@ -273,6 +273,9 @@ func (s *PebbleStorage) UpdateTokenHolder(ctx context.Context, holder *port.Toke
 	if err := s.ensureNotReadOnly(); err != nil {
 		return err
 	}
+	if holder == nil {
+		return fmt.Errorf("token holder cannot be nil")
+	}
 
 	// Get existing holder data if any (for old index cleanup)
 	oldHolder, err := s.getTokenHolder(ctx, holder.TokenAddress, holder.HolderAddress)
@@ -355,6 +358,9 @@ func (s *PebbleStorage) UpdateTokenHolderStats(ctx context.Context, stats *port.
 	if err := s.ensureNotReadOnly(); err != nil {
 		return err
 	}
+	if stats == nil {
+		return fmt.Errorf("token holder stats cannot be nil")
+	}
 
 	jsonData := tokenHolderStatsToJSON(stats)
 	data, err := json.Marshal(jsonData)
@@ -377,6 +383,9 @@ func (s *PebbleStorage) ProcessERC20TransferForHolders(ctx context.Context, tran
 	}
 	if err := s.ensureNotReadOnly(); err != nil {
 		return err
+	}
+	if transfer == nil {
+		return fmt.Errorf("transfer cannot be nil")
 	}
 
 	// Update sender balance (subtract)

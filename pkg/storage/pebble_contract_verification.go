@@ -41,23 +41,22 @@ func (s *PebbleStorage) GetContractVerification(ctx context.Context, address com
 	return &verification, nil
 }
 
-// IsContractVerified checks if a contract is verified
+// IsContractVerified checks if a contract is verified: it has a record
+// whose IsVerified is set.
 func (s *PebbleStorage) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return false, err
 	}
 
-	key := ContractVerificationKey(address)
-	_, closer, err := s.kv(ctx).Get(key)
+	verification, err := s.GetContractVerification(ctx, address)
 	if err != nil {
-		if err == pebble.ErrNotFound {
+		if err == port.ErrNotFound {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to check contract verification: %w", err)
 	}
-	closer.Close()
 
-	return true, nil
+	return verification.IsVerified, nil
 }
 
 // ListVerifiedContracts returns all verified contract addresses with pagination
@@ -178,16 +177,32 @@ func (s *PebbleStorage) SetContractVerification(ctx context.Context, verificatio
 		return fmt.Errorf("failed to encode contract verification: %w", err)
 	}
 
+	// Remove the list entry of the record being replaced; its verification
+	// time may differ.
+	previous, err := s.GetContractVerification(ctx, verification.Address)
+	if err != nil && err != port.ErrNotFound {
+		return fmt.Errorf("failed to get previous contract verification: %w", err)
+	}
+	if previous != nil {
+		oldIndexKey := VerifiedContractIndexKey(previous.VerifiedAt.Unix(), verification.Address)
+		if err := s.kv(ctx).Delete(oldIndexKey, nil); err != nil {
+			return fmt.Errorf("failed to delete verified contract index: %w", err)
+		}
+	}
+
 	// Store verification data
 	key := ContractVerificationKey(verification.Address)
 	if err := s.kv(ctx).Set(key, data, nil); err != nil {
 		return fmt.Errorf("failed to set contract verification: %w", err)
 	}
 
-	// Store index entry for listing verified contracts
-	indexKey := VerifiedContractIndexKey(verification.VerifiedAt.Unix(), verification.Address)
-	if err := s.kv(ctx).Set(indexKey, []byte{1}, nil); err != nil {
-		return fmt.Errorf("failed to set verified contract index: %w", err)
+	// Store index entry for listing verified contracts; a record that is not
+	// verified is not listed.
+	if verification.IsVerified {
+		indexKey := VerifiedContractIndexKey(verification.VerifiedAt.Unix(), verification.Address)
+		if err := s.kv(ctx).Set(indexKey, []byte{1}, nil); err != nil {
+			return fmt.Errorf("failed to set verified contract index: %w", err)
+		}
 	}
 
 	return nil
