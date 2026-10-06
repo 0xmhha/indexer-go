@@ -101,7 +101,6 @@ func init() {
 		"/data/userop/", "/index/userop/", "/data/bundler/", "/data/paymaster/", "/data/factory/",
 		"/data/smartaccount/", "/data/module/", "/index/module/",
 	)
-	RegisterKeyspace("notifications", ChainData, "/data/notification/", "/index/notification/")
 	RegisterKeyspace("multichain", ChainData, "/chain/")
 	RegisterKeyspace("verification", Preserved, "/data/abi/", "/data/verification/", "/index/verification/")
 	// StableNet data, still stored by this package (to be moved under

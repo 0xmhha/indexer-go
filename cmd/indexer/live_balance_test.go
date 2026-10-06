@@ -62,7 +62,7 @@ func TestLiveBalances(t *testing.T) {
 
 	// Every account with a recorded balance has a latest entry.
 	var accounts []common.Address
-	require.NoError(t, app.storage.Iterate(ctx, []byte("/index/balance/"), func(key, _ []byte) bool {
+	require.NoError(t, app.storage.(storage.KVStore).Iterate(ctx, []byte("/index/balance/"), func(key, _ []byte) bool {
 		if k := string(key); strings.HasSuffix(k, "/latest") {
 			accounts = append(accounts, common.HexToAddress(strings.TrimSuffix(strings.TrimPrefix(k, "/index/balance/"), "/latest")))
 		}

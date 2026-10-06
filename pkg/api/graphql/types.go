@@ -609,8 +609,6 @@ func initTypes() {
 	// Initialize reorganization and orphaned block types (uses core types)
 	initReorgTypes()
 
-	// Initialize watchlist types
-	initWatchlistTypes()
 
 	// Initialize EIP-7702 SetCode types
 	initSetCodeTypes()

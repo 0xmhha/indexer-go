@@ -63,7 +63,6 @@ indexer-go/
 │   ├── multichain/                # 멀티체인 매니저
 │   ├── notifications/             # 알림 (Webhook/Email/Slack)
 │   ├── price/                     # 토큰 가격 데이터
-│   ├── resilience/                # WebSocket 복원력
 │   ├── rpcproxy/                  # RPC 프록시 (eth_call 등)
 │   │
 │   ├── storage/                   # 데이터 저장소
@@ -83,7 +82,6 @@ indexer-go/
 │   │   ├── chain/                 #   체인 어댑터 인터페이스
 │   │   └── consensus/             #   컨센서스 타입
 │   ├── verifier/                  # 컨트랙트 소스 검증
-│   └── watchlist/                 # 주소 감시 서비스
 │
 ├── configs/                       # 환경별 설정 파일
 │   ├── config-anvil.yaml

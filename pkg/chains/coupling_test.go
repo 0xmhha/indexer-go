@@ -18,8 +18,8 @@ import (
 // chain-specific code outside this list.
 var chainNeutral = []string{
 	"fetch", "api", "source", "feature", "features", "storage", "events", "eventbus",
-	"core", "types", "token", "abi", "client", "rpcproxy", "notifications", "watchlist",
-	"multichain", "resilience", "userop", "module", "verifier", "compiler", "price",
+	"core", "types", "token", "abi", "client", "rpcproxy", "notifications",
+	"multichain", "userop", "module", "verifier", "compiler", "price",
 	"../internal",
 }
 

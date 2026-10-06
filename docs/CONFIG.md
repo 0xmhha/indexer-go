@@ -15,7 +15,7 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 - `multichain.enabled: true`(체인이 하나라도 있을 때): 모든 체인이 같은 저장 키를 써서 서로 덮어쓰는 결함이 있다. 체인별 저장 공간을 나누는 작업 뒤에 다시 연다.
 - `database.readonly: true`: 수집기는 써야 한다. API 전용 실행은 별도 작업으로 계획되어 있다.
 
-다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.*`, `watchlist.enabled`, `resilience.enabled`, `account_abstraction.entry_point_addresses`.
+다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.*`, `account_abstraction.entry_point_addresses`. `watchlist.enabled`와 `resilience.enabled`는 v0.1.0 이후 해당 기능을 지웠으므로 효과가 없고, 켜져 있으면 경고가 남는다.
 
 ---
 
@@ -186,31 +186,6 @@ notifications:
     history_retention: 720h             # 30일
     max_settings_per_user: 100
     max_pending_notifications: 10000
-```
-
-### WebSocket Resilience
-
-```yaml
-resilience:
-  enabled: false
-  session:
-    ttl: 30m                            # 세션 TTL
-    cleanup_period: 5m
-  event_cache:
-    window: 5m                          # 이벤트 캐시 윈도우
-    backend: "pebble"                   # pebble | redis
-```
-
-### Watchlist
-
-```yaml
-watchlist:
-  enabled: false
-  bloom_filter:
-    expected_items: 10000
-    false_positive_rate: 0.01
-  history:
-    retention: 720h                     # 30일
 ```
 
 ### Node Identity

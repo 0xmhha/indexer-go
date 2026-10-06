@@ -640,10 +640,10 @@ func (a *App) initNotificationService() error {
 		},
 	}
 
-	// Get KVStore from storage for notification persistence
-	kvStore, ok := a.storage.(storage.KVStore)
+	// The notification service stores its data in the indexer database
+	kvStore, ok := a.storage.(notifications.KeyValueStore)
 	if !ok {
-		return fmt.Errorf("storage does not implement KVStore interface")
+		return fmt.Errorf("storage does not support key-value access for notifications")
 	}
 
 	// Create notification storage

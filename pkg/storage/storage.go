@@ -184,7 +184,6 @@ type Storage interface {
 	SetCodeIndexWriter
 	UserOpIndexReader
 	UserOpIndexWriter
-	KVStore
 
 	// SetTokenMetadataFetcher sets the fetcher for on-demand token metadata lookups
 	SetTokenMetadataFetcher(fetcher TokenMetadataFetcher)
