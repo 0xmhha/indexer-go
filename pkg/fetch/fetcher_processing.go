@@ -51,75 +51,6 @@ func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uin
 	return nil, hadError, fmt.Errorf("failed to fetch block %d: no attempts", height)
 }
 
-// processFeeDelegationMetadata extracts and stores fee delegation metadata
-// for blocks read through the legacy client, by fetching the block again
-// through a fee delegation aware client. Blocks decoded by a chain profile
-// carry the fee payer themselves and are handled by the
-// stablenet.fee_delegation feature. Removed with the legacy client path.
-func (f *Fetcher) processFeeDelegationMetadata(ctx context.Context, fb *fetchedBlock) error {
-	if f.src != nil {
-		return nil
-	}
-	height := fb.height()
-	// Check if storage supports fee delegation
-	fdStorage, ok := f.storage.(FeeDelegationStorage)
-	if !ok {
-		return nil // Storage doesn't support fee delegation, skip silently
-	}
-
-	// Check if a client supporting fee delegation metadata extraction is set
-	fdClient := f.fdClient
-	if fdClient == nil {
-		var ok bool
-		if fdClient, ok = f.client.(FeeDelegationClient); !ok {
-			return nil // Client doesn't support fee delegation metadata extraction, skip silently
-		}
-	}
-
-	// Fetch block with fee delegation metadata
-	_, metas, err := fdClient.GetBlockWithFeeDelegationMeta(ctx, height)
-	if err != nil {
-		f.logger.Warn("Failed to fetch fee delegation metadata",
-			zap.Uint64("height", height),
-			zap.Error(err),
-		)
-		return nil // Don't fail block processing for fee delegation metadata extraction failure
-	}
-
-	// Store each fee delegation metadata
-	for _, meta := range metas {
-		storageMeta := &storagepkg.FeeDelegationTxMeta{
-			TxHash:       meta.TxHash,
-			BlockNumber:  meta.BlockNumber,
-			OriginalType: meta.OriginalType,
-			FeePayer:     meta.FeePayer,
-			FeePayerV:    meta.FeePayerV,
-			FeePayerR:    meta.FeePayerR,
-			FeePayerS:    meta.FeePayerS,
-		}
-		if err := fdStorage.SetFeeDelegationTxMeta(ctx, storageMeta); err != nil {
-			f.logger.Warn("Failed to store fee delegation metadata",
-				zap.String("txHash", meta.TxHash.Hex()),
-				zap.Uint64("height", height),
-				zap.Error(err),
-			)
-			if f.strictStorageErrors {
-				return fmt.Errorf("failed to store fee delegation metadata: %w", err)
-			}
-			// Continue processing other metadata even if one fails
-		}
-	}
-
-	if len(metas) > 0 {
-		f.logger.Debug("Stored fee delegation metadata",
-			zap.Uint64("height", height),
-			zap.Int("count", len(metas)),
-		)
-	}
-
-	return nil
-}
-
 // processBlockMetadata processes WBFT metadata, address indexing, balance tracking, and genesis initialization
 func (f *Fetcher) processBlockMetadata(ctx context.Context, fb *fetchedBlock) error {
 	// Address indexing, balances and the other per-block indexes are
@@ -134,11 +65,6 @@ func (f *Fetcher) processBlockMetadata(ctx context.Context, fb *fetchedBlock) er
 		}
 	}
 	return nil
-}
-
-// storeAndProcessReceipts stores receipts and indexes logs using appropriate processing strategy
-func (f *Fetcher) storeAndProcessReceipts(ctx context.Context, fb *fetchedBlock) error {
-	return f.storeReceiptsSequential(ctx, fb)
 }
 
 // storeReceiptsSequential stores receipts, indexes their logs and parses
@@ -159,14 +85,7 @@ func (f *Fetcher) storeReceiptsSequential(ctx context.Context, fb *fetchedBlock)
 		// Index logs from this receipt
 		if logWriter, ok := f.storage.(storagepkg.LogWriter); ok && len(receipt.Logs) > 0 {
 			if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
-				f.logger.Warn("failed to index logs",
-					zap.String("tx", receipt.TxHash.Hex()),
-					zap.Int("logs", len(receipt.Logs)),
-					zap.Error(err),
-				)
-				if f.strictStorageErrors {
-					return fmt.Errorf("failed to index logs: %w", err)
-				}
+				return fmt.Errorf("failed to index logs of tx %s: %w", receipt.TxHash.Hex(), err)
 			}
 		}
 	}

@@ -41,7 +41,7 @@ indexer:
   workers: 100                          # 병렬 워커 수 (RPC 부하에 따라 조정)
   chunk_size: 1                         # 배치당 블록 수 (1 = 실시간 모드)
   start_height: 0                       # 인덱싱 시작 블록
-  atomic_block: true                    # 블록 하나를 트랜잭션 하나로 저장 (기본값 true, false = 기존 경로로 되돌리기, 다음 릴리스에서 제거)
+  orphan_retention: 1000                # 보관할 reorg 기록 수 (0 = 전부 보관)
 
 api:
   enabled: true
@@ -277,7 +277,7 @@ INDEXER_DB_READONLY=false
 INDEXER_WORKERS=100
 INDEXER_CHUNK_SIZE=1
 INDEXER_START_HEIGHT=0
-INDEXER_ATOMIC_BLOCK=true
+INDEXER_ORPHAN_RETENTION=1000
 INDEXER_API_ENABLED=true
 INDEXER_API_HOST=localhost
 INDEXER_API_PORT=8080

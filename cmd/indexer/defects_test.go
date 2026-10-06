@@ -20,13 +20,8 @@ import (
 // currently reproduce. While an id is listed its test asserts the defect is
 // still observable, so a silent behaviour change is noticed. The change that
 // fixes a defect removes its id, and from then on the same test requires
-// correct behaviour. The legacy path keeps its defects until it is deleted.
+// correct behaviour.
 var knownDefects = map[string]map[string]string{
-	legacyMode.name: {
-		"D3":  "reprocessing an indexed block is not idempotent (balance deltas, address index, tx count)",
-		"D10": "gap recovery rewinds the cursor and reprocesses already indexed blocks",
-	},
-	clientMode.name: {},
 	atomicMode.name: {},
 }
 
@@ -147,11 +142,9 @@ func TestGapRecoveryDoesNotReprocess(t *testing.T) {
 			checkDefect(t, base, "D10", len(extra) == 0, extra...)
 
 			// The result equals indexing every block in one run.
-			if mode.atomic {
-				want := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), mode))
-				diff := testchain.DiffKeyspace(want, dumpDir(t, dir), 0)
-				require.Empty(t, diff, testchain.SummarizeDiff(diff))
-			}
+			want := dumpDir(t, indexScenarioMode(t, testchain.BuildDefault(), mode))
+			diff := testchain.DiffKeyspace(want, dumpDir(t, dir), 0)
+			require.Empty(t, diff, testchain.SummarizeDiff(diff))
 		})
 	}
 }

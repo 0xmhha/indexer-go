@@ -29,23 +29,25 @@ func TestAccountAbstractionDefault(t *testing.T) {
 	require.False(t, cfg.AccountAbstraction.Enabled, "explicit false must disable it")
 }
 
-// TestAtomicBlockDefault checks atomic block indexing is the default and
-// that the legacy path can still be selected explicitly.
-func TestAtomicBlockDefault(t *testing.T) {
+// TestRemovedIngestPathsRejected: the legacy write path and the legacy
+// client path were removed after v0.1.0. Leaving the settings out (or true)
+// is accepted; setting them to false stops loading with an explanation.
+func TestRemovedIngestPathsRejected(t *testing.T) {
 	base := "rpc:\n  endpoint: \"http://127.0.0.1:8545\"\ndatabase:\n  path: \"/tmp/indexer-test\"\n"
 
-	cfg, err := Load(writeConfig(t, base))
+	_, err := Load(writeConfig(t, base))
 	require.NoError(t, err)
-	require.True(t, cfg.Indexer.AtomicBlock)
+	_, err = Load(writeConfig(t, base+"indexer:\n  atomic_block: true\n  profile_source: true\n"))
+	require.NoError(t, err)
 
-	cfg, err = Load(writeConfig(t, base+"indexer:\n  atomic_block: false\n"))
-	require.NoError(t, err)
-	require.False(t, cfg.Indexer.AtomicBlock)
+	for _, setting := range []string{"atomic_block", "profile_source"} {
+		_, err = Load(writeConfig(t, base+"indexer:\n  "+setting+": false\n"))
+		require.ErrorContains(t, err, "removed after v0.1.0", setting)
+	}
 
 	t.Setenv("INDEXER_ATOMIC_BLOCK", "false")
-	cfg, err = Load(writeConfig(t, base))
-	require.NoError(t, err)
-	require.False(t, cfg.Indexer.AtomicBlock, "environment overrides the default")
+	_, err = Load(writeConfig(t, base))
+	require.ErrorContains(t, err, "removed after v0.1.0", "environment")
 }
 
 func TestUnsupportedSettings(t *testing.T) {

@@ -331,7 +331,7 @@ GraphQL `transactions`/`logs`는 범위를 주지 않으면 0..latest 전체 블
 | 11 | fix(api): bounded queries | R0-8 | 1 | 벤치 |
 | 12 | fix(config): precedence and unsupported keys, block multichain | R0-9, R0-10 | — | 설정 시험 |
 | 13 | chore: flip atomic_block default | 기본값 true | 8~10 | 전체 시험 |
-| 14 | chore: remove legacy path | 옛 `FetchBlock` 경로, 스위치, `LargeBlockProcessor` 쓰기 부분, `SetBlockWithReceipts`(호출자 없음) 삭제 | 13 이후 한 릴리스 | 그래프 도구로 옛 경로 호출자가 0곳 |
+| 14 | chore: remove legacy path (완료 10/6, v0.1.0 이후) | 옛 `FetchBlock` 경로, 스위치, `LargeBlockProcessor` 쓰기 부분, `SetBlockWithReceipts`(호출자 없음) 삭제 | 13 이후 한 릴리스 | 그래프 도구로 옛 경로 호출자가 0곳 |
 
 3, 4, 11, 12는 다른 작업과 독립이라 병렬로 진행할 수 있다.
 

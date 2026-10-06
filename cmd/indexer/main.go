@@ -731,7 +731,6 @@ func (a *App) initFetcher(ctx context.Context) error {
 		MaxRetries:    3,
 		RetryDelay:    retryDelay,
 		NumWorkers:    a.config.Indexer.Workers,
-		AtomicBlock:   a.config.Indexer.AtomicBlock,
 		RPCTimeout:    a.config.RPC.Timeout,
 		PollInterval:  a.config.Indexer.PollInterval,
 		Finality:      a.config.Indexer.Finality,
@@ -755,41 +754,30 @@ func (a *App) initFetcher(ctx context.Context) error {
 		)
 	}
 
-	// The chain profile decodes blocks (profile_source) and gives the
-	// default features. Without profile_source a failed detection only
-	// leaves the features to the configuration.
-	profile, src := a.profile, a.profileSrc
-	switch {
-	case a.profileErr == nil:
-	case a.config.Indexer.ProfileSource:
+	// The chain profile decodes blocks and gives the default features.
+	if a.profileErr != nil {
 		return fmt.Errorf("detect chain profile: %w", a.profileErr)
-	default:
-		a.logger.Warn("Chain profile detection failed; using configured features only", zap.Error(a.profileErr))
 	}
-	if a.config.Indexer.ProfileSource {
-		var blocks source.Source = src
-		if dir := a.config.Source.EraDir; dir != "" {
-			es, err := era.OpenDir(dir, profile)
-			if err != nil {
-				return fmt.Errorf("open era1 archives: %w", err)
-			}
-			a.eraSource = es
-			chained := &source.Chained{First: es, Then: src}
-			if err := chained.CheckJoin(ctx); err != nil {
-				return fmt.Errorf("era1 archives in %s: %w", dir, err)
-			}
-			blocks = chained
-			first, last := es.Range()
-			a.logger.Info("Reading history from era1 archives", zap.String("dir", dir), zap.Uint64("first", first), zap.Uint64("last", last))
+	profile, src := a.profile, a.profileSrc
+	var blocks source.Source = src
+	if dir := a.config.Source.EraDir; dir != "" {
+		es, err := era.OpenDir(dir, profile)
+		if err != nil {
+			return fmt.Errorf("open era1 archives: %w", err)
 		}
-		a.fetcher.SetSource(blocks)
-		a.logger.Info("Reading blocks through chain profile", zap.String("profile", profile.ID()))
+		a.eraSource = es
+		chained := &source.Chained{First: es, Then: src}
+		if err := chained.CheckJoin(ctx); err != nil {
+			return fmt.Errorf("era1 archives in %s: %w", dir, err)
+		}
+		blocks = chained
+		first, last := es.Range()
+		a.logger.Info("Reading history from era1 archives", zap.String("dir", dir), zap.Uint64("first", first), zap.Uint64("last", last))
 	}
+	a.fetcher.SetSource(blocks)
+	a.logger.Info("Reading blocks through chain profile", zap.String("profile", profile.ID()))
 
-	defaults := feature.Defaults()
-	if profile != nil {
-		defaults = append(defaults, profile.Features()...)
-	}
+	defaults := append(feature.Defaults(), profile.Features()...)
 	enabled, err := feature.Enabled(defaults, a.featureOverrides())
 	if err != nil {
 		return err
@@ -829,7 +817,6 @@ func (a *App) initFetcher(ctx context.Context) error {
 		return err
 	}
 
-	a.registerFeatureProcessors()
 
 	// Add token block processor for automatic token metadata indexing
 	tokenProcessor := token.NewBlockProcessorFromEthClient(a.client.EthClient(), a.storage, a.logger)
@@ -1310,20 +1297,6 @@ func reindexData(path string, log *zap.Logger) error {
 	)
 
 	return nil
-}
-
-// The StableNet RPC client must satisfy the fetcher's fee delegation
-// interface; this fails to compile if their metadata types drift apart.
-var _ fetch.FeeDelegationClient = (*factory.EVMClient)(nil)
-
-// registerFeatureProcessors connects the legacy client's fee delegation
-// re-fetch. It is removed with the legacy client path; every other
-// per-block processor is a feature (pkg/features).
-func (a *App) registerFeatureProcessors() {
-	// Fee delegation (type 0x16) exists only on StableNet nodes.
-	if a.nodeInfo != nil && a.nodeInfo.Type == detector.NodeTypeStableOne {
-		a.fetcher.SetFeeDelegationClient(factory.NewEVMClient(a.client.RPCClient()))
-	}
 }
 
 // featureOverrides returns the configured feature overrides. The older

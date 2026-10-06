@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -41,8 +42,7 @@ type FeePayerStats struct {
 }
 
 // Backend is the storage the statistics read: stored blocks and receipts
-// and the indexed height. Fee payers of transactions indexed by the legacy
-// path come from their stored metadata (storage.FeeDelegationOf).
+// and the indexed height.
 type Backend interface {
 	storage.ModelReader
 	GetLatestHeight(ctx context.Context) (uint64, error)
@@ -91,7 +91,7 @@ func (s *Stats) scan(ctx context.Context, fromBlock, toBlock uint64, fn func(spo
 		}
 		total += uint64(len(block.Transactions))
 		for _, tx := range block.Transactions {
-			fd, ok := storage.FeeDelegationOf(ctx, s.db, tx)
+			fd, ok := chains.FeeDelegationOf(tx)
 			if !ok {
 				continue
 			}

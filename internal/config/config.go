@@ -97,15 +97,14 @@ type IndexerConfig struct {
 	Workers     int    `yaml:"workers"`
 	ChunkSize   int    `yaml:"chunk_size"`
 	StartHeight uint64 `yaml:"start_height"`
-	// AtomicBlock indexes each block in one storage transaction (default
-	// true). Setting it to false selects the legacy write path, which is
-	// kept for one release as a fallback and then removed.
-	AtomicBlock bool `yaml:"atomic_block"`
-	// ProfileSource reads blocks as raw JSON decoded by the node's chain
-	// profile (default true), so chain-specific transaction types and block
-	// hash rules are kept. Setting it to false selects the legacy
-	// go-ethereum client path, kept for one release as a fallback.
-	ProfileSource bool `yaml:"profile_source"`
+	// AtomicBlock and ProfileSource selected the legacy write path and the
+	// legacy go-ethereum client path when false. Both paths were removed
+	// after v0.1.0: blocks are always indexed in one storage transaction
+	// and decoded by the node's chain profile. The settings are kept only
+	// so that a configuration still setting them to false is rejected
+	// instead of silently ignored.
+	AtomicBlock   *bool `yaml:"atomic_block"`
+	ProfileSource *bool `yaml:"profile_source"`
 	// PollInterval is how long the live loop waits before asking the node
 	// for a new head once it has caught up (default 50ms). It bounds the
 	// delay between a block appearing on the node and indexing starting.
@@ -491,8 +490,6 @@ func NewConfig() *Config {
 	cfg.AccountAbstraction.Enabled = true
 	// Same reasoning: atomic block indexing is the default, and an explicit
 	// false in the file or INDEXER_ATOMIC_BLOCK=false selects the legacy path.
-	cfg.Indexer.AtomicBlock = true
-	cfg.Indexer.ProfileSource = true
 	cfg.Indexer.OrphanRetention = 1000
 	// WebSocket keep-alive pings keep idle subscribers connected; it can be
 	// disabled with api.enable_websocket_keepalive: false.
@@ -824,14 +821,14 @@ func (c *Config) LoadFromEnv() error {
 		if err != nil {
 			return fmt.Errorf("invalid INDEXER_ATOMIC_BLOCK: %w", err)
 		}
-		c.Indexer.AtomicBlock = val
+		c.Indexer.AtomicBlock = &val
 	}
 	if v := os.Getenv("INDEXER_PROFILE_SOURCE"); v != "" {
 		val, err := strconv.ParseBool(v)
 		if err != nil {
 			return fmt.Errorf("invalid INDEXER_PROFILE_SOURCE: %w", err)
 		}
-		c.Indexer.ProfileSource = val
+		c.Indexer.ProfileSource = &val
 	}
 	// INDEXER_FEATURES=name1,-name2 turns name1 on and name2 off.
 	if v := os.Getenv("INDEXER_FEATURES"); v != "" {
@@ -1110,6 +1107,9 @@ func (c *Config) LoadFromFile(filename string) error {
 	return nil
 }
 
+// isFalse reports whether an optional setting was set to false.
+func isFalse(b *bool) bool { return b != nil && !*b }
+
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	// Validate RPC configuration
@@ -1119,8 +1119,8 @@ func (c *Config) Validate() error {
 	if c.RPC.Timeout <= 0 {
 		return fmt.Errorf("RPC timeout must be positive")
 	}
-	if c.Source.EraDir != "" && !c.Indexer.ProfileSource {
-		return fmt.Errorf("source.era_dir requires indexer.profile_source")
+	if isFalse(c.Indexer.AtomicBlock) || isFalse(c.Indexer.ProfileSource) {
+		return fmt.Errorf("indexer.atomic_block: false and indexer.profile_source: false select ingest paths removed after v0.1.0; remove these settings (or run v0.1.0)")
 	}
 	switch c.Indexer.Finality {
 	case "", "head", "finalized":

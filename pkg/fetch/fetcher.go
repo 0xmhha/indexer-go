@@ -47,16 +47,6 @@ type Subscription interface {
 	Unsubscribe()
 }
 
-// FeeDelegationMeta contains fee delegation metadata for a transaction.
-type FeeDelegationMeta = chain.FeeDelegationMeta
-
-// FeeDelegationClient is an optional interface for clients that support
-// extracting fee delegation metadata from blocks
-type FeeDelegationClient interface {
-	// GetBlockWithFeeDelegationMeta retrieves a block along with fee delegation metadata
-	GetBlockWithFeeDelegationMeta(ctx context.Context, number uint64) (*types.Block, []*FeeDelegationMeta, error)
-}
-
 // BlockProcessor defines an interface for processing blocks after indexing
 // This is used by external modules like watchlist to hook into block processing
 type BlockProcessor interface {
@@ -83,12 +73,6 @@ type Storage interface {
 	HasReceipt(ctx context.Context, hash common.Hash) (bool, error)
 	GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error)
 	Close() error
-}
-
-// FeeDelegationStorage is an optional interface for storages that support
-// storing fee delegation transaction metadata
-type FeeDelegationStorage interface {
-	SetFeeDelegationTxMeta(ctx context.Context, meta *storagepkg.FeeDelegationTxMeta) error
 }
 
 // ============================================================================
@@ -125,9 +109,6 @@ type Config struct {
 	// closely without retrying failures aggressively.
 	PollInterval time.Duration
 
-	// AtomicBlock indexes each block in one storage transaction (cursor
-	// included) and publishes its events after commit.
-	AtomicBlock bool
 
 	// Finality and Confirmations choose the live loop's target height
 	// (see targetHead). The zero value indexes up to the head.
@@ -203,15 +184,9 @@ type Fetcher struct {
 	// instead of through client (chain profile design, CP-3).
 	src source.Source
 
-	// fdClient extracts StableNet fee delegation metadata. When nil the
-	// fetcher falls back to checking whether its main client supports it.
-	fdClient FeeDelegationClient
 
 	// txr opens per-block storage transactions (nil if the storage cannot).
 	txr storagepkg.BlockTransactor
-	// strictStorageErrors makes storage write failures abort the block
-	// instead of being logged. It is on in atomic mode.
-	strictStorageErrors bool
 	// pendingEvents buffers events while a block transaction is open.
 	pendingEvents *[]events.Event
 	// beforeCommitHook is a fault-injection point for tests.
@@ -242,10 +217,9 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		)
 	}
 
+	// Blocks are indexed in one storage transaction each; a storage without
+	// block transactions cannot index (indexBlock fails).
 	txr, _ := storage.(storagepkg.BlockTransactor)
-	if config.AtomicBlock && txr == nil {
-		logger.Warn("Atomic block indexing requested but storage does not support block transactions; using legacy path")
-	}
 
 	return &Fetcher{
 		client:              client,
@@ -256,7 +230,6 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		metrics:             metrics,
 		optimizer:           optimizer,
 		txr:                 txr,
-		strictStorageErrors: config.AtomicBlock && txr != nil,
 	}
 }
 
@@ -309,13 +282,6 @@ func (f *Fetcher) GetChainID() string {
 func (f *Fetcher) SetTokenIndexer(indexer TokenIndexer) {
 	f.tokenIndexer = indexer
 	f.logger.Info("Token indexer configured")
-}
-
-// SetFeeDelegationClient sets the client used to extract fee delegation
-// metadata (StableNet type 0x16 transactions).
-func (f *Fetcher) SetFeeDelegationClient(client FeeDelegationClient) {
-	f.fdClient = client
-	f.logger.Info("Fee delegation client configured")
 }
 
 // AddBlockProcessor adds a block processor to be called after each block is indexed
@@ -378,73 +344,7 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 		f.metrics.RecordRequest(time.Since(startTime), false, false)
 	}
 
-	if f.atomic() {
-		return f.indexBlock(ctx, fb)
-	}
-
-	// Legacy path: separate writes, removed after the atomic path is the
-	// default for a release (phase0-design.md P0-14).
-	block, receipts := fb.geth, fb.gethReceipts
-	// Store block
-	if err := f.storage.SetBlock(ctx, block); err != nil {
-		return fmt.Errorf("failed to store block %d: %w", height, err)
-	}
-
-	// Process metadata and indexing
-	if err := f.processBlockMetadata(ctx, fb); err != nil {
-		return err
-	}
-
-	// Process fee delegation metadata
-	if err := f.processFeeDelegationMetadata(ctx, fb); err != nil {
-		// Log but don't fail block processing
-		f.logger.Warn("Fee delegation metadata processing failed",
-			zap.Uint64("height", height),
-			zap.Error(err),
-		)
-	}
-
-	// Publish block event
-	if f.eventBus != nil {
-		blockEvent := events.NewBlockEvent(block)
-		if !f.eventBus.Publish(blockEvent) {
-			f.logger.Warn("Failed to publish block event (channel full)",
-				zap.Uint64("height", height),
-			)
-		}
-	}
-
-	// Store receipts and index logs
-	if err := f.storeAndProcessReceipts(ctx, fb); err != nil {
-		return err
-	}
-	if err := f.runFeatures(ctx, fb); err != nil {
-		return fmt.Errorf("block %d: %w", height, err)
-	}
-
-	// Publish transaction and log events
-	if f.eventBus != nil {
-		f.publishBlockEvents(fb)
-	}
-
-	// Process block with external processors (e.g., watchlist)
-	f.processBlockWithProcessors(ctx, block, receipts)
-
-	// Update latest height
-	if err := f.storage.SetLatestHeight(ctx, height); err != nil {
-		return fmt.Errorf("failed to update latest height to %d: %w", height, err)
-	}
-
-	// Record metrics and log success
-	f.metrics.RecordBlockProcessed(len(receipts))
-	f.logger.Info("Successfully indexed block",
-		zap.Uint64("height", height),
-		zap.String("hash", block.Hash().Hex()),
-		zap.Int("txs", len(block.Transactions())),
-		zap.Int("receipts", len(receipts)),
-	)
-
-	return nil
+	return f.indexBlock(ctx, fb)
 }
 
 // FetchRange fetches a range of blocks sequentially
@@ -593,108 +493,9 @@ func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) e
 		// Process results in sequential order
 		for {
 			if res, ok := resultMap[nextHeight]; ok {
-				if f.atomic() {
-					if err := f.indexBlock(ctx, res.block); err != nil {
-						return err
-					}
-					delete(resultMap, nextHeight)
-					processedCount++
-					nextHeight++
-					if nextHeight > end {
-						break
-					}
-					continue
+				if err := f.indexBlock(ctx, res.block); err != nil {
+					return err
 				}
-
-				fb := res.block
-				block, receipts := fb.geth, fb.gethReceipts
-
-				// Store block
-				if err := f.storage.SetBlock(ctx, block); err != nil {
-					return fmt.Errorf("failed to store block %d: %w", nextHeight, err)
-				}
-
-				// Process fee delegation metadata
-				if err := f.processFeeDelegationMetadata(ctx, fb); err != nil {
-					f.logger.Warn("Fee delegation metadata processing failed",
-						zap.Uint64("height", nextHeight),
-						zap.Error(err),
-					)
-				}
-
-				// Publish block event if EventBus is configured
-				if f.eventBus != nil {
-					blockEvent := events.NewBlockEvent(block)
-					if !f.eventBus.Publish(blockEvent) {
-						f.logger.Warn("Failed to publish block event (channel full)",
-							zap.Uint64("height", nextHeight),
-						)
-					}
-				}
-
-				// Store receipts and index logs
-				for _, receipt := range receipts {
-					if err := f.storage.SetReceipt(ctx, receipt); err != nil {
-						return fmt.Errorf("failed to store receipt for tx %s: %w", receipt.TxHash.Hex(), err)
-					}
-
-					// Index logs from this receipt
-					if logWriter, ok := f.storage.(storagepkg.LogWriter); ok && len(receipt.Logs) > 0 {
-						if err := logWriter.IndexLogs(ctx, receipt.Logs); err != nil {
-							f.logger.Warn("failed to index logs",
-								zap.String("tx", receipt.TxHash.Hex()),
-								zap.Int("logs", len(receipt.Logs)),
-								zap.Error(err),
-							)
-							// Continue processing - log indexing failure shouldn't block block indexing
-						}
-					}
-				}
-
-				if err := f.runFeatures(ctx, fb); err != nil {
-					return fmt.Errorf("block %d: %w", nextHeight, err)
-				}
-
-				// Publish transaction events if EventBus is configured
-				if f.eventBus != nil {
-					transactions := block.Transactions()
-					// Build receipt map for O(1) lookup (avoids O(n²) matching)
-					receiptMap := buildReceiptMap(receipts)
-					for i, tx := range transactions {
-						// O(1) receipt lookup
-						receipt := receiptMap[tx.Hash()]
-
-						// Create transaction event
-						txEvent := events.NewTransactionEvent(
-							tx,
-							block.NumberU64(),
-							block.Hash(),
-							uint(i),
-							getTransactionSender(tx),
-							receipt,
-						)
-
-						if !f.eventBus.Publish(txEvent) {
-							f.logger.Warn("Failed to publish transaction event (channel full)",
-								zap.String("tx_hash", tx.Hash().Hex()),
-								zap.Uint64("block", nextHeight),
-							)
-						}
-					}
-				}
-
-				if err := f.storage.SetLatestHeight(ctx, nextHeight); err != nil {
-					return fmt.Errorf("failed to update latest height to %d: %w", nextHeight, err)
-				}
-
-				f.logger.Debug("Stored block",
-					zap.Uint64("height", nextHeight),
-					zap.String("hash", block.Hash().Hex()),
-					zap.Int("txs", len(block.Transactions())),
-					zap.Int("receipts", len(receipts)),
-				)
-
-				// Clean up and move to next height
 				delete(resultMap, nextHeight)
 				processedCount++
 				nextHeight++

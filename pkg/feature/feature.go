@@ -141,11 +141,9 @@ func (b *Block) pairTransactions() []TxWithReceipt {
 }
 
 // DelegatedFeePayer returns the account paying gas for tx when it is not the
-// sender: from the transaction when a chain profile decoded it
-// (chains.FeeDelegationOf), otherwise from fee delegation metadata stored by
-// the legacy ingest path.
-func DelegatedFeePayer(ctx context.Context, st storage.Storage, tx *model.Transaction) (common.Address, bool) {
-	if fd, ok := storage.FeeDelegationOf(ctx, st, tx); ok {
+// sender, as the chain profile decoded it (chains.FeeDelegationOf).
+func DelegatedFeePayer(tx *model.Transaction) (common.Address, bool) {
+	if fd, ok := chains.FeeDelegationOf(tx); ok {
 		return fd.Payer, true
 	}
 	return common.Address{}, false

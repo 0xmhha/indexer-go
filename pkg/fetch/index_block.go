@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/events"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
@@ -17,11 +16,6 @@ import (
 // matches both errors.Is(err, ErrReorg) and this error) so the caller rolls
 // back instead of overwriting.
 var ErrBlockConflict = errors.New("fetch: stored block differs from fetched block")
-
-// atomic reports whether blocks are indexed with one storage transaction each.
-func (f *Fetcher) atomic() bool {
-	return f.config.AtomicBlock && f.txr != nil
-}
 
 // SetBeforeCommitHook installs a function called after a block's writes are
 // staged and before they commit. Returning an error aborts the block as a
@@ -71,12 +65,6 @@ func (f *Fetcher) applyBlock(ctx context.Context, fb *fetchedBlock) error {
 	}
 	if err := f.processBlockMetadata(ctx, fb); err != nil {
 		return err
-	}
-	if err := f.processFeeDelegationMetadata(ctx, fb); err != nil {
-		f.logger.Warn("Fee delegation metadata processing failed",
-			zap.Uint64("height", height),
-			zap.Error(err),
-		)
 	}
 	f.publish(f.blockEvent(fb))
 
