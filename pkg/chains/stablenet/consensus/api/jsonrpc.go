@@ -10,7 +10,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -52,7 +52,7 @@ func (h *rpcHandler) getWBFTBlockExtra(ctx context.Context, params json.RawMessa
 
 	extra, err := wbftReader.GetWBFTBlockExtra(ctx, blockNumber)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get WBFT block extra",
@@ -88,7 +88,7 @@ func (h *rpcHandler) getWBFTBlockExtraByHash(ctx context.Context, params json.Ra
 
 	extra, err := wbftReader.GetWBFTBlockExtraByHash(ctx, hash)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get WBFT block extra by hash",
@@ -137,7 +137,7 @@ func (h *rpcHandler) getEpochInfo(ctx context.Context, params json.RawMessage) (
 
 	epochInfo, err := wbftReader.GetEpochInfo(ctx, epochNumber)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get epoch info",
@@ -161,7 +161,7 @@ func (h *rpcHandler) getLatestEpochInfo(ctx context.Context, params json.RawMess
 
 	epochInfo, err := wbftReader.GetLatestEpochInfo(ctx)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get latest epoch info", zap.Error(err))
@@ -233,7 +233,7 @@ func (h *rpcHandler) getValidatorSigningStats(ctx context.Context, params json.R
 
 	stats, err := wbftReader.GetValidatorSigningStats(ctx, validatorAddr, fromBlock, toBlock)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get validator signing stats",
@@ -487,7 +487,7 @@ func (h *rpcHandler) getBlockSigners(ctx context.Context, params json.RawMessage
 
 	preparers, committers, err := wbftReader.GetBlockSigners(ctx, blockNumber)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get block signers",

@@ -8,7 +8,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,7 +22,7 @@ type mockWBFTStorage struct {
 
 func (m *mockWBFTStorage) GetWBFTBlockExtra(ctx context.Context, blockNumber uint64) (*consensus.WBFTBlockExtra, error) {
 	if blockNumber == 0 {
-		return nil, storage.ErrNotFound
+		return nil, port.ErrNotFound
 	}
 	return &consensus.WBFTBlockExtra{
 		BlockNumber:  blockNumber,
@@ -48,7 +48,7 @@ func (m *mockWBFTStorage) GetWBFTBlockExtraByHash(ctx context.Context, blockHash
 
 func (m *mockWBFTStorage) GetEpochInfo(ctx context.Context, epochNumber uint64) (*consensus.EpochInfo, error) {
 	if epochNumber == 0 {
-		return nil, storage.ErrNotFound
+		return nil, port.ErrNotFound
 	}
 	return &consensus.EpochInfo{
 		EpochNumber: epochNumber,

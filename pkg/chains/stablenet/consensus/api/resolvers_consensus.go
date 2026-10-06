@@ -7,7 +7,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	gql "github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -29,7 +29,7 @@ func (s *Schema) resolveConsensusData(p gql.ResolveParams) (interface{}, error) 
 	// Get WBFT block extra - now available directly through Storage interface
 	wbftExtra, err := s.storage.GetWBFTBlockExtra(ctx, blockNumber)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get WBFT block extra",
@@ -41,7 +41,7 @@ func (s *Schema) resolveConsensusData(p gql.ResolveParams) (interface{}, error) 
 	// Get block for proposer (coinbase)
 	block, err := s.storage.GetModelBlock(ctx, blockNumber)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get block",
@@ -69,7 +69,7 @@ func (s *Schema) resolveConsensusData(p gql.ResolveParams) (interface{}, error) 
 	// Convert to ConsensusData
 	data := s.wbftExtraToConsensusData(wbftExtra, block.Miner, prepareSigners, commitSigners)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get consensus data",
@@ -115,7 +115,7 @@ func (s *Schema) resolveValidatorStats(p gql.ResolveParams) (interface{}, error)
 	consensusStorage := consensus.NewConsensusStorage(s.storage, s.logger)
 	stats, err := consensusStorage.GetValidatorStats(ctx, address, fromBlock, toBlock)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get validator stats",
@@ -178,7 +178,7 @@ func (s *Schema) resolveValidatorParticipation(p gql.ResolveParams) (interface{}
 	consensusStorage := consensus.NewConsensusStorage(s.storage, s.logger)
 	participation, err := consensusStorage.GetValidatorParticipation(ctx, address, fromBlock, toBlock, limit, offset)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get validator participation",
@@ -267,7 +267,7 @@ func (s *Schema) resolveEpochData(p gql.ResolveParams) (interface{}, error) {
 	consensusStorage := consensus.NewConsensusStorage(s.storage, s.logger)
 	epochData, err := consensusStorage.GetEpochInfo(ctx, epochNumber)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get epoch data",
@@ -286,7 +286,7 @@ func (s *Schema) resolveLatestEpochData(p gql.ResolveParams) (interface{}, error
 	consensusStorage := consensus.NewConsensusStorage(s.storage, s.logger)
 	epochData, err := consensusStorage.GetLatestEpochInfo(ctx)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get latest epoch data",

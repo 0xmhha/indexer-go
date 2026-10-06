@@ -12,8 +12,8 @@ import (
 	"fmt"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Name is the feature name.
@@ -29,7 +29,7 @@ func (feeDelegationFeature) Requires() []string { return nil }
 func (feeDelegationFeature) OrderIndependent() bool { return true }
 
 func (feeDelegationFeature) Register(r feature.Registrar) error {
-	w, ok := r.Deps().Storage.(storagepkg.FeeDelegationWriter)
+	w, ok := r.Deps().Storage.(port.FeeDelegationWriter)
 	if !ok {
 		return fmt.Errorf("storage does not support fee delegation metadata")
 	}
@@ -39,7 +39,7 @@ func (feeDelegationFeature) Register(r feature.Registrar) error {
 			if !ok {
 				continue
 			}
-			meta := &storagepkg.FeeDelegationTxMeta{
+			meta := &port.FeeDelegationTxMeta{
 				TxHash:       tx.Hash,
 				BlockNumber:  b.Model.Number,
 				OriginalType: tx.Type,

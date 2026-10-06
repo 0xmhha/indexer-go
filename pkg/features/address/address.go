@@ -9,8 +9,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Name is the feature name.
@@ -24,24 +24,23 @@ func (addressFeature) DefaultOn() bool    { return true }
 
 func (addressFeature) Register(r feature.Registrar) error {
 	st := r.Deps().Storage
-	txIndex, ok := st.(storagepkg.Writer)
+	txIndex, ok := st.(port.Writer)
 	if !ok {
 		return fmt.Errorf("storage does not support the address transaction index")
 	}
-	creations, ok := st.(storagepkg.AddressIndexWriter)
+	creations, ok := st.(port.AddressIndexWriter)
 	if !ok {
 		return fmt.Errorf("storage does not support contract creations")
 	}
-	r.OnBlock(&handler{storage: st, txIndex: txIndex, creations: creations})
+	r.OnBlock(&handler{txIndex: txIndex, creations: creations})
 	return nil
 }
 
 func init() { feature.Register(addressFeature{}) }
 
 type handler struct {
-	storage   storagepkg.Storage
-	txIndex   storagepkg.Writer
-	creations storagepkg.AddressIndexWriter
+	txIndex   port.Writer
+	creations port.AddressIndexWriter
 }
 
 // HandleBlock indexes the block's transactions. Hashes and addresses come
@@ -72,7 +71,7 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 
 		if tx.To == nil && receipt.ContractAddress != nil {
 			contract := *receipt.ContractAddress
-			creation := &storagepkg.ContractCreation{
+			creation := &port.ContractCreation{
 				ContractAddress: contract,
 				Creator:         from,
 				TransactionHash: tx.Hash,

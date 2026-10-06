@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	sc "github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -70,7 +71,7 @@ func (m *mockSystemContractStorage) GetProposalById(ctx context.Context, contrac
 	if m.proposalByID != nil {
 		return m.proposalByID, nil
 	}
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockSystemContractStorage) GetProposalVotes(ctx context.Context, contract common.Address, proposalId *big.Int) ([]*sc.ProposalVote, error) {

@@ -1,7 +1,7 @@
 package feature
 
 import (
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // BackfillJob asks for one feature to process blocks From..To. An Online job
@@ -38,8 +38,8 @@ func IsOrderIndependent(name string) bool {
 // are recorded active at once, with the blocks they missed as a gap, and the
 // job is marked Online. A gap left by an interrupted online backfill is
 // resumed.
-func Reconcile(enabled []string, states map[string]storage.FeatureState, latest uint64, hasData bool) (map[string]storage.FeatureState, []BackfillJob) {
-	writes := map[string]storage.FeatureState{}
+func Reconcile(enabled []string, states map[string]port.FeatureState, latest uint64, hasData bool) (map[string]port.FeatureState, []BackfillJob) {
+	writes := map[string]port.FeatureState{}
 	on := map[string]bool{}
 	for _, n := range enabled {
 		on[n] = true
@@ -50,7 +50,7 @@ func Reconcile(enabled []string, states map[string]storage.FeatureState, latest 
 	// complete.
 	if !hasData || len(states) == 0 {
 		for _, n := range enabled {
-			writes[n] = storage.FeatureState{Active: true}
+			writes[n] = port.FeatureState{Active: true}
 		}
 		return writes, nil
 	}
@@ -66,7 +66,7 @@ func Reconcile(enabled []string, states map[string]storage.FeatureState, latest 
 		case known && st.Active:
 			continue // up to date
 		case known && st.Through >= latest:
-			writes[n] = storage.FeatureState{Active: true}
+			writes[n] = port.FeatureState{Active: true}
 			continue
 		case known:
 			from = st.Through + 1
@@ -74,7 +74,7 @@ func Reconcile(enabled []string, states map[string]storage.FeatureState, latest 
 			from = 0
 		}
 		if IsOrderIndependent(n) {
-			writes[n] = storage.FeatureState{Active: true, Gap: &storage.BlockRange{From: from, To: latest}}
+			writes[n] = port.FeatureState{Active: true, Gap: &port.BlockRange{From: from, To: latest}}
 			jobs = append(jobs, BackfillJob{Feature: n, From: from, To: latest, Online: true})
 			continue
 		}
@@ -82,7 +82,7 @@ func Reconcile(enabled []string, states map[string]storage.FeatureState, latest 
 	}
 	for n, st := range states {
 		if !on[n] && st.Active {
-			writes[n] = storage.FeatureState{Through: latest}
+			writes[n] = port.FeatureState{Through: latest}
 			if st.Gap != nil {
 				// It never filled its gap: complete only below the gap. A gap
 				// from genesis leaves block 0, which has no transactions, so
@@ -91,7 +91,7 @@ func Reconcile(enabled []string, states map[string]storage.FeatureState, latest 
 				if st.Gap.From > 0 {
 					through = st.Gap.From - 1
 				}
-				writes[n] = storage.FeatureState{Through: through}
+				writes[n] = port.FeatureState{Through: through}
 			}
 		}
 	}

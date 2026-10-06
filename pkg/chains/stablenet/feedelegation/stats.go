@@ -14,7 +14,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // FeeDelegationStats represents overall fee delegation statistics
@@ -44,7 +44,7 @@ type FeePayerStats struct {
 // Backend is the storage the statistics read: stored blocks and receipts
 // and the indexed height.
 type Backend interface {
-	storage.ModelReader
+	port.ModelReader
 	GetLatestHeight(ctx context.Context) (uint64, error)
 }
 

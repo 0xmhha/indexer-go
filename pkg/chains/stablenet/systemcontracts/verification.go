@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // SystemContractInfo contains metadata for a system contract
@@ -77,7 +77,7 @@ type SystemContractVerificationConfig struct {
 
 // InitSystemContractVerifications initializes verification data for all system contracts
 // by reading source code from the specified path and storing it in the database
-func InitSystemContractVerifications(ctx context.Context, writer storage.ContractVerificationWriter, reader storage.ContractVerificationReader, config *SystemContractVerificationConfig) error {
+func InitSystemContractVerifications(ctx context.Context, writer port.ContractVerificationWriter, reader port.ContractVerificationReader, config *SystemContractVerificationConfig) error {
 	if config == nil {
 		return fmt.Errorf("config cannot be nil")
 	}
@@ -150,7 +150,7 @@ func InitSystemContractVerifications(ctx context.Context, writer storage.Contrac
 		}
 
 		// Create verification entry
-		verification := &storage.ContractVerification{
+		verification := &port.ContractVerification{
 			Address:             info.Address,
 			IsVerified:          true,
 			Name:                info.Name,

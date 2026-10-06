@@ -8,20 +8,25 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Schema holds the resolvers of the fee delegation queries. stats is nil
 // when the indexer's storage cannot serve them; the queries then fail.
+// history is nil when the storage cannot map timestamps to blocks; the
+// time arguments are then ignored.
 type Schema struct {
-	storage storage.Storage
+	history port.HistoricalReader
 	stats   *feedelegation.Stats
 	logger  *zap.Logger
 }
 
 func init() {
 	graphql.RegisterExtension("stablenet.fee_delegation", func(e *graphql.Extension) {
-		s := &Schema{storage: e.Storage(), logger: e.Logger()}
+		s := &Schema{logger: e.Logger()}
+		if h, ok := e.Storage().(port.HistoricalReader); ok {
+			s.history = h
+		}
 		if s.logger == nil {
 			s.logger = zap.NewNop()
 		}
