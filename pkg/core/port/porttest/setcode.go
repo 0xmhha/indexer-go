@@ -271,7 +271,6 @@ func testSetCodeIndex(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("TransactionCountCountsTransactions", func(t *testing.T) {
-		knownDefect(t, "GetSetCodeTransactionCount counts authorizations, not transactions")
 		s := open[setCodeStore](t, newStore)
 		require.NoError(t, s.SaveSetCodeAuthorizations(ctx, []*port.SetCodeAuthorizationRecord{
 			setCodeRecord(1, 0, 0, setCodeAuthority, setCodeTarget),
@@ -284,7 +283,6 @@ func testSetCodeIndex(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("LargeAuthIndex", func(t *testing.T) {
-		knownDefect(t, "authorization index above 255 is truncated in the target/authority/block indexes")
 		s := open[setCodeStore](t, newStore)
 		r := setCodeRecord(9, 0, 256, setCodeAuthority, setCodeTarget)
 		require.NoError(t, s.SaveSetCodeAuthorization(ctx, r))
@@ -370,7 +368,6 @@ func testSetCodeIndex(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("StatsFollowDelegation", func(t *testing.T) {
-		knownDefect(t, "AddressSetCodeStats.CurrentDelegation is never set from the delegation state")
 		s := open[setCodeStore](t, newStore)
 		target := setCodeTarget
 		require.NoError(t, s.UpdateAddressDelegationState(ctx, &port.AddressDelegationState{

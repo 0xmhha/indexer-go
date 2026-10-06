@@ -97,11 +97,15 @@ type ModuleIndexReader interface {
 	// GetAccountModules retrieves all modules for an account, grouped by type.
 	GetAccountModules(ctx context.Context, account common.Address) (*AccountModules, error)
 
-	// GetRecentModuleEvents retrieves the most recent module install/uninstall events.
+	// GetRecentModuleEvents retrieves the most recently installed modules across
+	// all accounts: one install record per account and module, listed at the
+	// block of its latest install. An uninstall adds no entry; it marks the
+	// record inactive (Active=false, RemovedAt/RemovedTx set).
 	// Results are ordered by block number descending (newest first).
 	GetRecentModuleEvents(ctx context.Context, limit int) ([]*InstalledModule, error)
 
-	// GetModuleEventCount returns the total count of module events indexed.
+	// GetModuleEventCount returns the total count of module install records
+	// indexed (one per account and module; uninstalls are not counted).
 	GetModuleEventCount(ctx context.Context) (int, error)
 
 	// ListModuleStats retrieves module stats with pagination.

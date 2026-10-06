@@ -1120,11 +1120,13 @@ func SmartAccountKeyPrefix() []byte {
 	return []byte(prefixSmartAccount)
 }
 
-// UserOpSenderIndexKey returns the index key for querying by sender address
-// Format: /index/userop/sender/{address}/{blockNumber:016x}/{bundleIndex:08x}
-func UserOpSenderIndexKey(sender common.Address, blockNumber uint64, bundleIndex uint32) []byte {
-	return []byte(fmt.Sprintf("%s%s/%016x/%08x",
-		prefixIdxUserOpSender, sender.Hex(), blockNumber, bundleIndex))
+// UserOpSenderIndexKey returns the index key for querying by sender address.
+// The bundle index restarts in each bundle transaction, so the transaction
+// hash keeps the operations of two bundles in one block apart.
+// Format: /index/userop/sender/{address}/{blockNumber:016x}/{txHash}/{bundleIndex:08x}
+func UserOpSenderIndexKey(sender common.Address, blockNumber uint64, txHash common.Hash, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%s/%08x",
+		prefixIdxUserOpSender, sender.Hex(), blockNumber, txHash.Hex(), bundleIndex))
 }
 
 // UserOpSenderIndexKeyPrefix returns the prefix for querying by sender address
@@ -1133,11 +1135,13 @@ func UserOpSenderIndexKeyPrefix(sender common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%s/", prefixIdxUserOpSender, sender.Hex()))
 }
 
-// UserOpBundlerIndexKey returns the index key for querying by bundler address
-// Format: /index/userop/bundler/{address}/{blockNumber:016x}/{bundleIndex:08x}
-func UserOpBundlerIndexKey(bundler common.Address, blockNumber uint64, bundleIndex uint32) []byte {
-	return []byte(fmt.Sprintf("%s%s/%016x/%08x",
-		prefixIdxUserOpBundler, bundler.Hex(), blockNumber, bundleIndex))
+// UserOpBundlerIndexKey returns the index key for querying by bundler address.
+// The bundle index restarts in each bundle transaction, so the transaction
+// hash keeps the operations of two bundles in one block apart.
+// Format: /index/userop/bundler/{address}/{blockNumber:016x}/{txHash}/{bundleIndex:08x}
+func UserOpBundlerIndexKey(bundler common.Address, blockNumber uint64, txHash common.Hash, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%s/%08x",
+		prefixIdxUserOpBundler, bundler.Hex(), blockNumber, txHash.Hex(), bundleIndex))
 }
 
 // UserOpBundlerIndexKeyPrefix returns the prefix for querying by bundler address
@@ -1146,11 +1150,13 @@ func UserOpBundlerIndexKeyPrefix(bundler common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%s/", prefixIdxUserOpBundler, bundler.Hex()))
 }
 
-// UserOpPaymasterIndexKey returns the index key for querying by paymaster address
-// Format: /index/userop/paymaster/{address}/{blockNumber:016x}/{bundleIndex:08x}
-func UserOpPaymasterIndexKey(paymaster common.Address, blockNumber uint64, bundleIndex uint32) []byte {
-	return []byte(fmt.Sprintf("%s%s/%016x/%08x",
-		prefixIdxUserOpPaymaster, paymaster.Hex(), blockNumber, bundleIndex))
+// UserOpPaymasterIndexKey returns the index key for querying by paymaster address.
+// The bundle index restarts in each bundle transaction, so the transaction
+// hash keeps the operations of two bundles in one block apart.
+// Format: /index/userop/paymaster/{address}/{blockNumber:016x}/{txHash}/{bundleIndex:08x}
+func UserOpPaymasterIndexKey(paymaster common.Address, blockNumber uint64, txHash common.Hash, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%s/%08x",
+		prefixIdxUserOpPaymaster, paymaster.Hex(), blockNumber, txHash.Hex(), bundleIndex))
 }
 
 // UserOpPaymasterIndexKeyPrefix returns the prefix for querying by paymaster address
@@ -1159,11 +1165,13 @@ func UserOpPaymasterIndexKeyPrefix(paymaster common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%s/", prefixIdxUserOpPaymaster, paymaster.Hex()))
 }
 
-// UserOpFactoryIndexKey returns the index key for querying by factory address
-// Format: /index/userop/factory/{address}/{blockNumber:016x}/{bundleIndex:08x}
-func UserOpFactoryIndexKey(factory common.Address, blockNumber uint64, bundleIndex uint32) []byte {
-	return []byte(fmt.Sprintf("%s%s/%016x/%08x",
-		prefixIdxUserOpFactory, factory.Hex(), blockNumber, bundleIndex))
+// UserOpFactoryIndexKey returns the index key for querying by factory address.
+// The bundle index restarts in each bundle transaction, so the transaction
+// hash keeps the operations of two bundles in one block apart.
+// Format: /index/userop/factory/{address}/{blockNumber:016x}/{txHash}/{bundleIndex:08x}
+func UserOpFactoryIndexKey(factory common.Address, blockNumber uint64, txHash common.Hash, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%s/%016x/%s/%08x",
+		prefixIdxUserOpFactory, factory.Hex(), blockNumber, txHash.Hex(), bundleIndex))
 }
 
 // UserOpFactoryIndexKeyPrefix returns the prefix for querying by factory address
@@ -1172,11 +1180,13 @@ func UserOpFactoryIndexKeyPrefix(factory common.Address) []byte {
 	return []byte(fmt.Sprintf("%s%s/", prefixIdxUserOpFactory, factory.Hex()))
 }
 
-// UserOpBlockIndexKey returns the index key for querying by block number
-// Format: /index/userop/block/{blockNumber:016x}/{bundleIndex:08x}
-func UserOpBlockIndexKey(blockNumber uint64, bundleIndex uint32) []byte {
-	return []byte(fmt.Sprintf("%s%016x/%08x",
-		prefixIdxUserOpBlock, blockNumber, bundleIndex))
+// UserOpBlockIndexKey returns the index key for querying by block number.
+// The bundle index restarts in each bundle transaction, so the transaction
+// hash keeps the operations of two bundles in one block apart.
+// Format: /index/userop/block/{blockNumber:016x}/{txHash}/{bundleIndex:08x}
+func UserOpBlockIndexKey(blockNumber uint64, txHash common.Hash, bundleIndex uint32) []byte {
+	return []byte(fmt.Sprintf("%s%016x/%s/%08x",
+		prefixIdxUserOpBlock, blockNumber, txHash.Hex(), bundleIndex))
 }
 
 // UserOpBlockIndexKeyPrefix returns the prefix for querying by block number

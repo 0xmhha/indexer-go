@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/cockroachdb/pebble"
@@ -274,7 +275,8 @@ func (s *PebbleStorage) GetAccountModules(ctx context.Context, account common.Ad
 	return result, nil
 }
 
-// GetRecentModuleEvents retrieves the most recent module install/uninstall events.
+// GetRecentModuleEvents retrieves the most recently installed modules (one
+// install record per account and module; uninstalls add no entry).
 func (s *PebbleStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([]*port.InstalledModule, error) {
 	if s.closed.Load() {
 		return nil, port.ErrClosed
@@ -328,7 +330,7 @@ func (s *PebbleStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([
 	return records, nil
 }
 
-// GetModuleEventCount returns the total count of module events indexed.
+// GetModuleEventCount returns the total count of module install records indexed.
 func (s *PebbleStorage) GetModuleEventCount(ctx context.Context) (int, error) {
 	if s.closed.Load() {
 		return 0, port.ErrClosed
@@ -427,8 +429,27 @@ func (s *PebbleStorage) SaveInstalledModule(ctx context.Context, record *port.In
 		return fmt.Errorf("failed to marshal installed module: %w", err)
 	}
 
+	// A reinstall replaces the primary record; its index keys carry the
+	// install block and module type, so drop the replaced record's entries.
+	previous, err := s.GetInstalledModule(ctx, record.Account, record.Module)
+	if err != nil && !errors.Is(err, port.ErrNotFound) {
+		return fmt.Errorf("failed to get replaced module: %w", err)
+	}
+
 	batch := s.newBatch(ctx)
 	defer batch.Close()
+
+	if previous != nil && (previous.InstalledAt != record.InstalledAt || previous.ModuleType != record.ModuleType) {
+		for _, staleKey := range [][]byte{
+			ModuleAccountIndexKey(previous.Account, previous.InstalledAt, previous.Module),
+			ModuleTypeIndexKey(previous.ModuleType, previous.InstalledAt, previous.Account, previous.Module),
+			ModuleBlockIndexKey(previous.InstalledAt, previous.Account, previous.Module),
+		} {
+			if err := batch.Delete(staleKey, pebble.Sync); err != nil {
+				return fmt.Errorf("failed to delete replaced module index: %w", err)
+			}
+		}
+	}
 
 	// 1. Save the primary record
 	key := ModuleKey(record.Account, record.Module)

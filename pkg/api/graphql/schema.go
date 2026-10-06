@@ -787,7 +787,7 @@ func (b *SchemaBuilder) WithModuleQueries() *SchemaBuilder {
 	// Module event count
 	b.queries["moduleEventCount"] = &graphql.Field{
 		Type:        graphql.NewNonNull(graphql.Int),
-		Description: "Get the total count of module events (installs and uninstalls)",
+		Description: "Get the total count of module install records (one per account and module; uninstalls are not counted)",
 		Resolve:     s.resolveModuleEventCount,
 	}
 

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -120,10 +121,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, ta
 				txHash    common.Hash
 				authIndex int
 			}
-			ref.txHash = common.BytesToHash(value[:32])
-			if len(value) > 32 {
-				ref.authIndex = int(value[32])
-			}
+			ref.txHash, ref.authIndex = decodeSetCodeIndexValue(value)
 			txRefs = append(txRefs, ref)
 		}
 	}
@@ -198,10 +196,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context,
 				txHash    common.Hash
 				authIndex int
 			}
-			ref.txHash = common.BytesToHash(value[:32])
-			if len(value) > 32 {
-				ref.authIndex = int(value[32])
-			}
+			ref.txHash, ref.authIndex = decodeSetCodeIndexValue(value)
 			txRefs = append(txRefs, ref)
 		}
 	}
@@ -258,11 +253,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blo
 	for iter.First(); iter.Valid(); iter.Next() {
 		value := iter.Value()
 		if len(value) >= 32 {
-			txHash := common.BytesToHash(value[:32])
-			authIndex := 0
-			if len(value) > 32 {
-				authIndex = int(value[32])
-			}
+			txHash, authIndex := decodeSetCodeIndexValue(value)
 
 			record, err := s.GetSetCodeAuthorization(ctx, txHash, authIndex)
 			if err != nil {
@@ -284,11 +275,30 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blo
 }
 
 // GetAddressSetCodeStats retrieves SetCode statistics for an address.
+// CurrentDelegation is taken from the address's delegation state.
 func (s *PebbleStorage) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*port.AddressSetCodeStats, error) {
 	if s.closed.Load() {
 		return nil, port.ErrClosed
 	}
 
+	stats, err := s.getStoredSetCodeStats(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	state, err := s.GetAddressDelegationState(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	stats.CurrentDelegation = nil
+	if state.HasDelegation && state.DelegationTarget != nil {
+		target := *state.DelegationTarget
+		stats.CurrentDelegation = &target
+	}
+	return stats, nil
+}
+
+// getStoredSetCodeStats reads the stored SetCode counters for an address.
+func (s *PebbleStorage) getStoredSetCodeStats(ctx context.Context, address common.Address) (*port.AddressSetCodeStats, error) {
 	key := SetCodeStatsKey(address)
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
@@ -396,7 +406,9 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsCountByAuthority(ctx context.Con
 	return count, nil
 }
 
-// GetSetCodeTransactionCount returns the total count of SetCode authorizations indexed.
+// GetSetCodeTransactionCount returns the total count of SetCode transactions indexed.
+// Authorization keys are grouped by transaction hash, so each transaction is
+// counted once however many authorizations it carries.
 func (s *PebbleStorage) GetSetCodeTransactionCount(ctx context.Context) (int, error) {
 	if s.closed.Load() {
 		return 0, port.ErrClosed
@@ -414,8 +426,18 @@ func (s *PebbleStorage) GetSetCodeTransactionCount(ctx context.Context) (int, er
 	defer iter.Close()
 
 	count := 0
+	var lastTx []byte
 	for iter.First(); iter.Valid(); iter.Next() {
-		count++
+		// Key: prefix + txHash hex + "/" + authIndex
+		key := iter.Key()
+		if len(key) < len(prefix)+common.HashLength*2+2 {
+			continue
+		}
+		tx := key[len(prefix) : len(prefix)+common.HashLength*2+2]
+		if string(tx) != string(lastTx) {
+			count++
+			lastTx = append(lastTx[:0], tx...)
+		}
 	}
 
 	if err := iter.Error(); err != nil {
@@ -456,11 +478,7 @@ func (s *PebbleStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limi
 	for iter.Last(); iter.Valid() && count < limit; iter.Prev() {
 		value := iter.Value()
 		if len(value) >= 32 {
-			txHash := common.BytesToHash(value[:32])
-			authIndex := 0
-			if len(value) > 32 {
-				authIndex = int(value[32])
-			}
+			txHash, authIndex := decodeSetCodeIndexValue(value)
 
 			record, err := s.GetSetCodeAuthorization(ctx, txHash, authIndex)
 			if err != nil {
@@ -505,10 +523,7 @@ func (s *PebbleStorage) SaveSetCodeAuthorization(ctx context.Context, record *po
 		return fmt.Errorf("failed to set setcode authorization: %w", err)
 	}
 
-	// Create index value: txHash + authIndex
-	indexValue := make([]byte, 33)
-	copy(indexValue[:32], record.TxHash.Bytes())
-	indexValue[32] = byte(record.AuthIndex)
+	indexValue := encodeSetCodeIndexValue(record)
 
 	// 2. Create target index
 	targetKey := SetCodeTargetIndexKey(record.TargetAddress, record.BlockNumber, record.TxIndex, record.AuthIndex)
@@ -575,10 +590,7 @@ func (s *PebbleStorage) SaveSetCodeAuthorizations(ctx context.Context, records [
 			return fmt.Errorf("failed to set setcode authorization: %w", err)
 		}
 
-		// Create index value: txHash + authIndex
-		indexValue := make([]byte, 33)
-		copy(indexValue[:32], record.TxHash.Bytes())
-		indexValue[32] = byte(record.AuthIndex)
+		indexValue := encodeSetCodeIndexValue(record)
 
 		// 2. Create target index
 		targetKey := SetCodeTargetIndexKey(record.TargetAddress, record.BlockNumber, record.TxIndex, record.AuthIndex)
@@ -649,8 +661,8 @@ func (s *PebbleStorage) IncrementSetCodeStats(ctx context.Context, address commo
 		return port.ErrClosed
 	}
 
-	// Get current stats
-	stats, err := s.GetAddressSetCodeStats(ctx, address)
+	// Get current stats (CurrentDelegation is not stored; it follows the delegation state)
+	stats, err := s.getStoredSetCodeStats(ctx, address)
 	if err != nil {
 		return fmt.Errorf("failed to get current stats: %w", err)
 	}
@@ -695,4 +707,28 @@ func (s *PebbleStorage) blockTimeOrNow(ctx context.Context, height uint64) time.
 		return time.Unix(int64(blk.Time), 0)
 	}
 	return time.Now()
+}
+
+// encodeSetCodeIndexValue returns the value of a SetCode secondary index
+// entry: the transaction hash followed by the authorization index as a
+// 4-byte big-endian integer.
+func encodeSetCodeIndexValue(record *port.SetCodeAuthorizationRecord) []byte {
+	value := make([]byte, common.HashLength+4)
+	copy(value[:common.HashLength], record.TxHash.Bytes())
+	binary.BigEndian.PutUint32(value[common.HashLength:], uint32(record.AuthIndex))
+	return value
+}
+
+// decodeSetCodeIndexValue reads a SetCode secondary index value. Values
+// written before the authorization index was widened hold it in one byte.
+func decodeSetCodeIndexValue(value []byte) (common.Hash, int) {
+	txHash := common.BytesToHash(value[:common.HashLength])
+	rest := value[common.HashLength:]
+	if len(rest) >= 4 {
+		return txHash, int(binary.BigEndian.Uint32(rest[:4]))
+	}
+	if len(rest) > 0 {
+		return txHash, int(rest[0])
+	}
+	return txHash, 0
 }

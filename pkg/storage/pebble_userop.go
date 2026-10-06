@@ -495,19 +495,19 @@ func (s *PebbleStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation
 	indexValue := op.Hash.Bytes()
 
 	// 2. Create sender index
-	senderKey := UserOpSenderIndexKey(op.Sender, op.BlockNumber, op.BundleIndex)
+	senderKey := UserOpSenderIndexKey(op.Sender, op.BlockNumber, op.TransactionHash, op.BundleIndex)
 	if err := batch.Set(senderKey, indexValue, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set sender index: %w", err)
 	}
 
 	// 3. Create bundler index
-	bundlerKey := UserOpBundlerIndexKey(op.Bundler, op.BlockNumber, op.BundleIndex)
+	bundlerKey := UserOpBundlerIndexKey(op.Bundler, op.BlockNumber, op.TransactionHash, op.BundleIndex)
 	if err := batch.Set(bundlerKey, indexValue, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set bundler index: %w", err)
 	}
 
 	// 4. Create block index
-	blockKey := UserOpBlockIndexKey(op.BlockNumber, op.BundleIndex)
+	blockKey := UserOpBlockIndexKey(op.BlockNumber, op.TransactionHash, op.BundleIndex)
 	if err := batch.Set(blockKey, indexValue, pebble.Sync); err != nil {
 		return fmt.Errorf("failed to set block index: %w", err)
 	}
@@ -520,7 +520,7 @@ func (s *PebbleStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation
 
 	// 6. Create paymaster index (if paymaster exists)
 	if op.Paymaster != nil && *op.Paymaster != (common.Address{}) {
-		pmKey := UserOpPaymasterIndexKey(*op.Paymaster, op.BlockNumber, op.BundleIndex)
+		pmKey := UserOpPaymasterIndexKey(*op.Paymaster, op.BlockNumber, op.TransactionHash, op.BundleIndex)
 		if err := batch.Set(pmKey, indexValue, pebble.Sync); err != nil {
 			return fmt.Errorf("failed to set paymaster index: %w", err)
 		}
@@ -528,7 +528,7 @@ func (s *PebbleStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation
 
 	// 7. Create factory index (if factory exists)
 	if op.Factory != nil && *op.Factory != (common.Address{}) {
-		factoryKey := UserOpFactoryIndexKey(*op.Factory, op.BlockNumber, op.BundleIndex)
+		factoryKey := UserOpFactoryIndexKey(*op.Factory, op.BlockNumber, op.TransactionHash, op.BundleIndex)
 		if err := batch.Set(factoryKey, indexValue, pebble.Sync); err != nil {
 			return fmt.Errorf("failed to set factory index: %w", err)
 		}
@@ -576,19 +576,19 @@ func (s *PebbleStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOpera
 		indexValue := op.Hash.Bytes()
 
 		// 2. Create sender index
-		senderKey := UserOpSenderIndexKey(op.Sender, op.BlockNumber, op.BundleIndex)
+		senderKey := UserOpSenderIndexKey(op.Sender, op.BlockNumber, op.TransactionHash, op.BundleIndex)
 		if err := batch.Set(senderKey, indexValue, pebble.Sync); err != nil {
 			return fmt.Errorf("failed to set sender index: %w", err)
 		}
 
 		// 3. Create bundler index
-		bundlerKey := UserOpBundlerIndexKey(op.Bundler, op.BlockNumber, op.BundleIndex)
+		bundlerKey := UserOpBundlerIndexKey(op.Bundler, op.BlockNumber, op.TransactionHash, op.BundleIndex)
 		if err := batch.Set(bundlerKey, indexValue, pebble.Sync); err != nil {
 			return fmt.Errorf("failed to set bundler index: %w", err)
 		}
 
 		// 4. Create block index
-		blockKey := UserOpBlockIndexKey(op.BlockNumber, op.BundleIndex)
+		blockKey := UserOpBlockIndexKey(op.BlockNumber, op.TransactionHash, op.BundleIndex)
 		if err := batch.Set(blockKey, indexValue, pebble.Sync); err != nil {
 			return fmt.Errorf("failed to set block index: %w", err)
 		}
@@ -601,7 +601,7 @@ func (s *PebbleStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOpera
 
 		// 6. Create paymaster index
 		if op.Paymaster != nil && *op.Paymaster != (common.Address{}) {
-			pmKey := UserOpPaymasterIndexKey(*op.Paymaster, op.BlockNumber, op.BundleIndex)
+			pmKey := UserOpPaymasterIndexKey(*op.Paymaster, op.BlockNumber, op.TransactionHash, op.BundleIndex)
 			if err := batch.Set(pmKey, indexValue, pebble.Sync); err != nil {
 				return fmt.Errorf("failed to set paymaster index: %w", err)
 			}
@@ -609,7 +609,7 @@ func (s *PebbleStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOpera
 
 		// 7. Create factory index
 		if op.Factory != nil && *op.Factory != (common.Address{}) {
-			factoryKey := UserOpFactoryIndexKey(*op.Factory, op.BlockNumber, op.BundleIndex)
+			factoryKey := UserOpFactoryIndexKey(*op.Factory, op.BlockNumber, op.TransactionHash, op.BundleIndex)
 			if err := batch.Set(factoryKey, indexValue, pebble.Sync); err != nil {
 				return fmt.Errorf("failed to set factory index: %w", err)
 			}
