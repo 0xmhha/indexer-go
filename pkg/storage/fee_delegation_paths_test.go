@@ -39,12 +39,11 @@ func TestLegacyReadsFindFeeDelegationTxs(t *testing.T) {
 		require.NoError(t, s.SetModelReceipt(ctx, r))
 	}
 	fdTx := b.Transactions[1]
-	fd, ok := stablenet.FeeDelegationOf(fdTx)
+	_, ok := stablenet.FeeDelegationOf(fdTx)
 	require.True(t, ok)
-	require.NoError(t, s.SetFeeDelegationTxMeta(ctx, &port.FeeDelegationTxMeta{
-		TxHash: fdTx.Hash, BlockNumber: 33, OriginalType: stablenet.FeeDelegationTxType, FeePayer: fd.FeePayer,
-		FeePayerV: fd.V, FeePayerR: fd.R, FeePayerS: fd.S,
-	}))
+	for _, tx := range b.Transactions {
+		require.NoError(t, s.AddTransactionToAddressIndex(ctx, tx.From, tx.Hash))
+	}
 
 	receipts, err := s.GetReceiptsByBlockNumber(ctx, 33)
 	require.NoError(t, err)
@@ -60,4 +59,26 @@ func TestLegacyReadsFindFeeDelegationTxs(t *testing.T) {
 	require.Len(t, found, 1)
 	require.Equal(t, fdTx.Hash.Hex(), found[0].Value)
 	require.Equal(t, fdTx.From.Hex(), found[0].Metadata["from"])
+
+	// The fee delegation filter follows the transaction as the chain
+	// profile decoded it. Results are compared by position: the go-ethereum
+	// view of a 0x16 transaction has another hash.
+	for _, tx := range b.Transactions {
+		for _, want := range []bool{true, false} {
+			filter := port.DefaultTransactionFilter()
+			filter.IsFeeDelegated = &want
+			got, err := s.GetTransactionsByAddressFiltered(ctx, tx.From, filter, 10, 0)
+			require.NoError(t, err)
+			var gotIdx, wantIdx []uint64
+			for _, r := range got {
+				gotIdx = append(gotIdx, r.Location.TxIndex)
+			}
+			for i, other := range b.Transactions {
+				if other.From == tx.From && (other.Hash == fdTx.Hash) == want {
+					wantIdx = append(wantIdx, uint64(i))
+				}
+			}
+			require.ElementsMatch(t, wantIdx, gotIdx, "sender %s, fee delegated=%v", tx.From.Hex(), want)
+		}
+	}
 }

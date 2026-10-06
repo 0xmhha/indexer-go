@@ -17,7 +17,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
-	"github.com/0xmhha/indexer-go/pkg/core/port"
+	fdmeta "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
 )
 
 // TestLiveStableNet indexes a running StableNet node twice, once straight
@@ -55,10 +55,10 @@ func TestLiveStableNet(t *testing.T) {
 
 	// Fee delegation metadata must be stored for the given transactions.
 	if list := os.Getenv("INDEXER_LIVE_FD_TXS"); list != "" {
-		fd, ok := app.storage.(port.FeeDelegationReader)
-		require.True(t, ok)
+		fd, err := fdmeta.OpenMetaStore(app.storage)
+		require.NoError(t, err)
 		for _, h := range strings.Split(list, ",") {
-			meta, err := fd.GetFeeDelegationTxMeta(ctx, common.HexToHash(h))
+			meta, err := fd.TxMeta(ctx, common.HexToHash(h))
 			require.NoError(t, err)
 			require.NotNil(t, meta, "fee delegation meta for %s", h)
 			require.Equal(t, uint8(0x16), meta.OriginalType)

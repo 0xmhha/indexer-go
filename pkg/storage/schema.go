@@ -67,8 +67,6 @@ const (
 	prefixIdxVerifiedContracts = "/index/verification/verified/"
 
 	// Fee delegation data prefixes
-	prefixFeeDelegation         = "/data/feedelegation/"
-	prefixIdxFeeDelegationPayer = "/index/feedelegation/payer/"
 
 
 	// Token metadata data prefixes
@@ -795,22 +793,6 @@ func IsChainKey(key []byte) bool {
 	return HasPrefix(key, []byte(prefixChain))
 }
 
-// FeeDelegationMetaKey returns the key for storing fee delegation metadata
-// Format: /data/feedelegation/{txHash}
-func FeeDelegationMetaKey(txHash common.Hash) []byte {
-	return []byte(fmt.Sprintf("%s%s", prefixFeeDelegation, txHash.Hex()))
-}
-
-// FeeDelegationPayerIndexKey returns the index key for fee payer to transaction mapping
-// Format: /index/feedelegation/payer/{feePayer}/{blockNumber}/{txHash}
-func FeeDelegationPayerIndexKey(feePayer common.Address, blockNumber uint64, txHash common.Hash) []byte {
-	return []byte(fmt.Sprintf("%s%s/%016x/%s", prefixIdxFeeDelegationPayer, feePayer.Hex(), blockNumber, txHash.Hex()))
-}
-
-// FeeDelegationPayerPrefix returns the prefix for all transactions by a fee payer
-func FeeDelegationPayerPrefix(feePayer common.Address) []byte {
-	return []byte(fmt.Sprintf("%s%s/", prefixIdxFeeDelegationPayer, feePayer.Hex()))
-}
 
 // ========== Token Metadata Key Functions ==========
 

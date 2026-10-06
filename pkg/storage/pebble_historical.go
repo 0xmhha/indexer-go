@@ -199,8 +199,10 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 		if filter.MatchTransaction(tx, receipt, location, addr) {
 			// Check fee delegation filter
 			if filter.IsFeeDelegated != nil {
-				meta, _ := s.GetFeeDelegationTxMeta(ctx, txHash)
-				isFD := (meta != nil)
+				isFD, err := s.isFeeDelegated(ctx, txHash)
+				if err != nil {
+					return nil, err
+				}
 				if *filter.IsFeeDelegated != isFD {
 					continue
 				}
@@ -225,6 +227,17 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 	}
 
 	return results, nil
+}
+
+// isFeeDelegated reports whether a stored transaction has its gas paid by a
+// fee payer, as the chain profile decoded it (chains.FeeDelegationOf).
+func (s *PebbleStorage) isFeeDelegated(ctx context.Context, txHash common.Hash) (bool, error) {
+	tx, _, err := s.GetModelTransaction(ctx, txHash)
+	if err != nil {
+		return false, fmt.Errorf("read transaction %s: %w", txHash.Hex(), err)
+	}
+	_, ok := chains.FeeDelegationOf(tx)
+	return ok, nil
 }
 
 // GetAddressBalance returns the balance of an address at a specific block

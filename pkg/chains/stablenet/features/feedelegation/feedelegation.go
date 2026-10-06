@@ -12,7 +12,7 @@ import (
 	"fmt"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	"github.com/0xmhha/indexer-go/pkg/core/port"
+	fdmeta "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 )
 
@@ -29,9 +29,9 @@ func (feeDelegationFeature) Requires() []string { return nil }
 func (feeDelegationFeature) OrderIndependent() bool { return true }
 
 func (feeDelegationFeature) Register(r feature.Registrar) error {
-	w, ok := r.Deps().Storage.(port.FeeDelegationWriter)
-	if !ok {
-		return fmt.Errorf("storage does not support fee delegation metadata")
+	w, err := fdmeta.OpenMetaStore(r.Deps().Storage)
+	if err != nil {
+		return err
 	}
 	r.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
 		for _, tx := range b.Model.Transactions {
@@ -39,7 +39,7 @@ func (feeDelegationFeature) Register(r feature.Registrar) error {
 			if !ok {
 				continue
 			}
-			meta := &port.FeeDelegationTxMeta{
+			meta := &fdmeta.TxMeta{
 				TxHash:       tx.Hash,
 				BlockNumber:  b.Model.Number,
 				OriginalType: tx.Type,
@@ -48,7 +48,7 @@ func (feeDelegationFeature) Register(r feature.Registrar) error {
 				FeePayerR:    fd.R,
 				FeePayerS:    fd.S,
 			}
-			if err := w.SetFeeDelegationTxMeta(ctx, meta); err != nil {
+			if err := w.SetTxMeta(ctx, meta); err != nil {
 				return fmt.Errorf("store fee delegation metadata of %s: %w", tx.Hash.Hex(), err)
 			}
 		}

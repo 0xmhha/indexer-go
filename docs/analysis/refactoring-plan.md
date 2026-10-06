@@ -384,9 +384,9 @@ graph LR
 
 | ID | 작업 | 선행 | 검증 기준 |
 |---|---|---|---|
-| R1-1 | 도메인별 포트를 `core/port`로 옮긴다(블록, 로그, 주소, 토큰, 시스템 컨트랙트 등). `Storage` 합집합은 조립용으로만 남긴다. (완료 10/6: 인터페이스와 값 타입을 `pkg/core/port`로 옮기고 `pkg/storage`의 별칭을 지웠다. API는 `port.QueryStore`를 받고, 합집합에 이미 든 포트로 하는 assertion 64곳을 지웠다. fetch는 `port.Rollbacker`로 Pebble 검사를 대신한다. 시험: `TestPortsImportNoImplementation`, `TestStorageAssemblyOnly`, `TestNoPortAliases`. 남은 것: fee delegation 메타 포트를 `pkg/chains/stablenet`으로 옮기기, 포트 시그니처의 go-ethereum 타입, `AsModelReader`) | Phase 0 | 포트 패키지가 Pebble을 import하지 않는다(그래프 검사) |
+| R1-1 | 도메인별 포트를 `core/port`로 옮긴다(블록, 로그, 주소, 토큰, 시스템 컨트랙트 등). `Storage` 합집합은 조립용으로만 남긴다. (완료 10/6: 인터페이스와 값 타입을 `pkg/core/port`로 옮기고 `pkg/storage`의 별칭을 지웠다. API는 `port.QueryStore`를 받고, 합집합에 이미 든 포트로 하는 assertion 64곳을 지웠다. fetch는 `port.Rollbacker`로 Pebble 검사를 대신한다. 시험: `TestPortsImportNoImplementation`, `TestStorageAssemblyOnly`, `TestNoPortAliases`. 남은 것: 포트 시그니처의 go-ethereum 타입, `AsModelReader`. 후속(10/6): fee delegation 메타 저장을 `pkg/chains/stablenet/feedelegation`(`MetaStore`, `port.KV`)으로 옮겼고, `isFeeDelegated` 필터는 `chains.FeeDelegationOf`로 판정한다) | Phase 0 | 포트 패키지가 Pebble을 import하지 않는다(그래프 검사) |
 | R1-2 | `KVStore`를 공개 인터페이스에서 빼고, notifications는 자기 포트를 갖게 한다. resilience와 watchlist는 연결하거나 지운다. (완료 10/6: `Storage`에서 `KVStore`를 뺐고, notifications는 `KeyValueStore` 포트와 자기 키·keyspace를 갖는다. resilience·watchlist는 지웠다. 체인 패키지는 `storage.KV`를 쓴다) | R1-1 | 저장소 밖의 KVStore 호출이 0곳이다 |
-| R1-3 | 키 코덱. 고정 길이 이진 키와 단일 값 형식을 도입하고, 스키마 버전을 기록한다 | R1-1 | 키 정렬 속성 시험(무작위 높이에서 사전순과 숫자순이 같다) |
+| R1-3 | 키 코덱. 고정 길이 이진 키와 단일 값 형식을 도입하고, 스키마 버전을 기록한다 | R1-1 | 키 정렬 속성 시험(무작위 높이에서 사전순과 숫자순이 같다. 후속(10/6): fee delegation 메타 저장을 `pkg/chains/stablenet/feedelegation`(`MetaStore`, `port.KV`)으로 옮겼고, `isFeeDelegated` 필터는 `chains.FeeDelegationOf`로 판정한다) |
 | R1-4 | 어댑터 계약 시험. 포트마다 어떤 어댑터든 통과해야 하는 시험 묶음을 만든다 | R1-1 | Pebble 어댑터가 통과한다 |
 | R1-5 | keyset 페이지. 목록 포트를 `(cursor, limit)` 방식으로 바꾼다 | R1-1 | 깊은 페이지의 조회 시간이 페이지 위치와 무관하다 |
 | R1-6 | `backend.go`(KV 수준 추상화)를 지운다. (완료 10/6) | R1-1 | — |
