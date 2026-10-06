@@ -92,7 +92,7 @@ api:
 
 Pre-configured: `configs/config-{anvil,devnet,sepolia}.yaml`
 
-Known config issues: `database.readonly` and several sections (`eventbus` except the buffer sizes, `node`, `watchlist`, `resilience`, `account_abstraction`) are read but ignored. The `--workers` default overrides the YAML value.
+Settings that are read but not wired (`eventbus.type` other than local and `node.*`, `watchlist.enabled`, `resilience.enabled`, `account_abstraction.entry_point_addresses`) are reported at startup (`Config.UnsupportedSettings`); `database.readonly: true` is rejected (an API-only role is planned, R4-1). Command-line flags override the configuration only when given explicitly.
 
 ### API Endpoints
 
