@@ -3,7 +3,7 @@ package graphql
 import (
 	"fmt"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
 )
@@ -20,7 +20,7 @@ func (s *Schema) resolveTokenMetadata(p graphql.ResolveParams) (interface{}, err
 
 	metadata, err := s.storage.GetTokenMetadata(ctx, address)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, nil
 		}
 		return nil, err
@@ -34,9 +34,9 @@ func (s *Schema) resolveTokens(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
 	// Parse standard filter
-	var standard storage.TokenStandard
+	var standard port.TokenStandard
 	if standardArg, ok := p.Args["standard"].(string); ok && standardArg != "" {
-		standard = storage.TokenStandard(standardArg)
+		standard = port.TokenStandard(standardArg)
 	}
 
 	// Parse pagination
@@ -112,9 +112,9 @@ func (s *Schema) resolveSearchTokens(p graphql.ResolveParams) (interface{}, erro
 func (s *Schema) resolveTokenCount(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	var standard storage.TokenStandard
+	var standard port.TokenStandard
 	if standardArg, ok := p.Args["standard"].(string); ok && standardArg != "" {
-		standard = storage.TokenStandard(standardArg)
+		standard = port.TokenStandard(standardArg)
 	}
 
 	count, err := s.storage.GetTokensCount(ctx, standard)
@@ -125,8 +125,8 @@ func (s *Schema) resolveTokenCount(p graphql.ResolveParams) (interface{}, error)
 	return count, nil
 }
 
-// mapTokenMetadata maps storage.TokenMetadata to GraphQL response
-func mapTokenMetadata(metadata *storage.TokenMetadata) map[string]interface{} {
+// mapTokenMetadata maps port.TokenMetadata to GraphQL response
+func mapTokenMetadata(metadata *port.TokenMetadata) map[string]interface{} {
 	result := map[string]interface{}{
 		"address":            metadata.Address.Hex(),
 		"standard":           string(metadata.Standard),
@@ -239,7 +239,7 @@ func (s *Schema) resolveTokenHolders(p graphql.ResolveParams) (interface{}, erro
 	}
 
 	// Check if storage implements TokenHolderIndexReader
-	holderReader, ok := s.storage.(storage.TokenHolderIndexReader)
+	holderReader, ok := s.storage.(port.TokenHolderIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support token holder queries")
 	}
@@ -285,7 +285,7 @@ func (s *Schema) resolveTokenHolderCount(p graphql.ResolveParams) (interface{}, 
 	token := common.HexToAddress(tokenHex)
 
 	// Check if storage implements TokenHolderIndexReader
-	holderReader, ok := s.storage.(storage.TokenHolderIndexReader)
+	holderReader, ok := s.storage.(port.TokenHolderIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support token holder queries")
 	}
@@ -315,14 +315,14 @@ func (s *Schema) resolveTokenBalance(p graphql.ResolveParams) (interface{}, erro
 	holder := common.HexToAddress(holderHex)
 
 	// Check if storage implements TokenHolderIndexReader
-	holderReader, ok := s.storage.(storage.TokenHolderIndexReader)
+	holderReader, ok := s.storage.(port.TokenHolderIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support token holder queries")
 	}
 
 	balance, err := holderReader.GetTokenBalance(ctx, token, holder)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			return "0", nil
 		}
 		return nil, err
@@ -342,14 +342,14 @@ func (s *Schema) resolveTokenHolderStats(p graphql.ResolveParams) (interface{}, 
 	token := common.HexToAddress(tokenHex)
 
 	// Check if storage implements TokenHolderIndexReader
-	holderReader, ok := s.storage.(storage.TokenHolderIndexReader)
+	holderReader, ok := s.storage.(port.TokenHolderIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support token holder queries")
 	}
 
 	stats, err := holderReader.GetTokenHolderStats(ctx, token)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, nil
 		}
 		return nil, err
@@ -358,8 +358,8 @@ func (s *Schema) resolveTokenHolderStats(p graphql.ResolveParams) (interface{}, 
 	return mapTokenHolderStats(stats), nil
 }
 
-// mapTokenHolder maps storage.TokenHolder to GraphQL response
-func mapTokenHolder(holder *storage.TokenHolder) map[string]interface{} {
+// mapTokenHolder maps port.TokenHolder to GraphQL response
+func mapTokenHolder(holder *port.TokenHolder) map[string]interface{} {
 	balance := "0"
 	if holder.Balance != nil {
 		balance = holder.Balance.String()
@@ -372,8 +372,8 @@ func mapTokenHolder(holder *storage.TokenHolder) map[string]interface{} {
 	}
 }
 
-// mapTokenHolderStats maps storage.TokenHolderStats to GraphQL response
-func mapTokenHolderStats(stats *storage.TokenHolderStats) map[string]interface{} {
+// mapTokenHolderStats maps port.TokenHolderStats to GraphQL response
+func mapTokenHolderStats(stats *port.TokenHolderStats) map[string]interface{} {
 	return map[string]interface{}{
 		"tokenAddress":      stats.TokenAddress.Hex(),
 		"holderCount":       stats.HolderCount,

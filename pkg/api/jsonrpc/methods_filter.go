@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
@@ -32,7 +33,7 @@ func (h *Handler) ethNewFilter(ctx context.Context, params json.RawMessage) (int
 	filterParam := p[0]
 
 	// Build filter
-	filter := &storage.LogFilter{}
+	filter := &port.LogFilter{}
 
 	// Parse fromBlock
 	if filterParam.FromBlock != nil {
@@ -44,7 +45,7 @@ func (h *Handler) ethNewFilter(ctx context.Context, params json.RawMessage) (int
 	} else {
 		// Default to latest
 		latestHeight, err := h.storage.GetLatestHeight(ctx)
-		if err != nil && err != storage.ErrNotFound {
+		if err != nil && err != port.ErrNotFound {
 			h.logger.Error("failed to get latest height", zap.Error(err))
 			return nil, NewError(InternalError, "failed to get latest height", err.Error())
 		}
@@ -61,7 +62,7 @@ func (h *Handler) ethNewFilter(ctx context.Context, params json.RawMessage) (int
 	} else {
 		// Default to latest
 		latestHeight, err := h.storage.GetLatestHeight(ctx)
-		if err != nil && err != storage.ErrNotFound {
+		if err != nil && err != port.ErrNotFound {
 			h.logger.Error("failed to get latest height", zap.Error(err))
 			return nil, NewError(InternalError, "failed to get latest height", err.Error())
 		}
@@ -121,7 +122,7 @@ func (h *Handler) ethNewFilter(ctx context.Context, params json.RawMessage) (int
 
 	// Get current block height for the filter's starting point
 	latestHeight, err := h.storage.GetLatestHeight(ctx)
-	if err != nil && err != storage.ErrNotFound {
+	if err != nil && err != port.ErrNotFound {
 		h.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, NewError(InternalError, "failed to get latest height", err.Error())
 	}
@@ -153,7 +154,7 @@ func (h *Handler) ethNewFilter(ctx context.Context, params json.RawMessage) (int
 func (h *Handler) ethNewBlockFilter(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
 	// Get current block height
 	latestHeight, err := h.storage.GetLatestHeight(ctx)
-	if err != nil && err != storage.ErrNotFound {
+	if err != nil && err != port.ErrNotFound {
 		h.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, NewError(InternalError, "failed to get latest height", err.Error())
 	}
@@ -175,7 +176,7 @@ func (h *Handler) ethNewBlockFilter(ctx context.Context, params json.RawMessage)
 func (h *Handler) ethNewPendingTransactionFilter(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
 	// Get current block height
 	latestHeight, err := h.storage.GetLatestHeight(ctx)
-	if err != nil && err != storage.ErrNotFound {
+	if err != nil && err != port.ErrNotFound {
 		h.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, NewError(InternalError, "failed to get latest height", err.Error())
 	}

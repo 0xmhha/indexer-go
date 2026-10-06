@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -32,14 +32,14 @@ func (h *Handler) getContractCreation(ctx context.Context, params json.RawMessag
 	address := common.HexToAddress(p.Address)
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
 	creation, err := addressReader.GetContractCreation(ctx, address)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get contract creation", zap.String("address", p.Address), zap.Error(err))
@@ -81,7 +81,7 @@ func (h *Handler) getContractsByCreator(ctx context.Context, params json.RawMess
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
@@ -130,14 +130,14 @@ func (h *Handler) getInternalTransactions(ctx context.Context, params json.RawMe
 	txHash := common.HexToHash(p.TxHash)
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
 	internals, err := addressReader.GetInternalTransactions(ctx, txHash)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return map[string]interface{}{
 				"internals": []interface{}{},
 			}, nil
@@ -189,7 +189,7 @@ func (h *Handler) getInternalTransactionsByAddress(ctx context.Context, params j
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
@@ -234,14 +234,14 @@ func (h *Handler) getERC20Transfer(ctx context.Context, params json.RawMessage) 
 	txHash := common.HexToHash(p.TxHash)
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
 	transfer, err := addressReader.GetERC20Transfer(ctx, txHash, p.LogIndex)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get ERC20 transfer",
@@ -286,7 +286,7 @@ func (h *Handler) getERC20TransfersByToken(ctx context.Context, params json.RawM
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
@@ -341,7 +341,7 @@ func (h *Handler) getERC20TransfersByAddress(ctx context.Context, params json.Ra
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
@@ -386,14 +386,14 @@ func (h *Handler) getERC721Transfer(ctx context.Context, params json.RawMessage)
 	txHash := common.HexToHash(p.TxHash)
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
 	transfer, err := addressReader.GetERC721Transfer(ctx, txHash, p.LogIndex)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get ERC721 transfer",
@@ -438,7 +438,7 @@ func (h *Handler) getERC721TransfersByToken(ctx context.Context, params json.Raw
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
@@ -493,7 +493,7 @@ func (h *Handler) getERC721TransfersByAddress(ctx context.Context, params json.R
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
@@ -543,14 +543,14 @@ func (h *Handler) getERC721Owner(ctx context.Context, params json.RawMessage) (i
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := h.storage.(storage.AddressIndexReader)
+	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
 	owner, err := addressReader.GetERC721Owner(ctx, token, tokenId)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		h.logger.Error("failed to get ERC721 owner",
@@ -568,7 +568,7 @@ func (h *Handler) getERC721Owner(ctx context.Context, params json.RawMessage) (i
 // ========== Helper mapper functions ==========
 
 // contractCreationToMap converts ContractCreation to a map
-func contractCreationToMap(creation *storage.ContractCreation) map[string]interface{} {
+func contractCreationToMap(creation *port.ContractCreation) map[string]interface{} {
 	return map[string]interface{}{
 		"contractAddress": creation.ContractAddress.Hex(),
 		"creator":         creation.Creator.Hex(),
@@ -580,7 +580,7 @@ func contractCreationToMap(creation *storage.ContractCreation) map[string]interf
 }
 
 // internalTransactionToMap converts InternalTransaction to a map
-func internalTransactionToMap(internal *storage.InternalTransaction) map[string]interface{} {
+func internalTransactionToMap(internal *port.InternalTransaction) map[string]interface{} {
 	m := map[string]interface{}{
 		"transactionHash": internal.TransactionHash.Hex(),
 		"blockNumber":     fmt.Sprintf("%d", internal.BlockNumber),
@@ -604,7 +604,7 @@ func internalTransactionToMap(internal *storage.InternalTransaction) map[string]
 }
 
 // erc20TransferToMap converts ERC20Transfer to a map
-func erc20TransferToMap(transfer *storage.ERC20Transfer) map[string]interface{} {
+func erc20TransferToMap(transfer *port.ERC20Transfer) map[string]interface{} {
 	return map[string]interface{}{
 		"contractAddress": transfer.ContractAddress.Hex(),
 		"from":            transfer.From.Hex(),
@@ -618,7 +618,7 @@ func erc20TransferToMap(transfer *storage.ERC20Transfer) map[string]interface{} 
 }
 
 // erc721TransferToMap converts ERC721Transfer to a map
-func erc721TransferToMap(transfer *storage.ERC721Transfer) map[string]interface{} {
+func erc721TransferToMap(transfer *port.ERC721Transfer) map[string]interface{} {
 	return map[string]interface{}{
 		"contractAddress": transfer.ContractAddress.Hex(),
 		"from":            transfer.From.Hex(),

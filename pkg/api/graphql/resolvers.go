@@ -9,6 +9,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,7 +22,7 @@ func (s *Schema) resolveLatestHeight(p graphql.ResolveParams) (interface{}, erro
 	ctx := p.Context
 	height, err := s.storage.GetLatestHeight(ctx)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return "0", nil
 		}
 		s.logger.Error("failed to get latest height",
@@ -85,7 +86,7 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	// Get latest height
 	latestHeight, err := s.storage.GetLatestHeight(ctx)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return emptyConnection(false), nil
 		}
 		s.logger.Error("failed to get latest height", zap.Error(err))
@@ -158,10 +159,8 @@ func (s *Schema) calculateBlockTotalCount(ctx context.Context, filter BlockFilte
 		return len(filteredBlocks)
 	}
 
-	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
-		if count, err := histStorage.GetBlockCount(ctx); err == nil {
-			return int(count)
-		}
+	if count, err := s.storage.GetBlockCount(ctx); err == nil {
+		return int(count)
 	}
 	return int(latestHeight + 1)
 }
@@ -287,7 +286,7 @@ func (s *Schema) resolveBlocksRange(p graphql.ResolveParams) (interface{}, error
 			blockTs := fmt.Sprintf("%d", block.Time)
 			enhancedTxs := make([]interface{}, 0, len(block.Transactions))
 			for i, tx := range block.Transactions {
-				txMap := s.transactionToMap(tx, &storage.TxLocation{
+				txMap := s.transactionToMap(tx, &port.TxLocation{
 					BlockHeight: blockNum,
 					BlockHash:   block.Hash,
 					TxIndex:     uint64(i),
@@ -361,7 +360,7 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 	// Get latest height
 	latestHeight, err := s.storage.GetLatestHeight(ctx)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return emptyConnection(false), nil
 		}
 		s.logger.Error("failed to get latest height", zap.Error(err))
@@ -437,7 +436,7 @@ func (s *Schema) filterTransactionsFromBlocks(blocks []*model.Block, filter Tran
 				continue
 			}
 
-			location := &storage.TxLocation{
+			location := &port.TxLocation{
 				BlockHeight: block.Number,
 				BlockHash:   block.Hash,
 				TxIndex:     uint64(i),
@@ -473,10 +472,8 @@ func (s *Schema) calculateTxTotalCount(ctx context.Context, filter TransactionFi
 		return len(filteredTxs)
 	}
 
-	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
-		if count, err := histStorage.GetTransactionCount(ctx); err == nil {
-			return int(count)
-		}
+	if count, err := s.storage.GetTransactionCount(ctx); err == nil {
+		return int(count)
 	}
 	return len(filteredTxs)
 }
@@ -564,7 +561,7 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 	for _, txHash := range txHashes {
 		tx, location, err := s.models().GetModelTransaction(ctx, txHash)
 		if err != nil {
-			if !errors.Is(err, storage.ErrNotFound) {
+			if !errors.Is(err, port.ErrNotFound) {
 				s.logger.Error("failed to get transaction",
 					zap.String("txHash", txHash.Hex()),
 					zap.String("address", addressStr),
@@ -688,7 +685,7 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 	// Get latest height
 	latestHeight, err := s.storage.GetLatestHeight(ctx)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return emptyConnection(false), nil
 		}
 		s.logger.Error("failed to get latest height", zap.Error(err))
@@ -730,7 +727,7 @@ func (s *Schema) collectLogsFromBlockRange(ctx context.Context, blockFrom, block
 	for blockNum := blockFrom; blockNum <= blockTo; blockNum++ {
 		receipts, err := s.storage.GetReceiptsByBlockNumber(ctx, blockNum)
 		if err != nil {
-			if !errors.Is(err, storage.ErrNotFound) {
+			if !errors.Is(err, port.ErrNotFound) {
 				s.logger.Error("failed to get receipts for block",
 					zap.Uint64("blockNumber", blockNum),
 					zap.Error(err))
@@ -789,7 +786,7 @@ func (s *Schema) buildLogCursor(log map[string]interface{}) interface{} {
 
 // models reads blocks and transactions as the chain-neutral model, so hashes,
 // transaction types and senders are the ones the chain reports.
-func (s *Schema) models() storage.ModelReader {
+func (s *Schema) models() port.ModelReader {
 	return storage.AsModelReader(s.storage)
 }
 
@@ -809,7 +806,7 @@ func (s *Schema) modelBlockOf(ctx context.Context, b *types.Block) *model.Block 
 // modelTxAt returns the stored model of a transaction another reader
 // returned as a go-ethereum transaction. It is looked up by position: the
 // go-ethereum hash of a chain-specific type differs from the chain's.
-func (s *Schema) modelTxAt(ctx context.Context, tx *types.Transaction, loc *storage.TxLocation) *model.Transaction {
+func (s *Schema) modelTxAt(ctx context.Context, tx *types.Transaction, loc *port.TxLocation) *model.Transaction {
 	if loc != nil {
 		if b, err := s.models().GetModelBlock(ctx, loc.BlockHeight); err == nil && int(loc.TxIndex) < len(b.Transactions) {
 			return b.Transactions[loc.TxIndex]

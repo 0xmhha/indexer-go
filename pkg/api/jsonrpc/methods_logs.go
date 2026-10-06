@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -39,14 +39,14 @@ func (h *Handler) ethGetLogs(ctx context.Context, params json.RawMessage) (inter
 	}
 
 	// Build filter
-	filter := &storage.LogFilter{}
+	filter := &port.LogFilter{}
 
 	// Handle blockHash case
 	if filterParam.BlockHash != nil {
 		blockHash := common.HexToHash(*filterParam.BlockHash)
 		block, err := h.storage.GetBlockByHash(ctx, blockHash)
 		if err != nil {
-			if err == storage.ErrNotFound {
+			if err == port.ErrNotFound {
 				return nil, NewError(InternalError, "block not found", nil)
 			}
 			h.logger.Error("failed to get block by hash", zap.String("hash", *filterParam.BlockHash), zap.Error(err))
@@ -77,7 +77,7 @@ func (h *Handler) ethGetLogs(ctx context.Context, params json.RawMessage) (inter
 		} else {
 			// Default to latest
 			latestHeight, err := h.storage.GetLatestHeight(ctx)
-			if err != nil && err != storage.ErrNotFound {
+			if err != nil && err != port.ErrNotFound {
 				h.logger.Error("failed to get latest height", zap.Error(err))
 				return nil, NewError(InternalError, "failed to get latest height", err.Error())
 			}
@@ -168,14 +168,14 @@ func (h *Handler) parseBlockNumber(blockParam interface{}) (uint64, error) {
 			return 0, nil
 		case "latest":
 			latestHeight, err := h.storage.GetLatestHeight(context.Background())
-			if err != nil && err != storage.ErrNotFound {
+			if err != nil && err != port.ErrNotFound {
 				return 0, fmt.Errorf("failed to get latest height: %w", err)
 			}
 			return latestHeight, nil
 		case "pending":
 			// For now, treat pending as latest
 			latestHeight, err := h.storage.GetLatestHeight(context.Background())
-			if err != nil && err != storage.ErrNotFound {
+			if err != nil && err != port.ErrNotFound {
 				return 0, fmt.Errorf("failed to get latest height: %w", err)
 			}
 			return latestHeight, nil

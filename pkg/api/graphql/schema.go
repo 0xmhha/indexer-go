@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	abiDecoder "github.com/0xmhha/indexer-go/pkg/abi"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -18,7 +18,7 @@ import (
 // Schema holds the GraphQL schema
 type Schema struct {
 	schema     graphql.Schema
-	storage    storage.Storage
+	storage    port.QueryStore
 	logger     *zap.Logger
 	abiDecoder *abiDecoder.Decoder
 	verifier   verifier.Verifier
@@ -44,7 +44,7 @@ type SchemaBuilder struct {
 }
 
 // NewSchemaBuilder creates a new schema builder
-func NewSchemaBuilder(store storage.Storage, logger *zap.Logger) *SchemaBuilder {
+func NewSchemaBuilder(store port.QueryStore, logger *zap.Logger) *SchemaBuilder {
 	return &SchemaBuilder{
 		schema: &Schema{
 			storage:    store,
@@ -1242,7 +1242,7 @@ func (b *SchemaBuilder) Build() (*Schema, error) {
 }
 
 // NewSchema creates a new GraphQL schema using the builder pattern
-func NewSchema(store storage.Storage, logger *zap.Logger) (*Schema, error) {
+func NewSchema(store port.QueryStore, logger *zap.Logger) (*Schema, error) {
 	return NewSchemaBuilder(store, logger).
 		WithCoreQueries().
 		WithHistoricalQueries().

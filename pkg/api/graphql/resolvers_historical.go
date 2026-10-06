@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -51,11 +51,7 @@ func (s *Schema) resolveBlocksByTimeRange(p graphql.ResolveParams) (interface{},
 		}
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	blocks, err := histStorage.GetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset)
 	if err != nil {
@@ -109,11 +105,7 @@ func (s *Schema) resolveBlockByTimestamp(p graphql.ResolveParams) (interface{}, 
 		return nil, fmt.Errorf("invalid timestamp format: %w", err)
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	block, err := histStorage.GetBlockByTimestamp(ctx, timestamp)
 	if err != nil {
@@ -149,21 +141,19 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 	}
 
 	// Convert fromTime/toTime to block numbers (overrides fromBlock/toBlock)
-	if histStorage, ok := s.storage.(storage.HistoricalReader); ok {
-		if fromTimeStr, ok := filterArgs["fromTime"].(string); ok && fromTimeStr != "" {
-			if ft, success := new(big.Int).SetString(fromTimeStr, 10); success {
-				block, err := histStorage.GetBlockByTimestamp(ctx, ft.Uint64())
-				if err == nil && block != nil {
-					filter.FromBlock = block.NumberU64()
-				}
+	if fromTimeStr, ok := filterArgs["fromTime"].(string); ok && fromTimeStr != "" {
+		if ft, success := new(big.Int).SetString(fromTimeStr, 10); success {
+			block, err := s.storage.GetBlockByTimestamp(ctx, ft.Uint64())
+			if err == nil && block != nil {
+				filter.FromBlock = block.NumberU64()
 			}
 		}
-		if toTimeStr, ok := filterArgs["toTime"].(string); ok && toTimeStr != "" {
-			if tt, success := new(big.Int).SetString(toTimeStr, 10); success {
-				block, err := histStorage.GetBlockByTimestamp(ctx, tt.Uint64())
-				if err == nil && block != nil {
-					filter.ToBlock = block.NumberU64()
-				}
+	}
+	if toTimeStr, ok := filterArgs["toTime"].(string); ok && toTimeStr != "" {
+		if tt, success := new(big.Int).SetString(toTimeStr, 10); success {
+			block, err := s.storage.GetBlockByTimestamp(ctx, tt.Uint64())
+			if err == nil && block != nil {
+				filter.ToBlock = block.NumberU64()
 			}
 		}
 	}
@@ -183,11 +173,7 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 		}
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	txsWithReceipts, err := histStorage.GetTransactionsByAddressFiltered(ctx, address, filter, limit, offset)
 	if err != nil {
@@ -253,11 +239,7 @@ func (s *Schema) resolveAddressBalance(p graphql.ResolveParams) (interface{}, er
 		blockNumber = bn
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	balance, err := histStorage.GetAddressBalance(ctx, address, blockNumber)
 	if err != nil {
@@ -317,11 +299,7 @@ func (s *Schema) resolveBalanceHistory(p graphql.ResolveParams) (interface{}, er
 		}
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	snapshots, err := histStorage.GetBalanceHistory(ctx, address, fromBlock, toBlock, limit, offset)
 	if err != nil {
@@ -365,11 +343,7 @@ func (s *Schema) resolveBalanceHistory(p graphql.ResolveParams) (interface{}, er
 func (s *Schema) resolveBlockCount(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	count, err := histStorage.GetBlockCount(ctx)
 	if err != nil {
@@ -384,11 +358,7 @@ func (s *Schema) resolveBlockCount(p graphql.ResolveParams) (interface{}, error)
 func (s *Schema) resolveTransactionCount(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	count, err := histStorage.GetTransactionCount(ctx)
 	if err != nil {
@@ -425,11 +395,7 @@ func (s *Schema) resolveTopMiners(p graphql.ResolveParams) (interface{}, error) 
 		}
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	stats, err := histStorage.GetTopMiners(ctx, limit, fromBlock, toBlock)
 	if err != nil {
@@ -478,11 +444,7 @@ func (s *Schema) resolveTokenBalances(p graphql.ResolveParams) (interface{}, err
 		tokenType = tt
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	balances, err := histStorage.GetTokenBalances(ctx, addr, tokenType)
 	if err != nil {
@@ -533,10 +495,10 @@ func (s *Schema) resolveTokenBalances(p graphql.ResolveParams) (interface{}, err
 	return result, nil
 }
 
-// parseHistoricalTransactionFilter parses GraphQL filter arguments to storage.TransactionFilter
-func parseHistoricalTransactionFilter(args map[string]interface{}) (*storage.TransactionFilter, error) {
-	filter := &storage.TransactionFilter{
-		TxType:      storage.TxTypeAll,
+// parseHistoricalTransactionFilter parses GraphQL filter arguments to port.TransactionFilter
+func parseHistoricalTransactionFilter(args map[string]interface{}) (*port.TransactionFilter, error) {
+	filter := &port.TransactionFilter{
+		TxType:      port.TxTypeAll,
 		SuccessOnly: false,
 	}
 
@@ -582,7 +544,7 @@ func parseHistoricalTransactionFilter(args map[string]interface{}) (*storage.Tra
 
 	// Parse optional txType
 	if txType, ok := args["txType"].(int); ok {
-		filter.TxType = storage.TransactionType(txType)
+		filter.TxType = port.TransactionType(txType)
 	}
 
 	// Parse optional successOnly
@@ -620,11 +582,11 @@ func parseHistoricalTransactionFilter(args map[string]interface{}) (*storage.Tra
 	if direction, ok := args["direction"].(string); ok {
 		switch direction {
 		case "SENT":
-			filter.TxType = storage.TxTypeSent
+			filter.TxType = port.TxTypeSent
 		case "RECEIVED":
-			filter.TxType = storage.TxTypeReceived
+			filter.TxType = port.TxTypeReceived
 		case "ALL":
-			filter.TxType = storage.TxTypeAll
+			filter.TxType = port.TxTypeAll
 		}
 	}
 
@@ -655,11 +617,7 @@ func (s *Schema) resolveGasStats(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("invalid toBlock format: %w", err)
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	stats, err := histStorage.GetGasStatsByBlockRange(ctx, fromBlock, toBlock)
 	if err != nil {
@@ -711,11 +669,7 @@ func (s *Schema) resolveAddressGasStats(p graphql.ResolveParams) (interface{}, e
 		return nil, fmt.Errorf("invalid toBlock format: %w", err)
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	stats, err := histStorage.GetGasStatsByAddress(ctx, address, fromBlock, toBlock)
 	if err != nil {
@@ -769,11 +723,7 @@ func (s *Schema) resolveTopAddressesByGasUsed(p graphql.ResolveParams) (interfac
 		return nil, fmt.Errorf("invalid toBlock format: %w", err)
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	statsList, err := histStorage.GetTopAddressesByGasUsed(ctx, limit, fromBlock, toBlock)
 	if err != nil {
@@ -833,11 +783,7 @@ func (s *Schema) resolveTopAddressesByTxCount(p graphql.ResolveParams) (interfac
 		return nil, fmt.Errorf("invalid toBlock format: %w", err)
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	statsList, err := histStorage.GetTopAddressesByTxCount(ctx, limit, fromBlock, toBlock)
 	if err != nil {
@@ -888,11 +834,7 @@ func (s *Schema) resolveNetworkMetrics(p graphql.ResolveParams) (interface{}, er
 		return nil, fmt.Errorf("invalid toTime format: %w", err)
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	metrics, err := histStorage.GetNetworkMetrics(ctx, fromTime, toTime)
 	if err != nil {
@@ -923,10 +865,7 @@ func (s *Schema) resolveAddressStats(p graphql.ResolveParams) (interface{}, erro
 	}
 	address := common.HexToAddress(addressStr)
 
-	histStorage, ok := s.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support historical queries")
-	}
+	histStorage := s.storage
 
 	stats, err := histStorage.GetAddressStats(ctx, address)
 	if err != nil {

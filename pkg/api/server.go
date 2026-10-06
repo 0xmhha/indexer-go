@@ -12,10 +12,10 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/api/websocket"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -27,7 +27,7 @@ import (
 type Server struct {
 	config              *Config
 	logger              *zap.Logger
-	storage             storage.Storage
+	storage             port.QueryStore
 	eventBus            *events.EventBus
 	router              *chi.Mux
 	server              *http.Server
@@ -46,12 +46,12 @@ type ServerOptions struct {
 }
 
 // NewServer creates a new API server
-func NewServer(config *Config, logger *zap.Logger, store storage.Storage) (*Server, error) {
+func NewServer(config *Config, logger *zap.Logger, store port.QueryStore) (*Server, error) {
 	return NewServerWithOptions(config, logger, store, nil)
 }
 
 // NewServerWithOptions creates a new API server with optional configurations
-func NewServerWithOptions(config *Config, logger *zap.Logger, store storage.Storage, opts *ServerOptions) (*Server, error) {
+func NewServerWithOptions(config *Config, logger *zap.Logger, store port.QueryStore, opts *ServerOptions) (*Server, error) {
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)

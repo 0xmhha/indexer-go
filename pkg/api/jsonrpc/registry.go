@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Methods registered by packages outside the API, such as chain-specific
@@ -16,7 +16,7 @@ import (
 
 // MethodDeps is what a registered method receives.
 type MethodDeps struct {
-	Storage storage.Storage
+	Storage port.QueryStore
 	Logger  *zap.Logger
 }
 

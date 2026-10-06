@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/userop"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
@@ -23,14 +23,11 @@ func (s *Schema) resolveUserOperation(p graphql.ResolveParams) (interface{}, err
 
 	opHash := common.HexToHash(hashStr)
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	op, err := userOpReader.GetUserOp(ctx, opHash)
 	if err != nil {
-		if err == storagepkg.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, nil
 		}
 		s.logger.Error("failed to get UserOperation",
@@ -60,10 +57,7 @@ func (s *Schema) resolveUserOperations(p graphql.ResolveParams) (interface{}, er
 		}
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	// If sender filter is provided, use GetUserOpsBySender
 	if senderStr, ok := p.Args["sender"].(string); ok && senderStr != "" {
@@ -124,10 +118,7 @@ func (s *Schema) resolveUserOperationsByAddress(p graphql.ResolveParams) (interf
 		}
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	ops, err := userOpReader.GetUserOpsBySender(ctx, sender, limit, offset)
 	if err != nil {
@@ -158,10 +149,7 @@ func (s *Schema) resolveBundlers(p graphql.ResolveParams) (interface{}, error) {
 		}
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	bundlers, err := userOpReader.ListBundlers(ctx, limit, offset)
 	if err != nil {
@@ -199,10 +187,7 @@ func (s *Schema) resolveBundler(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("invalid address")
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	stats, err := userOpReader.GetBundlerStats(ctx, common.HexToAddress(addressStr))
 	if err != nil {
@@ -235,10 +220,7 @@ func (s *Schema) resolveFactories(p graphql.ResolveParams) (interface{}, error) 
 		}
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	factories, err := userOpReader.ListFactories(ctx, limit, offset)
 	if err != nil {
@@ -275,10 +257,7 @@ func (s *Schema) resolveFactory(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("invalid address")
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	stats, err := userOpReader.GetFactoryStats(ctx, common.HexToAddress(addressStr))
 	if err != nil {
@@ -310,10 +289,7 @@ func (s *Schema) resolvePaymasters(p graphql.ResolveParams) (interface{}, error)
 		}
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	paymasters, err := userOpReader.ListPaymasters(ctx, limit, offset)
 	if err != nil {
@@ -350,10 +326,7 @@ func (s *Schema) resolvePaymaster(p graphql.ResolveParams) (interface{}, error) 
 		return nil, fmt.Errorf("invalid address")
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	stats, err := userOpReader.GetPaymasterStats(ctx, common.HexToAddress(addressStr))
 	if err != nil {
@@ -385,10 +358,7 @@ func (s *Schema) resolveSmartAccounts(p graphql.ResolveParams) (interface{}, err
 		}
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	accounts, err := userOpReader.ListSmartAccounts(ctx, limit, offset)
 	if err != nil {
@@ -422,14 +392,11 @@ func (s *Schema) resolveSmartAccount(p graphql.ResolveParams) (interface{}, erro
 		return nil, fmt.Errorf("invalid address")
 	}
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	account, err := userOpReader.GetSmartAccount(ctx, common.HexToAddress(addressStr))
 	if err != nil {
-		if err == storagepkg.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, nil
 		}
 		s.logger.Error("failed to get smart account", zap.String("address", addressStr), zap.Error(err))
@@ -443,10 +410,7 @@ func (s *Schema) resolveSmartAccount(p graphql.ResolveParams) (interface{}, erro
 func (s *Schema) resolveUserOpCount(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	userOpReader, ok := s.storage.(storagepkg.UserOpIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support UserOp queries")
-	}
+	userOpReader := s.storage
 
 	count, err := userOpReader.GetUserOpCount(ctx)
 	if err != nil {

@@ -9,8 +9,8 @@ import (
 	"github.com/graphql-go/graphql"
 
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // WithReorgQueries adds queries for chain reorganizations and the blocks
@@ -63,8 +63,8 @@ func (b *SchemaBuilder) WithReorgQueries() *SchemaBuilder {
 	return b
 }
 
-func (s *Schema) orphans() (storage.OrphanReader, error) {
-	r, ok := s.storage.(storage.OrphanReader)
+func (s *Schema) orphans() (port.OrphanReader, error) {
+	r, ok := s.storage.(port.OrphanReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not keep orphaned blocks")
 	}
@@ -106,7 +106,7 @@ func (s *Schema) resolveReorg(p graphql.ResolveParams) (interface{}, error) {
 		return nil, fmt.Errorf("invalid reorg id: %w", err)
 	}
 	rg, err := r.GetReorg(p.Context, id)
-	if errors.Is(err, storage.ErrNotFound) {
+	if errors.Is(err, port.ErrNotFound) {
 		return nil, nil
 	}
 	if err != nil {
@@ -143,7 +143,7 @@ func (s *Schema) resolveOrphanedBlock(p graphql.ResolveParams) (interface{}, err
 	}
 	hashStr, _ := p.Args["hash"].(string)
 	ob, err := r.GetOrphanedBlock(p.Context, common.HexToHash(hashStr))
-	if errors.Is(err, storage.ErrNotFound) {
+	if errors.Is(err, port.ErrNotFound) {
 		return nil, nil
 	}
 	if err != nil {
@@ -168,7 +168,7 @@ func (s *Schema) resolveOrphanedTransaction(p graphql.ResolveParams) (interface{
 	var reincluded interface{}
 	if _, loc, err := s.models().GetModelTransaction(p.Context, txHash); err == nil {
 		reincluded = blockRefToMap(loc.BlockHeight, loc.BlockHash)
-	} else if !errors.Is(err, storage.ErrNotFound) {
+	} else if !errors.Is(err, port.ErrNotFound) {
 		return nil, err
 	}
 
@@ -178,7 +178,7 @@ func (s *Schema) resolveOrphanedTransaction(p graphql.ResolveParams) (interface{
 			if tx.Hash != txHash {
 				continue
 			}
-			txMap := s.transactionToMap(tx, &storage.TxLocation{BlockHeight: ob.Block.Number, BlockHash: ob.Block.Hash, TxIndex: uint64(i)})
+			txMap := s.transactionToMap(tx, &port.TxLocation{BlockHeight: ob.Block.Number, BlockHash: ob.Block.Hash, TxIndex: uint64(i)})
 			var receipt interface{}
 			if i < len(ob.Receipts) {
 				receipt = s.receiptToMap(gethconv.ReceiptToGeth(ob.Receipts[i]))
@@ -195,7 +195,7 @@ func (s *Schema) resolveOrphanedTransaction(p graphql.ResolveParams) (interface{
 	return out, nil
 }
 
-func (s *Schema) orphanedBlockToMap(p graphql.ResolveParams, r storage.OrphanReader, ob *storage.OrphanedBlock) map[string]interface{} {
+func (s *Schema) orphanedBlockToMap(p graphql.ResolveParams, r port.OrphanReader, ob *port.OrphanedBlock) map[string]interface{} {
 	receipts := make([]interface{}, len(ob.Receipts))
 	for i, rc := range ob.Receipts {
 		receipts[i] = s.receiptToMap(gethconv.ReceiptToGeth(rc))
@@ -215,7 +215,7 @@ func blockRefToMap(number uint64, hash common.Hash) map[string]interface{} {
 	return map[string]interface{}{"number": fmt.Sprintf("%d", number), "hash": hash.Hex()}
 }
 
-func reorgToMap(r *storage.Reorg) map[string]interface{} {
+func reorgToMap(r *port.Reorg) map[string]interface{} {
 	removed := make([]interface{}, len(r.Removed))
 	for i, b := range r.Removed {
 		removed[i] = blockRefToMap(b.Number, b.Hash)

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	abiDecoder "github.com/0xmhha/indexer-go/pkg/abi"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -92,7 +92,7 @@ func (h *Handler) getContractABI(ctx context.Context, params json.RawMessage) (i
 	// Get ABI from storage
 	abiJSON, err := h.storage.GetABI(ctx, address)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, NewError(InternalError, fmt.Sprintf("ABI not found for contract %s", address.Hex()), nil)
 		}
 		h.logger.Error("failed to get ABI",

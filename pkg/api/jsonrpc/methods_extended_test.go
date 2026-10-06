@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
@@ -22,65 +22,65 @@ import (
 
 type mockSetCodeStorage struct {
 	*mockStorage
-	authsByTx        []*storage.SetCodeAuthorizationRecord
-	authsByTarget    []*storage.SetCodeAuthorizationRecord
-	authsByAuthority []*storage.SetCodeAuthorizationRecord
-	authsByBlock     []*storage.SetCodeAuthorizationRecord
-	recentAuths      []*storage.SetCodeAuthorizationRecord
-	delegationState  *storage.AddressDelegationState
-	setCodeStats     *storage.AddressSetCodeStats
+	authsByTx        []*port.SetCodeAuthorizationRecord
+	authsByTarget    []*port.SetCodeAuthorizationRecord
+	authsByAuthority []*port.SetCodeAuthorizationRecord
+	authsByBlock     []*port.SetCodeAuthorizationRecord
+	recentAuths      []*port.SetCodeAuthorizationRecord
+	delegationState  *port.AddressDelegationState
+	setCodeStats     *port.AddressSetCodeStats
 	txCount          int
 }
 
-func (m *mockSetCodeStorage) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockSetCodeStorage) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*port.SetCodeAuthorizationRecord, error) {
 	for _, r := range m.authsByTx {
 		if r.TxHash == txHash && r.AuthIndex == authIndex {
 			return r, nil
 		}
 	}
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
-func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*port.SetCodeAuthorizationRecord, error) {
 	if m.authsByTx != nil {
 		return m.authsByTx, nil
 	}
-	return []*storage.SetCodeAuthorizationRecord{}, nil
+	return []*port.SetCodeAuthorizationRecord{}, nil
 }
 
-func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	if m.authsByTarget != nil {
 		return m.authsByTarget, nil
 	}
-	return []*storage.SetCodeAuthorizationRecord{}, nil
+	return []*port.SetCodeAuthorizationRecord{}, nil
 }
 
-func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	if m.authsByAuthority != nil {
 		return m.authsByAuthority, nil
 	}
-	return []*storage.SetCodeAuthorizationRecord{}, nil
+	return []*port.SetCodeAuthorizationRecord{}, nil
 }
 
-func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*port.SetCodeAuthorizationRecord, error) {
 	if m.authsByBlock != nil {
 		return m.authsByBlock, nil
 	}
-	return []*storage.SetCodeAuthorizationRecord{}, nil
+	return []*port.SetCodeAuthorizationRecord{}, nil
 }
 
-func (m *mockSetCodeStorage) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*storage.AddressSetCodeStats, error) {
+func (m *mockSetCodeStorage) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*port.AddressSetCodeStats, error) {
 	if m.setCodeStats != nil {
 		return m.setCodeStats, nil
 	}
-	return &storage.AddressSetCodeStats{}, nil
+	return &port.AddressSetCodeStats{}, nil
 }
 
-func (m *mockSetCodeStorage) GetAddressDelegationState(ctx context.Context, address common.Address) (*storage.AddressDelegationState, error) {
+func (m *mockSetCodeStorage) GetAddressDelegationState(ctx context.Context, address common.Address) (*port.AddressDelegationState, error) {
 	if m.delegationState != nil {
 		return m.delegationState, nil
 	}
-	return &storage.AddressDelegationState{}, nil
+	return &port.AddressDelegationState{}, nil
 }
 
 func (m *mockSetCodeStorage) GetSetCodeAuthorizationsCountByTarget(ctx context.Context, target common.Address) (int, error) {
@@ -95,11 +95,11 @@ func (m *mockSetCodeStorage) GetSetCodeTransactionCount(ctx context.Context) (in
 	return m.txCount, nil
 }
 
-func (m *mockSetCodeStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockSetCodeStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*port.SetCodeAuthorizationRecord, error) {
 	if m.recentAuths != nil {
 		return m.recentAuths, nil
 	}
-	return []*storage.SetCodeAuthorizationRecord{}, nil
+	return []*port.SetCodeAuthorizationRecord{}, nil
 }
 
 // --- Tests ---
@@ -112,7 +112,7 @@ func TestSetCodeMethods(t *testing.T) {
 	target := common.HexToAddress("0x5555555555555555555555555555555555555555")
 	authority := common.HexToAddress("0x6666666666666666666666666666666666666666")
 
-	record := &storage.SetCodeAuthorizationRecord{
+	record := &port.SetCodeAuthorizationRecord{
 		TxHash:           txHash,
 		BlockNumber:      100,
 		BlockHash:        common.HexToHash("0xblockhash"),
@@ -136,16 +136,16 @@ func TestSetCodeMethods(t *testing.T) {
 			blocks:       make(map[uint64]*types.Block),
 			blocksByHash: make(map[common.Hash]*types.Block),
 		},
-		authsByTx:        []*storage.SetCodeAuthorizationRecord{record},
-		authsByTarget:    []*storage.SetCodeAuthorizationRecord{record},
-		authsByAuthority: []*storage.SetCodeAuthorizationRecord{record},
-		authsByBlock:     []*storage.SetCodeAuthorizationRecord{record},
-		recentAuths:      []*storage.SetCodeAuthorizationRecord{record},
-		delegationState: &storage.AddressDelegationState{
+		authsByTx:        []*port.SetCodeAuthorizationRecord{record},
+		authsByTarget:    []*port.SetCodeAuthorizationRecord{record},
+		authsByAuthority: []*port.SetCodeAuthorizationRecord{record},
+		authsByBlock:     []*port.SetCodeAuthorizationRecord{record},
+		recentAuths:      []*port.SetCodeAuthorizationRecord{record},
+		delegationState: &port.AddressDelegationState{
 			HasDelegation:    true,
 			DelegationTarget: &target,
 		},
-		setCodeStats: &storage.AddressSetCodeStats{
+		setCodeStats: &port.AddressSetCodeStats{
 			AsTargetCount:    3,
 			AsAuthorityCount: 2,
 			LastActivityBlock: 100,
@@ -919,7 +919,7 @@ func TestFilterManager(t *testing.T) {
 		fm := NewFilterManager(context.Background(), 5*time.Minute)
 		defer fm.Close()
 
-		logID := fm.NewFilter(LogFilterType, &storage.LogFilter{FromBlock: 0, ToBlock: 100}, 0, false)
+		logID := fm.NewFilter(LogFilterType, &port.LogFilter{FromBlock: 0, ToBlock: 100}, 0, false)
 		assert.NotEmpty(t, logID)
 
 		blockID := fm.NewFilter(BlockFilterType, nil, 50, false)
@@ -937,7 +937,7 @@ func TestFilterManager(t *testing.T) {
 		fm := NewFilterManager(context.Background(), 5*time.Minute)
 		defer fm.Close()
 
-		filterID := fm.NewFilter(LogFilterType, &storage.LogFilter{FromBlock: 10, ToBlock: 20}, 10, true)
+		filterID := fm.NewFilter(LogFilterType, &port.LogFilter{FromBlock: 10, ToBlock: 20}, 10, true)
 
 		filter, exists := fm.GetFilter(filterID)
 		assert.True(t, exists)

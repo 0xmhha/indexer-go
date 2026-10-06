@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/userop"
 	"github.com/ethereum/go-ethereum/common"
@@ -33,25 +34,25 @@ func (m *mockStorage) GetBlock(ctx context.Context, height uint64) (*types.Block
 	if block, ok := m.blocks[height]; ok {
 		return block, nil
 	}
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	if block, ok := m.blocksByHash[hash]; ok {
 		return block, nil
 	}
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *storage.TxLocation, error) {
-	return nil, nil, storage.ErrNotFound
+func (m *mockStorage) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
+	return nil, nil, port.ErrNotFound
 }
-func (m *mockStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*storage.TxLocation, error) {
+func (m *mockStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
 	return nil, nil, nil
 }
 
 func (m *mockStorage) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorage) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
@@ -108,7 +109,7 @@ func (m *mockStorage) SetBlock(ctx context.Context, block *types.Block) error {
 	return nil
 }
 
-func (m *mockStorage) SetTransaction(ctx context.Context, tx *types.Transaction, location *storage.TxLocation) error {
+func (m *mockStorage) SetTransaction(ctx context.Context, tx *types.Transaction, location *port.TxLocation) error {
 	return nil
 }
 
@@ -150,7 +151,7 @@ func (m *mockStorage) Put(ctx context.Context, key, value []byte) error {
 }
 
 func (m *mockStorage) Get(ctx context.Context, key []byte) ([]byte, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorage) Delete(ctx context.Context, key []byte) error {
@@ -193,7 +194,7 @@ func (m *mockStorage) HasABI(ctx context.Context, address common.Address) (bool,
 	return false, nil
 }
 
-func (m *mockStorage) GetLogs(ctx context.Context, filter *storage.LogFilter) ([]*types.Log, error) {
+func (m *mockStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 
@@ -229,13 +230,13 @@ func (m *mockStorage) IndexLog(ctx context.Context, log *types.Log) error {
 	return nil
 }
 
-func (m *mockStorage) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
-	return []storage.SearchResult{}, nil
+func (m *mockStorage) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]port.SearchResult, error) {
+	return []port.SearchResult{}, nil
 }
 
 // Contract verification methods
-func (m *mockStorage) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetContractVerification(ctx context.Context, address common.Address) (*port.ContractVerification, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorage) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
@@ -250,7 +251,7 @@ func (m *mockStorage) CountVerifiedContracts(ctx context.Context) (int, error) {
 	return 0, nil
 }
 
-func (m *mockStorage) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+func (m *mockStorage) SetContractVerification(ctx context.Context, verification *port.ContractVerification) error {
 	return nil
 }
 
@@ -258,7 +259,7 @@ func (m *mockStorage) DeleteContractVerification(ctx context.Context, address co
 	return nil
 }
 
-func (m *mockStorage) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
+func (m *mockStorage) GetAddressStats(ctx context.Context, addr common.Address) (*port.AddressStats, error) {
 	return nil, nil
 }
 
@@ -268,19 +269,19 @@ func (m *mockStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime
 }
 
 func (m *mockStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *storage.TransactionFilter, limit, offset int) ([]*storage.TransactionWithReceipt, error) {
-	return []*storage.TransactionWithReceipt{}, nil
+func (m *mockStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
+	return []*port.TransactionWithReceipt{}, nil
 }
 
 func (m *mockStorage) GetAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error) {
 	return big.NewInt(0), nil
 }
 
-func (m *mockStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]storage.BalanceSnapshot, error) {
-	return []storage.BalanceSnapshot{}, nil
+func (m *mockStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
+	return []port.BalanceSnapshot{}, nil
 }
 
 func (m *mockStorage) GetBlockCount(ctx context.Context) (uint64, error) {
@@ -291,32 +292,32 @@ func (m *mockStorage) GetTransactionCount(ctx context.Context) (uint64, error) {
 	return 0, nil
 }
 
-func (m *mockStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.MinerStats, error) {
-	return []storage.MinerStats{}, nil
+func (m *mockStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.MinerStats, error) {
+	return []port.MinerStats{}, nil
 }
 
-func (m *mockStorage) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]storage.TokenBalance, error) {
-	return []storage.TokenBalance{}, nil
+func (m *mockStorage) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]port.TokenBalance, error) {
+	return []port.TokenBalance{}, nil
 }
 
-func (m *mockStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*storage.GasStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*port.GasStats, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*storage.AddressGasStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*port.AddressGasStats, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressGasStats, error) {
-	return []storage.AddressGasStats{}, nil
+func (m *mockStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressGasStats, error) {
+	return []port.AddressGasStats{}, nil
 }
 
-func (m *mockStorage) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressActivityStats, error) {
-	return []storage.AddressActivityStats{}, nil
+func (m *mockStorage) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressActivityStats, error) {
+	return []port.AddressActivityStats{}, nil
 }
 
-func (m *mockStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*storage.NetworkMetrics, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*port.NetworkMetrics, error) {
+	return nil, port.ErrNotFound
 }
 
 // HistoricalWriter methods
@@ -334,37 +335,37 @@ func (m *mockStorage) SetBalance(ctx context.Context, addr common.Address, block
 
 // FeeDelegationReader methods
 
-func (m *mockStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*port.FeeDelegationTxMeta, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorage) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
 	return []common.Hash{}, nil
 }
 
-func (m *mockStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *storage.FeeDelegationTxMeta) error {
+func (m *mockStorage) SetFeeDelegationTxMeta(ctx context.Context, meta *port.FeeDelegationTxMeta) error {
 	return nil
 }
 
 // TokenMetadataReader methods
-func (m *mockStorage) GetTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetTokenMetadata(ctx context.Context, address common.Address) (*port.TokenMetadata, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) ListTokensByStandard(ctx context.Context, standard storage.TokenStandard, limit, offset int) ([]*storage.TokenMetadata, error) {
-	return []*storage.TokenMetadata{}, nil
+func (m *mockStorage) ListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
+	return []*port.TokenMetadata{}, nil
 }
 
-func (m *mockStorage) GetTokensCount(ctx context.Context, standard storage.TokenStandard) (int, error) {
+func (m *mockStorage) GetTokensCount(ctx context.Context, standard port.TokenStandard) (int, error) {
 	return 0, nil
 }
 
-func (m *mockStorage) SearchTokens(ctx context.Context, query string, limit int) ([]*storage.TokenMetadata, error) {
-	return []*storage.TokenMetadata{}, nil
+func (m *mockStorage) SearchTokens(ctx context.Context, query string, limit int) ([]*port.TokenMetadata, error) {
+	return []*port.TokenMetadata{}, nil
 }
 
 // TokenMetadataWriter methods
-func (m *mockStorage) SaveTokenMetadata(ctx context.Context, metadata *storage.TokenMetadata) error {
+func (m *mockStorage) SaveTokenMetadata(ctx context.Context, metadata *port.TokenMetadata) error {
 	return nil
 }
 
@@ -372,30 +373,30 @@ func (m *mockStorage) DeleteTokenMetadata(ctx context.Context, address common.Ad
 	return nil
 }
 
-func (m *mockStorage) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
+func (m *mockStorage) SetTokenMetadataFetcher(fetcher port.TokenMetadataFetcher) {
 }
 
 // SetCodeIndexReader methods
-func (m *mockStorage) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*storage.SetCodeAuthorizationRecord, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*port.SetCodeAuthorizationRecord, error) {
+	return nil, port.ErrNotFound
 }
-func (m *mockStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*storage.AddressSetCodeStats, error) {
-	return &storage.AddressSetCodeStats{Address: address}, nil
+func (m *mockStorage) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*port.AddressSetCodeStats, error) {
+	return &port.AddressSetCodeStats{Address: address}, nil
 }
-func (m *mockStorage) GetAddressDelegationState(ctx context.Context, address common.Address) (*storage.AddressDelegationState, error) {
-	return &storage.AddressDelegationState{Address: address}, nil
+func (m *mockStorage) GetAddressDelegationState(ctx context.Context, address common.Address) (*port.AddressDelegationState, error) {
+	return &port.AddressDelegationState{Address: address}, nil
 }
 func (m *mockStorage) GetSetCodeAuthorizationsCountByTarget(ctx context.Context, target common.Address) (int, error) {
 	return 0, nil
@@ -406,18 +407,18 @@ func (m *mockStorage) GetSetCodeAuthorizationsCountByAuthority(ctx context.Conte
 func (m *mockStorage) GetSetCodeTransactionCount(ctx context.Context) (int, error) {
 	return 0, nil
 }
-func (m *mockStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, nil
 }
 
 // SetCodeIndexWriter methods
-func (m *mockStorage) SaveSetCodeAuthorization(ctx context.Context, record *storage.SetCodeAuthorizationRecord) error {
+func (m *mockStorage) SaveSetCodeAuthorization(ctx context.Context, record *port.SetCodeAuthorizationRecord) error {
 	return nil
 }
-func (m *mockStorage) SaveSetCodeAuthorizations(ctx context.Context, records []*storage.SetCodeAuthorizationRecord) error {
+func (m *mockStorage) SaveSetCodeAuthorizations(ctx context.Context, records []*port.SetCodeAuthorizationRecord) error {
 	return nil
 }
-func (m *mockStorage) UpdateAddressDelegationState(ctx context.Context, state *storage.AddressDelegationState) error {
+func (m *mockStorage) UpdateAddressDelegationState(ctx context.Context, state *port.AddressDelegationState) error {
 	return nil
 }
 func (m *mockStorage) IncrementSetCodeStats(ctx context.Context, address common.Address, asTarget, asAuthority bool, blockNumber uint64) error {
@@ -426,7 +427,7 @@ func (m *mockStorage) IncrementSetCodeStats(ctx context.Context, address common.
 
 // UserOpIndexReader methods
 func (m *mockStorage) GetUserOp(ctx context.Context, opHash common.Hash) (*userop.UserOperation, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error) {
 	return nil, nil
@@ -447,16 +448,16 @@ func (m *mockStorage) GetUserOpsByFactory(ctx context.Context, factory common.Ad
 	return nil, nil
 }
 func (m *mockStorage) GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorage) GetFactoryStats(ctx context.Context, factory common.Address) (*userop.FactoryStats, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorage) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*userop.PaymasterStats, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorage) GetSmartAccount(ctx context.Context, address common.Address) (*userop.SmartAccount, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*userop.UserOperation, error) {
 	return nil, nil
@@ -498,39 +499,39 @@ func (m *mockStorage) SaveSmartAccount(ctx context.Context, account *userop.Smar
 }
 
 // ModuleIndexReader methods
-func (m *mockStorage) GetInstalledModule(ctx context.Context, account, module common.Address) (*storage.InstalledModule, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetInstalledModule(ctx context.Context, account, module common.Address) (*port.InstalledModule, error) {
+	return nil, port.ErrNotFound
 }
-func (m *mockStorage) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*storage.InstalledModule, error) {
+func (m *mockStorage) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*port.InstalledModule, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetModulesByType(ctx context.Context, moduleType storage.ModuleType, limit, offset int) ([]*storage.InstalledModule, error) {
+func (m *mockStorage) GetModulesByType(ctx context.Context, moduleType port.ModuleType, limit, offset int) ([]*port.InstalledModule, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetModuleStats(ctx context.Context, module common.Address) (*storage.ModuleStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetModuleStats(ctx context.Context, module common.Address) (*port.ModuleStats, error) {
+	return nil, port.ErrNotFound
 }
-func (m *mockStorage) GetAccountModules(ctx context.Context, account common.Address) (*storage.AccountModules, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorage) GetAccountModules(ctx context.Context, account common.Address) (*port.AccountModules, error) {
+	return nil, port.ErrNotFound
 }
-func (m *mockStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([]*storage.InstalledModule, error) {
+func (m *mockStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([]*port.InstalledModule, error) {
 	return nil, nil
 }
 func (m *mockStorage) GetModuleEventCount(ctx context.Context) (int, error) {
 	return 0, nil
 }
-func (m *mockStorage) ListModuleStats(ctx context.Context, limit, offset int) ([]*storage.ModuleStats, error) {
+func (m *mockStorage) ListModuleStats(ctx context.Context, limit, offset int) ([]*port.ModuleStats, error) {
 	return nil, nil
 }
 
 // ModuleIndexWriter methods
-func (m *mockStorage) SaveInstalledModule(ctx context.Context, record *storage.InstalledModule) error {
+func (m *mockStorage) SaveInstalledModule(ctx context.Context, record *port.InstalledModule) error {
 	return nil
 }
 func (m *mockStorage) RemoveModule(ctx context.Context, account, module common.Address, blockNumber uint64, txHash common.Hash) error {
 	return nil
 }
-func (m *mockStorage) UpdateModuleStats(ctx context.Context, stats *storage.ModuleStats) error {
+func (m *mockStorage) UpdateModuleStats(ctx context.Context, stats *port.ModuleStats) error {
 	return nil
 }
 
@@ -541,20 +542,20 @@ type mockStorageWithData struct {
 	receipts     map[common.Hash]*types.Receipt
 }
 
-func (m *mockStorageWithData) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *storage.TxLocation, error) {
+func (m *mockStorageWithData) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
 	if tx, ok := m.transactions[hash]; ok {
-		location := &storage.TxLocation{
+		location := &port.TxLocation{
 			BlockHeight: 1,
 			BlockHash:   common.HexToHash("0x123"),
 			TxIndex:     0,
 		}
 		return tx, location, nil
 	}
-	return nil, nil, storage.ErrNotFound
+	return nil, nil, port.ErrNotFound
 }
-func (m *mockStorageWithData) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*storage.TxLocation, error) {
+func (m *mockStorageWithData) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
 	txs := make([]*types.Transaction, len(hashes))
-	locs := make([]*storage.TxLocation, len(hashes))
+	locs := make([]*port.TxLocation, len(hashes))
 	for i, h := range hashes {
 		txs[i], locs[i], _ = m.GetTransaction(ctx, h)
 	}
@@ -565,7 +566,7 @@ func (m *mockStorageWithData) GetReceipt(ctx context.Context, hash common.Hash) 
 	if receipt, ok := m.receipts[hash]; ok {
 		return receipt, nil
 	}
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func TestJSONRPCServer(t *testing.T) {
@@ -1167,94 +1168,94 @@ func (m *mockStorageWithErrors) GetLatestHeight(ctx context.Context) (uint64, er
 }
 
 func (m *mockStorageWithErrors) GetBlock(ctx context.Context, height uint64) (*types.Block, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *storage.TxLocation, error) {
-	return nil, nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
+	return nil, nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*storage.TxLocation, error) {
-	return nil, nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
+	return nil, nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) HasBlock(ctx context.Context, height uint64) (bool, error) {
-	return false, storage.ErrNotFound
+	return false, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) HasTransaction(ctx context.Context, hash common.Hash) (bool, error) {
-	return false, storage.ErrNotFound
+	return false, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) HasReceipt(ctx context.Context, hash common.Hash) (bool, error) {
-	return false, storage.ErrNotFound
+	return false, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) SetLatestHeight(ctx context.Context, height uint64) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) SetBlock(ctx context.Context, block *types.Block) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) SetTransaction(ctx context.Context, tx *types.Transaction, location *storage.TxLocation) error {
-	return storage.ErrNotFound
+func (m *mockStorageWithErrors) SetTransaction(ctx context.Context, tx *types.Transaction, location *port.TxLocation) error {
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) SetReceipts(ctx context.Context, receipts []*types.Receipt) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) AddTransactionToAddressIndex(ctx context.Context, addr common.Address, txHash common.Hash) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) SetBlocks(ctx context.Context, blocks []*types.Block) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) DeleteBlock(ctx context.Context, height uint64) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) Close() error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) NewBatch() storage.Batch {
@@ -1262,402 +1263,402 @@ func (m *mockStorageWithErrors) NewBatch() storage.Batch {
 }
 
 func (m *mockStorageWithErrors) Compact(ctx context.Context, start, end []byte) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) SetABI(ctx context.Context, address common.Address, abiJSON []byte) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetABI(ctx context.Context, address common.Address) ([]byte, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) DeleteABI(ctx context.Context, address common.Address) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) ListABIs(ctx context.Context) ([]common.Address, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) HasABI(ctx context.Context, address common.Address) (bool, error) {
-	return false, storage.ErrNotFound
+	return false, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetLogs(ctx context.Context, filter *storage.LogFilter) ([]*types.Log, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) SaveLog(ctx context.Context, log *types.Log) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) SaveLogs(ctx context.Context, logs []*types.Log) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) DeleteLogsByBlock(ctx context.Context, blockNumber uint64) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) IndexLogs(ctx context.Context, logs []*types.Log) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) IndexLog(ctx context.Context, log *types.Log) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]port.SearchResult, error) {
+	return nil, port.ErrNotFound
 }
 
 // Contract verification methods
-func (m *mockStorageWithErrors) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetContractVerification(ctx context.Context, address common.Address) (*port.ContractVerification, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
-	return false, storage.ErrNotFound
+	return false, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) CountVerifiedContracts(ctx context.Context) (int, error) {
-	return 0, storage.ErrNotFound
+	return 0, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
-	return storage.ErrNotFound
+func (m *mockStorageWithErrors) SetContractVerification(ctx context.Context, verification *port.ContractVerification) error {
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) DeleteContractVerification(ctx context.Context, address common.Address) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetAddressStats(ctx context.Context, addr common.Address) (*port.AddressStats, error) {
+	return nil, port.ErrNotFound
 }
 
 // HistoricalReader methods for mockStorageWithErrors
 func (m *mockStorageWithErrors) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *storage.TransactionFilter, limit, offset int) ([]*storage.TransactionWithReceipt, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]storage.BalanceSnapshot, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetBlockCount(ctx context.Context) (uint64, error) {
-	return 0, storage.ErrNotFound
+	return 0, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetTransactionCount(ctx context.Context) (uint64, error) {
-	return 0, storage.ErrNotFound
+	return 0, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.MinerStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.MinerStats, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]storage.TokenBalance, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]port.TokenBalance, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*storage.GasStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*port.GasStats, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*storage.AddressGasStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*port.AddressGasStats, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressGasStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressGasStats, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressActivityStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressActivityStats, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*storage.NetworkMetrics, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*port.NetworkMetrics, error) {
+	return nil, port.ErrNotFound
 }
 
 // HistoricalWriter methods for mockStorageWithErrors
 func (m *mockStorageWithErrors) SetBlockTimestamp(ctx context.Context, timestamp uint64, height uint64) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) UpdateBalance(ctx context.Context, addr common.Address, blockNumber uint64, delta *big.Int, txHash common.Hash) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) SetBalance(ctx context.Context, addr common.Address, blockNumber uint64, balance *big.Int) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 // FeeDelegationReader methods for mockStorageWithErrors
 
-func (m *mockStorageWithErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*port.FeeDelegationTxMeta, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetFeeDelegationTxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) SetFeeDelegationTxMeta(ctx context.Context, meta *storage.FeeDelegationTxMeta) error {
-	return storage.ErrNotFound
+func (m *mockStorageWithErrors) SetFeeDelegationTxMeta(ctx context.Context, meta *port.FeeDelegationTxMeta) error {
+	return port.ErrNotFound
 }
 
 // KVStore interface methods for mockStorageWithErrors
 func (m *mockStorageWithErrors) Put(ctx context.Context, key, value []byte) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) Get(ctx context.Context, key []byte) ([]byte, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) Delete(ctx context.Context, key []byte) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) Iterate(ctx context.Context, prefix []byte, fn func(key, value []byte) bool) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) Has(ctx context.Context, key []byte) (bool, error) {
-	return false, storage.ErrNotFound
+	return false, port.ErrNotFound
 }
 
 // TokenMetadataReader interface methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetTokenMetadata(ctx context.Context, address common.Address) (*port.TokenMetadata, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) ListTokensByStandard(ctx context.Context, standard storage.TokenStandard, limit, offset int) ([]*storage.TokenMetadata, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) ListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTokensCount(ctx context.Context, standard storage.TokenStandard) (int, error) {
-	return 0, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetTokensCount(ctx context.Context, standard port.TokenStandard) (int, error) {
+	return 0, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) SearchTokens(ctx context.Context, query string, limit int) ([]*storage.TokenMetadata, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) SearchTokens(ctx context.Context, query string, limit int) ([]*port.TokenMetadata, error) {
+	return nil, port.ErrNotFound
 }
 
 // TokenMetadataWriter interface methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) SaveTokenMetadata(ctx context.Context, metadata *storage.TokenMetadata) error {
-	return storage.ErrNotFound
+func (m *mockStorageWithErrors) SaveTokenMetadata(ctx context.Context, metadata *port.TokenMetadata) error {
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) DeleteTokenMetadata(ctx context.Context, address common.Address) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
+func (m *mockStorageWithErrors) SetTokenMetadataFetcher(fetcher port.TokenMetadataFetcher) {
 }
 
 // SetCodeIndexReader methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*storage.SetCodeAuthorizationRecord, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*port.SetCodeAuthorizationRecord, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*storage.SetCodeAuthorizationRecord, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*port.SetCodeAuthorizationRecord, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*storage.SetCodeAuthorizationRecord, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*port.SetCodeAuthorizationRecord, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*storage.AddressSetCodeStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*port.AddressSetCodeStats, error) {
+	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetAddressDelegationState(ctx context.Context, address common.Address) (*storage.AddressDelegationState, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetAddressDelegationState(ctx context.Context, address common.Address) (*port.AddressDelegationState, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetSetCodeAuthorizationsCountByTarget(ctx context.Context, target common.Address) (int, error) {
-	return 0, storage.ErrNotFound
+	return 0, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetSetCodeAuthorizationsCountByAuthority(ctx context.Context, authority common.Address) (int, error) {
-	return 0, storage.ErrNotFound
+	return 0, port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) GetSetCodeTransactionCount(ctx context.Context) (int, error) {
-	return 0, storage.ErrNotFound
+	return 0, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*storage.SetCodeAuthorizationRecord, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*port.SetCodeAuthorizationRecord, error) {
+	return nil, port.ErrNotFound
 }
 
 // SetCodeIndexWriter methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) SaveSetCodeAuthorization(ctx context.Context, record *storage.SetCodeAuthorizationRecord) error {
-	return storage.ErrNotFound
+func (m *mockStorageWithErrors) SaveSetCodeAuthorization(ctx context.Context, record *port.SetCodeAuthorizationRecord) error {
+	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) SaveSetCodeAuthorizations(ctx context.Context, records []*storage.SetCodeAuthorizationRecord) error {
-	return storage.ErrNotFound
+func (m *mockStorageWithErrors) SaveSetCodeAuthorizations(ctx context.Context, records []*port.SetCodeAuthorizationRecord) error {
+	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) UpdateAddressDelegationState(ctx context.Context, state *storage.AddressDelegationState) error {
-	return storage.ErrNotFound
+func (m *mockStorageWithErrors) UpdateAddressDelegationState(ctx context.Context, state *port.AddressDelegationState) error {
+	return port.ErrNotFound
 }
 
 func (m *mockStorageWithErrors) IncrementSetCodeStats(ctx context.Context, address common.Address, asTarget, asAuthority bool, blockNumber uint64) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 // UserOpIndexReader methods for mockStorageWithErrors
 func (m *mockStorageWithErrors) GetUserOp(ctx context.Context, opHash common.Hash) (*userop.UserOperation, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetFactoryStats(ctx context.Context, factory common.Address) (*userop.FactoryStats, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetPaymasterStats(ctx context.Context, paymaster common.Address) (*userop.PaymasterStats, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetSmartAccount(ctx context.Context, address common.Address) (*userop.SmartAccount, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetRecentUserOps(ctx context.Context, limit int) ([]*userop.UserOperation, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetUserOpCount(ctx context.Context) (int, error) {
-	return 0, storage.ErrNotFound
+	return 0, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 // UserOpIndexWriter methods for mockStorageWithErrors
 func (m *mockStorageWithErrors) SaveUserOp(ctx context.Context, op *userop.UserOperation) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 func (m *mockStorageWithErrors) SaveUserOps(ctx context.Context, ops []*userop.UserOperation) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 func (m *mockStorageWithErrors) UpdateBundlerStats(ctx context.Context, stats *userop.BundlerStats) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 func (m *mockStorageWithErrors) UpdateFactoryStats(ctx context.Context, stats *userop.FactoryStats) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 func (m *mockStorageWithErrors) UpdatePaymasterStats(ctx context.Context, stats *userop.PaymasterStats) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 func (m *mockStorageWithErrors) SaveSmartAccount(ctx context.Context, account *userop.SmartAccount) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
 
 // ModuleIndexReader methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetInstalledModule(ctx context.Context, account, module common.Address) (*storage.InstalledModule, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetInstalledModule(ctx context.Context, account, module common.Address) (*port.InstalledModule, error) {
+	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*storage.InstalledModule, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*port.InstalledModule, error) {
+	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetModulesByType(ctx context.Context, moduleType storage.ModuleType, limit, offset int) ([]*storage.InstalledModule, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetModulesByType(ctx context.Context, moduleType port.ModuleType, limit, offset int) ([]*port.InstalledModule, error) {
+	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetModuleStats(ctx context.Context, module common.Address) (*storage.ModuleStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetModuleStats(ctx context.Context, module common.Address) (*port.ModuleStats, error) {
+	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetAccountModules(ctx context.Context, account common.Address) (*storage.AccountModules, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetAccountModules(ctx context.Context, account common.Address) (*port.AccountModules, error) {
+	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetRecentModuleEvents(ctx context.Context, limit int) ([]*storage.InstalledModule, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) GetRecentModuleEvents(ctx context.Context, limit int) ([]*port.InstalledModule, error) {
+	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetModuleEventCount(ctx context.Context) (int, error) {
-	return 0, storage.ErrNotFound
+	return 0, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) ListModuleStats(ctx context.Context, limit, offset int) ([]*storage.ModuleStats, error) {
-	return nil, storage.ErrNotFound
+func (m *mockStorageWithErrors) ListModuleStats(ctx context.Context, limit, offset int) ([]*port.ModuleStats, error) {
+	return nil, port.ErrNotFound
 }
 
 // ModuleIndexWriter methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) SaveInstalledModule(ctx context.Context, record *storage.InstalledModule) error {
-	return storage.ErrNotFound
+func (m *mockStorageWithErrors) SaveInstalledModule(ctx context.Context, record *port.InstalledModule) error {
+	return port.ErrNotFound
 }
 func (m *mockStorageWithErrors) RemoveModule(ctx context.Context, account, module common.Address, blockNumber uint64, txHash common.Hash) error {
-	return storage.ErrNotFound
+	return port.ErrNotFound
 }
-func (m *mockStorageWithErrors) UpdateModuleStats(ctx context.Context, stats *storage.ModuleStats) error {
-	return storage.ErrNotFound
+func (m *mockStorageWithErrors) UpdateModuleStats(ctx context.Context, stats *port.ModuleStats) error {
+	return port.ErrNotFound
 }
 
 // mockStorageWithNonNotFoundErrors returns non-ErrNotFound errors to test logging paths
@@ -1676,10 +1677,10 @@ func (m *mockStorageWithNonNotFoundErrors) GetBlockByHash(ctx context.Context, h
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *storage.TxLocation, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
 	return nil, nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*storage.TxLocation, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
 	return nil, nil, fmt.Errorf("database connection failed")
 }
 
@@ -1731,7 +1732,7 @@ func (m *mockStorageWithNonNotFoundErrors) SetBlock(ctx context.Context, block *
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) SetTransaction(ctx context.Context, tx *types.Transaction, location *storage.TxLocation) error {
+func (m *mockStorageWithNonNotFoundErrors) SetTransaction(ctx context.Context, tx *types.Transaction, location *port.TxLocation) error {
 	return fmt.Errorf("database connection failed")
 }
 
@@ -1787,7 +1788,7 @@ func (m *mockStorageWithNonNotFoundErrors) HasABI(ctx context.Context, address c
 	return false, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetLogs(ctx context.Context, filter *storage.LogFilter) ([]*types.Log, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1823,12 +1824,12 @@ func (m *mockStorageWithNonNotFoundErrors) IndexLog(ctx context.Context, log *ty
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]storage.SearchResult, error) {
+func (m *mockStorageWithNonNotFoundErrors) Search(ctx context.Context, query string, resultTypes []string, limit int) ([]port.SearchResult, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
 // Contract verification methods
-func (m *mockStorageWithNonNotFoundErrors) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetContractVerification(ctx context.Context, address common.Address) (*port.ContractVerification, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1844,7 +1845,7 @@ func (m *mockStorageWithNonNotFoundErrors) CountVerifiedContracts(ctx context.Co
 	return 0, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+func (m *mockStorageWithNonNotFoundErrors) SetContractVerification(ctx context.Context, verification *port.ContractVerification) error {
 	return fmt.Errorf("database connection failed")
 }
 
@@ -1852,7 +1853,7 @@ func (m *mockStorageWithNonNotFoundErrors) DeleteContractVerification(ctx contex
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetAddressStats(ctx context.Context, addr common.Address) (*storage.AddressStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetAddressStats(ctx context.Context, addr common.Address) (*port.AddressStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1865,7 +1866,7 @@ func (m *mockStorageWithNonNotFoundErrors) GetBlockByTimestamp(ctx context.Conte
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *storage.TransactionFilter, limit, offset int) ([]*storage.TransactionWithReceipt, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1873,7 +1874,7 @@ func (m *mockStorageWithNonNotFoundErrors) GetAddressBalance(ctx context.Context
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]storage.BalanceSnapshot, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1885,31 +1886,31 @@ func (m *mockStorageWithNonNotFoundErrors) GetTransactionCount(ctx context.Conte
 	return 0, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.MinerStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.MinerStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]storage.TokenBalance, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]port.TokenBalance, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*storage.GasStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*port.GasStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*storage.AddressGasStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*port.AddressGasStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressGasStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressGasStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressActivityStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressActivityStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*storage.NetworkMetrics, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*port.NetworkMetrics, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1928,7 +1929,7 @@ func (m *mockStorageWithNonNotFoundErrors) SetBalance(ctx context.Context, addr 
 
 // FeeDelegationReader methods for mockStorageWithNonNotFoundErrors
 
-func (m *mockStorageWithNonNotFoundErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*storage.FeeDelegationTxMeta, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetFeeDelegationTxMeta(ctx context.Context, txHash common.Hash) (*port.FeeDelegationTxMeta, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1936,7 +1937,7 @@ func (m *mockStorageWithNonNotFoundErrors) GetFeeDelegationTxsByFeePayer(ctx con
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) SetFeeDelegationTxMeta(ctx context.Context, meta *storage.FeeDelegationTxMeta) error {
+func (m *mockStorageWithNonNotFoundErrors) SetFeeDelegationTxMeta(ctx context.Context, meta *port.FeeDelegationTxMeta) error {
 	return fmt.Errorf("database connection failed")
 }
 
@@ -1962,24 +1963,24 @@ func (m *mockStorageWithNonNotFoundErrors) Has(ctx context.Context, key []byte) 
 }
 
 // TokenMetadataReader interface methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) GetTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetTokenMetadata(ctx context.Context, address common.Address) (*port.TokenMetadata, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) ListTokensByStandard(ctx context.Context, standard storage.TokenStandard, limit, offset int) ([]*storage.TokenMetadata, error) {
+func (m *mockStorageWithNonNotFoundErrors) ListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTokensCount(ctx context.Context, standard storage.TokenStandard) (int, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetTokensCount(ctx context.Context, standard port.TokenStandard) (int, error) {
 	return 0, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) SearchTokens(ctx context.Context, query string, limit int) ([]*storage.TokenMetadata, error) {
+func (m *mockStorageWithNonNotFoundErrors) SearchTokens(ctx context.Context, query string, limit int) ([]*port.TokenMetadata, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
 // TokenMetadataWriter interface methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) SaveTokenMetadata(ctx context.Context, metadata *storage.TokenMetadata) error {
+func (m *mockStorageWithNonNotFoundErrors) SaveTokenMetadata(ctx context.Context, metadata *port.TokenMetadata) error {
 	return fmt.Errorf("database connection failed")
 }
 
@@ -1987,35 +1988,35 @@ func (m *mockStorageWithNonNotFoundErrors) DeleteTokenMetadata(ctx context.Conte
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) SetTokenMetadataFetcher(fetcher storage.TokenMetadataFetcher) {
+func (m *mockStorageWithNonNotFoundErrors) SetTokenMetadataFetcher(fetcher port.TokenMetadataFetcher) {
 }
 
 // SetCodeIndexReader methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*port.SetCodeAuthorizationRecord, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*storage.AddressSetCodeStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*port.AddressSetCodeStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetAddressDelegationState(ctx context.Context, address common.Address) (*storage.AddressDelegationState, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetAddressDelegationState(ctx context.Context, address common.Address) (*port.AddressDelegationState, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -2031,20 +2032,20 @@ func (m *mockStorageWithNonNotFoundErrors) GetSetCodeTransactionCount(ctx contex
 	return 0, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*storage.SetCodeAuthorizationRecord, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
 // SetCodeIndexWriter methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) SaveSetCodeAuthorization(ctx context.Context, record *storage.SetCodeAuthorizationRecord) error {
+func (m *mockStorageWithNonNotFoundErrors) SaveSetCodeAuthorization(ctx context.Context, record *port.SetCodeAuthorizationRecord) error {
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) SaveSetCodeAuthorizations(ctx context.Context, records []*storage.SetCodeAuthorizationRecord) error {
+func (m *mockStorageWithNonNotFoundErrors) SaveSetCodeAuthorizations(ctx context.Context, records []*port.SetCodeAuthorizationRecord) error {
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) UpdateAddressDelegationState(ctx context.Context, state *storage.AddressDelegationState) error {
+func (m *mockStorageWithNonNotFoundErrors) UpdateAddressDelegationState(ctx context.Context, state *port.AddressDelegationState) error {
 	return fmt.Errorf("database connection failed")
 }
 
@@ -2126,39 +2127,39 @@ func (m *mockStorageWithNonNotFoundErrors) SaveSmartAccount(ctx context.Context,
 }
 
 // ModuleIndexReader methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) GetInstalledModule(ctx context.Context, account, module common.Address) (*storage.InstalledModule, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetInstalledModule(ctx context.Context, account, module common.Address) (*port.InstalledModule, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*storage.InstalledModule, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*port.InstalledModule, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetModulesByType(ctx context.Context, moduleType storage.ModuleType, limit, offset int) ([]*storage.InstalledModule, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetModulesByType(ctx context.Context, moduleType port.ModuleType, limit, offset int) ([]*port.InstalledModule, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetModuleStats(ctx context.Context, module common.Address) (*storage.ModuleStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetModuleStats(ctx context.Context, module common.Address) (*port.ModuleStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetAccountModules(ctx context.Context, account common.Address) (*storage.AccountModules, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetAccountModules(ctx context.Context, account common.Address) (*port.AccountModules, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetRecentModuleEvents(ctx context.Context, limit int) ([]*storage.InstalledModule, error) {
+func (m *mockStorageWithNonNotFoundErrors) GetRecentModuleEvents(ctx context.Context, limit int) ([]*port.InstalledModule, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 func (m *mockStorageWithNonNotFoundErrors) GetModuleEventCount(ctx context.Context) (int, error) {
 	return 0, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) ListModuleStats(ctx context.Context, limit, offset int) ([]*storage.ModuleStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) ListModuleStats(ctx context.Context, limit, offset int) ([]*port.ModuleStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
 // ModuleIndexWriter methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) SaveInstalledModule(ctx context.Context, record *storage.InstalledModule) error {
+func (m *mockStorageWithNonNotFoundErrors) SaveInstalledModule(ctx context.Context, record *port.InstalledModule) error {
 	return fmt.Errorf("database connection failed")
 }
 func (m *mockStorageWithNonNotFoundErrors) RemoveModule(ctx context.Context, account, module common.Address, blockNumber uint64, txHash common.Hash) error {
 	return fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) UpdateModuleStats(ctx context.Context, stats *storage.ModuleStats) error {
+func (m *mockStorageWithNonNotFoundErrors) UpdateModuleStats(ctx context.Context, stats *port.ModuleStats) error {
 	return fmt.Errorf("database connection failed")
 }
 

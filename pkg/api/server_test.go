@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -38,7 +39,7 @@ func (m *mockStorage) HasABI(ctx context.Context, address common.Address) (bool,
 	return false, nil
 }
 
-func (m *mockStorage) GetLogs(ctx context.Context, filter *storage.LogFilter) ([]*types.Log, error) {
+func (m *mockStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 

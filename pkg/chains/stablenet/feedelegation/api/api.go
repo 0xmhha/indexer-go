@@ -13,8 +13,7 @@ import (
 
 // Schema holds the resolvers of the fee delegation queries. stats is nil
 // when the indexer's storage cannot serve them; the queries then fail.
-// history is nil when the storage cannot map timestamps to blocks; the
-// time arguments are then ignored.
+// history is nil without storage; the time arguments are then ignored.
 type Schema struct {
 	history port.HistoricalReader
 	stats   *feedelegation.Stats
@@ -23,10 +22,7 @@ type Schema struct {
 
 func init() {
 	graphql.RegisterExtension("stablenet.fee_delegation", func(e *graphql.Extension) {
-		s := &Schema{logger: e.Logger()}
-		if h, ok := e.Storage().(port.HistoricalReader); ok {
-			s.history = h
-		}
+		s := &Schema{history: e.Storage(), logger: e.Logger()}
 		if s.logger == nil {
 			s.logger = zap.NewNop()
 		}

@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -23,7 +23,7 @@ func (s *Schema) resolveAccountModules(p graphql.ResolveParams) (interface{}, er
 	address := common.HexToAddress(addressStr)
 
 	// Cast storage to ModuleIndexReader
-	moduleReader, ok := s.storage.(storagepkg.ModuleIndexReader)
+	moduleReader, ok := s.storage.(port.ModuleIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support Module queries")
 	}
@@ -70,7 +70,7 @@ func (s *Schema) resolveInstalledModules(p graphql.ResolveParams) (interface{}, 
 	ctx := p.Context
 
 	// Cast storage to ModuleIndexReader
-	moduleReader, ok := s.storage.(storagepkg.ModuleIndexReader)
+	moduleReader, ok := s.storage.(port.ModuleIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support Module queries")
 	}
@@ -90,7 +90,7 @@ func (s *Schema) resolveInstalledModules(p graphql.ResolveParams) (interface{}, 
 		}
 	}
 
-	var records []*storagepkg.InstalledModule
+	var records []*port.InstalledModule
 	var err error
 
 	// Check for account filter
@@ -141,7 +141,7 @@ func (s *Schema) resolveModuleStats(p graphql.ResolveParams) (interface{}, error
 	moduleAddr := common.HexToAddress(moduleStr)
 
 	// Cast storage to ModuleIndexReader
-	moduleReader, ok := s.storage.(storagepkg.ModuleIndexReader)
+	moduleReader, ok := s.storage.(port.ModuleIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support Module queries")
 	}
@@ -162,7 +162,7 @@ func (s *Schema) resolveListModuleStats(p graphql.ResolveParams) (interface{}, e
 	ctx := p.Context
 
 	// Cast storage to ModuleIndexReader
-	moduleReader, ok := s.storage.(storagepkg.ModuleIndexReader)
+	moduleReader, ok := s.storage.(port.ModuleIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support Module queries")
 	}
@@ -211,7 +211,7 @@ func (s *Schema) resolveModuleEventCount(p graphql.ResolveParams) (interface{}, 
 	ctx := p.Context
 
 	// Cast storage to ModuleIndexReader
-	moduleReader, ok := s.storage.(storagepkg.ModuleIndexReader)
+	moduleReader, ok := s.storage.(port.ModuleIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support Module queries")
 	}
@@ -227,7 +227,7 @@ func (s *Schema) resolveModuleEventCount(p graphql.ResolveParams) (interface{}, 
 }
 
 // installedModuleToMap converts an InstalledModule to a GraphQL-compatible map
-func (s *Schema) installedModuleToMap(record *storagepkg.InstalledModule) map[string]interface{} {
+func (s *Schema) installedModuleToMap(record *port.InstalledModule) map[string]interface{} {
 	result := map[string]interface{}{
 		"account":     record.Account.Hex(),
 		"module":      record.Module.Hex(),
@@ -250,7 +250,7 @@ func (s *Schema) installedModuleToMap(record *storagepkg.InstalledModule) map[st
 }
 
 // moduleStatsToMap converts ModuleStats to a GraphQL-compatible map
-func (s *Schema) moduleStatsToMap(stats *storagepkg.ModuleStats) map[string]interface{} {
+func (s *Schema) moduleStatsToMap(stats *port.ModuleStats) map[string]interface{} {
 	return map[string]interface{}{
 		"module":         stats.Module.Hex(),
 		"moduleType":     stats.ModuleType.String(),
@@ -260,17 +260,17 @@ func (s *Schema) moduleStatsToMap(stats *storagepkg.ModuleStats) map[string]inte
 }
 
 // parseModuleType converts a string module type to ModuleType
-func parseModuleType(s string) storagepkg.ModuleType {
+func parseModuleType(s string) port.ModuleType {
 	switch s {
 	case "VALIDATOR", "validator":
-		return storagepkg.ModuleTypeValidator
+		return port.ModuleTypeValidator
 	case "EXECUTOR", "executor":
-		return storagepkg.ModuleTypeExecutor
+		return port.ModuleTypeExecutor
 	case "FALLBACK", "fallback":
-		return storagepkg.ModuleTypeFallback
+		return port.ModuleTypeFallback
 	case "HOOK", "hook":
-		return storagepkg.ModuleTypeHook
+		return port.ModuleTypeHook
 	default:
-		return storagepkg.ModuleType(0)
+		return port.ModuleType(0)
 	}
 }
