@@ -37,7 +37,7 @@ type TokenHolderIndexReader interface {
 	GetTokenBalance(ctx context.Context, token, holder common.Address) (*big.Int, error)
 
 	// GetTokenHolderStats retrieves aggregate statistics for a token.
-	// Returns nil if the token has no stats recorded.
+	// Returns ErrNotFound if the token has no stats recorded.
 	GetTokenHolderStats(ctx context.Context, token common.Address) (*TokenHolderStats, error)
 
 	// GetHolderTokens retrieves all tokens held by a specific address with pagination.

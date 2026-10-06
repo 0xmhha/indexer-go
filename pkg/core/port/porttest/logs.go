@@ -240,7 +240,6 @@ func testLogs(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("GetLogsFromAboveLatestIsEmpty", func(t *testing.T) {
-		knownDefect(t, "GetLogs with ToBlock 0 and FromBlock above the latest height fails with a block range error")
 		s, _ := logsFixtureStore(t, newStore)
 		got, err := s.GetLogs(ctx, &port.LogFilter{FromBlock: logsLatestNum + 1})
 		require.NoError(t, err)
@@ -318,7 +317,6 @@ func testLogs(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("GetLogsChainOrder", func(t *testing.T) {
-		knownDefect(t, "GetLogs returns logs grouped by address or topic0 option instead of in chain order")
 		s, logs := logsFixtureStore(t, newStore)
 		got, err := s.GetLogs(ctx, &port.LogFilter{Addresses: []common.Address{logsAddrD, addrC}})
 		require.NoError(t, err)
@@ -330,7 +328,6 @@ func testLogs(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("GetLogsRepeatedOptionsReturnOnce", func(t *testing.T) {
-		knownDefect(t, "GetLogs returns a log once per repeated address or topic0 option")
 		s, logs := logsFixtureStore(t, newStore)
 		got, err := s.GetLogs(ctx, &port.LogFilter{Addresses: []common.Address{logsAddrD, logsAddrD}})
 		require.NoError(t, err)
@@ -368,7 +365,6 @@ func testLogs(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("ReindexDropsStaleIndexes", func(t *testing.T) {
-		knownDefect(t, "re-indexing a log position with another address or topics leaves it under the old address and topics")
 		s, logs := logsFixtureStore(t, newStore)
 		moved := *logs[0]
 		moved.Address = addrB

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cockroachdb/pebble"
+
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
@@ -51,7 +53,7 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 	case "blockNumber":
 		// Search by block number
 		if isTypeAllowed("block") {
-			blockNum, _ := strconv.ParseUint(query, 10, 64)
+			blockNum, _ := parseBlockNumberQuery(query)
 			block, err := s.GetBlock(ctx, blockNum)
 			if err == nil && block != nil {
 				metadata := map[string]interface{}{
@@ -144,9 +146,9 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 				}
 
 				// Try to get transaction count for this address
-				txHashes, err := s.GetTransactionsByAddress(ctx, addr, 1, 0)
+				txCount, err := s.countAddressTransactions(ctx, addr)
 				if err == nil {
-					metadata["transactionCount"] = len(txHashes)
+					metadata["transactionCount"] = txCount
 				}
 
 				results = append(results, port.SearchResult{
@@ -165,9 +167,9 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 			}
 
 			// Try to get transaction count
-			txHashes, err := s.GetTransactionsByAddress(ctx, addr, 1, 0)
-			if err == nil && len(txHashes) > 0 {
-				metadata["transactionCount"] = len(txHashes)
+			txCount, err := s.countAddressTransactions(ctx, addr)
+			if err == nil && txCount > 0 {
+				metadata["transactionCount"] = txCount
 			}
 
 			results = append(results, port.SearchResult{
@@ -187,25 +189,76 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 	return results, nil
 }
 
-// detectQueryType determines the type of search query
+// countAddressTransactions counts the transactions in an address's
+// transaction index without loading them.
+func (s *PebbleStorage) countAddressTransactions(ctx context.Context, addr common.Address) (int, error) {
+	prefix := AddressTransactionKeyPrefix(addr)
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: prefixUpperBound(prefix),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer func() { _ = iter.Close() }()
+
+	count := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		count++
+	}
+	if err := iter.Error(); err != nil {
+		return 0, fmt.Errorf("iterator error: %w", err)
+	}
+	return count, nil
+}
+
+// parseBlockNumberQuery parses a block number given in decimal or as a
+// 0x-prefixed hex number.
+func parseBlockNumberQuery(query string) (uint64, bool) {
+	if hex, ok := strings.CutPrefix(query, "0x"); ok {
+		n, err := strconv.ParseUint(hex, 16, 64)
+		return n, err == nil
+	}
+	n, err := strconv.ParseUint(query, 10, 64)
+	return n, err == nil
+}
+
+// isHexDigits reports whether s is a non-empty run of hex digits.
+func isHexDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", c) {
+			return false
+		}
+	}
+	return true
+}
+
+// detectQueryType determines the type of search query. It returns "" for a
+// query that is not a block number, hash or address.
 func detectQueryType(query string) string {
 	// Remove 0x prefix if present
-	query = strings.TrimPrefix(query, "0x")
+	hex := strings.TrimPrefix(query, "0x")
+
+	// Check if it's a valid hex hash (64 characters for block/tx hash, 40 for
+	// address). These are checked first so that a hash or address made of
+	// digits is not read as a block number.
+	if isHexDigits(hex) {
+		if len(hex) == 64 {
+			// Could be block hash or transaction hash
+			return "hash"
+		} else if len(hex) == 40 {
+			// Address
+			return "address"
+		}
+	}
 
 	// Check if it's a number (block number)
-	if _, err := strconv.ParseUint(query, 10, 64); err == nil {
+	if _, ok := parseBlockNumberQuery(query); ok {
 		return "blockNumber"
 	}
 
-	// Check if it's a valid hex hash (64 characters for block/tx hash, 40 for address)
-	if len(query) == 64 {
-		// Could be block hash or transaction hash
-		return "hash"
-	} else if len(query) == 40 {
-		// Address
-		return "address"
-	}
-
-	// Default to address for shorter queries (partial address search could be implemented)
-	return "address"
+	return ""
 }

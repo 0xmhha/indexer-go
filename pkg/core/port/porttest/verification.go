@@ -147,7 +147,6 @@ func testContractVerification(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("ReverifyListsOnce", func(t *testing.T) {
-		knownDefect(t, "re-verifying a contract at a new time keeps its old list entry, so it is listed and counted twice")
 		s := open[verificationStore](t, newStore)
 		require.NoError(t, s.SetContractVerification(ctx, verificationFixture(addrC, 0)))
 		require.NoError(t, s.SetContractVerification(ctx, verificationFixture(addrC, 60)))
@@ -160,7 +159,6 @@ func testContractVerification(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("UnverifiedRecordIsNotVerified", func(t *testing.T) {
-		knownDefect(t, "a record with IsVerified false is reported, listed and counted as verified")
 		s := open[verificationStore](t, newStore)
 		v := verificationFixture(addrC, 0)
 		v.IsVerified = false

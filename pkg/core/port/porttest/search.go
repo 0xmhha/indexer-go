@@ -77,7 +77,6 @@ func testSearch(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("HexBlockNumber", func(t *testing.T) {
-		knownDefect(t, "Search treats a 0x-prefixed block number as block 0")
 		s, _ := searchStoreWithChain(t, newStore)
 		rs, err := s.Search(ctx, "0x3", nil, 10)
 		require.NoError(t, err)
@@ -138,7 +137,6 @@ func testSearch(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("AddressTransactionCount", func(t *testing.T) {
-		knownDefect(t, "Search reports at most 1 as an address's transactionCount")
 		s, c := searchStoreWithChain(t, newStore)
 		for _, b := range c.Blocks[1:] {
 			require.NoError(t, s.AddTransactionToAddressIndex(ctx, addrA, b.Transactions[0].Hash))
@@ -213,7 +211,6 @@ func testSearch(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("UnrecognisedQuery", func(t *testing.T) {
-		knownDefect(t, "Search returns an address result for a query that is not a number, hash or address")
 		s, _ := searchStoreWithChain(t, newStore)
 		for _, q := range []string{"hello", "0xabcd"} {
 			rs, err := s.Search(ctx, q, nil, 10)
