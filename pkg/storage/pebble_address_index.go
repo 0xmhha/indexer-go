@@ -1014,18 +1014,9 @@ func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, ad
 	skipped := 0
 	seenTxs := make(map[common.Hash]bool)
 
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip offset items
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if count >= limit {
-			break
-		}
-
+	// Offset and limit both count internal calls involving the address, not
+	// index keys: one key covers every call of its transaction.
+	for iter.First(); iter.Valid() && count < limit; iter.Next() {
 		// Extract txHash from key
 		key := iter.Key()
 		keyStr := string(key)
@@ -1052,18 +1043,18 @@ func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, ad
 
 		// Filter by address
 		for _, internal := range txInternals {
-			if isFrom && internal.From == address {
-				internals = append(internals, internal)
-				count++
-				if count >= limit {
-					break
-				}
-			} else if !isFrom && internal.To == address {
-				internals = append(internals, internal)
-				count++
-				if count >= limit {
-					break
-				}
+			if (isFrom && internal.From != address) || (!isFrom && internal.To != address) {
+				continue
+			}
+			// Skip offset items
+			if skipped < offset {
+				skipped++
+				continue
+			}
+			internals = append(internals, internal)
+			count++
+			if count >= limit {
+				break
 			}
 		}
 	}
