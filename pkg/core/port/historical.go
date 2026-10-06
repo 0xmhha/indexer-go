@@ -200,10 +200,15 @@ type AddressStats struct {
 
 // HistoricalReader provides read-only access to historical blockchain data
 type HistoricalReader interface {
-	// GetBlocksByTimeRange returns blocks within a time range
+	// GetBlocksByTimeRange returns blocks within a time range, both ends
+	// inclusive, in time order. It finds the blocks stored with
+	// BlockWriter.SetBlock and those indexed with SetBlockTimestamp.
 	GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error)
 
-	// GetBlockByTimestamp returns the block closest to the given timestamp
+	// GetBlockByTimestamp returns the first block at or after the given
+	// timestamp, or the last block when every block is earlier. Callers turn
+	// a time into a block bound with it, so it never returns a block before
+	// the time while a later one exists.
 	GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error)
 
 	// GetTransactionsByAddressFiltered returns filtered transactions for an address
@@ -242,7 +247,10 @@ type HistoricalReader interface {
 	// GetTopAddressesByTxCount returns the top addresses by transaction count
 	GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]AddressActivityStats, error)
 
-	// GetNetworkMetrics returns network activity metrics for a time range
+	// GetNetworkMetrics returns network activity metrics for a time range,
+	// both ends inclusive. The totals cover every block in the range, so the
+	// cost grows with the number of blocks; the scan stops with the
+	// context's error when ctx is done.
 	GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*NetworkMetrics, error)
 
 	// GetAddressStats returns aggregated statistics for an address

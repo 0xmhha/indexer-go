@@ -150,3 +150,29 @@ func TestAddressStatsCountPaidGasAndMovedValue(t *testing.T) {
 		require.Zero(t, gas.Cmp(stats.TotalGasCost), "%s gas", acct.Address.Hex())
 	}
 }
+
+// TestTimeQueriesFindIndexedBlocks: ingest indexes every block's time, so
+// the time queries find the indexed blocks.
+func TestTimeQueriesFindIndexedBlocks(t *testing.T) {
+	sc := testchain.BuildDefault()
+	app := indexAll(t, sc.Chain)
+	r := app.storage.(port.HistoricalReader)
+	ctx := context.Background()
+	head := sc.Chain.Head()
+	first, last := sc.Chain.Block(0).Block.Time(), sc.Chain.Block(head).Block.Time()
+
+	blocks, err := r.GetBlocksByTimeRange(ctx, first, last, int(head)+1, 0)
+	require.NoError(t, err)
+	require.Len(t, blocks, int(head)+1)
+	for i, b := range blocks {
+		require.Equal(t, uint64(i), b.Number)
+	}
+
+	b, err := r.GetBlockByTimestamp(ctx, last)
+	require.NoError(t, err)
+	require.Equal(t, head, b.Number)
+
+	m, err := r.GetNetworkMetrics(ctx, first, last)
+	require.NoError(t, err)
+	require.Equal(t, head+1, m.TotalBlocks)
+}

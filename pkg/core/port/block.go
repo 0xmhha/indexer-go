@@ -25,8 +25,9 @@ type BlockReader interface {
 // model's hashes, so a block or transaction is found under the hash its
 // chain reports.
 type BlockWriter interface {
-	// SetBlock stores the block, its hash index and every transaction
-	// with its location.
+	// SetBlock stores the block, its hash index, its time (a store that
+	// also implements HistoricalReader finds the block by time) and every
+	// transaction with its location.
 	SetBlock(ctx context.Context, b *model.Block) error
 	// SetReceipt stores one receipt.
 	SetReceipt(ctx context.Context, r *model.Receipt) error

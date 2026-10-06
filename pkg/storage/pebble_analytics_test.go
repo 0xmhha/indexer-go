@@ -390,6 +390,34 @@ func TestPebbleStorage_GetNetworkMetrics(t *testing.T) {
 	}
 }
 
+// TestPebbleStorage_GetNetworkMetrics_CountsEveryBlock checks that the
+// totals cover a window of more blocks than the 10000 the metrics once read.
+func TestPebbleStorage_GetNetworkMetrics_CountsEveryBlock(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	storage := s.(*PebbleStorage)
+	ctx := context.Background()
+	miner := common.HexToAddress("0x1111111111111111111111111111111111111111")
+
+	const n = 10_005
+	for i := uint64(0); i < n; i++ {
+		// SetBlock indexes the block's time.
+		require.NoError(t, storage.SetBlock(ctx, modelBlock(createTestBlockWithMiner(i, miner, 100, 1000+i))))
+	}
+
+	metrics, err := storage.GetNetworkMetrics(ctx, 1000, 1000+n-1)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(n), metrics.TotalBlocks)
+	assert.Equal(t, uint64(100), metrics.AverageBlockSize)
+	assert.InDelta(t, 1.0, metrics.BlockTime, 1e-9)
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = storage.GetNetworkMetrics(canceled, 1000, 1000+n-1)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestPebbleStorage_GetNetworkMetrics_InvalidRange(t *testing.T) {
 	s, cleanup := setupTestStorage(t)
 	defer cleanup()
