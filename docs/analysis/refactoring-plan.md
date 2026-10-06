@@ -378,7 +378,7 @@ graph LR
 | R0-7 | C1~C4 수정. 고루틴 누수, WebSocket subscription ID를 연결별 네임스페이스로 분리, `close` panic, keepalive, 재귀 RLock, context를 보는 sleep | — | `go test -race`, goleak 시험 |
 | R0-8 | P1 수정. 범위가 없는 조회는 거부하거나 상한을 둔다 | — | 큰 DB에서 조회 시간이 범위에 비례한다 |
 | R0-9 | D4 임시 조치. 체인별 키 분리 전까지 `multichain.enabled`면 시작하지 않는다 | — | 설정 검증 시험 |
-| R0-10 | F4 정리. 무시되는 설정 키를 반영하거나 지우고, CLI 기본값이 설정 파일을 덮는 문제를 고친다 | — | 설정 우선순위 시험 |
+| R0-10 | F4 정리. 무시되는 설정 키를 반영하거나 지우고, CLI 기본값이 설정 파일을 덮는 문제를 고친다. (완료: 명시적 플래그만 적용, 연결 안 된 설정은 시작 시 경고, `database.readonly`는 거부) | — | 설정 우선순위 시험 |
 
 ### Phase 1: 저장 포트 분리
 
