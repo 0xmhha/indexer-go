@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
-	"github.com/0xmhha/indexer-go/pkg/adapters/detector"
 	fdmeta "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
 )
 
@@ -49,8 +48,8 @@ func TestLiveStableNet(t *testing.T) {
 	// Run A: straight through.
 	dirA := filepath.Join(t.TempDir(), "a")
 	app := startAppAt(t, rpc, dirA, atomicMode)
-	require.NotNil(t, app.nodeInfo)
-	require.Equal(t, detector.NodeTypeStableOne, app.nodeInfo.Type, "adapter detection")
+	require.NotNil(t, app.profile)
+	require.Equal(t, "stablenet", app.profile.ID(), "chain profile detection")
 	require.NoError(t, app.fetcher.FetchRange(ctx, 0, head))
 
 	// Fee delegation metadata must be stored for the given transactions.

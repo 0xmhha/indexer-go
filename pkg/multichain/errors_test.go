@@ -66,7 +66,7 @@ func TestChainError_Unwrap(t *testing.T) {
 	underlyingErr := errors.New("timeout")
 	chainErr := &ChainError{
 		ChainID: "eth",
-		Op:      ErrAdapterInitFailed,
+		Op:      ErrSourceInitFailed,
 		Err:     underlyingErr,
 	}
 
@@ -95,8 +95,8 @@ func TestChainError_Is(t *testing.T) {
 	}
 
 	// Should not match unrelated error
-	if chainErr.Is(ErrAdapterInitFailed) {
-		t.Error("Is(ErrAdapterInitFailed) should return false")
+	if chainErr.Is(ErrSourceInitFailed) {
+		t.Error("Is(ErrSourceInitFailed) should return false")
 	}
 }
 

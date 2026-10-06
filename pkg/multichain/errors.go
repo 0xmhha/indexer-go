@@ -15,7 +15,7 @@ var (
 
 	// Initialization errors
 	ErrClientInitFailed   = errors.New("failed to initialize client")
-	ErrAdapterInitFailed  = errors.New("failed to initialize adapter")
+	ErrSourceInitFailed   = errors.New("failed to initialize block source")
 	ErrFetcherInitFailed  = errors.New("failed to initialize fetcher")
 	ErrStorageInitFailed  = errors.New("failed to initialize storage")
 	ErrStorageRequired    = errors.New("storage is required to start chain")

@@ -17,7 +17,6 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/source"
-	"github.com/0xmhha/indexer-go/pkg/types/chain"
 )
 
 // ============================================================================
@@ -148,11 +147,6 @@ type Fetcher struct {
 	metrics             *RPCMetrics
 	optimizer           *AdaptiveOptimizer
 
-	// chainAdapter provides chain-specific operations (optional)
-	// When set, the fetcher will use the adapter for consensus parsing
-	// and system contract event handling instead of hardcoded logic.
-	chainAdapter chain.Adapter
-
 	// chainID is the chain identifier for multi-chain support
 	chainID string
 
@@ -231,40 +225,6 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		optimizer:           optimizer,
 		txr:                 txr,
 	}
-}
-
-// NewFetcherWithAdapter creates a new Fetcher instance with a chain adapter.
-// The chain adapter provides chain-specific operations for consensus parsing
-// and system contract event handling.
-func NewFetcherWithAdapter(client Client, storage Storage, config *Config, logger *zap.Logger, eventBus *events.EventBus, adapter chain.Adapter) *Fetcher {
-	fetcher := NewFetcher(client, storage, config, logger, eventBus)
-	fetcher.chainAdapter = adapter
-
-	if adapter != nil {
-		logger.Info("Fetcher initialized with chain adapter",
-			zap.String("chain_type", string(adapter.Info().ChainType)),
-			zap.String("consensus_type", string(adapter.Info().ConsensusType)),
-		)
-	}
-
-	return fetcher
-}
-
-// SetChainAdapter sets the chain adapter for the fetcher.
-// This allows setting the adapter after construction.
-func (f *Fetcher) SetChainAdapter(adapter chain.Adapter) {
-	f.chainAdapter = adapter
-	if adapter != nil {
-		f.logger.Info("Chain adapter set",
-			zap.String("chain_type", string(adapter.Info().ChainType)),
-			zap.String("consensus_type", string(adapter.Info().ConsensusType)),
-		)
-	}
-}
-
-// GetChainAdapter returns the current chain adapter (may be nil).
-func (f *Fetcher) GetChainAdapter() chain.Adapter {
-	return f.chainAdapter
 }
 
 // SetChainID sets the chain identifier for multi-chain support

@@ -21,12 +21,6 @@ indexer-go/
 │
 ├── pkg/
 │   ├── abi/                       # ABI 디코딩 (로그 이벤트 파싱)
-│   ├── adapters/                  # 체인 어댑터
-│   │   ├── anvil/                 #   Anvil (로컬 개발)
-│   │   ├── detector/              #   체인 자동 감지
-│   │   ├── evm/                   #   범용 EVM
-│   │   ├── factory/               #   어댑터 팩토리
-│   │   └── stableone/             #   Stable-One (WBFT)
 │   │
 │   ├── api/                       # API 레이어
 │   │   ├── server.go              #   HTTP 서버 (chi 라우터)
@@ -209,20 +203,19 @@ type Storage interface {
 - 이벤트 히스토리 버퍼링 (기본 100개)
 - Replay: 구독 시 과거 이벤트 즉시 수신
 
-### 5. Chain Adapters — 체인 어댑터
+### 5. Chain Profiles — 체인 프로필
 
-`pkg/adapters/`
+`pkg/chains/`
 
-플러그 가능한 어댑터 시스템으로 다양한 EVM 체인 지원.
+체인마다 프로필이 원시 블록을 체인 중립 모델로 디코딩한다. 시작할 때 `--adapter`로 프로필 이름(예: `stablenet`, 별칭 `stableone`)을 지정하거나, 노드의 `web3_clientVersion`으로 감지한다(`pkg/source/rpc`의 `Select`). 체인 전용 동작은 `pkg/chains`의 레지스트리를 통해서만 체인 중립 코드에 닿는다.
 
 ```
-chain.Adapter 인터페이스
-    ├── evm.Adapter        (범용 EVM — Ethereum, Sepolia 등)
-    ├── stableone.Adapter  (Stable-One — WBFT + 시스템 컨트랙트)
-    └── anvil.Adapter      (로컬 개발)
+chains.Profile
+    ├── evm        (범용 EVM — Ethereum, Sepolia, Anvil 등)
+    └── stablenet  (StableNet — fee delegation 0x16, WBFT, 시스템 컨트랙트)
 ```
 
-`detector` 패키지가 체인 ID와 특성 기반으로 어댑터를 자동 선택.
+예전의 어댑터 계층(`pkg/adapters`, `pkg/types/chain`)은 프로필과 기능이 같아 제거했다.
 
 ---
 
@@ -297,7 +290,7 @@ Client Request → API Layer (GraphQL/JSON-RPC) → Storage Query (PebbleDB) →
 
 ## Design Principles
 
-1. **Interface Segregation** — 인터페이스 분리로 의존성 최소화 (Storage, Adapter, Consensus)
+1. **Interface Segregation** — 인터페이스 분리로 의존성 최소화 (Storage, Chain Profile, Consensus)
 2. **Composition** — 인터페이스 합성으로 기능 조합 (Storage = Reader + Writer + ...)
 3. **Dependency Injection** — Setter 기반 프로세서 주입 (SetUserOpProcessor 등)
 4. **Plugin System** — 컨센서스 파서, 체인 어댑터 플러그인 레지스트리
