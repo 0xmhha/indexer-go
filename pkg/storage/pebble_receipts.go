@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ============================================================================
@@ -24,7 +25,7 @@ func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*type
 	value, closer, err := s.kv(ctx).Get(ReceiptKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get receipt: %w", err)
 	}
@@ -55,24 +56,24 @@ func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*type
 // validateReceipt validates a receipt before storage
 func validateReceipt(receipt *types.Receipt) error {
 	if receipt == nil {
-		return fmt.Errorf("%w: receipt cannot be nil", ErrInvalidReceipt)
+		return fmt.Errorf("%w: receipt cannot be nil", port.ErrInvalidReceipt)
 	}
 
 	// Check that TxHash is set (not zero hash)
 	var zeroHash common.Hash
 	if receipt.TxHash == zeroHash {
-		return fmt.Errorf("%w: transaction hash is not set", ErrInvalidReceipt)
+		return fmt.Errorf("%w: transaction hash is not set", port.ErrInvalidReceipt)
 	}
 
 	// Check status is valid (0 = failed, 1 = success)
 	if receipt.Status > 1 {
-		return fmt.Errorf("%w: invalid status %d (expected 0 or 1)", ErrInvalidReceipt, receipt.Status)
+		return fmt.Errorf("%w: invalid status %d (expected 0 or 1)", port.ErrInvalidReceipt, receipt.Status)
 	}
 
 	// Check that CumulativeGasUsed is at least GasUsed
 	if receipt.CumulativeGasUsed < receipt.GasUsed {
 		return fmt.Errorf("%w: cumulative gas used (%d) is less than gas used (%d)",
-			ErrInvalidReceipt, receipt.CumulativeGasUsed, receipt.GasUsed)
+			port.ErrInvalidReceipt, receipt.CumulativeGasUsed, receipt.GasUsed)
 	}
 
 	return nil
@@ -148,7 +149,7 @@ func (s *PebbleStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumbe
 	for _, hash := range hashes {
 		receipt, err := s.GetReceipt(ctx, hash)
 		if err != nil {
-			if err == ErrNotFound {
+			if err == port.ErrNotFound {
 				// Skip missing receipts
 				continue
 			}

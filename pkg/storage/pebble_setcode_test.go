@@ -11,6 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 func setupTestSetCodeStorage(t *testing.T) (*PebbleStorage, func()) {
@@ -45,7 +47,7 @@ func TestSaveSetCodeAuthorization(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test record
-	record := &SetCodeAuthorizationRecord{
+	record := &port.SetCodeAuthorizationRecord{
 		TxHash:           common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
 		BlockNumber:      100,
 		BlockHash:        common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"),
@@ -85,7 +87,7 @@ func TestGetSetCodeAuthorizationsByTx(t *testing.T) {
 	txHash := common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 
 	// Create multiple authorizations for same tx
-	records := []*SetCodeAuthorizationRecord{
+	records := []*port.SetCodeAuthorizationRecord{
 		{
 			TxHash:           txHash,
 			BlockNumber:      100,
@@ -110,7 +112,7 @@ func TestGetSetCodeAuthorizationsByTx(t *testing.T) {
 			ChainID:          big.NewInt(1),
 			Nonce:            2,
 			Applied:          false,
-			Error:            SetCodeErrNonceMismatch,
+			Error:            port.SetCodeErrNonceMismatch,
 			Timestamp:        time.Now(),
 		},
 	}
@@ -134,7 +136,7 @@ func TestGetSetCodeAuthorizationsByTarget(t *testing.T) {
 
 	// Create multiple authorizations for same target
 	for i := 0; i < 5; i++ {
-		record := &SetCodeAuthorizationRecord{
+		record := &port.SetCodeAuthorizationRecord{
 			TxHash:           common.HexToHash("0x" + string(rune('1'+i)) + "111111111111111111111111111111111111111111111111111111111111111"),
 			BlockNumber:      uint64(100 + i),
 			BlockHash:        common.HexToHash("0xaaa"),
@@ -174,7 +176,7 @@ func TestGetSetCodeAuthorizationsByAuthority(t *testing.T) {
 
 	// Create multiple authorizations for same authority
 	for i := 0; i < 3; i++ {
-		record := &SetCodeAuthorizationRecord{
+		record := &port.SetCodeAuthorizationRecord{
 			TxHash:           common.HexToHash("0x" + string(rune('a'+i)) + "111111111111111111111111111111111111111111111111111111111111111"),
 			BlockNumber:      uint64(200 + i),
 			BlockHash:        common.HexToHash("0xbbb"),
@@ -211,7 +213,7 @@ func TestGetSetCodeAuthorizationsByBlock(t *testing.T) {
 
 	// Create authorizations in same block
 	for i := 0; i < 4; i++ {
-		record := &SetCodeAuthorizationRecord{
+		record := &port.SetCodeAuthorizationRecord{
 			TxHash:           common.HexToHash("0x" + string(rune('1'+i)) + "222222222222222222222222222222222222222222222222222222222222222"),
 			BlockNumber:      blockNumber,
 			BlockHash:        common.HexToHash("0xccc"),
@@ -306,7 +308,7 @@ func TestGetRecentSetCodeAuthorizations(t *testing.T) {
 
 	// Create authorizations in different blocks
 	for i := 0; i < 10; i++ {
-		record := &SetCodeAuthorizationRecord{
+		record := &port.SetCodeAuthorizationRecord{
 			TxHash:           common.HexToHash("0x" + string(rune('0'+i)) + "333333333333333333333333333333333333333333333333333333333333333"),
 			BlockNumber:      uint64(1000 + i),
 			BlockHash:        common.HexToHash("0xddd"),
@@ -349,7 +351,7 @@ func TestGetSetCodeTransactionCount(t *testing.T) {
 
 	// Add some records
 	for i := 0; i < 7; i++ {
-		record := &SetCodeAuthorizationRecord{
+		record := &port.SetCodeAuthorizationRecord{
 			TxHash:           common.HexToHash("0x" + string(rune('a'+i)) + "444444444444444444444444444444444444444444444444444444444444444"),
 			BlockNumber:      uint64(2000 + i),
 			BlockHash:        common.HexToHash("0xeee"),
@@ -381,7 +383,7 @@ func TestParseDelegation(t *testing.T) {
 	}{
 		{
 			name:     "valid delegation",
-			code:     AddressToDelegation(common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")),
+			code:     port.AddressToDelegation(common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")),
 			wantAddr: common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678"),
 			wantOk:   true,
 		},
@@ -413,7 +415,7 @@ func TestParseDelegation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			addr, ok := ParseDelegation(tt.code)
+			addr, ok := port.ParseDelegation(tt.code)
 			assert.Equal(t, tt.wantOk, ok)
 			if tt.wantOk {
 				assert.Equal(t, tt.wantAddr, addr)
@@ -424,21 +426,21 @@ func TestParseDelegation(t *testing.T) {
 
 func TestAddressToDelegation(t *testing.T) {
 	addr := common.HexToAddress("0xabcdef1234567890abcdef1234567890abcdef12")
-	code := AddressToDelegation(addr)
+	code := port.AddressToDelegation(addr)
 
 	// Check length
-	assert.Equal(t, DelegationCodeLength, len(code))
+	assert.Equal(t, port.DelegationCodeLength, len(code))
 
 	// Check prefix
-	assert.Equal(t, DelegationPrefix[0], code[0])
-	assert.Equal(t, DelegationPrefix[1], code[1])
-	assert.Equal(t, DelegationPrefix[2], code[2])
+	assert.Equal(t, port.DelegationPrefix[0], code[0])
+	assert.Equal(t, port.DelegationPrefix[1], code[1])
+	assert.Equal(t, port.DelegationPrefix[2], code[2])
 
 	// Check address
 	assert.Equal(t, addr.Bytes(), code[3:])
 
 	// Verify round-trip
-	parsed, ok := ParseDelegation(code)
+	parsed, ok := port.ParseDelegation(code)
 	assert.True(t, ok)
 	assert.Equal(t, addr, parsed)
 }
@@ -447,10 +449,10 @@ func TestIsDelegation(t *testing.T) {
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 	// Valid delegation
-	assert.True(t, IsDelegation(AddressToDelegation(addr)))
+	assert.True(t, port.IsDelegation(port.AddressToDelegation(addr)))
 
 	// Not a delegation
-	assert.False(t, IsDelegation([]byte{0x60, 0x80}))
-	assert.False(t, IsDelegation(nil))
-	assert.False(t, IsDelegation([]byte{}))
+	assert.False(t, port.IsDelegation([]byte{0x60, 0x80}))
+	assert.False(t, port.IsDelegation(nil))
+	assert.False(t, port.IsDelegation([]byte{}))
 }

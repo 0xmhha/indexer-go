@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 func TestPebbleStorage_FeeDelegationTxMeta(t *testing.T) {
@@ -26,7 +28,7 @@ func TestPebbleStorage_FeeDelegationTxMeta(t *testing.T) {
 	feePayer := common.HexToAddress("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 	txHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 
-	meta := &FeeDelegationTxMeta{
+	meta := &port.FeeDelegationTxMeta{
 		TxHash:       txHash,
 		BlockNumber:  100,
 		OriginalType: 22,
@@ -66,7 +68,7 @@ func TestPebbleStorage_FeeDelegationTxMeta(t *testing.T) {
 
 	t.Run("GetByFeePayer", func(t *testing.T) {
 		// Store another tx from the same fee payer
-		meta2 := &FeeDelegationTxMeta{
+		meta2 := &port.FeeDelegationTxMeta{
 			TxHash:       common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"),
 			BlockNumber:  200,
 			OriginalType: 22,

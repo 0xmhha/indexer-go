@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -15,7 +16,7 @@ import (
 // ============================================================================
 
 // GetGasStatsByBlockRange returns gas usage statistics for a block range
-func (s *PebbleStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*GasStats, error) {
+func (s *PebbleStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*port.GasStats, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -24,7 +25,7 @@ func (s *PebbleStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, 
 		return nil, fmt.Errorf("fromBlock (%d) cannot be greater than toBlock (%d)", fromBlock, toBlock)
 	}
 
-	stats := &GasStats{
+	stats := &port.GasStats{
 		TotalGasUsed:     0,
 		TotalGasLimit:    0,
 		AverageGasUsed:   0,
@@ -81,7 +82,7 @@ func (s *PebbleStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, 
 }
 
 // GetGasStatsByAddress returns gas usage statistics for a specific address
-func (s *PebbleStorage) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*AddressGasStats, error) {
+func (s *PebbleStorage) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*port.AddressGasStats, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -90,7 +91,7 @@ func (s *PebbleStorage) GetGasStatsByAddress(ctx context.Context, addr common.Ad
 		return nil, fmt.Errorf("fromBlock (%d) cannot be greater than toBlock (%d)", fromBlock, toBlock)
 	}
 
-	stats := &AddressGasStats{
+	stats := &port.AddressGasStats{
 		Address:          addr,
 		TotalGasUsed:     0,
 		TransactionCount: 0,
@@ -142,7 +143,7 @@ func (s *PebbleStorage) GetGasStatsByAddress(ctx context.Context, addr common.Ad
 }
 
 // GetTopAddressesByGasUsed returns the top addresses by total gas used
-func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]AddressGasStats, error) {
+func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressGasStats, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -156,7 +157,7 @@ func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int,
 	}
 
 	// Map to track gas usage by address
-	addressMap := make(map[common.Address]*AddressGasStats)
+	addressMap := make(map[common.Address]*port.AddressGasStats)
 
 	// Iterate through blocks
 	for height := fromBlock; height <= toBlock; height++ {
@@ -182,7 +183,7 @@ func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int,
 
 				stats, exists := addressMap[sender]
 				if !exists {
-					stats = &AddressGasStats{
+					stats = &port.AddressGasStats{
 						Address:          sender,
 						TotalGasUsed:     0,
 						TransactionCount: 0,
@@ -206,7 +207,7 @@ func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int,
 	}
 
 	// Convert map to slice
-	result := make([]AddressGasStats, 0, len(addressMap))
+	result := make([]port.AddressGasStats, 0, len(addressMap))
 	for _, stats := range addressMap {
 		// Calculate average
 		if stats.TransactionCount > 0 {
@@ -233,7 +234,7 @@ func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int,
 }
 
 // GetTopAddressesByTxCount returns the top addresses by transaction count
-func (s *PebbleStorage) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]AddressActivityStats, error) {
+func (s *PebbleStorage) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressActivityStats, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -247,7 +248,7 @@ func (s *PebbleStorage) GetTopAddressesByTxCount(ctx context.Context, limit int,
 	}
 
 	// Map to track activity by address
-	addressMap := make(map[common.Address]*AddressActivityStats)
+	addressMap := make(map[common.Address]*port.AddressActivityStats)
 
 	// Iterate through blocks
 	for height := fromBlock; height <= toBlock; height++ {
@@ -273,7 +274,7 @@ func (s *PebbleStorage) GetTopAddressesByTxCount(ctx context.Context, limit int,
 
 				stats, exists := addressMap[sender]
 				if !exists {
-					stats = &AddressActivityStats{
+					stats = &port.AddressActivityStats{
 						Address:            sender,
 						TransactionCount:   0,
 						TotalGasUsed:       0,
@@ -297,7 +298,7 @@ func (s *PebbleStorage) GetTopAddressesByTxCount(ctx context.Context, limit int,
 	}
 
 	// Convert map to slice
-	result := make([]AddressActivityStats, 0, len(addressMap))
+	result := make([]port.AddressActivityStats, 0, len(addressMap))
 	for _, stats := range addressMap {
 		result = append(result, *stats)
 	}
@@ -320,7 +321,7 @@ func (s *PebbleStorage) GetTopAddressesByTxCount(ctx context.Context, limit int,
 }
 
 // GetNetworkMetrics returns network activity metrics for a time range
-func (s *PebbleStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*NetworkMetrics, error) {
+func (s *PebbleStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*port.NetworkMetrics, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -329,7 +330,7 @@ func (s *PebbleStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime 
 		return nil, fmt.Errorf("fromTime (%d) cannot be greater than toTime (%d)", fromTime, toTime)
 	}
 
-	metrics := &NetworkMetrics{
+	metrics := &port.NetworkMetrics{
 		TPS:               0,
 		BlockTime:         0,
 		TotalBlocks:       0,

@@ -10,6 +10,8 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Undo records let the indexer roll back blocks after a chain reorganization
@@ -20,10 +22,6 @@ import (
 
 // UndoWindow is how many recent blocks can be rolled back.
 const UndoWindow = 128
-
-// ErrNoUndo means a block cannot be rolled back: its undo record was pruned,
-// never written, or the block used an operation that cannot be undone.
-var ErrNoUndo = errors.New("storage: no undo record for block")
 
 const prefixUndo = "/undo/"
 
@@ -97,10 +95,10 @@ func (tx *BlockTx) writeUndo() error {
 
 // undoBlock rolls back block h in one transaction, archiving it as an
 // orphan of reorg first (with the reorganization record when first).
-func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *Reorg, first bool) (*OrphanedBlock, error) {
+func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *port.Reorg, first bool) (*port.OrphanedBlock, error) {
 	raw, closer, err := s.kv(ctx).Get(UndoKey(h))
 	if errors.Is(err, pebble.ErrNotFound) {
-		return nil, fmt.Errorf("%w %d", ErrNoUndo, h)
+		return nil, fmt.Errorf("%w %d", port.ErrNoUndo, h)
 	}
 	if err != nil {
 		return nil, err
@@ -114,7 +112,7 @@ func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *Reorg, f
 		return nil, fmt.Errorf("decode undo record %d: %w", h, decErr)
 	}
 	if !rec.Complete {
-		return nil, fmt.Errorf("%w %d (incomplete)", ErrNoUndo, h)
+		return nil, fmt.Errorf("%w %d (incomplete)", port.ErrNoUndo, h)
 	}
 
 	txCtx, tx, err := s.beginBlock(ctx)
@@ -168,7 +166,7 @@ func (s *PebbleStorage) DropUndo(ctx context.Context, height uint64) error {
 func (s *PebbleStorage) checkUndo(ctx context.Context, h uint64) error {
 	raw, closer, err := s.kv(ctx).Get(UndoKey(h))
 	if errors.Is(err, pebble.ErrNotFound) {
-		return fmt.Errorf("%w %d", ErrNoUndo, h)
+		return fmt.Errorf("%w %d", port.ErrNoUndo, h)
 	}
 	if err != nil {
 		return err
@@ -182,7 +180,7 @@ func (s *PebbleStorage) checkUndo(ctx context.Context, h uint64) error {
 		return fmt.Errorf("decode undo record %d: %w", h, decErr)
 	}
 	if !rec.Complete {
-		return fmt.Errorf("%w %d (incomplete)", ErrNoUndo, h)
+		return fmt.Errorf("%w %d (incomplete)", port.ErrNoUndo, h)
 	}
 	return nil
 }

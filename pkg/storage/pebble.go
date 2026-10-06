@@ -10,6 +10,8 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // PebbleStorage implements Storage interface using PebbleDB
@@ -41,7 +43,7 @@ type PebbleStorage struct {
 
 	// Optional token metadata fetcher for on-demand fetching from chain
 	// When set, GetTokenBalances will fetch metadata from chain if not found in DB
-	tokenMetadataFetcher TokenMetadataFetcher
+	tokenMetadataFetcher port.TokenMetadataFetcher
 }
 
 // NewPebbleStorage creates a new PebbleDB storage
@@ -135,14 +137,14 @@ func (s *PebbleStorage) SetOrphanRetention(n uint64) {
 
 // SetTokenMetadataFetcher sets the token metadata fetcher for on-demand fetching
 // When set, GetTokenBalances will fetch metadata from chain if not found in DB
-func (s *PebbleStorage) SetTokenMetadataFetcher(fetcher TokenMetadataFetcher) {
+func (s *PebbleStorage) SetTokenMetadataFetcher(fetcher port.TokenMetadataFetcher) {
 	s.tokenMetadataFetcher = fetcher
 }
 
 // ensureNotClosed checks if storage is closed
 func (s *PebbleStorage) ensureNotClosed() error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 	return nil
 }
@@ -150,7 +152,7 @@ func (s *PebbleStorage) ensureNotClosed() error {
 // ensureNotReadOnly checks if storage is read-only
 func (s *PebbleStorage) ensureNotReadOnly() error {
 	if s.config.ReadOnly {
-		return ErrReadOnly
+		return port.ErrReadOnly
 	}
 	return nil
 }
@@ -283,7 +285,7 @@ func (s *PebbleStorage) Get(ctx context.Context, key []byte) ([]byte, error) {
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, err
 	}
@@ -389,14 +391,14 @@ func (s *PebbleStorage) Scan(ctx context.Context, lower, upper []byte, reverse b
 }
 
 // NewCursor implements KV.
-func (s *PebbleStorage) NewCursor(ctx context.Context, lower, upper []byte) (Cursor, error) {
+func (s *PebbleStorage) NewCursor(ctx context.Context, lower, upper []byte) (port.Cursor, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
 	return s.kv(ctx).NewIter(&pebble.IterOptions{LowerBound: lower, UpperBound: upper})
 }
 
-var _ KV = (*PebbleStorage)(nil)
+var _ port.KV = (*PebbleStorage)(nil)
 
 // PrefixEnd returns the smallest key greater than every key with the
 // prefix (the exclusive upper bound of a prefix scan), or nil if none.

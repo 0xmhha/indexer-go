@@ -7,12 +7,14 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ========== Contract Verification Reader Methods ==========
 
 // GetContractVerification returns verification data for a contract
-func (s *PebbleStorage) GetContractVerification(ctx context.Context, address common.Address) (*ContractVerification, error) {
+func (s *PebbleStorage) GetContractVerification(ctx context.Context, address common.Address) (*port.ContractVerification, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -21,7 +23,7 @@ func (s *PebbleStorage) GetContractVerification(ctx context.Context, address com
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get contract verification: %w", err)
 	}
@@ -31,7 +33,7 @@ func (s *PebbleStorage) GetContractVerification(ctx context.Context, address com
 	data := make([]byte, len(value))
 	copy(data, value)
 
-	var verification ContractVerification
+	var verification port.ContractVerification
 	if err := json.Unmarshal(data, &verification); err != nil {
 		return nil, fmt.Errorf("failed to decode contract verification: %w", err)
 	}
@@ -158,7 +160,7 @@ func (s *PebbleStorage) CountVerifiedContracts(ctx context.Context) (int, error)
 // ========== Contract Verification Writer Methods ==========
 
 // SetContractVerification stores contract verification data
-func (s *PebbleStorage) SetContractVerification(ctx context.Context, verification *ContractVerification) error {
+func (s *PebbleStorage) SetContractVerification(ctx context.Context, verification *port.ContractVerification) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}
@@ -203,7 +205,7 @@ func (s *PebbleStorage) DeleteContractVerification(ctx context.Context, address 
 	// Get verification data to find the index key
 	verification, err := s.GetContractVerification(ctx, address)
 	if err != nil {
-		if err == ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil // Already deleted
 		}
 		return fmt.Errorf("failed to get verification for deletion: %w", err)

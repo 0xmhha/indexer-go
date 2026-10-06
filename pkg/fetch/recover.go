@@ -7,8 +7,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Recover brings the database in line with the node and the configuration
@@ -36,7 +36,7 @@ func (f *Fetcher) Recover(ctx context.Context, enabled []string, backfill *featu
 // that height yet is not a reorg.
 func (f *Fetcher) recoverReorg(ctx context.Context) error {
 	latest, err := f.storage.GetLatestHeight(ctx)
-	if errors.Is(err, storagepkg.ErrNotFound) {
+	if errors.Is(err, port.ErrNotFound) {
 		return nil
 	}
 	if err != nil {
@@ -44,7 +44,7 @@ func (f *Fetcher) recoverReorg(ctx context.Context) error {
 	}
 	stored, err := f.storedBlockHash(ctx, latest)
 	if err != nil {
-		if errors.Is(err, storagepkg.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil
 		}
 		return err
@@ -69,7 +69,7 @@ func (f *Fetcher) recoverReorg(ctx context.Context) error {
 }
 
 func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []string, backfill *feature.Pipeline) error {
-	fs, ok := f.storage.(storagepkg.FeatureStateStore)
+	fs, ok := f.storage.(port.FeatureStateStore)
 	if !ok {
 		return nil
 	}
@@ -79,7 +79,7 @@ func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []string, backfil
 	}
 	latest, err := f.storage.GetLatestHeight(ctx)
 	hasData := err == nil
-	if err != nil && !errors.Is(err, storagepkg.ErrNotFound) {
+	if err != nil && !errors.Is(err, port.ErrNotFound) {
 		return err
 	}
 
@@ -104,13 +104,13 @@ func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []string, backfil
 		f.logger.Info("Backfilling feature", zap.String("feature", job.Feature), zap.Uint64("from", job.From), zap.Uint64("to", job.To))
 		name := job.Feature
 		progress := func(ctx context.Context, h uint64) error {
-			return fs.SetFeatureState(ctx, name, storagepkg.FeatureState{Through: h})
+			return fs.SetFeatureState(ctx, name, port.FeatureState{Through: h})
 		}
 		if err := f.Backfill(ctx, backfill.Only(name), job.From, job.To, progress); err != nil {
 			return fmt.Errorf("backfill %s: %w", name, err)
 		}
 		if err := f.Exec(ctx, "featureState", func(ctx context.Context) error {
-			return fs.SetFeatureState(ctx, name, storagepkg.FeatureState{Active: true})
+			return fs.SetFeatureState(ctx, name, port.FeatureState{Active: true})
 		}); err != nil {
 			return err
 		}
@@ -125,7 +125,7 @@ func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []string, backfil
 // background while ingest runs. Each block is one writer command, so live
 // indexing commands interleave with it. Progress is recorded with each
 // block; after a restart Recover resumes from the gap left.
-func (f *Fetcher) startOnlineBackfill(jobs []feature.BackfillJob, backfill *feature.Pipeline, fs storagepkg.FeatureStateStore) {
+func (f *Fetcher) startOnlineBackfill(jobs []feature.BackfillJob, backfill *feature.Pipeline, fs port.FeatureStateStore) {
 	ctx := f.background()
 	f.bgWG.Add(1)
 	go func() {
@@ -134,9 +134,9 @@ func (f *Fetcher) startOnlineBackfill(jobs []feature.BackfillJob, backfill *feat
 			name, to := job.Feature, job.To
 			f.logger.Info("Backfilling feature online", zap.String("feature", name), zap.Uint64("from", job.From), zap.Uint64("to", to))
 			progress := func(ctx context.Context, h uint64) error {
-				st := storagepkg.FeatureState{Active: true}
+				st := port.FeatureState{Active: true}
 				if h < to {
-					st.Gap = &storagepkg.BlockRange{From: h + 1, To: to}
+					st.Gap = &port.BlockRange{From: h + 1, To: to}
 				}
 				return fs.SetFeatureState(ctx, name, st)
 			}

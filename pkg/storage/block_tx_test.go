@@ -60,7 +60,7 @@ func TestBlockTxCommitPublishesWritesAndState(t *testing.T) {
 	require.Equal(t, uint64(9), h)
 
 	tx.Rollback() // no-op after Commit
-	require.ErrorIs(t, tx.Commit(), ErrBlockTxDone)
+	require.ErrorIs(t, tx.Commit(), port.ErrBlockTxDone)
 }
 
 func TestBlockTxRollbackLeavesNoTrace(t *testing.T) {

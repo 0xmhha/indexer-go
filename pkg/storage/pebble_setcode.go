@@ -11,31 +11,32 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Compile-time check to ensure PebbleStorage implements SetCode interfaces
-var _ SetCodeIndexReader = (*PebbleStorage)(nil)
-var _ SetCodeIndexWriter = (*PebbleStorage)(nil)
+var _ port.SetCodeIndexReader = (*PebbleStorage)(nil)
+var _ port.SetCodeIndexWriter = (*PebbleStorage)(nil)
 
 // ========== SetCode Authorization Read Operations ==========
 
 // GetSetCodeAuthorization retrieves a specific authorization by transaction hash and index.
-func (s *PebbleStorage) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*SetCodeAuthorizationRecord, error) {
+func (s *PebbleStorage) GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*port.SetCodeAuthorizationRecord, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := SetCodeAuthorizationKey(txHash, authIndex)
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get setcode authorization: %w", err)
 	}
 	defer closer.Close()
 
-	var record SetCodeAuthorizationRecord
+	var record port.SetCodeAuthorizationRecord
 	if err := json.Unmarshal(value, &record); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal setcode authorization: %w", err)
 	}
@@ -44,9 +45,9 @@ func (s *PebbleStorage) GetSetCodeAuthorization(ctx context.Context, txHash comm
 }
 
 // GetSetCodeAuthorizationsByTx retrieves all authorizations in a transaction.
-func (s *PebbleStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*SetCodeAuthorizationRecord, error) {
+func (s *PebbleStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*port.SetCodeAuthorizationRecord, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	prefix := SetCodeAuthorizationKeyPrefix(txHash)
@@ -60,9 +61,9 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash
 	}
 	defer iter.Close()
 
-	var records []*SetCodeAuthorizationRecord
+	var records []*port.SetCodeAuthorizationRecord
 	for iter.First(); iter.Valid(); iter.Next() {
-		var record SetCodeAuthorizationRecord
+		var record port.SetCodeAuthorizationRecord
 		if err := json.Unmarshal(iter.Value(), &record); err != nil {
 			s.logger.Warn("failed to unmarshal setcode authorization",
 				zap.String("key", string(iter.Key())),
@@ -81,9 +82,9 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash
 
 // GetSetCodeAuthorizationsByTarget retrieves authorizations where address is the target.
 // Results are ordered by block number descending (newest first).
-func (s *PebbleStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*SetCodeAuthorizationRecord, error) {
+func (s *PebbleStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	if limit <= 0 {
@@ -134,7 +135,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, ta
 	// Apply pagination
 	start := offset
 	if start >= len(txRefs) {
-		return []*SetCodeAuthorizationRecord{}, nil
+		return []*port.SetCodeAuthorizationRecord{}, nil
 	}
 	end := start + limit
 	if end > len(txRefs) {
@@ -142,7 +143,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, ta
 	}
 
 	// Fetch full records
-	records := make([]*SetCodeAuthorizationRecord, 0, end-start)
+	records := make([]*port.SetCodeAuthorizationRecord, 0, end-start)
 	for _, ref := range txRefs[start:end] {
 		record, err := s.GetSetCodeAuthorization(ctx, ref.txHash, ref.authIndex)
 		if err != nil {
@@ -159,9 +160,9 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, ta
 }
 
 // GetSetCodeAuthorizationsByAuthority retrieves authorizations where address is the authority.
-func (s *PebbleStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*SetCodeAuthorizationRecord, error) {
+func (s *PebbleStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	if limit <= 0 {
@@ -212,7 +213,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context,
 	// Apply pagination
 	start := offset
 	if start >= len(txRefs) {
-		return []*SetCodeAuthorizationRecord{}, nil
+		return []*port.SetCodeAuthorizationRecord{}, nil
 	}
 	end := start + limit
 	if end > len(txRefs) {
@@ -220,7 +221,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context,
 	}
 
 	// Fetch full records
-	records := make([]*SetCodeAuthorizationRecord, 0, end-start)
+	records := make([]*port.SetCodeAuthorizationRecord, 0, end-start)
 	for _, ref := range txRefs[start:end] {
 		record, err := s.GetSetCodeAuthorization(ctx, ref.txHash, ref.authIndex)
 		if err != nil {
@@ -237,9 +238,9 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context,
 }
 
 // GetSetCodeAuthorizationsByBlock retrieves all authorizations in a specific block.
-func (s *PebbleStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*SetCodeAuthorizationRecord, error) {
+func (s *PebbleStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*port.SetCodeAuthorizationRecord, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	prefix := SetCodeBlockIndexKeyPrefix(blockNumber)
@@ -253,7 +254,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blo
 	}
 	defer iter.Close()
 
-	var records []*SetCodeAuthorizationRecord
+	var records []*port.SetCodeAuthorizationRecord
 	for iter.First(); iter.Valid(); iter.Next() {
 		value := iter.Value()
 		if len(value) >= 32 {
@@ -283,9 +284,9 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blo
 }
 
 // GetAddressSetCodeStats retrieves SetCode statistics for an address.
-func (s *PebbleStorage) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*AddressSetCodeStats, error) {
+func (s *PebbleStorage) GetAddressSetCodeStats(ctx context.Context, address common.Address) (*port.AddressSetCodeStats, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := SetCodeStatsKey(address)
@@ -293,7 +294,7 @@ func (s *PebbleStorage) GetAddressSetCodeStats(ctx context.Context, address comm
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			// Return zero-value stats
-			return &AddressSetCodeStats{
+			return &port.AddressSetCodeStats{
 				Address: address,
 			}, nil
 		}
@@ -301,7 +302,7 @@ func (s *PebbleStorage) GetAddressSetCodeStats(ctx context.Context, address comm
 	}
 	defer closer.Close()
 
-	var stats AddressSetCodeStats
+	var stats port.AddressSetCodeStats
 	if err := json.Unmarshal(value, &stats); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal setcode stats: %w", err)
 	}
@@ -310,9 +311,9 @@ func (s *PebbleStorage) GetAddressSetCodeStats(ctx context.Context, address comm
 }
 
 // GetAddressDelegationState retrieves the current delegation state for an address.
-func (s *PebbleStorage) GetAddressDelegationState(ctx context.Context, address common.Address) (*AddressDelegationState, error) {
+func (s *PebbleStorage) GetAddressDelegationState(ctx context.Context, address common.Address) (*port.AddressDelegationState, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	key := SetCodeDelegationStateKey(address)
@@ -320,7 +321,7 @@ func (s *PebbleStorage) GetAddressDelegationState(ctx context.Context, address c
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			// Return state with no delegation
-			return &AddressDelegationState{
+			return &port.AddressDelegationState{
 				Address:       address,
 				HasDelegation: false,
 			}, nil
@@ -329,7 +330,7 @@ func (s *PebbleStorage) GetAddressDelegationState(ctx context.Context, address c
 	}
 	defer closer.Close()
 
-	var state AddressDelegationState
+	var state port.AddressDelegationState
 	if err := json.Unmarshal(value, &state); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal delegation state: %w", err)
 	}
@@ -340,7 +341,7 @@ func (s *PebbleStorage) GetAddressDelegationState(ctx context.Context, address c
 // GetSetCodeAuthorizationsCountByTarget returns the count of authorizations for a target address.
 func (s *PebbleStorage) GetSetCodeAuthorizationsCountByTarget(ctx context.Context, target common.Address) (int, error) {
 	if s.closed.Load() {
-		return 0, ErrClosed
+		return 0, port.ErrClosed
 	}
 
 	prefix := SetCodeTargetIndexKeyPrefix(target)
@@ -369,7 +370,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsCountByTarget(ctx context.Contex
 // GetSetCodeAuthorizationsCountByAuthority returns the count of authorizations by an authority address.
 func (s *PebbleStorage) GetSetCodeAuthorizationsCountByAuthority(ctx context.Context, authority common.Address) (int, error) {
 	if s.closed.Load() {
-		return 0, ErrClosed
+		return 0, port.ErrClosed
 	}
 
 	prefix := SetCodeAuthorityIndexKeyPrefix(authority)
@@ -398,7 +399,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsCountByAuthority(ctx context.Con
 // GetSetCodeTransactionCount returns the total count of SetCode authorizations indexed.
 func (s *PebbleStorage) GetSetCodeTransactionCount(ctx context.Context) (int, error) {
 	if s.closed.Load() {
-		return 0, ErrClosed
+		return 0, port.ErrClosed
 	}
 
 	prefix := SetCodeAuthKeyPrefix()
@@ -425,9 +426,9 @@ func (s *PebbleStorage) GetSetCodeTransactionCount(ctx context.Context) (int, er
 }
 
 // GetRecentSetCodeAuthorizations retrieves the most recent SetCode authorizations.
-func (s *PebbleStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*SetCodeAuthorizationRecord, error) {
+func (s *PebbleStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*port.SetCodeAuthorizationRecord, error) {
 	if s.closed.Load() {
-		return nil, ErrClosed
+		return nil, port.ErrClosed
 	}
 
 	if limit <= 0 {
@@ -448,7 +449,7 @@ func (s *PebbleStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limi
 	}
 	defer iter.Close()
 
-	var records []*SetCodeAuthorizationRecord
+	var records []*port.SetCodeAuthorizationRecord
 	count := 0
 
 	// Iterate in reverse order (newest first)
@@ -484,9 +485,9 @@ func (s *PebbleStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limi
 // ========== SetCode Authorization Write Operations ==========
 
 // SaveSetCodeAuthorization saves a SetCode authorization record.
-func (s *PebbleStorage) SaveSetCodeAuthorization(ctx context.Context, record *SetCodeAuthorizationRecord) error {
+func (s *PebbleStorage) SaveSetCodeAuthorization(ctx context.Context, record *port.SetCodeAuthorizationRecord) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	// Marshal record
@@ -549,9 +550,9 @@ func (s *PebbleStorage) SaveSetCodeAuthorization(ctx context.Context, record *Se
 }
 
 // SaveSetCodeAuthorizations saves multiple authorization records in a batch.
-func (s *PebbleStorage) SaveSetCodeAuthorizations(ctx context.Context, records []*SetCodeAuthorizationRecord) error {
+func (s *PebbleStorage) SaveSetCodeAuthorizations(ctx context.Context, records []*port.SetCodeAuthorizationRecord) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	if len(records) == 0 {
@@ -616,9 +617,9 @@ func (s *PebbleStorage) SaveSetCodeAuthorizations(ctx context.Context, records [
 }
 
 // UpdateAddressDelegationState updates the delegation state for an address.
-func (s *PebbleStorage) UpdateAddressDelegationState(ctx context.Context, state *AddressDelegationState) error {
+func (s *PebbleStorage) UpdateAddressDelegationState(ctx context.Context, state *port.AddressDelegationState) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	if state.UpdatedAt.IsZero() {
@@ -645,7 +646,7 @@ func (s *PebbleStorage) UpdateAddressDelegationState(ctx context.Context, state 
 // IncrementSetCodeStats increments SetCode statistics for an address.
 func (s *PebbleStorage) IncrementSetCodeStats(ctx context.Context, address common.Address, asTarget, asAuthority bool, blockNumber uint64) error {
 	if s.closed.Load() {
-		return ErrClosed
+		return port.ErrClosed
 	}
 
 	// Get current stats

@@ -14,12 +14,12 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // indexedBalanceAt returns the indexed balance of addr after block n and
 // whether the indexer has any record of addr up to n.
-func indexedBalanceAt(t *testing.T, r storage.HistoricalReader, addr common.Address, n uint64) (*big.Int, bool) {
+func indexedBalanceAt(t *testing.T, r port.HistoricalReader, addr common.Address, n uint64) (*big.Int, bool) {
 	t.Helper()
 	hist, err := r.GetBalanceHistory(context.Background(), addr, 0, n, 1<<20, 0)
 	require.NoError(t, err)
@@ -35,7 +35,7 @@ func indexedBalanceAt(t *testing.T, r storage.HistoricalReader, addr common.Addr
 // genesis.
 func requireChainBalances(t *testing.T, app *App, chain *testchain.Chain) {
 	t.Helper()
-	r := app.storage.(storage.HistoricalReader)
+	r := app.storage.(port.HistoricalReader)
 	head := chain.Head()
 	var mismatches []string
 	for _, addr := range chain.Accounts() {
@@ -89,7 +89,7 @@ func TestNativeBalancesMatchChainStableNet(t *testing.T) {
 func TestStableNetGovernanceEvents(t *testing.T) {
 	sc := testchain.BuildStableNet()
 	app := indexAll(t, sc.Chain)
-	r := systemcontracts.NewStore(app.storage.(storage.KV), nil)
+	r := systemcontracts.NewStore(app.storage.(port.KV), nil)
 	ctx := context.Background()
 
 	p, err := r.GetProposalById(ctx, testchain.GovMinter, big.NewInt(1))
@@ -110,7 +110,7 @@ func TestStableNetGovernanceEvents(t *testing.T) {
 func TestNativeTransfersAreNotTokenTransfers(t *testing.T) {
 	sc := testchain.BuildStableNet()
 	app := indexAll(t, sc.Chain)
-	r := app.storage.(storage.AddressIndexReader)
+	r := app.storage.(port.AddressIndexReader)
 	got, err := r.GetERC20TransfersByToken(context.Background(), testchain.NativeCoinAdapterAddress, 100, 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
@@ -121,7 +121,7 @@ func TestNativeTransfersAreNotTokenTransfers(t *testing.T) {
 func TestAddressStatsCountPaidGasAndMovedValue(t *testing.T) {
 	sc := testchain.BuildDefault()
 	app := indexAll(t, sc.Chain)
-	r := app.storage.(storage.HistoricalReader)
+	r := app.storage.(port.HistoricalReader)
 
 	for _, acct := range sc.Accounts[:3] {
 		sent, received, gas := new(big.Int), new(big.Int), new(big.Int)

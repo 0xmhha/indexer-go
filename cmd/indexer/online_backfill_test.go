@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // onlineFeature is an order-independent test feature: it records every
@@ -35,13 +35,13 @@ func (onlineFeature) Name() string           { return onlineFeatureName }
 func (onlineFeature) Requires() []string     { return nil }
 func (onlineFeature) OrderIndependent() bool { return true }
 func (onlineFeature) Register(r feature.Registrar) error {
-	w := r.Deps().Storage.(storage.FeeDelegationWriter)
+	w := r.Deps().Storage.(port.FeeDelegationWriter)
 	r.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
 		if int64(b.Model.Number) == onlineFailAt.Load() {
 			return errors.New("injected failure")
 		}
 		for _, tx := range b.Model.Transactions {
-			if err := w.SetFeeDelegationTxMeta(ctx, &storage.FeeDelegationTxMeta{
+			if err := w.SetFeeDelegationTxMeta(ctx, &port.FeeDelegationTxMeta{
 				TxHash: tx.Hash, BlockNumber: b.Model.Number, OriginalType: tx.Type, FeePayer: tx.From,
 				FeePayerV: big.NewInt(0), FeePayerR: big.NewInt(0), FeePayerS: big.NewInt(0),
 			}); err != nil {
@@ -61,9 +61,9 @@ func extendChain(sc *testchain.Scenario, n int) {
 	}
 }
 
-func featureState(t *testing.T, app *App, name string) storage.FeatureState {
+func featureState(t *testing.T, app *App, name string) port.FeatureState {
 	t.Helper()
-	states, err := app.storage.(storage.FeatureStateStore).FeatureStates(context.Background())
+	states, err := app.storage.(port.FeatureStateStore).FeatureStates(context.Background())
 	require.NoError(t, err)
 	return states[name]
 }

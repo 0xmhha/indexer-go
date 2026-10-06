@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 func TestContractCreation(t *testing.T) {
@@ -13,17 +15,17 @@ func TestContractCreation(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	addressWriter, ok := storage.(AddressIndexWriter)
+	addressWriter, ok := storage.(port.AddressIndexWriter)
 	if !ok {
 		t.Fatal("storage does not support address indexing")
 	}
-	addressReader, ok := storage.(AddressIndexReader)
+	addressReader, ok := storage.(port.AddressIndexReader)
 	if !ok {
 		t.Fatal("storage does not support address indexing")
 	}
 
 	t.Run("SaveAndGetContractCreation_Success", func(t *testing.T) {
-		creation := &ContractCreation{
+		creation := &port.ContractCreation{
 			ContractAddress: common.HexToAddress("0x1234567890123456789012345678901234567890"),
 			Creator:         common.HexToAddress("0x0987654321098765432109876543210987654321"),
 			TransactionHash: common.HexToHash("0xabcdef"),
@@ -55,13 +57,13 @@ func TestContractCreation(t *testing.T) {
 
 	t.Run("GetContractCreation_NotFound", func(t *testing.T) {
 		_, err := addressReader.GetContractCreation(ctx, common.HexToAddress("0xnonexistent"))
-		if err != ErrNotFound {
+		if err != port.ErrNotFound {
 			t.Errorf("expected ErrNotFound, got %v", err)
 		}
 	})
 
 	t.Run("SaveContractCreation_ZeroAddress", func(t *testing.T) {
-		creation := &ContractCreation{
+		creation := &port.ContractCreation{
 			ContractAddress: common.Address{},
 			Creator:         common.HexToAddress("0x0987654321098765432109876543210987654321"),
 			TransactionHash: common.HexToHash("0xabcdef"),
@@ -80,7 +82,7 @@ func TestContractCreation(t *testing.T) {
 
 		// Save multiple contracts by the same creator
 		for i := 0; i < 3; i++ {
-			creation := &ContractCreation{
+			creation := &port.ContractCreation{
 				ContractAddress: common.BigToAddress(big.NewInt(int64(1000 + i))),
 				Creator:         creator,
 				TransactionHash: common.BigToHash(big.NewInt(int64(100 + i))),
@@ -110,7 +112,7 @@ func TestContractCreation(t *testing.T) {
 
 		// Save 5 contracts
 		for i := 0; i < 5; i++ {
-			creation := &ContractCreation{
+			creation := &port.ContractCreation{
 				ContractAddress: common.BigToAddress(big.NewInt(int64(2000 + i))),
 				Creator:         creator,
 				TransactionHash: common.BigToHash(big.NewInt(int64(200 + i))),
@@ -159,17 +161,17 @@ func TestERC20Transfer(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	addressWriter, ok := storage.(AddressIndexWriter)
+	addressWriter, ok := storage.(port.AddressIndexWriter)
 	if !ok {
 		t.Fatal("storage does not support address indexing")
 	}
-	addressReader, ok := storage.(AddressIndexReader)
+	addressReader, ok := storage.(port.AddressIndexReader)
 	if !ok {
 		t.Fatal("storage does not support address indexing")
 	}
 
 	t.Run("SaveAndGetERC20Transfer_Success", func(t *testing.T) {
-		transfer := &ERC20Transfer{
+		transfer := &port.ERC20Transfer{
 			ContractAddress: common.BigToAddress(big.NewInt(123)),
 			From:            common.BigToAddress(big.NewInt(456)),
 			To:              common.BigToAddress(big.NewInt(789)),
@@ -200,7 +202,7 @@ func TestERC20Transfer(t *testing.T) {
 
 	t.Run("GetERC20Transfer_NotFound", func(t *testing.T) {
 		_, err := addressReader.GetERC20Transfer(ctx, common.HexToHash("0xnonexistent"), 0)
-		if err != ErrNotFound {
+		if err != port.ErrNotFound {
 			t.Errorf("expected ErrNotFound, got %v", err)
 		}
 	})
@@ -210,7 +212,7 @@ func TestERC20Transfer(t *testing.T) {
 
 		// Save multiple transfers for the same token
 		for i := 0; i < 3; i++ {
-			transfer := &ERC20Transfer{
+			transfer := &port.ERC20Transfer{
 				ContractAddress: token,
 				From:            common.BigToAddress(big.NewInt(int64(100 + i))),
 				To:              common.BigToAddress(big.NewInt(int64(200 + i))),
@@ -239,7 +241,7 @@ func TestERC20Transfer(t *testing.T) {
 	t.Run("GetERC20TransfersByAddress_From", func(t *testing.T) {
 		from := common.BigToAddress(big.NewInt(789))
 
-		transfer := &ERC20Transfer{
+		transfer := &port.ERC20Transfer{
 			ContractAddress: common.BigToAddress(big.NewInt(3000)),
 			From:            from,
 			To:              common.BigToAddress(big.NewInt(3001)),
@@ -268,7 +270,7 @@ func TestERC20Transfer(t *testing.T) {
 	t.Run("GetERC20TransfersByAddress_To", func(t *testing.T) {
 		to := common.BigToAddress(big.NewInt(999))
 
-		transfer := &ERC20Transfer{
+		transfer := &port.ERC20Transfer{
 			ContractAddress: common.BigToAddress(big.NewInt(4000)),
 			From:            common.BigToAddress(big.NewInt(4001)),
 			To:              to,
@@ -300,17 +302,17 @@ func TestERC721Transfer(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	addressWriter, ok := storage.(AddressIndexWriter)
+	addressWriter, ok := storage.(port.AddressIndexWriter)
 	if !ok {
 		t.Fatal("storage does not support address indexing")
 	}
-	addressReader, ok := storage.(AddressIndexReader)
+	addressReader, ok := storage.(port.AddressIndexReader)
 	if !ok {
 		t.Fatal("storage does not support address indexing")
 	}
 
 	t.Run("SaveAndGetERC721Transfer_Success", func(t *testing.T) {
-		transfer := &ERC721Transfer{
+		transfer := &port.ERC721Transfer{
 			ContractAddress: common.BigToAddress(big.NewInt(5000)),
 			From:            common.BigToAddress(big.NewInt(5001)),
 			To:              common.BigToAddress(big.NewInt(5002)),
@@ -341,7 +343,7 @@ func TestERC721Transfer(t *testing.T) {
 		tokenId := big.NewInt(123)
 		owner := common.BigToAddress(big.NewInt(6001))
 
-		transfer := &ERC721Transfer{
+		transfer := &port.ERC721Transfer{
 			ContractAddress: token,
 			From:            common.BigToAddress(big.NewInt(6002)),
 			To:              owner,
@@ -374,7 +376,7 @@ func TestERC721Transfer(t *testing.T) {
 		secondOwner := common.BigToAddress(big.NewInt(7002))
 
 		// First transfer
-		transfer1 := &ERC721Transfer{
+		transfer1 := &port.ERC721Transfer{
 			ContractAddress: token,
 			From:            common.Address{},
 			To:              firstOwner,
@@ -398,7 +400,7 @@ func TestERC721Transfer(t *testing.T) {
 		}
 
 		// Second transfer (ownership change)
-		transfer2 := &ERC721Transfer{
+		transfer2 := &port.ERC721Transfer{
 			ContractAddress: token,
 			From:            firstOwner,
 			To:              secondOwner,
@@ -427,7 +429,7 @@ func TestERC721Transfer(t *testing.T) {
 
 		// Save multiple transfers for the same NFT collection
 		for i := 0; i < 3; i++ {
-			transfer := &ERC721Transfer{
+			transfer := &port.ERC721Transfer{
 				ContractAddress: token,
 				From:            common.BigToAddress(big.NewInt(int64(8100 + i))),
 				To:              common.BigToAddress(big.NewInt(int64(8200 + i))),
@@ -459,11 +461,11 @@ func TestInternalTransaction(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	addressWriter, ok := storage.(AddressIndexWriter)
+	addressWriter, ok := storage.(port.AddressIndexWriter)
 	if !ok {
 		t.Fatal("storage does not support address indexing")
 	}
-	addressReader, ok := storage.(AddressIndexReader)
+	addressReader, ok := storage.(port.AddressIndexReader)
 	if !ok {
 		t.Fatal("storage does not support address indexing")
 	}
@@ -471,7 +473,7 @@ func TestInternalTransaction(t *testing.T) {
 	t.Run("SaveAndGetInternalTransactions_Success", func(t *testing.T) {
 		txHash := common.BigToHash(big.NewInt(9000))
 
-		internalTxs := []*InternalTransaction{
+		internalTxs := []*port.InternalTransaction{
 			{
 				TransactionHash: txHash,
 				From:            common.HexToAddress("0xfrom1"),
@@ -481,7 +483,7 @@ func TestInternalTransaction(t *testing.T) {
 				GasUsed:         21000,
 				Input:           []byte{},
 				Output:          []byte{},
-				Type:            InternalTxTypeCall,
+				Type:            port.InternalTxTypeCall,
 				Index:           0,
 				BlockNumber:     100,
 				Depth:           0,
@@ -495,7 +497,7 @@ func TestInternalTransaction(t *testing.T) {
 				GasUsed:         10000,
 				Input:           []byte{},
 				Output:          []byte{},
-				Type:            InternalTxTypeCall,
+				Type:            port.InternalTxTypeCall,
 				Index:           1,
 				BlockNumber:     100,
 				Depth:           1,
@@ -536,7 +538,7 @@ func TestInternalTransaction(t *testing.T) {
 		address := common.BigToAddress(big.NewInt(9500))
 
 		txHash := common.BigToHash(big.NewInt(9501))
-		internalTxs := []*InternalTransaction{
+		internalTxs := []*port.InternalTransaction{
 			{
 				TransactionHash: txHash,
 				From:            address,
@@ -546,7 +548,7 @@ func TestInternalTransaction(t *testing.T) {
 				GasUsed:         21000,
 				Input:           []byte{},
 				Output:          []byte{},
-				Type:            InternalTxTypeCall,
+				Type:            port.InternalTxTypeCall,
 				Index:           0,
 				BlockNumber:     200,
 				Depth:           0,

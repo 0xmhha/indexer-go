@@ -11,7 +11,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
-var _ FeatureStateStore = (*PebbleStorage)(nil)
+var _ port.FeatureStateStore = (*PebbleStorage)(nil)
 
 const prefixFeatureState = "/meta/features/"
 
@@ -19,7 +19,7 @@ const prefixFeatureState = "/meta/features/"
 func FeatureStateKey(name string) []byte { return []byte(prefixFeatureState + name) }
 
 // FeatureStates implements FeatureStateStore.
-func (s *PebbleStorage) FeatureStates(ctx context.Context) (map[string]FeatureState, error) {
+func (s *PebbleStorage) FeatureStates(ctx context.Context) (map[string]port.FeatureState, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -29,9 +29,9 @@ func (s *PebbleStorage) FeatureStates(ctx context.Context) (map[string]FeatureSt
 		return nil, fmt.Errorf("open feature state iterator: %w", err)
 	}
 	defer it.Close()
-	out := map[string]FeatureState{}
+	out := map[string]port.FeatureState{}
 	for it.First(); it.Valid(); it.Next() {
-		var st FeatureState
+		var st port.FeatureState
 		if err := json.Unmarshal(it.Value(), &st); err != nil {
 			return nil, fmt.Errorf("decode feature state %s: %w", it.Key(), err)
 		}
@@ -41,7 +41,7 @@ func (s *PebbleStorage) FeatureStates(ctx context.Context) (map[string]FeatureSt
 }
 
 // SetFeatureState implements FeatureStateStore.
-func (s *PebbleStorage) SetFeatureState(ctx context.Context, name string, st FeatureState) error {
+func (s *PebbleStorage) SetFeatureState(ctx context.Context, name string, st port.FeatureState) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}
@@ -54,11 +54,3 @@ func (s *PebbleStorage) SetFeatureState(ctx context.Context, name string, st Fea
 	}
 	return s.kv(ctx).Set(FeatureStateKey(name), b, pebble.Sync)
 }
-
-// Aliases of the ports moved to pkg/core/port (refactoring plan R1-1);
-// removed once every consumer uses the port package.
-type (
-	FeatureState      = port.FeatureState
-	BlockRange        = port.BlockRange
-	FeatureStateStore = port.FeatureStateStore
-)

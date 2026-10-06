@@ -152,7 +152,7 @@ func DecodeLog(data []byte) (*types.Log, error) {
 }
 
 // EncodeTxLocation encodes a TxLocation using RLP
-func EncodeTxLocation(loc *TxLocation) ([]byte, error) {
+func EncodeTxLocation(loc *port.TxLocation) ([]byte, error) {
 	if loc == nil {
 		return nil, fmt.Errorf("location cannot be nil")
 	}
@@ -166,12 +166,12 @@ func EncodeTxLocation(loc *TxLocation) ([]byte, error) {
 }
 
 // DecodeTxLocation decodes a TxLocation from RLP
-func DecodeTxLocation(data []byte) (*TxLocation, error) {
+func DecodeTxLocation(data []byte) (*port.TxLocation, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("data cannot be empty")
 	}
 
-	var loc TxLocation
+	var loc port.TxLocation
 	if err := rlp.DecodeBytes(data, &loc); err != nil {
 		return nil, fmt.Errorf("failed to decode location: %w", err)
 	}
@@ -181,7 +181,7 @@ func DecodeTxLocation(data []byte) (*TxLocation, error) {
 
 // EncodeBalanceSnapshot encodes a BalanceSnapshot
 // Format: blockNumber (8 bytes) + balance bytes length (8 bytes) + balance bytes + delta bytes length (8 bytes) + delta bytes + txHash (32 bytes)
-func EncodeBalanceSnapshot(snapshot *BalanceSnapshot) ([]byte, error) {
+func EncodeBalanceSnapshot(snapshot *port.BalanceSnapshot) ([]byte, error) {
 	if snapshot == nil {
 		return nil, fmt.Errorf("snapshot cannot be nil")
 	}
@@ -241,7 +241,7 @@ func EncodeBalanceSnapshot(snapshot *BalanceSnapshot) ([]byte, error) {
 }
 
 // DecodeBalanceSnapshot decodes a BalanceSnapshot
-func DecodeBalanceSnapshot(data []byte) (*BalanceSnapshot, error) {
+func DecodeBalanceSnapshot(data []byte) (*port.BalanceSnapshot, error) {
 	if len(data) < 8+8+1+8+32 {
 		return nil, fmt.Errorf("data too short: %d bytes", len(data))
 	}
@@ -304,7 +304,7 @@ func DecodeBalanceSnapshot(data []byte) (*BalanceSnapshot, error) {
 	var txHash common.Hash
 	copy(txHash[:], data[offset:offset+32])
 
-	return &BalanceSnapshot{
+	return &port.BalanceSnapshot{
 		BlockNumber: blockNumber,
 		Balance:     balance,
 		Delta:       delta,
@@ -327,9 +327,3 @@ func DecodeBigInt(data []byte) *big.Int {
 	}
 	return new(big.Int).SetBytes(data)
 }
-
-// Aliases of the ports moved to pkg/core/port (refactoring plan R1-1);
-// removed once every consumer uses the port package.
-type (
-	TxLocation = port.TxLocation
-)

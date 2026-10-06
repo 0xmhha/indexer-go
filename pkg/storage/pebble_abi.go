@@ -6,6 +6,8 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ========== ABI Reader Methods ==========
@@ -20,7 +22,7 @@ func (s *PebbleStorage) GetABI(ctx context.Context, address common.Address) ([]b
 	value, closer, err := s.kv(ctx).Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get ABI: %w", err)
 	}

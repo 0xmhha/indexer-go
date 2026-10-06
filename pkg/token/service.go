@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
@@ -154,7 +154,7 @@ func (a *TokenIndexerAdapter) IndexToken(ctx context.Context, address common.Add
 	return err
 }
 
-// StorageTokenMetadataFetcher implements storage.TokenMetadataFetcher interface
+// StorageTokenMetadataFetcher implements port.TokenMetadataFetcher interface
 // This adapter allows on-demand token metadata fetching from chain for GetTokenBalances
 type StorageTokenMetadataFetcher struct {
 	detector *Detector
@@ -162,7 +162,7 @@ type StorageTokenMetadataFetcher struct {
 	logger   *zap.Logger
 }
 
-// NewStorageTokenMetadataFetcher creates a fetcher that implements storage.TokenMetadataFetcher
+// NewStorageTokenMetadataFetcher creates a fetcher that implements port.TokenMetadataFetcher
 func NewStorageTokenMetadataFetcher(client EthClient, logger *zap.Logger) *StorageTokenMetadataFetcher {
 	if logger == nil {
 		logger = zap.NewNop()
@@ -204,9 +204,9 @@ func (w *ethClientWrapper) CodeAt(ctx context.Context, contract common.Address, 
 	return w.client.CodeAt(ctx, contract, blockNumber)
 }
 
-// FetchTokenMetadata implements storage.TokenMetadataFetcher interface
+// FetchTokenMetadata implements port.TokenMetadataFetcher interface
 // It detects if the contract is a token and fetches its metadata from chain
-func (f *StorageTokenMetadataFetcher) FetchTokenMetadata(ctx context.Context, address common.Address) (*storage.TokenMetadata, error) {
+func (f *StorageTokenMetadataFetcher) FetchTokenMetadata(ctx context.Context, address common.Address) (*port.TokenMetadata, error) {
 	// Detect token standard
 	detection := f.detector.DetectStandard(ctx, address)
 	if detection.Error != nil {
@@ -228,7 +228,7 @@ func (f *StorageTokenMetadataFetcher) FetchTokenMetadata(ctx context.Context, ad
 
 	// Create storage token metadata
 	now := time.Now()
-	metadata := &storage.TokenMetadata{
+	metadata := &port.TokenMetadata{
 		Address:            address,
 		Standard:           convertStandardToStorage(detection.Standard),
 		Name:               metadataResult.Name,
@@ -254,17 +254,17 @@ func (f *StorageTokenMetadataFetcher) FetchTokenMetadata(ctx context.Context, ad
 	return metadata, nil
 }
 
-// convertStandardToStorage converts token.TokenStandard to storage.TokenStandard
-func convertStandardToStorage(standard TokenStandard) storage.TokenStandard {
+// convertStandardToStorage converts token.TokenStandard to port.TokenStandard
+func convertStandardToStorage(standard TokenStandard) port.TokenStandard {
 	switch standard {
 	case StandardERC20:
-		return storage.TokenStandardERC20
+		return port.TokenStandardERC20
 	case StandardERC721:
-		return storage.TokenStandardERC721
+		return port.TokenStandardERC721
 	case StandardERC1155:
-		return storage.TokenStandardERC1155
+		return port.TokenStandardERC1155
 	default:
-		return storage.TokenStandardUnknown
+		return port.TokenStandardUnknown
 	}
 }
 

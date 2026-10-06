@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // TestBalanceTrackingFullFlow tests the complete balance tracking workflow
@@ -23,7 +25,7 @@ func TestBalanceTrackingFullFlow(t *testing.T) {
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 	// 1. Verify interface implementation
-	_, ok = interface{}(storage).(HistoricalWriter)
+	_, ok = interface{}(storage).(port.HistoricalWriter)
 	if !ok {
 		t.Fatal("PebbleStorage does not implement HistoricalWriter interface")
 	}
@@ -134,7 +136,7 @@ func TestInterfaceAssertion(t *testing.T) {
 	}
 
 	// Test HistoricalWriter
-	_, ok = interface{}(storage).(HistoricalWriter)
+	_, ok = interface{}(storage).(port.HistoricalWriter)
 	if !ok {
 		t.Error("PebbleStorage should implement HistoricalWriter")
 	} else {
@@ -142,7 +144,7 @@ func TestInterfaceAssertion(t *testing.T) {
 	}
 
 	// Test HistoricalReader
-	_, ok = interface{}(storage).(HistoricalReader)
+	_, ok = interface{}(storage).(port.HistoricalReader)
 	if !ok {
 		t.Error("PebbleStorage should implement HistoricalReader")
 	} else {
@@ -150,7 +152,7 @@ func TestInterfaceAssertion(t *testing.T) {
 	}
 
 	// Test HistoricalStorage (composite interface)
-	_, ok = interface{}(storage).(HistoricalStorage)
+	_, ok = interface{}(storage).(port.HistoricalStorage)
 	if !ok {
 		t.Error("PebbleStorage should implement HistoricalStorage")
 	} else {

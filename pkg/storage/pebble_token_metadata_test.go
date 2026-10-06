@@ -9,10 +9,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
-func createTestTokenMetadata(addr common.Address, name, symbol string, standard TokenStandard) *TokenMetadata {
-	return &TokenMetadata{
+func createTestTokenMetadata(addr common.Address, name, symbol string, standard port.TokenStandard) *port.TokenMetadata {
+	return &port.TokenMetadata{
 		Address:          addr,
 		Standard:         standard,
 		Name:             name,
@@ -35,7 +37,7 @@ func TestPebbleStorage_SaveAndGetTokenMetadata(t *testing.T) {
 	ctx := context.Background()
 
 	addr := common.HexToAddress("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-	meta := createTestTokenMetadata(addr, "TestToken", "TT", TokenStandardERC20)
+	meta := createTestTokenMetadata(addr, "TestToken", "TT", port.TokenStandardERC20)
 
 	t.Run("SaveAndGet", func(t *testing.T) {
 		err := storage.SaveTokenMetadata(ctx, meta)
@@ -48,18 +50,18 @@ func TestPebbleStorage_SaveAndGetTokenMetadata(t *testing.T) {
 		assert.Equal(t, "TestToken", got.Name)
 		assert.Equal(t, "TT", got.Symbol)
 		assert.Equal(t, uint8(18), got.Decimals)
-		assert.Equal(t, TokenStandardERC20, got.Standard)
+		assert.Equal(t, port.TokenStandardERC20, got.Standard)
 		assert.Equal(t, 0, got.TotalSupply.Cmp(big.NewInt(1000000)))
 	})
 
 	t.Run("GetNonExistent", func(t *testing.T) {
 		unknown := common.HexToAddress("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 		_, err := storage.GetTokenMetadata(ctx, unknown)
-		assert.Equal(t, ErrNotFound, err)
+		assert.Equal(t, port.ErrNotFound, err)
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		updated := createTestTokenMetadata(addr, "UpdatedToken", "UT", TokenStandardERC20)
+		updated := createTestTokenMetadata(addr, "UpdatedToken", "UT", port.TokenStandardERC20)
 		err := storage.SaveTokenMetadata(ctx, updated)
 		require.NoError(t, err)
 
@@ -78,7 +80,7 @@ func TestPebbleStorage_DeleteTokenMetadata(t *testing.T) {
 	ctx := context.Background()
 
 	addr := common.HexToAddress("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-	meta := createTestTokenMetadata(addr, "TestToken", "TT", TokenStandardERC20)
+	meta := createTestTokenMetadata(addr, "TestToken", "TT", port.TokenStandardERC20)
 
 	require.NoError(t, storage.SaveTokenMetadata(ctx, meta))
 
@@ -86,7 +88,7 @@ func TestPebbleStorage_DeleteTokenMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = storage.GetTokenMetadata(ctx, addr)
-	assert.Equal(t, ErrNotFound, err)
+	assert.Equal(t, port.ErrNotFound, err)
 
 	// Delete non-existent should not error
 	err = storage.DeleteTokenMetadata(ctx, addr)
@@ -103,15 +105,15 @@ func TestPebbleStorage_ListTokensByStandard(t *testing.T) {
 	// Create tokens of different standards
 	erc20_1 := createTestTokenMetadata(
 		common.HexToAddress("0x1111111111111111111111111111111111111111"),
-		"Token1", "T1", TokenStandardERC20,
+		"Token1", "T1", port.TokenStandardERC20,
 	)
 	erc20_2 := createTestTokenMetadata(
 		common.HexToAddress("0x2222222222222222222222222222222222222222"),
-		"Token2", "T2", TokenStandardERC20,
+		"Token2", "T2", port.TokenStandardERC20,
 	)
 	erc721 := createTestTokenMetadata(
 		common.HexToAddress("0x3333333333333333333333333333333333333333"),
-		"NFT1", "N1", TokenStandardERC721,
+		"NFT1", "N1", port.TokenStandardERC721,
 	)
 
 	require.NoError(t, storage.SaveTokenMetadata(ctx, erc20_1))
@@ -119,13 +121,13 @@ func TestPebbleStorage_ListTokensByStandard(t *testing.T) {
 	require.NoError(t, storage.SaveTokenMetadata(ctx, erc721))
 
 	t.Run("FilterByERC20", func(t *testing.T) {
-		tokens, err := storage.ListTokensByStandard(ctx, TokenStandardERC20, 10, 0)
+		tokens, err := storage.ListTokensByStandard(ctx, port.TokenStandardERC20, 10, 0)
 		require.NoError(t, err)
 		assert.Len(t, tokens, 2)
 	})
 
 	t.Run("FilterByERC721", func(t *testing.T) {
-		tokens, err := storage.ListTokensByStandard(ctx, TokenStandardERC721, 10, 0)
+		tokens, err := storage.ListTokensByStandard(ctx, port.TokenStandardERC721, 10, 0)
 		require.NoError(t, err)
 		assert.Len(t, tokens, 1)
 		assert.Equal(t, "NFT1", tokens[0].Name)
@@ -138,7 +140,7 @@ func TestPebbleStorage_ListTokensByStandard(t *testing.T) {
 	})
 
 	t.Run("WithPagination", func(t *testing.T) {
-		tokens, err := storage.ListTokensByStandard(ctx, TokenStandardERC20, 1, 0)
+		tokens, err := storage.ListTokensByStandard(ctx, port.TokenStandardERC20, 1, 0)
 		require.NoError(t, err)
 		assert.Len(t, tokens, 1)
 	})
@@ -159,11 +161,11 @@ func TestPebbleStorage_GetTokensCount(t *testing.T) {
 	// Add tokens
 	erc20 := createTestTokenMetadata(
 		common.HexToAddress("0x1111111111111111111111111111111111111111"),
-		"Token1", "T1", TokenStandardERC20,
+		"Token1", "T1", port.TokenStandardERC20,
 	)
 	erc721 := createTestTokenMetadata(
 		common.HexToAddress("0x2222222222222222222222222222222222222222"),
-		"NFT1", "N1", TokenStandardERC721,
+		"NFT1", "N1", port.TokenStandardERC721,
 	)
 	require.NoError(t, storage.SaveTokenMetadata(ctx, erc20))
 	require.NoError(t, storage.SaveTokenMetadata(ctx, erc721))
@@ -172,7 +174,7 @@ func TestPebbleStorage_GetTokensCount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 
-	count, err = storage.GetTokensCount(ctx, TokenStandardERC20)
+	count, err = storage.GetTokensCount(ctx, port.TokenStandardERC20)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 }
@@ -186,11 +188,11 @@ func TestPebbleStorage_SearchTokens(t *testing.T) {
 
 	token1 := createTestTokenMetadata(
 		common.HexToAddress("0x1111111111111111111111111111111111111111"),
-		"stablecoin", "USDT", TokenStandardERC20,
+		"stablecoin", "USDT", port.TokenStandardERC20,
 	)
 	token2 := createTestTokenMetadata(
 		common.HexToAddress("0x2222222222222222222222222222222222222222"),
-		"wrapped-eth", "WETH", TokenStandardERC20,
+		"wrapped-eth", "WETH", port.TokenStandardERC20,
 	)
 	require.NoError(t, storage.SaveTokenMetadata(ctx, token1))
 	require.NoError(t, storage.SaveTokenMetadata(ctx, token2))

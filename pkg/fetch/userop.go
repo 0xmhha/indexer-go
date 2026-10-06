@@ -10,14 +10,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/userop"
 )
 
 // UserOpIndexer defines the interface for indexing ERC-4337 UserOperations
 type UserOpIndexer interface {
-	storagepkg.UserOpIndexWriter
-	storagepkg.UserOpIndexReader
+	port.UserOpIndexWriter
+	port.UserOpIndexReader
 }
 
 // UserOpProcessor handles processing of ERC-4337 UserOperations from blocks

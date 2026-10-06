@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -49,4 +50,17 @@ type OrphanReader interface {
 	// GetOrphanedTransaction returns every orphaned block that held the
 	// transaction (a transaction can be orphaned more than once).
 	GetOrphanedTransaction(ctx context.Context, txHash common.Hash) ([]*OrphanedBlock, error)
+}
+
+// ErrNoUndo means a block cannot be rolled back: its undo record was pruned,
+// never written, or the block used an operation that cannot be undone.
+var ErrNoUndo = errors.New("storage: no undo record for block")
+
+// Rollbacker rolls indexed blocks back after a chain reorganization.
+type Rollbacker interface {
+	// RollbackTo undoes the indexed blocks above height to, newest first,
+	// archives them as orphans and returns the reorganization record. If a
+	// block in the range cannot be undone, nothing changes and the error
+	// wraps ErrNoUndo.
+	RollbackTo(ctx context.Context, to uint64) (*Reorg, error)
 }

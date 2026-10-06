@@ -7,12 +7,14 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ========== Log Reader Methods ==========
 
 // GetLogs returns logs matching the given filter
-func (s *PebbleStorage) GetLogs(ctx context.Context, filter *LogFilter) ([]*types.Log, error) {
+func (s *PebbleStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -30,7 +32,7 @@ func (s *PebbleStorage) GetLogs(ctx context.Context, filter *LogFilter) ([]*type
 	toBlock := filter.ToBlock
 	if toBlock == 0 {
 		latestHeight, err := s.GetLatestHeight(ctx)
-		if err != nil && err != ErrNotFound {
+		if err != nil && err != port.ErrNotFound {
 			return nil, fmt.Errorf("failed to get latest height: %w", err)
 		}
 		toBlock = latestHeight
@@ -66,7 +68,7 @@ func (s *PebbleStorage) GetLogs(ctx context.Context, filter *LogFilter) ([]*type
 		// Strategy 3: Scan all logs in block range
 		for blockNum := filter.FromBlock; blockNum <= toBlock; blockNum++ {
 			blockLogs, err := s.GetLogsByBlock(ctx, blockNum)
-			if err != nil && err != ErrNotFound {
+			if err != nil && err != port.ErrNotFound {
 				return nil, err
 			}
 			logs = append(logs, blockLogs...)

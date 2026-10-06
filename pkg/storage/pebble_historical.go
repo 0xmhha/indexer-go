@@ -11,11 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Ensure PebbleStorage implements HistoricalReader and HistoricalWriter
-var _ HistoricalReader = (*PebbleStorage)(nil)
-var _ HistoricalWriter = (*PebbleStorage)(nil)
+var _ port.HistoricalReader = (*PebbleStorage)(nil)
+var _ port.HistoricalWriter = (*PebbleStorage)(nil)
 
 // ============================================================================
 // Historical Data Methods
@@ -65,7 +66,7 @@ func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTi
 		// Get block by height
 		block, err := s.GetBlock(ctx, height)
 		if err != nil {
-			if err == ErrNotFound {
+			if err == port.ErrNotFound {
 				continue // Skip missing blocks
 			}
 			return nil, fmt.Errorf("failed to get block %d: %w", height, err)
@@ -127,20 +128,20 @@ func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint6
 	}
 
 	if !found {
-		return nil, ErrNotFound
+		return nil, port.ErrNotFound
 	}
 
 	return s.GetBlock(ctx, closestHeight)
 }
 
 // GetTransactionsByAddressFiltered returns filtered transactions for an address
-func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *TransactionFilter, limit, offset int) ([]*TransactionWithReceipt, error) {
+func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
 
 	if filter == nil {
-		filter = DefaultTransactionFilter()
+		filter = port.DefaultTransactionFilter()
 	}
 
 	if err := filter.Validate(); err != nil {
@@ -163,7 +164,7 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 	}
 	defer iter.Close()
 
-	var results []*TransactionWithReceipt
+	var results []*port.TransactionWithReceipt
 	count := 0
 
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -177,7 +178,7 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 		// Get transaction and location
 		tx, location, err := s.GetTransaction(ctx, txHash)
 		if err != nil {
-			if err == ErrNotFound {
+			if err == port.ErrNotFound {
 				continue
 			}
 			return nil, fmt.Errorf("failed to get transaction: %w", err)
@@ -186,7 +187,7 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 		// Get receipt
 		receipt, err := s.GetReceipt(ctx, txHash)
 		if err != nil {
-			if err == ErrNotFound {
+			if err == port.ErrNotFound {
 				// Continue without receipt (optional)
 				receipt = nil
 			} else {
@@ -210,7 +211,7 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 				continue
 			}
 
-			results = append(results, &TransactionWithReceipt{
+			results = append(results, &port.TransactionWithReceipt{
 				Transaction: tx,
 				Receipt:     receipt,
 				Location:    location,
@@ -288,7 +289,7 @@ func (s *PebbleStorage) getAddressBalance(ctx context.Context, addr common.Addre
 }
 
 // GetBalanceHistory returns the balance history for an address
-func (s *PebbleStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]BalanceSnapshot, error) {
+func (s *PebbleStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -311,7 +312,7 @@ func (s *PebbleStorage) GetBalanceHistory(ctx context.Context, addr common.Addre
 	}
 	defer iter.Close()
 
-	var snapshots []BalanceSnapshot
+	var snapshots []port.BalanceSnapshot
 	count := 0
 
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -354,7 +355,7 @@ func (s *PebbleStorage) GetBlockCount(ctx context.Context) (uint64, error) {
 	// Get latest block height
 	height, err := s.GetLatestHeight(ctx)
 	if err != nil {
-		if err == ErrNotFound {
+		if err == port.ErrNotFound {
 			return 0, nil // No blocks indexed yet
 		}
 		return 0, fmt.Errorf("failed to get latest height: %w", err)
@@ -415,7 +416,7 @@ func (s *PebbleStorage) InitializeTransactionCount(ctx context.Context) error {
 	for height := uint64(0); height <= latestHeight; height++ {
 		block, err := s.GetBlock(ctx, height)
 		if err != nil {
-			if err == ErrNotFound {
+			if err == port.ErrNotFound {
 				continue // Skip missing blocks
 			}
 			return fmt.Errorf("failed to get block %d: %w", height, err)
@@ -437,7 +438,7 @@ func (s *PebbleStorage) InitializeTransactionCount(ctx context.Context) error {
 }
 
 // GetTopMiners returns the top miners by block count
-func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]MinerStats, error) {
+func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.MinerStats, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -445,8 +446,8 @@ func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, 
 	// Get the latest height
 	latestHeight, err := s.GetLatestHeight(ctx)
 	if err != nil {
-		if err == ErrNotFound {
-			return []MinerStats{}, nil
+		if err == port.ErrNotFound {
+			return []port.MinerStats{}, nil
 		}
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
@@ -454,7 +455,7 @@ func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, 
 	// Determine block range
 	startBlock, endBlock, valid := determineBlockRange(fromBlock, toBlock, latestHeight)
 	if !valid {
-		return []MinerStats{}, nil
+		return []port.MinerStats{}, nil
 	}
 
 	// Aggregate miner stats
@@ -502,11 +503,11 @@ func (s *PebbleStorage) UpdateBalance(ctx context.Context, addr common.Address, 
 	// Calculate new balance
 	newBalance := new(big.Int).Add(currentBalance, delta)
 	if newBalance.Sign() < 0 {
-		return fmt.Errorf("%w: %s at block %d (%s %+d)", ErrNegativeBalance, addr.Hex(), blockNumber, currentBalance, delta)
+		return fmt.Errorf("%w: %s at block %d (%s %+d)", port.ErrNegativeBalance, addr.Hex(), blockNumber, currentBalance, delta)
 	}
 
 	// Create snapshot
-	snapshot := &BalanceSnapshot{
+	snapshot := &port.BalanceSnapshot{
 		BlockNumber: blockNumber,
 		Balance:     newBalance,
 		Delta:       delta,
@@ -577,12 +578,12 @@ func (s *PebbleStorage) SetBalance(ctx context.Context, addr common.Address, blo
 }
 
 // GetAddressStats returns aggregated statistics for an address
-func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address) (*AddressStats, error) {
+func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address) (*port.AddressStats, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
 
-	stats := &AddressStats{
+	stats := &port.AddressStats{
 		Address:            addr,
 		TotalGasCost:       big.NewInt(0),
 		TotalValueSent:     big.NewInt(0),

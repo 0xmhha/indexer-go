@@ -18,5 +18,5 @@ pkg/features/address 1
 pkg/features/token 7
 pkg/fetch 9
 pkg/multichain 2
-pkg/storage 45
+pkg/storage 37
 pkg/types/chain 11

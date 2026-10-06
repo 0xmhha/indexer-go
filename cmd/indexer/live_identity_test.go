@@ -23,8 +23,8 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // TestLiveStableNetIdentity indexes a running StableNet node and checks that
@@ -61,15 +61,15 @@ func TestLiveStableNetIdentity(t *testing.T) {
 	app := startAppAt(t, endpoint, dir, atomicMode)
 	require.NoError(t, app.fetcher.FetchRange(ctx, 0, head))
 
-	mr, ok := app.storage.(storage.ModelReader)
+	mr, ok := app.storage.(port.ModelReader)
 	require.True(t, ok)
 	gql, err := graphql.NewHandler(app.storage, zap.NewNop())
 	require.NoError(t, err)
 	rpcAPI := jsonrpc.NewHandler(app.storage, zap.NewNop())
 	defer rpcAPI.Close()
-	fdReader, ok := app.storage.(storage.FeeDelegationReader)
+	fdReader, ok := app.storage.(port.FeeDelegationReader)
 	require.True(t, ok)
-	logReader, ok := app.storage.(storage.LogReader)
+	logReader, ok := app.storage.(port.LogReader)
 	require.True(t, ok)
 
 	// wrong maps each hash that must not be stored to what it stands for.
@@ -153,7 +153,7 @@ func TestLiveStableNetIdentity(t *testing.T) {
 	// only the value to the sender. Compare the recorded change per
 	// transaction (whole-account balances also move by untracked income such
 	// as validator fees, so they are not comparable with the node).
-	hist, ok := app.storage.(storage.HistoricalReader)
+	hist, ok := app.storage.(port.HistoricalReader)
 	require.True(t, ok)
 	for _, c := range changes {
 		snaps, err := hist.GetBalanceHistory(ctx, c.addr, c.block, c.block, 100, 0)

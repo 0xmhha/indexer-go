@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ============================================================================
@@ -24,7 +25,7 @@ func (s *PebbleStorage) GetLatestHeight(ctx context.Context) (uint64, error) {
 	value, closer, err := s.kv(ctx).Get(LatestHeightKey())
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return 0, ErrNotFound
+			return 0, port.ErrNotFound
 		}
 		return 0, fmt.Errorf("failed to get latest height: %w", err)
 	}
@@ -69,7 +70,7 @@ func (s *PebbleStorage) GetBlock(ctx context.Context, height uint64) (*types.Blo
 	value, closer, err := s.kv(ctx).Get(BlockKey(height))
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
@@ -93,7 +94,7 @@ func (s *PebbleStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*
 	value, closer, err := s.kv(ctx).Get(BlockHashIndexKey(hash))
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, ErrNotFound
+			return nil, port.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get block hash index: %w", err)
 	}
@@ -173,7 +174,7 @@ func (s *PebbleStorage) SetBlockWithReceipts(ctx context.Context, block *types.B
 			return fmt.Errorf("failed to encode transaction: %w", err)
 		}
 
-		location := &TxLocation{
+		location := &port.TxLocation{
 			BlockHeight: height,
 			TxIndex:     uint64(txIndex),
 			BlockHash:   block.Hash(),
@@ -239,7 +240,7 @@ func (s *PebbleStorage) GetBlocks(ctx context.Context, startHeight, endHeight ui
 	for height := startHeight; height <= endHeight; height++ {
 		block, err := s.GetBlock(ctx, height)
 		if err != nil {
-			if err == ErrNotFound {
+			if err == port.ErrNotFound {
 				continue // Skip missing blocks
 			}
 			return nil, fmt.Errorf("failed to get block %d: %w", height, err)
@@ -283,7 +284,7 @@ func (s *PebbleStorage) DeleteBlock(ctx context.Context, height uint64) error {
 	// Get block to find its hash
 	block, err := s.GetBlock(ctx, height)
 	if err != nil {
-		if err == ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil // Already deleted
 		}
 		return fmt.Errorf("failed to get block for deletion: %w", err)
