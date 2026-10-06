@@ -6,6 +6,7 @@ pkg/api/graphql 21
 pkg/api/jsonrpc 7
 pkg/chains 15
 pkg/core/port 3
+pkg/core/port/porttest 4
 pkg/feature 2
 pkg/features/address 1
 pkg/features/token 7
