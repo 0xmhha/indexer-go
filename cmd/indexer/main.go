@@ -28,6 +28,7 @@ import (
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts/api"      // StableNet system contract API
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/compiler"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
@@ -503,7 +504,7 @@ func (a *App) completeStorageInit(ctx context.Context) error {
 	// Log latest indexed height
 	latestHeight, err := a.storage.GetLatestHeight(ctx)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			a.logger.Info("No blocks indexed yet, starting from configured height",
 				zap.Uint64("start_height", a.config.Indexer.StartHeight),
 			)
@@ -530,12 +531,12 @@ func (a *App) initStorage(ctx context.Context) error {
 // initSystemContractVerifications initializes system contract verifications
 func (a *App) initSystemContractVerifications(ctx context.Context) error {
 	// Cast storage to required interfaces
-	writer, ok := a.storage.(storage.ContractVerificationWriter)
+	writer, ok := a.storage.(port.ContractVerificationWriter)
 	if !ok {
 		return fmt.Errorf("storage does not support contract verification writes")
 	}
 
-	reader, ok := a.storage.(storage.ContractVerificationReader)
+	reader, ok := a.storage.(port.ContractVerificationReader)
 	if !ok {
 		return fmt.Errorf("storage does not support contract verification reads")
 	}
@@ -1110,7 +1111,7 @@ func (a *App) Shutdown() {
 		finalHeight, err := a.storage.GetLatestHeight(ctx)
 		if err == nil {
 			a.logger.Info("Final statistics", zap.Uint64("latest_height", finalHeight))
-		} else if !errors.Is(err, storage.ErrNotFound) {
+		} else if !errors.Is(err, port.ErrNotFound) {
 			a.logger.Warn("Failed to read final indexed height", zap.Error(err))
 		}
 	}

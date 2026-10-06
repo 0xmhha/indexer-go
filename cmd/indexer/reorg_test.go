@@ -15,13 +15,13 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 type rollbacker interface {
-	RollbackTo(ctx context.Context, to uint64) (*storage.Reorg, error)
+	RollbackTo(ctx context.Context, to uint64) (*port.Reorg, error)
 }
 
 // TestRollbackRestoresEarlierState indexes the reference scenario, rolls the
@@ -74,7 +74,7 @@ func TestRollbackWithoutUndoFails(t *testing.T) {
 		DropUndo(context.Context, uint64) error
 	}).DropUndo(ctx, 3))
 	_, err := app.storage.(rollbacker).RollbackTo(ctx, 1)
-	require.ErrorIs(t, err, storage.ErrNoUndo)
+	require.ErrorIs(t, err, port.ErrNoUndo)
 	latest, err := app.storage.GetLatestHeight(ctx)
 	require.NoError(t, err)
 	require.Equal(t, uint64(5), latest, "nothing was rolled back")
@@ -316,7 +316,7 @@ func TestReorgEventsAndOrphans(t *testing.T) {
 		}
 	}
 
-	orphans := app.storage.(storage.OrphanReader)
+	orphans := app.storage.(port.OrphanReader)
 	reorgs, err := orphans.GetReorgs(ctx, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, reorgs, 1)

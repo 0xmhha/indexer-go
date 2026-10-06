@@ -15,12 +15,12 @@ import (
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/wbft"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
 	"github.com/0xmhha/indexer-go/pkg/features/address"
 	"github.com/0xmhha/indexer-go/pkg/features/balance"
 	"github.com/0xmhha/indexer-go/pkg/features/token"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // failingFeature fails on one block, to check that feature handlers run
@@ -87,7 +87,7 @@ func TestFeatureFailureAbortsBlock(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), head)
 	_, err = app.storage.GetBlock(ctx, 3)
-	require.ErrorIs(t, err, storage.ErrNotFound)
+	require.ErrorIs(t, err, port.ErrNotFound)
 }
 
 // TestWBFTFeatureOnNonWBFTChain enables stablenet.wbft on the test chain,

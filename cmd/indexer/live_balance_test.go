@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // TestLiveBalances indexes the most recent blocks of a running node and
@@ -62,7 +62,7 @@ func TestLiveBalances(t *testing.T) {
 
 	// Every account with a recorded balance has a latest entry.
 	var accounts []common.Address
-	require.NoError(t, app.storage.(storage.KVStore).Iterate(ctx, []byte("/index/balance/"), func(key, _ []byte) bool {
+	require.NoError(t, app.storage.(port.KVStore).Iterate(ctx, []byte("/index/balance/"), func(key, _ []byte) bool {
 		if k := string(key); strings.HasSuffix(k, "/latest") {
 			accounts = append(accounts, common.HexToAddress(strings.TrimSuffix(strings.TrimPrefix(k, "/index/balance/"), "/latest")))
 		}
@@ -72,7 +72,7 @@ func TestLiveBalances(t *testing.T) {
 		t.Skipf("no transactions in blocks %d..%d; send some and rerun", from, head)
 	}
 
-	r := app.storage.(storage.HistoricalReader)
+	r := app.storage.(port.HistoricalReader)
 	var mismatches []string
 	snapshots := 0
 	for _, addr := range accounts {
