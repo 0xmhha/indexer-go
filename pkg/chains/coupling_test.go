@@ -23,10 +23,6 @@ var chainNeutral = []string{
 	"../internal",
 }
 
-// genericProfile is the Ethereum profile; the neutral model's conversions
-// from go-ethereum types (pkg/core/gethconv) use its rules.
-const genericProfile = "github.com/0xmhha/indexer-go/pkg/chains/evm"
-
 // TestChainNeutralPackagesDoNotImportProfiles keeps chain-specific code in
 // the profiles (chain profile design, section 3).
 func TestChainNeutralPackagesDoNotImportProfiles(t *testing.T) {
@@ -44,7 +40,7 @@ func TestChainNeutralPackagesDoNotImportProfiles(t *testing.T) {
 			}
 			for _, imp := range f.Imports {
 				p, _ := strconv.Unquote(imp.Path.Value)
-				if strings.HasPrefix(p, profiles) && p != genericProfile {
+				if strings.HasPrefix(p, profiles) {
 					t.Errorf("%s imports chain profile %s", path, p)
 				}
 			}

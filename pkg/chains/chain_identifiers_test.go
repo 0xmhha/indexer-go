@@ -26,6 +26,16 @@ const identifierLimits = "testdata/chain-identifiers.txt"
 // rules, system contracts and their governance.
 var chainSpecific = regexp.MustCompile(`(?i)wbft|istanbul|stablenet|stableone|stable_one|feedelegat|feepayer|fee_payer|anzeon|systemcontract|system_contract|syscontract|nativecoin|govminter|govvalidator|govmaster|govcouncil|accountmanager|blacklist|epochinfo|gastip`)
 
+// standardNames are Ethereum names that contain a chainSpecific word:
+// GasTipCap is the EIP-1559 priority fee cap, not StableNet's gas tip.
+var standardNames = regexp.MustCompile(`(?i)gastipcap`)
+
+// isChainSpecific reports whether a name or string names a StableNet
+// concept.
+func isChainSpecific(s string) bool {
+	return chainSpecific.MatchString(standardNames.ReplaceAllString(s, ""))
+}
+
 // TestChainIdentifierLimits counts chain-specific identifiers and strings
 // in the production code of every package outside pkg/chains/<chain>/ and
 // requires each count to equal its recorded limit: code that names a chain
@@ -63,12 +73,12 @@ func TestChainIdentifierLimits(t *testing.T) {
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.Ident:
-				if chainSpecific.MatchString(x.Name) {
+				if isChainSpecific(x.Name) {
 					counts[pkg]++
 				}
 			case *ast.BasicLit:
 				if x.Kind == token.STRING {
-					if s, err := strconv.Unquote(x.Value); err == nil && chainSpecific.MatchString(s) {
+					if s, err := strconv.Unquote(x.Value); err == nil && isChainSpecific(s) {
 						counts[pkg]++
 					}
 				}
