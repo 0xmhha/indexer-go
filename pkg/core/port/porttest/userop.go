@@ -255,7 +255,6 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("BundlesInOneBlock", func(t *testing.T) {
-		knownDefect(t, "two bundle transactions in one block overwrite each other's block/sender/bundler/paymaster index entries")
 		s := open[userOpStore](t, newStore)
 		// Two bundles of one bundler in block 9; each bundle's first
 		// operation has bundle index 0.

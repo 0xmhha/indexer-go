@@ -1617,7 +1617,7 @@ type Query {
   # List all module stats with pagination
   listModuleStats(pagination: PaginationInput): ModuleStatsConnection!
 
-  # Get total count of module events
+  # Get total count of module install records (one per account and module)
   moduleEventCount: Int!
 
   # ========== Notification Queries ==========

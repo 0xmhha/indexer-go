@@ -102,7 +102,7 @@ func (s *Schema) resolveInstalledModules(p graphql.ResolveParams) (interface{}, 
 		moduleType := parseModuleType(moduleTypeStr)
 		records, err = moduleReader.GetModulesByType(ctx, moduleType, limit, offset)
 	} else {
-		// Get recent module events
+		// Get recently installed modules
 		records, err = moduleReader.GetRecentModuleEvents(ctx, limit)
 	}
 
@@ -206,7 +206,7 @@ func (s *Schema) resolveListModuleStats(p graphql.ResolveParams) (interface{}, e
 	}, nil
 }
 
-// resolveModuleEventCount resolves the total count of module events
+// resolveModuleEventCount resolves the total count of module install records
 func (s *Schema) resolveModuleEventCount(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 

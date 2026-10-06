@@ -241,7 +241,6 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("ReinstallListedOnce", func(t *testing.T) {
-		knownDefect(t, "re-installing a module leaves the earlier install's account/type/block index entries, so the module is listed twice")
 		s := open[moduleStore](t, newStore)
 		require.NoError(t, s.SaveInstalledModule(ctx, moduleRecord(moduleAccount, 1, port.ModuleTypeValidator, 1)))
 		require.NoError(t, s.RemoveModule(ctx, moduleAccount, moduleAddr(1), 2, fixtureHash("module-remove-tx", 2)))
@@ -260,8 +259,9 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 		assert.Len(t, byType, 1, "ByType")
 	})
 
-	t.Run("UninstallIsAnEvent", func(t *testing.T) {
-		knownDefect(t, "RemoveModule records no module event: the event count and recent events ignore uninstalls")
+	t.Run("UninstallIsNotAnInstall", func(t *testing.T) {
+		// The module "events" of the port are install records: an
+		// uninstall marks its record inactive but adds no entry.
 		s := open[moduleStore](t, newStore)
 		require.NoError(t, s.SaveInstalledModule(ctx, moduleRecord(moduleAccount, 1, port.ModuleTypeValidator, 1)))
 		require.NoError(t, s.SaveInstalledModule(ctx, moduleRecord(moduleAccount, 2, port.ModuleTypeValidator, 5)))
@@ -269,12 +269,13 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 
 		n, err := s.GetModuleEventCount(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, 3, n, "two installs and one uninstall")
-		recent, err := s.GetRecentModuleEvents(ctx, 1)
+		assert.Equal(t, 2, n, "two install records; the uninstall is not counted")
+		recent, err := s.GetRecentModuleEvents(ctx, 10)
 		require.NoError(t, err)
-		require.Len(t, recent, 1)
-		assert.Equal(t, moduleAddr(1), recent[0].Module, "the uninstall at block 10 is the newest event")
-		assert.False(t, recent[0].Active)
+		require.Len(t, recent, 2)
+		assert.Equal(t, []uint64{5, 1}, moduleBlocks(recent), "listed at their install blocks, newest first")
+		assert.Equal(t, moduleAddr(1), recent[1].Module)
+		assert.False(t, recent[1].Active, "the uninstalled module's record is inactive")
 	})
 
 	t.Run("StatsReplaceAndList", func(t *testing.T) {
