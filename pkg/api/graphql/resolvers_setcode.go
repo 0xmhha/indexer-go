@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -27,11 +27,7 @@ func (s *Schema) resolveSetCodeAuthorization(p graphql.ResolveParams) (interface
 
 	txHash := common.HexToHash(txHashStr)
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := s.storage.(storagepkg.SetCodeIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support SetCode queries")
-	}
+	setCodeReader := s.storage
 
 	// Get all authorizations for this tx and find the one with matching index
 	records, err := setCodeReader.GetSetCodeAuthorizationsByTx(ctx, txHash)
@@ -63,11 +59,7 @@ func (s *Schema) resolveSetCodeAuthorizationsByTx(p graphql.ResolveParams) (inte
 
 	txHash := common.HexToHash(txHashStr)
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := s.storage.(storagepkg.SetCodeIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support SetCode queries")
-	}
+	setCodeReader := s.storage
 
 	records, err := setCodeReader.GetSetCodeAuthorizationsByTx(ctx, txHash)
 	if err != nil {
@@ -111,11 +103,7 @@ func (s *Schema) resolveSetCodeAuthorizationsByTarget(p graphql.ResolveParams) (
 		}
 	}
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := s.storage.(storagepkg.SetCodeIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support SetCode queries")
-	}
+	setCodeReader := s.storage
 
 	records, err := setCodeReader.GetSetCodeAuthorizationsByTarget(ctx, target, limit, offset)
 	if err != nil {
@@ -168,11 +156,7 @@ func (s *Schema) resolveSetCodeAuthorizationsByAuthority(p graphql.ResolveParams
 		}
 	}
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := s.storage.(storagepkg.SetCodeIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support SetCode queries")
-	}
+	setCodeReader := s.storage
 
 	records, err := setCodeReader.GetSetCodeAuthorizationsByAuthority(ctx, authority, limit, offset)
 	if err != nil {
@@ -210,11 +194,7 @@ func (s *Schema) resolveAddressSetCodeInfo(p graphql.ResolveParams) (interface{}
 
 	address := common.HexToAddress(addressStr)
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := s.storage.(storagepkg.SetCodeIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support SetCode queries")
-	}
+	setCodeReader := s.storage
 
 	// Get delegation state
 	delegationState, err := setCodeReader.GetAddressDelegationState(ctx, address)
@@ -276,11 +256,7 @@ func (s *Schema) resolveSetCodeTransactionsInBlock(p graphql.ResolveParams) (int
 		return nil, fmt.Errorf("invalid blockNumber format: %w", err)
 	}
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := s.storage.(storagepkg.SetCodeIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support SetCode queries")
-	}
+	setCodeReader := s.storage
 
 	records, err := setCodeReader.GetSetCodeAuthorizationsByBlock(ctx, blockNumber)
 	if err != nil {
@@ -340,11 +316,7 @@ func (s *Schema) resolveRecentSetCodeTransactions(p graphql.ResolveParams) (inte
 		}
 	}
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := s.storage.(storagepkg.SetCodeIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support SetCode queries")
-	}
+	setCodeReader := s.storage
 
 	records, err := setCodeReader.GetRecentSetCodeAuthorizations(ctx, limit*2)
 	if err != nil {
@@ -402,11 +374,7 @@ func (s *Schema) resolveRecentSetCodeTransactions(p graphql.ResolveParams) (inte
 func (s *Schema) resolveSetCodeTransactionCount(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := s.storage.(storagepkg.SetCodeIndexReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support SetCode queries")
-	}
+	setCodeReader := s.storage
 
 	count, err := setCodeReader.GetSetCodeTransactionCount(ctx)
 	if err != nil {
@@ -419,7 +387,7 @@ func (s *Schema) resolveSetCodeTransactionCount(p graphql.ResolveParams) (interf
 }
 
 // setCodeAuthorizationToMap converts a SetCodeAuthorizationRecord to a GraphQL map
-func (s *Schema) setCodeAuthorizationToMap(record *storagepkg.SetCodeAuthorizationRecord) map[string]interface{} {
+func (s *Schema) setCodeAuthorizationToMap(record *port.SetCodeAuthorizationRecord) map[string]interface{} {
 	result := map[string]interface{}{
 		"txHash":             record.TxHash.Hex(),
 		"blockNumber":        strconv.FormatUint(record.BlockNumber, 10),
@@ -440,7 +408,7 @@ func (s *Schema) setCodeAuthorizationToMap(record *storagepkg.SetCodeAuthorizati
 		result["authority"] = record.AuthorityAddress.Hex()
 	}
 
-	if record.Error != "" && record.Error != storagepkg.SetCodeErrNone {
+	if record.Error != "" && record.Error != port.SetCodeErrNone {
 		result["error"] = record.Error
 	}
 

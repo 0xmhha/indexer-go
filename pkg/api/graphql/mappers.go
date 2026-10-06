@@ -9,7 +9,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -24,7 +24,7 @@ func (s *Schema) blockToMap(block *model.Block) map[string]interface{} {
 	blockTimestamp := fmt.Sprintf("%d", block.Time)
 	transactions := make([]interface{}, len(block.Transactions))
 	for i, tx := range block.Transactions {
-		txMap := s.transactionToMap(tx, &storage.TxLocation{
+		txMap := s.transactionToMap(tx, &port.TxLocation{
 			BlockHeight: block.Number,
 			BlockHash:   block.Hash,
 			TxIndex:     uint64(i),
@@ -84,7 +84,7 @@ func (s *Schema) blockToMap(block *model.Block) map[string]interface{} {
 // transactionToMap converts a transaction to a GraphQL-friendly map. The
 // hash, type and sender are the ones the chain reports, so a StableNet fee
 // delegation transaction appears as type 22 under its own hash.
-func (s *Schema) transactionToMap(tx *model.Transaction, location *storage.TxLocation) map[string]interface{} {
+func (s *Schema) transactionToMap(tx *model.Transaction, location *port.TxLocation) map[string]interface{} {
 	if tx == nil {
 		return nil
 	}

@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"go.uber.org/zap"
 )
 
@@ -18,7 +18,7 @@ type Server struct {
 }
 
 // NewServer creates a new JSON-RPC server
-func NewServer(store storage.Storage, logger *zap.Logger) *Server {
+func NewServer(store port.QueryStore, logger *zap.Logger) *Server {
 	return &Server{
 		handler: NewHandler(store, logger),
 		logger:  logger,

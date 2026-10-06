@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -15,27 +15,27 @@ import (
 // mockAddressIndexStorage extends mockStorage with address indexing support
 type mockAddressIndexStorage struct {
 	*mockStorage
-	contractCreation         *storage.ContractCreation
+	contractCreation         *port.ContractCreation
 	contractsByCreator       []common.Address
-	internalTxs              []*storage.InternalTransaction
-	internalTxsByAddress     []*storage.InternalTransaction
-	erc20Transfer            *storage.ERC20Transfer
-	erc20TransfersByToken    []*storage.ERC20Transfer
-	erc20TransfersByAddress  []*storage.ERC20Transfer
-	erc721Transfer           *storage.ERC721Transfer
-	erc721TransfersByToken   []*storage.ERC721Transfer
-	erc721TransfersByAddress []*storage.ERC721Transfer
+	internalTxs              []*port.InternalTransaction
+	internalTxsByAddress     []*port.InternalTransaction
+	erc20Transfer            *port.ERC20Transfer
+	erc20TransfersByToken    []*port.ERC20Transfer
+	erc20TransfersByAddress  []*port.ERC20Transfer
+	erc721Transfer           *port.ERC721Transfer
+	erc721TransfersByToken   []*port.ERC721Transfer
+	erc721TransfersByAddress []*port.ERC721Transfer
 	erc721Owner              common.Address
 }
 
-func (m *mockAddressIndexStorage) GetContractCreation(ctx context.Context, contractAddress common.Address) (*storage.ContractCreation, error) {
+func (m *mockAddressIndexStorage) GetContractCreation(ctx context.Context, contractAddress common.Address) (*port.ContractCreation, error) {
 	if m.contractCreation != nil {
 		return m.contractCreation, nil
 	}
 	// For GetContractsByCreator tests, return a valid ContractCreation for any address
 	// Only if contractsByCreator is set (indicating we're testing the list functionality)
 	if m.contractsByCreator != nil {
-		return &storage.ContractCreation{
+		return &port.ContractCreation{
 			ContractAddress: contractAddress,
 			Creator:         common.HexToAddress("0xcreator123"),
 			TransactionHash: common.HexToHash("0xtx123"),
@@ -43,7 +43,7 @@ func (m *mockAddressIndexStorage) GetContractCreation(ctx context.Context, contr
 			Timestamp:       1234567890,
 		}, nil
 	}
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
 func (m *mockAddressIndexStorage) GetContractsByCreator(ctx context.Context, creator common.Address, limit, offset int) ([]common.Address, error) {
@@ -61,124 +61,124 @@ func (m *mockAddressIndexStorage) GetContractsByCreator(ctx context.Context, cre
 	return []common.Address{}, nil
 }
 
-func (m *mockAddressIndexStorage) GetInternalTransactions(ctx context.Context, txHash common.Hash) ([]*storage.InternalTransaction, error) {
+func (m *mockAddressIndexStorage) GetInternalTransactions(ctx context.Context, txHash common.Hash) ([]*port.InternalTransaction, error) {
 	if m.internalTxs != nil {
 		return m.internalTxs, nil
 	}
-	return []*storage.InternalTransaction{}, nil
+	return []*port.InternalTransaction{}, nil
 }
 
-func (m *mockAddressIndexStorage) GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*storage.InternalTransaction, error) {
+func (m *mockAddressIndexStorage) GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.InternalTransaction, error) {
 	if m.internalTxsByAddress != nil {
 		start := offset
 		end := offset + limit
 		if start >= len(m.internalTxsByAddress) {
-			return []*storage.InternalTransaction{}, nil
+			return []*port.InternalTransaction{}, nil
 		}
 		if end > len(m.internalTxsByAddress) {
 			end = len(m.internalTxsByAddress)
 		}
 		return m.internalTxsByAddress[start:end], nil
 	}
-	return []*storage.InternalTransaction{}, nil
+	return []*port.InternalTransaction{}, nil
 }
 
-func (m *mockAddressIndexStorage) GetERC20Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*storage.ERC20Transfer, error) {
+func (m *mockAddressIndexStorage) GetERC20Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*port.ERC20Transfer, error) {
 	if m.erc20Transfer != nil {
 		return m.erc20Transfer, nil
 	}
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
-func (m *mockAddressIndexStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*storage.ERC20Transfer, error) {
+func (m *mockAddressIndexStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC20Transfer, error) {
 	if m.erc20TransfersByToken != nil {
 		start := offset
 		end := offset + limit
 		if start >= len(m.erc20TransfersByToken) {
-			return []*storage.ERC20Transfer{}, nil
+			return []*port.ERC20Transfer{}, nil
 		}
 		if end > len(m.erc20TransfersByToken) {
 			end = len(m.erc20TransfersByToken)
 		}
 		return m.erc20TransfersByToken[start:end], nil
 	}
-	return []*storage.ERC20Transfer{}, nil
+	return []*port.ERC20Transfer{}, nil
 }
 
-func (m *mockAddressIndexStorage) GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*storage.ERC20Transfer, error) {
+func (m *mockAddressIndexStorage) GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC20Transfer, error) {
 	if m.erc20TransfersByAddress != nil {
 		start := offset
 		end := offset + limit
 		if start >= len(m.erc20TransfersByAddress) {
-			return []*storage.ERC20Transfer{}, nil
+			return []*port.ERC20Transfer{}, nil
 		}
 		if end > len(m.erc20TransfersByAddress) {
 			end = len(m.erc20TransfersByAddress)
 		}
 		return m.erc20TransfersByAddress[start:end], nil
 	}
-	return []*storage.ERC20Transfer{}, nil
+	return []*port.ERC20Transfer{}, nil
 }
 
-func (m *mockAddressIndexStorage) GetERC721Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*storage.ERC721Transfer, error) {
+func (m *mockAddressIndexStorage) GetERC721Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*port.ERC721Transfer, error) {
 	if m.erc721Transfer != nil {
 		return m.erc721Transfer, nil
 	}
-	return nil, storage.ErrNotFound
+	return nil, port.ErrNotFound
 }
 
-func (m *mockAddressIndexStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*storage.ERC721Transfer, error) {
+func (m *mockAddressIndexStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC721Transfer, error) {
 	if m.erc721TransfersByToken != nil {
 		start := offset
 		end := offset + limit
 		if start >= len(m.erc721TransfersByToken) {
-			return []*storage.ERC721Transfer{}, nil
+			return []*port.ERC721Transfer{}, nil
 		}
 		if end > len(m.erc721TransfersByToken) {
 			end = len(m.erc721TransfersByToken)
 		}
 		return m.erc721TransfersByToken[start:end], nil
 	}
-	return []*storage.ERC721Transfer{}, nil
+	return []*port.ERC721Transfer{}, nil
 }
 
-func (m *mockAddressIndexStorage) GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*storage.ERC721Transfer, error) {
+func (m *mockAddressIndexStorage) GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC721Transfer, error) {
 	if m.erc721TransfersByAddress != nil {
 		start := offset
 		end := offset + limit
 		if start >= len(m.erc721TransfersByAddress) {
-			return []*storage.ERC721Transfer{}, nil
+			return []*port.ERC721Transfer{}, nil
 		}
 		if end > len(m.erc721TransfersByAddress) {
 			end = len(m.erc721TransfersByAddress)
 		}
 		return m.erc721TransfersByAddress[start:end], nil
 	}
-	return []*storage.ERC721Transfer{}, nil
+	return []*port.ERC721Transfer{}, nil
 }
 
 func (m *mockAddressIndexStorage) GetERC721Owner(ctx context.Context, tokenAddress common.Address, tokenId *big.Int) (common.Address, error) {
 	if m.erc721Owner != (common.Address{}) {
 		return m.erc721Owner, nil
 	}
-	return common.Address{}, storage.ErrNotFound
+	return common.Address{}, port.ErrNotFound
 }
 
-func (m *mockAddressIndexStorage) ListContracts(ctx context.Context, limit, offset int) ([]*storage.ContractCreation, error) {
-	return []*storage.ContractCreation{}, nil
+func (m *mockAddressIndexStorage) ListContracts(ctx context.Context, limit, offset int) ([]*port.ContractCreation, error) {
+	return []*port.ContractCreation{}, nil
 }
 
 func (m *mockAddressIndexStorage) GetContractsCount(ctx context.Context) (int, error) {
 	return 0, nil
 }
 
-func (m *mockAddressIndexStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*storage.NFTOwnership, error) {
-	return []*storage.NFTOwnership{}, nil
+func (m *mockAddressIndexStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*port.NFTOwnership, error) {
+	return []*port.NFTOwnership{}, nil
 }
 
 // Contract verification methods
-func (m *mockAddressIndexStorage) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
-	return nil, storage.ErrNotFound
+func (m *mockAddressIndexStorage) GetContractVerification(ctx context.Context, address common.Address) (*port.ContractVerification, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockAddressIndexStorage) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
@@ -193,7 +193,7 @@ func (m *mockAddressIndexStorage) CountVerifiedContracts(ctx context.Context) (i
 	return 0, nil
 }
 
-func (m *mockAddressIndexStorage) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+func (m *mockAddressIndexStorage) SetContractVerification(ctx context.Context, verification *port.ContractVerification) error {
 	return nil
 }
 
@@ -208,7 +208,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 	t.Run("GetContractCreation_Success", func(t *testing.T) {
 		store := &mockAddressIndexStorage{
 			mockStorage: &mockStorage{},
-			contractCreation: &storage.ContractCreation{
+			contractCreation: &port.ContractCreation{
 				ContractAddress: common.HexToAddress("0x1234567890123456789012345678901234567890"),
 				Creator:         common.HexToAddress("0x0987654321098765432109876543210987654321"),
 				TransactionHash: common.HexToHash("0xabcdef"),
@@ -337,7 +337,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 	t.Run("GetERC20Transfer_Success", func(t *testing.T) {
 		store := &mockAddressIndexStorage{
 			mockStorage: &mockStorage{},
-			erc20Transfer: &storage.ERC20Transfer{
+			erc20Transfer: &port.ERC20Transfer{
 				ContractAddress: common.HexToAddress("0xtoken"),
 				From:            common.HexToAddress("0xfrom"),
 				To:              common.HexToAddress("0xto"),
@@ -374,7 +374,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 	t.Run("GetERC20TransfersByToken_Success", func(t *testing.T) {
 		store := &mockAddressIndexStorage{
 			mockStorage: &mockStorage{},
-			erc20TransfersByToken: []*storage.ERC20Transfer{
+			erc20TransfersByToken: []*port.ERC20Transfer{
 				{
 					ContractAddress: common.HexToAddress("0xtoken"),
 					From:            common.HexToAddress("0xfrom1"),
@@ -422,7 +422,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 	t.Run("GetERC20TransfersByAddress_From", func(t *testing.T) {
 		store := &mockAddressIndexStorage{
 			mockStorage: &mockStorage{},
-			erc20TransfersByAddress: []*storage.ERC20Transfer{
+			erc20TransfersByAddress: []*port.ERC20Transfer{
 				{
 					ContractAddress: common.HexToAddress("0xtoken"),
 					From:            common.HexToAddress("0xfrom"),
@@ -460,7 +460,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 	t.Run("GetERC721Transfer_Success", func(t *testing.T) {
 		store := &mockAddressIndexStorage{
 			mockStorage: &mockStorage{},
-			erc721Transfer: &storage.ERC721Transfer{
+			erc721Transfer: &port.ERC721Transfer{
 				ContractAddress: common.HexToAddress("0xnft"),
 				From:            common.HexToAddress("0xfrom"),
 				To:              common.HexToAddress("0xto"),
@@ -528,7 +528,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 	t.Run("GetInternalTransactions_Success", func(t *testing.T) {
 		store := &mockAddressIndexStorage{
 			mockStorage: &mockStorage{},
-			internalTxs: []*storage.InternalTransaction{
+			internalTxs: []*port.InternalTransaction{
 				{
 					TransactionHash: common.HexToHash("0xtx123"),
 					From:            common.HexToAddress("0xfrom"),
@@ -538,7 +538,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 					GasUsed:         21000,
 					Input:           []byte{},
 					Output:          []byte{},
-					Type:            storage.InternalTxTypeCall,
+					Type:            port.InternalTxTypeCall,
 					Index:           0,
 					BlockNumber:     100,
 					Depth:           0,
@@ -570,7 +570,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 	t.Run("GetInternalTransactionsByAddress_Success", func(t *testing.T) {
 		store := &mockAddressIndexStorage{
 			mockStorage: &mockStorage{},
-			internalTxsByAddress: []*storage.InternalTransaction{
+			internalTxsByAddress: []*port.InternalTransaction{
 				{
 					TransactionHash: common.HexToHash("0xtx123"),
 					From:            common.HexToAddress("0xaddress"),
@@ -580,7 +580,7 @@ func TestAddressIndexingJSONRPCMethods(t *testing.T) {
 					GasUsed:         21000,
 					Input:           []byte{},
 					Output:          []byte{},
-					Type:            storage.InternalTxTypeCall,
+					Type:            port.InternalTxTypeCall,
 					Index:           0,
 					BlockNumber:     100,
 					Depth:           0,

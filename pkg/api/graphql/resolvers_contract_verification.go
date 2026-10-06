@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
@@ -56,16 +56,12 @@ func (s *Schema) resolveContractVerification(params graphql.ResolveParams) (inte
 
 	address := common.HexToAddress(addressStr)
 
-	// Cast storage to ContractVerificationReader
-	verificationReader, ok := s.storage.(storage.ContractVerificationReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support contract verification queries")
-	}
+	verificationReader := s.storage
 
 	// Get contract verification data
 	verification, err := verificationReader.GetContractVerification(ctx, address)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			// Return unverified contract result
 			return &ContractVerificationResponse{
 				Address:    address.Hex(),
@@ -97,12 +93,7 @@ func (s *Schema) resolveVerifyContract(params graphql.ResolveParams) (interface{
 		return nil, err
 	}
 
-	// Check storage and verifier availability
-	verificationWriter, err := s.getVerificationWriter()
-	if err != nil {
-		return nil, err
-	}
-
+	// Check verifier availability
 	if s.verifier == nil {
 		return nil, fmt.Errorf("contract verifier is not configured")
 	}
@@ -116,7 +107,7 @@ func (s *Schema) resolveVerifyContract(params graphql.ResolveParams) (interface{
 	}
 
 	// Store verification result
-	verification, err := s.storeVerificationResult(ctx, verificationWriter, vParams, address, result)
+	verification, err := s.storeVerificationResult(ctx, s.storage, vParams, address, result)
 	if err != nil {
 		return nil, err
 	}
@@ -193,15 +184,6 @@ func validateVerificationInputs(addressStr string) (common.Address, error) {
 	return common.HexToAddress(addressStr), nil
 }
 
-// getVerificationWriter checks if storage supports contract verification writes
-func (s *Schema) getVerificationWriter() (storage.ContractVerificationWriter, error) {
-	verificationWriter, ok := s.storage.(storage.ContractVerificationWriter)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support contract verification writes")
-	}
-	return verificationWriter, nil
-}
-
 // buildVerificationRequest creates a verification request from parameters
 func buildVerificationRequest(vParams *verificationParams, address common.Address) *verifier.VerificationRequest {
 	return &verifier.VerificationRequest{
@@ -239,12 +221,12 @@ func (s *Schema) executeVerification(ctx context.Context, address common.Address
 // storeVerificationResult stores the verification result in the database
 func (s *Schema) storeVerificationResult(
 	ctx context.Context,
-	writer storage.ContractVerificationWriter,
+	writer port.ContractVerificationWriter,
 	vParams *verificationParams,
 	address common.Address,
 	result *verifier.VerificationResult,
-) (*storage.ContractVerification, error) {
-	verification := &storage.ContractVerification{
+) (*port.ContractVerification, error) {
+	verification := &port.ContractVerification{
 		Address:              address,
 		IsVerified:           true,
 		Name:                 vParams.contractName,
@@ -268,8 +250,8 @@ func (s *Schema) storeVerificationResult(
 	return verification, nil
 }
 
-// toVerificationResponse converts storage.ContractVerification to GraphQL response
-func toVerificationResponse(verification *storage.ContractVerification) *ContractVerificationResponse {
+// toVerificationResponse converts port.ContractVerification to GraphQL response
+func toVerificationResponse(verification *port.ContractVerification) *ContractVerificationResponse {
 	return &ContractVerificationResponse{
 		Address:              verification.Address.Hex(),
 		IsVerified:           verification.IsVerified,

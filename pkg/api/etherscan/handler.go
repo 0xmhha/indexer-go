@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/compiler"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
@@ -19,7 +19,7 @@ import (
 
 // Handler handles Etherscan-compatible API requests
 type Handler struct {
-	storage  storage.Storage
+	storage  port.QueryStore
 	verifier verifier.Verifier
 	logger   *zap.Logger
 
@@ -45,7 +45,7 @@ type Response struct {
 }
 
 // NewHandler creates a new Etherscan API handler
-func NewHandler(store storage.Storage, v verifier.Verifier, logger *zap.Logger) *Handler {
+func NewHandler(store port.QueryStore, v verifier.Verifier, logger *zap.Logger) *Handler {
 	return &Handler{
 		storage:  store,
 		verifier: v,
@@ -231,11 +231,7 @@ func (h *Handler) processVerification(
 	}
 
 	// Store verification result
-	verificationWriter, ok := h.storage.(storage.ContractVerificationWriter)
-	if !ok {
-		h.updateJobStatus(job, "Fail", "Storage does not support verification writes")
-		return
-	}
+	verificationWriter := h.storage
 
 	// Extract contract name from "path/to/file.sol:ContractName" format
 	storedName := contractName
@@ -243,7 +239,7 @@ func (h *Handler) processVerification(
 		storedName = contractName[idx+1:]
 	}
 
-	verification := &storage.ContractVerification{
+	verification := &port.ContractVerification{
 		Address:              address,
 		IsVerified:           true,
 		Name:                 storedName,
@@ -327,15 +323,11 @@ func (h *Handler) handleGetABI(w http.ResponseWriter, r *http.Request) {
 	address := common.HexToAddress(addressStr)
 
 	// Get verification data
-	reader, ok := h.storage.(storage.ContractVerificationReader)
-	if !ok {
-		h.sendError(w, "Storage does not support verification queries")
-		return
-	}
+	reader := h.storage
 
 	verification, err := reader.GetContractVerification(context.Background(), address)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			h.sendError(w, "Contract source code not verified")
 			return
 		}
@@ -368,15 +360,11 @@ func (h *Handler) handleGetSourceCode(w http.ResponseWriter, r *http.Request) {
 	address := common.HexToAddress(addressStr)
 
 	// Get verification data
-	reader, ok := h.storage.(storage.ContractVerificationReader)
-	if !ok {
-		h.sendError(w, "Storage does not support verification queries")
-		return
-	}
+	reader := h.storage
 
 	verification, err := reader.GetContractVerification(context.Background(), address)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			h.sendError(w, "Contract source code not verified")
 			return
 		}

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -27,11 +27,7 @@ func (h *Handler) getSetCodeAuthorization(ctx context.Context, params json.RawMe
 
 	txHash := common.HexToHash(p.TxHash)
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := h.storage.(storage.SetCodeIndexReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support SetCode queries", nil)
-	}
+	setCodeReader := h.storage
 
 	records, err := setCodeReader.GetSetCodeAuthorizationsByTx(ctx, txHash)
 	if err != nil {
@@ -67,11 +63,7 @@ func (h *Handler) getSetCodeAuthorizationsByTx(ctx context.Context, params json.
 
 	txHash := common.HexToHash(p.TxHash)
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := h.storage.(storage.SetCodeIndexReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support SetCode queries", nil)
-	}
+	setCodeReader := h.storage
 
 	records, err := setCodeReader.GetSetCodeAuthorizationsByTx(ctx, txHash)
 	if err != nil {
@@ -117,11 +109,7 @@ func (h *Handler) getSetCodeAuthorizationsByTarget(ctx context.Context, params j
 		offset = p.Offset
 	}
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := h.storage.(storage.SetCodeIndexReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support SetCode queries", nil)
-	}
+	setCodeReader := h.storage
 
 	records, err := setCodeReader.GetSetCodeAuthorizationsByTarget(ctx, target, limit, offset)
 	if err != nil {
@@ -172,11 +160,7 @@ func (h *Handler) getSetCodeAuthorizationsByAuthority(ctx context.Context, param
 		offset = p.Offset
 	}
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := h.storage.(storage.SetCodeIndexReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support SetCode queries", nil)
-	}
+	setCodeReader := h.storage
 
 	records, err := setCodeReader.GetSetCodeAuthorizationsByAuthority(ctx, authority, limit, offset)
 	if err != nil {
@@ -215,11 +199,7 @@ func (h *Handler) getAddressSetCodeInfo(ctx context.Context, params json.RawMess
 
 	address := common.HexToAddress(p.Address)
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := h.storage.(storage.SetCodeIndexReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support SetCode queries", nil)
-	}
+	setCodeReader := h.storage
 
 	// Get delegation state
 	delegationState, err := setCodeReader.GetAddressDelegationState(ctx, address)
@@ -296,11 +276,7 @@ func (h *Handler) getSetCodeTransactionsInBlock(ctx context.Context, params json
 		return nil, NewError(InvalidParams, "block number must be a string or number", nil)
 	}
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := h.storage.(storage.SetCodeIndexReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support SetCode queries", nil)
-	}
+	setCodeReader := h.storage
 
 	records, err := setCodeReader.GetSetCodeAuthorizationsByBlock(ctx, blockNumber)
 	if err != nil {
@@ -349,11 +325,7 @@ func (h *Handler) getRecentSetCodeTransactions(ctx context.Context, params json.
 		limit = p.Limit
 	}
 
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := h.storage.(storage.SetCodeIndexReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support SetCode queries", nil)
-	}
+	setCodeReader := h.storage
 
 	records, err := setCodeReader.GetRecentSetCodeAuthorizations(ctx, limit*2)
 	if err != nil {
@@ -395,11 +367,7 @@ func (h *Handler) getRecentSetCodeTransactions(ctx context.Context, params json.
 
 // getSetCodeTransactionCount returns the total count of SetCode transactions
 func (h *Handler) getSetCodeTransactionCount(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	// Cast storage to SetCodeIndexReader
-	setCodeReader, ok := h.storage.(storage.SetCodeIndexReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support SetCode queries", nil)
-	}
+	setCodeReader := h.storage
 
 	count, err := setCodeReader.GetSetCodeTransactionCount(ctx)
 	if err != nil {
@@ -414,7 +382,7 @@ func (h *Handler) getSetCodeTransactionCount(ctx context.Context, params json.Ra
 }
 
 // setCodeAuthorizationToJSON converts a SetCodeAuthorizationRecord to JSON format
-func (h *Handler) setCodeAuthorizationToJSON(record *storage.SetCodeAuthorizationRecord) map[string]interface{} {
+func (h *Handler) setCodeAuthorizationToJSON(record *port.SetCodeAuthorizationRecord) map[string]interface{} {
 	result := map[string]interface{}{
 		"txHash":             record.TxHash.Hex(),
 		"blockNumber":        strconv.FormatUint(record.BlockNumber, 10),
@@ -435,7 +403,7 @@ func (h *Handler) setCodeAuthorizationToJSON(record *storage.SetCodeAuthorizatio
 		result["authority"] = record.AuthorityAddress.Hex()
 	}
 
-	if record.Error != "" && record.Error != storage.SetCodeErrNone {
+	if record.Error != "" && record.Error != port.SetCodeErrNone {
 		result["error"] = record.Error
 	}
 

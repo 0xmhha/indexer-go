@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/ethereum/go-ethereum/common"
@@ -24,24 +25,24 @@ import (
 
 type mockStorage struct {
 	storage.Storage // embedded nil - satisfies interface; only verification methods overridden
-	verifications   map[common.Address]*storage.ContractVerification
+	verifications   map[common.Address]*port.ContractVerification
 	setErr          error
 	getErr          error
 }
 
 func newMockStorage() *mockStorage {
 	return &mockStorage{
-		verifications: make(map[common.Address]*storage.ContractVerification),
+		verifications: make(map[common.Address]*port.ContractVerification),
 	}
 }
 
-func (m *mockStorage) GetContractVerification(_ context.Context, address common.Address) (*storage.ContractVerification, error) {
+func (m *mockStorage) GetContractVerification(_ context.Context, address common.Address) (*port.ContractVerification, error) {
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
 	v, ok := m.verifications[address]
 	if !ok {
-		return nil, storage.ErrNotFound
+		return nil, port.ErrNotFound
 	}
 	return v, nil
 }
@@ -62,7 +63,7 @@ func (m *mockStorage) CountVerifiedContracts(_ context.Context) (int, error) {
 	return len(m.verifications), nil
 }
 
-func (m *mockStorage) SetContractVerification(_ context.Context, v *storage.ContractVerification) error {
+func (m *mockStorage) SetContractVerification(_ context.Context, v *port.ContractVerification) error {
 	if m.setErr != nil {
 		return m.setErr
 	}
@@ -412,7 +413,7 @@ func TestHandleGetABI_NotVerified(t *testing.T) {
 func TestHandleGetABI_Verified(t *testing.T) {
 	stor := newMockStorage()
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
-	stor.verifications[addr] = &storage.ContractVerification{
+	stor.verifications[addr] = &port.ContractVerification{
 		Address:    addr,
 		IsVerified: true,
 		ABI:        `[{"type":"function","name":"foo"}]`,
@@ -433,7 +434,7 @@ func TestHandleGetABI_Verified(t *testing.T) {
 func TestHandleGetABI_VerifiedButNotVerifiedFlag(t *testing.T) {
 	stor := newMockStorage()
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
-	stor.verifications[addr] = &storage.ContractVerification{
+	stor.verifications[addr] = &port.ContractVerification{
 		Address:    addr,
 		IsVerified: false, // exists but not verified
 		ABI:        `[]`,
@@ -477,7 +478,7 @@ func TestHandleGetSourceCode_NotVerified(t *testing.T) {
 func TestHandleGetSourceCode_Verified(t *testing.T) {
 	stor := newMockStorage()
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
-	stor.verifications[addr] = &storage.ContractVerification{
+	stor.verifications[addr] = &port.ContractVerification{
 		Address:             addr,
 		IsVerified:          true,
 		Name:                "TestContract",

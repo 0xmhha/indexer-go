@@ -9,8 +9,8 @@ import (
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Extensions let packages outside the API, such as chain-specific code
@@ -42,7 +42,7 @@ func RegisterExtension(name string, fn func(*Extension)) {
 }
 
 // Storage returns the schema's storage.
-func (e *Extension) Storage() storage.Storage { return e.b.schema.storage }
+func (e *Extension) Storage() port.QueryStore { return e.b.schema.storage }
 
 // Logger returns the schema's logger.
 func (e *Extension) Logger() *zap.Logger { return e.b.schema.logger }

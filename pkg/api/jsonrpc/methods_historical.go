@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -76,11 +76,7 @@ func (h *Handler) getBlocksByTimeRange(ctx context.Context, params json.RawMessa
 		offset = *p.Offset
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := h.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support historical queries", nil)
-	}
+	histStorage := h.storage
 
 	blocks, err := histStorage.GetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset)
 	if err != nil {
@@ -136,15 +132,11 @@ func (h *Handler) getBlockByTimestamp(ctx context.Context, params json.RawMessag
 		return nil, NewError(InvalidParams, "timestamp must be a string or number", nil)
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := h.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support historical queries", nil)
-	}
+	histStorage := h.storage
 
 	block, err := histStorage.GetBlockByTimestamp(ctx, timestamp)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, NewError(InternalError, "block not found", nil)
 		}
 		h.logger.Error("failed to get block by timestamp",
@@ -197,11 +189,7 @@ func (h *Handler) getTransactionsByAddressFiltered(ctx context.Context, params j
 		offset = *p.Offset
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := h.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support historical queries", nil)
-	}
+	histStorage := h.storage
 
 	txsWithReceipts, err := histStorage.GetTransactionsByAddressFiltered(ctx, address, filter, limit, offset)
 	if err != nil {
@@ -265,11 +253,7 @@ func (h *Handler) getAddressBalance(ctx context.Context, params json.RawMessage)
 		}
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := h.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support historical queries", nil)
-	}
+	histStorage := h.storage
 
 	balance, err := histStorage.GetAddressBalance(ctx, address, blockNumber)
 	if err != nil {
@@ -354,11 +338,7 @@ func (h *Handler) getBalanceHistory(ctx context.Context, params json.RawMessage)
 		offset = *p.Offset
 	}
 
-	// Cast storage to HistoricalReader
-	histStorage, ok := h.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support historical queries", nil)
-	}
+	histStorage := h.storage
 
 	snapshots, err := histStorage.GetBalanceHistory(ctx, address, fromBlock, toBlock, limit, offset)
 	if err != nil {
@@ -407,11 +387,7 @@ func (h *Handler) getBalanceHistory(ctx context.Context, params json.RawMessage)
 
 // getBlockCount returns total block count
 func (h *Handler) getBlockCount(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	// Cast storage to HistoricalReader
-	histStorage, ok := h.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support historical queries", nil)
-	}
+	histStorage := h.storage
 
 	count, err := histStorage.GetBlockCount(ctx)
 	if err != nil {
@@ -426,11 +402,7 @@ func (h *Handler) getBlockCount(ctx context.Context, params json.RawMessage) (in
 
 // getTransactionCount returns total transaction count
 func (h *Handler) getTransactionCount(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	// Cast storage to HistoricalReader
-	histStorage, ok := h.storage.(storage.HistoricalReader)
-	if !ok {
-		return nil, NewError(InternalError, "storage does not support historical queries", nil)
-	}
+	histStorage := h.storage
 
 	count, err := histStorage.GetTransactionCount(ctx)
 	if err != nil {
@@ -443,10 +415,10 @@ func (h *Handler) getTransactionCount(ctx context.Context, params json.RawMessag
 	}, nil
 }
 
-// parseTransactionFilter parses filter parameters to storage.TransactionFilter
-func parseTransactionFilter(filter map[string]interface{}) (*storage.TransactionFilter, error) {
-	result := &storage.TransactionFilter{
-		TxType:      storage.TxTypeAll,
+// parseTransactionFilter parses filter parameters to port.TransactionFilter
+func parseTransactionFilter(filter map[string]interface{}) (*port.TransactionFilter, error) {
+	result := &port.TransactionFilter{
+		TxType:      port.TxTypeAll,
 		SuccessOnly: false,
 	}
 
@@ -518,7 +490,7 @@ func parseTransactionFilter(filter map[string]interface{}) (*storage.Transaction
 	if txTypeVal, ok := filter["txType"]; ok {
 		switch v := txTypeVal.(type) {
 		case float64:
-			result.TxType = storage.TransactionType(int(v))
+			result.TxType = port.TransactionType(int(v))
 		default:
 			return nil, fmt.Errorf("txType must be a number")
 		}

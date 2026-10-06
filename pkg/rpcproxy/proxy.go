@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -26,7 +26,7 @@ type Proxy struct {
 	logger         *zap.Logger
 	ethClient      *ethclient.Client
 	rpcClient      *rpc.Client
-	storage        storage.ContractVerificationReader
+	storage        port.ContractVerificationReader
 	cache          *Cache
 	keyBuilder     *CacheKeyBuilder
 	workerPool     *WorkerPool
@@ -44,7 +44,7 @@ type Proxy struct {
 func NewProxy(
 	ethClient *ethclient.Client,
 	rpcClient *rpc.Client,
-	storage storage.ContractVerificationReader,
+	storage port.ContractVerificationReader,
 	config *Config,
 	logger *zap.Logger,
 ) *Proxy {

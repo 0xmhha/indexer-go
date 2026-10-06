@@ -2,10 +2,8 @@ package graphql
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
@@ -37,11 +35,7 @@ func (s *Schema) resolveSearch(params graphql.ResolveParams) (interface{}, error
 		limit = limitArg
 	}
 
-	// Cast storage to SearchReader
-	searchReader, ok := s.storage.(storage.SearchReader)
-	if !ok {
-		return nil, fmt.Errorf("storage does not support search queries")
-	}
+	searchReader := s.storage
 
 	// Perform search
 	results, err := searchReader.Search(ctx, query, resultTypes, limit)
@@ -54,7 +48,7 @@ func (s *Schema) resolveSearch(params graphql.ResolveParams) (interface{}, error
 		return nil, err
 	}
 
-	// Convert storage.SearchResult to GraphQL format
+	// Convert port.SearchResult to GraphQL format
 	graphqlResults := make([]map[string]interface{}, len(results))
 	for i, result := range results {
 		// Convert metadata map to JSON string

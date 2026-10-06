@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -24,7 +25,7 @@ type tipSwapStore struct {
 	seen    []common.Hash
 }
 
-func (s *tipSwapStore) GetLogs(ctx context.Context, f *storage.LogFilter) ([]*types.Log, error) {
+func (s *tipSwapStore) GetLogs(ctx context.Context, f *port.LogFilter) ([]*types.Log, error) {
 	logs, err := s.PebbleStorage.GetLogs(ctx, f)
 	h, _ := hashAt(ctx, s.PebbleStorage, 2)
 	s.seen = append(s.seen, h)
@@ -63,7 +64,7 @@ func TestFilterPollRecordsTheTipItRead(t *testing.T) {
 	store := &tipSwapStore{PebbleStorage: db, t: t}
 	fm := NewFilterManager(ctx, time.Minute)
 	defer fm.Close()
-	id := fm.NewFilter(LogFilterType, &storage.LogFilter{}, 0, false)
+	id := fm.NewFilter(LogFilterType, &port.LogFilter{}, 0, false)
 
 	_, height, hash, err := fm.GetLogsSinceLastPoll(ctx, store, id)
 	require.NoError(t, err)

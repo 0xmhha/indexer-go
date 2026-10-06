@@ -13,6 +13,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,14 +22,14 @@ import (
 
 // Handler handles JSON-RPC method calls
 type Handler struct {
-	storage       storage.Storage
+	storage       port.QueryStore
 	logger        *zap.Logger
 	filterManager *FilterManager
 	abiDecoder    *abiDecoder.Decoder
 }
 
 // NewHandler creates a new JSON-RPC handler
-func NewHandler(store storage.Storage, logger *zap.Logger) *Handler {
+func NewHandler(store port.QueryStore, logger *zap.Logger) *Handler {
 	h := &Handler{
 		storage:       store,
 		logger:        logger,
@@ -222,7 +223,7 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 func (h *Handler) getLatestHeight(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
 	height, err := h.storage.GetLatestHeight(ctx)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return map[string]interface{}{
 				"height": uint64(0),
 			}, nil
@@ -267,7 +268,7 @@ func (h *Handler) getBlock(ctx context.Context, params json.RawMessage) (interfa
 
 	block, err := h.models().GetModelBlock(ctx, blockNumber)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, NewError(InternalError, "block not found", nil)
 		}
 		h.logger.Error("failed to get block", zap.Uint64("number", blockNumber), zap.Error(err))
@@ -294,7 +295,7 @@ func (h *Handler) getBlockByHash(ctx context.Context, params json.RawMessage) (i
 	hash := common.HexToHash(p.Hash)
 	block, err := h.models().GetModelBlockByHash(ctx, hash)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, NewError(InternalError, "block not found", nil)
 		}
 		h.logger.Error("failed to get block by hash", zap.String("hash", p.Hash), zap.Error(err))
@@ -321,7 +322,7 @@ func (h *Handler) getTxResult(ctx context.Context, params json.RawMessage) (inte
 	hash := common.HexToHash(p.Hash)
 	tx, location, err := h.models().GetModelTransaction(ctx, hash)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, NewError(InternalError, "transaction not found", nil)
 		}
 		h.logger.Error("failed to get transaction", zap.String("hash", p.Hash), zap.Error(err))
@@ -348,7 +349,7 @@ func (h *Handler) getTxReceipt(ctx context.Context, params json.RawMessage) (int
 	hash := common.HexToHash(p.Hash)
 	receipt, err := h.storage.GetReceipt(ctx, hash)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if err == port.ErrNotFound {
 			return nil, NewError(InternalError, "receipt not found", nil)
 		}
 		h.logger.Error("failed to get receipt", zap.String("hash", p.Hash), zap.Error(err))
@@ -416,9 +417,9 @@ func (h *Handler) blockToJSON(block *model.Block) map[string]interface{} {
 
 // transactionToJSON converts a transaction to JSON-friendly format. The
 // hash, type and sender are the ones the chain reports.
-func (h *Handler) transactionToJSON(tx *model.Transaction, location *storage.TxLocation) map[string]interface{} {
+func (h *Handler) transactionToJSON(tx *model.Transaction, location *port.TxLocation) map[string]interface{} {
 	if location == nil {
-		location = &storage.TxLocation{}
+		location = &port.TxLocation{}
 	}
 	result := map[string]interface{}{
 		"blockHash":        location.BlockHash.Hex(),
@@ -528,7 +529,7 @@ func (h *Handler) feeDelegation(tx *model.Transaction) (common.Address, *big.Int
 }
 
 // models reads blocks and transactions as the chain-neutral model.
-func (h *Handler) models() storage.ModelReader {
+func (h *Handler) models() port.ModelReader {
 	return storage.AsModelReader(h.storage)
 }
 
@@ -545,7 +546,7 @@ func (h *Handler) modelBlockOf(ctx context.Context, b *types.Block) *model.Block
 // modelTxAt returns the stored model of a transaction another reader
 // returned as a go-ethereum transaction, looked up by position because the
 // go-ethereum hash of a chain-specific type differs from the chain's.
-func (h *Handler) modelTxAt(ctx context.Context, tx *types.Transaction, loc *storage.TxLocation) *model.Transaction {
+func (h *Handler) modelTxAt(ctx context.Context, tx *types.Transaction, loc *port.TxLocation) *model.Transaction {
 	if loc != nil {
 		if b, err := h.models().GetModelBlock(ctx, loc.BlockHeight); err == nil && int(loc.TxIndex) < len(b.Transactions) {
 			return b.Transactions[loc.TxIndex]

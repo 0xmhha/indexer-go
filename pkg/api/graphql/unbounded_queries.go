@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/model"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // maxUnboundedOffset caps pagination depth for list queries without a block
@@ -38,7 +38,7 @@ func (s *Schema) recentTransactions(ctx context.Context, filter TransactionFilte
 	for h := int64(latestHeight); h >= 0 && len(collected) < need; h-- {
 		block, err := s.models().GetModelBlock(ctx, uint64(h))
 		if err != nil {
-			if errors.Is(err, storage.ErrNotFound) {
+			if errors.Is(err, port.ErrNotFound) {
 				continue
 			}
 			return nil, fmt.Errorf("failed to get block %d: %w", h, err)

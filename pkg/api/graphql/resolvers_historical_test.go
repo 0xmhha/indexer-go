@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -16,9 +16,9 @@ type mockHistoricalStorage struct {
 	*mockStorage
 	blocksByTime     []*types.Block
 	blockByTimestamp *types.Block
-	txsWithReceipts  []*storage.TransactionWithReceipt
+	txsWithReceipts  []*port.TransactionWithReceipt
 	balance          *big.Int
-	balanceHistory   []storage.BalanceSnapshot
+	balanceHistory   []port.BalanceSnapshot
 	blockCount       uint64
 	txCount          uint64
 }
@@ -32,14 +32,14 @@ func (m *mockHistoricalStorage) GetBlocksByTimeRange(ctx context.Context, fromTi
 
 func (m *mockHistoricalStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
 	if m.blockByTimestamp == nil {
-		return nil, storage.ErrNotFound
+		return nil, port.ErrNotFound
 	}
 	return m.blockByTimestamp, nil
 }
 
-func (m *mockHistoricalStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *storage.TransactionFilter, limit, offset int) ([]*storage.TransactionWithReceipt, error) {
+func (m *mockHistoricalStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
 	if m.txsWithReceipts == nil {
-		return []*storage.TransactionWithReceipt{}, nil
+		return []*port.TransactionWithReceipt{}, nil
 	}
 	return m.txsWithReceipts, nil
 }
@@ -51,9 +51,9 @@ func (m *mockHistoricalStorage) GetAddressBalance(ctx context.Context, addr comm
 	return m.balance, nil
 }
 
-func (m *mockHistoricalStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]storage.BalanceSnapshot, error) {
+func (m *mockHistoricalStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
 	if m.balanceHistory == nil {
-		return []storage.BalanceSnapshot{}, nil
+		return []port.BalanceSnapshot{}, nil
 	}
 	return m.balanceHistory, nil
 }
@@ -66,37 +66,37 @@ func (m *mockHistoricalStorage) GetTransactionCount(ctx context.Context) (uint64
 	return m.txCount, nil
 }
 
-func (m *mockHistoricalStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.MinerStats, error) {
-	return []storage.MinerStats{}, nil
+func (m *mockHistoricalStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.MinerStats, error) {
+	return []port.MinerStats{}, nil
 }
 
-func (m *mockHistoricalStorage) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]storage.TokenBalance, error) {
-	return []storage.TokenBalance{}, nil
+func (m *mockHistoricalStorage) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]port.TokenBalance, error) {
+	return []port.TokenBalance{}, nil
 }
 
-func (m *mockHistoricalStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*storage.GasStats, error) {
-	return &storage.GasStats{}, nil
+func (m *mockHistoricalStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, toBlock uint64) (*port.GasStats, error) {
+	return &port.GasStats{}, nil
 }
 
-func (m *mockHistoricalStorage) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*storage.AddressGasStats, error) {
-	return &storage.AddressGasStats{}, nil
+func (m *mockHistoricalStorage) GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock, toBlock uint64) (*port.AddressGasStats, error) {
+	return &port.AddressGasStats{}, nil
 }
 
-func (m *mockHistoricalStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressGasStats, error) {
-	return []storage.AddressGasStats{}, nil
+func (m *mockHistoricalStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressGasStats, error) {
+	return []port.AddressGasStats{}, nil
 }
 
-func (m *mockHistoricalStorage) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]storage.AddressActivityStats, error) {
-	return []storage.AddressActivityStats{}, nil
+func (m *mockHistoricalStorage) GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock, toBlock uint64) ([]port.AddressActivityStats, error) {
+	return []port.AddressActivityStats{}, nil
 }
 
-func (m *mockHistoricalStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*storage.NetworkMetrics, error) {
-	return &storage.NetworkMetrics{}, nil
+func (m *mockHistoricalStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) (*port.NetworkMetrics, error) {
+	return &port.NetworkMetrics{}, nil
 }
 
 // Contract verification methods
-func (m *mockHistoricalStorage) GetContractVerification(ctx context.Context, address common.Address) (*storage.ContractVerification, error) {
-	return nil, storage.ErrNotFound
+func (m *mockHistoricalStorage) GetContractVerification(ctx context.Context, address common.Address) (*port.ContractVerification, error) {
+	return nil, port.ErrNotFound
 }
 
 func (m *mockHistoricalStorage) IsContractVerified(ctx context.Context, address common.Address) (bool, error) {
@@ -111,7 +111,7 @@ func (m *mockHistoricalStorage) CountVerifiedContracts(ctx context.Context) (int
 	return 0, nil
 }
 
-func (m *mockHistoricalStorage) SetContractVerification(ctx context.Context, verification *storage.ContractVerification) error {
+func (m *mockHistoricalStorage) SetContractVerification(ctx context.Context, verification *port.ContractVerification) error {
 	return nil
 }
 
@@ -170,11 +170,11 @@ func TestHistoricalResolvers(t *testing.T) {
 		},
 		blocksByTime:     []*types.Block{block1, block2},
 		blockByTimestamp: block1,
-		txsWithReceipts: []*storage.TransactionWithReceipt{
+		txsWithReceipts: []*port.TransactionWithReceipt{
 			{
 				Transaction: testTx,
 				Receipt:     testReceipt,
-				Location: &storage.TxLocation{
+				Location: &port.TxLocation{
 					BlockHeight: 1,
 					BlockHash:   block1.Hash(),
 					TxIndex:     0,
@@ -182,7 +182,7 @@ func TestHistoricalResolvers(t *testing.T) {
 			},
 		},
 		balance: big.NewInt(1000000),
-		balanceHistory: []storage.BalanceSnapshot{
+		balanceHistory: []port.BalanceSnapshot{
 			{
 				BlockNumber: 1,
 				Balance:     big.NewInt(1000),
@@ -655,7 +655,7 @@ func TestParseHistoricalTransactionFilter(t *testing.T) {
 		if filter.MaxValue.Cmp(big.NewInt(10000)) != 0 {
 			t.Errorf("expected MaxValue 10000, got %s", filter.MaxValue.String())
 		}
-		if filter.TxType != storage.TransactionType(1) {
+		if filter.TxType != port.TransactionType(1) {
 			t.Errorf("expected TxType 1, got %d", filter.TxType)
 		}
 		if !filter.SuccessOnly {
@@ -727,7 +727,7 @@ func TestParseHistoricalTransactionFilter(t *testing.T) {
 		if filter.MaxValue != nil {
 			t.Error("expected MaxValue to be nil")
 		}
-		if filter.TxType != storage.TxTypeAll {
+		if filter.TxType != port.TxTypeAll {
 			t.Errorf("expected TxType TxTypeAll, got %d", filter.TxType)
 		}
 		if filter.SuccessOnly {

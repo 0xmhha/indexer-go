@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/eventbus"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // DetailedHealth provides comprehensive health information for the indexer service
@@ -89,7 +89,7 @@ type HealthChecker struct {
 
 	// Components
 	eventBus eventbus.EventBus
-	storage  storage.Storage
+	storage  port.QueryStore
 
 	// Distributed components
 	redisEventBus *eventbus.RedisEventBus
@@ -123,7 +123,7 @@ func (hc *HealthChecker) SetEventBus(eb eventbus.EventBus) {
 }
 
 // SetStorage sets the storage for health checking
-func (hc *HealthChecker) SetStorage(s storage.Storage) {
+func (hc *HealthChecker) SetStorage(s port.QueryStore) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	hc.storage = s
@@ -276,7 +276,7 @@ func (hc *HealthChecker) checkStorageHealth(ctx context.Context) *ComponentHealt
 	message := "Storage is operational"
 	if err != nil {
 		// Check if it's just an empty database (no blocks indexed yet)
-		if err != storage.ErrNotFound {
+		if err != port.ErrNotFound {
 			status = "unhealthy"
 			message = err.Error()
 		}

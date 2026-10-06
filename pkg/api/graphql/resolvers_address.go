@@ -7,8 +7,8 @@ import (
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/graphql-go/graphql"
@@ -54,16 +54,14 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 	}
 
 	// Get balance from historical reader
-	if historicalReader, ok := s.storage.(storage.HistoricalReader); ok {
-		balance, err := historicalReader.GetAddressBalance(ctx, address, 0) // 0 = latest
-		if err == nil {
-			overview["balance"] = balance.String()
-		}
+	balance, err := s.storage.GetAddressBalance(ctx, address, 0) // 0 = latest
+	if err == nil {
+		overview["balance"] = balance.String()
 	}
 
 	// Check if address is a contract
 	// First, try to get contract creation info from address indexing
-	addressReader, hasAddressReader := s.storage.(storage.AddressIndexReader)
+	addressReader, hasAddressReader := s.storage.(port.AddressIndexReader)
 	if hasAddressReader {
 		// Try to get contract creation info
 		creation, err := addressReader.GetContractCreation(ctx, address)
@@ -181,21 +179,19 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 	}
 
 	// Get verification info
-	if verificationReader, ok := s.storage.(storage.ContractVerificationReader); ok {
-		verification, err := verificationReader.GetContractVerification(ctx, address)
-		if err == nil && verification != nil {
-			overview["verificationInfo"] = map[string]interface{}{
-				"address":              verification.Address.Hex(),
-				"isVerified":           verification.IsVerified,
-				"name":                 verification.Name,
-				"compilerVersion":      verification.CompilerVersion,
-				"optimizationEnabled":  verification.OptimizationEnabled,
-				"optimizationRuns":     verification.OptimizationRuns,
-				"licenseType":          verification.LicenseType,
-				"sourceCode":           verification.SourceCode,
-				"abi":                  verification.ABI,
-				"constructorArguments": verification.ConstructorArguments,
-			}
+	verification, err := s.storage.GetContractVerification(ctx, address)
+	if err == nil && verification != nil {
+		overview["verificationInfo"] = map[string]interface{}{
+			"address":              verification.Address.Hex(),
+			"isVerified":           verification.IsVerified,
+			"name":                 verification.Name,
+			"compilerVersion":      verification.CompilerVersion,
+			"optimizationEnabled":  verification.OptimizationEnabled,
+			"optimizationRuns":     verification.OptimizationRuns,
+			"licenseType":          verification.LicenseType,
+			"sourceCode":           verification.SourceCode,
+			"abi":                  verification.ABI,
+			"constructorArguments": verification.ConstructorArguments,
 		}
 	}
 
@@ -217,31 +213,27 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 	}
 
 	// Get token metadata
-	if tokenReader, ok := s.storage.(storage.TokenMetadataReader); ok {
-		tokenMetadata, err := tokenReader.GetTokenMetadata(ctx, address)
-		if err == nil && tokenMetadata != nil {
-			overview["isToken"] = true
-			overview["tokenMetadata"] = mapTokenMetadata(tokenMetadata)
-		}
+	tokenMetadata, err := s.storage.GetTokenMetadata(ctx, address)
+	if err == nil && tokenMetadata != nil {
+		overview["isToken"] = true
+		overview["tokenMetadata"] = mapTokenMetadata(tokenMetadata)
 	}
 
 	// Get EIP-7702 SetCode information
-	if setCodeReader, ok := s.storage.(storage.SetCodeIndexReader); ok {
-		// Delegation state
-		delegationState, err := setCodeReader.GetAddressDelegationState(ctx, address)
-		if err == nil && delegationState != nil {
-			overview["hasDelegation"] = delegationState.HasDelegation
-			if delegationState.DelegationTarget != nil {
-				overview["delegationTarget"] = delegationState.DelegationTarget.Hex()
-			}
+	// Delegation state
+	delegationState, err := s.storage.GetAddressDelegationState(ctx, address)
+	if err == nil && delegationState != nil {
+		overview["hasDelegation"] = delegationState.HasDelegation
+		if delegationState.DelegationTarget != nil {
+			overview["delegationTarget"] = delegationState.DelegationTarget.Hex()
 		}
+	}
 
-		// SetCode stats
-		stats, err := setCodeReader.GetAddressSetCodeStats(ctx, address)
-		if err == nil && stats != nil {
-			overview["asAuthorityCount"] = stats.AsAuthorityCount
-			overview["asTargetCount"] = stats.AsTargetCount
-		}
+	// SetCode stats
+	stats, err := s.storage.GetAddressSetCodeStats(ctx, address)
+	if err == nil && stats != nil {
+		overview["asAuthorityCount"] = stats.AsAuthorityCount
+		overview["asTargetCount"] = stats.AsTargetCount
 	}
 
 	return overview, nil
@@ -279,14 +271,14 @@ func (s *Schema) resolveContractCreation(p graphql.ResolveParams) (interface{}, 
 	address := common.HexToAddress(addressStr)
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
 	creation, err := addressReader.GetContractCreation(ctx, address)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get contract creation",
@@ -319,7 +311,7 @@ func (s *Schema) resolveContracts(p graphql.ResolveParams) (interface{}, error) 
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
@@ -380,7 +372,7 @@ func (s *Schema) resolveContractsByCreator(p graphql.ResolveParams) (interface{}
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
@@ -429,14 +421,14 @@ func (s *Schema) resolveInternalTransactions(p graphql.ResolveParams) (interface
 	txHash := common.HexToHash(txHashStr)
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
 	internals, err := addressReader.GetInternalTransactions(ctx, txHash)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return []interface{}{}, nil
 		}
 		s.logger.Error("failed to get internal transactions",
@@ -485,7 +477,7 @@ func (s *Schema) resolveInternalTransactionsByAddress(p graphql.ResolveParams) (
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
@@ -532,14 +524,14 @@ func (s *Schema) resolveERC20Transfer(p graphql.ResolveParams) (interface{}, err
 	txHash := common.HexToHash(txHashStr)
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
 	transfer, err := addressReader.GetERC20Transfer(ctx, txHash, uint(logIndex))
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get ERC20 transfer",
@@ -579,7 +571,7 @@ func (s *Schema) resolveERC20TransfersByToken(p graphql.ResolveParams) (interfac
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
@@ -639,7 +631,7 @@ func (s *Schema) resolveERC20TransfersByAddress(p graphql.ResolveParams) (interf
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
@@ -686,14 +678,14 @@ func (s *Schema) resolveERC721Transfer(p graphql.ResolveParams) (interface{}, er
 	txHash := common.HexToHash(txHashStr)
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
 	transfer, err := addressReader.GetERC721Transfer(ctx, txHash, uint(logIndex))
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get ERC721 transfer",
@@ -733,7 +725,7 @@ func (s *Schema) resolveERC721TransfersByToken(p graphql.ResolveParams) (interfa
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
@@ -793,7 +785,7 @@ func (s *Schema) resolveERC721TransfersByAddress(p graphql.ResolveParams) (inter
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
@@ -842,14 +834,14 @@ func (s *Schema) resolveERC721Owner(p graphql.ResolveParams) (interface{}, error
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
 	owner, err := addressReader.GetERC721Owner(ctx, token, tokenId)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
+		if errors.Is(err, port.ErrNotFound) {
 			return nil, nil
 		}
 		s.logger.Error("failed to get ERC721 owner",
@@ -889,7 +881,7 @@ func (s *Schema) resolveNFTsByOwner(p graphql.ResolveParams) (interface{}, error
 	}
 
 	// Check if storage implements AddressIndexReader
-	addressReader, ok := s.storage.(storage.AddressIndexReader)
+	addressReader, ok := s.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
@@ -920,7 +912,7 @@ func (s *Schema) resolveNFTsByOwner(p graphql.ResolveParams) (interface{}, error
 // ========== Helper mapper functions ==========
 
 // contractCreationToMapWithName converts ContractCreation to a map with contract name from verification
-func (s *Schema) contractCreationToMapWithName(creation *storage.ContractCreation) map[string]interface{} {
+func (s *Schema) contractCreationToMapWithName(creation *port.ContractCreation) map[string]interface{} {
 	m := map[string]interface{}{
 		"contractAddress": creation.ContractAddress.Hex(),
 		"name":            nil,
@@ -932,18 +924,16 @@ func (s *Schema) contractCreationToMapWithName(creation *storage.ContractCreatio
 	}
 
 	// Try to get contract name from verification data
-	if verificationReader, ok := s.storage.(storage.ContractVerificationReader); ok {
-		verification, err := verificationReader.GetContractVerification(context.Background(), creation.ContractAddress)
-		if err == nil && verification != nil && verification.Name != "" {
-			m["name"] = verification.Name
-		}
+	verification, err := s.storage.GetContractVerification(context.Background(), creation.ContractAddress)
+	if err == nil && verification != nil && verification.Name != "" {
+		m["name"] = verification.Name
 	}
 
 	return m
 }
 
 // internalTransactionToMap converts InternalTransaction to a map
-func (s *Schema) internalTransactionToMap(internal *storage.InternalTransaction) map[string]interface{} {
+func (s *Schema) internalTransactionToMap(internal *port.InternalTransaction) map[string]interface{} {
 	m := map[string]interface{}{
 		"transactionHash": internal.TransactionHash.Hex(),
 		"blockNumber":     fmt.Sprintf("%d", internal.BlockNumber),
@@ -967,7 +957,7 @@ func (s *Schema) internalTransactionToMap(internal *storage.InternalTransaction)
 }
 
 // erc20TransferToMap converts ERC20Transfer to a map
-func (s *Schema) erc20TransferToMap(transfer *storage.ERC20Transfer) map[string]interface{} {
+func (s *Schema) erc20TransferToMap(transfer *port.ERC20Transfer) map[string]interface{} {
 	return map[string]interface{}{
 		"contractAddress": transfer.ContractAddress.Hex(),
 		"from":            transfer.From.Hex(),
@@ -981,7 +971,7 @@ func (s *Schema) erc20TransferToMap(transfer *storage.ERC20Transfer) map[string]
 }
 
 // erc721TransferToMap converts ERC721Transfer to a map
-func (s *Schema) erc721TransferToMap(transfer *storage.ERC721Transfer) map[string]interface{} {
+func (s *Schema) erc721TransferToMap(transfer *port.ERC721Transfer) map[string]interface{} {
 	return map[string]interface{}{
 		"contractAddress": transfer.ContractAddress.Hex(),
 		"from":            transfer.From.Hex(),
@@ -995,7 +985,7 @@ func (s *Schema) erc721TransferToMap(transfer *storage.ERC721Transfer) map[strin
 }
 
 // nftOwnershipToMap converts NFTOwnership to a map
-func (s *Schema) nftOwnershipToMap(nft *storage.NFTOwnership) map[string]interface{} {
+func (s *Schema) nftOwnershipToMap(nft *port.NFTOwnership) map[string]interface{} {
 	return map[string]interface{}{
 		"contractAddress": nft.ContractAddress.Hex(),
 		"tokenId":         nft.TokenId.String(),
