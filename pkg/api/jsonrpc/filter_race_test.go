@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/pkg/core/model"
@@ -25,13 +24,13 @@ type tipSwapStore struct {
 	seen    []common.Hash
 }
 
-func (s *tipSwapStore) GetLogs(ctx context.Context, f *port.LogFilter) ([]*types.Log, error) {
+func (s *tipSwapStore) GetLogs(ctx context.Context, f *port.LogFilter) ([]*model.Log, error) {
 	logs, err := s.PebbleStorage.GetLogs(ctx, f)
 	h, _ := hashAt(ctx, s.PebbleStorage, 2)
 	s.seen = append(s.seen, h)
 	if !s.swapped {
 		s.swapped = true
-		require.NoError(s.t, s.SetModelBlock(ctx, testModelBlock(2, 0xbb)))
+		require.NoError(s.t, s.SetBlock(ctx, testModelBlock(2, 0xbb)))
 	}
 	return logs, err
 }
@@ -57,7 +56,7 @@ func TestFilterPollRecordsTheTipItRead(t *testing.T) {
 	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 	for n := uint64(0); n <= 2; n++ {
-		require.NoError(t, db.SetModelBlock(ctx, testModelBlock(n, 0xaa)))
+		require.NoError(t, db.SetBlock(ctx, testModelBlock(n, 0xaa)))
 	}
 	require.NoError(t, db.SetLatestHeight(ctx, 2))
 

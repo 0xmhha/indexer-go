@@ -22,7 +22,6 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Feature is one optional part of indexing.
@@ -364,7 +363,7 @@ func (d Deps) Blocks() chains.AccountingEnv { return depsBlocks{d} }
 type depsBlocks struct{ d Deps }
 
 func (b depsBlocks) Block(ctx context.Context, number uint64) (*model.Block, error) {
-	blk, err := storage.AsModelReader(b.d.Storage).GetModelBlock(ctx, number)
+	blk, err := b.d.Storage.GetBlock(ctx, number)
 	if err == nil || !errors.Is(err, port.ErrNotFound) || b.d.BlockAt == nil {
 		return blk, err
 	}

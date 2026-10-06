@@ -76,7 +76,7 @@ func (h *chainHarness) requireIndexed(t *testing.T, from, to uint64) {
 	t.Helper()
 	ctx := context.Background()
 	for n := from; n <= to; n++ {
-		b, err := h.db.GetModelBlock(ctx, n)
+		b, err := h.db.GetBlock(ctx, n)
 		require.NoError(t, err, "block %d", n)
 		require.Equal(t, h.chain.Block(n).Block.Hash(), b.Hash, "block %d", n)
 	}

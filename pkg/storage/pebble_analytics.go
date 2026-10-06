@@ -8,7 +8,6 @@ import (
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // ============================================================================
@@ -45,8 +44,8 @@ func (s *PebbleStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, 
 		}
 
 		stats.BlockCount++
-		stats.TotalGasLimit += block.GasLimit()
-		stats.TotalGasUsed += block.GasUsed()
+		stats.TotalGasLimit += block.GasLimit
+		stats.TotalGasUsed += block.GasUsed
 
 		// Get receipts to calculate actual gas used and gas prices
 		receipts, err := s.GetReceiptsByBlockNumber(ctx, height)
@@ -57,10 +56,10 @@ func (s *PebbleStorage) GetGasStatsByBlockRange(ctx context.Context, fromBlock, 
 		stats.TransactionCount += uint64(len(receipts))
 
 		// Calculate gas prices
-		txs := block.Transactions()
+		txs := block.Transactions
 		for i, tx := range txs {
 			if i < len(receipts) {
-				gasPrice := tx.GasPrice()
+				gasPrice := txGasPrice(tx)
 				if gasPrice != nil && gasPrice.Sign() > 0 {
 					totalGasPrice.Add(totalGasPrice, gasPrice)
 					gasPriceCount++
@@ -111,13 +110,10 @@ func (s *PebbleStorage) GetGasStatsByAddress(ctx context.Context, addr common.Ad
 			continue
 		}
 
-		txs := block.Transactions()
+		txs := block.Transactions
 		for i, tx := range txs {
 			// Check if transaction is from this address
-			sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-			if err != nil {
-				continue
-			}
+			sender := tx.From
 
 			if sender == addr && i < len(receipts) {
 				receipt := receipts[i]
@@ -125,7 +121,7 @@ func (s *PebbleStorage) GetGasStatsByAddress(ctx context.Context, addr common.Ad
 				stats.TransactionCount++
 
 				// Calculate fees paid (gasUsed * gasPrice)
-				gasPrice := tx.GasPrice()
+				gasPrice := txGasPrice(tx)
 				if gasPrice != nil {
 					fee := new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), gasPrice)
 					stats.TotalFeesPaid.Add(stats.TotalFeesPaid, fee)
@@ -171,12 +167,9 @@ func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int,
 			continue
 		}
 
-		txs := block.Transactions()
+		txs := block.Transactions
 		for i, tx := range txs {
-			sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-			if err != nil {
-				continue
-			}
+			sender := tx.From
 
 			if i < len(receipts) {
 				receipt := receipts[i]
@@ -197,7 +190,7 @@ func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int,
 				stats.TransactionCount++
 
 				// Calculate fees
-				gasPrice := tx.GasPrice()
+				gasPrice := txGasPrice(tx)
 				if gasPrice != nil {
 					fee := new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), gasPrice)
 					stats.TotalFeesPaid.Add(stats.TotalFeesPaid, fee)
@@ -262,12 +255,9 @@ func (s *PebbleStorage) GetTopAddressesByTxCount(ctx context.Context, limit int,
 			continue
 		}
 
-		txs := block.Transactions()
+		txs := block.Transactions
 		for i, tx := range txs {
-			sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-			if err != nil {
-				continue
-			}
+			sender := tx.From
 
 			if i < len(receipts) {
 				receipt := receipts[i]
@@ -353,13 +343,13 @@ func (s *PebbleStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime 
 	}
 
 	metrics.TotalBlocks = uint64(len(blocks))
-	firstBlockTime = blocks[0].Time()
-	lastBlockTime = blocks[len(blocks)-1].Time()
+	firstBlockTime = blocks[0].Time
+	lastBlockTime = blocks[len(blocks)-1].Time
 
 	// Calculate metrics
 	for _, block := range blocks {
-		metrics.TotalTransactions += uint64(block.Transactions().Len())
-		totalGasUsed += block.GasUsed()
+		metrics.TotalTransactions += uint64(len(block.Transactions))
+		totalGasUsed += block.GasUsed
 	}
 
 	// Calculate averages

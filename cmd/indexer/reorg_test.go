@@ -124,7 +124,7 @@ func TestLiveLoopRollsBackReorg(t *testing.T) {
 					return false
 				}
 				b, err := app.storage.GetBlock(ctx, newHead)
-				return err == nil && b.Extra() != nil
+				return err == nil && b.Extra != nil
 			}, time.Minute, 50*time.Millisecond)
 			stop()
 			<-done

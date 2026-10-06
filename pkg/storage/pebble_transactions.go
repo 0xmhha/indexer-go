@@ -6,9 +6,8 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
@@ -16,52 +15,13 @@ import (
 // Transaction Methods
 // ============================================================================
 
-// GetTransaction returns a transaction and its location by hash
-func (s *PebbleStorage) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, nil, err
-	}
-
-	// Get transaction location
-	locValue, closer, err := s.kv(ctx).Get(TransactionHashIndexKey(hash))
-	if err != nil {
-		if err == pebble.ErrNotFound {
-			return nil, nil, port.ErrNotFound
-		}
-		return nil, nil, fmt.Errorf("failed to get transaction location: %w", err)
-	}
-	defer closer.Close()
-
-	location, err := DecodeTxLocation(locValue)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to decode location: %w", err)
-	}
-
-	// Get transaction data
-	txValue, closer, err := s.kv(ctx).Get(TransactionKey(location.BlockHeight, location.TxIndex))
-	if err != nil {
-		if err == pebble.ErrNotFound {
-			return nil, nil, port.ErrNotFound
-		}
-		return nil, nil, fmt.Errorf("failed to get transaction: %w", err)
-	}
-	defer closer.Close()
-
-	tx, err := DecodeTransaction(txValue)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to decode transaction: %w", err)
-	}
-
-	return tx, location, nil
-}
-
 // GetTransactions returns multiple transactions and their locations by hash (batch operation)
-func (s *PebbleStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
+func (s *PebbleStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*model.Transaction, []*port.TxLocation, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, nil, err
 	}
 
-	txs := make([]*types.Transaction, len(hashes))
+	txs := make([]*model.Transaction, len(hashes))
 	locations := make([]*port.TxLocation, len(hashes))
 	var firstError error
 
@@ -82,29 +42,6 @@ func (s *PebbleStorage) GetTransactions(ctx context.Context, hashes []common.Has
 	}
 
 	return txs, locations, nil
-}
-
-// SetTransaction stores a transaction with its location
-func (s *PebbleStorage) SetTransaction(ctx context.Context, tx *types.Transaction, location *port.TxLocation) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
-	if tx == nil {
-		return fmt.Errorf("transaction cannot be nil")
-	}
-	if location == nil {
-		return fmt.Errorf("location cannot be nil")
-	}
-	m, err := gethconv.TxFromGeth(tx)
-	if err != nil {
-		return fmt.Errorf("failed to encode transaction: %w", err)
-	}
-	m.BlockHash, m.BlockNumber, m.Index = location.BlockHash, location.BlockHeight, uint(location.TxIndex)
-	return s.setModelTransaction(ctx, m, location)
 }
 
 // GetTransactionsByAddress returns transactions for an address with pagination

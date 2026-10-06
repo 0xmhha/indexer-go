@@ -105,15 +105,44 @@ func ReceiptFromGeth(r *types.Receipt) *model.Receipt {
 		addr := r.ContractAddress
 		m.ContractAddress = &addr
 	}
-	m.Logs = make([]*model.Log, 0, len(r.Logs))
-	for _, l := range r.Logs {
-		m.Logs = append(m.Logs, &model.Log{
-			Address: l.Address, Topics: l.Topics, Data: l.Data,
-			BlockNumber: l.BlockNumber, BlockHash: l.BlockHash, TxHash: l.TxHash,
-			TxIndex: l.TxIndex, Index: l.Index, Removed: l.Removed,
-		})
-	}
+	m.Logs = LogsFromGeth(r.Logs)
 	return m
+}
+
+// LogFromGeth converts a log.
+func LogFromGeth(l *types.Log) *model.Log {
+	return &model.Log{
+		Address: l.Address, Topics: l.Topics, Data: l.Data,
+		BlockNumber: l.BlockNumber, BlockHash: l.BlockHash, TxHash: l.TxHash,
+		TxIndex: l.TxIndex, Index: l.Index, Removed: l.Removed,
+	}
+}
+
+// LogsFromGeth converts logs; the result is never nil.
+func LogsFromGeth(ls []*types.Log) []*model.Log {
+	out := make([]*model.Log, 0, len(ls))
+	for _, l := range ls {
+		out = append(out, LogFromGeth(l))
+	}
+	return out
+}
+
+// LogToGeth converts a log.
+func LogToGeth(l *model.Log) *types.Log {
+	return &types.Log{
+		Address: l.Address, Topics: l.Topics, Data: l.Data,
+		BlockNumber: l.BlockNumber, BlockHash: l.BlockHash, TxHash: l.TxHash,
+		TxIndex: l.TxIndex, Index: l.Index, Removed: l.Removed,
+	}
+}
+
+// LogsToGeth converts logs; the result is never nil.
+func LogsToGeth(ls []*model.Log) []*types.Log {
+	out := make([]*types.Log, 0, len(ls))
+	for _, l := range ls {
+		out = append(out, LogToGeth(l))
+	}
+	return out
 }
 
 // RecoverTx converts a go-ethereum transaction to the model, recovering the
@@ -262,17 +291,10 @@ func ReceiptToGeth(m *model.Receipt) *types.Receipt {
 		BlockHash:         m.BlockHash,
 		BlockNumber:       new(big.Int).SetUint64(m.BlockNumber),
 		TransactionIndex:  m.TxIndex,
-		Logs:              make([]*types.Log, 0, len(m.Logs)),
+		Logs:              LogsToGeth(m.Logs),
 	}
 	if m.ContractAddress != nil {
 		r.ContractAddress = *m.ContractAddress
-	}
-	for _, l := range m.Logs {
-		r.Logs = append(r.Logs, &types.Log{
-			Address: l.Address, Topics: l.Topics, Data: l.Data,
-			BlockNumber: l.BlockNumber, BlockHash: l.BlockHash, TxHash: l.TxHash,
-			TxIndex: l.TxIndex, Index: l.Index, Removed: l.Removed,
-		})
 	}
 	return r
 }

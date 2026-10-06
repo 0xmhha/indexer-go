@@ -48,7 +48,7 @@ func TestPebbleStorage_Search(t *testing.T) {
 	t.Run("SearchByBlockNumber", func(t *testing.T) {
 		// Store a block
 		block := createTestBlock(42)
-		require.NoError(t, storage.SetBlock(ctx, block))
+		require.NoError(t, storage.SetBlock(ctx, modelBlock(block)))
 
 		results, err := storage.Search(ctx, "42", nil, 10)
 		require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestPebbleStorage_Search(t *testing.T) {
 	t.Run("SearchByHash_BlockHash", func(t *testing.T) {
 		// Store a block and search by its hash
 		block := createTestBlock(50)
-		require.NoError(t, storage.SetBlock(ctx, block))
+		require.NoError(t, storage.SetBlock(ctx, modelBlock(block)))
 
 		hash := block.Hash().Hex()
 		results, err := storage.Search(ctx, hash, []string{"block"}, 10)

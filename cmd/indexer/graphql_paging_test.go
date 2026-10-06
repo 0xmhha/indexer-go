@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -24,12 +24,12 @@ type countingStorage struct {
 	blockReads atomic.Int64
 }
 
-func (c *countingStorage) GetBlock(ctx context.Context, h uint64) (*types.Block, error) {
+func (c *countingStorage) GetBlock(ctx context.Context, h uint64) (*model.Block, error) {
 	c.blockReads.Add(1)
 	return c.Storage.GetBlock(ctx, h)
 }
 
-func (c *countingStorage) GetBlocks(ctx context.Context, from, to uint64) ([]*types.Block, error) {
+func (c *countingStorage) GetBlocks(ctx context.Context, from, to uint64) ([]*model.Block, error) {
 	c.blockReads.Add(int64(to - from + 1))
 	return c.Storage.GetBlocks(ctx, from, to)
 }

@@ -38,10 +38,10 @@ func TestFeeDelegationTxOutput(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = st.Close() }()
 	ctx := context.Background()
-	require.NoError(t, st.SetModelBlock(ctx, b))
+	require.NoError(t, st.SetBlock(ctx, b))
 	require.NoError(t, st.SetLatestHeight(ctx, 33))
 	for _, r := range rs {
-		require.NoError(t, st.SetModelReceipt(ctx, r))
+		require.NoError(t, st.SetReceipt(ctx, r))
 	}
 
 	srv := NewServer(st, zap.NewNop())

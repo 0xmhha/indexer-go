@@ -35,10 +35,10 @@ func TestStatsCountFeeDelegationTxs(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	ctx := context.Background()
-	require.NoError(t, db.SetModelBlock(ctx, b))
+	require.NoError(t, db.SetBlock(ctx, b))
 	require.NoError(t, db.SetLatestHeight(ctx, 33))
 	for _, r := range rs {
-		require.NoError(t, db.SetModelReceipt(ctx, r))
+		require.NoError(t, db.SetReceipt(ctx, r))
 	}
 	fdTx, fdReceipt := b.Transactions[1], rs[1]
 	fd, ok := stablenet.FeeDelegationOf(fdTx)

@@ -10,7 +10,6 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )
@@ -151,11 +150,10 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 			}
 
 			// Count direction
-			if tx.To() != nil && *tx.To() == address {
+			if tx.To != nil && *tx.To == address {
 				receivedCount++
 			}
-			from, err := s.getSenderAddress(tx)
-			if err == nil && from == address {
+			if tx.From == address {
 				sentCount++
 			}
 		}
@@ -167,13 +165,13 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 			// Get timestamp from block
 			block, err := s.storage.GetBlock(ctx, firstSeen)
 			if err == nil && block != nil {
-				overview["firstSeen"] = fmt.Sprintf("%d", block.Time())
+				overview["firstSeen"] = fmt.Sprintf("%d", block.Time)
 			}
 		}
 		if lastSeen > 0 {
 			block, err := s.storage.GetBlock(ctx, lastSeen)
 			if err == nil && block != nil {
-				overview["lastSeen"] = fmt.Sprintf("%d", block.Time())
+				overview["lastSeen"] = fmt.Sprintf("%d", block.Time)
 			}
 		}
 	}
@@ -237,25 +235,6 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 	}
 
 	return overview, nil
-}
-
-// getSenderAddress extracts sender address from a transaction
-func (s *Schema) getSenderAddress(tx *types.Transaction) (common.Address, error) {
-	if tx == nil {
-		return common.Address{}, fmt.Errorf("transaction is nil")
-	}
-
-	chainId := tx.ChainId()
-	if chainId == nil {
-		return common.Address{}, fmt.Errorf("transaction has no chain ID")
-	}
-
-	from, err := types.Sender(types.LatestSignerForChainID(chainId), tx)
-	if err != nil {
-		return common.Address{}, fmt.Errorf("failed to extract sender: %w", err)
-	}
-
-	return from, nil
 }
 
 // ========== Contract Creation Resolvers ==========

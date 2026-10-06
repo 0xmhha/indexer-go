@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
@@ -90,7 +91,7 @@ func (h *Handler) getBlocksByTimeRange(ctx context.Context, params json.RawMessa
 	// Convert blocks to JSON
 	nodes := make([]interface{}, len(blocks))
 	for i, block := range blocks {
-		nodes[i] = h.blockToJSON(h.modelBlockOf(ctx, block))
+		nodes[i] = h.blockToJSON(block)
 	}
 
 	return map[string]interface{}{
@@ -145,7 +146,7 @@ func (h *Handler) getBlockByTimestamp(ctx context.Context, params json.RawMessag
 		return nil, NewError(InternalError, "failed to get block", err.Error())
 	}
 
-	return h.blockToJSON(h.modelBlockOf(ctx, block)), nil
+	return h.blockToJSON(block), nil
 }
 
 // getTransactionsByAddressFiltered returns filtered transactions for an address
@@ -202,9 +203,9 @@ func (h *Handler) getTransactionsByAddressFiltered(ctx context.Context, params j
 	// Convert to JSON
 	nodes := make([]interface{}, len(txsWithReceipts))
 	for i, txr := range txsWithReceipts {
-		txJSON := h.transactionToJSON(h.modelTxAt(ctx, txr.Transaction, txr.Location), txr.Location)
+		txJSON := h.transactionToJSON(txr.Transaction, txr.Location)
 		if txr.Receipt != nil {
-			txJSON["receipt"] = h.receiptToJSON(txr.Receipt)
+			txJSON["receipt"] = h.receiptToJSON(gethconv.ReceiptToGeth(txr.Receipt))
 		}
 		nodes[i] = txJSON
 	}

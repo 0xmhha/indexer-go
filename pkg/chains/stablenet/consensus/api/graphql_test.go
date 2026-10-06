@@ -26,7 +26,7 @@ func TestWBFTResolversWithData(t *testing.T) {
 	store := consensus.NewStore(db, zap.NewNop())
 
 	validator := common.HexToAddress("0x10")
-	require.NoError(t, db.SetBlock(ctx, createBlock(1, validator)))
+	require.NoError(t, db.SetBlock(ctx, modelBlock(createBlock(1, validator))))
 	require.NoError(t, store.SaveWBFTBlockExtra(ctx, &consensus.WBFTBlockExtra{
 		BlockNumber: 1, BlockHash: common.HexToHash("0xw1"), Round: 1,
 		PreparedSeal:  &consensus.WBFTAggregatedSeal{Sealers: []byte{0xFF}, Signature: make([]byte, 96)},

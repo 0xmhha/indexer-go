@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
@@ -65,7 +66,7 @@ func (s *Schema) resolveBlocksByTimeRange(p graphql.ResolveParams) (interface{},
 	// Convert blocks to maps, read as the model for the chain's hashes
 	nodes := make([]interface{}, len(blocks))
 	for i, block := range blocks {
-		nodes[i] = s.blockToMap(s.modelBlockOf(ctx, block))
+		nodes[i] = s.blockToMap(block)
 	}
 
 	// Note: totalCount represents blocks returned in this page
@@ -115,7 +116,7 @@ func (s *Schema) resolveBlockByTimestamp(p graphql.ResolveParams) (interface{}, 
 		return nil, err
 	}
 
-	return s.blockToMap(s.modelBlockOf(ctx, block)), nil
+	return s.blockToMap(block), nil
 }
 
 // resolveTransactionsByAddressFiltered resolves filtered transactions for an address
@@ -145,7 +146,7 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 		if ft, success := new(big.Int).SetString(fromTimeStr, 10); success {
 			block, err := s.storage.GetBlockByTimestamp(ctx, ft.Uint64())
 			if err == nil && block != nil {
-				filter.FromBlock = block.NumberU64()
+				filter.FromBlock = block.Number
 			}
 		}
 	}
@@ -153,7 +154,7 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 		if tt, success := new(big.Int).SetString(toTimeStr, 10); success {
 			block, err := s.storage.GetBlockByTimestamp(ctx, tt.Uint64())
 			if err == nil && block != nil {
-				filter.ToBlock = block.NumberU64()
+				filter.ToBlock = block.Number
 			}
 		}
 	}
@@ -187,15 +188,15 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 	nodes := make([]interface{}, len(txsWithReceipts))
 	blockTimestamps := make(map[uint64]string) // cache block timestamps
 	for i, txr := range txsWithReceipts {
-		txMap := s.transactionToMap(s.modelTxAt(ctx, txr.Transaction, txr.Location), txr.Location)
+		txMap := s.transactionToMap(txr.Transaction, txr.Location)
 		if txr.Receipt != nil {
-			txMap["receipt"] = s.receiptToMap(txr.Receipt)
+			txMap["receipt"] = s.receiptToMap(gethconv.ReceiptToGeth(txr.Receipt))
 		}
 		if txr.Location != nil {
 			if ts, ok := blockTimestamps[txr.Location.BlockHeight]; ok {
 				txMap["blockTimestamp"] = ts
 			} else {
-				block, blockErr := s.models().GetModelBlock(ctx, txr.Location.BlockHeight)
+				block, blockErr := s.storage.GetBlock(ctx, txr.Location.BlockHeight)
 				if blockErr == nil && block != nil {
 					ts = fmt.Sprintf("%d", block.Time)
 					blockTimestamps[txr.Location.BlockHeight] = ts

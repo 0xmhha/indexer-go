@@ -34,28 +34,8 @@ type Storage interface {
 	// Close closes the storage and releases resources
 	Close() error
 
-	// NewBatch creates a new batch for atomic writes
-	NewBatch() Batch
-
 	// Compact triggers manual compaction (optional optimization)
 	Compact(ctx context.Context, start, end []byte) error
-}
-
-// Batch provides atomic batch write operations
-type Batch interface {
-	port.Writer
-
-	// Commit writes all batched operations atomically
-	Commit() error
-
-	// Reset clears all operations in the batch
-	Reset()
-
-	// Count returns the number of operations in the batch
-	Count() int
-
-	// Close releases batch resources without committing
-	Close() error
 }
 
 // Config holds storage configuration

@@ -6,10 +6,10 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/testutil"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
@@ -45,10 +45,10 @@ func TestBoundBatchCapturesWrites(t *testing.T) {
 	defer batch.Close()
 
 	block := testutil.NewTestBlockWithTransactions(7, 2)
-	require.NoError(t, s.SetBlock(ctx, block))
+	require.NoError(t, s.SetBlock(ctx, modelBlock(block)))
 
 	logAddr := common.HexToAddress("0x00000000000000000000000000000000000000AA")
-	require.NoError(t, s.IndexLogs(ctx, []*types.Log{{
+	require.NoError(t, s.IndexLogs(ctx, []*model.Log{{
 		Address:     logAddr,
 		Topics:      []common.Hash{common.HexToHash("0x01")},
 		BlockNumber: 7,
@@ -68,7 +68,7 @@ func TestBoundBatchCapturesWrites(t *testing.T) {
 	// Reads through the bound ctx see the pending writes.
 	got, err := s.GetBlock(ctx, 7)
 	require.NoError(t, err)
-	require.Equal(t, block.Hash(), got.Hash())
+	require.Equal(t, block.Hash(), got.Hash)
 	meta, err := s.GetTokenMetadata(ctx, tokenAddr)
 	require.NoError(t, err)
 	require.Equal(t, "T", meta.Name)
@@ -80,14 +80,14 @@ func TestBoundBatchCapturesWrites(t *testing.T) {
 	}
 	got, err = s.GetBlock(context.Background(), 7)
 	require.NoError(t, err)
-	require.Equal(t, block.Hash(), got.Hash())
+	require.Equal(t, block.Hash(), got.Hash)
 }
 
 // TestUnboundContextWritesDirectly checks the default path is unchanged.
 func TestUnboundContextWritesDirectly(t *testing.T) {
 	s := newTestPebble(t)
 	block := testutil.NewTestBlockWithTransactions(3, 1)
-	require.NoError(t, s.SetBlock(context.Background(), block))
+	require.NoError(t, s.SetBlock(context.Background(), modelBlock(block)))
 	require.NotZero(t, committedKeys(t, s, "/data/blocks/"))
 }
 
@@ -99,7 +99,7 @@ func TestBatchBoundToOtherStorageIsIgnored(t *testing.T) {
 	ctx, batch := bindTestBatch(a)
 	defer batch.Close()
 
-	require.NoError(t, b.SetBlock(ctx, testutil.NewTestBlockWithTransactions(5, 1)))
+	require.NoError(t, b.SetBlock(ctx, modelBlock(testutil.NewTestBlockWithTransactions(5, 1))))
 	require.NotZero(t, committedKeys(t, b, "/data/blocks/"))
 	require.Zero(t, batch.Count())
 }

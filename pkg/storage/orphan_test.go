@@ -41,8 +41,8 @@ func indexOrphanTestChain(t *testing.T, s *PebbleStorage, n uint64, tag byte) []
 		txCtx, tx, err := s.BeginBlock(ctx)
 		require.NoError(t, err)
 		tx.SetHeight(h)
-		require.NoError(t, s.SetModelBlock(txCtx, b))
-		require.NoError(t, s.SetModelReceipt(txCtx, r))
+		require.NoError(t, s.SetBlock(txCtx, b))
+		require.NoError(t, s.SetReceipt(txCtx, r))
 		require.NoError(t, s.SetLatestHeight(txCtx, h))
 		require.NoError(t, tx.Commit())
 		blocks = append(blocks, b)
@@ -69,7 +69,7 @@ func TestRollbackArchivesOrphans(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), latest)
 	for h := uint64(3); h <= 5; h++ {
-		_, err := s.GetModelBlock(ctx, h)
+		_, err := s.GetBlock(ctx, h)
 		require.ErrorIs(t, err, port.ErrNotFound, "block %d left the canonical index", h)
 
 		ob, err := s.GetOrphanedBlock(ctx, blocks[h].Hash)
@@ -100,7 +100,7 @@ func TestRollbackArchivesOrphans(t *testing.T) {
 			require.NoError(t, err)
 			tx.SetHeight(h)
 			b := &model.Block{Hash: common.Hash{'b', byte(h)}, Number: h, Difficulty: big.NewInt(0)}
-			require.NoError(t, s.SetModelBlock(txCtx, b))
+			require.NoError(t, s.SetBlock(txCtx, b))
 			require.NoError(t, s.SetLatestHeight(txCtx, h))
 			require.NoError(t, tx.Commit())
 		}
@@ -140,7 +140,7 @@ func TestRollbackArchivesAtomically(t *testing.T) {
 	_, err := s.RollbackTo(ctx, 2)
 	require.Error(t, err)
 	for h := uint64(3); h <= 5; h++ {
-		_, canonErr := s.GetModelBlock(ctx, h)
+		_, canonErr := s.GetBlock(ctx, h)
 		_, orphanErr := s.GetOrphanedBlock(ctx, blocks[h].Hash)
 		require.NotEqual(t, canonErr == nil, orphanErr == nil, "block %d: canonical %v, orphan %v", h, canonErr, orphanErr)
 	}
@@ -166,9 +166,9 @@ func TestOrphanRetentionPrunesOldReorgs(t *testing.T) {
 		txCtx, tx, err := s.BeginBlock(ctx)
 		require.NoError(t, err)
 		tx.SetHeight(5)
-		require.NoError(t, s.SetModelBlock(txCtx, b))
+		require.NoError(t, s.SetBlock(txCtx, b))
 		for _, x := range b.Transactions {
-			require.NoError(t, s.SetModelReceipt(txCtx, &model.Receipt{
+			require.NoError(t, s.SetReceipt(txCtx, &model.Receipt{
 				Status: 1, CumulativeGasUsed: 21000, GasUsed: 21000, EffectiveGasPrice: big.NewInt(1),
 				TxHash: x.Hash, BlockHash: b.Hash, BlockNumber: 5, Bloom: make([]byte, 256),
 			}))

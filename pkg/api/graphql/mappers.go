@@ -156,7 +156,7 @@ func (s *Schema) transactionToMap(tx *model.Transaction, location *port.TxLocati
 		// Contract creation transaction - look up the receipt to get the contract address
 		if s.storage != nil {
 			receipt, err := s.storage.GetReceipt(context.Background(), tx.Hash)
-			if err == nil && receipt != nil && receipt.ContractAddress != (common.Address{}) {
+			if err == nil && receipt != nil && receipt.ContractAddress != nil {
 				result["contractAddress"] = receipt.ContractAddress.Hex()
 			}
 		}
@@ -356,7 +356,7 @@ func decodedEventLogToMap(decoded *abi.DecodedEventLog) map[string]interface{} {
 
 // logToMapWithDecode converts a log to a GraphQL-friendly map with optional decoding
 // Uses contract ABI if available, otherwise falls back to known event signatures
-func (s *Schema) logToMapWithDecode(log *types.Log, decode bool) map[string]interface{} {
+func (s *Schema) logToMapWithDecode(log *model.Log, decode bool) map[string]interface{} {
 	if log == nil {
 		return nil
 	}
@@ -382,7 +382,7 @@ func (s *Schema) logToMapWithDecode(log *types.Log, decode bool) map[string]inte
 	if decode {
 		// 1. Try contract-specific ABI first (if available)
 		if s.abiDecoder != nil && s.abiDecoder.HasABI(log.Address) {
-			decoded, err := s.abiDecoder.DecodeLog(log)
+			decoded, err := s.abiDecoder.DecodeLog(gethconv.LogToGeth(log))
 			if err == nil {
 				// Convert to new format with structured params
 				params := make([]interface{}, 0)
@@ -404,7 +404,7 @@ func (s *Schema) logToMapWithDecode(log *types.Log, decode bool) map[string]inte
 		}
 
 		// 2. Fall back to known event signatures
-		if knownDecoded := abi.DecodeKnownEvent(log); knownDecoded != nil {
+		if knownDecoded := abi.DecodeKnownEvent(gethconv.LogToGeth(log)); knownDecoded != nil {
 			result["decoded"] = decodedEventLogToMap(knownDecoded)
 		}
 	}

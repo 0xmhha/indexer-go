@@ -192,7 +192,7 @@ func (s *Schema) resolveDynamicContractEvents(p graphql.ResolveParams) (interfac
 			timestamp := "0"
 			block, err := s.storage.GetBlock(ctx, log.BlockNumber)
 			if err == nil && block != nil {
-				timestamp = fmt.Sprintf("%d", block.Header().Time)
+				timestamp = fmt.Sprintf("%d", block.Time)
 			}
 
 			allEvents = append(allEvents, map[string]interface{}{

@@ -82,7 +82,7 @@ func TestPebbleStorage_GetTopMiners(t *testing.T) {
 
 	// Index blocks
 	for _, block := range blocks {
-		_ = storage.SetBlock(ctx, block)
+		_ = storage.SetBlock(ctx, modelBlock(block))
 	}
 	_ = storage.SetLatestHeight(ctx, 109)
 
@@ -143,7 +143,7 @@ func TestPebbleStorage_GetTopMiners_WithLimit(t *testing.T) {
 
 	// Create blocks for each miner
 	for i, miner := range miners {
-		_ = storage.SetBlock(ctx, createTestBlockWithMiner(uint64(100+i), miner, 100000, uint64(1000+i)))
+		_ = storage.SetBlock(ctx, modelBlock(createTestBlockWithMiner(uint64(100+i), miner, 100000, uint64(1000+i))))
 	}
 	_ = storage.SetLatestHeight(ctx, 104)
 
@@ -167,7 +167,7 @@ func TestPebbleStorage_GetTopMiners_EmptyRange(t *testing.T) {
 
 	// Set some blocks
 	miner := common.HexToAddress("0x1111111111111111111111111111111111111111")
-	_ = storage.SetBlock(ctx, createTestBlockWithMiner(100, miner, 100000, 1000))
+	_ = storage.SetBlock(ctx, modelBlock(createTestBlockWithMiner(100, miner, 100000, 1000)))
 	_ = storage.SetLatestHeight(ctx, 100)
 
 	// Query range with no blocks
@@ -208,7 +208,7 @@ func TestPebbleStorage_GetTokenBalances(t *testing.T) {
 		Extra:       []byte{},
 	}
 	block := types.NewBlock(header, &types.Body{Transactions: []*types.Transaction{tx}}, nil, trie.NewStackTrie(nil))
-	if err := storage.SetBlock(ctx, block); err != nil {
+	if err := storage.SetBlock(ctx, modelBlock(block)); err != nil {
 		t.Fatalf("SetBlock() error = %v", err)
 	}
 
@@ -240,7 +240,7 @@ func TestPebbleStorage_GetTokenBalances(t *testing.T) {
 			},
 		},
 	}
-	if err := storage.SetReceipt(ctx, receipt); err != nil {
+	if err := storage.SetReceipt(ctx, modelReceipt(receipt)); err != nil {
 		t.Fatalf("SetReceipt() error = %v", err)
 	}
 
@@ -292,7 +292,7 @@ func TestPebbleStorage_GetGasStatsByBlockRange(t *testing.T) {
 		header.TxHash = types.DeriveSha(types.Transactions{tx}, trie.NewStackTrie(nil))
 		blockWithTx := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
 
-		_ = storage.SetBlock(ctx, blockWithTx)
+		_ = storage.SetBlock(ctx, modelBlock(blockWithTx))
 
 		// Create receipt
 		receipt := &types.Receipt{
@@ -309,7 +309,7 @@ func TestPebbleStorage_GetGasStatsByBlockRange(t *testing.T) {
 			BlockNumber:       big.NewInt(int64(100 + i)),
 			TransactionIndex:  0,
 		}
-		_ = storage.SetReceipt(ctx, receipt)
+		_ = storage.SetReceipt(ctx, modelReceipt(receipt))
 	}
 
 	_ = storage.SetLatestHeight(ctx, 104)
@@ -364,7 +364,7 @@ func TestPebbleStorage_GetNetworkMetrics(t *testing.T) {
 	// Create 10 blocks over 10 seconds (1 block per second)
 	for i := uint64(0); i < 10; i++ {
 		block := createTestBlockWithMiner(100+i, miner, 100000, 1000+i)
-		_ = storage.SetBlock(ctx, block)
+		_ = storage.SetBlock(ctx, modelBlock(block))
 		_ = storage.SetBlockTimestamp(ctx, 1000+i, 100+i)
 	}
 
@@ -507,7 +507,7 @@ func TestPebbleStorage_GetGasStatsByBlockRange_EmptyRange(t *testing.T) {
 
 	// Add a block
 	miner := common.HexToAddress("0x1111111111111111111111111111111111111111")
-	_ = storage.SetBlock(ctx, createTestBlockWithMiner(100, miner, 100000, 1000))
+	_ = storage.SetBlock(ctx, modelBlock(createTestBlockWithMiner(100, miner, 100000, 1000)))
 	_ = storage.SetLatestHeight(ctx, 100)
 
 	// Query range with no blocks
@@ -554,7 +554,7 @@ func TestPebbleStorage_GetGasStatsByAddress(t *testing.T) {
 		}
 		header.TxHash = types.DeriveSha(types.Transactions{tx}, trie.NewStackTrie(nil))
 		block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
-		require.NoError(t, storage.SetBlock(ctx, block))
+		require.NoError(t, storage.SetBlock(ctx, modelBlock(block)))
 
 		receipt := &types.Receipt{
 			Type:              types.LegacyTxType,
@@ -566,7 +566,7 @@ func TestPebbleStorage_GetGasStatsByAddress(t *testing.T) {
 			BlockNumber:       big.NewInt(int64(100 + i)),
 			TransactionIndex:  0,
 		}
-		require.NoError(t, storage.SetReceipt(ctx, receipt))
+		require.NoError(t, storage.SetReceipt(ctx, modelReceipt(receipt)))
 	}
 	require.NoError(t, storage.SetLatestHeight(ctx, 102))
 
@@ -602,7 +602,7 @@ func TestPebbleStorage_GetGasStatsByAddress_NoTxs(t *testing.T) {
 
 	// Create block without transactions from this address
 	block := createTestBlockWithMiner(100, common.Address{}, 100000, 1000)
-	require.NoError(t, storage.SetBlock(ctx, block))
+	require.NoError(t, storage.SetBlock(ctx, modelBlock(block)))
 	require.NoError(t, storage.SetLatestHeight(ctx, 100))
 
 	stats, err := storage.GetGasStatsByAddress(ctx, addr, 100, 100)
@@ -643,7 +643,7 @@ func TestPebbleStorage_GetTopAddressesByGasUsed(t *testing.T) {
 		}
 		header.TxHash = types.DeriveSha(types.Transactions{tx}, trie.NewStackTrie(nil))
 		block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
-		require.NoError(t, storage.SetBlock(ctx, block))
+		require.NoError(t, storage.SetBlock(ctx, modelBlock(block)))
 
 		receipt := &types.Receipt{
 			Type:              types.LegacyTxType,
@@ -655,7 +655,7 @@ func TestPebbleStorage_GetTopAddressesByGasUsed(t *testing.T) {
 			BlockNumber:       big.NewInt(int64(100 + i)),
 			TransactionIndex:  0,
 		}
-		require.NoError(t, storage.SetReceipt(ctx, receipt))
+		require.NoError(t, storage.SetReceipt(ctx, modelReceipt(receipt)))
 	}
 	require.NoError(t, storage.SetLatestHeight(ctx, 102))
 
@@ -711,7 +711,7 @@ func TestPebbleStorage_GetTopAddressesByTxCount(t *testing.T) {
 		}
 		header.TxHash = types.DeriveSha(types.Transactions{tx}, trie.NewStackTrie(nil))
 		block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
-		require.NoError(t, storage.SetBlock(ctx, block))
+		require.NoError(t, storage.SetBlock(ctx, modelBlock(block)))
 
 		receipt := &types.Receipt{
 			Type:              types.LegacyTxType,
@@ -723,7 +723,7 @@ func TestPebbleStorage_GetTopAddressesByTxCount(t *testing.T) {
 			BlockNumber:       big.NewInt(int64(100 + i)),
 			TransactionIndex:  0,
 		}
-		require.NoError(t, storage.SetReceipt(ctx, receipt))
+		require.NoError(t, storage.SetReceipt(ctx, modelReceipt(receipt)))
 	}
 	require.NoError(t, storage.SetLatestHeight(ctx, 103))
 

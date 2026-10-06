@@ -41,7 +41,7 @@ func TestPebbleStorage_IndexLog(t *testing.T) {
 	log := createTestLog(100, 0, 0, addr, topics, data)
 
 	// Index the log
-	err := storage.IndexLog(ctx, log)
+	err := storage.IndexLog(ctx, modelLog(log))
 	if err != nil {
 		t.Fatalf("IndexLog() error = %v", err)
 	}
@@ -84,7 +84,7 @@ func TestPebbleStorage_IndexLogs(t *testing.T) {
 	}
 
 	// Index multiple logs
-	err := storage.IndexLogs(ctx, logs)
+	err := storage.IndexLogs(ctx, modelLogs(logs))
 	if err != nil {
 		t.Fatalf("IndexLogs() error = %v", err)
 	}
@@ -116,7 +116,7 @@ func TestPebbleStorage_IndexLog_Errors(t *testing.T) {
 	t.Run("closed storage", func(t *testing.T) {
 		storage.Close()
 		log := createTestLog(100, 0, 0, common.Address{}, []common.Hash{}, []byte{})
-		err := storage.IndexLog(ctx, log)
+		err := storage.IndexLog(ctx, modelLog(log))
 		if err != port.ErrClosed {
 			t.Errorf("IndexLog() on closed storage error = %v, want ErrClosed", err)
 		}
@@ -137,9 +137,9 @@ func TestPebbleStorage_GetLogsByBlock(t *testing.T) {
 	log2 := createTestLog(100, 0, 1, addr, []common.Hash{topic}, []byte{2})
 	log3 := createTestLog(101, 0, 0, addr, []common.Hash{topic}, []byte{3})
 
-	_ = storage.IndexLog(ctx, log1)
-	_ = storage.IndexLog(ctx, log2)
-	_ = storage.IndexLog(ctx, log3)
+	_ = storage.IndexLog(ctx, modelLog(log1))
+	_ = storage.IndexLog(ctx, modelLog(log2))
+	_ = storage.IndexLog(ctx, modelLog(log3))
 
 	// Get logs from block 100
 	logs, err := storage.GetLogsByBlock(ctx, 100)
@@ -187,9 +187,9 @@ func TestPebbleStorage_GetLogsByAddress(t *testing.T) {
 	log2 := createTestLog(101, 0, 0, addr1, []common.Hash{topic}, []byte{2})
 	log3 := createTestLog(102, 0, 0, addr2, []common.Hash{topic}, []byte{3})
 
-	_ = storage.IndexLog(ctx, log1)
-	_ = storage.IndexLog(ctx, log2)
-	_ = storage.IndexLog(ctx, log3)
+	_ = storage.IndexLog(ctx, modelLog(log1))
+	_ = storage.IndexLog(ctx, modelLog(log2))
+	_ = storage.IndexLog(ctx, modelLog(log3))
 
 	// Get logs from addr1
 	logs, err := storage.GetLogsByAddress(ctx, addr1, 100, 102)
@@ -238,9 +238,9 @@ func TestPebbleStorage_GetLogsByTopic(t *testing.T) {
 	log2 := createTestLog(101, 0, 0, addr, []common.Hash{topic0, topic2}, []byte{2})
 	log3 := createTestLog(102, 0, 0, addr, []common.Hash{topic1, topic2}, []byte{3})
 
-	_ = storage.IndexLog(ctx, log1)
-	_ = storage.IndexLog(ctx, log2)
-	_ = storage.IndexLog(ctx, log3)
+	_ = storage.IndexLog(ctx, modelLog(log1))
+	_ = storage.IndexLog(ctx, modelLog(log2))
+	_ = storage.IndexLog(ctx, modelLog(log3))
 
 	// Get logs by topic0 at position 0
 	logs, err := storage.GetLogsByTopic(ctx, topic0, 0, 100, 102)
@@ -292,10 +292,10 @@ func TestPebbleStorage_GetLogs(t *testing.T) {
 	log3 := createTestLog(102, 0, 0, addr2, []common.Hash{topic1, topic2}, []byte{3})
 	log4 := createTestLog(103, 0, 0, addr2, []common.Hash{topic0, topic1}, []byte{4})
 
-	_ = storage.IndexLog(ctx, log1)
-	_ = storage.IndexLog(ctx, log2)
-	_ = storage.IndexLog(ctx, log3)
-	_ = storage.IndexLog(ctx, log4)
+	_ = storage.IndexLog(ctx, modelLog(log1))
+	_ = storage.IndexLog(ctx, modelLog(log2))
+	_ = storage.IndexLog(ctx, modelLog(log3))
+	_ = storage.IndexLog(ctx, modelLog(log4))
 
 	// Set latest height for filter
 	_ = storage.SetLatestHeight(ctx, 103)
@@ -424,7 +424,7 @@ func TestPebbleStorage_FilterLogsByTopics(t *testing.T) {
 	}
 
 	t.Run("empty topic filter", func(t *testing.T) {
-		filtered := ps.filterLogsByTopics(logs, [][]common.Hash{})
+		filtered := ps.filterLogsByTopics(modelLogs(logs), [][]common.Hash{})
 		if len(filtered) != 3 {
 			t.Errorf("filterLogsByTopics(empty) returned %d logs, want 3", len(filtered))
 		}
@@ -432,7 +432,7 @@ func TestPebbleStorage_FilterLogsByTopics(t *testing.T) {
 
 	t.Run("single topic filter", func(t *testing.T) {
 		topicFilter := [][]common.Hash{{topic0}}
-		filtered := ps.filterLogsByTopics(logs, topicFilter)
+		filtered := ps.filterLogsByTopics(modelLogs(logs), topicFilter)
 		if len(filtered) != 2 {
 			t.Errorf("filterLogsByTopics(topic0) returned %d logs, want 2", len(filtered))
 		}
@@ -441,7 +441,7 @@ func TestPebbleStorage_FilterLogsByTopics(t *testing.T) {
 	t.Run("multiple topic positions", func(t *testing.T) {
 		// Match topic0 at position 0 AND topic2 at position 1
 		topicFilter := [][]common.Hash{{topic0}, {topic2}}
-		filtered := ps.filterLogsByTopics(logs, topicFilter)
+		filtered := ps.filterLogsByTopics(modelLogs(logs), topicFilter)
 		if len(filtered) != 1 {
 			t.Errorf("filterLogsByTopics(topic0, topic2) returned %d logs, want 1", len(filtered))
 		}
@@ -450,7 +450,7 @@ func TestPebbleStorage_FilterLogsByTopics(t *testing.T) {
 	t.Run("wildcard topic position", func(t *testing.T) {
 		// Match topic2 at position 1, any value at position 0
 		topicFilter := [][]common.Hash{{}, {topic2}}
-		filtered := ps.filterLogsByTopics(logs, topicFilter)
+		filtered := ps.filterLogsByTopics(modelLogs(logs), topicFilter)
 		if len(filtered) != 2 {
 			t.Errorf("filterLogsByTopics(*, topic2) returned %d logs, want 2", len(filtered))
 		}
@@ -519,7 +519,7 @@ func TestPebbleStorage_MatchesTopicFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ps.matchesTopicFilter(log, tt.topicFilter)
+			got := ps.matchesTopicFilter(modelLog(log), tt.topicFilter)
 			if got != tt.want {
 				t.Errorf("matchesTopicFilter() = %v, want %v", got, tt.want)
 			}
@@ -542,7 +542,7 @@ func TestPebbleStorage_LogIndexing_MultipleTopics(t *testing.T) {
 	// Index log with all 4 topics
 	log := createTestLog(100, 0, 0, addr, []common.Hash{topic0, topic1, topic2, topic3}, []byte{1, 2, 3, 4})
 
-	err := storage.IndexLog(ctx, log)
+	err := storage.IndexLog(ctx, modelLog(log))
 	if err != nil {
 		t.Fatalf("IndexLog() error = %v", err)
 	}
@@ -575,7 +575,7 @@ func TestPebbleStorage_Logs_ReadOnly(t *testing.T) {
 
 	ctx := context.Background()
 	log := createTestLog(100, 0, 0, common.Address{}, []common.Hash{}, []byte{1})
-	_ = storage.IndexLog(ctx, log)
+	_ = storage.IndexLog(ctx, modelLog(log))
 	storage.Close()
 
 	// Reopen as read-only
@@ -597,7 +597,7 @@ func TestPebbleStorage_Logs_ReadOnly(t *testing.T) {
 
 	// Should not be able to write
 	newLog := createTestLog(101, 0, 0, common.Address{}, []common.Hash{}, []byte{2})
-	err = roStorage.IndexLog(ctx, newLog)
+	err = roStorage.IndexLog(ctx, modelLog(newLog))
 	if err != port.ErrReadOnly {
 		t.Errorf("IndexLog() on read-only storage error = %v, want ErrReadOnly", err)
 	}

@@ -11,8 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/userop"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,28 +31,28 @@ func (m *mockStorage) GetLatestHeight(ctx context.Context) (uint64, error) {
 	return m.latestHeight, nil
 }
 
-func (m *mockStorage) GetBlock(ctx context.Context, height uint64) (*types.Block, error) {
+func (m *mockStorage) gethGetBlock(ctx context.Context, height uint64) (*types.Block, error) {
 	if block, ok := m.blocks[height]; ok {
 		return block, nil
 	}
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+func (m *mockStorage) gethGetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	if block, ok := m.blocksByHash[hash]; ok {
 		return block, nil
 	}
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
+func (m *mockStorage) gethGetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
 	return nil, nil, port.ErrNotFound
 }
-func (m *mockStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
+func (m *mockStorage) gethGetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
 	return nil, nil, nil
 }
 
-func (m *mockStorage) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+func (m *mockStorage) gethGetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -59,19 +60,19 @@ func (m *mockStorage) GetTransactionsByAddress(ctx context.Context, addr common.
 	return []common.Hash{}, nil
 }
 
-func (m *mockStorage) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
+func (m *mockStorage) gethGetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
 	return []*types.Receipt{}, nil
 }
 
-func (m *mockStorage) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
+func (m *mockStorage) gethGetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
 	return []*types.Receipt{}, nil
 }
 
-func (m *mockStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+func (m *mockStorage) gethGetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
 	return []*types.Receipt{}, nil
 }
 
-func (m *mockStorage) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
+func (m *mockStorage) gethGetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
 	blocks := make([]*types.Block, 0, endHeight-startHeight+1)
 	for i := startHeight; i <= endHeight; i++ {
 		if block, ok := m.blocks[i]; ok {
@@ -103,7 +104,7 @@ func (m *mockStorage) SetLatestHeight(ctx context.Context, height uint64) error 
 	return nil
 }
 
-func (m *mockStorage) SetBlock(ctx context.Context, block *types.Block) error {
+func (m *mockStorage) gethSetBlock(ctx context.Context, block *types.Block) error {
 	m.blocks[block.NumberU64()] = block
 	m.blocksByHash[block.Hash()] = block
 	return nil
@@ -113,7 +114,7 @@ func (m *mockStorage) SetTransaction(ctx context.Context, tx *types.Transaction,
 	return nil
 }
 
-func (m *mockStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
+func (m *mockStorage) gethSetReceipt(ctx context.Context, receipt *types.Receipt) error {
 	return nil
 }
 
@@ -166,10 +167,6 @@ func (m *mockStorage) Has(ctx context.Context, key []byte) (bool, error) {
 	return false, nil
 }
 
-func (m *mockStorage) NewBatch() storage.Batch {
-	return nil
-}
-
 func (m *mockStorage) Compact(ctx context.Context, start, end []byte) error {
 	return nil
 }
@@ -194,19 +191,19 @@ func (m *mockStorage) HasABI(ctx context.Context, address common.Address) (bool,
 	return false, nil
 }
 
-func (m *mockStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
+func (m *mockStorage) gethGetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 
-func (m *mockStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
+func (m *mockStorage) gethGetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 
-func (m *mockStorage) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (m *mockStorage) gethGetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 
-func (m *mockStorage) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (m *mockStorage) gethGetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
 	return []*types.Log{}, nil
 }
 
@@ -222,11 +219,11 @@ func (m *mockStorage) DeleteLogsByBlock(ctx context.Context, blockNumber uint64)
 	return nil
 }
 
-func (m *mockStorage) IndexLogs(ctx context.Context, logs []*types.Log) error {
+func (m *mockStorage) gethIndexLogs(ctx context.Context, logs []*types.Log) error {
 	return nil
 }
 
-func (m *mockStorage) IndexLog(ctx context.Context, log *types.Log) error {
+func (m *mockStorage) gethIndexLog(ctx context.Context, log *types.Log) error {
 	return nil
 }
 
@@ -264,11 +261,11 @@ func (m *mockStorage) GetAddressStats(ctx context.Context, addr common.Address) 
 }
 
 // HistoricalReader methods
-func (m *mockStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
+func (m *mockStorage) gethGetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
 	return []*types.Block{}, nil
 }
 
-func (m *mockStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
+func (m *mockStorage) gethGetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -528,7 +525,7 @@ type mockStorageWithData struct {
 	receipts     map[common.Hash]*types.Receipt
 }
 
-func (m *mockStorageWithData) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
+func (m *mockStorageWithData) gethGetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
 	if tx, ok := m.transactions[hash]; ok {
 		location := &port.TxLocation{
 			BlockHeight: 1,
@@ -539,16 +536,16 @@ func (m *mockStorageWithData) GetTransaction(ctx context.Context, hash common.Ha
 	}
 	return nil, nil, port.ErrNotFound
 }
-func (m *mockStorageWithData) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
+func (m *mockStorageWithData) gethGetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
 	txs := make([]*types.Transaction, len(hashes))
 	locs := make([]*port.TxLocation, len(hashes))
 	for i, h := range hashes {
-		txs[i], locs[i], _ = m.GetTransaction(ctx, h)
+		txs[i], locs[i], _ = m.gethGetTransaction(ctx, h)
 	}
 	return txs, locs, nil
 }
 
-func (m *mockStorageWithData) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+func (m *mockStorageWithData) gethGetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	if receipt, ok := m.receipts[hash]; ok {
 		return receipt, nil
 	}
@@ -1153,22 +1150,22 @@ func (m *mockStorageWithErrors) GetLatestHeight(ctx context.Context) (uint64, er
 	return 0, fmt.Errorf("storage error")
 }
 
-func (m *mockStorageWithErrors) GetBlock(ctx context.Context, height uint64) (*types.Block, error) {
+func (m *mockStorageWithErrors) gethGetBlock(ctx context.Context, height uint64) (*types.Block, error) {
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+func (m *mockStorageWithErrors) gethGetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
+func (m *mockStorageWithErrors) gethGetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
 	return nil, nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
+func (m *mockStorageWithErrors) gethGetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
 	return nil, nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+func (m *mockStorageWithErrors) gethGetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -1176,19 +1173,19 @@ func (m *mockStorageWithErrors) GetTransactionsByAddress(ctx context.Context, ad
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
+func (m *mockStorageWithErrors) gethGetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
+func (m *mockStorageWithErrors) gethGetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+func (m *mockStorageWithErrors) gethGetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
+func (m *mockStorageWithErrors) gethGetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -1212,7 +1209,7 @@ func (m *mockStorageWithErrors) SetLatestHeight(ctx context.Context, height uint
 	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) SetBlock(ctx context.Context, block *types.Block) error {
+func (m *mockStorageWithErrors) gethSetBlock(ctx context.Context, block *types.Block) error {
 	return port.ErrNotFound
 }
 
@@ -1220,7 +1217,7 @@ func (m *mockStorageWithErrors) SetTransaction(ctx context.Context, tx *types.Tr
 	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
+func (m *mockStorageWithErrors) gethSetReceipt(ctx context.Context, receipt *types.Receipt) error {
 	return port.ErrNotFound
 }
 
@@ -1242,10 +1239,6 @@ func (m *mockStorageWithErrors) DeleteBlock(ctx context.Context, height uint64) 
 
 func (m *mockStorageWithErrors) Close() error {
 	return port.ErrNotFound
-}
-
-func (m *mockStorageWithErrors) NewBatch() storage.Batch {
-	return nil
 }
 
 func (m *mockStorageWithErrors) Compact(ctx context.Context, start, end []byte) error {
@@ -1272,19 +1265,19 @@ func (m *mockStorageWithErrors) HasABI(ctx context.Context, address common.Addre
 	return false, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
+func (m *mockStorageWithErrors) gethGetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
+func (m *mockStorageWithErrors) gethGetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (m *mockStorageWithErrors) gethGetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (m *mockStorageWithErrors) gethGetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -1300,11 +1293,11 @@ func (m *mockStorageWithErrors) DeleteLogsByBlock(ctx context.Context, blockNumb
 	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) IndexLogs(ctx context.Context, logs []*types.Log) error {
+func (m *mockStorageWithErrors) gethIndexLogs(ctx context.Context, logs []*types.Log) error {
 	return port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) IndexLog(ctx context.Context, log *types.Log) error {
+func (m *mockStorageWithErrors) gethIndexLog(ctx context.Context, log *types.Log) error {
 	return port.ErrNotFound
 }
 
@@ -1342,11 +1335,11 @@ func (m *mockStorageWithErrors) GetAddressStats(ctx context.Context, addr common
 }
 
 // HistoricalReader methods for mockStorageWithErrors
-func (m *mockStorageWithErrors) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
+func (m *mockStorageWithErrors) gethGetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
+func (m *mockStorageWithErrors) gethGetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -1641,22 +1634,22 @@ func (m *mockStorageWithNonNotFoundErrors) GetLatestHeight(ctx context.Context) 
 	return 0, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetBlock(ctx context.Context, height uint64) (*types.Block, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetBlock(ctx context.Context, height uint64) (*types.Block, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, *port.TxLocation, error) {
 	return nil, nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetTransactions(ctx context.Context, hashes []common.Hash) ([]*types.Transaction, []*port.TxLocation, error) {
 	return nil, nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1664,19 +1657,19 @@ func (m *mockStorageWithNonNotFoundErrors) GetTransactionsByAddress(ctx context.
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*types.Block, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1700,7 +1693,7 @@ func (m *mockStorageWithNonNotFoundErrors) SetLatestHeight(ctx context.Context, 
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) SetBlock(ctx context.Context, block *types.Block) error {
+func (m *mockStorageWithNonNotFoundErrors) gethSetBlock(ctx context.Context, block *types.Block) error {
 	return fmt.Errorf("database connection failed")
 }
 
@@ -1708,7 +1701,7 @@ func (m *mockStorageWithNonNotFoundErrors) SetTransaction(ctx context.Context, t
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
+func (m *mockStorageWithNonNotFoundErrors) gethSetReceipt(ctx context.Context, receipt *types.Receipt) error {
 	return fmt.Errorf("database connection failed")
 }
 
@@ -1730,10 +1723,6 @@ func (m *mockStorageWithNonNotFoundErrors) DeleteBlock(ctx context.Context, heig
 
 func (m *mockStorageWithNonNotFoundErrors) Close() error {
 	return fmt.Errorf("database connection failed")
-}
-
-func (m *mockStorageWithNonNotFoundErrors) NewBatch() storage.Batch {
-	return nil
 }
 
 func (m *mockStorageWithNonNotFoundErrors) Compact(ctx context.Context, start, end []byte) error {
@@ -1760,19 +1749,19 @@ func (m *mockStorageWithNonNotFoundErrors) HasABI(ctx context.Context, address c
 	return false, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1788,11 +1777,11 @@ func (m *mockStorageWithNonNotFoundErrors) DeleteLogsByBlock(ctx context.Context
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) IndexLogs(ctx context.Context, logs []*types.Log) error {
+func (m *mockStorageWithNonNotFoundErrors) gethIndexLogs(ctx context.Context, logs []*types.Log) error {
 	return fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) IndexLog(ctx context.Context, log *types.Log) error {
+func (m *mockStorageWithNonNotFoundErrors) gethIndexLog(ctx context.Context, log *types.Log) error {
 	return fmt.Errorf("database connection failed")
 }
 
@@ -1830,11 +1819,11 @@ func (m *mockStorageWithNonNotFoundErrors) GetAddressStats(ctx context.Context, 
 }
 
 // HistoricalReader methods for mockStorageWithNonNotFoundErrors
-func (m *mockStorageWithNonNotFoundErrors) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
+func (m *mockStorageWithNonNotFoundErrors) gethGetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -2455,4 +2444,256 @@ func TestJSONRPCErrorLogging(t *testing.T) {
 			t.Errorf("expected InternalError, got %v", err.Code)
 		}
 	})
+}
+
+func (m *mockStorage) GetBlock(ctx context.Context, height uint64) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlock(ctx, height))
+}
+
+func (m *mockStorage) GetBlockByHash(ctx context.Context, hash common.Hash) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlockByHash(ctx, hash))
+}
+
+func (m *mockStorage) GetTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *port.TxLocation, error) {
+	return modelTxOf(m.gethGetTransaction(ctx, hash))
+}
+
+func (m *mockStorage) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*model.Transaction, []*port.TxLocation, error) {
+	return modelTxsOf(m.gethGetTransactions(ctx, hashes))
+}
+
+func (m *mockStorage) GetReceipt(ctx context.Context, hash common.Hash) (*model.Receipt, error) {
+	return modelReceiptOf(m.gethGetReceipt(ctx, hash))
+}
+
+func (m *mockStorage) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*model.Receipt, error) {
+	return modelReceiptsOf(m.gethGetReceipts(ctx, hashes))
+}
+
+func (m *mockStorage) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*model.Receipt, error) {
+	return modelReceiptsOf(m.gethGetReceiptsByBlockHash(ctx, blockHash))
+}
+
+func (m *mockStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*model.Receipt, error) {
+	return modelReceiptsOf(m.gethGetReceiptsByBlockNumber(ctx, blockNumber))
+}
+
+func (m *mockStorage) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*model.Block, error) {
+	return modelBlocksOf(m.gethGetBlocks(ctx, startHeight, endHeight))
+}
+
+func (m *mockStorage) SetBlock(ctx context.Context, b *model.Block) error {
+	gb, err := gethconv.BlockToGeth(b)
+	if err != nil {
+		return err
+	}
+	return m.gethSetBlock(ctx, gb)
+}
+
+func (m *mockStorage) SetReceipt(ctx context.Context, r *model.Receipt) error {
+	return m.gethSetReceipt(ctx, gethconv.ReceiptToGeth(r))
+}
+
+func (m *mockStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogs(ctx, filter))
+}
+
+func (m *mockStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByBlock(ctx, blockNumber))
+}
+
+func (m *mockStorage) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByAddress(ctx, address, fromBlock, toBlock))
+}
+
+func (m *mockStorage) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByTopic(ctx, topic, topicIndex, fromBlock, toBlock))
+}
+
+func (m *mockStorage) IndexLogs(ctx context.Context, logs []*model.Log) error {
+	return m.gethIndexLogs(ctx, gethconv.LogsToGeth(logs))
+}
+
+func (m *mockStorage) IndexLog(ctx context.Context, log *model.Log) error {
+	return m.gethIndexLog(ctx, gethconv.LogToGeth(log))
+}
+
+func (m *mockStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+	return modelBlocksOf(m.gethGetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset))
+}
+
+func (m *mockStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlockByTimestamp(ctx, timestamp))
+}
+
+func (m *mockStorageWithData) GetTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *port.TxLocation, error) {
+	return modelTxOf(m.gethGetTransaction(ctx, hash))
+}
+
+func (m *mockStorageWithData) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*model.Transaction, []*port.TxLocation, error) {
+	return modelTxsOf(m.gethGetTransactions(ctx, hashes))
+}
+
+func (m *mockStorageWithData) GetReceipt(ctx context.Context, hash common.Hash) (*model.Receipt, error) {
+	return modelReceiptOf(m.gethGetReceipt(ctx, hash))
+}
+
+func (m *mockStorageWithErrors) GetBlock(ctx context.Context, height uint64) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlock(ctx, height))
+}
+
+func (m *mockStorageWithErrors) GetBlockByHash(ctx context.Context, hash common.Hash) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlockByHash(ctx, hash))
+}
+
+func (m *mockStorageWithErrors) GetTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *port.TxLocation, error) {
+	return modelTxOf(m.gethGetTransaction(ctx, hash))
+}
+
+func (m *mockStorageWithErrors) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*model.Transaction, []*port.TxLocation, error) {
+	return modelTxsOf(m.gethGetTransactions(ctx, hashes))
+}
+
+func (m *mockStorageWithErrors) GetReceipt(ctx context.Context, hash common.Hash) (*model.Receipt, error) {
+	return modelReceiptOf(m.gethGetReceipt(ctx, hash))
+}
+
+func (m *mockStorageWithErrors) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*model.Receipt, error) {
+	return modelReceiptsOf(m.gethGetReceipts(ctx, hashes))
+}
+
+func (m *mockStorageWithErrors) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*model.Receipt, error) {
+	return modelReceiptsOf(m.gethGetReceiptsByBlockHash(ctx, blockHash))
+}
+
+func (m *mockStorageWithErrors) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*model.Receipt, error) {
+	return modelReceiptsOf(m.gethGetReceiptsByBlockNumber(ctx, blockNumber))
+}
+
+func (m *mockStorageWithErrors) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*model.Block, error) {
+	return modelBlocksOf(m.gethGetBlocks(ctx, startHeight, endHeight))
+}
+
+func (m *mockStorageWithErrors) SetBlock(ctx context.Context, b *model.Block) error {
+	gb, err := gethconv.BlockToGeth(b)
+	if err != nil {
+		return err
+	}
+	return m.gethSetBlock(ctx, gb)
+}
+
+func (m *mockStorageWithErrors) SetReceipt(ctx context.Context, r *model.Receipt) error {
+	return m.gethSetReceipt(ctx, gethconv.ReceiptToGeth(r))
+}
+
+func (m *mockStorageWithErrors) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogs(ctx, filter))
+}
+
+func (m *mockStorageWithErrors) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByBlock(ctx, blockNumber))
+}
+
+func (m *mockStorageWithErrors) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByAddress(ctx, address, fromBlock, toBlock))
+}
+
+func (m *mockStorageWithErrors) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByTopic(ctx, topic, topicIndex, fromBlock, toBlock))
+}
+
+func (m *mockStorageWithErrors) IndexLogs(ctx context.Context, logs []*model.Log) error {
+	return m.gethIndexLogs(ctx, gethconv.LogsToGeth(logs))
+}
+
+func (m *mockStorageWithErrors) IndexLog(ctx context.Context, log *model.Log) error {
+	return m.gethIndexLog(ctx, gethconv.LogToGeth(log))
+}
+
+func (m *mockStorageWithErrors) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+	return modelBlocksOf(m.gethGetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset))
+}
+
+func (m *mockStorageWithErrors) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlockByTimestamp(ctx, timestamp))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetBlock(ctx context.Context, height uint64) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlock(ctx, height))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetBlockByHash(ctx context.Context, hash common.Hash) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlockByHash(ctx, hash))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *port.TxLocation, error) {
+	return modelTxOf(m.gethGetTransaction(ctx, hash))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetTransactions(ctx context.Context, hashes []common.Hash) ([]*model.Transaction, []*port.TxLocation, error) {
+	return modelTxsOf(m.gethGetTransactions(ctx, hashes))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetReceipt(ctx context.Context, hash common.Hash) (*model.Receipt, error) {
+	return modelReceiptOf(m.gethGetReceipt(ctx, hash))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*model.Receipt, error) {
+	return modelReceiptsOf(m.gethGetReceipts(ctx, hashes))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*model.Receipt, error) {
+	return modelReceiptsOf(m.gethGetReceiptsByBlockHash(ctx, blockHash))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*model.Receipt, error) {
+	return modelReceiptsOf(m.gethGetReceiptsByBlockNumber(ctx, blockNumber))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetBlocks(ctx context.Context, startHeight, endHeight uint64) ([]*model.Block, error) {
+	return modelBlocksOf(m.gethGetBlocks(ctx, startHeight, endHeight))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetBlock(ctx context.Context, b *model.Block) error {
+	gb, err := gethconv.BlockToGeth(b)
+	if err != nil {
+		return err
+	}
+	return m.gethSetBlock(ctx, gb)
+}
+
+func (m *mockStorageWithNonNotFoundErrors) SetReceipt(ctx context.Context, r *model.Receipt) error {
+	return m.gethSetReceipt(ctx, gethconv.ReceiptToGeth(r))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogs(ctx, filter))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByBlock(ctx, blockNumber))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByAddress(ctx, address, fromBlock, toBlock))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*model.Log, error) {
+	return modelLogsOf(m.gethGetLogsByTopic(ctx, topic, topicIndex, fromBlock, toBlock))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) IndexLogs(ctx context.Context, logs []*model.Log) error {
+	return m.gethIndexLogs(ctx, gethconv.LogsToGeth(logs))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) IndexLog(ctx context.Context, log *model.Log) error {
+	return m.gethIndexLog(ctx, gethconv.LogToGeth(log))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+	return modelBlocksOf(m.gethGetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlockByTimestamp(ctx, timestamp))
 }

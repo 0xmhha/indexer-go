@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -24,7 +25,7 @@ type mockHistoricalStorage struct {
 	txCount          uint64
 }
 
-func (m *mockHistoricalStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
+func (m *mockHistoricalStorage) gethGetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
 	if m.blocksByTime != nil {
 		start := offset
 		end := offset + limit
@@ -39,7 +40,7 @@ func (m *mockHistoricalStorage) GetBlocksByTimeRange(ctx context.Context, fromTi
 	return []*types.Block{}, nil
 }
 
-func (m *mockHistoricalStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
+func (m *mockHistoricalStorage) gethGetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
 	if m.blockByTimestamp != nil {
 		return m.blockByTimestamp, nil
 	}
@@ -360,13 +361,13 @@ func TestHistoricalJSONRPCMethods(t *testing.T) {
 			mockStorage: &mockStorage{},
 			txsWithReceipts: []*port.TransactionWithReceipt{
 				{
-					Transaction: testTx,
+					Transaction: modelTx(testTx),
 					Location: &port.TxLocation{
 						BlockHeight: 1,
 						BlockHash:   block1.Hash(),
 						TxIndex:     0,
 					},
-					Receipt: testReceipt,
+					Receipt: modelReceipt(testReceipt),
 				},
 			},
 		}
@@ -966,4 +967,12 @@ func TestParseTransactionFilter(t *testing.T) {
 			t.Errorf("expected ToBlock 200, got %d", result.ToBlock)
 		}
 	})
+}
+
+func (m *mockHistoricalStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+	return modelBlocksOf(m.gethGetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset))
+}
+
+func (m *mockHistoricalStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlockByTimestamp(ctx, timestamp))
 }

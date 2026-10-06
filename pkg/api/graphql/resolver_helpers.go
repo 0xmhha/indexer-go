@@ -8,7 +8,6 @@ import (
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/graphql-go/graphql"
 )
 
@@ -250,7 +249,7 @@ func parseLogFilter(p graphql.ResolveParams) (LogFilter, error) {
 }
 
 // matchesLog checks if a log matches the filter criteria
-func (f *LogFilter) matchesLog(log *types.Log) bool {
+func (f *LogFilter) matchesLog(log *model.Log) bool {
 	if log == nil {
 		return false
 	}

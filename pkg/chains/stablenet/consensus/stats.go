@@ -22,7 +22,7 @@ type ConsensusStorage struct {
 type ConsensusBackend interface {
 	WBFTReader
 	WBFTWriter
-	GetModelBlock(ctx context.Context, height uint64) (*model.Block, error)
+	GetBlock(ctx context.Context, height uint64) (*model.Block, error)
 }
 
 // NewConsensusStorage creates a new ConsensusStorage instance
@@ -83,7 +83,7 @@ func (cs *ConsensusStorage) GetConsensusData(ctx context.Context, blockNumber ui
 	}
 
 	// Get block to extract proposer (coinbase)
-	block, err := cs.storage.GetModelBlock(ctx, blockNumber)
+	block, err := cs.storage.GetBlock(ctx, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}

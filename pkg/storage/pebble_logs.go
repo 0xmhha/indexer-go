@@ -6,15 +6,16 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // ========== Log Reader Methods ==========
 
 // GetLogs returns logs matching the given filter
-func (s *PebbleStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*types.Log, error) {
+func (s *PebbleStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*model.Log, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func (s *PebbleStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]
 		return nil, fmt.Errorf("block range too large: %d blocks (max %d)", toBlock-filter.FromBlock, maxBlockRange)
 	}
 
-	logs := make([]*types.Log, 0, 64)
+	logs := make([]*model.Log, 0, 64)
 
 	// Strategy 1: If specific addresses are provided, use address index
 	if len(filter.Addresses) > 0 {
@@ -87,7 +88,7 @@ func (s *PebbleStorage) GetLogs(ctx context.Context, filter *port.LogFilter) ([]
 }
 
 // GetLogsByBlock returns all logs in a specific block
-func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*types.Log, error) {
+func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*model.Log, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -106,7 +107,7 @@ func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) 
 	}
 	defer iter.Close()
 
-	logs := make([]*types.Log, 0, 32)
+	logs := make([]*model.Log, 0, 32)
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		// Value is empty, we need to get the actual log data
@@ -125,7 +126,7 @@ func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) 
 			continue // Skip missing logs
 		}
 
-		log, err := DecodeLog(logData)
+		log, err := decodeModelLog(logData)
 		closer.Close()
 		if err != nil {
 			continue // Skip invalid logs
@@ -142,7 +143,7 @@ func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) 
 }
 
 // GetLogsByAddress returns logs emitted by a specific contract
-func (s *PebbleStorage) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (s *PebbleStorage) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*model.Log, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -151,7 +152,7 @@ func (s *PebbleStorage) GetLogsByAddress(ctx context.Context, address common.Add
 }
 
 // GetLogsByTopic returns logs with a specific topic at a specific position
-func (s *PebbleStorage) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (s *PebbleStorage) GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*model.Log, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -166,7 +167,7 @@ func (s *PebbleStorage) GetLogsByTopic(ctx context.Context, topic common.Hash, t
 // ========== Log Writer Methods ==========
 
 // IndexLogs indexes logs from receipts
-func (s *PebbleStorage) IndexLogs(ctx context.Context, logs []*types.Log) error {
+func (s *PebbleStorage) IndexLogs(ctx context.Context, logs []*model.Log) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}
@@ -187,7 +188,7 @@ func (s *PebbleStorage) IndexLogs(ctx context.Context, logs []*types.Log) error 
 }
 
 // IndexLog indexes a single log
-func (s *PebbleStorage) IndexLog(ctx context.Context, log *types.Log) error {
+func (s *PebbleStorage) IndexLog(ctx context.Context, log *model.Log) error {
 	if err := s.ensureNotClosed(); err != nil {
 		return err
 	}
@@ -208,13 +209,13 @@ func (s *PebbleStorage) IndexLog(ctx context.Context, log *types.Log) error {
 // ========== Internal Helper Methods ==========
 
 // indexLogToBatch adds log indexing operations to a batch
-func (s *PebbleStorage) indexLogToBatch(batch *pebbleBatch, log *types.Log) error {
+func (s *PebbleStorage) indexLogToBatch(batch *pebbleBatch, log *model.Log) error {
 	if log == nil {
 		return fmt.Errorf("log cannot be nil")
 	}
 
 	// Encode log data
-	encoded, err := EncodeLog(log)
+	encoded, err := EncodeLog(gethconv.LogToGeth(log))
 	if err != nil {
 		return fmt.Errorf("failed to encode log: %w", err)
 	}
@@ -263,12 +264,11 @@ func (s *PebbleStorage) indexLogToBatch(batch *pebbleBatch, log *types.Log) erro
 		return fmt.Errorf("failed to store block index: %w", err)
 	}
 
-	batch.count += 5 + len(log.Topics) // 1 data + 1 addr + topics + 1 block
 	return nil
 }
 
 // getLogsByAddressRange retrieves logs by address within a block range
-func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*model.Log, error) {
 	prefix := LogAddressIndexKeyPrefix(address)
 
 	// Create iterator with block range bounds
@@ -284,7 +284,7 @@ func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address commo
 	}
 	defer iter.Close()
 
-	logs := make([]*types.Log, 0, 32)
+	logs := make([]*model.Log, 0, 32)
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		// Parse key to extract block, tx, log indexes
@@ -302,7 +302,7 @@ func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address commo
 			continue
 		}
 
-		log, err := DecodeLog(logData)
+		log, err := decodeModelLog(logData)
 		closer.Close()
 		if err != nil {
 			continue
@@ -319,7 +319,7 @@ func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address commo
 }
 
 // getLogsByTopicRange retrieves logs by topic within a block range
-func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*types.Log, error) {
+func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Hash, topicIndex int, fromBlock, toBlock uint64) ([]*model.Log, error) {
 	var prefix []byte
 	var startKey, endKey []byte
 
@@ -353,7 +353,7 @@ func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Ha
 	}
 	defer iter.Close()
 
-	logs := make([]*types.Log, 0, 32)
+	logs := make([]*model.Log, 0, 32)
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		// Parse key to extract block, tx, log indexes
@@ -371,7 +371,7 @@ func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Ha
 			continue
 		}
 
-		log, err := DecodeLog(logData)
+		log, err := decodeModelLog(logData)
 		closer.Close()
 		if err != nil {
 			continue
@@ -388,12 +388,12 @@ func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Ha
 }
 
 // filterLogsByTopics filters logs by topic criteria
-func (s *PebbleStorage) filterLogsByTopics(logs []*types.Log, topics [][]common.Hash) []*types.Log {
+func (s *PebbleStorage) filterLogsByTopics(logs []*model.Log, topics [][]common.Hash) []*model.Log {
 	if len(topics) == 0 {
 		return logs
 	}
 
-	filtered := make([]*types.Log, 0, len(logs))
+	filtered := make([]*model.Log, 0, len(logs))
 
 	for _, log := range logs {
 		if s.matchesTopicFilter(log, topics) {
@@ -405,12 +405,12 @@ func (s *PebbleStorage) filterLogsByTopics(logs []*types.Log, topics [][]common.
 }
 
 // filterLogsByAddresses filters logs by contract addresses
-func (s *PebbleStorage) filterLogsByAddresses(logs []*types.Log, addresses []common.Address) []*types.Log {
+func (s *PebbleStorage) filterLogsByAddresses(logs []*model.Log, addresses []common.Address) []*model.Log {
 	if len(addresses) == 0 {
 		return logs
 	}
 
-	filtered := make([]*types.Log, 0, len(logs))
+	filtered := make([]*model.Log, 0, len(logs))
 	addressMap := make(map[common.Address]bool)
 	for _, addr := range addresses {
 		addressMap[addr] = true
@@ -426,7 +426,7 @@ func (s *PebbleStorage) filterLogsByAddresses(logs []*types.Log, addresses []com
 }
 
 // matchesTopicFilter checks if a log matches the topic filter
-func (s *PebbleStorage) matchesTopicFilter(log *types.Log, topicFilter [][]common.Hash) bool {
+func (s *PebbleStorage) matchesTopicFilter(log *model.Log, topicFilter [][]common.Hash) bool {
 	for i, topicOptions := range topicFilter {
 		if len(topicOptions) == 0 {
 			// nil means "any value" for this position
@@ -453,4 +453,14 @@ func (s *PebbleStorage) matchesTopicFilter(log *types.Log, topicFilter [][]commo
 	}
 
 	return true
+}
+
+// decodeModelLog decodes a stored log. Logs are stored in go-ethereum's
+// encoding (EncodeLog).
+func decodeModelLog(data []byte) (*model.Log, error) {
+	l, err := DecodeLog(data)
+	if err != nil {
+		return nil, err
+	}
+	return gethconv.LogFromGeth(l), nil
 }

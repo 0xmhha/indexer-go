@@ -55,11 +55,11 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 			block, err := s.GetBlock(ctx, blockNum)
 			if err == nil && block != nil {
 				metadata := map[string]interface{}{
-					"number":           block.Number().Uint64(),
-					"hash":             block.Hash().Hex(),
-					"timestamp":        block.Time(),
-					"transactionCount": len(block.Transactions()),
-					"miner":            block.Coinbase().Hex(),
+					"number":           block.Number,
+					"hash":             block.Hash.Hex(),
+					"timestamp":        block.Time,
+					"transactionCount": len(block.Transactions),
+					"miner":            block.Miner.Hex(),
 				}
 				results = append(results, port.SearchResult{
 					Type:     "block",
@@ -77,16 +77,16 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 			block, err := s.GetBlockByHash(ctx, hash)
 			if err == nil && block != nil {
 				metadata := map[string]interface{}{
-					"number":           block.Number().Uint64(),
-					"hash":             block.Hash().Hex(),
-					"timestamp":        block.Time(),
-					"transactionCount": len(block.Transactions()),
-					"miner":            block.Coinbase().Hex(),
+					"number":           block.Number,
+					"hash":             block.Hash.Hex(),
+					"timestamp":        block.Time,
+					"transactionCount": len(block.Transactions),
+					"miner":            block.Miner.Hex(),
 				}
 				results = append(results, port.SearchResult{
 					Type:     "block",
-					Value:    block.Hash().Hex(),
-					Label:    fmt.Sprintf("Block #%d", block.Number().Uint64()),
+					Value:    block.Hash.Hex(),
+					Label:    fmt.Sprintf("Block #%d", block.Number),
 					Metadata: metadata,
 				})
 			}
@@ -96,7 +96,7 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 		if isTypeAllowed("transaction") && len(results) < limit {
 			hash := common.HexToHash(query)
 			// The model keeps the hash, sender and type the chain reports.
-			tx, location, err := s.GetModelTransaction(ctx, hash)
+			tx, location, err := s.GetTransaction(ctx, hash)
 			if err == nil && tx != nil && location != nil {
 				value := "0"
 				if tx.Value != nil {
@@ -116,7 +116,7 @@ func (s *PebbleStorage) Search(ctx context.Context, query string, resultTypes []
 				} else {
 					// Contract creation transaction - get contract address from receipt
 					receipt, err := s.GetReceipt(ctx, tx.Hash)
-					if err == nil && receipt != nil && receipt.ContractAddress != (common.Address{}) {
+					if err == nil && receipt != nil && receipt.ContractAddress != nil {
 						metadata["contractAddress"] = receipt.ContractAddress.Hex()
 					}
 				}
@@ -209,4 +209,3 @@ func detectQueryType(query string) string {
 	// Default to address for shorter queries (partial address search could be implemented)
 	return "address"
 }
-

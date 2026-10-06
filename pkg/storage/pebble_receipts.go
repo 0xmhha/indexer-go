@@ -6,9 +6,8 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
@@ -16,85 +15,13 @@ import (
 // Receipt Methods
 // ============================================================================
 
-// GetReceipt returns a transaction receipt by hash
-func (s *PebbleStorage) GetReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
-	}
-
-	value, closer, err := s.kv(ctx).Get(ReceiptKey(hash))
-	if err != nil {
-		if err == pebble.ErrNotFound {
-			return nil, port.ErrNotFound
-		}
-		return nil, fmt.Errorf("failed to get receipt: %w", err)
-	}
-	defer closer.Close()
-
-	receipt, err := DecodeReceipt(value)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode receipt: %w", err)
-	}
-
-	// TxHash is not part of RLP encoding, so we need to restore it
-	// from the key used to store the receipt
-	receipt.TxHash = hash
-
-	// ContractAddress is not part of RLP encoding, retrieve it separately
-	contractAddrValue, contractAddrCloser, err := s.kv(ctx).Get(ContractAddressKey(hash))
-	if err == nil {
-		defer contractAddrCloser.Close()
-		if len(contractAddrValue) == common.AddressLength {
-			receipt.ContractAddress = common.BytesToAddress(contractAddrValue)
-		}
-	}
-	// Ignore error - ContractAddress is optional (only for contract creation txs)
-
-	return receipt, nil
-}
-
-// validateReceipt validates a receipt before storage
-func validateReceipt(receipt *types.Receipt) error {
-	if receipt == nil {
-		return fmt.Errorf("%w: receipt cannot be nil", port.ErrInvalidReceipt)
-	}
-
-	// Check that TxHash is set (not zero hash)
-	var zeroHash common.Hash
-	if receipt.TxHash == zeroHash {
-		return fmt.Errorf("%w: transaction hash is not set", port.ErrInvalidReceipt)
-	}
-
-	// Check status is valid (0 = failed, 1 = success)
-	if receipt.Status > 1 {
-		return fmt.Errorf("%w: invalid status %d (expected 0 or 1)", port.ErrInvalidReceipt, receipt.Status)
-	}
-
-	// Check that CumulativeGasUsed is at least GasUsed
-	if receipt.CumulativeGasUsed < receipt.GasUsed {
-		return fmt.Errorf("%w: cumulative gas used (%d) is less than gas used (%d)",
-			port.ErrInvalidReceipt, receipt.CumulativeGasUsed, receipt.GasUsed)
-	}
-
-	return nil
-}
-
-// SetReceipt stores a transaction receipt. It converts the receipt to the
-// model and stores it like SetModelReceipt.
-func (s *PebbleStorage) SetReceipt(ctx context.Context, receipt *types.Receipt) error {
-	if err := validateReceipt(receipt); err != nil {
-		return err
-	}
-	return s.SetModelReceipt(ctx, gethconv.ReceiptFromGeth(receipt))
-}
-
 // GetReceipts returns multiple receipts by transaction hashes (batch operation)
-func (s *PebbleStorage) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*types.Receipt, error) {
+func (s *PebbleStorage) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*model.Receipt, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
 
-	receipts := make([]*types.Receipt, len(hashes))
+	receipts := make([]*model.Receipt, len(hashes))
 	var firstError error
 
 	for i, hash := range hashes {
@@ -117,7 +44,7 @@ func (s *PebbleStorage) GetReceipts(ctx context.Context, hashes []common.Hash) (
 }
 
 // GetReceiptsByBlockHash returns all receipts for a block by block hash
-func (s *PebbleStorage) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*types.Receipt, error) {
+func (s *PebbleStorage) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*model.Receipt, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -128,11 +55,11 @@ func (s *PebbleStorage) GetReceiptsByBlockHash(ctx context.Context, blockHash co
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
-	return s.GetReceiptsByBlockNumber(ctx, block.Number().Uint64())
+	return s.GetReceiptsByBlockNumber(ctx, block.Number)
 }
 
 // GetReceiptsByBlockNumber returns all receipts for a block by block number
-func (s *PebbleStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*types.Receipt, error) {
+func (s *PebbleStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*model.Receipt, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
@@ -143,7 +70,7 @@ func (s *PebbleStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumbe
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
-	receipts := make([]*types.Receipt, 0, len(hashes))
+	receipts := make([]*model.Receipt, 0, len(hashes))
 
 	// Get receipt for each transaction
 	for _, hash := range hashes {
@@ -159,27 +86,6 @@ func (s *PebbleStorage) GetReceiptsByBlockNumber(ctx context.Context, blockNumbe
 	}
 
 	return receipts, nil
-}
-
-// SetReceipts stores multiple receipts atomically (batch operation)
-func (s *PebbleStorage) SetReceipts(ctx context.Context, receipts []*types.Receipt) error {
-	if err := s.ensureNotClosed(); err != nil {
-		return err
-	}
-	if err := s.ensureNotReadOnly(); err != nil {
-		return err
-	}
-
-	batch := s.newBatchCtx(ctx)
-	defer batch.Close()
-
-	for _, receipt := range receipts {
-		if err := batch.SetReceipt(ctx, receipt); err != nil {
-			return fmt.Errorf("failed to add receipt to batch: %w", err)
-		}
-	}
-
-	return batch.Commit()
 }
 
 // HasReceipt checks if a receipt exists for a transaction

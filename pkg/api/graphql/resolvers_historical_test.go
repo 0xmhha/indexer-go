@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -23,14 +24,14 @@ type mockHistoricalStorage struct {
 	txCount          uint64
 }
 
-func (m *mockHistoricalStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
+func (m *mockHistoricalStorage) gethGetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*types.Block, error) {
 	if m.blocksByTime == nil {
 		return []*types.Block{}, nil
 	}
 	return m.blocksByTime, nil
 }
 
-func (m *mockHistoricalStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
+func (m *mockHistoricalStorage) gethGetBlockByTimestamp(ctx context.Context, timestamp uint64) (*types.Block, error) {
 	if m.blockByTimestamp == nil {
 		return nil, port.ErrNotFound
 	}
@@ -172,8 +173,8 @@ func TestHistoricalResolvers(t *testing.T) {
 		blockByTimestamp: block1,
 		txsWithReceipts: []*port.TransactionWithReceipt{
 			{
-				Transaction: testTx,
-				Receipt:     testReceipt,
+				Transaction: modelTx(testTx),
+				Receipt:     modelReceipt(testReceipt),
 				Location: &port.TxLocation{
 					BlockHeight: 1,
 					BlockHash:   block1.Hash(),
@@ -734,4 +735,12 @@ func TestParseHistoricalTransactionFilter(t *testing.T) {
 			t.Error("expected SuccessOnly false")
 		}
 	})
+}
+
+func (m *mockHistoricalStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+	return modelBlocksOf(m.gethGetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset))
+}
+
+func (m *mockHistoricalStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error) {
+	return modelBlockOf(m.gethGetBlockByTimestamp(ctx, timestamp))
 }

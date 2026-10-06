@@ -62,12 +62,10 @@ type TokenIndexer interface {
 
 // Storage defines the interface for storage operations
 type Storage interface {
+	port.BlockReader
+	port.BlockWriter
 	GetLatestHeight(ctx context.Context) (uint64, error)
-	GetBlock(ctx context.Context, height uint64) (*types.Block, error)
-	GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	SetLatestHeight(ctx context.Context, height uint64) error
-	SetBlock(ctx context.Context, block *types.Block) error
-	SetReceipt(ctx context.Context, receipt *types.Receipt) error
 	HasBlock(ctx context.Context, height uint64) (bool, error)
 	HasReceipt(ctx context.Context, hash common.Hash) (bool, error)
 	GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error)
