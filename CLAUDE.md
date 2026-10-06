@@ -33,7 +33,6 @@ pkg/
   source/                       Block sources: rpc (node), era (era1 archives), replay (recorded JSON-RPC), Chained
   storage/                      PebbleDB storage (interfaces and implementation in one package)
   multichain/                   Multi-chain orchestration (chains share storage keys; do not enable)
-  resilience/                   Session/event cache (not wired)
   rpcproxy/                     Node RPC proxy with cache and circuit breaker
 internal/
   config/                       YAML/env/flag configuration
@@ -92,7 +91,7 @@ api:
 
 Pre-configured: `configs/config-{anvil,devnet,sepolia}.yaml`
 
-Settings that are read but not wired (`eventbus.type` other than local and `node.*`, `watchlist.enabled`, `resilience.enabled`, `account_abstraction.entry_point_addresses`) are reported at startup (`Config.UnsupportedSettings`); `database.readonly: true` is rejected (an API-only role is planned, R4-1). Command-line flags override the configuration only when given explicitly.
+Settings that are read but not wired (`eventbus.type` other than local and `node.*`, `account_abstraction.entry_point_addresses`) are reported at startup (`Config.UnsupportedSettings`), and so are `watchlist.enabled` and `resilience.enabled`, whose packages were removed after v0.1.0; `database.readonly: true` is rejected (an API-only role is planned, R4-1). Command-line flags override the configuration only when given explicitly.
 
 ### API Endpoints
 

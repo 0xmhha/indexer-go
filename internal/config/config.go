@@ -178,66 +178,16 @@ type ChainConfig struct {
 	RPCTimeout time.Duration `yaml:"rpc_timeout,omitempty"`
 }
 
-// WatchlistConfig holds configuration for the address watchlist service
+// WatchlistConfig is kept so that a configuration enabling the watchlist,
+// which was removed after v0.1.0, is reported (UnsupportedSettings).
 type WatchlistConfig struct {
-	// Enabled indicates whether the watchlist service is active
 	Enabled bool `yaml:"enabled"`
-	// BloomFilter holds bloom filter configuration
-	BloomFilter BloomFilterConfig `yaml:"bloom_filter"`
-	// History holds event history configuration
-	History HistoryConfig `yaml:"history"`
 }
 
-// BloomFilterConfig holds bloom filter optimization settings
-type BloomFilterConfig struct {
-	// ExpectedItems is the expected number of addresses to monitor
-	ExpectedItems int `yaml:"expected_items"`
-	// FalsePositiveRate is the target false positive rate
-	FalsePositiveRate float64 `yaml:"false_positive_rate"`
-}
-
-// HistoryConfig holds event history retention settings
-type HistoryConfig struct {
-	// RetentionPeriod is how long to keep historical events
-	RetentionPeriod time.Duration `yaml:"retention"`
-}
-
-// ResilienceConfig holds WebSocket resilience configuration
+// ResilienceConfig is kept so that a configuration enabling WebSocket
+// resilience, which was removed after v0.1.0, is reported.
 type ResilienceConfig struct {
-	// Enabled indicates whether WebSocket resilience is active
 	Enabled bool `yaml:"enabled"`
-	// Session holds session management configuration
-	Session SessionConfig `yaml:"session"`
-	// EventCache holds event cache configuration
-	EventCache EventCacheConfig `yaml:"event_cache"`
-}
-
-// SessionConfig holds session management settings
-type SessionConfig struct {
-	// TTL is the session time-to-live
-	TTL time.Duration `yaml:"ttl"`
-	// CleanupPeriod is how often to clean up expired sessions
-	CleanupPeriod time.Duration `yaml:"cleanup_period"`
-}
-
-// EventCacheConfig holds event cache settings
-type EventCacheConfig struct {
-	// Window is the time window for event caching (for replay)
-	Window time.Duration `yaml:"window"`
-	// Backend is the cache storage backend: "pebble" or "redis"
-	Backend string `yaml:"backend"`
-	// Redis holds Redis-specific configuration (if backend is "redis")
-	Redis *RedisConfig `yaml:"redis,omitempty"`
-}
-
-// RedisConfig holds Redis connection settings
-type RedisConfig struct {
-	// Addr is the Redis server address (for standalone mode)
-	Addr string `yaml:"addr"`
-	// Password is the optional Redis password
-	Password string `yaml:"password,omitempty"`
-	// DB is the Redis database number
-	DB int `yaml:"db"`
 }
 
 // EventBusConfig holds EventBus configuration for distributed operations
@@ -545,30 +495,6 @@ func (c *Config) SetDefaults() {
 		c.MultiChain.AutoRestartDelay = 30 * time.Second
 	}
 
-	// Watchlist defaults
-	if c.Watchlist.BloomFilter.ExpectedItems == 0 {
-		c.Watchlist.BloomFilter.ExpectedItems = 100000
-	}
-	if c.Watchlist.BloomFilter.FalsePositiveRate == 0 {
-		c.Watchlist.BloomFilter.FalsePositiveRate = 0.0001
-	}
-	if c.Watchlist.History.RetentionPeriod == 0 {
-		c.Watchlist.History.RetentionPeriod = 720 * time.Hour // 30 days
-	}
-
-	// Resilience defaults
-	if c.Resilience.Session.TTL == 0 {
-		c.Resilience.Session.TTL = 24 * time.Hour
-	}
-	if c.Resilience.Session.CleanupPeriod == 0 {
-		c.Resilience.Session.CleanupPeriod = time.Hour
-	}
-	if c.Resilience.EventCache.Window == 0 {
-		c.Resilience.EventCache.Window = time.Hour
-	}
-	if c.Resilience.EventCache.Backend == "" {
-		c.Resilience.EventCache.Backend = "pebble"
-	}
 
 	// Notifications defaults
 	if c.Notifications.Webhook.Timeout == 0 {
@@ -1260,10 +1186,10 @@ func (c *Config) UnsupportedSettings() []string {
 		out = append(out, fmt.Sprintf("eventbus.type=%q is not wired; the in-process event bus is used (node.* settings are ignored too)", c.EventBus.Type))
 	}
 	if c.Watchlist.Enabled {
-		out = append(out, "watchlist.enabled is not wired; the watchlist service does not run")
+		out = append(out, "watchlist.enabled has no effect: the watchlist was removed after v0.1.0")
 	}
 	if c.Resilience.Enabled {
-		out = append(out, "resilience.enabled is not wired; session persistence and event replay do not run")
+		out = append(out, "resilience.enabled has no effect: WebSocket resilience was removed after v0.1.0")
 	}
 	if len(c.AccountAbstraction.EntryPointAddresses) > 0 {
 		out = append(out, "account_abstraction.entry_point_addresses is not supported yet; known EntryPoint addresses are used")
