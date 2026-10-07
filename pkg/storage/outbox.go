@@ -17,7 +17,7 @@ import (
 // The outbox (refactoring plan R3-1) holds the events of indexed blocks
 // under /outbox/<seq>, written in the block transaction. /meta/outbox/seq
 // holds the last assigned sequence, so numbering continues after pruning,
-// and /meta/outbox/cursor/<name> what each relay delivered. None of these
+// and /meta/outbox/cursor/<name> what each consumer group delivered. None of these
 // keys is recorded in undo: a rollback keeps entries that may have been
 // delivered and appends the reorganization's entries instead. A reindex
 // deletes the entries but keeps the sequence and the cursors, so the
@@ -116,11 +116,22 @@ func (s *PebbleStorage) LastOutboxSeq(ctx context.Context) (uint64, error) {
 }
 
 // OutboxCursor implements port.Outbox.
-func (s *PebbleStorage) OutboxCursor(ctx context.Context, name string) (uint64, error) {
+func (s *PebbleStorage) OutboxCursor(ctx context.Context, name string) (uint64, bool, error) {
 	if err := s.ensureNotClosed(); err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return s.readUint(s.kv(ctx), []byte(prefixOutboxCursor+name))
+	v, closer, err := s.kv(ctx).Get([]byte(prefixOutboxCursor + name))
+	if errors.Is(err, pebble.ErrNotFound) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	defer func() { _ = closer.Close() }()
+	if len(v) != 8 {
+		return 0, false, fmt.Errorf("outbox cursor %q has %d bytes, want 8", name, len(v))
+	}
+	return binary.BigEndian.Uint64(v), true, nil
 }
 
 // SetOutboxCursor implements port.Outbox.

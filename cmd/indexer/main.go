@@ -798,6 +798,7 @@ func (a *App) initFetcher(ctx context.Context) error {
 		Confirmations: a.config.Indexer.Confirmations,
 		NoOutbox:      !a.config.EventBus.Outbox,
 		OutboxRetain:  a.config.EventBus.OutboxRetention,
+		StreamGroup:   a.config.Node.ID,
 	}
 
 	a.fetcher = fetch.NewFetcher(a.client, a.storage, fetcherConfig, a.logger, a.eventBus)

@@ -84,6 +84,24 @@ func (c *consumer) quiet() {
 	}
 }
 
+// newRelay returns a relay of DefaultGroup over s that delivers the whole
+// outbox (its group joins at StartEarliest), and its bus.
+func newRelay(t *testing.T, s *storage.PebbleStorage, publish func(events.Event) bool, cfg OutboxBusConfig) (*Relay, *OutboxBus) {
+	t.Helper()
+	b := NewOutboxBus(s, cfg, nil)
+	_, err := b.Join(context.Background(), DefaultGroup, StartEarliest)
+	require.NoError(t, err)
+	return NewRelay(b, "", publish, nil), b
+}
+
+// cursorOf returns the recorded position of DefaultGroup.
+func cursorOf(t *testing.T, s *storage.PebbleStorage) uint64 {
+	t.Helper()
+	seq, _, err := s.OutboxCursor(context.Background(), DefaultGroup)
+	require.NoError(t, err)
+	return seq
+}
+
 func runRelay(r *Relay) (stop func() error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -104,16 +122,14 @@ func TestRelayDeliversInSequence(t *testing.T) {
 	c := newConsumer(t, bus)
 	appendBlocks(t, s, 3, 4) // committed before the relay starts
 
-	r := NewRelay(s, bus.Publish, RelayConfig{Poll: time.Hour}, nil)
+	r, b := newRelay(t, s, bus.Publish, OutboxBusConfig{Poll: time.Hour})
 	stop := runRelay(r)
 	c.await(12)
 	appendBlocks(t, s, 2, 3)
-	r.Notify()
+	b.Notify()
 	c.await(18)
 	require.ErrorIs(t, stop(), context.Canceled)
-	cursor, err := s.OutboxCursor(context.Background(), DefaultRelayName)
-	require.NoError(t, err)
-	require.Equal(t, uint64(18), cursor)
+	require.Equal(t, uint64(18), cursorOf(t, s))
 	c.quiet()
 }
 
@@ -144,7 +160,7 @@ func TestRelayKilledMidwayLosesAndRepeatsNothing(t *testing.T) {
 			published.Add(1)
 			return bus.Publish(ev)
 		}
-		r := NewRelay(s, publish, RelayConfig{Batch: 16, Poll: 10 * time.Millisecond}, nil)
+		r, _ := newRelay(t, s, publish, OutboxBusConfig{Batch: 16, Poll: 10 * time.Millisecond})
 		done := make(chan error, 1)
 		go func() { done <- r.Run(ctx) }()
 		finished := false
@@ -155,9 +171,7 @@ func TestRelayKilledMidwayLosesAndRepeatsNothing(t *testing.T) {
 				require.ErrorIs(t, err, context.Canceled)
 				break wait
 			case <-time.After(5 * time.Millisecond):
-				cursor, err := s.OutboxCursor(context.Background(), DefaultRelayName)
-				require.NoError(t, err)
-				if cursor == total { // delivered the rest before its kill point
+				if cursorOf(t, s) == total { // delivered the rest before its kill point
 					kill()
 					<-done
 					finished = true
@@ -191,7 +205,8 @@ func TestRelayWaitsForFullBus(t *testing.T) {
 		}
 		return bus.Publish(ev)
 	}
-	stop := runRelay(NewRelay(s, publish, RelayConfig{Poll: time.Hour}, nil))
+	r, _ := newRelay(t, s, publish, OutboxBusConfig{Poll: time.Hour})
+	stop := runRelay(r)
 	c.await(20)
 	require.ErrorIs(t, stop(), context.Canceled)
 	c.quiet()
@@ -202,11 +217,12 @@ func TestRelayWaitsForFullBus(t *testing.T) {
 func TestRelayRestartsFromCursor(t *testing.T) {
 	s := newStore(t)
 	appendBlocks(t, s, 4, 5)
-	require.NoError(t, s.SetOutboxCursor(context.Background(), DefaultRelayName, 12))
+	require.NoError(t, s.SetOutboxCursor(context.Background(), DefaultGroup, 12))
 
 	bus := newBus(t)
 	sub := bus.Subscribe("c", []events.EventType{events.EventTypeBlock}, nil, 64)
-	stop := runRelay(NewRelay(s, bus.Publish, RelayConfig{Poll: time.Hour}, nil))
+	r, _ := newRelay(t, s, bus.Publish, OutboxBusConfig{Poll: time.Hour})
+	stop := runRelay(r)
 	defer func() { _ = stop() }()
 	for want := uint64(13); want <= 20; want++ {
 		select {
@@ -224,7 +240,8 @@ func TestRelayPrunesDeliveredEntries(t *testing.T) {
 	bus := newBus(t)
 	c := newConsumer(t, bus)
 	appendBlocks(t, s, 30, 100) // 3000 events
-	stop := runRelay(NewRelay(s, bus.Publish, RelayConfig{Retain: 500, Poll: time.Hour}, nil))
+	r, _ := newRelay(t, s, bus.Publish, OutboxBusConfig{Retain: 500, Poll: time.Hour})
+	stop := runRelay(r)
 	c.await(3000)
 	require.ErrorIs(t, stop(), context.Canceled)
 
@@ -233,7 +250,7 @@ func TestRelayPrunesDeliveredEntries(t *testing.T) {
 	require.NotEmpty(t, left)
 	require.Equal(t, uint64(3000), left[len(left)-1].Seq, "undelivered and recent entries stay")
 	require.GreaterOrEqual(t, len(left), 500, "at least Retain entries stay")
-	require.Less(t, len(left), 500+pruneStep+DefaultRelayBatch, "older entries are pruned")
+	require.Less(t, len(left), 500+pruneStep+DefaultBatch, "older entries are pruned")
 }
 
 // TestRelaySkipsUndecodableEntry: an entry of a type this build cannot
@@ -249,7 +266,8 @@ func TestRelaySkipsUndecodableEntry(t *testing.T) {
 
 	bus := newBus(t)
 	sub := bus.Subscribe("c", []events.EventType{events.EventTypeBlock}, nil, 8)
-	stop := runRelay(NewRelay(s, bus.Publish, RelayConfig{Poll: time.Hour}, nil))
+	r, _ := newRelay(t, s, bus.Publish, OutboxBusConfig{Poll: time.Hour})
+	stop := runRelay(r)
 	defer func() { _ = stop() }()
 	var seqs []uint64
 	for len(seqs) < 2 {

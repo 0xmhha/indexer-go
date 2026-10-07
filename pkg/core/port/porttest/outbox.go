@@ -21,7 +21,8 @@ type outboxStore interface {
 // transaction uses no numbers; entries exist only after the transaction
 // commits; a block rollback keeps them, and entries the undo hook appends
 // commit with the rollback; pruning deletes old entries without restarting
-// the numbering; cursors are kept per name.
+// the numbering; cursors are kept per name, and a recorded 0 differs from
+// none.
 func testOutbox(t *testing.T, newStore NewStore) {
 	ctx := context.Background()
 
@@ -134,17 +135,25 @@ func testOutbox(t *testing.T, newStore NewStore) {
 
 	t.Run("Cursors", func(t *testing.T) {
 		s := open[outboxStore](t, newStore)
-		seq, err := s.OutboxCursor(ctx, "relay")
+		seq, ok, err := s.OutboxCursor(ctx, "relay")
 		require.NoError(t, err)
+		assert.False(t, ok, "no cursor recorded")
 		assert.Zero(t, seq)
 		require.NoError(t, s.SetOutboxCursor(ctx, "relay", 7))
 		require.NoError(t, s.SetOutboxCursor(ctx, "other", 2))
-		seq, err = s.OutboxCursor(ctx, "relay")
+		require.NoError(t, s.SetOutboxCursor(ctx, "zero", 0))
+		seq, ok, err = s.OutboxCursor(ctx, "relay")
 		require.NoError(t, err)
+		assert.True(t, ok)
 		assert.Equal(t, uint64(7), seq)
-		seq, err = s.OutboxCursor(ctx, "other")
+		seq, ok, err = s.OutboxCursor(ctx, "other")
 		require.NoError(t, err)
+		assert.True(t, ok)
 		assert.Equal(t, uint64(2), seq)
+		seq, ok, err = s.OutboxCursor(ctx, "zero")
+		require.NoError(t, err)
+		assert.True(t, ok, "a recorded 0 is a cursor")
+		assert.Zero(t, seq)
 	})
 }
 
