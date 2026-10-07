@@ -1,8 +1,6 @@
 package fetch
 
 import (
-	"context"
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -10,10 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-
-	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // ============================================================================
@@ -43,44 +38,6 @@ func TestFetcher_SetGetChainID(t *testing.T) {
 	f.SetChainID("stable-mainnet")
 	if f.GetChainID() != "stable-mainnet" {
 		t.Errorf("expected stable-mainnet, got %s", f.GetChainID())
-	}
-}
-
-func TestFetcher_SetTokenIndexer(t *testing.T) {
-	f := newTestFetcherForHelpers(t)
-	mock := &mockTokenIndexer{}
-	f.SetTokenIndexer(mock)
-
-	if f.tokenIndexer == nil {
-		t.Error("expected tokenIndexer to be set")
-	}
-}
-
-func TestFetcher_AddRemoveBlockProcessor(t *testing.T) {
-	f := newTestFetcherForHelpers(t)
-	p := &mockBlockProcessor{}
-
-	f.AddBlockProcessor(p)
-	if len(f.blockProcessors) != 1 {
-		t.Errorf("expected 1 processor, got %d", len(f.blockProcessors))
-	}
-
-	f.RemoveBlockProcessor(p)
-	if len(f.blockProcessors) != 0 {
-		t.Errorf("expected 0 processors after remove, got %d", len(f.blockProcessors))
-	}
-}
-
-func TestFetcher_RemoveBlockProcessor_NotFound(t *testing.T) {
-	f := newTestFetcherForHelpers(t)
-	p1 := &mockBlockProcessor{}
-	p2 := &mockBlockProcessor{}
-
-	f.AddBlockProcessor(p1)
-	f.RemoveBlockProcessor(p2) // p2 was never added
-
-	if len(f.blockProcessors) != 1 {
-		t.Errorf("expected 1 processor after removing non-existent, got %d", len(f.blockProcessors))
 	}
 }
 
@@ -177,43 +134,3 @@ func TestGetTransactionSender_UnsignedReturnsZero(t *testing.T) {
 // ============================================================================
 // Mock implementations
 // ============================================================================
-
-type mockTokenIndexer struct{}
-
-func (m *mockTokenIndexer) IndexToken(ctx context.Context, address common.Address, blockHeight uint64) error {
-	return nil
-}
-
-type mockBlockProcessor struct {
-	processedBlocks int
-}
-
-func (m *mockBlockProcessor) ProcessBlock(ctx context.Context, chainID string, block *types.Block, receipts []*types.Receipt) error {
-	m.processedBlocks++
-	return nil
-}
-
-// recordingTokenIndexer records the contracts it is asked to index.
-type recordingTokenIndexer struct {
-	calls []string
-}
-
-func (r *recordingTokenIndexer) IndexToken(_ context.Context, address common.Address, blockHeight uint64) error {
-	r.calls = append(r.calls, fmt.Sprintf("%s@%d", address.Hex(), blockHeight))
-	return nil
-}
-
-// TestInitializeGenesisTokenMetadata indexes the chain's known token
-// contracts at height 0.
-func TestInitializeGenesisTokenMetadata(t *testing.T) {
-	addr := common.HexToAddress("0x000000000000000000000000000000000000F00d")
-	storagepkg.RegisterKnownToken(addr, storagepkg.KnownToken{Name: "Test", Symbol: "TST", Decimals: 18})
-
-	f := newTestFetcherForHelpers(t)
-	require.NoError(t, f.initializeGenesisTokenMetadata(context.Background()), "no token indexer")
-
-	idx := &recordingTokenIndexer{}
-	f.SetTokenIndexer(idx)
-	require.NoError(t, f.initializeGenesisTokenMetadata(context.Background()))
-	require.Contains(t, idx.calls, addr.Hex()+"@0")
-}

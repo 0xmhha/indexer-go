@@ -138,7 +138,6 @@ func dumpDir(t *testing.T, dir string) []testchain.Entry {
 // of the record is still pinned. Each entry is a determinism defect to fix in
 // the owning feature (handlers must not read the clock).
 var volatileJSONFields = map[string][]string{
-	"/data/token/metadata/": {"createdAt", "updatedAt"}, // pkg/token/block_processor.go time.Now()
 }
 
 func normalizeVolatile(key, value []byte) ([]byte, bool) {

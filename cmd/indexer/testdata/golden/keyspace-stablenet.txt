@@ -459,6 +459,7 @@
 /meta/features/stablenet.fee_delegation 27 a3f3126da7d65d7e
 /meta/features/stablenet.system_contracts 27 a3f3126da7d65d7e
 /meta/features/stablenet.wbft 27 a3f3126da7d65d7e
+/meta/features/token.metadata 27 a3f3126da7d65d7e
 /meta/features/token.transfers 27 a3f3126da7d65d7e
 /meta/lh 8 e66c57014a615606
 /meta/schema 8 cd04a4754498e06d

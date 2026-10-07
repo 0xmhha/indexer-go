@@ -53,17 +53,9 @@ func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uin
 
 // processBlockMetadata processes WBFT metadata, address indexing, balance tracking, and genesis initialization
 func (f *Fetcher) processBlockMetadata(ctx context.Context, fb *fetchedBlock) error {
-	// Address indexing, balances and the other per-block indexes are
-	// features (pkg/features); they run after the core data is stored.
-	if fb.height() == 0 {
-		// Initialize genesis token metadata for system contracts
-		if err := f.initializeGenesisTokenMetadata(ctx); err != nil {
-			f.logger.Warn("Failed to initialize genesis token metadata",
-				zap.Uint64("height", 0),
-				zap.Error(err),
-			)
-		}
-	}
+	// Address indexing, balances, token metadata and the other per-block
+	// indexes are features (pkg/features); they run after the core data is
+	// stored.
 	return nil
 }
 

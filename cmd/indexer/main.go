@@ -748,6 +748,7 @@ func (a *App) initFetcher(ctx context.Context) error {
 		Publish:   a.fetcher.Publish,
 		BalanceAt: a.fetcher.BalanceAt,
 		BlockAt:   a.fetcher.BlockAt,
+		Contracts: token.NewEthClientAdapter(a.client.EthClient()),
 	}
 	pipeline, err := feature.Build(enabled, deps)
 	if err != nil {
@@ -776,11 +777,6 @@ func (a *App) initFetcher(ctx context.Context) error {
 		return err
 	}
 
-
-	// Add token block processor for automatic token metadata indexing
-	tokenProcessor := token.NewBlockProcessorFromEthClient(a.client.EthClient(), a.storage, a.logger)
-	a.fetcher.AddBlockProcessor(tokenProcessor)
-	a.logger.Info("Token block processor added to fetcher")
 
 	// Set up on-demand token metadata fetcher for storage
 	// This allows GetTokenBalances to fetch metadata for tokens not yet indexed
