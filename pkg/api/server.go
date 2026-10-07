@@ -110,6 +110,16 @@ func NewServerWithOptions(config *Config, logger *zap.Logger, store port.QuerySt
 	return s, nil
 }
 
+// streamOutbox returns the change stream's outbox of store when the server
+// serves it (StreamResume), nil otherwise.
+func (s *Server) streamOutbox(store port.QueryStore) port.Outbox {
+	if !s.config.StreamResume || store == nil {
+		return nil
+	}
+	ob, _ := store.(port.Outbox)
+	return ob
+}
+
 // SetEventBus sets the EventBus for the server (optional)
 func (s *Server) SetEventBus(bus *events.EventBus) {
 	s.eventBus = bus
@@ -253,9 +263,13 @@ func (s *Server) setupRoutes() {
 		s.logger.Info("GraphQL API enabled", zap.String("path", s.config.GraphQLPath))
 
 		// Create GraphQL handler with optional RPC Proxy and Notification Service
+		outbox := s.streamOutbox(s.storage)
 		opts := &graphql.HandlerOptions{
 			RPCProxy:            s.rpcProxy,
 			NotificationService: s.notificationService,
+		}
+		if outbox != nil {
+			opts.Stream = outbox
 		}
 		graphqlHandler, err := graphql.NewHandlerWithOptions(s.storage, s.logger, opts)
 		if err != nil {
@@ -269,6 +283,9 @@ func (s *Server) setupRoutes() {
 		// Create GraphQL Subscription server (EventBus will be set later via SetEventBus)
 		s.gqlSubServer = graphql.NewSubscriptionServer(nil, s.logger, s.config.EnableWebSocketKeepAlive)
 		s.gqlSubServer.SetDirect(s.config.DirectSubscriptions)
+		if outbox != nil {
+			s.gqlSubServer.SetOutbox(outbox)
+		}
 		s.router.Get("/graphql/ws", s.gqlSubServer.Handler())
 		s.logger.Info("GraphQL subscriptions endpoint registered",
 			zap.String("path", "/graphql/ws"),

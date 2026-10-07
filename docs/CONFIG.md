@@ -64,6 +64,16 @@ api:
   # 막힌 클라이언트는 오류를 받지 못하므로, 마지막으로 받은 sequence 다음부터 다시
   # 구독한다. "next" 메시지에는 extensions.sequence(체인 안의 이벤트 번호)가 붙는다.
   # false는 구독마다 이벤트 버스를 직접 구독하던 이전 방식(가득 차면 버림)으로 되돌린다.
+  #
+  # 재동기화(R3-4, eventbus.outbox가 켜져 있을 때): 구독 변수 fromSequence: N을 주면
+  # outbox에 남은 N 이후 이벤트를 먼저 보내고 실시간 이벤트로 이어 간다. 각 sequence는
+  # 한 번씩, 순서대로 온다. 끊긴 클라이언트는 마지막으로 받은 sequence + 1(또는 오류의
+  # resumeFrom)로 다시 구독한다. 처음 붙는 클라이언트는 snapshot부터 시작한다:
+  # { streamSequence }로 위치 S를 읽고, 필요한 상태를 조회하고, fromSequence: S+1로
+  # 구독한다(두 조회 사이에 commit된 변경은 이벤트로 다시 올 수 있으니 블록 번호와 hash로
+  # 한 번만 반영한다). N 이후가 이미 지워졌으면(outbox_retention) SEQUENCE_TOO_OLD
+  # 오류(extensions.oldest)가 오고, snapshot부터 다시 시작한다. outbox가 꺼져 있으면
+  # RESUME_UNSUPPORTED 오류가 오고 streamSequence는 null이다.
 
 ### Account Abstraction (EIP-4337)
 

@@ -15,6 +15,19 @@ import (
 	"go.uber.org/zap"
 )
 
+// resolveStreamSequence resolves the sequence of the last committed change
+// stream event (refactoring plan R3-4).
+func (s *Schema) resolveStreamSequence(p graphql.ResolveParams) (interface{}, error) {
+	if s.stream == nil {
+		return nil, nil
+	}
+	seq, err := s.stream.LastOutboxSeq(p.Context)
+	if err != nil {
+		return nil, err
+	}
+	return fmt.Sprintf("%d", seq), nil
+}
+
 // resolveLatestHeight resolves the latest indexed block height
 func (s *Schema) resolveLatestHeight(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context

@@ -719,6 +719,7 @@ Query.setCodeTransactionCount(): Int!
 Query.setCodeTransactionsInBlock(blockNumber: String!): [Transaction!]!
 Query.smartAccount(address: String!): SmartAccount
 Query.smartAccounts(pagination: PaginationInput): SmartAccountConnection!
+Query.streamSequence(): String
 Query.tokenBalance(holder: String!, token: String!): String!
 Query.tokenBalances(address: String!, tokenType: String): [TokenBalance!]!
 Query.tokenCount(standard: TokenStandard): Int!

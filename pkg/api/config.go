@@ -43,6 +43,11 @@ type Config struct {
 	// EnableWebSocket enables WebSocket subscriptions
 	EnableWebSocket bool
 
+	// StreamResume serves the change stream's outbox (eventbus.outbox):
+	// the streamSequence query and subscriptions that resume from a
+	// sequence (fromSequence).
+	StreamResume bool
+
 	// DirectSubscriptions delivers GraphQL subscriptions through a bus
 	// subscription each instead of the subscription engine
 	// (api.subscription_engine: false).
