@@ -41,21 +41,24 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 		err = s.RemoveModule(ctx, moduleAccount, moduleAddr(1), 3, fixtureHash("module-tx", 3))
 		assert.ErrorIs(t, err, port.ErrNotFound, "removing a module that was never installed")
 
-		byAccount, err := s.GetModulesByAccount(ctx, moduleAccount, 10, 0)
+		byAccount, next, err := s.GetModulesByAccount(ctx, moduleAccount, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, byAccount)
-		byType, err := s.GetModulesByType(ctx, port.ModuleTypeValidator, 10, 0)
+		assert.Empty(t, next)
+		byType, next, err := s.GetModulesByType(ctx, port.ModuleTypeValidator, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, byType)
+		assert.Empty(t, next)
 		recent, err := s.GetRecentModuleEvents(ctx, 10)
 		require.NoError(t, err)
 		assert.Empty(t, recent)
 		n, err := s.GetModuleEventCount(ctx)
 		require.NoError(t, err)
 		assert.Zero(t, n)
-		list, err := s.ListModuleStats(ctx, 10, 0)
+		list, next, err := s.ListModuleStats(ctx, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, list)
+		assert.Empty(t, next)
 
 		stats, err := s.GetModuleStats(ctx, moduleAddr(1))
 		require.NoError(t, err, "no activity is zero-value stats, not an error")
@@ -84,9 +87,11 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 		moduleAssertRecord(t, want, got)
 
 		for name, list := range map[string]func() ([]*port.InstalledModule, error){
-			"ByAccount": func() ([]*port.InstalledModule, error) { return s.GetModulesByAccount(ctx, moduleAccount, 10, 0) },
+			"ByAccount": func() ([]*port.InstalledModule, error) {
+				return moduleItems(s.GetModulesByAccount(ctx, moduleAccount, port.FirstPage(10)))
+			},
 			"ByType": func() ([]*port.InstalledModule, error) {
-				return s.GetModulesByType(ctx, port.ModuleTypeExecutor, 10, 0)
+				return moduleItems(s.GetModulesByType(ctx, port.ModuleTypeExecutor, port.FirstPage(10)))
 			},
 			"Recent": func() ([]*port.InstalledModule, error) { return s.GetRecentModuleEvents(ctx, 10) },
 		} {
@@ -101,10 +106,10 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 
 		_, err = s.GetInstalledModule(ctx, moduleAccount2, moduleAddr(1))
 		assert.ErrorIs(t, err, port.ErrNotFound, "the same module on another account")
-		other, err := s.GetModulesByAccount(ctx, moduleAccount2, 10, 0)
+		other, _, err := s.GetModulesByAccount(ctx, moduleAccount2, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, other, "another account")
-		other, err = s.GetModulesByType(ctx, port.ModuleTypeValidator, 10, 0)
+		other, _, err = s.GetModulesByType(ctx, port.ModuleTypeValidator, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, other, "another type")
 	})
@@ -143,30 +148,41 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 		}
 		require.NoError(t, s.SaveInstalledModule(ctx, moduleRecord(moduleAccount2, 9, port.ModuleTypeHook, 6)))
 
-		pages := map[string]func(limit, offset int) ([]*port.InstalledModule, error){
-			"ByAccount": func(limit, offset int) ([]*port.InstalledModule, error) {
-				return s.GetModulesByAccount(ctx, moduleAccount, limit, offset)
-			},
-			"ByType": func(limit, offset int) ([]*port.InstalledModule, error) {
-				return s.GetModulesByType(ctx, port.ModuleTypeValidator, limit, offset)
-			},
+		// Two more validators installed in block 3 on the account, and two
+		// executors on another account for cursors from another list.
+		require.NoError(t, s.SaveInstalledModule(ctx, moduleRecord(moduleAccount, 6, port.ModuleTypeValidator, 3)))
+		require.NoError(t, s.SaveInstalledModule(ctx, moduleRecord(moduleAccount, 7, port.ModuleTypeValidator, 3)))
+		require.NoError(t, s.SaveInstalledModule(ctx, moduleRecord(moduleAccount2, 10, port.ModuleTypeExecutor, 1)))
+		require.NoError(t, s.SaveInstalledModule(ctx, moduleRecord(moduleAccount2, 11, port.ModuleTypeExecutor, 2)))
+
+		byAccount := func(account common.Address) listPage[*port.InstalledModule] {
+			return func(page port.Page) ([]*port.InstalledModule, string, error) {
+				return s.GetModulesByAccount(ctx, account, page)
+			}
 		}
-		for name, page := range pages {
-			got, err := page(2, 0)
-			require.NoError(t, err, name)
-			assert.Equal(t, []uint64{5, 4}, moduleBlocks(got), "%s: newest first", name)
-			got, err = page(2, 2)
-			require.NoError(t, err, name)
-			assert.Equal(t, []uint64{3, 2}, moduleBlocks(got), "%s: second page", name)
-			got, err = page(2, 4)
-			require.NoError(t, err, name)
-			assert.Equal(t, []uint64{1}, moduleBlocks(got), "%s: last page is short", name)
-			got, err = page(2, 5)
-			require.NoError(t, err, name)
-			assert.Empty(t, got, "%s: offset at the end", name)
-			got, err = page(2, 50)
-			require.NoError(t, err, name)
-			assert.Empty(t, got, "%s: offset past the end", name)
+		byType := func(typ port.ModuleType) listPage[*port.InstalledModule] {
+			return func(page port.Page) ([]*port.InstalledModule, string, error) {
+				return s.GetModulesByType(ctx, typ, page)
+			}
+		}
+		for name, c := range map[string]struct {
+			list, other listPage[*port.InstalledModule]
+			blocks      []uint64
+		}{
+			"ByAccount": {byAccount(moduleAccount), byAccount(moduleAccount2), []uint64{5, 4, 3, 3, 3, 2, 1}},
+			"ByType":    {byType(port.ModuleTypeValidator), byType(port.ModuleTypeExecutor), []uint64{5, 4, 3, 3, 3, 2, 1}},
+		} {
+			t.Run(name, func(t *testing.T) {
+				// Installs of the same block are in a fixed order the port
+				// does not specify: take the list's own order and check that
+				// pages follow it.
+				all, _, err := c.list(port.FirstPage(50))
+				require.NoError(t, err)
+				assert.Equal(t, c.blocks, moduleBlocks(all), "newest first")
+				checkPaging(t, all, moduleKey, c.list)
+				checkCursorFromOtherList(t, c.list, c.other)
+				checkCursorFromOtherList(t, c.other, c.list)
+			})
 		}
 
 		recent, err := s.GetRecentModuleEvents(ctx, 3)
@@ -174,10 +190,10 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 		assert.Equal(t, []uint64{6, 5, 4}, moduleBlocks(recent), "recent: newest first across accounts, bounded by limit")
 		recent, err = s.GetRecentModuleEvents(ctx, 50)
 		require.NoError(t, err)
-		assert.Equal(t, []uint64{6, 5, 4, 3, 2, 1}, moduleBlocks(recent))
+		assert.Equal(t, []uint64{6, 5, 4, 3, 3, 3, 2, 2, 1, 1}, moduleBlocks(recent))
 		n, err := s.GetModuleEventCount(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, 6, n)
+		assert.Equal(t, 10, n)
 	})
 
 	t.Run("InstallThenUninstall", func(t *testing.T) {
@@ -206,7 +222,7 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 		assert.Nil(t, still.RemovedAt)
 
 		// The account's lists show the module with its current state.
-		byAccount, err := s.GetModulesByAccount(ctx, moduleAccount, 10, 0)
+		byAccount, _, err := s.GetModulesByAccount(ctx, moduleAccount, port.FirstPage(10))
 		require.NoError(t, err)
 		require.Len(t, byAccount, 2)
 		for _, m := range byAccount {
@@ -230,9 +246,13 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, n)
 		for name, list := range map[string]func() ([]*port.InstalledModule, error){
-			"ByAccount": func() ([]*port.InstalledModule, error) { return s.GetModulesByAccount(ctx, moduleAccount, 10, 0) },
-			"ByType":    func() ([]*port.InstalledModule, error) { return s.GetModulesByType(ctx, port.ModuleTypeHook, 10, 0) },
-			"Recent":    func() ([]*port.InstalledModule, error) { return s.GetRecentModuleEvents(ctx, 10) },
+			"ByAccount": func() ([]*port.InstalledModule, error) {
+				return moduleItems(s.GetModulesByAccount(ctx, moduleAccount, port.FirstPage(10)))
+			},
+			"ByType": func() ([]*port.InstalledModule, error) {
+				return moduleItems(s.GetModulesByType(ctx, port.ModuleTypeHook, port.FirstPage(10)))
+			},
+			"Recent": func() ([]*port.InstalledModule, error) { return s.GetRecentModuleEvents(ctx, 10) },
 		} {
 			got, err := list()
 			require.NoError(t, err, name)
@@ -251,10 +271,10 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 		require.NoError(t, err)
 		moduleAssertRecord(t, again, got)
 
-		byAccount, err := s.GetModulesByAccount(ctx, moduleAccount, 10, 0)
+		byAccount, _, err := s.GetModulesByAccount(ctx, moduleAccount, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Len(t, byAccount, 1, "ByAccount")
-		byType, err := s.GetModulesByType(ctx, port.ModuleTypeValidator, 10, 0)
+		byType, _, err := s.GetModulesByType(ctx, port.ModuleTypeValidator, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Len(t, byType, 1, "ByType")
 	})
@@ -296,23 +316,18 @@ func testModuleIndex(t *testing.T, newStore NewStore) {
 		require.NoError(t, s.UpdateModuleStats(ctx, &port.ModuleStats{Module: moduleAddr(2), ModuleType: port.ModuleTypeHook, TotalInstalls: 1, ActiveInstalls: 1}))
 		require.NoError(t, s.UpdateModuleStats(ctx, &port.ModuleStats{Module: moduleAddr(3), ModuleType: port.ModuleTypeExecutor, TotalInstalls: 2}))
 
-		all, err := s.ListModuleStats(ctx, 10, 0)
+		all, next, err := s.ListModuleStats(ctx, port.FirstPage(10))
 		require.NoError(t, err)
+		assert.Empty(t, next)
 		assert.ElementsMatch(t, []common.Address{moduleAddr(1), moduleAddr(2), moduleAddr(3)}, moduleStatsAddrs(all))
 		for _, st := range all {
 			if st.Module == moduleAddr(1) {
 				assert.Equal(t, *replaced, *st, "the list holds the latest stats")
 			}
 		}
-		first, err := s.ListModuleStats(ctx, 2, 0)
-		require.NoError(t, err)
-		assert.Equal(t, moduleStatsAddrs(all)[:2], moduleStatsAddrs(first), "pages follow the list order")
-		second, err := s.ListModuleStats(ctx, 2, 2)
-		require.NoError(t, err)
-		assert.Equal(t, moduleStatsAddrs(all)[2:], moduleStatsAddrs(second))
-		past, err := s.ListModuleStats(ctx, 2, 3)
-		require.NoError(t, err)
-		assert.Empty(t, past, "offset at the end")
+		// The order is fixed but not specified: pages follow the list order.
+		checkPaging(t, all, func(st *port.ModuleStats) common.Address { return st.Module },
+			func(page port.Page) ([]*port.ModuleStats, string, error) { return s.ListModuleStats(ctx, page) })
 
 		// Installs alone do not create stats: the writer maintains them.
 		require.NoError(t, s.SaveInstalledModule(ctx, moduleRecord(moduleAccount, 4, port.ModuleTypeHook, 1)))
@@ -373,4 +388,14 @@ func moduleStatsAddrs(stats []*port.ModuleStats) []common.Address {
 		out = append(out, s.Module)
 	}
 	return out
+}
+
+// moduleItems drops the cursor of a page.
+func moduleItems(records []*port.InstalledModule, _ string, err error) ([]*port.InstalledModule, error) {
+	return records, err
+}
+
+// moduleKey identifies an install record by account and module.
+func moduleKey(r *port.InstalledModule) [2]common.Address {
+	return [2]common.Address{r.Account, r.Module}
 }

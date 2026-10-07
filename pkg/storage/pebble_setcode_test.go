@@ -154,7 +154,7 @@ func TestGetSetCodeAuthorizationsByTarget(t *testing.T) {
 	}
 
 	// Get by target with pagination
-	records, err := storage.GetSetCodeAuthorizationsByTarget(ctx, targetAddr, 3, 0)
+	records, _, err := storage.GetSetCodeAuthorizationsByTarget(ctx, targetAddr, port.FirstPage(3))
 	require.NoError(t, err)
 	assert.Len(t, records, 3)
 
@@ -194,7 +194,7 @@ func TestGetSetCodeAuthorizationsByAuthority(t *testing.T) {
 	}
 
 	// Get by authority
-	records, err := storage.GetSetCodeAuthorizationsByAuthority(ctx, authorityAddr, 10, 0)
+	records, _, err := storage.GetSetCodeAuthorizationsByAuthority(ctx, authorityAddr, port.FirstPage(10))
 	require.NoError(t, err)
 	assert.Len(t, records, 3)
 

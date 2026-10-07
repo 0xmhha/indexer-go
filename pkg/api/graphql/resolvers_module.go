@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -75,38 +76,35 @@ func (s *Schema) resolveInstalledModules(p graphql.ResolveParams) (interface{}, 
 		return nil, fmt.Errorf("storage does not support Module queries")
 	}
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	var records []*port.InstalledModule
+	var next string
 	var err error
+	recent := false
 
 	// Check for account filter
 	if accountStr, ok := p.Args["account"].(string); ok && accountStr != "" {
 		account := common.HexToAddress(accountStr)
-		records, err = moduleReader.GetModulesByAccount(ctx, account, limit, offset)
+		records, next, err = moduleReader.GetModulesByAccount(ctx, account, pagination.page())
 	} else if moduleTypeStr, ok := p.Args["moduleType"].(string); ok && moduleTypeStr != "" {
 		// Filter by module type
 		moduleType := parseModuleType(moduleTypeStr)
-		records, err = moduleReader.GetModulesByType(ctx, moduleType, limit, offset)
+		records, next, err = moduleReader.GetModulesByType(ctx, moduleType, pagination.page())
 	} else {
-		// Get recently installed modules
-		records, err = moduleReader.GetRecentModuleEvents(ctx, limit)
+		// Get recently installed modules (the first page only; this list
+		// issues no cursors)
+		if pagination.After != "" {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
+		recent = true
+		records, err = moduleReader.GetRecentModuleEvents(ctx, pagination.Limit)
 	}
 
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get installed modules",
 			zap.Error(err))
 		return nil, err
@@ -117,15 +115,19 @@ func (s *Schema) resolveInstalledModules(p graphql.ResolveParams) (interface{}, 
 		nodes[i] = s.installedModuleToMap(record)
 	}
 
+	pageInfo := cursorPageInfo(pagination, next)
+	if recent {
+		pageInfo = map[string]interface{}{
+			"hasNextPage":     len(records) == pagination.Limit,
+			"hasPreviousPage": pagination.Offset > 0,
+			"startCursor":     nil,
+			"endCursor":       nil,
+		}
+	}
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(records),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(records) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   pageInfo,
 	}, nil
 }
 
@@ -167,23 +169,13 @@ func (s *Schema) resolveListModuleStats(p graphql.ResolveParams) (interface{}, e
 		return nil, fmt.Errorf("storage does not support Module queries")
 	}
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
-	statsList, err := moduleReader.ListModuleStats(ctx, limit, offset)
+	statsList, next, err := moduleReader.ListModuleStats(ctx, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to list module stats",
 			zap.Error(err))
 		return nil, err
@@ -197,12 +189,7 @@ func (s *Schema) resolveListModuleStats(p graphql.ResolveParams) (interface{}, e
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(statsList),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(statsList) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 

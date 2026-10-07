@@ -81,155 +81,47 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash
 	return records, nil
 }
 
-// GetSetCodeAuthorizationsByTarget retrieves authorizations where address is the target.
-// Results are ordered by block number descending (newest first).
-func (s *PebbleStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
-	if s.closed.Load() {
-		return nil, port.ErrClosed
-	}
-
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	prefix := SetCodeTargetIndexKeyPrefix(target)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	// Collect all tx hashes first (reverse order for newest first)
-	var txRefs []struct {
-		txHash    common.Hash
-		authIndex int
-	}
-	for iter.Last(); iter.Valid(); iter.Prev() {
-		value := iter.Value()
-		if len(value) >= 32 {
-			var ref struct {
-				txHash    common.Hash
-				authIndex int
-			}
-			ref.txHash, ref.authIndex = decodeSetCodeIndexValue(value)
-			txRefs = append(txRefs, ref)
-		}
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	// Apply pagination
-	start := offset
-	if start >= len(txRefs) {
-		return []*port.SetCodeAuthorizationRecord{}, nil
-	}
-	end := start + limit
-	if end > len(txRefs) {
-		end = len(txRefs)
-	}
-
-	// Fetch full records
-	records := make([]*port.SetCodeAuthorizationRecord, 0, end-start)
-	for _, ref := range txRefs[start:end] {
-		record, err := s.GetSetCodeAuthorization(ctx, ref.txHash, ref.authIndex)
-		if err != nil {
-			s.logger.Warn("failed to get setcode authorization",
-				zap.String("txHash", ref.txHash.Hex()),
-				zap.Int("authIndex", ref.authIndex),
-				zap.Error(err))
-			continue
-		}
-		records = append(records, record)
-	}
-
-	return records, nil
+// GetSetCodeAuthorizationsByTarget returns one page of the authorizations
+// where address is the target, newest first.
+func (s *PebbleStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, page port.Page) ([]*port.SetCodeAuthorizationRecord, string, error) {
+	return s.setCodeAuthorizationPage(ctx, SetCodeTargetIndexKeyPrefix(target), page)
 }
 
-// GetSetCodeAuthorizationsByAuthority retrieves authorizations where address is the authority.
-func (s *PebbleStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
+// GetSetCodeAuthorizationsByAuthority returns one page of the authorizations
+// where address is the authority, newest first.
+func (s *PebbleStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, page port.Page) ([]*port.SetCodeAuthorizationRecord, string, error) {
+	return s.setCodeAuthorizationPage(ctx, SetCodeAuthorityIndexKeyPrefix(authority), page)
+}
+
+// setCodeAuthorizationPage reads one page of a SetCode address index (keys
+// ordered by block, transaction index and authorization index) in reverse,
+// so the newest authorization comes first, and loads the records it refers
+// to. The cursor is the index key of the last entry.
+func (s *PebbleStorage) setCodeAuthorizationPage(ctx context.Context, prefix []byte, page port.Page) ([]*port.SetCodeAuthorizationRecord, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
-
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	prefix := SetCodeAuthorityIndexKeyPrefix(authority)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
+	limit := min(pageLimit(page, constants.DefaultPaginationLimit), constants.DefaultMaxPaginationLimit)
+	isRef := func(_, value []byte) bool { return len(value) >= common.HashLength }
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), true, page, limit, isRef)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	// Collect all tx hashes first (reverse order for newest first)
-	var txRefs []struct {
-		txHash    common.Hash
-		authIndex int
-	}
-	for iter.Last(); iter.Valid(); iter.Prev() {
-		value := iter.Value()
-		if len(value) >= 32 {
-			var ref struct {
-				txHash    common.Hash
-				authIndex int
-			}
-			ref.txHash, ref.authIndex = decodeSetCodeIndexValue(value)
-			txRefs = append(txRefs, ref)
-		}
+		return nil, "", err
 	}
 
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	// Apply pagination
-	start := offset
-	if start >= len(txRefs) {
-		return []*port.SetCodeAuthorizationRecord{}, nil
-	}
-	end := start + limit
-	if end > len(txRefs) {
-		end = len(txRefs)
-	}
-
-	// Fetch full records
-	records := make([]*port.SetCodeAuthorizationRecord, 0, end-start)
-	for _, ref := range txRefs[start:end] {
-		record, err := s.GetSetCodeAuthorization(ctx, ref.txHash, ref.authIndex)
+	records := make([]*port.SetCodeAuthorizationRecord, 0, len(entries))
+	for _, e := range entries {
+		txHash, authIndex := decodeSetCodeIndexValue(e.Value)
+		record, err := s.GetSetCodeAuthorization(ctx, txHash, authIndex)
 		if err != nil {
 			s.logger.Warn("failed to get setcode authorization",
-				zap.String("txHash", ref.txHash.Hex()),
-				zap.Int("authIndex", ref.authIndex),
+				zap.String("txHash", txHash.Hex()),
+				zap.Int("authIndex", authIndex),
 				zap.Error(err))
 			continue
 		}
 		records = append(records, record)
 	}
-
-	return records, nil
+	return records, next, nil
 }
 
 // GetSetCodeAuthorizationsByBlock retrieves all authorizations in a specific block.

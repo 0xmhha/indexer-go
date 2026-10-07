@@ -82,13 +82,17 @@ type ModuleIndexReader interface {
 	// Returns ErrNotFound if the module is not found.
 	GetInstalledModule(ctx context.Context, account, module common.Address) (*InstalledModule, error)
 
-	// GetModulesByAccount retrieves all modules installed on a specific account.
-	// Results are ordered by block number descending (newest first).
-	GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*InstalledModule, error)
+	// GetModulesByAccount returns one page of the modules installed on an
+	// account, newest install first (by install block, descending; installs
+	// of the same block in a fixed order), and the cursor of the next page
+	// (see Page).
+	GetModulesByAccount(ctx context.Context, account common.Address, page Page) ([]*InstalledModule, string, error)
 
-	// GetModulesByType retrieves modules by their type across all accounts.
-	// Results are ordered by block number descending (newest first).
-	GetModulesByType(ctx context.Context, moduleType ModuleType, limit, offset int) ([]*InstalledModule, error)
+	// GetModulesByType returns one page of the modules of a type across all
+	// accounts, newest install first (by install block, descending; installs
+	// of the same block in a fixed order), and the cursor of the next page
+	// (see Page).
+	GetModulesByType(ctx context.Context, moduleType ModuleType, page Page) ([]*InstalledModule, string, error)
 
 	// GetModuleStats retrieves aggregate statistics for a module contract.
 	// Returns zero-value stats if the module has no install activity.
@@ -108,8 +112,9 @@ type ModuleIndexReader interface {
 	// indexed (one per account and module; uninstalls are not counted).
 	GetModuleEventCount(ctx context.Context) (int, error)
 
-	// ListModuleStats retrieves module stats with pagination.
-	ListModuleStats(ctx context.Context, limit, offset int) ([]*ModuleStats, error)
+	// ListModuleStats returns one page of the module stats, in a fixed order,
+	// and the cursor of the next page (see Page).
+	ListModuleStats(ctx context.Context, page Page) ([]*ModuleStats, string, error)
 }
 
 // ModuleIndexWriter defines write operations for ERC-7579 module indexing

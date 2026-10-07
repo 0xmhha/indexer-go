@@ -89,12 +89,12 @@ func (m *richMockStorage) GetSetCodeAuthorizationsByTx(_ context.Context, _ comm
 		{TxHash: common.HexToHash("0xsc1"), BlockNumber: 30, AuthIndex: 0, TargetAddress: common.HexToAddress("0xS1"), AuthorityAddress: common.HexToAddress("0xS2"), ChainID: big.NewInt(1), Nonce: 5, Applied: true, Timestamp: time.Unix(1700000000, 0)},
 	}, nil
 }
-func (m *richMockStorage) GetSetCodeAuthorizationsByTarget(_ context.Context, _ common.Address, _, _ int) ([]*port.SetCodeAuthorizationRecord, error) {
+func (m *richMockStorage) offsetGetSetCodeAuthorizationsByTarget(_ context.Context, _ common.Address, _, _ int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return []*port.SetCodeAuthorizationRecord{
 		{TxHash: common.HexToHash("0xsc2"), BlockNumber: 31, AuthIndex: 0, TargetAddress: common.HexToAddress("0xS1"), AuthorityAddress: common.HexToAddress("0xS3"), ChainID: big.NewInt(1), Applied: true, Timestamp: time.Unix(1700000010, 0)},
 	}, nil
 }
-func (m *richMockStorage) GetSetCodeAuthorizationsByAuthority(_ context.Context, _ common.Address, _, _ int) ([]*port.SetCodeAuthorizationRecord, error) {
+func (m *richMockStorage) offsetGetSetCodeAuthorizationsByAuthority(_ context.Context, _ common.Address, _, _ int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return []*port.SetCodeAuthorizationRecord{
 		{TxHash: common.HexToHash("0xsc3"), BlockNumber: 32, AuthIndex: 0, TargetAddress: common.HexToAddress("0xS4"), AuthorityAddress: common.HexToAddress("0xS2"), ChainID: big.NewInt(1), Applied: false, Error: "nonce mismatch", Timestamp: time.Unix(1700000020, 0)},
 	}, nil
@@ -251,10 +251,10 @@ func (m *mockStorage) GetSetCodeAuthorization(_ context.Context, _ common.Hash, 
 func (m *mockStorage) GetSetCodeAuthorizationsByTx(_ context.Context, _ common.Hash) ([]*port.SetCodeAuthorizationRecord, error) {
 	return []*port.SetCodeAuthorizationRecord{}, nil
 }
-func (m *mockStorage) GetSetCodeAuthorizationsByTarget(_ context.Context, _ common.Address, _, _ int) ([]*port.SetCodeAuthorizationRecord, error) {
+func (m *mockStorage) offsetGetSetCodeAuthorizationsByTarget(_ context.Context, _ common.Address, _, _ int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return []*port.SetCodeAuthorizationRecord{}, nil
 }
-func (m *mockStorage) GetSetCodeAuthorizationsByAuthority(_ context.Context, _ common.Address, _, _ int) ([]*port.SetCodeAuthorizationRecord, error) {
+func (m *mockStorage) offsetGetSetCodeAuthorizationsByAuthority(_ context.Context, _ common.Address, _, _ int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return []*port.SetCodeAuthorizationRecord{}, nil
 }
 func (m *mockStorage) GetSetCodeAuthorizationsByBlock(_ context.Context, _ uint64) ([]*port.SetCodeAuthorizationRecord, error) {
