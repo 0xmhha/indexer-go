@@ -63,6 +63,7 @@ make docker-build   # Container image
   - `pkg/eventbus` (Redis, Kafka, factory with local degradation) exists but is not wired
 - **Storage**: PebbleDB. Each block is indexed in one block transaction (`BeginBlock`, indexed batch bound to ctx; all access goes through `s.kv(ctx)`). Blocks are always read through the chain profile source; the legacy write path and go-ethereum client path were removed after v0.1.0 (`atomic_block: false` or `profile_source: false` is rejected at startup). Each block's commit records undo (`/undo/<height>`, last 128 blocks); on a reorg the live loop rolls back to the fork point, keeps the removed blocks as orphans (`/orphan/`, queryable with GraphQL `reorgs`/`orphanedBlock`/`orphanedTransaction`) and publishes a `reorg` event followed by the removed logs with `removed: true` (`docs/analysis/reorg-design.md`)
 - **Ports** (`pkg/core/port`): ports speak the chain-neutral model (`pkg/core/model`: blocks, transactions, receipts, logs); go-ethereum `core/types` stays out of them (enforced by `TestPortsImportNoImplementation`) and is converted at the edges with `pkg/core/gethconv`. Consumers take the storage ports they use. The APIs take `port.QueryStore`, `feature.Deps.Storage` is a `port.Reader`, and optional ports (address index, token holder, module, orphan, ...) are taken by type assertion. Only `cmd` and `pkg/multichain` name `storage.Storage` or the Pebble types (`TestStorageAssemblyOnly`); `pkg/storage` declares no port aliases (`TestNoPortAliases`), and `pkg/core/port` imports no implementation (`TestPortsImportNoImplementation`)
+- **RPC pool** (`pkg/rpcpool`): an `http.RoundTripper` under the go-ethereum RPC client, so ethclient, the block source and the recording proxy share it: per-attempt timeout (`rpc.timeout`), rate limit, failover to `rpc.fallback_endpoints` on connection errors, timeouts, 429 and 5xx (a failed endpoint cools down for 10s, then the primary is used again; JSON-RPC errors are returned as they are). `rpc.ws_endpoint` subscribes to newHeads to wake the live loop (live p95 head latency 1-2ms instead of ~50ms)
 - **Pagination** (`port.Page`): list ports take `Page{After, Limit, Offset}` and return the next page's cursor; a cursor page costs the same at any depth (Pebble `scanPage` over the list's key range), Offset is kept for clients that page by number. GraphQL `pagination.after` / `pageInfo.endCursor`, JSON-RPC `after` / `nextCursor`
 - **Fetcher**: Live indexing processes blocks sequentially by polling; the worker pool (`indexer.workers`) is used only by gap recovery
   - All state changes (index block, rollback, backfill) run as commands on one writer goroutine (`pkg/fetch/writer.go`, the only caller of `BeginBlock`, enforced by a test). Startup recovery is `Fetcher.Recover`: reorg check, feature state, backfill (order-independent features backfill online in the background)
@@ -78,6 +79,9 @@ Precedence (lowest to highest): defaults < YAML < environment variables < CLI fl
 ```yaml
 rpc:
   endpoint: "http://127.0.0.1:8501"
+  fallback_endpoints: []  # further HTTP(S) nodes of the same chain; calls fail over in order (pkg/rpcpool)
+  rate_limit: 0           # requests per second to the nodes; 0 = unlimited
+  ws_endpoint: ""         # newHeads subscription that wakes the live loop (polling stays the fallback)
 indexer:
   workers: 100
   poll_interval: 50ms   # head polling once caught up (head latency); separate from error retry delay
