@@ -415,19 +415,19 @@ func (m *mockStorage) GetUserOp(ctx context.Context, opHash common.Hash) (*usero
 func (m *mockStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorage) offsetGetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorage) offsetGetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, nil
 }
 func (m *mockStorage) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorage) offsetGetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorage) offsetGetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, nil
 }
 func (m *mockStorage) GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error) {
@@ -448,16 +448,16 @@ func (m *mockStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*usero
 func (m *mockStorage) GetUserOpCount(ctx context.Context) (int, error) {
 	return 0, nil
 }
-func (m *mockStorage) ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
+func (m *mockStorage) offsetListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
 	return nil, nil
 }
-func (m *mockStorage) ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
+func (m *mockStorage) offsetListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
 	return nil, nil
 }
-func (m *mockStorage) ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
+func (m *mockStorage) offsetListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
 	return nil, nil
 }
-func (m *mockStorage) ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
+func (m *mockStorage) offsetListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
 	return nil, nil
 }
 
@@ -1523,19 +1523,19 @@ func (m *mockStorageWithErrors) GetUserOp(ctx context.Context, opHash common.Has
 func (m *mockStorageWithErrors) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorageWithErrors) offsetGetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorageWithErrors) offsetGetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorageWithErrors) offsetGetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorageWithErrors) offsetGetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, port.ErrNotFound
 }
 func (m *mockStorageWithErrors) GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error) {
@@ -1556,16 +1556,16 @@ func (m *mockStorageWithErrors) GetRecentUserOps(ctx context.Context, limit int)
 func (m *mockStorageWithErrors) GetUserOpCount(ctx context.Context) (int, error) {
 	return 0, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
+func (m *mockStorageWithErrors) offsetListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
+func (m *mockStorageWithErrors) offsetListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
+func (m *mockStorageWithErrors) offsetListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorageWithErrors) ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
+func (m *mockStorageWithErrors) offsetListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -2007,19 +2007,19 @@ func (m *mockStorageWithNonNotFoundErrors) GetUserOp(ctx context.Context, opHash
 func (m *mockStorageWithNonNotFoundErrors) GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetGetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetGetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 func (m *mockStorageWithNonNotFoundErrors) GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetGetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetGetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 func (m *mockStorageWithNonNotFoundErrors) GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error) {
@@ -2040,16 +2040,16 @@ func (m *mockStorageWithNonNotFoundErrors) GetRecentUserOps(ctx context.Context,
 func (m *mockStorageWithNonNotFoundErrors) GetUserOpCount(ctx context.Context) (int, error) {
 	return 0, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
-func (m *mockStorageWithNonNotFoundErrors) ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 

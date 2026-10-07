@@ -54,26 +54,24 @@ func (s *PebbleStorage) GetUserOpsByTx(ctx context.Context, txHash common.Hash) 
 	return s.getUserOpsByIndex(ctx, prefix)
 }
 
-// GetUserOpsBySender retrieves UserOperations sent by a specific address.
-func (s *PebbleStorage) GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+// GetUserOpsBySender returns one page of the UserOperations sent by a specific address,
+// newest first.
+func (s *PebbleStorage) GetUserOpsBySender(ctx context.Context, sender common.Address, page port.Page) ([]*userop.UserOperation, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	limit, offset = normalizePagination(limit, offset)
-	prefix := UserOpSenderIndexKeyPrefix(sender)
-	return s.getUserOpsByIndexPaginated(ctx, prefix, limit, offset)
+	return s.getUserOpsPage(ctx, UserOpSenderIndexKeyPrefix(sender), page)
 }
 
-// GetUserOpsByBundler retrieves UserOperations bundled by a specific address.
-func (s *PebbleStorage) GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+// GetUserOpsByBundler returns one page of the UserOperations bundled by a specific address,
+// newest first.
+func (s *PebbleStorage) GetUserOpsByBundler(ctx context.Context, bundler common.Address, page port.Page) ([]*userop.UserOperation, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	limit, offset = normalizePagination(limit, offset)
-	prefix := UserOpBundlerIndexKeyPrefix(bundler)
-	return s.getUserOpsByIndexPaginated(ctx, prefix, limit, offset)
+	return s.getUserOpsPage(ctx, UserOpBundlerIndexKeyPrefix(bundler), page)
 }
 
 // GetUserOpsByBlock retrieves all UserOperations in a specific block.
@@ -86,26 +84,24 @@ func (s *PebbleStorage) GetUserOpsByBlock(ctx context.Context, blockNumber uint6
 	return s.getUserOpsByIndex(ctx, prefix)
 }
 
-// GetUserOpsByPaymaster retrieves UserOperations sponsored by a specific paymaster.
-func (s *PebbleStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+// GetUserOpsByPaymaster returns one page of the UserOperations sponsored by a specific paymaster,
+// newest first.
+func (s *PebbleStorage) GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, page port.Page) ([]*userop.UserOperation, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	limit, offset = normalizePagination(limit, offset)
-	prefix := UserOpPaymasterIndexKeyPrefix(paymaster)
-	return s.getUserOpsByIndexPaginated(ctx, prefix, limit, offset)
+	return s.getUserOpsPage(ctx, UserOpPaymasterIndexKeyPrefix(paymaster), page)
 }
 
-// GetUserOpsByFactory retrieves UserOperations that deployed accounts via a specific factory.
-func (s *PebbleStorage) GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error) {
+// GetUserOpsByFactory returns one page of the UserOperations that deployed accounts via a specific factory,
+// newest first.
+func (s *PebbleStorage) GetUserOpsByFactory(ctx context.Context, factory common.Address, page port.Page) ([]*userop.UserOperation, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	limit, offset = normalizePagination(limit, offset)
-	prefix := UserOpFactoryIndexKeyPrefix(factory)
-	return s.getUserOpsByIndexPaginated(ctx, prefix, limit, offset)
+	return s.getUserOpsPage(ctx, UserOpFactoryIndexKeyPrefix(factory), page)
 }
 
 // GetBundlerStats retrieves statistics for a bundler address.
@@ -284,189 +280,40 @@ func (s *PebbleStorage) GetUserOpCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// ListBundlers retrieves bundler stats with pagination.
-func (s *PebbleStorage) ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error) {
+// ListBundlers returns one page of bundler stats, in key order (by address).
+func (s *PebbleStorage) ListBundlers(ctx context.Context, page port.Page) ([]*userop.BundlerStats, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	limit, offset = normalizePagination(limit, offset)
-	prefix := BundlerStatsKeyPrefix()
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var all []*userop.BundlerStats
-	for iter.First(); iter.Valid(); iter.Next() {
-		var stats userop.BundlerStats
-		if err := json.Unmarshal(iter.Value(), &stats); err != nil {
-			s.logger.Warn("failed to unmarshal bundler stats",
-				zap.String("key", string(iter.Key())),
-				zap.Error(err))
-			continue
-		}
-		all = append(all, &stats)
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	// Apply pagination
-	start := offset
-	if start >= len(all) {
-		return []*userop.BundlerStats{}, nil
-	}
-	end := start + limit
-	if end > len(all) {
-		end = len(all)
-	}
-
-	return all[start:end], nil
+	return pageRecords[userop.BundlerStats](ctx, s, BundlerStatsKeyPrefix(), page, "bundler stats")
 }
 
-// ListFactories retrieves factory stats with pagination.
-func (s *PebbleStorage) ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error) {
+// ListFactories returns one page of factory stats, in key order (by address).
+func (s *PebbleStorage) ListFactories(ctx context.Context, page port.Page) ([]*userop.FactoryStats, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	limit, offset = normalizePagination(limit, offset)
-	prefix := FactoryStatsKeyPrefix()
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var all []*userop.FactoryStats
-	for iter.First(); iter.Valid(); iter.Next() {
-		var stats userop.FactoryStats
-		if err := json.Unmarshal(iter.Value(), &stats); err != nil {
-			s.logger.Warn("failed to unmarshal factory stats",
-				zap.String("key", string(iter.Key())),
-				zap.Error(err))
-			continue
-		}
-		all = append(all, &stats)
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	start := offset
-	if start >= len(all) {
-		return []*userop.FactoryStats{}, nil
-	}
-	end := start + limit
-	if end > len(all) {
-		end = len(all)
-	}
-
-	return all[start:end], nil
+	return pageRecords[userop.FactoryStats](ctx, s, FactoryStatsKeyPrefix(), page, "factory stats")
 }
 
-// ListPaymasters retrieves paymaster stats with pagination.
-func (s *PebbleStorage) ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error) {
+// ListPaymasters returns one page of paymaster stats, in key order (by address).
+func (s *PebbleStorage) ListPaymasters(ctx context.Context, page port.Page) ([]*userop.PaymasterStats, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	limit, offset = normalizePagination(limit, offset)
-	prefix := PaymasterStatsKeyPrefix()
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var all []*userop.PaymasterStats
-	for iter.First(); iter.Valid(); iter.Next() {
-		var stats userop.PaymasterStats
-		if err := json.Unmarshal(iter.Value(), &stats); err != nil {
-			s.logger.Warn("failed to unmarshal paymaster stats",
-				zap.String("key", string(iter.Key())),
-				zap.Error(err))
-			continue
-		}
-		all = append(all, &stats)
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	start := offset
-	if start >= len(all) {
-		return []*userop.PaymasterStats{}, nil
-	}
-	end := start + limit
-	if end > len(all) {
-		end = len(all)
-	}
-
-	return all[start:end], nil
+	return pageRecords[userop.PaymasterStats](ctx, s, PaymasterStatsKeyPrefix(), page, "paymaster stats")
 }
 
-// ListSmartAccounts retrieves smart accounts with pagination.
-func (s *PebbleStorage) ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error) {
+// ListSmartAccounts returns one page of smart account, in key order (by address).
+func (s *PebbleStorage) ListSmartAccounts(ctx context.Context, page port.Page) ([]*userop.SmartAccount, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	limit, offset = normalizePagination(limit, offset)
-	prefix := SmartAccountKeyPrefix()
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var all []*userop.SmartAccount
-	for iter.First(); iter.Valid(); iter.Next() {
-		var account userop.SmartAccount
-		if err := json.Unmarshal(iter.Value(), &account); err != nil {
-			s.logger.Warn("failed to unmarshal smart account",
-				zap.String("key", string(iter.Key())),
-				zap.Error(err))
-			continue
-		}
-		all = append(all, &account)
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	start := offset
-	if start >= len(all) {
-		return []*userop.SmartAccount{}, nil
-	}
-	end := start + limit
-	if end > len(all) {
-		end = len(all)
-	}
-
-	return all[start:end], nil
+	return pageRecords[userop.SmartAccount](ctx, s, SmartAccountKeyPrefix(), page, "smart account")
 }
 
 // ========== UserOp Write Operations ==========
@@ -722,20 +569,6 @@ func (s *PebbleStorage) SaveSmartAccount(ctx context.Context, account *userop.Sm
 
 // ========== Internal Helpers ==========
 
-// normalizePagination applies default limits and bounds to pagination parameters
-func normalizePagination(limit, offset int) (int, int) {
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	return limit, offset
-}
-
 // getUserOpsByIndex retrieves all UserOps referenced by an index prefix (no pagination)
 func (s *PebbleStorage) getUserOpsByIndex(ctx context.Context, prefix []byte) ([]*userop.UserOperation, error) {
 	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
@@ -770,43 +603,26 @@ func (s *PebbleStorage) getUserOpsByIndex(ctx context.Context, prefix []byte) ([
 	return ops, nil
 }
 
-// getUserOpsByIndexPaginated retrieves UserOps from an index with reverse iteration and pagination
-func (s *PebbleStorage) getUserOpsByIndexPaginated(ctx context.Context, prefix []byte, limit, offset int) ([]*userop.UserOperation, error) {
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
+// userOpPageLimit returns the number of items of a UserOperation list page:
+// the default limit when page.Limit is not positive, at most the maximum.
+func userOpPageLimit(page port.Page) int {
+	return min(pageLimit(page, constants.DefaultPaginationLimit), constants.DefaultMaxPaginationLimit)
+}
+
+// getUserOpsPage reads one page of a UserOperation index (sender, bundler,
+// paymaster or factory) newest first. The index keys end in
+// {blockNumber}/{txHash}/{bundleIndex}, so the reverse key order is the list
+// order and the page cursor is the last entry's index key.
+func (s *PebbleStorage) getUserOpsPage(ctx context.Context, prefix []byte, page port.Page) ([]*userop.UserOperation, string, error) {
+	hasHash := func(_, value []byte) bool { return len(value) >= 32 }
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), true, page, userOpPageLimit(page), hasHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	// Collect all op hashes (reverse order for newest first)
-	var opHashes []common.Hash
-	for iter.Last(); iter.Valid(); iter.Prev() {
-		value := iter.Value()
-		if len(value) >= 32 {
-			opHashes = append(opHashes, common.BytesToHash(value[:32]))
-		}
+		return nil, "", err
 	}
 
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	// Apply pagination
-	start := offset
-	if start >= len(opHashes) {
-		return []*userop.UserOperation{}, nil
-	}
-	end := start + limit
-	if end > len(opHashes) {
-		end = len(opHashes)
-	}
-
-	// Fetch full records
-	ops := make([]*userop.UserOperation, 0, end-start)
-	for _, opHash := range opHashes[start:end] {
+	ops := make([]*userop.UserOperation, 0, len(entries))
+	for _, e := range entries {
+		opHash := common.BytesToHash(e.Value[:32])
 		op, err := s.GetUserOp(ctx, opHash)
 		if err != nil {
 			s.logger.Warn("failed to get userop",
@@ -817,5 +633,29 @@ func (s *PebbleStorage) getUserOpsByIndexPaginated(ctx context.Context, prefix [
 		ops = append(ops, op)
 	}
 
-	return ops, nil
+	return ops, next, nil
+}
+
+// pageRecords reads one page of the JSON records stored under prefix, in key
+// order; the page cursor is the last record's key. A record that does not
+// decode is logged and left out.
+func pageRecords[T any](ctx context.Context, s *PebbleStorage, prefix []byte, page port.Page, what string) ([]*T, string, error) {
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), false, page, userOpPageLimit(page), nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	out := make([]*T, 0, len(entries))
+	for _, e := range entries {
+		var record T
+		if err := json.Unmarshal(e.Value, &record); err != nil {
+			s.logger.Warn("failed to unmarshal "+what,
+				zap.String("key", string(e.Key)),
+				zap.Error(err))
+			continue
+		}
+		out = append(out, &record)
+	}
+
+	return out, next, nil
 }

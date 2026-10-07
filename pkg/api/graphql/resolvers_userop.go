@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -43,36 +44,32 @@ func (s *Schema) resolveUserOperation(p graphql.ResolveParams) (interface{}, err
 func (s *Schema) resolveUserOperations(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	userOpReader := s.storage
 
 	// If sender filter is provided, use GetUserOpsBySender
 	if senderStr, ok := p.Args["sender"].(string); ok && senderStr != "" {
 		sender := common.HexToAddress(senderStr)
-		ops, err := userOpReader.GetUserOpsBySender(ctx, sender, limit, offset)
+		ops, next, err := userOpReader.GetUserOpsBySender(ctx, sender, pagination.page())
 		if err != nil {
+			if errors.Is(err, port.ErrInvalidCursor) {
+				return nil, fmt.Errorf("invalid pagination cursor")
+			}
 			s.logger.Error("failed to get UserOperations by sender",
 				zap.String("sender", senderStr),
 				zap.Error(err))
 			return nil, err
 		}
-		return s.userOpConnectionResult(ops, limit, offset), nil
+		return s.userOpConnectionResult(ops, cursorPageInfo(pagination, next)), nil
 	}
 
-	// Otherwise return recent UserOps
+	// Otherwise return recent UserOps. This list issues no cursors, so a
+	// cursor given here is not one of its own.
+	if pagination.After != "" {
+		return nil, fmt.Errorf("invalid pagination cursor")
+	}
+	limit, offset := pagination.Limit, pagination.Offset
 	ops, err := userOpReader.GetRecentUserOps(ctx, limit)
 	if err != nil {
 		s.logger.Error("failed to get recent UserOperations",
@@ -90,7 +87,12 @@ func (s *Schema) resolveUserOperations(p graphql.ResolveParams) (interface{}, er
 		ops = ops[:limit]
 	}
 
-	return s.userOpConnectionResult(ops, limit, offset), nil
+	return s.userOpConnectionResult(ops, map[string]interface{}{
+		"hasNextPage":     len(ops) == limit,
+		"hasPreviousPage": offset > 0,
+		"startCursor":     nil,
+		"endCursor":       nil,
+	}), nil
 }
 
 // resolveUserOperationsByAddress resolves UserOperations by sender address
@@ -104,55 +106,37 @@ func (s *Schema) resolveUserOperationsByAddress(p graphql.ResolveParams) (interf
 
 	sender := common.HexToAddress(senderStr)
 
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	userOpReader := s.storage
 
-	ops, err := userOpReader.GetUserOpsBySender(ctx, sender, limit, offset)
+	ops, next, err := userOpReader.GetUserOpsBySender(ctx, sender, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get UserOperations by sender",
 			zap.String("sender", senderStr),
 			zap.Error(err))
 		return nil, err
 	}
 
-	return s.userOpConnectionResult(ops, limit, offset), nil
+	return s.userOpConnectionResult(ops, cursorPageInfo(pagination, next)), nil
 }
 
 // resolveBundlers resolves a paginated list of bundler stats
 func (s *Schema) resolveBundlers(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	userOpReader := s.storage
 
-	bundlers, err := userOpReader.ListBundlers(ctx, limit, offset)
+	bundlers, next, err := userOpReader.ListBundlers(ctx, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to list bundlers", zap.Error(err))
 		return nil, err
 	}
@@ -169,12 +153,7 @@ func (s *Schema) resolveBundlers(p graphql.ResolveParams) (interface{}, error) {
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -206,24 +185,15 @@ func (s *Schema) resolveBundler(p graphql.ResolveParams) (interface{}, error) {
 func (s *Schema) resolveFactories(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	userOpReader := s.storage
 
-	factories, err := userOpReader.ListFactories(ctx, limit, offset)
+	factories, next, err := userOpReader.ListFactories(ctx, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to list factories", zap.Error(err))
 		return nil, err
 	}
@@ -239,12 +209,7 @@ func (s *Schema) resolveFactories(p graphql.ResolveParams) (interface{}, error) 
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -275,24 +240,15 @@ func (s *Schema) resolveFactory(p graphql.ResolveParams) (interface{}, error) {
 func (s *Schema) resolvePaymasters(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	userOpReader := s.storage
 
-	paymasters, err := userOpReader.ListPaymasters(ctx, limit, offset)
+	paymasters, next, err := userOpReader.ListPaymasters(ctx, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to list paymasters", zap.Error(err))
 		return nil, err
 	}
@@ -308,12 +264,7 @@ func (s *Schema) resolvePaymasters(p graphql.ResolveParams) (interface{}, error)
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -344,24 +295,15 @@ func (s *Schema) resolvePaymaster(p graphql.ResolveParams) (interface{}, error) 
 func (s *Schema) resolveSmartAccounts(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	userOpReader := s.storage
 
-	accounts, err := userOpReader.ListSmartAccounts(ctx, limit, offset)
+	accounts, next, err := userOpReader.ListSmartAccounts(ctx, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to list smart accounts", zap.Error(err))
 		return nil, err
 	}
@@ -374,12 +316,7 @@ func (s *Schema) resolveSmartAccounts(p graphql.ResolveParams) (interface{}, err
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -489,7 +426,7 @@ func (s *Schema) smartAccountToMap(account *userop.SmartAccount) map[string]inte
 }
 
 // userOpConnectionResult creates a standard connection result for UserOperations
-func (s *Schema) userOpConnectionResult(ops []*userop.UserOperation, limit, offset int) map[string]interface{} {
+func (s *Schema) userOpConnectionResult(ops []*userop.UserOperation, pageInfo map[string]interface{}) map[string]interface{} {
 	nodes := make([]interface{}, len(ops))
 	for i, op := range ops {
 		nodes[i] = s.userOpToMap(op)
@@ -498,11 +435,6 @@ func (s *Schema) userOpConnectionResult(ops []*userop.UserOperation, limit, offs
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   pageInfo,
 	}
 }

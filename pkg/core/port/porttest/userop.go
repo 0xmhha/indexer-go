@@ -42,13 +42,21 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 		assert.ErrorIs(t, err, port.ErrNotFound)
 
 		for name, list := range map[string]func() ([]*userop.UserOperation, error){
-			"ByTx":        func() ([]*userop.UserOperation, error) { return s.GetUserOpsByTx(ctx, userOpTxHash(1, 0)) },
-			"ByBlock":     func() ([]*userop.UserOperation, error) { return s.GetUserOpsByBlock(ctx, 1) },
-			"BySender":    func() ([]*userop.UserOperation, error) { return s.GetUserOpsBySender(ctx, userOpSender, 10, 0) },
-			"ByBundler":   func() ([]*userop.UserOperation, error) { return s.GetUserOpsByBundler(ctx, userOpBundler, 10, 0) },
-			"ByPaymaster": func() ([]*userop.UserOperation, error) { return s.GetUserOpsByPaymaster(ctx, userOpPaymaster, 10, 0) },
-			"ByFactory":   func() ([]*userop.UserOperation, error) { return s.GetUserOpsByFactory(ctx, userOpFactory, 10, 0) },
-			"Recent":      func() ([]*userop.UserOperation, error) { return s.GetRecentUserOps(ctx, 10) },
+			"ByTx":    func() ([]*userop.UserOperation, error) { return s.GetUserOpsByTx(ctx, userOpTxHash(1, 0)) },
+			"ByBlock": func() ([]*userop.UserOperation, error) { return s.GetUserOpsByBlock(ctx, 1) },
+			"BySender": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsBySender(ctx, userOpSender, port.FirstPage(10)))
+			},
+			"ByBundler": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsByBundler(ctx, userOpBundler, port.FirstPage(10)))
+			},
+			"ByPaymaster": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsByPaymaster(ctx, userOpPaymaster, port.FirstPage(10)))
+			},
+			"ByFactory": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsByFactory(ctx, userOpFactory, port.FirstPage(10)))
+			},
+			"Recent": func() ([]*userop.UserOperation, error) { return s.GetRecentUserOps(ctx, 10) },
 		} {
 			got, err := list()
 			require.NoError(t, err, name)
@@ -69,16 +77,16 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 		require.NoError(t, err)
 		assert.Equal(t, userop.PaymasterStats{Address: userOpPaymaster}, *paymaster)
 
-		bundlers, err := s.ListBundlers(ctx, 10, 0)
+		bundlers, err := userOpItems(s.ListBundlers(ctx, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Empty(t, bundlers)
-		factories, err := s.ListFactories(ctx, 10, 0)
+		factories, err := userOpItems(s.ListFactories(ctx, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Empty(t, factories)
-		paymasters, err := s.ListPaymasters(ctx, 10, 0)
+		paymasters, err := userOpItems(s.ListPaymasters(ctx, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Empty(t, paymasters)
-		accounts, err := s.ListSmartAccounts(ctx, 10, 0)
+		accounts, err := userOpItems(s.ListSmartAccounts(ctx, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Empty(t, accounts)
 	})
@@ -95,13 +103,21 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 		userOpAssertOp(t, want, got)
 
 		for name, list := range map[string]func() ([]*userop.UserOperation, error){
-			"ByTx":        func() ([]*userop.UserOperation, error) { return s.GetUserOpsByTx(ctx, want.TransactionHash) },
-			"ByBlock":     func() ([]*userop.UserOperation, error) { return s.GetUserOpsByBlock(ctx, 6) },
-			"BySender":    func() ([]*userop.UserOperation, error) { return s.GetUserOpsBySender(ctx, userOpSender, 10, 0) },
-			"ByBundler":   func() ([]*userop.UserOperation, error) { return s.GetUserOpsByBundler(ctx, userOpBundler, 10, 0) },
-			"ByPaymaster": func() ([]*userop.UserOperation, error) { return s.GetUserOpsByPaymaster(ctx, userOpPaymaster, 10, 0) },
-			"ByFactory":   func() ([]*userop.UserOperation, error) { return s.GetUserOpsByFactory(ctx, userOpFactory, 10, 0) },
-			"Recent":      func() ([]*userop.UserOperation, error) { return s.GetRecentUserOps(ctx, 10) },
+			"ByTx":    func() ([]*userop.UserOperation, error) { return s.GetUserOpsByTx(ctx, want.TransactionHash) },
+			"ByBlock": func() ([]*userop.UserOperation, error) { return s.GetUserOpsByBlock(ctx, 6) },
+			"BySender": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsBySender(ctx, userOpSender, port.FirstPage(10)))
+			},
+			"ByBundler": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsByBundler(ctx, userOpBundler, port.FirstPage(10)))
+			},
+			"ByPaymaster": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsByPaymaster(ctx, userOpPaymaster, port.FirstPage(10)))
+			},
+			"ByFactory": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsByFactory(ctx, userOpFactory, port.FirstPage(10)))
+			},
+			"Recent": func() ([]*userop.UserOperation, error) { return s.GetRecentUserOps(ctx, 10) },
 		} {
 			got, err := list()
 			require.NoError(t, err, name)
@@ -116,10 +132,10 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 		other, err := s.GetUserOpsByBlock(ctx, 7)
 		require.NoError(t, err)
 		assert.Empty(t, other, "another block")
-		other, err = s.GetUserOpsBySender(ctx, userOpBundler, 10, 0)
+		other, err = userOpItems(s.GetUserOpsBySender(ctx, userOpBundler, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Empty(t, other, "the bundler is not a sender")
-		other, err = s.GetUserOpsByBundler(ctx, userOpSender, 10, 0)
+		other, err = userOpItems(s.GetUserOpsByBundler(ctx, userOpSender, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Empty(t, other, "the sender is not a bundler")
 	})
@@ -131,14 +147,14 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 			userOpOp(2, 0, 0, userOpSender, userOpBundler, nil, nil),
 			userOpOp(3, 0, 0, userOpSender, userOpBundler, &zero, &zero),
 		}))
-		byPaymaster, err := s.GetUserOpsByPaymaster(ctx, zero, 10, 0)
+		byPaymaster, err := userOpItems(s.GetUserOpsByPaymaster(ctx, zero, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Empty(t, byPaymaster, "an operation without a paymaster is not listed under the zero address")
-		byFactory, err := s.GetUserOpsByFactory(ctx, zero, 10, 0)
+		byFactory, err := userOpItems(s.GetUserOpsByFactory(ctx, zero, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Empty(t, byFactory, "an operation without a factory is not listed under the zero address")
 
-		bySender, err := s.GetUserOpsBySender(ctx, userOpSender, 10, 0)
+		bySender, err := userOpItems(s.GetUserOpsBySender(ctx, userOpSender, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Len(t, bySender, 2, "the other indexes still list them")
 	})
@@ -170,52 +186,67 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 		n, err := s.GetUserOpCount(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, 3, n)
-		bySender, err := s.GetUserOpsBySender(ctx, userOpSender2, 10, 0)
+		bySender, err := userOpItems(s.GetUserOpsBySender(ctx, userOpSender2, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Hash{ops[1].Hash}, userOpHashes(bySender))
-		byPaymaster, err := s.GetUserOpsByPaymaster(ctx, userOpPaymaster, 10, 0)
+		byPaymaster, err := userOpItems(s.GetUserOpsByPaymaster(ctx, userOpPaymaster, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Hash{ops[0].Hash}, userOpHashes(byPaymaster))
-		byFactory, err := s.GetUserOpsByFactory(ctx, userOpFactory, 10, 0)
+		byFactory, err := userOpItems(s.GetUserOpsByFactory(ctx, userOpFactory, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Hash{ops[1].Hash}, userOpHashes(byFactory))
 	})
 
 	t.Run("NewestFirstAndPagination", func(t *testing.T) {
 		s := open[userOpStore](t, newStore)
+		paymaster2 := common.HexToAddress("0x0000000000000000000000000000000000004c02")
+		factory2 := common.HexToAddress("0x0000000000000000000000000000000000004d02")
+		var want []*userop.UserOperation
 		for b := uint64(1); b <= 5; b++ {
-			require.NoError(t, s.SaveUserOp(ctx, userOpOp(b, 0, 0, userOpSender, userOpBundler, &userOpPaymaster, &userOpFactory)))
+			op := userOpOp(b, 0, 0, userOpSender, userOpBundler, &userOpPaymaster, &userOpFactory)
+			require.NoError(t, s.SaveUserOp(ctx, op))
+			want = append([]*userop.UserOperation{op}, want...)
+			// Operations of other addresses in the same blocks, so each
+			// list has a neighbour of the same kind.
+			if b <= 2 {
+				require.NoError(t, s.SaveUserOp(ctx, userOpOp(b, 1, 0, userOpSender2, userOpBundler2, &paymaster2, &factory2)))
+			}
 		}
-		pages := map[string]func(limit, offset int) ([]*userop.UserOperation, error){
-			"BySender": func(limit, offset int) ([]*userop.UserOperation, error) {
-				return s.GetUserOpsBySender(ctx, userOpSender, limit, offset)
-			},
-			"ByBundler": func(limit, offset int) ([]*userop.UserOperation, error) {
-				return s.GetUserOpsByBundler(ctx, userOpBundler, limit, offset)
-			},
-			"ByPaymaster": func(limit, offset int) ([]*userop.UserOperation, error) {
-				return s.GetUserOpsByPaymaster(ctx, userOpPaymaster, limit, offset)
-			},
-			"ByFactory": func(limit, offset int) ([]*userop.UserOperation, error) {
-				return s.GetUserOpsByFactory(ctx, userOpFactory, limit, offset)
-			},
+		type byAddr func(addr common.Address) listPage[*userop.UserOperation]
+		lists := map[string]struct {
+			list        byAddr
+			addr, other common.Address
+		}{
+			"BySender": {func(a common.Address) listPage[*userop.UserOperation] {
+				return func(page port.Page) ([]*userop.UserOperation, string, error) {
+					return s.GetUserOpsBySender(ctx, a, page)
+				}
+			}, userOpSender, userOpSender2},
+			"ByBundler": {func(a common.Address) listPage[*userop.UserOperation] {
+				return func(page port.Page) ([]*userop.UserOperation, string, error) {
+					return s.GetUserOpsByBundler(ctx, a, page)
+				}
+			}, userOpBundler, userOpBundler2},
+			"ByPaymaster": {func(a common.Address) listPage[*userop.UserOperation] {
+				return func(page port.Page) ([]*userop.UserOperation, string, error) {
+					return s.GetUserOpsByPaymaster(ctx, a, page)
+				}
+			}, userOpPaymaster, paymaster2},
+			"ByFactory": {func(a common.Address) listPage[*userop.UserOperation] {
+				return func(page port.Page) ([]*userop.UserOperation, string, error) {
+					return s.GetUserOpsByFactory(ctx, a, page)
+				}
+			}, userOpFactory, factory2},
 		}
-		for name, page := range pages {
-			got, err := page(2, 0)
-			require.NoError(t, err, name)
-			assert.Equal(t, []uint64{5, 4}, userOpBlocks(got), "%s: newest first", name)
-			got, err = page(2, 2)
-			require.NoError(t, err, name)
-			assert.Equal(t, []uint64{3, 2}, userOpBlocks(got), "%s: second page", name)
-			got, err = page(2, 4)
-			require.NoError(t, err, name)
-			assert.Equal(t, []uint64{1}, userOpBlocks(got), "%s: last page is short", name)
-			got, err = page(2, 5)
-			require.NoError(t, err, name)
-			assert.Empty(t, got, "%s: offset at the end", name)
-			got, err = page(2, 50)
-			require.NoError(t, err, name)
-			assert.Empty(t, got, "%s: offset past the end", name)
+		opHash := func(op *userop.UserOperation) common.Hash { return op.Hash }
+		for name, l := range lists {
+			t.Run(name, func(t *testing.T) {
+				got, _, err := l.list(l.addr)(port.FirstPage(10))
+				require.NoError(t, err)
+				assert.Equal(t, []uint64{5, 4, 3, 2, 1}, userOpBlocks(got), "newest first")
+				checkPaging(t, want, opHash, l.list(l.addr))
+				checkCursorFromOtherList(t, l.list(l.addr), l.list(l.other))
+			})
 		}
 
 		recent, err := s.GetRecentUserOps(ctx, 3)
@@ -223,10 +254,25 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 		assert.Equal(t, []uint64{5, 4, 3}, userOpBlocks(recent), "recent: newest first, bounded by limit")
 		recent, err = s.GetRecentUserOps(ctx, 50)
 		require.NoError(t, err)
-		assert.Equal(t, []uint64{5, 4, 3, 2, 1}, userOpBlocks(recent))
+		assert.Equal(t, []uint64{5, 4, 3, 2, 2, 1, 1}, userOpBlocks(recent), "recent: every address")
 		n, err := s.GetUserOpCount(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, 5, n)
+		assert.Equal(t, 7, n)
+	})
+
+	t.Run("BySenderResumeAfterAppend", func(t *testing.T) {
+		s := open[userOpStore](t, newStore)
+		first := userOpOp(1, 0, 0, userOpSender, userOpBundler, nil, nil)
+		second := userOpOp(2, 0, 0, userOpSender, userOpBundler, nil, nil)
+		require.NoError(t, s.SaveUserOps(ctx, []*userop.UserOperation{first, second}))
+		page, next, err := s.GetUserOpsBySender(ctx, userOpSender, port.FirstPage(1))
+		require.NoError(t, err)
+		require.Equal(t, []common.Hash{second.Hash}, userOpHashes(page))
+		require.NotEmpty(t, next)
+		require.NoError(t, s.SaveUserOp(ctx, userOpOp(3, 0, 0, userOpSender, userOpBundler, nil, nil)))
+		got, _, err := s.GetUserOpsBySender(ctx, userOpSender, port.Page{After: next, Limit: 10})
+		require.NoError(t, err)
+		assert.Equal(t, []common.Hash{first.Hash}, userOpHashes(got), "a cursor stays valid while newer operations arrive")
 	})
 
 	t.Run("ResaveIsIdempotent", func(t *testing.T) {
@@ -240,13 +286,21 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, n)
 		for name, list := range map[string]func() ([]*userop.UserOperation, error){
-			"ByTx":        func() ([]*userop.UserOperation, error) { return s.GetUserOpsByTx(ctx, op.TransactionHash) },
-			"ByBlock":     func() ([]*userop.UserOperation, error) { return s.GetUserOpsByBlock(ctx, 8) },
-			"BySender":    func() ([]*userop.UserOperation, error) { return s.GetUserOpsBySender(ctx, userOpSender, 10, 0) },
-			"ByBundler":   func() ([]*userop.UserOperation, error) { return s.GetUserOpsByBundler(ctx, userOpBundler, 10, 0) },
-			"ByPaymaster": func() ([]*userop.UserOperation, error) { return s.GetUserOpsByPaymaster(ctx, userOpPaymaster, 10, 0) },
-			"ByFactory":   func() ([]*userop.UserOperation, error) { return s.GetUserOpsByFactory(ctx, userOpFactory, 10, 0) },
-			"Recent":      func() ([]*userop.UserOperation, error) { return s.GetRecentUserOps(ctx, 10) },
+			"ByTx":    func() ([]*userop.UserOperation, error) { return s.GetUserOpsByTx(ctx, op.TransactionHash) },
+			"ByBlock": func() ([]*userop.UserOperation, error) { return s.GetUserOpsByBlock(ctx, 8) },
+			"BySender": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsBySender(ctx, userOpSender, port.FirstPage(10)))
+			},
+			"ByBundler": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsByBundler(ctx, userOpBundler, port.FirstPage(10)))
+			},
+			"ByPaymaster": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsByPaymaster(ctx, userOpPaymaster, port.FirstPage(10)))
+			},
+			"ByFactory": func() ([]*userop.UserOperation, error) {
+				return userOpItems(s.GetUserOpsByFactory(ctx, userOpFactory, port.FirstPage(10)))
+			},
+			"Recent": func() ([]*userop.UserOperation, error) { return s.GetRecentUserOps(ctx, 10) },
 		} {
 			got, err := list()
 			require.NoError(t, err, name)
@@ -268,10 +322,10 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 		byBlock, err := s.GetUserOpsByBlock(ctx, 9)
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []common.Hash{a.Hash, b.Hash}, userOpHashes(byBlock), "ByBlock")
-		byBundler, err := s.GetUserOpsByBundler(ctx, userOpBundler, 10, 0)
+		byBundler, err := userOpItems(s.GetUserOpsByBundler(ctx, userOpBundler, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []common.Hash{a.Hash, b.Hash}, userOpHashes(byBundler), "ByBundler")
-		byPaymaster, err := s.GetUserOpsByPaymaster(ctx, userOpPaymaster, 10, 0)
+		byPaymaster, err := userOpItems(s.GetUserOpsByPaymaster(ctx, userOpPaymaster, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []common.Hash{a.Hash, b.Hash}, userOpHashes(byPaymaster), "ByPaymaster")
 		recent, err := s.GetRecentUserOps(ctx, 10)
@@ -324,58 +378,52 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 			require.NoError(t, s.UpdatePaymasterStats(ctx, &userop.PaymasterStats{Address: a, TotalOps: n}))
 			require.NoError(t, s.SaveSmartAccount(ctx, &userop.SmartAccount{Address: a, TotalOps: n}))
 		}
-		// Every list is paginated over the same three addresses: pages are
-		// disjoint and together hold every address once.
-		lists := map[string]func(limit, offset int) ([]common.Address, error){
-			"Bundlers": func(limit, offset int) ([]common.Address, error) {
-				l, err := s.ListBundlers(ctx, limit, offset)
+		// Every list holds the same three addresses, one entry each, in a
+		// fixed order.
+		lists := map[string]listPage[common.Address]{
+			"Bundlers": func(page port.Page) ([]common.Address, string, error) {
+				l, next, err := s.ListBundlers(ctx, page)
 				out := make([]common.Address, 0, len(l))
 				for _, x := range l {
 					out = append(out, x.Address)
 				}
-				return out, err
+				return out, next, err
 			},
-			"Factories": func(limit, offset int) ([]common.Address, error) {
-				l, err := s.ListFactories(ctx, limit, offset)
+			"Factories": func(page port.Page) ([]common.Address, string, error) {
+				l, next, err := s.ListFactories(ctx, page)
 				out := make([]common.Address, 0, len(l))
 				for _, x := range l {
 					out = append(out, x.Address)
 				}
-				return out, err
+				return out, next, err
 			},
-			"Paymasters": func(limit, offset int) ([]common.Address, error) {
-				l, err := s.ListPaymasters(ctx, limit, offset)
+			"Paymasters": func(page port.Page) ([]common.Address, string, error) {
+				l, next, err := s.ListPaymasters(ctx, page)
 				out := make([]common.Address, 0, len(l))
 				for _, x := range l {
 					out = append(out, x.Address)
 				}
-				return out, err
+				return out, next, err
 			},
-			"SmartAccounts": func(limit, offset int) ([]common.Address, error) {
-				l, err := s.ListSmartAccounts(ctx, limit, offset)
+			"SmartAccounts": func(page port.Page) ([]common.Address, string, error) {
+				l, next, err := s.ListSmartAccounts(ctx, page)
 				out := make([]common.Address, 0, len(l))
 				for _, x := range l {
 					out = append(out, x.Address)
 				}
-				return out, err
+				return out, next, err
 			},
 		}
 		for name, list := range lists {
-			all, err := list(10, 0)
-			require.NoError(t, err, name)
-			assert.ElementsMatch(t, addrs, all, name)
-
-			first, err := list(2, 0)
-			require.NoError(t, err, name)
-			require.Len(t, first, 2, name)
-			assert.Equal(t, all[:2], first, "%s: pages follow the list order", name)
-			second, err := list(2, 2)
-			require.NoError(t, err, name)
-			assert.Equal(t, all[2:], second, "%s: second page", name)
-			past, err := list(2, 3)
-			require.NoError(t, err, name)
-			assert.Empty(t, past, "%s: offset at the end", name)
+			t.Run(name, func(t *testing.T) {
+				all, _, err := list(port.FirstPage(10))
+				require.NoError(t, err)
+				assert.ElementsMatch(t, addrs, all)
+				checkPaging(t, all, func(a common.Address) common.Address { return a }, list)
+			})
 		}
+		checkCursorFromOtherList(t, lists["Bundlers"], lists["Factories"])
+		checkCursorFromOtherList(t, lists["Paymasters"], lists["SmartAccounts"])
 	})
 
 	t.Run("SmartAccountSaveOrUpdate", func(t *testing.T) {
@@ -400,7 +448,7 @@ func testUserOpIndex(t *testing.T, newStore NewStore) {
 		require.NoError(t, err)
 		userOpAssertJSON(t, &updated, got)
 
-		accounts, err := s.ListSmartAccounts(ctx, 10, 0)
+		accounts, err := userOpItems(s.ListSmartAccounts(ctx, port.FirstPage(10)))
 		require.NoError(t, err)
 		assert.Len(t, accounts, 1, "saving an account again updates it")
 
@@ -482,4 +530,9 @@ func userOpBlocks(ops []*userop.UserOperation) []uint64 {
 		out = append(out, op.BlockNumber)
 	}
 	return out
+}
+
+// userOpItems returns the items of a list page, dropping its cursor.
+func userOpItems[T any](items []T, _ string, err error) ([]T, error) {
+	return items, err
 }

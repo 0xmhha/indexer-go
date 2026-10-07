@@ -19,23 +19,27 @@ type UserOpIndexReader interface {
 	GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error)
 
 	// GetUserOpsBySender retrieves UserOperations sent by a specific address.
-	// Results are ordered by block number descending (newest first).
-	GetUserOpsBySender(ctx context.Context, sender common.Address, limit, offset int) ([]*userop.UserOperation, error)
+	// Results are newest first (block number, then transaction hash and
+	// bundle index, descending); see Page.
+	GetUserOpsBySender(ctx context.Context, sender common.Address, page Page) ([]*userop.UserOperation, string, error)
 
 	// GetUserOpsByBundler retrieves UserOperations bundled by a specific address.
-	// Results are ordered by block number descending (newest first).
-	GetUserOpsByBundler(ctx context.Context, bundler common.Address, limit, offset int) ([]*userop.UserOperation, error)
+	// Results are newest first (block number, then transaction hash and
+	// bundle index, descending); see Page.
+	GetUserOpsByBundler(ctx context.Context, bundler common.Address, page Page) ([]*userop.UserOperation, string, error)
 
 	// GetUserOpsByBlock retrieves all UserOperations in a specific block.
 	GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error)
 
 	// GetUserOpsByPaymaster retrieves UserOperations sponsored by a specific paymaster.
-	// Results are ordered by block number descending (newest first).
-	GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, limit, offset int) ([]*userop.UserOperation, error)
+	// Results are newest first (block number, then transaction hash and
+	// bundle index, descending); see Page.
+	GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, page Page) ([]*userop.UserOperation, string, error)
 
 	// GetUserOpsByFactory retrieves UserOperations that deployed accounts via a specific factory.
-	// Results are ordered by block number descending (newest first).
-	GetUserOpsByFactory(ctx context.Context, factory common.Address, limit, offset int) ([]*userop.UserOperation, error)
+	// Results are newest first (block number, then transaction hash and
+	// bundle index, descending); see Page.
+	GetUserOpsByFactory(ctx context.Context, factory common.Address, page Page) ([]*userop.UserOperation, string, error)
 
 	// GetBundlerStats retrieves statistics for a bundler address.
 	// Returns zero-value stats if the bundler has no activity.
@@ -60,17 +64,21 @@ type UserOpIndexReader interface {
 	// GetUserOpCount returns the total count of UserOperations indexed.
 	GetUserOpCount(ctx context.Context) (int, error)
 
-	// ListBundlers retrieves bundler stats with pagination.
-	ListBundlers(ctx context.Context, limit, offset int) ([]*userop.BundlerStats, error)
+	// ListBundlers retrieves one page of bundler stats,
+	// one entry per address in a fixed order of the addresses; see Page.
+	ListBundlers(ctx context.Context, page Page) ([]*userop.BundlerStats, string, error)
 
-	// ListFactories retrieves factory stats with pagination.
-	ListFactories(ctx context.Context, limit, offset int) ([]*userop.FactoryStats, error)
+	// ListFactories retrieves one page of factory stats,
+	// one entry per address in a fixed order of the addresses; see Page.
+	ListFactories(ctx context.Context, page Page) ([]*userop.FactoryStats, string, error)
 
-	// ListPaymasters retrieves paymaster stats with pagination.
-	ListPaymasters(ctx context.Context, limit, offset int) ([]*userop.PaymasterStats, error)
+	// ListPaymasters retrieves one page of paymaster stats,
+	// one entry per address in a fixed order of the addresses; see Page.
+	ListPaymasters(ctx context.Context, page Page) ([]*userop.PaymasterStats, string, error)
 
-	// ListSmartAccounts retrieves smart accounts with pagination.
-	ListSmartAccounts(ctx context.Context, limit, offset int) ([]*userop.SmartAccount, error)
+	// ListSmartAccounts retrieves one page of smart accounts,
+	// one entry per address in a fixed order of the addresses; see Page.
+	ListSmartAccounts(ctx context.Context, page Page) ([]*userop.SmartAccount, string, error)
 }
 
 // UserOpIndexWriter defines write operations for ERC-4337 UserOperation indexing
