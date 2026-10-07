@@ -56,7 +56,7 @@ func TestRollbackArchivesOrphans(t *testing.T) {
 	ctx := context.Background()
 	blocks := indexOrphanTestChain(t, s, 5, 'a')
 
-	r, err := s.RollbackTo(ctx, 2)
+	r, err := s.RollbackTo(ctx, 2, nil)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), r.Seq)
 	require.Equal(t, uint64(2), r.ForkNumber)
@@ -106,7 +106,7 @@ func TestRollbackArchivesOrphans(t *testing.T) {
 		}
 	}
 	indexAgain(3, 4)
-	r2, err := s.RollbackTo(ctx, 3)
+	r2, err := s.RollbackTo(ctx, 3, nil)
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), r2.Seq)
 	at, err = s.GetOrphanedBlocksAt(ctx, 4)
@@ -137,7 +137,7 @@ func TestRollbackArchivesAtomically(t *testing.T) {
 	blocks := indexOrphanTestChain(t, s, 5, 'a')
 	require.NoError(t, s.db.Delete(ReceiptKey(blocks[4].Transactions[0].Hash), pebble.Sync))
 
-	_, err := s.RollbackTo(ctx, 2)
+	_, err := s.RollbackTo(ctx, 2, nil)
 	require.Error(t, err)
 	for h := uint64(3); h <= 5; h++ {
 		_, canonErr := s.GetBlock(ctx, h)
@@ -175,7 +175,7 @@ func TestRollbackRemovesTimeIndex(t *testing.T) {
 	}
 	require.Equal(t, 6, timeKeys(), "one entry per block")
 
-	_, err := s.RollbackTo(ctx, 2)
+	_, err := s.RollbackTo(ctx, 2, nil)
 	require.NoError(t, err)
 	require.Equal(t, 3, timeKeys(), "the rolled back blocks' entries are gone")
 	got, _, err := s.GetBlocksByTimeRange(ctx, 1000, 1005, port.FirstPage(10))
@@ -227,7 +227,7 @@ func TestOrphanRetentionPrunesOldReorgs(t *testing.T) {
 		}
 	}
 	rollback := func(seq uint64) {
-		r, err := s.RollbackTo(ctx, 4)
+		r, err := s.RollbackTo(ctx, 4, nil)
 		require.NoError(t, err)
 		require.Equal(t, seq, r.Seq)
 	}

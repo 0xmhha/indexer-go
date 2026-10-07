@@ -30,6 +30,7 @@ var brokenStores = map[string]func(*PebbleStorage) any{
 	"CommitDiscards":               func(s *PebbleStorage) any { return &commitDiscards{s} },
 	"ReceiptsByBlockWrongOrder":    func(s *PebbleStorage) any { return &receiptsReversed{s} },
 	"MissingBlockIsNotErrNotFound": func(s *PebbleStorage) any { return &missingBlockNil{s} },
+	"OutboxRenumbersAfterPrune":    func(s *PebbleStorage) any { return &outboxRenumbers{s} },
 }
 
 // TestPortContractsCatchBrokenStores runs the contracts against each broken
@@ -111,4 +112,23 @@ func (s *missingBlockNil) GetBlock(ctx context.Context, n uint64) (*model.Block,
 		return nil, nil
 	}
 	return b, nil
+}
+
+// outboxRenumbers numbers new outbox entries after the last stored entry
+// instead of the last assigned sequence, so pruning reuses numbers.
+type outboxRenumbers struct{ *PebbleStorage }
+
+func (s *outboxRenumbers) AppendOutbox(ctx context.Context, entries []port.OutboxEntry) error {
+	stored, err := s.ReadOutbox(ctx, 0, 0)
+	if err != nil {
+		return err
+	}
+	var last uint64
+	if len(stored) > 0 {
+		last = stored[len(stored)-1].Seq
+	}
+	if err := s.boundBatch(ctx).Set([]byte(keyOutboxSeq), encodeUint64(last), nil); err != nil {
+		return err
+	}
+	return s.PebbleStorage.AppendOutbox(ctx, entries)
 }

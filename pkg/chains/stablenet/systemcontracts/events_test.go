@@ -1,9 +1,12 @@
 package systemcontracts
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/0xmhha/indexer-go/pkg/events"
 )
 
 func TestSystemContractEvent_Interface(t *testing.T) {
@@ -90,5 +93,27 @@ func TestSystemContractEventTypes(t *testing.T) {
 		if event.Type() != EventTypeSystemContract {
 			t.Errorf("expected type %s for %s", EventTypeSystemContract, eventType)
 		}
+	}
+}
+
+// TestSystemContractEventCodecKeepsNumbers: numeric values decode as
+// json.Number, so the subscription renders the same digits after the outbox.
+func TestSystemContractEventCodecKeepsNumbers(t *testing.T) {
+	ev := NewSystemContractEvent(common.HexToAddress("0x1"), SystemContractEventMint, 9, common.HexToHash("0x2"), 1,
+		map[string]interface{}{"amount": json.RawMessage("123456789012345678901234567890"), "to": "0x3"})
+	data, err := events.MarshalEvent(ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := events.UnmarshalEvent(EventTypeSystemContract, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := json.Marshal(got.(*SystemContractEvent).Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"amount":123456789012345678901234567890,"to":"0x3"}`; string(out) != want {
+		t.Fatalf("data %s, want %s", out, want)
 	}
 }

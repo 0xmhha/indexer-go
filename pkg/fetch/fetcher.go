@@ -100,6 +100,14 @@ type Config struct {
 
 	// OptimizerConfig holds configuration for adaptive optimization (optional)
 	OptimizerConfig *OptimizerConfig
+
+	// NoOutbox publishes the events of indexed blocks directly after the
+	// commit instead of through the storage's outbox (eventbus.outbox:
+	// false).
+	NoOutbox bool
+	// OutboxRetain is how many delivered events the outbox keeps
+	// (eventbus.outbox_retention); 0 keeps all.
+	OutboxRetain uint64
 }
 
 // Validate validates the fetcher configuration
@@ -165,6 +173,9 @@ type Fetcher struct {
 	txr port.BlockTransactor
 	// pendingEvents buffers events while a block transaction is open.
 	pendingEvents *[]events.Event
+	// outbox records the events of indexed blocks and relays them (nil if
+	// the storage has none; outbox.go).
+	outbox *outboxState
 	// beforeCommitHook is a fault-injection point for tests.
 	beforeCommitHook func(height uint64) error
 }
@@ -197,7 +208,7 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 	// block transactions cannot index (indexBlock fails).
 	txr, _ := storage.(port.BlockTransactor)
 
-	return &Fetcher{
+	f := &Fetcher{
 		client:              client,
 		storage:             storage,
 		config:              config,
@@ -207,6 +218,10 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		optimizer:           optimizer,
 		txr:                 txr,
 	}
+	if !config.NoOutbox {
+		f.initOutbox(config.OutboxRetain)
+	}
+	return f
 }
 
 // SetChainID sets the chain identifier for multi-chain support

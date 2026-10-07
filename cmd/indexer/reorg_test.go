@@ -21,7 +21,7 @@ import (
 )
 
 type rollbacker interface {
-	RollbackTo(ctx context.Context, to uint64) (*port.Reorg, error)
+	RollbackTo(ctx context.Context, to uint64, onUndo port.UndoHook) (*port.Reorg, error)
 }
 
 // TestRollbackRestoresEarlierState indexes the reference scenario, rolls the
@@ -43,7 +43,7 @@ func TestRollbackRestoresEarlierState(t *testing.T) {
 		app := startApp(t, srv, dir)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		require.NoError(t, app.fetcher.FetchRange(ctx, 0, head))
-		_, err := app.storage.(rollbacker).RollbackTo(ctx, j)
+		_, err := app.storage.(rollbacker).RollbackTo(ctx, j, nil)
 		require.NoError(t, err)
 		latest, err := app.storage.GetLatestHeight(ctx)
 		require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestRollbackWithoutUndoFails(t *testing.T) {
 	require.NoError(t, app.storage.(interface {
 		DropUndo(context.Context, uint64) error
 	}).DropUndo(ctx, 3))
-	_, err := app.storage.(rollbacker).RollbackTo(ctx, 1)
+	_, err := app.storage.(rollbacker).RollbackTo(ctx, 1, nil)
 	require.ErrorIs(t, err, port.ErrNoUndo)
 	latest, err := app.storage.GetLatestHeight(ctx)
 	require.NoError(t, err)
@@ -181,7 +181,7 @@ func TestRollbackLargeBlocks(t *testing.T) {
 	app := startApp(t, srv, dir)
 	ctx := context.Background()
 	require.NoError(t, app.fetcher.FetchRange(ctx, 0, head))
-	_, err := app.storage.(rollbacker).RollbackTo(ctx, j)
+	_, err := app.storage.(rollbacker).RollbackTo(ctx, j, nil)
 	require.NoError(t, err)
 	app.Shutdown()
 
@@ -255,6 +255,7 @@ func TestReorgEventsAndOrphans(t *testing.T) {
 	}
 	require.NotEmpty(t, removedLogs, "the removed range must hold logs")
 
+	waitRelayed(t, app) // the events of the first indexing are delivered
 	sub := app.eventBus.Subscribe("reorg-test", []events.EventType{events.EventTypeReorg, events.EventTypeLog, events.EventTypeBlock}, nil, 100_000)
 	// The new branch must outgrow the indexed head: the live loop looks for
 	// new blocks above it and finds the fork through their parents.

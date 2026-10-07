@@ -175,7 +175,7 @@ graph TD
 | D5 | [중요] | 로그 색인, 주소·잔액 색인, 블록 처리기, 시스템 컨트랙트 파서의 실패를 경고 로그로만 남긴다. 커서는 그대로 전진해서 색인에 빈칸이 영구히 남는다 | `fetcher_processing.go`, `fetcher_indexing.go` | [Mid] |
 | D6 | [중요] | gap 복구 경로(`FetchRangeConcurrent`)는 시스템 컨트랙트 파싱, 로그 이벤트, 블록 처리기를 건너뛴다. 복구한 블록은 라이브 블록보다 덜 색인된다. (해소 10/7: 모든 경로가 한 파이프라인을 쓴다, R2-2) | `fetcher.go:476-690` | [Mid] |
 | D7 | [중요] | 큰 블록은 주소 색인, transfer, SetCode, UserOp 처리를 두 번 한다 | `large_block.go:194-235` | [Mid] |
-| D8 | [중요] | 블록 이벤트를 receipt 저장 전에 발행한다. 발행 버퍼가 차면 이벤트를 버리고, outbox가 없다. 이벤트를 받은 클라이언트가 아직 저장되지 않은 receipt를 조회할 수 있다 | `fetcher.go:387 대 397`, `events/bus.go:330-346` | [Mid] |
+| D8 | [중요] | 블록 이벤트를 receipt 저장 전에 발행한다. 발행 버퍼가 차면 이벤트를 버리고, outbox가 없다. 이벤트를 받은 클라이언트가 아직 저장되지 않은 receipt를 조회할 수 있다. (해소 10/7: commit 뒤 발행은 Phase 0, 버퍼가 찼을 때의 유실과 프로세스가 죽었을 때의 유실은 R3-1 outbox) | `fetcher.go:387 대 397`, `events/bus.go:330-346` | [Mid] |
 | D9 | [중요] | 잠금 없이 읽고-수정하고-쓰는 카운터가 있다(holder 수, total supply, setcode·module·bundler 통계, notification 통계). 지금은 라이브 루프가 순차라서 잠재 결함이지만, 병렬 commit을 도입하는 순간 race가 된다 | `pebble_token_holder.go:380-465`, `pebble_system_contracts_impl.go:341-372` 등 | [Mid] |
 
 #### 기능 미동작(연결 누락)
@@ -408,7 +408,7 @@ graph LR
 
 | ID | 작업 | 선행 | 검증 기준 |
 |---|---|---|---|
-| R3-1 | outbox와 relay, 스트림별 sequence | R2-3 | relay를 중간에 죽여도 sequence에 빈칸과 중복이 없다(소비자 기준) |
+| R3-1 | outbox와 relay, 스트림별 sequence. (완료 10/7: 블록의 이벤트를 그 블록의 저장 트랜잭션에 `/outbox/<seq>`로 기록하고, `pkg/stream` relay가 commit 뒤 sequence 순서로 이벤트 버스에 넘긴다. 스트림은 체인(DB)마다 하나이고 sequence는 1부터 빈칸 없이 증가한다. 실패하거나 되돌린 트랜잭션은 번호를 쓰지 않는다. reorg 이벤트와 제거된 log는 블록을 되돌리는 트랜잭션에 기록한다(`port.UndoHook`). outbox 키는 undo에 넣지 않는다. relay는 batch마다 cursor를 기록하므로 죽으면 그 뒤를 다시 보내고(at-least-once), 버스는 이미 받은 sequence를 버린다. 버스가 차면 relay가 기다린다. 전달한 항목은 `eventbus.outbox_retention`(기본 10만)개만 남기고, 재색인은 항목을 지우되 sequence와 cursor는 남긴다. 이벤트 본문은 `events.MarshalEvent`로 저장한다(블록 이벤트는 헤더만, 확정 거래 이벤트는 Tx·Receipt 없이). WBFT 이벤트에 codec을 추가했다. `eventbus.outbox: false`로 이전 방식으로 되돌릴 수 있다(9.2절). 검증: relay를 batch 안의 여러 지점에서 죽였다 다시 켜도 소비자가 1..70을 한 번씩 받는다(`TestRelayKilledMidwayLosesAndRepeatsNothing`). outbox를 켠 실행과 끈 실행이 reorg를 포함해 같은 이벤트를 같은 순서로 낸다(`TestOutboxDeliversTheSameEvents`). commit 실패와 재시작 두 번을 거쳐도 sequence가 끊김 없는 실행과 같다(`TestOutboxSequenceSurvivesCrashAndRestart`). 이 작업 중 재색인이 schema 표시를 지워 보존 데이터(contract 검증)가 있는 DB가 다시 열리지 않던 결함을 찾아 고쳤다) | R2-3 | relay를 중간에 죽여도 sequence에 빈칸과 중복이 없다(소비자 기준) |
 | R3-2 | 버스 어댑터(Kafka, NATS JetStream, Redis Streams 중 결정). 노드마다 고유한 consumer group을 둔다 | R3-1 | api 노드마다 모든 메시지를 받는다 |
 | R3-3 | 구독 엔진(주제 색인 COW, 링 버퍼, 한 번만 직렬화, 느린 구독자 끊기) | R3-1 | 구독자 1만 명 부하 시험에서 p99 지연과 느린 구독자 격리를 확인한다 |
 | R3-4 | snapshot + delta + sequence 프로토콜과 재동기화 | R3-3 | 연결을 끊었다 다시 붙어도 빠진 구간이 없다 |

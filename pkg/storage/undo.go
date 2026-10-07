@@ -69,8 +69,8 @@ func (tx *BlockTx) writeUndo() error {
 			rec.Complete = false // range deletes and merges are not recorded
 			continue
 		}
-		if seen[string(key)] {
-			continue
+		if seen[string(key)] || outboxKey(key) {
+			continue // outbox entries are kept on rollback (outbox.go)
 		}
 		seen[string(key)] = true
 		rec.Entries = append(rec.Entries, undoEntry{Key: append([]byte(nil), key...)})
@@ -94,8 +94,9 @@ func (tx *BlockTx) writeUndo() error {
 }
 
 // undoBlock rolls back block h in one transaction, archiving it as an
-// orphan of reorg first (with the reorganization record when first).
-func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *port.Reorg, first bool) (*port.OrphanedBlock, error) {
+// orphan of reorg first (with the reorganization record when first). onUndo
+// runs in the same transaction after the block's keys are restored.
+func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *port.Reorg, first bool, onUndo port.UndoHook) (*port.OrphanedBlock, error) {
 	raw, closer, err := s.kv(ctx).Get(UndoKey(h))
 	if errors.Is(err, pebble.ErrNotFound) {
 		return nil, fmt.Errorf("%w %d", port.ErrNoUndo, h)
@@ -137,6 +138,11 @@ func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *port.Reo
 	}
 	if err := tx.batch.Delete(UndoKey(h), nil); err != nil {
 		return nil, err
+	}
+	if onUndo != nil {
+		if err := onUndo(txCtx, reorg, ob, first); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err

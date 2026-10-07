@@ -96,6 +96,16 @@ eventbus:
   type: "local"                         # local | redis | kafka | hybrid
   publish_buffer_size: 1000
   history_size: 100                     # 이벤트 히스토리 버퍼 크기
+  outbox: true                          # 블록 이벤트를 outbox에 기록하고 relay가 sequence 순서로 전달
+  outbox_retention: 100000              # 전달한 뒤에도 DB에 남기는 이벤트 수, 0이면 모두 남김
+
+  # outbox(refactoring plan R3-1): 블록의 이벤트를 그 블록을 저장하는 트랜잭션에 함께
+  # 기록한다(`/outbox/<seq>`). relay가 commit 뒤 sequence 순서로 이벤트 버스에 넘기고,
+  # 버스가 차 있으면 버리지 않고 기다린다. 이벤트마다 체인 안에서 1부터 빈칸 없이
+  # 증가하는 sequence가 붙고(`events.SequenceOf`), 버스는 이미 받은 sequence를 버린다.
+  # reorg 이벤트와 제거된 log 이벤트는 되돌리는 트랜잭션에 함께 기록된다.
+  # 재색인은 outbox 항목을 지우지만 sequence는 이어간다. outbox: false는 commit 뒤
+  # 직접 발행하던 이전 방식(sequence 없음)으로 되돌린다.
 
   # Redis 백엔드 (type: redis 또는 hybrid)
   redis:
@@ -256,6 +266,8 @@ INDEXER_WORKERS=100
 INDEXER_CHUNK_SIZE=1
 INDEXER_START_HEIGHT=0
 INDEXER_ORPHAN_RETENTION=1000
+INDEXER_EVENTBUS_OUTBOX=true
+INDEXER_EVENTBUS_OUTBOX_RETENTION=100000
 INDEXER_API_ENABLED=true
 INDEXER_API_HOST=localhost
 INDEXER_API_PORT=8080

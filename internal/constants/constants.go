@@ -183,6 +183,10 @@ const (
 	// DefaultEventBusSubscriberBuffer is the default channel size of API
 	// subscriptions (eventbus.subscriber_buffer_size).
 	DefaultEventBusSubscriberBuffer = 16384
+
+	// DefaultOutboxRetention is how many delivered events stay in the
+	// outbox, so consumers can ask for the events they missed.
+	DefaultOutboxRetention = 100_000
 )
 
 // Size Constants

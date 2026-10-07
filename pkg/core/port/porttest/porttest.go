@@ -54,6 +54,7 @@ var contracts = []contract{
 	{"UserOpIndex", false, implements[userOpStore], testUserOpIndex},
 	{"ModuleIndex", false, implements[moduleStore], testModuleIndex},
 	{"Orphans", false, implements[orphanStore], testOrphans},
+	{"Outbox", false, implements[outboxStore], testOutbox},
 	{"FeatureState", false, implements[port.FeatureStateStore], testFeatureState},
 	{"KV", false, implements[port.KV], testKV},
 }

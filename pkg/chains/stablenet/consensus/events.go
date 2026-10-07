@@ -26,6 +26,8 @@ const (
 
 // ConsensusBlockEvent represents a new block finalized with consensus data
 type ConsensusBlockEvent struct {
+	events.Stream // change stream position (R3-1)
+
 	// Block identification
 	BlockNumber    uint64
 	BlockHash      common.Hash
@@ -104,6 +106,8 @@ func NewConsensusBlockEvent(
 
 // ConsensusForkEvent represents a chain fork detection
 type ConsensusForkEvent struct {
+	events.Stream // change stream position (R3-1)
+
 	// Fork location
 	ForkBlockNumber uint64
 	ForkBlockHash   common.Hash
@@ -176,6 +180,8 @@ func (e *ConsensusForkEvent) ResolveFork(winningChain int) {
 
 // ConsensusValidatorChangeEvent represents a validator set change
 type ConsensusValidatorChangeEvent struct {
+	events.Stream // change stream position (R3-1)
+
 	// Block where change occurred
 	BlockNumber    uint64
 	BlockHash      common.Hash
@@ -254,6 +260,8 @@ func NewConsensusValidatorChangeEvent(
 
 // ConsensusErrorEvent represents a consensus error or anomaly
 type ConsensusErrorEvent struct {
+	events.Stream // change stream position (R3-1)
+
 	// Error location
 	BlockNumber    uint64
 	BlockHash      common.Hash
@@ -343,4 +351,13 @@ func (e *ConsensusErrorEvent) SetRecoveryTime(blocks uint64) {
 // IsHighSeverity returns true if this is a high or critical severity error
 func (e *ConsensusErrorEvent) IsHighSeverity() bool {
 	return e.Severity == "critical" || e.Severity == "high"
+}
+
+// The consensus events are recorded in the outbox with the block that
+// produced them (refactoring plan R3-1), so they need codecs.
+func init() {
+	events.RegisterCodec(EventTypeConsensusBlock, events.StructCodec[ConsensusBlockEvent]())
+	events.RegisterCodec(EventTypeConsensusFork, events.StructCodec[ConsensusForkEvent]())
+	events.RegisterCodec(EventTypeConsensusValidatorChange, events.StructCodec[ConsensusValidatorChangeEvent]())
+	events.RegisterCodec(EventTypeConsensusError, events.StructCodec[ConsensusErrorEvent]())
 }
