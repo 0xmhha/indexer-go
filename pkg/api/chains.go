@@ -35,6 +35,8 @@ type chainRoutes struct {
 	keepAlive bool
 	direct    bool
 
+	streamOutbox func(port.QueryStore) port.Outbox
+
 	mu       sync.Mutex
 	handlers map[string]*chainHandlers
 }
@@ -54,6 +56,8 @@ func (s *Server) mountChainRoutes(chains ChainStores) {
 		keepAlive: s.config.EnableWebSocketKeepAlive,
 		direct:    s.config.DirectSubscriptions,
 		handlers:  map[string]*chainHandlers{},
+
+		streamOutbox: s.streamOutbox,
 	}
 	s.router.Get("/chains", cr.list)
 	if s.config.EnableGraphQL {
@@ -103,13 +107,21 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 		return h, http.StatusOK
 	}
 	logger := cr.logger.With(zap.String("chain", id))
-	gql, err := graphql.NewHandlerWithOptions(store, logger, nil)
+	outbox := cr.streamOutbox(store)
+	var opts *graphql.HandlerOptions
+	if outbox != nil {
+		opts = &graphql.HandlerOptions{Stream: outbox}
+	}
+	gql, err := graphql.NewHandlerWithOptions(store, logger, opts)
 	if err != nil {
 		logger.Error("failed to create GraphQL handler", zap.Error(err))
 		return nil, http.StatusInternalServerError
 	}
 	sub := graphql.NewSubscriptionServer(bus, logger, cr.keepAlive)
 	sub.SetDirect(cr.direct)
+	if outbox != nil {
+		sub.SetOutbox(outbox)
+	}
 	h := &chainHandlers{
 		store:   store,
 		graphql: gql,

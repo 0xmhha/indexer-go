@@ -9,6 +9,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
+	"github.com/0xmhha/indexer-go/pkg/stream"
 	"github.com/graphql-go/graphql"
 	graphqlhandler "github.com/graphql-go/handler"
 	"go.uber.org/zap"
@@ -26,6 +27,9 @@ type HandlerOptions struct {
 	RPCProxy                    *rpcproxy.Proxy
 	NotificationService         notifications.Service
 	ContractRegistrationService *events.ContractRegistrationService
+	// Stream is the outbox of the change stream, for the streamSequence
+	// query; nil when events are not kept.
+	Stream stream.Outbox
 }
 
 // NewHandler creates a new GraphQL handler
@@ -35,7 +39,11 @@ func NewHandler(store port.QueryStore, logger *zap.Logger) (*Handler, error) {
 
 // NewHandlerWithOptions creates a new GraphQL handler with optional configurations
 func NewHandlerWithOptions(store port.QueryStore, logger *zap.Logger, opts *HandlerOptions) (*Handler, error) {
-	builder := NewSchemaBuilder(store, logger).
+	builder := NewSchemaBuilder(store, logger)
+	if opts != nil {
+		builder.schema.stream = opts.Stream
+	}
+	builder = builder.
 		WithCoreQueries().
 		WithHistoricalQueries().
 		WithAnalyticsQueries().

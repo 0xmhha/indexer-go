@@ -50,6 +50,19 @@ type SubscriptionServer struct {
 	engine    *stream.Engine
 	engineBus *events.EventBus
 	engineSub events.SubscriptionID
+	outbox    stream.Outbox
+}
+
+// SetOutbox sets the outbox of the chain whose events the server delivers,
+// so subscriptions can resume from a sequence (the fromSequence variable,
+// refactoring plan R3-4). Without one, fromSequence is refused.
+func (s *SubscriptionServer) SetOutbox(ob stream.Outbox) {
+	s.engineMu.Lock()
+	defer s.engineMu.Unlock()
+	s.outbox = ob
+	if s.engine != nil {
+		s.engine.SetOutbox(ob)
+	}
 }
 
 // SetDirect selects the former delivery (true): a bus subscription per
@@ -99,6 +112,7 @@ func (s *SubscriptionServer) subscriptionEngine() *stream.Engine {
 	}
 	s.stopEngineLocked()
 	e := stream.NewEngine(stream.EngineConfig{Buffer: bus.SubscriberBufferSize()})
+	e.SetOutbox(s.outbox)
 	for name, eventType := range builtinSubscriptions {
 		e.AddTopic(name, eventType, subscriptionEncoder(name))
 	}
@@ -597,15 +611,46 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 	// Parse replayLast parameter
 	replayLast := parseReplayLast(sub.Variables["replayLast"])
 
+	// fromSequence resumes from a change stream sequence (R3-4): the
+	// events from there that are kept, then live ones.
+	var from uint64
+	resume := sub.Variables["fromSequence"] != nil
+	if resume {
+		if from, err = parseUint64Value(sub.Variables["fromSequence"]); err != nil {
+			c.sendError(id, "invalid fromSequence")
+			return
+		}
+		if c.stream == nil {
+			c.sendErrorCode(id, "fromSequence needs the subscription engine (api.subscription_engine)", "RESUME_UNSUPPORTED", nil)
+			return
+		}
+	}
+
 	if c.stream != nil {
 		var match func(events.Event) bool
 		if filter != nil {
 			match = filter.Match
 		}
-		if err := c.stream.Subscribe(id, subType, match, replayLast); err != nil {
-			if errors.Is(err, stream.ErrDuplicateSub) {
+		if resume {
+			err = c.stream.SubscribeFrom(c.ctx, id, subType, match, from)
+		} else {
+			err = c.stream.Subscribe(id, subType, match, replayLast)
+		}
+		if err != nil {
+			var tooOld *stream.TooOldError
+			switch {
+			case errors.Is(err, stream.ErrDuplicateSub):
 				c.sendError(id, fmt.Sprintf("subscriber for %s already exists", id))
-			} else {
+			case errors.As(err, &tooOld):
+				ext := map[string]interface{}{}
+				if tooOld.Oldest != 0 {
+					ext["oldest"] = tooOld.Oldest
+				}
+				c.sendErrorCode(id, fmt.Sprintf("events from sequence %d are no longer kept; start again from a snapshot (streamSequence)", from),
+					"SEQUENCE_TOO_OLD", ext)
+			case errors.Is(err, stream.ErrNoOutbox):
+				c.sendErrorCode(id, "resuming from a sequence is not supported: events are not kept (eventbus.outbox)", "RESUME_UNSUPPORTED", nil)
+			default:
 				c.sendError(id, "failed to create subscription")
 			}
 			return
@@ -1189,6 +1234,17 @@ func (c *subscriptionClient) sendError(id string, errMsg string) {
 		Type:    "error",
 		Payload: payload,
 	})
+}
+
+// sendErrorCode sends an error message with extensions.code (and further
+// extensions).
+func (c *subscriptionClient) sendErrorCode(id, errMsg, code string, ext map[string]interface{}) {
+	if ext == nil {
+		ext = map[string]interface{}{}
+	}
+	ext["code"] = code
+	payload, _ := json.Marshal([]map[string]interface{}{{"message": errMsg, "extensions": ext}})
+	c.sendMessage(wsMessage{ID: id, Type: "error", Payload: payload})
 }
 
 // cleanup unsubscribes from all EventBus subscriptions

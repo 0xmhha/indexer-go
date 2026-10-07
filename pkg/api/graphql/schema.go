@@ -10,6 +10,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
+	"github.com/0xmhha/indexer-go/pkg/stream"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
@@ -32,6 +33,10 @@ type Schema struct {
 
 	// Dynamic contract registration service
 	contractRegistrationService *events.ContractRegistrationService
+
+	// stream is the outbox of the change stream (streamSequence); nil when
+	// events are not kept
+	stream stream.Outbox
 }
 
 // SchemaBuilder helps construct a GraphQL schema using the Builder pattern
@@ -64,6 +69,12 @@ func (b *SchemaBuilder) WithCoreQueries() *SchemaBuilder {
 	b.queries["latestHeight"] = &graphql.Field{
 		Type:    graphql.NewNonNull(bigIntType),
 		Resolve: s.resolveLatestHeight,
+	}
+	b.queries["streamSequence"] = &graphql.Field{
+		Type: bigIntType,
+		Description: "The sequence of the last committed change stream event, null when events are not kept. " +
+			"Read it before a snapshot of the state and subscribe with fromSequence set to the next sequence",
+		Resolve: s.resolveStreamSequence,
 	}
 	b.queries["block"] = &graphql.Field{
 		Type: blockType,

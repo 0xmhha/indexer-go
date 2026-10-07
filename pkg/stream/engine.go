@@ -77,12 +77,22 @@ type topic struct {
 	encode    Encoder
 }
 
-// subscription is one subscription of a connection.
+// subscription is one subscription of a connection. The fields below
+// match are guarded by conn.mu.
 type subscription struct {
 	conn  *Conn
 	id    string
 	topic string
 	match func(events.Event) bool
+
+	// next is the lowest sequence still to deliver: sequenced events below
+	// it were delivered already (a subscription that resumed from the
+	// outbox, resume.go). 0 delivers every event.
+	next uint64
+	// catching is true while the subscription reads the outbox; live
+	// events wait in pending meanwhile.
+	catching bool
+	pending  []Frame
 }
 
 // subList is the copy-on-write list of one event type's subscriptions.
@@ -98,6 +108,9 @@ type Engine struct {
 	mu     sync.Mutex
 	topics map[string]topic
 	index  atomic.Pointer[map[events.EventType]*subList]
+
+	// outbox is where subscriptions resume from (SetOutbox).
+	outbox atomic.Pointer[outboxSource]
 
 	// pubMu serializes publishing with subscriptions that replay history.
 	pubMu   sync.Mutex
@@ -192,7 +205,7 @@ func (e *Engine) Publish(ev events.Event) {
 		if !ok {
 			continue
 		}
-		if s.conn.push(Frame{Sub: s.id, Seq: seq, Payload: payload}) {
+		if s.conn.deliver(s, Frame{Sub: s.id, Seq: seq, Payload: payload}) {
 			e.frames.Add(1)
 		}
 	}
@@ -318,7 +331,7 @@ func (e *Engine) remove(drop func(*subscription) bool) {
 // Connect opens a connection. Its writer reads frames with Take when Ready
 // signals, and calls Close when it is done.
 func (e *Engine) Connect() *Conn {
-	c := &Conn{engine: e, ready: make(chan struct{}, 1), done: make(chan struct{}), subs: make(map[string]*subscription)}
+	c := &Conn{engine: e, ready: make(chan struct{}, 1), space: make(chan struct{}, 1), done: make(chan struct{}), subs: make(map[string]*subscription)}
 	e.conns.Store(c, struct{}{})
 	if e.closed.Load() { // closed meanwhile: failAll may have missed c
 		c.fail(ErrConnClosed)
@@ -330,6 +343,7 @@ func (e *Engine) Connect() *Conn {
 type Conn struct {
 	engine *Engine
 	ready  chan struct{} // signalled when frames are queued
+	space  chan struct{} // signalled when Take empties the queue
 	done   chan struct{} // closed when the connection fails or closes
 
 	mu    sync.Mutex
@@ -434,6 +448,10 @@ func (c *Conn) Take() ([]Frame, error) {
 		}
 	}
 	c.queue = c.queue[:0]
+	select {
+	case c.space <- struct{}{}:
+	default:
+	}
 	return out, nil
 }
 
