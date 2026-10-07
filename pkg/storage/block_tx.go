@@ -234,13 +234,4 @@ func (s *PebbleStorage) addTxCount(ctx context.Context, n uint64) uint64 {
 	return s.txCount.Add(n)
 }
 
-// subTxCount undoes addTxCount after a failed write outside a transaction.
-func (s *PebbleStorage) subTxCount(ctx context.Context, n uint64) {
-	if tx := s.boundTx(ctx); tx != nil {
-		tx.txDelta -= n
-		return
-	}
-	s.txCount.Add(^(n - 1))
-}
-
 var _ port.BlockTransactor = (*PebbleStorage)(nil)

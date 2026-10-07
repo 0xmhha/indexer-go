@@ -469,14 +469,6 @@ func addrInternal(tx common.Hash, block uint64, index int, typ string, from, to 
 	}
 }
 
-func addrContractAddrs(cs []*port.ContractCreation) []common.Address {
-	out := make([]common.Address, 0, len(cs))
-	for _, c := range cs {
-		out = append(out, c.ContractAddress)
-	}
-	return out
-}
-
 // addrAssertInternals compares internal transactions in order; values are
 // compared numerically.
 func addrAssertInternals(t *testing.T, want, got []*port.InternalTransaction) {

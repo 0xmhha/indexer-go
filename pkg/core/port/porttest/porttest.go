@@ -157,11 +157,3 @@ func open[S any](t *testing.T, newStore NewStore) S {
 	}
 	return s
 }
-
-// knownDefect skips a check that the reference storage is known to fail,
-// naming the defect. The check states the contract; remove the call when
-// the defect is fixed.
-func knownDefect(t *testing.T, defect string) {
-	t.Helper()
-	t.Skipf("known defect: %s", defect)
-}
