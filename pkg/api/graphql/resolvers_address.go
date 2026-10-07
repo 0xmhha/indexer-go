@@ -121,7 +121,7 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 	}
 
 	// Get transaction counts
-	txHashes, err := s.storage.GetTransactionsByAddress(ctx, address, 10000, 0)
+	txHashes, _, err := s.storage.GetTransactionsByAddress(ctx, address, port.Page{Limit: 10000, Offset: 0})
 	if err == nil {
 		overview["transactionCount"] = len(txHashes)
 

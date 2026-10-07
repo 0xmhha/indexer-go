@@ -140,7 +140,7 @@ func TestLiveStableNetIdentity(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, meta, "fee delegation meta of %s", tx.Hash.Hex())
 			require.Equal(t, fd.FeePayer, meta.FeePayer)
-			payerTxs, err := app.storage.GetTransactionsByAddress(ctx, fd.FeePayer, 10000, 0)
+			payerTxs, _, err := app.storage.GetTransactionsByAddress(ctx, fd.FeePayer, port.Page{Limit: 10000, Offset: 0})
 			require.NoError(t, err)
 			require.Contains(t, payerTxs, tx.Hash, "fee payer address index")
 		}

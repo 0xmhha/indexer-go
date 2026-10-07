@@ -688,7 +688,12 @@ func initInputTypes() {
 				Type: graphql.Int,
 			},
 			"offset": &graphql.InputObjectFieldConfig{
-				Type: graphql.Int,
+				Type:        graphql.Int,
+				Description: "Items to skip from the start; costs time proportional to the offset. Ignored when after is set.",
+			},
+			"after": &graphql.InputObjectFieldConfig{
+				Type:        graphql.String,
+				Description: "Continue after the page that returned this cursor (pageInfo.endCursor); the same cost at any depth.",
 			},
 		},
 	})

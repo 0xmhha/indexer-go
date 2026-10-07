@@ -510,7 +510,7 @@ func TestPebbleStorage_AddressIndex_Pagination(t *testing.T) {
 	}
 
 	// Test pagination - first page (limit 5, offset 0)
-	page1, err := storage.GetTransactionsByAddress(ctx, addr, 5, 0)
+	page1, _, err := storage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 5, Offset: 0})
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress() error = %v", err)
 	}
@@ -519,7 +519,7 @@ func TestPebbleStorage_AddressIndex_Pagination(t *testing.T) {
 	}
 
 	// Test pagination - second page (limit 5, offset 5)
-	page2, err := storage.GetTransactionsByAddress(ctx, addr, 5, 5)
+	page2, _, err := storage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 5, Offset: 5})
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress() error = %v", err)
 	}
@@ -568,7 +568,7 @@ func TestPebbleStorage_AddressIndex_MultipleAddresses(t *testing.T) {
 	}
 
 	// Query addr1 - should have 2 transactions
-	txs1, err := storage.GetTransactionsByAddress(ctx, addr1, 10, 0)
+	txs1, _, err := storage.GetTransactionsByAddress(ctx, addr1, port.Page{Limit: 10, Offset: 0})
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress(addr1) error = %v", err)
 	}
@@ -577,7 +577,7 @@ func TestPebbleStorage_AddressIndex_MultipleAddresses(t *testing.T) {
 	}
 
 	// Query addr2 - should have 1 transaction
-	txs2, err := storage.GetTransactionsByAddress(ctx, addr2, 10, 0)
+	txs2, _, err := storage.GetTransactionsByAddress(ctx, addr2, port.Page{Limit: 10, Offset: 0})
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress(addr2) error = %v", err)
 	}
@@ -595,7 +595,7 @@ func TestPebbleStorage_AddressIndex_EmptyAddress(t *testing.T) {
 	addr := common.HexToAddress("0xempty")
 
 	// Query empty address - should return empty list
-	txs, err := storage.GetTransactionsByAddress(ctx, addr, 10, 0)
+	txs, _, err := storage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 10, Offset: 0})
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress() error = %v", err)
 	}
@@ -1283,7 +1283,7 @@ func TestPebbleStorage_AddressIndex(t *testing.T) {
 	}
 
 	// Query transactions for address
-	txHashes, err := storage.GetTransactionsByAddress(ctx, addr, 10, 0)
+	txHashes, _, err := storage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 10, Offset: 0})
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress() error = %v", err)
 	}
@@ -2325,7 +2325,7 @@ func TestPebbleStorage_GetTransactionsByAddress_ClosedStorage(t *testing.T) {
 	cleanup()
 
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
-	_, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, 10, 0)
+	_, _, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 10, Offset: 0})
 	if err == nil {
 		t.Error("GetTransactionsByAddress() should fail on closed storage")
 	}
@@ -2923,7 +2923,7 @@ func TestPebbleStorage_AddTransactionToAddressIndex_Success(t *testing.T) {
 	}
 
 	// Get transactions by address
-	retrieved, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, 10, 0)
+	retrieved, _, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 10, Offset: 0})
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress() error = %v", err)
 	}
