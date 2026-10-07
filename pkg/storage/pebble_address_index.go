@@ -1,7 +1,9 @@
 package storage
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -17,6 +19,16 @@ import (
 // Compile-time check to ensure PebbleStorage implements AddressIndexReader and AddressIndexWriter
 var _ port.AddressIndexReader = (*PebbleStorage)(nil)
 var _ port.AddressIndexWriter = (*PebbleStorage)(nil)
+
+// addressIndexPageLimit returns the page size of an address index list:
+// page.Limit, constants.DefaultPaginationLimit when it is not positive, and
+// at most constants.DefaultMaxPaginationLimit.
+func addressIndexPageLimit(page port.Page) int {
+	return min(pageLimit(page, constants.DefaultPaginationLimit), constants.DefaultMaxPaginationLimit)
+}
+
+// addressIndexHasValue keeps the index entries that hold a value.
+func addressIndexHasValue(_, value []byte) bool { return len(value) > 0 }
 
 // ========== Contract Creation Implementation ==========
 
@@ -45,65 +57,25 @@ func (s *PebbleStorage) GetContractCreation(ctx context.Context, contractAddress
 	return &creation, nil
 }
 
-// GetContractsByCreator retrieves contracts created by a specific address with pagination.
+// GetContractsByCreator returns one page of the contracts created by a
+// specific address, in deployment block order.
 // Returns empty slice if no contracts found.
-func (s *PebbleStorage) GetContractsByCreator(ctx context.Context, creator common.Address, limit, offset int) ([]common.Address, error) {
+func (s *PebbleStorage) GetContractsByCreator(ctx context.Context, creator common.Address, page port.Page) ([]common.Address, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
-	}
-
-	// Validate pagination parameters
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
+		return nil, "", port.ErrClosed
 	}
 
 	prefix := ContractCreatorIndexKeyPrefix(creator)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), false, page, addressIndexPageLimit(page), addressIndexHasValue)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	contracts := make([]common.Address, 0, limit)
-	count := 0
-	skipped := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip offset items
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if count >= limit {
-			break
-		}
-
-		// Extract contract address from value
-		value := iter.Value()
-		if len(value) > 0 {
-			addr := common.BytesToAddress(value)
-			contracts = append(contracts, addr)
-			count++
-		}
+		return nil, "", err
 	}
 
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
+	contracts := make([]common.Address, len(entries))
+	for i, e := range entries {
+		contracts[i] = common.BytesToAddress(e.Value)
 	}
-
-	return contracts, nil
+	return contracts, next, nil
 }
 
 // SaveContractCreation saves contract creation information.
@@ -163,66 +135,25 @@ func (s *PebbleStorage) SaveContractCreation(ctx context.Context, creation *port
 	return nil
 }
 
-// ListContracts retrieves all deployed contracts with pagination.
-// Returns contracts sorted by deployment block number (descending - newest first).
-func (s *PebbleStorage) ListContracts(ctx context.Context, limit, offset int) ([]*port.ContractCreation, error) {
+// ListContracts returns one page of all deployed contracts, newest
+// deployment block first.
+func (s *PebbleStorage) ListContracts(ctx context.Context, page port.Page) ([]*port.ContractCreation, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	// Validate pagination parameters
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	// Use block index for reverse chronological order
-	// /index/contract/block/{blockNumber}/{contractAddress}
+	// The block index /index/contract/block/{blockNumber}/{contractAddress}
+	// read in reverse gives the newest deployment first.
 	prefix := []byte(prefixIdxContractBlock)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), true, page, addressIndexPageLimit(page), addressIndexHasValue)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
+		return nil, "", err
 	}
-	defer iter.Close()
-
-	// Collect all contract addresses first (to sort by block descending)
-	var contractAddrs []common.Address
-	for iter.Last(); iter.Valid(); iter.Prev() {
-		value := iter.Value()
-		if len(value) > 0 {
-			addr := common.BytesToAddress(value)
-			contractAddrs = append(contractAddrs, addr)
-		}
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	// Apply pagination
-	start := offset
-	if start >= len(contractAddrs) {
-		return []*port.ContractCreation{}, nil
-	}
-	end := start + limit
-	if end > len(contractAddrs) {
-		end = len(contractAddrs)
-	}
-
-	paginatedAddrs := contractAddrs[start:end]
 
 	// Fetch full contract creation info for each address
-	contracts := make([]*port.ContractCreation, 0, len(paginatedAddrs))
-	for _, addr := range paginatedAddrs {
+	contracts := make([]*port.ContractCreation, 0, len(entries))
+	for _, e := range entries {
+		addr := common.BytesToAddress(e.Value)
 		creation, err := s.GetContractCreation(ctx, addr)
 		if err != nil {
 			s.logger.Warn("failed to get contract creation details",
@@ -233,7 +164,7 @@ func (s *PebbleStorage) ListContracts(ctx context.Context, limit, offset int) ([
 		contracts = append(contracts, creation)
 	}
 
-	return contracts, nil
+	return contracts, next, nil
 }
 
 // GetContractsCount returns the total number of deployed contracts.
@@ -292,105 +223,22 @@ func (s *PebbleStorage) GetERC20Transfer(ctx context.Context, txHash common.Hash
 	return &transfer, nil
 }
 
-// GetERC20TransfersByToken retrieves ERC20 transfers for a specific token contract with pagination.
-func (s *PebbleStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC20Transfer, error) {
+// GetERC20TransfersByToken returns one page of the ERC20 transfers of a
+// specific token contract, in block and log index order.
+func (s *PebbleStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, page port.Page) ([]*port.ERC20Transfer, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
-
-	// Validate pagination parameters
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	prefix := ERC20TokenIndexKeyPrefix(tokenAddress)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	transfers := make([]*port.ERC20Transfer, 0, limit)
-	count := 0
-	skipped := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip offset items
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if count >= limit {
-			break
-		}
-
-		// Extract txHash from value
-		value := iter.Value()
-		if len(value) == 0 {
-			continue
-		}
-
-		txHash := common.BytesToHash(value)
-
-		// Extract logIndex from key (last 6 digits)
-		key := iter.Key()
-		// Key format: /index/erc20/token/{address}/{blockNumber}/{logIndex}
-		// Parse logIndex from the end of the key
-		keyStr := string(key)
-		var logIndex uint
-		if n, err := fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex); n == 0 || err != nil {
-			s.logger.Warn("Failed to parse logIndex from key", zap.String("key", keyStr), zap.Error(err))
-			continue
-		}
-
-		// Fetch the actual transfer data
-		transfer, err := s.GetERC20Transfer(ctx, txHash, logIndex)
-		if err != nil {
-			// Skip if not found, but log error
-			s.logger.Warn("Failed to get ERC20 transfer", zap.String("txHash", txHash.Hex()), zap.Uint("logIndex", logIndex), zap.Error(err))
-			continue
-		}
-
-		transfers = append(transfers, transfer)
-		count++
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return transfers, nil
+	return s.erc20TransferPage(ctx, ERC20TokenIndexKeyPrefix(tokenAddress), page)
 }
 
-// GetERC20TransfersByAddress retrieves ERC20 transfers involving a specific address.
+// GetERC20TransfersByAddress returns one page of the ERC20 transfers
+// involving a specific address, in block and log index order.
 // If isFrom is true, returns transfers where address is the sender.
 // If isFrom is false, returns transfers where address is the recipient.
-func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC20Transfer, error) {
+func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, page port.Page) ([]*port.ERC20Transfer, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
-	}
-
-	// Validate pagination parameters
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
+		return nil, "", port.ErrClosed
 	}
 
 	var prefix []byte
@@ -399,65 +247,70 @@ func (s *PebbleStorage) GetERC20TransfersByAddress(ctx context.Context, address 
 	} else {
 		prefix = ERC20ToIndexKeyPrefix(address)
 	}
+	return s.erc20TransferPage(ctx, prefix, page)
+}
 
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
+// erc20TransferPage reads one page of an ERC20 transfer index and loads the
+// transfers it points to.
+func (s *PebbleStorage) erc20TransferPage(ctx context.Context, prefix []byte, page port.Page) ([]*port.ERC20Transfer, string, error) {
+	refs, next, err := s.transferIndexPage(ctx, prefix, page)
+	if err != nil {
+		return nil, "", err
+	}
+	transfers := make([]*port.ERC20Transfer, 0, len(refs))
+	for _, ref := range refs {
+		transfer, err := s.GetERC20Transfer(ctx, ref.txHash, ref.logIndex)
+		if err != nil {
+			// Skip if not found, but log error
+			s.logger.Warn("Failed to get ERC20 transfer", zap.String("txHash", ref.txHash.Hex()), zap.Uint("logIndex", ref.logIndex), zap.Error(err))
+			continue
+		}
+		transfers = append(transfers, transfer)
+	}
+	return transfers, next, nil
+}
+
+// transferRef locates a transfer: the transaction hash an index entry holds
+// and the log index at the end of its key.
+type transferRef struct {
+	txHash   common.Hash
+	logIndex uint
+}
+
+// transferIndexPage reads one page of a transfer index (ERC20 or ERC721,
+// by token, sender or recipient). Keys end in /{logIndex:06d} and values
+// hold the transaction hash; entries without a value or a log index are
+// not items of the list.
+func (s *PebbleStorage) transferIndexPage(ctx context.Context, prefix []byte, page port.Page) ([]transferRef, string, error) {
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), false, page, addressIndexPageLimit(page), func(key, value []byte) bool {
+		_, ok := transferLogIndex(key)
+		return len(value) > 0 && ok
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
+		return nil, "", err
 	}
-	defer iter.Close()
-
-	transfers := make([]*port.ERC20Transfer, 0, limit)
-	count := 0
-	skipped := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip offset items
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if count >= limit {
-			break
-		}
-
-		// Extract txHash from value
-		value := iter.Value()
-		if len(value) == 0 {
-			continue
-		}
-
-		txHash := common.BytesToHash(value)
-
-		// Extract logIndex from key
-		key := iter.Key()
-		keyStr := string(key)
-		var logIndex uint
-		if n, err := fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex); n == 0 || err != nil {
-			s.logger.Warn("Failed to parse logIndex from key", zap.String("key", keyStr), zap.Error(err))
-			continue
-		}
-
-		// Fetch the actual transfer data
-		transfer, err := s.GetERC20Transfer(ctx, txHash, logIndex)
-		if err != nil {
-			s.logger.Warn("Failed to get ERC20 transfer", zap.String("txHash", txHash.Hex()), zap.Uint("logIndex", logIndex), zap.Error(err))
-			continue
-		}
-
-		transfers = append(transfers, transfer)
-		count++
+	refs := make([]transferRef, len(entries))
+	for i, e := range entries {
+		logIndex, _ := transferLogIndex(e.Key)
+		refs[i] = transferRef{txHash: common.BytesToHash(e.Value), logIndex: logIndex}
 	}
+	return refs, next, nil
+}
 
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
+// transferLogIndex parses the log index from the last six digits of a
+// transfer index key: /index/{erc20|erc721}/{token|from|to}/{address}/{blockNumber}/{logIndex}.
+func transferLogIndex(key []byte) (uint, bool) {
+	if len(key) < 6 {
+		return 0, false
 	}
-
-	return transfers, nil
+	var logIndex uint
+	for _, c := range key[len(key)-6:] {
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		logIndex = logIndex*10 + uint(c-'0')
+	}
+	return logIndex, true
 }
 
 // SaveERC20Transfer saves an ERC20 token transfer.
@@ -550,102 +403,22 @@ func (s *PebbleStorage) GetERC721Transfer(ctx context.Context, txHash common.Has
 	return &transfer, nil
 }
 
-// GetERC721TransfersByToken retrieves ERC721 transfers for a specific token contract with pagination.
-func (s *PebbleStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC721Transfer, error) {
+// GetERC721TransfersByToken returns one page of the ERC721 transfers of a
+// specific token contract, in block and log index order.
+func (s *PebbleStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, page port.Page) ([]*port.ERC721Transfer, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
-
-	// Validate pagination parameters
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	prefix := ERC721TokenIndexKeyPrefix(tokenAddress)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	transfers := make([]*port.ERC721Transfer, 0, limit)
-	count := 0
-	skipped := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip offset items
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if count >= limit {
-			break
-		}
-
-		// Extract txHash from value
-		value := iter.Value()
-		if len(value) == 0 {
-			continue
-		}
-
-		txHash := common.BytesToHash(value)
-
-		// Extract logIndex from key
-		key := iter.Key()
-		keyStr := string(key)
-		var logIndex uint
-		if n, err := fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex); n == 0 || err != nil {
-			s.logger.Warn("Failed to parse logIndex from key", zap.String("key", keyStr), zap.Error(err))
-			continue
-		}
-
-		// Fetch the actual transfer data
-		transfer, err := s.GetERC721Transfer(ctx, txHash, logIndex)
-		if err != nil {
-			s.logger.Warn("Failed to get ERC721 transfer", zap.String("txHash", txHash.Hex()), zap.Uint("logIndex", logIndex), zap.Error(err))
-			continue
-		}
-
-		transfers = append(transfers, transfer)
-		count++
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return transfers, nil
+	return s.erc721TransferPage(ctx, ERC721TokenIndexKeyPrefix(tokenAddress), page)
 }
 
-// GetERC721TransfersByAddress retrieves ERC721 transfers involving a specific address.
+// GetERC721TransfersByAddress returns one page of the ERC721 transfers
+// involving a specific address, in block and log index order.
 // If isFrom is true, returns transfers where address is the sender.
 // If isFrom is false, returns transfers where address is the recipient.
-func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC721Transfer, error) {
+func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, page port.Page) ([]*port.ERC721Transfer, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
-	}
-
-	// Validate pagination parameters
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
+		return nil, "", port.ErrClosed
 	}
 
 	var prefix []byte
@@ -654,65 +427,26 @@ func (s *PebbleStorage) GetERC721TransfersByAddress(ctx context.Context, address
 	} else {
 		prefix = ERC721ToIndexKeyPrefix(address)
 	}
+	return s.erc721TransferPage(ctx, prefix, page)
+}
 
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
+// erc721TransferPage reads one page of an ERC721 transfer index and loads
+// the transfers it points to.
+func (s *PebbleStorage) erc721TransferPage(ctx context.Context, prefix []byte, page port.Page) ([]*port.ERC721Transfer, string, error) {
+	refs, next, err := s.transferIndexPage(ctx, prefix, page)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
+		return nil, "", err
 	}
-	defer iter.Close()
-
-	transfers := make([]*port.ERC721Transfer, 0, limit)
-	count := 0
-	skipped := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip offset items
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if count >= limit {
-			break
-		}
-
-		// Extract txHash from value
-		value := iter.Value()
-		if len(value) == 0 {
-			continue
-		}
-
-		txHash := common.BytesToHash(value)
-
-		// Extract logIndex from key
-		key := iter.Key()
-		keyStr := string(key)
-		var logIndex uint
-		if n, err := fmt.Sscanf(keyStr[len(keyStr)-6:], "%06d", &logIndex); n == 0 || err != nil {
-			s.logger.Warn("Failed to parse logIndex from key", zap.String("key", keyStr), zap.Error(err))
-			continue
-		}
-
-		// Fetch the actual transfer data
-		transfer, err := s.GetERC721Transfer(ctx, txHash, logIndex)
+	transfers := make([]*port.ERC721Transfer, 0, len(refs))
+	for _, ref := range refs {
+		transfer, err := s.GetERC721Transfer(ctx, ref.txHash, ref.logIndex)
 		if err != nil {
-			s.logger.Warn("Failed to get ERC721 transfer", zap.String("txHash", txHash.Hex()), zap.Uint("logIndex", logIndex), zap.Error(err))
+			s.logger.Warn("Failed to get ERC721 transfer", zap.String("txHash", ref.txHash.Hex()), zap.Uint("logIndex", ref.logIndex), zap.Error(err))
 			continue
 		}
-
 		transfers = append(transfers, transfer)
-		count++
 	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return transfers, nil
+	return transfers, next, nil
 }
 
 // GetERC721Owner retrieves the current owner of a specific NFT token.
@@ -740,84 +474,50 @@ func (s *PebbleStorage) GetERC721Owner(ctx context.Context, tokenAddress common.
 	return owner, nil
 }
 
-// GetNFTsByOwner retrieves all NFTs owned by a specific address with pagination.
+// GetNFTsByOwner returns one page of the NFTs a specific address owns, in
+// index key order (contract address, then token id as a decimal string).
 // Returns empty slice if no NFTs found.
-func (s *PebbleStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*port.NFTOwnership, error) {
+func (s *PebbleStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, page port.Page) ([]*port.NFTOwnership, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	// Validate pagination parameters
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
+	// Key format: /index/erc721/owner/{ownerAddress}/{contractAddress}/{tokenId}
 	prefix := ERC721OwnerIndexKeyPrefix(owner)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	nfts := make([]*port.NFTOwnership, 0, limit)
-	count := 0
-	skipped := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip offset items
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if count >= limit {
-			break
-		}
-
-		// Parse the key to extract contractAddress and tokenId
-		// Key format: /index/erc721/owner/{ownerAddress}/{contractAddress}/{tokenId}
-		key := string(iter.Key())
-		prefixStr := string(prefix)
-		remaining := key[len(prefixStr):]
-
-		// Find the separator between contractAddress and tokenId
-		parts := splitNFTKey(remaining)
+	parse := func(key []byte) (common.Address, *big.Int, bool) {
+		parts := splitNFTKey(string(key[len(prefix):]))
 		if len(parts) < 2 {
-			s.logger.Warn("Invalid NFT owner index key", zap.String("key", key))
-			continue
+			return common.Address{}, nil, false
 		}
-
-		contractAddress := common.HexToAddress(parts[0])
 		tokenId, ok := new(big.Int).SetString(parts[1], 10)
 		if !ok {
-			s.logger.Warn("Invalid tokenId in NFT owner index key", zap.String("key", key), zap.String("tokenId", parts[1]))
-			continue
+			return common.Address{}, nil, false
 		}
+		return common.HexToAddress(parts[0]), tokenId, true
+	}
+	// The cursor is the key of the last NFT returned, so it stays valid when
+	// that NFT leaves the owner: the next page seeks past the deleted key.
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), false, page, addressIndexPageLimit(page), func(key, _ []byte) bool {
+		if _, _, ok := parse(key); !ok {
+			s.logger.Warn("Invalid NFT owner index key", zap.String("key", string(key)))
+			return false
+		}
+		return true
+	})
+	if err != nil {
+		return nil, "", err
+	}
 
-		nfts = append(nfts, &port.NFTOwnership{
+	nfts := make([]*port.NFTOwnership, len(entries))
+	for i, e := range entries {
+		contractAddress, tokenId, _ := parse(e.Key)
+		nfts[i] = &port.NFTOwnership{
 			ContractAddress: contractAddress,
 			TokenId:         tokenId,
 			Owner:           owner,
-		})
-		count++
+		}
 	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return nfts, nil
+	return nfts, next, nil
 }
 
 // splitNFTKey splits the remaining key into contractAddress and tokenId
@@ -974,24 +674,25 @@ func (s *PebbleStorage) GetInternalTransactions(ctx context.Context, txHash comm
 	return internals, nil
 }
 
-// GetInternalTransactionsByAddress retrieves internal transactions involving a specific address.
-// If isFrom is true, returns transactions where address is the caller.
-// If isFrom is false, returns transactions where address is the callee.
-func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.InternalTransaction, error) {
+// GetInternalTransactionsByAddress returns one page of the internal calls
+// involving a specific address, in block order and, within a transaction,
+// in call order.
+// If isFrom is true, returns calls where address is the caller.
+// If isFrom is false, returns calls where address is the callee.
+//
+// One index key /index/internal/{from|to}/{address}/{blockNumber}/{txHash}
+// covers every call of its transaction that involves the address, so
+// Limit and Offset count calls, not keys, and a page may end between two
+// calls of one transaction. The cursor therefore addresses a call: the key
+// of its transaction followed by its call index (internalTxCursor). The
+// next page seeks to that key and skips the calls up to that index, so a
+// cursor page costs the same at any depth.
+func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, page port.Page) ([]*port.InternalTransaction, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
 
-	// Validate pagination parameters
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit := addressIndexPageLimit(page)
 
 	var prefix []byte
 	if isFrom {
@@ -999,24 +700,46 @@ func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, ad
 	} else {
 		prefix = InternalTxToIndexKeyPrefix(address)
 	}
+	upper := prefixUpperBound(prefix)
+
+	var afterKey []byte
+	afterCall := -1
+	if page.After != "" {
+		var err error
+		if afterKey, afterCall, err = decodeInternalTxCursor(page.After, prefix, upper); err != nil {
+			return nil, "", err
+		}
+	}
 
 	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
+		UpperBound: upper,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
+		return nil, "", fmt.Errorf("failed to create iterator: %w", err)
 	}
 	defer iter.Close()
 
-	internals := make([]*port.InternalTransaction, 0, limit)
-	count := 0
-	skipped := 0
+	// call is one item of the list with the index key it was found under.
+	type call struct {
+		key      []byte
+		internal *port.InternalTransaction
+	}
+	// Read one call more than the page holds to know whether more follow.
+	calls := make([]call, 0, limit+1)
+	skip := page.Offset
+	valid := iter.First()
+	if afterKey != nil {
+		skip = 0
+		valid = iter.SeekGE(afterKey)
+	}
 	seenTxs := make(map[common.Hash]bool)
 
-	// Offset and limit both count internal calls involving the address, not
-	// index keys: one key covers every call of its transaction.
-	for iter.First(); iter.Valid() && count < limit; iter.Next() {
+	for ; valid && len(calls) <= limit; valid = iter.Next() {
+		s.pageSteps.Add(1)
+		if err := ctx.Err(); err != nil {
+			return nil, "", err
+		}
 		// Extract txHash from key
 		key := iter.Key()
 		keyStr := string(key)
@@ -1041,29 +764,73 @@ func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, ad
 			continue
 		}
 
+		// The cursor's transaction continues after the cursor's call.
+		resume := afterKey != nil && bytes.Equal(key, afterKey)
+		keyCopy := append([]byte(nil), key...)
+
 		// Filter by address
 		for _, internal := range txInternals {
 			if (isFrom && internal.From != address) || (!isFrom && internal.To != address) {
 				continue
 			}
-			// Skip offset items
-			if skipped < offset {
-				skipped++
+			if resume && internal.Index <= afterCall {
 				continue
 			}
-			internals = append(internals, internal)
-			count++
-			if count >= limit {
+			// Skip offset items
+			if skip > 0 {
+				skip--
+				continue
+			}
+			calls = append(calls, call{key: keyCopy, internal: internal})
+			if len(calls) > limit {
 				break
 			}
 		}
 	}
 
 	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
+		return nil, "", fmt.Errorf("iterator error: %w", err)
 	}
 
-	return internals, nil
+	var next string
+	if len(calls) > limit {
+		calls = calls[:limit]
+		last := calls[limit-1]
+		next = encodeInternalTxCursor(last.key, last.internal.Index)
+	}
+	internals := make([]*port.InternalTransaction, len(calls))
+	for i, c := range calls {
+		internals[i] = c.internal
+	}
+	return internals, next, nil
+}
+
+// encodeInternalTxCursor returns the cursor that continues after call index
+// callIndex of the transaction under index key key: the key followed by the
+// call index as four big-endian bytes.
+func encodeInternalTxCursor(key []byte, callIndex int) string {
+	raw := make([]byte, len(key)+4)
+	copy(raw, key)
+	binary.BigEndian.PutUint32(raw[len(key):], uint32(callIndex))
+	return encodeCursor(raw)
+}
+
+// decodeInternalTxCursor returns the index key and call index of an
+// internal transaction cursor. A cursor that is malformed or whose key is
+// outside [lower, upper) is port.ErrInvalidCursor.
+func decodeInternalTxCursor(cursor string, lower, upper []byte) ([]byte, int, error) {
+	raw, err := decodeCursor(cursor, lower, upper)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(raw) < 4 {
+		return nil, 0, port.ErrInvalidCursor
+	}
+	key := raw[:len(raw)-4]
+	if bytes.Compare(key, lower) < 0 {
+		return nil, 0, port.ErrInvalidCursor
+	}
+	return key, int(binary.BigEndian.Uint32(raw[len(key):])), nil
 }
 
 // SaveInternalTransactions saves all internal transactions for a given transaction hash.

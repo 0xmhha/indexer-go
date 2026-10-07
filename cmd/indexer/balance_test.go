@@ -111,7 +111,7 @@ func TestNativeTransfersAreNotTokenTransfers(t *testing.T) {
 	sc := testchain.BuildStableNet()
 	app := indexAll(t, sc.Chain)
 	r := app.storage.(port.AddressIndexReader)
-	got, err := r.GetERC20TransfersByToken(context.Background(), testchain.NativeCoinAdapterAddress, 100, 0)
+	got, _, err := r.GetERC20TransfersByToken(context.Background(), testchain.NativeCoinAdapterAddress, port.Page{Limit: 100, Offset: 0})
 	require.NoError(t, err)
 	require.Empty(t, got)
 }

@@ -82,8 +82,8 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 	if hasAddressReader {
 
 		// Get internal transaction counts (from + to)
-		internalFrom, _ := addressReader.GetInternalTransactionsByAddress(ctx, address, true, 1, 0)
-		internalTo, _ := addressReader.GetInternalTransactionsByAddress(ctx, address, false, 1, 0)
+		internalFrom, _, _ := addressReader.GetInternalTransactionsByAddress(ctx, address, true, port.FirstPage(1))
+		internalTo, _, _ := addressReader.GetInternalTransactionsByAddress(ctx, address, false, port.FirstPage(1))
 		// Note: We need actual count, not just len of paginated result
 		// For now, we check if any exist
 		internalCount := 0
@@ -96,8 +96,8 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 		overview["internalTxCount"] = internalCount
 
 		// Get ERC20 token count (unique tokens)
-		erc20From, _ := addressReader.GetERC20TransfersByAddress(ctx, address, true, 1000, 0)
-		erc20To, _ := addressReader.GetERC20TransfersByAddress(ctx, address, false, 1000, 0)
+		erc20From, _, _ := addressReader.GetERC20TransfersByAddress(ctx, address, true, port.FirstPage(1000))
+		erc20To, _, _ := addressReader.GetERC20TransfersByAddress(ctx, address, false, port.FirstPage(1000))
 		tokenSet := make(map[string]bool)
 		for _, t := range erc20From {
 			tokenSet[t.ContractAddress.Hex()] = true
@@ -108,8 +108,8 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 		overview["erc20TokenCount"] = len(tokenSet)
 
 		// Get ERC721 token count (unique NFT contracts)
-		erc721From, _ := addressReader.GetERC721TransfersByAddress(ctx, address, true, 1000, 0)
-		erc721To, _ := addressReader.GetERC721TransfersByAddress(ctx, address, false, 1000, 0)
+		erc721From, _, _ := addressReader.GetERC721TransfersByAddress(ctx, address, true, port.FirstPage(1000))
+		erc721To, _, _ := addressReader.GetERC721TransfersByAddress(ctx, address, false, port.FirstPage(1000))
 		nftSet := make(map[string]bool)
 		for _, t := range erc721From {
 			nftSet[t.ContractAddress.Hex()] = true
@@ -273,21 +273,7 @@ func (s *Schema) resolveContractCreation(p graphql.ResolveParams) (interface{}, 
 func (s *Schema) resolveContracts(p graphql.ResolveParams) (interface{}, error) {
 	ctx := p.Context
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := s.storage.(port.AddressIndexReader)
@@ -295,8 +281,11 @@ func (s *Schema) resolveContracts(p graphql.ResolveParams) (interface{}, error) 
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
-	contracts, err := addressReader.ListContracts(ctx, limit, offset)
+	contracts, next, err := addressReader.ListContracts(ctx, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to list contracts", zap.Error(err))
 		return nil, err
 	}
@@ -317,10 +306,7 @@ func (s *Schema) resolveContracts(p graphql.ResolveParams) (interface{}, error) 
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     offset+len(nodes) < totalCount,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -334,21 +320,7 @@ func (s *Schema) resolveContractsByCreator(p graphql.ResolveParams) (interface{}
 
 	creator := common.HexToAddress(creatorStr)
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := s.storage.(port.AddressIndexReader)
@@ -356,8 +328,11 @@ func (s *Schema) resolveContractsByCreator(p graphql.ResolveParams) (interface{}
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
-	contracts, err := addressReader.GetContractsByCreator(ctx, creator, limit, offset)
+	contracts, next, err := addressReader.GetContractsByCreator(ctx, creator, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get contracts by creator",
 			zap.String("creator", creatorStr),
 			zap.Error(err))
@@ -380,10 +355,7 @@ func (s *Schema) resolveContractsByCreator(p graphql.ResolveParams) (interface{}
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -439,21 +411,7 @@ func (s *Schema) resolveInternalTransactionsByAddress(p graphql.ResolveParams) (
 
 	address := common.HexToAddress(addressStr)
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := s.storage.(port.AddressIndexReader)
@@ -461,8 +419,11 @@ func (s *Schema) resolveInternalTransactionsByAddress(p graphql.ResolveParams) (
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
-	internals, err := addressReader.GetInternalTransactionsByAddress(ctx, address, isFrom, limit, offset)
+	internals, next, err := addressReader.GetInternalTransactionsByAddress(ctx, address, isFrom, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get internal transactions by address",
 			zap.String("address", addressStr),
 			zap.Bool("isFrom", isFrom),
@@ -478,10 +439,7 @@ func (s *Schema) resolveInternalTransactionsByAddress(p graphql.ResolveParams) (
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -533,21 +491,7 @@ func (s *Schema) resolveERC20TransfersByToken(p graphql.ResolveParams) (interfac
 
 	token := common.HexToAddress(tokenStr)
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := s.storage.(port.AddressIndexReader)
@@ -555,8 +499,11 @@ func (s *Schema) resolveERC20TransfersByToken(p graphql.ResolveParams) (interfac
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
-	transfers, err := addressReader.GetERC20TransfersByToken(ctx, token, limit, offset)
+	transfers, next, err := addressReader.GetERC20TransfersByToken(ctx, token, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get ERC20 transfers by token",
 			zap.String("token", tokenStr),
 			zap.Error(err))
@@ -571,10 +518,7 @@ func (s *Schema) resolveERC20TransfersByToken(p graphql.ResolveParams) (interfac
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -593,21 +537,7 @@ func (s *Schema) resolveERC20TransfersByAddress(p graphql.ResolveParams) (interf
 
 	address := common.HexToAddress(addressStr)
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := s.storage.(port.AddressIndexReader)
@@ -615,8 +545,11 @@ func (s *Schema) resolveERC20TransfersByAddress(p graphql.ResolveParams) (interf
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
-	transfers, err := addressReader.GetERC20TransfersByAddress(ctx, address, isFrom, limit, offset)
+	transfers, next, err := addressReader.GetERC20TransfersByAddress(ctx, address, isFrom, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get ERC20 transfers by address",
 			zap.String("address", addressStr),
 			zap.Bool("isFrom", isFrom),
@@ -632,10 +565,7 @@ func (s *Schema) resolveERC20TransfersByAddress(p graphql.ResolveParams) (interf
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -687,21 +617,7 @@ func (s *Schema) resolveERC721TransfersByToken(p graphql.ResolveParams) (interfa
 
 	token := common.HexToAddress(tokenStr)
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := s.storage.(port.AddressIndexReader)
@@ -709,8 +625,11 @@ func (s *Schema) resolveERC721TransfersByToken(p graphql.ResolveParams) (interfa
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
-	transfers, err := addressReader.GetERC721TransfersByToken(ctx, token, limit, offset)
+	transfers, next, err := addressReader.GetERC721TransfersByToken(ctx, token, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get ERC721 transfers by token",
 			zap.String("token", tokenStr),
 			zap.Error(err))
@@ -725,10 +644,7 @@ func (s *Schema) resolveERC721TransfersByToken(p graphql.ResolveParams) (interfa
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -747,21 +663,7 @@ func (s *Schema) resolveERC721TransfersByAddress(p graphql.ResolveParams) (inter
 
 	address := common.HexToAddress(addressStr)
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := s.storage.(port.AddressIndexReader)
@@ -769,8 +671,11 @@ func (s *Schema) resolveERC721TransfersByAddress(p graphql.ResolveParams) (inter
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
-	transfers, err := addressReader.GetERC721TransfersByAddress(ctx, address, isFrom, limit, offset)
+	transfers, next, err := addressReader.GetERC721TransfersByAddress(ctx, address, isFrom, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get ERC721 transfers by address",
 			zap.String("address", addressStr),
 			zap.Bool("isFrom", isFrom),
@@ -786,10 +691,7 @@ func (s *Schema) resolveERC721TransfersByAddress(p graphql.ResolveParams) (inter
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -843,21 +745,7 @@ func (s *Schema) resolveNFTsByOwner(p graphql.ResolveParams) (interface{}, error
 
 	owner := common.HexToAddress(ownerStr)
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := s.storage.(port.AddressIndexReader)
@@ -865,8 +753,11 @@ func (s *Schema) resolveNFTsByOwner(p graphql.ResolveParams) (interface{}, error
 		return nil, fmt.Errorf("storage does not support address indexing")
 	}
 
-	nfts, err := addressReader.GetNFTsByOwner(ctx, owner, limit, offset)
+	nfts, next, err := addressReader.GetNFTsByOwner(ctx, owner, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get NFTs by owner",
 			zap.String("owner", ownerStr),
 			zap.Error(err))
@@ -881,10 +772,7 @@ func (s *Schema) resolveNFTsByOwner(p graphql.ResolveParams) (interface{}, error
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(nodes),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(nodes) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 

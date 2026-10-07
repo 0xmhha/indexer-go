@@ -46,7 +46,7 @@ func (m *mockAddressIndexStorage) GetContractCreation(ctx context.Context, contr
 	return nil, port.ErrNotFound
 }
 
-func (m *mockAddressIndexStorage) GetContractsByCreator(ctx context.Context, creator common.Address, limit, offset int) ([]common.Address, error) {
+func (m *mockAddressIndexStorage) offsetGetContractsByCreator(ctx context.Context, creator common.Address, limit, offset int) ([]common.Address, error) {
 	if m.contractsByCreator != nil {
 		start := offset
 		end := offset + limit
@@ -68,7 +68,7 @@ func (m *mockAddressIndexStorage) GetInternalTransactions(ctx context.Context, t
 	return []*port.InternalTransaction{}, nil
 }
 
-func (m *mockAddressIndexStorage) GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.InternalTransaction, error) {
+func (m *mockAddressIndexStorage) offsetGetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.InternalTransaction, error) {
 	if m.internalTxsByAddress != nil {
 		start := offset
 		end := offset + limit
@@ -90,7 +90,7 @@ func (m *mockAddressIndexStorage) GetERC20Transfer(ctx context.Context, txHash c
 	return nil, port.ErrNotFound
 }
 
-func (m *mockAddressIndexStorage) GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC20Transfer, error) {
+func (m *mockAddressIndexStorage) offsetGetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC20Transfer, error) {
 	if m.erc20TransfersByToken != nil {
 		start := offset
 		end := offset + limit
@@ -105,7 +105,7 @@ func (m *mockAddressIndexStorage) GetERC20TransfersByToken(ctx context.Context, 
 	return []*port.ERC20Transfer{}, nil
 }
 
-func (m *mockAddressIndexStorage) GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC20Transfer, error) {
+func (m *mockAddressIndexStorage) offsetGetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC20Transfer, error) {
 	if m.erc20TransfersByAddress != nil {
 		start := offset
 		end := offset + limit
@@ -127,7 +127,7 @@ func (m *mockAddressIndexStorage) GetERC721Transfer(ctx context.Context, txHash 
 	return nil, port.ErrNotFound
 }
 
-func (m *mockAddressIndexStorage) GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC721Transfer, error) {
+func (m *mockAddressIndexStorage) offsetGetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*port.ERC721Transfer, error) {
 	if m.erc721TransfersByToken != nil {
 		start := offset
 		end := offset + limit
@@ -142,7 +142,7 @@ func (m *mockAddressIndexStorage) GetERC721TransfersByToken(ctx context.Context,
 	return []*port.ERC721Transfer{}, nil
 }
 
-func (m *mockAddressIndexStorage) GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC721Transfer, error) {
+func (m *mockAddressIndexStorage) offsetGetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*port.ERC721Transfer, error) {
 	if m.erc721TransfersByAddress != nil {
 		start := offset
 		end := offset + limit
@@ -164,7 +164,7 @@ func (m *mockAddressIndexStorage) GetERC721Owner(ctx context.Context, tokenAddre
 	return common.Address{}, port.ErrNotFound
 }
 
-func (m *mockAddressIndexStorage) ListContracts(ctx context.Context, limit, offset int) ([]*port.ContractCreation, error) {
+func (m *mockAddressIndexStorage) offsetListContracts(ctx context.Context, limit, offset int) ([]*port.ContractCreation, error) {
 	return []*port.ContractCreation{}, nil
 }
 
@@ -172,7 +172,7 @@ func (m *mockAddressIndexStorage) GetContractsCount(ctx context.Context) (int, e
 	return 0, nil
 }
 
-func (m *mockAddressIndexStorage) GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*port.NFTOwnership, error) {
+func (m *mockAddressIndexStorage) offsetGetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*port.NFTOwnership, error) {
 	return []*port.NFTOwnership{}, nil
 }
 
