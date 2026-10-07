@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -79,6 +80,16 @@ type Deps struct {
 	BalanceAt func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
 	// BlockAt reads a block from the node (nil when unavailable).
 	BlockAt func(ctx context.Context, number uint64) (*model.Block, error)
+	// Contracts reads contract code and calls contracts on the node at its
+	// latest state (nil when unavailable).
+	Contracts ContractReader
+}
+
+// ContractReader reads contracts on the node. A nil block number means the
+// latest state.
+type ContractReader interface {
+	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber interface{}) ([]byte, error)
+	CodeAt(ctx context.Context, contract common.Address, blockNumber interface{}) ([]byte, error)
 }
 
 // DefaultOn is implemented by features that are enabled on every chain

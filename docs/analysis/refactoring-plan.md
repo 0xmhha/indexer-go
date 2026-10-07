@@ -400,7 +400,7 @@ graph LR
 | R2-3 | 작업 단위와 체크포인트(R0-4를 일반화) | R2-2 | crash 시험 |
 | R2-4 | finality·reorg(정책 3종, parent hash 확인, undo 기록, 보상 이벤트) | R2-3 | anvil에서 reorg를 주입해 시험한다 |
 | R2-5 | 처리기·기능 레지스트리, 플래그, 의존성 검증, 프로필 | R2-3 | 기능을 끄면 그 기능의 처리기가 실행되지 않는다 |
-| R2-6 | 기존 기능을 하나씩 기능 모듈로 옮긴다(5.3절 순서: raw → address → token → stablenet → aa → contract) | R2-5 | 모듈을 옮길 때마다 R0-1 스냅샷이 같다 |
+| R2-6 | 기존 기능을 하나씩 기능 모듈로 옮긴다(5.3절 순서: raw → address → token → stablenet → aa → contract). (완료 10/7: 마지막으로 남은 token metadata 처리(core의 `BlockProcessor`)를 `token.metadata` 기능으로 옮겼다. 노드 호출은 `feature.Deps.Contracts`. 기록 시각은 블록 시각이라 재처리해도 같은 값이다. core의 처리기 연결점(`AddBlockProcessor`, `SetTokenIndexer`)은 지웠다) | R2-5 | 모듈을 옮길 때마다 R0-1 스냅샷이 같다 |
 | R2-7 | 기능별 backfill(기능을 새로 켤 때 그 기능만 다시 돌린다) | R2-5 | 기능을 켠 DB와 처음부터 켠 DB의 결과가 같다 |
 | R2-8 | 체인 네임스페이스(D4 해소)와 멀티체인 재활성화 | R2-3 | 두 체인을 동시에 색인해도 키가 겹치지 않는다 |
 

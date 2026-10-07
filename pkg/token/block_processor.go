@@ -2,13 +2,13 @@ package token
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
 )
@@ -62,98 +62,54 @@ type TokenMetadataStore interface {
 	port.TokenMetadataWriter
 }
 
-// BlockProcessor implements the fetch.BlockProcessor interface
-// to detect and index token metadata when new contracts are deployed
-type BlockProcessor struct {
+// ContractIndexer detects whether a new contract is a token and stores its
+// metadata. It is used by the token.metadata feature.
+type ContractIndexer struct {
 	detector *Detector
 	fetcher  *MetadataFetcher
-	storage  port.TokenMetadataWriter
-	reader   port.TokenMetadataReader
+	storage  TokenMetadataStore
 	logger   *zap.Logger
 }
 
-// NewBlockProcessor creates a new token block processor
-func NewBlockProcessor(client EthClient, stor TokenMetadataStore, logger *zap.Logger) *BlockProcessor {
+// NewContractIndexer returns an indexer that reads contracts through client.
+func NewContractIndexer(client EthClient, stor TokenMetadataStore, logger *zap.Logger) *ContractIndexer {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-
-	return &BlockProcessor{
+	return &ContractIndexer{
 		detector: NewDetector(client, logger),
 		fetcher:  NewMetadataFetcher(client, logger),
 		storage:  stor,
-		reader:   stor,
 		logger:   logger,
 	}
 }
 
-// NewBlockProcessorFromEthClient creates a new token block processor from an ethclient.Client
-// This is a convenience function for integrating with the standard go-ethereum client
-func NewBlockProcessorFromEthClient(ethClient *ethclient.Client, stor TokenMetadataStore, logger *zap.Logger) *BlockProcessor {
-	adapter := NewEthClientAdapter(ethClient)
-	return NewBlockProcessor(adapter, stor, logger)
-}
-
-// ProcessBlock implements fetch.BlockProcessor interface
-// It scans the block's receipts for contract creations and indexes token metadata
-func (p *BlockProcessor) ProcessBlock(ctx context.Context, chainID string, block *types.Block, receipts []*types.Receipt) error {
-	if block == nil {
-		return nil
-	}
-
-	blockNumber := block.NumberU64()
-
-	// Scan receipts for contract creations
-	for _, receipt := range receipts {
-		if receipt == nil {
-			continue
-		}
-
-		// Contract creation is indicated by ContractAddress being non-zero
-		if receipt.ContractAddress == (common.Address{}) {
-			continue
-		}
-
-		// Contract was created - attempt to detect and index token metadata
-		p.indexContractIfToken(ctx, receipt.ContractAddress, blockNumber)
-	}
-
-	return nil
-}
-
-// indexContractIfToken checks if a contract is a token and indexes its metadata
-func (p *BlockProcessor) indexContractIfToken(ctx context.Context, address common.Address, blockNumber uint64) {
-	// Check if we already have metadata for this token
-	existing, err := p.reader.GetTokenMetadata(ctx, address)
+// IndexContract stores the metadata of the contract at address, created in
+// block blockNumber at blockTime, if it is a token not indexed yet. Node
+// reads that fail leave the contract unindexed (they are logged); storage
+// errors are returned.
+func (p *ContractIndexer) IndexContract(ctx context.Context, address common.Address, blockNumber, blockTime uint64) error {
+	existing, err := p.storage.GetTokenMetadata(ctx, address)
 	if err == nil && existing != nil {
-		// Token already indexed
-		p.logger.Debug("Token already indexed",
-			zap.String("address", address.Hex()),
-			zap.String("standard", string(existing.Standard)))
-		return
+		return nil // already indexed
 	}
 
-	// Detect token standard
 	detection := p.detector.DetectStandard(ctx, address)
 	if detection.Error != nil {
 		p.logger.Debug("Failed to detect token standard",
 			zap.String("address", address.Hex()),
 			zap.Error(detection.Error))
-		return
+		return nil
 	}
-
-	// If standard could not be detected, skip
 	if detection.Standard == StandardUnknown {
-		p.logger.Debug("Contract is not a recognized token",
-			zap.String("address", address.Hex()))
-		return
+		return nil
 	}
 
-	// Fetch metadata based on detected standard
 	metadataResult := p.fetcher.FetchMetadata(ctx, address, detection.Standard)
 
-	// Create storage token metadata
-	now := time.Now()
+	// Times are the block's, so that reprocessing a block stores the same
+	// record.
+	at := time.Unix(int64(blockTime), 0).UTC()
 	metadata := &port.TokenMetadata{
 		Address:            address,
 		Standard:           convertStandard(detection.Standard),
@@ -163,30 +119,22 @@ func (p *BlockProcessor) indexContractIfToken(ctx context.Context, address commo
 		TotalSupply:        metadataResult.TotalSupply,
 		BaseURI:            metadataResult.BaseURI,
 		DetectedAt:         blockNumber,
-		CreatedAt:          now,
-		UpdatedAt:          now,
+		CreatedAt:          at,
+		UpdatedAt:          at,
 		SupportsERC165:     detection.SupportsERC165,
 		SupportsMetadata:   detection.SupportsMetadata,
 		SupportsEnumerable: detection.SupportsEnumerable,
 	}
-
-	// Save to storage
 	if err := p.storage.SaveTokenMetadata(ctx, metadata); err != nil {
-		p.logger.Error("Failed to save token metadata",
-			zap.String("address", address.Hex()),
-			zap.Error(err))
-		return
+		return fmt.Errorf("save token metadata of %s: %w", address.Hex(), err)
 	}
-
-	// Log successful indexing
-	p.logger.Info("Indexed token contract",
+	p.logger.Debug("Indexed token contract",
 		zap.String("address", address.Hex()),
 		zap.String("standard", string(metadata.Standard)),
 		zap.String("name", metadata.Name),
 		zap.String("symbol", metadata.Symbol),
-		zap.Uint8("decimals", metadata.Decimals),
-		zap.Float64("confidence", detection.Confidence),
 		zap.Uint64("blockNumber", blockNumber))
+	return nil
 }
 
 // convertStandard converts token.TokenStandard to port.TokenStandard

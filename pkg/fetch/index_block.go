@@ -70,7 +70,6 @@ func (f *Fetcher) applyBlock(ctx context.Context, fb *fetchedBlock) error {
 		return fmt.Errorf("block %d: %w", height, err)
 	}
 	f.publishBlockEvents(fb)
-	f.processBlockWithProcessors(ctx, fb.geth, fb.gethReceipts)
 	return nil
 }
 

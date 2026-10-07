@@ -82,8 +82,8 @@
 /data/smartaccount/0x00000000000000000000000000000000000aA001 69 3db0c526aafcf942
 /data/syscontracts/burn/00000000000000000006/000000/000001 70 ca0b048f7344ee02
 /data/syscontracts/mint/00000000000000000006/000000/000000 91 e7a105728c0f082b
-/data/token/metadata/0xB9816fC57977D5A786E654c7CF76767be63b966e 173 5cd0b99aa1146935
-/data/token/metadata/0xDe09E74d4888Bc4e65F589e8c13Bce9F71DdF4c7 173 2d238b7f5053407d
+/data/token/metadata/0xB9816fC57977D5A786E654c7CF76767be63b966e 237 72abcce5dd8b10dc
+/data/token/metadata/0xDe09E74d4888Bc4e65F589e8c13Bce9F71DdF4c7 237 3c7253e3f8d1b3a4
 /data/txs/00000000000000000001/000000 344 081af33d1b920d05
 /data/txs/00000000000000000001/000001 342 b9b45b102b6f8fc6
 /data/txs/00000000000000000002/000000 293 1a2f08f0a1032db4
@@ -414,6 +414,7 @@
 /meta/features/address.index 27 a3f3126da7d65d7e
 /meta/features/balance.native 27 a3f3126da7d65d7e
 /meta/features/stablenet.system_contracts 27 a3f3126da7d65d7e
+/meta/features/token.metadata 27 a3f3126da7d65d7e
 /meta/features/token.transfers 27 a3f3126da7d65d7e
 /meta/lh 8 22a264ee63bc826a
 /meta/schema 8 cd04a4754498e06d

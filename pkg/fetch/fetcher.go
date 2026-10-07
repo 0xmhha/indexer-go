@@ -46,20 +46,6 @@ type Subscription interface {
 	Unsubscribe()
 }
 
-// BlockProcessor defines an interface for processing blocks after indexing
-// This is used by external modules like watchlist to hook into block processing
-type BlockProcessor interface {
-	ProcessBlock(ctx context.Context, chainID string, block *types.Block, receipts []*types.Receipt) error
-}
-
-// TokenIndexer defines an interface for indexing token metadata
-// This is called when a new contract is deployed to detect and store token metadata
-type TokenIndexer interface {
-	// IndexToken detects if the contract is a token and fetches/stores its metadata
-	// Returns nil if the contract is not a token or if metadata cannot be fetched
-	IndexToken(ctx context.Context, address common.Address, blockHeight uint64) error
-}
-
 // Storage defines the interface for storage operations
 type Storage interface {
 	port.BlockReader
@@ -148,13 +134,7 @@ type Fetcher struct {
 	// chainID is the chain identifier for multi-chain support
 	chainID string
 
-	// blockProcessors are called after block processing to allow external modules
-	// (like watchlist) to react to new blocks
-	blockProcessors []BlockProcessor
-	processorMu     sync.RWMutex
 
-	// tokenIndexer is called when a new contract is deployed to index token metadata
-	tokenIndexer TokenIndexer
 
 	// features runs the handlers of the enabled features for every block.
 	features *feature.Pipeline
@@ -233,55 +213,6 @@ func (f *Fetcher) SetChainID(chainID string) {
 // GetChainID returns the chain identifier
 func (f *Fetcher) GetChainID() string {
 	return f.chainID
-}
-
-// SetTokenIndexer sets the token indexer to be called when contracts are deployed
-// This enables automatic detection and indexing of token metadata (name, symbol, decimals)
-func (f *Fetcher) SetTokenIndexer(indexer TokenIndexer) {
-	f.tokenIndexer = indexer
-	f.logger.Info("Token indexer configured")
-}
-
-// AddBlockProcessor adds a block processor to be called after each block is indexed
-// Block processors receive the block and receipts to process (e.g., watchlist, analytics)
-func (f *Fetcher) AddBlockProcessor(processor BlockProcessor) {
-	f.processorMu.Lock()
-	defer f.processorMu.Unlock()
-	f.blockProcessors = append(f.blockProcessors, processor)
-	f.logger.Info("Block processor added", zap.Int("total_processors", len(f.blockProcessors)))
-}
-
-// RemoveBlockProcessor removes a block processor
-func (f *Fetcher) RemoveBlockProcessor(processor BlockProcessor) {
-	f.processorMu.Lock()
-	defer f.processorMu.Unlock()
-	for i, p := range f.blockProcessors {
-		if p == processor {
-			f.blockProcessors = append(f.blockProcessors[:i], f.blockProcessors[i+1:]...)
-			break
-		}
-	}
-}
-
-// processBlockWithProcessors calls all registered block processors
-func (f *Fetcher) processBlockWithProcessors(ctx context.Context, block *types.Block, receipts types.Receipts) {
-	f.processorMu.RLock()
-	processors := make([]BlockProcessor, len(f.blockProcessors))
-	copy(processors, f.blockProcessors)
-	f.processorMu.RUnlock()
-
-	// Convert receipts to slice of pointers
-	receiptPtrs := make([]*types.Receipt, len(receipts))
-	copy(receiptPtrs, receipts)
-
-	for _, processor := range processors {
-		if err := processor.ProcessBlock(ctx, f.chainID, block, receiptPtrs); err != nil {
-			f.logger.Warn("Block processor failed",
-				zap.Error(err),
-				zap.Uint64("height", block.NumberU64()),
-			)
-		}
-	}
 }
 
 // ============================================================================
