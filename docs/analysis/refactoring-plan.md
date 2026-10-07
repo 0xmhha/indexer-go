@@ -398,7 +398,7 @@ graph LR
 | R2-1 | 소스 SPI와 RPC 풀(failover, timeout, 속도 제한, `newHeads` + 폴링) | Phase 1 | 엔드포인트 하나를 끊어도 수집이 계속된다 |
 | R2-2 | 스케줄러(errgroup worker pool, 재정렬 버퍼, backpressure). 라이브 수집과 gap 복구가 같은 경로를 쓰게 한다 | R2-1 | 처리량 벤치, 두 경로의 결과가 같다(D6 해소) |
 | R2-3 | 작업 단위와 체크포인트(R0-4를 일반화) | R2-2 | crash 시험 |
-| R2-4 | finality·reorg(정책 3종, parent hash 확인, undo 기록, 보상 이벤트) | R2-3 | anvil에서 reorg를 주입해 시험한다 |
+| R2-4 | finality·reorg(정책 3종, parent hash 확인, undo 기록, 보상 이벤트). (완료 10/7: 기능은 Phase 0에서 구현(reorg-design.md). 검증 기준인 anvil reorg 주입은 `e2e/reorg_test.go`: 블록 2로 되돌리고 다른 가지를 만들면 수집 루프가 3~5를 되돌리고 orphan·reorg 기록을 남긴 뒤 노드의 hash로 다시 색인한다. e2e는 이제 빈 포트에 자기 anvil을 띄운다) | R2-3 | anvil에서 reorg를 주입해 시험한다 |
 | R2-5 | 처리기·기능 레지스트리, 플래그, 의존성 검증, 프로필 | R2-3 | 기능을 끄면 그 기능의 처리기가 실행되지 않는다 |
 | R2-6 | 기존 기능을 하나씩 기능 모듈로 옮긴다(5.3절 순서: raw → address → token → stablenet → aa → contract). (완료 10/7: 마지막으로 남은 token metadata 처리(core의 `BlockProcessor`)를 `token.metadata` 기능으로 옮겼다. 노드 호출은 `feature.Deps.Contracts`. 기록 시각은 블록 시각이라 재처리해도 같은 값이다. core의 처리기 연결점(`AddBlockProcessor`, `SetTokenIndexer`)은 지웠다) | R2-5 | 모듈을 옮길 때마다 R0-1 스냅샷이 같다 |
 | R2-7 | 기능별 backfill(기능을 새로 켤 때 그 기능만 다시 돌린다) | R2-5 | 기능을 켠 DB와 처음부터 켠 DB의 결과가 같다 |
