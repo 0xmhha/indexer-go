@@ -33,7 +33,7 @@ type chainHarness struct {
 	f     *Fetcher
 }
 
-func newChainHarness(t *testing.T, cfg *Config, bus *events.EventBus) *chainHarness {
+func newChainHarness(t testing.TB, cfg *Config, bus *events.EventBus) *chainHarness {
 	t.Helper()
 	sc := testchain.BuildDefault()
 	srv := testchain.NewServer(sc.Chain)

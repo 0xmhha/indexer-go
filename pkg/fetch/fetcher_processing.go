@@ -3,7 +3,6 @@ package fetch
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -13,43 +12,6 @@ import (
 // ============================================================================
 // Block Processing Internal Methods
 // ============================================================================
-
-// fetchBlockAndReceiptsWithRetry fetches block and receipts with exponential backoff retry logic
-func (f *Fetcher) fetchBlockAndReceiptsWithRetry(ctx context.Context, height uint64, startTime time.Time) (*fetchedBlock, bool, error) {
-	var hadError bool
-
-	// Retry logic with exponential backoff
-	for attempt := 0; attempt <= f.config.MaxRetries; attempt++ {
-		if attempt > 0 {
-			backoffDelay := f.config.RetryDelay * time.Duration(1<<uint(attempt-1))
-			f.logger.Warn("Retrying block fetch",
-				zap.Uint64("height", height),
-				zap.Int("attempt", attempt),
-				zap.Int("max_retries", f.config.MaxRetries),
-				zap.Duration("backoff_delay", backoffDelay),
-			)
-			if err := sleepCtx(ctx, backoffDelay); err != nil {
-				return nil, true, err
-			}
-		}
-
-		fb, err := f.fetchOnce(ctx, height)
-		if err == nil {
-			return fb, hadError, nil
-		}
-		hadError = true
-		f.logger.Error("Failed to fetch block",
-			zap.Uint64("height", height),
-			zap.Int("attempt", attempt),
-			zap.Error(err),
-		)
-		f.metrics.RecordRequest(time.Since(startTime), true, false)
-		if attempt == f.config.MaxRetries {
-			return nil, hadError, fmt.Errorf("failed to fetch block %d after %d attempts: %w", height, f.config.MaxRetries, err)
-		}
-	}
-	return nil, hadError, fmt.Errorf("failed to fetch block %d: no attempts", height)
-}
 
 // processBlockMetadata processes WBFT metadata, address indexing, balance tracking, and genesis initialization
 func (f *Fetcher) processBlockMetadata(ctx context.Context, fb *fetchedBlock) error {
@@ -76,49 +38,6 @@ func (f *Fetcher) storeReceiptsSequential(ctx context.Context, fb *fetchedBlock)
 	}
 
 	return nil
-}
-
-// fetchBlockJob fetches a single block and its receipts with retry logic
-func (f *Fetcher) fetchBlockJob(ctx context.Context, height uint64) *jobResult {
-	for attempt := 0; attempt <= f.config.MaxRetries; attempt++ {
-		if attempt > 0 {
-			// Exponential backoff: delay = baseDelay * 2^(attempt-1)
-			backoffDelay := f.config.RetryDelay * time.Duration(1<<uint(attempt-1))
-			f.logger.Warn("Retrying block fetch",
-				zap.Uint64("height", height),
-				zap.Int("attempt", attempt),
-				zap.Int("max_retries", f.config.MaxRetries),
-				zap.Duration("backoff_delay", backoffDelay),
-			)
-			if err := sleepCtx(ctx, backoffDelay); err != nil {
-				return &jobResult{height: height, err: err}
-			}
-		}
-
-		// Check context cancellation
-		select {
-		case <-ctx.Done():
-			return &jobResult{height: height, err: ctx.Err()}
-		default:
-		}
-
-		fb, err := f.fetchOnce(ctx, height)
-		if err == nil {
-			return &jobResult{height: height, block: fb}
-		}
-		f.logger.Error("Failed to fetch block",
-			zap.Uint64("height", height),
-			zap.Int("attempt", attempt),
-			zap.Error(err),
-		)
-		if attempt == f.config.MaxRetries {
-			return &jobResult{
-				height: height,
-				err:    fmt.Errorf("failed to fetch block after %d attempts: %w", f.config.MaxRetries, err),
-			}
-		}
-	}
-	return &jobResult{height: height, err: fmt.Errorf("failed to fetch block %d: no attempts", height)}
 }
 
 // GetNextHeight determines the next block height to fetch

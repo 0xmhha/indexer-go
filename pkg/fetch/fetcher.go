@@ -223,62 +223,23 @@ func (f *Fetcher) GetChainID() string {
 // Core Fetching API
 // ============================================================================
 
-// FetchBlock fetches a single block and its receipts and stores them
+// FetchBlock fetches and indexes one block.
 func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
-	// Fetch block and receipts with retry logic
-	startTime := time.Now()
-	fb, hadError, err := f.fetchBlockAndReceiptsWithRetry(ctx, height, startTime)
-	if err != nil {
-		return err
-	}
-
-	// Record successful fetch metrics
-	if !hadError {
-		f.metrics.RecordRequest(time.Since(startTime), false, false)
-	}
-
-	return f.indexBlock(ctx, fb)
+	return f.indexRange(ctx, height, height, 1)
 }
 
-// FetchRange fetches a range of blocks sequentially
+// FetchRange fetches and indexes blocks start..end in height order, fetching
+// up to the configured number of workers concurrently (see indexRange).
 func (f *Fetcher) FetchRange(ctx context.Context, start, end uint64) error {
-	f.logger.Info("Starting block range fetch",
-		zap.Uint64("start", start),
-		zap.Uint64("end", end),
-		zap.Uint64("total", end-start+1),
-	)
+	return f.indexRange(ctx, start, end, f.workers())
+}
 
-	for height := start; height <= end; height++ {
-		// Check context cancellation
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("context cancelled at block %d: %w", height, ctx.Err())
-		default:
-		}
-
-		// Fetch and store block
-		if err := f.FetchBlock(ctx, height); err != nil {
-			return fmt.Errorf("failed to fetch block %d: %w", height, err)
-		}
-
-		// Log progress periodically
-		if (height-start+1)%100 == 0 || height == end {
-			progress := float64(height-start+1) / float64(end-start+1) * 100
-			f.logger.Info("Fetch progress",
-				zap.Uint64("current", height),
-				zap.Uint64("end", end),
-				zap.Float64("progress", progress),
-			)
-		}
+// workers returns the configured number of fetch workers.
+func (f *Fetcher) workers() int {
+	if f.config.NumWorkers > 0 {
+		return f.config.NumWorkers
 	}
-
-	f.logger.Info("Completed block range fetch",
-		zap.Uint64("start", start),
-		zap.Uint64("end", end),
-		zap.Uint64("total", end-start+1),
-	)
-
-	return nil
+	return constants.DefaultNumWorkers
 }
 
 // jobResult holds the result of fetching a single block
@@ -288,140 +249,10 @@ type jobResult struct {
 	err    error
 }
 
-// FetchRangeConcurrent fetches a range of blocks concurrently using a worker pool
+// FetchRangeConcurrent is FetchRange; gap recovery and the live loop share
+// one pipeline (refactoring plan R2-2, D6).
 func (f *Fetcher) FetchRangeConcurrent(ctx context.Context, start, end uint64) error {
-	// Check context cancellation before starting
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
-	numWorkers := f.config.NumWorkers
-	if numWorkers == 0 {
-		numWorkers = constants.DefaultNumWorkers // Default worker pool size
-	}
-
-	f.logger.Info("Starting concurrent block range fetch",
-		zap.Uint64("start", start),
-		zap.Uint64("end", end),
-		zap.Uint64("total", end-start+1),
-		zap.Int("workers", numWorkers),
-	)
-
-	totalBlocks := end - start + 1
-
-	// Cancel workers and the producer on any early return below.
-	ctx, cancel := context.WithCancel(ctx)
-
-	// Create channels for job distribution and result collection
-	jobs := make(chan uint64, numWorkers)
-	results := make(chan *jobResult, numWorkers)
-
-	// Start worker pool
-	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			for height := range jobs {
-				// Check context cancellation
-				if ctx.Err() != nil {
-					return
-				}
-
-				// Fetch block and receipts with retry logic
-				result := f.fetchBlockJob(ctx, height)
-				select {
-				case results <- result:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}(i)
-	}
-
-	// Send jobs to workers
-	go func() {
-		for height := start; height <= end; height++ {
-			select {
-			case <-ctx.Done():
-				close(jobs)
-				return
-			case jobs <- height:
-			}
-		}
-		close(jobs)
-	}()
-
-	// Wait for all workers to finish and close results channel
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// On every return: stop the workers and the producer, then drain the
-	// results channel (closed after all workers exit) so no goroutine is left
-	// blocked on a send.
-	defer func() {
-		cancel()
-		for range results {
-		}
-	}()
-
-	// Collect results and store blocks in order
-	resultMap := make(map[uint64]*jobResult)
-	nextHeight := start
-	processedCount := uint64(0)
-
-	for result := range results {
-		// Handle errors
-		if result.err != nil {
-			return fmt.Errorf("failed to fetch block %d: %w", result.height, result.err)
-		}
-
-		// Store result in map
-		resultMap[result.height] = result
-
-		// Process results in sequential order
-		for {
-			if res, ok := resultMap[nextHeight]; ok {
-				if err := f.indexBlock(ctx, res.block); err != nil {
-					return err
-				}
-				delete(resultMap, nextHeight)
-				processedCount++
-				nextHeight++
-
-				// Log progress periodically
-				if processedCount%100 == 0 || processedCount == totalBlocks {
-					progress := float64(processedCount) / float64(totalBlocks) * 100
-					f.logger.Info("Concurrent fetch progress",
-						zap.Uint64("processed", processedCount),
-						zap.Uint64("total", totalBlocks),
-						zap.Float64("progress", progress),
-					)
-				}
-
-				// Check if we're done
-				if nextHeight > end {
-					break
-				}
-			} else {
-				// Next result not ready yet, wait for more results
-				break
-			}
-		}
-	}
-
-	f.logger.Info("Completed concurrent block range fetch",
-		zap.Uint64("start", start),
-		zap.Uint64("end", end),
-		zap.Uint64("total", totalBlocks),
-		zap.Int("workers", numWorkers),
-	)
-
-	return nil
+	return f.FetchRange(ctx, start, end)
 }
 
 // Run starts the fetcher and continuously fetches new blocks
