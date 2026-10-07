@@ -81,6 +81,11 @@ func (s *PebbleStorage) DeleteBlock(ctx context.Context, height uint64) error {
 		return fmt.Errorf("failed to delete block hash index: %w", err)
 	}
 
+	// Delete block timestamp index
+	if err := s.kv(ctx).Delete(BlockTimestampKey(block.Time, height), pebble.Sync); err != nil {
+		return fmt.Errorf("failed to delete block timestamp index: %w", err)
+	}
+
 	// Delete block data
 	return s.kv(ctx).Delete(BlockKey(height), pebble.Sync)
 }

@@ -26,7 +26,7 @@ func indexOrphanTestChain(t *testing.T, s *PebbleStorage, n uint64, tag byte) []
 		txHash := common.Hash{tag, byte(h), 2}
 		to := common.Address{9}
 		b := &model.Block{
-			Hash: hash, ParentHash: parent, Number: h, Difficulty: big.NewInt(0), BaseFee: big.NewInt(1),
+			Hash: hash, ParentHash: parent, Number: h, Time: 1000 + h, Difficulty: big.NewInt(0), BaseFee: big.NewInt(1),
 			Transactions: []*model.Transaction{{
 				Hash: txHash, To: &to, Value: big.NewInt(int64(h)), Gas: 21000,
 				GasPrice: big.NewInt(1), GasTipCap: big.NewInt(1), GasFeeCap: big.NewInt(1),
@@ -149,6 +149,44 @@ func TestRollbackArchivesAtomically(t *testing.T) {
 	latest, err := s.GetLatestHeight(ctx)
 	require.NoError(t, err)
 	require.Equal(t, uint64(4), latest)
+}
+
+// TestRollbackRemovesTimeIndex checks that the timestamp index entry SetBlock
+// writes leaves with the block: a rollback reverts it through the undo
+// record, and DeleteBlock deletes it.
+func TestRollbackRemovesTimeIndex(t *testing.T) {
+	s := newTestPebble(t)
+	ctx := context.Background()
+	indexOrphanTestChain(t, s, 5, 'a')
+
+	timeKeys := func() int {
+		t.Helper()
+		iter, err := s.db.NewIter(&pebble.IterOptions{
+			LowerBound: BlockTimestampKeyPrefix(),
+			UpperBound: prefixUpperBound(BlockTimestampKeyPrefix()),
+		})
+		require.NoError(t, err)
+		defer func() { _ = iter.Close() }()
+		n := 0
+		for iter.First(); iter.Valid(); iter.Next() {
+			n++
+		}
+		return n
+	}
+	require.Equal(t, 6, timeKeys(), "one entry per block")
+
+	_, err := s.RollbackTo(ctx, 2)
+	require.NoError(t, err)
+	require.Equal(t, 3, timeKeys(), "the rolled back blocks' entries are gone")
+	got, err := s.GetBlocksByTimeRange(ctx, 1000, 1005, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	b, err := s.GetBlockByTimestamp(ctx, 1005)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), b.Number)
+
+	require.NoError(t, s.DeleteBlock(ctx, 2))
+	require.Equal(t, 2, timeKeys(), "DeleteBlock removes the entry")
 }
 
 // TestOrphanRetentionPrunesOldReorgs keeps the newest two reorganization

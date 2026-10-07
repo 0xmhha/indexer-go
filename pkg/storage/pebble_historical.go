@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
+	"strconv"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
@@ -33,10 +35,7 @@ func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTi
 	}
 
 	// Create iterator for timestamp range
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: BlockTimestampKey(fromTime, 0),
-		UpperBound: BlockTimestampKey(toTime+1, 0),
-	})
+	iter, err := s.kv(ctx).NewIter(blockTimeRange(fromTime, toTime))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
@@ -83,14 +82,42 @@ func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTi
 	return blocks, nil
 }
 
+// blockTimeRange returns the iterator bounds of the timestamp index entries
+// from fromTime to toTime inclusive. toTime+1 would wrap at the largest
+// timestamp, so that range ends at the end of the index instead.
+func blockTimeRange(fromTime, toTime uint64) *pebble.IterOptions {
+	upper := prefixUpperBound(BlockTimestampKeyPrefix())
+	if toTime < math.MaxUint64 {
+		upper = BlockTimestampKey(toTime+1, 0)
+	}
+	return &pebble.IterOptions{LowerBound: BlockTimestampKey(fromTime, 0), UpperBound: upper}
+}
+
+// decodeBlockTimestampEntry returns the timestamp and height of a timestamp
+// index entry.
+func decodeBlockTimestampEntry(key, value []byte) (uint64, uint64, error) {
+	prefix := len(BlockTimestampKeyPrefix())
+	if len(key) < prefix+20 {
+		return 0, 0, fmt.Errorf("invalid timestamp index key %q", key)
+	}
+	ts, err := strconv.ParseUint(string(key[prefix:prefix+20]), 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to decode timestamp index key %q: %w", key, err)
+	}
+	height, err := DecodeUint64(value)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to decode height: %w", err)
+	}
+	return ts, height, nil
+}
+
 // GetBlockByTimestamp returns the block closest to the given timestamp
 func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, err
 	}
 
-	// Binary search for closest timestamp. The upper bound keeps Last() and
-	// a seek past the newest timestamp inside the timestamp index.
+	// The bounds keep the seeks below inside the timestamp index.
 	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
 		LowerBound: BlockTimestampKeyPrefix(),
 		UpperBound: prefixUpperBound(BlockTimestampKeyPrefix()),
@@ -100,31 +127,23 @@ func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint6
 	}
 	defer iter.Close()
 
-	// Seek to the target timestamp
-	iter.SeekGE(BlockTimestampKey(timestamp, 0))
-
+	// The first block at or after the timestamp, otherwise the last block.
 	var closestHeight uint64
 	var found bool
 
-	if iter.Valid() {
-		// Found exact or later timestamp
-		height, err := DecodeUint64(iter.Value())
+	positioned := iter.SeekGE(BlockTimestampKey(timestamp, 0))
+	if !positioned {
+		positioned = iter.Last()
+	}
+	if positioned {
+		_, height, err := decodeBlockTimestampEntry(iter.Key(), iter.Value())
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode height: %w", err)
+			return nil, err
 		}
-		closestHeight = height
-		found = true
-	} else {
-		// Seek to last block before timestamp
-		iter.Last()
-		if iter.Valid() {
-			height, err := DecodeUint64(iter.Value())
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode height: %w", err)
-			}
-			closestHeight = height
-			found = true
-		}
+		closestHeight, found = height, true
+	}
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
 	}
 
 	if !found {

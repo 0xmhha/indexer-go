@@ -15,10 +15,11 @@ import (
 )
 
 // testHistorical checks HistoricalReader and HistoricalWriter. Time queries
-// read the index written by SetBlockTimestamp, address queries the address
-// index written by Writer.AddTransactionToAddressIndex, balances the
-// snapshots written by UpdateBalance and SetBalance; the statistics are
-// derived from the stored blocks and receipts.
+// find the blocks stored with SetBlock or indexed with SetBlockTimestamp,
+// address queries the address index written by
+// Writer.AddTransactionToAddressIndex, balances the snapshots written by
+// UpdateBalance and SetBalance; the statistics are derived from the stored
+// blocks and receipts.
 func testHistorical(t *testing.T, newStore NewStore) {
 	t.Run("TransactionFilter", testHistTransactionFilter)
 	t.Run("TimeIndex", func(t *testing.T) { testHistTimeIndex(t, newStore) })
@@ -121,7 +122,8 @@ func testHistTransactionFilter(t *testing.T) {
 }
 
 // testHistTimeIndex checks GetBlocksByTimeRange, GetBlockByTimestamp and
-// GetNetworkMetrics: they find the blocks indexed with SetBlockTimestamp.
+// GetNetworkMetrics: they find the blocks stored with SetBlock and those
+// indexed with SetBlockTimestamp.
 func testHistTimeIndex(t *testing.T, newStore NewStore) {
 	ctx := context.Background()
 	c := newChain(5)
@@ -162,7 +164,6 @@ func testHistTimeIndex(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("BlocksByTimeRangeUnboundedEnd", func(t *testing.T) {
-		knownDefect(t, "GetBlocksByTimeRange returns nothing when toTime is the largest uint64 (toTime+1 overflows)")
 		s := open[historicalStore](t, newStore)
 		histWrite(t, s, c)
 		got, err := s.GetBlocksByTimeRange(ctx, 0, math.MaxUint64, 10, 0)
@@ -196,13 +197,33 @@ func testHistTimeIndex(t *testing.T, newStore NewStore) {
 		assertBlock(t, c.Blocks[2], got)
 	})
 
-	t.Run("BlockByTimestampIsClosest", func(t *testing.T) {
-		knownDefect(t, "GetBlockByTimestamp returns the next block at or after the time, not the closest one")
+	t.Run("BlockByTimestampIsFirstAtOrAfter", func(t *testing.T) {
 		s := open[historicalStore](t, newStore)
 		histWrite(t, s, c)
 		got, err := s.GetBlockByTimestamp(ctx, at(2)+1) // 1s after block 2, 11s before block 3
 		require.NoError(t, err)
+		assert.Equal(t, uint64(3), got.Number, "never a block before the time while a later one exists")
+		got, err = s.GetBlockByTimestamp(ctx, at(2))
+		require.NoError(t, err)
 		assert.Equal(t, uint64(2), got.Number)
+	})
+
+	t.Run("BlocksWrittenWithBlockWriter", func(t *testing.T) {
+		// The time queries find blocks stored with SetBlock alone, without
+		// SetBlockTimestamp.
+		s := open[historicalStore](t, newStore)
+		c.write(t, s)
+
+		got, err := s.GetBlocksByTimeRange(ctx, at(1), at(3), 10, 0)
+		require.NoError(t, err)
+		assert.Equal(t, []uint64{1, 2, 3}, histNumbers(got))
+		b, err := s.GetBlockByTimestamp(ctx, at(2))
+		require.NoError(t, err)
+		assertBlock(t, c.Blocks[2], b)
+		m, err := s.GetNetworkMetrics(ctx, at(1), at(4))
+		require.NoError(t, err)
+		assert.Equal(t, uint64(4), m.TotalBlocks)
+		assert.Equal(t, uint64(9), m.TotalTransactions)
 	})
 
 	t.Run("NetworkMetrics", func(t *testing.T) {
@@ -611,7 +632,6 @@ func testHistGasStats(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("FeesUseEffectiveGasPrice", func(t *testing.T) {
-		knownDefect(t, "GetGasStatsByAddress and GetTopAddressesByGasUsed price fees at the fee cap, not the receipt's effective gas price")
 		s := open[historicalStore](t, newStore)
 		histWithEffectivePrice(newChain(2), histGwei(2)).write(t, s)
 		// B's call in block 1: 60000 gas at an effective 2 gwei (fee cap 3 gwei).

@@ -16,3 +16,13 @@ func txGasPrice(tx *model.Transaction) *big.Int {
 	return tx.GasPrice
 }
 
+// receiptGasPrice returns the price a transaction paid per gas: the
+// receipt's effective gas price, or the transaction's gas price when the
+// receipt has none.
+func receiptGasPrice(r *model.Receipt, tx *model.Transaction) *big.Int {
+	if r != nil && r.EffectiveGasPrice != nil {
+		return r.EffectiveGasPrice
+	}
+	return txGasPrice(tx)
+}
+

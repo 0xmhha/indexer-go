@@ -39,6 +39,9 @@ func (s *PebbleStorage) SetBlock(ctx context.Context, b *model.Block) error {
 	if err := s.kv(ctx).Set(BlockHashIndexKey(b.Hash), EncodeUint64(b.Number), pebble.NoSync); err != nil {
 		return fmt.Errorf("failed to set block hash index: %w", err)
 	}
+	if err := s.kv(ctx).Set(BlockTimestampKey(b.Time, b.Number), EncodeUint64(b.Number), pebble.NoSync); err != nil {
+		return fmt.Errorf("failed to set block timestamp index: %w", err)
+	}
 	for i, tx := range b.Transactions {
 		loc := &port.TxLocation{BlockHeight: b.Number, TxIndex: uint64(i), BlockHash: b.Hash}
 		if err := s.setModelTransaction(ctx, tx, loc); err != nil {

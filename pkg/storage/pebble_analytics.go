@@ -120,8 +120,8 @@ func (s *PebbleStorage) GetGasStatsByAddress(ctx context.Context, addr common.Ad
 				stats.TotalGasUsed += receipt.GasUsed
 				stats.TransactionCount++
 
-				// Calculate fees paid (gasUsed * gasPrice)
-				gasPrice := txGasPrice(tx)
+				// Calculate fees paid (gasUsed * effective gas price)
+				gasPrice := receiptGasPrice(receipt, tx)
 				if gasPrice != nil {
 					fee := new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), gasPrice)
 					stats.TotalFeesPaid.Add(stats.TotalFeesPaid, fee)
@@ -190,7 +190,7 @@ func (s *PebbleStorage) GetTopAddressesByGasUsed(ctx context.Context, limit int,
 				stats.TransactionCount++
 
 				// Calculate fees
-				gasPrice := txGasPrice(tx)
+				gasPrice := receiptGasPrice(receipt, tx)
 				if gasPrice != nil {
 					fee := new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), gasPrice)
 					stats.TotalFeesPaid.Add(stats.TotalFeesPaid, fee)
@@ -332,24 +332,43 @@ func (s *PebbleStorage) GetNetworkMetrics(ctx context.Context, fromTime, toTime 
 	totalGasUsed := uint64(0)
 	var firstBlockTime, lastBlockTime uint64
 
-	// Get blocks by time range
-	blocks, err := s.GetBlocksByTimeRange(ctx, fromTime, toTime, 10000, 0)
+	// Read every block in the range from the timestamp index; the totals
+	// are exact, so there is no cap on the number of blocks.
+	iter, err := s.kv(ctx).NewIter(blockTimeRange(fromTime, toTime))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get blocks: %w", err)
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
+	defer func() { _ = iter.Close() }()
 
-	if len(blocks) == 0 {
-		return metrics, nil
-	}
-
-	metrics.TotalBlocks = uint64(len(blocks))
-	firstBlockTime = blocks[0].Time
-	lastBlockTime = blocks[len(blocks)-1].Time
-
-	// Calculate metrics
-	for _, block := range blocks {
+	for iter.First(); iter.Valid(); iter.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		height, err := DecodeUint64(iter.Value())
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode height: %w", err)
+		}
+		block, err := s.GetBlock(ctx, height)
+		if err != nil {
+			if err == port.ErrNotFound {
+				continue // Skip missing blocks
+			}
+			return nil, fmt.Errorf("failed to get block %d: %w", height, err)
+		}
+		if metrics.TotalBlocks == 0 {
+			firstBlockTime = block.Time
+		}
+		lastBlockTime = block.Time
+		metrics.TotalBlocks++
 		metrics.TotalTransactions += uint64(len(block.Transactions))
 		totalGasUsed += block.GasUsed
+	}
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	if metrics.TotalBlocks == 0 {
+		return metrics, nil
 	}
 
 	// Calculate averages
