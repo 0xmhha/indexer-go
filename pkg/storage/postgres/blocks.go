@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/jackc/pgx/v5"
@@ -324,22 +325,20 @@ const defaultPageLimit = 100
 // GetTransactionsByAddress implements port.Reader.
 func (s *Store) GetTransactionsByAddress(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
 	list := "addrtx:" + addr.Hex()
-	after, err := decodeCursor(list, page.After)
+	after, err := decodeCursor(list, page.After, 1)
 	if err != nil {
 		return nil, "", err
 	}
-	limit := page.Limit
-	if limit <= 0 {
-		limit = defaultPageLimit
+	limit := pageLimit(page, false)
+	where, args := "address = $1", []any{addr.Bytes()}
+	if after != nil {
+		id, err := strconv.ParseInt(after[0], 10, 64)
+		if err != nil {
+			return nil, "", port.ErrInvalidCursor
+		}
+		where, args = where+" AND id > $2", append(args, id)
 	}
-	var rows pgx.Rows
-	if page.After != "" {
-		rows, err = s.q(ctx).Query(ctx, `SELECT id, tx_hash FROM address_transactions
-			WHERE address = $1 AND id > $2 ORDER BY id LIMIT $3`, addr.Bytes(), after, limit+1)
-	} else {
-		rows, err = s.q(ctx).Query(ctx, `SELECT id, tx_hash FROM address_transactions
-			WHERE address = $1 ORDER BY id OFFSET $2 LIMIT $3`, addr.Bytes(), max(page.Offset, 0), limit+1)
-	}
+	rows, err := s.q(ctx).Query(ctx, "SELECT id, tx_hash FROM address_transactions WHERE "+where+" ORDER BY id"+limitClause(page, limit), args...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -351,10 +350,10 @@ func (s *Store) GetTransactionsByAddress(ctx context.Context, addr common.Addres
 	if err != nil {
 		return nil, "", err
 	}
+	items, more := trimPage(items, limit)
 	next := ""
-	if len(items) > limit {
-		items = items[:limit]
-		next = encodeCursor(list, items[len(items)-1].ID)
+	if more {
+		next = encodeCursor(list, strconv.FormatInt(items[len(items)-1].ID, 10))
 	}
 	out := make([]common.Hash, len(items))
 	for i, it := range items {
@@ -395,3 +394,5 @@ func sendBatch(ctx context.Context, q querier, b *pgx.Batch) error {
 	}
 	return res.Close()
 }
+
+func itoa(v int) string { return strconv.Itoa(v) }
