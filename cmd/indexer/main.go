@@ -385,6 +385,12 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 		if err := app.initFetcher(ctx); err != nil {
 			return nil, err
 		}
+
+		// Notifications consume the change stream (R3-5) when events are
+		// recorded in the outbox.
+		if err := app.streamNotifications(); err != nil {
+			return nil, err
+		}
 	}
 
 	// Initialize API server if enabled
@@ -653,6 +659,21 @@ func (a *App) initNotificationService() error {
 		zap.Int("worker_count", notifConfig.Queue.Workers),
 	)
 
+	return nil
+}
+
+// streamNotifications makes the notification service consume the change
+// stream as its own consumer group, so no event of an indexed block is
+// lost before its notifications are stored. Without the outbox the service
+// keeps its event bus subscription.
+func (a *App) streamNotifications() error {
+	svc, ok := a.notificationService.(*notifications.NotificationService)
+	if !ok || a.fetcher == nil || a.fetcher.Stream() == nil {
+		return nil
+	}
+	if err := svc.SetStream(a.fetcher.Stream(), notifications.DefaultStreamGroup); err != nil {
+		return fmt.Errorf("notifications: %w", err)
+	}
 	return nil
 }
 

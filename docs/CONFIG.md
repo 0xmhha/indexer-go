@@ -225,6 +225,14 @@ notifications:
     history_retention: 720h             # 30일
     max_settings_per_user: 100
     max_pending_notifications: 10000
+
+  # 이벤트 유입(R3-5, eventbus.outbox가 켜져 있을 때): 알림 서비스는 이벤트 버스를
+  # 구독하지 않고 변경 스트림을 자기 소비 그룹(notifications)으로 읽는다. 이벤트마다 알림을
+  # 설정 id와 sequence로 만든 고정 id로 먼저 저장한 뒤에 다음 이벤트로 넘어가므로, 대기열이
+  # 가득 차거나 재시작해도 알림이 사라지지 않고, 같은 이벤트가 다시 와도 알림이 두 번
+  # 만들어지지 않는다. 대기열에 못 들어간 알림은 저장된 채 대기하다 flush_interval마다
+  # 재시도 처리기가 보낸다. 처음 켠 서비스는 켠 뒤에 commit된 이벤트부터 알린다.
+  # outbox가 꺼져 있으면 이전처럼 이벤트 버스를 구독한다.
 ```
 
 ### Node Identity

@@ -159,6 +159,15 @@ func (m *mockStorage) ListNotifications(ctx context.Context, filter *Notificatio
 	return result, nil
 }
 
+func (m *mockStorage) UpdateNotification(ctx context.Context, notification *Notification) error {
+	if _, ok := m.notifications[notification.ID]; !ok {
+		return errors.New("notification not found: " + notification.ID)
+	}
+	n := *notification
+	m.notifications[notification.ID] = &n
+	return nil
+}
+
 func (m *mockStorage) GetPendingNotifications(ctx context.Context, limit int) ([]*Notification, error) {
 	if m.getPendingErr != nil {
 		return nil, m.getPendingErr
