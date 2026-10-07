@@ -173,7 +173,7 @@ graph TD
 | D21 | [치명] (StableNet) | 시스템 컨트랙트 이벤트 키에 log 위치가 없었다. mint·burn·가스 팁·멤버 변경·긴급 정지·제안 수 상한·실행 건너뜀·권한 계정 이벤트는 거래 인덱스(일부는 log 인덱스까지)를 코드에서 0으로 고정했다. minter 설정·검증자 변경·blacklist는 (주소, 블록)만 썼다. 그래서 같은 블록에서 같은 종류의 이벤트가 두 번 나오면 앞 이벤트가 덮어써져 사라졌다. 이벤트에 거래·log 인덱스를 담고 키를 (블록, log 위치)로 바꿔 고쳤다 | `pkg/storage/pebble_system_contracts_impl.go`, `schema.go` | [High] |
 | D22 | [중요] (StableNet) | minter·burner로 거른 mint·burn 조회는 `/index/syscontracts/mint_minter/`·`burn_burner/` 색인을 읽는데, 이 색인을 쓰는 코드가 없었다. 그래서 거른 조회는 항상 빈 결과였다. 이벤트를 저장할 때 색인도 쓰도록 고쳤다 | `pkg/storage/pebble_system_contracts_impl.go` | [High] |
 | D5 | [중요] | 로그 색인, 주소·잔액 색인, 블록 처리기, 시스템 컨트랙트 파서의 실패를 경고 로그로만 남긴다. 커서는 그대로 전진해서 색인에 빈칸이 영구히 남는다 | `fetcher_processing.go`, `fetcher_indexing.go` | [Mid] |
-| D6 | [중요] | gap 복구 경로(`FetchRangeConcurrent`)는 시스템 컨트랙트 파싱, 로그 이벤트, 블록 처리기를 건너뛴다. 복구한 블록은 라이브 블록보다 덜 색인된다 | `fetcher.go:476-690` | [Mid] |
+| D6 | [중요] | gap 복구 경로(`FetchRangeConcurrent`)는 시스템 컨트랙트 파싱, 로그 이벤트, 블록 처리기를 건너뛴다. 복구한 블록은 라이브 블록보다 덜 색인된다. (해소 10/7: 모든 경로가 한 파이프라인을 쓴다, R2-2) | `fetcher.go:476-690` | [Mid] |
 | D7 | [중요] | 큰 블록은 주소 색인, transfer, SetCode, UserOp 처리를 두 번 한다 | `large_block.go:194-235` | [Mid] |
 | D8 | [중요] | 블록 이벤트를 receipt 저장 전에 발행한다. 발행 버퍼가 차면 이벤트를 버리고, outbox가 없다. 이벤트를 받은 클라이언트가 아직 저장되지 않은 receipt를 조회할 수 있다 | `fetcher.go:387 대 397`, `events/bus.go:330-346` | [Mid] |
 | D9 | [중요] | 잠금 없이 읽고-수정하고-쓰는 카운터가 있다(holder 수, total supply, setcode·module·bundler 통계, notification 통계). 지금은 라이브 루프가 순차라서 잠재 결함이지만, 병렬 commit을 도입하는 순간 race가 된다 | `pebble_token_holder.go:380-465`, `pebble_system_contracts_impl.go:341-372` 등 | [Mid] |
@@ -396,7 +396,7 @@ graph LR
 | ID | 작업 | 선행 | 검증 기준 |
 |---|---|---|---|
 | R2-1 | 소스 SPI와 RPC 풀(failover, timeout, 속도 제한, `newHeads` + 폴링). (완료 10/7: SPI는 `pkg/source`. 풀은 `pkg/rpcpool`로 RPC 클라이언트 아래 HTTP transport에 둬서 모든 노드 호출이 함께 전환된다. `rpc.fallback_endpoints`, `rpc.rate_limit`, `rpc.ws_endpoint`. 검증: 1순위 노드를 끊어도 수집이 끝까지 가고 결과가 한 번에 색인한 DB와 같다(`TestIndexingSurvivesEndpointLoss`), live에서 응답 없는 1순위 뒤 fallback으로 색인(`TestLiveFailover`). newHeads로 live head 지연 p95가 50ms에서 1~2ms) | Phase 1 | 엔드포인트 하나를 끊어도 수집이 계속된다 |
-| R2-2 | 스케줄러(errgroup worker pool, 재정렬 버퍼, backpressure). 라이브 수집과 gap 복구가 같은 경로를 쓰게 한다 | R2-1 | 처리량 벤치, 두 경로의 결과가 같다(D6 해소) |
+| R2-2 | 스케줄러(errgroup worker pool, 재정렬 버퍼, backpressure). 라이브 수집과 gap 복구가 같은 경로를 쓰게 한다. (완료 10/7: `fetch.indexRange` 하나를 라이브 루프·gap 복구·블록 단위 fetch가 함께 쓴다. 진행 중 높이는 2×workers로 제한, 오류는 가장 낮은 실패 높이에서 멈추고 그 아래는 색인. 세 경로로 색인한 DB가 같다(`TestIngestPathsStoreTheSameData`, D6 해소). 노드 왕복 20ms에서 21블록 479ms(worker 1)→116ms(worker 16), 그 이상은 블록당 commit fsync가 병목) | R2-1 | 처리량 벤치, 두 경로의 결과가 같다(D6 해소) |
 | R2-3 | 작업 단위와 체크포인트(R0-4를 일반화) | R2-2 | crash 시험 |
 | R2-4 | finality·reorg(정책 3종, parent hash 확인, undo 기록, 보상 이벤트). (완료 10/7: 기능은 Phase 0에서 구현(reorg-design.md). 검증 기준인 anvil reorg 주입은 `e2e/reorg_test.go`: 블록 2로 되돌리고 다른 가지를 만들면 수집 루프가 3~5를 되돌리고 orphan·reorg 기록을 남긴 뒤 노드의 hash로 다시 색인한다. e2e는 이제 빈 포트에 자기 anvil을 띄운다) | R2-3 | anvil에서 reorg를 주입해 시험한다 |
 | R2-5 | 처리기·기능 레지스트리, 플래그, 의존성 검증, 프로필 | R2-3 | 기능을 끄면 그 기능의 처리기가 실행되지 않는다 |
