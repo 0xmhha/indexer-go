@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1055,14 +1056,54 @@ func (c *Config) LoadFromFile(filename string) error {
 	return nil
 }
 
+// MultiChainMode reports whether the indexer runs the chains listed in
+// multichain.chains, each indexed into its own database under
+// <database.path>/chains/<id> (refactoring plan R2-8).
+func (c *Config) MultiChainMode() bool {
+	return c.MultiChain.Enabled && len(c.MultiChain.Chains) > 0
+}
+
+// chainIDPattern is the form of a chain id: it names the chain's database
+// directory and appears in API paths, so it has no path separators and
+// does not start with a dot (multichain.ValidChainID).
+var chainIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+
+// validateMultiChain checks the chain entries of multichain mode.
+func (c *Config) validateMultiChain() error {
+	if !c.MultiChainMode() {
+		return nil
+	}
+	seen := map[string]bool{}
+	for i, ch := range c.MultiChain.Chains {
+		if !chainIDPattern.MatchString(ch.ID) {
+			return fmt.Errorf("multichain.chains[%d]: invalid id %q: use letters, digits, '.', '_' and '-', starting with a letter or digit", i, ch.ID)
+		}
+		if seen[ch.ID] {
+			return fmt.Errorf("multichain.chains[%d]: duplicate id %q", i, ch.ID)
+		}
+		seen[ch.ID] = true
+		if !strings.HasPrefix(ch.RPCEndpoint, "http://") && !strings.HasPrefix(ch.RPCEndpoint, "https://") {
+			return fmt.Errorf("multichain.chains[%d] (%s): rpc_endpoint %q is not an HTTP(S) URL", i, ch.ID, ch.RPCEndpoint)
+		}
+		if ch.WSEndpoint != "" && !strings.HasPrefix(ch.WSEndpoint, "ws://") && !strings.HasPrefix(ch.WSEndpoint, "wss://") {
+			return fmt.Errorf("multichain.chains[%d] (%s): ws_endpoint %q is not a WebSocket URL", i, ch.ID, ch.WSEndpoint)
+		}
+	}
+	return nil
+}
+
 // isFalse reports whether an optional setting was set to false.
 func isFalse(b *bool) bool { return b != nil && !*b }
 
 // Validate validates the configuration
 func (c *Config) Validate() error {
-	// Validate RPC configuration
-	if c.RPC.Endpoint == "" {
+	// Validate RPC configuration (multichain mode reads each chain's
+	// endpoint from its entry)
+	if c.RPC.Endpoint == "" && !c.MultiChainMode() {
 		return fmt.Errorf("RPC endpoint is required")
+	}
+	if err := c.validateMultiChain(); err != nil {
+		return err
 	}
 	if c.RPC.RateLimit < 0 {
 		return fmt.Errorf("rpc.rate_limit must not be negative")
@@ -1226,6 +1267,22 @@ func (c *Config) UnsupportedSettings() []string {
 	}
 	if len(c.AccountAbstraction.EntryPointAddresses) > 0 {
 		out = append(out, "account_abstraction.entry_point_addresses is not supported yet; known EntryPoint addresses are used")
+	}
+	if c.MultiChainMode() {
+		ignored := map[string]bool{
+			"rpc.endpoint":           c.RPC.Endpoint != "",
+			"rpc.fallback_endpoints": len(c.RPC.FallbackEndpoints) > 0,
+			"rpc.ws_endpoint":        c.RPC.WSEndpoint != "",
+			"rpc.record_dir":         c.RPC.RecordDir != "",
+			"source.era_dir":         c.Source.EraDir != "",
+			"notifications.enabled":  c.Notifications.Enabled,
+			"verifier.enabled":       c.Verifier.Enabled,
+		}
+		for _, name := range []string{"rpc.endpoint", "rpc.fallback_endpoints", "rpc.ws_endpoint", "rpc.record_dir", "source.era_dir", "notifications.enabled", "verifier.enabled"} {
+			if ignored[name] {
+				out = append(out, name+" has no effect in multichain mode: chains are configured by their multichain.chains entries")
+			}
+		}
 	}
 	return out
 }

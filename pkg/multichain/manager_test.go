@@ -12,7 +12,7 @@ func TestNewManager(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
 	// Test with nil config (should use defaults)
-	manager, err := NewManager(nil, nil, nil, logger)
+	manager, err := NewManager(nil, nil, logger)
 	if err != nil {
 		t.Fatalf("expected no error with nil config, got %v", err)
 	}
@@ -41,7 +41,7 @@ func TestNewManagerWithConfig(t *testing.T) {
 		},
 	}
 
-	manager, err := NewManager(config, nil, nil, logger)
+	manager, err := NewManager(config, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create manager: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestNewManagerInvalidConfig(t *testing.T) {
 		Chains:  []ChainConfig{}, // Empty chains
 	}
 
-	_, err := NewManager(config, nil, nil, logger)
+	_, err := NewManager(config, nil, logger)
 	if err == nil {
 		t.Error("expected error for invalid config (enabled with no chains)")
 	}
@@ -74,7 +74,7 @@ func TestManagerChainCount(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
 	config := DefaultManagerConfig()
-	manager, err := NewManager(config, nil, nil, logger)
+	manager, err := NewManager(config, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create manager: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestManagerIsEnabled(t *testing.T) {
 	// Disabled config
 	disabledConfig := DefaultManagerConfig()
 	disabledConfig.Enabled = false
-	disabledManager, _ := NewManager(disabledConfig, nil, nil, logger)
+	disabledManager, _ := NewManager(disabledConfig, nil, logger)
 
 	if disabledManager.IsEnabled() {
 		t.Error("expected disabled manager to report IsEnabled() = false")
@@ -113,7 +113,7 @@ func TestManagerIsEnabled(t *testing.T) {
 			},
 		},
 	}
-	enabledManager, _ := NewManager(enabledConfig, nil, nil, logger)
+	enabledManager, _ := NewManager(enabledConfig, nil, logger)
 
 	if !enabledManager.IsEnabled() {
 		t.Error("expected enabled manager to report IsEnabled() = true")
@@ -124,7 +124,7 @@ func TestManagerGetChainNotFound(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	_, err := manager.GetChain("nonexistent")
 	if err != ErrChainNotFound {
@@ -136,7 +136,7 @@ func TestManagerListChainsEmpty(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	chains := manager.ListChains()
 	if len(chains) != 0 {
@@ -149,7 +149,7 @@ func TestManagerHealthCheckEmpty(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	statuses := manager.HealthCheck(ctx)
 	if len(statuses) != 0 {
@@ -161,7 +161,7 @@ func TestManagerGetMetricsEmpty(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	metrics := manager.GetMetrics()
 	if len(metrics) != 0 {
@@ -174,7 +174,7 @@ func TestManagerStartStopEmpty(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	// Start with no chains should succeed
 	if err := manager.Start(ctx); err != nil {
@@ -192,7 +192,7 @@ func TestManagerDoubleStart(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	// First start
 	if err := manager.Start(ctx); err != nil {
@@ -213,7 +213,7 @@ func TestManagerDoubleStop(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	// Start first
 	_ = manager.Start(ctx)
@@ -234,7 +234,7 @@ func TestManagerRegisterChain(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	chainConfig := &ChainConfig{
 		ID:          "test-chain",
@@ -271,7 +271,7 @@ func TestManagerRegisterDuplicateChain(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	chainConfig := &ChainConfig{
 		ID:          "test-chain",
@@ -298,7 +298,7 @@ func TestManagerRegisterInvalidChain(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	// Missing required fields
 	invalidConfig := &ChainConfig{
@@ -316,7 +316,7 @@ func TestManagerUnregisterChain(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	chainConfig := &ChainConfig{
 		ID:          "test-chain",
@@ -347,7 +347,7 @@ func TestManagerUnregisterNonexistent(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	err := manager.UnregisterChain(ctx, "nonexistent")
 	if err != ErrChainNotFound {
@@ -360,7 +360,7 @@ func TestManagerStartChainNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	err := manager.StartChain(ctx, "nonexistent")
 	if err != ErrChainNotFound {
@@ -373,7 +373,7 @@ func TestManagerStopChainNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	err := manager.StopChain(ctx, "nonexistent")
 	if err != ErrChainNotFound {
@@ -386,7 +386,7 @@ func TestManagerStopChainRegistered(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	chainConfig := &ChainConfig{
 		ID:          "test-chain",
@@ -408,12 +408,12 @@ func TestManagerStopChainRegistered(t *testing.T) {
 	}
 }
 
-func TestManagerStartChainRequiresStorage(t *testing.T) {
+func TestManagerStartChainRequiresFactory(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger) // nil storage
+	manager, _ := NewManager(config, nil, logger) // nil factory
 
 	chainConfig := &ChainConfig{
 		ID:          "test-chain",
@@ -430,8 +430,8 @@ func TestManagerStartChainRequiresStorage(t *testing.T) {
 
 	// StartChain should fail due to nil storage
 	err = manager.StartChain(ctx, "test-chain")
-	if err != ErrStorageRequired {
-		t.Errorf("expected ErrStorageRequired, got %v", err)
+	if err != ErrIndexerRequired {
+		t.Errorf("expected ErrIndexerRequired, got %v", err)
 	}
 }
 
@@ -439,7 +439,7 @@ func TestManagerWaitForSync(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	t.Run("times out with no healthy chains", func(t *testing.T) {
 		// Register a chain (won't be healthy)
@@ -472,7 +472,7 @@ func TestManagerCheckAndRestartFailedChains(t *testing.T) {
 		AutoRestartDelay:    10 * time.Millisecond, // Short delay for testing
 		HealthCheckInterval: 50 * time.Millisecond,
 	}
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	ctx := context.Background()
 
@@ -512,7 +512,7 @@ func TestManagerCheckAndRestartFailedChains_DelayNotElapsed(t *testing.T) {
 		AutoRestartDelay:    5 * time.Second, // Long delay - won't be reached
 		HealthCheckInterval: 50 * time.Millisecond,
 	}
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	ctx := context.Background()
 
@@ -556,7 +556,7 @@ func TestManagerCheckAndRestartFailedChains_NoErrorChains(t *testing.T) {
 		AutoRestartDelay:    10 * time.Millisecond,
 		HealthCheckInterval: 50 * time.Millisecond,
 	}
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	ctx := context.Background()
 
@@ -592,7 +592,7 @@ func TestManagerAutoRestartMonitor(t *testing.T) {
 		AutoRestartDelay:    10 * time.Millisecond,
 		HealthCheckInterval: 50 * time.Millisecond,
 	}
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	manager.ctx = ctx
@@ -632,7 +632,7 @@ func TestManagerStartWithAutoRestart(t *testing.T) {
 		AutoRestartDelay:    time.Second,
 		HealthCheckInterval: time.Second,
 	}
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	// Start should launch auto-restart monitor
 	err := manager.Start(ctx)
@@ -669,7 +669,7 @@ func TestManagerStartWithChains(t *testing.T) {
 	}
 
 	// Create manager with nil storage (chains will fail to start but shouldn't panic)
-	manager, err := NewManager(config, nil, nil, logger)
+	manager, err := NewManager(config, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create manager: %v", err)
 	}
@@ -694,7 +694,7 @@ func TestManagerUnregisterRunningChain(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	chainConfig := &ChainConfig{
 		ID:          "unregister-running-chain",
@@ -730,7 +730,7 @@ func TestManagerStopWithRunningChains(t *testing.T) {
 	ctx := context.Background()
 
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	// Register multiple chains
 	for i := 0; i < 3; i++ {
@@ -772,7 +772,7 @@ func TestManagerStopWithTimeout(t *testing.T) {
 		AutoRestart:         true,
 		HealthCheckInterval: time.Second,
 	}
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	// Start manager
 	err := manager.Start(ctx)

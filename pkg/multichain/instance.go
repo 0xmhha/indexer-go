@@ -6,11 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/client"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/fetch"
-	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"go.uber.org/zap"
 )
 
@@ -19,12 +16,10 @@ type ChainInstance struct {
 	// Configuration
 	Config *ChainConfig
 
-	// Core components
-	Client   *client.Client
-	Source   *sourcerpc.Source // blocks decoded with the chain profile
-	Fetcher  *fetch.Fetcher
-	Storage  storage.Storage   // Shared storage with chain-scoped prefixing
-	EventBus *events.EventBus  // Global event bus (shared across chains)
+	// Indexer is the chain's pipeline and storage while it runs (nil
+	// before Start and after Stop).
+	Indexer Indexer
+	factory IndexerFactory
 
 	// State
 	status       ChainStatus
@@ -42,23 +37,16 @@ type ChainInstance struct {
 	rpcErrors           atomic.Uint64
 
 	// Control
-	ctx        context.Context
 	cancelFunc context.CancelFunc
 	runningWg  sync.WaitGroup
 	logger     *zap.Logger
 }
 
 // NewChainInstance creates a new chain instance with the given configuration.
-func NewChainInstance(
-	cfg *ChainConfig,
-	globalStorage storage.Storage,
-	globalEventBus *events.EventBus,
-	logger *zap.Logger,
-) *ChainInstance {
+func NewChainInstance(cfg *ChainConfig, factory IndexerFactory, logger *zap.Logger) *ChainInstance {
 	return &ChainInstance{
 		Config:       cfg,
-		Storage:      globalStorage,
-		EventBus:     globalEventBus,
+		factory:      factory,
 		status:       StatusRegistered,
 		registeredAt: time.Now(),
 		logger:       logger.With(zap.String("chain", cfg.ID)),
@@ -75,46 +63,38 @@ func (ci *ChainInstance) Start(ctx context.Context) error {
 	ci.setStatusLocked(StatusStarting)
 	ci.statusMu.Unlock()
 
-	// Validate required dependencies
-	if ci.Storage == nil {
-		ci.setError(ErrStorageRequired)
-		return ErrStorageRequired
+	if ci.factory == nil {
+		ci.setError(ErrIndexerRequired)
+		return ErrIndexerRequired
 	}
 
 	// Create instance-specific context
-	ci.ctx, ci.cancelFunc = context.WithCancel(ctx)
+	runCtx, cancel := context.WithCancel(ctx)
+	ci.cancelFunc = cancel
 
 	ci.logger.Info("starting chain instance",
 		zap.String("rpc", ci.Config.RPCEndpoint),
 		zap.Uint64("chainId", ci.Config.ChainID),
 	)
 
-	// Initialize client
-	if err := ci.initClient(); err != nil {
+	idx, err := ci.factory(runCtx, ci.Config)
+	if err != nil {
+		cancel()
+		err = NewChainError(ci.Config.ID, ErrSourceInitFailed, err)
 		ci.setError(err)
 		return err
 	}
-
-	// Select the chain profile and its block source
-	if err := ci.initSource(ctx); err != nil {
-		ci.setError(err)
-		return err
-	}
-
-	// Initialize fetcher
-	if err := ci.initFetcher(); err != nil {
-		ci.setError(err)
-		return err
-	}
-
-	// Start the fetcher in background
-	ci.runningWg.Add(1)
-	go ci.runFetcher()
-
 	now := time.Now()
+	ci.statusMu.Lock()
+	ci.Indexer = idx
 	ci.startedAt = &now
+	ci.setStatusLocked(StatusSyncing)
+	ci.statusMu.Unlock()
 
-	ci.setStatus(StatusSyncing)
+	// Index in the background
+	ci.runningWg.Add(1)
+	go ci.run(runCtx, idx)
+
 	ci.logger.Info("chain instance started successfully")
 
 	return nil
@@ -144,20 +124,54 @@ func (ci *ChainInstance) Stop(ctx context.Context) error {
 		close(done)
 	}()
 
+	// Release the chain's storage and connections once its pipeline has
+	// stopped; closing them under a running pipeline would fail its writes.
+	ci.statusMu.Lock()
+	idx := ci.Indexer
+	ci.Indexer = nil
+	ci.statusMu.Unlock()
 	select {
 	case <-done:
 		ci.logger.Info("chain instance stopped gracefully")
+		if idx != nil {
+			idx.Close()
+		}
 	case <-ctx.Done():
-		ci.logger.Warn("chain instance stop timed out")
-	}
-
-	// Clean up resources
-	if ci.Client != nil {
-		ci.Client.Close()
+		ci.logger.Warn("chain instance stop timed out; closing it when its pipeline stops")
+		if idx != nil {
+			go func() { <-done; idx.Close() }()
+		}
 	}
 
 	ci.setStatus(StatusStopped)
 	return nil
+}
+
+// IndexedHeight returns the chain's latest indexed block, if it is running
+// and has indexed one.
+func (ci *ChainInstance) IndexedHeight(ctx context.Context) (uint64, bool) {
+	idx := ci.runningIndexer()
+	if idx == nil {
+		return 0, false
+	}
+	h, err := idx.IndexedHeight(ctx)
+	return h, err == nil
+}
+
+// Store returns the chain's store and event bus while it runs.
+func (ci *ChainInstance) Store() (port.QueryStore, *events.EventBus, bool) {
+	idx := ci.runningIndexer()
+	if idx == nil {
+		return nil, nil, false
+	}
+	return idx.Store(), idx.EventBus(), true
+}
+
+// runningIndexer returns the chain's indexer while it runs, else nil.
+func (ci *ChainInstance) runningIndexer() Indexer {
+	ci.statusMu.RLock()
+	defer ci.statusMu.RUnlock()
+	return ci.Indexer
 }
 
 // Status returns the current status of the chain instance.
@@ -199,14 +213,17 @@ func (ci *ChainInstance) HealthCheck(ctx context.Context) *HealthStatus {
 		CheckedAt: time.Now(),
 	}
 
-	if ci.startedAt != nil {
-		status.Uptime = time.Since(*ci.startedAt)
+	ci.statusMu.RLock()
+	startedAt := ci.startedAt
+	ci.statusMu.RUnlock()
+	if startedAt != nil {
+		status.Uptime = time.Since(*startedAt)
 	}
 
 	// Check if we can get the latest block
-	if ci.Client != nil {
+	if idx := ci.runningIndexer(); idx != nil {
 		start := time.Now()
-		latestHeight, err := ci.Client.GetLatestBlockNumber(ctx)
+		latestHeight, err := idx.NodeHeight(ctx)
 		status.RPCLatency = time.Since(start)
 
 		if err != nil {
@@ -217,11 +234,9 @@ func (ci *ChainInstance) HealthCheck(ctx context.Context) *HealthStatus {
 		} else {
 			status.LatestHeight = latestHeight
 
-			// Get indexed height from storage (only if storage is available)
-			if ci.Storage != nil {
-				indexedHeight, err := ci.Storage.GetLatestHeight(ctx)
-				if err == nil {
-					status.IndexedHeight = indexedHeight
+			if indexedHeight, err := idx.IndexedHeight(ctx); err == nil {
+				status.IndexedHeight = indexedHeight
+				if latestHeight > indexedHeight {
 					status.SyncLag = latestHeight - indexedHeight
 				}
 			}
@@ -254,94 +269,32 @@ func (ci *ChainInstance) GetMetrics() *ChainMetrics {
 	}
 }
 
-// initClient initializes the RPC client.
-func (ci *ChainInstance) initClient() error {
-	clientCfg := &client.Config{
-		Endpoint: ci.Config.RPCEndpoint,
-		Timeout:  ci.Config.RPCTimeout,
-		Logger:   ci.logger,
-	}
-
-	var err error
-	ci.Client, err = client.NewClient(clientCfg)
-	if err != nil {
-		return NewChainError(ci.Config.ID, ErrClientInitFailed, err)
-	}
-	return nil
-}
-
-// initSource selects the chain profile (AdapterType names it; "auto"
-// detects it from the node) and the block source that decodes with it.
-func (ci *ChainInstance) initSource(ctx context.Context) error {
-	name := ci.Config.AdapterType
-	if name == "auto" {
-		name = ""
-	}
-	src, err := sourcerpc.Select(ctx, ci.Client.RPCClient(), name)
-	if err != nil {
-		return NewChainError(ci.Config.ID, ErrSourceInitFailed, err)
-	}
-	ci.Source = src
-	ci.logger.Info("chain profile selected", zap.String("profile", src.Profile().ID()))
-	return nil
-}
-
-// initFetcher initializes the block fetcher.
-func (ci *ChainInstance) initFetcher() error {
-	fetcherConfig := &fetch.Config{
-		StartHeight: ci.Config.StartHeight,
-		BatchSize:   ci.Config.BatchSize,
-		NumWorkers:  ci.Config.Workers,
-		MaxRetries:  3,
-		RetryDelay:  time.Second,
-	}
-
-	ci.Fetcher = fetch.NewFetcher(ci.Client, ci.Storage, fetcherConfig, ci.logger, ci.EventBus)
-	ci.Fetcher.SetSource(ci.Source)
-
-	return nil
-}
-
-// runFetcher runs the fetcher in a goroutine.
-func (ci *ChainInstance) runFetcher() {
+// run indexes the chain until it stops, tracking metrics from its events.
+func (ci *ChainInstance) run(ctx context.Context, idx Indexer) {
 	defer ci.runningWg.Done()
+	ci.logger.Info("indexer started")
 
-	ci.logger.Info("fetcher started")
-
-	// Subscribe to block events to track metrics (only if EventBus is available)
-	if ci.EventBus != nil {
+	if bus := idx.EventBus(); bus != nil {
 		subID := events.SubscriptionID("chain-" + ci.Config.ID + "-metrics")
-		sub := ci.EventBus.Subscribe(
-			subID,
+		sub := bus.Subscribe(subID,
 			[]events.EventType{events.EventTypeBlock, events.EventTypeTransaction, events.EventTypeLog},
-			nil,
-			100,
-		)
-		defer ci.EventBus.Unsubscribe(subID)
-
-		// Start metrics tracking goroutine
-		go ci.trackMetrics(sub)
-	} else {
-		ci.logger.Warn("EventBus not available, metrics tracking disabled")
+			nil, 100)
+		defer bus.Unsubscribe(subID)
+		go ci.trackMetrics(ctx, sub)
 	}
 
-	// Run the fetcher with gap recovery
-	if err := ci.Fetcher.RunWithGapRecovery(ci.ctx); err != nil {
-		if ci.ctx.Err() == nil {
-			// Not a cancellation error
-			ci.setError(err)
-			ci.logger.Error("fetcher error", zap.Error(err))
-		}
+	if err := idx.Run(ctx); err != nil && ctx.Err() == nil {
+		ci.setError(err)
+		ci.logger.Error("indexer error", zap.Error(err))
 	}
-
-	ci.logger.Info("fetcher stopped")
+	ci.logger.Info("indexer stopped")
 }
 
 // trackMetrics tracks block/tx/log counts from events.
-func (ci *ChainInstance) trackMetrics(sub *events.Subscription) {
+func (ci *ChainInstance) trackMetrics(ctx context.Context, sub *events.Subscription) {
 	for {
 		select {
-		case <-ci.ctx.Done():
+		case <-ctx.Done():
 			return
 		case event, ok := <-sub.Channel:
 			if !ok {
@@ -352,7 +305,7 @@ func (ci *ChainInstance) trackMetrics(sub *events.Subscription) {
 				ci.blocksIndexed.Add(1)
 				// Check if we've caught up
 				if ci.Status() == StatusSyncing {
-					if health := ci.HealthCheck(ci.ctx); health.SyncLag < 10 {
+					if health := ci.HealthCheck(ctx); health.SyncLag < 10 {
 						ci.setStatus(StatusActive)
 					}
 				}

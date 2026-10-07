@@ -262,12 +262,8 @@ func chainInstanceToMap(instance *multichain.ChainInstance) map[string]interface
 	}
 
 	// Add latest height
-	if instance.Storage != nil {
-		ctx := context.Background()
-		height, err := instance.Storage.GetLatestHeight(ctx)
-		if err == nil {
-			result["latestHeight"] = strconv.FormatUint(height, 10)
-		}
+	if height, ok := instance.IndexedHeight(context.Background()); ok {
+		result["latestHeight"] = strconv.FormatUint(height, 10)
 	}
 
 	return result

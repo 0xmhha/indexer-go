@@ -323,6 +323,9 @@ func (f *Fetcher) Run(ctx context.Context) error {
 				}
 				err = rerr
 			}
+			if ctx.Err() != nil {
+				return ctx.Err() // stopped, not failed
+			}
 			f.logger.Error("Failed to fetch batch", zap.Error(err))
 			if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
 				return err

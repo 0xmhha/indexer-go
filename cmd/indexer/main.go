@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -144,8 +145,10 @@ func run() error {
 
 	// Reindex: clear blockchain data while preserving verification data
 	if flags.reindex && !flags.clearData {
-		if err := reindexData(cfg.Database.Path, log); err != nil {
-			return fmt.Errorf("failed to reindex data: %w", err)
+		for _, path := range databasePaths(cfg) {
+			if err := reindexData(path, log); err != nil {
+				return fmt.Errorf("failed to reindex data: %w", err)
+			}
 		}
 	}
 
@@ -333,35 +336,34 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 
 	ctx := context.Background()
 
-	if err := app.startRPCArchive(); err != nil {
-		return nil, err
-	}
-
-	// Initialize storage first (needed by both single and multi-chain modes)
-	if err := app.initStorageOnly(ctx); err != nil {
-		return nil, err
-	}
-
-	// Initialize EventBus (shared across all chains)
-	app.initEventBus()
-
-	// Initialize notification service if enabled
-	if err := app.initNotificationService(); err != nil {
-		return nil, fmt.Errorf("failed to initialize notification service: %w", err)
-	}
-
-	// Check if multichain mode is enabled
-	if cfg.MultiChain.Enabled && len(cfg.MultiChain.Chains) > 0 {
+	if cfg.MultiChainMode() {
+		// Every chain runs its own pipeline into its own database
+		// (<database.path>/chains/<id>, refactoring plan R2-8); this App
+		// only manages them and serves their APIs.
 		log.Info("Multi-chain mode enabled",
 			zap.Int("configured_chains", len(cfg.MultiChain.Chains)),
 		)
-
-		if err := app.initMultiChainManager(ctx); err != nil {
+		if err := app.initMultiChainManager(); err != nil {
 			return nil, fmt.Errorf("failed to initialize multi-chain manager: %w", err)
 		}
 	} else {
-		// Single chain mode (legacy)
 		log.Info("Single-chain mode")
+
+		if err := app.startRPCArchive(); err != nil {
+			return nil, err
+		}
+
+		// Initialize storage
+		if err := app.initStorageOnly(ctx); err != nil {
+			return nil, err
+		}
+
+		app.initEventBus()
+
+		// Initialize notification service if enabled
+		if err := app.initNotificationService(); err != nil {
+			return nil, fmt.Errorf("failed to initialize notification service: %w", err)
+		}
 
 		// Initialize Ethereum client
 		if err := app.initClient(); err != nil {
@@ -654,9 +656,9 @@ func (a *App) initNotificationService() error {
 	return nil
 }
 
-// initMultiChainManager initializes the multi-chain manager
-func (a *App) initMultiChainManager(ctx context.Context) error {
-	// Convert config chains to multichain ChainConfigs
+// initMultiChainManager creates the manager of multichain mode. It starts
+// every enabled chain with newChainIndexer.
+func (a *App) initMultiChainManager() error {
 	chainConfigs := make([]multichain.ChainConfig, 0, len(a.config.MultiChain.Chains))
 	for _, cc := range a.config.MultiChain.Chains {
 		chainConfigs = append(chainConfigs, multichain.ChainConfig{
@@ -668,22 +670,22 @@ func (a *App) initMultiChainManager(ctx context.Context) error {
 			AdapterType: cc.AdapterType,
 			StartHeight: cc.StartHeight,
 			Enabled:     cc.Enabled,
-			Workers:     a.config.Indexer.Workers,
-			BatchSize:   a.config.Indexer.ChunkSize,
-			RPCTimeout:  a.config.RPC.Timeout,
+			Workers:     orDefault(cc.Workers, a.config.Indexer.Workers),
+			BatchSize:   orDefault(cc.BatchSize, a.config.Indexer.ChunkSize),
+			RPCTimeout:  orDefault(cc.RPCTimeout, a.config.RPC.Timeout),
 		})
 	}
 
 	managerConfig := &multichain.ManagerConfig{
-		Enabled:             true,
-		Chains:              chainConfigs,
-		HealthCheckInterval: a.config.MultiChain.HealthCheckInterval,
+		Enabled:              true,
+		Chains:               chainConfigs,
+		HealthCheckInterval:  a.config.MultiChain.HealthCheckInterval,
 		MaxUnhealthyDuration: a.config.MultiChain.MaxUnhealthyDuration,
-		AutoRestart:         a.config.MultiChain.AutoRestart,
-		AutoRestartDelay:    a.config.MultiChain.AutoRestartDelay,
+		AutoRestart:          a.config.MultiChain.AutoRestart,
+		AutoRestartDelay:     a.config.MultiChain.AutoRestartDelay,
 	}
 
-	manager, err := multichain.NewManager(managerConfig, a.storage, a.eventBus, a.logger)
+	manager, err := multichain.NewManager(managerConfig, a.newChainIndexer, a.logger)
 	if err != nil {
 		return fmt.Errorf("failed to create multi-chain manager: %w", err)
 	}
@@ -694,6 +696,86 @@ func (a *App) initMultiChainManager(ctx context.Context) error {
 	)
 
 	return nil
+}
+
+// orDefault returns v, or def when v is the zero value.
+func orDefault[T comparable](v, def T) T {
+	var zero T
+	if v == zero {
+		return def
+	}
+	return v
+}
+
+// chainDBPath is the database of one chain in multichain mode.
+func chainDBPath(root, chainID string) string {
+	return filepath.Join(root, "chains", chainID)
+}
+
+// chainAppConfig returns the configuration of one chain's App: the shared
+// settings with the chain's endpoints, database and indexing range. Settings
+// that belong to the process (API server, notifications, contract
+// verification, RPC archives) are off; the manager's App serves the API.
+func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
+	cfg := *a.config
+	cfg.RPC.Endpoint = cc.RPCEndpoint
+	cfg.RPC.WSEndpoint = cc.WSEndpoint
+	cfg.RPC.FallbackEndpoints = nil
+	cfg.RPC.RecordDir = ""
+	cfg.RPC.Timeout = orDefault(cc.RPCTimeout, a.config.RPC.Timeout)
+	cfg.Source = config.SourceConfig{}
+	cfg.Database.Path = chainDBPath(a.config.Database.Path, cc.ID)
+	cfg.Indexer.StartHeight = cc.StartHeight
+	cfg.Indexer.Workers = orDefault(cc.Workers, a.config.Indexer.Workers)
+	cfg.Indexer.ChunkSize = orDefault(cc.BatchSize, a.config.Indexer.ChunkSize)
+	cfg.MultiChain = config.MultiChainConfig{}
+	cfg.API.Enabled = false
+	cfg.Notifications.Enabled = false
+	cfg.Verifier.Enabled = false
+	return &cfg
+}
+
+// newChainIndexer builds one chain of multichain mode
+// (multichain.IndexerFactory): an App of its own over the chain's database,
+// so chains never share storage keys (D4).
+func (a *App) newChainIndexer(ctx context.Context, cc *multichain.ChainConfig) (multichain.Indexer, error) {
+	profile := cc.AdapterType
+	if profile == "auto" {
+		profile = "" // detected from the node
+	}
+	app, err := NewApp(a.chainAppConfig(cc), a.logger.With(zap.String("chain", cc.ID)), a.enableGapMode, profile)
+	if err != nil {
+		return nil, err
+	}
+	if cc.ChainID != 0 {
+		id, err := app.client.GetChainID(ctx)
+		if err == nil && (!id.IsUint64() || id.Uint64() != cc.ChainID) {
+			err = fmt.Errorf("node at %s serves chain id %s, configured chain_id is %d", cc.RPCEndpoint, id, cc.ChainID)
+		}
+		if err != nil {
+			app.closeAfterFailedStart()
+			return nil, fmt.Errorf("chain id check: %w", err)
+		}
+	}
+	return &chainIndexer{app: app}, nil
+}
+
+// chainIndexer runs one chain's App for the multichain manager.
+type chainIndexer struct {
+	app *App
+}
+
+func (c *chainIndexer) Run(ctx context.Context) error { return c.app.Run(ctx) }
+func (c *chainIndexer) Close()                        { c.app.Shutdown() }
+func (c *chainIndexer) Store() port.QueryStore        { return c.app.storage }
+func (c *chainIndexer) EventBus() *events.EventBus    { return c.app.eventBus }
+
+func (c *chainIndexer) IndexedHeight(ctx context.Context) (uint64, error) {
+	return c.app.storage.GetLatestHeight(ctx)
+}
+
+func (c *chainIndexer) NodeHeight(ctx context.Context) (uint64, error) {
+	return c.app.client.GetLatestBlockNumber(ctx)
 }
 
 // initFetcher initializes the block fetcher
@@ -803,9 +885,12 @@ func (a *App) initFetcher(ctx context.Context) error {
 func (a *App) initAPIServer() error {
 	a.logger.Info("Initializing API server...")
 
-	// Initialize RPC Proxy for contract call queries
-	if err := a.initRPCProxy(); err != nil {
-		a.logger.Warn("Failed to initialize RPC Proxy, contract call queries will be disabled", zap.Error(err))
+	// Initialize RPC Proxy for contract call queries (single-chain mode;
+	// multichain mode has no process-wide node)
+	if a.client != nil {
+		if err := a.initRPCProxy(); err != nil {
+			a.logger.Warn("Failed to initialize RPC Proxy, contract call queries will be disabled", zap.Error(err))
+		}
 	}
 
 	// Initialize Contract Verifier for Etherscan-compatible API
@@ -839,7 +924,14 @@ func (a *App) initAPIServer() error {
 		NotificationService: a.notificationService,
 		Verifier:            a.contractVerifier,
 	}
-	apiServer, err := api.NewServerWithOptions(apiConfig, a.logger, a.storage, serverOpts)
+	var store port.QueryStore // nil in multichain mode: chains are served under /chains/{id}/
+	if a.storage != nil {
+		store = a.storage
+	}
+	if a.multichainManager != nil {
+		serverOpts.Chains = a.multichainManager
+	}
+	apiServer, err := api.NewServerWithOptions(apiConfig, a.logger, store, serverOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create API server: %w", err)
 	}
@@ -1042,8 +1134,14 @@ func (a *App) Shutdown() {
 		a.fetcher.Close()
 	}
 
-	// Close storage
+	// Close storage, after reading the final height
 	if a.storage != nil {
+		finalHeight, err := a.storage.GetLatestHeight(context.Background())
+		if err == nil {
+			a.logger.Info("Final statistics", zap.Uint64("latest_height", finalHeight))
+		} else if !errors.Is(err, port.ErrNotFound) {
+			a.logger.Warn("Failed to read final indexed height", zap.Error(err))
+		}
 		if err := a.storage.Close(); err != nil {
 			a.logger.Error("Failed to close storage", zap.Error(err))
 		}
@@ -1056,11 +1154,7 @@ func (a *App) Shutdown() {
 	a.stopRPCArchive()
 	a.closeEraSource()
 
-	// Wait for graceful shutdown
-	time.Sleep(time.Second * 2)
-
 	// Log final statistics
-	ctx := context.Background()
 	if a.multichainManager != nil {
 		// Multi-chain mode: log stats for each chain
 		metrics := a.multichainManager.GetMetrics()
@@ -1071,14 +1165,6 @@ func (a *App) Shutdown() {
 				zap.Uint64("txsIndexed", m.TransactionsIndexed),
 				zap.Uint64("logsIndexed", m.LogsIndexed),
 			)
-		}
-	} else if a.storage != nil {
-		// Single-chain mode
-		finalHeight, err := a.storage.GetLatestHeight(ctx)
-		if err == nil {
-			a.logger.Info("Final statistics", zap.Uint64("latest_height", finalHeight))
-		} else if !errors.Is(err, port.ErrNotFound) {
-			a.logger.Warn("Failed to read final indexed height", zap.Error(err))
 		}
 	}
 
@@ -1135,7 +1221,7 @@ func applyAPIFlags(cfg *config.Config, f *Flags) {
 
 // validateConfig validates the configuration
 func validateConfig(cfg *config.Config) error {
-	if cfg.RPC.Endpoint == "" {
+	if cfg.RPC.Endpoint == "" && !cfg.MultiChainMode() {
 		return fmt.Errorf("RPC endpoint is required (use --rpc flag or set in config.yaml)")
 	}
 	if cfg.Database.Path == "" {
@@ -1146,9 +1232,6 @@ func validateConfig(cfg *config.Config) error {
 	}
 	if cfg.Indexer.ChunkSize <= 0 {
 		return fmt.Errorf("batch size must be positive")
-	}
-	if cfg.MultiChain.Enabled && len(cfg.MultiChain.Chains) > 0 {
-		return fmt.Errorf("multichain mode is disabled: all chains would share the same storage keys and overwrite each other (refactoring plan D4, R2-8)")
 	}
 	if cfg.Database.ReadOnly {
 		return fmt.Errorf("database.readonly is not supported: the indexer must write; an API-only role is planned (refactoring plan R4-1)")
@@ -1194,6 +1277,19 @@ func clearDataFolder(path string, log *zap.Logger) error {
 
 	log.Info("Data folder cleared successfully", zap.String("path", path))
 	return nil
+}
+
+// databasePaths returns the databases the configuration indexes into: one
+// per chain in multichain mode, else database.path.
+func databasePaths(cfg *config.Config) []string {
+	if !cfg.MultiChainMode() {
+		return []string{cfg.Database.Path}
+	}
+	paths := make([]string, 0, len(cfg.MultiChain.Chains))
+	for _, cc := range cfg.MultiChain.Chains {
+		paths = append(paths, chainDBPath(cfg.Database.Path, cc.ID))
+	}
+	return paths
 }
 
 // reindexData clears blockchain data while preserving verification data (ABIs, source code, verification status)
