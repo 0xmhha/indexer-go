@@ -17,6 +17,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/stream"
 )
 
 // startAppOutbox starts an app on dir with the outbox on or off.
@@ -279,4 +280,91 @@ func waitRelayed(t *testing.T, app *App) {
 		last, err := ob.LastOutboxSeq(context.Background())
 		return err == nil && app.eventBus.LastSequence() == last
 	}, 10*time.Second, 5*time.Millisecond)
+}
+
+// TestEveryNodeReceivesEveryEvent is the R3-2 criterion: nodes that consume
+// the change stream, each as its own consumer group, all receive every
+// event, in the order the indexing node's bus does, with a reorganization
+// in between. One node stops while blocks are indexed and receives what it
+// missed when it starts again.
+func TestEveryNodeReceivesEveryEvent(t *testing.T) {
+	sc := testchain.BuildDefault()
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+	app := startAppOutbox(t, srv, filepath.Join(t.TempDir(), "db"), true)
+	defer app.Shutdown()
+	sub := app.eventBus.Subscribe("all", allEventTypes(), nil, 1<<16)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// A node is an event bus fed by a relay of its group.
+	type node struct {
+		bus  *events.EventBus
+		sub  *events.Subscription
+		stop func()
+	}
+	startRelay := func(n *node, group string) {
+		relayCtx, stop := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = stream.NewRelay(app.fetcher.Stream(), group, n.bus.Publish, nil).Run(relayCtx)
+		}()
+		n.stop = func() { stop(); <-done }
+	}
+	groups := []string{"api-1", "api-2", "api-3"}
+	nodes := make(map[string]*node)
+	for _, g := range groups {
+		_, err := app.fetcher.Stream().Join(ctx, g, stream.StartEarliest)
+		require.NoError(t, err)
+		bus := events.NewEventBus(1024, 1024)
+		go bus.Run()
+		defer bus.Stop()
+		n := &node{bus: bus, sub: bus.Subscribe("all", allEventTypes(), nil, 1<<16)}
+		startRelay(n, g)
+		defer func() { n.stop() }()
+		nodes[g] = n
+	}
+
+	head := sc.Chain.Head()
+	require.NoError(t, app.fetcher.FetchRange(ctx, 0, head/2))
+	nodes["api-2"].stop()
+	require.NoError(t, app.fetcher.FetchRange(ctx, head/2+1, head))
+	reorgChain(sc, head-3, 5)
+	newHead := sc.Chain.Head()
+	loopCtx, stopLoop := context.WithCancel(ctx)
+	loopDone := make(chan error, 1)
+	go func() { loopDone <- app.fetcher.Run(loopCtx) }()
+	require.Eventually(t, func() bool {
+		b, err := app.storage.GetBlock(ctx, newHead)
+		return err == nil && b.Extra != nil
+	}, time.Minute, 20*time.Millisecond)
+	stopLoop()
+	<-loopDone
+	startRelay(nodes["api-2"], "api-2")
+
+	last, err := app.storage.(port.Outbox).LastOutboxSeq(ctx)
+	require.NoError(t, err)
+	for _, g := range groups {
+		require.Eventually(t, func() bool { return nodes[g].bus.LastSequence() == last },
+			10*time.Second, 5*time.Millisecond, "node %s receives up to %d", g, last)
+	}
+	want := drain(t, sub)
+	requireSequence(t, want, 1)
+	require.Equal(t, last, uint64(len(want)))
+	var reorgs int
+	for _, ev := range want {
+		if ev.Type() == events.EventTypeReorg {
+			reorgs++
+		}
+	}
+	require.Equal(t, 1, reorgs)
+	for _, g := range groups {
+		got := drain(t, nodes[g].sub)
+		requireSequence(t, got, 1)
+		require.Equal(t, len(want), len(got), "node %s", g)
+		for i := range want {
+			require.Equal(t, eventKey(t, want[i]), eventKey(t, got[i]), "node %s event %d", g, i)
+		}
+	}
 }

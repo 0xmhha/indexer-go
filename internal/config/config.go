@@ -306,7 +306,9 @@ type TLSConfig struct {
 
 // NodeConfig holds configuration for multi-node deployment
 type NodeConfig struct {
-	// ID is the unique identifier for this node
+	// ID is the unique identifier for this node. It names the node's
+	// consumer group of the change stream (refactoring plan R3-2), so a
+	// restarted node resumes where it stopped. Defaults to the hostname.
 	ID string `yaml:"id"`
 	// Role is the node role: "writer", "reader", "all"
 	Role string `yaml:"role"`
@@ -1283,7 +1285,7 @@ func LoadUnvalidated(configFile string) (*Config, error) {
 func (c *Config) UnsupportedSettings() []string {
 	var out []string
 	if c.EventBus.Type != "" && c.EventBus.Type != "local" {
-		out = append(out, fmt.Sprintf("eventbus.type=%q is not wired; the in-process event bus is used (node.* settings are ignored too)", c.EventBus.Type))
+		out = append(out, fmt.Sprintf("eventbus.type=%q is not wired; the in-process event bus is used (node.role and node.priority are ignored too)", c.EventBus.Type))
 	}
 	if c.Watchlist.Enabled {
 		out = append(out, "watchlist.enabled has no effect: the watchlist was removed after v0.1.0")

@@ -18,10 +18,14 @@ import (
 // so they exist exactly when the block does, and a relay delivers them to
 // the event bus in sequence order after the commit. A storage without an
 // outbox gets the events published directly after the commit, as before.
+//
+// The relay consumes the outbox as this node's consumer group (R3-2), and
+// Stream gives the outbox to other consumers, each with its own group.
 
 // outboxState is the fetcher's outbox and relay.
 type outboxState struct {
 	store  port.Outbox
+	bus    *stream.OutboxBus
 	relay  *stream.Relay
 	once   sync.Once
 	cancel context.CancelFunc
@@ -29,17 +33,34 @@ type outboxState struct {
 }
 
 // initOutbox uses the storage's outbox when it has one and blocks are
-// indexed in transactions. retain is how many delivered entries the relay
-// keeps (0 keeps all).
-func (f *Fetcher) initOutbox(retain uint64) {
+// indexed in transactions. retain is how many delivered entries the outbox
+// keeps (0 keeps all); group is the relay's consumer group.
+func (f *Fetcher) initOutbox(retain uint64, group string) {
 	ob, ok := f.storage.(port.Outbox)
 	if !ok || f.txr == nil {
 		return
 	}
-	f.outbox = &outboxState{store: ob}
-	if f.eventBus != nil {
-		f.outbox.relay = stream.NewRelay(ob, f.eventBus.Publish, stream.RelayConfig{Retain: retain}, f.logger)
+	f.outbox = &outboxState{store: ob, bus: stream.NewOutboxBus(ob, stream.OutboxBusConfig{Retain: retain}, f.logger)}
+	if f.eventBus == nil {
+		return
 	}
+	f.outbox.relay = stream.NewRelay(f.outbox.bus, group, f.eventBus.Publish, f.logger)
+	// Join before anything is indexed: the relay starts on the first
+	// commit and must deliver that block's events too. A group that has a
+	// position (this node ran before) resumes there.
+	if _, err := f.outbox.bus.Join(context.Background(), f.outbox.relay.Group(), stream.StartLatest); err != nil {
+		f.logger.Error("Event relay could not join the change stream", zap.String("group", f.outbox.relay.Group()), zap.Error(err))
+	}
+}
+
+// Stream returns the change stream of the indexed blocks for consumers
+// besides the relay, each consuming as its own group, or nil when events
+// are not recorded in an outbox.
+func (f *Fetcher) Stream() stream.Bus {
+	if f.outbox == nil {
+		return nil
+	}
+	return f.outbox.bus
 }
 
 // recordEvents adds the events of the block being written to the outbox in
@@ -75,10 +96,15 @@ func (f *Fetcher) committed(evs []events.Event, height uint64) {
 	}
 }
 
-// notifyRelay starts the relay on first use and wakes it.
+// notifyRelay starts the relay on first use and wakes the stream's
+// consumers.
 func (f *Fetcher) notifyRelay() {
 	o := f.outbox
-	if o == nil || o.relay == nil {
+	if o == nil {
+		return
+	}
+	defer o.bus.Notify()
+	if o.relay == nil {
 		return
 	}
 	o.once.Do(func() {
@@ -98,7 +124,6 @@ func (f *Fetcher) notifyRelay() {
 			}
 		}()
 	})
-	o.relay.Notify()
 }
 
 // StartRelay starts delivering the outbox, including entries committed

@@ -15,7 +15,7 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 - `multichain.chains[].id`가 디렉터리 이름으로 쓸 수 없는 값(`/`, 앞의 `.` 등)이거나 중복일 때.
 - `database.readonly: true`: 수집기는 써야 한다. API 전용 실행은 별도 작업으로 계획되어 있다.
 
-다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.*`, `account_abstraction.entry_point_addresses`. `watchlist.enabled`와 `resilience.enabled`는 v0.1.0 이후 해당 기능을 지웠으므로 효과가 없고, 켜져 있으면 경고가 남는다.
+다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.role`·`node.priority`, `account_abstraction.entry_point_addresses`. `watchlist.enabled`와 `resilience.enabled`는 v0.1.0 이후 해당 기능을 지웠으므로 효과가 없고, 켜져 있으면 경고가 남는다.
 
 ---
 
@@ -97,7 +97,7 @@ eventbus:
   publish_buffer_size: 1000
   history_size: 100                     # 이벤트 히스토리 버퍼 크기
   outbox: true                          # 블록 이벤트를 outbox에 기록하고 relay가 sequence 순서로 전달
-  outbox_retention: 100000              # 전달한 뒤에도 DB에 남기는 이벤트 수, 0이면 모두 남김
+  outbox_retention: 100000              # 가장 느린 소비 그룹 뒤로 DB에 남기는 이벤트 수, 0이면 모두 남김
 
   # outbox(refactoring plan R3-1): 블록의 이벤트를 그 블록을 저장하는 트랜잭션에 함께
   # 기록한다(`/outbox/<seq>`). relay가 commit 뒤 sequence 순서로 이벤트 버스에 넘기고,
@@ -106,6 +106,13 @@ eventbus:
   # reorg 이벤트와 제거된 log 이벤트는 되돌리는 트랜잭션에 함께 기록된다.
   # 재색인은 outbox 항목을 지우지만 sequence는 이어간다. outbox: false는 commit 뒤
   # 직접 발행하던 이전 방식(sequence 없음)으로 되돌린다.
+  #
+  # 소비 그룹(R3-2): relay는 outbox를 `node.id`라는 소비 그룹으로 읽고, 그룹마다
+  # 어디까지 받았는지(`/meta/outbox/cursor/<group>`)를 따로 기록한다. 그래서 노드마다
+  # 모든 이벤트를 받고, 재시작하면 마지막으로 받은 batch 뒤부터 이어 받는다. 처음 보는
+  # 그룹은 시작 시점 뒤에 commit된 이벤트부터 받는다. node.id가 바뀌면 새 그룹이 되므로
+  # 이전 그룹이 받지 못한 이벤트는 넘어간다. 전달이 끝난 항목은 지금 소비 중인 그룹 중
+  # 가장 느린 그룹보다 outbox_retention개 넘게 뒤처진 것만 지운다.
 
   # Redis 백엔드 (type: redis 또는 hybrid)
   redis:
@@ -205,8 +212,8 @@ notifications:
 
 ```yaml
 node:
-  id: "node-1"                         # 노드 식별자
-  role: "all"                           # writer | reader | all
+  id: "node-1"                         # 노드 식별자, 기본값은 hostname. 이벤트 스트림의 소비 그룹 이름으로 쓴다
+  role: "all"                           # writer | reader | all (아직 반영되지 않음)
   priority: 0
 ```
 

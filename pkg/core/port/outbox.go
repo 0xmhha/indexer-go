@@ -31,9 +31,10 @@ type Outbox interface {
 	// LastOutboxSeq returns the sequence of the last committed entry, 0 if
 	// there is none.
 	LastOutboxSeq(ctx context.Context) (uint64, error)
-	// OutboxCursor returns the last sequence a named consumer (a relay)
-	// recorded as delivered, 0 if none.
-	OutboxCursor(ctx context.Context, name string) (uint64, error)
+	// OutboxCursor returns the last sequence a named consumer (a consumer
+	// group of the change stream) recorded as delivered; ok is false if it
+	// recorded none.
+	OutboxCursor(ctx context.Context, name string) (seq uint64, ok bool, err error)
 	// SetOutboxCursor records seq as delivered by the named consumer.
 	SetOutboxCursor(ctx context.Context, name string, seq uint64) error
 	// PruneOutbox deletes the entries with Seq < before. Numbering

@@ -108,6 +108,10 @@ type Config struct {
 	// OutboxRetain is how many delivered events the outbox keeps
 	// (eventbus.outbox_retention); 0 keeps all.
 	OutboxRetain uint64
+	// StreamGroup is the consumer group the relay feeds the event bus as
+	// (node.id); every node consumes the change stream as its own group.
+	// Empty means stream.DefaultGroup.
+	StreamGroup string
 }
 
 // Validate validates the fetcher configuration
@@ -219,7 +223,7 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 		txr:                 txr,
 	}
 	if !config.NoOutbox {
-		f.initOutbox(config.OutboxRetain)
+		f.initOutbox(config.OutboxRetain, config.StreamGroup)
 	}
 	return f
 }
