@@ -75,7 +75,16 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 		if err != nil {
 			return nil, fmt.Errorf("postgres: connect: %w", err)
 		}
-		_, err = conn.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+pgx.Identifier{schema}.Sanitize())
+		// CREATE SCHEMA IF NOT EXISTS is not safe against itself running
+		// concurrently (a unique violation), so processes opening a new
+		// schema together take the migration lock first.
+		err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", migrateLock); err != nil {
+				return err
+			}
+			_, err := tx.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+pgx.Identifier{schema}.Sanitize())
+			return err
+		})
 		_ = conn.Close(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("postgres: create schema %s: %w", schema, err)
