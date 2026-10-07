@@ -2,11 +2,11 @@ package storage
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
@@ -44,52 +44,22 @@ func (s *PebbleStorage) GetTransactions(ctx context.Context, hashes []common.Has
 	return txs, locations, nil
 }
 
-// GetTransactionsByAddress returns transactions for an address with pagination
-func (s *PebbleStorage) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
+// GetTransactionsByAddress returns one page of an address's transactions,
+// in the order they were indexed.
+func (s *PebbleStorage) GetTransactionsByAddress(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
 	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-
 	prefix := AddressTransactionKeyPrefix(addr)
-	// Create upper bound by copying prefix and appending 0xff
-	// Must copy to avoid modifying the prefix slice
-	upperBound := make([]byte, len(prefix), len(prefix)+1)
-	copy(upperBound, prefix)
-	upperBound = append(upperBound, 0xff)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: upperBound,
-	})
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), false, page, pageLimit(page, constants.DefaultPaginationLimit), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
+		return nil, "", err
 	}
-	defer iter.Close()
-
-	var hashes []common.Hash
-	count := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		if count < offset {
-			count++
-			continue
-		}
-
-		if len(hashes) >= limit {
-			break
-		}
-
-		var hash common.Hash
-		copy(hash[:], iter.Value())
-		hashes = append(hashes, hash)
-		count++
+	hashes := make([]common.Hash, len(entries))
+	for i, e := range entries {
+		hashes[i] = common.BytesToHash(e.Value)
 	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return hashes, nil
+	return hashes, next, nil
 }
 
 // AddTransactionToAddressIndex adds a transaction to an address index

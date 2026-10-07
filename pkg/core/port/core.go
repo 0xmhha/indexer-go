@@ -46,8 +46,10 @@ type Reader interface {
 	// the first such error is returned with the partial result.
 	GetTransactions(ctx context.Context, hashes []common.Hash) ([]*model.Transaction, []*TxLocation, error)
 
-	// GetTransactionsByAddress returns transactions for an address with pagination
-	GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error)
+	// GetTransactionsByAddress returns one page of the transactions indexed
+	// for an address (AddTransactionToAddressIndex), in the order they were
+	// indexed, and the cursor of the next page (see Page).
+	GetTransactionsByAddress(ctx context.Context, addr common.Address, page Page) ([]common.Hash, string, error)
 
 	// GetReceipts returns multiple receipts by transaction hashes (batch
 	// operation), with the same partial-result rule as GetTransactions.

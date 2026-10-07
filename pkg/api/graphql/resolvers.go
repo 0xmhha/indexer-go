@@ -522,35 +522,18 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 
 	address := common.HexToAddress(addressStr)
 
-	// Get pagination parameters with validation
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			if l > 100 {
-				limit = 100 // Maximum limit to prevent resource exhaustion
-			} else {
-				limit = l
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	// Fetch transaction hashes from storage
-	txHashes, err := s.storage.GetTransactionsByAddress(ctx, address, limit+1, offset)
+	txHashes, next, err := s.storage.GetTransactionsByAddress(ctx, address, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get transactions by address",
 			zap.String("address", addressStr),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to get transactions by address: %w", err)
-	}
-
-	// Determine if there are more results
-	hasMore := len(txHashes) > limit
-	if hasMore {
-		txHashes = txHashes[:limit]
 	}
 
 	// Convert transaction results to full transaction objects
@@ -588,34 +571,10 @@ func (s *Schema) resolveTransactionsByAddress(p graphql.ResolveParams) (interfac
 		nodes = append(nodes, txMap)
 	}
 
-	// Calculate pagination info
-	totalCount := len(nodes)
-	hasNextPage := hasMore
-	hasPreviousPage := offset > 0
-
-	var startCursor, endCursor interface{}
-	if len(nodes) > 0 {
-		if txMap, ok := nodes[0].(map[string]interface{}); ok {
-			if hash, ok := txMap["hash"].(string); ok {
-				startCursor = hash
-			}
-		}
-		if txMap, ok := nodes[len(nodes)-1].(map[string]interface{}); ok {
-			if hash, ok := txMap["hash"].(string); ok {
-				endCursor = hash
-			}
-		}
-	}
-
 	return map[string]interface{}{
 		"nodes":      nodes,
-		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     hasNextPage,
-			"hasPreviousPage": hasPreviousPage,
-			"startCursor":     startCursor,
-			"endCursor":       endCursor,
-		},
+		"totalCount": len(nodes),
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 

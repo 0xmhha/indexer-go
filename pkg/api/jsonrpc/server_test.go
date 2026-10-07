@@ -56,7 +56,7 @@ func (m *mockStorage) gethGetReceipt(ctx context.Context, hash common.Hash) (*ty
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
+func (m *mockStorage) offsetGetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
 	return []common.Hash{}, nil
 }
 
@@ -1169,7 +1169,7 @@ func (m *mockStorageWithErrors) gethGetReceipt(ctx context.Context, hash common.
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
+func (m *mockStorageWithErrors) offsetGetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -1653,7 +1653,7 @@ func (m *mockStorageWithNonNotFoundErrors) gethGetReceipt(ctx context.Context, h
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetGetTransactionsByAddress(ctx context.Context, addr common.Address, limit, offset int) ([]common.Hash, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -2696,4 +2696,19 @@ func (m *mockStorageWithNonNotFoundErrors) GetBlocksByTimeRange(ctx context.Cont
 
 func (m *mockStorageWithNonNotFoundErrors) GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error) {
 	return modelBlockOf(m.gethGetBlockByTimestamp(ctx, timestamp))
+}
+
+func (m *mockStorageWithNonNotFoundErrors) GetTransactionsByAddress(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
+	items, err := m.offsetGetTransactionsByAddress(ctx, addr, page.Limit, page.Offset)
+	return items, "", err
+}
+
+func (m *mockStorageWithErrors) GetTransactionsByAddress(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
+	items, err := m.offsetGetTransactionsByAddress(ctx, addr, page.Limit, page.Offset)
+	return items, "", err
+}
+
+func (m *mockStorage) GetTransactionsByAddress(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
+	items, err := m.offsetGetTransactionsByAddress(ctx, addr, page.Limit, page.Offset)
+	return items, "", err
 }

@@ -41,6 +41,10 @@ type PebbleStorage struct {
 	// orphanRetention is how many reorganization records are kept (0: all).
 	orphanRetention atomic.Uint64
 
+	// pageSteps counts the entries scanPage visited, so tests can check
+	// that a cursor page does not walk the entries before it.
+	pageSteps atomic.Int64
+
 	// Optional token metadata fetcher for on-demand fetching from chain
 	// When set, GetTokenBalances will fetch metadata from chain if not found in DB
 	tokenMetadataFetcher port.TokenMetadataFetcher

@@ -575,6 +575,7 @@ PageInfo.endCursor(): String
 PageInfo.hasNextPage(): Boolean!
 PageInfo.hasPreviousPage(): Boolean!
 PageInfo.startCursor(): String
+PaginationInput.after: String
 PaginationInput.limit: Int
 PaginationInput.offset: Int
 PaymasterStats.address(): String!

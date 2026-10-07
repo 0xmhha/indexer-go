@@ -7,6 +7,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
 )
@@ -30,6 +31,32 @@ func extractContext(ctx interface{}) context.Context {
 type PaginationParams struct {
 	Limit  int
 	Offset int
+	// After is the cursor of the previous page (keyset pagination).
+	After string
+}
+
+// page returns the storage page request for p.
+func (p PaginationParams) page() port.Page {
+	return port.Page{After: p.After, Limit: p.Limit, Offset: p.Offset}
+}
+
+// cursorPageInfo returns the pageInfo of a page read with p that returned
+// the cursor next: endCursor continues after this page, startCursor is the
+// cursor this page continued from.
+func cursorPageInfo(p PaginationParams, next string) map[string]interface{} {
+	info := map[string]interface{}{
+		"hasNextPage":     next != "",
+		"hasPreviousPage": p.After != "" || p.Offset > 0,
+		"startCursor":     nil,
+		"endCursor":       nil,
+	}
+	if p.After != "" {
+		info["startCursor"] = p.After
+	}
+	if next != "" {
+		info["endCursor"] = next
+	}
+	return info
 }
 
 // parsePaginationParams extracts pagination parameters from GraphQL args
@@ -53,6 +80,9 @@ func parsePaginationParams(p graphql.ResolveParams, maxLimit int) PaginationPara
 		}
 		if o, ok := pagination["offset"].(int); ok && o >= 0 {
 			params.Offset = o
+		}
+		if a, ok := pagination["after"].(string); ok {
+			params.After = a
 		}
 	}
 

@@ -26,7 +26,7 @@ func TestPortContracts(t *testing.T) {
 // behaviour they claim to.
 var brokenStores = map[string]func(*PebbleStorage) any{
 	"GetBlocksExcludesEnd":         func(s *PebbleStorage) any { return &blocksExcludeEnd{s} },
-	"AddressListIgnoresOffset":     func(s *PebbleStorage) any { return &addressListIgnoresOffset{s} },
+	"AddressListIgnoresCursor":     func(s *PebbleStorage) any { return &addressListIgnoresCursor{s} },
 	"CommitDiscards":               func(s *PebbleStorage) any { return &commitDiscards{s} },
 	"ReceiptsByBlockWrongOrder":    func(s *PebbleStorage) any { return &receiptsReversed{s} },
 	"MissingBlockIsNotErrNotFound": func(s *PebbleStorage) any { return &missingBlockNil{s} },
@@ -67,12 +67,13 @@ func (s *blocksExcludeEnd) GetBlocks(ctx context.Context, start, end uint64) ([]
 	return s.PebbleStorage.GetBlocks(ctx, start, end-1)
 }
 
-// addressListIgnoresOffset always lists an address's transactions from the
-// start.
-type addressListIgnoresOffset struct{ *PebbleStorage }
+// addressListIgnoresCursor always lists an address's transactions from the
+// start, ignoring the page cursor.
+type addressListIgnoresCursor struct{ *PebbleStorage }
 
-func (s *addressListIgnoresOffset) GetTransactionsByAddress(ctx context.Context, addr common.Address, limit, _ int) ([]common.Hash, error) {
-	return s.PebbleStorage.GetTransactionsByAddress(ctx, addr, limit, 0)
+func (s *addressListIgnoresCursor) GetTransactionsByAddress(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
+	page.After = ""
+	return s.PebbleStorage.GetTransactionsByAddress(ctx, addr, page)
 }
 
 // commitDiscards rolls a block transaction back when asked to commit it.

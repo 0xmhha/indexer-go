@@ -218,23 +218,36 @@ func testReader(t *testing.T, newStore NewStore) {
 		for _, b := range c.Blocks[1:] {
 			tx := b.Transactions[0]
 			require.NoError(t, s.AddTransactionToAddressIndex(ctx, addrA, tx.Hash))
+			require.NoError(t, s.AddTransactionToAddressIndex(ctx, addrB, b.Transactions[1].Hash))
 			want = append(want, tx.Hash)
 		}
-		got, err := s.GetTransactionsByAddress(ctx, addrA, 100, 0)
-		require.NoError(t, err)
-		assert.Equal(t, want, got, "in the order they were indexed")
+		byAddr := func(addr common.Address) listPage[common.Hash] {
+			return func(page port.Page) ([]common.Hash, string, error) {
+				return s.GetTransactionsByAddress(ctx, addr, page)
+			}
+		}
+		checkPaging(t, want, func(h common.Hash) common.Hash { return h }, byAddr(addrA))
+		checkCursorFromOtherList(t, byAddr(addrA), byAddr(addrB))
 
-		got, err = s.GetTransactionsByAddress(ctx, addrA, 2, 1)
-		require.NoError(t, err)
-		assert.Equal(t, want[1:3], got, "limit and offset")
-
-		got, err = s.GetTransactionsByAddress(ctx, addrA, 10, len(want))
-		require.NoError(t, err)
-		assert.Empty(t, got, "offset past the end")
-
-		got, err = s.GetTransactionsByAddress(ctx, unknown, 10, 0)
+		got, next, err := s.GetTransactionsByAddress(ctx, unknown, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, got)
+		assert.Empty(t, next)
+	})
+
+	t.Run("TransactionsByAddressResumeAfterAppend", func(t *testing.T) {
+		s := open[readerStore](t, newStore)
+		first, second := c.Blocks[1].Transactions[0].Hash, c.Blocks[2].Transactions[0].Hash
+		require.NoError(t, s.AddTransactionToAddressIndex(ctx, addrA, first))
+		require.NoError(t, s.AddTransactionToAddressIndex(ctx, addrA, second))
+		_, next, err := s.GetTransactionsByAddress(ctx, addrA, port.FirstPage(1))
+		require.NoError(t, err)
+		require.NotEmpty(t, next)
+		third := c.Blocks[3].Transactions[0].Hash
+		require.NoError(t, s.AddTransactionToAddressIndex(ctx, addrA, third))
+		got, _, err := s.GetTransactionsByAddress(ctx, addrA, port.Page{After: next, Limit: 10})
+		require.NoError(t, err)
+		assert.Equal(t, []common.Hash{second, third}, got, "a cursor stays valid while the list grows")
 	})
 }
 
