@@ -119,7 +119,7 @@ Settings that are read but not wired (`eventbus.type` other than local and `node
   - `cmd/indexer/api_snapshot_test.go`: pins the served GraphQL schema and JSON-RPC methods (`testdata/api/`), including the chain extensions
   - `cmd/indexer/balance_test.go`: compares indexed native balances with the test chain's state (EVM and StableNet rules)
   - `cmd/indexer/defects_test.go`: reproduces known data-integrity defects listed in `knownDefects`; remove an id when its fix lands
-- Storage port contracts: `pkg/core/port/porttest` checks any storage against every port (`porttest.Run`); Pebble runs it in `pkg/storage/contract_test.go`, which also requires the contracts to fail on deliberately broken stores. Checks the reference storage still fails are marked with `knownDefect`
+- Storage port contracts: `pkg/core/port/porttest` checks any storage against every port (`porttest.Run`); Pebble runs it in `pkg/storage/contract_test.go`, which also requires the contracts to fail on deliberately broken stores
 - Benchmarks: EventBus performance tests
 
 ### Dependencies
