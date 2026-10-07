@@ -385,10 +385,10 @@ graph LR
 | ID | 작업 | 선행 | 검증 기준 |
 |---|---|---|---|
 | R1-1 | 도메인별 포트를 `core/port`로 옮긴다(블록, 로그, 주소, 토큰, 시스템 컨트랙트 등). `Storage` 합집합은 조립용으로만 남긴다. (완료 10/6: 인터페이스와 값 타입을 `pkg/core/port`로 옮기고 `pkg/storage`의 별칭을 지웠다. API는 `port.QueryStore`를 받고, 합집합에 이미 든 포트로 하는 assertion 64곳을 지웠다. fetch는 `port.Rollbacker`로 Pebble 검사를 대신한다. 시험: `TestPortsImportNoImplementation`, `TestStorageAssemblyOnly`, `TestNoPortAliases`. 후속(10/6): 포트는 체인 중립 모델(`pkg/core/model`)만 주고받는다(`core/types` import 금지 시험). `BlockReader`·`BlockWriter`가 `Reader`·`Writer`에 들어가고 `AsModelReader`, 공개 `Batch`, go-ethereum 쓰기 메서드를 지웠다. fee delegation 메타 저장을 `pkg/chains/stablenet/feedelegation`(`MetaStore`, `port.KV`)으로 옮겼고, `isFeeDelegated` 필터는 `chains.FeeDelegationOf`로 판정한다) | Phase 0 | 포트 패키지가 Pebble을 import하지 않는다(그래프 검사) |
-| R1-2 | `KVStore`를 공개 인터페이스에서 빼고, notifications는 자기 포트를 갖게 한다. resilience와 watchlist는 연결하거나 지운다. (완료 10/6: `Storage`에서 `KVStore`를 뺐고, notifications는 `KeyValueStore` 포트와 자기 키·keyspace를 갖는다. resilience·watchlist는 지웠다. 체인 패키지는 `storage.KV`를 쓴다) | R1-1 | 저장소 밖의 KVStore 호출이 0곳이다 |
-| R1-3 | 키 코덱. 고정 길이 이진 키와 단일 값 형식을 도입하고, 스키마 버전을 기록한다 | R1-1 | 키 정렬 속성 시험(무작위 높이에서 사전순과 숫자순이 같다. 후속(10/6): fee delegation 메타 저장을 `pkg/chains/stablenet/feedelegation`(`MetaStore`, `port.KV`)으로 옮겼고, `isFeeDelegated` 필터는 `chains.FeeDelegationOf`로 판정한다) |
+| R1-2 | `KVStore`를 공개 인터페이스에서 빼고, notifications는 자기 포트를 갖게 한다. resilience와 watchlist는 연결하거나 지운다. (완료 10/6: `Storage`에서 `KVStore`를 뺐고, notifications는 `KeyValueStore` 포트와 자기 키·keyspace를 갖는다. resilience·watchlist는 지웠다. 체인 패키지는 `port.KV`를 쓴다) | R1-1 | 저장소 밖의 KVStore 호출이 0곳이다 |
+| R1-3 | 키 코덱. 고정 길이 이진 키와 단일 값 형식을 도입하고, 스키마 버전을 기록한다. (K1 완료 10/5: 숫자 키를 고정 자릿수로. K2 보류 10/7: 측정 결과 이득이 작다, 11절) | R1-1 | 키 정렬 속성 시험(무작위 높이에서 사전순과 숫자순이 같다) |
 | R1-4 | 어댑터 계약 시험. 포트마다 어떤 어댑터든 통과해야 하는 시험 묶음을 만든다. (완료 10/6: `pkg/core/port/porttest`가 모든 포트 메서드의 계약을 포트만으로 시험하고 Pebble은 `TestPortContracts`로 통과한다. 일부러 틀린 저장소 5종을 잡는지 `TestPortContractsCatchBrokenStores`로 확인한다. 계약 작성 중 찾은 Pebble 결함은 `knownDefect`로 표시하고 따로 고친다) | R1-1 | Pebble 어댑터가 통과한다 |
-| R1-5 | keyset 페이지. 목록 포트를 `(cursor, limit)` 방식으로 바꾼다 | R1-1 | 깊은 페이지의 조회 시간이 페이지 위치와 무관하다 |
+| R1-5 | keyset 페이지. 목록 포트를 `(cursor, limit)` 방식으로 바꾼다. (완료 10/7: 목록 포트 30개가 `port.Page{After, Limit, Offset}`를 받고 다음 페이지 cursor를 돌려준다. Pebble은 `scanPage`로 key 범위를 읽어 cursor 페이지가 앞쪽 항목을 지나지 않는다(`pageSteps` 시험, 5만 개 목록에서 offset 1.8ms·cursor 3.8µs). GraphQL `PaginationInput.after`와 `pageInfo.endCursor`, JSON-RPC `after`·`nextCursor`. offset은 기존 클라이언트용으로 남는다. 계약은 `checkPaging`. 남은 것: GraphQL `reorgs`는 목록을 그대로 돌려줘 cursor를 내보내지 않고, `GetRecent*`는 limit만 받는다) | R1-1 | 깊은 페이지의 조회 시간이 페이지 위치와 무관하다 |
 | R1-6 | `backend.go`(KV 수준 추상화)를 지운다. (완료 10/6) | R1-1 | — |
 
 ### Phase 2: 수집 파이프라인 core와 기능 레지스트리
@@ -518,4 +518,16 @@ graph LR
 
 **K1: 숫자 키의 정렬(완료).** 블록·거래 키와 시스템 컨트랙트 이벤트 키의 숫자가 고정 자릿수가 아니었다(`/data/blocks/10`이 `/data/blocks/2`보다 앞). 그래서 iterator로 읽으면 같은 블록 안의 거래 10이 거래 2보다 먼저 나왔다. 모든 숫자 부분을 고정 자릿수(높이 20자리, 거래·log 6자리, 상태 3자리)로 바꿨다. `TestNumericKeysSortNumerically`는 숫자로 만드는 키 18종에 자릿수 경계값과 무작위 값을 넣어, 바이트 순서와 숫자 순서가 같은지 확인한다. 예전 형식의 `BlockKey`로 바꾸면 실패하는 것도 확인했다. 이 작업 중에 시스템 컨트랙트 이벤트 덮어쓰기(D21)와 minter·burner 색인 누락(D22)을 찾아 고쳤다. schema v2가 배포 전이라 버전은 올리지 않았다.
 
-**K2: 이진 인코딩(결정 필요).** 키를 사람이 읽을 수 있는 문자열에서 고정 길이 이진값으로 바꾸면 키가 짧아진다. 주소 hex(42바이트)는 20바이트, 높이(20바이트)는 8바이트가 된다. 비교도 빨라진다. 대신 golden 파일, DB 덤프, 운영 중 키 확인을 사람이 읽기 어려워진다. 그리고 키 함수 235개와 해석 코드를 모두 바꿔야 한다. 정렬 문제는 K1로 해결되었으므로, K2는 성능 측정(키 크기가 DB 크기와 조회 시간에 주는 영향)을 먼저 하고 정하는 것을 권장한다.
+**K2: 이진 인코딩(보류, 10/7 측정).** 합성 체인(4,000블록×50트랜잭션, 키 180만 개)을 실제 키 함수로 만든 문자열 키와, 같은 필드를 담은 이진 키로 각각 저장하고 compaction 뒤 비교했다. 값은 같게 했다. 키 평균 길이는 72.8바이트에서 27.5바이트로 62% 줄지만, Pebble이 블록 안에서 키의 공통 prefix를 압축하므로 디스크는 205MB에서 192MB로 6%만 줄었다. 단건 조회는 6.4µs에서 6.2µs(3%), 20건 범위 조회는 8.2~9.4µs에서 7.4µs(약 12%)였다. 이득이 작은 데 비해 키 함수 235개와 해석 코드를 다시 쓰고, golden·덤프·운영 중 키 확인의 가독성을 잃고, 전체 재색인이 필요하므로 지금은 하지 않는다. 값이 압축되는 실제 데이터에서는 키 비중이 더 클 수 있으니, PostgreSQL 어댑터(R4-2)나 저장 형식을 다시 바꿀 때 실제 DB로 다시 잰다.
+
+이전 기록:  키를 사람이 읽을 수 있는 문자열에서 고정 길이 이진값으로 바꾸면 키가 짧아진다. 주소 hex(42바이트)는 20바이트, 높이(20바이트)는 8바이트가 된다. 비교도 빨라진다. 대신 golden 파일, DB 덤프, 운영 중 키 확인을 사람이 읽기 어려워진다. 그리고 키 함수 235개와 해석 코드를 모두 바꿔야 한다. 정렬 문제는 K1로 해결되었으므로, K2는 성능 측정(키 크기가 DB 크기와 조회 시간에 주는 영향)을 먼저 하고 정하는 것을 권장한다.
+
+## 12. Phase 1 뒤에 남은 작은 항목 (10/7)
+
+Phase 1 작업 중 확인했지만 범위 밖이라 고치지 않은 것들이다. 각각 작고 서로 독립적이다.
+
+- `GetGasStatsByBlockRange`의 `AverageGasPrice`는 트랜잭션의 fee cap(go-ethereum `GasPrice()` 규칙)으로 평균을 낸다. 주소별 수수료는 receipt의 실제 가격으로 바꿨으므로(#24), 이 평균도 같은 기준으로 맞출지 정해야 한다.
+- GraphQL·fee delegation의 `fromTime`/`toTime`은 `GetBlockByTimestamp`(그 시각 이후 첫 블록)로 블록 범위를 정한다. 그래서 `toTime`은 그 시각 뒤의 첫 블록까지 포함한다. "그 시각 이전 마지막 블록"으로 상한을 정하는 함수가 있으면 정확해진다.
+- 같은 높이의 블록을 rollback 없이 다른 시각으로 다시 쓰면 예전 시간 색인 항목이 남는다. 지금 그런 경로는 없다(reorg는 rollback을 거친다).
+- GraphQL `reorgs`는 목록을 그대로 돌려줘서 cursor를 내보낼 자리가 없다(스키마 변경 필요). `GetRecent*` 목록은 limit만 받는다.
+- 로그 재색인 결함(#23)을 고치며 로그마다 저장된 로그를 한 번 더 읽는다. live head 지연 p95가 43~44ms에서 48ms로 늘었다(블록 간격 1초 대비 작음).
