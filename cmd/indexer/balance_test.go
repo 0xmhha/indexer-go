@@ -21,7 +21,7 @@ import (
 // whether the indexer has any record of addr up to n.
 func indexedBalanceAt(t *testing.T, r port.HistoricalReader, addr common.Address, n uint64) (*big.Int, bool) {
 	t.Helper()
-	hist, err := r.GetBalanceHistory(context.Background(), addr, 0, n, 1<<20, 0)
+	hist, _, err := r.GetBalanceHistory(context.Background(), addr, 0, n, port.FirstPage(1<<20))
 	require.NoError(t, err)
 	if len(hist) == 0 {
 		return nil, false
@@ -161,7 +161,7 @@ func TestTimeQueriesFindIndexedBlocks(t *testing.T) {
 	head := sc.Chain.Head()
 	first, last := sc.Chain.Block(0).Block.Time(), sc.Chain.Block(head).Block.Time()
 
-	blocks, err := r.GetBlocksByTimeRange(ctx, first, last, int(head)+1, 0)
+	blocks, _, err := r.GetBlocksByTimeRange(ctx, first, last, port.FirstPage(int(head)+1))
 	require.NoError(t, err)
 	require.Len(t, blocks, int(head)+1)
 	for i, b := range blocks {

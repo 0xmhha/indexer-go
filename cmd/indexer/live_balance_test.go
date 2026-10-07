@@ -76,7 +76,7 @@ func TestLiveBalances(t *testing.T) {
 	var mismatches []string
 	snapshots := 0
 	for _, addr := range accounts {
-		hist, err := r.GetBalanceHistory(ctx, addr, from, head, 1<<20, 0)
+		hist, _, err := r.GetBalanceHistory(ctx, addr, from, head, port.FirstPage(1<<20))
 		require.NoError(t, err)
 		for i, s := range hist {
 			// A block can have several entries (the starting balance of an

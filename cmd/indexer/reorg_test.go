@@ -317,7 +317,7 @@ func TestReorgEventsAndOrphans(t *testing.T) {
 	}
 
 	orphans := app.storage.(port.OrphanReader)
-	reorgs, err := orphans.GetReorgs(ctx, 10, 0)
+	reorgs, _, err := orphans.GetReorgs(ctx, port.FirstPage(10))
 	require.NoError(t, err)
 	require.Len(t, reorgs, 1)
 	for _, b := range removed {

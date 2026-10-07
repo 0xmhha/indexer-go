@@ -191,7 +191,7 @@ func (h *handler) initGenesisMiner(ctx context.Context, miner common.Address) er
 	if current.Sign() != 0 {
 		return nil
 	}
-	history, err := h.r.GetBalanceHistory(ctx, miner, 0, 0, 1, 0)
+	history, _, err := h.r.GetBalanceHistory(ctx, miner, 0, 0, port.FirstPage(1))
 	if err != nil {
 		return fmt.Errorf("failed to check miner balance history: %w", err)
 	}

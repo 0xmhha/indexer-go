@@ -21,8 +21,9 @@ type TokenMetadataStorage interface {
 	// DeleteTokenMetadata removes token metadata by address
 	DeleteTokenMetadata(ctx context.Context, address common.Address) error
 
-	// ListTokensByStandard retrieves tokens filtered by standard with pagination
-	ListTokensByStandard(ctx context.Context, standard TokenStandard, limit, offset int) ([]*TokenMetadata, error)
+	// ListTokensByStandard returns one page of the tokens of a standard (see
+	// port.TokenMetadataReader)
+	ListTokensByStandard(ctx context.Context, standard TokenStandard, page port.Page) ([]*TokenMetadata, string, error)
 
 	// GetTokensCount returns the count of tokens, optionally filtered by standard
 	GetTokensCount(ctx context.Context, standard TokenStandard) (int, error)
@@ -305,9 +306,10 @@ func (s *Service) GetTokenMetadata(ctx context.Context, address common.Address) 
 	return s.storage.GetTokenMetadata(ctx, address)
 }
 
-// ListTokens lists tokens with optional standard filter and pagination
-func (s *Service) ListTokens(ctx context.Context, standard TokenStandard, limit, offset int) ([]*TokenMetadata, error) {
-	return s.storage.ListTokensByStandard(ctx, standard, limit, offset)
+// ListTokens returns one page of the tokens with an optional standard
+// filter, and the cursor of the next page
+func (s *Service) ListTokens(ctx context.Context, standard TokenStandard, page port.Page) ([]*TokenMetadata, string, error) {
+	return s.storage.ListTokensByStandard(ctx, standard, page)
 }
 
 // SearchTokens searches tokens by name or symbol

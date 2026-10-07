@@ -55,7 +55,7 @@ func (m *mockStorage) IsContractVerified(_ context.Context, address common.Addre
 	return v.IsVerified, nil
 }
 
-func (m *mockStorage) ListVerifiedContracts(_ context.Context, _, _ int) ([]common.Address, error) {
+func (m *mockStorage) offsetListVerifiedContracts(_ context.Context, _, _ int) ([]common.Address, error) {
 	return nil, nil
 }
 

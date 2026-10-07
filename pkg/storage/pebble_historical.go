@@ -11,6 +11,7 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -24,62 +25,35 @@ var _ port.HistoricalWriter = (*PebbleStorage)(nil)
 // Historical Data Methods
 // ============================================================================
 
-// GetBlocksByTimeRange returns blocks within a time range
-func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+// GetBlocksByTimeRange returns one page of the blocks within a time range,
+// in the order of the timestamp index (time, then height). The cursor is the
+// last block's timestamp index key; index entries whose block is missing are
+// skipped.
+func (s *PebbleStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, page port.Page) ([]*model.Block, string, error) {
 	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if fromTime > toTime {
-		return nil, fmt.Errorf("fromTime (%d) cannot be greater than toTime (%d)", fromTime, toTime)
+		return nil, "", fmt.Errorf("fromTime (%d) cannot be greater than toTime (%d)", fromTime, toTime)
 	}
 
-	// Create iterator for timestamp range
-	iter, err := s.kv(ctx).NewIter(blockTimeRange(fromTime, toTime))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var blocks []*model.Block
-	count := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip offset items
-		if count < offset {
-			count++
-			continue
-		}
-
-		// Stop if limit reached
-		if len(blocks) >= limit {
-			break
-		}
-
-		// Extract height from value
-		height, err := DecodeUint64(iter.Value())
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode height: %w", err)
-		}
-
-		// Get block by height
-		block, err := s.GetBlock(ctx, height)
-		if err != nil {
-			if err == port.ErrNotFound {
-				continue // Skip missing blocks
+	bounds := blockTimeRange(fromTime, toTime)
+	return scanLoadedPage(ctx, s, bounds.LowerBound, bounds.UpperBound, false, page, pageLimit(page, constants.DefaultPaginationLimit),
+		func(ctx context.Context, _, value []byte) (*model.Block, bool, error) {
+			height, err := DecodeUint64(value)
+			if err != nil {
+				return nil, false, fmt.Errorf("failed to decode height: %w", err)
 			}
-			return nil, fmt.Errorf("failed to get block %d: %w", height, err)
-		}
-
-		blocks = append(blocks, block)
-		count++
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return blocks, nil
+			block, err := s.GetBlock(ctx, height)
+			if errors.Is(err, port.ErrNotFound) {
+				return nil, false, nil // Skip missing blocks
+			}
+			if err != nil {
+				return nil, false, fmt.Errorf("failed to get block %d: %w", height, err)
+			}
+			return block, true, nil
+		})
 }
 
 // blockTimeRange returns the iterator bounds of the timestamp index entries
@@ -153,10 +127,14 @@ func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint6
 	return s.GetBlock(ctx, closestHeight)
 }
 
-// GetTransactionsByAddressFiltered returns filtered transactions for an address
-func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
+// GetTransactionsByAddressFiltered returns one page of an address's
+// transactions that match filter, in address index order. The filter is
+// applied while scanning the address index, so the cursor is the address
+// index key of the last match and a cursor page reads only the entries after
+// it; Offset still counts matches from the start.
+func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, page port.Page) ([]*port.TransactionWithReceipt, string, error) {
 	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if filter == nil {
@@ -164,88 +142,52 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 	}
 
 	if err := filter.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid filter: %w", err)
+		return nil, "", fmt.Errorf("invalid filter: %w", err)
 	}
 
-	// Get all transaction hashes for the address
-	// We need to scan all because we don't have block-indexed address transactions
 	prefix := AddressTransactionKeyPrefix(addr)
-	upperBound := make([]byte, len(prefix), len(prefix)+1)
-	copy(upperBound, prefix)
-	upperBound = append(upperBound, 0xff)
+	return scanLoadedPage(ctx, s, prefix, prefixUpperBound(prefix), false, page, pageLimit(page, constants.DefaultPaginationLimit),
+		func(ctx context.Context, _, value []byte) (*port.TransactionWithReceipt, bool, error) {
+			txHash := common.BytesToHash(value)
 
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: upperBound,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var results []*port.TransactionWithReceipt
-	count := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		if len(results) >= limit {
-			break
-		}
-
-		var txHash common.Hash
-		copy(txHash[:], iter.Value())
-
-		// Get transaction and location
-		tx, location, err := s.GetTransaction(ctx, txHash)
-		if err != nil {
-			if err == port.ErrNotFound {
-				continue
+			// Get transaction and location
+			tx, location, err := s.GetTransaction(ctx, txHash)
+			if err != nil {
+				if errors.Is(err, port.ErrNotFound) {
+					return nil, false, nil
+				}
+				return nil, false, fmt.Errorf("failed to get transaction: %w", err)
 			}
-			return nil, fmt.Errorf("failed to get transaction: %w", err)
-		}
 
-		// Get receipt
-		receipt, err := s.GetReceipt(ctx, txHash)
-		if err != nil {
-			if err == port.ErrNotFound {
-				// Continue without receipt (optional)
-				receipt = nil
-			} else {
-				return nil, fmt.Errorf("failed to get receipt: %w", err)
+			// Get receipt
+			receipt, err := s.GetReceipt(ctx, txHash)
+			if err != nil {
+				if !errors.Is(err, port.ErrNotFound) {
+					return nil, false, fmt.Errorf("failed to get receipt: %w", err)
+				}
+				receipt = nil // Continue without receipt (optional)
 			}
-		}
 
-		// Apply filter
-		if filter.MatchTransaction(tx, receipt, location, addr) {
+			// Apply filter
+			if !filter.MatchTransaction(tx, receipt, location, addr) {
+				return nil, false, nil
+			}
 			// Check fee delegation filter
 			if filter.IsFeeDelegated != nil {
 				isFD, err := s.isFeeDelegated(ctx, txHash)
 				if err != nil {
-					return nil, err
+					return nil, false, err
 				}
 				if *filter.IsFeeDelegated != isFD {
-					continue
+					return nil, false, nil
 				}
 			}
-
-			if count < offset {
-				count++
-				continue
-			}
-
-			results = append(results, &port.TransactionWithReceipt{
+			return &port.TransactionWithReceipt{
 				Transaction: tx,
 				Receipt:     receipt,
 				Location:    location,
-			})
-			count++
-		}
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return results, nil
+			}, true, nil
+		})
 }
 
 // isFeeDelegated reports whether a stored transaction has its gas paid by a
@@ -320,62 +262,31 @@ func (s *PebbleStorage) getAddressBalance(ctx context.Context, addr common.Addre
 	return balance, nil
 }
 
-// GetBalanceHistory returns the balance history for an address
-func (s *PebbleStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
+// GetBalanceHistory returns one page of an address's balance snapshots in
+// the block range, in the order they were recorded. The cursor is the last
+// snapshot's history key.
+func (s *PebbleStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, page port.Page) ([]port.BalanceSnapshot, string, error) {
 	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if fromBlock > toBlock {
-		return nil, fmt.Errorf("fromBlock (%d) cannot be greater than toBlock (%d)", fromBlock, toBlock)
+		return nil, "", fmt.Errorf("fromBlock (%d) cannot be greater than toBlock (%d)", fromBlock, toBlock)
 	}
 
 	prefix := AddressBalanceKeyPrefix(addr)
-	upperBound := make([]byte, len(prefix), len(prefix)+1)
-	copy(upperBound, prefix)
-	upperBound = append(upperBound, 0xff)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: upperBound,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var snapshots []port.BalanceSnapshot
-	count := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		if len(snapshots) >= limit {
-			break
-		}
-
-		snapshot, err := DecodeBalanceSnapshot(iter.Value())
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode snapshot: %w", err)
-		}
-
-		// Filter by block range
-		if snapshot.BlockNumber < fromBlock || snapshot.BlockNumber > toBlock {
-			continue
-		}
-
-		if count < offset {
-			count++
-			continue
-		}
-
-		snapshots = append(snapshots, *snapshot)
-		count++
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return snapshots, nil
+	return scanLoadedPage(ctx, s, prefix, prefixUpperBound(prefix), false, page, pageLimit(page, constants.DefaultPaginationLimit),
+		func(_ context.Context, _, value []byte) (port.BalanceSnapshot, bool, error) {
+			snapshot, err := DecodeBalanceSnapshot(value)
+			if err != nil {
+				return port.BalanceSnapshot{}, false, fmt.Errorf("failed to decode snapshot: %w", err)
+			}
+			// Filter by block range
+			if snapshot.BlockNumber < fromBlock || snapshot.BlockNumber > toBlock {
+				return port.BalanceSnapshot{}, false, nil
+			}
+			return *snapshot, true, nil
+		})
 }
 
 // GetBlockCount returns the total number of indexed blocks

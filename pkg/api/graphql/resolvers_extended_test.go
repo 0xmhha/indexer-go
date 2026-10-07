@@ -113,7 +113,7 @@ func (m *richMockStorage) GetRecentSetCodeAuthorizations(_ context.Context, _ in
 
 // ---- TokenHolder overrides for richMockStorage ----
 
-func (m *richMockStorage) GetTokenHolders(_ context.Context, _ common.Address, _, _ int) ([]*port.TokenHolder, error) {
+func (m *richMockStorage) offsetGetTokenHolders(_ context.Context, _ common.Address, _, _ int) ([]*port.TokenHolder, error) {
 	return []*port.TokenHolder{
 		{TokenAddress: common.HexToAddress("0xT1"), HolderAddress: common.HexToAddress("0x01"), Balance: big.NewInt(1000000)},
 	}, nil
@@ -281,7 +281,7 @@ func (m *mockStorage) GetRecentSetCodeAuthorizations(_ context.Context, _ int) (
 
 // ---- TokenHolderIndexReader implementation for mockStorage ----
 
-func (m *mockStorage) GetTokenHolders(_ context.Context, _ common.Address, _, _ int) ([]*port.TokenHolder, error) {
+func (m *mockStorage) offsetGetTokenHolders(_ context.Context, _ common.Address, _, _ int) ([]*port.TokenHolder, error) {
 	return []*port.TokenHolder{}, nil
 }
 func (m *mockStorage) GetTokenHolderCount(_ context.Context, _ common.Address) (int, error) {
@@ -293,7 +293,7 @@ func (m *mockStorage) GetTokenBalance(_ context.Context, _, _ common.Address) (*
 func (m *mockStorage) GetTokenHolderStats(_ context.Context, token common.Address) (*port.TokenHolderStats, error) {
 	return &port.TokenHolderStats{TokenAddress: token}, nil
 }
-func (m *mockStorage) GetHolderTokens(_ context.Context, _ common.Address, _, _ int) ([]*port.TokenHolder, error) {
+func (m *mockStorage) offsetGetHolderTokens(_ context.Context, _ common.Address, _, _ int) ([]*port.TokenHolder, error) {
 	return []*port.TokenHolder{}, nil
 }
 

@@ -280,7 +280,7 @@ func TestGetBlocksByTimeRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results, err := storage.GetBlocksByTimeRange(ctx, tt.fromTime, tt.toTime, tt.limit, tt.offset)
+			results, _, err := storage.GetBlocksByTimeRange(ctx, tt.fromTime, tt.toTime, port.Page{Limit: tt.limit, Offset: tt.offset})
 			if err != nil {
 				t.Fatalf("GetBlocksByTimeRange() error = %v", err)
 			}
@@ -454,7 +454,7 @@ func TestGetBalanceHistory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			history, err := storage.GetBalanceHistory(ctx, addr, tt.fromBlock, tt.toBlock, tt.limit, tt.offset)
+			history, _, err := storage.GetBalanceHistory(ctx, addr, tt.fromBlock, tt.toBlock, port.Page{Limit: tt.limit, Offset: tt.offset})
 			if err != nil {
 				t.Fatalf("GetBalanceHistory() error = %v", err)
 			}

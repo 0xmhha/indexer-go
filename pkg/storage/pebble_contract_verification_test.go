@@ -145,7 +145,7 @@ func TestPebbleStorage_ListVerifiedContracts(t *testing.T) {
 	}
 
 	// List all contracts
-	list, err := storage.ListVerifiedContracts(ctx, 10, 0)
+	list, _, err := storage.ListVerifiedContracts(ctx, port.FirstPage(10))
 	if err != nil {
 		t.Fatalf("ListVerifiedContracts() error = %v", err)
 	}
@@ -155,7 +155,7 @@ func TestPebbleStorage_ListVerifiedContracts(t *testing.T) {
 	}
 
 	// Test pagination
-	list, err = storage.ListVerifiedContracts(ctx, 2, 0)
+	list, _, err = storage.ListVerifiedContracts(ctx, port.FirstPage(2))
 	if err != nil {
 		t.Fatalf("ListVerifiedContracts() with limit error = %v", err)
 	}
@@ -165,7 +165,7 @@ func TestPebbleStorage_ListVerifiedContracts(t *testing.T) {
 	}
 
 	// Test offset
-	list, err = storage.ListVerifiedContracts(ctx, 10, 2)
+	list, _, err = storage.ListVerifiedContracts(ctx, port.Page{Limit: 10, Offset: 2})
 	if err != nil {
 		t.Fatalf("ListVerifiedContracts() with offset error = %v", err)
 	}
@@ -182,7 +182,7 @@ func TestPebbleStorage_ListVerifiedContracts_Empty(t *testing.T) {
 	storage := s.(*PebbleStorage)
 	ctx := context.Background()
 
-	list, err := storage.ListVerifiedContracts(ctx, 10, 0)
+	list, _, err := storage.ListVerifiedContracts(ctx, port.FirstPage(10))
 	if err != nil {
 		t.Fatalf("ListVerifiedContracts() error = %v", err)
 	}
@@ -316,7 +316,7 @@ func TestPebbleStorage_ContractVerification_ClosedStorage(t *testing.T) {
 		t.Errorf("IsContractVerified() on closed storage error = %v, want ErrClosed", err)
 	}
 
-	_, err = storage.ListVerifiedContracts(ctx, 10, 0)
+	_, _, err = storage.ListVerifiedContracts(ctx, port.FirstPage(10))
 	if err != port.ErrClosed {
 		t.Errorf("ListVerifiedContracts() on closed storage error = %v, want ErrClosed", err)
 	}

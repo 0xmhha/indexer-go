@@ -48,7 +48,7 @@ func TestPebbleStorage_UpdateAndGetTokenHolder(t *testing.T) {
 	})
 
 	t.Run("GetTokenHolders", func(t *testing.T) {
-		holders, err := storage.GetTokenHolders(ctx, token, 10, 0)
+		holders, _, err := storage.GetTokenHolders(ctx, token, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Len(t, holders, 2)
 	})
@@ -60,7 +60,7 @@ func TestPebbleStorage_UpdateAndGetTokenHolder(t *testing.T) {
 	})
 
 	t.Run("GetHolderTokens", func(t *testing.T) {
-		tokens, err := storage.GetHolderTokens(ctx, holder1, 10, 0)
+		tokens, _, err := storage.GetHolderTokens(ctx, holder1, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Len(t, tokens, 1)
 		assert.Equal(t, token, tokens[0].TokenAddress)

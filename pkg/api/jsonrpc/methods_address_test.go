@@ -185,7 +185,7 @@ func (m *mockAddressIndexStorage) IsContractVerified(ctx context.Context, addres
 	return false, nil
 }
 
-func (m *mockAddressIndexStorage) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+func (m *mockAddressIndexStorage) offsetListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
 	return []common.Address{}, nil
 }
 

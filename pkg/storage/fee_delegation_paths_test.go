@@ -67,7 +67,7 @@ func TestLegacyReadsFindFeeDelegationTxs(t *testing.T) {
 		for _, want := range []bool{true, false} {
 			filter := port.DefaultTransactionFilter()
 			filter.IsFeeDelegated = &want
-			got, err := s.GetTransactionsByAddressFiltered(ctx, tx.From, filter, 10, 0)
+			got, _, err := s.GetTransactionsByAddressFiltered(ctx, tx.From, filter, port.FirstPage(10))
 			require.NoError(t, err)
 			var gotIdx, wantIdx []uint64
 			for _, r := range got {

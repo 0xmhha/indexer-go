@@ -82,7 +82,7 @@ func TestBalanceTrackingFullFlow(t *testing.T) {
 	t.Logf("✅ Balance after second update: %s wei (70 ETH)", balance2.String())
 
 	// 7. Test GetBalanceHistory
-	history, err := storage.GetBalanceHistory(ctx, addr, 0, 100, 10, 0)
+	history, _, err := storage.GetBalanceHistory(ctx, addr, 0, 100, port.FirstPage(10))
 	if err != nil {
 		t.Fatalf("GetBalanceHistory() failed: %v", err)
 	}

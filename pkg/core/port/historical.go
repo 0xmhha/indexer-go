@@ -201,9 +201,10 @@ type AddressStats struct {
 // HistoricalReader provides read-only access to historical blockchain data
 type HistoricalReader interface {
 	// GetBlocksByTimeRange returns blocks within a time range, both ends
-	// inclusive, in time order. It finds the blocks stored with
-	// BlockWriter.SetBlock and those indexed with SetBlockTimestamp.
-	GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error)
+	// inclusive, in time order, one page at a time (see Page). It finds the
+	// blocks stored with BlockWriter.SetBlock and those indexed with
+	// SetBlockTimestamp.
+	GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, page Page) ([]*model.Block, string, error)
 
 	// GetBlockByTimestamp returns the first block at or after the given
 	// timestamp, or the last block when every block is earlier. Callers turn
@@ -211,15 +212,20 @@ type HistoricalReader interface {
 	// the time while a later one exists.
 	GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error)
 
-	// GetTransactionsByAddressFiltered returns filtered transactions for an address
-	GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *TransactionFilter, limit, offset int) ([]*TransactionWithReceipt, error)
+	// GetTransactionsByAddressFiltered returns one page of an address's
+	// transactions that match filter, in the order they were indexed (see
+	// Page). Offset counts matching transactions; a cursor continues after
+	// the last match returned.
+	GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *TransactionFilter, page Page) ([]*TransactionWithReceipt, string, error)
 
 	// GetAddressBalance returns the balance of an address at a specific block
 	// If blockNumber is 0, returns the latest balance
 	GetAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error)
 
-	// GetBalanceHistory returns the balance history for an address
-	GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]BalanceSnapshot, error)
+	// GetBalanceHistory returns one page of an address's balance snapshots
+	// between fromBlock and toBlock inclusive, in the order they were
+	// recorded (see Page).
+	GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, page Page) ([]BalanceSnapshot, string, error)
 
 	// GetBlockCount returns the total number of indexed blocks
 	GetBlockCount(ctx context.Context) (uint64, error)

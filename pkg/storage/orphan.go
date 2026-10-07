@@ -245,24 +245,27 @@ var (
 	_ port.Rollbacker   = (*PebbleStorage)(nil)
 )
 
-// GetReorgs implements OrphanReader.
-func (s *PebbleStorage) GetReorgs(ctx context.Context, limit, offset int) ([]*port.Reorg, error) {
-	last, err := s.lastReorgSeq(ctx)
+// GetReorgs implements OrphanReader. Record keys hold the zero-padded
+// sequence number, so a reverse scan lists them newest first and the cursor
+// is the last record's key. Pruned records (SetOrphanRetention) have no key.
+func (s *PebbleStorage) GetReorgs(ctx context.Context, page port.Page) ([]*port.Reorg, string, error) {
+	if err := s.ensureNotClosed(); err != nil {
+		return nil, "", err
+	}
+	prefix := []byte(prefixOrphanReorg)
+	entries, next, err := s.scanPageOrAll(ctx, prefix, prefixUpperBound(prefix), true, page, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	var out []*port.Reorg
-	for seq := int64(last) - int64(offset); seq >= 1 && (limit <= 0 || len(out) < limit); seq-- {
-		r, err := s.GetReorg(ctx, uint64(seq))
-		if errors.Is(err, port.ErrNotFound) {
-			break // older records were pruned (SetOrphanRetention)
+	out := make([]*port.Reorg, len(entries))
+	for i, e := range entries {
+		var r port.Reorg
+		if err := rlp.DecodeBytes(e.Value, &r); err != nil {
+			return nil, "", fmt.Errorf("decode reorg record %s: %w", e.Key[len(prefix):], err)
 		}
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, r)
+		out[i] = &r
 	}
-	return out, nil
+	return out, next, nil
 }
 
 // GetReorg implements OrphanReader.

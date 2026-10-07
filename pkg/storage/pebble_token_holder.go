@@ -1,11 +1,12 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
@@ -80,60 +81,41 @@ func tokenHolderStatsFromJSON(j *TokenHolderStatsJSON) *port.TokenHolderStats {
 	}
 }
 
-// GetTokenHolders retrieves token holders sorted by balance (descending) with pagination
-func (s *PebbleStorage) GetTokenHolders(ctx context.Context, token common.Address, limit, offset int) ([]*port.TokenHolder, error) {
+// GetTokenHolders returns one page of a token's holders, largest balance
+// first. The by-token index key holds the inverted balance, so key order is
+// balance order and the cursor is the last holder's index key.
+func (s *PebbleStorage) GetTokenHolders(ctx context.Context, token common.Address, page port.Page) ([]*port.TokenHolder, string, error) {
 	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-
 	prefix := TokenHolderByTokenIndexPrefix(token)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
+	// Format: /index/token/holder/token/{token}/{balanceHex}/{holder}
+	return s.tokenHolderPage(ctx, prefix, page, func(key []byte) (common.Address, common.Address) {
+		return token, lastKeyAddress(key)
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
+}
 
-	var holders []*port.TokenHolder
-	skipped := 0
+// tokenHolderPage reads one page of a holder index under prefix; holderOf
+// returns the token and holder an index key names. Index entries whose
+// holder record is missing are skipped.
+func (s *PebbleStorage) tokenHolderPage(ctx context.Context, prefix []byte, page port.Page, holderOf func(key []byte) (common.Address, common.Address)) ([]*port.TokenHolder, string, error) {
+	return scanLoadedPage(ctx, s, prefix, prefixUpperBound(prefix), false, page, page.Limit,
+		func(ctx context.Context, key, _ []byte) (*port.TokenHolder, bool, error) {
+			token, holder := holderOf(key)
+			h, err := s.getTokenHolder(ctx, token, holder)
+			if errors.Is(err, port.ErrNotFound) {
+				return nil, false, nil
+			}
+			if err != nil {
+				return nil, false, err
+			}
+			return h, true, nil
+		})
+}
 
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip for offset
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if limit > 0 && len(holders) >= limit {
-			break
-		}
-
-		// Extract holder address from index key
-		// Format: /index/token/holder/token/{token}/{balanceHex}/{holder}
-		keyStr := string(iter.Key())
-		parts := strings.Split(keyStr, "/")
-		if len(parts) < 2 {
-			continue
-		}
-		holderHex := parts[len(parts)-1]
-		holderAddr := common.HexToAddress(holderHex)
-
-		// Get the actual holder data
-		holder, err := s.getTokenHolder(ctx, token, holderAddr)
-		if err != nil {
-			continue
-		}
-		holders = append(holders, holder)
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return holders, nil
+// lastKeyAddress returns the address in the last "/" segment of key.
+func lastKeyAddress(key []byte) common.Address {
+	return common.HexToAddress(string(key[bytes.LastIndexByte(key, '/')+1:]))
 }
 
 // GetTokenHolderCount returns the number of unique holders for a token
@@ -209,60 +191,17 @@ func (s *PebbleStorage) GetTokenHolderStats(ctx context.Context, token common.Ad
 	return tokenHolderStatsFromJSON(&jsonData), nil
 }
 
-// GetHolderTokens retrieves all tokens held by a specific address with pagination
-func (s *PebbleStorage) GetHolderTokens(ctx context.Context, holder common.Address, limit, offset int) ([]*port.TokenHolder, error) {
+// GetHolderTokens returns one page of the tokens an address holds, in the
+// order of the by-holder index (token address).
+func (s *PebbleStorage) GetHolderTokens(ctx context.Context, holder common.Address, page port.Page) ([]*port.TokenHolder, string, error) {
 	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-
 	prefix := TokenHolderByHolderIndexPrefix(holder)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
+	// Format: /index/token/holder/holder/{holder}/{token}
+	return s.tokenHolderPage(ctx, prefix, page, func(key []byte) (common.Address, common.Address) {
+		return lastKeyAddress(key), holder
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var holders []*port.TokenHolder
-	skipped := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip for offset
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if limit > 0 && len(holders) >= limit {
-			break
-		}
-
-		// Extract token address from index key
-		// Format: /index/token/holder/holder/{holder}/{token}
-		keyStr := string(iter.Key())
-		parts := strings.Split(keyStr, "/")
-		if len(parts) < 2 {
-			continue
-		}
-		tokenHex := parts[len(parts)-1]
-		tokenAddr := common.HexToAddress(tokenHex)
-
-		// Get the actual holder data
-		h, err := s.getTokenHolder(ctx, tokenAddr, holder)
-		if err != nil {
-			continue
-		}
-		holders = append(holders, h)
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return holders, nil
 }
 
 // UpdateTokenHolder updates the balance for a token holder
