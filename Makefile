@@ -1,4 +1,4 @@
-.PHONY: all build clean test lint lint-install coverage generate tools help
+.PHONY: all build clean test test-postgres lint lint-install coverage generate tools help
 
 # Variables
 BINARY_NAME=indexer-go
@@ -71,6 +71,10 @@ test-all:
 test-integration:
 	@echo "Running integration tests..."
 	$(GOTEST) -v -tags=integration ./...
+
+## test-postgres: Run the PostgreSQL adapter tests (disposable container, or INDEXER_TEST_POSTGRES)
+test-postgres:
+	@./scripts/test-postgres.sh
 
 ## coverage: Generate test coverage report
 coverage:
