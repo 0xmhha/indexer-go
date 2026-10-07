@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"net"
 	"os/exec"
 	"time"
 
@@ -16,8 +17,9 @@ import (
 )
 
 const (
-	// DefaultPort is the default Anvil RPC port
-	DefaultPort = 8545
+	// DefaultPort is 0: each test instance listens on a free port, so tests
+	// never talk to (or change) an Anvil node that is already running.
+	DefaultPort = 0
 
 	// DefaultChainID is the default Anvil chain ID
 	DefaultChainID = 31337
@@ -72,6 +74,7 @@ type TestInstance struct {
 	Config    *TestConfig
 	cmd       *exec.Cmd
 	rpcURL    string
+	exited    chan struct{} // closed when the Anvil process exits
 	rpcClient *rpc.Client
 	ethClient *ethclient.Client
 	logger    *zap.Logger
@@ -93,8 +96,16 @@ func NewTestInstance(config *TestConfig, logger *zap.Logger) *TestInstance {
 	}
 }
 
-// Start starts the Anvil process
+// Start starts the Anvil process. A zero port selects a free one.
 func (t *TestInstance) Start(ctx context.Context) error {
+	if t.Config.Port == 0 {
+		port, err := freePort()
+		if err != nil {
+			return err
+		}
+		t.Config.Port = port
+		t.rpcURL = fmt.Sprintf("http://localhost:%d", port)
+	}
 	args := []string{
 		"--port", fmt.Sprintf("%d", t.Config.Port),
 		"--chain-id", fmt.Sprintf("%d", t.Config.ChainID),
@@ -123,6 +134,11 @@ func (t *TestInstance) Start(ctx context.Context) error {
 	if err := t.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start anvil: %w", err)
 	}
+	t.exited = make(chan struct{})
+	go func() {
+		_ = t.cmd.Wait()
+		close(t.exited)
+	}()
 
 	// Wait for Anvil to be ready
 	if err := t.waitForReady(ctx); err != nil {
@@ -146,6 +162,8 @@ func (t *TestInstance) waitForReady(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-t.exited:
+			return fmt.Errorf("anvil exited before it was ready")
 		default:
 		}
 
@@ -186,7 +204,7 @@ func (t *TestInstance) Stop() {
 
 	if t.cmd != nil && t.cmd.Process != nil {
 		_ = t.cmd.Process.Kill()
-		_ = t.cmd.Wait()
+		<-t.exited
 		t.cmd = nil
 	}
 
@@ -326,4 +344,14 @@ func SkipIfNoAnvil(skip func(args ...interface{})) {
 	if !IsAnvilInstalled() {
 		skip("anvil not installed, skipping E2E test")
 	}
+}
+
+// freePort returns a TCP port nothing listens on.
+func freePort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, fmt.Errorf("find a free port: %w", err)
+	}
+	defer func() { _ = l.Close() }()
+	return l.Addr().(*net.TCPAddr).Port, nil
 }
