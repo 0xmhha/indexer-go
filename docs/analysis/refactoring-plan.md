@@ -419,7 +419,7 @@ graph LR
 | ID | 작업 | 선행 | 검증 기준 |
 |---|---|---|---|
 | R4-1 | 실행 역할 `ingest`/`api`/`all`. api는 읽기 전용으로 연다 | R3-2 | api 노드 N개를 동시에 띄운다 |
-| R4-2 | PostgreSQL 어댑터(포트 계약 시험 통과), migration 도구 | R1-4 | 계약 시험, R0-1 스냅샷이 같다 |
+| R4-2 | PostgreSQL 어댑터(포트 계약 시험 통과), migration 도구. (진행 중, 10/8 결정: 관계형으로, 포트 묶음마다 단계를 나눈다. Pebble은 읽기 전용으로 열어도 디렉터리 잠금을 잡아 다른 프로세스가 열 수 없으므로 R4-1보다 먼저 한다. 1단계 완료: `pkg/storage/postgres`. 테이블은 조회 컬럼과 인덱스를 두고 모델 전체는 `pkg/core/model` codec으로 함께 저장한다. 블록 트랜잭션은 ctx에 묶인 PostgreSQL 트랜잭션이다. 필수 포트(Block·Reader·Writer·BlockTransactor·Log)와 KV, FeatureState가 계약 시험을 통과한다. migration은 `migrations/NNNN_*.sql`을 내장해 열 때 advisory lock 아래 한 번씩 적용하고, 더 새 스키마는 거부하며, 읽기 전용 store는 migrate하지 않고 버전만 확인한다. 시험은 `INDEXER_TEST_POSTGRES` 또는 `make test-postgres`(임시 컨테이너). 남은 단계: 주소·토큰, setcode·userop·module, historical·검색·ABI·검증, orphan·rollback·outbox, 그다음 앱 연결과 R0-1 스냅샷 비교) | R1-4 | 계약 시험, R0-1 스냅샷이 같다 |
 | R4-3 | 공개 API 보안(S1): 신뢰 프록시 설정, 기본 rate limit, CORS 정정, Origin 검사, GraphQL 깊이·복잡도 제한 | — | 보안 시험 |
 | R4-4 | GraphQL 스키마를 분리하고 고빈도 경로를 REST·스트림으로 옮긴다. indexer-frontend 호환을 확인한다 | R4-1 | indexer-frontend 회귀 시험 |
 | R4-5 | 캐시와 singleflight(rpcproxy 캐시 잠금 개선 포함) | — | 부하 시험 |
