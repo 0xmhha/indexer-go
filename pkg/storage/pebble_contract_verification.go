@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -59,73 +60,25 @@ func (s *PebbleStorage) IsContractVerified(ctx context.Context, address common.A
 	return verification.IsVerified, nil
 }
 
-// ListVerifiedContracts returns all verified contract addresses with pagination
-func (s *PebbleStorage) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+// ListVerifiedContracts returns one page of the verified contract addresses,
+// in the order of the verified index (verification time). The cursor is the
+// last address's index key.
+func (s *PebbleStorage) ListVerifiedContracts(ctx context.Context, page port.Page) ([]common.Address, string, error) {
 	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	if limit <= 0 {
-		limit = DefaultVerifiedContractsLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
+	// Key format: /index/verification/verified/{verifiedAt_timestamp}/{address}
 	prefix := VerifiedContractIndexKeyPrefix()
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var addresses []common.Address
-	current := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip offset entries
-		if current < offset {
-			current++
-			continue
-		}
-
-		// Stop at limit
-		if len(addresses) >= limit {
-			break
-		}
-
-		// Extract address from key
-		// Key format: /index/verification/verified/{verifiedAt_timestamp}/{address}
-		key := string(iter.Key())
-		prefixLen := len(string(prefix))
-
-		// Skip timestamp part and extract address
-		// Format: {timestamp}/{address}
-		parts := key[prefixLen:]
-		var addrHex string
-		for i := len(parts) - 1; i >= 0; i-- {
-			if parts[i] == '/' {
-				addrHex = parts[i+1:]
-				break
+	return scanLoadedPage(ctx, s, prefix, prefixUpperBound(prefix), false, page, pageLimit(page, DefaultVerifiedContractsLimit),
+		func(_ context.Context, key, _ []byte) (common.Address, bool, error) {
+			rest := key[len(prefix):]
+			addrHex := string(rest[bytes.LastIndexByte(rest, '/')+1:])
+			if bytes.IndexByte(rest, '/') < 0 || !common.IsHexAddress(addrHex) {
+				return common.Address{}, false, nil // Skip invalid keys
 			}
-		}
-
-		if !common.IsHexAddress(addrHex) {
-			continue // Skip invalid keys
-		}
-
-		addresses = append(addresses, common.HexToAddress(addrHex))
-		current++
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return addresses, nil
+			return common.HexToAddress(addrHex), true, nil
+		})
 }
 
 // CountVerifiedContracts returns the total number of verified contracts

@@ -510,7 +510,7 @@ func TestPebbleStorage_AddressIndex_Pagination(t *testing.T) {
 	}
 
 	// Test pagination - first page (limit 5, offset 0)
-	page1, _, err := storage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 5, Offset: 0})
+	page1, _, err := storage.GetTransactionsByAddress(ctx, addr, port.FirstPage(5))
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress() error = %v", err)
 	}
@@ -568,7 +568,7 @@ func TestPebbleStorage_AddressIndex_MultipleAddresses(t *testing.T) {
 	}
 
 	// Query addr1 - should have 2 transactions
-	txs1, _, err := storage.GetTransactionsByAddress(ctx, addr1, port.Page{Limit: 10, Offset: 0})
+	txs1, _, err := storage.GetTransactionsByAddress(ctx, addr1, port.FirstPage(10))
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress(addr1) error = %v", err)
 	}
@@ -577,7 +577,7 @@ func TestPebbleStorage_AddressIndex_MultipleAddresses(t *testing.T) {
 	}
 
 	// Query addr2 - should have 1 transaction
-	txs2, _, err := storage.GetTransactionsByAddress(ctx, addr2, port.Page{Limit: 10, Offset: 0})
+	txs2, _, err := storage.GetTransactionsByAddress(ctx, addr2, port.FirstPage(10))
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress(addr2) error = %v", err)
 	}
@@ -595,7 +595,7 @@ func TestPebbleStorage_AddressIndex_EmptyAddress(t *testing.T) {
 	addr := common.HexToAddress("0xempty")
 
 	// Query empty address - should return empty list
-	txs, _, err := storage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 10, Offset: 0})
+	txs, _, err := storage.GetTransactionsByAddress(ctx, addr, port.FirstPage(10))
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress() error = %v", err)
 	}
@@ -1283,7 +1283,7 @@ func TestPebbleStorage_AddressIndex(t *testing.T) {
 	}
 
 	// Query transactions for address
-	txHashes, _, err := storage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 10, Offset: 0})
+	txHashes, _, err := storage.GetTransactionsByAddress(ctx, addr, port.FirstPage(10))
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress() error = %v", err)
 	}
@@ -1731,7 +1731,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered_Simple(t *testing.T) {
 			ToBlock:   ^uint64(0),
 			TxType:    port.TxTypeAll,
 		}
-		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, filter, 10, 0)
+		results, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, filter, port.FirstPage(10))
 		if err != nil {
 			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
 		}
@@ -1741,7 +1741,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered_Simple(t *testing.T) {
 	})
 
 	t.Run("with default filter (nil)", func(t *testing.T) {
-		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, nil, 10, 0)
+		results, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, nil, port.FirstPage(10))
 		if err != nil {
 			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
 		}
@@ -1756,7 +1756,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered_Simple(t *testing.T) {
 			ToBlock:   0, // Invalid: from > to
 			TxType:    port.TxTypeAll,
 		}
-		_, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, filter, 10, 0)
+		_, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, targetAddr, filter, port.FirstPage(10))
 		if err == nil {
 			t.Error("Expected error for invalid filter")
 		}
@@ -1856,7 +1856,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 			ToBlock:   ^uint64(0),
 			TxType:    port.TxTypeSent,
 		}
-		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
+		results, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, port.FirstPage(10))
 		if err != nil {
 			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
 		}
@@ -1871,7 +1871,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 			ToBlock:   ^uint64(0),
 			TxType:    port.TxTypeSent,
 		}
-		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 2, 0)
+		results, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, port.FirstPage(2))
 		if err != nil {
 			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
 		}
@@ -1886,7 +1886,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 			ToBlock:   ^uint64(0),
 			TxType:    port.TxTypeSent,
 		}
-		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 1)
+		results, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, port.Page{Limit: 10, Offset: 1})
 		if err != nil {
 			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
 		}
@@ -1901,7 +1901,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 			ToBlock:   3,
 			TxType:    port.TxTypeSent,
 		}
-		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
+		results, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, port.FirstPage(10))
 		if err != nil {
 			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
 		}
@@ -1917,7 +1917,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 			TxType:    port.TxTypeSent,
 			MinValue:  big.NewInt(2000),
 		}
-		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
+		results, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, port.FirstPage(10))
 		if err != nil {
 			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
 		}
@@ -1932,7 +1932,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 			ToBlock:   0, // Invalid: from > to
 			TxType:    port.TxTypeSent,
 		}
-		_, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, 10, 0)
+		_, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, fromAddr, filter, port.FirstPage(10))
 		if err == nil {
 			t.Error("Expected error for invalid filter")
 		}
@@ -1945,7 +1945,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered(t *testing.T) {
 			ToBlock:   ^uint64(0),
 			TxType:    port.TxTypeSent,
 		}
-		results, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, unknownAddr, filter, 10, 0)
+		results, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, unknownAddr, filter, port.FirstPage(10))
 		if err != nil {
 			t.Fatalf("GetTransactionsByAddressFiltered() error = %v", err)
 		}
@@ -1966,7 +1966,7 @@ func TestPebbleStorage_GetTransactionsByAddressFiltered_ClosedStorage(t *testing
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 	// Try to get filtered transactions from closed storage
-	_, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, addr, nil, 10, 0)
+	_, _, err := pebbleStorage.GetTransactionsByAddressFiltered(ctx, addr, nil, port.FirstPage(10))
 	if err == nil {
 		t.Error("GetTransactionsByAddressFiltered() should fail on closed storage")
 	}
@@ -2325,7 +2325,7 @@ func TestPebbleStorage_GetTransactionsByAddress_ClosedStorage(t *testing.T) {
 	cleanup()
 
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
-	_, _, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 10, Offset: 0})
+	_, _, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, port.FirstPage(10))
 	if err == nil {
 		t.Error("GetTransactionsByAddress() should fail on closed storage")
 	}
@@ -2399,7 +2399,7 @@ func TestPebbleStorage_GetBalanceHistory_ClosedStorage(t *testing.T) {
 	cleanup()
 
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
-	_, err := pebbleStorage.GetBalanceHistory(ctx, addr, 0, 100, 10, 0)
+	_, _, err := pebbleStorage.GetBalanceHistory(ctx, addr, 0, 100, port.FirstPage(10))
 	if err == nil {
 		t.Error("GetBalanceHistory() should fail on closed storage")
 	}
@@ -2413,7 +2413,7 @@ func TestPebbleStorage_GetBlocksByTimeRange_ClosedStorage(t *testing.T) {
 	// Close storage
 	cleanup()
 
-	_, err := pebbleStorage.GetBlocksByTimeRange(ctx, 0, 1000, 10, 0)
+	_, _, err := pebbleStorage.GetBlocksByTimeRange(ctx, 0, 1000, port.FirstPage(10))
 	if err == nil {
 		t.Error("GetBlocksByTimeRange() should fail on closed storage")
 	}
@@ -2454,7 +2454,7 @@ func TestPebbleStorage_GetBlocksByTimeRange_Extended(t *testing.T) {
 	}
 
 	t.Run("get blocks in time range", func(t *testing.T) {
-		blocks, err := pebbleStorage.GetBlocksByTimeRange(ctx, 2000, 5000, 10, 0)
+		blocks, _, err := pebbleStorage.GetBlocksByTimeRange(ctx, 2000, 5000, port.FirstPage(10))
 		if err != nil {
 			t.Fatalf("GetBlocksByTimeRange() error = %v", err)
 		}
@@ -2464,7 +2464,7 @@ func TestPebbleStorage_GetBlocksByTimeRange_Extended(t *testing.T) {
 	})
 
 	t.Run("get with limit", func(t *testing.T) {
-		blocks, err := pebbleStorage.GetBlocksByTimeRange(ctx, 1000, 10000, 3, 0)
+		blocks, _, err := pebbleStorage.GetBlocksByTimeRange(ctx, 1000, 10000, port.FirstPage(3))
 		if err != nil {
 			t.Fatalf("GetBlocksByTimeRange() error = %v", err)
 		}
@@ -2474,7 +2474,7 @@ func TestPebbleStorage_GetBlocksByTimeRange_Extended(t *testing.T) {
 	})
 
 	t.Run("get with offset", func(t *testing.T) {
-		blocks, err := pebbleStorage.GetBlocksByTimeRange(ctx, 1000, 10000, 10, 5)
+		blocks, _, err := pebbleStorage.GetBlocksByTimeRange(ctx, 1000, 10000, port.Page{Limit: 10, Offset: 5})
 		if err != nil {
 			t.Fatalf("GetBlocksByTimeRange() error = %v", err)
 		}
@@ -2484,7 +2484,7 @@ func TestPebbleStorage_GetBlocksByTimeRange_Extended(t *testing.T) {
 	})
 
 	t.Run("empty range", func(t *testing.T) {
-		blocks, err := pebbleStorage.GetBlocksByTimeRange(ctx, 100000, 200000, 10, 0)
+		blocks, _, err := pebbleStorage.GetBlocksByTimeRange(ctx, 100000, 200000, port.FirstPage(10))
 		if err != nil {
 			t.Fatalf("GetBlocksByTimeRange() error = %v", err)
 		}
@@ -2529,7 +2529,7 @@ func TestPebbleStorage_UpdateBalance_Extended(t *testing.T) {
 		}
 
 		// Check history (fromBlock=1, toBlock=10, limit=10, offset=0)
-		history, err := pebbleStorage.GetBalanceHistory(ctx, addr, 1, 10, 10, 0)
+		history, _, err := pebbleStorage.GetBalanceHistory(ctx, addr, 1, 10, port.FirstPage(10))
 		if err != nil {
 			t.Fatalf("GetBalanceHistory() error = %v", err)
 		}
@@ -2586,7 +2586,7 @@ func TestPebbleStorage_GetBlocksByTimeRange_InvalidRange(t *testing.T) {
 	pebbleStorage := storage.(*PebbleStorage)
 
 	// Test with fromTime > toTime
-	_, err := pebbleStorage.GetBlocksByTimeRange(ctx, 10000, 1000, 10, 0)
+	_, _, err := pebbleStorage.GetBlocksByTimeRange(ctx, 10000, 1000, port.FirstPage(10))
 	if err == nil {
 		t.Error("GetBlocksByTimeRange() should fail when fromTime > toTime")
 	}
@@ -2700,7 +2700,7 @@ func TestPebbleStorage_GetBalanceHistory_Empty(t *testing.T) {
 
 	// Get history for address with no history
 	addr := common.HexToAddress("0x8888888888888888888888888888888888888888")
-	history, err := pebbleStorage.GetBalanceHistory(ctx, addr, 0, 100, 10, 0)
+	history, _, err := pebbleStorage.GetBalanceHistory(ctx, addr, 0, 100, port.FirstPage(10))
 	if err != nil {
 		t.Fatalf("GetBalanceHistory() error = %v", err)
 	}
@@ -2719,7 +2719,7 @@ func TestPebbleStorage_GetBalanceHistory_InvalidRange(t *testing.T) {
 	addr := common.HexToAddress("0x9999999999999999999999999999999999999999")
 
 	// Test with fromBlock > toBlock
-	_, err := pebbleStorage.GetBalanceHistory(ctx, addr, 100, 10, 10, 0)
+	_, _, err := pebbleStorage.GetBalanceHistory(ctx, addr, 100, 10, port.FirstPage(10))
 	if err == nil {
 		t.Error("GetBalanceHistory() should fail when fromBlock > toBlock")
 	}
@@ -2923,7 +2923,7 @@ func TestPebbleStorage_AddTransactionToAddressIndex_Success(t *testing.T) {
 	}
 
 	// Get transactions by address
-	retrieved, _, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, port.Page{Limit: 10, Offset: 0})
+	retrieved, _, err := pebbleStorage.GetTransactionsByAddress(ctx, addr, port.FirstPage(10))
 	if err != nil {
 		t.Fatalf("GetTransactionsByAddress() error = %v", err)
 	}

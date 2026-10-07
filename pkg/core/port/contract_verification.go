@@ -41,8 +41,9 @@ type ContractVerificationReader interface {
 	// IsContractVerified checks if a contract is verified
 	IsContractVerified(ctx context.Context, address common.Address) (bool, error)
 
-	// ListVerifiedContracts returns all verified contract addresses with pagination
-	ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error)
+	// ListVerifiedContracts returns one page of the verified contract
+	// addresses, in the order they were verified (see Page).
+	ListVerifiedContracts(ctx context.Context, page Page) ([]common.Address, string, error)
 
 	// CountVerifiedContracts returns the total number of verified contracts
 	CountVerifiedContracts(ctx context.Context) (int, error)

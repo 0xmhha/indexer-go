@@ -113,11 +113,11 @@ func TestRollbackArchivesOrphans(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, at, 2, "both branches' block 4 are kept")
 
-	reorgs, err := s.GetReorgs(ctx, 10, 0)
+	reorgs, _, err := s.GetReorgs(ctx, port.FirstPage(10))
 	require.NoError(t, err)
 	require.Len(t, reorgs, 2)
 	require.Equal(t, uint64(2), reorgs[0].Seq, "newest first")
-	reorgs, err = s.GetReorgs(ctx, 1, 1)
+	reorgs, _, err = s.GetReorgs(ctx, port.Page{Limit: 1, Offset: 1})
 	require.NoError(t, err)
 	require.Len(t, reorgs, 1)
 	require.Equal(t, uint64(1), reorgs[0].Seq)
@@ -178,7 +178,7 @@ func TestRollbackRemovesTimeIndex(t *testing.T) {
 	_, err := s.RollbackTo(ctx, 2)
 	require.NoError(t, err)
 	require.Equal(t, 3, timeKeys(), "the rolled back blocks' entries are gone")
-	got, err := s.GetBlocksByTimeRange(ctx, 1000, 1005, 10, 0)
+	got, _, err := s.GetBlocksByTimeRange(ctx, 1000, 1005, port.FirstPage(10))
 	require.NoError(t, err)
 	require.Len(t, got, 3)
 	b, err := s.GetBlockByTimestamp(ctx, 1005)
@@ -265,7 +265,7 @@ func TestOrphanRetentionPrunesOldReorgs(t *testing.T) {
 	}
 	require.ElementsMatch(t, []common.Hash{a5.Hash, c5.Hash}, hashes)
 
-	reorgs, err := s.GetReorgs(ctx, 10, 0)
+	reorgs, _, err := s.GetReorgs(ctx, port.FirstPage(10))
 	require.NoError(t, err)
 	require.Len(t, reorgs, 2)
 	require.Equal(t, uint64(4), reorgs[0].Seq)

@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -39,21 +40,14 @@ func (s *Schema) resolveTokens(p graphql.ResolveParams) (interface{}, error) {
 		standard = port.TokenStandard(standardArg)
 	}
 
-	// Parse pagination
-	limit := 20
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok {
-			limit = l
-		}
-		if o, ok := pagination["offset"].(int); ok {
-			offset = o
-		}
-	}
+	pagination := parseTokenPagination(p)
 
 	// Get tokens
-	tokens, err := s.storage.ListTokensByStandard(ctx, standard, limit, offset)
+	tokens, next, err := s.storage.ListTokensByStandard(ctx, standard, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		return nil, err
 	}
 
@@ -72,12 +66,7 @@ func (s *Schema) resolveTokens(p graphql.ResolveParams) (interface{}, error) {
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     offset+len(tokens) < totalCount,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -226,17 +215,7 @@ func (s *Schema) resolveTokenHolders(p graphql.ResolveParams) (interface{}, erro
 	}
 	token := common.HexToAddress(tokenHex)
 
-	// Parse pagination
-	limit := 20
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok {
-			limit = l
-		}
-		if o, ok := pagination["offset"].(int); ok {
-			offset = o
-		}
-	}
+	pagination := parseTokenPagination(p)
 
 	// Check if storage implements TokenHolderIndexReader
 	holderReader, ok := s.storage.(port.TokenHolderIndexReader)
@@ -245,8 +224,11 @@ func (s *Schema) resolveTokenHolders(p graphql.ResolveParams) (interface{}, erro
 	}
 
 	// Get holders
-	holders, err := holderReader.GetTokenHolders(ctx, token, limit, offset)
+	holders, next, err := holderReader.GetTokenHolders(ctx, token, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		return nil, err
 	}
 
@@ -265,12 +247,7 @@ func (s *Schema) resolveTokenHolders(p graphql.ResolveParams) (interface{}, erro
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     offset+len(holders) < totalCount,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -442,4 +419,22 @@ func (b *SchemaBuilder) WithTokenHolderQueries() *SchemaBuilder {
 	}
 
 	return b
+}
+
+// parseTokenPagination reads the pagination argument of the token lists:
+// limit defaults to 20 and is passed on as given (0 lists every item).
+func parseTokenPagination(p graphql.ResolveParams) PaginationParams {
+	params := PaginationParams{Limit: 20}
+	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
+		if l, ok := pagination["limit"].(int); ok {
+			params.Limit = l
+		}
+		if o, ok := pagination["offset"].(int); ok {
+			params.Offset = o
+		}
+		if a, ok := pagination["after"].(string); ok {
+			params.After = a
+		}
+	}
+	return params
 }

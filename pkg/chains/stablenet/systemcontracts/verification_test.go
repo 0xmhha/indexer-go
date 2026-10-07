@@ -109,7 +109,7 @@ func (m *mockContractVerificationReader) GetContractVerification(ctx context.Con
 	return nil, nil
 }
 
-func (m *mockContractVerificationReader) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+func (m *mockContractVerificationReader) offsetListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
 	var addrs []common.Address
 	for addr, verified := range m.verified {
 		if verified {

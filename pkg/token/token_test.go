@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // --- Mock EthClient ---
@@ -127,7 +129,7 @@ func (m *mockTokenStorage) DeleteTokenMetadata(_ context.Context, address common
 	return nil
 }
 
-func (m *mockTokenStorage) ListTokensByStandard(_ context.Context, standard TokenStandard, limit, offset int) ([]*TokenMetadata, error) {
+func (m *mockTokenStorage) offsetListTokensByStandard(_ context.Context, standard TokenStandard, limit, offset int) ([]*TokenMetadata, error) {
 	var result []*TokenMetadata
 	for _, meta := range m.tokens {
 		if standard == "" || meta.Standard == standard {
@@ -708,7 +710,7 @@ func TestService_ListTokens(t *testing.T) {
 	stor.tokens[common.HexToAddress("0x02")] = &TokenMetadata{Address: common.HexToAddress("0x02"), Standard: StandardERC721}
 
 	s := NewService(newMockEthClient(), stor, zap.NewNop())
-	tokens, err := s.ListTokens(context.Background(), StandardERC20, 10, 0)
+	tokens, _, err := s.ListTokens(context.Background(), StandardERC20, port.FirstPage(10))
 	require.NoError(t, err)
 	assert.Len(t, tokens, 1)
 }

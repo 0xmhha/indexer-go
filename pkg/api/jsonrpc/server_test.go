@@ -240,7 +240,7 @@ func (m *mockStorage) IsContractVerified(ctx context.Context, address common.Add
 	return false, nil
 }
 
-func (m *mockStorage) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+func (m *mockStorage) offsetListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
 	return []common.Address{}, nil
 }
 
@@ -269,7 +269,7 @@ func (m *mockStorage) gethGetBlockByTimestamp(ctx context.Context, timestamp uin
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
+func (m *mockStorage) offsetGetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
 	return []*port.TransactionWithReceipt{}, nil
 }
 
@@ -277,7 +277,7 @@ func (m *mockStorage) GetAddressBalance(ctx context.Context, addr common.Address
 	return big.NewInt(0), nil
 }
 
-func (m *mockStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
+func (m *mockStorage) offsetGetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
 	return []port.BalanceSnapshot{}, nil
 }
 
@@ -335,7 +335,7 @@ func (m *mockStorage) GetTokenMetadata(ctx context.Context, address common.Addre
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorage) ListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
+func (m *mockStorage) offsetListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
 	return []*port.TokenMetadata{}, nil
 }
 
@@ -1314,7 +1314,7 @@ func (m *mockStorageWithErrors) IsContractVerified(ctx context.Context, address 
 	return false, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+func (m *mockStorageWithErrors) offsetListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -1343,7 +1343,7 @@ func (m *mockStorageWithErrors) gethGetBlockByTimestamp(ctx context.Context, tim
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
+func (m *mockStorageWithErrors) offsetGetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -1351,7 +1351,7 @@ func (m *mockStorageWithErrors) GetAddressBalance(ctx context.Context, addr comm
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
+func (m *mockStorageWithErrors) offsetGetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -1430,7 +1430,7 @@ func (m *mockStorageWithErrors) GetTokenMetadata(ctx context.Context, address co
 	return nil, port.ErrNotFound
 }
 
-func (m *mockStorageWithErrors) ListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
+func (m *mockStorageWithErrors) offsetListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
 	return nil, port.ErrNotFound
 }
 
@@ -1798,7 +1798,7 @@ func (m *mockStorageWithNonNotFoundErrors) IsContractVerified(ctx context.Contex
 	return false, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1827,7 +1827,7 @@ func (m *mockStorageWithNonNotFoundErrors) gethGetBlockByTimestamp(ctx context.C
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetGetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1835,7 +1835,7 @@ func (m *mockStorageWithNonNotFoundErrors) GetAddressBalance(ctx context.Context
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetGetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -1914,7 +1914,7 @@ func (m *mockStorageWithNonNotFoundErrors) GetTokenMetadata(ctx context.Context,
 	return nil, fmt.Errorf("database connection failed")
 }
 
-func (m *mockStorageWithNonNotFoundErrors) ListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
 	return nil, fmt.Errorf("database connection failed")
 }
 
@@ -2518,7 +2518,7 @@ func (m *mockStorage) IndexLog(ctx context.Context, log *model.Log) error {
 	return m.gethIndexLog(ctx, gethconv.LogToGeth(log))
 }
 
-func (m *mockStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+func (m *mockStorage) offsetGetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
 	return modelBlocksOf(m.gethGetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset))
 }
 
@@ -2610,7 +2610,7 @@ func (m *mockStorageWithErrors) IndexLog(ctx context.Context, log *model.Log) er
 	return m.gethIndexLog(ctx, gethconv.LogToGeth(log))
 }
 
-func (m *mockStorageWithErrors) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+func (m *mockStorageWithErrors) offsetGetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
 	return modelBlocksOf(m.gethGetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset))
 }
 
@@ -2690,7 +2690,7 @@ func (m *mockStorageWithNonNotFoundErrors) IndexLog(ctx context.Context, log *mo
 	return m.gethIndexLog(ctx, gethconv.LogToGeth(log))
 }
 
-func (m *mockStorageWithNonNotFoundErrors) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+func (m *mockStorageWithNonNotFoundErrors) offsetGetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
 	return modelBlocksOf(m.gethGetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset))
 }
 

@@ -121,26 +121,26 @@ func TestPebbleStorage_ListTokensByStandard(t *testing.T) {
 	require.NoError(t, storage.SaveTokenMetadata(ctx, erc721))
 
 	t.Run("FilterByERC20", func(t *testing.T) {
-		tokens, err := storage.ListTokensByStandard(ctx, port.TokenStandardERC20, 10, 0)
+		tokens, _, err := storage.ListTokensByStandard(ctx, port.TokenStandardERC20, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Len(t, tokens, 2)
 	})
 
 	t.Run("FilterByERC721", func(t *testing.T) {
-		tokens, err := storage.ListTokensByStandard(ctx, port.TokenStandardERC721, 10, 0)
+		tokens, _, err := storage.ListTokensByStandard(ctx, port.TokenStandardERC721, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Len(t, tokens, 1)
 		assert.Equal(t, "NFT1", tokens[0].Name)
 	})
 
 	t.Run("AllTokens", func(t *testing.T) {
-		tokens, err := storage.ListTokensByStandard(ctx, "", 10, 0)
+		tokens, _, err := storage.ListTokensByStandard(ctx, "", port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Len(t, tokens, 3)
 	})
 
 	t.Run("WithPagination", func(t *testing.T) {
-		tokens, err := storage.ListTokensByStandard(ctx, port.TokenStandardERC20, 1, 0)
+		tokens, _, err := storage.ListTokensByStandard(ctx, port.TokenStandardERC20, port.FirstPage(1))
 		require.NoError(t, err)
 		assert.Len(t, tokens, 1)
 	})

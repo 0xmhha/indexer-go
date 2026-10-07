@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -37,25 +38,15 @@ func (s *Schema) resolveBlocksByTimeRange(p graphql.ResolveParams) (interface{},
 		return nil, fmt.Errorf("invalid toTime format: %w", err)
 	}
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	histStorage := s.storage
 
-	blocks, err := histStorage.GetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset)
+	blocks, next, err := histStorage.GetBlocksByTimeRange(ctx, fromTime, toTime, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get blocks by time range",
 			zap.Uint64("fromTime", fromTime),
 			zap.Uint64("toTime", toTime),
@@ -74,21 +65,10 @@ func (s *Schema) resolveBlocksByTimeRange(p graphql.ResolveParams) (interface{},
 	// a separate CountBlocksByTimeRange method in storage (performance optimization for future)
 	totalCount := len(blocks)
 
-	// For more accurate totalCount when no pagination is applied
-	if limit >= constants.DefaultMaxPaginationLimit && offset == 0 {
-		// User requested maximum limit - totalCount is likely accurate for the range
-		totalCount = len(blocks)
-	}
-
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": totalCount,
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(blocks) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -159,25 +139,15 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 		}
 	}
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	histStorage := s.storage
 
-	txsWithReceipts, err := histStorage.GetTransactionsByAddressFiltered(ctx, address, filter, limit, offset)
+	txsWithReceipts, next, err := histStorage.GetTransactionsByAddressFiltered(ctx, address, filter, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get filtered transactions",
 			zap.String("address", addressStr),
 			zap.Error(err))
@@ -210,12 +180,7 @@ func (s *Schema) resolveTransactionsByAddressFiltered(p graphql.ResolveParams) (
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(txsWithReceipts),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(txsWithReceipts) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -285,25 +250,15 @@ func (s *Schema) resolveBalanceHistory(p graphql.ResolveParams) (interface{}, er
 		return nil, fmt.Errorf("invalid toBlock format: %w", err)
 	}
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	histStorage := s.storage
 
-	snapshots, err := histStorage.GetBalanceHistory(ctx, address, fromBlock, toBlock, limit, offset)
+	snapshots, next, err := histStorage.GetBalanceHistory(ctx, address, fromBlock, toBlock, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get balance history",
 			zap.String("address", addressStr),
 			zap.Uint64("fromBlock", fromBlock),
@@ -331,12 +286,7 @@ func (s *Schema) resolveBalanceHistory(p graphql.ResolveParams) (interface{}, er
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(snapshots),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(snapshots) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 

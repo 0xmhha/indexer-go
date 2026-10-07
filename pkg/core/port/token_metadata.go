@@ -95,9 +95,10 @@ type TokenMetadataReader interface {
 	// Returns ErrNotFound if the token metadata does not exist
 	GetTokenMetadata(ctx context.Context, address common.Address) (*TokenMetadata, error)
 
-	// ListTokensByStandard retrieves tokens filtered by standard with pagination
-	// If standard is empty, returns all tokens
-	ListTokensByStandard(ctx context.Context, standard TokenStandard, limit, offset int) ([]*TokenMetadata, error)
+	// ListTokensByStandard returns one page of the tokens of a standard, in
+	// address order (see Page). If standard is empty, it lists all tokens.
+	// Limit <= 0 returns every token.
+	ListTokensByStandard(ctx context.Context, standard TokenStandard, page Page) ([]*TokenMetadata, string, error)
 
 	// GetTokensCount returns the count of tokens, optionally filtered by standard
 	// If standard is empty, returns total count

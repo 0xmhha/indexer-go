@@ -39,8 +39,9 @@ type OrphanedBlock struct {
 
 // OrphanReader reads reorganization records and orphaned blocks.
 type OrphanReader interface {
-	// GetReorgs returns reorganization records, newest first.
-	GetReorgs(ctx context.Context, limit, offset int) ([]*Reorg, error)
+	// GetReorgs returns one page of the reorganization records, newest
+	// first (see Page). Limit <= 0 returns every record.
+	GetReorgs(ctx context.Context, page Page) ([]*Reorg, string, error)
 	// GetReorg returns record seq, or ErrNotFound.
 	GetReorg(ctx context.Context, seq uint64) (*Reorg, error)
 	// GetOrphanedBlock returns an orphaned block by hash, or ErrNotFound.

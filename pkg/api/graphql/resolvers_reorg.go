@@ -84,7 +84,7 @@ func (s *Schema) resolveReorgs(p graphql.ResolveParams) (interface{}, error) {
 	if offset < 0 {
 		offset = 0
 	}
-	reorgs, err := r.GetReorgs(p.Context, limit, offset)
+	reorgs, _, err := r.GetReorgs(p.Context, port.Page{Limit: limit, Offset: offset})
 	if err != nil {
 		return nil, err
 	}

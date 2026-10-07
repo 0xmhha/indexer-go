@@ -237,10 +237,13 @@ func (s *PebbleStorage) DeleteTokenMetadata(ctx context.Context, address common.
 	return s.commitBatch(ctx, batch, pebble.Sync)
 }
 
-// ListTokensByStandard retrieves tokens filtered by standard with pagination
-func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard port.TokenStandard, limit, offset int) ([]*port.TokenMetadata, error) {
+// ListTokensByStandard returns one page of the tokens of a standard (all
+// tokens when standard is empty), in the order of the standard index (or of
+// the metadata keys): token address. The cursor is the last token's key;
+// limit <= 0 returns every token.
+func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard port.TokenStandard, page port.Page) ([]*port.TokenMetadata, string, error) {
 	if err := s.ensureNotClosed(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	var prefix []byte
@@ -252,61 +255,15 @@ func (s *PebbleStorage) ListTokensByStandard(ctx context.Context, standard port.
 		prefix = TokenMetadataKeyPrefix()
 	}
 
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var tokens []*port.TokenMetadata
-	skipped := 0
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip for offset
-		if skipped < offset {
-			skipped++
-			continue
-		}
-
-		// Check limit
-		if limit > 0 && len(tokens) >= limit {
-			break
-		}
-
-		var address common.Address
-		if standard != "" {
-			// Extract address from index key
-			keyStr := string(iter.Key())
-			parts := strings.Split(keyStr, "/")
-			if len(parts) > 0 {
-				address = common.HexToAddress(parts[len(parts)-1])
+	// Both keys end with the token address.
+	return scanLoadedPage(ctx, s, prefix, prefixUpperBound(prefix), false, page, page.Limit,
+		func(ctx context.Context, key, _ []byte) (*port.TokenMetadata, bool, error) {
+			metadata, err := s.GetTokenMetadata(ctx, lastKeyAddress(key))
+			if err != nil {
+				return nil, false, nil // Skip unreadable metadata
 			}
-		} else {
-			// Parse from metadata key
-			keyStr := string(iter.Key())
-			parts := strings.Split(keyStr, "/")
-			if len(parts) > 0 {
-				address = common.HexToAddress(parts[len(parts)-1])
-			}
-		}
-
-		// Fetch full metadata
-		metadata, err := s.GetTokenMetadata(ctx, address)
-		if err != nil {
-			continue
-		}
-
-		tokens = append(tokens, metadata)
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	return tokens, nil
+			return metadata, true, nil
+		})
 }
 
 // GetTokensCount returns the count of tokens, optionally filtered by standard

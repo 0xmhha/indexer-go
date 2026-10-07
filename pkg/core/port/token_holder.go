@@ -25,9 +25,12 @@ type TokenHolderStats struct {
 
 // TokenHolderIndexReader defines read operations for token holder indexing
 type TokenHolderIndexReader interface {
-	// GetTokenHolders retrieves token holders sorted by balance (descending) with pagination.
-	// Returns empty slice if no holders found.
-	GetTokenHolders(ctx context.Context, token common.Address, limit, offset int) ([]*TokenHolder, error)
+	// GetTokenHolders returns one page of a token's holders, sorted by
+	// balance (largest first; holders with equal balances in a fixed order)
+	// (see Page). Limit <= 0 returns every holder. A cursor stays valid
+	// while balances change: the next page continues after the balance and
+	// holder the cursor ended at.
+	GetTokenHolders(ctx context.Context, token common.Address, page Page) ([]*TokenHolder, string, error)
 
 	// GetTokenHolderCount returns the number of unique holders for a token.
 	GetTokenHolderCount(ctx context.Context, token common.Address) (int, error)
@@ -40,9 +43,9 @@ type TokenHolderIndexReader interface {
 	// Returns ErrNotFound if the token has no stats recorded.
 	GetTokenHolderStats(ctx context.Context, token common.Address) (*TokenHolderStats, error)
 
-	// GetHolderTokens retrieves all tokens held by a specific address with pagination.
-	// Returns empty slice if the address holds no tokens.
-	GetHolderTokens(ctx context.Context, holder common.Address, limit, offset int) ([]*TokenHolder, error)
+	// GetHolderTokens returns one page of the tokens an address holds, in
+	// token address order (see Page). Limit <= 0 returns every token.
+	GetHolderTokens(ctx context.Context, holder common.Address, page Page) ([]*TokenHolder, string, error)
 }
 
 // TokenHolderIndexWriter defines write operations for token holder indexing

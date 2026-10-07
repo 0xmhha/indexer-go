@@ -6,6 +6,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // RPCClient interface for querying balance from RPC
@@ -63,7 +65,7 @@ func (s *PebbleStorage) maybeInitGenesisBalance(ctx context.Context, addr common
 	// published on commit, so a rolled back block is retried in full.
 	s.markGenesisTried(ctx, addr)
 
-	history, err := s.GetBalanceHistory(ctx, addr, 0, blockNumber, 1, 0)
+	history, _, err := s.GetBalanceHistory(ctx, addr, 0, blockNumber, port.FirstPage(1))
 	if err != nil {
 		s.logger.Debug("failed to check balance history", zap.String("address", addr.Hex()), zap.Error(err))
 		return balance

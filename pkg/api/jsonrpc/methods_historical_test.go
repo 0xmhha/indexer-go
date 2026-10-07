@@ -47,7 +47,7 @@ func (m *mockHistoricalStorage) gethGetBlockByTimestamp(ctx context.Context, tim
 	return nil, port.ErrNotFound
 }
 
-func (m *mockHistoricalStorage) GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
+func (m *mockHistoricalStorage) offsetGetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, limit, offset int) ([]*port.TransactionWithReceipt, error) {
 	if m.txsWithReceipts != nil {
 		start := offset
 		end := offset + limit
@@ -69,7 +69,7 @@ func (m *mockHistoricalStorage) GetAddressBalance(ctx context.Context, addr comm
 	return big.NewInt(0), nil
 }
 
-func (m *mockHistoricalStorage) GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
+func (m *mockHistoricalStorage) offsetGetBalanceHistory(ctx context.Context, addr common.Address, fromBlock, toBlock uint64, limit, offset int) ([]port.BalanceSnapshot, error) {
 	if m.balanceHistory != nil {
 		start := offset
 		end := offset + limit
@@ -129,7 +129,7 @@ func (m *mockHistoricalStorage) IsContractVerified(ctx context.Context, address 
 	return false, nil
 }
 
-func (m *mockHistoricalStorage) ListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
+func (m *mockHistoricalStorage) offsetListVerifiedContracts(ctx context.Context, limit, offset int) ([]common.Address, error) {
 	return []common.Address{}, nil
 }
 
@@ -969,7 +969,7 @@ func TestParseTransactionFilter(t *testing.T) {
 	})
 }
 
-func (m *mockHistoricalStorage) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
+func (m *mockHistoricalStorage) offsetGetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint64, limit, offset int) ([]*model.Block, error) {
 	return modelBlocksOf(m.gethGetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset))
 }
 

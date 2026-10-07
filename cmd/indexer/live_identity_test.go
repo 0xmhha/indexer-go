@@ -140,7 +140,7 @@ func TestLiveStableNetIdentity(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, meta, "fee delegation meta of %s", tx.Hash.Hex())
 			require.Equal(t, fd.FeePayer, meta.FeePayer)
-			payerTxs, _, err := app.storage.GetTransactionsByAddress(ctx, fd.FeePayer, port.Page{Limit: 10000, Offset: 0})
+			payerTxs, _, err := app.storage.GetTransactionsByAddress(ctx, fd.FeePayer, port.FirstPage(10000))
 			require.NoError(t, err)
 			require.Contains(t, payerTxs, tx.Hash, "fee payer address index")
 		}
@@ -157,7 +157,7 @@ func TestLiveStableNetIdentity(t *testing.T) {
 	hist, ok := app.storage.(port.HistoricalReader)
 	require.True(t, ok)
 	for _, c := range changes {
-		snaps, err := hist.GetBalanceHistory(ctx, c.addr, c.block, c.block, 100, 0)
+		snaps, _, err := hist.GetBalanceHistory(ctx, c.addr, c.block, c.block, port.FirstPage(100))
 		require.NoError(t, err)
 		got := new(big.Int)
 		for _, s := range snaps {

@@ -88,7 +88,7 @@ func assertTokenMetadata(t *testing.T, want, got *port.TokenMetadata) {
 // testTokenMetadata checks TokenMetadataReader and TokenMetadataWriter:
 // metadata comes back as saved, a missing token is port.ErrNotFound, tokens
 // are listed and counted by standard (all of them for an empty standard)
-// with limit/offset pagination, SearchTokens matches names and symbols
+// a page at a time (port.Page), SearchTokens matches names and symbols
 // case-insensitively, and saving or deleting a token updates every reader.
 func testTokenMetadata(t *testing.T, newStore NewStore) {
 	ctx := context.Background()
@@ -97,7 +97,7 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 		s := open[tokenMetadataStore](t, newStore)
 		_, err := s.GetTokenMetadata(ctx, tokensERC20a)
 		assert.ErrorIs(t, err, port.ErrNotFound)
-		list, err := s.ListTokensByStandard(ctx, "", 10, 0)
+		list, _, err := s.ListTokensByStandard(ctx, "", port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, list)
 		n, err := s.GetTokensCount(ctx, "")
@@ -135,14 +135,14 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 			{"", tokensAddresses(ms)},
 		}
 		for _, tc := range cases {
-			list, err := s.ListTokensByStandard(ctx, tc.std, 10, 0)
+			list, _, err := s.ListTokensByStandard(ctx, tc.std, port.FirstPage(10))
 			require.NoError(t, err, tc.std)
 			assert.ElementsMatch(t, tc.want, tokensAddresses(list), "standard %q", tc.std)
 			n, err := s.GetTokensCount(ctx, tc.std)
 			require.NoError(t, err, tc.std)
 			assert.Equal(t, len(tc.want), n, "standard %q", tc.std)
 		}
-		list, err := s.ListTokensByStandard(ctx, port.TokenStandardERC721, 10, 0)
+		list, _, err := s.ListTokensByStandard(ctx, port.TokenStandardERC721, port.FirstPage(10))
 		require.NoError(t, err)
 		require.Len(t, list, 1)
 		assertTokenMetadata(t, ms[2], list[0])
@@ -152,7 +152,7 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 		s := open[tokenMetadataStore](t, newStore)
 		tokensSaveAll(t, s, tokensMetadataSet())
 		tokensSaveAll(t, s, []*port.TokenMetadata{tokensMetadata(tokensUnknown, port.TokenStandardUnknown, "Odd", "ODD")})
-		list, err := s.ListTokensByStandard(ctx, port.TokenStandardUnknown, 10, 0)
+		list, _, err := s.ListTokensByStandard(ctx, port.TokenStandardUnknown, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Address{tokensUnknown}, tokensAddresses(list))
 		n, err := s.GetTokensCount(ctx, port.TokenStandardUnknown)
@@ -164,27 +164,26 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 		s := open[tokenMetadataStore](t, newStore)
 		ms := tokensMetadataSet()
 		tokensSaveAll(t, s, ms)
-		all, err := s.ListTokensByStandard(ctx, "", 10, 0)
+		all, _, err := s.ListTokensByStandard(ctx, "", port.FirstPage(10))
 		require.NoError(t, err)
 		require.Len(t, all, len(ms))
 
-		var paged []common.Address
-		for offset := 0; offset < len(ms); offset += 3 {
-			page, err := s.ListTokensByStandard(ctx, "", 3, offset)
-			require.NoError(t, err)
-			paged = append(paged, tokensAddresses(page)...)
+		byStandard := func(std port.TokenStandard) listPage[*port.TokenMetadata] {
+			return func(page port.Page) ([]*port.TokenMetadata, string, error) {
+				return s.ListTokensByStandard(ctx, std, page)
+			}
 		}
-		assert.Equal(t, tokensAddresses(all), paged, "pages follow the order of the full list")
+		address := func(m *port.TokenMetadata) common.Address { return m.Address }
+		checkPaging(t, all, address, byStandard(""))
+		checkCursorFromOtherList(t, byStandard(port.TokenStandardERC20), byStandard(port.TokenStandardERC721))
 
-		page, err := s.ListTokensByStandard(ctx, port.TokenStandardERC20, 1, 1)
+		page, _, err := s.ListTokensByStandard(ctx, port.TokenStandardERC20, port.Page{Limit: 1, Offset: 1})
 		require.NoError(t, err)
 		assert.Len(t, page, 1)
-		page, err = s.ListTokensByStandard(ctx, "", 3, len(ms))
-		require.NoError(t, err)
-		assert.Empty(t, page, "offset past the end")
-		page, err = s.ListTokensByStandard(ctx, "", 0, 0)
+		page, next, err := s.ListTokensByStandard(ctx, "", port.Page{})
 		require.NoError(t, err)
 		assert.Len(t, page, len(ms), "limit 0 is no limit")
+		assert.Empty(t, next)
 	})
 
 	t.Run("SearchTokens", func(t *testing.T) {
@@ -266,13 +265,13 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 		s := open[tokenMetadataStore](t, newStore)
 		tokensSaveAll(t, s, tokensMetadataSet())
 		require.NoError(t, s.SaveTokenMetadata(ctx, tokensMetadata(tokensERC20b, port.TokenStandardERC721, "Wrapped Ether", "WETH")))
-		list, err := s.ListTokensByStandard(ctx, port.TokenStandardERC20, 10, 0)
+		list, _, err := s.ListTokensByStandard(ctx, port.TokenStandardERC20, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Address{tokensERC20a}, tokensAddresses(list))
 		n, err := s.GetTokensCount(ctx, port.TokenStandardERC20)
 		require.NoError(t, err)
 		assert.Equal(t, 1, n)
-		list, err = s.ListTokensByStandard(ctx, port.TokenStandardERC721, 10, 0)
+		list, _, err = s.ListTokensByStandard(ctx, port.TokenStandardERC721, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []common.Address{tokensERC721, tokensERC20b}, tokensAddresses(list))
 	})
@@ -284,7 +283,7 @@ func testTokenMetadata(t *testing.T, newStore NewStore) {
 
 		_, err := s.GetTokenMetadata(ctx, tokensERC20a)
 		assert.ErrorIs(t, err, port.ErrNotFound)
-		list, err := s.ListTokensByStandard(ctx, port.TokenStandardERC20, 10, 0)
+		list, _, err := s.ListTokensByStandard(ctx, port.TokenStandardERC20, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Address{tokensERC20b}, tokensAddresses(list))
 		n, err := s.GetTokensCount(ctx, "")
@@ -360,8 +359,8 @@ func assertTokenBalance(t *testing.T, s tokenHolderStore, token, holder common.A
 }
 
 // testTokenHolderIndex checks TokenHolderIndexReader and
-// TokenHolderIndexWriter: holders are listed by balance (largest first) with
-// limit/offset pagination, a zero balance removes the holder, the holder
+// TokenHolderIndexWriter: holders are listed by balance (largest first) a
+// page at a time (port.Page), a zero balance removes the holder, the holder
 // count follows the holders, a missing balance is port.ErrNotFound, and an
 // ERC-20 transfer moves balances (mints and burns use the zero address) and
 // updates the token's statistics.
@@ -370,14 +369,14 @@ func testTokenHolderIndex(t *testing.T, newStore NewStore) {
 
 	t.Run("EmptyStore", func(t *testing.T) {
 		s := open[tokenHolderStore](t, newStore)
-		hs, err := s.GetTokenHolders(ctx, tokensERC20a, 10, 0)
+		hs, _, err := s.GetTokenHolders(ctx, tokensERC20a, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, hs)
 		n, err := s.GetTokenHolderCount(ctx, tokensERC20a)
 		require.NoError(t, err)
 		assert.Equal(t, 0, n)
 		assertTokenBalance(t, s, tokensERC20a, tokensHolder1, nil)
-		hs, err = s.GetHolderTokens(ctx, tokensHolder1, 10, 0)
+		hs, _, err = s.GetHolderTokens(ctx, tokensHolder1, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, hs)
 	})
@@ -397,11 +396,11 @@ func testTokenHolderIndex(t *testing.T, newStore NewStore) {
 		assertTokenBalance(t, s, tokensERC20b, tokensHolder1, nil)
 		assertTokenBalance(t, s, tokensERC20a, tokensHolder2, nil)
 
-		hs, err := s.GetTokenHolders(ctx, tokensERC20a, 10, 0)
+		hs, _, err := s.GetTokenHolders(ctx, tokensERC20a, port.FirstPage(10))
 		require.NoError(t, err)
 		require.Len(t, hs, 1)
 		assertTokenHolder(t, want, hs[0])
-		hs, err = s.GetHolderTokens(ctx, tokensHolder1, 10, 0)
+		hs, _, err = s.GetHolderTokens(ctx, tokensHolder1, port.FirstPage(10))
 		require.NoError(t, err)
 		require.Len(t, hs, 1)
 		assertTokenHolder(t, want, hs[0])
@@ -414,14 +413,14 @@ func testTokenHolderIndex(t *testing.T, newStore NewStore) {
 		require.NoError(t, s.UpdateTokenHolder(ctx, tokensHolder(tokensERC20a, tokensHolder2, 50, 1)))
 		require.NoError(t, s.UpdateTokenHolder(ctx, tokensHolder(tokensERC20a, tokensHolder3, 20, 1)))
 		require.NoError(t, s.UpdateTokenHolder(ctx, &port.TokenHolder{TokenAddress: tokensERC20a, HolderAddress: tokensHolder4, Balance: big1, LastUpdatedAt: 1}))
-		hs, err := s.GetTokenHolders(ctx, tokensERC20a, 10, 0)
+		hs, _, err := s.GetTokenHolders(ctx, tokensERC20a, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Address{tokensHolder4, tokensHolder2, tokensHolder3, tokensHolder1}, tokensHolderAddrs(hs))
 		assert.Zero(t, big1.Cmp(hs[0].Balance))
 
 		// A balance change moves the holder.
 		require.NoError(t, s.UpdateTokenHolder(ctx, tokensHolder(tokensERC20a, tokensHolder1, 30, 2)))
-		hs, err = s.GetTokenHolders(ctx, tokensERC20a, 10, 0)
+		hs, _, err = s.GetTokenHolders(ctx, tokensERC20a, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Address{tokensHolder4, tokensHolder2, tokensHolder1, tokensHolder3}, tokensHolderAddrs(hs),
 			"an updated holder is listed once, at its new balance")
@@ -433,22 +432,39 @@ func testTokenHolderIndex(t *testing.T, newStore NewStore) {
 		for i, h := range []common.Address{tokensHolder1, tokensHolder2, tokensHolder3, tokensHolder4} {
 			require.NoError(t, s.UpdateTokenHolder(ctx, tokensHolder(tokensERC20a, h, int64(10*(i+1)), 1)))
 		}
+		require.NoError(t, s.UpdateTokenHolder(ctx, tokensHolder(tokensERC20b, tokensHolder1, 1, 1)))
 		want := []common.Address{tokensHolder4, tokensHolder3, tokensHolder2, tokensHolder1}
-		hs, err := s.GetTokenHolders(ctx, tokensERC20a, 2, 0)
+		holders := func(token common.Address) listPage[*port.TokenHolder] {
+			return func(page port.Page) ([]*port.TokenHolder, string, error) {
+				return s.GetTokenHolders(ctx, token, page)
+			}
+		}
+		all, _, err := s.GetTokenHolders(ctx, tokensERC20a, port.FirstPage(10))
 		require.NoError(t, err)
-		assert.Equal(t, want[:2], tokensHolderAddrs(hs))
-		hs, err = s.GetTokenHolders(ctx, tokensERC20a, 2, 2)
-		require.NoError(t, err)
-		assert.Equal(t, want[2:], tokensHolderAddrs(hs))
-		hs, err = s.GetTokenHolders(ctx, tokensERC20a, 3, 3)
-		require.NoError(t, err)
-		assert.Equal(t, want[3:], tokensHolderAddrs(hs), "the last page is short")
-		hs, err = s.GetTokenHolders(ctx, tokensERC20a, 2, 4)
-		require.NoError(t, err)
-		assert.Empty(t, hs, "offset past the end")
-		hs, err = s.GetTokenHolders(ctx, tokensERC20a, 0, 0)
+		assert.Equal(t, want, tokensHolderAddrs(all))
+		checkPaging(t, all, func(h *port.TokenHolder) common.Address { return h.HolderAddress }, holders(tokensERC20a))
+		checkCursorFromOtherList(t, holders(tokensERC20a), holders(tokensERC20b))
+
+		hs, next, err := s.GetTokenHolders(ctx, tokensERC20a, port.Page{})
 		require.NoError(t, err)
 		assert.Equal(t, want, tokensHolderAddrs(hs), "limit 0 is no limit")
+		assert.Empty(t, next)
+	})
+
+	t.Run("HoldersCursorSurvivesBalanceChange", func(t *testing.T) {
+		s := open[tokenHolderStore](t, newStore)
+		for i, h := range []common.Address{tokensHolder1, tokensHolder2, tokensHolder3, tokensHolder4} {
+			require.NoError(t, s.UpdateTokenHolder(ctx, tokensHolder(tokensERC20a, h, int64(10*(i+1)), 1)))
+		}
+		hs, next, err := s.GetTokenHolders(ctx, tokensERC20a, port.FirstPage(2))
+		require.NoError(t, err)
+		require.Equal(t, []common.Address{tokensHolder4, tokensHolder3}, tokensHolderAddrs(hs))
+		// The holder the cursor ended at moves: the next page still
+		// continues after the balance the cursor ended at (30).
+		require.NoError(t, s.UpdateTokenHolder(ctx, tokensHolder(tokensERC20a, tokensHolder3, 35, 2)))
+		hs, _, err = s.GetTokenHolders(ctx, tokensERC20a, port.Page{After: next, Limit: 2})
+		require.NoError(t, err)
+		assert.Equal(t, []common.Address{tokensHolder2, tokensHolder1}, tokensHolderAddrs(hs))
 	})
 
 	t.Run("HolderTokens", func(t *testing.T) {
@@ -459,26 +475,24 @@ func testTokenHolderIndex(t *testing.T, newStore NewStore) {
 		}
 		require.NoError(t, s.UpdateTokenHolder(ctx, tokensHolder(tokensERC1155, tokensHolder2, 1, 1)))
 
-		all, err := s.GetHolderTokens(ctx, tokensHolder1, 10, 0)
+		all, _, err := s.GetHolderTokens(ctx, tokensHolder1, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.ElementsMatch(t, tokens, tokensHolderTokens(all), "only the holder's own tokens")
 		for _, h := range all {
 			assert.Equal(t, tokensHolder1, h.HolderAddress)
 		}
 
-		var paged []common.Address
-		for offset := 0; offset < len(tokens); offset += 2 {
-			page, err := s.GetHolderTokens(ctx, tokensHolder1, 2, offset)
-			require.NoError(t, err)
-			paged = append(paged, tokensHolderTokens(page)...)
+		held := func(holder common.Address) listPage[*port.TokenHolder] {
+			return func(page port.Page) ([]*port.TokenHolder, string, error) {
+				return s.GetHolderTokens(ctx, holder, page)
+			}
 		}
-		assert.Equal(t, tokensHolderTokens(all), paged, "pages follow the order of the full list")
-		page, err := s.GetHolderTokens(ctx, tokensHolder1, 2, len(tokens))
-		require.NoError(t, err)
-		assert.Empty(t, page, "offset past the end")
-		page, err = s.GetHolderTokens(ctx, tokensHolder1, 0, 0)
+		checkPaging(t, all, func(h *port.TokenHolder) common.Address { return h.TokenAddress }, held(tokensHolder1))
+		checkCursorFromOtherList(t, held(tokensHolder1), held(tokensHolder2))
+		page, next, err := s.GetHolderTokens(ctx, tokensHolder1, port.Page{})
 		require.NoError(t, err)
 		assert.Len(t, page, len(tokens), "limit 0 is no limit")
+		assert.Empty(t, next)
 	})
 
 	t.Run("ZeroBalanceRemovesHolder", func(t *testing.T) {
@@ -490,10 +504,10 @@ func testTokenHolderIndex(t *testing.T, newStore NewStore) {
 
 		assertTokenBalance(t, s, tokensERC20a, tokensHolder1, nil)
 		assertTokenBalance(t, s, tokensERC20a, tokensHolder2, nil)
-		hs, err := s.GetTokenHolders(ctx, tokensERC20a, 10, 0)
+		hs, _, err := s.GetTokenHolders(ctx, tokensERC20a, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, hs)
-		hs, err = s.GetHolderTokens(ctx, tokensHolder1, 10, 0)
+		hs, _, err = s.GetHolderTokens(ctx, tokensHolder1, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, hs)
 		n, err := s.GetTokenHolderCount(ctx, tokensERC20a)
@@ -568,7 +582,7 @@ func testTokenHolderIndex(t *testing.T, newStore NewStore) {
 		assertTokenBalance(t, s, tokensERC20a, tokensHolder1, big.NewInt(70))
 		assertTokenBalance(t, s, tokensERC20a, tokensHolder2, nil)
 		assertTokenBalance(t, s, tokensERC20a, zero, nil)
-		hs, err := s.GetTokenHolders(ctx, tokensERC20a, 10, 0)
+		hs, _, err := s.GetTokenHolders(ctx, tokensERC20a, port.FirstPage(10))
 		require.NoError(t, err)
 		require.Len(t, hs, 1, "the zero address is never a holder")
 		assertTokenHolder(t, tokensHolder(tokensERC20a, tokensHolder1, 70, 2), hs[0])

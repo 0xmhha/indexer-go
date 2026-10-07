@@ -49,7 +49,7 @@ func assertVerification(t *testing.T, want, got *port.ContractVerification) {
 // testContractVerification checks ContractVerificationReader and
 // ContractVerificationWriter: a record comes back as stored, a missing one
 // is port.ErrNotFound (false from IsContractVerified), verified contracts
-// are listed in verification time order with limit/offset pagination, and
+// are listed in verification time order a page at a time (port.Page), and
 // the count matches the list.
 func testContractVerification(t *testing.T, newStore NewStore) {
 	ctx := context.Background()
@@ -61,7 +61,7 @@ func testContractVerification(t *testing.T, newStore NewStore) {
 		ok, err := s.IsContractVerified(ctx, addrC)
 		require.NoError(t, err)
 		assert.False(t, ok)
-		list, err := s.ListVerifiedContracts(ctx, 10, 0)
+		list, _, err := s.ListVerifiedContracts(ctx, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, list)
 		n, err := s.CountVerifiedContracts(ctx)
@@ -95,7 +95,7 @@ func testContractVerification(t *testing.T, newStore NewStore) {
 			want = append(want, a)
 			require.NoError(t, s.SetContractVerification(ctx, verificationFixture(a, int64(i))))
 		}
-		list, err := s.ListVerifiedContracts(ctx, 10, 0)
+		list, _, err := s.ListVerifiedContracts(ctx, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, want, list, "oldest verification first")
 		n, err := s.CountVerifiedContracts(ctx)
@@ -111,23 +111,13 @@ func testContractVerification(t *testing.T, newStore NewStore) {
 			want = append(want, a)
 			require.NoError(t, s.SetContractVerification(ctx, verificationFixture(a, int64(i))))
 		}
-		list, err := s.ListVerifiedContracts(ctx, 2, 0)
-		require.NoError(t, err)
-		assert.Equal(t, want[0:2], list)
-		list, err = s.ListVerifiedContracts(ctx, 2, 2)
-		require.NoError(t, err)
-		assert.Equal(t, want[2:4], list)
-		list, err = s.ListVerifiedContracts(ctx, 2, 4)
-		require.NoError(t, err)
-		assert.Equal(t, want[4:], list, "the last page is short")
-		list, err = s.ListVerifiedContracts(ctx, 2, 5)
-		require.NoError(t, err)
-		assert.Empty(t, list, "offset past the end")
+		verified := func(page port.Page) ([]common.Address, string, error) { return s.ListVerifiedContracts(ctx, page) }
+		checkPaging(t, want, func(a common.Address) common.Address { return a }, verified)
 
-		list, err = s.ListVerifiedContracts(ctx, 0, 0)
+		list, _, err := s.ListVerifiedContracts(ctx, port.Page{})
 		require.NoError(t, err)
 		assert.Equal(t, want, list, "limit 0 uses a default limit")
-		list, err = s.ListVerifiedContracts(ctx, -1, -1)
+		list, _, err = s.ListVerifiedContracts(ctx, port.Page{Limit: -1, Offset: -1})
 		require.NoError(t, err)
 		assert.Equal(t, want, list, "a negative limit uses a default limit and a negative offset is 0")
 	})
@@ -150,7 +140,7 @@ func testContractVerification(t *testing.T, newStore NewStore) {
 		s := open[verificationStore](t, newStore)
 		require.NoError(t, s.SetContractVerification(ctx, verificationFixture(addrC, 0)))
 		require.NoError(t, s.SetContractVerification(ctx, verificationFixture(addrC, 60)))
-		list, err := s.ListVerifiedContracts(ctx, 10, 0)
+		list, _, err := s.ListVerifiedContracts(ctx, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Address{addrC}, list)
 		n, err := s.CountVerifiedContracts(ctx)
@@ -166,7 +156,7 @@ func testContractVerification(t *testing.T, newStore NewStore) {
 		ok, err := s.IsContractVerified(ctx, addrC)
 		require.NoError(t, err)
 		assert.False(t, ok)
-		list, err := s.ListVerifiedContracts(ctx, 10, 0)
+		list, _, err := s.ListVerifiedContracts(ctx, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, list)
 		n, err := s.CountVerifiedContracts(ctx)
@@ -185,7 +175,7 @@ func testContractVerification(t *testing.T, newStore NewStore) {
 		ok, err := s.IsContractVerified(ctx, addrC)
 		require.NoError(t, err)
 		assert.False(t, ok)
-		list, err := s.ListVerifiedContracts(ctx, 10, 0)
+		list, _, err := s.ListVerifiedContracts(ctx, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []common.Address{created}, list)
 		n, err := s.CountVerifiedContracts(ctx)

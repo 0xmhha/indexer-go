@@ -24,7 +24,7 @@ func testOrphans(t *testing.T, newStore NewStore) {
 
 	t.Run("EmptyStore", func(t *testing.T) {
 		s := open[orphanStore](t, newStore)
-		reorgs, err := s.GetReorgs(ctx, 10, 0)
+		reorgs, _, err := s.GetReorgs(ctx, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, reorgs)
 		_, err = s.GetReorg(ctx, 1)
@@ -150,18 +150,9 @@ func testOrphans(t *testing.T, newStore NewStore) {
 		assert.Equal(t, uint64(3), second.OldHead)
 		assert.Equal(t, orphanRefs(fork), second.Removed)
 
-		reorgs, err := s.GetReorgs(ctx, 10, 0)
+		reorgs, _, err := s.GetReorgs(ctx, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []uint64{second.Seq, first.Seq}, orphanSeqs(reorgs), "newest first")
-		reorgs, err = s.GetReorgs(ctx, 1, 0)
-		require.NoError(t, err)
-		assert.Equal(t, []uint64{second.Seq}, orphanSeqs(reorgs), "limit")
-		reorgs, err = s.GetReorgs(ctx, 1, 1)
-		require.NoError(t, err)
-		assert.Equal(t, []uint64{first.Seq}, orphanSeqs(reorgs), "offset")
-		reorgs, err = s.GetReorgs(ctx, 10, 2)
-		require.NoError(t, err)
-		assert.Empty(t, reorgs, "offset past the end")
 
 		at, err := s.GetOrphanedBlocksAt(ctx, 3)
 		require.NoError(t, err)
@@ -185,6 +176,25 @@ func testOrphans(t *testing.T, newStore NewStore) {
 		assert.ErrorIs(t, err, port.ErrNotFound)
 	})
 
+	t.Run("ReorgsPaging", func(t *testing.T) {
+		s := open[orphanStore](t, newStore)
+		orphanIndexChain(t, s, c)
+		var want []*port.Reorg
+		for _, to := range []uint64{3, 2, 1} {
+			r, err := s.RollbackTo(ctx, to)
+			require.NoError(t, err)
+			require.NotNil(t, r)
+			want = append([]*port.Reorg{r}, want...) // newest first
+		}
+		reorgs := func(page port.Page) ([]*port.Reorg, string, error) { return s.GetReorgs(ctx, page) }
+		checkPaging(t, want, func(r *port.Reorg) uint64 { return r.Seq }, reorgs)
+
+		all, next, err := s.GetReorgs(ctx, port.Page{})
+		require.NoError(t, err)
+		assert.Equal(t, orphanSeqs(want), orphanSeqs(all), "limit 0 lists every record")
+		assert.Empty(t, next)
+	})
+
 	t.Run("RollbackToHeadIsNoop", func(t *testing.T) {
 		s := open[orphanStore](t, newStore)
 		orphanIndexChain(t, s, c)
@@ -200,7 +210,7 @@ func testOrphans(t *testing.T, newStore NewStore) {
 		assert.Equal(t, c.head(), head)
 		_, err = s.GetBlock(ctx, c.head())
 		assert.NoError(t, err)
-		reorgs, err := s.GetReorgs(ctx, 10, 0)
+		reorgs, _, err := s.GetReorgs(ctx, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, reorgs, "nothing was rolled back")
 	})
@@ -376,7 +386,7 @@ func orphanAssertUnchanged(t *testing.T, s orphanStore, c *chain) {
 			assert.NoError(t, err, "receipt %s stays", tx.Hash.Hex())
 		}
 	}
-	reorgs, err := s.GetReorgs(ctx, 10, 0)
+	reorgs, _, err := s.GetReorgs(ctx, port.FirstPage(10))
 	require.NoError(t, err)
 	assert.Empty(t, reorgs, "no reorganization recorded")
 	at, err := s.GetOrphanedBlocksAt(ctx, c.head())

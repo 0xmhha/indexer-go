@@ -133,24 +133,29 @@ func testHistTimeIndex(t *testing.T, newStore NewStore) {
 		s := open[historicalStore](t, newStore)
 		histWrite(t, s, c)
 
-		got, err := s.GetBlocksByTimeRange(ctx, at(1), at(3), 10, 0)
+		got, _, err := s.GetBlocksByTimeRange(ctx, at(1), at(3), port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []uint64{1, 2, 3}, histNumbers(got), "both ends are inclusive, in time order")
 		assertBlock(t, c.Blocks[2], got[1])
 
-		got, err = s.GetBlocksByTimeRange(ctx, at(1)-1, at(3)+1, 10, 0)
+		got, _, err = s.GetBlocksByTimeRange(ctx, at(1)-1, at(3)+1, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []uint64{1, 2, 3}, histNumbers(got))
 
-		got, err = s.GetBlocksByTimeRange(ctx, at(0), at(4), 2, 1)
-		require.NoError(t, err)
-		assert.Equal(t, []uint64{1, 2}, histNumbers(got), "limit and offset")
+		byTime := func(from, to uint64) listPage[*model.Block] {
+			return func(page port.Page) ([]*model.Block, string, error) {
+				return s.GetBlocksByTimeRange(ctx, from, to, page)
+			}
+		}
+		number := func(b *model.Block) uint64 { return b.Number }
+		checkPaging(t, c.Blocks, number, byTime(at(0), at(4)))
+		checkCursorFromOtherList(t, byTime(at(0), at(4)), byTime(at(3), at(4)))
 
-		got, err = s.GetBlocksByTimeRange(ctx, at(1)+1, at(2)-1, 10, 0)
+		got, _, err = s.GetBlocksByTimeRange(ctx, at(1)+1, at(2)-1, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, got, "no block in the window")
 
-		_, err = s.GetBlocksByTimeRange(ctx, at(3), at(1), 10, 0)
+		_, _, err = s.GetBlocksByTimeRange(ctx, at(3), at(1), port.FirstPage(10))
 		assert.Error(t, err, "fromTime after toTime")
 	})
 
@@ -158,7 +163,7 @@ func testHistTimeIndex(t *testing.T, newStore NewStore) {
 		s := open[historicalStore](t, newStore)
 		histWrite(t, s, c)
 		require.NoError(t, s.SetBlockTimestamp(ctx, at(5), 5)) // block 5 is not stored
-		got, err := s.GetBlocksByTimeRange(ctx, at(3), at(5), 10, 0)
+		got, _, err := s.GetBlocksByTimeRange(ctx, at(3), at(5), port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []uint64{3, 4}, histNumbers(got))
 	})
@@ -166,7 +171,7 @@ func testHistTimeIndex(t *testing.T, newStore NewStore) {
 	t.Run("BlocksByTimeRangeUnboundedEnd", func(t *testing.T) {
 		s := open[historicalStore](t, newStore)
 		histWrite(t, s, c)
-		got, err := s.GetBlocksByTimeRange(ctx, 0, math.MaxUint64, 10, 0)
+		got, _, err := s.GetBlocksByTimeRange(ctx, 0, math.MaxUint64, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []uint64{0, 1, 2, 3, 4}, histNumbers(got))
 	})
@@ -214,7 +219,7 @@ func testHistTimeIndex(t *testing.T, newStore NewStore) {
 		s := open[historicalStore](t, newStore)
 		c.write(t, s)
 
-		got, err := s.GetBlocksByTimeRange(ctx, at(1), at(3), 10, 0)
+		got, _, err := s.GetBlocksByTimeRange(ctx, at(1), at(3), port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Equal(t, []uint64{1, 2, 3}, histNumbers(got))
 		b, err := s.GetBlockByTimestamp(ctx, at(2))
@@ -250,7 +255,7 @@ func testHistTimeIndex(t *testing.T, newStore NewStore) {
 
 // testHistAddressTransactions checks GetTransactionsByAddressFiltered: it
 // lists the address index in the order it was written, applies every
-// filter field and then the offset and limit.
+// filter field and pages over the matches (port.Page).
 func testHistAddressTransactions(t *testing.T, newStore NewStore) {
 	ctx := context.Background()
 	c := newChain(5)
@@ -268,13 +273,13 @@ func testHistAddressTransactions(t *testing.T, newStore NewStore) {
 		if mod != nil {
 			mod(f)
 		}
-		got, err := s.GetTransactionsByAddressFiltered(ctx, addr, f, limit, offset)
+		got, _, err := s.GetTransactionsByAddressFiltered(ctx, addr, f, port.Page{Limit: limit, Offset: offset})
 		require.NoError(t, err)
 		return histTxHashes(got)
 	}
 
 	t.Run("NilFilterListsAll", func(t *testing.T) {
-		got, err := s.GetTransactionsByAddressFiltered(ctx, addrB, nil, 100, 0)
+		got, _, err := s.GetTransactionsByAddressFiltered(ctx, addrB, nil, port.FirstPage(100))
 		require.NoError(t, err)
 		assert.Equal(t, allB, histTxHashes(got))
 		assert.Equal(t, []common.Hash{tr(1), tr(2), tr(3), create, tr(4)}, list(t, addrA, nil, 100, 0))
@@ -282,7 +287,7 @@ func testHistAddressTransactions(t *testing.T, newStore NewStore) {
 	})
 
 	t.Run("ResultsCarryReceiptAndLocation", func(t *testing.T) {
-		got, err := s.GetTransactionsByAddressFiltered(ctx, addrB, nil, 100, 0)
+		got, _, err := s.GetTransactionsByAddressFiltered(ctx, addrB, nil, port.FirstPage(100))
 		require.NoError(t, err)
 		require.Len(t, got, len(allB))
 		failed := got[3] // the failed call in block 2
@@ -331,17 +336,41 @@ func testHistAddressTransactions(t *testing.T, newStore NewStore) {
 		assert.Equal(t, allB, list(t, addrB, func(f *port.TransactionFilter) { f.IsFeeDelegated = histBool(false) }, 100, 0))
 	})
 
-	t.Run("LimitAndOffsetAfterFilter", func(t *testing.T) {
+	t.Run("PagingAfterFilter", func(t *testing.T) {
+		filtered := func(addr common.Address, mod func(f *port.TransactionFilter)) listPage[common.Hash] {
+			return func(page port.Page) ([]common.Hash, string, error) {
+				f := port.DefaultTransactionFilter()
+				if mod != nil {
+					mod(f)
+				}
+				got, next, err := s.GetTransactionsByAddressFiltered(ctx, addr, f, page)
+				return histTxHashes(got), next, err
+			}
+		}
+		received := func(f *port.TransactionFilter) { f.TxType = port.TxTypeReceived }
+		hash := func(h common.Hash) common.Hash { return h }
+		checkPaging(t, allB, hash, filtered(addrB, nil))
+		checkPaging(t, []common.Hash{tr(1), tr(2), tr(3), tr(4)}, hash, filtered(addrB, received))
+		checkCursorFromOtherList(t, filtered(addrB, nil), filtered(addrA, nil))
+
 		assert.Equal(t, []common.Hash{tr(2), call(2), tr(3)}, list(t, addrB, nil, 3, 2))
-		assert.Equal(t, []common.Hash{tr(3), tr(4)}, list(t, addrB, func(f *port.TransactionFilter) { f.TxType = port.TxTypeReceived }, 2, 2),
+		assert.Equal(t, []common.Hash{tr(3), tr(4)}, list(t, addrB, received, 2, 2),
 			"the offset counts matching transactions only")
 		assert.Empty(t, list(t, addrB, nil, 3, 8))
+
+		// A cursor continues after the last match: the entries it skipped
+		// are not read again.
+		_, next, err := filtered(addrB, received)(port.FirstPage(1))
+		require.NoError(t, err)
+		got, _, err := filtered(addrB, received)(port.Page{After: next, Limit: 2})
+		require.NoError(t, err)
+		assert.Equal(t, []common.Hash{tr(2), tr(3)}, got)
 	})
 
 	t.Run("RejectsInvalidFilter", func(t *testing.T) {
 		f := port.DefaultTransactionFilter()
 		f.FromBlock, f.ToBlock = 3, 2
-		_, err := s.GetTransactionsByAddressFiltered(ctx, addrB, f, 100, 0)
+		_, _, err := s.GetTransactionsByAddressFiltered(ctx, addrB, f, port.FirstPage(100))
 		assert.Error(t, err)
 	})
 }
@@ -381,27 +410,32 @@ func testHistBalances(t *testing.T, newStore NewStore) {
 	t.Run("History", func(t *testing.T) {
 		s := open[historicalStore](t, newStore)
 		write(t, s)
-		got, err := s.GetBalanceHistory(ctx, addrA, 0, math.MaxUint64, 10, 0)
+		got, _, err := s.GetBalanceHistory(ctx, addrA, 0, math.MaxUint64, port.FirstPage(10))
 		require.NoError(t, err)
 		histAssertSnapshots(t, want, got)
 
-		got, err = s.GetBalanceHistory(ctx, addrA, 3, 5, 10, 0)
+		got, _, err = s.GetBalanceHistory(ctx, addrA, 3, 5, port.FirstPage(10))
 		require.NoError(t, err)
 		histAssertSnapshots(t, want[1:], got, "the block range is inclusive")
 
-		got, err = s.GetBalanceHistory(ctx, addrA, 2, 4, 10, 0)
+		got, _, err = s.GetBalanceHistory(ctx, addrA, 2, 4, port.FirstPage(10))
 		require.NoError(t, err)
 		histAssertSnapshots(t, want[1:2], got)
 
-		got, err = s.GetBalanceHistory(ctx, addrA, 0, math.MaxUint64, 1, 1)
-		require.NoError(t, err)
-		histAssertSnapshots(t, want[1:2], got, "limit and offset")
+		history := func(addr common.Address) listPage[port.BalanceSnapshot] {
+			return func(page port.Page) ([]port.BalanceSnapshot, string, error) {
+				return s.GetBalanceHistory(ctx, addr, 0, math.MaxUint64, page)
+			}
+		}
+		block := func(b port.BalanceSnapshot) uint64 { return b.BlockNumber }
+		checkPaging(t, want, block, history(addrA))
+		checkCursorFromOtherList(t, history(addrA), history(addrB))
 
-		got, err = s.GetBalanceHistory(ctx, unknown, 0, math.MaxUint64, 10, 0)
+		got, _, err = s.GetBalanceHistory(ctx, unknown, 0, math.MaxUint64, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, got)
 
-		_, err = s.GetBalanceHistory(ctx, addrA, 5, 3, 10, 0)
+		_, _, err = s.GetBalanceHistory(ctx, addrA, 5, 3, port.FirstPage(10))
 		assert.Error(t, err, "fromBlock after toBlock")
 	})
 
@@ -413,7 +447,7 @@ func testHistBalances(t *testing.T, newStore NewStore) {
 		got, err := s.GetAddressBalance(ctx, addrA, 0)
 		require.NoError(t, err)
 		histAssertBig(t, big.NewInt(500), got, "a rejected update changes nothing")
-		hist, err := s.GetBalanceHistory(ctx, addrA, 0, math.MaxUint64, 10, 0)
+		hist, _, err := s.GetBalanceHistory(ctx, addrA, 0, math.MaxUint64, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Len(t, hist, 3, "a rejected update records no snapshot")
 

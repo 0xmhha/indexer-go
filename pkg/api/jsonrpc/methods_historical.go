@@ -3,6 +3,7 @@ package jsonrpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -21,6 +22,7 @@ func (h *Handler) getBlocksByTimeRange(ctx context.Context, params json.RawMessa
 		ToTime   interface{} `json:"toTime"`
 		Limit    *int        `json:"limit,omitempty"`
 		Offset   *int        `json:"offset,omitempty"`
+		After    string      `json:"after,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -79,8 +81,12 @@ func (h *Handler) getBlocksByTimeRange(ctx context.Context, params json.RawMessa
 
 	histStorage := h.storage
 
-	blocks, err := histStorage.GetBlocksByTimeRange(ctx, fromTime, toTime, limit, offset)
+	page := port.Page{After: p.After, Limit: limit, Offset: offset}
+	blocks, next, err := histStorage.GetBlocksByTimeRange(ctx, fromTime, toTime, page)
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get blocks by time range",
 			zap.Uint64("fromTime", fromTime),
 			zap.Uint64("toTime", toTime),
@@ -97,10 +103,8 @@ func (h *Handler) getBlocksByTimeRange(ctx context.Context, params json.RawMessa
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(blocks),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(blocks) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   historicalPageInfo(page, next),
+		"nextCursor": historicalNextCursor(next),
 	}, nil
 }
 
@@ -156,6 +160,7 @@ func (h *Handler) getTransactionsByAddressFiltered(ctx context.Context, params j
 		Filter  map[string]interface{} `json:"filter"`
 		Limit   *int                   `json:"limit,omitempty"`
 		Offset  *int                   `json:"offset,omitempty"`
+		After   string                 `json:"after,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -192,8 +197,12 @@ func (h *Handler) getTransactionsByAddressFiltered(ctx context.Context, params j
 
 	histStorage := h.storage
 
-	txsWithReceipts, err := histStorage.GetTransactionsByAddressFiltered(ctx, address, filter, limit, offset)
+	page := port.Page{After: p.After, Limit: limit, Offset: offset}
+	txsWithReceipts, next, err := histStorage.GetTransactionsByAddressFiltered(ctx, address, filter, page)
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get filtered transactions",
 			zap.String("address", p.Address),
 			zap.Error(err))
@@ -213,10 +222,8 @@ func (h *Handler) getTransactionsByAddressFiltered(ctx context.Context, params j
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(txsWithReceipts),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(txsWithReceipts) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   historicalPageInfo(page, next),
+		"nextCursor": historicalNextCursor(next),
 	}, nil
 }
 
@@ -278,6 +285,7 @@ func (h *Handler) getBalanceHistory(ctx context.Context, params json.RawMessage)
 		ToBlock   interface{} `json:"toBlock"`
 		Limit     *int        `json:"limit,omitempty"`
 		Offset    *int        `json:"offset,omitempty"`
+		After     string      `json:"after,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -341,8 +349,12 @@ func (h *Handler) getBalanceHistory(ctx context.Context, params json.RawMessage)
 
 	histStorage := h.storage
 
-	snapshots, err := histStorage.GetBalanceHistory(ctx, address, fromBlock, toBlock, limit, offset)
+	page := port.Page{After: p.After, Limit: limit, Offset: offset}
+	snapshots, next, err := histStorage.GetBalanceHistory(ctx, address, fromBlock, toBlock, page)
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get balance history",
 			zap.String("address", p.Address),
 			zap.Uint64("fromBlock", fromBlock),
@@ -379,10 +391,8 @@ func (h *Handler) getBalanceHistory(ctx context.Context, params json.RawMessage)
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(snapshots),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(snapshots) == limit,
-			"hasPreviousPage": offset > 0,
-		},
+		"pageInfo":   historicalPageInfo(page, next),
+		"nextCursor": historicalNextCursor(next),
 	}, nil
 }
 
@@ -507,4 +517,23 @@ func parseTransactionFilter(filter map[string]interface{}) (*port.TransactionFil
 	}
 
 	return result, nil
+}
+
+// historicalPageInfo returns the pageInfo of a page read with page that
+// returned the cursor next.
+func historicalPageInfo(page port.Page, next string) map[string]interface{} {
+	return map[string]interface{}{
+		"hasNextPage":     next != "",
+		"hasPreviousPage": page.After != "" || page.Offset > 0,
+	}
+}
+
+// historicalNextCursor returns the "nextCursor" result field: the cursor
+// that continues after a page (pass it as "after"), or nil after the last
+// page.
+func historicalNextCursor(next string) interface{} {
+	if next == "" {
+		return nil
+	}
+	return next
 }
