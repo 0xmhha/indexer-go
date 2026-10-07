@@ -33,6 +33,7 @@ type chainRoutes struct {
 	chains    ChainStores
 	logger    *zap.Logger
 	keepAlive bool
+	direct    bool
 
 	mu       sync.Mutex
 	handlers map[string]*chainHandlers
@@ -51,6 +52,7 @@ func (s *Server) mountChainRoutes(chains ChainStores) {
 		chains:    chains,
 		logger:    s.logger,
 		keepAlive: s.config.EnableWebSocketKeepAlive,
+		direct:    s.config.DirectSubscriptions,
 		handlers:  map[string]*chainHandlers{},
 	}
 	s.router.Get("/chains", cr.list)
@@ -106,10 +108,12 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 		logger.Error("failed to create GraphQL handler", zap.Error(err))
 		return nil, http.StatusInternalServerError
 	}
+	sub := graphql.NewSubscriptionServer(bus, logger, cr.keepAlive)
+	sub.SetDirect(cr.direct)
 	h := &chainHandlers{
 		store:   store,
 		graphql: gql,
-		sub:     graphql.NewSubscriptionServer(bus, logger, cr.keepAlive).Handler(),
+		sub:     sub.Handler(),
 		rpc:     jsonrpc.NewServer(store, logger),
 	}
 	cr.handlers[id] = h

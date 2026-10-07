@@ -54,7 +54,16 @@ api:
   enable_cors: true
   allowed_origins:
     - "*"                               # CORS 허용 오리진 (* = 전체 허용)
-```
+  subscription_engine: true             # GraphQL 구독을 구독 엔진으로 전달 (false = 이전 방식)
+
+  # 구독 엔진(refactoring plan R3-3): 이벤트 버스에는 엔진 하나만 구독하고, 엔진이
+  # 구독 종류(newBlock, logs 등)마다 이벤트를 한 번 직렬화해 조건이 맞는 연결에 같은
+  # 바이트를 넣는다. 연결마다 대기열은 eventbus.subscriber_buffer_size개까지이고, 넘치면
+  # 그 연결만 끊는다. 끊기 전에 구독마다 오류(extensions.code: SLOW_SUBSCRIBER,
+  # extensions.resumeFrom: 받지 못한 첫 sequence)를 보내고 close 1008로 닫는다. 소켓까지
+  # 막힌 클라이언트는 오류를 받지 못하므로, 마지막으로 받은 sequence 다음부터 다시
+  # 구독한다. "next" 메시지에는 extensions.sequence(체인 안의 이벤트 번호)가 붙는다.
+  # false는 구독마다 이벤트 버스를 직접 구독하던 이전 방식(가득 차면 버림)으로 되돌린다.
 
 ### Account Abstraction (EIP-4337)
 

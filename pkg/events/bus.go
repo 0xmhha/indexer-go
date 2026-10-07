@@ -156,6 +156,10 @@ func NewEventBusWithHistory(publishBufferSize, historySize int) *EventBus {
 	}
 }
 
+// SubscriberBufferSize returns the channel size of subscriptions that do
+// not choose one (eventbus.subscriber_buffer_size).
+func (eb *EventBus) SubscriberBufferSize() int { return eb.defaultChannelSize }
+
 // SetMetrics enables Prometheus metrics for the EventBus
 // This is optional - if not called, metrics will not be collected
 func (eb *EventBus) SetMetrics(metrics *Metrics) {

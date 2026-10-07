@@ -144,6 +144,13 @@ type APIConfig struct {
 	EnableWebSocketKeepAlive bool     `yaml:"enable_websocket_keepalive"`
 	EnableCORS               bool     `yaml:"enable_cors"`
 	AllowedOrigins           []string `yaml:"allowed_origins"`
+
+	// SubscriptionEngine delivers GraphQL subscriptions through the
+	// subscription engine (refactoring plan R3-3): events encoded once per
+	// subscription kind, slow connections disconnected with the sequence to
+	// resubscribe from. false subscribes each client subscription to the
+	// event bus directly, as before.
+	SubscriptionEngine bool `yaml:"subscription_engine"`
 }
 
 // MultiChainConfig holds configuration for multi-chain support
@@ -468,6 +475,9 @@ func NewConfig() *Config {
 	// WebSocket keep-alive pings keep idle subscribers connected; it can be
 	// disabled with api.enable_websocket_keepalive: false.
 	cfg.API.EnableWebSocketKeepAlive = true
+	// The subscription engine is on unless a file or
+	// INDEXER_API_SUBSCRIPTION_ENGINE turns it off.
+	cfg.API.SubscriptionEngine = true
 	return cfg
 }
 
@@ -868,6 +878,13 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_API_WEBSOCKET_KEEPALIVE: %w", err)
 		}
 		c.API.EnableWebSocketKeepAlive = val
+	}
+	if v := os.Getenv("INDEXER_API_SUBSCRIPTION_ENGINE"); v != "" {
+		val, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_SUBSCRIPTION_ENGINE: %w", err)
+		}
+		c.API.SubscriptionEngine = val
 	}
 	if enableCORS := os.Getenv("INDEXER_API_CORS_ENABLED"); enableCORS != "" {
 		val, err := strconv.ParseBool(enableCORS)

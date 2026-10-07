@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/stream"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/websocket"
@@ -27,17 +29,136 @@ const (
 	maxMessageSize = 4096
 )
 
-// SubscriptionServer handles GraphQL subscriptions over WebSocket
+// SubscriptionServer handles GraphQL subscriptions over WebSocket.
+//
+// Events reach the connections through a subscription engine
+// (stream.Engine, refactoring plan R3-3) that holds the server's only
+// event bus subscription: it encodes each event once per subscription
+// kind, queues it for the connections whose subscriptions match, and
+// disconnects a connection whose queue is full with the sequence to
+// resubscribe from. SetDirect(true) restores the former delivery, a bus
+// subscription and an encoding per client subscription, events dropped when
+// a buffer is full.
 type SubscriptionServer struct {
 	eventBus        *events.EventBus
 	logger          *zap.Logger
 	upgrader        websocket.Upgrader
 	enableKeepAlive bool
+	direct          bool
+
+	engineMu  sync.Mutex
+	engine    *stream.Engine
+	engineBus *events.EventBus
+	engineSub events.SubscriptionID
+}
+
+// SetDirect selects the former delivery (true): a bus subscription per
+// client subscription. It is the switch back from the subscription engine
+// (api.subscription_engine: false). Connections opened before keep the
+// delivery they started with.
+func (s *SubscriptionServer) SetDirect(direct bool) {
+	s.engineMu.Lock()
+	s.direct = direct
+	s.engineMu.Unlock()
+	if direct {
+		s.stopEngine()
+	} else {
+		s.subscriptionEngine()
+	}
+}
+
+// builtinSubscriptions are the subscription kinds of the schema and the
+// event types they listen to.
+var builtinSubscriptions = map[string]events.EventType{
+	"newBlock":               events.EventTypeBlock,
+	"newTransaction":         events.EventTypeTransaction,
+	"newPendingTransactions": events.EventTypeTransaction,
+	"logs":                   events.EventTypeLog,
+	"chainConfig":            events.EventTypeChainConfig,
+	"validatorSet":           events.EventTypeValidatorSet,
+	"reorg":                  events.EventTypeReorg,
+}
+
+// engineBusBuffer is the size of the engine's event bus subscription. The
+// engine never waits for connections, so it only buffers bursts.
+const engineBusBuffer = 1 << 16
+
+// subscriptionEngine returns the engine fed by the server's event bus,
+// starting it when needed: the server starts it as soon as it has a bus, so
+// replays (replayLast) cover the events before the first connection. It
+// returns nil without a bus or in direct mode.
+func (s *SubscriptionServer) subscriptionEngine() *stream.Engine {
+	s.engineMu.Lock()
+	defer s.engineMu.Unlock()
+	bus := s.eventBus
+	if bus == nil || s.direct {
+		return nil
+	}
+	if s.engine != nil && s.engineBus == bus && !s.engine.Closed() {
+		return s.engine
+	}
+	s.stopEngineLocked()
+	e := stream.NewEngine(stream.EngineConfig{Buffer: bus.SubscriberBufferSize()})
+	for name, eventType := range builtinSubscriptions {
+		e.AddTopic(name, eventType, subscriptionEncoder(name))
+	}
+	for _, name := range registeredSubscriptionNames() {
+		spec, _ := registeredSubscription(name)
+		e.AddTopic(name, spec.EventType, subscriptionEncoder(name))
+	}
+	id := events.SubscriptionID("graphql-engine/" + newConnID())
+	sub := bus.Subscribe(id, e.EventTypes(), nil, engineBusBuffer)
+	if sub == nil {
+		return nil // the bus is stopped
+	}
+	go func() {
+		for ev := range sub.Channel {
+			e.Publish(ev)
+		}
+		e.Close() // unsubscribed, or the bus stopped
+	}()
+	s.engine, s.engineBus, s.engineSub = e, bus, id
+	return e
+}
+
+// stopEngine stops the engine: its connections close and its bus
+// subscription ends.
+func (s *SubscriptionServer) stopEngine() {
+	s.engineMu.Lock()
+	defer s.engineMu.Unlock()
+	s.stopEngineLocked()
+}
+
+func (s *SubscriptionServer) stopEngineLocked() {
+	if s.engine == nil {
+		return
+	}
+	s.engineBus.Unsubscribe(s.engineSub)
+	s.engine.Close()
+	s.engine, s.engineBus, s.engineSub = nil, nil, ""
+}
+
+// subscriptionEncoder encodes an event as the payload of a "next" message
+// of subscription kind subType: the GraphQL result, with the event's change
+// stream sequence in extensions.sequence when it has one.
+func subscriptionEncoder(subType string) stream.Encoder {
+	return func(ev events.Event) ([]byte, bool) {
+		value, ok := subscriptionValue(subType, ev)
+		if !ok {
+			return nil, false
+		}
+		result := map[string]interface{}{"data": map[string]interface{}{subType: value}}
+		if seq := events.SequenceOf(ev); seq != 0 {
+			result["extensions"] = map[string]interface{}{"sequence": seq}
+		}
+		data, err := json.Marshal(result)
+		return data, err == nil
+	}
 }
 
 // NewSubscriptionServer creates a new subscription server
 func NewSubscriptionServer(eventBus *events.EventBus, logger *zap.Logger, enableKeepAlive bool) *SubscriptionServer {
-	return &SubscriptionServer{
+	s := &SubscriptionServer{
 		eventBus:        eventBus,
 		logger:          logger,
 		enableKeepAlive: enableKeepAlive,
@@ -50,6 +171,8 @@ func NewSubscriptionServer(eventBus *events.EventBus, logger *zap.Logger, enable
 			},
 		},
 	}
+	s.subscriptionEngine()
+	return s
 }
 
 // ServeHTTP handles WebSocket connections for GraphQL subscriptions
@@ -88,6 +211,9 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		enableKeepAlive: s.enableKeepAlive,
 		connID:          newConnID(),
 	}
+	if e := s.subscriptionEngine(); e != nil {
+		client.stream = e.Connect()
+	}
 
 	go client.writePump()
 	go client.readPump()
@@ -107,6 +233,9 @@ type subscriptionClient struct {
 	// connID scopes client-chosen subscription ids on the shared event bus,
 	// so two connections using the same id ("1") do not collide.
 	connID string
+	// stream is the connection's place in the subscription engine (nil for
+	// direct delivery); writePump writes its frames.
+	stream *stream.Conn
 }
 
 // busID returns the event bus id for a client subscription id.
@@ -196,8 +325,32 @@ func (c *subscriptionClient) writePump() {
 		c.conn.Close()
 	}()
 
+	var ready, failed <-chan struct{}
+	if c.stream != nil {
+		ready, failed = c.stream.Ready(), c.stream.Done()
+		// A write blocked on a client that stopped reading would hold the
+		// disconnected connection open until writeWait; bound it.
+		go func() {
+			select {
+			case <-failed:
+				_ = c.conn.UnderlyingConn().SetWriteDeadline(time.Now().Add(disconnectWait))
+			case <-c.ctx.Done():
+			}
+		}()
+	}
+	w := &frameWriter{}
+
 	for {
 		select {
+		case <-ready:
+			if !c.writeFrames(w) {
+				return
+			}
+
+		case <-failed:
+			c.writeFrames(w) // writes the reason and closes
+			return
+
 		case <-c.ctx.Done():
 			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
@@ -224,6 +377,90 @@ func (c *subscriptionClient) writePump() {
 			c.logger.Debug("sent ping message")
 		}
 	}
+}
+
+// frameWriter builds the "next" messages of engine frames, reusing one
+// buffer; the frame's payload is copied in as encoded, once per event.
+type frameWriter struct {
+	buf []byte
+	ids map[string][]byte // subscription id -> its JSON string
+}
+
+func (w *frameWriter) next(f stream.Frame) []byte {
+	id, ok := w.ids[f.Sub]
+	if !ok {
+		id, _ = json.Marshal(f.Sub)
+		if w.ids == nil {
+			w.ids = make(map[string][]byte)
+		}
+		w.ids[f.Sub] = id
+	}
+	w.buf = append(w.buf[:0], `{"id":`...)
+	w.buf = append(w.buf, id...)
+	w.buf = append(w.buf, `,"type":"next","payload":`...)
+	w.buf = append(w.buf, f.Payload...)
+	w.buf = append(w.buf, '}')
+	return w.buf
+}
+
+// writeFrames writes the frames the engine queued for the connection. It
+// returns false when the connection must close: a write failed, or the
+// engine disconnected it (the client is told why).
+func (c *subscriptionClient) writeFrames(w *frameWriter) bool {
+	frames, err := c.stream.Take()
+	if err != nil {
+		c.writeDisconnect(err)
+		return false
+	}
+	for _, f := range frames {
+		_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		if err := c.conn.WriteMessage(websocket.TextMessage, w.next(f)); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// disconnectWait bounds the writes that tell a disconnected client why.
+const disconnectWait = time.Second
+
+// writeDisconnect tells the client why the engine disconnected it. A slow
+// connection gets an error per subscription with the change stream
+// sequence to resubscribe from (extensions.resumeFrom), then a close frame.
+func (c *subscriptionClient) writeDisconnect(err error) {
+	var slow *stream.SlowError
+	if !errors.As(err, &slow) {
+		if c.ctx.Err() == nil { // the engine stopped with its event bus
+			_ = c.conn.SetWriteDeadline(time.Now().Add(disconnectWait))
+			_ = c.conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseGoingAway, "event stream stopped"))
+		}
+		return
+	}
+	c.logger.Warn("Disconnecting slow subscriber", zap.String("conn", c.connID), zap.Uint64("resume_from", slow.ResumeFrom))
+	message := "subscriber too slow"
+	ext := map[string]interface{}{"code": "SLOW_SUBSCRIBER"}
+	if slow.ResumeFrom != 0 {
+		message = fmt.Sprintf("subscriber too slow; resubscribe from sequence %d", slow.ResumeFrom)
+		ext["resumeFrom"] = slow.ResumeFrom
+	}
+	payload, _ := json.Marshal([]map[string]interface{}{{"message": message, "extensions": ext}})
+	c.mu.RLock()
+	ids := make([]string, 0, len(c.subscriptions))
+	for id := range c.subscriptions {
+		ids = append(ids, id)
+	}
+	c.mu.RUnlock()
+	for _, id := range ids {
+		data, _ := json.Marshal(wsMessage{ID: id, Type: "error", Payload: payload})
+		_ = c.conn.SetWriteDeadline(time.Now().Add(disconnectWait))
+		if c.conn.WriteMessage(websocket.TextMessage, data) != nil {
+			return
+		}
+	}
+	_ = c.conn.SetWriteDeadline(time.Now().Add(disconnectWait))
+	_ = c.conn.WriteMessage(websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "subscriber too slow"))
 }
 
 // handleMessage processes incoming WebSocket messages
@@ -360,6 +597,26 @@ func (c *subscriptionClient) handleSubscribe(id string, payload json.RawMessage)
 	// Parse replayLast parameter
 	replayLast := parseReplayLast(sub.Variables["replayLast"])
 
+	if c.stream != nil {
+		var match func(events.Event) bool
+		if filter != nil {
+			match = filter.Match
+		}
+		if err := c.stream.Subscribe(id, subType, match, replayLast); err != nil {
+			if errors.Is(err, stream.ErrDuplicateSub) {
+				c.sendError(id, fmt.Sprintf("subscriber for %s already exists", id))
+			} else {
+				c.sendError(id, "failed to create subscription")
+			}
+			return
+		}
+		c.mu.Lock()
+		c.subscriptions[id] = &clientSubscription{id: id, subType: subType, cancelFunc: func() {}}
+		c.mu.Unlock()
+		c.logger.Info("subscription started", zap.String("id", id), zap.String("type", subType))
+		return
+	}
+
 	// Create subscription ID
 	subID := c.busID(id)
 	opts := events.SubscribeOptions{
@@ -424,8 +681,10 @@ func (c *subscriptionClient) handleComplete(id string) {
 	if sub, ok := c.subscriptions[id]; ok {
 		// Cancel the event loop
 		sub.cancelFunc()
-		// Unsubscribe from EventBus
-		if c.server.eventBus != nil {
+		// Unsubscribe from the engine or the EventBus
+		if c.stream != nil {
+			c.stream.Unsubscribe(id)
+		} else if c.server.eventBus != nil {
 			c.server.eventBus.Unsubscribe(c.busID(id))
 		}
 		delete(c.subscriptions, id)
@@ -435,13 +694,24 @@ func (c *subscriptionClient) handleComplete(id string) {
 	c.logger.Info("subscription completed", zap.String("id", id))
 }
 
-// handleEvent handles events from EventBus
+// handleEvent sends an event of a direct (bus) subscription.
 func (c *subscriptionClient) handleEvent(id string, subType string, event interface{}) {
 	c.logger.Debug("handling event",
 		zap.String("id", id),
 		zap.String("type", subType),
 	)
+	ev, ok := event.(events.Event)
+	if !ok {
+		return
+	}
+	if data, ok := subscriptionEncoder(subType)(ev); ok {
+		c.sendMessage(wsMessage{ID: id, Type: "next", Payload: data})
+	}
+}
 
+// subscriptionValue returns the value of subscription field subType for an
+// event; false skips the event.
+func subscriptionValue(subType string, event events.Event) (interface{}, bool) {
 	var payload interface{}
 
 	switch subType {
@@ -458,11 +728,7 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				blockData["parentHash"] = blockEvent.Block.ParentHash().Hex()
 				blockData["miner"] = blockEvent.Block.Coinbase().Hex()
 			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"newBlock": blockData,
-				},
-			}
+			payload = blockData
 		}
 
 	case "newTransaction":
@@ -477,11 +743,7 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 			if txEvent.To != nil {
 				txData["to"] = txEvent.To.Hex()
 			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"newTransaction": txData,
-				},
-			}
+			payload = txData
 		}
 
 	case "newPendingTransactions":
@@ -510,11 +772,7 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 			} else {
 				pendingData["type"] = "0x0"
 			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"newPendingTransactions": pendingData,
-				},
-			}
+			payload = pendingData
 		}
 
 	case "logs":
@@ -536,11 +794,7 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 			if (logEvent.Log.BlockHash != common.Hash{}) {
 				logData["blockHash"] = logEvent.Log.BlockHash.Hex()
 			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"logs": logData,
-				},
-			}
+			payload = logData
 		}
 
 	case "chainConfig":
@@ -552,11 +806,7 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 				"oldValue":    configEvent.OldValue,
 				"newValue":    configEvent.NewValue,
 			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"chainConfig": configData,
-				},
-			}
+			payload = configData
 		}
 
 	case "validatorSet":
@@ -571,36 +821,22 @@ func (c *subscriptionClient) handleEvent(id string, subType string, event interf
 			if validatorEvent.ValidatorInfo != "" {
 				validatorData["validatorInfo"] = validatorEvent.ValidatorInfo
 			}
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"validatorSet": validatorData,
-				},
-			}
+			payload = validatorData
 		}
 
 	case "reorg":
 		if reorgEvent, ok := event.(*events.ReorgEvent); ok {
-			payload = map[string]interface{}{
-				"data": map[string]interface{}{
-					"reorg": reorgEventToMap(reorgEvent),
-				},
-			}
+			payload = reorgEventToMap(reorgEvent)
 		}
 
 	}
 
 	if payload == nil {
 		if spec, ok := registeredSubscription(subType); ok && spec.Payload != nil {
-			if ev, ok := event.(events.Event); ok {
-				if value, ok := spec.Payload(ev); ok {
-					payload = map[string]interface{}{"data": map[string]interface{}{subType: value}}
-				}
-			}
+			return spec.Payload(event)
 		}
 	}
-	if payload != nil {
-		c.sendNext(id, payload)
-	}
+	return payload, payload != nil
 }
 
 // parseSubscriptionType extracts subscription type from query
@@ -939,20 +1175,6 @@ func (c *subscriptionClient) sendMessage(msg wsMessage) {
 	}
 }
 
-// sendNext sends subscription data
-func (c *subscriptionClient) sendNext(id string, payload interface{}) {
-	data, _ := json.Marshal(payload)
-	c.logger.Debug("sending subscription data",
-		zap.String("id", id),
-		zap.Int("payload_size", len(data)),
-	)
-	c.sendMessage(wsMessage{
-		ID:      id,
-		Type:    "next",
-		Payload: data,
-	})
-}
-
 // sendError sends an error message
 func (c *subscriptionClient) sendError(id string, errMsg string) {
 	c.logger.Error("sending error to client",
@@ -979,8 +1201,12 @@ func (c *subscriptionClient) cleanup() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if c.stream != nil {
+		c.stream.Close()
+	}
+
 	// Unsubscribe all subscriptions from EventBus
-	if c.server.eventBus != nil {
+	if c.stream == nil && c.server.eventBus != nil {
 		for id, sub := range c.subscriptions {
 			c.logger.Debug("unsubscribing",
 				zap.String("id", id),
@@ -999,7 +1225,10 @@ func (c *subscriptionClient) cleanup() {
 
 // SetEventBus sets the EventBus (for dependency injection)
 func (s *SubscriptionServer) SetEventBus(bus *events.EventBus) {
+	s.engineMu.Lock()
 	s.eventBus = bus
+	s.engineMu.Unlock()
+	s.subscriptionEngine()
 }
 
 // SubscriptionHandler returns a handler that checks for EventBus availability

@@ -920,6 +920,7 @@ func (a *App) initAPIServer() error {
 		ShutdownTimeout:       constants.DefaultShutdownTimeout,
 	}
 	apiConfig.EnableWebSocketKeepAlive = a.config.API.EnableWebSocketKeepAlive
+	apiConfig.DirectSubscriptions = !a.config.API.SubscriptionEngine
 
 	// Create API server with optional RPC Proxy, Notification Service, and Verifier
 	serverOpts := &api.ServerOptions{

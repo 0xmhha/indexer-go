@@ -43,6 +43,11 @@ type Config struct {
 	// EnableWebSocket enables WebSocket subscriptions
 	EnableWebSocket bool
 
+	// DirectSubscriptions delivers GraphQL subscriptions through a bus
+	// subscription each instead of the subscription engine
+	// (api.subscription_engine: false).
+	DirectSubscriptions bool
+
 	// EnableWebSocketKeepAlive enables WebSocket keep-alive (ping/pong)
 	// When enabled, server sends ping every 54 seconds with 60 second timeout
 	// Default: false
