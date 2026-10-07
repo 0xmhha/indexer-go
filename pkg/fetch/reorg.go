@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/events"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -108,33 +105,17 @@ func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) 
 	return fork, nil
 }
 
-// publishReorg announces a committed rollback: the reorganization, then
-// every log of the removed blocks with Removed set (newest block first,
-// logs in reverse order, as go-ethereum's log subscriptions report them).
+// publishReorg delivers a committed rollback's events: the relay already
+// has them in the outbox; without an outbox they are published directly.
 func (f *Fetcher) publishReorg(r *port.Reorg) {
-	ev := &events.ReorgEvent{
-		Seq: r.Seq, ForkNumber: r.ForkNumber, ForkHash: r.ForkHash, OldHead: r.OldHead, CreatedAt: time.Now(),
+	if f.outbox != nil {
+		f.notifyRelay()
+		return
 	}
-	for _, b := range r.Removed {
-		ev.Removed = append(ev.Removed, events.BlockRef{Number: b.Number, Hash: b.Hash})
-	}
-	if !f.publish(ev) {
-		f.logger.Warn("Failed to publish reorg event (channel full)", zap.Uint64("seq", r.Seq))
-	}
-	for _, ob := range r.Blocks {
-		for i := len(ob.Receipts) - 1; i >= 0; i-- {
-			logs := ob.Receipts[i].Logs
-			for j := len(logs) - 1; j >= 0; j-- {
-				l := logs[j]
-				removed := &types.Log{
-					Address: l.Address, Topics: l.Topics, Data: l.Data,
-					BlockNumber: l.BlockNumber, BlockHash: l.BlockHash, TxHash: l.TxHash,
-					TxIndex: l.TxIndex, Index: l.Index, Removed: true,
-				}
-				if !f.publish(events.NewLogEvent(removed)) {
-					f.logger.Warn("Failed to publish removed log event (channel full)",
-						zap.Uint64("block", l.BlockNumber), zap.Uint("log_index", l.Index))
-				}
+	for i, ob := range r.Blocks {
+		for _, ev := range reorgEvents(r, ob, i == 0) {
+			if !f.publish(ev) {
+				f.logger.Warn("Failed to publish reorg event (channel full)", zap.Uint64("seq", r.Seq), zap.String("type", string(ev.Type())))
 			}
 		}
 	}

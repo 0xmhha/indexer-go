@@ -271,7 +271,7 @@ func testKV(t *testing.T, newStore NewStore) {
 			}
 			require.NoError(t, tx.Commit())
 		}
-		_, err := os.RollbackTo(ctx, 1)
+		_, err := os.RollbackTo(ctx, 1, nil)
 		require.NoError(t, err)
 		kvAssertValue(t, ctx, s, kept, "block 1")
 		kvAssertValue(t, ctx, s, added, "")

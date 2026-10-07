@@ -116,8 +116,8 @@ func (f *Fetcher) write() *writer {
 	return f.writerInst
 }
 
-// Close stops the writer after the commands already sent have run. The
-// fetcher must not index after Close.
+// Close stops the writer after the commands already sent have run, then the
+// event relay. The fetcher must not index after Close.
 func (f *Fetcher) Close() {
 	f.bgOnce.Do(func() {}) // background work never started: nothing to stop
 	if f.bgCancel != nil {
@@ -128,6 +128,7 @@ func (f *Fetcher) Close() {
 	if f.writerInst != nil {
 		f.writerInst.close()
 	}
+	f.stopRelay()
 }
 
 // ============================================================================
@@ -143,7 +144,8 @@ func (f *Fetcher) Close() {
 //     processing a block twice never changes storage.
 //   - The cursor only moves forward, so filling a gap below it does not
 //     rewind it.
-//   - Events are published only after the transaction commits.
+//   - Events are recorded in the outbox in the same transaction and
+//     delivered by the relay after it commits (outbox.go).
 func (f *Fetcher) indexBlock(ctx context.Context, fb *fetchedBlock) error {
 	if f.txr == nil {
 		return errNoBlockTransactions
@@ -187,6 +189,11 @@ func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
 	if err := f.advanceCursor(txCtx, height); err != nil {
 		return err
 	}
+	if f.outbox != nil {
+		if err := f.recordEvents(txCtx, pending); err != nil {
+			return fmt.Errorf("record events of block %d: %w", height, err)
+		}
+	}
 	if f.beforeCommitHook != nil {
 		if err := f.beforeCommitHook(height); err != nil {
 			return err
@@ -197,14 +204,7 @@ func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
 	}
 
 	f.pendingEvents = nil
-	for _, ev := range pending {
-		if !f.publish(ev) {
-			f.logger.Warn("Failed to publish event (channel full)",
-				zap.Uint64("height", height),
-				zap.String("type", string(ev.Type())),
-			)
-		}
-	}
+	f.committed(pending, height)
 
 	f.metrics.RecordBlockProcessed(len(fb.receipts))
 	f.logger.Info("Successfully indexed block",
@@ -231,12 +231,13 @@ func (f *Fetcher) writeCursorOnly(ctx context.Context, height uint64) error {
 	return tx.Commit()
 }
 
-// rollbackTo rolls the database back to height `to` on the writer and,
-// once the rollback committed, announces it (publishReorg) before any block
-// of the new branch is indexed.
+// rollbackTo rolls the database back to height `to` on the writer. The
+// reorganization's events are recorded in the outbox with each rolled-back
+// block (rollbackHook), so they precede the events of the new branch and
+// survive a crash during the rollback.
 func (f *Fetcher) rollbackTo(ctx context.Context, rb port.Rollbacker, to uint64) error {
 	return f.write().do(ctx, "rollback", func(ctx context.Context) error {
-		r, err := rb.RollbackTo(ctx, to)
+		r, err := rb.RollbackTo(ctx, to, f.rollbackHook())
 		if err != nil {
 			return err
 		}

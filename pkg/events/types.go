@@ -42,6 +42,8 @@ type Event interface {
 
 // BlockEvent represents a new block event
 type BlockEvent struct {
+	Stream // change stream position (R3-1)
+
 	// Block data
 	Block *types.Block
 
@@ -70,6 +72,8 @@ func (e *BlockEvent) Timestamp() time.Time {
 
 // TransactionEvent represents a new transaction event
 type TransactionEvent struct {
+	Stream // change stream position (R3-1)
+
 	// Transaction data
 	Tx *types.Transaction
 
@@ -153,6 +157,8 @@ func NewTransactionEvent(
 
 // LogEvent represents a log emitted as part of a transaction receipt
 type LogEvent struct {
+	Stream // change stream position (R3-1)
+
 	// Log is the raw Ethereum log data
 	Log *types.Log
 
@@ -184,6 +190,8 @@ func NewLogEvent(log *types.Log) *LogEvent {
 // events of the new branch. The removed blocks stay queryable as orphans
 // under the same sequence number.
 type ReorgEvent struct {
+	Stream // change stream position (R3-1)
+
 	Seq        uint64 // reorganization record number
 	ForkNumber uint64 // newest block both branches share
 	ForkHash   common.Hash
@@ -206,6 +214,8 @@ func (e *ReorgEvent) Timestamp() time.Time { return e.CreatedAt }
 
 // ChainConfigEvent represents a chain configuration change event
 type ChainConfigEvent struct {
+	Stream // change stream position (R3-1)
+
 	// Block number where the config change occurred
 	BlockNumber uint64
 
@@ -249,6 +259,8 @@ func NewChainConfigEvent(blockNumber uint64, blockHash common.Hash, parameter, o
 
 // ValidatorSetEvent represents a validator set change event
 type ValidatorSetEvent struct {
+	Stream // change stream position (R3-1)
+
 	// Block number where the validator set change occurred
 	BlockNumber uint64
 
@@ -309,6 +321,8 @@ const EventTypeContract EventType = "contract"
 // ContractLogEvent is a contract log decoded by the dynamic contract
 // pipeline.
 type ContractLogEvent struct {
+	Stream // change stream position (R3-1)
+
 	Contract    common.Address
 	EventName   string
 	BlockNumber uint64
@@ -327,4 +341,8 @@ func (e *ContractLogEvent) Timestamp() time.Time { return e.CreatedAt }
 // Source implements SourcedEvent.
 func (e *ContractLogEvent) Source() (common.Address, string, uint64) {
 	return e.Contract, e.EventName, e.BlockNumber
+}
+
+func init() {
+	RegisterCodec(EventTypeContract, StructCodec[ContractLogEvent]())
 }

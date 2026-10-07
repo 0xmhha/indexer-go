@@ -796,6 +796,8 @@ func (a *App) initFetcher(ctx context.Context) error {
 		PollInterval:  a.config.Indexer.PollInterval,
 		Finality:      a.config.Indexer.Finality,
 		Confirmations: a.config.Indexer.Confirmations,
+		NoOutbox:      !a.config.EventBus.Outbox,
+		OutboxRetain:  a.config.EventBus.OutboxRetention,
 	}
 
 	a.fetcher = fetch.NewFetcher(a.client, a.storage, fetcherConfig, a.logger, a.eventBus)
@@ -1059,6 +1061,8 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	// Single-chain mode (legacy)
+	// Deliver the events committed before this start first.
+	a.fetcher.StartRelay()
 	if a.enableGapMode {
 		a.logger.Info("Starting with gap recovery enabled")
 		return a.fetcher.RunWithGapRecovery(ctx)

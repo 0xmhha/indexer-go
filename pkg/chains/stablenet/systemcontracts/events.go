@@ -1,6 +1,7 @@
 package systemcontracts
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -70,6 +71,8 @@ const (
 
 // SystemContractEvent represents an event emitted by a system contract
 type SystemContractEvent struct {
+	events.Stream // change stream position (R3-1)
+
 	// Contract address that emitted the event
 	Contract common.Address
 
@@ -127,8 +130,12 @@ func init() {
 			}, nil
 		},
 		Decode: func(data []byte) (events.Event, error) {
+			// Numbers decode as json.Number so they encode again to the
+			// same digits (a float64 would round large amounts).
 			var ed systemContractEventData
-			if err := json.Unmarshal(data, &ed); err != nil {
+			dec := json.NewDecoder(bytes.NewReader(data))
+			dec.UseNumber()
+			if err := dec.Decode(&ed); err != nil {
 				return nil, err
 			}
 			return &SystemContractEvent{

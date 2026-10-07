@@ -42,7 +42,7 @@ func testOrphans(t *testing.T, newStore NewStore) {
 	t.Run("RollbackRemovesBlocks", func(t *testing.T) {
 		s := open[orphanStore](t, newStore)
 		orphanIndexChain(t, s, c)
-		reorg, err := s.RollbackTo(ctx, 1)
+		reorg, err := s.RollbackTo(ctx, 1, nil)
 		require.NoError(t, err)
 		require.NotNil(t, reorg)
 
@@ -90,7 +90,7 @@ func testOrphans(t *testing.T, newStore NewStore) {
 	t.Run("OrphansReadable", func(t *testing.T) {
 		s := open[orphanStore](t, newStore)
 		orphanIndexChain(t, s, c)
-		_, err := s.RollbackTo(ctx, 1)
+		_, err := s.RollbackTo(ctx, 1, nil)
 		require.NoError(t, err)
 
 		for _, b := range c.Blocks[2:] {
@@ -132,7 +132,7 @@ func testOrphans(t *testing.T, newStore NewStore) {
 	t.Run("RepeatedReorgs", func(t *testing.T) {
 		s := open[orphanStore](t, newStore)
 		orphanIndexChain(t, s, c)
-		first, err := s.RollbackTo(ctx, 2)
+		first, err := s.RollbackTo(ctx, 2, nil)
 		require.NoError(t, err)
 		require.NotNil(t, first)
 
@@ -143,7 +143,7 @@ func testOrphans(t *testing.T, newStore NewStore) {
 		require.NoError(t, err)
 		assert.Equal(t, fork.Hash, got.Hash, "the new branch is canonical")
 
-		second, err := s.RollbackTo(ctx, 2)
+		second, err := s.RollbackTo(ctx, 2, nil)
 		require.NoError(t, err)
 		require.NotNil(t, second)
 		assert.Equal(t, first.Seq+1, second.Seq, "sequence numbers increase")
@@ -181,7 +181,7 @@ func testOrphans(t *testing.T, newStore NewStore) {
 		orphanIndexChain(t, s, c)
 		var want []*port.Reorg
 		for _, to := range []uint64{3, 2, 1} {
-			r, err := s.RollbackTo(ctx, to)
+			r, err := s.RollbackTo(ctx, to, nil)
 			require.NoError(t, err)
 			require.NotNil(t, r)
 			want = append([]*port.Reorg{r}, want...) // newest first
@@ -199,7 +199,7 @@ func testOrphans(t *testing.T, newStore NewStore) {
 		s := open[orphanStore](t, newStore)
 		orphanIndexChain(t, s, c)
 		for _, to := range []uint64{c.head(), c.head() + 5} {
-			reorg, err := s.RollbackTo(ctx, to)
+			reorg, err := s.RollbackTo(ctx, to, nil)
 			require.NoError(t, err, "to %d", to)
 			if reorg != nil {
 				assert.Empty(t, reorg.Removed, "to %d", to)
@@ -220,12 +220,12 @@ func testOrphans(t *testing.T, newStore NewStore) {
 		for _, b := range c.Blocks {
 			orphanIndex(t, s, b, orphanReceipts(c, b), b.Number != 3)
 		}
-		reorg, err := s.RollbackTo(ctx, 1)
+		reorg, err := s.RollbackTo(ctx, 1, nil)
 		assert.ErrorIs(t, err, port.ErrNoUndo, "block 3 has no undo")
 		assert.Nil(t, reorg)
 		orphanAssertUnchanged(t, s, c)
 
-		reorg, err = s.RollbackTo(ctx, 3)
+		reorg, err = s.RollbackTo(ctx, 3, nil)
 		require.NoError(t, err, "block 4 above it can still be rolled back")
 		assert.Equal(t, orphanRefs(c.Blocks[4]), reorg.Removed)
 	})
@@ -243,7 +243,7 @@ func testOrphans(t *testing.T, newStore NewStore) {
 			long.Blocks = append(long.Blocks, b)
 			orphanIndex(t, s, b, nil, true)
 		}
-		reorg, err := s.RollbackTo(ctx, 0)
+		reorg, err := s.RollbackTo(ctx, 0, nil)
 		if err == nil {
 			t.Logf("store keeps undo for at least %d blocks", long.head())
 			require.NotNil(t, reorg)

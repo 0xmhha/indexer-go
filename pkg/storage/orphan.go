@@ -75,7 +75,7 @@ type orphanBlockRecord struct {
 // its rollback transaction, and the first transaction records the
 // reorganization. If any block in the range has no complete undo record,
 // nothing is changed and the error wraps port.ErrNoUndo.
-func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) (*port.Reorg, error) {
+func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64, onUndo port.UndoHook) (*port.Reorg, error) {
 	latest, err := s.GetLatestHeight(ctx)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (s *PebbleStorage) RollbackTo(ctx context.Context, to uint64) (*port.Reorg,
 	rec.Seq = seq + 1
 
 	for h := latest; h > to; h-- {
-		ob, err := s.undoBlock(ctx, h, rec, h == latest)
+		ob, err := s.undoBlock(ctx, h, rec, h == latest, onUndo)
 		if err != nil {
 			return nil, err
 		}

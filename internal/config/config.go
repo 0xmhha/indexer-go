@@ -212,6 +212,14 @@ type EventBusConfig struct {
 	SubscriberBufferSize int `yaml:"subscriber_buffer_size"`
 	// HistorySize is the number of events to keep in history for replay
 	HistorySize int `yaml:"history_size"`
+	// Outbox records the events of indexed blocks in the block's storage
+	// transaction and delivers them through a relay in sequence order
+	// (default). false publishes them directly after the commit, the
+	// earlier behaviour, without sequence numbers.
+	Outbox bool `yaml:"outbox"`
+	// OutboxRetention is how many delivered events the outbox keeps in the
+	// database after the relay delivered them; 0 keeps all.
+	OutboxRetention uint64 `yaml:"outbox_retention"`
 	// Redis holds Redis EventBus configuration
 	Redis EventBusRedisConfig `yaml:"redis"`
 	// Kafka holds Kafka EventBus configuration
@@ -451,6 +459,10 @@ func NewConfig() *Config {
 	// Same reasoning: atomic block indexing is the default, and an explicit
 	// false in the file or INDEXER_ATOMIC_BLOCK=false selects the legacy path.
 	cfg.Indexer.OrphanRetention = 1000
+	// Likewise the outbox is on unless a file or INDEXER_EVENTBUS_OUTBOX
+	// turns it off, and an explicit 0 keeps every outbox entry.
+	cfg.EventBus.Outbox = true
+	cfg.EventBus.OutboxRetention = constants.DefaultOutboxRetention
 	// WebSocket keep-alive pings keep idle subscribers connected; it can be
 	// disabled with api.enable_websocket_keepalive: false.
 	cfg.API.EnableWebSocketKeepAlive = true
@@ -688,6 +700,20 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_ORPHAN_RETENTION: %w", err)
 		}
 		c.Indexer.OrphanRetention = n
+	}
+	if v := os.Getenv("INDEXER_EVENTBUS_OUTBOX"); v != "" {
+		on, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_EVENTBUS_OUTBOX: %w", err)
+		}
+		c.EventBus.Outbox = on
+	}
+	if v := os.Getenv("INDEXER_EVENTBUS_OUTBOX_RETENTION"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_EVENTBUS_OUTBOX_RETENTION: %w", err)
+		}
+		c.EventBus.OutboxRetention = n
 	}
 	if v := os.Getenv("INDEXER_POLL_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)

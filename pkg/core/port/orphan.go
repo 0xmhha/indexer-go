@@ -62,6 +62,7 @@ type Rollbacker interface {
 	// RollbackTo undoes the indexed blocks above height to, newest first,
 	// archives them as orphans and returns the reorganization record. If a
 	// block in the range cannot be undone, nothing changes and the error
-	// wraps ErrNoUndo.
-	RollbackTo(ctx context.Context, to uint64) (*Reorg, error)
+	// wraps ErrNoUndo. Blocks are rolled back one transaction each;
+	// onUndo, if not nil, runs inside every one of them.
+	RollbackTo(ctx context.Context, to uint64, onUndo UndoHook) (*Reorg, error)
 }

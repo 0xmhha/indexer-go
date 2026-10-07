@@ -107,7 +107,13 @@ type EventBus struct {
 		totalEvents     atomic.Uint64
 		totalDeliveries atomic.Uint64
 		droppedEvents   atomic.Uint64
+		duplicates      atomic.Uint64
 	}
+
+	// lastSeq is the change stream position of the last delivered
+	// sequenced event (events.Stream); events at or below it are
+	// duplicates of a relay that delivered again after a restart.
+	lastSeq atomic.Uint64
 
 	// metrics holds Prometheus metrics (optional)
 	metrics *Metrics
@@ -169,6 +175,9 @@ func (eb *EventBus) Run() {
 			return
 
 		case event := <-eb.publishCh:
+			if eb.duplicate(event) {
+				continue
+			}
 			// Handle event publishing
 			eb.stats.totalEvents.Add(1)
 
@@ -184,6 +193,29 @@ func (eb *EventBus) Run() {
 		}
 	}
 }
+
+// duplicate reports whether a sequenced event was delivered already, and
+// otherwise records its position. Events without a position always pass.
+func (eb *EventBus) duplicate(event Event) bool {
+	seq := SequenceOf(event)
+	if seq == 0 {
+		return false
+	}
+	if seq <= eb.lastSeq.Load() {
+		eb.stats.duplicates.Add(1)
+		return true
+	}
+	eb.lastSeq.Store(seq)
+	return false
+}
+
+// LastSequence returns the change stream position of the last delivered
+// sequenced event, 0 if none.
+func (eb *EventBus) LastSequence() uint64 { return eb.lastSeq.Load() }
+
+// Duplicates returns how many sequenced events were dropped as already
+// delivered.
+func (eb *EventBus) Duplicates() uint64 { return eb.stats.duplicates.Load() }
 
 // storeEventInHistory stores an event in the ring buffer for replay
 func (eb *EventBus) storeEventInHistory(event Event) {

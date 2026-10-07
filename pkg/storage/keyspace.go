@@ -88,8 +88,11 @@ func init() {
 	RegisterKeyspace("core", ChainData,
 		"/data/blocks/", "/data/txs/", "/data/receipts/", "/data/contractaddr/", "/data/logs/",
 		"/index/txh/", "/index/blockh/", "/index/time/", "/index/logs/",
-		"/meta/lh", "/meta/tc", "/meta/bc", "/meta/schema",
+		"/meta/lh", "/meta/tc", "/meta/bc",
 	)
+	// The schema marker describes the layout of everything stored, including
+	// what a reindex preserves, so the database opens again afterwards.
+	RegisterKeyspace("schema", Preserved, keySchemaVersion)
 	RegisterKeyspace("reorg", ChainData, prefixUndo, prefixOrphanReorg, prefixOrphanBlock, prefixOrphanHeight, prefixOrphanTx, keyOrphanSeq)
 	RegisterKeyspace("features", ChainData, "/meta/features/")
 	RegisterKeyspace("address", ChainData, "/index/addr/", "/meta/addrseq/")

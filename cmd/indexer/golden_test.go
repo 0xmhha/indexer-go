@@ -145,7 +145,10 @@ func normalizeVolatile(key, value []byte) ([]byte, bool) {
 	// backfills), not only on the chain; rollback tests check them.
 	// Orphaned blocks and reorganization records likewise depend on the
 	// reorganizations the indexer went through; orphan tests check them.
-	if bytes.HasPrefix(key, []byte("/undo/")) || bytes.HasPrefix(key, []byte("/orphan/")) || bytes.HasPrefix(key, []byte("/meta/orphan/")) {
+	// Outbox entries hold the events in the order they were committed,
+	// with the time they were created; outbox tests check them.
+	if bytes.HasPrefix(key, []byte("/undo/")) || bytes.HasPrefix(key, []byte("/orphan/")) || bytes.HasPrefix(key, []byte("/meta/orphan/")) ||
+		bytes.HasPrefix(key, []byte("/outbox/")) || bytes.HasPrefix(key, []byte("/meta/outbox/")) {
 		return nil, false
 	}
 	for prefix, fields := range volatileJSONFields {
