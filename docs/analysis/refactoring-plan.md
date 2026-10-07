@@ -158,7 +158,7 @@ graph TD
 | D1 | [치명] | 주소 sequence 복원이 빈 함수다. 재시작하면 `addrSeq`가 0부터 시작해 `/index/addr/{addr}/{seq}`와 잔액 이력 키를 **덮어쓴다**. 두 기능이 같은 카운터를 나눠 써서 번호에 빈칸도 생긴다 | `pebble.go:381-386`, `pebble_transactions.go:189-196`, `pebble_historical.go:516` | [High] |
 | D2 | [치명] | 블록 하나를 10번 넘는 개별 쓰기로 저장하고, Sync와 NoSync가 섞여 있다. 커서(`SetLatestHeight`)는 NoSync라서 crash 뒤에 커서와 데이터의 순서가 보장되지 않는다. 한 batch로 쓰는 `SetBlockWithReceipts`는 있지만 아무도 부르지 않는다 | `fetcher.go:354-424`, `pebble_blocks.go:40-50,158` | [High] |
 | D3 | [치명] | 재처리가 멱등이 아니다. `UpdateBalance`는 읽고 delta를 더해 쓰므로 재처리하면 두 번 더해진다. `txCount`가 다시 증가하고, 주소 색인에 새 sequence로 중복 항목이 생긴다 | `pebble_historical.go:480-531`, `pebble_transactions.go:123` | [High] |
-| D4 | [치명] (멀티체인을 켤 때) | 모든 체인이 저장소 하나의 같은 키(`LatestHeightKey`, 블록 키 등)에 쓴다. `Chain*Key`는 정의만 있고 쓰이지 않는다 | `multichain/instance.go:28`, `schema.go:1011-1059` | [High] |
+| D4 | [치명] (멀티체인을 켤 때) | 모든 체인이 저장소 하나의 같은 키(`LatestHeightKey`, 블록 키 등)에 쓴다. `Chain*Key`는 정의만 있고 쓰이지 않는다. (해소 10/7, R2-8: 체인마다 DB를 따로 둔다) | `multichain/instance.go:28`, `schema.go:1011-1059` | [High] |
 | D10 | [치명] | gap 복구가 블록마다 `SetLatestHeight(높이)`를 무조건 기록한다. 그래서 커서가 gap 끝으로 되돌아가고, 이어지는 `Run`이 gap 뒤의 이미 색인된 블록을 모두 다시 처리한다. 재처리는 멱등이 아니므로(D3) `--gap-recovery`로 시작할 때 gap이 있으면 데이터가 오염된다 | `fetcher_gaps.go:320-365`, `fetcher.go:645`, `fetcher_processing.go:322-350` | [High] |
 | D11 | [중요] | 시스템 컨트랙트 조회 10개(Mint, Burn, MinterHistory, MinterConfigHistory, GasTip, Validator, EmergencyPause, DepositMint, Blacklist, MemberHistory)가 데이터를 RLP·이진 형식으로 쓰고 JSON으로 읽는다. 데이터가 한 건이라도 있으면 조회가 decode 오류로 실패한다. F1 때문에 데이터가 저장되지 않아 드러나지 않았다. P0-9에서 발견해 수정했다 | `pebble_system_contracts_impl.go` | [High] |
 | D12 | [중요] | gap을 뒤에 있는 블록보다 나중에 채우면, 처리 순서에 따라 결과가 달라지는 상태가 틀어진다. 잔액 이력 순서, 모듈 설치·해제 상태(해제가 설치보다 먼저 처리되어 최종 상태가 "활성"으로 남음) 등이다. 원자적 경로는 커서를 연속으로만 전진시켜 새 gap을 만들지 않지만, 기존 DB의 gap을 채우는 경우에는 남는다. 순서 보장은 R2-2(스케줄러)에서, 기존 DB는 재색인으로 해결한다. (10/6) gap 복구는 순서 의존 기능이 켜져 있으면 색인된 블록 아래의 gap을 채우지 않고 `ErrGapBelowIndexed`로 멈춘다(재색인 안내). 순서 무관 기능만 켜진 경우에만 채운다 | `fetcher_gaps.go`, 순서에 의존하는 처리기들 | [High] |
@@ -284,7 +284,7 @@ graph TD
 | 연계 | `bus.kafka` / `bus.redis` / `bus.nats` | 외부 메시지 버스로 스트림을 내보낸다 | C-09 | 연결 안 됨 |
 | | `notify.webhook` / `notify.email` / `notify.slack` | 알림 | C-09 | 있음(유입 단계에서 유실될 수 있다) |
 | | `watchlist` | 주소 감시 | C-09 | 연결 안 됨 |
-| 운영 | `multichain` | 여러 체인을 한 프로세스에서 | C-08의 체인 네임스페이스 | 있음(D4) |
+| 운영 | `multichain` | 여러 체인을 한 프로세스에서 | C-08의 체인 네임스페이스 | 해소(R2-8, 체인별 DB) |
 | | `retention.pruning` | 보존 기간이 지난 데이터 삭제 | — | 없음 |
 | | `ops.snapshot` | 스냅샷·백업 | — | 없음 |
 
@@ -377,7 +377,7 @@ graph LR
 | R0-6 | F2 연결(9.1절 결정). SetCode, UserOp, Module processor를 fetcher에 등록하고, fee delegation 클라이언트를 고친다. 라이브 경로와 gap 복구 경로 모두에서 동작하게 한다 | R0-1, R0-5 | 시나리오별 GraphQL 조회 결과가 기대값과 같다 |
 | R0-7 | C1~C4 수정. 고루틴 누수, WebSocket subscription ID를 연결별 네임스페이스로 분리, `close` panic, keepalive, 재귀 RLock, context를 보는 sleep | — | `go test -race`, goleak 시험 |
 | R0-8 | P1 수정. 범위가 없는 조회는 거부하거나 상한을 둔다 | — | 큰 DB에서 조회 시간이 범위에 비례한다 |
-| R0-9 | D4 임시 조치. 체인별 키 분리 전까지 `multichain.enabled`면 시작하지 않는다 | — | 설정 검증 시험 |
+| R0-9 | D4 임시 조치. 체인별 키 분리 전까지 `multichain.enabled`면 시작하지 않는다. (R2-8에서 해제) | — | 설정 검증 시험 |
 | R0-10 | F4 정리. 무시되는 설정 키를 반영하거나 지우고, CLI 기본값이 설정 파일을 덮는 문제를 고친다. (완료: 명시적 플래그만 적용, 연결 안 된 설정은 시작 시 경고, `database.readonly`는 거부) | — | 설정 우선순위 시험 |
 
 ### Phase 1: 저장 포트 분리
@@ -402,7 +402,7 @@ graph LR
 | R2-5 | 처리기·기능 레지스트리, 플래그, 의존성 검증, 프로필 | R2-3 | 기능을 끄면 그 기능의 처리기가 실행되지 않는다 |
 | R2-6 | 기존 기능을 하나씩 기능 모듈로 옮긴다(5.3절 순서: raw → address → token → stablenet → aa → contract). (완료 10/7: 마지막으로 남은 token metadata 처리(core의 `BlockProcessor`)를 `token.metadata` 기능으로 옮겼다. 노드 호출은 `feature.Deps.Contracts`. 기록 시각은 블록 시각이라 재처리해도 같은 값이다. core의 처리기 연결점(`AddBlockProcessor`, `SetTokenIndexer`)은 지웠다) | R2-5 | 모듈을 옮길 때마다 R0-1 스냅샷이 같다 |
 | R2-7 | 기능별 backfill(기능을 새로 켤 때 그 기능만 다시 돌린다) | R2-5 | 기능을 켠 DB와 처음부터 켠 DB의 결과가 같다 |
-| R2-8 | 체인 네임스페이스(D4 해소)와 멀티체인 재활성화 | R2-3 | 두 체인을 동시에 색인해도 키가 겹치지 않는다 |
+| R2-8 | 체인 네임스페이스(D4 해소)와 멀티체인 재활성화. (완료 10/7: 키 접두사 대신 체인마다 DB를 따로 둔다(`<database.path>/chains/<id>`). 각 체인은 체인 설정으로 만든 자기 `App`(수집 루프, 저장소, 이벤트 버스, 기능)으로 돌고, `multichain` 패키지는 주입받은 `IndexerFactory`로 체인을 만들고 관리만 한다. API는 `/chains/{id}/graphql`, `/chains/{id}/graphql/ws`, `/chains/{id}/rpc`, `GET /chains`이고 루트 API는 없다. 체인 id는 경로로 쓰이므로 `../` 같은 값을 거부하고, 노드의 chain id가 설정과 다르면 그 체인만 시작하지 않는다. 시작 거부(R0-9)와 쓰이지 않던 `Chain*Key`는 지웠다. 검증: 서로 다른 두 테스트 체인(EVM, StableNet)을 동시에 색인하면 각 DB가 그 체인만 색인한 DB와 같고 체인별 API가 자기 체인의 블록을 돌려준다(`TestMultiChainIndexesEachChainIntoItsOwnDatabase`). live에서 노드 두 개(8600, 8610)를 동시에 색인했다) | R2-3 | 두 체인을 동시에 색인해도 키가 겹치지 않는다 |
 
 ### Phase 3: 변경 스트림과 구독 엔진
 

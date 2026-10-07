@@ -5,9 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/storage"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/events"
 )
 
 // Manager is the main entry point for multi-chain management.
@@ -16,8 +17,7 @@ type Manager struct {
 	config        *ManagerConfig
 	registry      *Registry
 	healthChecker *HealthChecker
-	storage       storage.Storage
-	eventBus      *events.EventBus
+	factory       IndexerFactory
 	logger        *zap.Logger
 
 	ctx        context.Context
@@ -28,13 +28,9 @@ type Manager struct {
 	isRunning bool
 }
 
-// NewManager creates a new multi-chain manager.
-func NewManager(
-	config *ManagerConfig,
-	globalStorage storage.Storage,
-	globalEventBus *events.EventBus,
-	logger *zap.Logger,
-) (*Manager, error) {
+// NewManager returns a manager that builds each chain's indexer with
+// factory; every chain has its own storage.
+func NewManager(config *ManagerConfig, factory IndexerFactory, logger *zap.Logger) (*Manager, error) {
 	if config == nil {
 		config = DefaultManagerConfig()
 	}
@@ -46,8 +42,7 @@ func NewManager(
 	m := &Manager{
 		config:   config,
 		registry: NewRegistry(logger),
-		storage:  globalStorage,
-		eventBus: globalEventBus,
+		factory:  factory,
 		logger:   logger.Named("multichain"),
 	}
 
@@ -164,7 +159,7 @@ func (m *Manager) RegisterChain(ctx context.Context, config *ChainConfig) (strin
 		return "", ErrChainAlreadyExists
 	}
 
-	instance := NewChainInstance(config, m.storage, m.eventBus, m.logger)
+	instance := NewChainInstance(config, m.factory, m.logger)
 	if err := m.registry.Register(instance); err != nil {
 		return "", err
 	}
@@ -218,6 +213,16 @@ func (m *Manager) StopChain(ctx context.Context, chainID string) error {
 // GetChain returns a chain instance by ID.
 func (m *Manager) GetChain(chainID string) (*ChainInstance, error) {
 	return m.registry.Get(chainID)
+}
+
+// ChainStore returns the store and event bus of a running chain, for the
+// per-chain API routes.
+func (m *Manager) ChainStore(chainID string) (port.QueryStore, *events.EventBus, bool) {
+	instance, err := m.registry.Get(chainID)
+	if err != nil {
+		return nil, nil, false
+	}
+	return instance.Store()
 }
 
 // ListChains returns status information for all chains.

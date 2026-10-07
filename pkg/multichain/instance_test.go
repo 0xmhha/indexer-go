@@ -18,7 +18,7 @@ func TestNewChainInstance(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	if instance == nil {
 		t.Fatal("expected non-nil instance")
@@ -41,7 +41,7 @@ func TestChainInstance_Status(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Initial status
 	if instance.Status() != StatusRegistered {
@@ -73,7 +73,7 @@ func TestChainInstance_Info(t *testing.T) {
 		StartHeight: 100,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 	info := instance.Info()
 
 	if info.ID != cfg.ID {
@@ -115,7 +115,7 @@ func TestChainInstance_GetMetrics(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Initial metrics should be zero
 	metrics := instance.GetMetrics()
@@ -157,22 +157,22 @@ func TestChainInstance_GetMetrics(t *testing.T) {
 	}
 }
 
-func TestChainInstance_StartWithoutStorage(t *testing.T) {
+func TestChainInstance_StartWithoutFactory(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := context.Background()
 
 	cfg := &ChainConfig{
-		ID:          "no-storage-test",
-		Name:        "No Storage Test",
+		ID:          "no-factory-test",
+		Name:        "No Factory Test",
 		RPCEndpoint: "http://localhost:8545",
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger) // nil storage
+	instance := NewChainInstance(cfg, nil, logger) // nil factory
 
 	err := instance.Start(ctx)
-	if err != ErrStorageRequired {
-		t.Errorf("expected ErrStorageRequired, got %v", err)
+	if err != ErrIndexerRequired {
+		t.Errorf("expected ErrIndexerRequired, got %v", err)
 	}
 	if instance.Status() != StatusError {
 		t.Errorf("expected status error after failed start, got %v", instance.Status())
@@ -190,7 +190,7 @@ func TestChainInstance_StartAlreadyRunning(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Manually set status to syncing
 	instance.setStatus(StatusSyncing)
@@ -212,15 +212,15 @@ func TestChainInstance_StartFromError(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Set error status
 	instance.setStatus(StatusError)
 
 	// Should be able to start from error state, but will fail due to no storage
 	err := instance.Start(ctx)
-	if err != ErrStorageRequired {
-		t.Errorf("expected ErrStorageRequired, got %v", err)
+	if err != ErrIndexerRequired {
+		t.Errorf("expected ErrIndexerRequired, got %v", err)
 	}
 }
 
@@ -235,15 +235,15 @@ func TestChainInstance_StartFromStopped(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Set stopped status
 	instance.setStatus(StatusStopped)
 
 	// Should be able to start from stopped state, but will fail due to no storage
 	err := instance.Start(ctx)
-	if err != ErrStorageRequired {
-		t.Errorf("expected ErrStorageRequired, got %v", err)
+	if err != ErrIndexerRequired {
+		t.Errorf("expected ErrIndexerRequired, got %v", err)
 	}
 }
 
@@ -258,7 +258,7 @@ func TestChainInstance_StopRegistered(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Stop a registered (not started) chain
 	err := instance.Stop(ctx)
@@ -281,7 +281,7 @@ func TestChainInstance_StopAlreadyStopped(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 	instance.setStatus(StatusStopped)
 
 	// Stop should be idempotent
@@ -302,7 +302,7 @@ func TestChainInstance_StopStopping(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 	instance.setStatus(StatusStopping)
 
 	// Stop should be idempotent when already stopping
@@ -322,12 +322,11 @@ func TestChainInstance_StopWithTimeout(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 	instance.setStatus(StatusSyncing)
 
 	// Set up a cancel function
-	ctx, cancel := context.WithCancel(context.Background())
-	instance.ctx = ctx
+	_, cancel := context.WithCancel(context.Background())
 	instance.cancelFunc = cancel
 
 	// Simulate a running goroutine
@@ -362,7 +361,7 @@ func TestChainInstance_HealthCheck(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Health check without client
 	status := instance.HealthCheck(ctx)
@@ -385,7 +384,7 @@ func TestChainInstance_HealthCheckWithUptime(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Set started time
 	now := time.Now()
@@ -410,7 +409,7 @@ func TestChainInstance_HealthCheckWithError(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Set error
 	instance.setError(ErrClientInitFailed)
@@ -434,7 +433,7 @@ func TestChainInstance_setError(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	testErr := ErrClientInitFailed
 	instance.setError(testErr)
@@ -460,7 +459,7 @@ func TestChainInstance_setStatusLocked(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Test status change
 	instance.statusMu.Lock()
@@ -491,7 +490,7 @@ func TestChainInstance_ConcurrentStatusAccess(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Concurrent reads and writes
 	done := make(chan struct{})
@@ -521,7 +520,7 @@ func TestChainInstance_ConcurrentMetricsAccess(t *testing.T) {
 		ChainID:     1,
 	}
 
-	instance := NewChainInstance(cfg, nil, nil, logger)
+	instance := NewChainInstance(cfg, nil, logger)
 
 	// Concurrent metric updates and reads
 	done := make(chan struct{})

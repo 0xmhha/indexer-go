@@ -3,6 +3,7 @@ package multichain
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 )
 
@@ -115,6 +116,9 @@ func (c *ChainConfig) Validate() error {
 	if c.ID == "" {
 		return errors.New("id is required")
 	}
+	if !ValidChainID(c.ID) {
+		return fmt.Errorf("invalid id %q: use letters, digits, '.', '_' and '-', starting with a letter or digit (it names the chain's database directory)", c.ID)
+	}
 	if c.Name == "" {
 		return errors.New("name is required")
 	}
@@ -173,3 +177,12 @@ func (c *ManagerConfig) GetChainByID(id string) *ChainConfig {
 	}
 	return nil
 }
+
+// chainIDPattern is the form of a chain id. The id names the chain's
+// database directory (<database.path>/chains/<id>) and appears in API paths
+// (/chains/<id>/graphql), so it cannot contain path separators or start
+// with a dot.
+var chainIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+
+// ValidChainID reports whether id is a valid chain id.
+func ValidChainID(id string) bool { return chainIDPattern.MatchString(id) }

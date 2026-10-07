@@ -33,7 +33,7 @@ func TestIntegration_ManagerLifecycle(t *testing.T) {
 		AutoRestart:          false,
 	}
 
-	manager, err := NewManager(config, nil, nil, logger)
+	manager, err := NewManager(config, nil, logger)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestIntegration_ConcurrentChainOperations(t *testing.T) {
 	defer cancel()
 
 	config := DefaultManagerConfig()
-	manager, err := NewManager(config, nil, nil, logger)
+	manager, err := NewManager(config, nil, logger)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestIntegration_HealthCheckMonitoring(t *testing.T) {
 		AutoRestart:          false,
 	}
 
-	manager, err := NewManager(config, nil, nil, logger)
+	manager, err := NewManager(config, nil, logger)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestIntegration_MetricsCollection(t *testing.T) {
 	defer cancel()
 
 	config := DefaultManagerConfig()
-	manager, err := NewManager(config, nil, nil, logger)
+	manager, err := NewManager(config, nil, logger)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestIntegration_DisabledManager(t *testing.T) {
 		HealthCheckInterval: 30 * time.Second, // Set valid interval even for disabled
 	}
 
-	manager, err := NewManager(config, nil, nil, logger)
+	manager, err := NewManager(config, nil, logger)
 	if err != nil {
 		t.Fatalf("Failed to create disabled manager: %v", err)
 	}

@@ -18,7 +18,7 @@ var (
 	ErrSourceInitFailed   = errors.New("failed to initialize block source")
 	ErrFetcherInitFailed  = errors.New("failed to initialize fetcher")
 	ErrStorageInitFailed  = errors.New("failed to initialize storage")
-	ErrStorageRequired    = errors.New("storage is required to start chain")
+	ErrIndexerRequired    = errors.New("an indexer factory is required to start chain")
 
 	// Configuration errors
 	ErrInvalidConfig     = errors.New("invalid configuration")

@@ -11,7 +11,7 @@ import (
 func TestNewHealthChecker(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	hc := NewHealthChecker(manager, 5*time.Second, logger)
 
@@ -29,7 +29,7 @@ func TestNewHealthChecker(t *testing.T) {
 func TestHealthChecker_StartStop(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	hc := NewHealthChecker(manager, 100*time.Millisecond, logger)
 
@@ -57,7 +57,7 @@ func TestHealthChecker_StartStop(t *testing.T) {
 func TestHealthChecker_StartStopMultiple(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	hc := NewHealthChecker(manager, 100*time.Millisecond, logger)
 	ctx := context.Background()
@@ -73,7 +73,7 @@ func TestHealthChecker_StartStopMultiple(t *testing.T) {
 func TestHealthChecker_CheckChain(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	hc := NewHealthChecker(manager, time.Second, logger)
 	ctx := context.Background()
@@ -110,7 +110,7 @@ func TestHealthChecker_CheckChain(t *testing.T) {
 func TestHealthChecker_checkAll(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	hc := NewHealthChecker(manager, time.Second, logger)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -133,7 +133,7 @@ func TestHealthChecker_checkAll(t *testing.T) {
 func TestHealthChecker_checkAllEmpty(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	hc := NewHealthChecker(manager, time.Second, logger)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -147,7 +147,7 @@ func TestHealthChecker_checkAllEmpty(t *testing.T) {
 func TestHealthChecker_checkAllWithUnhealthyChain(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	// Register a chain (without client, it's unhealthy)
 	chainConfig := &ChainConfig{
@@ -170,7 +170,7 @@ func TestHealthChecker_checkAllWithUnhealthyChain(t *testing.T) {
 func TestHealthChecker_WaitForHealthy(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	hc := NewHealthChecker(manager, time.Second, logger)
 
@@ -212,7 +212,7 @@ func TestHealthChecker_WaitForAllHealthy(t *testing.T) {
 
 	t.Run("no chains returns nil (all healthy)", func(t *testing.T) {
 		config := DefaultManagerConfig()
-		manager, _ := NewManager(config, nil, nil, logger)
+		manager, _ := NewManager(config, nil, logger)
 		hc := NewHealthChecker(manager, time.Second, logger)
 
 		// WaitForAllHealthy uses a hardcoded 1-second ticker
@@ -229,7 +229,7 @@ func TestHealthChecker_WaitForAllHealthy(t *testing.T) {
 
 	t.Run("context cancelled with unhealthy chains", func(t *testing.T) {
 		config := DefaultManagerConfig()
-		manager, _ := NewManager(config, nil, nil, logger)
+		manager, _ := NewManager(config, nil, logger)
 		hc := NewHealthChecker(manager, 50*time.Millisecond, logger)
 
 		chainConfig := &ChainConfig{
@@ -253,7 +253,7 @@ func TestHealthChecker_WaitForAllHealthy(t *testing.T) {
 
 	t.Run("context immediately cancelled", func(t *testing.T) {
 		config := DefaultManagerConfig()
-		manager, _ := NewManager(config, nil, nil, logger)
+		manager, _ := NewManager(config, nil, logger)
 		hc := NewHealthChecker(manager, time.Second, logger)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -269,7 +269,7 @@ func TestHealthChecker_WaitForAllHealthy(t *testing.T) {
 func TestHealthChecker_run(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	// Use a very short interval for testing
 	hc := NewHealthChecker(manager, 50*time.Millisecond, logger)
@@ -303,7 +303,7 @@ func TestHealthChecker_run(t *testing.T) {
 func TestHealthChecker_StopWithoutStart(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	config := DefaultManagerConfig()
-	manager, _ := NewManager(config, nil, nil, logger)
+	manager, _ := NewManager(config, nil, logger)
 
 	hc := NewHealthChecker(manager, time.Second, logger)
 

@@ -36,6 +36,7 @@ type Server struct {
 	rpcProxy            *rpcproxy.Proxy
 	verifier            verifier.Verifier
 	notificationService notifications.Service
+	chains              ChainStores
 }
 
 // ServerOptions contains optional configuration for the API server
@@ -43,6 +44,10 @@ type ServerOptions struct {
 	RPCProxy            *rpcproxy.Proxy
 	Verifier            verifier.Verifier
 	NotificationService notifications.Service
+	// Chains serves the chains of multichain mode under /chains/{id}/.
+	// The server then has no store of its own (store is nil) and serves no
+	// GraphQL, JSON-RPC or Etherscan API at the root.
+	Chains ChainStores
 }
 
 // NewServer creates a new API server
@@ -80,6 +85,10 @@ func NewServerWithOptions(config *Config, logger *zap.Logger, store port.QuerySt
 	if opts != nil && opts.NotificationService != nil {
 		s.notificationService = opts.NotificationService
 		logger.Info("Notification service configured for API server")
+	}
+
+	if opts != nil && opts.Chains != nil {
+		s.chains = opts.Chains
 	}
 
 	// Setup middleware
@@ -230,6 +239,14 @@ func (s *Server) setupRoutes() {
 
 	// EventBus subscriber stats endpoint (if EventBus is configured)
 	s.router.Get("/subscribers", s.handleSubscribers)
+
+	if s.chains != nil {
+		s.mountChainRoutes(s.chains)
+	}
+	if s.storage == nil {
+		// Multichain mode: every chain's API is under /chains/{id}/.
+		return
+	}
 
 	// GraphQL endpoints
 	if s.config.EnableGraphQL {

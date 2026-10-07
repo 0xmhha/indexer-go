@@ -71,9 +71,21 @@ func TestDefaultConfigFileIsOptional(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestMultiChainConfigLoads: multichain mode starts from a file without a
+// root rpc.endpoint (refactoring plan R2-8).
+func TestMultiChainConfigLoads(t *testing.T) {
+	path := configFile(t, "database:\n  path: \""+t.TempDir()+"\"\nmultichain:\n  enabled: true\n  chains:\n    - id: a\n      name: a\n      rpc_endpoint: \"http://127.0.0.1:8545\"\n      chain_id: 1\n      enabled: true\n")
+	f, err := parseFlagsFrom([]string{"--config", path}, flag.ContinueOnError)
+	require.NoError(t, err)
+	cfg, err := loadAndValidateConfig(f)
+	require.NoError(t, err)
+	require.True(t, cfg.MultiChainMode())
+}
+
 func TestStartupRejectsUnsafeModes(t *testing.T) {
 	for name, body := range map[string]string{
-		"multichain": baseConfig + "multichain:\n  enabled: true\n  chains:\n    - id: a\n      name: a\n      rpc_endpoint: \"http://127.0.0.1:8545\"\n      chain_id: 1\n      enabled: true\n",
+		// A chain id that would put its database outside database.path.
+		"multichain": baseConfig + "multichain:\n  enabled: true\n  chains:\n    - id: ../a\n      name: a\n      rpc_endpoint: \"http://127.0.0.1:8545\"\n      chain_id: 1\n      enabled: true\n",
 		"readonly":   "rpc:\n  endpoint: \"http://127.0.0.1:8545\"\ndatabase:\n  path: \"/tmp/indexer-flags-test\"\n  readonly: true\n",
 	} {
 		t.Run(name, func(t *testing.T) {

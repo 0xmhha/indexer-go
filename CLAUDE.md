@@ -34,7 +34,7 @@ pkg/
     port/                       Storage ports: interfaces and their value types (imports no implementation)
     gethconv/                   go-ethereum type conversions
   storage/                      PebbleDB implementation of the ports; the Storage union is for assembly only
-  multichain/                   Multi-chain orchestration (chains share storage keys; do not enable)
+  multichain/                   Multi-chain orchestration (one database and pipeline per chain under <db>/chains/<id>)
   rpcproxy/                     Node RPC proxy with cache and circuit breaker
 internal/
   config/                       YAML/env/flag configuration
@@ -140,7 +140,7 @@ Settings that are read but not wired (`eventbus.type` other than local and `node
 - Blocks are read as raw JSON and decoded by the chain profile (`pkg/chains`, `pkg/source`) and stored as the chain-neutral model (`pkg/core/model`, storage schema v2): StableNet fee delegation (D13) and WBFT block hashes (D16) are kept as the chain reports them, in storage and in GraphQL/JSON-RPC responses (`docs/analysis/chain-profile-design.md`)
 - Gap recovery fills missing blocks below indexed blocks only when every enabled feature is order-independent; otherwise it stops with `fetch.ErrGapBelowIndexed` and the database must be reindexed (D12)
 - Phase 1 is complete: storage ports in `pkg/core/port` speak the model (R1-1), `KVStore` removed from the public interface (R1-2), numeric keys sort numerically (R1-3 K1; binary keys K2 measured and deferred), port contract tests in `porttest` (R1-4, the 25 Pebble defects they found are fixed), keyset pagination for every list port (R1-5), `backend.go` removed (R1-6), adapter layer removed. Block times are indexed on ingest (`/index/time/`); databases indexed before need a reindex for time queries and for the UserOperation indexes
-- Open: multi-chain mode shares storage keys (D4) and is rejected at startup
+- Multi-chain mode (R2-8, fixes D4): every chain runs its own `App` (built by `newChainIndexer`, the `multichain.IndexerFactory`) into its own database `<database.path>/chains/<id>`; the API serves each chain under `/chains/<id>/` (graphql, graphql/ws, playground, rpc) and lists them at `GET /chains`, with no root API
 - Fixed after comparing with go-stablenet: native balances follow the chain's fee and value rules (StableNet: native transfer logs, tip to the coinbase, base fee distribution, fee payers), system contract event signatures, WBFT signing statistics from canonical seals, native coin transfers recorded as tokens, swallowed system contract storage errors, missing finalized tag, invalid fee payer signatures, system contract events never published
 - Chain-specific code (WBFT, fee delegation statistics, system contracts) lives under `pkg/chains/stablenet`. The legacy ingest paths were removed after v0.1.0; databases indexed by them need a reindex
 - Live verification against a local go-stablenet network: `TestLiveStableNet` (runs only with `INDEXER_LIVE_RPC`); also `TestLiveBalances` (compares indexed balances with `eth_getBalance`; needs transactions in the last 100 blocks), `TestLiveRecordReplay`, `TestLiveEraSource` (needs `INDEXER_LIVE_ERA_DIR`) and `TestLiveHeadLatency` (needs `INDEXER_LIVE_LATENCY=1`)

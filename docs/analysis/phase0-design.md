@@ -543,7 +543,7 @@ golden 키 공간은 의도한 세 키만 늘었다. `/data/syscontracts/mint/�
 | bool 플래그로 끌 수 없음 | 명시한 값을 그대로 적용한다 | 같은 시험(`--api=false`) |
 | 검증이 플래그 적용 전 | `config.LoadUnvalidated`를 추가했다. `main`은 플래그를 적용한 뒤 `Validate`를 부른다. `config.Load`는 그대로 검증까지 한다 | `TestFlagsCanSupplyRequiredValues` |
 | 기본 설정 파일이 없으면 오류 | `--config`를 주지 않았고 `config.yaml`이 없으면 파일 없이 시작한다. 명시한 파일이 없으면 지금처럼 오류다 | `TestDefaultConfigFileIsOptional` |
-| D4 멀티체인 | 체인이 설정된 채로 켜면 시작을 거부한다 | `TestStartupRejectsUnsafeModes/multichain` |
+| D4 멀티체인 | 체인이 설정된 채로 켜면 시작을 거부한다. (R2-8에서 체인별 DB로 해소하고 거부를 지웠다. 지금 이 시험은 DB 경로를 벗어나는 체인 id를 거부하는지 본다) | `TestStartupRejectsUnsafeModes/multichain` |
 | `database.readonly` 무시 | 켜면 시작을 거부한다 | `TestStartupRejectsUnsafeModes/readonly` |
 | 무시되는 설정 | `Config.UnsupportedSettings`가 목록을 만들고, 시작 로그에 경고로 남긴다 | `TestUnsupportedSettings` |
 

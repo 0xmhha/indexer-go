@@ -3,10 +3,7 @@
 package multichain
 
 import (
-	"fmt"
 	"time"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // ChainStatus represents the current operational state of a chain.
@@ -81,40 +78,4 @@ type ChainMetrics struct {
 	AverageBlockTime    time.Duration `json:"averageBlockTime"`
 	AverageRPCLatency   time.Duration `json:"averageRpcLatency"`
 	DiskUsage           uint64        `json:"diskUsage"`
-}
-
-// StorageKeyPrefix generates a chain-scoped storage key prefix.
-func StorageKeyPrefix(chainID string) string {
-	return "chain:" + chainID + ":"
-}
-
-// BlockKey generates a storage key for a block.
-func BlockKey(chainID string, height uint64) string {
-	return StorageKeyPrefix(chainID) + "block:" + uintToString(height)
-}
-
-// TxKey generates a storage key for a transaction.
-func TxKey(chainID string, hash common.Hash) string {
-	return StorageKeyPrefix(chainID) + "tx:" + hash.Hex()
-}
-
-// ReceiptKey generates a storage key for a receipt.
-func ReceiptKey(chainID string, hash common.Hash) string {
-	return StorageKeyPrefix(chainID) + "receipt:" + hash.Hex()
-}
-
-// LogKey generates a storage key for a log.
-func LogKey(chainID string, blockNum uint64, logIndex uint) string {
-	return StorageKeyPrefix(chainID) + "log:" + uintToString(blockNum) + ":" + uintToString(uint64(logIndex))
-}
-
-// LatestHeightKey generates a storage key for the latest indexed height.
-func LatestHeightKey(chainID string) string {
-	return StorageKeyPrefix(chainID) + "latest"
-}
-
-// uintToString is a simple helper for uint64 to string conversion.
-// Uses fixed-width padding for proper lexicographic ordering.
-func uintToString(n uint64) string {
-	return fmt.Sprintf("%020d", n)
 }

@@ -12,7 +12,7 @@
 CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 기본값(예: `--workers`의 100)은 설정 파일 값을 덮지 않는다. bool 플래그는 끄는 쪽으로도 쓸 수 있다(`--api=false`). 설정 검증은 플래그를 적용한 뒤에 하므로, 설정 파일에 없는 필수값(`rpc.endpoint`, `database.path`)을 플래그로 줄 수 있다. `--config`를 주지 않았고 `config.yaml`도 없으면 기본값, 환경 변수, 플래그만으로 시작한다. `--config`로 지정한 파일이 없으면 오류다.
 
 다음 설정은 시작할 때 거부된다.
-- `multichain.enabled: true`(체인이 하나라도 있을 때): 모든 체인이 같은 저장 키를 써서 서로 덮어쓰는 결함이 있다. 체인별 저장 공간을 나누는 작업 뒤에 다시 연다.
+- `multichain.chains[].id`가 디렉터리 이름으로 쓸 수 없는 값(`/`, 앞의 `.` 등)이거나 중복일 때.
 - `database.readonly: true`: 수집기는 써야 한다. API 전용 실행은 별도 작업으로 계획되어 있다.
 
 다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.*`, `account_abstraction.entry_point_addresses`. `watchlist.enabled`와 `resilience.enabled`는 v0.1.0 이후 해당 기능을 지웠으므로 효과가 없고, 켜져 있으면 경고가 남는다.
@@ -123,7 +123,9 @@ eventbus:
 
 ### Multi-Chain
 
-> 현재 비활성화되어 있다. 체인이 설정된 상태로 `enabled: true`이면 시작을 거부한다(모든 체인이 같은 저장 키를 써서 데이터가 섞이는 결함 때문).
+> 체인마다 DB를 따로 둔다: `<database.path>/chains/<id>`. 각 체인은 자기 수집 루프, 이벤트 버스, 기능으로 돌고 `features.*` 같은 공통 설정을 함께 쓴다. 루트의 `rpc.endpoint`는 필요 없고, `rpc.fallback_endpoints`·`rpc.ws_endpoint`·`rpc.record_dir`·`source.era_dir`·`notifications`·`verifier`는 이 모드에서 쓰이지 않는다(시작 시 경고). `chain_id`는 노드가 알려 주는 값과 같아야 그 체인이 시작된다. `--reindex`는 체인 DB마다 적용된다.
+>
+> API는 체인별 경로로만 열린다: `/chains/<id>/graphql`, `/chains/<id>/graphql/ws`, `/chains/<id>/playground`, `/chains/<id>/rpc`, 체인 목록 `GET /chains`. 루트의 `/graphql`, `/rpc`, `/api`는 없다.
 
 ```yaml
 multichain:
@@ -136,6 +138,7 @@ multichain:
     - id: "stableone-mainnet"
       name: "Stable-One Mainnet"
       rpc_endpoint: "http://127.0.0.1:8545"
+      ws_endpoint: "ws://127.0.0.1:8546"   # 선택: newHeads로 새 블록을 바로 읽는다
       chain_id: 1000
       adapter_type: "auto"              # auto | evm | stableone | anvil
       start_height: 0
