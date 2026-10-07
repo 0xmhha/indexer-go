@@ -3,8 +3,11 @@ package notifications
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // KeyValueStore is the storage port of the notification service: plain
@@ -14,6 +17,18 @@ type KeyValueStore interface {
 	Get(ctx context.Context, key []byte) ([]byte, error)
 	Delete(ctx context.Context, key []byte) error
 	Iterate(ctx context.Context, prefix []byte, fn func(key, value []byte) bool) error
+}
+
+var _ Storage = (*PebbleStorage)(nil)
+
+// get reads a key, nil if it is absent: the indexer's store reports an
+// absent key as port.ErrNotFound.
+func (s *PebbleStorage) get(ctx context.Context, key []byte) ([]byte, error) {
+	data, err := s.store.Get(ctx, key)
+	if errors.Is(err, port.ErrNotFound) {
+		return nil, nil
+	}
+	return data, err
 }
 
 // PebbleStorage implements the Storage interface over a KeyValueStore (the
@@ -41,7 +56,7 @@ func (s *PebbleStorage) SaveSetting(ctx context.Context, setting *NotificationSe
 // GetSetting returns a notification setting by ID.
 func (s *PebbleStorage) GetSetting(ctx context.Context, id string) (*NotificationSetting, error) {
 	key := NotificationSettingKey(id)
-	data, err := s.store.Get(ctx, key)
+	data, err := s.get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get setting: %w", err)
 	}
@@ -176,7 +191,7 @@ func (s *PebbleStorage) SaveNotification(ctx context.Context, notification *Noti
 // GetNotification returns a notification by ID.
 func (s *PebbleStorage) GetNotification(ctx context.Context, id string) (*Notification, error) {
 	key := NotificationKey(id)
-	data, err := s.store.Get(ctx, key)
+	data, err := s.get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get notification: %w", err)
 	}
@@ -249,6 +264,43 @@ func (s *PebbleStorage) UpdateNotificationStatus(ctx context.Context, id string,
 	}
 
 	return nil
+}
+
+// UpdateNotification implements Storage: it stores the notification's
+// delivery state and moves its status and pending index entries.
+func (s *PebbleStorage) UpdateNotification(ctx context.Context, notification *Notification) error {
+	old, err := s.GetNotification(ctx, notification.ID)
+	if err != nil {
+		return err
+	}
+	if old == nil {
+		return fmt.Errorf("notification not found: %s", notification.ID)
+	}
+	data, err := json.Marshal(notification)
+	if err != nil {
+		return fmt.Errorf("failed to marshal notification: %w", err)
+	}
+	if err := s.store.Put(ctx, NotificationKey(notification.ID), data); err != nil {
+		return err
+	}
+	_ = s.store.Delete(ctx, NotificationStatusIndexKey(string(old.Status), old.CreatedAt.UnixNano(), old.ID))
+	_ = s.store.Delete(ctx, NotificationPendingIndexKey(pendingTime(old), old.ID))
+	if err := s.store.Put(ctx, NotificationStatusIndexKey(string(notification.Status), notification.CreatedAt.UnixNano(), notification.ID), []byte(notification.ID)); err != nil {
+		return err
+	}
+	if notification.Status == DeliveryStatusPending || notification.Status == DeliveryStatusRetrying {
+		return s.store.Put(ctx, NotificationPendingIndexKey(pendingTime(notification), notification.ID), []byte(notification.ID))
+	}
+	return nil
+}
+
+// pendingTime is the time a pending notification is due: its next retry,
+// or its creation when it was never attempted.
+func pendingTime(n *Notification) int64 {
+	if n.NextRetry != nil {
+		return n.NextRetry.UnixNano()
+	}
+	return n.CreatedAt.UnixNano()
 }
 
 // ListNotifications returns notifications matching the filter.
@@ -397,7 +449,7 @@ func (s *PebbleStorage) GetDeliveryHistory(ctx context.Context, notificationID s
 // GetStats returns notification statistics for a setting.
 func (s *PebbleStorage) GetStats(ctx context.Context, settingID string) (*NotificationStats, error) {
 	key := NotificationStatsKey(settingID)
-	data, err := s.store.Get(ctx, key)
+	data, err := s.get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stats: %w", err)
 	}

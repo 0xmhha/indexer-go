@@ -13,7 +13,9 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/stream"
 )
 
 // Service defines the notification service interface.
@@ -80,6 +82,11 @@ type Storage interface {
 	ListNotifications(ctx context.Context, filter *NotificationsFilter) ([]*Notification, error)
 	GetPendingNotifications(ctx context.Context, limit int) ([]*Notification, error)
 
+	// UpdateNotification stores a notification's delivery state (status,
+	// error, retry count, next retry, sent time) and moves its status and
+	// pending index entries.
+	UpdateNotification(ctx context.Context, notification *Notification) error
+
 	// History
 	SaveDeliveryHistory(ctx context.Context, history *DeliveryHistory) error
 	GetDeliveryHistory(ctx context.Context, notificationID string) ([]*DeliveryHistory, error)
@@ -117,6 +124,16 @@ type NotificationService struct {
 	wg        sync.WaitGroup
 
 	eventSub *events.Subscription
+
+	// stream is the change stream the service consumes as group (R3-5);
+	// nil consumes the event bus instead.
+	stream      stream.Bus
+	streamGroup string
+
+	// inflight are the notifications in the queue or being delivered, so
+	// the retry processor does not queue them again.
+	inflightMu sync.Mutex
+	inflight   map[string]bool
 
 	// nonTokenTransfer are contracts whose Transfer logs are not token
 	// transfers (a native coin exposed as a token contract).
@@ -181,7 +198,30 @@ func NewService(
 		handlers: make(map[NotificationType]Handler),
 		queue:    make(chan *Notification, config.Queue.BufferSize),
 		settings: make(map[string]*NotificationSetting),
+		inflight: make(map[string]bool),
 	}
+}
+
+// DefaultStreamGroup is the consumer group of the notification service.
+const DefaultStreamGroup = "notifications"
+
+// SetStream makes the service consume the change stream as group (empty:
+// DefaultStreamGroup) instead of subscribing to the event bus (refactoring
+// plan R3-5). Every event of an indexed block then leads to its
+// notifications: they are stored, under an id derived from the setting and
+// the event's sequence, before the service moves past the event, so a full
+// queue or a restart loses none and a redelivered event creates none
+// twice. A group that is new starts at the events committed from now on.
+// Call it before Start.
+func (s *NotificationService) SetStream(bus stream.Bus, group string) error {
+	if group == "" {
+		group = DefaultStreamGroup
+	}
+	if _, err := bus.Join(context.Background(), group, stream.StartLatest); err != nil {
+		return fmt.Errorf("join change stream: %w", err)
+	}
+	s.stream, s.streamGroup = bus, group
+	return nil
 }
 
 // RegisterHandler registers a notification handler.
@@ -221,8 +261,11 @@ func (s *NotificationService) Start(ctx context.Context) error {
 		go s.worker(i)
 	}
 
-	// Subscribe to events
-	if s.eventBus != nil {
+	// Consume the change stream, or subscribe to the event bus
+	if s.stream != nil {
+		s.wg.Add(1)
+		go s.consumeStream()
+	} else if s.eventBus != nil {
 		if err := s.subscribeToEvents(); err != nil {
 			s.logger.Error("failed to subscribe to events", zap.Error(err))
 		}
@@ -341,8 +384,66 @@ func (s *NotificationService) processEvents() {
 	}
 }
 
-// handleEvent processes a single blockchain event.
+// handleEvent processes an event of the event bus.
 func (s *NotificationService) handleEvent(event events.Event) {
+	if err := s.notify(s.ctx, event); err != nil {
+		s.logger.Error("failed to create notifications", zap.String("type", string(event.Type())), zap.Error(err))
+	}
+}
+
+// streamTypes are the event types the service notifies of.
+var streamTypes = map[events.EventType]bool{
+	events.EventTypeBlock:       true,
+	events.EventTypeTransaction: true,
+	events.EventTypeLog:         true,
+	events.EventTypeReorg:       true,
+}
+
+// consumeStream consumes the change stream until the service stops,
+// starting again after errors.
+func (s *NotificationService) consumeStream() {
+	defer s.wg.Done()
+	for {
+		err := s.stream.Consume(s.ctx, s.streamGroup, s.handleBatch)
+		if s.ctx.Err() != nil {
+			return
+		}
+		s.logger.Error("change stream consumption stopped; retrying", zap.Error(err))
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+// handleBatch creates the notifications of a batch of change stream
+// entries. An error leaves the batch to be delivered again; notifications
+// it created already are recognized by their ids.
+func (s *NotificationService) handleBatch(ctx context.Context, batch []port.OutboxEntry) error {
+	for _, entry := range batch {
+		if !streamTypes[events.EventType(entry.Type)] {
+			continue
+		}
+		event, err := events.UnmarshalEvent(events.EventType(entry.Type), entry.Data)
+		if err != nil {
+			s.logger.Error("undecodable change stream entry skipped", zap.Uint64("seq", entry.Seq), zap.Error(err))
+			continue
+		}
+		if sq, ok := event.(events.Sequenced); ok {
+			sq.SetSequence(entry.Seq)
+		}
+		if err := s.notify(ctx, event); err != nil {
+			return fmt.Errorf("notifications of sequence %d: %w", entry.Seq, err)
+		}
+	}
+	return nil
+}
+
+// notify creates, stores and queues the notifications of an event. A
+// notification of a sequenced event that exists already (the event was
+// delivered again) is not created again.
+func (s *NotificationService) notify(ctx context.Context, event events.Event) error {
 	s.mu.RLock()
 	settings := make([]*NotificationSetting, 0, len(s.settings))
 	for _, setting := range s.settings {
@@ -354,13 +455,29 @@ func (s *NotificationService) handleEvent(event events.Event) {
 
 	kinds := s.eventKinds(event)
 	for _, setting := range settings {
-		if kind, ok := s.shouldNotify(setting, event, kinds); ok {
-			notification := s.createNotification(setting, event, kind)
-			if notification != nil {
-				s.enqueueNotification(notification)
+		kind, ok := s.shouldNotify(setting, event, kinds)
+		if !ok {
+			continue
+		}
+		notification := s.createNotification(setting, event, kind)
+		if notification == nil {
+			continue
+		}
+		if events.SequenceOf(event) != 0 {
+			existing, err := s.storage.GetNotification(ctx, notification.ID)
+			if err != nil {
+				return err
+			}
+			if existing != nil {
+				continue
 			}
 		}
+		if err := s.storage.SaveNotification(ctx, notification); err != nil {
+			return err
+		}
+		s.enqueueNotification(notification)
 	}
+	return nil
 }
 
 // shouldNotify checks if a setting should be notified for an event of the
@@ -538,8 +655,13 @@ func (s *NotificationService) createNotification(setting *NotificationSetting, e
 	}
 	payload.EventType = kind
 
+	id := uuid.New().String()
+	if seq := events.SequenceOf(event); seq != 0 {
+		// One notification per setting and change stream event.
+		id = uuid.NewSHA1(notificationIDSpace, []byte(fmt.Sprintf("%s/%d", setting.ID, seq))).String()
+	}
 	return &Notification{
-		ID:         uuid.New().String(),
+		ID:         id,
 		SettingID:  setting.ID,
 		Type:       setting.Type,
 		EventType:  kind,
@@ -549,6 +671,10 @@ func (s *NotificationService) createNotification(setting *NotificationSetting, e
 		CreatedAt:  time.Now(),
 	}
 }
+
+// notificationIDSpace is the UUID namespace of notification ids derived
+// from a setting and a change stream sequence.
+var notificationIDSpace = uuid.MustParse("6f3c1d52-9a43-4b8e-9d2a-0b7e5c1f4a10")
 
 // createPayload creates an event payload.
 func (s *NotificationService) createPayload(event events.Event) (*EventPayload, error) {
@@ -591,18 +717,29 @@ func (s *NotificationService) createPayload(event events.Event) (*EventPayload, 
 	}, nil
 }
 
-// enqueueNotification adds a notification to the queue.
+// enqueueNotification queues a stored notification for delivery unless it
+// is queued or being delivered already. When the queue is full it stays
+// stored as pending and the retry processor queues it later.
 func (s *NotificationService) enqueueNotification(notification *Notification) {
+	s.inflightMu.Lock()
+	defer s.inflightMu.Unlock()
+	if s.inflight[notification.ID] {
+		return
+	}
 	select {
 	case s.queue <- notification:
-		// Save to storage
-		if err := s.storage.SaveNotification(s.ctx, notification); err != nil {
-			s.logger.Error("failed to save notification", zap.Error(err))
-		}
+		s.inflight[notification.ID] = true
 	default:
-		s.logger.Warn("notification queue full, dropping notification",
+		s.logger.Debug("notification queue full, delivery deferred",
 			zap.String("notification_id", notification.ID))
 	}
+}
+
+// delivered ends a notification's queued or delivering state.
+func (s *NotificationService) delivered(id string) {
+	s.inflightMu.Lock()
+	delete(s.inflight, id)
+	s.inflightMu.Unlock()
 }
 
 // worker processes notifications from the queue.
@@ -620,12 +757,22 @@ func (s *NotificationService) worker(id int) {
 				return
 			}
 			s.processNotification(notification)
+			s.delivered(notification.ID)
 		}
 	}
 }
 
 // processNotification delivers a single notification.
 func (s *NotificationService) processNotification(notification *Notification) {
+	// The queued copy may be stale (the retry processor read it before an
+	// earlier delivery finished): deliver what the storage holds, and
+	// nothing that was sent or given up already.
+	if current, err := s.storage.GetNotification(s.ctx, notification.ID); err == nil && current != nil {
+		if current.Status == DeliveryStatusSent || current.Status == DeliveryStatusFailed {
+			return
+		}
+		notification = current
+	}
 	s.mu.RLock()
 	setting := s.settings[notification.SettingID]
 	s.mu.RUnlock()
@@ -634,6 +781,7 @@ func (s *NotificationService) processNotification(notification *Notification) {
 		s.logger.Warn("notification setting not found",
 			zap.String("notification_id", notification.ID),
 			zap.String("setting_id", notification.SettingID))
+		s.giveUp(notification, "notification setting not found")
 		return
 	}
 
@@ -641,6 +789,7 @@ func (s *NotificationService) processNotification(notification *Notification) {
 	if !ok {
 		s.logger.Error("no handler for notification type",
 			zap.String("type", string(notification.Type)))
+		s.giveUp(notification, "no handler for notification type "+string(notification.Type))
 		return
 	}
 
@@ -675,6 +824,16 @@ func (s *NotificationService) processNotification(notification *Notification) {
 		s.handleDeliveryFailure(notification, result, err)
 	} else {
 		s.handleDeliverySuccess(notification, result, duration)
+	}
+}
+
+// giveUp marks a notification that cannot be delivered as failed, so it
+// is not retried.
+func (s *NotificationService) giveUp(notification *Notification, reason string) {
+	if err := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusFailed, reason); err != nil {
+		s.logger.Warn("failed to update notification status to failed",
+			zap.String("notification_id", notification.ID),
+			zap.Error(err))
 	}
 }
 
@@ -714,7 +873,8 @@ func (s *NotificationService) handleDeliveryFailure(notification *Notification, 
 
 	if notification.RetryCount >= s.config.Retry.MaxAttempts {
 		notification.Status = DeliveryStatusFailed
-		if stErr := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusFailed, errMsg); stErr != nil {
+		notification.NextRetry = nil
+		if stErr := s.storage.UpdateNotification(s.ctx, notification); stErr != nil {
 			s.logger.Warn("failed to update notification status to failed",
 				zap.String("notification_id", notification.ID),
 				zap.Error(stErr))
@@ -734,7 +894,9 @@ func (s *NotificationService) handleDeliveryFailure(notification *Notification, 
 		nextRetry := time.Now().Add(delay)
 		notification.NextRetry = &nextRetry
 		notification.Status = DeliveryStatusRetrying
-		if stErr := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusRetrying, errMsg); stErr != nil {
+		// The retry count and time are stored with the status, so the
+		// retry processor waits for them, also after a restart.
+		if stErr := s.storage.UpdateNotification(s.ctx, notification); stErr != nil {
 			s.logger.Warn("failed to update notification status to retrying",
 				zap.String("notification_id", notification.ID),
 				zap.Error(stErr))
@@ -783,11 +945,11 @@ func (s *NotificationService) processRetries() {
 		return
 	}
 
-	now := time.Now()
+	// The storage returns the notifications that are due: never attempted
+	// (left out of a full queue, or stored before a restart) or due for a
+	// retry.
 	for _, notification := range notifications {
-		if notification.NextRetry != nil && notification.NextRetry.Before(now) {
-			s.enqueueNotification(notification)
-		}
+		s.enqueueNotification(notification)
 	}
 }
 
