@@ -119,6 +119,18 @@ func registeredSubscription(name string) (SubscriptionSpec, bool) {
 	return spec, ok
 }
 
+// registeredSubscriptionNames returns the names of the registered
+// subscriptions.
+func registeredSubscriptionNames() []string {
+	extMu.RLock()
+	defer extMu.RUnlock()
+	names := make([]string, 0, len(subscriptions))
+	for name := range subscriptions {
+		names = append(names, name)
+	}
+	return names
+}
+
 // registeredSubscriptionIn returns the registered subscription named in a
 // query, preferring the longest name (so "consensusBlock" wins over a
 // shorter name it contains).
