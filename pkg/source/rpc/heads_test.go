@@ -113,6 +113,10 @@ func TestSubscribeHeadsCoalescesSignals(t *testing.T) {
 		}
 	}
 	require.Eventually(t, func() bool { return len(heads) == 1 }, 5*time.Second, 10*time.Millisecond)
+	// The first head makes the signal pending while the others may still be
+	// on their way; reading now would let a late one signal again. Wait for
+	// them before reading.
+	time.Sleep(200 * time.Millisecond)
 	<-heads
 	select {
 	case <-heads:
