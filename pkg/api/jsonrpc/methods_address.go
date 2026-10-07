@@ -55,6 +55,7 @@ func (h *Handler) getContractsByCreator(ctx context.Context, params json.RawMess
 		Creator string `json:"creator"`
 		Limit   *int   `json:"limit,omitempty"`
 		Offset  *int   `json:"offset,omitempty"`
+		After   string `json:"after,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -67,27 +68,17 @@ func (h *Handler) getContractsByCreator(ctx context.Context, params json.RawMess
 
 	creator := common.HexToAddress(p.Creator)
 
-	// Set defaults for pagination
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if p.Limit != nil && *p.Limit > 0 {
-		limit = *p.Limit
-		if limit > constants.DefaultMaxPaginationLimit {
-			limit = constants.DefaultMaxPaginationLimit
-		}
-	}
-	if p.Offset != nil && *p.Offset >= 0 {
-		offset = *p.Offset
-	}
-
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
-	contracts, err := addressReader.GetContractsByCreator(ctx, creator, limit, offset)
+	contracts, next, err := addressReader.GetContractsByCreator(ctx, creator, addressListPage(p.Limit, p.Offset, p.After))
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get contracts by creator", zap.String("creator", p.Creator), zap.Error(err))
 		return nil, NewError(InternalError, "failed to get contracts by creator", err.Error())
 	}
@@ -106,8 +97,9 @@ func (h *Handler) getContractsByCreator(ctx context.Context, params json.RawMess
 	}
 
 	return map[string]interface{}{
-		"contracts": results,
-		"total":     len(results),
+		"contracts":  results,
+		"total":      len(results),
+		"nextCursor": addressNextCursor(next),
 	}, nil
 }
 
@@ -163,6 +155,7 @@ func (h *Handler) getInternalTransactionsByAddress(ctx context.Context, params j
 		IsFrom  bool   `json:"isFrom"`
 		Limit   *int   `json:"limit,omitempty"`
 		Offset  *int   `json:"offset,omitempty"`
+		After   string `json:"after,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -175,27 +168,17 @@ func (h *Handler) getInternalTransactionsByAddress(ctx context.Context, params j
 
 	address := common.HexToAddress(p.Address)
 
-	// Set defaults for pagination
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if p.Limit != nil && *p.Limit > 0 {
-		limit = *p.Limit
-		if limit > constants.DefaultMaxPaginationLimit {
-			limit = constants.DefaultMaxPaginationLimit
-		}
-	}
-	if p.Offset != nil && *p.Offset >= 0 {
-		offset = *p.Offset
-	}
-
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
-	internals, err := addressReader.GetInternalTransactionsByAddress(ctx, address, p.IsFrom, limit, offset)
+	internals, next, err := addressReader.GetInternalTransactionsByAddress(ctx, address, p.IsFrom, addressListPage(p.Limit, p.Offset, p.After))
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get internal transactions by address",
 			zap.String("address", p.Address),
 			zap.Bool("isFrom", p.IsFrom),
@@ -209,8 +192,9 @@ func (h *Handler) getInternalTransactionsByAddress(ctx context.Context, params j
 	}
 
 	return map[string]interface{}{
-		"internals": results,
-		"total":     len(results),
+		"internals":  results,
+		"total":      len(results),
+		"nextCursor": addressNextCursor(next),
 	}, nil
 }
 
@@ -260,6 +244,7 @@ func (h *Handler) getERC20TransfersByToken(ctx context.Context, params json.RawM
 		Token  string `json:"token"`
 		Limit  *int   `json:"limit,omitempty"`
 		Offset *int   `json:"offset,omitempty"`
+		After  string `json:"after,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -272,27 +257,17 @@ func (h *Handler) getERC20TransfersByToken(ctx context.Context, params json.RawM
 
 	token := common.HexToAddress(p.Token)
 
-	// Set defaults for pagination
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if p.Limit != nil && *p.Limit > 0 {
-		limit = *p.Limit
-		if limit > constants.DefaultMaxPaginationLimit {
-			limit = constants.DefaultMaxPaginationLimit
-		}
-	}
-	if p.Offset != nil && *p.Offset >= 0 {
-		offset = *p.Offset
-	}
-
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
-	transfers, err := addressReader.GetERC20TransfersByToken(ctx, token, limit, offset)
+	transfers, next, err := addressReader.GetERC20TransfersByToken(ctx, token, addressListPage(p.Limit, p.Offset, p.After))
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get ERC20 transfers by token", zap.String("token", p.Token), zap.Error(err))
 		return nil, NewError(InternalError, "failed to get ERC20 transfers by token", err.Error())
 	}
@@ -303,8 +278,9 @@ func (h *Handler) getERC20TransfersByToken(ctx context.Context, params json.RawM
 	}
 
 	return map[string]interface{}{
-		"transfers": results,
-		"total":     len(results),
+		"transfers":  results,
+		"total":      len(results),
+		"nextCursor": addressNextCursor(next),
 	}, nil
 }
 
@@ -315,6 +291,7 @@ func (h *Handler) getERC20TransfersByAddress(ctx context.Context, params json.Ra
 		IsFrom  bool   `json:"isFrom"`
 		Limit   *int   `json:"limit,omitempty"`
 		Offset  *int   `json:"offset,omitempty"`
+		After   string `json:"after,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -327,27 +304,17 @@ func (h *Handler) getERC20TransfersByAddress(ctx context.Context, params json.Ra
 
 	address := common.HexToAddress(p.Address)
 
-	// Set defaults for pagination
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if p.Limit != nil && *p.Limit > 0 {
-		limit = *p.Limit
-		if limit > constants.DefaultMaxPaginationLimit {
-			limit = constants.DefaultMaxPaginationLimit
-		}
-	}
-	if p.Offset != nil && *p.Offset >= 0 {
-		offset = *p.Offset
-	}
-
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
-	transfers, err := addressReader.GetERC20TransfersByAddress(ctx, address, p.IsFrom, limit, offset)
+	transfers, next, err := addressReader.GetERC20TransfersByAddress(ctx, address, p.IsFrom, addressListPage(p.Limit, p.Offset, p.After))
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get ERC20 transfers by address",
 			zap.String("address", p.Address),
 			zap.Bool("isFrom", p.IsFrom),
@@ -361,8 +328,9 @@ func (h *Handler) getERC20TransfersByAddress(ctx context.Context, params json.Ra
 	}
 
 	return map[string]interface{}{
-		"transfers": results,
-		"total":     len(results),
+		"transfers":  results,
+		"total":      len(results),
+		"nextCursor": addressNextCursor(next),
 	}, nil
 }
 
@@ -412,6 +380,7 @@ func (h *Handler) getERC721TransfersByToken(ctx context.Context, params json.Raw
 		Token  string `json:"token"`
 		Limit  *int   `json:"limit,omitempty"`
 		Offset *int   `json:"offset,omitempty"`
+		After  string `json:"after,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -424,27 +393,17 @@ func (h *Handler) getERC721TransfersByToken(ctx context.Context, params json.Raw
 
 	token := common.HexToAddress(p.Token)
 
-	// Set defaults for pagination
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if p.Limit != nil && *p.Limit > 0 {
-		limit = *p.Limit
-		if limit > constants.DefaultMaxPaginationLimit {
-			limit = constants.DefaultMaxPaginationLimit
-		}
-	}
-	if p.Offset != nil && *p.Offset >= 0 {
-		offset = *p.Offset
-	}
-
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
-	transfers, err := addressReader.GetERC721TransfersByToken(ctx, token, limit, offset)
+	transfers, next, err := addressReader.GetERC721TransfersByToken(ctx, token, addressListPage(p.Limit, p.Offset, p.After))
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get ERC721 transfers by token", zap.String("token", p.Token), zap.Error(err))
 		return nil, NewError(InternalError, "failed to get ERC721 transfers by token", err.Error())
 	}
@@ -455,8 +414,9 @@ func (h *Handler) getERC721TransfersByToken(ctx context.Context, params json.Raw
 	}
 
 	return map[string]interface{}{
-		"transfers": results,
-		"total":     len(results),
+		"transfers":  results,
+		"total":      len(results),
+		"nextCursor": addressNextCursor(next),
 	}, nil
 }
 
@@ -467,6 +427,7 @@ func (h *Handler) getERC721TransfersByAddress(ctx context.Context, params json.R
 		IsFrom  bool   `json:"isFrom"`
 		Limit   *int   `json:"limit,omitempty"`
 		Offset  *int   `json:"offset,omitempty"`
+		After   string `json:"after,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -479,27 +440,17 @@ func (h *Handler) getERC721TransfersByAddress(ctx context.Context, params json.R
 
 	address := common.HexToAddress(p.Address)
 
-	// Set defaults for pagination
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if p.Limit != nil && *p.Limit > 0 {
-		limit = *p.Limit
-		if limit > constants.DefaultMaxPaginationLimit {
-			limit = constants.DefaultMaxPaginationLimit
-		}
-	}
-	if p.Offset != nil && *p.Offset >= 0 {
-		offset = *p.Offset
-	}
-
 	// Check if storage implements AddressIndexReader
 	addressReader, ok := h.storage.(port.AddressIndexReader)
 	if !ok {
 		return nil, NewError(InternalError, "storage does not support address indexing", nil)
 	}
 
-	transfers, err := addressReader.GetERC721TransfersByAddress(ctx, address, p.IsFrom, limit, offset)
+	transfers, next, err := addressReader.GetERC721TransfersByAddress(ctx, address, p.IsFrom, addressListPage(p.Limit, p.Offset, p.After))
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get ERC721 transfers by address",
 			zap.String("address", p.Address),
 			zap.Bool("isFrom", p.IsFrom),
@@ -513,8 +464,9 @@ func (h *Handler) getERC721TransfersByAddress(ctx context.Context, params json.R
 	}
 
 	return map[string]interface{}{
-		"transfers": results,
-		"total":     len(results),
+		"transfers":  results,
+		"total":      len(results),
+		"nextCursor": addressNextCursor(next),
 	}, nil
 }
 
@@ -629,4 +581,29 @@ func erc721TransferToMap(transfer *port.ERC721Transfer) map[string]interface{} {
 		"logIndex":        transfer.LogIndex,
 		"timestamp":       fmt.Sprintf("%d", transfer.Timestamp),
 	}
+}
+
+// addressListPage returns the page request of an address index list
+// method from its limit, offset and after parameters: limit defaults to
+// constants.DefaultPaginationLimit and is at most
+// constants.DefaultMaxPaginationLimit, and after (the nextCursor of the
+// previous page) takes precedence over offset.
+func addressListPage(limit, offset *int, after string) port.Page {
+	page := port.Page{Limit: constants.DefaultPaginationLimit, After: after}
+	if limit != nil && *limit > 0 {
+		page.Limit = min(*limit, constants.DefaultMaxPaginationLimit)
+	}
+	if offset != nil && *offset >= 0 {
+		page.Offset = *offset
+	}
+	return page
+}
+
+// addressNextCursor returns the nextCursor result field: the cursor of the
+// next page, or null when the list has no more items.
+func addressNextCursor(next string) interface{} {
+	if next == "" {
+		return nil
+	}
+	return next
 }

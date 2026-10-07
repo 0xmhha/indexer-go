@@ -73,13 +73,14 @@ type AddressIndexReader interface {
 	// Returns ErrNotFound if the contract was not created or not indexed.
 	GetContractCreation(ctx context.Context, contractAddress common.Address) (*ContractCreation, error)
 
-	// GetContractsByCreator retrieves contracts created by a specific address with pagination.
+	// GetContractsByCreator returns one page of the contracts created by a
+	// specific address, in deployment block order (see Page).
 	// Returns empty slice if no contracts found.
-	GetContractsByCreator(ctx context.Context, creator common.Address, limit, offset int) ([]common.Address, error)
+	GetContractsByCreator(ctx context.Context, creator common.Address, page Page) ([]common.Address, string, error)
 
-	// ListContracts retrieves all deployed contracts with pagination.
-	// Returns contracts sorted by deployment block number (descending).
-	ListContracts(ctx context.Context, limit, offset int) ([]*ContractCreation, error)
+	// ListContracts returns one page of all deployed contracts, newest
+	// deployment block first (see Page).
+	ListContracts(ctx context.Context, page Page) ([]*ContractCreation, string, error)
 
 	// GetContractsCount returns the total number of deployed contracts.
 	GetContractsCount(ctx context.Context) (int, error)
@@ -90,10 +91,13 @@ type AddressIndexReader interface {
 	// Returns empty slice if no internal transactions found or tracing is disabled.
 	GetInternalTransactions(ctx context.Context, txHash common.Hash) ([]*InternalTransaction, error)
 
-	// GetInternalTransactionsByAddress retrieves internal transactions involving a specific address.
-	// If isFrom is true, returns transactions where address is the caller.
-	// If isFrom is false, returns transactions where address is the callee.
-	GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*InternalTransaction, error)
+	// GetInternalTransactionsByAddress returns one page of the internal calls
+	// involving a specific address, in block order and, within a transaction,
+	// in call order (see Page). Limit and Offset count calls, and a page may
+	// end between two calls of one transaction.
+	// If isFrom is true, returns calls where address is the caller.
+	// If isFrom is false, returns calls where address is the callee.
+	GetInternalTransactionsByAddress(ctx context.Context, address common.Address, isFrom bool, page Page) ([]*InternalTransaction, string, error)
 
 	// ERC20 Transfer queries
 	//
@@ -101,13 +105,15 @@ type AddressIndexReader interface {
 	// Returns ErrNotFound if the transfer does not exist.
 	GetERC20Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*ERC20Transfer, error)
 
-	// GetERC20TransfersByToken retrieves ERC20 transfers for a specific token contract with pagination.
-	GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*ERC20Transfer, error)
+	// GetERC20TransfersByToken returns one page of the ERC20 transfers of a
+	// specific token contract, in block and log index order (see Page).
+	GetERC20TransfersByToken(ctx context.Context, tokenAddress common.Address, page Page) ([]*ERC20Transfer, string, error)
 
-	// GetERC20TransfersByAddress retrieves ERC20 transfers involving a specific address.
+	// GetERC20TransfersByAddress returns one page of the ERC20 transfers
+	// involving a specific address, in block and log index order (see Page).
 	// If isFrom is true, returns transfers where address is the sender.
 	// If isFrom is false, returns transfers where address is the recipient.
-	GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*ERC20Transfer, error)
+	GetERC20TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, page Page) ([]*ERC20Transfer, string, error)
 
 	// ERC721 Transfer queries
 	//
@@ -115,21 +121,25 @@ type AddressIndexReader interface {
 	// Returns ErrNotFound if the transfer does not exist.
 	GetERC721Transfer(ctx context.Context, txHash common.Hash, logIndex uint) (*ERC721Transfer, error)
 
-	// GetERC721TransfersByToken retrieves ERC721 transfers for a specific token contract with pagination.
-	GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, limit, offset int) ([]*ERC721Transfer, error)
+	// GetERC721TransfersByToken returns one page of the ERC721 transfers of a
+	// specific token contract, in block and log index order (see Page).
+	GetERC721TransfersByToken(ctx context.Context, tokenAddress common.Address, page Page) ([]*ERC721Transfer, string, error)
 
-	// GetERC721TransfersByAddress retrieves ERC721 transfers involving a specific address.
+	// GetERC721TransfersByAddress returns one page of the ERC721 transfers
+	// involving a specific address, in block and log index order (see Page).
 	// If isFrom is true, returns transfers where address is the sender.
 	// If isFrom is false, returns transfers where address is the recipient.
-	GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, limit, offset int) ([]*ERC721Transfer, error)
+	GetERC721TransfersByAddress(ctx context.Context, address common.Address, isFrom bool, page Page) ([]*ERC721Transfer, string, error)
 
 	// GetERC721Owner retrieves the current owner of a specific NFT token.
 	// Returns ErrNotFound if the token has not been transferred or does not exist.
 	GetERC721Owner(ctx context.Context, tokenAddress common.Address, tokenId *big.Int) (common.Address, error)
 
-	// GetNFTsByOwner retrieves all NFTs owned by a specific address with pagination.
+	// GetNFTsByOwner returns one page of the NFTs a specific address owns,
+	// in a fixed order (see Page). A cursor stays valid when the token it
+	// ended at leaves the owner.
 	// Returns empty slice if no NFTs found.
-	GetNFTsByOwner(ctx context.Context, owner common.Address, limit, offset int) ([]*NFTOwnership, error)
+	GetNFTsByOwner(ctx context.Context, owner common.Address, page Page) ([]*NFTOwnership, string, error)
 }
 
 // AddressIndexWriter defines write operations for address indexing

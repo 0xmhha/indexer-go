@@ -25,13 +25,13 @@ type richMockStorage struct {
 func (m *richMockStorage) GetContractCreation(_ context.Context, addr common.Address) (*port.ContractCreation, error) {
 	return &port.ContractCreation{ContractAddress: addr, Creator: common.HexToAddress("0x01"), TransactionHash: common.HexToHash("0xcc1"), BlockNumber: 10, Timestamp: 1700000000, BytecodeSize: 1024}, nil
 }
-func (m *richMockStorage) GetContractsByCreator(_ context.Context, _ common.Address, _, _ int) ([]common.Address, error) {
-	return []common.Address{common.HexToAddress("0xA1"), common.HexToAddress("0xA2")}, nil
+func (m *richMockStorage) GetContractsByCreator(_ context.Context, _ common.Address, _ port.Page) ([]common.Address, string, error) {
+	return []common.Address{common.HexToAddress("0xA1"), common.HexToAddress("0xA2")}, "", nil
 }
-func (m *richMockStorage) ListContracts(_ context.Context, _, _ int) ([]*port.ContractCreation, error) {
+func (m *richMockStorage) ListContracts(_ context.Context, _ port.Page) ([]*port.ContractCreation, string, error) {
 	return []*port.ContractCreation{
 		{ContractAddress: common.HexToAddress("0xA1"), Creator: common.HexToAddress("0x01"), TransactionHash: common.HexToHash("0xcc1"), BlockNumber: 10, Timestamp: 1700000000, BytecodeSize: 512},
-	}, nil
+	}, "", nil
 }
 func (m *richMockStorage) GetContractsCount(_ context.Context) (int, error) { return 5, nil }
 func (m *richMockStorage) GetInternalTransactions(_ context.Context, _ common.Hash) ([]*port.InternalTransaction, error) {
@@ -39,44 +39,44 @@ func (m *richMockStorage) GetInternalTransactions(_ context.Context, _ common.Ha
 		{TransactionHash: common.HexToHash("0xdd1"), BlockNumber: 15, Index: 0, Type: "CALL", From: common.HexToAddress("0x01"), To: common.HexToAddress("0x02"), Value: big.NewInt(1000), Gas: 21000, GasUsed: 21000, Depth: 0},
 	}, nil
 }
-func (m *richMockStorage) GetInternalTransactionsByAddress(_ context.Context, _ common.Address, _ bool, _, _ int) ([]*port.InternalTransaction, error) {
+func (m *richMockStorage) GetInternalTransactionsByAddress(_ context.Context, _ common.Address, _ bool, _ port.Page) ([]*port.InternalTransaction, string, error) {
 	return []*port.InternalTransaction{
 		{TransactionHash: common.HexToHash("0xdd2"), BlockNumber: 16, Index: 0, Type: "DELEGATECALL", From: common.HexToAddress("0x01"), To: common.HexToAddress("0x03"), Value: big.NewInt(0), Gas: 50000, GasUsed: 30000, Depth: 1},
-	}, nil
+	}, "", nil
 }
 func (m *richMockStorage) GetERC20Transfer(_ context.Context, _ common.Hash, _ uint) (*port.ERC20Transfer, error) {
 	return &port.ERC20Transfer{ContractAddress: common.HexToAddress("0xE1"), From: common.HexToAddress("0x01"), To: common.HexToAddress("0x02"), Value: big.NewInt(5000), TransactionHash: common.HexToHash("0xee1"), BlockNumber: 20, LogIndex: 0, Timestamp: 1700000000}, nil
 }
-func (m *richMockStorage) GetERC20TransfersByToken(_ context.Context, _ common.Address, _, _ int) ([]*port.ERC20Transfer, error) {
+func (m *richMockStorage) GetERC20TransfersByToken(_ context.Context, _ common.Address, _ port.Page) ([]*port.ERC20Transfer, string, error) {
 	return []*port.ERC20Transfer{
 		{ContractAddress: common.HexToAddress("0xE1"), From: common.HexToAddress("0x01"), To: common.HexToAddress("0x02"), Value: big.NewInt(5000), TransactionHash: common.HexToHash("0xee1"), BlockNumber: 20, LogIndex: 0, Timestamp: 1700000000},
-	}, nil
+	}, "", nil
 }
-func (m *richMockStorage) GetERC20TransfersByAddress(_ context.Context, _ common.Address, _ bool, _, _ int) ([]*port.ERC20Transfer, error) {
+func (m *richMockStorage) GetERC20TransfersByAddress(_ context.Context, _ common.Address, _ bool, _ port.Page) ([]*port.ERC20Transfer, string, error) {
 	return []*port.ERC20Transfer{
 		{ContractAddress: common.HexToAddress("0xE1"), From: common.HexToAddress("0x01"), To: common.HexToAddress("0x02"), Value: big.NewInt(5000), TransactionHash: common.HexToHash("0xee2"), BlockNumber: 21, LogIndex: 1, Timestamp: 1700000010},
-	}, nil
+	}, "", nil
 }
 func (m *richMockStorage) GetERC721Transfer(_ context.Context, _ common.Hash, _ uint) (*port.ERC721Transfer, error) {
 	return &port.ERC721Transfer{ContractAddress: common.HexToAddress("0xF1"), From: common.HexToAddress("0x01"), To: common.HexToAddress("0x02"), TokenId: big.NewInt(42), TransactionHash: common.HexToHash("0xff1"), BlockNumber: 25, LogIndex: 0, Timestamp: 1700000000}, nil
 }
-func (m *richMockStorage) GetERC721TransfersByToken(_ context.Context, _ common.Address, _, _ int) ([]*port.ERC721Transfer, error) {
+func (m *richMockStorage) GetERC721TransfersByToken(_ context.Context, _ common.Address, _ port.Page) ([]*port.ERC721Transfer, string, error) {
 	return []*port.ERC721Transfer{
 		{ContractAddress: common.HexToAddress("0xF1"), From: common.HexToAddress("0x01"), To: common.HexToAddress("0x02"), TokenId: big.NewInt(42), TransactionHash: common.HexToHash("0xff1"), BlockNumber: 25, LogIndex: 0, Timestamp: 1700000000},
-	}, nil
+	}, "", nil
 }
-func (m *richMockStorage) GetERC721TransfersByAddress(_ context.Context, _ common.Address, _ bool, _, _ int) ([]*port.ERC721Transfer, error) {
+func (m *richMockStorage) GetERC721TransfersByAddress(_ context.Context, _ common.Address, _ bool, _ port.Page) ([]*port.ERC721Transfer, string, error) {
 	return []*port.ERC721Transfer{
 		{ContractAddress: common.HexToAddress("0xF1"), From: common.HexToAddress("0x01"), To: common.HexToAddress("0x02"), TokenId: big.NewInt(43), TransactionHash: common.HexToHash("0xff2"), BlockNumber: 26, LogIndex: 1, Timestamp: 1700000010},
-	}, nil
+	}, "", nil
 }
 func (m *richMockStorage) GetERC721Owner(_ context.Context, _ common.Address, _ *big.Int) (common.Address, error) {
 	return common.HexToAddress("0x02"), nil
 }
-func (m *richMockStorage) GetNFTsByOwner(_ context.Context, _ common.Address, _, _ int) ([]*port.NFTOwnership, error) {
+func (m *richMockStorage) GetNFTsByOwner(_ context.Context, _ common.Address, _ port.Page) ([]*port.NFTOwnership, string, error) {
 	return []*port.NFTOwnership{
 		{ContractAddress: common.HexToAddress("0xF1"), TokenId: big.NewInt(42), Owner: common.HexToAddress("0x02")},
-	}, nil
+	}, "", nil
 }
 
 // ---- SetCode overrides for richMockStorage ----
@@ -203,11 +203,11 @@ func newRichTestHandlerFull(t *testing.T) *Handler {
 func (m *mockStorage) GetContractCreation(_ context.Context, _ common.Address) (*port.ContractCreation, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorage) GetContractsByCreator(_ context.Context, _ common.Address, _, _ int) ([]common.Address, error) {
-	return []common.Address{}, nil
+func (m *mockStorage) GetContractsByCreator(_ context.Context, _ common.Address, _ port.Page) ([]common.Address, string, error) {
+	return []common.Address{}, "", nil
 }
-func (m *mockStorage) ListContracts(_ context.Context, _, _ int) ([]*port.ContractCreation, error) {
-	return []*port.ContractCreation{}, nil
+func (m *mockStorage) ListContracts(_ context.Context, _ port.Page) ([]*port.ContractCreation, string, error) {
+	return []*port.ContractCreation{}, "", nil
 }
 func (m *mockStorage) GetContractsCount(_ context.Context) (int, error) {
 	return 0, nil
@@ -215,32 +215,32 @@ func (m *mockStorage) GetContractsCount(_ context.Context) (int, error) {
 func (m *mockStorage) GetInternalTransactions(_ context.Context, _ common.Hash) ([]*port.InternalTransaction, error) {
 	return []*port.InternalTransaction{}, nil
 }
-func (m *mockStorage) GetInternalTransactionsByAddress(_ context.Context, _ common.Address, _ bool, _, _ int) ([]*port.InternalTransaction, error) {
-	return []*port.InternalTransaction{}, nil
+func (m *mockStorage) GetInternalTransactionsByAddress(_ context.Context, _ common.Address, _ bool, _ port.Page) ([]*port.InternalTransaction, string, error) {
+	return []*port.InternalTransaction{}, "", nil
 }
 func (m *mockStorage) GetERC20Transfer(_ context.Context, _ common.Hash, _ uint) (*port.ERC20Transfer, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorage) GetERC20TransfersByToken(_ context.Context, _ common.Address, _, _ int) ([]*port.ERC20Transfer, error) {
-	return []*port.ERC20Transfer{}, nil
+func (m *mockStorage) GetERC20TransfersByToken(_ context.Context, _ common.Address, _ port.Page) ([]*port.ERC20Transfer, string, error) {
+	return []*port.ERC20Transfer{}, "", nil
 }
-func (m *mockStorage) GetERC20TransfersByAddress(_ context.Context, _ common.Address, _ bool, _, _ int) ([]*port.ERC20Transfer, error) {
-	return []*port.ERC20Transfer{}, nil
+func (m *mockStorage) GetERC20TransfersByAddress(_ context.Context, _ common.Address, _ bool, _ port.Page) ([]*port.ERC20Transfer, string, error) {
+	return []*port.ERC20Transfer{}, "", nil
 }
 func (m *mockStorage) GetERC721Transfer(_ context.Context, _ common.Hash, _ uint) (*port.ERC721Transfer, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorage) GetERC721TransfersByToken(_ context.Context, _ common.Address, _, _ int) ([]*port.ERC721Transfer, error) {
-	return []*port.ERC721Transfer{}, nil
+func (m *mockStorage) GetERC721TransfersByToken(_ context.Context, _ common.Address, _ port.Page) ([]*port.ERC721Transfer, string, error) {
+	return []*port.ERC721Transfer{}, "", nil
 }
-func (m *mockStorage) GetERC721TransfersByAddress(_ context.Context, _ common.Address, _ bool, _, _ int) ([]*port.ERC721Transfer, error) {
-	return []*port.ERC721Transfer{}, nil
+func (m *mockStorage) GetERC721TransfersByAddress(_ context.Context, _ common.Address, _ bool, _ port.Page) ([]*port.ERC721Transfer, string, error) {
+	return []*port.ERC721Transfer{}, "", nil
 }
 func (m *mockStorage) GetERC721Owner(_ context.Context, _ common.Address, _ *big.Int) (common.Address, error) {
 	return common.Address{}, port.ErrNotFound
 }
-func (m *mockStorage) GetNFTsByOwner(_ context.Context, _ common.Address, _, _ int) ([]*port.NFTOwnership, error) {
-	return []*port.NFTOwnership{}, nil
+func (m *mockStorage) GetNFTsByOwner(_ context.Context, _ common.Address, _ port.Page) ([]*port.NFTOwnership, string, error) {
+	return []*port.NFTOwnership{}, "", nil
 }
 
 // ---- SetCodeIndexReader implementation for mockStorage ----

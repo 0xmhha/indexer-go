@@ -97,7 +97,7 @@ func TestContractCreation(t *testing.T) {
 		}
 
 		// Get all contracts
-		contracts, err := addressReader.GetContractsByCreator(ctx, creator, 10, 0)
+		contracts, _, err := addressReader.GetContractsByCreator(ctx, creator, port.Page{Limit: 10, Offset: 0})
 		if err != nil {
 			t.Fatalf("GetContractsByCreator failed: %v", err)
 		}
@@ -127,7 +127,7 @@ func TestContractCreation(t *testing.T) {
 		}
 
 		// Get first 2 contracts
-		contracts, err := addressReader.GetContractsByCreator(ctx, creator, 2, 0)
+		contracts, _, err := addressReader.GetContractsByCreator(ctx, creator, port.Page{Limit: 2, Offset: 0})
 		if err != nil {
 			t.Fatalf("GetContractsByCreator failed: %v", err)
 		}
@@ -136,7 +136,7 @@ func TestContractCreation(t *testing.T) {
 		}
 
 		// Get next 2 contracts
-		contracts, err = addressReader.GetContractsByCreator(ctx, creator, 2, 2)
+		contracts, _, err = addressReader.GetContractsByCreator(ctx, creator, port.Page{Limit: 2, Offset: 2})
 		if err != nil {
 			t.Fatalf("GetContractsByCreator failed: %v", err)
 		}
@@ -149,7 +149,7 @@ func TestContractCreation(t *testing.T) {
 		creator := common.BigToAddress(big.NewInt(789))
 
 		// Limit validation now happens in storage implementation
-		_, err := addressReader.GetContractsByCreator(ctx, creator, 200, 0)
+		_, _, err := addressReader.GetContractsByCreator(ctx, creator, port.Page{Limit: 200, Offset: 0})
 		// Some implementations may return an error, some may silently cap to 100
 		// We just verify it doesn't panic
 		_ = err
@@ -228,7 +228,7 @@ func TestERC20Transfer(t *testing.T) {
 			}
 		}
 
-		transfers, err := addressReader.GetERC20TransfersByToken(ctx, token, 10, 0)
+		transfers, _, err := addressReader.GetERC20TransfersByToken(ctx, token, port.Page{Limit: 10, Offset: 0})
 		if err != nil {
 			t.Fatalf("GetERC20TransfersByToken failed: %v", err)
 		}
@@ -257,7 +257,7 @@ func TestERC20Transfer(t *testing.T) {
 			t.Fatalf("SaveERC20Transfer failed: %v", err)
 		}
 
-		transfers, err := addressReader.GetERC20TransfersByAddress(ctx, from, true, 10, 0)
+		transfers, _, err := addressReader.GetERC20TransfersByAddress(ctx, from, true, port.Page{Limit: 10, Offset: 0})
 		if err != nil {
 			t.Fatalf("GetERC20TransfersByAddress failed: %v", err)
 		}
@@ -286,7 +286,7 @@ func TestERC20Transfer(t *testing.T) {
 			t.Fatalf("SaveERC20Transfer failed: %v", err)
 		}
 
-		transfers, err := addressReader.GetERC20TransfersByAddress(ctx, to, false, 10, 0)
+		transfers, _, err := addressReader.GetERC20TransfersByAddress(ctx, to, false, port.Page{Limit: 10, Offset: 0})
 		if err != nil {
 			t.Fatalf("GetERC20TransfersByAddress failed: %v", err)
 		}
@@ -445,7 +445,7 @@ func TestERC721Transfer(t *testing.T) {
 			}
 		}
 
-		transfers, err := addressReader.GetERC721TransfersByToken(ctx, token, 10, 0)
+		transfers, _, err := addressReader.GetERC721TransfersByToken(ctx, token, port.Page{Limit: 10, Offset: 0})
 		if err != nil {
 			t.Fatalf("GetERC721TransfersByToken failed: %v", err)
 		}
@@ -560,7 +560,7 @@ func TestInternalTransaction(t *testing.T) {
 			t.Fatalf("SaveInternalTransactions failed: %v", err)
 		}
 
-		retrieved, err := addressReader.GetInternalTransactionsByAddress(ctx, address, true, 10, 0)
+		retrieved, _, err := addressReader.GetInternalTransactionsByAddress(ctx, address, true, port.Page{Limit: 10, Offset: 0})
 		if err != nil {
 			t.Fatalf("GetInternalTransactionsByAddress failed: %v", err)
 		}
