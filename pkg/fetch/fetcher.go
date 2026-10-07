@@ -134,6 +134,10 @@ type Fetcher struct {
 	// chainID is the chain identifier for multi-chain support
 	chainID string
 
+	// heads wakes the live loop when the node reports a new head
+	// (SetHeadNotifier); nil means polling only.
+	heads <-chan struct{}
+
 
 
 	// features runs the handlers of the enabled features for every block.
@@ -455,7 +459,7 @@ func (f *Fetcher) Run(ctx context.Context) error {
 				zap.Uint64("next_height", nextHeight),
 				zap.Uint64("latest_chain_block", latestChainBlock),
 			)
-			if err := sleepCtx(ctx, f.pollInterval()); err != nil {
+			if err := f.waitForHead(ctx); err != nil {
 				return err
 			}
 			continue
@@ -530,6 +534,29 @@ func getTransactionSender(tx *types.Transaction) common.Address {
 }
 
 // pollInterval is the wait between head checks once caught up.
+// SetHeadNotifier makes the live loop, once caught up, poll the node as
+// soon as ch delivers instead of waiting for the poll interval. Polling
+// stays the fallback: a missed or late notification only costs one
+// interval.
+func (f *Fetcher) SetHeadNotifier(ch <-chan struct{}) { f.heads = ch }
+
+// waitForHead waits for the poll interval or a head notification.
+func (f *Fetcher) waitForHead(ctx context.Context) error {
+	d := f.pollInterval()
+	if f.heads == nil || d <= 0 {
+		return sleepCtx(ctx, d)
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+	case <-f.heads:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
+}
+
 func (f *Fetcher) pollInterval() time.Duration {
 	if f.config.PollInterval > 0 {
 		return f.config.PollInterval

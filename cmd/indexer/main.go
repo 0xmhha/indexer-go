@@ -36,6 +36,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
+	"github.com/0xmhha/indexer-go/pkg/rpcpool"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/source"
 	"github.com/0xmhha/indexer-go/pkg/source/era"
@@ -396,11 +397,19 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 
 // initClient initializes the Ethereum client and detects node type
 func (a *App) initClient() error {
-	ethClient, err := client.NewClient(&client.Config{
-		Endpoint: a.config.RPC.Endpoint,
-		Timeout:  a.config.RPC.Timeout,
-		Logger:   a.logger,
-	})
+	clientCfg := &client.Config{
+		Endpoint:  a.config.RPC.Endpoint,
+		Timeout:   a.config.RPC.Timeout,
+		Logger:    a.logger,
+		Fallbacks: a.config.RPC.FallbackEndpoints,
+		RateLimit: a.config.RPC.RateLimit,
+	}
+	if a.rpcEndpoint != nil {
+		// The local record/replay endpoint already does the failover and
+		// rate limiting (record) or needs none (replay).
+		clientCfg.Fallbacks, clientCfg.RateLimit = nil, 0
+	}
+	ethClient, err := client.NewClient(clientCfg)
 	if err != nil {
 		return fmt.Errorf("failed to create Ethereum client: %w", err)
 	}
@@ -963,8 +972,18 @@ func (a *App) Run(ctx context.Context) error {
 		return a.fetcher.RunWithGapRecovery(ctx)
 	}
 
+	a.followHeads(ctx)
 	a.logger.Info("Starting normal indexing mode")
 	return a.fetcher.Run(ctx)
+}
+
+// followHeads subscribes to newHeads (rpc.ws_endpoint) for the live loop
+// until ctx ends.
+func (a *App) followHeads(ctx context.Context) {
+	if ws := a.config.RPC.WSEndpoint; ws != "" {
+		a.fetcher.SetHeadNotifier(sourcerpc.SubscribeHeads(ctx, ws, a.logger))
+		a.logger.Info("Following newHeads", zap.String("endpoint", ws))
+	}
 }
 
 // Shutdown gracefully shuts down all application components
@@ -1315,7 +1334,17 @@ func (a *App) startRPCArchive() error {
 		if err != nil {
 			return fmt.Errorf("open RPC record dir: %w", err)
 		}
-		ep, err := replay.Serve(replay.NewRecorder(a.config.RPC.Endpoint, w))
+		pool, err := rpcpool.New(rpcpool.Config{
+			Endpoints: append([]string{a.config.RPC.Endpoint}, a.config.RPC.FallbackEndpoints...),
+			Timeout:   a.config.RPC.Timeout,
+			RateLimit: a.config.RPC.RateLimit,
+			Logger:    a.logger,
+		})
+		if err != nil {
+			_ = w.Close()
+			return err
+		}
+		ep, err := replay.Serve(replay.NewRecorderVia(pool.Primary(), pool, w))
 		if err != nil {
 			_ = w.Close()
 			return err

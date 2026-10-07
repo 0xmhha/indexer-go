@@ -61,6 +61,12 @@ func NewRecorder(upstream string, w *Writer) *Recorder {
 	return &Recorder{upstream: upstream, client: &http.Client{}, w: w}
 }
 
+// NewRecorderVia is NewRecorder sending the calls through transport (for
+// example an endpoint pool, pkg/rpcpool).
+func NewRecorderVia(upstream string, transport http.RoundTripper, w *Writer) *Recorder {
+	return &Recorder{upstream: upstream, client: &http.Client{Transport: transport}, w: w}
+}
+
 func (rc *Recorder) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

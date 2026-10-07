@@ -19,7 +19,7 @@ import (
 var chainNeutral = []string{
 	"fetch", "api", "source", "feature", "features", "storage", "events", "eventbus",
 	"core", "types", "token", "abi", "client", "rpcproxy", "notifications",
-	"multichain", "userop", "module", "verifier", "compiler", "price",
+	"multichain", "userop", "module", "verifier", "compiler", "price", "rpcpool",
 	"../internal",
 }
 

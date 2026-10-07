@@ -59,6 +59,15 @@ type RPCConfig struct {
 	// RecordDir, when set, records every JSON-RPC call to the node into an
 	// archive in this directory while indexing.
 	RecordDir string `yaml:"record_dir"`
+	// FallbackEndpoints are further HTTP(S) JSON-RPC URLs of the same chain.
+	// Calls go to Endpoint and fail over to them in order when it does not
+	// answer (pkg/rpcpool).
+	FallbackEndpoints []string `yaml:"fallback_endpoints"`
+	// RateLimit caps JSON-RPC requests per second to the nodes (0: none).
+	RateLimit float64 `yaml:"rate_limit"`
+	// WSEndpoint, when set, is a WebSocket URL whose newHeads subscription
+	// wakes the live loop as soon as a block arrives; polling continues.
+	WSEndpoint string `yaml:"ws_endpoint"`
 }
 
 // SourceConfig selects where block data comes from besides the node.
@@ -686,6 +695,19 @@ func (c *Config) LoadFromEnv() error {
 		}
 		c.Indexer.PollInterval = d
 	}
+	if v := os.Getenv("INDEXER_RPC_FALLBACK_ENDPOINTS"); v != "" {
+		c.RPC.FallbackEndpoints = splitList(v)
+	}
+	if v := os.Getenv("INDEXER_RPC_RATE_LIMIT"); v != "" {
+		r, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_RPC_RATE_LIMIT: %w", err)
+		}
+		c.RPC.RateLimit = r
+	}
+	if v := os.Getenv("INDEXER_RPC_WS_ENDPOINT"); v != "" {
+		c.RPC.WSEndpoint = v
+	}
 	if v := os.Getenv("INDEXER_RPC_RECORD_DIR"); v != "" {
 		c.RPC.RecordDir = v
 	}
@@ -1042,6 +1064,17 @@ func (c *Config) Validate() error {
 	if c.RPC.Endpoint == "" {
 		return fmt.Errorf("RPC endpoint is required")
 	}
+	if c.RPC.RateLimit < 0 {
+		return fmt.Errorf("rpc.rate_limit must not be negative")
+	}
+	for _, e := range c.RPC.FallbackEndpoints {
+		if !strings.HasPrefix(e, "http://") && !strings.HasPrefix(e, "https://") {
+			return fmt.Errorf("rpc.fallback_endpoints: %q is not an HTTP(S) URL", e)
+		}
+	}
+	if c.RPC.WSEndpoint != "" && !strings.HasPrefix(c.RPC.WSEndpoint, "ws://") && !strings.HasPrefix(c.RPC.WSEndpoint, "wss://") {
+		return fmt.Errorf("rpc.ws_endpoint: %q is not a WebSocket URL", c.RPC.WSEndpoint)
+	}
 	if c.RPC.Timeout <= 0 {
 		return fmt.Errorf("RPC timeout must be positive")
 	}
@@ -1193,6 +1226,18 @@ func (c *Config) UnsupportedSettings() []string {
 	}
 	if len(c.AccountAbstraction.EntryPointAddresses) > 0 {
 		out = append(out, "account_abstraction.entry_point_addresses is not supported yet; known EntryPoint addresses are used")
+	}
+	return out
+}
+
+// splitList splits a comma-separated value, dropping empty items and
+// surrounding spaces.
+func splitList(v string) []string {
+	var out []string
+	for _, item := range strings.Split(v, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
 	}
 	return out
 }

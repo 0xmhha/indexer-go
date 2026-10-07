@@ -395,7 +395,7 @@ graph LR
 
 | ID | 작업 | 선행 | 검증 기준 |
 |---|---|---|---|
-| R2-1 | 소스 SPI와 RPC 풀(failover, timeout, 속도 제한, `newHeads` + 폴링) | Phase 1 | 엔드포인트 하나를 끊어도 수집이 계속된다 |
+| R2-1 | 소스 SPI와 RPC 풀(failover, timeout, 속도 제한, `newHeads` + 폴링). (완료 10/7: SPI는 `pkg/source`. 풀은 `pkg/rpcpool`로 RPC 클라이언트 아래 HTTP transport에 둬서 모든 노드 호출이 함께 전환된다. `rpc.fallback_endpoints`, `rpc.rate_limit`, `rpc.ws_endpoint`. 검증: 1순위 노드를 끊어도 수집이 끝까지 가고 결과가 한 번에 색인한 DB와 같다(`TestIndexingSurvivesEndpointLoss`), live에서 응답 없는 1순위 뒤 fallback으로 색인(`TestLiveFailover`). newHeads로 live head 지연 p95가 50ms에서 1~2ms) | Phase 1 | 엔드포인트 하나를 끊어도 수집이 계속된다 |
 | R2-2 | 스케줄러(errgroup worker pool, 재정렬 버퍼, backpressure). 라이브 수집과 gap 복구가 같은 경로를 쓰게 한다 | R2-1 | 처리량 벤치, 두 경로의 결과가 같다(D6 해소) |
 | R2-3 | 작업 단위와 체크포인트(R0-4를 일반화) | R2-2 | crash 시험 |
 | R2-4 | finality·reorg(정책 3종, parent hash 확인, undo 기록, 보상 이벤트). (완료 10/7: 기능은 Phase 0에서 구현(reorg-design.md). 검증 기준인 anvil reorg 주입은 `e2e/reorg_test.go`: 블록 2로 되돌리고 다른 가지를 만들면 수집 루프가 3~5를 되돌리고 orphan·reorg 기록을 남긴 뒤 노드의 hash로 다시 색인한다. e2e는 이제 빈 포트에 자기 anvil을 띄운다) | R2-3 | anvil에서 reorg를 주입해 시험한다 |

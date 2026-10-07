@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"strings"
 	"time"
 
@@ -14,12 +15,15 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/pkg/rpcpool"
 )
 
 // Client wraps Ethereum JSON-RPC client with additional functionality
 type Client struct {
 	ethClient *ethclient.Client
 	rpcClient *rpc.Client
+	pool      *rpcpool.Pool // nil for a non-HTTP endpoint
 	endpoint  string
 	logger    *zap.Logger
 }
@@ -54,6 +58,11 @@ type Config struct {
 	Endpoint string
 	Timeout  time.Duration
 	Logger   *zap.Logger
+	// Fallbacks are further HTTP(S) endpoints of the same chain; calls fail
+	// over to them in order (pkg/rpcpool).
+	Fallbacks []string
+	// RateLimit caps requests per second to the nodes (0: none).
+	RateLimit float64
 }
 
 // NewClient creates a new Ethereum client
@@ -79,7 +88,28 @@ func NewClient(cfg *Config) (*Client, error) {
 		defer cancel()
 	}
 
-	rpcClient, err := rpc.DialContext(ctx, cfg.Endpoint)
+	var pool *rpcpool.Pool
+	var rpcClient *rpc.Client
+	var err error
+	if strings.HasPrefix(cfg.Endpoint, "http://") || strings.HasPrefix(cfg.Endpoint, "https://") {
+		// HTTP(S) calls go through the endpoint pool: per-attempt timeout,
+		// rate limit and failover to the fallback endpoints.
+		pool, err = rpcpool.New(rpcpool.Config{
+			Endpoints: append([]string{cfg.Endpoint}, cfg.Fallbacks...),
+			Timeout:   cfg.Timeout,
+			RateLimit: cfg.RateLimit,
+			Logger:    logger,
+		})
+		if err != nil {
+			return nil, err
+		}
+		rpcClient, err = rpc.DialOptions(ctx, pool.Primary(), rpc.WithHTTPClient(&http.Client{Transport: pool}))
+	} else {
+		if len(cfg.Fallbacks) > 0 {
+			return nil, fmt.Errorf("fallback endpoints need an HTTP(S) primary endpoint, not %q", cfg.Endpoint)
+		}
+		rpcClient, err = rpc.DialContext(ctx, cfg.Endpoint)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RPC endpoint: %w", err)
 	}
@@ -89,6 +119,7 @@ func NewClient(cfg *Config) (*Client, error) {
 	client := &Client{
 		ethClient: ethClient,
 		rpcClient: rpcClient,
+		pool:      pool,
 		endpoint:  cfg.Endpoint,
 		logger:    logger,
 	}
@@ -122,6 +153,9 @@ func (c *Client) Close() {
 func (c *Client) EthClient() *ethclient.Client {
 	return c.ethClient
 }
+
+// Pool returns the endpoint pool, or nil for a non-HTTP endpoint.
+func (c *Client) Pool() *rpcpool.Pool { return c.pool }
 
 // RPCClient returns the underlying rpc.Client
 func (c *Client) RPCClient() *rpc.Client {

@@ -43,6 +43,12 @@ func TestLiveHeadLatency(t *testing.T) {
 	cfg.API.Enabled = false
 	cfg.Indexer.StartHeight = head
 	cfg.Indexer.Finality = os.Getenv("INDEXER_FINALITY") // empty: head
+	cfg.RPC.WSEndpoint = os.Getenv("INDEXER_LIVE_WS")    // empty: polling only
+	if v := os.Getenv("INDEXER_LIVE_POLL"); v != "" {
+		d, err := time.ParseDuration(v)
+		require.NoError(t, err)
+		cfg.Indexer.PollInterval = d
+	}
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
 
@@ -65,6 +71,7 @@ func TestLiveHeadLatency(t *testing.T) {
 	go watch(func() (uint64, error) { return app.storage.GetLatestHeight(ctx) }, indexed, time.Millisecond)
 
 	runCtx, stop := context.WithTimeout(ctx, 30*time.Second)
+	app.followHeads(runCtx)
 	_ = app.fetcher.Run(runCtx)
 	stop()
 	cancel()
@@ -90,7 +97,7 @@ func TestLiveHeadLatency(t *testing.T) {
 	require.NotEmpty(t, lat, "the node produced no blocks")
 	sort.Slice(lat, func(i, j int) bool { return lat[i] < lat[j] })
 	p95 := lat[len(lat)*95/100]
-	t.Logf("finality %q poll %v: %d blocks, p50 %v p95 %v max %v", cfg.Indexer.Finality, cfg.Indexer.PollInterval, len(lat),
+	t.Logf("finality %q poll %v ws %q: %d blocks, p50 %v p95 %v max %v", cfg.Indexer.Finality, cfg.Indexer.PollInterval, cfg.RPC.WSEndpoint, len(lat),
 		lat[len(lat)/2].Round(time.Millisecond), p95.Round(time.Millisecond), lat[len(lat)-1].Round(time.Millisecond))
 	if cfg.Indexer.Finality == "" || cfg.Indexer.Finality == "head" {
 		// Other policies wait for confirmation by design and are only measured.
