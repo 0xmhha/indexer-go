@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -88,25 +89,15 @@ func (s *Schema) resolveSetCodeAuthorizationsByTarget(p graphql.ResolveParams) (
 
 	target := common.HexToAddress(targetStr)
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	setCodeReader := s.storage
 
-	records, err := setCodeReader.GetSetCodeAuthorizationsByTarget(ctx, target, limit, offset)
+	records, next, err := setCodeReader.GetSetCodeAuthorizationsByTarget(ctx, target, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get SetCode authorizations by target",
 			zap.String("target", targetStr),
 			zap.Error(err))
@@ -121,12 +112,7 @@ func (s *Schema) resolveSetCodeAuthorizationsByTarget(p graphql.ResolveParams) (
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(records), // Note: This is the count of returned records, not total
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(records) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 
@@ -141,25 +127,15 @@ func (s *Schema) resolveSetCodeAuthorizationsByAuthority(p graphql.ResolveParams
 
 	authority := common.HexToAddress(authorityStr)
 
-	// Get pagination parameters
-	limit := constants.DefaultPaginationLimit
-	offset := 0
-	if pagination, ok := p.Args["pagination"].(map[string]interface{}); ok {
-		if l, ok := pagination["limit"].(int); ok && l > 0 {
-			limit = l
-			if limit > constants.DefaultMaxPaginationLimit {
-				limit = constants.DefaultMaxPaginationLimit
-			}
-		}
-		if o, ok := pagination["offset"].(int); ok && o >= 0 {
-			offset = o
-		}
-	}
+	pagination := parsePaginationParams(p, constants.DefaultMaxPaginationLimit)
 
 	setCodeReader := s.storage
 
-	records, err := setCodeReader.GetSetCodeAuthorizationsByAuthority(ctx, authority, limit, offset)
+	records, next, err := setCodeReader.GetSetCodeAuthorizationsByAuthority(ctx, authority, pagination.page())
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, fmt.Errorf("invalid pagination cursor")
+		}
 		s.logger.Error("failed to get SetCode authorizations by authority",
 			zap.String("authority", authorityStr),
 			zap.Error(err))
@@ -174,12 +150,7 @@ func (s *Schema) resolveSetCodeAuthorizationsByAuthority(p graphql.ResolveParams
 	return map[string]interface{}{
 		"nodes":      nodes,
 		"totalCount": len(records),
-		"pageInfo": map[string]interface{}{
-			"hasNextPage":     len(records) == limit,
-			"hasPreviousPage": offset > 0,
-			"startCursor":     nil,
-			"endCursor":       nil,
-		},
+		"pageInfo":   cursorPageInfo(pagination, next),
 	}, nil
 }
 

@@ -3,6 +3,7 @@ package jsonrpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -87,6 +88,7 @@ func (h *Handler) getSetCodeAuthorizationsByTarget(ctx context.Context, params j
 		Target string `json:"target"`
 		Limit  int    `json:"limit"`
 		Offset int    `json:"offset"`
+		After  string `json:"after"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -111,8 +113,11 @@ func (h *Handler) getSetCodeAuthorizationsByTarget(ctx context.Context, params j
 
 	setCodeReader := h.storage
 
-	records, err := setCodeReader.GetSetCodeAuthorizationsByTarget(ctx, target, limit, offset)
+	records, next, err := setCodeReader.GetSetCodeAuthorizationsByTarget(ctx, target, port.Page{After: p.After, Limit: limit, Offset: offset})
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get SetCode authorizations by target",
 			zap.String("target", p.Target),
 			zap.Error(err))
@@ -129,6 +134,7 @@ func (h *Handler) getSetCodeAuthorizationsByTarget(ctx context.Context, params j
 		"count":          len(result),
 		"limit":          limit,
 		"offset":         offset,
+		"nextCursor":     next,
 	}, nil
 }
 
@@ -138,6 +144,7 @@ func (h *Handler) getSetCodeAuthorizationsByAuthority(ctx context.Context, param
 		Authority string `json:"authority"`
 		Limit     int    `json:"limit"`
 		Offset    int    `json:"offset"`
+		After     string `json:"after"`
 	}
 
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -162,8 +169,11 @@ func (h *Handler) getSetCodeAuthorizationsByAuthority(ctx context.Context, param
 
 	setCodeReader := h.storage
 
-	records, err := setCodeReader.GetSetCodeAuthorizationsByAuthority(ctx, authority, limit, offset)
+	records, next, err := setCodeReader.GetSetCodeAuthorizationsByAuthority(ctx, authority, port.Page{After: p.After, Limit: limit, Offset: offset})
 	if err != nil {
+		if errors.Is(err, port.ErrInvalidCursor) {
+			return nil, NewError(InvalidParams, "invalid pagination cursor", nil)
+		}
 		h.logger.Error("failed to get SetCode authorizations by authority",
 			zap.String("authority", p.Authority),
 			zap.Error(err))
@@ -180,6 +190,7 @@ func (h *Handler) getSetCodeAuthorizationsByAuthority(ctx context.Context, param
 		"count":          len(result),
 		"limit":          limit,
 		"offset":         offset,
+		"nextCursor":     next,
 	}, nil
 }
 

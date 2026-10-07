@@ -48,14 +48,14 @@ func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, t
 	return []*port.SetCodeAuthorizationRecord{}, nil
 }
 
-func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
+func (m *mockSetCodeStorage) offsetGetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	if m.authsByTarget != nil {
 		return m.authsByTarget, nil
 	}
 	return []*port.SetCodeAuthorizationRecord{}, nil
 }
 
-func (m *mockSetCodeStorage) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
+func (m *mockSetCodeStorage) offsetGetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	if m.authsByAuthority != nil {
 		return m.authsByAuthority, nil
 	}

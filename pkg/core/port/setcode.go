@@ -68,13 +68,17 @@ type SetCodeIndexReader interface {
 	// Returns empty slice if no authorizations found.
 	GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*SetCodeAuthorizationRecord, error)
 
-	// GetSetCodeAuthorizationsByTarget retrieves authorizations where address is the target.
-	// Results are ordered by block number descending (newest first).
-	GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*SetCodeAuthorizationRecord, error)
+	// GetSetCodeAuthorizationsByTarget returns one page of the authorizations
+	// where address is the target, newest first (by block, transaction index
+	// and authorization index, descending), and the cursor of the next page
+	// (see Page).
+	GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, page Page) ([]*SetCodeAuthorizationRecord, string, error)
 
-	// GetSetCodeAuthorizationsByAuthority retrieves authorizations where address is the authority (signer).
-	// Results are ordered by block number descending (newest first).
-	GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*SetCodeAuthorizationRecord, error)
+	// GetSetCodeAuthorizationsByAuthority returns one page of the
+	// authorizations where address is the authority (signer), newest first
+	// (by block, transaction index and authorization index, descending), and
+	// the cursor of the next page (see Page).
+	GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, page Page) ([]*SetCodeAuthorizationRecord, string, error)
 
 	// GetSetCodeAuthorizationsByBlock retrieves all authorizations in a specific block.
 	GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*SetCodeAuthorizationRecord, error)

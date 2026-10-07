@@ -44,12 +44,14 @@ func testSetCodeIndex(t *testing.T, newStore NewStore) {
 		byBlock, err := s.GetSetCodeAuthorizationsByBlock(ctx, 1)
 		require.NoError(t, err)
 		assert.Empty(t, byBlock)
-		byTarget, err := s.GetSetCodeAuthorizationsByTarget(ctx, setCodeTarget, 10, 0)
+		byTarget, next, err := s.GetSetCodeAuthorizationsByTarget(ctx, setCodeTarget, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, byTarget)
-		byAuthority, err := s.GetSetCodeAuthorizationsByAuthority(ctx, setCodeAuthority, 10, 0)
+		assert.Empty(t, next)
+		byAuthority, next, err := s.GetSetCodeAuthorizationsByAuthority(ctx, setCodeAuthority, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, byAuthority)
+		assert.Empty(t, next)
 		recent, err := s.GetRecentSetCodeAuthorizations(ctx, 10)
 		require.NoError(t, err)
 		assert.Empty(t, recent)
@@ -100,10 +102,10 @@ func testSetCodeIndex(t *testing.T, newStore NewStore) {
 			},
 			"ByBlock": func() ([]*port.SetCodeAuthorizationRecord, error) { return s.GetSetCodeAuthorizationsByBlock(ctx, 7) },
 			"ByTarget": func() ([]*port.SetCodeAuthorizationRecord, error) {
-				return s.GetSetCodeAuthorizationsByTarget(ctx, setCodeTarget, 10, 0)
+				return setCodeItems(s.GetSetCodeAuthorizationsByTarget(ctx, setCodeTarget, port.FirstPage(10)))
 			},
 			"ByAuthority": func() ([]*port.SetCodeAuthorizationRecord, error) {
-				return s.GetSetCodeAuthorizationsByAuthority(ctx, setCodeAuthority, 10, 0)
+				return setCodeItems(s.GetSetCodeAuthorizationsByAuthority(ctx, setCodeAuthority, port.FirstPage(10)))
 			},
 			"Recent": func() ([]*port.SetCodeAuthorizationRecord, error) { return s.GetRecentSetCodeAuthorizations(ctx, 10) },
 		} {
@@ -116,10 +118,10 @@ func testSetCodeIndex(t *testing.T, newStore NewStore) {
 		other, err := s.GetSetCodeAuthorizationsByBlock(ctx, 8)
 		require.NoError(t, err)
 		assert.Empty(t, other, "another block")
-		other, err = s.GetSetCodeAuthorizationsByTarget(ctx, setCodeAuthority, 10, 0)
+		other, _, err = s.GetSetCodeAuthorizationsByTarget(ctx, setCodeAuthority, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, other, "the authority is not a target")
-		other, err = s.GetSetCodeAuthorizationsByAuthority(ctx, setCodeTarget, 10, 0)
+		other, _, err = s.GetSetCodeAuthorizationsByAuthority(ctx, setCodeTarget, port.FirstPage(10))
 		require.NoError(t, err)
 		assert.Empty(t, other, "the target is not an authority")
 	})
@@ -170,38 +172,49 @@ func testSetCodeIndex(t *testing.T, newStore NewStore) {
 			require.NoError(t, s.SaveSetCodeAuthorization(ctx, setCodeRecord(b, 0, 0, setCodeAuthority, setCodeTarget)))
 		}
 
-		pages := map[string]func(limit, offset int) ([]*port.SetCodeAuthorizationRecord, error){
-			"ByTarget": func(limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
-				return s.GetSetCodeAuthorizationsByTarget(ctx, setCodeTarget, limit, offset)
-			},
-			"ByAuthority": func(limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
-				return s.GetSetCodeAuthorizationsByAuthority(ctx, setCodeAuthority, limit, offset)
-			},
+		// Block 3 holds two transactions, the second with two
+		// authorizations: the order within a block is by transaction index,
+		// then authorization index, both newest (highest) first.
+		tied := []*port.SetCodeAuthorizationRecord{
+			setCodeRecord(3, 1, 0, setCodeAuthority, setCodeTarget),
+			setCodeRecord(3, 1, 1, setCodeAuthority, setCodeTarget),
 		}
-		for name, page := range pages {
-			got, err := page(2, 0)
-			require.NoError(t, err, name)
-			assert.Equal(t, []uint64{5, 4}, setCodeBlocks(got), "%s: newest first", name)
-			got, err = page(2, 2)
-			require.NoError(t, err, name)
-			assert.Equal(t, []uint64{3, 2}, setCodeBlocks(got), "%s: second page", name)
-			got, err = page(2, 4)
-			require.NoError(t, err, name)
-			assert.Equal(t, []uint64{1}, setCodeBlocks(got), "%s: last page is short", name)
-			got, err = page(2, 5)
-			require.NoError(t, err, name)
-			assert.Empty(t, got, "%s: offset at the end", name)
-			got, err = page(2, 50)
-			require.NoError(t, err, name)
-			assert.Empty(t, got, "%s: offset past the end", name)
+		require.NoError(t, s.SaveSetCodeAuthorizations(ctx, tied))
+		// Another target and authority with two authorizations each, for
+		// cursors from another list.
+		require.NoError(t, s.SaveSetCodeAuthorizations(ctx, []*port.SetCodeAuthorizationRecord{
+			setCodeRecord(6, 0, 0, setCodeOther, setCodeTarget2),
+			setCodeRecord(7, 0, 0, setCodeOther, setCodeTarget2),
+		}))
+		want := []setCodePos{{5, 0, 0}, {4, 0, 0}, {3, 1, 1}, {3, 1, 0}, {3, 0, 0}, {2, 0, 0}, {1, 0, 0}}
+
+		byTarget := func(addr common.Address) listPage[*port.SetCodeAuthorizationRecord] {
+			return func(page port.Page) ([]*port.SetCodeAuthorizationRecord, string, error) {
+				return s.GetSetCodeAuthorizationsByTarget(ctx, addr, page)
+			}
 		}
+		byAuthority := func(addr common.Address) listPage[*port.SetCodeAuthorizationRecord] {
+			return func(page port.Page) ([]*port.SetCodeAuthorizationRecord, string, error) {
+				return s.GetSetCodeAuthorizationsByAuthority(ctx, addr, page)
+			}
+		}
+		t.Run("ByTarget", func(t *testing.T) {
+			checkPaging(t, setCodeWant(want), setCodePosOf, byTarget(setCodeTarget))
+			checkCursorFromOtherList(t, byTarget(setCodeTarget), byTarget(setCodeTarget2))
+			checkCursorFromOtherList(t, byTarget(setCodeTarget2), byTarget(setCodeTarget))
+		})
+		t.Run("ByAuthority", func(t *testing.T) {
+			checkPaging(t, setCodeWant(want), setCodePosOf, byAuthority(setCodeAuthority))
+			checkCursorFromOtherList(t, byAuthority(setCodeAuthority), byAuthority(setCodeOther))
+			checkCursorFromOtherList(t, byAuthority(setCodeOther), byAuthority(setCodeAuthority))
+		})
 
 		recent, err := s.GetRecentSetCodeAuthorizations(ctx, 3)
 		require.NoError(t, err)
-		assert.Equal(t, []uint64{5, 4, 3}, setCodeBlocks(recent), "recent: newest first, bounded by limit")
+		assert.Equal(t, []uint64{7, 6, 5}, setCodeBlocks(recent), "recent: newest first, bounded by limit")
 		recent, err = s.GetRecentSetCodeAuthorizations(ctx, 50)
 		require.NoError(t, err)
-		assert.Equal(t, []uint64{5, 4, 3, 2, 1}, setCodeBlocks(recent))
+		assert.Equal(t, []uint64{7, 6, 5, 4, 3, 3, 3, 2, 1}, setCodeBlocks(recent))
 	})
 
 	t.Run("CountsMatchRecords", func(t *testing.T) {
@@ -230,11 +243,11 @@ func testSetCodeIndex(t *testing.T, newStore NewStore) {
 			if c.target {
 				n, err = s.GetSetCodeAuthorizationsCountByTarget(ctx, c.addr)
 				require.NoError(t, err)
-				list, err = s.GetSetCodeAuthorizationsByTarget(ctx, c.addr, 100, 0)
+				list, _, err = s.GetSetCodeAuthorizationsByTarget(ctx, c.addr, port.FirstPage(100))
 			} else {
 				n, err = s.GetSetCodeAuthorizationsCountByAuthority(ctx, c.addr)
 				require.NoError(t, err)
-				list, err = s.GetSetCodeAuthorizationsByAuthority(ctx, c.addr, 100, 0)
+				list, _, err = s.GetSetCodeAuthorizationsByAuthority(ctx, c.addr, port.FirstPage(100))
 			}
 			require.NoError(t, err)
 			assert.Equal(t, c.want, n, "count of %s (target=%v)", c.addr.Hex(), c.target)
@@ -287,8 +300,8 @@ func testSetCodeIndex(t *testing.T, newStore NewStore) {
 		r := setCodeRecord(9, 0, 256, setCodeAuthority, setCodeTarget)
 		require.NoError(t, s.SaveSetCodeAuthorization(ctx, r))
 		for name, list := range map[string][]*port.SetCodeAuthorizationRecord{
-			"ByTarget":    setCodeMust(s.GetSetCodeAuthorizationsByTarget(ctx, setCodeTarget, 10, 0)),
-			"ByAuthority": setCodeMust(s.GetSetCodeAuthorizationsByAuthority(ctx, setCodeAuthority, 10, 0)),
+			"ByTarget":    setCodeMust(setCodeItems(s.GetSetCodeAuthorizationsByTarget(ctx, setCodeTarget, port.FirstPage(10)))),
+			"ByAuthority": setCodeMust(setCodeItems(s.GetSetCodeAuthorizationsByAuthority(ctx, setCodeAuthority, port.FirstPage(10)))),
 			"ByBlock":     setCodeMust(s.GetSetCodeAuthorizationsByBlock(ctx, 9)),
 			"Recent":      setCodeMust(s.GetRecentSetCodeAuthorizations(ctx, 10)),
 		} {
@@ -437,4 +450,31 @@ func setCodeMust(records []*port.SetCodeAuthorizationRecord, err error) []*port.
 		return nil
 	}
 	return records
+}
+
+// setCodeItems drops the cursor of a page.
+func setCodeItems(records []*port.SetCodeAuthorizationRecord, _ string, err error) ([]*port.SetCodeAuthorizationRecord, error) {
+	return records, err
+}
+
+// setCodePos is the position of an authorization: block, transaction index
+// and authorization index.
+type setCodePos struct {
+	Block, TxIndex uint64
+	AuthIndex      int
+}
+
+// setCodePosOf returns the position of an authorization.
+func setCodePosOf(r *port.SetCodeAuthorizationRecord) setCodePos {
+	return setCodePos{r.BlockNumber, r.TxIndex, r.AuthIndex}
+}
+
+// setCodeWant returns the fixture authorizations at positions (authority
+// setCodeAuthority, target setCodeTarget), for comparison by position.
+func setCodeWant(positions []setCodePos) []*port.SetCodeAuthorizationRecord {
+	out := make([]*port.SetCodeAuthorizationRecord, len(positions))
+	for i, p := range positions {
+		out[i] = setCodeRecord(p.Block, p.TxIndex, p.AuthIndex, setCodeAuthority, setCodeTarget)
+	}
+	return out
 }

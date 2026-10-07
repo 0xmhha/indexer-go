@@ -44,154 +44,47 @@ func (s *PebbleStorage) GetInstalledModule(ctx context.Context, account, module 
 	return &record, nil
 }
 
-// GetModulesByAccount retrieves all modules installed on a specific account.
-// Results are ordered by block number descending (newest first).
-func (s *PebbleStorage) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*port.InstalledModule, error) {
-	if s.closed.Load() {
-		return nil, port.ErrClosed
-	}
-
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	prefix := ModuleAccountIndexKeyPrefix(account)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	// Collect all module references (reverse order for newest first)
-	type moduleRef struct {
-		account common.Address
-		module  common.Address
-	}
-	var refs []moduleRef
-	for iter.Last(); iter.Valid(); iter.Prev() {
-		value := iter.Value()
-		if len(value) >= 40 {
-			var ref moduleRef
-			ref.account = common.BytesToAddress(value[:20])
-			ref.module = common.BytesToAddress(value[20:40])
-			refs = append(refs, ref)
-		}
-	}
-
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	// Apply pagination
-	start := offset
-	if start >= len(refs) {
-		return []*port.InstalledModule{}, nil
-	}
-	end := start + limit
-	if end > len(refs) {
-		end = len(refs)
-	}
-
-	// Fetch full records
-	records := make([]*port.InstalledModule, 0, end-start)
-	for _, ref := range refs[start:end] {
-		record, err := s.GetInstalledModule(ctx, ref.account, ref.module)
-		if err != nil {
-			s.logger.Warn("failed to get installed module",
-				zap.String("account", ref.account.Hex()),
-				zap.String("module", ref.module.Hex()),
-				zap.Error(err))
-			continue
-		}
-		records = append(records, record)
-	}
-
-	return records, nil
+// GetModulesByAccount returns one page of the modules installed on an
+// account, newest install first.
+func (s *PebbleStorage) GetModulesByAccount(ctx context.Context, account common.Address, page port.Page) ([]*port.InstalledModule, string, error) {
+	return s.modulePage(ctx, ModuleAccountIndexKeyPrefix(account), page)
 }
 
-// GetModulesByType retrieves modules by their type across all accounts.
-// Results are ordered by block number descending (newest first).
-func (s *PebbleStorage) GetModulesByType(ctx context.Context, moduleType port.ModuleType, limit, offset int) ([]*port.InstalledModule, error) {
+// GetModulesByType returns one page of the modules of a type across all
+// accounts, newest install first.
+func (s *PebbleStorage) GetModulesByType(ctx context.Context, moduleType port.ModuleType, page port.Page) ([]*port.InstalledModule, string, error) {
+	return s.modulePage(ctx, ModuleTypeIndexKeyPrefix(moduleType), page)
+}
+
+// modulePage reads one page of a module index (keys ordered by install
+// block) in reverse, so the newest install comes first, and loads the
+// records it refers to. The cursor is the index key of the last entry.
+func (s *PebbleStorage) modulePage(ctx context.Context, prefix []byte, page port.Page) ([]*port.InstalledModule, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
-
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	prefix := ModuleTypeIndexKeyPrefix(moduleType)
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
+	limit := min(pageLimit(page, constants.DefaultPaginationLimit), constants.DefaultMaxPaginationLimit)
+	isRef := func(_, value []byte) bool { return len(value) >= 2*common.AddressLength }
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), true, page, limit, isRef)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	// Collect all module references (reverse order for newest first)
-	type moduleRef struct {
-		account common.Address
-		module  common.Address
-	}
-	var refs []moduleRef
-	for iter.Last(); iter.Valid(); iter.Prev() {
-		value := iter.Value()
-		if len(value) >= 40 {
-			var ref moduleRef
-			ref.account = common.BytesToAddress(value[:20])
-			ref.module = common.BytesToAddress(value[20:40])
-			refs = append(refs, ref)
-		}
+		return nil, "", err
 	}
 
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
-	}
-
-	// Apply pagination
-	start := offset
-	if start >= len(refs) {
-		return []*port.InstalledModule{}, nil
-	}
-	end := start + limit
-	if end > len(refs) {
-		end = len(refs)
-	}
-
-	// Fetch full records
-	records := make([]*port.InstalledModule, 0, end-start)
-	for _, ref := range refs[start:end] {
-		record, err := s.GetInstalledModule(ctx, ref.account, ref.module)
+	records := make([]*port.InstalledModule, 0, len(entries))
+	for _, e := range entries {
+		account := common.BytesToAddress(e.Value[:common.AddressLength])
+		module := common.BytesToAddress(e.Value[common.AddressLength : 2*common.AddressLength])
+		record, err := s.GetInstalledModule(ctx, account, module)
 		if err != nil {
 			s.logger.Warn("failed to get installed module",
-				zap.String("account", ref.account.Hex()),
-				zap.String("module", ref.module.Hex()),
+				zap.String("account", account.Hex()),
+				zap.String("module", module.Hex()),
 				zap.Error(err))
 			continue
 		}
 		records = append(records, record)
 	}
-
-	return records, nil
+	return records, next, nil
 }
 
 // GetModuleStats retrieves aggregate statistics for a module contract.
@@ -359,60 +252,38 @@ func (s *PebbleStorage) GetModuleEventCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// ListModuleStats retrieves module stats with pagination.
-func (s *PebbleStorage) ListModuleStats(ctx context.Context, limit, offset int) ([]*port.ModuleStats, error) {
+// ListModuleStats returns one page of the module stats in key order.
+// Entries that do not decode are skipped and are not items of the list.
+func (s *PebbleStorage) ListModuleStats(ctx context.Context, page port.Page) ([]*port.ModuleStats, string, error) {
 	if s.closed.Load() {
-		return nil, port.ErrClosed
+		return nil, "", port.ErrClosed
 	}
-
-	if limit <= 0 {
-		limit = constants.DefaultPaginationLimit
-	}
-	if limit > constants.DefaultMaxPaginationLimit {
-		limit = constants.DefaultMaxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
+	limit := min(pageLimit(page, constants.DefaultPaginationLimit), constants.DefaultMaxPaginationLimit)
 	prefix := ModuleStatsKeyPrefix()
-
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	var allStats []*port.ModuleStats
-	for iter.First(); iter.Valid(); iter.Next() {
+	decodes := func(key, value []byte) bool {
 		var stats port.ModuleStats
-		if err := json.Unmarshal(iter.Value(), &stats); err != nil {
+		if err := json.Unmarshal(value, &stats); err != nil {
 			s.logger.Warn("failed to unmarshal module stats",
-				zap.String("key", string(iter.Key())),
+				zap.String("key", string(key)),
 				zap.Error(err))
-			continue
+			return false
 		}
-		allStats = append(allStats, &stats)
+		return true
+	}
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), false, page, limit, decodes)
+	if err != nil {
+		return nil, "", err
 	}
 
-	if err := iter.Error(); err != nil {
-		return nil, fmt.Errorf("iterator error: %w", err)
+	statsList := make([]*port.ModuleStats, 0, len(entries))
+	for _, e := range entries {
+		var stats port.ModuleStats
+		if err := json.Unmarshal(e.Value, &stats); err != nil {
+			return nil, "", fmt.Errorf("failed to unmarshal module stats: %w", err)
+		}
+		statsList = append(statsList, &stats)
 	}
-
-	// Apply pagination
-	start := offset
-	if start >= len(allStats) {
-		return []*port.ModuleStats{}, nil
-	}
-	end := start + limit
-	if end > len(allStats) {
-		end = len(allStats)
-	}
-
-	return allStats[start:end], nil
+	return statsList, next, nil
 }
 
 // ========== Module Write Operations ==========

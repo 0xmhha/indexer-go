@@ -481,10 +481,10 @@ func (m *mockStorage) SaveSmartAccount(ctx context.Context, account *userop.Smar
 func (m *mockStorage) GetInstalledModule(ctx context.Context, account, module common.Address) (*port.InstalledModule, error) {
 	return nil, port.ErrNotFound
 }
-func (m *mockStorage) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*port.InstalledModule, error) {
+func (m *mockStorage) offsetGetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*port.InstalledModule, error) {
 	return nil, nil
 }
-func (m *mockStorage) GetModulesByType(ctx context.Context, moduleType port.ModuleType, limit, offset int) ([]*port.InstalledModule, error) {
+func (m *mockStorage) offsetGetModulesByType(ctx context.Context, moduleType port.ModuleType, limit, offset int) ([]*port.InstalledModule, error) {
 	return nil, nil
 }
 func (m *mockStorage) GetModuleStats(ctx context.Context, module common.Address) (*port.ModuleStats, error) {
@@ -499,7 +499,7 @@ func (m *mockStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([]*
 func (m *mockStorage) GetModuleEventCount(ctx context.Context) (int, error) {
 	return 0, nil
 }
-func (m *mockStorage) ListModuleStats(ctx context.Context, limit, offset int) ([]*port.ModuleStats, error) {
+func (m *mockStorage) offsetListModuleStats(ctx context.Context, limit, offset int) ([]*port.ModuleStats, error) {
 	return nil, nil
 }
 
@@ -833,10 +833,10 @@ func (m *mockStorageWithErrors) GetSetCodeAuthorization(ctx context.Context, txH
 func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
+func (m *mockStorageWithErrors) offsetGetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
+func (m *mockStorageWithErrors) offsetGetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, limit, offset int) ([]*port.SetCodeAuthorizationRecord, error) {
 	return nil, fmt.Errorf("storage error")
 }
 func (m *mockStorageWithErrors) GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*port.SetCodeAuthorizationRecord, error) {
@@ -952,10 +952,10 @@ func (m *mockStorageWithErrors) SaveSmartAccount(ctx context.Context, account *u
 func (m *mockStorageWithErrors) GetInstalledModule(ctx context.Context, account, module common.Address) (*port.InstalledModule, error) {
 	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*port.InstalledModule, error) {
+func (m *mockStorageWithErrors) offsetGetModulesByAccount(ctx context.Context, account common.Address, limit, offset int) ([]*port.InstalledModule, error) {
 	return nil, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) GetModulesByType(ctx context.Context, moduleType port.ModuleType, limit, offset int) ([]*port.InstalledModule, error) {
+func (m *mockStorageWithErrors) offsetGetModulesByType(ctx context.Context, moduleType port.ModuleType, limit, offset int) ([]*port.InstalledModule, error) {
 	return nil, fmt.Errorf("storage error")
 }
 func (m *mockStorageWithErrors) GetModuleStats(ctx context.Context, module common.Address) (*port.ModuleStats, error) {
@@ -970,7 +970,7 @@ func (m *mockStorageWithErrors) GetRecentModuleEvents(ctx context.Context, limit
 func (m *mockStorageWithErrors) GetModuleEventCount(ctx context.Context) (int, error) {
 	return 0, fmt.Errorf("storage error")
 }
-func (m *mockStorageWithErrors) ListModuleStats(ctx context.Context, limit, offset int) ([]*port.ModuleStats, error) {
+func (m *mockStorageWithErrors) offsetListModuleStats(ctx context.Context, limit, offset int) ([]*port.ModuleStats, error) {
 	return nil, fmt.Errorf("storage error")
 }
 
