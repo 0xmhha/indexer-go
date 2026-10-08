@@ -774,3 +774,64 @@ func TestNodeRole(t *testing.T) {
 		t.Error("unknown role: expected an error")
 	}
 }
+
+// TestAPISecurity: the API's rate limit and GraphQL bounds are on by
+// default, a file or the environment can turn them off, and trusted
+// proxies must be addresses or CIDR ranges (refactoring plan R4-3).
+func TestAPISecurity(t *testing.T) {
+	cfg := NewConfig()
+	cfg.RPC.Endpoint = "http://localhost:8545"
+	cfg.Database.Path = "/tmp/indexer"
+	if !cfg.API.RateLimit.Enabled || cfg.API.RateLimit.PerSecond <= 0 || cfg.API.RateLimit.Burst <= 0 {
+		t.Errorf("rate limit is not on by default: %+v", cfg.API.RateLimit)
+	}
+	if cfg.API.GraphQL.MaxDepth <= 0 || cfg.API.GraphQL.MaxComplexity <= 0 {
+		t.Errorf("GraphQL bounds are not on by default: %+v", cfg.API.GraphQL)
+	}
+	if len(cfg.API.TrustedProxies) != 0 {
+		t.Errorf("no proxy is trusted by default: %v", cfg.API.TrustedProxies)
+	}
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	yml := "api:\n  trusted_proxies: [\"10.0.0.0/8\", \"192.0.2.1\"]\n  rate_limit:\n    enabled: false\n  graphql:\n    max_depth: 0\n    max_complexity: 300\n"
+	if err := os.WriteFile(path, []byte(yml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.LoadFromFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.API.RateLimit.Enabled || cfg.API.GraphQL.MaxDepth != 0 || cfg.API.GraphQL.MaxComplexity != 300 || len(cfg.API.TrustedProxies) != 2 {
+		t.Errorf("file settings not applied: %+v", cfg.API)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("valid settings: %v", err)
+	}
+
+	t.Setenv("INDEXER_API_TRUSTED_PROXIES", "127.0.0.1, ::1")
+	t.Setenv("INDEXER_API_RATE_LIMIT_ENABLED", "true")
+	t.Setenv("INDEXER_API_RATE_LIMIT_PER_SECOND", "5")
+	t.Setenv("INDEXER_API_RATE_LIMIT_BURST", "10")
+	t.Setenv("INDEXER_API_GRAPHQL_MAX_DEPTH", "8")
+	t.Setenv("INDEXER_API_GRAPHQL_MAX_COMPLEXITY", "900")
+	if err := cfg.LoadFromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	want := APIRateLimitConfig{Enabled: true, PerSecond: 5, Burst: 10}
+	if cfg.API.RateLimit != want || cfg.API.GraphQL != (APIGraphQLConfig{MaxDepth: 8, MaxComplexity: 900}) ||
+		strings.Join(cfg.API.TrustedProxies, ",") != "127.0.0.1,::1" {
+		t.Errorf("environment not applied: %+v", cfg.API)
+	}
+
+	for name, mutate := range map[string]func(*APIConfig){
+		"proxy host name": func(a *APIConfig) { a.TrustedProxies = []string{"proxy.local"} },
+		"zero rate":       func(a *APIConfig) { a.RateLimit.PerSecond = 0 },
+		"negative bound":  func(a *APIConfig) { a.GraphQL.MaxComplexity = -1 },
+	} {
+		bad := *cfg
+		bad.API.TrustedProxies = append([]string(nil), cfg.API.TrustedProxies...)
+		mutate(&bad.API)
+		if err := bad.Validate(); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}

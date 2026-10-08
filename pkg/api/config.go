@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
 )
 
 // Config holds API server configuration
@@ -28,8 +29,19 @@ type Config struct {
 	// EnableCORS enables CORS middleware
 	EnableCORS bool
 
-	// AllowedOrigins is a list of allowed CORS origins
+	// AllowedOrigins is a list of allowed CORS origins ("*" allows every
+	// origin). WebSocket upgrades check their Origin against it too.
 	AllowedOrigins []string
+
+	// TrustedProxies are the addresses and CIDR ranges of the reverse
+	// proxies whose X-Forwarded-For and X-Real-IP headers name the client.
+	// Without them the client is the connection's peer.
+	TrustedProxies []string
+
+	// GraphQLMaxDepth and GraphQLMaxComplexity bound GraphQL requests
+	// (0: no limit).
+	GraphQLMaxDepth      int
+	GraphQLMaxComplexity int
 
 	// MaxHeaderBytes is the maximum size of request headers
 	MaxHeaderBytes int
@@ -81,12 +93,11 @@ type Config struct {
 	// EnableRateLimit enables rate limiting middleware
 	EnableRateLimit bool
 
-	// RateLimitPerSecond is the number of requests allowed per second per IP
-	// Default: 1000 (generous for development/testing)
+	// RateLimitPerSecond is the number of requests allowed per second per
+	// client address
 	RateLimitPerSecond float64
 
 	// RateLimitBurst is the maximum burst size
-	// Default: 2000 (allows temporary spikes)
 	RateLimitBurst int
 
 	// EnableAPIKeyAuth enables API key authentication middleware
@@ -119,9 +130,11 @@ func DefaultConfig() *Config {
 		JSONRPCPath:              constants.DefaultJSONRPCPath,
 		WebSocketPath:            constants.DefaultWebSocketPath,
 		ShutdownTimeout:          constants.DefaultShutdownTimeout,
-		EnableRateLimit:          false, // Disabled by default for development
+		EnableRateLimit:          true,
 		RateLimitPerSecond:       constants.DefaultRateLimitPerSecond,
 		RateLimitBurst:           constants.DefaultRateLimitBurst,
+		GraphQLMaxDepth:          constants.DefaultGraphQLMaxDepth,
+		GraphQLMaxComplexity:     constants.DefaultGraphQLMaxComplexity,
 		EnableAPIKeyAuth:         false, // Disabled by default for development
 	}
 }
@@ -153,6 +166,16 @@ func (c *Config) Validate() error {
 	// At least one API must be enabled
 	if !c.EnableGraphQL && !c.EnableJSONRPC && !c.EnableWebSocket {
 		return errors.New("at least one API (GraphQL, JSON-RPC, or WebSocket) must be enabled")
+	}
+
+	if c.EnableRateLimit && (c.RateLimitPerSecond <= 0 || c.RateLimitBurst <= 0) {
+		return errors.New("rate limit per second and burst must be positive when rate limiting is enabled")
+	}
+	if c.GraphQLMaxDepth < 0 || c.GraphQLMaxComplexity < 0 {
+		return errors.New("GraphQL depth and complexity limits cannot be negative")
+	}
+	if _, err := apimiddleware.ParseTrustedProxies(c.TrustedProxies); err != nil {
+		return err
 	}
 
 	// Validate API key auth configuration

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"os"
 	"regexp"
 	"strconv"
@@ -171,12 +172,38 @@ type APIConfig struct {
 	EnableCORS               bool     `yaml:"enable_cors"`
 	AllowedOrigins           []string `yaml:"allowed_origins"`
 
+	// TrustedProxies are the reverse proxies (addresses or CIDR ranges)
+	// whose X-Forwarded-For and X-Real-IP headers name the client. The
+	// headers of any other peer are ignored: clients can write them.
+	TrustedProxies []string `yaml:"trusted_proxies"`
+	// RateLimit limits the requests of each client address.
+	RateLimit APIRateLimitConfig `yaml:"rate_limit"`
+	// GraphQL bounds what one GraphQL request may ask for.
+	GraphQL APIGraphQLConfig `yaml:"graphql"`
+
 	// SubscriptionEngine delivers GraphQL subscriptions through the
 	// subscription engine (refactoring plan R3-3): events encoded once per
 	// subscription kind, slow connections disconnected with the sequence to
 	// resubscribe from. false subscribes each client subscription to the
 	// event bus directly, as before.
 	SubscriptionEngine bool `yaml:"subscription_engine"`
+}
+
+// APIRateLimitConfig limits the API requests of each client address.
+type APIRateLimitConfig struct {
+	Enabled   bool    `yaml:"enabled"`
+	PerSecond float64 `yaml:"per_second"`
+	Burst     int     `yaml:"burst"`
+}
+
+// APIGraphQLConfig bounds GraphQL requests; a request over a bound is
+// refused before it runs. 0 turns a bound off.
+type APIGraphQLConfig struct {
+	// MaxDepth is the deepest field nesting allowed.
+	MaxDepth int `yaml:"max_depth"`
+	// MaxComplexity is the highest complexity allowed: every field counts
+	// 1, and the fields under a page count once per row asked for.
+	MaxComplexity int `yaml:"max_complexity"`
 }
 
 // MultiChainConfig holds configuration for multi-chain support
@@ -529,6 +556,17 @@ func NewConfig() *Config {
 	// The subscription engine is on unless a file or
 	// INDEXER_API_SUBSCRIPTION_ENGINE turns it off.
 	cfg.API.SubscriptionEngine = true
+	// Likewise the API's rate limit and GraphQL bounds are on unless a file
+	// or the environment turns them off (enabled: false, a bound of 0).
+	cfg.API.RateLimit = APIRateLimitConfig{
+		Enabled:   true,
+		PerSecond: constants.DefaultRateLimitPerSecond,
+		Burst:     constants.DefaultRateLimitBurst,
+	}
+	cfg.API.GraphQL = APIGraphQLConfig{
+		MaxDepth:      constants.DefaultGraphQLMaxDepth,
+		MaxComplexity: constants.DefaultGraphQLMaxComplexity,
+	}
 	return cfg
 }
 
@@ -973,6 +1011,50 @@ func (c *Config) LoadFromEnv() error {
 		}
 		c.API.AllowedOrigins = origins
 	}
+	if v := os.Getenv("INDEXER_API_TRUSTED_PROXIES"); v != "" {
+		var proxies []string
+		for _, p := range strings.Split(v, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				proxies = append(proxies, p)
+			}
+		}
+		c.API.TrustedProxies = proxies
+	}
+	if v := os.Getenv("INDEXER_API_RATE_LIMIT_ENABLED"); v != "" {
+		val, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_RATE_LIMIT_ENABLED: %w", err)
+		}
+		c.API.RateLimit.Enabled = val
+	}
+	if v := os.Getenv("INDEXER_API_RATE_LIMIT_PER_SECOND"); v != "" {
+		val, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_RATE_LIMIT_PER_SECOND: %w", err)
+		}
+		c.API.RateLimit.PerSecond = val
+	}
+	if v := os.Getenv("INDEXER_API_RATE_LIMIT_BURST"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_RATE_LIMIT_BURST: %w", err)
+		}
+		c.API.RateLimit.Burst = val
+	}
+	if v := os.Getenv("INDEXER_API_GRAPHQL_MAX_DEPTH"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_GRAPHQL_MAX_DEPTH: %w", err)
+		}
+		c.API.GraphQL.MaxDepth = val
+	}
+	if v := os.Getenv("INDEXER_API_GRAPHQL_MAX_COMPLEXITY"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_GRAPHQL_MAX_COMPLEXITY: %w", err)
+		}
+		c.API.GraphQL.MaxComplexity = val
+	}
 
 	// System contracts configuration
 	if enabled := os.Getenv("INDEXER_SYSTEM_CONTRACTS_ENABLED"); enabled != "" {
@@ -1261,6 +1343,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid database.driver %q, must be one of: %s, %s", c.Database.Driver, DriverPebble, DriverPostgres)
 	}
 
+	if err := c.API.validate(); err != nil {
+		return err
+	}
+
 	// Validate log configuration
 	validLogLevels := map[string]bool{
 		"debug": true,
@@ -1339,6 +1425,25 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("node.role %s is not supported in multi-chain mode yet; use %s", c.Node.Role, RoleAll)
 	}
 
+	return nil
+}
+
+// validate checks the API's security settings.
+func (a *APIConfig) validate() error {
+	for _, p := range a.TrustedProxies {
+		if _, err := netip.ParsePrefix(p); err == nil {
+			continue
+		}
+		if _, err := netip.ParseAddr(p); err != nil {
+			return fmt.Errorf("api.trusted_proxies: %q is neither an IP address nor a CIDR range", p)
+		}
+	}
+	if a.RateLimit.Enabled && (a.RateLimit.PerSecond <= 0 || a.RateLimit.Burst <= 0) {
+		return fmt.Errorf("api.rate_limit.per_second and burst must be positive (or set api.rate_limit.enabled: false)")
+	}
+	if a.GraphQL.MaxDepth < 0 || a.GraphQL.MaxComplexity < 0 {
+		return fmt.Errorf("api.graphql.max_depth and max_complexity cannot be negative (0 turns a bound off)")
+	}
 	return nil
 }
 

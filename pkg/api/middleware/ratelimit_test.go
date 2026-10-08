@@ -129,63 +129,34 @@ func TestRateLimitMiddleware(t *testing.T) {
 	}
 }
 
-func TestRateLimitMiddleware_XForwardedFor(t *testing.T) {
-	logger := zap.NewNop()
-
+// TestRateLimitMiddleware_IgnoresForwardingHeaders: a client cannot get a
+// fresh allowance by writing another X-Forwarded-For or X-Real-IP; the
+// limit keys on the connection's peer (ClientIP replaces it for trusted
+// proxies).
+func TestRateLimitMiddleware_IgnoresForwardingHeaders(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	rateLimited := RateLimit(1, 1, zap.NewNop())(handler)
 
-	rateLimited := RateLimit(1, 1, logger)(handler)
-
-	// Request with X-Forwarded-For header
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Forwarded-For", "203.0.113.195")
-	rec := httptest.NewRecorder()
-
-	rateLimited.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
+	headers := []struct{ name, value string }{
+		{"X-Forwarded-For", "203.0.113.1"},
+		{"X-Forwarded-For", "203.0.113.2"},
+		{"X-Real-IP", "198.51.100.178"},
 	}
-
-	// Second request with same X-Forwarded-For should be limited
-	req = httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Forwarded-For", "203.0.113.195")
-	rec = httptest.NewRecorder()
-
-	rateLimited.ServeHTTP(rec, req)
-	if rec.Code != http.StatusTooManyRequests {
-		t.Errorf("expected 429, got %d", rec.Code)
-	}
-}
-
-func TestRateLimitMiddleware_XRealIP(t *testing.T) {
-	logger := zap.NewNop()
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	rateLimited := RateLimit(1, 1, logger)(handler)
-
-	// Request with X-Real-IP header
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Real-IP", "198.51.100.178")
-	rec := httptest.NewRecorder()
-
-	rateLimited.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
-	}
-
-	// Second request with same X-Real-IP should be limited
-	req = httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Real-IP", "198.51.100.178")
-	rec = httptest.NewRecorder()
-
-	rateLimited.ServeHTTP(rec, req)
-	if rec.Code != http.StatusTooManyRequests {
-		t.Errorf("expected 429, got %d", rec.Code)
+	for i, h := range headers {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.RemoteAddr = "192.0.2.7:4000"
+		req.Header.Set(h.name, h.value)
+		rec := httptest.NewRecorder()
+		rateLimited.ServeHTTP(rec, req)
+		want := http.StatusTooManyRequests
+		if i == 0 {
+			want = http.StatusOK
+		}
+		if rec.Code != want {
+			t.Errorf("request %d (%s: %s): expected %d, got %d", i, h.name, h.value, want, rec.Code)
+		}
 	}
 }
 

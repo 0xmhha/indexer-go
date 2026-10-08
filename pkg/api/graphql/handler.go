@@ -20,6 +20,7 @@ type Handler struct {
 	schema  *Schema
 	handler *graphqlhandler.Handler
 	logger  *zap.Logger
+	limits  Limits
 }
 
 // HandlerOptions contains optional configuration for the GraphQL handler
@@ -30,6 +31,8 @@ type HandlerOptions struct {
 	// Stream is the outbox of the change stream, for the streamSequence
 	// query; nil when events are not kept.
 	Stream stream.Outbox
+	// Limits bound the depth and complexity of requests.
+	Limits Limits
 }
 
 // NewHandler creates a new GraphQL handler
@@ -87,15 +90,22 @@ func NewHandlerWithOptions(store port.QueryStore, logger *zap.Logger, opts *Hand
 		Playground: true,
 	})
 
-	return &Handler{
+	handler := &Handler{
 		schema:  schema,
 		handler: h,
 		logger:  logger,
-	}, nil
+	}
+	if opts != nil {
+		handler.limits = opts.Limits
+	}
+	return handler, nil
 }
 
 // ServeHTTP implements http.Handler
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.limits.enabled() && h.checkLimits(w, r) {
+		return
+	}
 	h.handler.ServeHTTP(w, r)
 }
 

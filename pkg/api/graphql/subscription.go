@@ -65,6 +65,13 @@ func (s *SubscriptionServer) SetOutbox(ob stream.Outbox) {
 	}
 }
 
+// SetCheckOrigin sets the check of the Origin header of upgrade requests
+// (api.allowed_origins); every origin is allowed until it is set. Call it
+// before serving.
+func (s *SubscriptionServer) SetCheckOrigin(check func(r *http.Request) bool) {
+	s.upgrader.CheckOrigin = check
+}
+
 // SetDirect selects the former delivery (true): a bus subscription per
 // client subscription. It is the switch back from the subscription engine
 // (api.subscription_engine: false). Connections opened before keep the
@@ -181,7 +188,7 @@ func NewSubscriptionServer(eventBus *events.EventBus, logger *zap.Logger, enable
 			WriteBufferSize: 1024,
 			Subprotocols:    []string{"graphql-transport-ws", "graphql-ws"}, // Support both protocols
 			CheckOrigin: func(r *http.Request) bool {
-				return true // Allow all origins for development
+				return true // until SetCheckOrigin
 			},
 		},
 	}
