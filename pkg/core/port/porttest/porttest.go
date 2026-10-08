@@ -55,6 +55,7 @@ var contracts = []contract{
 	{"ModuleIndex", false, implements[moduleStore], testModuleIndex},
 	{"Dex", false, implements[dexStore], testDex},
 	{"Aggregates", false, implements[aggStore], testAgg},
+	{"Records", false, implements[recordStore], testRecords},
 	{"Orphans", false, implements[orphanStore], testOrphans},
 	{"Outbox", false, implements[outboxStore], testOutbox},
 	{"FeatureState", false, implements[port.FeatureStateStore], testFeatureState},
@@ -138,6 +139,10 @@ type (
 	userOpStore interface {
 		port.UserOpIndexReader
 		port.UserOpIndexWriter
+	}
+	recordStore interface {
+		port.RecordReader
+		port.RecordWriter
 	}
 	aggStore interface {
 		port.AggReader
