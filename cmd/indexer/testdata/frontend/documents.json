@@ -1,0 +1,550 @@
+[
+  {
+    "file": "app/api/v1/token/[address]/route.ts",
+    "document": "\n  query GetTokenInfo($address: String!) {\n    # Get logs to count transfers (Transfer events)\n    logs(\n      filter: { address: $address }\n      pagination: { limit: 1 }\n    ) {\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "app/api/v1/token/[address]/transfers/route.ts",
+    "document": "\n  query GetTokenLogsRelay($address: String!, $limit: Int, $offset: Int) {\n    logs(\n      filter: { address: $address, topics: [\"\"] }\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        transactionHash\n        blockNumber\n        topics\n        data\n      }\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetUserOp($hash: String!) {\n    userOp(userOpHash: $hash) {\n      userOpHash\n      txHash\n      blockNumber\n      blockHash\n      txIndex\n      logIndex\n      sender\n      paymaster\n      nonce\n      success\n      actualGasCost\n      actualUserOpFeePerGas\n      bundler\n      entryPoint\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetUserOpsBySender($sender: String!, $limit: Int, $offset: Int) {\n    userOpsBySender(sender: $sender, pagination: { limit: $limit, offset: $offset }) {\n      nodes {\n        userOpHash\n        txHash\n        blockNumber\n        sender\n        paymaster\n        nonce\n        success\n        actualGasCost\n        actualUserOpFeePerGas\n        bundler\n        entryPoint\n        timestamp\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetUserOpsByBundler($bundler: String!, $limit: Int, $offset: Int) {\n    userOpsByBundler(bundler: $bundler, pagination: { limit: $limit, offset: $offset }) {\n      nodes {\n        userOpHash\n        txHash\n        blockNumber\n        sender\n        paymaster\n        success\n        actualGasCost\n        bundler\n        entryPoint\n        timestamp\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetUserOpsByPaymaster($paymaster: String!, $limit: Int, $offset: Int) {\n    userOpsByPaymaster(paymaster: $paymaster, pagination: { limit: $limit, offset: $offset }) {\n      nodes {\n        userOpHash\n        txHash\n        blockNumber\n        sender\n        paymaster\n        success\n        actualGasCost\n        bundler\n        entryPoint\n        timestamp\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetUserOpsByTx($txHash: String!) {\n    userOpsByTx(txHash: $txHash) {\n      userOpHash\n      sender\n      paymaster\n      success\n      actualGasCost\n      bundler\n      entryPoint\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetUserOpsByBlock($blockNumber: String!) {\n    userOpsByBlock(blockNumber: $blockNumber) {\n      userOpHash\n      txHash\n      sender\n      paymaster\n      success\n      actualGasCost\n      bundler\n      entryPoint\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetRecentUserOps($limit: Int) {\n    recentUserOps(limit: $limit) {\n      userOpHash\n      txHash\n      blockNumber\n      sender\n      paymaster\n      success\n      actualGasCost\n      bundler\n      entryPoint\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetUserOpCount {\n    userOpCount\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetBundlerStats($address: String!) {\n    bundlerStats(bundler: $address) {\n      address\n      totalOps\n      successfulOps\n      failedOps\n      totalGasSponsored\n      lastActivityBlock\n      lastActivityTime\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetPaymasterStats($address: String!) {\n    paymasterStats(paymaster: $address) {\n      address\n      totalOps\n      successfulOps\n      failedOps\n      totalGasSponsored\n      lastActivityBlock\n      lastActivityTime\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetAllBundlers($limit: Int, $offset: Int) {\n    allBundlers(pagination: { limit: $limit, offset: $offset }) {\n      nodes {\n        address\n        totalOps\n        successfulOps\n        failedOps\n        totalGasSponsored\n        lastActivityBlock\n        lastActivityTime\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetAllPaymasters($limit: Int, $offset: Int) {\n    allPaymasters(pagination: { limit: $limit, offset: $offset }) {\n      nodes {\n        address\n        totalOps\n        successfulOps\n        failedOps\n        totalGasSponsored\n        lastActivityBlock\n        lastActivityTime\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetAccountDeployment($hash: String!) {\n    accountDeployment(userOpHash: $hash) {\n      userOpHash\n      sender\n      factory\n      paymaster\n      txHash\n      blockNumber\n      logIndex\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetDeploymentsByFactory($factory: String!, $limit: Int, $offset: Int) {\n    accountDeploymentsByFactory(factory: $factory, pagination: { limit: $limit, offset: $offset }) {\n      userOpHash\n      sender\n      factory\n      paymaster\n      txHash\n      blockNumber\n      logIndex\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/aa.ts",
+    "document": "\n  query GetUserOpRevert($hash: String!) {\n    userOpRevert(userOpHash: $hash) {\n      userOpHash\n      sender\n      nonce\n      revertReason\n      txHash\n      blockNumber\n      logIndex\n      revertType\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/address.ts",
+    "document": "\n  query GetAddressBalance($address: String!, $blockNumber: String) {\n    addressBalance(address: $address, blockNumber: $blockNumber)\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/address.ts",
+    "document": "\n  query GetAddressOverview($address: String!) {\n    addressOverview(address: $address) {\n      address\n      isContract\n      balance\n      transactionCount\n      sentCount\n      receivedCount\n      internalTxCount\n      erc20TokenCount\n      erc721TokenCount\n      firstSeen\n      lastSeen\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/address.ts",
+    "document": "\n  query GetLiveBalance($address: String!, $blockNumber: String) {\n    liveBalance(address: $address, blockNumber: $blockNumber) {\n      address\n      balance\n      blockNumber\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/address.ts",
+    "document": "\n  query GetBalanceHistory(\n    $address: String!\n    $fromBlock: String!\n    $toBlock: String!\n    $limit: Int\n    $offset: Int\n  ) {\n    balanceHistory(\n      address: $address\n      fromBlock: $fromBlock\n      toBlock: $toBlock\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        blockNumber\n        balance\n        delta\n        transactionHash\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/address.ts",
+    "document": "\n  query GetTokenBalances($address: String!, $tokenType: String) {\n    tokenBalances(address: $address, tokenType: $tokenType) {\n      address\n      tokenType\n      balance\n      tokenId\n      name\n      symbol\n      decimals\n      metadata\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/address.ts",
+    "document": "\n  query GetAddressStats($address: String!) {\n    addressStats(address: $address) {\n      address\n      totalTransactions\n      sentCount\n      receivedCount\n      successCount\n      failedCount\n      totalGasUsed\n      totalGasCost\n      totalValueSent\n      totalValueReceived\n      contractInteractionCount\n      uniqueAddressCount\n      firstTransactionTimestamp\n      lastTransactionTimestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/address.ts",
+    "document": "\n  query GetAddressSetCodeInfo($address: String!) {\n    addressSetCodeInfo(address: $address) {\n      address\n      hasDelegation\n      delegationTarget\n      asAuthorityCount\n      asTargetCount\n      lastActivityBlock\n      lastActivityTimestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/block.ts",
+    "document": "\n  query GetLatestHeight {\n    latestHeight\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/block.ts",
+    "document": "\n  query GetBlock($number: String!) {\n    block(number: $number) {\n      number\n      hash\n      parentHash\n      timestamp\n      miner\n      gasUsed\n      gasLimit\n      size\n      transactionCount\n      baseFeePerGas\n      withdrawalsRoot\n      blobGasUsed\n      excessBlobGas\n      transactions {\n        hash\n        from\n        to\n        contractAddress\n        value\n        gas\n        gasPrice\n        type\n        nonce\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/block.ts",
+    "document": "\n  query GetBlockByHash($hash: String!) {\n    blockByHash(hash: $hash) {\n      number\n      hash\n      parentHash\n      timestamp\n      miner\n      gasUsed\n      gasLimit\n      size\n      transactionCount\n      baseFeePerGas\n      withdrawalsRoot\n      blobGasUsed\n      excessBlobGas\n      transactions {\n        hash\n        from\n        to\n        contractAddress\n        value\n        gas\n        gasPrice\n        type\n        nonce\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/block.ts",
+    "document": "\n  query GetBlocksByTimeRange($fromTime: String!, $toTime: String!, $limit: Int) {\n    blocksByTimeRange(\n      fromTime: $fromTime\n      toTime: $toTime\n      pagination: { limit: $limit }\n    ) {\n      nodes {\n        number\n        hash\n        timestamp\n        miner\n        gasUsed\n        gasLimit\n        transactionCount\n      }\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/block.ts",
+    "document": "\n  query GetBlockCount {\n    blockCount\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/consensus.ts",
+    "document": "\n  subscription OnConsensusBlock($replayLast: Int) {\n    consensusBlock(replayLast: $replayLast) {\n      blockNumber\n      blockHash\n      timestamp\n      round\n      prevRound\n      roundChanged\n      proposer\n      validatorCount\n      prepareCount\n      commitCount\n      participationRate\n      missedValidatorRate\n      isEpochBoundary\n      epochNumber\n      epochValidators\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/consensus.ts",
+    "document": "\n  subscription OnConsensusFork($replayLast: Int) {\n    consensusFork(replayLast: $replayLast) {\n      forkBlockNumber\n      forkBlockHash\n      chain1Hash\n      chain1Height\n      chain1Weight\n      chain2Hash\n      chain2Height\n      chain2Weight\n      resolved\n      winningChain\n      detectedAt\n      detectionLag\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/consensus.ts",
+    "document": "\n  subscription OnValidatorChange($replayLast: Int) {\n    consensusValidatorChange(replayLast: $replayLast) {\n      blockNumber\n      blockHash\n      timestamp\n      epochNumber\n      isEpochBoundary\n      changeType\n      previousValidatorCount\n      newValidatorCount\n      addedValidators\n      removedValidators\n      validatorSet\n      additionalInfo\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/consensus.ts",
+    "document": "\n  subscription OnConsensusError($replayLast: Int) {\n    consensusError(replayLast: $replayLast) {\n      blockNumber\n      blockHash\n      timestamp\n      errorType\n      severity\n      errorMessage\n      round\n      expectedValidators\n      actualSigners\n      participationRate\n      missedValidators\n      consensusImpacted\n      recoveryTime\n      errorDetails\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/fee-delegation.ts",
+    "document": "\n  query GetFeeDelegationStats($fromBlock: String, $toBlock: String, $fromTime: String, $toTime: String) {\n    feeDelegationStats(fromBlock: $fromBlock, toBlock: $toBlock, fromTime: $fromTime, toTime: $toTime) {\n      totalFeeDelegatedTxs\n      totalFeesSaved\n      adoptionRate\n      avgFeeSaved\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/fee-delegation.ts",
+    "document": "\n  query GetTopFeePayers($limit: Int, $fromBlock: String, $toBlock: String) {\n    topFeePayers(limit: $limit, fromBlock: $fromBlock, toBlock: $toBlock) {\n      nodes {\n        address\n        txCount\n        totalFeesPaid\n        percentage\n      }\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/fee-delegation.ts",
+    "document": "\n  query GetFeePayerStats($address: String!, $fromBlock: String, $toBlock: String) {\n    feePayerStats(address: $address, fromBlock: $fromBlock, toBlock: $toBlock) {\n      address\n      txCount\n      totalFeesPaid\n      percentage\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/gas.ts",
+    "document": "\n  query GetRecentBlocksForGas($limit: Int!) {\n    blocks(pagination: { limit: $limit }) {\n      nodes {\n        number\n        hash\n        timestamp\n        baseFeePerGas\n        gasUsed\n        gasLimit\n        transactionCount\n        transactions {\n          hash\n          gasPrice\n          maxFeePerGas\n          maxPriorityFeePerGas\n          type\n        }\n      }\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/gas.ts",
+    "document": "\n  query GetLatestBlockGas {\n    latestHeight\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/gas.ts",
+    "document": "\n  subscription NewBlockGas {\n    newBlock {\n      number\n      hash\n      timestamp\n      transactionCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/module.ts",
+    "document": "\n  query GetAccountModules($address: String!) {\n    accountModules(address: $address) {\n      account\n      validators {\n        account\n        module\n        moduleType\n        installedAt\n        installedTx\n        active\n        removedAt\n        removedTx\n        timestamp\n      }\n      executors {\n        account\n        module\n        moduleType\n        installedAt\n        installedTx\n        active\n        removedAt\n        removedTx\n        timestamp\n      }\n      fallbacks {\n        account\n        module\n        moduleType\n        installedAt\n        installedTx\n        active\n        removedAt\n        removedTx\n        timestamp\n      }\n      hooks {\n        account\n        module\n        moduleType\n        installedAt\n        installedTx\n        active\n        removedAt\n        removedTx\n        timestamp\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/module.ts",
+    "document": "\n  query GetInstalledModules(\n    $account: String\n    $moduleType: String\n    $limit: Int\n    $offset: Int\n  ) {\n    installedModules(\n      account: $account\n      moduleType: $moduleType\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        account\n        module\n        moduleType\n        installedAt\n        installedTx\n        active\n        timestamp\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n        hasPreviousPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/module.ts",
+    "document": "\n  query GetModuleStats($module: String!) {\n    moduleStats(module: $module) {\n      module\n      moduleType\n      totalInstalls\n      activeInstalls\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/module.ts",
+    "document": "\n  query GetListModuleStats(\n    $moduleType: String\n    $limit: Int\n    $offset: Int\n  ) {\n    listModuleStats(\n      moduleType: $moduleType\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        module\n        moduleType\n        totalInstalls\n        activeInstalls\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n        hasPreviousPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/module.ts",
+    "document": "\n  query GetModuleEventCount($account: String, $moduleType: String) {\n    moduleEventCount(account: $account, moduleType: $moduleType)\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/receipt.ts",
+    "document": "\n  query GetReceipt($txHash: String!) {\n    receipt(transactionHash: $txHash) {\n      transactionHash\n      blockNumber\n      blockHash\n      transactionIndex\n      status\n      gasUsed\n      cumulativeGasUsed\n      effectiveGasPrice\n      contractAddress\n      logs {\n        address\n        topics\n        data\n        logIndex\n        blockNumber\n        transactionHash\n        decoded {\n          eventName\n          eventSignature\n          params {\n            name\n            type\n            value\n            indexed\n          }\n        }\n      }\n      logsBloom\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/receipt.ts",
+    "document": "\n  query GetReceiptsByBlock($blockNumber: String!) {\n    receiptsByBlock(blockNumber: $blockNumber) {\n      transactionHash\n      blockNumber\n      blockHash\n      transactionIndex\n      status\n      gasUsed\n      cumulativeGasUsed\n      effectiveGasPrice\n      contractAddress\n      logs {\n        address\n        topics\n        data\n        logIndex\n        decoded {\n          eventName\n          eventSignature\n          params {\n            name\n            type\n            value\n            indexed\n          }\n        }\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/receipt.ts",
+    "document": "\n  query GetLogs(\n    $address: String\n    $topics: [String!]\n    $blockNumberFrom: String\n    $blockNumberTo: String\n    $limit: Int\n    $offset: Int\n  ) {\n    logs(\n      filter: {\n        address: $address\n        topics: $topics\n        blockNumberFrom: $blockNumberFrom\n        blockNumberTo: $blockNumberTo\n      }\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        address\n        topics\n        data\n        blockNumber\n        transactionHash\n        logIndex\n      }\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/subscription.ts",
+    "document": "\n  subscription NewBlock($replayLast: Int) {\n    newBlock(replayLast: $replayLast) {\n      number\n      hash\n      parentHash\n      timestamp\n      miner\n      transactionCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/subscription.ts",
+    "document": "\n  subscription NewTransaction($replayLast: Int) {\n    newTransaction(replayLast: $replayLast) {\n      hash\n      from\n      to\n      value\n      nonce\n      gas\n      type\n      gasPrice\n      maxFeePerGas\n      maxPriorityFeePerGas\n      blockNumber\n      blockHash\n      transactionIndex\n      feePayer\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/subscription.ts",
+    "document": "\n  subscription NewPendingTransactions($limit: Int) {\n    newPendingTransactions(limit: $limit) {\n      hash\n      from\n      to\n      value\n      nonce\n      gas\n      type\n      gasPrice\n      maxFeePerGas\n      maxPriorityFeePerGas\n      feePayer\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/subscription.ts",
+    "document": "\n  subscription Logs($filter: LogFilter!, $replayLast: Int) {\n    logs(filter: $filter, replayLast: $replayLast) {\n      address\n      topics\n      data\n      blockNumber\n      blockHash\n      transactionHash\n      transactionIndex\n      logIndex\n      removed\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/subscription.ts",
+    "document": "\n  subscription ChainConfig($replayLast: Int) {\n    chainConfig(replayLast: $replayLast) {\n      blockNumber\n      blockHash\n      parameter\n      oldValue\n      newValue\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/subscription.ts",
+    "document": "\n  subscription ValidatorSet($replayLast: Int) {\n    validatorSet(replayLast: $replayLast) {\n      blockNumber\n      blockHash\n      changeType\n      validator\n      validatorSetSize\n      validatorInfo\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/transaction.ts",
+    "document": "\n  query GetTransaction($hash: String!) {\n    transaction(hash: $hash) {\n      hash\n      blockNumber\n      blockHash\n      transactionIndex\n      from\n      to\n      value\n      gas\n      gasPrice\n      maxFeePerGas\n      maxPriorityFeePerGas\n      type\n      input\n      nonce\n      v\n      r\n      s\n      chainId\n      feePayer\n      feePayerSignatures {\n        v\n        r\n        s\n      }\n      authorizationList {\n        chainId\n        address\n        nonce\n        yParity\n        r\n        s\n        authority\n      }\n      receipt {\n        status\n        gasUsed\n        cumulativeGasUsed\n        effectiveGasPrice\n        contractAddress\n        logs {\n          address\n          topics\n          data\n          logIndex\n          decoded {\n            eventName\n            eventSignature\n            params {\n              name\n              type\n              value\n              indexed\n            }\n          }\n        }\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/transaction.ts",
+    "document": "\n  query GetTransactionsByAddress($address: String!, $limit: Int, $offset: Int) {\n    transactionsByAddress(address: $address, pagination: { limit: $limit, offset: $offset }) {\n      nodes {\n        hash\n        blockNumber\n        blockTimestamp\n        from\n        to\n        contractAddress\n        value\n        gas\n        gasPrice\n        type\n        receipt {\n          status\n          contractAddress\n        }\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/transaction.ts",
+    "document": "\n  query GetTransactionCount {\n    transactionCount\n  }\n"
+  },
+  {
+    "file": "lib/apollo/queries/transaction.ts",
+    "document": "\n  query GetSetCodeTransactions($address: String!, $limit: Int, $offset: Int) {\n    transactionsByAddress(address: $address, pagination: { limit: $limit, offset: $offset }) {\n      nodes {\n        hash\n        blockNumber\n        from\n        to\n        type\n      }\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetContractCreation($address: String!) {\n    contractCreation(address: $address) {\n      contractAddress\n      name\n      creator\n      transactionHash\n      blockNumber\n      timestamp\n      bytecodeSize\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetContractsByCreator(\n    $creator: String!\n    $pagination: PaginationInput\n  ) {\n    contractsByCreator(creator: $creator, pagination: $pagination) {\n      nodes {\n        contractAddress\n        name\n        creator\n        transactionHash\n        blockNumber\n        timestamp\n        bytecodeSize\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetContracts($pagination: PaginationInput) {\n    contracts(pagination: $pagination) {\n      nodes {\n        contractAddress\n        name\n        creator\n        transactionHash\n        blockNumber\n        timestamp\n        bytecodeSize\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetInternalTransactionsByAddress(\n    $address: String!\n    $isFrom: Boolean!\n    $pagination: PaginationInput\n  ) {\n    internalTransactionsByAddress(address: $address, isFrom: $isFrom, pagination: $pagination) {\n      nodes {\n        transactionHash\n        type\n        from\n        to\n        value\n        input\n        output\n        error\n        blockNumber\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetERC20Transfer($txHash: String!, $logIndex: Int!) {\n    erc20Transfer(txHash: $txHash, logIndex: $logIndex) {\n      transactionHash\n      logIndex\n      contractAddress\n      from\n      to\n      value\n      blockNumber\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetERC20TransfersByToken(\n    $token: String!\n    $pagination: PaginationInput\n  ) {\n    erc20TransfersByToken(token: $token, pagination: $pagination) {\n      nodes {\n        transactionHash\n        logIndex\n        contractAddress\n        from\n        to\n        value\n        blockNumber\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetERC20TransfersByAddress(\n    $address: String!\n    $isFrom: Boolean!\n    $pagination: PaginationInput\n  ) {\n    erc20TransfersByAddress(address: $address, isFrom: $isFrom, pagination: $pagination) {\n      nodes {\n        transactionHash\n        logIndex\n        contractAddress\n        from\n        to\n        value\n        blockNumber\n        timestamp\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetERC721Transfer($txHash: String!, $logIndex: Int!) {\n    erc721Transfer(txHash: $txHash, logIndex: $logIndex) {\n      transactionHash\n      logIndex\n      contractAddress\n      from\n      to\n      tokenId\n      blockNumber\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetERC721TransfersByToken(\n    $token: String!\n    $pagination: PaginationInput\n  ) {\n    erc721TransfersByToken(token: $token, pagination: $pagination) {\n      nodes {\n        transactionHash\n        logIndex\n        contractAddress\n        from\n        to\n        tokenId\n        blockNumber\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetERC721TransfersByAddress(\n    $address: String!\n    $isFrom: Boolean!\n    $pagination: PaginationInput\n  ) {\n    erc721TransfersByAddress(address: $address, isFrom: $isFrom, pagination: $pagination) {\n      nodes {\n        transactionHash\n        logIndex\n        contractAddress\n        from\n        to\n        tokenId\n        blockNumber\n        timestamp\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/address-indexing.ts",
+    "document": "\n  query GetERC721Owner($token: String!, $tokenId: String!) {\n    erc721Owner(token: $token, tokenId: $tokenId)\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/consensus.ts",
+    "document": "\n  query GetWbftBlockExtra($blockNumber: String!) {\n    wbftBlockExtra(blockNumber: $blockNumber) {\n      blockNumber\n      blockHash\n      randaoReveal\n      prevRound\n      round\n      preparedSeal {\n        sealers\n        signature\n      }\n      committedSeal {\n        sealers\n        signature\n      }\n      gasTip\n      epochInfo {\n        epochNumber\n        blockNumber\n        candidates {\n          address\n          diligence\n        }\n        validators\n        blsPublicKeys\n      }\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/consensus.ts",
+    "document": "\n  query GetWbftBlockExtraByHash($blockHash: String!) {\n    wbftBlockExtraByHash(blockHash: $blockHash) {\n      blockNumber\n      blockHash\n      randaoReveal\n      prevRound\n      round\n      preparedSeal {\n        sealers\n        signature\n      }\n      committedSeal {\n        sealers\n        signature\n      }\n      gasTip\n      epochInfo {\n        epochNumber\n        blockNumber\n        candidates {\n          address\n          diligence\n        }\n        validators\n        blsPublicKeys\n      }\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/consensus.ts",
+    "document": "\n  query GetEpochInfo($epochNumber: String!) {\n    epochInfo(epochNumber: $epochNumber) {\n      epochNumber\n      blockNumber\n      candidates {\n        address\n        diligence\n      }\n      validators\n      blsPublicKeys\n      validatorCount\n      candidateCount\n      previousEpochValidatorCount\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/consensus.ts",
+    "document": "\n  query GetEpochs($limit: Int, $offset: Int) {\n    epochs(pagination: { limit: $limit, offset: $offset }) {\n      nodes {\n        epochNumber\n        blockNumber\n        validatorCount\n        candidateCount\n        timestamp\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/consensus.ts",
+    "document": "\n  query GetLatestEpochInfo {\n    latestEpochInfo {\n      epochNumber\n      blockNumber\n      candidates {\n        address\n        diligence\n      }\n      validators\n      blsPublicKeys\n      validatorCount\n      candidateCount\n      previousEpochValidatorCount\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/consensus.ts",
+    "document": "\n  query GetValidatorSigningStats(\n    $validatorAddress: String!\n    $fromBlock: String!\n    $toBlock: String!\n  ) {\n    validatorSigningStats(\n      validatorAddress: $validatorAddress\n      fromBlock: $fromBlock\n      toBlock: $toBlock\n    ) {\n      validatorAddress\n      validatorIndex\n      prepareSignCount\n      prepareMissCount\n      commitSignCount\n      commitMissCount\n      fromBlock\n      toBlock\n      signingRate\n      blocksProposed\n      totalBlocks\n      proposalRate\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/consensus.ts",
+    "document": "\n  query GetAllValidatorsSigningStats(\n    $fromBlock: String!\n    $toBlock: String!\n    $limit: Int\n    $offset: Int\n  ) {\n    allValidatorsSigningStats(\n      fromBlock: $fromBlock\n      toBlock: $toBlock\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        validatorAddress\n        validatorIndex\n        prepareSignCount\n        prepareMissCount\n        commitSignCount\n        commitMissCount\n        fromBlock\n        toBlock\n        signingRate\n        blocksProposed\n        totalBlocks\n        proposalRate\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/consensus.ts",
+    "document": "\n  query GetValidatorSigningActivity(\n    $validatorAddress: String!\n    $fromBlock: String!\n    $toBlock: String!\n    $limit: Int\n    $offset: Int\n  ) {\n    validatorSigningActivity(\n      validatorAddress: $validatorAddress\n      fromBlock: $fromBlock\n      toBlock: $toBlock\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        blockNumber\n        blockHash\n        validatorAddress\n        validatorIndex\n        signedPrepare\n        signedCommit\n        round\n        timestamp\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/consensus.ts",
+    "document": "\n  query GetBlockSigners($blockNumber: String!) {\n    blockSigners(blockNumber: $blockNumber) {\n      blockNumber\n      preparers\n      committers\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/contractVerification.ts",
+    "document": "\n  query GetContractVerification($address: String!) {\n    contractVerification(address: $address) {\n      address\n      isVerified\n      name\n      compilerVersion\n      optimizationEnabled\n      optimizationRuns\n      sourceCode\n      abi\n      constructorArguments\n      verifiedAt\n      licenseType\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/contractVerification.ts",
+    "document": "\n  mutation VerifyContract(\n    $address: String!\n    $sourceCode: String!\n    $compilerVersion: String!\n    $optimizationEnabled: Boolean!\n    $optimizationRuns: Int\n    $constructorArguments: String\n    $contractName: String\n    $licenseType: String\n  ) {\n    verifyContract(\n      address: $address\n      sourceCode: $sourceCode\n      compilerVersion: $compilerVersion\n      optimizationEnabled: $optimizationEnabled\n      optimizationRuns: $optimizationRuns\n      constructorArguments: $constructorArguments\n      contractName: $contractName\n      licenseType: $licenseType\n    ) {\n      address\n      isVerified\n      verifiedAt\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetAddressBalanceRelay($address: String!) {\n    addressBalance(address: $address)\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetTokenBalancesRelay($address: String!) {\n    tokenBalances(address: $address) {\n      address\n      balance\n      tokenId\n      tokenType\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetTransactionsByAddressRelay(\n    $address: String!\n    $limit: Int\n    $offset: Int\n  ) {\n    transactionsByAddress(\n      address: $address\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        hash\n        blockNumber\n        blockHash\n        transactionIndex\n        from\n        to\n        value\n        gas\n        gasPrice\n        maxFeePerGas\n        maxPriorityFeePerGas\n        type\n        input\n        nonce\n        receipt {\n          status\n          gasUsed\n          contractAddress\n        }\n      }\n      pageInfo {\n        hasNextPage\n      }\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetLogsByAddressRelay(\n    $address: String\n    $limit: Int\n    $offset: Int\n  ) {\n    logs(\n      filter: { address: $address }\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        address\n        topics\n        data\n        blockNumber\n        blockHash\n        transactionHash\n        transactionIndex\n        logIndex\n      }\n      pageInfo {\n        hasNextPage\n      }\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetBlockTimestamp($number: String!) {\n    block(number: $number) {\n      number\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetLatestHeightRelay {\n    latestHeight\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetContractCreationRelay($address: String!) {\n    contractCreation(address: $address) {\n      contractAddress\n      creator\n      transactionHash\n      blockNumber\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetContractVerificationRelay($address: String!) {\n    contractVerification(address: $address) {\n      address\n      isVerified\n      name\n      compilerVersion\n      optimizationEnabled\n      optimizationRuns\n      sourceCode\n      abi\n      constructorArguments\n      verifiedAt\n      licenseType\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetActiveValidatorsRelay {\n    activeValidators {\n      address\n      isActive\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetBlockByNumberRelay($number: String!) {\n    block(number: $number) {\n      number\n      hash\n      parentHash\n      timestamp\n      miner\n      gasUsed\n      gasLimit\n      size\n      transactionCount\n      baseFeePerGas\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetBlockByHashRelay($hash: String!) {\n    blockByHash(hash: $hash) {\n      number\n      hash\n      parentHash\n      timestamp\n      miner\n      gasUsed\n      gasLimit\n      size\n      transactionCount\n      baseFeePerGas\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetTransactionRelay($hash: String!) {\n    transaction(hash: $hash) {\n      hash\n      blockNumber\n      blockHash\n      transactionIndex\n      from\n      to\n      value\n      gas\n      gasPrice\n      maxFeePerGas\n      maxPriorityFeePerGas\n      type\n      input\n      nonce\n      receipt {\n        status\n        gasUsed\n        cumulativeGasUsed\n        effectiveGasPrice\n        contractAddress\n        logs {\n          address\n          topics\n          data\n          logIndex\n        }\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetAccountTxCountRelay($address: String!) {\n    transactionsByAddress(address: $address, pagination: { limit: 1 }) {\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetRecentTransactionsRelay($limit: Int!) {\n    transactions(pagination: { limit: $limit }) {\n      nodes {\n        gasPrice\n        receipt {\n          gasUsed\n        }\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/relay.ts",
+    "document": "\n  query GetTokenHoldersRelay($token: String!, $limit: Int, $offset: Int) {\n    tokenHolders(token: $token, pagination: { limit: $limit, offset: $offset }) {\n      nodes {\n        holderAddress\n        balance\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/rpcProxy.ts",
+    "document": "\n  query ContractCall(\n    $address: String!\n    $method: String!\n    $params: String\n    $abi: String\n  ) {\n    contractCall(\n      address: $address\n      method: $method\n      params: $params\n      abi: $abi\n    ) {\n      result\n      rawResult\n      decoded\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/rpcProxy.ts",
+    "document": "\n  query TransactionStatus($txHash: String!) {\n    transactionStatus(txHash: $txHash) {\n      txHash\n      status\n      blockNumber\n      blockHash\n      confirmations\n      gasUsed\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/rpcProxy.ts",
+    "document": "\n  query InternalTransactionsRPC($txHash: String!) {\n    internalTransactionsRPC(txHash: $txHash) {\n      txHash\n      totalCount\n      internalTransactions {\n        type\n        from\n        to\n        value\n        gas\n        gasUsed\n        input\n        output\n        error\n        depth\n        traceAddress\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/rpcProxy.ts",
+    "document": "\n  query RPCProxyMetrics {\n    rpcProxyMetrics {\n      totalRequests\n      successfulRequests\n      failedRequests\n      cacheHits\n      cacheMisses\n      averageLatency\n      queueDepth\n      activeWorkers\n      circuitState\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/search.ts",
+    "document": "\n  query Search($query: String!, $types: [String], $limit: Int = 10) {\n    search(query: $query, types: $types, limit: $limit) {\n      type\n      value\n      label\n      metadata\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/search.ts",
+    "document": "\n  query SearchAutocomplete($query: String!, $limit: Int = 5) {\n    search(query: $query, limit: $limit) {\n      type\n      value\n      label\n      metadata\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/stats.ts",
+    "document": "\n  query GetTopMiners($limit: Int, $fromBlock: String, $toBlock: String) {\n    topMiners(limit: $limit, fromBlock: $fromBlock, toBlock: $toBlock) {\n      address\n      blockCount\n      percentage\n      totalRewards\n      lastBlockNumber\n      lastBlockTime\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/stats.ts",
+    "document": "\n  query GetNetworkMetrics($fromTime: String!, $toTime: String!) {\n    networkMetrics(fromTime: $fromTime, toTime: $toTime) {\n      tps\n      blockTime\n      totalBlocks\n      totalTransactions\n      averageBlockSize\n      timePeriod\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetTotalSupply {\n    totalSupply\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetActiveMinters {\n    activeMinters {\n      address\n      allowance\n      isActive\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetMinterAllowance($minter: String!) {\n    minterAllowance(minter: $minter)\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetMintEvents($filter: SystemContractEventFilter!, $pagination: PaginationInput) {\n    mintEvents(filter: $filter, pagination: $pagination) {\n      nodes {\n        blockNumber\n        transactionHash\n        minter\n        to\n        amount\n        timestamp\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetBurnEvents($filter: SystemContractEventFilter!, $pagination: PaginationInput) {\n    burnEvents(filter: $filter, pagination: $pagination) {\n      nodes {\n        blockNumber\n        transactionHash\n        burner\n        amount\n        timestamp\n        withdrawalId\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetProposals($filter: ProposalFilter!, $pagination: PaginationInput) {\n    proposals(filter: $filter, pagination: $pagination) {\n      nodes {\n        contract\n        proposalId\n        proposer\n        actionType\n        callData\n        memberVersion\n        requiredApprovals\n        approved\n        rejected\n        status\n        createdAt\n        executedAt\n        blockNumber\n        transactionHash\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetProposal($contract: String!, $proposalId: String!) {\n    proposal(contract: $contract, proposalId: $proposalId) {\n      contract\n      proposalId\n      proposer\n      actionType\n      callData\n      memberVersion\n      requiredApprovals\n      approved\n      rejected\n      status\n      createdAt\n      executedAt\n      blockNumber\n      transactionHash\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetProposalVotes($contract: String!, $proposalId: String!) {\n    proposalVotes(contract: $contract, proposalId: $proposalId) {\n      contract\n      proposalId\n      voter\n      approval\n      blockNumber\n      transactionHash\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetActiveValidators {\n    activeValidators {\n      address\n      isActive\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetBlacklistedAddresses {\n    blacklistedAddresses\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetDepositMintProposals($filter: SystemContractEventFilter!, $status: ProposalStatus) {\n    depositMintProposals(filter: $filter, status: $status) {\n      proposalId\n      requester\n      beneficiary\n      amount\n      depositId\n      bankReference\n      status\n      blockNumber\n      transactionHash\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetMaxProposalsUpdateHistory($contract: String!) {\n    maxProposalsUpdateHistory(contract: $contract) {\n      contract\n      blockNumber\n      transactionHash\n      oldMax\n      newMax\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetProposalExecutionSkippedEvents($contract: String!, $proposalId: String) {\n    proposalExecutionSkippedEvents(contract: $contract, proposalId: $proposalId) {\n      contract\n      blockNumber\n      transactionHash\n      account\n      proposalId\n      reason\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  subscription SystemContractEvents($filter: SystemContractSubscriptionFilter) {\n    systemContractEvents(filter: $filter) {\n      contract\n      eventName\n      blockNumber\n      transactionHash\n      logIndex\n      data\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  mutation RegisterContract($input: RegisterContractInput!) {\n    registerContract(input: $input) {\n      address\n      name\n      abi\n      registeredAt\n      blockNumber\n      isVerified\n      events\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  mutation UnregisterContract($address: String!) {\n    unregisterContract(address: $address)\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetRegisteredContracts {\n    registeredContracts {\n      address\n      name\n      events\n      isVerified\n      registeredAt\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  query GetRegisteredContract($address: String!) {\n    registeredContract(address: $address) {\n      address\n      name\n      abi\n      events\n      isVerified\n      registeredAt\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/queries/system-contracts.ts",
+    "document": "\n  subscription DynamicContractEvents($filter: DynamicContractSubscriptionFilter) {\n    dynamicContractEvents(filter: $filter) {\n      contract\n      contractName\n      eventName\n      blockNumber\n      txHash\n      logIndex\n      data\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/subscriptions.ts",
+    "document": "\n  subscription OnNewBlock {\n    newBlock {\n      number\n      hash\n      parentHash\n      timestamp\n      miner\n      gasLimit\n      gasUsed\n      difficulty\n      totalDifficulty\n      size\n      transactionCount\n      baseFeePerGas\n      withdrawalsRoot\n      blobGasUsed\n      excessBlobGas\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/subscriptions.ts",
+    "document": "\n  subscription OnNewTransaction($replayLast: Int) {\n    newTransaction(replayLast: $replayLast) {\n      hash\n      from\n      to\n      value\n      nonce\n      gas\n      gasPrice\n      input\n      type\n      blockNumber\n      blockHash\n      transactionIndex\n      maxFeePerGas\n      maxPriorityFeePerGas\n      feePayer\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/subscriptions.ts",
+    "document": "\n  subscription OnNewPendingTransactions($limit: Int) {\n    newPendingTransactions(limit: $limit) {\n      hash\n      from\n      to\n      value\n      nonce\n      gas\n      gasPrice\n      input\n      type\n      maxFeePerGas\n      maxPriorityFeePerGas\n      feePayer\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/subscriptions.ts",
+    "document": "\n  subscription OnLogs($filter: LogFilter!, $replayLast: Int) {\n    logs(filter: $filter, replayLast: $replayLast) {\n      address\n      topics\n      data\n      blockNumber\n      transactionHash\n      transactionIndex\n      logIndex\n      removed\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/subscriptions.ts",
+    "document": "\n  subscription OnLogsByAddress($address: String!) {\n    logs(filter: { address: $address }) {\n      address\n      topics\n      data\n      blockNumber\n      transactionHash\n      transactionIndex\n      logIndex\n      removed\n    }\n  }\n"
+  },
+  {
+    "file": "lib/graphql/subscriptions.ts",
+    "document": "\n  subscription OnLogsByTopics($topics: [Hash!]) {\n    logs(filter: { topics: $topics }) {\n      address\n      topics\n      data\n      blockNumber\n      transactionHash\n      transactionIndex\n      logIndex\n      removed\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useBlocks.ts",
+    "document": "\n  query GetBlocks(\n    $limit: Int\n    $offset: Int\n    $numberFrom: String\n    $numberTo: String\n    $miner: String\n  ) {\n    blocks(\n      pagination: { limit: $limit, offset: $offset }\n      filter: { numberFrom: $numberFrom, numberTo: $numberTo, miner: $miner }\n    ) {\n      nodes {\n        number\n        hash\n        timestamp\n        miner\n        gasUsed\n        gasLimit\n        size\n        transactionCount\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useFilteredTransactions.ts",
+    "document": "\n  query GetFilteredTransactions(\n    $address: String!\n    $fromBlock: String!\n    $toBlock: String!\n    $minValue: String\n    $maxValue: String\n    $txType: Int\n    $successOnly: Boolean\n    $isFeeDelegated: Boolean\n    $methodId: String\n    $minGasUsed: String\n    $maxGasUsed: String\n    $direction: TransactionDirection\n    $fromTime: String\n    $toTime: String\n    $limit: Int\n    $offset: Int\n  ) {\n    transactionsByAddressFiltered(\n      address: $address\n      filter: {\n        fromBlock: $fromBlock\n        toBlock: $toBlock\n        minValue: $minValue\n        maxValue: $maxValue\n        txType: $txType\n        successOnly: $successOnly\n        isFeeDelegated: $isFeeDelegated\n        methodId: $methodId\n        minGasUsed: $minGasUsed\n        maxGasUsed: $maxGasUsed\n        direction: $direction\n        fromTime: $fromTime\n        toTime: $toTime\n      }\n      pagination: { limit: $limit, offset: $offset }\n    ) {\n      nodes {\n        hash\n        blockNumber\n        from\n        to\n        value\n        gas\n        gasPrice\n        type\n        blockTimestamp\n        receipt {\n          status\n          gasUsed\n        }\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useGovernanceBlacklist.ts",
+    "document": "\n  query GetBlacklistHistoryLocal($address: String!) {\n    blacklistHistory(address: $address) {\n      blockNumber\n      transactionHash\n      account\n      action\n      proposalId\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useNativeCoinAdapter.ts",
+    "document": "\n  query GetMinterHistoryLocal($minter: String!) {\n    minterHistory(minter: $minter) {\n      blockNumber\n      transactionHash\n      minter\n      allowance\n      action\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useTransactions.ts",
+    "document": "\n  query GetTransactions(\n    $limit: Int\n    $offset: Int\n    $blockNumberFrom: String\n    $blockNumberTo: String\n    $from: String\n    $to: String\n    $type: Int\n  ) {\n    transactions(\n      pagination: { limit: $limit, offset: $offset }\n      filter: {\n        blockNumberFrom: $blockNumberFrom\n        blockNumberTo: $blockNumberTo\n        from: $from\n        to: $to\n        type: $type\n      }\n    ) {\n      nodes {\n        hash\n        blockNumber\n        from\n        to\n        contractAddress\n        value\n        gas\n        gasPrice\n        type\n      }\n      totalCount\n      pageInfo {\n        hasNextPage\n      }\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useValidatorGovernance.ts",
+    "document": "\n  query GetGasTipHistoryLocal($fromBlock: String!, $toBlock: String!) {\n    gasTipHistory(filter: { fromBlock: $fromBlock, toBlock: $toBlock }) {\n      blockNumber\n      transactionHash\n      oldTip\n      newTip\n      updater\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useValidatorGovernance.ts",
+    "document": "\n  query GetValidatorHistoryLocal($validator: String!) {\n    validatorHistory(validator: $validator) {\n      blockNumber\n      transactionHash\n      validator\n      action\n      oldValidator\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useValidatorGovernance.ts",
+    "document": "\n  query GetEmergencyPauseHistoryLocal($contract: String!) {\n    emergencyPauseHistory(contract: $contract) {\n      contract\n      blockNumber\n      transactionHash\n      proposalId\n      action\n      timestamp\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useValidatorGovernance.ts",
+    "document": "\n  query GetBurnHistoryLocal($filter: SystemContractEventFilter!, $pagination: PaginationInput) {\n    burnEvents(filter: $filter, pagination: $pagination) {\n      nodes {\n        blockNumber\n        transactionHash\n        burner\n        amount\n        withdrawalId\n        timestamp\n      }\n      totalCount\n    }\n  }\n"
+  },
+  {
+    "file": "lib/hooks/useValidatorGovernance.ts",
+    "document": "\n  query GetMemberHistoryLocal($contract: String!) {\n    memberHistory(contract: $contract) {\n      contract\n      blockNumber\n      transactionHash\n      member\n      action\n      oldMember\n      totalMembers\n      newQuorum\n      timestamp\n    }\n  }\n"
+  }
+]

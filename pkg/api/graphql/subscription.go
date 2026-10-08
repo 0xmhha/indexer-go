@@ -893,6 +893,13 @@ func subscriptionValue(subType string, event events.Event) (interface{}, bool) {
 
 // parseSubscriptionType extracts subscription type from query
 func (c *subscriptionClient) parseSubscriptionType(query string) string {
+	return SubscriptionKind(query)
+}
+
+// SubscriptionKind returns the subscription a subscription document asks
+// for as the WebSocket server reads it (by name, without validating the
+// document against the schema), "" when it serves none of them.
+func SubscriptionKind(query string) string {
 	// Simple parsing - check for subscription keywords (order matters: more specific first)
 	if name := registeredSubscriptionIn(query); name != "" {
 		return name
