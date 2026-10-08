@@ -206,10 +206,10 @@ WebSocket 서버(`/graphql/ws`)는 구독 문서를 스키마로 검증하지 �
 1. indexer-go 저장소에서 frontend 문서를 다시 읽어 온다(frontend 체크아웃이 `../indexer-frontend`에 있다고 가정한다. 다른 곳이면 `INDEXER_FRONTEND_DIR`를 지정한다).
 
    ```bash
-   go test ./cmd/indexer -run TestFrontendDocuments -update
+   go test ./pkg/app -run TestFrontendDocuments -update
    ```
 
-2. 고친 문서는 시험이 "works now: remove it from known-invalid.txt"라고 알려 준다. `cmd/indexer/testdata/frontend/known-invalid.txt`에서 그 줄을 지운다.
+2. 고친 문서는 시험이 "works now: remove it from known-invalid.txt"라고 알려 준다. `pkg/app/testdata/frontend/known-invalid.txt`에서 그 줄을 지운다.
 3. 새로 깨진 문서가 있으면 "no longer works"와 서버의 검증 오류가 나온다.
 4. 바뀐 `documents.json`과 `known-invalid.txt`를 indexer-go에 커밋한다. 이후 indexer-go 변경이 frontend 문서를 깨뜨리면 이 시험이 실패한다.
 

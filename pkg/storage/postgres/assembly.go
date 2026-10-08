@@ -14,7 +14,7 @@ import (
 )
 
 // The methods the application uses to assemble a store besides the ports
-// (pkg/storage.Storage and the optional setters cmd/indexer looks for).
+// (pkg/storage.Storage and the optional setters pkg/app looks for).
 
 // SetLogger sets the logger of the store's warnings.
 func (s *Store) SetLogger(logger *zap.Logger) {

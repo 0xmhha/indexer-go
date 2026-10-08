@@ -11,7 +11,9 @@
 ```
 indexer-go/
 ├── cmd/indexer/
-│   └── main.go                    # 진입점, App 초기화, CLI 플래그
+│   └── main.go                    # 명령: app.Main 호출
+│
+├── pkg/app/                       # 애플리케이션: App 초기화, CLI 플래그, 수명 관리 (import 가능)
 │
 ├── internal/
 │   ├── config/                    # 설정 관리 (YAML + ENV + CLI)

@@ -1,0 +1,87 @@
+package app
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/api/graphql"
+)
+
+const goldenGraphQL = "testdata/golden/graphql.json"
+
+// graphqlGoldenQueries are read through the production GraphQL schema after
+// indexing the reference scenario. They cover features that the removed
+// storage wrapper used to disable (system contract events, consensus
+// queries that type-asserted the concrete storage) and the feature
+// processors connected later.
+var graphqlGoldenQueries = []struct {
+	name  string
+	query string
+}{
+	{"mintEvents", `{ mintEvents(filter: {fromBlock: "0", toBlock: "20"}) { totalCount nodes { blockNumber minter to amount } } }`},
+	{"burnEvents", `{ burnEvents(filter: {fromBlock: "0", toBlock: "20"}) { totalCount nodes { blockNumber burner amount } } }`},
+	{"allValidatorsSigningStats", `{ allValidatorsSigningStats(fromBlock: "0", toBlock: "20") { totalCount } }`},
+	// Processors connected in P0-10 (EIP-7702, ERC-4337, ERC-7579).
+	{"setCodeTransactionCount", `{ setCodeTransactionCount }`},
+	{"userOperationCount", `{ userOperationCount }`},
+	{"moduleEventCount", `{ moduleEventCount }`},
+	{"installedModules", `{ installedModules(account: "0x00000000000000000000000000000000000AA001") { totalCount nodes { module moduleType installedAt active removedAt } } }`},
+	// Stored receipt fields (schema v2 keeps what the consensus encoding dropped).
+	{"receiptsByBlock", `{ ` + receiptsByBlockFields(1, 6) + ` }`},
+}
+
+// receiptsByBlockFields queries the receipts of blocks from..to, one alias per
+// block.
+func receiptsByBlockFields(from, to int) string {
+	var q string
+	for n := from; n <= to; n++ {
+		q += fmt.Sprintf(`b%d: receiptsByBlock(blockNumber: "%d") { transactionHash blockNumber blockHash transactionIndex contractAddress gasUsed cumulativeGasUsed effectiveGasPrice status logs { address logIndex transactionIndex blockNumber } } `, n, n)
+	}
+	return q
+}
+
+// TestGraphQLGolden pins API results for the reference scenario.
+// Regenerate with: go test ./pkg/app -run TestGraphQLGolden -update
+func TestGraphQLGolden(t *testing.T) {
+	sc := testchain.BuildDefault()
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+	dir := filepath.Join(t.TempDir(), "db")
+
+	app := startAppMode(t, srv, dir, atomicMode)
+	defer app.Shutdown()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	require.NoError(t, app.fetcher.FetchRange(ctx, 0, sc.Chain.Head()))
+
+	h, err := graphql.NewHandler(app.storage, zap.NewNop())
+	require.NoError(t, err)
+
+	results := map[string]any{}
+	for _, q := range graphqlGoldenQueries {
+		res := h.ExecuteQuery(q.query, nil)
+		require.Empty(t, res.Errors, "%s: %v", q.name, res.Errors)
+		results[q.name] = res.Data
+	}
+	got, err := json.MarshalIndent(results, "", "  ")
+	require.NoError(t, err)
+	got = append(got, '\n')
+
+	if *updateGolden {
+		require.NoError(t, os.WriteFile(goldenGraphQL, got, 0o644))
+		return
+	}
+	want, err := os.ReadFile(goldenGraphQL)
+	require.NoError(t, err, "missing golden file; run with -update")
+	require.Equal(t, string(bytes.TrimSpace(want)), string(bytes.TrimSpace(got)))
+}

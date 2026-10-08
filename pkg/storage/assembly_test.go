@@ -23,7 +23,7 @@ var assemblyNames = map[string]bool{
 // assemblyDirs may use assemblyNames outside tests: the binary wires the
 // storage into every component, and the multi-chain manager creates one
 // storage per chain.
-var assemblyDirs = []string{"cmd/", "pkg/multichain/"}
+var assemblyDirs = []string{"cmd/", "pkg/app/", "pkg/multichain/"}
 
 // TestStorageAssemblyOnly keeps consumers on the ports (refactoring plan
 // R1-1): outside pkg/storage, only assembly code names storage.Storage or
