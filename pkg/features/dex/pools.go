@@ -149,8 +149,33 @@ type blockState struct {
 	store   dexStore
 	markets map[port.DexMarketKey]*port.DexMarket
 	orders  map[[2]common.Hash]*port.DexOrder
+	ticks   map[tickKey]*port.DexTick
 	mOrder  []port.DexMarketKey
 	oOrder  [][2]common.Hash
+	tOrder  []tickKey
+}
+
+type tickKey struct {
+	market port.DexMarketKey
+	tick   int32
+}
+
+// tick returns a pool's tick, with zero liquidity when not initialized.
+func (s *blockState) tick(ctx context.Context, market port.DexMarketKey, i int32) (*port.DexTick, error) {
+	k := tickKey{market, i}
+	if t, ok := s.ticks[k]; ok {
+		return t, nil
+	}
+	t, err := s.store.GetDexTick(ctx, market, i)
+	if errors.Is(err, port.ErrNotFound) {
+		t, err = &port.DexTick{Market: market, Tick: i, LiquidityGross: new(big.Int), LiquidityNet: new(big.Int)}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	s.ticks[k] = t
+	s.tOrder = append(s.tOrder, k)
+	return t, nil
 }
 
 func (s *blockState) market(ctx context.Context, key port.DexMarketKey) (*port.DexMarket, error) {
@@ -217,12 +242,18 @@ func (s *blockState) save(ctx context.Context) error {
 			return fmt.Errorf("save DEX order %s: %w", o.ID.Hex(), err)
 		}
 	}
+	for _, k := range s.tOrder {
+		if err := s.store.SaveDexTick(ctx, s.ticks[k]); err != nil {
+			return fmt.Errorf("save DEX tick %d of %s: %w", k.tick, k.market.Address.Hex(), err)
+		}
+	}
 	return nil
 }
 
 // HandleBlock implements feature.BlockHandler.
 func (p *pools) HandleBlock(ctx context.Context, b *feature.Block) error {
-	st := &blockState{store: p.store, markets: map[port.DexMarketKey]*port.DexMarket{}, orders: map[[2]common.Hash]*port.DexOrder{}}
+	st := &blockState{store: p.store, markets: map[port.DexMarketKey]*port.DexMarket{}, orders: map[[2]common.Hash]*port.DexOrder{},
+		ticks: map[tickKey]*port.DexTick{}}
 	for _, receipt := range b.Receipts {
 		for _, log := range receipt.Logs {
 			if log == nil || len(log.Topics) == 0 {
@@ -306,6 +337,9 @@ func (p *pools) handlePoolLog(ctx context.Context, st *blockState, b *feature.Bl
 		change.Kind, change.Owner = port.DexAddLiquidity, e.topicAddress(1)
 		change.TickLower, change.TickUpper = int32Of(e.topicInt(2)), int32Of(e.topicInt(3))
 		change.Liquidity, change.Amount0, change.Amount1 = e.uint(1), e.uint(2), e.uint(3)
+		if err := p.moveLiquidity(ctx, st, m, change, 1); err != nil {
+			return err
+		}
 		return p.saveLiquidity(ctx, change)
 	case m.Venue == port.DexUniswapV3 && e.is(TopicV3Burn, 4, 3):
 		change.Kind, change.Owner = port.DexRemoveLiquidity, e.topicAddress(1)
@@ -313,6 +347,9 @@ func (p *pools) handlePoolLog(ctx context.Context, st *blockState, b *feature.Bl
 		change.Liquidity, change.Amount0, change.Amount1 = e.uint(0), e.uint(1), e.uint(2)
 		if change.Liquidity.Sign() == 0 {
 			return nil // a fee update ("poke"), no liquidity moved
+		}
+		if err := p.moveLiquidity(ctx, st, m, change, -1); err != nil {
+			return err
 		}
 		return p.saveLiquidity(ctx, change)
 	case m.Venue == port.DexUniswapV2 && e.is(TopicV2Sync, 1, 2):
@@ -332,6 +369,31 @@ func (p *pools) handlePoolLog(ctx context.Context, st *blockState, b *feature.Bl
 	return nil
 }
 
+// moveLiquidity applies a V3 position's liquidity added (sign 1) or removed
+// (sign -1) to the pool as the pool does: the gross liquidity of both bound
+// ticks, the net liquidity of the lower (+) and upper (-) tick, and the
+// in-range liquidity when the current tick is inside the range.
+func (p *pools) moveLiquidity(ctx context.Context, st *blockState, m *port.DexMarket, change *port.DexLiquidity, sign int64) error {
+	delta := new(big.Int).Mul(change.Liquidity, big.NewInt(sign))
+	for i, bound := range []int32{change.TickLower, change.TickUpper} {
+		t, err := st.tick(ctx, m.Key, bound)
+		if err != nil {
+			return err
+		}
+		t.LiquidityGross = new(big.Int).Add(t.LiquidityGross, delta)
+		if i == 0 {
+			t.LiquidityNet = new(big.Int).Add(t.LiquidityNet, delta)
+		} else {
+			t.LiquidityNet = new(big.Int).Sub(t.LiquidityNet, delta)
+		}
+	}
+	if m.Liquidity != nil && change.TickLower <= m.Tick && m.Tick < change.TickUpper {
+		m.Liquidity = new(big.Int).Add(m.Liquidity, delta)
+	}
+	m.UpdatedBlock = change.BlockNumber
+	return nil
+}
+
 func (p *pools) saveLiquidity(ctx context.Context, change *port.DexLiquidity) error {
 	if err := p.store.SaveDexLiquidity(ctx, change); err != nil {
 		return fmt.Errorf("save DEX liquidity change: %w", err)
@@ -347,13 +409,23 @@ func sideOf(v *big.Int) port.DexSide {
 	return port.DexSell
 }
 
+// isTriggerOrder reports whether an order type waits for a trigger price
+// (stop, stop limit, take profit, take profit limit): such an order starts
+// pending and rests only once triggered.
+func isTriggerOrder(typ uint8) bool { return typ >= 2 && typ <= 5 }
+
 // handleOrder keeps the orders of an order manager.
 func (p *pools) handleOrder(ctx context.Context, st *blockState, b *feature.Block, e event) error {
 	if e.is(TopicPerpOrderCreated, 4, 4) {
+		typ := uint8(e.uint(1).Uint64())
+		status := port.DexOrderOpen
+		if isTriggerOrder(typ) {
+			status = port.DexOrderPending
+		}
 		st.putOrder(&port.DexOrder{
 			Market: port.DexMarketKey{Address: e.Address, ID: e.topicUint(3).Uint64()},
-			ID:     e.Topics[1], Trader: e.topicAddress(2), Side: sideOf(e.uint(0)), Type: uint8(e.uint(1).Uint64()),
-			Size: e.uint(2), Price: e.uint(3), Filled: new(big.Int), Status: port.DexOrderOpen,
+			ID:     e.Topics[1], Trader: e.topicAddress(2), Side: sideOf(e.uint(0)), Type: typ,
+			Size: e.uint(2), Price: e.uint(3), Filled: new(big.Int), Status: status,
 			CreatedBlock: e.BlockNumber, CreatedTx: e.TxHash, CreatedLogIndex: e.Index, UpdatedBlock: e.BlockNumber,
 		})
 		return nil
@@ -372,6 +444,8 @@ func (p *pools) handleOrder(ctx context.Context, st *blockState, b *feature.Bloc
 		change = func(o *port.DexOrder) { o.Status = port.DexOrderCancelled }
 	case e.is(TopicPerpOrderExpired, 3, 1):
 		change = func(o *port.DexOrder) { o.Status = port.DexOrderExpired }
+	case e.is(TopicPerpOrderTriggered, 2, 2):
+		change = func(o *port.DexOrder) { o.Status = port.DexOrderOpen }
 	case e.is(TopicPerpOrderModified, 3, 2):
 		size, price := e.uint(0), e.uint(1)
 		change = func(o *port.DexOrder) { o.Size, o.Price = size, price }

@@ -122,6 +122,11 @@ func TestDEXTradesReproduced(t *testing.T) {
 	pool, err := s.GetDexMarket(ctx, port.DexMarketKey{Address: sc.V3Pool})
 	require.NoError(t, err)
 	assert.Equal(t, int32(-3), pool.Tick, "the pool's tick after its last swap")
+	ticks, err := s.ListDexTicks(ctx, pool.Key)
+	require.NoError(t, err)
+	require.Len(t, ticks, 2, "the bounds of the one position")
+	assert.Equal(t, [2]int32{-600, 600}, [2]int32{ticks[0].Tick, ticks[1].Tick})
+	assert.Equal(t, "1000000/-1000000", ticks[0].LiquidityNet.String()+"/"+ticks[1].LiquidityNet.String())
 
 	byAlice, _, err := s.ListDexTradesByTrader(ctx, sc.Accounts[1].Address, port.FirstPage(100))
 	require.NoError(t, err)

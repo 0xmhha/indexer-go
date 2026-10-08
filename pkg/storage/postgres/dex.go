@@ -97,6 +97,33 @@ func (s *Store) ListDexOrders(ctx context.Context, market port.DexMarketKey, pag
 	}.run(ctx, s.q(ctx), cappedPage(page))
 }
 
+// ListDexOpenOrders implements port.DexReader.
+func (s *Store) ListDexOpenOrders(ctx context.Context, market port.DexMarketKey, page port.Page) ([]*port.DexOrder, string, error) {
+	return listQuery[*port.DexOrder]{
+		list: dexMarketList("dex-open-orders", market),
+		sql: `SELECT o.data FROM dex_open_orders p JOIN dex_orders o USING (manager, order_id)
+			WHERE p.manager = $1 AND p.market_id = $2`,
+		args: []any{market.Address.Bytes(), i64(market.ID)},
+		keys: []keyCol{{"p.created_block", kindInt, false}, {"p.created_log_index", kindInt, false}},
+		scan: scanJSON[port.DexOrder],
+		keyOf: func(o *port.DexOrder) []string {
+			return []string{u64s(o.CreatedBlock), u64s(uint64(o.CreatedLogIndex))}
+		},
+	}.run(ctx, s.q(ctx), cappedPage(page))
+}
+
+// GetDexTick implements port.DexReader.
+func (s *Store) GetDexTick(ctx context.Context, market port.DexMarketKey, tick int32) (*port.DexTick, error) {
+	return getJSON[port.DexTick](ctx, s.q(ctx),
+		"SELECT data FROM dex_ticks WHERE address = $1 AND market_id = $2 AND tick = $3", market.Address.Bytes(), i64(market.ID), tick)
+}
+
+// ListDexTicks implements port.DexReader.
+func (s *Store) ListDexTicks(ctx context.Context, market port.DexMarketKey) ([]*port.DexTick, error) {
+	return queryJSON[port.DexTick](ctx, s.q(ctx),
+		"SELECT data FROM dex_ticks WHERE address = $1 AND market_id = $2 ORDER BY tick", market.Address.Bytes(), i64(market.ID))
+}
+
 // saveDex writes a record as JSON with the given statement, whose last
 // argument is the data.
 func (s *Store) saveDex(ctx context.Context, what string, record any, sql string, args ...any) error {
@@ -149,9 +176,37 @@ func (s *Store) SaveDexLiquidity(ctx context.Context, l *port.DexLiquidity) erro
 
 // SaveDexOrder implements port.DexWriter.
 func (s *Store) SaveDexOrder(ctx context.Context, o *port.DexOrder) error {
-	return s.saveDex(ctx, "dex order", o, `INSERT INTO dex_orders (manager, order_id, market_id, created_block, created_log_index, data)
+	err := s.saveDex(ctx, "dex order", o, `INSERT INTO dex_orders (manager, order_id, market_id, created_block, created_log_index, data)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (manager, order_id) DO UPDATE SET market_id = EXCLUDED.market_id,
 			created_block = EXCLUDED.created_block, created_log_index = EXCLUDED.created_log_index, data = EXCLUDED.data`,
 		o.Market.Address.Bytes(), o.ID.Bytes(), i64(o.Market.ID), i64(o.CreatedBlock), int64(o.CreatedLogIndex))
+	if err != nil {
+		return err
+	}
+	if !o.Status.Resting() {
+		_, err = s.q(ctx).Exec(ctx, "DELETE FROM dex_open_orders WHERE manager = $1 AND order_id = $2", o.Market.Address.Bytes(), o.ID.Bytes())
+		return err
+	}
+	_, err = s.q(ctx).Exec(ctx, `INSERT INTO dex_open_orders (manager, order_id, market_id, created_block, created_log_index)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (manager, order_id) DO UPDATE SET market_id = EXCLUDED.market_id,
+			created_block = EXCLUDED.created_block, created_log_index = EXCLUDED.created_log_index`,
+		o.Market.Address.Bytes(), o.ID.Bytes(), i64(o.Market.ID), i64(o.CreatedBlock), int64(o.CreatedLogIndex))
+	return err
+}
+
+// SaveDexTick implements port.DexWriter.
+func (s *Store) SaveDexTick(ctx context.Context, t *port.DexTick) error {
+	if t.LiquidityGross == nil || t.LiquidityGross.Sign() == 0 {
+		if err := s.write(); err != nil {
+			return err
+		}
+		_, err := s.q(ctx).Exec(ctx, "DELETE FROM dex_ticks WHERE address = $1 AND market_id = $2 AND tick = $3",
+			t.Market.Address.Bytes(), i64(t.Market.ID), t.Tick)
+		return err
+	}
+	return s.saveDex(ctx, "dex tick", t, `INSERT INTO dex_ticks (address, market_id, tick, data) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (address, market_id, tick) DO UPDATE SET data = EXCLUDED.data`,
+		t.Market.Address.Bytes(), i64(t.Market.ID), t.Tick)
 }

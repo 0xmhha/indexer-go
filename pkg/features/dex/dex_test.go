@@ -26,10 +26,12 @@ type memStore struct {
 	trades      []*port.DexTrade
 	liquidity   []*port.DexLiquidity
 	orders      map[[2]common.Hash]*port.DexOrder
+	ticks       map[tickKey]*port.DexTick
 }
 
 func newMemStore() *memStore {
-	return &memStore{markets: map[port.DexMarketKey]*port.DexMarket{}, orders: map[[2]common.Hash]*port.DexOrder{}}
+	return &memStore{markets: map[port.DexMarketKey]*port.DexMarket{}, orders: map[[2]common.Hash]*port.DexOrder{},
+		ticks: map[tickKey]*port.DexTick{}}
 }
 
 func clone[T any](v *T) *T {
@@ -65,6 +67,26 @@ func (s *memStore) GetDexOrder(_ context.Context, m common.Address, id common.Ha
 }
 func (s *memStore) ListDexOrders(context.Context, port.DexMarketKey, port.Page) ([]*port.DexOrder, string, error) {
 	return nil, "", nil
+}
+func (s *memStore) ListDexOpenOrders(context.Context, port.DexMarketKey, port.Page) ([]*port.DexOrder, string, error) {
+	return nil, "", nil
+}
+func (s *memStore) GetDexTick(_ context.Context, m port.DexMarketKey, i int32) (*port.DexTick, error) {
+	if t, ok := s.ticks[tickKey{m, i}]; ok {
+		return clone(t), nil
+	}
+	return nil, port.ErrNotFound
+}
+func (s *memStore) ListDexTicks(context.Context, port.DexMarketKey) ([]*port.DexTick, error) {
+	return nil, nil
+}
+func (s *memStore) SaveDexTick(_ context.Context, t *port.DexTick) error {
+	if t.LiquidityGross.Sign() == 0 {
+		delete(s.ticks, tickKey{t.Market, t.Tick})
+	} else {
+		s.ticks[tickKey{t.Market, t.Tick}] = clone(t)
+	}
+	return nil
 }
 func (s *memStore) SaveDexMarket(_ context.Context, m *port.DexMarket) error {
 	s.markets[m.Key] = clone(m)
@@ -245,6 +267,7 @@ func TestUniswapV3(t *testing.T) {
 	assert.Equal(t, bob, l.Owner)
 	assert.Equal(t, [2]int32{-600, 600}, [2]int32{l.TickLower, l.TickUpper})
 	assert.Equal(t, "7000/100/400", l.Liquidity.String()+"/"+l.Amount0.String()+"/"+l.Amount1.String())
+	assert.Equal(t, "7000", m.Liquidity.String(), "the position is in range")
 
 	run(t, handlers, chainBlock(2,
 		[]*model.Log{swap(pool, -1000, 2500)}, // base out of the pool: a buy
@@ -408,4 +431,71 @@ func TestMatchClaimsOnlyItsFills(t *testing.T) {
 		l.Index = uint(i)
 	}
 	assert.Equal(t, map[uint]bool{1: true, 2: true}, matchedFills(logs))
+}
+
+// TestUniswapV3Ticks: positions keep the gross and net liquidity of their
+// bound ticks as the pool does, change the in-range liquidity only when the
+// current tick is inside them, and a tick left with no liquidity is removed.
+func TestUniswapV3Ticks(t *testing.T) {
+	store := newMemStore()
+	handlers, _ := setup(t, store, testSettings())
+	key := port.DexMarketKey{Address: pool}
+	position := func(topic0 common.Hash, lower, upper, liquidity int64) *model.Log {
+		if topic0 == TopicV3Mint {
+			return &model.Log{Address: pool, Topics: []common.Hash{TopicV3Mint, topic(bob), topicInt(lower), topicInt(upper)},
+				Data: data(addrWord(router), word(liquidity), word(1), word(1))}
+		}
+		return &model.Log{Address: pool, Topics: []common.Hash{TopicV3Burn, topic(bob), topicInt(lower), topicInt(upper)},
+			Data: data(word(liquidity), word(1), word(1))}
+	}
+	ticks := func() map[int32]string {
+		out := map[int32]string{}
+		for k, tk := range store.ticks {
+			out[k.tick] = tk.LiquidityGross.String() + "/" + tk.LiquidityNet.String()
+		}
+		return out
+	}
+	run(t, handlers, chainBlock(1,
+		[]*model.Log{
+			{Address: v3Factory, Topics: []common.Hash{TopicV3PoolCreated, topic(tokenA), topic(tokenB), common.BigToHash(big.NewInt(3000))},
+				Data: data(word(60), addrWord(pool))},
+			{Address: pool, Topics: []common.Hash{TopicV3Initialize}, Data: data(word(1<<40), word(10))},
+		},
+		[]*model.Log{position(TopicV3Mint, -120, 120, 1000)}, // in range
+		[]*model.Log{position(TopicV3Mint, 120, 240, 300)},   // above: shares tick 120
+		[]*model.Log{position(TopicV3Mint, -60, 0, 50)},      // below the current tick
+	))
+	assert.Equal(t, map[int32]string{-120: "1000/1000", 120: "1300/-700", 240: "300/-300", -60: "50/50", 0: "50/-50"}, ticks())
+	assert.Equal(t, "1000", store.markets[key].Liquidity.String(), "only the position around tick 10")
+
+	run(t, handlers, chainBlock(2,
+		[]*model.Log{position(TopicV3Burn, -120, 120, 400)},
+		[]*model.Log{position(TopicV3Burn, -60, 0, 50)}, // the position is closed
+	))
+	assert.Equal(t, map[int32]string{-120: "600/600", 120: "900/-300", 240: "300/-300"}, ticks(), "ticks -60 and 0 are removed")
+	assert.Equal(t, "600", store.markets[key].Liquidity.String())
+	assert.Equal(t, uint64(2), store.markets[key].UpdatedBlock)
+}
+
+// TestPerpTriggerOrders: stop and take profit orders wait for their
+// trigger, and rest once triggered.
+func TestPerpTriggerOrders(t *testing.T) {
+	store := newMemStore()
+	handlers, _ := setup(t, store, testSettings())
+	stop, limit := common.HexToHash("0x0e"), common.HexToHash("0x0f")
+	created := perpOrder(stop, bob, 7, 1, 3, 40)
+	created.Data = data(word(1), word(3), word(3), scaledWord(40)) // stop limit
+	run(t, handlers, chainBlock(1,
+		[]*model.Log{{Address: engine, Topics: []common.Hash{TopicPerpMarketCreated, common.BigToHash(big.NewInt(7)), {}, topic(tokenB)}, Data: word(20)}},
+		[]*model.Log{created, perpOrder(limit, bob, 7, 1, 3, 40)},
+	))
+	status := func(id common.Hash) port.DexOrderStatus { return store.orders[orderKey(manager, id)].Status }
+	assert.Equal(t, port.DexOrderPending, status(stop))
+	assert.Equal(t, port.DexOrderOpen, status(limit))
+	assert.False(t, status(stop).Resting())
+
+	run(t, handlers, chainBlock(2, []*model.Log{{Address: manager, Topics: []common.Hash{TopicPerpOrderTriggered, stop},
+		Data: data(scaledWord(41), scaledWord(40))}}))
+	assert.Equal(t, port.DexOrderOpen, status(stop))
+	assert.Equal(t, uint64(2), store.orders[orderKey(manager, stop)].UpdatedBlock)
 }
