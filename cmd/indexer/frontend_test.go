@@ -16,7 +16,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
-	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
@@ -139,14 +138,14 @@ func TestFrontendDocuments(t *testing.T) {
 		}
 	}
 
-	// The schema every optional query group adds to: what a node serving
-	// the RPC proxy and dynamic contracts answers.
+	// The schema a single-chain process serves: with the RPC proxy (it has
+	// a node); the dynamic contract group needs a contract registration
+	// service, which no process wires.
 	st, err := storage.NewPebbleStorage(storage.DefaultConfig(t.TempDir()))
 	require.NoError(t, err)
 	defer func() { _ = st.Close() }()
 	h, err := graphql.NewHandlerWithOptions(st, zap.NewNop(), &graphql.HandlerOptions{
-		RPCProxy:                    &rpcproxy.Proxy{},
-		ContractRegistrationService: &events.ContractRegistrationService{},
+		RPCProxy: &rpcproxy.Proxy{},
 	})
 	require.NoError(t, err)
 
