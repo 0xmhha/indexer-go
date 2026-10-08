@@ -7,19 +7,11 @@ import (
 	"go.uber.org/zap"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// Allow all origins for now (should be configured in production)
-		return true
-	},
-}
-
 // Server handles WebSocket connections
 type Server struct {
-	hub    *Hub
-	logger *zap.Logger
+	hub      *Hub
+	logger   *zap.Logger
+	upgrader websocket.Upgrader
 }
 
 // NewServer creates a new WebSocket server
@@ -30,12 +22,23 @@ func NewServer(logger *zap.Logger) *Server {
 	return &Server{
 		hub:    hub,
 		logger: logger,
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			CheckOrigin:     func(r *http.Request) bool { return true },
+		},
 	}
+}
+
+// SetCheckOrigin sets the check of the Origin header of upgrade requests
+// (api.allowed_origins); every origin is allowed until it is set.
+func (s *Server) SetCheckOrigin(check func(r *http.Request) bool) {
+	s.upgrader.CheckOrigin = check
 }
 
 // ServeHTTP handles WebSocket upgrade requests
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		s.logger.Error("failed to upgrade connection", zap.Error(err))
 		return

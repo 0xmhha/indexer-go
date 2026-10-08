@@ -59,8 +59,40 @@ api:
   enable_websocket_keepalive: false     # WebSocket keepalive 활성화
   enable_cors: true
   allowed_origins:
-    - "*"                               # CORS 허용 오리진 (* = 전체 허용)
+    - "*"                               # CORS와 WebSocket Origin 검사의 허용 오리진 (* = 전체 허용)
+  trusted_proxies: []                   # X-Forwarded-For/X-Real-IP를 믿을 리버스 프록시 (IP 또는 CIDR)
+  rate_limit:
+    enabled: true                       # 클라이언트 주소마다 요청 수 제한 (기본 켜짐)
+    per_second: 100
+    burst: 200
+  graphql:
+    max_depth: 15                       # 필드 중첩 깊이 상한 (0 = 제한 없음)
+    max_complexity: 5000                # 복잡도 상한 (0 = 제한 없음)
   subscription_engine: true             # GraphQL 구독을 구독 엔진으로 전달 (false = 이전 방식)
+
+  # 공개 API 보호(refactoring plan R4-3):
+  # - 클라이언트 주소: 연결 상대(peer)의 주소다. X-Forwarded-For와 X-Real-IP는 연결이
+  #   trusted_proxies에서 왔을 때만 믿는다. 누구나 이 헤더를 쓸 수 있기 때문이다.
+  #   X-Forwarded-For는 오른쪽부터 읽어 trusted_proxies가 아닌 첫 주소를 클라이언트로
+  #   본다. 그 왼쪽은 클라이언트가 쓴 값이라 믿지 않는다. 리버스 프록시 뒤에서
+  #   trusted_proxies를 비워 두면 모든 요청이 프록시 주소 하나로 보여 rate limit을 함께
+  #   쓰게 된다. 그런 요청이 처음 오면 경고 로그를 한 번 남긴다.
+  # - rate_limit: 클라이언트 주소마다 초당 per_second개, 한 번에 burst개까지 받고,
+  #   넘으면 429와 Retry-After: 1로 답한다. /health와 /metrics도 포함된다.
+  # - CORS: 허용 오리진에서 온 요청에만 CORS 헤더를 붙인다. "*"이면
+  #   Access-Control-Allow-Origin: *로 답하고, 목록이면 그 오리진을 그대로 돌려준다.
+  #   Access-Control-Allow-Credentials는 보내지 않는다(API는 쿠키를 쓰지 않는다).
+  # - WebSocket(/graphql/ws, /ws, /chains/<id>/graphql/ws): 브라우저는 WebSocket에
+  #   CORS를 적용하지 않으므로 서버가 Origin을 검사한다. Origin이 없는 클라이언트(브라우저가
+  #   아님), 허용 오리진, 서버 자신의 호스트만 받고 나머지는 403으로 거절한다.
+  # - graphql: 요청을 실행하기 전에 깊이와 복잡도를 계산한다. 필드는 1이고, 페이지를 묻는
+  #   필드(pagination: {limit}, limit, first 인자)의 하위 필드는 행 수만큼 곱한다. 예를 들어
+  #   blocks(pagination: {limit: 100}) { number hash }는 1 + 100 × 2 = 201이다. 변수로 준
+  #   페이지 크기도 읽는다. 넘으면 실행하지 않고 오류(extensions.code: QUERY_TOO_DEEP 또는
+  #   QUERY_TOO_COMPLEX, extensions.limit)로 답한다. 기본값은 GraphQL 도구의 introspection
+  #   쿼리(깊이 13)와, indexer-frontend 쿼리 중 가장 비싼 것을 100행 페이지로 물었을 때의
+  #   복잡도(약 2,200)를 받아들인다. 페이지 안에 다시 페이지를 묻는 쿼리
+  #   (blocks 100개마다 트랜잭션 100개 등)는 거절된다.
 
   # 구독 엔진(refactoring plan R3-3): 이벤트 버스에는 엔진 하나만 구독하고, 엔진이
   # 구독 종류(newBlock, logs 등)마다 이벤트를 한 번 직렬화해 조건이 맞는 연결에 같은
@@ -339,6 +371,13 @@ INDEXER_API_PORT=8080
 INDEXER_API_GRAPHQL=true
 INDEXER_API_JSONRPC=true
 INDEXER_API_WEBSOCKET=true
+INDEXER_API_CORS_ALLOWED_ORIGINS=https://explorer.example.com
+INDEXER_API_TRUSTED_PROXIES=10.0.0.0/8,127.0.0.1
+INDEXER_API_RATE_LIMIT_ENABLED=true
+INDEXER_API_RATE_LIMIT_PER_SECOND=100
+INDEXER_API_RATE_LIMIT_BURST=200
+INDEXER_API_GRAPHQL_MAX_DEPTH=15
+INDEXER_API_GRAPHQL_MAX_COMPLEXITY=5000
 INDEXER_LOG_LEVEL=info
 INDEXER_LOG_FORMAT=json
 ```
@@ -397,6 +436,8 @@ api:
   enable_cors: true
   allowed_origins:
     - "https://explorer.example.com"
+  trusted_proxies:
+    - "10.0.0.0/8"                      # 로드밸런서·리버스 프록시 대역
 account_abstraction:
   enabled: true
   entry_point_addresses:

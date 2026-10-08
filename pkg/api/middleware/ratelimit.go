@@ -3,7 +3,6 @@ package middleware
 import (
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -136,27 +135,11 @@ func (rl *RateLimiter) LimiterCount() int {
 	return len(rl.limiters)
 }
 
-// extractClientIP extracts the real client IP from the request.
-// It validates X-Forwarded-For and X-Real-IP headers to prevent spoofing.
+// extractClientIP returns the client address of the request: the peer of
+// the connection, which ClientIP replaces with the forwarded client when
+// the peer is a trusted proxy. Forwarding headers are not read here: the
+// client can write them.
 func extractClientIP(r *http.Request) string {
-	// Try X-Forwarded-For first (take the first/leftmost IP)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.SplitN(xff, ",", 2)
-		ip := strings.TrimSpace(parts[0])
-		if parsedIP := net.ParseIP(ip); parsedIP != nil {
-			return ip
-		}
-	}
-
-	// Try X-Real-IP
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		ip := strings.TrimSpace(xri)
-		if parsedIP := net.ParseIP(ip); parsedIP != nil {
-			return ip
-		}
-	}
-
-	// Fall back to RemoteAddr (strip port)
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

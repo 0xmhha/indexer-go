@@ -31,11 +31,21 @@ const (
 	// DefaultMaxHeaderBytes is the default maximum request header size (1 MB)
 	DefaultMaxHeaderBytes = 1 << 20 // 1 MB
 
-	// DefaultRateLimitPerSecond is the default rate limit (requests per second)
-	DefaultRateLimitPerSecond = 1000
+	// DefaultRateLimitPerSecond is the default rate limit of the API
+	// (requests per second per client address)
+	DefaultRateLimitPerSecond = 100
 
 	// DefaultRateLimitBurst is the default rate limit burst size
-	DefaultRateLimitBurst = 2000
+	DefaultRateLimitBurst = 200
+
+	// DefaultGraphQLMaxDepth is the default deepest field nesting of a
+	// GraphQL request (the introspection query of GraphQL tools is 13 deep)
+	DefaultGraphQLMaxDepth = 15
+
+	// DefaultGraphQLMaxComplexity is the default highest complexity of a
+	// GraphQL request: about 2x the costliest indexer-frontend query asking
+	// for pages of 100
+	DefaultGraphQLMaxComplexity = 5000
 )
 
 // API Paths

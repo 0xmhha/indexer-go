@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/api/etherscan"
@@ -37,6 +38,8 @@ type Server struct {
 	verifier            verifier.Verifier
 	notificationService notifications.Service
 	chains              ChainStores
+	origins             apimiddleware.Origins
+	trustedProxies      []netip.Prefix
 }
 
 // ServerOptions contains optional configuration for the API server
@@ -62,11 +65,17 @@ func NewServerWithOptions(config *Config, logger *zap.Logger, store port.QuerySt
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
+	trusted, err := apimiddleware.ParseTrustedProxies(config.TrustedProxies)
+	if err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
 	s := &Server{
-		config:  config,
-		logger:  logger,
-		storage: store,
-		router:  chi.NewRouter(),
+		config:         config,
+		logger:         logger,
+		storage:        store,
+		router:         chi.NewRouter(),
+		origins:        apimiddleware.NewOrigins(config.AllowedOrigins),
+		trustedProxies: trusted,
 	}
 
 	// Set optional RPC Proxy before setting up routes
@@ -110,6 +119,11 @@ func NewServerWithOptions(config *Config, logger *zap.Logger, store port.QuerySt
 	return s, nil
 }
 
+// graphqlLimits are the bounds of GraphQL requests.
+func (s *Server) graphqlLimits() graphql.Limits {
+	return graphql.Limits{MaxDepth: s.config.GraphQLMaxDepth, MaxComplexity: s.config.GraphQLMaxComplexity}
+}
+
 // streamOutbox returns the change stream's outbox of store when the server
 // serves it (StreamResume), nil otherwise.
 func (s *Server) streamOutbox(store port.QueryStore) port.Outbox {
@@ -151,8 +165,9 @@ func (s *Server) setupMiddleware() {
 	// Request ID middleware
 	s.router.Use(middleware.RequestID)
 
-	// Real IP middleware
-	s.router.Use(middleware.RealIP)
+	// Client address: the peer, or the client a trusted proxy forwarded
+	// for (api.trusted_proxies); logs and the rate limit use it
+	s.router.Use(apimiddleware.ClientIP(s.trustedProxies, s.logger))
 
 	// Logger middleware
 	s.router.Use(apimiddleware.LoggerWithLevel(s.logger))
@@ -189,41 +204,9 @@ func (s *Server) setupMiddleware() {
 		)
 	}
 
-	// Custom CORS middleware that adds headers to ALL responses
+	// CORS headers on every response to an allowed origin
 	if s.config.EnableCORS {
-		s.router.Use(func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				origin := r.Header.Get("Origin")
-				if origin == "" {
-					origin = "*"
-				}
-
-				// Check if origin is allowed
-				allowed := false
-				for _, allowedOrigin := range s.config.AllowedOrigins {
-					if allowedOrigin == "*" || allowedOrigin == origin {
-						allowed = true
-						break
-					}
-				}
-
-				if allowed {
-					w.Header().Set("Access-Control-Allow-Origin", origin)
-					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-					w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token, Upgrade, Connection")
-					w.Header().Set("Access-Control-Allow-Credentials", "true")
-					w.Header().Set("Access-Control-Max-Age", "300")
-				}
-
-				// Handle preflight requests
-				if r.Method == "OPTIONS" {
-					w.WriteHeader(http.StatusOK)
-					return
-				}
-
-				next.ServeHTTP(w, r)
-			})
-		})
+		s.router.Use(apimiddleware.CORS(s.origins))
 	}
 }
 
@@ -235,6 +218,7 @@ func (s *Server) setupRoutes() {
 
 		// Create WebSocket server
 		s.wsServer = websocket.NewServer(s.logger)
+		s.wsServer.SetCheckOrigin(s.origins.CheckWebSocketOrigin)
 		s.router.Get(s.config.WebSocketPath, s.wsServer.ServeHTTP)
 	}
 
@@ -272,6 +256,7 @@ func (s *Server) setupRoutes() {
 		opts := &graphql.HandlerOptions{
 			RPCProxy:            s.rpcProxy,
 			NotificationService: s.notificationService,
+			Limits:              s.graphqlLimits(),
 		}
 		if outbox != nil {
 			opts.Stream = outbox
@@ -288,6 +273,7 @@ func (s *Server) setupRoutes() {
 		// Create GraphQL Subscription server (EventBus will be set later via SetEventBus)
 		s.gqlSubServer = graphql.NewSubscriptionServer(nil, s.logger, s.config.EnableWebSocketKeepAlive)
 		s.gqlSubServer.SetDirect(s.config.DirectSubscriptions)
+		s.gqlSubServer.SetCheckOrigin(s.origins.CheckWebSocketOrigin)
 		if outbox != nil {
 			s.gqlSubServer.SetOutbox(outbox)
 		}

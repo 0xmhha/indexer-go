@@ -10,6 +10,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
+	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
@@ -37,6 +38,9 @@ type chainRoutes struct {
 
 	streamOutbox func(port.QueryStore) port.Outbox
 
+	limits  graphql.Limits
+	origins apimiddleware.Origins
+
 	mu       sync.Mutex
 	handlers map[string]*chainHandlers
 }
@@ -56,6 +60,8 @@ func (s *Server) mountChainRoutes(chains ChainStores) {
 		keepAlive: s.config.EnableWebSocketKeepAlive,
 		direct:    s.config.DirectSubscriptions,
 		handlers:  map[string]*chainHandlers{},
+		limits:    s.graphqlLimits(),
+		origins:   s.origins,
 
 		streamOutbox: s.streamOutbox,
 	}
@@ -108,9 +114,9 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 	}
 	logger := cr.logger.With(zap.String("chain", id))
 	outbox := cr.streamOutbox(store)
-	var opts *graphql.HandlerOptions
+	opts := &graphql.HandlerOptions{Limits: cr.limits}
 	if outbox != nil {
-		opts = &graphql.HandlerOptions{Stream: outbox}
+		opts.Stream = outbox
 	}
 	gql, err := graphql.NewHandlerWithOptions(store, logger, opts)
 	if err != nil {
@@ -119,6 +125,7 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 	}
 	sub := graphql.NewSubscriptionServer(bus, logger, cr.keepAlive)
 	sub.SetDirect(cr.direct)
+	sub.SetCheckOrigin(cr.origins.CheckWebSocketOrigin)
 	if outbox != nil {
 		sub.SetOutbox(outbox)
 	}
