@@ -136,6 +136,7 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
   - `cmd/indexer/defects_test.go`: reproduces known data-integrity defects listed in `knownDefects`; remove an id when its fix lands
 - Storage port contracts: `pkg/core/port/porttest` checks any storage against every port (`porttest.Run`); Pebble runs it in `pkg/storage/contract_test.go`, which also requires the contracts to fail on deliberately broken stores
 - PostgreSQL: `make test-postgres` runs the adapter tests and the whole `cmd/indexer` end-to-end suite on PostgreSQL (`INDEXER_TEST_DRIVER=postgres`, `INDEXER_TEST_POSTGRES`; `cmd/indexer/testdb_test.go` gives every test database a schema and dumps it for the keyspace comparisons; tests of Pebble itself call `pebbleOnly`). `TestPostgresMatchesPebble` indexes the scenarios with both drivers and compares every read port
+- Service level (R5-5, G3): `make test-slo` (`TestSLOLoad`, `INDEXER_LOAD_SLO=1`, about two minutes) indexes a DEX load chain block by block with the live loop and the API, with 1,000 WebSocket `dexTrade` subscribers at 10 trades/s; end-to-end p99 (node shows block -> subscriber has trade) must be <= 250 ms, and 1% non-reading subscribers may not make it more than 20% worse. `INDEXER_LOAD_*` variables change the load for reports
 - Benchmarks: EventBus performance tests
 
 ### Dependencies

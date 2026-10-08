@@ -269,3 +269,57 @@ func (sc *DEXScenario) Fork() {
 		ch.AddBlock(TxSpec{From: op, Tx: &types.LegacyTx{To: &lp.Address, Value: ether(2), Gas: 21000, GasPrice: gp}})
 	}
 }
+
+// BuildDEXLoad builds a chain for load tests: block 1 creates and funds the
+// DEX scenario's V2 pair, and each of the next blocks holds swaps
+// transactions, each one swap of the pair (alternately buying and selling a
+// little). Every block is built; the visible head is block 1, so a test
+// reveals blocks one at a time with SetHead.
+func BuildDEXLoad(blocks, swaps int) *DEXScenario {
+	accts := make([]Account, 4)
+	alloc := map[common.Address]*big.Int{}
+	for i := range accts {
+		accts[i] = NewAccount(uint64(60 + i))
+		alloc[accts[i].Address] = ether(1_000_000)
+	}
+	ch := NewChain(DefaultChainID, alloc)
+	sc := &DEXScenario{
+		Scenario:  Scenario{Chain: ch, Accounts: accts},
+		V2Factory: common.HexToAddress("0x00000000000000000000000000000000000F2001"),
+		V2Pair:    common.HexToAddress("0x00000000000000000000000000000000000B2001"),
+		TokenA:    common.HexToAddress("0x000000000000000000000000000000000000A0A0"),
+		TokenB:    common.HexToAddress("0x000000000000000000000000000000000000B0B0"),
+	}
+	router := common.HexToAddress("0x00000000000000000000000000000000000C0001")
+	gp := big.NewInt(2_000_000_000)
+	call := func(from Account, to common.Address, logs ...*types.Log) TxSpec {
+		return TxSpec{From: from, Tx: &types.LegacyTx{To: &to, Gas: 300000, GasPrice: gp}, GasUsed: 120000, Logs: logs}
+	}
+	r0, r1 := big.NewInt(1_000_000_000), big.NewInt(2_000_000_000)
+	ch.AddBlock(call(accts[0], sc.V2Factory,
+		&types.Log{Address: sc.V2Factory, Topics: []common.Hash{SigV2PairCreated, addrTopic(sc.TokenA), addrTopic(sc.TokenB)},
+			Data: concat(addrWord(sc.V2Pair), word(n(1)))},
+		&types.Log{Address: sc.V2Pair, Topics: []common.Hash{SigV2Mint, addrTopic(router)}, Data: concat(word(r0), word(r1))},
+		&types.Log{Address: sc.V2Pair, Topics: []common.Hash{SigV2Sync}, Data: concat(word(r0), word(r1))},
+	))
+	for b := 0; b < blocks; b++ {
+		specs := make([]TxSpec, swaps)
+		for i := range specs {
+			trader := accts[1+(b*swaps+i)%3]
+			var swap []byte
+			if i%2 == 0 { // buy 100 A for 201 B
+				swap = concat(word(n(0)), word(n(201)), word(n(100)), word(n(0)))
+				r0, r1 = new(big.Int).Sub(r0, n(100)), new(big.Int).Add(r1, n(201))
+			} else { // sell 100 A for 199 B
+				swap = concat(word(n(100)), word(n(0)), word(n(0)), word(n(199)))
+				r0, r1 = new(big.Int).Add(r0, n(100)), new(big.Int).Sub(r1, n(199))
+			}
+			specs[i] = call(trader, router,
+				&types.Log{Address: sc.V2Pair, Topics: []common.Hash{SigV2Swap, addrTopic(router), addrTopic(trader.Address)}, Data: swap},
+				&types.Log{Address: sc.V2Pair, Topics: []common.Hash{SigV2Sync}, Data: concat(word(r0), word(r1))})
+		}
+		ch.AddBlock(specs...)
+	}
+	ch.SetHead(1)
+	return sc
+}
