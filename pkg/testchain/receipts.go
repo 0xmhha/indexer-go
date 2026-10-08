@@ -8,12 +8,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// PaymentSettledSignature is the event of the receipts scenario, as a
-// declared source writes it.
-const PaymentSettledSignature = "PaymentSettled(address indexed merchant, bytes32 indexed orderId, address device, uint256 amount)"
+// PaymentSettledSignature is the settlement contract's event (the P07
+// receipt indexer's input), as a declared source writes it.
+const PaymentSettledSignature = "PaymentSettled(address indexed merchant, bytes32 indexed orderId, address indexed device, uint256 amount, uint256 nonce)"
 
 var (
-	SigPaymentSettled = crypto.Keccak256Hash([]byte("PaymentSettled(address,bytes32,address,uint256)"))
+	SigPaymentSettled = crypto.Keccak256Hash([]byte("PaymentSettled(address,bytes32,address,uint256,uint256)"))
 	SigRefunded       = crypto.Keccak256Hash([]byte("Refunded(bytes32,uint256)"))
 )
 
@@ -25,6 +25,7 @@ type Payment struct {
 	OrderID  common.Hash
 	Device   common.Address
 	Amount   int64
+	Nonce    int64
 }
 
 // ReceiptsScenario is a payment settlement chain (the P07 receipt
@@ -62,16 +63,19 @@ func BuildReceipts() *ReceiptsScenario {
 	kiosk := accts[0]
 	gp := big.NewInt(1_000_000_000)
 	order := func(n int64) common.Hash { return common.BigToHash(big.NewInt(1000 + n)) }
+	nonce := int64(0)
 	payment := func(at common.Address, m common.Address, o common.Hash, amount int64) *types.Log {
-		return &types.Log{Address: at, Topics: []common.Hash{SigPaymentSettled, addrTopic(m), o},
-			Data: concat(addrWord(sc.Device), word(big.NewInt(amount)))}
+		nonce++
+		return &types.Log{Address: at, Topics: []common.Hash{SigPaymentSettled, addrTopic(m), o, addrTopic(sc.Device)},
+			Data: concat(word(big.NewInt(amount)), word(big.NewInt(nonce)))}
 	}
 	pay := func(logs ...*types.Log) {
 		ch.AddBlock(TxSpec{From: kiosk, Tx: &types.LegacyTx{To: &sc.Settlement, Gas: 200000, GasPrice: gp}, GasUsed: 90000, Logs: logs})
 		for _, l := range logs {
 			if l.Address == sc.Settlement && l.Topics[0] == SigPaymentSettled {
 				sc.Payments = append(sc.Payments, Payment{Block: ch.Head(), Merchant: common.BytesToAddress(l.Topics[1].Bytes()),
-					OrderID: l.Topics[2], Device: sc.Device, Amount: new(big.Int).SetBytes(l.Data[32:]).Int64()})
+					OrderID: l.Topics[2], Device: common.BytesToAddress(l.Topics[3].Bytes()),
+					Amount: new(big.Int).SetBytes(l.Data[:32]).Int64(), Nonce: new(big.Int).SetBytes(l.Data[32:]).Int64()})
 			} else {
 				sc.Decoys++
 			}
