@@ -287,6 +287,8 @@ func (s *Server) setupRoutes() {
 			zap.Bool("keep_alive", s.config.EnableWebSocketKeepAlive))
 	}
 
+	s.mountRoutes()
+
 	if s.config.DeclaredOnly {
 		s.logger.Info("Declared data only: no explorer, REST, JSON-RPC or Etherscan API")
 		return
