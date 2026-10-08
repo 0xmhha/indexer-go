@@ -36,7 +36,6 @@ indexer:
   mode: declared
   finality: finalized
   poll_interval: 10ms
-  chunk_size: 1   # one block per batch: retries every 200ms and the head is polled again between blocks
 api:
   enabled: true
   host: 127.0.0.1

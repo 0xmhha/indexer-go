@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -102,4 +103,44 @@ func TestRPCTimeoutBoundsCalls(t *testing.T) {
 	_, err := f.balanceAt(context.Background(), common.Address{}, nil)
 	require.True(t, errors.Is(err, context.DeadlineExceeded), "got %v", err)
 	require.Less(t, time.Since(start), time.Second)
+}
+
+// movingHeadClient is a node whose head the test moves while Run reads it.
+type movingHeadClient struct {
+	*mockClient
+	head atomic.Uint64
+}
+
+func (c *movingHeadClient) GetLatestBlockNumber(context.Context) (uint64, error) {
+	return c.head.Load(), nil
+}
+
+// TestProgressFollowsTheNodeWhileRetrying: while a batch keeps failing (no
+// block source here, and an hour between retries) the live loop does not
+// poll the node, yet Progress follows the node's head, so an API can tell
+// that indexing is behind.
+func TestProgressFollowsTheNodeWhileRetrying(t *testing.T) {
+	saved := progressPoll
+	progressPoll = 10 * time.Millisecond
+	defer func() { progressPoll = saved }()
+
+	client := &movingHeadClient{mockClient: newMockClient()}
+	client.head.Store(10)
+	f := newLifecycleFetcher(t, client, &Config{BatchSize: 100, MaxRetries: 1, RetryDelay: time.Hour, NumWorkers: 1})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- f.Run(ctx) }()
+	require.Eventually(t, func() bool { target, ok := f.Progress(); return ok && target == 10 }, 5*time.Second, 5*time.Millisecond)
+
+	client.head.Store(500) // the loop is waiting an hour to retry
+	require.Eventually(t, func() bool { target, _ := f.Progress(); return target == 500 }, 5*time.Second, 5*time.Millisecond,
+		"the progress follows the node while the batch retries")
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not stop")
+	}
 }
