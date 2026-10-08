@@ -53,6 +53,11 @@ type Config struct {
 	// (api.subscription_engine: false).
 	DirectSubscriptions bool
 
+	// HealthOnly serves only /health, /version, /metrics and /subscribers:
+	// the HTTP server of an indexing process that leaves the API to other
+	// processes (node.role ingest, refactoring plan R4-1).
+	HealthOnly bool
+
 	// EnableWebSocketKeepAlive enables WebSocket keep-alive (ping/pong)
 	// When enabled, server sends ping every 54 seconds with 60 second timeout
 	// Default: false

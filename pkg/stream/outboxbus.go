@@ -29,6 +29,12 @@ type OutboxBusConfig struct {
 	// group consuming from this bus (for consumers that ask for missed
 	// events); 0 keeps every entry.
 	Retain uint64
+	// Ephemeral keeps the groups' positions in this bus only and writes
+	// nothing to the outbox (no positions, no pruning), so a process that
+	// opens the outbox read-only can consume it (an API process, R4-1). A
+	// group then resumes where it stopped within the process, not after a
+	// restart: it starts again where Join's start puts it.
+	Ephemeral bool
 }
 
 // OutboxBus is the Bus that reads the outbox directly: each group's
@@ -48,6 +54,7 @@ type OutboxBus struct {
 	mu        sync.Mutex
 	consumers map[string]*consumerState // groups consuming now
 	prunedTo  uint64                    // entries below were pruned by this bus
+	positions map[string]uint64         // Ephemeral: each group's position
 }
 
 type consumerState struct {
@@ -68,7 +75,7 @@ func NewOutboxBus(outbox port.Outbox, cfg OutboxBusConfig, logger *zap.Logger) *
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	return &OutboxBus{outbox: outbox, cfg: cfg, logger: logger, consumers: make(map[string]*consumerState)}
+	return &OutboxBus{outbox: outbox, cfg: cfg, logger: logger, consumers: make(map[string]*consumerState), positions: make(map[string]uint64)}
 }
 
 // Notify tells the consumers that entries were committed. It never blocks.
@@ -88,7 +95,7 @@ func (b *OutboxBus) Join(ctx context.Context, group string, start Start) (uint64
 	if group == "" {
 		return 0, errors.New("stream: empty consumer group")
 	}
-	pos, ok, err := b.outbox.OutboxCursor(ctx, group)
+	pos, ok, err := b.position(ctx, group)
 	if err != nil {
 		return 0, fmt.Errorf("stream: read position of %q: %w", group, err)
 	}
@@ -112,10 +119,33 @@ func (b *OutboxBus) Join(ctx context.Context, group string, start Start) (uint64
 	if err != nil {
 		return 0, fmt.Errorf("stream: start position of %q: %w", group, err)
 	}
-	if err := b.outbox.SetOutboxCursor(ctx, group, pos); err != nil {
+	if err := b.setPosition(ctx, group, pos); err != nil {
 		return 0, fmt.Errorf("stream: record position of %q: %w", group, err)
 	}
 	return pos, nil
+}
+
+// position returns a group's recorded position: its outbox cursor, or the
+// bus's own record when Ephemeral.
+func (b *OutboxBus) position(ctx context.Context, group string) (uint64, bool, error) {
+	if b.cfg.Ephemeral {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		pos, ok := b.positions[group]
+		return pos, ok, nil
+	}
+	return b.outbox.OutboxCursor(ctx, group)
+}
+
+// setPosition records a group's position.
+func (b *OutboxBus) setPosition(ctx context.Context, group string, pos uint64) error {
+	if b.cfg.Ephemeral {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		b.positions[group] = pos
+		return nil
+	}
+	return b.outbox.SetOutboxCursor(ctx, group, pos)
 }
 
 // Consume implements Bus.
@@ -166,7 +196,7 @@ func (b *OutboxBus) Consume(ctx context.Context, group string, handle Handler) e
 			return err
 		}
 		pos = batch[len(batch)-1].Seq
-		if err := b.outbox.SetOutboxCursor(ctx, group, pos); err != nil {
+		if err := b.setPosition(ctx, group, pos); err != nil {
 			return fmt.Errorf("stream: record position %d of %q: %w", pos, group, err)
 		}
 		b.moved(ctx, c, pos)
@@ -188,7 +218,7 @@ func (b *OutboxBus) moved(ctx context.Context, c *consumerState, pos uint64) {
 	prunedTo := b.prunedTo
 	b.mu.Unlock()
 
-	if b.cfg.Retain == 0 || slowest <= b.cfg.Retain {
+	if b.cfg.Ephemeral || b.cfg.Retain == 0 || slowest <= b.cfg.Retain {
 		return
 	}
 	before := slowest - b.cfg.Retain + 1

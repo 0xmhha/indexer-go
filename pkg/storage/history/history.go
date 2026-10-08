@@ -585,6 +585,9 @@ func DescribeToken(ctx context.Context, tb *port.TokenBalance, store TokenMetada
 	}
 	applyMetadata(tb, md)
 	if err := store.SaveTokenMetadata(ctx, md); err != nil {
+		if errors.Is(err, port.ErrReadOnly) {
+			return // an API process: the indexing process stores metadata
+		}
 		logger.Warn("Failed to cache fetched token metadata", zap.String("contract", contract.Hex()), zap.Error(err))
 		return
 	}

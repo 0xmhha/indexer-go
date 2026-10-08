@@ -25,15 +25,24 @@ var (
 // usesPostgres reports whether db selects the PostgreSQL store.
 func usesPostgres(db *config.DatabaseConfig) bool { return db.Driver == config.DriverPostgres }
 
-// openStore opens the store db selects for indexing.
-func openStore(ctx context.Context, db *config.DatabaseConfig, logger *zap.Logger) (storage.Storage, error) {
+// openStore opens the store db selects: for indexing, or read-only for an
+// API process (node.role api, PostgreSQL only).
+func openStore(ctx context.Context, db *config.DatabaseConfig, readOnly bool, logger *zap.Logger) (storage.Storage, error) {
 	if usesPostgres(db) {
-		s, err := openPostgres(ctx, db)
+		s, err := postgres.Open(ctx, postgres.Options{
+			DSN:      db.Postgres.DSN,
+			Schema:   db.Postgres.Schema,
+			MaxConns: db.Postgres.MaxConns,
+			ReadOnly: readOnly,
+		})
 		if err != nil {
 			return nil, err
 		}
 		s.SetLogger(logger)
 		return s, nil
+	}
+	if readOnly {
+		return nil, fmt.Errorf("a read-only process needs database.driver %s", config.DriverPostgres)
 	}
 	cfg := storage.DefaultConfig(db.Path)
 	cfg.ReadOnly = false

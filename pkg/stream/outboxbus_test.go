@@ -19,6 +19,12 @@ import (
 // outboxHarness is a stream in a Pebble outbox. Every bus it returns reads
 // the same outbox, as the nodes of one database would.
 func outboxHarness(wrap func(*stream.OutboxBus) stream.Bus) streamtest.NewHarness {
+	return outboxHarnessWith(stream.OutboxBusConfig{Batch: 3, Poll: time.Hour}, false, wrap)
+}
+
+// outboxHarnessWith is outboxHarness with buses of cfg; with shared, every
+// NewBus returns the same bus.
+func outboxHarnessWith(cfg stream.OutboxBusConfig, shared bool, wrap func(*stream.OutboxBus) stream.Bus) streamtest.NewHarness {
 	return func(t *testing.T) streamtest.Harness {
 		s, err := storage.NewPebbleStorage(storage.DefaultConfig(t.TempDir()))
 		require.NoError(t, err)
@@ -42,8 +48,13 @@ func outboxHarness(wrap func(*stream.OutboxBus) stream.Bus) streamtest.NewHarnes
 				}
 			},
 			NewBus: func(t *testing.T) stream.Bus {
-				b := stream.NewOutboxBus(s, stream.OutboxBusConfig{Batch: 3, Poll: time.Hour}, nil)
 				mu.Lock()
+				if shared && len(buses) > 0 {
+					b := buses[0]
+					mu.Unlock()
+					return b
+				}
+				b := stream.NewOutboxBus(s, cfg, nil)
 				buses = append(buses, b)
 				mu.Unlock()
 				if wrap != nil {
@@ -185,4 +196,53 @@ func TestOutboxBusPrunesBehindSlowestGroup(t *testing.T) {
 	require.Greater(t, first[0].Seq, slowPos, "entries behind every group are pruned")
 	stopSlow()
 	require.ErrorIs(t, <-slowDone, context.Canceled)
+}
+
+// TestEphemeralOutboxBusContract runs the bus contract against an Ephemeral
+// OutboxBus within one process: every "other bus" is the same instance, as
+// the restarts and nodes of the contract are, for an API process, the
+// consumers of its one bus.
+func TestEphemeralOutboxBusContract(t *testing.T) {
+	streamtest.Run(t, outboxHarnessWith(stream.OutboxBusConfig{Batch: 3, Poll: time.Hour, Ephemeral: true}, true, nil))
+}
+
+// TestEphemeralOutboxBusWritesNothing: an Ephemeral bus records no
+// positions and prunes nothing, so a read-only store can serve it.
+func TestEphemeralOutboxBusWritesNothing(t *testing.T) {
+	ctx := context.Background()
+	s, err := storage.NewPebbleStorage(storage.DefaultConfig(t.TempDir()))
+	require.NoError(t, err)
+	defer func() { _ = s.Close() }()
+	for i := 0; i < 5; i++ {
+		txCtx, tx, err := s.BeginBlock(ctx)
+		require.NoError(t, err)
+		require.NoError(t, s.AppendOutbox(txCtx, []port.OutboxEntry{{Type: "t", Data: []byte("x")}}))
+		require.NoError(t, tx.Commit())
+	}
+	bus := stream.NewOutboxBus(s, stream.OutboxBusConfig{Ephemeral: true, Retain: 1, Poll: 10 * time.Millisecond}, nil)
+	_, err = bus.Join(ctx, "api", stream.StartEarliest)
+	require.NoError(t, err)
+
+	cctx, cancel := context.WithCancel(ctx)
+	var got []uint64
+	done := make(chan error, 1)
+	go func() {
+		done <- bus.Consume(cctx, "api", func(_ context.Context, batch []port.OutboxEntry) error {
+			for _, e := range batch {
+				got = append(got, e.Seq)
+			}
+			if len(got) == 5 {
+				cancel()
+			}
+			return nil
+		})
+	}()
+	<-done
+	require.Equal(t, []uint64{1, 2, 3, 4, 5}, got)
+	_, ok, err := s.OutboxCursor(ctx, "api")
+	require.NoError(t, err)
+	require.False(t, ok, "no position written")
+	entries, err := s.ReadOutbox(ctx, 0, 0)
+	require.NoError(t, err)
+	require.Len(t, entries, 5, "nothing pruned")
 }

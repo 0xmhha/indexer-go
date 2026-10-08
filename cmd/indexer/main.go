@@ -44,6 +44,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/source/replay"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/stream"
 	"github.com/0xmhha/indexer-go/pkg/token"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/ethereum/go-ethereum/common"
@@ -90,6 +91,10 @@ type App struct {
 
 	// Contract verification
 	contractVerifier verifier.Verifier
+
+	// streamRelay feeds the event bus of an API process from the change
+	// stream (node.role api, role.go).
+	streamRelay *stream.Relay
 
 	// Runtime flags
 	enableGapMode    bool
@@ -345,8 +350,13 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 		if err := app.initMultiChainManager(); err != nil {
 			return nil, fmt.Errorf("failed to initialize multi-chain manager: %w", err)
 		}
+	} else if cfg.NodeRole() == config.RoleAPI {
+		log.Info("Single-chain mode", zap.String("role", config.RoleAPI))
+		if err := app.initAPINode(ctx); err != nil {
+			return nil, err
+		}
 	} else {
-		log.Info("Single-chain mode")
+		log.Info("Single-chain mode", zap.String("role", cfg.NodeRole()))
 
 		if err := app.startRPCArchive(); err != nil {
 			return nil, err
@@ -449,7 +459,7 @@ func (a *App) testConnection(ctx context.Context) error {
 // initStorageOnly initializes only the base storage layer without genesis initialization
 // This is used when multichain mode is enabled (each chain handles its own genesis)
 func (a *App) initStorageOnly(ctx context.Context) error {
-	baseStore, err := openStore(ctx, &a.config.Database, a.logger)
+	baseStore, err := openStore(ctx, &a.config.Database, a.config.NodeRole() == config.RoleAPI, a.logger)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -890,8 +900,13 @@ func (a *App) initFetcher(ctx context.Context) error {
 	}
 
 
-	// Set up on-demand token metadata fetcher for storage
-	// This allows GetTokenBalances to fetch metadata for tokens not yet indexed
+	a.setTokenMetadataFetcher()
+	return nil
+}
+
+// setTokenMetadataFetcher lets GetTokenBalances fetch the metadata of tokens
+// not indexed yet from the node.
+func (a *App) setTokenMetadataFetcher() {
 	tokenMetadataFetcher := token.NewStorageTokenMetadataFetcherFromEthClient(a.client.EthClient(), a.logger)
 	if tokenMetadataFetcher != nil {
 		a.storage.SetTokenMetadataFetcher(tokenMetadataFetcher)
@@ -899,7 +914,6 @@ func (a *App) initFetcher(ctx context.Context) error {
 	} else {
 		a.logger.Warn("Failed to create token metadata fetcher - on-demand fetching will be disabled")
 	}
-	return nil
 }
 
 // initAPIServer initializes the API server
@@ -914,9 +928,12 @@ func (a *App) initAPIServer() error {
 		}
 	}
 
-	// Initialize Contract Verifier for Etherscan-compatible API
-	if err := a.initContractVerifier(); err != nil {
-		a.logger.Warn("Failed to initialize Contract Verifier, contract verification will be disabled", zap.Error(err))
+	// Initialize Contract Verifier for Etherscan-compatible API; it stores
+	// what it verifies, so an API process (read-only) has none.
+	if a.config.NodeRole() != config.RoleAPI {
+		if err := a.initContractVerifier(); err != nil {
+			a.logger.Warn("Failed to initialize Contract Verifier, contract verification will be disabled", zap.Error(err))
+		}
 	}
 
 	apiConfig := &api.Config{
@@ -938,6 +955,12 @@ func (a *App) initAPIServer() error {
 		ShutdownTimeout:       constants.DefaultShutdownTimeout,
 	}
 	apiConfig.EnableWebSocketKeepAlive = a.config.API.EnableWebSocketKeepAlive
+	if a.config.NodeRole() == config.RoleIngest {
+		// API processes serve the API (R4-1); this one serves health and
+		// metrics.
+		apiConfig.HealthOnly = true
+		apiConfig.EnableGraphQL, apiConfig.EnableJSONRPC, apiConfig.EnableWebSocket = false, false, false
+	}
 	apiConfig.DirectSubscriptions = !a.config.API.SubscriptionEngine
 	apiConfig.StreamResume = a.config.EventBus.Outbox
 
@@ -1079,6 +1102,10 @@ func (a *App) Run(ctx context.Context) error {
 		// Block until context is cancelled
 		<-ctx.Done()
 		return ctx.Err()
+	}
+
+	if a.streamRelay != nil || a.fetcher == nil {
+		return a.runAPINode(ctx)
 	}
 
 	// Single-chain mode (legacy)
@@ -1262,7 +1289,7 @@ func validateConfig(cfg *config.Config) error {
 		return fmt.Errorf("batch size must be positive")
 	}
 	if cfg.Database.ReadOnly {
-		return fmt.Errorf("database.readonly is not supported: the indexer must write; an API-only role is planned (refactoring plan R4-1)")
+		return fmt.Errorf("database.readonly is not supported: an API process opens the database read-only with node.role: %s", config.RoleAPI)
 	}
 	return nil
 }

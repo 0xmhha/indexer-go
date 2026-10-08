@@ -13,9 +13,10 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 다음 설정은 시작할 때 거부된다.
 - `multichain.chains[].id`가 디렉터리 이름으로 쓸 수 없는 값(`/`, 앞의 `.` 등)이거나 중복일 때.
-- `database.readonly: true`: 수집기는 써야 한다. API 전용 실행은 별도 작업으로 계획되어 있다.
+- `database.readonly: true`: 수집기는 써야 한다. API만 하는 프로세스는 `node.role: api`로 DB를 읽기 전용으로 연다.
+- `node.role: api`인데 `database.driver`가 postgres가 아닐 때(Pebble은 한 프로세스만 연다), multi-chain 모드에서 `node.role`이 all이 아닐 때.
 
-다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.role`·`node.priority`, `account_abstraction.entry_point_addresses`. `watchlist.enabled`와 `resilience.enabled`는 v0.1.0 이후 해당 기능을 지웠으므로 효과가 없고, 켜져 있으면 경고가 남는다.
+다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.priority`, `account_abstraction.entry_point_addresses`. `watchlist.enabled`와 `resilience.enabled`는 v0.1.0 이후 해당 기능을 지웠으므로 효과가 없고, 켜져 있으면 경고가 남는다.
 
 ---
 
@@ -245,9 +246,21 @@ notifications:
 ```yaml
 node:
   id: "node-1"                         # 노드 식별자, 기본값은 hostname. 이벤트 스트림의 소비 그룹 이름으로 쓴다
-  role: "all"                           # writer | reader | all (아직 반영되지 않음)
+  role: "all"                           # all | ingest | api (writer·reader는 ingest·api의 예전 이름)
   priority: 0
 ```
+
+실행 역할(리팩터링 계획 R4-1). DB 하나를 색인하는 프로세스 하나(`ingest` 또는 `all`)와 그 DB를 서비스하는 API 프로세스 여러 개(`api`)로 나눠 띄울 수 있다.
+
+| 역할 | 색인 | API | 비고 |
+|---|---|---|---|
+| `all`(기본) | 한다 | 한다 | 지금까지의 동작 |
+| `ingest` | 한다 | `/health`·`/version`·`/metrics`·`/subscribers`만 | 알림, 계약 검증처럼 쓰는 일도 여기서 한다 |
+| `api` | 안 한다 | 한다 | `database.driver: postgres` 필요, DB를 읽기 전용으로 연다 |
+
+- `api` 프로세스는 schema를 만들거나 올리지 않는다. 색인 프로세스가 먼저 migration을 적용해야 시작한다.
+- `api` 프로세스의 GraphQL 구독은 색인 프로세스가 쓴 outbox를 `indexer.poll_interval`마다 읽어 받는다(소비 그룹 `node.id`, 위치는 메모리에만 둔다). 시작한 뒤의 이벤트부터 받으므로, 그 전 이벤트가 필요한 구독자는 `fromSequence`로 이어 받는다.
+- `api` 프로세스에서는 쓰는 기능이 동작하지 않는다: 알림(`notifications.enabled`)과 계약 검증(`verifier.enabled`)은 무시하고 경고를 남긴다. 알림 설정처럼 저장하는 API 요청은 읽기 전용 오류로 끝난다. genesis 잔액과 노드에서 가져온 토큰 메타데이터는 응답에는 쓰지만 저장하지 않는다.
 
 ---
 
