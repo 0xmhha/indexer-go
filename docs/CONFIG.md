@@ -204,6 +204,28 @@ features:
 - GraphQL: `dexOrderBook(market, marketId, levels, stepBps)`는 `bids`(높은 가격부터), `asks`(낮은 가격부터), `midPrice`, `blockNumber`, `reconciliation`을 돌려준다.
 - 0009 이전에 `dex.pools`로 색인한 DB는 V3 tick과 pending 상태가 없다. tick이 필요하면 재색인한다.
 
+### 캔들과 시계열 (agg.candles, agg.timeseries)
+
+두 기능은 기본으로 꺼져 있다. 블록의 저장 트랜잭션 안에서 집계를 갱신하므로, rollback하면 그 블록의 몫이 함께 되돌아간다. 집계는 순서와 무관하게 합쳐지므로(시가·종가는 체결 위치로 정한다) 색인된 DB에서 켜면 저장된 블록으로 background backfill한다.
+
+```yaml
+features:
+  agg.candles:                 # dex.trades 필요
+    enabled: true
+    intervals: [1m, 5m, 15m, 1h, 4h, 1d]   # <숫자><s|m|h|d>, 30일 이하
+  agg.timeseries:
+    enabled: true
+    series: [chain, dex, token]            # 기본 [chain]; dex는 dex.trades 필요
+```
+
+- 캔들: 시장·주기마다 [start, start+interval) 안의 체결로 open, high, low, close(가격은 quote/base×1e18), base·quote 거래량(원시 단위), 체결 수를 둔다. start는 Unix 0부터 주기의 배수다. 체결이 없는 구간에는 캔들이 없다(채우지 않는다).
+- 시계열은 UTC 일, ISO 주(월요일 시작), 월마다 점 하나를 둔다.
+  - `chain`: 블록 수, 트랜잭션 수, gasUsed, 수수료(gasUsed × 실제 낸 가격, wei), 첫·마지막 블록.
+  - `dex`: 시장별 체결 수, base·quote 거래량. `dex.trades`가 같은 블록에서 먼저 실행된다.
+  - `token`: 토큰별 전송 수와 ERC-20 전송량. `token.transfers`와 같은 규칙으로 전송을 판별한다(체인의 native coin 컨트랙트는 제외).
+- GraphQL: `dexCandles(market, marketId, interval, from, to)`, `chainActivity(period, from, to)`, `dexVolume(market, marketId, period, from, to)`, `tokenTransferVolume(token, period, from, to)`. `from`·`to`는 구간 시작의 Unix 초이고 둘 다 포함한다. 오래된 것부터 `pagination.after`로 넘긴다.
+- 0010 이전에 Pebble로 색인한 DEX 체결은 블록별 색인(`/dex/block/`)이 없어 캔들·DEX 시계열에 잡히지 않는다. 재색인한다.
+
 ### Contract Verification
 
 ```yaml

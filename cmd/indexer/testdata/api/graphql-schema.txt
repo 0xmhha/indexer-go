@@ -135,6 +135,16 @@ Candidate.address(): String!
 Candidate.diligence(): String!
 CandidateInfo.address(): String!
 CandidateInfo.diligence(): String!
+ChainActivity.blocks(): String!
+ChainActivity.fees(): String!
+ChainActivity.firstBlock(): String!
+ChainActivity.gasUsed(): String!
+ChainActivity.lastBlock(): String!
+ChainActivity.period(): String!
+ChainActivity.start(): String!
+ChainActivity.transactions(): String!
+ChainActivityConnection.nodes(): [ChainActivity!]!
+ChainActivityConnection.pageInfo(): PageInfo!
 ConsensusBlockSub.blockHash(): String!
 ConsensusBlockSub.blockNumber(): String!
 ConsensusBlockSub.commitCount(): Int!
@@ -253,6 +263,17 @@ DexBookReconciliation.error(): String
 DexBookReconciliation.inSync(): Boolean!
 DexBookReconciliation.mismatches(): [String!]!
 DexBookReconciliation.timestamp(): String!
+DexCandle.baseVolume(): String!
+DexCandle.close(): String!
+DexCandle.high(): String!
+DexCandle.interval(): String!
+DexCandle.low(): String!
+DexCandle.open(): String!
+DexCandle.quoteVolume(): String!
+DexCandle.start(): String!
+DexCandle.trades(): String!
+DexCandleConnection.nodes(): [DexCandle!]!
+DexCandleConnection.pageInfo(): PageInfo!
 DexLiquidityChange.amount0(): String!
 DexLiquidityChange.amount1(): String!
 DexLiquidityChange.blockNumber(): String!
@@ -331,6 +352,13 @@ DexTrade.transactionHash(): String!
 DexTrade.venue(): String!
 DexTradeConnection.nodes(): [DexTrade!]!
 DexTradeConnection.pageInfo(): PageInfo!
+DexVolume.baseVolume(): String!
+DexVolume.period(): String!
+DexVolume.quoteVolume(): String!
+DexVolume.start(): String!
+DexVolume.trades(): String!
+DexVolumeConnection.nodes(): [DexVolume!]!
+DexVolumeConnection.pageInfo(): PageInfo!
 ENUM ProposalStatus
 ENUM TokenStandard
 ENUM TransactionDirection
@@ -562,6 +590,8 @@ OBJECT BurnEvent
 OBJECT BurnEventConnection
 OBJECT Candidate
 OBJECT CandidateInfo
+OBJECT ChainActivity
+OBJECT ChainActivityConnection
 OBJECT ConsensusBlockSub
 OBJECT ConsensusData
 OBJECT ConsensusErrorSub
@@ -575,6 +605,8 @@ OBJECT DecodedParam
 OBJECT DepositMintProposal
 OBJECT DexBookLevel
 OBJECT DexBookReconciliation
+OBJECT DexCandle
+OBJECT DexCandleConnection
 OBJECT DexLiquidityChange
 OBJECT DexLiquidityConnection
 OBJECT DexMarket
@@ -584,6 +616,8 @@ OBJECT DexOrderBook
 OBJECT DexOrderConnection
 OBJECT DexTrade
 OBJECT DexTradeConnection
+OBJECT DexVolume
+OBJECT DexVolumeConnection
 OBJECT ERC20Transfer
 OBJECT ERC20TransferConnection
 OBJECT ERC721Transfer
@@ -644,6 +678,8 @@ OBJECT TokenHolderConnection
 OBJECT TokenHolderStats
 OBJECT TokenMetadata
 OBJECT TokenMetadataConnection
+OBJECT TokenTransferVolume
+OBJECT TokenTransferVolumeConnection
 OBJECT TopFeePayersResult
 OBJECT Transaction
 OBJECT TransactionConnection
@@ -750,12 +786,14 @@ Query.bundler(address: String!): BundlerStats
 Query.bundlers(pagination: PaginationInput): BundlerStatsConnection!
 Query.burnEvents(filter: SystemContractEventFilter!, pagination: PaginationInput): BurnEventConnection!
 Query.burnHistory(filter: SystemContractEventFilter!, pagination: PaginationInput): BurnEventConnection!
+Query.chainActivity(from: String, pagination: PaginationInput, period: String!, to: String): ChainActivityConnection!
 Query.consensusData(blockNumber: String!): ConsensusData
 Query.contractCreation(address: String!): ContractCreation
 Query.contractVerification(address: String!): ContractVerification
 Query.contracts(pagination: PaginationInput): ContractCreationConnection
 Query.contractsByCreator(creator: String!, pagination: PaginationInput): ContractCreationConnection
 Query.depositMintProposals(filter: SystemContractEventFilter!): [DepositMintProposal!]!
+Query.dexCandles(from: String, interval: String!, market: String!, marketId: String, pagination: PaginationInput, to: String): DexCandleConnection!
 Query.dexLiquidityChanges(market: String!, marketId: String, pagination: PaginationInput): DexLiquidityConnection!
 Query.dexMarket(address: String!, marketId: String): DexMarket
 Query.dexMarkets(pagination: PaginationInput): DexMarketConnection!
@@ -764,6 +802,7 @@ Query.dexOrderBook(levels: Int, market: String!, marketId: String, stepBps: Int)
 Query.dexOrders(market: String!, marketId: String, pagination: PaginationInput): DexOrderConnection!
 Query.dexTrades(market: String!, marketId: String, pagination: PaginationInput): DexTradeConnection!
 Query.dexTradesByTrader(pagination: PaginationInput, trader: String!): DexTradeConnection!
+Query.dexVolume(from: String, market: String!, marketId: String, pagination: PaginationInput, period: String!, to: String): DexVolumeConnection!
 Query.emergencyPauseHistory(contract: String!): [EmergencyPauseEvent!]!
 Query.epochByNumber(number: String!): EpochInfo
 Query.epochData(epochNumber: String!): EpochData
@@ -832,6 +871,7 @@ Query.tokenHolderCount(token: String!): Int!
 Query.tokenHolderStats(token: String!): TokenHolderStats
 Query.tokenHolders(pagination: PaginationInput, token: String!): TokenHolderConnection!
 Query.tokenMetadata(address: String!): TokenMetadata
+Query.tokenTransferVolume(from: String, pagination: PaginationInput, period: String!, to: String, token: String!): TokenTransferVolumeConnection!
 Query.tokens(pagination: PaginationInput, standard: TokenStandard): TokenMetadataConnection!
 Query.topAddressesByGasUsed(fromBlock: String!, limit: Int, toBlock: String!): [AddressGasStats!]!
 Query.topAddressesByTxCount(fromBlock: String!, limit: Int, toBlock: String!): [AddressActivityStats!]!
@@ -970,6 +1010,12 @@ TokenStandard = ERC1155
 TokenStandard = ERC20
 TokenStandard = ERC721
 TokenStandard = UNKNOWN
+TokenTransferVolume.period(): String!
+TokenTransferVolume.start(): String!
+TokenTransferVolume.transfers(): String!
+TokenTransferVolume.volume(): String
+TokenTransferVolumeConnection.nodes(): [TokenTransferVolume!]!
+TokenTransferVolumeConnection.pageInfo(): PageInfo!
 TopFeePayersResult.nodes(): [FeePayerStats!]!
 TopFeePayersResult.totalCount(): String!
 Transaction.accessList(): [AccessListEntry!]

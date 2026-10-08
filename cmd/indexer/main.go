@@ -32,7 +32,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
 	_ "github.com/0xmhha/indexer-go/pkg/features/address" // address.index feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/agg"     // agg.candles, agg.timeseries features
+	_ "github.com/0xmhha/indexer-go/pkg/features/agg/api" // agg.candles, agg.timeseries and their GraphQL
 	_ "github.com/0xmhha/indexer-go/pkg/features/balance" // balance.native feature
 	_ "github.com/0xmhha/indexer-go/pkg/features/dex/api" // dex.pools, dex.trades, dex.orderbook and their GraphQL
 	"github.com/0xmhha/indexer-go/pkg/features/dex/orderbook"
