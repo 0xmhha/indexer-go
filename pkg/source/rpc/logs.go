@@ -100,6 +100,55 @@ func (l *Logs) BlockWithReceipts(ctx context.Context, n uint64) (*model.Block, [
 	return b, receipts, nil
 }
 
+// LogsInRange returns the declared logs of blocks [from, to] in chain
+// order, with one eth_getLogs call. A node may refuse a range it finds too
+// large; the caller splits it.
+func (l *Logs) LogsInRange(ctx context.Context, from, to uint64) ([]*model.Log, error) {
+	var logs []*types.Log
+	filter := logFilter{FromBlock: hexutil.EncodeUint64(from), ToBlock: hexutil.EncodeUint64(to), Address: l.addresses, Topics: [][]common.Hash{l.topics}}
+	if err := l.src.rpc.CallContext(ctx, &logs, "eth_getLogs", filter); err != nil {
+		return nil, fmt.Errorf("source: eth_getLogs %d..%d: %w", from, to, err)
+	}
+	out := make([]*model.Log, 0, len(logs))
+	for _, gl := range logs {
+		if gl.BlockNumber < from || gl.BlockNumber > to {
+			return nil, fmt.Errorf("source: eth_getLogs %d..%d returned a log of block %d", from, to, gl.BlockNumber)
+		}
+		out = append(out, gethconv.LogFromGeth(gl))
+	}
+	return out, nil
+}
+
+// Headers returns the headers (blocks without transactions) of the given
+// heights, read in one JSON-RPC batch.
+func (l *Logs) Headers(ctx context.Context, heights []uint64) (map[uint64]*model.Block, error) {
+	raws := make([]json.RawMessage, len(heights))
+	batch := make([]gethrpc.BatchElem, len(heights))
+	for i, n := range heights {
+		batch[i] = gethrpc.BatchElem{Method: "eth_getBlockByNumber", Args: []interface{}{hexutil.EncodeUint64(n), false}, Result: &raws[i]}
+	}
+	if len(batch) > 0 {
+		if err := l.src.rpc.BatchCallContext(ctx, batch); err != nil {
+			return nil, fmt.Errorf("source: %d headers: %w", len(heights), err)
+		}
+	}
+	out := make(map[uint64]*model.Block, len(heights))
+	for i, n := range heights {
+		if batch[i].Error != nil {
+			return nil, fmt.Errorf("source: header %d: %w", n, batch[i].Error)
+		}
+		if isNull(raws[i]) {
+			return nil, fmt.Errorf("%w: %d", ErrNotFound, n)
+		}
+		b, err := l.header(n, raws[i])
+		if err != nil {
+			return nil, err
+		}
+		out[n] = b
+	}
+	return out, nil
+}
+
 // header decodes a block returned without transactions: the profile
 // decodes it as a block with none.
 func (l *Logs) header(n uint64, raw json.RawMessage) (*model.Block, error) {

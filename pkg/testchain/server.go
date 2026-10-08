@@ -32,6 +32,8 @@ type Server struct {
 	unknown    map[string]int
 	blockLoads map[uint64]int // eth_getBlockByNumber with an explicit number
 	disabled   map[string]bool
+	// maxLogRange makes eth_getLogs refuse wider ranges (0: no limit).
+	maxLogRange uint64
 }
 
 // NewServer starts an HTTP JSON-RPC server for chain. Close it when done.
@@ -72,6 +74,14 @@ func (s *Server) DisableMethod(method string) {
 func (s *Server) EnableMethod(method string) {
 	s.mu.Lock()
 	delete(s.disabled, method)
+	s.mu.Unlock()
+}
+
+// SetMaxLogRange makes eth_getLogs refuse ranges of more than n blocks, as
+// RPC providers do (0 removes the limit).
+func (s *Server) SetMaxLogRange(n uint64) {
+	s.mu.Lock()
+	s.maxLogRange = n
 	s.mu.Unlock()
 }
 
@@ -357,6 +367,12 @@ func (s *Server) getLogs(req rpcRequest) (any, *rpcError) {
 	to, ok2 := bound(f.ToBlock, c.head)
 	if !ok1 || !ok2 {
 		return nil, &rpcError{Code: -32602, Message: "invalid block range"}
+	}
+	s.mu.Lock()
+	limit := s.maxLogRange
+	s.mu.Unlock()
+	if limit > 0 && to >= from && to-from+1 > limit {
+		return nil, &rpcError{Code: -32005, Message: fmt.Sprintf("query exceeds max block range %d", limit)}
 	}
 	var addresses []common.Address
 	if len(f.Address) > 0 && string(f.Address) != "null" {
