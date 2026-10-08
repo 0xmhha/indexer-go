@@ -31,6 +31,12 @@ func (e *TradeEvent) Type() events.EventType { return EventTypeTrade }
 // Timestamp implements events.Event: the block time.
 func (e *TradeEvent) Timestamp() time.Time { return time.Unix(int64(e.Trade.Timestamp), 0) }
 
+// Source implements events.SourcedEvent: the market's contract, the venue
+// and the block, so subscriptions filter trades by market address.
+func (e *TradeEvent) Source() (common.Address, string, uint64) {
+	return e.Trade.Market.Address, string(e.Trade.Venue), e.Trade.BlockNumber
+}
+
 type tradesFeature struct{}
 
 func (tradesFeature) Name() string       { return TradesName }

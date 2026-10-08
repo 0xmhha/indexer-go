@@ -14,6 +14,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/features/dex"
 )
@@ -133,6 +134,31 @@ func TestDEXTradesReproduced(t *testing.T) {
 	require.Len(t, orders, 3)
 	assert.Equal(t, port.DexOrderFilled, orders[0].Status, "solo, filled by the operator")
 	assert.Equal(t, port.DexOrderPartiallyFilled, orders[1].Status)
+
+	// GraphQL answers what the store holds, a page at a time.
+	h, err := graphql.NewHandler(app.storage, zap.NewNop())
+	require.NoError(t, err)
+	q := `query($m: String!, $after: String) { dexTrades(market: $m, marketId: "7", pagination: {limit: 2, after: $after}) {
+		nodes { side baseAmount quoteAmount price taker maker takerOrder makerOrder } pageInfo { hasNextPage endCursor } } }`
+	var sides []string
+	var after interface{}
+	for {
+		res := h.ExecuteQuery(q, map[string]interface{}{"m": sc.OrderManager.Hex(), "after": after})
+		require.Empty(t, res.Errors)
+		conn := res.Data.(map[string]interface{})["dexTrades"].(map[string]interface{})
+		for _, n := range conn["nodes"].([]interface{}) {
+			sides = append(sides, n.(map[string]interface{})["side"].(string))
+		}
+		info := conn["pageInfo"].(map[string]interface{})
+		if !info["hasNextPage"].(bool) {
+			break
+		}
+		after = info["endCursor"]
+	}
+	assert.Equal(t, []string{"sell", "buy", "buy"}, sides, "the perpetual trades, newest first, over two pages")
+	res := h.ExecuteQuery(`{ dexMarkets { nodes { address venue } } }`, nil)
+	require.Empty(t, res.Errors)
+	assert.Len(t, res.Data.(map[string]interface{})["dexMarkets"].(map[string]interface{})["nodes"], 3)
 
 	// Every trade's event is in the outbox once.
 	entries, err := s.ReadOutbox(ctx, 0, 10_000)

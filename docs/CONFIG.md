@@ -179,6 +179,7 @@ features:
 - 선물 `matchOrders`는 `OrderPartiallyFilled` 두 개와 `OrdersMatched`를 낸다. 이를 체결 하나로 기록한다. 운영자를 상대로 한 `fillOrder`와 `MarketOrderExecuted`도 각각 체결이다.
 - 색인 시작 높이보다 먼저 만들어진 시장과 주문은 알 수 없으므로, 그 체결은 기록되지 않는다. 시장이 만들어진 높이부터 색인하거나 backfill한다.
 - 기능 설정 절에서 `enabled` 외의 키는 그 기능이 읽는다. 기능이 모르는 키를 쓰면 시작할 때 오류가 난다.
+- GraphQL: `dexMarkets`, `dexMarket(address, marketId)`, `dexTrades(market, marketId)`, `dexTradesByTrader(trader)`, `dexLiquidityChanges(market)`, `dexOrders(market, marketId)`, `dexOrder(manager, id)`. 목록은 최신순이고 `pagination.after`와 `pageInfo.endCursor`로 넘긴다(전체 개수는 없다). 구독 `dexTrade(markets: [...])`는 체결의 블록이 색인될 때 그 체결을 보낸다. `markets`를 주면 그 시장 주소의 체결만 받는다.
 
 ### Contract Verification
 

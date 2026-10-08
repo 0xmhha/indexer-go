@@ -160,6 +160,19 @@ func PaginationInputType() *graphql.InputObject { return paginationInputType }
 // PageInfoType is the page information type of connections.
 func PageInfoType() *graphql.Object { return pageInfoType }
 
+// Page reads the pagination argument of a field as a storage page (limit,
+// offset and the after cursor), capping the limit at maxLimit (0: the
+// default maximum).
+func Page(p graphql.ResolveParams, maxLimit int) port.Page {
+	return parsePaginationParams(p, maxLimit).page()
+}
+
+// CursorPageInfo is the pageInfo of a page read with page that returned the
+// cursor next (endCursor continues after it).
+func CursorPageInfo(page port.Page, next string) map[string]interface{} {
+	return cursorPageInfo(PaginationParams{Limit: page.Limit, Offset: page.Offset, After: page.After}, next)
+}
+
 // Pagination reads the pagination argument of a field, capping the limit
 // at maxLimit (0: the default maximum).
 func Pagination(p graphql.ResolveParams, maxLimit int) (limit, offset int) {
