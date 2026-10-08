@@ -25,6 +25,9 @@ func NewServer(store port.QueryStore, logger *zap.Logger) *Server {
 	}
 }
 
+// Close stops the server's background work (the filter manager's cleanup).
+func (s *Server) Close() { s.handler.Close() }
+
 // ServeHTTP implements http.Handler
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Only accept POST requests

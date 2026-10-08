@@ -99,6 +99,7 @@ func (p *Proxy) Stop() error {
 	defer p.mu.Unlock()
 
 	if !p.started {
+		p.cache.Close() // its cleanup runs from NewProxy on
 		return nil
 	}
 

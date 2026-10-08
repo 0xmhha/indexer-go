@@ -52,34 +52,43 @@ func expectNext(conn *websocket.Conn, id string, within time.Duration) bool {
 
 // TestSubscriptionIDsAreScopedPerConnection covers C2-1: the client-chosen
 // id was used as the bus-wide id, so two clients using "1" overwrote each
-// other and one client's complete cancelled the other's subscription.
+// other and one client's complete cancelled the other's subscription. Both
+// deliveries are checked: the subscription engine (the default) and a bus
+// subscription per client subscription (api.subscription_engine: false).
 func TestSubscriptionIDsAreScopedPerConnection(t *testing.T) {
-	bus := events.NewEventBus(100, 10)
-	go bus.Run()
-	defer bus.Stop()
+	for _, direct := range []bool{false, true} {
+		t.Run(map[bool]string{false: "engine", true: "direct"}[direct], func(t *testing.T) {
+			bus := events.NewEventBus(100, 10)
+			go bus.Run()
+			defer bus.Stop()
 
-	sub := NewSubscriptionServer(bus, zap.NewNop(), true)
-	srv := httptest.NewServer(http.HandlerFunc(sub.ServeHTTP))
-	defer srv.Close()
-	url := "ws" + strings.TrimPrefix(srv.URL, "http")
+			sub := NewSubscriptionServer(bus, zap.NewNop(), true)
+			sub.SetDirect(direct)
+			require.Equal(t, direct, sub.subscriptionEngine() == nil, "delivery mode")
+			srv := httptest.NewServer(http.HandlerFunc(sub.ServeHTTP))
+			defer srv.Close()
+			url := "ws" + strings.TrimPrefix(srv.URL, "http")
 
-	a := dialSubscriber(t, url)
-	defer a.Close()
-	b := dialSubscriber(t, url)
-	defer b.Close()
-	subscribeNewBlock(t, a, "1")
-	subscribeNewBlock(t, b, "1")
-	time.Sleep(100 * time.Millisecond)
+			a := dialSubscriber(t, url)
+			defer func() { _ = a.Close() }()
+			b := dialSubscriber(t, url)
+			defer func() { _ = b.Close() }()
+			subscribeNewBlock(t, a, "1")
+			subscribeNewBlock(t, b, "1")
+			time.Sleep(100 * time.Millisecond)
 
-	require.True(t, bus.Publish(events.NewBlockEvent(createTestBlock(1))))
-	require.True(t, expectNext(a, "1", 2*time.Second), "client A must receive")
-	require.True(t, expectNext(b, "1", 2*time.Second), "client B must receive")
+			require.True(t, bus.Publish(events.NewBlockEvent(createTestBlock(1))))
+			require.True(t, expectNext(a, "1", 2*time.Second), "client A must receive")
+			require.True(t, expectNext(b, "1", 2*time.Second), "client B must receive")
 
-	// A completes its "1"; B's "1" must keep working.
-	require.NoError(t, a.WriteJSON(map[string]any{"id": "1", "type": "complete"}))
-	time.Sleep(100 * time.Millisecond)
-	require.True(t, bus.Publish(events.NewBlockEvent(createTestBlock(2))))
-	require.True(t, expectNext(b, "1", 2*time.Second), "client B must still receive after A completed")
+			// A completes its "1"; B's "1" must keep working.
+			require.NoError(t, a.WriteJSON(map[string]any{"id": "1", "type": "complete"}))
+			time.Sleep(100 * time.Millisecond)
+			require.True(t, bus.Publish(events.NewBlockEvent(createTestBlock(2))))
+			require.True(t, expectNext(b, "1", 2*time.Second), "client B must still receive after A completed")
+			require.False(t, expectNext(a, "1", 200*time.Millisecond), "client A completed its subscription")
+		})
+	}
 }
 
 // TestSendAfterCleanupDoesNotPanic covers C2-2: cleanup closed the send

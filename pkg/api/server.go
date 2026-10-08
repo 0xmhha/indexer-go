@@ -43,6 +43,12 @@ type Server struct {
 	chains              ChainStores
 	origins             apimiddleware.Origins
 	trustedProxies      []netip.Prefix
+
+	// Background work the server stops: the rate limiter's cleanup, the
+	// JSON-RPC filter managers (root and per chain).
+	rateLimiter *apimiddleware.RateLimiter
+	rpcServer   *jsonrpc.Server
+	chainRoutes *chainRoutes
 }
 
 // ServerOptions contains optional configuration for the API server
@@ -180,11 +186,8 @@ func (s *Server) setupMiddleware() {
 
 	// Rate limiting middleware (if enabled)
 	if s.config.EnableRateLimit {
-		s.router.Use(apimiddleware.RateLimit(
-			s.config.RateLimitPerSecond,
-			s.config.RateLimitBurst,
-			s.logger,
-		))
+		s.rateLimiter = apimiddleware.NewRateLimiter(s.config.RateLimitPerSecond, s.config.RateLimitBurst, s.logger)
+		s.router.Use(s.rateLimiter.Middleware())
 		s.logger.Info("rate limiting enabled",
 			zap.Float64("rate_per_second", s.config.RateLimitPerSecond),
 			zap.Int("burst", s.config.RateLimitBurst),
@@ -315,6 +318,7 @@ func (s *Server) setupRoutes() {
 
 		// Create JSON-RPC handler
 		jsonrpcServer := jsonrpc.NewServer(s.storage, s.logger)
+		s.rpcServer = jsonrpcServer
 
 		// Set notification service if available
 		if s.notificationService != nil {
@@ -439,12 +443,27 @@ func (s *Server) Stop(ctx context.Context) error {
 	defer cancel()
 
 	// Shutdown server
+	defer s.stopBackground()
 	if err := s.server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("server shutdown failed: %w", err)
 	}
 
 	s.logger.Info("API server stopped gracefully")
 	return nil
+}
+
+// stopBackground stops the goroutines the server started besides the HTTP
+// server: the rate limiter's cleanup and the JSON-RPC filter managers.
+func (s *Server) stopBackground() {
+	if s.rateLimiter != nil {
+		s.rateLimiter.Stop()
+	}
+	if s.rpcServer != nil {
+		s.rpcServer.Close()
+	}
+	if s.chainRoutes != nil {
+		s.chainRoutes.close()
+	}
 }
 
 // Router returns the underlying chi router (for testing)

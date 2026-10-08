@@ -51,7 +51,7 @@ type chainHandlers struct {
 	store   port.QueryStore
 	graphql *graphql.Handler
 	sub     http.Handler
-	rpc     http.Handler
+	rpc     *jsonrpc.Server
 	rest    http.Handler
 }
 
@@ -67,6 +67,7 @@ func (s *Server) mountChainRoutes(chains ChainStores) {
 
 		streamOutbox: s.streamOutbox,
 	}
+	s.chainRoutes = cr
 	s.router.Get("/chains", cr.list)
 	if s.config.EnableGraphQL {
 		s.router.Handle("/chains/{id}/graphql", cr.serve(func(h *chainHandlers) http.Handler { return h.graphql }))
@@ -114,8 +115,12 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 	}
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	if h, ok := cr.handlers[id]; ok && h.store == store {
-		return h, http.StatusOK
+	old, ok := cr.handlers[id]
+	if ok && old.store == store {
+		return old, http.StatusOK
+	}
+	if ok {
+		old.rpc.Close() // the chain restarted with a new store
 	}
 	logger := cr.logger.With(zap.String("chain", id))
 	outbox := cr.streamOutbox(store)
@@ -143,6 +148,16 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 	}
 	cr.handlers[id] = h
 	return h, http.StatusOK
+}
+
+// close stops the background work of every chain's handlers.
+func (cr *chainRoutes) close() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	for id, h := range cr.handlers {
+		h.rpc.Close()
+		delete(cr.handlers, id)
+	}
 }
 
 // list answers GET /chains with the registered chains.

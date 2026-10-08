@@ -23,10 +23,12 @@ import (
 
 const (
 	// WebSocket configuration
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 4096
+	writeWait = 10 * time.Second
+	// defaultPongWait is how long a keep-alive connection may stay silent
+	// (no pong, no message) before it is closed; pings go out every 9/10
+	// of it.
+	defaultPongWait = 60 * time.Second
+	maxMessageSize  = 4096
 )
 
 // SubscriptionServer handles GraphQL subscriptions over WebSocket.
@@ -45,6 +47,8 @@ type SubscriptionServer struct {
 	upgrader        websocket.Upgrader
 	enableKeepAlive bool
 	direct          bool
+	// pongWait overrides defaultPongWait (tests).
+	pongWait time.Duration
 
 	engineMu  sync.Mutex
 	engine    *stream.Engine
@@ -235,6 +239,7 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx:             ctx,
 		cancel:          cancel,
 		enableKeepAlive: s.enableKeepAlive,
+		pongWait:        s.keepAliveWait(),
 		connID:          newConnID(),
 	}
 	if e := s.subscriptionEngine(); e != nil {
@@ -244,6 +249,18 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	go client.writePump()
 	go client.readPump()
 }
+
+// keepAliveWait is the silence after which a keep-alive connection closes.
+func (s *SubscriptionServer) keepAliveWait() time.Duration {
+	if s.pongWait > 0 {
+		return s.pongWait
+	}
+	return defaultPongWait
+}
+
+// pingPeriod is how often a keep-alive connection is pinged: before its
+// read deadline passes.
+func (c *subscriptionClient) pingPeriod() time.Duration { return c.pongWait * 9 / 10 }
 
 // subscriptionClient represents a WebSocket client for subscriptions
 type subscriptionClient struct {
@@ -257,6 +274,7 @@ type subscriptionClient struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	enableKeepAlive bool
+	pongWait        time.Duration // silence after which a keep-alive connection is closed
 	// connID scopes client-chosen subscription ids on the shared event bus,
 	// so two connections using the same id ("1") do not collide.
 	connID string
@@ -312,10 +330,10 @@ func (c *subscriptionClient) readPump() {
 	// it. Without keep-alive an idle subscriber would be dropped after
 	// pongWait even though it is healthy.
 	if c.enableKeepAlive {
-		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = c.conn.SetReadDeadline(time.Now().Add(c.pongWait))
 		c.conn.SetPongHandler(func(string) error {
 			c.logger.Debug("received pong message")
-			return c.conn.SetReadDeadline(time.Now().Add(pongWait))
+			return c.conn.SetReadDeadline(time.Now().Add(c.pongWait))
 		})
 	}
 
@@ -339,10 +357,10 @@ func (c *subscriptionClient) readPump() {
 func (c *subscriptionClient) writePump() {
 	var ticker *time.Ticker
 	if c.enableKeepAlive {
-		ticker = time.NewTicker(pingPeriod)
+		ticker = time.NewTicker(c.pingPeriod())
 		c.logger.Debug("WebSocket keep-alive enabled",
-			zap.Duration("ping_period", pingPeriod),
-			zap.Duration("pong_wait", pongWait))
+			zap.Duration("ping_period", c.pingPeriod()),
+			zap.Duration("pong_wait", c.pongWait))
 	}
 
 	defer func() {
