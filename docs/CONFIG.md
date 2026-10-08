@@ -30,8 +30,13 @@ rpc:
   timeout: 30s                          # 요청 타임아웃
 
 database:
-  path: "./data"                        # PebbleDB 데이터 디렉토리
+  driver: "pebble"                      # pebble(기본) | postgres
+  path: "./data"                        # PebbleDB 데이터 디렉토리 (driver pebble)
   readonly: false                       # 읽기 전용 모드
+  postgres:                             # driver postgres일 때
+    dsn: ""                             # postgres://user:pass@host:port/db (로그에 남기지 않음)
+    schema: ""                          # 테이블을 둘 schema, 비우면 public
+    max_conns: 0                        # 연결 풀 상한, 0은 pgxpool 기본값
 
 log:
   level: "info"                         # debug | info | warn | error
@@ -159,7 +164,7 @@ eventbus:
 
 ### Multi-Chain
 
-> 체인마다 DB를 따로 둔다: `<database.path>/chains/<id>`. 각 체인은 자기 수집 루프, 이벤트 버스, 기능으로 돌고 `features.*` 같은 공통 설정을 함께 쓴다. 루트의 `rpc.endpoint`는 필요 없고, `rpc.fallback_endpoints`·`rpc.ws_endpoint`·`rpc.record_dir`·`source.era_dir`·`notifications`·`verifier`는 이 모드에서 쓰이지 않는다(시작 시 경고). `chain_id`는 노드가 알려 주는 값과 같아야 그 체인이 시작된다. `--reindex`는 체인 DB마다 적용된다.
+> 체인마다 DB를 따로 둔다: `<database.path>/chains/<id>`(PostgreSQL이면 schema `<schema>_<id>`, schema를 비우면 `chain_<id>`. 소문자로 바꾸고 schema 이름에 쓸 수 없는 문자는 `_`로 바꾸며, 두 체인이 같은 schema가 되면 시작하지 않는다). 각 체인은 자기 수집 루프, 이벤트 버스, 기능으로 돌고 `features.*` 같은 공통 설정을 함께 쓴다. 루트의 `rpc.endpoint`는 필요 없고, `rpc.fallback_endpoints`·`rpc.ws_endpoint`·`rpc.record_dir`·`source.era_dir`·`notifications`·`verifier`는 이 모드에서 쓰이지 않는다(시작 시 경고). `chain_id`는 노드가 알려 주는 값과 같아야 그 체인이 시작된다. `--reindex`는 체인 DB마다 적용된다.
 >
 > API는 체인별 경로로만 열린다: `/chains/<id>/graphql`, `/chains/<id>/graphql/ws`, `/chains/<id>/playground`, `/chains/<id>/rpc`, 체인 목록 `GET /chains`. 루트의 `/graphql`, `/rpc`, `/api`는 없다.
 
@@ -287,6 +292,15 @@ node:
 
 ---
 
+## PostgreSQL
+
+`database.driver: postgres`로 색인을 PostgreSQL에 둔다(리팩터링 계획 R4-2). 여러 프로세스가 같은 DB를 볼 수 있어, 수집 프로세스 하나와 API 프로세스 여러 개로 나누는 실행 역할(R4-1)의 바탕이 된다.
+
+- 시작할 때 `migrations/`의 스키마를 적용한다(advisory lock으로 한 번만). 이 빌드보다 새 스키마는 거부한다.
+- reorg rollback은 block 트랜잭션마다 바뀐 행을 `undo_log`에 남겨 최근 128블록을 되돌린다. 그래서 행을 쓸 때마다 기록이 하나씩 더 생긴다.
+- `--reindex`는 체인 데이터 테이블을 비우고 계약 검증(ABI, 소스), outbox 번호와 소비자 위치는 남긴다. `--clear-data`는 schema 버전만 남기고 모두 지운다. schema 자체는 지우지 않는다.
+- DSN에 비밀번호가 들어갈 수 있으므로 로그에는 schema만 남긴다.
+
 ## Environment Variables
 
 Docker/Kubernetes 배포 시 환경변수를 사용할 수 있습니다:
@@ -296,6 +310,10 @@ INDEXER_RPC_ENDPOINT=http://localhost:8545
 INDEXER_RPC_TIMEOUT=30s
 INDEXER_DB_PATH=./data
 INDEXER_DB_READONLY=false
+INDEXER_DB_DRIVER=pebble                 # pebble | postgres
+INDEXER_DB_POSTGRES_DSN=postgres://indexer:secret@db:5432/indexer
+INDEXER_DB_POSTGRES_SCHEMA=
+INDEXER_DB_POSTGRES_MAX_CONNS=0
 INDEXER_WORKERS=100
 INDEXER_CHUNK_SIZE=1
 INDEXER_START_HEIGHT=0

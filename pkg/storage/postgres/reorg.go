@@ -80,6 +80,7 @@ func (s *Store) RollbackTo(ctx context.Context, to uint64, onUndo port.UndoHook)
 		}
 		rec.Blocks = append(rec.Blocks, ob)
 	}
+	s.resetGenesisTried()
 	return rec, nil
 }
 

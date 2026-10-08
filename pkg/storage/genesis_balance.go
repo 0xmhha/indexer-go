@@ -10,21 +10,11 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
-// RPCClient interface for querying balance from RPC
-// This allows using any client implementation that provides BalanceAt method
-type RPCClient interface {
-	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
-}
-
 // GenesisBalanceConfigurer is implemented by storages that can initialize
 // genesis allocation balances lazily from RPC.
 type GenesisBalanceConfigurer interface {
-	SetGenesisBalanceResolver(client RPCClient)
+	SetGenesisBalanceResolver(client port.BalanceSource)
 }
-
-// genesisLookupMaxBlock limits lazy genesis lookups to queries about early
-// blocks, as the former GenesisInitializingStorage wrapper did.
-const genesisLookupMaxBlock = 1000
 
 // SetGenesisBalanceResolver enables lazy genesis allocation initialization:
 // when GetAddressBalance finds a zero balance with no history for an early
@@ -32,7 +22,7 @@ const genesisLookupMaxBlock = 1000
 //
 // This replaces the GenesisInitializingStorage wrapper, which hid every
 // optional interface PebbleStorage implements outside Storage.
-func (s *PebbleStorage) SetGenesisBalanceResolver(client RPCClient) {
+func (s *PebbleStorage) SetGenesisBalanceResolver(client port.BalanceSource) {
 	s.genesisMu.Lock()
 	defer s.genesisMu.Unlock()
 	s.genesisClient = client
@@ -45,7 +35,7 @@ func (s *PebbleStorage) SetGenesisBalanceResolver(client RPCClient) {
 // initializing a genesis allocation from RPC when a resolver is set.
 func (s *PebbleStorage) GetAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error) {
 	balance, err := s.getAddressBalance(ctx, addr, blockNumber)
-	if err != nil || balance.Sign() != 0 || blockNumber >= genesisLookupMaxBlock {
+	if err != nil || balance.Sign() != 0 || blockNumber >= port.GenesisLookupMaxBlock {
 		return balance, err
 	}
 	return s.maybeInitGenesisBalance(ctx, addr, blockNumber, balance), nil

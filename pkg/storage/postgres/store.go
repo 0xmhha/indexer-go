@@ -20,11 +20,14 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
@@ -52,6 +55,18 @@ type Store struct {
 	// orphanRetention is how many reorganization records are kept with
 	// their orphaned blocks; 0 keeps all (SetOrphanRetention).
 	orphanRetention atomic.Uint64
+
+	logger *zap.Logger
+
+	// tokenFetcher reads token metadata the store lacks from the node
+	// (SetTokenMetadataFetcher).
+	tokenFetcher port.TokenMetadataFetcher
+
+	// genesis looks up the genesis allocation of accounts without a
+	// recorded balance (SetGenesisBalanceResolver).
+	genesisMu     sync.Mutex
+	genesisSource port.BalanceSource
+	genesisTried  map[common.Address]bool
 }
 
 var schemaName = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
@@ -99,7 +114,7 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("postgres: connect: %w", err)
 	}
-	s := &Store{pool: pool, schema: schema, readOnly: opts.ReadOnly}
+	s := &Store{pool: pool, schema: schema, readOnly: opts.ReadOnly, logger: zap.NewNop()}
 	if opts.ReadOnly {
 		if err := s.checkVersion(ctx); err != nil {
 			pool.Close()
@@ -175,6 +190,10 @@ type blockTx struct {
 	tx     pgx.Tx
 	done   bool
 	height *uint64
+
+	// genesisSeen holds the accounts whose genesis allocation the
+	// transaction looked up; they join the store's memo when it commits.
+	genesisSeen map[common.Address]bool
 }
 
 var _ port.BlockTransactor = (*Store)(nil)
@@ -223,6 +242,7 @@ func (t *blockTx) Commit() error {
 	if err := t.tx.Commit(ctx); err != nil {
 		return fmt.Errorf("postgres: commit block transaction: %w", err)
 	}
+	t.owner.publishGenesisTried(t.genesisSeen)
 	return nil
 }
 

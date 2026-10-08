@@ -79,10 +79,36 @@ type SourceConfig struct {
 	EraDir string `yaml:"era_dir"`
 }
 
+// Database drivers (database.driver).
+const (
+	// DriverPebble stores the index in a Pebble database under
+	// database.path (the default).
+	DriverPebble = "pebble"
+	// DriverPostgres stores the index in PostgreSQL (database.postgres,
+	// refactoring plan R4-2).
+	DriverPostgres = "postgres"
+)
+
 // DatabaseConfig holds database configuration
 type DatabaseConfig struct {
 	Path     string `yaml:"path"`
 	ReadOnly bool   `yaml:"readonly"`
+	// Driver selects the store: DriverPebble (empty) or DriverPostgres.
+	Driver   string         `yaml:"driver"`
+	Postgres PostgresConfig `yaml:"postgres"`
+}
+
+// PostgresConfig configures the PostgreSQL store (database.driver
+// postgres).
+type PostgresConfig struct {
+	// DSN is the connection string (postgres://user:pass@host:port/db).
+	// It may hold a password; it is never logged.
+	DSN string `yaml:"dsn"`
+	// Schema is the PostgreSQL schema of the tables; empty uses "public".
+	// In multi-chain mode each chain uses <schema>_<chain id>.
+	Schema string `yaml:"schema"`
+	// MaxConns caps the connection pool; 0 keeps the pgxpool default.
+	MaxConns int32 `yaml:"max_conns"`
 }
 
 // SystemContractsConfig holds system contracts verification configuration
@@ -772,6 +798,22 @@ func (c *Config) LoadFromEnv() error {
 		}
 		c.Database.ReadOnly = val
 	}
+	if driver := os.Getenv("INDEXER_DB_DRIVER"); driver != "" {
+		c.Database.Driver = driver
+	}
+	if dsn := os.Getenv("INDEXER_DB_POSTGRES_DSN"); dsn != "" {
+		c.Database.Postgres.DSN = dsn
+	}
+	if schema := os.Getenv("INDEXER_DB_POSTGRES_SCHEMA"); schema != "" {
+		c.Database.Postgres.Schema = schema
+	}
+	if conns := os.Getenv("INDEXER_DB_POSTGRES_MAX_CONNS"); conns != "" {
+		val, err := strconv.ParseInt(conns, 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_DB_POSTGRES_MAX_CONNS: %w", err)
+		}
+		c.Database.Postgres.MaxConns = int32(val)
+	}
 
 	// Log configuration
 	if level := os.Getenv("INDEXER_LOG_LEVEL"); level != "" {
@@ -1178,8 +1220,20 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate database configuration
-	if c.Database.Path == "" {
-		return fmt.Errorf("database path is required")
+	switch c.Database.Driver {
+	case "", DriverPebble:
+		if c.Database.Path == "" {
+			return fmt.Errorf("database path is required")
+		}
+	case DriverPostgres:
+		if c.Database.Postgres.DSN == "" {
+			return fmt.Errorf("database.postgres.dsn is required with database.driver %s", DriverPostgres)
+		}
+		if c.Database.Postgres.MaxConns < 0 {
+			return fmt.Errorf("database.postgres.max_conns cannot be negative")
+		}
+	default:
+		return fmt.Errorf("invalid database.driver %q, must be one of: %s, %s", c.Database.Driver, DriverPebble, DriverPostgres)
 	}
 
 	// Validate log configuration

@@ -239,7 +239,8 @@ func (s *Store) GetAddressStats(ctx context.Context, addr common.Address) (*port
 
 // GetAddressBalance implements port.HistoricalReader: at blockNumber, the
 // last snapshot before the first one past it (0 is the latest balance);
-// zero when none was recorded.
+// zero when none was recorded, unless the genesis lookup finds the
+// account's allocation (SetGenesisBalanceResolver).
 func (s *Store) GetAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error) {
 	var (
 		text string
@@ -254,12 +255,16 @@ func (s *Store) GetAddressBalance(ctx context.Context, addr common.Address, bloc
 			ORDER BY id DESC LIMIT 1`, addr.Bytes(), bigintOf(blockNumber)).Scan(&text)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return new(big.Int), nil
+		return s.genesisBalance(ctx, addr, blockNumber, new(big.Int)), nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return bigOf(text)
+	balance, err := bigOf(text)
+	if err != nil || balance.Sign() != 0 {
+		return balance, err
+	}
+	return s.genesisBalance(ctx, addr, blockNumber, balance), nil
 }
 
 // HasBalanceRecord implements port.BalanceRecordChecker.
@@ -385,10 +390,14 @@ func (s *Store) GetBlockCount(ctx context.Context) (uint64, error) {
 	return h + 1, nil
 }
 
-// GetTransactionCount implements port.HistoricalReader.
+// GetTransactionCount implements port.HistoricalReader: the count SetBlock
+// keeps, so the table is not scanned.
 func (s *Store) GetTransactionCount(ctx context.Context) (uint64, error) {
-	n, err := s.count(ctx, "SELECT count(*) FROM transactions")
-	return uint64(n), err
+	n, err := s.metaUint(ctx, metaTransactionCount)
+	if errors.Is(err, port.ErrNotFound) {
+		return 0, nil
+	}
+	return n, err
 }
 
 // GetTopMiners implements port.HistoricalReader.
@@ -396,21 +405,10 @@ func (s *Store) GetTopMiners(ctx context.Context, limit int, fromBlock, toBlock 
 	return history.TopMiners(ctx, s, limit, fromBlock, toBlock)
 }
 
-// GetTokenBalances implements port.HistoricalReader: names, symbols and
-// decimals come from the stored token metadata.
+// GetTokenBalances implements port.HistoricalReader (history.DescribeToken
+// names the tokens).
 func (s *Store) GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]port.TokenBalance, error) {
-	return history.TokenBalances(ctx, s, addr, tokenType, func(ctx context.Context, tb *port.TokenBalance) {
-		md, err := s.GetTokenMetadata(ctx, tb.ContractAddress)
-		if err != nil || md == nil {
-			return
-		}
-		tb.Name, tb.Symbol = md.Name, md.Symbol
-		decimals := int(md.Decimals)
-		tb.Decimals = &decimals
-		if md.Standard != "" {
-			tb.TokenType = string(md.Standard)
-		}
-	})
+	return history.TokenBalances(ctx, s, addr, tokenType, s.describeToken)
 }
 
 // GetGasStatsByBlockRange implements port.HistoricalReader.
