@@ -1,7 +1,10 @@
 package config
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"net/netip"
 	"os"
 	"regexp"
@@ -35,9 +38,57 @@ type Config struct {
 	Features map[string]FeatureConfig `yaml:"features"`
 }
 
-// FeatureConfig configures one feature.
+// FeatureConfig configures one feature: enabled, and the feature's own
+// settings, which the feature reads from its section (FeatureSettings).
 type FeatureConfig struct {
 	Enabled *bool `yaml:"enabled"`
+
+	settings yaml.Node // the whole section as written
+}
+
+// UnmarshalYAML keeps the section for the feature's own settings.
+func (f *FeatureConfig) UnmarshalYAML(n *yaml.Node) error {
+	var plain struct {
+		Enabled *bool `yaml:"enabled"`
+	}
+	if err := n.Decode(&plain); err != nil {
+		return err
+	}
+	f.Enabled, f.settings = plain.Enabled, *n
+	return nil
+}
+
+// FeatureSettings decodes the section of a feature into into (a pointer to
+// the feature's settings struct); a feature without a section leaves into
+// as it is. Keys the struct does not name are an error, so a misspelled
+// setting is not silently ignored ("enabled" is always allowed).
+func (c *Config) FeatureSettings(name string, into any) error {
+	fc, ok := c.Features[name]
+	if !ok || fc.settings.Kind == 0 {
+		return nil
+	}
+	node := fc.settings
+	if node.Kind == yaml.MappingNode {
+		// Leave out "enabled", which is not the feature's.
+		trimmed := node
+		trimmed.Content = nil
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value != "enabled" {
+				trimmed.Content = append(trimmed.Content, node.Content[i], node.Content[i+1])
+			}
+		}
+		node = trimmed
+	}
+	data, err := yaml.Marshal(&node)
+	if err != nil {
+		return fmt.Errorf("features.%s: %w", name, err)
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(into); err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("features.%s: %w", name, err)
+	}
+	return nil
 }
 
 // FeatureOverrides returns the features explicitly turned on (true) or off
@@ -940,7 +991,9 @@ func (c *Config) LoadFromEnv() error {
 			}
 			on := !strings.HasPrefix(item, "-")
 			name := strings.TrimPrefix(item, "-")
-			c.Features[name] = FeatureConfig{Enabled: &on}
+			fc := c.Features[name] // keeps the section's settings
+			fc.Enabled = &on
+			c.Features[name] = fc
 		}
 	}
 

@@ -83,6 +83,18 @@ type Deps struct {
 	// Contracts reads contract code and calls contracts on the node at its
 	// latest state (nil when unavailable).
 	Contracts ContractReader
+	// Settings decodes a feature's own settings (its features.<name>
+	// section) into into, a pointer to its settings struct; nil, or no
+	// section, leaves into as it is.
+	Settings func(feature string, into any) error
+}
+
+// DecodeSettings decodes the settings of feature (see Deps.Settings).
+func (d Deps) DecodeSettings(feature string, into any) error {
+	if d.Settings == nil {
+		return nil
+	}
+	return d.Settings(feature, into)
 }
 
 // ContractReader reads contracts on the node. A nil block number means the

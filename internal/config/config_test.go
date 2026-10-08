@@ -842,3 +842,51 @@ func TestAPISecurity(t *testing.T) {
 		}
 	}
 }
+
+// TestFeatureSettings: a feature reads its own section; "enabled" is not
+// one of its settings, unknown keys are an error, and the environment
+// turning a feature on keeps the section.
+func TestFeatureSettings(t *testing.T) {
+	type venue struct {
+		Type    string `yaml:"type"`
+		Factory string `yaml:"factory"`
+	}
+	type settings struct {
+		Venues []venue `yaml:"venues"`
+	}
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	yml := "features:\n  dex.pools:\n    enabled: false\n    venues:\n      - type: uniswap_v3\n        factory: \"0x01\"\n  typo:\n    venuez: []\n"
+	if err := os.WriteFile(path, []byte(yml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := NewConfig()
+	if err := cfg.LoadFromFile(path); err != nil {
+		t.Fatal(err)
+	}
+	var got settings
+	if err := cfg.FeatureSettings("dex.pools", &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 1 || got.Venues[0] != (venue{"uniswap_v3", "0x01"}) {
+		t.Errorf("settings %+v", got)
+	}
+	if err := cfg.FeatureSettings("typo", &got); err == nil || !strings.Contains(err.Error(), "venuez") {
+		t.Errorf("unknown key: got %v", err)
+	}
+	var none settings
+	if err := cfg.FeatureSettings("absent", &none); err != nil || none.Venues != nil {
+		t.Errorf("absent section: %v %+v", err, none)
+	}
+
+	t.Setenv("INDEXER_FEATURES", "dex.pools")
+	if err := cfg.LoadFromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.FeatureOverrides()["dex.pools"] {
+		t.Error("the environment did not turn the feature on")
+	}
+	got = settings{}
+	if err := cfg.FeatureSettings("dex.pools", &got); err != nil || len(got.Venues) != 1 {
+		t.Errorf("settings lost after the environment: %v %+v", err, got)
+	}
+}

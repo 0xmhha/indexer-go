@@ -33,6 +33,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
 	_ "github.com/0xmhha/indexer-go/pkg/features/address" // address.index feature
 	_ "github.com/0xmhha/indexer-go/pkg/features/balance" // balance.native feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/dex"     // dex.pools, dex.trades features
 	_ "github.com/0xmhha/indexer-go/pkg/features/token"   // token.transfers feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
@@ -871,6 +872,7 @@ func (a *App) initFetcher(ctx context.Context) error {
 		BalanceAt: a.fetcher.BalanceAt,
 		BlockAt:   a.fetcher.BlockAt,
 		Contracts: token.NewEthClientAdapter(a.client.EthClient()),
+		Settings:  a.config.FeatureSettings,
 	}
 	pipeline, err := feature.Build(enabled, deps)
 	if err != nil {
