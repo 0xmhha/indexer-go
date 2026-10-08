@@ -76,7 +76,7 @@ func startAppAt(t testing.TB, endpoint, dir string, mode ingestMode) *App {
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = endpoint
 	cfg.RPC.Timeout = 5 * time.Second
-	cfg.Database.Path = dir
+	setTestDatabase(t, cfg, dir)
 	cfg.API.Enabled = false
 	cfg.Indexer.StartHeight = 0
 	enableTestChainFeatures(cfg)
@@ -127,6 +127,9 @@ func indexScenarioMode(t *testing.T, sc *testchain.Scenario, mode ingestMode) st
 
 func dumpDir(t *testing.T, dir string) []testchain.Entry {
 	t.Helper()
+	if testOnPostgres() {
+		return dumpPostgres(t, dir)
+	}
 	entries, err := testchain.DumpKeyspace(dir, normalizeVolatile)
 	require.NoError(t, err)
 	require.NotEmpty(t, entries)
@@ -179,6 +182,7 @@ func dumpScenarioIndex(t *testing.T) []testchain.Entry {
 // TestGoldenKeyspace pins the complete storage contents produced by indexing
 // the reference scenario. Phase 0 changes must only alter keys they intend to.
 func TestGoldenKeyspace(t *testing.T) {
+	pebbleOnly(t)
 	entries := dumpScenarioIndex(t)
 
 	var got bytes.Buffer
@@ -198,6 +202,7 @@ func TestGoldenKeyspace(t *testing.T) {
 // scenario (go-stablenet rules: NativeCoinAdapter Transfer logs, base fee
 // distribution, WBFT extra data and epochs, governance events).
 func TestGoldenKeyspaceStableNet(t *testing.T) {
+	pebbleOnly(t)
 	entries := dumpDir(t, indexScenario(t, &testchain.BuildStableNet().Scenario))
 
 	var got bytes.Buffer
@@ -235,6 +240,7 @@ func enableTestChainFeatures(cfg *config.Config) {
 // to fall under a registered keyspace prefix (storage.RegisterKeyspace), so
 // whole-database operations such as reindex know about it.
 func TestGoldenKeysHaveRegisteredOwners(t *testing.T) {
+	pebbleOnly(t)
 	for _, file := range []string{goldenKeyspace, goldenKeyspaceStableNet} {
 		data, err := os.ReadFile(file)
 		require.NoError(t, err)

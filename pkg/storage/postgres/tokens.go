@@ -243,10 +243,12 @@ func scanMetadata(row pgx.CollectableRow) (*port.TokenMetadata, error) {
 		&created, &updated, &erc165, &meta, &enumerable); err != nil {
 		return nil, err
 	}
+	// Times read back in the local zone, as the Pebble store returns the
+	// times it wrote with time.Unix: the API renders them the same way.
 	m := &port.TokenMetadata{
 		Address: common.BytesToAddress(addr), Standard: port.TokenStandard(standard), Name: name, Symbol: symbol,
 		Decimals: uint8(decimals), BaseURI: baseURI, DetectedAt: uint64(detected),
-		CreatedAt: time.Unix(0, created).UTC(), UpdatedAt: time.Unix(0, updated).UTC(),
+		CreatedAt: time.Unix(0, created), UpdatedAt: time.Unix(0, updated),
 		SupportsERC165: erc165, SupportsMetadata: meta, SupportsEnumerable: enumerable,
 	}
 	if supply != nil {

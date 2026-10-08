@@ -130,6 +130,7 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.ro
   - `cmd/indexer/balance_test.go`: compares indexed native balances with the test chain's state (EVM and StableNet rules)
   - `cmd/indexer/defects_test.go`: reproduces known data-integrity defects listed in `knownDefects`; remove an id when its fix lands
 - Storage port contracts: `pkg/core/port/porttest` checks any storage against every port (`porttest.Run`); Pebble runs it in `pkg/storage/contract_test.go`, which also requires the contracts to fail on deliberately broken stores
+- PostgreSQL: `make test-postgres` runs the adapter tests and the whole `cmd/indexer` end-to-end suite on PostgreSQL (`INDEXER_TEST_DRIVER=postgres`, `INDEXER_TEST_POSTGRES`; `cmd/indexer/testdb_test.go` gives every test database a schema and dumps it for the keyspace comparisons; tests of Pebble itself call `pebbleOnly`). `TestPostgresMatchesPebble` indexes the scenarios with both drivers and compares every read port
 - Benchmarks: EventBus performance tests
 
 ### Dependencies

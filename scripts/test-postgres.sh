@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Runs the PostgreSQL adapter tests (pkg/storage/postgres) against a
-# disposable PostgreSQL container, or against INDEXER_TEST_POSTGRES when it
-# is set. The container is removed afterwards.
+# Runs the PostgreSQL adapter tests (pkg/storage/postgres) and the
+# end-to-end suite (cmd/indexer) on PostgreSQL (INDEXER_TEST_DRIVER), against
+# a disposable PostgreSQL container, or against INDEXER_TEST_POSTGRES when
+# it is set. The container is removed afterwards.
 set -euo pipefail
 
-pkgs=${*:-./pkg/storage/postgres/...}
+pkgs=${*:-./pkg/storage/postgres/... ./cmd/indexer}
+export INDEXER_TEST_DRIVER=postgres
 
 if [[ -n "${INDEXER_TEST_POSTGRES:-}" ]]; then
 	exec go test -count=1 $pkgs

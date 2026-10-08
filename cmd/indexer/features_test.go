@@ -50,7 +50,7 @@ func startAppFeatures(t *testing.T, srv *testchain.Server, dir string, features 
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = srv.URL()
 	cfg.RPC.Timeout = 5 * time.Second
-	cfg.Database.Path = dir
+	setTestDatabase(t, cfg, dir)
 	cfg.API.Enabled = false
 	enableTestChainFeatures(cfg)
 	for name, on := range features {
@@ -107,7 +107,7 @@ func TestWBFTFeatureOnNonWBFTChain(t *testing.T) {
 	app.Shutdown()
 
 	// Apart from its own state key, the feature leaves no trace.
-	diff := testchain.DiffKeyspace(dumpScenarioIndex(t), excludeEntries(dumpDir(t, dir), "/meta/features/"+wbft.Name), 0)
+	diff := testchain.DiffKeyspace(dumpScenarioIndex(t), excludeEntries(dumpDir(t, dir), featureStateKey(wbft.Name)), 0)
 	require.Empty(t, diff, testchain.SummarizeDiff(diff))
 }
 
@@ -129,7 +129,8 @@ var featureKeys = map[string][]string{
 
 func TestFeatureOffRemovesOnlyItsKeys(t *testing.T) {
 	with := dumpScenarioIndex(t)
-	for name, prefixes := range featureKeys {
+	for name := range featureKeys {
+		prefixes := featureKeyPrefixes(name)
 		t.Run(name, func(t *testing.T) {
 			sc := testchain.BuildDefault()
 			srv := testchain.NewServer(sc.Chain)
@@ -150,7 +151,7 @@ func TestFeatureOffRemovesOnlyItsKeys(t *testing.T) {
 			require.Positive(t, n, "the scenario exercises %s", name)
 			without := dumpDir(t, dir)
 			// The feature's state key is absent too: it never ran.
-			ignored := append([]string{"/meta/features/" + name}, prefixes...)
+			ignored := append([]string{featureStateKey(name)}, prefixes...)
 			diff := testchain.DiffKeyspace(excludeEntries(with, ignored...), without, 0)
 			require.Empty(t, diff, testchain.SummarizeDiff(diff))
 		})

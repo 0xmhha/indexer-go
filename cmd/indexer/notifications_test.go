@@ -44,7 +44,7 @@ func TestNotificationsFollowTheChangeStream(t *testing.T) {
 		cfg := config.NewConfig()
 		cfg.RPC.Endpoint = srv.URL()
 		cfg.RPC.Timeout = 5 * time.Second
-		cfg.Database.Path = dir
+		setTestDatabase(t, cfg, dir)
 		cfg.API.Enabled = false
 		cfg.Indexer.PollInterval = 10 * time.Millisecond
 		cfg.Notifications.Enabled = true

@@ -24,7 +24,7 @@ func TestAdapterFlagSelectsProfile(t *testing.T) {
 		cfg := config.NewConfig()
 		cfg.RPC.Endpoint = srv.URL()
 		cfg.RPC.Timeout = 5 * time.Second
-		cfg.Database.Path = filepath.Join(t.TempDir(), "db")
+		setTestDatabase(t, cfg, filepath.Join(t.TempDir(), "db"))
 		cfg.API.Enabled = false
 		app, err := NewApp(cfg, zap.NewNop(), false, flag)
 		require.NoError(t, err, flag)
