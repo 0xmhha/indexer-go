@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sync/atomic"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -47,6 +48,10 @@ type Store struct {
 	pool     *pgxpool.Pool
 	schema   string
 	readOnly bool
+
+	// orphanRetention is how many reorganization records are kept with
+	// their orphaned blocks; 0 keeps all (SetOrphanRetention).
+	orphanRetention atomic.Uint64
 }
 
 var schemaName = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
@@ -185,6 +190,11 @@ func (s *Store) BeginBlock(ctx context.Context) (context.Context, port.BlockTx, 
 	if err != nil {
 		return nil, nil, fmt.Errorf("postgres: begin block transaction: %w", err)
 	}
+	// The tracked tables record their changes for undo (migration 0006).
+	if _, err := tx.Exec(ctx, "SELECT set_config('indexer.undo', 'on', true)"); err != nil {
+		_ = tx.Rollback(context.Background())
+		return nil, nil, fmt.Errorf("postgres: begin block transaction: %w", err)
+	}
 	bt := &blockTx{owner: s, tx: tx}
 	return context.WithValue(ctx, blockTxKey{}, bt), bt, nil
 }
@@ -192,16 +202,45 @@ func (s *Store) BeginBlock(ctx context.Context) (context.Context, port.BlockTx, 
 // SetHeight implements port.BlockTx.
 func (t *blockTx) SetHeight(height uint64) { t.height = &height }
 
-// Commit implements port.BlockTx.
+// UndoWindow is how many recent blocks can be rolled back, as in the
+// Pebble store.
+const UndoWindow = 128
+
+// Commit implements port.BlockTx. With a height, the changes the
+// transaction recorded become the block's undo (replacing an earlier record
+// of the height) and the record that leaves the window is dropped; without
+// one they are discarded.
 func (t *blockTx) Commit() error {
 	if t.done {
 		return port.ErrBlockTxDone
 	}
 	t.done = true
-	if err := t.tx.Commit(context.Background()); err != nil {
+	ctx := context.Background()
+	if err := t.recordUndo(ctx); err != nil {
+		_ = t.tx.Rollback(ctx)
+		return fmt.Errorf("postgres: record undo: %w", err)
+	}
+	if err := t.tx.Commit(ctx); err != nil {
 		return fmt.Errorf("postgres: commit block transaction: %w", err)
 	}
 	return nil
+}
+
+func (t *blockTx) recordUndo(ctx context.Context) error {
+	if t.height == nil {
+		_, err := t.tx.Exec(ctx, "DELETE FROM undo_log WHERE height IS NULL AND txid = txid_current()")
+		return err
+	}
+	h := i64(*t.height)
+	b := &pgx.Batch{}
+	b.Queue("DELETE FROM undo_log WHERE height = $1", h)
+	b.Queue("UPDATE undo_log SET height = $1 WHERE height IS NULL AND txid = txid_current()", h)
+	b.Queue("INSERT INTO undo_blocks (height) VALUES ($1) ON CONFLICT DO NOTHING", h)
+	if h >= UndoWindow {
+		b.Queue("DELETE FROM undo_log WHERE height <= $1", h-UndoWindow)
+		b.Queue("DELETE FROM undo_blocks WHERE height <= $1", h-UndoWindow)
+	}
+	return sendBatch(ctx, t.tx, b)
 }
 
 // Rollback implements port.BlockTx.
