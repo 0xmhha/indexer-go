@@ -53,6 +53,7 @@ var contracts = []contract{
 	{"SetCodeIndex", false, implements[setCodeStore], testSetCodeIndex},
 	{"UserOpIndex", false, implements[userOpStore], testUserOpIndex},
 	{"ModuleIndex", false, implements[moduleStore], testModuleIndex},
+	{"Dex", false, implements[dexStore], testDex},
 	{"Orphans", false, implements[orphanStore], testOrphans},
 	{"Outbox", false, implements[outboxStore], testOutbox},
 	{"FeatureState", false, implements[port.FeatureStateStore], testFeatureState},
@@ -136,6 +137,10 @@ type (
 	userOpStore interface {
 		port.UserOpIndexReader
 		port.UserOpIndexWriter
+	}
+	dexStore interface {
+		port.DexReader
+		port.DexWriter
 	}
 	moduleStore interface {
 		port.ModuleIndexReader
