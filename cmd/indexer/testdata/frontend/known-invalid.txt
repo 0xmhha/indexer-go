@@ -1,6 +1,8 @@
 # indexer-frontend documents that do not work against this service's API.
-# All of them already failed before the refactoring (validated against
-# 2c0daaf^): the frontend asks for names the API changed or never had.
+# None was broken by the refactoring: the first 22 failed the same way
+# against the schema before it (2c0daaf^), the frontend asking for names
+# the API changed or never had; the dynamic contract ones were never
+# served. docs/FRONTEND_MIGRATION.md tells how to fix each.
 # TestFrontendDocuments fails when one of them starts working (remove it)
 # and when a document not listed here stops working.
 # Cannot query field "userOp" on type "Query".
@@ -47,3 +49,9 @@ lib/graphql/queries/rpcProxy.ts RPCProxyMetrics
 lib/graphql/queries/system-contracts.ts GetDepositMintProposals
 # no subscription the server serves
 lib/graphql/queries/system-contracts.ts DynamicContractEvents
+# Dynamic contract registration: no process wires the contract
+# registration service, so these queries and mutations are never served.
+lib/graphql/queries/system-contracts.ts RegisterContract
+lib/graphql/queries/system-contracts.ts UnregisterContract
+lib/graphql/queries/system-contracts.ts GetRegisteredContracts
+lib/graphql/queries/system-contracts.ts GetRegisteredContract

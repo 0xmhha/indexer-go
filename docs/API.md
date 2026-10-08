@@ -272,6 +272,8 @@ query {
 
 ### EIP-4337 Account Abstraction Queries
 
+> 주의: 이 절은 2026년 4월 ERC-4337 색인을 다시 만들기 전의 이름(`userOp`, `userOpsByBundler` 등)으로 적혀 있어 지금 서버와 맞지 않는다. 지금 이름(`userOperation`, `userOperationsBySender`, `bundlers` 등)과 대응표는 [FRONTEND_MIGRATION.md](FRONTEND_MIGRATION.md) 1장을 본다.
+
 ```graphql
 # UserOperation 단건 조회
 query {
