@@ -71,7 +71,12 @@ func (c *Client) Unsubscribe(eventType SubscriptionType) {
 // ReadPump pumps messages from the WebSocket connection to the hub
 func (c *Client) ReadPump() {
 	defer func() {
-		c.hub.unregister <- c
+		// The hub may have stopped (Run no longer receives): do not wait
+		// for it forever.
+		select {
+		case c.hub.unregister <- c:
+		case <-c.hub.done:
+		}
 		c.conn.Close()
 	}()
 

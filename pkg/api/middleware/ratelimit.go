@@ -19,6 +19,10 @@ type RateLimiter struct {
 	burst      int
 	logger     *zap.Logger
 	cleanupTTL time.Duration
+
+	stop     chan struct{}
+	stopped  chan struct{}
+	stopOnce sync.Once
 }
 
 // limiterEntry wraps a rate.Limiter with last-access tracking
@@ -37,18 +41,38 @@ func NewRateLimiter(ratePerSecond float64, burst int, logger *zap.Logger) *RateL
 		burst:      burst,
 		logger:     logger,
 		cleanupTTL: 10 * time.Minute,
+		stop:       make(chan struct{}),
+		stopped:    make(chan struct{}),
 	}
 	go rl.autoCleanup()
 	return rl
 }
 
-// autoCleanup periodically removes stale limiter entries
+// autoCleanup periodically removes stale limiter entries until Stop.
 func (rl *RateLimiter) autoCleanup() {
+	defer close(rl.stopped)
 	ticker := time.NewTicker(rl.cleanupTTL)
 	defer ticker.Stop()
-	for range ticker.C {
-		rl.cleanupStaleLimiters()
+	for {
+		select {
+		case <-rl.stop:
+			return
+		case <-ticker.C:
+			rl.cleanupStaleLimiters()
+		}
 	}
+}
+
+// Stop ends the cleanup goroutine; the limiter keeps limiting. Calling it
+// twice is harmless.
+func (rl *RateLimiter) Stop() {
+	rl.stopOnce.Do(func() { close(rl.stop) })
+	<-rl.stopped
+}
+
+// Middleware returns the rate limiting middleware of the limiter.
+func (rl *RateLimiter) Middleware() func(http.Handler) http.Handler {
+	return rateLimitWith(rl, rl.logger)
 }
 
 // cleanupStaleLimiters removes limiters that haven't been accessed within the TTL
@@ -97,10 +121,14 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	return rl.getLimiter(ip).Allow()
 }
 
-// RateLimit returns a rate limiting middleware
+// RateLimit returns a rate limiting middleware over a new limiter, whose
+// cleanup goroutine runs for the life of the process; a server that stops
+// creates the limiter itself and stops it (RateLimiter.Middleware, Stop).
 func RateLimit(ratePerSecond float64, burst int, logger *zap.Logger) func(http.Handler) http.Handler {
-	limiter := NewRateLimiter(ratePerSecond, burst, logger)
+	return rateLimitWith(NewRateLimiter(ratePerSecond, burst, logger), logger)
+}
 
+func rateLimitWith(limiter *RateLimiter, logger *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := extractClientIP(r)
