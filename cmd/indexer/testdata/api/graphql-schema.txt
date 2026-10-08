@@ -459,6 +459,7 @@ INPUT_OBJECT HistoricalTransactionFilter
 INPUT_OBJECT LogFilter
 INPUT_OBJECT PaginationInput
 INPUT_OBJECT ProposalFilter
+INPUT_OBJECT RecordFieldInput
 INPUT_OBJECT SystemContractEventFilter
 INPUT_OBJECT TransactionFilter
 InstalledModule.account(): String!
@@ -665,6 +666,9 @@ OBJECT ProposalExecutionSkippedEvent
 OBJECT ProposalVote
 OBJECT Query
 OBJECT Receipt
+OBJECT Record
+OBJECT RecordConnection
+OBJECT RecordField
 OBJECT Reorg
 OBJECT SearchResult
 OBJECT SetCodeAuthorization
@@ -852,6 +856,7 @@ Query.proposals(filter: ProposalFilter, pagination: PaginationInput): ProposalCo
 Query.receipt(transactionHash: String!): Receipt
 Query.receiptsByBlock(blockNumber: String!): [Receipt!]
 Query.recentSetCodeTransactions(limit: Int): [Transaction!]!
+Query.records(pagination: PaginationInput, table: String!, where: [RecordFieldInput!]): RecordConnection!
 Query.reorg(id: String!): Reorg
 Query.reorgs(limit: Int, offset: Int): [Reorg!]!
 Query.search(limit: Int, query: String!, types: [String]): [SearchResult!]!
@@ -907,6 +912,20 @@ Receipt.logsBloom(): String!
 Receipt.status(): Int!
 Receipt.transactionHash(): String!
 Receipt.transactionIndex(): Int!
+Record.address(): String!
+Record.blockNumber(): String!
+Record.blockTime(): String!
+Record.field(name: String!): String
+Record.fields(): [RecordField!]!
+Record.logIndex(): Int!
+Record.table(): String!
+Record.transactionHash(): String!
+RecordConnection.nodes(): [Record!]!
+RecordConnection.pageInfo(): PageInfo!
+RecordField.name(): String!
+RecordField.value(): String!
+RecordFieldInput.field: String!
+RecordFieldInput.value: String!
 Reorg.depth(): Int!
 Reorg.detectedAt(): String!
 Reorg.forkHash(): String!
