@@ -29,6 +29,10 @@ const (
 	// EventTypeReorg reports indexed blocks rolled back by a chain
 	// reorganization
 	EventTypeReorg EventType = "reorg"
+
+	// EventTypeAll subscribes to every event type (it is never an event's
+	// type): a consumer of the change stream sees every sequence.
+	EventTypeAll EventType = "*"
 )
 
 // Event is the base interface for all blockchain events
