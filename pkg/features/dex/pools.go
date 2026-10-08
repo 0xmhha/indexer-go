@@ -29,10 +29,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 )
 
@@ -127,11 +129,39 @@ func (poolsFeature) Register(r feature.Registrar) error {
 	if err != nil {
 		return err
 	}
-	r.OnBlock(&pools{store: store, venues: v})
+	r.OnBlock(&pools{store: store, venues: v, publish: deps.Publish})
 	return nil
 }
 
-func init() { feature.Register(poolsFeature{}) }
+func init() {
+	feature.Register(poolsFeature{})
+	events.RegisterCodec(EventTypeMarket, events.StructCodec[MarketEvent]())
+}
+
+// EventTypeMarket is the event of a market whose state, orders or ticks a
+// block changed (the order book reloads it).
+const EventTypeMarket events.EventType = "dexMarket"
+
+// MarketEvent is published once per block for every market the block
+// changed, after the block commits.
+type MarketEvent struct {
+	events.Stream // change stream position (R3-1)
+	Market        port.DexMarketKey
+	Venue         port.DexVenue
+	BlockNumber   uint64
+	Time          uint64 // block time, Unix seconds
+}
+
+// Type implements events.Event.
+func (e *MarketEvent) Type() events.EventType { return EventTypeMarket }
+
+// Timestamp implements events.Event: the block time.
+func (e *MarketEvent) Timestamp() time.Time { return time.Unix(int64(e.Time), 0) }
+
+// Source implements events.SourcedEvent: the market's contract.
+func (e *MarketEvent) Source() (common.Address, string, uint64) {
+	return e.Market.Address, string(e.Venue), e.BlockNumber
+}
 
 type dexStore interface {
 	port.DexReader
@@ -139,8 +169,9 @@ type dexStore interface {
 }
 
 type pools struct {
-	store  dexStore
-	venues *venues
+	store   dexStore
+	venues  *venues
+	publish func(events.Event) bool
 }
 
 // blockState holds the markets and orders a block touches, written once
@@ -153,6 +184,17 @@ type blockState struct {
 	mOrder  []port.DexMarketKey
 	oOrder  [][2]common.Hash
 	tOrder  []tickKey
+	// changed lists the markets the block changed, in order.
+	changed []port.DexMarketKey
+	venueOf map[port.DexMarketKey]port.DexVenue
+}
+
+// change records that the block changed a market.
+func (s *blockState) change(key port.DexMarketKey, venue port.DexVenue) {
+	if _, ok := s.venueOf[key]; !ok {
+		s.changed = append(s.changed, key)
+		s.venueOf[key] = venue
+	}
 }
 
 type tickKey struct {
@@ -253,7 +295,7 @@ func (s *blockState) save(ctx context.Context) error {
 // HandleBlock implements feature.BlockHandler.
 func (p *pools) HandleBlock(ctx context.Context, b *feature.Block) error {
 	st := &blockState{store: p.store, markets: map[port.DexMarketKey]*port.DexMarket{}, orders: map[[2]common.Hash]*port.DexOrder{},
-		ticks: map[tickKey]*port.DexTick{}}
+		ticks: map[tickKey]*port.DexTick{}, venueOf: map[port.DexMarketKey]port.DexVenue{}}
 	for _, receipt := range b.Receipts {
 		for _, log := range receipt.Logs {
 			if log == nil || len(log.Topics) == 0 {
@@ -264,7 +306,15 @@ func (p *pools) HandleBlock(ctx context.Context, b *feature.Block) error {
 			}
 		}
 	}
-	return st.save(ctx)
+	if err := st.save(ctx); err != nil {
+		return err
+	}
+	if p.publish != nil {
+		for _, k := range st.changed {
+			p.publish(&MarketEvent{Market: k, Venue: st.venueOf[k], BlockNumber: b.Model.Number, Time: b.Model.Time})
+		}
+	}
+	return nil
 }
 
 func (p *pools) handleLog(ctx context.Context, st *blockState, b *feature.Block, e event) error {
@@ -309,6 +359,7 @@ func (p *pools) register(ctx context.Context, st *blockState, e event, m *port.D
 		return nil
 	}
 	st.putMarket(m)
+	st.change(m.Key, m.Venue)
 	return nil
 }
 
@@ -366,6 +417,7 @@ func (p *pools) handlePoolLog(ctx context.Context, st *blockState, b *feature.Bl
 		return nil
 	}
 	m.UpdatedBlock = e.BlockNumber
+	st.change(m.Key, m.Venue)
 	return nil
 }
 
@@ -391,6 +443,7 @@ func (p *pools) moveLiquidity(ctx context.Context, st *blockState, m *port.DexMa
 		m.Liquidity = new(big.Int).Add(m.Liquidity, delta)
 	}
 	m.UpdatedBlock = change.BlockNumber
+	st.change(m.Key, m.Venue)
 	return nil
 }
 
@@ -428,6 +481,7 @@ func (p *pools) handleOrder(ctx context.Context, st *blockState, b *feature.Bloc
 			Size: e.uint(2), Price: e.uint(3), Filled: new(big.Int), Status: status,
 			CreatedBlock: e.BlockNumber, CreatedTx: e.TxHash, CreatedLogIndex: e.Index, UpdatedBlock: e.BlockNumber,
 		})
+		st.change(port.DexMarketKey{Address: e.Address, ID: e.topicUint(3).Uint64()}, port.DexPerpOrderBook)
 		return nil
 	}
 	var change func(o *port.DexOrder)
@@ -458,5 +512,6 @@ func (p *pools) handleOrder(ctx context.Context, st *blockState, b *feature.Bloc
 	}
 	change(o)
 	o.UpdatedBlock = e.BlockNumber
+	st.change(o.Market, port.DexPerpOrderBook)
 	return nil
 }

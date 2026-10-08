@@ -33,8 +33,9 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
 	_ "github.com/0xmhha/indexer-go/pkg/features/address" // address.index feature
 	_ "github.com/0xmhha/indexer-go/pkg/features/balance" // balance.native feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/dex/api" // dex.pools, dex.trades features and their GraphQL
-	_ "github.com/0xmhha/indexer-go/pkg/features/token"   // token.transfers feature
+	_ "github.com/0xmhha/indexer-go/pkg/features/dex/api" // dex.pools, dex.trades, dex.orderbook and their GraphQL
+	"github.com/0xmhha/indexer-go/pkg/features/dex/orderbook"
+	_ "github.com/0xmhha/indexer-go/pkg/features/token" // token.transfers feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
@@ -96,6 +97,8 @@ type App struct {
 	// streamRelay feeds the event bus of an API process from the change
 	// stream (node.role api, role.go).
 	streamRelay *stream.Relay
+	// orderBook keeps the DEX order books (dex.orderbook), nil when off.
+	orderBook *orderbook.Service
 
 	// Runtime flags
 	enableGapMode    bool
@@ -399,6 +402,11 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 		// Notifications consume the change stream (R3-5) when events are
 		// recorded in the outbox.
 		if err := app.streamNotifications(); err != nil {
+			return nil, err
+		}
+	}
+	if !cfg.MultiChainMode() {
+		if err := app.initOrderBook(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -1186,6 +1194,8 @@ func (a *App) Shutdown() {
 		a.logger.Info("Multi-chain manager stopped")
 	}
 
+	a.closeOrderBook()
+
 	// Stop EventBus
 	if a.eventBus != nil {
 		a.eventBus.Stop()
@@ -1431,6 +1441,7 @@ func (a *App) featureOverrides() map[string]bool {
 
 // closeAfterFailedStart releases the resources NewApp opened before failing.
 func (a *App) closeAfterFailedStart() {
+	a.closeOrderBook()
 	if a.eventBus != nil {
 		a.eventBus.Stop()
 	}
