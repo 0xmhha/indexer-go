@@ -272,11 +272,15 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 
 	case "eth_call":
 		var call struct {
-			To   *common.Address `json:"to"`
-			Data hexutil.Bytes   `json:"data"`
+			To    *common.Address `json:"to"`
+			Data  hexutil.Bytes   `json:"data"`
+			Input hexutil.Bytes   `json:"input"` // go-ethereum clients send the call data here
 		}
 		if len(req.Params) > 0 {
 			_ = json.Unmarshal(req.Params[0], &call)
+		}
+		if len(call.Input) > 0 {
+			call.Data = call.Input
 		}
 		if call.To == nil || len(call.Data) < 4 {
 			return nil, &rpcError{Code: 3, Message: "execution reverted"}
