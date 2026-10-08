@@ -48,35 +48,14 @@ func NewHandlerWithOptions(store port.QueryStore, logger *zap.Logger, opts *Hand
 	if opts != nil {
 		builder.schema.stream = opts.Stream
 	}
-	builder = builder.
-		WithCoreQueries().
-		WithHistoricalQueries().
-		WithAnalyticsQueries().
-		WithAddressIndexingQueries().
-		WithSetCodeQueries().
-		WithModuleQueries().
-		WithUserOpQueries().
-		WithTokenMetadataQueries().
-		WithTokenHolderQueries().
-		WithReorgQueries().
-		WithSubscriptions().
-		WithMutations()
-
-	// Add RPC Proxy queries if proxy is provided
+	builder = builder.WithModules(opts)
 	if opts != nil && opts.RPCProxy != nil {
-		builder = builder.WithRPCProxy(opts.RPCProxy).WithRPCProxyQueries()
 		logger.Info("GraphQL RPC Proxy queries enabled")
 	}
-
-	// Add notification queries if notification service is provided
 	if opts != nil && opts.NotificationService != nil {
-		builder = builder.WithNotificationService(opts.NotificationService).WithNotificationQueries()
 		logger.Info("GraphQL Notification queries enabled")
 	}
-
-	// Add dynamic contract queries if contract registration service is provided
 	if opts != nil && opts.ContractRegistrationService != nil {
-		builder = builder.WithContractRegistrationService(opts.ContractRegistrationService).WithDynamicContractQueries()
 		logger.Info("GraphQL Dynamic Contract queries enabled")
 	}
 
