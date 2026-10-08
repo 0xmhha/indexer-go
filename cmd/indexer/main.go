@@ -954,6 +954,7 @@ func (a *App) initAPIServer() error {
 		EnableGraphQL:         a.config.API.EnableGraphQL,
 		EnableJSONRPC:         a.config.API.EnableJSONRPC,
 		EnableWebSocket:       a.config.API.EnableWebSocket,
+		EnableREST:            a.config.API.EnableREST,
 		GraphQLPath:           constants.DefaultGraphQLPath,
 		GraphQLPlaygroundPath: constants.DefaultGraphQLPlaygroundPath,
 		JSONRPCPath:           constants.DefaultJSONRPCPath,
@@ -966,6 +967,7 @@ func (a *App) initAPIServer() error {
 		// metrics.
 		apiConfig.HealthOnly = true
 		apiConfig.EnableGraphQL, apiConfig.EnableJSONRPC, apiConfig.EnableWebSocket = false, false, false
+		apiConfig.EnableREST = false
 	}
 	apiConfig.DirectSubscriptions = !a.config.API.SubscriptionEngine
 	apiConfig.StreamResume = a.config.EventBus.Outbox

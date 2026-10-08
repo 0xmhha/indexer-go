@@ -143,6 +143,17 @@ func (h *Handler) Validate(document string) []string {
 	return msgs
 }
 
+// Execute runs a GraphQL document against the served schema, without the
+// request limits (for fixed documents such as the REST API's).
+func (h *Handler) Execute(ctx context.Context, document string, variables map[string]interface{}) *graphql.Result {
+	return graphql.Do(graphql.Params{
+		Schema:         h.schema.schema,
+		RequestString:  document,
+		VariableValues: variables,
+		Context:        ctx,
+	})
+}
+
 // ExecuteQuery executes a GraphQL query (for testing)
 func (h *Handler) ExecuteQuery(query string, variables map[string]interface{}) *graphql.Result {
 	params := graphql.Params{

@@ -172,6 +172,10 @@ type APIConfig struct {
 	EnableCORS               bool     `yaml:"enable_cors"`
 	AllowedOrigins           []string `yaml:"allowed_origins"`
 
+	// EnableREST serves the REST API of the most polled paths under /v1
+	// (/chains/<id>/v1 in multi-chain mode).
+	EnableREST bool `yaml:"enable_rest"`
+
 	// TrustedProxies are the reverse proxies (addresses or CIDR ranges)
 	// whose X-Forwarded-For and X-Real-IP headers name the client. The
 	// headers of any other peer are ignored: clients can write them.
@@ -556,6 +560,8 @@ func NewConfig() *Config {
 	// The subscription engine is on unless a file or
 	// INDEXER_API_SUBSCRIPTION_ENGINE turns it off.
 	cfg.API.SubscriptionEngine = true
+	// The REST API is on unless a file or INDEXER_API_REST turns it off.
+	cfg.API.EnableREST = true
 	// Likewise the API's rate limit and GraphQL bounds are on unless a file
 	// or the environment turns them off (enabled: false, a bound of 0).
 	cfg.API.RateLimit = APIRateLimitConfig{
@@ -983,6 +989,13 @@ func (c *Config) LoadFromEnv() error {
 			return fmt.Errorf("invalid INDEXER_API_WEBSOCKET_KEEPALIVE: %w", err)
 		}
 		c.API.EnableWebSocketKeepAlive = val
+	}
+	if v := os.Getenv("INDEXER_API_REST"); v != "" {
+		val, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_API_REST: %w", err)
+		}
+		c.API.EnableREST = val
 	}
 	if v := os.Getenv("INDEXER_API_SUBSCRIPTION_ENGINE"); v != "" {
 		val, err := strconv.ParseBool(v)

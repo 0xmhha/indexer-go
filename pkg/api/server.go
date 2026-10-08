@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	"strings"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/api/etherscan"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
+	"github.com/0xmhha/indexer-go/pkg/api/rest"
 	"github.com/0xmhha/indexer-go/pkg/api/websocket"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
@@ -281,6 +284,21 @@ func (s *Server) setupRoutes() {
 		s.logger.Info("GraphQL subscriptions endpoint registered",
 			zap.String("path", "/graphql/ws"),
 			zap.Bool("keep_alive", s.config.EnableWebSocketKeepAlive))
+	}
+
+	// REST API of the most polled paths, over the same resolvers
+	if s.config.EnableREST {
+		restPath := strings.TrimRight(s.config.RESTPath, "/")
+		if restPath == "" {
+			restPath = constants.DefaultRESTPath
+		}
+		gql, err := graphql.NewHandler(s.storage, s.logger)
+		if err != nil {
+			s.logger.Error("failed to create the REST API", zap.Error(err))
+		} else {
+			s.router.Handle(restPath+"/*", rest.NewHandler(gql))
+			s.logger.Info("REST API enabled", zap.String("path", restPath))
+		}
 	}
 
 	// JSON-RPC endpoints

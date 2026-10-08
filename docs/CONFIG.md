@@ -57,6 +57,7 @@ api:
   enable_jsonrpc: true
   enable_websocket: true
   enable_websocket_keepalive: false     # WebSocket keepalive 활성화
+  enable_rest: true                     # 자주 폴링하는 경로의 REST API (/v1, multi-chain은 /chains/<id>/v1)
   enable_cors: true
   allowed_origins:
     - "*"                               # CORS와 WebSocket Origin 검사의 허용 오리진 (* = 전체 허용)
@@ -69,6 +70,22 @@ api:
     max_depth: 15                       # 필드 중첩 깊이 상한 (0 = 제한 없음)
     max_complexity: 5000                # 복잡도 상한 (0 = 제한 없음)
   subscription_engine: true             # GraphQL 구독을 구독 엔진으로 전달 (false = 이전 방식)
+
+  # REST API(refactoring plan R4-4): 클라이언트가 자주 폴링하는 조회를 GET으로 제공한다.
+  #   GET /v1/blocks?limit&offset&numberFrom&numberTo&miner
+  #   GET /v1/transactions?limit&offset&blockNumberFrom&blockNumberTo&from&to&type
+  #   GET /v1/addresses/<address>/balance?blockNumber
+  #   GET /v1/addresses/<address>/overview
+  #   GET /v1/addresses/<address>/tokens?tokenType
+  #   GET /v1/addresses/<address>/transactions?limit&offset&after
+  #   GET /v1/stats/miners?limit&fromBlock&toBlock
+  #   GET /v1/stats/network?fromTime&toTime        (둘 다 필수, unix 초)
+  # 경로마다 고정된 GraphQL 문서를 같은 resolver로 실행하므로, 응답은 그 GraphQL 응답과
+  # 같다({"data": ...}, resolver 오류가 있으면 "errors"). 필드는 indexer-frontend가 같은
+  # 조회에서 묻는 것이다. limit은 1~100. 숫자는 10진수, 주소는 hex다. 잘못된 인자는 400,
+  # 요청한 값 자체를 못 얻으면 500이다. 성공 응답에는 ETag와 Cache-Control:
+  # public, max-age=1이 붙고, If-None-Match가 맞으면 본문 없이 304로 답한다. after 커서는
+  # 주소별 거래에만 있다(blocks·transactions는 블록 범위로 읽어 offset으로 넘긴다).
 
   # 공개 API 보호(refactoring plan R4-3):
   # - 클라이언트 주소: 연결 상대(peer)의 주소다. X-Forwarded-For와 X-Real-IP는 연결이
@@ -371,6 +388,7 @@ INDEXER_API_PORT=8080
 INDEXER_API_GRAPHQL=true
 INDEXER_API_JSONRPC=true
 INDEXER_API_WEBSOCKET=true
+INDEXER_API_REST=true
 INDEXER_API_CORS_ALLOWED_ORIGINS=https://explorer.example.com
 INDEXER_API_TRUSTED_PROXIES=10.0.0.0/8,127.0.0.1
 INDEXER_API_RATE_LIMIT_ENABLED=true

@@ -55,6 +55,11 @@ type Config struct {
 	// EnableWebSocket enables WebSocket subscriptions
 	EnableWebSocket bool
 
+	// EnableREST serves the REST API of the most polled paths under
+	// RESTPath (default /v1)
+	EnableREST bool
+	RESTPath   string
+
 	// StreamResume serves the change stream's outbox (eventbus.outbox):
 	// the streamSequence query and subscriptions that resume from a
 	// sequence (fromSequence).
@@ -124,6 +129,8 @@ func DefaultConfig() *Config {
 		EnableGraphQL:            true,
 		EnableJSONRPC:            true,
 		EnableWebSocket:          true,
+		EnableREST:               true,
+		RESTPath:                 constants.DefaultRESTPath,
 		EnableWebSocketKeepAlive: false, // Disabled by default
 		GraphQLPath:              constants.DefaultGraphQLPath,
 		GraphQLPlaygroundPath:    constants.DefaultGraphQLPlaygroundPath,
@@ -164,8 +171,8 @@ func (c *Config) Validate() error {
 	}
 
 	// At least one API must be enabled
-	if !c.EnableGraphQL && !c.EnableJSONRPC && !c.EnableWebSocket {
-		return errors.New("at least one API (GraphQL, JSON-RPC, or WebSocket) must be enabled")
+	if !c.EnableGraphQL && !c.EnableJSONRPC && !c.EnableWebSocket && !c.EnableREST {
+		return errors.New("at least one API (GraphQL, JSON-RPC, WebSocket or REST) must be enabled")
 	}
 
 	if c.EnableRateLimit && (c.RateLimitPerSecond <= 0 || c.RateLimitBurst <= 0) {

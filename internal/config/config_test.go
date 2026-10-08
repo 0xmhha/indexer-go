@@ -788,6 +788,9 @@ func TestAPISecurity(t *testing.T) {
 	if cfg.API.GraphQL.MaxDepth <= 0 || cfg.API.GraphQL.MaxComplexity <= 0 {
 		t.Errorf("GraphQL bounds are not on by default: %+v", cfg.API.GraphQL)
 	}
+	if !cfg.API.EnableREST {
+		t.Error("the REST API is not on by default")
+	}
 	if len(cfg.API.TrustedProxies) != 0 {
 		t.Errorf("no proxy is trusted by default: %v", cfg.API.TrustedProxies)
 	}
@@ -807,6 +810,7 @@ func TestAPISecurity(t *testing.T) {
 		t.Errorf("valid settings: %v", err)
 	}
 
+	t.Setenv("INDEXER_API_REST", "false")
 	t.Setenv("INDEXER_API_TRUSTED_PROXIES", "127.0.0.1, ::1")
 	t.Setenv("INDEXER_API_RATE_LIMIT_ENABLED", "true")
 	t.Setenv("INDEXER_API_RATE_LIMIT_PER_SECOND", "5")
@@ -815,6 +819,9 @@ func TestAPISecurity(t *testing.T) {
 	t.Setenv("INDEXER_API_GRAPHQL_MAX_COMPLEXITY", "900")
 	if err := cfg.LoadFromEnv(); err != nil {
 		t.Fatal(err)
+	}
+	if cfg.API.EnableREST {
+		t.Error("INDEXER_API_REST=false not applied")
 	}
 	want := APIRateLimitConfig{Enabled: true, PerSecond: 5, Burst: 10}
 	if cfg.API.RateLimit != want || cfg.API.GraphQL != (APIGraphQLConfig{MaxDepth: 8, MaxComplexity: 900}) ||

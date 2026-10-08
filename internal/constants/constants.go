@@ -64,6 +64,9 @@ const (
 
 	// DefaultGraphQLSubscriptionPath is the default GraphQL subscription (WebSocket) path
 	DefaultGraphQLSubscriptionPath = "/graphql/ws"
+
+	// DefaultRESTPath is the prefix of the REST API
+	DefaultRESTPath = "/v1"
 )
 
 // Fetcher Constants
