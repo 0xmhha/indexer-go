@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 )
 
@@ -140,4 +142,39 @@ func TestFollower(t *testing.T) {
 	_, err = feature.Build([]string{"af.reader", "af.source"}, feature.Deps{})
 	require.NoError(t, err)
 	require.Equal(t, map[string]bool{"af.source": true, "af.other": false, "af.reader": true}, enabled)
+}
+
+type rollbackFeature struct {
+	name  string
+	calls *[]string
+}
+
+func (f rollbackFeature) Name() string       { return f.name }
+func (f rollbackFeature) Requires() []string { return nil }
+func (f rollbackFeature) Register(r feature.Registrar) error {
+	r.OnRollback(f)
+	return nil
+}
+func (f rollbackFeature) HandleRollback(context.Context, *port.OrphanedBlock) ([]events.Event, error) {
+	*f.calls = append(*f.calls, f.name)
+	return []events.Event{&events.ReorgEvent{ForkNumber: uint64(len(*f.calls))}}, nil
+}
+
+// TestRollbackHandlers: rollback handlers run in the reverse of the block
+// order and their events are returned in that order.
+func TestRollbackHandlers(t *testing.T) {
+	var calls []string
+	feature.Register(rollbackFeature{name: "rb.a", calls: &calls})
+	feature.Register(rollbackFeature{name: "rb.b", calls: &calls})
+	p, err := feature.Build([]string{"rb.a", "rb.b"}, feature.Deps{})
+	require.NoError(t, err)
+	evs, err := p.HandleRollback(context.Background(), &port.OrphanedBlock{})
+	require.NoError(t, err)
+	require.Equal(t, []string{"rb.b", "rb.a"}, calls)
+	require.Len(t, evs, 2)
+	require.Equal(t, uint64(1), evs[0].(*events.ReorgEvent).ForkNumber)
+	var none *feature.Pipeline
+	evs, err = none.HandleRollback(context.Background(), &port.OrphanedBlock{})
+	require.NoError(t, err)
+	require.Empty(t, evs)
 }

@@ -44,6 +44,8 @@ type Outbox interface {
 
 // UndoHook runs inside the transaction that rolls back one block (ctx is
 // bound to it), so what it writes, such as the reorganization's outbox
-// entries, commits with the rollback. first is true for the newest block,
-// the first one rolled back.
+// entries, commits with the rollback. It runs before the block's changes
+// are undone, so it reads the records the block wrote (and must write no
+// key that undo restores). first is true for the newest block, the first
+// one rolled back.
 type UndoHook func(ctx context.Context, r *Reorg, b *OrphanedBlock, first bool) error

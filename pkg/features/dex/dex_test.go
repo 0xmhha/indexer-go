@@ -53,8 +53,14 @@ func (s *memStore) ListDexMarkets(context.Context, port.Page) ([]*port.DexMarket
 func (s *memStore) ListDexTrades(context.Context, port.DexMarketKey, port.Page) ([]*port.DexTrade, string, error) {
 	return nil, "", nil
 }
-func (s *memStore) ListDexTradesInBlock(context.Context, uint64) ([]*port.DexTrade, error) {
-	return nil, nil
+func (s *memStore) ListDexTradesInBlock(_ context.Context, n uint64) ([]*port.DexTrade, error) {
+	var out []*port.DexTrade
+	for _, t := range s.trades {
+		if t.BlockNumber == n {
+			out = append(out, clone(t))
+		}
+	}
+	return out, nil
 }
 func (s *memStore) ListDexTradesByTrader(context.Context, common.Address, port.Page) ([]*port.DexTrade, string, error) {
 	return nil, "", nil
@@ -110,13 +116,17 @@ func (s *memStore) SaveDexOrder(_ context.Context, o *port.DexOrder) error {
 
 // registrar collects the handlers of features registered with deps.
 type registrar struct {
-	deps     feature.Deps
-	handlers []feature.BlockHandler
+	deps      feature.Deps
+	handlers  []feature.BlockHandler
+	rollbacks []feature.RollbackHandler
 }
 
 func (r *registrar) Deps() feature.Deps             { return r.deps }
 func (r *registrar) OnBlock(h feature.BlockHandler) { r.handlers = append(r.handlers, h) }
 func (r *registrar) Enabled(string) bool            { return true }
+func (r *registrar) OnRollback(h feature.RollbackHandler) {
+	r.rollbacks = append(r.rollbacks, h)
+}
 
 var (
 	v3Factory = common.HexToAddress("0x0000000000000000000000000000000000f30001")
@@ -527,4 +537,41 @@ func TestPerpTriggerOrders(t *testing.T) {
 		Data: data(scaledWord(41), scaledWord(40))}}))
 	assert.Equal(t, port.DexOrderOpen, status(stop))
 	assert.Equal(t, uint64(2), store.orders[orderKey(manager, stop)].UpdatedBlock)
+}
+
+// TestTradesWithdrawnOnRollback: a rolled-back block's trades are published
+// again with Removed set, newest first.
+func TestTradesWithdrawnOnRollback(t *testing.T) {
+	store := newMemStore()
+	var published []events.Event
+	r := &registrar{deps: feature.Deps{Storage: store, Logger: zap.NewNop(),
+		Publish: func(e events.Event) bool { published = append(published, e); return true },
+		Settings: func(name string, into any) error {
+			if name == PoolsName {
+				*(into.(*Settings)) = testSettings()
+			}
+			return nil
+		}}}
+	require.NoError(t, poolsFeature{}.Register(r))
+	require.NoError(t, tradesFeature{}.Register(r))
+	require.Len(t, r.rollbacks, 1, "dex.trades withdraws its trades")
+	run(t, r.handlers, chainBlock(1, []*model.Log{{Address: v2Factory, Topics: []common.Hash{TopicV2PairCreated, topic(tokenA), topic(tokenB)}, Data: data(addrWord(pair), word(1))}}))
+	swap := func(in0, out0 int64) *model.Log {
+		return &model.Log{Address: pair, Topics: []common.Hash{TopicV2Swap, topic(router), topic(alice)}, Data: data(word(in0), word(10), word(out0), word(0))}
+	}
+	run(t, r.handlers, chainBlock(2, []*model.Log{swap(0, 5)}, []*model.Log{swap(3, 0)}))
+
+	withdrawn, err := r.rollbacks[0].HandleRollback(context.Background(), &port.OrphanedBlock{Block: &model.Block{Number: 2}})
+	require.NoError(t, err)
+	require.Len(t, withdrawn, 2)
+	for i, wantLog := range []uint{1, 0} {
+		ev := withdrawn[i].(*TradeEvent)
+		assert.True(t, ev.Removed)
+		assert.Equal(t, wantLog, ev.Trade.LogIndex, "newest first")
+		_, err := events.MarshalEvent(ev)
+		assert.NoError(t, err)
+	}
+	none, err := r.rollbacks[0].HandleRollback(context.Background(), &port.OrphanedBlock{Block: &model.Block{Number: 1}})
+	require.NoError(t, err)
+	assert.Empty(t, none)
 }

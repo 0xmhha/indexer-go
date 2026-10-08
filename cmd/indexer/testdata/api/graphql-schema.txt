@@ -341,6 +341,7 @@ DexTrade.market(): String!
 DexTrade.marketId(): String!
 DexTrade.price(): String!
 DexTrade.quoteAmount(): String!
+DexTrade.removed(): Boolean!
 DexTrade.sender(): String
 DexTrade.side(): String!
 DexTrade.sqrtPriceX96(): String

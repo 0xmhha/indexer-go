@@ -78,6 +78,7 @@ var (
 			"makerOrder":      {Type: graphql.HashType},
 			"sqrtPriceX96":    {Type: graphql.BigIntType},
 			"tick":            {Type: gql.Int},
+			"removed":         {Type: gql.NewNonNull(gql.Boolean), Description: "True when a reorganization removed the trade (subscriptions only)"},
 		},
 	})
 	liquidityType = gql.NewObject(gql.ObjectConfig{
@@ -266,7 +267,7 @@ func register(e *graphql.Extension) {
 	})
 	e.AddSubscription("dexTrade", &gql.Field{
 		Type:        gql.NewNonNull(tradeType),
-		Description: "Trades as their blocks are indexed; filter by market addresses",
+		Description: "Trades as their blocks are indexed, and again with removed: true when a reorganization removes them; filter by market addresses",
 		Args:        gql.FieldConfigArgument{"markets": {Type: gql.NewList(gql.NewNonNull(gql.String))}},
 	})
 	registerOrderBook(e)
@@ -352,7 +353,7 @@ func TradeMap(t *port.DexTrade) map[string]interface{} {
 		"baseAmount": t.BaseAmount.String(), "quoteAmount": t.QuoteAmount.String(), "price": t.Price.String(),
 		"taker": t.Taker.Hex(), "sender": optionalAddress(t.Sender), "maker": optionalAddress(t.Maker),
 		"takerOrder": optionalHash(t.TakerOrder), "makerOrder": optionalHash(t.MakerOrder),
-		"sqrtPriceX96": optional(t.SqrtPriceX96, t.SqrtPriceX96 == nil),
+		"sqrtPriceX96": optional(t.SqrtPriceX96, t.SqrtPriceX96 == nil), "removed": false,
 	}
 	if t.Venue == port.DexUniswapV3 {
 		out["tick"] = int(t.Tick)
@@ -404,5 +405,7 @@ func tradePayload(ev events.Event) (interface{}, bool) {
 	if !ok {
 		return nil, false
 	}
-	return TradeMap(&t.Trade), true
+	m := TradeMap(&t.Trade)
+	m["removed"] = t.Removed
+	return m, true
 }

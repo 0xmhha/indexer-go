@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/events"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -106,14 +107,15 @@ func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) 
 }
 
 // publishReorg delivers a committed rollback's events: the relay already
-// has them in the outbox; without an outbox they are published directly.
-func (f *Fetcher) publishReorg(r *port.Reorg) {
+// has them in the outbox; without an outbox they are published directly,
+// each block's followed by its features' (withdrawn, by height).
+func (f *Fetcher) publishReorg(r *port.Reorg, withdrawn map[uint64][]events.Event) {
 	if f.outbox != nil {
 		f.notifyRelay()
 		return
 	}
 	for i, ob := range r.Blocks {
-		for _, ev := range reorgEvents(r, ob, i == 0) {
+		for _, ev := range append(reorgEvents(r, ob, i == 0), withdrawn[ob.Block.Number]...) {
 			if !f.publish(ev) {
 				f.logger.Warn("Failed to publish reorg event (channel full)", zap.Uint64("seq", r.Seq), zap.String("type", string(ev.Type())))
 			}

@@ -182,6 +182,19 @@ type Registrar interface {
 	OnBlock(h BlockHandler)
 	// Enabled reports whether a feature is enabled with this one.
 	Enabled(name string) bool
+	// OnRollback adds a handler that runs for every block a
+	// reorganization rolls back.
+	OnRollback(h RollbackHandler)
+}
+
+// RollbackHandler withdraws what a feature published for a block that a
+// reorganization rolls back. It runs inside the block's rollback
+// transaction before the block's changes are undone, so it reads the
+// records the block wrote (the block's own changes need no handler: the
+// rollback undoes them). The events it returns are delivered with the
+// rollback, after the reorganization event.
+type RollbackHandler interface {
+	HandleRollback(ctx context.Context, b *port.OrphanedBlock) ([]events.Event, error)
 }
 
 // Follower is implemented by features that read what other features write
@@ -308,9 +321,15 @@ func namesLocked() []string {
 
 // Pipeline is the set of handlers of the enabled features, in order.
 type Pipeline struct {
-	deps     Deps
-	handlers []namedHandler
-	enabled  map[string]bool
+	deps      Deps
+	handlers  []namedHandler
+	rollbacks []namedRollback
+	enabled   map[string]bool
+}
+
+type namedRollback struct {
+	feature string
+	h       RollbackHandler
 }
 
 type namedHandler struct {
@@ -372,6 +391,28 @@ func (r *registrar) Enabled(name string) bool { return r.p.enabled[name] }
 
 func (r *registrar) OnBlock(h BlockHandler) {
 	r.p.handlers = append(r.p.handlers, namedHandler{feature: r.feature, h: h})
+}
+
+func (r *registrar) OnRollback(h RollbackHandler) {
+	r.p.rollbacks = append(r.p.rollbacks, namedRollback{feature: r.feature, h: h})
+}
+
+// HandleRollback runs every rollback handler, in the reverse of the block
+// order, for a block being rolled back and returns their events.
+func (p *Pipeline) HandleRollback(ctx context.Context, b *port.OrphanedBlock) ([]events.Event, error) {
+	if p == nil {
+		return nil, nil
+	}
+	var out []events.Event
+	for i := len(p.rollbacks) - 1; i >= 0; i-- {
+		h := p.rollbacks[i]
+		evs, err := h.h.HandleRollback(ctx, b)
+		if err != nil {
+			return nil, fmt.Errorf("feature %q rollback: %w", h.feature, err)
+		}
+		out = append(out, evs...)
+	}
+	return out, nil
 }
 
 // Enabled returns the features to enable: the registered defaults (for
