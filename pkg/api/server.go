@@ -250,6 +250,11 @@ func (s *Server) setupRoutes() {
 	// EventBus subscriber stats endpoint (if EventBus is configured)
 	s.router.Get("/subscribers", s.handleSubscribers)
 
+	if s.config.HealthOnly {
+		s.logger.Info("API endpoints are served by other processes (health and metrics only)")
+		return
+	}
+
 	if s.chains != nil {
 		s.mountChainRoutes(s.chains)
 	}

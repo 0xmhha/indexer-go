@@ -436,3 +436,28 @@ func (m *mockStorage) IndexLogs(ctx context.Context, logs []*model.Log) error {
 func (m *mockStorage) IndexLog(ctx context.Context, log *model.Log) error {
 	return m.gethIndexLog(ctx, gethconv.LogToGeth(log))
 }
+
+// TestServerHealthOnly: the HTTP server of an indexing process that leaves
+// the API to other processes (node.role ingest) serves health and metrics
+// and none of the API.
+func TestServerHealthOnly(t *testing.T) {
+	config := DefaultConfig()
+	config.HealthOnly = true
+	server, err := NewServer(config, zap.NewNop(), &mockStorage{})
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+	for path, want := range map[string]int{
+		"/health":     http.StatusOK,
+		"/metrics":    http.StatusOK,
+		"/graphql":    http.StatusNotFound,
+		"/playground": http.StatusNotFound,
+		"/api":        http.StatusNotFound,
+	} {
+		w := httptest.NewRecorder()
+		server.Router().ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != want {
+			t.Errorf("%s: status %d, want %d", path, w.Code, want)
+		}
+	}
+}

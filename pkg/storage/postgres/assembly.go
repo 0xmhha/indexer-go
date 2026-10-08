@@ -86,6 +86,11 @@ func (s *Store) genesisBalance(ctx context.Context, addr common.Address, blockNu
 	if allocation.Sign() == 0 {
 		return balance
 	}
+	if s.readOnly {
+		// An API process answers with the allocation; the indexing process
+		// records it when it reads the account.
+		return allocation
+	}
 	s.logger.Info("auto-initializing genesis allocation balance",
 		zap.String("address", addr.Hex()), zap.String("balance", allocation.String()))
 	if err := s.SetBalance(ctx, addr, 0, allocation); err != nil {

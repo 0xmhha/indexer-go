@@ -183,7 +183,12 @@ func TestMultiChainRejectsWrongChainID(t *testing.T) {
 	}, time.Minute, 20*time.Millisecond)
 	ci, err := app.multichainManager.GetChain("wrong")
 	require.NoError(t, err)
-	require.Contains(t, ci.HealthCheck(ctx).LastError, fmt.Sprintf("configured chain_id is %d", wrong.ChainID))
+	// The chains start concurrently: the wrong chain's check may end after
+	// the other chain indexed everything.
+	want := fmt.Sprintf("configured chain_id is %d", wrong.ChainID)
+	require.Eventually(t, func() bool {
+		return strings.Contains(ci.HealthCheck(ctx).LastError, want)
+	}, 10*time.Second, 20*time.Millisecond, "the wrong chain reports %q", want)
 	_, _, ok := app.multichainManager.ChainStore("wrong")
 	require.False(t, ok)
 }

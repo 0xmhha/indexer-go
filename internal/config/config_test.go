@@ -738,3 +738,39 @@ func TestDatabaseDriver(t *testing.T) {
 		t.Error("invalid INDEXER_DB_POSTGRES_MAX_CONNS: expected an error")
 	}
 }
+
+// TestNodeRole checks node.role: all (the default), ingest and api, with the
+// former names writer and reader; an API process needs PostgreSQL, and
+// multi-chain mode runs every role in one process.
+func TestNodeRole(t *testing.T) {
+	cfg := NewConfig()
+	cfg.RPC.Endpoint = "http://localhost:8545"
+	cfg.Database.Path = "/tmp/indexer"
+	if cfg.NodeRole() != RoleAll {
+		t.Errorf("default role %q, want %q", cfg.NodeRole(), RoleAll)
+	}
+	for role, want := range map[string]string{"writer": RoleIngest, "reader": RoleAPI, RoleIngest: RoleIngest, RoleAPI: RoleAPI} {
+		cfg.Node.Role = role
+		if got := cfg.NodeRole(); got != want {
+			t.Errorf("role %q is %q, want %q", role, got, want)
+		}
+	}
+
+	cfg.Node.Role = RoleIngest
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("ingest on pebble: %v", err)
+	}
+	cfg.Node.Role = RoleAPI
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), DriverPostgres) {
+		t.Errorf("api on pebble: got %v, want an error naming %s", err, DriverPostgres)
+	}
+	cfg.Database.Driver = DriverPostgres
+	cfg.Database.Postgres.DSN = "postgres://indexer@localhost/indexer"
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("api on postgres: %v", err)
+	}
+	cfg.Node.Role = "observer"
+	if err := cfg.Validate(); err == nil {
+		t.Error("unknown role: expected an error")
+	}
+}

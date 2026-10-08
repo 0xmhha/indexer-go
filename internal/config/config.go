@@ -337,13 +337,38 @@ type TLSConfig struct {
 	ServerName string `yaml:"server_name,omitempty"`
 }
 
+// Node roles (node.role).
+const (
+	RoleAll    = "all"
+	RoleIngest = "ingest"
+	RoleAPI    = "api"
+)
+
+// NodeRole returns the configured role, with the former names writer and
+// reader mapped to ingest and api.
+func (c *Config) NodeRole() string {
+	switch c.Node.Role {
+	case "", RoleAll:
+		return RoleAll
+	case "writer":
+		return RoleIngest
+	case "reader":
+		return RoleAPI
+	}
+	return c.Node.Role
+}
+
 // NodeConfig holds configuration for multi-node deployment
 type NodeConfig struct {
 	// ID is the unique identifier for this node. It names the node's
 	// consumer group of the change stream (refactoring plan R3-2), so a
 	// restarted node resumes where it stopped. Defaults to the hostname.
 	ID string `yaml:"id"`
-	// Role is the node role: "writer", "reader", "all"
+	// Role is what the process runs (refactoring plan R4-1): RoleAll
+	// (indexing and the API), RoleIngest (indexing; the HTTP server serves
+	// only health and metrics) or RoleAPI (the API over a database another
+	// process indexes, opened read-only). "writer" and "reader" are the
+	// former names of ingest and api.
 	Role string `yaml:"role"`
 	// Priority is used for leader election (higher = more likely to be leader)
 	Priority int `yaml:"priority"`
@@ -1299,13 +1324,19 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate Node configuration
-	validNodeRoles := map[string]bool{
-		"writer": true,
-		"reader": true,
-		"all":    true,
+	switch c.NodeRole() {
+	case RoleAll, RoleIngest:
+	case RoleAPI:
+		// Pebble locks its directory even when opened read-only, so only
+		// a database other processes can open serves an API process.
+		if c.Database.Driver != DriverPostgres {
+			return fmt.Errorf("node.role %s needs database.driver %s: the indexing process holds a Pebble database alone", RoleAPI, DriverPostgres)
+		}
+	default:
+		return fmt.Errorf("invalid node role %q, must be one of: %s, %s, %s", c.Node.Role, RoleAll, RoleIngest, RoleAPI)
 	}
-	if !validNodeRoles[c.Node.Role] {
-		return fmt.Errorf("invalid node role %q, must be one of: writer, reader, all", c.Node.Role)
+	if c.NodeRole() != RoleAll && c.MultiChainMode() {
+		return fmt.Errorf("node.role %s is not supported in multi-chain mode yet; use %s", c.Node.Role, RoleAll)
 	}
 
 	return nil
@@ -1356,7 +1387,7 @@ func LoadUnvalidated(configFile string) (*Config, error) {
 func (c *Config) UnsupportedSettings() []string {
 	var out []string
 	if c.EventBus.Type != "" && c.EventBus.Type != "local" {
-		out = append(out, fmt.Sprintf("eventbus.type=%q is not wired; the in-process event bus is used (node.role and node.priority are ignored too)", c.EventBus.Type))
+		out = append(out, fmt.Sprintf("eventbus.type=%q is not wired; the in-process event bus is used (node.priority is ignored too)", c.EventBus.Type))
 	}
 	if c.Watchlist.Enabled {
 		out = append(out, "watchlist.enabled has no effect: the watchlist was removed after v0.1.0")
