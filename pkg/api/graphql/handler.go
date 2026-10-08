@@ -35,6 +35,10 @@ type HandlerOptions struct {
 	Stream stream.Outbox
 	// Limits bound the depth and complexity of requests.
 	Limits Limits
+	// ExtensionsOnly builds the schema from the extensions alone, without
+	// the explorer's modules: the indexer keeps only declared data
+	// (indexer.mode: declared, refactoring plan R6-1).
+	ExtensionsOnly bool
 }
 
 // NewHandler creates a new GraphQL handler
@@ -48,7 +52,9 @@ func NewHandlerWithOptions(store port.QueryStore, logger *zap.Logger, opts *Hand
 	if opts != nil {
 		builder.schema.stream = opts.Stream
 	}
-	builder = builder.WithModules(opts)
+	if opts == nil || !opts.ExtensionsOnly {
+		builder = builder.WithModules(opts)
+	}
 	if opts != nil && opts.RPCProxy != nil {
 		logger.Info("GraphQL RPC Proxy queries enabled")
 	}

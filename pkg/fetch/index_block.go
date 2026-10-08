@@ -17,6 +17,17 @@ import (
 // back instead of overwriting.
 var ErrBlockConflict = errors.New("fetch: stored block differs from fetched block")
 
+// SetDeclared selects the declared ingest mode (indexer.mode: declared,
+// refactoring plan R6-1): blocks come from a source that returns headers and
+// declared logs, and only the header is stored with what the features
+// write.
+func (f *Fetcher) SetDeclared(declared bool) { f.declared = declared }
+
+// SetStartHeight sets the height indexing starts from on an empty
+// database (indexer.start_height, or the declared start block). It must be
+// called before indexing.
+func (f *Fetcher) SetStartHeight(h uint64) { f.config.StartHeight = h }
+
 // SetBeforeCommitHook installs a function called after a block's writes are
 // staged and before they commit. Returning an error aborts the block as a
 // crash at that point would. It exists for fault-injection tests only.
@@ -62,9 +73,13 @@ func (f *Fetcher) applyBlock(ctx context.Context, fb *fetchedBlock) error {
 	f.publish(f.blockEvent(fb))
 
 	// Receipts are always processed sequentially here: a block batch must
-	// not be written from several goroutines.
-	if err := f.storeReceiptsSequential(ctx, fb); err != nil {
-		return err
+	// not be written from several goroutines. In the declared mode the
+	// receipts hold only the declared logs, which features turn into
+	// records; they are not stored.
+	if !f.declared {
+		if err := f.storeReceiptsSequential(ctx, fb); err != nil {
+			return err
+		}
 	}
 	if err := f.runFeatures(ctx, fb); err != nil {
 		return fmt.Errorf("block %d: %w", height, err)

@@ -78,24 +78,16 @@ func (b *SchemaBuilder) Build() (*Schema, error) {
 		Fields: b.queries,
 	})
 
-	// Create subscription type
-	subscriptionType := graphql.NewObject(graphql.ObjectConfig{
-		Name:   "Subscription",
-		Fields: b.subscriptions,
-	})
-
-	// Create mutation type
-	mutationType := graphql.NewObject(graphql.ObjectConfig{
-		Name:   "Mutation",
-		Fields: b.mutations,
-	})
-
-	// Create schema
-	schema, err := graphql.NewSchema(graphql.SchemaConfig{
-		Query:        queryType,
-		Mutation:     mutationType,
-		Subscription: subscriptionType,
-	})
+	// Mutation and subscription types exist only with fields: a schema of
+	// extensions alone (HandlerOptions.ExtensionsOnly) may have none.
+	config := graphql.SchemaConfig{Query: queryType}
+	if len(b.subscriptions) > 0 {
+		config.Subscription = graphql.NewObject(graphql.ObjectConfig{Name: "Subscription", Fields: b.subscriptions})
+	}
+	if len(b.mutations) > 0 {
+		config.Mutation = graphql.NewObject(graphql.ObjectConfig{Name: "Mutation", Fields: b.mutations})
+	}
+	schema, err := graphql.NewSchema(config)
 	if err != nil {
 		return nil, err
 	}

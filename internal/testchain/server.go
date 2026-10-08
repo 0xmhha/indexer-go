@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -230,6 +231,9 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 		}
 		return marshalBlock(b, boolParam(req, 1)), nil
 
+	case "eth_getLogs":
+		return s.getLogs(req)
+
 	case "eth_getBlockReceipts":
 		b := s.blockParamNumberOrHash(req, 0)
 		if b == nil {
@@ -304,6 +308,88 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 	s.unknown[req.Method]++
 	s.mu.Unlock()
 	return nil, errNotFound
+}
+
+// getLogs answers eth_getLogs for a block range (blockHash filters are not
+// supported): logs of visible blocks whose address is one of the filter's
+// and whose topics match position by position (null matches any topic, a
+// list any of its topics).
+func (s *Server) getLogs(req rpcRequest) (any, *rpcError) {
+	c := s.chain
+	var f struct {
+		FromBlock string            `json:"fromBlock"`
+		ToBlock   string            `json:"toBlock"`
+		Address   json.RawMessage   `json:"address"`
+		Topics    []json.RawMessage `json:"topics"`
+	}
+	if len(req.Params) == 0 || json.Unmarshal(req.Params[0], &f) != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid filter"}
+	}
+	bound := func(tag string, def uint64) (uint64, bool) {
+		switch tag {
+		case "", "latest", "pending", "safe", "finalized":
+			return def, true
+		case "earliest":
+			return 0, true
+		}
+		n, err := hexutil.DecodeUint64(tag)
+		return n, err == nil
+	}
+	from, ok1 := bound(f.FromBlock, c.head)
+	to, ok2 := bound(f.ToBlock, c.head)
+	if !ok1 || !ok2 {
+		return nil, &rpcError{Code: -32602, Message: "invalid block range"}
+	}
+	var addresses []common.Address
+	if len(f.Address) > 0 && string(f.Address) != "null" {
+		var one common.Address
+		if json.Unmarshal(f.Address, &one) == nil {
+			addresses = []common.Address{one}
+		} else if json.Unmarshal(f.Address, &addresses) != nil {
+			return nil, &rpcError{Code: -32602, Message: "invalid address"}
+		}
+	}
+	topics := make([][]common.Hash, len(f.Topics))
+	for i, raw := range f.Topics {
+		if string(raw) == "null" {
+			continue
+		}
+		var one common.Hash
+		if json.Unmarshal(raw, &one) == nil {
+			topics[i] = []common.Hash{one}
+		} else if json.Unmarshal(raw, &topics[i]) != nil {
+			return nil, &rpcError{Code: -32602, Message: "invalid topics"}
+		}
+	}
+	matches := func(l *types.Log) bool {
+		if len(addresses) > 0 && !slices.Contains(addresses, l.Address) {
+			return false
+		}
+		for i, want := range topics {
+			if len(want) == 0 {
+				continue
+			}
+			if i >= len(l.Topics) || !slices.Contains(want, l.Topics[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	out := []*types.Log{}
+	for n := from; n <= min(to, c.head); n++ {
+		b := c.blockAt(n)
+		if b == nil {
+			break
+		}
+		for _, r := range b.Receipts {
+			for _, l := range r.Logs {
+				if matches(l) {
+					out = append(out, l)
+				}
+			}
+		}
+	}
+	return out, nil
 }
 
 // blockNumberParam resolves a block tag or hex number. ok is false when the

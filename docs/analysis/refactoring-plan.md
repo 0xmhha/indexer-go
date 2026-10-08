@@ -438,7 +438,7 @@ graph LR
 
 | ID | 작업 | 선행 | 검증 기준 |
 |---|---|---|---|
-| R6-1 | 선언형 수집 설정(체인, 컨트랙트 주소, ABI, 이벤트, 시작 블록, finality 정책, 도메인 테이블) | R2-5 | — |
+| R6-1 | 선언형 수집 설정(체인, 컨트랙트 주소, ABI, 이벤트, 시작 블록, finality 정책, 도메인 테이블). (완료 10/9, 10/9 결정: 선언한 데이터만 저장하는 수집 모드를 둔다. 도메인 테이블은 선언된 키를 가진 레코드다. 설정: `features.records`에 sources(주소, 시작 블록, 이벤트 시그니처 또는 ABI 파일)와 tables(이벤트 하나, 조회 키)를 적는다. `pkg/declared`가 검사·컴파일하고 로그를 decode한다. 체인은 노드 profile 감지, finality는 기존 `indexer.finality`를 쓴다. 저장: `port.RecordReader/Writer`(레코드는 (블록, log index)로 식별, 키마다 값의 hash로 색인), Pebble `/rec/`·`/reckey/`, PostgreSQL migration 0011. 기능: `records`(순서 무관, decode 안 되는 로그는 경고 후 건너뜀), GraphQL `records(table, where)`. 수집 모드 `indexer.mode: declared`: 블록마다 헤더와 선언한 로그를 한 batch로 읽고(`sourcerpc.Logs`), 헤더와 레코드만 저장하며, `LogsOnly` 기능만 실행하고, GraphQL 확장만 제공한다. 함께 고친 것: 시험 체인에 `eth_getLogs`, mutation·subscription이 없는 schema를 만들 수 있게 함. 검증: 정산 시나리오(중복 주문, 다른 컨트랙트의 같은 이벤트, 같은 컨트랙트의 다른 이벤트)에서 표에는 정산 컨트랙트의 PaymentSettled만 체인 순서대로 있고, 키 조회는 가장 이른 로그부터 둘 다 돌려주며, 같은 범위를 다시 색인해도 그대로다(`TestRecordsFromDeclaredTables`). declared 모드는 선언된 시작 블록에서 시작해 중간에 멈췄다 재시작해도 누락·중복이 없고, 저장된 키가 헤더·메타·레코드뿐이며(영수증을 저장하게 바꾸면 실패), 탐색기 조회가 없다(`TestDeclaredModeStoresOnlyDeclaredData`, Pebble·PostgreSQL). 남은 것: 블록마다 RPC 두 번(범위 단위 `eth_getLogs`는 하지 않음), 멀티체인 미지원, P07 응답 형식(duplicate 표시, 404)은 R6-2/R6-3 처리기 몫) | R2-5 | — |
 | R6-2 | 사용자 처리기 SDK와 예제 | R6-1 | 외부 모듈이 core를 고치지 않고 처리기를 등록한다 |
 | R6-3 | P07을 이 프레임워크로 재현(인수 시험) | R6-2 | P07-FR-01~06 통과 |
 
