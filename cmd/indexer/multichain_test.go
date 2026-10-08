@@ -124,6 +124,8 @@ func TestMultiChainIndexesEachChainIntoItsOwnDatabase(t *testing.T) {
 			`{"query":"{ block(number: \"1\") { hash } }"}`)
 		require.Contains(t, strings.ToLower(body), hash, "chain %s GraphQL", id)
 		require.NotContains(t, body, "error")
+		body = serve(t, router, http.MethodGet, "/chains/"+id+"/v1/blocks?numberFrom=1&numberTo=1", "")
+		require.Contains(t, strings.ToLower(body), hash, "chain %s REST", id)
 	}
 	require.Contains(t, serve(t, router, http.MethodGet, "/chains", ""), `"id":"stablenet"`)
 	rec := httptest.NewRecorder()

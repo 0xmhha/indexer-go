@@ -11,6 +11,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
 	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
+	"github.com/0xmhha/indexer-go/pkg/api/rest"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
@@ -51,6 +52,7 @@ type chainHandlers struct {
 	graphql *graphql.Handler
 	sub     http.Handler
 	rpc     http.Handler
+	rest    http.Handler
 }
 
 func (s *Server) mountChainRoutes(chains ChainStores) {
@@ -73,6 +75,9 @@ func (s *Server) mountChainRoutes(chains ChainStores) {
 	}
 	if s.config.EnableJSONRPC {
 		s.router.Post("/chains/{id}/rpc", cr.serve(func(h *chainHandlers) http.Handler { return h.rpc }))
+	}
+	if s.config.EnableREST {
+		s.router.Handle("/chains/{id}/v1/*", cr.serve(func(h *chainHandlers) http.Handler { return h.rest }))
 	}
 	s.logger.Info("Per-chain API enabled", zap.String("path", "/chains/{id}/"))
 }
@@ -134,6 +139,7 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 		graphql: gql,
 		sub:     sub.Handler(),
 		rpc:     jsonrpc.NewServer(store, logger),
+		rest:    rest.NewHandler(gql),
 	}
 	cr.handlers[id] = h
 	return h, http.StatusOK

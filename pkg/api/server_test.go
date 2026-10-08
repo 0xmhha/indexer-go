@@ -453,6 +453,7 @@ func TestServerHealthOnly(t *testing.T) {
 		"/graphql":    http.StatusNotFound,
 		"/playground": http.StatusNotFound,
 		"/api":        http.StatusNotFound,
+		"/v1/blocks":  http.StatusNotFound,
 	} {
 		w := httptest.NewRecorder()
 		server.Router().ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
