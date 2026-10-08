@@ -58,6 +58,22 @@ func (f *FeatureConfig) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
+// SetFeatureSettings sets the settings of a feature as if its section held
+// settings (a struct with yaml tags), keeping whether it is enabled.
+func (c *Config) SetFeatureSettings(name string, settings any) error {
+	var node yaml.Node
+	if err := node.Encode(settings); err != nil {
+		return fmt.Errorf("features.%s: %w", name, err)
+	}
+	if c.Features == nil {
+		c.Features = map[string]FeatureConfig{}
+	}
+	fc := c.Features[name]
+	fc.settings = node
+	c.Features[name] = fc
+	return nil
+}
+
 // FeatureSettings decodes the section of a feature into into (a pointer to
 // the feature's settings struct); a feature without a section leaves into
 // as it is. Keys the struct does not name are an error, so a misspelled
