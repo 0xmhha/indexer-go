@@ -21,7 +21,7 @@ func indexVia(t *testing.T, endpoint, recordDir, dir string, head uint64) *App {
 	cfg.RPC.Endpoint = endpoint
 	cfg.RPC.RecordDir = recordDir
 	cfg.RPC.Timeout = 5 * time.Second
-	cfg.Database.Path = dir
+	setTestDatabase(t, cfg, dir)
 	cfg.API.Enabled = false
 	enableTestChainFeatures(cfg)
 	app, err := NewApp(cfg, zap.NewNop(), false, "")

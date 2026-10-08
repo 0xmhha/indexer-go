@@ -18,12 +18,12 @@ import (
 
 // eraConfig is the test configuration reading history from eraDir and the
 // rest from the node at endpoint.
-func eraConfig(endpoint, eraDir, dbDir string) *config.Config {
+func eraConfig(t testing.TB, endpoint, eraDir, dbDir string) *config.Config {
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = endpoint
 	cfg.RPC.Timeout = 5 * time.Second
 	cfg.Source.EraDir = eraDir
-	cfg.Database.Path = dbDir
+	setTestDatabase(t, cfg, dbDir)
 	cfg.API.Enabled = false
 	enableTestChainFeatures(cfg)
 	return cfg
@@ -47,7 +47,7 @@ func TestEraSourceMatchesGolden(t *testing.T) {
 	require.NoError(t, sc.Chain.WriteEra1(filepath.Join(eraDir, "test-00001-00000000.era1"), split/2+1, split))
 
 	dbDir := filepath.Join(t.TempDir(), "db")
-	app, err := NewApp(eraConfig(srv.URL(), eraDir, dbDir), zap.NewNop(), false, "")
+	app, err := NewApp(eraConfig(t, srv.URL(), eraDir, dbDir), zap.NewNop(), false, "")
 	require.NoError(t, err)
 	srv.ResetBlockLoads() // startup checks read single hashes
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -81,6 +81,6 @@ func TestEraSourceRejectsOtherChain(t *testing.T) {
 	eraDir := t.TempDir()
 	require.NoError(t, other.WriteEra1(filepath.Join(eraDir, "other-00000-00000000.era1"), 0, 2))
 
-	_, err := NewApp(eraConfig(srv.URL(), eraDir, filepath.Join(t.TempDir(), "db")), zap.NewNop(), false, "")
+	_, err := NewApp(eraConfig(t, srv.URL(), eraDir, filepath.Join(t.TempDir(), "db")), zap.NewNop(), false, "")
 	require.ErrorIs(t, err, source.ErrDifferentChain)
 }

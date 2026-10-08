@@ -26,7 +26,7 @@ func startAppOutbox(t *testing.T, srv *testchain.Server, dir string, outbox bool
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = srv.URL()
 	cfg.RPC.Timeout = 5 * time.Second
-	cfg.Database.Path = dir
+	setTestDatabase(t, cfg, dir)
 	cfg.API.Enabled = false
 	cfg.Indexer.PollInterval = 10 * time.Millisecond
 	cfg.EventBus.Outbox = outbox
@@ -256,7 +256,7 @@ func TestReindexContinuesOutboxSequence(t *testing.T) {
 	require.NotZero(t, first)
 	app.Shutdown()
 
-	require.NoError(t, reindexData(dir, zap.NewNop()))
+	reindexTestDatabase(t, dir)
 
 	app = startAppOutbox(t, srv, dir, true)
 	defer app.Shutdown()

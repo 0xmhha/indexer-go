@@ -19,7 +19,7 @@ func startAppFinality(t *testing.T, srv *testchain.Server, finality string, conf
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = srv.URL()
 	cfg.RPC.Timeout = 5 * time.Second
-	cfg.Database.Path = filepath.Join(t.TempDir(), "db")
+	setTestDatabase(t, cfg, filepath.Join(t.TempDir(), "db"))
 	cfg.API.Enabled = false
 	cfg.Indexer.Finality = finality
 	cfg.Indexer.Confirmations = confirmations

@@ -274,3 +274,15 @@ func (s *Store) GetOrphanedTransaction(ctx context.Context, txHash common.Hash) 
 	}
 	return pgx.CollectRows(rows, scanOrphan)
 }
+
+// DropUndo deletes the undo of a height, making the block impossible to
+// roll back (as the Pebble store's DropUndo).
+func (s *Store) DropUndo(ctx context.Context, height uint64) error {
+	return s.inTx(ctx, func(q querier) error {
+		if _, err := q.Exec(ctx, "DELETE FROM undo_log WHERE height = $1", i64(height)); err != nil {
+			return err
+		}
+		_, err := q.Exec(ctx, "DELETE FROM undo_blocks WHERE height = $1", i64(height))
+		return err
+	})
+}

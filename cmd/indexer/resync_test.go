@@ -29,7 +29,7 @@ func startAppWithAPI(t *testing.T, srv *testchain.Server, dir string) (*App, str
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = srv.URL()
 	cfg.RPC.Timeout = 5 * time.Second
-	cfg.Database.Path = dir
+	setTestDatabase(t, cfg, dir)
 	cfg.Indexer.PollInterval = 10 * time.Millisecond
 	cfg.API.Enabled = true
 	cfg.API.Host = "127.0.0.1"

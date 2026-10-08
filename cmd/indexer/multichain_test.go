@@ -37,7 +37,7 @@ func multiChainConfig(t *testing.T, root string, chains ...config.ChainConfig) *
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = ""
 	cfg.RPC.Timeout = 5 * time.Second
-	cfg.Database.Path = root
+	setTestDatabase(t, cfg, root)
 	cfg.Indexer.PollInterval = 10 * time.Millisecond
 	cfg.API.Enabled = true
 	cfg.API.Host = "127.0.0.1"
@@ -139,10 +139,12 @@ func TestMultiChainIndexesEachChainIntoItsOwnDatabase(t *testing.T) {
 	}
 	app.Shutdown()
 
-	entries, err := os.ReadDir(root)
-	require.NoError(t, err)
-	require.Len(t, entries, 1)
-	require.Equal(t, "chains", entries[0].Name(), "the root holds only the chains' databases")
+	if !testOnPostgres() {
+		entries, err := os.ReadDir(root)
+		require.NoError(t, err)
+		require.Len(t, entries, 1)
+		require.Equal(t, "chains", entries[0].Name(), "the root holds only the chains' databases")
+	}
 
 	for id, sc := range map[string]*testchain.Scenario{"evm": evm, "stablenet": &snet.Scenario} {
 		alone := indexScenario(t, sc)

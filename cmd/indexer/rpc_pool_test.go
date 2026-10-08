@@ -29,7 +29,7 @@ func TestIndexingSurvivesEndpointLoss(t *testing.T) {
 	cfg.RPC.Endpoint = primary.URL()
 	cfg.RPC.FallbackEndpoints = []string{fallback.URL()}
 	cfg.RPC.Timeout = 2 * time.Second
-	cfg.Database.Path = filepath.Join(t.TempDir(), "db")
+	setTestDatabase(t, cfg, filepath.Join(t.TempDir(), "db"))
 	cfg.API.Enabled = false
 	cfg.Indexer.PollInterval = 10 * time.Millisecond
 	enableTestChainFeatures(cfg)

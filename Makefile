@@ -72,7 +72,7 @@ test-integration:
 	@echo "Running integration tests..."
 	$(GOTEST) -v -tags=integration ./...
 
-## test-postgres: Run the PostgreSQL adapter tests (disposable container, or INDEXER_TEST_POSTGRES)
+## test-postgres: Run the PostgreSQL adapter tests and the end-to-end suite on PostgreSQL (disposable container, or INDEXER_TEST_POSTGRES)
 test-postgres:
 	@./scripts/test-postgres.sh
 

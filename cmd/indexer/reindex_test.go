@@ -21,6 +21,7 @@ import (
 // of the new indexing continue the numbering consumers have seen), and the
 // database must open again.
 func TestReindexClearsAllChainData(t *testing.T) {
+	pebbleOnly(t)
 	for name, chain := range map[string]*testchain.Chain{
 		"evm":       testchain.BuildDefault().Chain,
 		"stablenet": testchain.BuildStableNet().Chain,
@@ -58,6 +59,7 @@ func TestReindexClearsAllChainData(t *testing.T) {
 // remaining data looks like an unmarked schema 1 database and the indexer
 // refuses to start.
 func TestReindexKeepsVerifiedDatabaseOpenable(t *testing.T) {
+	pebbleOnly(t)
 	dir := filepath.Join(t.TempDir(), "db")
 	db, err := storage.NewPebbleStorage(storage.DefaultConfig(dir))
 	require.NoError(t, err)
