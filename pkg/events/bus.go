@@ -287,7 +287,7 @@ func (eb *EventBus) broadcastEvent(event Event) {
 
 	for _, sub := range eb.subscribers {
 		// Check if subscriber is interested in this event type
-		if !sub.EventTypes[eventType] {
+		if !sub.EventTypes[eventType] && !sub.EventTypes[EventTypeAll] {
 			continue
 		}
 

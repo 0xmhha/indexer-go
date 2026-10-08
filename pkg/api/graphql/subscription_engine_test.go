@@ -329,3 +329,35 @@ func TestReplayCoversEventsBeforeFirstConnection(t *testing.T) {
 	}
 	require.Equal(t, []uint64{2, 3}, seqs)
 }
+
+// untopicalEvent is an event type no subscription listens to.
+type untopicalEvent struct{ events.Stream }
+
+func (untopicalEvent) Type() events.EventType { return "untopical" }
+func (untopicalEvent) Timestamp() time.Time   { return time.Time{} }
+
+// TestEventsWithoutTopicAreNoGap: the stream numbers events of every type;
+// an event no subscription listens to is not a lost event, so subscribers
+// stay connected and receive the next events.
+func TestEventsWithoutTopicAreNoGap(t *testing.T) {
+	bus, sub, srv := newEngineServer(t, 16)
+	conn := subscribeWS(t, srv.URL, "b", `subscription { newBlock { number } }`, nil)
+	defer func() { _ = conn.Close() }()
+	waitSubscriptions(t, sub, 1)
+
+	publish := func(seq uint64, ev events.Event) {
+		ev.(interface{ SetSequence(uint64) }).SetSequence(seq)
+		require.True(t, bus.Publish(ev))
+	}
+	publish(1, &events.BlockEvent{Number: 1})
+	publish(2, &untopicalEvent{})
+	publish(3, &untopicalEvent{})
+	publish(4, &events.BlockEvent{Number: 2})
+	for _, want := range []uint64{1, 4} {
+		require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
+		var m wsMsg
+		require.NoError(t, conn.ReadJSON(&m))
+		require.Equal(t, "next", m.Type, "%s", m.Payload)
+		require.Equal(t, want, nextSequence(t, m))
+	}
+}

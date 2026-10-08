@@ -128,7 +128,10 @@ func (s *SubscriptionServer) subscriptionEngine() *stream.Engine {
 		e.AddTopic(name, spec.EventType, subscriptionEncoder(name))
 	}
 	id := events.SubscriptionID("graphql-engine/" + newConnID())
-	sub := bus.Subscribe(id, e.EventTypes(), nil, engineBusBuffer)
+	// Every event type, not only the topics': the engine detects lost
+	// events by gaps in the sequence, and events of a type without a topic
+	// (dexMarket, for example) are part of it.
+	sub := bus.Subscribe(id, []events.EventType{events.EventTypeAll}, nil, engineBusBuffer)
 	if sub == nil {
 		return nil // the bus is stopped
 	}
