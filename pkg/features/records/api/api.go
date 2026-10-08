@@ -6,7 +6,6 @@ package api
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 
 	gql "github.com/graphql-go/graphql"
@@ -126,7 +125,6 @@ func register(e *graphql.Extension) {
 // values as records store them.
 func keyOf(table *declared.TablePlan, where []interface{}) (port.RecordKey, error) {
 	given := map[string]string{}
-	names := make([]string, 0, len(where))
 	for _, w := range where {
 		m, _ := w.(map[string]interface{})
 		field, _ := m["field"].(string)
@@ -135,26 +133,12 @@ func keyOf(table *declared.TablePlan, where []interface{}) (port.RecordKey, erro
 			return port.RecordKey{}, fmt.Errorf("field %q is given twice", field)
 		}
 		given[field] = value
-		names = append(names, field)
 	}
-	fields, ok := table.Key(names)
-	if !ok {
-		sort.Strings(names)
-		return port.RecordKey{}, fmt.Errorf("table %q declares no key %v (keys: %v)", table.Name, names, table.Keys)
+	id, values, err := table.Lookup(given)
+	if err != nil {
+		return port.RecordKey{}, err
 	}
-	key := port.RecordKey{ID: declared.KeyID(fields), Values: make([]string, len(fields))}
-	for i, f := range fields {
-		for _, arg := range table.Event.Inputs {
-			if arg.Name == f {
-				v, err := declared.FormatInput(arg, given[f])
-				if err != nil {
-					return port.RecordKey{}, err
-				}
-				key.Values[i] = v
-			}
-		}
-	}
-	return key, nil
+	return port.RecordKey{ID: id, Values: values}, nil
 }
 
 func recordMap(table *declared.TablePlan, r *port.Record) map[string]interface{} {

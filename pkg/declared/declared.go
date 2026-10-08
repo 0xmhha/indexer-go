@@ -125,6 +125,34 @@ func (t *TablePlan) Key(fields []string) ([]string, bool) {
 	return nil, false
 }
 
+// Lookup finds the declared key with exactly the fields of values and
+// returns its KeyID and the values in the key's order, normalized as
+// records store them (FormatInput).
+func (t *TablePlan) Lookup(values map[string]string) (string, []string, error) {
+	names := make([]string, 0, len(values))
+	for n := range values {
+		names = append(names, n)
+	}
+	fields, ok := t.Key(names)
+	if !ok {
+		sort.Strings(names)
+		return "", nil, fmt.Errorf("table %q declares no key %v (keys: %v)", t.Name, names, t.Keys)
+	}
+	out := make([]string, len(fields))
+	for i, f := range fields {
+		for _, arg := range t.Event.Inputs {
+			if arg.Name == f {
+				v, err := FormatInput(arg, values[f])
+				if err != nil {
+					return "", nil, err
+				}
+				out[i] = v
+			}
+		}
+	}
+	return KeyID(fields), out, nil
+}
+
 func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
