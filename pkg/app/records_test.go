@@ -67,7 +67,7 @@ func requireReceipts(t *testing.T, ctx context.Context, s port.RecordReader, sc 
 		assert.Equal(t, sc.Settlement, r.Address)
 		assert.Equal(t, map[string]string{
 			"merchant": strings.ToLower(p.Merchant.Hex()), "orderId": p.OrderID.Hex(),
-			"device": strings.ToLower(p.Device.Hex()), "amount": strconv.FormatInt(p.Amount, 10),
+			"device": strings.ToLower(p.Device.Hex()), "amount": strconv.FormatInt(p.Amount, 10), "nonce": strconv.FormatInt(p.Nonce, 10),
 		}, r.Fields, "payment %d", i)
 		assert.NotZero(t, r.BlockTime)
 	}
@@ -114,6 +114,7 @@ func TestRecordsFromDeclaredTables(t *testing.T) {
 		map[string]interface{}{"name": "orderId", "value": sc.Payments[0].OrderID.Hex()},
 		map[string]interface{}{"name": "device", "value": strings.ToLower(sc.Device.Hex())},
 		map[string]interface{}{"name": "amount", "value": "2500"},
+		map[string]interface{}{"name": "nonce", "value": strconv.FormatInt(sc.Payments[0].Nonce, 10)},
 	}, first["fields"], "the event's arguments in order")
 
 	for name, query := range map[string]string{

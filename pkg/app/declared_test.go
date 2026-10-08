@@ -18,6 +18,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/features/records"
+	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
@@ -98,6 +99,9 @@ func TestDeclaredModeStoresOnlyDeclaredData(t *testing.T) {
 	runLiveUntil(t, app, head)
 	s := app.storage.(port.RecordReader)
 	requireReceipts(t, ctx, s, sc)
+	target, polled, attached := fetch.ProgressOf(app.storage)
+	assert.True(t, attached && polled, "the live loop's progress is attached to its storage")
+	assert.Equal(t, head, target, "the head the live loop indexes to")
 
 	// Only the declared GraphQL is served.
 	h, err := graphql.NewHandlerWithOptions(app.storage, zap.NewNop(), &graphql.HandlerOptions{ExtensionsOnly: true})
@@ -112,9 +116,9 @@ func TestDeclaredModeStoresOnlyDeclaredData(t *testing.T) {
 	m := sc.Merchants[1]
 	order := common.HexToHash("0x5151")
 	sc.Chain.AddBlock(testchain.TxSpec{From: sc.Accounts[0], Tx: &types.LegacyTx{To: &sc.Settlement, Gas: 200000, GasPrice: common.Big1},
-		GasUsed: 90000, Logs: []*types.Log{{Address: sc.Settlement, Topics: []common.Hash{testchain.SigPaymentSettled, common.BytesToHash(m.Bytes()), order},
-			Data: append(common.LeftPadBytes(sc.Device.Bytes(), 32), common.LeftPadBytes([]byte{0x01, 0x00}, 32)...)}}})
-	sc.Payments = append(sc.Payments, testchain.Payment{Block: sc.Chain.Head(), Merchant: m, OrderID: order, Device: sc.Device, Amount: 256})
+		GasUsed: 90000, Logs: []*types.Log{{Address: sc.Settlement, Topics: []common.Hash{testchain.SigPaymentSettled, common.BytesToHash(m.Bytes()), order, common.BytesToHash(sc.Device.Bytes())},
+			Data: append(common.LeftPadBytes([]byte{0x01, 0x00}, 32), common.LeftPadBytes([]byte{0x63}, 32)...)}}})
+	sc.Payments = append(sc.Payments, testchain.Payment{Block: sc.Chain.Head(), Merchant: m, OrderID: order, Device: sc.Device, Amount: 256, Nonce: 99})
 	runLiveUntil(t, app, sc.Chain.Head())
 	requireReceipts(t, ctx, s, sc)
 	app.Shutdown()

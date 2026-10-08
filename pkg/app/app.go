@@ -425,6 +425,10 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 		if err := app.initRecords(); err != nil {
 			return nil, err
 		}
+		if app.fetcher != nil {
+			// Routes tell "not indexed yet" from "indexing is behind" (sdk.ProgressOf).
+			fetch.AttachProgress(app.storage, app.fetcher)
+		}
 	}
 
 	// Initialize API server if enabled
@@ -1219,6 +1223,7 @@ func (a *App) Shutdown() {
 
 	a.closeOrderBook()
 	records.Detach(a.storage)
+	fetch.DetachProgress(a.storage)
 
 	// Stop EventBus
 	if a.eventBus != nil {
@@ -1467,6 +1472,7 @@ func (a *App) featureOverrides() map[string]bool {
 func (a *App) closeAfterFailedStart() {
 	a.closeOrderBook()
 	records.Detach(a.storage)
+	fetch.DetachProgress(a.storage)
 	if a.eventBus != nil {
 		a.eventBus.Stop()
 	}

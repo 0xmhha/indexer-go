@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,41 @@ var ErrNoFinalized = errors.New("fetch: node does not report a finalized block")
 // has not finalized a block (or does not report finality).
 type FinalizedClient interface {
 	GetFinalizedBlockNumber(ctx context.Context) (n uint64, ok bool, err error)
+}
+
+// Progress is how far the live loop has looked: the highest block the node
+// offered under the finality policy at its last poll (refactoring plan
+// R6-3: a project's API tells "not indexed yet" from "indexing is behind").
+// ok is false before the first successful poll.
+func (f *Fetcher) Progress() (target uint64, ok bool) {
+	return f.lastTarget.Load(), f.polled.Load()
+}
+
+// noteTarget records a poll's target head.
+func (f *Fetcher) noteTarget(target uint64) {
+	f.lastTarget.Store(target)
+	f.polled.Store(true)
+}
+
+// Progress providers are found by the storage they index into, so an API
+// serving that storage finds the live loop's progress.
+var progress sync.Map // storage -> *Fetcher
+
+// AttachProgress makes f the progress of the storage store.
+func AttachProgress(store any, f *Fetcher) { progress.Store(store, f) }
+
+// DetachProgress removes the progress of store.
+func DetachProgress(store any) { progress.Delete(store) }
+
+// ProgressOf returns the live loop's progress for store (see Progress);
+// attached is false when no live loop indexes into it in this process.
+func ProgressOf(store any) (target uint64, ok, attached bool) {
+	v, found := progress.Load(store)
+	if !found {
+		return 0, false, false
+	}
+	target, ok = v.(*Fetcher).Progress()
+	return target, ok, true
 }
 
 // noFinalizedWarnEvery throttles the warning while the node reports no

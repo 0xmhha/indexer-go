@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -185,6 +186,9 @@ type Fetcher struct {
 
 	// declared is the declared ingest mode (SetDeclared).
 	declared bool
+	// lastTarget and polled are the live loop's progress (Progress).
+	lastTarget atomic.Uint64
+	polled     atomic.Bool
 }
 
 // NewFetcher creates a new Fetcher instance
@@ -304,6 +308,10 @@ func (f *Fetcher) Run(ctx context.Context) error {
 				return err
 			}
 			continue
+		}
+
+		if ok {
+			f.noteTarget(latestChainBlock)
 		}
 
 		// Check if we're caught up

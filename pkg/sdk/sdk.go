@@ -42,6 +42,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/features/records"
+	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -171,6 +172,37 @@ func LookupRecords(ctx context.Context, s any, table string, values map[string]s
 		return nil, "", err
 	}
 	return rs.ListRecordsByKey(ctx, table, key, page)
+}
+
+// Progress is how far indexing has come: Indexed is the latest indexed
+// block; Target the highest block the node offered under the finality
+// policy at the live loop's last poll, valid when Polled.
+type Progress struct {
+	Indexed uint64
+	Target  uint64
+	Polled  bool
+}
+
+// Lag is Target minus Indexed (0 when indexing is ahead or not polled).
+func (p Progress) Lag() uint64 {
+	if !p.Polled || p.Indexed >= p.Target {
+		return 0
+	}
+	return p.Target - p.Indexed
+}
+
+// ProgressOf returns the indexing progress of a storage served in this
+// process. Without a live loop indexing into it (an API process of
+// node.role api) Polled is false.
+func ProgressOf(ctx context.Context, s Store) (Progress, error) {
+	var p Progress
+	indexed, err := s.GetLatestHeight(ctx)
+	if err != nil && !errors.Is(err, port.ErrNotFound) {
+		return p, err
+	}
+	p.Indexed = indexed
+	p.Target, p.Polled, _ = fetch.ProgressOf(s)
+	return p, nil
 }
 
 // API.
