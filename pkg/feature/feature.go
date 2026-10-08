@@ -110,6 +110,22 @@ type DefaultOn interface {
 	DefaultOn() bool
 }
 
+// LogsOnly is implemented by features that read nothing but the logs of
+// the contracts declared in features.records: they are the only features
+// the declared ingest mode (indexer.mode: declared, refactoring plan R6-1)
+// runs, since its blocks hold nothing else.
+type LogsOnly interface {
+	LogsOnly() bool
+}
+
+// IsLogsOnly reports whether the registered feature name is LogsOnly.
+func IsLogsOnly(name string) bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	l, ok := features[name].(LogsOnly)
+	return ok && l.LogsOnly()
+}
+
 // Defaults returns the registered features that are on by default.
 func Defaults() []string {
 	mu.RLock()

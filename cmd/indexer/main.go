@@ -870,12 +870,18 @@ func (a *App) initFetcher(ctx context.Context) error {
 		first, last := es.Range()
 		a.logger.Info("Reading history from era1 archives", zap.String("dir", dir), zap.Uint64("first", first), zap.Uint64("last", last))
 	}
+	blocks, err := a.declaredSource(src, blocks)
+	if err != nil {
+		return err
+	}
 	a.fetcher.SetSource(blocks)
 	a.logger.Info("Reading blocks through chain profile", zap.String("profile", profile.ID()))
 
-	defaults := append(feature.Defaults(), profile.Features()...)
-	enabled, err := feature.Enabled(defaults, a.featureOverrides())
+	enabled, err := feature.Enabled(a.defaultFeatures(profile), a.featureOverrides())
 	if err != nil {
+		return err
+	}
+	if err := a.checkDeclaredFeatures(enabled); err != nil {
 		return err
 	}
 	deps := feature.Deps{
@@ -964,6 +970,7 @@ func (a *App) initAPIServer() error {
 		EnableRateLimit:       a.config.API.RateLimit.Enabled,
 		RateLimitPerSecond:    a.config.API.RateLimit.PerSecond,
 		RateLimitBurst:        a.config.API.RateLimit.Burst,
+		DeclaredOnly:          a.config.DeclaredMode(),
 		GraphQLMaxDepth:       a.config.API.GraphQL.MaxDepth,
 		GraphQLMaxComplexity:  a.config.API.GraphQL.MaxComplexity,
 		MaxHeaderBytes:        constants.DefaultMaxHeaderBytes,

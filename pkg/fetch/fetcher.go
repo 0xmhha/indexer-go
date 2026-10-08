@@ -182,6 +182,9 @@ type Fetcher struct {
 	outbox *outboxState
 	// beforeCommitHook is a fault-injection point for tests.
 	beforeCommitHook func(height uint64) error
+
+	// declared is the declared ingest mode (SetDeclared).
+	declared bool
 }
 
 // NewFetcher creates a new Fetcher instance

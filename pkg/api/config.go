@@ -75,6 +75,11 @@ type Config struct {
 	// processes (node.role ingest, refactoring plan R4-1).
 	HealthOnly bool
 
+	// DeclaredOnly serves what an indexer of declared data (indexer.mode:
+	// declared) has: the GraphQL extensions and subscriptions, without the
+	// explorer's queries, REST, JSON-RPC and Etherscan APIs.
+	DeclaredOnly bool
+
 	// EnableWebSocketKeepAlive enables WebSocket keep-alive (ping/pong)
 	// When enabled, server sends ping every 54 seconds with 60 second timeout
 	// Default: false

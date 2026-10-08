@@ -260,6 +260,7 @@ func (s *Server) setupRoutes() {
 			RPCProxy:            s.rpcProxy,
 			NotificationService: s.notificationService,
 			Limits:              s.graphqlLimits(),
+			ExtensionsOnly:      s.config.DeclaredOnly,
 		}
 		if outbox != nil {
 			opts.Stream = outbox
@@ -284,6 +285,11 @@ func (s *Server) setupRoutes() {
 		s.logger.Info("GraphQL subscriptions endpoint registered",
 			zap.String("path", "/graphql/ws"),
 			zap.Bool("keep_alive", s.config.EnableWebSocketKeepAlive))
+	}
+
+	if s.config.DeclaredOnly {
+		s.logger.Info("Declared data only: no explorer, REST, JSON-RPC or Etherscan API")
+		return
 	}
 
 	// REST API of the most polled paths, over the same resolvers

@@ -225,7 +225,21 @@ type IndexerConfig struct {
 	// blocks they removed (default 1000); older ones are deleted when a new
 	// reorganization is recorded. 0 keeps them all.
 	OrphanRetention uint64 `yaml:"orphan_retention"`
+	// Mode selects what is ingested: "full" (default) stores every block,
+	// transaction, receipt and log for the explorer; "declared" reads only
+	// the headers and the logs of the tables declared in features.records
+	// and stores those headers and records (refactoring plan R6-1).
+	Mode string `yaml:"mode"`
 }
+
+// Ingest modes (indexer.mode).
+const (
+	ModeFull     = "full"
+	ModeDeclared = "declared"
+)
+
+// DeclaredMode reports whether only declared data is ingested.
+func (c *Config) DeclaredMode() bool { return c.Indexer.Mode == ModeDeclared }
 
 // APIConfig holds API server configuration
 type APIConfig struct {
@@ -861,6 +875,9 @@ func (c *Config) LoadFromEnv() error {
 	if v := os.Getenv("INDEXER_FINALITY"); v != "" {
 		c.Indexer.Finality = v
 	}
+	if v := os.Getenv("INDEXER_MODE"); v != "" {
+		c.Indexer.Mode = v
+	}
 	if v := os.Getenv("INDEXER_CONFIRMATIONS"); v != "" {
 		n, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
@@ -1406,6 +1423,15 @@ func (c *Config) Validate() error {
 		}
 	default:
 		return fmt.Errorf("invalid indexer.finality %q, must be one of: head, confirmations, finalized", c.Indexer.Finality)
+	}
+	switch c.Indexer.Mode {
+	case "", ModeFull:
+	case ModeDeclared:
+		if c.MultiChainMode() || c.Source.EraDir != "" {
+			return fmt.Errorf("indexer.mode declared reads the declared logs from one node: multichain and source.era_dir are not supported")
+		}
+	default:
+		return fmt.Errorf("invalid indexer.mode %q, must be one of: full, declared", c.Indexer.Mode)
 	}
 
 	// Validate database configuration
