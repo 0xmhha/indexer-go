@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sync"
 	"testing"
 
@@ -188,4 +189,43 @@ func TestAccountAbstractionInBlockTx(t *testing.T) {
 	stats, err = s.GetAddressSetCodeStats(ctx, addr)
 	require.NoError(t, err)
 	assert.Zero(t, stats.AsTargetCount, "stats rolled back with the block")
+}
+
+// TestFilteredAddressListAcrossBatches: a filtered address list reads the
+// list in batches; matches after the first batch are found, and a cursor
+// continues after the last match.
+func TestFilteredAddressListAcrossBatches(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	addr := common.HexToAddress("0x0a01")
+	to := common.HexToAddress("0x0b01")
+	var txs []*model.Transaction
+	for i := 0; i < 3; i++ {
+		txs = append(txs, &model.Transaction{Hash: common.Hash{0xaa, byte(i)}, From: addr, To: &to, Value: big.NewInt(int64(i))})
+	}
+	require.NoError(t, s.SetBlock(ctx, &model.Block{Number: 1, Hash: common.Hash{1}, Transactions: txs}))
+	// More entries than a batch whose transactions are not stored, then the
+	// stored ones.
+	for i := 0; i < addressScanBatch+44; i++ {
+		require.NoError(t, s.AddTransactionToAddressIndex(ctx, addr, common.Hash{0xbb, byte(i >> 8), byte(i)}))
+	}
+	for _, tx := range txs {
+		require.NoError(t, s.AddTransactionToAddressIndex(ctx, addr, tx.Hash))
+	}
+
+	got, next, err := s.GetTransactionsByAddressFiltered(ctx, addr, nil, port.FirstPage(2))
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, txs[0].Hash, got[0].Transaction.Hash)
+	assert.Equal(t, txs[1].Hash, got[1].Transaction.Hash)
+	require.NotEmpty(t, next)
+	got, next, err = s.GetTransactionsByAddressFiltered(ctx, addr, nil, port.Page{After: next, Limit: 2})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, txs[2].Hash, got[0].Transaction.Hash)
+	assert.Empty(t, next)
+
+	stats, err := s.GetAddressStats(ctx, addr)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(3), stats.TotalTransactions, "the statistics read every batch")
 }
