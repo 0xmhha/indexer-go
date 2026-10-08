@@ -7,6 +7,7 @@ package testchain
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sort"
@@ -82,6 +83,16 @@ type Chain struct {
 
 	coinbase common.Address   // header coinbase; receives tips
 	sn       *StableNetConfig // StableNet mode, or nil
+
+	// raw are recorded blocks served instead of built ones (SetRawBlock).
+	raw map[uint64]RawBlock
+}
+
+// RawBlock is a block as a node sent it: the eth_getBlockByNumber result
+// with full transactions and the eth_getBlockReceipts result.
+type RawBlock struct {
+	Block    json.RawMessage
+	Receipts json.RawMessage
 }
 
 type txLocation struct {
@@ -119,6 +130,29 @@ func newChain(chainID int64, alloc map[common.Address]*big.Int, sn *StableNetCon
 
 // ChainID returns the chain id.
 func (c *Chain) ChainID() *big.Int { return new(big.Int).Set(c.chainID) }
+
+// SetRawBlock makes the node answer block n (eth_getBlockByNumber,
+// eth_getBlockByHash, eth_getBlockReceipts) with a recorded block, for
+// transaction types go-ethereum cannot build, such as StableNet's fee
+// delegation (0x16). Only the block is replaced: the built chain's other
+// blocks, state and head stay, so index the block on its own.
+func (c *Chain) SetRawBlock(n uint64, b RawBlock) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.raw == nil {
+		c.raw = map[uint64]RawBlock{}
+	}
+	c.raw[n] = b
+}
+
+// rawHash returns the hash of a recorded block.
+func rawHash(b RawBlock) common.Hash {
+	var h struct {
+		Hash common.Hash `json:"hash"`
+	}
+	_ = json.Unmarshal(b.Block, &h)
+	return h.Hash
+}
 
 // SetContract registers eth_call answers for an address.
 func (c *Chain) SetContract(addr common.Address, mock ContractMock) {
