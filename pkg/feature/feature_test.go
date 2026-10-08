@@ -107,3 +107,37 @@ func TestEnabled(t *testing.T) {
 	_, err = feature.Enabled(nil, map[string]bool{"en.typo": true})
 	require.ErrorContains(t, err, "not registered")
 }
+
+type followerFeature struct {
+	testFeature
+	after   []string
+	enabled map[string]bool
+}
+
+func (f followerFeature) After() []string { return f.after }
+func (f followerFeature) Register(r feature.Registrar) error {
+	for _, n := range []string{"af.source", "af.other", "af.reader"} {
+		f.enabled[n] = r.Enabled(n)
+	}
+	return f.testFeature.Register(r)
+}
+
+// TestFollower: a feature runs after the features its After names when they
+// are enabled, and does not need them.
+func TestFollower(t *testing.T) {
+	var calls []string
+	enabled := map[string]bool{}
+	feature.Register(testFeature{name: "af.source", calls: &calls})
+	feature.Register(followerFeature{testFeature: testFeature{name: "af.reader", calls: &calls}, after: []string{"af.source", "af.missing"}, enabled: enabled})
+
+	fs, err := feature.Resolve([]string{"af.source", "af.reader"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"af.source", "af.reader"}, names(fs), "after the source despite its name")
+	fs, err = feature.Resolve([]string{"af.reader"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"af.reader"}, names(fs), "the source is not required")
+
+	_, err = feature.Build([]string{"af.reader", "af.source"}, feature.Deps{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]bool{"af.source": true, "af.other": false, "af.reader": true}, enabled)
+}

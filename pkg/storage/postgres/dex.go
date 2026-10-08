@@ -65,6 +65,11 @@ func (s *Store) ListDexTradesByTrader(ctx context.Context, trader common.Address
 	}.run(ctx, s.q(ctx), cappedPage(page))
 }
 
+// ListDexTradesInBlock implements port.DexReader.
+func (s *Store) ListDexTradesInBlock(ctx context.Context, block uint64) ([]*port.DexTrade, error) {
+	return queryJSON[port.DexTrade](ctx, s.q(ctx), "SELECT data FROM dex_trades WHERE block_number = $1 ORDER BY log_index", i64(block))
+}
+
 // ListDexLiquidity implements port.DexReader.
 func (s *Store) ListDexLiquidity(ctx context.Context, market port.DexMarketKey, page port.Page) ([]*port.DexLiquidity, string, error) {
 	return listQuery[*port.DexLiquidity]{

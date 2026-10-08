@@ -180,6 +180,15 @@ type Registrar interface {
 	Deps() Deps
 	// OnBlock adds a handler that runs for every indexed block.
 	OnBlock(h BlockHandler)
+	// Enabled reports whether a feature is enabled with this one.
+	Enabled(name string) bool
+}
+
+// Follower is implemented by features that read what other features write
+// in the same block when those are enabled, without requiring them: each
+// runs after the features its After names that are enabled.
+type Follower interface {
+	After() []string
 }
 
 var (
@@ -235,10 +244,21 @@ func Resolve(enabled []string) ([]Feature, error) {
 	pending := map[string]int{}
 	dependents := map[string][]string{}
 	for n, f := range set {
+		before := map[string]bool{}
 		for _, r := range f.Requires() {
 			if _, ok := set[r]; !ok {
 				return nil, fmt.Errorf("feature: %q requires %q, which is not enabled", n, r)
 			}
+			before[r] = true
+		}
+		if fl, ok := f.(Follower); ok {
+			for _, r := range fl.After() {
+				if _, ok := set[r]; ok {
+					before[r] = true
+				}
+			}
+		}
+		for r := range before {
 			pending[n]++
 			dependents[r] = append(dependents[r], n)
 		}
@@ -290,6 +310,7 @@ func namesLocked() []string {
 type Pipeline struct {
 	deps     Deps
 	handlers []namedHandler
+	enabled  map[string]bool
 }
 
 type namedHandler struct {
@@ -303,7 +324,10 @@ func Build(enabled []string, deps Deps) (*Pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &Pipeline{deps: deps}
+	p := &Pipeline{deps: deps, enabled: map[string]bool{}}
+	for _, f := range fs {
+		p.enabled[f.Name()] = true
+	}
 	for _, f := range fs {
 		r := &registrar{p: p, feature: f.Name()}
 		if err := f.Register(r); err != nil {
@@ -343,6 +367,8 @@ type registrar struct {
 }
 
 func (r *registrar) Deps() Deps { return r.p.deps }
+
+func (r *registrar) Enabled(name string) bool { return r.p.enabled[name] }
 
 func (r *registrar) OnBlock(h BlockHandler) {
 	r.p.handlers = append(r.p.handlers, namedHandler{feature: r.feature, h: h})
