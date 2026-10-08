@@ -1,0 +1,49 @@
+# indexer-frontend documents that do not work against this service's API.
+# All of them already failed before the refactoring (validated against
+# 2c0daaf^): the frontend asks for names the API changed or never had.
+# TestFrontendDocuments fails when one of them starts working (remove it)
+# and when a document not listed here stops working.
+# Cannot query field "userOp" on type "Query".
+lib/apollo/queries/aa.ts GetUserOp
+# Cannot query field "userOpsBySender" on type "Query". Did you mean "userOperationsBySender"?
+lib/apollo/queries/aa.ts GetUserOpsBySender
+# Cannot query field "userOpsByBundler" on type "Query". Did you mean "userOperationsBySender"?
+lib/apollo/queries/aa.ts GetUserOpsByBundler
+# Cannot query field "userOpsByPaymaster" on type "Query". Did you mean "paymaster"?
+lib/apollo/queries/aa.ts GetUserOpsByPaymaster
+# Cannot query field "userOpsByTx" on type "Query".
+lib/apollo/queries/aa.ts GetUserOpsByTx
+# Cannot query field "userOpsByBlock" on type "Query". Did you mean "receiptsByBlock", "userOperation", or "userOperations"?
+lib/apollo/queries/aa.ts GetUserOpsByBlock
+# Cannot query field "recentUserOps" on type "Query".
+lib/apollo/queries/aa.ts GetRecentUserOps
+# Cannot query field "userOpCount" on type "Query". Did you mean "userOperationCount" or "userOperations"?
+lib/apollo/queries/aa.ts GetUserOpCount
+# Cannot query field "bundlerStats" on type "Query". Did you mean "bundlers", "moduleStats", "addressStats", "validatorStats", or "bundler"?
+lib/apollo/queries/aa.ts GetBundlerStats
+# Cannot query field "paymasterStats" on type "Query". Did you mean "paymasters", "feePayerStats", "paymaster", "validatorStats", or "gasStats"?
+lib/apollo/queries/aa.ts GetPaymasterStats
+# Cannot query field "allBundlers" on type "Query". Did you mean "bundlers" or "bundler"?
+lib/apollo/queries/aa.ts GetAllBundlers
+# Cannot query field "allPaymasters" on type "Query". Did you mean "paymasters" or "paymaster"?
+lib/apollo/queries/aa.ts GetAllPaymasters
+# Cannot query field "accountDeployment" on type "Query".
+lib/apollo/queries/aa.ts GetAccountDeployment
+# Cannot query field "accountDeploymentsByFactory" on type "Query".
+lib/apollo/queries/aa.ts GetDeploymentsByFactory
+# Cannot query field "userOpRevert" on type "Query".
+lib/apollo/queries/aa.ts GetUserOpRevert
+# Unknown argument "moduleType" on field "listModuleStats" of type "Query".
+lib/apollo/queries/module.ts GetListModuleStats
+# Unknown argument "account" on field "moduleEventCount" of type "Query".; Unknown argument "moduleType" on field "moduleEventCount" of type "Query".
+lib/apollo/queries/module.ts GetModuleEventCount
+# Unknown argument "txHash" on field "erc20Transfer" of type "Query".; Field "erc20Transfer" argument "transactionHash" of type "String!" is required bu
+lib/graphql/queries/address-indexing.ts GetERC20Transfer
+# Unknown argument "txHash" on field "erc721Transfer" of type "Query".; Field "erc721Transfer" argument "transactionHash" of type "String!" is required 
+lib/graphql/queries/address-indexing.ts GetERC721Transfer
+# Cannot query field "averageLatency" on type "RPCProxyMetrics". Did you mean "averageLatencyMs"?
+lib/graphql/queries/rpcProxy.ts RPCProxyMetrics
+# Unknown argument "status" on field "depositMintProposals" of type "Query".; Cannot query field "requester" on type "DepositMintProposal".; Cannot quer
+lib/graphql/queries/system-contracts.ts GetDepositMintProposals
+# no subscription the server serves
+lib/graphql/queries/system-contracts.ts DynamicContractEvents

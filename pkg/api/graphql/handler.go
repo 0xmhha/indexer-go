@@ -11,6 +11,8 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/stream"
 	"github.com/graphql-go/graphql"
+	"github.com/graphql-go/graphql/language/parser"
+	"github.com/graphql-go/graphql/language/source"
 	graphqlhandler "github.com/graphql-go/handler"
 	"go.uber.org/zap"
 )
@@ -142,6 +144,24 @@ func (h *Handler) PlaygroundHandler() http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(playgroundHTML))
 	}
+}
+
+// Validate returns why document does not validate against the served
+// schema, nil when it does.
+func (h *Handler) Validate(document string) []string {
+	doc, err := parser.Parse(parser.ParseParams{Source: source.NewSource(&source.Source{Body: []byte(document)})})
+	if err != nil {
+		return []string{err.Error()}
+	}
+	res := graphql.ValidateDocument(&h.schema.schema, doc, nil)
+	if res.IsValid {
+		return nil
+	}
+	msgs := make([]string, len(res.Errors))
+	for i, e := range res.Errors {
+		msgs[i] = e.Message
+	}
+	return msgs
 }
 
 // ExecuteQuery executes a GraphQL query (for testing)
