@@ -154,6 +154,32 @@ system_contracts:
   include_abstracts: false
 ```
 
+### DEX (dex.pools, dex.trades)
+
+두 기능은 기본으로 꺼져 있다. `dex.pools`가 시장(풀, 페어, 선물 시장)을 등록하고 상태·유동성·주문을 기록하며, `dex.trades`(dex.pools 필요)가 등록된 시장의 체결을 기록하고 `dexTrade` 이벤트를 낸다.
+
+```yaml
+features:
+  dex.pools:
+    enabled: true
+    venues:
+      - type: uniswap_v3                # PoolCreated를 내는 factory
+        factory: "0x077Bb7aA6d918D87692c7E07C97ED197240bb8C4"   # StableNet testnet(8283)
+      - type: uniswap_v2                # PairCreated를 내는 factory
+        factory: "0x..."
+      - type: perp_orderbook            # 무기한 선물 주문장
+        engine: "0x..."                 # MarketCreated를 내는 engine
+        order_manager: "0x..."          # 주문·체결 이벤트를 내는 order manager
+  dex.trades:
+    enabled: true
+```
+
+- 설정에 적은 factory와 engine이 낸 등록 이벤트만 시장으로 인정한다. 같은 이벤트는 누구나 낼 수 있기 때문이다. 등록되지 않은 컨트랙트의 Swap 등은 무시한다.
+- 체결 가격은 quote/base를 1e18배 한 정수다. 토큰 소수 자릿수는 적용하지 않은 원시 단위다. AMM은 token0이 base, token1이 quote이고, 풀에서 base가 나가면 taker의 매수다.
+- 선물 `matchOrders`는 `OrderPartiallyFilled` 두 개와 `OrdersMatched`를 낸다. 이를 체결 하나로 기록한다. 운영자를 상대로 한 `fillOrder`와 `MarketOrderExecuted`도 각각 체결이다.
+- 색인 시작 높이보다 먼저 만들어진 시장과 주문은 알 수 없으므로, 그 체결은 기록되지 않는다. 시장이 만들어진 높이부터 색인하거나 backfill한다.
+- 기능 설정 절에서 `enabled` 외의 키는 그 기능이 읽는다. 기능이 모르는 키를 쓰면 시작할 때 오류가 난다.
+
 ### Contract Verification
 
 ```yaml
