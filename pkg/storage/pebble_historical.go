@@ -12,9 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/storage/history"
 )
 
 // Ensure PebbleStorage implements HistoricalReader and HistoricalWriter
@@ -148,57 +148,8 @@ func (s *PebbleStorage) GetTransactionsByAddressFiltered(ctx context.Context, ad
 	prefix := AddressTransactionKeyPrefix(addr)
 	return scanLoadedPage(ctx, s, prefix, prefixUpperBound(prefix), false, page, pageLimit(page, constants.DefaultPaginationLimit),
 		func(ctx context.Context, _, value []byte) (*port.TransactionWithReceipt, bool, error) {
-			txHash := common.BytesToHash(value)
-
-			// Get transaction and location
-			tx, location, err := s.GetTransaction(ctx, txHash)
-			if err != nil {
-				if errors.Is(err, port.ErrNotFound) {
-					return nil, false, nil
-				}
-				return nil, false, fmt.Errorf("failed to get transaction: %w", err)
-			}
-
-			// Get receipt
-			receipt, err := s.GetReceipt(ctx, txHash)
-			if err != nil {
-				if !errors.Is(err, port.ErrNotFound) {
-					return nil, false, fmt.Errorf("failed to get receipt: %w", err)
-				}
-				receipt = nil // Continue without receipt (optional)
-			}
-
-			// Apply filter
-			if !filter.MatchTransaction(tx, receipt, location, addr) {
-				return nil, false, nil
-			}
-			// Check fee delegation filter
-			if filter.IsFeeDelegated != nil {
-				isFD, err := s.isFeeDelegated(ctx, txHash)
-				if err != nil {
-					return nil, false, err
-				}
-				if *filter.IsFeeDelegated != isFD {
-					return nil, false, nil
-				}
-			}
-			return &port.TransactionWithReceipt{
-				Transaction: tx,
-				Receipt:     receipt,
-				Location:    location,
-			}, true, nil
+			return history.AddressTransaction(ctx, s, addr, filter, common.BytesToHash(value))
 		})
-}
-
-// isFeeDelegated reports whether a stored transaction has its gas paid by a
-// fee payer, as the chain profile decoded it (chains.FeeDelegationOf).
-func (s *PebbleStorage) isFeeDelegated(ctx context.Context, txHash common.Hash) (bool, error) {
-	tx, _, err := s.GetTransaction(ctx, txHash)
-	if err != nil {
-		return false, fmt.Errorf("read transaction %s: %w", txHash.Hex(), err)
-	}
-	_, ok := chains.FeeDelegationOf(tx)
-	return ok, nil
 }
 
 // GetAddressBalance returns the balance of an address at a specific block
@@ -386,29 +337,7 @@ func (s *PebbleStorage) GetTopMiners(ctx context.Context, limit int, fromBlock, 
 		return nil, err
 	}
 
-	// Get the latest height
-	latestHeight, err := s.GetLatestHeight(ctx)
-	if err != nil {
-		if err == port.ErrNotFound {
-			return []port.MinerStats{}, nil
-		}
-		return nil, fmt.Errorf("failed to get latest height: %w", err)
-	}
-
-	// Determine block range
-	startBlock, endBlock, valid := determineBlockRange(fromBlock, toBlock, latestHeight)
-	if !valid {
-		return []port.MinerStats{}, nil
-	}
-
-	// Aggregate miner stats
-	minerMap, totalBlocks := s.aggregateMinerStats(ctx, startBlock, endBlock)
-
-	// Calculate percentages
-	calculateMinerPercentages(minerMap, totalBlocks)
-
-	// Sort and apply limit
-	return sortAndLimitMinerStats(minerMap, limit), nil
+	return history.TopMiners(ctx, s, limit, fromBlock, toBlock)
 }
 
 // ============================================================================
@@ -526,103 +455,23 @@ func (s *PebbleStorage) GetAddressStats(ctx context.Context, addr common.Address
 		return nil, err
 	}
 
-	stats := &port.AddressStats{
-		Address:            addr,
-		TotalGasCost:       big.NewInt(0),
-		TotalValueSent:     big.NewInt(0),
-		TotalValueReceived: big.NewInt(0),
-	}
-
-	uniqueAddresses := make(map[common.Address]bool)
-
 	// Iterate all transactions for this address
 	prefix := AddressTransactionKeyPrefix(addr)
-	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: prefixUpperBound(prefix),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		txHash := common.BytesToHash(iter.Value())
-
-		// The model keeps the sender and hash the chain reports, and the
-		// fee payer of fee delegation transactions.
-		tx, location, err := s.GetTransaction(ctx, txHash)
+	return history.AddressStats(ctx, s, addr, func(yield func(common.Hash) error) error {
+		iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{
+			LowerBound: prefix,
+			UpperBound: prefixUpperBound(prefix),
+		})
 		if err != nil {
-			continue
+			return fmt.Errorf("failed to create iterator: %w", err)
 		}
-		receipt, _ := s.GetReceipt(ctx, txHash)
-		from := tx.From
-		value := tx.Value
-		if value == nil {
-			value = new(big.Int)
-		}
-		succeeded := receipt != nil && receipt.Status == model.ReceiptStatusSuccessful
+		defer func() { _ = iter.Close() }()
 
-		stats.TotalTransactions++
-
-		// Sent vs Received. A failed transaction moves no value.
-		to := tx.To
-		if from == addr {
-			stats.SentCount++
-			if succeeded {
-				stats.TotalValueSent.Add(stats.TotalValueSent, value)
-			}
-			if to != nil {
-				uniqueAddresses[*to] = true
+		for iter.First(); iter.Valid(); iter.Next() {
+			if err := yield(common.BytesToHash(iter.Value())); err != nil {
+				return err
 			}
 		}
-		if to != nil && *to == addr {
-			stats.ReceivedCount++
-			if succeeded {
-				stats.TotalValueReceived.Add(stats.TotalValueReceived, value)
-			}
-			uniqueAddresses[from] = true
-		}
-
-		// Success vs Failed
-		if receipt != nil {
-			if succeeded {
-				stats.SuccessCount++
-			} else {
-				stats.FailedCount++
-			}
-			// Gas is counted for the account that paid it: the sender, or
-			// the fee payer of a fee delegation transaction.
-			if chains.GasPayer(tx) == addr {
-				stats.TotalGasUsed += receipt.GasUsed
-				if receipt.EffectiveGasPrice != nil {
-					cost := new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), receipt.EffectiveGasPrice)
-					stats.TotalGasCost.Add(stats.TotalGasCost, cost)
-				}
-			}
-		}
-
-		// Contract interaction (has input data and a target address)
-		if to != nil && len(tx.Input) > 0 {
-			stats.ContractInteractionCount++
-		}
-
-		// Timestamps
-		if location != nil {
-			block, err := s.GetBlock(ctx, location.BlockHeight)
-			if err == nil && block != nil {
-				ts := block.Time
-				if stats.FirstTransactionTimestamp == 0 || ts < stats.FirstTransactionTimestamp {
-					stats.FirstTransactionTimestamp = ts
-				}
-				if ts > stats.LastTransactionTimestamp {
-					stats.LastTransactionTimestamp = ts
-				}
-			}
-		}
-	}
-
-	stats.UniqueAddressCount = uint64(len(uniqueAddresses))
-
-	return stats, nil
+		return iter.Error()
+	})
 }

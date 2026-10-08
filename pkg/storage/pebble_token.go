@@ -3,12 +3,12 @@ package storage
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/storage/history"
 )
 
 // ============================================================================
@@ -21,23 +21,9 @@ func (s *PebbleStorage) GetTokenBalances(ctx context.Context, addr common.Addres
 		return nil, err
 	}
 
-	// Get the latest height
-	latestHeight, err := s.GetLatestHeight(ctx)
-	if err != nil {
-		if err == port.ErrNotFound {
-			return []port.TokenBalance{}, nil
-		}
-		return nil, fmt.Errorf("failed to get latest height: %w", err)
-	}
-
-	// Scan all blocks for Transfer events
-	balanceMap, err := s.scanTransferEvents(ctx, addr, latestHeight)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build result with metadata and filtering
-	return s.buildTokenBalanceResult(ctx, balanceMap, tokenType), nil
+	return history.TokenBalances(ctx, s, addr, tokenType, func(ctx context.Context, tb *port.TokenBalance) {
+		s.applyTokenMetadata(ctx, tb, tb.ContractAddress)
+	})
 }
 
 // buildTokenMetadataJSON creates a JSON string with additional token metadata
