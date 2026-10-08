@@ -279,6 +279,17 @@ type HistoricalWriter interface {
 // balance negative: the indexed balance has diverged from the chain.
 var ErrNegativeBalance = errors.New("storage: balance would become negative")
 
+// BalanceSource reads an account's balance at a block from the node. A
+// store given one (SetGenesisBalanceResolver) answers GetAddressBalance for
+// an account with no recorded balance with its genesis allocation.
+type BalanceSource interface {
+	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
+}
+
+// GenesisLookupMaxBlock bounds the genesis lookup: only a balance asked for
+// at a block below it is looked up.
+const GenesisLookupMaxBlock = 1000
+
 // BalanceRecordChecker reports whether a balance was ever recorded for an
 // account, without the genesis lookup GetAddressBalance performs.
 type BalanceRecordChecker interface {

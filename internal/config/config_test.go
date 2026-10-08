@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -694,5 +695,46 @@ func TestOrphanRetention(t *testing.T) {
 	t.Setenv("INDEXER_ORPHAN_RETENTION", "many")
 	if err := cfg.LoadFromEnv(); err == nil {
 		t.Fatal("expected an error for an invalid INDEXER_ORPHAN_RETENTION")
+	}
+}
+
+// TestDatabaseDriver checks database.driver: pebble (the default) needs a
+// path, postgres a DSN, and other drivers are refused; the environment sets
+// the PostgreSQL settings.
+func TestDatabaseDriver(t *testing.T) {
+	cfg := NewConfig()
+	cfg.RPC.Endpoint = "http://localhost:8545"
+	cfg.Database.Path = ""
+	if err := cfg.Validate(); err == nil {
+		t.Error("pebble without a path: expected an error")
+	}
+
+	cfg.Database.Driver = DriverPostgres
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "dsn") {
+		t.Errorf("postgres without a DSN: got %v", err)
+	}
+	t.Setenv("INDEXER_DB_POSTGRES_DSN", "postgres://indexer@localhost/indexer")
+	t.Setenv("INDEXER_DB_POSTGRES_SCHEMA", "idx")
+	t.Setenv("INDEXER_DB_POSTGRES_MAX_CONNS", "8")
+	if err := cfg.LoadFromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("postgres with a DSN and no path: %v", err)
+	}
+	if cfg.Database.Postgres.Schema != "idx" || cfg.Database.Postgres.MaxConns != 8 {
+		t.Errorf("postgres settings from the environment: %+v", cfg.Database.Postgres)
+	}
+
+	t.Setenv("INDEXER_DB_DRIVER", "sqlite")
+	if err := cfg.LoadFromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Error("unknown driver: expected an error")
+	}
+	t.Setenv("INDEXER_DB_POSTGRES_MAX_CONNS", "many")
+	if err := cfg.LoadFromEnv(); err == nil {
+		t.Error("invalid INDEXER_DB_POSTGRES_MAX_CONNS: expected an error")
 	}
 }

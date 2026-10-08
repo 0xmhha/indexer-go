@@ -26,7 +26,7 @@ type PebbleStorage struct {
 
 	// Lazy genesis allocation lookup (see SetGenesisBalanceResolver).
 	genesisMu     sync.Mutex
-	genesisClient RPCClient
+	genesisClient port.BalanceSource
 	genesisTried  map[common.Address]bool
 
 	// Address transaction sequence counters

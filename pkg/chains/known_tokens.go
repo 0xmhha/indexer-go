@@ -1,4 +1,4 @@
-package storage
+package chains
 
 import (
 	"sync"
@@ -26,13 +26,13 @@ func RegisterKnownToken(addr common.Address, t KnownToken) {
 	knownTokensMu.Lock()
 	defer knownTokensMu.Unlock()
 	if _, dup := knownTokens[addr]; dup {
-		panic("storage: known token " + addr.Hex() + " registered twice")
+		panic("chains: known token " + addr.Hex() + " registered twice")
 	}
 	knownTokens[addr] = t
 }
 
-// knownToken returns the registered metadata of a token contract.
-func knownToken(addr common.Address) (KnownToken, bool) {
+// KnownTokenOf returns the registered metadata of a token contract.
+func KnownTokenOf(addr common.Address) (KnownToken, bool) {
 	knownTokensMu.RLock()
 	defer knownTokensMu.RUnlock()
 	t, ok := knownTokens[addr]

@@ -138,17 +138,15 @@ func run() error {
 
 	// Clear data folder if requested
 	if flags.clearData {
-		if err := clearDataFolder(cfg.Database.Path, log); err != nil {
+		if err := clearDatabases(cfg, log); err != nil {
 			return fmt.Errorf("failed to clear data folder: %w", err)
 		}
 	}
 
 	// Reindex: clear blockchain data while preserving verification data
 	if flags.reindex && !flags.clearData {
-		for _, path := range databasePaths(cfg) {
-			if err := reindexData(path, log); err != nil {
-				return fmt.Errorf("failed to reindex data: %w", err)
-			}
+		if err := reindexDatabases(cfg, log); err != nil {
+			return fmt.Errorf("failed to reindex data: %w", err)
 		}
 	}
 
@@ -307,6 +305,7 @@ func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
 		zap.String("commit", commit),
 		zap.String("build_time", buildTime),
 		zap.String("rpc_endpoint", cfg.RPC.Endpoint),
+		zap.String("db_driver", cfg.Database.Driver),
 		zap.String("db_path", cfg.Database.Path),
 		zap.Uint64("start_height", cfg.Indexer.StartHeight),
 		zap.Int("workers", cfg.Indexer.Workers),
@@ -450,22 +449,20 @@ func (a *App) testConnection(ctx context.Context) error {
 // initStorageOnly initializes only the base storage layer without genesis initialization
 // This is used when multichain mode is enabled (each chain handles its own genesis)
 func (a *App) initStorageOnly(ctx context.Context) error {
-	storageConfig := storage.DefaultConfig(a.config.Database.Path)
-	storageConfig.ReadOnly = false
-
-	baseStore, err := storage.NewPebbleStorage(storageConfig)
+	baseStore, err := openStore(ctx, &a.config.Database, a.logger)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
-	baseStore.SetLogger(a.logger)
-	baseStore.SetOrphanRetention(a.config.Indexer.OrphanRetention)
+	if r, ok := baseStore.(interface{ SetOrphanRetention(uint64) }); ok {
+		r.SetOrphanRetention(a.config.Indexer.OrphanRetention)
+	}
 
 	// For multichain mode, use base storage directly
 	// For single chain mode, we'll wrap it with genesis initializer later
 	a.storage = baseStore
 
 	a.logger.Info("Base storage initialized",
-		zap.String("path", a.config.Database.Path),
+		storeLocation(&a.config.Database),
 	)
 
 	return nil
@@ -745,7 +742,7 @@ func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	cfg.RPC.RecordDir = ""
 	cfg.RPC.Timeout = orDefault(cc.RPCTimeout, a.config.RPC.Timeout)
 	cfg.Source = config.SourceConfig{}
-	cfg.Database.Path = chainDBPath(a.config.Database.Path, cc.ID)
+	cfg.Database = chainDatabase(a.config.Database, cc.ID)
 	cfg.Indexer.StartHeight = cc.StartHeight
 	cfg.Indexer.Workers = orDefault(cc.Workers, a.config.Indexer.Workers)
 	cfg.Indexer.ChunkSize = orDefault(cc.BatchSize, a.config.Indexer.ChunkSize)
@@ -1252,8 +1249,11 @@ func validateConfig(cfg *config.Config) error {
 	if cfg.RPC.Endpoint == "" && !cfg.MultiChainMode() {
 		return fmt.Errorf("RPC endpoint is required (use --rpc flag or set in config.yaml)")
 	}
-	if cfg.Database.Path == "" {
+	if cfg.Database.Path == "" && !usesPostgres(&cfg.Database) {
 		return fmt.Errorf("database path is required (use --db flag or set in config.yaml)")
+	}
+	if _, err := databases(cfg); err != nil {
+		return err
 	}
 	if cfg.Indexer.Workers <= 0 {
 		return fmt.Errorf("workers must be positive")
@@ -1305,19 +1305,6 @@ func clearDataFolder(path string, log *zap.Logger) error {
 
 	log.Info("Data folder cleared successfully", zap.String("path", path))
 	return nil
-}
-
-// databasePaths returns the databases the configuration indexes into: one
-// per chain in multichain mode, else database.path.
-func databasePaths(cfg *config.Config) []string {
-	if !cfg.MultiChainMode() {
-		return []string{cfg.Database.Path}
-	}
-	paths := make([]string, 0, len(cfg.MultiChain.Chains))
-	for _, cc := range cfg.MultiChain.Chains {
-		paths = append(paths, chainDBPath(cfg.Database.Path, cc.ID))
-	}
-	return paths
 }
 
 // reindexData clears blockchain data while preserving verification data (ABIs, source code, verification status)

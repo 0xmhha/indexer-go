@@ -22,6 +22,10 @@ var (
 // metaLatestHeight is the meta row of the indexed-height cursor.
 const metaLatestHeight = "latest_height"
 
+// metaTransactionCount is the meta row of the number of stored
+// transactions, kept by SetBlock (GetTransactionCount).
+const metaTransactionCount = "transaction_count"
+
 // SetBlock implements port.BlockWriter: the block (with its transactions)
 // and every transaction with its location.
 func (s *Store) SetBlock(ctx context.Context, b *model.Block) error {
@@ -40,7 +44,13 @@ func (s *Store) SetBlock(ctx context.Context, b *model.Block) error {
 			i64(b.Number), b.Hash.Bytes(), b.ParentHash.Bytes(), i64(b.Time), b.Miner.Bytes(), data); err != nil {
 			return fmt.Errorf("store block %d: %w", b.Number, err)
 		}
-		batch := &pgx.Batch{}
+		if len(b.Transactions) == 0 {
+			return nil
+		}
+		var (
+			hashes, froms, tos, datas [][]byte
+			indexes                   []int32
+		)
 		for i, tx := range b.Transactions {
 			txData, err := model.EncodeTransaction(tx)
 			if err != nil {
@@ -50,13 +60,30 @@ func (s *Store) SetBlock(ctx context.Context, b *model.Block) error {
 			if tx.To != nil {
 				to = tx.To.Bytes()
 			}
-			batch.Queue(`INSERT INTO transactions (hash, block_number, tx_index, block_hash, from_addr, to_addr, data)
-				VALUES ($1, $2, $3, $4, $5, $6, $7)
-				ON CONFLICT (hash) DO UPDATE SET block_number = EXCLUDED.block_number, tx_index = EXCLUDED.tx_index,
-					block_hash = EXCLUDED.block_hash, from_addr = EXCLUDED.from_addr, to_addr = EXCLUDED.to_addr, data = EXCLUDED.data`,
-				tx.Hash.Bytes(), i64(b.Number), i, b.Hash.Bytes(), tx.From.Bytes(), to, txData)
+			hashes, froms, tos, datas = append(hashes, tx.Hash.Bytes()), append(froms, tx.From.Bytes()), append(tos, to), append(datas, txData)
+			indexes = append(indexes, int32(i))
 		}
-		return sendBatch(ctx, q, batch)
+		// One statement for the block's transactions; xmax = 0 marks the
+		// rows inserted rather than updated, which the transaction count
+		// adds.
+		var added int64
+		err := q.QueryRow(ctx, `WITH written AS (
+				INSERT INTO transactions (hash, block_number, tx_index, block_hash, from_addr, to_addr, data)
+				SELECT h, $2, i, $3, f, t, d FROM unnest($1::bytea[], $4::integer[], $5::bytea[], $6::bytea[], $7::bytea[]) AS x(h, i, f, t, d)
+				ON CONFLICT (hash) DO UPDATE SET block_number = EXCLUDED.block_number, tx_index = EXCLUDED.tx_index,
+					block_hash = EXCLUDED.block_hash, from_addr = EXCLUDED.from_addr, to_addr = EXCLUDED.to_addr, data = EXCLUDED.data
+				RETURNING xmax = 0 AS inserted)
+			SELECT count(*) FILTER (WHERE inserted) FROM written`,
+			hashes, i64(b.Number), b.Hash.Bytes(), indexes, froms, tos, datas).Scan(&added)
+		if err != nil {
+			return fmt.Errorf("store transactions of block %d: %w", b.Number, err)
+		}
+		if added == 0 {
+			return nil
+		}
+		_, err = q.Exec(ctx, `INSERT INTO meta (name, value) VALUES ($1, int8send($2::bigint))
+			ON CONFLICT (name) DO UPDATE SET value = int8send(('x' || encode(meta.value, 'hex'))::bit(64)::bigint + $2::bigint)`, metaTransactionCount, added)
+		return err
 	})
 }
 

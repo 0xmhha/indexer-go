@@ -5,7 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
-	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/chains"
 )
 
 // System Contract Addresses for StableOne chain
@@ -76,7 +76,7 @@ var SystemContractTokenMetadataMap = map[common.Address]SystemContractTokenMetad
 
 func init() {
 	for addr, m := range SystemContractTokenMetadataMap {
-		storage.RegisterKnownToken(addr, storage.KnownToken{Name: m.Name, Symbol: m.Symbol, Decimals: m.Decimals})
+		chains.RegisterKnownToken(addr, chains.KnownToken{Name: m.Name, Symbol: m.Symbol, Decimals: m.Decimals})
 	}
 }
 

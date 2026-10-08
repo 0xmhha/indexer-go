@@ -6,12 +6,15 @@ package history
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"sort"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
@@ -548,4 +551,94 @@ func AddressStats(ctx context.Context, s port.BlockReader, addr common.Address, 
 	}
 	stats.UniqueAddressCount = uint64(len(counterparties))
 	return stats, nil
+}
+
+// TokenMetadataStore is the token metadata a store keeps.
+type TokenMetadataStore interface {
+	port.TokenMetadataReader
+	port.TokenMetadataWriter
+}
+
+// DescribeToken fills in a token balance's name, symbol, decimals, type and
+// metadata, from the first source that has them: the metadata a chain
+// registered (chains.RegisterKnownToken), the stored metadata, or the node
+// through fetcher (when not nil), whose answer is stored for later reads.
+func DescribeToken(ctx context.Context, tb *port.TokenBalance, store TokenMetadataStore, fetcher port.TokenMetadataFetcher, logger *zap.Logger) {
+	contract := tb.ContractAddress
+	if known, ok := chains.KnownTokenOf(contract); ok {
+		tb.Name = known.Name
+		tb.Symbol = known.Symbol
+		decimals := known.Decimals
+		tb.Decimals = &decimals
+		return
+	}
+	if md, err := store.GetTokenMetadata(ctx, contract); err == nil && md != nil {
+		applyMetadata(tb, md)
+		return
+	}
+	if fetcher == nil {
+		return
+	}
+	md, err := fetcher.FetchTokenMetadata(ctx, contract)
+	if err != nil || md == nil {
+		return
+	}
+	applyMetadata(tb, md)
+	if err := store.SaveTokenMetadata(ctx, md); err != nil {
+		logger.Warn("Failed to cache fetched token metadata", zap.String("contract", contract.Hex()), zap.Error(err))
+		return
+	}
+	logger.Info("Cached on-demand fetched token metadata",
+		zap.String("contract", contract.Hex()),
+		zap.String("name", md.Name),
+		zap.String("symbol", md.Symbol),
+		zap.Uint8("decimals", md.Decimals),
+	)
+}
+
+// applyMetadata copies stored or fetched token metadata into tb.
+func applyMetadata(tb *port.TokenBalance, md *port.TokenMetadata) {
+	tb.Name = md.Name
+	tb.Symbol = md.Symbol
+	decimals := int(md.Decimals)
+	tb.Decimals = &decimals
+	if md.Standard != "" {
+		tb.TokenType = string(md.Standard)
+	}
+	tb.Metadata = TokenMetadataJSON(md)
+}
+
+// TokenMetadataJSON returns the metadata beyond name, symbol and decimals as
+// a JSON object, "" when there is none.
+func TokenMetadataJSON(md *port.TokenMetadata) string {
+	if md == nil {
+		return ""
+	}
+	m := make(map[string]interface{})
+	if md.BaseURI != "" {
+		m["baseURI"] = md.BaseURI
+	}
+	if md.TotalSupply != nil && md.TotalSupply.Sign() > 0 {
+		m["totalSupply"] = md.TotalSupply.String()
+	}
+	if md.SupportsERC165 {
+		m["supportsERC165"] = true
+	}
+	if md.SupportsMetadata {
+		m["supportsMetadata"] = true
+	}
+	if md.SupportsEnumerable {
+		m["supportsEnumerable"] = true
+	}
+	if !md.CreatedAt.IsZero() {
+		m["createdAt"] = md.CreatedAt.Format(time.RFC3339)
+	}
+	if len(m) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

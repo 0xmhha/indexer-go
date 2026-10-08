@@ -204,7 +204,22 @@ func TestMultiChainConfigValidation(t *testing.T) {
 	cfg.RPC.Endpoint = ""
 	require.NoError(t, cfg.Validate(), "multichain mode needs no root rpc.endpoint")
 	require.NoError(t, validateConfig(cfg))
-	require.Equal(t, []string{chainDBPath(cfg.Database.Path, "a"), chainDBPath(cfg.Database.Path, "b")}, databasePaths(cfg))
+	dbs, err := databases(cfg)
+	require.NoError(t, err)
+	require.Len(t, dbs, 2)
+	require.Equal(t, chainDBPath(cfg.Database.Path, "a"), dbs[0].Path)
+	require.Equal(t, chainDBPath(cfg.Database.Path, "b"), dbs[1].Path)
+
+	// With PostgreSQL every chain has a schema of its own; ids that map to
+	// the same schema are refused.
+	cfg.Database.Driver = config.DriverPostgres
+	cfg.Database.Postgres = config.PostgresConfig{DSN: "postgres://localhost/indexer", Schema: "idx"}
+	dbs, err = databases(cfg)
+	require.NoError(t, err)
+	require.Equal(t, "idx_a", dbs[0].Postgres.Schema)
+	require.Equal(t, "idx_b", dbs[1].Postgres.Schema)
+	cfg.MultiChain.Chains[0].ID, cfg.MultiChain.Chains[1].ID = "x-1", "x.1"
+	require.ErrorContains(t, validateConfig(cfg), "both map to PostgreSQL schema")
 }
 
 // serve sends one request to h and returns the response body.
