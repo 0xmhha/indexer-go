@@ -2,13 +2,18 @@
 // indexer SDK (pkg/sdk) without changing the indexer: the receipt lookup of
 // a payment settlement contract (the P07 receipt indexer).
 //
-// The indexer stores the contract's PaymentSettled logs as the records of
-// a declared table (features.records, indexer.mode declared). This package
+// It reproduces the P07 receipt indexer on the indexer framework
+// (refactoring plan R6-3; acceptance_test.go checks P07-FR-01 to 06). The
+// indexer stores the contract's PaymentSettled logs as the records of a
+// declared table (features.records, indexer.mode declared). This package
 // adds:
 //
 //   - GET /receipts/{merchant}/{orderId}: the earliest PaymentSettled log
-//     of the order, marked duplicate when the order settled more than once,
-//     or 404 NOT_INDEXED;
+//     of the order, marked duplicate when the order settled more than once;
+//     404 NOT_INDEXED, or 503 RPC_STALE while indexing is more than
+//     StaleBlocks behind the finalized head;
+//   - GET /healthz: the indexed block (cursor), the lag and whether the
+//     live loop has polled;
 //   - the receipts.totals feature, which keeps each merchant's receipt
 //     count and amount in the indexer's key-value store, block by block,
 //     and GET /merchants/{merchant}/totals.
@@ -23,6 +28,7 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/sdk"
@@ -37,10 +43,15 @@ const TotalsName = "receipts.totals"
 
 const totalsPrefix = "/x/receipts/total/"
 
+// StaleBlocks: a missing receipt is 503 RPC_STALE instead of 404 while
+// indexing is more than this many blocks behind (P07 design 4).
+const StaleBlocks = 60
+
 func init() {
 	sdk.RegisterFeature(totals{})
 	sdk.RegisterKeyspace(TotalsName, "/x/receipts/")
 	sdk.RegisterRoute(http.MethodGet, "/receipts/{merchant}/{orderId}", receiptRoute)
+	sdk.RegisterRoute(http.MethodGet, "/healthz", healthRoute)
 	sdk.RegisterRoute(http.MethodGet, "/merchants/{merchant}/totals", totalsRoute)
 }
 
@@ -91,15 +102,35 @@ func receiptRoute(store sdk.Store, logger *zap.Logger) http.Handler {
 			return
 		}
 		if len(recs) == 0 {
+			// Not indexed may also mean indexing is behind: say so.
+			if p, err := sdk.ProgressOf(r.Context(), store); err == nil && p.Lag() > StaleBlocks {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "RPC_STALE", "cursor": p.Indexed})
+				return
+			}
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "NOT_INDEXED"})
 			return
 		}
 		first := recs[0]
 		writeJSON(w, http.StatusOK, Receipt{
-			Merchant: first.Fields["merchant"], OrderID: first.Fields["orderId"], Device: first.Fields["device"],
+			Merchant: checksum(first.Fields["merchant"]), OrderID: first.Fields["orderId"], Device: checksum(first.Fields["device"]),
 			Amount: first.Fields["amount"], BlockNumber: first.BlockNumber, BlockTime: first.BlockTime,
 			TxHashShort: Short(first.TxHash.Hex()), Duplicate: len(recs) > 1,
 		})
+	})
+}
+
+// checksum writes an address with the EIP-55 checksum, as P07 answers.
+func checksum(address string) string { return common.HexToAddress(address).Hex() }
+
+func healthRoute(store sdk.Store, logger *zap.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, err := sdk.ProgressOf(r.Context(), store)
+		if err != nil {
+			logger.Error("Progress failed", zap.Error(err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "INTERNAL"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"cursor": p.Indexed, "lag": p.Lag(), "polled": p.Polled})
 	})
 }
 

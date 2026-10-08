@@ -17,7 +17,7 @@ cmd/indexer/main.go             The indexer command: calls app.Main
 pkg/app/                        The application: wiring and lifecycle (importable; app.Main)
 pkg/sdk/                        Handler SDK for projects' own features, GraphQL and HTTP routes (docs/SDK.md, R6-2)
 pkg/testchain/                  Deterministic JSON-RPC test chain for end-to-end tests (also for SDK users)
-examples/receipts/              Example project module built on pkg/sdk (own go.mod; make test-examples)
+examples/receipts/              P07 receipt indexer rebuilt on pkg/sdk, with its acceptance tests (own go.mod; make test-examples)
 pkg/
   api/
     graphql/                    GraphQL (graphql-go, hand-written schema; not gqlgen)

@@ -68,6 +68,13 @@ func (s *Server) DisableMethod(method string) {
 	s.mu.Unlock()
 }
 
+// EnableMethod answers a method DisableMethod turned off again.
+func (s *Server) EnableMethod(method string) {
+	s.mu.Lock()
+	delete(s.disabled, method)
+	s.mu.Unlock()
+}
+
 // UnknownMethods lists methods that were called but are not implemented.
 // Tests can assert it is empty to notice new RPC dependencies.
 func (s *Server) UnknownMethods() []string {

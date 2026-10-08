@@ -1,6 +1,6 @@
 # 사용자 처리기 SDK
 
-프로젝트가 indexer를 고치지 않고 자기 처리기를 붙이는 방법이다(refactoring plan R6-2). 예제는 `examples/receipts`(정산 컨트랙트의 영수증 조회, P07)다.
+프로젝트가 indexer를 고치지 않고 자기 처리기를 붙이는 방법이다(refactoring plan R6-2). 예제는 `examples/receipts`(정산 컨트랙트의 영수증 조회, P07 재현과 인수 시험)다.
 
 ## 1. 구조
 
@@ -66,6 +66,8 @@ func init() {
 - `sdk.RegisterGraphQL(name, func(*sdk.GraphQLExtension))`: GraphQL 조회·구독을 더한다.
 - `sdk.RegisterRoute(method, pattern, func(store sdk.Store, logger) http.Handler)`: GraphQL 옆에 HTTP 경로를 더한다. 상태 코드와 고정 JSON 형식이 필요할 때 쓴다. 경로 인자는 `sdk.URLParam(r, "name")`. 단일 체인 서버(declared 모드 포함)가 mount하고, 멀티체인 서버는 하지 않는다.
 
+- `sdk.ProgressOf(ctx, store)`: 색인한 블록, live loop가 마지막으로 본 노드의 목표 블록(finality 정책 기준), 그 차이(`Lag`). "아직 색인 전"과 "색인이 늦음"을 구분할 때 쓴다(예제의 503 `RPC_STALE`). API 전용 프로세스(`node.role api`)에서는 `Polled`가 false다.
+
 ## 5. 시험
 
-`pkg/testchain`이 결정적인 JSON-RPC 시험 체인을 준다(`testchain.NewServer`, 시나리오 `BuildReceipts` 등). 예제의 시험은 자기 바이너리를 빌드해 시험 체인을 상대로 설정 파일로 실행하고 HTTP로 확인한다(`examples/receipts/receipts_test.go`). `make test-examples`가 예제를 모두 시험한다.
+`pkg/testchain`이 결정적인 JSON-RPC 시험 체인을 준다(`testchain.NewServer`, 시나리오 `BuildReceipts` 등, `DisableMethod`/`EnableMethod`로 RPC 장애 주입). 예제의 시험은 자기 바이너리를 빌드해 시험 체인을 상대로 설정 파일로 실행하고 HTTP로 확인한다(`examples/receipts/receipts_test.go`). `make test-examples`가 예제를 모두 시험한다.
