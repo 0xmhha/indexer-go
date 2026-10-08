@@ -33,6 +33,27 @@ func (f *Fetcher) Progress() (target uint64, ok bool) {
 	return f.lastTarget.Load(), f.polled.Load()
 }
 
+// progressPoll is how often the live loop's progress is read from the node
+// besides the loop's own polls: a batch that keeps failing retries without
+// polling, and the progress must not go stale meanwhile.
+var progressPoll = time.Second
+
+// followTarget records the target head every progressPoll until ctx ends.
+func (f *Fetcher) followTarget(ctx context.Context) {
+	t := time.NewTicker(progressPoll)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if target, ok, err := f.readTargetHead(ctx, false); err == nil && ok {
+				f.noteTarget(target)
+			}
+		}
+	}
+}
+
 // noteTarget records a poll's target head.
 func (f *Fetcher) noteTarget(target uint64) {
 	f.lastTarget.Store(target)
@@ -68,6 +89,12 @@ const noFinalizedWarnEvery = time.Minute
 // finality policy. ok is false when no block qualifies yet (fewer blocks
 // than the required confirmations).
 func (f *Fetcher) targetHead(ctx context.Context) (target uint64, ok bool, err error) {
+	return f.readTargetHead(ctx, true)
+}
+
+// readTargetHead is targetHead; warn reports a node without a finalized
+// block (only the live loop does, so the warning's state has one writer).
+func (f *Fetcher) readTargetHead(ctx context.Context, warn bool) (target uint64, ok bool, err error) {
 	switch f.config.Finality {
 	case "", FinalityHead:
 		head, err := f.latestBlockNumber(ctx)
@@ -96,7 +123,7 @@ func (f *Fetcher) targetHead(ctx context.Context) (target uint64, ok bool, err e
 			// go-stablenet sets the finalized block only for blocks it
 			// receives from peers, so it can have none after a restart or
 			// while syncing: wait instead of failing.
-			if time.Since(f.noFinalizedWarned) > noFinalizedWarnEvery {
+			if warn && time.Since(f.noFinalizedWarned) > noFinalizedWarnEvery {
 				f.noFinalizedWarned = time.Now()
 				f.logger.Warn("Node reports no finalized block yet; waiting (indexer.finality: finalized)")
 			}

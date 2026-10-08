@@ -288,6 +288,12 @@ func (f *Fetcher) Run(ctx context.Context) error {
 		zap.Int("batch_size", f.config.BatchSize),
 	)
 
+	// Keep the progress current while a batch retries (Progress).
+	progressCtx, stopProgress := context.WithCancel(ctx)
+	progressDone := make(chan struct{})
+	go func() { defer close(progressDone); f.followTarget(progressCtx) }()
+	defer func() { stopProgress(); <-progressDone }()
+
 	// Get next height to fetch
 	nextHeight := f.GetNextHeight(ctx)
 

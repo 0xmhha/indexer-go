@@ -44,8 +44,8 @@ go test ./...   # builds the binary and runs it against a test chain
   block. Catching up from the deployment block takes more calls.
 - P07's `start` is the cursor before the first block; `start_block` is the
   first block read.
-- The lag is measured at the live loop's last poll of the node. While a
-  batch of several blocks keeps failing the loop does not poll again until
-  the batch gives up, so `chunk_size: 1` keeps the lag current (as above).
+- The lag is the node's head (under the finality policy) read every
+  second while the live loop runs, minus the indexed block; it stays
+  current while a batch keeps failing.
 - P07 keeps its rows in PostgreSQL; the indexer stores records in Pebble or
   PostgreSQL (`database.driver`).
