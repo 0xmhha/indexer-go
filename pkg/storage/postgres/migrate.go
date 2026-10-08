@@ -15,7 +15,9 @@ import (
 // The schema is defined by the files in migrations/, named
 // NNNN_description.sql and applied in order, each once, in a transaction of
 // its own. schema_migrations records the applied versions. A migration is
-// never edited once released; a change is a new file.
+// never edited once released; a change is a new file. A migration that adds
+// a table of indexed data calls undo_track for it, so rollbacks restore it
+// (migration 0006, TestEveryTableIsUndoTracked).
 
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
