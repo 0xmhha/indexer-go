@@ -9,6 +9,11 @@
 // the GraphQL query without changing how they read it. Unlike a GraphQL
 // request it is a cacheable GET: responses carry an ETag (a request with a
 // matching If-None-Match gets 304 without a body) and Cache-Control.
+//
+// The handler also keeps successful responses for as long as Cache-Control
+// lets clients keep them (refactoring plan R4-5): clients polling the same
+// path share one execution per second, and requests arriving together for
+// the same uncached response share one execution (singleflight).
 package rest
 
 import (
@@ -20,10 +25,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-chi/chi/v5"
 	"github.com/graphql-go/graphql"
+	"golang.org/x/sync/singleflight"
 )
 
 // Executor runs a GraphQL document against the served schema
@@ -36,8 +44,20 @@ type Executor interface {
 const MaxLimit = 100
 
 // cacheControl is sent with successful responses: the data changes with
-// every block, so caches may reuse a response for a second.
-const cacheControl = "public, max-age=1"
+// every block, so caches may reuse a response for a second. DefaultCacheTTL
+// keeps them in the handler as long.
+const (
+	cacheControl    = "public, max-age=1"
+	DefaultCacheTTL = time.Second
+)
+
+// maxCached bounds the responses the handler keeps (a page of 100 rows is
+// some tens of KB).
+const maxCached = 1024
+
+// executeTimeout bounds an execution several requests share: it runs apart
+// from the context of the request that started it.
+const executeTimeout = 30 * time.Second
 
 // kind is how a parameter is read and checked.
 type kind int
@@ -168,11 +188,33 @@ func Paths() []string {
 // Handler serves the REST paths. Mount it under a pattern ending in "/*"
 // (such as /v1/*): it reads its path from the pattern's wildcard.
 type Handler struct {
-	exec Executor
+	exec  Executor
+	ttl   time.Duration
+	group singleflight.Group
+
+	mu     sync.Mutex
+	cached map[string]response
 }
 
-// NewHandler returns the REST API over exec.
-func NewHandler(exec Executor) *Handler { return &Handler{exec: exec} }
+// response is an executed request: its body, and for a successful one its
+// ETag and when it stops being served from the handler.
+type response struct {
+	body    []byte
+	status  int
+	etag    string
+	expires time.Time
+}
+
+// NewHandler returns the REST API over exec, keeping responses for
+// DefaultCacheTTL.
+func NewHandler(exec Executor) *Handler { return NewHandlerWithCache(exec, DefaultCacheTTL) }
+
+// NewHandlerWithCache returns the REST API over exec keeping successful
+// responses for ttl (0: not kept; requests arriving together still share
+// an execution).
+func NewHandlerWithCache(exec Executor, ttl time.Duration) *Handler {
+	return &Handler{exec: exec, ttl: ttl, cached: map[string]response{}}
+}
 
 // ServeHTTP implements http.Handler.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -199,35 +241,119 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := h.exec.Execute(r.Context(), ep.document, vars)
-	body, err := json.Marshal(res)
+	resp, err := h.respond(r.Context(), path, ep, vars)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to encode the response")
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if len(res.Errors) > 0 {
+	if resp.etag == "" {
 		w.Header().Set("Cache-Control", "no-store")
-		status := http.StatusOK
-		if failed(res) {
-			status = http.StatusInternalServerError
-		}
-		w.WriteHeader(status)
-		_, _ = w.Write(body)
+		w.WriteHeader(resp.status)
+		_, _ = w.Write(resp.body)
 		return
 	}
-	sum := sha256.Sum256(body)
-	etag := `"` + hex.EncodeToString(sum[:16]) + `"`
-	w.Header().Set("ETag", etag)
+	w.Header().Set("ETag", resp.etag)
 	w.Header().Set("Cache-Control", cacheControl)
-	if matches(r.Header.Get("If-None-Match"), etag) {
+	if matches(r.Header.Get("If-None-Match"), resp.etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 	if r.Method == http.MethodGet {
-		_, _ = w.Write(body)
+		_, _ = w.Write(resp.body)
 	}
+}
+
+// respond returns the response of a request: kept, or executed once for
+// the requests asking for it together.
+func (h *Handler) respond(ctx context.Context, path string, ep endpoint, vars map[string]interface{}) (response, error) {
+	key, err := json.Marshal(vars) // map keys are sorted
+	if err != nil {
+		return response{}, fmt.Errorf("failed to encode the request")
+	}
+	k := path + "\x00" + string(key)
+	if resp, ok := h.lookup(k); ok {
+		return resp, nil
+	}
+	ch := h.group.DoChan(k, func() (interface{}, error) {
+		if resp, ok := h.lookup(k); ok {
+			return resp, nil
+		}
+		ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), executeTimeout)
+		defer cancel()
+		resp, err := execute(ectx, h.exec, ep, vars)
+		if err == nil && resp.etag != "" {
+			h.keep(k, resp)
+		}
+		return resp, err
+	})
+	select {
+	case <-ctx.Done():
+		return response{}, ctx.Err()
+	case r := <-ch:
+		if r.Err != nil {
+			return response{}, r.Err
+		}
+		return r.Val.(response), nil
+	}
+}
+
+// execute runs an endpoint's document. A response with errors gets no ETag:
+// it is neither cached nor kept.
+func execute(ctx context.Context, exec Executor, ep endpoint, vars map[string]interface{}) (response, error) {
+	res := exec.Execute(ctx, ep.document, vars)
+	body, err := json.Marshal(res)
+	if err != nil {
+		return response{}, fmt.Errorf("failed to encode the response")
+	}
+	if len(res.Errors) > 0 {
+		status := http.StatusOK
+		if failed(res) {
+			status = http.StatusInternalServerError
+		}
+		return response{body: body, status: status}, nil
+	}
+	sum := sha256.Sum256(body)
+	return response{body: body, status: http.StatusOK, etag: `"` + hex.EncodeToString(sum[:16]) + `"`}, nil
+}
+
+// lookup returns a kept response that has not expired.
+func (h *Handler) lookup(key string) (response, bool) {
+	if h.ttl <= 0 {
+		return response{}, false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	resp, ok := h.cached[key]
+	if !ok || time.Now().After(resp.expires) {
+		return response{}, false
+	}
+	return resp, true
+}
+
+// keep keeps a successful response for the handler's TTL. When maxCached
+// responses are kept, expired ones are dropped first; if none has expired
+// the response is not kept.
+func (h *Handler) keep(key string, resp response) {
+	if h.ttl <= 0 {
+		return
+	}
+	now := time.Now()
+	resp.expires = now.Add(h.ttl)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.cached) >= maxCached {
+		for k, r := range h.cached {
+			if now.After(r.expires) {
+				delete(h.cached, k)
+			}
+		}
+		if len(h.cached) >= maxCached {
+			return
+		}
+	}
+	h.cached[key] = resp
 }
 
 // failed reports whether a result with errors has no data: the requested
