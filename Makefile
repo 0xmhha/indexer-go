@@ -28,9 +28,9 @@ GOLANGCI_LINT=$(shell $(GOCMD) env GOPATH)/bin/golangci-lint
 
 # Build flags with version information
 LDFLAGS=-ldflags "-s -w \
-	-X main.version=$(VERSION) \
-	-X main.commit=$(COMMIT) \
-	-X main.buildTime=$(BUILD_TIME)"
+	-X github.com/0xmhha/indexer-go/pkg/app.version=$(VERSION) \
+	-X github.com/0xmhha/indexer-go/pkg/app.commit=$(COMMIT) \
+	-X github.com/0xmhha/indexer-go/pkg/app.buildTime=$(BUILD_TIME)"
 TAGS=-tags release
 
 all: clean build test
@@ -78,7 +78,7 @@ test-postgres:
 
 ## test-slo: Check the G3 push latency service level (about two minutes; refactoring plan R5-5)
 test-slo:
-	INDEXER_LOAD_SLO=1 $(GOTEST) -v -timeout 10m -run TestSLOLoad ./cmd/indexer
+	INDEXER_LOAD_SLO=1 $(GOTEST) -v -timeout 10m -run TestSLOLoad ./pkg/app
 
 ## coverage: Generate test coverage report
 coverage:
