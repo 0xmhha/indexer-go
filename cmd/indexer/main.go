@@ -36,7 +36,9 @@ import (
 	_ "github.com/0xmhha/indexer-go/pkg/features/balance" // balance.native feature
 	_ "github.com/0xmhha/indexer-go/pkg/features/dex/api" // dex.pools, dex.trades, dex.orderbook and their GraphQL
 	"github.com/0xmhha/indexer-go/pkg/features/dex/orderbook"
-	_ "github.com/0xmhha/indexer-go/pkg/features/token" // token.transfers feature
+	"github.com/0xmhha/indexer-go/pkg/features/records"
+	_ "github.com/0xmhha/indexer-go/pkg/features/records/api" // records (declared tables) and its GraphQL
+	_ "github.com/0xmhha/indexer-go/pkg/features/token"       // token.transfers feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
@@ -408,6 +410,9 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 	}
 	if !cfg.MultiChainMode() {
 		if err := app.initOrderBook(ctx); err != nil {
+			return nil, err
+		}
+		if err := app.initRecords(); err != nil {
 			return nil, err
 		}
 	}
@@ -1196,6 +1201,7 @@ func (a *App) Shutdown() {
 	}
 
 	a.closeOrderBook()
+	records.Detach(a.storage)
 
 	// Stop EventBus
 	if a.eventBus != nil {
@@ -1443,6 +1449,7 @@ func (a *App) featureOverrides() map[string]bool {
 // closeAfterFailedStart releases the resources NewApp opened before failing.
 func (a *App) closeAfterFailedStart() {
 	a.closeOrderBook()
+	records.Detach(a.storage)
 	if a.eventBus != nil {
 		a.eventBus.Stop()
 	}
