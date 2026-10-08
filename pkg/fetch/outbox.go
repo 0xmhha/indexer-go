@@ -144,15 +144,22 @@ func (f *Fetcher) stopRelay() {
 	}
 }
 
-// rollbackHook returns the undo hook that records a reorganization's
-// events in the outbox with each rolled-back block, or nil when the storage
-// has no outbox.
-func (f *Fetcher) rollbackHook() port.UndoHook {
-	if f.outbox == nil {
-		return nil
-	}
+// rollbackHook returns the undo hook of a rollback. For each rolled-back
+// block it runs the features' rollback handlers, which read the block's
+// records before they are undone, and records the reorganization's events
+// and theirs in the outbox with the block. Without an outbox the handlers'
+// events are kept in withdrawn by height for publishReorg.
+func (f *Fetcher) rollbackHook(withdrawn map[uint64][]events.Event) port.UndoHook {
 	return func(txCtx context.Context, r *port.Reorg, ob *port.OrphanedBlock, first bool) error {
-		return f.recordEvents(txCtx, reorgEvents(r, ob, first))
+		evs, err := f.features.HandleRollback(txCtx, ob)
+		if err != nil {
+			return err
+		}
+		if f.outbox == nil {
+			withdrawn[ob.Block.Number] = evs
+			return nil
+		}
+		return f.recordEvents(txCtx, append(reorgEvents(r, ob, first), evs...))
 	}
 }
 

@@ -19,10 +19,13 @@ import (
 const EventTypeTrade events.EventType = "dexTrade"
 
 // TradeEvent is published for every trade dex.trades records, after its
-// block commits.
+// block commits, and again with Removed set when a reorganization rolls the
+// block back (after the reorg event, newest trade first, as removed logs
+// are reported).
 type TradeEvent struct {
 	events.Stream // change stream position (R3-1)
 	Trade         port.DexTrade
+	Removed       bool `json:",omitempty"`
 }
 
 // Type implements events.Event.
@@ -52,7 +55,9 @@ func (tradesFeature) Register(r feature.Registrar) error {
 	if !ok {
 		return fmt.Errorf("storage does not support DEX indexing")
 	}
-	r.OnBlock(&trades{store: store, publish: r.Deps().Publish})
+	t := &trades{store: store, publish: r.Deps().Publish}
+	r.OnBlock(t)
+	r.OnRollback(t)
 	return nil
 }
 
@@ -83,6 +88,20 @@ func (t *trades) HandleBlock(ctx context.Context, b *feature.Block) error {
 		}
 	}
 	return nil
+}
+
+// HandleRollback implements feature.RollbackHandler: the trades of a block
+// being rolled back, withdrawn newest first.
+func (t *trades) HandleRollback(ctx context.Context, b *port.OrphanedBlock) ([]events.Event, error) {
+	found, err := t.store.ListDexTradesInBlock(ctx, b.Block.Number)
+	if err != nil {
+		return nil, fmt.Errorf("DEX trades of rolled back block %d: %w", b.Block.Number, err)
+	}
+	out := make([]events.Event, 0, len(found))
+	for i := len(found) - 1; i >= 0; i-- {
+		out = append(out, &TradeEvent{Trade: *found[i], Removed: true})
+	}
+	return out, nil
 }
 
 // receiptTrades returns the trades a transaction's logs record, in log

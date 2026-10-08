@@ -172,9 +172,10 @@ type registrar struct {
 	handlers []feature.BlockHandler
 }
 
-func (r *registrar) Deps() feature.Deps             { return r.deps }
-func (r *registrar) OnBlock(h feature.BlockHandler) { r.handlers = append(r.handlers, h) }
-func (r *registrar) Enabled(n string) bool          { return r.enabled[n] }
+func (r *registrar) Deps() feature.Deps                 { return r.deps }
+func (r *registrar) OnBlock(h feature.BlockHandler)     { r.handlers = append(r.handlers, h) }
+func (r *registrar) Enabled(n string) bool              { return r.enabled[n] }
+func (r *registrar) OnRollback(feature.RollbackHandler) {}
 
 func register(t *testing.T, s *memStore, f feature.Feature, settings any) (feature.BlockHandler, error) {
 	t.Helper()

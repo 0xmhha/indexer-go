@@ -237,12 +237,13 @@ func (f *Fetcher) writeCursorOnly(ctx context.Context, height uint64) error {
 // survive a crash during the rollback.
 func (f *Fetcher) rollbackTo(ctx context.Context, rb port.Rollbacker, to uint64) error {
 	return f.write().do(ctx, "rollback", func(ctx context.Context) error {
-		r, err := rb.RollbackTo(ctx, to, f.rollbackHook())
+		withdrawn := map[uint64][]events.Event{}
+		r, err := rb.RollbackTo(ctx, to, f.rollbackHook(withdrawn))
 		if err != nil {
 			return err
 		}
 		if r != nil {
-			f.publishReorg(r)
+			f.publishReorg(r, withdrawn)
 		}
 		return nil
 	})

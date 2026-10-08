@@ -195,3 +195,77 @@ func BuildDEX() *DEXScenario {
 	}
 	return sc
 }
+
+// SigPerpCancelled is the order manager's OrderCancelled event.
+var SigPerpCancelled = crypto.Keccak256Hash([]byte("OrderCancelled(bytes32,address,string)"))
+
+// Fork replaces the blocks after the perpetual orders (block 4) with a
+// competing branch, as a reorganization does, and updates Trades:
+//
+//   - 5: the operator matches the two limit orders in full at 50 and alice
+//     cancels her third order;
+//   - 6: bob buys 50 A for 110 B on the V2 pair;
+//   - 7: a new V3 position in [-60, 60], then alice sells 200 A for 195 B;
+//   - 8-10: plain blocks.
+//
+// The new branch is longer than the old one, so the indexer meets it.
+func (sc *DEXScenario) Fork() {
+	const keep = 4
+	ch := sc.Chain
+	ch.Reorg(keep)
+	kept := sc.Trades[:0:0]
+	for _, tr := range sc.Trades {
+		if tr.Block <= keep {
+			kept = append(kept, tr)
+		}
+	}
+	sc.Trades = kept
+	op, alice, bob, lp := sc.Accounts[0], sc.Accounts[1], sc.Accounts[2], sc.Accounts[3]
+	router := common.HexToAddress("0x00000000000000000000000000000000000C0001")
+	gp := big.NewInt(2_000_000_000)
+	call := func(from Account, to common.Address, logs ...*types.Log) TxSpec {
+		return TxSpec{From: from, Tx: &types.LegacyTx{To: &to, Gas: 300000, GasPrice: gp}, GasUsed: 150000, Logs: logs}
+	}
+	trade := func(tr DEXTrade) {
+		tr.Block = ch.Head()
+		sc.Trades = append(sc.Trades, tr)
+	}
+	maker, taker, solo := common.HexToHash("0x01"), common.HexToHash("0x02"), common.HexToHash("0x03")
+	fill := func(id common.Hash, size, total, remaining, price int64) *types.Log {
+		return &types.Log{Address: sc.OrderManager, Topics: []common.Hash{SigPerpPartialFill, id},
+			Data: concat(word(n(size)), word(n(total)), word(n(remaining)), word(e18(price)))}
+	}
+
+	ch.AddBlock(
+		call(op, sc.OrderManager,
+			fill(maker, 10, 10, 0, 50), fill(taker, 10, 10, 0, 50),
+			&types.Log{Address: sc.OrderManager, Topics: []common.Hash{SigPerpMatched, maker, taker}, Data: concat(word(n(10)), word(e18(50)))}),
+		call(alice, sc.OrderManager, &types.Log{Address: sc.OrderManager,
+			Topics: []common.Hash{SigPerpCancelled, solo, addrTopic(alice.Address)}, Data: concat(word(n(32)), word(n(0)))}),
+	)
+	trade(DEXTrade{Market: sc.OrderManager, MarketID: 7, Venue: "perp_orderbook", Buy: true, Base: n(10), Quote: n(500),
+		Price: e18(50), Taker: alice.Address, Maker: bob.Address})
+
+	ch.AddBlock(call(bob, router,
+		&types.Log{Address: sc.V2Pair, Topics: []common.Hash{SigV2Swap, addrTopic(router), addrTopic(bob.Address)},
+			Data: concat(word(n(0)), word(n(110)), word(n(50)), word(n(0)))},
+		&types.Log{Address: sc.V2Pair, Topics: []common.Hash{SigV2Sync}, Data: concat(word(n(10050)), word(n(19914)))},
+	))
+	trade(DEXTrade{Market: sc.V2Pair, Venue: "uniswap_v2", Buy: true, Base: n(50), Quote: n(110),
+		Price: new(big.Int).Div(e18(110), n(50)), Taker: bob.Address})
+
+	q96 := new(big.Int).Lsh(big.NewInt(1), 96)
+	ch.AddBlock(
+		call(lp, sc.V3Pool, &types.Log{Address: sc.V3Pool,
+			Topics: []common.Hash{SigV3Mint, addrTopic(lp.Address), common.BytesToHash(signedWord(-60)), common.BytesToHash(signedWord(60))},
+			Data:   concat(addrWord(router), word(n(500_000)), word(n(1500)), word(n(1500)))}),
+		call(alice, router, &types.Log{Address: sc.V3Pool, Topics: []common.Hash{SigV3Swap, addrTopic(router), addrTopic(alice.Address)},
+			Data: concat(signedWord(200), signedWord(-195), word(q96), word(n(1_500_000)), signedWord(-5))}),
+	)
+	trade(DEXTrade{Market: sc.V3Pool, Venue: "uniswap_v3", Base: n(200), Quote: n(195),
+		Price: new(big.Int).Div(e18(195), n(200)), Taker: alice.Address})
+
+	for range 3 {
+		ch.AddBlock(TxSpec{From: op, Tx: &types.LegacyTx{To: &lp.Address, Value: ether(2), Gas: 21000, GasPrice: gp}})
+	}
+}

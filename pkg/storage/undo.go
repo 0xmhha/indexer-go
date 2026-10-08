@@ -95,7 +95,7 @@ func (tx *BlockTx) writeUndo() error {
 
 // undoBlock rolls back block h in one transaction, archiving it as an
 // orphan of reorg first (with the reorganization record when first). onUndo
-// runs in the same transaction after the block's keys are restored.
+// runs in the same transaction before the block's keys are restored.
 func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *port.Reorg, first bool, onUndo port.UndoHook) (*port.OrphanedBlock, error) {
 	raw, closer, err := s.kv(ctx).Get(UndoKey(h))
 	if errors.Is(err, pebble.ErrNotFound) {
@@ -125,6 +125,13 @@ func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *port.Reo
 	if err != nil {
 		return nil, err
 	}
+	// The hook reads the block's records as the block left them: it runs
+	// before the batch undoes them.
+	if onUndo != nil {
+		if err := onUndo(txCtx, reorg, ob, first); err != nil {
+			return nil, err
+		}
+	}
 	for i := len(rec.Entries) - 1; i >= 0; i-- {
 		e := rec.Entries[i]
 		if e.Existed {
@@ -138,11 +145,6 @@ func (s *PebbleStorage) undoBlock(ctx context.Context, h uint64, reorg *port.Reo
 	}
 	if err := tx.batch.Delete(UndoKey(h), nil); err != nil {
 		return nil, err
-	}
-	if onUndo != nil {
-		if err := onUndo(txCtx, reorg, ob, first); err != nil {
-			return nil, err
-		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err

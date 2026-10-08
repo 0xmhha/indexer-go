@@ -29,7 +29,7 @@ type aggSources interface {
 
 // startAggApp starts the app on dir with the features (and dex.pools and
 // dex.trades over the DEX scenario's venues when sc is not nil).
-func startAggApp(t *testing.T, srv *testchain.Server, dir string, sc *testchain.DEXScenario, features []string, series []string) *App {
+func startAggApp(t *testing.T, srv *testchain.Server, dir string, sc *testchain.DEXScenario, features []string, series []string, more ...func(*config.Config)) *App {
 	t.Helper()
 	configure := func(cfg *config.Config) {
 		on := true
@@ -37,6 +37,9 @@ func startAggApp(t *testing.T, srv *testchain.Server, dir string, sc *testchain.
 			cfg.Features[name] = config.FeatureConfig{Enabled: &on}
 		}
 		require.NoError(t, cfg.SetFeatureSettings(agg.TimeSeriesName, agg.TimeSeriesSettings{Series: series}))
+		for _, m := range more {
+			m(cfg)
+		}
 	}
 	if sc != nil {
 		return startDEXApp(t, srv, dir, sc, configure)

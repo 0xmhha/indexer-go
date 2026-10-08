@@ -30,7 +30,7 @@ func (s *Store) SetOrphanRetention(n uint64) { s.orphanRetention.Store(n) }
 
 // RollbackTo implements port.Rollbacker: the blocks above to are rolled
 // back newest first, one transaction each, which archives the block as an
-// orphan, restores the rows it changed (undo_block) and runs onUndo; the
+// orphan, runs onUndo and restores the rows it changed (undo_block); the
 // first records the reorganization. If a block in the range has no undo,
 // nothing changes.
 func (s *Store) RollbackTo(ctx context.Context, to uint64, onUndo port.UndoHook) (*port.Reorg, error) {
@@ -107,13 +107,15 @@ func (s *Store) undoBlock(ctx context.Context, h uint64, rec *port.Reorg, first 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, "SELECT undo_block($1)", i64(h)); err != nil {
-		return nil, fmt.Errorf("undo block %d: %w", h, err)
-	}
+	// The hook reads the block's rows as the block left them: it runs
+	// before undo_block restores them.
 	if onUndo != nil {
 		if err := onUndo(txCtx, rec, ob, first); err != nil {
 			return nil, err
 		}
+	}
+	if _, err := tx.Exec(ctx, "SELECT undo_block($1)", i64(h)); err != nil {
+		return nil, fmt.Errorf("undo block %d: %w", h, err)
 	}
 	if err := bt.Commit(); err != nil {
 		return nil, err
