@@ -33,7 +33,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
 	_ "github.com/0xmhha/indexer-go/pkg/features/address" // address.index feature
 	_ "github.com/0xmhha/indexer-go/pkg/features/balance" // balance.native feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/dex"     // dex.pools, dex.trades features
+	_ "github.com/0xmhha/indexer-go/pkg/features/dex/api" // dex.pools, dex.trades features and their GraphQL
 	_ "github.com/0xmhha/indexer-go/pkg/features/token"   // token.transfers feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"

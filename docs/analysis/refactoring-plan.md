@@ -428,7 +428,7 @@ graph LR
 
 | ID | 작업 | 선행 | 검증 기준 |
 |---|---|---|---|
-| R5-1 | `dex.pools`, `dex.trades` 기능 모듈 | R2-5, R3-1 | 시험 DEX 컨트랙트의 이벤트로 체결이 재현된다 |
+| R5-1 | `dex.pools`, `dex.trades` 기능 모듈. (완료 10/8, 10/8 결정: Uniswap V3(StableNet testnet 8283에 배포됨), Uniswap V2, 무기한 선물 주문장(`stable-poc-contract` OrderManager) 세 가지를 모두 지원한다. 저장: `port.DexReader/DexWriter`(시장, 체결, 유동성 변화, 선물 주문), Pebble `/dex/`, PostgreSQL migration 0008(undo 추적), `porttest` 계약을 두 저장소가 통과. 기능: `dex.pools`는 설정(`features.dex.pools.venues`)에 적은 factory·engine의 등록 이벤트만 시장으로 인정하고(같은 이벤트는 누구나 낼 수 있다) 상태(V3 가격·tick·유동성, V2 reserve), 유동성 변화, 주문 상태를 기록한다. `dex.trades`는 등록된 시장의 체결을 taker 방향, 원시 수량, quote/base×1e18 가격으로 기록하고 `dexTrade` 이벤트(outbox)를 낸다. 선물 `matchOrders`의 `OrderPartiallyFilled` 두 개와 `OrdersMatched`는 체결 하나로 센다. 기능마다 자기 설정 절을 읽는 통로(`config.FeatureSettings`, `Deps.Settings`)를 추가했다. API: GraphQL 확장 `pkg/features/dex/api`(cursor 목록, 구독 `dexTrade`). 검증: 시험 체인에서 세 종류의 시장이 낸 체결 6건(양방향 swap, 매칭, 운영자 체결, 시장가)이 시나리오가 기대한 그대로 기록되고, 가짜 factory의 풀은 무시되며, 모든 체결 이벤트가 outbox에 있고, rollback하면 그 블록의 체결·주문 체결·풀 상태가 되돌아가며 다시 색인하면 같다(`TestDEXTradesReproduced`, Pebble·PostgreSQL). 남은 것: 색인 시작 전에 만들어진 시장·주문의 체결은 모른다, 가격은 토큰 소수 자릿수를 적용하지 않은 원시 단위다, 선물 `OrderFilled`는 계약에 정의만 있고 내보내지 않아 읽지 않는다, REST 경로는 없다) | R2-5, R3-1 | 시험 DEX 컨트랙트의 이벤트로 체결이 재현된다 |
 | R5-2 | `dex.orderbook`(시장별 actor, 정렬 구조, RCU snapshot) | R5-1 | 호가창이 온체인 상태와 같다(주기적 대조) |
 | R5-3 | `agg.candles`, `agg.timeseries` | R5-1 | 재계산 결과와 증분 결과가 같다 |
 | R5-4 | reorg 때 DEX 상태 되돌리기 | R2-4 | reorg 주입 시험 |

@@ -245,6 +245,75 @@ DepositMintProposal.status(): ProposalStatus!
 DepositMintProposal.timestamp(): String!
 DepositMintProposal.to(): String!
 DepositMintProposal.transactionHash(): String!
+DexLiquidityChange.amount0(): String!
+DexLiquidityChange.amount1(): String!
+DexLiquidityChange.blockNumber(): String!
+DexLiquidityChange.kind(): String!
+DexLiquidityChange.liquidity(): String
+DexLiquidityChange.logIndex(): Int!
+DexLiquidityChange.market(): String!
+DexLiquidityChange.owner(): String!
+DexLiquidityChange.tickLower(): Int
+DexLiquidityChange.tickUpper(): Int
+DexLiquidityChange.timestamp(): String!
+DexLiquidityChange.transactionHash(): String!
+DexLiquidityChange.venue(): String!
+DexLiquidityConnection.nodes(): [DexLiquidityChange!]!
+DexLiquidityConnection.pageInfo(): PageInfo!
+DexMarket.address(): String!
+DexMarket.base(): String!
+DexMarket.createdBlock(): String!
+DexMarket.createdLogIndex(): Int!
+DexMarket.createdTx(): String!
+DexMarket.creator(): String!
+DexMarket.fee(): Int
+DexMarket.liquidity(): String
+DexMarket.marketId(): String!
+DexMarket.quote(): String!
+DexMarket.reserve0(): String
+DexMarket.reserve1(): String
+DexMarket.sqrtPriceX96(): String
+DexMarket.tick(): Int
+DexMarket.tickSpacing(): Int
+DexMarket.updatedBlock(): String!
+DexMarket.venue(): String!
+DexMarketConnection.nodes(): [DexMarket!]!
+DexMarketConnection.pageInfo(): PageInfo!
+DexOrder.createdBlock(): String!
+DexOrder.createdTx(): String!
+DexOrder.filled(): String!
+DexOrder.id(): String!
+DexOrder.manager(): String!
+DexOrder.marketId(): String!
+DexOrder.price(): String!
+DexOrder.side(): String!
+DexOrder.size(): String!
+DexOrder.status(): String!
+DexOrder.trader(): String!
+DexOrder.type(): Int!
+DexOrder.updatedBlock(): String!
+DexOrderConnection.nodes(): [DexOrder!]!
+DexOrderConnection.pageInfo(): PageInfo!
+DexTrade.baseAmount(): String!
+DexTrade.blockNumber(): String!
+DexTrade.logIndex(): Int!
+DexTrade.maker(): String
+DexTrade.makerOrder(): String
+DexTrade.market(): String!
+DexTrade.marketId(): String!
+DexTrade.price(): String!
+DexTrade.quoteAmount(): String!
+DexTrade.sender(): String
+DexTrade.side(): String!
+DexTrade.sqrtPriceX96(): String
+DexTrade.taker(): String!
+DexTrade.takerOrder(): String
+DexTrade.tick(): Int
+DexTrade.timestamp(): String!
+DexTrade.transactionHash(): String!
+DexTrade.venue(): String!
+DexTradeConnection.nodes(): [DexTrade!]!
+DexTradeConnection.pageInfo(): PageInfo!
 ENUM ProposalStatus
 ENUM TokenStandard
 ENUM TransactionDirection
@@ -487,6 +556,14 @@ OBJECT ContractVerification
 OBJECT DecodedLog
 OBJECT DecodedParam
 OBJECT DepositMintProposal
+OBJECT DexLiquidityChange
+OBJECT DexLiquidityConnection
+OBJECT DexMarket
+OBJECT DexMarketConnection
+OBJECT DexOrder
+OBJECT DexOrderConnection
+OBJECT DexTrade
+OBJECT DexTradeConnection
 OBJECT ERC20Transfer
 OBJECT ERC20TransferConnection
 OBJECT ERC721Transfer
@@ -659,6 +736,13 @@ Query.contractVerification(address: String!): ContractVerification
 Query.contracts(pagination: PaginationInput): ContractCreationConnection
 Query.contractsByCreator(creator: String!, pagination: PaginationInput): ContractCreationConnection
 Query.depositMintProposals(filter: SystemContractEventFilter!): [DepositMintProposal!]!
+Query.dexLiquidityChanges(market: String!, marketId: String, pagination: PaginationInput): DexLiquidityConnection!
+Query.dexMarket(address: String!, marketId: String): DexMarket
+Query.dexMarkets(pagination: PaginationInput): DexMarketConnection!
+Query.dexOrder(id: String!, manager: String!): DexOrder
+Query.dexOrders(market: String!, marketId: String, pagination: PaginationInput): DexOrderConnection!
+Query.dexTrades(market: String!, marketId: String, pagination: PaginationInput): DexTradeConnection!
+Query.dexTradesByTrader(pagination: PaginationInput, trader: String!): DexTradeConnection!
 Query.emergencyPauseHistory(contract: String!): [EmergencyPauseEvent!]!
 Query.epochByNumber(number: String!): EpochInfo
 Query.epochData(epochNumber: String!): EpochData
@@ -814,6 +898,7 @@ Subscription.consensusBlock(): ConsensusBlockSub!
 Subscription.consensusError(): ConsensusErrorSub!
 Subscription.consensusFork(): ConsensusForkSub!
 Subscription.consensusValidatorChange(): ConsensusValidatorChangeSub!
+Subscription.dexTrade(markets: [String!]): DexTrade!
 Subscription.logs(filter: LogFilter!): Log!
 Subscription.newBlock(): Block!
 Subscription.newPendingTransactions(limit: Int): Transaction!
