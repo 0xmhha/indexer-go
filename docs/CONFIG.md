@@ -181,6 +181,29 @@ features:
 - 기능 설정 절에서 `enabled` 외의 키는 그 기능이 읽는다. 기능이 모르는 키를 쓰면 시작할 때 오류가 난다.
 - GraphQL: `dexMarkets`, `dexMarket(address, marketId)`, `dexTrades(market, marketId)`, `dexTradesByTrader(trader)`, `dexLiquidityChanges(market)`, `dexOrders(market, marketId)`, `dexOrder(manager, id)`. 목록은 최신순이고 `pagination.after`와 `pageInfo.endCursor`로 넘긴다(전체 개수는 없다). 구독 `dexTrade(markets: [...])`는 체결의 블록이 색인될 때 그 체결을 보낸다. `markets`를 주면 그 시장 주소의 체결만 받는다.
 
+### DEX 호가창 (dex.orderbook)
+
+`dex.orderbook`(dex.pools 필요, 기본 꺼짐)은 등록된 시장마다 호가창을 메모리에 둔다. 데이터를 따로 저장하지 않으므로 켜도 backfill은 없다. 질의를 받는 프로세스(`node.role`이 `all` 또는 `api`)가 호가창을 만든다. 멀티체인 모드에서는 아직 만들지 않는다(`dexOrderBook`이 오류를 돌려준다).
+
+```yaml
+features:
+  dex.orderbook:
+    enabled: true
+    step_bps: 10             # 풀·페어 호가의 가격 간격(bp), 1~5000
+    levels: 20               # 한쪽 호가 단계 수, 1~200
+    reconcile_interval: 1m   # 체인 상태와 대조하는 주기, 0이면 대조하지 않는다
+```
+
+- 시장마다 actor 하나가 호가창을 가진다. 블록이 시장을 바꾸면(`dexMarket` 이벤트) 또는 reorg가 나면 저장소에서 상태를 다시 읽어 새 호가창으로 통째로 바꾼다. 읽는 쪽은 잠금 없이 그 시점의 호가창을 본다.
+- 선물 주문장: 남아 있는(open, partially_filled) 지정가 주문의 남은 수량을 가격별로 합친다. 스탑·익절 주문은 `OrderTriggered` 전까지 `pending`이라 호가창에 없다.
+- Uniswap V3: 현재 가격에서 위(asks)·아래(bids)로 `step_bps`씩 움직일 때 풀이 내주거나 받는 수량이다. 초기화된 tick을 지날 때 그 tick의 net 유동성만큼 유동성이 바뀐다(swap과 같다).
+- Uniswap V2: reserve 비율이 가격이고, 가격 p까지 움직일 때 base 수량은 √(k/p)의 변화다(k = reserve0·reserve1).
+- 수량은 수수료를 빼기 전, 풀이 실제로 내주거나 받는 양이다. 가격·수량은 체결과 같은 원시 단위(가격은 quote/base×1e18)다.
+- 대조: `reconcile_interval`마다 호가창을 다시 읽고, 그 호가창의 블록에서 컨트랙트를 `eth_call`로 읽어 비교한다. V2는 `getReserves`, V3는 `slot0`·`liquidity`·각 tick의 `ticks`와, 색인한 tick과 현재 tick이 든 `tickBitmap` 단어, 선물은 남아 있는 주문마다 `getOrder`(상태, 수량, 체결량, 가격)다. 결과는 GraphQL `reconciliation`과 metric `indexer_dex_orderbook_reconciliations_total{venue,result}`(in_sync, mismatch, error)로 보이고, 다르면 경고 로그를 남긴다. 노드가 그 블록의 상태를 가지고 있어야 한다(보통 최근 128블록).
+- 대조가 못 잡는 것: V3에서 색인한 tick과 현재 tick이 든 단어 밖의 tick, 선물에서 색인이 모르는 주문(order manager에는 시장별 주문 목록 조회가 없다). 시장은 등록 이벤트부터 색인하므로 보통 둘 다 생기지 않는다.
+- GraphQL: `dexOrderBook(market, marketId, levels, stepBps)`는 `bids`(높은 가격부터), `asks`(낮은 가격부터), `midPrice`, `blockNumber`, `reconciliation`을 돌려준다.
+- 0009 이전에 `dex.pools`로 색인한 DB는 V3 tick과 pending 상태가 없다. tick이 필요하면 재색인한다.
+
 ### Contract Verification
 
 ```yaml

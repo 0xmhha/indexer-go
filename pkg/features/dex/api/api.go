@@ -1,7 +1,8 @@
 // Package api serves the DEX records over GraphQL (refactoring plan R5-1):
 // markets, trades (per market and per trader), liquidity changes and
-// perpetual orders, read a page at a time with cursors, and the dexTrade
-// subscription. It is a GraphQL extension, linked in with the features.
+// perpetual orders, read a page at a time with cursors, the dexTrade
+// subscription, and the order books of dex.orderbook (R5-2). It is a
+// GraphQL extension, linked in with the features.
 package api
 
 import (
@@ -109,7 +110,7 @@ var (
 			"size":         {Type: gql.NewNonNull(graphql.BigIntType)},
 			"price":        {Type: gql.NewNonNull(graphql.BigIntType), Description: "Times 1e18"},
 			"filled":       {Type: gql.NewNonNull(graphql.BigIntType)},
-			"status":       {Type: gql.NewNonNull(gql.String), Description: "open, partially_filled, filled, cancelled or expired"},
+			"status":       {Type: gql.NewNonNull(gql.String), Description: "pending (a trigger order not triggered yet), open, partially_filled, filled, cancelled or expired"},
 			"createdBlock": {Type: gql.NewNonNull(graphql.BigIntType)},
 			"createdTx":    {Type: gql.NewNonNull(graphql.HashType)},
 			"updatedBlock": {Type: gql.NewNonNull(graphql.BigIntType)},
@@ -268,6 +269,7 @@ func register(e *graphql.Extension) {
 		Description: "Trades as their blocks are indexed; filter by market addresses",
 		Args:        gql.FieldConfigArgument{"markets": {Type: gql.NewList(gql.NewNonNull(gql.String))}},
 	})
+	registerOrderBook(e)
 }
 
 var errUnsupported = errors.New("the storage does not keep DEX records")

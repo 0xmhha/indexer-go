@@ -20,8 +20,8 @@ import (
 )
 
 // startDEXApp starts the app on dir with dex.pools and dex.trades over the
-// scenario's venues.
-func startDEXApp(t *testing.T, srv *testchain.Server, dir string, sc *testchain.DEXScenario) *App {
+// scenario's venues; configure changes the configuration further.
+func startDEXApp(t *testing.T, srv *testchain.Server, dir string, sc *testchain.DEXScenario, configure ...func(*config.Config)) *App {
 	t.Helper()
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = srv.URL()
@@ -35,6 +35,9 @@ func startDEXApp(t *testing.T, srv *testchain.Server, dir string, sc *testchain.
 		{Type: string(port.DexUniswapV2), Factory: sc.V2Factory.Hex()},
 		{Type: string(port.DexPerpOrderBook), Engine: sc.Engine.Hex(), OrderManager: sc.OrderManager.Hex()},
 	}}))
+	for _, c := range configure {
+		c(cfg)
+	}
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
 	return app

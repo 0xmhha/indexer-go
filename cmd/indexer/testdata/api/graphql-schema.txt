@@ -245,6 +245,14 @@ DepositMintProposal.status(): ProposalStatus!
 DepositMintProposal.timestamp(): String!
 DepositMintProposal.to(): String!
 DepositMintProposal.transactionHash(): String!
+DexBookLevel.baseAmount(): String!
+DexBookLevel.price(): String!
+DexBookLevel.quoteAmount(): String!
+DexBookReconciliation.blockNumber(): String!
+DexBookReconciliation.error(): String
+DexBookReconciliation.inSync(): Boolean!
+DexBookReconciliation.mismatches(): [String!]!
+DexBookReconciliation.timestamp(): String!
 DexLiquidityChange.amount0(): String!
 DexLiquidityChange.amount1(): String!
 DexLiquidityChange.blockNumber(): String!
@@ -292,6 +300,15 @@ DexOrder.status(): String!
 DexOrder.trader(): String!
 DexOrder.type(): Int!
 DexOrder.updatedBlock(): String!
+DexOrderBook.asks(): [DexBookLevel!]!
+DexOrderBook.bids(): [DexBookLevel!]!
+DexOrderBook.blockNumber(): String
+DexOrderBook.market(): String!
+DexOrderBook.marketId(): String!
+DexOrderBook.midPrice(): String
+DexOrderBook.reconciliation(): DexBookReconciliation
+DexOrderBook.stepBps(): Int
+DexOrderBook.venue(): String!
 DexOrderConnection.nodes(): [DexOrder!]!
 DexOrderConnection.pageInfo(): PageInfo!
 DexTrade.baseAmount(): String!
@@ -556,11 +573,14 @@ OBJECT ContractVerification
 OBJECT DecodedLog
 OBJECT DecodedParam
 OBJECT DepositMintProposal
+OBJECT DexBookLevel
+OBJECT DexBookReconciliation
 OBJECT DexLiquidityChange
 OBJECT DexLiquidityConnection
 OBJECT DexMarket
 OBJECT DexMarketConnection
 OBJECT DexOrder
+OBJECT DexOrderBook
 OBJECT DexOrderConnection
 OBJECT DexTrade
 OBJECT DexTradeConnection
@@ -740,6 +760,7 @@ Query.dexLiquidityChanges(market: String!, marketId: String, pagination: Paginat
 Query.dexMarket(address: String!, marketId: String): DexMarket
 Query.dexMarkets(pagination: PaginationInput): DexMarketConnection!
 Query.dexOrder(id: String!, manager: String!): DexOrder
+Query.dexOrderBook(levels: Int, market: String!, marketId: String, stepBps: Int): DexOrderBook
 Query.dexOrders(market: String!, marketId: String, pagination: PaginationInput): DexOrderConnection!
 Query.dexTrades(market: String!, marketId: String, pagination: PaginationInput): DexTradeConnection!
 Query.dexTradesByTrader(pagination: PaginationInput, trader: String!): DexTradeConnection!

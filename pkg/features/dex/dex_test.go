@@ -173,6 +173,19 @@ func chainBlock(n uint64, txs ...[]*model.Log) *feature.Block {
 	return b
 }
 
+// byType splits published events into trade and market events.
+func byType(published []events.Event) (trades, markets []events.Event) {
+	for _, e := range published {
+		switch e.Type() {
+		case EventTypeTrade:
+			trades = append(trades, e)
+		case EventTypeMarket:
+			markets = append(markets, e)
+		}
+	}
+	return trades, markets
+}
+
 func run(t *testing.T, handlers []feature.BlockHandler, b *feature.Block) {
 	t.Helper()
 	for _, h := range handlers {
@@ -292,12 +305,19 @@ func TestUniswapV3(t *testing.T) {
 	assert.Equal(t, "5000", store.markets[key].Liquidity.String(), "state from the last swap")
 	assert.Equal(t, uint64(2), store.markets[key].UpdatedBlock)
 
-	require.Len(t, *published, 2)
-	ev, ok := (*published)[0].(*TradeEvent)
-	require.True(t, ok)
+	tradeEvents, marketEvents := byType(*published)
+	require.Len(t, tradeEvents, 2)
+	ev := tradeEvents[0].(*TradeEvent)
 	assert.Equal(t, buy.TxHash, ev.Trade.TxHash)
 	_, err := events.MarshalEvent(ev)
 	assert.NoError(t, err, "the trade event has a codec for the outbox")
+	require.Len(t, marketEvents, 2, "the pool changed in both blocks, once each")
+	me := marketEvents[1].(*MarketEvent)
+	assert.Equal(t, key, me.Market)
+	assert.Equal(t, port.DexUniswapV3, me.Venue)
+	assert.Equal(t, uint64(2), me.BlockNumber)
+	_, err = events.MarshalEvent(me)
+	assert.NoError(t, err, "the market event has a codec for the outbox")
 }
 
 func TestUniswapV2(t *testing.T) {
@@ -407,7 +427,12 @@ func TestPerpOrderBook(t *testing.T) {
 	assert.Equal(t, "4", store.orders[orderKey(manager, makerID)].Filled.String())
 	assert.Equal(t, port.DexOrderFilled, status(soloID))
 	assert.Equal(t, port.DexOrderCancelled, status(gone))
-	assert.Len(t, *published, 3)
+	tradeEvents, marketEvents := byType(*published)
+	assert.Len(t, tradeEvents, 3)
+	require.Len(t, marketEvents, 2, "the market changed in both blocks; the foreign engine's market did not")
+	for _, e := range marketEvents {
+		assert.Equal(t, market, e.(*MarketEvent).Market)
+	}
 
 	// Trades are listed by log: each has its own.
 	var idx []int
