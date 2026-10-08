@@ -12,6 +12,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/userop"
 )
 
 // TestMigrateIsIdempotentAndSerialized: stores opened together on a new
@@ -153,4 +154,38 @@ func TestCallbacksMayUseTheTransaction(t *testing.T) {
 	var n int
 	require.NoError(t, s.Iterate(ctx, []byte("/b/"), func(_, _ []byte) bool { n++; return true }))
 	assert.Equal(t, 5, n)
+}
+
+// TestAccountAbstractionInBlockTx: the account abstraction writes of a block
+// belong to its transaction: SetCode statistics take the time of the block
+// written earlier in it, and a rollback discards them all.
+func TestAccountAbstractionInBlockTx(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	addr := common.HexToAddress("0x7a01")
+
+	txCtx, tx, err := s.BeginBlock(ctx)
+	require.NoError(t, err)
+	require.NoError(t, s.SetBlock(txCtx, &model.Block{Number: 5, Hash: common.Hash{5}, Time: 1_700_000_060}))
+	require.NoError(t, s.IncrementSetCodeStats(txCtx, addr, true, false, 5))
+	stats, err := s.GetAddressSetCodeStats(txCtx, addr)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1_700_000_060), stats.LastActivityTime.Unix(), "the block of the same transaction")
+	require.NoError(t, s.SaveSetCodeAuthorization(txCtx, &port.SetCodeAuthorizationRecord{TxHash: common.Hash{1}, BlockNumber: 5, AuthorityAddress: addr}))
+	require.NoError(t, s.SaveUserOp(txCtx, &userop.UserOperation{Hash: common.Hash{2}, Sender: addr, BlockNumber: 5}))
+	require.NoError(t, s.SaveInstalledModule(txCtx, &port.InstalledModule{Account: addr, Module: addr, InstalledAt: 5, Active: true}))
+	tx.Rollback()
+
+	for name, count := range map[string]func(context.Context) (int, error){
+		"setcode": s.GetSetCodeTransactionCount,
+		"userop":  s.GetUserOpCount,
+		"module":  s.GetModuleEventCount,
+	} {
+		n, err := count(ctx)
+		require.NoError(t, err, name)
+		assert.Zero(t, n, "%s: rolled back with the block", name)
+	}
+	stats, err = s.GetAddressSetCodeStats(ctx, addr)
+	require.NoError(t, err)
+	assert.Zero(t, stats.AsTargetCount, "stats rolled back with the block")
 }
