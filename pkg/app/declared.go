@@ -9,6 +9,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/features/records"
+	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/source"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 )
@@ -16,7 +17,8 @@ import (
 // The declared ingest mode (indexer.mode: declared, refactoring plan R6-1)
 // reads only the headers and the logs of the tables declared in
 // features.records, runs only the features that need nothing else and
-// serves only their APIs.
+// serves only their APIs. With finality "finalized" it reads a range of
+// blocks per eth_getLogs and stores only the blocks with declared logs.
 
 // defaultFeatures returns the features on by default: the registered
 // defaults and the profile's, none in the declared mode (the explorer
@@ -69,7 +71,12 @@ func (a *App) declaredSource(src *sourcerpc.Source, blocks source.Source) (sourc
 		a.fetcher.SetStartHeight(plan.StartBlock())
 	}
 	a.fetcher.SetDeclared(true)
+	// Finalized blocks are not reorganized: only the blocks with declared
+	// logs are read and stored, a range at a time (fetch.LogRange).
+	sparse := a.config.Indexer.Finality == fetch.FinalityFinalized
+	a.fetcher.SetSparse(sparse)
 	a.logger.Info("Declared ingest mode: reading headers and declared logs only",
-		zap.Int("contracts", len(plan.Addresses())), zap.Int("events", len(plan.Topics())), zap.Uint64("start_block", plan.StartBlock()))
+		zap.Int("contracts", len(plan.Addresses())), zap.Int("events", len(plan.Topics())), zap.Uint64("start_block", plan.StartBlock()),
+		zap.Bool("ranges_of_finalized_blocks", sparse))
 	return sourcerpc.NewLogs(src, plan.Addresses(), plan.Topics()), nil
 }

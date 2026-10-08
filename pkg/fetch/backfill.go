@@ -20,6 +20,9 @@ func (f *Fetcher) Backfill(ctx context.Context, p *feature.Pipeline, from, to ui
 	if f.txr == nil {
 		return fmt.Errorf("backfill needs storage with block transactions")
 	}
+	if f.declared {
+		return f.backfillFromNode(ctx, p, from, to, progress)
+	}
 	mr := f.storage
 	for h := from; h <= to; h++ {
 		if err := ctx.Err(); err != nil {
@@ -54,4 +57,39 @@ func (f *Fetcher) Backfill(ctx context.Context, p *feature.Pipeline, from, to ui
 
 type undoDropper interface {
 	DropUndo(ctx context.Context, height uint64) error
+}
+
+// backfillFromNode is Backfill in the declared mode: the storage keeps no
+// logs, so the declared logs of [from, to] are read again from the node a
+// LogRange at a time, and the features run on each block that has some.
+// The progress of the heights without logs is recorded with the range's
+// end, so a stopped backfill resumes after the last range it finished.
+func (f *Fetcher) backfillFromNode(ctx context.Context, p *feature.Pipeline, from, to uint64, progress func(ctx context.Context, height uint64) error) error {
+	for start := from; start <= to; {
+		end := min(to, start+LogRange-1)
+		blocks, err := f.readLogBlocks(ctx, start, end)
+		if err != nil {
+			return fmt.Errorf("backfill: read blocks %d..%d: %w", start, end, err)
+		}
+		last := start - 1
+		for _, fb := range blocks {
+			if err := f.backfillBlock(ctx, p, fb, progress); err != nil {
+				return err
+			}
+			last = fb.height()
+		}
+		if progress != nil && (last < end || len(blocks) == 0) {
+			if err := f.write().do(ctx, "backfillProgress", func(ctx context.Context) error {
+				return f.writeBackfillProgress(ctx, end, progress)
+			}); err != nil {
+				return err
+			}
+		}
+		f.logger.Info("Backfill progress", zap.Strings("features", p.Features()), zap.Uint64("height", end), zap.Uint64("to", to))
+		if end == to {
+			break
+		}
+		start = end + 1
+	}
+	return nil
 }

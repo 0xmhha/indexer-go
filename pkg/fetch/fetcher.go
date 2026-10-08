@@ -184,8 +184,10 @@ type Fetcher struct {
 	// beforeCommitHook is a fault-injection point for tests.
 	beforeCommitHook func(height uint64) error
 
-	// declared is the declared ingest mode (SetDeclared).
+	// declared is the declared ingest mode (SetDeclared); sparse its range
+	// ingest of finalized blocks (SetSparse, sparse.go).
 	declared bool
+	sparse   bool
 	// lastTarget and polled are the live loop's progress (Progress).
 	lastTarget atomic.Uint64
 	polled     atomic.Bool
@@ -257,6 +259,9 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 // FetchRange fetches and indexes blocks start..end in height order, fetching
 // up to the configured number of workers concurrently (see indexRange).
 func (f *Fetcher) FetchRange(ctx context.Context, start, end uint64) error {
+	if f.sparse {
+		return f.indexSparse(ctx, start, end)
+	}
 	return f.indexRange(ctx, start, end, f.workers())
 }
 
@@ -333,7 +338,7 @@ func (f *Fetcher) Run(ctx context.Context) error {
 		}
 
 		// Calculate batch end
-		batchEnd := nextHeight + uint64(f.config.BatchSize) - 1
+		batchEnd := nextHeight + f.batchSize() - 1
 		if batchEnd > latestChainBlock {
 			batchEnd = latestChainBlock
 		}

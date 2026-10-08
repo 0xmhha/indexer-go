@@ -39,9 +39,9 @@ go test ./...   # builds the binary and runs it against a test chain
 
 ## Differences from P07
 
-- P07 reads `eth_getLogs` over up to 1,000 blocks per call; the declared
-  mode reads each block's header and logs in one batch, two calls per
-  block. Catching up from the deployment block takes more calls.
+- Like P07, the declared mode with finalized blocks reads up to 1,000
+  blocks per `eth_getLogs` call and only the headers of blocks with logs;
+  unlike P07 it halves a range the node refuses.
 - P07's `start` is the cursor before the first block; `start_block` is the
   first block read.
 - The lag is the node's head (under the finality policy) read every

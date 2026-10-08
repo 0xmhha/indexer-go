@@ -298,3 +298,69 @@ func (f *Fetcher) writeBackfillBlock(ctx context.Context, p *feature.Pipeline, f
 func (f *Fetcher) Exec(ctx context.Context, name string, fn func(ctx context.Context) error) error {
 	return f.write().do(ctx, name, fn)
 }
+
+// writeSparse stores a range's blocks with declared logs and moves the
+// cursor to the range's end, in one transaction. No undo is recorded:
+// finalized blocks are not rolled back. A block already stored with the
+// same hash is skipped, so indexing a range again changes nothing.
+func (f *Fetcher) writeSparse(ctx context.Context, blocks []*fetchedBlock, end uint64) error {
+	txCtx, tx, err := f.txr.BeginBlock(ctx)
+	if err != nil {
+		return fmt.Errorf("begin blocks up to %d: %w", end, err)
+	}
+	defer tx.Rollback()
+
+	var pending []events.Event
+	f.pendingEvents = &pending
+	defer func() { f.pendingEvents = nil }()
+
+	for _, fb := range blocks {
+		stored, err := f.storedBlockHash(txCtx, fb.height())
+		switch {
+		case err == nil && stored == fb.block.Hash:
+			continue
+		case err == nil:
+			return fmt.Errorf("%w (height %d stored %s fetched %s): a finalized block changed",
+				ErrBlockConflict, fb.height(), stored.Hex(), fb.block.Hash.Hex())
+		case !errors.Is(err, port.ErrNotFound):
+			return fmt.Errorf("check stored block %d: %w", fb.height(), err)
+		}
+		if err := f.applyBlock(txCtx, fb); err != nil {
+			return err
+		}
+	}
+	if err := f.advanceCursor(txCtx, end); err != nil {
+		return err
+	}
+	if f.outbox != nil {
+		if err := f.recordEvents(txCtx, pending); err != nil {
+			return fmt.Errorf("record events up to %d: %w", end, err)
+		}
+	}
+	if f.beforeCommitHook != nil {
+		if err := f.beforeCommitHook(end); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit blocks up to %d: %w", end, err)
+	}
+	f.pendingEvents = nil
+	f.committed(pending, end)
+	f.logger.Info("Indexed declared logs", zap.Uint64("to", end), zap.Int("blocks_with_logs", len(blocks)))
+	return nil
+}
+
+// writeBackfillProgress records a backfill's progress at end in its own
+// transaction (heights without blocks to process, backfillFromNode).
+func (f *Fetcher) writeBackfillProgress(ctx context.Context, end uint64, progress func(ctx context.Context, height uint64) error) error {
+	txCtx, tx, err := f.txr.BeginBlock(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := progress(txCtx, end); err != nil {
+		return fmt.Errorf("backfill: record progress at %d: %w", end, err)
+	}
+	return tx.Commit()
+}

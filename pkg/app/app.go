@@ -1157,6 +1157,9 @@ func (a *App) Run(ctx context.Context) error {
 	// Deliver the events committed before this start first.
 	a.fetcher.StartRelay()
 	if a.enableGapMode {
+		if a.config.DeclaredMode() {
+			return errors.New("--gap-recovery reads whole blocks: it does not apply to indexer.mode declared")
+		}
 		a.logger.Info("Starting with gap recovery enabled")
 		return a.fetcher.RunWithGapRecovery(ctx)
 	}

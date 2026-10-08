@@ -259,7 +259,7 @@ features:
 - 레코드는 로그 하나이고 (블록, log index)로 식별한다. 같은 범위를 두 번 색인해도 한 번만 저장된다. 필드는 이벤트 인자이고 주소·bytes는 소문자 0x hex, 정수는 10진수, indexed 동적 타입(string, bytes)은 topic hash다.
 - 선언된 컨트랙트·이벤트인데 decode되지 않는 로그(인자 indexed 구성이 다른 같은 이름 이벤트)는 경고를 남기고 건너뛴다.
 - GraphQL: `records(table, where: [{field, value}], pagination)`. `where`가 없으면 표 전체, 있으면 그 필드들이 선언된 키 하나와 같아야 한다. 값은 저장할 때와 같은 형식으로 맞춘다(주소 대소문자, 0x 정수). 오래된 것부터 돌려주므로 같은 키의 로그가 둘 이상이면 첫 번째가 가장 이른 로그다.
-- `indexer.mode: declared`(`INDEXER_MODE`): 블록마다 헤더(`eth_getBlockByNumber`, 트랜잭션 없이)와 선언한 컨트랙트·이벤트의 로그(`eth_getLogs`)를 한 batch로 읽는다. 헤더(reorg 판정용)와 레코드만 저장하고 트랜잭션·영수증·로그는 저장하지 않는다. `LogsOnly` 기능(지금은 `records`)만 실행되고 다른 기능을 켜면 시작하지 않는다. API는 GraphQL 확장과 구독만 제공한다(탐색기 조회, REST, JSON-RPC, Etherscan API 없음). 멀티체인과 `source.era_dir`는 지원하지 않는다.
+- `indexer.mode: declared`(`INDEXER_MODE`): 블록마다 헤더(`eth_getBlockByNumber`, 트랜잭션 없이)와 선언한 컨트랙트·이벤트의 로그(`eth_getLogs`)를 한 batch로 읽는다. `indexer.finality: finalized`와 함께 쓰면 확정된 블록은 reorg가 없으므로 1,000블록 범위를 `eth_getLogs` 한 번으로 읽고, 선언한 로그가 있는 블록의 헤더만 읽어 저장하며, 범위마다 한 트랜잭션으로 cursor를 범위 끝으로 옮긴다(노드가 범위를 거부하면 반으로 나눈다). 로그가 없는 블록은 저장하지 않는다. 기능을 나중에 켜면 declared 모드의 backfill은 저장소가 아니라 노드에서 로그를 범위로 다시 읽는다. `--gap-recovery`는 declared 모드에서 쓸 수 없다. 헤더(reorg 판정용)와 레코드만 저장하고 트랜잭션·영수증·로그는 저장하지 않는다. `LogsOnly` 기능(지금은 `records`)만 실행되고 다른 기능을 켜면 시작하지 않는다. API는 GraphQL 확장과 구독만 제공한다(탐색기 조회, REST, JSON-RPC, Etherscan API 없음). 멀티체인과 `source.era_dir`는 지원하지 않는다.
 - `full` 모드에서도 `records`를 켤 수 있다. 이때는 체인 전체와 함께 레코드를 저장한다.
 
 ### Contract Verification
