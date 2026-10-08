@@ -33,6 +33,7 @@ var (
 	TopicPerpOrderCancelled      = sig("OrderCancelled(bytes32,address,string)")
 	TopicPerpOrderExpired        = sig("OrderExpired(bytes32,address,uint256)")
 	TopicPerpOrderModified       = sig("OrderModified(bytes32,address,uint256,uint256)")
+	TopicPerpOrderTriggered      = sig("OrderTriggered(bytes32,uint128,uint128)")
 	TopicPerpMarketOrderExecuted = sig("MarketOrderExecuted(address,uint32,uint8,uint128,uint128)")
 	TopicPerpOrdersMatched       = sig("OrdersMatched(bytes32,bytes32,uint128,uint128)")
 )

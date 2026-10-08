@@ -53,7 +53,9 @@ func dexTrade(market port.DexMarketKey, block uint64, logIndex uint, taker, make
 // listed in registration order; trades are listed per market and per
 // trader (taker and maker, once each) newest first; liquidity changes per
 // market newest first; orders are found by manager and id and listed per
-// market newest first; writing a market or order again replaces it.
+// market newest first, resting orders oldest first while they rest; ticks
+// are listed per pool in tick order until their gross liquidity is zero;
+// writing a market, order or tick again replaces it.
 func testDex(t *testing.T, newStore NewStore) {
 	ctx := context.Background()
 
@@ -229,5 +231,77 @@ func testDex(t *testing.T, newStore NewStore) {
 		}
 		checkPaging(t, want, func(o *port.DexOrder) common.Hash { return o.ID },
 			func(page port.Page) ([]*port.DexOrder, string, error) { return s.ListDexOrders(ctx, market, page) })
+	})
+
+	t.Run("OpenOrders", func(t *testing.T) {
+		s := open[dexStore](t, newStore)
+		market := port.DexMarketKey{Address: dexManager, ID: 7}
+		var orders []*port.DexOrder
+		for i, status := range []port.DexOrderStatus{port.DexOrderOpen, port.DexOrderPending, port.DexOrderOpen, port.DexOrderPartiallyFilled, port.DexOrderOpen} {
+			o := &port.DexOrder{
+				Market: market, ID: fixtureHash("open", uint64(i)), Trader: dexBob, Side: port.DexBuy, Type: 1,
+				Size: big.NewInt(10), Price: port.DexPriceScale, Filled: big.NewInt(0), Status: status,
+				CreatedBlock: 3 + uint64(i), CreatedTx: fixtureHash("open-tx", uint64(i)), UpdatedBlock: 3 + uint64(i),
+			}
+			require.NoError(t, s.SaveDexOrder(ctx, o))
+			orders = append(orders, o)
+		}
+		other := *orders[0]
+		other.Market.ID, other.ID = 8, fixtureHash("open", 99)
+		require.NoError(t, s.SaveDexOrder(ctx, &other))
+
+		// Order 2 fills, order 4 is cancelled, the pending order 1 triggers.
+		for i, status := range map[int]port.DexOrderStatus{2: port.DexOrderFilled, 4: port.DexOrderCancelled, 1: port.DexOrderOpen} {
+			changed := *orders[i]
+			changed.Status = status
+			require.NoError(t, s.SaveDexOrder(ctx, &changed))
+			orders[i] = &changed
+		}
+		want := []*port.DexOrder{orders[0], orders[1], orders[3]}
+		page, _, err := s.ListDexOpenOrders(ctx, market, port.FirstPage(10))
+		require.NoError(t, err)
+		require.Len(t, page, len(want))
+		for i := range want {
+			sameJSON(t, want[i], page[i], "open order %d", i)
+		}
+		checkPaging(t, want, func(o *port.DexOrder) common.Hash { return o.ID },
+			func(page port.Page) ([]*port.DexOrder, string, error) { return s.ListDexOpenOrders(ctx, market, page) })
+		all, _, err := s.ListDexOrders(ctx, market, port.FirstPage(10))
+		require.NoError(t, err)
+		assert.Len(t, all, len(orders), "every order stays listed")
+	})
+
+	t.Run("Ticks", func(t *testing.T) {
+		s := open[dexStore](t, newStore)
+		tick := func(market port.DexMarketKey, i int32, gross, net int64) *port.DexTick {
+			return &port.DexTick{Market: market, Tick: i, LiquidityGross: big.NewInt(gross), LiquidityNet: big.NewInt(net)}
+		}
+		empty, err := s.ListDexTicks(ctx, dexPool(1))
+		require.NoError(t, err)
+		assert.Empty(t, empty)
+		// Saved out of order, negative ticks included; one of another pool.
+		for _, tk := range []*port.DexTick{
+			tick(dexPool(1), 600, 100, -100), tick(dexPool(1), -600, 100, 100), tick(dexPool(1), -887220, 5, 5),
+			tick(dexPool(1), 0, 7, -7), tick(dexPool(2), 60, 1, 1), tick(dexPool(1), 887220, 5, -5),
+		} {
+			require.NoError(t, s.SaveDexTick(ctx, tk))
+		}
+		// Tick 0 changes, tick 600 is emptied.
+		require.NoError(t, s.SaveDexTick(ctx, tick(dexPool(1), 0, 9, 3)))
+		require.NoError(t, s.SaveDexTick(ctx, tick(dexPool(1), 600, 0, 0)))
+		one, err := s.GetDexTick(ctx, dexPool(1), -600)
+		require.NoError(t, err)
+		sameJSON(t, tick(dexPool(1), -600, 100, 100), one)
+		_, err = s.GetDexTick(ctx, dexPool(1), 600)
+		assert.ErrorIs(t, err, port.ErrNotFound, "an emptied tick")
+		_, err = s.GetDexTick(ctx, dexPool(2), 0)
+		assert.ErrorIs(t, err, port.ErrNotFound)
+		got, err := s.ListDexTicks(ctx, dexPool(1))
+		require.NoError(t, err)
+		want := []*port.DexTick{tick(dexPool(1), -887220, 5, 5), tick(dexPool(1), -600, 100, 100), tick(dexPool(1), 0, 9, 3), tick(dexPool(1), 887220, 5, -5)}
+		require.Len(t, got, len(want))
+		for i := range want {
+			sameJSON(t, want[i], got[i], "tick %d", i)
+		}
 	})
 }

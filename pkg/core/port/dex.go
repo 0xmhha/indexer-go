@@ -147,12 +147,19 @@ type DexLiquidity struct {
 type DexOrderStatus string
 
 const (
+	// DexOrderPending is a trigger order (stop, take profit) waiting for its
+	// trigger price; it is not in the book until triggered.
+	DexOrderPending         DexOrderStatus = "pending"
 	DexOrderOpen            DexOrderStatus = "open"
 	DexOrderPartiallyFilled DexOrderStatus = "partially_filled"
 	DexOrderFilled          DexOrderStatus = "filled"
 	DexOrderCancelled       DexOrderStatus = "cancelled"
 	DexOrderExpired         DexOrderStatus = "expired"
 )
+
+// Resting reports whether an order with this status is in the book (open
+// or partially filled).
+func (s DexOrderStatus) Resting() bool { return s == DexOrderOpen || s == DexOrderPartiallyFilled }
 
 // DexOrder is an order of a perpetual market.
 type DexOrder struct {
@@ -172,6 +179,17 @@ type DexOrder struct {
 	CreatedTx       common.Hash `json:"createdTx"`
 	CreatedLogIndex uint        `json:"createdLogIndex"`
 	UpdatedBlock    uint64      `json:"updatedBlock"`
+}
+
+// DexTick is an initialized tick of a Uniswap V3 pool: the liquidity of the
+// positions with a bound at the tick (gross) and the liquidity added when
+// the price crosses the tick upwards (net; removed when it crosses
+// downwards), as the pool keeps them (refactoring plan R5-2).
+type DexTick struct {
+	Market         DexMarketKey `json:"market"`
+	Tick           int32        `json:"tick"`
+	LiquidityGross *big.Int     `json:"liquidityGross"`
+	LiquidityNet   *big.Int     `json:"liquidityNet"`
 }
 
 // DexReader reads the DEX records.
@@ -197,14 +215,24 @@ type DexReader interface {
 	// ListDexOrders returns one page of a market's orders, newest first (by
 	// creation block and log index, descending).
 	ListDexOrders(ctx context.Context, market DexMarketKey, page Page) ([]*DexOrder, string, error)
+	// ListDexOpenOrders returns one page of a market's resting orders (open
+	// or partially filled), oldest first (by creation block and log index).
+	ListDexOpenOrders(ctx context.Context, market DexMarketKey, page Page) ([]*DexOrder, string, error)
+	// GetDexTick returns an initialized tick of a pool, ErrNotFound when the
+	// tick has no liquidity.
+	GetDexTick(ctx context.Context, market DexMarketKey, tick int32) (*DexTick, error)
+	// ListDexTicks returns every initialized tick of a pool, in tick order.
+	ListDexTicks(ctx context.Context, market DexMarketKey) ([]*DexTick, error)
 }
 
 // DexWriter writes the DEX records. Writing a market or an order again
 // replaces it; a trade or liquidity change is identified by its log (block,
-// log index) and writing it again replaces it.
+// log index) and writing it again replaces it. A tick is identified by its
+// pool and index; writing one with zero gross liquidity removes it.
 type DexWriter interface {
 	SaveDexMarket(ctx context.Context, market *DexMarket) error
 	SaveDexTrade(ctx context.Context, trade *DexTrade) error
 	SaveDexLiquidity(ctx context.Context, change *DexLiquidity) error
 	SaveDexOrder(ctx context.Context, order *DexOrder) error
+	SaveDexTick(ctx context.Context, tick *DexTick) error
 }

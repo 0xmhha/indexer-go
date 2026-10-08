@@ -30,6 +30,8 @@ var (
 //	/dex/liquidity/<market><position>          liquidity change (JSON)
 //	/dex/order/<manager><order id>             order (JSON)
 //	/dex/orders/<market><created position>     -> <order id>
+//	/dex/open/<market><created position>       -> <order id> (resting orders)
+//	/dex/tick/<market><tick + 2^31>            tick (JSON)
 const (
 	prefixDexMarket    = "/dex/market/"
 	prefixDexMarkets   = "/dex/markets/"
@@ -38,11 +40,13 @@ const (
 	prefixDexLiquidity = "/dex/liquidity/"
 	prefixDexOrder     = "/dex/order/"
 	prefixDexOrders    = "/dex/orders/"
+	prefixDexOpen      = "/dex/open/"
+	prefixDexTick      = "/dex/tick/"
 )
 
 func init() {
 	RegisterKeyspace("dex", ChainData, prefixDexMarket, prefixDexMarkets, prefixDexTrade, prefixDexTrader,
-		prefixDexLiquidity, prefixDexOrder, prefixDexOrders)
+		prefixDexLiquidity, prefixDexOrder, prefixDexOrders, prefixDexOpen, prefixDexTick)
 }
 
 const dexMarketKeyLen = common.AddressLength + 8
@@ -92,6 +96,11 @@ func getDexJSON[T any](ctx context.Context, s *PebbleStorage, key []byte) (*T, e
 
 // putDex writes the entries of one record.
 func (s *PebbleStorage) putDex(ctx context.Context, entries ...[2][]byte) error {
+	return s.writeDex(ctx, entries, nil)
+}
+
+// writeDex writes the entries of one record and deletes the keys of del.
+func (s *PebbleStorage) writeDex(ctx context.Context, entries [][2][]byte, del [][]byte) error {
 	if s.closed.Load() {
 		return port.ErrClosed
 	}
@@ -102,6 +111,11 @@ func (s *PebbleStorage) putDex(ctx context.Context, entries ...[2][]byte) error 
 	defer func() { _ = batch.Close() }()
 	for _, e := range entries {
 		if err := batch.Set(e[0], e[1], nil); err != nil {
+			return err
+		}
+	}
+	for _, k := range del {
+		if err := batch.Delete(k, nil); err != nil {
 			return err
 		}
 	}
@@ -199,13 +213,23 @@ func (s *PebbleStorage) GetDexOrder(ctx context.Context, manager common.Address,
 
 // ListDexOrders implements port.DexReader.
 func (s *PebbleStorage) ListDexOrders(ctx context.Context, market port.DexMarketKey, page port.Page) ([]*port.DexOrder, string, error) {
+	return s.dexOrderPage(ctx, prefixDexOrders, market, true, page)
+}
+
+// ListDexOpenOrders implements port.DexReader.
+func (s *PebbleStorage) ListDexOpenOrders(ctx context.Context, market port.DexMarketKey, page port.Page) ([]*port.DexOrder, string, error) {
+	return s.dexOrderPage(ctx, prefixDexOpen, market, false, page)
+}
+
+// dexOrderPage reads one page of a market's order list under prefix.
+func (s *PebbleStorage) dexOrderPage(ctx context.Context, prefix string, market port.DexMarketKey, newestFirst bool, page port.Page) ([]*port.DexOrder, string, error) {
 	if s.closed.Load() {
 		return nil, "", port.ErrClosed
 	}
-	prefix := dexKey(prefixDexOrders, dexMarketBytes(market))
+	list := dexKey(prefix, dexMarketBytes(market))
 	limit := min(pageLimit(page, constants.DefaultPaginationLimit), constants.DefaultMaxPaginationLimit)
 	isRef := func(_, value []byte) bool { return len(value) == common.HashLength }
-	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), true, page, limit, isRef)
+	entries, next, err := s.scanPage(ctx, list, prefixUpperBound(list), newestFirst, page, limit, isRef)
 	if err != nil {
 		return nil, "", err
 	}
@@ -218,6 +242,38 @@ func (s *PebbleStorage) ListDexOrders(ctx context.Context, market port.DexMarket
 		out = append(out, o)
 	}
 	return out, next, nil
+}
+
+// dexTickBytes encodes a tick so ticks sort numerically.
+func dexTickBytes(tick int32) []byte {
+	return binary.BigEndian.AppendUint32(nil, uint32(int64(tick)+1<<31))
+}
+
+// GetDexTick implements port.DexReader.
+func (s *PebbleStorage) GetDexTick(ctx context.Context, market port.DexMarketKey, tick int32) (*port.DexTick, error) {
+	return getDexJSON[port.DexTick](ctx, s, dexKey(prefixDexTick, dexMarketBytes(market), dexTickBytes(tick)))
+}
+
+// ListDexTicks implements port.DexReader.
+func (s *PebbleStorage) ListDexTicks(ctx context.Context, market port.DexMarketKey) ([]*port.DexTick, error) {
+	if s.closed.Load() {
+		return nil, port.ErrClosed
+	}
+	prefix := dexKey(prefixDexTick, dexMarketBytes(market))
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: prefixUpperBound(prefix)})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = iter.Close() }()
+	var out []*port.DexTick
+	for iter.First(); iter.Valid(); iter.Next() {
+		t := new(port.DexTick)
+		if err := json.Unmarshal(iter.Value(), t); err != nil {
+			return nil, fmt.Errorf("decode %q: %w", iter.Key(), err)
+		}
+		out = append(out, t)
+	}
+	return out, iter.Error()
 }
 
 // SaveDexMarket implements port.DexWriter.
@@ -273,7 +329,27 @@ func (s *PebbleStorage) SaveDexOrder(ctx context.Context, o *port.DexOrder) erro
 	if err != nil {
 		return err
 	}
-	return s.putDex(ctx,
-		[2][]byte{dexKey(prefixDexOrder, o.Market.Address.Bytes(), o.ID.Bytes()), data},
-		[2][]byte{dexKey(prefixDexOrders, dexMarketBytes(o.Market), dexPosition(o.CreatedBlock, o.CreatedLogIndex), o.ID.Bytes()), o.ID.Bytes()})
+	market, position := dexMarketBytes(o.Market), dexPosition(o.CreatedBlock, o.CreatedLogIndex)
+	entries := [][2][]byte{
+		{dexKey(prefixDexOrder, o.Market.Address.Bytes(), o.ID.Bytes()), data},
+		{dexKey(prefixDexOrders, market, position, o.ID.Bytes()), o.ID.Bytes()},
+	}
+	open := dexKey(prefixDexOpen, market, position, o.ID.Bytes())
+	if o.Status.Resting() {
+		return s.writeDex(ctx, append(entries, [2][]byte{open, o.ID.Bytes()}), nil)
+	}
+	return s.writeDex(ctx, entries, [][]byte{open})
+}
+
+// SaveDexTick implements port.DexWriter.
+func (s *PebbleStorage) SaveDexTick(ctx context.Context, t *port.DexTick) error {
+	key := dexKey(prefixDexTick, dexMarketBytes(t.Market), dexTickBytes(t.Tick))
+	if t.LiquidityGross == nil || t.LiquidityGross.Sign() == 0 {
+		return s.writeDex(ctx, nil, [][]byte{key})
+	}
+	data, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+	return s.putDex(ctx, [2][]byte{key, data})
 }
