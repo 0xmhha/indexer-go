@@ -221,6 +221,9 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 		if !ok {
 			return nil, nil
 		}
+		if raw, ok := c.raw[n]; ok {
+			return raw.Block, nil
+		}
 		b := c.blockAt(n)
 		if b == nil {
 			return nil, nil
@@ -232,6 +235,11 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 		}
 		return marshalBlock(b, boolParam(req, 1)), nil
 	case "eth_getBlockByHash":
+		for _, raw := range c.raw {
+			if rawHash(raw) == hashParam(req, 0) {
+				return raw.Block, nil
+			}
+		}
 		b := c.byHash[hashParam(req, 0)]
 		if b == nil || b.Block.NumberU64() > c.head {
 			return nil, nil
@@ -242,6 +250,9 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 		return s.getLogs(req)
 
 	case "eth_getBlockReceipts":
+		if raw, ok := s.rawBlockParam(req, 0); ok {
+			return raw.Receipts, nil
+		}
 		b := s.blockParamNumberOrHash(req, 0)
 		if b == nil {
 			return nil, nil
@@ -429,6 +440,29 @@ func (s *Server) blockNumberParam(req rpcRequest, i int) (uint64, bool) {
 		return 0, false
 	}
 	return n, n <= c.head
+}
+
+// rawBlockParam returns the recorded block a block number or hash
+// parameter names.
+func (s *Server) rawBlockParam(req rpcRequest, i int) (RawBlock, bool) {
+	c := s.chain
+	if len(c.raw) == 0 || len(req.Params) <= i {
+		return RawBlock{}, false
+	}
+	var arg string
+	if json.Unmarshal(req.Params[i], &arg) != nil {
+		return RawBlock{}, false
+	}
+	if n, err := hexutil.DecodeUint64(arg); err == nil {
+		raw, ok := c.raw[n]
+		return raw, ok
+	}
+	for _, raw := range c.raw {
+		if rawHash(raw) == common.HexToHash(arg) {
+			return raw, true
+		}
+	}
+	return RawBlock{}, false
 }
 
 func (s *Server) blockParamNumberOrHash(req rpcRequest, i int) *Block {
