@@ -3,6 +3,7 @@ package rpcproxy
 import (
 	"container/list"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -12,6 +13,8 @@ type CacheEntry struct {
 	Value     interface{}
 	ExpiresAt time.Time
 	element   *list.Element
+	// used is set by Get and cleared when eviction passes the entry over
+	used atomic.Bool
 }
 
 // IsExpired returns true if the entry has expired
@@ -19,16 +22,21 @@ func (e *CacheEntry) IsExpired() bool {
 	return time.Now().After(e.ExpiresAt)
 }
 
-// Cache is a thread-safe LRU cache with TTL support
+// Cache is a thread-safe cache with TTL support and approximate LRU
+// eviction (CLOCK): Get takes the lock shared and only marks the entry as
+// used, so readers do not wait for each other; eviction moves a used entry
+// to the front once instead of evicting it.
 type Cache struct {
 	mu        sync.RWMutex
 	maxSize   int
 	items     map[string]*CacheEntry
 	lru       *list.List
 	config    *CacheConfig
-	hits      int64
-	misses    int64
+	hits      atomic.Int64
+	misses    atomic.Int64
 	evictions int64
+	stop      chan struct{}
+	stopOnce  sync.Once
 }
 
 // NewCache creates a new LRU cache with TTL support
@@ -42,6 +50,7 @@ func NewCache(config *CacheConfig) *Cache {
 		items:   make(map[string]*CacheEntry),
 		lru:     list.New(),
 		config:  config,
+		stop:    make(chan struct{}),
 	}
 
 	// Start background cleanup goroutine
@@ -50,29 +59,26 @@ func NewCache(config *CacheConfig) *Cache {
 	return c
 }
 
-// Get retrieves a value from the cache
+// Get retrieves a value from the cache. Expired entries are left for Set
+// and the cleanup to remove.
 func (c *Cache) Get(key string) (interface{}, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	c.mu.RLock()
 	entry, exists := c.items[key]
+	var value interface{}
+	if exists && !entry.IsExpired() {
+		entry.used.Store(true)
+		value = entry.Value
+	} else {
+		exists = false
+	}
+	c.mu.RUnlock()
+
 	if !exists {
-		c.misses++
+		c.misses.Add(1)
 		return nil, false
 	}
-
-	// Check if expired
-	if entry.IsExpired() {
-		c.removeEntry(entry)
-		c.misses++
-		return nil, false
-	}
-
-	// Move to front (most recently used)
-	c.lru.MoveToFront(entry.element)
-	c.hits++
-
-	return entry.Value, true
+	c.hits.Add(1)
+	return value, true
 }
 
 // Set stores a value in the cache with the specified TTL
@@ -85,6 +91,7 @@ func (c *Cache) Set(key string, value interface{}, ttl time.Duration) {
 		// Update existing entry
 		entry.Value = value
 		entry.ExpiresAt = time.Now().Add(ttl)
+		entry.used.Store(false)
 		c.lru.MoveToFront(entry.element)
 		return
 	}
@@ -156,19 +163,17 @@ func (c *Cache) Size() int {
 func (c *Cache) Stats() (hits, misses, evictions int64, size int) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.hits, c.misses, c.evictions, len(c.items)
+	return c.hits.Load(), c.misses.Load(), c.evictions, len(c.items)
 }
 
 // HitRate returns the cache hit rate (0.0 to 1.0)
 func (c *Cache) HitRate() float64 {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	total := c.hits + c.misses
+	hits, misses := c.hits.Load(), c.misses.Load()
+	total := hits + misses
 	if total == 0 {
 		return 0
 	}
-	return float64(c.hits) / float64(total)
+	return float64(hits) / float64(total)
 }
 
 // removeEntry removes an entry from the cache (must be called with lock held)
@@ -177,16 +182,29 @@ func (c *Cache) removeEntry(entry *CacheEntry) {
 	delete(c.items, entry.Key)
 }
 
-// evictOldest removes the oldest entry (must be called with lock held)
+// evictOldest removes the least recently used entry (must be called with
+// lock held): entries used since eviction last passed them get a second
+// chance at the front. Every entry is passed over at most once, so it ends.
 func (c *Cache) evictOldest() {
-	oldest := c.lru.Back()
-	if oldest != nil {
+	for range c.lru.Len() {
+		oldest := c.lru.Back()
 		entry, ok := oldest.Value.(*CacheEntry)
 		if !ok {
 			return
 		}
+		if entry.used.Swap(false) {
+			c.lru.MoveToFront(oldest)
+			continue
+		}
 		c.removeEntry(entry)
 		c.evictions++
+		return
+	}
+	if oldest := c.lru.Back(); oldest != nil {
+		if entry, ok := oldest.Value.(*CacheEntry); ok {
+			c.removeEntry(entry)
+			c.evictions++
+		}
 	}
 }
 
@@ -195,9 +213,19 @@ func (c *Cache) cleanupLoop() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		c.cleanup()
+	for {
+		select {
+		case <-c.stop:
+			return
+		case <-ticker.C:
+			c.cleanup()
+		}
 	}
+}
+
+// Close stops the background cleanup.
+func (c *Cache) Close() {
+	c.stopOnce.Do(func() { close(c.stop) })
 }
 
 // cleanup removes all expired entries

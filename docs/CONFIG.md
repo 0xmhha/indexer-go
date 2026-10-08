@@ -86,6 +86,9 @@ api:
   # 요청한 값 자체를 못 얻으면 500이다. 성공 응답에는 ETag와 Cache-Control:
   # public, max-age=1이 붙고, If-None-Match가 맞으면 본문 없이 304로 답한다. after 커서는
   # 주소별 거래에만 있다(blocks·transactions는 블록 범위로 읽어 offset으로 넘긴다).
+  # 서버는 성공한 응답을 Cache-Control과 같은 1초 동안 보관해, 같은 경로와 인자를 묻는
+  # 요청에 다시 실행하지 않고 돌려준다. 보관된 응답이 없을 때 함께 도착한 같은 요청들은
+  # 한 번의 실행을 나눠 받는다(singleflight, R4-5). 그래서 응답은 최대 1초 늦을 수 있다.
 
   # 공개 API 보호(refactoring plan R4-3):
   # - 클라이언트 주소: 연결 상대(peer)의 주소다. X-Forwarded-For와 X-Real-IP는 연결이

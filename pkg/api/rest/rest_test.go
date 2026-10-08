@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/graphql-go/graphql"
@@ -99,7 +102,7 @@ func TestBadRequests(t *testing.T) {
 
 func TestCaching(t *testing.T) {
 	exec := &fakeExecutor{result: &graphql.Result{Data: map[string]interface{}{"blocks": map[string]interface{}{"totalCount": 3}}}}
-	h := NewHandler(exec)
+	h := NewHandlerWithCache(exec, 0)
 
 	rec := serve(h, "GET", "/v1/blocks", nil)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -138,4 +141,97 @@ func TestResolverErrors(t *testing.T) {
 	rec = serve(h, "GET", "/v1/blocks", nil)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+}
+
+// countingExecutor counts executions and holds each until release is
+// closed (when set).
+type countingExecutor struct {
+	runs    atomic.Int64
+	release chan struct{}
+}
+
+func (c *countingExecutor) Execute(ctx context.Context, _ string, _ map[string]interface{}) *graphql.Result {
+	n := c.runs.Add(1)
+	if c.release != nil {
+		select {
+		case <-c.release:
+		case <-ctx.Done():
+		}
+	}
+	return &graphql.Result{Data: map[string]interface{}{"run": n}}
+}
+
+// TestRequestsShareExecutions (refactoring plan R4-5): requests arriving
+// together share one execution, later ones within the TTL are answered
+// from the kept response, and after the TTL the path runs again.
+func TestRequestsShareExecutions(t *testing.T) {
+	exec := &countingExecutor{release: make(chan struct{})}
+	h := NewHandlerWithCache(exec, 100*time.Millisecond)
+
+	const clients = 100
+	var wg sync.WaitGroup
+	bodies := make(chan string, clients)
+	for range clients {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rec := serve(h, "GET", "/v1/blocks?limit=10", nil)
+			bodies <- rec.Body.String()
+		}()
+	}
+	require.Eventually(t, func() bool { return exec.runs.Load() == 1 }, 5*time.Second, time.Millisecond)
+	time.Sleep(20 * time.Millisecond) // let the others join
+	close(exec.release)
+	wg.Wait()
+	close(bodies)
+	for b := range bodies {
+		assert.JSONEq(t, `{"data":{"run":1}}`, b)
+	}
+	assert.Equal(t, int64(1), exec.runs.Load())
+
+	// Kept: same path and parameters (in any order or with ignored ones).
+	serve(h, "GET", "/v1/blocks?limit=10&unused=1", nil)
+	assert.Equal(t, int64(1), exec.runs.Load())
+	// Other parameters are another response.
+	serve(h, "GET", "/v1/blocks?limit=11", nil)
+	assert.Equal(t, int64(2), exec.runs.Load())
+
+	time.Sleep(150 * time.Millisecond)
+	rec := serve(h, "GET", "/v1/blocks?limit=10", nil)
+	assert.JSONEq(t, `{"data":{"run":3}}`, rec.Body.String(), "expired: runs again")
+}
+
+// TestFailuresAreNotKept: a response with errors is executed again by the
+// next request.
+func TestFailuresAreNotKept(t *testing.T) {
+	failure := gqlerrors.FormatError(errors.New("storage unavailable"))
+	exec := &fakeExecutor{result: &graphql.Result{Data: map[string]interface{}{"blocks": nil}, Errors: []gqlerrors.FormattedError{failure}}}
+	h := NewHandler(exec)
+	assert.Equal(t, http.StatusInternalServerError, serve(h, "GET", "/v1/blocks", nil).Code)
+	exec.result = &graphql.Result{Data: map[string]interface{}{"blocks": map[string]interface{}{"totalCount": 1}}}
+	assert.Equal(t, http.StatusOK, serve(h, "GET", "/v1/blocks", nil).Code)
+}
+
+// TestWaitingRequestLeaves: a request whose context ends stops waiting for
+// a shared execution, which completes for the others.
+func TestWaitingRequestLeaves(t *testing.T) {
+	exec := &countingExecutor{release: make(chan struct{})}
+	h := NewHandler(exec)
+	r := chi.NewRouter()
+	r.Handle("/v1/*", h)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	first := make(chan int, 1)
+	go func() {
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, httptest.NewRequest("GET", "/v1/blocks", nil).WithContext(ctx))
+		first <- rec.Code
+	}()
+	require.Eventually(t, func() bool { return exec.runs.Load() == 1 }, 5*time.Second, time.Millisecond)
+	second := make(chan string, 1)
+	go func() { second <- serve(h, "GET", "/v1/blocks", nil).Body.String() }()
+	cancel()
+	assert.Equal(t, http.StatusInternalServerError, <-first)
+	close(exec.release)
+	assert.JSONEq(t, `{"data":{"run":1}}`, <-second)
 }

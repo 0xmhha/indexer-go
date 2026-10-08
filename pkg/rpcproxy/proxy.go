@@ -3,6 +3,7 @@ package rpcproxy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 	"golang.org/x/time/rate"
 )
 
@@ -32,7 +34,8 @@ type Proxy struct {
 	workerPool     *WorkerPool
 	circuitBreaker *CircuitBreaker
 	rateLimiter    *rate.Limiter
-	ipLimiters     sync.Map // map[string]*rate.Limiter
+	flight         singleflight.Group // one node request per key at a time
+	ipLimiters     sync.Map           // map[string]*rate.Limiter
 	mu             sync.RWMutex
 	started        bool
 	totalRequests  int64
@@ -100,6 +103,7 @@ func (p *Proxy) Stop() error {
 	}
 
 	p.workerPool.Stop()
+	p.cache.Close()
 	p.started = false
 
 	p.logger.Info("RPC Proxy service stopped")
@@ -108,16 +112,6 @@ func (p *Proxy) Stop() error {
 
 // ContractCall executes a contract call and returns decoded result
 func (p *Proxy) ContractCall(ctx context.Context, req *ContractCallRequest) (*ContractCallResponse, error) {
-	// Check rate limit
-	if !p.rateLimiter.Allow() {
-		return nil, ErrRateLimited
-	}
-
-	// Check circuit breaker
-	if !p.circuitBreaker.Allow() {
-		return nil, ErrCircuitOpen
-	}
-
 	// Build cache key
 	paramsStr := string(req.Params)
 	blockStr := "latest"
@@ -126,247 +120,211 @@ func (p *Proxy) ContractCall(ctx context.Context, req *ContractCallRequest) (*Co
 	}
 	cacheKey := p.keyBuilder.ContractCall(req.ContractAddress.Hex(), req.MethodName, paramsStr+blockStr)
 
-	// Check cache
-	if cached, ok := p.cache.Get(cacheKey); ok {
-		if resp, ok := cached.(*ContractCallResponse); ok {
-			return resp, nil
-		}
-	}
+	v, err := p.load(ctx, cacheKey, nil, func(ctx context.Context) (interface{}, time.Duration, error) {
+		// Get ABI
+		var contractABI abi.ABI
+		var err error
 
-	// Get ABI
-	var contractABI abi.ABI
-	var err error
-
-	if req.ABI != "" {
-		// Use provided ABI
-		contractABI, err = abi.JSON(strings.NewReader(req.ABI))
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse provided ABI: %w", err)
-		}
-	} else {
-		// Get ABI from storage
-		verification, err := p.storage.GetContractVerification(ctx, req.ContractAddress)
-		if err != nil {
-			return nil, ErrContractNotVerified
-		}
-		if verification.ABI == "" {
-			return nil, ErrABINotFound
-		}
-		contractABI, err = abi.JSON(strings.NewReader(verification.ABI))
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse stored ABI: %w", err)
-		}
-	}
-
-	// Find method in ABI
-	method, exists := contractABI.Methods[req.MethodName]
-	if !exists {
-		return nil, ErrMethodNotFound
-	}
-
-	// Parse parameters
-	var params []interface{}
-	if len(req.Params) > 0 {
-		if err := json.Unmarshal(req.Params, &params); err != nil {
-			return nil, fmt.Errorf("failed to parse parameters: %w", err)
-		}
-	}
-
-	// Convert params to correct types based on ABI
-	convertedParams, err := p.convertParams(method.Inputs, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert parameters: %w", err)
-	}
-
-	// Pack the call data
-	callData, err := contractABI.Pack(req.MethodName, convertedParams...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to pack call data: %w", err)
-	}
-
-	// Create call message
-	msg := ethereum.CallMsg{
-		To:   &req.ContractAddress,
-		Data: callData,
-	}
-
-	// Execute call
-	start := time.Now()
-	result, err := p.ethClient.CallContract(ctx, msg, req.BlockNumber)
-	latency := time.Since(start)
-
-	p.recordLatency(latency)
-
-	if err != nil {
-		p.circuitBreaker.RecordFailure()
-		return nil, fmt.Errorf("contract call failed: %w", err)
-	}
-
-	p.circuitBreaker.RecordSuccess()
-
-	// Unpack result
-	var decoded interface{}
-	decodedOk := false
-
-	if len(method.Outputs) > 0 {
-		outputs, err := method.Outputs.Unpack(result)
-		if err == nil && len(outputs) > 0 {
-			if len(outputs) == 1 {
-				decoded = p.formatOutput(outputs[0])
-			} else {
-				formattedOutputs := make([]interface{}, len(outputs))
-				for i, out := range outputs {
-					formattedOutputs[i] = p.formatOutput(out)
-				}
-				decoded = formattedOutputs
+		if req.ABI != "" {
+			// Use provided ABI
+			contractABI, err = abi.JSON(strings.NewReader(req.ABI))
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to parse provided ABI: %w", err)
 			}
-			decodedOk = true
+		} else {
+			// Get ABI from storage
+			verification, err := p.storage.GetContractVerification(ctx, req.ContractAddress)
+			if err != nil {
+				return nil, 0, ErrContractNotVerified
+			}
+			if verification.ABI == "" {
+				return nil, 0, ErrABINotFound
+			}
+			contractABI, err = abi.JSON(strings.NewReader(verification.ABI))
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to parse stored ABI: %w", err)
+			}
 		}
+
+		// Find method in ABI
+		method, exists := contractABI.Methods[req.MethodName]
+		if !exists {
+			return nil, 0, ErrMethodNotFound
+		}
+
+		// Parse parameters
+		var params []interface{}
+		if len(req.Params) > 0 {
+			if err := json.Unmarshal(req.Params, &params); err != nil {
+				return nil, 0, fmt.Errorf("failed to parse parameters: %w", err)
+			}
+		}
+
+		// Convert params to correct types based on ABI
+		convertedParams, err := p.convertParams(method.Inputs, params)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to convert parameters: %w", err)
+		}
+
+		// Pack the call data
+		callData, err := contractABI.Pack(req.MethodName, convertedParams...)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to pack call data: %w", err)
+		}
+
+		// Create call message
+		msg := ethereum.CallMsg{
+			To:   &req.ContractAddress,
+			Data: callData,
+		}
+
+		// Execute call
+		start := time.Now()
+		result, err := p.ethClient.CallContract(ctx, msg, req.BlockNumber)
+		latency := time.Since(start)
+
+		p.recordLatency(latency)
+
+		if err != nil {
+			p.circuitBreaker.RecordFailure()
+			return nil, 0, fmt.Errorf("contract call failed: %w", err)
+		}
+
+		p.circuitBreaker.RecordSuccess()
+
+		// Unpack result
+		var decoded interface{}
+		decodedOk := false
+
+		if len(method.Outputs) > 0 {
+			outputs, err := method.Outputs.Unpack(result)
+			if err == nil && len(outputs) > 0 {
+				if len(outputs) == 1 {
+					decoded = p.formatOutput(outputs[0])
+				} else {
+					formattedOutputs := make([]interface{}, len(outputs))
+					for i, out := range outputs {
+						formattedOutputs[i] = p.formatOutput(out)
+					}
+					decoded = formattedOutputs
+				}
+				decodedOk = true
+			}
+		}
+
+		response := &ContractCallResponse{
+			Result:    decoded,
+			RawResult: fmt.Sprintf("0x%x", result),
+			Decoded:   decodedOk,
+		}
+
+		// Determine cache TTL based on method name
+		ttl := p.config.Cache.DefaultTTL
+		methodLower := strings.ToLower(req.MethodName)
+		if methodLower == "name" || methodLower == "symbol" || methodLower == "decimals" {
+			ttl = p.config.Cache.TokenMetadataTTL
+		} else if strings.Contains(methodLower, "balance") {
+			ttl = p.config.Cache.BalanceTTL
+		}
+		return response, ttl, nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	response := &ContractCallResponse{
-		Result:    decoded,
-		RawResult: fmt.Sprintf("0x%x", result),
-		Decoded:   decodedOk,
-	}
-
-	// Determine cache TTL based on method name
-	ttl := p.config.Cache.DefaultTTL
-	methodLower := strings.ToLower(req.MethodName)
-	if methodLower == "name" || methodLower == "symbol" || methodLower == "decimals" {
-		ttl = p.config.Cache.TokenMetadataTTL
-	} else if strings.Contains(methodLower, "balance") {
-		ttl = p.config.Cache.BalanceTTL
-	}
-
-	p.cache.Set(cacheKey, response, ttl)
-
-	return response, nil
+	return v.(*ContractCallResponse), nil
 }
 
 // GetTransactionStatus returns the current status of a transaction
 func (p *Proxy) GetTransactionStatus(ctx context.Context, txHash common.Hash) (*TransactionStatusResponse, error) {
-	// Check rate limit
-	if !p.rateLimiter.Allow() {
-		return nil, ErrRateLimited
-	}
-
-	// Check circuit breaker
-	if !p.circuitBreaker.Allow() {
-		return nil, ErrCircuitOpen
-	}
-
-	// Check cache (short TTL for pending transactions)
+	// Cached pending statuses are not served: a pending transaction is
+	// asked again (callers waiting together still share one request).
 	cacheKey := p.keyBuilder.TransactionStatus(txHash.Hex())
-	if cached, ok := p.cache.Get(cacheKey); ok {
-		if resp, ok := cached.(*TransactionStatusResponse); ok {
-			// Don't return cached pending status
-			if resp.Status != TxStatusPending {
-				return resp, nil
-			}
-		}
+	settled := func(v interface{}) bool {
+		resp, ok := v.(*TransactionStatusResponse)
+		return ok && resp.Status != TxStatusPending
 	}
+	v, err := p.load(ctx, cacheKey, settled, func(ctx context.Context) (interface{}, time.Duration, error) {
+		start := time.Now()
 
-	start := time.Now()
-
-	// Get transaction
-	tx, isPending, err := p.ethClient.TransactionByHash(ctx, txHash)
-	if err != nil {
-		p.circuitBreaker.RecordFailure()
-		if err.Error() == "not found" {
-			response := &TransactionStatusResponse{
-				TxHash: txHash,
-				Status: TxStatusNotFound,
-			}
-			return response, nil
+		// Get transaction
+		tx, isPending, err := p.ethClient.TransactionByHash(ctx, txHash)
+		if errors.Is(err, ethereum.NotFound) {
+			// The node answered: an unknown transaction is no node failure.
+			p.circuitBreaker.RecordSuccess()
+			return &TransactionStatusResponse{TxHash: txHash, Status: TxStatusNotFound}, 0, nil
 		}
-		return nil, fmt.Errorf("failed to get transaction: %w", err)
-	}
+		if err != nil {
+			p.circuitBreaker.RecordFailure()
+			return nil, 0, fmt.Errorf("failed to get transaction: %w", err)
+		}
 
-	p.circuitBreaker.RecordSuccess()
-	_ = tx // Used for future extensions
+		p.circuitBreaker.RecordSuccess()
+		_ = tx // Used for future extensions
 
-	if isPending {
+		if isPending {
+			p.recordLatency(time.Since(start))
+			// Short cache for pending
+			return &TransactionStatusResponse{TxHash: txHash, Status: TxStatusPending}, 5 * time.Second, nil
+		}
+
+		// Get receipt for confirmed transaction
+		receipt, err := p.ethClient.TransactionReceipt(ctx, txHash)
+		if err != nil {
+			// Transaction exists but receipt not yet available
+			p.recordLatency(time.Since(start))
+			return &TransactionStatusResponse{TxHash: txHash, Status: TxStatusPending}, 5 * time.Second, nil
+		}
+
+		// Get current block for confirmations
+		currentBlock, err := p.ethClient.BlockNumber(ctx)
+		if err != nil {
+			currentBlock = 0
+		}
+
+		blockNum := receipt.BlockNumber.Uint64()
+		confirmations := uint64(0)
+		if currentBlock >= blockNum {
+			confirmations = currentBlock - blockNum + 1
+		}
+
+		status := TxStatusSuccess
+		if receipt.Status == 0 {
+			status = TxStatusFailed
+		}
+
+		// Consider confirmed after 12 blocks
+		if confirmations >= 12 {
+			status = TxStatusConfirmed
+		}
+
+		gasUsed := receipt.GasUsed
+		blockHash := receipt.BlockHash
+
 		response := &TransactionStatusResponse{
-			TxHash: txHash,
-			Status: TxStatusPending,
+			TxHash:        txHash,
+			Status:        status,
+			BlockNumber:   &blockNum,
+			BlockHash:     &blockHash,
+			Confirmations: confirmations,
+			GasUsed:       &gasUsed,
 		}
-		// Short cache for pending
-		p.cache.Set(cacheKey, response, 5*time.Second)
-		p.recordLatency(time.Since(start))
-		return response, nil
-	}
 
-	// Get receipt for confirmed transaction
-	receipt, err := p.ethClient.TransactionReceipt(ctx, txHash)
-	if err != nil {
-		// Transaction exists but receipt not yet available
-		response := &TransactionStatusResponse{
-			TxHash: txHash,
-			Status: TxStatusPending,
+		// Cache confirmed transactions longer
+		ttl := p.config.Cache.DefaultTTL
+		if status == TxStatusConfirmed || status == TxStatusFailed {
+			ttl = p.config.Cache.ImmutableTTL
 		}
-		p.cache.Set(cacheKey, response, 5*time.Second)
 		p.recordLatency(time.Since(start))
-		return response, nil
-	}
-
-	// Get current block for confirmations
-	currentBlock, err := p.ethClient.BlockNumber(ctx)
+		return response, ttl, nil
+	})
 	if err != nil {
-		currentBlock = 0
+		return nil, err
 	}
-
-	blockNum := receipt.BlockNumber.Uint64()
-	confirmations := uint64(0)
-	if currentBlock >= blockNum {
-		confirmations = currentBlock - blockNum + 1
-	}
-
-	status := TxStatusSuccess
-	if receipt.Status == 0 {
-		status = TxStatusFailed
-	}
-
-	// Consider confirmed after 12 blocks
-	if confirmations >= 12 {
-		status = TxStatusConfirmed
-	}
-
-	gasUsed := receipt.GasUsed
-	blockHash := receipt.BlockHash
-
-	response := &TransactionStatusResponse{
-		TxHash:        txHash,
-		Status:        status,
-		BlockNumber:   &blockNum,
-		BlockHash:     &blockHash,
-		Confirmations: confirmations,
-		GasUsed:       &gasUsed,
-	}
-
-	// Cache confirmed transactions longer
-	ttl := p.config.Cache.DefaultTTL
-	if status == TxStatusConfirmed || status == TxStatusFailed {
-		ttl = p.config.Cache.ImmutableTTL
-	}
-	p.cache.Set(cacheKey, response, ttl)
-
-	p.recordLatency(time.Since(start))
-	return response, nil
+	return v.(*TransactionStatusResponse), nil
 }
 
 // GetBalance returns the balance of an address at a specific block from the chain RPC
 func (p *Proxy) GetBalance(ctx context.Context, req *BalanceRequest) (*BalanceResponse, error) {
-	// Check rate limit
-	if !p.rateLimiter.Allow() {
-		return nil, ErrRateLimited
-	}
-
-	// Check circuit breaker
-	if !p.circuitBreaker.Allow() {
-		return nil, ErrCircuitOpen
-	}
-
 	// Build cache key
 	blockStr := "latest"
 	if req.BlockNumber != nil {
@@ -374,61 +332,32 @@ func (p *Proxy) GetBalance(ctx context.Context, req *BalanceRequest) (*BalanceRe
 	}
 	cacheKey := p.keyBuilder.Balance(req.Address.Hex(), blockStr)
 
-	// Check cache
-	if cached, ok := p.cache.Get(cacheKey); ok {
-		if resp, ok := cached.(*BalanceResponse); ok {
-			return resp, nil
+	v, err := p.load(ctx, cacheKey, nil, func(ctx context.Context) (interface{}, time.Duration, error) {
+		start := time.Now()
+
+		value, err := p.ethClient.BalanceAt(ctx, req.Address, req.BlockNumber)
+		if err != nil {
+			p.circuitBreaker.RecordFailure()
+			return nil, 0, fmt.Errorf("failed to get balance: %w", err)
 		}
-	}
 
-	start := time.Now()
+		p.circuitBreaker.RecordSuccess()
+		p.recordLatency(time.Since(start))
 
-	// Get balance from chain RPC
-	balance, err := p.ethClient.BalanceAt(ctx, req.Address, req.BlockNumber)
+		return &BalanceResponse{
+			Address:     req.Address,
+			Balance:     value,
+			BlockNumber: p.responseBlock(ctx, req.BlockNumber),
+		}, p.config.Cache.BalanceTTL, nil
+	})
 	if err != nil {
-		p.circuitBreaker.RecordFailure()
-		return nil, fmt.Errorf("failed to get balance: %w", err)
+		return nil, err
 	}
-
-	p.circuitBreaker.RecordSuccess()
-	p.recordLatency(time.Since(start))
-
-	// Get block number for response
-	var blockNumber uint64
-	if req.BlockNumber != nil {
-		blockNumber = req.BlockNumber.Uint64()
-	} else {
-		// Get latest block number
-		currentBlock, err := p.ethClient.BlockNumber(ctx)
-		if err == nil {
-			blockNumber = currentBlock
-		}
-	}
-
-	response := &BalanceResponse{
-		Address:     req.Address,
-		Balance:     balance,
-		BlockNumber: blockNumber,
-	}
-
-	// Cache with balance TTL
-	p.cache.Set(cacheKey, response, p.config.Cache.BalanceTTL)
-
-	return response, nil
+	return v.(*BalanceResponse), nil
 }
 
 // GetNonce returns the nonce (transaction count) of an address at a specific block
 func (p *Proxy) GetNonce(ctx context.Context, req *NonceRequest) (*NonceResponse, error) {
-	// Check rate limit
-	if !p.rateLimiter.Allow() {
-		return nil, ErrRateLimited
-	}
-
-	// Check circuit breaker
-	if !p.circuitBreaker.Allow() {
-		return nil, ErrCircuitOpen
-	}
-
 	// Build cache key
 	blockStr := "latest"
 	if req.BlockNumber != nil {
@@ -436,61 +365,32 @@ func (p *Proxy) GetNonce(ctx context.Context, req *NonceRequest) (*NonceResponse
 	}
 	cacheKey := p.keyBuilder.Nonce(req.Address.Hex(), blockStr)
 
-	// Check cache
-	if cached, ok := p.cache.Get(cacheKey); ok {
-		if resp, ok := cached.(*NonceResponse); ok {
-			return resp, nil
+	v, err := p.load(ctx, cacheKey, nil, func(ctx context.Context) (interface{}, time.Duration, error) {
+		start := time.Now()
+
+		value, err := p.ethClient.NonceAt(ctx, req.Address, req.BlockNumber)
+		if err != nil {
+			p.circuitBreaker.RecordFailure()
+			return nil, 0, fmt.Errorf("failed to get nonce: %w", err)
 		}
-	}
 
-	start := time.Now()
+		p.circuitBreaker.RecordSuccess()
+		p.recordLatency(time.Since(start))
 
-	// Get nonce from chain RPC
-	nonce, err := p.ethClient.NonceAt(ctx, req.Address, req.BlockNumber)
+		return &NonceResponse{
+			Address:     req.Address,
+			Nonce:       value,
+			BlockNumber: p.responseBlock(ctx, req.BlockNumber),
+		}, p.config.Cache.BalanceTTL, nil
+	})
 	if err != nil {
-		p.circuitBreaker.RecordFailure()
-		return nil, fmt.Errorf("failed to get nonce: %w", err)
+		return nil, err
 	}
-
-	p.circuitBreaker.RecordSuccess()
-	p.recordLatency(time.Since(start))
-
-	// Get block number for response
-	var blockNumber uint64
-	if req.BlockNumber != nil {
-		blockNumber = req.BlockNumber.Uint64()
-	} else {
-		// Get latest block number
-		currentBlock, err := p.ethClient.BlockNumber(ctx)
-		if err == nil {
-			blockNumber = currentBlock
-		}
-	}
-
-	response := &NonceResponse{
-		Address:     req.Address,
-		Nonce:       nonce,
-		BlockNumber: blockNumber,
-	}
-
-	// Cache with balance TTL (nonce changes with transactions, similar to balance)
-	p.cache.Set(cacheKey, response, p.config.Cache.BalanceTTL)
-
-	return response, nil
+	return v.(*NonceResponse), nil
 }
 
 // GetCode returns the bytecode at an address to check if it's a contract
 func (p *Proxy) GetCode(ctx context.Context, req *CodeRequest) (*CodeResponse, error) {
-	// Check rate limit
-	if !p.rateLimiter.Allow() {
-		return nil, ErrRateLimited
-	}
-
-	// Check circuit breaker
-	if !p.circuitBreaker.Allow() {
-		return nil, ErrCircuitOpen
-	}
-
 	// Build cache key
 	blockStr := "latest"
 	if req.BlockNumber != nil {
@@ -498,100 +398,122 @@ func (p *Proxy) GetCode(ctx context.Context, req *CodeRequest) (*CodeResponse, e
 	}
 	cacheKey := p.keyBuilder.Code(req.Address.Hex(), blockStr)
 
-	// Check cache
-	if cached, ok := p.cache.Get(cacheKey); ok {
-		if resp, ok := cached.(*CodeResponse); ok {
-			return resp, nil
+	v, err := p.load(ctx, cacheKey, nil, func(ctx context.Context) (interface{}, time.Duration, error) {
+		start := time.Now()
+
+		value, err := p.ethClient.CodeAt(ctx, req.Address, req.BlockNumber)
+		if err != nil {
+			p.circuitBreaker.RecordFailure()
+			return nil, 0, fmt.Errorf("failed to get code: %w", err)
 		}
-	}
 
-	start := time.Now()
+		p.circuitBreaker.RecordSuccess()
+		p.recordLatency(time.Since(start))
 
-	// Get code from chain RPC
-	code, err := p.ethClient.CodeAt(ctx, req.Address, req.BlockNumber)
+		return &CodeResponse{
+			Address:     req.Address,
+			Code:        value,
+			IsContract:  len(value) > 0,
+			BlockNumber: p.responseBlock(ctx, req.BlockNumber),
+		}, p.config.Cache.ImmutableTTL, nil
+	})
 	if err != nil {
-		p.circuitBreaker.RecordFailure()
-		return nil, fmt.Errorf("failed to get code: %w", err)
+		return nil, err
 	}
-
-	p.circuitBreaker.RecordSuccess()
-	p.recordLatency(time.Since(start))
-
-	// Get block number for response
-	var blockNumber uint64
-	if req.BlockNumber != nil {
-		blockNumber = req.BlockNumber.Uint64()
-	} else {
-		// Get latest block number
-		currentBlock, err := p.ethClient.BlockNumber(ctx)
-		if err == nil {
-			blockNumber = currentBlock
-		}
-	}
-
-	response := &CodeResponse{
-		Address:     req.Address,
-		Code:        code,
-		IsContract:  len(code) > 0,
-		BlockNumber: blockNumber,
-	}
-
-	// Cache with immutable TTL (code doesn't change for existing contracts)
-	p.cache.Set(cacheKey, response, p.config.Cache.ImmutableTTL)
-
-	return response, nil
+	return v.(*CodeResponse), nil
 }
 
 // GetInternalTransactions returns internal transactions for a tx hash
 func (p *Proxy) GetInternalTransactions(ctx context.Context, txHash common.Hash) (*InternalTransactionResponse, error) {
-	// Check rate limit
-	if !p.rateLimiter.Allow() {
-		return nil, ErrRateLimited
-	}
-
-	// Check circuit breaker
-	if !p.circuitBreaker.Allow() {
-		return nil, ErrCircuitOpen
-	}
-
-	// Check cache (internal txs are immutable once confirmed)
+	// Internal transactions are immutable once confirmed
 	cacheKey := p.keyBuilder.InternalTransactions(txHash.Hex())
-	if cached, ok := p.cache.Get(cacheKey); ok {
-		if resp, ok := cached.(*InternalTransactionResponse); ok {
-			return resp, nil
+	v, err := p.load(ctx, cacheKey, nil, func(ctx context.Context) (interface{}, time.Duration, error) {
+		start := time.Now()
+
+		// Use debug_traceTransaction to get internal transactions
+		var traceResult map[string]interface{}
+		err := p.rpcClient.CallContext(ctx, &traceResult, "debug_traceTransaction", txHash, map[string]interface{}{
+			"tracer": "callTracer",
+		})
+
+		p.recordLatency(time.Since(start))
+
+		if err != nil {
+			p.circuitBreaker.RecordFailure()
+			return nil, 0, fmt.Errorf("failed to trace transaction: %w", err)
 		}
-	}
 
-	start := time.Now()
+		p.circuitBreaker.RecordSuccess()
 
-	// Use debug_traceTransaction to get internal transactions
-	var traceResult map[string]interface{}
-	err := p.rpcClient.CallContext(ctx, &traceResult, "debug_traceTransaction", txHash, map[string]interface{}{
-		"tracer": "callTracer",
+		// Parse trace result
+		internalTxs := p.parseTraceResult(traceResult, []int{})
+
+		return &InternalTransactionResponse{
+			TxHash:               txHash,
+			InternalTransactions: internalTxs,
+			TotalCount:           len(internalTxs),
+		}, p.config.Cache.ImmutableTTL, nil
 	})
-
-	p.recordLatency(time.Since(start))
-
 	if err != nil {
-		p.circuitBreaker.RecordFailure()
-		return nil, fmt.Errorf("failed to trace transaction: %w", err)
+		return nil, err
 	}
+	return v.(*InternalTransactionResponse), nil
+}
 
-	p.circuitBreaker.RecordSuccess()
+// loadTimeout bounds a node request shared by several callers: it runs
+// apart from the context of the caller that started it.
+const loadTimeout = 30 * time.Second
 
-	// Parse trace result
-	internalTxs := p.parseTraceResult(traceResult, []int{})
-
-	response := &InternalTransactionResponse{
-		TxHash:               txHash,
-		InternalTransactions: internalTxs,
-		TotalCount:           len(internalTxs),
+// load returns the value cached under key or, on a miss, fetches it from
+// the node once for every caller asking for the same key at the same time.
+// Only a fetch counts against the node rate limit and the circuit breaker;
+// a cache hit does not. usable reports whether a cached value may be
+// served (nil: any). A fetch returning a TTL of 0 is not cached. A caller
+// whose context ends stops waiting; the fetch goes on for the others.
+func (p *Proxy) load(ctx context.Context, key string, usable func(interface{}) bool, fetch func(context.Context) (interface{}, time.Duration, error)) (interface{}, error) {
+	if v, ok := p.cache.Get(key); ok && (usable == nil || usable(v)) {
+		return v, nil
 	}
+	ch := p.flight.DoChan(key, func() (interface{}, error) {
+		// Filled while this caller was not yet in the flight.
+		if v, ok := p.cache.Get(key); ok && (usable == nil || usable(v)) {
+			return v, nil
+		}
+		if !p.rateLimiter.Allow() {
+			return nil, ErrRateLimited
+		}
+		if !p.circuitBreaker.Allow() {
+			return nil, ErrCircuitOpen
+		}
+		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), loadTimeout)
+		defer cancel()
+		v, ttl, err := fetch(fctx)
+		if err != nil {
+			return nil, err
+		}
+		if ttl > 0 {
+			p.cache.Set(key, v, ttl)
+		}
+		return v, nil
+	})
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case r := <-ch:
+		return r.Val, r.Err
+	}
+}
 
-	// Cache immutable data
-	p.cache.SetImmutable(cacheKey, response)
-
-	return response, nil
+// responseBlock is the block number an account response reports: the
+// requested block, or the node's latest (0 when it cannot be read).
+func (p *Proxy) responseBlock(ctx context.Context, requested *big.Int) uint64 {
+	if requested != nil {
+		return requested.Uint64()
+	}
+	if current, err := p.ethClient.BlockNumber(ctx); err == nil {
+		return current
+	}
+	return 0
 }
 
 // parseTraceResult parses the callTracer result into internal transactions
