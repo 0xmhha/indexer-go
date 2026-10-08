@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // TestSystemContractEventsArePublished indexes the StableNet scenario and

@@ -7,8 +7,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // TestWBFTSigningFromCanonicalSeals indexes the StableNet scenario, whose

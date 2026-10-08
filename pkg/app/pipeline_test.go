@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // TestIngestPathsStoreTheSameData indexes one chain through the live loop,

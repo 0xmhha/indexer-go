@@ -11,8 +11,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // knownDefects lists, per ingest path, data-integrity defects

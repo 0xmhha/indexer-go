@@ -12,9 +12,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/source/era"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // TestLiveEraSource indexes a running StableNet node twice: once only from

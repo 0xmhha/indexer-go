@@ -131,6 +131,11 @@ type (
 	RecordStore = port.RecordReader
 )
 
+// DeclaredTables compiles the declared tables (features.records) from a
+// feature's dependencies, for a handler that reads them while it
+// registers.
+func DeclaredTables(deps Deps) (*Tables, error) { return records.Settings(deps.DecodeSettings) }
+
 // TablesOf returns the declared tables served from a storage, nil when the
 // records feature is off.
 func TablesOf(s any) *Tables { return records.Lookup(s) }

@@ -15,6 +15,9 @@
 ```
 cmd/indexer/main.go             The indexer command: calls app.Main
 pkg/app/                        The application: wiring and lifecycle (importable; app.Main)
+pkg/sdk/                        Handler SDK for projects' own features, GraphQL and HTTP routes (docs/SDK.md, R6-2)
+pkg/testchain/                  Deterministic JSON-RPC test chain for end-to-end tests (also for SDK users)
+examples/receipts/              Example project module built on pkg/sdk (own go.mod; make test-examples)
 pkg/
   api/
     graphql/                    GraphQL (graphql-go, hand-written schema; not gqlgen)
@@ -40,7 +43,6 @@ pkg/
 internal/
   config/                       YAML/env/flag configuration
   constants/                    Global constants
-  testchain/                    Deterministic JSON-RPC test chain for end-to-end tests
 tools/astgraph/                 Code graph generator (separate Go module)
 ```
 
@@ -130,7 +132,7 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 
 - testify/assert, testify/require
 - Integration tests: `//go:build integration` tag
-- End-to-end tests (`pkg/app`) run the real `NewApp` wiring against `internal/testchain`:
+- End-to-end tests (`pkg/app`) run the real `NewApp` wiring against `pkg/testchain`:
   - `pkg/app/golden_test.go`: pins the full storage keyspace (`testdata/golden/keyspace.txt`, StableNet scenario `keyspace-stablenet.txt`); regenerate with `go test ./pkg/app -run TestGolden -update`
   - `pkg/app/api_snapshot_test.go`: pins the served GraphQL schema and JSON-RPC methods (`testdata/api/`), including the chain extensions
   - `pkg/app/balance_test.go`: compares indexed native balances with the test chain's state (EVM and StableNet rules)
@@ -138,6 +140,7 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 - Storage port contracts: `pkg/core/port/porttest` checks any storage against every port (`porttest.Run`); Pebble runs it in `pkg/storage/contract_test.go`, which also requires the contracts to fail on deliberately broken stores
 - PostgreSQL: `make test-postgres` runs the adapter tests and the whole `pkg/app` end-to-end suite on PostgreSQL (`INDEXER_TEST_DRIVER=postgres`, `INDEXER_TEST_POSTGRES`; `pkg/app/testdb_test.go` gives every test database a schema and dumps it for the keyspace comparisons; tests of Pebble itself call `pebbleOnly`). `TestPostgresMatchesPebble` indexes the scenarios with both drivers and compares every read port
 - Service level (R5-5, G3): `make test-slo` (`TestSLOLoad`, `INDEXER_LOAD_SLO=1`, about two minutes) indexes a DEX load chain block by block with the live loop and the API, with 1,000 WebSocket `dexTrade` subscribers at 10 trades/s; end-to-end p99 (node shows block -> subscriber has trade) must be <= 250 ms, and 1% non-reading subscribers may not make it more than 20% worse. `INDEXER_LOAD_*` variables change the load for reports
+- Examples: `make test-examples` builds each module under `examples/` (separate go.mod, `replace` to the repository) and runs its tests; `examples/receipts` builds its own indexer binary with its handlers and checks it over HTTP against `pkg/testchain`
 - Benchmarks: EventBus performance tests
 
 ### Dependencies

@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // TestFilterChangesAcrossReorg polls JSON-RPC filters created before a

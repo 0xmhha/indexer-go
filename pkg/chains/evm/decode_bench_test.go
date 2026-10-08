@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // BenchmarkDecodeTxs compares sequential and parallel decoding of the

@@ -12,10 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	fdmeta "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // onlineFeature is an order-independent test feature: it records every

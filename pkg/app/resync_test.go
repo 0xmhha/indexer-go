@@ -17,9 +17,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // startAppWithAPI starts an app with the outbox and the GraphQL API on a

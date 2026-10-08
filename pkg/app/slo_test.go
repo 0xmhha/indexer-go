@@ -19,9 +19,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/features/dex"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // envInt reads a positive integer setting of the load test.

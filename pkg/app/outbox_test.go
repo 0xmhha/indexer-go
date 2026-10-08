@@ -14,10 +14,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/stream"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // startAppOutbox starts an app on dir with the outbox on or off.

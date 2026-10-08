@@ -13,11 +13,11 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/declared"
 	"github.com/0xmhha/indexer-go/pkg/features/records"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // receiptsSpec declares the receipts table of the receipts scenario.

@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/features/dex/orderbook"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 func e18(v int64) *big.Int { return new(big.Int).Mul(big.NewInt(v), port.DexPriceScale) }
