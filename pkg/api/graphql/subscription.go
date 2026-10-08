@@ -207,7 +207,8 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		zap.String("protocol", r.Header.Get("Sec-WebSocket-Protocol")),
 	)
 
-	conn, err := s.upgrader.Upgrade(w, r, nil)
+	cw := &corkWriter{ResponseWriter: w}
+	conn, err := s.upgrader.Upgrade(cw, r, nil)
 	if err != nil {
 		s.logger.Error("failed to upgrade connection",
 			zap.Error(err),
@@ -227,6 +228,7 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	client := &subscriptionClient{
 		server:          s,
 		conn:            conn,
+		cork:            cw.conn,
 		send:            make(chan []byte, 256),
 		subscriptions:   make(map[string]*clientSubscription),
 		logger:          s.logger,
@@ -247,6 +249,7 @@ func (s *SubscriptionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type subscriptionClient struct {
 	server          *SubscriptionServer
 	conn            *websocket.Conn
+	cork            *corkConn // conn's network connection; nil if not hijacked through corkWriter
 	send            chan []byte
 	subscriptions   map[string]*clientSubscription // id -> subscription
 	mu              sync.RWMutex
@@ -436,13 +439,22 @@ func (c *subscriptionClient) writeFrames(w *frameWriter) bool {
 		c.writeDisconnect(err)
 		return false
 	}
+	// The batch's frames go out in one write.
+	if c.cork != nil {
+		c.cork.Cork()
+	}
+	_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+	ok := true
 	for _, f := range frames {
-		_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 		if err := c.conn.WriteMessage(websocket.TextMessage, w.next(f)); err != nil {
-			return false
+			ok = false
+			break
 		}
 	}
-	return true
+	if c.cork != nil && c.cork.Uncork() != nil {
+		return false
+	}
+	return ok
 }
 
 // disconnectWait bounds the writes that tell a disconnected client why.
