@@ -203,6 +203,8 @@ type DexReader interface {
 	// ListDexTrades returns one page of a market's trades, newest first (by
 	// block and log index, descending).
 	ListDexTrades(ctx context.Context, market DexMarketKey, page Page) ([]*DexTrade, string, error)
+	// ListDexTradesInBlock returns the trades of a block, in log order.
+	ListDexTradesInBlock(ctx context.Context, block uint64) ([]*DexTrade, error)
 	// ListDexTradesByTrader returns one page of the trades an address took
 	// or made, newest first.
 	ListDexTradesByTrader(ctx context.Context, trader common.Address, page Page) ([]*DexTrade, string, error)

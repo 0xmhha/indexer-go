@@ -53,6 +53,9 @@ func (s *memStore) ListDexMarkets(context.Context, port.Page) ([]*port.DexMarket
 func (s *memStore) ListDexTrades(context.Context, port.DexMarketKey, port.Page) ([]*port.DexTrade, string, error) {
 	return nil, "", nil
 }
+func (s *memStore) ListDexTradesInBlock(context.Context, uint64) ([]*port.DexTrade, error) {
+	return nil, nil
+}
 func (s *memStore) ListDexTradesByTrader(context.Context, common.Address, port.Page) ([]*port.DexTrade, string, error) {
 	return nil, "", nil
 }
@@ -113,6 +116,7 @@ type registrar struct {
 
 func (r *registrar) Deps() feature.Deps             { return r.deps }
 func (r *registrar) OnBlock(h feature.BlockHandler) { r.handlers = append(r.handlers, h) }
+func (r *registrar) Enabled(string) bool            { return true }
 
 var (
 	v3Factory = common.HexToAddress("0x0000000000000000000000000000000000f30001")

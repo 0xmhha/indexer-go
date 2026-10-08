@@ -27,6 +27,7 @@ var (
 //	/dex/markets/<created position>            -> <market>
 //	/dex/trade/<market><position>              trade (JSON)
 //	/dex/trader/<address><position>            -> <market> (taker and maker)
+//	/dex/block/<position>                      -> <market> (trades by block)
 //	/dex/liquidity/<market><position>          liquidity change (JSON)
 //	/dex/order/<manager><order id>             order (JSON)
 //	/dex/orders/<market><created position>     -> <order id>
@@ -37,6 +38,7 @@ const (
 	prefixDexMarkets   = "/dex/markets/"
 	prefixDexTrade     = "/dex/trade/"
 	prefixDexTrader    = "/dex/trader/"
+	prefixDexBlock     = "/dex/block/"
 	prefixDexLiquidity = "/dex/liquidity/"
 	prefixDexOrder     = "/dex/order/"
 	prefixDexOrders    = "/dex/orders/"
@@ -45,7 +47,7 @@ const (
 )
 
 func init() {
-	RegisterKeyspace("dex", ChainData, prefixDexMarket, prefixDexMarkets, prefixDexTrade, prefixDexTrader,
+	RegisterKeyspace("dex", ChainData, prefixDexMarket, prefixDexMarkets, prefixDexTrade, prefixDexTrader, prefixDexBlock,
 		prefixDexLiquidity, prefixDexOrder, prefixDexOrders, prefixDexOpen, prefixDexTick)
 }
 
@@ -201,6 +203,29 @@ func (s *PebbleStorage) ListDexTradesByTrader(ctx context.Context, trader common
 	return out, next, nil
 }
 
+// ListDexTradesInBlock implements port.DexReader.
+func (s *PebbleStorage) ListDexTradesInBlock(ctx context.Context, block uint64) ([]*port.DexTrade, error) {
+	if s.closed.Load() {
+		return nil, port.ErrClosed
+	}
+	prefix := dexKey(prefixDexBlock, be64(block))
+	iter, err := s.kv(ctx).NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: prefixUpperBound(prefix)})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = iter.Close() }()
+	var out []*port.DexTrade
+	for iter.First(); iter.Valid(); iter.Next() {
+		position := iter.Key()[len(prefixDexBlock):]
+		t, err := getDexJSON[port.DexTrade](ctx, s, dexKey(prefixDexTrade, iter.Value(), position))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, iter.Error()
+}
+
 // ListDexLiquidity implements port.DexReader.
 func (s *PebbleStorage) ListDexLiquidity(ctx context.Context, market port.DexMarketKey, page port.Page) ([]*port.DexLiquidity, string, error) {
 	return dexPage[port.DexLiquidity](ctx, s, dexKey(prefixDexLiquidity, dexMarketBytes(market)), true, page)
@@ -295,7 +320,7 @@ func (s *PebbleStorage) SaveDexTrade(ctx context.Context, t *port.DexTrade) erro
 		return err
 	}
 	market, position := dexMarketBytes(t.Market), dexPosition(t.BlockNumber, t.LogIndex)
-	entries := [][2][]byte{{dexKey(prefixDexTrade, market, position), data}}
+	entries := [][2][]byte{{dexKey(prefixDexTrade, market, position), data}, {dexKey(prefixDexBlock, position), market}}
 	for _, a := range dexTraders(t) {
 		entries = append(entries, [2][]byte{dexKey(prefixDexTrader, a.Bytes(), position), market})
 	}

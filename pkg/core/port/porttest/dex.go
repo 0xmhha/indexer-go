@@ -141,6 +141,18 @@ func testDex(t *testing.T, newStore NewStore) {
 		// Writing a trade again replaces it.
 		require.NoError(t, s.SaveDexTrade(ctx, pool1[0]))
 
+		// A block's trades, of every market, in log order.
+		inBlock, err := s.ListDexTradesInBlock(ctx, 5)
+		require.NoError(t, err)
+		require.Len(t, inBlock, 3)
+		for i, want := range []uint{1, 2, 3} {
+			assert.Equal(t, want, inBlock[i].LogIndex)
+		}
+		sameJSON(t, pool1[1], inBlock[2], "the trade itself")
+		none, err := s.ListDexTradesInBlock(ctx, 6)
+		require.NoError(t, err)
+		assert.Empty(t, none)
+
 		page, _, err := s.ListDexTrades(ctx, dexPool(1), port.FirstPage(10))
 		require.NoError(t, err)
 		require.Len(t, page, len(pool1))
