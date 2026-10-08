@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
@@ -164,4 +166,53 @@ func (lq listQuery[T]) run(ctx context.Context, q querier, page port.Page) ([]T,
 		return items, "", nil
 	}
 	return items, encodeCursor(lq.list, lq.keyOf(items[len(items)-1])...), nil
+}
+
+// cappedPage applies the limits the Pebble store gives the account
+// abstraction lists: DefaultPaginationLimit items when the page asks for no
+// limit, at most DefaultMaxPaginationLimit.
+func cappedPage(page port.Page) port.Page {
+	page.Limit = recentLimit(page.Limit)
+	return page
+}
+
+// recentLimit bounds the limit of a "recent" read like cappedPage.
+func recentLimit(limit int) int {
+	if limit <= 0 {
+		limit = constants.DefaultPaginationLimit
+	}
+	return min(limit, constants.DefaultMaxPaginationLimit)
+}
+
+// scanJSON reads a row of one column holding a port record as JSON.
+func scanJSON[T any](row pgx.CollectableRow) (*T, error) {
+	var data []byte
+	if err := row.Scan(&data); err != nil {
+		return nil, err
+	}
+	v := new(T)
+	if err := json.Unmarshal(data, v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+// queryJSON reads the JSON records a query of one data column returns.
+func queryJSON[T any](ctx context.Context, q querier, sql string, args ...any) ([]*T, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanJSON[T])
+}
+
+// getJSON reads the one JSON record a query returns, port.ErrNotFound when
+// there is none.
+func getJSON[T any](ctx context.Context, q querier, sql string, args ...any) (*T, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	v, err := pgx.CollectExactlyOneRow(rows, scanJSON[T])
+	return v, notFound(err)
 }
