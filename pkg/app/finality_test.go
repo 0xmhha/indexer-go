@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // startAppFinality starts the app against srv with a finality policy.

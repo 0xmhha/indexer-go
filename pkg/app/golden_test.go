@@ -15,10 +15,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // Regenerate with: go test ./pkg/app -run TestGolden -update

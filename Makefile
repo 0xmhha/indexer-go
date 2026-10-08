@@ -1,4 +1,4 @@
-.PHONY: all build clean test test-postgres test-slo lint lint-install coverage generate tools help
+.PHONY: all build clean test test-postgres test-slo test-examples lint lint-install coverage generate tools help
 
 # Variables
 BINARY_NAME=indexer-go
@@ -75,6 +75,10 @@ test-integration:
 ## test-postgres: Run the PostgreSQL adapter tests and the end-to-end suite on PostgreSQL (disposable container, or INDEXER_TEST_POSTGRES)
 test-postgres:
 	@./scripts/test-postgres.sh
+
+## test-examples: Build and test the example modules (examples/*, separate go.mod each)
+test-examples:
+	@for d in examples/*/; do echo "== $$d"; (cd $$d && $(GOTEST) ./...) || exit 1; done
 
 ## test-slo: Check the G3 push latency service level (about two minutes; refactoring plan R5-5)
 test-slo:

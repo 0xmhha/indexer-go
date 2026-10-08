@@ -17,8 +17,8 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // rpcResult calls a JSON-RPC method and returns its raw result.

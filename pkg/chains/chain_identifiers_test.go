@@ -56,7 +56,7 @@ func TestChainIdentifierLimits(t *testing.T) {
 			switch {
 			case strings.HasPrefix(rel, ".") && rel != ".",
 				rel == "tools", rel == "docs", rel == "e2e",
-				rel == "internal/testchain",
+				rel == "pkg/testchain",
 				strings.HasPrefix(rel, "pkg/chains/") && strings.Count(rel, "/") >= 2: // pkg/chains/<chain>/...
 				return filepath.SkipDir
 			}

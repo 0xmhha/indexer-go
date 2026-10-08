@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // TestIndexingSurvivesEndpointLoss: with a fallback endpoint configured,

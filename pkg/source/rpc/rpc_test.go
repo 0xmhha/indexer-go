@@ -13,11 +13,11 @@ import (
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/evm"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/source"
 	"github.com/0xmhha/indexer-go/pkg/source/rpc"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 func dial(t *testing.T, url string) *gethrpc.Client {

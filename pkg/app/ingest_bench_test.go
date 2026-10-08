@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // BenchmarkIngest compares the legacy and atomic write paths on the same

@@ -15,12 +15,12 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
 	"github.com/0xmhha/indexer-go/pkg/features/address"
 	"github.com/0xmhha/indexer-go/pkg/features/balance"
 	"github.com/0xmhha/indexer-go/pkg/features/token"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // The end-to-end tests index into Pebble. With INDEXER_TEST_DRIVER=postgres

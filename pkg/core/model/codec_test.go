@@ -11,9 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/chains/evm"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // TestRoundTripFakeChain encodes every block and receipt of the reference and

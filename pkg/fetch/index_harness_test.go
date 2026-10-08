@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	_ "github.com/0xmhha/indexer-go/pkg/chains/evm" // generic profile for the test chain
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
@@ -20,6 +19,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/source"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // chainHarness indexes the deterministic test chain the way the indexer

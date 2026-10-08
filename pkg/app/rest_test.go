@@ -17,9 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	"github.com/0xmhha/indexer-go/pkg/api"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // frontendDocumentNamed returns indexer-frontend's GraphQL document of an

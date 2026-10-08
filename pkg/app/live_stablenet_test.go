@@ -15,8 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/internal/testchain"
 	fdmeta "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
+	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
 // TestLiveStableNet indexes a running StableNet node twice, once straight
