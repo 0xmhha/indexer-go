@@ -9,6 +9,6 @@ pkg/core/port 3
 pkg/core/port/porttest 4
 pkg/feature 2
 pkg/features/address 1
-pkg/features/token 7
+pkg/features/token 1
 pkg/multichain 2
 pkg/storage/history 3
