@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 
 	"go.uber.org/zap"
@@ -15,8 +16,10 @@ import (
 // (refactoring plan R6-2, pkg/sdk), serve HTTP endpoints of their own next
 // to the GraphQL API, for responses GraphQL cannot give (status codes,
 // fixed JSON shapes). They register in init; every single-chain server,
-// including one of declared data only, mounts them. Multi-chain servers do
-// not.
+// including one of declared data only, mounts them, and a multi-chain
+// server mounts them under each chain, /chains/{id}/<pattern>, over that
+// chain's storage. A pattern with an {id} parameter of its own clashes with
+// the chain's and is not mounted per chain (logged).
 
 // Route is one HTTP endpoint.
 type Route struct {
@@ -59,6 +62,12 @@ func registeredRoutes() []Route {
 		out[i] = routes[k]
 	}
 	return out
+}
+
+// chainRoutable reports whether a route can be mounted under
+// /chains/{id}: its pattern must not use the chain's {id} parameter.
+func chainRoutable(r Route) bool {
+	return !strings.Contains(r.Pattern, "{id}") && !strings.Contains(r.Pattern, "{id:")
 }
 
 // mountRoutes mounts the registered routes over the server's storage.

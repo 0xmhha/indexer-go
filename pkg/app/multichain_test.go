@@ -18,6 +18,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/pkg/api"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
@@ -66,6 +68,21 @@ func chainEntry(id, endpoint string) config.ChainConfig {
 		AdapterType: "auto",
 		Enabled:     true,
 	}
+}
+
+func init() {
+	// A route answering its storage's latest height, to see which chain's
+	// storage a multi-chain server mounts it over.
+	api.RegisterRoute(api.Route{Method: http.MethodGet, Pattern: "/test-latest-height", Handler: func(store port.QueryStore, _ *zap.Logger) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h, err := store.GetLatestHeight(r.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			_, _ = fmt.Fprint(w, h)
+		})
+	}})
 }
 
 // TestMultiChainIndexesEachChainIntoItsOwnDatabase runs two different
@@ -128,6 +145,10 @@ func TestMultiChainIndexesEachChainIntoItsOwnDatabase(t *testing.T) {
 		require.NotContains(t, body, "error")
 		body = serve(t, router, http.MethodGet, "/chains/"+id+"/v1/blocks?numberFrom=1&numberTo=1", "")
 		require.Contains(t, strings.ToLower(body), hash, "chain %s REST", id)
+	}
+	// Registered routes are served per chain over that chain's storage.
+	for id, head := range heads {
+		require.Equal(t, fmt.Sprint(head), serve(t, router, http.MethodGet, "/chains/"+id+"/test-latest-height", ""), "chain %s route", id)
 	}
 	list := serve(t, router, http.MethodGet, "/chains", "")
 	require.Contains(t, list, `"id":"stablenet"`)
