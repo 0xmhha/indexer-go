@@ -203,6 +203,18 @@ type Registrar interface {
 	OnRollback(h RollbackHandler)
 }
 
+// PartRegistrar is implemented by the registrar of a pipeline (a Registrar
+// may not implement it; register OnBlock handlers then).
+type PartRegistrar interface {
+	// OnPart adds a handler for one part of the feature: a piece its
+	// settings define (a records table) that writes data of its own. Each
+	// part's progress is recorded apart, so a part added to the settings of
+	// an indexed database is backfilled alone. definition identifies what
+	// the part indexes; a part whose definition changed since it was
+	// indexed stops startup, since its data is of the earlier definition.
+	OnPart(part, definition string, h BlockHandler)
+}
+
 // RollbackHandler withdraws what a feature published for a block that a
 // reorganization rolls back. It runs inside the block's rollback
 // transaction before the block's changes are undone, so it reads the
@@ -232,6 +244,9 @@ func Register(f Feature) {
 	name := f.Name()
 	if name == "" {
 		panic("feature: empty name")
+	}
+	if strings.Contains(name, PartSeparator) {
+		panic(fmt.Sprintf("feature: name %q contains %q", name, PartSeparator))
 	}
 	if _, ok := features[name]; ok {
 		panic(fmt.Sprintf("feature: %q registered twice", name))
@@ -350,7 +365,17 @@ type namedRollback struct {
 
 type namedHandler struct {
 	feature string
+	part    string // "" for the feature's own handlers
+	def     string // the part's definition
 	h       BlockHandler
+}
+
+// unit is the name the handler's progress is recorded under.
+func (h namedHandler) unit() string {
+	if h.part == "" {
+		return h.feature
+	}
+	return h.feature + PartSeparator + h.part
 }
 
 // Build resolves enabled and lets each feature register its handlers.
@@ -383,6 +408,34 @@ func (p *Pipeline) Features() []string {
 	return out
 }
 
+// Unit is what a feature state is recorded for: a feature, or one part of
+// a feature (Name is "feature/part") with the part's Definition.
+type Unit struct {
+	Name       string
+	Definition string
+}
+
+// PartSeparator joins a feature's name and a part's name in a Unit name.
+const PartSeparator = "/"
+
+// FeatureOf returns the feature a unit belongs to.
+func FeatureOf(unit string) string {
+	name, _, _ := strings.Cut(unit, PartSeparator)
+	return name
+}
+
+// Units returns the units of the features with handlers, in order: each
+// part of a feature with parts, the feature itself otherwise.
+func (p *Pipeline) Units() []Unit {
+	var out []Unit
+	for _, h := range p.handlers {
+		if n := h.unit(); len(out) == 0 || out[len(out)-1].Name != n {
+			out = append(out, Unit{Name: n, Definition: h.def})
+		}
+	}
+	return out
+}
+
 // HandleBlock runs every handler in order and stops at the first error.
 func (p *Pipeline) HandleBlock(ctx context.Context, b *Block) error {
 	if p == nil {
@@ -390,7 +443,7 @@ func (p *Pipeline) HandleBlock(ctx context.Context, b *Block) error {
 	}
 	for _, h := range p.handlers {
 		if err := h.h.HandleBlock(ctx, b); err != nil {
-			return fmt.Errorf("feature %q: %w", h.feature, err)
+			return fmt.Errorf("feature %q: %w", h.unit(), err)
 		}
 	}
 	return nil
@@ -407,6 +460,13 @@ func (r *registrar) Enabled(name string) bool { return r.p.enabled[name] }
 
 func (r *registrar) OnBlock(h BlockHandler) {
 	r.p.handlers = append(r.p.handlers, namedHandler{feature: r.feature, h: h})
+}
+
+func (r *registrar) OnPart(part, definition string, h BlockHandler) {
+	if part == "" {
+		panic(fmt.Sprintf("feature %q: empty part name", r.feature))
+	}
+	r.p.handlers = append(r.p.handlers, namedHandler{feature: r.feature, part: part, def: definition, h: h})
 }
 
 func (r *registrar) OnRollback(h RollbackHandler) {

@@ -17,14 +17,14 @@ import (
 //
 //  1. Reorg: if the newest indexed block is no longer on the node's chain
 //     (it reorganized while the indexer was down), roll back to the fork.
-//  2. Feature states: record which features process new blocks
-//     (feature.Reconcile).
-//  3. Backfill: features enabled after blocks were indexed process the
-//     stored blocks they missed, in block order.
+//  2. Feature states: record which features (and parts of features, such
+//     as records tables) process new blocks (feature.ReconcileUnits).
+//  3. Backfill: features and parts enabled after blocks were indexed
+//     process the stored blocks they missed, in block order.
 //
-// enabled lists the enabled features in execution order; backfill is a
-// pipeline of them that publishes no events.
-func (f *Fetcher) Recover(ctx context.Context, enabled []string, backfill *feature.Pipeline) error {
+// enabled lists the enabled units in execution order (Pipeline.Units);
+// backfill is a pipeline of them that publishes no events.
+func (f *Fetcher) Recover(ctx context.Context, enabled []feature.Unit, backfill *feature.Pipeline) error {
 	if err := f.recoverReorg(ctx); err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (f *Fetcher) recoverReorg(ctx context.Context) error {
 	return nil
 }
 
-func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []string, backfill *feature.Pipeline) error {
+func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []feature.Unit, backfill *feature.Pipeline) error {
 	fs, ok := f.storage.(port.FeatureStateStore)
 	if !ok {
 		return nil
@@ -83,7 +83,10 @@ func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []string, backfil
 		return err
 	}
 
-	writes, jobs := feature.Reconcile(enabled, states, latest, hasData)
+	writes, jobs, err := feature.ReconcileUnits(enabled, states, latest, hasData)
+	if err != nil {
+		return err
+	}
 	for name, st := range writes {
 		if !st.Active {
 			f.logger.Warn("Feature disabled; its data stops at the current height", zap.String("feature", name), zap.Uint64("through", st.Through))
@@ -102,15 +105,15 @@ func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []string, backfil
 			continue
 		}
 		f.logger.Info("Backfilling feature", zap.String("feature", job.Feature), zap.Uint64("from", job.From), zap.Uint64("to", job.To))
-		name := job.Feature
+		name, def := job.Feature, job.Definition
 		progress := func(ctx context.Context, h uint64) error {
-			return fs.SetFeatureState(ctx, name, port.FeatureState{Through: h})
+			return fs.SetFeatureState(ctx, name, port.FeatureState{Through: h, Definition: def})
 		}
 		if err := f.Backfill(ctx, backfill.Only(name), job.From, job.To, progress); err != nil {
 			return fmt.Errorf("backfill %s: %w", name, err)
 		}
 		if err := f.Exec(ctx, "featureState", func(ctx context.Context) error {
-			return fs.SetFeatureState(ctx, name, port.FeatureState{Active: true})
+			return fs.SetFeatureState(ctx, name, port.FeatureState{Active: true, Definition: def})
 		}); err != nil {
 			return err
 		}
@@ -124,17 +127,18 @@ func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []string, backfil
 // startOnlineBackfill fills the gaps of order-independent features in the
 // background while ingest runs. Each block is one writer command, so live
 // indexing commands interleave with it. Progress is recorded with each
-// block; after a restart Recover resumes from the gap left.
+// block; after a restart Recover resumes from the gap left. In the declared
+// mode a step is a LogRange of heights, read with one log request.
 func (f *Fetcher) startOnlineBackfill(jobs []feature.BackfillJob, backfill *feature.Pipeline, fs port.FeatureStateStore) {
 	ctx := f.background()
 	f.bgWG.Add(1)
 	go func() {
 		defer f.bgWG.Done()
 		for _, job := range jobs {
-			name, to := job.Feature, job.To
+			name, to, def := job.Feature, job.To, job.Definition
 			f.logger.Info("Backfilling feature online", zap.String("feature", name), zap.Uint64("from", job.From), zap.Uint64("to", to))
 			progress := func(ctx context.Context, h uint64) error {
-				st := port.FeatureState{Active: true}
+				st := port.FeatureState{Active: true, Definition: def}
 				if h < to {
 					st.Gap = &port.BlockRange{From: h + 1, To: to}
 				}
@@ -145,7 +149,11 @@ func (f *Fetcher) startOnlineBackfill(jobs []feature.BackfillJob, backfill *feat
 				if ctx.Err() != nil {
 					return
 				}
-				if err := f.Backfill(ctx, p, h, h, progress); err != nil {
+				end := h
+				if f.declared {
+					end = min(to, h+LogRange-1)
+				}
+				if err := f.Backfill(ctx, p, h, end, progress); err != nil {
 					if ctx.Err() != nil {
 						return
 					}
@@ -155,7 +163,7 @@ func (f *Fetcher) startOnlineBackfill(jobs []feature.BackfillJob, backfill *feat
 					}
 					continue
 				}
-				h++
+				h = end + 1
 			}
 			f.logger.Info("Online backfill done", zap.String("feature", name))
 		}

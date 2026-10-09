@@ -64,7 +64,9 @@ type undoDropper interface {
 // LogRange at a time, and the features run on each block that has some.
 // The progress of the heights without logs is recorded with the range's
 // end, so a stopped backfill resumes after the last range it finished.
+// Heights below the start height are not read: ingest starts there.
 func (f *Fetcher) backfillFromNode(ctx context.Context, p *feature.Pipeline, from, to uint64, progress func(ctx context.Context, height uint64) error) error {
+	from = max(from, min(f.config.StartHeight, to))
 	for start := from; start <= to; {
 		end := min(to, start+LogRange-1)
 		blocks, err := f.readLogBlocks(ctx, start, end)
