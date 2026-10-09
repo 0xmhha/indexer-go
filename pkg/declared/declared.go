@@ -106,19 +106,82 @@ func KeyID(fields []string) string { return strings.Join(fields, ",") }
 // arguments' names, types and which are indexed), its contracts and its
 // keys. Changing any of them changes the definition, while the table's
 // records keep the earlier one.
+//
+// It is TableDefinition as canonical JSON, so a changed definition can be
+// compared with the stored one (ExtendsDefinition).
 func (t *TablePlan) Definition() string {
-	addrs := make([]string, len(t.Addresses))
+	data, err := json.Marshal(t.definition())
+	if err != nil {
+		panic(err) // strings only
+	}
+	return string(data)
+}
+
+// TableDefinition is what a table stores: its event, its contracts (sorted,
+// lower case) and its keys.
+type TableDefinition struct {
+	Event     string   `json:"event"`
+	Addresses []string `json:"addresses"`
+	Keys      []string `json:"keys"`
+}
+
+func (t *TablePlan) definition() TableDefinition {
+	d := TableDefinition{Event: t.Event.String(), Addresses: make([]string, len(t.Addresses)), Keys: make([]string, len(t.Keys))}
 	for i, a := range t.Addresses {
-		addrs[i] = strings.ToLower(a.Hex())
+		d.Addresses[i] = strings.ToLower(a.Hex())
 	}
-	sort.Strings(addrs)
-	keys := make([]string, len(t.Keys))
+	sort.Strings(d.Addresses)
 	for i, k := range t.Keys {
-		keys[i] = KeyID(k)
+		d.Keys[i] = KeyID(k)
 	}
-	sum := sha256.Sum256([]byte(t.Event.String() + "\n" + strings.Join(addrs, ",") + "\n" + strings.Join(keys, ";")))
+	return d
+}
+
+// legacyDefinition is the form Definition had before it was JSON: a hash
+// of the same content, stored by databases indexed before.
+func (d TableDefinition) legacyDefinition() string {
+	sum := sha256.Sum256([]byte(d.Event + "\n" + strings.Join(d.Addresses, ",") + "\n" + strings.Join(d.Keys, ";")))
 	return hex.EncodeToString(sum[:16])
 }
+
+// DefinitionChange compares a table's stored definition with its current
+// one (Definition): unchanged (also when stored in the earlier hash form),
+// extended (the same event and keys over more contracts, so every record
+// stored is still a record of the table and the logs of the added
+// contracts are missing), or incompatible.
+func (t *TablePlan) DefinitionChange(stored string) DefinitionChange {
+	return CompareDefinitions(stored, t.definition())
+}
+
+// CompareDefinitions is DefinitionChange for a current definition.
+func CompareDefinitions(stored string, cur TableDefinition) DefinitionChange {
+	if data, err := json.Marshal(cur); err == nil && stored == string(data) || stored == cur.legacyDefinition() {
+		return DefinitionUnchanged
+	}
+	var old TableDefinition
+	if err := json.Unmarshal([]byte(stored), &old); err != nil || old.Event != cur.Event || strings.Join(old.Keys, ";") != strings.Join(cur.Keys, ";") {
+		return DefinitionIncompatible
+	}
+	have := map[string]bool{}
+	for _, a := range cur.Addresses {
+		have[a] = true
+	}
+	for _, a := range old.Addresses {
+		if !have[a] {
+			return DefinitionIncompatible // a contract was removed: its records stay
+		}
+	}
+	return DefinitionExtended
+}
+
+// DefinitionChange is how a table's definition changed.
+type DefinitionChange int
+
+const (
+	DefinitionUnchanged DefinitionChange = iota
+	DefinitionExtended
+	DefinitionIncompatible
+)
 
 // Fields are the table's fields: the event's arguments, in order.
 func (t *TablePlan) Fields() []string {

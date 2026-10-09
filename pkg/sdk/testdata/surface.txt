@@ -233,6 +233,7 @@ type Table = declared.TablePlan
   field Source string
   method Decode(l *model.Log) (map[string]string, error)
   method Definition() string
+  method DefinitionChange(stored string) declared.DefinitionChange
   method Fields() []string
   method Key(fields []string) ([]string, bool)
   method Lookup(values map[string]string) (string, []string, error)

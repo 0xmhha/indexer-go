@@ -1,6 +1,7 @@
 package declared
 
 import (
+	"encoding/json"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -196,5 +197,35 @@ func TestFormatInput(t *testing.T) {
 		}
 		require.NoError(t, err, c.in)
 		assert.Equal(t, c.want, got, c.in)
+	}
+}
+
+func TestCompareDefinitions(t *testing.T) {
+	cur := TableDefinition{Event: "event E(address indexed a)", Addresses: []string{"0x01", "0x02"}, Keys: []string{"a"}}
+	js := func(d TableDefinition) string {
+		b, err := json.Marshal(d)
+		require.NoError(t, err)
+		return string(b)
+	}
+	with := func(f func(*TableDefinition)) string {
+		d := cur
+		d.Addresses = append([]string(nil), cur.Addresses...)
+		d.Keys = append([]string(nil), cur.Keys...)
+		f(&d)
+		return js(d)
+	}
+	for name, c := range map[string]struct {
+		stored string
+		want   DefinitionChange
+	}{
+		"same":                         {js(cur), DefinitionUnchanged},
+		"stored in the earlier hash":   {cur.legacyDefinition(), DefinitionUnchanged},
+		"a contract added":             {with(func(d *TableDefinition) { d.Addresses = d.Addresses[:1] }), DefinitionExtended},
+		"a contract removed":           {with(func(d *TableDefinition) { d.Addresses = append(d.Addresses, "0x03") }), DefinitionIncompatible},
+		"another event":                {with(func(d *TableDefinition) { d.Event = "event F()" }), DefinitionIncompatible},
+		"other keys":                   {with(func(d *TableDefinition) { d.Keys = []string{"b"} }), DefinitionIncompatible},
+		"an unrelated hash or garbage": {"0123456789abcdef", DefinitionIncompatible},
+	} {
+		assert.Equal(t, c.want, CompareDefinitions(c.stored, cur), name)
 	}
 }
