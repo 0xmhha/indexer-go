@@ -7,7 +7,6 @@ import (
 	abiDecoder "github.com/0xmhha/indexer-go/pkg/abi"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/stream"
@@ -24,9 +23,6 @@ type Schema struct {
 	abiDecoder *abiDecoder.Decoder
 	verifier   verifier.Verifier
 	rpcProxy   *rpcproxy.Proxy
-
-	// Multi-chain service
-	chainManager *multichain.Manager
 
 	// Notification service
 	notificationService notifications.Service

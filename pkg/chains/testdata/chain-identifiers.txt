@@ -1,7 +1,7 @@
 # Chain-specific identifiers and strings per package outside pkg/chains/<chain>/ (TestChainIdentifierLimits).
 internal/config 12
 internal/constants 3
-pkg/api/graphql 21
+pkg/api/graphql 20
 pkg/api/jsonrpc 7
 pkg/app 20
 pkg/chains 15
