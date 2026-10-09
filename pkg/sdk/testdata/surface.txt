@@ -1,0 +1,265 @@
+package github.com/0xmhha/indexer-go/pkg/sdk
+type Block = feature.Block
+  field Geth *types.Block
+  field GethReceipts types.Receipts
+  field Model *model.Block
+  field Receipts []*model.Receipt
+  method Transactions() []feature.TxWithReceipt
+type BlockHandler = feature.BlockHandler
+  method HandleBlock(ctx context.Context, b *feature.Block) error
+type BlockHandlerFunc = feature.BlockHandlerFunc
+  method HandleBlock(ctx context.Context, b *feature.Block) error
+type BlockModel = model.Block
+  field BaseFee *big.Int
+  field BlobGasUsed *uint64
+  field Bloom []byte
+  field Difficulty *big.Int
+  field ExcessBlobGas *uint64
+  field Ext model.Extensions
+  field Extra []byte
+  field GasLimit uint64
+  field GasUsed uint64
+  field Hash common.Hash
+  field Miner common.Address
+  field MixDigest common.Hash
+  field Nonce uint64
+  field Number uint64
+  field ParentBeaconRoot *common.Hash
+  field ParentHash common.Hash
+  field ReceiptRoot common.Hash
+  field RequestsHash *common.Hash
+  field Size uint64
+  field StateRoot common.Hash
+  field Time uint64
+  field Transactions []*model.Transaction
+  field TxRoot common.Hash
+  field UncleHash common.Hash
+  field Uncles []common.Hash
+  field Withdrawals []model.Withdrawal
+  field WithdrawalsRoot *common.Hash
+func DeclaredTables(deps sdk.Deps) (*sdk.Tables, error)
+type Deps = feature.Deps
+  field BalanceAt func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
+  field BlockAt func(ctx context.Context, number uint64) (*model.Block, error)
+  field Contracts feature.ContractReader
+  field Logger *zap.Logger
+  field Profile chains.Profile
+  field Publish func(events.Event) bool
+  field Settings func(feature string, into any) error
+  field Storage port.Reader
+  method Blocks() chains.AccountingEnv
+  method DecodeSettings(feature string, into any) error
+var ErrNotFound error
+type Event = events.Event
+  method Timestamp() time.Time
+  method Type() events.EventType
+type Feature = feature.Feature
+  method Name() string
+  method Register(r feature.Registrar) error
+  method Requires() []string
+type GraphQLExtension = graphql.Extension
+  method AddMutation(name string, f *graphql.Field)
+  method AddQuery(name string, f *graphql.Field)
+  method AddSubscription(name string, f *graphql.Field)
+  method Logger() *zap.Logger
+  method Storage() port.QueryStore
+type KV = port.KV
+  method Delete(ctx context.Context, key []byte) error
+  method Get(ctx context.Context, key []byte) ([]byte, error)
+  method Has(ctx context.Context, key []byte) (bool, error)
+  method Iterate(ctx context.Context, prefix []byte, fn func(key []byte, value []byte) bool) error
+  method NewCursor(ctx context.Context, lower []byte, upper []byte) (port.Cursor, error)
+  method Put(ctx context.Context, key []byte, value []byte) error
+  method Scan(ctx context.Context, lower []byte, upper []byte, reverse bool, fn func(key []byte, value []byte) bool) error
+func KVOf(s any) (sdk.KV, error)
+type Log = model.Log
+  field Address common.Address
+  field BlockHash common.Hash
+  field BlockNumber uint64
+  field Data []byte
+  field Index uint
+  field Removed bool
+  field Topics []common.Hash
+  field TxHash common.Hash
+  field TxIndex uint
+type LogsOnly = feature.LogsOnly
+  method LogsOnly() bool
+func LookupRecords(ctx context.Context, s any, table string, values map[string]string, page sdk.Page) ([]*sdk.Record, string, error)
+func Main()
+type OrderIndependent = feature.OrderIndependent
+  method OrderIndependent() bool
+type Page = port.Page
+  field After string
+  field Limit int
+  field Offset int
+type Progress struct
+  field Indexed uint64
+  field Polled bool
+  field Target uint64
+  method Lag() uint64
+func ProgressOf(ctx context.Context, s sdk.Store) (sdk.Progress, error)
+type Receipt = model.Receipt
+  field BlobGasPrice *big.Int
+  field BlobGasUsed uint64
+  field BlockHash common.Hash
+  field BlockNumber uint64
+  field Bloom []byte
+  field ContractAddress *common.Address
+  field CumulativeGasUsed uint64
+  field EffectiveGasPrice *big.Int
+  field Ext model.Extensions
+  field GasUsed uint64
+  field Logs []*model.Log
+  field Status uint64
+  field TxHash common.Hash
+  field TxIndex uint
+  field Type uint8
+type Record = port.Record
+  field Address common.Address
+  field BlockNumber uint64
+  field BlockTime uint64
+  field Fields map[string]string
+  field LogIndex uint
+  field Table string
+  field TxHash common.Hash
+type RecordKey = port.RecordKey
+  field ID string
+  field Values []string
+type RecordStore = port.RecordReader
+  method ListRecords(ctx context.Context, table string, page port.Page) ([]*port.Record, string, error)
+  method ListRecordsByKey(ctx context.Context, table string, key port.RecordKey, page port.Page) ([]*port.Record, string, error)
+func RecordsOf(s any) (sdk.RecordStore, error)
+func RegisterFeature(f sdk.Feature)
+func RegisterGraphQL(name string, fn func(*sdk.GraphQLExtension))
+func RegisterKeyspace(owner string, prefixes ...string)
+func RegisterRoute(method string, pattern string, handler func(store sdk.Store, logger *zap.Logger) http.Handler)
+type Registrar = feature.Registrar
+  method Deps() feature.Deps
+  method Enabled(name string) bool
+  method OnBlock(h feature.BlockHandler)
+  method OnRollback(h feature.RollbackHandler)
+type RollbackHandler = feature.RollbackHandler
+  method HandleRollback(ctx context.Context, b *port.OrphanedBlock) ([]events.Event, error)
+type Route = api.Route
+  field Handler func(store port.QueryStore, logger *zap.Logger) http.Handler
+  field Method string
+  field Pattern string
+type Store = port.QueryStore
+  method CountVerifiedContracts(ctx context.Context) (int, error)
+  method DeleteABI(ctx context.Context, address common.Address) error
+  method DeleteContractVerification(ctx context.Context, address common.Address) error
+  method GetABI(ctx context.Context, address common.Address) ([]byte, error)
+  method GetAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error)
+  method GetAddressDelegationState(ctx context.Context, address common.Address) (*port.AddressDelegationState, error)
+  method GetAddressSetCodeStats(ctx context.Context, address common.Address) (*port.AddressSetCodeStats, error)
+  method GetAddressStats(ctx context.Context, addr common.Address) (*port.AddressStats, error)
+  method GetBalanceHistory(ctx context.Context, addr common.Address, fromBlock uint64, toBlock uint64, page port.Page) ([]port.BalanceSnapshot, string, error)
+  method GetBlock(ctx context.Context, height uint64) (*model.Block, error)
+  method GetBlockByHash(ctx context.Context, hash common.Hash) (*model.Block, error)
+  method GetBlockByTimestamp(ctx context.Context, timestamp uint64) (*model.Block, error)
+  method GetBlockCount(ctx context.Context) (uint64, error)
+  method GetBlocks(ctx context.Context, start uint64, end uint64) ([]*model.Block, error)
+  method GetBlocksByTimeRange(ctx context.Context, fromTime uint64, toTime uint64, page port.Page) ([]*model.Block, string, error)
+  method GetBundlerStats(ctx context.Context, bundler common.Address) (*userop.BundlerStats, error)
+  method GetContractVerification(ctx context.Context, address common.Address) (*port.ContractVerification, error)
+  method GetFactoryStats(ctx context.Context, factory common.Address) (*userop.FactoryStats, error)
+  method GetGasStatsByAddress(ctx context.Context, addr common.Address, fromBlock uint64, toBlock uint64) (*port.AddressGasStats, error)
+  method GetGasStatsByBlockRange(ctx context.Context, fromBlock uint64, toBlock uint64) (*port.GasStats, error)
+  method GetLatestHeight(ctx context.Context) (uint64, error)
+  method GetLogs(ctx context.Context, filter *port.LogFilter) ([]*model.Log, error)
+  method GetLogsByAddress(ctx context.Context, address common.Address, fromBlock uint64, toBlock uint64) ([]*model.Log, error)
+  method GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*model.Log, error)
+  method GetLogsByTopic(ctx context.Context, topic common.Hash, topicIndex int, fromBlock uint64, toBlock uint64) ([]*model.Log, error)
+  method GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error)
+  method GetNetworkMetrics(ctx context.Context, fromTime uint64, toTime uint64) (*port.NetworkMetrics, error)
+  method GetPaymasterStats(ctx context.Context, paymaster common.Address) (*userop.PaymasterStats, error)
+  method GetReceipt(ctx context.Context, hash common.Hash) (*model.Receipt, error)
+  method GetReceipts(ctx context.Context, hashes []common.Hash) ([]*model.Receipt, error)
+  method GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*model.Receipt, error)
+  method GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*model.Receipt, error)
+  method GetRecentSetCodeAuthorizations(ctx context.Context, limit int) ([]*port.SetCodeAuthorizationRecord, error)
+  method GetRecentUserOps(ctx context.Context, limit int) ([]*userop.UserOperation, error)
+  method GetSetCodeAuthorization(ctx context.Context, txHash common.Hash, authIndex int) (*port.SetCodeAuthorizationRecord, error)
+  method GetSetCodeAuthorizationsByAuthority(ctx context.Context, authority common.Address, page port.Page) ([]*port.SetCodeAuthorizationRecord, string, error)
+  method GetSetCodeAuthorizationsByBlock(ctx context.Context, blockNumber uint64) ([]*port.SetCodeAuthorizationRecord, error)
+  method GetSetCodeAuthorizationsByTarget(ctx context.Context, target common.Address, page port.Page) ([]*port.SetCodeAuthorizationRecord, string, error)
+  method GetSetCodeAuthorizationsByTx(ctx context.Context, txHash common.Hash) ([]*port.SetCodeAuthorizationRecord, error)
+  method GetSetCodeAuthorizationsCountByAuthority(ctx context.Context, authority common.Address) (int, error)
+  method GetSetCodeAuthorizationsCountByTarget(ctx context.Context, target common.Address) (int, error)
+  method GetSetCodeTransactionCount(ctx context.Context) (int, error)
+  method GetSmartAccount(ctx context.Context, address common.Address) (*userop.SmartAccount, error)
+  method GetTokenBalances(ctx context.Context, addr common.Address, tokenType string) ([]port.TokenBalance, error)
+  method GetTokenMetadata(ctx context.Context, address common.Address) (*port.TokenMetadata, error)
+  method GetTokensCount(ctx context.Context, standard port.TokenStandard) (int, error)
+  method GetTopAddressesByGasUsed(ctx context.Context, limit int, fromBlock uint64, toBlock uint64) ([]port.AddressGasStats, error)
+  method GetTopAddressesByTxCount(ctx context.Context, limit int, fromBlock uint64, toBlock uint64) ([]port.AddressActivityStats, error)
+  method GetTopMiners(ctx context.Context, limit int, fromBlock uint64, toBlock uint64) ([]port.MinerStats, error)
+  method GetTransaction(ctx context.Context, hash common.Hash) (*model.Transaction, *port.TxLocation, error)
+  method GetTransactionCount(ctx context.Context) (uint64, error)
+  method GetTransactions(ctx context.Context, hashes []common.Hash) ([]*model.Transaction, []*port.TxLocation, error)
+  method GetTransactionsByAddress(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error)
+  method GetTransactionsByAddressFiltered(ctx context.Context, addr common.Address, filter *port.TransactionFilter, page port.Page) ([]*port.TransactionWithReceipt, string, error)
+  method GetUserOp(ctx context.Context, opHash common.Hash) (*userop.UserOperation, error)
+  method GetUserOpCount(ctx context.Context) (int, error)
+  method GetUserOpsByBlock(ctx context.Context, blockNumber uint64) ([]*userop.UserOperation, error)
+  method GetUserOpsByBundler(ctx context.Context, bundler common.Address, page port.Page) ([]*userop.UserOperation, string, error)
+  method GetUserOpsByFactory(ctx context.Context, factory common.Address, page port.Page) ([]*userop.UserOperation, string, error)
+  method GetUserOpsByPaymaster(ctx context.Context, paymaster common.Address, page port.Page) ([]*userop.UserOperation, string, error)
+  method GetUserOpsBySender(ctx context.Context, sender common.Address, page port.Page) ([]*userop.UserOperation, string, error)
+  method GetUserOpsByTx(ctx context.Context, txHash common.Hash) ([]*userop.UserOperation, error)
+  method HasABI(ctx context.Context, address common.Address) (bool, error)
+  method HasBlock(ctx context.Context, height uint64) (bool, error)
+  method HasReceipt(ctx context.Context, hash common.Hash) (bool, error)
+  method HasTransaction(ctx context.Context, hash common.Hash) (bool, error)
+  method IsContractVerified(ctx context.Context, address common.Address) (bool, error)
+  method ListABIs(ctx context.Context) ([]common.Address, error)
+  method ListBundlers(ctx context.Context, page port.Page) ([]*userop.BundlerStats, string, error)
+  method ListFactories(ctx context.Context, page port.Page) ([]*userop.FactoryStats, string, error)
+  method ListPaymasters(ctx context.Context, page port.Page) ([]*userop.PaymasterStats, string, error)
+  method ListSmartAccounts(ctx context.Context, page port.Page) ([]*userop.SmartAccount, string, error)
+  method ListTokensByStandard(ctx context.Context, standard port.TokenStandard, page port.Page) ([]*port.TokenMetadata, string, error)
+  method ListVerifiedContracts(ctx context.Context, page port.Page) ([]common.Address, string, error)
+  method Search(ctx context.Context, query string, resultTypes []string, limit int) ([]port.SearchResult, error)
+  method SearchTokens(ctx context.Context, query string, limit int) ([]*port.TokenMetadata, error)
+  method SetABI(ctx context.Context, address common.Address, abiJSON []byte) error
+  method SetContractVerification(ctx context.Context, verification *port.ContractVerification) error
+type Table = declared.TablePlan
+  field Addresses []common.Address
+  field Event abi.Event
+  field Keys [][]string
+  field Name string
+  field Source string
+  method Decode(l *model.Log) (map[string]string, error)
+  method Definition() string
+  method Fields() []string
+  method Key(fields []string) ([]string, bool)
+  method Lookup(values map[string]string) (string, []string, error)
+type Tables = declared.Plan
+  field Tables []*declared.TablePlan
+  method Addresses() []common.Address
+  method Match(l *model.Log) []*declared.TablePlan
+  method StartBlock() uint64
+  method Table(name string) (*declared.TablePlan, bool)
+  method Topics() []common.Hash
+func TablesOf(s any) *sdk.Tables
+func URLParam(r *http.Request, name string) string
+
+package github.com/0xmhha/indexer-go/pkg/sdk/sdktest
+const AllowComment untyped string
+type Check struct
+  field Chain *testchain.Chain
+  field Declared bool
+  field Features []string
+  field Finality string
+  field Prefixes []string
+  field Requires []string
+  field Settings map[string]any
+type Finding struct
+  field Pos token.Position
+  field Reason string
+  field Use string
+  method String() string
+func RequireDeterministic(t testing.TB, c sdktest.Check)
+func RequireNoForbiddenUses(t testing.TB, dirs ...string)
+func ScanSource(dir string) ([]sdktest.Finding, error)
+
