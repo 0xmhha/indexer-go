@@ -96,7 +96,7 @@ func init() {
 
 예제는 `examples/receipts/determinism_test.go`다. indexer의 내장 기능 패키지도 `TestBuiltInFeaturesFollowTheRules`로 검사한다.
 
-알려진 예외: 내장 `token.metadata`는 `pkg/token`을 거쳐 노드의 latest 상태로 토큰 이름·심볼·총공급을 읽는다(3번 위반, 소스 검사는 다른 패키지라 잡지 못한다). `balance.native`는 처음 보는 계정의 잔액을 노드에서 못 읽으면 0에서 시작한다(3번의 오류 처리 위반).
+내장 `token.metadata`는 토큰을 생성 블록 기준으로 읽는다. 노드가 그 블록의 상태를 보관하지 않으면(archive가 아닌 노드에서 오래된 블록을 backfill할 때) latest 상태로 읽고 경고를 남긴다. 이 경우만 결정성이 깨진다. 노드가 응답하지 않은 오류는 블록을 다시 시도하게 한다. 알려진 예외: `balance.native`는 처음 보는 계정의 잔액을 노드에서 못 읽으면 0에서 시작한다(3번의 오류 처리 위반).
 
 ## 7. 호환성 약속
 
