@@ -429,6 +429,10 @@ FeePayerStats.address(): String!
 FeePayerStats.percentage(): Float!
 FeePayerStats.totalFeesPaid(): String!
 FeePayerStats.txCount(): String!
+FeePayerTransaction.blockNumber(): String!
+FeePayerTransaction.transactionHash(): String!
+FeePayerTransactionConnection.nodes(): [FeePayerTransaction!]!
+FeePayerTransactionConnection.pageInfo(): PageInfo!
 GasStats.averageGasPrice(): String!
 GasStats.averageGasUsed(): String!
 GasStats.blockCount(): String!
@@ -634,6 +638,8 @@ OBJECT FactoryStatsConnection
 OBJECT FeeDelegationStats
 OBJECT FeePayerSignature
 OBJECT FeePayerStats
+OBJECT FeePayerTransaction
+OBJECT FeePayerTransactionConnection
 OBJECT GasStats
 OBJECT GasTipUpdateEvent
 OBJECT InstalledModule
@@ -824,6 +830,7 @@ Query.factories(pagination: PaginationInput): FactoryStatsConnection!
 Query.factory(address: String!): FactoryStats
 Query.feeDelegationStats(fromBlock: String, fromTime: String, toBlock: String, toTime: String): FeeDelegationStats
 Query.feePayerStats(address: String!, fromBlock: String, fromTime: String, toBlock: String, toTime: String): FeePayerStats
+Query.feePayerTransactions(feePayer: String!, pagination: PaginationInput): FeePayerTransactionConnection!
 Query.gasStats(fromBlock: String!, toBlock: String!): GasStats
 Query.gasTipHistory(filter: SystemContractEventFilter!): [GasTipUpdateEvent!]!
 Query.installedModules(account: String, moduleType: String, pagination: PaginationInput): InstalledModuleConnection!

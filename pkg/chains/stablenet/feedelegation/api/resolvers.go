@@ -223,6 +223,32 @@ func (s *Schema) resolveFeePayerStats(p gql.ResolveParams) (interface{}, error) 
 	}, nil
 }
 
+// resolveFeePayerTransactions handles the feePayerTransactions query: one
+// page of the transactions a fee payer paid for, oldest first, read from
+// the payer index the stablenet.fee_delegation feature writes.
+func (s *Schema) resolveFeePayerTransactions(p gql.ResolveParams) (interface{}, error) {
+	if s.meta == nil {
+		return nil, fmt.Errorf("storage does not support fee delegation metadata")
+	}
+	payer, _ := p.Args["feePayer"].(string)
+	if !common.IsHexAddress(payer) {
+		return nil, fmt.Errorf("feePayer is not an address: %q", payer)
+	}
+	page := graphql.Page(p, 0)
+	txs, next, err := s.meta.FeePayerTxs(p.Context, common.HexToAddress(payer), page)
+	if err != nil {
+		return nil, fmt.Errorf("fee payer transactions: %w", err)
+	}
+	nodes := make([]map[string]interface{}, len(txs))
+	for i, tx := range txs {
+		nodes[i] = map[string]interface{}{
+			"transactionHash": tx.TxHash.Hex(),
+			"blockNumber":     fmt.Sprintf("%d", tx.BlockNumber),
+		}
+	}
+	return map[string]interface{}{"nodes": nodes, "pageInfo": graphql.CursorPageInfo(page, next)}, nil
+}
+
 // addQueries adds the fee delegation queries.
 func addQueries(e *graphql.Extension, s *Schema) {
 	// FeeDelegationStats type
@@ -369,5 +395,29 @@ func addQueries(e *graphql.Extension, s *Schema) {
 			},
 		},
 		Resolve: s.resolveFeePayerStats,
+	})
+
+	feePayerTransactionType := gql.NewObject(gql.ObjectConfig{
+		Name:        "FeePayerTransaction",
+		Description: "A transaction whose gas a fee payer paid",
+		Fields: gql.Fields{
+			"transactionHash": &gql.Field{Type: gql.NewNonNull(graphql.HashType)},
+			"blockNumber":     &gql.Field{Type: gql.NewNonNull(graphql.BigIntType)},
+		},
+	})
+	e.AddQuery("feePayerTransactions", &gql.Field{
+		Type: gql.NewNonNull(gql.NewObject(gql.ObjectConfig{
+			Name: "FeePayerTransactionConnection",
+			Fields: gql.Fields{
+				"nodes":    &gql.Field{Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(feePayerTransactionType)))},
+				"pageInfo": &gql.Field{Type: gql.NewNonNull(graphql.PageInfoType())},
+			},
+		})),
+		Description: "Transactions a fee payer paid for, oldest first (cursor pages: pagination.after = pageInfo.endCursor)",
+		Args: gql.FieldConfigArgument{
+			"feePayer":   &gql.ArgumentConfig{Type: gql.NewNonNull(graphql.AddressType)},
+			"pagination": &gql.ArgumentConfig{Type: graphql.PaginationInputType()},
+		},
+		Resolve: s.resolveFeePayerTransactions,
 	})
 }

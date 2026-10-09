@@ -99,6 +99,7 @@ func TestFeeDelegationQueries(t *testing.T) {
 		feeDelegationStats(fromBlock: "33", toBlock: "33") { totalFeeDelegatedTxs totalFeesSaved adoptionRate }
 		topFeePayers(fromBlock: "33", toBlock: "33") { nodes { address txCount totalFeesPaid } }
 		feePayerStats(address: $payer, fromBlock: "33", toBlock: "33") { address txCount totalFeesPaid percentage }
+		feePayerTransactions(feePayer: $payer) { nodes { transactionHash blockNumber } pageInfo { hasNextPage } }
 	}`, map[string]interface{}{"tx": fd.Hash.Hex(), "payer": payer})
 	require.Empty(t, res.Errors)
 	data := res.Data.(map[string]interface{})
@@ -126,6 +127,11 @@ func TestFeeDelegationQueries(t *testing.T) {
 	assert.Equal(t, "1", ps["txCount"])
 	assert.Equal(t, fee.String(), ps["totalFeesPaid"])
 	assert.InDelta(t, 100.0, ps["percentage"], 0.001, "the only fee payer")
+
+	// The fee payer's index the feature writes, served by feePayerTransactions.
+	paid := data["feePayerTransactions"].(map[string]interface{})
+	assert.Equal(t, []interface{}{map[string]interface{}{"transactionHash": fd.Hash.Hex(), "blockNumber": "33"}}, paid["nodes"])
+	assert.Equal(t, false, paid["pageInfo"].(map[string]interface{})["hasNextPage"])
 
 	// The feature's metadata.
 	meta, err := fdmeta.OpenMetaStore(app.storage)

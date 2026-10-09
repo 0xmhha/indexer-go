@@ -17,6 +17,7 @@ import (
 type Schema struct {
 	history port.HistoricalReader
 	stats   *feedelegation.Stats
+	meta    *feedelegation.MetaStore // nil without key-value storage
 	logger  *zap.Logger
 }
 
@@ -28,6 +29,9 @@ func init() {
 		}
 		if stats, err := feedelegation.Open(e.Storage()); err == nil {
 			s.stats = stats
+		}
+		if meta, err := feedelegation.OpenMetaStore(e.Storage()); err == nil {
+			s.meta = meta
 		}
 		addQueries(e, s)
 	})
