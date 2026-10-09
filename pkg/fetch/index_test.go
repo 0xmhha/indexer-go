@@ -179,3 +179,23 @@ func TestGapRecoveryGivesUpVisibly(t *testing.T) {
 	assert.Contains(t, err.Error(), "gap recovery between blocks")
 	require.NoError(t, ctx.Err(), "it gave up on its own, not at the deadline")
 }
+
+// TestRecoverRetriesRelayJoin: a relay that could not join the change
+// stream when the fetcher was built joins in Recover; when it still cannot,
+// Recover returns the error instead of letting indexing run with a relay
+// that delivers nothing.
+func TestRecoverRetriesRelayJoin(t *testing.T) {
+	ctx := context.Background()
+	h := newChainHarness(t, &Config{}, events.NewEventBus(16, 16))
+	require.NotNil(t, h.f.outbox)
+	require.NotNil(t, h.f.outbox.relay)
+
+	h.f.outbox.joinErr = errors.New("storage busy")
+	require.NoError(t, h.f.joinRelay(ctx), "the retry joins")
+	require.NoError(t, h.f.outbox.joinErr)
+
+	h.f.outbox.joinErr = errors.New("storage busy")
+	require.NoError(t, h.db.Close())
+	err := h.f.joinRelay(ctx)
+	require.ErrorContains(t, err, "cannot join the change stream")
+}

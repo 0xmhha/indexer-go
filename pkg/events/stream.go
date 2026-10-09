@@ -1,5 +1,7 @@
 package events
 
+import "time"
+
 // Stream is a chain's change stream position, embedded in every event type
 // that is recorded in the outbox (refactoring plan R3-1). Events of indexed
 // blocks are numbered when their block commits: the numbers of one chain
@@ -32,3 +34,21 @@ func SequenceOf(ev Event) uint64 {
 	}
 	return 0
 }
+
+// EventTypeSkipped is the type of SkippedEvent.
+const EventTypeSkipped EventType = "skipped"
+
+// SkippedEvent stands for a change stream entry this build cannot decode
+// (written by a build that knows more event types). It carries only the
+// entry's position and type, so consumers that follow positions see no
+// gap; no subscription delivers it.
+type SkippedEvent struct {
+	Stream
+	Original EventType
+}
+
+// Type implements Event.
+func (e *SkippedEvent) Type() EventType { return EventTypeSkipped }
+
+// Timestamp implements Event: unknown, the zero time.
+func (e *SkippedEvent) Timestamp() time.Time { return time.Time{} }

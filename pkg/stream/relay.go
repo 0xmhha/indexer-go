@@ -64,9 +64,12 @@ func (r *Relay) deliver(ctx context.Context, batch []port.OutboxEntry) error {
 		ev, err := events.UnmarshalEvent(events.EventType(e.Type), e.Data)
 		if err != nil {
 			// The entry was written by a build that knows the type and this
-			// one does not; the sequence stays visible as a gap.
+			// one does not. Its position is published as a skipped event, so
+			// consumers that follow positions (the subscription engine) see
+			// no gap: a gap would make them treat it as loss and disconnect
+			// every subscriber, again on each resume.
 			r.logger.Error("Undecodable outbox entry skipped", zap.Uint64("seq", e.Seq), zap.String("type", e.Type), zap.Error(err))
-			continue
+			ev = &events.SkippedEvent{Original: events.EventType(e.Type)}
 		}
 		if s, ok := ev.(events.Sequenced); ok {
 			s.SetSequence(e.Seq)

@@ -25,6 +25,9 @@ import (
 // enabled lists the enabled units in execution order (Pipeline.Units);
 // backfill is a pipeline of them that publishes no events.
 func (f *Fetcher) Recover(ctx context.Context, enabled []feature.Unit, backfill *feature.Pipeline) error {
+	if err := f.joinRelay(ctx); err != nil {
+		return err
+	}
 	if err := f.recoverReorg(ctx); err != nil {
 		return err
 	}
