@@ -58,6 +58,8 @@ make lint           # golangci-lint
 make docker-build   # Container image
 ```
 
+CI (`.github/workflows/ci.yml`) runs gofmt, vet, `make lint` (and tools/astgraph), `go test ./...`, `scripts/test-postgres.sh` and `make test-examples` on every pull request and on the default branch.
+
 `make generate` runs gqlgen, but the runtime GraphQL server does not use generated code.
 
 ### Key Patterns

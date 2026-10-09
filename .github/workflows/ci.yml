@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# The jobs run the same commands as a local check (Makefile, scripts/), so
+# CI and local results mean the same thing.
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$unformatted" ]; then echo "not gofmt-clean:"; echo "$unformatted"; exit 1; fi
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint
+        run: make lint
+      - name: golangci-lint (tools/astgraph)
+        working-directory: tools/astgraph
+        # The module needs a newer Go; go run builds the linter with it.
+        run: |
+          go vet ./...
+          go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: go build
+        run: go build ./...
+      - name: go test
+        # Includes TestSDKSurface, which pins the SDK (docs/SDK.md 7).
+        run: go test ./... -count=1 -timeout 20m
+
+  postgres:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: PostgreSQL adapter and end-to-end suite
+        run: ./scripts/test-postgres.sh
+
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Example modules
+        run: make test-examples
