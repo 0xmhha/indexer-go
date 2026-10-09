@@ -112,4 +112,4 @@ func init() {
 ### SDK 변경 기록
 
 - v0.2.0: SDK의 첫 발행. `pkg/sdk`(기능 등록, KV, 선언한 표, GraphQL 확장, HTTP 경로, `Main`, `ProgressOf`), `pkg/sdk/sdktest`(결정성 확인), `sdk.PartRegistrar`(선택 interface). 이후 버전은 이 면에서 바뀐 것만 적는다.
-- 다음 버전(미발행): `sdk.Table`에 `DefinitionChange` 메서드 추가(표 정의가 바뀐 방식, 깨는 변경 아님).
+- v0.2.5: `sdk.Table`에 `DefinitionChange` 메서드 추가(표 정의가 바뀐 방식, 깨는 변경 아님).
