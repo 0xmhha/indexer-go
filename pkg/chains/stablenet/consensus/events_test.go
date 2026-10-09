@@ -21,15 +21,15 @@ func TestConsensusBlockEvent_Interface(t *testing.T) {
 		blockNumber,
 		blockHash,
 		blockTimestamp,
-		1,     // round
-		0,     // prevRound
+		1, // round
+		0, // prevRound
 		proposer,
-		10,    // validatorCount
-		9,     // prepareCount
-		9,     // commitCount
-		0.9,   // participationRate
-		0.1,   // missedValidatorRate
-		true,  // isEpochBoundary
+		10,   // validatorCount
+		9,    // prepareCount
+		9,    // commitCount
+		0.9,  // participationRate
+		0.1,  // missedValidatorRate
+		true, // isEpochBoundary
 		&epochNum,
 		validators,
 	)
@@ -114,9 +114,9 @@ func TestConsensusForkEvent_Interface(t *testing.T) {
 		510,       // chain1Height
 		"1000000", // chain1Weight
 		chain2Hash,
-		508,       // chain2Height
-		"999000",  // chain2Weight
-		2,         // detectionLag
+		508,      // chain2Height
+		"999000", // chain2Weight
+		2,        // detectionLag
 	)
 
 	// Test Event interface implementation
@@ -311,7 +311,7 @@ func TestConsensusErrorEvent_Interface(t *testing.T) {
 		"missed_validators",
 		"high",
 		"Validators missed signing window",
-		5, // round
+		5,  // round
 		10, // expectedValidators
 		7,  // actualSigners
 		[]common.Address{missedValidator},

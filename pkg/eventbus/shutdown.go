@@ -273,10 +273,10 @@ func (mcs *MultiComponentShutdown) Shutdown(ctx context.Context) error {
 
 // Common shutdown priorities
 const (
-	ShutdownPriorityEventBus     = 100 // High priority - shut down event bus first
-	ShutdownPriorityKafka        = 90  // High priority - flush Kafka messages
-	ShutdownPriorityRedis        = 80  // Medium-high priority
-	ShutdownPriorityAPI          = 50  // Medium priority - stop accepting new requests
-	ShutdownPriorityStorage      = 10  // Low priority - close storage last
-	ShutdownPriorityCleanup      = 0   // Lowest priority - final cleanup
+	ShutdownPriorityEventBus = 100 // High priority - shut down event bus first
+	ShutdownPriorityKafka    = 90  // High priority - flush Kafka messages
+	ShutdownPriorityRedis    = 80  // Medium-high priority
+	ShutdownPriorityAPI      = 50  // Medium priority - stop accepting new requests
+	ShutdownPriorityStorage  = 10  // Low priority - close storage last
+	ShutdownPriorityCleanup  = 0   // Lowest priority - final cleanup
 )

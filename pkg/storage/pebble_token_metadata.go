@@ -17,19 +17,19 @@ import (
 
 // TokenMetadataJSON is a JSON-serializable version of TokenMetadata
 type TokenMetadataJSON struct {
-	Address            string  `json:"address"`
-	Standard           string  `json:"standard"`
-	Name               string  `json:"name"`
-	Symbol             string  `json:"symbol"`
-	Decimals           uint8   `json:"decimals"`
-	TotalSupply        string  `json:"totalSupply,omitempty"`
-	BaseURI            string  `json:"baseURI,omitempty"`
-	DetectedAt         uint64  `json:"detectedAt"`
-	CreatedAt          int64   `json:"createdAt"`
-	UpdatedAt          int64   `json:"updatedAt"`
-	SupportsERC165     bool    `json:"supportsERC165"`
-	SupportsMetadata   bool    `json:"supportsMetadata"`
-	SupportsEnumerable bool    `json:"supportsEnumerable,omitempty"`
+	Address            string `json:"address"`
+	Standard           string `json:"standard"`
+	Name               string `json:"name"`
+	Symbol             string `json:"symbol"`
+	Decimals           uint8  `json:"decimals"`
+	TotalSupply        string `json:"totalSupply,omitempty"`
+	BaseURI            string `json:"baseURI,omitempty"`
+	DetectedAt         uint64 `json:"detectedAt"`
+	CreatedAt          int64  `json:"createdAt"`
+	UpdatedAt          int64  `json:"updatedAt"`
+	SupportsERC165     bool   `json:"supportsERC165"`
+	SupportsMetadata   bool   `json:"supportsMetadata"`
+	SupportsEnumerable bool   `json:"supportsEnumerable,omitempty"`
 }
 
 // toJSON converts TokenMetadata to JSON-serializable format

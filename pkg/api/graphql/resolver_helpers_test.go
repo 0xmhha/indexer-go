@@ -6,13 +6,13 @@ import (
 
 func TestCalculateBlockRangeReverse(t *testing.T) {
 	tests := []struct {
-		name          string
-		latestHeight  uint64
-		offset        int
-		limit         int
-		wantStart     uint64
-		wantEnd       uint64
-		wantOk        bool
+		name         string
+		latestHeight uint64
+		offset       int
+		limit        int
+		wantStart    uint64
+		wantEnd      uint64
+		wantOk       bool
 	}{
 		{
 			name:         "page 1 (offset=0)",

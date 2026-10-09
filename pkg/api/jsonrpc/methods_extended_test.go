@@ -146,8 +146,8 @@ func TestSetCodeMethods(t *testing.T) {
 			DelegationTarget: &target,
 		},
 		setCodeStats: &port.AddressSetCodeStats{
-			AsTargetCount:    3,
-			AsAuthorityCount: 2,
+			AsTargetCount:     3,
+			AsAuthorityCount:  2,
 			LastActivityBlock: 100,
 		},
 		txCount: 42,
@@ -793,7 +793,6 @@ func TestNotificationMethods(t *testing.T) {
 		})
 	}
 }
-
 
 func TestServerEdgeCases(t *testing.T) {
 	logger := zap.NewNop()

@@ -18,21 +18,21 @@ import (
 
 // Config holds all configuration for the indexer
 type Config struct {
-	RPC             RPCConfig             `yaml:"rpc"`
-	Source          SourceConfig          `yaml:"source"`
-	Database        DatabaseConfig        `yaml:"database"`
-	Log             LogConfig             `yaml:"log"`
-	Indexer         IndexerConfig         `yaml:"indexer"`
-	API             APIConfig             `yaml:"api"`
-	SystemContracts SystemContractsConfig `yaml:"system_contracts"`
-	MultiChain      MultiChainConfig      `yaml:"multichain"`
-	Watchlist       WatchlistConfig       `yaml:"watchlist"`
-	Resilience      ResilienceConfig      `yaml:"resilience"`
-	Notifications   NotificationsConfig   `yaml:"notifications"`
-	EventBus        EventBusConfig        `yaml:"eventbus"`
-	Node                NodeConfig                `yaml:"node"`
-	Verifier            VerifierConfig            `yaml:"verifier"`
-	AccountAbstraction  AccountAbstractionConfig  `yaml:"account_abstraction"`
+	RPC                RPCConfig                `yaml:"rpc"`
+	Source             SourceConfig             `yaml:"source"`
+	Database           DatabaseConfig           `yaml:"database"`
+	Log                LogConfig                `yaml:"log"`
+	Indexer            IndexerConfig            `yaml:"indexer"`
+	API                APIConfig                `yaml:"api"`
+	SystemContracts    SystemContractsConfig    `yaml:"system_contracts"`
+	MultiChain         MultiChainConfig         `yaml:"multichain"`
+	Watchlist          WatchlistConfig          `yaml:"watchlist"`
+	Resilience         ResilienceConfig         `yaml:"resilience"`
+	Notifications      NotificationsConfig      `yaml:"notifications"`
+	EventBus           EventBusConfig           `yaml:"eventbus"`
+	Node               NodeConfig               `yaml:"node"`
+	Verifier           VerifierConfig           `yaml:"verifier"`
+	AccountAbstraction AccountAbstractionConfig `yaml:"account_abstraction"`
 	// Features turns registered features on or off (pkg/feature). Features
 	// not listed keep the chain profile's default.
 	Features map[string]FeatureConfig `yaml:"features"`
@@ -704,7 +704,6 @@ func (c *Config) SetDefaults() {
 	if c.MultiChain.AutoRestartDelay == 0 {
 		c.MultiChain.AutoRestartDelay = 30 * time.Second
 	}
-
 
 	// Notifications defaults
 	if c.Notifications.Webhook.Timeout == 0 {

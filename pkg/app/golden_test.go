@@ -31,7 +31,7 @@ const (
 
 // ingestMode selects the fetcher's block read and write paths.
 type ingestMode struct {
-	name   string
+	name string
 	// features overrides features (name -> enabled) on top of the test
 	// chain's defaults.
 	features map[string]bool
@@ -140,8 +140,7 @@ func dumpDir(t *testing.T, dir string) []testchain.Entry {
 // time instead of chain data. They are removed before comparison so the rest
 // of the record is still pinned. Each entry is a determinism defect to fix in
 // the owning feature (handlers must not read the clock).
-var volatileJSONFields = map[string][]string{
-}
+var volatileJSONFields = map[string][]string{}
 
 func normalizeVolatile(key, value []byte) ([]byte, bool) {
 	// Undo records depend on how blocks were processed (restarts,

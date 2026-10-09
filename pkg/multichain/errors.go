@@ -8,17 +8,17 @@ import (
 // Sentinel errors for the multichain package.
 var (
 	// Chain lifecycle errors
-	ErrChainNotFound      = errors.New("chain not found")
-	ErrChainAlreadyExists = errors.New("chain already exists")
+	ErrChainNotFound       = errors.New("chain not found")
+	ErrChainAlreadyExists  = errors.New("chain already exists")
 	ErrChainAlreadyRunning = errors.New("chain is already running")
-	ErrChainNotRunning    = errors.New("chain is not running")
+	ErrChainNotRunning     = errors.New("chain is not running")
 
 	// Initialization errors
-	ErrClientInitFailed   = errors.New("failed to initialize client")
-	ErrSourceInitFailed   = errors.New("failed to initialize block source")
-	ErrFetcherInitFailed  = errors.New("failed to initialize fetcher")
-	ErrStorageInitFailed  = errors.New("failed to initialize storage")
-	ErrIndexerRequired    = errors.New("an indexer factory is required to start chain")
+	ErrClientInitFailed  = errors.New("failed to initialize client")
+	ErrSourceInitFailed  = errors.New("failed to initialize block source")
+	ErrFetcherInitFailed = errors.New("failed to initialize fetcher")
+	ErrStorageInitFailed = errors.New("failed to initialize storage")
+	ErrIndexerRequired   = errors.New("an indexer factory is required to start chain")
 
 	// Configuration errors
 	ErrInvalidConfig     = errors.New("invalid configuration")

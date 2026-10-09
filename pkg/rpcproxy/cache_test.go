@@ -147,9 +147,9 @@ func TestCache_Stats(t *testing.T) {
 	c := NewCache(smallCacheConfig())
 
 	c.Set("a", 1, time.Minute)
-	c.Get("a")          // hit
+	c.Get("a")           // hit
 	c.Get("nonexistent") // miss
-	c.Get("a")          // hit
+	c.Get("a")           // hit
 
 	hits, misses, _, size := c.Stats()
 	assert.Equal(t, int64(2), hits)

@@ -116,12 +116,12 @@ type NotificationService struct {
 	handlers map[NotificationType]Handler
 	queue    chan *Notification
 
-	mu        sync.RWMutex
-	settings  map[string]*NotificationSetting
-	running   bool
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
+	mu       sync.RWMutex
+	settings map[string]*NotificationSetting
+	running  bool
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
 
 	eventSub *events.Subscription
 

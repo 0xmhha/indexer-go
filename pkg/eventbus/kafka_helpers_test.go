@@ -16,8 +16,8 @@ import (
 func TestCreateKafkaSASLMechanism_PLAIN(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "PLAIN",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 	}
 
 	mechanism, err := createKafkaSASLMechanism(cfg)
@@ -28,8 +28,8 @@ func TestCreateKafkaSASLMechanism_PLAIN(t *testing.T) {
 func TestCreateKafkaSASLMechanism_SCRAM256(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "SCRAM-SHA-256",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 	}
 
 	mechanism, err := createKafkaSASLMechanism(cfg)
@@ -40,8 +40,8 @@ func TestCreateKafkaSASLMechanism_SCRAM256(t *testing.T) {
 func TestCreateKafkaSASLMechanism_SCRAM512(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "SCRAM-SHA-512",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 	}
 
 	mechanism, err := createKafkaSASLMechanism(cfg)
@@ -52,8 +52,8 @@ func TestCreateKafkaSASLMechanism_SCRAM512(t *testing.T) {
 func TestCreateKafkaSASLMechanism_Unsupported(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "UNKNOWN",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 	}
 
 	mechanism, err := createKafkaSASLMechanism(cfg)
@@ -94,8 +94,8 @@ func TestBuildKafkaDialer_WithTLS(t *testing.T) {
 func TestBuildKafkaDialer_WithSASL(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "PLAIN",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 	}
 
 	dialer, err := buildKafkaDialer(cfg)
@@ -107,8 +107,8 @@ func TestBuildKafkaDialer_WithSASL(t *testing.T) {
 func TestBuildKafkaDialer_WithSASLAndTLS(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "PLAIN",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 		TLS: config.TLSConfig{
 			Enabled: true,
 		},
@@ -124,8 +124,8 @@ func TestBuildKafkaDialer_WithSASLAndTLS(t *testing.T) {
 func TestBuildKafkaDialer_UnsupportedSASL(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "INVALID",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 	}
 
 	dialer, err := buildKafkaDialer(cfg)
@@ -162,8 +162,8 @@ func TestBuildKafkaTransport_WithTLS(t *testing.T) {
 func TestBuildKafkaTransport_WithSASL(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "PLAIN",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 	}
 
 	transport, err := buildKafkaTransport(cfg)
@@ -175,8 +175,8 @@ func TestBuildKafkaTransport_WithSASL(t *testing.T) {
 func TestBuildKafkaTransport_WithSASLAndTLS(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "PLAIN",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 		TLS: config.TLSConfig{
 			Enabled: true,
 		},
@@ -192,8 +192,8 @@ func TestBuildKafkaTransport_WithSASLAndTLS(t *testing.T) {
 func TestBuildKafkaTransport_UnsupportedSASL(t *testing.T) {
 	cfg := config.EventBusKafkaConfig{
 		SASLMechanism: "INVALID",
-		SASLUsername:   "user",
-		SASLPassword:   "pass",
+		SASLUsername:  "user",
+		SASLPassword:  "pass",
 	}
 
 	transport, err := buildKafkaTransport(cfg)

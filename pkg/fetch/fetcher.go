@@ -93,7 +93,6 @@ type Config struct {
 	// closely without retrying failures aggressively.
 	PollInterval time.Duration
 
-
 	// Finality and Confirmations choose the live loop's target height
 	// (see targetHead). The zero value indexes up to the head.
 	Finality      string
@@ -136,13 +135,13 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
-	client              Client
-	storage             Storage
-	config              *Config
-	logger              *zap.Logger
-	eventBus            *events.EventBus
-	metrics             *RPCMetrics
-	optimizer           *AdaptiveOptimizer
+	client    Client
+	storage   Storage
+	config    *Config
+	logger    *zap.Logger
+	eventBus  *events.EventBus
+	metrics   *RPCMetrics
+	optimizer *AdaptiveOptimizer
 
 	// chainID is the chain identifier for multi-chain support
 	chainID string
@@ -150,8 +149,6 @@ type Fetcher struct {
 	// heads wakes the live loop when the node reports a new head
 	// (SetHeadNotifier); nil means polling only.
 	heads <-chan struct{}
-
-
 
 	// features runs the handlers of the enabled features for every block.
 	features *feature.Pipeline
@@ -172,7 +169,6 @@ type Fetcher struct {
 	// src, when set, reads blocks as raw JSON decoded by the chain profile
 	// instead of through client (chain profile design, CP-3).
 	src source.Source
-
 
 	// txr opens per-block storage transactions (nil if the storage cannot).
 	txr port.BlockTransactor
@@ -222,14 +218,14 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 	txr, _ := storage.(port.BlockTransactor)
 
 	f := &Fetcher{
-		client:              client,
-		storage:             storage,
-		config:              config,
-		logger:              logger,
-		eventBus:            eventBus,
-		metrics:             metrics,
-		optimizer:           optimizer,
-		txr:                 txr,
+		client:    client,
+		storage:   storage,
+		config:    config,
+		logger:    logger,
+		eventBus:  eventBus,
+		metrics:   metrics,
+		optimizer: optimizer,
+		txr:       txr,
 	}
 	if !config.NoOutbox {
 		f.initOutbox(config.OutboxRetain, config.StreamGroup)

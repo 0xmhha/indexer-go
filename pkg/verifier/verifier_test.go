@@ -80,14 +80,14 @@ func TestErrorSentinels(t *testing.T) {
 
 func TestVerificationRequest_Fields(t *testing.T) {
 	req := &VerificationRequest{
-		SourceCode:          "pragma solidity ^0.8.0;",
-		CompilerVersion:     "0.8.20",
-		ContractName:        "Token",
-		OptimizationEnabled: true,
-		OptimizationRuns:    200,
-		EVMVersion:          "london",
+		SourceCode:           "pragma solidity ^0.8.0;",
+		CompilerVersion:      "0.8.20",
+		ContractName:         "Token",
+		OptimizationEnabled:  true,
+		OptimizationRuns:     200,
+		EVMVersion:           "london",
 		ConstructorArguments: "000000000000000000000000000000000000000000000000000000000000002a",
-		LicenseType:         "MIT",
+		LicenseType:          "MIT",
 	}
 
 	assert.Equal(t, "Token", req.ContractName)
@@ -336,8 +336,8 @@ func TestMaskImmutablePositions_MultipleRefs(t *testing.T) {
 	bytecode := "6080604052348015600e"
 
 	refs := map[string][]compiler.ImmutableReference{
-		"1": {{Start: 0, Length: 2}},  // hex 0-3
-		"2": {{Start: 5, Length: 2}},  // hex 10-13
+		"1": {{Start: 0, Length: 2}}, // hex 0-3
+		"2": {{Start: 5, Length: 2}}, // hex 10-13
 	}
 
 	result := v.maskImmutablePositions(bytecode, refs)

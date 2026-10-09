@@ -96,4 +96,3 @@ func builtinType(t events.EventType) bool {
 func (s *JSONSerializer) ContentType() string {
 	return "application/json"
 }
-

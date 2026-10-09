@@ -633,9 +633,9 @@ func TestEncodeEpochInfo_Valid(t *testing.T) {
 	addr2 := common.HexToAddress("0x2222222222222222222222222222222222222222")
 
 	epochInfo := &EpochInfo{
-		EpochNumber:   10,
-		BlockNumber:   1000,
-		Candidates:    []Candidate{
+		EpochNumber: 10,
+		BlockNumber: 1000,
+		Candidates: []Candidate{
 			{Address: addr1, Diligence: 100},
 			{Address: addr2, Diligence: 200},
 		},

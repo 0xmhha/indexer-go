@@ -233,8 +233,8 @@ func TestPebbleStorage_GetTokenBalances(t *testing.T) {
 				Address: tokenContract,
 				Topics: []common.Hash{
 					common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"), // Transfer topic
-					common.BytesToHash(common.LeftPadBytes(sender.Bytes(), 32)),                           // from
-					common.BytesToHash(common.LeftPadBytes(recipient.Bytes(), 32)),                        // to
+					common.BytesToHash(common.LeftPadBytes(sender.Bytes(), 32)),                            // from
+					common.BytesToHash(common.LeftPadBytes(recipient.Bytes(), 32)),                         // to
 				},
 				Data: valueBytes,
 			},

@@ -119,11 +119,11 @@ func TestFetcher_GetOptimalWorkerCount_WithOptimizer(t *testing.T) {
 	client := newMockClient()
 	storage := newMockStorage()
 	config := &Config{
-		StartHeight:               0,
-		BatchSize:                 10,
-		MaxRetries:                3,
-		RetryDelay:                time.Second,
-		NumWorkers:                8,
+		StartHeight:                0,
+		BatchSize:                  10,
+		MaxRetries:                 3,
+		RetryDelay:                 time.Second,
+		NumWorkers:                 8,
 		EnableAdaptiveOptimization: true,
 	}
 	f := NewFetcher(client, storage, config, zap.NewNop(), nil)
@@ -139,10 +139,10 @@ func TestFetcher_GetOptimalBatchSize_WithOptimizer(t *testing.T) {
 	client := newMockClient()
 	storage := newMockStorage()
 	config := &Config{
-		StartHeight:               0,
-		BatchSize:                 10,
-		MaxRetries:                3,
-		RetryDelay:                time.Second,
+		StartHeight:                0,
+		BatchSize:                  10,
+		MaxRetries:                 3,
+		RetryDelay:                 time.Second,
 		EnableAdaptiveOptimization: true,
 	}
 	f := NewFetcher(client, storage, config, zap.NewNop(), nil)

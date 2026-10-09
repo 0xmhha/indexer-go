@@ -245,8 +245,8 @@ func TestCalculateOptimalWorkers_NoChange(t *testing.T) {
 
 	stats := MetricsSnapshot{
 		OptimalWorkerCount:    10,
-		RecentErrorRate:       0.02,  // Between target and max
-		RecentAvgResponseTime: 600,   // Above target but below target*2
+		RecentErrorRate:       0.02, // Between target and max
+		RecentAvgResponseTime: 600,  // Above target but below target*2
 	}
 
 	result := opt.calculateOptimalWorkers(stats)

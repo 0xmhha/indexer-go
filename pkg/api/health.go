@@ -13,19 +13,19 @@ import (
 
 // DetailedHealth provides comprehensive health information for the indexer service
 type DetailedHealth struct {
-	Status       string                   `json:"status"`
-	NodeID       string                   `json:"node_id"`
-	Role         string                   `json:"role"`
-	Timestamp    string                   `json:"timestamp"`
-	Uptime       string                   `json:"uptime"`
-	Version      string                   `json:"version"`
-	EventBus     *EventBusHealth          `json:"eventbus,omitempty"`
-	Redis        *ComponentHealth         `json:"redis,omitempty"`
-	Kafka        *ComponentHealth         `json:"kafka,omitempty"`
-	Storage      *ComponentHealth         `json:"storage,omitempty"`
-	Chains       map[string]ChainHealth   `json:"chains,omitempty"`
-	Metrics      HealthMetrics            `json:"metrics"`
-	Dependencies []DependencyHealth       `json:"dependencies,omitempty"`
+	Status       string                 `json:"status"`
+	NodeID       string                 `json:"node_id"`
+	Role         string                 `json:"role"`
+	Timestamp    string                 `json:"timestamp"`
+	Uptime       string                 `json:"uptime"`
+	Version      string                 `json:"version"`
+	EventBus     *EventBusHealth        `json:"eventbus,omitempty"`
+	Redis        *ComponentHealth       `json:"redis,omitempty"`
+	Kafka        *ComponentHealth       `json:"kafka,omitempty"`
+	Storage      *ComponentHealth       `json:"storage,omitempty"`
+	Chains       map[string]ChainHealth `json:"chains,omitempty"`
+	Metrics      HealthMetrics          `json:"metrics"`
+	Dependencies []DependencyHealth     `json:"dependencies,omitempty"`
 }
 
 // EventBusHealth contains EventBus health information
@@ -61,13 +61,13 @@ type ChainHealth struct {
 
 // HealthMetrics contains operational metrics
 type HealthMetrics struct {
-	RequestsPerSecond  float64 `json:"requests_per_second,omitempty"`
-	AverageLatencyMs   float64 `json:"average_latency_ms,omitempty"`
-	ErrorRate          float64 `json:"error_rate_percent,omitempty"`
-	MemoryUsageMB      float64 `json:"memory_usage_mb,omitempty"`
-	GoroutineCount     int     `json:"goroutine_count,omitempty"`
-	ActiveConnections  int     `json:"active_connections,omitempty"`
-	EventsProcessed    uint64  `json:"events_processed,omitempty"`
+	RequestsPerSecond float64 `json:"requests_per_second,omitempty"`
+	AverageLatencyMs  float64 `json:"average_latency_ms,omitempty"`
+	ErrorRate         float64 `json:"error_rate_percent,omitempty"`
+	MemoryUsageMB     float64 `json:"memory_usage_mb,omitempty"`
+	GoroutineCount    int     `json:"goroutine_count,omitempty"`
+	ActiveConnections int     `json:"active_connections,omitempty"`
+	EventsProcessed   uint64  `json:"events_processed,omitempty"`
 }
 
 // DependencyHealth represents health of an external dependency

@@ -23,4 +23,3 @@ func modelReceiptOf(r *types.Receipt, err error) (*model.Receipt, error) {
 	}
 	return gethconv.ReceiptFromGeth(r), nil
 }
-

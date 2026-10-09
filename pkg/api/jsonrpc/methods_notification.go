@@ -92,12 +92,12 @@ func (h *Handler) createNotificationSetting(ctx context.Context, params json.Raw
 	}
 
 	var input struct {
-		Name        string                    `json:"name"`
-		Type        string                    `json:"type"`
-		Enabled     *bool                     `json:"enabled,omitempty"`
-		EventTypes  []string                  `json:"eventTypes"`
-		Filter      *notificationFilterInput  `json:"filter,omitempty"`
-		Destination notificationDestInput     `json:"destination"`
+		Name        string                   `json:"name"`
+		Type        string                   `json:"type"`
+		Enabled     *bool                    `json:"enabled,omitempty"`
+		EventTypes  []string                 `json:"eventTypes"`
+		Filter      *notificationFilterInput `json:"filter,omitempty"`
+		Destination notificationDestInput    `json:"destination"`
 	}
 
 	if err := json.Unmarshal(params, &input); err != nil {
@@ -151,12 +151,12 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, params json.Raw
 	}
 
 	var input struct {
-		ID          string                    `json:"id"`
-		Name        *string                   `json:"name,omitempty"`
-		Enabled     *bool                     `json:"enabled,omitempty"`
-		EventTypes  []string                  `json:"eventTypes,omitempty"`
-		Filter      *notificationFilterInput  `json:"filter,omitempty"`
-		Destination *notificationDestInput    `json:"destination,omitempty"`
+		ID          string                   `json:"id"`
+		Name        *string                  `json:"name,omitempty"`
+		Enabled     *bool                    `json:"enabled,omitempty"`
+		EventTypes  []string                 `json:"eventTypes,omitempty"`
+		Filter      *notificationFilterInput `json:"filter,omitempty"`
+		Destination *notificationDestInput   `json:"destination,omitempty"`
 	}
 
 	if err := json.Unmarshal(params, &input); err != nil {
@@ -439,13 +439,13 @@ type notificationFilterInput struct {
 }
 
 type notificationDestInput struct {
-	WebhookURL     string   `json:"webhookURL,omitempty"`
-	WebhookSecret  string   `json:"webhookSecret,omitempty"`
-	EmailTo        []string `json:"emailTo,omitempty"`
-	EmailSubject   string   `json:"emailSubject,omitempty"`
-	SlackWebhookURL string  `json:"slackWebhookURL,omitempty"`
-	SlackChannel   string   `json:"slackChannel,omitempty"`
-	SlackUsername  string   `json:"slackUsername,omitempty"`
+	WebhookURL      string   `json:"webhookURL,omitempty"`
+	WebhookSecret   string   `json:"webhookSecret,omitempty"`
+	EmailTo         []string `json:"emailTo,omitempty"`
+	EmailSubject    string   `json:"emailSubject,omitempty"`
+	SlackWebhookURL string   `json:"slackWebhookURL,omitempty"`
+	SlackChannel    string   `json:"slackChannel,omitempty"`
+	SlackUsername   string   `json:"slackUsername,omitempty"`
 }
 
 func parseJSONRPCNotifyFilter(input *notificationFilterInput) *notifications.NotifyFilter {
@@ -497,4 +497,3 @@ func GetNotificationMethods() []string {
 		"notification_cancel",
 	}
 }
-
