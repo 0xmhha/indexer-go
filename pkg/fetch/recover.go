@@ -161,6 +161,14 @@ func (f *Fetcher) startOnlineBackfill(jobs []feature.BackfillJob, backfill *feat
 					if sleepCtx(ctx, f.config.RetryDelay) != nil {
 						return
 					}
+					// A step of several blocks commits them one by one, so
+					// some may have committed before the failure: resume
+					// after the progress stored with them, processing no
+					// block twice (an order-independent feature may still
+					// count, as receipts.totals does).
+					if next, ok := storedGapStart(ctx, fs, name, to); ok && next > h {
+						h = next
+					}
 					continue
 				}
 				h = end + 1
@@ -180,3 +188,21 @@ func (f *Fetcher) background() context.Context {
 // WaitBackground waits for background work (online backfill) to finish. It
 // is meant for tests and tooling.
 func (f *Fetcher) WaitBackground() { f.bgWG.Wait() }
+
+// storedGapStart returns the first height of the gap recorded for an
+// online backfill up to to, after the last committed block (to+1 when the
+// gap is filled); ok is false when it cannot be read.
+func storedGapStart(ctx context.Context, fs port.FeatureStateStore, name string, to uint64) (uint64, bool) {
+	states, err := fs.FeatureStates(ctx)
+	if err != nil {
+		return 0, false
+	}
+	st, ok := states[name]
+	switch {
+	case !ok || !st.Active:
+		return 0, false
+	case st.Gap == nil:
+		return to + 1, true
+	}
+	return st.Gap.From, true
+}
