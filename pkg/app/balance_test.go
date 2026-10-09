@@ -176,3 +176,38 @@ func TestTimeQueriesFindIndexedBlocks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, head+1, m.TotalBlocks)
 }
+
+// TestNativeBalancesSurviveNodeErrors: balance.native follows the
+// determinism rules (docs/SDK.md). A balance read the node does not answer
+// fails the block, which is retried, so the balances still match the chain
+// (it used to start the account at 0). A node that answers with an error
+// (as one without an old block's state does) cannot give the balance; the
+// account starts at 0 and indexing goes on rather than stopping for good.
+func TestNativeBalancesSurviveNodeErrors(t *testing.T) {
+	t.Run("node down for a while", func(t *testing.T) {
+		sc := testchain.BuildDefault()
+		srv := testchain.NewServer(sc.Chain)
+		defer srv.Close()
+		app := startApp(t, srv, filepath.Join(t.TempDir(), "db"))
+		defer app.Shutdown()
+		// Block 0 first, so the failures meet the first accounts of block 1.
+		head := sc.Chain.Head()
+		sc.Chain.SetHead(0)
+		runLiveUntil(t, app, 0)
+		sc.Chain.SetHead(head)
+		before := srv.Calls()["eth_getBalance"]
+		srv.FailMethod("eth_getBalance", 2)
+		runLiveUntil(t, app, head)
+		require.Greater(t, srv.Calls()["eth_getBalance"], before+2, "accounts were read from the node after the failures")
+		requireChainBalances(t, app, sc.Chain)
+	})
+	t.Run("node without the state", func(t *testing.T) {
+		sc := testchain.BuildDefault()
+		srv := testchain.NewServer(sc.Chain)
+		defer srv.Close()
+		srv.DisableMethod("eth_getBalance")
+		app := startApp(t, srv, filepath.Join(t.TempDir(), "db"))
+		defer app.Shutdown()
+		runLiveUntil(t, app, sc.Chain.Head()) // reaches the head
+	})
+}
