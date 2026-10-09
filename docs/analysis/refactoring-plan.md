@@ -454,7 +454,7 @@ graph LR
 | 스키마 버전과 migration, 기능별 backfill | 기능을 켜고 끄는 일과 키 형식 변경은 기존 DB와 충돌한다 |
 | 기존 데이터 이전 | 키 형식을 바꾸면 지금 Pebble DB를 쓸 수 없다. 재색인 시간을 추정하고 이전 계획을 세워야 한다 |
 | indexer-frontend 호환 | 이 서비스의 GraphQL을 indexer-frontend가 쓴다. 스키마를 바꾸면 화면이 깨진다 |
-| 결정성(determinism) 규약 | 처리기가 결정적이어야 재색인, reorg, backfill 결과가 같다. 시계 읽기와 외부 호출을 금지하는 규약이 필요하다. (10/9: 규약은 `docs/SDK.md` 6장. `pkg/sdk/sdktest`의 `RequireDeterministic`(처음부터, 다시, 재시작, 늦게 켜서 backfill한 결과 비교)와 `RequireNoForbiddenUses`(소스 검사)로 확인한다. 내장 기능 중 `token.metadata`(latest 상태 조회)와 `balance.native`(노드 오류 때 0에서 시작)는 아직 규약을 어긴다) |
+| 결정성(determinism) 규약 | 처리기가 결정적이어야 재색인, reorg, backfill 결과가 같다. 시계 읽기와 외부 호출을 금지하는 규약이 필요하다. (10/9: 규약은 `docs/SDK.md` 6장. `pkg/sdk/sdktest`의 `RequireDeterministic`(처음부터, 다시, 재시작, 늦게 켜서 backfill한 결과 비교)와 `RequireNoForbiddenUses`(소스 검사)로 확인한다. `token.metadata`는 10/9에 생성 블록 기준 조회로 고쳤다(노드에 그 상태가 없을 때만 latest, 경고). `balance.native`(노드 오류 때 0에서 시작)는 아직 규약을 어긴다) |
 | 공개 API 보안 | DEX용 공개 엔드포인트는 rate limit, 비용 제한, 인증이 기본으로 켜져 있어야 한다 |
 | 관측성과 SLO, 부하 시험 | 저지연 목표는 측정 없이는 검증할 수 없다. 기존 문서도 프로파일링을 하지 않았다 |
 | non-EVM 체인 범위 | "어떤 블록체인이든"의 범위를 정해야 한다. EVM 계열만이면 소스 SPI를 단순하게 둘 수 있다 |
