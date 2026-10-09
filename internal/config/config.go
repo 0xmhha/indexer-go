@@ -317,6 +317,10 @@ type ChainConfig struct {
 	RPCEndpoint string `yaml:"rpc_endpoint"`
 	// WSEndpoint is the optional WebSocket endpoint URL
 	WSEndpoint string `yaml:"ws_endpoint,omitempty"`
+	// FallbackEndpoints are further HTTP(S) JSON-RPC URLs of the chain;
+	// calls fail over to them in order, as rpc.fallback_endpoints does in
+	// single-chain mode.
+	FallbackEndpoints []string `yaml:"fallback_endpoints,omitempty"`
 	// ChainID is the numeric chain ID
 	ChainID uint64 `yaml:"chain_id"`
 	// AdapterType specifies which adapter to use: "auto", "evm", "stableone", "anvil"
@@ -1380,6 +1384,11 @@ func (c *Config) validateMultiChain() error {
 		if ch.WSEndpoint != "" && !strings.HasPrefix(ch.WSEndpoint, "ws://") && !strings.HasPrefix(ch.WSEndpoint, "wss://") {
 			return fmt.Errorf("multichain.chains[%d] (%s): ws_endpoint %q is not a WebSocket URL", i, ch.ID, ch.WSEndpoint)
 		}
+		for _, e := range ch.FallbackEndpoints {
+			if !strings.HasPrefix(e, "http://") && !strings.HasPrefix(e, "https://") {
+				return fmt.Errorf("multichain.chains[%d] (%s): fallback_endpoints: %q is not an HTTP(S) URL", i, ch.ID, e)
+			}
+		}
 	}
 	return nil
 }
@@ -1613,7 +1622,7 @@ func (c *Config) UnsupportedSettings() []string {
 	if c.MultiChainMode() {
 		ignored := map[string]bool{
 			"rpc.endpoint":           c.RPC.Endpoint != "",
-			"rpc.fallback_endpoints": len(c.RPC.FallbackEndpoints) > 0,
+			"rpc.fallback_endpoints": len(c.RPC.FallbackEndpoints) > 0, // per chain: multichain.chains[].fallback_endpoints
 			"rpc.ws_endpoint":        c.RPC.WSEndpoint != "",
 			"rpc.record_dir":         c.RPC.RecordDir != "",
 			"source.era_dir":         c.Source.EraDir != "",
