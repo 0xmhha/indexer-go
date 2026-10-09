@@ -422,7 +422,7 @@ node:
 
 - `api` 프로세스는 schema를 만들거나 올리지 않는다. 색인 프로세스가 먼저 migration을 적용해야 시작한다.
 - `api` 프로세스의 GraphQL 구독은 색인 프로세스가 쓴 outbox를 `indexer.poll_interval`마다 읽어 받는다(소비 그룹 `node.id`, 위치는 메모리에만 둔다). 시작한 뒤의 이벤트부터 받으므로, 그 전 이벤트가 필요한 구독자는 `fromSequence`로 이어 받는다.
-- `api` 프로세스에서는 쓰는 기능이 동작하지 않는다: 알림(`notifications.enabled`)과 계약 검증(`verifier.enabled`)은 무시하고 경고를 남긴다. 알림 설정처럼 저장하는 API 요청은 읽기 전용 오류로 끝난다. genesis 잔액과 노드에서 가져온 토큰 메타데이터는 응답에는 쓰지만 저장하지 않는다.
+- `api` 프로세스에서 계약 검증(`verifier.enabled`)은 무시하고 경고를 남긴다. 알림(`notifications.enabled`)은 API만 서빙한다: 설정·조회·재시도 요청을 처리하고 알림 키(`/data/notification/`, `/index/notification/`)만 DB에 쓸 수 있다(나머지는 읽기 전용). 전송은 ingest 프로세스가 하며, 그쪽 알림 서비스가 설정을 5초마다 다시 읽어 반영한다. 그래서 ingest와 api 양쪽에 `notifications.enabled`와 같은 handler 설정(webhook, email, slack)을 둔다. 재시도 요청은 pending으로 저장되고 ingest가 보낸다. 시험 전송(`testNotificationSetting`)은 api 프로세스가 직접 보낸다. genesis 잔액과 노드에서 가져온 토큰 메타데이터는 응답에는 쓰지만 저장하지 않는다.
 
 ---
 

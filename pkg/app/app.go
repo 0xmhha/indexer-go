@@ -488,7 +488,12 @@ func (a *App) testConnection(ctx context.Context) error {
 // initStorageOnly initializes only the base storage layer without genesis initialization
 // This is used when multichain mode is enabled (each chain handles its own genesis)
 func (a *App) initStorageOnly(ctx context.Context) error {
-	baseStore, err := openStore(ctx, &a.config.Database, a.config.NodeRole() == config.RoleAPI, a.logger)
+	apiProcess := a.config.NodeRole() == config.RoleAPI
+	var writable []string
+	if apiProcess && a.config.Notifications.Enabled {
+		writable = notifications.KeyPrefixes() // the API process manages notification settings
+	}
+	baseStore, err := openStore(ctx, &a.config.Database, apiProcess, writable, a.logger)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -1131,8 +1136,9 @@ func (a *App) initContractVerifier() error {
 func (a *App) Run(ctx context.Context) error {
 	a.logger.Info("Starting indexing...")
 
-	// Start notification service if enabled
-	if a.notificationService != nil {
+	// Start notification service if enabled. An API process only serves
+	// the notification API: the indexing process delivers.
+	if a.notificationService != nil && a.config.NodeRole() != config.RoleAPI {
 		if err := a.notificationService.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start notification service: %w", err)
 		}

@@ -229,3 +229,26 @@ func TestFilteredAddressListAcrossBatches(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, uint64(3), stats.TotalTransactions, "the statistics read every batch")
 }
+
+// TestReadOnlyStoreWritablePrefixes: a read-only store (an API process)
+// writes and deletes key-value keys under its writable prefixes, the
+// notification settings it manages, and refuses every other write.
+func TestReadOnlyStoreWritablePrefixes(t *testing.T) {
+	ctx := context.Background()
+	schema := newTestSchema(t)
+	openTestStore(t, schema, false) // creates the schema
+	r, err := Open(ctx, Options{DSN: testDSN(t), Schema: schema, ReadOnly: true, WritablePrefixes: []string{"/data/notification/"}})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = r.Close() })
+
+	key := []byte("/data/notification/setting/a")
+	require.NoError(t, r.Put(ctx, key, []byte("v")))
+	got, err := r.Get(ctx, key)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("v"), got)
+	require.NoError(t, r.Delete(ctx, key))
+
+	assert.ErrorIs(t, r.Put(ctx, []byte("/data/blocks/1"), []byte("v")), port.ErrReadOnly)
+	assert.ErrorIs(t, r.Delete(ctx, []byte("/data/blocks/1")), port.ErrReadOnly)
+	assert.ErrorIs(t, r.SetLatestHeight(ctx, 1), port.ErrReadOnly)
+}

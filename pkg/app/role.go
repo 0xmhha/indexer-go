@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.uber.org/zap"
@@ -26,9 +27,6 @@ import (
 // the event bus fed from the change stream, and the node client, used by
 // the RPC proxy, genesis balance lookups and token metadata lookups.
 func (a *App) initAPINode(ctx context.Context) error {
-	if a.config.Notifications.Enabled {
-		a.logger.Warn("notifications.enabled is ignored by an API process: the indexing process sends notifications")
-	}
 	if a.config.Verifier.Enabled {
 		a.logger.Warn("verifier.enabled is ignored by an API process: contract verification stores its results")
 	}
@@ -36,6 +34,11 @@ func (a *App) initAPINode(ctx context.Context) error {
 		return err
 	}
 	a.initEventBus()
+	// The notification API (settings, history): the service is not started
+	// here, the indexing process delivers and reloads the settings.
+	if err := a.initNotificationService(); err != nil {
+		return fmt.Errorf("failed to initialize notification service: %w", err)
+	}
 	if err := a.initClient(); err != nil {
 		return err
 	}

@@ -26,14 +26,16 @@ var (
 func usesPostgres(db *config.DatabaseConfig) bool { return db.Driver == config.DriverPostgres }
 
 // openStore opens the store db selects: for indexing, or read-only for an
-// API process (node.role api, PostgreSQL only).
-func openStore(ctx context.Context, db *config.DatabaseConfig, readOnly bool, logger *zap.Logger) (storage.Storage, error) {
+// API process (node.role api, PostgreSQL only), which still writes the
+// key-value prefixes in writable (its notification settings).
+func openStore(ctx context.Context, db *config.DatabaseConfig, readOnly bool, writable []string, logger *zap.Logger) (storage.Storage, error) {
 	if usesPostgres(db) {
 		s, err := postgres.Open(ctx, postgres.Options{
-			DSN:      db.Postgres.DSN,
-			Schema:   db.Postgres.Schema,
-			MaxConns: db.Postgres.MaxConns,
-			ReadOnly: readOnly,
+			DSN:              db.Postgres.DSN,
+			Schema:           db.Postgres.Schema,
+			MaxConns:         db.Postgres.MaxConns,
+			ReadOnly:         readOnly,
+			WritablePrefixes: writable,
 		})
 		if err != nil {
 			return nil, err

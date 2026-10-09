@@ -333,22 +333,32 @@ func (s *NotificationService) Stop(ctx context.Context) error {
 }
 
 // loadSettings loads all notification settings from storage.
+//
+// It replaces the settings held in memory, so settings another process
+// created, changed or deleted (an API process, node.role api) take effect
+// here; the retry processor calls it every settingsReload.
 func (s *NotificationService) loadSettings(ctx context.Context) error {
 	settings, err := s.storage.ListSettings(ctx, &SettingsFilter{Limit: 10000})
 	if err != nil {
 		return err
 	}
+	loaded := make(map[string]*NotificationSetting, len(settings))
+	for _, setting := range settings {
+		loaded[setting.ID] = setting
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	for _, setting := range settings {
-		s.settings[setting.ID] = setting
+	if len(loaded) != len(s.settings) {
+		s.logger.Info("loaded notification settings", zap.Int("count", len(loaded)))
 	}
-
-	s.logger.Info("loaded notification settings", zap.Int("count", len(settings)))
+	s.settings = loaded
 	return nil
 }
+
+// settingsReload is how often a running service reloads its settings from
+// storage, where an API process may have changed them.
+var settingsReload = 5 * time.Second
 
 // subscribeToEvents subscribes to blockchain events.
 func (s *NotificationService) subscribeToEvents() error {
@@ -934,6 +944,8 @@ func (s *NotificationService) retryProcessor() {
 
 	ticker := time.NewTicker(s.config.Queue.FlushInterval)
 	defer ticker.Stop()
+	reload := time.NewTicker(settingsReload)
+	defer reload.Stop()
 
 	for {
 		select {
@@ -941,6 +953,10 @@ func (s *NotificationService) retryProcessor() {
 			return
 		case <-ticker.C:
 			s.processRetries()
+		case <-reload.C:
+			if err := s.loadSettings(s.ctx); err != nil && s.ctx.Err() == nil {
+				s.logger.Warn("failed to reload notification settings", zap.Error(err))
+			}
 		}
 	}
 }
@@ -1100,8 +1116,18 @@ func (s *NotificationService) RetryNotification(ctx context.Context, id string) 
 	notification.Status = DeliveryStatusPending
 	notification.NextRetry = nil
 	notification.Error = ""
-
-	s.enqueueNotification(notification)
+	// Stored as pending, the retry processor of the running service (in
+	// another process for an API process) delivers it, also when the
+	// queue is full.
+	if err := s.storage.UpdateNotification(ctx, notification); err != nil {
+		return err
+	}
+	s.mu.RLock()
+	running := s.running
+	s.mu.RUnlock()
+	if running {
+		s.enqueueNotification(notification)
+	}
 	return nil
 }
 

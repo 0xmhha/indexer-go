@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,6 +20,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
@@ -130,4 +134,60 @@ func queryAll(t *testing.T, app *App) string {
 	out, err := json.Marshal(results)
 	require.NoError(t, err)
 	return string(out)
+}
+
+// TestAPIProcessManagesNotifications: with roles split, the API process
+// serves the notification API and stores the settings it creates (its
+// database is read-only but for the notification keys); the ingest process
+// reloads them and delivers. Before, neither process could create a
+// setting.
+func TestAPIProcessManagesNotifications(t *testing.T) {
+	postgresDSN(t)
+	sc := testchain.BuildDefault()
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+	var hooks atomic.Int64
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hooks.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer hook.Close()
+	notify := func(cfg *config.Config) *config.Config {
+		cfg.Notifications.Enabled = true
+		cfg.Notifications.Webhook.Enabled = true
+		cfg.Notifications.Queue.FlushInterval = 20 * time.Millisecond
+		cfg.SetDefaults()
+		return cfg
+	}
+	dir := filepath.Join(t.TempDir(), "db")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	ingest, err := NewApp(notify(roleConfig(t, srv.URL(), dir, config.RoleIngest, "ingest")), zap.NewNop(), false, "")
+	require.NoError(t, err)
+	defer ingest.Shutdown()
+	runCtx, stop := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { done <- ingest.Run(runCtx) }()
+	defer func() { stop(); <-done }()
+
+	api, err := NewApp(notify(roleConfig(t, srv.URL(), dir, config.RoleAPI, "api")), zap.NewNop(), false, "")
+	require.NoError(t, err)
+	defer api.Shutdown()
+	require.NotNil(t, api.notificationService, "the API process serves the notification API")
+	_, err = api.notificationService.CreateSetting(ctx, &notifications.NotificationSetting{
+		ID: "txs", Name: "txs", Type: notifications.NotificationTypeWebhook, Enabled: true,
+		EventTypes:  []notifications.EventType{notifications.EventTypeTransaction},
+		Destination: notifications.Destination{WebhookURL: hook.URL},
+	})
+	require.NoError(t, err, "the API process stores the setting")
+	assert.ErrorIs(t, api.storage.SetLatestHeight(ctx, 1), port.ErrReadOnly, "other writes stay refused")
+
+	// New blocks until the ingest process has reloaded the setting.
+	deadline := time.Now().Add(30 * time.Second)
+	for hooks.Load() == 0 && time.Now().Before(deadline) {
+		extendChain(sc, 1)
+		time.Sleep(300 * time.Millisecond)
+	}
+	require.Positive(t, hooks.Load(), "the ingest process delivers for a setting the API process created")
 }
