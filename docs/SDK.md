@@ -111,4 +111,4 @@ func init() {
 
 ### SDK 변경 기록
 
-- v0.1.0 이후(미발행): `pkg/sdk/sdktest` 추가. `sdk.PartRegistrar` 추가(선택 interface, 기존 코드 영향 없음).
+- v0.2.0: SDK의 첫 발행. `pkg/sdk`(기능 등록, KV, 선언한 표, GraphQL 확장, HTTP 경로, `Main`, `ProgressOf`), `pkg/sdk/sdktest`(결정성 확인), `sdk.PartRegistrar`(선택 interface). 이후 버전은 이 면에서 바뀐 것만 적는다.
