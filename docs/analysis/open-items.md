@@ -55,7 +55,7 @@
 | kill 시험 | 결함을 주입해 잡는지(mutation) 확인하지 않았다. 한 실행에서 재시작 4번이 같은 높이에 머문 원인을 보지 않았다 |
 | SLO | 한 호스트에서만 쟀다(R5-5). 시험의 구독 queue(1024)가 운영 기본값(16384)과 다르고, 부하 체인은 V2 시장만 쓴다 |
 | DEX 실제 컨트랙트 | 시험은 실제 이벤트 시그니처로 만든 로그를 쓴다. testnet 8283 컨트랙트로 확인하지 않았다 |
-| live 노드 시험 | `TestLiveStableNet*`, `TestLiveBalances`, `TestLiveFailover`, `TestLiveEraSource`는 go-stablenet 노드가 있어야 돈다. 이번 정리 기간에는 돌리지 않았다 |
+| live 노드 시험 (10/10 확인) | 로컬 go-stablenet(Gstable v1.1.0, chainbench로 validator 4 + endpoint 1)에서 `TestLiveBalances`, `TestLiveStableNet`, `TestLiveStableNetIdentity`(fee delegation 0x16 트랜잭션 3건 포함), `TestLiveFailover`, `TestLiveRecordReplay`, `TestLiveHeadLatency`(newHeads p95 4ms), `TestLiveLoopRollsBackReorg`가 통과했다. `TestLiveEraSource`는 era1 파일이 없어 돌리지 않았다. chainbench가 만든 genesis에는 `applepieBlock`이 없어 fee delegation을 쓰려면 genesis에 `applepieBlock`, `bohoBlock`을 0으로 넣어야 했다(chainbench 쪽 문제) |
 | indexer-frontend | GraphQL 문서 26개가 지금 스키마에서 동작하지 않는다(`known-invalid.txt`). REST로 옮기는 일도 frontend 쪽에 남아 있다(`docs/FRONTEND_MIGRATION.md`) |
 
 ## 4. 저장소 관리
