@@ -64,7 +64,7 @@ func init() {
 ## 4. API
 
 - `sdk.RegisterGraphQL(name, func(*sdk.GraphQLExtension))`: GraphQL 조회·구독을 더한다.
-- `sdk.RegisterRoute(method, pattern, func(store sdk.Store, logger) http.Handler)`: GraphQL 옆에 HTTP 경로를 더한다. 상태 코드와 고정 JSON 형식이 필요할 때 쓴다. 경로 인자는 `sdk.URLParam(r, "name")`. 단일 체인 서버(declared 모드 포함)가 mount한다. `node.role: ingest`(health와 metrics만 제공)와 멀티체인 서버는 하지 않는다.
+- `sdk.RegisterRoute(method, pattern, func(store sdk.Store, logger) http.Handler)`: GraphQL 옆에 HTTP 경로를 더한다. 상태 코드와 고정 JSON 형식이 필요할 때 쓴다. 경로 인자는 `sdk.URLParam(r, "name")`. 단일 체인 서버(declared 모드 포함)가 mount하고, 멀티체인 서버는 체인마다 `/chains/{id}/<pattern>`에 그 체인의 저장소로 mount한다. 경로 패턴에 `{id}` 인자가 있으면 체인 id와 겹치므로 멀티체인에서는 mount하지 않는다(경고 로그). `node.role: ingest`(health와 metrics만 제공)는 mount하지 않는다.
 
 - `sdk.ProgressOf(ctx, store)`: 색인한 블록, live loop가 마지막으로 본 노드의 목표 블록(finality 정책 기준), 그 차이(`Lag`). "아직 색인 전"과 "색인이 늦음"을 구분할 때 쓴다(예제의 503 `RPC_STALE`). API 전용 프로세스(`node.role api`)에서는 `Polled`가 false다.
 

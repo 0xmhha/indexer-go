@@ -54,6 +54,7 @@ type chainHandlers struct {
 	sub     http.Handler
 	rpc     *jsonrpc.Server
 	rest    http.Handler
+	routes  map[string]http.Handler // registered routes by method and pattern
 }
 
 func (s *Server) mountChainRoutes(chains ChainStores) {
@@ -80,6 +81,16 @@ func (s *Server) mountChainRoutes(chains ChainStores) {
 	}
 	if s.config.EnableREST {
 		s.router.Handle("/chains/{id}/v1/*", cr.serve(func(h *chainHandlers) http.Handler { return h.rest }))
+	}
+	for _, r := range registeredRoutes() {
+		if !chainRoutable(r) {
+			s.logger.Warn("Route not mounted per chain: its {id} parameter clashes with the chain's",
+				zap.String("method", r.Method), zap.String("pattern", r.Pattern))
+			continue
+		}
+		key := r.Method + " " + r.Pattern
+		s.router.Method(r.Method, "/chains/{id}"+r.Pattern, cr.serve(func(h *chainHandlers) http.Handler { return h.routes[key] }))
+		s.logger.Info("Route registered per chain", zap.String("method", r.Method), zap.String("pattern", "/chains/{id}"+r.Pattern))
 	}
 	s.logger.Info("Per-chain API enabled", zap.String("path", "/chains/{id}/"))
 }
@@ -146,6 +157,12 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 		sub:     sub.Handler(),
 		rpc:     jsonrpc.NewServer(store, logger),
 		rest:    rest.NewHandler(gql),
+		routes:  map[string]http.Handler{},
+	}
+	for _, r := range registeredRoutes() {
+		if chainRoutable(r) {
+			h.routes[r.Method+" "+r.Pattern] = r.Handler(store, logger)
+		}
 	}
 	cr.handlers[id] = h
 	return h, http.StatusOK

@@ -58,3 +58,11 @@ func TestRegisteredRoutes(t *testing.T) {
 		RegisterRoute(Route{Method: http.MethodGet, Pattern: "/test-routes/{name}", Handler: func(port.QueryStore, *zap.Logger) http.Handler { return nil }})
 	})
 }
+
+// TestChainRoutable: a route whose pattern has its own {id} parameter
+// clashes with the chain's and is not mounted per chain.
+func TestChainRoutable(t *testing.T) {
+	assert.True(t, chainRoutable(Route{Pattern: "/receipts/{merchant}/{orderId}"}))
+	assert.False(t, chainRoutable(Route{Pattern: "/orders/{id}"}))
+	assert.False(t, chainRoutable(Route{Pattern: "/orders/{id:[0-9]+}"}))
+}
