@@ -32,6 +32,7 @@ type Server struct {
 	unknown    map[string]int
 	blockLoads map[uint64]int // eth_getBlockByNumber with an explicit number
 	disabled   map[string]bool
+	failing    map[string]int // requests of a method still to fail with HTTP 503
 	// maxLogRange makes eth_getLogs refuse wider ranges (0: no limit).
 	maxLogRange uint64
 }
@@ -45,6 +46,7 @@ func NewServer(chain *Chain) *Server {
 		unknown:       map[string]int{},
 		blockLoads:    map[uint64]int{},
 		disabled:      map[string]bool{},
+		failing:       map[string]int{},
 	}
 	if chain.StableNet() {
 		s.clientVersion = StableNetClientVersion
@@ -68,6 +70,27 @@ func (s *Server) DisableMethod(method string) {
 	s.mu.Lock()
 	s.disabled[method] = true
 	s.mu.Unlock()
+}
+
+// FailMethod makes the next n requests of method fail without an answer
+// (HTTP 503 Service Unavailable), like a node that is down, unlike
+// DisableMethod, whose answer is a JSON-RPC error.
+func (s *Server) FailMethod(method string, n int) {
+	s.mu.Lock()
+	s.failing[method] = n
+	s.mu.Unlock()
+}
+
+// unavailable reports whether a request of method fails (FailMethod).
+func (s *Server) unavailable(method string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failing[method] <= 0 {
+		return false
+	}
+	s.failing[method]--
+	s.calls[method]++
+	return true
 }
 
 // EnableMethod answers a method DisableMethod turned off again.
@@ -172,6 +195,10 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	var req rpcRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if s.unavailable(req.Method) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	_ = json.NewEncoder(w).Encode(s.handle(req))
