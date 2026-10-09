@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -24,12 +25,15 @@ import (
 
 // outboxState is the fetcher's outbox and relay.
 type outboxState struct {
-	store  port.Outbox
-	bus    *stream.OutboxBus
-	relay  *stream.Relay
-	once   sync.Once
-	cancel context.CancelFunc
-	done   chan struct{}
+	store port.Outbox
+	bus   *stream.OutboxBus
+	relay *stream.Relay
+	// joinErr is the relay's failure to join the change stream at start;
+	// Recover tries again and stops startup when it fails.
+	joinErr error
+	once    sync.Once
+	cancel  context.CancelFunc
+	done    chan struct{}
 }
 
 // initOutbox uses the storage's outbox when it has one and blocks are
@@ -49,8 +53,23 @@ func (f *Fetcher) initOutbox(retain uint64, group string) {
 	// commit and must deliver that block's events too. A group that has a
 	// position (this node ran before) resumes there.
 	if _, err := f.outbox.bus.Join(context.Background(), f.outbox.relay.Group(), stream.StartLatest); err != nil {
+		f.outbox.joinErr = err
 		f.logger.Error("Event relay could not join the change stream", zap.String("group", f.outbox.relay.Group()), zap.Error(err))
 	}
+}
+
+// joinRelay retries a failed join of the relay. Without it the relay
+// would fail on every start of its loop while indexing went on, and no
+// event would reach the bus.
+func (f *Fetcher) joinRelay(ctx context.Context) error {
+	if f.outbox == nil || f.outbox.relay == nil || f.outbox.joinErr == nil {
+		return nil
+	}
+	if _, err := f.outbox.bus.Join(ctx, f.outbox.relay.Group(), stream.StartLatest); err != nil {
+		return fmt.Errorf("event relay %q cannot join the change stream: %w", f.outbox.relay.Group(), err)
+	}
+	f.outbox.joinErr = nil
+	return nil
 }
 
 // Stream returns the change stream of the indexed blocks for consumers

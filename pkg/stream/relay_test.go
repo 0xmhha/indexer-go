@@ -280,3 +280,39 @@ func TestRelaySkipsUndecodableEntry(t *testing.T) {
 	}
 	require.Equal(t, []uint64{1, 3}, seqs)
 }
+
+// TestRelayPublishesSkippedEntries: an entry this build cannot decode
+// (written by a build that knows more event types) is published as a
+// SkippedEvent with its sequence, so a subscription engine fed by the
+// relay sees no gap and keeps its subscribers instead of disconnecting
+// them all on every resume.
+func TestRelayPublishesSkippedEntries(t *testing.T) {
+	block := func(n uint64) port.OutboxEntry {
+		data, err := events.MarshalEvent(&events.BlockEvent{Number: n})
+		require.NoError(t, err)
+		return port.OutboxEntry{Type: string(events.EventTypeBlock), Data: data}
+	}
+	batch := []port.OutboxEntry{block(1), {Type: "future.type", Data: []byte(`{}`)}, block(3)}
+	for i := range batch {
+		batch[i].Seq = uint64(i + 1)
+	}
+
+	e := NewEngine(EngineConfig{})
+	e.AddTopic("blocks", events.EventTypeBlock, numberEncoder(nil))
+	c := e.Connect()
+	require.NoError(t, c.Subscribe("1", "blocks", nil, 0))
+	var published []events.Event
+	r := NewRelay(nil, "", func(ev events.Event) bool {
+		published = append(published, ev)
+		e.Publish(ev)
+		return true
+	}, nil)
+	require.NoError(t, r.deliver(context.Background(), batch))
+
+	require.Len(t, published, 3)
+	skipped, ok := published[1].(*events.SkippedEvent)
+	require.True(t, ok, "the undecodable entry is published as skipped")
+	require.Equal(t, uint64(2), skipped.Sequence())
+	require.Equal(t, events.EventType("future.type"), skipped.Original)
+	require.Equal(t, []string{"1:1", "1:3"}, payloads(takeAll(t, c, 2)), "the subscriber keeps receiving, without a gap error")
+}
