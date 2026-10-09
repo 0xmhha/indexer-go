@@ -17,6 +17,10 @@ type ChainConfig struct {
 	RPCEndpoint string `yaml:"rpc_endpoint" json:"rpcEndpoint"`
 	// WSEndpoint is the optional WebSocket endpoint URL for real-time subscriptions.
 	WSEndpoint string `yaml:"ws_endpoint,omitempty" json:"wsEndpoint,omitempty"`
+	// FallbackEndpoints are further HTTP(S) JSON-RPC URLs of the chain that
+	// calls fail over to. They are not served by the API (URLs often carry
+	// credentials).
+	FallbackEndpoints []string `yaml:"fallback_endpoints,omitempty" json:"-"`
 	// ChainID is the numeric chain ID (e.g., 1 for Ethereum mainnet).
 	ChainID uint64 `yaml:"chain_id" json:"chainId"`
 	// AdapterType names the chain profile: "auto" (detected from the node),

@@ -719,17 +719,18 @@ func (a *App) initMultiChainManager() error {
 	chainConfigs := make([]multichain.ChainConfig, 0, len(a.config.MultiChain.Chains))
 	for _, cc := range a.config.MultiChain.Chains {
 		chainConfigs = append(chainConfigs, multichain.ChainConfig{
-			ID:          cc.ID,
-			Name:        cc.Name,
-			RPCEndpoint: cc.RPCEndpoint,
-			WSEndpoint:  cc.WSEndpoint,
-			ChainID:     cc.ChainID,
-			AdapterType: cc.AdapterType,
-			StartHeight: cc.StartHeight,
-			Enabled:     cc.Enabled,
-			Workers:     orDefault(cc.Workers, a.config.Indexer.Workers),
-			BatchSize:   orDefault(cc.BatchSize, a.config.Indexer.ChunkSize),
-			RPCTimeout:  orDefault(cc.RPCTimeout, a.config.RPC.Timeout),
+			ID:                cc.ID,
+			Name:              cc.Name,
+			RPCEndpoint:       cc.RPCEndpoint,
+			WSEndpoint:        cc.WSEndpoint,
+			FallbackEndpoints: cc.FallbackEndpoints,
+			ChainID:           cc.ChainID,
+			AdapterType:       cc.AdapterType,
+			StartHeight:       cc.StartHeight,
+			Enabled:           cc.Enabled,
+			Workers:           orDefault(cc.Workers, a.config.Indexer.Workers),
+			BatchSize:         orDefault(cc.BatchSize, a.config.Indexer.ChunkSize),
+			RPCTimeout:        orDefault(cc.RPCTimeout, a.config.RPC.Timeout),
 		})
 	}
 
@@ -777,7 +778,7 @@ func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	cfg := *a.config
 	cfg.RPC.Endpoint = cc.RPCEndpoint
 	cfg.RPC.WSEndpoint = cc.WSEndpoint
-	cfg.RPC.FallbackEndpoints = nil
+	cfg.RPC.FallbackEndpoints = cc.FallbackEndpoints
 	cfg.RPC.RecordDir = ""
 	cfg.RPC.Timeout = orDefault(cc.RPCTimeout, a.config.RPC.Timeout)
 	cfg.Source = config.SourceConfig{}

@@ -243,3 +243,48 @@ func serve(t *testing.T, h http.Handler, method, path, body string) string {
 	require.Equal(t, http.StatusOK, rec.Code, "%s %s: %s", method, path, out)
 	return string(out)
 }
+
+// TestMultiChainFailsOverToFallbackEndpoints: a chain of multichain mode
+// fails over to its fallback_endpoints like single-chain mode, so a dead
+// primary node does not stop that chain.
+func TestMultiChainFailsOverToFallbackEndpoints(t *testing.T) {
+	sc := testchain.BuildDefault()
+	dead := testchain.NewServer(sc.Chain)
+	dead.Close()
+	live := testchain.NewServer(sc.Chain)
+	t.Cleanup(live.Close)
+
+	entry := chainEntry("evm", dead.URL())
+	entry.FallbackEndpoints = []string{live.URL()}
+	cfg := multiChainConfig(t, filepath.Join(t.TempDir(), "db"), entry)
+	cfg.API.Enabled = false
+	app, err := NewApp(cfg, zap.NewNop(), false, "")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	runCtx, stop := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { done <- app.Run(runCtx) }()
+	require.Eventually(t, func() bool {
+		ci, err := app.multichainManager.GetChain("evm")
+		if err != nil {
+			return false
+		}
+		h, ok := ci.IndexedHeight(ctx)
+		return ok && h == sc.Chain.Head()
+	}, 30*time.Second, 20*time.Millisecond, "the chain is indexed through its fallback")
+	stop()
+	<-done
+	app.Shutdown()
+}
+
+func TestMultiChainRejectsInvalidFallbackEndpoints(t *testing.T) {
+	entry := chainEntry("evm", "http://127.0.0.1:1")
+	entry.FallbackEndpoints = []string{"ws://127.0.0.1:2"}
+	cfg := config.NewConfig()
+	cfg.RPC.Endpoint = ""
+	cfg.Database.Path = filepath.Join(t.TempDir(), "db")
+	cfg.MultiChain = config.MultiChainConfig{Enabled: true, Chains: []config.ChainConfig{entry}}
+	require.ErrorContains(t, cfg.Validate(), `fallback_endpoints: "ws://127.0.0.1:2" is not an HTTP(S) URL`)
+}
