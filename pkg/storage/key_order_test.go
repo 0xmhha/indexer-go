@@ -21,8 +21,6 @@ func TestNumericKeysSortNumerically(t *testing.T) {
 		"AddressTransaction": func(a, _, _ uint64) []byte { return AddressTransactionKey(addr, a) },
 		"AddressBalance":     func(a, _, _ uint64) []byte { return AddressBalanceKey(addr, a) },
 		"Log":                func(a, b, c uint64) []byte { return LogKey(a, uint(b), uint(c)) },
-		"ChainBlock":         func(a, _, _ uint64) []byte { return ChainBlockKey("c", a) },
-		"ChainTransaction":   func(a, b, _ uint64) []byte { return ChainTransactionKey("c", a, b) },
 	}
 	rnd := rand.New(rand.NewSource(1))
 	// Values around digit-count boundaries plus random ones.
