@@ -77,6 +77,11 @@ type (
 	// LogsOnly marks a feature that reads nothing but the logs of the
 	// declared contracts, so it runs with indexer.mode declared.
 	LogsOnly = feature.LogsOnly
+	// PartRegistrar is implemented by the Registrar a feature gets: a
+	// feature whose settings define parts (as records does with tables)
+	// registers a handler per part with OnPart, so an added part is
+	// backfilled alone. Take it by type assertion.
+	PartRegistrar = feature.PartRegistrar
 )
 
 // RegisterFeature adds a feature; call it from init. A name registered

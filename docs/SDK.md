@@ -64,7 +64,7 @@ func init() {
 ## 4. API
 
 - `sdk.RegisterGraphQL(name, func(*sdk.GraphQLExtension))`: GraphQL 조회·구독을 더한다.
-- `sdk.RegisterRoute(method, pattern, func(store sdk.Store, logger) http.Handler)`: GraphQL 옆에 HTTP 경로를 더한다. 상태 코드와 고정 JSON 형식이 필요할 때 쓴다. 경로 인자는 `sdk.URLParam(r, "name")`. 단일 체인 서버(declared 모드 포함)가 mount하고, 멀티체인 서버는 하지 않는다.
+- `sdk.RegisterRoute(method, pattern, func(store sdk.Store, logger) http.Handler)`: GraphQL 옆에 HTTP 경로를 더한다. 상태 코드와 고정 JSON 형식이 필요할 때 쓴다. 경로 인자는 `sdk.URLParam(r, "name")`. 단일 체인 서버(declared 모드 포함)가 mount한다. `node.role: ingest`(health와 metrics만 제공)와 멀티체인 서버는 하지 않는다.
 
 - `sdk.ProgressOf(ctx, store)`: 색인한 블록, live loop가 마지막으로 본 노드의 목표 블록(finality 정책 기준), 그 차이(`Lag`). "아직 색인 전"과 "색인이 늦음"을 구분할 때 쓴다(예제의 503 `RPC_STALE`). API 전용 프로세스(`node.role api`)에서는 `Polled`가 false다.
 
@@ -103,11 +103,12 @@ func init() {
 프로젝트가 기대는 면은 `pkg/sdk`와 `pkg/sdk/sdktest`의 공개 식별자다. 별칭(alias)이 가리키는 indexer 타입의 공개 메서드와 필드도 여기에 들어간다. `pkg/testchain`은 시험용이라 약속에 넣지 않는다(바꿀 때 예제를 함께 고친다). 다른 `pkg/...`를 직접 import하면 약속 밖이다.
 
 - 버전: 모듈 tag `vX.Y.Z`. v1 전에는 SDK를 깨는 변경을 minor 버전(`v0.Y.0`)에서만 하고, 이 문서의 "SDK 변경 기록"에 무엇이 바뀌었고 어떻게 고치는지 적는다. patch 버전은 깨지 않는다.
-- 프로젝트가 구현하는 interface(`Feature`, `BlockHandler`, `RollbackHandler`, `OrderIndependent`, `LogsOnly`)에는 메서드를 더하지 않는다. 새 기능은 선택 interface로 더한다(`feature.PartRegistrar`처럼 type assertion으로 확인).
+- 프로젝트가 구현하는 interface(`Feature`, `BlockHandler`, `RollbackHandler`, `OrderIndependent`, `LogsOnly`)에는 메서드를 더하지 않는다. 새 기능은 선택 interface로 더한다(`sdk.PartRegistrar`처럼 type assertion으로 확인).
 - 프로젝트가 쓰기만 하는 interface(`Registrar`, `Store`, `KV`, `RecordStore`)와 struct(`Deps`, `Block`, 모델 타입)에는 메서드와 필드를 더할 수 있다. 이것은 깨는 변경으로 보지 않는다. 시험용으로 이 interface를 직접 구현했다면 컴파일이 깨질 수 있으니, 구현체에 indexer 쪽 값을 embed한다.
 - 저장 데이터: `RegisterKeyspace`로 등록한 prefix 아래는 프로젝트 것이다. indexer는 거기에 쓰지 않고, 재색인 때 지운다. indexer 자신의 키 형식은 약속에 들어가지 않으므로 port(`Store`, `RecordStore`)로 읽는다.
-- 강제: `TestSDKSurface`가 공개 면 전체(`pkg/sdk/testdata/surface.txt`)를 고정한다. 바뀌면 시험이 실패하고, 검토한 뒤 `-update`로 다시 쓴다. `make test-examples`는 예제가 지금 SDK로 빌드되고 동작하는지 본다.
+- `Block.Geth`, `Block.GethReceipts`는 go-ethereum 타입이다. indexer가 go-ethereum을 올리면 이 타입이 바뀔 수 있으므로, 이 두 필드는 약속에서 go-ethereum 버전만큼만 안정하다. 체인 중립 값은 `Block.Model`, `Block.Receipts`를 쓴다.
+- 강제: `TestSDKSurface`가 공개 면 전체(`pkg/sdk/testdata/surface.txt`)를 고정한다. 바뀌면 시험이 실패하고, 검토한 뒤 `-update`로 다시 쓴다. `make test-examples`는 예제가 지금 SDK로 빌드되고 동작하는지 본다. 저장소에 CI가 없으므로 두 시험은 release 전에 직접 돌린다(`go test ./...`가 `TestSDKSurface`를 포함하고, `make test-examples`는 따로 돌린다).
 
 ### SDK 변경 기록
 
-- v0.1.0 이후(미발행): `pkg/sdk/sdktest` 추가. `feature.PartRegistrar` 추가(선택 interface, 기존 코드 영향 없음).
+- v0.1.0 이후(미발행): `pkg/sdk/sdktest` 추가. `sdk.PartRegistrar` 추가(선택 interface, 기존 코드 영향 없음).

@@ -92,6 +92,8 @@ type Page = port.Page
   field After string
   field Limit int
   field Offset int
+type PartRegistrar = feature.PartRegistrar
+  method OnPart(part string, definition string, h feature.BlockHandler)
 type Progress struct
   field Indexed uint64
   field Polled bool

@@ -42,8 +42,8 @@ type metadata struct {
 }
 
 // HandleBlock indexes the token metadata of the contracts the block
-// creates. Node reads that fail leave a contract unindexed; storage errors
-// abort the block.
+// creates, read as of the creation block. Node reads the node does not
+// answer and storage errors abort the block, so it is retried.
 func (m *metadata) HandleBlock(ctx context.Context, b *feature.Block) error {
 	for _, r := range b.Receipts {
 		if r == nil || r.ContractAddress == nil {
