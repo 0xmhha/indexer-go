@@ -59,6 +59,14 @@ func (recordsFeature) Register(r feature.Registrar) error {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	// Each table is a part, so a table added to an indexed database is
+	// backfilled alone and a table whose definition changed is refused.
+	if pr, ok := r.(feature.PartRegistrar); ok {
+		for _, t := range plan.Tables {
+			pr.OnPart(t.Name, t.Definition(), &handler{store: store, plan: plan, table: t, logger: logger})
+		}
+		return nil
+	}
 	r.OnBlock(&handler{store: store, plan: plan, logger: logger})
 	return nil
 }
@@ -66,8 +74,11 @@ func (recordsFeature) Register(r feature.Registrar) error {
 func init() { feature.Register(recordsFeature{}) }
 
 type handler struct {
-	store  port.RecordWriter
-	plan   *declared.Plan
+	store port.RecordWriter
+	plan  *declared.Plan
+	// table, when set, is the one table the handler stores; every table
+	// otherwise.
+	table  *declared.TablePlan
 	logger *zap.Logger
 }
 
@@ -79,6 +90,9 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 	for _, receipt := range b.Receipts {
 		for _, l := range receipt.Logs {
 			for _, t := range h.plan.Match(l) {
+				if h.table != nil && t != h.table {
+					continue
+				}
 				if err := h.save(ctx, b.Model, t, l); err != nil {
 					return err
 				}

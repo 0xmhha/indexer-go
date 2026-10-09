@@ -32,6 +32,14 @@ func receiptsSpec(sc *testchain.ReceiptsScenario) declared.Spec {
 // receipts scenario; configure changes the configuration further.
 func startRecordsApp(t *testing.T, srv *testchain.Server, dir string, sc *testchain.ReceiptsScenario, configure ...func(*config.Config)) *App {
 	t.Helper()
+	app, err := newRecordsApp(t, srv, dir, sc, configure...)
+	require.NoError(t, err)
+	return app
+}
+
+// newRecordsApp is startRecordsApp returning NewApp's error.
+func newRecordsApp(t *testing.T, srv *testchain.Server, dir string, sc *testchain.ReceiptsScenario, configure ...func(*config.Config)) (*App, error) {
+	t.Helper()
 	cfg := config.NewConfig()
 	cfg.RPC.Endpoint = srv.URL()
 	cfg.RPC.Timeout = 5 * time.Second
@@ -47,9 +55,7 @@ func startRecordsApp(t *testing.T, srv *testchain.Server, dir string, sc *testch
 	for _, c := range configure {
 		c(cfg)
 	}
-	app, err := NewApp(cfg, zap.NewNop(), false, "")
-	require.NoError(t, err)
-	return app
+	return NewApp(cfg, zap.NewNop(), false, "")
 }
 
 // requireReceipts checks the receipts table against the scenario's

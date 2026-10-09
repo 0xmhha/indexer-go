@@ -29,6 +29,7 @@ package declared
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -100,6 +101,24 @@ type TablePlan struct {
 
 // KeyID is the name of a key: its arguments joined with ",".
 func KeyID(fields []string) string { return strings.Join(fields, ",") }
+
+// Definition identifies what the table stores: its event (with the
+// arguments' names, types and which are indexed), its contracts and its
+// keys. Changing any of them changes the definition, while the table's
+// records keep the earlier one.
+func (t *TablePlan) Definition() string {
+	addrs := make([]string, len(t.Addresses))
+	for i, a := range t.Addresses {
+		addrs[i] = strings.ToLower(a.Hex())
+	}
+	sort.Strings(addrs)
+	keys := make([]string, len(t.Keys))
+	for i, k := range t.Keys {
+		keys[i] = KeyID(k)
+	}
+	sum := sha256.Sum256([]byte(t.Event.String() + "\n" + strings.Join(addrs, ",") + "\n" + strings.Join(keys, ";")))
+	return hex.EncodeToString(sum[:16])
+}
 
 // Fields are the table's fields: the event's arguments, in order.
 func (t *TablePlan) Fields() []string {

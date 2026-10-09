@@ -931,7 +931,7 @@ func (a *App) initFetcher(ctx context.Context) error {
 	if err := a.fetcher.CheckFinality(ctx); err != nil {
 		return err
 	}
-	if err := a.fetcher.Recover(ctx, pipeline.Features(), backfill); err != nil {
+	if err := a.fetcher.Recover(ctx, pipeline.Units(), backfill); err != nil {
 		return err
 	}
 

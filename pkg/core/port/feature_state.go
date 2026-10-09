@@ -18,6 +18,9 @@ type FeatureState struct {
 	// database processes new blocks at once and fills the gap in the
 	// background (online backfill).
 	Gap *BlockRange `json:"gap,omitempty"`
+	// Definition, on a part of a feature (a records table), identifies what
+	// the part indexes, so a part whose definition changed is detected.
+	Definition string `json:"definition,omitempty"`
 }
 
 // BlockRange is an inclusive range of block heights.
