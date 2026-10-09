@@ -32,6 +32,7 @@ func TestFeeDelegationQueries(t *testing.T) {
 		{"topFeePayers", `{ topFeePayers(limit: 5, fromBlock: "0", toBlock: "100") { nodes { address } } }`},
 		{"feePayerStats", `{ feePayerStats(address: "0x0000000000000000000000000000000000000001") { address txCount totalFeesPaid percentage } }`},
 		{"feePayerStats", `{ feePayerStats(address: "0x0000000000000000000000000000000000000001", fromBlock: "0", toBlock: "100") { address } }`},
+		{"feePayerTransactions", `{ feePayerTransactions(feePayer: "0x0000000000000000000000000000000000000001") { nodes { transactionHash blockNumber } pageInfo { hasNextPage endCursor } } }`},
 	} {
 		result := handler.ExecuteQuery(tc.query, nil)
 		require.Empty(t, result.Errors, tc.query)

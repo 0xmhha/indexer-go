@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -63,17 +64,35 @@ func TestMetaStore(t *testing.T) {
 			TxHash: second, BlockNumber: 200, OriginalType: 0x16, FeePayer: feePayer,
 			FeePayerV: big.NewInt(27), FeePayerR: big.NewInt(11111), FeePayerS: big.NewInt(22222),
 		}))
-		hashes, err := m.TxsByFeePayer(ctx, feePayer, 10, 0)
-		require.NoError(t, err)
-		assert.Equal(t, []common.Hash{txHash, second}, hashes, "oldest first")
+		third := common.HexToHash("0x03")
+		require.NoError(t, m.SetTxMeta(ctx, &TxMeta{TxHash: third, BlockNumber: 0x1000, OriginalType: 0x16, FeePayer: feePayer}))
+		all := []PayerTx{{txHash, 100}, {second, 200}, {third, 0x1000}}
 
-		hashes, err = m.TxsByFeePayer(ctx, feePayer, 1, 1)
+		got, next, err := m.FeePayerTxs(ctx, feePayer, port.Page{Limit: 10})
 		require.NoError(t, err)
-		assert.Equal(t, []common.Hash{second}, hashes, "limit and offset")
+		assert.Equal(t, all, got, "oldest first, block numbers in numeric order")
+		assert.Empty(t, next, "no cursor after the last page")
 
-		hashes, err = m.TxsByFeePayer(ctx, common.HexToAddress("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"), 10, 0)
+		var paged []PayerTx
+		page := port.Page{Limit: 1}
+		for {
+			got, next, err := m.FeePayerTxs(ctx, feePayer, page)
+			require.NoError(t, err)
+			paged = append(paged, got...)
+			if next == "" {
+				break
+			}
+			page.After = next
+		}
+		assert.Equal(t, all, paged, "cursor pages cover every transaction once")
+
+		got, _, err = m.FeePayerTxs(ctx, feePayer, port.Page{Limit: 1, Offset: 1})
 		require.NoError(t, err)
-		assert.Empty(t, hashes)
+		assert.Equal(t, all[1:2], got, "limit and offset")
+
+		got, _, err = m.FeePayerTxs(ctx, common.HexToAddress("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"), port.Page{})
+		require.NoError(t, err)
+		assert.Empty(t, got)
 	})
 }
 

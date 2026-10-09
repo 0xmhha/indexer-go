@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -112,27 +114,71 @@ func (m *MetaStore) TxMeta(ctx context.Context, txHash common.Hash) (*TxMeta, er
 	return &meta, nil
 }
 
-// TxsByFeePayer returns the hashes of the transactions a fee payer paid
-// for, oldest first. A limit of 0 or less means 100.
-func (m *MetaStore) TxsByFeePayer(ctx context.Context, feePayer common.Address, limit, offset int) ([]common.Hash, error) {
+// PayerTx is one transaction in a fee payer's index.
+type PayerTx struct {
+	TxHash      common.Hash
+	BlockNumber uint64
+}
+
+// FeePayerTxs returns one page of the transactions a fee payer paid for,
+// oldest first, and the cursor that continues after it ("" after the last
+// one). Page.After is such a cursor; a Limit of 0 or less means 100.
+func (m *MetaStore) FeePayerTxs(ctx context.Context, feePayer common.Address, page port.Page) ([]PayerTx, string, error) {
+	limit := page.Limit
 	if limit <= 0 {
 		limit = 100
 	}
 	prefix := payerPrefix(feePayer)
-	var hashes []common.Hash
-	skipped := 0
-	err := m.db.Scan(ctx, prefix, storage.PrefixEnd(prefix), false, func(_, value []byte) bool {
-		if skipped < offset {
+	lower := prefix
+	if page.After != "" {
+		// Index keys never contain 0x00: start right after the cursor's key.
+		lower = append([]byte(string(prefix)+page.After), 0)
+	}
+	var (
+		out     []PayerTx
+		skipped int
+		last    string
+		more    bool
+		bad     error
+	)
+	err := m.db.Scan(ctx, lower, storage.PrefixEnd(prefix), false, func(key, _ []byte) bool {
+		if skipped < page.Offset {
 			skipped++
 			return true
 		}
-		if len(value) == common.HashLength {
-			hashes = append(hashes, common.BytesToHash(value))
+		if len(out) == limit {
+			more = true
+			return false
 		}
-		return len(hashes) < limit
+		suffix := string(key[len(prefix):])
+		tx, err := parsePayerEntry(suffix)
+		if err != nil {
+			bad = err
+			return false
+		}
+		out = append(out, tx)
+		last = suffix
+		return true
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan fee payer index: %w", err)
+		return nil, "", fmt.Errorf("failed to scan fee payer index: %w", err)
 	}
-	return hashes, nil
+	if bad != nil {
+		return nil, "", bad
+	}
+	if !more {
+		last = ""
+	}
+	return out, last, nil
+}
+
+// parsePayerEntry reads "{blockNumber:%016x}/{txHash}", the part of a fee
+// payer index key after the payer.
+func parsePayerEntry(suffix string) (PayerTx, error) {
+	block, hash, ok := strings.Cut(suffix, "/")
+	n, err := strconv.ParseUint(block, 16, 64)
+	if !ok || err != nil || !strings.HasPrefix(hash, "0x") || len(hash) != 2+2*common.HashLength {
+		return PayerTx{}, fmt.Errorf("malformed fee payer index entry %q", suffix)
+	}
+	return PayerTx{TxHash: common.HexToHash(hash), BlockNumber: n}, nil
 }
