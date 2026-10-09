@@ -75,7 +75,7 @@ func (p *UserOpProcessor) ProcessUserOps(
 	blockTimestamp uint64,
 	txs []UserOpBundle,
 ) error {
-	blockTime := time.Unix(int64(blockTimestamp), 0)
+	blockTime := time.Unix(int64(blockTimestamp), 0).UTC() // stored: the same whatever the host time zone
 
 	var allOps []*userop.UserOperation
 	bundlerTxCounts := make(map[common.Address]int) // Track bundles per bundler in this block

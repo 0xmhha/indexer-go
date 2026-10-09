@@ -67,7 +67,7 @@ func (p *SetCodeProcessor) ProcessSetCodeTransactionAt(
 		return nil
 	}
 
-	blockTime := time.Unix(int64(blockTimestamp), 0)
+	blockTime := time.Unix(int64(blockTimestamp), 0).UTC() // stored: the same whatever the host time zone
 	txHash := tx.Hash()
 
 	// Determine if the transaction was successful

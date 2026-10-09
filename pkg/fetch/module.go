@@ -46,7 +46,7 @@ func (p *ModuleProcessor) ProcessModuleEventsFromBlock(
 	}
 
 	blockNumber := block.NumberU64()
-	blockTime := time.Unix(int64(block.Time()), 0)
+	blockTime := time.Unix(int64(block.Time()), 0).UTC() // stored: the same whatever the host time zone
 
 	installCount := 0
 	uninstallCount := 0

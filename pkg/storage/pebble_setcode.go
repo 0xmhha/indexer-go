@@ -596,7 +596,7 @@ func (s *PebbleStorage) IncrementSetCodeStats(ctx context.Context, address commo
 // It falls back to the wall clock only when the block is not stored.
 func (s *PebbleStorage) blockTimeOrNow(ctx context.Context, height uint64) time.Time {
 	if blk, err := s.GetBlock(ctx, height); err == nil {
-		return time.Unix(int64(blk.Time), 0)
+		return time.Unix(int64(blk.Time), 0).UTC()
 	}
 	return time.Now()
 }
