@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -156,6 +157,76 @@ func TestDeclaredBackfillReadsLogsFromTheNode(t *testing.T) {
 			app.fetcher.WaitBackground()
 			assert.Equal(t, uint64(len(sc.Payments)), logCount(context.Background(), app.storage.(port.KV)),
 				"every declared log counted once by the backfill")
+		})
+	}
+}
+
+// onlineCountName is test.log_count declared order-independent, so it is
+// backfilled online, with a block that fails once (failOnlineCountAt).
+const onlineCountName = "test.online_log_count"
+
+var failOnlineCountAt atomic.Uint64
+
+type onlineCountFeature struct{ logCountFeature }
+
+func (onlineCountFeature) Name() string           { return onlineCountName }
+func (onlineCountFeature) OrderIndependent() bool { return true }
+
+func (f onlineCountFeature) Register(r feature.Registrar) error {
+	failed := false
+	return f.logCountFeature.Register(failingRegistrar{Registrar: r, fail: func(n uint64) bool {
+		if !failed && n == failOnlineCountAt.Load() {
+			failed = true
+			return true
+		}
+		return false
+	}})
+}
+
+// failingRegistrar makes the handlers it registers fail when fail says so.
+type failingRegistrar struct {
+	feature.Registrar
+	fail func(block uint64) bool
+}
+
+func (r failingRegistrar) OnBlock(h feature.BlockHandler) {
+	r.Registrar.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
+		if r.fail(b.Model.Number) {
+			return errors.New("injected failure")
+		}
+		return h.HandleBlock(ctx, b)
+	}))
+}
+
+func init() { feature.Register(onlineCountFeature{}) }
+
+// TestOnlineBackfillResumesAfterCommittedBlocks: an online backfill of the
+// declared mode commits a range's blocks one by one; when one fails, the
+// retry continues after the blocks already committed, so a counting
+// feature counts every log once.
+func TestOnlineBackfillResumesAfterCommittedBlocks(t *testing.T) {
+	for name, mode := range map[string]func(*config.Config){"per block": declaredMode, "finalized ranges": sparseMode} {
+		t.Run(name, func(t *testing.T) {
+			sc := longReceipts(1_500)
+			srv := testchain.NewServer(sc.Chain)
+			defer srv.Close()
+			dir := filepath.Join(t.TempDir(), "db")
+			app := startRecordsApp(t, srv, dir, sc, mode)
+			runLiveUntil(t, app, 1_500)
+			app.Shutdown()
+
+			require.Greater(t, len(sc.Payments), 2)
+			failOnlineCountAt.Store(sc.Payments[2].Block)
+			defer failOnlineCountAt.Store(0)
+			on := true
+			app = startRecordsApp(t, srv, dir, sc, mode, func(c *config.Config) {
+				c.Indexer.ChunkSize = 1 // retries after 200ms
+				c.Features[onlineCountName] = config.FeatureConfig{Enabled: &on}
+			})
+			defer app.Shutdown()
+			app.fetcher.WaitBackground()
+			assert.Equal(t, uint64(len(sc.Payments)), logCount(context.Background(), app.storage.(port.KV)),
+				"every declared log counted once, the blocks before the failure not again")
 		})
 	}
 }
