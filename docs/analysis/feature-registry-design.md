@@ -1,5 +1,7 @@
 # 기능 레지스트리 상세 설계 (10/5)
 
+> 10/9 검토: 인용한 `TestSystemContractsFeatureOff`는 `TestFeatureOffRemovesOnlyItsKeys`의 systemcontracts 하위 시험으로 바뀌었다. `pkg/resilience`, `LargeBlockProcessor`는 v0.1.0 뒤에 지워졌다. 그 언급은 당시 기록이다([plan-audit.md](plan-audit.md)).
+
 이 문서는 refactoring-plan.md의 R2-5(처리기·기능 레지스트리, 플래그, 의존성 검증)와 R2-6(기존 기능을 기능 모듈로 이전)의 첫 단계를 설계한다. 체인 프로필 설계(chain-profile-design.md)에서 남긴 WBFT·시스템 컨트랙트 처리의 범용 수집기 분리도 여기서 다룬다.
 
 ---
