@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -63,7 +64,10 @@ func (p *ModuleProcessor) ProcessModuleEventsFromBlock(
 			switch log.Topics[0] {
 			case modulepkg.ModuleInstalledSig:
 				if err := p.processModuleInstalled(ctx, log, blockNumber, blockTime); err != nil {
-					p.logger.Warn("Failed to process ModuleInstalled event",
+					if !errors.Is(err, errMalformedModuleLog) {
+						return err
+					}
+					p.logger.Warn("Skipping a malformed ModuleInstalled event",
 						zap.String("txHash", log.TxHash.Hex()),
 						zap.Uint("logIndex", log.Index),
 						zap.Error(err))
@@ -73,7 +77,11 @@ func (p *ModuleProcessor) ProcessModuleEventsFromBlock(
 
 			case modulepkg.ModuleUninstalledSig:
 				if err := p.processModuleUninstalled(ctx, log, blockNumber); err != nil {
-					p.logger.Warn("Failed to process ModuleUninstalled event",
+					// A module installed before indexing started is unknown.
+					if !errors.Is(err, errMalformedModuleLog) && !errors.Is(err, port.ErrNotFound) {
+						return err
+					}
+					p.logger.Warn("Skipping a ModuleUninstalled event",
 						zap.String("txHash", log.TxHash.Hex()),
 						zap.Uint("logIndex", log.Index),
 						zap.Error(err))
@@ -94,6 +102,11 @@ func (p *ModuleProcessor) ProcessModuleEventsFromBlock(
 	return nil
 }
 
+// errMalformedModuleLog is a module event whose data does not decode; it
+// is skipped. Storage errors are returned so the block is retried (defect
+// D5).
+var errMalformedModuleLog = errors.New("malformed module event")
+
 // processModuleInstalled handles a ModuleInstalled event
 func (p *ModuleProcessor) processModuleInstalled(
 	ctx context.Context,
@@ -105,7 +118,7 @@ func (p *ModuleProcessor) processModuleInstalled(
 	// Both parameters are non-indexed, so they are in log.Data
 	// Data layout: [32 bytes moduleTypeId][32 bytes module address]
 	if len(log.Data) < 64 {
-		return fmt.Errorf("insufficient data length: got %d, need 64", len(log.Data))
+		return fmt.Errorf("%w: data length %d, need 64", errMalformedModuleLog, len(log.Data))
 	}
 
 	// Extract moduleTypeId from first 32 bytes
@@ -133,26 +146,17 @@ func (p *ModuleProcessor) processModuleInstalled(
 		return fmt.Errorf("failed to save installed module: %w", err)
 	}
 
-	// Update module stats (increment)
+	// Update module stats (increment); empty stats when none are stored.
 	stats, err := p.storage.GetModuleStats(ctx, moduleAddr)
 	if err != nil {
-		p.logger.Warn("Failed to get module stats for increment",
-			zap.String("module", moduleAddr.Hex()),
-			zap.Error(err))
-		// Create new stats
-		stats = &port.ModuleStats{
-			Module:     moduleAddr,
-			ModuleType: moduleType,
-		}
+		return fmt.Errorf("module stats of %s: %w", moduleAddr.Hex(), err)
 	}
 	stats.TotalInstalls++
 	stats.ActiveInstalls++
 	stats.ModuleType = moduleType
 
 	if err := p.storage.UpdateModuleStats(ctx, stats); err != nil {
-		p.logger.Warn("Failed to update module stats after install",
-			zap.String("module", moduleAddr.Hex()),
-			zap.Error(err))
+		return fmt.Errorf("update module stats of %s: %w", moduleAddr.Hex(), err)
 	}
 
 	p.logger.Debug("Indexed ModuleInstalled event",
@@ -174,7 +178,7 @@ func (p *ModuleProcessor) processModuleUninstalled(
 	// Both parameters are non-indexed, so they are in log.Data
 	// Data layout: [32 bytes moduleTypeId][32 bytes module address]
 	if len(log.Data) < 64 {
-		return fmt.Errorf("insufficient data length: got %d, need 64", len(log.Data))
+		return fmt.Errorf("%w: data length %d, need 64", errMalformedModuleLog, len(log.Data))
 	}
 
 	// Extract moduleTypeId from first 32 bytes
@@ -195,20 +199,14 @@ func (p *ModuleProcessor) processModuleUninstalled(
 	// Update module stats (decrement active)
 	stats, err := p.storage.GetModuleStats(ctx, moduleAddr)
 	if err != nil {
-		p.logger.Warn("Failed to get module stats for decrement",
-			zap.String("module", moduleAddr.Hex()),
-			zap.Error(err))
-	} else {
-		if stats.ActiveInstalls > 0 {
-			stats.ActiveInstalls--
-		}
-		stats.ModuleType = moduleType
-
-		if err := p.storage.UpdateModuleStats(ctx, stats); err != nil {
-			p.logger.Warn("Failed to update module stats after uninstall",
-				zap.String("module", moduleAddr.Hex()),
-				zap.Error(err))
-		}
+		return fmt.Errorf("module stats of %s: %w", moduleAddr.Hex(), err)
+	}
+	if stats.ActiveInstalls > 0 {
+		stats.ActiveInstalls--
+	}
+	stats.ModuleType = moduleType
+	if err := p.storage.UpdateModuleStats(ctx, stats); err != nil {
+		return fmt.Errorf("update module stats of %s: %w", moduleAddr.Hex(), err)
 	}
 
 	p.logger.Debug("Indexed ModuleUninstalled event",

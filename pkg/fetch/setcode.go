@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -95,17 +96,15 @@ func (p *SetCodeProcessor) ProcessSetCodeTransactionAt(
 		records = append(records, record)
 
 		// Update stats for target and authority addresses
+		// Storage errors fail the block so it is retried (defect D5): a
+		// block committed without them would miss data for good.
 		if err := p.storage.IncrementSetCodeStats(ctx, record.TargetAddress, true, false, blockNumber); err != nil {
-			p.logger.Warn("Failed to increment target stats",
-				zap.String("address", record.TargetAddress.Hex()),
-				zap.Error(err))
+			return fmt.Errorf("increment SetCode stats of target %s: %w", record.TargetAddress.Hex(), err)
 		}
 
 		if record.AuthorityAddress != (common.Address{}) {
 			if err := p.storage.IncrementSetCodeStats(ctx, record.AuthorityAddress, false, true, blockNumber); err != nil {
-				p.logger.Warn("Failed to increment authority stats",
-					zap.String("address", record.AuthorityAddress.Hex()),
-					zap.Error(err))
+				return fmt.Errorf("increment SetCode stats of authority %s: %w", record.AuthorityAddress.Hex(), err)
 			}
 		}
 
@@ -129,9 +128,7 @@ func (p *SetCodeProcessor) ProcessSetCodeTransactionAt(
 			}
 
 			if err := p.storage.UpdateAddressDelegationState(ctx, state); err != nil {
-				p.logger.Warn("Failed to update delegation state",
-					zap.String("address", record.AuthorityAddress.Hex()),
-					zap.Error(err))
+				return fmt.Errorf("update delegation state of %s: %w", record.AuthorityAddress.Hex(), err)
 			}
 		}
 	}
