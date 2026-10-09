@@ -217,9 +217,16 @@ func TestGoldenKeyspaceStableNet(t *testing.T) {
 }
 
 // TestIndexIsDeterministic guards the golden test itself: two clean runs over
-// the same chain must produce identical storage.
+// the same chain must produce identical storage, also on hosts in different
+// time zones (stored times are UTC; the golden files are written in one zone
+// and checked in CI in another). No test of this package runs in parallel,
+// so changing time.Local is safe here.
 func TestIndexIsDeterministic(t *testing.T) {
+	local := time.Local
+	defer func() { time.Local = local }()
+	time.Local = time.FixedZone("UTC+9", 9*3600)
 	first := dumpScenarioIndex(t)
+	time.Local = time.FixedZone("UTC-5", -5*3600)
 	second := dumpScenarioIndex(t)
 	require.Empty(t, testchain.DiffKeyspace(first, second, 20))
 }
