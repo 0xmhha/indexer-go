@@ -63,6 +63,7 @@ func signedWord(b []byte) *big.Int {
 
 func (s *Service) reconcileLoop() {
 	defer s.wg.Done()
+	//sdk:nondeterministic the reconciler is a background job of the serving process, not a block handler
 	t := time.NewTicker(s.cfg.reconcile)
 	defer t.Stop()
 	for {
@@ -101,7 +102,7 @@ func (s *Service) Reconcile(ctx context.Context) map[port.DexMarketKey]*Reconcil
 // compare compares a book with its contract's state at the book's height.
 func (s *Service) compare(ctx context.Context, b *Book) *Reconciliation {
 	m := b.Market
-	r := &Reconciliation{Block: b.Height, At: time.Now()}
+	r := &Reconciliation{Block: b.Height, At: time.Now()} //sdk:nondeterministic when the comparison ran, reported only
 	result := "in_sync"
 	switch {
 	case s.caller == nil:

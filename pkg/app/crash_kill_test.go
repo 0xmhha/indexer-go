@@ -108,6 +108,16 @@ features:
 	midway := 0
 	for kill := 0; kill < 12; kill++ {
 		cmd := start()
+		// Every third kill counts from the process start, so some land in
+		// startup recovery; the others from when the API answers, so a
+		// slow start (a loaded machine) does not move them all before
+		// indexing begins.
+		if kill%3 != 0 {
+			deadline := time.Now().Add(30 * time.Second)
+			for _, ok := latestHeight(base); !ok && time.Now().Before(deadline); _, ok = latestHeight(base) {
+				time.Sleep(5 * time.Millisecond)
+			}
+		}
 		time.Sleep(time.Duration(20+rng.Intn(400)) * time.Millisecond)
 		h, answered := latestHeight(base)
 		require.NoError(t, cmd.Process.Signal(syscall.SIGKILL))
