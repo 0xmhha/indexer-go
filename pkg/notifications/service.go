@@ -121,7 +121,13 @@ type NotificationService struct {
 	running  bool
 	ctx      context.Context
 	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+	// workCtx is the context of deliveries: Stop cancels ctx first, so no
+	// new work starts, lets deliveries under way finish and record their
+	// status, and cancels workCtx only when its own deadline passes (a
+	// delivery cut off before its status is recorded is sent again later).
+	workCtx    context.Context
+	workCancel context.CancelFunc
+	wg         sync.WaitGroup
 
 	eventSub *events.Subscription
 
@@ -241,6 +247,7 @@ func (s *NotificationService) Start(ctx context.Context) error {
 	}
 	s.running = true
 	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.workCtx, s.workCancel = context.WithCancel(context.WithoutCancel(ctx))
 	s.mu.Unlock()
 
 	s.logger.Info("starting notification service")
@@ -318,8 +325,9 @@ func (s *NotificationService) Stop(ctx context.Context) error {
 	case <-done:
 		s.logger.Info("notification service stopped gracefully")
 	case <-ctx.Done():
-		s.logger.Warn("notification service stop timed out")
+		s.logger.Warn("notification service stop timed out; cancelling deliveries under way")
 	}
+	s.workCancel()
 
 	return nil
 }
@@ -767,7 +775,7 @@ func (s *NotificationService) processNotification(notification *Notification) {
 	// The queued copy may be stale (the retry processor read it before an
 	// earlier delivery finished): deliver what the storage holds, and
 	// nothing that was sent or given up already.
-	if current, err := s.storage.GetNotification(s.ctx, notification.ID); err == nil && current != nil {
+	if current, err := s.storage.GetNotification(s.workCtx, notification.ID); err == nil && current != nil {
 		if current.Status == DeliveryStatusSent || current.Status == DeliveryStatusFailed {
 			return
 		}
@@ -795,7 +803,7 @@ func (s *NotificationService) processNotification(notification *Notification) {
 
 	// Update status to sending
 	notification.Status = DeliveryStatusRetrying
-	if err := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusRetrying, ""); err != nil {
+	if err := s.storage.UpdateNotificationStatus(s.workCtx, notification.ID, DeliveryStatusRetrying, ""); err != nil {
 		s.logger.Warn("failed to update notification status to retrying",
 			zap.String("notification_id", notification.ID),
 			zap.Error(err))
@@ -803,7 +811,7 @@ func (s *NotificationService) processNotification(notification *Notification) {
 
 	// Deliver notification
 	start := time.Now()
-	result, err := handler.Deliver(s.ctx, notification, setting)
+	result, err := handler.Deliver(s.workCtx, notification, setting)
 	duration := time.Since(start).Milliseconds()
 
 	// Record history
@@ -814,7 +822,7 @@ func (s *NotificationService) processNotification(notification *Notification) {
 		Result:         result,
 		Timestamp:      time.Now(),
 	}
-	if err := s.storage.SaveDeliveryHistory(s.ctx, history); err != nil {
+	if err := s.storage.SaveDeliveryHistory(s.workCtx, history); err != nil {
 		s.logger.Warn("failed to save delivery history",
 			zap.String("notification_id", notification.ID),
 			zap.Error(err))
@@ -830,7 +838,7 @@ func (s *NotificationService) processNotification(notification *Notification) {
 // giveUp marks a notification that cannot be delivered as failed, so it
 // is not retried.
 func (s *NotificationService) giveUp(notification *Notification, reason string) {
-	if err := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusFailed, reason); err != nil {
+	if err := s.storage.UpdateNotificationStatus(s.workCtx, notification.ID, DeliveryStatusFailed, reason); err != nil {
 		s.logger.Warn("failed to update notification status to failed",
 			zap.String("notification_id", notification.ID),
 			zap.Error(err))
@@ -843,12 +851,12 @@ func (s *NotificationService) handleDeliverySuccess(notification *Notification, 
 	notification.Status = DeliveryStatusSent
 	notification.SentAt = &now
 
-	if err := s.storage.UpdateNotificationStatus(s.ctx, notification.ID, DeliveryStatusSent, ""); err != nil {
+	if err := s.storage.UpdateNotificationStatus(s.workCtx, notification.ID, DeliveryStatusSent, ""); err != nil {
 		s.logger.Warn("failed to update notification status to sent",
 			zap.String("notification_id", notification.ID),
 			zap.Error(err))
 	}
-	if err := s.storage.IncrementStats(s.ctx, notification.SettingID, true, durationMs); err != nil {
+	if err := s.storage.IncrementStats(s.workCtx, notification.SettingID, true, durationMs); err != nil {
 		s.logger.Warn("failed to increment notification stats",
 			zap.String("setting_id", notification.SettingID),
 			zap.Error(err))
@@ -874,12 +882,12 @@ func (s *NotificationService) handleDeliveryFailure(notification *Notification, 
 	if notification.RetryCount >= s.config.Retry.MaxAttempts {
 		notification.Status = DeliveryStatusFailed
 		notification.NextRetry = nil
-		if stErr := s.storage.UpdateNotification(s.ctx, notification); stErr != nil {
+		if stErr := s.storage.UpdateNotification(s.workCtx, notification); stErr != nil {
 			s.logger.Warn("failed to update notification status to failed",
 				zap.String("notification_id", notification.ID),
 				zap.Error(stErr))
 		}
-		if stErr := s.storage.IncrementStats(s.ctx, notification.SettingID, false, 0); stErr != nil {
+		if stErr := s.storage.IncrementStats(s.workCtx, notification.SettingID, false, 0); stErr != nil {
 			s.logger.Warn("failed to increment failure stats",
 				zap.String("setting_id", notification.SettingID),
 				zap.Error(stErr))
@@ -896,7 +904,7 @@ func (s *NotificationService) handleDeliveryFailure(notification *Notification, 
 		notification.Status = DeliveryStatusRetrying
 		// The retry count and time are stored with the status, so the
 		// retry processor waits for them, also after a restart.
-		if stErr := s.storage.UpdateNotification(s.ctx, notification); stErr != nil {
+		if stErr := s.storage.UpdateNotification(s.workCtx, notification); stErr != nil {
 			s.logger.Warn("failed to update notification status to retrying",
 				zap.String("notification_id", notification.ID),
 				zap.Error(stErr))

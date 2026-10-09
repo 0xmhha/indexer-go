@@ -173,13 +173,68 @@ func TestNotificationsSurviveRestart(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	distinct, repeats := h.delivered()
 	require.Equal(t, 300, distinct)
-	t.Logf("deliveries repeated after the restart: %d", repeats)
-	require.LessOrEqual(t, repeats, 1, "at most the delivery in progress at the stop repeats")
+	require.Zero(t, repeats, "a graceful stop lets the delivery in progress record its status")
 	stored := 0
 	for _, n := range storedNotifications(t, f.store) {
 		stored += n
 	}
 	require.Equal(t, 300, stored, "one notification per event")
+}
+
+// blockingHandler behaves like a webhook whose receiver got the request
+// and answers once release is closed: the delivery counts at once, and an
+// answer that arrives after ctx ended is lost to the sender, as an HTTP
+// client with a cancelled context reports an error.
+type blockingHandler struct {
+	countingHandler
+	started chan struct{}
+	release chan struct{}
+}
+
+func (h *blockingHandler) Deliver(ctx context.Context, n *Notification, s *NotificationSetting) (*DeliveryResult, error) {
+	res, err := h.countingHandler.Deliver(ctx, n, s)
+	select {
+	case h.started <- struct{}{}:
+	default:
+	}
+	<-h.release
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return res, err
+}
+
+// TestStopLetsDeliveriesRecordTheirStatus: Stop stops taking new work but
+// waits for a delivery under way to finish and record it as sent. Before,
+// Stop cancelled the context the status was written with, so a delivery
+// that succeeded stayed pending and was sent again after a restart.
+func TestStopLetsDeliveriesRecordTheirStatus(t *testing.T) {
+	f := newStreamFixture(t)
+	h := &blockingHandler{countingHandler: countingHandler{got: map[uint64]int{}}, started: make(chan struct{}, 1), release: make(chan struct{})}
+	svc := NewService(func() *Config {
+		cfg := DefaultConfig()
+		cfg.Enabled = true
+		cfg.Queue.Workers = 1
+		cfg.Queue.FlushInterval = 10 * time.Millisecond
+		return cfg
+	}(), f.store, nil, zap.NewNop())
+	svc.RegisterHandler(h)
+	require.NoError(t, svc.SetStream(f.bus, ""))
+	require.NoError(t, svc.Start(context.Background()))
+	f.createSetting(t, svc)
+	f.commit(t, 1, 1)
+	select {
+	case <-h.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("no delivery started")
+	}
+
+	stopped := make(chan struct{})
+	go func() { stopService(t, svc); close(stopped) }()
+	time.Sleep(50 * time.Millisecond) // Stop has cancelled the intake
+	close(h.release)
+	<-stopped
+	require.Equal(t, map[DeliveryStatus]int{DeliveryStatusSent: 1}, storedNotifications(t, f.store))
 }
 
 // failingStore fails storing one notification once.
