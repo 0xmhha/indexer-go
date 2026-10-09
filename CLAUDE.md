@@ -44,7 +44,7 @@ pkg/
 internal/
   config/                       YAML/env/flag configuration
   constants/                    Global constants
-tools/astgraph/                 Code graph generator (separate Go module)
+tools/astgraph/                 Code graph generator (separate Go module); query.py answers reachability from main (docs/analysis/plan-audit.md)
 ```
 
 ### Build & Run
@@ -154,6 +154,7 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 ### Current Work
 
 - Framework refactoring plan: `docs/analysis/refactoring-plan.md`
+- Plan completion audit (10/9) against the AST graph, code and tests: `docs/analysis/plan-audit.md`; remaining work: `docs/analysis/open-items.md`
 - Phase 0 design and progress: `docs/analysis/phase0-design.md`
 - Phase 0 fixed address sequence reset (D1), non-atomic block writes (D2), non-idempotent reprocessing (D3), gap recovery cursor rewind (D10), the storage wrapper hiding features (F1), unwired SetCode/UserOp/Module/fee delegation (F2) and system contract decoding (D11). Existing databases need a reindex
 - Blocks are read as raw JSON and decoded by the chain profile (`pkg/chains`, `pkg/source`) and stored as the chain-neutral model (`pkg/core/model`, storage schema v2): StableNet fee delegation (D13) and WBFT block hashes (D16) are kept as the chain reports them, in storage and in GraphQL/JSON-RPC responses (`docs/analysis/chain-profile-design.md`)

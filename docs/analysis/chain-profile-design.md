@@ -1,5 +1,7 @@
 # 체인 프로필 구조 상세 설계 (10/4)
 
+> 10/9 검토: `TestClientSourceMatchesGolden`은 client 경로와 함께 지워졌다. 남은 것으로 적힌 `pkg/watchlist`와 `fetcher_consensus.go`는 해소됐다(지워짐, WBFT는 `pkg/chains/stablenet/features/wbft` 기능). 이벤트 payload가 go-ethereum 타입(`events.BlockEvent.Block` 등)인 점은 그대로 남아 있다([plan-audit.md](plan-audit.md)).
+
 indexer가 여러 체인을 지원하면서 체인마다 고유한 트랜잭션 타입, 합의 데이터, 시스템 기능을 그대로 다룰 수 있게 하는 구조를 설계한다. 직접적인 계기는 StableNet의 fee delegation 트랜잭션(type 0x16)이다. 지금 indexer는 이 트랜잭션을 안쪽 송신자 트랜잭션으로 바꿔 저장해서, 실제 hash로 조회할 수 없고 receipt도 읽지 못한다(refactoring-plan.md D13). 결정 사항은 두 가지다. 우회하지 않고 type 0x16을 그대로 지원한다. 그리고 go-ethereum을 fork로 통째로 바꾸지 않고 체인별로 커스터마이즈하는 구조로 간다.
 
 이 문서는 refactoring-plan.md의 R1-3(키·값 형식), R2-1(소스 SPI), R2-6(기능 모듈 이전)을 앞당겨 하나로 묶는다.

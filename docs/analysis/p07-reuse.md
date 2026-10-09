@@ -1,5 +1,7 @@
 # indexer-go 재사용 분석 (10/3)
 
+> 10/9: 이 문서의 결론(P07을 indexer-go 위에 만들지 않고 따로 유지)은 R6-3이 대체했다. P07은 `examples/receipts`에서 `pkg/sdk` 위에 다시 만들었고 인수 시험을 통과한다. 이 문서가 인용한 `pkg/resilience`, `fetchBlockAndReceiptsWithRetry` 등은 지금 없다.
+
 > 이 문서는 nu-54v-dk-toy 저장소(NU-54V-DK 결제 프로젝트)에서 작성해 2026-10-03에 이 저장소로 옮겼다. 본문의 N25, N08 같은 번호는 그 저장소 설계 register의 결정 번호이고, P07-FR-01 같은 번호는 그 저장소 P07 indexer의 요구사항 번호다.
 
 P07 최소 indexer는 직접 폴링 방식으로 만들었다. 하지만 nu-54v-dk-toy 저장소의 P07 기획(`docs/content/products/p07/plan.md`) 4절은 `indexer-go`를 먼저 재사용할 수 있는지 판단하라고 정한다. 이 문서가 그 판단을 대신한다. 순서는 셋이다. 먼저 `indexer-go`(백엔드)와 `indexer-ui`(프런트엔드)의 코드를 AST로 읽어 그래프로 만들고 구조를 본다. 다음으로 P07이 서비스로 돌아가는 데 필요한 기능을 정리한다. 마지막으로 그 기능마다 `indexer-go`에서 가져올 수 있는지, 가져오면 무엇이 함께 딸려 오는지를 적는다.
