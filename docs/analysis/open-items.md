@@ -35,7 +35,7 @@
 | gap 채우기 재시도 (해소 10/9) | 남은 gap을 다시 찾아 채우는 round를 3번까지 하고, 그래도 실패하면 오류로 시작을 멈춘다(`Fetcher.recoverGaps`). 전에는 로그만 남기고 빈칸을 둔 채 live loop로 넘어갔다 | — | — |
 | 멀티체인 failover (해소 10/9) | 체인 항목의 `fallback_endpoints`로 체인마다 failover한다(API로는 노출하지 않음) | — | — |
 | 해석할 수 없는 outbox 항목 (해소 10/9) | relay가 그 위치를 `events.SkippedEvent`로 발행해 구독 엔진이 빈칸으로 보지 않는다. 그 이벤트를 받는 구독은 없다 | — | — |
-| outbox 정리 보호 | prune이 같은 프로세스에서 소비 중인 group만 본다 | 멈춘 알림 group이나 API 프로세스가 보존 범위(기본 10만)보다 뒤처지면 `SEQUENCE_TOO_OLD` | [권장] |
+| outbox 정리 보호 (검토 10/9: 설계상 의도, 바꾸지 않음) | prune은 같은 프로세스에서 소비 중인 group만 본다(`OutboxBus` 주석에 명시). 알림 group은 relay와 같은 ingest/all 프로세스에서만 돌아 실행 중에는 보호되고, ingest가 멈추면 새 entry가 없어 prune도 없다. API 프로세스는 위치를 메모리에만 두므로 저장소가 보호할 수 없고, 재개는 `SEQUENCE_TOO_OLD`로 답한다. 기록된 모든 group을 보호하면 버려진 group 하나가 outbox를 끝없이 키운다 | — | — |
 | relay 시작 실패 (해소 10/9) | `Fetcher.Recover`가 join을 다시 시도하고, 실패하면 시작을 멈춘다 | — | — |
 | API 프로세스의 알림 | `node.role: api`에는 알림 서비스가 없어 스키마에서 알림 모듈이 빠진다 | ingest 프로세스와 스키마가 다르다. 쓰기를 ingest로 넘기는 일(R4-1의 남은 것)은 그대로 남아 있다 | [권장] |
 | 값 형식 통일 | 값이 JSON, RLP, 고유 binary로 섞여 있다. R1-3의 "단일 값 형식"은 하지 않았다 | 새 저장 코드가 형식을 고를 기준이 없다. 바꾸려면 재색인이 필요하다 | [권장] |
