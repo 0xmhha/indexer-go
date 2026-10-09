@@ -5,6 +5,7 @@ package records
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -40,6 +41,24 @@ func (recordsFeature) Requires() []string { return nil }
 
 // records is order-independent: a record is identified by its log.
 func (recordsFeature) OrderIndependent() bool { return true }
+
+// EvolvePart implements feature.PartEvolver: a table that gained contracts
+// (same event and keys) is backfilled again from the start, which stores
+// the added contracts' logs and rewrites the existing records unchanged; any
+// other change needs a new table name or a reindex.
+func (recordsFeature) EvolvePart(part, stored, current string) feature.PartChange {
+	var cur declared.TableDefinition
+	if err := json.Unmarshal([]byte(current), &cur); err != nil {
+		return feature.PartIncompatible
+	}
+	switch declared.CompareDefinitions(stored, cur) {
+	case declared.DefinitionUnchanged:
+		return feature.PartUnchanged
+	case declared.DefinitionExtended:
+		return feature.PartExtended
+	}
+	return feature.PartIncompatible
+}
 
 // LogsOnly marks the feature as reading only the logs of the declared
 // contracts, so it runs in the declared ingest mode.

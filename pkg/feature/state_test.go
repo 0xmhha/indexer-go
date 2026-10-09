@@ -2,6 +2,7 @@ package feature_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -154,4 +155,41 @@ func (partsFeature) Register(r feature.Registrar) error {
 		}))
 	}
 	return nil
+}
+
+// evolvingFeature compares definitions as "base" and "base+more": the
+// longer one extends the shorter, "same:x" equals "x".
+type evolvingFeature struct{ independentFeature }
+
+func (evolvingFeature) EvolvePart(_, stored, current string) feature.PartChange {
+	switch {
+	case stored == "same:"+current:
+		return feature.PartUnchanged
+	case strings.HasPrefix(current, stored+"+"):
+		return feature.PartExtended
+	}
+	return feature.PartIncompatible
+}
+
+func TestReconcileEvolvedParts(t *testing.T) {
+	feature.Register(evolvingFeature{independentFeature{name: "rc.evolve"}})
+	unit := func(def string) []feature.Unit { return []feature.Unit{{Name: "rc.evolve/t", Definition: def}} }
+	stored := map[string]port.FeatureState{"rc.evolve/t": {Active: true, Definition: "base"}}
+
+	t.Run("extended: backfilled again from the start", func(t *testing.T) {
+		w, jobs, err := feature.ReconcileUnits(unit("base+more"), stored, 50, true)
+		require.NoError(t, err)
+		require.Equal(t, []feature.BackfillJob{{Feature: "rc.evolve/t", From: 0, To: 50, Online: true, Definition: "base+more"}}, jobs)
+		require.Equal(t, port.FeatureState{Active: true, Gap: &port.BlockRange{From: 0, To: 50}, Definition: "base+more"}, w["rc.evolve/t"])
+	})
+	t.Run("unchanged in another form: the new form is recorded", func(t *testing.T) {
+		w, jobs, err := feature.ReconcileUnits(unit("x"), map[string]port.FeatureState{"rc.evolve/t": {Active: true, Definition: "same:x"}}, 50, true)
+		require.NoError(t, err)
+		require.Empty(t, jobs)
+		require.Equal(t, port.FeatureState{Active: true, Definition: "x"}, w["rc.evolve/t"])
+	})
+	t.Run("incompatible: refused", func(t *testing.T) {
+		_, _, err := feature.ReconcileUnits(unit("other"), stored, 50, true)
+		require.ErrorContains(t, err, "changed since it was indexed")
+	})
 }
