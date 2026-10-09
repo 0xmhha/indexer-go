@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 )
 
@@ -188,40 +189,55 @@ func (f *Fetcher) FillGaps(ctx context.Context, gaps []GapRange) error {
 	return nil
 }
 
-// RunWithGapRecovery starts the fetcher with automatic gap detection and recovery
+// gapRecoveryRounds is how many times RunWithGapRecovery detects and fills
+// the remaining gaps before it gives up.
+const gapRecoveryRounds = 3
+
+// RunWithGapRecovery fills the gaps below the indexed head, then runs the
+// live loop. Each round detects the remaining gaps and fills them (blocks
+// filled by an earlier round stay filled); after gapRecoveryRounds failed
+// rounds, or when the gaps cannot be filled (ErrGapBelowIndexed), it
+// returns the error instead of following the node with the gaps left
+// behind, so the failure is visible and a restart tries again.
 func (f *Fetcher) RunWithGapRecovery(ctx context.Context) error {
 	f.logger.Info("Starting fetcher with gap recovery enabled",
 		zap.Uint64("start_height", f.config.StartHeight),
 		zap.Int("batch_size", f.config.BatchSize),
 	)
+	if err := f.recoverGaps(ctx); err != nil {
+		return err
+	}
+	return f.Run(ctx)
+}
 
-	// First, check for gaps in existing data
+// recoverGaps detects and fills the gaps between the start height and the
+// latest indexed block, in rounds.
+func (f *Fetcher) recoverGaps(ctx context.Context) error {
 	latestHeight, err := f.storage.GetLatestHeight(ctx)
-	if err == nil && latestHeight > f.config.StartHeight {
-		f.logger.Info("Checking for gaps in existing data",
-			zap.Uint64("start", f.config.StartHeight),
-			zap.Uint64("end", latestHeight),
-		)
-
-		// Check for block gaps
+	if errors.Is(err, port.ErrNotFound) || (err == nil && latestHeight <= f.config.StartHeight) {
+		return nil // nothing indexed below the head
+	}
+	if err != nil {
+		return fmt.Errorf("gap recovery: latest height: %w", err)
+	}
+	for round := 1; ; round++ {
 		gaps, err := f.DetectGaps(ctx, f.config.StartHeight, latestHeight)
-		if err != nil {
-			f.logger.Error("Failed to detect block gaps", zap.Error(err))
-		} else if len(gaps) > 0 {
+		if err == nil {
+			if len(gaps) == 0 {
+				return nil
+			}
 			f.logger.Info("Found block gaps in existing data, filling them first",
-				zap.Int("gap_count", len(gaps)),
-			)
-			if err := f.FillGaps(ctx, gaps); err != nil {
-				if errors.Is(err, ErrGapBelowIndexed) {
-					return err
-				}
-				f.logger.Error("Failed to fill block gaps", zap.Error(err))
-				// Continue anyway - gaps will be retried later
+				zap.Int("gap_count", len(gaps)), zap.Int("round", round))
+			if err = f.FillGaps(ctx, gaps); err == nil {
+				return nil
 			}
 		}
-
+		if errors.Is(err, ErrGapBelowIndexed) || ctx.Err() != nil || round == gapRecoveryRounds {
+			return fmt.Errorf("gap recovery between blocks %d and %d: %w", f.config.StartHeight, latestHeight, err)
+		}
+		f.logger.Warn("Gap recovery failed; retrying", zap.Int("round", round), zap.Error(err))
+		if err := sleepCtx(ctx, f.config.RetryDelay); err != nil {
+			return err
+		}
 	}
-
-	// Run normal fetching loop
-	return f.Run(ctx)
 }

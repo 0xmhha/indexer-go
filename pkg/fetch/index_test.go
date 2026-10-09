@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/pkg/events"
@@ -136,4 +137,45 @@ func TestRunWithGapRecovery(t *testing.T) {
 	cancel()
 	<-done
 	h.requireIndexed(t, 0, head)
+}
+
+// TestGapRecoveryRetriesFailedRounds: a gap the first round cannot fill
+// (the node fails every attempt at a block) is filled by a later round
+// instead of being left behind while the live loop follows the node.
+func TestGapRecoveryRetriesFailedRounds(t *testing.T) {
+	// One worker: the three failures are the three attempts (MaxRetries+1)
+	// at the gap's first block, so the first round fails.
+	h := newChainHarness(t, &Config{PollInterval: 5 * time.Millisecond, MaxRetries: 2, NumWorkers: 1}, nil)
+	head := h.chain.Head()
+	require.NoError(t, h.f.FetchRange(context.Background(), 0, 3))
+	require.NoError(t, h.f.FetchRange(context.Background(), 8, head))
+	h.src.failNext(3)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- h.f.RunWithGapRecovery(ctx) }()
+	require.Eventually(t, func() bool {
+		gaps, err := h.f.DetectGaps(context.Background(), 0, head)
+		return err == nil && len(gaps) == 0
+	}, 10*time.Second, 10*time.Millisecond)
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled, "recovery succeeded and the live loop ran")
+	h.requireIndexed(t, 0, head)
+}
+
+// TestGapRecoveryGivesUpVisibly: when every round fails, startup stops with
+// the error instead of following the node with the gap left behind.
+func TestGapRecoveryGivesUpVisibly(t *testing.T) {
+	h := newChainHarness(t, &Config{PollInterval: 5 * time.Millisecond, MaxRetries: 2}, nil)
+	head := h.chain.Head()
+	require.NoError(t, h.f.FetchRange(context.Background(), 0, 3))
+	require.NoError(t, h.f.FetchRange(context.Background(), 8, head))
+	h.src.failNext(1 << 20)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err := h.f.RunWithGapRecovery(ctx)
+	require.ErrorIs(t, err, errFlaky)
+	assert.Contains(t, err.Error(), "gap recovery between blocks")
+	require.NoError(t, ctx.Err(), "it gave up on its own, not at the deadline")
 }
