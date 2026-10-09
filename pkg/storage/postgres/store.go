@@ -16,6 +16,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -44,6 +45,9 @@ type Options struct {
 	// ReadOnly refuses writes (an API process, R4-1) and does not migrate:
 	// the schema must be current.
 	ReadOnly bool
+	// WritablePrefixes, with ReadOnly, are key-value prefixes the store
+	// still writes: the notification settings an API process manages.
+	WritablePrefixes []string
 }
 
 // Store implements the storage ports on PostgreSQL.
@@ -51,6 +55,7 @@ type Store struct {
 	pool     *pgxpool.Pool
 	schema   string
 	readOnly bool
+	writable []string // key-value prefixes writable although readOnly
 
 	// orphanRetention is how many reorganization records are kept with
 	// their orphaned blocks; 0 keeps all (SetOrphanRetention).
@@ -114,7 +119,7 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("postgres: connect: %w", err)
 	}
-	s := &Store{pool: pool, schema: schema, readOnly: opts.ReadOnly, logger: zap.NewNop()}
+	s := &Store{pool: pool, schema: schema, readOnly: opts.ReadOnly, writable: opts.WritablePrefixes, logger: zap.NewNop()}
 	if opts.ReadOnly {
 		if err := s.checkVersion(ctx); err != nil {
 			pool.Close()
@@ -170,6 +175,20 @@ func (s *Store) write() error {
 		return port.ErrReadOnly
 	}
 	return nil
+}
+
+// writeKey checks that the store accepts a write of a key-value key: any
+// key, or with ReadOnly a key under a writable prefix.
+func (s *Store) writeKey(key []byte) error {
+	if !s.readOnly {
+		return nil
+	}
+	for _, p := range s.writable {
+		if bytes.HasPrefix(key, []byte(p)) {
+			return nil
+		}
+	}
+	return port.ErrReadOnly
 }
 
 // inTx runs fn in the block transaction bound to ctx, or in a transaction

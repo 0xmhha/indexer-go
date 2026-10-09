@@ -27,7 +27,7 @@ const kvBatch = 256
 
 // Put implements port.KVStore.
 func (s *Store) Put(ctx context.Context, key, value []byte) error {
-	if err := s.write(); err != nil {
+	if err := s.writeKey(key); err != nil {
 		return err
 	}
 	if value == nil {
@@ -49,7 +49,7 @@ func (s *Store) Get(ctx context.Context, key []byte) ([]byte, error) {
 
 // Delete implements port.KVStore.
 func (s *Store) Delete(ctx context.Context, key []byte) error {
-	if err := s.write(); err != nil {
+	if err := s.writeKey(key); err != nil {
 		return err
 	}
 	_, err := s.q(ctx).Exec(ctx, "DELETE FROM kv WHERE key = $1", key)

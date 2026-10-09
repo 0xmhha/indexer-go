@@ -273,3 +273,47 @@ func TestNotificationsRedeliveredBatchCreatesNoDuplicates(t *testing.T) {
 	}
 	require.Equal(t, 60, stored)
 }
+
+// TestSettingsFromAnotherProcessTakeEffect: settings created, changed or
+// deleted through a service that is not running (an API process, node.role
+// api) reach a running service on the same storage within settingsReload,
+// and a retry requested there is stored as pending for the running
+// service to deliver.
+func TestSettingsFromAnotherProcessTakeEffect(t *testing.T) {
+	old := settingsReload
+	settingsReload = 20 * time.Millisecond
+	defer func() { settingsReload = old }()
+
+	f := newStreamFixture(t)
+	h := &countingHandler{got: map[uint64]int{}}
+	running := f.startService(t, f.store, h)
+	defer stopService(t, running)
+	api := NewService(DefaultConfig(), f.store, nil, zap.NewNop()) // never started
+	api.RegisterHandler(h)
+
+	f.createSetting(t, api)
+	require.Eventually(t, func() bool {
+		running.mu.RLock()
+		defer running.mu.RUnlock()
+		return running.settings["logs"] != nil
+	}, 5*time.Second, 10*time.Millisecond, "the running service loads the new setting")
+	f.commit(t, 1, 3)
+	require.Eventually(t, func() bool { d, _ := h.delivered(); return d == 3 }, 10*time.Second, 10*time.Millisecond)
+
+	all, err := f.store.ListNotifications(context.Background(), &NotificationsFilter{SettingID: "logs", Limit: 10})
+	require.NoError(t, err)
+	require.NotEmpty(t, all)
+	require.NoError(t, f.store.UpdateNotificationStatus(context.Background(), all[0].ID, DeliveryStatusFailed, "gave up"))
+	require.NoError(t, api.RetryNotification(context.Background(), all[0].ID))
+	require.Eventually(t, func() bool {
+		n, err := f.store.GetNotification(context.Background(), all[0].ID)
+		return err == nil && n.Status == DeliveryStatusSent
+	}, 10*time.Second, 10*time.Millisecond, "the running service delivers a retry requested elsewhere")
+
+	require.NoError(t, api.DeleteSetting(context.Background(), "logs"))
+	require.Eventually(t, func() bool {
+		running.mu.RLock()
+		defer running.mu.RUnlock()
+		return running.settings["logs"] == nil
+	}, 5*time.Second, 10*time.Millisecond, "a deleted setting is dropped")
+}

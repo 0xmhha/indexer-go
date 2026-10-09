@@ -20,8 +20,13 @@ const (
 	prefixIdxNotificationPending = "/index/notification/pending/"
 )
 
+// KeyPrefixes are the key-value prefixes of all notification data: an API
+// process (node.role api) opens its read-only database with them writable
+// so it can manage notification settings.
+func KeyPrefixes() []string { return []string{"/data/notification/", "/index/notification/"} }
+
 func init() {
-	storage.RegisterKeyspace("notifications", storage.ChainData, "/data/notification/", "/index/notification/")
+	storage.RegisterKeyspace("notifications", storage.ChainData, KeyPrefixes()...)
 }
 
 // NotificationSettingKey returns the key for storing a notification setting
