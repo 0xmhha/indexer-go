@@ -212,7 +212,7 @@ func TestFilterManagerWithPendingPool(t *testing.T) {
 		filterID := fm.NewFilter(PendingTxFilterType, nil, 0, false)
 
 		// First poll should return empty (filter created with current index)
-		hashes, err := fm.GetPendingTransactionsSinceLastPoll(nil, nil, filterID)
+		hashes, err := fm.GetPendingTransactionsSinceLastPoll(context.Background(), nil, filterID)
 		require.NoError(t, err)
 		assert.Empty(t, hashes)
 
@@ -223,19 +223,19 @@ func TestFilterManagerWithPendingPool(t *testing.T) {
 		}
 
 		// Second poll should return new transactions
-		hashes, err = fm.GetPendingTransactionsSinceLastPoll(nil, nil, filterID)
+		hashes, err = fm.GetPendingTransactionsSinceLastPoll(context.Background(), nil, filterID)
 		require.NoError(t, err)
 		assert.Len(t, hashes, 3)
 
 		// Third poll should return empty (already seen)
-		hashes, err = fm.GetPendingTransactionsSinceLastPoll(nil, nil, filterID)
+		hashes, err = fm.GetPendingTransactionsSinceLastPoll(context.Background(), nil, filterID)
 		require.NoError(t, err)
 		assert.Empty(t, hashes)
 	})
 
 	t.Run("non-pending filter returns nil", func(t *testing.T) {
 		filterID := fm.NewFilter(BlockFilterType, nil, 0, false)
-		hashes, err := fm.GetPendingTransactionsSinceLastPoll(nil, nil, filterID)
+		hashes, err := fm.GetPendingTransactionsSinceLastPoll(context.Background(), nil, filterID)
 		require.NoError(t, err)
 		assert.Nil(t, hashes)
 	})
@@ -247,7 +247,7 @@ func TestFilterManagerWithoutPendingPool(t *testing.T) {
 
 	filterID := fm.NewFilter(PendingTxFilterType, nil, 0, false)
 
-	hashes, err := fm.GetPendingTransactionsSinceLastPoll(nil, nil, filterID)
+	hashes, err := fm.GetPendingTransactionsSinceLastPoll(context.Background(), nil, filterID)
 	require.NoError(t, err)
 	assert.Empty(t, hashes)
 }

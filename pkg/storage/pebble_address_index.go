@@ -47,7 +47,7 @@ func (s *PebbleStorage) GetContractCreation(ctx context.Context, contractAddress
 		}
 		return nil, fmt.Errorf("failed to get contract creation: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var creation port.ContractCreation
 	if err := json.Unmarshal(value, &creation); err != nil {
@@ -101,7 +101,7 @@ func (s *PebbleStorage) SaveContractCreation(ctx context.Context, creation *port
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	// Encode contract creation data
 	data, err := json.Marshal(creation)
@@ -182,7 +182,7 @@ func (s *PebbleStorage) GetContractsCount(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	count := 0
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -213,7 +213,7 @@ func (s *PebbleStorage) GetERC20Transfer(ctx context.Context, txHash common.Hash
 		}
 		return nil, fmt.Errorf("failed to get ERC20 transfer: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var transfer port.ERC20Transfer
 	if err := json.Unmarshal(value, &transfer); err != nil {
@@ -336,7 +336,7 @@ func (s *PebbleStorage) SaveERC20Transfer(ctx context.Context, transfer *port.ER
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	// Encode transfer data
 	data, err := json.Marshal(transfer)
@@ -393,7 +393,7 @@ func (s *PebbleStorage) GetERC721Transfer(ctx context.Context, txHash common.Has
 		}
 		return nil, fmt.Errorf("failed to get ERC721 transfer: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var transfer port.ERC721Transfer
 	if err := json.Unmarshal(value, &transfer); err != nil {
@@ -468,7 +468,7 @@ func (s *PebbleStorage) GetERC721Owner(ctx context.Context, tokenAddress common.
 		}
 		return common.Address{}, fmt.Errorf("failed to get ERC721 owner: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	owner := common.BytesToAddress(value)
 	return owner, nil
@@ -562,7 +562,7 @@ func (s *PebbleStorage) SaveERC721Transfer(ctx context.Context, transfer *port.E
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	// Encode transfer data
 	data, err := json.Marshal(transfer)
@@ -648,7 +648,7 @@ func (s *PebbleStorage) GetInternalTransactions(ctx context.Context, txHash comm
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	internals := make([]*port.InternalTransaction, 0, 16)
 
@@ -718,7 +718,7 @@ func (s *PebbleStorage) GetInternalTransactionsByAddress(ctx context.Context, ad
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	// call is one item of the list with the index key it was found under.
 	type call struct {
@@ -851,7 +851,7 @@ func (s *PebbleStorage) SaveInternalTransactions(ctx context.Context, txHash com
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	for _, internal := range internals {
 		if internal == nil {

@@ -1109,7 +1109,9 @@ func (a *App) initContractVerifier() error {
 	// Create contract verifier
 	contractVerifier, err := verifier.NewContractVerifier(verifierCfg)
 	if err != nil {
-		solcCompiler.Close()
+		if cerr := solcCompiler.Close(); cerr != nil {
+			a.logger.Warn("Failed to close Solidity compiler", zap.Error(cerr))
+		}
 		return fmt.Errorf("failed to create contract verifier: %w", err)
 	}
 
@@ -1409,7 +1411,11 @@ func reindexData(path string, log *zap.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Error("Failed to close database after reindex", zap.Error(err))
+		}
+	}()
 
 	// Every prefix storing chain data is deleted; user data (contract
 	// verification) is preserved. Packages register their prefixes

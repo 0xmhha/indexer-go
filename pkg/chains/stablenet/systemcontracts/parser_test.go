@@ -434,7 +434,7 @@ func TestParseMintEvent_InvalidTopics(t *testing.T) {
 	}
 
 	// Error is logged but doesn't stop processing
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }
 
 func TestParseMintEvent_InvalidData(t *testing.T) {
@@ -450,7 +450,7 @@ func TestParseMintEvent_InvalidData(t *testing.T) {
 		Data:    []byte{0x01, 0x02}, // Invalid data length
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }
 
 // ========== Burn Event Tests ==========
@@ -617,7 +617,7 @@ func TestParseProposalCreatedEvent_DataTooShort(t *testing.T) {
 		Data:    []byte{0x01}, // Too short
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }
 
 func TestParseProposalVotedEvent(t *testing.T) {
@@ -686,7 +686,7 @@ func TestParseProposalRejectedEvent(t *testing.T) {
 		Topics:  []common.Hash{EventSigProposalRejected, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusRejected {
 		t.Error("expected Rejected status update")
 	}
@@ -703,7 +703,7 @@ func TestParseProposalExecutedEvent(t *testing.T) {
 		BlockNumber: 900,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusExecuted {
 		t.Error("expected Executed status update")
 	}
@@ -719,7 +719,7 @@ func TestParseProposalFailedEvent(t *testing.T) {
 		Topics:  []common.Hash{EventSigProposalFailed, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusFailed {
 		t.Error("expected Failed status update")
 	}
@@ -735,7 +735,7 @@ func TestParseProposalExpiredEvent(t *testing.T) {
 		Topics:  []common.Hash{EventSigProposalExpired, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusExpired {
 		t.Error("expected Expired status update")
 	}
@@ -751,7 +751,7 @@ func TestParseProposalCancelledEvent(t *testing.T) {
 		Topics:  []common.Hash{EventSigProposalCancelled, common.BytesToHash(proposalID.Bytes()), common.BytesToHash(common.Address{}.Bytes())},
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 	if len(mock.proposalStatusUpdates) != 1 || mock.proposalStatusUpdates[0].status != ProposalStatusCancelled {
 		t.Error("expected Cancelled status update")
 	}
@@ -807,7 +807,7 @@ func TestParseMemberRemovedEvent(t *testing.T) {
 		BlockNumber: 1100,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.memberChangeEvents) != 1 {
 		t.Fatalf("expected 1 member change event")
@@ -830,7 +830,7 @@ func TestParseMemberChangedEvent(t *testing.T) {
 		BlockNumber: 1200,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.memberChangeEvents) != 1 {
 		t.Fatalf("expected 1 member change event")
@@ -858,7 +858,7 @@ func TestParseGasTipUpdatedEvent(t *testing.T) {
 		BlockNumber: 1300,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.gasTipEvents) != 1 {
 		t.Fatalf("expected 1 gas tip event, got %d", len(mock.gasTipEvents))
@@ -881,7 +881,7 @@ func TestParseEmergencyPausedEvent(t *testing.T) {
 		BlockNumber: 1400,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.emergencyPauseEvents) != 1 {
 		t.Fatalf("expected 1 emergency pause event")
@@ -902,7 +902,7 @@ func TestParseEmergencyUnpausedEvent(t *testing.T) {
 		BlockNumber: 1500,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.emergencyPauseEvents) != 1 {
 		t.Fatalf("expected 1 emergency pause event")
@@ -939,7 +939,7 @@ func TestParseDepositMintProposedEvent(t *testing.T) {
 		BlockNumber: 1600,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.depositMintProposals) != 1 {
 		t.Fatalf("expected 1 deposit mint proposal, got %d", len(mock.depositMintProposals))
@@ -994,7 +994,7 @@ func TestParseBurnExecutedEvent(t *testing.T) {
 		BlockNumber: 1800,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.burnEvents) != 1 {
 		t.Fatalf("expected 1 burn event, got %d", len(mock.burnEvents))
@@ -1019,7 +1019,7 @@ func TestParseAddressBlacklistedEvent(t *testing.T) {
 		BlockNumber: 1900,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.blacklistEvents) != 1 {
 		t.Fatalf("expected 1 blacklist event")
@@ -1045,7 +1045,7 @@ func TestParseAddressUnblacklistedEvent(t *testing.T) {
 		BlockNumber: 2000,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.blacklistEvents) != 1 {
 		t.Fatalf("expected 1 blacklist event")
@@ -1070,7 +1070,7 @@ func TestParseAuthorizedAccountAddedEvent(t *testing.T) {
 		BlockNumber: 2100,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.authorizedAccountEvents) != 1 {
 		t.Fatalf("expected 1 authorized account event")
@@ -1093,7 +1093,7 @@ func TestParseAuthorizedAccountRemovedEvent(t *testing.T) {
 		BlockNumber: 2200,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.authorizedAccountEvents) != 1 {
 		t.Fatalf("expected 1 authorized account event")
@@ -1120,7 +1120,7 @@ func TestParseMaxProposalsPerMemberUpdatedEvent(t *testing.T) {
 		BlockNumber: 2300,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.maxProposalsEvents) != 1 {
 		t.Fatalf("expected 1 max proposals event")
@@ -1153,7 +1153,7 @@ func TestParseProposalExecutionSkippedEvent(t *testing.T) {
 		BlockNumber: 2400,
 	}
 
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 
 	if len(mock.proposalExecSkippedEvents) != 1 {
 		t.Fatalf("expected 1 proposal execution skipped event")
@@ -1237,7 +1237,7 @@ func TestParseMintEvent_StorageError(t *testing.T) {
 	}
 
 	// Error is logged but ParseAndIndexLogs continues
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }
 
 // ========== isSystemContract Tests ==========
@@ -1275,7 +1275,7 @@ func TestParseBurnEvent_InvalidTopics(t *testing.T) {
 		Topics:  []common.Hash{EventSigBurn}, // Missing indexed topic
 		Data:    common.LeftPadBytes(big.NewInt(1).Bytes(), 32),
 	}
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }
 
 func TestParseMinterConfiguredEvent_InvalidTopics(t *testing.T) {
@@ -1287,7 +1287,7 @@ func TestParseMinterConfiguredEvent_InvalidTopics(t *testing.T) {
 		Topics:  []common.Hash{EventSigMinterConfigured}, // Missing indexed topic
 		Data:    common.LeftPadBytes(big.NewInt(1).Bytes(), 32),
 	}
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }
 
 func TestParseMinterRemovedEvent_InvalidTopics(t *testing.T) {
@@ -1298,7 +1298,7 @@ func TestParseMinterRemovedEvent_InvalidTopics(t *testing.T) {
 		Address: NativeCoinAdapterAddress,
 		Topics:  []common.Hash{EventSigMinterRemoved}, // Missing indexed topic
 	}
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }
 
 func TestParseEmergencyPausedEvent_InvalidTopics(t *testing.T) {
@@ -1309,5 +1309,5 @@ func TestParseEmergencyPausedEvent_InvalidTopics(t *testing.T) {
 		Address: GovMasterMinterAddress,
 		Topics:  []common.Hash{EventSigEmergencyPaused}, // Missing indexed topic
 	}
-	parser.ParseAndIndexLogs(ctx, []*types.Log{log})
+	_ = parser.ParseAndIndexLogs(ctx, []*types.Log{log})
 }

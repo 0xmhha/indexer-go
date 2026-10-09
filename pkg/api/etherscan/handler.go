@@ -297,11 +297,12 @@ func (h *Handler) handleCheckVerifyStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	// Return status in Etherscan format
-	if status == "Pending" {
+	switch status {
+	case "Pending":
 		h.sendResponse(w, "0", "Pending in queue", message)
-	} else if status == "Pass" {
+	case "Pass":
 		h.sendResponse(w, "1", "Pass - Verified", message)
-	} else {
+	default:
 		h.sendResponse(w, "0", "Fail - Unable to verify", message)
 	}
 }

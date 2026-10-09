@@ -34,7 +34,7 @@ func (s *PebbleStorage) GetUserOp(ctx context.Context, opHash common.Hash) (*use
 		}
 		return nil, fmt.Errorf("failed to get userop: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var op userop.UserOperation
 	if err := json.Unmarshal(value, &op); err != nil {
@@ -118,7 +118,7 @@ func (s *PebbleStorage) GetBundlerStats(ctx context.Context, bundler common.Addr
 		}
 		return nil, fmt.Errorf("failed to get bundler stats: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var stats userop.BundlerStats
 	if err := json.Unmarshal(value, &stats); err != nil {
@@ -142,7 +142,7 @@ func (s *PebbleStorage) GetFactoryStats(ctx context.Context, factory common.Addr
 		}
 		return nil, fmt.Errorf("failed to get factory stats: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var stats userop.FactoryStats
 	if err := json.Unmarshal(value, &stats); err != nil {
@@ -166,7 +166,7 @@ func (s *PebbleStorage) GetPaymasterStats(ctx context.Context, paymaster common.
 		}
 		return nil, fmt.Errorf("failed to get paymaster stats: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var stats userop.PaymasterStats
 	if err := json.Unmarshal(value, &stats); err != nil {
@@ -190,7 +190,7 @@ func (s *PebbleStorage) GetSmartAccount(ctx context.Context, address common.Addr
 		}
 		return nil, fmt.Errorf("failed to get smart account: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var account userop.SmartAccount
 	if err := json.Unmarshal(value, &account); err != nil {
@@ -222,7 +222,7 @@ func (s *PebbleStorage) GetRecentUserOps(ctx context.Context, limit int) ([]*use
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var ops []*userop.UserOperation
 	count := 0
@@ -266,7 +266,7 @@ func (s *PebbleStorage) GetUserOpCount(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	count := 0
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -330,7 +330,7 @@ func (s *PebbleStorage) SaveUserOp(ctx context.Context, op *userop.UserOperation
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	// 1. Save the primary record
 	key := UserOpKey(op.Hash)
@@ -406,7 +406,7 @@ func (s *PebbleStorage) SaveUserOps(ctx context.Context, ops []*userop.UserOpera
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	for _, op := range ops {
 		data, err := json.Marshal(op)
@@ -578,7 +578,7 @@ func (s *PebbleStorage) getUserOpsByIndex(ctx context.Context, prefix []byte) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var ops []*userop.UserOperation
 	for iter.First(); iter.Valid(); iter.Next() {

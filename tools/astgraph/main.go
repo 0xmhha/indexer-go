@@ -301,7 +301,9 @@ func main() {
 		}
 		return a.To < b.To
 	})
-	os.MkdirAll(*out, 0o755)
+	if err := os.MkdirAll(*out, 0o755); err != nil {
+		log.Fatal(err)
+	}
 	fh, err := os.Create(filepath.Join(*out, "graph.json"))
 	if err != nil {
 		log.Fatal(err)
@@ -311,7 +313,9 @@ func main() {
 	if err := enc.Encode(g); err != nil {
 		log.Fatal(err)
 	}
-	fh.Close()
+	if err := fh.Close(); err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("module=%s packages=%d nodes=%d edges=%d\n", modPath, len(pkgs), len(g.Nodes), len(g.Edges))
 }
 

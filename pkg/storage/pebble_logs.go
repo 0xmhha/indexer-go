@@ -129,7 +129,7 @@ func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	logs := make([]*model.Log, 0, 32)
 
@@ -151,7 +151,7 @@ func (s *PebbleStorage) GetLogsByBlock(ctx context.Context, blockNumber uint64) 
 		}
 
 		log, err := decodeModelLog(logData)
-		closer.Close()
+		_ = closer.Close()
 		if err != nil {
 			continue // Skip invalid logs
 		}
@@ -200,7 +200,7 @@ func (s *PebbleStorage) IndexLogs(ctx context.Context, logs []*model.Log) error 
 	}
 
 	batch := s.newBatchCtx(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	// written holds the logs indexed earlier in this batch, so that a later
 	// log at the same position replaces their index entries too.
@@ -224,7 +224,7 @@ func (s *PebbleStorage) IndexLog(ctx context.Context, log *model.Log) error {
 	}
 
 	batch := s.newBatchCtx(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	if err := s.indexLogToBatch(ctx, batch, log, nil); err != nil {
 		return err
@@ -384,7 +384,7 @@ func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address commo
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	logs := make([]*model.Log, 0, 32)
 
@@ -405,7 +405,7 @@ func (s *PebbleStorage) getLogsByAddressRange(ctx context.Context, address commo
 		}
 
 		log, err := decodeModelLog(logData)
-		closer.Close()
+		_ = closer.Close()
 		if err != nil {
 			continue
 		}
@@ -453,7 +453,7 @@ func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Ha
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	logs := make([]*model.Log, 0, 32)
 
@@ -474,7 +474,7 @@ func (s *PebbleStorage) getLogsByTopicRange(ctx context.Context, topic common.Ha
 		}
 
 		log, err := decodeModelLog(logData)
-		closer.Close()
+		_ = closer.Close()
 		if err != nil {
 			continue
 		}

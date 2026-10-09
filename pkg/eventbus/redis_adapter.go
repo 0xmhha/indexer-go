@@ -346,7 +346,7 @@ func (eb *RedisEventBus) subscribeLoop() {
 	// Subscribe to all event type channels
 	channels := eb.getSubscriptionChannels()
 	pubsub := eb.client.Subscribe(eb.ctx, channels...)
-	defer pubsub.Close()
+	defer func() { _ = pubsub.Close() }()
 
 	eb.logger.Info("subscribed to Redis channels", "channels", channels)
 

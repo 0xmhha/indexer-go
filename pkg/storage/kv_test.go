@@ -42,7 +42,7 @@ func committedKeys(t *testing.T, s *PebbleStorage, prefix string) int64 {
 func TestBoundBatchCapturesWrites(t *testing.T) {
 	s := newTestPebble(t)
 	ctx, batch := bindTestBatch(s)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	block := testutil.NewTestBlockWithTransactions(7, 2)
 	require.NoError(t, s.SetBlock(ctx, modelBlock(block)))
@@ -97,7 +97,7 @@ func TestBatchBoundToOtherStorageIsIgnored(t *testing.T) {
 	a := newTestPebble(t)
 	b := newTestPebble(t)
 	ctx, batch := bindTestBatch(a)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	require.NoError(t, b.SetBlock(ctx, modelBlock(testutil.NewTestBlockWithTransactions(5, 1))))
 	require.NotZero(t, committedKeys(t, b, "/data/blocks/"))

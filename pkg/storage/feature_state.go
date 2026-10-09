@@ -28,7 +28,7 @@ func (s *PebbleStorage) FeatureStates(ctx context.Context) (map[string]port.Feat
 	if err != nil {
 		return nil, fmt.Errorf("open feature state iterator: %w", err)
 	}
-	defer it.Close()
+	defer func() { _ = it.Close() }()
 	out := map[string]port.FeatureState{}
 	for it.First(); it.Valid(); it.Next() {
 		var st port.FeatureState

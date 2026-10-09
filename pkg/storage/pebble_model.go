@@ -125,7 +125,7 @@ func (s *PebbleStorage) get(ctx context.Context, key []byte, what string) ([]byt
 		}
 		return nil, fmt.Errorf("failed to get %s: %w", what, err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 	return append([]byte(nil), value...), nil
 }
 

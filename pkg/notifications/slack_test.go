@@ -121,7 +121,7 @@ func TestSlackHandler_Validate(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "Slack webhook URL is required",
+			errorMsg:    "slack webhook URL is required",
 		},
 		{
 			name: "invalid URL format",

@@ -16,13 +16,13 @@ func TestPebbleStorage_SystemContractEvents(t *testing.T) {
 	// Create temp directory for test database
 	tempDir, err := os.MkdirTemp("", "pebble_syscontracts_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create storage
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 
@@ -203,12 +203,12 @@ func TestPebbleStorage_SystemContractEvents(t *testing.T) {
 func TestPebbleStorage_UpdateProposalStatus(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_proposal_status_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 
@@ -241,12 +241,12 @@ func TestPebbleStorage_UpdateProposalStatus(t *testing.T) {
 func TestPebbleStorage_TotalSupply(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_supply_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 
@@ -269,12 +269,12 @@ func TestPebbleStorage_TotalSupply(t *testing.T) {
 func TestPebbleStorage_ActiveMinter(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_minter_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 	minter := common.HexToAddress("0xminter123")
@@ -292,12 +292,12 @@ func TestPebbleStorage_ActiveMinter(t *testing.T) {
 func TestPebbleStorage_ActiveValidator(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_validator_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 	validator := common.HexToAddress("0xvalidator123")
@@ -314,12 +314,12 @@ func TestPebbleStorage_ActiveValidator(t *testing.T) {
 func TestPebbleStorage_BlacklistStatus(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_blacklist_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 	account := common.HexToAddress("0xblacklisted123")
@@ -336,12 +336,12 @@ func TestPebbleStorage_BlacklistStatus(t *testing.T) {
 func TestPebbleStorage_GetMintEvents(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_get_mints_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 	minter := common.HexToAddress("0xminter456")
@@ -373,12 +373,12 @@ func TestPebbleStorage_GetMintEvents(t *testing.T) {
 func TestPebbleStorage_GetBurnEvents(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_get_burns_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 	burner := common.HexToAddress("0xburner456")
@@ -410,12 +410,12 @@ func TestPebbleStorage_GetBurnEvents(t *testing.T) {
 func TestPebbleStorage_MaxProposalsUpdateEvent(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_maxproposals_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 	contract := common.HexToAddress("0x0000000000000000000000000000000000001004")
@@ -450,12 +450,12 @@ func TestPebbleStorage_MaxProposalsUpdateEvent(t *testing.T) {
 func TestPebbleStorage_ProposalExecutionSkippedEvent(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_proposalskipped_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 	contract := common.HexToAddress("0x0000000000000000000000000000000000001004")
@@ -493,12 +493,12 @@ func TestPebbleStorage_ProposalExecutionSkippedEvent(t *testing.T) {
 func TestPebbleStorage_AuthorizedAccountEvent(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pebble_authaccount_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	cfg := storagepkg.DefaultConfig(tempDir)
 	storage, err := newTestDB(cfg)
 	require.NoError(t, err)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 

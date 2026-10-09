@@ -47,7 +47,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.writeErrorResponse(w, nil, NewError(ParseError, "request body too large or unreadable", err.Error()))
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	// Check if it's a batch request
 	var isBatch bool

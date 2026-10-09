@@ -33,8 +33,8 @@ func setupTestSetCodeStorage(t *testing.T) (*PebbleStorage, func()) {
 	require.NoError(t, err)
 
 	cleanup := func() {
-		storage.Close()
-		os.RemoveAll(tmpDir)
+		_ = storage.Close()
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return storage, cleanup

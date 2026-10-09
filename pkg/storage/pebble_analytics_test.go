@@ -463,7 +463,7 @@ func TestPebbleStorage_Analytics_ClosedStorage(t *testing.T) {
 	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
 
 	// Close storage
-	storage.Close()
+	require.NoError(t, storage.Close())
 
 	// All analytics operations should return ErrClosed
 	_, err := storage.GetTopMiners(ctx, 10, 0, 100)

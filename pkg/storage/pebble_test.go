@@ -29,13 +29,13 @@ func setupTestStorage(t *testing.T) (Storage, func()) {
 	cfg := DefaultConfig(tmpDir)
 	storage, err := NewPebbleStorage(cfg)
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
 	cleanup := func() {
-		storage.Close()
-		os.RemoveAll(tmpDir)
+		_ = storage.Close()
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return storage, cleanup
@@ -881,14 +881,14 @@ func createTestBlockWithTxs(t *testing.T, height uint64, numTxs int) *types.Bloc
 // TestPebbleStorage_SetLogger tests logger setting
 func TestPebbleStorage_SetLogger(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "pebble-test-*")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	storage, err := NewPebbleStorage(cfg)
 	if err != nil {
 		t.Fatalf("NewPebbleStorage() error = %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	// Create a new logger and set it
 	logger := zap.NewExample()
@@ -1223,7 +1223,7 @@ func TestPebbleStorage_DeleteBlock_Closed(t *testing.T) {
 // TestPebbleStorage_DeleteBlock_ReadOnly tests deletion on read-only storage
 func TestPebbleStorage_DeleteBlock_ReadOnly(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "pebble-test-readonly-*")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create storage with test data
 	cfg := DefaultConfig(tmpDir)
@@ -1238,7 +1238,9 @@ func TestPebbleStorage_DeleteBlock_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetBlock() error = %v", err)
 	}
-	storage.Close()
+	if err := storage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	// Reopen as read-only
 	cfg.ReadOnly = true
@@ -1246,7 +1248,7 @@ func TestPebbleStorage_DeleteBlock_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPebbleStorage() read-only error = %v", err)
 	}
-	defer roStorage.Close()
+	defer func() { _ = roStorage.Close() }()
 
 	// Try to delete - should fail with ErrReadOnly
 	err = roStorage.DeleteBlock(ctx, 100)
@@ -1365,7 +1367,7 @@ func TestPebbleStorage_DeleteBlock(t *testing.T) {
 
 func TestPebbleStorage_Close(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "pebble-test-*")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	storage, err := NewPebbleStorage(cfg)
@@ -1389,7 +1391,7 @@ func TestPebbleStorage_Close(t *testing.T) {
 
 func TestPebbleStorage_ReadOnly(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "pebble-test-*")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create storage and write some data
 	cfg := DefaultConfig(tmpDir)
@@ -1398,7 +1400,9 @@ func TestPebbleStorage_ReadOnly(t *testing.T) {
 
 	block := createTestBlock(100)
 	_ = storage.SetBlock(ctx, modelBlock(block))
-	storage.Close()
+	if err := storage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	// Open in read-only mode
 	cfg.ReadOnly = true
@@ -1406,7 +1410,7 @@ func TestPebbleStorage_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPebbleStorage() read-only error = %v", err)
 	}
-	defer roStorage.Close()
+	defer func() { _ = roStorage.Close() }()
 
 	// Read should work
 	retrieved, err := roStorage.GetBlock(ctx, 100)
@@ -1462,11 +1466,11 @@ func TestPebbleStorage_Concurrent(t *testing.T) {
 
 func BenchmarkPebbleStorage_SetBlock(b *testing.B) {
 	tmpDir, _ := os.MkdirTemp("", "pebble-bench-*")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	storage, _ := NewPebbleStorage(cfg)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 	block := createTestBlock(0)
@@ -1479,11 +1483,11 @@ func BenchmarkPebbleStorage_SetBlock(b *testing.B) {
 
 func BenchmarkPebbleStorage_GetBlock(b *testing.B) {
 	tmpDir, _ := os.MkdirTemp("", "pebble-bench-*")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	storage, _ := NewPebbleStorage(cfg)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	ctx := context.Background()
 	block := createTestBlock(100)
@@ -3025,7 +3029,7 @@ func TestPebbleStorage_Put_ClosedStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
@@ -3033,7 +3037,9 @@ func TestPebbleStorage_Put_ClosedStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	ctx := context.Background()
 	err = pebbleStorage.Put(ctx, []byte("key"), []byte("value"))
@@ -3047,7 +3053,7 @@ func TestPebbleStorage_Put_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// First create storage normally
 	cfg := DefaultConfig(tmpDir)
@@ -3055,7 +3061,9 @@ func TestPebbleStorage_Put_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	// Reopen as read-only
 	cfg.ReadOnly = true
@@ -3063,7 +3071,7 @@ func TestPebbleStorage_Put_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open storage read-only: %v", err)
 	}
-	defer pebbleStorage.Close()
+	defer func() { _ = pebbleStorage.Close() }()
 
 	ctx := context.Background()
 	err = pebbleStorage.Put(ctx, []byte("key"), []byte("value"))
@@ -3110,7 +3118,7 @@ func TestPebbleStorage_Get_ClosedStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
@@ -3118,7 +3126,9 @@ func TestPebbleStorage_Get_ClosedStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	ctx := context.Background()
 	_, err = pebbleStorage.Get(ctx, []byte("key"))
@@ -3176,7 +3186,7 @@ func TestPebbleStorage_Delete_ClosedStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
@@ -3184,7 +3194,9 @@ func TestPebbleStorage_Delete_ClosedStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	ctx := context.Background()
 	err = pebbleStorage.Delete(ctx, []byte("key"))
@@ -3198,7 +3210,7 @@ func TestPebbleStorage_Delete_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// First create storage normally
 	cfg := DefaultConfig(tmpDir)
@@ -3206,7 +3218,9 @@ func TestPebbleStorage_Delete_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	// Reopen as read-only
 	cfg.ReadOnly = true
@@ -3214,7 +3228,7 @@ func TestPebbleStorage_Delete_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open storage read-only: %v", err)
 	}
-	defer pebbleStorage.Close()
+	defer func() { _ = pebbleStorage.Close() }()
 
 	ctx := context.Background()
 	err = pebbleStorage.Delete(ctx, []byte("key"))
@@ -3264,7 +3278,7 @@ func TestPebbleStorage_Has_ClosedStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
@@ -3272,7 +3286,9 @@ func TestPebbleStorage_Has_ClosedStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	ctx := context.Background()
 	_, err = pebbleStorage.Has(ctx, []byte("key"))
@@ -3387,7 +3403,7 @@ func TestPebbleStorage_Iterate_ClosedStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
@@ -3395,7 +3411,9 @@ func TestPebbleStorage_Iterate_ClosedStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	ctx := context.Background()
 	err = pebbleStorage.Iterate(ctx, []byte("prefix"), func(key, value []byte) bool {
@@ -3480,7 +3498,7 @@ func TestPebbleStorage_Sync_ClosedStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
@@ -3488,7 +3506,9 @@ func TestPebbleStorage_Sync_ClosedStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	err = pebbleStorage.Sync()
 	if err == nil {
@@ -3562,7 +3582,7 @@ func TestPebbleStorage_HasReceipt_ClosedStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
@@ -3570,7 +3590,9 @@ func TestPebbleStorage_HasReceipt_ClosedStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	ctx := context.Background()
 	_, err = pebbleStorage.HasReceipt(ctx, common.Hash{})
@@ -3658,7 +3680,7 @@ func TestPebbleStorage_GetMissingReceipts_ClosedStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
@@ -3666,7 +3688,9 @@ func TestPebbleStorage_GetMissingReceipts_ClosedStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	ctx := context.Background()
 	_, err = pebbleStorage.GetMissingReceipts(ctx, 1)
@@ -3745,7 +3769,7 @@ func TestPebbleStorage_InitializeTransactionCount_ClosedStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
@@ -3753,7 +3777,9 @@ func TestPebbleStorage_InitializeTransactionCount_ClosedStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	ctx := context.Background()
 	err = pebbleStorage.InitializeTransactionCount(ctx)
@@ -3767,14 +3793,16 @@ func TestPebbleStorage_InitializeTransactionCount_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := DefaultConfig(tmpDir)
 	pebbleStorage, err := NewPebbleStorage(cfg)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	pebbleStorage.Close()
+	if err := pebbleStorage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	// Reopen in read-only mode
 	cfg.ReadOnly = true
@@ -3782,7 +3810,7 @@ func TestPebbleStorage_InitializeTransactionCount_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create read-only storage: %v", err)
 	}
-	defer pebbleStorage.Close()
+	defer func() { _ = pebbleStorage.Close() }()
 
 	ctx := context.Background()
 	err = pebbleStorage.InitializeTransactionCount(ctx)
@@ -3927,7 +3955,9 @@ func TestPebbleStorage_DeleteByPrefix_ClosedStorage(t *testing.T) {
 	defer cleanup()
 
 	ps := s.(*PebbleStorage)
-	ps.Close()
+	if err := ps.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	_, err := ps.DeleteByPrefix([]byte("/test/"))
 	if err != port.ErrClosed {
@@ -3940,7 +3970,9 @@ func TestPebbleStorage_CountByPrefix_ClosedStorage(t *testing.T) {
 	defer cleanup()
 
 	ps := s.(*PebbleStorage)
-	ps.Close()
+	if err := ps.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	_, err := ps.CountByPrefix([]byte("/test/"))
 	if err != port.ErrClosed {

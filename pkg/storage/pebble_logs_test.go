@@ -114,7 +114,7 @@ func TestPebbleStorage_IndexLog_Errors(t *testing.T) {
 	})
 
 	t.Run("closed storage", func(t *testing.T) {
-		storage.Close()
+		_ = storage.Close()
 		log := createTestLog(100, 0, 0, common.Address{}, []common.Hash{}, []byte{})
 		err := storage.IndexLog(ctx, modelLog(log))
 		if err != port.ErrClosed {
@@ -564,7 +564,7 @@ func TestPebbleStorage_Logs_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create storage and add a log
 	cfg := DefaultConfig(tmpDir)
@@ -576,7 +576,9 @@ func TestPebbleStorage_Logs_ReadOnly(t *testing.T) {
 	ctx := context.Background()
 	log := createTestLog(100, 0, 0, common.Address{}, []common.Hash{}, []byte{1})
 	_ = storage.IndexLog(ctx, modelLog(log))
-	storage.Close()
+	if err := storage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	// Reopen as read-only
 	cfg.ReadOnly = true
@@ -584,7 +586,7 @@ func TestPebbleStorage_Logs_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create read-only storage: %v", err)
 	}
-	defer roStorage.Close()
+	defer func() { _ = roStorage.Close() }()
 
 	// Should be able to read
 	logs, err := roStorage.GetLogsByBlock(ctx, 100)

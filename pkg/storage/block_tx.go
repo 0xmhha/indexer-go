@@ -81,7 +81,7 @@ func (tx *BlockTx) Commit() error {
 	}
 	tx.done = true
 	defer tx.s.writeMu.Unlock()
-	defer tx.batch.Close()
+	defer func() { _ = tx.batch.Close() }()
 
 	if err := tx.writeUndo(); err != nil {
 		return fmt.Errorf("record undo: %w", err)
@@ -211,7 +211,7 @@ func (s *PebbleStorage) lastSeqUnder(ctx context.Context, prefix []byte) (uint64
 	if err != nil {
 		return 0, false, err
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 	for valid := iter.Last(); valid; valid = iter.Prev() {
 		suffix := iter.Key()[len(prefix):]
 		if len(suffix) != 20 {

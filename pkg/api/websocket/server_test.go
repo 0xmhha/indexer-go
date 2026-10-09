@@ -30,7 +30,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Should have 1 client
 		time.Sleep(100 * time.Millisecond)
@@ -44,7 +44,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Send subscribe message
 		subReq := Message{
@@ -73,7 +73,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Subscribe first
 		subReq := Message{Type: "subscribe"}
@@ -109,7 +109,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Subscribe to newBlock
 		subReq := Message{Type: "subscribe"}
@@ -155,7 +155,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Send ping
 		pingMsg := Message{Type: "ping"}
@@ -179,7 +179,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Send invalid message
 		if err := conn.WriteMessage(websocket.TextMessage, []byte("invalid json")); err != nil {
@@ -202,7 +202,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Send subscribe with invalid type
 		subReq := Message{Type: "subscribe"}
@@ -229,7 +229,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Send unknown message type
 		unknownMsg := Message{Type: "unknown"}
@@ -254,14 +254,14 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect client 1: %v", err)
 		}
-		defer conn1.Close()
+		defer func() { _ = conn1.Close() }()
 
 		// Connect second client
 		conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 		if err != nil {
 			t.Fatalf("failed to connect client 2: %v", err)
 		}
-		defer conn2.Close()
+		defer func() { _ = conn2.Close() }()
 
 		// Wait for connections to be registered
 		time.Sleep(100 * time.Millisecond)
@@ -277,7 +277,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Try to unsubscribe without subscribing first
 		unsubReq := Message{Type: "unsubscribe"}
@@ -305,7 +305,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Send subscribe with invalid payload as raw message
 		invalidMsg := `{"type":"subscribe","payload":"invalid json"}`
@@ -329,7 +329,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Send unsubscribe with invalid payload as raw message
 		invalidMsg := `{"type":"unsubscribe","payload":"invalid json"}`
@@ -353,7 +353,7 @@ func TestWebSocketServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Subscribe to newBlock
 		subReq := Message{Type: "subscribe"}
@@ -407,7 +407,7 @@ func TestWebSocketServer(t *testing.T) {
 		_ = conn.ReadJSON(&resp)
 
 		// Abruptly close the connection
-		conn.Close()
+		_ = conn.Close()
 
 		// Give server time to process the close
 		time.Sleep(200 * time.Millisecond)
@@ -428,7 +428,7 @@ func TestWebSocketServer(t *testing.T) {
 		// Close immediately to trigger read error
 		go func() {
 			time.Sleep(50 * time.Millisecond)
-			conn.Close()
+			_ = conn.Close()
 		}()
 
 		// Send a message and try to read response
@@ -491,7 +491,7 @@ func TestHub(t *testing.T) {
 		// Close all connections
 		for i, conn := range conns {
 			if conn != nil {
-				conn.Close()
+				_ = conn.Close()
 			}
 			_ = i
 		}
@@ -529,7 +529,7 @@ func TestWebSocketEdgeCases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Subscribe to newTransaction
 		subReq := Message{Type: "subscribe"}
@@ -575,7 +575,7 @@ func TestWebSocketEdgeCases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Subscribe to both newBlock and newTransaction
 		subReqBlock := Message{Type: "subscribe"}
@@ -621,7 +621,7 @@ func TestWebSocketEdgeCases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Subscribe only to newBlock
 		subReq := Message{Type: "subscribe"}
@@ -661,7 +661,7 @@ func TestClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upgrader := websocket.Upgrader{}
 		conn, _ := upgrader.Upgrade(w, r, nil)
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		client := NewClient(hub, conn, logger)
 
@@ -686,7 +686,7 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	time.Sleep(200 * time.Millisecond)
 }

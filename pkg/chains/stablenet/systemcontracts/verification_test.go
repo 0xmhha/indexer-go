@@ -135,7 +135,7 @@ func TestInitSystemContractVerifications_WithTempDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	v1Dir := filepath.Join(tmpDir, "v1")
 	if err := os.MkdirAll(v1Dir, 0755); err != nil {
@@ -191,7 +191,7 @@ func TestInitSystemContractVerifications_SkipsAlreadyVerified(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	v1Dir := filepath.Join(tmpDir, "v1")
 	if err := os.MkdirAll(v1Dir, 0755); err != nil {
@@ -237,7 +237,7 @@ func TestInitSystemContractVerifications_WithAbstracts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	v1Dir := filepath.Join(tmpDir, "v1")
 	abstractsDir := filepath.Join(tmpDir, "abstracts")

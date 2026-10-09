@@ -358,7 +358,7 @@ func txToRecord(tx *Transaction) (*txRecord, error) {
 		Opaque: tx.Opaque, Ext: ext,
 	}
 	for _, a := range tx.AccessList {
-		r.AccessList = append(r.AccessList, accessRecord{Address: a.Address, StorageKeys: a.StorageKeys})
+		r.AccessList = append(r.AccessList, accessRecord(a))
 	}
 	for _, a := range tx.AuthList {
 		r.AuthList = append(r.AuthList, authRecord{
@@ -391,7 +391,7 @@ func txFromRecord(r *txRecord) (*Transaction, error) {
 		return nil, err
 	}
 	for _, a := range r.AccessList {
-		tx.AccessList = append(tx.AccessList, AccessTuple{Address: a.Address, StorageKeys: a.StorageKeys})
+		tx.AccessList = append(tx.AccessList, AccessTuple(a))
 	}
 	for _, a := range r.AuthList {
 		auth := SetCodeAuthorization{Address: a.Address, Nonce: a.Nonce, V: a.V}

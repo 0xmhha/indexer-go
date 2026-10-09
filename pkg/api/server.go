@@ -379,7 +379,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{"version":"1.0.0","name":"indexer-go"}`)
+	_, _ = fmt.Fprintf(w, `{"version":"1.0.0","name":"indexer-go"}`)
 }
 
 // SubscribersResponse represents the subscribers list response

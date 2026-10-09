@@ -74,7 +74,7 @@ func (s *SolcCompiler) Compile(ctx context.Context, opts *CompilationOptions) (*
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	args := s.buildSolcArgs(opts, sourceFile)
 
@@ -314,7 +314,7 @@ func (s *SolcCompiler) prepareSourceFile(sourceCode string) (tmpDir string, sour
 
 	sourceFile = filepath.Join(tmpDir, "contract.sol")
 	if err := os.WriteFile(sourceFile, []byte(sourceCode), 0644); err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		return "", "", fmt.Errorf("failed to write source file: %w", err)
 	}
 
@@ -498,7 +498,7 @@ func (s *SolcCompiler) DownloadVersion(ctx context.Context, version string) erro
 	if err != nil {
 		return fmt.Errorf("failed to download compiler: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to download compiler: status %d", resp.StatusCode)
@@ -510,9 +510,13 @@ func (s *SolcCompiler) DownloadVersion(ctx context.Context, version string) erro
 	if err != nil {
 		return fmt.Errorf("failed to create compiler file: %w", err)
 	}
-	defer file.Close()
-
 	if _, err := io.Copy(file, resp.Body); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("failed to save compiler binary: %w", err)
+	}
+
+	// The binary is complete only once the file is closed without error.
+	if err := file.Close(); err != nil {
 		return fmt.Errorf("failed to save compiler binary: %w", err)
 	}
 

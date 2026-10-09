@@ -322,7 +322,7 @@ func (c *subscriptionClient) readPump() {
 	defer func() {
 		c.logger.Info("WebSocket connection closing")
 		c.cleanup()
-		c.conn.Close()
+		_ = c.conn.Close()
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -367,7 +367,7 @@ func (c *subscriptionClient) writePump() {
 		if ticker != nil {
 			ticker.Stop()
 		}
-		c.conn.Close()
+		_ = c.conn.Close()
 	}()
 
 	var ready, failed <-chan struct{}

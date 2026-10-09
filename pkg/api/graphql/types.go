@@ -97,7 +97,6 @@ var (
 	addressSetCodeInfoType             *graphql.Object
 
 	// ERC-7579 Module types
-	moduleTypeEnum                *graphql.Enum
 	installedModuleType           *graphql.Object
 	installedModuleConnectionType *graphql.Object
 	moduleStatsType               *graphql.Object
@@ -1562,30 +1561,6 @@ func initSetCodeTypes() {
 
 // initModuleTypes initializes ERC-7579 Module types
 func initModuleTypes() {
-	// ModuleType enum
-	moduleTypeEnum = graphql.NewEnum(graphql.EnumConfig{
-		Name:        "ModuleType",
-		Description: "ERC-7579 module type",
-		Values: graphql.EnumValueConfigMap{
-			"VALIDATOR": &graphql.EnumValueConfig{
-				Value:       "VALIDATOR",
-				Description: "Validator module (type 1) - validates user operations",
-			},
-			"EXECUTOR": &graphql.EnumValueConfig{
-				Value:       "EXECUTOR",
-				Description: "Executor module (type 2) - executes operations on behalf of the account",
-			},
-			"FALLBACK": &graphql.EnumValueConfig{
-				Value:       "FALLBACK",
-				Description: "Fallback module (type 3) - handles fallback calls",
-			},
-			"HOOK": &graphql.EnumValueConfig{
-				Value:       "HOOK",
-				Description: "Hook module (type 4) - provides pre/post execution hooks",
-			},
-		},
-	})
-
 	// InstalledModule type
 	installedModuleType = graphql.NewObject(graphql.ObjectConfig{
 		Name:        "InstalledModule",
