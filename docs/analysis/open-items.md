@@ -32,7 +32,7 @@
 
 | 항목 | 지금 동작 | 영향 | 심각도 |
 |---|---|---|---|
-| gap 채우기 재시도 | `--gap-recovery`에서 gap 채우기가 `ErrGapBelowIndexed`가 아닌 이유로 실패하면 로그만 남고 다시 시도하지 않는다(`fetcher_gaps.go:219`) | 다음 재시작까지 빈칸이 남는다 | [중요] |
+| gap 채우기 재시도 (해소 10/9) | 남은 gap을 다시 찾아 채우는 round를 3번까지 하고, 그래도 실패하면 오류로 시작을 멈춘다(`Fetcher.recoverGaps`). 전에는 로그만 남기고 빈칸을 둔 채 live loop로 넘어갔다 | — | — |
 | 멀티체인 failover | 멀티체인 모드는 체인마다 `rpc.fallback_endpoints`를 비운다(`app.go:780`), 설정 필드도 없다 | 멀티체인에서 노드 하나가 죽으면 그 체인이 멈춘다 | [권장] |
 | 해석할 수 없는 outbox 항목 | relay가 건너뛴 sequence를 구독 엔진이 유실로 보고 구독자를 끊는다. 재개가 같은 항목을 다시 읽는다 | 서로 다른 build가 같은 DB를 쓸 때만 생긴다. 구독자가 재접속을 반복할 수 있다 | [권장] |
 | outbox 정리 보호 | prune이 같은 프로세스에서 소비 중인 group만 본다 | 멈춘 알림 group이나 API 프로세스가 보존 범위(기본 10만)보다 뒤처지면 `SEQUENCE_TOO_OLD` | [권장] |
