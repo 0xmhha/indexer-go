@@ -95,7 +95,7 @@ func (s *PebbleStorage) GetTokenMetadata(ctx context.Context, address common.Add
 		}
 		return nil, fmt.Errorf("failed to get token metadata: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var jsonData TokenMetadataJSON
 	if err := json.Unmarshal(value, &jsonData); err != nil {
@@ -144,7 +144,7 @@ func (s *PebbleStorage) SaveTokenMetadata(ctx context.Context, metadata *port.To
 
 	// Use batch for atomic writes
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	// Save main data
 	key := TokenMetadataKey(metadata.Address)
@@ -204,7 +204,7 @@ func (s *PebbleStorage) DeleteTokenMetadata(ctx context.Context, address common.
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	// Delete main data
 	key := TokenMetadataKey(address)
@@ -286,7 +286,7 @@ func (s *PebbleStorage) GetTokensCount(ctx context.Context, standard port.TokenS
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	count := 0
 	for iter.First(); iter.Valid(); iter.Next() {

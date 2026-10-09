@@ -160,7 +160,7 @@ func isNil(value interface{}) bool {
 	// Use reflection to check if the underlying value is nil
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		return v.IsNil()
 	default:
 		return false

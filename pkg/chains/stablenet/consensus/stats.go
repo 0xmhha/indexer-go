@@ -419,10 +419,7 @@ func (cs *ConsensusStorage) convertToEpochInfo(epochData *EpochData, blockNumber
 
 	// Convert candidates
 	for _, candidate := range epochData.Candidates {
-		epochInfo.Candidates = append(epochInfo.Candidates, Candidate{
-			Address:   candidate.Address,
-			Diligence: candidate.Diligence,
-		})
+		epochInfo.Candidates = append(epochInfo.Candidates, Candidate(candidate))
 	}
 
 	// Convert validators

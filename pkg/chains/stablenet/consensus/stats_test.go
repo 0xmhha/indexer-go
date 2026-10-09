@@ -13,7 +13,7 @@ import (
 
 func TestConsensusStorage_SaveAndGetConsensusData(t *testing.T) {
 	pebbleStorage := newTestPebble(t)
-	defer pebbleStorage.Close()
+	defer func() { _ = pebbleStorage.Close() }()
 	var err error
 
 	logger := zap.NewNop()
@@ -71,7 +71,7 @@ func TestConsensusStorage_SaveAndGetConsensusData(t *testing.T) {
 
 func TestConsensusStorage_SaveConsensusDataWithEpoch(t *testing.T) {
 	pebbleStorage := newTestPebble(t)
-	defer pebbleStorage.Close()
+	defer func() { _ = pebbleStorage.Close() }()
 	var err error
 
 	logger := zap.NewNop()
@@ -146,7 +146,7 @@ func TestConsensusStorage_SaveConsensusDataWithEpoch(t *testing.T) {
 
 func TestConsensusStorage_GetValidatorStats(t *testing.T) {
 	pebbleStorage := newTestPebble(t)
-	defer pebbleStorage.Close()
+	defer func() { _ = pebbleStorage.Close() }()
 	var err error
 
 	logger := zap.NewNop()
@@ -200,7 +200,7 @@ func TestConsensusStorage_GetValidatorStats(t *testing.T) {
 
 func TestConsensusStorage_GetValidatorParticipation(t *testing.T) {
 	pebbleStorage := newTestPebble(t)
-	defer pebbleStorage.Close()
+	defer func() { _ = pebbleStorage.Close() }()
 	var err error
 
 	logger := zap.NewNop()
@@ -248,7 +248,7 @@ func TestConsensusStorage_GetValidatorParticipation(t *testing.T) {
 
 func TestConsensusStorage_GetAllValidatorStats(t *testing.T) {
 	pebbleStorage := newTestPebble(t)
-	defer pebbleStorage.Close()
+	defer func() { _ = pebbleStorage.Close() }()
 	var err error
 
 	logger := zap.NewNop()
@@ -299,7 +299,7 @@ func TestConsensusStorage_GetAllValidatorStats(t *testing.T) {
 
 func TestConsensusStorage_GetLatestEpochInfo(t *testing.T) {
 	pebbleStorage := newTestPebble(t)
-	defer pebbleStorage.Close()
+	defer func() { _ = pebbleStorage.Close() }()
 	var err error
 
 	logger := zap.NewNop()

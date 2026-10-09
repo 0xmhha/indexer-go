@@ -128,20 +128,4 @@ var (
 			},
 		},
 	})
-
-	// DynamicContractSubscriptionFilter input type
-	dynamicContractSubscriptionFilterType = graphql.NewInputObject(graphql.InputObjectConfig{
-		Name:        "DynamicContractSubscriptionFilter",
-		Description: "Filter for dynamic contract event subscriptions",
-		Fields: graphql.InputObjectConfigFieldMap{
-			"contract": &graphql.InputObjectFieldConfig{
-				Type:        addressType,
-				Description: "Filter by contract address",
-			},
-			"eventNames": &graphql.InputObjectFieldConfig{
-				Type:        graphql.NewList(graphql.NewNonNull(graphql.String)),
-				Description: "Filter by event names",
-			},
-		},
-	})
 )

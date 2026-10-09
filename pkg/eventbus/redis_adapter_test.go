@@ -105,7 +105,7 @@ func TestRedisEventBus_Disconnect_NotConnected(t *testing.T) {
 	eb, err := NewRedisEventBus(cfg, "node-1")
 	require.NoError(t, err)
 
-	err = eb.Disconnect(nil)
+	err = eb.Disconnect(context.Background())
 	assert.ErrorIs(t, err, ErrNotConnected)
 }
 

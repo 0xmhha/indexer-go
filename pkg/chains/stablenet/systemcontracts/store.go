@@ -404,7 +404,7 @@ func (s *Store) GetMintEvents(ctx context.Context, fromBlock, toBlock uint64, mi
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var events []*MintEvent
 	count := 0
@@ -476,7 +476,7 @@ func (s *Store) GetBurnEvents(ctx context.Context, fromBlock, toBlock uint64, bu
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var events []*BurnEvent
 	count := 0
@@ -535,7 +535,7 @@ func (s *Store) GetActiveMinters(ctx context.Context) ([]common.Address, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var minters []common.Address
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -574,7 +574,7 @@ func (s *Store) GetMinterHistory(ctx context.Context, minter common.Address) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var events []*MinterConfigEvent
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -599,7 +599,7 @@ func (s *Store) GetActiveValidators(ctx context.Context) ([]common.Address, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var validators []common.Address
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -627,7 +627,7 @@ func (s *Store) GetGasTipHistory(ctx context.Context, fromBlock, toBlock uint64)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var events []*GasTipUpdateEvent
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -652,7 +652,7 @@ func (s *Store) GetValidatorHistory(ctx context.Context, validator common.Addres
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var events []*ValidatorChangeEvent
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -679,7 +679,7 @@ func (s *Store) GetMinterConfigHistory(ctx context.Context, fromBlock, toBlock u
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var events []*MinterConfigEvent
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -708,7 +708,7 @@ func (s *Store) GetEmergencyPauseHistory(ctx context.Context, contract common.Ad
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var events []*EmergencyPauseEvent
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -734,7 +734,7 @@ func (s *Store) GetDepositMintProposals(ctx context.Context, fromBlock, toBlock 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var proposals []*DepositMintProposal
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -771,7 +771,7 @@ func (s *Store) GetBlacklistedAddresses(ctx context.Context) ([]common.Address, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var addresses []common.Address
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -796,7 +796,7 @@ func (s *Store) GetBlacklistHistory(ctx context.Context, address common.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var events []*BlacklistEvent
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -837,7 +837,7 @@ func (s *Store) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	// Replay events in order to derive current authorized accounts set
 	accountSet := make(map[common.Address]bool)
@@ -846,9 +846,10 @@ func (s *Store) GetAuthorizedAccounts(ctx context.Context) ([]common.Address, er
 		if err := json.Unmarshal(iter.Value(), event); err != nil {
 			return nil, fmt.Errorf("failed to decode authorized account event: %w", err)
 		}
-		if event.Action == "added" {
+		switch event.Action {
+		case "added":
 			accountSet[event.Account] = true
-		} else if event.Action == "removed" {
+		case "removed":
 			delete(accountSet, event.Account)
 		}
 	}
@@ -872,7 +873,7 @@ func (s *Store) GetProposals(ctx context.Context, contract common.Address, statu
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var proposals []*Proposal
 	count := 0
@@ -942,7 +943,7 @@ func (s *Store) GetProposalVotes(ctx context.Context, contract common.Address, p
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var votes []*ProposalVote
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -967,7 +968,7 @@ func (s *Store) GetMemberHistory(ctx context.Context, contract common.Address) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var events []*MemberChangeEvent
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -1022,7 +1023,7 @@ func (s *Store) GetMaxProposalsUpdateHistory(ctx context.Context, contract commo
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var results []*MaxProposalsUpdateEvent
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -1047,7 +1048,7 @@ func (s *Store) GetProposalExecutionSkippedEvents(ctx context.Context, contract 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var results []*ProposalExecutionSkippedEvent
 	for iter.First(); iter.Valid(); iter.Next() {

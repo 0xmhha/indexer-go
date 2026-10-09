@@ -16,7 +16,7 @@ func TestSchemaVersion(t *testing.T) {
 		require.NoError(t, err)
 		got, err := DecodeUint64(v)
 		require.NoError(t, err)
-		closer.Close()
+		_ = closer.Close()
 		require.Equal(t, SchemaVersion, got)
 		require.NoError(t, s.Close())
 

@@ -99,7 +99,7 @@ func (s *PebbleStorage) GetBlockByTimestamp(ctx context.Context, timestamp uint6
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	// The first block at or after the timestamp, otherwise the last block.
 	var closestHeight uint64
@@ -170,7 +170,7 @@ func (s *PebbleStorage) getAddressBalance(ctx context.Context, addr common.Addre
 			}
 			return nil, fmt.Errorf("failed to get latest balance: %w", err)
 		}
-		defer closer.Close()
+		defer func() { _ = closer.Close() }()
 
 		return DecodeBigInt(value), nil
 	}
@@ -188,9 +188,9 @@ func (s *PebbleStorage) getAddressBalance(ctx context.Context, addr common.Addre
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
-	var balance *big.Int = big.NewInt(0)
+	balance := big.NewInt(0)
 
 	// Iterate through all snapshots up to target block
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -279,7 +279,7 @@ func (s *PebbleStorage) GetTransactionCount(ctx context.Context) (uint64, error)
 		}
 		return 0, fmt.Errorf("failed to get transaction count: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	count, err := DecodeUint64(value)
 	if err != nil {

@@ -357,7 +357,7 @@ func TestPebbleStorage_ABI_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create storage and add an ABI
 	cfg := DefaultConfig(tmpDir)
@@ -371,7 +371,9 @@ func TestPebbleStorage_ABI_ReadOnly(t *testing.T) {
 	abiJSON := []byte(`[{"name":"test","type":"function"}]`)
 
 	_ = storage.SetABI(ctx, addr, abiJSON)
-	storage.Close()
+	if err := storage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	// Reopen as read-only
 	cfg.ReadOnly = true
@@ -379,7 +381,7 @@ func TestPebbleStorage_ABI_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create read-only storage: %v", err)
 	}
-	defer roStorage.Close()
+	defer func() { _ = roStorage.Close() }()
 
 	// Should be able to read
 	retrievedABI, err := roStorage.GetABI(ctx, addr)
@@ -431,7 +433,9 @@ func TestPebbleStorage_ABI_ClosedStorage(t *testing.T) {
 	abiJSON := []byte(`[{"name":"test","type":"function"}]`)
 
 	// Close storage
-	storage.Close()
+	if err := storage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	// All operations should return ErrClosed
 	err := storage.SetABI(ctx, addr, abiJSON)

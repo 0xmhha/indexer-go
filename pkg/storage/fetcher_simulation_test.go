@@ -63,7 +63,7 @@ func TestStorageInterfaceReturnsHistoricalWriter(t *testing.T) {
 	defer cleanup()
 
 	// Test 1: Check if it's a Storage interface (always true since setupTestStorage returns Storage)
-	var isStorage bool = true
+	isStorage := true
 	_ = isStorage // storageInterface is already Storage type
 	if !isStorage {
 		t.Error("❌ Not a Storage interface")

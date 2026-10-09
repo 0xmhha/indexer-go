@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/stretchr/testify/require"
 )
 
 // TestNewConfig tests creating a config with defaults
@@ -176,25 +177,25 @@ func TestConfigValidation(t *testing.T) {
 // TestLoadFromEnv tests loading configuration from environment variables
 func TestLoadFromEnv(t *testing.T) {
 	// Set environment variables
-	os.Setenv("INDEXER_RPC_ENDPOINT", "http://testnet:8545")
-	os.Setenv("INDEXER_RPC_TIMEOUT", "60s")
-	os.Setenv("INDEXER_DB_PATH", "/data/indexer")
-	os.Setenv("INDEXER_LOG_LEVEL", "debug")
-	os.Setenv("INDEXER_LOG_FORMAT", "console")
-	os.Setenv("INDEXER_WORKERS", "200")
-	os.Setenv("INDEXER_CHUNK_SIZE", "50")
-	os.Setenv("INDEXER_API_CORS_ENABLED", "true")
-	os.Setenv("INDEXER_API_CORS_ALLOWED_ORIGINS", "http://localhost:3001,https://app.example.com")
+	require.NoError(t, os.Setenv("INDEXER_RPC_ENDPOINT", "http://testnet:8545"))
+	require.NoError(t, os.Setenv("INDEXER_RPC_TIMEOUT", "60s"))
+	require.NoError(t, os.Setenv("INDEXER_DB_PATH", "/data/indexer"))
+	require.NoError(t, os.Setenv("INDEXER_LOG_LEVEL", "debug"))
+	require.NoError(t, os.Setenv("INDEXER_LOG_FORMAT", "console"))
+	require.NoError(t, os.Setenv("INDEXER_WORKERS", "200"))
+	require.NoError(t, os.Setenv("INDEXER_CHUNK_SIZE", "50"))
+	require.NoError(t, os.Setenv("INDEXER_API_CORS_ENABLED", "true"))
+	require.NoError(t, os.Setenv("INDEXER_API_CORS_ALLOWED_ORIGINS", "http://localhost:3001,https://app.example.com"))
 	defer func() {
-		os.Unsetenv("INDEXER_RPC_ENDPOINT")
-		os.Unsetenv("INDEXER_RPC_TIMEOUT")
-		os.Unsetenv("INDEXER_DB_PATH")
-		os.Unsetenv("INDEXER_LOG_LEVEL")
-		os.Unsetenv("INDEXER_LOG_FORMAT")
-		os.Unsetenv("INDEXER_WORKERS")
-		os.Unsetenv("INDEXER_CHUNK_SIZE")
-		os.Unsetenv("INDEXER_API_CORS_ENABLED")
-		os.Unsetenv("INDEXER_API_CORS_ALLOWED_ORIGINS")
+		_ = os.Unsetenv("INDEXER_RPC_ENDPOINT")
+		_ = os.Unsetenv("INDEXER_RPC_TIMEOUT")
+		_ = os.Unsetenv("INDEXER_DB_PATH")
+		_ = os.Unsetenv("INDEXER_LOG_LEVEL")
+		_ = os.Unsetenv("INDEXER_LOG_FORMAT")
+		_ = os.Unsetenv("INDEXER_WORKERS")
+		_ = os.Unsetenv("INDEXER_CHUNK_SIZE")
+		_ = os.Unsetenv("INDEXER_API_CORS_ENABLED")
+		_ = os.Unsetenv("INDEXER_API_CORS_ALLOWED_ORIGINS")
 	}()
 
 	cfg := NewConfig()
@@ -345,8 +346,8 @@ log:
 	}
 
 	// Set environment variable (should override file)
-	os.Setenv("INDEXER_RPC_ENDPOINT", "http://env:8545")
-	defer os.Unsetenv("INDEXER_RPC_ENDPOINT")
+	require.NoError(t, os.Setenv("INDEXER_RPC_ENDPOINT", "http://env:8545"))
+	defer func() { _ = os.Unsetenv("INDEXER_RPC_ENDPOINT") }()
 
 	cfg := NewConfig()
 
@@ -494,8 +495,8 @@ log:
 	}
 
 	// Set environment variable
-	os.Setenv("INDEXER_RPC_ENDPOINT", "http://env:8545")
-	defer os.Unsetenv("INDEXER_RPC_ENDPOINT")
+	require.NoError(t, os.Setenv("INDEXER_RPC_ENDPOINT", "http://env:8545"))
+	defer func() { _ = os.Unsetenv("INDEXER_RPC_ENDPOINT") }()
 
 	cfg, err := Load(configFile)
 	if err != nil {
@@ -562,8 +563,8 @@ func TestValidateInvalidLogFormat(t *testing.T) {
 
 // TestLoadFromEnvInvalidTimeout tests loading invalid timeout from env
 func TestLoadFromEnvInvalidTimeout(t *testing.T) {
-	os.Setenv("INDEXER_RPC_TIMEOUT", "invalid")
-	defer os.Unsetenv("INDEXER_RPC_TIMEOUT")
+	require.NoError(t, os.Setenv("INDEXER_RPC_TIMEOUT", "invalid"))
+	defer func() { _ = os.Unsetenv("INDEXER_RPC_TIMEOUT") }()
 
 	cfg := NewConfig()
 	err := cfg.LoadFromEnv()
@@ -574,8 +575,8 @@ func TestLoadFromEnvInvalidTimeout(t *testing.T) {
 
 // TestLoadFromEnvInvalidReadOnly tests loading invalid readonly from env
 func TestLoadFromEnvInvalidReadOnly(t *testing.T) {
-	os.Setenv("INDEXER_DB_READONLY", "invalid")
-	defer os.Unsetenv("INDEXER_DB_READONLY")
+	require.NoError(t, os.Setenv("INDEXER_DB_READONLY", "invalid"))
+	defer func() { _ = os.Unsetenv("INDEXER_DB_READONLY") }()
 
 	cfg := NewConfig()
 	err := cfg.LoadFromEnv()
@@ -586,8 +587,8 @@ func TestLoadFromEnvInvalidReadOnly(t *testing.T) {
 
 // TestLoadFromEnvInvalidWorkers tests loading invalid workers from env
 func TestLoadFromEnvInvalidWorkers(t *testing.T) {
-	os.Setenv("INDEXER_WORKERS", "invalid")
-	defer os.Unsetenv("INDEXER_WORKERS")
+	require.NoError(t, os.Setenv("INDEXER_WORKERS", "invalid"))
+	defer func() { _ = os.Unsetenv("INDEXER_WORKERS") }()
 
 	cfg := NewConfig()
 	err := cfg.LoadFromEnv()
@@ -598,8 +599,8 @@ func TestLoadFromEnvInvalidWorkers(t *testing.T) {
 
 // TestLoadFromEnvInvalidChunkSize tests loading invalid chunk size from env
 func TestLoadFromEnvInvalidChunkSize(t *testing.T) {
-	os.Setenv("INDEXER_CHUNK_SIZE", "invalid")
-	defer os.Unsetenv("INDEXER_CHUNK_SIZE")
+	require.NoError(t, os.Setenv("INDEXER_CHUNK_SIZE", "invalid"))
+	defer func() { _ = os.Unsetenv("INDEXER_CHUNK_SIZE") }()
 
 	cfg := NewConfig()
 	err := cfg.LoadFromEnv()
@@ -610,8 +611,8 @@ func TestLoadFromEnvInvalidChunkSize(t *testing.T) {
 
 // TestLoadFromEnvInvalidStartHeight tests loading invalid start height from env
 func TestLoadFromEnvInvalidStartHeight(t *testing.T) {
-	os.Setenv("INDEXER_START_HEIGHT", "invalid")
-	defer os.Unsetenv("INDEXER_START_HEIGHT")
+	require.NoError(t, os.Setenv("INDEXER_START_HEIGHT", "invalid"))
+	defer func() { _ = os.Unsetenv("INDEXER_START_HEIGHT") }()
 
 	cfg := NewConfig()
 	err := cfg.LoadFromEnv()

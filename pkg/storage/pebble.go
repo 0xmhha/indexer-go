@@ -91,13 +91,13 @@ func NewPebbleStorage(cfg *Config) (*PebbleStorage, error) {
 	}
 
 	if err := storage.checkSchema(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
 	// Load transaction count into cache
 	if err := storage.loadTransactionCount(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to load transaction count: %w", err)
 	}
 
@@ -115,7 +115,7 @@ func (s *PebbleStorage) loadTransactionCount() error {
 		}
 		return fmt.Errorf("failed to get transaction count: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	count, err := DecodeUint64(value)
 	if err != nil {
@@ -190,10 +190,10 @@ func (s *PebbleStorage) DeleteByPrefix(prefix []byte) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	batch := s.db.NewBatch()
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	var count int64
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -235,7 +235,7 @@ func (s *PebbleStorage) CountByPrefix(prefix []byte) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var count int64
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -293,7 +293,7 @@ func (s *PebbleStorage) Get(ctx context.Context, key []byte) ([]byte, error) {
 		}
 		return nil, err
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	// Copy the value as it's only valid until closer.Close()
 	result := make([]byte, len(value))
@@ -326,7 +326,7 @@ func (s *PebbleStorage) Iterate(ctx context.Context, prefix []byte, fn func(key,
 	if err != nil {
 		return err
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		// Check context cancellation
@@ -363,7 +363,7 @@ func (s *PebbleStorage) Has(ctx context.Context, key []byte) (bool, error) {
 		}
 		return false, err
 	}
-	closer.Close()
+	_ = closer.Close()
 	return true, nil
 }
 

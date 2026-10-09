@@ -45,7 +45,7 @@ func TestWebSocketBlockSubscription_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect WebSocket: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	t.Log("✅ WebSocket connected")
 
@@ -225,7 +225,7 @@ func TestWebSocketTransactionSubscription(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Init
 	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
@@ -315,7 +315,7 @@ func TestWebSocketLogSubscription(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Init
 	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
@@ -414,7 +414,7 @@ func TestWebSocketMultipleSubscriptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Init
 	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
@@ -527,7 +527,7 @@ func TestWebSocketErrorHandling(t *testing.T) {
 
 	// Should get HTTP error since EventBus is nil
 	if err == nil {
-		conn.Close()
+		_ = conn.Close()
 		t.Log("Note: Connection succeeded even without EventBus (Handler will check later)")
 	} else if resp != nil && resp.StatusCode == http.StatusServiceUnavailable {
 		t.Log("✅ Correctly returned 503 Service Unavailable")
@@ -558,7 +558,7 @@ func TestWebSocketInvalidSubscription(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Init
 	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
@@ -613,7 +613,7 @@ func TestWebSocketTransactionFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Connection init
 	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
@@ -766,7 +766,7 @@ func BenchmarkWebSocketThroughput(b *testing.B) {
 	header := http.Header{}
 	header.Add("Sec-WebSocket-Protocol", "graphql-transport-ws")
 	conn, _, _ := websocket.DefaultDialer.Dial(wsURL, header)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	_ = conn.WriteJSON(map[string]interface{}{"type": "connection_init"})
 	var ack map[string]interface{}

@@ -88,7 +88,7 @@ func TestBlockTxRollbackLeavesNoTrace(t *testing.T) {
 		v, closer, err := s.db.Get(AddressTransactionKey(txAddrA, uint64(i)))
 		require.NoError(t, err)
 		require.Equal(t, h.Bytes(), v)
-		closer.Close()
+		_ = closer.Close()
 	}
 }
 
@@ -169,7 +169,7 @@ func TestAddrSeqRestoredAfterReopen(t *testing.T) {
 		v, closer, err := s.db.Get(AddressTransactionKey(txAddrA, uint64(i)))
 		require.NoError(t, err, "seq %d", i)
 		require.Equal(t, want.Bytes(), v, "seq %d was overwritten", i)
-		closer.Close()
+		_ = closer.Close()
 	}
 }
 

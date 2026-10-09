@@ -98,8 +98,8 @@ func TestNewSolcCompiler_NilConfig(t *testing.T) {
 	// DefaultConfig uses relative paths, which should work in tmpdir
 	origDir, _ := os.Getwd()
 	tmpDir := t.TempDir()
-	os.Chdir(tmpDir)
-	defer os.Chdir(origDir)
+	require.NoError(t, os.Chdir(tmpDir))
+	defer func() { _ = os.Chdir(origDir) }()
 
 	sc, err := NewSolcCompiler(nil)
 	require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestIsVersionAvailable(t *testing.T) {
 
 	// Create fake binary
 	fakeBin := sc.getCompilerPath("0.8.20")
-	os.WriteFile(fakeBin, []byte("fake"), 0755)
+	require.NoError(t, os.WriteFile(fakeBin, []byte("fake"), 0755))
 
 	avail, err = sc.IsVersionAvailable("0.8.20")
 	require.NoError(t, err)
@@ -293,9 +293,9 @@ func TestListVersions(t *testing.T) {
 	// ListVersions trims "solc-" prefix and filepath.Ext, so "solc-v0.8.20" → "v0.8" (ext=".20" removed)
 	// Real binaries from DownloadVersion are named "solc-0.8.20" with no extension handling issue
 	// So test with the actual names the list function returns
-	os.WriteFile(filepath.Join(tmpDir, "solc-0.8.20"), []byte("fake"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "solc-0.8.21"), []byte("fake"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "not-solc"), []byte("fake"), 0755) // Should be ignored
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "solc-0.8.20"), []byte("fake"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "solc-0.8.21"), []byte("fake"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "not-solc"), []byte("fake"), 0755)) // Should be ignored
 
 	versions, err = sc.ListVersions()
 	require.NoError(t, err)

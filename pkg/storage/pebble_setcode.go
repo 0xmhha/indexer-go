@@ -35,7 +35,7 @@ func (s *PebbleStorage) GetSetCodeAuthorization(ctx context.Context, txHash comm
 		}
 		return nil, fmt.Errorf("failed to get setcode authorization: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var record port.SetCodeAuthorizationRecord
 	if err := json.Unmarshal(value, &record); err != nil {
@@ -60,7 +60,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByTx(ctx context.Context, txHash
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var records []*port.SetCodeAuthorizationRecord
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -139,7 +139,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsByBlock(ctx context.Context, blo
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var records []*port.SetCodeAuthorizationRecord
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -202,7 +202,7 @@ func (s *PebbleStorage) getStoredSetCodeStats(ctx context.Context, address commo
 		}
 		return nil, fmt.Errorf("failed to get setcode stats: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var stats port.AddressSetCodeStats
 	if err := json.Unmarshal(value, &stats); err != nil {
@@ -230,7 +230,7 @@ func (s *PebbleStorage) GetAddressDelegationState(ctx context.Context, address c
 		}
 		return nil, fmt.Errorf("failed to get delegation state: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var state port.AddressDelegationState
 	if err := json.Unmarshal(value, &state); err != nil {
@@ -255,7 +255,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsCountByTarget(ctx context.Contex
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	count := 0
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -284,7 +284,7 @@ func (s *PebbleStorage) GetSetCodeAuthorizationsCountByAuthority(ctx context.Con
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	count := 0
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -315,7 +315,7 @@ func (s *PebbleStorage) GetSetCodeTransactionCount(ctx context.Context) (int, er
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	count := 0
 	var lastTx []byte
@@ -361,7 +361,7 @@ func (s *PebbleStorage) GetRecentSetCodeAuthorizations(ctx context.Context, limi
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var records []*port.SetCodeAuthorizationRecord
 	count := 0
@@ -407,7 +407,7 @@ func (s *PebbleStorage) SaveSetCodeAuthorization(ctx context.Context, record *po
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	// 1. Save the primary record
 	key := SetCodeAuthorizationKey(record.TxHash, record.AuthIndex)
@@ -467,7 +467,7 @@ func (s *PebbleStorage) SaveSetCodeAuthorizations(ctx context.Context, records [
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	for _, record := range records {
 		// Marshal record

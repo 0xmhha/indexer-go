@@ -370,9 +370,10 @@ func (hc *HealthChecker) DetailedHealthHandler() http.HandlerFunc {
 		health := hc.GetDetailedHealth(r.Context())
 
 		status := http.StatusOK
-		if health.Status == "unhealthy" {
+		switch health.Status {
+		case "unhealthy":
 			status = http.StatusServiceUnavailable
-		} else if health.Status == "degraded" {
+		case "degraded":
 			status = http.StatusOK // Still serve traffic when degraded
 		}
 

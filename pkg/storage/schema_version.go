@@ -28,7 +28,7 @@ func SchemaVersionKey() []byte { return []byte(keySchemaVersion) }
 func (s *PebbleStorage) checkSchema() error {
 	value, closer, err := s.db.Get(SchemaVersionKey())
 	if err == nil {
-		defer closer.Close()
+		defer func() { _ = closer.Close() }()
 		got, derr := DecodeUint64(value)
 		if derr != nil {
 			return fmt.Errorf("decode schema version: %w", derr)
@@ -63,6 +63,6 @@ func (s *PebbleStorage) isEmpty() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("open iterator: %w", err)
 	}
-	defer it.Close()
+	defer func() { _ = it.Close() }()
 	return !it.First(), nil
 }

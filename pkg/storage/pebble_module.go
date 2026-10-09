@@ -34,7 +34,7 @@ func (s *PebbleStorage) GetInstalledModule(ctx context.Context, account, module 
 		}
 		return nil, fmt.Errorf("failed to get installed module: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var record port.InstalledModule
 	if err := json.Unmarshal(value, &record); err != nil {
@@ -104,7 +104,7 @@ func (s *PebbleStorage) GetModuleStats(ctx context.Context, module common.Addres
 		}
 		return nil, fmt.Errorf("failed to get module stats: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var stats port.ModuleStats
 	if err := json.Unmarshal(value, &stats); err != nil {
@@ -138,7 +138,7 @@ func (s *PebbleStorage) GetAccountModules(ctx context.Context, account common.Ad
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		var record port.InstalledModule
@@ -191,7 +191,7 @@ func (s *PebbleStorage) GetRecentModuleEvents(ctx context.Context, limit int) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var records []*port.InstalledModule
 	count := 0
@@ -238,7 +238,7 @@ func (s *PebbleStorage) GetModuleEventCount(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	count := 0
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -308,7 +308,7 @@ func (s *PebbleStorage) SaveInstalledModule(ctx context.Context, record *port.In
 	}
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	if previous != nil && (previous.InstalledAt != record.InstalledAt || previous.ModuleType != record.ModuleType) {
 		for _, staleKey := range [][]byte{

@@ -101,7 +101,7 @@ func (s *PebbleStorage) HasReceipt(ctx context.Context, hash common.Hash) (bool,
 		}
 		return false, fmt.Errorf("failed to check receipt: %w", err)
 	}
-	closer.Close()
+	_ = closer.Close()
 	return true, nil
 }
 

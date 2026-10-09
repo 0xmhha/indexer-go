@@ -149,7 +149,7 @@ func (h *WebhookHandler) Deliver(ctx context.Context, notification *Notification
 		result.Duration = time.Since(start).Milliseconds()
 		return result, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body
 	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024*10)) // Limit to 10KB

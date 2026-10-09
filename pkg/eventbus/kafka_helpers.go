@@ -103,7 +103,7 @@ func testKafkaBrokerConnectivity(brokers []string, timeout time.Duration) error 
 	for _, broker := range brokers {
 		conn, err := net.DialTimeout("tcp", broker, timeout)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			return nil
 		}
 	}

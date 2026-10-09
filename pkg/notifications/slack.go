@@ -56,7 +56,7 @@ func (h *SlackHandler) Type() NotificationType {
 // Validate validates a Slack notification setting.
 func (h *SlackHandler) Validate(setting *NotificationSetting) error {
 	if setting.Destination.SlackWebhookURL == "" {
-		return fmt.Errorf("Slack webhook URL is required")
+		return fmt.Errorf("slack webhook URL is required")
 	}
 
 	// Validate that it looks like a Slack webhook URL
@@ -120,7 +120,7 @@ func (h *SlackHandler) Deliver(ctx context.Context, notification *Notification, 
 		result.Duration = time.Since(start).Milliseconds()
 		return result, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response
 	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))

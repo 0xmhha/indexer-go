@@ -51,7 +51,7 @@ func newMockRPCServer(t *testing.T, handlers map[string]methodHandler) *httptest
 			http.Error(w, "bad request", 400)
 			return
 		}
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		w.Header().Set("Content-Type", "application/json")
 
 		var req jrpcRequest
@@ -72,7 +72,7 @@ func newMockRPCServer(t *testing.T, handlers map[string]methodHandler) *httptest
 				resp.Result = result
 			}
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	t.Cleanup(server.Close)
 	return server

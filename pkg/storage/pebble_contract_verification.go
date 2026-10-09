@@ -28,7 +28,7 @@ func (s *PebbleStorage) GetContractVerification(ctx context.Context, address com
 		}
 		return nil, fmt.Errorf("failed to get contract verification: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	// Copy the value since it's only valid until closer is called
 	data := make([]byte, len(value))
@@ -95,7 +95,7 @@ func (s *PebbleStorage) CountVerifiedContracts(ctx context.Context) (int, error)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	count := 0
 	for iter.First(); iter.Valid(); iter.Next() {

@@ -813,7 +813,7 @@ func TestServerEdgeCases(t *testing.T) {
 		server.ServeHTTP(w, req)
 
 		var resp Response
-		json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 		require.NotNil(t, resp.Error)
 		assert.Equal(t, InvalidRequest, resp.Error.Code)
 	})
@@ -826,7 +826,7 @@ func TestServerEdgeCases(t *testing.T) {
 		server.ServeHTTP(w, req)
 
 		var resp Response
-		json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 		require.NotNil(t, resp.Error)
 		assert.Equal(t, ParseError, resp.Error.Code)
 	})
@@ -839,7 +839,7 @@ func TestServerEdgeCases(t *testing.T) {
 		server.ServeHTTP(w, req)
 
 		var resp Response
-		json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 		require.NotNil(t, resp.Error)
 		assert.Equal(t, InvalidRequest, resp.Error.Code)
 	})
@@ -856,7 +856,7 @@ func TestServerEdgeCases(t *testing.T) {
 		server.ServeHTTP(w, req)
 
 		var batch BatchResponse
-		json.NewDecoder(w.Body).Decode(&batch)
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&batch))
 		assert.Len(t, batch, 3)
 		assert.Nil(t, batch[0].Error)
 		assert.NotNil(t, batch[1].Error)
@@ -881,7 +881,7 @@ func TestServerEdgeCases(t *testing.T) {
 		server.ServeHTTP(w, req)
 
 		var resp Response
-		json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 		require.NotNil(t, resp.Error)
 		assert.Equal(t, InvalidRequest, resp.Error.Code)
 	})

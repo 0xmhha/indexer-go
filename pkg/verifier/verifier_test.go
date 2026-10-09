@@ -53,17 +53,6 @@ func (m *mockCompiler) Close() error {
 // Since ContractVerifier uses ethclient.Client directly, we test internal methods
 // that don't need the client, and test the full Verify flow with a testable verifier.
 
-// testVerifier wraps ContractVerifier but overrides GetDeployedBytecode
-type testVerifier struct {
-	*ContractVerifier
-	deployedCode string
-	deployedErr  error
-}
-
-func (tv *testVerifier) GetDeployedBytecode(_ context.Context, _ [20]byte) (string, error) {
-	return tv.deployedCode, tv.deployedErr
-}
-
 // --- Tests ---
 
 func TestConstants(t *testing.T) {

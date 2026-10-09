@@ -686,7 +686,7 @@ func TestManagerStartWithChains(t *testing.T) {
 	}
 
 	// Cleanup
-	manager.Stop(ctx)
+	_ = manager.Stop(ctx)
 }
 
 func TestManagerUnregisterRunningChain(t *testing.T) {

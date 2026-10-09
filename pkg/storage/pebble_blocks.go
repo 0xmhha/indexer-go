@@ -26,7 +26,7 @@ func (s *PebbleStorage) GetLatestHeight(ctx context.Context) (uint64, error) {
 		}
 		return 0, fmt.Errorf("failed to get latest height: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	height, err := DecodeUint64(value)
 	if err != nil {
@@ -103,6 +103,6 @@ func (s *PebbleStorage) HasBlock(ctx context.Context, height uint64) (bool, erro
 		}
 		return false, err
 	}
-	closer.Close()
+	_ = closer.Close()
 	return true, nil
 }

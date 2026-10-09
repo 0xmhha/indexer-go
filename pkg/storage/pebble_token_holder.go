@@ -139,7 +139,7 @@ func (s *PebbleStorage) GetTokenHolderCount(ctx context.Context, token common.Ad
 	if err != nil {
 		return 0, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	count := 0
 	for iter.First(); iter.Valid(); iter.Next() {
@@ -181,7 +181,7 @@ func (s *PebbleStorage) GetTokenHolderStats(ctx context.Context, token common.Ad
 		}
 		return nil, fmt.Errorf("failed to get token holder stats: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var jsonData TokenHolderStatsJSON
 	if err := json.Unmarshal(value, &jsonData); err != nil {
@@ -221,7 +221,7 @@ func (s *PebbleStorage) UpdateTokenHolder(ctx context.Context, holder *port.Toke
 	hasOldHolder := err == nil && oldHolder != nil
 
 	batch := s.newBatch(ctx)
-	defer batch.Close()
+	defer func() { _ = batch.Close() }()
 
 	// Delete old index if exists
 	if hasOldHolder {
@@ -405,7 +405,7 @@ func (s *PebbleStorage) getTokenHolder(ctx context.Context, token, holder common
 		}
 		return nil, fmt.Errorf("failed to get token holder: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	var jsonData TokenHolderJSON
 	if err := json.Unmarshal(value, &jsonData); err != nil {
@@ -423,7 +423,7 @@ func (s *PebbleStorage) updateHolderCountInBatch(ctx context.Context, batch *peb
 
 	var stats *port.TokenHolderStats
 	if err == nil {
-		defer closer.Close()
+		defer func() { _ = closer.Close() }()
 		var jsonData TokenHolderStatsJSON
 		if err := json.Unmarshal(value, &jsonData); err == nil {
 			stats = tokenHolderStatsFromJSON(&jsonData)

@@ -31,13 +31,13 @@ func DumpKeyspace(path string, filter Filter) ([]Entry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	it, err := db.NewIter(nil)
 	if err != nil {
 		return nil, err
 	}
-	defer it.Close()
+	defer func() { _ = it.Close() }()
 
 	var out []Entry
 	for it.First(); it.Valid(); it.Next() {

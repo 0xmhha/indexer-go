@@ -303,7 +303,9 @@ func TestPebbleStorage_ContractVerification_ClosedStorage(t *testing.T) {
 	addr := common.HexToAddress("0x5555555555555555555555555555555555555555")
 
 	// Close storage
-	storage.Close()
+	if err := storage.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	// All operations should return ErrClosed
 	_, err := storage.GetContractVerification(ctx, addr)

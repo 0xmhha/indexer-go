@@ -95,6 +95,6 @@ func (s *PebbleStorage) HasTransaction(ctx context.Context, hash common.Hash) (b
 		}
 		return false, err
 	}
-	closer.Close()
+	_ = closer.Close()
 	return true, nil
 }

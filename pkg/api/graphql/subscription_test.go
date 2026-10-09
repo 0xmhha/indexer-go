@@ -79,7 +79,7 @@ func TestSubscriptionServer_WebSocketConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Send connection_init
 	initMsg := wsMessage{Type: "connection_init"}
@@ -115,7 +115,7 @@ func TestSubscriptionServer_Subscribe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Send connection_init
 	initMsg := wsMessage{Type: "connection_init"}
@@ -164,7 +164,7 @@ func TestSubscriptionServer_PingPong(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Send ping
 	pingMsg := wsMessage{Type: "ping"}

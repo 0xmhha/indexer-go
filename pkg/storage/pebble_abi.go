@@ -26,7 +26,7 @@ func (s *PebbleStorage) GetABI(ctx context.Context, address common.Address) ([]b
 		}
 		return nil, fmt.Errorf("failed to get ABI: %w", err)
 	}
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	// Copy the value since it's only valid until closer is called
 	result := make([]byte, len(value))
@@ -49,7 +49,7 @@ func (s *PebbleStorage) HasABI(ctx context.Context, address common.Address) (boo
 		}
 		return false, fmt.Errorf("failed to check ABI: %w", err)
 	}
-	closer.Close()
+	_ = closer.Close()
 
 	return true, nil
 }
@@ -68,7 +68,7 @@ func (s *PebbleStorage) ListABIs(ctx context.Context) ([]common.Address, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	var addresses []common.Address
 

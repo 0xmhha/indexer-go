@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -185,7 +186,7 @@ func TestProcessSetCodeTransaction_NonSetCode(t *testing.T) {
 	block := types.NewBlockWithHeader(header)
 
 	// Should return nil for non-SetCode tx
-	err := p.ProcessSetCodeTransaction(nil, tx, nil, block, 0)
+	err := p.ProcessSetCodeTransaction(context.Background(), tx, nil, block, 0)
 	if err != nil {
 		t.Errorf("expected nil error for non-SetCode tx, got %v", err)
 	}
@@ -205,7 +206,7 @@ func TestProcessSetCodeTransactionBatch_NoSetCodeTxs(t *testing.T) {
 	header := &types.Header{Number: big.NewInt(1)}
 	block := types.NewBlockWithHeader(header)
 
-	err := p.ProcessSetCodeTransactionBatch(nil, []*types.Transaction{tx}, nil, block)
+	err := p.ProcessSetCodeTransactionBatch(context.Background(), []*types.Transaction{tx}, nil, block)
 	if err != nil {
 		t.Errorf("expected nil error, got %v", err)
 	}

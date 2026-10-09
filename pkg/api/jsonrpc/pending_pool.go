@@ -222,7 +222,7 @@ func (p *PendingPool) GetTransactionsSince(sinceIndex uint64) ([]common.Hash, ui
 	defer p.mu.RUnlock()
 
 	var result []common.Hash
-	var maxIndex uint64 = sinceIndex
+	maxIndex := sinceIndex
 
 	for _, hash := range p.transactions {
 		if tx, exists := p.txDetails[hash]; exists {

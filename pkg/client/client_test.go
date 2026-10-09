@@ -50,7 +50,7 @@ func newMockRPCServer(t *testing.T, handlers map[string]methodHandler) *httptest
 			http.Error(w, "bad request", 400)
 			return
 		}
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 
 		w.Header().Set("Content-Type", "application/json")
 
@@ -65,7 +65,7 @@ func newMockRPCServer(t *testing.T, handlers map[string]methodHandler) *httptest
 			for _, req := range reqs {
 				responses = append(responses, dispatchRequest(req, handlers))
 			}
-			json.NewEncoder(w).Encode(responses)
+			_ = json.NewEncoder(w).Encode(responses)
 			return
 		}
 
@@ -74,7 +74,7 @@ func newMockRPCServer(t *testing.T, handlers map[string]methodHandler) *httptest
 			http.Error(w, "invalid request", 400)
 			return
 		}
-		json.NewEncoder(w).Encode(dispatchRequest(req, handlers))
+		_ = json.NewEncoder(w).Encode(dispatchRequest(req, handlers))
 	}))
 	t.Cleanup(server.Close)
 	return server
@@ -543,12 +543,12 @@ func TestClient_BatchGetBlocks(t *testing.T) {
 		client := newTestClient(t, map[string]methodHandler{
 			"eth_getBlockByNumber": func(params json.RawMessage) (json.RawMessage, *jrpcError) {
 				var args []json.RawMessage
-				json.Unmarshal(params, &args)
+				_ = json.Unmarshal(params, &args)
 				// Parse block number from params
 				if len(args) > 0 {
 					numStr := strings.Trim(string(args[0]), `"`)
 					var num uint64
-					fmt.Sscanf(numStr, "0x%x", &num)
+					_, _ = fmt.Sscanf(numStr, "0x%x", &num)
 					return makeBlockJSON(num), nil
 				}
 				return makeBlockJSON(0), nil
@@ -563,7 +563,7 @@ func TestClient_BatchGetBlocks(t *testing.T) {
 		client := newTestClient(t, map[string]methodHandler{
 			"eth_getBlockByNumber": func(params json.RawMessage) (json.RawMessage, *jrpcError) {
 				var args []json.RawMessage
-				json.Unmarshal(params, &args)
+				_ = json.Unmarshal(params, &args)
 				if len(args) > 0 {
 					numStr := strings.Trim(string(args[0]), `"`)
 					if numStr == "0x63" { // block 99
@@ -668,7 +668,7 @@ func TestClient_BatchGetReceiptsWithDetails(t *testing.T) {
 		client := newTestClient(t, map[string]methodHandler{
 			"eth_getTransactionReceipt": func(params json.RawMessage) (json.RawMessage, *jrpcError) {
 				var args []json.RawMessage
-				json.Unmarshal(params, &args)
+				_ = json.Unmarshal(params, &args)
 				if len(args) > 0 {
 					hashStr := strings.Trim(string(args[0]), `"`)
 					if hashStr == hash2.Hex() {
