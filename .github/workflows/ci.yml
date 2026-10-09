@@ -52,6 +52,10 @@ jobs:
 
   postgres:
     runs-on: ubuntu-latest
+    # The test job runs in UTC; this one in another zone, so stored or
+    # returned values that depend on the host's time zone fail a job.
+    env:
+      TZ: Asia/Seoul
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

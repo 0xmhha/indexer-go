@@ -248,7 +248,7 @@ func scanMetadata(row pgx.CollectableRow) (*port.TokenMetadata, error) {
 	m := &port.TokenMetadata{
 		Address: common.BytesToAddress(addr), Standard: port.TokenStandard(standard), Name: name, Symbol: symbol,
 		Decimals: uint8(decimals), BaseURI: baseURI, DetectedAt: uint64(detected),
-		CreatedAt: time.Unix(0, created), UpdatedAt: time.Unix(0, updated),
+		CreatedAt: time.Unix(0, created).UTC(), UpdatedAt: time.Unix(0, updated).UTC(),
 		SupportsERC165: erc165, SupportsMetadata: meta, SupportsEnumerable: enumerable,
 	}
 	if supply != nil {
