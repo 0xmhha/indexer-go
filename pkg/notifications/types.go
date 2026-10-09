@@ -109,14 +109,14 @@ type EventPayload struct {
 
 // BlockEventData contains block-specific event data.
 type BlockEventData struct {
-	Number       uint64      `json:"number"`
-	Hash         common.Hash `json:"hash"`
-	ParentHash   common.Hash `json:"parent_hash"`
-	Miner        string      `json:"miner"`
-	GasUsed      uint64      `json:"gas_used"`
-	GasLimit     uint64      `json:"gas_limit"`
-	TxCount      int         `json:"tx_count"`
-	BaseFeePerGas *string    `json:"base_fee_per_gas,omitempty"`
+	Number        uint64      `json:"number"`
+	Hash          common.Hash `json:"hash"`
+	ParentHash    common.Hash `json:"parent_hash"`
+	Miner         string      `json:"miner"`
+	GasUsed       uint64      `json:"gas_used"`
+	GasLimit      uint64      `json:"gas_limit"`
+	TxCount       int         `json:"tx_count"`
+	BaseFeePerGas *string     `json:"base_fee_per_gas,omitempty"`
 }
 
 // TransactionEventData contains transaction-specific event data.
@@ -157,21 +157,21 @@ type DeliveryResult struct {
 
 // DeliveryHistory tracks notification delivery attempts.
 type DeliveryHistory struct {
-	NotificationID string           `json:"notification_id"`
-	SettingID      string           `json:"setting_id"`
-	Attempt        int              `json:"attempt"`
-	Result         *DeliveryResult  `json:"result"`
-	Timestamp      time.Time        `json:"timestamp"`
+	NotificationID string          `json:"notification_id"`
+	SettingID      string          `json:"setting_id"`
+	Attempt        int             `json:"attempt"`
+	Result         *DeliveryResult `json:"result"`
+	Timestamp      time.Time       `json:"timestamp"`
 }
 
 // NotificationStats contains statistics for a notification setting.
 type NotificationStats struct {
-	SettingID      string    `json:"setting_id"`
-	TotalSent      int64     `json:"total_sent"`
-	TotalFailed    int64     `json:"total_failed"`
-	TotalPending   int64     `json:"total_pending"`
-	LastSentAt     *time.Time `json:"last_sent_at,omitempty"`
-	LastFailedAt   *time.Time `json:"last_failed_at,omitempty"`
-	AvgDeliveryMs  float64   `json:"avg_delivery_ms"`
-	SuccessRate    float64   `json:"success_rate"`
+	SettingID     string     `json:"setting_id"`
+	TotalSent     int64      `json:"total_sent"`
+	TotalFailed   int64      `json:"total_failed"`
+	TotalPending  int64      `json:"total_pending"`
+	LastSentAt    *time.Time `json:"last_sent_at,omitempty"`
+	LastFailedAt  *time.Time `json:"last_failed_at,omitempty"`
+	AvgDeliveryMs float64    `json:"avg_delivery_ms"`
+	SuccessRate   float64    `json:"success_rate"`
 }

@@ -42,14 +42,14 @@ func (s *Schema) resolveAddressOverview(p graphql.ResolveParams) (interface{}, e
 		"firstSeen":        nil,
 		"lastSeen":         nil,
 		// New fields
-		"currentBalance":    nil,
-		"nonce":             nil,
-		"isToken":           false,
-		"tokenMetadata":     nil,
-		"hasDelegation":     false,
-		"delegationTarget":  nil,
-		"asAuthorityCount":  0,
-		"asTargetCount":     0,
+		"currentBalance":   nil,
+		"nonce":            nil,
+		"isToken":          false,
+		"tokenMetadata":    nil,
+		"hasDelegation":    false,
+		"delegationTarget": nil,
+		"asAuthorityCount": 0,
+		"asTargetCount":    0,
 	}
 
 	// Get balance from historical reader

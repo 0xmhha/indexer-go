@@ -21,11 +21,11 @@ import (
 // --- Mock EthClient ---
 
 type mockEthClient struct {
-	codeAt       map[common.Address][]byte
-	codeAtErr    error
-	callResults  map[string][]byte // key: address+selector hex
-	callErr      error
-	callErrMap   map[string]error // per-call errors
+	codeAt      map[common.Address][]byte
+	codeAtErr   error
+	callResults map[string][]byte // key: address+selector hex
+	callErr     error
+	callErrMap  map[string]error // per-call errors
 }
 
 func newMockEthClient() *mockEthClient {
@@ -305,10 +305,10 @@ func TestDetector_DetectStandard_ERC721_ViaERC165(t *testing.T) {
 	smartClient := &smartMockEthClient{
 		codeAt: map[common.Address][]byte{addr: {0x60, 0x80}},
 		interfaceSupport: map[string]bool{
-			InterfaceIDERC165:          true,
-			InterfaceIDERC721:          true,
-			InterfaceIDERC721Metadata:  true,
-			InterfaceIDERC1155:         false,
+			InterfaceIDERC165:         true,
+			InterfaceIDERC721:         true,
+			InterfaceIDERC721Metadata: true,
+			InterfaceIDERC1155:        false,
 		},
 	}
 
@@ -622,9 +622,9 @@ func TestService_IndexToken_New(t *testing.T) {
 		},
 		callResults: map[string][]byte{
 			callKey(addr, SelectorName):        abiEncodeString("New"),
-			callKey(addr, SelectorSymbol):       abiEncodeString("NEW"),
-			callKey(addr, SelectorDecimals):     abiEncodeUint8(18),
-			callKey(addr, SelectorTotalSupply):  abiEncodeUint256(big.NewInt(500)),
+			callKey(addr, SelectorSymbol):      abiEncodeString("NEW"),
+			callKey(addr, SelectorDecimals):    abiEncodeUint8(18),
+			callKey(addr, SelectorTotalSupply): abiEncodeUint256(big.NewInt(500)),
 		},
 	}
 
@@ -669,9 +669,9 @@ func TestService_IndexToken_SaveError(t *testing.T) {
 		},
 		callResults: map[string][]byte{
 			callKey(addr, SelectorName):        abiEncodeString("Fail"),
-			callKey(addr, SelectorSymbol):       abiEncodeString("FAIL"),
-			callKey(addr, SelectorDecimals):     abiEncodeUint8(18),
-			callKey(addr, SelectorTotalSupply):  abiEncodeUint256(big.NewInt(0)),
+			callKey(addr, SelectorSymbol):      abiEncodeString("FAIL"),
+			callKey(addr, SelectorDecimals):    abiEncodeUint8(18),
+			callKey(addr, SelectorTotalSupply): abiEncodeUint256(big.NewInt(0)),
 		},
 	}
 

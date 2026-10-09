@@ -12,7 +12,7 @@ import (
 func newTestAuthConfig() AuthConfig {
 	return AuthConfig{
 		APIKeys: map[string]string{
-			"test-key-123": "test-app",
+			"test-key-123":  "test-app",
 			"admin-key-456": "admin",
 		},
 		AllowedPaths: map[string]bool{

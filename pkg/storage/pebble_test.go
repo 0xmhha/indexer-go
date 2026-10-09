@@ -3292,9 +3292,9 @@ func TestPebbleStorage_Iterate(t *testing.T) {
 		// Set up test data
 		prefix := []byte("iter-test/")
 		testData := map[string]string{
-			"iter-test/key1": "value1",
-			"iter-test/key2": "value2",
-			"iter-test/key3": "value3",
+			"iter-test/key1":   "value1",
+			"iter-test/key2":   "value2",
+			"iter-test/key3":   "value3",
 			"other-prefix/key": "other-value",
 		}
 

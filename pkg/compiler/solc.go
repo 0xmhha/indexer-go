@@ -142,13 +142,13 @@ func (s *SolcCompiler) parseStandardJsonOutput(output []byte, contractName strin
 			Message  string `json:"message"`
 		} `json:"errors"`
 		Contracts map[string]map[string]struct {
-			Abi      json.RawMessage `json:"abi"`
-			Evm      struct {
+			Abi json.RawMessage `json:"abi"`
+			Evm struct {
 				Bytecode struct {
 					Object string `json:"object"`
 				} `json:"bytecode"`
 				DeployedBytecode struct {
-					Object              string                         `json:"object"`
+					Object              string                          `json:"object"`
 					ImmutableReferences map[string][]ImmutableReference `json:"immutableReferences"`
 				} `json:"deployedBytecode"`
 			} `json:"evm"`

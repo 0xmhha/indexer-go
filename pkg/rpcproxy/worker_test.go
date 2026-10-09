@@ -298,10 +298,10 @@ func TestCircuitBreaker_HalfOpenLimitsRequests(t *testing.T) {
 	time.Sleep(80 * time.Millisecond)
 	cb.Allow() // Half-open, successes=0
 
-	assert.True(t, cb.Allow())  // successes=0 < 2
-	cb.RecordSuccess()          // successes=1
-	assert.True(t, cb.Allow())  // successes=1 < 2
-	cb.RecordSuccess()          // successes=2 → closed
+	assert.True(t, cb.Allow()) // successes=0 < 2
+	cb.RecordSuccess()         // successes=1
+	assert.True(t, cb.Allow()) // successes=1 < 2
+	cb.RecordSuccess()         // successes=2 → closed
 	assert.Equal(t, CircuitClosed, cb.State())
 }
 

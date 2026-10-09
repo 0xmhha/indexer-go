@@ -74,9 +74,6 @@ var (
 
 	// System contract types
 
-
-
-
 	// Address indexing types
 	contractCreationType              *graphql.Object
 	addressOverviewType               *graphql.Object
@@ -100,13 +97,12 @@ var (
 	addressSetCodeInfoType             *graphql.Object
 
 	// ERC-7579 Module types
-	moduleTypeEnum                 *graphql.Enum
-	installedModuleType            *graphql.Object
-	installedModuleConnectionType  *graphql.Object
-	moduleStatsType                *graphql.Object
-	moduleStatsConnectionType      *graphql.Object
-	accountModulesType             *graphql.Object
-
+	moduleTypeEnum                *graphql.Enum
+	installedModuleType           *graphql.Object
+	installedModuleConnectionType *graphql.Object
+	moduleStatsType               *graphql.Object
+	moduleStatsConnectionType     *graphql.Object
+	accountModulesType            *graphql.Object
 )
 
 func init() {
@@ -608,7 +604,6 @@ func initTypes() {
 
 	// Initialize reorganization and orphaned block types (uses core types)
 	initReorgTypes()
-
 
 	// Initialize EIP-7702 SetCode types
 	initSetCodeTypes()

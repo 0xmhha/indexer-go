@@ -206,11 +206,11 @@ func TestChainERC721TransferKey(t *testing.T) {
 
 func TestParseChainKey(t *testing.T) {
 	tests := []struct {
-		name          string
-		key           []byte
-		wantChainID   string
-		wantRest      string
-		wantErr       bool
+		name        string
+		key         []byte
+		wantChainID string
+		wantRest    string
+		wantErr     bool
 	}{
 		{
 			name:        "valid chain key",

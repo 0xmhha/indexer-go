@@ -6,8 +6,8 @@ import (
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/pkg/abi"
-	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"

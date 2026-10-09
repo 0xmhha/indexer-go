@@ -238,11 +238,11 @@ func (p *UserOpProcessor) parseUserOpsFromReceipt(
 		sponsorType := userop.DetermineSponsorType(paymaster)
 
 		op := &userop.UserOperation{
-			Hash:              common.Hash(opHash),
-			Sender:            sender,
-			Nonce:             nonce.String(),
-			CallData:          nil, // Not available from events
-			CallGasLimit:      "0",
+			Hash:                 common.Hash(opHash),
+			Sender:               sender,
+			Nonce:                nonce.String(),
+			CallData:             nil, // Not available from events
+			CallGasLimit:         "0",
 			VerificationGasLimit: "0",
 			PreVerificationGas:   "0",
 			MaxFeePerGas:         "0",

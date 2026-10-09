@@ -15,17 +15,16 @@ import (
 
 // Key prefixes for different data types
 const (
-	prefixMeta      = "/meta/"
-	prefixData      = "/data/"
-	prefixIndex     = "/index/"
-	prefixBlocks    = "/data/blocks/"
-	prefixTxs       = "/data/txs/"
-	prefixReceipts  = "/data/receipts/"
+	prefixMeta         = "/meta/"
+	prefixData         = "/data/"
+	prefixIndex        = "/index/"
+	prefixBlocks       = "/data/blocks/"
+	prefixTxs          = "/data/txs/"
+	prefixReceipts     = "/data/receipts/"
 	prefixTxHash       = "/index/txh/"
 	prefixAddr         = "/index/addr/"
 	prefixBlockHash    = "/index/blockh/"
 	prefixContractAddr = "/data/contractaddr/"
-
 
 	// Address indexing data prefixes
 	prefixContractCreation = "/data/contract/creation/"
@@ -67,7 +66,6 @@ const (
 	prefixIdxVerifiedContracts = "/index/verification/verified/"
 
 	// Fee delegation data prefixes
-
 
 	// Token metadata data prefixes
 	prefixTokenMetadata = "/data/token/metadata/"
@@ -792,7 +790,6 @@ func ParseChainKey(key []byte) (string, string, error) {
 func IsChainKey(key []byte) bool {
 	return HasPrefix(key, []byte(prefixChain))
 }
-
 
 // ========== Token Metadata Key Functions ==========
 

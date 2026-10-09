@@ -210,15 +210,15 @@ type mockDistributedEventBus struct {
 	disconnectErr error
 }
 
-func (m *mockDistributedEventBus) Connect(ctx context.Context) error   { return nil }
-func (m *mockDistributedEventBus) IsConnected() bool                   { return m.connected }
-func (m *mockDistributedEventBus) NodeID() string                      { return "test-node" }
-func (m *mockDistributedEventBus) GetHealthStatus() HealthStatus       { return HealthStatus{} }
+func (m *mockDistributedEventBus) Connect(ctx context.Context) error { return nil }
+func (m *mockDistributedEventBus) IsConnected() bool                 { return m.connected }
+func (m *mockDistributedEventBus) NodeID() string                    { return "test-node" }
+func (m *mockDistributedEventBus) GetHealthStatus() HealthStatus     { return HealthStatus{} }
 func (m *mockDistributedEventBus) Disconnect(ctx context.Context) error {
 	m.disconnected = true
 	return m.disconnectErr
 }
-func (m *mockDistributedEventBus) Publish(event events.Event) bool       { return true }
+func (m *mockDistributedEventBus) Publish(event events.Event) bool { return true }
 func (m *mockDistributedEventBus) PublishWithContext(ctx context.Context, event events.Event) error {
 	return nil
 }

@@ -16,4 +16,3 @@ func modelLogsOf(ls []*types.Log, err error) ([]*model.Log, error) {
 	}
 	return gethconv.LogsFromGeth(ls), nil
 }
-
