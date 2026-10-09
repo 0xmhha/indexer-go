@@ -118,3 +118,6 @@ solc-bin/
 solc-cache/
 
 .claude/settings.local.json
+
+# Binary of the code graph generator (go build in tools/astgraph)
+/tools/astgraph/astgraph
