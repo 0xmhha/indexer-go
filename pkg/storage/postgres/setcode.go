@@ -163,7 +163,7 @@ func (s *Store) GetAddressSetCodeStats(ctx context.Context, address common.Addre
 	switch {
 	case err == nil:
 		stats.LastActivityBlock = uint64(block)
-		stats.LastActivityTime = time.Unix(0, at)
+		stats.LastActivityTime = time.Unix(0, at).UTC()
 	case !errors.Is(err, pgx.ErrNoRows):
 		return nil, err
 	}
