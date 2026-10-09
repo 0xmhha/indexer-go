@@ -3,6 +3,8 @@ package fetch
 import (
 	"context"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -111,11 +113,10 @@ func (p *UserOpProcessor) ProcessUserOps(
 	}
 
 	// Update stats for bundlers, paymasters, factories, and smart accounts
+	// Storage errors fail the block so it is retried (defect D5): stats
+	// skipped once, or reset from a failed read, would stay wrong.
 	if err := p.updateStats(ctx, allOps, bundlerTxCounts); err != nil {
-		p.logger.Warn("Failed to update ERC-4337 stats",
-			zap.Uint64("blockNumber", blockNumber),
-			zap.Error(err))
-		// Don't fail block processing for stats errors
+		return fmt.Errorf("update ERC-4337 stats of block %d: %w", blockNumber, err)
 	}
 
 	p.logger.Info("Indexed ERC-4337 UserOperations",
@@ -286,10 +287,9 @@ func (p *UserOpProcessor) updateStats(
 ) error {
 	// Update bundler stats
 	for bundler, bundleCount := range bundlerTxCounts {
-		stats, err := p.storage.GetBundlerStats(ctx, bundler)
+		stats, err := p.storage.GetBundlerStats(ctx, bundler) // empty when none is stored
 		if err != nil {
-			p.logger.Warn("Failed to get bundler stats", zap.String("address", bundler.Hex()), zap.Error(err))
-			stats = &userop.BundlerStats{Address: bundler}
+			return fmt.Errorf("bundler stats of %s: %w", bundler.Hex(), err)
 		}
 		stats.TotalBundles += uint64(bundleCount)
 		// Count ops for this bundler
@@ -299,7 +299,7 @@ func (p *UserOpProcessor) updateStats(
 			}
 		}
 		if err := p.storage.UpdateBundlerStats(ctx, stats); err != nil {
-			p.logger.Warn("Failed to update bundler stats", zap.String("address", bundler.Hex()), zap.Error(err))
+			return fmt.Errorf("update bundler stats of %s: %w", bundler.Hex(), err)
 		}
 	}
 
@@ -323,6 +323,9 @@ func (p *UserOpProcessor) updateStats(
 
 		// Update smart account
 		account, err := p.storage.GetSmartAccount(ctx, op.Sender)
+		if err != nil && !errors.Is(err, port.ErrNotFound) {
+			return fmt.Errorf("smart account %s: %w", op.Sender.Hex(), err)
+		}
 		if err != nil {
 			// New smart account
 			account = &userop.SmartAccount{
@@ -344,35 +347,31 @@ func (p *UserOpProcessor) updateStats(
 		}
 
 		if err := p.storage.SaveSmartAccount(ctx, account); err != nil {
-			p.logger.Warn("Failed to save smart account",
-				zap.String("address", op.Sender.Hex()),
-				zap.Error(err))
+			return fmt.Errorf("save smart account %s: %w", op.Sender.Hex(), err)
 		}
 	}
 
 	// Update paymaster stats
 	for pm, count := range paymasterOps {
-		stats, err := p.storage.GetPaymasterStats(ctx, pm)
+		stats, err := p.storage.GetPaymasterStats(ctx, pm) // empty when none is stored
 		if err != nil {
-			p.logger.Warn("Failed to get paymaster stats", zap.String("address", pm.Hex()), zap.Error(err))
-			stats = &userop.PaymasterStats{Address: pm}
+			return fmt.Errorf("paymaster stats of %s: %w", pm.Hex(), err)
 		}
 		stats.TotalOps += count
 		if err := p.storage.UpdatePaymasterStats(ctx, stats); err != nil {
-			p.logger.Warn("Failed to update paymaster stats", zap.String("address", pm.Hex()), zap.Error(err))
+			return fmt.Errorf("update paymaster stats of %s: %w", pm.Hex(), err)
 		}
 	}
 
 	// Update factory stats
 	for factory, accounts := range factoryAccounts {
-		stats, err := p.storage.GetFactoryStats(ctx, factory)
+		stats, err := p.storage.GetFactoryStats(ctx, factory) // empty when none is stored
 		if err != nil {
-			p.logger.Warn("Failed to get factory stats", zap.String("address", factory.Hex()), zap.Error(err))
-			stats = &userop.FactoryStats{Address: factory}
+			return fmt.Errorf("factory stats of %s: %w", factory.Hex(), err)
 		}
 		stats.TotalAccounts += uint64(len(accounts))
 		if err := p.storage.UpdateFactoryStats(ctx, stats); err != nil {
-			p.logger.Warn("Failed to update factory stats", zap.String("address", factory.Hex()), zap.Error(err))
+			return fmt.Errorf("update factory stats of %s: %w", factory.Hex(), err)
 		}
 	}
 

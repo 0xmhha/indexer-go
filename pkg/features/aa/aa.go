@@ -49,8 +49,7 @@ func (eip7702) Register(r feature.Registrar) error {
 				continue
 			}
 			if err := p.ProcessSetCodeTransactionAt(ctx, t.GethTx, t.GethReceipt, b.Model.Number, b.Model.Hash, b.Model.Time, uint64(t.Index)); err != nil {
-				log.Warn("Failed to process SetCode transaction",
-					zap.Uint64("block", b.Model.Number), zap.String("tx", t.Tx.Hash.Hex()), zap.Error(err))
+				return fmt.Errorf("SetCode transaction %s: %w", t.Tx.Hash.Hex(), err)
 			}
 		}
 		return nil
@@ -78,10 +77,7 @@ func (erc4337) Register(r feature.Registrar) error {
 		for _, t := range txs {
 			bundles = append(bundles, fetch.UserOpBundle{Sender: t.Tx.From, Receipt: t.GethReceipt})
 		}
-		if err := p.ProcessUserOps(ctx, b.Model.Number, b.Model.Hash, b.Model.Time, bundles); err != nil {
-			log.Warn("Failed to process ERC-4337 UserOperations", zap.Uint64("block", b.Model.Number), zap.Error(err))
-		}
-		return nil
+		return p.ProcessUserOps(ctx, b.Model.Number, b.Model.Hash, b.Model.Time, bundles)
 	}))
 	return nil
 }
@@ -101,10 +97,7 @@ func (erc7579) Register(r feature.Registrar) error {
 	log := logger(d)
 	p := fetch.NewModuleProcessor(log, s)
 	r.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
-		if err := p.ProcessModuleEventsFromBlock(ctx, b.Geth, b.GethReceipts); err != nil {
-			log.Warn("Failed to process ERC-7579 module events", zap.Uint64("block", b.Model.Number), zap.Error(err))
-		}
-		return nil
+		return p.ProcessModuleEventsFromBlock(ctx, b.Geth, b.GethReceipts)
 	}))
 	return nil
 }
