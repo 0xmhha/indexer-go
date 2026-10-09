@@ -107,7 +107,7 @@ func init() {
 - 프로젝트가 쓰기만 하는 interface(`Registrar`, `Store`, `KV`, `RecordStore`)와 struct(`Deps`, `Block`, 모델 타입)에는 메서드와 필드를 더할 수 있다. 이것은 깨는 변경으로 보지 않는다. 시험용으로 이 interface를 직접 구현했다면 컴파일이 깨질 수 있으니, 구현체에 indexer 쪽 값을 embed한다.
 - 저장 데이터: `RegisterKeyspace`로 등록한 prefix 아래는 프로젝트 것이다. indexer는 거기에 쓰지 않고, 재색인 때 지운다. indexer 자신의 키 형식은 약속에 들어가지 않으므로 port(`Store`, `RecordStore`)로 읽는다.
 - `Block.Geth`, `Block.GethReceipts`는 go-ethereum 타입이다. indexer가 go-ethereum을 올리면 이 타입이 바뀔 수 있으므로, 이 두 필드는 약속에서 go-ethereum 버전만큼만 안정하다. 체인 중립 값은 `Block.Model`, `Block.Receipts`를 쓴다.
-- 강제: `TestSDKSurface`가 공개 면 전체(`pkg/sdk/testdata/surface.txt`)를 고정한다. 바뀌면 시험이 실패하고, 검토한 뒤 `-update`로 다시 쓴다. `make test-examples`는 예제가 지금 SDK로 빌드되고 동작하는지 본다. 저장소에 CI가 없으므로 두 시험은 release 전에 직접 돌린다(`go test ./...`가 `TestSDKSurface`를 포함하고, `make test-examples`는 따로 돌린다).
+- 강제: `TestSDKSurface`가 공개 면 전체(`pkg/sdk/testdata/surface.txt`)를 고정한다. 바뀌면 시험이 실패하고, 검토한 뒤 `-update`로 다시 쓴다. `make test-examples`는 예제가 지금 SDK로 빌드되고 동작하는지 본다. 두 시험은 CI(`.github/workflows/ci.yml`)가 PR마다 돌린다.
 
 ### SDK 변경 기록
 
