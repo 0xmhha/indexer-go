@@ -82,7 +82,9 @@ func TestMultiChainIndexesEachChainIntoItsOwnDatabase(t *testing.T) {
 	t.Cleanup(snetSrv.Close)
 
 	root := filepath.Join(t.TempDir(), "db")
-	cfg := multiChainConfig(t, root, chainEntry("evm", evmSrv.URL()), chainEntry("stablenet", snetSrv.URL()))
+	// The StableNet node URL carries a key in its path and query, as
+	// provider URLs do; GET /chains must not show it.
+	cfg := multiChainConfig(t, root, chainEntry("evm", evmSrv.URL()), chainEntry("stablenet", snetSrv.URL()+"/v3/topsecret?key=topsecret"))
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
 	require.Nil(t, app.storage, "multichain mode opens no shared database")
@@ -127,7 +129,10 @@ func TestMultiChainIndexesEachChainIntoItsOwnDatabase(t *testing.T) {
 		body = serve(t, router, http.MethodGet, "/chains/"+id+"/v1/blocks?numberFrom=1&numberTo=1", "")
 		require.Contains(t, strings.ToLower(body), hash, "chain %s REST", id)
 	}
-	require.Contains(t, serve(t, router, http.MethodGet, "/chains", ""), `"id":"stablenet"`)
+	list := serve(t, router, http.MethodGet, "/chains", "")
+	require.Contains(t, list, `"id":"stablenet"`)
+	require.Contains(t, list, `"rpcEndpoint":"`+snetSrv.URL()+`"`, "scheme and host only")
+	require.NotContains(t, list, "topsecret", "the key in the node URL is not served")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/chains/other/rpc", strings.NewReader(`{}`)))
 	require.Equal(t, http.StatusNotFound, rec.Code)

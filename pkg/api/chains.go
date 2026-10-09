@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"sync"
 
 	"github.com/go-chi/chi/v5"
@@ -161,9 +162,29 @@ func (cr *chainRoutes) close() {
 }
 
 // list answers GET /chains with the registered chains.
+// list describes the registered chains. Node URLs keep only their scheme
+// and host: their user information, path and query often carry
+// credentials (many providers put the API key in the path or the query).
 func (cr *chainRoutes) list(w http.ResponseWriter, _ *http.Request) {
+	infos := cr.chains.ListChains()
+	out := make([]multichain.ChainInfo, len(infos))
+	for i, info := range infos {
+		out[i] = *info
+		out[i].RPCEndpoint = redactURL(info.RPCEndpoint)
+		out[i].WSEndpoint = redactURL(info.WSEndpoint)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(cr.chains.ListChains())
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// redactURL returns the scheme and host (with port) of a node URL, "" when
+// it has none.
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if raw == "" || err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 func writeJSONError(w http.ResponseWriter, status int, msg string) {

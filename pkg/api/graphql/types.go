@@ -598,9 +598,6 @@ func initTypes() {
 	// Initialize token transfer types
 	initTokenTypes()
 
-	// Initialize multi-chain types
-	initMultiChainTypes()
-
 	// Initialize reorganization and orphaned block types (uses core types)
 	initReorgTypes()
 
