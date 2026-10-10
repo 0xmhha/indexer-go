@@ -16,7 +16,7 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 - `database.readonly: true`: 수집기는 써야 한다. API만 하는 프로세스는 `node.role: api`로 DB를 읽기 전용으로 연다.
 - `node.role: api`인데 `database.driver`가 postgres가 아닐 때(Pebble은 한 프로세스만 연다), multi-chain 모드에서 `node.role`이 all이 아닐 때.
 
-다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.priority`, `account_abstraction.entry_point_addresses`. `watchlist.enabled`와 `resilience.enabled`는 v0.1.0 이후 해당 기능을 지웠으므로 효과가 없고, 켜져 있으면 경고가 남는다.
+다음 설정은 읽지만 아직 동작에 반영되지 않는다. 설정되어 있으면 시작 로그에 경고가 남는다: `eventbus.type`(local 외), `node.priority`, `account_abstraction.entry_point_addresses`(대신 `features.aa.erc4337.entry_points`). `watchlist.enabled`와 `resilience.enabled`는 v0.1.0 이후 해당 기능을 지웠으므로 효과가 없고, 켜져 있으면 경고가 남는다.
 
 ---
 
@@ -137,15 +137,24 @@ api:
 
 ### Account Abstraction (EIP-4337)
 
-`enabled`의 기본값은 true다(키를 생략하면 켜진다). UserOp(ERC-4337)과 모듈(ERC-7579) 색인을 함께 켜고 끈다. `entry_point_addresses`는 아직 처리기가 지원하지 않아 무시되고, 알려진 EntryPoint 주소(v0.6, v0.7)를 쓴다.
+`enabled`의 기본값은 true다(키를 생략하면 켜진다). UserOp(ERC-4337)과 모듈(ERC-7579) 색인을 함께 켜고 끈다.
 
 ```yaml
 account_abstraction:
   enabled: true
-  entry_point_addresses:                # EntryPoint 컨트랙트 주소 (빈 배열 = 이벤트 시그니처로 자동 감지)
-    - "0x0000000071727De22E5E9d8BAf0edAc6f37da032"  # EntryPoint v0.7
-    - "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"  # EntryPoint v0.6
+features:
+  aa.erc4337:
+    entry_points:                       # 알려진 EntryPoint(v0.6 0x5FF137D4…, v0.7 0x0000000071727De2…) 외에 색인할 것
+      - address: "0xEf6817fe73741A8F10088f9511c64b666a338A14"   # poc-contract EntryPoint (chain 8283 배포 기록)
+        version: "v0.9"                 # v0.6, v0.7, v0.8, v0.9 중 하나
 ```
+
+- UserOp는 색인할 EntryPoint가 낸 `UserOperationEvent`만 읽는다. 알려진 두 주소와 `features.aa.erc4337.entry_points`에 적은 주소가 그 대상이다. 같은 이벤트는 누구나 낼 수 있으므로 서명만으로 찾지 않는다.
+- 버전은 저장하는 UserOp의 `entryPointVersion` 이름표다. v0.6~v0.9는 indexer가 읽는 세 이벤트(`UserOperationEvent`, `AccountDeployed`, `UserOperationRevertReason`)가 같아 해석이 바뀌지 않는다. UserOp의 calldata·gas 필드는 이벤트에 없어 어느 버전이든 비워 둔다.
+- 주소 형식이 틀리거나, 버전이 목록에 없거나, 같은 주소를 두 번 적거나, 알려진 주소에 다른 버전을 적으면 시작할 때 오류가 난다.
+- 멀티체인 모드에서는 체인 항목의 `features`(`multichain.chains[].features.aa.erc4337`)에 체인마다 적는다.
+- 이미 색인한 DB에 주소를 더하면 그 뒤 블록부터 색인된다. 앞선 블록의 UserOp까지 필요하면 재색인한다. 다시 채우는 경로를 두지 않은 이유는 bundler·paymaster 통계가 누적 값이라 같은 블록을 두 번 처리하면 두 번 세기 때문이다.
+- `account_abstraction.entry_point_addresses`는 지원하지 않는다(시작 로그에 경고). 버전을 적을 수 없고, 프로세스 전체 설정이라 체인마다 다르게 줄 수 없기 때문이다.
 
 ### System Contracts (Stable-One)
 
@@ -582,8 +591,6 @@ api:
     - "10.0.0.0/8"                      # 로드밸런서·리버스 프록시 대역
 account_abstraction:
   enabled: true
-  entry_point_addresses:
-    - "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
 verifier:
   enabled: true
   auto_download: true

@@ -1,6 +1,7 @@
 package userop
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
@@ -24,9 +25,30 @@ type EntryPointVersion string
 const (
 	EntryPointV06 EntryPointVersion = "v0.6"
 	EntryPointV07 EntryPointVersion = "v0.7"
+	EntryPointV08 EntryPointVersion = "v0.8"
+	EntryPointV09 EntryPointVersion = "v0.9"
 )
 
-// KnownEntryPoints maps known EntryPoint contract addresses to their versions
+// EntryPointVersions are the versions an EntryPoint may be configured with.
+// Every version emits the same UserOperationEvent, AccountDeployed and
+// UserOperationRevertReason events, which are all the indexer reads; the
+// version is kept as a label of the UserOperations.
+var EntryPointVersions = []EntryPointVersion{EntryPointV06, EntryPointV07, EntryPointV08, EntryPointV09}
+
+// ParseEntryPointVersion returns the version named s ("v0.9"), or an error
+// if it is none of EntryPointVersions.
+func ParseEntryPointVersion(s string) (EntryPointVersion, error) {
+	for _, v := range EntryPointVersions {
+		if string(v) == s {
+			return v, nil
+		}
+	}
+	return "", fmt.Errorf("EntryPoint version %q is not one of %v", s, EntryPointVersions)
+}
+
+// KnownEntryPoints maps the EntryPoint addresses indexed on every chain to
+// their versions (the canonical deployments); a chain's further EntryPoints
+// come from its configuration (features.aa.erc4337.entry_points).
 var KnownEntryPoints = map[common.Address]EntryPointVersion{
 	common.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"): EntryPointV06,
 	common.HexToAddress("0x0000000071727De22E5E9d8BAf0edAc6f37da032"): EntryPointV07,

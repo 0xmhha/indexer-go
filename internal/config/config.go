@@ -525,8 +525,9 @@ type VerifierConfig struct {
 type AccountAbstractionConfig struct {
 	// Enabled indicates whether AA event indexing is active
 	Enabled bool `yaml:"enabled"`
-	// EntryPointAddresses is a list of known EntryPoint contract addresses
-	// If empty, the processor will detect EntryPoint events by signature matching
+	// EntryPointAddresses is not supported (UnsupportedSettings): it names no
+	// versions and cannot differ between chains. EntryPoints are configured
+	// in features.aa.erc4337.entry_points.
 	EntryPointAddresses []string `yaml:"entry_point_addresses"`
 }
 
@@ -1688,7 +1689,7 @@ func (c *Config) UnsupportedSettings() []string {
 		out = append(out, "resilience.enabled has no effect: WebSocket resilience was removed after v0.1.0")
 	}
 	if len(c.AccountAbstraction.EntryPointAddresses) > 0 {
-		out = append(out, "account_abstraction.entry_point_addresses is not supported yet; known EntryPoint addresses are used")
+		out = append(out, "account_abstraction.entry_point_addresses is not supported; name EntryPoints with their versions in features.aa.erc4337.entry_points")
 	}
 	if c.MultiChainMode() {
 		ignored := map[string]bool{
