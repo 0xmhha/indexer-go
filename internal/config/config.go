@@ -164,6 +164,10 @@ type DatabaseConfig struct {
 	// Driver selects the store: DriverPebble (empty) or DriverPostgres.
 	Driver   string         `yaml:"driver"`
 	Postgres PostgresConfig `yaml:"postgres"`
+	// CacheMB is the Pebble block cache in MB; 0 uses 128. A range query
+	// whose blocks do not fit reads them from the files again. In
+	// multi-chain mode every chain has a cache of this size.
+	CacheMB int `yaml:"cache_mb"`
 }
 
 // PostgresConfig configures the PostgreSQL store (database.driver
@@ -963,6 +967,13 @@ func (c *Config) LoadFromEnv() error {
 	if schema := os.Getenv("INDEXER_DB_POSTGRES_SCHEMA"); schema != "" {
 		c.Database.Postgres.Schema = schema
 	}
+	if cache := os.Getenv("INDEXER_DB_CACHE_MB"); cache != "" {
+		val, err := strconv.Atoi(cache)
+		if err != nil {
+			return fmt.Errorf("invalid INDEXER_DB_CACHE_MB: %w", err)
+		}
+		c.Database.CacheMB = val
+	}
 	if conns := os.Getenv("INDEXER_DB_POSTGRES_MAX_CONNS"); conns != "" {
 		val, err := strconv.ParseInt(conns, 10, 32)
 		if err != nil {
@@ -1447,6 +1458,9 @@ func (c *Config) Validate() error {
 	case "", DriverPebble:
 		if c.Database.Path == "" {
 			return fmt.Errorf("database path is required")
+		}
+		if c.Database.CacheMB < 0 {
+			return fmt.Errorf("database.cache_mb cannot be negative")
 		}
 	case DriverPostgres:
 		if c.Database.Postgres.DSN == "" {

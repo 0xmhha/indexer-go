@@ -48,6 +48,9 @@ func openStore(ctx context.Context, db *config.DatabaseConfig, readOnly bool, wr
 	}
 	cfg := storage.DefaultConfig(db.Path)
 	cfg.ReadOnly = false
+	if db.CacheMB > 0 {
+		cfg.Cache = db.CacheMB
+	}
 	s, err := storage.NewPebbleStorage(cfg)
 	if err != nil {
 		return nil, err

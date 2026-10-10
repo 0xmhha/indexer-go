@@ -390,17 +390,20 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 		return nil, fmt.Errorf("invalid block range: blockNumberFrom (%d) > blockNumberTo (%d)", blockFrom, blockTo)
 	}
 
-	// Fetch blocks and filter transactions
-	blocks, err := s.storage.GetBlocks(ctx, blockFrom, blockTo)
-	if err != nil {
-		s.logger.Error("failed to get blocks",
-			zap.Uint64("blockNumberFrom", blockFrom),
-			zap.Uint64("blockNumberTo", blockTo),
-			zap.Error(err))
-		return nil, fmt.Errorf("failed to get blocks: %w", err)
+	// Read the blocks one at a time and keep only the matches, so a long
+	// range does not hold every block of it in memory.
+	var filteredTxs []map[string]interface{}
+	for h := blockFrom; h <= blockTo; h++ {
+		block, err := s.storage.GetBlock(ctx, h)
+		if errors.Is(err, port.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			s.logger.Error("failed to get block", zap.Uint64("blockNumber", h), zap.Error(err))
+			return nil, fmt.Errorf("failed to get block %d: %w", h, err)
+		}
+		filteredTxs = append(filteredTxs, s.filterTransactionsFromBlocks([]*model.Block{block}, filter)...)
 	}
-
-	filteredTxs := s.filterTransactionsFromBlocks(blocks, filter)
 	reverseSlice(filteredTxs) // DESC order (newest first)
 
 	totalCount := s.calculateTxTotalCount(ctx, filter, filteredTxs)
