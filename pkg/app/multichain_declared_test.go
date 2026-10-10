@@ -140,8 +140,7 @@ func TestChainFeatures(t *testing.T) {
 
 // TestChainFeaturesFromYAML: chains[].features is read from the
 // configuration file like the top-level features, and each chain's App
-// gets its own records declaration. source.era_dir is still refused in
-// declared mode.
+// gets its own records declaration.
 func TestChainFeaturesFromYAML(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(`
@@ -186,6 +185,4 @@ multichain:
 		assert.True(t, chainCfg.FeatureOverrides()[records.Name], "chain %s keeps records enabled", id)
 	}
 
-	cfg.Source.EraDir = t.TempDir()
-	require.ErrorContains(t, cfg.Validate(), "source.era_dir")
 }

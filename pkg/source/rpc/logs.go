@@ -16,7 +16,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/source"
 )
 
-var _ source.Source = (*Logs)(nil)
+var _ source.LogRangeSource = (*Logs)(nil)
 
 // Logs is the source of the declared ingest mode (indexer.mode: declared,
 // refactoring plan R6-1): a block is its header and the logs of the
