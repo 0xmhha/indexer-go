@@ -424,6 +424,54 @@ func (p *Proxy) GetCode(ctx context.Context, req *CodeRequest) (*CodeResponse, e
 	return v.(*CodeResponse), nil
 }
 
+// callAnswer is a cached eth_call answer: the returned data, or the error
+// the node answered with (a revert).
+type callAnswer struct {
+	data []byte
+	err  error
+}
+
+// Call runs eth_call of msg at block (nil: latest) through the cache, the
+// node rate limit and the circuit breaker. An error the node answers (a
+// revert, such as a call to a method the contract lacks) is cached like
+// data, so it is not asked again until the entry expires; it counts as a
+// working node for the circuit breaker. Answers at latest are kept for
+// Cache.DefaultTTL, answers at a block for Cache.ImmutableTTL.
+func (p *Proxy) Call(ctx context.Context, msg ethereum.CallMsg, block *big.Int) ([]byte, error) {
+	if msg.To == nil {
+		return nil, errors.New("rpcproxy: a call needs a contract address")
+	}
+	blockStr := "latest"
+	ttl := p.config.Cache.DefaultTTL
+	if block != nil {
+		blockStr = block.String()
+		ttl = p.config.Cache.ImmutableTTL
+	}
+	cacheKey := p.keyBuilder.ContractCall(msg.To.Hex(), "eth_call", fmt.Sprintf("%x@%s", msg.Data, blockStr))
+
+	v, err := p.load(ctx, cacheKey, nil, func(ctx context.Context) (interface{}, time.Duration, error) {
+		start := time.Now()
+		data, err := p.ethClient.CallContract(ctx, msg, block)
+		p.recordLatency(time.Since(start))
+		if err != nil {
+			var answered rpc.Error
+			if !errors.As(err, &answered) {
+				p.circuitBreaker.RecordFailure()
+				return nil, 0, fmt.Errorf("contract call failed: %w", err)
+			}
+			p.circuitBreaker.RecordSuccess()
+			return &callAnswer{err: err}, ttl, nil
+		}
+		p.circuitBreaker.RecordSuccess()
+		return &callAnswer{data: data}, ttl, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	a := v.(*callAnswer)
+	return a.data, a.err
+}
+
 // GetInternalTransactions returns internal transactions for a tx hash
 func (p *Proxy) GetInternalTransactions(ctx context.Context, txHash common.Hash) (*InternalTransactionResponse, error) {
 	// Internal transactions are immutable once confirmed

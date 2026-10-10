@@ -8,11 +8,13 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -21,8 +23,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// fakeNode answers eth_getBalance, eth_blockNumber and
-// eth_getTransactionByHash (always unknown), counting calls per method and
+// fakeNode answers eth_getBalance, eth_blockNumber, eth_call (reverted
+// for calls to revertingContract) and eth_getTransactionByHash (always
+// unknown), counting calls per method and
 // holding each answer until release is closed (when set).
 type fakeNode struct {
 	calls   sync.Map // method -> *atomic.Int64
@@ -38,6 +41,7 @@ func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ID     json.RawMessage `json:"id"`
 		Method string          `json:"method"`
+		Params json.RawMessage `json:"params"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -50,6 +54,13 @@ func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var result string
 	switch req.Method {
+	case "eth_call":
+		if strings.Contains(strings.ToLower(string(req.Params)), strings.ToLower(revertingContract.Hex())) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%s,"error":{"code":3,"message":"execution reverted"}}`, req.ID)
+			return
+		}
+		result = `"0x01"`
 	case "eth_getBalance":
 		result = `"0x64"`
 	case "eth_blockNumber":
@@ -76,7 +87,10 @@ func newTestProxy(t *testing.T, node *fakeNode, cfg *Config) *Proxy {
 	return p
 }
 
-var account = common.HexToAddress("0x00000000000000000000000000000000000AA001")
+var (
+	account           = common.HexToAddress("0x00000000000000000000000000000000000AA001")
+	revertingContract = common.HexToAddress("0x00000000000000000000000000000000000DD001")
+)
 
 // TestConcurrentMissesShareOneNodeRequest: callers asking for the same
 // value at the same time get one node request between them.
@@ -141,6 +155,34 @@ func TestUnknownTransactionsKeepTheCircuitClosed(t *testing.T) {
 	}
 	_, err := p.GetBalance(ctx, &BalanceRequest{Address: account})
 	assert.NoError(t, err)
+}
+
+// TestCallsAreCachedWithTheirReverts: an eth_call answer, data or a
+// revert, is served from the cache on the next call; a revert keeps the
+// circuit closed, and a new call is still limited by the node allowance.
+func TestCallsAreCachedWithTheirReverts(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.RateLimit.RequestsPerSecond, cfg.RateLimit.BurstSize = 0.001, 2
+	node := &fakeNode{}
+	p := newTestProxy(t, node, cfg)
+	ctx := context.Background()
+	call := ethereum.CallMsg{To: &account, Data: []byte{0x06, 0xfd, 0xde, 0x03}}
+	revert := ethereum.CallMsg{To: &revertingContract, Data: []byte{0x01, 0xff, 0xc9, 0xa7}}
+
+	for range 3 * DefaultCircuitBreakerConfig().MaxFailures {
+		data, err := p.Call(ctx, call, nil)
+		require.NoError(t, err)
+		assert.Equal(t, []byte{1}, data)
+		_, err = p.Call(ctx, revert, nil)
+		var answered rpc.Error
+		require.ErrorAs(t, err, &answered, "the revert is returned as the node answered it")
+	}
+	assert.Equal(t, int64(2), node.count("eth_call"), "one node request per call")
+	assert.Equal(t, "closed", p.circuitBreaker.State().String())
+
+	other := ethereum.CallMsg{To: &account, Data: []byte{0x95, 0xd8, 0x9b, 0x41}}
+	_, err := p.Call(ctx, other, nil)
+	assert.ErrorIs(t, err, ErrRateLimited)
 }
 
 // TestWaiterLeavesWhenItsContextEnds: a caller whose context ends stops

@@ -48,7 +48,6 @@ func (a *App) initAPINode(ctx context.Context) error {
 	if g, ok := a.storage.(storage.GenesisBalanceConfigurer); ok {
 		g.SetGenesisBalanceResolver(a.client)
 	}
-	a.setTokenMetadataFetcher()
 
 	ob, ok := a.storage.(port.Outbox)
 	if !ok || !a.config.EventBus.Outbox || a.eventBus == nil {
