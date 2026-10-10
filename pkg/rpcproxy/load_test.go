@@ -23,7 +23,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// fakeNode answers eth_getBalance, eth_blockNumber, eth_call (reverted
+// fakeNode answers eth_getBalance, eth_getCode, eth_blockNumber, eth_call (reverted
 // for calls to revertingContract) and eth_getTransactionByHash (always
 // unknown), counting calls per method and
 // holding each answer until release is closed (when set).
@@ -63,6 +63,8 @@ func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result = `"0x01"`
 	case "eth_getBalance":
 		result = `"0x64"`
+	case "eth_getCode":
+		result = `"0x6080"`
 	case "eth_blockNumber":
 		result = `"0xa"`
 	default:
@@ -183,6 +185,25 @@ func TestCallsAreCachedWithTheirReverts(t *testing.T) {
 	other := ethereum.CallMsg{To: &account, Data: []byte{0x95, 0xd8, 0x9b, 0x41}}
 	_, err := p.Call(ctx, other, nil)
 	assert.ErrorIs(t, err, ErrRateLimited)
+}
+
+// TestMissesShareTheLatestBlockNumber: responses to different accounts
+// read the node's latest block number once between them, not once per
+// cache miss.
+func TestMissesShareTheLatestBlockNumber(t *testing.T) {
+	node := &fakeNode{}
+	p := newTestProxy(t, node, nil)
+	ctx := context.Background()
+	for i := range 20 {
+		addr := common.BigToAddress(big.NewInt(int64(0xAB000 + i)))
+		resp, err := p.GetBalance(ctx, &BalanceRequest{Address: addr})
+		require.NoError(t, err)
+		assert.Equal(t, uint64(10), resp.BlockNumber)
+		_, err = p.GetCode(ctx, &CodeRequest{Address: addr})
+		require.NoError(t, err)
+	}
+	assert.Equal(t, int64(20), node.count("eth_getBalance"))
+	assert.Equal(t, int64(1), node.count("eth_blockNumber"))
 }
 
 // TestWaiterLeavesWhenItsContextEnds: a caller whose context ends stops

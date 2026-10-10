@@ -553,16 +553,38 @@ func (p *Proxy) load(ctx context.Context, key string, usable func(interface{}) b
 	}
 }
 
+// latestBlockTTL is how long responses reuse the node's latest block
+// number. The number is read apart from the value it labels, so it was
+// never exact; reusing it bounds the extra node requests of cache misses
+// to one per second.
+const latestBlockTTL = time.Second
+
 // responseBlock is the block number an account response reports: the
-// requested block, or the node's latest (0 when it cannot be read).
+// requested block, or the node's latest (0 when it cannot be read), read
+// at most once per latestBlockTTL by all callers together.
 func (p *Proxy) responseBlock(ctx context.Context, requested *big.Int) uint64 {
 	if requested != nil {
 		return requested.Uint64()
 	}
-	if current, err := p.ethClient.BlockNumber(ctx); err == nil {
-		return current
+	key := p.keyBuilder.prefix + ":blocknumber"
+	if v, ok := p.cache.Get(key); ok {
+		return v.(uint64)
 	}
-	return 0
+	v, err, _ := p.flight.Do(key, func() (interface{}, error) {
+		if v, ok := p.cache.Get(key); ok {
+			return v, nil
+		}
+		current, err := p.ethClient.BlockNumber(ctx)
+		if err != nil {
+			return nil, err
+		}
+		p.cache.Set(key, current, latestBlockTTL)
+		return current, nil
+	})
+	if err != nil {
+		return 0
+	}
+	return v.(uint64)
 }
 
 // parseTraceResult parses the callTracer result into internal transactions
