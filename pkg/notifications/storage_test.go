@@ -609,3 +609,42 @@ func TestPebbleStorage_CleanupOldHistory(t *testing.T) {
 		}
 	})
 }
+
+// unsyncedKVStore counts writes that wait for the disk and writes that do
+// not.
+type unsyncedKVStore struct {
+	*mockKVStore
+	synced, unsynced int
+}
+
+func (m *unsyncedKVStore) Put(ctx context.Context, key, value []byte) error {
+	m.synced++
+	return m.mockKVStore.Put(ctx, key, value)
+}
+
+func (m *unsyncedKVStore) PutUnsynced(ctx context.Context, key, value []byte) error {
+	m.unsynced++
+	return m.mockKVStore.Put(ctx, key, value)
+}
+
+// TestNotificationWritesDoNotWaitForTheDisk: a store that can write
+// without an fsync gets every notification write that way (an fsync per
+// key held fast notifications back by seconds).
+func TestNotificationWritesDoNotWaitForTheDisk(t *testing.T) {
+	ctx := context.Background()
+	store := &unsyncedKVStore{mockKVStore: newMockKVStore()}
+	s := NewPebbleStorage(store)
+	n := &Notification{ID: "n", SettingID: "s", Type: NotificationTypeWebhook, Status: DeliveryStatusPending, CreatedAt: time.Now()}
+	if err := s.SaveNotification(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateNotificationStatus(ctx, n.ID, DeliveryStatusSent, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveSetting(ctx, &NotificationSetting{ID: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if store.synced != 0 || store.unsynced == 0 {
+		t.Errorf("synced writes %d, unsynced %d: want none synced", store.synced, store.unsynced)
+	}
+}

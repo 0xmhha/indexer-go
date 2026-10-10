@@ -545,6 +545,11 @@ type NotificationsConfig struct {
 	// MaxStreamsPerOwner caps the connections one key holds to the
 	// notification stream (/v1/subscriptions/stream); default 4.
 	MaxStreamsPerOwner int `yaml:"max_streams_per_owner"`
+	// DestinationRateLimit caps webhook deliveries per host and Slack
+	// deliveries per URL, per second (default 10; 0 for no cap);
+	// DestinationBurst is how many may go at once (default 20).
+	DestinationRateLimit float64 `yaml:"destination_rate_limit"`
+	DestinationBurst     int     `yaml:"destination_burst"`
 	// AllowPrivateDestinations lets webhook and Slack deliveries reach
 	// loopback, private and other internal addresses. Destinations are
 	// chosen by whoever registers a setting, so they are refused by
@@ -670,6 +675,8 @@ func NewConfig() *Config {
 	// notifications.max_settings_per_owner (0 removes the limit).
 	cfg.Notifications.MaxSettingsPerOwner = 100
 	cfg.Notifications.MaxStreamsPerOwner = 4
+	cfg.Notifications.DestinationRateLimit = 10
+	cfg.Notifications.DestinationBurst = 20
 	// Likewise the outbox is on unless a file or INDEXER_EVENTBUS_OUTBOX
 	// turns it off, and an explicit 0 keeps every outbox entry.
 	cfg.EventBus.Outbox = true
@@ -1523,6 +1530,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Notifications.MaxStreamsPerOwner < 0 {
 		return fmt.Errorf("notifications.max_streams_per_owner cannot be negative")
+	}
+	if c.Notifications.DestinationRateLimit < 0 || c.Notifications.DestinationBurst < 0 {
+		return fmt.Errorf("notifications.destination_rate_limit and destination_burst cannot be negative (a rate of 0 removes the cap)")
 	}
 
 	// Validate log configuration

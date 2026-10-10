@@ -155,6 +155,8 @@ webhook_url: https://...
 
 같은 호스트, newHeads 사용 기준으로 "노드가 블록을 보인 때 → 스트림 메시지 도착" p99 ≤ 10ms를 목표로 둔다 [Low: 측정 전 추정]. 마지막 단계에서 `TestSLOLoad`와 같은 방식으로 재고 확정한다.
 
+결과(10/11, 6단계): 시험 체인과 1ms polling(newHeads 대신)으로 쟀다. fast 스트림 p99는 노드가 블록을 보인 때부터 9.6~12.1ms(4회), fast path에 들어온 뒤로는 1.3~5.1ms다. 알림 경로는 목표 안이고, 처음부터 재면 블록 fetch 때문에 경계에 있다. 시험은 여유를 두어 처음부터 20ms, fast path부터 10ms로 검사한다. 실제 노드와 newHeads로는 재지 않았다(newHeads 감지는 live 시험에서 p95 1~4ms). 목표를 10ms로 둘지 20ms로 둘지는 운영 기준으로 정할 일이다.
+
 ---
 
 ## 5. 하지 않는 것
@@ -191,4 +193,4 @@ webhook_url: https://...
 | 4c (완료 10/10) | 스트림 채널: 알림 유형 `stream`(저장·재시도 없음), `/v1/subscriptions/stream`(key 필요, key별 연결 수 `max_streams_per_owner`, 연결마다 메시지 1,024개, 넘치면 1008 `SLOW_SUBSCRIBER`), fast path 대기열 넘침을 `lagging`(시작 블록)으로 fast 설정 소유자에게 알림. 채널은 설정마다 하나(스트림과 webhook을 함께 쓰려면 설정 둘). `all` 역할과 단일 체인에서만 | GraphQL로 등록 → 시험 체인 → 키의 스트림에 트랜잭션마다 한 번, 다른 키에는 없음 (`TestNotificationStream`, `TestStream*`, `TestLaggingToldOncePerRun`, `TestSubscriptionStreamStopsWithTheServer`) |
 | 5a (완료 10/10) | 조건식: CEL(`cel-go` v0.31.0) `condition`·`payload`, 등록 때 타입·길이·예상 비용 검사, 실행 비용 상한, 실행 오류는 소유자 스트림에 `error`, 10번 잇달아 실패하면 설정을 끔. 이벤트 인자는 점이 든 변수(`event.<인자>`)로 선언해 오타도 등록 때 거절한다. 64비트를 넘는 정수는 문자열과 `bigCmp`. 이벤트 하나 평가 약 3.5µs | 조건이 거짓이면 오지 않는다, 오류는 그 설정만 멈춘다 (`TestNotificationExpressions`, `TestExpression*`) |
 | 5b (완료 10/11) | dry run: GraphQL `checkNotificationExpressions`, JSON-RPC `notification_checkExpressions`(키 필요). 등록과 같은 컴파일 검사, 예제 로그·트랜잭션으로 한 번 평가해 `valid`·`notify`·`result`·`decoded`·`error`를 돌려준다. 아무것도 저장하지 않는다 | 색인한 체인의 로그로 GraphQL·JSON-RPC 결과가 같고, 키 없으면 거절, 설정이 생기지 않는다 (`TestNotificationExpressionDryRun`, `TestCheckExpressions`) |
-| 6 | webhook 목적지별 상한, metrics, 지연 측정 | 지연 p99로 4.8절 확정 |
+| 6 (완료 10/11) | webhook host·Slack URL마다 전달 상한(`notifications.destination_rate_limit` 10/s, burst 20; 넘으면 시도 없이 미룸), 전달·스트림·fast path 지표, 지연 측정(`TestNotificationLatency`, `make test-slo`). 측정 중 발견: 알림 저장이 키마다 fsync를 기다려 fast webhook 설정이 fast path 전체를 수 초 늦췄다 → sync를 기다리지 않는 쓰기(`PutUnsynced`)와 블록마다 스트림 설정 먼저 | fast 스트림 p99: 노드→메시지 9.6~12.1ms, fast path→메시지 1.3~5.1ms (macOS, 1ms polling). 시험은 20ms·10ms로 검사. 4.8절 아래 결과 참고 |

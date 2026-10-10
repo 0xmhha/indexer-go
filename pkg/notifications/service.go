@@ -138,6 +138,9 @@ type NotificationService struct {
 	// streams are the stream connections by owner (streams.go).
 	streams *Streams
 
+	// limits cap deliveries per destination (destination_limit.go).
+	limits *destinationLimits
+
 	// chainID is the indexed chain's id (SetChainID), 0 until known.
 	chainID atomic.Uint64
 
@@ -222,6 +225,7 @@ func NewService(
 		inflight: make(map[string]bool),
 		fastPath: fastState{queue: make(chan fastBlock, fastQueueBlocks)},
 		streams:  NewStreams(config.MaxStreamsPerOwner),
+		limits:   newDestinationLimits(config.DestinationRateLimit, config.DestinationBurst),
 
 		exprErrors: map[string]int{},
 	}
@@ -872,6 +876,11 @@ func (s *NotificationService) processNotification(notification *Notification) {
 		return
 	}
 
+	if wait := s.limits.wait(destinationKey(notification.Type, setting.Destination), time.Now()); wait > 0 {
+		s.deferDelivery(notification, wait)
+		return
+	}
+
 	// Update status to sending
 	notification.Status = DeliveryStatusRetrying
 	if err := s.storage.UpdateNotificationStatus(s.workCtx, notification.ID, DeliveryStatusRetrying, ""); err != nil {
@@ -883,6 +892,7 @@ func (s *NotificationService) processNotification(notification *Notification) {
 	// Deliver notification
 	start := time.Now()
 	result, err := handler.Deliver(s.workCtx, notification, setting)
+	metricDeliverySeconds.WithLabelValues(string(notification.Type)).Observe(time.Since(start).Seconds())
 	duration := time.Since(start).Milliseconds()
 
 	// Record history
@@ -921,6 +931,7 @@ func (s *NotificationService) handleDeliverySuccess(notification *Notification, 
 	now := time.Now()
 	notification.Status = DeliveryStatusSent
 	notification.SentAt = &now
+	metricDeliveries.WithLabelValues(string(notification.Type), "sent").Inc()
 
 	if err := s.storage.UpdateNotificationStatus(s.workCtx, notification.ID, DeliveryStatusSent, ""); err != nil {
 		s.logger.Warn("failed to update notification status to sent",
@@ -951,6 +962,7 @@ func (s *NotificationService) handleDeliveryFailure(notification *Notification, 
 	notification.Error = errMsg
 
 	if notification.RetryCount >= s.config.Retry.MaxAttempts {
+		metricDeliveries.WithLabelValues(string(notification.Type), "failed").Inc()
 		notification.Status = DeliveryStatusFailed
 		notification.NextRetry = nil
 		if stErr := s.storage.UpdateNotification(s.workCtx, notification); stErr != nil {
@@ -969,6 +981,7 @@ func (s *NotificationService) handleDeliveryFailure(notification *Notification, 
 			zap.String("error", errMsg))
 	} else {
 		// Schedule retry
+		metricDeliveries.WithLabelValues(string(notification.Type), "retry").Inc()
 		delay := s.calculateRetryDelay(notification.RetryCount)
 		nextRetry := time.Now().Add(delay)
 		notification.NextRetry = &nextRetry

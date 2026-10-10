@@ -280,6 +280,21 @@ func (s *PebbleStorage) Put(ctx context.Context, key, value []byte) error {
 	return s.kv(ctx).Set(key, value, pebble.Sync)
 }
 
+// PutUnsynced stores a value without waiting for the disk: the write is in
+// the write-ahead log, so a process crash keeps it, and the next synced
+// write (every block commit) makes it durable against a system crash too.
+// For records that are recreated or repeated after such a crash, such as
+// notifications (each Sync costs an fsync, milliseconds on some systems).
+func (s *PebbleStorage) PutUnsynced(ctx context.Context, key, value []byte) error {
+	if err := s.ensureNotClosed(); err != nil {
+		return err
+	}
+	if err := s.ensureNotReadOnly(); err != nil {
+		return err
+	}
+	return s.kv(ctx).Set(key, value, pebble.NoSync)
+}
+
 // Get retrieves a value by key
 func (s *PebbleStorage) Get(ctx context.Context, key []byte) ([]byte, error) {
 	if err := s.ensureNotClosed(); err != nil {
