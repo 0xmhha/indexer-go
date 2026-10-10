@@ -10,7 +10,7 @@ count or the number of words read no longer matches them.
 |---|---|---|---|
 | `uniswap_v3` | `IUniswapV3Factory.json`, `IUniswapV3Pool.json` | Uniswap `v3-core` `d8b1c63` (poc-contract `lib/v3-core`) | `solc --abi lib/v3-core/contracts/interfaces/IUniswapV3{Factory,Pool}.sol` |
 | `uniswap_v2` | `IUniswapV2Factory.json`, `IUniswapV2Pair.json` | Uniswap `v2-core` `ee547b1` (poc-contract `lib/v2-core`) | `solc --abi lib/v2-core/contracts/interfaces/IUniswapV2{Factory,Pair}.sol` |
-| `perp_orderbook` | `PerpetualEngine.json`, `OrderManager.json` | poc-contract `abi/perpetual` at `bea8381` (branch `feat/perpetual-orderbook`) | `./script/export-venue-abi.sh` in poc-contract, then copy `abi/perpetual/*.json` |
+| `perp_orderbook` | `PerpetualEngine.json`, `OrderManager.json` | poc-contract `abi/perpetual` at `3f40bdf` | `./script/export-venue-abi.sh` in poc-contract, then copy `abi/perpetual/*.json` |
 
 JSON is pretty-printed with sorted keys so diffs stay readable. When a
 contract changes an event or a view the indexer reads, update the fixture and
