@@ -68,9 +68,9 @@ func TestNotificationExpressions(t *testing.T) {
 			"query": `mutation($in: CreateNotificationSettingInput!) { createNotificationSetting(input: $in) { id condition payload } }`,
 			"variables": map[string]any{"in": map[string]any{"name": "big transfers", "type": "STREAM", "delivery": "fast",
 				"eventTypes": []string{"LOG"}, "destination": map[string]any{},
-				"filter":     map[string]any{"event": "Transfer(address indexed from, address indexed to, uint256 value)"},
-				"condition":  condition,
-				"payload":    `{"to": event.to, "value": event.value, "chain": chain.id}`}},
+				"filter":    map[string]any{"event": "Transfer(address indexed from, address indexed to, uint256 value)"},
+				"condition": condition,
+				"payload":   `{"to": event.to, "value": event.value, "chain": chain.id}`}},
 		})
 		req, _ := http.NewRequest(http.MethodPost, "http://"+base+"/graphql", bytes.NewReader(data))
 		req.Header.Set("Content-Type", "application/json")
