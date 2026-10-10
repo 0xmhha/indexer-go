@@ -44,7 +44,7 @@
 | 노드 URL 노출 (해소 10/9) | 노출 경로는 GraphQL이 아니라 `GET /chains`였다(GraphQL 멀티체인 모듈은 서빙되지 않는 코드였다). 이제 노드 URL은 scheme과 host만 내보낸다. 인증 없는 체인 등록 mutation이 든 서빙되지 않던 GraphQL 모듈은 지웠다 | — | — |
 | HTTP 경로와 멀티체인 (해소 10/9) | 멀티체인 서버가 체인마다 `/chains/{id}/<pattern>`에 mount한다(`{id}` 인자가 있는 패턴은 제외). ingest 역할은 의도대로 mount하지 않는다 | — | — |
 | records 표 정의 변경 (해소 10/10, 결정: 명시적 허용) | 표에 컨트랙트 주소를 더하면 그 표를 처음부터 다시 채운다(`feature.PartEvolver`). 이벤트·키 변경과 주소 삭제는 표를 `features.records.rebuild`에 적었을 때만 그 표의 레코드를 지우고(새 정의 기록과 같은 트랜잭션) 처음부터 다시 채우고(`feature.PartRebuilder`, `port.RecordWriter.DeleteRecords`), 적지 않으면 지금처럼 시작을 거부한다 | 다시 채우는 동안 그 표의 조회는 일부만 돌려준다 | — |
-| declared 모드 범위 (결정 10/10: 지원한다) | 멀티체인, `source.era_dir`를 지원하지 않는다. finalized 범위 모드는 로그 없는 블록을 저장하지 않는다. 실시간 규칙 엔진의 전제로 둘 다 지원하기로 했다(`rules-engine-design.md` 3장, 7장 1~2단계) | 구현 전까지 해당 구성은 시작하지 않는다 | [권장] |
+| declared 모드 범위 (결정 10/10: 지원한다) | 멀티체인, `source.era_dir`를 지원하지 않는다. finalized 범위 모드는 로그 없는 블록을 저장하지 않는다. 실시간 구독의 전제로 둘 다 지원하기로 했다(`subscriptions-design.md` 3장, 7장 1~2단계) | 구현 전까지 해당 구성은 시작하지 않는다 | [권장] |
 | archive가 아닌 노드 | `balance.native`는 노드가 옛 블록 상태가 없다고 답하면 0에서 시작하고, `token.metadata`는 latest로 읽는다(둘 다 경고) | 옛 높이부터 색인하면 잔액과 토큰 총공급이 틀릴 수 있다. 정확한 값에는 archive 노드가 필요하다 | [권장] |
 
 ## 3. 측정과 확인이 남은 것
