@@ -534,6 +534,13 @@ type AccountAbstractionConfig struct {
 type NotificationsConfig struct {
 	// Enabled indicates whether the notification service is active
 	Enabled bool `yaml:"enabled"`
+	// OperatorLabels are the labels (api.keys) whose keys see and manage
+	// every notification setting, including those created before settings
+	// had owners; other keys see only the settings they created.
+	OperatorLabels []string `yaml:"operator_labels"`
+	// MaxSettingsPerOwner caps the settings of one non-operator key (0: no
+	// limit; default 100).
+	MaxSettingsPerOwner int `yaml:"max_settings_per_owner"`
 	// AllowPrivateDestinations lets webhook and Slack deliveries reach
 	// loopback, private and other internal addresses. Destinations are
 	// chosen by whoever registers a setting, so they are refused by
@@ -655,6 +662,9 @@ func NewConfig() *Config {
 	// Same reasoning: atomic block indexing is the default, and an explicit
 	// false in the file or INDEXER_ATOMIC_BLOCK=false selects the legacy path.
 	cfg.Indexer.OrphanRetention = 1000
+	// Likewise a key may hold 100 notification settings unless a file sets
+	// notifications.max_settings_per_owner (0 removes the limit).
+	cfg.Notifications.MaxSettingsPerOwner = 100
 	// Likewise the outbox is on unless a file or INDEXER_EVENTBUS_OUTBOX
 	// turns it off, and an explicit 0 keeps every outbox entry.
 	cfg.EventBus.Outbox = true
@@ -1502,6 +1512,9 @@ func (c *Config) Validate() error {
 
 	if err := c.API.validate(); err != nil {
 		return err
+	}
+	if c.Notifications.MaxSettingsPerOwner < 0 {
+		return fmt.Errorf("notifications.max_settings_per_owner cannot be negative (0 removes the limit)")
 	}
 
 	// Validate log configuration

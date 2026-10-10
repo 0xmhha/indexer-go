@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -51,7 +52,7 @@ func (h *Handler) getNotificationSettings(ctx context.Context, params json.RawMe
 		filter.Types = append(filter.Types, notifications.NotificationType(t))
 	}
 
-	settings, err := notificationService.ListSettings(ctx, filter)
+	settings, err := notificationsFor(ctx).ListSettings(ctx, filter)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to list settings", err.Error())
 	}
@@ -77,7 +78,7 @@ func (h *Handler) getNotificationSetting(ctx context.Context, params json.RawMes
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	setting, err := notificationService.GetSetting(ctx, input.ID)
+	setting, err := notificationsFor(ctx).GetSetting(ctx, input.ID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get setting", err.Error())
 	}
@@ -136,7 +137,7 @@ func (h *Handler) createNotificationSetting(ctx context.Context, params json.Raw
 
 	setting.Destination = parseJSONRPCDestination(input.Destination)
 
-	created, err := notificationService.CreateSetting(ctx, setting)
+	created, err := notificationsFor(ctx).CreateSetting(ctx, setting)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to create setting", err.Error())
 	}
@@ -167,7 +168,7 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, params json.Raw
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	existing, err := notificationService.GetSetting(ctx, input.ID)
+	existing, err := notificationsFor(ctx).GetSetting(ctx, input.ID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get setting", err.Error())
 	}
@@ -198,7 +199,7 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, params json.Raw
 		existing.Destination = parseJSONRPCDestination(*input.Destination)
 	}
 
-	updated, err := notificationService.UpdateSetting(ctx, existing)
+	updated, err := notificationsFor(ctx).UpdateSetting(ctx, existing)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to update setting", err.Error())
 	}
@@ -224,7 +225,7 @@ func (h *Handler) deleteNotificationSetting(ctx context.Context, params json.Raw
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	if err := notificationService.DeleteSetting(ctx, input.ID); err != nil {
+	if err := notificationsFor(ctx).DeleteSetting(ctx, input.ID); err != nil {
 		return nil, NewError(InternalError, "failed to delete setting", err.Error())
 	}
 
@@ -269,7 +270,7 @@ func (h *Handler) getNotifications(ctx context.Context, params json.RawMessage) 
 		filter.EventTypes = append(filter.EventTypes, notifications.EventType(et))
 	}
 
-	notifs, err := notificationService.ListNotifications(ctx, filter)
+	notifs, err := notificationsFor(ctx).ListNotifications(ctx, filter)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to list notifications", err.Error())
 	}
@@ -295,7 +296,7 @@ func (h *Handler) getNotification(ctx context.Context, params json.RawMessage) (
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	notif, err := notificationService.GetNotification(ctx, input.ID)
+	notif, err := notificationsFor(ctx).GetNotification(ctx, input.ID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get notification", err.Error())
 	}
@@ -321,7 +322,7 @@ func (h *Handler) getNotificationStats(ctx context.Context, params json.RawMessa
 		return nil, NewError(InvalidParams, "settingId is required", nil)
 	}
 
-	stats, err := notificationService.GetStats(ctx, input.SettingID)
+	stats, err := notificationsFor(ctx).GetStats(ctx, input.SettingID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get stats", err.Error())
 	}
@@ -347,7 +348,7 @@ func (h *Handler) getDeliveryHistory(ctx context.Context, params json.RawMessage
 		return nil, NewError(InvalidParams, "notificationId is required", nil)
 	}
 
-	history, err := notificationService.GetDeliveryHistory(ctx, input.NotificationID)
+	history, err := notificationsFor(ctx).GetDeliveryHistory(ctx, input.NotificationID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get delivery history", err.Error())
 	}
@@ -373,7 +374,7 @@ func (h *Handler) testNotificationSetting(ctx context.Context, params json.RawMe
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	result, err := notificationService.TestSetting(ctx, input.ID)
+	result, err := notificationsFor(ctx).TestSetting(ctx, input.ID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to test setting", err.Error())
 	}
@@ -399,7 +400,7 @@ func (h *Handler) retryNotification(ctx context.Context, params json.RawMessage)
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	if err := notificationService.RetryNotification(ctx, input.ID); err != nil {
+	if err := notificationsFor(ctx).RetryNotification(ctx, input.ID); err != nil {
 		return nil, NewError(InternalError, "failed to retry notification", err.Error())
 	}
 
@@ -424,7 +425,7 @@ func (h *Handler) cancelNotification(ctx context.Context, params json.RawMessage
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	if err := notificationService.CancelNotification(ctx, input.ID); err != nil {
+	if err := notificationsFor(ctx).CancelNotification(ctx, input.ID); err != nil {
 		return nil, NewError(InternalError, "failed to cancel notification", err.Error())
 	}
 
@@ -496,4 +497,11 @@ func GetNotificationMethods() []string {
 		"notification_retry",
 		"notification_cancel",
 	}
+}
+
+// notificationsFor is the notification service as the request's API key
+// sees it: its own settings only, everything for an operator key.
+func notificationsFor(ctx context.Context) notifications.Service {
+	label, _ := middleware.APIKeyFromContext(ctx)
+	return notifications.ForCaller(notificationService, label)
 }

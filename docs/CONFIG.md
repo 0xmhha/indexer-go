@@ -360,6 +360,8 @@ multichain:
 notifications:
   enabled: false
   allow_private_destinations: false     # true면 webhook·Slack이 내부 주소로도 보낸다 (개발용)
+  operator_labels: []                   # 모든 알림 설정을 보고 관리하는 api.keys 라벨 (소유자 없는 예전 설정 포함)
+  max_settings_per_owner: 100           # 운영자가 아닌 키 하나가 가질 수 있는 설정 수 (0 = 제한 없음)
 
   webhook:
     enabled: true
@@ -407,7 +409,7 @@ notifications:
   # outbox가 꺼져 있으면 이전처럼 이벤트 버스를 구독한다.
 ```
 
-- 알림 API(GraphQL `notificationSettings`·`createNotificationSetting` 등, JSON-RPC `notification_*`)는 `api.keys`의 키를 `X-API-Key` 헤더(또는 `Authorization: Bearer`)로 보낸 요청만 처리한다. 키가 없으면 GraphQL은 `UNAUTHENTICATED`, JSON-RPC는 `-32001`로 거절한다. 모르는 키를 보낸 요청은 어느 경로든 401이다. 나머지 API는 키 없이 열려 있다. 설정이 webhook 주소와 서명 비밀을 담고, 설정을 만들면 서버가 그 주소로 요청을 보내기 때문이다.
+- 알림 API(GraphQL `notificationSettings`·`createNotificationSetting` 등, JSON-RPC `notification_*`)는 `api.keys`의 키를 `X-API-Key` 헤더(또는 `Authorization: Bearer`)로 보낸 요청만 처리한다. 키가 없으면 GraphQL은 `UNAUTHENTICATED`, JSON-RPC는 `-32001`로 거절한다. 모르는 키를 보낸 요청은 어느 경로든 401이다. 나머지 API는 키 없이 열려 있다. 설정이 webhook 주소와 서명 비밀을 담고, 설정을 만들면 서버가 그 주소로 요청을 보내기 때문이다. 설정은 만든 키의 것이다(설정의 `owner`에 그 키의 라벨). 키는 자기 설정과 그 알림만 보고 바꾸며, 다른 키의 설정은 없는 것처럼 보인다(조회는 null, 변경은 not found). 모든 설정의 통계는 운영자만 본다. `operator_labels`의 키는 모든 설정을 보고 관리하며, 소유자 기록 전에 만든 설정(owner 없음)은 운영자만 볼 수 있다. 운영자가 설정을 고쳐도 owner는 그대로다.
 - webhook과 Slack의 주소가 loopback, 사설·link-local 대역(cloud metadata `169.254.169.254` 포함), CGNAT, 문서·예약 대역이거나 `localhost`·`.internal`·`.local`·점 없는 이름이면 등록을 거절하고, 보낼 때도 이름을 푼 실제 주소를 다시 검사한다(등록 뒤 DNS를 바꾸는 우회 방지). redirect는 따라가지 않는다(3xx 응답이 결과가 된다). 같은 망의 수신기로 보내야 하는 개발 환경만 `allow_private_destinations: true`를 쓴다.
 
 ### Node Identity

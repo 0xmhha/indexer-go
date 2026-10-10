@@ -115,3 +115,66 @@ func TestNotificationAPINeedsAKeyAndRefusesInternalWebhooks(t *testing.T) {
 	_, out = post("/rpc", key, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "notification_getSettings", "params": map[string]any{}})
 	assert.Nil(t, out["error"], "JSON-RPC with a key")
 }
+
+// TestNotificationSettingsAreSeparatedByKey: through the served API a key
+// sees only the settings it created, and an operator key sees all.
+func TestNotificationSettingsAreSeparatedByKey(t *testing.T) {
+	sc := testchain.BuildDefault()
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+
+	keys := map[string]string{"alice": "alice-key-0123456789abcdef01", "bob": "bob-key-0123456789abcdef0123", "ops": "ops-key-0123456789abcdef0123"}
+	cfg := config.NewConfig()
+	cfg.RPC.Endpoint = srv.URL()
+	cfg.RPC.Timeout = 5 * time.Second
+	setTestDatabase(t, cfg, filepath.Join(t.TempDir(), "db"))
+	cfg.API.Enabled = true
+	cfg.API.Host = "127.0.0.1"
+	cfg.API.Port = freeAPIPort(t)
+	cfg.API.EnableGraphQL = true
+	cfg.API.EnableJSONRPC = true
+	cfg.API.EnableWebSocket = false
+	cfg.API.Keys = keys
+	cfg.Notifications.Enabled = true
+	cfg.Notifications.Webhook.Enabled = true
+	cfg.Notifications.OperatorLabels = []string{"ops"}
+	enableTestChainFeatures(cfg)
+	cfg.SetDefaults()
+	app, err := NewApp(cfg, zap.NewNop(), false, "")
+	require.NoError(t, err)
+	defer app.Shutdown()
+	base := fmt.Sprintf("http://127.0.0.1:%d", cfg.API.Port)
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(base + "/health")
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+		return err == nil
+	}, 10*time.Second, 10*time.Millisecond)
+
+	gql := func(who, query string, vars map[string]any) map[string]any {
+		data, _ := json.Marshal(map[string]any{"query": query, "variables": vars})
+		req, _ := http.NewRequest(http.MethodPost, base+"/graphql", bytes.NewReader(data))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Key", keys[who])
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+		var out map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
+		require.Empty(t, out["errors"], "%s: %v", who, out["errors"])
+		return out["data"].(map[string]any)
+	}
+	created := gql("alice", `mutation($in: CreateNotificationSettingInput!) { createNotificationSetting(input: $in) { id } }`,
+		map[string]any{"in": map[string]any{"name": "a", "type": "WEBHOOK", "eventTypes": []string{"BLOCK"},
+			"destination": map[string]any{"webhookURL": "https://hooks.example.com/a"}}})
+	id := created["createNotificationSetting"].(map[string]any)["id"].(string)
+
+	count := func(who string) int {
+		return len(gql(who, `{ notificationSettings { id } }`, nil)["notificationSettings"].([]any))
+	}
+	assert.Equal(t, 1, count("alice"))
+	assert.Equal(t, 0, count("bob"), "bob does not see alice's setting")
+	assert.Equal(t, 1, count("ops"), "the operator sees every setting")
+	assert.Nil(t, gql("bob", `query($id: ID!) { notificationSetting(id: $id) { id } }`, map[string]any{"id": id})["notificationSetting"])
+}
