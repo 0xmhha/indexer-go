@@ -47,11 +47,20 @@ func (s *PebbleStorage) GetTransactions(ctx context.Context, hashes []common.Has
 // GetTransactionsByAddress returns one page of an address's transactions,
 // in the order they were indexed.
 func (s *PebbleStorage) GetTransactionsByAddress(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
+	return s.transactionsByAddress(ctx, addr, false, page)
+}
+
+// GetTransactionsByAddressNewestFirst implements port.AddressTransactionsNewestFirst.
+func (s *PebbleStorage) GetTransactionsByAddressNewestFirst(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
+	return s.transactionsByAddress(ctx, addr, true, page)
+}
+
+func (s *PebbleStorage) transactionsByAddress(ctx context.Context, addr common.Address, reverse bool, page port.Page) ([]common.Hash, string, error) {
 	if err := s.ensureNotClosed(); err != nil {
 		return nil, "", err
 	}
 	prefix := AddressTransactionKeyPrefix(addr)
-	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), false, page, pageLimit(page, constants.DefaultPaginationLimit), nil)
+	entries, next, err := s.scanPage(ctx, prefix, prefixUpperBound(prefix), reverse, page, pageLimit(page, constants.DefaultPaginationLimit), nil)
 	if err != nil {
 		return nil, "", err
 	}

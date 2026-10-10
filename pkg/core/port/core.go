@@ -75,6 +75,13 @@ type Reader interface {
 	GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error)
 }
 
+// AddressTransactionsNewestFirst reads the address index in reverse.
+type AddressTransactionsNewestFirst interface {
+	// GetTransactionsByAddressNewestFirst is GetTransactionsByAddress in
+	// reverse: the most recently indexed transaction first.
+	GetTransactionsByAddressNewestFirst(ctx context.Context, addr common.Address, page Page) ([]common.Hash, string, error)
+}
+
 // Writer provides write access to blockchain data
 // Following Interface Segregation Principle - separate write interface
 type Writer interface {

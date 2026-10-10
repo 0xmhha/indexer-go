@@ -9,11 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
@@ -21,7 +23,25 @@ import (
 // countingStorage counts block and receipt reads made by the API.
 type countingStorage struct {
 	storage.Storage
-	blockReads atomic.Int64
+	blockReads   atomic.Int64
+	receiptReads atomic.Int64
+	indexReads   atomic.Int64
+}
+
+func (c *countingStorage) GetReceiptsByBlockNumber(ctx context.Context, h uint64) ([]*model.Receipt, error) {
+	c.receiptReads.Add(1)
+	return c.Storage.GetReceiptsByBlockNumber(ctx, h)
+}
+
+// The optional ports the API takes by type assertion pass through.
+
+func (c *countingStorage) GetTransactionsByAddressNewestFirst(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
+	c.indexReads.Add(1)
+	return c.Storage.(port.AddressTransactionsNewestFirst).GetTransactionsByAddressNewestFirst(ctx, addr, page)
+}
+
+func (c *countingStorage) FeatureStates(ctx context.Context) (map[string]port.FeatureState, error) {
+	return c.Storage.(port.FeatureStateStore).FeatureStates(ctx)
 }
 
 func (c *countingStorage) GetBlock(ctx context.Context, h uint64) (*model.Block, error) {

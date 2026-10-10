@@ -197,6 +197,7 @@ WebSocket 서버(`/graphql/ws`)는 구독 문서를 스키마로 검증하지 �
 | rate limit(주소마다 초당 100, burst 200, 기본 켜짐). 넘으면 429와 `Retry-After: 1` | 429를 오류로 보이지 말고 잠시 뒤 다시 시도한다. Next.js 서버 라우트(`app/api/v1/...`)에서 색인기를 부르는 요청은 frontend 서버 주소 하나로 묶여 한도를 함께 쓴다. 이 경로의 요청이 많으면 운영 쪽에서 `api.rate_limit`을 올려야 한다 |
 | GraphQL 깊이 15, 복잡도 5000. 넘으면 `extensions.code`가 `QUERY_TOO_DEEP` 또는 `QUERY_TOO_COMPLEX`인 오류 | 복잡도는 페이지 크기만큼 곱해 센다. 지금 frontend 쿼리는 100행 페이지로 물어도 최대 약 2,200이라 걸리지 않는다. 페이지 안에서 다시 페이지를 묻는 쿼리(블록 100개마다 거래 100개 등)를 새로 만들지 않는다 |
 | CORS는 credentials를 허용하지 않는다 | frontend는 `credentials: 'same-origin'`이라 영향이 없다. 다른 출처로 쿠키를 보내는 요청을 새로 만들지 않는다 |
+| 블록 범위 없는 `transactions`/`logs`가 색인으로 답하지 못하는 조건(트랜잭션 `type`만, 조건 없는 `logs`)이면 블록을 최대 10,000개만 읽는다. 페이지를 다 채우지 못하고 멈추면 connection의 `scannedThrough`에 마지막으로 읽은 블록이 온다 | `scannedThrough`가 있으면 결과가 더 있을 수 있다는 뜻이다. 트랜잭션은 `blockNumberTo`를 그 아래로, 로그는 `blockNumberFrom`을 그 위로 주어 이어 묻는다. `from`/`to`(트랜잭션), `address`/`topics`(로그) 조건은 색인으로 답하므로 멈추지 않는다 |
 | WebSocket은 Origin을 검사한다 | 운영에서 `api.allowed_origins`를 목록으로 두면 frontend 주소를 반드시 넣는다. 빠지면 구독 연결이 403으로 거절된다 |
 
 ---

@@ -351,7 +351,19 @@ const defaultPageLimit = 100
 
 // GetTransactionsByAddress implements port.Reader.
 func (s *Store) GetTransactionsByAddress(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
-	list := "addrtx:" + addr.Hex()
+	return s.transactionsByAddress(ctx, addr, false, page)
+}
+
+// GetTransactionsByAddressNewestFirst implements port.AddressTransactionsNewestFirst.
+func (s *Store) GetTransactionsByAddressNewestFirst(ctx context.Context, addr common.Address, page port.Page) ([]common.Hash, string, error) {
+	return s.transactionsByAddress(ctx, addr, true, page)
+}
+
+func (s *Store) transactionsByAddress(ctx context.Context, addr common.Address, newestFirst bool, page port.Page) ([]common.Hash, string, error) {
+	list, cmp, order := "addrtx:"+addr.Hex(), ">", "id"
+	if newestFirst {
+		list, cmp, order = "addrtx-desc:"+addr.Hex(), "<", "id DESC"
+	}
 	after, err := decodeCursor(list, page.After, 1)
 	if err != nil {
 		return nil, "", err
@@ -363,9 +375,9 @@ func (s *Store) GetTransactionsByAddress(ctx context.Context, addr common.Addres
 		if err != nil {
 			return nil, "", port.ErrInvalidCursor
 		}
-		where, args = where+" AND id > $2", append(args, id)
+		where, args = where+" AND id "+cmp+" $2", append(args, id)
 	}
-	rows, err := s.q(ctx).Query(ctx, "SELECT id, tx_hash FROM address_transactions WHERE "+where+" ORDER BY id"+limitClause(page, limit), args...)
+	rows, err := s.q(ctx).Query(ctx, "SELECT id, tx_hash FROM address_transactions WHERE "+where+" ORDER BY "+order+limitClause(page, limit), args...)
 	if err != nil {
 		return nil, "", err
 	}
