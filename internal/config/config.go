@@ -345,6 +345,11 @@ type ChainConfig struct {
 	BatchSize int `yaml:"batch_size,omitempty"`
 	// RPCTimeout is the timeout for RPC calls
 	RPCTimeout time.Duration `yaml:"rpc_timeout,omitempty"`
+	// Features are the chain's own feature sections, in the form of the
+	// top-level features: a section here replaces the top-level one for
+	// this chain (its enabled, when given, too), so each chain can
+	// declare its own records sources and tables.
+	Features map[string]FeatureConfig `yaml:"features,omitempty"`
 }
 
 // WatchlistConfig is kept so that a configuration enabling the watchlist,
@@ -1471,8 +1476,8 @@ func (c *Config) Validate() error {
 	switch c.Indexer.Mode {
 	case "", ModeFull:
 	case ModeDeclared:
-		if c.MultiChainMode() || c.Source.EraDir != "" {
-			return fmt.Errorf("indexer.mode declared reads the declared logs from one node: multichain and source.era_dir are not supported")
+		if c.Source.EraDir != "" {
+			return fmt.Errorf("indexer.mode declared reads the declared logs from the node: source.era_dir is not supported yet")
 		}
 	default:
 		return fmt.Errorf("invalid indexer.mode %q, must be one of: full, declared", c.Indexer.Mode)

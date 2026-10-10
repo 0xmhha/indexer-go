@@ -783,6 +783,35 @@ func chainDBPath(root, chainID string) string {
 	return filepath.Join(root, "chains", chainID)
 }
 
+// chainFeatureOverrides returns the feature sections configured on the
+// chain id's entry.
+func (a *App) chainFeatureOverrides(id string) map[string]config.FeatureConfig {
+	for _, cc := range a.config.MultiChain.Chains {
+		if cc.ID == id {
+			return cc.Features
+		}
+	}
+	return nil
+}
+
+// chainFeatures returns a chain's feature sections: the shared ones, each
+// replaced by the chain's own section where it has one; a chain section
+// without enabled keeps the shared enabled. The result is a new map, so
+// chains never share or change the shared sections.
+func chainFeatures(shared, chain map[string]config.FeatureConfig) map[string]config.FeatureConfig {
+	out := make(map[string]config.FeatureConfig, len(shared)+len(chain))
+	for name, fc := range shared {
+		out[name] = fc
+	}
+	for name, fc := range chain {
+		if fc.Enabled == nil {
+			fc.Enabled = shared[name].Enabled
+		}
+		out[name] = fc
+	}
+	return out
+}
+
 // chainAppConfig returns the configuration of one chain's App: the shared
 // settings with the chain's endpoints, database and indexing range. Settings
 // that belong to the process (API server, notifications, contract
@@ -799,6 +828,7 @@ func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	cfg.Indexer.StartHeight = cc.StartHeight
 	cfg.Indexer.Workers = orDefault(cc.Workers, a.config.Indexer.Workers)
 	cfg.Indexer.ChunkSize = orDefault(cc.BatchSize, a.config.Indexer.ChunkSize)
+	cfg.Features = chainFeatures(a.config.Features, a.chainFeatureOverrides(cc.ID))
 	cfg.MultiChain = config.MultiChainConfig{}
 	cfg.API.Enabled = false
 	cfg.Notifications.Enabled = false
