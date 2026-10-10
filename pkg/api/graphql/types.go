@@ -512,7 +512,7 @@ func initConnectionTypes() {
 			},
 			"scannedThrough": &graphql.Field{
 				Type:        bigIntType,
-				Description: "Set when a query without a block range stopped at the scan limit (10,000 blocks) before filling its page: the lowest block it read. Older matches need blockNumberTo below it.",
+				Description: "Set when the query did not read every block it covers: a range longer than 10,000 blocks is cut to its newest blocks, and a query without a range stops after 10,000 blocks when no index serves its filter and the page is not full. The lowest block read; older matches need blockNumberTo below it.",
 			},
 		},
 	})
@@ -532,7 +532,7 @@ func initConnectionTypes() {
 			},
 			"scannedThrough": &graphql.Field{
 				Type:        bigIntType,
-				Description: "Set when a query without a block range stopped at the scan limit (10,000 blocks) before filling its page: the highest block it read. Later matches need blockNumberFrom above it.",
+				Description: "Set when the query did not read every block it covers: a range longer than 10,000 blocks is cut to its oldest blocks, and a query without a range stops after 10,000 blocks when no filter is given and the page is not full. The highest block read; later matches need blockNumberFrom above it.",
 			},
 		},
 	})
