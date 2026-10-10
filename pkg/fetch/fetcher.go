@@ -135,6 +135,8 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
+	// tap observes blocks before they are stored (SetBlockTap).
+	tap       BlockTap
 	client    Client
 	storage   Storage
 	config    *Config

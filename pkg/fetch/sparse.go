@@ -140,6 +140,9 @@ func (f *Fetcher) indexSparse(ctx context.Context, from, to uint64) error {
 		if err != nil {
 			return fmt.Errorf("read blocks %d..%d: %w", start, end, err)
 		}
+		for _, fb := range blocks {
+			f.offerBlock(fb) // fast path: before the range's commit
+		}
 		if err := f.write().do(ctx, "indexSparse", func(ctx context.Context) error {
 			return f.writeSparse(ctx, blocks, end)
 		}); err != nil {

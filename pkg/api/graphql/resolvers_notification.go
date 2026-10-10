@@ -443,6 +443,9 @@ func parseNotificationSettingInput(input map[string]interface{}) (*notifications
 	if enabled, ok := input["enabled"].(bool); ok {
 		setting.Enabled = enabled
 	}
+	if delivery, ok := input["delivery"].(string); ok {
+		setting.Delivery = notifications.Delivery(delivery)
+	}
 
 	if eventTypes, ok := input["eventTypes"].([]interface{}); ok {
 		for _, e := range eventTypes {
@@ -533,6 +536,9 @@ func applyNotificationSettingUpdates(setting *notifications.NotificationSetting,
 	if enabled, ok := input["enabled"].(bool); ok {
 		setting.Enabled = enabled
 	}
+	if delivery, ok := input["delivery"].(string); ok {
+		setting.Delivery = notifications.Delivery(delivery)
+	}
 
 	if eventTypes, ok := input["eventTypes"].([]interface{}); ok {
 		setting.EventTypes = nil
@@ -563,6 +569,7 @@ func notificationSettingToMap(setting *notifications.NotificationSetting) map[st
 		"name":        setting.Name,
 		"type":        string(setting.Type),
 		"enabled":     setting.Enabled,
+		"delivery":    string(deliveryOf(setting)),
 		"destination": notificationDestinationToMap(setting.Destination),
 		"createdAt":   setting.CreatedAt.Format(time.RFC3339),
 		"updatedAt":   setting.UpdatedAt.Format(time.RFC3339),
@@ -759,4 +766,12 @@ func requireAPIKey(resolve graphql.FieldResolveFn) graphql.FieldResolveFn {
 func (s *Schema) notificationsFor(ctx context.Context) notifications.Service {
 	label, _ := middleware.APIKeyFromContext(ctx)
 	return notifications.ForCaller(s.notificationService, label)
+}
+
+// deliveryOf is a setting's delivery, durable when unset.
+func deliveryOf(st *notifications.NotificationSetting) notifications.Delivery {
+	if st.Delivery == "" {
+		return notifications.DeliveryDurable
+	}
+	return st.Delivery
 }

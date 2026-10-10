@@ -95,6 +95,7 @@ func (h *Handler) createNotificationSetting(ctx context.Context, params json.Raw
 		Name        string                   `json:"name"`
 		Type        string                   `json:"type"`
 		Enabled     *bool                    `json:"enabled,omitempty"`
+		Delivery    string                   `json:"delivery,omitempty"`
 		EventTypes  []string                 `json:"eventTypes"`
 		Filter      *notificationFilterInput `json:"filter,omitempty"`
 		Destination notificationDestInput    `json:"destination"`
@@ -125,6 +126,7 @@ func (h *Handler) createNotificationSetting(ctx context.Context, params json.Raw
 	if input.Enabled != nil {
 		setting.Enabled = *input.Enabled
 	}
+	setting.Delivery = notifications.Delivery(input.Delivery)
 
 	for _, et := range input.EventTypes {
 		setting.EventTypes = append(setting.EventTypes, notifications.EventType(et))
@@ -158,6 +160,7 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, params json.Raw
 		ID          string                   `json:"id"`
 		Name        *string                  `json:"name,omitempty"`
 		Enabled     *bool                    `json:"enabled,omitempty"`
+		Delivery    *string                  `json:"delivery,omitempty"`
 		EventTypes  []string                 `json:"eventTypes,omitempty"`
 		Filter      *notificationFilterInput `json:"filter,omitempty"`
 		Destination *notificationDestInput   `json:"destination,omitempty"`
@@ -185,6 +188,9 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, params json.Raw
 
 	if input.Enabled != nil {
 		existing.Enabled = *input.Enabled
+	}
+	if input.Delivery != nil {
+		existing.Delivery = notifications.Delivery(*input.Delivery)
 	}
 
 	if len(input.EventTypes) > 0 {

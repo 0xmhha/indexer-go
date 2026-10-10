@@ -131,6 +131,9 @@ type NotificationService struct {
 
 	eventSub *events.Subscription
 
+	// fastPath creates the notifications of fast settings (fast.go).
+	fastPath fastState
+
 	// stream is the change stream the service consumes as group (R3-5);
 	// nil consumes the event bus instead.
 	stream      stream.Bus
@@ -205,6 +208,7 @@ func NewService(
 		queue:    make(chan *Notification, config.Queue.BufferSize),
 		settings: make(map[string]*NotificationSetting),
 		inflight: make(map[string]bool),
+		fastPath: fastState{queue: make(chan fastBlock, fastQueueBlocks)},
 	}
 }
 
@@ -277,6 +281,10 @@ func (s *NotificationService) Start(ctx context.Context) error {
 			s.logger.Error("failed to subscribe to events", zap.Error(err))
 		}
 	}
+
+	// Fast path: notifications of fast settings before blocks are stored
+	s.wg.Add(1)
+	go s.fastProcessor()
 
 	// Start retry processor
 	s.wg.Add(1)
@@ -353,6 +361,7 @@ func (s *NotificationService) loadSettings(ctx context.Context) error {
 		s.logger.Info("loaded notification settings", zap.Int("count", len(loaded)))
 	}
 	s.settings = loaded
+	s.countFast()
 	return nil
 }
 
@@ -472,29 +481,47 @@ func (s *NotificationService) notify(ctx context.Context, event events.Event) er
 	s.mu.RUnlock()
 
 	kinds := s.eventKinds(event)
+	_, reorg := event.(*events.ReorgEvent)
 	for _, setting := range settings {
-		kind, ok := s.shouldNotify(setting, event, kinds)
-		if !ok {
-			continue
+		if setting.fast() && !reorg {
+			continue // created on the fast path, before the commit
 		}
-		notification := s.createNotification(setting, event, kind)
-		if notification == nil {
-			continue
-		}
-		if events.SequenceOf(event) != 0 {
-			existing, err := s.storage.GetNotification(ctx, notification.ID)
-			if err != nil {
-				return err
-			}
-			if existing != nil {
-				continue
-			}
-		}
-		if err := s.storage.SaveNotification(ctx, notification); err != nil {
+		if err := s.deliverMatch(ctx, setting, event, kinds, ""); err != nil {
 			return err
 		}
-		s.enqueueNotification(notification)
 	}
+	return nil
+}
+
+// deliverMatch creates, stores and queues the notification of an event
+// for a setting it matches. A notification whose id exists already (a
+// sequenced event delivered again, or a fast event, keyed by fastKey,
+// evaluated again) is not created again.
+func (s *NotificationService) deliverMatch(ctx context.Context, setting *NotificationSetting, event events.Event, kinds []EventType, fastKey string) error {
+	kind, ok := s.shouldNotify(setting, event, kinds)
+	if !ok {
+		return nil
+	}
+	notification := s.createNotification(setting, event, kind)
+	if notification == nil {
+		return nil
+	}
+	if fastKey != "" {
+		notification.ID = uuid.NewSHA1(notificationIDSpace, []byte(setting.ID+"/fast/"+fastKey)).String()
+	}
+	if fastKey != "" || events.SequenceOf(event) != 0 {
+		existing, err := s.storage.GetNotification(ctx, notification.ID)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			return nil
+		}
+	}
+	if err := s.storage.SaveNotification(ctx, notification); err != nil {
+		return err
+	}
+	s.enqueueNotification(notification)
 	return nil
 }
 
@@ -1019,6 +1046,9 @@ func (s *NotificationService) CreateSetting(ctx context.Context, setting *Notifi
 	if err := validateFilter(setting.Filter); err != nil {
 		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
+	if err := validateDelivery(setting.Delivery); err != nil {
+		return nil, fmt.Errorf("invalid setting: %w", err)
+	}
 	if err := handler.Validate(setting); err != nil {
 		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
@@ -1029,6 +1059,7 @@ func (s *NotificationService) CreateSetting(ctx context.Context, setting *Notifi
 
 	s.mu.Lock()
 	s.settings[setting.ID] = setting
+	s.countFast()
 	s.mu.Unlock()
 
 	s.logger.Info("created notification setting",
@@ -1062,6 +1093,9 @@ func (s *NotificationService) UpdateSetting(ctx context.Context, setting *Notifi
 	if err := validateFilter(setting.Filter); err != nil {
 		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
+	if err := validateDelivery(setting.Delivery); err != nil {
+		return nil, fmt.Errorf("invalid setting: %w", err)
+	}
 	if err := handler.Validate(setting); err != nil {
 		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
@@ -1072,6 +1106,7 @@ func (s *NotificationService) UpdateSetting(ctx context.Context, setting *Notifi
 
 	s.mu.Lock()
 	s.settings[setting.ID] = setting
+	s.countFast()
 	s.mu.Unlock()
 
 	s.logger.Info("updated notification setting",
@@ -1088,6 +1123,7 @@ func (s *NotificationService) DeleteSetting(ctx context.Context, id string) erro
 
 	s.mu.Lock()
 	delete(s.settings, id)
+	s.countFast()
 	s.mu.Unlock()
 
 	s.logger.Info("deleted notification setting", zap.String("id", id))

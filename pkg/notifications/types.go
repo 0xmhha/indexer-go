@@ -58,6 +58,9 @@ type NotificationSetting struct {
 	// that key (and operator keys) may see or change it (ForCaller).
 	// Settings created before owners existed have none.
 	Owner string `json:"owner,omitempty"`
+	// Delivery is when notifications are created: durable (default, after
+	// the commit) or fast (before the block is stored; fast.go).
+	Delivery Delivery `json:"delivery,omitempty"`
 }
 
 // NotifyFilter defines conditions for triggering notifications.
