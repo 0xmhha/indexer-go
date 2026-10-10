@@ -32,6 +32,12 @@ type StreamMessage struct {
 	Type         string        `json:"type"`
 	Notification *Notification `json:"notification,omitempty"`
 	FromBlock    uint64        `json:"from_block,omitempty"`
+	// Error messages (StreamError): the setting, the event's block, the
+	// cause, and whether the setting was disabled.
+	SettingID string `json:"setting_id,omitempty"`
+	Block     uint64 `json:"block,omitempty"`
+	Error     string `json:"error,omitempty"`
+	Disabled  bool   `json:"disabled,omitempty"`
 }
 
 // DefaultMaxStreamsPerOwner is how many stream connections a key may hold
