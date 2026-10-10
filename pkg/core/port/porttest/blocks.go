@@ -235,6 +235,31 @@ func testReader(t *testing.T, newStore NewStore) {
 		assert.Empty(t, next)
 	})
 
+	t.Run("TransactionsByAddressNewestFirst", func(t *testing.T) {
+		s := open[readerStore](t, newStore)
+		r, ok := s.(port.AddressTransactionsNewestFirst)
+		require.True(t, ok, "the store reads the address index newest first")
+		var want []common.Hash
+		for _, b := range c.Blocks[1:] {
+			tx := b.Transactions[0]
+			require.NoError(t, s.AddTransactionToAddressIndex(ctx, addrA, tx.Hash))
+			require.NoError(t, s.AddTransactionToAddressIndex(ctx, addrB, b.Transactions[1].Hash))
+			want = append([]common.Hash{tx.Hash}, want...)
+		}
+		byAddr := func(addr common.Address) listPage[common.Hash] {
+			return func(page port.Page) ([]common.Hash, string, error) {
+				return r.GetTransactionsByAddressNewestFirst(ctx, addr, page)
+			}
+		}
+		checkPaging(t, want, func(h common.Hash) common.Hash { return h }, byAddr(addrA))
+		checkCursorFromOtherList(t, byAddr(addrA), byAddr(addrB))
+
+		got, next, err := r.GetTransactionsByAddressNewestFirst(ctx, unknown, port.FirstPage(10))
+		require.NoError(t, err)
+		assert.Empty(t, got)
+		assert.Empty(t, next)
+	})
+
 	t.Run("TransactionsByAddressResumeAfterAppend", func(t *testing.T) {
 		s := open[readerStore](t, newStore)
 		first, second := c.Blocks[1].Transactions[0].Hash, c.Blocks[2].Transactions[0].Hash

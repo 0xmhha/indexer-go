@@ -506,6 +506,7 @@ Log.transactionHash(): String!
 Log.transactionIndex(): Int!
 LogConnection.nodes(): [Log!]
 LogConnection.pageInfo(): PageInfo!
+LogConnection.scannedThrough(): String
 LogConnection.totalCount(): Int!
 LogFilter.address: String
 LogFilter.blockNumberFrom: String
@@ -1072,6 +1073,7 @@ Transaction.v(): String!
 Transaction.value(): String!
 TransactionConnection.nodes(): [Transaction!]
 TransactionConnection.pageInfo(): PageInfo!
+TransactionConnection.scannedThrough(): String
 TransactionConnection.totalCount(): Int!
 TransactionDirection = ALL
 TransactionDirection = RECEIVED
