@@ -937,24 +937,7 @@ func (a *App) initFetcher(ctx context.Context) error {
 	if err := a.fetcher.CheckFinality(ctx); err != nil {
 		return err
 	}
-	if err := a.fetcher.Recover(ctx, pipeline.Units(), backfill); err != nil {
-		return err
-	}
-
-	a.setTokenMetadataFetcher()
-	return nil
-}
-
-// setTokenMetadataFetcher lets GetTokenBalances fetch the metadata of tokens
-// not indexed yet from the node.
-func (a *App) setTokenMetadataFetcher() {
-	tokenMetadataFetcher := token.NewStorageTokenMetadataFetcherFromEthClient(a.client.EthClient(), a.logger)
-	if tokenMetadataFetcher != nil {
-		a.storage.SetTokenMetadataFetcher(tokenMetadataFetcher)
-		a.logger.Info("Token metadata fetcher configured for on-demand fetching")
-	} else {
-		a.logger.Warn("Failed to create token metadata fetcher - on-demand fetching will be disabled")
-	}
+	return a.fetcher.Recover(ctx, pipeline.Units(), backfill)
 }
 
 // initAPIServer initializes the API server
@@ -1073,6 +1056,9 @@ func (a *App) initRPCProxy() error {
 	}
 
 	a.rpcProxy = proxy
+	// GetTokenBalances reads the metadata of tokens not indexed yet from
+	// the node through the proxy (its cache, rate limit, circuit breaker).
+	a.storage.SetTokenMetadataFetcher(&proxyTokenMetadata{proxy: proxy, logger: a.logger})
 	a.logger.Info("RPC Proxy initialized",
 		zap.String("endpoint", a.config.RPC.Endpoint),
 		zap.Int("workers", proxyConfig.Worker.NumWorkers),

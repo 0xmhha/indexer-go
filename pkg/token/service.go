@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -173,36 +172,6 @@ func NewStorageTokenMetadataFetcher(client EthClient, logger *zap.Logger) *Stora
 		fetcher:  NewMetadataFetcher(client, logger),
 		logger:   logger,
 	}
-}
-
-// NewStorageTokenMetadataFetcherFromEthClient creates a fetcher from ethclient.Client
-func NewStorageTokenMetadataFetcherFromEthClient(ethClient interface{}, logger *zap.Logger) *StorageTokenMetadataFetcher {
-	// Type assert to get the underlying ethclient
-	if ec, ok := ethClient.(interface {
-		CallContract(ctx context.Context, call interface{}, blockNumber interface{}) ([]byte, error)
-		CodeAt(ctx context.Context, contract common.Address, blockNumber interface{}) ([]byte, error)
-	}); ok {
-		// Create adapter
-		adapter := &ethClientWrapper{client: ec}
-		return NewStorageTokenMetadataFetcher(adapter, logger)
-	}
-	return nil
-}
-
-// ethClientWrapper wraps an interface to implement EthClient
-type ethClientWrapper struct {
-	client interface {
-		CallContract(ctx context.Context, call interface{}, blockNumber interface{}) ([]byte, error)
-		CodeAt(ctx context.Context, contract common.Address, blockNumber interface{}) ([]byte, error)
-	}
-}
-
-func (w *ethClientWrapper) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber interface{}) ([]byte, error) {
-	return w.client.CallContract(ctx, call, blockNumber)
-}
-
-func (w *ethClientWrapper) CodeAt(ctx context.Context, contract common.Address, blockNumber interface{}) ([]byte, error) {
-	return w.client.CodeAt(ctx, contract, blockNumber)
 }
 
 // FetchTokenMetadata implements port.TokenMetadataFetcher interface
