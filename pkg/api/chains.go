@@ -37,6 +37,10 @@ type chainRoutes struct {
 	logger    *zap.Logger
 	keepAlive bool
 	direct    bool
+	// declaredOnly serves each chain as an indexer of declared data
+	// (indexer.mode declared): GraphQL extensions only, no JSON-RPC or
+	// REST, like the single-chain server.
+	declaredOnly bool
 
 	streamOutbox func(port.QueryStore) port.Outbox
 
@@ -59,13 +63,14 @@ type chainHandlers struct {
 
 func (s *Server) mountChainRoutes(chains ChainStores) {
 	cr := &chainRoutes{
-		chains:    chains,
-		logger:    s.logger,
-		keepAlive: s.config.EnableWebSocketKeepAlive,
-		direct:    s.config.DirectSubscriptions,
-		handlers:  map[string]*chainHandlers{},
-		limits:    s.graphqlLimits(),
-		origins:   s.origins,
+		chains:       chains,
+		logger:       s.logger,
+		keepAlive:    s.config.EnableWebSocketKeepAlive,
+		direct:       s.config.DirectSubscriptions,
+		declaredOnly: s.config.DeclaredOnly,
+		handlers:     map[string]*chainHandlers{},
+		limits:       s.graphqlLimits(),
+		origins:      s.origins,
 
 		streamOutbox: s.streamOutbox,
 	}
@@ -76,10 +81,10 @@ func (s *Server) mountChainRoutes(chains ChainStores) {
 		s.router.Get("/chains/{id}/graphql/ws", cr.serve(func(h *chainHandlers) http.Handler { return h.sub }))
 		s.router.Get("/chains/{id}/playground", cr.serve(func(h *chainHandlers) http.Handler { return h.graphql.PlaygroundHandler() }))
 	}
-	if s.config.EnableJSONRPC {
+	if s.config.EnableJSONRPC && !cr.declaredOnly {
 		s.router.Post("/chains/{id}/rpc", cr.serve(func(h *chainHandlers) http.Handler { return h.rpc }))
 	}
-	if s.config.EnableREST {
+	if s.config.EnableREST && !cr.declaredOnly {
 		s.router.Handle("/chains/{id}/v1/*", cr.serve(func(h *chainHandlers) http.Handler { return h.rest }))
 	}
 	for _, r := range registeredRoutes() {
@@ -136,7 +141,7 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 	}
 	logger := cr.logger.With(zap.String("chain", id))
 	outbox := cr.streamOutbox(store)
-	opts := &graphql.HandlerOptions{Limits: cr.limits}
+	opts := &graphql.HandlerOptions{Limits: cr.limits, ExtensionsOnly: cr.declaredOnly}
 	if outbox != nil {
 		opts.Stream = outbox
 	}
