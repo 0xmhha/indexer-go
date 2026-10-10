@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -36,7 +37,6 @@ func TestCheckDestination(t *testing.T) {
 		{"http://0.0.0.0/webhook", false, true},
 		{"http://[::1]/webhook", false, true},
 		{"http://[fd00::1]/webhook", false, true},
-		{"http://[::ffff:127.0.0.1]/webhook", false, true},
 		{"http://metadata.google.internal/computeMetadata", false, true},
 		{"http://intranet/webhook", false, true},
 		{"ftp://hooks.example.com/notify", false, false},
@@ -49,6 +49,11 @@ func TestCheckDestination(t *testing.T) {
 		err = checkDestination(tc.url, true)
 		assert.Equal(t, tc.anyScope, err == nil, "%q with private allowed: %v", tc.url, err)
 	}
+	// IPv4-mapped IPv6 addresses are checked as IPv4 (URLs with them do
+	// not parse on every Go version, so the address is checked directly).
+	assert.True(t, blockedIP(net.ParseIP("::ffff:127.0.0.1")))
+	assert.True(t, blockedIP(net.ParseIP("::ffff:169.254.169.254")))
+	assert.False(t, blockedIP(net.ParseIP("::ffff:93.184.216.34")))
 }
 
 // TestDeliveryClientRefusesInternalAddresses: the check runs on the
