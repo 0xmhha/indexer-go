@@ -104,6 +104,20 @@ func TestUnboundedQueriesUseTheIndexes(t *testing.T) {
 		}
 	})
 
+	t.Run("LongRangesAreCutAndReported", func(t *testing.T) {
+		res := f.query(t, fmt.Sprintf(`{ transactions(pagination: {limit: 3}, filter: {blockNumberFrom: "0", blockNumberTo: "%d"}) { nodes { hash } scannedThrough } }`, f.head))
+		conn := res["transactions"].(map[string]any)
+		assert.Empty(t, conn["nodes"], "the newest 10,001 blocks are empty")
+		assert.Equal(t, fmt.Sprint(f.head-10000), conn["scannedThrough"], "a newest-first list keeps the newest blocks")
+
+		filter := fmt.Sprintf(`address: "%s"`, f.sc.ERC20.Hex())
+		long := f.query(t, fmt.Sprintf(`{ logs(filter: {%s, blockNumberFrom: "0", blockNumberTo: "%d"}, pagination: {limit: 50}) { nodes { transactionHash logIndex } scannedThrough } }`, filter, f.head))
+		short := f.query(t, fmt.Sprintf(`{ logs(filter: {%s, blockNumberFrom: "0", blockNumberTo: "%d"}, pagination: {limit: 50}) { nodes { transactionHash logIndex } scannedThrough } }`, filter, scenarioEnd))
+		assert.Equal(t, "10000", long["logs"].(map[string]any)["scannedThrough"], "an oldest-first list keeps the oldest blocks")
+		assert.Nil(t, short["logs"].(map[string]any)["scannedThrough"], "a range within the limit is read whole")
+		assert.Equal(t, short["logs"].(map[string]any)["nodes"], long["logs"].(map[string]any)["nodes"])
+	})
+
 	t.Run("UnindexedFilterStopsAtTheScanLimit", func(t *testing.T) {
 		reset()
 		res := f.query(t, `{ transactions(pagination: {limit: 3}, filter: {type: 2}) { nodes { hash } scannedThrough } }`)

@@ -385,7 +385,7 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 	}
 
 	// Set default and validate block range
-	blockFrom, blockTo := s.normalizeBlockRange(filter.BlockNumberFrom, filter.BlockNumberTo, latestHeight)
+	blockFrom, blockTo, cut := s.normalizeBlockRange(filter.BlockNumberFrom, filter.BlockNumberTo, latestHeight, true)
 	if blockFrom > blockTo {
 		return nil, fmt.Errorf("invalid block range: blockNumberFrom (%d) > blockNumberTo (%d)", blockFrom, blockTo)
 	}
@@ -406,31 +406,34 @@ func (s *Schema) resolveTransactions(p graphql.ResolveParams) (interface{}, erro
 	totalCount := s.calculateTxTotalCount(ctx, filter, filteredTxs)
 	paginatedTxs := applyPagination(filteredTxs, pagination.Offset, pagination.Limit)
 
-	return s.buildTxConnectionResponse(paginatedTxs, totalCount, len(filteredTxs), pagination), nil
+	resp := s.buildTxConnectionResponse(paginatedTxs, totalCount, len(filteredTxs), pagination)
+	if cut != nil {
+		markScanStopped(resp, *cut)
+	}
+	return resp, nil
 }
 
-// normalizeBlockRange sets default block range and applies safety limits.
-// For explicit ranges, it caps at maxRange to prevent excessive queries.
-// For default queries (no range specified), it scans all blocks to ensure
-// all transactions are discoverable regardless of which blocks contain them.
-func (s *Schema) normalizeBlockRange(from, to, latestHeight uint64) (uint64, uint64) {
-	if from == 0 && to == 0 {
-		// Default: scan entire chain so all transactions are reachable
-		to = latestHeight
-		return from, to
-	}
+// maxRange is the most blocks a query with a block range reads, plus one.
+const maxRange = uint64(10000)
 
+// normalizeBlockRange fills an open end of a block range with the latest
+// height and cuts a range longer than maxRange to the part read first:
+// the newest blocks for a list served newest first, the oldest otherwise.
+// cut is the last block read when the range was cut (the lowest for
+// newestFirst, the highest otherwise), nil when it was not.
+func (s *Schema) normalizeBlockRange(from, to, latestHeight uint64, newestFirst bool) (uint64, uint64, *uint64) {
 	if to == 0 {
 		to = latestHeight
 	}
-
-	// Only apply maxRange limit when user specifies an explicit range
-	const maxRange = uint64(10000)
-	if to-from > maxRange {
-		to = from + maxRange
+	if from > to || to-from <= maxRange {
+		return from, to, nil
 	}
-
-	return from, to
+	if newestFirst {
+		from = to - maxRange
+		return from, to, &from
+	}
+	to = from + maxRange
+	return from, to, &to
 }
 
 // filterTransactionsFromBlocks filters transactions from blocks based on filter criteria
@@ -668,7 +671,7 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 	}
 
 	// Set default and validate block range
-	blockFrom, blockTo := s.normalizeBlockRange(filter.BlockNumberFrom, filter.BlockNumberTo, latestHeight)
+	blockFrom, blockTo, cut := s.normalizeBlockRange(filter.BlockNumberFrom, filter.BlockNumberTo, latestHeight, false)
 	if blockFrom > blockTo {
 		return nil, fmt.Errorf("invalid block range: blockNumberFrom (%d) > blockNumberTo (%d)", blockFrom, blockTo)
 	}
@@ -679,7 +682,11 @@ func (s *Schema) resolveLogs(p graphql.ResolveParams) (interface{}, error) {
 	totalCount := len(filteredLogs)
 	paginatedLogs := applyPagination(filteredLogs, pagination.Offset, pagination.Limit)
 
-	return s.buildLogConnectionResponse(paginatedLogs, totalCount, pagination), nil
+	resp := s.buildLogConnectionResponse(paginatedLogs, totalCount, pagination)
+	if cut != nil {
+		markScanStopped(resp, *cut)
+	}
+	return resp, nil
 }
 
 // getDecodeParam extracts the decode parameter from GraphQL args
