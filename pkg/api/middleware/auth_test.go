@@ -276,3 +276,36 @@ func TestAPIKeyFromContext_NotSet(t *testing.T) {
 		t.Error("expected no API key in context")
 	}
 }
+
+// TestAPIKeyIdentify: requests without a key pass without a label, a valid
+// key adds its label, and an unknown key is refused rather than treated as
+// none.
+func TestAPIKeyIdentify(t *testing.T) {
+	keys := map[string]string{"k-0123456789abcdef01234567": "ops"}
+	var label string
+	var labeled bool
+	h := APIKeyIdentify(keys, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		label, labeled = APIKeyFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for name, tc := range map[string]struct {
+		set    func(*http.Request)
+		status int
+		label  string
+	}{
+		"no key":      {func(*http.Request) {}, http.StatusOK, ""},
+		"header":      {func(r *http.Request) { r.Header.Set(APIKeyHeader, "k-0123456789abcdef01234567") }, http.StatusOK, "ops"},
+		"bearer":      {func(r *http.Request) { r.Header.Set("Authorization", "Bearer k-0123456789abcdef01234567") }, http.StatusOK, "ops"},
+		"unknown key": {func(r *http.Request) { r.Header.Set(APIKeyHeader, "wrong") }, http.StatusUnauthorized, ""},
+	} {
+		label, labeled = "", false
+		req := httptest.NewRequest(http.MethodPost, "/graphql", nil)
+		tc.set(req)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.status || label != tc.label || labeled != (tc.label != "") {
+			t.Errorf("%s: status %d label %q (%v), want %d %q", name, rec.Code, label, labeled, tc.status, tc.label)
+		}
+	}
+}

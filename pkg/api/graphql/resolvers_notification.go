@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
@@ -684,5 +685,30 @@ func deliveryResultToMap(result *notifications.DeliveryResult) map[string]interf
 		"statusCode": result.StatusCode,
 		"error":      result.Error,
 		"durationMs": int(result.Duration),
+	}
+}
+
+// errAPIKeyRequired answers a notification operation without a valid API
+// key: settings hold webhook destinations and secrets, and creating one
+// makes the server send requests.
+type errAPIKeyRequired struct{}
+
+func (errAPIKeyRequired) Error() string {
+	return "notification operations need an API key (api.keys; X-API-Key header)"
+}
+
+// Extensions implements gqlerrors.ExtendedError.
+func (errAPIKeyRequired) Extensions() map[string]interface{} {
+	return map[string]interface{}{"code": "UNAUTHENTICATED"}
+}
+
+// requireAPIKey runs resolve only for requests whose API key the server
+// accepted (middleware.APIKeyIdentify).
+func requireAPIKey(resolve graphql.FieldResolveFn) graphql.FieldResolveFn {
+	return func(p graphql.ResolveParams) (interface{}, error) {
+		if _, ok := middleware.APIKeyFromContext(extractContext(p.Context)); !ok {
+			return nil, errAPIKeyRequired{}
+		}
+		return resolve(p)
 	}
 }

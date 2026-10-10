@@ -154,6 +154,7 @@ func TestAPIProcessManagesNotifications(t *testing.T) {
 	defer hook.Close()
 	notify := func(cfg *config.Config) *config.Config {
 		cfg.Notifications.Enabled = true
+		cfg.Notifications.AllowPrivateDestinations = true // the hook is a local test server
 		cfg.Notifications.Webhook.Enabled = true
 		cfg.Notifications.Queue.FlushInterval = 20 * time.Millisecond
 		cfg.SetDefaults()

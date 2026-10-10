@@ -25,7 +25,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Filter options",
 			},
 		},
-		Resolve: s.resolveNotificationSettings,
+		Resolve: requireAPIKey(s.resolveNotificationSettings),
 	}
 	b.queries["notificationSetting"] = &graphql.Field{
 		Type:        notificationSettingType,
@@ -36,7 +36,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Setting identifier",
 			},
 		},
-		Resolve: s.resolveNotificationSetting,
+		Resolve: requireAPIKey(s.resolveNotificationSetting),
 	}
 	b.queries["notifications"] = &graphql.Field{
 		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(notificationType))),
@@ -47,7 +47,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Filter options",
 			},
 		},
-		Resolve: s.resolveNotifications,
+		Resolve: requireAPIKey(s.resolveNotifications),
 	}
 	b.queries["notification"] = &graphql.Field{
 		Type:        notificationType,
@@ -58,7 +58,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Notification identifier",
 			},
 		},
-		Resolve: s.resolveNotification,
+		Resolve: requireAPIKey(s.resolveNotification),
 	}
 	b.queries["notificationStats"] = &graphql.Field{
 		Type:        notificationStatsType,
@@ -69,7 +69,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Setting identifier",
 			},
 		},
-		Resolve: s.resolveNotificationStats,
+		Resolve: requireAPIKey(s.resolveNotificationStats),
 	}
 	b.queries["deliveryHistory"] = &graphql.Field{
 		Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(deliveryHistoryType))),
@@ -80,7 +80,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Notification identifier",
 			},
 		},
-		Resolve: s.resolveDeliveryHistory,
+		Resolve: requireAPIKey(s.resolveDeliveryHistory),
 	}
 
 	// Mutations
@@ -93,7 +93,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Setting configuration",
 			},
 		},
-		Resolve: s.resolveCreateNotificationSetting,
+		Resolve: requireAPIKey(s.resolveCreateNotificationSetting),
 	}
 	b.mutations["updateNotificationSetting"] = &graphql.Field{
 		Type:        graphql.NewNonNull(notificationSettingType),
@@ -108,7 +108,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Fields to update",
 			},
 		},
-		Resolve: s.resolveUpdateNotificationSetting,
+		Resolve: requireAPIKey(s.resolveUpdateNotificationSetting),
 	}
 	b.mutations["deleteNotificationSetting"] = &graphql.Field{
 		Type:        graphql.NewNonNull(graphql.Boolean),
@@ -119,7 +119,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Setting identifier",
 			},
 		},
-		Resolve: s.resolveDeleteNotificationSetting,
+		Resolve: requireAPIKey(s.resolveDeleteNotificationSetting),
 	}
 	b.mutations["testNotificationSetting"] = &graphql.Field{
 		Type:        graphql.NewNonNull(deliveryResultType),
@@ -130,7 +130,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Setting identifier",
 			},
 		},
-		Resolve: s.resolveTestNotificationSetting,
+		Resolve: requireAPIKey(s.resolveTestNotificationSetting),
 	}
 	b.mutations["retryNotification"] = &graphql.Field{
 		Type:        graphql.NewNonNull(graphql.Boolean),
@@ -141,7 +141,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Notification identifier",
 			},
 		},
-		Resolve: s.resolveRetryNotification,
+		Resolve: requireAPIKey(s.resolveRetryNotification),
 	}
 	b.mutations["cancelNotification"] = &graphql.Field{
 		Type:        graphql.NewNonNull(graphql.Boolean),
@@ -152,7 +152,7 @@ func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 				Description: "Notification identifier",
 			},
 		},
-		Resolve: s.resolveCancelNotification,
+		Resolve: requireAPIKey(s.resolveCancelNotification),
 	}
 
 	return b

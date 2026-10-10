@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 	"time"
 
 	abiDecoder "github.com/0xmhha/indexer-go/pkg/abi"
+	"github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
@@ -92,6 +94,14 @@ func (h *Handler) Close() {
 
 // HandleMethod handles a JSON-RPC method call
 func (h *Handler) HandleMethod(ctx context.Context, method string, params json.RawMessage) (interface{}, *Error) {
+	// Notification settings hold webhook destinations and secrets, and
+	// creating one makes the server send requests: only callers with an
+	// API key the server accepted (middleware.APIKeyIdentify) may use them.
+	if strings.HasPrefix(method, "notification_") {
+		if _, ok := middleware.APIKeyFromContext(ctx); !ok {
+			return nil, NewError(Unauthorized, "notification methods need an API key (api.keys; X-API-Key header)", nil)
+		}
+	}
 	switch method {
 	case "getLatestHeight":
 		return h.getLatestHeight(ctx, params)

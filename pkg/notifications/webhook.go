@@ -38,14 +38,7 @@ func NewWebhookHandler(config *WebhookConfig, logger *zap.Logger) *WebhookHandle
 
 	return &WebhookHandler{
 		config: config,
-		client: &http.Client{
-			Timeout: config.Timeout,
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 10,
-				IdleConnTimeout:     90 * time.Second,
-			},
-		},
+		client: newDeliveryClient(config.Timeout, config.AllowPrivateDestinations),
 		logger: logger.Named("webhook"),
 	}
 }
@@ -61,14 +54,12 @@ func (h *WebhookHandler) Validate(setting *NotificationSetting) error {
 		return fmt.Errorf("webhook URL is required")
 	}
 
-	// Validate URL format
+	if err := checkDestination(setting.Destination.WebhookURL, h.config.AllowPrivateDestinations); err != nil {
+		return fmt.Errorf("webhook URL: %w", err)
+	}
 	parsedURL, err := url.Parse(setting.Destination.WebhookURL)
 	if err != nil {
 		return fmt.Errorf("invalid webhook URL: %w", err)
-	}
-
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("webhook URL must use http or https scheme")
 	}
 
 	// Check allowed hosts if configured

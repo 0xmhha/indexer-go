@@ -208,6 +208,11 @@ func (s *Server) setupMiddleware() {
 		s.logger.Info("API key authentication enabled",
 			zap.Int("configured_keys", len(s.config.APIKeys)),
 		)
+	} else if len(s.config.APIKeys) > 0 {
+		// Keys identify callers of the operations that need one (the
+		// notification API); the rest of the API stays open.
+		s.router.Use(apimiddleware.APIKeyIdentify(s.config.APIKeys, s.logger))
+		s.logger.Info("API keys configured for protected operations", zap.Int("configured_keys", len(s.config.APIKeys)))
 	}
 
 	// CORS headers on every response to an allowed origin

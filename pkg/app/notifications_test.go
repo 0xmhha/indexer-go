@@ -48,6 +48,7 @@ func TestNotificationsFollowTheChangeStream(t *testing.T) {
 		cfg.API.Enabled = false
 		cfg.Indexer.PollInterval = 10 * time.Millisecond
 		cfg.Notifications.Enabled = true
+		cfg.Notifications.AllowPrivateDestinations = true // the hook is a local test server
 		cfg.Notifications.Webhook.Enabled = true
 		cfg.Notifications.Queue.FlushInterval = 20 * time.Millisecond
 		enableTestChainFeatures(cfg)

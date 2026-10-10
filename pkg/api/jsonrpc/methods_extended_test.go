@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -785,9 +786,15 @@ func TestNotificationMethods(t *testing.T) {
 		{"notification_cancel", `{"id": "test-id"}`},
 	}
 
+	withKey := middleware.WithAPIKeyLabel(ctx, "ops")
 	for _, tc := range notificationMethods {
-		t.Run(tc.method+"_NoService", func(t *testing.T) {
+		t.Run(tc.method+"_NoKey", func(t *testing.T) {
 			_, err := server.HandleMethodDirect(ctx, tc.method, json.RawMessage(tc.params))
+			require.NotNil(t, err, "a notification method needs an API key")
+			assert.Equal(t, Unauthorized, err.Code)
+		})
+		t.Run(tc.method+"_NoService", func(t *testing.T) {
+			_, err := server.HandleMethodDirect(withKey, tc.method, json.RawMessage(tc.params))
 			require.NotNil(t, err, "expected error for %s without service", tc.method)
 			assert.Equal(t, InternalError, err.Code)
 		})

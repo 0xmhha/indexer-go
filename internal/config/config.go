@@ -265,6 +265,12 @@ type APIConfig struct {
 	// whose X-Forwarded-For and X-Real-IP headers name the client. The
 	// headers of any other peer are ignored: clients can write them.
 	TrustedProxies []string `yaml:"trusted_proxies"`
+	// Keys are the API keys of the operations that need one (the
+	// notification API), label -> key; the label names the caller in
+	// logs. Without keys those operations refuse every request. A key is
+	// sent in the X-API-Key header. Environment: INDEXER_API_KEYS as
+	// "label:key,label:key".
+	Keys map[string]string `yaml:"keys"`
 	// RateLimit limits the requests of each client address.
 	RateLimit APIRateLimitConfig `yaml:"rate_limit"`
 	// GraphQL bounds what one GraphQL request may ask for.
@@ -523,6 +529,11 @@ type AccountAbstractionConfig struct {
 type NotificationsConfig struct {
 	// Enabled indicates whether the notification service is active
 	Enabled bool `yaml:"enabled"`
+	// AllowPrivateDestinations lets webhook and Slack deliveries reach
+	// loopback, private and other internal addresses. Destinations are
+	// chosen by whoever registers a setting, so they are refused by
+	// default (server-side request forgery). For development only.
+	AllowPrivateDestinations bool `yaml:"allow_private_destinations"`
 	// Webhook holds webhook-specific configuration
 	Webhook WebhookNotificationConfig `yaml:"webhook"`
 	// Email holds email-specific configuration
@@ -1124,6 +1135,20 @@ func (c *Config) LoadFromEnv() error {
 		}
 		c.API.AllowedOrigins = origins
 	}
+	if v := os.Getenv("INDEXER_API_KEYS"); v != "" {
+		keys := map[string]string{}
+		for _, entry := range strings.Split(v, ",") {
+			if entry = strings.TrimSpace(entry); entry == "" {
+				continue
+			}
+			label, key, ok := strings.Cut(entry, ":")
+			if !ok {
+				return fmt.Errorf("invalid INDEXER_API_KEYS: entries are label:key")
+			}
+			keys[strings.TrimSpace(label)] = strings.TrimSpace(key)
+		}
+		c.API.Keys = keys
+	}
 	if v := os.Getenv("INDEXER_API_TRUSTED_PROXIES"); v != "" {
 		var proxies []string
 		for _, p := range strings.Split(v, ",") {
@@ -1558,8 +1583,25 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// minAPIKeyLength is the shortest API key accepted, so a guessable key
+// cannot be configured by mistake.
+const minAPIKeyLength = 24
+
 // validate checks the API's security settings.
 func (a *APIConfig) validate() error {
+	seen := map[string]string{}
+	for label, key := range a.Keys {
+		if label == "" {
+			return fmt.Errorf("api.keys: a key has no label")
+		}
+		if len(key) < minAPIKeyLength {
+			return fmt.Errorf("api.keys: the key of %q is shorter than %d characters", label, minAPIKeyLength)
+		}
+		if other, dup := seen[key]; dup {
+			return fmt.Errorf("api.keys: %q and %q have the same key", other, label)
+		}
+		seen[key] = label
+	}
 	for _, p := range a.TrustedProxies {
 		if _, err := netip.ParsePrefix(p); err == nil {
 			continue

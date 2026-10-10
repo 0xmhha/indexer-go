@@ -36,6 +36,7 @@ const (
 	InvalidParams  = -32602
 	InternalError  = -32603
 	FilterNotFound = -32000 // Custom error code for filter not found
+	Unauthorized   = -32001 // A method that needs an API key was called without one
 )
 
 // NewError creates a new JSON-RPC error
