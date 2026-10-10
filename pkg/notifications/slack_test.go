@@ -108,7 +108,7 @@ func TestSlackHandler_Validate(t *testing.T) {
 			name: "valid HTTP URL",
 			setting: &NotificationSetting{
 				Destination: Destination{
-					SlackWebhookURL: "http://localhost:8080/webhook",
+					SlackWebhookURL: "http://hooks.example.com/webhook",
 				},
 			},
 			expectError: false,
@@ -131,7 +131,7 @@ func TestSlackHandler_Validate(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "invalid Slack webhook URL format",
+			errorMsg:    "invalid Slack webhook URL",
 		},
 	}
 
@@ -154,30 +154,6 @@ func TestSlackHandler_Validate(t *testing.T) {
 	}
 }
 
-func TestIsValidSlackWebhookURL(t *testing.T) {
-	tests := []struct {
-		url      string
-		expected bool
-	}{
-		{"https://hooks.slack.com/services/T00/B00/XXX", true},
-		{"https://api.slack.com/webhook", true},
-		{"http://localhost:8080/webhook", true},
-		{"https://example.com/webhook", true},
-		{"", false},
-		{"not-a-url", false},
-		{"ftp://example.com/webhook", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.url, func(t *testing.T) {
-			result := isValidSlackWebhookURL(tt.url)
-			if result != tt.expected {
-				t.Errorf("isValidSlackWebhookURL(%q) = %v, want %v", tt.url, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestSlackHandler_Deliver(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	ctx := context.Background()
@@ -192,9 +168,10 @@ func TestSlackHandler_Deliver(t *testing.T) {
 		defer server.Close()
 
 		handler := NewSlackHandler(&SlackConfig{
-			Enabled:         true,
-			Timeout:         5 * time.Second,
-			DefaultUsername: "Test Bot",
+			AllowPrivateDestinations: true,
+			Enabled:                  true,
+			Timeout:                  5 * time.Second,
+			DefaultUsername:          "Test Bot",
 		}, logger)
 
 		notification := createTestSlackNotification()
@@ -243,7 +220,8 @@ func TestSlackHandler_Deliver(t *testing.T) {
 		defer server.Close()
 
 		handler := NewSlackHandler(&SlackConfig{
-			DefaultUsername: "Default Bot",
+			AllowPrivateDestinations: true,
+			DefaultUsername:          "Default Bot",
 		}, logger)
 
 		notification := createTestSlackNotification()
@@ -275,7 +253,7 @@ func TestSlackHandler_Deliver(t *testing.T) {
 		}))
 		defer server.Close()
 
-		handler := NewSlackHandler(nil, logger)
+		handler := NewSlackHandler(&SlackConfig{Enabled: true, Timeout: 10 * time.Second, AllowPrivateDestinations: true}, logger)
 		notification := createTestSlackNotification()
 		setting := &NotificationSetting{
 			Destination: Destination{
@@ -299,7 +277,7 @@ func TestSlackHandler_Deliver(t *testing.T) {
 		}))
 		defer server.Close()
 
-		handler := NewSlackHandler(nil, logger)
+		handler := NewSlackHandler(&SlackConfig{Enabled: true, Timeout: 10 * time.Second, AllowPrivateDestinations: true}, logger)
 		notification := createTestSlackNotification()
 		setting := &NotificationSetting{
 			Destination: Destination{
@@ -318,7 +296,8 @@ func TestSlackHandler_Deliver(t *testing.T) {
 
 	t.Run("connection failure", func(t *testing.T) {
 		handler := NewSlackHandler(&SlackConfig{
-			Timeout: 1 * time.Second,
+			AllowPrivateDestinations: true,
+			Timeout:                  1 * time.Second,
 		}, logger)
 		notification := createTestSlackNotification()
 		setting := &NotificationSetting{
@@ -338,7 +317,8 @@ func TestSlackHandler_Deliver(t *testing.T) {
 
 	t.Run("rate limit exceeded", func(t *testing.T) {
 		handler := NewSlackHandler(&SlackConfig{
-			RateLimitPerMinute: 1,
+			AllowPrivateDestinations: true,
+			RateLimitPerMinute:       1,
 		}, logger)
 
 		notification := createTestSlackNotification()

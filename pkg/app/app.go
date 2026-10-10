@@ -618,6 +618,10 @@ func (a *App) initNotificationService() error {
 		return nil
 	}
 
+	if a.config.Notifications.AllowPrivateDestinations {
+		a.logger.Warn("notifications.allow_private_destinations: webhooks may reach internal addresses (development only)")
+	}
+
 	// Convert config to notification service config
 	notifConfig := &notifications.Config{
 		Enabled: a.config.Notifications.Enabled,
@@ -628,6 +632,8 @@ func (a *App) initNotificationService() error {
 			MaxConcurrent:   a.config.Notifications.Webhook.MaxConcurrent,
 			AllowedHosts:    a.config.Notifications.Webhook.AllowedHosts,
 			SignatureHeader: a.config.Notifications.Webhook.SignatureHeader,
+
+			AllowPrivateDestinations: a.config.Notifications.AllowPrivateDestinations,
 		},
 		Email: notifications.EmailConfig{
 			Enabled:            a.config.Notifications.Email.Enabled,
@@ -648,6 +654,8 @@ func (a *App) initNotificationService() error {
 			DefaultUsername:    a.config.Notifications.Slack.DefaultUsername,
 			DefaultIconEmoji:   a.config.Notifications.Slack.DefaultIconEmoji,
 			RateLimitPerMinute: a.config.Notifications.Slack.RateLimitPerMinute,
+
+			AllowPrivateDestinations: a.config.Notifications.AllowPrivateDestinations,
 		},
 		Retry: notifications.RetryConfig{
 			MaxAttempts:  a.config.Notifications.Retry.MaxAttempts,
@@ -993,6 +1001,14 @@ func (a *App) initAPIServer() error {
 		apiConfig.HealthOnly = true
 		apiConfig.EnableGraphQL, apiConfig.EnableJSONRPC, apiConfig.EnableWebSocket = false, false, false
 		apiConfig.EnableREST = false
+	}
+	if len(a.config.API.Keys) > 0 {
+		apiConfig.APIKeys = make(map[string]string, len(a.config.API.Keys))
+		for label, key := range a.config.API.Keys {
+			apiConfig.APIKeys[key] = label
+		}
+	} else if a.config.Notifications.Enabled {
+		a.logger.Warn("No api.keys: the notification API refuses every request")
 	}
 	apiConfig.DirectSubscriptions = !a.config.API.SubscriptionEngine
 	apiConfig.StreamResume = a.config.EventBus.Outbox

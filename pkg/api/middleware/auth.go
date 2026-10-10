@@ -29,6 +29,13 @@ type AuthConfig struct {
 	AllowedPaths map[string]bool
 }
 
+// WithAPIKeyLabel returns ctx carrying an accepted API key's label, as the
+// middleware does (for callers that authenticate by other means, and
+// tests).
+func WithAPIKeyLabel(ctx context.Context, label string) context.Context {
+	return context.WithValue(ctx, apiKeyContextKey, label)
+}
+
 // APIKeyFromContext returns the API key from the request context, if present.
 func APIKeyFromContext(ctx context.Context) (string, bool) {
 	key, ok := ctx.Value(apiKeyContextKey).(string)
@@ -47,17 +54,7 @@ func APIKeyAuth(cfg AuthConfig, logger *zap.Logger) func(http.Handler) http.Hand
 				return
 			}
 
-			// Extract API key from header or query param
-			key := r.Header.Get(APIKeyHeader)
-			if key == "" {
-				key = r.URL.Query().Get("api_key")
-			}
-			// Also check Authorization: Bearer <key>
-			if key == "" {
-				if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-					key = strings.TrimPrefix(auth, "Bearer ")
-				}
-			}
+			key := requestAPIKey(r)
 
 			if key == "" {
 				logger.Debug("request missing API key",
@@ -87,6 +84,45 @@ func APIKeyAuth(cfg AuthConfig, logger *zap.Logger) func(http.Handler) http.Hand
 			// Store key label in context for downstream handlers
 			ctx := context.WithValue(r.Context(), apiKeyContextKey, label)
 			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// requestAPIKey returns the API key of a request: the X-API-Key header,
+// the "api_key" query parameter or Authorization: Bearer, "" for none.
+func requestAPIKey(r *http.Request) string {
+	if key := r.Header.Get(APIKeyHeader); key != "" {
+		return key
+	}
+	if key := r.URL.Query().Get("api_key"); key != "" {
+		return key
+	}
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		return strings.TrimPrefix(auth, "Bearer ")
+	}
+	return ""
+}
+
+// APIKeyIdentify returns a middleware for APIs that need a key only for
+// some operations: a request with a valid key gets its label in the
+// context (APIKeyFromContext), a request without a key goes on without
+// one, and a request with an unknown key is refused (401), so a wrong key
+// is never taken for none. The operations check APIKeyFromContext.
+func APIKeyIdentify(keys map[string]string, logger *zap.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			key := requestAPIKey(r)
+			if key == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			label, valid := validateAPIKey(keys, key)
+			if !valid {
+				logger.Warn("invalid API key", zap.String("path", r.URL.Path), zap.String("ip", extractClientIP(r)))
+				writeUnauthorized(w, "invalid API key")
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey, label)))
 		})
 	}
 }

@@ -39,10 +39,8 @@ func NewSlackHandler(config *SlackConfig, logger *zap.Logger) *SlackHandler {
 	}
 
 	return &SlackHandler{
-		config: config,
-		client: &http.Client{
-			Timeout: config.Timeout,
-		},
+		config:      config,
+		client:      newDeliveryClient(config.Timeout, config.AllowPrivateDestinations),
 		logger:      logger.Named("slack"),
 		rateLimiter: newRateLimiter(rateLimit),
 	}
@@ -59,19 +57,10 @@ func (h *SlackHandler) Validate(setting *NotificationSetting) error {
 		return fmt.Errorf("slack webhook URL is required")
 	}
 
-	// Validate that it looks like a Slack webhook URL
-	if !isValidSlackWebhookURL(setting.Destination.SlackWebhookURL) {
-		return fmt.Errorf("invalid Slack webhook URL format")
+	if err := checkDestination(setting.Destination.SlackWebhookURL, h.config.AllowPrivateDestinations); err != nil {
+		return fmt.Errorf("invalid Slack webhook URL: %w", err)
 	}
-
 	return nil
-}
-
-// isValidSlackWebhookURL checks if the URL looks like a valid Slack webhook.
-func isValidSlackWebhookURL(url string) bool {
-	// Slack webhook URLs typically start with https://hooks.slack.com/services/
-	// but we allow other formats for custom Slack integrations
-	return len(url) > 0 && (url[:8] == "https://" || url[:7] == "http://")
 }
 
 // Deliver delivers a Slack notification.

@@ -63,6 +63,7 @@ api:
   allowed_origins:
     - "*"                               # CORS와 WebSocket Origin 검사의 허용 오리진 (* = 전체 허용)
   trusted_proxies: []                   # X-Forwarded-For/X-Real-IP를 믿을 리버스 프록시 (IP 또는 CIDR)
+  keys: {}                              # 키가 필요한 조작(알림 API)의 API key, 라벨: 키 (24자 이상). 없으면 그 조작은 모두 거절
   rate_limit:
     enabled: true                       # 클라이언트 주소마다 요청 수 제한 (기본 켜짐)
     per_second: 100
@@ -358,6 +359,7 @@ multichain:
 ```yaml
 notifications:
   enabled: false
+  allow_private_destinations: false     # true면 webhook·Slack이 내부 주소로도 보낸다 (개발용)
 
   webhook:
     enabled: true
@@ -404,6 +406,9 @@ notifications:
   # 재시도 처리기가 보낸다. 처음 켠 서비스는 켠 뒤에 commit된 이벤트부터 알린다.
   # outbox가 꺼져 있으면 이전처럼 이벤트 버스를 구독한다.
 ```
+
+- 알림 API(GraphQL `notificationSettings`·`createNotificationSetting` 등, JSON-RPC `notification_*`)는 `api.keys`의 키를 `X-API-Key` 헤더(또는 `Authorization: Bearer`)로 보낸 요청만 처리한다. 키가 없으면 GraphQL은 `UNAUTHENTICATED`, JSON-RPC는 `-32001`로 거절한다. 모르는 키를 보낸 요청은 어느 경로든 401이다. 나머지 API는 키 없이 열려 있다. 설정이 webhook 주소와 서명 비밀을 담고, 설정을 만들면 서버가 그 주소로 요청을 보내기 때문이다.
+- webhook과 Slack의 주소가 loopback, 사설·link-local 대역(cloud metadata `169.254.169.254` 포함), CGNAT, 문서·예약 대역이거나 `localhost`·`.internal`·`.local`·점 없는 이름이면 등록을 거절하고, 보낼 때도 이름을 푼 실제 주소를 다시 검사한다(등록 뒤 DNS를 바꾸는 우회 방지). redirect는 따라가지 않는다(3xx 응답이 결과가 된다). 같은 망의 수신기로 보내야 하는 개발 환경만 `allow_private_destinations: true`를 쓴다.
 
 ### Node Identity
 
@@ -489,6 +494,7 @@ INDEXER_DB_PATH=./data
 INDEXER_DB_READONLY=false
 INDEXER_DB_DRIVER=pebble                 # pebble | postgres
 INDEXER_DB_CACHE_MB=0
+INDEXER_API_KEYS=ops:<24자 이상 키>,partner:<키>
 INDEXER_DB_POSTGRES_DSN=postgres://indexer:secret@db:5432/indexer
 INDEXER_DB_POSTGRES_SCHEMA=
 INDEXER_DB_POSTGRES_MAX_CONNS=0

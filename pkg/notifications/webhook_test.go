@@ -83,7 +83,7 @@ func TestWebhookHandler_Validate(t *testing.T) {
 			config: &WebhookConfig{Enabled: true},
 			setting: &NotificationSetting{
 				Destination: Destination{
-					WebhookURL: "http://localhost:8080/webhook",
+					WebhookURL: "http://hooks.example.com/webhook",
 				},
 			},
 			expectError: false,
@@ -188,8 +188,9 @@ func TestWebhookHandler_Deliver(t *testing.T) {
 		defer server.Close()
 
 		handler := NewWebhookHandler(&WebhookConfig{
-			Enabled: true,
-			Timeout: 5 * time.Second,
+			AllowPrivateDestinations: true,
+			Enabled:                  true,
+			Timeout:                  5 * time.Second,
 		}, logger)
 
 		notification := createTestNotification()
@@ -238,9 +239,10 @@ func TestWebhookHandler_Deliver(t *testing.T) {
 		defer server.Close()
 
 		handler := NewWebhookHandler(&WebhookConfig{
-			Enabled:         true,
-			Timeout:         5 * time.Second,
-			SignatureHeader: "X-Signature-256",
+			AllowPrivateDestinations: true,
+			Enabled:                  true,
+			Timeout:                  5 * time.Second,
+			SignatureHeader:          "X-Signature-256",
 		}, logger)
 
 		notification := createTestNotification()
@@ -276,7 +278,7 @@ func TestWebhookHandler_Deliver(t *testing.T) {
 		}))
 		defer server.Close()
 
-		handler := NewWebhookHandler(nil, logger)
+		handler := NewWebhookHandler(&WebhookConfig{Enabled: true, Timeout: 10 * time.Second, SignatureHeader: "X-Signature-256", AllowPrivateDestinations: true}, logger)
 		notification := createTestNotification()
 		setting := &NotificationSetting{
 			Destination: Destination{
@@ -303,7 +305,7 @@ func TestWebhookHandler_Deliver(t *testing.T) {
 		}))
 		defer server.Close()
 
-		handler := NewWebhookHandler(nil, logger)
+		handler := NewWebhookHandler(&WebhookConfig{Enabled: true, Timeout: 10 * time.Second, SignatureHeader: "X-Signature-256", AllowPrivateDestinations: true}, logger)
 		notification := createTestNotification()
 		setting := &NotificationSetting{
 			Destination: Destination{
@@ -322,13 +324,14 @@ func TestWebhookHandler_Deliver(t *testing.T) {
 
 	t.Run("connection failure", func(t *testing.T) {
 		handler := NewWebhookHandler(&WebhookConfig{
-			Enabled: true,
-			Timeout: 1 * time.Second,
+			AllowPrivateDestinations: true,
+			Enabled:                  true,
+			Timeout:                  1 * time.Second,
 		}, logger)
 		notification := createTestNotification()
 		setting := &NotificationSetting{
 			Destination: Destination{
-				WebhookURL: "http://localhost:59999/nonexistent",
+				WebhookURL: "http://hooks.example.com/webhook",
 			},
 		}
 

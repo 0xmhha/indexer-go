@@ -43,6 +43,11 @@ type WebhookConfig struct {
 	// AllowedHosts restricts webhook URLs to specific hosts (empty = allow all).
 	AllowedHosts []string `yaml:"allowed_hosts" json:"allowed_hosts"`
 
+	// AllowPrivateDestinations lets webhooks reach loopback, private and
+	// other internal addresses, which are refused by default (destination.go).
+	// For development and tests only.
+	AllowPrivateDestinations bool `yaml:"allow_private_destinations" json:"allow_private_destinations"`
+
 	// SignatureHeader is the header name for HMAC signature.
 	SignatureHeader string `yaml:"signature_header" json:"signature_header"`
 }
@@ -102,6 +107,10 @@ type SlackConfig struct {
 
 	// RateLimitPerMinute limits Slack messages per minute.
 	RateLimitPerMinute int `yaml:"rate_limit_per_minute" json:"rate_limit_per_minute"`
+
+	// AllowPrivateDestinations lets Slack webhook URLs reach internal
+	// addresses, refused by default (destination.go). For tests only.
+	AllowPrivateDestinations bool `yaml:"allow_private_destinations" json:"allow_private_destinations"`
 }
 
 // RetryConfig holds retry behavior configuration.
