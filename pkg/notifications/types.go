@@ -66,6 +66,13 @@ type NotifyFilter struct {
 	Topics        [][]common.Hash  `json:"topics,omitempty"`
 	ContractTypes []string         `json:"contract_types,omitempty"`
 	MinValue      *string          `json:"min_value,omitempty"`
+	// Event is a human-readable event signature with argument names: logs
+	// match only when they are that event, and notifications carry its
+	// decoded arguments (filter_event.go).
+	Event string `json:"event,omitempty"`
+	// Participants match logs with one of the addresses as an indexed
+	// argument (a token Transfer's from or to).
+	Participants []common.Address `json:"participants,omitempty"`
 }
 
 // Destination contains channel-specific delivery settings.
@@ -109,6 +116,8 @@ type EventPayload struct {
 	Timestamp   time.Time       `json:"timestamp"`
 	EventType   EventType       `json:"event_type"`
 	Data        json.RawMessage `json:"data"`
+	// Decoded are the arguments of a log of the setting's filter event.
+	Decoded map[string]string `json:"decoded,omitempty"`
 }
 
 // BlockEventData contains block-specific event data.
