@@ -21,6 +21,8 @@ func main() { sdk.Main() }
 
 go.mod는 `github.com/0xmhha/indexer-go`를 require한다(저장소 안 예제는 `replace => ../..`).
 
+알림 조건식이 쓰는 `cel-go`(v0.31.0)는 분리된 `google.golang.org/genproto/googleapis/api`를 쓴다. 프로젝트의 모듈 그래프에 분리 전의 `google.golang.org/genproto`(2023년 판)가 남아 있으면 `ambiguous import`가 난다. 이때는 `go get google.golang.org/genproto@v0.0.0-20240826202546-f6391c0de4c7` 뒤에 `go mod tidy`를 실행한다(`examples/receipts`도 이렇게 맞췄다).
+
 ## 2. 처리기
 
 ```go

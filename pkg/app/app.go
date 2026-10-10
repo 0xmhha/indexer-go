@@ -482,6 +482,9 @@ func (a *App) testConnection(ctx context.Context) error {
 	}
 
 	a.logger.Info("Connected to chain", zap.String("chain_id", chainID.String()))
+	if svc, ok := a.notificationService.(interface{ SetChainID(uint64) }); ok && chainID.IsUint64() {
+		svc.SetChainID(chainID.Uint64())
+	}
 	return nil
 }
 

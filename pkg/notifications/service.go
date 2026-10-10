@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -137,6 +138,14 @@ type NotificationService struct {
 	// streams are the stream connections by owner (streams.go).
 	streams *Streams
 
+	// chainID is the indexed chain's id (SetChainID), 0 until known.
+	chainID atomic.Uint64
+
+	// exprErrors counts each setting's consecutive expression errors
+	// (expression_errors.go).
+	exprMu     sync.Mutex
+	exprErrors map[string]int
+
 	// stream is the change stream the service consumes as group (R3-5);
 	// nil consumes the event bus instead.
 	stream      stream.Bus
@@ -213,6 +222,8 @@ func NewService(
 		inflight: make(map[string]bool),
 		fastPath: fastState{queue: make(chan fastBlock, fastQueueBlocks)},
 		streams:  NewStreams(config.MaxStreamsPerOwner),
+
+		exprErrors: map[string]int{},
 	}
 	s.handlers[NotificationTypeStream] = &streamHandler{streams: s.streams, logger: s.logger}
 	return s
@@ -517,6 +528,9 @@ func (s *NotificationService) deliverMatch(ctx context.Context, setting *Notific
 	if notification == nil {
 		return nil
 	}
+	if notify, err := s.applyExpressions(ctx, setting, event, notification); err != nil || !notify {
+		return err
+	}
 	if fastKey != "" {
 		notification.ID = uuid.NewSHA1(notificationIDSpace, []byte(setting.ID+"/fast/"+fastKey)).String()
 	}
@@ -745,7 +759,7 @@ var notificationIDSpace = uuid.MustParse("6f3c1d52-9a43-4b8e-9d2a-0b7e5c1f4a10")
 func (s *NotificationService) createPayload(event events.Event) (*EventPayload, error) {
 	var blockNumber uint64
 	var blockHash common.Hash
-	var chainID uint64 = 1 // Default chain ID
+	chainID := s.chainID.Load()
 
 	// Extract block info based on event type
 	switch e := event.(type) {
@@ -1066,6 +1080,9 @@ func (s *NotificationService) CreateSetting(ctx context.Context, setting *Notifi
 	if err := validateDelivery(setting.Delivery); err != nil {
 		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
+	if err := validateExpressions(setting); err != nil {
+		return nil, fmt.Errorf("invalid setting: %w", err)
+	}
 	if err := handler.Validate(setting); err != nil {
 		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
@@ -1111,6 +1128,9 @@ func (s *NotificationService) UpdateSetting(ctx context.Context, setting *Notifi
 		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
 	if err := validateDelivery(setting.Delivery); err != nil {
+		return nil, fmt.Errorf("invalid setting: %w", err)
+	}
+	if err := validateExpressions(setting); err != nil {
 		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
 	if err := handler.Validate(setting); err != nil {

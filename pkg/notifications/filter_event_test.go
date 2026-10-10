@@ -34,3 +34,16 @@ func TestFilterInputParse(t *testing.T) {
 		assert.Error(t, err, name)
 	}
 }
+
+// TestEventFilterNeedsItsIndexedTopics: an event of the same signature
+// with other indexed arguments (an ERC-721 Transfer, whose token id is a
+// topic) shares the first topic but is not the filter's event.
+func TestEventFilterNeedsItsIndexedTopics(t *testing.T) {
+	f := &NotifyFilter{Event: "Transfer(address indexed from, address indexed to, uint256 value)"}
+	p, err := filterEvent(f.Event)
+	require.NoError(t, err)
+	from, to := common.BytesToHash([]byte{1}), common.BytesToHash([]byte{2})
+	assert.True(t, matchesEvent(f, []common.Hash{p.Event.ID, from, to}), "ERC-20 Transfer")
+	assert.False(t, matchesEvent(f, []common.Hash{p.Event.ID, from, to, common.BytesToHash([]byte{9})}), "ERC-721 Transfer")
+	assert.False(t, matchesEvent(f, []common.Hash{p.Event.ID, from}), "too few topics")
+}

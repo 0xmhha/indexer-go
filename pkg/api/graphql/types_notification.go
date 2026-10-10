@@ -159,6 +159,14 @@ var notificationSettingType = graphql.NewObject(graphql.ObjectConfig{
 			Type:        graphql.String,
 			Description: "durable or fast",
 		},
+		"condition": &graphql.Field{
+			Type:        graphql.String,
+			Description: "CEL condition an event must meet to be notified (empty: every matching event)",
+		},
+		"payload": &graphql.Field{
+			Type:        graphql.String,
+			Description: "CEL expression whose value notifications carry as payload.result",
+		},
 		"id": &graphql.Field{
 			Type:        graphql.NewNonNull(graphql.ID),
 			Description: "Setting unique identifier",
@@ -442,6 +450,14 @@ var createNotificationSettingInputType = graphql.NewInputObject(graphql.InputObj
 			Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(notificationEventTypeEnumType))),
 			Description: "Event types that trigger notifications",
 		},
+		"condition": &graphql.InputObjectFieldConfig{
+			Type:        graphql.String,
+			Description: "CEL condition an event must meet to be notified; type-checked when registered (variables: event.<argument> of filter.event, log.*, tx.*, block.*, chain.id; bigCmp for integers over 64 bits)",
+		},
+		"payload": &graphql.InputObjectFieldConfig{
+			Type:        graphql.String,
+			Description: "CEL expression whose value notifications carry as payload.result",
+		},
 		"delivery": &graphql.InputObjectFieldConfig{
 			Type:        graphql.String,
 			Description: "When notifications are created: durable (default, after the block is stored; none missed or repeated) or fast (before it is stored; sooner, at least once)",
@@ -473,6 +489,14 @@ var updateNotificationSettingInputType = graphql.NewInputObject(graphql.InputObj
 		"eventTypes": &graphql.InputObjectFieldConfig{
 			Type:        graphql.NewList(graphql.NewNonNull(notificationEventTypeEnumType)),
 			Description: "Event types that trigger notifications",
+		},
+		"condition": &graphql.InputObjectFieldConfig{
+			Type:        graphql.String,
+			Description: "CEL condition an event must meet to be notified; type-checked when registered (variables: event.<argument> of filter.event, log.*, tx.*, block.*, chain.id; bigCmp for integers over 64 bits)",
+		},
+		"payload": &graphql.InputObjectFieldConfig{
+			Type:        graphql.String,
+			Description: "CEL expression whose value notifications carry as payload.result",
 		},
 		"delivery": &graphql.InputObjectFieldConfig{
 			Type:        graphql.String,

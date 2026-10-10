@@ -446,6 +446,12 @@ func parseNotificationSettingInput(input map[string]interface{}) (*notifications
 	if delivery, ok := input["delivery"].(string); ok {
 		setting.Delivery = notifications.Delivery(delivery)
 	}
+	if condition, ok := input["condition"].(string); ok {
+		setting.Condition = condition
+	}
+	if payload, ok := input["payload"].(string); ok {
+		setting.Payload = payload
+	}
 
 	if eventTypes, ok := input["eventTypes"].([]interface{}); ok {
 		for _, e := range eventTypes {
@@ -539,6 +545,12 @@ func applyNotificationSettingUpdates(setting *notifications.NotificationSetting,
 	if delivery, ok := input["delivery"].(string); ok {
 		setting.Delivery = notifications.Delivery(delivery)
 	}
+	if condition, ok := input["condition"].(string); ok {
+		setting.Condition = condition
+	}
+	if payload, ok := input["payload"].(string); ok {
+		setting.Payload = payload
+	}
 
 	if eventTypes, ok := input["eventTypes"].([]interface{}); ok {
 		setting.EventTypes = nil
@@ -570,6 +582,8 @@ func notificationSettingToMap(setting *notifications.NotificationSetting) map[st
 		"type":        string(setting.Type),
 		"enabled":     setting.Enabled,
 		"delivery":    string(deliveryOf(setting)),
+		"condition":   setting.Condition,
+		"payload":     setting.Payload,
 		"destination": notificationDestinationToMap(setting.Destination),
 		"createdAt":   setting.CreatedAt.Format(time.RFC3339),
 		"updatedAt":   setting.UpdatedAt.Format(time.RFC3339),

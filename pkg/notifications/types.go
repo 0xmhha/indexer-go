@@ -61,6 +61,11 @@ type NotificationSetting struct {
 	// Delivery is when notifications are created: durable (default, after
 	// the commit) or fast (before the block is stored; fast.go).
 	Delivery Delivery `json:"delivery,omitempty"`
+	// Condition is a CEL expression that must be true for an event to be
+	// notified; Payload is a CEL expression whose value is sent as the
+	// notification's payload.result (expression.go). Both are optional.
+	Condition string `json:"condition,omitempty"`
+	Payload   string `json:"payload,omitempty"`
 }
 
 // NotifyFilter defines conditions for triggering notifications.
@@ -121,6 +126,8 @@ type EventPayload struct {
 	Data        json.RawMessage `json:"data"`
 	// Decoded are the arguments of a log of the setting's filter event.
 	Decoded map[string]string `json:"decoded,omitempty"`
+	// Result is the value of the setting's payload expression.
+	Result json.RawMessage `json:"result,omitempty"`
 }
 
 // BlockEventData contains block-specific event data.

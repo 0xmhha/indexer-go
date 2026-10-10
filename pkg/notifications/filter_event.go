@@ -57,13 +57,25 @@ func validateFilter(f *NotifyFilter) error {
 }
 
 // matchesEvent reports whether a log (by its topics) is of the filter's
-// event.
+// event: its first topic is the event's and it has one topic per indexed
+// argument after it. Events of the same signature with other indexed
+// arguments share the first topic (an ERC-721 Transfer indexes the token
+// id an ERC-20 Transfer has in its data) but are not the filter's event.
 func matchesEvent(f *NotifyFilter, topics []common.Hash) bool {
 	if f.Event == "" {
 		return true
 	}
 	p, err := filterEvent(f.Event)
-	return err == nil && len(topics) > 0 && topics[0] == p.Event.ID
+	if err != nil || len(topics) == 0 || topics[0] != p.Event.ID {
+		return false
+	}
+	indexed := 0
+	for _, a := range p.Event.Inputs {
+		if a.Indexed {
+			indexed++
+		}
+	}
+	return len(topics) == indexed+1
 }
 
 // matchesParticipants reports whether one of the filter's participants is
