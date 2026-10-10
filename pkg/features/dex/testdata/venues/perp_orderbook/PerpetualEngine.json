@@ -1,0 +1,1273 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "admin",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "collateral",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "DEFAULT_LEVERAGE",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_MARKETS",
+    "outputs": [
+      {
+        "internalType": "uint32",
+        "name": "",
+        "type": "uint32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "positionKey",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint128",
+        "name": "addMargin",
+        "type": "uint128"
+      }
+    ],
+    "name": "addPositionMargin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "cancelAllOrders",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "cancelOrder",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "positionKey",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint128",
+        "name": "maxSlippage",
+        "type": "uint128"
+      }
+    ],
+    "name": "closePosition",
+    "outputs": [
+      {
+        "internalType": "int256",
+        "name": "realizedPnL",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "collateralToken",
+    "outputs": [
+      {
+        "internalType": "contract IERC20",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "baseAsset",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "quoteAsset",
+        "type": "string"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint32",
+            "name": "maxLeverage",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "maintenanceMarginBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "initialMarginBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "makerFeeBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "takerFeeBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "liquidationFeeBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint128",
+            "name": "maxPositionSize",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "maxOpenInterest",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint64",
+            "name": "fundingInterval",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint32",
+            "name": "maxFundingRateBps",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct PerpetualTypes.MarketConfig",
+        "name": "config",
+        "type": "tuple"
+      }
+    ],
+    "name": "createMarket",
+    "outputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "depositMargin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "emergencyPause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "emergencyUnpause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getAllMarketIds",
+    "outputs": [
+      {
+        "internalType": "uint32[]",
+        "name": "marketIds",
+        "type": "uint32[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getComponents",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "positionManager",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "marginManager",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "orderManager",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "liquidator",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "insuranceFund",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "adlEngine",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "getMarket",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "marketId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "baseToken",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "quoteToken",
+            "type": "address"
+          },
+          {
+            "internalType": "uint64",
+            "name": "createdAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "enum PerpetualTypes.MarketStatus",
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint32",
+                "name": "maxLeverage",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "maintenanceMarginBps",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "initialMarginBps",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "makerFeeBps",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "takerFeeBps",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint32",
+                "name": "liquidationFeeBps",
+                "type": "uint32"
+              },
+              {
+                "internalType": "uint128",
+                "name": "maxPositionSize",
+                "type": "uint128"
+              },
+              {
+                "internalType": "uint128",
+                "name": "maxOpenInterest",
+                "type": "uint128"
+              },
+              {
+                "internalType": "uint64",
+                "name": "fundingInterval",
+                "type": "uint64"
+              },
+              {
+                "internalType": "uint32",
+                "name": "maxFundingRateBps",
+                "type": "uint32"
+              }
+            ],
+            "internalType": "struct PerpetualTypes.MarketConfig",
+            "name": "config",
+            "type": "tuple"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint128",
+                "name": "openInterestLong",
+                "type": "uint128"
+              },
+              {
+                "internalType": "uint128",
+                "name": "openInterestShort",
+                "type": "uint128"
+              },
+              {
+                "internalType": "uint128",
+                "name": "totalVolume24h",
+                "type": "uint128"
+              },
+              {
+                "internalType": "uint128",
+                "name": "totalFees24h",
+                "type": "uint128"
+              },
+              {
+                "internalType": "int64",
+                "name": "cumulativeFundingIndex",
+                "type": "int64"
+              },
+              {
+                "internalType": "uint64",
+                "name": "lastFundingTime",
+                "type": "uint64"
+              },
+              {
+                "internalType": "uint64",
+                "name": "lastPriceUpdateTime",
+                "type": "uint64"
+              }
+            ],
+            "internalType": "struct PerpetualTypes.MarketStats",
+            "name": "stats",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct PerpetualTypes.Market",
+        "name": "market",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "getMarketConfig",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint32",
+            "name": "maxLeverage",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "maintenanceMarginBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "initialMarginBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "makerFeeBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "takerFeeBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "liquidationFeeBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint128",
+            "name": "maxPositionSize",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "maxOpenInterest",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint64",
+            "name": "fundingInterval",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint32",
+            "name": "maxFundingRateBps",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct PerpetualTypes.MarketConfig",
+        "name": "config",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getMarketCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "count",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "getMarketStats",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint128",
+            "name": "openInterestLong",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "openInterestShort",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "totalVolume24h",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "totalFees24h",
+            "type": "uint128"
+          },
+          {
+            "internalType": "int64",
+            "name": "cumulativeFundingIndex",
+            "type": "int64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "lastFundingTime",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "lastPriceUpdateTime",
+            "type": "uint64"
+          }
+        ],
+        "internalType": "struct PerpetualTypes.MarketStats",
+        "name": "stats",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "getMarketSymbols",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "baseAsset",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "quoteAsset",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "isMarketActive",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "marketExists",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      },
+      {
+        "internalType": "enum PerpetualTypes.PositionSide",
+        "name": "side",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint128",
+        "name": "size",
+        "type": "uint128"
+      },
+      {
+        "internalType": "uint128",
+        "name": "maxSlippage",
+        "type": "uint128"
+      }
+    ],
+    "name": "openMarketPosition",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "positionKey",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint128",
+        "name": "fillPrice",
+        "type": "uint128"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "pauseTrading",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "paused",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint32",
+            "name": "marketId",
+            "type": "uint32"
+          },
+          {
+            "internalType": "enum PerpetualTypes.PositionSide",
+            "name": "side",
+            "type": "uint8"
+          },
+          {
+            "internalType": "enum PerpetualTypes.OrderType",
+            "name": "orderType",
+            "type": "uint8"
+          },
+          {
+            "internalType": "enum PerpetualTypes.TimeInForce",
+            "name": "timeInForce",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bool",
+            "name": "reduceOnly",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint128",
+            "name": "size",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "price",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "triggerPrice",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint64",
+            "name": "expiration",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint128",
+            "name": "maxSlippage",
+            "type": "uint128"
+          }
+        ],
+        "internalType": "struct PerpetualTypes.OrderParams",
+        "name": "params",
+        "type": "tuple"
+      }
+    ],
+    "name": "placeLimitOrder",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "orderId",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "positionKey",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint128",
+        "name": "reduceSize",
+        "type": "uint128"
+      },
+      {
+        "internalType": "uint128",
+        "name": "maxSlippage",
+        "type": "uint128"
+      }
+    ],
+    "name": "reducePosition",
+    "outputs": [
+      {
+        "internalType": "int256",
+        "name": "realizedPnL",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "positionKey",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint128",
+        "name": "removeMargin",
+        "type": "uint128"
+      }
+    ],
+    "name": "removePositionMargin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "resumeTrading",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "positionManager",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "marginManager",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "orderManager",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "liquidator",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "insuranceFund",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "adlEngine",
+        "type": "address"
+      }
+    ],
+    "name": "setComponents",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "fundingRate",
+        "type": "address"
+      }
+    ],
+    "name": "setFundingRate",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint8",
+        "name": "leverage",
+        "type": "uint8"
+      }
+    ],
+    "name": "setLeverage",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      },
+      {
+        "internalType": "enum PerpetualTypes.MarginMode",
+        "name": "mode",
+        "type": "uint8"
+      }
+    ],
+    "name": "setMarginMode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      },
+      {
+        "internalType": "enum PerpetualTypes.MarketStatus",
+        "name": "status",
+        "type": "uint8"
+      }
+    ],
+    "name": "setMarketStatus",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      },
+      {
+        "internalType": "address",
+        "name": "indexOracle",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "markOracle",
+        "type": "address"
+      }
+    ],
+    "name": "setOracles",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint32",
+            "name": "maxLeverage",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "maintenanceMarginBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "initialMarginBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "makerFeeBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "takerFeeBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "liquidationFeeBps",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint128",
+            "name": "maxPositionSize",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "maxOpenInterest",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint64",
+            "name": "fundingInterval",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint32",
+            "name": "maxFundingRateBps",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct PerpetualTypes.MarketConfig",
+        "name": "config",
+        "type": "tuple"
+      }
+    ],
+    "name": "updateMarketConfig",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "withdrawMargin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "baseToken",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "quoteToken",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "maxLeverage",
+        "type": "uint32"
+      }
+    ],
+    "name": "MarketCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "enum PerpetualTypes.MarketStatus",
+        "name": "oldStatus",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "enum PerpetualTypes.MarketStatus",
+        "name": "newStatus",
+        "type": "uint8"
+      }
+    ],
+    "name": "MarketStatusChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "Paused",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "pausedBy",
+        "type": "address"
+      }
+    ],
+    "name": "SystemPaused",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "unpausedBy",
+        "type": "address"
+      }
+    ],
+    "name": "SystemUnpaused",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "Unpaused",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "EnforcedPause",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ExpectedPause",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "leverage",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "minLeverage",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "maxLeverage",
+        "type": "uint256"
+      }
+    ],
+    "name": "InvalidLeverage",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "param",
+        "type": "string"
+      }
+    ],
+    "name": "InvalidParameter",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "MarketNotActive",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "marketId",
+        "type": "uint32"
+      }
+    ],
+    "name": "MarketNotFound",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ReentrancyGuardReentrantCall",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "SafeERC20FailedOperation",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "expectedPrice",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "actualPrice",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "maxSlippage",
+        "type": "uint256"
+      }
+    ],
+    "name": "SlippageExceeded",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "caller",
+        "type": "address"
+      }
+    ],
+    "name": "Unauthorized",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ZeroAddress",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ZeroAmount",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ZeroSize",
+    "type": "error"
+  }
+]

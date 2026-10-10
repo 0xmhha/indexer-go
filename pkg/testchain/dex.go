@@ -5,25 +5,27 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/0xmhha/indexer-go/pkg/features/dex"
 )
 
 // DEX event signatures (Uniswap V3 and V2, and the perpetual engine and
-// order manager, whose enums are uint8 in signatures).
+// order manager), taken from the DEX feature so the scenario logs and the
+// decoder cannot drift apart.
 var (
-	SigV3PoolCreated   = crypto.Keccak256Hash([]byte("PoolCreated(address,address,uint24,int24,address)"))
-	SigV3Initialize    = crypto.Keccak256Hash([]byte("Initialize(uint160,int24)"))
-	SigV3Swap          = crypto.Keccak256Hash([]byte("Swap(address,address,int256,int256,uint160,uint128,int24)"))
-	SigV3Mint          = crypto.Keccak256Hash([]byte("Mint(address,address,int24,int24,uint128,uint256,uint256)"))
-	SigV2PairCreated   = crypto.Keccak256Hash([]byte("PairCreated(address,address,address,uint256)"))
-	SigV2Swap          = crypto.Keccak256Hash([]byte("Swap(address,uint256,uint256,uint256,uint256,address)"))
-	SigV2Sync          = crypto.Keccak256Hash([]byte("Sync(uint112,uint112)"))
-	SigV2Mint          = crypto.Keccak256Hash([]byte("Mint(address,uint256,uint256)"))
-	SigPerpMarket      = crypto.Keccak256Hash([]byte("MarketCreated(uint32,address,address,uint32)"))
-	SigPerpOrder       = crypto.Keccak256Hash([]byte("OrderCreated(bytes32,address,uint32,uint8,uint8,uint256,uint256)"))
-	SigPerpPartialFill = crypto.Keccak256Hash([]byte("OrderPartiallyFilled(bytes32,uint256,uint256,uint256,uint256)"))
-	SigPerpMatched     = crypto.Keccak256Hash([]byte("OrdersMatched(bytes32,bytes32,uint128,uint128)"))
-	SigPerpMarketOrder = crypto.Keccak256Hash([]byte("MarketOrderExecuted(address,uint32,uint8,uint128,uint128)"))
+	SigV3PoolCreated   = dex.TopicV3PoolCreated
+	SigV3Initialize    = dex.TopicV3Initialize
+	SigV3Swap          = dex.TopicV3Swap
+	SigV3Mint          = dex.TopicV3Mint
+	SigV2PairCreated   = dex.TopicV2PairCreated
+	SigV2Swap          = dex.TopicV2Swap
+	SigV2Sync          = dex.TopicV2Sync
+	SigV2Mint          = dex.TopicV2Mint
+	SigPerpMarket      = dex.TopicPerpMarketCreated
+	SigPerpOrder       = dex.TopicPerpOrderCreated
+	SigPerpPartialFill = dex.TopicPerpOrderPartiallyFill
+	SigPerpMatched     = dex.TopicPerpOrdersMatched
+	SigPerpMarketOrder = dex.TopicPerpMarketOrderExecuted
 )
 
 // DEXTrade is a trade the DEX scenario makes, as the indexer should record
@@ -197,7 +199,7 @@ func BuildDEX() *DEXScenario {
 }
 
 // SigPerpCancelled is the order manager's OrderCancelled event.
-var SigPerpCancelled = crypto.Keccak256Hash([]byte("OrderCancelled(bytes32,address,string)"))
+var SigPerpCancelled = dex.TopicPerpOrderCancelled
 
 // Fork replaces the blocks after the perpetual orders (block 4) with a
 // competing branch, as a reorganization does, and updates Trades:
