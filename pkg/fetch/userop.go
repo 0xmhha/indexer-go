@@ -26,14 +26,25 @@ type UserOpIndexer interface {
 type UserOpProcessor struct {
 	logger  *zap.Logger
 	storage UserOpIndexer
+	// entryPoints are the EntryPoint contracts whose events are indexed,
+	// with their versions.
+	entryPoints map[common.Address]userop.EntryPointVersion
 }
 
-// NewUserOpProcessor creates a new UserOp processor
+// NewUserOpProcessor creates a new UserOp processor that indexes the known
+// EntryPoints (userop.KnownEntryPoints).
 func NewUserOpProcessor(logger *zap.Logger, storage UserOpIndexer) *UserOpProcessor {
 	return &UserOpProcessor{
-		logger:  logger.Named("userop"),
-		storage: storage,
+		logger:      logger.Named("userop"),
+		storage:     storage,
+		entryPoints: userop.KnownEntryPoints,
 	}
+}
+
+// SetEntryPoints replaces the EntryPoints whose events are indexed. Call it
+// before the first block; the map is not copied.
+func (p *UserOpProcessor) SetEntryPoints(entryPoints map[common.Address]userop.EntryPointVersion) {
+	p.entryPoints = entryPoints
 }
 
 // ProcessUserOpsFromBlock processes all ERC-4337 UserOperations from a block's receipts.
@@ -126,13 +137,13 @@ func (p *UserOpProcessor) ProcessUserOps(
 	return nil
 }
 
-// detectEntryPointTx checks if a transaction receipt contains any known EntryPoint events.
+// detectEntryPointTx checks if a transaction receipt contains events of an indexed EntryPoint.
 // Returns the EntryPoint address and version if found.
 func (p *UserOpProcessor) detectEntryPointTx(receipt *types.Receipt) (common.Address, string) {
 	for _, log := range receipt.Logs {
 		if len(log.Topics) > 0 && log.Topics[0] == userop.UserOperationEventSig {
-			if v := userop.GetEntryPointVersion(log.Address); v != "" {
-				return log.Address, v
+			if v, ok := p.entryPoints[log.Address]; ok {
+				return log.Address, string(v)
 			}
 		}
 	}

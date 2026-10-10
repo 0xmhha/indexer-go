@@ -453,11 +453,12 @@ api:
 # EIP-4337 Account Abstraction indexing
 account_abstraction:
   enabled: true
-  # Known EntryPoint contract addresses (optional)
-  # If empty, auto-detects by event signature matching
-  entry_point_addresses:
-    - "0x0000000071727De22E5E9d8BAf0edAc6f37da032"  # EntryPoint v0.7
-    - "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"  # EntryPoint v0.6
+features:
+  aa.erc4337:
+    # EntryPoints indexed besides the known v0.6 and v0.7 deployments
+    entry_points:
+      - address: "0xEf6817fe73741A8F10088f9511c64b666a338A14"
+        version: "v0.9"
 ```
 
 See [`config.example.yaml`](config.example.yaml) for a complete example.

@@ -15,3 +15,14 @@ count or the number of words read no longer matches them.
 JSON is pretty-printed with sorted keys so diffs stay readable. When a
 contract changes an event or a view the indexer reads, update the fixture and
 the signature string in the same change.
+
+To refresh `perp_orderbook` after poc-contract changes a perpetual event or
+the `getOrder` layout:
+
+1. In poc-contract, run `./script/export-venue-abi.sh` (its CI runs it with
+   `--check`, so the committed `abi/perpetual` is current on its main).
+2. Copy `abi/perpetual/*.json` here into `perp_orderbook/` and update the
+   commit in the table above.
+3. Run `go test ./pkg/features/dex/...`. A changed signature, indexed-topic
+   count, word count or `getOrder` position fails the venue ABI tests; fix
+   the signature strings and decoders in the same change.

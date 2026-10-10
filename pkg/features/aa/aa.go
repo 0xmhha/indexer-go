@@ -8,11 +8,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
+	"github.com/0xmhha/indexer-go/pkg/userop"
 )
 
 // Feature names.
@@ -57,6 +59,49 @@ func (eip7702) Register(r feature.Registrar) error {
 	return nil
 }
 
+// ERC4337Settings are the settings of aa.erc4337 (features.aa.erc4337).
+type ERC4337Settings struct {
+	// EntryPoints are EntryPoint contracts indexed besides the known ones
+	// (userop.KnownEntryPoints), such as a chain's own deployment.
+	EntryPoints []EntryPointSetting `yaml:"entry_points"`
+}
+
+// EntryPointSetting names one EntryPoint contract and its version.
+type EntryPointSetting struct {
+	Address string `yaml:"address"`
+	Version string `yaml:"version"` // one of userop.EntryPointVersions, e.g. "v0.9"
+}
+
+// entryPoints returns the known EntryPoints with the configured ones. A
+// configured address that is malformed, repeated, or known with another
+// version is an error.
+func (st ERC4337Settings) entryPoints() (map[common.Address]userop.EntryPointVersion, error) {
+	out := make(map[common.Address]userop.EntryPointVersion, len(userop.KnownEntryPoints)+len(st.EntryPoints))
+	for addr, v := range userop.KnownEntryPoints {
+		out[addr] = v
+	}
+	seen := make(map[common.Address]bool, len(st.EntryPoints))
+	for i, ep := range st.EntryPoints {
+		if !common.IsHexAddress(ep.Address) {
+			return nil, fmt.Errorf("features.%s.entry_points[%d]: address %q is not a hex address", ERC4337, i, ep.Address)
+		}
+		v, err := userop.ParseEntryPointVersion(ep.Version)
+		if err != nil {
+			return nil, fmt.Errorf("features.%s.entry_points[%d]: %w", ERC4337, i, err)
+		}
+		addr := common.HexToAddress(ep.Address)
+		if seen[addr] {
+			return nil, fmt.Errorf("features.%s.entry_points[%d]: %s is listed twice", ERC4337, i, addr.Hex())
+		}
+		seen[addr] = true
+		if known, ok := userop.KnownEntryPoints[addr]; ok && known != v {
+			return nil, fmt.Errorf("features.%s.entry_points[%d]: %s is the known EntryPoint %s, not %s", ERC4337, i, addr.Hex(), known, v)
+		}
+		out[addr] = v
+	}
+	return out, nil
+}
+
 type erc4337 struct{}
 
 func (erc4337) Name() string       { return ERC4337 }
@@ -69,8 +114,17 @@ func (erc4337) Register(r feature.Registrar) error {
 	if !ok {
 		return fmt.Errorf("storage does not support UserOperations")
 	}
+	var st ERC4337Settings
+	if err := d.DecodeSettings(ERC4337, &st); err != nil {
+		return err
+	}
+	eps, err := st.entryPoints()
+	if err != nil {
+		return err
+	}
 	log := logger(d)
 	p := fetch.NewUserOpProcessor(log, s)
+	p.SetEntryPoints(eps)
 	r.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
 		txs := b.Transactions()
 		bundles := make([]fetch.UserOpBundle, 0, len(txs))
