@@ -7,6 +7,14 @@ type Config struct {
 	// Enabled determines if the notification service is active.
 	Enabled bool `yaml:"enabled" json:"enabled"`
 
+	// OperatorLabels are the API key labels that see and manage every
+	// setting, including those without an owner (ForCaller).
+	OperatorLabels []string `yaml:"operator_labels" json:"operator_labels"`
+
+	// MaxSettingsPerOwner caps the settings of one non-operator key; 0
+	// for no limit.
+	MaxSettingsPerOwner int `yaml:"max_settings_per_owner" json:"max_settings_per_owner"`
+
 	// Webhook configuration
 	Webhook WebhookConfig `yaml:"webhook" json:"webhook"`
 

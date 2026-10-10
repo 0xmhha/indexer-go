@@ -54,6 +54,10 @@ type NotificationSetting struct {
 	EventTypes  []EventType      `json:"event_types"`
 	Filter      *NotifyFilter    `json:"filter,omitempty"`
 	Destination Destination      `json:"destination"`
+	// Owner is the label of the API key that created the setting; only
+	// that key (and operator keys) may see or change it (ForCaller).
+	// Settings created before owners existed have none.
+	Owner string `json:"owner,omitempty"`
 }
 
 // NotifyFilter defines conditions for triggering notifications.

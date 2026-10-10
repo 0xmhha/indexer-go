@@ -1044,6 +1044,9 @@ func (s *NotificationService) UpdateSetting(ctx context.Context, setting *Notifi
 
 	setting.CreatedAt = existing.CreatedAt
 	setting.UpdatedAt = time.Now()
+	if setting.Owner == "" {
+		setting.Owner = existing.Owner // an update does not change the owner
+	}
 
 	// Validate with handler
 	handler, ok := s.handlers[setting.Type]

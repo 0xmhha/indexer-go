@@ -29,7 +29,7 @@ func (s *Schema) resolveNotificationSettings(p graphql.ResolveParams) (interface
 
 	filter := parseNotificationSettingsFilter(p.Args["filter"])
 
-	settings, err := s.notificationService.ListSettings(ctx, filter)
+	settings, err := s.notificationsFor(ctx).ListSettings(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (s *Schema) resolveNotificationSetting(p graphql.ResolveParams) (interface{
 		ctx = context.Background()
 	}
 
-	setting, err := s.notificationService.GetSetting(ctx, id)
+	setting, err := s.notificationsFor(ctx).GetSetting(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (s *Schema) resolveNotifications(p graphql.ResolveParams) (interface{}, err
 
 	filter := parseNotificationsFilter(p.Args["filter"])
 
-	notifs, err := s.notificationService.ListNotifications(ctx, filter)
+	notifs, err := s.notificationsFor(ctx).ListNotifications(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (s *Schema) resolveNotification(p graphql.ResolveParams) (interface{}, erro
 		ctx = context.Background()
 	}
 
-	notif, err := s.notificationService.GetNotification(ctx, id)
+	notif, err := s.notificationsFor(ctx).GetNotification(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func (s *Schema) resolveNotificationStats(p graphql.ResolveParams) (interface{},
 		ctx = context.Background()
 	}
 
-	stats, err := s.notificationService.GetStats(ctx, settingID)
+	stats, err := s.notificationsFor(ctx).GetStats(ctx, settingID)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (s *Schema) resolveDeliveryHistory(p graphql.ResolveParams) (interface{}, e
 		ctx = context.Background()
 	}
 
-	history, err := s.notificationService.GetDeliveryHistory(ctx, notificationID)
+	history, err := s.notificationsFor(ctx).GetDeliveryHistory(ctx, notificationID)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func (s *Schema) resolveCreateNotificationSetting(p graphql.ResolveParams) (inte
 
 	setting := parseNotificationSettingInput(input)
 
-	created, err := s.notificationService.CreateSetting(ctx, setting)
+	created, err := s.notificationsFor(ctx).CreateSetting(ctx, setting)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (s *Schema) resolveUpdateNotificationSetting(p graphql.ResolveParams) (inte
 	}
 
 	// Get existing setting
-	existing, err := s.notificationService.GetSetting(ctx, id)
+	existing, err := s.notificationsFor(ctx).GetSetting(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (s *Schema) resolveUpdateNotificationSetting(p graphql.ResolveParams) (inte
 	// Apply updates
 	applyNotificationSettingUpdates(existing, input)
 
-	updated, err := s.notificationService.UpdateSetting(ctx, existing)
+	updated, err := s.notificationsFor(ctx).UpdateSetting(ctx, existing)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (s *Schema) resolveDeleteNotificationSetting(p graphql.ResolveParams) (inte
 		ctx = context.Background()
 	}
 
-	if err := s.notificationService.DeleteSetting(ctx, id); err != nil {
+	if err := s.notificationsFor(ctx).DeleteSetting(ctx, id); err != nil {
 		return nil, err
 	}
 
@@ -283,7 +283,7 @@ func (s *Schema) resolveTestNotificationSetting(p graphql.ResolveParams) (interf
 		ctx = context.Background()
 	}
 
-	result, err := s.notificationService.TestSetting(ctx, id)
+	result, err := s.notificationsFor(ctx).TestSetting(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func (s *Schema) resolveRetryNotification(p graphql.ResolveParams) (interface{},
 		ctx = context.Background()
 	}
 
-	if err := s.notificationService.RetryNotification(ctx, id); err != nil {
+	if err := s.notificationsFor(ctx).RetryNotification(ctx, id); err != nil {
 		return nil, err
 	}
 
@@ -330,7 +330,7 @@ func (s *Schema) resolveCancelNotification(p graphql.ResolveParams) (interface{}
 		ctx = context.Background()
 	}
 
-	if err := s.notificationService.CancelNotification(ctx, id); err != nil {
+	if err := s.notificationsFor(ctx).CancelNotification(ctx, id); err != nil {
 		return nil, err
 	}
 
@@ -711,4 +711,11 @@ func requireAPIKey(resolve graphql.FieldResolveFn) graphql.FieldResolveFn {
 		}
 		return resolve(p)
 	}
+}
+
+// notificationsFor is the notification service as the request's API key
+// sees it: its own settings only, everything for an operator key.
+func (s *Schema) notificationsFor(ctx context.Context) notifications.Service {
+	label, _ := middleware.APIKeyFromContext(ctx)
+	return notifications.ForCaller(s.notificationService, label)
 }

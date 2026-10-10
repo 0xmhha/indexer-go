@@ -618,13 +618,20 @@ func (a *App) initNotificationService() error {
 		return nil
 	}
 
+	for _, label := range a.config.Notifications.OperatorLabels {
+		if _, ok := a.config.API.Keys[label]; !ok {
+			a.logger.Warn("notifications.operator_labels names a label without a key in api.keys", zap.String("label", label))
+		}
+	}
 	if a.config.Notifications.AllowPrivateDestinations {
 		a.logger.Warn("notifications.allow_private_destinations: webhooks may reach internal addresses (development only)")
 	}
 
 	// Convert config to notification service config
 	notifConfig := &notifications.Config{
-		Enabled: a.config.Notifications.Enabled,
+		Enabled:             a.config.Notifications.Enabled,
+		OperatorLabels:      a.config.Notifications.OperatorLabels,
+		MaxSettingsPerOwner: a.config.Notifications.MaxSettingsPerOwner,
 		Webhook: notifications.WebhookConfig{
 			Enabled:         a.config.Notifications.Webhook.Enabled,
 			Timeout:         a.config.Notifications.Webhook.Timeout,
