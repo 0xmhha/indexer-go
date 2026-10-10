@@ -45,6 +45,97 @@ type Ranged interface {
 	Range() (first, last uint64)
 }
 
+// LogRangeSource is a source of the declared ingest mode (headers and the
+// declared logs) that also reads ranges: the logs of many blocks at once
+// and the headers of chosen blocks (fetch.RangeSource).
+type LogRangeSource interface {
+	Source
+	LogsInRange(ctx context.Context, from, to uint64) ([]*model.Log, error)
+	Headers(ctx context.Context, heights []uint64) (map[uint64]*model.Block, error)
+}
+
+// RangedLogSource is a LogRangeSource of a fixed range (an archive).
+type RangedLogSource interface {
+	LogRangeSource
+	Range() (first, last uint64)
+}
+
+// ChainedLogs is Chained for declared-mode sources: an archive's declared
+// logs for history and the node's after it, by block and by range.
+type ChainedLogs struct {
+	*Chained
+	first RangedLogSource
+	then  LogRangeSource
+}
+
+var _ LogRangeSource = (*ChainedLogs)(nil)
+
+// NewChainedLogs returns the declared-mode source reading first's range
+// from first and every other block from then.
+func NewChainedLogs(first RangedLogSource, then LogRangeSource) *ChainedLogs {
+	return &ChainedLogs{Chained: &Chained{First: first, Then: then}, first: first, then: then}
+}
+
+// LogsInRange implements LogRangeSource: the part of [from, to] inside the
+// archive's range from the archive, the rest from the node, in chain order.
+func (c *ChainedLogs) LogsInRange(ctx context.Context, from, to uint64) ([]*model.Log, error) {
+	first, last := c.first.Range()
+	var out []*model.Log
+	read := func(s LogRangeSource, a, b uint64) error {
+		if a > b {
+			return nil
+		}
+		logs, err := s.LogsInRange(ctx, a, b)
+		out = append(out, logs...)
+		return err
+	}
+	if from < first {
+		if err := read(c.then, from, min(to, first-1)); err != nil {
+			return nil, err
+		}
+	}
+	if err := read(c.first, max(from, first), min(to, last)); err != nil {
+		return nil, err
+	}
+	if to > last {
+		if err := read(c.then, max(from, last+1), to); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// Headers implements LogRangeSource: each height from the source that
+// holds it.
+func (c *ChainedLogs) Headers(ctx context.Context, heights []uint64) (map[uint64]*model.Block, error) {
+	first, last := c.first.Range()
+	var inArchive, onNode []uint64
+	for _, n := range heights {
+		if n >= first && n <= last {
+			inArchive = append(inArchive, n)
+		} else {
+			onNode = append(onNode, n)
+		}
+	}
+	out := make(map[uint64]*model.Block, len(heights))
+	for _, part := range []struct {
+		s       LogRangeSource
+		heights []uint64
+	}{{c.first, inArchive}, {c.then, onNode}} {
+		if len(part.heights) == 0 {
+			continue
+		}
+		hs, err := part.s.Headers(ctx, part.heights)
+		if err != nil {
+			return nil, err
+		}
+		for n, b := range hs {
+			out[n] = b
+		}
+	}
+	return out, nil
+}
+
 // Chained reads blocks within First's range from First and every other block
 // from Then: an archive for history, a node for what follows.
 type Chained struct {

@@ -11,6 +11,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/features/records"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/source"
+	"github.com/0xmhha/indexer-go/pkg/source/era"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 )
 
@@ -56,7 +57,8 @@ func (a *App) checkDeclaredFeatures(enabled []string) error {
 }
 
 // declaredSource returns the source the fetcher reads: in the declared
-// mode the headers and declared logs of src, otherwise blocks itself. It
+// mode the headers and declared logs of src (and of the era1 archives
+// before it, when source.era_dir is set), otherwise blocks itself. It
 // also starts indexing at the declared start block when indexer.start_height
 // is not set.
 func (a *App) declaredSource(src *sourcerpc.Source, blocks source.Source) (source.Source, error) {
@@ -78,5 +80,11 @@ func (a *App) declaredSource(src *sourcerpc.Source, blocks source.Source) (sourc
 	a.logger.Info("Declared ingest mode: reading headers and declared logs only",
 		zap.Int("contracts", len(plan.Addresses())), zap.Int("events", len(plan.Topics())), zap.Uint64("start_block", plan.StartBlock()),
 		zap.Bool("ranges_of_finalized_blocks", sparse))
-	return sourcerpc.NewLogs(src, plan.Addresses(), plan.Topics()), nil
+	logs := sourcerpc.NewLogs(src, plan.Addresses(), plan.Topics())
+	if a.eraSource == nil {
+		return logs, nil
+	}
+	// The archive's declared logs for history, the node's after it (the
+	// join of both was checked when the archive was opened).
+	return source.NewChainedLogs(era.NewLogs(a.eraSource, plan.Addresses(), plan.Topics()), logs), nil
 }

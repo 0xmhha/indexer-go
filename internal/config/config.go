@@ -1476,9 +1476,6 @@ func (c *Config) Validate() error {
 	switch c.Indexer.Mode {
 	case "", ModeFull:
 	case ModeDeclared:
-		if c.Source.EraDir != "" {
-			return fmt.Errorf("indexer.mode declared reads the declared logs from the node: source.era_dir is not supported yet")
-		}
 	default:
 		return fmt.Errorf("invalid indexer.mode %q, must be one of: full, declared", c.Indexer.Mode)
 	}
