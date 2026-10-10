@@ -3289,6 +3289,7 @@ enum NotificationType {
   WEBHOOK
   EMAIL
   SLACK
+  STREAM
 }
 
 # Event type that triggers notification

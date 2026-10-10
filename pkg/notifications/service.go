@@ -134,6 +134,9 @@ type NotificationService struct {
 	// fastPath creates the notifications of fast settings (fast.go).
 	fastPath fastState
 
+	// streams are the stream connections by owner (streams.go).
+	streams *Streams
+
 	// stream is the change stream the service consumes as group (R3-5);
 	// nil consumes the event bus instead.
 	stream      stream.Bus
@@ -199,7 +202,7 @@ func NewService(
 		config = DefaultConfig()
 	}
 
-	return &NotificationService{
+	s := &NotificationService{
 		config:   config,
 		storage:  storage,
 		eventBus: eventBus,
@@ -209,8 +212,15 @@ func NewService(
 		settings: make(map[string]*NotificationSetting),
 		inflight: make(map[string]bool),
 		fastPath: fastState{queue: make(chan fastBlock, fastQueueBlocks)},
+		streams:  NewStreams(config.MaxStreamsPerOwner),
 	}
+	s.handlers[NotificationTypeStream] = &streamHandler{streams: s.streams, logger: s.logger}
+	return s
 }
+
+// Streams are the stream connections the service sends stream settings'
+// notifications to (served at /v1/subscriptions/stream).
+func (s *NotificationService) Streams() *Streams { return s.streams }
 
 // DefaultStreamGroup is the consumer group of the notification service.
 const DefaultStreamGroup = "notifications"
@@ -494,7 +504,8 @@ func (s *NotificationService) notify(ctx context.Context, event events.Event) er
 }
 
 // deliverMatch creates, stores and queues the notification of an event
-// for a setting it matches. A notification whose id exists already (a
+// for a setting it matches; a stream setting's notification is sent to
+// its owner's connections instead, without being stored. A notification whose id exists already (a
 // sequenced event delivered again, or a fast event, keyed by fastKey,
 // evaluated again) is not created again.
 func (s *NotificationService) deliverMatch(ctx context.Context, setting *NotificationSetting, event events.Event, kinds []EventType, fastKey string) error {
@@ -508,6 +519,12 @@ func (s *NotificationService) deliverMatch(ctx context.Context, setting *Notific
 	}
 	if fastKey != "" {
 		notification.ID = uuid.NewSHA1(notificationIDSpace, []byte(setting.ID+"/fast/"+fastKey)).String()
+	}
+	if setting.Type == NotificationTypeStream {
+		// Not stored: sent to the owner's connections now or never.
+		notification.Status = DeliveryStatusSent
+		_, err := s.streams.sendJSON(setting.Owner, &StreamMessage{Type: StreamNotification, Notification: notification})
+		return err
 	}
 	if fastKey != "" || events.SequenceOf(event) != 0 {
 		existing, err := s.storage.GetNotification(ctx, notification.ID)

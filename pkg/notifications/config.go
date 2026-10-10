@@ -15,6 +15,10 @@ type Config struct {
 	// for no limit.
 	MaxSettingsPerOwner int `yaml:"max_settings_per_owner" json:"max_settings_per_owner"`
 
+	// MaxStreamsPerOwner caps the stream connections of one key
+	// (DefaultMaxStreamsPerOwner when not positive).
+	MaxStreamsPerOwner int `yaml:"max_streams_per_owner" json:"max_streams_per_owner"`
+
 	// Webhook configuration
 	Webhook WebhookConfig `yaml:"webhook" json:"webhook"`
 

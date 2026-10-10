@@ -40,6 +40,8 @@ type Server struct {
 	rpcProxy            *rpcproxy.Proxy
 	verifier            verifier.Verifier
 	notificationService notifications.Service
+	notificationStreams *notifications.Streams
+	subStreams          *subscriptionStreams
 	chains              ChainStores
 	origins             apimiddleware.Origins
 	trustedProxies      []netip.Prefix
@@ -56,6 +58,9 @@ type ServerOptions struct {
 	RPCProxy            *rpcproxy.Proxy
 	Verifier            verifier.Verifier
 	NotificationService notifications.Service
+	// NotificationStreams, when set, are served at SubscriptionStreamPath:
+	// give them only where the notification service evaluates blocks.
+	NotificationStreams *notifications.Streams
 	// Chains serves the chains of multichain mode under /chains/{id}/.
 	// The server then has no store of its own (store is nil) and serves no
 	// GraphQL, JSON-RPC or Etherscan API at the root.
@@ -103,6 +108,9 @@ func NewServerWithOptions(config *Config, logger *zap.Logger, store port.QuerySt
 	if opts != nil && opts.NotificationService != nil {
 		s.notificationService = opts.NotificationService
 		logger.Info("Notification service configured for API server")
+	}
+	if opts != nil {
+		s.notificationStreams = opts.NotificationStreams
 	}
 
 	if opts != nil && opts.Chains != nil {
@@ -295,6 +303,12 @@ func (s *Server) setupRoutes() {
 			zap.Bool("keep_alive", s.config.EnableWebSocketKeepAlive))
 	}
 
+	if s.notificationStreams != nil {
+		s.subStreams = newSubscriptionStreams(s.notificationStreams, s.origins.CheckWebSocketOrigin, s.logger)
+		s.router.Get(SubscriptionStreamPath, s.subStreams.ServeHTTP)
+		s.logger.Info("Notification stream endpoint registered", zap.String("path", SubscriptionStreamPath))
+	}
+
 	s.mountRoutes()
 
 	if s.config.DeclaredOnly {
@@ -468,6 +482,9 @@ func (s *Server) stopBackground() {
 	}
 	if s.chainRoutes != nil {
 		s.chainRoutes.close()
+	}
+	if s.subStreams != nil {
+		s.subStreams.close()
 	}
 }
 

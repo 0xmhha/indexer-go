@@ -19,6 +19,10 @@ var notificationTypeEnumType = graphql.NewEnum(graphql.EnumConfig{
 			Value:       "slack",
 			Description: "Slack delivery",
 		},
+		"STREAM": &graphql.EnumValueConfig{
+			Value:       "stream",
+			Description: "Sent to the owning key's connections at /v1/subscriptions/stream; not stored or retried",
+		},
 	},
 })
 

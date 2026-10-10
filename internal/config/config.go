@@ -542,6 +542,9 @@ type NotificationsConfig struct {
 	// MaxSettingsPerOwner caps the settings of one non-operator key (0: no
 	// limit; default 100).
 	MaxSettingsPerOwner int `yaml:"max_settings_per_owner"`
+	// MaxStreamsPerOwner caps the connections one key holds to the
+	// notification stream (/v1/subscriptions/stream); default 4.
+	MaxStreamsPerOwner int `yaml:"max_streams_per_owner"`
 	// AllowPrivateDestinations lets webhook and Slack deliveries reach
 	// loopback, private and other internal addresses. Destinations are
 	// chosen by whoever registers a setting, so they are refused by
@@ -666,6 +669,7 @@ func NewConfig() *Config {
 	// Likewise a key may hold 100 notification settings unless a file sets
 	// notifications.max_settings_per_owner (0 removes the limit).
 	cfg.Notifications.MaxSettingsPerOwner = 100
+	cfg.Notifications.MaxStreamsPerOwner = 4
 	// Likewise the outbox is on unless a file or INDEXER_EVENTBUS_OUTBOX
 	// turns it off, and an explicit 0 keeps every outbox entry.
 	cfg.EventBus.Outbox = true
@@ -1516,6 +1520,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Notifications.MaxSettingsPerOwner < 0 {
 		return fmt.Errorf("notifications.max_settings_per_owner cannot be negative (0 removes the limit)")
+	}
+	if c.Notifications.MaxStreamsPerOwner < 0 {
+		return fmt.Errorf("notifications.max_streams_per_owner cannot be negative")
 	}
 
 	// Validate log configuration
