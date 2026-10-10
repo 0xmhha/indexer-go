@@ -616,7 +616,7 @@ func (s *NotificationService) matchesLogFilter(filter *NotifyFilter, e *events.L
 		}
 	}
 
-	return true
+	return matchesEvent(filter, e.Log.Topics) && matchesParticipants(filter, e.Log.Topics)
 }
 
 // containsAddress checks if an address is in the list.
@@ -672,6 +672,9 @@ func (s *NotificationService) createNotification(setting *NotificationSetting, e
 		return nil
 	}
 	payload.EventType = kind
+	if le, ok := event.(*events.LogEvent); ok {
+		payload.Decoded = decodeFilterEvent(setting.Filter, le.Log)
+	}
 
 	id := uuid.New().String()
 	if seq := events.SequenceOf(event); seq != 0 {
@@ -1013,6 +1016,9 @@ func (s *NotificationService) CreateSetting(ctx context.Context, setting *Notifi
 	if !ok {
 		return nil, fmt.Errorf("unsupported notification type: %s", setting.Type)
 	}
+	if err := validateFilter(setting.Filter); err != nil {
+		return nil, fmt.Errorf("invalid setting: %w", err)
+	}
 	if err := handler.Validate(setting); err != nil {
 		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
@@ -1052,6 +1058,9 @@ func (s *NotificationService) UpdateSetting(ctx context.Context, setting *Notifi
 	handler, ok := s.handlers[setting.Type]
 	if !ok {
 		return nil, fmt.Errorf("unsupported notification type: %s", setting.Type)
+	}
+	if err := validateFilter(setting.Filter); err != nil {
+		return nil, fmt.Errorf("invalid setting: %w", err)
 	}
 	if err := handler.Validate(setting); err != nil {
 		return nil, fmt.Errorf("invalid setting: %w", err)

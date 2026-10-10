@@ -135,6 +135,14 @@ var notificationFilterType = graphql.NewObject(graphql.ObjectConfig{
 			Type:        bigIntType,
 			Description: "Minimum transaction value filter",
 		},
+		"event": &graphql.Field{
+			Type:        graphql.String,
+			Description: "Event signature with argument names; logs match only that event and notifications carry its decoded arguments",
+		},
+		"participants": &graphql.Field{
+			Type:        graphql.NewList(addressType),
+			Description: "Logs match when one of these addresses is an indexed argument (a token transfer's from or to)",
+		},
 	},
 })
 
@@ -392,6 +400,14 @@ var notificationFilterInputType = graphql.NewInputObject(graphql.InputObjectConf
 		"minValue": &graphql.InputObjectFieldConfig{
 			Type:        graphql.String,
 			Description: "Minimum transaction value filter",
+		},
+		"event": &graphql.InputObjectFieldConfig{
+			Type:        graphql.String,
+			Description: "Event signature with argument names, e.g. \"Transfer(address indexed from, address indexed to, uint256 value)\"",
+		},
+		"participants": &graphql.InputObjectFieldConfig{
+			Type:        graphql.NewList(addressType),
+			Description: "Logs match when one of these addresses is an indexed argument",
 		},
 	},
 })

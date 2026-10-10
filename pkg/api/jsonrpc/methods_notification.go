@@ -6,7 +6,6 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // notificationService holds the notification service reference
@@ -132,7 +131,11 @@ func (h *Handler) createNotificationSetting(ctx context.Context, params json.Raw
 	}
 
 	if input.Filter != nil {
-		setting.Filter = parseJSONRPCNotifyFilter(input.Filter)
+		filter, err := parseJSONRPCNotifyFilter(input.Filter)
+		if err != nil {
+			return nil, NewError(InvalidParams, err.Error(), nil)
+		}
+		setting.Filter = filter
 	}
 
 	setting.Destination = parseJSONRPCDestination(input.Destination)
@@ -192,7 +195,11 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, params json.Raw
 	}
 
 	if input.Filter != nil {
-		existing.Filter = parseJSONRPCNotifyFilter(input.Filter)
+		filter, err := parseJSONRPCNotifyFilter(input.Filter)
+		if err != nil {
+			return nil, NewError(InvalidParams, err.Error(), nil)
+		}
+		existing.Filter = filter
 	}
 
 	if input.Destination != nil {
@@ -434,10 +441,8 @@ func (h *Handler) cancelNotification(ctx context.Context, params json.RawMessage
 
 // Helper types and functions
 
-type notificationFilterInput struct {
-	Addresses []string `json:"addresses,omitempty"`
-	MinValue  *string  `json:"minValue,omitempty"`
-}
+// notificationFilterInput is a filter as a request gives it.
+type notificationFilterInput = notifications.FilterInput
 
 type notificationDestInput struct {
 	WebhookURL      string   `json:"webhookURL,omitempty"`
@@ -449,24 +454,11 @@ type notificationDestInput struct {
 	SlackUsername   string   `json:"slackUsername,omitempty"`
 }
 
-func parseJSONRPCNotifyFilter(input *notificationFilterInput) *notifications.NotifyFilter {
+func parseJSONRPCNotifyFilter(input *notificationFilterInput) (*notifications.NotifyFilter, error) {
 	if input == nil {
-		return nil
+		return nil, nil
 	}
-
-	filter := &notifications.NotifyFilter{}
-
-	for _, addr := range input.Addresses {
-		if common.IsHexAddress(addr) {
-			filter.Addresses = append(filter.Addresses, common.HexToAddress(addr))
-		}
-	}
-
-	if input.MinValue != nil && *input.MinValue != "" {
-		filter.MinValue = input.MinValue
-	}
-
-	return filter
+	return input.Parse()
 }
 
 func parseJSONRPCDestination(input notificationDestInput) notifications.Destination {

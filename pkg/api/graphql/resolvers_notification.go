@@ -7,7 +7,6 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
 )
 
@@ -193,7 +192,10 @@ func (s *Schema) resolveCreateNotificationSetting(p graphql.ResolveParams) (inte
 		ctx = context.Background()
 	}
 
-	setting := parseNotificationSettingInput(input)
+	setting, err := parseNotificationSettingInput(input)
+	if err != nil {
+		return nil, err
+	}
 
 	created, err := s.notificationsFor(ctx).CreateSetting(ctx, setting)
 	if err != nil {
@@ -234,7 +236,9 @@ func (s *Schema) resolveUpdateNotificationSetting(p graphql.ResolveParams) (inte
 	}
 
 	// Apply updates
-	applyNotificationSettingUpdates(existing, input)
+	if err := applyNotificationSettingUpdates(existing, input); err != nil {
+		return nil, err
+	}
 
 	updated, err := s.notificationsFor(ctx).UpdateSetting(ctx, existing)
 	if err != nil {
@@ -423,7 +427,7 @@ func parseNotificationsFilter(v interface{}) *notifications.NotificationsFilter 
 	return filter
 }
 
-func parseNotificationSettingInput(input map[string]interface{}) *notifications.NotificationSetting {
+func parseNotificationSettingInput(input map[string]interface{}) (*notifications.NotificationSetting, error) {
 	setting := &notifications.NotificationSetting{
 		Enabled: true,
 	}
@@ -449,32 +453,44 @@ func parseNotificationSettingInput(input map[string]interface{}) *notifications.
 	}
 
 	if filter, ok := input["filter"].(map[string]interface{}); ok {
-		setting.Filter = parseNotifyFilter(filter)
+		f, err := parseNotifyFilter(filter)
+		if err != nil {
+			return nil, err
+		}
+		setting.Filter = f
 	}
 
 	if dest, ok := input["destination"].(map[string]interface{}); ok {
 		setting.Destination = parseNotificationDestination(dest)
 	}
 
-	return setting
+	return setting, nil
 }
 
-func parseNotifyFilter(m map[string]interface{}) *notifications.NotifyFilter {
-	filter := &notifications.NotifyFilter{}
-
-	if addresses, ok := m["addresses"].([]interface{}); ok {
-		for _, a := range addresses {
-			if as, ok := a.(string); ok && common.IsHexAddress(as) {
-				filter.Addresses = append(filter.Addresses, common.HexToAddress(as))
+func parseNotifyFilter(m map[string]interface{}) (*notifications.NotifyFilter, error) {
+	strs := func(v interface{}) []string {
+		var out []string
+		list, _ := v.([]interface{})
+		for _, e := range list {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
 			}
 		}
+		return out
 	}
-
-	if minValue, ok := m["minValue"].(string); ok && minValue != "" {
-		filter.MinValue = &minValue
+	in := notifications.FilterInput{Addresses: strs(m["addresses"]), Participants: strs(m["participants"])}
+	if topics, ok := m["topics"].([]interface{}); ok {
+		for _, position := range topics {
+			in.Topics = append(in.Topics, strs(position))
+		}
 	}
-
-	return filter
+	if minValue, ok := m["minValue"].(string); ok {
+		in.MinValue = &minValue
+	}
+	if event, ok := m["event"].(string); ok {
+		in.Event = event
+	}
+	return in.Parse()
 }
 
 func parseNotificationDestination(m map[string]interface{}) notifications.Destination {
@@ -509,7 +525,7 @@ func parseNotificationDestination(m map[string]interface{}) notifications.Destin
 	return dest
 }
 
-func applyNotificationSettingUpdates(setting *notifications.NotificationSetting, input map[string]interface{}) {
+func applyNotificationSettingUpdates(setting *notifications.NotificationSetting, input map[string]interface{}) error {
 	if name, ok := input["name"].(string); ok {
 		setting.Name = name
 	}
@@ -528,12 +544,17 @@ func applyNotificationSettingUpdates(setting *notifications.NotificationSetting,
 	}
 
 	if filter, ok := input["filter"].(map[string]interface{}); ok {
-		setting.Filter = parseNotifyFilter(filter)
+		f, err := parseNotifyFilter(filter)
+		if err != nil {
+			return err
+		}
+		setting.Filter = f
 	}
 
 	if dest, ok := input["destination"].(map[string]interface{}); ok {
 		setting.Destination = parseNotificationDestination(dest)
 	}
+	return nil
 }
 
 func notificationSettingToMap(setting *notifications.NotificationSetting) map[string]interface{} {
@@ -601,6 +622,26 @@ func notifyFilterToMap(filter *notifications.NotifyFilter) map[string]interface{
 
 	if filter.MinValue != nil && *filter.MinValue != "" {
 		result["minValue"] = *filter.MinValue
+	}
+	if len(filter.Topics) > 0 {
+		topics := make([][]string, len(filter.Topics))
+		for i, position := range filter.Topics {
+			topics[i] = []string{}
+			for _, t := range position {
+				topics[i] = append(topics[i], t.Hex())
+			}
+		}
+		result["topics"] = topics
+	}
+	if filter.Event != "" {
+		result["event"] = filter.Event
+	}
+	if len(filter.Participants) > 0 {
+		participants := make([]string, 0, len(filter.Participants))
+		for _, a := range filter.Participants {
+			participants = append(participants, a.Hex())
+		}
+		result["participants"] = participants
 	}
 
 	return result
