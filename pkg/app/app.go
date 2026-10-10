@@ -632,6 +632,7 @@ func (a *App) initNotificationService() error {
 		Enabled:             a.config.Notifications.Enabled,
 		OperatorLabels:      a.config.Notifications.OperatorLabels,
 		MaxSettingsPerOwner: a.config.Notifications.MaxSettingsPerOwner,
+		MaxStreamsPerOwner:  a.config.Notifications.MaxStreamsPerOwner,
 		Webhook: notifications.WebhookConfig{
 			Enabled:         a.config.Notifications.Webhook.Enabled,
 			Timeout:         a.config.Notifications.Webhook.Timeout,
@@ -1067,6 +1068,11 @@ func (a *App) initAPIServer() error {
 	}
 	if a.multichainManager != nil {
 		serverOpts.Chains = a.multichainManager
+	}
+	// The stream is served by the process that evaluates blocks: not by an
+	// API process, whose ingest process creates the notifications.
+	if svc, ok := a.notificationService.(*notifications.NotificationService); ok && a.config.NodeRole() != config.RoleAPI {
+		serverOpts.NotificationStreams = svc.Streams()
 	}
 	apiServer, err := api.NewServerWithOptions(apiConfig, a.logger, store, serverOpts)
 	if err != nil {

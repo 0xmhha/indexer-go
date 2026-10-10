@@ -285,9 +285,12 @@ func TestNotificationService_RegisterHandler(t *testing.T) {
 	webhookHandler := NewWebhookHandler(nil, logger)
 	service.RegisterHandler(webhookHandler)
 
-	// Handler should be registered
-	if len(service.handlers) != 1 {
-		t.Errorf("expected 1 handler, got %d", len(service.handlers))
+	// Handler should be registered, besides the built-in stream handler
+	if service.handlers[NotificationTypeWebhook] != webhookHandler {
+		t.Errorf("webhook handler not registered")
+	}
+	if len(service.handlers) != 2 {
+		t.Errorf("expected 2 handlers (webhook, stream), got %d", len(service.handlers))
 	}
 }
 

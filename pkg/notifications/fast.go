@@ -41,6 +41,9 @@ type fastState struct {
 	queue    chan fastBlock
 	settings atomic.Int64  // enabled fast settings
 	dropped  atomic.Uint64 // blocks the queue had no room for
+	// lagging is set from a dropped block until a block is queued again:
+	// the owners are told once per run of dropped blocks.
+	lagging atomic.Bool
 }
 
 func validateDelivery(d Delivery) error {
@@ -75,10 +78,33 @@ func (s *NotificationService) Active() bool { return s.fastPath.settings.Load() 
 func (s *NotificationService) OfferBlock(height uint64, evs []events.Event) {
 	select {
 	case s.fastPath.queue <- fastBlock{height: height, events: evs}:
+		s.fastPath.lagging.Store(false)
 	default:
 		n := s.fastPath.dropped.Add(1)
 		s.logger.Warn("fast notifications behind: block dropped from the fast path",
 			zap.Uint64("block", height), zap.Uint64("dropped_blocks", n))
+		if s.fastPath.lagging.CompareAndSwap(false, true) {
+			s.tellLagging(height)
+		}
+	}
+}
+
+// tellLagging sends a lagging message, from block height on, to the
+// stream connections of every owner of an enabled fast setting. It does
+// not wait: a connection without room is ended (Streams.send).
+func (s *NotificationService) tellLagging(height uint64) {
+	owners := map[string]bool{}
+	s.mu.RLock()
+	for _, st := range s.settings {
+		if st.Enabled && st.fast() && st.Owner != "" {
+			owners[st.Owner] = true
+		}
+	}
+	s.mu.RUnlock()
+	for owner := range owners {
+		if _, err := s.streams.sendJSON(owner, &StreamMessage{Type: StreamLagging, FromBlock: height}); err != nil {
+			s.logger.Warn("lagging message not sent", zap.String("owner", owner), zap.Error(err))
+		}
 	}
 }
 
