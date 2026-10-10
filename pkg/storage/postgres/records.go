@@ -67,3 +67,16 @@ func (s *Store) SaveRecord(ctx context.Context, r *port.Record, keys []port.Reco
 	}
 	return nil
 }
+
+// DeleteRecords implements port.RecordWriter.
+func (s *Store) DeleteRecords(ctx context.Context, table string) error {
+	if err := s.write(); err != nil {
+		return err
+	}
+	for _, stmt := range []string{`DELETE FROM record_keys WHERE tbl = $1`, `DELETE FROM records WHERE tbl = $1`} {
+		if _, err := s.q(ctx).Exec(ctx, stmt, table); err != nil {
+			return err
+		}
+	}
+	return nil
+}

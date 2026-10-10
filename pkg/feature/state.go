@@ -1,6 +1,7 @@
 package feature
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -15,6 +16,10 @@ type BackfillJob struct {
 	From, To   uint64
 	Online     bool
 	Definition string `json:",omitempty"`
+	// Reset asks to remove the part's data before it is backfilled (a
+	// part rebuilt under an incompatible definition, PartRebuilder),
+	// together with writing its new state.
+	Reset bool `json:",omitempty"`
 }
 
 // OrderIndependent is implemented by features whose result does not depend
@@ -56,6 +61,16 @@ type PartEvolver interface {
 	EvolvePart(part, stored, current string) PartChange
 }
 
+// PartRebuilder is implemented by a part's handler whose data can be
+// removed and indexed again from the start when its definition changed
+// incompatibly. RebuildAllowed reports whether the operator allowed it for
+// this part (records: features.records.rebuild); ResetPart removes the
+// part's data, inside the transaction bound to ctx.
+type PartRebuilder interface {
+	RebuildAllowed() bool
+	ResetPart(ctx context.Context) error
+}
+
 // evolvePart compares a part's stored and current definitions with its
 // feature's PartEvolver; without one any change is incompatible.
 func evolvePart(unit, stored, current string) PartChange {
@@ -94,8 +109,10 @@ func Reconcile(enabled []string, states map[string]port.FeatureState, latest uin
 // A part is reconciled like a feature of its own, so a part added to an
 // indexed feature is backfilled alone. A part whose stored definition
 // differs from its current one is an error: its data is of the earlier
-// definition. A database indexed before its feature had parts recorded the
-// feature only; the parts take over the feature's state.
+// definition, unless the part may be rebuilt (Unit.Rebuild): its job then
+// resets the part and backfills it from the start. A database indexed
+// before its feature had parts recorded the feature only; the parts take
+// over the feature's state.
 func ReconcileUnits(enabled []Unit, states map[string]port.FeatureState, latest uint64, hasData bool) (map[string]port.FeatureState, []BackfillJob, error) {
 	writes := map[string]port.FeatureState{}
 	on := map[string]bool{}
@@ -133,6 +150,7 @@ func ReconcileUnits(enabled []Unit, states map[string]port.FeatureState, latest 
 	for _, u := range enabled {
 		n := u.Name
 		st, known := states[n]
+		reset := false
 		if f := FeatureOf(n); !known && f != n && !recordedParts[f] {
 			// The feature was recorded before it had parts: each part has
 			// what the feature had.
@@ -144,8 +162,11 @@ func ReconcileUnits(enabled []Unit, states map[string]port.FeatureState, latest 
 		if known && st.Definition != u.Definition {
 			switch evolvePart(n, st.Definition, u.Definition) {
 			case PartIncompatible:
-				return nil, nil, fmt.Errorf("%s changed since it was indexed, so its data is of the earlier definition: "+
-					"give it a new name to index it anew, or reindex the database", n)
+				if !u.Rebuild {
+					return nil, nil, fmt.Errorf("%s changed since it was indexed, so its data is of the earlier definition: "+
+						"give it a new name to index it anew, allow its rebuild, or reindex the database", n)
+				}
+				known, reset = false, true // removed and backfilled from the start, below
 			case PartExtended:
 				known = false // backfilled again from the start, below
 			default:
@@ -173,10 +194,10 @@ func ReconcileUnits(enabled []Unit, states map[string]port.FeatureState, latest 
 		}
 		if IsOrderIndependent(n) {
 			writes[n] = define(u, port.FeatureState{Active: true, Gap: &port.BlockRange{From: from, To: latest}})
-			jobs = append(jobs, BackfillJob{Feature: n, From: from, To: latest, Online: true, Definition: u.Definition})
+			jobs = append(jobs, BackfillJob{Feature: n, From: from, To: latest, Online: true, Definition: u.Definition, Reset: reset})
 			continue
 		}
-		jobs = append(jobs, BackfillJob{Feature: n, From: from, To: latest, Definition: u.Definition})
+		jobs = append(jobs, BackfillJob{Feature: n, From: from, To: latest, Definition: u.Definition, Reset: reset})
 	}
 	for n, st := range states {
 		if on[n] || !st.Active || hasParts[n] {

@@ -92,4 +92,38 @@ func testRecords(t *testing.T, newStore NewStore) {
 		require.Len(t, refunds, 1, "tables are separate")
 		sameJSON(t, saved[4], refunds[0])
 	})
+
+	t.Run("DeleteTable", func(t *testing.T) {
+		s := open[recordStore](t, newStore)
+		// receipts_v2 shares a name prefix with receipts.
+		for _, r := range []*port.Record{
+			record("receipts", 5, 0, "0xa", "0x01", "10"),
+			record("receipts", 6, 1, "0xb", "0x02", "20"),
+			record("receipts_v2", 5, 0, "0xa", "0x01", "10"),
+			record("refunds", 5, 0, "0xa", "0x01", "1"),
+		} {
+			require.NoError(t, s.SaveRecord(ctx, r, keys(r)))
+		}
+		require.NoError(t, s.DeleteRecords(ctx, "receipts"))
+
+		byMerchant := port.RecordKey{ID: "merchant", Values: []string{"0xa"}}
+		got, _, err := s.ListRecords(ctx, "receipts", port.FirstPage(10))
+		require.NoError(t, err)
+		assert.Empty(t, got, "the table's records are gone")
+		got, _, err = s.ListRecordsByKey(ctx, "receipts", byMerchant, port.FirstPage(10))
+		require.NoError(t, err)
+		assert.Empty(t, got, "and its key entries")
+		for _, table := range []string{"receipts_v2", "refunds"} {
+			got, _, err = s.ListRecordsByKey(ctx, table, byMerchant, port.FirstPage(10))
+			require.NoError(t, err)
+			assert.Len(t, got, 1, "%s is kept", table)
+		}
+
+		again := record("receipts", 7, 0, "0xa", "0x03", "30")
+		require.NoError(t, s.SaveRecord(ctx, again, keys(again)))
+		got, _, err = s.ListRecordsByKey(ctx, "receipts", byMerchant, port.FirstPage(10))
+		require.NoError(t, err)
+		require.Len(t, got, 1, "the table is written again")
+		sameJSON(t, again, got[0])
+	})
 }

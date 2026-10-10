@@ -192,4 +192,60 @@ func TestReconcileEvolvedParts(t *testing.T) {
 		_, _, err := feature.ReconcileUnits(unit("other"), stored, 50, true)
 		require.ErrorContains(t, err, "changed since it was indexed")
 	})
+	t.Run("incompatible with rebuild allowed: reset and backfilled from the start", func(t *testing.T) {
+		u := []feature.Unit{{Name: "rc.evolve/t", Definition: "other", Rebuild: true}}
+		w, jobs, err := feature.ReconcileUnits(u, stored, 50, true)
+		require.NoError(t, err)
+		require.Equal(t, []feature.BackfillJob{{Feature: "rc.evolve/t", From: 0, To: 50, Online: true, Definition: "other", Reset: true}}, jobs)
+		require.Equal(t, port.FeatureState{Active: true, Gap: &port.BlockRange{From: 0, To: 50}, Definition: "other"}, w["rc.evolve/t"])
+	})
+	t.Run("rebuild allowed but nothing changed: no reset", func(t *testing.T) {
+		u := []feature.Unit{{Name: "rc.evolve/t", Definition: "base", Rebuild: true}}
+		w, jobs, err := feature.ReconcileUnits(u, stored, 50, true)
+		require.NoError(t, err)
+		require.Empty(t, jobs)
+		require.Empty(t, w)
+	})
+}
+
+// rebuildingHandler is a part handler that may be rebuilt.
+type rebuildingHandler struct {
+	feature.BlockHandlerFunc
+	allowed bool
+	resets  *int
+}
+
+func (h rebuildingHandler) RebuildAllowed() bool { return h.allowed }
+func (h rebuildingHandler) ResetPart(context.Context) error {
+	*h.resets++
+	return nil
+}
+
+type rebuildFeature struct{ resets *int }
+
+func (rebuildFeature) Name() string       { return "pp.rebuild" }
+func (rebuildFeature) Requires() []string { return nil }
+func (f rebuildFeature) Register(r feature.Registrar) error {
+	noop := feature.BlockHandlerFunc(func(context.Context, *feature.Block) error { return nil })
+	r.(feature.PartRegistrar).OnPart("on", "d", rebuildingHandler{noop, true, f.resets})
+	r.(feature.PartRegistrar).OnPart("off", "d", rebuildingHandler{noop, false, f.resets})
+	r.(feature.PartRegistrar).OnPart("plain", "d", noop)
+	return nil
+}
+
+func TestPipelinePartRebuild(t *testing.T) {
+	var resets int
+	feature.Register(rebuildFeature{&resets})
+	p, err := feature.Build([]string{"pp.rebuild"}, feature.Deps{})
+	require.NoError(t, err)
+	require.Equal(t, []feature.Unit{
+		{Name: "pp.rebuild/on", Definition: "d", Rebuild: true},
+		{Name: "pp.rebuild/off", Definition: "d"},
+		{Name: "pp.rebuild/plain", Definition: "d"},
+	}, p.Units(), "only a rebuilder that allows it")
+
+	require.NoError(t, p.ResetPart(context.Background(), "pp.rebuild/on"))
+	require.Equal(t, 1, resets)
+	require.ErrorContains(t, p.ResetPart(context.Background(), "pp.rebuild/plain"), "cannot be rebuilt")
+	require.ErrorContains(t, p.ResetPart(context.Background(), "pp.rebuild/none"), "has no handler")
 }

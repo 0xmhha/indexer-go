@@ -44,4 +44,7 @@ type RecordReader interface {
 // log position: writing it again replaces it and its key entries.
 type RecordWriter interface {
 	SaveRecord(ctx context.Context, record *Record, keys []RecordKey) error
+	// DeleteRecords removes every record of a table and its key entries
+	// (a table rebuilt under a changed definition); other tables are kept.
+	DeleteRecords(ctx context.Context, table string) error
 }

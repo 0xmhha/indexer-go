@@ -21,17 +21,42 @@ import (
 // Name is the feature name.
 const Name = "records"
 
+// Spec is the feature's section: the declaration and the tables that may
+// be rebuilt.
+type Spec struct {
+	declared.Spec `yaml:",inline"`
+	// Rebuild names tables whose records may be removed and indexed again
+	// from the start when their definition changed in a way that does not
+	// extend them (another event or keys, fewer contracts). Without it
+	// such a change stops startup. Queries of a table see only part of it
+	// until its rebuild completes.
+	Rebuild []string `yaml:"rebuild"`
+}
+
 // Settings decodes the feature's settings and compiles them.
 func Settings(decode func(feature string, into any) error) (*declared.Plan, error) {
-	var spec declared.Spec
+	plan, _, err := settings(decode)
+	return plan, err
+}
+
+// settings is Settings with the tables that may be rebuilt.
+func settings(decode func(feature string, into any) error) (*declared.Plan, map[string]bool, error) {
+	var spec Spec
 	if err := decode(Name, &spec); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	plan, err := declared.Compile(spec)
+	plan, err := declared.Compile(spec.Spec)
 	if err != nil {
-		return nil, fmt.Errorf("features.%s: %w", Name, err)
+		return nil, nil, fmt.Errorf("features.%s: %w", Name, err)
 	}
-	return plan, nil
+	rebuild := map[string]bool{}
+	for _, name := range spec.Rebuild {
+		if _, ok := plan.Table(name); !ok {
+			return nil, nil, fmt.Errorf("features.%s.rebuild: table %q is not declared", Name, name)
+		}
+		rebuild[name] = true
+	}
+	return plan, rebuild, nil
 }
 
 type recordsFeature struct{}
@@ -70,7 +95,7 @@ func (recordsFeature) Register(r feature.Registrar) error {
 	if !ok {
 		return errors.New("storage does not support records")
 	}
-	plan, err := Settings(deps.DecodeSettings)
+	plan, rebuild, err := settings(deps.DecodeSettings)
 	if err != nil {
 		return err
 	}
@@ -79,10 +104,11 @@ func (recordsFeature) Register(r feature.Registrar) error {
 		logger = zap.NewNop()
 	}
 	// Each table is a part, so a table added to an indexed database is
-	// backfilled alone and a table whose definition changed is refused.
+	// backfilled alone and a table whose definition changed is refused
+	// unless it may be rebuilt.
 	if pr, ok := r.(feature.PartRegistrar); ok {
 		for _, t := range plan.Tables {
-			pr.OnPart(t.Name, t.Definition(), &handler{store: store, plan: plan, table: t, logger: logger})
+			pr.OnPart(t.Name, t.Definition(), &handler{store: store, plan: plan, table: t, rebuild: rebuild[t.Name], logger: logger})
 		}
 		return nil
 	}
@@ -97,8 +123,22 @@ type handler struct {
 	plan  *declared.Plan
 	// table, when set, is the one table the handler stores; every table
 	// otherwise.
-	table  *declared.TablePlan
-	logger *zap.Logger
+	table *declared.TablePlan
+	// rebuild: the table is listed in features.records.rebuild.
+	rebuild bool
+	logger  *zap.Logger
+}
+
+// RebuildAllowed implements feature.PartRebuilder.
+func (h *handler) RebuildAllowed() bool { return h.table != nil && h.rebuild }
+
+// ResetPart implements feature.PartRebuilder: it removes the table's
+// records.
+func (h *handler) ResetPart(ctx context.Context) error {
+	if h.table == nil {
+		return errors.New("records: only a table can be reset")
+	}
+	return h.store.DeleteRecords(ctx, h.table.Name)
 }
 
 // HandleBlock implements feature.BlockHandler: every log of a declared

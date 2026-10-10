@@ -413,6 +413,8 @@ func (p *Pipeline) Features() []string {
 type Unit struct {
 	Name       string
 	Definition string
+	// Rebuild: the part's handler is a PartRebuilder allowed to rebuild.
+	Rebuild bool
 }
 
 // PartSeparator joins a feature's name and a part's name in a Unit name.
@@ -430,10 +432,27 @@ func (p *Pipeline) Units() []Unit {
 	var out []Unit
 	for _, h := range p.handlers {
 		if n := h.unit(); len(out) == 0 || out[len(out)-1].Name != n {
-			out = append(out, Unit{Name: n, Definition: h.def})
+			rb, ok := h.h.(PartRebuilder)
+			out = append(out, Unit{Name: n, Definition: h.def, Rebuild: h.part != "" && ok && rb.RebuildAllowed()})
 		}
 	}
 	return out
+}
+
+// ResetPart removes the data of a part whose handler is a PartRebuilder,
+// inside the transaction bound to ctx.
+func (p *Pipeline) ResetPart(ctx context.Context, unit string) error {
+	for _, h := range p.handlers {
+		if h.part == "" || h.unit() != unit {
+			continue
+		}
+		rb, ok := h.h.(PartRebuilder)
+		if !ok {
+			return fmt.Errorf("%s cannot be rebuilt", unit)
+		}
+		return rb.ResetPart(ctx)
+	}
+	return fmt.Errorf("%s has no handler", unit)
 }
 
 // HandleBlock runs every handler in order and stops at the first error.

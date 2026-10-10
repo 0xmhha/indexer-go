@@ -31,6 +31,17 @@ func (s *memStore) SaveRecord(_ context.Context, r *port.Record, keys []port.Rec
 	return nil
 }
 
+func (s *memStore) DeleteRecords(_ context.Context, table string) error {
+	kept := s.saved[:0]
+	for _, sv := range s.saved {
+		if sv.record.Table != table {
+			kept = append(kept, sv)
+		}
+	}
+	s.saved = kept
+	return nil
+}
+
 type registrar struct {
 	deps     feature.Deps
 	handlers []feature.BlockHandler
@@ -58,7 +69,7 @@ func TestTablesOfOneEvent(t *testing.T) {
 	}
 	store := &memStore{}
 	r := &registrar{deps: feature.Deps{Storage: store, Logger: zap.NewNop(), Settings: func(name string, into any) error {
-		*(into.(*declared.Spec)) = spec
+		*(into.(*Spec)) = Spec{Spec: spec}
 		return nil
 	}}}
 	require.NoError(t, recordsFeature{}.Register(r))
