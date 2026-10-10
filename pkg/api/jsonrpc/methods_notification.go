@@ -505,7 +505,32 @@ func GetNotificationMethods() []string {
 		"notification_test",
 		"notification_retry",
 		"notification_cancel",
+		"notification_checkExpressions",
 	}
+}
+
+// checkNotificationExpressions is a dry run of a setting's condition and
+// payload over an optional sample log or transaction
+// (notifications.ExpressionCheck); nothing is stored or sent.
+func (h *Handler) checkNotificationExpressions(_ context.Context, params json.RawMessage) (interface{}, *Error) {
+	checker, ok := notificationService.(interface {
+		CheckExpressions(notifications.ExpressionCheck) (*notifications.ExpressionCheckResult, error)
+	})
+	if !ok {
+		return nil, NewError(InternalError, "notification service not enabled", nil)
+	}
+	var input notifications.ExpressionCheck
+	if err := json.Unmarshal(params, &input); err != nil {
+		return nil, NewError(InvalidParams, "invalid params", err.Error())
+	}
+	out, err := checker.CheckExpressions(input)
+	if err != nil {
+		if notifications.IsSampleError(err) {
+			return nil, NewError(InvalidParams, err.Error(), nil)
+		}
+		return nil, NewError(InternalError, "failed to check expressions", err.Error())
+	}
+	return out, nil
 }
 
 // notificationsFor is the notification service as the request's API key

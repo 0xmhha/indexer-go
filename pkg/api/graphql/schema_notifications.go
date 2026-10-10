@@ -14,6 +14,7 @@ func (b *SchemaBuilder) WithNotificationService(service notifications.Service) *
 // WithNotificationQueries adds notification management queries and mutations
 func (b *SchemaBuilder) WithNotificationQueries() *SchemaBuilder {
 	s := b.schema
+	b.addNotificationExpressionCheck()
 
 	// Queries
 	b.queries["notificationSettings"] = &graphql.Field{

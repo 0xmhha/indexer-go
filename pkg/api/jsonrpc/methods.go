@@ -220,6 +220,8 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		return h.retryNotification(ctx, params)
 	case "notification_cancel":
 		return h.cancelNotification(ctx, params)
+	case "notification_checkExpressions":
+		return h.checkNotificationExpressions(ctx, params)
 	default:
 		if fn, ok := registeredMethod(method); ok {
 			return fn(ctx, MethodDeps{Storage: h.storage, Logger: h.logger}, params)
