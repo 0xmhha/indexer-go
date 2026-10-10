@@ -34,6 +34,7 @@ database:
   driver: "pebble"                      # pebble(기본) | postgres
   path: "./data"                        # PebbleDB 데이터 디렉토리 (driver pebble)
   readonly: false                       # 읽기 전용 모드
+  cache_mb: 0                           # Pebble block cache(MB), 0은 128. 범위 조회의 블록이 다 들어가지 않으면 파일에서 다시 읽는다. 멀티체인은 체인마다 이 크기
   postgres:                             # driver postgres일 때
     dsn: ""                             # postgres://user:pass@host:port/db (로그에 남기지 않음)
     schema: ""                          # 테이블을 둘 schema, 비우면 public
@@ -486,6 +487,7 @@ INDEXER_RPC_TIMEOUT=30s
 INDEXER_DB_PATH=./data
 INDEXER_DB_READONLY=false
 INDEXER_DB_DRIVER=pebble                 # pebble | postgres
+INDEXER_DB_CACHE_MB=0
 INDEXER_DB_POSTGRES_DSN=postgres://indexer:secret@db:5432/indexer
 INDEXER_DB_POSTGRES_SCHEMA=
 INDEXER_DB_POSTGRES_MAX_CONNS=0

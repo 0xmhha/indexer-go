@@ -740,6 +740,32 @@ func TestDatabaseDriver(t *testing.T) {
 	}
 }
 
+// TestDatabaseCache checks database.cache_mb from the environment and its
+// validation.
+func TestDatabaseCache(t *testing.T) {
+	cfg := NewConfig()
+	cfg.RPC.Endpoint = "http://localhost:8545"
+	cfg.Database.Path = "/tmp/indexer"
+	t.Setenv("INDEXER_DB_CACHE_MB", "1024")
+	if err := cfg.LoadFromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Database.CacheMB != 1024 {
+		t.Errorf("cache from the environment: %d", cfg.Database.CacheMB)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("a cache size: %v", err)
+	}
+	cfg.Database.CacheMB = -1
+	if err := cfg.Validate(); err == nil {
+		t.Error("negative cache: expected an error")
+	}
+	t.Setenv("INDEXER_DB_CACHE_MB", "big")
+	if err := cfg.LoadFromEnv(); err == nil {
+		t.Error("invalid INDEXER_DB_CACHE_MB: expected an error")
+	}
+}
+
 // TestNodeRole checks node.role: all (the default), ingest and api, with the
 // former names writer and reader; an API process needs PostgreSQL, and
 // multi-chain mode runs every role in one process.
