@@ -39,6 +39,7 @@
 | relay 시작 실패 (해소 10/9) | `Fetcher.Recover`가 join을 다시 시도하고, 실패하면 시작을 멈춘다 | — | — |
 | API 프로세스의 알림 (해소 10/10, 결정: api가 쓰고 ingest가 다시 읽기) | api 프로세스가 알림 API를 서빙하고 알림 키만 DB에 쓴다. ingest의 알림 서비스가 설정을 5초마다 다시 읽는다. 재시도는 pending으로 저장해 ingest가 보낸다(전에는 재시도가 저장되지 않아 queue가 차 있으면 사라졌다) | — | — |
 | 값 형식 통일 (결정 10/10: 보류) | 값이 JSON, RLP, 고유 binary로 섞여 있다. 기존 값은 그대로 둔다(바꾸면 모든 DB를 재색인해야 한다). 새 저장 코드의 규칙: 체인 데이터(블록, 트랜잭션, 영수증, 로그)는 `pkg/core/model`의 인코딩을, 기능의 레코드는 JSON을 쓴다(지금 기능들이 쓰는 방식) | 형식이 섞인 상태는 남는다 | — |
+| 토큰 메타데이터 on-demand 조회 (발견 10/10) | `setTokenMetadataFetcher`(`pkg/app/app.go`)가 `ethclient.Client`를 `interface{}` 인자 메서드로 type assertion하는데, 실제 메서드 시그니처(`ethereum.CallMsg`, `*big.Int`)와 맞지 않아 항상 실패한다. 그래서 시작할 때마다 경고만 남고 fetcher가 설정되지 않는다 | `GetTokenBalances`가 색인되지 않은 토큰의 메타데이터를 노드에서 읽지 못하고 비워 둔다. 고치면 API 요청이 노드 호출을 부르므로 부하·지연을 함께 정해야 한다 | [권장] |
 | 노드 URL 노출 (해소 10/9) | 노출 경로는 GraphQL이 아니라 `GET /chains`였다(GraphQL 멀티체인 모듈은 서빙되지 않는 코드였다). 이제 노드 URL은 scheme과 host만 내보낸다. 인증 없는 체인 등록 mutation이 든 서빙되지 않던 GraphQL 모듈은 지웠다 | — | — |
 | HTTP 경로와 멀티체인 (해소 10/9) | 멀티체인 서버가 체인마다 `/chains/{id}/<pattern>`에 mount한다(`{id}` 인자가 있는 패턴은 제외). ingest 역할은 의도대로 mount하지 않는다 | — | — |
 | records 표 정의 변경 (일부 해소 10/10) | 표에 컨트랙트 주소를 더하면 그 표를 처음부터 다시 채운다(`feature.PartEvolver`). 이벤트·키 변경과 주소 삭제는 여전히 시작을 거부한다 | 그 경우 이름을 바꿔 새로 색인하거나 재색인해야 한다 | [권장] |
@@ -52,7 +53,7 @@
 | K2 이진 키 | 11절이 R4-2 뒤 실제 DB로 다시 재기로 했으나 기록이 없다 |
 | PostgreSQL 쓰기 성능 | ingest가 Pebble보다 약 4배 느리다(R4-2). 다시 재지 않았다 |
 | 넓은 범위 조회 | 10,000블록에서 블록당 비용이 늘어난다(R0-8). 드문 조건의 필터를 범위 없이 주면 체인 끝까지 읽는다 |
-| kill 시험 | 결함을 주입해 잡는지(mutation) 확인하지 않았다. 한 실행에서 재시작 4번이 같은 높이에 머문 원인을 보지 않았다 |
+| kill 시험 (10/10 확인) | 결함 두 가지를 주입해 둘 다 실패하는 것을 확인했다. 블록 commit을 두 batch로 나누면 데이터 120건이 빠지고, 재시작 뒤 주소 sequence를 복원하지 않으면 `/index/addr/`·`/index/balance/` 키가 덮어써진다. 같은 높이가 이어진 원인: 재시작 뒤 API가 답한 때부터 첫 블록 색인까지 30~45ms가 걸리는데(부하 없을 때 측정), kill 전 대기가 20~420ms에서 무작위라 짧은 대기가 이어지면 진행 없이 kill된다. 시작 경로가 멈추는 것은 아니다 |
 | SLO | 한 호스트에서만 쟀다(R5-5). 시험의 구독 queue(1024)가 운영 기본값(16384)과 다르고, 부하 체인은 V2 시장만 쓴다 |
 | DEX 실제 컨트랙트 | 시험은 실제 이벤트 시그니처로 만든 로그를 쓴다. testnet 8283 컨트랙트로 확인하지 않았다 |
 | live 노드 시험 (10/10 확인) | 로컬 go-stablenet(Gstable v1.1.0, chainbench로 validator 4 + endpoint 1)에서 `TestLiveBalances`, `TestLiveStableNet`, `TestLiveStableNetIdentity`(fee delegation 0x16 트랜잭션 3건 포함), `TestLiveFailover`, `TestLiveRecordReplay`, `TestLiveHeadLatency`(newHeads p95 4ms), `TestLiveLoopRollsBackReorg`가 통과했다. `TestLiveEraSource`는 era1 파일이 없어 돌리지 않았다. chainbench가 만든 genesis에는 `applepieBlock`이 없어 fee delegation을 쓰려면 genesis에 `applepieBlock`, `bohoBlock`을 0으로 넣어야 했다(chainbench 쪽 문제) |
