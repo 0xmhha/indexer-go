@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/cockroachdb/pebble"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -108,4 +109,19 @@ func (s *PebbleStorage) SaveRecord(ctx context.Context, r *port.Record, keys []p
 		entries = append(entries, [2][]byte{append(kp, position...), position})
 	}
 	return s.putDex(ctx, entries...)
+}
+
+// DeleteRecords implements port.RecordWriter.
+func (s *PebbleStorage) DeleteRecords(ctx context.Context, table string) error {
+	records, err := recordPrefix(table)
+	if err != nil {
+		return err
+	}
+	keys := []byte(prefixRecordKey + table + "/")
+	for _, prefix := range [][]byte{records, keys} {
+		if err := s.kv(ctx).DeleteRange(prefix, prefixUpperBound(prefix), pebble.Sync); err != nil {
+			return err
+		}
+	}
+	return nil
 }

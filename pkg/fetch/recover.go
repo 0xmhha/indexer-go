@@ -90,12 +90,28 @@ func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []feature.Unit, b
 	if err != nil {
 		return err
 	}
+	reset := map[string]bool{}
+	for _, job := range jobs {
+		if job.Reset {
+			reset[job.Feature] = true
+			f.logger.Warn("Rebuilding a part whose definition changed: its data is removed and indexed again from the start",
+				zap.String("part", job.Feature))
+		}
+	}
 	for name, st := range writes {
 		if !st.Active {
 			f.logger.Warn("Feature disabled; its data stops at the current height", zap.String("feature", name), zap.Uint64("through", st.Through))
 		}
 		name, st := name, st
+		// A rebuilt part's data is removed in the transaction that records
+		// its new definition, so a restart never sees one without the other.
 		if err := f.Exec(ctx, "featureState", func(ctx context.Context) error {
+			if reset[name] {
+				if err := backfill.ResetPart(ctx, name); err != nil {
+					return fmt.Errorf("reset %s: %w", name, err)
+				}
+				delete(reset, name)
+			}
 			return fs.SetFeatureState(ctx, name, st)
 		}); err != nil {
 			return err
@@ -109,6 +125,14 @@ func (f *Fetcher) recoverFeatures(ctx context.Context, enabled []feature.Unit, b
 		}
 		f.logger.Info("Backfilling feature", zap.String("feature", job.Feature), zap.Uint64("from", job.From), zap.Uint64("to", job.To))
 		name, def := job.Feature, job.Definition
+		if reset[name] {
+			// Backfill progress records the new definition, so a rebuild
+			// interrupted after its first block resumes instead of
+			// resetting again.
+			if err := f.Exec(ctx, "resetPart", func(ctx context.Context) error { return backfill.ResetPart(ctx, name) }); err != nil {
+				return fmt.Errorf("reset %s: %w", name, err)
+			}
+		}
 		progress := func(ctx context.Context, h uint64) error {
 			return fs.SetFeatureState(ctx, name, port.FeatureState{Through: h, Definition: def})
 		}
