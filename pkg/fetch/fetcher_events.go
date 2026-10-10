@@ -17,47 +17,61 @@ import (
 
 // publishBlockEvents publishes transaction and log events to the event bus
 func (f *Fetcher) publishBlockEvents(fb *fetchedBlock) {
-	receipts, height := fb.gethReceipts, fb.height()
-
-	// Publish transaction events. Hashes and the sender come from the model:
-	// the go-ethereum view of a fee delegation transaction has another hash.
-	for _, p := range fb.transactions() {
-		txEvent := events.NewTransactionEvent(
-			p.gethTx,
-			height,
-			fb.block.Hash,
-			uint(p.index),
-			p.tx.From,
-			p.gethReceipt,
-		)
-		txEvent.Hash = p.tx.Hash
-
-		if !f.publish(txEvent) {
+	for _, ev := range blockEvents(fb) {
+		if f.publish(ev) {
+			continue
+		}
+		switch e := ev.(type) {
+		case *events.TransactionEvent:
 			f.logger.Warn("Failed to publish transaction event (channel full)",
-				zap.String("tx_hash", p.tx.Hash.Hex()),
-				zap.Uint64("block", height),
-			)
+				zap.String("tx_hash", e.Hash.Hex()), zap.Uint64("block", e.BlockNumber))
+		case *events.LogEvent:
+			f.logger.Warn("Failed to publish log event (channel full)",
+				zap.String("tx_hash", e.Log.TxHash.Hex()), zap.Uint64("block", e.Log.BlockNumber), zap.Uint("log_index", e.Log.Index))
 		}
 	}
+}
 
-	// Publish log events
-	for _, receipt := range receipts {
+// blockEvents returns the transaction and log events of a block, in
+// order: what publishBlockEvents publishes and a BlockTap observes.
+func blockEvents(fb *fetchedBlock) []events.Event {
+	var out []events.Event
+	// Hashes and the sender come from the model: the go-ethereum view of a
+	// fee delegation transaction has another hash.
+	for _, p := range fb.transactions() {
+		txEvent := events.NewTransactionEvent(p.gethTx, fb.height(), fb.block.Hash, uint(p.index), p.tx.From, p.gethReceipt)
+		txEvent.Hash = p.tx.Hash
+		out = append(out, txEvent)
+	}
+	for _, receipt := range fb.gethReceipts {
 		if receipt == nil {
 			continue
 		}
 		for _, logEntry := range receipt.Logs {
-			if logEntry == nil {
-				continue
-			}
-			logEvent := events.NewLogEvent(logEntry)
-			if !f.publish(logEvent) {
-				f.logger.Warn("Failed to publish log event (channel full)",
-					zap.String("tx_hash", logEntry.TxHash.Hex()),
-					zap.Uint64("block", logEntry.BlockNumber),
-					zap.Uint("log_index", uint(logEntry.Index)),
-				)
+			if logEntry != nil {
+				out = append(out, events.NewLogEvent(logEntry))
 			}
 		}
+	}
+	return out
+}
+
+// BlockTap observes every block in height order before it is stored: the
+// fast path of notifications evaluates its events without waiting for the
+// commit. OfferBlock must not block; Active reports whether anything
+// observes now, so blocks are not turned into events for nobody.
+type BlockTap interface {
+	Active() bool
+	OfferBlock(height uint64, evs []events.Event)
+}
+
+// SetBlockTap sets the observer of blocks before they are stored.
+func (f *Fetcher) SetBlockTap(tap BlockTap) { f.tap = tap }
+
+// offerBlock gives a block to the tap, if one is active.
+func (f *Fetcher) offerBlock(fb *fetchedBlock) {
+	if f.tap != nil && f.tap.Active() {
+		f.tap.OfferBlock(fb.height(), blockEvents(fb))
 	}
 }
 

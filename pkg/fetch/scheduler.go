@@ -102,6 +102,7 @@ func (f *Fetcher) indexRange(ctx context.Context, start, end uint64, workers int
 			if res.err != nil {
 				return fmt.Errorf("failed to fetch block %d: %w", res.height, res.err)
 			}
+			f.offerBlock(res.block) // fast path: before the commit
 			if err := f.indexBlock(ctx, res.block); err != nil {
 				return err
 			}

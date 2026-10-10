@@ -187,7 +187,7 @@ webhook_url: https://...
 | 2 (완료 10/10) | declared era1: era `Logs`와 `RangeSource`, 연결 source | era 파일 + 시험 체인 결과가 노드만으로 색인한 DB와 같다 (`TestDeclaredModeReadsEra1Archives`, `TestChainedLogsSplitsAtTheArchive`) |
 | 3 (완료 10/10) | 소유와 한도: 설정의 소유 label, 기존 설정은 운영자만, label별 설정 수 한도(평가 시간·메시지·연결 한도는 해당 기능과 함께 4~6단계) | 다른 key의 설정을 보거나 바꿀 수 없다 (`TestSettingsBelongToTheirKey`, `TestSettingsQuota`, `TestNotificationSettingsAreSeparatedByKey`) |
 | 4a (완료 10/10) | 구독 유형: 기존 이벤트 종류·필터 위에 `event`(decode)와 `participants`를 더함. address_activity는 transaction + addresses, contract_logs는 log + addresses, contract_event는 log + event, token_transfer는 token_transfer + participants. 두 API가 topics를 버리던 결함을 고침 | `TestNotificationOfOneDecodedEvent`, `TestFilterInputParse` |
-| 4b | fast path: tap·평가기, `delivery: fast`, 대기열 넘침 알림 | 수집이 평가를 기다리지 않는다 |
+| 4b (완료 10/10) | fast path: `fetch.BlockTap`, 알림 서비스의 블록 대기열과 평가기, `delivery: fast`, 대기열 넘침은 버리고 경고(소유자에게 알리는 것은 4c 스트림과 함께) | commit을 붙잡은 동안 fast 알림이 도착하고 각 이벤트는 한 번 (`TestFastNotificationsArriveBeforeTheCommit`, `TestFastPath*`) |
 | 4c | 스트림 채널 | 등록 → 시험 체인 이벤트 → 스트림 수신 |
 | 5 | 조건식: CEL 타입 검사·dry run·비용 상한, payload 식, 오류 보고 | 조건이 거짓이면 오지 않는다, 비용 초과 구독만 멈춘다 |
 | 6 | webhook 목적지별 상한, metrics, 지연 측정 | 지연 p99로 4.8절 확정 |

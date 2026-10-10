@@ -151,6 +151,10 @@ var notificationSettingType = graphql.NewObject(graphql.ObjectConfig{
 	Name:        "NotificationSetting",
 	Description: "Notification setting configuration",
 	Fields: graphql.Fields{
+		"delivery": &graphql.Field{
+			Type:        graphql.String,
+			Description: "durable or fast",
+		},
 		"id": &graphql.Field{
 			Type:        graphql.NewNonNull(graphql.ID),
 			Description: "Setting unique identifier",
@@ -434,6 +438,10 @@ var createNotificationSettingInputType = graphql.NewInputObject(graphql.InputObj
 			Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(notificationEventTypeEnumType))),
 			Description: "Event types that trigger notifications",
 		},
+		"delivery": &graphql.InputObjectFieldConfig{
+			Type:        graphql.String,
+			Description: "When notifications are created: durable (default, after the block is stored; none missed or repeated) or fast (before it is stored; sooner, at least once)",
+		},
 		"filter": &graphql.InputObjectFieldConfig{
 			Type:        notificationFilterInputType,
 			Description: "Optional filter configuration",
@@ -461,6 +469,10 @@ var updateNotificationSettingInputType = graphql.NewInputObject(graphql.InputObj
 		"eventTypes": &graphql.InputObjectFieldConfig{
 			Type:        graphql.NewList(graphql.NewNonNull(notificationEventTypeEnumType)),
 			Description: "Event types that trigger notifications",
+		},
+		"delivery": &graphql.InputObjectFieldConfig{
+			Type:        graphql.String,
+			Description: "When notifications are created: durable (default, after the block is stored; none missed or repeated) or fast (before it is stored; sooner, at least once)",
 		},
 		"filter": &graphql.InputObjectFieldConfig{
 			Type:        notificationFilterInputType,

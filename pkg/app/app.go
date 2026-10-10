@@ -724,7 +724,12 @@ func (a *App) initNotificationService() error {
 // keeps its event bus subscription.
 func (a *App) streamNotifications() error {
 	svc, ok := a.notificationService.(*notifications.NotificationService)
-	if !ok || a.fetcher == nil || a.fetcher.Stream() == nil {
+	if !ok || a.fetcher == nil {
+		return nil
+	}
+	// Fast settings are evaluated as blocks are fetched, before the commit.
+	a.fetcher.SetBlockTap(svc)
+	if a.fetcher.Stream() == nil {
 		return nil
 	}
 	if err := svc.SetStream(a.fetcher.Stream(), notifications.DefaultStreamGroup); err != nil {
