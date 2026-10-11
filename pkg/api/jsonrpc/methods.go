@@ -16,6 +16,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
@@ -27,6 +28,7 @@ type Handler struct {
 	logger        *zap.Logger
 	filterManager *FilterManager
 	abiDecoder    *abiDecoder.Decoder
+	notifications notifications.Service // nil when notifications are off
 }
 
 // NewHandler creates a new JSON-RPC handler

@@ -1715,10 +1715,9 @@ func (c *Config) UnsupportedSettings() []string {
 			"rpc.ws_endpoint":        c.RPC.WSEndpoint != "",
 			"rpc.record_dir":         c.RPC.RecordDir != "",
 			"source.era_dir":         c.Source.EraDir != "",
-			"notifications.enabled":  c.Notifications.Enabled,
 			"verifier.enabled":       c.Verifier.Enabled,
 		}
-		for _, name := range []string{"rpc.endpoint", "rpc.fallback_endpoints", "rpc.ws_endpoint", "rpc.record_dir", "source.era_dir", "notifications.enabled", "verifier.enabled"} {
+		for _, name := range []string{"rpc.endpoint", "rpc.fallback_endpoints", "rpc.ws_endpoint", "rpc.record_dir", "source.era_dir", "verifier.enabled"} {
 			if ignored[name] {
 				out = append(out, name+" has no effect in multichain mode: chains are configured by their multichain.chains entries")
 			}

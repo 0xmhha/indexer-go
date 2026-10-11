@@ -833,8 +833,10 @@ func chainFeatures(shared, chain map[string]config.FeatureConfig) map[string]con
 
 // chainAppConfig returns the configuration of one chain's App: the shared
 // settings with the chain's endpoints, database and indexing range. Settings
-// that belong to the process (API server, notifications, contract
-// verification, RPC archives) are off; the manager's App serves the API.
+// that belong to the process (API server, contract verification, RPC
+// archives) are off; the manager's App serves the API. Each chain runs its
+// own notification service over its own database, so a setting watches
+// the chain it was created under (/chains/{id}/).
 func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	cfg := *a.config
 	cfg.RPC.Endpoint = cc.RPCEndpoint
@@ -849,8 +851,7 @@ func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	cfg.Indexer.ChunkSize = orDefault(cc.BatchSize, a.config.Indexer.ChunkSize)
 	cfg.Features = chainFeatures(a.config.Features, a.chainFeatureOverrides(cc.ID))
 	cfg.MultiChain = config.MultiChainConfig{}
-	cfg.API.Enabled = false
-	cfg.Notifications.Enabled = false
+	cfg.API.Enabled = false // the manager's App serves every chain's API, notifications included
 	cfg.Verifier.Enabled = false
 	return &cfg
 }
@@ -883,6 +884,27 @@ func (a *App) newChainIndexer(ctx context.Context, cc *multichain.ChainConfig) (
 // chainIndexer runs one chain's App for the multichain manager.
 type chainIndexer struct {
 	app *App
+}
+
+// chainNotifications serves each running chain's notification service and
+// stream connections to the API (api.ChainNotifications), besides its
+// store (api.ChainStores).
+type chainNotifications struct{ *multichain.Manager }
+
+func (c chainNotifications) ChainNotifications(id string) (notifications.Service, *notifications.Streams, bool) {
+	idx, ok := c.ChainIndexer(id)
+	if !ok {
+		return nil, nil, false
+	}
+	ci, ok := idx.(*chainIndexer)
+	if !ok {
+		return nil, nil, false
+	}
+	svc, ok := ci.app.notificationService.(*notifications.NotificationService)
+	if !ok {
+		return nil, nil, false
+	}
+	return svc, svc.Streams(), true
 }
 
 func (c *chainIndexer) Run(ctx context.Context) error { return c.app.Run(ctx) }
@@ -1074,6 +1096,9 @@ func (a *App) initAPIServer() error {
 	}
 	if a.multichainManager != nil {
 		serverOpts.Chains = a.multichainManager
+		if a.config.Notifications.Enabled {
+			serverOpts.Chains = chainNotifications{a.multichainManager}
+		}
 	}
 	// The stream is served by the process that evaluates blocks: not by an
 	// API process, whose ingest process creates the notifications.
