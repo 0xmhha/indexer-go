@@ -60,7 +60,8 @@ func TestSubscriptionStreamOpenedWhileStopping(t *testing.T) {
 	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
 	_, _, err = conn.ReadMessage()
 	require.True(t, gws.IsCloseError(err, gws.CloseGoingAway), "closed as going away: %v", err)
-	require.Zero(t, streams.Connected("alice"))
+	// The handler releases the stream after it closed the connection.
+	require.Eventually(t, func() bool { return streams.Connected("alice") == 0 }, 5*time.Second, 5*time.Millisecond)
 	_ = conn.Close()
 	web.Close()
 	goleak.VerifyNone(t, baseline)
