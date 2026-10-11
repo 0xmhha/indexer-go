@@ -59,13 +59,23 @@ func writeStreamError(w http.ResponseWriter, status int, code, message string) {
 
 // ServeHTTP upgrades a request with an API key to a stream connection of
 // the key's label. Without a key it answers 401, over the key's
-// connection limit 429.
+// connection limit 429, once the server is stopping 503.
+//
+// The handler counts for close from its first step (begin), so close waits
+// for every handler whatever step it is at, and each handler releases its
+// stream before it stops counting: once close (and Server.Stop) returns no
+// stream of this server still counts for its key.
 func (h *subscriptionStreams) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	label, _ := apimiddleware.APIKeyFromContext(r.Context())
 	if label == "" {
 		writeStreamError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "an API key (api.keys) is required")
 		return
 	}
+	if !h.begin() {
+		writeStreamError(w, http.StatusServiceUnavailable, "STREAM_REFUSED", "the server is stopping")
+		return
+	}
+	defer h.wg.Done()
 	st, err := h.streams.Open(label)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -80,24 +90,30 @@ func (h *subscriptionStreams) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return // the upgrader answered the request
 	}
+	defer func() { _ = conn.Close() }()
 	if !h.track(conn) {
-		// The server stopped while this connection was being set up
-		// (close found no connection to end): end it the same way.
+		// The server began stopping while this connection was being set
+		// up (close could not reach it): end it the same way.
 		goingAway(conn)
-		_ = conn.Close()
 		return
 	}
-	// The stream is released before the connection is untracked, so once
-	// close (and Server.Stop) returns no stream of a closed connection
-	// still counts for its key.
-	defer func() {
-		h.streams.Close(st)
-		h.untrack(conn)
-	}()
+	defer h.untrack(conn)
 	h.serve(conn, st)
 }
 
-// track records conn so close can end it; false once the server stopped.
+// begin counts a handler for close; false once the server is stopping.
+func (h *subscriptionStreams) begin() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return false
+	}
+	h.wg.Add(1)
+	return true
+}
+
+// track records conn so close can end it; false once the server is
+// stopping.
 func (h *subscriptionStreams) track(conn *gws.Conn) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -105,7 +121,6 @@ func (h *subscriptionStreams) track(conn *gws.Conn) bool {
 		return false
 	}
 	h.conns[conn] = struct{}{}
-	h.wg.Add(1)
 	return true
 }
 
@@ -113,8 +128,6 @@ func (h *subscriptionStreams) untrack(conn *gws.Conn) {
 	h.mu.Lock()
 	delete(h.conns, conn)
 	h.mu.Unlock()
-	_ = conn.Close()
-	h.wg.Done()
 }
 
 // serve writes the stream's messages until the client goes away, the
@@ -161,7 +174,7 @@ func (h *subscriptionStreams) serve(conn *gws.Conn, st *notifications.Stream) {
 	}
 }
 
-// close ends every connection and waits for their handlers.
+// close ends every connection and waits for every handler (begin).
 func (h *subscriptionStreams) close() {
 	h.mu.Lock()
 	h.closed = true

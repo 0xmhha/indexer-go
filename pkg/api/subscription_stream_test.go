@@ -45,26 +45,45 @@ func TestSubscriptionStreamStopsWithTheServer(t *testing.T) {
 	goleak.VerifyNone(t, baseline)
 }
 
-// TestSubscriptionStreamOpenedWhileStopping: a connection whose handler
-// finds the server stopped (it was set up while close ran, a race CI hit
-// once) is closed as going away too, not dropped without a close frame.
-func TestSubscriptionStreamOpenedWhileStopping(t *testing.T) {
+// TestSubscriptionStreamRefusedWhileStopping: a connection asked for once
+// the server is stopping is refused (503) and holds no stream.
+func TestSubscriptionStreamRefusedWhileStopping(t *testing.T) {
 	baseline := goleak.IgnoreCurrent()
 	streams := notifications.NewStreams(1)
 	h := newSubscriptionStreams(streams, func(*http.Request) bool { return true }, zap.NewNop())
-	h.close() // stopped before the connection is tracked
+	h.close()
 	web := httptest.NewServer(apiKeyLabel("alice", h))
 	url := "ws" + strings.TrimPrefix(web.URL, "http")
-	conn, _, err := gws.DefaultDialer.Dial(url, nil)
-	require.NoError(t, err)
-	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
-	_, _, err = conn.ReadMessage()
-	require.True(t, gws.IsCloseError(err, gws.CloseGoingAway), "closed as going away: %v", err)
-	// The handler releases the stream after it closed the connection.
-	require.Eventually(t, func() bool { return streams.Connected("alice") == 0 }, 5*time.Second, 5*time.Millisecond)
-	_ = conn.Close()
+	_, resp, err := gws.DefaultDialer.Dial(url, nil)
+	require.Error(t, err)
+	require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	require.Zero(t, streams.Connected("alice"))
 	web.Close()
 	goleak.VerifyNone(t, baseline)
+}
+
+// TestSubscriptionStreamStopWaitsForHandlers: Stop waits for a handler
+// that has begun but not yet registered its connection (the window a CI
+// run hit: the stream was released after Stop returned), and that
+// handler's stream is released by the time Stop returns.
+func TestSubscriptionStreamStopWaitsForHandlers(t *testing.T) {
+	streams := notifications.NewStreams(1)
+	h := newSubscriptionStreams(streams, func(*http.Request) bool { return true }, zap.NewNop())
+	require.True(t, h.begin(), "a handler has begun")
+	st, err := streams.Open("alice")
+	require.NoError(t, err)
+	stopped := make(chan struct{})
+	go func() { h.close(); close(stopped) }()
+	select {
+	case <-stopped:
+		t.Fatal("close returned while a handler was still running")
+	case <-time.After(50 * time.Millisecond):
+	}
+	// The handler ends: it releases its stream, then stops counting.
+	streams.Close(st)
+	h.wg.Done()
+	<-stopped
+	require.Zero(t, streams.Connected("alice"))
 }
 
 // apiKeyLabel serves h with requests carrying an API key of label.
