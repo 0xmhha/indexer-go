@@ -50,6 +50,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.8"
+          cache: false # the module cache was restored by the first setup-go
       - name: golangci-lint
         run: make lint
       - name: golangci-lint (tools/astgraph)
