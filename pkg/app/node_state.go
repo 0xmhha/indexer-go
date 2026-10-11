@@ -18,7 +18,8 @@ import (
 // state before each block it processes (feature.StateReader) and the node
 // no longer keeps the state before the first such block: a node that is not
 // an archive node keeps only recent states, and the feature would start
-// accounts it cannot read from 0. A feature whose settings set
+// accounts it cannot read from 0 (balance.native) or read contracts at the
+// latest state (token.metadata). A feature whose settings set
 // allow_pruned_state is not checked.
 func (a *App) checkNodeState(ctx context.Context, units []feature.Unit, features []string) error {
 	var readers []string
@@ -67,7 +68,8 @@ func (a *App) checkNodeState(ctx context.Context, units []feature.Unit, features
 		zap.Strings("features", readers), zap.Uint64("block", at), zap.Error(err))
 	return fmt.Errorf("%v read the node's state before each block, but the node keeps no state of block %d (%v): "+
 		"use an archive node, start from a height whose state the node keeps (indexer.start_height), disable the feature, "+
-		"or set features.<name>.allow_pruned_state: true to start accounts the node cannot give from 0", readers, at, err)
+		"or set features.<name>.allow_pruned_state: true to go on without it (balance.native starts accounts the node cannot give from 0, "+
+		"token.metadata reads contracts at the latest state)", readers, at, err)
 }
 
 // firstStateHeight is the lowest block one of the features will process:
