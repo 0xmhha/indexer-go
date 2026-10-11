@@ -157,7 +157,7 @@ func (s *NotificationService) notifyFast(ctx context.Context, evs []events.Event
 	// Stream settings first: their notifications are only sent, while the
 	// others' are stored, which must not hold the streams back.
 	sort.SliceStable(settings, func(i, j int) bool {
-		return settings[i].Type == NotificationTypeStream && settings[j].Type != NotificationTypeStream
+		return settings[i].hasChannel(NotificationTypeStream) && !settings[j].hasChannel(NotificationTypeStream)
 	})
 	kinds := make([][]EventType, len(evs))
 	for _, setting := range settings {

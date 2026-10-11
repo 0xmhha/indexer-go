@@ -159,6 +159,10 @@ var notificationSettingType = graphql.NewObject(graphql.ObjectConfig{
 			Type:        graphql.String,
 			Description: "durable or fast",
 		},
+		"channels": &graphql.Field{
+			Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(notificationTypeEnumType))),
+			Description: "Every channel the notifications go to: type first, then the further channels",
+		},
 		"condition": &graphql.Field{
 			Type:        graphql.String,
 			Description: "CEL condition an event must meet to be notified (empty: every matching event)",
@@ -450,6 +454,10 @@ var createNotificationSettingInputType = graphql.NewInputObject(graphql.InputObj
 			Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(notificationEventTypeEnumType))),
 			Description: "Event types that trigger notifications",
 		},
+		"channels": &graphql.InputObjectFieldConfig{
+			Type:        graphql.NewList(graphql.NewNonNull(notificationTypeEnumType)),
+			Description: "Further channels besides type, such as WEBHOOK besides STREAM; each is validated like type",
+		},
 		"condition": &graphql.InputObjectFieldConfig{
 			Type:        graphql.String,
 			Description: "CEL condition an event must meet to be notified; type-checked when registered (variables: event.<argument> of filter.event, log.*, tx.*, block.*, chain.id; bigCmp for integers over 64 bits)",
@@ -489,6 +497,10 @@ var updateNotificationSettingInputType = graphql.NewInputObject(graphql.InputObj
 		"eventTypes": &graphql.InputObjectFieldConfig{
 			Type:        graphql.NewList(graphql.NewNonNull(notificationEventTypeEnumType)),
 			Description: "Event types that trigger notifications",
+		},
+		"channels": &graphql.InputObjectFieldConfig{
+			Type:        graphql.NewList(graphql.NewNonNull(notificationTypeEnumType)),
+			Description: "Further channels besides type, such as WEBHOOK besides STREAM; each is validated like type",
 		},
 		"condition": &graphql.InputObjectFieldConfig{
 			Type:        graphql.String,
