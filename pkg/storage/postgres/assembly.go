@@ -123,14 +123,17 @@ func (s *Store) resetGenesisTried() {
 
 // ========== Reindex ==========
 
-// preservedTables keep their rows when chain data is cleared: the schema
-// version, contract verification (user data) and the outbox numbering and
-// cursors, so events of the new indexing continue the sequence consumers
+// preservedTables keep their rows when chain data is cleared: contract
+// verification (user data) and the outbox numbering and cursors, so events of the new indexing continue the sequence consumers
 // have seen (as the Pebble store's Preserved keyspaces).
 var preservedTables = map[string]bool{
-	"schema_migrations": true, "abis": true, "contract_verifications": true,
+	"abis": true, "contract_verifications": true,
 	"outbox_sequence": true, "outbox_cursors": true,
 }
+
+// schemaTables describe the schema, not data: they are never cleared (the
+// schema version, and the tables undone by height, migration 0012).
+var schemaTables = map[string]bool{"schema_migrations": true, "undo_by_height": true}
 
 // ClearChainData deletes the indexed chain data for a reindex: every table
 // except preservedTables, and the kv rows under kvPrefixes (the chain data
@@ -153,7 +156,7 @@ func (s *Store) ClearChainData(ctx context.Context, kvPrefixes []string, all boo
 			rows.Close()
 			return nil, err
 		}
-		keep := preservedTables[name] && (!all || name == "schema_migrations")
+		keep := schemaTables[name] || (preservedTables[name] && !all)
 		if !keep && name != "kv" {
 			tables = append(tables, name)
 		}

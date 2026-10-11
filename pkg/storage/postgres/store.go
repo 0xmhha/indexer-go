@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -216,9 +217,10 @@ type blockTx struct {
 	genesisSeen map[common.Address]bool
 
 	// pending are queued writes (pending.go); balances the latest balance
-	// of each account the transaction updated.
+	// of each account the transaction read or updated.
 	pending  *pgx.Batch
 	balances map[common.Address]*big.Int
+	dirty    map[common.Address]bool // balances not written since the last flush
 }
 
 var _ port.BlockTransactor = (*Store)(nil)
@@ -244,7 +246,12 @@ func (s *Store) BeginBlock(ctx context.Context) (context.Context, port.BlockTx, 
 }
 
 // SetHeight implements port.BlockTx.
-func (t *blockTx) SetHeight(height uint64) { t.height = &height }
+func (t *blockTx) SetHeight(height uint64) {
+	t.height = &height
+	// The undo trigger and the undo-by-height tables record the height
+	// with each write (migration 0012).
+	t.queue("SELECT set_config('indexer.height', $1, true)", strconv.FormatUint(height, 10))
+}
 
 // UndoWindow is how many recent blocks can be rolled back, as in the
 // Pebble store.
@@ -282,7 +289,10 @@ func (t *blockTx) recordUndo(ctx context.Context) error {
 	}
 	h := i64(*t.height)
 	b := &pgx.Batch{}
-	b.Queue("DELETE FROM undo_log WHERE height = $1", h)
+	// An earlier transaction's record of the height is replaced; this
+	// transaction's records carry the height already (or, written before
+	// SetHeight, get it now).
+	b.Queue("DELETE FROM undo_log WHERE height = $1 AND txid <> txid_current()", h)
 	b.Queue("UPDATE undo_log SET height = $1 WHERE height IS NULL AND txid = txid_current()", h)
 	b.Queue("INSERT INTO undo_blocks (height) VALUES ($1) ON CONFLICT DO NOTHING", h)
 	if h >= UndoWindow {

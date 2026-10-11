@@ -18,17 +18,20 @@ import (
 // untracked lists the tables whose changes a rollback keeps: the schema
 // version, undo itself, orphans and the outbox (migration 0006).
 var untracked = map[string]bool{
-	"schema_migrations": true, "undo_log": true, "undo_blocks": true,
+	"schema_migrations": true, "undo_log": true, "undo_blocks": true, "undo_by_height": true,
 	"reorgs": true, "orphaned_blocks": true, "orphaned_transactions": true,
 	"outbox": true, "outbox_sequence": true, "outbox_cursors": true,
 }
 
 // trackedTables returns the tables of the store's schema that are not in
-// untracked, and whether each has the undo trigger.
+// untracked, and whether each is undone: by the undo trigger, or by height
+// (listed in undo_by_height, with its undo_height column; migration 0012).
 func trackedTables(t *testing.T, s *Store) map[string]bool {
 	t.Helper()
 	rows, err := s.pool.Query(context.Background(), `SELECT c.relname,
 			EXISTS (SELECT 1 FROM pg_trigger g WHERE g.tgrelid = c.oid AND g.tgname = 'undo_record')
+			OR (EXISTS (SELECT 1 FROM undo_by_height u WHERE u.tbl = c.relname)
+				AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'undo_height'))
 		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 		WHERE n.nspname = current_schema() AND c.relkind = 'r'`)
 	require.NoError(t, err)
@@ -55,7 +58,7 @@ func TestEveryTableIsUndoTracked(t *testing.T) {
 	tables := trackedTables(t, s)
 	require.NotEmpty(t, tables)
 	for name, tracked := range tables {
-		assert.True(t, tracked, "table %s has no undo trigger: call undo_track('%s') in its migration", name, name)
+		assert.True(t, tracked, "table %s is not undone: call undo_track('%s') (or undo_by_height_track for a table blocks only insert into) in its migration", name, name)
 	}
 }
 
@@ -125,6 +128,9 @@ func TestRollbackRestoresEveryTable(t *testing.T) {
 		require.NoError(t, s.SetABI(ctx, token, []byte("[]")))
 		require.NoError(t, s.IncrementSetCodeStats(ctx, a, true, false, 2))
 		require.NoError(t, s.SetFeatureState(ctx, "f", port.FeatureState{Through: 2}))
+		// A row of another block number written by block 2, as the
+		// genesis balance lookup writes block-0 history.
+		require.NoError(t, s.SetBalance(ctx, common.HexToAddress("0x0c"), 0, big.NewInt(9)))
 	})
 	require.NotEqual(t, before, snapshot(t, s), "block 2 changed rows")
 
@@ -138,4 +144,34 @@ func TestRollbackRestoresEveryTable(t *testing.T) {
 	for name, rows := range before {
 		assert.Equal(t, rows, after[name], "table %s after the rollback", name)
 	}
+}
+
+// TestUndoByHeightGuard: a block transaction may not update or delete a
+// row another height wrote in a table undone by height, since rolling the
+// block back would not restore it; outside block transactions (rollback,
+// maintenance) it may.
+func TestUndoByHeightGuard(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	a := common.HexToAddress("0x0a")
+	txCtx, tx, err := s.BeginBlock(ctx)
+	require.NoError(t, err)
+	tx.SetHeight(1)
+	require.NoError(t, s.AddTransactionToAddressIndex(txCtx, a, common.Hash{0x11}))
+	require.NoError(t, tx.Commit())
+
+	var height *int64
+	require.NoError(t, s.pool.QueryRow(ctx, "SELECT undo_height FROM address_transactions").Scan(&height))
+	require.NotNil(t, height)
+	assert.Equal(t, int64(1), *height, "the row records the height that wrote it")
+
+	txCtx, tx, err = s.BeginBlock(ctx)
+	require.NoError(t, err)
+	tx.SetHeight(2)
+	_, err = s.q(txCtx).Exec(txCtx, "UPDATE address_transactions SET tx_hash = $1", common.Hash{0x22}.Bytes())
+	require.ErrorContains(t, err, "may not change a row of address_transactions written by block 1")
+	tx.Rollback()
+
+	_, err = s.pool.Exec(ctx, "DELETE FROM address_transactions")
+	require.NoError(t, err, "outside a block transaction")
 }
