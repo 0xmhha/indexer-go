@@ -58,7 +58,7 @@ make lint           # golangci-lint
 make docker-build   # Container image
 ```
 
-CI (`.github/workflows/ci.yml`) runs gofmt, vet, `make lint` (and tools/astgraph), `go test ./...`, `scripts/test-postgres.sh` and `make test-examples` on every pull request and on the default branch.
+CI (`.github/workflows/ci.yml`) runs gofmt, vet, `make lint` (and tools/astgraph), `go test ./...`, `scripts/test-postgres.sh` and `make test-examples` on every pull request and on the default branch. Jobs install the Go of go.mod's `toolchain` line (`GO_VERSION`, checked against go.mod) with `GOTOOLCHAIN=local`, so no job downloads a toolchain; the linters get Go 1.26.8. main requires the four jobs (lint, test, postgres, examples) to pass before a merge, administrators included. Tests wait for the state they check (`require.Eventually`, `waitSubscribed`, `waitRelayed`) instead of sleeping a fixed time; new concurrency tests are run with `-count=200`, `-race` and `GOMAXPROCS=1` before they are pushed.
 
 `make generate` runs gqlgen, but the runtime GraphQL server does not use generated code.
 
