@@ -173,12 +173,22 @@ func TestDEXReorgWithoutOutbox(t *testing.T) {
 	defer cancel()
 	app := startDEXReorgApp(t, srv, filepath.Join(t.TempDir(), "db"), sc, func(c *config.Config) { c.EventBus.Outbox = false })
 	defer app.Shutdown()
+	// Subscribed before the first indexing: the bus delivers events
+	// asynchronously, so trades of the first indexing could otherwise
+	// arrive after a later subscription and pass for the new branch's.
+	sub := app.eventBus.Subscribe("test-trades", []events.EventType{dex.EventTypeTrade}, nil, 1000)
+	require.NotNil(t, sub)
 	require.NoError(t, app.fetcher.FetchRange(ctx, 0, sc.Chain.Head()))
 	removedWant := tradesAbove(t, ctx, app.storage.(dexStore), 4, sc.Chain.Head())
 	require.Len(t, removedWant, 4)
-
-	sub := app.eventBus.Subscribe("test-trades", []events.EventType{dex.EventTypeTrade}, nil, 1000)
-	require.NotNil(t, sub)
+	for first := len(tradesAbove(t, ctx, app.storage.(dexStore), 0, sc.Chain.Head())); first > 0; first-- {
+		select {
+		case ev := <-sub.Channel:
+			require.False(t, ev.(*dex.TradeEvent).Removed, "the first indexing removes nothing")
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%d trades of the first indexing not delivered", first)
+		}
+	}
 	sc.Fork()
 	newHead := sc.Chain.Head()
 	loopCtx, stop := context.WithCancel(ctx)
