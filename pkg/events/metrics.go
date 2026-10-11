@@ -29,8 +29,17 @@ type Metrics struct {
 	BroadcastDuration      prometheus.Histogram
 }
 
-// NewMetrics creates and registers all EventBus metrics
+// NewMetrics creates all EventBus metrics and registers them with the
+// default Prometheus registry.
 func NewMetrics(namespace, subsystem string) *Metrics {
+	return NewMetricsWith(prometheus.DefaultRegisterer, namespace, subsystem)
+}
+
+// NewMetricsWith creates all EventBus metrics and registers them with reg,
+// so tests (or a second bus) can use a registry of their own: the default
+// registry refuses a metric registered twice.
+func NewMetricsWith(reg prometheus.Registerer, namespace, subsystem string) *Metrics {
+	auto := promauto.With(reg)
 	if namespace == "" {
 		namespace = "indexer"
 	}
@@ -40,25 +49,25 @@ func NewMetrics(namespace, subsystem string) *Metrics {
 
 	return &Metrics{
 		// Gauges
-		SubscribersTotal: promauto.NewGauge(prometheus.GaugeOpts{
+		SubscribersTotal: auto.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "subscribers_total",
 			Help:      "Current number of active subscribers",
 		}),
-		SubscribersByType: promauto.NewGaugeVec(prometheus.GaugeOpts{
+		SubscribersByType: auto.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "subscribers_by_type",
 			Help:      "Current number of subscribers by event type",
 		}, []string{"event_type"}),
-		PublishChannelSize: promauto.NewGauge(prometheus.GaugeOpts{
+		PublishChannelSize: auto.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "publish_channel_size",
 			Help:      "Current size of the publish channel buffer",
 		}),
-		SubscribeChannelSize: promauto.NewGauge(prometheus.GaugeOpts{
+		SubscribeChannelSize: auto.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "subscribe_channel_size",
@@ -66,37 +75,37 @@ func NewMetrics(namespace, subsystem string) *Metrics {
 		}),
 
 		// Counters
-		EventsPublishedTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+		EventsPublishedTotal: auto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "events_published_total",
 			Help:      "Total number of events published",
 		}, []string{"event_type"}),
-		EventsDeliveredTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+		EventsDeliveredTotal: auto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "events_delivered_total",
 			Help:      "Total number of events delivered to subscribers",
 		}, []string{"event_type"}),
-		EventsDroppedTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+		EventsDroppedTotal: auto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "events_dropped_total",
 			Help:      "Total number of events dropped due to full channels",
 		}, []string{"event_type"}),
-		EventsFilteredTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+		EventsFilteredTotal: auto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "events_filtered_total",
 			Help:      "Total number of events filtered out by subscriber filters",
 		}, []string{"event_type", "filter_type"}),
-		SubscriptionsTotal: promauto.NewCounter(prometheus.CounterOpts{
+		SubscriptionsTotal: auto.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "subscriptions_total",
 			Help:      "Total number of subscription requests",
 		}),
-		UnsubscriptionsTotal: promauto.NewCounter(prometheus.CounterOpts{
+		UnsubscriptionsTotal: auto.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "unsubscriptions_total",
@@ -104,21 +113,21 @@ func NewMetrics(namespace, subsystem string) *Metrics {
 		}),
 
 		// Histograms
-		EventDeliveryDuration: promauto.NewHistogramVec(prometheus.HistogramOpts{
+		EventDeliveryDuration: auto.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "event_delivery_duration_seconds",
 			Help:      "Event delivery duration in seconds",
 			Buckets:   []float64{0.000001, 0.000005, 0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01}, // 1μs to 10ms
 		}, []string{"event_type"}),
-		FilterMatchingDuration: promauto.NewHistogramVec(prometheus.HistogramOpts{
+		FilterMatchingDuration: auto.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "filter_matching_duration_seconds",
 			Help:      "Filter matching duration in seconds",
 			Buckets:   []float64{0.000001, 0.000005, 0.00001, 0.00005, 0.0001, 0.0005, 0.001}, // 1μs to 1ms
 		}, []string{"event_type", "has_filter"}),
-		BroadcastDuration: promauto.NewHistogram(prometheus.HistogramOpts{
+		BroadcastDuration: auto.NewHistogram(prometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "broadcast_duration_seconds",
