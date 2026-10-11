@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/features/dex"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
@@ -269,7 +270,9 @@ func TestSLOLoad(t *testing.T) {
 	blocks := envInt(t, "INDEXER_LOAD_BLOCKS", 60)
 	swaps := envInt(t, "INDEXER_LOAD_SWAPS", sloTradesPerSec)
 	interval := time.Duration(envInt(t, "INDEXER_LOAD_INTERVAL_MS", 1000)) * time.Millisecond
-	queue := envInt(t, "INDEXER_LOAD_QUEUE", 1024)
+	// The production default; at this load no queue fills, so a smaller one
+	// measured the same (1024: p99 87/96 ms, 16384: 89/94 ms on 10/12).
+	queue := envInt(t, "INDEXER_LOAD_QUEUE", constants.DefaultEventBusSubscriberBuffer)
 	bound := time.Duration(envInt(t, "INDEXER_LOAD_P99_MS", int(sloP99/time.Millisecond))) * time.Millisecond
 	rate := float64(swaps) / interval.Seconds()
 	report := func(name string, r sloResult, slow int) {
