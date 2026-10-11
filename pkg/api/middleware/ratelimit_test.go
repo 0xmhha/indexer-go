@@ -162,7 +162,10 @@ func TestRateLimitMiddleware_IgnoresForwardingHeaders(t *testing.T) {
 
 func TestRateLimiter_Concurrent(t *testing.T) {
 	logger := zap.NewNop()
-	limiter := NewRateLimiter(100, 100, logger)
+	// A refill too slow to matter (one token per 1000s): the 200 requests
+	// take more than 10ms on a slow or race-instrumented run, which at
+	// 100/s would refill a token and allow 101.
+	limiter := NewRateLimiter(0.001, 100, logger)
 
 	var wg sync.WaitGroup
 	allowed := make(chan bool, 200)

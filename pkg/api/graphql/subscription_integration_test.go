@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -97,8 +98,8 @@ func TestWebSocketBlockSubscription_Integration(t *testing.T) {
 	testBlock := createTestBlock(12345)
 	blockEvent := events.NewBlockEvent(testBlock)
 
-	// Give subscription time to register
-	time.Sleep(100 * time.Millisecond)
+	// Wait until the subscription is registered
+	waitSubscribed(t, subServer, eventBus, 1)
 
 	// Publish event
 	if !eventBus.Publish(blockEvent) {
@@ -250,7 +251,7 @@ func TestWebSocketTransactionSubscription(t *testing.T) {
 		},
 	})
 
-	time.Sleep(100 * time.Millisecond)
+	waitSubscribed(t, subServer, eventBus, 1)
 
 	// Publish transaction event
 	tx := createTestTransaction()
@@ -346,7 +347,7 @@ func TestWebSocketLogSubscription(t *testing.T) {
 		},
 	})
 
-	time.Sleep(100 * time.Millisecond)
+	waitSubscribed(t, subServer, eventBus, 1)
 
 	// Publish matching log event
 	matchingLog := &types.Log{
@@ -439,7 +440,7 @@ func TestWebSocketMultipleSubscriptions(t *testing.T) {
 		},
 	})
 
-	time.Sleep(100 * time.Millisecond)
+	waitSubscribed(t, subServer, eventBus, 2)
 
 	// Publish block
 	blockEvent := events.NewBlockEvent(createTestBlock(100))
@@ -644,7 +645,7 @@ func TestWebSocketTransactionFilter(t *testing.T) {
 		},
 	})
 
-	time.Sleep(100 * time.Millisecond)
+	waitSubscribed(t, subServer, eventBus, 1)
 
 	// Publish matching transaction (from matches filter)
 	matchingTx := createTestTransaction()
@@ -725,8 +726,12 @@ func TestEventBusStats(t *testing.T) {
 		eventBus.Publish(blockEvent)
 	}
 
-	// Wait for events to be processed
-	time.Sleep(200 * time.Millisecond)
+	// Wait for the bus to count all five deliveries (it counts after the
+	// send, asynchronously).
+	require.Eventually(t, func() bool {
+		info := eventBus.GetSubscriberInfo(subID)
+		return info != nil && info.EventsReceived == 5
+	}, 5*time.Second, 5*time.Millisecond)
 
 	// Check subscriber stats
 	info := eventBus.GetSubscriberInfo(subID)
