@@ -139,7 +139,7 @@ func (s *Store) saveDex(ctx context.Context, what string, record any, sql string
 	if err != nil {
 		return fmt.Errorf("marshal %s: %w", what, err)
 	}
-	_, err = s.q(ctx).Exec(ctx, sql, append(args, data)...)
+	err = s.execLater(ctx, sql, append(args, data)...)
 	return err
 }
 
@@ -190,10 +190,10 @@ func (s *Store) SaveDexOrder(ctx context.Context, o *port.DexOrder) error {
 		return err
 	}
 	if !o.Status.Resting() {
-		_, err = s.q(ctx).Exec(ctx, "DELETE FROM dex_open_orders WHERE manager = $1 AND order_id = $2", o.Market.Address.Bytes(), o.ID.Bytes())
+		err = s.execLater(ctx, "DELETE FROM dex_open_orders WHERE manager = $1 AND order_id = $2", o.Market.Address.Bytes(), o.ID.Bytes())
 		return err
 	}
-	_, err = s.q(ctx).Exec(ctx, `INSERT INTO dex_open_orders (manager, order_id, market_id, created_block, created_log_index)
+	err = s.execLater(ctx, `INSERT INTO dex_open_orders (manager, order_id, market_id, created_block, created_log_index)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (manager, order_id) DO UPDATE SET market_id = EXCLUDED.market_id,
 			created_block = EXCLUDED.created_block, created_log_index = EXCLUDED.created_log_index`,
@@ -207,7 +207,7 @@ func (s *Store) SaveDexTick(ctx context.Context, t *port.DexTick) error {
 		if err := s.write(); err != nil {
 			return err
 		}
-		_, err := s.q(ctx).Exec(ctx, "DELETE FROM dex_ticks WHERE address = $1 AND market_id = $2 AND tick = $3",
+		err := s.execLater(ctx, "DELETE FROM dex_ticks WHERE address = $1 AND market_id = $2 AND tick = $3",
 			t.Market.Address.Bytes(), i64(t.Market.ID), t.Tick)
 		return err
 	}

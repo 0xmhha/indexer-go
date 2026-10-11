@@ -324,6 +324,16 @@ func (s *Store) GetBalanceHistory(ctx context.Context, addr common.Address, from
 // the balance negative is rejected (port.ErrNegativeBalance) and changes
 // nothing.
 func (s *Store) UpdateBalance(ctx context.Context, addr common.Address, blockNumber uint64, delta *big.Int, txHash common.Hash) error {
+	if bt := s.boundTx(ctx); bt != nil {
+		if err := s.write(); err != nil {
+			return err
+		}
+		current, err := bt.balance(ctx, addr)
+		if err != nil {
+			return err
+		}
+		return bt.addSnapshot(addr, blockNumber, current, delta, txHash)
+	}
 	return s.inTx(ctx, func(q querier) error {
 		current, err := latestBalance(ctx, q, addr)
 		if err != nil {
@@ -336,6 +346,16 @@ func (s *Store) UpdateBalance(ctx context.Context, addr common.Address, blockNum
 // SetBalance implements port.HistoricalWriter: a snapshot whose delta is
 // the change from the latest balance.
 func (s *Store) SetBalance(ctx context.Context, addr common.Address, blockNumber uint64, balance *big.Int) error {
+	if bt := s.boundTx(ctx); bt != nil {
+		if err := s.write(); err != nil {
+			return err
+		}
+		current, err := bt.balance(ctx, addr)
+		if err != nil {
+			return err
+		}
+		return bt.addSnapshot(addr, blockNumber, current, new(big.Int).Sub(balance, current), common.Hash{})
+	}
 	return s.inTx(ctx, func(q querier) error {
 		current, err := latestBalance(ctx, q, addr)
 		if err != nil {

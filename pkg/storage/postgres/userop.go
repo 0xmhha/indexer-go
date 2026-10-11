@@ -199,7 +199,7 @@ func (s *Store) putRecord(ctx context.Context, table string, address common.Addr
 	if err != nil {
 		return fmt.Errorf("marshal %s: %w", table, err)
 	}
-	_, err = s.q(ctx).Exec(ctx, "INSERT INTO "+table+` (address, data) VALUES ($1, $2)
+	err = s.execLater(ctx, "INSERT INTO "+table+` (address, data) VALUES ($1, $2)
 		ON CONFLICT (address) DO UPDATE SET data = EXCLUDED.data`, address.Bytes(), data)
 	return err
 }

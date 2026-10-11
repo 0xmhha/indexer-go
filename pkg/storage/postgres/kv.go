@@ -33,7 +33,7 @@ func (s *Store) Put(ctx context.Context, key, value []byte) error {
 	if value == nil {
 		value = []byte{}
 	}
-	_, err := s.q(ctx).Exec(ctx, `INSERT INTO kv (key, value) VALUES ($1, $2)
+	err := s.execLater(ctx, `INSERT INTO kv (key, value) VALUES ($1, $2)
 		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, key, value)
 	return err
 }
@@ -52,7 +52,7 @@ func (s *Store) Delete(ctx context.Context, key []byte) error {
 	if err := s.writeKey(key); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, "DELETE FROM kv WHERE key = $1", key)
+	err := s.execLater(ctx, "DELETE FROM kv WHERE key = $1", key)
 	return err
 }
 
@@ -244,7 +244,7 @@ func (s *Store) SetFeatureState(ctx context.Context, name string, st port.Featur
 	if err != nil {
 		return err
 	}
-	_, err = s.q(ctx).Exec(ctx, `INSERT INTO feature_states (name, state) VALUES ($1, $2)
+	err = s.execLater(ctx, `INSERT INTO feature_states (name, state) VALUES ($1, $2)
 		ON CONFLICT (name) DO UPDATE SET state = EXCLUDED.state`, name, data)
 	return err
 }

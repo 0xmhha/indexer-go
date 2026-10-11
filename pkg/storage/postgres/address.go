@@ -52,7 +52,7 @@ func (s *Store) SaveContractCreation(ctx context.Context, c *port.ContractCreati
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, `INSERT INTO contract_creations (`+creationColumns+`) VALUES ($1, $2, $3, $4, $5, $6)
+	err := s.execLater(ctx, `INSERT INTO contract_creations (`+creationColumns+`) VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (contract_address) DO UPDATE SET creator = EXCLUDED.creator, tx_hash = EXCLUDED.tx_hash,
 			block_number = EXCLUDED.block_number, timestamp = EXCLUDED.timestamp, bytecode_size = EXCLUDED.bytecode_size`,
 		c.ContractAddress.Bytes(), c.Creator.Bytes(), c.TransactionHash.Bytes(), i64(c.BlockNumber), i64(c.Timestamp), c.BytecodeSize)
@@ -228,13 +228,12 @@ func (s *Store) SaveERC20Transfer(ctx context.Context, t *port.ERC20Transfer) er
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, `INSERT INTO erc20_transfers (tx_hash, log_index, contract, from_addr, to_addr, value, block_number, timestamp)
+	return s.execLater(ctx, `INSERT INTO erc20_transfers (tx_hash, log_index, contract, from_addr, to_addr, value, block_number, timestamp)
 		VALUES ($1, $2, $3, $4, $5, $6::numeric, $7, $8)
 		ON CONFLICT (tx_hash, log_index) DO UPDATE SET contract = EXCLUDED.contract, from_addr = EXCLUDED.from_addr,
 			to_addr = EXCLUDED.to_addr, value = EXCLUDED.value, block_number = EXCLUDED.block_number, timestamp = EXCLUDED.timestamp`,
 		t.TransactionHash.Bytes(), int64(t.LogIndex), t.ContractAddress.Bytes(), t.From.Bytes(), t.To.Bytes(), numeric(t.Value),
 		i64(t.BlockNumber), i64(t.Timestamp))
-	return err
 }
 
 func scanERC20(row pgx.CollectableRow) (*port.ERC20Transfer, error) {

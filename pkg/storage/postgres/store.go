@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -154,7 +155,7 @@ type blockTxKey struct{}
 // store bound to ctx, or the pool.
 func (s *Store) q(ctx context.Context) querier {
 	if tx := s.boundTx(ctx); tx != nil {
-		return tx.tx
+		return tx.q()
 	}
 	return s.pool
 }
@@ -198,7 +199,7 @@ func (s *Store) inTx(ctx context.Context, fn func(q querier) error) error {
 		return err
 	}
 	if tx := s.boundTx(ctx); tx != nil {
-		return fn(tx.tx)
+		return fn(tx.q())
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return fn(tx) })
 }
@@ -213,6 +214,11 @@ type blockTx struct {
 	// genesisSeen holds the accounts whose genesis allocation the
 	// transaction looked up; they join the store's memo when it commits.
 	genesisSeen map[common.Address]bool
+
+	// pending are queued writes (pending.go); balances the latest balance
+	// of each account the transaction updated.
+	pending  *pgx.Batch
+	balances map[common.Address]*big.Int
 }
 
 var _ port.BlockTransactor = (*Store)(nil)
@@ -254,6 +260,10 @@ func (t *blockTx) Commit() error {
 	}
 	t.done = true
 	ctx := context.Background()
+	if err := t.flush(ctx); err != nil {
+		_ = t.tx.Rollback(ctx)
+		return fmt.Errorf("postgres: commit block transaction: %w", err)
+	}
 	if err := t.recordUndo(ctx); err != nil {
 		_ = t.tx.Rollback(ctx)
 		return fmt.Errorf("postgres: record undo: %w", err)

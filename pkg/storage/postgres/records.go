@@ -59,7 +59,7 @@ func (s *Store) SaveRecord(ctx context.Context, r *port.Record, keys []port.Reco
 		return err
 	}
 	for _, k := range keys {
-		if _, err := s.q(ctx).Exec(ctx, `INSERT INTO record_keys (tbl, key_id, value_hash, block_number, log_index)
+		if err := s.execLater(ctx, `INSERT INTO record_keys (tbl, key_id, value_hash, block_number, log_index)
 			VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
 			r.Table, k.ID, recordValuesHash(k.Values), i64(r.BlockNumber), int64(r.LogIndex)); err != nil {
 			return err
@@ -74,7 +74,7 @@ func (s *Store) DeleteRecords(ctx context.Context, table string) error {
 		return err
 	}
 	for _, stmt := range []string{`DELETE FROM record_keys WHERE tbl = $1`, `DELETE FROM records WHERE tbl = $1`} {
-		if _, err := s.q(ctx).Exec(ctx, stmt, table); err != nil {
+		if err := s.execLater(ctx, stmt, table); err != nil {
 			return err
 		}
 	}
