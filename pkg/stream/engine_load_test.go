@@ -154,7 +154,12 @@ func TestEngineLoad(t *testing.T) {
 		for i, got := range r.received {
 			require.Equal(t, n, got, "subscriber %d receives every event", i)
 		}
-		require.Less(t, r.p99, bound, "p99 latency")
+		// Under the race detector the load runs several times slower, so
+		// only delivery and order are checked; the latency bound is
+		// checked by ordinary runs (and CI).
+		if !raceEnabled {
+			require.Less(t, r.p99, bound, "p99 latency")
+		}
 	}
 	for i, err := range withSlow.slowErrs {
 		var slowErr *SlowError

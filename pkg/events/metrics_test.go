@@ -8,13 +8,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // TestMetrics_Integration tests metrics collection with EventBus
 func TestMetrics_Integration(t *testing.T) {
 	// Create EventBus with metrics
 	bus := NewEventBus(1000, 100)
-	metrics := NewMetrics("test", "eventbus")
+	metrics := NewMetricsWith(prometheus.NewRegistry(), "test", "eventbus")
 	bus.SetMetrics(metrics)
 
 	go bus.Run()
@@ -113,7 +114,7 @@ func TestMetrics_Integration(t *testing.T) {
 func TestMetrics_DroppedEvents(t *testing.T) {
 	// Create EventBus with very small buffer
 	bus := NewEventBus(1, 10)
-	metrics := NewMetrics("test_dropped", "eventbus")
+	metrics := NewMetricsWith(prometheus.NewRegistry(), "test_dropped", "eventbus")
 	bus.SetMetrics(metrics)
 
 	go bus.Run()
@@ -165,7 +166,7 @@ func TestMetrics_DroppedEvents(t *testing.T) {
 func TestMetrics_FilteredEvents(t *testing.T) {
 	// Create EventBus with metrics
 	bus := NewEventBus(1000, 100)
-	metrics := NewMetrics("test_filtered", "eventbus")
+	metrics := NewMetricsWith(prometheus.NewRegistry(), "test_filtered", "eventbus")
 	bus.SetMetrics(metrics)
 
 	go bus.Run()
@@ -222,7 +223,7 @@ func TestMetrics_FilteredEvents(t *testing.T) {
 func TestMetrics_SubscriberInfo(t *testing.T) {
 	// Create EventBus
 	bus := NewEventBus(1000, 100)
-	metrics := NewMetrics("test_subinfo", "eventbus")
+	metrics := NewMetricsWith(prometheus.NewRegistry(), "test_subinfo", "eventbus")
 	bus.SetMetrics(metrics)
 
 	go bus.Run()
@@ -273,7 +274,7 @@ func TestMetrics_SubscriberInfo(t *testing.T) {
 func TestMetrics_GetAllSubscriberInfo(t *testing.T) {
 	// Create EventBus
 	bus := NewEventBus(1000, 100)
-	metrics := NewMetrics("test_allinfo", "eventbus")
+	metrics := NewMetricsWith(prometheus.NewRegistry(), "test_allinfo", "eventbus")
 	bus.SetMetrics(metrics)
 
 	go bus.Run()
