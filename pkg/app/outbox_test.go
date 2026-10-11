@@ -125,6 +125,9 @@ func TestOutboxDeliversTheSameEvents(t *testing.T) {
 					stop()
 					<-done
 				}
+				if outbox {
+					waitRelayed(t, app)
+				}
 				return drain(t, sub)
 			}
 
@@ -169,6 +172,7 @@ func TestOutboxSequenceSurvivesCrashAndRestart(t *testing.T) {
 	clean := startAppOutbox(t, srv, filepath.Join(t.TempDir(), "clean"), true)
 	cleanSub := clean.eventBus.Subscribe("all", allEventTypes(), nil, 1<<16)
 	require.NoError(t, clean.fetcher.FetchRange(ctx, 0, head))
+	waitRelayed(t, clean)
 	want := drain(t, cleanSub)
 	clean.Shutdown()
 	requireSequence(t, want, 1)
@@ -197,6 +201,10 @@ func TestOutboxSequenceSurvivesCrashAndRestart(t *testing.T) {
 		return nil
 	})
 	require.ErrorIs(t, app.fetcher.FetchRange(ctx, 0, head), crash)
+	// Every committed event reaches the subscription before it is read:
+	// one the relay delivered after the drain would be lost to the test,
+	// the cursor having moved past it.
+	waitRelayed(t, app)
 	consume(drain(t, sub))
 	for _, ev := range got {
 		require.Less(t, eventBlock(ev), uint64(6), "no event of the failed block")
@@ -218,6 +226,7 @@ func TestOutboxSequenceSurvivesCrashAndRestart(t *testing.T) {
 	sub = app.eventBus.Subscribe("all", allEventTypes(), nil, 1<<16)
 	app.fetcher.StartRelay()
 	require.NoError(t, app.fetcher.FetchRange(ctx, 10, head))
+	waitRelayed(t, app)
 	consume(drain(t, sub))
 
 	require.Equal(t, len(want), len(got))
@@ -263,6 +272,7 @@ func TestReindexContinuesOutboxSequence(t *testing.T) {
 	sub := app.eventBus.Subscribe("all", allEventTypes(), nil, 1<<16)
 	app.fetcher.StartRelay()
 	require.NoError(t, app.fetcher.FetchRange(ctx, 0, 5))
+	waitRelayed(t, app)
 	evs := drain(t, sub)
 	require.NotEmpty(t, evs)
 	requireSequence(t, evs, first+1)
@@ -349,6 +359,7 @@ func TestEveryNodeReceivesEveryEvent(t *testing.T) {
 		require.Eventually(t, func() bool { return nodes[g].bus.LastSequence() == last },
 			10*time.Second, 5*time.Millisecond, "node %s receives up to %d", g, last)
 	}
+	waitRelayed(t, app)
 	want := drain(t, sub)
 	requireSequence(t, want, 1)
 	require.Equal(t, last, uint64(len(want)))

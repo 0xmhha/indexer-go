@@ -62,6 +62,25 @@ func newEngineServer(t *testing.T, buffer int) (*events.EventBus, *SubscriptionS
 }
 
 // waitSubscriptions waits until the engine indexes n subscriptions.
+// waitSubscribed waits until the server holds n client subscriptions,
+// whichever delivery it uses: in its engine, or (direct mode) as
+// subscriptions of the bus. A "subscribe" message has no answer and is
+// handled asynchronously, so tests that publish right after subscribing
+// wait here instead of sleeping.
+func waitSubscribed(t testing.TB, s *SubscriptionServer, bus *events.EventBus, n int) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		s.engineMu.Lock()
+		direct := s.direct
+		s.engineMu.Unlock()
+		if direct {
+			return bus.SubscriberCount() == n
+		}
+		e := s.subscriptionEngine()
+		return e != nil && e.Stats().Subscriptions == n
+	}, 5*time.Second, 5*time.Millisecond, "%d subscriptions registered", n)
+}
+
 func waitSubscriptions(t *testing.T, s *SubscriptionServer, n int) {
 	t.Helper()
 	require.Eventually(t, func() bool {

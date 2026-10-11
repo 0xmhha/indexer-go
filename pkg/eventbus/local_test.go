@@ -202,6 +202,11 @@ func TestLocalEventBus_Stats(t *testing.T) {
 		}
 	}
 
+	// The bus counts a delivery after its send.
+	require.Eventually(t, func() bool {
+		_, d, _ := eb.Stats()
+		return d == 5
+	}, 5*time.Second, 2*time.Millisecond)
 	totalEvents, totalDeliveries, droppedEvents := eb.Stats()
 	assert.Equal(t, uint64(5), totalEvents)
 	assert.Equal(t, uint64(5), totalDeliveries)
@@ -386,10 +391,9 @@ func TestLocalEventBus_ConcurrentPublish(t *testing.T) {
 
 	wg.Wait()
 
-	// Wait for delivery
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify stats
-	totalEvents, _, _ := eb.Stats()
-	assert.Equal(t, uint64(numPublishers*eventsPerPublisher), totalEvents)
+	// Verify stats once the bus has taken every event
+	require.Eventually(t, func() bool {
+		total, _, _ := eb.Stats()
+		return total == uint64(numPublishers*eventsPerPublisher)
+	}, 5*time.Second, 2*time.Millisecond)
 }

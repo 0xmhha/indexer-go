@@ -165,8 +165,11 @@ func (c *countingExecutor) Execute(ctx context.Context, _ string, _ map[string]i
 // together share one execution, later ones within the TTL are answered
 // from the kept response, and after the TTL the path runs again.
 func TestRequestsShareExecutions(t *testing.T) {
+	// A TTL long enough that a client scheduled late still gets the kept
+	// response (run 1) instead of running the path again; expiry is
+	// checked below on a handler of its own.
 	exec := &countingExecutor{release: make(chan struct{})}
-	h := NewHandlerWithCache(exec, 100*time.Millisecond)
+	h := NewHandlerWithCache(exec, 10*time.Second)
 
 	const clients = 100
 	var wg sync.WaitGroup
@@ -196,9 +199,12 @@ func TestRequestsShareExecutions(t *testing.T) {
 	serve(h, "GET", "/v1/blocks?limit=11", nil)
 	assert.Equal(t, int64(2), exec.runs.Load())
 
+	short := &countingExecutor{}
+	hs := NewHandlerWithCache(short, 50*time.Millisecond)
+	serve(hs, "GET", "/v1/blocks?limit=10", nil)
 	time.Sleep(150 * time.Millisecond)
-	rec := serve(h, "GET", "/v1/blocks?limit=10", nil)
-	assert.JSONEq(t, `{"data":{"run":3}}`, rec.Body.String(), "expired: runs again")
+	rec := serve(hs, "GET", "/v1/blocks?limit=10", nil)
+	assert.JSONEq(t, `{"data":{"run":2}}`, rec.Body.String(), "expired: runs again")
 }
 
 // TestFailuresAreNotKept: a response with errors is executed again by the

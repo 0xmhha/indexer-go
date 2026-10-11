@@ -172,8 +172,10 @@ func TestIntegration_HighThroughput(t *testing.T) {
 
 	publishDuration := time.Since(start)
 
-	// Wait for delivery
-	time.Sleep(500 * time.Millisecond)
+	eventually(t, "every event delivered or dropped", func() bool {
+		total, d, dropped := bus.Stats()
+		return total == uint64(eventCount) && d+dropped >= uint64(eventCount*subscriberCount)
+	})
 
 	// Check statistics
 	totalEvents, totalDeliveries, droppedEvents := bus.Stats()
@@ -225,7 +227,7 @@ func TestIntegration_DynamicSubscriptions(t *testing.T) {
 		bus.Publish(event)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	eventually(t, "the first batch delivered to sub1 and sub2", func() bool { return deliveries(bus) == 10 })
 
 	// Add new subscriber mid-stream
 	sub3 := bus.Subscribe("sub3", []EventType{EventTypeBlock}, nil, 100)
@@ -240,7 +242,7 @@ func TestIntegration_DynamicSubscriptions(t *testing.T) {
 		bus.Publish(event)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	eventually(t, "the second batch delivered to sub1, sub2 and sub3", func() bool { return deliveries(bus) == 25 })
 
 	// Remove a subscriber
 	bus.Unsubscribe("sub2")
@@ -255,7 +257,7 @@ func TestIntegration_DynamicSubscriptions(t *testing.T) {
 		bus.Publish(event)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	eventually(t, "the last batch delivered to sub1 and sub3", func() bool { return deliveries(bus) == 35 })
 
 	// Count received events
 	count1 := drainChannel(sub1.Channel)
@@ -324,7 +326,10 @@ func TestIntegration_ConcurrentPublishSubscribe(t *testing.T) {
 	}
 
 	wg.Wait()
-	time.Sleep(200 * time.Millisecond)
+	eventually(t, "every event", func() bool {
+		total, _, _ := bus.Stats()
+		return total == uint64(eventCount)
+	})
 
 	// Verify system stability
 	if count := bus.SubscriberCount(); count != subscriberCount {

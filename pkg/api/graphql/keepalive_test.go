@@ -84,9 +84,11 @@ func TestKeepAlive(t *testing.T) {
 
 	t.Run("answering client stays", func(t *testing.T) {
 		c := dialKeepAlive(t, true, wait, true)
-		time.Sleep(5 * wait)
-		require.GreaterOrEqual(t, c.pings.Load(), int32(3), "pinged every 180ms")
-		require.True(t, c.alive(t), "still connected after five waits")
+		// Three pings (one every 180ms) take at least three waits; a slow
+		// runner may take longer, so wait for them instead of a fixed time.
+		require.Eventually(t, func() bool { return c.pings.Load() >= 3 }, 10*time.Second, 10*time.Millisecond, "pinged every 180ms")
+		time.Sleep(2 * wait)
+		require.True(t, c.alive(t), "still connected past the wait")
 	})
 
 	t.Run("silent client is closed", func(t *testing.T) {

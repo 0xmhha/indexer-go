@@ -87,7 +87,13 @@ func (h *subscriptionStreams) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		_ = conn.Close()
 		return
 	}
-	defer h.untrack(conn)
+	// The stream is released before the connection is untracked, so once
+	// close (and Server.Stop) returns no stream of a closed connection
+	// still counts for its key.
+	defer func() {
+		h.streams.Close(st)
+		h.untrack(conn)
+	}()
 	h.serve(conn, st)
 }
 

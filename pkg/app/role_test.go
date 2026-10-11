@@ -106,6 +106,8 @@ func TestAPIProcessesServeTheIndex(t *testing.T) {
 		assert.Equal(t, want, queryAll(t, app), "api process %d answers as the index", i)
 		assert.ErrorIs(t, app.storage.SetLatestHeight(ctx, 1), port.ErrReadOnly, "api process %d refuses writes", i)
 
+		require.Eventually(t, func() bool { return app.eventBus.LastSequence() == last },
+			10*time.Second, 5*time.Millisecond, "api process %d relays up to %d", i, last)
 		evs := drain(t, subs[i])
 		require.NotEmpty(t, evs, "api process %d receives the new blocks' events", i)
 		requireSequence(t, evs, first+1)

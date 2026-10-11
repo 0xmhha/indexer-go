@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -219,16 +220,30 @@ func TestGoldenKeyspaceStableNet(t *testing.T) {
 // TestIndexIsDeterministic guards the golden test itself: two clean runs over
 // the same chain must produce identical storage, also on hosts in different
 // time zones (stored times are UTC; the golden files are written in one zone
-// and checked in CI in another). No test of this package runs in parallel,
-// so changing time.Local is safe here.
+// and checked in CI in another). Each run is this test binary run again with
+// TZ set, so the zone is the process's own: changing time.Local in this
+// process raced with goroutines of earlier apps that read it.
 func TestIndexIsDeterministic(t *testing.T) {
-	local := time.Local
-	defer func() { time.Local = local }()
-	time.Local = time.FixedZone("UTC+9", 9*3600)
-	first := dumpScenarioIndex(t)
-	time.Local = time.FixedZone("UTC-5", -5*3600)
-	second := dumpScenarioIndex(t)
-	require.Empty(t, testchain.DiffKeyspace(first, second, 20))
+	if out := os.Getenv("INDEXER_DETERMINISM_OUT"); out != "" {
+		var buf bytes.Buffer
+		require.NoError(t, testchain.FormatKeyspace(&buf, dumpScenarioIndex(t)))
+		require.NoError(t, os.WriteFile(out, buf.Bytes(), 0o600))
+		return
+	}
+	dump := func(zone string) string {
+		t.Helper()
+		out := filepath.Join(t.TempDir(), "keyspace")
+		cmd := exec.Command(os.Args[0], "-test.run=^TestIndexIsDeterministic$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "TZ="+zone, "INDEXER_DETERMINISM_OUT="+out)
+		msg, err := cmd.CombinedOutput()
+		require.NoError(t, err, "run in %s: %s", zone, msg)
+		data, err := os.ReadFile(out)
+		require.NoError(t, err)
+		return string(data)
+	}
+	first, second := dump("Asia/Seoul"), dump("America/New_York")
+	require.NotEmpty(t, first)
+	require.Equal(t, first, second, "the index does not depend on the host's time zone")
 }
 
 // enableTestChainFeatures turns on the StableNet features whose data the test

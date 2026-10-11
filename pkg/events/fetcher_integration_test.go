@@ -315,7 +315,8 @@ func TestFetcherIntegration_ConcurrentSubscribers(t *testing.T) {
 		}
 	}
 
-	// Verify stats
+	// Verify stats (the bus counts a delivery after its send)
+	eventually(t, "every delivery counted", func() bool { return deliveries(bus) == uint64(numBlocks*numSubscribers) })
 	totalEvents, totalDeliveries, droppedEvents := bus.Stats()
 	if totalEvents != uint64(numBlocks) {
 		t.Errorf("expected %d total events, got %d", numBlocks, totalEvents)

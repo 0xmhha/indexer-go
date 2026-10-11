@@ -47,7 +47,8 @@ func TestReorgAndRemovedLogSubscriptions(t *testing.T) {
 	bus := events.NewEventBus(1000, 100)
 	go bus.Run()
 	defer bus.Stop()
-	srv := httptest.NewServer(NewSubscriptionServer(bus, zap.NewNop(), true))
+	subServer := NewSubscriptionServer(bus, zap.NewNop(), true)
+	srv := httptest.NewServer(subServer)
 	defer srv.Close()
 
 	reorgConn := subscribeWS(t, srv.URL, "r", `subscription { reorg { id forkNumber forkHash oldHead depth removedBlocks { number hash } detectedAt } }`, nil)
@@ -56,7 +57,7 @@ func TestReorgAndRemovedLogSubscriptions(t *testing.T) {
 	logsConn := subscribeWS(t, srv.URL, "l", `subscription($filter: LogFilter!) { logs(filter: $filter) { address logIndex removed } }`,
 		map[string]any{"filter": map[string]any{"address": addr.Hex()}})
 	defer func() { _ = logsConn.Close() }()
-	time.Sleep(100 * time.Millisecond) // let both subscriptions register
+	waitSubscribed(t, subServer, bus, 2)
 
 	require.True(t, bus.Publish(&events.ReorgEvent{
 		Seq: 2, ForkNumber: 10, ForkHash: common.Hash{1}, OldHead: 12,

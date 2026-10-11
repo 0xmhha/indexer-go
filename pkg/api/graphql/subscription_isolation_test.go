@@ -75,7 +75,7 @@ func TestSubscriptionIDsAreScopedPerConnection(t *testing.T) {
 			defer func() { _ = b.Close() }()
 			subscribeNewBlock(t, a, "1")
 			subscribeNewBlock(t, b, "1")
-			time.Sleep(100 * time.Millisecond)
+			waitSubscribed(t, sub, bus, 2)
 
 			require.True(t, bus.Publish(events.NewBlockEvent(createTestBlock(1))))
 			require.True(t, expectNext(a, "1", 2*time.Second), "client A must receive")
@@ -83,7 +83,7 @@ func TestSubscriptionIDsAreScopedPerConnection(t *testing.T) {
 
 			// A completes its "1"; B's "1" must keep working.
 			require.NoError(t, a.WriteJSON(map[string]any{"id": "1", "type": "complete"}))
-			time.Sleep(100 * time.Millisecond)
+			waitSubscribed(t, sub, bus, 1)
 			require.True(t, bus.Publish(events.NewBlockEvent(createTestBlock(2))))
 			require.True(t, expectNext(b, "1", 2*time.Second), "client B must still receive after A completed")
 			require.False(t, expectNext(a, "1", 200*time.Millisecond), "client A completed its subscription")

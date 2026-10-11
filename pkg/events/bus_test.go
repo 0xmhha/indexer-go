@@ -213,8 +213,7 @@ func TestEventBus_Stats(t *testing.T) {
 		bus.Publish(event)
 	}
 
-	// Wait for delivery
-	time.Sleep(50 * time.Millisecond)
+	eventually(t, "10 deliveries", func() bool { return deliveries(bus) == 10 })
 
 	// Check stats
 	totalEvents, totalDeliveries, droppedEvents := bus.Stats()
@@ -338,7 +337,10 @@ func TestEventBus_ConcurrentOperations(t *testing.T) {
 		}(i)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	eventually(t, "every subscriber and event", func() bool {
+		total, _, _ := bus.Stats()
+		return bus.SubscriberCount() == subscriberCount && total == uint64(publishCount)
+	})
 
 	// Check that we have correct subscriber count
 	if count := bus.SubscriberCount(); count != subscriberCount {

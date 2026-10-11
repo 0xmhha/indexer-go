@@ -63,8 +63,7 @@ func TestMetrics_Integration(t *testing.T) {
 		t.Fatal("failed to publish transaction event")
 	}
 
-	// Wait for events to be delivered
-	time.Sleep(100 * time.Millisecond)
+	eventually(t, "2 deliveries", func() bool { return deliveries(bus) == 2 })
 
 	// Verify stats
 	totalEvents, totalDeliveries, droppedEvents := bus.Stats()
@@ -203,8 +202,12 @@ func TestMetrics_FilteredEvents(t *testing.T) {
 	event2 := NewTransactionEvent(tx2, 100, common.Hash{}, 1, common.HexToAddress("0x3333"), nil)
 	bus.Publish(event2)
 
-	// Wait for processing
-	time.Sleep(100 * time.Millisecond)
+	// Both events processed (the bus counts each published event) and the
+	// matching one read.
+	eventually(t, "both events and the matching delivery", func() bool {
+		total, _, _ := bus.Stats()
+		return total == 2 && received.Load() >= 1
+	})
 
 	// Verify only 1 event was received (the matching one)
 	if got := received.Load(); got != 1 {

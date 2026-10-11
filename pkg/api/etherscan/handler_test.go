@@ -660,15 +660,14 @@ func TestFullVerificationWorkflow(t *testing.T) {
 	require.Equal(t, "1", resp.Status)
 	guid := resp.Result.(string)
 
-	// Wait for background verification to complete
-	time.Sleep(100 * time.Millisecond)
-
-	// Step 2: Check status
-	req = httptest.NewRequest("GET", "/api?module=contract&action=checkverifystatus&guid="+guid, nil)
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	resp = parseResponse(t, rec)
+	// Step 2: Check status, once the background verification finished
+	require.Eventually(t, func() bool {
+		req := httptest.NewRequest("GET", "/api?module=contract&action=checkverifystatus&guid="+guid, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		resp = parseResponse(t, rec)
+		return !strings.Contains(strings.ToLower(resp.Message), "pending")
+	}, 10*time.Second, 10*time.Millisecond, "verification finishes")
 	assert.Equal(t, "1", resp.Status)
 	assert.Equal(t, "Pass - Verified", resp.Message)
 

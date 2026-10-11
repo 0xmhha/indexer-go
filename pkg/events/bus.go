@@ -194,12 +194,19 @@ func (eb *EventBus) Run() {
 			}
 
 			eb.broadcastEvent(event)
+			// Recorded after the broadcast, so LastSequence never reports
+			// an event subscribers may still receive: a subscription made
+			// once LastSequence reached a position gets none of the events
+			// up to it. Only this goroutine writes lastSeq.
+			if seq := SequenceOf(event); seq != 0 {
+				eb.lastSeq.Store(seq)
+			}
 		}
 	}
 }
 
-// duplicate reports whether a sequenced event was delivered already, and
-// otherwise records its position. Events without a position always pass.
+// duplicate reports whether a sequenced event was delivered already.
+// Events without a position always pass.
 func (eb *EventBus) duplicate(event Event) bool {
 	seq := SequenceOf(event)
 	if seq == 0 {
@@ -209,12 +216,11 @@ func (eb *EventBus) duplicate(event Event) bool {
 		eb.stats.duplicates.Add(1)
 		return true
 	}
-	eb.lastSeq.Store(seq)
 	return false
 }
 
-// LastSequence returns the change stream position of the last delivered
-// sequenced event, 0 if none.
+// LastSequence returns the change stream position of the last sequenced
+// event the bus has delivered to its subscribers, 0 if none.
 func (eb *EventBus) LastSequence() uint64 { return eb.lastSeq.Load() }
 
 // Duplicates returns how many sequenced events were dropped as already

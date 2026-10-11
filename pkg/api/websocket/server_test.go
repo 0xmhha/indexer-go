@@ -33,7 +33,7 @@ func TestWebSocketServer(t *testing.T) {
 		defer func() { _ = conn.Close() }()
 
 		// Should have 1 client
-		time.Sleep(100 * time.Millisecond)
+		waitClients(t, server.Hub(), 1)
 		if count := server.Hub().ClientCount(); count != 1 {
 			t.Errorf("expected 1 client, got %d", count)
 		}
@@ -263,8 +263,9 @@ func TestWebSocketServer(t *testing.T) {
 		}
 		defer func() { _ = conn2.Close() }()
 
-		// Wait for connections to be registered
-		time.Sleep(100 * time.Millisecond)
+		// Wait for connections to be registered (and earlier subtests'
+		// closed ones to be unregistered)
+		waitClients(t, server.Hub(), 2)
 
 		// Should have 2 clients
 		if count := server.Hub().ClientCount(); count != 2 {
@@ -481,7 +482,7 @@ func TestHub(t *testing.T) {
 			conns[i] = conn
 		}
 
-		time.Sleep(200 * time.Millisecond)
+		waitClients(t, server.Hub(), 5)
 
 		// Verify all clients are registered
 		if count := server.Hub().ClientCount(); count != 5 {
@@ -496,7 +497,7 @@ func TestHub(t *testing.T) {
 			_ = i
 		}
 
-		time.Sleep(200 * time.Millisecond)
+		waitClients(t, server.Hub(), 0)
 
 		// Verify all clients are unregistered
 		if count := server.Hub().ClientCount(); count != 0 {
@@ -689,4 +690,18 @@ func TestClient(t *testing.T) {
 	defer func() { _ = conn.Close() }()
 
 	time.Sleep(200 * time.Millisecond)
+}
+
+// waitClients waits until the hub holds n clients: it registers a client
+// after the upgrade and unregisters a closed one when its read loop ends,
+// both asynchronously.
+func waitClients(t *testing.T, hub *Hub, n int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for hub.ClientCount() != n {
+		if time.Now().After(deadline) {
+			t.Fatalf("hub holds %d clients, want %d", hub.ClientCount(), n)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 }
