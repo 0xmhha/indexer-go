@@ -13,6 +13,7 @@ import (
 	"go.uber.org/goleak"
 	"go.uber.org/zap"
 
+	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 )
 
@@ -42,4 +43,32 @@ func TestSubscriptionStreamStopsWithTheServer(t *testing.T) {
 	_ = conn.Close()
 	web.Close()
 	goleak.VerifyNone(t, baseline)
+}
+
+// TestSubscriptionStreamOpenedWhileStopping: a connection whose handler
+// finds the server stopped (it was set up while close ran, a race CI hit
+// once) is closed as going away too, not dropped without a close frame.
+func TestSubscriptionStreamOpenedWhileStopping(t *testing.T) {
+	baseline := goleak.IgnoreCurrent()
+	streams := notifications.NewStreams(1)
+	h := newSubscriptionStreams(streams, func(*http.Request) bool { return true }, zap.NewNop())
+	h.close() // stopped before the connection is tracked
+	web := httptest.NewServer(apiKeyLabel("alice", h))
+	url := "ws" + strings.TrimPrefix(web.URL, "http")
+	conn, _, err := gws.DefaultDialer.Dial(url, nil)
+	require.NoError(t, err)
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
+	_, _, err = conn.ReadMessage()
+	require.True(t, gws.IsCloseError(err, gws.CloseGoingAway), "closed as going away: %v", err)
+	require.Zero(t, streams.Connected("alice"))
+	_ = conn.Close()
+	web.Close()
+	goleak.VerifyNone(t, baseline)
+}
+
+// apiKeyLabel serves h with requests carrying an API key of label.
+func apiKeyLabel(label string, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r.WithContext(apimiddleware.WithAPIKeyLabel(r.Context(), label)))
+	})
 }
