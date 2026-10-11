@@ -1,9 +1,11 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/big"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/jackc/pgx/v5"
@@ -29,8 +31,10 @@ type pendingTx struct{ t *blockTx }
 // before each statement.
 func (t *blockTx) q() querier { return pendingTx{t} }
 
-// flush sends the queued writes.
+// flush sends the queued writes, ending with one upsert per balance
+// changed since the last flush.
 func (t *blockTx) flush(ctx context.Context) error {
+	t.queueDirtyBalances()
 	if t.pending == nil || t.pending.Len() == 0 {
 		return nil
 	}
@@ -117,8 +121,29 @@ func (t *blockTx) addSnapshot(addr common.Address, blockNumber uint64, current, 
 	}
 	t.queue(`INSERT INTO balance_history (address, block_number, balance, delta, tx_hash)
 		VALUES ($1, $2, $3::numeric, $4::numeric, $5)`, addr.Bytes(), i64(blockNumber), balance.String(), delta.String(), txHash.Bytes())
-	t.queue(`INSERT INTO balances (address, balance) VALUES ($1, $2::numeric)
-		ON CONFLICT (address) DO UPDATE SET balance = EXCLUDED.balance`, addr.Bytes(), balance.String())
 	t.balances[addr] = balance
+	if t.dirty == nil {
+		t.dirty = map[common.Address]bool{}
+	}
+	t.dirty[addr] = true
 	return nil
+}
+
+// queueDirtyBalances queues one upsert per account whose balance changed
+// since the last flush, in address order: a block that changes an account
+// many times writes its row once.
+func (t *blockTx) queueDirtyBalances() {
+	if len(t.dirty) == 0 {
+		return
+	}
+	addrs := make([]common.Address, 0, len(t.dirty))
+	for a := range t.dirty {
+		addrs = append(addrs, a)
+	}
+	sort.Slice(addrs, func(i, j int) bool { return bytes.Compare(addrs[i][:], addrs[j][:]) < 0 })
+	for _, a := range addrs {
+		t.queue(`INSERT INTO balances (address, balance) VALUES ($1, $2::numeric)
+			ON CONFLICT (address) DO UPDATE SET balance = EXCLUDED.balance`, a.Bytes(), t.balances[a].String())
+	}
+	t.dirty = nil
 }

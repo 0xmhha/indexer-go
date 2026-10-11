@@ -103,7 +103,7 @@ func dropTestSchemas(dsn, schema string) {
 // normalizeVolatile does for Pebble: undo, orphans and reorganizations, and
 // the outbox depend on how blocks were processed, not only on the chain.
 var pgDumpSkipped = map[string]bool{
-	"schema_migrations": true, "undo_log": true, "undo_blocks": true,
+	"schema_migrations": true, "undo_log": true, "undo_blocks": true, "undo_by_height": true,
 	"reorgs": true, "orphaned_blocks": true, "orphaned_transactions": true,
 	"outbox": true, "outbox_sequence": true, "outbox_cursors": true,
 }
@@ -147,10 +147,13 @@ func dumpPostgres(t testing.TB, dir string) []testchain.Entry {
 		}
 		from := pgx.Identifier{schema, tb.name}.Sanitize()
 		key := "jsonb_build_array(" + tb.pk + ")"
-		row := "to_jsonb(t)"
+		// undo_height records which block transaction wrote a row (undo
+		// bookkeeping, migration 0012), not indexed data: a backfill writes
+		// the same rows from other transactions.
+		row := "to_jsonb(t) - 'undo_height'"
 		if pgSerialLists[tb.name] {
 			key = "jsonb_build_array(address, row_number() OVER (PARTITION BY address ORDER BY id))"
-			row = "to_jsonb(t) - 'id'"
+			row = "to_jsonb(t) - 'id' - 'undo_height'"
 		}
 		q := "SELECT '" + tb.name + "/' || (" + key + ")::text, (" + row + ")::text FROM " + from + " t"
 		if tb.name == "meta" {

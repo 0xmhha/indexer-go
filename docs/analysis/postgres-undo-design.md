@@ -1,4 +1,4 @@
-# PostgreSQL undo 비용 줄이기 (설계, 10/11)
+# PostgreSQL undo 비용 줄이기 (설계 10/11, 구현 10/11)
 
 ## 1. 왜
 
@@ -77,3 +77,19 @@ A + C(높이를 쓸 때 기록) + D. 예상: trigger 호출이 블록당 약 400
 
 - Pebble 쪽은 바꾸지 않는다(undo가 batch 안의 키 단위 기록이라 이 비용이 없다).
 - trigger 기반 undo를 없애지 않는다. 갱신되는 표는 계속 trigger로 되돌린다.
+
+## 7. 결과 (구현 10/11, migration 0012)
+
+A, C(높이를 쓸 때 기록), D를 구현했다. 대상 표 8개는 trigger 대신 `undo_height`와 `undo_height_guard`를 쓴다. 같은 시험(블록 202개, 거래 10,001건)에서 바뀐 것은 다음과 같다.
+
+- trigger 호출: 80,624번에서 2,606번(97% 감소)
+- `balances` upsert: 15,007번에서 2,201번
+- 서버 실행 시간 합: 약 4.4초에서 2.4초
+
+ingest 시간은 같은 부하에서 번갈아 쟀다(load average 13~16). main(#140)이 7.0~7.6초, 이 변경이 5.2~5.9초로 약 25% 줄었고, Pebble은 1.6~2.0초였다. 서버 비용이 줄어 이제 남은 시간의 대부분은 왕복이다. 블록마다 계정을 처음 읽는 왕복과 genesis 조회의 `EXISTS`가 각각 약 1,200번이다.
+
+구현 중 바로잡은 것은 두 가지다.
+- BEFORE UPDATE trigger가 `OLD`를 돌려주면 갱신이 조용히 무시된다. 포트 계약 시험(`SetBlockReplaces`)이 잡았고, 갱신에는 `NEW`를 돌려주게 고쳤다.
+- reindex가 `undo_by_height`(스키마 정보)를 비우지 않게 했다. 시험의 DB 비교에서는 `undo_height`(어느 트랜잭션이 썼는지)를 뺀다. backfill은 같은 행을 다른 트랜잭션에서 쓰기 때문이다.
+
+`make test-postgres` 전체(reorg e2e, `TestPostgresMatchesPebble` 포함)에서 guard가 한 번도 막지 않았다.
