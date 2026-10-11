@@ -53,12 +53,13 @@ tools/astgraph/                 Code graph generator (separate Go module); query
 make build          # Production binary (version from git describe)
 make build-dev      # With debug symbols
 make test           # Run tests
+make test-race      # Every test with the race detector (run before each commit and PR)
 make coverage       # HTML coverage report
 make lint           # golangci-lint
 make docker-build   # Container image
 ```
 
-CI (`.github/workflows/ci.yml`) runs gofmt, vet, `make lint` (and tools/astgraph), `go test ./...`, `scripts/test-postgres.sh` and `make test-examples` on every pull request and on the default branch. Jobs install the Go of go.mod's `toolchain` line (`GO_VERSION`, checked against go.mod) with `GOTOOLCHAIN=local`, so no job downloads a toolchain; the linters get Go 1.26.8. main requires the four jobs (lint, test, postgres, examples) to pass before a merge, administrators included. Tests wait for the state they check (`require.Eventually`, `waitSubscribed`, `waitRelayed`) instead of sleeping a fixed time; new concurrency tests are run with `-count=200`, `-race` and `GOMAXPROCS=1` before they are pushed.
+CI (`.github/workflows/ci.yml`) runs gofmt, vet, `make lint` (and tools/astgraph), `go test ./...`, `scripts/test-postgres.sh` and `make test-examples` on every pull request and on the default branch. Jobs install the Go of go.mod's `toolchain` line (`GO_VERSION`, checked against go.mod) with `GOTOOLCHAIN=local`, so no job downloads a toolchain; the linters get Go 1.26.8. main requires the four jobs (lint, test, postgres, examples) to pass before a merge, administrators included. Tests wait for the state they check (`require.Eventually`, `waitSubscribed`, `waitRelayed`) instead of sleeping a fixed time; new concurrency tests are run with `-count=200`, `-race` and `GOMAXPROCS=1` before they are pushed. CI has no race job (decided 10/12: it would make CI too slow), so `make test-race` (`go test -race ./...`) must pass locally before every commit and pull request.
 
 `make generate` runs gqlgen, but the runtime GraphQL server does not use generated code.
 
