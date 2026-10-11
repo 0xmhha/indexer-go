@@ -269,6 +269,11 @@ func (s *Store) GetAddressBalance(ctx context.Context, addr common.Address, bloc
 
 // HasBalanceRecord implements port.BalanceRecordChecker.
 func (s *Store) HasBalanceRecord(ctx context.Context, addr common.Address) (bool, error) {
+	if bt := s.boundTx(ctx); bt != nil {
+		if rec, ok := bt.recorded[addr]; ok {
+			return rec, nil // prefetched, kept as the transaction writes
+		}
+	}
 	return s.exists(ctx, "SELECT EXISTS (SELECT 1 FROM balances WHERE address = $1)", addr.Bytes())
 }
 

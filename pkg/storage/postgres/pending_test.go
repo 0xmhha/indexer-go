@@ -70,3 +70,49 @@ func TestQueuedWriteErrorsFailTheCommit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got, "a rolled back transaction's queued writes are dropped")
 }
+
+// TestPrefetchBalances: one prefetch reads the accounts a block changes;
+// the block transaction then answers their balances and whether each was
+// recorded from what it read and wrote, and the results equal reading each
+// account.
+func TestPrefetchBalances(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	old, fresh := common.HexToAddress("0xb1"), common.HexToAddress("0xb2")
+
+	bctx, tx, err := s.BeginBlock(ctx)
+	require.NoError(t, err)
+	tx.SetHeight(1)
+	require.NoError(t, s.SetBalance(bctx, old, 1, big.NewInt(100)))
+	require.NoError(t, tx.Commit())
+
+	bctx, tx, err = s.BeginBlock(ctx)
+	require.NoError(t, err)
+	tx.SetHeight(2)
+	require.NoError(t, s.PrefetchBalances(bctx, []common.Address{fresh, old}))
+	bt := s.boundTx(bctx)
+	assert.Equal(t, map[common.Address]bool{old: true, fresh: false}, bt.recorded)
+	assert.Equal(t, "100", bt.balances[old].String())
+	assert.Equal(t, "0", bt.balances[fresh].String())
+
+	has, err := s.HasBalanceRecord(bctx, fresh)
+	require.NoError(t, err)
+	assert.False(t, has)
+	require.NoError(t, s.SetBalance(bctx, fresh, 2, big.NewInt(7)))
+	has, err = s.HasBalanceRecord(bctx, fresh)
+	require.NoError(t, err)
+	assert.True(t, has, "recorded once the transaction writes it")
+	require.ErrorIs(t, s.UpdateBalance(bctx, old, 2, big.NewInt(-101), common.Hash{}), port.ErrNegativeBalance, "the prefetched balance is 100")
+	require.NoError(t, s.UpdateBalance(bctx, old, 2, big.NewInt(-40), common.Hash{}))
+	require.NoError(t, tx.Commit())
+
+	for addr, want := range map[common.Address]string{old: "60", fresh: "7"} {
+		has, err := s.HasBalanceRecord(ctx, addr)
+		require.NoError(t, err)
+		assert.True(t, has)
+		history, _, err := s.GetBalanceHistory(ctx, addr, 0, 10, port.FirstPage(10))
+		require.NoError(t, err)
+		require.NotEmpty(t, history)
+		assert.Equal(t, want, history[len(history)-1].Balance.String(), "%s", addr.Hex())
+	}
+}
