@@ -225,6 +225,16 @@ func (m *Manager) ChainStore(chainID string) (port.QueryStore, *events.EventBus,
 	return instance.Store()
 }
 
+// ChainIndexer returns the indexer of a running chain.
+func (m *Manager) ChainIndexer(chainID string) (Indexer, bool) {
+	instance, err := m.registry.Get(chainID)
+	if err != nil {
+		return nil, false
+	}
+	idx := instance.runningIndexer()
+	return idx, idx != nil
+}
+
 // ListChains returns status information for all chains.
 func (m *Manager) ListChains() []*ChainInfo {
 	instances := m.registry.List()

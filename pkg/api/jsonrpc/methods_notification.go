@@ -8,19 +8,17 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/notifications"
 )
 
-// notificationService holds the notification service reference
-var notificationService notifications.Service
-
-// SetNotificationService sets the notification service for JSON-RPC handlers
+// SetNotificationService sets the notification service of this handler
+// (each chain's handler has its own in multichain mode).
 func (h *Handler) SetNotificationService(service notifications.Service) {
-	notificationService = service
+	h.notifications = service
 }
 
 // Notification methods
 
 // getNotificationSettings returns notification settings
 func (h *Handler) getNotificationSettings(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -51,7 +49,7 @@ func (h *Handler) getNotificationSettings(ctx context.Context, params json.RawMe
 		filter.Types = append(filter.Types, notifications.NotificationType(t))
 	}
 
-	settings, err := notificationsFor(ctx).ListSettings(ctx, filter)
+	settings, err := h.notificationsFor(ctx).ListSettings(ctx, filter)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to list settings", err.Error())
 	}
@@ -61,7 +59,7 @@ func (h *Handler) getNotificationSettings(ctx context.Context, params json.RawMe
 
 // getNotificationSetting returns a single notification setting
 func (h *Handler) getNotificationSetting(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -77,7 +75,7 @@ func (h *Handler) getNotificationSetting(ctx context.Context, params json.RawMes
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	setting, err := notificationsFor(ctx).GetSetting(ctx, input.ID)
+	setting, err := h.notificationsFor(ctx).GetSetting(ctx, input.ID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get setting", err.Error())
 	}
@@ -87,7 +85,7 @@ func (h *Handler) getNotificationSetting(ctx context.Context, params json.RawMes
 
 // createNotificationSetting creates a new notification setting
 func (h *Handler) createNotificationSetting(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -145,7 +143,7 @@ func (h *Handler) createNotificationSetting(ctx context.Context, params json.Raw
 
 	setting.Destination = parseJSONRPCDestination(input.Destination)
 
-	created, err := notificationsFor(ctx).CreateSetting(ctx, setting)
+	created, err := h.notificationsFor(ctx).CreateSetting(ctx, setting)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to create setting", err.Error())
 	}
@@ -155,7 +153,7 @@ func (h *Handler) createNotificationSetting(ctx context.Context, params json.Raw
 
 // updateNotificationSetting updates a notification setting
 func (h *Handler) updateNotificationSetting(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -179,7 +177,7 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, params json.Raw
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	existing, err := notificationsFor(ctx).GetSetting(ctx, input.ID)
+	existing, err := h.notificationsFor(ctx).GetSetting(ctx, input.ID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get setting", err.Error())
 	}
@@ -223,7 +221,7 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, params json.Raw
 		existing.Destination = parseJSONRPCDestination(*input.Destination)
 	}
 
-	updated, err := notificationsFor(ctx).UpdateSetting(ctx, existing)
+	updated, err := h.notificationsFor(ctx).UpdateSetting(ctx, existing)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to update setting", err.Error())
 	}
@@ -233,7 +231,7 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, params json.Raw
 
 // deleteNotificationSetting deletes a notification setting
 func (h *Handler) deleteNotificationSetting(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -249,7 +247,7 @@ func (h *Handler) deleteNotificationSetting(ctx context.Context, params json.Raw
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	if err := notificationsFor(ctx).DeleteSetting(ctx, input.ID); err != nil {
+	if err := h.notificationsFor(ctx).DeleteSetting(ctx, input.ID); err != nil {
 		return nil, NewError(InternalError, "failed to delete setting", err.Error())
 	}
 
@@ -258,7 +256,7 @@ func (h *Handler) deleteNotificationSetting(ctx context.Context, params json.Raw
 
 // getNotifications returns notifications
 func (h *Handler) getNotifications(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -294,7 +292,7 @@ func (h *Handler) getNotifications(ctx context.Context, params json.RawMessage) 
 		filter.EventTypes = append(filter.EventTypes, notifications.EventType(et))
 	}
 
-	notifs, err := notificationsFor(ctx).ListNotifications(ctx, filter)
+	notifs, err := h.notificationsFor(ctx).ListNotifications(ctx, filter)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to list notifications", err.Error())
 	}
@@ -304,7 +302,7 @@ func (h *Handler) getNotifications(ctx context.Context, params json.RawMessage) 
 
 // getNotification returns a single notification
 func (h *Handler) getNotification(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -320,7 +318,7 @@ func (h *Handler) getNotification(ctx context.Context, params json.RawMessage) (
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	notif, err := notificationsFor(ctx).GetNotification(ctx, input.ID)
+	notif, err := h.notificationsFor(ctx).GetNotification(ctx, input.ID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get notification", err.Error())
 	}
@@ -330,7 +328,7 @@ func (h *Handler) getNotification(ctx context.Context, params json.RawMessage) (
 
 // getNotificationStats returns notification statistics
 func (h *Handler) getNotificationStats(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -346,7 +344,7 @@ func (h *Handler) getNotificationStats(ctx context.Context, params json.RawMessa
 		return nil, NewError(InvalidParams, "settingId is required", nil)
 	}
 
-	stats, err := notificationsFor(ctx).GetStats(ctx, input.SettingID)
+	stats, err := h.notificationsFor(ctx).GetStats(ctx, input.SettingID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get stats", err.Error())
 	}
@@ -356,7 +354,7 @@ func (h *Handler) getNotificationStats(ctx context.Context, params json.RawMessa
 
 // getDeliveryHistory returns delivery history for a notification
 func (h *Handler) getDeliveryHistory(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -372,7 +370,7 @@ func (h *Handler) getDeliveryHistory(ctx context.Context, params json.RawMessage
 		return nil, NewError(InvalidParams, "notificationId is required", nil)
 	}
 
-	history, err := notificationsFor(ctx).GetDeliveryHistory(ctx, input.NotificationID)
+	history, err := h.notificationsFor(ctx).GetDeliveryHistory(ctx, input.NotificationID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to get delivery history", err.Error())
 	}
@@ -382,7 +380,7 @@ func (h *Handler) getDeliveryHistory(ctx context.Context, params json.RawMessage
 
 // testNotificationSetting tests a notification setting
 func (h *Handler) testNotificationSetting(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -398,7 +396,7 @@ func (h *Handler) testNotificationSetting(ctx context.Context, params json.RawMe
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	result, err := notificationsFor(ctx).TestSetting(ctx, input.ID)
+	result, err := h.notificationsFor(ctx).TestSetting(ctx, input.ID)
 	if err != nil {
 		return nil, NewError(InternalError, "failed to test setting", err.Error())
 	}
@@ -408,7 +406,7 @@ func (h *Handler) testNotificationSetting(ctx context.Context, params json.RawMe
 
 // retryNotification retries a failed notification
 func (h *Handler) retryNotification(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -424,7 +422,7 @@ func (h *Handler) retryNotification(ctx context.Context, params json.RawMessage)
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	if err := notificationsFor(ctx).RetryNotification(ctx, input.ID); err != nil {
+	if err := h.notificationsFor(ctx).RetryNotification(ctx, input.ID); err != nil {
 		return nil, NewError(InternalError, "failed to retry notification", err.Error())
 	}
 
@@ -433,7 +431,7 @@ func (h *Handler) retryNotification(ctx context.Context, params json.RawMessage)
 
 // cancelNotification cancels a pending notification
 func (h *Handler) cancelNotification(ctx context.Context, params json.RawMessage) (interface{}, *Error) {
-	if notificationService == nil {
+	if h.notifications == nil {
 		return nil, NewError(InternalError, "notification service not enabled", nil)
 	}
 
@@ -449,7 +447,7 @@ func (h *Handler) cancelNotification(ctx context.Context, params json.RawMessage
 		return nil, NewError(InvalidParams, "id is required", nil)
 	}
 
-	if err := notificationsFor(ctx).CancelNotification(ctx, input.ID); err != nil {
+	if err := h.notificationsFor(ctx).CancelNotification(ctx, input.ID); err != nil {
 		return nil, NewError(InternalError, "failed to cancel notification", err.Error())
 	}
 
@@ -513,7 +511,7 @@ func GetNotificationMethods() []string {
 // payload over an optional sample log or transaction
 // (notifications.ExpressionCheck); nothing is stored or sent.
 func (h *Handler) checkNotificationExpressions(_ context.Context, params json.RawMessage) (interface{}, *Error) {
-	checker, ok := notificationService.(interface {
+	checker, ok := h.notifications.(interface {
 		CheckExpressions(notifications.ExpressionCheck) (*notifications.ExpressionCheckResult, error)
 	})
 	if !ok {
@@ -535,7 +533,7 @@ func (h *Handler) checkNotificationExpressions(_ context.Context, params json.Ra
 
 // notificationsFor is the notification service as the request's API key
 // sees it: its own settings only, everything for an operator key.
-func notificationsFor(ctx context.Context) notifications.Service {
+func (h *Handler) notificationsFor(ctx context.Context) notifications.Service {
 	label, _ := middleware.APIKeyFromContext(ctx)
-	return notifications.ForCaller(notificationService, label)
+	return notifications.ForCaller(h.notifications, label)
 }

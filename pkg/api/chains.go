@@ -16,6 +16,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
+	"github.com/0xmhha/indexer-go/pkg/notifications"
 )
 
 // ChainStores gives the API the chains of multichain mode, each indexed
@@ -26,6 +27,14 @@ type ChainStores interface {
 	ChainStore(id string) (port.QueryStore, *events.EventBus, bool)
 	// ListChains describes the registered chains.
 	ListChains() []*multichain.ChainInfo
+}
+
+// ChainNotifications is implemented by ChainStores whose chains run their
+// own notification services: each chain's notification API (GraphQL,
+// JSON-RPC) and stream (/chains/{id}/v1/subscriptions/stream) are that
+// chain's.
+type ChainNotifications interface {
+	ChainNotifications(id string) (notifications.Service, *notifications.Streams, bool)
 }
 
 // chainRoutes serves every chain's API under /chains/{id}/: graphql,
@@ -59,6 +68,24 @@ type chainHandlers struct {
 	rpc     *jsonrpc.Server
 	rest    http.Handler
 	routes  map[string]http.Handler // registered routes by method and pattern
+	// streams serves the chain's notification stream; nil without one.
+	streams *subscriptionStreams
+}
+
+// streamHandler is the chain's notification stream, 404 without one.
+func (h *chainHandlers) streamHandler() http.Handler {
+	if h.streams == nil {
+		return http.NotFoundHandler()
+	}
+	return h.streams
+}
+
+// stop ends the handlers' background work and stream connections.
+func (h *chainHandlers) stop() {
+	h.rpc.Close()
+	if h.streams != nil {
+		h.streams.close()
+	}
 }
 
 func (s *Server) mountChainRoutes(chains ChainStores) {
@@ -83,6 +110,9 @@ func (s *Server) mountChainRoutes(chains ChainStores) {
 	}
 	if s.config.EnableJSONRPC && !cr.declaredOnly {
 		s.router.Post("/chains/{id}/rpc", cr.serve(func(h *chainHandlers) http.Handler { return h.rpc }))
+	}
+	if _, ok := chains.(ChainNotifications); ok {
+		s.router.Get("/chains/{id}"+SubscriptionStreamPath, cr.serve(func(h *chainHandlers) http.Handler { return h.streamHandler() }))
 	}
 	if s.config.EnableREST && !cr.declaredOnly {
 		s.router.Handle("/chains/{id}/v1/*", cr.serve(func(h *chainHandlers) http.Handler { return h.rest }))
@@ -137,13 +167,23 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 		return old, http.StatusOK
 	}
 	if ok {
-		old.rpc.Close() // the chain restarted with a new store
+		old.stop() // the chain restarted with a new store
 	}
 	logger := cr.logger.With(zap.String("chain", id))
 	outbox := cr.streamOutbox(store)
 	opts := &graphql.HandlerOptions{Limits: cr.limits, ExtensionsOnly: cr.declaredOnly}
 	if outbox != nil {
 		opts.Stream = outbox
+	}
+	var (
+		notifier notifications.Service
+		streams  *notifications.Streams
+	)
+	if cn, ok := cr.chains.(ChainNotifications); ok {
+		if svc, st, ok := cn.ChainNotifications(id); ok {
+			notifier, streams = svc, st
+			opts.NotificationService = svc
+		}
 	}
 	gql, err := graphql.NewHandlerWithOptions(store, logger, opts)
 	if err != nil {
@@ -164,6 +204,12 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 		rest:    rest.NewHandler(gql),
 		routes:  map[string]http.Handler{},
 	}
+	if notifier != nil {
+		h.rpc.SetNotificationService(notifier)
+	}
+	if streams != nil {
+		h.streams = newSubscriptionStreams(streams, cr.origins.CheckWebSocketOrigin, logger)
+	}
 	for _, r := range registeredRoutes() {
 		if chainRoutable(r) {
 			h.routes[r.Method+" "+r.Pattern] = r.Handler(store, logger)
@@ -178,7 +224,7 @@ func (cr *chainRoutes) close() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	for id, h := range cr.handlers {
-		h.rpc.Close()
+		h.stop()
 		delete(cr.handlers, id)
 	}
 }
