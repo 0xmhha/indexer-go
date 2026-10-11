@@ -148,7 +148,7 @@ func (s *Store) UpdateAddressDelegationState(ctx context.Context, state *port.Ad
 	if err != nil {
 		return fmt.Errorf("marshal delegation state: %w", err)
 	}
-	_, err = s.q(ctx).Exec(ctx, `INSERT INTO setcode_delegations (address, data) VALUES ($1, $2)
+	err = s.execLater(ctx, `INSERT INTO setcode_delegations (address, data) VALUES ($1, $2)
 		ON CONFLICT (address) DO UPDATE SET data = EXCLUDED.data`, state.Address.Bytes(), data)
 	return err
 }

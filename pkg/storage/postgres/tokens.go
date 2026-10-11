@@ -99,7 +99,7 @@ func (s *Store) UpdateTokenHolderStats(ctx context.Context, st *port.TokenHolder
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, `INSERT INTO token_holder_stats (token, holder_count, transfer_count, last_activity_at)
+	err := s.execLater(ctx, `INSERT INTO token_holder_stats (token, holder_count, transfer_count, last_activity_at)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (token) DO UPDATE SET holder_count = EXCLUDED.holder_count, transfer_count = EXCLUDED.transfer_count,
 			last_activity_at = EXCLUDED.last_activity_at`,
@@ -274,7 +274,7 @@ func (s *Store) SaveTokenMetadata(ctx context.Context, m *port.TokenMetadata) er
 		v := m.TotalSupply.String()
 		supply = &v
 	}
-	_, err := s.q(ctx).Exec(ctx, `INSERT INTO token_metadata (address, standard, name, symbol, decimals, total_supply,
+	err := s.execLater(ctx, `INSERT INTO token_metadata (address, standard, name, symbol, decimals, total_supply,
 			base_uri, detected_at, created_at, updated_at, supports_erc165, supports_metadata, supports_enumerable)
 		VALUES ($1, $2, $3, $4, $5, $6::numeric, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (address) DO UPDATE SET standard = EXCLUDED.standard, name = EXCLUDED.name, symbol = EXCLUDED.symbol,
@@ -292,7 +292,7 @@ func (s *Store) DeleteTokenMetadata(ctx context.Context, address common.Address)
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, "DELETE FROM token_metadata WHERE address = $1", address.Bytes())
+	err := s.execLater(ctx, "DELETE FROM token_metadata WHERE address = $1", address.Bytes())
 	return err
 }
 

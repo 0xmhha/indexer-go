@@ -126,7 +126,7 @@ func (s *Store) SaveInstalledModule(ctx context.Context, record *port.InstalledM
 	if err != nil {
 		return fmt.Errorf("marshal installed module: %w", err)
 	}
-	_, err = s.q(ctx).Exec(ctx, `INSERT INTO installed_modules (account, module, module_type, installed_at, data)
+	err = s.execLater(ctx, `INSERT INTO installed_modules (account, module, module_type, installed_at, data)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (account, module) DO UPDATE SET module_type = EXCLUDED.module_type,
 			installed_at = EXCLUDED.installed_at, data = EXCLUDED.data`,
@@ -166,7 +166,7 @@ func (s *Store) UpdateModuleStats(ctx context.Context, stats *port.ModuleStats) 
 	if err != nil {
 		return fmt.Errorf("marshal module stats: %w", err)
 	}
-	_, err = s.q(ctx).Exec(ctx, `INSERT INTO module_stats (module, data) VALUES ($1, $2)
+	err = s.execLater(ctx, `INSERT INTO module_stats (module, data) VALUES ($1, $2)
 		ON CONFLICT (module) DO UPDATE SET data = EXCLUDED.data`, stats.Module.Bytes(), data)
 	return err
 }

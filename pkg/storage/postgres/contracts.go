@@ -62,7 +62,7 @@ func (s *Store) SetABI(ctx context.Context, address common.Address, abiJSON []by
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, `INSERT INTO abis (address, abi) VALUES ($1, $2)
+	err := s.execLater(ctx, `INSERT INTO abis (address, abi) VALUES ($1, $2)
 		ON CONFLICT (address) DO UPDATE SET abi = EXCLUDED.abi`, address.Bytes(), bytes.Clone(abiJSON))
 	return err
 }
@@ -72,7 +72,7 @@ func (s *Store) DeleteABI(ctx context.Context, address common.Address) error {
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, "DELETE FROM abis WHERE address = $1", address.Bytes())
+	err := s.execLater(ctx, "DELETE FROM abis WHERE address = $1", address.Bytes())
 	return err
 }
 
@@ -152,7 +152,7 @@ func (s *Store) SetContractVerification(ctx context.Context, v *port.ContractVer
 	if err != nil {
 		return fmt.Errorf("encode contract verification: %w", err)
 	}
-	_, err = s.q(ctx).Exec(ctx, `INSERT INTO contract_verifications (address, is_verified, verified_at, data) VALUES ($1, $2, $3, $4)
+	err = s.execLater(ctx, `INSERT INTO contract_verifications (address, is_verified, verified_at, data) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (address) DO UPDATE SET is_verified = EXCLUDED.is_verified, verified_at = EXCLUDED.verified_at, data = EXCLUDED.data`,
 		v.Address.Bytes(), v.IsVerified, v.VerifiedAt.Unix(), data)
 	return err
@@ -163,7 +163,7 @@ func (s *Store) DeleteContractVerification(ctx context.Context, address common.A
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, "DELETE FROM contract_verifications WHERE address = $1", address.Bytes())
+	err := s.execLater(ctx, "DELETE FROM contract_verifications WHERE address = $1", address.Bytes())
 	return err
 }
 

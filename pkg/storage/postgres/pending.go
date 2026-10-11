@@ -1,0 +1,124 @@
+package postgres
+
+import (
+	"context"
+	"fmt"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
+)
+
+// Writes of a block transaction whose results nobody reads are queued and
+// sent together (one round trip for many statements) instead of one round
+// trip each: a block of 50 transactions otherwise costs hundreds of round
+// trips, which dominate ingest when the database is across a network
+// (open-items.md, PostgreSQL write performance). The queue is sent, in
+// order, before any other statement of the transaction runs and before it
+// commits, so the transaction always reads its own writes. A queued
+// statement that fails fails the statement or the commit that sent it.
+
+// pendingTx is a block transaction seen through its queue: every statement
+// sends the queued writes first.
+type pendingTx struct{ t *blockTx }
+
+// q returns the block transaction as a querier that sends queued writes
+// before each statement.
+func (t *blockTx) q() querier { return pendingTx{t} }
+
+// flush sends the queued writes.
+func (t *blockTx) flush(ctx context.Context) error {
+	if t.pending == nil || t.pending.Len() == 0 {
+		return nil
+	}
+	b := t.pending
+	t.pending = nil
+	res := t.tx.SendBatch(ctx, b)
+	for i := 0; i < b.Len(); i++ {
+		if _, err := res.Exec(); err != nil {
+			_ = res.Close()
+			return fmt.Errorf("postgres: queued write: %w", err)
+		}
+	}
+	return res.Close()
+}
+
+// queue adds a write to be sent with the next statement or the commit.
+func (t *blockTx) queue(sql string, args ...any) {
+	if t.pending == nil {
+		t.pending = &pgx.Batch{}
+	}
+	t.pending.Queue(sql, args...)
+}
+
+func (p pendingTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	if err := p.t.flush(ctx); err != nil {
+		return pgconn.CommandTag{}, err
+	}
+	return p.t.tx.Exec(ctx, sql, args...)
+}
+
+func (p pendingTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	if err := p.t.flush(ctx); err != nil {
+		return nil, err
+	}
+	return p.t.tx.Query(ctx, sql, args...)
+}
+
+func (p pendingTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	if err := p.t.flush(ctx); err != nil {
+		return errRow{err}
+	}
+	return p.t.tx.QueryRow(ctx, sql, args...)
+}
+
+// errRow is a row whose Scan fails with err.
+type errRow struct{ err error }
+
+func (r errRow) Scan(...any) error { return r.err }
+
+// execLater runs a write whose result is not read: queued in the block
+// transaction bound to ctx, else run now.
+func (s *Store) execLater(ctx context.Context, sql string, args ...any) error {
+	if bt := s.boundTx(ctx); bt != nil {
+		bt.queue(sql, args...)
+		return nil
+	}
+	_, err := s.pool.Exec(ctx, sql, args...)
+	return err
+}
+
+// balance returns an account's latest balance in the block transaction:
+// read (and its row locked) the first time, then kept as the transaction
+// changes it, so each further update of the account costs no round trip.
+func (t *blockTx) balance(ctx context.Context, addr common.Address) (*big.Int, error) {
+	if b, ok := t.balances[addr]; ok {
+		return new(big.Int).Set(b), nil
+	}
+	b, err := latestBalance(ctx, t.q(), addr)
+	if err != nil {
+		return nil, err
+	}
+	if t.balances == nil {
+		t.balances = map[common.Address]*big.Int{}
+	}
+	t.balances[addr] = new(big.Int).Set(b)
+	return b, nil
+}
+
+// addSnapshot queues the balance current+delta at blockNumber.
+func (t *blockTx) addSnapshot(addr common.Address, blockNumber uint64, current, delta *big.Int, txHash common.Hash) error {
+	balance := new(big.Int).Add(current, delta)
+	if balance.Sign() < 0 {
+		return fmt.Errorf("%w: %s at block %d (%s %+d)", port.ErrNegativeBalance, addr.Hex(), blockNumber, current, delta)
+	}
+	t.queue(`INSERT INTO balance_history (address, block_number, balance, delta, tx_hash)
+		VALUES ($1, $2, $3::numeric, $4::numeric, $5)`, addr.Bytes(), i64(blockNumber), balance.String(), delta.String(), txHash.Bytes())
+	t.queue(`INSERT INTO balances (address, balance) VALUES ($1, $2::numeric)
+		ON CONFLICT (address) DO UPDATE SET balance = EXCLUDED.balance`, addr.Bytes(), balance.String())
+	t.balances[addr] = balance
+	return nil
+}

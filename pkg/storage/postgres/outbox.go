@@ -26,7 +26,7 @@ func (s *Store) AppendOutbox(ctx context.Context, entries []port.OutboxEntry) er
 	if bt == nil {
 		return errors.New("postgres: outbox entries must be appended in a block transaction")
 	}
-	last, err := lastOutboxSeq(ctx, bt.tx)
+	last, err := lastOutboxSeq(ctx, bt.q())
 	if err != nil {
 		return fmt.Errorf("read outbox sequence: %w", err)
 	}
@@ -41,7 +41,7 @@ func (s *Store) AppendOutbox(ctx context.Context, entries []port.OutboxEntry) er
 	}
 	b.Queue(`INSERT INTO outbox_sequence (last) VALUES ($1)
 		ON CONFLICT (id) DO UPDATE SET last = EXCLUDED.last`, i64(last))
-	return sendBatch(ctx, bt.tx, b)
+	return sendBatch(ctx, bt.q(), b)
 }
 
 func lastOutboxSeq(ctx context.Context, q querier) (uint64, error) {
@@ -100,7 +100,7 @@ func (s *Store) SetOutboxCursor(ctx context.Context, name string, seq uint64) er
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, `INSERT INTO outbox_cursors (name, seq) VALUES ($1, $2)
+	err := s.execLater(ctx, `INSERT INTO outbox_cursors (name, seq) VALUES ($1, $2)
 		ON CONFLICT (name) DO UPDATE SET seq = EXCLUDED.seq`, name, i64(seq))
 	return err
 }
@@ -110,6 +110,6 @@ func (s *Store) PruneOutbox(ctx context.Context, before uint64) error {
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, "DELETE FROM outbox WHERE seq < $1", bigintOf(before))
+	err := s.execLater(ctx, "DELETE FROM outbox WHERE seq < $1", bigintOf(before))
 	return err
 }

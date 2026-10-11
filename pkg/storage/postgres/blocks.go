@@ -103,7 +103,7 @@ func (s *Store) SetReceipt(ctx context.Context, r *model.Receipt) error {
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err = s.q(ctx).Exec(ctx, `INSERT INTO receipts (tx_hash, block_number, tx_index, block_hash, status, contract_address, data)
+	err = s.execLater(ctx, `INSERT INTO receipts (tx_hash, block_number, tx_index, block_hash, status, contract_address, data)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (tx_hash) DO UPDATE SET block_number = EXCLUDED.block_number, tx_index = EXCLUDED.tx_index,
 			block_hash = EXCLUDED.block_hash, status = EXCLUDED.status, contract_address = EXCLUDED.contract_address, data = EXCLUDED.data`,
@@ -217,7 +217,7 @@ func (s *Store) setMetaUint(ctx context.Context, name string, v uint64) error {
 	}
 	var b [8]byte
 	binary.BigEndian.PutUint64(b[:], v)
-	_, err := s.q(ctx).Exec(ctx, `INSERT INTO meta (name, value) VALUES ($1, $2)
+	err := s.execLater(ctx, `INSERT INTO meta (name, value) VALUES ($1, $2)
 		ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value`, name, b[:])
 	return err
 }
@@ -333,7 +333,7 @@ func (s *Store) DeleteBlock(ctx context.Context, height uint64) error {
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, "DELETE FROM blocks WHERE number = $1", i64(height))
+	err := s.execLater(ctx, "DELETE FROM blocks WHERE number = $1", i64(height))
 	return err
 }
 
@@ -342,7 +342,7 @@ func (s *Store) AddTransactionToAddressIndex(ctx context.Context, addr common.Ad
 	if err := s.write(); err != nil {
 		return err
 	}
-	_, err := s.q(ctx).Exec(ctx, "INSERT INTO address_transactions (address, tx_hash) VALUES ($1, $2)", addr.Bytes(), txHash.Bytes())
+	err := s.execLater(ctx, "INSERT INTO address_transactions (address, tx_hash) VALUES ($1, $2)", addr.Bytes(), txHash.Bytes())
 	return err
 }
 
@@ -416,6 +416,13 @@ func collectHashes(rows pgx.Rows) ([]common.Hash, error) {
 // sendBatch runs queued statements and checks each result.
 func sendBatch(ctx context.Context, q querier, b *pgx.Batch) error {
 	if b.Len() == 0 {
+		return nil
+	}
+	if p, ok := q.(pendingTx); ok {
+		// In a block transaction: queued with its other writes.
+		for _, qq := range b.QueuedQueries {
+			p.t.queue(qq.SQL, qq.Arguments...)
+		}
 		return nil
 	}
 	sender, ok := q.(interface {
