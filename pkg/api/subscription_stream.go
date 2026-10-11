@@ -81,6 +81,9 @@ func (h *subscriptionStreams) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return // the upgrader answered the request
 	}
 	if !h.track(conn) {
+		// The server stopped while this connection was being set up
+		// (close found no connection to end): end it the same way.
+		goingAway(conn)
 		_ = conn.Close()
 		return
 	}
@@ -157,9 +160,14 @@ func (h *subscriptionStreams) close() {
 	h.mu.Lock()
 	h.closed = true
 	for conn := range h.conns {
-		_ = conn.WriteControl(gws.CloseMessage, gws.FormatCloseMessage(gws.CloseGoingAway, "server stopping"), time.Now().Add(time.Second))
+		goingAway(conn)
 		_ = conn.Close()
 	}
 	h.mu.Unlock()
 	h.wg.Wait()
+}
+
+// goingAway tells the client the server is stopping (close 1001).
+func goingAway(conn *gws.Conn) {
+	_ = conn.WriteControl(gws.CloseMessage, gws.FormatCloseMessage(gws.CloseGoingAway, "server stopping"), time.Now().Add(time.Second))
 }
