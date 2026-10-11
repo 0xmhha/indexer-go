@@ -158,6 +158,8 @@ webhook_url: https://...
 
 결과(10/11, 6단계): 시험 체인과 1ms polling(newHeads 대신)으로 쟀다. fast 스트림 p99는 노드가 블록을 보인 때부터 9.6~12.1ms(4회), fast path에 들어온 뒤로는 1.3~5.1ms다. 알림 경로는 목표 안이고, 처음부터 재면 블록 fetch 때문에 경계에 있다. 시험은 여유를 두어 처음부터 20ms, fast path부터 10ms로 검사한다. 실제 노드와 newHeads로는 재지 않았다(newHeads 감지는 live 시험에서 p95 1~4ms). 목표(결정 10/11): fast 스트림 p99 20ms 이하(노드가 블록을 보인 때부터), fast path부터 10ms 이하. `make test-slo`가 검사한다.
 
+실제 노드(10/11): 로컬 go-stablenet(Gstable v1.1.0, chainbench로 validator 4 + endpoint 1, chain 8283)에서 `TestLiveNotificationLatency`로 쟀다. 송신 계정의 트랜잭션을 보는 fast 스트림 설정을 두고, 자기 자신에게 보내는 전송을 블록마다 하나씩 보냈다. "노드가 블록을 보인 때"는 시험이 같은 노드에 따로 연 newHeads 구독이 그 블록을 받은 때다. newHeads(`rpc.ws_endpoint`)를 쓰면 30건 p50 1.5ms, p99 6ms, max 16.8ms였고, 60건은 p50 1.3ms, p99 6.9ms, max 11.8ms였다. polling만 쓰면(기본 50ms) 30건 p50 29.7ms, p99 51.5ms였다. 목표 20ms는 newHeads를 켠 배포에서 지킨다. polling만 쓰는 배포는 poll 간격이 지연을 정한다.
+
 ---
 
 ## 5. 하지 않는 것
