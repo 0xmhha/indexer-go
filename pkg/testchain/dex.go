@@ -277,7 +277,16 @@ func (sc *DEXScenario) Fork() {
 // transactions, each one swap of the pair (alternately buying and selling a
 // little). Every block is built; the visible head is block 1, so a test
 // reveals blocks one at a time with SetHead.
-func BuildDEXLoad(blocks, swaps int) *DEXScenario {
+func BuildDEXLoad(blocks, swaps int) *DEXScenario { return buildDEXLoad(blocks, swaps, false) }
+
+// BuildDEXLoadMixed is BuildDEXLoad with the DEX scenario's V3 pool as well:
+// block 1 also creates, initializes and funds the pool, and the swaps of a
+// block go to the pair and the pool in turn, two at a time (V2 buy, V2
+// sell, V3 buy, V3 sell, ...). The V3 swaps stay at the pool's initial
+// price, so no tick is crossed.
+func BuildDEXLoadMixed(blocks, swaps int) *DEXScenario { return buildDEXLoad(blocks, swaps, true) }
+
+func buildDEXLoad(blocks, swaps int, v3 bool) *DEXScenario {
 	accts := make([]Account, 4)
 	alloc := map[common.Address]*big.Int{}
 	for i := range accts {
@@ -297,19 +306,46 @@ func BuildDEXLoad(blocks, swaps int) *DEXScenario {
 	call := func(from Account, to common.Address, logs ...*types.Log) TxSpec {
 		return TxSpec{From: from, Tx: &types.LegacyTx{To: &to, Gas: 300000, GasPrice: gp}, GasUsed: 120000, Logs: logs}
 	}
+	q96 := new(big.Int).Lsh(big.NewInt(1), 96)
 	r0, r1 := big.NewInt(1_000_000_000), big.NewInt(2_000_000_000)
-	ch.AddBlock(call(accts[0], sc.V2Factory,
-		&types.Log{Address: sc.V2Factory, Topics: []common.Hash{SigV2PairCreated, addrTopic(sc.TokenA), addrTopic(sc.TokenB)},
+	setup := []*types.Log{
+		{Address: sc.V2Factory, Topics: []common.Hash{SigV2PairCreated, addrTopic(sc.TokenA), addrTopic(sc.TokenB)},
 			Data: concat(addrWord(sc.V2Pair), word(n(1)))},
-		&types.Log{Address: sc.V2Pair, Topics: []common.Hash{SigV2Mint, addrTopic(router)}, Data: concat(word(r0), word(r1))},
-		&types.Log{Address: sc.V2Pair, Topics: []common.Hash{SigV2Sync}, Data: concat(word(r0), word(r1))},
-	))
+		{Address: sc.V2Pair, Topics: []common.Hash{SigV2Mint, addrTopic(router)}, Data: concat(word(r0), word(r1))},
+		{Address: sc.V2Pair, Topics: []common.Hash{SigV2Sync}, Data: concat(word(r0), word(r1))},
+	}
+	if v3 {
+		sc.V3Factory = common.HexToAddress("0x00000000000000000000000000000000000F3001")
+		sc.V3Pool = common.HexToAddress("0x00000000000000000000000000000000000B3001")
+		setup = append(setup,
+			&types.Log{Address: sc.V3Factory, Topics: []common.Hash{SigV3PoolCreated, addrTopic(sc.TokenA), addrTopic(sc.TokenB), common.BigToHash(n(3000))},
+				Data: concat(signedWord(60), addrWord(sc.V3Pool))},
+			&types.Log{Address: sc.V3Pool, Topics: []common.Hash{SigV3Initialize}, Data: concat(word(q96), signedWord(0))},
+			&types.Log{Address: sc.V3Pool,
+				Topics: []common.Hash{SigV3Mint, addrTopic(accts[0].Address), common.BytesToHash(signedWord(-600)), common.BytesToHash(signedWord(600))},
+				Data:   concat(addrWord(router), word(n(1_000_000_000)), word(n(1_000_000_000)), word(n(1_000_000_000)))},
+		)
+	}
+	ch.AddBlock(call(accts[0], sc.V2Factory, setup...))
 	for b := 0; b < blocks; b++ {
 		specs := make([]TxSpec, swaps)
 		for i := range specs {
 			trader := accts[1+(b*swaps+i)%3]
+			buy := i%2 == 0
+			if v3 && i%4 >= 2 {
+				// The pool pays out A for B (buy) or takes A for B (sell),
+				// at its initial price.
+				a0, a1 := int64(100), int64(-99)
+				if buy {
+					a0, a1 = -100, 101
+				}
+				specs[i] = call(trader, router, &types.Log{Address: sc.V3Pool,
+					Topics: []common.Hash{SigV3Swap, addrTopic(router), addrTopic(trader.Address)},
+					Data:   concat(signedWord(a0), signedWord(a1), word(q96), word(n(1_000_000_000)), signedWord(0))})
+				continue
+			}
 			var swap []byte
-			if i%2 == 0 { // buy 100 A for 201 B
+			if buy { // buy 100 A for 201 B
 				swap = concat(word(n(0)), word(n(201)), word(n(100)), word(n(0)))
 				r0, r1 = new(big.Int).Sub(r0, n(100)), new(big.Int).Add(r1, n(201))
 			} else { // sell 100 A for 199 B

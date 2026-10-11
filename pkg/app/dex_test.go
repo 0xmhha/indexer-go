@@ -200,3 +200,55 @@ func TestDEXTradesReproduced(t *testing.T) {
 	require.NoError(t, app.fetcher.FetchRange(ctx, keep+1, head))
 	requireTrades(t, ctx, s, sc, head)
 }
+
+// TestDEXLoadMixedTrades: the mixed load chain of the SLO test trades on the
+// V2 pair and the V3 pool in turn, and every swap is indexed as a trade of
+// its venue, with its side and amounts.
+func TestDEXLoadMixedTrades(t *testing.T) {
+	const blocks, swaps = 3, 8
+	sc := testchain.BuildDEXLoadMixed(blocks, swaps)
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+	head := uint64(1 + blocks)
+	sc.Chain.SetHead(head)
+
+	cfg := config.NewConfig()
+	cfg.RPC.Endpoint = srv.URL()
+	cfg.RPC.Timeout = 5 * time.Second
+	setTestDatabase(t, cfg, filepath.Join(t.TempDir(), "db"))
+	cfg.API.Enabled = false
+	on := true
+	cfg.Features = map[string]config.FeatureConfig{dex.PoolsName: {Enabled: &on}, dex.TradesName: {Enabled: &on}}
+	require.NoError(t, cfg.SetFeatureSettings(dex.PoolsName, dex.Settings{Venues: []dex.Venue{
+		{Type: string(port.DexUniswapV2), Factory: sc.V2Factory.Hex()},
+		{Type: string(port.DexUniswapV3), Factory: sc.V3Factory.Hex()},
+	}}))
+	app, err := NewApp(cfg, zap.NewNop(), false, "")
+	require.NoError(t, err)
+	defer app.Shutdown()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	require.NoError(t, app.fetcher.FetchRange(ctx, 0, head))
+
+	s := app.storage.(port.DexReader)
+	for b := uint64(2); b <= head; b++ {
+		trades, err := s.ListDexTradesInBlock(ctx, b)
+		require.NoError(t, err)
+		require.Len(t, trades, swaps, "block %d", b)
+		for i, tr := range trades {
+			venue, market, quote := port.DexUniswapV2, sc.V2Pair, int64(201)
+			if i%4 >= 2 {
+				venue, market, quote = port.DexUniswapV3, sc.V3Pool, 101
+			}
+			side := port.DexBuy
+			if i%2 == 1 {
+				side, quote = port.DexSell, quote-2 // V2 199, V3 99
+			}
+			assert.Equal(t, venue, tr.Venue, "block %d trade %d", b, i)
+			assert.Equal(t, market, tr.Market.Address, "block %d trade %d", b, i)
+			assert.Equal(t, side, tr.Side, "block %d trade %d", b, i)
+			assert.Equal(t, int64(100), tr.BaseAmount.Int64(), "block %d trade %d", b, i)
+			assert.Equal(t, quote, tr.QuoteAmount.Int64(), "block %d trade %d", b, i)
+		}
+	}
+}

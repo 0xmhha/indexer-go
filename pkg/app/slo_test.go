@@ -66,7 +66,7 @@ type sloResult struct {
 // node shows one per interval, each with swaps trades, while subscribers
 // WebSocket clients subscribe to dexTrade, slow of which never read.
 func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval time.Duration, queue int) sloResult {
-	sc := testchain.BuildDEXLoad(blocks, swaps)
+	sc := testchain.BuildDEXLoadMixed(blocks, swaps) // V2 and V3 trades
 	srv := testchain.NewServer(sc.Chain)
 	defer srv.Close()
 
@@ -84,7 +84,10 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 	cfg.EventBus.SubscriberBufferSize = queue
 	on := true
 	cfg.Features = map[string]config.FeatureConfig{dex.PoolsName: {Enabled: &on}, dex.TradesName: {Enabled: &on}}
-	require.NoError(t, cfg.SetFeatureSettings(dex.PoolsName, dex.Settings{Venues: []dex.Venue{{Type: "uniswap_v2", Factory: sc.V2Factory.Hex()}}}))
+	require.NoError(t, cfg.SetFeatureSettings(dex.PoolsName, dex.Settings{Venues: []dex.Venue{
+		{Type: "uniswap_v2", Factory: sc.V2Factory.Hex()},
+		{Type: "uniswap_v3", Factory: sc.V3Factory.Hex()},
+	}}))
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
 	defer app.Shutdown()
