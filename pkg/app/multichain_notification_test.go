@@ -53,16 +53,22 @@ func TestMultiChainNotifications(t *testing.T) {
 	})
 	base := fmt.Sprintf("127.0.0.1:%d", cfg.API.Port)
 
-	post := func(path string, body any) map[string]any {
+	try := func(path string, body any) (map[string]any, error) {
 		data, _ := json.Marshal(body)
 		req, _ := http.NewRequest(http.MethodPost, "http://"+base+path, bytes.NewReader(data))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-API-Key", key)
 		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
+		if err != nil {
+			return nil, err
+		}
 		defer func() { _ = resp.Body.Close() }()
 		var out map[string]any
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
+		return out, json.NewDecoder(resp.Body).Decode(&out)
+	}
+	post := func(path string, body any) map[string]any {
+		out, err := try(path, body)
+		require.NoError(t, err, path)
 		return out
 	}
 	create := map[string]any{
@@ -72,8 +78,11 @@ func TestMultiChainNotifications(t *testing.T) {
 	}
 	for _, chain := range []string{"a", "b"} {
 		require.Eventually(t, func() bool {
-			return post("/chains/"+chain+"/graphql", map[string]any{"query": `{ notificationSettings { id } }`})["data"] != nil
-		}, 30*time.Second, 50*time.Millisecond, "chain %s serves its notification API", chain)
+			// Until the server listens and the chain runs, requests fail
+			// or answer 503.
+			out, err := try("/chains/"+chain+"/graphql", map[string]any{"query": `{ notificationSettings { id } }`})
+			return err == nil && out["data"] != nil
+		}, time.Minute, 50*time.Millisecond, "chain %s serves its notification API", chain)
 	}
 	created := post("/chains/a/graphql", create)
 	require.Empty(t, created["errors"])
