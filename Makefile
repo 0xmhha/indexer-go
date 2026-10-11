@@ -1,4 +1,4 @@
-.PHONY: all build clean test test-postgres test-slo test-examples lint lint-install coverage generate tools help
+.PHONY: all build clean test test-race test-postgres test-slo test-examples lint lint-install coverage generate tools help
 
 # Variables
 BINARY_NAME=indexer-go
@@ -61,6 +61,10 @@ clean:
 test:
 	@echo "Running tests..."
 	$(GOTEST) -v -short ./...
+
+## test-race: Run every test once with the race detector; run it before each commit and pull request (CI has no race job, to keep CI fast)
+test-race:
+	$(GOTEST) -race -count=1 ./...
 
 ## test-all: Run all tests including integration tests
 test-all:
