@@ -583,6 +583,9 @@ type WebhookNotificationConfig struct {
 	AllowedHosts []string `yaml:"allowed_hosts"`
 	// SignatureHeader is the header name for HMAC signature
 	SignatureHeader string `yaml:"signature_header"`
+	// VerifyDestinations accepts a webhook URL only when it echoes a
+	// challenge at registration (default false)
+	VerifyDestinations bool `yaml:"verify_destinations"`
 }
 
 // EmailNotificationConfig holds email notification settings
