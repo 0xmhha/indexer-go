@@ -137,7 +137,7 @@ func (s *PebbleStorage) ListSettings(ctx context.Context, filter *SettingsFilter
 			if len(filter.Types) > 0 {
 				found := false
 				for _, t := range filter.Types {
-					if t == setting.Type {
+					if setting.hasChannel(t) {
 						found = true
 						break
 					}

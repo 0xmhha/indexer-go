@@ -45,15 +45,18 @@ const (
 
 // NotificationSetting represents a user's notification configuration.
 type NotificationSetting struct {
-	ID          string           `json:"id"`
-	Name        string           `json:"name"`
-	Type        NotificationType `json:"type"`
-	Enabled     bool             `json:"enabled"`
-	CreatedAt   time.Time        `json:"created_at"`
-	UpdatedAt   time.Time        `json:"updated_at"`
-	EventTypes  []EventType      `json:"event_types"`
-	Filter      *NotifyFilter    `json:"filter,omitempty"`
-	Destination Destination      `json:"destination"`
+	ID   string           `json:"id"`
+	Name string           `json:"name"`
+	Type NotificationType `json:"type"`
+	// Channels are further channels the notifications go to besides Type
+	// (channels.go), such as a webhook besides a stream.
+	Channels    []NotificationType `json:"channels,omitempty"`
+	Enabled     bool               `json:"enabled"`
+	CreatedAt   time.Time          `json:"created_at"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+	EventTypes  []EventType        `json:"event_types"`
+	Filter      *NotifyFilter      `json:"filter,omitempty"`
+	Destination Destination        `json:"destination"`
 	// Owner is the label of the API key that created the setting; only
 	// that key (and operator keys) may see or change it (ForCaller).
 	// Settings created before owners existed have none.

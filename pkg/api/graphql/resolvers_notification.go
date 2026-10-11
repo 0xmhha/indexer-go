@@ -449,6 +449,14 @@ func parseNotificationSettingInput(input map[string]interface{}) (*notifications
 	if condition, ok := input["condition"].(string); ok {
 		setting.Condition = condition
 	}
+	if channels, ok := input["channels"].([]interface{}); ok {
+		setting.Channels = nil
+		for _, c := range channels {
+			if cs, ok := c.(string); ok {
+				setting.Channels = append(setting.Channels, notifications.NotificationType(cs))
+			}
+		}
+	}
 	if payload, ok := input["payload"].(string); ok {
 		setting.Payload = payload
 	}
@@ -548,6 +556,14 @@ func applyNotificationSettingUpdates(setting *notifications.NotificationSetting,
 	if condition, ok := input["condition"].(string); ok {
 		setting.Condition = condition
 	}
+	if channels, ok := input["channels"].([]interface{}); ok {
+		setting.Channels = nil
+		for _, c := range channels {
+			if cs, ok := c.(string); ok {
+				setting.Channels = append(setting.Channels, notifications.NotificationType(cs))
+			}
+		}
+	}
 	if payload, ok := input["payload"].(string); ok {
 		setting.Payload = payload
 	}
@@ -583,6 +599,7 @@ func notificationSettingToMap(setting *notifications.NotificationSetting) map[st
 		"enabled":     setting.Enabled,
 		"delivery":    string(deliveryOf(setting)),
 		"condition":   setting.Condition,
+		"channels":    settingChannels(setting),
 		"payload":     setting.Payload,
 		"destination": notificationDestinationToMap(setting.Destination),
 		"createdAt":   setting.CreatedAt.Format(time.RFC3339),
@@ -788,4 +805,15 @@ func deliveryOf(st *notifications.NotificationSetting) notifications.Delivery {
 		return notifications.DeliveryDurable
 	}
 	return st.Delivery
+}
+
+// settingChannels lists a setting's channels, its type first.
+func settingChannels(st *notifications.NotificationSetting) []string {
+	out := []string{string(st.Type)}
+	for _, c := range st.Channels {
+		if c != st.Type {
+			out = append(out, string(c))
+		}
+	}
+	return out
 }

@@ -518,11 +518,12 @@ func (s *NotificationService) notify(ctx context.Context, event events.Event) er
 	return nil
 }
 
-// deliverMatch creates, stores and queues the notification of an event
-// for a setting it matches; a stream setting's notification is sent to
-// its owner's connections instead, without being stored. A notification whose id exists already (a
-// sequenced event delivered again, or a fast event, keyed by fastKey,
-// evaluated again) is not created again.
+// deliverMatch creates the notification of an event for a setting it
+// matches and sends it to the setting's channels (sendChannels): stored
+// and queued, or, for a stream, sent to its owner's connections. A
+// notification whose id exists already (a sequenced event delivered again,
+// or a fast event, keyed by fastKey, evaluated again) is not created
+// again.
 func (s *NotificationService) deliverMatch(ctx context.Context, setting *NotificationSetting, event events.Event, kinds []EventType, fastKey string) error {
 	kind, ok := s.shouldNotify(setting, event, kinds)
 	if !ok {
@@ -538,26 +539,7 @@ func (s *NotificationService) deliverMatch(ctx context.Context, setting *Notific
 	if fastKey != "" {
 		notification.ID = uuid.NewSHA1(notificationIDSpace, []byte(setting.ID+"/fast/"+fastKey)).String()
 	}
-	if setting.Type == NotificationTypeStream {
-		// Not stored: sent to the owner's connections now or never.
-		notification.Status = DeliveryStatusSent
-		_, err := s.streams.sendJSON(setting.Owner, &StreamMessage{Type: StreamNotification, Notification: notification})
-		return err
-	}
-	if fastKey != "" || events.SequenceOf(event) != 0 {
-		existing, err := s.storage.GetNotification(ctx, notification.ID)
-		if err != nil {
-			return err
-		}
-		if existing != nil {
-			return nil
-		}
-	}
-	if err := s.storage.SaveNotification(ctx, notification); err != nil {
-		return err
-	}
-	s.enqueueNotification(notification)
-	return nil
+	return s.sendChannels(ctx, setting, notification, fastKey != "" || events.SequenceOf(event) != 0)
 }
 
 // shouldNotify checks if a setting should be notified for an event of the
@@ -1082,22 +1064,8 @@ func (s *NotificationService) CreateSetting(ctx context.Context, setting *Notifi
 	setting.CreatedAt = time.Now()
 	setting.UpdatedAt = time.Now()
 
-	// Validate with handler
-	handler, ok := s.handlers[setting.Type]
-	if !ok {
-		return nil, fmt.Errorf("unsupported notification type: %s", setting.Type)
-	}
-	if err := validateFilter(setting.Filter); err != nil {
-		return nil, fmt.Errorf("invalid setting: %w", err)
-	}
-	if err := validateDelivery(setting.Delivery); err != nil {
-		return nil, fmt.Errorf("invalid setting: %w", err)
-	}
-	if err := validateExpressions(setting); err != nil {
-		return nil, fmt.Errorf("invalid setting: %w", err)
-	}
-	if err := handler.Validate(setting); err != nil {
-		return nil, fmt.Errorf("invalid setting: %w", err)
+	if err := s.validateSetting(setting); err != nil {
+		return nil, err
 	}
 
 	if err := s.storage.SaveSetting(ctx, setting); err != nil {
@@ -1132,22 +1100,8 @@ func (s *NotificationService) UpdateSetting(ctx context.Context, setting *Notifi
 		setting.Owner = existing.Owner // an update does not change the owner
 	}
 
-	// Validate with handler
-	handler, ok := s.handlers[setting.Type]
-	if !ok {
-		return nil, fmt.Errorf("unsupported notification type: %s", setting.Type)
-	}
-	if err := validateFilter(setting.Filter); err != nil {
-		return nil, fmt.Errorf("invalid setting: %w", err)
-	}
-	if err := validateDelivery(setting.Delivery); err != nil {
-		return nil, fmt.Errorf("invalid setting: %w", err)
-	}
-	if err := validateExpressions(setting); err != nil {
-		return nil, fmt.Errorf("invalid setting: %w", err)
-	}
-	if err := handler.Validate(setting); err != nil {
-		return nil, fmt.Errorf("invalid setting: %w", err)
+	if err := s.validateSetting(setting); err != nil {
+		return nil, err
 	}
 
 	if err := s.storage.SaveSetting(ctx, setting); err != nil {
@@ -1254,16 +1208,29 @@ func (s *NotificationService) TestSetting(ctx context.Context, id string) (*Deli
 		return nil, fmt.Errorf("setting not found: %s", id)
 	}
 
-	handler, ok := s.handlers[setting.Type]
-	if !ok {
-		return nil, fmt.Errorf("unsupported notification type: %s", setting.Type)
+	// Create a test notification for each channel; the result is the
+	// first channel's that failed, or the last one's.
+	var result *DeliveryResult
+	for _, channel := range setting.channels() {
+		handler, ok := s.handlers[channel]
+		if !ok {
+			return nil, fmt.Errorf("unsupported notification type: %s", channel)
+		}
+		r, err := handler.Deliver(ctx, s.testNotification(setting, channel), setting)
+		if err != nil || r == nil || !r.Success {
+			return r, err
+		}
+		result = r
 	}
+	return result, nil
+}
 
-	// Create a test notification
-	testNotification := &Notification{
+// testNotification is the sample notification TestSetting sends.
+func (s *NotificationService) testNotification(setting *NotificationSetting, channel NotificationType) *Notification {
+	return &Notification{
 		ID:        uuid.New().String(),
 		SettingID: setting.ID,
-		Type:      setting.Type,
+		Type:      channel,
 		EventType: EventTypeBlock,
 		Payload: &EventPayload{
 			ChainID:     1,
@@ -1276,6 +1243,4 @@ func (s *NotificationService) TestSetting(ctx context.Context, id string) (*Deli
 		Status:    DeliveryStatusPending,
 		CreatedAt: time.Now(),
 	}
-
-	return handler.Deliver(ctx, testNotification, setting)
 }
