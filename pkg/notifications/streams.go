@@ -160,6 +160,7 @@ func (s *Streams) send(owner string, msg []byte) int {
 		c.once.Do(func() {
 			c.overflowed = true
 			close(c.done)
+			metricStreamOverflows.Inc()
 		})
 	}
 	return sent
@@ -171,7 +172,13 @@ func (s *Streams) sendJSON(owner string, m *StreamMessage) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return s.send(owner, data), nil
+	sent := s.send(owner, data)
+	result := "sent"
+	if sent == 0 {
+		result = "unsent"
+	}
+	metricStreamMessages.WithLabelValues(m.Type, result).Inc()
+	return sent, nil
 }
 
 // streamHandler is the handler of stream settings: delivery happens when

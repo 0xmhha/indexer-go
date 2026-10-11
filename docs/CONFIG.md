@@ -372,6 +372,8 @@ notifications:
   operator_labels: []                   # 모든 알림 설정을 보고 관리하는 api.keys 라벨 (소유자 없는 예전 설정 포함)
   max_settings_per_owner: 100           # 운영자가 아닌 키 하나가 가질 수 있는 설정 수 (0 = 제한 없음)
   max_streams_per_owner: 4              # 키 하나가 /v1/subscriptions/stream에 동시에 열 수 있는 연결 수
+  destination_rate_limit: 10            # webhook은 host마다, Slack은 incoming webhook URL마다 초당 전달 수 (0 = 제한 없음)
+  destination_burst: 20                 # 한 번에 보낼 수 있는 수
 
   webhook:
     enabled: true
@@ -427,6 +429,11 @@ notifications:
   - 한 이벤트의 평가는 약 3.5µs다(조건 3개와 필드 3개 payload, `BenchmarkExpressionEvaluate`). 지표: `indexer_notification_expression_evaluations_total{result}`(notify, skip, error), `indexer_notification_expression_seconds`, `indexer_notification_settings_disabled_total`.
   - reorg 알림에는 식을 적용하지 않는다.
   - dry run: 등록하기 전에 식을 시험한다. GraphQL `checkNotificationExpressions(input: {event, condition, payload, log | transaction, block})`, JSON-RPC `notification_checkExpressions`(같은 필드)를 쓴다. 키가 필요하다. 식이 등록될 수 있는지(`valid`, 아니면 `error`)를 돌려준다. 예제 로그(eth_getLogs 형식의 `address`, `topics`, `data`, `index`, `transactionHash`)나 트랜잭션(`hash`, `from`, `to`, `value`)과 그 블록(`number`, `time`, `hash`)을 주면, 그 이벤트가 알림될지(`notify`), payload 값(`result`), decode한 인자(`decoded`)도 돌려준다. 실행 오류와 "예제 로그가 필터 이벤트가 아님"은 `error`로 알린다. 아무것도 저장하거나 보내지 않는다. 형식이 틀린 예제(주소, hex)는 요청 오류다.
+- 목적지별 상한: webhook은 같은 host로 가는 전달이, Slack은 같은 incoming webhook URL로 가는 전달이 `destination_rate_limit`(초당, 기본 10)과 `destination_burst`(기본 20)를 나눠 쓴다. 설정 하나로 남의 서버에 요청을 쏟지 못하게 하려는 것이다. 상한을 넘은 전달은 시도하지 않고, 상한이 허락하는 때로 미룬다(시도 횟수에 들지 않는다). 그래서 붐비는 목적지는 자기 알림만 늦어진다. 스트림은 상한이 없다(키별 연결 수와 연결별 대기열이 막는다).
+- 알림 저장은 디스크 sync를 기다리지 않는다(`storage.PebbleStorage.PutUnsynced`). 프로세스가 죽어도 남고, 시스템이 죽으면 다음 블록 commit의 sync 전 기록이 사라질 수 있다. 이때는 그 이벤트가 outbox에서 다시 오거나(cursor도 sync 전이므로) 블록을 다시 처리하며 같은 id로 다시 만들어지고, 전달 상태는 다시 보낸다(at-least-once). 키마다 fsync를 기다리면 fast webhook 알림이 블록마다 밀려 수 초 늦어졌다(macOS에서 p50 3초).
+- fast path는 블록마다 스트림 설정을 먼저 평가한다. 저장해야 하는 설정이 스트림을 늦추지 않게 하려는 것이다.
+- 지연(`make test-slo`의 `TestNotificationLatency`, 10/11, macOS 한 대, 시험 체인, 1ms polling으로 newHeads를 대신함, 100ms마다 swap 10개 블록, CEL 조건): fast 스트림은 노드가 블록을 보인 때부터 p50 3.5ms, p99 9.6~12.1ms(4회)이고 그중 fast path에 들어온 뒤로는 p99 1.3~5.1ms다(나머지는 블록 fetch). fast webhook은 p50 12ms, p99 22ms, durable 스트림은 p50 13ms, p99 25ms다. 시험은 fast 스트림 p99를 처음부터 20ms, fast path부터 10ms 이하로 검사한다. 설계의 가설(p99 10ms)은 알림 경로만으로는 맞고, 처음부터 재면 이 기계에서 경계에 있다. 실제 노드와 newHeads로는 재지 않았다.
+- 지표: `indexer_notification_deliveries_total{type,result}`(sent, retry, failed), `indexer_notification_delivery_seconds{type}`, `indexer_notification_deferred_total{type}`(상한으로 미룸), `indexer_notification_stream_messages_total{type,result}`(sent, unsent), `indexer_notification_stream_overflows_total`, `indexer_notification_fast_dropped_blocks_total`.
 - `filter.event`는 첫 topic과 함께 indexed 인자 수도 맞아야 한다. 시그니처가 같아도 indexed 인자가 다른 이벤트(ERC-20 Transfer 필터에 대한 ERC-721 Transfer)는 맞지 않는다. 전에는 첫 topic만 보아 이런 로그가 `decoded` 없이 알림됐다.
 - 알림의 `payload.chain_id`는 연결한 노드의 체인 id다. 전에는 항상 1이었다.
 - webhook과 Slack의 주소가 loopback, 사설·link-local 대역(cloud metadata `169.254.169.254` 포함), CGNAT, 문서·예약 대역이거나 `localhost`·`.internal`·`.local`·점 없는 이름이면 등록을 거절하고, 보낼 때도 이름을 푼 실제 주소를 다시 검사한다(등록 뒤 DNS를 바꾸는 우회 방지). redirect는 따라가지 않는다(3xx 응답이 결과가 된다). 같은 망의 수신기로 보내야 하는 개발 환경만 `allow_private_destinations: true`를 쓴다.

@@ -636,6 +636,9 @@ func (a *App) initNotificationService() error {
 		OperatorLabels:      a.config.Notifications.OperatorLabels,
 		MaxSettingsPerOwner: a.config.Notifications.MaxSettingsPerOwner,
 		MaxStreamsPerOwner:  a.config.Notifications.MaxStreamsPerOwner,
+
+		DestinationRateLimit: a.config.Notifications.DestinationRateLimit,
+		DestinationBurst:     a.config.Notifications.DestinationBurst,
 		Webhook: notifications.WebhookConfig{
 			Enabled:         a.config.Notifications.Webhook.Enabled,
 			Timeout:         a.config.Notifications.Webhook.Timeout,

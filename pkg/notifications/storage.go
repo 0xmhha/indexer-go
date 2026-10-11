@@ -21,6 +21,25 @@ type KeyValueStore interface {
 
 var _ Storage = (*PebbleStorage)(nil)
 
+// unsyncedPutter is a store that can write without waiting for the disk
+// (storage.PebbleStorage.PutUnsynced).
+type unsyncedPutter interface {
+	PutUnsynced(ctx context.Context, key, value []byte) error
+}
+
+// put writes a key without waiting for the disk when the store can: a
+// notification lost in a system crash is created again (its event is
+// delivered again: the outbox cursor and the block it follows are written
+// after it, and the first synced write makes all of them durable) or, for
+// a delivery status, delivered again. Waiting for an fsync per key held
+// fast notifications back by seconds (subscriptions design phase 6).
+func (s *PebbleStorage) put(ctx context.Context, key, value []byte) error {
+	if u, ok := s.store.(unsyncedPutter); ok {
+		return u.PutUnsynced(ctx, key, value)
+	}
+	return s.store.Put(ctx, key, value)
+}
+
 // get reads a key, nil if it is absent: the indexer's store reports an
 // absent key as port.ErrNotFound.
 func (s *PebbleStorage) get(ctx context.Context, key []byte) ([]byte, error) {
@@ -50,7 +69,7 @@ func (s *PebbleStorage) SaveSetting(ctx context.Context, setting *NotificationSe
 	}
 
 	key := NotificationSettingKey(setting.ID)
-	return s.store.Put(ctx, key, data)
+	return s.put(ctx, key, data)
 }
 
 // GetSetting returns a notification setting by ID.
@@ -149,7 +168,7 @@ func (s *PebbleStorage) SaveNotification(ctx context.Context, notification *Noti
 	}
 
 	key := NotificationKey(notification.ID)
-	if err := s.store.Put(ctx, key, data); err != nil {
+	if err := s.put(ctx, key, data); err != nil {
 		return err
 	}
 
@@ -159,7 +178,7 @@ func (s *PebbleStorage) SaveNotification(ctx context.Context, notification *Noti
 		notification.CreatedAt.UnixNano(),
 		notification.ID,
 	)
-	if err := s.store.Put(ctx, statusKey, []byte(notification.ID)); err != nil {
+	if err := s.put(ctx, statusKey, []byte(notification.ID)); err != nil {
 		return err
 	}
 
@@ -169,7 +188,7 @@ func (s *PebbleStorage) SaveNotification(ctx context.Context, notification *Noti
 		notification.CreatedAt.UnixNano(),
 		notification.ID,
 	)
-	if err := s.store.Put(ctx, settingKey, []byte(notification.ID)); err != nil {
+	if err := s.put(ctx, settingKey, []byte(notification.ID)); err != nil {
 		return err
 	}
 
@@ -180,7 +199,7 @@ func (s *PebbleStorage) SaveNotification(ctx context.Context, notification *Noti
 			nextRetry = notification.NextRetry.UnixNano()
 		}
 		pendingKey := NotificationPendingIndexKey(nextRetry, notification.ID)
-		if err := s.store.Put(ctx, pendingKey, []byte(notification.ID)); err != nil {
+		if err := s.put(ctx, pendingKey, []byte(notification.ID)); err != nil {
 			return err
 		}
 	}
@@ -232,7 +251,7 @@ func (s *PebbleStorage) UpdateNotificationStatus(ctx context.Context, id string,
 		return fmt.Errorf("failed to marshal notification: %w", err)
 	}
 	key := NotificationKey(id)
-	if err := s.store.Put(ctx, key, data); err != nil {
+	if err := s.put(ctx, key, data); err != nil {
 		return err
 	}
 
@@ -249,7 +268,7 @@ func (s *PebbleStorage) UpdateNotificationStatus(ctx context.Context, id string,
 		notification.CreatedAt.UnixNano(),
 		notification.ID,
 	)
-	if err := s.store.Put(ctx, newStatusKey, []byte(notification.ID)); err != nil {
+	if err := s.put(ctx, newStatusKey, []byte(notification.ID)); err != nil {
 		return err
 	}
 
@@ -280,16 +299,16 @@ func (s *PebbleStorage) UpdateNotification(ctx context.Context, notification *No
 	if err != nil {
 		return fmt.Errorf("failed to marshal notification: %w", err)
 	}
-	if err := s.store.Put(ctx, NotificationKey(notification.ID), data); err != nil {
+	if err := s.put(ctx, NotificationKey(notification.ID), data); err != nil {
 		return err
 	}
 	_ = s.store.Delete(ctx, NotificationStatusIndexKey(string(old.Status), old.CreatedAt.UnixNano(), old.ID))
 	_ = s.store.Delete(ctx, NotificationPendingIndexKey(pendingTime(old), old.ID))
-	if err := s.store.Put(ctx, NotificationStatusIndexKey(string(notification.Status), notification.CreatedAt.UnixNano(), notification.ID), []byte(notification.ID)); err != nil {
+	if err := s.put(ctx, NotificationStatusIndexKey(string(notification.Status), notification.CreatedAt.UnixNano(), notification.ID), []byte(notification.ID)); err != nil {
 		return err
 	}
 	if notification.Status == DeliveryStatusPending || notification.Status == DeliveryStatusRetrying {
-		return s.store.Put(ctx, NotificationPendingIndexKey(pendingTime(notification), notification.ID), []byte(notification.ID))
+		return s.put(ctx, NotificationPendingIndexKey(pendingTime(notification), notification.ID), []byte(notification.ID))
 	}
 	return nil
 }
@@ -421,7 +440,7 @@ func (s *PebbleStorage) SaveDeliveryHistory(ctx context.Context, history *Delive
 	}
 
 	key := NotificationHistoryKey(history.NotificationID, history.Attempt)
-	return s.store.Put(ctx, key, data)
+	return s.put(ctx, key, data)
 }
 
 // GetDeliveryHistory returns delivery history for a notification.
@@ -499,7 +518,7 @@ func (s *PebbleStorage) IncrementStats(ctx context.Context, settingID string, su
 	}
 
 	key := NotificationStatsKey(settingID)
-	return s.store.Put(ctx, key, data)
+	return s.put(ctx, key, data)
 }
 
 // CleanupOldHistory removes delivery history older than the given time.

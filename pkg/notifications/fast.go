@@ -3,6 +3,7 @@ package notifications
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync/atomic"
 
 	"go.uber.org/zap"
@@ -81,6 +82,7 @@ func (s *NotificationService) OfferBlock(height uint64, evs []events.Event) {
 		s.fastPath.lagging.Store(false)
 	default:
 		n := s.fastPath.dropped.Add(1)
+		metricFastDropped.Inc()
 		s.logger.Warn("fast notifications behind: block dropped from the fast path",
 			zap.Uint64("block", height), zap.Uint64("dropped_blocks", n))
 		if s.fastPath.lagging.CompareAndSwap(false, true) {
@@ -152,14 +154,22 @@ func (s *NotificationService) notifyFast(ctx context.Context, evs []events.Event
 		}
 	}
 	s.mu.RUnlock()
-	for _, ev := range evs {
-		key := fastKey(ev)
-		if key == "" {
-			continue
-		}
-		kinds := s.eventKinds(ev)
-		for _, setting := range settings {
-			if err := s.deliverMatch(ctx, setting, ev, kinds, key); err != nil {
+	// Stream settings first: their notifications are only sent, while the
+	// others' are stored, which must not hold the streams back.
+	sort.SliceStable(settings, func(i, j int) bool {
+		return settings[i].Type == NotificationTypeStream && settings[j].Type != NotificationTypeStream
+	})
+	kinds := make([][]EventType, len(evs))
+	for _, setting := range settings {
+		for i, ev := range evs {
+			key := fastKey(ev)
+			if key == "" {
+				continue
+			}
+			if kinds[i] == nil {
+				kinds[i] = s.eventKinds(ev)
+			}
+			if err := s.deliverMatch(ctx, setting, ev, kinds[i], key); err != nil {
 				return err
 			}
 		}

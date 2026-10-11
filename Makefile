@@ -80,9 +80,9 @@ test-postgres:
 test-examples:
 	@for d in examples/*/; do echo "== $$d"; (cd $$d && $(GOTEST) ./...) || exit 1; done
 
-## test-slo: Check the G3 push latency service level (about two minutes; refactoring plan R5-5)
+## test-slo: Check the G3 push latency service level and the real-time notification latency (about two minutes; refactoring plan R5-5, subscriptions design phase 6)
 test-slo:
-	INDEXER_LOAD_SLO=1 $(GOTEST) -v -timeout 10m -run TestSLOLoad ./pkg/app
+	INDEXER_LOAD_SLO=1 $(GOTEST) -v -timeout 10m -run 'TestSLOLoad|TestNotificationLatency' ./pkg/app
 
 ## coverage: Generate test coverage report
 coverage:

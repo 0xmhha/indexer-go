@@ -19,6 +19,12 @@ type Config struct {
 	// (DefaultMaxStreamsPerOwner when not positive).
 	MaxStreamsPerOwner int `yaml:"max_streams_per_owner" json:"max_streams_per_owner"`
 
+	// DestinationRateLimit caps webhook deliveries per host and Slack
+	// deliveries per URL, per second (0: no cap); DestinationBurst is how
+	// many may go at once (destination_limit.go).
+	DestinationRateLimit float64 `yaml:"destination_rate_limit" json:"destination_rate_limit"`
+	DestinationBurst     int     `yaml:"destination_burst" json:"destination_burst"`
+
 	// Webhook configuration
 	Webhook WebhookConfig `yaml:"webhook" json:"webhook"`
 
@@ -170,7 +176,9 @@ type StorageConfig struct {
 // DefaultConfig returns a configuration with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		Enabled: false,
+		Enabled:              false,
+		DestinationRateLimit: DefaultDestinationRateLimit,
+		DestinationBurst:     DefaultDestinationBurst,
 		Webhook: WebhookConfig{
 			Enabled:         true,
 			Timeout:         10 * time.Second,
