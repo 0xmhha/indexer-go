@@ -1018,6 +1018,9 @@ func (a *App) initFetcher(ctx context.Context) error {
 	if err := a.fetcher.CheckFinality(ctx); err != nil {
 		return err
 	}
+	if err := a.checkNodeState(ctx, pipeline.Units(), pipeline.Features()); err != nil {
+		return err
+	}
 	return a.fetcher.Recover(ctx, pipeline.Units(), backfill)
 }
 

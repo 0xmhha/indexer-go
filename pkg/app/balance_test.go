@@ -11,7 +11,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 
+	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
@@ -181,8 +184,10 @@ func TestTimeQueriesFindIndexedBlocks(t *testing.T) {
 // determinism rules (docs/SDK.md). A balance read the node does not answer
 // fails the block, which is retried, so the balances still match the chain
 // (it used to start the account at 0). A node that answers with an error
-// (as one without an old block's state does) cannot give the balance; the
-// account starts at 0 and indexing goes on rather than stopping for good.
+// (as one without an old block's state does) cannot give the balance: the
+// indexer does not start (TestNodeStateCheckedAtStartup) unless
+// allow_pruned_state is set; the account then starts at 0 and indexing goes
+// on rather than stopping for good.
 func TestNativeBalancesSurviveNodeErrors(t *testing.T) {
 	t.Run("node down for a while", func(t *testing.T) {
 		sc := testchain.BuildDefault()
@@ -201,13 +206,106 @@ func TestNativeBalancesSurviveNodeErrors(t *testing.T) {
 		require.Greater(t, srv.Calls()["eth_getBalance"], before+2, "accounts were read from the node after the failures")
 		requireChainBalances(t, app, sc.Chain)
 	})
-	t.Run("node without the state", func(t *testing.T) {
+	t.Run("node without the state, allowed", func(t *testing.T) {
 		sc := testchain.BuildDefault()
 		srv := testchain.NewServer(sc.Chain)
 		defer srv.Close()
 		srv.DisableMethod("eth_getBalance")
-		app := startApp(t, srv, filepath.Join(t.TempDir(), "db"))
+		app, err := startStateApp(t, srv, filepath.Join(t.TempDir(), "db"), true, nil)
+		require.NoError(t, err)
 		defer app.Shutdown()
 		runLiveUntil(t, app, sc.Chain.Head()) // reaches the head
+	})
+}
+
+// startStateApp starts the app with balance.native, allow_pruned_state set
+// as given; config changes the configuration further (may be nil).
+func startStateApp(t *testing.T, srv *testchain.Server, dir string, allowPruned bool, change func(*config.Config)) (*App, error) {
+	t.Helper()
+	cfg := config.NewConfig()
+	cfg.RPC.Endpoint = srv.URL()
+	cfg.RPC.Timeout = 5 * time.Second
+	setTestDatabase(t, cfg, dir)
+	cfg.API.Enabled = false
+	enableTestChainFeatures(cfg)
+	var fc config.FeatureConfig
+	require.NoError(t, yaml.Unmarshal([]byte(fmt.Sprintf("enabled: true\nallow_pruned_state: %v\n", allowPruned)), &fc))
+	cfg.Features["balance.native"] = fc
+	if change != nil {
+		change(cfg)
+	}
+	return NewApp(cfg, zap.NewNop(), false, "")
+}
+
+// TestNodeStateCheckedAtStartup: balance.native starts an account from the
+// node's balance before the block, so the indexer starts only if the node
+// keeps the state before the first block balance.native will process: the
+// next block to index, or the start of its backfill when it is enabled on
+// an indexed database. A node that is not an archive node keeps only recent
+// states.
+func TestNodeStateCheckedAtStartup(t *testing.T) {
+	sc := testchain.BuildDefault()
+	head := sc.Chain.Head()
+	require.Greater(t, head, uint64(3))
+	pruned := head - 2 // the node keeps the states of the last blocks only
+
+	t.Run("from genesis", func(t *testing.T) {
+		srv := testchain.NewServer(sc.Chain)
+		defer srv.Close()
+		srv.PruneStateBefore(pruned)
+		_, err := startStateApp(t, srv, filepath.Join(t.TempDir(), "db"), false, nil)
+		require.ErrorContains(t, err, "keeps no state of block 0")
+		require.ErrorContains(t, err, "allow_pruned_state")
+	})
+	t.Run("from genesis, allowed", func(t *testing.T) {
+		srv := testchain.NewServer(sc.Chain)
+		defer srv.Close()
+		srv.PruneStateBefore(pruned)
+		app, err := startStateApp(t, srv, filepath.Join(t.TempDir(), "db"), true, nil)
+		require.NoError(t, err)
+		defer app.Shutdown()
+		runLiveUntil(t, app, head)
+	})
+	t.Run("from a recent start height", func(t *testing.T) {
+		srv := testchain.NewServer(sc.Chain)
+		defer srv.Close()
+		srv.PruneStateBefore(pruned)
+		app, err := startStateApp(t, srv, filepath.Join(t.TempDir(), "db"), false, func(c *config.Config) {
+			c.Indexer.StartHeight = pruned + 1 // the state of block pruned is kept
+		})
+		require.NoError(t, err)
+		app.Shutdown()
+		_, err = startStateApp(t, srv, filepath.Join(t.TempDir(), "db"), false, func(c *config.Config) {
+			c.Indexer.StartHeight = pruned
+		})
+		require.ErrorContains(t, err, fmt.Sprintf("keeps no state of block %d", pruned-1))
+	})
+	t.Run("restart near the head", func(t *testing.T) {
+		srv := testchain.NewServer(sc.Chain)
+		defer srv.Close()
+		dir := filepath.Join(t.TempDir(), "db")
+		app, err := startStateApp(t, srv, dir, false, nil)
+		require.NoError(t, err)
+		runLiveUntil(t, app, head)
+		app.Shutdown()
+		srv.PruneStateBefore(pruned)
+		app, err = startStateApp(t, srv, dir, false, nil) // next block head+1 needs the head's state
+		require.NoError(t, err)
+		app.Shutdown()
+	})
+	t.Run("enabled on an indexed database", func(t *testing.T) {
+		srv := testchain.NewServer(sc.Chain)
+		defer srv.Close()
+		dir := filepath.Join(t.TempDir(), "db")
+		app, err := startStateApp(t, srv, dir, false, func(c *config.Config) {
+			off := false
+			c.Features["balance.native"] = config.FeatureConfig{Enabled: &off}
+		})
+		require.NoError(t, err)
+		runLiveUntil(t, app, head)
+		app.Shutdown()
+		srv.PruneStateBefore(pruned)
+		_, err = startStateApp(t, srv, dir, false, nil) // backfills from block 0
+		require.ErrorContains(t, err, "keeps no state of block 0")
 	})
 }

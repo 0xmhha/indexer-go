@@ -35,6 +35,9 @@ type Server struct {
 	failing    map[string]int // requests of a method still to fail with HTTP 503
 	// maxLogRange makes eth_getLogs refuse wider ranges (0: no limit).
 	maxLogRange uint64
+	// stateFrom is the lowest block whose state eth_getBalance answers
+	// (PruneStateBefore; 0: every block).
+	stateFrom uint64
 }
 
 // NewServer starts an HTTP JSON-RPC server for chain. Close it when done.
@@ -91,6 +94,14 @@ func (s *Server) unavailable(method string) bool {
 	s.failing[method]--
 	s.calls[method]++
 	return true
+}
+
+// PruneStateBefore makes eth_getBalance answer blocks below n with the
+// error of a node that no longer keeps their state (not an archive node).
+func (s *Server) PruneStateBefore(n uint64) {
+	s.mu.Lock()
+	s.stateFrom = n
+	s.mu.Unlock()
 }
 
 // EnableMethod answers a method DisableMethod turned off again.
@@ -320,6 +331,12 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 		n, ok := s.blockNumberParam(req, 1)
 		if !ok {
 			n = c.head
+		}
+		s.mu.Lock()
+		pruned := n < s.stateFrom
+		s.mu.Unlock()
+		if pruned {
+			return nil, &rpcError{Code: -32000, Message: "missing trie node 0000000000000000000000000000000000000000000000000000000000000000 (path ) state 0x0 is not available"}
 		}
 		return (*hexutil.Big)(c.balanceAt(addr, n)), nil
 	case "eth_getCode":

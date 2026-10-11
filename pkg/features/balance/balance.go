@@ -45,6 +45,10 @@ func (balanceFeature) Register(r feature.Registrar) error {
 	if d.BalanceAt == nil {
 		return fmt.Errorf("no node balance reader")
 	}
+	var st settings // read at startup (feature.StateReader); decoded to reject unknown keys
+	if err := d.DecodeSettings(Name, &st); err != nil {
+		return err
+	}
 	logger := d.Logger
 	if logger == nil {
 		logger = zap.NewNop()
@@ -56,6 +60,18 @@ func (balanceFeature) Register(r feature.Registrar) error {
 		balanceAt:  d.BalanceAt, blocks: d.Blocks(), logger: logger,
 	})
 	return nil
+}
+
+// ReadsState implements feature.StateReader: an account seen for the first
+// time starts from the node's balance before the block.
+func (balanceFeature) ReadsState() bool { return true }
+
+// settings are the feature's features.balance.native section.
+type settings struct {
+	// AllowPrunedState lets the indexer start although the node keeps no
+	// state before the first block to process (feature.StateReader): new
+	// accounts whose balance the node cannot give then start from 0.
+	AllowPrunedState bool `yaml:"allow_pruned_state"`
 }
 
 func init() { feature.Register(balanceFeature{}) }

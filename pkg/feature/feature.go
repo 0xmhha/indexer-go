@@ -126,6 +126,24 @@ func IsLogsOnly(name string) bool {
 	return ok && l.LogsOnly()
 }
 
+// StateReader is implemented by features that read the node's state as of
+// the block before each block they process (balance.native starts an
+// account from the node's balance). The indexer starts only if the node
+// keeps the state before the first block such a feature will process, unless
+// the feature's settings set allow_pruned_state: a node that is not an
+// archive node keeps only recent states.
+type StateReader interface {
+	ReadsState() bool
+}
+
+// ReadsState reports whether the registered feature name is a StateReader.
+func ReadsState(name string) bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	r, ok := features[name].(StateReader)
+	return ok && r.ReadsState()
+}
+
 // Defaults returns the registered features that are on by default.
 func Defaults() []string {
 	mu.RLock()
