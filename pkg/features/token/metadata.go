@@ -22,6 +22,18 @@ func (metadataFeature) DefaultOn() bool    { return true }
 // OrderIndependent: one record per contract, written once.
 func (metadataFeature) OrderIndependent() bool { return true }
 
+// ReadsState implements feature.StateReader: a contract is read as of its
+// creation block.
+func (metadataFeature) ReadsState() bool { return true }
+
+// metadataSettings are the feature's features.token.metadata section.
+type metadataSettings struct {
+	// AllowPrunedState lets the indexer start although the node keeps no
+	// state of the blocks to process (feature.StateReader): contracts are
+	// then read at the node's latest state.
+	AllowPrunedState bool `yaml:"allow_pruned_state"`
+}
+
 func (metadataFeature) Register(r feature.Registrar) error {
 	d := r.Deps()
 	store, ok := d.Storage.(tokenmeta.TokenMetadataStore)
@@ -30,6 +42,10 @@ func (metadataFeature) Register(r feature.Registrar) error {
 	}
 	if d.Contracts == nil {
 		return fmt.Errorf("no node contract reader")
+	}
+	var st metadataSettings // read at startup (feature.StateReader); decoded to reject unknown keys
+	if err := d.DecodeSettings(MetadataName, &st); err != nil {
+		return err
 	}
 	r.OnBlock(&metadata{indexer: tokenmeta.NewContractIndexer(d.Contracts, store, d.Logger)})
 	return nil

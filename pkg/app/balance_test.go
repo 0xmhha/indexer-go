@@ -218,8 +218,9 @@ func TestNativeBalancesSurviveNodeErrors(t *testing.T) {
 	})
 }
 
-// startStateApp starts the app with balance.native, allow_pruned_state set
-// as given; config changes the configuration further (may be nil).
+// startStateApp starts the app with balance.native and token.metadata, the
+// features that read the node's state, allow_pruned_state set as given;
+// change changes the configuration further (may be nil).
 func startStateApp(t *testing.T, srv *testchain.Server, dir string, allowPruned bool, change func(*config.Config)) (*App, error) {
 	t.Helper()
 	cfg := config.NewConfig()
@@ -228,9 +229,11 @@ func startStateApp(t *testing.T, srv *testchain.Server, dir string, allowPruned 
 	setTestDatabase(t, cfg, dir)
 	cfg.API.Enabled = false
 	enableTestChainFeatures(cfg)
-	var fc config.FeatureConfig
-	require.NoError(t, yaml.Unmarshal([]byte(fmt.Sprintf("enabled: true\nallow_pruned_state: %v\n", allowPruned)), &fc))
-	cfg.Features["balance.native"] = fc
+	for _, name := range []string{"balance.native", "token.metadata"} {
+		var fc config.FeatureConfig
+		require.NoError(t, yaml.Unmarshal([]byte(fmt.Sprintf("enabled: true\nallow_pruned_state: %v\n", allowPruned)), &fc))
+		cfg.Features[name] = fc
+	}
 	if change != nil {
 		change(cfg)
 	}
@@ -238,8 +241,9 @@ func startStateApp(t *testing.T, srv *testchain.Server, dir string, allowPruned 
 }
 
 // TestNodeStateCheckedAtStartup: balance.native starts an account from the
-// node's balance before the block, so the indexer starts only if the node
-// keeps the state before the first block balance.native will process: the
+// node's balance before the block and token.metadata reads a contract as of
+// its creation block, so the indexer starts only if the node keeps the state
+// before the first block such a feature will process: the
 // next block to index, or the start of its backfill when it is enabled on
 // an indexed database. A node that is not an archive node keeps only recent
 // states.
@@ -265,6 +269,20 @@ func TestNodeStateCheckedAtStartup(t *testing.T) {
 		require.NoError(t, err)
 		defer app.Shutdown()
 		runLiveUntil(t, app, head)
+	})
+	t.Run("token.metadata alone", func(t *testing.T) {
+		srv := testchain.NewServer(sc.Chain)
+		defer srv.Close()
+		srv.PruneStateBefore(pruned)
+		balanceOff := func(c *config.Config) {
+			off := false
+			c.Features["balance.native"] = config.FeatureConfig{Enabled: &off}
+		}
+		_, err := startStateApp(t, srv, filepath.Join(t.TempDir(), "db"), false, balanceOff)
+		require.ErrorContains(t, err, "[token.metadata]")
+		app, err := startStateApp(t, srv, filepath.Join(t.TempDir(), "db"), true, balanceOff)
+		require.NoError(t, err)
+		app.Shutdown()
 	})
 	t.Run("from a recent start height", func(t *testing.T) {
 		srv := testchain.NewServer(sc.Chain)
