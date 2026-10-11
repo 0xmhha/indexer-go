@@ -647,6 +647,8 @@ func (a *App) initNotificationService() error {
 			AllowedHosts:    a.config.Notifications.Webhook.AllowedHosts,
 			SignatureHeader: a.config.Notifications.Webhook.SignatureHeader,
 
+			VerifyDestinations: a.config.Notifications.Webhook.VerifyDestinations,
+
 			AllowPrivateDestinations: a.config.Notifications.AllowPrivateDestinations,
 		},
 		Email: notifications.EmailConfig{

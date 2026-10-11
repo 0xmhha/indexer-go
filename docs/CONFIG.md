@@ -380,6 +380,7 @@ notifications:
     timeout: 10s
     max_retries: 3
     max_concurrent: 10
+    verify_destinations: false          # true: 등록·주소 변경 때 webhook 주소가 challenge에 답해야 받는다
 
   email:
     enabled: false
@@ -432,6 +433,7 @@ notifications:
   - reorg 알림에는 식을 적용하지 않는다.
   - dry run: 등록하기 전에 식을 시험한다. GraphQL `checkNotificationExpressions(input: {event, condition, payload, log | transaction, block})`, JSON-RPC `notification_checkExpressions`(같은 필드)를 쓴다. 키가 필요하다. 식이 등록될 수 있는지(`valid`, 아니면 `error`)를 돌려준다. 예제 로그(eth_getLogs 형식의 `address`, `topics`, `data`, `index`, `transactionHash`)나 트랜잭션(`hash`, `from`, `to`, `value`)과 그 블록(`number`, `time`, `hash`)을 주면, 그 이벤트가 알림될지(`notify`), payload 값(`result`), decode한 인자(`decoded`)도 돌려준다. 실행 오류와 "예제 로그가 필터 이벤트가 아님"은 `error`로 알린다. 아무것도 저장하거나 보내지 않는다. 형식이 틀린 예제(주소, hex)는 요청 오류다.
 - 목적지별 상한: webhook은 같은 host로 가는 전달이, Slack은 같은 incoming webhook URL로 가는 전달이 `destination_rate_limit`(초당, 기본 10)과 `destination_burst`(기본 20)를 나눠 쓴다. 설정 하나로 남의 서버에 요청을 쏟지 못하게 하려는 것이다. 상한을 넘은 전달은 시도하지 않고, 상한이 허락하는 때로 미룬다(시도 횟수에 들지 않는다). 그래서 붐비는 목적지는 자기 알림만 늦어진다. 스트림은 상한이 없다(키별 연결 수와 연결별 대기열이 막는다).
+- 목적지 확인(`notifications.webhook.verify_destinations`, 기본 false): 켜면 webhook 설정을 만들 때와 주소를 바꿀 때 그 주소로 `{"type":"url_verification","challenge":"<무작위 값>"}`를 POST한다(헤더 `X-Event-Type: url_verification`, 비밀이 있으면 평소처럼 서명). 주소가 2xx로 그 값을 본문 그대로 또는 `{"challenge":"<값>"}`로 돌려줘야 설정을 받는다. 알림을 원하지 않는 서버는 이 값을 돌려주지 않으므로, 남의 서버를 목적지로 적어 요청을 보내게 할 수 없다. 주소가 그대로인 수정은 다시 묻지 않는다. 켜기 전에 기존 수신 쪽이 이 요청에 답하게 고쳐야 한다(기존 설정은 다시 확인하지 않는다).
 - 알림 저장은 디스크 sync를 기다리지 않는다(`storage.PebbleStorage.PutUnsynced`). 프로세스가 죽어도 남고, 시스템이 죽으면 다음 블록 commit의 sync 전 기록이 사라질 수 있다. 이때는 그 이벤트가 outbox에서 다시 오거나(cursor도 sync 전이므로) 블록을 다시 처리하며 같은 id로 다시 만들어지고, 전달 상태는 다시 보낸다(at-least-once). 키마다 fsync를 기다리면 fast webhook 알림이 블록마다 밀려 수 초 늦어졌다(macOS에서 p50 3초).
 - fast path는 블록마다 스트림 설정을 먼저 평가한다. 저장해야 하는 설정이 스트림을 늦추지 않게 하려는 것이다.
 - 지연(`make test-slo`의 `TestNotificationLatency`, 10/11, macOS 한 대, 시험 체인, 1ms polling으로 newHeads를 대신함, 100ms마다 swap 10개 블록, CEL 조건): fast 스트림은 노드가 블록을 보인 때부터 p50 3.5ms, p99 9.6~12.1ms(4회)이고 그중 fast path에 들어온 뒤로는 p99 1.3~5.1ms다(나머지는 블록 fetch). fast webhook은 p50 12ms, p99 22ms, durable 스트림은 p50 13ms, p99 25ms다. 시험은 fast 스트림 p99를 처음부터 20ms, fast path부터 10ms 이하로 검사한다. 설계의 가설(p99 10ms)은 알림 경로만으로는 맞고, 처음부터 재면 이 기계에서 경계에 있다. 실제 노드(로컬 go-stablenet, `TestLiveNotificationLatency`)에서는 newHeads(`rpc.ws_endpoint`)를 켜면 p50 1.3~1.5ms, p99 6~6.9ms였고, polling만(기본 50ms) 쓰면 p50 30ms, p99 52ms였다. 실시간 알림을 쓰는 배포는 `rpc.ws_endpoint`를 켠다.

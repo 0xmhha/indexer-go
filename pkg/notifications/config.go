@@ -68,6 +68,10 @@ type WebhookConfig struct {
 
 	// SignatureHeader is the header name for HMAC signature.
 	SignatureHeader string `yaml:"signature_header" json:"signature_header"`
+
+	// VerifyDestinations accepts a webhook URL only when it echoes a
+	// challenge at registration (webhook_verify.go).
+	VerifyDestinations bool `yaml:"verify_destinations" json:"verify_destinations"`
 }
 
 // EmailConfig holds email-specific configuration.

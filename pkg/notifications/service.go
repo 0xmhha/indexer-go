@@ -1067,6 +1067,9 @@ func (s *NotificationService) CreateSetting(ctx context.Context, setting *Notifi
 	if err := s.validateSetting(setting); err != nil {
 		return nil, err
 	}
+	if err := s.verifyDestinations(ctx, setting, nil); err != nil {
+		return nil, err
+	}
 
 	if err := s.storage.SaveSetting(ctx, setting); err != nil {
 		return nil, err
@@ -1101,6 +1104,9 @@ func (s *NotificationService) UpdateSetting(ctx context.Context, setting *Notifi
 	}
 
 	if err := s.validateSetting(setting); err != nil {
+		return nil, err
+	}
+	if err := s.verifyDestinations(ctx, setting, existing); err != nil {
 		return nil, err
 	}
 
