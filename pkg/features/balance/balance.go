@@ -49,8 +49,9 @@ func (balanceFeature) Register(r feature.Registrar) error {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	prefetch, _ := d.Storage.(port.BalancePrefetcher) // optional
 	r.OnBlock(&handler{
-		w: w, r: rd, records: rc,
+		w: w, r: rd, records: rc, prefetch: prefetch,
 		accounting: chains.AccountingOf(d.Profile),
 		balanceAt:  d.BalanceAt, blocks: d.Blocks(), logger: logger,
 	})
@@ -63,6 +64,7 @@ type handler struct {
 	w          port.HistoricalWriter
 	r          port.HistoricalReader
 	records    port.BalanceRecordChecker
+	prefetch   port.BalancePrefetcher // nil when the store reads each account
 	accounting chains.NativeAccounting
 	balanceAt  func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
 	blocks     chains.AccountingEnv
@@ -90,9 +92,23 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 		return fmt.Errorf("native balance changes of block %d: %w", n, err)
 	}
 
+	merged := mergeDeltas(deltas)
+	if h.prefetch != nil {
+		// Read every changed account at once instead of one by one.
+		changed := map[common.Address]bool{}
+		for _, d := range merged {
+			if d.Delta.Sign() != 0 {
+				changed[d.Address] = true
+			}
+		}
+		if err := h.prefetch.PrefetchBalances(ctx, sortedAddresses(changed)); err != nil {
+			return fmt.Errorf("read balances of block %d: %w", n, err)
+		}
+	}
+
 	initialized := map[common.Address]bool{}
 	diverged := map[common.Address]bool{}
-	for _, d := range mergeDeltas(deltas) {
+	for _, d := range merged {
 		if d.Delta.Sign() == 0 || diverged[d.Address] {
 			continue
 		}

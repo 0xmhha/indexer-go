@@ -95,6 +95,68 @@ func (s *Store) execLater(ctx context.Context, sql string, args ...any) error {
 	return err
 }
 
+var _ port.BalancePrefetcher = (*Store)(nil)
+
+// PrefetchBalances implements port.BalancePrefetcher: one query reads and
+// locks the balance rows of the accounts the block transaction has not
+// read yet, and the transaction keeps them (balance, recorded).
+func (s *Store) PrefetchBalances(ctx context.Context, addrs []common.Address) error {
+	bt := s.boundTx(ctx)
+	if bt == nil {
+		return nil
+	}
+	var want [][]byte
+	for _, a := range addrs {
+		if _, ok := bt.recorded[a]; !ok {
+			want = append(want, a.Bytes())
+		}
+	}
+	if len(want) == 0 {
+		return nil
+	}
+	rows, err := bt.q().Query(ctx, `SELECT address, balance::text FROM balances WHERE address = ANY($1)
+		ORDER BY address FOR UPDATE`, want)
+	if err != nil {
+		return fmt.Errorf("prefetch balances: %w", err)
+	}
+	found := map[common.Address]*big.Int{}
+	for rows.Next() {
+		var (
+			raw  []byte
+			text string
+		)
+		if err := rows.Scan(&raw, &text); err != nil {
+			rows.Close()
+			return err
+		}
+		b, err := bigOf(text)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		found[common.BytesToAddress(raw)] = b
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if bt.balances == nil {
+		bt.balances = map[common.Address]*big.Int{}
+	}
+	if bt.recorded == nil {
+		bt.recorded = map[common.Address]bool{}
+	}
+	for _, raw := range want {
+		a := common.BytesToAddress(raw)
+		b, ok := found[a]
+		if !ok {
+			b = new(big.Int)
+		}
+		bt.balances[a] = b
+		bt.recorded[a] = ok
+	}
+	return nil
+}
+
 // balance returns an account's latest balance in the block transaction:
 // read (and its row locked) the first time, then kept as the transaction
 // changes it, so each further update of the account costs no round trip.
@@ -122,6 +184,9 @@ func (t *blockTx) addSnapshot(addr common.Address, blockNumber uint64, current, 
 	t.queue(`INSERT INTO balance_history (address, block_number, balance, delta, tx_hash)
 		VALUES ($1, $2, $3::numeric, $4::numeric, $5)`, addr.Bytes(), i64(blockNumber), balance.String(), delta.String(), txHash.Bytes())
 	t.balances[addr] = balance
+	if t.recorded != nil {
+		t.recorded[addr] = true
+	}
 	if t.dirty == nil {
 		t.dirty = map[common.Address]bool{}
 	}

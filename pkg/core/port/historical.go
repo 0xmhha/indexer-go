@@ -296,6 +296,16 @@ type BalanceRecordChecker interface {
 	HasBalanceRecord(ctx context.Context, addr common.Address) (bool, error)
 }
 
+// BalancePrefetcher is a store that reads the balances (and whether each
+// was recorded) of many accounts at once, for the block transaction bound
+// to ctx, so the block's balance updates and record checks need no read
+// each (a store across a network saves a round trip per account). It is
+// optional: features call it when the store has it, and a store without a
+// block transaction ignores it.
+type BalancePrefetcher interface {
+	PrefetchBalances(ctx context.Context, addrs []common.Address) error
+}
+
 // HistoricalStorage combines historical read and write interfaces
 type HistoricalStorage interface {
 	HistoricalReader

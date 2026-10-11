@@ -221,6 +221,9 @@ type blockTx struct {
 	pending  *pgx.Batch
 	balances map[common.Address]*big.Int
 	dirty    map[common.Address]bool // balances not written since the last flush
+	// recorded is whether each prefetched account has a balance record
+	// (PrefetchBalances), kept as the transaction writes balances.
+	recorded map[common.Address]bool
 }
 
 var _ port.BlockTransactor = (*Store)(nil)
