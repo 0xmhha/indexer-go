@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
@@ -24,8 +25,8 @@ import (
 // native transfer logs, the gas tip, the base fee distribution and fee
 // payers) against the node's own state.
 //
-// The node must still hold the state of the indexed blocks: a full node
-// keeps the last 128, so the default window is 100 blocks. Skipped unless
+// The node must still hold state before and throughout the indexed range.
+// Retention varies by node; the default window is 100 blocks. Skipped unless
 // INDEXER_LIVE_RPC is set, e.g.
 //
 //	INDEXER_LIVE_RPC=http://127.0.0.1:8600 \
@@ -42,6 +43,7 @@ func TestLiveBalances(t *testing.T) {
 		require.NoError(t, err, "INDEXER_LIVE_BALANCE_BLOCKS")
 		window = n
 	}
+	require.Positive(t, window, "INDEXER_LIVE_BALANCE_BLOCKS")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -51,12 +53,14 @@ func TestLiveBalances(t *testing.T) {
 	head, err := ec.BlockNumber(ctx)
 	require.NoError(t, err)
 	from := uint64(1)
-	if head > window {
-		from = head - window
+	if head >= window {
+		from = head - window + 1
 	}
 	t.Logf("indexing blocks %d..%d from %s", from, head, rpc)
 
-	app := startAppAt(t, rpc, filepath.Join(t.TempDir(), "db"), atomicMode)
+	cfg := liveRPCConfig(t, rpc, filepath.Join(t.TempDir(), "db"), from)
+	app, err := NewApp(cfg, zap.NewNop(), false, "")
+	require.NoError(t, err)
 	defer app.Shutdown()
 	require.NoError(t, app.fetcher.FetchRange(ctx, from, head))
 

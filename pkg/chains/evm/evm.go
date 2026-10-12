@@ -45,6 +45,7 @@ type Profile struct {
 	txDecoders       map[uint8]TxDecoder
 	verifyHeaderHash bool
 	headerHash       func(*types.Header) common.Hash
+	customHeaderHash bool
 
 	binaryTxDecoders  map[uint8]BinaryTxDecoder
 	effectiveGasPrice EffectiveGasPriceFunc
@@ -76,7 +77,7 @@ func WithHeaderHashCheck(on bool) Option { return func(p *Profile) { p.verifyHea
 // WithHeaderHasher sets the rule that computes a block hash from its header,
 // for chains whose consensus hashes a filtered header (for example WBFT).
 func WithHeaderHasher(f func(*types.Header) common.Hash) Option {
-	return func(p *Profile) { p.headerHash = f }
+	return func(p *Profile) { p.headerHash, p.customHeaderHash = f, true }
 }
 
 // WithNativeAccounting sets the rules that derive native balance changes
@@ -136,11 +137,13 @@ func (p *Profile) Features() []string               { return append([]string(nil
 
 // rpcBlock carries the parts of a block response that are not header fields.
 type rpcBlock struct {
-	Hash         common.Hash         `json:"hash"`
-	Size         *hexutil.Uint64     `json:"size"`
-	Transactions []json.RawMessage   `json:"transactions"`
-	Uncles       []common.Hash       `json:"uncles"`
-	Withdrawals  []*types.Withdrawal `json:"withdrawals"`
+	Hash           common.Hash         `json:"hash"`
+	Size           *hexutil.Uint64     `json:"size"`
+	Transactions   []json.RawMessage   `json:"transactions"`
+	Uncles         []common.Hash       `json:"uncles"`
+	Withdrawals    []*types.Withdrawal `json:"withdrawals"`
+	AccessListHash *common.Hash        `json:"blockAccessListHash"`
+	SlotNumber     *hexutil.Uint64     `json:"slotNumber"`
 }
 
 // DecodeBlock implements chains.Profile.
@@ -153,13 +156,28 @@ func (p *Profile) DecodeBlock(raw json.RawMessage) (*model.Block, error) {
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, fmt.Errorf("evm: decode block: %w", err)
 	}
+	var fields *HeaderFields
+	if body.AccessListHash != nil || body.SlotNumber != nil {
+		fields = &HeaderFields{BlockAccessListHash: body.AccessListHash}
+		if body.SlotNumber != nil {
+			slot := uint64(*body.SlotNumber)
+			fields.SlotNumber = &slot
+		}
+	}
 	if p.verifyHeaderHash {
-		if h := p.headerHash(&head); h != body.Hash {
+		h, err := p.hashHeader(&head, fields)
+		if err != nil {
+			return nil, err
+		}
+		if h != body.Hash {
 			return nil, fmt.Errorf("%w: block %d header %s reported %s", ErrHashMismatch, head.Number, h.Hex(), body.Hash.Hex())
 		}
 	}
 
 	b := headerToModel(&head)
+	if fields != nil {
+		b.Ext.Set(headerFieldsKey, fields)
+	}
 	b.Hash = body.Hash
 	if body.Size != nil {
 		b.Size = uint64(*body.Size)

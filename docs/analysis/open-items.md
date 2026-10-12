@@ -91,6 +91,24 @@ main `47b5363`의 `TestDEXReorg`, `TestDEXReorgWithoutOutbox`를 `go test -race 
 
 세 실행 평균의 중앙값은 Pebble 1.506초, PostgreSQL 2.749초(1.83배)다. 앞선 3.1~3.6초 기록과 측정 환경의 부하가 같다고 확인하지 않았으므로 코드 개선 효과로 해석하지 않는다. 같은 호스트의 이 부하에서 얻은 수치이며 운영 장비의 성능을 보장하지 않는다. PostgreSQL 목표 배수와 추가 구조 변경 여부는 아직 사용자 답을 기다린다.
 
+### 3.4 10/13 공개 테스트넷 RPC와 full node 검증
+
+사용자가 운영 노드는 full node이고 archive 노드는 없다고 답했고, 여러 테스트넷 RPC로 프레임워크의 체인 확장성을 검증하도록 승인했다. 아래 공개 RPC를 production `NewApp` 기본 기능, 기본 Pebble 저장소와 최근 시작 높이로 검증했다. 공개 RPC의 PostgreSQL 색인은 확인하지 않았다. 과거 상태 조회의 성공·실패를 관찰한 것이며, 공개 서비스의 실제 노드 구성이나 archive 여부를 확인한 것은 아니다.
+
+| 체인 / 자동 선택 profile | RPC | 검증 블록 | 트랜잭션 / 로그 | 결과 |
+|---|---|---|---|---|
+| StableNet testnet 8283 / stablenet | `https://api.test.stablenet.network` | 22,168,449~22,168,451 (3개) | 0 / 0 | 시작·색인·API·replay 통과. genesis 상태 조회도 응답 |
+| BSC testnet 97 / evm | `https://bsc-testnet-dataseed.bnbchain.org` | 136,431,487~136,431,494 (8개) | 18 / 74 | genesis 상태는 missing trie 오류, genesis 시작 거부. 최근 시작·색인·API·replay 통과 |
+| Sepolia 11155111 / evm | `https://ethereum-sepolia-rpc.publicnode.com` | 11,901,639 (1개) | 157 / 287 | genesis 상태는 historical state not available 오류, genesis 시작 거부. 최근 시작·색인·API·replay 통과 |
+
+검증 범위는 노드의 chain id와 profile 자동 선택, 상태 검사, 블록 해시·부모·높이·거래 수, 거래의 유형·송수신자·금액·위치, receipt의 gasUsed·status·해시, 로그의 주소·topics·data·거래 해시·index, GraphQL/JSON-RPC의 블록 해시, 기록을 오프라인 replay했을 때 전체 저장 키 공간의 일치다. `TestLiveRPCFramework`는 체인 목록을 JSON으로 받아 체인별 코드를 추가하지 않고 반복할 수 있다(`CLAUDE.md` Testing). 기본 시험·CI에서는 외부 RPC를 호출하지 않는다. 기존 `TestLiveBalances`도 상태 검사에 실제 최근 시작 높이를 전달하도록 고쳤고, genesis 상태가 없는 로컬 시험 노드로 회귀를 확인한다. 보존 기간이 항상 128블록이라는 가정은 제거했다.
+
+**[중요][High] Sepolia에서 실제 호환성 결함을 발견했다.** 블록 11,901,474의 노드 해시가 기존 계산 해시와 달랐다. 이 헤더에는 현재 의존하는 geth v1.16.5의 Header에 없는 `blockAccessListHash`, `slotNumber`가 있었다. [Glamsterdam 테스트넷 공지](https://blog.ethereum.org/2026/09/17/glamsterdam-testnet-announcement)의 Sepolia 활성화 일정, [EIP-7928](https://eips.ethereum.org/EIPS/eip-7928), [EIP-7843](https://eips.ethereum.org/EIPS/eip-7843)의 헤더 필드와 일치한다. 두 필드를 chain profile에서 보존하고 canonical RLP 해시에 포함시켰다. 해시 검사나 시작 시 상태 검사를 끄지 않았다. 실제 헤더와 노드가 보고한 해시를 fixture로 고정해 JSON·RLP 입력 및 저장 codec round trip을 검증하고, 어느 필드를 제거해도 같은 해시로 받아들이지 않는 것을 확인한다. Go·geth 의존성과 SDK 모델은 그대로이며, 추가 필드는 typed model extension `evm.header`에 저장한다. 이 codec이 없는 이전 빌드는 해당 새 블록을 읽을 수 없다. 추가 필드를 가진 custom hash 체인은 자신의 profile에서 해시 규칙을 구현할 때까지 거부한다.
+
+**확인하지 않은 것:** 모든 EVM fork의 실행·수수료·내부 전송을 포함한 native balance 정확성, BAL 자체의 실행 검증, 이번 StableNet 표본에서 fee delegation(거래가 없었음), 여러 체인을 한 프로세스에서 동시에 돌린 운영 구성, 공개 RPC의 전체 상태 보존 범위, 사용자 운영 설정·시작 높이·활성 기능. Python 요청에서 Sepolia HTTP 403이 관찰됐지만 같은 URL의 Go RPC와 curl은 응답했고 실제 검증도 통과했다. 따라서 403을 서비스 전체의 접근 불가로 해석하지 않는다.
+
+변경 후 `gofmt -l`, `make build`, `make lint`, `make test-race`, `make test-postgres`, `make test-examples`, `make test-slo`가 모두 통과했다. 최근 시작 높이 회귀 시험은 `-race -count=200`과 `-race -cpu=1 -count=200` 각각 통과했다. SLO는 읽는 구독자만 있는 조건의 p99 중앙값 105.9ms, 읽지 않는 구독자 1%를 포함한 조건 106.8ms(+1%)로 기준 이내였고, fast stream 알림 p99는 노드 기준 14.2ms, fast path 기준 6.9ms였다. 시험 전용 PostgreSQL 컨테이너의 정리와 기존 컨테이너의 보존도 확인했다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.
