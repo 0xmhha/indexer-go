@@ -98,7 +98,11 @@ func init() {
 
 예제는 `examples/receipts/determinism_test.go`다. indexer의 내장 기능 패키지도 `TestBuiltInFeaturesFollowTheRules`로 검사한다.
 
-내장 `token.metadata`는 토큰을 생성 블록 기준으로 읽는다. 노드가 그 블록의 상태를 보관하지 않으면(archive가 아닌 노드에서 오래된 블록을 backfill할 때) latest 상태로 읽고 경고를 남긴다. 이 경우만 결정성이 깨진다. 노드가 응답하지 않은 오류는 블록을 다시 시도하게 한다. `balance.native`도 노드가 응답하지 않은 오류와 저장 오류로 블록을 다시 시도하게 한다. 남은 예외: 노드가 그 블록의 상태가 없다고 응답하면 처음 보는 계정은 0에서 시작한다(다른 곳에서 그 잔액을 알 수 없고, 블록을 실패시키면 색인이 영영 멈춘다). archive가 아닌 노드로 오래된 높이부터 색인하면 잔액이 틀릴 수 있다.
+내장 `token.metadata`는 토큰을 생성 블록 기준으로, `balance.native`는 처음 보는 계정의 잔액을 처리 블록 직전 기준으로 읽는다. 두 기능은 `feature.StateReader`다. v0.2.15부터 시작할 때 처리할 첫 블록 직전의 상태를 노드에 묻고, 노드가 그 상태가 없다고 답하면 시작을 거부한다(`pkg/app/node_state.go`). 첫 블록은 새 DB의 `indexer.start_height`, 재시작할 때의 다음 색인 블록, 또는 새로 켠 기능의 backfill 시작 블록이다. 블록 0부터 시작하면 상태 검사도 블록 0을 쓴다.
+
+full node도 필요한 높이의 상태를 보관하면 시작할 수 있다. archive 노드가 없고 과거 상태가 지워졌다면, 상태가 남아 있는 높이 바로 다음 블록으로 `indexer.start_height`를 정하거나 해당 기능을 꺼야 한다. 최근 높이부터 시작한 DB에는 그 이전 블록의 색인 결과가 없다. 기능을 끈 DB에서 나중에 켜면 과거 높이부터 backfill할 수 있으므로 상태 검사를 다시 받는다. 노드 종류만으로 시작 가능 여부를 판단하지 말고, 실제 운영 설정과 시작 높이로 확인한다(`TestNodeStateCheckedAtStartup`).
+
+`features.<name>.allow_pruned_state: true`는 그 기능의 시작 시 상태 검사를 건너뛴다. 이 설정은 archive 상태를 복원하지 않는다. 처리 중 노드가 요청한 상태가 없다고 답하면 기존 fallback이 적용된다: `token.metadata`는 latest 상태로 읽고 경고를 남기며 결정성이 깨질 수 있고, `balance.native`는 처음 보는 계정을 0에서 시작하므로 잔액이 틀릴 수 있다. 시작 검사는 처리 중의 상태 보존까지 보장하지 않는다. 노드가 응답하지 않은 오류나 저장 오류는 블록을 취소하고 다시 시도하게 한다.
 
 ## 7. 호환성 약속
 

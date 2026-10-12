@@ -62,6 +62,35 @@
 | live 노드 시험 (10/10 확인) | 로컬 go-stablenet(Gstable v1.1.0, chainbench로 validator 4 + endpoint 1)에서 `TestLiveBalances`, `TestLiveStableNet`, `TestLiveStableNetIdentity`(fee delegation 0x16 트랜잭션 3건 포함), `TestLiveFailover`, `TestLiveRecordReplay`, `TestLiveHeadLatency`(newHeads p95 4ms), `TestLiveLoopRollsBackReorg`가 통과했다. 10/11에 `TestLiveNotificationLatency`를 더해 돌렸다: newHeads를 켜면 노드가 블록을 보인 때부터 fast 스트림 메시지까지 p99 6~6.9ms(30건, 60건), polling만이면 p99 51.5ms. `TestLiveEraSource`는 era1 파일이 없어 돌리지 않았다. chainbench가 만든 genesis에는 `applepieBlock`이 없어 fee delegation을 쓰려면 genesis에 `applepieBlock`, `bohoBlock`을 0으로 넣어야 했다(chainbench 쪽 문제) |
 | indexer-frontend | GraphQL 문서 26개가 지금 스키마에서 동작하지 않는다(`known-invalid.txt`). REST로 옮기는 일도 frontend 쪽에 남아 있다(`docs/FRONTEND_MIGRATION.md`) |
 
+### 3.1 10/12 후속 SLO 조사
+
+같은 main `47b5363`에서 기본 `make test-slo`를 두 번 실행했다. 부하는 기존과 같다(구독자 1,000명, 블록당 10건, 60블록, 조건별 두 번씩 번갈아 측정).
+
+| 실행 | 읽는 구독자만 있을 때 p99 중앙값 | 읽지 않는 구독자 1% 포함 p99 중앙값 | 결과 |
+|---|---|---|---|
+| 첫 실행 | 104.5ms | 125.4ms | 모든 구간의 p99는 250ms 이내. 영향 검사만 실패: 실제 125.396ms가 허용치 125.361ms를 0.035ms 초과 |
+| 재실행 | 117.3ms | 90.0ms | 전체 통과(영향 -23%) |
+
+두 기본 실행의 최대 지연은 각각 139.6ms, 156.0ms로 170~240ms 지연은 재현되지 않았다. `TestNotificationLatency`는 둘 다 통과했다(fast stream 노드 기준 p99 10.2ms, 10.9ms). 첫 실행 때 호스트 load average는 약 3, 재실행 시작 때는 약 13이었지만, 이 부하 변화가 지연 차이의 원인인지는 확인하지 않았다.
+
+별도 임시 Go overlay로 블록별 최대 지연과 runtime trace를 수집했다(조건별 한 번, 총 120블록; 저장소의 시험·운영 코드는 변경하지 않음). 최대 지연은 116.4ms, 134.6ms였고, 단일 비교의 영향 검사는 +26%로 실패했다. 계측과 반복 횟수가 기본 시험과 다르므로 기본 SLO 통과 결과로 취급하지 않는다. trace의 GC stop-the-world 최대는 0.88ms였다. 가장 느린 134.6ms 블록에는 GC가 겹치지 않았고, 그 시간 구간의 고루틴 Runnable 대기 최대는 49.1ms였다. 해당 고루틴이 최종 수신 지연을 결정했는지는 확인하지 않았다. 재현되지 않은 170~240ms 지연의 원인은 계속 미확인으로 둔다. SLO 상한이나 20% 검사 기준은 바꾸지 않았다.
+
+### 3.2 10/12 후속 DEX reorg 확인
+
+main `47b5363`의 `TestDEXReorg`, `TestDEXReorgWithoutOutbox`를 `go test -race -count=200 -run '^TestDEXReorg' ./pkg/app`로 반복했고 통과했다(156.7초). 같은 시험을 `-cpu=1`(GOMAXPROCS=1)에서도 각각 200회 반복해 통과했다(196.6초). 두 조건에서 flake는 재현되지 않았으며, 재현되면 수정한다는 기존 방침은 유지한다.
+
+### 3.3 10/12 후속 PostgreSQL ingest 측정
+
+같은 main `47b5363`, macOS/Apple M2 Max, Go 1.26.8에서 `BenchmarkIngest/regular/atomic`(202블록, 거래 10,001건)을 Pebble, PostgreSQL 순서로 세 번씩 번갈아 쟀다(`-benchtime=3x -count=1`). 각 값은 한 실행에서 세 번 색인한 평균이다. PostgreSQL은 이 측정 전용 Docker 컨테이너의 `postgres:16-alpine`, `fsync=on`을 썼고 끝난 뒤 해당 컨테이너만 제거했다.
+
+| 비교 | Pebble | PostgreSQL | PostgreSQL/Pebble |
+|---|---|---|---|
+| 1 | 1.534초 | 2.749초 | 1.79배 |
+| 2 | 1.492초 | 3.005초 | 2.01배 |
+| 3 | 1.506초 | 2.728초 | 1.81배 |
+
+세 실행 평균의 중앙값은 Pebble 1.506초, PostgreSQL 2.749초(1.83배)다. 앞선 3.1~3.6초 기록과 측정 환경의 부하가 같다고 확인하지 않았으므로 코드 개선 효과로 해석하지 않는다. 같은 호스트의 이 부하에서 얻은 수치이며 운영 장비의 성능을 보장하지 않는다. PostgreSQL 목표 배수와 추가 구조 변경 여부는 아직 사용자 답을 기다린다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.
