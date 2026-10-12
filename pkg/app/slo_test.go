@@ -66,7 +66,7 @@ type sloResult struct {
 // node shows one per interval, each with swaps trades, while subscribers
 // WebSocket clients subscribe to dexTrade, slow of which never read.
 func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval time.Duration, queue int) sloResult {
-	sc := testchain.BuildDEXLoadMixed(blocks, swaps) // V2 and V3 trades
+	sc := testchain.BuildDEXLoadMixed(blocks, swaps) // V2, V3 and perpetual order book trades
 	srv := testchain.NewServer(sc.Chain)
 	defer srv.Close()
 
@@ -87,6 +87,7 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 	require.NoError(t, cfg.SetFeatureSettings(dex.PoolsName, dex.Settings{Venues: []dex.Venue{
 		{Type: "uniswap_v2", Factory: sc.V2Factory.Hex()},
 		{Type: "uniswap_v3", Factory: sc.V3Factory.Hex()},
+		{Type: "perp_orderbook", Engine: sc.Engine.Hex(), OrderManager: sc.OrderManager.Hex()},
 	}}))
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
@@ -259,11 +260,15 @@ const (
 // TestSLOLoad checks the G3 service level through the whole path: the node
 // shows a block, the live loop fetches and indexes it, the outbox relay
 // publishes its trades and the subscription engine sends them over
-// WebSocket. It runs the load twice, without and with non-reading
-// subscribers. Run it with INDEXER_LOAD_SLO=1 (about two minutes);
-// INDEXER_LOAD_SUBSCRIBERS, _SWAPS (trades per block), _BLOCKS,
-// _INTERVAL_MS, _QUEUE and _P99_MS change the load or the bound, for
-// reports beyond the service level.
+// WebSocket. It runs the load without and with non-reading subscribers in
+// turn, INDEXER_LOAD_ROUNDS times each (default 2). Every run must meet the
+// p99 bound; the non-readers' effect compares the median p99 of each kind
+// of run: a run's p99 is about its slowest of 60 blocks, so two single runs
+// differ by up to about 15% with nothing changed, close to the 20% allowed
+// (10/12: the single-run comparison failed 1 run in 7 on main). Run it with
+// INDEXER_LOAD_SLO=1 (about four minutes); INDEXER_LOAD_SUBSCRIBERS, _SWAPS
+// (trades per block), _BLOCKS, _INTERVAL_MS, _QUEUE and _P99_MS change the
+// load or the bound, for reports beyond the service level.
 func TestSLOLoad(t *testing.T) {
 	if os.Getenv("INDEXER_LOAD_SLO") == "" {
 		t.Skip("set INDEXER_LOAD_SLO=1")
@@ -286,14 +291,33 @@ func TestSLOLoad(t *testing.T) {
 		t.Logf("  push (bus -> subscriber has trade):                    %v", r.push)
 	}
 
-	alone := runSLOLoad(t, subscribers, 0, blocks, swaps, interval, queue)
-	report("readers only", alone, 0)
-	withSlow := runSLOLoad(t, subscribers, slow, blocks, swaps, interval, queue)
-	report("with non-readers", withSlow, slow)
-	t.Logf("  non-readers disconnected as slow: %d of %d", withSlow.slowClosed, slow)
+	rounds := max(1, envInt(t, "INDEXER_LOAD_ROUNDS", 2))
+	var aloneP99, slowP99 []time.Duration
+	for round := 1; round <= rounds; round++ {
+		alone := runSLOLoad(t, subscribers, 0, blocks, swaps, interval, queue)
+		report(fmt.Sprintf("round %d, readers only", round), alone, 0)
+		withSlow := runSLOLoad(t, subscribers, slow, blocks, swaps, interval, queue)
+		report(fmt.Sprintf("round %d, with non-readers", round), withSlow, slow)
+		t.Logf("  non-readers disconnected as slow: %d of %d", withSlow.slowClosed, slow)
+		require.LessOrEqual(t, alone.endToEnd.p99, bound, "p99 end to end, round %d", round)
+		require.LessOrEqual(t, withSlow.endToEnd.p99, bound, "p99 end to end with non-reading subscribers, round %d", round)
+		aloneP99, slowP99 = append(aloneP99, alone.endToEnd.p99), append(slowP99, withSlow.endToEnd.p99)
+	}
 
-	require.LessOrEqual(t, alone.endToEnd.p99, bound, "p99 end to end")
-	require.LessOrEqual(t, withSlow.endToEnd.p99, bound, "p99 end to end with non-reading subscribers")
-	require.LessOrEqual(t, float64(withSlow.endToEnd.p99), sloSlowTolerance*float64(alone.endToEnd.p99),
-		"non-reading subscribers make the readers' p99 at most %.0f%% worse", (sloSlowTolerance-1)*100)
+	aloneMid, slowMid := medianDuration(aloneP99), medianDuration(slowP99)
+	t.Logf("median p99 end to end over %d rounds: readers only %v, with non-readers %v (%+.0f%%)",
+		rounds, aloneMid.Round(100*time.Microsecond), slowMid.Round(100*time.Microsecond), 100*(float64(slowMid)/float64(aloneMid)-1))
+	require.LessOrEqual(t, float64(slowMid), sloSlowTolerance*float64(aloneMid),
+		"non-reading subscribers make the readers' median p99 at most %.0f%% worse", (sloSlowTolerance-1)*100)
+}
+
+// medianDuration is the median of ds (the mean of the middle two for an
+// even count).
+func medianDuration(ds []time.Duration) time.Duration {
+	s := slices.Clone(ds)
+	slices.Sort(s)
+	if len(s)%2 == 1 {
+		return s[len(s)/2]
+	}
+	return (s[len(s)/2-1] + s[len(s)/2]) / 2
 }
