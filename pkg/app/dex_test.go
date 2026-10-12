@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math/big"
 	"path/filepath"
 	"testing"
 	"time"
@@ -202,10 +204,10 @@ func TestDEXTradesReproduced(t *testing.T) {
 }
 
 // TestDEXLoadMixedTrades: the mixed load chain of the SLO test trades on the
-// V2 pair and the V3 pool in turn, and every swap is indexed as a trade of
-// its venue, with its side and amounts.
+// V2 pair, the V3 pool and the perpetual market in turn, and every trade is
+// indexed with its venue, side and amounts.
 func TestDEXLoadMixedTrades(t *testing.T) {
-	const blocks, swaps = 3, 8
+	const blocks, swaps = 3, 12
 	sc := testchain.BuildDEXLoadMixed(blocks, swaps)
 	srv := testchain.NewServer(sc.Chain)
 	defer srv.Close()
@@ -222,6 +224,7 @@ func TestDEXLoadMixedTrades(t *testing.T) {
 	require.NoError(t, cfg.SetFeatureSettings(dex.PoolsName, dex.Settings{Venues: []dex.Venue{
 		{Type: string(port.DexUniswapV2), Factory: sc.V2Factory.Hex()},
 		{Type: string(port.DexUniswapV3), Factory: sc.V3Factory.Hex()},
+		{Type: string(port.DexPerpOrderBook), Engine: sc.Engine.Hex(), OrderManager: sc.OrderManager.Hex()},
 	}}))
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
@@ -236,19 +239,26 @@ func TestDEXLoadMixedTrades(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, trades, swaps, "block %d", b)
 		for i, tr := range trades {
-			venue, market, quote := port.DexUniswapV2, sc.V2Pair, int64(201)
-			if i%4 >= 2 {
-				venue, market, quote = port.DexUniswapV3, sc.V3Pool, 101
+			type want struct {
+				venue       port.DexVenue
+				market      port.DexMarketKey
+				side        port.DexSide
+				base, quote *big.Int
 			}
-			side := port.DexBuy
-			if i%2 == 1 {
-				side, quote = port.DexSell, quote-2 // V2 199, V3 99
-			}
-			assert.Equal(t, venue, tr.Venue, "block %d trade %d", b, i)
-			assert.Equal(t, market, tr.Market.Address, "block %d trade %d", b, i)
-			assert.Equal(t, side, tr.Side, "block %d trade %d", b, i)
-			assert.Equal(t, int64(100), tr.BaseAmount.Int64(), "block %d trade %d", b, i)
-			assert.Equal(t, quote, tr.QuoteAmount.Int64(), "block %d trade %d", b, i)
+			w := map[int]want{
+				0: {port.DexUniswapV2, port.DexMarketKey{Address: sc.V2Pair}, port.DexBuy, big.NewInt(100), big.NewInt(201)},
+				1: {port.DexUniswapV2, port.DexMarketKey{Address: sc.V2Pair}, port.DexSell, big.NewInt(100), big.NewInt(199)},
+				2: {port.DexUniswapV3, port.DexMarketKey{Address: sc.V3Pool}, port.DexBuy, big.NewInt(100), big.NewInt(101)},
+				3: {port.DexUniswapV3, port.DexMarketKey{Address: sc.V3Pool}, port.DexSell, big.NewInt(100), big.NewInt(99)},
+				4: {port.DexPerpOrderBook, port.DexMarketKey{Address: sc.OrderManager, ID: 7}, port.DexBuy, big.NewInt(2), big.NewInt(100)},
+				5: {port.DexPerpOrderBook, port.DexMarketKey{Address: sc.OrderManager, ID: 7}, port.DexBuy, big.NewInt(3), big.NewInt(150)},
+			}[i%6]
+			at := fmt.Sprintf("block %d trade %d", b, i)
+			assert.Equal(t, w.venue, tr.Venue, at)
+			assert.Equal(t, w.market, tr.Market, at)
+			assert.Equal(t, w.side, tr.Side, at)
+			assert.Equal(t, w.base.String(), tr.BaseAmount.String(), at)
+			assert.Equal(t, w.quote.String(), tr.QuoteAmount.String(), at)
 		}
 	}
 }

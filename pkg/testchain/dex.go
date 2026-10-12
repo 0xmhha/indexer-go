@@ -279,11 +279,15 @@ func (sc *DEXScenario) Fork() {
 // reveals blocks one at a time with SetHead.
 func BuildDEXLoad(blocks, swaps int) *DEXScenario { return buildDEXLoad(blocks, swaps, false) }
 
-// BuildDEXLoadMixed is BuildDEXLoad with the DEX scenario's V3 pool as well:
-// block 1 also creates, initializes and funds the pool, and the swaps of a
-// block go to the pair and the pool in turn, two at a time (V2 buy, V2
-// sell, V3 buy, V3 sell, ...). The V3 swaps stay at the pool's initial
-// price, so no tick is crossed.
+// BuildDEXLoadMixed is BuildDEXLoad over every venue of the DEX scenario:
+// block 1 also creates, initializes and funds the V3 pool and creates
+// perpetual market 7, and the trades of a block go to the venues in turn,
+// six at a time: V2 buy, V2 sell, V3 buy, V3 sell, a perpetual market order
+// (long 2 at 50) and a matched pair of perpetual limit orders created in
+// the same transaction (3 at 50, the taker buying). The V3 swaps stay at
+// the pool's initial price; the indexer stores a swap's price, liquidity
+// and tick as the event gives them, so crossing ticks costs it nothing
+// more.
 func BuildDEXLoadMixed(blocks, swaps int) *DEXScenario { return buildDEXLoad(blocks, swaps, true) }
 
 func buildDEXLoad(blocks, swaps int, v3 bool) *DEXScenario {
@@ -317,7 +321,12 @@ func buildDEXLoad(blocks, swaps int, v3 bool) *DEXScenario {
 	if v3 {
 		sc.V3Factory = common.HexToAddress("0x00000000000000000000000000000000000F3001")
 		sc.V3Pool = common.HexToAddress("0x00000000000000000000000000000000000B3001")
+		sc.Engine = common.HexToAddress("0x00000000000000000000000000000000000E0001")
+		sc.OrderManager = common.HexToAddress("0x00000000000000000000000000000000000E0002")
+		sc.PerpMarket = 7
 		setup = append(setup,
+			&types.Log{Address: sc.Engine,
+				Topics: []common.Hash{SigPerpMarket, common.BigToHash(n(7)), {}, addrTopic(sc.TokenB)}, Data: word(n(20))},
 			&types.Log{Address: sc.V3Factory, Topics: []common.Hash{SigV3PoolCreated, addrTopic(sc.TokenA), addrTopic(sc.TokenB), common.BigToHash(n(3000))},
 				Data: concat(signedWord(60), addrWord(sc.V3Pool))},
 			&types.Log{Address: sc.V3Pool, Topics: []common.Hash{SigV3Initialize}, Data: concat(word(q96), signedWord(0))},
@@ -332,7 +341,30 @@ func buildDEXLoad(blocks, swaps int, v3 bool) *DEXScenario {
 		for i := range specs {
 			trader := accts[1+(b*swaps+i)%3]
 			buy := i%2 == 0
-			if v3 && i%4 >= 2 {
+			if v3 && i%6 == 4 { // long 2 at 50
+				specs[i] = call(trader, sc.OrderManager, &types.Log{Address: sc.OrderManager,
+					Topics: []common.Hash{SigPerpMarketOrder, addrTopic(trader.Address), common.BigToHash(n(7))},
+					Data:   concat(word(n(0)), word(n(2)), word(e18(50)))})
+				continue
+			}
+			if v3 && i%6 == 5 { // a sell order and a buy order of 3 at 50, matched
+				maker := common.BigToHash(n(int64(2*(b*swaps+i) + 1)))
+				taker := common.BigToHash(n(int64(2*(b*swaps+i) + 2)))
+				other := accts[1+(b*swaps+i+1)%3]
+				order := func(id common.Hash, owner common.Address, side int64) *types.Log {
+					return &types.Log{Address: sc.OrderManager, Topics: []common.Hash{SigPerpOrder, id, addrTopic(owner), common.BigToHash(n(7))},
+						Data: concat(word(n(side)), word(n(1)), word(n(3)), word(e18(50)))}
+				}
+				fill := func(id common.Hash) *types.Log {
+					return &types.Log{Address: sc.OrderManager, Topics: []common.Hash{SigPerpPartialFill, id},
+						Data: concat(word(n(3)), word(n(3)), word(n(0)), word(e18(50)))}
+				}
+				specs[i] = call(trader, sc.OrderManager,
+					order(maker, other.Address, 1), order(taker, trader.Address, 0), fill(maker), fill(taker),
+					&types.Log{Address: sc.OrderManager, Topics: []common.Hash{SigPerpMatched, maker, taker}, Data: concat(word(n(3)), word(e18(50)))})
+				continue
+			}
+			if v3 && i%6 >= 2 {
 				// The pool pays out A for B (buy) or takes A for B (sell),
 				// at its initial price.
 				a0, a1 := int64(100), int64(-99)
