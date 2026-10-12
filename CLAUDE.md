@@ -136,6 +136,7 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 ### Testing
 
 - testify/assert, testify/require
+- Public RPC framework verification (opt-in): `go test -count=1 -v -timeout 15m -run '^TestLiveRPCFramework$' ./pkg/app -args -live-rpc-targets=testdata/live-rpc-targets.json`. The JSON file supplies arbitrary targets (`name`, `endpoint`, expected `chain_id`, optional `profile`, recent `blocks`, default 1, maximum 100). With the flag unset, no external RPC calls are made. The test uses production feature defaults, checks genesis startup rejection when the node reports missing state, indexes the recent range, compares block/transaction/receipt/log identities and API block hashes, then requires recorded RPC replay to produce identical storage. It sends no transactions. The state before and throughout the range must remain available; retention is node-specific. This is not a complete native-balance or fork-execution conformance test; see `docs/analysis/open-items.md` 3.4.
 - Integration tests: `//go:build integration` tag
 - End-to-end tests (`pkg/app`) run the real `NewApp` wiring against `pkg/testchain`:
   - `pkg/app/golden_test.go`: pins the full storage keyspace (`testdata/golden/keyspace.txt`, StableNet scenario `keyspace-stablenet.txt`); regenerate with `go test ./pkg/app -run TestGolden -update`
@@ -152,6 +153,7 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 ### Dependencies
 
 - Go 1.24, go-ethereum v1.16.5
+- EVM headers with `blockAccessListHash` (EIP-7928) and `slotNumber` (EIP-7843) are hashed with their canonical RLP suffix in both JSON and binary sources and retained in the model's `evm.header` extension (`evm.HeaderFieldsOf`). Go and geth versions are unchanged. Custom header hash profiles reject these extra fields until they implement their own matching layout. The legacy geth header view omits the suffix; use the model hash and extension. Older builds without this codec cannot read blocks carrying the new extension; older stored blocks remain readable.
 - PebbleDB v1.1.5, graphql-go v0.8.1 (gqlgen is pinned as a tool only)
 - chi/v5, gorilla/websocket, zap, prometheus
 

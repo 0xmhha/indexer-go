@@ -1,0 +1,23 @@
+[
+  {
+    "name": "StableNet testnet",
+    "endpoint": "https://api.test.stablenet.network",
+    "chain_id": 8283,
+    "profile": "stablenet",
+    "blocks": 3
+  },
+  {
+    "name": "BSC testnet",
+    "endpoint": "https://bsc-testnet-dataseed.bnbchain.org",
+    "chain_id": 97,
+    "profile": "evm",
+    "blocks": 8
+  },
+  {
+    "name": "Sepolia",
+    "endpoint": "https://ethereum-sepolia-rpc.publicnode.com",
+    "chain_id": 11155111,
+    "profile": "evm",
+    "blocks": 1
+  }
+]

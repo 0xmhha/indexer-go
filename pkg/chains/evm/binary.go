@@ -67,8 +67,8 @@ func MinBig(a, b *big.Int) *big.Int {
 
 // DecodeBlockRLP implements chains.BinaryProfile.
 func (p *Profile) DecodeBlockRLP(header, body []byte) (*model.Block, error) {
-	var head types.Header
-	if err := rlp.DecodeBytes(header, &head); err != nil {
+	head, fields, err := p.decodeHeader(header)
+	if err != nil {
 		return nil, fmt.Errorf("evm: decode header RLP: %w", err)
 	}
 	content, rest, err := rlp.SplitList(body)
@@ -80,8 +80,14 @@ func (p *Profile) DecodeBlockRLP(header, body []byte) (*model.Block, error) {
 		return nil, fmt.Errorf("evm: block %d: body has %d parts: %v", head.Number, len(parts), err)
 	}
 
-	b := headerToModel(&head)
-	b.Hash = p.headerHash(&head)
+	b := headerToModel(head)
+	b.Hash, err = p.hashHeader(head, fields)
+	if err != nil {
+		return nil, err
+	}
+	if fields != nil {
+		b.Ext.Set(headerFieldsKey, fields)
+	}
 	b.Size = uint64(rlp.ListSize(uint64(len(header) + len(content))))
 
 	var uncles []*types.Header
