@@ -845,6 +845,7 @@ make bench
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - 시스템 아키텍처 및 코드 구조
 - [API.md](docs/API.md) - GraphQL, JSON-RPC, WebSocket API 레퍼런스
 - [CONFIG.md](docs/CONFIG.md) - 전체 설정 옵션 가이드
+- [CHAIN_CUSTOMIZATION.md](docs/CHAIN_CUSTOMIZATION.md) - EVM 체인별 profile·회계·기능 확장 계약과 별도 모듈 예제
 
 ---
 

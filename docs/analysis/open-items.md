@@ -149,13 +149,23 @@ PostgreSQL로도 실제 공개 RPC를 색인하고 기록을 offline replay한 �
 
 | 추천 순서 | 작업 | 완료 기준 / 필요한 것 |
 |---|---|---|
-| 1 | 커스터마이징 계약과 예제 정리 | 기존 profile·회계·feature 등록 경계를 문서와 예제로 설명. 실제 확장 공백이 발견되면 구현 범위를 먼저 제안 |
+| 1 (완료 10/13) | 커스터마이징 계약과 예제 정리 | `docs/CHAIN_CUSTOMIZATION.md`, `examples/chainprofile` 및 기존 receipts SDK 예제. 새 공통 인터페이스를 추가하지 않음. 범위는 3.7절 |
 | 2 | Arc 회계 표본 확대 및 저장소 대조 | 내부 전송·mint/burn·실패 거래·수수료가 포함된 실제 표본에서 노드 잔액과 비교. 같은 RPC 기록을 Pebble/PostgreSQL에 재생해 결과 대조 |
 | 3 | EVM 멀티체인 동시 실행 검증 | StableNet·BSC·Sepolia·Arc의 DB·feature·API·알림 분리, RPC 장애와 재시작 검증. 순차 RPC 시험만으로 동시 운영이 검증됐다고 보지 않음 |
 | 4 | full node 운영 설정 확정 | 운영 설정 경로·시작 높이·활성 기능·상태 보존 범위 필요. archive는 없으며, 최근 높이 시작/기능 비활성화/fallback 방침을 정해야 함 |
 | 5 | 운영 성능 측정 | PostgreSQL 목표 배수 결정 및 여러 호스트 환경 필요. 현재 단일 호스트 중앙값 1.83배는 운영 목표가 아님 |
 
 별도 자원이나 승인이 필요한 항목은 유지한다: 실제 export era1/노드 속도 비교, Arc mainnet 검증, frontend 이전(이 저장소에서는 수정 금지), 태그 발행·원격 branch 삭제·외부 배포. 간헐 SLO 지연은 원인 미확인이고 DEX reorg flake는 재현 시 수정한다. K2·값 형식 통일·perp 이름 등 기존 보류/하지 않음 결정은 다시 열지 않는다.
+
+### 3.7 10/13 체인 커스터마이징 계약·예제
+
+사용자가 다음 작업 진행을 요청해 3.6절의 첫 항목을 수행했다. `docs/CHAIN_CUSTOMIZATION.md`에 profile·회계·native coin·typed extension·binary·feature/SDK·API 등록의 책임과 검증 범위를 정리했다. profile wrapper의 선택 인터페이스 손실, 중복 id/priority, 등록되지 않은 adapter 이름의 자동 감지, full node 상태 조건을 설명한다. `pkg/chains`는 SDK 호환성 약속 밖이며 새 SDK 면이나 공통 코어 변경을 추가하지 않았다.
+
+별도 모듈 `examples/chainprofile`의 `pkg/chains/projectarc`는 `arc.New()`의 구체적 EVM profile을 embed해 `project-arc` id/alias와 testnet 감지를 등록한다. priority 200으로 testnet만 커스터마이징하고 Arc mainnet/generic EVM 선택은 유지한다. native accounting/native coin/BinaryProfile 선택 인터페이스를 보존한다. 로컬 시험은 선택/alias, native 수수료와 value 규칙의 위임, 변조된 블록/거래 해시·sender 거부를 확인한다. SDK feature와 API 구현 예제는 기존 `examples/receipts`를 연결한다.
+
+최종 gofmt/build/root lint/전체 race/PostgreSQL/예제 검증은 모두 통과했다(전체 race pkg/app 423.5초, PostgreSQL app 150.2초). 별도 예제 모듈의 race/lint와 실제 바이너리 빌드도 통과했다. 첫 전체 실행의 구조 검사 실패는 예제 내부에서 해결했고 검사 코드나 허용 예산을 바꾸지 않았다. 새 동시성 시험이나 SLO/알림/부하 경로 변경은 없다.
+
+이번 예제는 공개 RPC를 다시 색인하거나 새 회계 알고리즘·고유 거래 타입·운영 기능을 추가하지 않는다. 실제 바이너리의 빌드는 확인하지만 실노드 실행, JSON/binary 동일 데이터 대조, mainnet, 전체 회계·동시 운영까지 새로 검증한 것으로 해석하지 않는다. 다음 작업은 3.6절의 Arc 회계 표본 확대와 같은 RPC 기록의 Pebble/PostgreSQL 대조다.
 
 ## 4. 저장소 관리
 
