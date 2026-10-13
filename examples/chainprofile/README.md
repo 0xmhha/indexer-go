@@ -49,4 +49,4 @@ verify profile priority and aliases, preservation of native accounting and
 native-coin interfaces, and rejection of altered block/transaction hashes
 and transaction senders. This example does not establish new mainnet,
 historical accounting or live operation guarantees. Existing Arc testnet
-measurements are recorded in `docs/analysis/open-items.md` 3.5.
+measurements are recorded in `docs/analysis/work-log-2026-10.md` 3.5.

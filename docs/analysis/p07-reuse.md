@@ -1,5 +1,7 @@
 # indexer-go 재사용 분석 (10/3)
 
+> 작성·검토 시점의 설계 또는 분석 기록이다. 현재 구현은 [아키텍처](../ARCHITECTURE.md), 현재 남은 작업은 [open-items](open-items.md), 후속 결정·측정은 [작업 기록](work-log-2026-10.md)을 확인한다. 아래 과거 경로·선택지·수치는 현재 지원 보장이 아니다.
+
 > 10/9: 이 문서의 결론(P07을 indexer-go 위에 만들지 않고 따로 유지)은 R6-3이 대체했다. P07은 `examples/receipts`에서 `pkg/sdk` 위에 다시 만들었고 인수 시험을 통과한다. 이 문서가 인용한 `pkg/resilience`, `fetchBlockAndReceiptsWithRetry` 등은 지금 없다.
 
 > 이 문서는 nu-54v-dk-toy 저장소(NU-54V-DK 결제 프로젝트)에서 작성해 2026-10-03에 이 저장소로 옮겼다. 본문의 N25, N08 같은 번호는 그 저장소 설계 register의 결정 번호이고, P07-FR-01 같은 번호는 그 저장소 P07 indexer의 요구사항 번호다.

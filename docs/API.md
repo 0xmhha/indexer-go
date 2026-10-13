@@ -1,929 +1,119 @@
-# API Reference
+# API 안내
 
-indexer-go는 3가지 프로토콜로 데이터를 제공합니다: **GraphQL**, **JSON-RPC**, **WebSocket**.
+단일 체인의 full 모드와 `all` 역할을 기준으로 설명한다. 기능·체인·역할·declared 모드에 따라 제공 범위가 달라진다. 전체 필드와 인자는 [GraphQL snapshot](../pkg/app/testdata/api/graphql-schema.txt), 메서드 이름은 [JSON-RPC snapshot](../pkg/app/testdata/api/jsonrpc-methods.txt)에서 확인한다. Snapshot은 시험 구성의 API를 고정한 목록이며 기능 활성화나 실제 노드 지원까지 보장하지 않는다.
 
----
+## 1. Endpoints
 
-## Endpoints
+| 경로 | 용도 |
+|---|---|
+| `/graphql` | GraphQL 조회·조작 |
+| `/playground` | GraphQL Playground와 introspection |
+| `/graphql/ws` | GraphQL 구독 |
+| `/rpc` | JSON-RPC |
+| `/v1/...` | 자주 조회하는 경로의 REST |
+| `/v1/subscriptions/stream` | API key 소유자의 알림 stream |
+| `/api` | Etherscan 호환 API |
+| `/ws` | 별도 hub. 현재 색인 파이프라인의 이벤트가 연결되지 않음 |
+| `/health`, `/metrics` | 상태·Prometheus 지표 |
 
-| Path | Protocol | Description |
-|------|----------|-------------|
-| `/graphql` | POST | GraphQL API |
-| `/playground` | GET | GraphQL Playground (브라우저) |
-| `/graphql/ws` | WebSocket | GraphQL 서브스크립션 |
-| `/rpc` | POST | JSON-RPC API |
-| `/ws` | WebSocket | 실시간 이벤트 구독 |
-| `/api` | GET/POST | Etherscan 호환 API |
-| `/health` | GET | 헬스체크 |
-| `/metrics` | GET | Prometheus 메트릭 |
+멀티체인은 `/chains/{id}/graphql`, `/chains/{id}/rpc`, `/chains/{id}/v1/...`처럼 체인별 경로를 사용한다. 체인 목록은 `GET /chains`다. 루트 탐색 API가 있다고 가정하지 않는다. `ingest` 역할의 HTTP는 health·metrics만 제공한다.
 
----
+## 2. GraphQL API
 
-## GraphQL API
-
-### Custom Scalars
-
-| Scalar | Format | Example |
-|--------|--------|---------|
-| `BigInt` | 숫자 문자열 | `"1000000"` |
-| `Hash` | 0x 접두사 32바이트 hex | `"0xabc..."` |
-| `Address` | 0x 접두사 20바이트 hex | `"0x1234..."` |
-| `Bytes` | 0x 접두사 hex | `"0x..."` |
-
-> **Note**: GraphQL 변수에서 custom scalar는 모두 `String` 타입으로 전달합니다.
-
-### Pagination
-
-페이지네이션이 필요한 쿼리는 `pagination` 인자를 받습니다:
+높이·금액·해시·주소처럼 모델의 큰 숫자/hex 값은 해당 스키마의 String 형식을 따른다. 반환 필드와 인자는 snapshot 또는 실제 introspection으로 확인한다. 기본 블록 필드는 `number`, `timestamp`, `transactionCount`다.
 
 ```graphql
-pagination: { limit: Int, offset: Int }
-```
-
-응답은 Connection 타입으로 반환됩니다:
-```graphql
-{
-  nodes: [T!]!
-  totalCount: Int!
-  pageInfo: {
-    hasNextPage: Boolean!
-    hasPreviousPage: Boolean!
-  }
+query {
+  latestHeight
 }
 ```
 
----
-
-### Core Queries — 블록/트랜잭션/영수증
-
 ```graphql
-# 최신 인덱싱 높이
-query { latestHeight }
-
-# 블록 조회 (높이)
-query {
-  block(height: "1000") {
+query BlockAt($number: String!) {
+  block(number: $number) {
+    number
     hash
-    height
     parentHash
-    time
-    miner
+    timestamp
+    transactionCount
     gasUsed
-    gasLimit
-    numTxs
     baseFeePerGas
   }
 }
+```
 
-# 블록 조회 (해시)
-query {
-  blockByHash(hash: "0xabc...") {
-    height
-    time
-    numTxs
-  }
-}
-
-# 블록 범위 조회
-query {
-  blocksRange(from: "100", to: "110") {
-    height
-    time
-    numTxs
-  }
-}
-
-# 트랜잭션 조회
-query {
-  transaction(hash: "0xabc...") {
+```graphql
+query TransactionByHash($hash: String!) {
+  transaction(hash: $hash) {
     hash
-    blockNumber
     from
     to
     value
-    gas
-    gasPrice
-    type
-    input
-    nonce
-    receipt {
-      status
-      gasUsed
-      contractAddress
-      logs {
-        address
-        topics
-        data
-        decoded {
-          eventName
-          params { name type value indexed }
-        }
-      }
-    }
+    blockNumber
   }
 }
-
-# 주소별 트랜잭션 (페이지네이션)
-query {
-  transactionsByAddress(
-    address: "0x1234..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    nodes {
-      hash
-      blockNumber
-      from
-      to
-      value
-      type
-    }
-    totalCount
-    pageInfo { hasNextPage hasPreviousPage }
-  }
-}
-
-# 영수증 조회
-query {
-  receipt(transactionHash: "0xabc...") {
-    status
-    gasUsed
-    cumulativeGasUsed
-    effectiveGasPrice
-    contractAddress
-    logs { address topics data logIndex }
-  }
-}
-
-# 로그 필터
-query {
-  logs(filter: {
-    fromBlock: "100"
-    toBlock: "200"
-    address: "0x1234..."
-    topics: ["0xddf252..."]
-  }) {
-    nodes { address topics data blockNumber transactionHash logIndex }
-    totalCount
-  }
-}
-
-# 카운트
-query { blockCount }
-query { transactionCount }
 ```
 
-#### curl 예시
+`block(height: ...)`, `Block.height`, `Block.time`, `Block.numTxs`는 현재 snapshot의 이름이 아니다. 최근 시작한 DB의 이전 블록이나 아직 색인하지 않은 값이 항상 존재한다고 가정하지 않는다.
+
+### Pagination
+
+`PaginationInput`은 `limit`, `offset`, `after`를 제공한다. Cursor가 지원되는 목록에서는 반환된 `pageInfo.endCursor`를 다음 `after`로 보낸다. Cursor는 불투명한 값이며 클라이언트가 새로 만들지 않는다. 각 목록의 필터·순서·범위 제한은 해당 resolver와 [설정](CONFIG.md)을 확인한다.
+
+```graphql
+query AddressTransactions($address: String!, $after: String) {
+  transactionsByAddress(address: $address, pagination: {limit: 20, after: $after}) {
+    nodes { hash blockNumber from to value }
+    pageInfo { hasNextPage endCursor }
+    totalCount
+  }
+}
+```
+
+넓은 범위 또는 색인이 없는 조건은 scan 상한과 `scannedThrough`로 조회한 범위를 알릴 수 있다. DEX·집계·records·AA·StableNet 전용 조회는 기능 설정과 저장된 자료가 필요하다. 프로젝트 조회는 [SDK](SDK.md)로 추가한다.
+
+## 3. REST
+
+대표 경로는 다음과 같다.
+
+- `GET /v1/blocks`
+- `GET /v1/transactions`
+- `GET /v1/addresses/{address}/balance`
+- `GET /v1/addresses/{address}/overview`
+- `GET /v1/addresses/{address}/tokens`
+- `GET /v1/addresses/{address}/transactions`
+- `GET /v1/stats/miners`, `GET /v1/stats/network`
+
+고정된 GraphQL 문서를 같은 resolver로 실행하며 응답은 `data`/`errors` 구조다. 성공 응답의 ETag·Cache-Control과 1초 cache를 사용한다. 상세 인자·범위·오류 동작은 [설정의 REST 설명](CONFIG.md)과 `pkg/api/rest`를 확인한다. frontend 이전 경로는 [이전 안내](FRONTEND_MIGRATION.md)에 있다.
+
+## 4. JSON-RPC API
 
 ```bash
-# 최신 높이
-curl -s http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ latestHeight }"}'
-
-# 블록 조회
-curl -s http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ block(height: \"1000\") { hash height time numTxs } }"}'
-
-# 트랜잭션 조회
-curl -s http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ transaction(hash: \"0xabc...\") { hash from to value } }"}'
-```
-
----
-
-### Address Indexing Queries — 주소/컨트랙트/토큰
-
-```graphql
-# 주소 개요
-query {
-  addressOverview(address: "0x1234...") {
-    address
-    balance
-    txCount
-    isContract
-    contractCreator
-  }
-}
-
-# 컨트랙트 생성 정보
-query {
-  contractCreation(address: "0x1234...") {
-    creator
-    txHash
-    blockNumber
-  }
-}
-
-# ERC-20 전송 (주소별)
-query {
-  erc20TransfersByAddress(
-    address: "0x1234..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    nodes {
-      txHash
-      from
-      to
-      value
-      tokenAddress
-      blockNumber
-    }
-    totalCount
-  }
-}
-
-# ERC-721 전송 (토큰별)
-query {
-  erc721TransfersByToken(
-    token: "0x5678..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    nodes { txHash from to tokenId blockNumber }
-    totalCount
-  }
-}
-
-# Internal 트랜잭션
-query {
-  internalTransactionsByAddress(
-    address: "0x1234..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    nodes { txHash from to value callType blockNumber }
-    totalCount
-  }
-}
-
-# 컨트랙트 검증 상태
-query {
-  contractVerification(address: "0x1234...") {
-    verified
-    contractName
-    compilerVersion
-    sourceCode
-    abi
-  }
-}
-```
-
----
-
-### EIP-4337 Account Abstraction Queries
-
-> 주의: 이 절은 2026년 4월 ERC-4337 색인을 다시 만들기 전의 이름(`userOp`, `userOpsByBundler` 등)으로 적혀 있어 지금 서버와 맞지 않는다. 지금 이름(`userOperation`, `userOperationsBySender`, `bundlers` 등)과 대응표는 [FRONTEND_MIGRATION.md](FRONTEND_MIGRATION.md) 1장을 본다.
-
-```graphql
-# UserOperation 단건 조회
-query {
-  userOp(userOpHash: "0xabc...") {
-    userOpHash
-    txHash
-    blockNumber
-    blockHash
-    txIndex
-    logIndex
-    sender
-    paymaster
-    nonce
-    success
-    actualGasCost
-    actualUserOpFeePerGas
-    bundler
-    entryPoint
-    timestamp
-  }
-}
-
-# sender별 UserOp (페이지네이션)
-query {
-  userOpsBySender(
-    sender: "0x1234..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    nodes {
-      userOpHash
-      txHash
-      blockNumber
-      sender
-      paymaster
-      success
-      actualGasCost
-      bundler
-      entryPoint
-      timestamp
-    }
-    totalCount
-    pageInfo { hasNextPage hasPreviousPage }
-  }
-}
-
-# bundler별 UserOp (페이지네이션)
-query {
-  userOpsByBundler(
-    bundler: "0x5678..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    nodes { userOpHash sender success actualGasCost paymaster }
-    totalCount
-  }
-}
-
-# paymaster별 UserOp (페이지네이션)
-query {
-  userOpsByPaymaster(
-    paymaster: "0x9abc..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    nodes { userOpHash sender success actualGasCost bundler }
-    totalCount
-  }
-}
-
-# 트랜잭션 내 UserOp (번들 조회)
-query {
-  userOpsByTx(txHash: "0xabc...") {
-    userOpHash
-    sender
-    paymaster
-    success
-    actualGasCost
-    bundler
-    entryPoint
-  }
-}
-
-# 블록 내 UserOp
-query {
-  userOpsByBlock(blockNumber: "1000") {
-    userOpHash
-    txHash
-    sender
-    success
-    bundler
-  }
-}
-
-# 최근 UserOp (최대 100개)
-query {
-  recentUserOps(limit: 20) {
-    userOpHash
-    txHash
-    blockNumber
-    sender
-    paymaster
-    success
-    actualGasCost
-    bundler
-    entryPoint
-    timestamp
-  }
-}
-
-# UserOp 총 개수
-query { userOpCount }
-
-# Bundler 통계
-query {
-  bundlerStats(bundler: "0x5678...") {
-    address
-    totalOps
-    successfulOps
-    failedOps
-    totalGasSponsored
-    lastActivityBlock
-    lastActivityTime
-  }
-}
-
-# Paymaster 통계
-query {
-  paymasterStats(paymaster: "0x9abc...") {
-    address
-    totalOps
-    successfulOps
-    failedOps
-    totalGasSponsored
-    lastActivityBlock
-    lastActivityTime
-  }
-}
-
-# Account Deployment 조회
-query {
-  accountDeployment(userOpHash: "0xabc...") {
-    userOpHash
-    sender
-    factory
-    paymaster
-    txHash
-    blockNumber
-    logIndex
-    timestamp
-  }
-}
-
-# Factory별 배포 목록
-query {
-  accountDeploymentsByFactory(
-    factory: "0xdef..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    userOpHash
-    sender
-    factory
-    paymaster
-    blockNumber
-  }
-}
-
-# UserOp Revert 이유
-query {
-  userOpRevert(userOpHash: "0xabc...") {
-    userOpHash
-    sender
-    nonce
-    revertReason
-    txHash
-    blockNumber
-    logIndex
-    revertType    # "execution" or "postop"
-    timestamp
-  }
-}
-```
-
-#### curl 예시
-
-```bash
-# UserOp 조회
-curl -s http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ userOp(userOpHash: \"0xabc...\") { userOpHash sender success bundler actualGasCost } }"}'
-
-# 최근 UserOp
-curl -s http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ recentUserOps(limit: 10) { userOpHash sender success bundler blockNumber } }"}'
-
-# Bundler 통계
-curl -s http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ bundlerStats(bundler: \"0x5678...\") { totalOps successfulOps failedOps } }"}'
-```
-
----
-
-### EIP-7702 SetCode Queries
-
-```graphql
-# SetCode authorization 조회 (트랜잭션별)
-query {
-  setCodeAuthorizationsByTx(txHash: "0xabc...") {
-    txHash
-    address
-    authority
-    chainId
-    nonce
-    applied
-    blockNumber
-    authIndex
-  }
-}
-
-# target 주소별 authorization
-query {
-  setCodeAuthorizationsByTarget(
-    target: "0x1234..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    nodes { txHash address authority applied blockNumber }
-    totalCount
-  }
-}
-
-# authority별 authorization
-query {
-  setCodeAuthorizationsByAuthority(
-    authority: "0x5678..."
-    pagination: { limit: 20, offset: 0 }
-  ) {
-    nodes { txHash address authority applied blockNumber }
-    totalCount
-  }
-}
-
-# 주소 SetCode 정보 (delegation 상태)
-query {
-  addressSetCodeInfo(address: "0x1234...") {
-    address
-    hasDelegation
-    delegationTarget
-    asTargetCount
-    asAuthorityCount
-    lastActivityBlock
-    lastActivityTimestamp
-  }
-}
-
-# SetCode 트랜잭션 카운트
-query { setCodeTransactionCount }
-
-# 블록 내 SetCode 트랜잭션
-query {
-  setCodeTransactionsInBlock(blockNumber: "1000") {
-    txHash
-    address
-    authority
-    applied
-  }
-}
-
-# 최근 SetCode authorization
-query {
-  recentSetCodeTransactions(limit: 20) {
-    txHash
-    address
-    authority
-    applied
-    blockNumber
-  }
-}
-```
-
----
-
-### WBFT Consensus Queries
-
-```graphql
-# WBFT 블록 Extra Data
-query {
-  wbftBlockExtra(blockNumber: "1000") {
-    blockNumber
-    randaoReveal
-    aggregatedSig
-    epochNumber
-  }
-}
-
-# 에폭 정보
-query {
-  epochInfo(epochNumber: "10") {
-    epochNumber
-    startBlock
-    endBlock
-    validators
-  }
-}
-
-# 검증자 서명 통계
-query {
-  validatorSigningStats(
-    validatorAddress: "0x1234..."
-    epochNumber: "10"
-  ) {
-    prepareSignCount
-    commitSignCount
-    missCount
-    participationRate
-  }
-}
-
-# 블록 서명자
-query {
-  blockSigners(blockNumber: "1000") {
-    blockNumber
-    proposer
-    signers
-  }
-}
-
-# 에폭 목록 (페이지네이션)
-query {
-  epochs(pagination: { limit: 10, offset: 0 }) {
-    nodes { epochNumber startBlock endBlock }
-    totalCount
-  }
-}
-```
-
----
-
-### Subscriptions (GraphQL WebSocket)
-
-```graphql
-# 새 블록 구독
-subscription {
-  newBlock {
-    hash
-    height
-    time
-    numTxs
-  }
-}
-
-# 새 트랜잭션 구독
-subscription {
-  newTransaction {
-    hash
-    blockNumber
-    from
-    to
-    value
-  }
-}
-
-# 로그 구독 (필터)
-subscription {
-  logs(filter: {
-    address: "0x1234..."
-    topics: ["0xddf252..."]
-  }) {
-    address
-    topics
-    data
-    blockNumber
-    transactionHash
-  }
-}
-
-# 컨센서스 블록 구독
-subscription {
-  consensusBlock {
-    blockNumber
-    epochNumber
-  }
-}
-```
-
-#### JavaScript 연결 예시
-
-```javascript
-import { createClient } from 'graphql-ws'
-
-const client = createClient({
-  url: 'ws://localhost:8080/graphql/ws',
-})
-
-// 새 블록 구독
-const unsubscribe = client.subscribe(
-  {
-    query: `subscription { newBlock { hash height time numTxs } }`,
-  },
-  {
-    next: (data) => console.log('New block:', data),
-    error: (err) => console.error('Error:', err),
-    complete: () => console.log('Subscription completed'),
-  }
-)
-```
-
----
-
-## JSON-RPC API
-
-JSON-RPC 2.0 프로토콜을 따릅니다. 엔드포인트: `POST /rpc`
-
-### Request Format
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "methodName",
-  "params": { ... },
-  "id": 1
-}
-```
-
-### Core Methods
-
-```bash
-# 최신 높이
-curl -s http://localhost:8080/rpc \
-  -H "Content-Type: application/json" \
+curl -s http://127.0.0.1:8080/rpc \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"getLatestHeight","params":{},"id":1}'
-
-# 블록 조회
-curl -s http://localhost:8080/rpc \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"getBlock","params":{"height":1000},"id":1}'
-
-# 블록 조회 (해시)
-curl -s http://localhost:8080/rpc \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"getBlockByHash","params":{"hash":"0xabc..."},"id":1}'
-
-# 트랜잭션 조회
-curl -s http://localhost:8080/rpc \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"getTxResult","params":{"hash":"0xabc..."},"id":1}'
-
-# 영수증 조회
-curl -s http://localhost:8080/rpc \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"getTxReceipt","params":{"hash":"0xabc..."},"id":1}'
 ```
 
-### Method Reference
+프로젝트 메서드 이름과 Ethereum 호환 메서드 일부를 제공한다. 모든 Ethereum RPC가 구현돼 있다고 가정하지 않는다. 예를 들어 현재 목록에는 `getLatestHeight`, `getBlock`, `getTxResult`, `getTxReceipt`, `eth_getLogs`, filter 메서드가 있고 `eth_subscribe`는 없다. 인자·반환 형식은 `pkg/api/jsonrpc`와 체인별 method 등록 코드를 확인한다.
 
-#### Blockchain Data
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `getLatestHeight` | — | 최신 인덱싱 높이 |
-| `getBlock` | `height` | 블록 조회 (높이) |
-| `getBlockByHash` | `hash` | 블록 조회 (해시) |
-| `getTxResult` | `hash` | 트랜잭션 조회 |
-| `getTxReceipt` | `hash` | 영수증 조회 |
-| `getBlockCount` | — | 총 블록 수 |
-| `getTransactionCount` | — | 총 트랜잭션 수 |
-| `getBlocksByTimeRange` | `start, end` | 시간 범위 블록 |
-| `getBlockByTimestamp` | `timestamp` | 타임스탬프로 블록 |
+## 5. WebSocket·구독·알림
 
-#### Address & Token
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `getAddressBalance` | `address` | 잔액 조회 |
-| `getContractCreation` | `address` | 컨트랙트 생성 정보 |
-| `getContractsByCreator` | `creator` | 크리에이터별 컨트랙트 |
-| `getERC20Transfer` | `txHash, logIndex` | ERC-20 전송 |
-| `getERC20TransfersByToken` | `token, limit, offset` | 토큰별 ERC-20 전송 |
-| `getERC20TransfersByAddress` | `address, limit, offset` | 주소별 ERC-20 전송 |
-| `getERC721Transfer` | `txHash, logIndex` | ERC-721 전송 |
-| `getERC721TransfersByToken` | `token, limit, offset` | 토큰별 ERC-721 전송 |
-| `getERC721TransfersByAddress` | `address, limit, offset` | 주소별 ERC-721 전송 |
-| `getERC721Owner` | `token, tokenId` | NFT 소유자 |
-| `getInternalTransactions` | `txHash` | Internal 트랜잭션 |
-| `getInternalTransactionsByAddress` | `address, limit, offset` | 주소별 Internal 트랜잭션 |
+색인 이벤트 구독은 `/graphql/ws`를 사용한다. `graphql-transport-ws` 프로토콜을 사용할 수 있으며 연결은 `connection_init` 뒤 `subscribe`로 구독한다. 예를 들면 다음 GraphQL 문서다.
 
-#### Consensus (WBFT)
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `getWBFTBlockExtra` | `blockNumber` | WBFT Extra Data |
-| `getWBFTBlockExtraByHash` | `blockHash` | WBFT Extra Data (해시) |
-| `getEpochInfo` | `epochNumber` | 에폭 정보 |
-| `getLatestEpochInfo` | — | 최신 에폭 |
-| `getValidatorSigningStats` | `validator, epoch` | 검증자 서명 통계 |
-| `getAllValidatorsSigningStats` | `epoch` | 전체 검증자 통계 |
-| `getValidatorSigningActivity` | `validator, limit` | 서명 활동 |
-| `getBlockSigners` | `blockNumber` | 블록 서명자 |
-
-#### System Contracts
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `getTotalSupply` | — | 총 공급량 |
-| `getActiveMinters` | — | 활성 Minter 목록 |
-| `getMinterAllowance` | `address` | Minter 허용량 |
-| `getActiveValidators` | — | 활성 Validator 목록 |
-| `getBlacklistedAddresses` | — | 블랙리스트 주소 |
-| `getProposals` | — | 거버넌스 제안 목록 |
-| `getProposal` | `proposalId` | 제안 상세 |
-| `getMintEvents` | `limit, offset` | Mint 이벤트 |
-| `getBurnEvents` | `limit, offset` | Burn 이벤트 |
-
-#### SetCode (EIP-7702)
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `getSetCodeAuthorization` | `txHash, authIndex` | SetCode authorization |
-| `getSetCodeAuthorizationsByTx` | `txHash` | 트랜잭션별 authorization |
-| `getSetCodeAuthorizationsByTarget` | `target, limit, offset` | target별 |
-| `getSetCodeAuthorizationsByAuthority` | `authority, limit, offset` | authority별 |
-| `getAddressSetCodeInfo` | `address` | 주소 SetCode 정보 |
-| `getSetCodeTransactionCount` | — | SetCode 트랜잭션 수 |
-| `getSetCodeTransactionsInBlock` | `blockNumber` | 블록 내 SetCode |
-| `getRecentSetCodeTransactions` | `limit` | 최근 SetCode |
-
-#### Ethereum Filter API
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `eth_newFilter` | `fromBlock, toBlock, address, topics` | 로그 필터 생성 |
-| `eth_newBlockFilter` | — | 블록 필터 생성 |
-| `eth_newPendingTransactionFilter` | — | 보류 트랜잭션 필터 |
-| `eth_uninstallFilter` | `filterId` | 필터 제거 |
-| `eth_getFilterChanges` | `filterId` | 필터 변경사항 |
-| `eth_getFilterLogs` | `filterId` | 필터 로그 |
-| `eth_getLogs` | `fromBlock, toBlock, address, topics` | 로그 조회 |
-
-#### ABI Management
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `setContractABI` | `address, abi` | ABI 등록 |
-| `getContractABI` | `address` | ABI 조회 |
-| `deleteContractABI` | `address` | ABI 삭제 |
-| `listContractABIs` | — | ABI 목록 |
-| `decodeLog` | `address, topics, data` | 로그 디코딩 |
-
----
-
-## WebSocket API
-
-WebSocket 엔드포인트: `ws://localhost:8080/ws`
-
-### 구독
-
-```javascript
-const ws = new WebSocket('ws://localhost:8080/ws')
-
-// 새 블록 구독
-ws.send(JSON.stringify({
-  jsonrpc: '2.0',
-  method: 'subscribe',
-  params: ['newBlock'],
-  id: 1
-}))
-
-// 메시지 수신
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data)
-  console.log('Event:', data)
+```graphql
+subscription {
+  newBlock { number hash timestamp transactionCount }
 }
 ```
 
-### 구독 타입
+Outbox가 켜져 있으면 `extensions.sequence`와 재개 변수 `fromSequence`로 재동기화할 수 있다. `fromSequence`는 구독 처리기의 재개 변수이며 위 schema snapshot의 필드 인자로 나타나지 않는다. Queue overflow·`SLOW_SUBSCRIBER`·`SEQUENCE_TOO_OLD` 처리와 snapshot 절차는 [CONFIG](CONFIG.md)와 [구독 설계](analysis/subscriptions-design.md)에 있다.
 
-| Type | Description |
-|------|-------------|
-| `newBlock` | 새 블록 인덱싱 시 알림 |
-| `newTransaction` | 새 트랜잭션 인덱싱 시 알림 |
-| `logs` | 로그 이벤트 (필터 가능) |
-| `consensusBlock` | WBFT 컨센서스 블록 |
+API key 알림은 `/v1/subscriptions/stream`을 사용한다. 설정은 만든 key의 소유이며 조건식·fast/durable·webhook challenge·채널 설정은 [Notifications 설정](CONFIG.md#notifications)을 따른다. Fast 경로는 commit 전 평가이고 durable 경로는 outbox 소비다. 일반 GraphQL 구독과 같은 전달 보장이라고 가정하지 않는다.
 
----
+`/ws` hub의 프로토콜은 존재하지만 현재 수집 파이프라인이 그 hub로 이벤트를 보내지 않는다. 이를 새 블록의 운영 구독 경로로 안내하지 않는다.
 
-## Go Client 연동 예시
+## 6. 접근과 검증 범위
 
-```go
-package main
+알림 설정 API는 `api.keys`의 key가 필요하다. Key 소유권·rate limit·trusted proxy·CORS·GraphQL depth/complexity·WebSocket Origin 검사 등 접근 조건은 [설정](CONFIG.md)에 있다.
 
-import (
-    "fmt"
-    "math/big"
-
-    "github.com/0xmhha/indexer-go/pkg/eventbus"
-    "github.com/0xmhha/indexer-go/pkg/events"
-)
-
-func main() {
-    // EventBus 생성
-    bus := eventbus.NewLocalEventBus(1000, 100)
-    go bus.Run()
-    defer bus.Stop()
-
-    // 블록 이벤트 구독
-    blockSub := bus.Subscribe(
-        "block-monitor",
-        []events.EventType{events.EventTypeBlock},
-        nil,
-        100,
-    )
-
-    // 고가 트랜잭션 구독 (필터)
-    filter := &events.Filter{
-        MinValue: big.NewInt(1e18), // 1 ETH 이상
-    }
-    txSub := bus.Subscribe(
-        "high-value-tx",
-        []events.EventType{events.EventTypeTransaction},
-        filter,
-        100,
-    )
-
-    // 블록 이벤트 처리
-    go func() {
-        for event := range blockSub.Channel {
-            blockEvent := event.(*events.BlockEvent)
-            fmt.Printf("Block %d: %d txs\n",
-                blockEvent.Number, blockEvent.TxCount)
-        }
-    }()
-
-    // 트랜잭션 이벤트 처리
-    go func() {
-        for event := range txSub.Channel {
-            txEvent := event.(*events.TransactionEvent)
-            fmt.Printf("High-value TX: %s (%s)\n",
-                txEvent.Hash, txEvent.Value)
-        }
-    }()
-
-    select {}
-}
-```
-
----
-
-## Health & Monitoring
-
-```bash
-# 헬스체크
-curl http://localhost:8080/health
-
-# 구독자 통계
-curl http://localhost:8080/subscribers
-
-# Prometheus 메트릭
-curl http://localhost:8080/metrics
-
-# 버전 정보
-curl http://localhost:8080/version
-```
+API snapshot과 로컬 시험은 이름·계약·회귀를 검증한다. 실제 노드의 전체 데이터·내부 이동·native 잔액 정확성 또는 모든 체인의 동시 운영을 보장하지 않는다. 미검증 영역과 후속 작업은 [open-items](analysis/open-items.md), 실제 공개 RPC 표본은 [작업 기록](analysis/work-log-2026-10.md)에 있다.

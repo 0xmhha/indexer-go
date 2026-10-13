@@ -1,6 +1,6 @@
 # AA (EIP-4337) Backend Enhancement Tasks
 
-> indexer-go 백엔드에서 Account Abstraction 기능 강화를 위해 필요한 작업 목록
+> 기존 AA 목록 API 제안이다. 현재 승인된 실행 목록은 [open-items](analysis/open-items.md)에 있으며 이 제안을 자동으로 실행하지 않는다. 2026-10-13 현재 API snapshot에는 `allBundlers`·`allPaymasters`가 없다. 아래 파일 경로·구현안은 당시 구조의 제안이며 현 구조에 맞춘 재설계가 필요하다. frontend의 현재 우회 동작은 이번 문서 정리에서 확인하지 않았다.
 
 ## 배경
 

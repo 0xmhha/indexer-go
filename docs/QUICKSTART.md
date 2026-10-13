@@ -1,251 +1,80 @@
-# Quick Start
+# 빠른 시작
 
-## Prerequisites
-
-- **Go 1.24+** (toolchain 1.24.9)
-- RPC 엔드포인트 (Stable-One, Ethereum, 또는 Anvil)
-
----
+현재 범위는 EVM 체인이다. 설정 상세는 [CONFIG](CONFIG.md), 구조는 [ARCHITECTURE](ARCHITECTURE.md), 구현을 붙이는 방법은 [체인 확장 계약](CHAIN_CUSTOMIZATION.md)과 [SDK](SDK.md)에 있다.
 
 ## 1. 빌드
 
+Go 모듈은 `go 1.24.0`, toolchain `go1.24.9`를 사용한다. Makefile이 실제 `pkg/app` 버전 필드에 빌드 정보를 넣는다.
+
 ```bash
-git clone https://github.com/0xmhha/indexer-go.git
-cd indexer-go
-
-# 의존성 설치
 go mod download
-
-# 빌드
-go build -o build/indexer-go ./cmd/indexer
-
-# 버전 정보 포함 빌드
-VERSION=$(git describe --tags --always --dirty)
-COMMIT=$(git rev-parse --short HEAD)
-BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
-
-go build -ldflags "-s -w \
-  -X main.version=$VERSION \
-  -X main.commit=$COMMIT \
-  -X main.buildTime=$BUILD_TIME" \
-  -o build/indexer-go ./cmd/indexer
+make build
+./build/indexer-go --version
 ```
 
----
+## 2. Full node 시작 조건
 
-## 2. 설정
+운영에 archive 노드는 없다. 기본 활성 기능 `balance.native`·`token.metadata`가 필요한 과거 상태를 노드가 보관해야 시작할 수 있다. 새 DB는 시작 블록 직전 상태, 재시작은 다음 블록 직전 상태, 새 기능은 backfill 시작 직전 상태를 확인한다.
 
-`config.yaml` 파일 생성:
+1. RPC와 chain id를 확인한다.
+2. 실제 RPC가 상태를 보관하는 최근 높이를 정한다. 보존 기간을 고정된 블록 수로 가정하지 않는다.
+3. 그 상태 다음 블록을 시작 높이로 정하고 활성 기능을 확인한다.
+4. 기존 DB를 재개할 때는 DB의 다음 블록과 기능 backfill 범위까지 확인한다.
+
+최근 시작하면 이전 블록의 색인 결과는 없다. 처리 중에도 상태가 지워질 수 있다. `allow_pruned_state`는 과거 상태를 복원하지 않으며 잔액 또는 메타데이터 정확성을 떨어뜨릴 수 있다. 사용자 운영 설정·시작 높이·이 경우의 방침은 아직 확정하지 않았다.
+
+## 3. 설정과 실행
+
+예를 들어 사용자 제공 Sepolia RPC로 새 DB를 만들 때 `config.yaml`을 다음과 같이 둔다. 기존 DB나 운영 구성을 바꾸는 예제가 아니다.
 
 ```yaml
 rpc:
-  endpoint: "http://127.0.0.1:8545"
-  timeout: 30s
-
+  endpoint: https://ethereum-sepolia-rpc.publicnode.com
+  timeout: 15s
 database:
-  path: "./data"
-
-log:
-  level: "info"
-  format: "json"
-
+  driver: pebble
+  path: ./data-sepolia
 indexer:
-  workers: 100
-  chunk_size: 1
-  start_height: 0
-
+  workers: 1
+  poll_interval: 50ms
 api:
   enabled: true
-  host: "localhost"
+  host: 127.0.0.1
   port: 8080
-  enable_graphql: true
-  enable_jsonrpc: true
-  enable_websocket: true
-  enable_cors: true
-  allowed_origins: ["*"]
+log:
+  level: info
 ```
 
-> 전체 설정 옵션은 [CONFIG.md](CONFIG.md) 참조
-
----
-
-## 3. 실행
-
-### 인덱서 + API 서버
+선택한 최근 시작 높이를 `INDEXER_START_HEIGHT`에 넣고 실행한다.
 
 ```bash
-./build/indexer-go --config config.yaml
+./build/indexer-go --config config.yaml \
+  --start-height "${INDEXER_START_HEIGHT:?set a retained recent start height}"
 ```
 
-### CLI 플래그로 실행
+Profile은 자동 감지된다. 등록된 이름이나 alias만 명시적으로 `--adapter`로 지정한다. generic `evm`, StableNet의 `stablenet`/`stableone`, Arc의 `arc`가 있다. Anvil은 generic EVM을 사용한다. 등록되지 않은 adapter 이름도 현재 자동 감지로 넘어가므로 오타와 실제 선택 로그를 확인한다.
 
-```bash
-./build/indexer-go \
-  --rpc http://127.0.0.1:8545 \
-  --db ./data \
-  --api --graphql --jsonrpc --websocket \
-  --api-port 8080 \
-  --log-level info
-```
-
----
+Arc 예제는 [별도 profile 모듈](../examples/chainprofile/README.md)을 따른다. Arc profile은 tag `v0.2.15` 이후 main에 추가됐다. generic EVM 회계로 만든 기존 Arc DB는 새 profile로 재색인해야 하며 자동 보정되지 않는다.
 
 ## 4. 동작 확인
 
-### 헬스체크
-
 ```bash
-curl http://localhost:8080/health
-```
-
-### GraphQL Playground
-
-브라우저에서 열기: http://localhost:8080/playground
-
-### 최신 인덱싱 높이
-
-```bash
-curl -s http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
+curl http://127.0.0.1:8080/health
+curl -s http://127.0.0.1:8080/graphql \
+  -H 'Content-Type: application/json' \
   -d '{"query":"{ latestHeight }"}'
-```
-
-### 블록 조회
-
-```bash
-curl -s http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ block(height: \"1\") { hash height time numTxs } }"}'
-```
-
-### 트랜잭션 조회
-
-```bash
-curl -s http://localhost:8080/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ transaction(hash: \"0xabc...\") { hash from to value } }"}'
-```
-
-### JSON-RPC 조회
-
-```bash
-curl -s http://localhost:8080/rpc \
-  -H "Content-Type: application/json" \
+curl -s http://127.0.0.1:8080/rpc \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"getLatestHeight","params":{},"id":1}'
 ```
 
----
+GraphQL Playground는 `/playground`다. 최근 시작 높이 이전의 블록을 조회할 수 있다고 가정하지 않는다. API 필드와 REST·구독 경로는 [API 안내](API.md)에 있다.
 
-## 5. 로컬 개발 (Anvil)
+## 5. 운영 역할·멀티체인·데이터 관리
 
-[Anvil](https://book.getfoundry.sh/anvil/)을 사용한 로컬 개발:
+- API를 분리하려면 PostgreSQL과 `node.role: ingest`/`api` 구성을 사용한다. Pebble은 `all`/`ingest`만 지원한다.
+- 멀티체인은 현재 `all` 역할만 지원하며 API가 `/chains/{id}/` 아래에 열린다. 실제 동시 운영 검증은 남은 작업이다.
+- `--reindex`와 `--clear-data`는 데이터를 삭제하는 동작이다. 적용 범위·보존 데이터는 [CONFIG의 데이터 관리](CONFIG.md#data-management)를 확인하고 대상 DB와 재수집 가능한 범위를 먼저 정한다.
+- 외부 배포·새 태그·원격 branch 삭제는 이번 문서 정리의 실행 범위가 아니다. 사용자 승인이 필요하다.
 
-```bash
-# Terminal 1: Anvil 실행
-anvil --block-time 2
-
-# Terminal 2: Anvil 설정으로 인덱서 실행
-./build/indexer-go --config configs/config-anvil.yaml
-
-# Terminal 3: 테스트 트랜잭션 전송
-cast send \
-  --from 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-  0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
-  --value 1ether \
-  --rpc-url http://127.0.0.1:8545
-```
-
----
-
-## 6. Ethereum Sepolia 테스트넷
-
-```bash
-./build/indexer-go --config configs/config-sepolia.yaml
-```
-
----
-
-## 7. Docker
-
-```bash
-# 빌드
-docker build -t indexer-go:latest .
-
-# 실행
-docker run -d \
-  --name indexer-go \
-  -p 8080:8080 \
-  -v $(pwd)/data:/data \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  indexer-go:latest
-```
-
-### Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  indexer:
-    image: indexer-go:latest
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/data
-      - ./config.yaml:/app/config.yaml
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-```
-
----
-
-## 8. 프로덕션 배포
-
-```bash
-# systemd 서비스 설치
-sudo cp build/indexer-go /opt/indexer-go/bin/
-sudo cp deployments/systemd/indexer-go.service /etc/systemd/system/
-sudo mkdir -p /etc/indexer-go
-sudo cp config.yaml /etc/indexer-go/
-
-# 서비스 시작
-sudo systemctl daemon-reload
-sudo systemctl enable indexer-go
-sudo systemctl start indexer-go
-
-# 상태 확인
-sudo systemctl status indexer-go
-curl http://localhost:8080/health
-```
-
----
-
-## 9. 데이터 관리
-
-```bash
-# 재인덱싱 (ABI, 검증 데이터 보존)
-./build/indexer-go --config config.yaml --reindex
-
-# 전체 초기화
-./build/indexer-go --config config.yaml --clear-data
-```
-
----
-
-## 10. 지원 네트워크
-
-| Network | Adapter | Chain ID | Config |
-|---------|---------|----------|--------|
-| Anvil (로컬) | anvil | 31337 | `configs/config-anvil.yaml` |
-| Ethereum Sepolia | evm | 11155111 | `configs/config-sepolia.yaml` |
-| Stable-One | stableone | custom | `config.yaml` |
-| 기타 EVM 체인 | auto-detect | any | 커스텀 config |
-
----
-
-## Next Steps
-
-- [ARCHITECTURE.md](ARCHITECTURE.md) — 시스템 아키텍처 및 코드 구조
-- [API.md](API.md) — GraphQL, JSON-RPC, WebSocket API 레퍼런스
-- [CONFIG.md](CONFIG.md) — 전체 설정 옵션
+Docker·systemd 스크립트는 저장소에 있지만, 이 문서 정리에서 실제 배포를 검증하거나 실행하지 않았다. 운영 구성은 [남은 작업](analysis/open-items.md)의 R03/R04에서 확정한다. 사용자의 기존 노드·컨테이너를 이 안내의 실행 전제로 재설정하지 않는다.
