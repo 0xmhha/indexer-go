@@ -21,7 +21,9 @@ import (
 	"github.com/0xmhha/indexer-go/internal/logger"
 	"github.com/0xmhha/indexer-go/pkg/api"
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	_ "github.com/0xmhha/indexer-go/pkg/chains/arc"                                // Arc USDC-native chain profile
 	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"                                // generic EVM chain profile
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stable"                             // Stable consensus-hash RPC profile
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet"                          // StableNet chain profile
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus/api"            // StableNet WBFT consensus API
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/feedelegation"   // stablenet.fee_delegation feature

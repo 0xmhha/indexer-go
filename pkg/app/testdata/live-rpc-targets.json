@@ -19,5 +19,19 @@
     "chain_id": 11155111,
     "profile": "evm",
     "blocks": 1
+  },
+  {
+    "name": "Arc testnet",
+    "endpoint": "https://rpc.testnet.arc.io",
+    "chain_id": 5042002,
+    "profile": "arc",
+    "blocks": 3
+  },
+  {
+    "name": "Stable testnet",
+    "endpoint": "https://rpc.testnet.stable.xyz",
+    "chain_id": 2201,
+    "profile": "stable",
+    "blocks": 3
   }
 ]

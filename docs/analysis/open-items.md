@@ -109,6 +109,36 @@ main `47b5363`의 `TestDEXReorg`, `TestDEXReorgWithoutOutbox`를 `go test -race 
 
 변경 후 `gofmt -l`, `make build`, `make lint`, `make test-race`, `make test-postgres`, `make test-examples`, `make test-slo`가 모두 통과했다. 최근 시작 높이 회귀 시험은 `-race -count=200`과 `-race -cpu=1 -count=200` 각각 통과했다. SLO는 읽는 구독자만 있는 조건의 p99 중앙값 105.9ms, 읽지 않는 구독자 1%를 포함한 조건 106.8ms(+1%)로 기준 이내였고, fast stream 알림 p99는 노드 기준 14.2ms, fast path 기준 6.9ms였다. 시험 전용 PostgreSQL 컨테이너의 정리와 기존 컨테이너의 보존도 확인했다.
 
+### 3.5 10/13 Arc·Stable 추가와 공개 RPC PostgreSQL 검증
+
+사용자가 Arc·Stable 추가와 다음 작업 진행을 요청했다. Arc는 Circle의 USDC 네이티브 체인, Stable은 USDT0 네이티브 체인으로 해석해 테스트넷을 추가했다. 공식 [Arc 연결 문서](https://docs.arc.io/arc/references/connect-to-arc)와 [Stable 연결 문서](https://docs.stable.xyz/en/reference/connect/)의 RPC와 chain id를 사용했다. 기존 3.4절의 StableNet(8283)과 Stable(2201)은 각각 별도의 profile이다.
+
+**[중요][High] Stable 합의 해시와 시스템 거래의 차이를 확인했다.** 블록 72,432,091의 해시는 Ethereum RLP 계산과 달랐다. Stable의 CometBFT 합의 구조 및 [Cosmos EVM의 RPCMarshalHeader/RPCMarshalBlock](https://github.com/cosmos/evm/blob/main/rpc/types/utils.go)은 합의 블록 해시를 Ethereum 형태 RPC에 싣는다. `stable` profile에서 이 RPC 합의 해시를 보존하며 거래의 blockHash가 그 해시와 같은지도 확인한다. 이 profile은 Ethereum RLP 블록 해시를 재계산하지 않으며 CometBFT 합의 증명을 검증하는 구현은 아니다. RLP에서 합의 해시를 복원할 수 없으므로 BinaryProfile을 구현하지 않는다. 다른 체인의 Ethereum 헤더 검사는 유지한다.
+
+같은 블록에는 서명 v/r/s가 0인 type 2 시스템 거래가 있었다. [StableSystem 공식 문서](https://docs.stable.xyz/en/reference/system-transactions-api/)의 `notifySystemTxLogs()` selector `0xe8e983b7`, 대상 `0x9999`와 일치한다. 문서는 예약된 발신자를 address(1)로 설명하지만 이번 testnet 응답은 `0x8888…8888`을 보고했다. 배포 버전이 왜 다른지는 확인하지 않았다. 두 예약 발신자를 지원하되 시스템 호출의 유형·대상·selector·chain id·zero signature·zero fee/value·블록 높이와 nonce를 검사하고 Ethereum 거래 해시도 검증한다. 서명으로 sender를 복원할 수 없는 시스템 거래는 `Opaque`로 표시한다. 정상 사용자 거래는 sender 복원과 hash 검사를 유지하고 변조하면 실패한다. 실제 Stable 블록 fixture로 재현·저장 round trip·잘못된 시스템 거래 거부를 검증했다.
+
+**[중요][High] Arc에서 기본 회계의 잔액 불일치를 발견해 수정했다.** 기존 Ethereum 회계로 66,904,957~66,904,959를 색인하면 16개 계정의 17개 블록 잔액 중 8개 계정에서 노드와 달랐다. [Arc USDC system events](https://docs.arc.io/arc/references/usdc-system-events)에 따라 18자리 네이티브 Transfer와 6자리 ERC-20 Transfer를 구분해야 하며, tx.value도 다시 더하면 중복이다. 또 표본에서 블록 생성자의 차이는 baseFee×gasUsed와 정확히 같았다(블록 66,904,957: 11,390,580,000,000,000). `arc` profile은 시스템 이벤트(Zero5 전 legacy authority 이벤트 포함)로 네이티브 이동을 읽고 execution gas fee 전액을 block.miner에 지급한다. 네이티브 emitter는 ERC-20 색인·토큰 알림에서 제외한다. 수정 후 66,906,252~66,906,254의 21개 계정, 23개 블록 잔액 대조가 통과했다. 최초 실패 블록의 원본과 별도로 조회한 12개 주소의 전후 잔액을 fixture로 고정해 회계 회귀를 검증했고, 18/6자리 중복 및 legacy mint/burn도 시험한다. 이것은 관찰한 testnet 표본의 검증이며 mainnet이나 모든 업그레이드의 증명은 아니다.
+
+| 저장소 / 체인 | 블록 | 거래 / 로그 | 결과 |
+|---|---|---|---|
+| Pebble / Arc (전용 회계 추가 전 core 검증) | 66,904,261~66,904,263 | 15 / 52 | 색인·API·replay 통과 |
+| Pebble / Stable | 72,436,516~72,436,518 | 3 / 0 | genesis 시작 거부, 최근 시작·색인·API·replay 통과. 거래는 시스템 호출 |
+| PostgreSQL / StableNet | 22,179,019~22,179,021 | 0 / 0 | 색인·API·replay 통과 |
+| PostgreSQL / BSC | 136,454,979~136,454,986 | 15 / 33 | genesis 시작 거부, 최근 시작·색인·API·replay 통과 |
+| PostgreSQL / Sepolia | 11,902,519 | 172 / 442 | genesis 시작 거부, 최근 시작·색인·API·replay 통과 |
+| PostgreSQL / Arc (전용 회계 추가 전 core 검증) | 66,904,542~66,904,544 | 16 / 44 | 색인·API·replay 통과 |
+| PostgreSQL / Stable | 72,436,708~72,436,710 | 3 / 0 | genesis 시작 거부, 최근 시작·색인·API·replay 통과 |
+| PostgreSQL / Arc (최종 arc profile) | 66,909,300~66,909,302 | 25 / 47 | 전용 회계 포함 색인·API·replay 통과 |
+| PostgreSQL / Stable (최종 stable profile) | 72,440,074~72,440,076 | 3 / 0 | genesis 시작 거부, 최근 시작·색인·API·replay 통과 |
+
+PostgreSQL로도 실제 공개 RPC를 색인하고 기록을 offline replay한 저장 내용이 일치하는지 확인했다. 각 저장소 안에서 기록/재생을 비교했으며, 서로 다른 시간에 고른 Pebble·PostgreSQL 범위끼리 같은 데이터라고 비교한 것은 아니다. 검증은 전용 임시 컨테이너만 사용했고 정리와 기존 컨테이너 보존을 확인했다. 재현 명령은 `scripts/test-postgres.sh ./pkg/app -v -timeout 15m -run '^TestLiveRPCFramework$' -args -live-rpc-targets=<absolute path to pkg/app/testdata/live-rpc-targets.json>`이다.
+
+기존 generic EVM profile로 Arc를 색인한 DB에는 잘못된 native balance와 ERC-20으로 분류한 system transfer가 남을 수 있다. 이번 변경은 이미 쓴 데이터를 자동 수정하지 않는다. 해당 데이터가 있는 DB는 새 arc profile로 재색인해야 한다. 실제 운영 DB는 읽거나 변경하지 않았다.
+
+최종 코드의 gofmt, build, lint, full race, PostgreSQL 전체 시험, 예제, SLO 검사가 모두 통과했다. 최종 race의 pkg/app은 318.2초, PostgreSQL pkg/app은 150.0초였다. SLO p99 중앙값은 readers only 105.7ms, non-readers 포함 101.6ms(-4%), fast stream p99는 node 기준 4.5ms, fast path 기준 0.8ms였다. 새 동시성 시험은 추가하지 않았다.
+
+**확인하지 않은 것:** Arc·Stable mainnet, Arc의 Zero5 이전 전체 역사 구간의 실제 잔액(legacy 이벤트 디코딩은 로컬 시험으로 확인), Stable의 일반 사용자 거래가 포함된 실체인 표본(서명 검증은 로컬 시험으로 확인), Stable의 Cosmos bank·분배·보상·USDT0 fractional reconciliation을 포함한 전체 잔액 회계, CometBFT 합의 증명, 운영 설정·시작 높이, 여러 체인의 동시 운영. Stable 회계는 현재 generic Ethereum fallback이라 이 영역의 정확성을 보장하지 않는다. 새 profile을 쓴다고 이 미검증 영역까지 지원된다고 해석하지 않는다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.
