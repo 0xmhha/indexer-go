@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Arc testnet",
+    "endpoint": "https://rpc.testnet.arc.io",
+    "chain_id": 5042002,
+    "profile": "arc",
+    "blocks": 100
+  }
+]

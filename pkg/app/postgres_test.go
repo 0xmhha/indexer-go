@@ -103,6 +103,13 @@ func TestPostgresMatchesPebble(t *testing.T) {
 // statistics reads, plus the lists and the chain packages' key-value data.
 // Each read is keyed by what it asked, its result encoded as JSON.
 func dumpPorts(t *testing.T, s storage.Storage) map[string]string {
+	return dumpPortsFrom(t, s, 0)
+}
+
+// dumpPortsFrom bounds block reads to the indexed range, including recent
+// recordings whose first block is far above genesis. Token balances are
+// omitted above genesis: that query walks every height starting at zero.
+func dumpPortsFrom(t *testing.T, s storage.Storage, from uint64) map[string]string {
 	t.Helper()
 	ctx := context.Background()
 	out := map[string]string{}
@@ -134,7 +141,7 @@ func dumpPorts(t *testing.T, s storage.Storage) map[string]string {
 	addrs := map[common.Address]bool{}
 	tokens := map[common.Address]bool{}
 	var txs []common.Hash
-	for h := uint64(0); h <= head; h++ {
+	for h := from; h <= head; h++ {
 		b, err := s.GetBlock(ctx, h)
 		put(fmt.Sprintf("block/%d", h), b, err)
 		if err != nil {
@@ -183,7 +190,7 @@ func dumpPorts(t *testing.T, s storage.Storage) map[string]string {
 		ops, err := s.GetUserOpsByTx(ctx, h)
 		put("useropsByTx/"+h.Hex(), ops, err)
 	}
-	logs, err := s.GetLogs(ctx, &port.LogFilter{FromBlock: 0, ToBlock: head})
+	logs, err := s.GetLogs(ctx, &port.LogFilter{FromBlock: from, ToBlock: head})
 	put("logs", logs, err)
 
 	sorted := make([]common.Address, 0, len(addrs))
@@ -203,11 +210,13 @@ func dumpPorts(t *testing.T, s storage.Storage) map[string]string {
 		put("balanceHistory/"+k, hist, err)
 		stats, err := s.GetAddressStats(ctx, a)
 		put("addressStats/"+k, stats, err)
-		gas, err := s.GetGasStatsByAddress(ctx, a, 0, head)
+		gas, err := s.GetGasStatsByAddress(ctx, a, from, head)
 		put("gasByAddress/"+k, gas, err)
-		tb, err := s.GetTokenBalances(ctx, a, "")
-		sort.Slice(tb, func(i, j int) bool { return tb[i].ContractAddress.Hex() < tb[j].ContractAddress.Hex() })
-		put("tokenBalances/"+k, tb, err)
+		if from == 0 {
+			tb, err := s.GetTokenBalances(ctx, a, "")
+			sort.Slice(tb, func(i, j int) bool { return tb[i].ContractAddress.Hex() < tb[j].ContractAddress.Hex() })
+			put("tokenBalances/"+k, tb, err)
+		}
 		abi, err := s.GetABI(ctx, a)
 		put("abi/"+k, abi, err)
 		verified, err := s.IsContractVerified(ctx, a)
@@ -238,9 +247,13 @@ func dumpPorts(t *testing.T, s storage.Storage) map[string]string {
 			for _, from := range []bool{true, false} {
 				it, _, err := ai.GetInternalTransactionsByAddress(ctx, a, from, all)
 				put(fmt.Sprintf("internalByAddress/%s/%v", k, from), it, err)
-				e20, _, err := ai.GetERC20TransfersByAddress(ctx, a, from, all)
+				e20, err := readPortPages(func(page port.Page) ([]*port.ERC20Transfer, string, error) {
+					return ai.GetERC20TransfersByAddress(ctx, a, from, page)
+				})
 				put(fmt.Sprintf("erc20ByAddress/%s/%v", k, from), e20, err)
-				e721, _, err := ai.GetERC721TransfersByAddress(ctx, a, from, all)
+				e721, err := readPortPages(func(page port.Page) ([]*port.ERC721Transfer, string, error) {
+					return ai.GetERC721TransfersByAddress(ctx, a, from, page)
+				})
 				put(fmt.Sprintf("erc721ByAddress/%s/%v", k, from), e721, err)
 			}
 			nfts, _, err := ai.GetNFTsByOwner(ctx, a, all)
@@ -260,9 +273,13 @@ func dumpPorts(t *testing.T, s storage.Storage) map[string]string {
 	for tok := range tokens {
 		k := tok.Hex()
 		if ai, ok := s.(port.AddressIndexReader); ok {
-			e20, _, err := ai.GetERC20TransfersByToken(ctx, tok, all)
+			e20, err := readPortPages(func(page port.Page) ([]*port.ERC20Transfer, string, error) {
+				return ai.GetERC20TransfersByToken(ctx, tok, page)
+			})
 			put("erc20ByToken/"+k, e20, err)
-			e721, _, err := ai.GetERC721TransfersByToken(ctx, tok, all)
+			e721, err := readPortPages(func(page port.Page) ([]*port.ERC721Transfer, string, error) {
+				return ai.GetERC721TransfersByToken(ctx, tok, page)
+			})
 			put("erc721ByToken/"+k, e721, err)
 		}
 		if th, ok := s.(port.TokenHolderIndexReader); ok {
@@ -300,14 +317,20 @@ func dumpPorts(t *testing.T, s storage.Storage) map[string]string {
 		stats, _, err := mi.ListModuleStats(ctx, all)
 		put("moduleStatsList", stats, err)
 	}
-	gas, err := s.GetGasStatsByBlockRange(ctx, 0, head)
+	gas, err := s.GetGasStatsByBlockRange(ctx, from, head)
 	put("gasStats", gas, err)
-	miners, err := s.GetTopMiners(ctx, 100, 0, 0)
+	miners, err := s.GetTopMiners(ctx, 100, from, head)
 	put("topMiners", sortMiners(miners), err)
-	topGas, err := s.GetTopAddressesByGasUsed(ctx, 100, 0, head)
+	topLimit := 100
+	if from > 0 {
+		// A cutoff inside a tied rank can pick different accounts on each
+		// read. Compare the complete ranking of the bounded recording.
+		topLimit = max(topLimit, len(sorted))
+	}
+	topGas, err := s.GetTopAddressesByGasUsed(ctx, topLimit, from, head)
 	sort.SliceStable(topGas, func(i, j int) bool { return topGas[i].Address.Hex() < topGas[j].Address.Hex() })
 	put("topGas", topGas, err)
-	topTx, err := s.GetTopAddressesByTxCount(ctx, 100, 0, head)
+	topTx, err := s.GetTopAddressesByTxCount(ctx, topLimit, from, head)
 	sort.SliceStable(topTx, func(i, j int) bool { return topTx[i].Address.Hex() < topTx[j].Address.Hex() })
 	put("topTxCount", topTx, err)
 	blocks, _, err := s.GetBlocksByTimeRange(ctx, 0, math.MaxUint64, all)
@@ -336,6 +359,29 @@ func dumpPorts(t *testing.T, s storage.Storage) map[string]string {
 		}
 	}
 	return out
+}
+
+// readPortPages compares transfer contents across drivers with different
+// maximum page sizes. It follows each opaque cursor instead of assuming a
+// request for 1,000 items returns the whole list.
+func readPortPages[T any](read func(port.Page) ([]T, string, error)) ([]T, error) {
+	page := port.FirstPage(100)
+	seen := map[string]bool{}
+	var all []T
+	for {
+		items, next, err := read(page)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+		if next == "" {
+			return all, nil
+		}
+		if seen[next] {
+			return nil, fmt.Errorf("transfer pagination repeated a cursor")
+		}
+		seen[next], page.After = true, next
+	}
 }
 
 // isStoreKeyspace reports whether a keyspace is the Pebble store's own

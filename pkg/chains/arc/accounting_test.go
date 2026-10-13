@@ -3,6 +3,7 @@ package arc_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"os"
 	"testing"
@@ -20,19 +21,32 @@ import (
 // were fetched from rpc.testnet.arc.io on 2026-10-13, independently of
 // the accounting implementation. Ethereum's rules failed on this block.
 func TestLiveBalanceOracle(t *testing.T) {
+	checkBalanceOracle(t, 66904957)
+}
+
+// Independent before/after node states collected on 2026-10-14 cover
+// current system-emitter mint, burn, non-top-level moves and failed fees.
+func TestExpandedBalanceOracles(t *testing.T) {
+	for _, height := range []uint64{67017992, 67018549, 67018552, 67018564} {
+		t.Run(fmt.Sprint(height), func(t *testing.T) { checkBalanceOracle(t, height) })
+	}
+}
+
+func checkBalanceOracle(t *testing.T, height uint64) {
+	t.Helper()
 	p := arc.New()
-	raw, err := os.ReadFile("testdata/block-66904957.json")
+	raw, err := os.ReadFile(fmt.Sprintf("testdata/block-%d.json", height))
 	require.NoError(t, err)
 	b, err := p.DecodeBlock(raw)
 	require.NoError(t, err)
-	raw, err = os.ReadFile("testdata/receipts-66904957.json")
+	raw, err = os.ReadFile(fmt.Sprintf("testdata/receipts-%d.json", height))
 	require.NoError(t, err)
 	rs, err := p.DecodeReceipts(raw)
 	require.NoError(t, err)
 	deltas, err := chains.AccountingOf(p).NativeDeltas(context.Background(), b, rs, nil)
 	require.NoError(t, err)
 	got := totals(deltas)
-	raw, err = os.ReadFile("testdata/balances-66904957.json")
+	raw, err = os.ReadFile(fmt.Sprintf("testdata/balances-%d.json", height))
 	require.NoError(t, err)
 	var balances map[common.Address]struct{ Before, After string }
 	require.NoError(t, json.Unmarshal(raw, &balances))

@@ -1,4 +1,4 @@
-# 작업 결정·검증 기록 (2026-10-09~13)
+# 작업 결정·검증 기록 (2026-10-09~14)
 
 이 문서는 당시의 문제·선택지·결정·측정 결과를 보존한 기록이다. 결정 전 상태와 결정 후 결과가 함께 들어 있다. 현재 범위와 남은 작업은 [open-items.md](open-items.md), 현재 구조는 [ARCHITECTURE.md](../ARCHITECTURE.md)를 따른다. Stable 관련 구현 기록은 과거 사실이며 현재 지원 범위가 아니다.
 
@@ -166,6 +166,24 @@ PostgreSQL로도 실제 공개 RPC를 색인하고 기록을 offline replay한 �
 최종 gofmt/build/root lint/전체 race/PostgreSQL/예제 검증은 모두 통과했다(전체 race pkg/app 423.5초, PostgreSQL app 150.2초). 별도 예제 모듈의 race/lint와 실제 바이너리 빌드도 통과했다. 첫 전체 실행의 구조 검사 실패는 예제 내부에서 해결했고 검사 코드나 허용 예산을 바꾸지 않았다. 새 동시성 시험이나 SLO/알림/부하 경로 변경은 없다.
 
 이번 예제는 공개 RPC를 다시 색인하거나 새 회계 알고리즘·고유 거래 타입·운영 기능을 추가하지 않는다. 실제 바이너리의 빌드는 확인하지만 실노드 실행, JSON/binary 동일 데이터 대조, mainnet, 전체 회계·동시 운영까지 새로 검증한 것으로 해석하지 않는다. 다음 작업은 3.6절의 Arc 회계 표본 확대와 같은 RPC 기록의 Pebble/PostgreSQL 대조다.
+
+### 3.8 10/14 Arc 회계 표본 확대·동일 RPC 저장소 대조
+
+R01을 수행했다. 운영 회계·저장소·API·SDK 코드는 변경하지 않았다. Arc 전용 표본과 회계 회귀는 `pkg/chains/arc/testdata`와 `accounting_test.go`에, profile과 무관한 기록/재생 비교 도구는 `pkg/app/rpc_parity_test.go`에 둔다. 공통 코어에 체인 조건문이나 새 인터페이스를 더하지 않는다.
+
+Arc testnet RPC `https://rpc.testnet.arc.io`(5042002)에서 66,917,992 / 66,918,549 / 66,918,552 / 66,918,564의 block·receipt와 각 블록 전후 `eth_getBalance` 응답을 독립적으로 수집했다. 각각 19 / 13 / 10 / 13개 주소, 총 55개 계정/블록 델타가 회계 출력과 일치했다. mint 2건, burn 1건, 실패 거래의 gas 지불, miner의 base fee 포함 전체 execution fee, 최상위 거래의 from/to와 다른 native 이동이 포함된다. balance feature가 잘못된 잔액을 노드 값으로 reset하기 **전**의 델타를 검증한다. [표본 설명](../../pkg/chains/arc/testdata/README.md)에 범위와 수집 방법이 있다.
+
+별도의 연속 구간 66,919,625~66,919,724(100블록)을 production `NewApp` 기본 기능으로 색인했다. 600개 거래(실패 101개), 1,436개 로그, native transfer 430건과 burn 1건을 포함한다. 블록·거래·receipt·로그·GraphQL/JSON-RPC 블록 해시를 확인했다. 461개 계정의 980개 블록별 마지막 잔액이 같은 높이의 노드 상태와 일치했다. 이 구간에는 mint가 없으며 위 고정 표본에서 별도로 검증했다.
+
+한 번 확보한 RPC 응답을 새 Pebble과 PostgreSQL DB에 각각 재생해 25,118개 port 조회가 일치했고, 어느 재생도 미기록 RPC 호출을 요구하지 않았다. PostgreSQL은 이 작업만의 임시 컨테이너(`fsync=on`)를 사용했다. 비교는 model codec의 블록·거래·receipt·로그, native balance/history, 주소·transfer·holder·AA·조회 통계 등 helper의 조회 결과다. 서로 다른 물리적 keyspace나 outbox/undo 내부 형식을 동일하다고 비교하지 않는다. 범위 없는 `GetTokenBalances`는 genesis부터 순회하므로 최근 높이 비교에서 제외한다. Transfer 목록은 저장소별 최대 페이지 크기 차이(Pebble 100)에 기대지 않고 커서로 끝까지 읽는다. 다른 list 조회는 helper의 지정된 한 페이지/최근 목록 범위다.
+
+처음에는 공개 RPC의 일시적인 응답 오류와 429 때문에 실행이 중단됐다. 색인뿐 아니라 블록 식별자·잔액 확인도 recorder의 5 requests/s 제한을 공유하게 했다. 첫 재생 비교는 상위 100개의 동률 경계와 최대 transfer 페이지 크기 차이로 실패했다. 통계의 전체 순위와 커서로 읽은 transfer 내용을 대조하도록 **시험 도구**를 수정한 뒤, 확보한 동일 RPC 기록으로 오프라인 재실행해 통과했다. 운영 API의 정렬·페이지 크기는 변경하지 않았다.
+
+재실행은 `INDEXER_TEST_POSTGRES`가 지정된 테스트 DB에서 수행한다. live 표본: `go test -count=1 -v -timeout 15m -run '^TestLiveRPCStorageParity$' ./pkg/app -args -live-rpc-targets=testdata/live-rpc-accounting-targets.json -rpc-parity-balances`. 보유한 연속 기록: `TestRPCArchiveStorageParity`에 `-rpc-parity-archive`와 필요하면 `-rpc-parity-balances`를 준다. archive manifest는 100블록 이내의 연속 색인 구간이어야 하며, 다른 높이의 context 블록이 섞인 기록은 이 입력으로 사용하지 않는다. 일반 실행·CI는 live/보유 archive 플래그가 없으면 외부 호출 없이 건너뛴다. 로컬 `TestRecordedRPCStorageParity`는 외부 노드 없이 같은 비교 경로를 검사한다.
+
+**확인하지 않은 것:** 전체 역사·Zero5 이전 실노드 회계, SELFDESTRUCT와 모든 fork 규칙, mainnet, 여러 체인의 동시 운영, 실제 운영 설정과 기존 Arc DB, 공개 RPC 노드의 물리적 full/archive 구성과 전체 상태 보존 범위. 표본의 endpoint 차이를 실행 trace로 입증한 것은 아니다. 체인 트랜잭션 전송·외부 배포·운영 DB 변경을 하지 않았다.
+
+최종 gofmt/build/lint/전체 race/기본 PostgreSQL 전체 시험/예제가 모두 통과했다. 새 로컬 기록·재생 경로의 별도 race 시험도 통과했다. 동시 실행 중에는 PostgreSQL 전체 시험의 10분 제한과 기존 1,500블록 backfill 시험의 30초 대기 실패, 전체 race의 앱 시험 실패가 관찰됐다. 해당 race 실패의 세부 원인은 확인하지 못했다. 최종 필수 시험은 각각 단독으로 재실행해 통과했으며 시험 판정 기준이나 운영 구현은 바꾸지 않았다. 새 동시성 시험은 추가하지 않았고 SLO·알림·부하 경로 변경이 없어 추가 SLO 실행은 하지 않았다.
 
 ## 4. 저장소 관리
 
