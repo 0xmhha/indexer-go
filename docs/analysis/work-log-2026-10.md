@@ -185,6 +185,31 @@ Arc testnet RPC `https://rpc.testnet.arc.io`(5042002)에서 66,917,992 / 66,918,
 
 최종 gofmt/build/lint/전체 race/기본 PostgreSQL 전체 시험/예제가 모두 통과했다. 새 로컬 기록·재생 경로의 별도 race 시험도 통과했다. 동시 실행 중에는 PostgreSQL 전체 시험의 10분 제한과 기존 1,500블록 backfill 시험의 30초 대기 실패, 전체 race의 앱 시험 실패가 관찰됐다. 해당 race 실패의 세부 원인은 확인하지 못했다. 최종 필수 시험은 각각 단독으로 재실행해 통과했으며 시험 판정 기준이나 운영 구현은 바꾸지 않았다. 새 동시성 시험은 추가하지 않았고 SLO·알림·부하 경로 변경이 없어 추가 SLO 실행은 하지 않았다.
 
+### 3.9 10/14 공개 RPC 멀티체인 동시 실행
+
+R02의 검증이다. 기존 `testdata/live-rpc-targets.json`의 네 공개 RPC를 production `NewApp` 한 프로세스에 연결했다. 체인 데이터·합의 형식·회계는 기존 profile을 자동 선택했으며 공통 코어에 chain-id 분기를 더하지 않았다. 로컬 제어 proxy는 광고하는 head만 단계적으로 공개하고 한 체인에 HTTP 503을 주입했다. 블록·receipt·상태는 실제 공개 노드에서 읽었고, proxy마다 5 requests/s를 적용했다. 체인에 거래를 보내거나 외부 배포·운영 DB 변경을 하지 않았다.
+
+| 테스트넷 / profile | 최근 구간 | 거래 | 로그 |
+|---|---|---:|---:|
+| StableNet 8283 / `stablenet` | 22,253,852~22,253,854 | 0 | 0 |
+| BSC 97 / `evm` | 136,621,269~136,621,276 | 11 | 28 |
+| Sepolia 11155111 / `evm` | 11,908,739~11,908,741 | 346 | 596 |
+| Arc 5042002 / `arc` | 67,051,866~67,051,868 | 15 | 30 |
+
+총 17블록·372거래·654로그를 원본 RPC의 hash·위치·receipt·로그와 대조했다. 각 DB에 다른 체인의 블록 hash가 없고, `/chains/<id>/`의 GraphQL/JSON-RPC/REST가 그 체인의 블록을 반환함을 확인했다. production 기능 기본값에서 첫 체인의 `token.transfers`만 끄는 시험용 override를 적용했고 다른 체인의 기능은 유지됐다. 체인별로 같은 API key의 독립된 STREAM 설정을 만들고 durable BLOCK 알림의 설정 ID·chain ID·번호·hash를 대조했다. 거래가 없는 StableNet 구간도 블록 알림으로 검사했다.
+
+첫 블록을 색인한 뒤 StableNet proxy를 차단한 동안 BSC·Sepolia·Arc가 마지막에서 하나 전 블록까지 진행했다. StableNet의 health는 실패를 보고하고 저장 높이는 그대로였으며, 복구 후 다른 체인과 함께 따라잡았다. 전체 프로세스를 종료하고 같은 DB·알림 설정으로 다시 시작해 stream을 재연결한 뒤 마지막 블록을 공개했다. 저장 설정·profile·기능 override를 유지했고 마지막 알림은 자기 체인의 다음 블록이었다. 이는 한 프로세스의 동시 파이프라인 검증이며 이전 순차 시험을 재사용한 결과가 아니다.
+
+별도로 자동 재시작 코드가 성공한 `Start`에 사용한 컨텍스트를 즉시 취소하는 오류를 로컬 회귀 시험으로 재현했다. 새 파이프라인의 수명을 manager의 컨텍스트에 연결하고, restart delay 계산의 오류 시각을 lock 아래에서 읽게 했다. RPC 호출의 설정된 timeout은 유지한다. 공개 RPC의 일시적인 503은 기존 fetch loop의 재시도로 복구했고, 이 fatal pipeline 자동 재시작 회귀와 구별한다.
+
+초기 시험은 fast BLOCK 설정으로 알림을 기다려 실패했다. 기존 fast 경로는 거래·로그를 지원하므로 durable BLOCK 경로를 사용했다. 첫 공개 실행은 다른 체인의 색인을 기다리며 stream을 읽지 않아 ping/pong이 멈추고 연결이 끊겼다. 네 stream을 계속 읽는 클라이언트로 보완했다. 다음 실행은 BSC의 프로세스 재시작 준비 대기에서 시간 초과했다. 당시 실제 오류의 원인은 확정하지 못했고, 진단을 추가한 후 다른 최근 구간으로 재실행해 모든 검사에 통과했다. 노드의 상태 보존 문제로 단정하거나 자동 재시작 수정이 그 시간 초과를 해결했다고 주장하지 않는다.
+
+재실행: `go test -count=1 -v -timeout 12m -run '^TestLiveRPCMultiChainIsolation$' ./pkg/app -args -live-rpc-targets=testdata/live-rpc-targets.json`. 최소 두 target, 체인당 최소 3·최대 100 최근 블록이다. `TestControlledRPCMultiChainIsolation`은 서로 다른 ID/hash의 로컬 EVM 노드 네 개로 같은 분리·장애·재시작 시험을 수행하며 일반 시험과 PostgreSQL 시험에 포함된다. 공개 RPC 검증의 저장소는 Pebble이다.
+
+최종 gofmt/build/lint/전체 race/PostgreSQL 전체 시험/예제/SLO가 통과했다. 새 자동 재시작·네 체인 동시성 시험은 각각 race 200회와 단일 CPU 200회에 통과했다. PostgreSQL의 앱 통합 시험에서도 네 로컬 체인의 같은 분리·장애·재시작 검사가 통과했다. 이 작업의 임시 PostgreSQL 컨테이너는 정리했다. 단일 호스트 SLO는 fast stream p99 노드 기준 12.8ms·fast path 기준 4.2ms, 1,000 구독자 부하의 반복별 p99 중앙값은 읽는 구독자만 145.8ms·1% 비독자 포함 96.8ms였다. 이를 운영 환경의 목표나 보장으로 바꾸지 않는다.
+
+**확인하지 않은 것:** 장기간의 움직이는 head 동시 운영, 네 공개 체인의 PostgreSQL 동시 실행, 운영 설정·실제 보존 범위·기존 Arc DB, 여러 호스트 SLO, mainnet·전체 역사·모든 fork 규칙과 native 잔액. 공개 노드의 물리적 full/archive 구성은 확인하지 않았다. R03의 full node 운영 설정 결정과 R04의 운영 측정은 남는다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.

@@ -302,11 +302,11 @@ func (m *Manager) checkAndRestartFailedChains() {
 
 	for _, instance := range errorChains {
 		// Wait for restart delay
-		if instance.lastErrorAt != nil {
-			elapsed := time.Since(*instance.lastErrorAt)
-			if elapsed < m.config.AutoRestartDelay {
-				continue
-			}
+		instance.statusMu.RLock()
+		waiting := instance.lastErrorAt != nil && time.Since(*instance.lastErrorAt) < m.config.AutoRestartDelay
+		instance.statusMu.RUnlock()
+		if waiting {
+			continue
 		}
 
 		m.logger.Info("auto-restarting failed chain",
@@ -318,8 +318,10 @@ func (m *Manager) checkAndRestartFailedChains() {
 		_ = instance.Stop(ctx)
 		cancel()
 
-		ctx, cancel = context.WithTimeout(m.ctx, 60*time.Second)
-		if err := instance.Start(ctx); err != nil {
+		// Start owns the pipeline's lifetime, not just its initialization.
+		// RPC calls have their own configured deadlines; canceling a startup
+		// timeout here would immediately stop a successfully restarted chain.
+		if err := instance.Start(m.ctx); err != nil {
 			m.logger.Error("failed to auto-restart chain",
 				zap.String("chainId", instance.Config.ID),
 				zap.Error(err),
@@ -329,7 +331,6 @@ func (m *Manager) checkAndRestartFailedChains() {
 				zap.String("chainId", instance.Config.ID),
 			)
 		}
-		cancel()
 	}
 }
 
