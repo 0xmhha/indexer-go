@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: Explorer backend in use; Phase 0 integrity fixes in progress (see `docs/analysis/`)
+- **Current Stage**: EVM framework refactoring complete; further validation and operational decisions remain (see current scope and remaining work in `docs/analysis/open-items.md`)
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context
@@ -137,7 +137,7 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 ### Testing
 
 - testify/assert, testify/require
-- Public RPC framework verification (opt-in): `go test -count=1 -v -timeout 15m -run '^TestLiveRPCFramework$' ./pkg/app -args -live-rpc-targets=testdata/live-rpc-targets.json`. The JSON file supplies arbitrary targets (`name`, `endpoint`, expected `chain_id`, optional `profile`, recent `blocks`, default 1, maximum 100). With the flag unset, no external RPC calls are made. The test uses production feature defaults, checks genesis startup rejection when the node reports missing state, indexes the recent range, compares block/transaction/receipt/log identities and API block hashes, then requires recorded RPC replay to produce identical storage. It sends no transactions. The state before and throughout the range must remain available; retention is node-specific. This is not a complete native-balance or fork-execution conformance test; see `docs/analysis/open-items.md` 3.4.
+- Public RPC framework verification (opt-in): `go test -count=1 -v -timeout 15m -run '^TestLiveRPCFramework$' ./pkg/app -args -live-rpc-targets=testdata/live-rpc-targets.json`. The JSON file supplies arbitrary targets (`name`, `endpoint`, expected `chain_id`, optional `profile`, recent `blocks`, default 1, maximum 100). With the flag unset, no external RPC calls are made. The test uses production feature defaults, checks genesis startup rejection when the node reports missing state, indexes the recent range, compares block/transaction/receipt/log identities and API block hashes, then requires recorded RPC replay to produce identical storage. It sends no transactions. The state before and throughout the range must remain available; retention is node-specific. This is not a complete native-balance or fork-execution conformance test; see `docs/analysis/work-log-2026-10.md` 3.4.
 - Integration tests: `//go:build integration` tag
 - End-to-end tests (`pkg/app`) run the real `NewApp` wiring against `pkg/testchain`:
   - `pkg/app/golden_test.go`: pins the full storage keyspace (`testdata/golden/keyspace.txt`, StableNet scenario `keyspace-stablenet.txt`); regenerate with `go test ./pkg/app -run TestGolden -update`
@@ -154,8 +154,8 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 ### Dependencies
 
 - Go 1.24, go-ethereum v1.16.5
-- Additional profile: `arc` detects Arc 5042/5042002, retains canonical EVM header/transaction verification, reads 18-decimal native USDC movements from the system emitter (legacy authority events before Zero5), and credits the miner with the full execution gas fee. Its native emitter is excluded from ERC-20 transfer indexing and token-transfer notifications; the 6-decimal USDC ERC-20 interface remains separate. Databases previously indexed as generic EVM need reindexing to correct those balances and transfer records. Mainnet was not tested; detailed testnet results are in `docs/analysis/open-items.md` 3.5.
-- Scope decision (10/13): focus on EVM chains. The Stable 988/2201 profile and public RPC target were removed; its CometBFT hash trust and unsigned system-call exceptions are not part of the supported implementation. StableNet 8283 is a separate EVM chain and remains supported. Historical Stable results in open-items 3.5 are retained as evidence, not current support. Chain-specific decoding, accounting and optional features stay under `pkg/chains/<chain>` and connect through existing registries/interfaces; the shared core must not gain chain-id branches.
+- Additional profile: `arc` detects Arc 5042/5042002, retains canonical EVM header/transaction verification, reads 18-decimal native USDC movements from the system emitter (legacy authority events before Zero5), and credits the miner with the full execution gas fee. Its native emitter is excluded from ERC-20 transfer indexing and token-transfer notifications; the 6-decimal USDC ERC-20 interface remains separate. Databases previously indexed as generic EVM need reindexing to correct those balances and transfer records. Mainnet was not tested; detailed testnet results are in `docs/analysis/work-log-2026-10.md` 3.5.
+- Scope decision (10/13): focus on EVM chains. The Stable 988/2201 profile and public RPC target were removed; its CometBFT hash trust and unsigned system-call exceptions are not part of the supported implementation. StableNet 8283 is a separate EVM chain and remains supported. Historical Stable results in work-log-2026-10.md 3.5 are retained as evidence, not current support. Chain-specific decoding, accounting and optional features stay under `pkg/chains/<chain>` and connect through existing registries/interfaces; the shared core must not gain chain-id branches.
 - EVM headers with `blockAccessListHash` (EIP-7928) and `slotNumber` (EIP-7843) are hashed with their canonical RLP suffix in both JSON and binary sources and retained in the model's `evm.header` extension (`evm.HeaderFieldsOf`). Go and geth versions are unchanged. Custom header hash profiles reject these extra fields until they implement their own matching layout. The legacy geth header view omits the suffix; use the model hash and extension. Older builds without this codec cannot read blocks carrying the new extension; older stored blocks remain readable.
 - PebbleDB v1.1.5, graphql-go v0.8.1 (gqlgen is pinned as a tool only)
 - chi/v5, gorilla/websocket, zap, prometheus
@@ -163,7 +163,8 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 ### Current Work
 
 - Framework refactoring plan: `docs/analysis/refactoring-plan.md`
-- Plan completion audit (10/9) against the AST graph, code and tests: `docs/analysis/plan-audit.md`; remaining work: `docs/analysis/open-items.md`
+- Documentation index: `docs/README.md`. Current remaining work: `docs/analysis/open-items.md`; dated decisions and measurements: `docs/analysis/work-log-2026-10.md`. Design/analysis documents are historical snapshots, not current runtime guarantees.
+- Plan completion audit (10/9) against the AST graph, code and tests: `docs/analysis/plan-audit.md`
 - Real-time event subscriptions (premium; subscription types and optional CEL conditions evaluated on a fast path before commit, stream push and webhooks; no user code is run) and their prerequisites, declared mode for multichain and era1: design and phases in `docs/analysis/subscriptions-design.md`
 - Phase 0 design and progress: `docs/analysis/phase0-design.md`
 - Phase 0 fixed address sequence reset (D1), non-atomic block writes (D2), non-idempotent reprocessing (D3), gap recovery cursor rewind (D10), the storage wrapper hiding features (F1), unwired SetCode/UserOp/Module/fee delegation (F2) and system contract decoding (D11). Existing databases need a reindex

@@ -20,6 +20,14 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 ---
 
+## Full node와 체인 범위
+
+현재는 EVM 전용이며 Stable은 제외한다. 내장 profile은 `evm`, `stablenet`, `arc`다. StableNet은 Stable과 별개다. 사용자 운영은 archive 없는 full node이며 실제 운영 설정과 시작 높이는 아직 확정하지 않았다.
+
+`balance.native`·`token.metadata` 같은 상태 읽기 기능은 처리할 첫 블록 직전 상태를 검사한다. 필요한 상태가 없으면 시작을 거부한다. `indexer.start_height`를 노드가 상태를 보관하는 최근 높이에 맞추거나 기능을 끄는 방침을 정해야 한다. `features.<name>.allow_pruned_state: true`는 상태를 복원하지 않으며 잔액은 0에서 시작하거나 메타데이터를 latest로 읽어 정확성/결정성이 떨어질 수 있다. 보존 기간을 고정된 블록 수로 가정하지 않는다.
+
+[빠른 시작](QUICKSTART.md), [SDK 상태 규약](SDK.md#6-결정성-규약), [남은 운영 결정](analysis/open-items.md)을 함께 확인한다.
+
 ## config.yaml (권장)
 
 ### 기본 설정
@@ -33,7 +41,7 @@ rpc:
 database:
   driver: "pebble"                      # pebble(기본) | postgres
   path: "./data"                        # PebbleDB 데이터 디렉토리 (driver pebble)
-  readonly: false                       # 읽기 전용 모드
+  readonly: false                       # true는 시작 거부. 조회 전용은 node.role: api
   cache_mb: 0                           # Pebble block cache(MB), 0은 128. 범위 조회의 블록이 다 들어가지 않으면 파일에서 다시 읽는다. 멀티체인은 체인마다 이 크기
   postgres:                             # driver postgres일 때
     dsn: ""                             # postgres://user:pass@host:port/db (로그에 남기지 않음)
@@ -47,7 +55,7 @@ log:
 indexer:
   workers: 100                          # 병렬 워커 수 (RPC 부하에 따라 조정)
   chunk_size: 1                         # 배치당 블록 수 (1 = 실시간 모드)
-  start_height: 0                       # 인덱싱 시작 블록
+  start_height: 0                       # 예시. full node에서는 필요한 상태가 남은 최근 높이로 정함
   orphan_retention: 1000                # 보관할 reorg 기록 수 (0 = 전부 보관)
 
 api:
@@ -134,6 +142,8 @@ api:
   # 한 번만 반영한다). N 이후가 이미 지워졌으면(outbox_retention) SEQUENCE_TOO_OLD
   # 오류(extensions.oldest)가 오고, snapshot부터 다시 시작한다. outbox가 꺼져 있으면
   # RESUME_UNSUPPORTED 오류가 오고 streamSequence는 null이다.
+
+```
 
 ### Account Abstraction (EIP-4337)
 
@@ -338,7 +348,9 @@ eventbus:
 
 ### Multi-Chain
 
-> 체인마다 DB를 따로 둔다: `<database.path>/chains/<id>`(PostgreSQL이면 schema `<schema>_<id>`, schema를 비우면 `chain_<id>`. 소문자로 바꾸고 schema 이름에 쓸 수 없는 문자는 `_`로 바꾸며, 두 체인이 같은 schema가 되면 시작하지 않는다). 각 체인은 자기 수집 루프, 이벤트 버스, 기능으로 돌고 `features.*` 같은 공통 설정을 함께 쓴다. 체인 항목에 `features`를 두면 그 체인에서는 같은 이름의 공통 기능 설정을 통째로 바꾼다(`enabled`를 적지 않으면 공통 값). 체인마다 컨트랙트 주소가 다르므로 `records`(선언형 수집)는 보통 체인 항목에 적는다. 루트의 `rpc.endpoint`는 필요 없고(노드 주소와 대체 노드는 체인 항목의 `rpc_endpoint`, `ws_endpoint`, `fallback_endpoints`에 둔다), `rpc.fallback_endpoints`·`rpc.ws_endpoint`·`rpc.record_dir`·`source.era_dir`·`notifications`·`verifier`는 이 모드에서 쓰이지 않는다(시작 시 경고). `chain_id`는 노드가 알려 주는 값과 같아야 그 체인이 시작된다. `--reindex`는 체인 DB마다 적용된다.
+> 체인마다 DB를 따로 둔다: `<database.path>/chains/<id>`(PostgreSQL이면 schema `<schema>_<id>`, schema를 비우면 `chain_<id>`. 소문자로 바꾸고 schema 이름에 쓸 수 없는 문자는 `_`로 바꾸며, 두 체인이 같은 schema가 되면 시작하지 않는다). 각 체인은 자기 수집 루프, 이벤트 버스, 기능으로 돌고 `features.*` 같은 공통 설정을 함께 쓴다. 체인 항목에 `features`를 두면 그 체인에서는 같은 이름의 공통 기능 설정을 통째로 바꾼다(`enabled`를 적지 않으면 공통 값). 체인마다 컨트랙트 주소가 다르므로 `records`(선언형 수집)는 보통 체인 항목에 적는다. 루트의 `rpc.endpoint`는 필요 없고(노드 주소와 대체 노드는 체인 항목의 `rpc_endpoint`, `ws_endpoint`, `fallback_endpoints`에 둔다), `rpc.fallback_endpoints`·`rpc.ws_endpoint`·`rpc.record_dir`·`source.era_dir`·`verifier`는 이 모드에서 쓰이지 않는다(시작 시 경고). `chain_id`는 노드가 알려 주는 값과 같아야 그 체인이 시작된다. `--reindex`는 체인 DB마다 적용된다.
+>
+> 알림은 공통 notifications 설정을 사용하며 체인별 App·DB·서비스에서 평가한다. 설정 API와 stream도 `/chains/<id>/` 아래 해당 체인의 서비스를 사용한다.
 >
 > API는 체인별 경로로만 열린다: `/chains/<id>/graphql`, `/chains/<id>/graphql/ws`, `/chains/<id>/playground`, `/chains/<id>/rpc`, 체인 목록 `GET /chains`. 루트의 `/graphql`, `/rpc`, `/api`는 없다.
 
@@ -350,14 +362,14 @@ multichain:
   auto_restart: true
   auto_restart_delay: 10s
   chains:
-    - id: "stableone-mainnet"
-      name: "Stable-One Mainnet"
-      rpc_endpoint: "http://127.0.0.1:8545"
-      ws_endpoint: "ws://127.0.0.1:8546"   # 선택: newHeads로 새 블록을 바로 읽는다
+    - id: "stablenet-testnet"
+      name: "StableNet Testnet"
+      rpc_endpoint: "https://api.test.stablenet.network"
+      ws_endpoint: ""                   # 해당 체인의 WS RPC가 있으면 지정
       fallback_endpoints: []                # 선택: 같은 체인의 다른 HTTP(S) 노드. 단일 체인의 rpc.fallback_endpoints처럼 차례로 failover (API로는 노출하지 않음)
-      chain_id: 1000
-      adapter_type: "auto"              # auto | evm | stableone | anvil
-      start_height: 0
+      chain_id: 8283
+      adapter_type: "auto"              # 자동 감지 또는 등록된 profile/alias: evm | stablenet | stableone | arc
+      start_height: 0                   # 예시. 상태가 남아 있는 최근 시작 높이로 정함
       enabled: true
       workers: 100
       batch_size: 10
@@ -467,7 +479,7 @@ node:
 
 ## CLI Flags
 
-```bash
+```text
 ./indexer-go [flags]
 
 # 필수
@@ -476,24 +488,24 @@ node:
 
 # 인덱서
   --workers int             병렬 워커 수 (명시했을 때만 indexer.workers를 덮음)
-  --batch-size int          배치당 블록 수 (default: 100)
+  --batch-size int          배치당 블록 수 (0 = 설정 파일 사용)
   --start-height uint       시작 블록 높이 (default: 0)
   --gap-recovery            갭 감지 및 복구 활성화
 
 # API 서버
   --api                     API 서버 활성화
-  --api-host string         API 호스트 (default: "localhost")
-  --api-port int            API 포트 (default: 8080)
+  --api-host string         명시했을 때 설정의 API 호스트를 덮음
+  --api-port int            명시했을 때 설정의 API 포트를 덮음
   --graphql                 GraphQL 활성화
   --jsonrpc                 JSON-RPC 활성화
   --websocket               WebSocket 활성화
 
 # 로깅
-  --log-level string        로그 레벨 (default: "info")
-  --log-format string       로그 포맷 (default: "json")
+  --log-level string        명시했을 때 설정의 로그 레벨을 덮음
+  --log-format string       명시했을 때 설정의 로그 포맷을 덮음
 
 # 체인 어댑터
-  --adapter string          어댑터 강제 지정 (auto-detect if empty)
+  --adapter string          등록된 profile/alias. 빈 값이나 미등록 이름이면 자동 감지
 
 # 데이터 관리
   --clear-data              전체 데이터 삭제 후 시작
@@ -511,7 +523,7 @@ node:
 `database.driver: postgres`로 색인을 PostgreSQL에 둔다(리팩터링 계획 R4-2). 여러 프로세스가 같은 DB를 볼 수 있어, 수집 프로세스 하나와 API 프로세스 여러 개로 나누는 실행 역할(R4-1)의 바탕이 된다.
 
 - 시작할 때 `migrations/`의 스키마를 적용한다(advisory lock으로 한 번만). 이 빌드보다 새 스키마는 거부한다.
-- reorg rollback은 block 트랜잭션마다 바뀐 행을 `undo_log`에 남겨 최근 128블록을 되돌린다. 그래서 행을 쓸 때마다 기록이 하나씩 더 생긴다.
+- reorg rollback은 최근 128블록을 되돌린다. 삽입형 표는 `undo_height`로 삭제하고 다른 표의 변경은 trigger 기반 `undo_log`로 복원한다. [undo 설계](analysis/postgres-undo-design.md)를 따른다.
 - `--reindex`는 체인 데이터 테이블을 비우고 계약 검증(ABI, 소스), outbox 번호와 소비자 위치는 남긴다. `--clear-data`는 schema 버전만 남기고 모두 지운다. schema 자체는 지우지 않는다.
 - DSN에 비밀번호가 들어갈 수 있으므로 로그에는 schema만 남긴다.
 
@@ -526,7 +538,7 @@ INDEXER_DB_PATH=./data
 INDEXER_DB_READONLY=false
 INDEXER_DB_DRIVER=pebble                 # pebble | postgres
 INDEXER_DB_CACHE_MB=0
-INDEXER_API_KEYS=ops:<24자 이상 키>,partner:<키>
+INDEXER_API_KEYS='ops:<24자 이상 키>,partner:<키>'
 INDEXER_DB_POSTGRES_DSN=postgres://indexer:secret@db:5432/indexer
 INDEXER_DB_POSTGRES_SCHEMA=
 INDEXER_DB_POSTGRES_MAX_CONNS=0

@@ -1,5 +1,7 @@
 # Reorg 처리 상세 설계 (10/5)
 
+> 작성·검토 시점의 설계 또는 분석 기록이다. 현재 구현은 [아키텍처](../ARCHITECTURE.md), 현재 남은 작업은 [open-items](open-items.md), 후속 결정·측정은 [작업 기록](work-log-2026-10.md)을 확인한다. 아래 과거 경로·선택지·수치는 현재 지원 보장이 아니다.
+
 > 10/9 검토: 동작은 구현되어 있지만 이 문서의 일부는 낡았다. `TestFinalityFinalizedUnsupported`는 `TestFinalityFinalizedNotYet`으로 바뀌었고, finalized 블록이 없는 노드에서는 시작을 거부하지 않고 기다린다. orphan은 무기한이 아니라 `indexer.orphan_retention`(기본 1000)만큼 보관한다. legacy client 경로는 지워졌다. "알림이 reorg 이벤트를 다루지 않는다"는 해소됐다. 짧은 분기 감지와 JSON-RPC filter 경쟁 구간은 그대로 남아 있다([plan-audit.md](plan-audit.md)).
 
 이 문서는 refactoring-plan.md의 R2-4(finality·reorg)를 설계한다.

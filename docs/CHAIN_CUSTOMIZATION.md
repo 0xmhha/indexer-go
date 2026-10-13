@@ -93,7 +93,7 @@ HTTP/GraphQL 조회는 SDK로 등록한다. JSON-RPC 고유 메서드와 이벤�
 5. native 회계가 필요한 주소의 전후 노드 잔액과 일치하는지.
 6. 기능의 재시작/backfill/reorg 결정성. SDK 처리기는 `sdktest`로 확인.
 
-`examples/chainprofile`은 1~3의 로컬 회귀와 바이너리 빌드를 보여준다. 실제 노드·binary 입력·전체 회계·동시 운영까지 새로 확인한 예제는 아니다. 기존 Arc 테스트넷 기록은 [open-items 3.5](analysis/open-items.md#35-1013-arcstable-추가와-공개-rpc-postgresql-검증)에 있다. mainnet과 모든 역사 구간은 미검증이다.
+`examples/chainprofile`은 1~3의 로컬 회귀와 바이너리 빌드를 보여준다. 실제 노드·binary 입력·전체 회계·동시 운영까지 새로 확인한 예제는 아니다. 기존 Arc 테스트넷 기록은 [작업 기록 3.5](analysis/work-log-2026-10.md#35-1013-arcstable-추가와-공개-rpc-postgresql-검증)에 있다. mainnet과 모든 역사 구간은 미검증이다.
 
 `pkg/sdk`·`pkg/sdk/sdktest`는 [SDK 7장](SDK.md#7-호환성-약속)의 호환성 약속을 따른다. 체인 profile에 쓰는 `pkg/chains`·`pkg/chains/evm` 및 다른 패키지는 그 약속 밖이다. 프로젝트는 모듈 버전을 고정하고 업그레이드 때 예제를 빌드·검증한다. 이 문서는 새 SDK 공개 면이나 버전 약속을 추가하지 않는다.
 

@@ -1,5 +1,7 @@
 # PostgreSQL undo 비용 줄이기 (설계 10/11, 구현 10/11)
 
+> 작성·검토 시점의 설계 또는 분석 기록이다. 현재 구현은 [아키텍처](../ARCHITECTURE.md), 현재 남은 작업은 [open-items](open-items.md), 후속 결정·측정은 [작업 기록](work-log-2026-10.md)을 확인한다. 아래 과거 경로·선택지·수치는 현재 지원 보장이 아니다.
+
 ## 1. 왜
 
 블록 쓰기를 batch로 보낸 뒤(#140) PostgreSQL ingest는 Pebble보다 2~4배 느리다(`BenchmarkIngest/regular`, 블록 202개, 거래 10,001건). 남은 시간의 대부분은 서버 쪽이다. `pg_stat_statements`로 보면 바뀐 행 하나마다 undo trigger(`undo_record`, migration 0006)가 돈다. 이 trigger는 다음 일을 한다.
