@@ -210,6 +210,28 @@ R02의 검증이다. 기존 `testdata/live-rpc-targets.json`의 네 공개 RPC�
 
 **확인하지 않은 것:** 장기간의 움직이는 head 동시 운영, 네 공개 체인의 PostgreSQL 동시 실행, 운영 설정·실제 보존 범위·기존 Arc DB, 여러 호스트 SLO, mainnet·전체 역사·모든 fork 규칙과 native 잔액. 공개 노드의 물리적 full/archive 구성은 확인하지 않았다. R03의 full node 운영 설정 결정과 R04의 운영 측정은 남는다.
 
+### 3.10 10/14 로컬 full node 설정 복구·명시적 profile 선택
+
+R03의 로컬 설정을 점검했다. 실제 `config.yaml`이 없고 예제 설정만 남아 있어, 사용자 선택에 따라 StableNet·BSC·Sepolia·Arc 테스트넷을 한 App에서 실행하는 로컬 전용 `config.yaml`을 재구성했다. 이 파일은 저장소의 기존 ignore 규칙을 따른다. 원격 운영 설정을 복원했다는 뜻은 아니다.
+
+새 Pebble DB 경로는 `./data/multichain-testnets`, API는 `127.0.0.1:8088`이다. 기존 `data-devnet`과 이전 generic EVM으로 색인한 Arc DB는 재사용하지 않았다. 각 공개 노드의 chain id와 최근 시작 높이 직전의 zero-address `eth_getBalance` 응답을 확인하고, balance.native/token.metadata는 켠 채 allow_pruned_state=false를 유지했다. 체인당 5 requests/s·workers=2·poll_interval=2s는 공개 RPC를 위한 보수적인 로컬 설정이며 운영 처리량 목표가 아니다. 알림 대상과 API 키는 구성하지 않았고 notifications/verifier는 껐다.
+
+07:41:48 KST에 StableNet 22,258,605, BSC 136,631,835, Sepolia 11,909,133, Arc 67,061,244를 시작 높이로 선택했다. 네 노드에서 그 직전 상태 조회가 성공했다. BSC/Sepolia의 genesis 상태 조회는 실패했고 StableNet/Arc에서는 성공했다. 이 표본만으로 물리적 full/archive 구성, 전체 상태 보존 범위나 모든 계정의 상태 가용성을 확정하지 않는다. 별도 임시 DB와 임시 localhost 포트에서 production App을 실행해 네 시작 블록의 색인·체인별 GraphQL 높이/해시 조회와 /chains 목록을 확인한 뒤 앱과 임시 DB를 정리했다. 실제 로컬 DB 경로에 상시 운영을 시작하거나 외부 배포하지 않았다.
+
+설정 재구성 중 `adapter_type: stablenet`이 시작 전에 거부됐다. 멀티체인 validator가 auto/evm/stableone/anvil만 허용하는 별도 목록을 갖고 있어, 문서에 안내한 arc/stablenet와 외부 profile의 명시적 선택이 막혀 있었다. 첫 로컬 검증은 auto로 통과했다. 후속 수정에서는 `chains.Lookup`으로 등록된 id/alias를 검증하며 빈 값·auto·anvil의 기존 선택과 미등록 이름 거부를 유지한다. production 멀티체인 패키지의 체인 고유 문자열 두 개를 없애고 구조 검사 예산도 그만큼 줄였다. 체인 profile import나 chain-id 분기를 공통 코어에 추가하지 않았다.
+
+회귀 시험은 수정 전 arc/stablenet/외부 profile/alias 거부를 재현하고, 수정 후 등록된 이름 수용과 기존 미등록 이름 거부를 확인한다. 기존 두 체인 통합 시험은 명시적 evm/stablenet 선택으로 색인·DB 분리·GraphQL/JSON-RPC/REST 조회와 단일 체인 색인 결과 일치를 검사한다. profile 선택 이후의 회계·feature·알림·SLO 경로는 변경하지 않았다.
+
+후속 공개 검증은 수정한 실제 실행 파일과 명시적 profile 설정으로 수행했다. 08:09:13 KST에 새 시작 직전 상태를 확인하고 StableNet 22,260,252 / BSC 136,635,495 / Sepolia 11,909,271 / Arc 67,064,495에서 시작했다. 별도 임시 DB·포트에서 네 체인의 시작 블록 hash를 GraphQL로 읽고 종료한 뒤, 같은 DB로 재시작해 시작 블록 hash가 유지되고 재시작 후 처음 관측한 저장 높이보다 새 색인이 진행하는 것을 확인했다. 재시작 때의 관측 높이는 각각 22,260,265 / 136,635,594 / 11,909,274 / 67,064,532다. 이는 시작·저장·재시작 진행 검사이며 전체 잔액 대조나 운영 SLO 측정이 아니다. 시험 앱과 임시 DB는 종료·정리했다. 로컬 config.yaml의 최근 높이와 명시적 profile도 갱신했다.
+
+**실제 운영 문제:** 재시작 실행의 BSC 로그에 새 계정의 이전 상태 소실로 0에서 시작하는 경고 66건과 잔액 보정 상태 소실 경고 73건이 나타났다(총 66개 주소). `balance.native.allow_pruned_state: false`였으나 현재 설정은 시작 검사에만 적용된다. 움직이는 head 처리 중 필요한 상태가 사라져도 이 경로는 경고 후 계속 진행한다. 원인을 고정된 보존 블록 수나 단일 부하 요인으로 단정하지 않는다. 네 체인의 블록/재시작 검사가 통과했다는 사실을 잔액 정확성 보장으로 해석하지 않는다. 처리 중 블록 실패·재시도 또는 상태 읽기 기능 비활성화의 사용자 운영 방침은 아직 정하지 않았다. 이 동작을 명시적 profile 수정에서 바꾸지 않았다.
+
+필수 로컬 검증은 gofmt/build/lint(0 issues)/전체 race(pkg/app 421.053초)/PostgreSQL(adapter 44.826초, app 184.418초)/예제 모두 통과했다. 새 동시성 시험은 추가하지 않았고 SLO·알림·부하 실행 경로 변경도 없어 추가 SLO 시험은 실행하지 않았다.
+
+첫 실행 전에는 시작 직전 상태를 다시 확인해야 한다. 기존 DB 재시작에서는 최신 저장 높이와 새 기능 backfill이 요구하는 상태를 확인하고, 시작 높이를 임의로 올려 데이터 누락을 만들지 않는다. 오래 중단했거나 기능을 추가해 필요한 상태가 사라졌다면 기존 startup refusal을 유지한다. 재색인/기능 비활성화 등 운영 결정을 정하지 않고 fallback을 켜지 않는다. 최근 시작은 이전 블록의 거래·계정·토큰 색인 완전성을 제공하지 않는다.
+
+**확인하지 않은 것:** 실제 운영 호스트의 보존 범위·허용 중단 시간, 움직이는 head의 장기 동시 운영, 기존 Arc 운영 DB, 공개 네 체인의 PostgreSQL 동시 운영, 여러 호스트 SLO와 PostgreSQL 운영 성능 목표. R03 전체 운영 검증과 R04는 남는다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.

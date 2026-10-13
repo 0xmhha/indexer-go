@@ -6,7 +6,7 @@
 
 - **EVM 전용 프레임워크**다. 현재 내장 profile은 `evm`, `stablenet`, `arc`다. Stable(988/2201, Tendermint/CometBFT)은 제외했다. StableNet과 Stable은 별개다.
 - 체인별 디코딩·회계·native coin 규칙은 `pkg/chains/<chain>`에, 고유 색인·조회는 feature/SDK 확장에 둔다. 공통 코어에 chain-id 조건문을 더하지 않는다. [커스터마이징 계약](../CHAIN_CUSTOMIZATION.md)을 따른다.
-- 운영 노드는 **full node이며 archive는 없다**. 운영 설정 경로·시작 높이·활성 기능·실제 상태 보존 범위는 확인하지 않았다. archive 여부 질문을 반복하지 않는다.
+- 운영 노드는 **full node이며 archive는 없다**. 로컬 `config.yaml`을 네 테스트넷 동시 실행으로 재구성하고 임시 DB에서 시작·색인·API 조회를 확인했다. 최근 시작과 상태 읽기 기능의 `allow_pruned_state: false`를 유지한다. 실제 운영 호스트의 상태 보존 범위·허용 중단 시간은 확인하지 않았다. archive 여부 질문을 반복하지 않는다.
 - 공개 RPC의 순차 색인·API·record/replay와 같은 프로세스의 제한된 최근 구간 동시 색인·장애·재시작 검증은 StableNet·BSC·Sepolia·Arc에서 수행했다. 장기간 동시 운영, 전체 회계, mainnet 지원까지 검증한 것은 아니다.
 - 기존 generic EVM으로 Arc를 색인한 DB가 있다면 새 Arc 회계로 재색인이 필요하다. 해당 운영 DB의 존재나 내용은 확인하지 않았다.
 
@@ -16,10 +16,10 @@
 
 | 순서 / ID | 작업 | 현재 증거와 남은 범위 | 완료 기준 / 필요한 조건 |
 |---|---|---|---|
-| 1 / R03 | full node 운영 설정 확정 | 최근 상태가 있으면 시작, 상태가 없으면 시작 거부하는 경로는 검증됨. 사용자 운영 구성은 미확인 | 설정 파일 경로·시작 높이·활성 기능·보존 범위 필요. 최근 높이 시작 / 상태 기능 비활성화 / 정확성 제약을 수용한 fallback 방침 결정. 기존 Arc DB가 있으면 재색인 방침도 확정 |
+| 1 / R03 | full node 운영 설정 확정 | 로컬 4개 테스트넷 설정을 복구하고 시작·API·같은 DB 재시작 후 진행을 검증. 명시적 profile/alias는 registry로 검증. BSC 처리 중 상태 소실·0 잔액 대체 경고를 관찰했으며 `allow_pruned_state: false`는 시작 검사에만 적용됨 | 처리 중 상태가 없을 때 해당 블록 실패·재시도 / 상태 기능 비활성화 방침 결정 필요. 첫 실행 전 시작 직전 상태 재확인. 기존 DB의 다음 높이·backfill 상태와 실제 보존 범위·허용 중단 시간 확인. 기존 generic EVM Arc DB는 재사용하지 않음. 잔액 정확한 상시 운영 완료로 간주하지 않음 |
 | 2 / R04 | 운영 성능·여러 호스트 SLO | 단일 호스트 ingest 중앙값 Pebble 1.506초, PostgreSQL 2.749초(1.83배). SLO는 한 호스트에서 측정 | PostgreSQL 목표 배수 결정, 노드·indexer·구독자 측정 환경 필요. 같은 입력·설정으로 처리량과 지연을 측정하고 호스트 조건을 기록. 현재 수치를 운영 목표로 간주하지 않음 |
 
-근거: [Arc·공개 RPC 기록](work-log-2026-10.md#35-1013-arcstable-추가와-공개-rpc-postgresql-검증), [PostgreSQL 측정](work-log-2026-10.md#33-1012-후속-postgresql-ingest-측정), [SLO 조사](work-log-2026-10.md#31-1012-후속-slo-조사).
+근거: [로컬 설정 복구·profile 선택](work-log-2026-10.md#310-1014-로컬-full-node-설정-복구명시적-profile-선택), [Arc·공개 RPC 기록](work-log-2026-10.md#35-1013-arcstable-추가와-공개-rpc-postgresql-검증), [PostgreSQL 측정](work-log-2026-10.md#33-1012-후속-postgresql-ingest-측정), [SLO 조사](work-log-2026-10.md#31-1012-후속-slo-조사).
 
 ## 3. 별도 조건이 있는 작업
 
