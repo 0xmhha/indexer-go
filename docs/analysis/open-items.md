@@ -51,6 +51,8 @@
 
 ## 3. 측정과 확인이 남은 것
 
+현재 범위와 다음 작업 순서는 **3.6절**을 따른다. 3.4~3.5절은 당시 검증 기록이며, 10/13 결정으로 Stable은 현재 지원 대상에서 제외했다.
+
 | 항목 | 남은 일 |
 |---|---|
 | K2 이진 키 (10/12 재측정, 보류 유지) | StableNet testnet 블록 0~700,000(키 1,761만 개)에서 키는 60% 짧아지지만 디스크는 6.7%만 준다. cache가 찬 뒤 단건 조회 약 30%, 20건 범위 조회 약 11% 빠르다(`TestBinaryKeysOnRealData`, refactoring-plan 11절). 저장 형식을 다시 바꿀 때 함께 검토한다 |
@@ -138,6 +140,22 @@ PostgreSQL로도 실제 공개 RPC를 색인하고 기록을 offline replay한 �
 최종 코드의 gofmt, build, lint, full race, PostgreSQL 전체 시험, 예제, SLO 검사가 모두 통과했다. 최종 race의 pkg/app은 318.2초, PostgreSQL pkg/app은 150.0초였다. SLO p99 중앙값은 readers only 105.7ms, non-readers 포함 101.6ms(-4%), fast stream p99는 node 기준 4.5ms, fast path 기준 0.8ms였다. 새 동시성 시험은 추가하지 않았다.
 
 **확인하지 않은 것:** Arc·Stable mainnet, Arc의 Zero5 이전 전체 역사 구간의 실제 잔액(legacy 이벤트 디코딩은 로컬 시험으로 확인), Stable의 일반 사용자 거래가 포함된 실체인 표본(서명 검증은 로컬 시험으로 확인), Stable의 Cosmos bank·분배·보상·USDT0 fractional reconciliation을 포함한 전체 잔액 회계, CometBFT 합의 증명, 운영 설정·시작 높이, 여러 체인의 동시 운영. Stable 회계는 현재 generic Ethereum fallback이라 이 영역의 정확성을 보장하지 않는다. 새 profile을 쓴다고 이 미검증 영역까지 지원된다고 해석하지 않는다.
+
+### 3.6 10/13 EVM 범위 결정과 다음 작업
+
+사용자 결정: Stable은 Tendermint/CometBFT 기반이므로 제외하고 현재는 EVM 전용 프레임워크로 진행한다. StableNet과 Stable은 별개이며 StableNet 지원은 유지한다. `pkg/chains/stable`과 앱의 등록 import, 공개 RPC target을 제거한다. Stable의 전용 회계, 시스템 거래 확장, CometBFT 증명, Stable mainnet 검증은 현재 작업 목록에서 제외한다. 3.5절의 검증 기록은 과거 사실로 남긴다.
+
+공통 코어는 체인 중립으로 유지한다. 체인별 디코딩·회계·native coin 규칙은 `pkg/chains/<chain>` profile 및 optional interface로, 체인별 기능·API는 feature/SDK/registry 확장으로 제공한다. 새로운 체인을 위해 공통 fetch/storage/API에 chain-id 조건문을 더하지 않는다.
+
+| 추천 순서 | 작업 | 완료 기준 / 필요한 것 |
+|---|---|---|
+| 1 | 커스터마이징 계약과 예제 정리 | 기존 profile·회계·feature 등록 경계를 문서와 예제로 설명. 실제 확장 공백이 발견되면 구현 범위를 먼저 제안 |
+| 2 | Arc 회계 표본 확대 및 저장소 대조 | 내부 전송·mint/burn·실패 거래·수수료가 포함된 실제 표본에서 노드 잔액과 비교. 같은 RPC 기록을 Pebble/PostgreSQL에 재생해 결과 대조 |
+| 3 | EVM 멀티체인 동시 실행 검증 | StableNet·BSC·Sepolia·Arc의 DB·feature·API·알림 분리, RPC 장애와 재시작 검증. 순차 RPC 시험만으로 동시 운영이 검증됐다고 보지 않음 |
+| 4 | full node 운영 설정 확정 | 운영 설정 경로·시작 높이·활성 기능·상태 보존 범위 필요. archive는 없으며, 최근 높이 시작/기능 비활성화/fallback 방침을 정해야 함 |
+| 5 | 운영 성능 측정 | PostgreSQL 목표 배수 결정 및 여러 호스트 환경 필요. 현재 단일 호스트 중앙값 1.83배는 운영 목표가 아님 |
+
+별도 자원이나 승인이 필요한 항목은 유지한다: 실제 export era1/노드 속도 비교, Arc mainnet 검증, frontend 이전(이 저장소에서는 수정 금지), 태그 발행·원격 branch 삭제·외부 배포. 간헐 SLO 지연은 원인 미확인이고 DEX reorg flake는 재현 시 수정한다. K2·값 형식 통일·perp 이름 등 기존 보류/하지 않음 결정은 다시 열지 않는다.
 
 ## 4. 저장소 관리
 
