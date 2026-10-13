@@ -26,6 +26,8 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 `balance.native`·`token.metadata` 같은 상태 읽기 기능은 처리할 첫 블록 직전 상태를 검사한다. 필요한 상태가 없으면 시작을 거부한다. `indexer.start_height`를 노드가 상태를 보관하는 최근 높이에 맞추거나 기능을 끄는 방침을 정해야 한다. `features.<name>.allow_pruned_state: true`는 상태를 복원하지 않으며 잔액은 0에서 시작하거나 메타데이터를 latest로 읽어 정확성/결정성이 떨어질 수 있다. 보존 기간을 고정된 블록 수로 가정하지 않는다.
 
+현재 `allow_pruned_state: false`의 거부 검사는 **시작 시점**에 적용된다. 처리 중 `balance.native`가 새 계정의 이전 잔액을 읽지 못하면 경고 후 0에서 시작하며, 잔액 보정에 필요한 상태가 없으면 기존 계산값을 남긴다. 최근 시작·시작 검사 통과만으로 계속 정확한 잔액을 보장하지 않는다. 처리 중 상태 소실에 대한 중단/기능 비활성화 방침은 [남은 작업 R03](analysis/open-items.md)에 있다.
+
 [빠른 시작](QUICKSTART.md), [SDK 상태 규약](SDK.md#6-결정성-규약), [남은 운영 결정](analysis/open-items.md)을 함께 확인한다.
 
 ## config.yaml (권장)
@@ -374,6 +376,8 @@ multichain:
       workers: 100
       batch_size: 10
 ```
+
+`adapter_type`는 앱이 등록한 profile id나 alias를 받는다. 외부 profile도 기존 registry에 등록하면 같은 설정으로 선택할 수 있다. 빈 값, `auto`, 기존 `anvil` 이름은 자동 감지를 선택한다. 등록되지 않은 다른 이름은 멀티체인 시작 전에 거부한다.
 
 ### Notifications
 

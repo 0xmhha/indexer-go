@@ -3,7 +3,36 @@ package multichain
 import (
 	"testing"
 	"time"
+
+	"github.com/0xmhha/indexer-go/pkg/chains"
+	_ "github.com/0xmhha/indexer-go/pkg/chains/arc"
+	"github.com/0xmhha/indexer-go/pkg/chains/evm"
+	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 )
+
+func init() {
+	chains.Register(evm.New("multichain-config-test"), -1)
+	chains.RegisterAlias("multichain-config-alias", "multichain-config-test")
+}
+
+// Configuration accepts the same profile IDs and aliases as source selection,
+// including profiles supplied by an application outside the built-in set.
+func TestChainConfigRegisteredProfiles(t *testing.T) {
+	for _, name := range []string{"evm", "stablenet", "stableone", "arc", "multichain-config-test", "multichain-config-alias", "auto", "anvil"} {
+		t.Run(name, func(t *testing.T) {
+			cfg := DefaultChainConfig()
+			cfg.ID, cfg.Name = "test", "Test"
+			cfg.RPCEndpoint, cfg.ChainID = "http://127.0.0.1:1", 1
+			cfg.AdapterType = name
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("registered profile or detection name %q rejected: %v", name, err)
+			}
+			if cfg.AdapterType != name {
+				t.Fatalf("profile changed from %q to %q", name, cfg.AdapterType)
+			}
+		})
+	}
+}
 
 func TestDefaultManagerConfig(t *testing.T) {
 	config := DefaultManagerConfig()

@@ -333,7 +333,7 @@ type ChainConfig struct {
 	FallbackEndpoints []string `yaml:"fallback_endpoints,omitempty"`
 	// ChainID is the numeric chain ID
 	ChainID uint64 `yaml:"chain_id"`
-	// AdapterType specifies which adapter to use: "auto", "evm", "stableone", "anvil"
+	// AdapterType names a registered chain profile or alias, or "auto" for detection.
 	AdapterType string `yaml:"adapter_type"`
 	// StartHeight is the block height to start indexing from
 	StartHeight uint64 `yaml:"start_height"`

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/0xmhha/indexer-go/pkg/chains"
 )
 
 // ChainConfig defines the configuration for a single blockchain connection.
@@ -23,8 +25,8 @@ type ChainConfig struct {
 	FallbackEndpoints []string `yaml:"fallback_endpoints,omitempty" json:"-"`
 	// ChainID is the numeric chain ID (e.g., 1 for Ethereum mainnet).
 	ChainID uint64 `yaml:"chain_id" json:"chainId"`
-	// AdapterType names the chain profile: "auto" (detected from the node),
-	// "evm", "stableone" (StableNet) or "anvil" (detected).
+	// AdapterType names a registered chain profile or alias. Empty, "auto"
+	// and the legacy "anvil" name select node detection.
 	AdapterType string `yaml:"adapter_type" json:"adapterType"`
 	// StartHeight is the block height to start indexing from (0 for genesis).
 	StartHeight uint64 `yaml:"start_height" json:"startHeight"`
@@ -133,18 +135,13 @@ func (c *ChainConfig) Validate() error {
 		return errors.New("chain_id is required")
 	}
 
-	// Validate adapter type
-	validAdapters := map[string]bool{
-		"auto":      true,
-		"evm":       true,
-		"stableone": true,
-		"anvil":     true,
-	}
 	if c.AdapterType == "" {
 		c.AdapterType = "auto"
 	}
-	if !validAdapters[c.AdapterType] {
-		return fmt.Errorf("invalid adapter_type: %s (valid: auto, evm, stableone, anvil)", c.AdapterType)
+	// Match source selection without keeping a second list of profile names.
+	// Applications register their profiles and aliases before assembly.
+	if _, registered := chains.Lookup(c.AdapterType); !registered && c.AdapterType != "auto" && c.AdapterType != "anvil" {
+		return fmt.Errorf("invalid adapter_type: %s (use auto, anvil, or a registered chain profile or alias)", c.AdapterType)
 	}
 
 	// Set defaults

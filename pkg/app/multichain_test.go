@@ -102,6 +102,9 @@ func TestMultiChainIndexesEachChainIntoItsOwnDatabase(t *testing.T) {
 	// The StableNet node URL carries a key in its path and query, as
 	// provider URLs do; GET /chains must not show it.
 	cfg := multiChainConfig(t, root, chainEntry("evm", evmSrv.URL()), chainEntry("stablenet", snetSrv.URL()+"/v3/topsecret?key=topsecret"))
+	// Explicit registered profile IDs must work as well as auto detection.
+	cfg.MultiChain.Chains[0].AdapterType = "evm"
+	cfg.MultiChain.Chains[1].AdapterType = "stablenet"
 	app, err := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, err)
 	require.Nil(t, app.storage, "multichain mode opens no shared database")
