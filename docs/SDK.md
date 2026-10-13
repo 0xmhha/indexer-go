@@ -2,6 +2,8 @@
 
 프로젝트가 indexer를 고치지 않고 자기 처리기를 붙이는 방법이다(refactoring plan R6-2). 예제는 `examples/receipts`(정산 컨트랙트의 영수증 조회, P07 재현과 인수 시험)다.
 
+체인 자체의 디코딩·회계·감지를 바꾸는 방법은 [체인 커스터마이징 계약](CHAIN_CUSTOMIZATION.md)과 [별도 profile 모듈 예제](../examples/chainprofile/README.md)에 있다. profile API는 이 문서 7장의 SDK 호환성 약속 밖이며, 기능 처리기는 계속 SDK로 붙인다.
+
 ## 1. 구조
 
 처리기는 기능(feature)이다. `init`에서 등록하고, 색인되는 블록마다 그 블록의 저장 트랜잭션 안에서 호출된다. 그래서 처리기가 쓴 것은 블록과 함께 commit되고, reorg로 블록이 되돌려지면 함께 되돌려진다. 처리기는 GraphQL 조회와 HTTP 경로를 더할 수 있다.

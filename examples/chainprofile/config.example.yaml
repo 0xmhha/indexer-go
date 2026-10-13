@@ -1,0 +1,12 @@
+rpc:
+  endpoint: https://rpc.testnet.arc.io
+  timeout: 15s
+database:
+  path: ./data
+indexer:
+  workers: 1
+api:
+  host: 127.0.0.1
+  port: 8088
+log:
+  level: info
