@@ -368,6 +368,66 @@ SLO 기본 경로의 첫 실행은 round2 비읽기 구독자의 end-to-end p99�
 
 수명 수정까지 포함한 최종 소스의 gofmt/build/lint(0 issues)/전체 race(app418.368초)/PostgreSQL(adapter42.217초, app177.008초)/예제(정상 캐시 통과)를 다시 확인했다. 새 batch 동시성 시험의 일반/CPU1 200회와 load 수명 시험의 일반/CPU1 200회, 기본/배치16의 최종 정규 SLO가 모두 통과했다. GPG/noreply와 PR/main 네 CI의 기존 저장소 절차를 따른다.
 
+### 3.16 10/14 동일 입력 Pebble/PostgreSQL 전후 비교
+
+main `34619b0`과 `44fd99c`를 동일한 25블록(24×8 신규 수신자+genesis)·workers 2/state_workers 4·동일 HTTP/member counter와 pipeline 계측·3회 평균으로 비교했다. 기준 커밋의 archive checkout에 같은 benchmark를 복사하고 미지원 batch 16 옵션만 제외했다. 입력·fixture/App 생성 제외·Shutdown 제외 기준은 3.15와 같다. 이 native workload에 새 토큰 생성은 없다. 각 DB는 새 임시 DB/schema다. 이 작업의 heavy 검증은 끝낸 상태지만 다른 사용자 작업의 호스트 부하를 통제하지 않았다.
+
+| 저장소/조건 | 이전 ordered | 이전 prepared | 현재 ordered | 현재 prepared | 현재 batch16 |
+|---|---:|---:|---:|---:|---:|
+| Pebble local | 0.216초 | 0.233초 | 0.231초 | 0.154초 | 0.221초 |
+| Pebble RPC5ms | 1.416초 | 0.342초 | 1.403초 | 0.404초 | 0.418초 |
+| Pebble RPC5ms/50HTTPs | 4.455초 | 4.939초 | 4.453초 | 4.932초 | 1.534초 |
+| PostgreSQL local | 0.205초 | 0.219초 | 0.218초 | 0.212초 | 0.262초 |
+| PostgreSQL RPC5ms | 1.494초 | 0.382초 | 1.580초 | 0.379초 | 0.365초 |
+| PostgreSQL RPC5ms/50HTTPs | 4.420초 | 4.993초 | 4.423초 | 4.942초 | 1.519초 |
+
+PostgreSQL 16.15(aarch64/alpine/Docker)는 `fsync/synchronous_commit/full_page_writes=on`을 실제로 조회했다. 기능 시험의 fsync=off와 구분한다. Pebble도 기존 synced commit을 유지했다. 두 저장소의 실행 환경은 macOS native와 같은 호스트의 Docker VM으로 다르므로 DB 고유 속도나 운영 목표 배수로 일반화하지 않는다. 현재 batch의 cap 50 완료 시간 차이는 약 1%였다. 이 조건에서는 RPC 제한의 영향이 크다.
+
+제한 조건에서 HTTP 요청은 247→76, 논리 RPC는 약 272→273이었다. 이전 prepared 대비 시간은 Pebble 약 68.9%/PG 약 69.6% 감소했다. 현재 prepared와 batch 비교도 약 68.9%/69.3%다. 현재 무지연 batch는 개별 준비보다 느렸다(Pebble0.154→0.221/PG0.212→0.262). RPC 5ms에서는 Pebble batch가 소폭 느려서 왕복 지연만으로 항상 개선을 보장할 수 없다. 전후 개별 control의 local/무제한 변동을 batch 효과로 해석하지 않는다. cap 50 현재 writer p95 평균은 Pebble 141.7→80.0ms/PG165.5→69.7ms, 누적 할당 31.05→21.10MB/30.65→21.00MB였다. peak payload는 9,888/10,312 bytes였다. heap 전체 크기나 DB commit 단독 시간은 아니다.
+
+현재 PG 도구의 첫 시도는 초기화 중 DB 생성 전에 `pg_isready`가 성공하여 metadata 쿼리에서 실패했다. benchmark는 실행하지 않았다. 실제 TCP로 테스트 DB의 `SELECT 1` 성공을 기다리도록 고친 뒤 위 최종 표를 측정했다. 실패 시도는 성능 표본에 포함하지 않았고, 해당 임시 컨테이너는 정리했다. 공개 5 HTTP/s 운영 성능·전체 회계·장기 SLO는 다음 실노드 관측과 별개다.
+
+### 3.17 10/14 네 공개 테스트넷 30분 동시 관측
+
+main `44fd99c` 실행 파일을 17:13:10 KST부터 1800.010초 실행했다. 새 임시 DB에서 최근 head-2와 시작 상태를 재확인했다. 설정은 `allow_pruned_state: false`, workers 2, state_workers 4, chunk 10, state_prefetch true, state_batch_size 16이었다. 원래 ignored config의 batch 기본값은 1이며, 16은 임시 검증 설정에만 적용했다. App과 투명 proxy의 체인별 5 HTTP/s 제한을 유지했고, head 관측 174회/체인도 같은 proxy 제한을 공유했다. 배치 전달·HTTP/member별 논리 요청 분리·HTTPS 연결 재사용 조건은 3.13과 같다. 다른 사용자 작업의 호스트 부하는 통제하지 않았고 이 작업의 heavy 시험은 겹치지 않았다.
+
+| 체인 | 시작 | 마지막색인/head | gap | App HTTP/논리 | 마지막약10분 생성/색인 blk/s |
+|---|---:|---:|---:|---:|---:|
+| StableNet | 22292889 | 22294690/22294691 | 1 | 4822/7396 | 1.001/1.002 |
+| BSC | 136708015 | 136712015/136712017 | 2 | 8283/12768 | 2.222/2.236 |
+| Sepolia | 11911983 | 11912135/11912135 | 0 | 2859/8179 | 0.083/0.083 |
+| Arc | 67128941 | 67130550/67132499 | 1949 | 8770/15224 | 1.976/0.682 |
+
+마지막 표본은 1799.550초, 마지막 속도 창은 592.645초다. 첫 색인 확인은 StableNet 166.839/BSC 10.206/Sepolia 20.519/Arc 10.206초였다. StableNet 초기 epoch tracker가 앞선 블록을 순차 조회하는 경로를 확인했지만 초기 지연의 모든 원인을 확정하지 않았다. 헤더/영수증 조회 각 2,574개와 색인 1,802블록의 차이도 profile 추가 비용으로 분리할 필요가 있다. BSC/Sepolia는 head 근처를 유지했다. 이전 3.13의 BSC 정지 표본과 이번 입력·노드 라우팅·상태는 달라, 실노드의 인과적 개선률을 계산하지 않는다.
+
+Arc의 격차는 약 5분 184/10분 383/20분 1,196/종료 1,949블록으로 늘었다. 끝무렵 native balance 4건과 receipt 1건에서 JSON-RPC -32005 `rate limit exceeded`를 받았다(HTTP 200). 필수 조회 실패는 블록 전체 실패와 동일 높이 재시도로 이어졌다. Arc의 기능 RPC는 balance 5,168/code 552/call 3,506건으로, native/token 상태 획득 비용이 남는다. 정상 VM revert 546/invalid jump 116건은 토큰 판별 응답으로 quota 실패와 구분했다. 배치는 물리 왕복을 줄이지만 member quota를 없애지 않는다. 이 설정으로 Arc의 상시 운영 조건을 충족했다고 볼 수 없다.
+
+StableNet의 proxy HTTP 502는 38건 모두 upstream 이름 해석 실패(`[Errno 8] nodename...`)였다. App의 target/block 재시도 후 head 근처로 복구했고, source block not found 6회도 관찰했다. BSC/Sepolia/Arc의 proxy HTTP status는 모두 200이었다. proxy transport p95는 StableNet 35.8/BSC 166.1/Sepolia 136.9/Arc 75.7ms, proxy wait p95는 350.5/206.5/74.6/344.0ms였다. App limiter 대기와 proxy 대기를 합쳐 노드 CPU 비용으로 해석하지 않는다.
+
+최근 256개 샘플의 단계별 p95(수집/준비/순차 쓰기)는 StableNet 416.9/399.8/33.1ms, BSC 520.9/399.0/337.8ms, Sepolia 449.3/2759.9/686.0ms, Arc 800.8/4992.9/960.1ms였다. 쓰기는 DB commit 단독 시간이 아니다. 최종 pipeline의 in_flight/state bytes는 모두 0, peak in_flight는 4였다. peak payload는 StableNet 0/BSC 4,459/Sepolia 65,590/Arc 19,285 bytes였다. RSS는 32.8~509.5MiB였으며 DB cache·전체 heap·기본 블록을 포함하므로 payload 상한과 구분한다.
+
+종료 후 실제 초기 조회 계정과 원래 hash로 상태를 재조회했다. BSC/Sepolia에서 성공했던 원래 hash는 상태 소실 오류를 반환했다. 같은 계정의 head-32는 성공했고 head-128/-512는 실패했다. Arc는 원래 hash와 head-512도 성공했다. StableNet은 이 창에서 zero 주소 외 초기 잔액 표본이 없어 계정 보존 probe를 수행하지 않았다. 계정·시점·라우팅의 제한이 있으므로 고정 보존 폭·허용 중단 시간·전체 native 회계를 확정하지 않는다.
+
+프로세스는 exit 0으로 정상 종료했고 자체 임시 DB·proxy를 정리했다. 근사 fallback 경고는 0건이었다. 이 30분 관측은 며칠 단위의 운영 SLO, 재시작, 전체 회계, 메인넷 검증을 대신하지 않는다. 시작·재시작 증거는 이전의 제한된 3.9 검증과 구분한다.
+
+### 3.18 10/14 full node 실행 후보와 운영 미확정 조건
+
+현재 `indexer-go/config.yaml`은 네 공개 RPC, 명시적 profile, strict 상태 정책, workers 2/state_workers 4, payload 16MiB, chunk 10, 물리 5 HTTP/s로 구성됐다. `database.path`의 실제 DB가 없음을 확인했다. 네 chain ID 및 최근 시작 직전의 실제 계정(StableNet miner/BSC 0x1000/기존 Sepolia·Arc 표본)의 parent hash 잔액 조회가 모두 성공한 뒤 시작 높이를 갱신했다. 이후 실행 전에 다시 조회해야 하는 순간 표본이다. 기존 DB가 있으면 시작 높이를 건너뛰지 않고 next height/backfill 상태를 검사해야 한다. 글로벌 `state_batch_size`는 1이며, 검증에 쓴 16을 상시 운영 설정에 자동 적용하지 않았다.
+
+초기 Python 기본 User-Agent 프리플라이트는 Sepolia/Arc에서 HTTP 403으로 실패했다. 실제 Go User-Agent를 사용해 재확인한 최근 state 표본은 네 곳 모두 성공했다. 초기 403을 실제 노드 장애로 일반화하지 않는다. 관측 전 config의 mtime(10:49:20 KST)과 내용을 확인했으며, 3.17의 Arc endpoint는 `https://rpc.testnet.arc.io`였다. 이전 인수인계의 `.network` 표기는 현재 파일과 달랐다. 관측 중 endpoint를 바꾸지 않았다.
+
+[BNB 공식 문서](https://docs.bnbchain.org/bnb-smart-chain/developers/json_rpc/json-rpc-endpoint/)는 testnet/mainnet 10K/5min을 명시하지만 batch member 계산과 현재 사용자의 전체 IP 예산은 확정하지 못했다. [StableNet node 설정 문서](https://docs.stablenet.network/en/getting-started/2.2-node-configuration)는 full node가 최근 state만 보관하고 batch request 기본값이 1,000/response 25MB라고 설명한다. 현재 공개 RPC 운영자의 실제 설정과 보존 기간을 검증한 것은 아니다. [Arc 공식 연결 문서](https://docs.arc.io/arc/references/connect-to-arc)는 5042002/primary rpc.testnet.arc.io를 명시하지만 quota/retention 보장은 확인하지 못했다.
+
+운영 확정에는 실제 full node의 설정 경로/CLI와 state pruning 정책, member/HTTP/메서드별 quota, 허용 중단 시간, 기존 DB의 next height/backfill 정보가 필요하다. archive가 없다는 결정은 유지한다. 실측 상태 보존 여유는 현재 lag+상태 획득 시간+중단+복구 시간보다 충분히 커야 하며, 지속 색인 속도가 생성 속도를 넘어야 한다. 이번 Arc는 속도 조건을 충족하지 못했고 quota 오류도 있었다. BSC/Sepolia의 head-32 성공/head-128 실패를 고정 보존 폭이나 허용 중단 시간 보장으로 바꾸지 않는다. 로컬 후보 설정 점검·재구성은 완료했으나, 실제 운영 보존 정책과 허용 중단 시간의 확정은 미완료다.
+
+### 3.19 10/14 SLO 변동과 추가 호스트 조건
+
+3.15에 기본 실패 2회, 변경 전 main 기준 통과 1회, CPU/GC 계측 통과 1회, load loop 수명 누수 재현·수정, race 200회/CPU1 race 200회, 수정 후 기본·batch 16 SLO의 동일 기준 통과를 기록했다. 프로파일은 다른 시점의 집계 표본이므로 실패 원인을 단정하지 않는다. 기존 170~240ms 및 상대 비율 변동의 단일 원인과 여러 호스트 운영 SLO는 미확정이다.
+
+추가 호스트의 SSH 주소·계정·테스트 경로를 요청했다. 연결된 MacBookAir의 현재 SSH 해석은 kevin/22였으며, BatchMode/StrictHostKeyChecking/5초 timeout의 읽기 전용 uname·Go 버전 probe는 port 22 `Connection refused`로 실행하지 못했다. SSH 설정·인증·known_hosts·원격 파일은 변경하지 않았다. 접속 가능한 host/port/account/path가 필요하므로 추가 호스트 실측은 미완료다. 같은 호스트의 Docker PostgreSQL은 다른 물리 호스트의 SLO 증거가 아니다. 가능한 로컬 진단·수명 수정·표본 보존은 완료했으며 R07에는 여러 호스트와 실패 시점의 분리 관측을 남긴다.
+
+문서 커밋 전 gofmt/build/lint(0 issues)/예제/전체 race(app 437.472초)/PostgreSQL(adapter 43.339초, app 185.490초)가 통과했다. 생산 코드는 #173 병합 이후 동일하며, 기본·batch 16의 정규 SLO 통과 증거는 3.15와 같다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.
