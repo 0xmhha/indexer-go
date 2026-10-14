@@ -309,6 +309,29 @@ HTTP 관측 proxy는 body/응답을 변경하지 않고 upstream HTTPS 연결을
 
 **남은 범위:** 장기 실행, 동일 입력 off/on 비교, 네 공개 체인의 PostgreSQL 동시 관측, 전체 잔액 정확성, 개별 DB commit latency/전체 heap, 여러 호스트 SLO와 상태 보존 안전 여유. 이번 5분 실행은 운영 SLO나 R03/R04 전체 완료가 아니다. 소스/부하 시험/알림 경로를 변경하지 않았으므로 추가 SLO 실행은 하지 않는다. 문서 PR 전 gofmt/build/lint(0 issues)/전체 race(app 466.575초)/PostgreSQL(adapter 44.341초, app 176.484초)/예제를 통과했다. 링크·코드 fence·측정 표의 원본 대조와 임시 DB 정리도 확인했다. 새 동시성 시험은 추가하지 않았다.
 
+### 3.14 10/14 중복 head 관측 감소
+
+사용자는 후속 작업 1~6을 순서대로 진행하도록 승인했다. 첫 항목은 3.13에서 확인한 head 요청 중복이다. `Fetcher`마다 raw head/finalized target 관측을 별도로 두고, background progress와 syncing 중 블록 metric 판정이 최근 1초 이내 성공 또는 진행 중 조회를 공유한다. live target poll/head 알림과 명시적/API/주기적 health는 **독립적인 fresh RPC**를 시작한다. 관측 timer는 마지막 성공의 만료 시각을 따라 실패·긴 batch 대기에서도 progress를 갱신한다. confirmations target을 raw health head로 사용하지 않는다.
+
+실패는 이전 성공을 무효화하고, 요청 generation으로 늦게 끝난 이전 조회가 새 관측을 덮지 않게 한다. 원래 RPC latency를 재사용해 cache hit 실행 시간을 노드 지연으로 보고하지 않는다. 조회를 요청한 고루틴이 RPC를 소유하며 새 background job을 만들지 않는다. 관측 대기자는 자기 context로 취소하고, 먼저 조회한 호출자가 취소되면 살아 있는 대기자는 재조회한다. canonical hash·계정/토큰 상태 RPC는 이 cache와 분리돼 그대로 검증한다. chain/pipeline 재시작의 새 Fetcher는 기존 관측을 재사용하지 않는다.
+
+기존 `multichain.Indexer`는 유지하고 선택적 `NodeHeightObserver`만 추가했다. 지원하지 않는 외부 구현은 기존 fresh NodeHeight 경로다. syncing→active 판정은 성공한 health와 살아 있는 context를 요구하고 상태 lock 안에서 syncing인지 재확인해 오류/중지를 active로 덮지 않는다.
+
+초기 구현은 명시적 health까지 성공 관측을 재사용해 기존 네 체인 장애 시험이 실패했다. 그 결과를 보고 fresh health 계약을 유지하도록 범위를 좁혔다. 새 head 알림도 이전 요청에 합류하지 않도록 검사했다. 시험 기준·오류 주입·API 응답은 바꾸지 않았다.
+
+최종 새 회귀는 race200(fetch 55.451초, multichain 3.052초, app 50.653초)와 CPU1 race200(fetch 44.748초, multichain 2.509초, app 33.282초)을 통과했다. 조회 공유/만료/fresh 우회/오류 무효화/대기자·소유자 취소/낮아진 head/이전 요청의 늦은 완료/원래 latency/명시적 health 장애 감지/실패 시 active 승격 거부를 확인한다. 기존 progress 재시도·finality·네 체인 장애/재시작 시험의 focused race도 통과했다.
+
+같은 `BenchmarkHeadObservationQuota` 파일을 변경 전 main `0d9d8f5` git archive checkout과 최종 구현에 적용했다. Apple M2 Max/darwin arm64/Go1.26.8/Pebble, 결정적인 41개 empty block(40+genesis), 5 HTTPrequests/s, workers2/state_workers4/chunk10/poll2s/state_prefetch=true의 같은 NewApp 멀티체인 wiring이다. fixture와 parent App 생성 및 최종 Shutdown은 제외하고 child startup·색인·metrics subscriber 전달·live cancel까지 잰 3회 평균이다. block/receipt batch의 member 수와 HTTP 요청 수는 다르다.
+
+| 구현 | 완료 시간 | HTTP / head 요청 | 누적 할당량 / 횟수 |
+|---|---:|---:|---:|
+| main 0d9d8f5 | 17.660초 | 89 / 41 | 9.31 MB/op / 61,702 |
+| head 관측 공유 | 11.908초 | 60 / 12 | 7.50 MB/op / 48,834 |
+
+시간 약32.6%, HTTP약32.6%, head약70.7% 감소다. 초기 fixture 시간을 포함한 smoke/기준 실행은 이 최종 표에 사용하지 않았다. 빈 블록으로 관측 비용을 분리했으며 거래·상태 조회가 많은 실노드의 개선률·장기 SLO·PostgreSQL 운영 목표로 일반화하지 않는다. 누적 할당량은 peak heap이 아니다. RPC quota와 기존 ignored config/DB를 변경하지 않았다. 실제 체인 운영의 동시 관측과 초기 잔액/토큰 조회량 감소는 다음 항목이다.
+
+최종 gofmt/build/lint(0 issues)/전체 race(app475.451초)/PostgreSQL(adapter41.865초, app171.661초)/예제(14.438초)가 통과했다. 격리한 기본 SLO는 readers125.3/non-readers108.5ms(-13%), 준비 true SLO는109.0/111.8ms(+3%)로 동일 기준을 통과했다. fast stream p99는 각각10.5/8.0ms였다. 부하·round 수·판정 임계값은 완화하지 않았다. 기존 R07 변동의 원인을 해소했다고 주장하지 않는다. 문서 링크/코드 fence와 비교 표를 확인했다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.

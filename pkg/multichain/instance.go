@@ -207,6 +207,10 @@ func (ci *ChainInstance) Info() *ChainInfo {
 
 // HealthCheck performs a health check on the chain instance.
 func (ci *ChainInstance) HealthCheck(ctx context.Context) *HealthStatus {
+	return ci.healthCheck(ctx, 0)
+}
+
+func (ci *ChainInstance) healthCheck(ctx context.Context, maxAge time.Duration) *HealthStatus {
 	status := &HealthStatus{
 		ChainID:   ci.Config.ID,
 		Status:    ci.Status(),
@@ -223,8 +227,14 @@ func (ci *ChainInstance) HealthCheck(ctx context.Context) *HealthStatus {
 	// Check if we can get the latest block
 	if idx := ci.runningIndexer(); idx != nil {
 		start := time.Now()
-		latestHeight, err := idx.NodeHeight(ctx)
-		status.RPCLatency = time.Since(start)
+		var latestHeight uint64
+		var err error
+		if observer, ok := idx.(NodeHeightObserver); ok {
+			latestHeight, status.RPCLatency, err = observer.ObserveNodeHeight(ctx, maxAge)
+		} else {
+			latestHeight, err = idx.NodeHeight(ctx)
+			status.RPCLatency = time.Since(start)
+		}
 
 		if err != nil {
 			status.IsHealthy = false
@@ -305,8 +315,12 @@ func (ci *ChainInstance) trackMetrics(ctx context.Context, sub *events.Subscript
 				ci.blocksIndexed.Add(1)
 				// Check if we've caught up
 				if ci.Status() == StatusSyncing {
-					if health := ci.HealthCheck(ctx); health.SyncLag < 10 {
-						ci.setStatus(StatusActive)
+					if health := ci.healthCheck(ctx, time.Second); health.IsHealthy && health.SyncLag < 10 && ctx.Err() == nil {
+						ci.statusMu.Lock()
+						if ci.status == StatusSyncing {
+							ci.setStatusLocked(StatusActive)
+						}
+						ci.statusMu.Unlock()
 					}
 				}
 			case events.EventTypeTransaction:

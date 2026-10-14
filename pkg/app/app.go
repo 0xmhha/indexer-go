@@ -924,7 +924,12 @@ func (c *chainIndexer) IndexedHeight(ctx context.Context) (uint64, error) {
 }
 
 func (c *chainIndexer) NodeHeight(ctx context.Context) (uint64, error) {
-	return c.app.client.GetLatestBlockNumber(ctx)
+	n, _, err := c.app.fetcher.ObserveNodeHeight(ctx, 0)
+	return n, err
+}
+
+func (c *chainIndexer) ObserveNodeHeight(ctx context.Context, maxAge time.Duration) (uint64, time.Duration, error) {
+	return c.app.fetcher.ObserveNodeHeight(ctx, maxAge)
 }
 
 // initFetcher initializes the block fetcher

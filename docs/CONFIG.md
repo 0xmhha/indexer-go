@@ -32,6 +32,12 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 [빠른 시작](QUICKSTART.md), [SDK 상태 규약](SDK.md#6-결정성-규약), [남은 운영 결정](analysis/open-items.md)을 함께 확인한다.
 
+## Head 관측과 health 조회
+
+live 처리 루프와 head 알림은 매번 새 RPC 조회를 시작한다. background progress와 syncing 중 블록별 metric 판정은 체인별 최근 1초 이내의 성공 관측 및 진행 중인 조회를 공유한다. background timer는 관측 만료 시각에 맞춰 갱신하므로 처리 실패·긴 batch 대기 중에도 progress를 갱신한다. raw node head와 finalized target은 별도로 관리하며 confirmations target을 raw head로 사용하지 않는다.
+
+명시적/API/주기적 health 검사는 새 조회를 유지한다. 오류는 이전 성공 관측을 무효화하고, 늦게 끝난 이전 요청은 새 요청의 관측값을 덮지 않는다. RPC latency는 cache hit의 실행 시간이 아닌 원래 RPC 측정값이다. 재시작한 pipeline과 다른 체인은 관측을 공유하지 않는다. 기존 RPC rate_limit/timeout은 그대로 적용하며 이 관측 cache는 canonical hash·잔액·토큰 상태를 대체하지 않는다.
+
 ## 상태 조회 준비 파이프라인
 
 `indexer.state_prefetch: true`는 full ingest의 수집 worker가 필요한 상태를 준비한 뒤 기존 bounded channel로 넘기게 한다. 기본값은 `false`이며 같은 DB에서 켜고 끌 수 있다. `multichain.chains[].state_prefetch`로 특정 체인만 덮어쓸 수 있다.

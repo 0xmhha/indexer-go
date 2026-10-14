@@ -2,6 +2,7 @@ package multichain
 
 import (
 	"context"
+	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
@@ -28,3 +29,12 @@ type Indexer interface {
 
 // IndexerFactory builds the indexer of a chain.
 type IndexerFactory func(ctx context.Context, cfg *ChainConfig) (Indexer, error)
+
+// NodeHeightObserver optionally shares recent raw-head reads with ingestion.
+// Latency is the duration of the observed RPC, even when the result is reused.
+// An implementation must respect maxAge (zero means fresh), expire observations
+// and invalidate them after errors.
+// Indexers without it keep the fresh NodeHeight health probe.
+type NodeHeightObserver interface {
+	ObserveNodeHeight(context.Context, time.Duration) (uint64, time.Duration, error)
+}
