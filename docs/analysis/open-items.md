@@ -1,4 +1,4 @@
-# 남은 작업 (2026-10-14)
+# 남은 작업 (2026-10-15)
 
 현재 남은 작업의 기준 문서다. 완료 항목은 아래 요약에만 두고, 세부 결정·실험·측정 기록은 [작업 기록](work-log-2026-10.md)에 보존한다. 이 목록을 기록하는 것은 미승인 구현·외부 배포·태그 발행의 승인을 뜻하지 않는다.
 
@@ -36,7 +36,7 @@ R04의 구현 범위와 다음 작업:
 |---|---|---|
 | R05 | 실제 export era1과 RPC 속도 비교 | 변환한 StableNet testnet era1 색인은 수행. 실제 `gstable export-history` 파일과 같은 체인의 노드 `eth_getLogs` 비교는 미검증. 파일·노드 필요 |
 | R06 | Arc mainnet 검증 | mainnet을 새로 검증하지 않음. 접근 환경과 검증 범위를 정해 수행 |
-| R07 | 간헐 SLO 지연·상대 비율 변동 | 기존 170~240ms 원인은 미확인. 상태 준비 후 기본 설정 두 SLO에서 non-reader +25/+32% 초과를 관찰. main 비교는 -6%, 계측 opt-in 분리 후 기본/준비 옵션은 -37/-5%로 통과. batch 준비 후 기본 SLO 한 실행의 round2 non-reader가 절대p99337.2ms로 실패(ingest105.4/push217.8ms). 변경 전 main 기준은116.4/119.3ms(+3%) 통과. 유일한 원인은 확정하지 않음. load fixture가 이전 live loop를 종료·join하지 않는 결함을 재현·수정하고 race200/CPU1race200 검증. 수정 fixture 기본/배치16 SLO 각각 -4%로 통과. 특정 변동 원인은 확정하지 않음. CPU/GC 계측 통과 표본을 보존했으나 실패 원인 단정 안 함. 추가 MacBookAir의 SSH port 22 읽기 probe는 connection refused였다. 접속 가능한 host/port/account/path가 필요하며 여러 호스트 실측·실패 시점 관측은 남음 |
+| R07 | 간헐 SLO 지연·상대 비율 변동 | 기존 170~240ms 원인은 미확인. 상태 준비 후 기본 설정 두 SLO에서 non-reader +25/+32% 초과를 관찰. main 비교는 -6%, 계측 opt-in 분리 후 기본/준비 옵션은 -37/-5%로 통과. batch 준비 후 기본 SLO 한 실행의 round2 non-reader가 절대p99337.2ms로 실패(ingest105.4/push217.8ms). 변경 전 main 기준은116.4/119.3ms(+3%) 통과. 유일한 원인은 확정하지 않음. load fixture가 이전 live loop를 종료·join하지 않는 결함을 재현·수정하고 race200/CPU1race200 검증. 수정 fixture 기본/배치16 SLO 각각 -4%로 통과. 특정 변동 원인은 확정하지 않음. CPU/GC 계측 통과 표본을 보존했으나 실패 원인 단정 안 함. 추가 MacBookAir의 SSH port 22 읽기 probe는 connection refused였다. 사용자는 우선 로컬 Docker 비교를 선택했다. 같은 물리 Mac의 GOMAXPROCS4/CGO off 비교에서 macOS는318.2ms 실패, Docker Linux는+7% 통과. 임시 SSH 계정·컨테이너·키는 제거했다. 후속 trace에서 197ms ingest 중 Pebble Commit173ms/WAL write 최대42ms, GC STW 최대0.21ms를 확인했다. 별도317.1ms 실패도 재현했으나 그 블록의 trace는 없어 모든 실패 원인을 동일하게 단정하지 않는다. 60블록 p99가 최악 블록을 누락하는 계산을 수정하고 느린 블록·Commit 지연을 별도 보고한다. Pebble 캐시 생성자 참조 누락을 재현·수정했고 정상 종료/Open·초기화 실패의 invariants 검사20회가 통과했다. race가 끄는 캐시 finalizer 검사를 CI에 별도 추가했다. 이것을318ms I/O 지연의 유일한 원인으로 단정하지 않는다. 기본 SLO 재확인156.1/161.6ms(+4%)·fast10.1ms는 통과했다. 최종4CPU prepared 조건은block27 ingest362.9ms/Commit309.9ms/end-to-end p99378.0ms로 실패해 저장 대기만250ms 예산을 초과했다. OS 파일 쓰기/동기화 변동과 여러 물리 호스트의 운영 SLO는 여전히 미완료 |
 | R08 | DEX reorg flake | 두 시험 각각 race 200회와 cpu=1 200회 통과, flake 미재현. 재현 시 수정 |
 | R09 | frontend 이전 | GraphQL 문서 26개와 REST 이전은 frontend 작업. [이전 안내](../FRONTEND_MIGRATION.md) 참조. 이 세션에서는 해당 저장소 수정 금지 |
 | R10 | 태그·원격 branch·배포 | 새 태그 발행, 병합 branch 원격 삭제, 외부 배포는 사용자 확인 필요. 다음 개발 작업의 자동 후속 단계가 아님 |

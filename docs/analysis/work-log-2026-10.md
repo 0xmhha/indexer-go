@@ -477,6 +477,34 @@ StableNet의 시작 높이 이전 full block 요청은 696건/서로 다른 58�
 
 관측 종료 후 gofmt/build/lint(0 issues)/예제/전체 race(app 419.154초)/격리 PostgreSQL 기능 시험(adapter 42.423초, app 177.228초)이 통과했다. PostgreSQL은 이전 디스크·bind 소유권 문제를 피하는 전용 tmpfs와 기능 시험의 fsync=off 설정이며 디스크 성능 비교가 아니다. 생산 코드는 #175와 같고 정규 SLO 증거는 3.20의 단건/배치16 통과 결과를 유지한다.
 
+
+### 3.22 10/14~15 macOS SLO 재현·캐시 수명 수정·WAL 대기 분리
+
+사용자는 공개 RPC 네 개·체인별 5 HTTP/s 유지, 우선 로컬 Docker 비교를 선택했다. `00f99af`에서 동일 Go1.26.8/arm64/CGO off/GOMAXPROCS4·상태 준비 true/batch1·구독자1000명·10trades/s·60블록·2회 교대·250ms/상대20% 기준을 유지했다. macOS는 비읽기 round2 p99 318.2ms(ingest 최대294.7ms)로 실패했고, Docker Linux는 일반104.8/비읽기112.5ms(+7%)로 통과했다. 빠른 stream p99는8.8/10.1ms였다. Linux만 CPU quota4/메모리2GiB 제한을 갖고, DB는 같은 호스트 APFS의 새 경로이며 Linux는 bind mount를 사용했다. 이는 여러 물리 호스트나 공개 5 HTTP/s 색인 처리량 비교가 아니다. Docker CPU throttle은0이었다. localhost 전용 임시 SSH 계정의 공개 키 로그인으로 시험을 실행한 뒤 계정·키·컨테이너를 제거했고, 운영 설정 해시가 동일함을 확인했다. 원본은 `/private/tmp/indexer-docker-ssh-slo-20261014/`에 있다.
+
+후속 macOS 진단은 같은4CPU/상태 준비 조건의 임시 Go overlay와 Go1.26 FlightRecorder를 사용했다. 첫 시도는 시작 이전 height0 이벤트가 trace를 선점해 중단했으며 유효 성능 표본으로 사용하지 않는다. 측정 높이부터 캡처한 실행에서 일반 구독자 round2도 p99 317.1ms/ingest305.5ms로 실패했다. 따라서 비읽기 구독자만의 문제가 아니다. 이 실행의 첫 수신150ms trace는 해당 블록의 write 약9ms/Commit약8ms였고, 뒤의305ms 블록을 포함하지 않았다. 원래318ms 또는 이317ms 실패 전체의 유일한 원인을 이 trace로 확정하지 않는다.
+
+ingest와 수신 캡처를 나눈 다음 실행은 절대 기준을 통과했으나 일반107.2/비읽기183.4ms(+71%)로 상대 기준에 실패했다. 비읽기 round2 height45의 ingest197.032ms를 캡처했다. 같은 단조 trace 시간축에서 write174.776ms/Commit174.009ms/Pebble batch Commit173.411ms였고, WAL의 실제 파일 write syscall은26.447/41.750ms였다. 직전 height43/44의 Commit도67.310/100.388ms였다. 해당 window의 GC stop-the-world 최대0.210ms여서 이 ingest197ms 표본의 지배적 대기는 WAL 쓰기·동기화를 포함하는 커밋 구간이다. 디스크의 지연을 특정 외부 프로세스나 하나의 syscall로 더 좁히지는 않았다. macOS의 Go `os.File.Sync`가 `F_FULLFSYNC`를 사용하는 코드는 로컬 toolchain에서 확인했다. 내구성 경계를 약화하거나 동기화를 끄지 않는다. trace export/상시 tracing 비용이 있는 진단 실행을 비계측 성능 개선률로 사용하지 않는다. 원본과 분석은 `/private/tmp/indexer-macos-slo-cause-20261014/`에 있다.
+
+진단 과정에서 별개로 확인한 계산 오류를 수정했다. 기존 `floor(q*(n-1))`은60블록의 p99에서 가장 느린 블록을 제외했다. 한 블록은 각 구독자의 메시지1/60을 차지하므로 ingest와 수신의 p99 설명이 어긋났다. pipeline metrics와 같은 nearest-rank로 통일하고, 느린 ingest·수신 block height와 지연을 라운드마다 출력한다. `INDEXER_LOAD_DIAGNOSTICS=1`은 pipeline snapshot도 출력한다. `database_commit`은 정상 색인의 `BlockTx.Commit` 호출(undo·내구성 대기·staged state 반영)을 독립적으로 계측하며 RPC·writer queue·feature 처리를 제외한다. fsync syscall 단독 시간은 아니다. 기존 state_prefetch/pipeline_metrics 계측 활성화 조건과 disabled fast path를 유지한다. 저장 순서·동기화·RPC 제한·SLO 부하 및 합격 기준은 동일하다.
+
+회귀 시험은59개10ms와1개300ms의60개 표본에서 p99=300ms를 요구한다. 수정 전 소스 overlay에서 실제10ms로 실패했고 수정본은 통과했다. 지연 후 Commit 실패 시 cursor/outbox가 전진하지 않으며 같은 높이 재시도는 성공하고, Commit 관측에 실패·대기 시간이 남는 것을 검증했다. disabled 경로의 계측은0이다. 캐시 수정 전 계측 변경만 적용한4CPU/CGO off/상태 준비 true/batch1의 비trace SLO는 일반150.8/비읽기106.7ms(-29%)로 통과했다. 한 표본의 통과를 이전 실패의 해소나 코드 속도 개선률로 해석하지 않는다.
+
+추가 검토에서 `NewPebbleStorage`가 직접 만든 `pebble.NewCache`의 생성자 참조를 해제하지 않는 결함을 확인했다. Pebble Open/Close는 DB 자신의 참조만 관리하므로 생성자의1개 참조가 남았다. 캐시 생성 직후 defer Unref를 추가해 성공·Open 실패·초기화 실패에서 모두 소유권을 해제한다. DB가 실행되는 동안은 DB 자신의 참조가 유지된다. 캐시 크기·저장 형식·sync 방식은 바꾸지 않는다.
+
+`TestPebbleCacheLifecycle`은 Pebble의 `invariants` 최종 참조 검사를 켜고 정상 종료, 잘못된 경로의 Open 실패, 손상된 transaction counter로 초기화가 실패하는 경로를 GC로 회수한다. 수정 전 `cache ... non-zero reference count: 1`로 프로세스가 실패했고 수정 후1회(1.126초)/20회(10.903초)가 통과했다. 내부 참조 필드를 reflection으로 읽거나 noisy heap 크기 기준을 사용하지 않는다. Pebble은 race 빌드에서 이 finalizer를 끄므로 시험은 `invariants && !race`이며 `make test-cache-lifecycle`과 기존 CI test job의 별도 step으로 실행한다. 새 CI job은 추가하지 않는다. 캐시 소유권 누락은 확인·수정된 독립 결함이며, 원래318ms I/O 지연의 유일한 원인 또는 메모리 증가의 양적 원인으로 단정하지 않는다.
+
+계측·통계 수정 시점의 전체 race는App442.139초/fetch13.286초, PostgreSQL adapter49.901초/App199.755초로 통과했다. 이후 캐시 수명 수정이 추가되어 최종 전체 검증을 다시 실행한다. 최종 캐시 수정 소스의 빌드/lint(0 issues)/예제/전체 race(App475.010초, storage304.742초, fetch16.662초)/PostgreSQL(adapter46.090초, App185.512초)이 통과했다. PostgreSQL은 자체 tmpfs·fsync off의 기존 기능 시험 환경이며 디스크 성능·내구성 비교는 아니다.
+
+기본 `make test-slo`의 첫 최종 실행은 전체 구독자 부하가 일반156.4/비읽기117.1ms(-25%)로 통과했지만 빠른 stream p99130.026ms/fast-path 이후44ms로 실패했다. 이10초 실패 구간에는 trace가 없다. 커밋·통계·캐시 수정으로 모든 OS 지연을 해소했다고 주장하지 않는다. 같은 빠른 알림 경로에 임시 writer/commit trace를 붙인5회 실행은 node→message p999.1/12.7/8.3/17.0/9.2ms, fast-path 이후3.5/7.6/1.1/2.6/1.6ms로 통과해 새130ms 실패를 재현하지 못했다. 통과한 trace로 실패 순간의 유일한 원인을 대신 설명하지 않는다.
+
+단일CPU의64회 별도 동기화 probe는 동일한 F_FULLFSYNC 내구성 요청을 `os.File.Sync` 및 RawConn.Control 안의 x/sys/unix.FcntlInt로 각각 수행했다. 실행 가능한 CPU worker의 동기화 중 진행이0인 표본은61/64 대57/64, 중앙 진행량은 양쪽0이었다. maxSync17.416/17.567ms, heartbeat 최대간격21.396/23.544ms였다. 이 표본으로 명확한 스케줄러 개선을 입증하지 못했으며 별도Darwin FS wrapper나 sync 방식 변경을 채택하지 않았다. 합격 기준·부하·반복 횟수는 완화하지 않고 기본SLO를 재확인한다. 실패와 통과 표본을 모두 보존한다. 기본 SLO 재확인은App252.877초로 통과했다. 빠른stream node→message p9910.1ms/fast-path→message1.4ms, 일반 구독자 중앙p99156.1/비읽기161.6ms(+4%)였다. 첫130ms 실패를 지우지 않으며 반복 측정의 통과를 상시 안정성 보장으로 바꾸지 않는다.
+
+최종4CPU/CGO off/상태 준비 true/batch1/진단 true 실행은 빠른알림은 통과했지만 일반 구독자 round1 p99377.993ms로 실패했다. 가장 느린 block27의 ingest362.918ms/최대수신400.511ms, 해당 라운드의 writer p99310.949ms와 독립Commit p99309.910ms를 기록했다. fetch p9914.655ms/준비0.792ms, 커밋 오류0·최종inflight0·state bytes0이었다. Commit 대기만250ms 예산을 넘는 저장 경로의 tail을 비trace 실행에서도 확인했다. 이 측정은 syscall 단독 원인을 더 분리하지 않지만 RPC나 상태 준비만의 병목으로 설명할 수 없다. 커밋을 기다리기 전 durable 이벤트를 보내거나 sync를 끄는 방식으로 기준을 맞추지 않는다. 캐시 누수/통계·진단 결함의 수정과 간헐OS I/O 지연의 해소는 구분하며 R07을 완료로 표시하지 않는다.
+
+필수 기본 SLO/빌드/lint(0 issues)/전체race/PostgreSQL/예제와 캐시 수명20회, 새Commit 회귀race200(52.465초)/CPU1race200(45.657초)이 통과했다. 위4CPU 실패는 추가 운영 조건의 미충족 증거로 보존한다. 공개RPC 네 개와5HTTP/s, 운영config.yaml은 유지했고 다른 사용자의 프로세스·컨테이너는 변경하지 않았다.
+
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.

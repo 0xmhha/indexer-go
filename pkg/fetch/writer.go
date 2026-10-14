@@ -202,7 +202,10 @@ func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
 			return err
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	commitStarted := f.pipelineMetrics.start()
+	err = tx.Commit()
+	f.pipelineMetrics.finish(stageCommit, commitStarted, err != nil)
+	if err != nil {
 		return fmt.Errorf("commit block %d: %w", height, err)
 	}
 

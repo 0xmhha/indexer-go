@@ -70,6 +70,9 @@ func NewPebbleStorage(cfg *Config) (*PebbleStorage, error) {
 		ErrorIfExists:            false,
 		ErrorIfNotExists:         false,
 	}
+	// Open acquires the DB's own cache reference. Release the creator's
+	// reference on both success and failure so Close can reclaim the cache.
+	defer opts.Cache.Unref()
 
 	if cfg.ReadOnly {
 		opts.ReadOnly = true
