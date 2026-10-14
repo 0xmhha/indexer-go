@@ -272,6 +272,43 @@ writer의 기존 블록 트랜잭션을 이용하므로 실패한 블록·거래
 
 두 최종 알림 검사의 fast stream p99는 기본 10.6ms, 준비 true 12.2ms였다. 준비는 fast block tap 앞에 있으므로 cold 상태 RPC 대기가 provisional 알림에도 더해질 수 있다. localhost 시험 결과를 원격 RPC 알림 지연 보장으로 해석하지 않는다. queue/outbox 원자성과 데이터 정확성 검증, 제한된 네 공개 체인 lifecycle 확인과 실제 운영 SLO를 구분한다.
 
+
+### 3.13 10/14 네 공개 테스트넷 5분 운영 창 관측
+
+R04의 실제 요청량·head 지연을 후속 관측했다. main `ebc7e7a`의 production 바이너리(`v0.2.15-12-gebc7e7a`)와 로컬 네 테스트넷 설정을 사용했다. 12:44:51 KST부터 300.004초, Pebble 임시 DB에서 한 App으로 동시 실행했다. state_prefetch=true, workers=2, state_workers=4, chunk_size=10, poll_interval=2s, finality=head, 두 상태 기능의 allow_pruned_state=false를 유지했다. 저장소의 실제 DB/config와 기능 기본값은 바꾸지 않았다. 시작 직전 zero-address 상태를 확인하고 당시 head-2를 시작 높이로 선택했다.
+
+HTTP 관측 proxy는 body/응답을 변경하지 않고 upstream HTTPS 연결을 재사용했다. App의 체인별 5 HTTP requests/s 한도를 유지하면서, 관측용 head 조회까지 proxy의 같은 5회/초 limiter를 공유했다. batch는 그대로 전달하며 HTTP 요청 수와 batch member의 논리 요청 수를 따로 센다. 같은 JSON-RPC batch라도 제공자가 멤버별 quota를 적용할 수 있으므로 HTTP cap을 제공자의 실제 계약 한도로 해석하지 않는다. head/색인 API/RSS는 약 10초마다 관측했다. 관측 자체가 약 0.093 requests/s를 쓰고 proxy의 추가 대기·전달 비용도 있으므로 무계측 직접 실행의 처리량 수치가 아니다. 마지막 표본은 시작 후 294.718초이며 head 조회와 DB/API 조회가 완전히 동시인 것은 아니다.
+
+| 체인 | 시작 / 마지막 관측 저장 높이 | 마지막 head 차이 | 첫 유효 저장 표본~마지막의 색인/생성률 |
+|---|---|---:|---:|
+| StableNet 8283 | 22,276,792 / 22,277,088 (297블록) | 1블록 | 1.525 / 1.001 blocks/s |
+| BSC 97 | 136,672,247 / 136,672,351 (105블록) | 555블록 | 0.348 / 2.225 blocks/s |
+| Sepolia 11155111 | 11,910,643 / 11,910,646 (4블록) | 24블록 | 0.023 / 0.090 blocks/s |
+| Arc 5042002 | 67,097,158 / 67,097,305 (148블록) | 439블록 | 0.529 / 1.976 blocks/s |
+
+위 비율의 관측 구간은 각각 186.884/284.519/88.781/274.240초다. 처음 유효 저장 높이를 관측한 시각은 107.834/10.199/205.936/20.478초다. StableNet은 초기 epoch/상태 준비 이후 따라잡는 구간을 포함해 비율이 생성률보다 높았고, 마지막에는 head 근처였다. Sepolia는 아래 transport 실패·재시도 영향을 포함한다. BSC의 낮은 비율에는 멈춘 시간이 포함되므로 성공 경로의 지속 처리량으로 해석하지 않는다. Arc의 격차는 첫 유효 표본 42블록에서 마지막 439블록으로 증가했다.
+
+| 체인 | App HTTP / 논리 요청 | head / 잔액 요청 | proxy 대기 p95 / upstream 응답 p95 |
+|---|---:|---:|---:|
+| StableNet | 1,252 / 1,956 | 544 / 1 | 566.7 / 37.5ms |
+| BSC | 1,027 / 1,333 | 440 / 202 | 560.6 / 176.3ms |
+| Sepolia | 1,445 / 1,454 | 303 / 1,125 | 1,020.8 / 115.4ms |
+| Arc | 1,455 / 1,607 | 440 / 681 | 678.2 / 76.7ms |
+
+각 체인의 관측 head 요청은 추가 28회다. proxy 대기는 App 내부 limiter 대기를 포함하지 않는다. HTTP 429는 없었다. BSC 잔액 hash 조회 74회는 missing trie node였다. Arc의 계약 호출 오류 17회는 정상적인 token 판별 VM revert이며 상태 소실과 구분했다. Sepolia는 upstream 연결이 응답 없이 닫혀 proxy가 502를 반환한 transport 실패 1회와 첫 블록 전체 재시도가 있었다. proxy/연결 재사용의 영향을 배제하지 못했으므로 이를 노드 자체 장애율이나 무계측 성능으로 주장하지 않는다. 네 체인 프로세스 RSS는 표본 33,584~112,688 KiB였다. 누수 판정이나 chain별 heap 수치가 아니다.
+
+**실제 상태 소실:** BSC는 `136672352`의 필수 초기 잔액을 부모 hash로 읽지 못해 25회 batch 실패·같은 높이 재시도를 기록했다. 마지막까지 저장 높이 `136672351`을 유지했다. 실패한 snapshot을 0으로 저장하거나 시작 높이를 올려 건너뛰지 않았다. 최초 오류는 12:46:36 KST였다. 이후 다른 세 체인의 색인은 진행했다. 전체 실행의 0 초기화/latest 메타데이터 대체/보정 상태 소실 fallback 경고는 모두 0건이다. 이는 잔액 전체 oracle 검증이 아니다.
+
+앱 종료 후 실제로 성공했던 첫 nonzero-address 잔액 요청을 다시 조회했다. BSC의 `0x0000000000000000000000000000000000001000`은 원래 hash에서 성공했던 상태가 재조회 때 missing trie node였고, 당시 head 및 head-32의 number 조회는 성공, head-128/head-512는 실패했다. Sepolia의 표본 계정은 원래 hash 및 head/head-32/head-128 성공, head-512 실패였다. Arc 표본은 원래 hash와 네 number 조회 모두 성공했다. StableNet에는 준비 중 nonzero-address 잔액 요청이 없어 이 계정 검사를 수행하지 않았다. 이 소수 계정·시점의 결과로 고정 보존 블록 수, 제공자의 물리적 archive 구성이나 허용 중단 시간을 확정하지 않는다.
+
+기존 단계 계측의 마지막 **완료 chunk 로그**에서 fetch/prepare/write p95는 StableNet 870.1/1.0/30.1ms, BSC 1,204.7/1,995.8/1,417.6ms, Arc 1,403.2/6,002.3/1,633.3ms였다. 순서대로 sample count는 301/100/150이며 최근 256개 window와 전체 누적 count를 구분한다. BSC의 실패 뒤에는 완료 chunk 로그가 갱신되지 않아 위 값은 최종 실패들을 포함하지 않는다. Sepolia는 chunk를 끝내지 못해 이 snapshot이 없었다. write 시간은 canonical RPC와 전체 transaction을 포함하며 순수 DB commit latency가 아니다. 전달 payload peak는 0/5,706/9,375 bytes, in-flight peak는 모두 4였다. 이 값은 준비 중 임시 할당이나 전체 heap 상한이 아니다.
+
+**다음 개선 우선순위:** head 조회가 App 논리 요청의 27.8/33.0/20.8/27.4%, HTTP 요청의 43.5/42.8/21.0/30.2%다. 코드에서 `fetch.followTarget`은 설정 poll_interval과 별도로 1초마다 RPC를 읽고, `multichain.trackMetrics`는 syncing 중 commit 블록마다 health 조회로 head RPC를 더한다. 따라서 우선 head/동기화 상태 관측의 중복을 줄이되 API의 freshness·실패 시 progress와 체인 health 계약을 유지하는 회귀 검증이 필요하다. 다음은 Sepolia/Arc의 초기 잔액 요청량과 speculative 중복·hash 고정 batch 가능성 측정이다. workers만 늘리거나 quota를 임의로 올리는 것으로 해결됐다고 간주하지 않는다. BSC/Arc의 현재 설정을 정확한 잔액의 지속 운영 가능한 구성으로 확정하지 않았다.
+
+처음 관측 도구는 batch 배열을 단일 JSON-RPC object로 읽어 색인이 진행되지 않았다. 그 실행은 중단·정리하고 성능 표본에서 제외했다. 수정 후 단일/batch payload의 동일 전달, HTTP/논리 집계, 오류 ID 매핑과 표본 계정 선택을 별도로 확인한 뒤 위 측정을 수행했다. 응답 내용이나 운영 코드를 이 문제 때문에 바꾸지 않았다. 측정 후 App은 정상 종료(code 0)하고 임시 DB를 제거했다. 다른 프로세스/컨테이너를 중지하지 않았고 실제 `data/multichain-testnets`를 만들지 않았다. 도구·원본 JSON/log는 로컬 `/private/tmp/indexer-recovery-20261014/observe-live.py`, `operating-window.json/log`에 있다. 영구 사실·방법·한계는 이 기록에 보존한다.
+
+**남은 범위:** 장기 실행, 동일 입력 off/on 비교, 네 공개 체인의 PostgreSQL 동시 관측, 전체 잔액 정확성, 개별 DB commit latency/전체 heap, 여러 호스트 SLO와 상태 보존 안전 여유. 이번 5분 실행은 운영 SLO나 R03/R04 전체 완료가 아니다. 소스/부하 시험/알림 경로를 변경하지 않았으므로 추가 SLO 실행은 하지 않는다. 문서 PR 전 gofmt/build/lint(0 issues)/전체 race(app 466.575초)/PostgreSQL(adapter 44.341초, app 176.484초)/예제를 통과했다. 링크·코드 fence·측정 표의 원본 대조와 임시 DB 정리도 확인했다. 새 동시성 시험은 추가하지 않았다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.
