@@ -110,6 +110,8 @@ full node도 필요한 높이의 상태를 보관하면 시작할 수 있다. ar
 
 ## 7. 호환성 약속
 
+상태 준비 API는 기존 handler/registrar 인터페이스를 바꾸지 않는 선택적 추가다. `sdk.BlockPreparer.PrepareBlock`은 여러 블록에서 동시에 호출될 수 있으며 저장·publish·Block 변경 없이 `sdk.PreparedHandler`를 반환한다. `Handler`만 기존 순서의 block transaction에서 실행된다. 입력은 block hash로 조회하며(`Deps.BalanceAtHash`, 선택적 `sdk.HashContractReader`), `ReadState: true`면 writer가 canonical hash를 검증한다. `Bytes`로 유지하는 payload 크기를 계산해 보고한다. 채널 전달 후 입력을 수정하거나 다른 블록/fork에 재사용하지 않는다. `Deps.PrepareReads`는 `PrepareConcurrency`와 pipeline 공유 permit으로 작업 수를 제한한다. 기존 구현은 이 API 없이 그대로 작동하며 backfill은 기존 ordered handler를 호출한다.
+
 프로젝트가 기대는 면은 `pkg/sdk`와 `pkg/sdk/sdktest`의 공개 식별자다. 별칭(alias)이 가리키는 indexer 타입의 공개 메서드와 필드도 여기에 들어간다. `pkg/testchain`은 시험용이라 약속에 넣지 않는다(바꿀 때 예제를 함께 고친다). 다른 `pkg/...`를 직접 import하면 약속 밖이다.
 
 - 버전: 모듈 tag `vX.Y.Z`. v1 전에는 SDK를 깨는 변경을 minor 버전(`v0.Y.0`)에서만 하고, 이 문서의 "SDK 변경 기록"에 무엇이 바뀌었고 어떻게 고치는지 적는다. patch 버전은 깨지 않는다.

@@ -32,6 +32,28 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 [빠른 시작](QUICKSTART.md), [SDK 상태 규약](SDK.md#6-결정성-규약), [남은 운영 결정](analysis/open-items.md)을 함께 확인한다.
 
+## 상태 조회 준비 파이프라인
+
+`indexer.state_prefetch: true`는 full ingest의 수집 worker가 필요한 상태를 준비한 뒤 기존 bounded channel로 넘기게 한다. 기본값은 `false`이며 같은 DB에서 켜고 끌 수 있다. `multichain.chains[].state_prefetch`로 특정 체인만 덮어쓸 수 있다.
+
+```yaml
+indexer:
+  workers: 2
+  state_prefetch: true
+  state_workers: 4
+  state_max_bytes: 16777216
+```
+
+`state_workers`(기본 4)는 한 체인의 준비 pipeline에서 잔액·계약 조회 작업이 공유하는 동시 실행 상한이다. 기존 `rpc.rate_limit`·timeout·fallback 설정도 적용된다. 초기 잔액은 부모 block hash, 토큰 메타데이터는 생성 block hash로 조회한다(EIP-1898 지원 RPC 필요). writer는 canonical hash를 다시 확인하고 높이 순서대로 DB 반영·cursor·undo·outbox를 함께 commit한다. 준비 결과는 해당 pipeline·height·hash에만 사용하며, 취소/reorg/실패 시 남은 결과를 폐기하고 고루틴을 모두 기다린다.
+
+준비 가능한 회계 구현은 `chains.ConcurrentAccounting`에 명시적으로 동의해야 한다. 내장 세 profile은 지원하며 StableNet epoch 조회는 조상 hash 연결도 검증한다. writer가 계정 기록을 다시 확인하므로 앞선 블록에서 이미 초기화된 계정의 불필요한 준비 오류는 사용하지 않는다. 음수 잔액 보정·준비 중 기록이 있었으나 writer에서는 없어진 계정·backfill·준비 API가 없는 확장의 RPC는 writer에 남는다. `allow_pruned_state` 정책은 동일하다. 해시 selector의 invalid-params/method-not-found 오류는 0 대체로 처리하지 않는다.
+
+한 범위에서 최대 `2 × workers` 블록이 진행 중이다. `state_max_bytes`(기본 16 MiB)는 **블록별로 전달하는 준비 payload 계산값**의 상한이며 초과하면 블록을 거부한다. 따라서 workers=2에서 통과한 준비 payload는 최대 64 MiB다. Go heap 전체·기본 블록/영수증 데이터·준비 중 임시 할당을 제한하는 값은 아니다. 영구 상태 cache는 없다.
+
+준비 옵션을 켜거나 `indexer.pipeline_metrics: true`를 명시하면 `Index progress` 로그의 `pipeline`과 `Fetcher.GetPipelineMetrics()`가 수집/디코딩·상태 준비·순차 쓰기의 count/error/누적 ms와 최근 256개 p50/p95/p99, 진행 중 블록 수·준비 payload와 최고값을 제공한다. 기본 설정에서는 새 계측을 실행하지 않는다. 기존/준비 경로를 비교할 때는 양쪽 모두 `pipeline_metrics: true`로 같은 조건을 쓴다. 쓰기 시간은 writer queue·canonical 조회·전체 트랜잭션을 포함하며 DB commit만의 지연이 아니다. RPC 제한 대기는 각 단계에 포함된다.
+
+RPC 왕복이 주된 비용일 때 유리할 수 있지만, canonical 검증과 speculative 조회가 요청 수를 늘린다. 요청 제한이 병목이면 더 느려질 수 있으므로 같은 입력에서 시간과 RPC 수를 함께 비교한다. [통제된 비교](analysis/work-log-2026-10.md#312-1014-상태-준비-고루틴채널-파이프라인)는 운영 SLO나 모든 체인의 개선 보장이 아니다. 필요한 상태가 이미 지워졌다면 이 옵션도 복구하지 못한다.
+
 ## config.yaml (권장)
 
 ### 기본 설정

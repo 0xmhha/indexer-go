@@ -41,6 +41,8 @@ type Accounting struct {
 	epochs     EpochTracker
 }
 
+func (*Accounting) ConcurrentAccounting() bool { return true }
+
 var _ chains.NativeAccounting = (*Accounting)(nil)
 
 // NewAccounting returns the StableNet accounting rules.

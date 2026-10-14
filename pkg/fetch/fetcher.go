@@ -65,6 +65,9 @@ type Storage interface {
 
 // Config holds fetcher configuration
 type Config struct {
+	StatePrefetch   bool
+	PipelineMetrics bool
+	StateMaxBytes   int64
 	// StartHeight is the block height to start indexing from
 	StartHeight uint64
 
@@ -135,6 +138,7 @@ func (c *Config) Validate() error {
 
 // Fetcher handles fetching and indexing blockchain data
 type Fetcher struct {
+	pipelineMetrics pipelineMetrics
 	// tap observes blocks before they are stored (SetBlockTap).
 	tap       BlockTap
 	client    Client
@@ -170,7 +174,8 @@ type Fetcher struct {
 
 	// src, when set, reads blocks as raw JSON decoded by the chain profile
 	// instead of through client (chain profile design, CP-3).
-	src source.Source
+	src         source.Source
+	stateSource source.Source
 
 	// txr opens per-block storage transactions (nil if the storage cannot).
 	txr port.BlockTransactor
@@ -220,14 +225,15 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 	txr, _ := storage.(port.BlockTransactor)
 
 	f := &Fetcher{
-		client:    client,
-		storage:   storage,
-		config:    config,
-		logger:    logger,
-		eventBus:  eventBus,
-		metrics:   metrics,
-		optimizer: optimizer,
-		txr:       txr,
+		pipelineMetrics: pipelineMetrics{enabled: config.StatePrefetch || config.PipelineMetrics},
+		client:          client,
+		storage:         storage,
+		config:          config,
+		logger:          logger,
+		eventBus:        eventBus,
+		metrics:         metrics,
+		optimizer:       optimizer,
+		txr:             txr,
 	}
 	if !config.NoOutbox {
 		f.initOutbox(config.OutboxRetain, config.StreamGroup)

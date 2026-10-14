@@ -244,6 +244,34 @@ writer의 기존 블록 트랜잭션을 이용하므로 실패한 블록·거래
 
 사용자가 제안한 **처리 속도 향상·수집/처리 고루틴 분리·채널 통신**을 R04의 구체적인 과제로 기록했다. 현재 `scheduler.go`에도 병렬 블록/영수증 수집, bounded results channel, 순서 복원과 하나의 writer가 있다. 처리 단계 안의 feature 상태 RPC 대기는 추가 병렬 준비의 후보이며 아직 병목 측정 결과는 아니다. 체인별 단계 지연·RPC 제한 대기·queue 메모리·head 지연·실제 상태 가용성을 먼저 측정한다. 준비 결과를 chain id/height/hash에 묶고 소유권을 채널로 넘기며 reorg 폐기·backpressure를 유지한다. 잔액 의존성과 원자적 commit을 지키기 위해 체인별 writer는 높이 순서를 유지한다. 이 수정에서 전체 파이프라인 변경이나 처리량 향상을 구현·측정했다고 주장하지 않는다.
 
+### 3.12 10/14 상태 준비 고루틴·채널 파이프라인
+
+사용자가 권장 구조의 실행을 승인했다. `state_prefetch`는 수집 worker에서 초기 잔액/토큰 메타데이터를 준비하고, 기존 크기 제한 채널·순서 복원·체인별 writer로 전달한다. 기본은 opt-in이며 체인별로 덮어쓸 수 있다. `state_workers`의 permit은 한 pipeline의 준비 작업이 공유한다. 부모/생성 block hash로 상태를 읽으며 writer에서 canonicality·DB 기록을 재확인한다. 음수 잔액 보정·backfill·미지원 custom handler는 기존 순차 경로를 사용한다. 기존 SDK 인터페이스는 유지하고 선택적 준비/hash reader API와 snapshot을 추가했다. StableNet epoch 조회는 준비 block의 조상 hash 연결을 검증해 다른 fork의 헤더로 cache를 채우지 않는다.
+
+준비 값은 전달 후 수정하지 않는다. 범위 취소/reorg/실패 시 작업 고루틴과 channel drainer를 모두 기다리고 결과를 폐기한다. 최대 `2 × workers` 블록이 진행 중이며 `state_max_bytes`는 블록별 전달 payload 계산값만 제한한다. 기본 블록/영수증과 임시 할당을 포함한 heap 상한은 아니다. 상태가 없거나 hash RPC가 미지원이면 잘못된 0/latest 대체를 저장하지 않는다(strict 기본값). 노드가 큐 대기 중 이미 조회한 상태를 pruning한 뒤에도 준비 값으로 같은 블록을 정확하게 저장하는 시험을 추가했다.
+
+통제된 비교는 Apple M2 Max/darwin arm64/Go 1.26.8/Pebble에서 `BenchmarkStatePreparation -benchtime=3x -count=1`로 수행했다. 동일한 25블록(24블록은 각 8개 새 수신자를 건드리는 native 거래), 수집 workers=2·state_workers=4·양쪽 pipeline_metrics=true이며 DB/노드 생성과 App 시작/종료는 시간에서 제외했다. 아래 값은 3회 평균이며 RPC 수는 논리 요청 수, writer p95는 각 반복의 최근 window p95 평균이다. peak payload는 반복 중 최대 계산값이다. B/op는 **누적 할당량**이며 peak heap이 아니다.
+
+| 입력 | 기존/준비 시간 | 기존/준비 RPC | 기존/준비 writer p95 | 기존/준비 할당량 |
+|---|---|---|---|---|
+| localhost, 추가 지연 없음 | 0.284 / 0.164초 | 245 / 272 | 26.33 / 13.27ms | 28.94 / 34.80 MB/op |
+| 각 RPC 왕복 5ms 추가, quota 없음 | 1.435 / 0.322초 | 245 / 272 | 69.57 / 19.96ms | 27.38 / 35.60 MB/op |
+| 왕복 5ms, 50 requests/s 제한 | 4.469 / 4.942초 | 245 / 272 | 202.8 / 149.4ms | 26.88 / 30.78 MB/op |
+
+준비 payload 최고값은 각각 10,206 / 7,416 / 5,050 bytes다. RTT 입력은 약 4.45배 개선했지만 요청 제한 입력은 약 10.6% 느렸다. 추가 canonical 검증·speculative 초기 잔액 조회와 메모리 할당 비용이 있다. 초기 구현의 준비 직후 header 검증은 hash 고정 조회와 중복돼 제거했으며 writer에서 재확인한다. 실제 체인·RPC·PostgreSQL·여러 호스트 SLO에 이 비율을 적용하지 않는다. 로컬 공개 RPC의 초당 5회 cap을 임의로 올리지 않았다.
+
+공개 RPC의 hash 지원은 production Go client(5 requests/s)에서 확인했다. StableNet 22,268,836 / BSC 136,654,564 / Sepolia 11,909,989 / Arc 67,081,451의 부모 hash 잔액 및 head hash 코드/호출 조회가 모두 성공했다. 조회 시간에는 limiter 대기도 포함한다. zero-address 표본이므로 일반 계정의 상태 보존 범위·장기 운영 정확성을 보장하지 않는다. Python 기본 요청은 Sepolia/Arc에서 403이었으나 production client 조회는 성공했다.
+
+실제 바이너리와 `state_prefetch: true`/state_workers=4/수집 workers=2/5 requests/s/strict 기능 설정으로 네 공개 체인을 임시 DB·localhost 포트에서 동시에 실행했다. 시작 높이는 StableNet 22,269,858 / BSC 136,656,840 / Sepolia 11,910,071 / Arc 67,083,465였다. 같은 DB로 재시작해 저장된 시작 hash 유지와 새 진행을 확인했다. 재시작에서 관측한 높이는 각각 22,269,869 / 136,656,902 / 11,910,073 / 67,083,486이었다. 초기 0 대체·latest 메타데이터 대체·보정 상태 소실 경고는 두 실행 합계 모두 0건이었다. 이 검사는 lifecycle·블록 hash 검사이며 일반 계정의 잔액 전체 대조나 장기 SLO가 아니다. 임시 앱/DB는 정리했고 실제 새 DB 경로는 생성하지 않았다. 로컬 config.yaml의 최근 시작 높이는 재확인 후 갱신했으며 실제 운영 시작 전에는 다시 확인해야 한다.
+
+새 준비 회귀 시험은 일반 race 200회(feature 1.622초, fetch 78.587초, app 615.625초)와 단일 CPU race 200회(feature 1.684초, fetch 50.539초, app 675.676초)를 통과했다. 기존 네 체인 장애/stream/같은 DB 재시작 통합 시험은 실제 native 거래와 준비 옵션을 사용하도록 확장했으며 focused race도 통과했다. 알림/SLO 시험은 `INDEXER_LOAD_STATE_PREFETCH=1`로 준비 경로의 영향을 추가로 측정할 수 있다.
+
+최종 필수 검증은 gofmt/build/lint(0 issues)/전체 race(app 420.418초)/PostgreSQL(adapter 44.743초, app 190.377초)/예제 모두 통과했다. 계측 분리 뒤의 채널/준비 시험도 일반 race 200회(feature 1.611초, fetch 56.190초) 및 단일 CPU race 200회(feature 1.497초, fetch 55.380초)를 통과했다.
+
+**SLO 실패와 비교:** 초기 기본 설정 두 실행에서 non-reader 상대 지연은 110.9/138.8ms(+25%), 93.9/123.9ms(+32%)로 20% 기준을 초과했다. 절대 p99는 기준 안이었다. 변경 전 main e80ce1b를 별도 임시 archive checkout에서 같은 입력으로 실행한 결과는 111.0/104.5ms(-6%)였다. 기존 경로의 비용을 보존하기 위해 새 계측은 state_prefetch 또는 명시적 pipeline_metrics에서만 실행하도록 분리했다. 그 뒤 같은 기준의 기본 SLO는 172.3/108.0ms(-37%), 옵션 true SLO는 107.0/101.8ms(-5%)로 통과했다. 기준·입력·반복 횟수는 완화하지 않았다. 실행 간 변동이 커서 최초 실패의 유일한 원인을 확정하거나 간헐 SLO 문제 전체를 해소했다고 주장하지 않는다. R07에는 이 비율 변동도 남긴다.
+
+두 최종 알림 검사의 fast stream p99는 기본 10.6ms, 준비 true 12.2ms였다. 준비는 fast block tap 앞에 있으므로 cold 상태 RPC 대기가 provisional 알림에도 더해질 수 있다. localhost 시험 결과를 원격 RPC 알림 지연 보장으로 해석하지 않는다. queue/outbox 원자성과 데이터 정확성 검증, 제한된 네 공개 체인 lifecycle 확인과 실제 운영 SLO를 구분한다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.

@@ -21,6 +21,19 @@ type EthClientAdapter struct {
 	client *ethclient.Client
 }
 
+// HashEthClient reads a specific fork's state, without selecting by height.
+type HashEthClient interface {
+	CallContractAtHash(context.Context, ethereum.CallMsg, common.Hash) ([]byte, error)
+	CodeAtHash(context.Context, common.Address, common.Hash) ([]byte, error)
+}
+
+func (a *EthClientAdapter) CallContractAtHash(ctx context.Context, call ethereum.CallMsg, hash common.Hash) ([]byte, error) {
+	return a.client.CallContractAtHash(ctx, call, hash)
+}
+func (a *EthClientAdapter) CodeAtHash(ctx context.Context, addr common.Address, hash common.Hash) ([]byte, error) {
+	return a.client.CodeAtHash(ctx, addr, hash)
+}
+
 // NewEthClientAdapter creates a new adapter from an ethclient.Client
 func NewEthClientAdapter(client *ethclient.Client) *EthClientAdapter {
 	return &EthClientAdapter{client: client}
@@ -100,7 +113,42 @@ func (p *ContractIndexer) IndexContract(ctx context.Context, address common.Addr
 		return nil // already indexed
 	}
 
+	metadata, err := p.ReadContract(ctx, address, blockNumber, blockTime)
+	if err != nil {
+		return err
+	}
+	if metadata == nil {
+		return nil
+	}
+	if err := p.storage.SaveTokenMetadata(ctx, metadata); err != nil {
+		return fmt.Errorf("save token metadata of %s: %w", address.Hex(), err)
+	}
+	p.logger.Debug("Indexed token contract",
+		zap.String("address", address.Hex()),
+		zap.String("standard", string(metadata.Standard)),
+		zap.String("name", metadata.Name),
+		zap.String("symbol", metadata.Symbol),
+		zap.Uint64("blockNumber", blockNumber))
+	return nil
+}
+
+// ReadContract acquires creation-block metadata without reading or writing
+// storage. Its result may be passed to the ordered writer for an atomic save.
+func (p *ContractIndexer) ReadContract(ctx context.Context, address common.Address, blockNumber, blockTime uint64) (*port.TokenMetadata, error) {
+	return p.readContract(ctx, address, blockNumber, blockTime, nil)
+}
+
+// ReadContractAtHash acquires metadata from the exact creation block's state.
+func (p *ContractIndexer) ReadContractAtHash(ctx context.Context, address common.Address, blockNumber, blockTime uint64, hash common.Hash) (*port.TokenMetadata, error) {
+	if _, ok := p.client.(HashEthClient); !ok {
+		return nil, fmt.Errorf("client does not support contract reads by block hash")
+	}
+	return p.readContract(ctx, address, blockNumber, blockTime, &hash)
+}
+
+func (p *ContractIndexer) readContract(ctx context.Context, address common.Address, blockNumber, blockTime uint64, hash *common.Hash) (*port.TokenMetadata, error) {
 	node := &blockReader{client: p.client, block: new(big.Int).SetUint64(blockNumber), allowPrunedState: p.allowPrunedState}
+	node.hash = hash
 	defer func() {
 		if node.latest {
 			p.logger.Warn("The node keeps no state of the token's creation block; read its latest state",
@@ -109,21 +157,21 @@ func (p *ContractIndexer) IndexContract(ctx context.Context, address common.Addr
 	}()
 	detection := NewDetector(node, p.logger).DetectStandard(ctx, address)
 	if node.failed != nil {
-		return fmt.Errorf("read contract %s at block %d: %w", address.Hex(), blockNumber, node.failed)
+		return nil, fmt.Errorf("read contract %s at block %d: %w", address.Hex(), blockNumber, node.failed)
 	}
 	if detection.Error != nil {
 		p.logger.Debug("Failed to detect token standard",
 			zap.String("address", address.Hex()),
 			zap.Error(detection.Error))
-		return nil
+		return nil, nil
 	}
 	if detection.Standard == StandardUnknown {
-		return nil
+		return nil, nil
 	}
 
 	metadataResult := NewMetadataFetcher(node, p.logger).FetchMetadata(ctx, address, detection.Standard)
 	if node.failed != nil {
-		return fmt.Errorf("read token %s at block %d: %w", address.Hex(), blockNumber, node.failed)
+		return nil, fmt.Errorf("read token %s at block %d: %w", address.Hex(), blockNumber, node.failed)
 	}
 
 	// Times are the block's, so that reprocessing a block stores the same
@@ -144,16 +192,7 @@ func (p *ContractIndexer) IndexContract(ctx context.Context, address common.Addr
 		SupportsMetadata:   detection.SupportsMetadata,
 		SupportsEnumerable: detection.SupportsEnumerable,
 	}
-	if err := p.storage.SaveTokenMetadata(ctx, metadata); err != nil {
-		return fmt.Errorf("save token metadata of %s: %w", address.Hex(), err)
-	}
-	p.logger.Debug("Indexed token contract",
-		zap.String("address", address.Hex()),
-		zap.String("standard", string(metadata.Standard)),
-		zap.String("name", metadata.Name),
-		zap.String("symbol", metadata.Symbol),
-		zap.Uint64("blockNumber", blockNumber))
-	return nil
+	return metadata, nil
 }
 
 // convertStandard converts token.TokenStandard to port.TokenStandard
@@ -177,6 +216,7 @@ func convertStandard(standard TokenStandard) port.TokenStandard {
 // missing-state or code-read errors, are kept in failed. Contract-call reverts
 // remain detector answers: they can indicate a method the contract lacks.
 type blockReader struct {
+	hash             *common.Hash
 	client           EthClient
 	block            *big.Int
 	latest           bool
@@ -185,7 +225,13 @@ type blockReader struct {
 }
 
 func (r *blockReader) CallContract(ctx context.Context, call ethereum.CallMsg, _ interface{}) ([]byte, error) {
-	out, err := r.client.CallContract(ctx, call, r.block)
+	var out []byte
+	var err error
+	if r.hash != nil {
+		out, err = r.client.(HashEthClient).CallContractAtHash(ctx, call, *r.hash)
+	} else {
+		out, err = r.client.CallContract(ctx, call, r.block)
+	}
 	if r.allowPrunedState && missingState(err) {
 		r.latest = true
 		out, err = r.client.CallContract(ctx, call, nil)
@@ -194,7 +240,13 @@ func (r *blockReader) CallContract(ctx context.Context, call ethereum.CallMsg, _
 }
 
 func (r *blockReader) CodeAt(ctx context.Context, contract common.Address, _ interface{}) ([]byte, error) {
-	out, err := r.client.CodeAt(ctx, contract, r.block)
+	var out []byte
+	var err error
+	if r.hash != nil {
+		out, err = r.client.(HashEthClient).CodeAtHash(ctx, contract, *r.hash)
+	} else {
+		out, err = r.client.CodeAt(ctx, contract, r.block)
+	}
 	if r.allowPrunedState && missingState(err) {
 		r.latest = true
 		out, err = r.client.CodeAt(ctx, contract, nil)
@@ -209,10 +261,26 @@ func (r *blockReader) CodeAt(ctx context.Context, contract common.Address, _ int
 
 func (r *blockReader) note(err error) error {
 	var answered rpc.Error
-	if err != nil && (!errors.As(err, &answered) || !r.allowPrunedState && missingState(err)) && r.failed == nil {
+	if err != nil && (!errors.As(err, &answered) || !r.allowPrunedState && missingState(err) || r.hash != nil && !contractRevert(answered)) && r.failed == nil {
 		r.failed = err
 	}
 	return err
+}
+
+func contractRevert(err rpc.Error) bool {
+	if err == nil {
+		return false
+	}
+	if err.ErrorCode() == 3 {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	for _, vmError := range []string{"execution reverted", "out of gas", "invalid opcode", "invalid jump destination", "stack underflow", "stack limit reached", "write protection", "return data out of bounds", "gas uint64 overflow", "vm execution error"} {
+		if strings.Contains(message, vmError) {
+			return true
+		}
+	}
+	return false
 }
 
 // missingState reports whether the node answered that it keeps no state of

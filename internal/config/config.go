@@ -202,9 +202,15 @@ type LogConfig struct {
 
 // IndexerConfig holds indexer-specific configuration
 type IndexerConfig struct {
-	Workers     int    `yaml:"workers"`
-	ChunkSize   int    `yaml:"chunk_size"`
-	StartHeight uint64 `yaml:"start_height"`
+	// StatePrefetch prepares state reads outside the ordered writer (opt-in).
+	StatePrefetch   bool `yaml:"state_prefetch"`
+	PipelineMetrics bool `yaml:"pipeline_metrics"`
+	StateWorkers    int  `yaml:"state_workers"`
+	// StateMaxBytes caps retained preparation payload per block.
+	StateMaxBytes int64  `yaml:"state_max_bytes"`
+	Workers       int    `yaml:"workers"`
+	ChunkSize     int    `yaml:"chunk_size"`
+	StartHeight   uint64 `yaml:"start_height"`
 	// AtomicBlock and ProfileSource selected the legacy write path and the
 	// legacy go-ethereum client path when false. Both paths were removed
 	// after v0.1.0: blocks are always indexed in one storage transaction
@@ -341,6 +347,8 @@ type ChainConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// Workers is the number of concurrent fetch workers
 	Workers int `yaml:"workers,omitempty"`
+	// StatePrefetch overrides indexer.state_prefetch for this chain.
+	StatePrefetch *bool `yaml:"state_prefetch,omitempty"`
 	// BatchSize is the number of blocks to fetch per batch
 	BatchSize int `yaml:"batch_size,omitempty"`
 	// RPCTimeout is the timeout for RPC calls
@@ -725,6 +733,12 @@ func (c *Config) SetDefaults() {
 	}
 
 	// Indexer defaults
+	if c.Indexer.StateWorkers == 0 {
+		c.Indexer.StateWorkers = 4
+	}
+	if c.Indexer.StateMaxBytes == 0 {
+		c.Indexer.StateMaxBytes = 16 << 20
+	}
 	if c.Indexer.Workers == 0 {
 		c.Indexer.Workers = constants.DefaultNumWorkers
 	}
@@ -1558,6 +1572,12 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate indexer configuration
+	if c.Indexer.StateWorkers < 0 {
+		return fmt.Errorf("state worker count must be positive")
+	}
+	if c.Indexer.StateMaxBytes < 0 {
+		return fmt.Errorf("state_max_bytes must be positive")
+	}
 	if c.Indexer.Workers <= 0 {
 		return fmt.Errorf("worker count must be positive")
 	}

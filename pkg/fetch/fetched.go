@@ -30,6 +30,7 @@ import (
 // code that records a hash must take it from the model. Transactions and
 // receipts are aligned by index in both views.
 type fetchedBlock struct {
+	prepared *feature.PreparedBlock // owned by this block; discarded with its range
 	block    *model.Block
 	receipts []*model.Receipt
 
@@ -125,9 +126,14 @@ func (f *Fetcher) runFeatures(ctx context.Context, fb *fetchedBlock) error {
 	if f.features == nil {
 		return nil
 	}
-	return f.features.HandleBlock(ctx, &feature.Block{
-		Model: fb.block, Receipts: fb.receipts, Geth: fb.geth, GethReceipts: fb.gethReceipts,
-	})
+	if fb.prepared != nil {
+		return fb.prepared.HandleBlock(ctx, fb.featureBlock())
+	}
+	return f.features.HandleBlock(ctx, fb.featureBlock())
+}
+
+func (fb *fetchedBlock) featureBlock() *feature.Block {
+	return &feature.Block{Model: fb.block, Receipts: fb.receipts, Geth: fb.geth, GethReceipts: fb.gethReceipts}
 }
 
 // BlockAt reads block n from the node as the model (for chain rules that
@@ -145,3 +151,19 @@ func (f *Fetcher) BlockAt(ctx context.Context, n uint64) (*model.Block, error) {
 func (f *Fetcher) BalanceAt(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error) {
 	return f.balanceAt(ctx, addr, block)
 }
+
+func (f *Fetcher) BalanceAtHash(ctx context.Context, addr common.Address, hash common.Hash) (*big.Int, error) {
+	reader, ok := f.client.(interface {
+		BalanceAtHash(context.Context, common.Address, common.Hash) (*big.Int, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("client does not support balance reads by block hash")
+	}
+	rctx, cancel := f.rpcCtx(ctx)
+	defer cancel()
+	return reader.BalanceAtHash(rctx, addr, hash)
+}
+
+// SetStateSource chooses the live node for canonical state validation even
+// when the block source combines RPC and immutable archives.
+func (f *Fetcher) SetStateSource(src source.Source) { f.stateSource = src }

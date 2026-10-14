@@ -26,6 +26,8 @@ var (
 // Arc credits the miner with all execution gas fees, including the base fee.
 type Accounting struct{}
 
+func (Accounting) ConcurrentAccounting() bool { return true }
+
 func (Accounting) NativeDeltas(_ context.Context, b *model.Block, rs []*model.Receipt, _ chains.AccountingEnv) ([]chains.BalanceDelta, error) {
 	if len(b.Withdrawals) > 0 {
 		return nil, fmt.Errorf("arc: unexpected Ethereum beacon withdrawals")
