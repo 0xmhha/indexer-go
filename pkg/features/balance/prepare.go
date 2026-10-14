@@ -14,8 +14,9 @@ import (
 )
 
 type preparedBalance struct {
-	value *big.Int
-	err   error
+	value   *big.Int
+	err     error
+	skipped bool
 }
 
 // PrepareBlock computes profile deltas and acquires initial balances before
@@ -59,9 +60,27 @@ func (h *handler) PrepareBlock(ctx context.Context, b *feature.Block) (feature.P
 	if b.Model.Number > 0 {
 		hash = b.Model.ParentHash
 	}
-	readOne := func(ctx context.Context, i int) error {
+	readBalance := func(ctx context.Context, i int) error {
 		values[i].value, values[i].err = h.deps.BalanceAtHash(ctx, addresses[i], hash)
 		return preparationReadError(ctx, values[i].err)
+	}
+	// Check after obtaining the shared read permit: an earlier block may
+	// initialize the account while this job waits. Do not reuse another
+	// block's speculative state; only committed records suppress a read.
+	needsRead := func(ctx context.Context, i int) (bool, error) {
+		recorded, err := h.records.HasBalanceRecord(ctx, addresses[i])
+		if err != nil {
+			return false, fmt.Errorf("prepare balance record %s: %w", addresses[i], err)
+		}
+		values[i].skipped = recorded
+		return !recorded, nil
+	}
+	readOne := func(ctx context.Context, i int) error {
+		needed, err := needsRead(ctx, i)
+		if err != nil || !needed {
+			return err
+		}
+		return readBalance(ctx, i)
 	}
 	batchSize := max(1, min(64, h.deps.StateBatchSize))
 	var readErr error
@@ -70,25 +89,40 @@ func (h *handler) PrepareBlock(ctx context.Context, b *feature.Block) (feature.P
 	} else {
 		readErr = h.deps.PrepareReads(ctx, (len(addresses)+batchSize-1)/batchSize, func(ctx context.Context, batch int) error {
 			from, to := batch*batchSize, min((batch+1)*batchSize, len(addresses))
-			out, failures, err := h.deps.BalanceBatchAtHash(ctx, addresses[from:to], hash)
+			var indices []int
+			var pending []common.Address
+			for i := from; i < to; i++ {
+				needed, err := needsRead(ctx, i)
+				if err != nil {
+					return err
+				}
+				if needed {
+					indices = append(indices, i)
+					pending = append(pending, addresses[i])
+				}
+			}
+			if len(pending) == 0 {
+				return nil
+			}
+			out, failures, err := h.deps.BalanceBatchAtHash(ctx, pending, hash)
 			if errors.Is(err, rpcbatch.ErrUnsupported) {
 				// The outer job already holds a shared permit. Re-entering
 				// PrepareReads here would deadlock all permits on fallback.
-				for i := from; i < to; i++ {
-					if err := readOne(ctx, i); err != nil {
+				for _, i := range indices {
+					if err := readBalance(ctx, i); err != nil {
 						return err
 					}
 				}
 				return nil
 			}
-			if err == nil && (len(out) != to-from || len(failures) != to-from) {
+			if err == nil && (len(out) != len(pending) || len(failures) != len(pending)) {
 				err = fmt.Errorf("invalid balance batch result length")
 			}
-			for i := from; i < to; i++ {
+			for result, i := range indices {
 				if err != nil {
 					values[i].err = err
 				} else {
-					values[i].value, values[i].err = out[i-from], failures[i-from]
+					values[i].value, values[i].err = out[result], failures[result]
 					if values[i].value == nil && values[i].err == nil {
 						values[i].err = fmt.Errorf("balance batch has no result for %s", addresses[i])
 					}
@@ -109,6 +143,9 @@ func (h *handler) PrepareBlock(ctx context.Context, b *feature.Block) (feature.P
 	balances := make(map[common.Address]preparedBalance, len(addresses))
 	var size int64
 	for i, addr := range addresses {
+		if values[i].skipped {
+			continue // recorded after waiting; rollback uses the writer fallback
+		}
 		balances[addr] = values[i]
 		size += 96
 		if values[i].value != nil {
@@ -137,7 +174,7 @@ func (h *handler) PrepareBlock(ctx context.Context, b *feature.Block) (feature.P
 	}
 	return feature.PreparedHandler{Handler: feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
 		return copyHandler.applyDeltas(ctx, b, merged)
-	}), ReadState: len(addresses) > 0, Bytes: size}, nil
+	}), ReadState: len(balances) > 0, Bytes: size}, nil
 }
 
 func preparationReadError(ctx context.Context, err error) error {
