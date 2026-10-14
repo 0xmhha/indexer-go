@@ -27,10 +27,11 @@ func (nodeError) ErrorCode() int  { return -32000 }
 // answers nothing; latest reads see supply as the total supply.
 type nodeAtBlock struct {
 	*mockEthClient
-	blocks  []interface{}
-	missing bool
-	down    error
-	supply  *big.Int
+	blocks      []interface{}
+	missing     bool
+	missingFrom int // state disappears after this many reads, including this one
+	down        error
+	supply      *big.Int
 }
 
 func (n *nodeAtBlock) read(block interface{}) error {
@@ -38,7 +39,7 @@ func (n *nodeAtBlock) read(block interface{}) error {
 	switch {
 	case n.down != nil:
 		return n.down
-	case n.missing && block != nil:
+	case (n.missing || n.missingFrom > 0 && len(n.blocks) >= n.missingFrom) && block != nil:
 		return nodeError("missing trie node 1f2e (path )")
 	}
 	return nil
@@ -123,10 +124,29 @@ func TestIndexContractReadsTheCreationBlock(t *testing.T) {
 	t.Run("a node without the block's state is read at its latest state", func(t *testing.T) {
 		node, store := erc20Node(addr), newPortStore()
 		node.missing = true
-		require.NoError(t, NewContractIndexer(node, store, zap.NewNop()).IndexContract(ctx, addr, 42, 1000))
+		indexer := NewContractIndexer(node, store, zap.NewNop())
+		indexer.SetAllowPrunedState(true)
+		require.NoError(t, indexer.IndexContract(ctx, addr, 42, 1000))
 		require.Contains(t, store.tokens, addr)
 		assert.Equal(t, big.NewInt(2000), store.tokens[addr].TotalSupply)
 	})
+	for _, at := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("strict state loss at read %d", at), func(t *testing.T) {
+			node, store := erc20Node(addr), newPortStore()
+			node.missingFrom = at
+			indexer := NewContractIndexer(node, store, zap.NewNop())
+			err := indexer.IndexContract(ctx, addr, 42, 1000)
+			require.ErrorContains(t, err, "missing trie node")
+			assert.Empty(t, store.tokens, "partial/latest metadata must not be stored")
+			for _, block := range node.blocks {
+				assert.Equal(t, big.NewInt(42), block, "no latest-state fallback")
+			}
+			node.missingFrom = 0
+			require.NoError(t, indexer.IndexContract(ctx, addr, 42, 1000))
+			require.Contains(t, store.tokens, addr)
+			assert.Equal(t, big.NewInt(1000), store.tokens[addr].TotalSupply, "retry reads historical state")
+		})
+	}
 	t.Run("a node that does not answer fails the block", func(t *testing.T) {
 		node, store := erc20Node(addr), newPortStore()
 		node.down = errors.New("connection refused")

@@ -59,8 +59,8 @@ func (f *Fetcher) storedBlockHash(ctx context.Context, height uint64) (common.Ha
 }
 
 // applyBlock performs every write for one block. It must run inside a block
-// transaction (ctx from BeginBlock). Storage write failures abort the block;
-// failures of external enrichment (RPC lookups, token metadata) are logged.
+// transaction (ctx from BeginBlock). Storage and feature failures abort the
+// block, including required historical state reads, before cursor/outbox commit.
 func (f *Fetcher) applyBlock(ctx context.Context, fb *fetchedBlock) error {
 	height := fb.height()
 

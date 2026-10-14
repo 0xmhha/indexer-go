@@ -68,12 +68,13 @@ type TokenMetadataStore interface {
 // ContractIndexer detects whether a new contract is a token and stores its
 // metadata. It is used by the token.metadata feature.
 type ContractIndexer struct {
-	client  EthClient
-	storage TokenMetadataStore
-	logger  *zap.Logger
+	client           EthClient
+	storage          TokenMetadataStore
+	logger           *zap.Logger
+	allowPrunedState bool
 }
 
-// NewContractIndexer returns an indexer that reads contracts through client.
+// NewContractIndexer returns an indexer that requires historical state from client.
 func NewContractIndexer(client EthClient, stor TokenMetadataStore, logger *zap.Logger) *ContractIndexer {
 	if logger == nil {
 		logger = zap.NewNop()
@@ -81,21 +82,25 @@ func NewContractIndexer(client EthClient, stor TokenMetadataStore, logger *zap.L
 	return &ContractIndexer{client: client, storage: stor, logger: logger}
 }
 
+// SetAllowPrunedState permits latest-state fallback when historical state is
+// unavailable. Configure this before indexing; the default is strict.
+func (p *ContractIndexer) SetAllowPrunedState(allow bool) {
+	p.allowPrunedState = allow
+}
+
 // IndexContract stores the metadata of the contract at address, created in
 // block blockNumber at blockTime, if it is a token not indexed yet. The
 // contract is read as of that block, so live indexing and a later backfill
-// store the same metadata (docs/SDK.md, determinism rules); a node that no
-// longer keeps that block's state is read at its latest state, with a
-// warning. A read the node did not answer (connection, timeout) is returned
-// as an error, so the block is retried instead of indexed without the
-// token; storage errors are returned too.
+// store the same metadata (docs/SDK.md, determinism rules). Missing state
+// fails the block unless SetAllowPrunedState explicitly permits a warned
+// latest-state fallback. Unanswered reads and storage errors fail the block.
 func (p *ContractIndexer) IndexContract(ctx context.Context, address common.Address, blockNumber, blockTime uint64) error {
 	existing, err := p.storage.GetTokenMetadata(ctx, address)
 	if err == nil && existing != nil {
 		return nil // already indexed
 	}
 
-	node := &blockReader{client: p.client, block: new(big.Int).SetUint64(blockNumber)}
+	node := &blockReader{client: p.client, block: new(big.Int).SetUint64(blockNumber), allowPrunedState: p.allowPrunedState}
 	defer func() {
 		if node.latest {
 			p.logger.Warn("The node keeps no state of the token's creation block; read its latest state",
@@ -167,20 +172,21 @@ func convertStandard(standard TokenStandard) port.TokenStandard {
 
 // blockReader reads the node as of one block, whatever block the caller
 // asks for. A node that answers it keeps no state of that block (not an
-// archive node) is asked for its latest state instead, and latest is set.
-// The first error the node did not answer itself (connection, timeout,
-// cancellation) is kept in failed: unlike an answered error (a revert, a
-// method the contract lacks) it says nothing about the contract.
+// archive node) is asked for latest state only when allowPrunedState is set.
+// Unanswered errors (connection, timeout, cancellation), and in strict mode
+// missing-state or code-read errors, are kept in failed. Contract-call reverts
+// remain detector answers: they can indicate a method the contract lacks.
 type blockReader struct {
-	client EthClient
-	block  *big.Int
-	latest bool
-	failed error
+	client           EthClient
+	block            *big.Int
+	latest           bool
+	failed           error
+	allowPrunedState bool
 }
 
 func (r *blockReader) CallContract(ctx context.Context, call ethereum.CallMsg, _ interface{}) ([]byte, error) {
 	out, err := r.client.CallContract(ctx, call, r.block)
-	if missingState(err) {
+	if r.allowPrunedState && missingState(err) {
 		r.latest = true
 		out, err = r.client.CallContract(ctx, call, nil)
 	}
@@ -189,16 +195,21 @@ func (r *blockReader) CallContract(ctx context.Context, call ethereum.CallMsg, _
 
 func (r *blockReader) CodeAt(ctx context.Context, contract common.Address, _ interface{}) ([]byte, error) {
 	out, err := r.client.CodeAt(ctx, contract, r.block)
-	if missingState(err) {
+	if r.allowPrunedState && missingState(err) {
 		r.latest = true
 		out, err = r.client.CodeAt(ctx, contract, nil)
+	}
+	// Unlike a contract call, a code read cannot be a contract-level revert.
+	// A failed strict code read must not silently classify a token as absent.
+	if err != nil && !r.allowPrunedState && r.failed == nil {
+		r.failed = err
 	}
 	return out, r.note(err)
 }
 
 func (r *blockReader) note(err error) error {
 	var answered rpc.Error
-	if err != nil && !errors.As(err, &answered) && r.failed == nil {
+	if err != nil && (!errors.As(err, &answered) || !r.allowPrunedState && missingState(err)) && r.failed == nil {
 		r.failed = err
 	}
 	return err

@@ -45,7 +45,7 @@ func (balanceFeature) Register(r feature.Registrar) error {
 	if d.BalanceAt == nil {
 		return fmt.Errorf("no node balance reader")
 	}
-	var st settings // read at startup (feature.StateReader); decoded to reject unknown keys
+	var st settings
 	if err := d.DecodeSettings(Name, &st); err != nil {
 		return err
 	}
@@ -58,6 +58,7 @@ func (balanceFeature) Register(r feature.Registrar) error {
 		w: w, r: rd, records: rc, prefetch: prefetch,
 		accounting: chains.AccountingOf(d.Profile),
 		balanceAt:  d.BalanceAt, blocks: d.Blocks(), logger: logger,
+		allowPrunedState: st.AllowPrunedState,
 	})
 	return nil
 }
@@ -68,23 +69,24 @@ func (balanceFeature) ReadsState() bool { return true }
 
 // settings are the feature's features.balance.native section.
 type settings struct {
-	// AllowPrunedState lets the indexer start although the node keeps no
-	// state before the first block to process (feature.StateReader): new
-	// accounts whose balance the node cannot give then start from 0.
+	// AllowPrunedState permits missing state at startup and while indexing:
+	// new accounts then start from 0 and unavailable resyncs are skipped.
+	// Otherwise every required balance read must succeed before commit.
 	AllowPrunedState bool `yaml:"allow_pruned_state"`
 }
 
 func init() { feature.Register(balanceFeature{}) }
 
 type handler struct {
-	w          port.HistoricalWriter
-	r          port.HistoricalReader
-	records    port.BalanceRecordChecker
-	prefetch   port.BalancePrefetcher // nil when the store reads each account
-	accounting chains.NativeAccounting
-	balanceAt  func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
-	blocks     chains.AccountingEnv
-	logger     *zap.Logger
+	w                port.HistoricalWriter
+	r                port.HistoricalReader
+	records          port.BalanceRecordChecker
+	prefetch         port.BalancePrefetcher // nil when the store reads each account
+	accounting       chains.NativeAccounting
+	balanceAt        func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
+	blocks           chains.AccountingEnv
+	logger           *zap.Logger
+	allowPrunedState bool
 }
 
 // HandleBlock applies the native balance changes of the block, as the chain
@@ -94,13 +96,10 @@ type handler struct {
 // would make a balance negative, the indexed balance has diverged from the
 // chain: the account is reset to the node's balance after the block.
 //
-// Storage errors and node reads the node did not answer (connection,
-// timeout) fail the block, so it is retried and every run stores the same
-// balances (docs/SDK.md, determinism rules). A node that answers it keeps
-// no state of the block asked for (not an archive node) cannot give the
-// balance: a new account then starts from 0 and a diverged account keeps
-// its balance, both logged; correct balances from such heights need an
-// archive node.
+// Storage and required node-read errors fail the block, so its transaction
+// rolls back and the live loop retries it. Only allow_pruned_state permits
+// an answered node error to start a new account from 0 or skip a resync;
+// transport errors always fail the block.
 func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 	n := b.Model.Number
 	deltas, err := h.accounting.NativeDeltas(ctx, b.Model, b.Receipts, h.blocks)
@@ -200,10 +199,10 @@ func mergeDeltas(deltas []chains.BalanceDelta) []chains.BalanceDelta {
 }
 
 // resync resets a diverged account to the node's balance after block n.
-// A node that answers it has no such balance leaves the account as it is.
+// Missing state aborts the block unless allow_pruned_state is set.
 func (h *handler) resync(ctx context.Context, addr common.Address, n uint64) error {
 	balance, err := h.balanceAt(ctx, addr, new(big.Int).SetUint64(n))
-	if unanswered(err) {
+	if err != nil && (!h.allowPrunedState || unanswered(err)) {
 		return fmt.Errorf("read balance of diverged %s at block %d: %w", addr.Hex(), n, err)
 	}
 	if err != nil {
@@ -238,13 +237,11 @@ func (h *handler) ensureInitialized(ctx context.Context, addr common.Address, bl
 		at = new(big.Int).SetUint64(block - 1)
 	}
 	balance, err := h.balanceAt(ctx, addr, at)
-	if unanswered(err) {
+	if err != nil && (!h.allowPrunedState || unanswered(err)) {
 		return err
 	}
 	if err != nil {
-		// The node answered that it keeps no state of the previous block
-		// (not an archive node): nothing else knows the balance, and
-		// failing the block would stop indexing for good.
+		// The operator explicitly permits approximate balances without state.
 		h.logger.Warn("The node keeps no balance of the previous block; starting from 0",
 			zap.String("address", addr.Hex()), zap.Uint64("block", block), zap.Error(err))
 		balance = big.NewInt(0)
@@ -270,7 +267,7 @@ func (h *handler) initGenesisMiner(ctx context.Context, miner common.Address) er
 		return nil
 	}
 	balance, err := h.balanceAt(ctx, miner, big.NewInt(0))
-	if unanswered(err) {
+	if err != nil && (!h.allowPrunedState || unanswered(err)) {
 		return err
 	}
 	if err != nil {

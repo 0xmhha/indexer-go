@@ -104,7 +104,9 @@ func init() {
 
 full node도 필요한 높이의 상태를 보관하면 시작할 수 있다. archive 노드가 없고 과거 상태가 지워졌다면, 상태가 남아 있는 높이 바로 다음 블록으로 `indexer.start_height`를 정하거나 해당 기능을 꺼야 한다. 최근 높이부터 시작한 DB에는 그 이전 블록의 색인 결과가 없다. 기능을 끈 DB에서 나중에 켜면 과거 높이부터 backfill할 수 있으므로 상태 검사를 다시 받는다. 노드 종류만으로 시작 가능 여부를 판단하지 말고, 실제 운영 설정과 시작 높이로 확인한다(`TestNodeStateCheckedAtStartup`).
 
-`features.<name>.allow_pruned_state: true`는 그 기능의 시작 시 상태 검사를 건너뛴다. 이 설정은 archive 상태를 복원하지 않는다. 처리 중 노드가 요청한 상태가 없다고 답하면 기존 fallback이 적용된다: `token.metadata`는 latest 상태로 읽고 경고를 남기며 결정성이 깨질 수 있고, `balance.native`는 처음 보는 계정을 0에서 시작하므로 잔액이 틀릴 수 있다. 시작 검사는 처리 중의 상태 보존까지 보장하지 않는다. 노드가 응답하지 않은 오류나 저장 오류는 블록을 취소하고 다시 시도하게 한다.
+`features.<name>.allow_pruned_state: false`(기본값)는 처리 중에도 적용된다. 필요한 잔액 조회나 토큰의 과거 상태 조회가 실패하면 블록 트랜잭션을 취소하고 live loop가 같은 높이를 재시도한다. 초기 잔액을 0으로 대체하거나 메타데이터를 latest로 읽지 않는다. 계약 자체의 호출 revert는 토큰 판별의 정상적인 응답으로 남긴다. `token.NewContractIndexer`도 기본적으로 과거 상태를 요구하며, 근사 처리가 필요하면 색인 시작 전에 `SetAllowPrunedState(true)`를 호출해야 한다.
+
+`features.<name>.allow_pruned_state: true`는 시작 시 상태 검사를 건너뛰고 처리 중 기존 fallback을 명시적으로 허용한다: `token.metadata`는 latest 상태로 읽고 경고를 남기며 결정성이 깨질 수 있고, `balance.native`는 처음 보는 계정을 0에서 시작하거나 보정을 건너뛰므로 잔액이 틀릴 수 있다. 이 설정은 archive 상태를 복원하지 않는다. 시작 검사 통과는 처리 중 상태 보존을 보장하지 않으며 영구히 지워진 상태는 재시도로 돌아오지 않는다. 노드가 응답하지 않은 오류나 저장 오류는 설정과 관계없이 블록을 취소한다.
 
 ## 7. 호환성 약속
 
