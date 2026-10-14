@@ -450,6 +450,33 @@ StableNet의 proxy HTTP 502는 38건 모두 upstream 이름 해석 실패(`[Errn
 
 전체 race는 app 415.677초로 통과했고 build/lint(0 issues)/예제도 통과했다. 배치16 정규 SLO는 읽기 중앙 p99 94.6ms/비읽기 포함 106ms(+12%)로 통과했다(app 253.001초). 단건/배치 fast stream p99는 각각 node→message 9.1/6.1ms, fast path→message 1.2/0.6ms로 통과했다. 단건 준비 옵션의 정규 SLO는 읽기 중앙 p99 112.2ms/비읽기 포함 105.3ms(-6%)로 통과했다(app 252.763초). 구독자 1,000명·10 trades/s·2회 교대·절대 250ms/상대 20%의 기존 기준을 유지했다.
 
+### 3.21 10/14 현재 소스의 네 테스트넷 10분 관측·Arc RPC 비용 분해
+
+#175 병합 소스 `99a6666` 실행 파일(v0.2.15-17-g99a6666)을 21:35:38 KST부터 600.002초 관측했다. 새 임시 DB·head-2 시작 재조회·체인 ID/시작 상태 검사·strict 정책·workers 2/state_workers 4/chunk 10/state_prefetch true/batch16, App과 proxy의 체인별 5 HTTP/s 제한을 유지했다. 관측 head 요청도 같은 proxy 예산을 공유했다. profile은 실행 로그에서 StableNet/evm/evm/arc를 확인했다. 성공 요청에도 params·물리 요청 그룹·응답 바이트를 기록하여 주소와 상태 참조의 중복을 분리했다. 기존 설정 파일·DB와 이전 관측 자료는 수정하지 않았다. 이 작업의 heavy 검증은 관측 후에 실행했고, 다른 사용자 작업의 호스트 부하는 통제하지 않았다.
+
+| 체인 | 시작 | 마지막 색인/head | 격차 | App HTTP/논리 RPC | 마지막 약 5분 생성/색인 blk/s |
+|---|---:|---:|---:|---:|---:|
+| StableNet | 22308638 | 22309231/22309233 | 2 | 2016/3357 | 1.001/0.997 |
+| BSC | 136743014 | 136744318/136744332 | 14 | 2929/4703 | 2.222/2.201 |
+| Sepolia | 11913286 | 11913337/11913337 | 0 | 1060/3420 | 0.083/0.083 |
+| Arc | 67160059 | 67160864/67161232 | 368 | 2908/5342 | 1.974/1.479 |
+
+마지막 API 표본은 591.804초, 속도 계산 창은 290.746초다. 전체 요청 수는 600초 창이므로 마지막 색인 표본으로 나눈 요청/블록 값에는 시작 및 끝의 진행 중 작업이 포함된다. 첫 색인 확인은 StableNet 51.652초, 나머지 세 체인 10.183초였다(관측 간격 약 10초). Arc 격차는 약 4분 178/6분 267/9분 355/마지막 368블록으로 계속 늘었다. 이 입력에서 #175 이후 최신 상태를 지속 유지하는 조건은 충족하지 못했다. 이전 3.17의 30분 표본과 같은 입력이 아니므로 0.682→1.479 blk/s를 코드 개선률로 계산하지 않는다. 이번 Arc contract code 조회는 69/806 색인 블록이며 이전은 552/1609로, 토큰 생성 작업량도 다르다.
+
+Arc의 물리 요청은 블록+영수증 batch 830, 잔액 704, canonical hash 확인용 block(false) 708, head 441, code 69, contract call 153, chain ID 3건이었다. 논리 요청은 balance 2,172/code 69/call 289/head 441/block 1,538/receipt 830/chain ID 3건이다. zero 주소 검사 1건을 뺀 초기 잔액 2,171건은 2,161개 주소/상태 참조 조합, 2,132개 주소였다. 동일 조합의 추가 조회는 10건(약 0.46%)이며 같은 주소의 다른 참조는 29개다. 10개 조합은 모두 동일한 부모 hash에 묶인 재시도였고, 최초 실패한 2개 멤버와 성공했던 8개 멤버를 포함한다. 실패한 2개 멤버는 반드시 다시 읽어야 한다. 다른 block hash의 잔액을 같다고 가정해 공유하지 않는다. 중복 10건을 모두 제거해도 이 표본의 약 25% 처리량 부족을 해결한다고 볼 수 없다. 성공했던 추측 입력의 range 취소·재시도와 같은 참조의 반복은 별도로 조사할 수 있지만, 현재 대다수 초기 조회는 별개 상태다.
+
+Arc contract call의 논리 비용은 ERC165 확인 89, name/symbol/decimals/totalSupply 186, tokenURI fallback 14건이었다. 실제 물리 그룹 수로 합산하며 배치 멤버 수를 HTTP 수로 대체하지 않는다. 최근 300초 App HTTP는 약 4.903/s로 proxy의 남은 예산에 근접했다. 같은 입력 비율·효율이 유지된다는 단순 추정에서는 생성률을 맞추려면 App 약 6.55 HTTP/s 또는 요청/블록 비용 약 25.1% 감소가 필요하다. 이는 공급자의 허용 quota나 운영 권장 한도가 아니며 서로 약간 다른 요청/속도 창을 사용한 근사 용량 계산이다. 한도를 임의로 높이지 않았다. 준비 상태의 canonical 확인이나 필요한 초기 잔액을 생략해 정확성을 낮추지 않는다.
+
+Arc native balance 멤버 2건이 HTTP200/JSON-RPC -32005 `rate limit exceeded`로 실패했고, 블록 67160128 전체 실패·동일 높이 재시도 후 진행했다. Arc의 정상 토큰 판별 응답은 execution revert 75/invalid jump 80건으로 quota 오류와 구분한다. StableNet의 HTTP502 1건은 upstream transport timeout(`[Errno 60] Operation timed out`)으로 재시도 후 복구했다. 이 표본을 이전 관측의 DNS 실패와 혼동하지 않는다. BSC/Sepolia/Arc HTTP status는 모두 200이었다. 종료 코드는 0, 근사 fallback 경고는 0, 자체 프로세스·임시 DB·proxy는 정리됐다.
+
+최근 proxy transport p95는 StableNet 34.3/BSC 165.2/Sepolia 168.4/Arc 75.8ms, proxy wait p95는 160.7/230.7/147.6/327.7ms였다. 최근 pipeline 샘플의 수집/상태 준비/쓰기 p95는 StableNet 421.5/399.8/25.9ms, BSC 633.3/767.9/799.9ms, Sepolia 638.3/5054.5/608.6ms, Arc 809.8/1393.5/826.8ms였다. writer 단계는 canonical RPC·대기·DB 작업을 포함하므로 DB commit 단독 지연이 아니다. App limiter 대기는 proxy 대기에 포함되지 않는다. 최종 in_flight/state bytes는 모두 0, peak in_flight는 4 이하였고 RSS는 33.6~385.3MiB였다.
+
+StableNet의 시작 높이 이전 full block 요청은 696건/서로 다른 58개 높이였다. `EpochTracker`는 적용 epoch를 찾을 때 부모 hash를 검증하면서 이전 블록을 읽고, 현재 `Fetcher.BlockAt`은 블록 모델만 반환하면서 `fetchOnce`로 영수증도 획득한다. 이 조상 조회의 반복과 불필요한 receipt 비용은 R04의 별도 개선 후보다. hash/fork 검증을 유지하는 방법으로 비교해야 하며, 이 기록에서 새 캐시나 조회 경로를 구현하지 않았다.
+
+종료 후 최초 성공한 실제 계정의 원래 상태 참조를 재조회했다. BSC는 원래 참조와 head-128/-512가 상태 소실 오류였고 head/head-32는 성공했다. Sepolia는 이번 10분 원래 참조 및 head-128까지 성공했고 head-512는 실패했다. 이는 이전 30분 표본과 다르다. Arc는 원래 참조와 head-512까지 모두 성공했다. StableNet은 이 창에 실제 초기 잔액 계정 표본이 없었다. 고정 보존 폭·허용 중단 시간·전체 native 회계를 확정하지 않는다. 운영 완료에는 지속 생성률 초과 처리량과 실제 보존 정책/quota 확인이 여전히 필요하다.
+
+관측 종료 후 gofmt/build/lint(0 issues)/예제/전체 race(app 419.154초)/격리 PostgreSQL 기능 시험(adapter 42.423초, app 177.228초)이 통과했다. PostgreSQL은 이전 디스크·bind 소유권 문제를 피하는 전용 tmpfs와 기능 시험의 fsync=off 설정이며 디스크 성능 비교가 아니다. 생산 코드는 #175와 같고 정규 SLO 증거는 3.20의 단건/배치16 통과 결과를 유지한다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.
