@@ -11,7 +11,8 @@ import (
 
 // ChainConfig defines the configuration for a single blockchain connection.
 type ChainConfig struct {
-	StatePrefetch *bool `yaml:"state_prefetch,omitempty" json:"statePrefetch,omitempty"`
+	StatePrefetch  *bool `yaml:"state_prefetch,omitempty" json:"statePrefetch,omitempty"`
+	StateBatchSize *int  `yaml:"state_batch_size,omitempty" json:"stateBatchSize,omitempty"`
 	// ID is a unique identifier for this chain instance (e.g., "stableone-mainnet").
 	ID string `yaml:"id" json:"id"`
 	// Name is a human-readable name for the chain (e.g., "StableOne Mainnet").
@@ -120,6 +121,9 @@ func (c *ManagerConfig) Validate() error {
 
 // Validate validates a single chain configuration.
 func (c *ChainConfig) Validate() error {
+	if c.StateBatchSize != nil && (*c.StateBatchSize < 0 || *c.StateBatchSize > 64) {
+		return errors.New("state_batch_size must be between 1 and 64 (0 defaults to 1)")
+	}
 	if c.ID == "" {
 		return errors.New("id is required")
 	}

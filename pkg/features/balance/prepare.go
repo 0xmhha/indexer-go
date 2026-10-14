@@ -8,6 +8,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/feature"
+	"github.com/0xmhha/indexer-go/pkg/rpcbatch"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -58,15 +59,52 @@ func (h *handler) PrepareBlock(ctx context.Context, b *feature.Block) (feature.P
 	if b.Model.Number > 0 {
 		hash = b.Model.ParentHash
 	}
-	if err := h.deps.PrepareReads(ctx, len(addresses), func(ctx context.Context, i int) error {
+	readOne := func(ctx context.Context, i int) error {
 		values[i].value, values[i].err = h.deps.BalanceAtHash(ctx, addresses[i], hash)
-		var reply rpc.Error
-		if errors.As(values[i].err, &reply) && (reply.ErrorCode() == -32601 || reply.ErrorCode() == -32602) {
-			return values[i].err // RPC capability errors must not become zero balances.
-		}
-		return ctx.Err()
-	}); err != nil {
-		return feature.PreparedHandler{}, err
+		return preparationReadError(ctx, values[i].err)
+	}
+	batchSize := max(1, min(64, h.deps.StateBatchSize))
+	var readErr error
+	if batchSize == 1 || h.deps.BalanceBatchAtHash == nil {
+		readErr = h.deps.PrepareReads(ctx, len(addresses), readOne)
+	} else {
+		readErr = h.deps.PrepareReads(ctx, (len(addresses)+batchSize-1)/batchSize, func(ctx context.Context, batch int) error {
+			from, to := batch*batchSize, min((batch+1)*batchSize, len(addresses))
+			out, failures, err := h.deps.BalanceBatchAtHash(ctx, addresses[from:to], hash)
+			if errors.Is(err, rpcbatch.ErrUnsupported) {
+				// The outer job already holds a shared permit. Re-entering
+				// PrepareReads here would deadlock all permits on fallback.
+				for i := from; i < to; i++ {
+					if err := readOne(ctx, i); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			if err == nil && (len(out) != to-from || len(failures) != to-from) {
+				err = fmt.Errorf("invalid balance batch result length")
+			}
+			for i := from; i < to; i++ {
+				if err != nil {
+					values[i].err = err
+				} else {
+					values[i].value, values[i].err = out[i-from], failures[i-from]
+					if values[i].value == nil && values[i].err == nil {
+						values[i].err = fmt.Errorf("balance batch has no result for %s", addresses[i])
+					}
+					if values[i].value != nil && values[i].value.Sign() < 0 && values[i].err == nil {
+						values[i].err = fmt.Errorf("balance batch has a negative result for %s", addresses[i])
+					}
+				}
+				if err := preparationReadError(ctx, values[i].err); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+	if readErr != nil {
+		return feature.PreparedHandler{}, readErr
 	}
 	balances := make(map[common.Address]preparedBalance, len(addresses))
 	var size int64
@@ -100,4 +138,12 @@ func (h *handler) PrepareBlock(ctx context.Context, b *feature.Block) (feature.P
 	return feature.PreparedHandler{Handler: feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
 		return copyHandler.applyDeltas(ctx, b, merged)
 	}), ReadState: len(addresses) > 0, Bytes: size}, nil
+}
+
+func preparationReadError(ctx context.Context, err error) error {
+	var reply rpc.Error
+	if errors.As(err, &reply) && (reply.ErrorCode() == -32601 || reply.ErrorCode() == -32602) {
+		return err // RPC capability errors must not become zero balances.
+	}
+	return ctx.Err()
 }

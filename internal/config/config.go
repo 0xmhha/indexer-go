@@ -206,6 +206,7 @@ type IndexerConfig struct {
 	StatePrefetch   bool `yaml:"state_prefetch"`
 	PipelineMetrics bool `yaml:"pipeline_metrics"`
 	StateWorkers    int  `yaml:"state_workers"`
+	StateBatchSize  int  `yaml:"state_batch_size"`
 	// StateMaxBytes caps retained preparation payload per block.
 	StateMaxBytes int64  `yaml:"state_max_bytes"`
 	Workers       int    `yaml:"workers"`
@@ -348,7 +349,8 @@ type ChainConfig struct {
 	// Workers is the number of concurrent fetch workers
 	Workers int `yaml:"workers,omitempty"`
 	// StatePrefetch overrides indexer.state_prefetch for this chain.
-	StatePrefetch *bool `yaml:"state_prefetch,omitempty"`
+	StatePrefetch  *bool `yaml:"state_prefetch,omitempty"`
+	StateBatchSize *int  `yaml:"state_batch_size,omitempty"`
 	// BatchSize is the number of blocks to fetch per batch
 	BatchSize int `yaml:"batch_size,omitempty"`
 	// RPCTimeout is the timeout for RPC calls
@@ -733,6 +735,9 @@ func (c *Config) SetDefaults() {
 	}
 
 	// Indexer defaults
+	if c.Indexer.StateBatchSize == 0 {
+		c.Indexer.StateBatchSize = 1
+	}
 	if c.Indexer.StateWorkers == 0 {
 		c.Indexer.StateWorkers = 4
 	}
@@ -1572,6 +1577,9 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate indexer configuration
+	if c.Indexer.StateBatchSize < 0 || c.Indexer.StateBatchSize > 64 {
+		return fmt.Errorf("state_batch_size must be between 1 and 64 (0 defaults to 1)")
+	}
 	if c.Indexer.StateWorkers < 0 {
 		return fmt.Errorf("state worker count must be positive")
 	}

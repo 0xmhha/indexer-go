@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -21,11 +22,12 @@ import (
 
 // Client wraps Ethereum JSON-RPC client with additional functionality
 type Client struct {
-	ethClient *ethclient.Client
-	rpcClient *rpc.Client
-	pool      *rpcpool.Pool // nil for a non-HTTP endpoint
-	endpoint  string
-	logger    *zap.Logger
+	stateBatchUnavailable atomic.Bool
+	ethClient             *ethclient.Client
+	rpcClient             *rpc.Client
+	pool                  *rpcpool.Pool // nil for a non-HTTP endpoint
+	endpoint              string
+	logger                *zap.Logger
 }
 
 // BatchReceiptError represents an error for a single receipt in a batch operation

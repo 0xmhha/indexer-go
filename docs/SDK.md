@@ -112,6 +112,8 @@ full node도 필요한 높이의 상태를 보관하면 시작할 수 있다. ar
 
 상태 준비 API는 기존 handler/registrar 인터페이스를 바꾸지 않는 선택적 추가다. `sdk.BlockPreparer.PrepareBlock`은 여러 블록에서 동시에 호출될 수 있으며 저장·publish·Block 변경 없이 `sdk.PreparedHandler`를 반환한다. `Handler`만 기존 순서의 block transaction에서 실행된다. 입력은 block hash로 조회하며(`Deps.BalanceAtHash`, 선택적 `sdk.HashContractReader`), `ReadState: true`면 writer가 canonical hash를 검증한다. `Bytes`로 유지하는 payload 크기를 계산해 보고한다. 채널 전달 후 입력을 수정하거나 다른 블록/fork에 재사용하지 않는다. `Deps.PrepareReads`는 `PrepareConcurrency`와 pipeline 공유 permit으로 작업 수를 제한한다. 기존 구현은 이 API 없이 그대로 작동하며 backfill은 기존 ordered handler를 호출한다.
 
+`Deps.StateBatchSize`와 선택적 `Deps.BalanceBatchAtHash(ctx, addresses, hash)` 및 `sdk.HashContractBatchReader.CallContractBatchAtHash(ctx, address, calldata, hash)`는 batch 지원을 추가한다. envelope 성공 시 반환값은 입력 순서의 값 배열과 같은 길이의 멤버 오류 배열이다. envelope 오류가 있으면 값 배열은 nil일 수 있다. 호출자는 envelope 성공만으로 모든 값을 사용하지 말고 각 멤버의 오류를 확인한다. hash를 latest로 바꾸거나 미응답 잔액을 0으로 만들지 않는다. 기존 계약 reader 인터페이스에는 메서드를 추가하지 않았다. 공유 permit을 이미 가진 작업에서 `PrepareReads`를 다시 호출하면 교착될 수 있으므로 개별 fallback은 현재 permit 안에서 실행한다.
+
 멀티체인의 기존 `multichain.Indexer` 인터페이스는 유지한다. 선택적 `multichain.NodeHeightObserver`는 `ObserveNodeHeight(ctx, maxAge)`로 raw head와 원래 RPC latency를 함께 제공한다. `maxAge=0`은 독립적인 fresh RPC이며, 양수는 지정한 freshness 범위에서 관측을 공유할 수 있다. production 구현은 최대 1초로 제한한다. 이 인터페이스가 없는 외부 Indexer는 기존 NodeHeight health 조회를 사용한다. finalized/confirmations target을 raw head로 반환하거나 실패를 이전 성공으로 숨기지 않는다.
 
 프로젝트가 기대는 면은 `pkg/sdk`와 `pkg/sdk/sdktest`의 공개 식별자다. 별칭(alias)이 가리키는 indexer 타입의 공개 메서드와 필드도 여기에 들어간다. `pkg/testchain`은 시험용이라 약속에 넣지 않는다(바꿀 때 예제를 함께 고친다). 다른 `pkg/...`를 직접 import하면 약속 밖이다.

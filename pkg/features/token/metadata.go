@@ -48,6 +48,7 @@ func (metadataFeature) Register(r feature.Registrar) error {
 	}
 	indexer := tokenmeta.NewContractIndexer(d.Contracts, store, d.Logger)
 	indexer.SetAllowPrunedState(st.AllowPrunedState)
+	indexer.SetStateBatchSize(d.StateBatchSize)
 	r.OnBlock(&metadata{indexer: indexer, store: store, deps: d})
 	return nil
 }

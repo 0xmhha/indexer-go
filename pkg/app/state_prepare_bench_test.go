@@ -49,6 +49,7 @@ func BenchmarkStatePreparation(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			var requests atomic.Int64
+			var httpRequests atomic.Int64
 			proxy := httputil.NewSingleHostReverseProxy(upstream)
 			gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				raw, err := io.ReadAll(r.Body)
@@ -65,6 +66,7 @@ func BenchmarkStatePreparation(b *testing.B) {
 					count = int64(len(batch))
 				}
 				requests.Add(count)
+				httpRequests.Add(1)
 				if tc.delay > 0 {
 					timer := time.NewTimer(tc.delay)
 					defer timer.Stop()
@@ -77,25 +79,32 @@ func BenchmarkStatePreparation(b *testing.B) {
 				proxy.ServeHTTP(w, r)
 			}))
 			defer gateway.Close()
-			for _, on := range []bool{false, true} {
-				name := "ordered"
-				if on {
-					name = "prepared"
-				}
-				b.Run(name, func(b *testing.B) {
+			for _, mode := range []struct {
+				name  string
+				on    bool
+				batch int
+			}{{"ordered", false, 1}, {"prepared", true, 1}, {"prepared_batch16", true, 16}} {
+				b.Run(mode.name, func(b *testing.B) {
 					b.ReportAllocs()
 					var calls int64
+					var httpCalls int64
 					var peak int64
 					var writeP95 float64
 					for i := 0; i < b.N; i++ {
 						b.StopTimer()
-						app := newPreparedApp(b, gateway.URL, filepath.Join(b.TempDir(), "db"), on, 0, func(cfg *config.Config) { cfg.RPC.RateLimit = tc.rate; cfg.Indexer.PipelineMetrics = true })
+						app := newPreparedApp(b, gateway.URL, filepath.Join(b.TempDir(), "db"), mode.on, 0, func(cfg *config.Config) {
+							cfg.RPC.RateLimit = tc.rate
+							cfg.Indexer.PipelineMetrics = true
+							cfg.Indexer.StateBatchSize = mode.batch
+						})
 						before := requests.Load()
+						beforeHTTP := httpRequests.Load()
 						b.StartTimer()
 						err := app.fetcher.FetchRange(context.Background(), 0, chain.Head())
 						b.StopTimer()
 						require.NoError(b, err)
 						calls += requests.Load() - before
+						httpCalls += httpRequests.Load() - beforeHTTP
 						stats := app.fetcher.GetPipelineMetrics()
 						peak = max(peak, stats.PeakStateBytes)
 						writeP95 += stats.Write.P95MS
@@ -103,6 +112,7 @@ func BenchmarkStatePreparation(b *testing.B) {
 					}
 					b.ReportMetric(float64(chain.Head()+1), "blocks/op")
 					b.ReportMetric(float64(calls)/float64(b.N), "RPCs/op")
+					b.ReportMetric(float64(httpCalls)/float64(b.N), "HTTPs/op")
 					b.ReportMetric(float64(peak), "peak_state_bytes")
 					b.ReportMetric(writeP95/float64(b.N), "writer_p95_ms")
 				})

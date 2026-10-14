@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -18,7 +19,8 @@ import (
 
 // EthClientAdapter wraps ethclient.Client to implement the EthClient interface
 type EthClientAdapter struct {
-	client *ethclient.Client
+	client                *ethclient.Client
+	stateBatchUnavailable atomic.Bool
 }
 
 // HashEthClient reads a specific fork's state, without selecting by height.
@@ -85,6 +87,7 @@ type ContractIndexer struct {
 	storage          TokenMetadataStore
 	logger           *zap.Logger
 	allowPrunedState bool
+	stateBatchSize   int
 }
 
 // NewContractIndexer returns an indexer that requires historical state from client.
@@ -99,6 +102,12 @@ func NewContractIndexer(client EthClient, stor TokenMetadataStore, logger *zap.L
 // unavailable. Configure this before indexing; the default is strict.
 func (p *ContractIndexer) SetAllowPrunedState(allow bool) {
 	p.allowPrunedState = allow
+}
+
+// SetStateBatchSize enables hash-bound independent property batches. One
+// retains individual reads. Configure before indexing, as with state policy.
+func (p *ContractIndexer) SetStateBatchSize(size int) {
+	p.stateBatchSize = max(1, min(64, size))
 }
 
 // IndexContract stores the metadata of the contract at address, created in
@@ -169,6 +178,9 @@ func (p *ContractIndexer) readContract(ctx context.Context, address common.Addre
 		return nil, nil
 	}
 
+	if err := node.preloadMetadata(ctx, address, detection.Standard, p.stateBatchSize); err != nil {
+		return nil, err
+	}
 	metadataResult := NewMetadataFetcher(node, p.logger).FetchMetadata(ctx, address, detection.Standard)
 	if node.failed != nil {
 		return nil, fmt.Errorf("read token %s at block %d: %w", address.Hex(), blockNumber, node.failed)
@@ -216,6 +228,8 @@ func convertStandard(standard TokenStandard) port.TokenStandard {
 // missing-state or code-read errors, are kept in failed. Contract-call reverts
 // remain detector answers: they can indicate a method the contract lacks.
 type blockReader struct {
+	preparedAddress  common.Address
+	preparedCalls    map[string]preparedCall
 	hash             *common.Hash
 	client           EthClient
 	block            *big.Int
@@ -225,8 +239,21 @@ type blockReader struct {
 }
 
 func (r *blockReader) CallContract(ctx context.Context, call ethereum.CallMsg, _ interface{}) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, r.note(err)
+	}
 	var out []byte
 	var err error
+	if call.To != nil && *call.To == r.preparedAddress {
+		if prepared, ok := r.preparedCalls[string(call.Data)]; ok {
+			out, err = prepared.value, prepared.err
+			if r.allowPrunedState && missingState(err) {
+				r.latest = true
+				out, err = r.client.CallContract(ctx, call, nil)
+			}
+			return out, r.note(err)
+		}
+	}
 	if r.hash != nil {
 		out, err = r.client.(HashEthClient).CallContractAtHash(ctx, call, *r.hash)
 	} else {

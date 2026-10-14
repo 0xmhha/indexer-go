@@ -332,6 +332,42 @@ HTTP 관측 proxy는 body/응답을 변경하지 않고 upstream HTTPS 연결을
 
 최종 gofmt/build/lint(0 issues)/전체 race(app475.451초)/PostgreSQL(adapter41.865초, app171.661초)/예제(14.438초)가 통과했다. 격리한 기본 SLO는 readers125.3/non-readers108.5ms(-13%), 준비 true SLO는109.0/111.8ms(+3%)로 동일 기준을 통과했다. fast stream p99는 각각10.5/8.0ms였다. 부하·round 수·판정 임계값은 완화하지 않았다. 기존 R07 변동의 원인을 해소했다고 주장하지 않는다. 문서 링크/코드 fence와 비교 표를 확인했다.
 
+
+### 3.15 10/14 hash 상태 batch 준비
+
+초기 잔액의 개별 HTTP 왕복과 토큰 속성의 순차 왕복을 줄이기 위해 `indexer.state_batch_size`를 추가했다. 기본값 1, 0은 1로 정규화, 최대 64이며 체인별 override가 가능하다. `state_prefetch`가 켜진 full ingest에서 같은 부모 hash의 초기 잔액과 같은 생성 hash의 독립 메타데이터 속성을 묶는다. canonical 검증·블록별 atomic writer·같은 높이 재시도·strict 상태 정책은 유지한다. URI fallback과 번호 기반 backfill은 기존 경로다.
+
+batch envelope가 거부되거나 전체 응답의 ID를 대응시킬 수 없으면 client별로 개별 조회를 사용한다. 그 fallback은 이미 보유한 공유 permit 안에서 실행해 permit 재진입 교착을 피한다. 부분 오류·null 잔액·상태 소실·hash selector 오류·429/5xx는 성공이나 batch 미지원으로 바꾸지 않는다. 정상 계약 revert는 선택 속성의 기존 규칙을 따른다. SDK의 기존 인터페이스는 유지하고 선택 batch reader와 Deps 필드만 추가했다.
+
+HTTP 왕복 감소는 논리 RPC/제공자 quota 감소를 뜻하지 않는다. 앞선 블록의 commit 전에 같은 계정이 준비되는 speculative 중복은 남는다. 공개 RPC의 멤버별 quota가 확정되기 전 운영 config는 개별 조회를 유지한다.
+
+검증 결과: EVM/최근 시작/StableNet의 개별·배치 keyspace와 실제 잔액 oracle 일치, native/token 멤버 오류 시 블록/cursor/outbox rollback과 같은 높이 재시도, 80개 신규 계정·4 permit의 미지원 fallback, 취소 후 pipeline 배출, 역순 응답/부분 오류/null 응답을 확인했다. 새 App 동시성 시험의 일반 race 200회는 806.202초, CPU1 race 200회는 1200.760초로 통과했다.
+
+
+동일 25블록(각 8개 신규 수신자), workers2/state_workers4, 양쪽 pipeline 계측 활성화, 3회 평균으로 Pebble에서 측정했다. fixture/App 생성과 Shutdown은 제외한다. 같은 구현에서 옵션만 바꾼 비교이며 hash/canonical의 논리 요청과 batch HTTP를 별도로 센다. Apple M2 Max/darwin arm64/Go1.26.8/64GiB/12CPU, 자체 heavy 검증은 종료한 상태였으나 다른 사용자 작업의 호스트 부하는 통제하지 않았다(측정 시작 load average 9.27/6.85/6.46).
+
+| 조건 | ordered | prepared 개별 | prepared batch16 | HTTP 개별→batch / 논리 RPC 개별→batch |
+|---|---:|---:|---:|---:|
+| 로컬 무지연 | 0.222초 | 0.154초 | 0.215초 | 246.3→76 / 271.3→272 |
+| RPC 5ms | 1.469초 | 0.462초 | 0.376초 | 246.7→76 / 271.7→272 |
+| RPC 5ms·50HTTP/s | 4.477초 | 4.953초 | 1.534초 | 247→76 / 272→273 |
+
+50HTTP/s에서 prepared 개별 대비 batch의 완료 시간은 약69.0%, HTTP 왕복은 약69.2% 줄었다. 논리 요청은 감소하지 않았고 로컬 무지연에서는 batch가 약40.2% 느렸다. 누적 할당은 cap50 조건 31.21→21.34MB/op, writer p95 평균은149.5→86.27ms였다. prepared batch의 최고 payload 계산값은9,888bytes였다. 누적 할당은 peak heap이 아니며 writer 시간에는 queue/canonical/전체 트랜잭션이 포함된다. 이 native workload에는 새 토큰 생성이 없고, 토큰 batch는 정확성 시험으로 검증했다. 공개 5HTTP/s·PostgreSQL·장기 운영의 개선률로 적용하지 않는다. 다음 순차 항목에서 동일 입력의 두 저장소 전후 비교를 수행한다.
+
+최종 gofmt/build/lint(0 issues)/예제(17.813초)/PostgreSQL(adapter46.940초, app204.780초)가 통과했다. 첫 전체 race는 다른 자체 반복 검증과 겹쳐 실행해 package 전체 10분 제한으로 실패했다(TestRollbackLargeBlocks 시작 시점의 Pebble Open/fsync). 통과로 간주하지 않았으며 반복 검증 종료 후 같은 전체 race를 단독으로 재실행해 app448.922초로 통과했다. 두 번째 실행은 package 실행 제한만20분으로 지정했으며 테스트 항목과 assertion을 완화하지 않았다.
+
+SLO 기본 경로의 첫 실행은 round2 비읽기 구독자의 end-to-end p99가337.2ms로 절대250ms 기준을 초과했다(ingest105.4/push217.8ms, readers137.5ms). round1은116.4/100.5ms였고 fast stream11.8ms/path1.6ms는 통과했다. 당시 호스트 load average7.66/7.32/6.88과 OS mediaanalysisd/앱 renderer/VM의 CPU 부하를 읽었으나 원인으로 확정하지 않았고 다른 작업을 중지하지 않았다. 실패 표본을 통과로 간주하지 않는다.
+
+변경 전 main34619b0 git archive를 같은 호스트·1000구독자·60블록·10trades/s·2 alternating rounds·같은250ms/상대20% 기준으로 실행했다. 기준 실행은252.876초, readers116.4/non-readers119.3ms(+3%), fast stream8.2ms로 통과했다. 비교 시점의 호스트 부하는 달랐으며 causal regression/특정 외부 부하 원인을 확정하지 않았다. 준비가 꺼진 기본 경로에서 이 batch 옵션은 사용되지 않는다. R07의 변동 조사와 여러 호스트 검증은 계속 남는다.
+
+현재 기본 SLO의 동일 기준 재확인은252.885초로 상대 기준 실패(readers109.3/non-readers158.2ms,+45%)였다. 이 표본의 비읽기 라운드는 ingest110.9/113.2ms, push55.3/47.2ms로 첫 실패의 push 급증과 다른 양상이다. CPU/GC 계측을 추가한 동일 기준 진단 실행은readers153.8/non109.9ms(-29%)로 통과했다. 185 GC에서 최대 STW 합9.1ms·최대 concurrent GC13ms였고, CPU 표본56.57초의73.6%는raw syscall, 누적TCP read41.4%/write31.8%였다. 이 프로파일은 통과한 계측 표본이며 실패 시점의 원인을 대신 설명하지 않는다.
+
+검토 중 load fixture의 수명 결함을 확인했다. 각 SLO 라운드와 알림 부하 시험이 `fetcher.Run(t.Context())`를 시작하고 App/DB를 닫기 전에 loop를 취소·join하지 않았다. `Fetcher.Close`는 writer/relay/background를 닫지만 외부 Run context를 끝내지 않으므로 이전 라운드의 loop가 부모 시험 종료까지 남았다. 시험별 child context와 종료 대기를 추가했다. 작은 두 라운드에서 부모 context가 살아 있어도 live fetcher가 남지 않는 회귀 시험을 추가했고, 원래 시작 방식에서기대0/실제1로 실패를 재현했다. 저장한 수정본을 복원한 뒤 일반 race200(74.684초)·CPU1 race200(84.315초)가 통과했다. 이는 시험 격리의 수정이며 실제 SLO 변동의 유일한 원인으로 확정하지 않았다. 부하·round 수·절대/상대 기준을 변경하지 않았다.
+
+수정한 fixture의 기본 SLO는252.927초로 통과(readers121.3/non116.1ms,-4%; fast stream8.6ms/path1.2ms), state_prefetch=true/batch16 SLO도252.829초로 통과(readers125.6/non119.9ms,-4%; fast stream5.0ms/path1.1ms)했다. 1000구독자·60블록·10trades/s·2 alternating rounds·기존 절대/상대 기준을 그대로 사용했다. 이전 실패와 계측 표본을 삭제하지 않았으며 여러 호스트와 장기 반복의 변동 원인까지 해결했다고 주장하지 않는다.
+
+수명 수정까지 포함한 최종 소스의 gofmt/build/lint(0 issues)/전체 race(app418.368초)/PostgreSQL(adapter42.217초, app177.008초)/예제(정상 캐시 통과)를 다시 확인했다. 새 batch 동시성 시험의 일반/CPU1 200회와 load 수명 시험의 일반/CPU1 200회, 기본/배치16의 최종 정규 SLO가 모두 통과했다. GPG/noreply와 PR/main 네 CI의 기존 저장소 절차를 따른다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.

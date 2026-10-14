@@ -10,6 +10,19 @@ import (
 	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 )
 
+func TestChainStateBatchSizeValidation(t *testing.T) {
+	for _, size := range []int{-1, 0, 1, 64, 65} {
+		cfg := DefaultChainConfig()
+		cfg.ID, cfg.RPCEndpoint, cfg.ChainID = "test", "http://127.0.0.1:1", 1
+		cfg.Name = "Test"
+		cfg.StateBatchSize = &size
+		err := cfg.Validate()
+		if (size < 0 || size > 64) != (err != nil) {
+			t.Fatalf("state batch size %d: %v", size, err)
+		}
+	}
+}
+
 func init() {
 	chains.Register(evm.New("multichain-config-test"), -1)
 	chains.RegisterAlias("multichain-config-alias", "multichain-config-test")

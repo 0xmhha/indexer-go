@@ -69,9 +69,10 @@ type (
 	// BlockHandlerFunc adapts a function to BlockHandler.
 	BlockHandlerFunc = feature.BlockHandlerFunc
 	// BlockPreparer optionally acquires immutable inputs before the writer.
-	BlockPreparer      = feature.BlockPreparer
-	PreparedHandler    = feature.PreparedHandler
-	HashContractReader = feature.HashContractReader
+	BlockPreparer           = feature.BlockPreparer
+	PreparedHandler         = feature.PreparedHandler
+	HashContractReader      = feature.HashContractReader
+	HashContractBatchReader = feature.HashContractBatchReader
 	// RollbackHandler withdraws what a feature published for a block a
 	// reorganization rolls back (its writes are undone without it).
 	RollbackHandler = feature.RollbackHandler
