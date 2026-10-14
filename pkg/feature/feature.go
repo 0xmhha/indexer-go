@@ -67,7 +67,9 @@ func (f BlockHandlerFunc) HandleBlock(ctx context.Context, b *Block) error { ret
 type Deps struct {
 	// PrepareConcurrency bounds node-read preparation across this pipeline.
 	PrepareConcurrency int
-	prepareSlots       chan struct{}
+	// StateBatchSize bounds the number of reads in one state RPC envelope.
+	StateBatchSize int
+	prepareSlots   chan struct{}
 	// Storage is the indexer's storage. A feature takes the ports it uses
 	// (pkg/core/port) by type assertion and fails to register when one is
 	// missing.
@@ -84,6 +86,9 @@ type Deps struct {
 	// BalanceAtHash reads a specific fork's state during preparation. Nil
 	// keeps native balances on the legacy ordered path.
 	BalanceAtHash func(context.Context, common.Address, common.Hash) (*big.Int, error)
+	// BalanceBatchAtHash returns parallel values/errors in address order.
+	// Nil retains individual reads. Envelope errors do not become zero balances.
+	BalanceBatchAtHash func(context.Context, []common.Address, common.Hash) ([]*big.Int, []error, error)
 	// BlockAt reads a block from the node (nil when unavailable).
 	BlockAt func(ctx context.Context, number uint64) (*model.Block, error)
 	// Contracts reads contract code and calls contracts on the node at its
@@ -115,6 +120,12 @@ type ContractReader interface {
 type HashContractReader interface {
 	CallContractAtHash(context.Context, ethereum.CallMsg, common.Hash) ([]byte, error)
 	CodeAtHash(context.Context, common.Address, common.Hash) ([]byte, error)
+}
+
+// HashContractBatchReader optionally reads independent zero-value calls to one
+// contract at a fixed hash, preserving each member's value/error and order.
+type HashContractBatchReader interface {
+	CallContractBatchAtHash(context.Context, common.Address, [][]byte, common.Hash) ([][]byte, []error, error)
 }
 
 // DefaultOn is implemented by features that are enabled on every chain

@@ -32,6 +32,17 @@ func TestNewConfig(t *testing.T) {
 	if cfg.Indexer.ChunkSize != 100 {
 		t.Errorf("Expected default chunk size 100, got %d", cfg.Indexer.ChunkSize)
 	}
+	require.Equal(t, 1, cfg.Indexer.StateBatchSize)
+}
+
+func TestStateBatchSizeValidation(t *testing.T) {
+	for _, size := range []int{-1, 65} {
+		cfg := NewConfig()
+		cfg.RPC.Endpoint = "http://localhost:8545"
+		cfg.Database.Path = t.TempDir()
+		cfg.Indexer.StateBatchSize = size
+		require.ErrorContains(t, cfg.Validate(), "state_batch_size")
+	}
 }
 
 // TestConfigValidation tests configuration validation

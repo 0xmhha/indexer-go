@@ -765,6 +765,7 @@ func (a *App) initMultiChainManager() error {
 			Enabled:           cc.Enabled,
 			Workers:           orDefault(cc.Workers, a.config.Indexer.Workers),
 			StatePrefetch:     cc.StatePrefetch,
+			StateBatchSize:    cc.StateBatchSize,
 			BatchSize:         orDefault(cc.BatchSize, a.config.Indexer.ChunkSize),
 			RPCTimeout:        orDefault(cc.RPCTimeout, a.config.RPC.Timeout),
 		})
@@ -854,6 +855,9 @@ func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	cfg.Indexer.Workers = orDefault(cc.Workers, a.config.Indexer.Workers)
 	if cc.StatePrefetch != nil {
 		cfg.Indexer.StatePrefetch = *cc.StatePrefetch
+	}
+	if cc.StateBatchSize != nil {
+		cfg.Indexer.StateBatchSize = *cc.StateBatchSize
 	}
 	cfg.Indexer.ChunkSize = orDefault(cc.BatchSize, a.config.Indexer.ChunkSize)
 	cfg.Features = chainFeatures(a.config.Features, a.chainFeatureOverrides(cc.ID))
@@ -1001,12 +1005,14 @@ func (a *App) initFetcher(ctx context.Context) error {
 	}
 	deps := feature.Deps{
 		PrepareConcurrency: orDefault(a.config.Indexer.StateWorkers, 4),
+		StateBatchSize:     orDefault(a.config.Indexer.StateBatchSize, 1),
 		Storage:            a.storage,
 		Logger:             a.logger,
 		Profile:            profile,
 		Publish:            a.fetcher.Publish,
 		BalanceAt:          a.fetcher.BalanceAt,
 		BalanceAtHash:      a.fetcher.BalanceAtHash,
+		BalanceBatchAtHash: a.fetcher.BalanceBatchAtHash,
 		BlockAt:            a.fetcher.BlockAt,
 		Contracts:          token.NewEthClientAdapter(a.client.EthClient()),
 		Settings:           a.config.FeatureSettings,
@@ -1435,6 +1441,9 @@ func applyAPIFlags(cfg *config.Config, f *Flags) {
 
 // validateConfig validates the configuration
 func validateConfig(cfg *config.Config) error {
+	if cfg.Indexer.StateBatchSize < 0 || cfg.Indexer.StateBatchSize > 64 {
+		return fmt.Errorf("state_batch_size must be between 1 and 64 (0 defaults to 1)")
+	}
 	if cfg.Indexer.StateWorkers < 0 {
 		return fmt.Errorf("state workers must not be negative")
 	}

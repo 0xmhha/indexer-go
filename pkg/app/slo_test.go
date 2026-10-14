@@ -72,6 +72,7 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 
 	cfg := config.NewConfig()
 	cfg.Indexer.StatePrefetch = os.Getenv("INDEXER_LOAD_STATE_PREFETCH") == "1"
+	cfg.Indexer.StateBatchSize = envInt(t, "INDEXER_LOAD_STATE_BATCH_SIZE", 1)
 	cfg.RPC.Endpoint = srv.URL()
 	cfg.RPC.Timeout = 5 * time.Second
 	setTestDatabase(t, cfg, filepath.Join(t.TempDir(), "db"))
@@ -202,8 +203,8 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 	}
 
 	ctx := t.Context()
-	loopDone := make(chan error, 1)
-	go func() { loopDone <- app.fetcher.Run(ctx) }()
+	stopLoop := startLoadFetcher(t, app, ctx)
+	defer stopLoop()
 	start := time.Now()
 	for b := 2; b <= blocks+1; b++ {
 		if wait := time.Until(start.Add(time.Duration(b-1) * interval)); wait > 0 {

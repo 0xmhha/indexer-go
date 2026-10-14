@@ -43,6 +43,7 @@ func DeclaredTables(deps sdk.Deps) (*sdk.Tables, error)
 type Deps = feature.Deps
   field BalanceAt func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
   field BalanceAtHash func(context.Context, common.Address, common.Hash) (*big.Int, error)
+  field BalanceBatchAtHash func(context.Context, []common.Address, common.Hash) ([]*big.Int, []error, error)
   field BlockAt func(ctx context.Context, number uint64) (*model.Block, error)
   field Contracts feature.ContractReader
   field Logger *zap.Logger
@@ -50,6 +51,7 @@ type Deps = feature.Deps
   field Profile chains.Profile
   field Publish func(events.Event) bool
   field Settings func(feature string, into any) error
+  field StateBatchSize int
   field Storage port.Reader
   method Blocks() chains.AccountingEnv
   method DecodeSettings(feature string, into any) error
@@ -68,6 +70,8 @@ type GraphQLExtension = graphql.Extension
   method AddSubscription(name string, f *graphql.Field)
   method Logger() *zap.Logger
   method Storage() port.QueryStore
+type HashContractBatchReader = feature.HashContractBatchReader
+  method CallContractBatchAtHash(context.Context, common.Address, [][]byte, common.Hash) ([][]byte, []error, error)
 type HashContractReader = feature.HashContractReader
   method CallContractAtHash(context.Context, ethereum.CallMsg, common.Hash) ([]byte, error)
   method CodeAtHash(context.Context, common.Address, common.Hash) ([]byte, error)

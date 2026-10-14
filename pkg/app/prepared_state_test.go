@@ -165,10 +165,16 @@ func TestPreparedStateChainConfiguration(t *testing.T) {
 	cfg := config.NewConfig()
 	cfg.Indexer.StatePrefetch = true
 	cfg.Indexer.StateWorkers = 3
+	cfg.Indexer.StateBatchSize = 16
 	a := &App{config: cfg}
 	cc := &multichain.ChainConfig{ID: "test", RPCEndpoint: "http://localhost"}
 	require.True(t, a.chainAppConfig(cc).Indexer.StatePrefetch)
 	require.Equal(t, 3, a.chainAppConfig(cc).Indexer.StateWorkers)
+	require.Equal(t, 16, a.chainAppConfig(cc).Indexer.StateBatchSize)
+	single := 1
+	cc.StateBatchSize = &single
+	require.Equal(t, 1, a.chainAppConfig(cc).Indexer.StateBatchSize)
+	require.Equal(t, 16, cfg.Indexer.StateBatchSize, "batch overrides must not change other chains")
 	off := false
 	cc.StatePrefetch = &off
 	require.False(t, a.chainAppConfig(cc).Indexer.StatePrefetch)

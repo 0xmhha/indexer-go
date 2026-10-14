@@ -47,10 +47,17 @@ indexer:
   workers: 2
   state_prefetch: true
   state_workers: 4
+  state_batch_size: 1
   state_max_bytes: 16777216
 ```
 
 `state_workers`(기본 4)는 한 체인의 준비 pipeline에서 잔액·계약 조회 작업이 공유하는 동시 실행 상한이다. 기존 `rpc.rate_limit`·timeout·fallback 설정도 적용된다. 초기 잔액은 부모 block hash, 토큰 메타데이터는 생성 block hash로 조회한다(EIP-1898 지원 RPC 필요). writer는 canonical hash를 다시 확인하고 높이 순서대로 DB 반영·cursor·undo·outbox를 함께 commit한다. 준비 결과는 해당 pipeline·height·hash에만 사용하며, 취소/reorg/실패 시 남은 결과를 폐기하고 고루틴을 모두 기다린다.
+
+`state_batch_size`는 준비 단계에서 한 JSON-RPC batch에 넣는 상태 조회 수다. 기본 1은 개별 조회이며 0도 1로 정규화한다. 2~64로 설정하면 같은 부모 hash의 초기 잔액과 같은 생성 hash의 독립 토큰 속성(name/symbol/decimals/totalSupply)을 묶는다. `multichain.chains[].state_batch_size`로 체인별로 덮어쓸 수 있다. URI의 순차 fallback과 번호 기반 backfill은 기존 경로다. batch 한 건이 공유 permit 하나를 사용한다.
+
+서버가 batch envelope를 거부하거나 응답 전체의 ID를 대응시킬 수 없으면 해당 client는 이후 개별 조회를 사용한다. HTTP 429/5xx, 일부 멤버의 상태 소실·잘못된 hash·미응답은 배치 미지원으로 처리하지 않는다. 필요한 멤버의 오류는 블록 실패·동일 높이 재시도로 이어지며 null 잔액을 0으로 만들지 않는다. 정상 계약 revert는 기존 선택 속성 처리 규칙을 따른다.
+
+배치는 **HTTP 왕복 수**를 줄이며 논리 RPC 수나 노드 계산량을 같은 비율로 줄이지 않는다. `rpc.rate_limit`은 HTTP 요청 기준이고 제공자 quota는 멤버별일 수 있으므로, 공개 RPC에서 켜기 전에 허용 batch 크기와 과금/요청 기준을 확인한다. 준비 중 앞선 블록이 아직 초기화하지 못한 계정의 speculative 조회는 남는다. batch를 켜도 이미 지워진 상태를 복구하지 못한다.
 
 준비 가능한 회계 구현은 `chains.ConcurrentAccounting`에 명시적으로 동의해야 한다. 내장 세 profile은 지원하며 StableNet epoch 조회는 조상 hash 연결도 검증한다. writer가 계정 기록을 다시 확인하므로 앞선 블록에서 이미 초기화된 계정의 불필요한 준비 오류는 사용하지 않는다. 음수 잔액 보정·준비 중 기록이 있었으나 writer에서는 없어진 계정·backfill·준비 API가 없는 확장의 RPC는 writer에 남는다. `allow_pruned_state` 정책은 동일하다. 해시 selector의 invalid-params/method-not-found 오류는 0 대체로 처리하지 않는다.
 
