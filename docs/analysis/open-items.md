@@ -17,7 +17,7 @@
 | 순서 / ID | 작업 | 현재 증거와 남은 범위 | 완료 기준 / 필요한 조건 |
 |---|---|---|---|
 | 1 / R03 | full node 운영 설정 확정 | 로컬 4개 테스트넷 설정·명시적 profile·제한된 시작/재시작 검증 완료. BSC의 처리 중 상태 소실을 확인한 뒤 사용자가 블록 실패·재시도를 선택. `allow_pruned_state: false`를 런타임에도 적용하고 블록 전체 취소·동일 높이 재시도를 회귀 시험으로 검증 | 첫 실행 전 시작 직전 상태 재확인. 기존 DB의 다음 높이·backfill 상태와 실제 보존 범위·허용 중단 시간 확인. 영구히 지워진 상태는 재시도로 복구되지 않음. 기존 generic EVM Arc DB는 재사용하지 않음. 잔액 정확한 상시 운영 완료로 간주하지 않음 |
-| 2 / R04 | full node 처리 속도·상태 확보 지연·여러 호스트 SLO | 선택적 해시 기반 상태 준비·bounded channel·체인별 순차 writer 구현. 단계별 지연/진행 중 수/payload 계측 추가. 통제된 RPC 왕복 입력에서 개선했으나 요청 제한에 걸리면 추가 canonical RPC로 더 느려짐. 5분 실노드 창에서 StableNet은 head 근처, BSC는 필수 상태 소실로 정지, Arc는 격차 증가, Sepolia는 초기 상태 요청과 transport 재시도 지연. 기존 Pebble/PostgreSQL ingest 중앙값 1.506/2.749초는 별도 입력의 과거 측정 | 실제 노드·계정의 상태 보존 범위와 RPC quota에 맞춰 선택 설정·workers/요청량을 조정. 지속 처리량이 생성률을 넘고 head 지연+상태 확보 시간이 보존 기간보다 충분히 짧을 것. 네 공개 체인의 장기 실행·같은 입력의 PostgreSQL 비교·여러 호스트 SLO·PostgreSQL 목표 배수는 남음. 통제된 결과를 운영 목표로 간주하지 않음 |
+| 2 / R04 | full node 처리 속도·상태 확보 지연·여러 호스트 SLO | 선택적 해시 기반 상태 준비·bounded channel·체인별 순차 writer와 관측 head 공유 구현. 명시적 health/live poll은 fresh 유지. 빈 블록 동일 입력에서 HTTP89→60/head41→12/17.660→11.908초(실노드 개선률 아님). 단계별 지연/진행 중 수/payload 계측 추가. 통제된 RPC 왕복 입력에서 개선했으나 요청 제한에 걸리면 추가 canonical RPC로 더 느려짐. 5분 실노드 창에서 StableNet은 head 근처, BSC는 필수 상태 소실로 정지, Arc는 격차 증가, Sepolia는 초기 상태 요청과 transport 재시도 지연. 기존 Pebble/PostgreSQL ingest 중앙값 1.506/2.749초는 별도 입력의 과거 측정 | 실제 노드·계정의 상태 보존 범위와 RPC quota에 맞춰 선택 설정·workers/요청량을 조정. 지속 처리량이 생성률을 넘고 head 지연+상태 확보 시간이 보존 기간보다 충분히 짧을 것. 네 공개 체인의 장기 실행·같은 입력의 PostgreSQL 비교·여러 호스트 SLO·PostgreSQL 목표 배수는 남음. 통제된 결과를 운영 목표로 간주하지 않음 |
 
 R04의 구현 범위와 다음 작업:
 
@@ -25,10 +25,10 @@ R04의 구현 범위와 다음 작업:
 2. `indexer.state_prefetch`로 초기 잔액·토큰 상태 준비를 수집 worker에서 실행하고 `state_workers`의 공유 permit으로 제한한다. 부모/생성 block hash를 사용한다. 음수 잔액 보정·backfill·준비를 지원하지 않는 확장 기능은 기존 writer 경로다. DB 확인 중복·speculative 요청·RPC batch 가능성·profile의 추가 헤더 비용은 후속 측정 대상이다.
 3. 준비 결과는 체인별 pipeline·height·block hash에 묶인 포인터로 기존 bounded channel에 넘긴다. `state_max_bytes`는 블록별 전달 payload 계산값의 상한이며 heap 전체 상한은 아니다. producer는 전달 후 수정하지 않는다. writer에서 canonical hash를 확인하고 reorg/취소/실패 시 범위의 결과를 폐기한다. strict 상태 정책에서 latest로 대체하지 않는다.
 4. 체인별 writer 하나가 높이 순서대로 잔액·트랜잭션·undo·cursor·outbox를 함께 반영한다. 계정/토큰 기록을 writer에서 재확인해 불필요해진 준비 오류를 사용하지 않는다. 아직 기록되지 않은 필수 상태 오류는 블록 전체를 취소한다.
-5. head 조회가 실제 App 논리 요청의 약 21~33%, HTTP 요청의 약 21~44%였다. 1초 progress RPC와 syncing 중 블록마다 health RPC의 중복을 우선 줄이고 freshness/실패 시 상태 표시에 대한 계약을 검사한다. 초기 잔액의 요청량·speculative 중복·hash 고정 batch가 다음 대상이다.
+5. 변경 전 5분 창의 head 조회는 App 논리 약21~33%/HTTP약21~44%였다. 최근 관측·진행 중 RPC를 background progress/블록 metric에 공유하고 live poll·명시적 health의 fresh 계약, 오류·취소·응답 순서를 검증했다. 초기 잔액/토큰의 요청량·speculative 중복·hash 고정 batch가 다음 대상이다. 변경 후 실노드 창은 이후 순차 검증한다.
 6. 같은 입력·설정으로 변경 전후 처리량과 p50/p95/p99 지연·메모리·정확성을 비교하고, 네 체인 동시 실행 및 한 RPC 지연/장애 시 다른 체인의 진행을 검증한다. 보존 기간과 안전 여유는 실제 환경을 측정해 정한다. 이 과제 기록을 전체 파이프라인 변경의 완료로 간주하지 않는다.
 
-근거: [네 테스트넷 5분 관측](work-log-2026-10.md#313-1014-네-공개-테스트넷-5분-운영-창-관측), [로컬 설정 복구·profile 선택](work-log-2026-10.md#310-1014-로컬-full-node-설정-복구명시적-profile-선택), [Arc·공개 RPC 기록](work-log-2026-10.md#35-1013-arcstable-추가와-공개-rpc-postgresql-검증), [PostgreSQL 측정](work-log-2026-10.md#33-1012-후속-postgresql-ingest-측정), [SLO 조사](work-log-2026-10.md#31-1012-후속-slo-조사).
+근거: [중복 head 관측 감소](work-log-2026-10.md#314-1014-중복-head-관측-감소), [네 테스트넷 5분 관측](work-log-2026-10.md#313-1014-네-공개-테스트넷-5분-운영-창-관측), [로컬 설정 복구·profile 선택](work-log-2026-10.md#310-1014-로컬-full-node-설정-복구명시적-profile-선택), [Arc·공개 RPC 기록](work-log-2026-10.md#35-1013-arcstable-추가와-공개-rpc-postgresql-검증), [PostgreSQL 측정](work-log-2026-10.md#33-1012-후속-postgresql-ingest-측정), [SLO 조사](work-log-2026-10.md#31-1012-후속-slo-조사).
 
 ## 3. 별도 조건이 있는 작업
 

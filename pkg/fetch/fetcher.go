@@ -194,6 +194,8 @@ type Fetcher struct {
 	// lastTarget and polled are the live loop's progress (Progress).
 	lastTarget atomic.Uint64
 	polled     atomic.Bool
+	nodeHead   heightObserver
+	finalized  heightObserver
 }
 
 // NewFetcher creates a new Fetcher instance

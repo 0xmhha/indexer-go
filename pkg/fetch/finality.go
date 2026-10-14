@@ -40,16 +40,21 @@ var progressPoll = time.Second
 
 // followTarget records the target head every progressPoll until ctx ends.
 func (f *Fetcher) followTarget(ctx context.Context) {
-	t := time.NewTicker(progressPoll)
+	observer := &f.nodeHead
+	if f.config.Finality == FinalityFinalized {
+		observer = &f.finalized
+	}
+	t := time.NewTimer(observer.nextRead(progressPoll))
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if target, ok, err := f.readTargetHead(ctx, false); err == nil && ok {
+			if target, ok, err := f.readTargetHead(ctx, false, progressPoll); err == nil && ok {
 				f.noteTarget(target)
 			}
+			t.Reset(observer.nextRead(progressPoll))
 		}
 	}
 }
@@ -89,21 +94,22 @@ const noFinalizedWarnEvery = time.Minute
 // finality policy. ok is false when no block qualifies yet (fewer blocks
 // than the required confirmations).
 func (f *Fetcher) targetHead(ctx context.Context) (target uint64, ok bool, err error) {
-	return f.readTargetHead(ctx, true)
+	return f.readTargetHead(ctx, true, 0)
 }
 
 // readTargetHead is targetHead; warn reports a node without a finalized
 // block (only the live loop does, so the warning's state has one writer).
-func (f *Fetcher) readTargetHead(ctx context.Context, warn bool) (target uint64, ok bool, err error) {
+func (f *Fetcher) readTargetHead(ctx context.Context, warn bool, age time.Duration) (target uint64, ok bool, err error) {
 	switch f.config.Finality {
 	case "", FinalityHead:
-		head, err := f.latestBlockNumber(ctx)
-		return head, err == nil, err
+		observation := f.readNodeHeight(ctx, age)
+		return observation.height, observation.ok, observation.err
 	case FinalityConfirmations:
-		head, err := f.latestBlockNumber(ctx)
-		if err != nil {
-			return 0, false, err
+		observation := f.readNodeHeight(ctx, age)
+		if observation.err != nil {
+			return 0, false, observation.err
 		}
+		head := observation.height
 		if head < f.config.Confirmations {
 			return 0, false, nil
 		}
@@ -113,9 +119,12 @@ func (f *Fetcher) readTargetHead(ctx context.Context, warn bool) (target uint64,
 		if !isFC {
 			return 0, false, fmt.Errorf("%w: client cannot read it", ErrNoFinalized)
 		}
-		rctx, cancel := f.rpcCtx(ctx)
-		defer cancel()
-		n, ok, err := fc.GetFinalizedBlockNumber(rctx)
+		observation := f.finalized.read(ctx, age, func(ctx context.Context) (uint64, bool, error) {
+			rctx, cancel := f.rpcCtx(ctx)
+			defer cancel()
+			return fc.GetFinalizedBlockNumber(rctx)
+		})
+		n, ok, err := observation.height, observation.ok, observation.err
 		if err != nil {
 			return 0, false, err
 		}

@@ -16,12 +16,6 @@ func (f *Fetcher) rpcCtx(ctx context.Context) (context.Context, context.CancelFu
 	return ctx, func() {}
 }
 
-func (f *Fetcher) latestBlockNumber(ctx context.Context) (uint64, error) {
-	ctx, cancel := f.rpcCtx(ctx)
-	defer cancel()
-	return f.client.GetLatestBlockNumber(ctx)
-}
-
 func (f *Fetcher) balanceAt(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error) {
 	ctx, cancel := f.rpcCtx(ctx)
 	defer cancel()
