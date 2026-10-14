@@ -15,6 +15,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
@@ -91,11 +92,9 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 
 	// The validator set of the parent (for its canonical seals in this
 	// block) and of this block.
-	parentEpoch, known := h.epochs.Applied(b.Model.ParentHash)
-	if !known && b.Model.Number > 0 {
-		if parentEpoch, err = stablenet.EpochOf(ctx, b.Model.Number-1, h.blocks); err != nil {
-			return fmt.Errorf("epoch of block %d: %w", b.Model.Number-1, err)
-		}
+	parentEpoch, parent, err := h.parentEpochFor(ctx, b.Model)
+	if err != nil {
+		return err
 	}
 	epoch, err := h.epochs.For(ctx, b.Model, h.blocks)
 	if err != nil {
@@ -118,7 +117,7 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 		}
 	}
 
-	if err := h.recordParentSigning(ctx, b, wbftExtra, parentEpoch); err != nil {
+	if err := h.recordParentSigning(ctx, b, wbftExtra, parentEpoch, parent); err != nil {
 		return err
 	}
 
@@ -130,6 +129,33 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 
 	h.publishConsensusBlockEvent(b, wbftExtra, epoch)
 	return nil
+}
+
+// parentEpochFor primes the same tracker used for the current block, avoiding
+// two independent ancestor walks at startup. The parent header is also reused
+// for its signing timestamp. Its hash must link to the current block.
+func (h *handler) parentEpochFor(ctx context.Context, b *model.Block) (*stablenet.EpochInfo, *model.Block, error) {
+	if b.Number == 0 {
+		return nil, nil, nil
+	}
+	if info, known := h.epochs.Applied(b.ParentHash); known {
+		return info, nil, nil
+	}
+	if h.blocks == nil {
+		return nil, nil, fmt.Errorf("cannot read parent epoch of block %d", b.Number)
+	}
+	parent, err := h.blocks.Block(ctx, b.Number-1)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read parent of block %d: %w", b.Number, err)
+	}
+	if parent == nil || parent.Number != b.Number-1 || parent.Hash != b.ParentHash {
+		return nil, nil, fmt.Errorf("parent of block %d does not match its header: %w", b.Number, chains.ErrAccountingFork)
+	}
+	info, err := h.epochs.For(ctx, parent, h.blocks)
+	if err != nil {
+		return nil, nil, fmt.Errorf("epoch of block %d: %w", parent.Number, err)
+	}
+	return info, parent, nil
 }
 
 // epochNumber numbers a new epoch block: one after the latest stored epoch,
@@ -155,7 +181,7 @@ func (h *handler) epochNumber(ctx context.Context, height uint64) (uint64, error
 
 // recordParentSigning records who signed block N-1, from the Prev seals in
 // block N.
-func (h *handler) recordParentSigning(ctx context.Context, b *feature.Block, x *consensus.WBFTBlockExtra, parentEpoch *stablenet.EpochInfo) error {
+func (h *handler) recordParentSigning(ctx context.Context, b *feature.Block, x *consensus.WBFTBlockExtra, parentEpoch *stablenet.EpochInfo, parent *model.Block) error {
 	if b.Model.Number < 2 || parentEpoch == nil || (x.PrevPreparedSeal == nil && x.PrevCommittedSeal == nil) {
 		return nil // genesis is not sealed
 	}
@@ -164,8 +190,10 @@ func (h *handler) recordParentSigning(ctx context.Context, b *feature.Block, x *
 		return fmt.Errorf("validators of block %d: %w", b.Model.Number-1, err)
 	}
 	var timestamp uint64
-	if parent, err := h.blocks.Block(ctx, b.Model.Number-1); err == nil {
+	if parent != nil {
 		timestamp = parent.Time
+	} else if stored, err := h.blocks.Block(ctx, b.Model.Number-1); err == nil {
+		timestamp = stored.Time
 	}
 	activities := make([]*consensus.ValidatorSigningActivity, len(validators))
 	for i, addr := range validators {
