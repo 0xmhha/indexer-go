@@ -1,4 +1,4 @@
-.PHONY: all build clean test test-race test-postgres test-slo test-examples lint lint-install coverage generate tools help
+.PHONY: all build clean test test-race test-cache-lifecycle test-postgres test-slo test-examples lint lint-install coverage generate tools help
 
 # Variables
 BINARY_NAME=indexer-go
@@ -65,6 +65,10 @@ test:
 ## test-race: Run every test once with the race detector; run it before each commit and pull request (CI has no race job, to keep CI fast)
 test-race:
 	$(GOTEST) -race -count=1 ./...
+
+## test-cache-lifecycle: Check Pebble cache ownership with its leak finalizers (race disables these finalizers)
+test-cache-lifecycle:
+	$(GOTEST) -tags=invariants -count=1 -run '^TestPebbleCacheLifecycle$$' ./pkg/storage
 
 ## test-all: Run all tests including integration tests
 test-all:

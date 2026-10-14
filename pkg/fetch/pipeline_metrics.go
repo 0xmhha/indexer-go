@@ -10,6 +10,7 @@ const (
 	stageFetch = iota
 	stagePrepare
 	stageWrite
+	stageCommit
 	pipelineSampleWindow = 256
 )
 
@@ -26,9 +27,12 @@ type StageMetrics struct {
 }
 
 type PipelineMetrics struct {
-	Fetch          StageMetrics `json:"fetch_decode"`
-	Prepare        StageMetrics `json:"state_prepare"`
-	Write          StageMetrics `json:"ordered_write"`
+	Fetch   StageMetrics `json:"fetch_decode"`
+	Prepare StageMetrics `json:"state_prepare"`
+	Write   StageMetrics `json:"ordered_write"`
+	// Commit is the block transaction's Commit call, including undo and
+	// durability waits. It excludes writer queue, RPC and feature handling.
+	Commit         StageMetrics `json:"database_commit"`
 	InFlight       int64        `json:"in_flight"`
 	PeakInFlight   int64        `json:"peak_in_flight"`
 	StateBytes     int64        `json:"prepared_state_bytes"`
@@ -44,7 +48,7 @@ type stageSamples struct {
 type pipelineMetrics struct {
 	enabled                                            bool // immutable after construction
 	mu                                                 sync.Mutex
-	stages                                             [3]stageSamples
+	stages                                             [4]stageSamples
 	inFlight, peakInFlight, stateBytes, peakStateBytes int64
 }
 
@@ -119,5 +123,5 @@ func (f *Fetcher) GetPipelineMetrics() PipelineMetrics {
 		}
 		return out
 	}
-	return PipelineMetrics{Fetch: snapshot(m.stages[stageFetch]), Prepare: snapshot(m.stages[stagePrepare]), Write: snapshot(m.stages[stageWrite]), InFlight: m.inFlight, PeakInFlight: m.peakInFlight, StateBytes: m.stateBytes, PeakStateBytes: m.peakStateBytes}
+	return PipelineMetrics{Fetch: snapshot(m.stages[stageFetch]), Prepare: snapshot(m.stages[stagePrepare]), Write: snapshot(m.stages[stageWrite]), Commit: snapshot(m.stages[stageCommit]), InFlight: m.inFlight, PeakInFlight: m.peakInFlight, StateBytes: m.stateBytes, PeakStateBytes: m.peakStateBytes}
 }

@@ -47,8 +47,16 @@ func (s sloStats) String() string {
 
 func statsOf(samples []time.Duration) sloStats {
 	slices.Sort(samples)
-	at := func(q float64) time.Duration { return samples[int(q*float64(len(samples)-1))] }
-	return sloStats{at(0.5), at(0.99), samples[len(samples)-1]}
+	// Nearest rank, as in pipeline metrics. With 60 blocks, floor(q*(n-1))
+	// discarded the slowest block at p99 even though it affects 1/60 of
+	// each subscriber's messages.
+	at := func(p int) time.Duration { return samples[(len(samples)*p+99)/100-1] }
+	return sloStats{at(50), at(99), samples[len(samples)-1]}
+}
+
+type sloBlockLatency struct {
+	height  uint64
+	elapsed time.Duration
 }
 
 // sloResult is what a load run measured.
@@ -57,9 +65,11 @@ type sloResult struct {
 	// one of its trades; ingest from the node showing the block to its
 	// events reaching the in-process bus (fetch, index, commit, outbox,
 	// relay); push from the bus to the subscriber (engine, WebSocket).
-	endToEnd, ingest, push sloStats
-	trades                 int // per subscriber
-	slowClosed             int // non-reading subscribers disconnected as slow
+	endToEnd, ingest, push    sloStats
+	trades                    int // per subscriber
+	slowClosed                int // non-reading subscribers disconnected as slow
+	worstIngest, worstReceive sloBlockLatency
+	pipeline                  string // opt-in diagnostic snapshot; no profiling in normal runs
 }
 
 // runSLOLoad (refactoring plan R5-5) indexes a DEX chain whose blocks the
@@ -73,6 +83,7 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 	cfg := config.NewConfig()
 	cfg.Indexer.StatePrefetch = os.Getenv("INDEXER_LOAD_STATE_PREFETCH") == "1"
 	cfg.Indexer.StateBatchSize = envInt(t, "INDEXER_LOAD_STATE_BATCH_SIZE", 1)
+	cfg.Indexer.PipelineMetrics = os.Getenv("INDEXER_LOAD_DIAGNOSTICS") == "1"
 	cfg.RPC.Endpoint = srv.URL()
 	cfg.RPC.Timeout = 5 * time.Second
 	setTestDatabase(t, cfg, filepath.Join(t.TempDir(), "db"))
@@ -146,12 +157,13 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 
 	total := blocks * swaps
 	var (
-		wg      sync.WaitGroup
-		mu      sync.Mutex
-		e2e     []time.Duration
-		push    []time.Duration
-		failed  atomic.Int64
-		minimum = total
+		wg           sync.WaitGroup
+		mu           sync.Mutex
+		e2e          []time.Duration
+		push         []time.Duration
+		failed       atomic.Int64
+		minimum      = total
+		worstReceive sloBlockLatency
 	)
 	for i := slow; i < subscribers; i++ {
 		wg.Add(1)
@@ -159,10 +171,14 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 			defer wg.Done()
 			var mineE2E, minePush []time.Duration
 			got := 0
+			var mineWorst sloBlockLatency
 			defer func() {
 				mu.Lock()
 				e2e, push = append(e2e, mineE2E...), append(push, minePush...)
 				minimum = min(minimum, got)
+				if mineWorst.elapsed > worstReceive.elapsed {
+					worstReceive = mineWorst
+				}
 				mu.Unlock()
 			}()
 			_ = c.SetReadDeadline(time.Now().Add(time.Duration(blocks)*interval + time.Minute))
@@ -195,7 +211,11 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 				got++
 				b, _ := strconv.Atoi(m.Payload.Data.DexTrade.BlockNumber)
 				if b > 0 && b < len(shown) {
-					mineE2E = append(mineE2E, time.Duration(now-shown[b].Load()))
+					elapsed := time.Duration(now - shown[b].Load())
+					mineE2E = append(mineE2E, elapsed)
+					if elapsed > mineWorst.elapsed {
+						mineWorst = sloBlockLatency{uint64(b), elapsed}
+					}
 					minePush = append(minePush, time.Duration(now-onBus[b].Load()))
 				}
 			}
@@ -218,9 +238,14 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 	require.Equal(t, total, minimum)
 
 	var ingest []time.Duration
+	var worstIngest sloBlockLatency
 	for b := 2; b <= blocks+1; b++ {
 		if at := onBus[b].Load(); at != 0 {
-			ingest = append(ingest, time.Duration(at-shown[b].Load()))
+			elapsed := time.Duration(at - shown[b].Load())
+			ingest = append(ingest, elapsed)
+			if elapsed > worstIngest.elapsed {
+				worstIngest = sloBlockLatency{uint64(b), elapsed}
+			}
 		}
 	}
 	require.Len(t, ingest, blocks, "every block event reached the bus")
@@ -228,6 +253,12 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 	// Subscribers that never read are disconnected as slow (when the run
 	// overflowed their queue) instead of holding the others back.
 	res := sloResult{endToEnd: statsOf(e2e), push: statsOf(push), ingest: statsOf(ingest), trades: total}
+	res.worstIngest, res.worstReceive = worstIngest, worstReceive
+	if cfg.Indexer.PipelineMetrics {
+		data, err := json.Marshal(app.fetcher.GetPipelineMetrics())
+		require.NoError(t, err)
+		res.pipeline = string(data)
+	}
 	for _, c := range conns[:slow] {
 		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
 		for {
@@ -291,6 +322,11 @@ func TestSLOLoad(t *testing.T) {
 		t.Logf("  end to end (node shows block -> subscriber has trade): %v", r.endToEnd)
 		t.Logf("  ingest (node shows block -> block event on the bus):  %v", r.ingest)
 		t.Logf("  push (bus -> subscriber has trade):                    %v", r.push)
+		t.Logf("  slowest ingest: block %d, %v; slowest receipt: block %d, %v",
+			r.worstIngest.height, r.worstIngest.elapsed, r.worstReceive.height, r.worstReceive.elapsed)
+		if r.pipeline != "" {
+			t.Logf("  pipeline (commit excludes RPC/queue/feature handling): %s", r.pipeline)
+		}
 	}
 
 	rounds := max(1, envInt(t, "INDEXER_LOAD_ROUNDS", 2))
