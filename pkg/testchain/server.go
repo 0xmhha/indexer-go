@@ -330,7 +330,7 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 		}
 		n, ok := s.blockNumberParam(req, 1)
 		if !ok {
-			n = c.head
+			return nil, &rpcError{Code: -32000, Message: "header not found"}
 		}
 		s.mu.Lock()
 		pruned := n < s.stateFrom
@@ -340,6 +340,9 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 		}
 		return (*hexutil.Big)(c.balanceAt(addr, n)), nil
 	case "eth_getCode":
+		if _, ok := s.blockNumberParam(req, 1); !ok {
+			return nil, &rpcError{Code: -32000, Message: "header not found"}
+		}
 		var addr common.Address
 		if len(req.Params) > 0 {
 			_ = json.Unmarshal(req.Params[0], &addr)
@@ -347,6 +350,9 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 		return hexutil.Bytes(c.code[addr]), nil
 
 	case "eth_call":
+		if _, ok := s.blockNumberParam(req, 1); !ok {
+			return nil, &rpcError{Code: -32000, Message: "header not found"}
+		}
 		var call struct {
 			To    *common.Address `json:"to"`
 			Data  hexutil.Bytes   `json:"data"`
@@ -479,6 +485,12 @@ func (s *Server) blockNumberParam(req rpcRequest, i int) (uint64, bool) {
 	}
 	var tag string
 	if err := json.Unmarshal(req.Params[i], &tag); err != nil {
+		var selector struct{ BlockHash common.Hash }
+		if json.Unmarshal(req.Params[i], &selector) == nil {
+			if block := c.byHash[selector.BlockHash]; block != nil && block.Block.NumberU64() <= c.head {
+				return block.Block.NumberU64(), true
+			}
+		}
 		return 0, false
 	}
 	switch tag {

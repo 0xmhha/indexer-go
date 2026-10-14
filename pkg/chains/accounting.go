@@ -2,6 +2,7 @@ package chains
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,6 +34,17 @@ type AccountingEnv interface {
 type NativeAccounting interface {
 	NativeDeltas(ctx context.Context, b *model.Block, rs []*model.Receipt, env AccountingEnv) ([]BalanceDelta, error)
 }
+
+// ConcurrentAccounting explicitly permits NativeDeltas calls for different
+// blocks to overlap during preparation. Unknown/custom accounting stays on
+// the ordered writer unless it opts in.
+type ConcurrentAccounting interface{ ConcurrentAccounting() bool }
+
+// ErrAccountingFork rejects earlier headers that are not ancestors of the
+// block being prepared (for example a stale indexed prefix during a reorg).
+var ErrAccountingFork = errors.New("native accounting inputs belong to different forks")
+
+func (EthereumAccounting) ConcurrentAccounting() bool { return true }
 
 // AccountingProfile is implemented by profiles with their own accounting
 // rules.

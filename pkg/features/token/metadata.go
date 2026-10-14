@@ -48,7 +48,7 @@ func (metadataFeature) Register(r feature.Registrar) error {
 	}
 	indexer := tokenmeta.NewContractIndexer(d.Contracts, store, d.Logger)
 	indexer.SetAllowPrunedState(st.AllowPrunedState)
-	r.OnBlock(&metadata{indexer: indexer})
+	r.OnBlock(&metadata{indexer: indexer, store: store, deps: d})
 	return nil
 }
 
@@ -56,6 +56,8 @@ func init() { feature.Register(metadataFeature{}) }
 
 type metadata struct {
 	indexer *tokenmeta.ContractIndexer
+	store   tokenmeta.TokenMetadataStore
+	deps    feature.Deps
 }
 
 // HandleBlock indexes the token metadata of the contracts the block

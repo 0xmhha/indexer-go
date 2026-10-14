@@ -55,7 +55,8 @@ func (balanceFeature) Register(r feature.Registrar) error {
 	}
 	prefetch, _ := d.Storage.(port.BalancePrefetcher) // optional
 	r.OnBlock(&handler{
-		w: w, r: rd, records: rc, prefetch: prefetch,
+		deps: d,
+		w:    w, r: rd, records: rc, prefetch: prefetch,
 		accounting: chains.AccountingOf(d.Profile),
 		balanceAt:  d.BalanceAt, blocks: d.Blocks(), logger: logger,
 		allowPrunedState: st.AllowPrunedState,
@@ -78,6 +79,7 @@ type settings struct {
 func init() { feature.Register(balanceFeature{}) }
 
 type handler struct {
+	deps             feature.Deps
 	w                port.HistoricalWriter
 	r                port.HistoricalReader
 	records          port.BalanceRecordChecker
@@ -108,6 +110,11 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 	}
 
 	merged := mergeDeltas(deltas)
+	return h.applyDeltas(ctx, b, merged)
+}
+
+func (h *handler) applyDeltas(ctx context.Context, b *feature.Block, merged []chains.BalanceDelta) error {
+	n := b.Model.Number
 	if h.prefetch != nil {
 		// Read every changed account at once instead of one by one.
 		changed := map[common.Address]bool{}

@@ -94,7 +94,7 @@ func (t *EpochTracker) For(ctx context.Context, b *model.Block, blocks chains.Ac
 		info = t.last.next
 	default:
 		var err error
-		if info, err = lastEpochAtOrBelow(ctx, b.Number-1, blocks); err != nil {
+		if info, err = lastEpochAtOrBelow(ctx, b.Number-1, blocks, &b.ParentHash); err != nil {
 			return nil, err
 		}
 	}
@@ -127,12 +127,12 @@ func EpochOf(ctx context.Context, n uint64, blocks chains.AccountingEnv) (*Epoch
 	if n == 0 {
 		return nil, nil
 	}
-	return lastEpochAtOrBelow(ctx, n-1, blocks)
+	return lastEpochAtOrBelow(ctx, n-1, blocks, nil)
 }
 
 // lastEpochAtOrBelow reads blocks back from n to the newest one carrying
 // epoch info.
-func lastEpochAtOrBelow(ctx context.Context, n uint64, blocks chains.AccountingEnv) (*EpochInfo, error) {
+func lastEpochAtOrBelow(ctx context.Context, n uint64, blocks chains.AccountingEnv, expected *common.Hash) (*EpochInfo, error) {
 	if blocks == nil {
 		return nil, fmt.Errorf("stablenet: cannot read earlier blocks for epoch info")
 	}
@@ -141,6 +141,10 @@ func lastEpochAtOrBelow(ctx context.Context, n uint64, blocks chains.AccountingE
 		if err != nil {
 			return nil, fmt.Errorf("stablenet: read block %d for epoch info: %w", h, err)
 		}
+		if expected != nil && blk.Hash != *expected {
+			return nil, fmt.Errorf("stablenet: epoch header %d hash %s differs from parent %s: %w", h, blk.Hash, *expected, chains.ErrAccountingFork)
+		}
+		expected = &blk.ParentHash
 		info, err := ExtraEpochInfo(blk.Extra)
 		if err != nil {
 			return nil, fmt.Errorf("stablenet: block %d: %w", h, err)

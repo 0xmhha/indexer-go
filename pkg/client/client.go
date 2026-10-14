@@ -255,6 +255,11 @@ func (c *Client) GetNetworkID(ctx context.Context) (*big.Int, error) {
 	return networkID, nil
 }
 
+// BalanceAtHash reads state identified by a hash, including the fork identity.
+func (c *Client) BalanceAtHash(ctx context.Context, account common.Address, hash common.Hash) (*big.Int, error) {
+	return c.ethClient.BalanceAtHash(ctx, account, hash)
+}
+
 // BalanceAt returns the balance of an account at a specific block number
 // If blockNumber is nil, returns the balance at the latest block
 func (c *Client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {

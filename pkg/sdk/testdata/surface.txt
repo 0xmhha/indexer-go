@@ -37,18 +37,23 @@ type BlockModel = model.Block
   field Uncles []common.Hash
   field Withdrawals []model.Withdrawal
   field WithdrawalsRoot *common.Hash
+type BlockPreparer = feature.BlockPreparer
+  method PrepareBlock(context.Context, *feature.Block) (feature.PreparedHandler, error)
 func DeclaredTables(deps sdk.Deps) (*sdk.Tables, error)
 type Deps = feature.Deps
   field BalanceAt func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
+  field BalanceAtHash func(context.Context, common.Address, common.Hash) (*big.Int, error)
   field BlockAt func(ctx context.Context, number uint64) (*model.Block, error)
   field Contracts feature.ContractReader
   field Logger *zap.Logger
+  field PrepareConcurrency int
   field Profile chains.Profile
   field Publish func(events.Event) bool
   field Settings func(feature string, into any) error
   field Storage port.Reader
   method Blocks() chains.AccountingEnv
   method DecodeSettings(feature string, into any) error
+  method PrepareReads(ctx context.Context, count int, read func(context.Context, int) error) error
 var ErrNotFound error
 type Event = events.Event
   method Timestamp() time.Time
@@ -63,6 +68,9 @@ type GraphQLExtension = graphql.Extension
   method AddSubscription(name string, f *graphql.Field)
   method Logger() *zap.Logger
   method Storage() port.QueryStore
+type HashContractReader = feature.HashContractReader
+  method CallContractAtHash(context.Context, ethereum.CallMsg, common.Hash) ([]byte, error)
+  method CodeAtHash(context.Context, common.Address, common.Hash) ([]byte, error)
 type KV = port.KV
   method Delete(ctx context.Context, key []byte) error
   method Get(ctx context.Context, key []byte) ([]byte, error)
@@ -94,6 +102,10 @@ type Page = port.Page
   field Offset int
 type PartRegistrar = feature.PartRegistrar
   method OnPart(part string, definition string, h feature.BlockHandler)
+type PreparedHandler = feature.PreparedHandler
+  field Bytes int64
+  field Handler feature.BlockHandler
+  field ReadState bool
 type Progress struct
   field Indexed uint64
   field Polled bool

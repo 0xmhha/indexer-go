@@ -162,3 +162,40 @@ func TestIndexContractReadsTheCreationBlock(t *testing.T) {
 		assert.Empty(t, store.tokens)
 	})
 }
+
+type hashNode struct {
+	*nodeAtBlock
+	hashes    []common.Hash
+	callError error
+}
+
+func (n *hashNode) CodeAtHash(ctx context.Context, a common.Address, h common.Hash) ([]byte, error) {
+	n.hashes = append(n.hashes, h)
+	return n.CodeAt(ctx, a, big.NewInt(42))
+}
+func (n *hashNode) CallContractAtHash(ctx context.Context, c ethereum.CallMsg, h common.Hash) ([]byte, error) {
+	n.hashes = append(n.hashes, h)
+	if n.callError != nil {
+		return nil, n.callError
+	}
+	return n.CallContract(ctx, c, big.NewInt(42))
+}
+func TestReadContractPinsBlockHashWithoutWriting(t *testing.T) {
+	addr := common.HexToAddress("0x20")
+	hash := common.HexToHash("0x42")
+	store := newPortStore()
+	node := &hashNode{nodeAtBlock: erc20Node(addr)}
+	indexer := NewContractIndexer(node, store, zap.NewNop())
+	metadata, err := indexer.ReadContractAtHash(context.Background(), addr, 42, 1000, hash)
+	require.NoError(t, err)
+	require.NotNil(t, metadata)
+	require.Empty(t, store.tokens, "preparation cannot write storage")
+	require.NotEmpty(t, node.hashes)
+	for _, h := range node.hashes {
+		require.Equal(t, hash, h)
+	}
+	require.Equal(t, big.NewInt(1000), metadata.TotalSupply)
+	node.callError = nodeError("invalid parameters: block hash selector unsupported")
+	_, err = indexer.ReadContractAtHash(context.Background(), addr, 42, 1000, hash)
+	require.ErrorContains(t, err, "block hash selector unsupported", "RPC capability failures are not contract reverts")
+}

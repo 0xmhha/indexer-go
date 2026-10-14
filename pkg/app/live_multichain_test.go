@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
 	gws "github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
@@ -114,18 +116,20 @@ func TestLiveRPCMultiChainIsolation(t *testing.T) {
 func TestControlledRPCMultiChainIsolation(t *testing.T) {
 	var targets []liveRPCTarget
 	for i := range 4 {
-		chain := testchain.NewChain(int64(9000+i), nil)
-		for range 3 {
-			chain.AddBlockWithExtra([]byte{byte(i + 1)})
+		sender := testchain.NewAccount(uint64(9000 + i))
+		chain := testchain.NewChain(int64(9000+i), map[common.Address]*big.Int{sender.Address: new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)})
+		for n := range 3 {
+			to := common.BigToAddress(big.NewInt(int64(10000 + i*10 + n)))
+			chain.AddBlockWithExtra([]byte{byte(i + 1)}, testchain.TxSpec{From: sender, Tx: &types.LegacyTx{To: &to, Value: big.NewInt(1), Gas: 21000, GasPrice: big.NewInt(1_000_000_000)}})
 		}
 		srv := testchain.NewServer(chain)
 		t.Cleanup(srv.Close)
 		targets = append(targets, liveRPCTarget{Name: fmt.Sprintf("local%d", i), Endpoint: srv.URL(), ChainID: uint64(9000 + i), Profile: "evm", Blocks: 3})
 	}
-	verifyMultiChainIsolation(t, targets, 0)
+	verifyMultiChainIsolation(t, targets, 0, true)
 }
 
-func verifyMultiChainIsolation(t *testing.T, targets []liveRPCTarget, rate float64) {
+func verifyMultiChainIsolation(t *testing.T, targets []liveRPCTarget, rate float64, prepare ...bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Minute)
 	defer cancel()
@@ -174,6 +178,9 @@ func verifyMultiChainIsolation(t *testing.T, targets []liveRPCTarget, rate float
 	off := false
 	entries[0].Features = map[string]config.FeatureConfig{"token.transfers": {Enabled: &off}}
 	cfg := multiChainConfig(t, filepath.Join(t.TempDir(), "db"), entries...)
+	if len(prepare) > 0 {
+		cfg.Indexer.StatePrefetch = prepare[0]
+	}
 	cfg.Features = nil // production defaults, without the synthetic StableNet override
 	cfg.RPC.Timeout = 20 * time.Second
 	cfg.Indexer.ChunkSize = 1

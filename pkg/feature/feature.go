@@ -65,6 +65,9 @@ func (f BlockHandlerFunc) HandleBlock(ctx context.Context, b *Block) error { ret
 
 // Deps are the services a feature may use.
 type Deps struct {
+	// PrepareConcurrency bounds node-read preparation across this pipeline.
+	PrepareConcurrency int
+	prepareSlots       chan struct{}
 	// Storage is the indexer's storage. A feature takes the ports it uses
 	// (pkg/core/port) by type assertion and fails to register when one is
 	// missing.
@@ -78,6 +81,9 @@ type Deps struct {
 	// BalanceAt reads an account's native balance from the node at a block
 	// (nil means latest), with the indexer's RPC timeout.
 	BalanceAt func(ctx context.Context, addr common.Address, block *big.Int) (*big.Int, error)
+	// BalanceAtHash reads a specific fork's state during preparation. Nil
+	// keeps native balances on the legacy ordered path.
+	BalanceAtHash func(context.Context, common.Address, common.Hash) (*big.Int, error)
 	// BlockAt reads a block from the node (nil when unavailable).
 	BlockAt func(ctx context.Context, number uint64) (*model.Block, error)
 	// Contracts reads contract code and calls contracts on the node at its
@@ -102,6 +108,13 @@ func (d Deps) DecodeSettings(feature string, into any) error {
 type ContractReader interface {
 	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber interface{}) ([]byte, error)
 	CodeAt(ctx context.Context, contract common.Address, blockNumber interface{}) ([]byte, error)
+}
+
+// HashContractReader optionally binds contract reads to a specific fork.
+// Existing ContractReader implementations need not implement it.
+type HashContractReader interface {
+	CallContractAtHash(context.Context, ethereum.CallMsg, common.Hash) ([]byte, error)
+	CodeAtHash(context.Context, common.Address, common.Hash) ([]byte, error)
 }
 
 // DefaultOn is implemented by features that are enabled on every chain
@@ -402,6 +415,7 @@ func Build(enabled []string, deps Deps) (*Pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
+	deps.prepareSlots = make(chan struct{}, max(1, deps.PrepareConcurrency))
 	p := &Pipeline{deps: deps, enabled: map[string]bool{}}
 	for _, f := range fs {
 		p.enabled[f.Name()] = true

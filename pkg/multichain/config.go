@@ -11,6 +11,7 @@ import (
 
 // ChainConfig defines the configuration for a single blockchain connection.
 type ChainConfig struct {
+	StatePrefetch *bool `yaml:"state_prefetch,omitempty" json:"statePrefetch,omitempty"`
 	// ID is a unique identifier for this chain instance (e.g., "stableone-mainnet").
 	ID string `yaml:"id" json:"id"`
 	// Name is a human-readable name for the chain (e.g., "StableOne Mainnet").

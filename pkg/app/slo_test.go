@@ -71,6 +71,7 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 	defer srv.Close()
 
 	cfg := config.NewConfig()
+	cfg.Indexer.StatePrefetch = os.Getenv("INDEXER_LOAD_STATE_PREFETCH") == "1"
 	cfg.RPC.Endpoint = srv.URL()
 	cfg.RPC.Timeout = 5 * time.Second
 	setTestDatabase(t, cfg, filepath.Join(t.TempDir(), "db"))

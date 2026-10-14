@@ -171,6 +171,9 @@ func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
 	if err := f.checkParent(ctx, fb); err != nil {
 		return err
 	}
+	if err := f.checkPreparedState(ctx, fb); err != nil {
+		return err
+	}
 
 	txCtx, tx, err := f.txr.BeginBlock(ctx)
 	if err != nil {

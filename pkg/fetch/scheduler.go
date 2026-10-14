@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -42,6 +43,8 @@ func (f *Fetcher) indexRange(ctx context.Context, start, end uint64, workers int
 	slots := make(chan struct{}, window) // heights fetched or being fetched, not yet indexed
 	heights := make(chan uint64)
 	results := make(chan *jobResult, window)
+	var held atomic.Int64
+	var stateBytes atomic.Int64
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -51,6 +54,8 @@ func (f *Fetcher) indexRange(ctx context.Context, start, end uint64, workers int
 		for h := start; h <= end; h++ {
 			select {
 			case slots <- struct{}{}:
+				held.Add(1)
+				f.pipelineMetrics.addInFlight(1)
 			case <-ctx.Done():
 				return
 			}
@@ -67,6 +72,11 @@ func (f *Fetcher) indexRange(ctx context.Context, start, end uint64, workers int
 			defer wg.Done()
 			for h := range heights {
 				r := f.fetchJob(ctx, h)
+				if r.block != nil {
+					size := r.block.prepared.Bytes()
+					stateBytes.Add(size)
+					f.pipelineMetrics.addStateBytes(size)
+				}
 				select {
 				case results <- r:
 				case <-ctx.Done():
@@ -78,12 +88,17 @@ func (f *Fetcher) indexRange(ctx context.Context, start, end uint64, workers int
 	// On return, stop and wait for the goroutines so none outlives the call.
 	defer func() {
 		cancel()
+		drained := make(chan struct{})
 		go func() {
+			defer close(drained)
 			for range results {
 			}
 		}()
 		wg.Wait()
 		close(results)
+		<-drained
+		f.pipelineMetrics.addInFlight(-held.Swap(0))
+		f.pipelineMetrics.addStateBytes(-stateBytes.Swap(0))
 	}()
 
 	pending := make(map[uint64]*jobResult, window)
@@ -103,14 +118,25 @@ func (f *Fetcher) indexRange(ctx context.Context, start, end uint64, workers int
 				return fmt.Errorf("failed to fetch block %d: %w", res.height, res.err)
 			}
 			f.offerBlock(res.block) // fast path: before the commit
-			if err := f.indexBlock(ctx, res.block); err != nil {
+			writeStart := f.pipelineMetrics.start()
+			err := f.indexBlock(ctx, res.block)
+			f.pipelineMetrics.finish(stageWrite, writeStart, err != nil)
+			if err != nil {
 				return err
 			}
 			delete(pending, next)
-			<-slots // the height left the window
+			held.Add(-1)
+			f.pipelineMetrics.addInFlight(-1)
+			size := res.block.prepared.Bytes()
+			stateBytes.Add(-size)
+			f.pipelineMetrics.addStateBytes(-size)
+			<-slots // release only after accounting has left the window
 			if done := next - start + 1; done%100 == 0 || next == end {
-				f.logger.Info("Index progress",
-					zap.Uint64("height", next), zap.Uint64("done", done), zap.Uint64("total", total))
+				fields := []zap.Field{zap.Uint64("height", next), zap.Uint64("done", done), zap.Uint64("total", total)}
+				if f.pipelineMetrics.enabled {
+					fields = append(fields, zap.Any("pipeline", f.GetPipelineMetrics()))
+				}
+				f.logger.Info("Index progress", fields...)
 			}
 			next++
 		}
@@ -136,8 +162,16 @@ func (f *Fetcher) fetchJob(ctx context.Context, height uint64) *jobResult {
 				return &jobResult{height: height, err: err}
 			}
 		}
+		fetchStart := f.pipelineMetrics.start()
 		fb, err := f.fetchOnce(ctx, height)
+		f.pipelineMetrics.finish(stageFetch, fetchStart, err != nil)
 		if err == nil {
+			prepareStart := f.pipelineMetrics.start()
+			prepareErr := f.prepareBlock(ctx, fb)
+			f.pipelineMetrics.finish(stagePrepare, prepareStart, prepareErr != nil)
+			if prepareErr != nil {
+				return &jobResult{height: height, err: prepareErr}
+			}
 			f.metrics.RecordRequest(time.Since(start), false, false)
 			return &jobResult{height: height, block: fb}
 		}

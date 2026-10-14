@@ -764,6 +764,7 @@ func (a *App) initMultiChainManager() error {
 			StartHeight:       cc.StartHeight,
 			Enabled:           cc.Enabled,
 			Workers:           orDefault(cc.Workers, a.config.Indexer.Workers),
+			StatePrefetch:     cc.StatePrefetch,
 			BatchSize:         orDefault(cc.BatchSize, a.config.Indexer.ChunkSize),
 			RPCTimeout:        orDefault(cc.RPCTimeout, a.config.RPC.Timeout),
 		})
@@ -851,6 +852,9 @@ func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	cfg.Database = chainDatabase(a.config.Database, cc.ID)
 	cfg.Indexer.StartHeight = cc.StartHeight
 	cfg.Indexer.Workers = orDefault(cc.Workers, a.config.Indexer.Workers)
+	if cc.StatePrefetch != nil {
+		cfg.Indexer.StatePrefetch = *cc.StatePrefetch
+	}
 	cfg.Indexer.ChunkSize = orDefault(cc.BatchSize, a.config.Indexer.ChunkSize)
 	cfg.Features = chainFeatures(a.config.Features, a.chainFeatureOverrides(cc.ID))
 	cfg.MultiChain = config.MultiChainConfig{}
@@ -932,18 +936,21 @@ func (a *App) initFetcher(ctx context.Context) error {
 	}
 
 	fetcherConfig := &fetch.Config{
-		StartHeight:   a.config.Indexer.StartHeight,
-		BatchSize:     a.config.Indexer.ChunkSize,
-		MaxRetries:    3,
-		RetryDelay:    retryDelay,
-		NumWorkers:    a.config.Indexer.Workers,
-		RPCTimeout:    a.config.RPC.Timeout,
-		PollInterval:  a.config.Indexer.PollInterval,
-		Finality:      a.config.Indexer.Finality,
-		Confirmations: a.config.Indexer.Confirmations,
-		NoOutbox:      !a.config.EventBus.Outbox,
-		OutboxRetain:  a.config.EventBus.OutboxRetention,
-		StreamGroup:   a.config.Node.ID,
+		StatePrefetch:   a.config.Indexer.StatePrefetch,
+		PipelineMetrics: a.config.Indexer.PipelineMetrics,
+		StateMaxBytes:   a.config.Indexer.StateMaxBytes,
+		StartHeight:     a.config.Indexer.StartHeight,
+		BatchSize:       a.config.Indexer.ChunkSize,
+		MaxRetries:      3,
+		RetryDelay:      retryDelay,
+		NumWorkers:      a.config.Indexer.Workers,
+		RPCTimeout:      a.config.RPC.Timeout,
+		PollInterval:    a.config.Indexer.PollInterval,
+		Finality:        a.config.Indexer.Finality,
+		Confirmations:   a.config.Indexer.Confirmations,
+		NoOutbox:        !a.config.EventBus.Outbox,
+		OutboxRetain:    a.config.EventBus.OutboxRetention,
+		StreamGroup:     a.config.Node.ID,
 	}
 
 	a.fetcher = fetch.NewFetcher(a.client, a.storage, fetcherConfig, a.logger, a.eventBus)
@@ -977,6 +984,7 @@ func (a *App) initFetcher(ctx context.Context) error {
 		return err
 	}
 	a.fetcher.SetSource(blocks)
+	a.fetcher.SetStateSource(src)
 	a.logger.Info("Reading blocks through chain profile", zap.String("profile", profile.ID()))
 
 	enabled, err := feature.Enabled(a.defaultFeatures(profile), a.featureOverrides())
@@ -987,14 +995,16 @@ func (a *App) initFetcher(ctx context.Context) error {
 		return err
 	}
 	deps := feature.Deps{
-		Storage:   a.storage,
-		Logger:    a.logger,
-		Profile:   profile,
-		Publish:   a.fetcher.Publish,
-		BalanceAt: a.fetcher.BalanceAt,
-		BlockAt:   a.fetcher.BlockAt,
-		Contracts: token.NewEthClientAdapter(a.client.EthClient()),
-		Settings:  a.config.FeatureSettings,
+		PrepareConcurrency: orDefault(a.config.Indexer.StateWorkers, 4),
+		Storage:            a.storage,
+		Logger:             a.logger,
+		Profile:            profile,
+		Publish:            a.fetcher.Publish,
+		BalanceAt:          a.fetcher.BalanceAt,
+		BalanceAtHash:      a.fetcher.BalanceAtHash,
+		BlockAt:            a.fetcher.BlockAt,
+		Contracts:          token.NewEthClientAdapter(a.client.EthClient()),
+		Settings:           a.config.FeatureSettings,
 	}
 	pipeline, err := feature.Build(enabled, deps)
 	if err != nil {
@@ -1420,6 +1430,12 @@ func applyAPIFlags(cfg *config.Config, f *Flags) {
 
 // validateConfig validates the configuration
 func validateConfig(cfg *config.Config) error {
+	if cfg.Indexer.StateWorkers < 0 {
+		return fmt.Errorf("state workers must not be negative")
+	}
+	if cfg.Indexer.StateMaxBytes < 0 {
+		return fmt.Errorf("state_max_bytes must not be negative")
+	}
 	if cfg.RPC.Endpoint == "" && !cfg.MultiChainMode() {
 		return fmt.Errorf("RPC endpoint is required (use --rpc flag or set in config.yaml)")
 	}
