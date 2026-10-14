@@ -39,6 +39,23 @@ type Source interface {
 	HashAt(ctx context.Context, n uint64) (common.Hash, error)
 }
 
+// BlockReader optionally reads a profile-decoded block without its receipts.
+// Accounting and consensus rules use it for ancestor headers; ingestion still
+// uses BlockWithReceipts and validates every receipt.
+type BlockReader interface {
+	Block(context.Context, uint64) (*model.Block, error)
+}
+
+// ReadBlock uses the block-only path when available, retaining compatibility
+// with sources that only implement Source.
+func ReadBlock(ctx context.Context, s Source, n uint64) (*model.Block, error) {
+	if reader, ok := s.(BlockReader); ok {
+		return reader.Block(ctx, n)
+	}
+	b, _, err := s.BlockWithReceipts(ctx, n)
+	return b, err
+}
+
 // Ranged is a source that holds a fixed range of blocks (an archive).
 type Ranged interface {
 	Source
@@ -171,6 +188,11 @@ func (c *Chained) Head(ctx context.Context) (uint64, error) {
 // BlockWithReceipts implements Source.
 func (c *Chained) BlockWithReceipts(ctx context.Context, n uint64) (*model.Block, []*model.Receipt, error) {
 	return c.pick(n).BlockWithReceipts(ctx, n)
+}
+
+// Block keeps the chosen source's optional block-only path across the join.
+func (c *Chained) Block(ctx context.Context, n uint64) (*model.Block, error) {
+	return ReadBlock(ctx, c.pick(n), n)
 }
 
 // HashAt implements Source.

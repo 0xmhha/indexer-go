@@ -505,6 +505,46 @@ ingest와 수신 캡처를 나눈 다음 실행은 절대 기준을 통과했으
 필수 기본 SLO/빌드/lint(0 issues)/전체race/PostgreSQL/예제와 캐시 수명20회, 새Commit 회귀race200(52.465초)/CPU1race200(45.657초)이 통과했다. 위4CPU 실패는 추가 운영 조건의 미충족 증거로 보존한다. 공개RPC 네 개와5HTTP/s, 운영config.yaml은 유지했고 다른 사용자의 프로세스·컨테이너는 변경하지 않았다.
 
 
+
+### 3.23 10/15 macOS 블록별 undo·WAL 쓰기·동기화·교체 분리
+
+main `5ab0b9b`의 남은 R07 저장 대기를 조사했다. 저장소 런타임 소스는 바꾸지 않고 Go overlay를 사용했다. 첫 실행은 FlightRecorder와 undo/Pebble Commit/WAL Write·SyncData region을 추가했고, 두 번째는 trace 없이 블록별 시각·`Batch.CommitStats()`·같은 DB의 raw WAL Write/Sync/SyncData/SyncTo 구간을 메모리에 모아 라운드 종료 후 저장했다. 파일 래퍼는 기존 파일의 모든 연산과 인자를 그대로 전달했다. 두 실행 모두 macOS/GOMAXPROCS4/CGO off, state prefetch true/batch1/diagnostics true, 1,000 구독자·10 trades/s·60블록×4라운드, 절대 p99 250ms·non-reader 상대 median +20% 기준을 유지했다. 실제 공개 RPC나 로컬 config.yaml은 바꾸지 않았다.
+
+| 실행 | readers median p99 | non-readers median p99 | 상대 변화 | 결과 |
+|---|---:|---:|---:|---|
+| FlightRecorder | 100.6ms | 114.4ms | +14% | TestSLOLoad 통과, 242.21s |
+| 블록별 메모리 기록 | 100.3ms | 106.2ms | +6% | TestSLOLoad 통과, 242.26s |
+
+메모리 기록의 240개 부하 블록에서 undo 최대1.242ms, 커밋 최대30.237ms였다. 가장 느린 round2 block35는 undo0.715ms/Pebble29.518ms/공유 상태 게시0.004ms였다. Pebble 통계는 WAL 교체17.603ms/CommitWait11.246ms, 같은 커밋 구간에서 raw WAL 쓰기 합계0.266ms/SyncData 합계15.679ms(2회)를 기록했다. WAL 교체는 이전 WAL의 동기화·종료 및 새 WAL 생성 등을 포함하므로 raw sync 시간과 중첩한다. 두 수치를 더해 독립 비용처럼 계산하지 않는다. Memtable/L0 write stall, WAL queue wait, 커밋 오류는 모두0이었다. 현재 표본에서는 undo CPU 비용보다 저장 대기가 크며, 작은 파일 쓰기만이 아니라 WAL 교체와 내구성 대기를 함께 봐야 한다.
+
+첫 실행의 ingest250ms/receipt300ms trace trigger는 발생하지 않았다. 이전 378ms 실패를 이번 8라운드에서 재현하지 못했으므로 그 실패의 fsync 단독 원인이나 해결을 새로 입증하지 않았다. 계측 부하·공유 호스트 조건이 있는 통과 표본을 성능 개선으로 비교하지 않는다. `TestNotificationLatency`는 이번 두 실행에 포함하지 않았으며 여러 물리 호스트나 공개 RPC의 운영 SLO를 검증한 것도 아니다. 추가 런타임 최적화는 이번 표본만으로 채택하지 않았고 sync/커밋 후 알림 계약은 유지했다. R07은 계속 미완료다.
+
+원본·overlay·분해 결과: `/private/tmp/indexer-macos-commit-stages-20261015/{diagnostic.log,overlay.json,summary.json}` 및 `memory/{diagnostic.log,overlay.json,round-1-events.json,round-2-events.json,round-3-events.json,round-4-events.json,analysis.json,blocks.json,analyze.py}`. 임시 래퍼는 운영 빌드에 포함하지 않는다.
+
+
+### 3.24 10/15 StableNet 조상 영수증 제거·해시별 epoch 재사용
+
+R04의 확인된 낭비부터 줄였다. 기존 `Fetcher.BlockAt`은 모델 블록만 반환하면서 `fetchOnce`로 영수증과 불필요한 geth 뷰까지 읽었다. 선택적 `source.BlockReader`/`ReadBlock`을 추가해 RPC의 기존 profile 검증 Block 경로를 사용하고, `Chained`도 선택한 source의 블록 전용 읽기를 유지한다. 지원하지 않는 source는 기존 `BlockWithReceipts`로 돌아간다. 정상 ingest의 영수증 획득·일대일/순서·해시 검증은 바꾸지 않았다.
+
+StableNet `EpochTracker`는 마지막 블록 하나 대신 최대256개의 **블록 hash+height**에 묶인 epoch 해석을 기억한다. 부모 hash를 잇는 전체 탐색이 성공해야 결과를 게시하고, epoch 블록의 본인 적용 집합과 다음 블록 집합을 구분한다. 탐색 중에도 가까운 조상의 가벼운 정보만256개까지 보관하며 전체 모델/거래를 붙잡지 않는다. 같은 높이의 다른 fork는 다른 해시 키이고, 이미 hash로 증명된 header metadata만 재사용한다. StableNet hash는 epochInfo를 포함하며 현재 round/seals만 걸러낸다. 계정 state 캐시나 writer의 fresh canonical 검증 생략은 추가하지 않았다.
+
+WBFT의 시작 시 부모 epoch(`EpochOf`)와 현재 epoch(`For`)가 각각 같은 조상을 탐색하는 비용도 제거했다. 먼저 부모 모델의 높이·hash가 현재 블록과 연결되는지 검증해 같은 tracker의 `For(parent)`를 호출하고, 현재 블록이 그 부모의 next 집합을 재사용한다. 부모 모델은 signing timestamp에도 재사용한다. 부모의 epoch 집합이 자식부터 적용된다는 경계 계약은 회귀 시험으로 확인했다.
+
+12개의 반복·순서 역전 블록을 같은 입력으로 비교한 회귀에서 조상 읽기는589→59회(약90.0% 감소)였다. 기존 main overlay는 영수증 요청0건과59회 기대값 두 시험을 실제로 실패했다. 3회 CPU 벤치마크 중앙값은74,421→16,430ns/op,41,746→29,203B/op,1,485→226allocs/op이었다. 이는 가짜 header reader의 요청 수·CPU 측정이며 실노드 전체 처리량 개선률이 아니다. 서로 다른 fork·실패 후 재시도·취소·epoch 경계·캐시 축출·1,024조상 탐색·잘못된 부모 모델·Source fallback/Chained 경계를 검증했다. 동시 fork 시험은 race200/CPU1 race200 각각 통과했다.
+
+네 공개 테스트넷을 기존5 HTTP/s·state prefetch true/batch16·workers2/state_workers4·strict 정책·head-2·새 임시DB로 300초씩 두 번 실행했다. 첫 부분 변경의 StableNet 조상은333회/111높이/영수증0건, 최종 WBFT 통합 뒤는14회/7높이/영수증0건이었다. 이는 독립 Accounting/WBFT tracker 각각 한 번의 탐색이며 마지막 단계에서 높이당3→2회가 확인됐다. 두 표본의 시작 epoch까지 거리가111/7로 달라 시작 지연84초→10초나 절대 요청333→14를 코드 개선률로 계산하지 않는다. 최종 창은300.008초, 마지막 API 표본290.339초, 속도 창134.662초였다.
+
+| 체인 | 시작 | 마지막 색인/head | 격차 | App HTTP/논리 RPC | 최근 생성/색인 blk/s |
+|---|---:|---:|---:|---:|---:|
+| stablenet-testnet | 22342467 | 22342758/22342760 | 2 | 730/1033 | 1.003/1.003 |
+| bsc-testnet | 136818182 | 136818825/136818830 | 5 | 1415/2297 | 2.220/2.235 |
+| sepolia | 11916101 | 11916127/11916127 | 0 | 496/1920 | 0.082/0.082 |
+| arc-testnet | 67226868 | 67227249/67227445 | 196 | 1447/2718 | 1.968/1.352 |
+
+최종 StableNet의 아직 보이지 않은 블록 한 조회는 `source: block not found` 뒤 같은 높이 재시도로 복구했다. 첫 창 Arc receipt quota(-32005)1건도 재시도로 진행했다. 최종 창의 Arc44건/Sepolia2건 `eth_call` revert는 정상 토큰 판별 응답이며 상태 소실/quota와 구분했다. 두 창의 근사 fallback 경고는0·종료코드0이고 자체 프로세스·proxy·임시DB는 정리했다. 실제 config.yaml/기존DB/5회 한도는 바꾸지 않았다. 최종 Arc 생성1.968/색인1.352blk/s·격차196은 계속 처리량 부족을 보여준다. StableNet 변경을 Arc 처리량 개선으로 주장하지 않으며 물리 batch/head/canonical/필수 잔액 비용을 R04에 남긴다. 전체 회계 oracle·days-long/다중 물리 호스트 SLO 증거로 확대하지 않는다.
+
+검증: gofmt/build/lint0/예제/새 회귀 및 concurrency200회, 전체 race(app456.438초/storage291.364초), 격리 PostgreSQL(adapter106.708초/app306.126초)이 통과했다. PostgreSQL은 기존 기능 시험의 tmpfs/fsync=off이며 디스크 성능 증거가 아니다. 첫 기본 SLO는 fast19.4/3.9ms와 모든 라운드의 절대250ms를 통과했으나 readers/non-reader median139.3/169.9ms(+22%)로 상대20% 기준을 실패했다. 원본 `slo.log`를 보존했다. 기존 main 네 소스 파일 overlay의 같은 조건 비교는 fast166.7/2.4ms와 reader round2 p99895.695ms로 실패했고, 예정한 수정본 한 차례 재확인도 fast171.5/19.3ms·첫 pair의 readers857.4ms/non-readers2813.7ms로 실패했다. 기준·부하·표본 수는 바꾸지 않았고 추가로 통과할 때까지 반복하지 않았다. 비교 실패는 기존 소스에도 큰 지연이 있음을 보이지만 각각의 실패 원인을 동일하게 확정하지 않는다. 재확인 종료 직후 읽기 전용 호스트 표본은12코어/load average49.43·32.17·22.62, memory free31%, disk0 다음1초9526tps/47.67MBs였다. 공유 호스트의 CPU/I/O 경합 증거이며 정확한 실패 블록의 trace나 특정 프로세스의 인과 증거는 아니다. 다른 프로세스·설정은 변경하지 않았다. SLO는 미해결로 기록하고 변경은 draft PR로 정리해 병합하지 않는다. 원본/비교/관측 자료는 `/private/tmp/indexer-epoch-reads-20261015/`의 `regression-before.log`, `regression-final.log`, `benchmark-{before,after}.log`, `four-testnets{,-final}/{operating-window.json,summary.json,operating-window.log}`, `summary.json`에 보존했다.
+
 ## 4. 저장소 관리
 
 - `tools/astgraph` 바이너리(7 MB)가 #92에서 잘못 commit됐다가 #93에서 지워졌다. git history에는 남는다. 지우려면 main의 history를 다시 써서 force push해야 하므로 하지 않았다.

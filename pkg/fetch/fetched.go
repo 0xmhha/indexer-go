@@ -139,11 +139,12 @@ func (fb *fetchedBlock) featureBlock() *feature.Block {
 // BlockAt reads block n from the node as the model (for chain rules that
 // need earlier headers than the index holds).
 func (f *Fetcher) BlockAt(ctx context.Context, n uint64) (*model.Block, error) {
-	fb, err := f.fetchOnce(ctx, n)
-	if err != nil {
-		return nil, err
+	if f.src == nil {
+		return nil, errNoSource
 	}
-	return fb.block, nil
+	rctx, cancel := f.rpcCtx(ctx)
+	defer cancel()
+	return source.ReadBlock(rctx, f.src, n)
 }
 
 // BalanceAt reads an account's native balance from the node at a block,
