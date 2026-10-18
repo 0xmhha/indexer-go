@@ -51,6 +51,7 @@ type Server struct {
 	rateLimiter *apimiddleware.RateLimiter
 	rpcServer   *jsonrpc.Server
 	chainRoutes *chainRoutes
+	queryReader port.QueryReaderLease
 }
 
 // ServerOptions contains optional configuration for the API server
@@ -90,6 +91,22 @@ func NewServerWithOptions(config *Config, logger *zap.Logger, store port.QuerySt
 		router:         chi.NewRouter(),
 		origins:        apimiddleware.NewOrigins(config.AllowedOrigins),
 		trustedProxies: trusted,
+	}
+	ready := false
+	defer func() {
+		if !ready && s.queryReader != nil {
+			s.queryReader.Close()
+		}
+	}()
+	if config.ReserveQueryReader {
+		if reserver, ok := store.(port.QueryReaderReserver); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			s.queryReader, err = reserver.ReserveQueryReader(ctx)
+			cancel()
+			if err != nil {
+				return nil, fmt.Errorf("reserve API query reader: %w", err)
+			}
+		}
 	}
 
 	// Set optional RPC Proxy before setting up routes
@@ -133,6 +150,7 @@ func NewServerWithOptions(config *Config, logger *zap.Logger, store port.QuerySt
 		MaxHeaderBytes: config.MaxHeaderBytes,
 	}
 
+	ready = true
 	return s, nil
 }
 
@@ -178,6 +196,13 @@ func (s *Server) SetNotificationService(service notifications.Service) {
 func (s *Server) setupMiddleware() {
 	// Recovery middleware (must be first)
 	s.router.Use(apimiddleware.Recovery(s.logger))
+	if s.queryReader != nil {
+		s.router.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				next.ServeHTTP(w, r.WithContext(s.queryReader.Context(r.Context())))
+			})
+		})
+	}
 
 	// Request ID middleware
 	s.router.Use(middleware.RequestID)
@@ -486,9 +511,21 @@ func (s *Server) stopBackground() {
 	if s.subStreams != nil {
 		s.subStreams.close()
 	}
+	if s.queryReader != nil {
+		s.queryReader.Close()
+	}
 }
 
 // Router returns the underlying chi router (for testing)
 func (s *Server) Router() *chi.Mux {
 	return s.router
+}
+
+// ReservedQueryReaders reports the logical short-read reservation (0 or 1).
+// It is part of the existing Store's pool budget, not an additional pool.
+func (s *Server) ReservedQueryReaders() int {
+	if s.queryReader != nil {
+		return 1
+	}
+	return 0
 }

@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"regexp"
+	"runtime/trace"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -54,10 +54,13 @@ type Options struct {
 
 // Store implements the storage ports on PostgreSQL.
 type Store struct {
-	pool     *pgxpool.Pool
-	schema   string
-	readOnly bool
-	writable []string // key-value prefixes writable although readOnly
+	pool         *pgxpool.Pool
+	schema       string
+	readOnly     bool
+	writable     []string // key-value prefixes writable although readOnly
+	queryMu      sync.Mutex
+	queryReader  *reservedQueryReader
+	queryClosing bool
 
 	// orphanRetention is how many reorganization records are kept with
 	// their orphaned blocks; 0 keeps all (SetOrphanRetention).
@@ -76,26 +79,13 @@ type Store struct {
 	genesisTried  map[common.Address]bool
 }
 
-var schemaName = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
-
 // Open connects to the database, creates the schema when missing, and
 // brings it to the current version unless the store is read-only.
 func Open(ctx context.Context, opts Options) (*Store, error) {
-	schema := opts.Schema
-	if schema == "" {
-		schema = "public"
-	}
-	if !schemaName.MatchString(schema) {
-		return nil, fmt.Errorf("postgres: invalid schema name %q", schema)
-	}
-	cfg, err := pgxpool.ParseConfig(opts.DSN)
+	cfg, schema, err := poolConfig(opts)
 	if err != nil {
-		return nil, fmt.Errorf("postgres: parse DSN: %w", err)
+		return nil, err
 	}
-	if opts.MaxConns > 0 {
-		cfg.MaxConns = opts.MaxConns
-	}
-	cfg.ConnConfig.RuntimeParams["search_path"] = schema
 	if !opts.ReadOnly {
 		// Create the schema before the pool's connections use it.
 		conn, err := pgx.ConnectConfig(ctx, cfg.ConnConfig)
@@ -138,6 +128,13 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 
 // Close closes the connection pool.
 func (s *Store) Close() error {
+	s.queryMu.Lock()
+	s.queryClosing = true
+	if s.queryReader != nil {
+		s.queryReader.close()
+		s.queryReader = nil
+	}
+	s.queryMu.Unlock()
 	s.pool.Close()
 	return nil
 }
@@ -157,6 +154,11 @@ type blockTxKey struct{}
 func (s *Store) q(ctx context.Context) querier {
 	if tx := s.boundTx(ctx); tx != nil {
 		return tx.q()
+	}
+	if ctx != nil {
+		if reader, ok := ctx.Value(queryReaderKey{}).(*reservedQueryReader); ok && reader.owner == s {
+			return reader
+		}
 	}
 	return s.pool
 }
@@ -240,7 +242,7 @@ func (s *Store) BeginBlock(ctx context.Context) (context.Context, port.BlockTx, 
 		return nil, nil, fmt.Errorf("postgres: begin block transaction: %w", err)
 	}
 	// The tracked tables record their changes for undo (migration 0006).
-	if _, err := tx.Exec(ctx, "SELECT set_config('indexer.undo', 'on', true)"); err != nil {
+	if _, err := (transactionQuery{tx}).Exec(ctx, "SELECT set_config('indexer.undo', 'on', true)"); err != nil {
 		_ = tx.Rollback(context.Background())
 		return nil, nil, fmt.Errorf("postgres: begin block transaction: %w", err)
 	}
@@ -265,6 +267,11 @@ const UndoWindow = 128
 // of the height) and the record that leaves the window is dropped; without
 // one they are discarded.
 func (t *blockTx) Commit() error {
+	region := trace.StartRegion(context.Background(), "postgres.projectionCommit")
+	defer region.End()
+	if trace.IsEnabled() && t.height != nil {
+		trace.Logf(context.Background(), "feed.block", "%d", *t.height)
+	}
 	if t.done {
 		return port.ErrBlockTxDone
 	}

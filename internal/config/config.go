@@ -7,17 +7,21 @@ import (
 	"io"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/pkg/feed"
+	"github.com/0xmhha/indexer-go/pkg/window"
 	"gopkg.in/yaml.v3"
 )
 
 // Config holds all configuration for the indexer
 type Config struct {
+	WindowStorage      window.Layout            `yaml:"window_storage,omitempty"`
 	RPC                RPCConfig                `yaml:"rpc"`
 	Source             SourceConfig             `yaml:"source"`
 	Database           DatabaseConfig           `yaml:"database"`
@@ -121,6 +125,8 @@ func (c *Config) FeatureOverrides() map[string]bool {
 
 // RPCConfig holds RPC client configuration
 type RPCConfig struct {
+	// CoalesceReads combines concurrent read envelopes without caching responses.
+	CoalesceReads bool `yaml:"coalesce_reads"`
 	// Endpoint is the node's JSON-RPC URL, or "replay:///dir" to serve a
 	// recorded archive instead of a node (pkg/source/replay).
 	Endpoint string        `yaml:"endpoint"`
@@ -141,6 +147,8 @@ type RPCConfig struct {
 
 // SourceConfig selects where block data comes from besides the node.
 type SourceConfig struct {
+	Feed           *feed.Config `yaml:"feed,omitempty"`
+	NodeFeedSocket string       `yaml:"node_feed_socket"`
 	// EraDir, when set, reads the blocks held by the era1 archives in this
 	// directory (exported by the node client) from the files, and every
 	// later block from the node. Requires indexer.profile_source.
@@ -202,6 +210,10 @@ type LogConfig struct {
 
 // IndexerConfig holds indexer-specific configuration
 type IndexerConfig struct {
+	// AcquisitionQueue continuously acquires state before ordered processing.
+	AcquisitionQueue bool  `yaml:"acquisition_queue"`
+	QueueBlocks      int   `yaml:"queue_blocks"`
+	QueueMaxBytes    int64 `yaml:"queue_max_bytes"`
 	// StatePrefetch prepares state reads outside the ordered writer (opt-in).
 	StatePrefetch   bool `yaml:"state_prefetch"`
 	PipelineMetrics bool `yaml:"pipeline_metrics"`
@@ -326,6 +338,9 @@ type MultiChainConfig struct {
 
 // ChainConfig defines the configuration for a single blockchain connection
 type ChainConfig struct {
+	Feed           *feed.Config `yaml:"feed,omitempty" json:"-"`
+	NodeFeedSocket string       `yaml:"node_feed_socket,omitempty"`
+	CoalesceReads  *bool        `yaml:"coalesce_reads,omitempty" json:"coalesceReads,omitempty"`
 	// ID is a unique identifier for this chain instance
 	ID string `yaml:"id"`
 	// Name is a human-readable name for the chain
@@ -349,8 +364,11 @@ type ChainConfig struct {
 	// Workers is the number of concurrent fetch workers
 	Workers int `yaml:"workers,omitempty"`
 	// StatePrefetch overrides indexer.state_prefetch for this chain.
-	StatePrefetch  *bool `yaml:"state_prefetch,omitempty"`
-	StateBatchSize *int  `yaml:"state_batch_size,omitempty"`
+	StatePrefetch    *bool  `yaml:"state_prefetch,omitempty"`
+	StateBatchSize   *int   `yaml:"state_batch_size,omitempty"`
+	AcquisitionQueue *bool  `yaml:"acquisition_queue,omitempty"`
+	QueueBlocks      *int   `yaml:"queue_blocks,omitempty"`
+	QueueMaxBytes    *int64 `yaml:"queue_max_bytes,omitempty"`
 	// BatchSize is the number of blocks to fetch per batch
 	BatchSize int `yaml:"batch_size,omitempty"`
 	// RPCTimeout is the timeout for RPC calls
@@ -1456,6 +1474,22 @@ func (c *Config) validateMultiChain() error {
 	}
 	seen := map[string]bool{}
 	for i, ch := range c.MultiChain.Chains {
+		if ch.QueueBlocks != nil && (*ch.QueueBlocks < 0 || *ch.QueueBlocks > 65536) || ch.QueueMaxBytes != nil && *ch.QueueMaxBytes < 0 {
+			return fmt.Errorf("multichain.chains[%d]: invalid acquisition queue limits", i)
+		}
+		queued, prepared := c.Indexer.AcquisitionQueue, c.Indexer.StatePrefetch
+		if ch.AcquisitionQueue != nil {
+			queued = *ch.AcquisitionQueue
+		}
+		if ch.StatePrefetch != nil {
+			prepared = *ch.StatePrefetch
+		}
+		if queued && !prepared {
+			return fmt.Errorf("multichain.chains[%d]: acquisition_queue requires state_prefetch", i)
+		}
+		if ch.NodeFeedSocket != "" && (!filepath.IsAbs(ch.NodeFeedSocket) || !queued || !prepared || c.DeclaredMode()) {
+			return fmt.Errorf("multichain.chains[%d]: node_feed_socket requires an absolute path, full mode, acquisition_queue and state_prefetch", i)
+		}
 		if !chainIDPattern.MatchString(ch.ID) {
 			return fmt.Errorf("multichain.chains[%d]: invalid id %q: use letters, digits, '.', '_' and '-', starting with a letter or digit", i, ch.ID)
 		}
@@ -1483,6 +1517,12 @@ func isFalse(b *bool) bool { return b != nil && !*b }
 
 // Validate validates the configuration
 func (c *Config) Validate() error {
+	if err := c.WindowStorage.Validate(); err != nil {
+		return fmt.Errorf("window_storage: %w", err)
+	}
+	if !c.MultiChainMode() && c.Source.NodeFeedSocket != "" && (!filepath.IsAbs(c.Source.NodeFeedSocket) || !c.Indexer.AcquisitionQueue || !c.Indexer.StatePrefetch || c.Source.EraDir != "" || c.DeclaredMode()) {
+		return fmt.Errorf("source.node_feed_socket requires an absolute path, full mode, acquisition_queue, state_prefetch and no era archive")
+	}
 	// Validate RPC configuration (multichain mode reads each chain's
 	// endpoint from its entry)
 	if c.RPC.Endpoint == "" && !c.MultiChainMode() {
@@ -1577,6 +1617,12 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate indexer configuration
+	if c.Indexer.QueueBlocks < 0 || c.Indexer.QueueBlocks > 65536 || c.Indexer.QueueMaxBytes < 0 {
+		return fmt.Errorf("invalid acquisition queue limits")
+	}
+	if c.Indexer.AcquisitionQueue && !c.Indexer.StatePrefetch {
+		return fmt.Errorf("acquisition_queue requires state_prefetch")
+	}
 	if c.Indexer.StateBatchSize < 0 || c.Indexer.StateBatchSize > 64 {
 		return fmt.Errorf("state_batch_size must be between 1 and 64 (0 defaults to 1)")
 	}
@@ -1741,12 +1787,13 @@ func (c *Config) UnsupportedSettings() []string {
 	}
 	if c.MultiChainMode() {
 		ignored := map[string]bool{
-			"rpc.endpoint":           c.RPC.Endpoint != "",
-			"rpc.fallback_endpoints": len(c.RPC.FallbackEndpoints) > 0, // per chain: multichain.chains[].fallback_endpoints
-			"rpc.ws_endpoint":        c.RPC.WSEndpoint != "",
-			"rpc.record_dir":         c.RPC.RecordDir != "",
-			"source.era_dir":         c.Source.EraDir != "",
-			"verifier.enabled":       c.Verifier.Enabled,
+			"rpc.endpoint":            c.RPC.Endpoint != "",
+			"rpc.fallback_endpoints":  len(c.RPC.FallbackEndpoints) > 0, // per chain: multichain.chains[].fallback_endpoints
+			"rpc.ws_endpoint":         c.RPC.WSEndpoint != "",
+			"rpc.record_dir":          c.RPC.RecordDir != "",
+			"source.era_dir":          c.Source.EraDir != "",
+			"source.node_feed_socket": c.Source.NodeFeedSocket != "",
+			"verifier.enabled":        c.Verifier.Enabled,
 		}
 		for _, name := range []string{"rpc.endpoint", "rpc.fallback_endpoints", "rpc.ws_endpoint", "rpc.record_dir", "source.era_dir", "verifier.enabled"} {
 			if ignored[name] {

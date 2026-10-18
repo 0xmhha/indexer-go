@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/0xmhha/indexer-go/pkg/abi"
 	"github.com/0xmhha/indexer-go/pkg/chains"
@@ -22,16 +23,15 @@ func (s *Schema) blockToMap(block *model.Block) map[string]interface{} {
 	}
 
 	blockTimestamp := fmt.Sprintf("%d", block.Time)
-	transactions := make([]interface{}, len(block.Transactions))
-	for i, tx := range block.Transactions {
-		txMap := s.transactionToMap(tx, &port.TxLocation{
-			BlockHeight: block.Number,
-			BlockHash:   block.Hash,
-			TxIndex:     uint64(i),
-		})
-		txMap["blockTimestamp"] = blockTimestamp
-		transactions[i] = txMap
-	}
+	transactions := sync.OnceValue(func() interface{} {
+		out := make([]interface{}, len(block.Transactions))
+		for i, tx := range block.Transactions {
+			txMap := s.transactionToMap(tx, &port.TxLocation{BlockHeight: block.Number, BlockHash: block.Hash, TxIndex: uint64(i)})
+			txMap["blockTimestamp"] = blockTimestamp
+			out[i] = txMap
+		}
+		return out
+	})
 
 	uncleHashes := make([]interface{}, len(block.Uncles))
 	for i, uncle := range block.Uncles {
@@ -58,7 +58,7 @@ func (s *Schema) blockToMap(block *model.Block) map[string]interface{} {
 		"extraData":        fmt.Sprintf("0x%x", block.Extra),
 		"size":             fmt.Sprintf("%d", block.Size),
 		"transactions":     transactions,
-		"transactionCount": len(transactions),
+		"transactionCount": len(block.Transactions),
 		"uncles":           uncleHashes,
 		"withdrawalsRoot":  nil, // Post-Shanghai
 		"blobGasUsed":      nil, // EIP-4844

@@ -1,17 +1,11 @@
 package graphql
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
-	"net/http"
 
 	"github.com/graphql-go/graphql/language/ast"
-	"github.com/graphql-go/graphql/language/parser"
-	"github.com/graphql-go/graphql/language/source"
-	graphqlhandler "github.com/graphql-go/handler"
 )
 
 // Limits bound what one GraphQL request may ask for; a request over a
@@ -181,49 +175,22 @@ type limitError struct {
 	Extensions map[string]interface{} `json:"extensions"`
 }
 
-// checkLimits answers a request over the limits with an error and reports
-// whether it did. It reads the request the way the GraphQL handler does and
-// leaves the body for it. Requests that do not parse are left to the
-// handler, which reports the syntax error.
-func (h *Handler) checkLimits(w http.ResponseWriter, r *http.Request) bool {
-	if r.Body != nil {
-		body, err := io.ReadAll(r.Body)
-		_ = r.Body.Close()
-		if err != nil {
-			http.Error(w, "failed to read the request", http.StatusBadRequest)
-			return true
-		}
-		r.Body = io.NopCloser(bytes.NewReader(body))
-		peek := r.Clone(r.Context())
-		peek.Body = io.NopCloser(bytes.NewReader(body))
-		r = peek
-	}
-	opts := graphqlhandler.NewRequestOptions(r)
-	if opts.Query == "" {
-		return false
-	}
-	doc, err := parser.Parse(parser.ParseParams{Source: source.NewSource(&source.Source{Body: []byte(opts.Query)})})
-	if err != nil {
-		return false
-	}
-	depth, complexity := QueryCost(doc, opts.Variables)
-	var e *limitError
+// checkDocumentLimits reuses the exact document and variables subsequently
+// passed to standard validation/execution. It never rereads or reparses input.
+func (h *Handler) checkDocumentLimits(doc *ast.Document, variables map[string]interface{}) *limitError {
+	depth, complexity := QueryCost(doc, variables)
 	switch {
 	case h.limits.MaxDepth > 0 && depth > h.limits.MaxDepth:
-		e = &limitError{
+		return &limitError{
 			Message:    fmt.Sprintf("query depth %d exceeds the limit %d", depth, h.limits.MaxDepth),
 			Extensions: map[string]interface{}{"code": "QUERY_TOO_DEEP", "depth": depth, "limit": h.limits.MaxDepth},
 		}
 	case h.limits.MaxComplexity > 0 && complexity > h.limits.MaxComplexity:
-		e = &limitError{
+		return &limitError{
 			Message:    fmt.Sprintf("query complexity %d exceeds the limit %d", complexity, h.limits.MaxComplexity),
 			Extensions: map[string]interface{}{"code": "QUERY_TOO_COMPLEX", "complexity": complexity, "limit": h.limits.MaxComplexity},
 		}
 	default:
-		return false
+		return nil
 	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"errors": []*limitError{e}})
-	return true
 }

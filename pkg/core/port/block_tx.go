@@ -17,6 +17,13 @@ type BlockTransactor interface {
 	BeginBlock(ctx context.Context) (context.Context, BlockTx, error)
 }
 
+// BlockDurability explicitly verifies/enforces durable commit for a source
+// that will acknowledge retained inputs. Called inside a bound projection
+// transaction before Commit, never outside or after publication.
+type BlockDurability interface {
+	RequireBlockDurability(context.Context) error
+}
+
 // BlockTx is an open block transaction.
 type BlockTx interface {
 	// SetHeight makes Commit record undo for the block at height, so a

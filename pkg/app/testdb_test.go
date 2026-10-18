@@ -77,7 +77,7 @@ func setTestDatabase(t testing.TB, cfg *config.Config, dir string) {
 	dsn := testPostgresDSN(t)
 	schema := testSchema(dir)
 	cfg.Database.Driver = config.DriverPostgres
-	cfg.Database.Postgres = config.PostgresConfig{DSN: dsn, Schema: schema, MaxConns: 8}
+	cfg.Database.Postgres = config.PostgresConfig{DSN: dsn, Schema: schema, MaxConns: 4}
 	t.Cleanup(func() { dropTestSchemas(dsn, schema) })
 }
 

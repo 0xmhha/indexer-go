@@ -40,21 +40,27 @@ var progressPoll = time.Second
 
 // followTarget records the target head every progressPoll until ctx ends.
 func (f *Fetcher) followTarget(ctx context.Context) {
+	interval := progressPoll
+	if f.config.AcquisitionQueue && !f.sparse {
+		// The acquisition loop shares these observations. Honour the slower
+		// configured poll under a tight public RPC budget.
+		interval = max(interval, f.pollInterval())
+	}
 	observer := &f.nodeHead
 	if f.config.Finality == FinalityFinalized {
 		observer = &f.finalized
 	}
-	t := time.NewTimer(observer.nextRead(progressPoll))
+	t := time.NewTimer(observer.nextRead(interval))
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if target, ok, err := f.readTargetHead(ctx, false, progressPoll); err == nil && ok {
+			if target, ok, err := f.readTargetHead(ctx, false, interval); err == nil && ok {
 				f.noteTarget(target)
 			}
-			t.Reset(observer.nextRead(progressPoll))
+			t.Reset(observer.nextRead(interval))
 		}
 	}
 }

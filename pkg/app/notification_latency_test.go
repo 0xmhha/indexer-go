@@ -104,6 +104,7 @@ func TestNotificationLatency(t *testing.T) {
 	keys := map[string]string{"fast": "fast-key-0123456789abcdef0123", "durable": "durable-key-0123456789abcdef01"}
 	cfg := config.NewConfig()
 	cfg.Indexer.StatePrefetch = os.Getenv("INDEXER_LOAD_STATE_PREFETCH") == "1"
+	cfg.Indexer.AcquisitionQueue = os.Getenv("INDEXER_LOAD_ACQUISITION_QUEUE") == "1"
 	cfg.Indexer.StateBatchSize = envInt(t, "INDEXER_LOAD_STATE_BATCH_SIZE", 1)
 	cfg.RPC.Endpoint = srv.URL()
 	cfg.RPC.Timeout = 5 * time.Second

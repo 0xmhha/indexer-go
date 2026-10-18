@@ -53,10 +53,14 @@ func TestPreparedStateMatchesOrderedIndexing(t *testing.T) {
 			defer srv.Close()
 			end := chain.Head()
 			var dirs []string
-			for _, on := range []bool{false, true} {
+			for _, mode := range []string{"ordered", "prepared", "queued", "coalesced"} {
+				on := mode != "ordered"
 				dir := filepath.Join(t.TempDir(), "db")
 				dirs = append(dirs, dir)
-				app := newPreparedApp(t, srv.URL(), dir, on, tc.from)
+				app := newPreparedApp(t, srv.URL(), dir, on, tc.from, func(cfg *config.Config) {
+					cfg.Indexer.AcquisitionQueue = mode == "queued" || mode == "coalesced"
+					cfg.RPC.CoalesceReads = mode == "coalesced"
+				})
 				require.NoError(t, app.fetcher.FetchRange(context.Background(), tc.from, end))
 				for _, addr := range chain.Accounts() {
 					balance, tracked := indexedBalanceAt(t, app.storage.(port.HistoricalReader), addr, end)
@@ -69,7 +73,13 @@ func TestPreparedStateMatchesOrderedIndexing(t *testing.T) {
 				require.Zero(t, stats.StateBytes)
 				if on {
 					require.Positive(t, stats.PeakStateBytes)
-					require.LessOrEqual(t, stats.PeakInFlight, int64(4))
+					if mode == "prepared" {
+						require.LessOrEqual(t, stats.PeakInFlight, int64(4))
+					}
+					if mode == "queued" || mode == "coalesced" {
+						require.NotNil(t, stats.AcquiredHeight)
+						require.Equal(t, end, *stats.CommittedHeight)
+					}
 				}
 				// Reprocessing must skip preparation even if the state is now pruned.
 				if on {
@@ -80,6 +90,10 @@ func TestPreparedStateMatchesOrderedIndexing(t *testing.T) {
 				app.Shutdown()
 			}
 			diff := testchain.DiffKeyspace(dumpDir(t, dirs[0]), dumpDir(t, dirs[1]), 0)
+			require.Empty(t, diff, testchain.SummarizeDiff(diff))
+			diff = testchain.DiffKeyspace(dumpDir(t, dirs[0]), dumpDir(t, dirs[2]), 0)
+			require.Empty(t, diff, testchain.SummarizeDiff(diff))
+			diff = testchain.DiffKeyspace(dumpDir(t, dirs[0]), dumpDir(t, dirs[3]), 0)
 			require.Empty(t, diff, testchain.SummarizeDiff(diff))
 		})
 	}
@@ -121,7 +135,7 @@ func TestPreparedStateSurvivesPruningWhileQueued(t *testing.T) {
 	sc.Chain.SetHead(1)
 	srv := testchain.NewServer(sc.Chain)
 	defer srv.Close()
-	app := newPreparedApp(t, srv.URL(), filepath.Join(t.TempDir(), "db"), true, 0)
+	app := newPreparedApp(t, srv.URL(), filepath.Join(t.TempDir(), "db"), true, 0, func(cfg *config.Config) { cfg.Indexer.AcquisitionQueue = true; cfg.RPC.CoalesceReads = true })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	release := make(chan struct{})
 	var once sync.Once
@@ -168,6 +182,10 @@ func TestPreparedStateChainConfiguration(t *testing.T) {
 	cfg.Indexer.StateBatchSize = 16
 	a := &App{config: cfg}
 	cc := &multichain.ChainConfig{ID: "test", RPCEndpoint: "http://localhost"}
+	on := true
+	cc.CoalesceReads = &on
+	require.True(t, a.chainAppConfig(cc).RPC.CoalesceReads)
+	require.False(t, cfg.RPC.CoalesceReads)
 	require.True(t, a.chainAppConfig(cc).Indexer.StatePrefetch)
 	require.Equal(t, 3, a.chainAppConfig(cc).Indexer.StateWorkers)
 	require.Equal(t, 16, a.chainAppConfig(cc).Indexer.StateBatchSize)
@@ -179,4 +197,127 @@ func TestPreparedStateChainConfiguration(t *testing.T) {
 	cc.StatePrefetch = &off
 	require.False(t, a.chainAppConfig(cc).Indexer.StatePrefetch)
 	require.True(t, cfg.Indexer.StatePrefetch, "a per-chain override must not change other chains")
+}
+
+func TestAcquisitionQueueChainConfiguration(t *testing.T) {
+	cfg := config.NewConfig()
+	cfg.Indexer.StatePrefetch = true
+	cfg.Indexer.AcquisitionQueue = false
+	cfg.RPC.RateLimit = 5
+	on, blocks, bytes := true, 256, int64(256<<20)
+	a := &App{config: cfg}
+	cc := &multichain.ChainConfig{ID: "arc-testnet", RPCEndpoint: "http://localhost", AcquisitionQueue: &on, QueueBlocks: &blocks, QueueMaxBytes: &bytes}
+	arc := a.chainAppConfig(cc)
+	require.True(t, arc.Indexer.AcquisitionQueue)
+	require.Equal(t, blocks, arc.Indexer.QueueBlocks)
+	require.Equal(t, bytes, arc.Indexer.QueueMaxBytes)
+	require.Equal(t, float64(5), float64(arc.RPC.RateLimit))
+	require.False(t, cfg.Indexer.AcquisitionQueue)
+	other := a.chainAppConfig(&multichain.ChainConfig{ID: "other"})
+	require.False(t, other.Indexer.AcquisitionQueue)
+	require.Zero(t, other.Indexer.QueueBlocks)
+	cfg.Indexer.StatePrefetch = false
+	cfg.Indexer.AcquisitionQueue = true
+	require.ErrorContains(t, validateConfig(cfg), "requires state_prefetch")
+}
+
+func TestAcquisitionQueueReorgDiscardsPreparedFork(t *testing.T) {
+	sc := testchain.BuildDefault()
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+	head := sc.Chain.Head()
+	dir := filepath.Join(t.TempDir(), "db")
+	app := newPreparedApp(t, srv.URL(), dir, true, 0, func(cfg *config.Config) {
+		cfg.Indexer.AcquisitionQueue = true
+		cfg.Indexer.PollInterval = time.Millisecond
+		cfg.RPC.CoalesceReads = true
+	})
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var enterOnce, releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	app.fetcher.SetBeforeCommitHook(func(n uint64) error {
+		if n == head-2 {
+			enterOnce.Do(func() {
+				close(entered)
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+			})
+		}
+		return ctx.Err()
+	})
+	done := make(chan error, 1)
+	go func() { done <- app.fetcher.Run(ctx) }()
+	joined := false
+	defer func() {
+		cancel()
+		unblock()
+		if !joined {
+			<-done
+		}
+		app.Shutdown()
+	}()
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("commit did not start")
+	}
+	require.Eventually(t, func() bool {
+		height := app.fetcher.GetPipelineMetrics().AcquiredHeight
+		return height != nil && *height == head
+	}, 5*time.Second, time.Millisecond)
+	reorgChain(sc, head-3, 5)
+	newHead := sc.Chain.Head()
+	unblock()
+	require.Eventually(t, func() bool {
+		n, err := app.storage.GetLatestHeight(ctx)
+		if err != nil || n != newHead {
+			return false
+		}
+		b, err := app.storage.GetBlock(ctx, newHead)
+		return err == nil && b.Hash == sc.Chain.Block(newHead).Block.Hash()
+	}, 10*time.Second, time.Millisecond)
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+	joined = true
+	count, depth := app.fetcher.Reorgs()
+	require.Equal(t, uint64(1), count)
+	require.GreaterOrEqual(t, depth, uint64(1))
+	require.LessOrEqual(t, depth, uint64(3), "all committed old-fork blocks are rolled back")
+	app.Shutdown()
+	fresh := filepath.Join(t.TempDir(), "fresh")
+	reference := newPreparedApp(t, srv.URL(), fresh, true, 0)
+	require.NoError(t, reference.fetcher.FetchRange(t.Context(), 0, newHead))
+	reference.Shutdown()
+	diff := testchain.DiffKeyspace(dumpDir(t, fresh), dumpDir(t, dir), 0)
+	require.Empty(t, diff, testchain.SummarizeDiff(diff))
+}
+
+func TestAcquisitionQueueReorgBelowConfiguredStart(t *testing.T) {
+	sc := testchain.BuildDefault()
+	srv := testchain.NewServer(sc.Chain)
+	defer srv.Close()
+	head := sc.Chain.Head()
+	app := newPreparedApp(t, srv.URL(), filepath.Join(t.TempDir(), "db"), true, head, func(cfg *config.Config) {
+		cfg.Indexer.AcquisitionQueue = true
+		cfg.Indexer.PollInterval = time.Millisecond
+	})
+	defer app.Shutdown()
+	require.NoError(t, app.fetcher.FetchRange(t.Context(), 0, head))
+	reorgChain(sc, head-3, 5)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	done := make(chan error, 1)
+	go func() { done <- app.fetcher.Run(ctx) }()
+	defer func() { cancel(); <-done }()
+	require.Eventually(t, func() bool {
+		n, err := app.storage.GetLatestHeight(ctx)
+		return err == nil && n == sc.Chain.Head()
+	}, 8*time.Second, time.Millisecond)
+	for n := head - 2; n <= sc.Chain.Head(); n++ {
+		b, err := app.storage.GetBlock(t.Context(), n)
+		require.NoError(t, err, "reorg recovery must not skip below start_height")
+		require.Equal(t, sc.Chain.Block(n).Block.Hash(), b.Hash)
+	}
 }

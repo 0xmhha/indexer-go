@@ -39,6 +39,7 @@ type TxDecoder func(raw json.RawMessage) (*model.Transaction, error)
 
 // Profile is an EVM chain profile.
 type Profile struct {
+	blobCapability   *model.BlobCapability
 	id               string
 	detect           func(chains.NodeInfo) bool
 	features         []string

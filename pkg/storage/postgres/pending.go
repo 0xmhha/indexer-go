@@ -62,21 +62,21 @@ func (p pendingTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.Co
 	if err := p.t.flush(ctx); err != nil {
 		return pgconn.CommandTag{}, err
 	}
-	return p.t.tx.Exec(ctx, sql, args...)
+	return (transactionQuery{p.t.tx}).Exec(ctx, sql, args...)
 }
 
 func (p pendingTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	if err := p.t.flush(ctx); err != nil {
 		return nil, err
 	}
-	return p.t.tx.Query(ctx, sql, args...)
+	return (transactionQuery{p.t.tx}).Query(ctx, sql, args...)
 }
 
 func (p pendingTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	if err := p.t.flush(ctx); err != nil {
 		return errRow{err}
 	}
-	return p.t.tx.QueryRow(ctx, sql, args...)
+	return (transactionQuery{p.t.tx}).QueryRow(ctx, sql, args...)
 }
 
 // errRow is a row whose Scan fails with err.

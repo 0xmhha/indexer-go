@@ -50,6 +50,13 @@ type BinaryProfile interface {
 	DeriveReceipts(b *model.Block, receipts []byte) ([]*model.Receipt, error)
 }
 
+// HeaderCodec authenticates a header independently of its body. JSON encoding
+// must recompute the profile's hash even if ordinary RPC decoding is relaxed.
+type HeaderCodec interface {
+	EncodeHeaderJSON(json.RawMessage) ([]byte, error)
+	DecodeHeaderRLP([]byte) (*model.Block, error)
+}
+
 type registration struct {
 	profile  Profile
 	priority int

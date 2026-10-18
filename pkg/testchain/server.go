@@ -339,6 +339,36 @@ func (s *Server) dispatch(req rpcRequest) (any, *rpcError) {
 			return nil, &rpcError{Code: -32000, Message: "missing trie node 0000000000000000000000000000000000000000000000000000000000000000 (path ) state 0x0 is not available"}
 		}
 		return (*hexutil.Big)(c.balanceAt(addr, n)), nil
+	case "eth_getProof":
+		// An independent empty-trie oracle for app lifecycle fixtures. Rich
+		// account/storage proofs are tested with Geth's trie builder separately.
+		n, ok := s.blockNumberParam(req, 2)
+		if !ok || c.blocks[n].Block.Root() != types.EmptyRootHash {
+			return nil, &rpcError{Code: -32000, Message: "proof state unavailable"}
+		}
+		var selector struct {
+			BlockHash common.Hash `json:"blockHash"`
+			Canonical bool        `json:"requireCanonical"`
+		}
+		if len(req.Params) != 3 || json.Unmarshal(req.Params[2], &selector) != nil || !selector.Canonical || selector.BlockHash != c.blocks[n].Block.Hash() {
+			return nil, &rpcError{Code: -32602, Message: "exact canonical hash selector required"}
+		}
+		s.mu.Lock()
+		pruned := n < s.stateFrom
+		s.mu.Unlock()
+		if pruned {
+			return nil, &rpcError{Code: -32000, Message: "missing trie node: pruned state"}
+		}
+		var address common.Address
+		var keys []common.Hash
+		if json.Unmarshal(req.Params[0], &address) != nil || json.Unmarshal(req.Params[1], &keys) != nil {
+			return nil, &rpcError{Code: -32602, Message: "invalid proof selection"}
+		}
+		storage := []map[string]interface{}{}
+		for _, key := range keys {
+			storage = append(storage, map[string]interface{}{"key": key.Hex(), "value": "0x0", "proof": []string{}})
+		}
+		return map[string]interface{}{"address": address, "accountProof": []string{}, "balance": "0x0", "nonce": "0x0", "codeHash": types.EmptyCodeHash, "storageHash": types.EmptyRootHash, "storageProof": storage}, nil
 	case "eth_getCode":
 		if _, ok := s.blockNumberParam(req, 1); !ok {
 			return nil, &rpcError{Code: -32000, Message: "header not found"}

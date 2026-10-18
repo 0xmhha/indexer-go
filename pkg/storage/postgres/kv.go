@@ -145,7 +145,8 @@ func (c *kvCursor) load(from []byte, backward bool) bool {
 	if backward {
 		order = "DESC"
 	}
-	rows, err := c.s.q(c.ctx).Query(c.ctx, fmt.Sprintf("SELECT key, value FROM kv WHERE %s ORDER BY key %s LIMIT %d", where, order, kvBatch), args...)
+	args = append(args, kvBatch)
+	rows, err := c.s.q(c.ctx).Query(c.ctx, fmt.Sprintf("SELECT key, value FROM kv WHERE %s ORDER BY key %s LIMIT $%d", where, order, len(args)), args...)
 	if err != nil {
 		c.err = err
 		c.buf = nil
@@ -244,7 +245,9 @@ func (s *Store) SetFeatureState(ctx context.Context, name string, st port.Featur
 	if err != nil {
 		return err
 	}
+	// Exec mode has no described parameter OIDs: []byte would bind as bytea
+	// rather than JSON text. Keep the value on the server binding path.
 	err = s.execLater(ctx, `INSERT INTO feature_states (name, state) VALUES ($1, $2)
-		ON CONFLICT (name) DO UPDATE SET state = EXCLUDED.state`, name, data)
+		ON CONFLICT (name) DO UPDATE SET state = EXCLUDED.state`, name, string(data))
 	return err
 }

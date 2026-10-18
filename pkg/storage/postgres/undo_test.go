@@ -21,6 +21,7 @@ var untracked = map[string]bool{
 	"schema_migrations": true, "undo_log": true, "undo_blocks": true, "undo_by_height": true,
 	"reorgs": true, "orphaned_blocks": true, "orphaned_transactions": true,
 	"outbox": true, "outbox_sequence": true, "outbox_cursors": true,
+	"capture_locks": true, "capture_records": true, // immutable source facts, not projection writes
 }
 
 // trackedTables returns the tables of the store's schema that are not in

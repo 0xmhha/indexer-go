@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
@@ -93,9 +94,20 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	ctx := extractContext(p.Context)
 	pagination := parsePaginationParams(p, 0)
 	filter := parseBlockFilter(p)
+	userRequestedRange := filter.hasNumberFilter()
 
-	// Get latest height
-	latestHeight, err := s.storage.GetLatestHeight(ctx)
+	// Stores with a snapshot window can read the indexed tip and default
+	// height range together. Explicit ranges retain the generic reader path.
+	var latestHeight uint64
+	var blocks []*model.Block
+	var err error
+	reader, windowRead := s.storage.(port.LatestBlockWindowReader)
+	windowRead = windowRead && !userRequestedRange
+	if windowRead {
+		latestHeight, blocks, err = reader.GetLatestBlockWindow(ctx, pagination.Offset, pagination.Limit)
+	} else {
+		latestHeight, err = s.storage.GetLatestHeight(ctx)
+	}
 	if err != nil {
 		if errors.Is(err, port.ErrNotFound) {
 			return emptyConnection(false), nil
@@ -103,10 +115,6 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 		s.logger.Error("failed to get latest height", zap.Error(err))
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
-
-	// Track whether user explicitly specified a number range filter
-	// Must be checked BEFORE mutating filter.NumberTo below
-	userRequestedRange := filter.hasNumberFilter()
 
 	// Set default range if not specified
 	if !userRequestedRange {
@@ -129,21 +137,27 @@ func (s *Schema) resolveBlocks(p graphql.ResolveParams) (interface{}, error) {
 	}
 
 	// Fetch and filter blocks
-	blocks, err := s.storage.GetBlocks(ctx, blockRange.StartBlock, blockRange.EndBlock)
-	if err != nil {
-		s.logger.Error("failed to get blocks",
-			zap.Uint64("startBlock", blockRange.StartBlock),
-			zap.Uint64("endBlock", blockRange.EndBlock),
-			zap.Error(err))
-		return nil, fmt.Errorf("failed to get blocks: %w", err)
+	if !windowRead {
+		blocks, err = s.storage.GetBlocks(ctx, blockRange.StartBlock, blockRange.EndBlock)
+		if err != nil {
+			s.logger.Error("failed to get blocks",
+				zap.Uint64("startBlock", blockRange.StartBlock),
+				zap.Uint64("endBlock", blockRange.EndBlock),
+				zap.Error(err))
+			return nil, fmt.Errorf("failed to get blocks: %w", err)
+		}
 	}
 
 	filteredBlocks := filterBlocks(blocks, filter)
 	nodes := s.blocksToNodes(filteredBlocks)
-	totalCount := s.calculateBlockTotalCount(ctx, filter, filteredBlocks, latestHeight)
-
 	reverseOrder := !userRequestedRange
-	return s.buildBlockConnectionResponse(filteredBlocks, nodes, totalCount, filter, blockRange, pagination, reverseOrder), nil
+	result := s.buildBlockConnectionResponse(filteredBlocks, nodes, 0, filter, blockRange, pagination, reverseOrder)
+	// graphql-go resolves this function only if totalCount is selected,
+	// including aliases/fragments. Memoize for repeated aliases in a query.
+	result["totalCount"] = sync.OnceValue(func() interface{} {
+		return s.calculateBlockTotalCount(ctx, filter, filteredBlocks, latestHeight)
+	})
+	return result, nil
 }
 
 // calculateBlockRange calculates the block range for pagination

@@ -7,6 +7,22 @@ rpc:
   endpoint: "http://localhost:8501"
   # Request timeout duration
   timeout: 30s
+  # Combine concurrent read envelopes; preserves fresh canonical queries.
+  coalesce_reads: false
+
+source:
+  # Optional feed.call_traces: explicit name/provider/start_height; docs/CALL_TRACES.md.
+  # Optional feed.telemetry: {receive_interval_target: 450ms}; docs/FEED_TELEMETRY.md.
+  # Optional feed.state_proofs: explicit name/start_height/accounts; docs/STATE_PROOFS.md.
+  # parent_checkpoint: true adds before-state; required: true pins completion/GC BEFORE first intake.
+  # project_changes: true adds an independent tracked-state head/changes/undo/event worker.
+  # Optional feed.projections: [execution.summary.v1, source.lookup.v1] adds independent workers.
+  # source.lookup.v1 builds DB-only block/tx hash search.
+  # Optional source.search.v1 adds address/topic/block-range search; each worker fresh check shares the RPC budget.
+  # Optional source.feed app mode: docs/FEED_APP.md (explicit peer, checkpoint and external window).
+  # Optional local ExEx socket; requires full queued state prefetch.
+  # See docs/NODE_FEED.md. Disabled unless a real producer is running.
+  node_feed_socket: ""
 
 # Database Configuration
 database:
@@ -14,6 +30,11 @@ database:
   path: "./data"
   # Open database in read-only mode
   readonly: false
+  # When selecting driver: postgres, allow facts reads alongside the writer.
+  # Two is the measured starting budget for one writer and facts acquisition.
+  # This caps the total store pool, not an additional read pool.
+  postgres:
+    max_conns: 2
 
 # Storage Configuration
 storage:
@@ -35,6 +56,13 @@ indexer:
   chunk_size: 100
   # Block height to start indexing from (0 = from genesis)
   start_height: 0
+  # Opt-in continuous acquisition + an ordered processing queue.
+  # Requires state_prefetch; enabled per chain using the same names.
+  state_prefetch: false
+  acquisition_queue: false
+  queue_blocks: 256
+  # Serialized model + prepared state payload, not the entire Go heap.
+  queue_max_bytes: 268435456
 
 # API Server Configuration
 api:

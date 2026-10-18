@@ -10,6 +10,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/source"
 	storagepkg "github.com/0xmhha/indexer-go/pkg/storage"
 )
 
@@ -69,6 +70,16 @@ func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) 
 		from = latest
 	}
 
+	var anchorHeight uint64
+	var anchorHash common.Hash
+	hasAnchor := false
+	if anchored, ok := f.src.(source.RecoveryAnchor); ok {
+		anchorHeight, anchorHash, err = anchored.RecoveryAnchor(ctx)
+		if err != nil {
+			return 0, err
+		}
+		hasAnchor = true
+	}
 	fork := from
 	for {
 		stored, storedErr := f.storedBlockHash(ctx, fork)
@@ -78,6 +89,12 @@ func (f *Fetcher) HandleReorg(ctx context.Context, from uint64) (uint64, error) 
 		onNode, err := f.nodeBlockHash(ctx, fork)
 		if err != nil {
 			return 0, fmt.Errorf("read node block %d: %w", fork, err)
+		}
+		if hasAnchor && fork == anchorHeight && errors.Is(storedErr, port.ErrNotFound) && onNode == anchorHash {
+			break
+		}
+		if hasAnchor && fork <= anchorHeight && (storedErr != nil || stored != onNode) {
+			return 0, fmt.Errorf("%w: verified bootstrap changed", ErrReorgTooDeep)
 		}
 		if storedErr == nil && stored == onNode {
 			break // the newest block both chains share

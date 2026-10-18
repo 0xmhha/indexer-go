@@ -2,12 +2,17 @@ package balance
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
+	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/chains/arc"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
@@ -209,5 +214,60 @@ func TestPreparedBalanceCompactedBatchKeepsMemberIdentity(t *testing.T) {
 			require.Equal(t, big.NewInt(62), records.balances[a])
 			require.Equal(t, big.NewInt(123), records.balances[b])
 		}
+	}
+}
+
+// These before/after states were recorded independently from Arc's public
+// node. Prepared inputs must preserve its system-emitter and miner accounting
+// after historical reads become unavailable, including a recent start.
+func TestPreparedArcBalancesSurvivePruning(t *testing.T) {
+	for _, height := range []uint64{66904957, 67017992, 67018549, 67018552, 67018564} {
+		t.Run(fmt.Sprint(height), func(t *testing.T) {
+			profile := arc.New()
+			prefix := "../../chains/arc/testdata/"
+			raw, err := os.ReadFile(fmt.Sprintf("%sblock-%d.json", prefix, height))
+			require.NoError(t, err)
+			block, err := profile.DecodeBlock(raw)
+			require.NoError(t, err)
+			raw, err = os.ReadFile(fmt.Sprintf("%sreceipts-%d.json", prefix, height))
+			require.NoError(t, err)
+			receipts, err := profile.DecodeReceipts(raw)
+			require.NoError(t, err)
+			raw, err = os.ReadFile(fmt.Sprintf("%sbalances-%d.json", prefix, height))
+			require.NoError(t, err)
+			var oracle map[common.Address]struct{ Before, After string }
+			require.NoError(t, json.Unmarshal(raw, &oracle))
+			records := &preparationRecords{balances: map[common.Address]*big.Int{}}
+			var pruned atomic.Bool
+			h := &handler{w: records, r: records, records: records, accounting: chains.AccountingOf(profile), logger: zap.NewNop(), deps: feature.Deps{PrepareConcurrency: 4}}
+			h.deps.BalanceAtHash = func(_ context.Context, addr common.Address, hash common.Hash) (*big.Int, error) {
+				if pruned.Load() {
+					return nil, fmt.Errorf("state pruned")
+				}
+				if hash != block.ParentHash {
+					return nil, fmt.Errorf("wrong parent hash")
+				}
+				value, ok := new(big.Int).SetString(oracle[addr].Before, 10)
+				if !ok {
+					return nil, fmt.Errorf("oracle missing %s", addr)
+				}
+				return value, nil
+			}
+			h.balanceAt = func(context.Context, common.Address, *big.Int) (*big.Int, error) {
+				return nil, fmt.Errorf("late state read after pruning")
+			}
+			input := &feature.Block{Model: block, Receipts: receipts}
+			prepared, err := h.PrepareBlock(t.Context(), input)
+			require.NoError(t, err)
+			require.True(t, prepared.ReadState)
+			pruned.Store(true)
+			require.NoError(t, prepared.Handler.HandleBlock(t.Context(), input))
+			require.NotEmpty(t, records.balances)
+			for addr, actual := range records.balances {
+				expected, ok := new(big.Int).SetString(oracle[addr].After, 10)
+				require.True(t, ok)
+				require.Zero(t, actual.Cmp(expected), "Arc balance %s", addr)
+			}
+		})
 	}
 }

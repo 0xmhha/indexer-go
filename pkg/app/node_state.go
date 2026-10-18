@@ -41,6 +41,29 @@ func (a *App) checkNodeState(ctx context.Context, units []feature.Unit, features
 		return nil
 	}
 
+	if a.nodeFeed != nil {
+		var native, external []string
+		for _, name := range readers {
+			if name == "balance.native" {
+				native = append(native, name)
+			} else {
+				external = append(external, name)
+			}
+		}
+		if len(native) > 0 {
+			if err := a.checkStateReaders(ctx, units, native, a.nodeFeed.BalanceAt); err != nil {
+				return err
+			}
+		}
+		if len(external) == 0 {
+			return nil
+		}
+		return a.checkStateReaders(ctx, units, external, a.fetcher.BalanceAt)
+	}
+	return a.checkStateReaders(ctx, units, readers, a.fetcher.BalanceAt)
+}
+
+func (a *App) checkStateReaders(ctx context.Context, units []feature.Unit, readers []string, balanceAt func(context.Context, common.Address, *big.Int) (*big.Int, error)) error {
 	first, err := a.firstStateHeight(ctx, units, readers)
 	if err != nil {
 		return err
@@ -56,7 +79,7 @@ func (a *App) checkNodeState(ctx context.Context, units []feature.Unit, features
 	if at > head {
 		return nil // the node has not reached it; its state will be recent
 	}
-	_, err = a.fetcher.BalanceAt(ctx, common.Address{}, new(big.Int).SetUint64(at))
+	_, err = balanceAt(ctx, common.Address{}, new(big.Int).SetUint64(at))
 	var answered rpc.Error
 	switch {
 	case err == nil:

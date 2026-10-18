@@ -20,6 +20,20 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 ---
 
+## 원본 윈도우 저장 설정
+
+`window_storage`는 named `volumes`와 `windows`를 읽는 공통 layout이다. volume root/ID·공유 예산·여유 floor, instance별 경로/예산·최소24시간 retention을 검증하고 알 수 없는 nested 필드를 거부한다. 예시는 [standalone window-storage.yaml](examples/window-storage.yaml)이며 앱 설정에서는 그 전체 내용을 `window_storage:` 아래로 들여쓴다. 이 파일의 bytes는 정수이고 기간은 `24h` 같은 duration이다. `source.feed`의 현재 앱 설정은 [feed 실행](FEED_APP.md)을 따른다. 설계 문서의 `feed_storage`와 영구 객체 YAML은 아직 구현되지 않았다.
+
+파싱은 디스크를 초기화하지 않는다. `source.feed`로 등록 모듈과 이 layout의 예약을 명시하면 앱이 capture와 DB facts writer를 함께 실행한다. 현재 Arc ETH/68 테스트넷 header/body/receipt plan만 공급하며 상태 기능은 시작 전에 거부한다. layout만 있고 feed가 없으면 오류다. 최초 초기화·외장 mount·재시작·정책·멀티체인 설정은 [앱 feed 실행](FEED_APP.md), 저수준 세션은 [capture API](CAPTURE_STORAGE.md), 예약/압력은 [window API](WINDOW_STORAGE.md)를 따른다. 공개 RPC5와 fresh canonical 검사는 유지한다. 현재 운영 `config.yaml`에는 활성화하지 않았다.
+
+선택 `source.feed.projections: [execution.summary.v1]`와 per-chain `feed.projections`는 DB-only block 요약 worker를 추가한다. 기본값은 비활성이며 같은5 HTTP/s pool의 fresh 검사 비용을 공유한다. [기능별 완료와 coverage API](PROJECTION_PROGRESS.md)에 transaction/epoch/조회 경계와 제한이 있다.
+
+선택 `source.feed.call_traces`와 per-chain `feed.call_traces`는 `name/provider/start_height/poll_interval`의 provider-reported 호출 트리 수집이다. module이 지정한 profile·범위·검증/상한·DB-only API와 지원 조건은 [호출 trace](CALL_TRACES.md)를 따른다. 기존5 HTTP/s·fresh·strict 오류를 유지하며 기본 비활성이다.
+
+선택 `source.feed.telemetry: {receive_interval_target: 450ms}` 또는 per-chain `feed.telemetry`는 제한된 메모리에서 단계별 지연·queue age·공유 RPC 대기를 계측한다. `/indexing/status.pipeline`에 노출하며 source/GC 완료 계약을 바꾸지 않는다. 재시작/별도 API 프로세스에서는 실행 표본이 없음을 표시한다. [계측과 운영 기준](FEED_TELEMETRY.md)을 따른다.
+
+선택 `source.feed.state_proofs`와 per-chain `feed.state_proofs`는 `name`·`start_height`·`accounts[].address/code/slots`를 명시하는 자동 tracked 상태 수집이다. 주소20바이트/슬롯32바이트 hex·최대8주소/총128슬롯·중복/오타를 검사한다. `poll_interval`은 기본50ms(20ms..5s)이며 기존5 HTTP/s pool을 공유한다. name/selection/start/parent/required 모드는 DB에 고정한다. optional 범위를 바꾸려면 새 명시적 이름을 사용한다. `parent_checkpoint: true`는 시작 직전 상태를 보존한다. `required: true`는 부모 checkpoint와 필수 상태 완료/GC 계약을 첫 intake 전에 고정하며, 이후 설정 제거/범위 변경을 거부한다. 이미 수집된 source DB에는 자동 추가하지 않는다. 현재 모듈 capability는 Arc testnet만 선언했다. [실행·상태 API·raw GC와의 경계](STATE_PROOFS.md)를 따른다. 상태 feature의 startup 제한은 유지된다. `project_changes: true`는 parent 모드와 선택 범위의 독립 상태 후처리·undo/event/API를 켠다. 현재값과 변경은 [상태 worker 계약](TRACKED_STATE_PROJECTION.md)을 따른다.
+
 ## Full node와 체인 범위
 
 현재는 EVM 전용이며 Stable은 제외한다. 내장 profile은 `evm`, `stablenet`, `arc`다. StableNet은 Stable과 별개다. 사용자 운영은 archive 없는 full node이며 실제 운영 설정과 시작 높이는 아직 확정하지 않았다.
@@ -37,6 +51,8 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 live 처리 루프와 head 알림은 매번 새 RPC 조회를 시작한다. background progress와 syncing 중 블록별 metric 판정은 체인별 최근 1초 이내의 성공 관측 및 진행 중인 조회를 공유한다. background timer는 관측 만료 시각에 맞춰 갱신하므로 처리 실패·긴 batch 대기 중에도 progress를 갱신한다. raw node head와 finalized target은 별도로 관리하며 confirmations target을 raw head로 사용하지 않는다.
 
 명시적/API/주기적 health 검사는 새 조회를 유지한다. 오류는 이전 성공 관측을 무효화하고, 늦게 끝난 이전 요청은 새 요청의 관측값을 덮지 않는다. RPC latency는 cache hit의 실행 시간이 아닌 원래 RPC 측정값이다. 재시작한 pipeline과 다른 체인은 관측을 공유하지 않는다. 기존 RPC rate_limit/timeout은 그대로 적용하며 이 관측 cache는 canonical hash·잔액·토큰 상태를 대체하지 않는다.
+
+큐 모드(`acquisition_queue: true`)는 수집과 background progress가 관측을 공유하며 `max(1s, poll_interval)` 주기를 사용한다. 커밋을 기다리며 별도의 head 조회를 더하지 않는다. 아래의 큐 설정을 참고한다.
 
 ## 상태 조회 준비 파이프라인
 
@@ -67,6 +83,31 @@ indexer:
 
 RPC 왕복이 주된 비용일 때 유리할 수 있지만, canonical 검증과 speculative 조회가 요청 수를 늘린다. 요청 제한이 병목이면 더 느려질 수 있으므로 같은 입력에서 시간과 RPC 수를 함께 비교한다. [통제된 비교](analysis/work-log-2026-10.md#312-1014-상태-준비-고루틴채널-파이프라인)는 운영 SLO나 모든 체인의 개선 보장이 아니다. 필요한 상태가 이미 지워졌다면 이 옵션도 복구하지 못한다.
 
+## 연속 수집과 처리 큐
+
+`acquisition_queue: true`는 최근 블록의 수집·상태 준비를 순차 DB 처리와 분리한다. `state_prefetch: true`가 필요하며 기본값은 꺼짐이다. `multichain.chains[]`에서 같은 옵션을 쓰면 Arc만 켤 수 있다.
+
+```yaml
+# 기존 public RPC 제한 유지
+rpc:
+  rate_limit: 5
+multichain:
+  chains:
+    - id: arc-testnet  # 기존 Arc 항목의 다른 필드는 유지
+      acquisition_queue: true
+      state_prefetch: true
+      queue_blocks: 256
+      queue_max_bytes: 268435456
+```
+
+첫 단계는 블록·영수증과 나중에 소실될 수 있는 초기 잔액·생성 계약 메타데이터를 확보한다. 처리 큐로 넘기는 즉시 수집 슬롯을 반환하므로 writer의 커밋이나 `chunk_size` 경계가 다음 수집을 막지 않는다. 처리 단계는 높이 순서로 canonical 확인·기능 처리·원자적 커밋을 수행한다. 모든 조회는 기존 체인별 RPC pool과 같은 5 HTTP/s 제한을 공유한다.
+
+`queue_blocks` 기본 256은 쓰는 중인 블록을 포함한다. `queue_max_bytes` 기본 256MiB는 직렬화 모델과 준비 상태 payload를 계산하며 전체 Go heap/RSS의 상한은 아니다. 큐 앞의 작은 수집 창(`2*workers`)은 추가 입력을 보유한다. 개수나 byte 상한에 도달하면 수집을 기다리게 하고, 하나의 입력이 byte 상한을 넘으면 명시적으로 실패한다. 오류·취소·reorg에서는 worker를 종료·join하고 미커밋 큐를 폐기한다. 큐는 메모리에 있으므로 재시작하면 커밋 cursor부터 재수집하며, 이미 소실된 상태를 복구하지 못한다.
+
+10초마다 `Acquisition queue` 로그에서 `target_height`, `acquired_height`, `committed_height`와 큐 크기/바이트를 확인한다. `acquired_height`는 연속한 높이까지 준비가 완료됐다는 의미이며, 불필요해질 수도 있는 speculative 상태 오류를 포함할 수 있다. 커밋된 정확한 데이터와 구분한다. `acquisition_interval`은 실행 중 연속 준비 완료 간격이며 450ms 목표와 비교한다. pipeline 재시작마다 기준 시간이 초기화되므로 전체 retry 대기는 빠진다. 생성/커밋률은 wall clock 높이 차이로 별도 계산한다. 병렬 job 하나의 `acquisition` 시간, `handoff_wait`, `processing_queue_wait`, `ordered_write`, `database_commit`도 별도로 제공한다.
+
+잔액 불일치 보정·준비 API가 없는 custom handler의 후속 상태 RPC는 기존처럼 남아 있고, 필요한 상태가 사라졌으면 블록 전체를 실패시킨다. 큐만으로 지속 생성률보다 낮은 RPC 처리량을 해결하거나 450ms를 보장하지 않는다. [설계와 정확성 범위](analysis/arc-acquisition-queue.md)를 함께 확인한다.
+
 ## config.yaml (권장)
 
 ### 기본 설정
@@ -85,7 +126,7 @@ database:
   postgres:                             # driver postgres일 때
     dsn: ""                             # postgres://user:pass@host:port/db (로그에 남기지 않음)
     schema: ""                          # 테이블을 둘 schema, 비우면 public
-    max_conns: 0                        # 연결 풀 상한, 0은 pgxpool 기본값
+    max_conns: 0                        # 연결 풀 상한, 0은 DSN/pgxpool 기본값. facts+writer 병행은 2부터 측정
 
 log:
   level: "info"                         # debug | info | warn | error
@@ -183,6 +224,12 @@ api:
   # RESUME_UNSUPPORTED 오류가 오고 streamSequence는 null이다.
 
 ```
+
+PostgreSQL facts 수집과 writer를 함께 실행하면 `database.postgres.max_conns: 2` 또는 `INDEXER_DB_POSTGRES_MAX_CONNS=2`를 시작점으로 사용한다. 이 값은 저장소 전체 pool 상한이다. writer는 fresh 검사 중에도 자신의 block transaction/연결을 유지하고, 사전 facts 읽기는 나머지 연결에서 read-only snapshot을 연다. 커밋 직전의 source 검증은 기존 bound transaction의 generation fence(공개 prefix는 KEY SHARE)를 재사용하므로 별도 읽기 연결로 이동하지 않는다. 명시적인1은 계속 단일 연결로 동작하며 자동으로 늘리지 않는다.0은 DSN의 `pool_max_conns`나 pgxpool 기본값을 따르고1을 뜻하지 않는다. 멀티체인에서는 체인별 pool이며 다른 프로세스도 별도 연결 예산을 사용한다. [고정 입력 비교](SOURCE_FACTS.md)를 참고한다. 원천이 이미 준비된 writer 비교의 시작 예산은2이며, 같은 DB에서 수집·writer·API 두 client(최대20 RPS)를 함께 실행한 비교에서는4개가 API p95를 약192→9.46ms로 줄였다. API tail이 중요한 혼합 구성은4개부터 다시 측정하되 수집 처리량 증가로 해석하지 않는다. 후속 연결4 고정 비교에서는 raw 단일 후보와 기존 commit fresh를 사용해 선행 resolve RPC를 줄였고 누적32블록 처리량이2.282→2.458블록/s로 개선됐다. 이때 backlog 중간 ACK와 API tail은 증가했으므로 [측정 조건과 지연 차이](SOURCE_FACTS.md)를 함께 확인한다. pool 예산을 자동 변경하거나 fresh/세대 fence를 완화하지 않는다. 후속 잠금 분리에서는 같은4연결로 append·공개 prefix 검증·immutable ACK를 병행해 누적 ACK p50 9.004→4.621초, 최근8블록 API p99 89.179→41.285ms를 관측했다. 임의 mutable 값을 읽는 bound full view와 Reset/삭제는 계속 배타 보호하며 실행별 tail 편차도 함께 기록했다.
+
+단일 체인 `node.role: all`에서 `database.postgres.max_conns: 4`를 명시하면 root API의 짧은 projection SQL에 최소1개를 예약한다. 같은 pool 안의 사용 가능한 일반 연결도 짧게 빌려 병렬 조회하므로 연결을 추가하지 않고 총4개를 유지한다. source/commit 검증은 원래 Store의 bound transaction을 우선 사용한다. API/ingest 전용 역할과1/2/default0·다른 예산은 자동 변경하지 않는다. read-only Store는 예약하지 않는다. SDK 직접 API 생성은 `api.Config.ReserveQueryReader`(기본 false)로 선택한다. source snapshot/멀티체인 route/무거운 조회와 추가 worker 예산은 별도 측정 대상이다. [계측·수명·측정 범위](SOURCE_FACTS.md#api-tail-계측과-불필요-작업-지연-2026-10-17)를 따른다.
+
+
 
 ### Account Abstraction (EIP-4337)
 
@@ -568,6 +615,10 @@ node:
 - `--reindex`는 체인 데이터 테이블을 비우고 계약 검증(ABI, 소스), outbox 번호와 소비자 위치는 남긴다. `--clear-data`는 schema 버전만 남기고 모두 지운다. schema 자체는 지우지 않는다.
 - DSN에 비밀번호가 들어갈 수 있으므로 로그에는 schema만 남긴다.
 
+SQL 값은 `$1`, `$2` 등의 placeholder와 별도 인자로 전달한다. 검색어·record table/key 이름·cursor 값·LIMIT/OFFSET도 SQL 문자열에 붙이지 않는다. pgx의 기본 prepared statement cache를 사용하며 명시적 `Prepare`를 쿼리마다 반복할 필요는 없다. DSN의 `default_query_exec_mode=simple_protocol`은 서버 파라미터 바인딩을 사용하는 `exec`로 전환한다. transaction pooler에서 statement cache를 사용할 수 없으면 `default_query_exec_mode=exec`를 지정할 수 있다.
+
+schema/table 식별자는 값 placeholder로 바인딩할 수 없으므로 schema 허용 규칙과 `pgx.Identifier.Sanitize`를 적용한다. 정렬식·방향·연산자는 코드에 정의된 항목만 사용한다. 재색인도 catalog에서 얻은 이름을 schema와 함께 식별자로 처리한다. 여러 명령이 있는 SQL은 배포물에 포함된 migration처럼 신뢰된 정적 코드에만 사용한다. 새 원천 DB도 같은 규칙을 따른다. [OWASP SQL 인젝션 방어](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
+
 ## Environment Variables
 
 Docker/Kubernetes 배포 시 환경변수를 사용할 수 있습니다:
@@ -717,3 +768,28 @@ eventbus:
 
 > **SSD 사용 권장**: PebbleDB 성능을 위해 SSD 스토리지를 사용하세요.
 > **IPv4 권장**: `127.0.0.1` 사용 (`localhost`는 IPv6로 해석될 수 있음).
+
+### 독립 읽기 RPC의 HTTP 배치 통합
+
+`rpc.coalesce_reads: true`로 같은 HTTP 클라이언트에 동시에 대기하는 읽기 요청을 합칠 수 있다. 멀티체인은 `multichain.chains[].coalesce_reads`로 체인별로 재정의한다. 기본은 `false`이며 다른 체인의 요청이나 인증 헤더가 다른 요청은 합치지 않는다. Arc에만 켜는 예:
+
+```yaml
+rpc:
+  rate_limit: 5
+  coalesce_reads: false
+multichain:
+  chains:
+    - id: arc-testnet
+      # 기존 endpoint, chain_id, DB와 시작 높이는 그대로 사용한다.
+      coalesce_reads: true
+```
+
+dispatcher는 최대 10ms 수집 창과 HTTP 토큰 대기 중 들어온 독립 읽기를 모은다. JSON-RPC 멤버 최대 64개, 대기 envelope 128개, 동시에 전송 중인 그룹 최대 4개다. 통합 대상 원본 envelope는 최대 1MiB이며 초과·64멤버 초과·쓰기·notification·알 수 없는 메서드는 원본 경로로 전송한다. 이는 전체 heap/RSS 상한이 아니다. 기존 블록+receipt 배치와 주소별 상태 배치를 펼친 뒤 고유 ID를 붙여 보내고, 응답은 원본 ID·single/batch 모양으로 돌려준다. 누락·중복·알 수 없는 응답 ID는 성공으로 간주하지 않는다. 일부 멤버의 revert·pruned-state 오류는 그대로 전달한다.
+
+`rate_limit`는 **실제 HTTP envelope 전송 횟수** 기준이다. failover와 미지원 배치의 원본 재시도도 같은 limiter를 거친다. 공급자가 멤버별 quota를 적용한다면 HTTP 배치로 그 quota가 늘어나지 않는다. 명시적인 envelope-level `-32600`/null-ID 응답에서만 원본 envelope로 재시도하고 이후 통합을 중지한다. 원래부터 batch인 호출의 미지원 처리는 기존 호출자의 책임이다. recorder/replay와 비 HTTP 연결에는 이 통합을 적용하지 않는다.
+
+이 기능은 응답 캐시·동일 조회 병합이 아니다. writer의 fresh canonical 조회는 호출할 때마다 실제 멤버로 전송하며, 상태 준비가 끝나기를 기다려 새로운 의존 관계를 만들지 않는다. 배치는 서버의 원자적 스냅샷이 아니므로 블록/receipt 검증, EIP-1898 상태 참조와 writer의 canonical 비교를 유지한다. 한 호출의 취소는 다른 호출을 취소하지 않으며 전부 취소하면 그룹 전송을 중단한다. 클라이언트 종료는 dispatcher와 전송 worker를 취소하고 join한다.
+
+### Node-feed
+
+`source.node_feed_socket` 또는 체인별 `node_feed_socket`을 지정하면 Arc ExEx의 로컬 실행 입력과 native 상태를 사용한다. 기본은 비활성화이며 full ingest·state_prefetch·acquisition_queue가 필요하다. 공개 RPC5와 fresh canonical은 유지한다. producer hook, Docker socket 조건, 커밋 후 ACK·pruning/복구·자원 상한은 [NODE_FEED](NODE_FEED.md)를 따른다.

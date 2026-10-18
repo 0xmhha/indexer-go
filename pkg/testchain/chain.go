@@ -220,7 +220,7 @@ func (c *Chain) AddBlockWithExtra(extra []byte, specs ...TxSpec) *Block {
 }
 
 // appendBlock must be called with c.mu held (or during construction).
-func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
+func (c *Chain) appendBlock(specs []TxSpec, extra []byte, roots ...common.Hash) *Block {
 	number := uint64(len(c.blocks))
 	parent := common.Hash{}
 	if number > 0 {
@@ -342,6 +342,9 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 		Extra:      extra,
 		BaseFee:    baseFee,
 	}
+	if len(roots) == 1 {
+		header.Root = roots[0]
+	}
 	blk := types.NewBlock(header, &types.Body{Transactions: txs}, receipts, trie.NewStackTrie(nil))
 	for _, r := range receipts {
 		r.BlockHash = blk.Hash()
@@ -359,6 +362,16 @@ func (c *Chain) appendBlock(specs []TxSpec, extra []byte) *Block {
 	if number > 0 {
 		c.balances = append(c.balances, state)
 	}
+	return b
+}
+
+// AddStateRootBlock creates an empty block with an independently supplied
+// fixture commitment. It does not execute an EVM or synthesize state proofs.
+func (c *Chain) AddStateRootBlock(root common.Hash, extra []byte) *Block {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	b := c.appendBlock(nil, extra, root)
+	c.head = b.Block.NumberU64()
 	return b
 }
 

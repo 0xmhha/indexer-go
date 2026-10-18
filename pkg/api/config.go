@@ -11,6 +11,9 @@ import (
 
 // Config holds API server configuration
 type Config struct {
+	// ReserveQueryReader opts a cohosted ingest/API process into one reserved
+	// short-read slot inside its existing Store pool (when supported).
+	ReserveQueryReader bool
 	// Host is the server host (default: localhost)
 	Host string
 
