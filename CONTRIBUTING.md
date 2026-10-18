@@ -1,0 +1,92 @@
+# Contributing to indexer-go
+
+Contributions to the framework, examples and documentation are welcome. Start with the [project README](README.md), [architecture](docs/ARCHITECTURE.md) and the relevant extension contract.
+
+## Discuss the change
+
+Use [GitHub Issues](https://github.com/0xmhha/indexer-go/issues) for questions, bugs and feature proposals. For a bug, include the commit or version, chain/profile, enabled features, storage driver, expected behavior and a minimal reproduction. Redact credentials from RPC URLs, DSNs and logs.
+
+For changes to storage formats, chain accounting, public SDK interfaces or source completeness, describe the compatibility and recovery behavior before implementation. Existing design notes are context; they do not make every proposal part of the supported runtime.
+
+## Development setup
+
+Clone the repository and install the Go toolchain pinned in [go.mod](go.mod). Main builds and tests use Go 1.24.9. CI uses Go 1.26.8 for the pinned golangci-lint and the separate `tools/astgraph` module.
+
+```bash
+go mod download
+make build
+```
+
+Use a feature branch based on `main`. Keep local node credentials, `config.yaml`, database files, build outputs and test artifacts out of commits.
+
+Docker is needed for `make test-postgres` unless you supply `INDEXER_TEST_POSTGRES`. The script creates an identifiable temporary PostgreSQL database with `fsync=on` and removes its own container and named volume. Use a disposable database when supplying a DSN yourself; the tests create schemas and write data.
+
+The optional Rust adapter has its own prerequisites in [its README](modules/arc-node-feed/README.md). Rust and an Arc execution node are not required for normal Go development.
+
+## Find the right extension point
+
+| Change | Location or contract |
+| --- | --- |
+| Project handlers, derived records and HTTP/GraphQL routes | [SDK](docs/SDK.md), `pkg/sdk`, [receipts example](examples/receipts/README.md) |
+| Chain detection, decoding, verification or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md), `pkg/chains/<chain>` |
+| Storage interfaces and driver implementations | `pkg/core/port`, `pkg/storage`, `pkg/storage/postgres` |
+| Application lifecycle and multi-chain wiring | `pkg/app`, `pkg/multichain` |
+| Source/feed contracts and workers | `pkg/source`, `pkg/chainfeed`, `pkg/window`, `pkg/capture`, `modules/feeds/arc` |
+| API schema and registered methods | `pkg/api`, [API snapshots](pkg/app/testdata/api/) |
+
+Keep chain-specific rules in profiles or chain modules rather than adding chain-id branches to shared code. Project integrations should prefer the SDK over internal packages.
+
+## Preserve the data contracts
+
+- Bind feature writes to the block transaction. Preserve rollback, cursor and outbox semantics on success, error, restart and reorg.
+- Keep deterministic handlers independent of wall clocks, randomness and unbound external state. Use the SDK's [determinism checks](docs/SDK.md#6-결정성-규약).
+- Keep canonical checks immediately before commit, with the existing generation/epoch fences. Physical RPC attempts, including retries and batch fallback, share the configured budget.
+- Keep PostgreSQL values parameter-bound and dynamic identifiers validated and quoted. Capture/projection ACKs require durable database commits.
+- Preserve raw retention, finality, lease and ACK gates. Missing data or failed validation must not become successful completion.
+- Document any change to stored formats, profile behavior, coverage, defaults or public API compatibility. Update examples and snapshots only when the intended contract changes.
+
+## Run the checks
+
+Run the relevant package checks while developing, then the repository checks required before submission:
+
+```bash
+go build ./...
+go vet ./...
+go test -count=1 -timeout 20m ./...
+make test-race
+make test-cache-lifecycle
+make test-postgres
+make test-examples
+```
+
+`make test-race` is required locally before each commit and pull request because CI has no race job. Format Go files with the pinned toolchain before submitting. Run the linter with the toolchain used for lint in CI:
+
+```bash
+GOTOOLCHAIN=go1.26.8 make lint
+```
+
+The `tools/astgraph` directory is a separate Go module. CI also runs its vet and lint checks. The modules under `examples/` are separate modules as well; root `go test ./...` does not cover them.
+
+New concurrency tests must pass with `GOMAXPROCS=1`, `-race` and a single `-count=200` invocation before push. Select the actual test names and package; partial runs are not equivalent to one complete run. Wait for the state a test checks instead of relying on fixed sleeps.
+
+Public-RPC and live-node checks are opt-in. Run workload/SLO checks only when they are relevant to an agreed validation scope. Keep functional success, performance measurements and live operational evidence distinct; report commands, inputs, skips, failures and the limits of the result.
+
+For documentation changes, verify relative links and section anchors, match flags and configuration keys to the code, and check that examples point to real files. Keep dated measurements out of onboarding instructions.
+
+## Submit a pull request
+
+Use a concise English commit subject with a conventional prefix, such as `fix:`, `feat:` or `docs:`. Keep unrelated changes out of the patch.
+
+A useful PR description explains the concrete problem, resulting behavior, compatibility/recovery considerations and validation. Call out incomplete checks and unresolved limitations. Include a reproduction or before/after example when it helps review.
+
+The protected `main` branch requires **lint**, **test**, **postgres** and **examples** to pass. Pull requests merge with **squash** after those checks pass; do not bypass protection. [The CI workflow](.github/workflows/ci.yml) is the source of truth for its commands and toolchain versions.
+
+## Update documentation in the right place
+
+- [README](README.md): project fit, first successful run, developer entry points and support.
+- [Documentation index](docs/README.md): task-based navigation to maintained guides.
+- Guides: current configuration, interfaces, examples and implementation contracts.
+- [Remaining work](docs/analysis/open-items.md): open requirements, dependencies and deferred work.
+- [Analysis and validation](docs/analysis/README.md): dated decisions, failures, measurements and their scope.
+
+Preserve historical evidence when correcting a current guide. If a link or example becomes obsolete, update its callers along with it.

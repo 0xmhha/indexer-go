@@ -1,42 +1,95 @@
-# 빠른 시작
+# Quickstart
 
-현재 범위는 EVM 체인이다. 설정 상세는 [CONFIG](CONFIG.md), 구조는 [ARCHITECTURE](ARCHITECTURE.md), 구현을 붙이는 방법은 [체인 확장 계약](CHAIN_CUSTOMIZATION.md)과 [SDK](SDK.md)에 있다.
+Build the indexer, collect a local EVM chain and query the result. Then connect a node of your choice or build a project extension.
 
-## 1. 빌드
+## Prerequisites
 
-Go 모듈은 `go 1.24.0`, toolchain `go1.24.9`를 사용한다. Makefile이 실제 `pkg/app` 버전 필드에 빌드 정보를 넣는다.
+- Git, Make and Go. The repository pins `go1.24.9` in [go.mod](../go.mod).
+- An EVM JSON-RPC endpoint. The local walkthrough below uses [Anvil](https://getfoundry.sh/anvil/overview); install it separately if you want to follow that path.
+- Docker only if you run the disposable PostgreSQL integration tests. The local walkthrough uses embedded Pebble.
+
+## Build from source
 
 ```bash
+git clone https://github.com/0xmhha/indexer-go.git
+cd indexer-go
 go mod download
 make build
 ./build/indexer-go --version
 ```
 
-## 2. Full node 시작 조건
+Run the remaining commands from the repository root. The binary is `build/indexer-go`.
 
-운영에 archive 노드는 없다. 기본 활성 기능 `balance.native`·`token.metadata`가 필요한 과거 상태를 노드가 보관해야 시작할 수 있다. 새 DB는 시작 블록 직전 상태, 재시작은 다음 블록 직전 상태, 새 기능은 backfill 시작 직전 상태를 확인한다.
+## Run a local chain
 
-1. RPC와 chain id를 확인한다.
-2. 실제 RPC가 상태를 보관하는 최근 높이를 정한다. 보존 기간을 고정된 블록 수로 가정하지 않는다.
-3. 그 상태 다음 블록을 시작 높이로 정하고 활성 기능을 확인한다.
-4. 기존 DB를 재개할 때는 DB의 다음 블록과 기능 backfill 범위까지 확인한다.
+In a separate terminal, start Anvil with periodic blocks:
 
-최근 시작하면 이전 블록의 색인 결과는 없다. 처리 중에도 상태가 지워질 수 있다. `allow_pruned_state: false`(기본값)면 필요한 상태 조회 실패 시 블록 전체를 취소하고 같은 높이를 재시도한다. 사용자는 이 방침과 네 테스트넷 동시 실행을 선택했다. `true`를 명시하면 근사 처리를 허용하지만 과거 상태를 복원하지 않으며 잔액 또는 메타데이터 정확성을 떨어뜨릴 수 있다. 실제 보존 범위·허용 중단 시간·처리 성능은 운영 환경에서 확인해야 한다.
+```bash
+anvil --block-time 2
+```
 
-## 3. 설정과 실행
+Start the indexer:
 
-예를 들어 사용자 제공 Sepolia RPC로 새 DB를 만들 때 `config.yaml`을 다음과 같이 둔다. 기존 DB나 운영 구성을 바꾸는 예제가 아니다.
+```bash
+./build/indexer-go --config configs/config-anvil.yaml
+```
+
+The [development configuration](../configs/config-anvil.yaml) connects to `http://127.0.0.1:8545`, uses the generic EVM profile, starts from genesis and stores its index in `./data-anvil`. Its API listens on port 8080. Stop the process with Ctrl+C; restarting with the same configuration resumes the saved index.
+
+Keep the local node's chain history consistent with the index. If you reset Anvil, use a separate development database rather than resuming an index for the previous chain.
+
+## Query the API
+
+Check service health:
+
+```bash
+curl -sS http://127.0.0.1:8080/health
+```
+
+Read the latest indexed height:
+
+```bash
+curl -sS http://127.0.0.1:8080/graphql \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"{ latestHeight }"}'
+```
+
+The same height is available through the project's JSON-RPC method:
+
+```bash
+curl -sS http://127.0.0.1:8080/rpc \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","method":"getLatestHeight","params":{},"id":1}'
+```
+
+Open [Playground](http://127.0.0.1:8080/playground) for schema exploration. Health and indexed progress describe different things: a healthy service can still be catching up. See the [API reference](API.md) for block queries, pagination and `/graphql/ws` subscriptions.
+
+## Connect your own RPC
+
+### Choose a starting height
+
+Check the node's chain identity and the historical data available to your enabled features. Default state-dependent features such as `balance.native` and `token.metadata` need state at specific blocks, including the parent state used to initialize balances.
+
+For a new database, select a starting block whose required state is available. On restart, the next indexed block and any feature backfill must still be supported by the node. Starting near the tip omits earlier history from your index.
+
+A pruned RPC cannot supply state it has already removed. With the default `allow_pruned_state: false`, missing required state rejects startup or rolls back the affected block; it is not replaced with a latest-state result or a zero balance. Increasing queue size does not recover missing state.
+
+### Create a configuration
+
+Save the following as `config.yaml`. Replace the endpoint with your own node and use a database path dedicated to that chain and profile.
 
 ```yaml
 rpc:
-  endpoint: https://ethereum-sepolia-rpc.publicnode.com
-  timeout: 15s
+  endpoint: http://127.0.0.1:8545
+  timeout: 30s
+  rate_limit: 5
 database:
   driver: pebble
-  path: ./data-sepolia
+  path: ./data/my-chain
 indexer:
   workers: 1
-  poll_interval: 50ms
+  poll_interval: 1s
+  finality: head
 api:
   enabled: true
   host: 127.0.0.1
@@ -45,36 +98,46 @@ log:
   level: info
 ```
 
-선택한 최근 시작 높이를 `INDEXER_START_HEIGHT`에 넣고 실행한다.
+This example follows the head and caps physical HTTP RPC attempts at five per second. Batch members can count separately toward a provider's quota. The cap is a request budget, not a throughput guarantee. Choose the finality policy appropriate to your application; see [configuration](CONFIG.md).
+
+Set `INDEXER_START_HEIGHT` to your chosen decimal block height, then run:
 
 ```bash
 ./build/indexer-go --config config.yaml \
-  --start-height "${INDEXER_START_HEIGHT:?set a retained recent start height}"
+  --start-height "${INDEXER_START_HEIGHT:?set a retained starting block height}"
 ```
 
-Profile은 자동 감지된다. 등록된 이름이나 alias만 명시적으로 `--adapter`로 지정한다. generic `evm`, StableNet의 `stablenet`/`stableone`, Arc의 `arc`가 있다. Anvil은 generic EVM을 사용한다. 등록되지 않은 adapter 이름도 현재 자동 감지로 넘어가므로 오타와 실제 선택 로그를 확인한다.
+Profiles are detected from the node. You can select a registered id or alias explicitly with `--adapter`, such as `evm`, `stablenet` / `stableone`, or `arc`. Check the selected-profile startup log; an unregistered adapter name currently falls back to detection.
 
-Arc 예제는 [별도 profile 모듈](../examples/chainprofile/README.md)을 따른다. Arc profile은 tag `v0.2.15` 이후 main에 추가됐다. generic EVM 회계로 만든 기존 Arc DB는 새 profile로 재색인해야 하며 자동 보정되지 않는다.
+`config.yaml` is ignored by Git. Command-line flags override the corresponding configuration values when explicitly set. Additional environment variables, feature settings and batch options are documented in [CONFIG.md](CONFIG.md).
 
-## 4. 동작 확인
+## Choose storage and process roles
 
-```bash
-curl http://127.0.0.1:8080/health
-curl -s http://127.0.0.1:8080/graphql \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"{ latestHeight }"}'
-curl -s http://127.0.0.1:8080/rpc \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","method":"getLatestHeight","params":{},"id":1}'
-```
+| Need | Configuration path |
+| --- | --- |
+| Run ingestion and APIs together | Pebble or PostgreSQL with `node.role: all` |
+| Run only ingestion | `node.role: ingest`; HTTP exposes health and metrics |
+| Separate API processes from ingestion | PostgreSQL with `node.role: api` and an already migrated database |
+| Index multiple chains | Multi-chain `all` mode; separate per-chain databases and `/chains/{id}/` APIs |
 
-GraphQL Playground는 `/playground`다. 최근 시작 높이 이전의 블록을 조회할 수 있다고 가정하지 않는다. API 필드와 REST·구독 경로는 [API 안내](API.md)에 있다.
+Use [PostgreSQL configuration](CONFIG.md#postgresql) for the DSN, schema and bounded connection pool. The API reservation shares that pool; it does not add connections. The current mixed-load functional setup uses four total connections, including one API reservation.
 
-## 5. 운영 역할·멀티체인·데이터 관리
+A database is tied to its chain, profile and collected range. In particular, an Arc database created with generic EVM native accounting needs reindexing for the Arc profile. See [data management](CONFIG.md#data-management) before using `--reindex` or `--clear-data`; those operations delete indexed data.
 
-- API를 분리하려면 PostgreSQL과 `node.role: ingest`/`api` 구성을 사용한다. Pebble은 `all`/`ingest`만 지원한다.
-- 멀티체인은 현재 `all` 역할만 지원하며 API가 `/chains/{id}/` 아래에 열린다. 실제 동시 운영 검증은 남은 작업이다.
-- `--reindex`와 `--clear-data`는 데이터를 삭제하는 동작이다. 적용 범위·보존 데이터는 [CONFIG의 데이터 관리](CONFIG.md#data-management)를 확인하고 대상 DB와 재수집 가능한 범위를 먼저 정한다.
-- 외부 배포·새 태그·원격 branch 삭제는 이번 문서 정리의 실행 범위가 아니다. 사용자 승인이 필요하다.
+## Troubleshooting
 
-Docker·systemd 스크립트는 저장소에 있지만, 이 문서 정리에서 실제 배포를 검증하거나 실행하지 않았다. 운영 구성은 [남은 작업](analysis/open-items.md)의 R03/R04에서 확정한다. 사용자의 기존 노드·컨테이너를 이 안내의 실행 전제로 재설정하지 않는다.
+| Symptom | Check |
+| --- | --- |
+| Build requests a different Go version | Use the toolchain pinned in `go.mod`; see [development setup](../CONTRIBUTING.md#development-setup) |
+| Startup reports missing historical state | Check the selected start/backfill height, enabled features and the RPC's actual retention |
+| Block queries return no data | Check the indexed range and progress; a recent start does not include earlier blocks |
+| Multi-chain requests fail at root endpoints | Discover chains with `GET /chains` and use `/chains/{id}/...` |
+| The selected profile is unexpected | Check the adapter id, linked registration package and startup detection log |
+
+## Next steps
+
+- Build a contract-specific backend with the [receipts example](../examples/receipts/README.md) and [SDK](SDK.md).
+- Add chain-specific behavior with [chain customization](CHAIN_CUSTOMIZATION.md).
+- Read the [architecture](ARCHITECTURE.md) before changing ingestion, rollback or storage.
+- Configure the experimental Arc disk-window path with [feed application](FEED_APP.md). It requires explicit peers, a checkpoint and storage configuration; it is separate from this RPC walkthrough.
+- Review [remaining operational work](analysis/open-items.md) before treating testnet samples or local checks as production guarantees.

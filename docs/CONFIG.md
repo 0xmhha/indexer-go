@@ -1,5 +1,9 @@
 # Configuration Guide
 
+[문서 목차](README.md) · [빠른 시작](QUICKSTART.md) · [아키텍처](ARCHITECTURE.md)
+
+이 문서는 현재 구현된 설정과 동작의 참조다. 처음 실행하려면 빠른 시작을, source.feed의 전체 조립 예시는 [feed 앱 설정](FEED_APP.md)을 따른다. 아래 선택 기능은 공급 자료·활성 feature·역할에 따라 적용 범위가 다르다.
+
 ## 설정 우선순위
 
 설정은 다음 순서로 적용됩니다 (높은 순위가 덮어씀):
@@ -24,7 +28,7 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 `window_storage`는 named `volumes`와 `windows`를 읽는 공통 layout이다. volume root/ID·공유 예산·여유 floor, instance별 경로/예산·최소24시간 retention을 검증하고 알 수 없는 nested 필드를 거부한다. 예시는 [standalone window-storage.yaml](examples/window-storage.yaml)이며 앱 설정에서는 그 전체 내용을 `window_storage:` 아래로 들여쓴다. 이 파일의 bytes는 정수이고 기간은 `24h` 같은 duration이다. `source.feed`의 현재 앱 설정은 [feed 실행](FEED_APP.md)을 따른다. 설계 문서의 `feed_storage`와 영구 객체 YAML은 아직 구현되지 않았다.
 
-파싱은 디스크를 초기화하지 않는다. `source.feed`로 등록 모듈과 이 layout의 예약을 명시하면 앱이 capture와 DB facts writer를 함께 실행한다. 현재 Arc ETH/68 테스트넷 header/body/receipt plan만 공급하며 상태 기능은 시작 전에 거부한다. layout만 있고 feed가 없으면 오류다. 최초 초기화·외장 mount·재시작·정책·멀티체인 설정은 [앱 feed 실행](FEED_APP.md), 저수준 세션은 [capture API](CAPTURE_STORAGE.md), 예약/압력은 [window API](WINDOW_STORAGE.md)를 따른다. 공개 RPC5와 fresh canonical 검사는 유지한다. 현재 운영 `config.yaml`에는 활성화하지 않았다.
+파싱은 디스크를 초기화하지 않는다. `source.feed`로 등록 모듈과 이 layout의 예약을 명시하면 앱이 capture와 DB facts writer를 함께 실행한다. 현재 Arc ETH/68 테스트넷 header/body/receipt plan만 공급하며 상태 기능은 시작 전에 거부한다. layout만 있고 feed가 없으면 오류다. 최초 초기화·외장 mount·재시작·정책·멀티체인 설정은 [앱 feed 실행](FEED_APP.md), 저수준 세션은 [capture API](CAPTURE_STORAGE.md), 예약/압력은 [window API](WINDOW_STORAGE.md)를 따른다. 공유 RPC 요청 제한과 fresh canonical 검사를 유지한다. 기본값은 비활성이며 실제 peer·checkpoint·외장 저장소를 명시한 구성에서만 활성화한다.
 
 선택 `source.feed.projections: [execution.summary.v1]`와 per-chain `feed.projections`는 DB-only block 요약 worker를 추가한다. 기본값은 비활성이며 같은5 HTTP/s pool의 fresh 검사 비용을 공유한다. [기능별 완료와 coverage API](PROJECTION_PROGRESS.md)에 transaction/epoch/조회 경계와 제한이 있다.
 
@@ -36,7 +40,7 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 ## Full node와 체인 범위
 
-현재는 EVM 전용이며 Stable은 제외한다. 내장 profile은 `evm`, `stablenet`, `arc`다. StableNet은 Stable과 별개다. 사용자 운영은 archive 없는 full node이며 실제 운영 설정과 시작 높이는 아직 확정하지 않았다.
+내장 EVM profile은 `evm`, `stablenet`, `arc`다. StableNet은 Tendermint/CometBFT 기반의 Stable과 다른 체인이며 후자는 현재 지원 범위 밖이다. 필요한 과거 상태와 시작 높이는 노드 유형의 이름이 아니라 활성 feature가 요청하는 데이터와 RPC의 실제 보존 범위로 정한다. archive가 없는 RPC에서도 필요한 상태가 남아 있는 구간은 수집할 수 있다.
 
 `balance.native`·`token.metadata` 같은 상태 읽기 기능은 처리할 첫 블록 직전 상태를 검사한다. 필요한 상태가 없으면 시작을 거부한다. `indexer.start_height`를 노드가 상태를 보관하는 최근 높이에 맞추거나 기능을 끄는 방침을 정해야 한다. `features.<name>.allow_pruned_state: true`는 상태를 복원하지 않으며 잔액은 0에서 시작하거나 메타데이터를 latest로 읽어 정확성/결정성이 떨어질 수 있다. 보존 기간을 고정된 블록 수로 가정하지 않는다.
 
