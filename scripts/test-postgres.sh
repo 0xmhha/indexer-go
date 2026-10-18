@@ -28,9 +28,11 @@ cleanup() {
 	exit "$cleanup_status"
 }
 trap cleanup EXIT
+# Capture/projection commits are durability ACKs and reject fsync=off.
+# Use the same server durability contract in CI and local functional checks.
 docker run -d --name "$name" --mount "type=volume,src=$volume,dst=/var/lib/postgresql/data" \
 	-e POSTGRES_USER=indexer -e POSTGRES_HOST_AUTH_METHOD=trust \
-	-p 127.0.0.1::5432 postgres:16-alpine -c fsync=off -c max_connections=300 >/dev/null
+	-p 127.0.0.1::5432 postgres:16-alpine -c fsync=on -c max_connections=300 >/dev/null
 
 port=$(docker port "$name" 5432/tcp | head -1 | sed 's/.*://')
 ready=false

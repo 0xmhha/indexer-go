@@ -1231,3 +1231,10 @@ DB 준비 단계에서도 초기화용 Unix socket 서버가 ready를 반환하�
 새 성능 측정·host screen·공개 RPC·실제 node/peer 실행은0이며 다른 프로젝트와 공유 cache는 조작하지 않았다. 전용 DB/container·named volume·DSN을 ID/label로 확인해 제거했고 기존12개 container의 ID/status/StartedAt도 보존했다. 준비 스크립트의 별도 임시 DB/volume 역시 제거됐다. Go cache/toolchain은 후속 기능 검사용으로 유지한다. Git staging/commit/push/PR은 실행하지 않았다.
 
 근거는 `/private/tmp/indexer-concurrency200-20261018/`의 `verification.json`, `final-audit.json`, `failure-analysis.json`, `single-invocation-correction.json`, `script-functional.json`, `cleanup.json`과 각 최종/최초 원본 로그다. 이 API 범위의 push 전 동시성200회 항목은 완료로 마감한다. 새 변경/실패 없이 동일 검사를 다시 미완료로 제안하지 않는다. API tail 인과·성능 효과·운영 SLO 및 실제 peer/mount는 기존대로 미확정/보류다.
+
+
+## PR CI의 PostgreSQL 내구성 설정 불일치 (2026-10-19)
+
+첫 PR CI [39139569852](https://github.com/0xmhha/indexer-go/actions/runs/39139569852)는 lint/test/examples PASS, postgres FAIL이었다. PostgreSQL의 상위31개 실패 중 직접 오류는 capture의 fsync 요구 거부이고, 네 체인 격리 검사는 Arc 진행 대기 timeout이었다. 로컬 전체 실제 DB 검증은 fsync=on이었으나 공식 `scripts/test-postgres.sh`가 fsync=off를 강제했다. 준비 단계에서 이 실행 조건 차이를 놓쳤다. 이 기록은 앞선 로컬 검증을 CI 전체 통과로 확대하지 않는다.
+
+시험 스크립트의 임시 DB만 `fsync=on`으로 맞췄다. capture/projection의 내구성 guard, synchronous_commit on, SQL 바인딩, commit fresh와 공유 RPC5 HTTP/s를 완화하지 않았다. 같은 수정 스크립트에서 Go1.24.9/GOMAXPROCS1/race/각1회로 다음5개를 통과했다: TestCaptureBatchSnapshotBindingAndOwnership, TestCaptureBatchBoundsAndStickyFailure, TestProjectionDurability, TestManagedBlobCapabilityReadonlyAndLegacy, TestManagedFeedFourChainIsolation. 실패/skip0, 소요31.55초였다. 이는 추가 성능 측정이나 전체 회귀/200회 반복이 아니다. Go 소스/운영 설정/의존성 변경은 없으며 앞선 전체 race/동시성 근거는 유지한다. 임시 DB/volume이 정리됐고 기존13개 container 상태/StartedAt 변경은0이었다. 원본은 `/private/tmp/indexer-pr-submit-20261019/`에 보존한다. PR 병합에는 수정 커밋의 보호 CI 네 항목 통과가 별도로 필요하다.

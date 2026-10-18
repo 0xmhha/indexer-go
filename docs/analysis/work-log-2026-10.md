@@ -1513,3 +1513,10 @@ PostgreSQL16/fsync=on/Asia-Seoul의 DB 분기9개 package race 원본은8개 pac
 사용자가 커밋·PR 진행과 squash merge를 요청했다. `refactor/arc-node-feed`를 유지하고 누적 window/feed·원천 저장·독립 후처리·API/DB 읽기 변경을 제출 범위로 정리했다. origin/main과의 차이에는 기존 StableNet ancestor RPC 개선 커밋도 포함한다. PR 설명은 기능/안전 경계와 실제 운영 미검증 범위를 구분한다. 기존3.86/3.87 원본 해시와 현재 파일을 대조했으며 차이는 해당 검증에서 기록한 test-only/시험 스크립트 수정과 문서다. 이번 준비에서 운영 Go 코드·설정·의존성을 수정하지 않았고 추가 성능 측정이나 로컬 전체 회귀/200회 반복도 실행하지 않았다.
 
 open-items의 날짜·제출 범위와 R08을 최신 완료 결과에 맞췄다. 다른 프로젝트·DB4/예약1·RPC5 HTTP/s·커밋 직전 fresh/post-RPC epoch/transaction fence·raw 내구성·SQL 바인딩은 유지한다. GitHub main 보호 규칙은 lint/test/postgres/examples 네 CI를 요구하며 관리자에게도 적용된다. 필수 CI를 통과한 뒤 squash로 병합하고 우회 옵션이나 force push를 사용하지 않는다. 실제 Arc peer/외장 mount/24시간 운전·독립 CL certificate·API tail 인과와 SLO는 계속 미검증/보류다.
+
+
+### 3.89 PR CI의 PostgreSQL 내구성 설정 불일치 수정 (10/19)
+
+PR [#179](https://github.com/0xmhha/indexer-go/pull/179)의 첫 [CI](https://github.com/0xmhha/indexer-go/actions/runs/39139569852)는 lint/test/examples를 통과했지만 PostgreSQL에서 상위31개 검사가 실패했다. 직접 오류는 `capture: PostgreSQL fsync must be on`이며 네 체인 격리 검사는 Arc 진행 대기로 실패했다. 기존3.86/3.87 실제 DB 검증은 fsync=on으로 실행했지만 공식 시험 스크립트에는 과거 `-c fsync=off`가 남아 있었다. 제출 준비에서 이 실행 조건 불일치를 놓쳤다. 새 원천 저장의 내구성 거부는 정상이며 운영 guard를 완화하지 않는다.
+
+수정은 `scripts/test-postgres.sh`의 임시 DB 시작 옵션을 `fsync=on`으로 바꾸고 이유를 주석/규칙에 기록한 것이다. 운영 Go 코드·설정·의존성·RPC5/fresh/DB4·예약1·raw/SQL 경계는 그대로다. 수정 스크립트 자체로 CaptureBatch2개·ProjectionDurability·ManagedBlobCapabilityReadonlyAndLegacy·ManagedFeedFourChainIsolation의5개를 Go1.24.9/GOMAXPROCS1/race/각1회 검사하여 모두 통과했다. 이는 성능 측정이나200회 재실행이 아니다. 소유 임시 자원은 정리됐고 시작 시 존재한 다른13개 container의 상태/StartedAt은 같았다. 원본과 결과는 `/private/tmp/indexer-pr-submit-20261019/{ci-failed.log,initial-ci-failure.json,fsync-functional.json}`에 보존한다. 수정 커밋의 필수 CI 네 항목을 통과한 뒤 squash merge한다.
