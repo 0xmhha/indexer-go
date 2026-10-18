@@ -1520,3 +1520,12 @@ open-items의 날짜·제출 범위와 R08을 최신 완료 결과에 맞췄다.
 PR [#179](https://github.com/0xmhha/indexer-go/pull/179)의 첫 [CI](https://github.com/0xmhha/indexer-go/actions/runs/39139569852)는 lint/test/examples를 통과했지만 PostgreSQL에서 상위31개 검사가 실패했다. 직접 오류는 `capture: PostgreSQL fsync must be on`이며 네 체인 격리 검사는 Arc 진행 대기로 실패했다. 기존3.86/3.87 실제 DB 검증은 fsync=on으로 실행했지만 공식 시험 스크립트에는 과거 `-c fsync=off`가 남아 있었다. 제출 준비에서 이 실행 조건 불일치를 놓쳤다. 새 원천 저장의 내구성 거부는 정상이며 운영 guard를 완화하지 않는다.
 
 수정은 `scripts/test-postgres.sh`의 임시 DB 시작 옵션을 `fsync=on`으로 바꾸고 이유를 주석/규칙에 기록한 것이다. 운영 Go 코드·설정·의존성·RPC5/fresh/DB4·예약1·raw/SQL 경계는 그대로다. 수정 스크립트 자체로 CaptureBatch2개·ProjectionDurability·ManagedBlobCapabilityReadonlyAndLegacy·ManagedFeedFourChainIsolation의5개를 Go1.24.9/GOMAXPROCS1/race/각1회 검사하여 모두 통과했다. 이는 성능 측정이나200회 재실행이 아니다. 소유 임시 자원은 정리됐고 시작 시 존재한 다른13개 container의 상태/StartedAt은 같았다. 원본과 결과는 `/private/tmp/indexer-pr-submit-20261019/{ci-failed.log,initial-ci-failure.json,fsync-functional.json}`에 보존한다. 수정 커밋의 필수 CI 네 항목을 통과한 뒤 squash merge한다.
+
+
+### 3.90 개발자 대상 공개 문서 재구성 (10/19)
+
+README를 기존의 세션/작업 상태 순서에서 개발자의 평가·실행·확장 흐름으로 새로 작성했다. 영문 개요·용도·CI/toolchain/license·Anvil 로컬 실행과 GraphQL 조회·SDK/체인 profile/예제 선택·지원/실험 범위·기여/도움·라이선스를 노출한다. 시간별 측정·내부 운영 결정은 첫 안내에 복제하지 않고 상세 문서로 연결한다. README 구성과 기여 문서의 역할은 GitHub의 공식 안내를 참고했다.
+
+문서 목차를 시작/조회/확장/운영/선택 Arc feed로 재편하고 QUICKSTART를 로컬 시작→자기 RPC→저장/역할→문제 해결의 영문 가이드로 다시 썼다. CONTRIBUTING에는 기존 코드/내구성/검증/PR 규칙과 squash merge를 모았다. analysis 목차를 추가해 현재 계약·남은 일·제안·과거 증거를 구분한다. 상세 한국어 문서의 언어를 안내했고 기존 설계/실험 원본은 보존했다. 아키텍처 그림은 RPC와 disk-window/capture/DB facts/독립 projection의 현재 연결을 포함한다. 이미 확인한 제한 구간 멀티체인 검증을 미완료로 적은 부분과 strict 상태 방침/개인 운영 구성이 섞인 설명을 바로잡았다.
+
+문서 링크/앵커·Markdown 렌더·셸 구문·요청 JSON/API snapshot 대조를 검사했다. QUICKSTART의 새 YAML과 기존 Anvil/config.example의3개를 pinned Go1.24.9 실제 config.Load로 읽어 검증했다. 검증 도구는 `/private/tmp/indexer-docs-refresh-20261019/`에만 두며 runtime/RPC/DB를 시작하지 않는다. 추가 성능 측정·로컬 전체 회귀·200회 반복·Docker/노드 실행은 없었다. 변경은 Markdown 문서뿐이며 다른 프로젝트·DB4/예약1·RPC5 HTTP/s·커밋 직전 fresh·운영 설정·의존성은 그대로다.

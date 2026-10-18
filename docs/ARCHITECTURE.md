@@ -1,5 +1,7 @@
 # Architecture
 
+[문서 목차](README.md) · [빠른 시작](QUICKSTART.md) · [SDK](SDK.md)
+
 indexer-go는 EVM 체인을 위한 프레임워크다. 공통 코어는 중립 모델·저장 포트·feature 계약을 사용하고, 체인 규칙은 별도 profile에 둔다. 현재 범위와 미검증 영역은 [남은 작업](analysis/open-items.md), 체인 구현 계약은 [커스터마이징 문서](CHAIN_CUSTOMIZATION.md)를 따른다.
 
 24시간 원본 보관과 DB 기반 후처리로 확장하는 단계는 [윈도우 수집 설계](analysis/windowed-feed-design.md)를 따른다. 기존 앱 경로와 라이브러리로 연결한 새 window/capture 경로를 구분한다. 새 경로는 [Arc ETH/68 모듈](../modules/feeds/arc/README.md)에서 수신→fsync window→bounded 참조 channel→검증·원천 DB commit까지 구현했다. 선택적 `RunManaged`는 명시적 RPC-finalized 정책·reorg supervisor·raw ACK·GC를 연결한다. [영구 원천 저장](PERMANENT_SOURCE_STORAGE.md)은 별도 객체 경로/예산·DB 참조·orphan 복구와 기본 정규화 행을 구현했다. [DB facts 후처리](SOURCE_FACTS.md)는 기존 writer·내구성·fresh 검사·처리 receipt까지 연결했다. [앱 실행](FEED_APP.md)은 opt-in 설정과 epoch/undo/종료를 연결했다. 실제 peer/mount 정책 운영 검증은 남아 있다.
@@ -8,26 +10,37 @@ indexer-go는 EVM 체인을 위한 프레임워크다. 공통 코어는 중립 �
 
 ```mermaid
 flowchart TD
-    Node[노드 RPC] --> RPC[RPC pool · 기록]
-    RPC --> Source[source/rpc · chain profile]
-    Era[era1 파일] --> Binary[source/era · BinaryProfile]
-    Replay[기록된 RPC] --> Source
-    Source --> Model[core/model]
-    Binary --> Model
-    Model --> Fetch[fetch scheduler · 높이 순서]
-    Fetch --> Writer[단일 writer · 블록 트랜잭션]
-    Writer --> Features[공통 feature · 체인 feature · SDK 처리기]
-    Features --> Store[Pebble 또는 PostgreSQL]
-    Writer --> Outbox[commit된 outbox]
-    Outbox --> Relay[stream relay · sequence]
-    Relay --> Streams[GraphQL 구독 · durable 알림]
-    Fetch --> Fast[선택적 fast 알림 · commit 전]
-    Store --> API[GraphQL · JSON-RPC · REST]
+    Node[Node RPC] --> Pool[Shared RPC pool]
+    Pool --> RPCSource[RPC source and chain profile]
+    Era[era1 archives] --> Binary[Binary profile]
+    Replay[Recorded RPC] --> RPCSource
+    RPCSource --> Writer[Ordered block writer]
+    Binary --> Writer
+
+    Peer[Arc ETH68 peer] --> Intake[Intake worker]
+    Intake --> Raw[Durable raw window]
+    Raw --> Queue[Bounded reference channel or disk replay]
+    Queue --> Capture[Verification and capture worker]
+    Capture --> SourceDB[Permanent source records]
+    SourceDB --> Facts[DB facts source]
+    Facts --> Writer
+    SourceDB --> Independent[Independent projection workers]
+    Independent --> Outputs[Projection outputs and cursors]
+
+    Writer --> Features[Built-in and SDK handlers]
+    Features --> Store[Pebble or PostgreSQL]
+    Writer --> Outbox[Committed outbox]
+    Outbox --> Relay[Relay and subscriptions]
+    Store --> API[GraphQL, JSON-RPC and REST]
+    SourceDB --> SourceAPI[DB-only source and status APIs]
+    Outputs --> SourceAPI
 ```
 
-RPC·era1·replay는 source 경계에서 profile을 거쳐 같은 모델로 바뀐다. 병렬 fetch와 순서대로 색인하는 경로는 live loop와 gap 복구가 공유한다. 한 블록의 데이터·기능 결과·outbox는 같은 저장 트랜잭션에 commit된다. 처리 오류가 나면 블록을 취소하고 다시 시도한다.
+RPC·era1·replay는 source 경계에서 profile을 거쳐 같은 모델로 바뀐다. 병렬 fetch와 순서대로 색인하는 경로는 live loop와 gap 복구가 공유한다. 선택 Arc feed는 수신 worker와 검증/원천 저장 worker를 분리하고 durable raw window를 재개 가능한 입력 큐로 사용한다. 원천 DB의 facts Source는 기존 순차 writer에 연결하며, 독립 projection은 자체 cursor·출력·undo/event를 소유한다.
 
-fast 알림은 commit 전에 평가하므로 durable outbox와 다른 전달 계약을 가진다. reorg와 재개·queue overflow의 규칙은 [구독 설계](analysis/subscriptions-design.md)와 [설정](CONFIG.md)에 있다.
+한 블록의 기존 feature 데이터·진행·outbox는 같은 writer transaction에 commit된다. capture 저장과 독립 projection은 각자의 transaction/완료 경계를 가지며 하나의 분산 원자적 commit이라고 취급하지 않는다. 커밋 직전 fresh canonical과 epoch/generation 검사를 유지한다. 공유 RPC pool의 물리 요청 제한은 선택 worker와 보충 조회에도 적용된다. 처리 오류는 해당 transaction을 취소하며 완료/ACK로 바꾸지 않는다.
+
+선택 fast 알림은 그림의 durable outbox 경로와 별개로 commit 전에 평가하므로 서로 다른 전달 계약을 가진다. reorg와 재개·queue overflow의 규칙은 [구독 설계](analysis/subscriptions-design.md)와 [설정](CONFIG.md)에 있다.
 
 ## 2. 패키지별 책임
 
@@ -85,11 +98,11 @@ Feature는 블록 context에 묶인 저장소로 쓰고, 자기 설정·의존 �
 
 Pebble은 `all`/`ingest`를 사용한다. API 분리는 PostgreSQL이 필요하다. 멀티체인 모드는 현재 `all`만 지원한다.
 
-멀티체인은 App·저장소·feature 설정·알림 서비스를 체인별로 둔다. Pebble 경로는 `<database.path>/chains/<id>`, PostgreSQL은 체인별 schema다. API는 `/chains/{id}/` 아래에 mount하고 루트 탐색 API를 두지 않는다. 실제 네 테스트넷의 동시 운영은 아직 검증하지 않았다.
+멀티체인은 App·저장소·feature 설정·알림 서비스를 체인별로 둔다. Pebble 경로는 `<database.path>/chains/<id>`, PostgreSQL은 체인별 schema다. API는 `/chains/{id}/` 아래에 mount하고 루트 탐색 API를 두지 않는다. 기존 RPC 경로는 네 테스트넷의 제한된 구간에서 동시 실행·장애 격리·재시작을 검증했다. 혼합 Arc feed/RPC 경로도 로컬 입력으로 격리를 검사했다. 실제 peer를 사용하는 네 체인의 장기 운영·24시간 추종을 검증한 결과는 아니다.
 
 ## 6. 상태·API·검증의 한계
 
-`balance.native`·`token.metadata`처럼 과거 상태를 읽는 기능은 시작·재시작·backfill에 필요한 높이의 상태를 검사한다. 운영은 archive 없는 full node다. 상태가 없을 때의 최근 높이 시작·기능 비활성화·fallback 방침은 [현재 작업 목록](analysis/open-items.md)에 남아 있다.
+`balance.native`·`token.metadata`처럼 과거 상태를 읽는 기능은 시작·재시작·backfill에 필요한 높이의 상태를 검사한다. 필요한 상태가 없으면 기본 strict 정책은 시작을 거부하거나 블록 전체를 취소하며 latest나0으로 대체하지 않는다. 노드의 실제 상태 보존 범위에 맞춰 시작 높이와 기능을 선택한다. 현재 공개 테스트넷 운영 후보는 archive 없는 RPC와 체인별5 HTTP/s를 사용하지만, 이는 프레임워크가 모든 RPC/chain에서 고정 보존 기간을 보장한다는 뜻이 아니다. 실제 환경·복구/중단 허용 범위는 [남은 운영 작업](analysis/open-items.md)에 있다.
 
 기본 Ethereum 회계는 내부 call 전송·PoW 보상까지 모두 복원하지 않는다. Arc는 native 이벤트와 자체 수수료 규칙을 쓴다. typed extension과 모델 해시는 저장/API에서 보존하지만 모든 fork 실행·합의 증명을 검증하는 노드는 아니다.
 

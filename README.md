@@ -1,64 +1,109 @@
 # indexer-go
 
-EVM 체인의 블록·거래·receipt·로그를 색인하고 API와 실시간 구독으로 제공하는 Go 프레임워크다. 체인별 디코딩·회계·기능은 별도 profile과 feature로 커스터마이징하며 공통 코어는 체인 중립 모델과 저장 포트를 사용한다.
+Build EVM indexing backends in Go. Turn blocks, transactions, receipts and logs into queryable application data, then extend the indexer with your own handlers, chain profiles and APIs.
 
-[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![CI](https://github.com/0xmhha/indexer-go/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/0xmhha/indexer-go/actions/workflows/ci.yml)
+[![Go toolchain](https://img.shields.io/badge/Go-1.24.9-00ADD8?logo=go)](go.mod)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-## 1. 현재 범위
+[Quickstart](docs/QUICKSTART.md) · [Documentation](docs/README.md) · [API reference](docs/API.md) · [SDK](docs/SDK.md) · [Examples](#examples)
 
-- 내장 profile: `evm`(Ethereum 호환), `stablenet`(StableNet/WBFT·fee delegation), `arc`(USDC native 회계).
-- Stable(Tendermint/CometBFT)은 현재 범위 밖이며 StableNet과 별개다.
-- 저장소: Pebble 또는 PostgreSQL. 기능: 주소·토큰·AA 색인, 선택적인 DEX·집계·선언형 records와 프로젝트 SDK 처리기.
-- API: GraphQL, JSON-RPC, REST, GraphQL 구독, 인증된 알림 stream. 멀티체인은 체인별 DB와 `/chains/{id}/` API를 사용한다.
-- 현재 공개 테스트넷 표본은 StableNet·BSC·Sepolia·Arc에서 검증했다. 모든 체인·fork의 전체 회계, mainnet 또는 실제 동시 운영을 보장하는 결과는 아니다.
+## Why indexer-go?
 
-자세한 구조는 [아키텍처](docs/ARCHITECTURE.md), 검증 범위와 남은 일은 [작업 목록](docs/analysis/open-items.md)에 있다.
+Use indexer-go when you need a backend for a block explorer, a contract event service, or a dApp that queries indexed chain data.
 
-## 2. 빌드와 시작
+- **Write application logic in Go.** Register project features and GraphQL or HTTP routes through the SDK. Declare contract events in configuration when you only need selected logs.
+- **Keep block writes consistent.** Indexed data, feature writes, progress and durable outbox events commit with the block. Reorg recovery uses recorded undo.
+- **Choose your storage layout.** Run with embedded Pebble, or use PostgreSQL to separate ingestion and API processes. Multi-chain mode isolates each chain's database and API routes.
+- **Expose the data you collect.** Serve GraphQL, JSON-RPC, REST and GraphQL subscriptions, with cursor-based reads and resumable outbox-backed streams.
+- **Customize chain behavior.** Chain profiles own decoding, verification, native accounting and extensions, while the shared indexing pipeline uses chain-neutral models.
 
-Go 모듈은 `go 1.24.0`, toolchain `go1.24.9`다. 버전 정보를 포함하는 빌드는 Makefile을 사용한다.
+## Quickstart
+
+You need Git, Make and the Go toolchain pinned in [go.mod](go.mod). This local example also uses [Anvil](https://getfoundry.sh/anvil/overview), an EVM development node.
 
 ```bash
+git clone https://github.com/0xmhha/indexer-go.git
+cd indexer-go
 go mod download
 make build
-./build/indexer-go --version
 ```
 
-[빠른 시작](docs/QUICKSTART.md)에 따라 설정과 시작 높이를 정한다. 운영은 full node이며 archive가 없다. `balance.native`·`token.metadata`가 필요로 하는 과거 상태가 없으면 시작을 거부한다. 노드에 남아 있는 최근 상태, 시작 높이와 활성 기능을 확인해야 한다. 최근 시작한 DB에는 이전 블록의 색인이 없다.
-
-현재 Arc profile은 발행 tag `v0.2.15` 이후 main에 추가됐다. 외부 프로젝트는 필요한 profile이 포함된 commit 또는 발행 버전을 고정한다. 기존 generic EVM 회계로 만든 Arc DB는 재색인이 필요하며 자동 보정하지 않는다.
-
-## 3. 프로젝트 커스터마이징
-
-- [체인 확장 계약](docs/CHAIN_CUSTOMIZATION.md): 감지·디코딩·native 회계·선택 인터페이스·binary·검증 책임.
-- [SDK](docs/SDK.md): 프로젝트 feature, KV, API, 결정성 및 호환성 약속.
-- [별도 profile 모듈](examples/chainprofile/README.md): Arc 규칙을 유지하는 프로젝트 테스트넷 profile.
-- [receipts 모듈](examples/receipts/README.md): 선언형 records와 프로젝트 기능·HTTP API.
-
-자기 바이너리에 등록 패키지를 연결한다. YAML이 새 코드를 동적으로 로드하지 않는다. `pkg/chains` 등 profile API는 SDK 호환성 약속 밖이며, 버전 고정과 업그레이드 검증이 필요하다.
-
-## 4. 검증
+Start a local chain in a separate terminal:
 
 ```bash
-gofmt -l $(git ls-files '*.go')
-make build
-make lint
-make test-race
-make test-postgres
-make test-examples
+anvil --block-time 2
 ```
 
-SLO·알림·부하 경로를 바꾸면 `make test-slo`도 실행한다. PostgreSQL 검증은 전용 임시 컨테이너를 사용한다. 공개 RPC 검증은 opt-in이며 기본 시험·CI가 외부 RPC를 호출하지 않는다. 실행 방법은 [작업 기록](docs/analysis/work-log-2026-10.md)과 CLAUDE.md Testing에 있다.
+From the repository root, start the indexer with the local development configuration:
 
-PR과 main CI는 lint·test·postgres·examples를 실행한다. CI에는 race job이 없으므로 커밋 전 로컬 race 검증이 필요하다. 성능 측정은 환경과 입력 범위의 결과이며 운영 목표를 대신하지 않는다.
+```bash
+./build/indexer-go --config configs/config-anvil.yaml
+```
 
-## 5. 문서와 작업 상태
+Query the indexed height from another terminal:
 
-[문서 목차](docs/README.md)에서 시작한다. API·설정·구조 설명은 각 문서에 두고, 이 README에는 중복된 전체 API 목록이나 배포 명령을 두지 않는다.
+```bash
+curl -sS http://127.0.0.1:8080/graphql \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"{ latestHeight }"}'
+```
 
-- [남은 작업](docs/analysis/open-items.md): Arc 회계 확대, 멀티체인 동시 검증, full node 운영 설정, 운영 성능과 별도 조건 항목.
-- [결정·측정 기록](docs/analysis/work-log-2026-10.md): 완료 작업과 실패·측정 근거.
-- [frontend 이전](docs/FRONTEND_MIGRATION.md): 별도 저장소의 후속 작업.
+Open the [GraphQL Playground](http://127.0.0.1:8080/playground) to explore the API. The example stores its index in `./data-anvil`.
 
-라이선스는 [Apache License 2.0](LICENSE)이다.
+For your own RPC endpoint, a retained starting height, or PostgreSQL, follow the [full quickstart](docs/QUICKSTART.md). State-dependent features need the state for the blocks they process; a recent start does not create an index of earlier history.
+
+## Build your own indexer
+
+| Your goal | Start here |
+| --- | --- |
+| Collect selected contract events | [Declared records](docs/CONFIG.md#선언형-수집-featuresrecords-indexermode) and the [receipts example](examples/receipts/README.md) |
+| Add derived data, a block handler or a custom API | [Project SDK](docs/SDK.md) |
+| Support custom headers, transactions or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md) and the [profile example](examples/chainprofile/README.md) |
+| Integrate an API client | [API reference](docs/API.md) and [schema snapshots](pkg/app/testdata/api/) |
+| Decouple Arc intake from downstream processing | [Opt-in feed application](docs/FEED_APP.md) and [Arc feed module](modules/feeds/arc/README.md) |
+
+Projects build their own binary and link the packages that register their features or profiles. YAML configures linked code; it does not load Go plugins. Pin your module version and check the [SDK compatibility boundary](docs/SDK.md#7-호환성-약속) before upgrading.
+
+## Examples
+
+These are separate Go modules that use the framework without modifying its core:
+
+- **[receipts](examples/receipts/README.md)** — collect a settlement contract's events, maintain merchant totals and expose a project-specific HTTP API. Includes local end-to-end and determinism checks.
+- **[chainprofile](examples/chainprofile/README.md)** — register a project Arc testnet profile while retaining the base profile's verification and native accounting.
+
+Run both example modules with `make test-examples`.
+
+## Supported paths and scope
+
+| Area | Available today |
+| --- | --- |
+| Chain profiles | Generic EVM (`evm`), StableNet (`stablenet` / `stableone`) and Arc (`arc`) |
+| Sources | JSON-RPC, recorded RPC replay and profile-supported era1 archives |
+| Storage | Pebble and PostgreSQL |
+| APIs | GraphQL, selected JSON-RPC methods, REST, GraphQL subscriptions and authenticated notification streams |
+| Arc feed | Opt-in ETH/68 header/body/receipt intake, a durable disk window, permanent source facts and independent projection workers |
+
+The Arc feed has local protocol and storage coverage; live Arc peer onboarding, external-volume operation and sustained throughput still need operational validation. Optional state proofs and provider-reported call traces have explicit scopes. Full blob verification is a separate library, and Arc blob admission is disabled.
+
+Choose features according to the data your source can supply. State-dependent RPC features stop on missing required historical state by default. Reorg recovery has a bounded undo window, and APIs return the indexed range and enabled features. These boundaries matter when choosing a starting height, a node provider or an extension; see [architecture](docs/ARCHITECTURE.md) and [remaining work](docs/analysis/open-items.md).
+
+## Documentation
+
+The [documentation index](docs/README.md) groups guides by task. Entry guides are in English; most detailed references are currently in Korean.
+
+- [Quickstart](docs/QUICKSTART.md) — build, run and query a local chain; connect your own RPC.
+- [Configuration](docs/CONFIG.md) — features, databases, roles, multi-chain mode and notifications.
+- [API reference](docs/API.md) — endpoints, query examples, pagination and subscriptions.
+- [SDK](docs/SDK.md) and [chain customization](docs/CHAIN_CUSTOMIZATION.md) — extend application behavior and chain rules.
+- [Architecture](docs/ARCHITECTURE.md) — ingestion, storage, recovery and extension boundaries.
+
+## Contributing and support
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, required checks and the pull request workflow. Pull requests merge with squash after the required CI checks pass.
+
+The project is maintained by its [contributors](https://github.com/0xmhha/indexer-go/graphs/contributors). Use [GitHub Issues](https://github.com/0xmhha/indexer-go/issues) for questions, bug reports and feature proposals. Include the commit or version, enabled features, storage driver and a minimal reproduction. Remove credentials from configurations and logs before sharing them.
+
+## License
+
+[Apache License 2.0](LICENSE).
