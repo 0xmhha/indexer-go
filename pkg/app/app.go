@@ -20,6 +20,7 @@ import (
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/internal/logger"
 	"github.com/0xmhha/indexer-go/pkg/api"
+	_ "github.com/0xmhha/indexer-go/pkg/api/indexing"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	_ "github.com/0xmhha/indexer-go/pkg/chains/arc"                                // Arc USDC-native chain profile
 	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"                                // generic EVM chain profile
@@ -52,12 +53,14 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/source"
 	"github.com/0xmhha/indexer-go/pkg/source/era"
+	"github.com/0xmhha/indexer-go/pkg/source/nodefeed"
 	"github.com/0xmhha/indexer-go/pkg/source/replay"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/stream"
 	"github.com/0xmhha/indexer-go/pkg/token"
 	"github.com/0xmhha/indexer-go/pkg/verifier"
+	"github.com/0xmhha/indexer-go/pkg/window"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -93,7 +96,9 @@ type App struct {
 	rpcRecorder *replay.Writer
 	rpcReplay   *replay.Server
 	// eraSource serves history from era1 archives (source.era_dir).
-	eraSource *era.Source
+	eraSource   *era.Source
+	nodeFeed    *nodefeed.Source
+	managedFeed *managedFeed
 
 	// Multi-chain support
 	multichainManager *multichain.Manager
@@ -158,6 +163,10 @@ func run() error {
 
 	// Log startup information
 	logStartupInfo(log, cfg, flags)
+
+	if err := preflightFeeds(cfg, flags.enableGapMode); err != nil {
+		return err
+	}
 
 	// Clear data folder if requested
 	if flags.clearData {
@@ -342,6 +351,9 @@ func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
 
 // NewApp creates and initializes a new application instance
 func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapterType string) (_ *App, err error) {
+	if err := preflightFeeds(cfg, enableGapMode); err != nil {
+		return nil, err
+	}
 	app := &App{
 		config:           cfg,
 		logger:           log,
@@ -445,16 +457,18 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 // initClient initializes the Ethereum client and detects node type
 func (a *App) initClient() error {
 	clientCfg := &client.Config{
-		Endpoint:  a.config.RPC.Endpoint,
-		Timeout:   a.config.RPC.Timeout,
-		Logger:    a.logger,
-		Fallbacks: a.config.RPC.FallbackEndpoints,
-		RateLimit: a.config.RPC.RateLimit,
+		Endpoint:      a.config.RPC.Endpoint,
+		Timeout:       a.config.RPC.Timeout,
+		Logger:        a.logger,
+		Fallbacks:     a.config.RPC.FallbackEndpoints,
+		RateLimit:     a.config.RPC.RateLimit,
+		CoalesceReads: a.config.RPC.CoalesceReads,
 	}
 	if a.rpcEndpoint != nil {
 		// The local record/replay endpoint already does the failover and
 		// rate limiting (record) or needs none (replay).
 		clientCfg.Fallbacks, clientCfg.RateLimit = nil, 0
+		clientCfg.CoalesceReads = false
 	}
 	ethClient, err := client.NewClient(clientCfg)
 	if err != nil {
@@ -754,6 +768,9 @@ func (a *App) initMultiChainManager() error {
 	chainConfigs := make([]multichain.ChainConfig, 0, len(a.config.MultiChain.Chains))
 	for _, cc := range a.config.MultiChain.Chains {
 		chainConfigs = append(chainConfigs, multichain.ChainConfig{
+			NodeFeedSocket:    cc.NodeFeedSocket,
+			Feed:              cc.Feed,
+			CoalesceReads:     cc.CoalesceReads,
 			ID:                cc.ID,
 			Name:              cc.Name,
 			RPCEndpoint:       cc.RPCEndpoint,
@@ -766,6 +783,9 @@ func (a *App) initMultiChainManager() error {
 			Workers:           orDefault(cc.Workers, a.config.Indexer.Workers),
 			StatePrefetch:     cc.StatePrefetch,
 			StateBatchSize:    cc.StateBatchSize,
+			AcquisitionQueue:  cc.AcquisitionQueue,
+			QueueBlocks:       cc.QueueBlocks,
+			QueueMaxBytes:     cc.QueueMaxBytes,
 			BatchSize:         orDefault(cc.BatchSize, a.config.Indexer.ChunkSize),
 			RPCTimeout:        orDefault(cc.RPCTimeout, a.config.RPC.Timeout),
 		})
@@ -845,11 +865,17 @@ func chainFeatures(shared, chain map[string]config.FeatureConfig) map[string]con
 func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	cfg := *a.config
 	cfg.RPC.Endpoint = cc.RPCEndpoint
+	if cc.CoalesceReads != nil {
+		cfg.RPC.CoalesceReads = *cc.CoalesceReads
+	}
 	cfg.RPC.WSEndpoint = cc.WSEndpoint
 	cfg.RPC.FallbackEndpoints = cc.FallbackEndpoints
 	cfg.RPC.RecordDir = ""
 	cfg.RPC.Timeout = orDefault(cc.RPCTimeout, a.config.RPC.Timeout)
-	cfg.Source = config.SourceConfig{}
+	cfg.Source = config.SourceConfig{NodeFeedSocket: cc.NodeFeedSocket, Feed: cc.Feed}
+	if cc.Feed == nil {
+		cfg.WindowStorage = window.Layout{}
+	}
 	cfg.Database = chainDatabase(a.config.Database, cc.ID)
 	cfg.Indexer.StartHeight = cc.StartHeight
 	cfg.Indexer.Workers = orDefault(cc.Workers, a.config.Indexer.Workers)
@@ -858,6 +884,15 @@ func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	}
 	if cc.StateBatchSize != nil {
 		cfg.Indexer.StateBatchSize = *cc.StateBatchSize
+	}
+	if cc.AcquisitionQueue != nil {
+		cfg.Indexer.AcquisitionQueue = *cc.AcquisitionQueue
+	}
+	if cc.QueueBlocks != nil {
+		cfg.Indexer.QueueBlocks = *cc.QueueBlocks
+	}
+	if cc.QueueMaxBytes != nil {
+		cfg.Indexer.QueueMaxBytes = *cc.QueueMaxBytes
 	}
 	cfg.Indexer.ChunkSize = orDefault(cc.BatchSize, a.config.Indexer.ChunkSize)
 	cfg.Features = chainFeatures(a.config.Features, a.chainFeatureOverrides(cc.ID))
@@ -928,16 +963,27 @@ func (c *chainIndexer) IndexedHeight(ctx context.Context) (uint64, error) {
 }
 
 func (c *chainIndexer) NodeHeight(ctx context.Context) (uint64, error) {
+	if c.app.managedFeed != nil {
+		return c.app.profileSrc.Head(ctx)
+	}
 	n, _, err := c.app.fetcher.ObserveNodeHeight(ctx, 0)
 	return n, err
 }
 
 func (c *chainIndexer) ObserveNodeHeight(ctx context.Context, maxAge time.Duration) (uint64, time.Duration, error) {
+	if c.app.managedFeed != nil {
+		start := time.Now()
+		n, e := c.app.profileSrc.Head(ctx)
+		return n, time.Since(start), e
+	}
 	return c.app.fetcher.ObserveNodeHeight(ctx, maxAge)
 }
 
 // initFetcher initializes the block fetcher
 func (a *App) initFetcher(ctx context.Context) error {
+	if a.config.Source.Feed != nil {
+		return a.initManagedFeed(ctx)
+	}
 	// Real-time mode: Use shorter RetryDelay for batch_size=1
 	retryDelay := time.Second * 5
 	if a.config.Indexer.ChunkSize == 1 {
@@ -945,21 +991,24 @@ func (a *App) initFetcher(ctx context.Context) error {
 	}
 
 	fetcherConfig := &fetch.Config{
-		StatePrefetch:   a.config.Indexer.StatePrefetch,
-		PipelineMetrics: a.config.Indexer.PipelineMetrics,
-		StateMaxBytes:   a.config.Indexer.StateMaxBytes,
-		StartHeight:     a.config.Indexer.StartHeight,
-		BatchSize:       a.config.Indexer.ChunkSize,
-		MaxRetries:      3,
-		RetryDelay:      retryDelay,
-		NumWorkers:      a.config.Indexer.Workers,
-		RPCTimeout:      a.config.RPC.Timeout,
-		PollInterval:    a.config.Indexer.PollInterval,
-		Finality:        a.config.Indexer.Finality,
-		Confirmations:   a.config.Indexer.Confirmations,
-		NoOutbox:        !a.config.EventBus.Outbox,
-		OutboxRetain:    a.config.EventBus.OutboxRetention,
-		StreamGroup:     a.config.Node.ID,
+		StatePrefetch:    a.config.Indexer.StatePrefetch,
+		PipelineMetrics:  a.config.Indexer.PipelineMetrics,
+		StateMaxBytes:    a.config.Indexer.StateMaxBytes,
+		AcquisitionQueue: a.config.Indexer.AcquisitionQueue,
+		QueueBlocks:      a.config.Indexer.QueueBlocks,
+		QueueMaxBytes:    a.config.Indexer.QueueMaxBytes,
+		StartHeight:      a.config.Indexer.StartHeight,
+		BatchSize:        a.config.Indexer.ChunkSize,
+		MaxRetries:       3,
+		RetryDelay:       retryDelay,
+		NumWorkers:       a.config.Indexer.Workers,
+		RPCTimeout:       a.config.RPC.Timeout,
+		PollInterval:     a.config.Indexer.PollInterval,
+		Finality:         a.config.Indexer.Finality,
+		Confirmations:    a.config.Indexer.Confirmations,
+		NoOutbox:         !a.config.EventBus.Outbox,
+		OutboxRetain:     a.config.EventBus.OutboxRetention,
+		StreamGroup:      a.config.Node.ID,
 	}
 
 	a.fetcher = fetch.NewFetcher(a.client, a.storage, fetcherConfig, a.logger, a.eventBus)
@@ -992,6 +1041,26 @@ func (a *App) initFetcher(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if socket := a.config.Source.NodeFeedSocket; socket != "" {
+		if a.config.Source.EraDir != "" || a.config.DeclaredMode() || !a.config.Indexer.AcquisitionQueue || !a.config.Indexer.StatePrefetch {
+			return fmt.Errorf("node-feed requires full queued state preparation without era archives")
+		}
+		id, err := a.client.GetChainID(ctx)
+		if err != nil {
+			return err
+		}
+		if !id.IsUint64() {
+			return fmt.Errorf("node-feed chain id exceeds uint64")
+		}
+		feed, err := nodefeed.New(ctx, nodefeed.Config{Socket: socket, ChainID: id.Uint64(), Timeout: a.config.RPC.Timeout, Consumer: a.config.Node.ID + "|" + a.config.Database.Path + "|" + a.config.Database.Postgres.Schema}, src)
+		if err != nil {
+			return err
+		}
+		a.nodeFeed, blocks = feed, feed
+		if resolver, ok := a.storage.(storage.GenesisBalanceConfigurer); ok {
+			resolver.SetGenesisBalanceResolver(feed)
+		}
+	}
 	a.fetcher.SetSource(blocks)
 	a.fetcher.SetStateSource(src)
 	a.logger.Info("Reading blocks through chain profile", zap.String("profile", profile.ID()))
@@ -1016,6 +1085,11 @@ func (a *App) initFetcher(ctx context.Context) error {
 		BlockAt:            a.fetcher.BlockAt,
 		Contracts:          token.NewEthClientAdapter(a.client.EthClient()),
 		Settings:           a.config.FeatureSettings,
+	}
+	if a.nodeFeed != nil {
+		deps.BalanceAt = a.nodeFeed.BalanceAt
+		deps.BalanceAtHash = a.nodeFeed.BalanceAtHash
+		deps.BalanceBatchAtHash = a.nodeFeed.BalanceBatchAtHash
 	}
 	pipeline, err := feature.Build(enabled, deps)
 	if err != nil {
@@ -1067,6 +1141,9 @@ func (a *App) initAPIServer() error {
 	}
 
 	apiConfig := &api.Config{
+		// The measured cohosted pool4 policy keeps one short-read slot.
+		// Other budgets and dedicated API/ingest roles retain their capacity.
+		ReserveQueryReader:    a.config.NodeRole() == config.RoleAll && a.config.Database.Postgres.MaxConns == 4,
 		Host:                  a.config.API.Host,
 		Port:                  a.config.API.Port,
 		ReadTimeout:           constants.DefaultReadTimeout,
@@ -1269,6 +1346,10 @@ func (a *App) Run(ctx context.Context) error {
 		return a.runAPINode(ctx)
 	}
 
+	if a.managedFeed != nil {
+		return a.managedFeed.Run(ctx)
+	}
+
 	// Single-chain mode (legacy)
 	// Deliver the events committed before this start first.
 	a.fetcher.StartRelay()
@@ -1297,6 +1378,9 @@ func (a *App) followHeads(ctx context.Context) {
 // Shutdown gracefully shuts down all application components
 func (a *App) Shutdown() {
 	a.logger.Info("Shutting down application components...")
+	if a.managedFeed != nil {
+		a.managedFeed.Stop()
+	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -1368,6 +1452,9 @@ func (a *App) Shutdown() {
 	}
 
 	// Close client (single-chain mode only)
+	if a.nodeFeed != nil {
+		a.nodeFeed.Close()
+	}
 	if a.client != nil {
 		a.client.Close()
 	}
@@ -1441,6 +1528,13 @@ func applyAPIFlags(cfg *config.Config, f *Flags) {
 
 // validateConfig validates the configuration
 func validateConfig(cfg *config.Config) error {
+	if cfg.Indexer.QueueBlocks < 0 || cfg.Indexer.QueueBlocks > 65536 || cfg.Indexer.QueueMaxBytes < 0 {
+		return fmt.Errorf("invalid acquisition queue limits")
+	}
+	if cfg.Indexer.AcquisitionQueue && !cfg.Indexer.StatePrefetch {
+		return fmt.Errorf("acquisition_queue requires state_prefetch")
+	}
+
 	if cfg.Indexer.StateBatchSize < 0 || cfg.Indexer.StateBatchSize > 64 {
 		return fmt.Errorf("state_batch_size must be between 1 and 64 (0 defaults to 1)")
 	}
@@ -1602,6 +1696,9 @@ func (a *App) featureOverrides() map[string]bool {
 
 // closeAfterFailedStart releases the resources NewApp opened before failing.
 func (a *App) closeAfterFailedStart() {
+	if a.managedFeed != nil {
+		a.managedFeed.Stop()
+	}
 	a.closeOrderBook()
 	records.Detach(a.storage)
 	fetch.DetachProgress(a.storage)
@@ -1615,6 +1712,9 @@ func (a *App) closeAfterFailedStart() {
 		if err := a.storage.Close(); err != nil {
 			a.logger.Error("Failed to close storage after failed start", zap.Error(err))
 		}
+	}
+	if a.nodeFeed != nil {
+		a.nodeFeed.Close()
 	}
 	if a.client != nil {
 		a.client.Close()

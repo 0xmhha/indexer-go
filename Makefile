@@ -194,3 +194,18 @@ help:
 	@grep -E '^## ' Makefile | sed 's/## /  /'
 
 .DEFAULT_GOAL := help
+
+.PHONY: test-node-feed check-node-feed-arc
+## test-node-feed: Check the Rust producer and Go IPC integration (requires Rust)
+test-node-feed:
+	cargo fmt --check --manifest-path modules/arc-node-feed/Cargo.toml
+	cargo test --locked --manifest-path modules/arc-node-feed/Cargo.toml
+	cargo check --locked --features reth --manifest-path modules/arc-node-feed/Cargo.toml
+	cargo build --locked --manifest-path modules/arc-node-feed/Cargo.toml --bin fixture
+	INDEXER_NODE_FEED_FIXTURE_BINARY="$(CURDIR)/modules/arc-node-feed/target/debug/fixture" $(GOCMD) test -race -count=1 ./pkg/source/nodefeed ./pkg/app -run '^TestNodeFeed'
+
+## check-node-feed-arc: Type-check the optional hook in the audited Arc checkout
+check-node-feed-arc:
+	@test -n "$(ARC_NODE_CHECKOUT)" || (echo 'Set ARC_NODE_CHECKOUT to the audited checkout'; exit 1)
+	python3 modules/arc-node-feed/install_arc.py --arc-checkout "$(ARC_NODE_CHECKOUT)"
+	cargo check --manifest-path "$(ARC_NODE_CHECKOUT)/Cargo.toml" -p arc-node-execution --bin arc-node-execution

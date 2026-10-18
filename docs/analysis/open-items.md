@@ -1,63 +1,146 @@
-# 남은 작업 (2026-10-15)
+# 남은 작업 (2026-10-19)
 
-현재 남은 작업의 기준 문서다. 완료 항목은 아래 요약에만 두고, 세부 결정·실험·측정 기록은 [작업 기록](work-log-2026-10.md)에 보존한다. 이 목록을 기록하는 것은 미승인 구현·외부 배포·태그 발행의 승인을 뜻하지 않는다.
+현재 구현은 **공통 디스크/원천 DB·Arc 기본 수신/finality/runtime·영구 객체/정규화 원천·DB-only writer와 opt-in 앱 lifecycle, 기능별 완료·요약/지정 상태 worker·계측·선택 provider 호출 trace와 전체 blob 검증/공급 library**까지다. 1~7번의 공통/Arc 기본 연결과8번의 진행 기록·불변 block 결과 worker를 구현했다. [앱 실행](../FEED_APP.md)과 [진행/독립 worker API](../PROJECTION_PROGRESS.md)를 따른다. 독립 CL certificate, 포괄 state/code/storage/trace/blob 공급·전용 관계형 검색과 실제 peer/mount/장기 처리량은 남아 있다. 아래 목록은 기존 R03/R04/R07과 [윈도우 설계 W0~W7](windowed-feed-design.md#13-구현-순서와-완료-기준)을 함께 진행한다.
 
-## 1. 현재 범위와 운영 조건
+세부 실험·과거 수치·실패 기록은 [작업 기록](work-log-2026-10.md)에 보존한다. 목록 정리가 배포·태그·원격 정리·범위 밖 기능의 승인을 뜻하지는 않는다.
 
-- **EVM 전용 프레임워크**다. 현재 내장 profile은 `evm`, `stablenet`, `arc`다. Stable(988/2201, Tendermint/CometBFT)은 제외했다. StableNet과 Stable은 별개다.
-- 체인별 디코딩·회계·native coin 규칙은 `pkg/chains/<chain>`에, 고유 색인·조회는 feature/SDK 확장에 둔다. 공통 코어에 chain-id 조건문을 더하지 않는다. [커스터마이징 계약](../CHAIN_CUSTOMIZATION.md)을 따른다.
-- 운영 노드는 **full node이며 archive는 없다**. 로컬 `config.yaml`을 네 테스트넷 동시 실행으로 재구성하고 임시 DB에서 시작·색인·API 조회를 확인했다. 최근 시작과 상태 읽기 기능의 `allow_pruned_state: false`를 유지한다. 현재 공개 RPC의 최근 parent hash/계정 state를 다시 확인하고 후보 설정의 시작 높이를 갱신했다. 실제 운영 호스트의 상태 보존 정책·허용 중단 시간은 확인하지 않았다. archive 여부 질문을 반복하지 않는다.
-- 공개 RPC의 순차 색인·API·record/replay와 같은 프로세스의 제한된 최근 구간 동시 색인·장애·재시작 검증은 StableNet·BSC·Sepolia·Arc에서 수행했다. batch16/5HTTPs로 30분 동시 관측(Stable/BSC/Sep 마지막 gap 1/2/0, Arc 1949)과 #175 이후 10분 비용 분해 관측(gap 2/14/0/368)을 완료했다. days-long 운영, 전체 회계, mainnet 지원까지 검증한 것은 아니다.
-- 기존 generic EVM으로 Arc를 색인한 DB가 있다면 새 Arc 회계로 재색인이 필요하다. 해당 운영 DB의 존재나 내용은 확인하지 않았다.
+현재 제출 범위는 Arc window/feed·원천 DB·독립 후처리와 API/DB 읽기 개선까지의 누적 변경이다. API 변경1~3, 실제 DB 통합, PR 전 비성능 전체 회귀(3.86), push 전 API 동시성200회(3.87)는 완료했다. 새 코드 변경이나 실패가 없으면 같은 검사를 반복하지 않는다. 성능 인과·SLO·실제 peer/mount·24시간 운전은 완료 범위에 포함하지 않는다. PR은 보호된 CI 네 항목을 확인한 뒤 squash 방식으로 병합한다.
 
-## 2. 주요 작업
+## 1. 현재 범위와 유지할 조건
 
-순서는 기존 추천 순서를 유지한다. 사용자 결정이나 외부 자료가 필요한 조건을 함께 기록한다.
+- EVM 전용이다. 대상 테스트넷은 **StableNet·BSC·Sepolia·Arc**다. Stable(988/2201, CometBFT)은 제외하며 StableNet과 구분한다.
+- 새 수집 경로는 체인별 P2P/relay 모듈과 최소24시간 디스크 윈도우다. 별도 full node 실행·snapshot 다운로드·과거 ExEx 운영 비교를 자동 후속 작업으로 잡지 않는다.
+- 기존 공개 RPC 경로는 archive 없는 노드를 기준으로 한다. 체인별 **5 HTTP/s**, 공유 limiter, fresh canonical 검사와 `allow_pruned_state: false`를 유지한다. 영구 소실된 상태를 latest나0으로 대체하지 않는다.
+- 원본은 수신 후 최소24시간 보관한다. 필수 데이터 DB 저장·검증된 finality·raw 소비자 ACK·lease 조건이 충족돼야 삭제한다. 처리 지연이나 용량 부족으로 미처리 원본을 버리지 않는다.
+- 외장 경로·volume identity·예산은 명시적으로 지정한다. 분리/손상 시 수신을 중단하고 내부 디스크로 자동 전환하지 않는다. 공간 부족 대기 중 후처리는 계속한다.
+- SQL 값 바인딩·검증/인용한 식별자, chain profile 검증, 순차 writer·undo/outbox·기존 처리 완료 ACK 의미를 유지한다. 기존 era/replay·declared·SDK 호환성을 회귀 범위에 둔다.
+- 체인 고유 코드는 `pkg/chains/<chain>` 또는 별도 모듈에 둔다. 공통 코어에 chain-id 조건문을 추가하지 않는다.
 
-| 순서 / ID | 작업 | 현재 증거와 남은 범위 | 완료 기준 / 필요한 조건 |
-|---|---|---|---|
-| 1 / R03 | full node 운영 설정 확정 | 로컬 4개 테스트넷 설정·명시적 profile·제한된 시작/재시작 검증 완료. BSC의 처리 중 상태 소실을 확인한 뒤 사용자가 블록 실패·재시도를 선택. `allow_pruned_state: false`를 런타임에도 적용하고 블록 전체 취소·동일 높이 재시도를 회귀 시험으로 검증 | 첫 실행 전 시작 직전 상태 재확인. 기존 DB의 다음 높이·backfill 상태와 실제 보존 범위·허용 중단 시간 확인. 영구히 지워진 상태는 재시도로 복구되지 않음. 기존 generic EVM Arc DB는 재사용하지 않음. 잔액 정확한 상시 운영 완료로 간주하지 않음 |
-| 2 / R04 | full node 처리 속도·상태 확보 지연·여러 호스트 SLO | 선택적 해시 기반 상태 준비·bounded channel·체인별 순차 writer와 관측 head 공유 구현. 명시적 health/live poll은 fresh 유지. 빈 블록 동일 입력에서 HTTP89→60/head41→12/17.660→11.908초(실노드 개선률 아님). 단계별 지연/진행 중 수/payload 계측 추가. 통제된 RPC 왕복 입력에서 개선했으나 요청 제한에 걸리면 추가 canonical RPC로 더 느려짐. 5분 실노드 창에서 StableNet은 head 근처, BSC는 필수 상태 소실로 정지, Arc는 격차 증가, Sepolia는 초기 상태 요청과 transport 재시도 지연. 기존 Pebble/PostgreSQL ingest 중앙값 1.506/2.749초는 별도 입력의 과거 측정 | 실제 노드·계정의 상태 보존 범위와 RPC quota에 맞춰 선택 설정·workers/요청량을 조정. 지속 처리량이 생성률을 넘고 head 지연+상태 확보 시간이 보존 기간보다 충분히 짧을 것. 네 공개 체인의 30분 창과 동일 입력의 durable Pebble/PostgreSQL 전후 비교 완료. 50 HTTP/s 제한의 이전 prepared→현재 batch 시간은 Pebble 4.939→1.534/PostgreSQL 4.993→1.519초, 논리 RPC 수는 거의 동일. Arc는 생성 1.976/색인 0.682 blk/s와 quota 오류로 상시 조건 미충족. 현재 소스의 새 10분 표본에서도 Arc 생성 1.974/색인 1.479 blk/s, 격차 368로 미충족. native 같은 hash의 반복은 10/2171건이며 2개 quota 실패 멤버의 필수 재시도가 포함됨. 요청 비용·논리 quota가 다음 우선 대상. days-long 운영·여러 호스트 SLO·PostgreSQL 운영 목표 배수는 남음. 통제된 결과를 운영 목표로 간주하지 않음 |
+## 2. 구현과 검증을 마친 기반
 
-R04의 구현 범위와 다음 작업:
+| 항목 | 완료 범위와 근거 |
+| --- | --- |
+| 수집 공통 계약 | chain/hash/generation, capture plan·coverage·manifest, bounded adapter 계약과 CanonicalReader 분리. Arc 공급 감사/지원 plan은1번에 정리, 실제 peer 공급은 미검증. [3.33](work-log-2026-10.md#333-수집-공통-계약과-sql-파라미터-바인딩-1015) |
+| 디스크 윈도우 | fsync append·디스크 색인·Page·lease·중단 복구·mount/identity·삭제 승인 경계. [window API](../WINDOW_STORAGE.md), [3.34](work-log-2026-10.md#334-원본-디스크-윈도우-저장소-코어-1015) |
+| 원천 DB 공통 코어 | bounded encoded dataset·manifest·연속 cursor·내부 이벤트의 durable transaction, generation/reset·DB 삭제 fence. 영구 객체 binding·기본 정규화 행은5번에서 확장함. [capture API](../CAPTURE_STORAGE.md), [3.35](work-log-2026-10.md#335-원천-db-transaction과-durable-삭제-fence-1015) |
+| 삭제 복구와 세션 | DB token/참조와 `.gc`/완료 기록 대조, DB 확인 후 unlink, 수신/처리 Task 취소·join·lease 반환. 두 worker와 Arc RPC-finalized 정책·reorg supervisor·raw ACK·선택 GC를 연결. 독립 CL certificate/실제 운영·orphan 삭제 정책은 남음. [3.36](work-log-2026-10.md#336-삭제-잠금-복구와-수집-세션-lifecycle-1015) |
+| 공유 예산과 설정 | durable volume 예약·80/95% 경고·외장 경로 YAML·RunConfiguredSession·용량 대기/장애 감시. 앱은 명시적 source.feed와 지원 plan이 있을 때만 활성화함. [앱 연결](../FEED_APP.md). [3.37](work-log-2026-10.md#337-공유-volume-예약압력과-설정-세션-연결-1015) |
+| SQL 인젝션 방어 | 값/페이지 파라미터 바인딩, pgx 식별자 처리, 서버 바인딩 연결 정책과 실제 DB 공격 문자열 회귀. 새 원천 저장에도 동일 규칙 적용 |
+| Docker 공간과 DB 전체 회귀 | 시험 volume40개·약28.85GB 정리, 재검증용 자원 제거, 시험 스크립트의 named volume 정리 보강. **fsync-on/race PostgreSQL413개·capture45개 test/subtest 통과**. 공간 부족으로 남았던 전체 PostgreSQL 시험은 완료. [3.38](work-log-2026-10.md#338-docker-공간-확보와-postgresql-전체-회귀-재검증-1015) |
 
-1. 체인별 수집·디코딩·상태 조회·DB commit 지연, RPC 요청 수/제한 대기/429, queue 개수/바이트, head 지연을 측정한다. 실제 사용 계정의 과거 상태 조회로 보존 범위를 확인한다. 5분·30분 표본에서 BSC의 성공했던 hash 상태가 소실됐고 head-32는 성공/head-128은 실패했다. 30분 Sepolia 표본도 같았고, Arc는 원래 hash/head-512 조회가 성공했다. StableNet은 이 관측 창에 실제 계정의 보존 표본이 없다. 고정 보존 폭은 확정하지 않는다. 로컬 `rpc.rate_limit: 5`가 처리량을 제한할 수 있으므로 workers만 늘리는 효과를 가정하지 않는다.
-2. `indexer.state_prefetch`로 초기 잔액·토큰 상태 준비를 수집 worker에서 실행하고 `state_workers`의 공유 permit으로 제한한다. 부모/생성 block hash를 사용한다. 음수 잔액 보정·backfill·준비를 지원하지 않는 확장 기능은 기존 writer 경로다. `state_batch_size`(기본1,최대64)로 같은 hash의 초기 잔액과 독립 토큰 속성을 묶을 수 있다. 배치가 거부되면 해당 client는 개별 조회로 전환하고, 상태 소실·멤버 오류·429/5xx는 숨기지 않는다. HTTP 왕복 감소와 논리 RPC 감소는 별개다. 공유 permit 확보 뒤 committed 잔액 기록을 재확인해 대기 중 완료된 초기화의 중복 조회를 생략한다. 현재 Arc 표본의 같은 hash 반복은 약 0.46%여서 중복만으로 처리량 부족을 해결하지 못한다. head/canonical/잔액의 물리 예산과 logical quota를 함께 확인해야 한다. StableNet 조상 조회는 영수증도 읽으며 시작 이전 58개 높이를 696회 조회했다. 반복·영수증 비용은 hash/fork 검증을 유지하는 별도 비교 대상이다.
-3. 준비 결과는 체인별 pipeline·height·block hash에 묶인 포인터로 기존 bounded channel에 넘긴다. `state_max_bytes`는 블록별 전달 payload 계산값의 상한이며 heap 전체 상한은 아니다. producer는 전달 후 수정하지 않는다. writer에서 canonical hash를 확인하고 reorg/취소/실패 시 범위의 결과를 폐기한다. strict 상태 정책에서 latest로 대체하지 않는다.
-4. 체인별 writer 하나가 높이 순서대로 잔액·트랜잭션·undo·cursor·outbox를 함께 반영한다. 계정/토큰 기록을 writer에서 재확인해 불필요해진 준비 오류를 사용하지 않는다. 아직 기록되지 않은 필수 상태 오류는 블록 전체를 취소한다.
-5. 변경 전 5분 창의 head 조회는 App 논리 약21~33%/HTTP약21~44%였다. 최근 관측·진행 중 RPC를 background progress/블록 metric에 공유하고 live poll·명시적 health의 fresh 계약, 오류·취소·응답 순서를 검증했다. 초기 잔액/토큰의 hash 고정 batch를 구현하고 동일 입력 및 네 테스트넷 30분 창에서 검증했다. 논리 요청량·speculative 중복·profile 추가 비용의 개선은 남는다.
-6. 같은 입력·설정으로 변경 전후 처리량과 p50/p95/p99 지연·메모리·정확성을 비교하고, 네 체인 동시 실행 및 한 RPC 지연/장애 시 다른 체인의 진행을 검증한다. 보존 기간과 안전 여유는 실제 환경을 측정해 정한다. 이 과제 기록을 전체 파이프라인 변경의 완료로 간주하지 않는다.
+Arc의 첫 지원 plan은 header/body/receipt3개다. 독립 loopback 실제 TCP/RLPx 수신·검증·저장과 부분 재시작을 확인했으나 실제 Arc peer 접속은 아직 없다. [모듈](../../modules/feeds/arc/README.md)과 [공급 감사](arc-peer-capabilities.md)를 참조한다. W0~W3 전체 완료나 포괄 상태 지원을 뜻하지 않는다. 현재 capture는 dataset당8MiB·블록당64MiB의 encoded 바이트를 저장하는 코어이며, 포괄 계정/계약/스토리지/trace/blob DB와 운영 수신기로 전환하는 작업은 남아 있다.
 
-근거: [현재 Arc RPC 비용 분해](work-log-2026-10.md#321-1014-현재-소스의-네-테스트넷-10분-관측arc-rpc-비용-분해), [동일 입력 저장소 비교](work-log-2026-10.md#316-1014-동일-입력-pebblepostgresql-전후-비교), [30분 동시 관측](work-log-2026-10.md#317-1014-네-공개-테스트넷-30분-동시-관측), [운영 미확정 조건](work-log-2026-10.md#318-1014-full-node-실행-후보와-운영-미확정-조건), [중복 head 관측 감소](work-log-2026-10.md#314-1014-중복-head-관측-감소), [네 테스트넷 5분 관측](work-log-2026-10.md#313-1014-네-공개-테스트넷-5분-운영-창-관측), [로컬 설정 복구·profile 선택](work-log-2026-10.md#310-1014-로컬-full-node-설정-복구명시적-profile-선택), [Arc·공개 RPC 기록](work-log-2026-10.md#35-1013-arcstable-추가와-공개-rpc-postgresql-검증), [PostgreSQL 측정](work-log-2026-10.md#33-1012-후속-postgresql-ingest-측정), [SLO 조사](work-log-2026-10.md#31-1012-후속-slo-조사).
+## 3. 다음 작업과 전체 구현 순서
 
-## 3. 별도 조건이 있는 작업
+### 통합 코드 리팩토링 순서
 
-| ID | 항목 | 상태 / 시작 조건 |
-|---|---|---|
-| R05 | 실제 export era1과 RPC 속도 비교 | 변환한 StableNet testnet era1 색인은 수행. 실제 `gstable export-history` 파일과 같은 체인의 노드 `eth_getLogs` 비교는 미검증. 파일·노드 필요 |
-| R06 | Arc mainnet 검증 | mainnet을 새로 검증하지 않음. 접근 환경과 검증 범위를 정해 수행 |
-| R07 | 간헐 SLO 지연·상대 비율 변동 | 기존 170~240ms 원인은 미확인. 상태 준비 후 기본 설정 두 SLO에서 non-reader +25/+32% 초과를 관찰. main 비교는 -6%, 계측 opt-in 분리 후 기본/준비 옵션은 -37/-5%로 통과. batch 준비 후 기본 SLO 한 실행의 round2 non-reader가 절대p99337.2ms로 실패(ingest105.4/push217.8ms). 변경 전 main 기준은116.4/119.3ms(+3%) 통과. 유일한 원인은 확정하지 않음. load fixture가 이전 live loop를 종료·join하지 않는 결함을 재현·수정하고 race200/CPU1race200 검증. 수정 fixture 기본/배치16 SLO 각각 -4%로 통과. 특정 변동 원인은 확정하지 않음. CPU/GC 계측 통과 표본을 보존했으나 실패 원인 단정 안 함. 추가 MacBookAir의 SSH port 22 읽기 probe는 connection refused였다. 사용자는 우선 로컬 Docker 비교를 선택했다. 같은 물리 Mac의 GOMAXPROCS4/CGO off 비교에서 macOS는318.2ms 실패, Docker Linux는+7% 통과. 임시 SSH 계정·컨테이너·키는 제거했다. 후속 trace에서 197ms ingest 중 Pebble Commit173ms/WAL write 최대42ms, GC STW 최대0.21ms를 확인했다. 별도317.1ms 실패도 재현했으나 그 블록의 trace는 없어 모든 실패 원인을 동일하게 단정하지 않는다. 60블록 p99가 최악 블록을 누락하는 계산을 수정하고 느린 블록·Commit 지연을 별도 보고한다. Pebble 캐시 생성자 참조 누락을 재현·수정했고 정상 종료/Open·초기화 실패의 invariants 검사20회가 통과했다. race가 끄는 캐시 finalizer 검사를 CI에 별도 추가했다. 이것을318ms I/O 지연의 유일한 원인으로 단정하지 않는다. 기본 SLO 재확인156.1/161.6ms(+4%)·fast10.1ms는 통과했다. 최종4CPU prepared 조건은block27 ingest362.9ms/Commit309.9ms/end-to-end p99378.0ms로 실패해 저장 대기만250ms 예산을 초과했다. OS 파일 쓰기/동기화 변동과 여러 물리 호스트의 운영 SLO는 여전히 미완료 |
-| R08 | DEX reorg flake | 두 시험 각각 race 200회와 cpu=1 200회 통과, flake 미재현. 재현 시 수정 |
-| R09 | frontend 이전 | GraphQL 문서 26개와 REST 이전은 frontend 작업. [이전 안내](../FRONTEND_MIGRATION.md) 참조. 이 세션에서는 해당 저장소 수정 금지 |
-| R10 | 태그·원격 branch·배포 | 새 태그 발행, 병합 branch 원격 삭제, 외부 배포는 사용자 확인 필요. 다음 개발 작업의 자동 후속 단계가 아님 |
+**1~3번의 Arc 기본 구현과 로컬 검증을 마쳤다.** 첫 plan은 header/body/receipt로 고정했고 다른 required를 거부한다. 실제 온보딩 enode/network/fork ID가 있어야 Arc 접속·history 보존·전파/재연결을 확인할 수 있다. 현 adapter는 ETH/68 history polling이며 CL 직접 gossip은 미구현이다. Arc4번 runtime과5번 영구 원천 저장,6번 DB-only writer 라이브러리를 연결했다. 7번 앱 lifecycle도 연결했고8번의 기능별 완료·독립 block 요약/coverage API와 지정 account/code/storage proof 공급 library를 구현했다. 실제 운영 환경 검증은 별도다. 기존 [ExEx 구현](../NODE_FEED.md)은 새 peer의 실제 네트워크/성능 증거가 아니다.
 
-## 4. 보류·범위 밖·미승인 제안
+| 순서 | 작업과 현재 상태 | 완료 시 결과와 검증 기준 | 연결 단계 |
+| --- | --- | --- | --- |
+| 1 | **Arc 공급 감사 — 지원 plan/형식 정리 완료** | header/body/transaction/receipt/log·계정/계약/code/storage 변화·state input·trace/internal call·blob의 실제 형식, 공급 경로, 보존 범위와 검증 방법을 정리한다. 실제 표본/fixture, required·tracked·unsupported 목록, 보충 RPC의 물리/논리 예산을 고정한다. 필수 자료가 없는 plan은 시작을 거부한다. | W0 / R03·R04 |
+| 2 | **Arc ETH/68 adapter — 기본 구현/로컬 검증 완료** | 검증한 프로토콜/라이브러리를 별도 모듈로 연결한다. peer 연결·chain/genesis·header 연속성/체인별 검증·실시간 전파·재연결·누락 범위 복구·취소를 구현한다. 네트워크 입력은 할당 전 길이를 제한하고, 보충 RPC는 기존5 HTTP/s pool을 공유한다. adapter는 bounded Envelope를 반환하고 수신 Task가 지정 window에 durable append한다. | W3 / R04 |
+| 3 | **capture worker —3-dataset 연결/로컬 검증 완료** | 수신 worker→bounded 참조 channel→검증/저장 worker를 연결한다. 임시 메모리 큐가 사라져도 raw Page와 capture cursor로 재개한다. 블록별 필수 dataset을 모아 검증하고 원천 DB에 원자적으로 저장한다. 누락·pruned·오류·검증된 빈 결과를 구분하고, 미완료 블록은 완료 ACK하지 않는다. | W1~W3 / R03·R04 |
+| 4 | **Arc 기본 runtime 구현·로컬 검증, 실제 운영/독립 CL 검증은 남음** | 신뢰 근거가 있는 checkpoint/finality 정책을 구현해 내부 Finalize API와 연결한다. generation reset·raw-only 소비자 ACK·lease·DB 삭제 fence를 실제 worker와 결합한다. 깊은 reorg/undo 범위 밖 재구축 정책을 정한다. 현재 Arc는 authority를 고정한 RPC-finalized 모드·기본128(설정 최대4096)높이 공통 조상 재개·raw 소비자 durable ACK·선택 GC를 구현했다. 이전 fork 원본은 별도 완료/취소 증거 없이 삭제하지 않는다. 실환경 정책 검증 전 기존 앱 GC를 활성화하지 않는다. | W0~W4 / R03·R04 |
+| 5 | **기본 구현: 영구 객체·정규화 원천 행** | 별도 외장 경로/예산의 스트리밍 객체·digest·참조 원자성·retirement/복구와 header/body/transaction/receipt/log 행/페이지 조회를 구현했다. 실제 객체/필수 행 손상은 완료/원본 삭제를 차단한다. 전용 관계형 테이블·전역 검색·계정/storage/trace/blob 공급은8번에 남는다. | W2·W5 / R04 |
+| 6 | **기본 구현: DB facts와 기존 writer 연결** | `pkg/source/facts`와 Arc factory·기존 writer를 연결했다. state-free/이미 초기화된 잔액을 DB 자료로 재생하고 누락 상태는 중단한다. commit 전 generation/fresh/내구성 검사·입력별 처리 receipt를 추가했다. 두 DB의 결과·순차 commit·undo/outbox·ACK 유실·era/replay·SDK를 대조했다. [계약과 한계](../SOURCE_FACTS.md). | W4 / R03·R04 |
+| 7 | **기본 구현: 앱 활성화·혼합 네 체인 조립** | strict `source.feed` registry와 app/multichain capture·facts worker·epoch 취소/join·undo·종료를 연결했다. durable window binding으로 누락 원본 재생성을 막고 상태/미수집 backfill을 거부한다. Arc feed+다른3체인 RPC의 로컬 장애 격리, 두 DB와 Linux를 확인했다. 실제 peer/mount 운영은 R03/9번에 남는다. [실행 계약](../FEED_APP.md). | W1~W4 / R03·R04 |
+| 8 | **진행: 완료/cursor·요약/지정 상태 worker·coverage API 구현** | feature/part별 구간·hash·epoch·definition을 기존 transaction/undo에 기록하고 read-only 상태 API를 연결했다. 선택 execution.summary.v1은 불변 block 결과·자체 cursor/reset-output event transaction을 소유한다. project_changes의 지정 상태 worker는 자체 head/output/undo/cursor/apply-revert-reset event와 조회를 구현했다. 단계별 bounded-memory 지연·현재 epoch backlog/age·읽기 전용 pipeline 진단과 운영 해석 기준도 구현했다. 선택 provider-reported 호출 trace의 수집/DB-only fork 고정 페이지도 연결했다. 전체 EIP-4844 blob의 KZG/위치 검증·선택 순차 worker·영구 DB/페이지 library도 구현했다. 고정 Arc 노드의 blob 비활성화 정책·supplier guard·durable 상태 audit도 연결했다. 선택 source.lookup.v1의 블록/거래 해시 색인·높이/해시/거래별 DB-only 행 페이지도 구현했다. 선택 source.search.v1의 거래 from/to·log 주소/topic·고정 높이 범위 검색도 연결했다. timestamp/OR·다중 주소 검색과 같은 입력의 DB 조회/색인 용량 비교도 완료했다. PostgreSQL trie의 스냅샷 캐시/일괄 읽기와 같은 입력의 전후 측정도 완료했다. canonical 원천 입력/작은 metadata의 단일 snapshot 읽기와 같은 입력의 SQL 조회 p50 74.502→46.108ms 비교도 완료했다. facts Source의 공통 snapshot 연결·실제 writer 비교도 완료했다. PostgreSQL 객체 단독 읽기 p50 19.658→6.521ms, 실제 writer 읽기204.636→189.795ms였고 fresh5 HTTP/s 아래 최종 처리량은 약5.1블록/s로 비슷했다. 연결 예산1/2/4를3회씩 비교해 객체 writer 읽기 p50 192.529→9.193ms(1→2)를 확인했고 설정 예제는2로 정했다. fresh5 HTTP/s 아래 최종 처리량은 약5.1블록/s로 비슷했다. 실제 ETH68/window/capture·writer·HTTP GraphQL 두 client의 혼합 부하도2/4연결로3회씩 비교했다. API 최근8블록 p95 191.973→9.457ms, 실제 API 완료19.062→19.875/s였고 수집/writer 최종 처리량은 개선되지 않았다. 혼합 API tail에는4개를 시작점으로 권장한다. 후속4연결 병목 개선은 단일 raw 후보+commit fresh로 중복/미래 resolve RPC를 줄였다. 로컬 streaming 공개→capture p50 807.135→178.940ms, backlog 최종 처리량 2.282→2.458블록/s를 확인했다. 이때 backlog 중간 ACK/API tail 지연은 늘었다. 후속 잠금 분리는 append·공개 prefix 검증·immutable ACK를 병행하고 Reset/삭제를 배타 보호했다. 연결4의 같은 입력 비교에서 누적 ACK p50 9.004→4.621초, 최근8블록 API p99 89.179→41.285ms, 처리량2.201→3.980블록/s를 관측했다. 실행별 tail 편차와 일부 지표 회귀는 남는다. [3.62](work-log-2026-10.md#362-연결4-수집writer-canonical-후보-병목-개선-1017)를 따른다. 추가 worker 소유권과 실제 운영 측정은 남는다. blob transport/앱 연결은 실제 지원 체인을 정한 뒤 진행한다. [소유권/제한](../PROJECTION_PROGRESS.md). | W5~W6 / R04 |
+| 9 | **단계별 계측 구현, 실제 처리량·내구성·장기 운영 검증 남음** | 같은 입력의 기존 RPC/새 feed 결과와 처리량·p50/p95/p99·누락/오류를 비교한다. Arc 수신 간격450ms 목표와 실제 생성률 추종을 검증하고 수신/원천 저장/후처리 lag를 분리한다. 논리 시간의86,400/172,800높이·용량/장애 시험, 네 테스트넷24시간 이상 운영·재시작·메모리/DB 증가를 확인한다. macOS/Docker SLO와 전체 app 회귀도 마무리한다. | W1~W7 / R04·R07·R08 |
 
-- **Stable 관련 작업:** 전용 회계·시스템 거래·CometBFT 증명·Stable mainnet 검증은 현재 범위 밖이다. 과거 검증 기록은 삭제하지 않는다.
-- **K2 이진 키:** 재측정 후 보류 유지. 디스크 절감 6.7%이며 저장 형식을 다시 바꿀 때 함께 검토한다.
-- **값 형식 통일:** 기존 데이터 변환은 보류. 새 체인 데이터는 `core/model` 인코딩, 기능 레코드는 JSON 규칙을 유지한다.
-- **perp 마켓 이름:** 현재 구현하지 않는 결정을 유지한다. 소비자 요구가 생기기 전에는 다시 열지 않는다.
-- **AA 목록 API:** [기존 제안](../AA_BACKEND_TASKS.md)의 `allBundlers`·`allPaymasters`는 현재 API snapshot에 없다. 승인된 남은 작업에 자동 편입하지 않는다. frontend의 현재 우회 동작은 이번에 확인하지 않았다.
-- **Git history 정리:** 이전 astgraph 바이너리가 history에 남아 있다. 이를 없애기 위한 history 재작성·force push는 수행하지 않는다.
+수신·capture·proof·상태/RPC의 지연 표본과 현재 epoch 적체·관측 가능한 첫 대기 나이는 [단계별 계측](../FEED_TELEMETRY.md)으로 조회한다. 실행 메모리의 측정 없음과 durable DB 완료를 구분하며 원격 상태 보존 보장/실제 latest/450ms 성공으로 해석하지 않는다.
 
-## 5. 완료 항목과 검증의 한계
+8번의 남은 순서는 다음과 같다.
 
-- **R02 완료(10/14):** 네 공개 테스트넷을 한 App에서 실행해 17블록·372거래·654로그의 식별자, 체인별 DB·profile·기능 설정·GraphQL/JSON-RPC/REST·durable 블록 stream 분리를 확인했다. 한 RPC의 HTTP 503 동안 나머지 체인이 진행했고, 복구 후 따라잡기와 같은 DB/알림 설정을 재사용한 프로세스 재시작도 통과했다. 자동 재시작이 새 파이프라인의 컨텍스트를 즉시 취소하던 오류를 수정했다. [동시 실행 범위와 실패 기록](work-log-2026-10.md#39-1014-공개-rpc-멀티체인-동시-실행)을 참조한다. 장기 운영·운영 SLO·mainnet 검증은 포함하지 않는다.
-- **R01 완료(10/14):** 실제 mint/burn·최상위 거래의 from/to 밖 이동·실패 거래·수수료 표본 4개 블록의 55개 계정/블록 델타가 독립 RPC 전후 잔액과 일치했다. 별도 100블록에서 461개 계정/980개 블록별 잔액을 대조했고, 동일 RPC 기록의 Pebble/PostgreSQL 재생에서 25,118개 port 조회가 일치했다. [표본과 비교 범위](work-log-2026-10.md#38-1014-arc-회계-표본-확대동일-rpc-저장소-대조)를 참조한다. 전체 역사·fork·SELFDESTRUCT·mainnet 검증으로 확대 해석하지 않는다.
-- R0~R6 계획은 [10/9 완료 검토](plan-audit.md)에 기록했다. 실시간 구독 단계는 [설계·완료 기록](subscriptions-design.md)에 있다.
-- PostgreSQL 쓰기 batch·높이 기반 undo·잔액 prefetch는 반영됐다. 추가 성능 목표는 R04에 남는다.
-- full node 시작 상태 검사와 SDK 안내, Sepolia 추가 헤더 필드 보존, 공개 RPC 검증, Arc 회계 수정은 완료했다. 모든 EVM 내부 이동·fork 실행·합의 증명까지 보장하지 않는다.
-- Stable 제외와 EVM 범위 정리는 완료했다.
-- [체인 커스터마이징 계약](../CHAIN_CUSTOMIZATION.md)과 [별도 profile 예제](../../examples/chainprofile/README.md)는 완료했다. 예제의 로컬 시험·빌드와 PR/main CI는 통과했으며 예제의 실노드 실행은 확인하지 않았다.
+1. **지정 account/code/storage의 proof library·자동 수집·설정/status·부모 checkpoint·필수 완료/GC gate는 구현했다.** [상태 증명 공급](../STATE_PROOFS.md)의 exact selection/start·block hash·MPT/code 검증·영구 supplement와 atomic cursor/event·fresh/5 HTTP/s 경계를 따른다. `parent_checkpoint`/`required`의 exact scope·초기 계약 고정·raw Open 이전 검사·proof 재검증 경계와 DB-only StateTransition을 따른다. `project_changes`의 지정 상태 worker는 현재값·블록 변경·독립 undo/연속 cursor/apply-revert-reset event와 DB-only API를 구현했다. 지연/보존의 운영 해석·각 단계/RPC 계측을 구현했다. 다음은 추가 stateful 기능 연결과 실제 운영 측정이다. 앱의 state feature는 아직 활성화하지 않는다. 전체 EVM 상태를 ETH68 body/receipt나 tracked snapshot만으로 추론하지 않는다.
+2. **trace/internal call의 첫 선택 공급·저장·DB 조회는 구현했다.** [호출 trace](../CALL_TRACES.md)의 고정 Geth 형식·RPC hash 선택·최상위/receipt 대조·reported call tree·자체 cursor/reset·fork 고정 페이지를 따른다. 하위 실행 자체의 증명/전체 변화·기존 내부거래 테이블 자동 활성화는 포함하지 않는다. [전체 blob](../BLOB_INPUTS.md)의 첫 library는 고정 EIP-4844 전체 blob+단일 KZG proof·captured 거래 위치 대조·선택 순차 worker·원자적 저장/cursor/event·DB-only 페이지를 구현했다. 기본 plan/GC 권한은 확장하지 않는다. 후속 감사에서 Arc 공식 노드의 EIP-4844 admission 비활성화를 확인하고 profile/module guard·DB-only 정책 상태를 연결했다. Arc blob 공급 활성화는 후속 필수 항목으로 잡지 않는다. 블록/거래 해시의 첫 source 색인과 DB-only 페이지는 구현했다. 주소/topic/고정 높이 검색도 구현했다. timestamp/OR 조건도 구현했다. provider debug/부모 상태 지원 확인과 공급 체인별 실행 검증은 남는다. blob transport/보존/앱 연결은 지원 체인에서 별도로 진행한다. 없는 자료는 unavailable로 유지한다.
+3. **블록/거래 해시 검색·색인의 첫 구현은 완료했다.** [원천 검색](../SOURCE_QUERIES.md)은 독립 순차 worker·immutable trie root·원자적 node/root/cursor/event·fresh/5 HTTP/s·reorg retained prefix·읽기 전용 DB 페이지를 제공한다. 선택 source.search.v1은 거래 from/to·log 주소/위치 topic과 고정 블록 범위의 DB-only cursor 페이지를 제공한다. 후보256/검증 블록16·행8MiB·합산 동시2개와 epoch/filter/root 핀을 적용했다. 시간(uint64 Unix 초)·주소/topic OR와 정규화된 커서도 구현했다.32블록/512로그의 검증 스캔·trie 검색 및 임시 SQL 후보 색인을 비교했다. PostgreSQL은 hash 검증 뒤 snapshot 내부 캐시와 선택 GetMany로 node별 KV 왕복을 줄였고 같은 입력에서 검증 조회 p50 88.159→58.996ms를 확인했다. ReadProjectionInput으로 canonical metadata/영구 bytes를 한 snapshot에서 읽고 디코딩 뒤 최신 epoch 검사를 유지했다. 같은 입력 SQL 읽기111→85회·검증 조회 p50 74.502→46.108ms를 확인했다. facts Source도 같은 snapshot으로 연결했고 coverage/큰 객체/손상/epoch/fresh/ACK 경계를 검증했다. 실제 writer와 단독 읽기의 개선 폭을 구분한 [전후 측정](../SOURCE_FACTS.md)을 완료했다. 연결1개·fresh 대기가 남아 최종 처리량은 약5.1블록/s로 비슷했다. 후속 연결 풀 비교에서 단일 연결의 읽기 경합을 줄였다.1→2연결의 객체 writer 읽기 p50 192.529→9.193ms, 최종 처리량 약5.1블록/s였다.4연결도 비교하고 fresh/fence/ACK와 단일 CPU200회 경합을 확인했다. 후속 pool4 동시 수집/writer/API 측정에서 중복 resolve RPC를 줄이고 commit fresh를 유지했다. streaming 지연/누적 처리량 개선과 backlog 중간 ACK/API tail 증가를 구분해 확인했다. fresh/세대 fence를 유지한 잠금 범위 분리·동시 ACK 불변성·같은 부하의 로컬 전후 측정도 완료했다. [3.63](work-log-2026-10.md#363-연결4-잠금-분리와-ack-공정성-1017)의 제약과 tail 편차를 따른다. API의 불필요 집계/거래 변환과 연결 대기를 계측하고 최소 API 예약+유휴 연결 차용을 구현했다. pool4/5 HTTP/s/fresh 고정의128블록 전후 비교에서 최근8블록 API p99는 누적12.173→5.901ms, streaming31.347→8.239ms였으며 단일 조회의 일부 지표는 증가했다. [3.64](work-log-2026-10.md#364-api-tail-계측지연-계산읽기-슬롯-1017)의 단일 체인/root projection 범위와 한계를 따른다. 후속 단일 p99의 두 연결 후보는 종단 개선이 없어 제외하고 제품 코드를 원복했다. 동일 CGO0/128블록의 app/DB 실행 위치 비교에서 p99 중앙값은 누적3.059→1.855ms·streaming10.379→4.780ms였지만 한 쌍의 회귀와 환경 차이가 남는다. 로컬 Docker 재현 도구와 전체 요청 기록을 추가했다. [3.65](work-log-2026-10.md#365-단일-블록-p99-분리후보-제외실행-위치-비교-1017)를 따른다. 후속 Docker 비교는 API 쿼리 종료의 취소 감시 rendezvous를 제거해 streaming 단일/목록8 p99 중앙값4.059→3.518ms/5.343→4.466ms로 낮췄다. pool4·5 HTTP/s·커밋 fresh는 유지했으며 일부 목록·ACK 실행 회귀와 SQL-wire tail 변동은 남았다. [3.66](work-log-2026-10.md#366-docker-streaming-p99의-쿼리-종료-대기-개선-1017)의 상세·범위를 따른다. 다음은 더 무거운 API/추가 worker 예산과 실제 운영·장기 측정, 필요시 원자성·epoch/복구를 갖춘 관계형 source 색인이다.
+4. 지정 상태 후처리의 독립 head/output/undo/event·consumer 계약은 구현했다. 추가 worker와 다른 cross-block 가변 집계도 각자의 계약을 정한 뒤 분리한다. 기존 stateful feature writer는 하나다.
 
-작업을 완료하면 이 문서에서 상태와 근거를 갱신한다. 측정의 입력·환경·실패·미검증 범위는 작업 기록에 남기고, 과거 수치를 현재 지원 보장으로 바꾸지 않는다.
+5번의 큰 객체 지원은 해당 크기의 필수 plan을 활성화하기 전에 끝내야 한다. 7번의 기존 API/writer까지 포함한 모드 활성화는4~6번의 완료를 전제로 한다. 기능 확장은 공급 가능한 plan 단위로 적용하고 모든 체인의 전체 상태를 얻을 수 있다고 가정하지 않는다.
+
+앱은 현재 Arc의 execution-only plan만 명시적으로 활성화하며 다른 세 체인은 기존 RPC 경로를 유지한다. 실제 네 테스트넷의 peer feed와 full state 기능이 완료된 것은 아니다. 운영용 enode/network/forkID·checkpoint·외장 mount/ID는 아직 제공되지 않았다.
+
+현재 pipeline은 수신 fsync 뒤 `OnReceived`, 검증/원천 DB commit 뒤 `OnCaptured` callback과 opt-in bounded-memory 계측을 제공한다. `/indexing/status.pipeline`은 수신/append·raw 대기·검증/원천 commit·proof/상태 처리·공유 RPC limiter/물리 HTTP의 count·p50/p95/p99·진행/적체를 구분한다. 실제 network head는 아직 알 수 없어 null이며 최근 수신 header를 latest로 대신하지 않는다. 관측 가능한 첫 proof/상태 대기 나이를 표시하지만 remote state retention 보장은 별도 운영 정보가 필요하다. 실제450ms/장기 추종 시험과 추가 feature writer의 상세 계측은9번에 남는다. 큰 큐만으로 수집 속도나 정확성이 달성됐다고 표시하지 않는다. segment 부분 compaction·추가 중복 제거·RPC 최적화는 이 측정에서 필요성을 확인한 뒤 적용한다.
+
+### 원본 저장·수신·ACK와 fresh 후속 점검 (3.67~3.87)
+
+**현재3.87: 남은 API push 전 동시성200회 항목을 완료했다.**18개 검사 각각 Go1.24.9/GOMAXPROCS1/race/단일-count200, 상위3600회 PASS·최종 실패/skip/DATA RACE0. 최초123번째 row 취소 검사의 비동기 폐기 통계 즉시 assertion을 동일1개 조건의 bounded 상태 대기로 보완하고 수정본200회 통과했다. 중단 전122/123회와78회 합산용 실행은 완료 근거에서 제외했으며 모든 최종 검사는 각 단일200회다. DB 준비 스크립트의 임시 서버 ready 문제도 실제 TCP SQL 확인으로 보완·기능 검사했다. 운영 코드/설정/의존성/DB4·예약1/RPC5/커밋 fresh·다른 프로젝트는 유지했다. 소유 DB/volume/DSN 정리·기존12개 container 보존을 확인했다. [3.87 원본·수정·검증 범위](../SOURCE_FACTS.md#push-전-api-동시성-200회-검증-2026-10-18)를 따르며 **새 변경/실패 없이 이200회나3.86 전체 회귀를 다시 다음 작업으로 제안하지 않는다.** 성능 인과/효과/SLO·실제 peer/mount는 기존대로 보류/미확정이며 아래는 과거 이력이다.
+
+**이력3.86: PR 전 비성능 전체 회귀 검증을 마쳤다.** 전체 기능/race 각각75개 package·상위2279개, build/vet/lint/gofmt·예제2개·Rust/IPC·invariants·Python/셸 검사를 통과했다. 실제 PG9개 package 첫 실행의 결과 폴더 준비 누락1건은 같은 소스의 해당 검사만 재확인해 통과했으며 나머지368개도 통과했다. 최초 PG exit1과 단독 재검증을 합쳐 확인한 결과이고 전체를 깨끗한 한 실행이라고 표시하지 않는다. 코드 변경은 테스트 fixture pool8→4 두 곳·중복 타입 선언1건뿐이며 운영 코드/다른 프로젝트/DB4·예약1/RPC5/커밋 fresh는 유지했다. 소유 DB·볼륨·DSN 정리, 기존12개 container 보존을 확인했다. **이 전체 회귀를 새 변경/실패 없이 다시 다음 작업으로 제안하지 않는다.** push 요청 시 새 동시성200회 규칙은 별도이며 성능·tail 인과/SLO·실제 peer/mount는 기존 범위대로 보류/미확정이다. [3.86 결과·제외·오류 해결](../SOURCE_FACTS.md#pr-전-전체-회귀-검증-2026-10-18)을 따르고 아래는 과거 이력이다.
+
+**이력3.85: API1~3 구현·keepalive 보완·실제 DB 통합 기능 검증 완료로 정리했다.** 현재143개 보호 소스는 DB 검증 시점과 동일하고 추가 확정 결함은 발견되지 않았다.42개 호환/keepalive10회/GraphQL·REST package race 및 실제 DB 대상10 Go 검사·Python4·실제 verdict 거절/원본 보존의 근거가 있다. 초기 fixture 거래 수 오류는 해결됐고 소유 DB 자원도 정리했다. 완료 항목을 새 실패/코드 변경 없이 다시 미완료로 제안하지 않는다. **남은 우선순위는①변경 확정/PR 전 저장소 전체 회귀·정적·race·example 및 push 시 새 동시성200회 규칙②사용자 재개 요청 전 API tail/효과 검증 보류③증거 있는 구간만 후속 최적화**다. 이번 빌드/검사/성능/호스트 관찰/Docker/DB/RPC 조작은0이고 실행 코드·다른 프로젝트·DB4/예약1/RPC5/커밋 fresh는 그대로다. 기능 완료와 성능/merge-ready/SLO 완료를 구분한다. [최종 완료 범위·남은 우선순위](../SOURCE_FACTS.md#api-변경13-및-실제-db-검증-최종-정리-2026-10-18)를 따르며 아래는 과거 이력이다.
+
+**이력3.84: 실제 PostgreSQL에서1~3 통합 기능 검증을 완료했다.**4개 pool/예약1개·HTTP8개로 pinned/borrowed·단일/목록 SQL1/decode·admission/SQL 취소와 반납/재조회·진단·compact JSON·validation/깊이 SQL0·실제 오류 verdict/원본 보존을 확인했다. 저장소/API/app 대상10검사를 GOMAXPROCS1/race와 Python4/실제 DB verdict parser 거절 검사로 통과했다. 첫 app fixture의1거래/2거래 불일치는 fixture만 수정하고 실패 원본을 보존했다. test-only 공통 진단 helper2파일과 새 검사2파일뿐이며 production 수정 필요 결함은 발견되지 않았다. 소유 DB/container·volume은 제거했고 기존12개 상태/StartedAt·DB4/예약1/RPC5/commit fresh·다른 프로젝트는 같다. 전체 repository 회귀/200회·성능 검증은 미실행이며 API tail 원인/효과는 미확정,반복 측정/host screen은 보류다. [통합 범위·실패와 수정·검증 근거](../SOURCE_FACTS.md#실제-db에서-api-변경13-통합-기능-검증-2026-10-18)를 따른다.
+
+**이력3.83: keepalive 검사 안정화와 대상 race 검사를 완료했다.** 기존 DATA RACE 경고 없는 assertion 실패는200ms 만료/180ms ping의20ms 여유와 client callback 계수+sleep을 섞은 취약한 테스트였다. 다만 그 실행의 실제 소켓 오류/스케줄링 원인은 기록 부족으로 미확정이다. production60s/54s·200ms 테스트 값은 유지하고 실제 ping/pong의 server deadline 갱신을 관찰하는 검사와 실제 무응답 read timeout·강제 만료 뒤 늦은 pong·비활성 검사를 분리했다. 테스트 파일1개만 수정했으며 GOMAXPROCS1/race10회·GraphQL/REST 두 패키지 race1회 모두 통과했다. 전용 Go cache는 후속 기능 검사에 재사용하도록 보존했다. 추가 성능/호스트 관찰/Docker/실제 DB/RPC 조작은0이고 DB4/RPC5/커밋 fresh·다른 프로젝트/production은 그대로다. 다음은 실제 DB 경로의1~3 통합 기능 검증이며 성능 검증은 보류다. [근거·테스트 범위·남는 한계](../SOURCE_FACTS.md#websocket-keepalive-검사-안정화-2026-10-18)를 따른다.
+
+**이력3.82: 추가 실행 없이1~3을 종합 검토했다.** 각 구현/대상 기능 검사는 완료지만 API tail의 단독 원인·개선율·3.73 회귀 해소는 미확정이다. 기존 자료는 지연이 handler 밖/DB 입장/SQL 왕복/미분리 handler에 분산된 것을 보이며 새 진단으로 소급 분해할 수 없다. 남은 순서는①기존 별도 WebSocket keepalive race 실패 원인 분석②1~3 실제 DB 통합 기능 검증③사용자 재개 요청 전 성능 인과 검증 보류④근거가 생긴 구간만 최적화다. 이번 새 빌드/검사/측정/호스트 관찰/Docker/실제 DB/RPC 조작은0,실행 코드·DB4/예약1/RPC5/fresh·다른 프로젝트는 그대로다. [확인 사실·가설·검사 한계·우선순위](../SOURCE_FACTS.md#api-변경13-종합-검토와-남은-우선순위-2026-10-18)를 따른다.
+
+**이력3.81: 사용자 승인으로3번 JSON 꾸밈 출력 제거를 구현했다.** GraphQL 결과 인코딩1줄을 compact JSON으로 바꿨고 데이터/오류 의미·HTTP status/header·Playground·단일 파싱/제한/표준 검증/취소는 유지했다. 제한 on/off42개 호환 비교와 GraphQL·REST 기능 검사를1회 실행해 모두 통과했다. DB4/RPC5/커밋 직전 fresh·다른 프로젝트와 나머지 보호 소스는 그대로다.1~3번은 구현 완료이며 추가 측정/호스트 관찰/Docker/실제 DB/공개 RPC 조작은 없다. 성능 인과/p99/SLO 효과는 미확정이고 사용자 별도 요청 없이 재측정하지 않는다. 이번 race는 실행하지 않았으며3.80의 이전 keepalive race 실패 원인은 미확정이다. [변경·검증 근거](../SOURCE_FACTS.md#graphql-json-꾸밈-출력-제거-2026-10-18)를 따른다. 아래 기록은 이전 작업 이력이다.
+
+**이력3.80: 사용자 승인으로2번 GraphQL 단일 파싱을 구현했다.** 요청별 AST를 QueryCost/전체 표준 validation/cancellable executor에 재사용한다. 요청 형식/응답·제한 on/off·변수/fragment·취소를 기능 검사했고, 발견된 기존 validator의 순환 fragment 재귀에는 공식 cycle rule 선검사로 대응한다. GraphQL·REST 기능 검사와 변경 HTTP 경로/REST race는 통과했다. 전체 race는 변경하지 않은 별도 WebSocket keepalive 시간 조건에서 실패해 원인이 미확정이며, 전체 통과로 표기하지 않는다. 실패/성공·범위·전용 cache 정리 근거를 audit에 보존했다. 추가 성능 측정·호스트 부하 확인·Docker/실제 DB/공개 RPC 조작은 하지 않는다. DB4/RPC5/fresh·다른 프로젝트 유지,1번 진단/실패 판정 유지,3번 compact JSON은 미구현이다. [상세 변경·제약](../SOURCE_FACTS.md#graphql-요청의-단일-파싱-구현-2026-10-18)을 따른다.
+
+**이력3.79: 사용자 승인으로1번 시간 구분/오류 판정만 구현했다.** client 준비/HTTP/검증·opt-in GraphQL 단계·DB decode/입장 경로를 구분하고 미완료를0ms로 집계하지 않는다. 결과 JSON 보존 후 모든 측정 API 오류를 Go 실패로 처리하며 도구도 실패/구형 false PASS를 거부하고 `.failed.json`을 보존한다. 추가 성능 측정/호스트 관찰/Docker/DB/RPC 조작은 하지 않았다. mock/메모리 transport 기능 검사이며 DB 통합/128블록3쌍·운영 SLO는 미실행이다. DB4/RPC5/commit fresh·다른 프로젝트를 유지했다.2번 중복 파싱 제거·3번 compact JSON은 미구현이며 성능 인과도 계속 미확정이다. [구현·시간 의미·검사 범위](../SOURCE_FACTS.md#api-시간-구분과-오류-판정-구현-2026-10-18)를 따른다.
+
+**이력 지시(3.78): 추가 측정 없이 기존 로그/코드 분석과 수정안을 먼저 공유한다.** 기존18회 원본·요청별 구간을 검토했으며 API 지연은 admission/SQL 왕복/미분리 handler/클라이언트 포함 잔여에 분산돼 있다. 큰 tail의 단독 원인·3.73 코드 인과는 미확정이다. 제안은①HTTP/검증·handler 단계와 오류 판정 구분②안전 제한/표준 validation을 지키는 요청 내 단일 파싱③compact JSON 별도 변경이며 아직 미구현이다.1ms wake 후보는 기존 제외 근거를 유지한다. DB4/RPC5/commit fresh·다른 프로젝트를 유지하고 새 측정/코드 구현을 이번 분석 완료로 표시하지 않는다. [구체적인 사실·가설·수정 범위](../SOURCE_FACTS.md#기존-api-로그와-코드의-원인-검토수정-제안-2026-10-18)를 따른다. 아래3.67~3.77 수치는 이전 작업 이력이다.
+
+**10/18 사용자 피드백: 같은 호스트 재확인 제안을 반복하지 않는다.** 최근6차례는 실제 benchmark0회였고 준비/관찰만 반복했다. load≤24·연속60초·비율≤1.25는 비교를 위해 에이전트가 정한 screen이며 제품 필수 조건이나 코드 결함 확정 근거가 아니다. 낮은 부하 비교는 미완료로 남기되 새로운 실행 조건 없이 같은 빌드/Docker/관찰을 되풀이하지 않는다. 다음 진전은 기존 API 요청별 구간·capture/fresh 로그와 코드 경로의 원인 분석으로 만든다. 추가 측정은 검증할 구체적 가설/변경 또는 달라진 환경이 있을 때 범위와 목적을 설명한다. 다른 프로젝트·DB4/RPC5/commit fresh는 유지한다.
+
+같은 블록의 최대3개 원본을 묶어 durable 저장하는 경로를 구현했다. 단일 입력 호환성과 회전 전 fsync·완성 prefix 복구·quota·삭제 fence를 유지한다. 별도32블록 진단의 원본 fsync는102→42회였다. 동일128블록·3쌍/모드 비교에서 streaming capture p99 중앙값305→240ms, 누적 수신 간격 p99108→53ms였지만, ACK·최종 처리량은 사실상 같았다. streaming API p99와 원본 저장 누적 시간 중앙값은 증가했으므로 전체 tail 개선 완료로 표시하지 않는다. [3.67](work-log-2026-10.md#367-원본-저장수신ack-분리와-같은-블록-fsync-공유-1017)과 [전후 결과](../SOURCE_FACTS.md)를 따른다.
+
+후속 [3.68](work-log-2026-10.md#368-seal과-다음-번호의-directory-fsync-공유-1017)에서 색인→seal·다음 번호→raw의 barrier를 유지하고 seal/다음 번호의 directory fsync만 공유했다. 별도 진단의 directory sync61→49회·raw data sync42회 동일을 확인했다. 동일128블록·3쌍의 raw append p99 중앙값은 streaming118→101ms, 누적99→29ms였다. ACK·최종 처리량은 사실상 같았고 streaming 수신 간격과 API tail은 증가했다. 복구/용량/삭제·fresh·공유 RPC 규칙과 기존 파일 형식을 유지한다. metadata I/O의 첫 개선이며 운영 tail 해결은 아니다.
+
+[3.69](work-log-2026-10.md#369-fresh-dbrpc-대기와-api-tail-분리-1017)에서 fresh의 DB·RPC 큐·HTTP와 API admission/SQL-wire/handler를 분리했다. scope/pointer/manifest를 같은 view로 검증해 fresh SQL11→5회·사전 DB p50 1.731→0.735ms를 확인했다. 호출마다 새 RPC·응답 뒤 epoch·같은 Store/transaction fence는 유지한다. 같은128블록·3쌍의 streaming API 단일/목록8 p99 중앙값은5.292/6.660→3.233/4.456ms였지만 누적은1.609/2.200→1.813/2.732ms로 증가했다. streaming capture/ACK/raw p99도 늘었고 fresh p99~185ms·누적 ACK~25.46초·4.957블록/s는 비슷했다. SQL 감소를 전체 tail 해결로 표시하지 않는다. 서버 SQL 집계와 API 요청별 시간·공유 호스트 편차의 한계는 [상세 결과](../SOURCE_FACTS.md#fresh-dbrpc-대기와-api-tail-분리-2026-10-17)를 따른다.
+
+[3.70](work-log-2026-10.md#370-capture와-writer-sql-종료-대기-감소-1017)은 이미 소유한 capture/bound writer transaction의 SQL 종료 rendezvous를 줄였다. 취소/rows 소비·소켓 재사용, 같은 Store/transaction/fresh·BEGIN/COMMIT/ROLLBACK·SendBatch·SQL 바인딩을 유지했다. 같은128블록·3쌍에서 streaming API 단일/목록8 p99 중앙값은3.948/7.688→2.491/3.746ms, 누적은2.767/3.856→1.777/3.637ms였다. streaming 세 쌍은 낮았으나 누적 첫 쌍·API p50은 증가했다. streaming capture p99는246.489→253.436ms로 소폭 증가했고 capture commit~219ms·ACK~440.74ms는 비슷했다. 채택 범위는 SQL 종료 비용과 관측된 API tail 감소이며 capture tail/SLO 해결은 아니다. [상세 분석·회귀·한계](../SOURCE_FACTS.md#capture와-writer-sql-종료-대기-감소-2026-10-17)를 따른다.
+
+[3.71](work-log-2026-10.md#371-유지보수-rpc의-fresh-배치-합류-1017)은 정기 canonical 검사와 commit fresh의 RPC 슬롯 경합을 줄였다. 낮은 rate/burst1 pool에서 유지보수 사전 조회만 최대500ms 모으며 foreground 도착 시 즉시 합류한다. deadline·FIFO/인증·기존 limiter·새 fresh/finality transaction 검사를 유지한다. 같은128블록·3쌍에서 streaming capture/ACK p99 중앙값259.427/480.103→213.765/419.706ms로 세 쌍 모두 낮았고 같은320개 논리조회에서 physical HTTP319/302/305→256회씩이었다. streaming API도 낮았으나 **누적 API 단일/목록8 p99는1.607/2.456→1.875/3.157ms로 세 쌍 모두 증가**했다. 누적 ACK/처리량은 비슷하다. 유지보수 지연·공유 호스트/원본 I/O 편차·실제 peer/SLO 미검증은 [상세 결과](../SOURCE_FACTS.md#유지보수-rpc의-fresh-배치-합류-2026-10-17)를 따른다.
+
+[3.72](work-log-2026-10.md#372-누적-api의-최신-높이블록-윈도우-통합-조회-1017)는 요청별 admission·SQL-wire·서버 parse/bind/execute와 handler를 분리했다. 기본 목록의 tip/높이 윈도우를 같은 PostgreSQL statement로 읽어 SQL2→1회로 줄였다. 필터/페이지·누락 높이·같은 Store/transaction·SQL 바인딩·오류/취소를 유지한다. busy token만으로 유지보수 grace를 줄인 후보는 같은320논리조회에서 Streaming HTTP256→305~308회로 늘어 제외했다. **최종 RPC/capture/writer/raw 정책·해시는3.71 그대로**다. 동일128블록·3쌍에서 누적 단일/목록8 API p99 중앙값2.812/3.682→1.945/2.648ms였고 단일은 세 쌍 모두 낮았다. 목록 마지막 쌍과 Streaming 단일 API는 악화했다. Streaming HTTP는6회 모두256회였지만 capture p99는190.575→206.360ms, raw p99도77.412→135.747ms로 늘어 수치상 지연 개선 유지까지 완료된 것은 아니다. [상세 결과/한계](../SOURCE_FACTS.md#누적-api의-최신-높이블록-윈도우-통합-조회-2026-10-17)를 따른다.
+
+[3.73](work-log-2026-10.md#373-streaming-capture와-회전-메타데이터-준비-1017)은 raw seal/create와 capture RPC 큐·SQL을 같은 블록에서 구분했다. 독립 seal/STORE 임시 파일을 먼저 준비하되 full Sync/Close/rename·index/metadata barrier·다음 raw 순서를 유지한다. 동일128블록·3쌍에서 Streaming capture p99 중앙값477.593→239.330ms·ACK686.458→533.842ms였지만 첫 쌍과 별도32블록 진단은 악화했다. 누적 목록 API p99는13.569→58.024ms로 세 쌍 모두 증가했고 단일도14.832→16.148ms였다. API SQL1회·DB4·RPC5/fresh 구현은 그대로지만 **수치상 API 개선 유지와 성능 수용은 미완료**다. 호스트 load164.67~243.08의 공유 환경이어서 코드 단독 인과를 확정하지 않는다. [전체 결과·검사·한계](../SOURCE_FACTS.md#streaming-capture와-회전-메타데이터-준비-2026-10-17)를 따른다.
+
+[3.74](work-log-2026-10.md#374-누적-api-재검증과-호스트-부하-확인-1017)의 저부하 API 재검증은 **미완료**다. 동일 바이너리 대조를 추가한18회 계획 중6회 시도/5회 통과 후 기준 코드에서도 API2초 timeout1건이 발생해 중단했다. 측정 시 load137.56~220.67·낮은 부하 통과0회이며3쌍 중앙값을 만들지 않았다. 같은 요청의 SQL/연결 획득 외에도 긴 handler/client 구간이 있어 DB 경합 하나로 원인을 확정하지 않는다. 측정 도구에 선택적 `--max-host-load`·startup/실행 전후 확인·부분 결과 보존을 추가했다. 실제 과부하 startup은 Docker 자원 생성 전에 중단했으며 Go 실행 코드/제한/fresh는 그대로다. [진단·실패·제약](../SOURCE_FACTS.md#누적-api-재검증과-호스트-부하-확인-2026-10-17)을 따른다.
+
+[3.75](work-log-2026-10.md#375-호스트-부하-원인과-고아-ci-조회-정리-1017)에서 indexer 프로젝트의 완료된 과거 CI를 기다리던 고아 쉘/대기 프로세스2개를 정리했다. 현재 수집/writer/test 잔여 실행 파일이나 소유 Docker 컨테이너는 발견되지 않았다. 주요 CPU 표본은 시스템 파일/메타데이터 처리와 별도 Unity/WBFT/빌드 작업이었고 메모리 압축/해제도 활발했다. 다른 프로젝트와 시스템 프로세스는 유지했다. 정리 대상 CPU는 거의0%였으며 이후3분 load73.75~196.89로 안정 조건이 충족되지 않아 API 측정은0회였다. [관측·소유 대조·정리 근거](../SOURCE_FACTS.md#호스트-부하-원인과-고아-ci-조회-정리-2026-10-17)를 따른다.
+
+다음 조건은 **다른 CPU/메모리 집중 작업이 끝난 낮고 일정한 호스트 부하**다. 누적 API 회귀를 같은3쌍으로 재검증한 뒤 capture36 SQL 왕복의 immutable row 저장 묶음을 평가한다. API admission·wire/행 소비·handler와 raw 회전 시점을 함께 확인한다. 낮은 token만으로 유지보수 합류를 줄이는 가설은 재적용하지 않는다. 매번 같은128블록·3쌍·DB 연결4·5 HTTP/s·커밋 직전 fresh를 유지한다. 원격 자료 부재를 최신값/0으로 바꾸거나 미처리 원본을 삭제해서 지연을 줄이지 않는다. 이후 무거운 API/추가 worker 예산과 실제 peer·외장 mount·24시간 운영을 검증한다. 별도 노드 설치나 운영 접속이 이 로컬 성능 결과로 완료된 것은 아니다.
+
+10/18 [3.76](work-log-2026-10.md#376-누적-api-비교-준비와-최종-호스트-안정성-확인-1018)에서는 build 후 screen14.04~16.96/비율1.208을 통과했지만 Docker 준비 뒤 첫 실행 전 load35로 guard가 중단했다. 모든 준비 후3분도30.15~82.39·마지막42.67로 기준에 미달했다. **본 비교0회**이며 잠깐의 screen 통과를3쌍 검증 완료로 표시하지 않는다. 소유 자원을 정리하고 다른 프로젝트/DB4/RPC5/fresh와 보호58파일을 유지했다. 다음 비교는 모든 준비가 끝난 뒤의 안정 구간을 기준으로 시작해야 한다.
+
+이어 [3.77](work-log-2026-10.md#377-모든-측정-준비-후-호스트-부하-재확인-1018)에서는00:21:11 KST에 빌드·복사·소유 Docker/PG 설정 확인을 모두 마친 뒤00:21:22~00:24:22에 관찰했다. load35.97~145.08·마지막132.45로 상한24를 계속 넘었고 **비교0회**다. 기존12개 컨테이너 상태와 보호58파일·DB4/RPC5/fresh를 보존했으며 소유 환경과 바이너리는 정리했다. 다른 프로젝트는 유지했고 안정된 호스트에서 같은3쌍 검증이 계속 필요하다.
+
+같은3.77의 후속00:31~00:34 재확인도 준비를 모두 마친 후 관찰했으나 load257.92~351.68·마지막257.92로 **비교0회**다. `/private/tmp/indexer-prepared-recheck-20261018-0030/final-audit.json`에 별도 보존했고 소유 환경/바이너리만 정리했다. 다른 프로젝트·기존12개 컨테이너 상태·보호58파일·DB4/RPC5/commit fresh는 유지했다. 같은3쌍 재검증은 미완료다.
+
+## 4. 운영 환경이나 별도 조건이 필요한 작업
+
+| ID | 남은 항목 | 진행 조건과 현재 상태 |
+| --- | --- | --- |
+| R03 | 운영 설정 확정 | 실제 외장 mount/ID·용량·raw/영구 객체/DB 경로, 시작 checkpoint·기존 DB 다음 높이·backfill·허용 중단 시간과 체인별 상태 보존을 확인한다. 공개 RPC4개·체인별5 HTTP/s·strict 상태 정책은 이미 결정했다. 기존 generic EVM Arc DB는 새 회계로 재색인이 필요하다. 별도 full node 구축은 선행 조건이 아니다. |
+| R05 | 실제 era1/RPC 비교 | 같은 체인의 실제 `gstable export-history` era1 파일과 RPC 접근이 필요하다. 변환 fixture 색인을 실제 export 비교 완료로 취급하지 않는다. |
+| R06 | Arc mainnet 검증 | 실제 접근 환경과 검증 범위를 정한 뒤 진행한다. 현재 testnet 표본을 mainnet 보장으로 확대하지 않는다. |
+| R07 | macOS SLO와 여러 호스트 비교 | 저장 commit/WAL 대기와 간헐 SLO 실패는 남아 있다. 실패 블록 trace로 원인을 확인한다. 로컬 Docker 비교는 승인됐고 추가 물리 호스트 비교는 접속 경로/시험 환경 확보 뒤 진행한다. Docker 용량 정리와 PostgreSQL 회귀 통과를 macOS SLO 해결로 표시하지 않는다. [3.22~3.23](work-log-2026-10.md#322-101415-macos-slo-재현캐시-수명-수정wal-대기-분리) |
+| R08 | 회귀 조건 유지 — 현재 검증 완료 | 과거 DEX reorg flake의 재현 조건은 유지한다. keepalive 기능/race 보완, 전체 app을 포함한 비성능 전체 회귀(3.86), API 동시성200회(3.87)는 완료했으므로 미완료로 재제안하지 않는다. 실제 새 실패나 관련 소스 변경이 생기면 영향 범위의 검사를 수행하며 commit/PR 전 race 기준은 유지한다. |
+| R09 | frontend 이전 | GraphQL 문서26개와 REST 이전은 별도 frontend 작업이다. 이 세션의 저장소 수정 범위에 포함하지 않는다. [이전 안내](../FRONTEND_MIGRATION.md) |
+| R10 | 태그·외부 배포·원격 정리 | 별도 요청/승인 뒤 진행한다. 남은 구현의 자동 후속 단계가 아니다. |
+
+## 5. 보류와 범위 밖
+
+- Stable 전용 회계·시스템 거래·CometBFT 증명·mainnet 검증은 제외한다.
+- K2 이진 키는 디스크 절감6.7% 재측정 뒤 보류 상태다. 기존 값 형식 일괄 변환도 보류하며 새 원천/feature 저장 규칙을 임의로 통일하지 않는다.
+- perp 마켓 이름은 구현하지 않는 결정을 유지한다. AA의 `allBundlers`·`allPaymasters` 목록 API는 [별도 제안](../AA_BACKEND_TASKS.md)이며 승인된 구현 목록이 아니다.
+- astgraph 바이너리를 지우기 위한 Git history 재작성/force push는 하지 않는다.
+- 기존 ExEx 노드·snapshot을 공간 확보 후 자동으로 다시 설치하거나 실행하지 않는다. Docker의 용도 불명 볼륨7개와 기존 사용자 데이터는 보존한다.
+
+## 6. 기존 경로에서 완료한 작업과 근거
+
+| 항목 | 완료한 범위 |
+| --- | --- |
+| R01 Arc 회계 표본/저장소 대조 | mint/burn·내부 이동·실패 거래·수수료 표본,100블록 잔액 대조와 동일 RPC 기록의 Pebble/PostgreSQL 조회 비교. 전체 역사/fork/mainnet 검증은 아님. [3.8](work-log-2026-10.md#38-1014-arc-회계-표본-확대동일-rpc-저장소-대조) |
+| R02 네 테스트넷 동시 실행 | 기존 RPC 경로의17블록·372거래·654로그와 DB/profile/API/stream 격리, 한 RPC503·복구·프로세스 재시작. 새 feed24시간 검증은 아님. [3.9](work-log-2026-10.md#39-1014-공개-rpc-멀티체인-동시-실행) |
+| 기존 수집 비용 개선 | hash 기반 상태 준비·HTTP 배치·연속 수집 큐·head 관측 공유·StableNet 조상/epoch 재사용. 새 peer/relay 수집의 성능 증거는 아님. [3.24~3.26](work-log-2026-10.md#324-1015-stablenet-조상-영수증-제거해시별-epoch-재사용) |
+| 과거 ExEx 비교 | 지원 확인·Rust/Go IPC fixture·동일32블록 기록 비교까지. 실제 node sync/새 window feed의 처리량 보장은 아님. [3.27~3.29](work-log-2026-10.md#327-arc-exex-node-feed-모듈-구현-1015) |
+| 공통 프레임워크/체인 확장 | R0~R6의 [10/9 완료 검토](plan-audit.md), SQL batch/높이 undo/잔액 prefetch·Sepolia 헤더·full node 상태 검사·SDK 및 [체인 커스터마이징](../CHAIN_CUSTOMIZATION.md) 예제. 새 window 경로 연결은 위 순서대로 진행 |
+
+작업을 끝낼 때 현재 상태와 근거를 갱신하고, 측정의 입력·환경·실패·미검증 범위는 작업 기록에 남긴다.

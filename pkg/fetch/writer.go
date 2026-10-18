@@ -2,16 +2,20 @@ package fetch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/0xmhha/indexer-go/pkg/source"
 	"runtime/debug"
 	"sync"
 
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
+	unitprogress "github.com/0xmhha/indexer-go/pkg/progress"
 )
 
 // The writer is the single goroutine that changes indexed state. Indexing a
@@ -150,9 +154,21 @@ func (f *Fetcher) indexBlock(ctx context.Context, fb *fetchedBlock) error {
 	if f.txr == nil {
 		return errNoBlockTransactions
 	}
-	return f.write().do(ctx, "indexBlock", func(ctx context.Context) error {
+	err := f.write().do(ctx, "indexBlock", func(ctx context.Context) error {
 		return f.writeBlock(ctx, fb)
 	})
+	if err != nil {
+		return err
+	}
+	if acknowledger, ok := f.src.(source.CommitAcknowledger); ok {
+		started := f.pipelineMetrics.start()
+		err := acknowledger.Acknowledge(ctx, fb.block)
+		f.pipelineMetrics.finish(stageSourceAck, started, err != nil)
+		if err != nil {
+			return fmt.Errorf("block %d is durable but feed ACK failed: %w", fb.height(), err)
+		}
+	}
+	return nil
 }
 
 func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
@@ -162,7 +178,7 @@ func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
 	switch {
 	case err == nil && storedHash == fb.block.Hash:
 		f.logger.Debug("Block already indexed, skipping", zap.Uint64("height", height))
-		return f.writeCursorOnly(ctx, height)
+		return f.writeCursorOnlyValidated(ctx, fb)
 	case err == nil:
 		return fmt.Errorf("%w (height %d stored %s fetched %s): %w", ErrBlockConflict, height, storedHash.Hex(), fb.block.Hash.Hex(), &ReorgError{Height: height})
 	case !errors.Is(err, port.ErrNotFound):
@@ -189,6 +205,9 @@ func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
 	if err := f.applyBlock(txCtx, fb); err != nil {
 		return err
 	}
+	if err := f.recordFeatureProgress(txCtx, fb, f.features, true, true); err != nil {
+		return err
+	}
 	if err := f.advanceCursor(txCtx, height); err != nil {
 		return err
 	}
@@ -201,6 +220,9 @@ func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
 		if err := f.beforeCommitHook(height); err != nil {
 			return err
 		}
+	}
+	if err := f.validateSourceCommit(txCtx, fb); err != nil {
+		return err
 	}
 	commitStarted := f.pipelineMetrics.start()
 	err = tx.Commit()
@@ -220,6 +242,51 @@ func (f *Fetcher) writeBlock(ctx context.Context, fb *fetchedBlock) error {
 		zap.Int("receipts", len(fb.receipts)),
 	)
 	return nil
+}
+
+func (f *Fetcher) validateSourceCommit(ctx context.Context, fb *fetchedBlock) (err error) {
+	validator, ok := f.src.(source.CommitValidator)
+	if !ok {
+		return nil
+	}
+	started := f.pipelineMetrics.start()
+	defer func() { f.pipelineMetrics.finish(stageSourceValidate, started, err != nil) }()
+	durable, ok := f.storage.(port.BlockDurability)
+	if !ok {
+		return errors.New("fetch: validated source requires explicit block durability")
+	}
+	if err := durable.RequireBlockDurability(ctx); err != nil {
+		return err
+	}
+	rctx, cancel := f.rpcCtx(ctx)
+	defer cancel()
+	if err := validator.ValidateCommit(rctx, fb.block); err != nil {
+		return fmt.Errorf("validate source block %d before commit: %w", fb.height(), err)
+	}
+	return nil
+}
+
+// A committed block retried after a lost ACK still needs a fresh check before
+// moving a cursor or delivering another source ACK. It retains its old undo.
+func (f *Fetcher) writeCursorOnlyValidated(ctx context.Context, fb *fetchedBlock) error {
+	if _, ok := f.src.(source.CommitValidator); !ok {
+		return f.writeCursorOnly(ctx, fb.height())
+	}
+	txCtx, tx, err := f.txr.BeginBlock(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := f.recordFeatureProgress(txCtx, fb, f.features, false, true); err != nil {
+		return err
+	}
+	if err := f.advanceCursor(txCtx, fb.height()); err != nil {
+		return err
+	}
+	if err := f.validateSourceCommit(txCtx, fb); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // writeCursorOnly moves the cursor for a skipped, already stored block in its
@@ -275,6 +342,9 @@ func (f *Fetcher) writeBackfillBlock(ctx context.Context, p *feature.Pipeline, f
 	}); err != nil {
 		return fmt.Errorf("backfill: block %d: %w", h, err)
 	}
+	if err := f.recordFeatureProgress(txCtx, fb, p, true, false); err != nil {
+		return err
+	}
 	if progress != nil {
 		if err := progress(txCtx, h); err != nil {
 			return fmt.Errorf("backfill: record progress at %d: %w", h, err)
@@ -292,6 +362,9 @@ func (f *Fetcher) writeBackfillBlock(ctx context.Context, p *feature.Pipeline, f
 		if err := f.beforeCommitHook(h); err != nil {
 			return err
 		}
+	}
+	if err := f.validateSourceCommit(txCtx, fb); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("backfill: commit block %d: %w", h, err)
@@ -369,4 +442,92 @@ func (f *Fetcher) writeBackfillProgress(ctx context.Context, end uint64, progres
 		return fmt.Errorf("backfill: record progress at %d: %w", end, err)
 	}
 	return tx.Commit()
+}
+
+// Metadata joins the same undo/outbox transaction as the actual handlers.
+func (f *Fetcher) recordFeatureProgress(ctx context.Context, fb *fetchedBlock, p *feature.Pipeline, applied, head bool) (err error) {
+	reporter, ok := f.src.(source.ProjectionReporter)
+	if !ok {
+		return nil
+	}
+	started := f.pipelineMetrics.start()
+	defer func() { f.pipelineMetrics.finish(stageFeatureProgress, started, err != nil) }()
+	kv, ok := f.storage.(port.KVStore)
+	if !ok {
+		return errors.New("facts progress requires transactional KV")
+	}
+	in, e := reporter.ProjectionInput(ctx, fb.block)
+	if e != nil {
+		return e
+	}
+	if p != nil {
+		for _, u := range p.Units() {
+			if e = unitprogress.Record(ctx, kv, u.Name, u.Definition, in, applied); e != nil {
+				return e
+			}
+		}
+	}
+	if head {
+		point := model.BlockPoint{Height: fb.height(), Hash: fb.block.Hash}
+		if b, e := kv.Get(ctx, []byte(unitprogress.HeadKey)); e == nil {
+			var old model.BlockPoint
+			if e = unitprogress.Decode(b, &old); e != nil {
+				return e
+			}
+			if old.Height > point.Height {
+				return nil
+			}
+		} else if !errors.Is(e, port.ErrNotFound) {
+			return e
+		}
+		b, e := json.Marshal(point)
+		if e != nil {
+			return e
+		}
+		return kv.Put(ctx, []byte(unitprogress.HeadKey), b)
+	}
+	return nil
+}
+
+// ConfigureProjection records the declared source scope before workers start.
+// It makes no completion claim and joins the existing writer lifecycle.
+func (f *Fetcher) ConfigureProjection(ctx context.Context, d model.ProjectionDescriptor) error {
+	if d.ValidateStateChanges() != nil || d.ValidateTelemetry() != nil || d.ValidateCallTraces() != nil || d.ValidateBlobCapability() != nil || d.ValidateSourceLookup() != nil || d.ValidateSourceSearch() != nil {
+		return port.ErrInvalidData
+	}
+	if d.StateProofs != nil && (d.StateProofs.Validate() != nil || d.StateProofs.FromHeight <= d.Anchor.Number) {
+		return port.ErrInvalidData
+	}
+	if f.txr == nil || d.Version != 1 || d.Anchor.Validate() != nil || d.Plan.Validate() != nil || len(d.Workers) > 8 {
+		return port.ErrInvalidData
+	}
+	if _, ok := f.src.(source.ProjectionReporter); !ok {
+		return port.ErrInvalidData
+	}
+	b, e := json.Marshal(d)
+	if e != nil {
+		return e
+	}
+	return f.write().do(ctx, "sourceDescriptor", func(ctx context.Context) error {
+		txCtx, tx, e := f.txr.BeginBlock(ctx)
+		if e != nil {
+			return e
+		}
+		defer tx.Rollback()
+		durable, ok := f.storage.(port.BlockDurability)
+		if !ok {
+			return port.ErrInvalidData
+		}
+		if e = durable.RequireBlockDurability(txCtx); e != nil {
+			return e
+		}
+		kv, ok := f.storage.(port.KVStore)
+		if !ok {
+			return port.ErrInvalidData
+		}
+		if e = kv.Put(txCtx, []byte(unitprogress.DescriptorKey), b); e != nil {
+			return e
+		}
+		return tx.Commit()
+	})
 }

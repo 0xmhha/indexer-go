@@ -68,6 +68,11 @@ type Config struct {
 	StatePrefetch   bool
 	PipelineMetrics bool
 	StateMaxBytes   int64
+	// AcquisitionQueue separates continuous state acquisition from ordered
+	// processing. The queue bounds include the block currently being written.
+	AcquisitionQueue bool
+	QueueBlocks      int
+	QueueMaxBytes    int64
 	// StartHeight is the block height to start indexing from
 	StartHeight uint64
 
@@ -119,6 +124,12 @@ type Config struct {
 
 // Validate validates the fetcher configuration
 func (c *Config) Validate() error {
+	if c.QueueBlocks < 0 || c.QueueBlocks > 65536 || c.QueueMaxBytes < 0 {
+		return fmt.Errorf("invalid acquisition queue limits")
+	}
+	if c.AcquisitionQueue && !c.StatePrefetch {
+		return fmt.Errorf("acquisition_queue requires state_prefetch")
+	}
 	if c.BatchSize <= 0 {
 		return fmt.Errorf("batch size must be positive")
 	}
@@ -227,7 +238,7 @@ func NewFetcher(client Client, storage Storage, config *Config, logger *zap.Logg
 	txr, _ := storage.(port.BlockTransactor)
 
 	f := &Fetcher{
-		pipelineMetrics: pipelineMetrics{enabled: config.StatePrefetch || config.PipelineMetrics},
+		pipelineMetrics: pipelineMetrics{enabled: config.StatePrefetch || config.PipelineMetrics || config.AcquisitionQueue},
 		client:          client,
 		storage:         storage,
 		config:          config,
@@ -259,6 +270,9 @@ func (f *Fetcher) GetChainID() string {
 
 // FetchBlock fetches and indexes one block.
 func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
+	if f.config.AcquisitionQueue {
+		return f.indexAcquired(ctx, height, &height)
+	}
 	return f.indexRange(ctx, height, height, 1)
 }
 
@@ -267,6 +281,9 @@ func (f *Fetcher) FetchBlock(ctx context.Context, height uint64) error {
 func (f *Fetcher) FetchRange(ctx context.Context, start, end uint64) error {
 	if f.sparse {
 		return f.indexSparse(ctx, start, end)
+	}
+	if f.config.AcquisitionQueue {
+		return f.indexAcquired(ctx, start, &end)
 	}
 	return f.indexRange(ctx, start, end, f.workers())
 }
@@ -304,6 +321,9 @@ func (f *Fetcher) Run(ctx context.Context) error {
 	progressDone := make(chan struct{})
 	go func() { defer close(progressDone); f.followTarget(progressCtx) }()
 	defer func() { stopProgress(); <-progressDone }()
+	if f.config.AcquisitionQueue && !f.sparse {
+		return f.runAcquired(ctx)
+	}
 
 	// Get next height to fetch
 	nextHeight := f.GetNextHeight(ctx)
@@ -423,19 +443,27 @@ func (f *Fetcher) SetHeadNotifier(ch <-chan struct{}) { f.heads = ch }
 
 // waitForHead waits for the poll interval or a head notification.
 func (f *Fetcher) waitForHead(ctx context.Context) error {
+	_, err := f.waitHeadSignal(ctx)
+	return err
+}
+
+// waitHeadSignal distinguishes an explicit new-head notification from a
+// timer, so acquisition can refresh rather than reuse a pre-notification head.
+func (f *Fetcher) waitHeadSignal(ctx context.Context) (bool, error) {
 	d := f.pollInterval()
 	if f.heads == nil || d <= 0 {
-		return sleepCtx(ctx, d)
+		return false, sleepCtx(ctx, d)
 	}
 	t := time.NewTimer(d)
 	defer t.Stop()
 	select {
 	case <-t.C:
 	case <-f.heads:
+		return true, nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return false, ctx.Err()
 	}
-	return nil
+	return false, nil
 }
 
 func (f *Fetcher) pollInterval() time.Duration {

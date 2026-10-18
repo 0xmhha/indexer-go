@@ -1,0 +1,31 @@
+# Standalone window.ReadLayout format. In app YAML nest this under window_storage.
+# App activation requires an explicit supported source.feed; see docs/FEED_APP.md.
+# Capacities are examples, not a measured 24-hour guarantee. No automatic initialization.
+volumes:
+  external:
+    root: /Volumes/IndexerData
+    id: indexer-external-01
+    max_bytes: 103079215104  # 96 GiB total; includes 1 MiB manager allowance
+    min_free_bytes: 21474836480  # 20 GiB above raw-window writes
+    allow_directory: false
+windows:
+  arc-testnet:
+    volume: external
+    path: /Volumes/IndexerData/indexer/window/arc
+    max_bytes: 34359738368  # 32 GiB
+    retention: 24h
+  bsc-testnet:
+    volume: external
+    path: /Volumes/IndexerData/indexer/window/bsc
+    max_bytes: 17179869184  # 16 GiB
+    retention: 24h
+  sepolia:
+    volume: external
+    path: /Volumes/IndexerData/indexer/window/sepolia
+    max_bytes: 17179869184
+    retention: 24h
+  stablenet-testnet:
+    volume: external
+    path: /Volumes/IndexerData/indexer/window/stablenet
+    max_bytes: 17179869184
+    retention: 24h

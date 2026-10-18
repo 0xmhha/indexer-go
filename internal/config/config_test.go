@@ -928,3 +928,49 @@ func TestFeatureSettings(t *testing.T) {
 		t.Errorf("settings lost after the environment: %v %+v", err, got)
 	}
 }
+
+func TestAcquisitionQueueConfigurationValidation(t *testing.T) {
+	cfg := NewConfig()
+	cfg.RPC.Endpoint = "http://127.0.0.1:1"
+	cfg.Database.Path = t.TempDir()
+	cfg.Indexer.AcquisitionQueue = true
+	require.ErrorContains(t, cfg.Validate(), "requires state_prefetch")
+	cfg.Indexer.StatePrefetch = true
+	require.NoError(t, cfg.Validate())
+	cfg.Indexer.QueueBlocks = 65537
+	require.ErrorContains(t, cfg.Validate(), "queue limits")
+	cfg.Indexer.QueueBlocks = 256
+	cfg.Indexer.QueueMaxBytes = -1
+	require.ErrorContains(t, cfg.Validate(), "queue limits")
+	cfg.Indexer.QueueMaxBytes = 256 << 20
+	on, off, limit := true, false, -1
+	cfg.MultiChain.Enabled = true
+	cfg.MultiChain.Chains = []ChainConfig{{ID: "arc", RPCEndpoint: "http://127.0.0.1:1", AcquisitionQueue: &on, StatePrefetch: &off}}
+	require.ErrorContains(t, cfg.Validate(), "requires state_prefetch")
+	cfg.MultiChain.Chains[0].StatePrefetch = &on
+	cfg.MultiChain.Chains[0].QueueBlocks = &limit
+	require.ErrorContains(t, cfg.Validate(), "queue limits")
+}
+
+func TestNodeFeedRequiresQueuedFullStateIngest(t *testing.T) {
+	cfg := NewConfig()
+	cfg.RPC.Endpoint = "http://localhost:8545"
+	cfg.Database.Path = t.TempDir()
+	cfg.Source.NodeFeedSocket = "/tmp/arc-feed.sock"
+	require.ErrorContains(t, cfg.Validate(), "node_feed_socket")
+	cfg.Indexer.StatePrefetch = true
+	cfg.Indexer.AcquisitionQueue = true
+	require.NoError(t, cfg.Validate())
+	cfg.Source.EraDir = "/tmp/era"
+	require.ErrorContains(t, cfg.Validate(), "node_feed_socket")
+	cfg.Source.EraDir = ""
+	cfg.Source.NodeFeedSocket = "relative.sock"
+	require.ErrorContains(t, cfg.Validate(), "absolute")
+	cfg.Source.NodeFeedSocket = ""
+	cfg.MultiChain.Enabled = true
+	off := false
+	cfg.MultiChain.Chains = []ChainConfig{{ID: "arc", ChainID: 5042002, RPCEndpoint: "http://localhost:8545", Enabled: true, NodeFeedSocket: "/tmp/arc-feed.sock", StatePrefetch: &off}}
+	require.ErrorContains(t, cfg.Validate(), "state_prefetch")
+	cfg.MultiChain.Chains[0].StatePrefetch = nil
+	require.NoError(t, cfg.Validate())
+}

@@ -13,11 +13,13 @@ import (
 // directly. Everything else must go through s.kv(ctx) / s.newBatch(ctx) so a
 // block transaction bound to ctx captures it. These functions run outside the
 // ingest path (startup, reindex tooling, the exported Batch API) or implement
-// the routing itself.
+// the routing itself. CaptureUpdate owns a separate source-facts transaction
+// and explicitly rejects contexts bound to a block transaction.
 var directDBAllowed = map[string]bool{
 	"kv":                   true, // routing
 	"newBatch":             true, // routing
 	"beginBlock":           true, // creates the block transaction batch
+	"CaptureUpdate":        true, // independent durable source transaction; bound block contexts are rejected (TestCaptureIsolationAndDurability)
 	"loadTransactionCount": true, // startup
 	"checkSchema":          true, // startup
 	"isEmpty":              true, // startup

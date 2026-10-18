@@ -189,6 +189,23 @@ func TestRateLimit(t *testing.T) {
 	assert.GreaterOrEqual(t, time.Since(start), 200*time.Millisecond, "6 calls at 20/s take at least 250ms after the first")
 }
 
+func TestResponseBoundBeforeDecode(t *testing.T) {
+	a, b := newNode(t, 1), newNode(t, 2)
+	a.srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		a.calls.Add(1)
+		_, _ = w.Write(make([]byte, 1025))
+	})
+	p, _ := newPool(t, Config{MaxResponseBytes: 1024}, a, b)
+	id, e := call(t, p)
+	require.NoError(t, e)
+	require.Equal(t, 2, id)
+	require.EqualValues(t, 1, a.calls.Load())
+	require.EqualValues(t, 1, p.Status()[0].Failures)
+	// Even a caller's oversized limit cannot remove the hard network cap.
+	p, _ = newPool(t, Config{MaxResponseBytes: 1 << 62}, b)
+	require.Equal(t, DefaultMaxResponseBytes, p.maxResponseBytes)
+}
+
 func TestRejectsBadEndpoints(t *testing.T) {
 	_, err := New(Config{})
 	assert.Error(t, err)

@@ -40,6 +40,11 @@ func TestSelection(t *testing.T) {
 // restore Ethereum accounting and classify the native emitter as an ERC-20.
 func TestInheritedAccounting(t *testing.T) {
 	p := projectarc.New()
+	blobs, err := chains.BlobCapabilityOf(p)
+	require.NoError(t, err)
+	require.Equal(t, projectarc.ID, blobs.Profile)
+	require.Equal(t, model.BlobUnsupported, blobs.Status)
+	require.Equal(t, arc.BlobAuditRevision, blobs.Revision)
 	emitter, ok := chains.NativeCoinContract(p)
 	require.True(t, ok)
 	require.Equal(t, arc.NativeEmitter, emitter)

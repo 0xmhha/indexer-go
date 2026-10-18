@@ -343,10 +343,12 @@ func (s *Store) SearchTokens(ctx context.Context, query string, limit int) ([]*p
 	}
 	sql := "SELECT " + metadataColumns + ` FROM token_metadata
 		WHERE strpos(lower(name), $1) > 0 OR strpos(lower(symbol), $1) > 0 ORDER BY address`
+	args := []any{strings.ToLower(query)}
 	if limit > 0 {
-		sql += " LIMIT " + itoa(limit)
+		sql += " LIMIT $2"
+		args = append(args, limit)
 	}
-	rows, err := s.q(ctx).Query(ctx, sql, strings.ToLower(query))
+	rows, err := s.q(ctx).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}

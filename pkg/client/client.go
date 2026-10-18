@@ -64,7 +64,8 @@ type Config struct {
 	// over to them in order (pkg/rpcpool).
 	Fallbacks []string
 	// RateLimit caps requests per second to the nodes (0: none).
-	RateLimit float64
+	RateLimit     float64
+	CoalesceReads bool
 }
 
 // NewClient creates a new Ethereum client
@@ -97,10 +98,11 @@ func NewClient(cfg *Config) (*Client, error) {
 		// HTTP(S) calls go through the endpoint pool: per-attempt timeout,
 		// rate limit and failover to the fallback endpoints.
 		pool, err = rpcpool.New(rpcpool.Config{
-			Endpoints: append([]string{cfg.Endpoint}, cfg.Fallbacks...),
-			Timeout:   cfg.Timeout,
-			RateLimit: cfg.RateLimit,
-			Logger:    logger,
+			Endpoints:     append([]string{cfg.Endpoint}, cfg.Fallbacks...),
+			Timeout:       cfg.Timeout,
+			RateLimit:     cfg.RateLimit,
+			CoalesceReads: cfg.CoalesceReads,
+			Logger:        logger,
 		})
 		if err != nil {
 			return nil, err
@@ -113,6 +115,9 @@ func NewClient(cfg *Config) (*Client, error) {
 		rpcClient, err = rpc.DialContext(ctx, cfg.Endpoint)
 	}
 	if err != nil {
+		if pool != nil {
+			pool.Close()
+		}
 		return nil, fmt.Errorf("failed to connect to RPC endpoint: %w", err)
 	}
 
@@ -128,7 +133,7 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	// Verify connection
 	if err := client.Ping(ctx); err != nil {
-		rpcClient.Close()
+		client.Close()
 		return nil, fmt.Errorf("failed to ping RPC endpoint: %w", err)
 	}
 
@@ -146,6 +151,9 @@ func (c *Client) Ping(ctx context.Context) error {
 
 // Close closes the client connection
 func (c *Client) Close() {
+	if c.pool != nil {
+		c.pool.Close()
+	}
 	if c.ethClient != nil {
 		c.ethClient.Close()
 	}

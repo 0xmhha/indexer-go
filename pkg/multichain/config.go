@@ -7,12 +7,19 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/feed"
 )
 
 // ChainConfig defines the configuration for a single blockchain connection.
 type ChainConfig struct {
-	StatePrefetch  *bool `yaml:"state_prefetch,omitempty" json:"statePrefetch,omitempty"`
-	StateBatchSize *int  `yaml:"state_batch_size,omitempty" json:"stateBatchSize,omitempty"`
+	Feed             *feed.Config `yaml:"feed,omitempty" json:"-"`
+	NodeFeedSocket   string       `yaml:"node_feed_socket,omitempty" json:"-"`
+	CoalesceReads    *bool        `yaml:"coalesce_reads,omitempty" json:"coalesceReads,omitempty"`
+	AcquisitionQueue *bool        `yaml:"acquisition_queue,omitempty" json:"acquisitionQueue,omitempty"`
+	QueueBlocks      *int         `yaml:"queue_blocks,omitempty" json:"queueBlocks,omitempty"`
+	QueueMaxBytes    *int64       `yaml:"queue_max_bytes,omitempty" json:"queueMaxBytes,omitempty"`
+	StatePrefetch    *bool        `yaml:"state_prefetch,omitempty" json:"statePrefetch,omitempty"`
+	StateBatchSize   *int         `yaml:"state_batch_size,omitempty" json:"stateBatchSize,omitempty"`
 	// ID is a unique identifier for this chain instance (e.g., "stableone-mainnet").
 	ID string `yaml:"id" json:"id"`
 	// Name is a human-readable name for the chain (e.g., "StableOne Mainnet").
@@ -121,6 +128,10 @@ func (c *ManagerConfig) Validate() error {
 
 // Validate validates a single chain configuration.
 func (c *ChainConfig) Validate() error {
+	if c.QueueBlocks != nil && (*c.QueueBlocks < 0 || *c.QueueBlocks > 65536) || c.QueueMaxBytes != nil && *c.QueueMaxBytes < 0 {
+		return errors.New("invalid acquisition queue limits")
+	}
+
 	if c.StateBatchSize != nil && (*c.StateBatchSize < 0 || *c.StateBatchSize > 64) {
 		return errors.New("state_batch_size must be between 1 and 64 (0 defaults to 1)")
 	}

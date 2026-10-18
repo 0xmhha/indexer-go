@@ -129,6 +129,9 @@ func (s *Store) blockWhere(ctx context.Context, where string, arg any) (*model.B
 	if err := s.q(ctx).QueryRow(ctx, "SELECT data FROM blocks WHERE "+where+" LIMIT 1", arg).Scan(&data); err != nil {
 		return nil, notFound(err)
 	}
+	if finish := observeDecode(ctx); finish != nil {
+		defer finish()
+	}
 	return model.DecodeBlock(data)
 }
 
@@ -144,6 +147,9 @@ func (s *Store) GetBlocks(ctx context.Context, start, end uint64) ([]*model.Bloc
 	datas, err := pgx.CollectRows(rows, pgx.RowTo[[]byte])
 	if err != nil {
 		return nil, err
+	}
+	if finish := observeDecode(ctx); finish != nil {
+		defer finish()
 	}
 	out := make([]*model.Block, 0, len(datas))
 	for _, d := range datas {
@@ -377,7 +383,8 @@ func (s *Store) transactionsByAddress(ctx context.Context, addr common.Address, 
 		}
 		where, args = where+" AND id "+cmp+" $2", append(args, id)
 	}
-	rows, err := s.q(ctx).Query(ctx, "SELECT id, tx_hash FROM address_transactions WHERE "+where+" ORDER BY "+order+limitClause(page, limit), args...)
+	sql := "SELECT id, tx_hash FROM address_transactions WHERE " + where + " ORDER BY " + order + limitClause(page, limit, &args)
+	rows, err := s.q(ctx).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, "", err
 	}

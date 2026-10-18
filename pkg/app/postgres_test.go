@@ -55,7 +55,7 @@ func indexWithDriver(t *testing.T, sc *testchain.Scenario, driver string) map[st
 		dsn := postgresDSN(t)
 		schema := testSchema(dir)
 		cfg.Database.Driver = config.DriverPostgres
-		cfg.Database.Postgres = config.PostgresConfig{DSN: dsn, Schema: schema, MaxConns: 8}
+		cfg.Database.Postgres = config.PostgresConfig{DSN: dsn, Schema: schema, MaxConns: 4}
 		t.Cleanup(func() { dropTestSchemas(dsn, schema) })
 	}
 	cfg.API.Enabled = false

@@ -15,9 +15,10 @@ const ID = "project-arc"
 type Profile struct{ *evm.Profile }
 
 var (
-	_ chains.Profile           = (*Profile)(nil)
-	_ chains.AccountingProfile = (*Profile)(nil)
-	_ chains.BinaryProfile     = (*Profile)(nil)
+	_ chains.Profile               = (*Profile)(nil)
+	_ chains.AccountingProfile     = (*Profile)(nil)
+	_ chains.BinaryProfile         = (*Profile)(nil)
+	_ chains.BlobCapabilityProfile = (*Profile)(nil)
 )
 
 // New retains Arc's header, transaction, receipt and native accounting rules.

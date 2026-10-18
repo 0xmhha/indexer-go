@@ -59,10 +59,12 @@ func (s *Store) ReadOutbox(ctx context.Context, after uint64, limit int) ([]port
 		return nil, nil
 	}
 	sql := "SELECT seq, type, data FROM outbox WHERE seq > $1 ORDER BY seq"
+	args := []any{i64(after)}
 	if limit > 0 {
-		sql += " LIMIT " + itoa(limit)
+		sql += " LIMIT $2"
+		args = append(args, limit)
 	}
-	rows, err := s.q(ctx).Query(ctx, sql, i64(after))
+	rows, err := s.q(ctx).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}

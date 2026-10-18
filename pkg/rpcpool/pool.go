@@ -18,10 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/0xmhha/indexer-go/pkg/feedtelemetry"
 	"io"
 	"net/http"
 	"net/url"
+	"runtime/trace"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -30,6 +33,11 @@ import (
 
 // DefaultCooldown is how long a failed endpoint is skipped.
 const DefaultCooldown = 10 * time.Second
+
+// DefaultMaxResponseBytes bounds an entire physical HTTP response before JSON
+// decoding, including batches and failed endpoints. Dataset decoders impose
+// smaller semantic limits. This does not change the shared request budget.
+const DefaultMaxResponseBytes int64 = 64 << 20
 
 // Config configures a Pool.
 type Config struct {
@@ -46,19 +54,25 @@ type Config struct {
 	// DefaultCooldown).
 	Cooldown time.Duration
 	// Transport sends the requests (default http.DefaultTransport).
-	Transport http.RoundTripper
-	Logger    *zap.Logger
+	Transport        http.RoundTripper
+	MaxResponseBytes int64
+	Logger           *zap.Logger
+	// CoalesceReads combines concurrent independent reads; disabled by default.
+	CoalesceReads bool
 }
 
 // Pool is an http.RoundTripper over several endpoints.
 type Pool struct {
-	endpoints []*endpoint
-	timeout   time.Duration
-	cooldown  time.Duration
-	limiter   *rate.Limiter
-	transport http.RoundTripper
-	logger    *zap.Logger
-	now       func() time.Time
+	telemetry        atomic.Pointer[feedtelemetry.Recorder]
+	endpoints        []*endpoint
+	reads            *readCoalescer
+	timeout          time.Duration
+	cooldown         time.Duration
+	limiter          *rate.Limiter
+	transport        http.RoundTripper
+	maxResponseBytes int64
+	logger           *zap.Logger
+	now              func() time.Time
 }
 
 type endpoint struct {
@@ -76,11 +90,15 @@ func New(cfg Config) (*Pool, error) {
 		return nil, errors.New("rpcpool: no endpoint")
 	}
 	p := &Pool{
-		timeout:   cfg.Timeout,
-		cooldown:  cfg.Cooldown,
-		transport: cfg.Transport,
-		logger:    cfg.Logger,
-		now:       time.Now,
+		timeout:          cfg.Timeout,
+		cooldown:         cfg.Cooldown,
+		transport:        cfg.Transport,
+		maxResponseBytes: cfg.MaxResponseBytes,
+		logger:           cfg.Logger,
+		now:              time.Now,
+	}
+	if p.maxResponseBytes <= 0 || p.maxResponseBytes > DefaultMaxResponseBytes {
+		p.maxResponseBytes = DefaultMaxResponseBytes
 	}
 	if p.cooldown <= 0 {
 		p.cooldown = DefaultCooldown
@@ -104,6 +122,9 @@ func New(cfg Config) (*Pool, error) {
 			return nil, fmt.Errorf("rpcpool: endpoint %q is not an HTTP(S) URL", raw)
 		}
 		p.endpoints = append(p.endpoints, &endpoint{url: u})
+	}
+	if cfg.CoalesceReads {
+		p.reads = newReadCoalescer(p)
 	}
 	return p, nil
 }
@@ -135,15 +156,35 @@ func (p *Pool) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		_ = req.Body.Close()
 	}
-	if p.limiter != nil {
-		if err := p.limiter.Wait(ctx); err != nil {
-			return nil, err
+	if p.reads != nil {
+		if parts, batch := readEnvelope(req, body); len(parts) > 0 {
+			return p.reads.roundTrip(req, parts, batch)
 		}
 	}
+	return p.send(ctx, req, body, false)
+}
 
+// Close cancels and joins the optional read dispatcher. It is idempotent.
+func (p *Pool) Close() {
+	if p.reads != nil {
+		p.reads.close()
+	}
+}
+
+func (p *Pool) send(ctx context.Context, req *http.Request, body []byte, reserved bool) (*http.Response, error) {
 	var lastErr error
 	for _, ep := range p.order() {
+		if !reserved && p.limiter != nil {
+			if err := p.waitLimit(ctx); err != nil {
+				return nil, err
+			}
+		}
+		reserved = false
+		region := trace.StartRegion(ctx, "rpc.http")
+		span := p.telemetry.Load().Start(feedtelemetry.RPCHTTP)
 		resp, err := p.attempt(ctx, req, body, ep)
+		span.End(err)
+		region.End()
 		if err == nil {
 			ep.markUp()
 			return resp, nil
@@ -196,10 +237,13 @@ func (p *Pool) attempt(ctx context.Context, req *http.Request, body []byte, ep *
 	if err != nil {
 		return nil, err
 	}
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, p.maxResponseBytes+1))
 	_ = resp.Body.Close()
 	if err != nil {
 		return nil, err
+	}
+	if int64(len(data)) > p.maxResponseBytes {
+		return nil, errors.New("rpcpool: HTTP response exceeds byte limit")
 	}
 	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 		return nil, &errStatus{endpoint: ep.url.Redacted(), status: resp.StatusCode}
@@ -255,4 +299,21 @@ func (p *Pool) Status() []EndpointStatus {
 		ep.mu.Unlock()
 	}
 	return out
+}
+
+// AttachTelemetry observes existing limiter/HTTP paths; it cannot send requests.
+// Release is safe against concurrent requests and another attachment.
+func (p *Pool) AttachTelemetry(r *feedtelemetry.Recorder) (func(), error) {
+	if r == nil || !p.telemetry.CompareAndSwap(nil, r) {
+		return nil, errors.New("rpcpool: telemetry already attached or nil")
+	}
+	return func() { p.telemetry.CompareAndSwap(r, nil) }, nil
+}
+func (p *Pool) waitLimit(ctx context.Context) error {
+	region := trace.StartRegion(ctx, "rpc.limitWait")
+	defer region.End()
+	span := p.telemetry.Load().Start(feedtelemetry.RPCLimitWait)
+	err := p.limiter.Wait(ctx)
+	span.End(err)
+	return err
 }

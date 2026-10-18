@@ -54,13 +54,20 @@ func pageLimit(page port.Page, defaultAll bool) int {
 
 // limitClause returns the LIMIT and OFFSET of a page read: limit+1 rows,
 // after Offset rows unless the page continues after a cursor.
-func limitClause(page port.Page, limit int) string {
+func limitClause(page port.Page, limit int, args *[]any) string {
 	s := ""
 	if page.After == "" && page.Offset > 0 {
-		s += " OFFSET " + itoa(page.Offset)
+		*args = append(*args, page.Offset)
+		s += " OFFSET $" + itoa(len(*args))
 	}
 	if limit > 0 {
-		s += " LIMIT " + itoa(limit+1)
+		// Read one extra row without overflowing for an unbounded int limit.
+		n := uint64(limit) + 1
+		if n > uint64(1<<63-1) {
+			n = uint64(limit)
+		}
+		*args = append(*args, int64(n))
+		s += " LIMIT $" + itoa(len(*args))
 	}
 	return s
 }
@@ -152,7 +159,9 @@ func (lq listQuery[T]) run(ctx context.Context, q querier, page port.Page) ([]T,
 		}
 	}
 	limit := pageLimit(page, lq.defaultAll)
-	sql += " ORDER BY " + strings.Join(order, ", ") + limitClause(page, limit)
+	// Expressions and directions come only from package-owned keyCol
+	// definitions. Cursor, filter and pagination values are always bound.
+	sql += " ORDER BY " + strings.Join(order, ", ") + limitClause(page, limit, &args)
 	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, "", err

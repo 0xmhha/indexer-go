@@ -2,6 +2,8 @@
 
 indexer-go는 EVM 체인을 위한 프레임워크다. 공통 코어는 중립 모델·저장 포트·feature 계약을 사용하고, 체인 규칙은 별도 profile에 둔다. 현재 범위와 미검증 영역은 [남은 작업](analysis/open-items.md), 체인 구현 계약은 [커스터마이징 문서](CHAIN_CUSTOMIZATION.md)를 따른다.
 
+24시간 원본 보관과 DB 기반 후처리로 확장하는 단계는 [윈도우 수집 설계](analysis/windowed-feed-design.md)를 따른다. 기존 앱 경로와 라이브러리로 연결한 새 window/capture 경로를 구분한다. 새 경로는 [Arc ETH/68 모듈](../modules/feeds/arc/README.md)에서 수신→fsync window→bounded 참조 channel→검증·원천 DB commit까지 구현했다. 선택적 `RunManaged`는 명시적 RPC-finalized 정책·reorg supervisor·raw ACK·GC를 연결한다. [영구 원천 저장](PERMANENT_SOURCE_STORAGE.md)은 별도 객체 경로/예산·DB 참조·orphan 복구와 기본 정규화 행을 구현했다. [DB facts 후처리](SOURCE_FACTS.md)는 기존 writer·내구성·fresh 검사·처리 receipt까지 연결했다. [앱 실행](FEED_APP.md)은 opt-in 설정과 epoch/undo/종료를 연결했다. 실제 peer/mount 정책 운영 검증은 남아 있다.
+
 ## 1. 구성과 데이터 흐름
 
 ```mermaid
@@ -40,6 +42,9 @@ fast 알림은 commit 전에 평가하므로 durable outbox와 다른 전달 계
 | `pkg/chains/stablenet` | WBFT·fee delegation·native 회계·시스템 기능/API |
 | `pkg/chains/arc` | Arc native 이벤트·수수료 회계와 native emitter |
 | `pkg/source` | RPC·era1·replay·연결된 source |
+| `pkg/chainfeed`, `pkg/chainfeed/ethpeer`, `pkg/chainfeed/evmdata` | bounded feed 계약·RLPx/ETH68 history·실행 입력 commitment 검증 |
+| `pkg/window`, `pkg/capture` | 외장 raw window·수신/검증 Task·원천 DB·finality/reorg supervisor·raw ACK·삭제 승인 |
+| `modules/feeds/arc` | Arc testnet의 검증된3-dataset plan·peer/session 라이브러리 조립 |
 | `pkg/fetch` | 병렬 fetch, 순서 보장, 단일 writer, 복구·backfill·reorg |
 | `pkg/feature`, `pkg/features` | 선택적인 블록 처리기와 공통 기능 |
 | `pkg/storage`, `pkg/storage/postgres` | Pebble 및 PostgreSQL 포트 구현 |
@@ -89,3 +94,7 @@ Pebble은 `all`/`ingest`를 사용한다. API 분리는 PostgreSQL이 필요하�
 기본 Ethereum 회계는 내부 call 전송·PoW 보상까지 모두 복원하지 않는다. Arc는 native 이벤트와 자체 수수료 규칙을 쓴다. typed extension과 모델 해시는 저장/API에서 보존하지만 모든 fork 실행·합의 증명을 검증하는 노드는 아니다.
 
 API 스키마·메서드 목록은 [API 안내](API.md)의 snapshot 링크에서 확인한다. 공개 RPC 시험은 opt-in이며, 최근 색인·식별자·API·record/replay를 검사한다. 구체적 측정 범위와 실패는 [작업 기록](analysis/work-log-2026-10.md)에 있다.
+
+`pkg/feed` registry와 `pkg/app`의 opt-in [source.feed](FEED_APP.md)는 체인 모듈이 선택한 capture와 DB facts projection을 별도 task로 실행한다. epoch가 바뀌면 이전 후처리/online backfill/writer/relay를 join한 뒤 새 Source와 undo를 조립한다. 현재 Arc의 execution-only plan과 다른 체인의 RPC를 혼합 실행하며 상태 reader는 거부한다. 원천 DB와 projection은 같은 handle을 쓰고 외장 window의 durable binding은 누락 디스크 재생성을 막는다.
+
+[기능별 완료](PROJECTION_PROGRESS.md)는 facts writer의 기존 block transaction/undo 안에 구간·hash·epoch를 기록한다. `execution.summary.v1` 독립 worker는 불변 block 결과와 자체 cursor/reset/output event를 별도 capture namespace transaction에 저장한다. source와 projection의 read-only snapshot을 대조하는 status/결과 HTTP API는 누락 상태를 unavailable로 표시한다. stateful 기존 feature의 전역 undo/outbox는 계속 단일 writer가 소유한다.

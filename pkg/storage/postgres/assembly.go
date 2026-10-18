@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -129,6 +130,7 @@ func (s *Store) resetGenesisTried() {
 var preservedTables = map[string]bool{
 	"abis": true, "contract_verifications": true,
 	"outbox_sequence": true, "outbox_cursors": true,
+	"capture_locks": true, "capture_records": true,
 }
 
 // schemaTables describe the schema, not data: they are never cleared (the
@@ -169,7 +171,9 @@ func (s *Store) ClearChainData(ctx context.Context, kvPrefixes []string, all boo
 		if len(tables) > 0 {
 			quoted := make([]string, len(tables))
 			for i, t := range tables {
-				quoted[i] = `"` + t + `"`
+				// Identifiers cannot be bound as values. Quote each component
+				// with the driver, including catalog names containing quotes.
+				quoted[i] = pgx.Identifier{s.schema, t}.Sanitize()
 			}
 			if _, err := q.Exec(ctx, "TRUNCATE "+strings.Join(quoted, ", ")); err != nil {
 				return fmt.Errorf("truncate chain data: %w", err)

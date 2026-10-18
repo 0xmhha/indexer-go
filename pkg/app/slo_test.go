@@ -82,6 +82,7 @@ func runSLOLoad(t *testing.T, subscribers, slow, blocks, swaps int, interval tim
 
 	cfg := config.NewConfig()
 	cfg.Indexer.StatePrefetch = os.Getenv("INDEXER_LOAD_STATE_PREFETCH") == "1"
+	cfg.Indexer.AcquisitionQueue = os.Getenv("INDEXER_LOAD_ACQUISITION_QUEUE") == "1"
 	cfg.Indexer.StateBatchSize = envInt(t, "INDEXER_LOAD_STATE_BATCH_SIZE", 1)
 	cfg.Indexer.PipelineMetrics = os.Getenv("INDEXER_LOAD_DIAGNOSTICS") == "1"
 	cfg.RPC.Endpoint = srv.URL()

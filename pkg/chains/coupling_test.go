@@ -17,6 +17,7 @@ import (
 // codecs). The chain profiles are the chain-specific code outside this
 // list.
 var chainNeutral = []string{
+	"chainfeed", "window", "capture", "progress", "projection", "indexingstatus", "feed",
 	"fetch", "api", "source", "feature", "features", "storage", "events", "eventbus",
 	"core", "types", "token", "abi", "client", "rpcproxy", "notifications",
 	"multichain", "userop", "module", "verifier", "compiler", "price", "rpcpool",

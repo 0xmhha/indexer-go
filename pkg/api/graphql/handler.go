@@ -13,16 +13,14 @@ import (
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/graphql/language/parser"
 	"github.com/graphql-go/graphql/language/source"
-	graphqlhandler "github.com/graphql-go/handler"
 	"go.uber.org/zap"
 )
 
 // Handler handles GraphQL requests
 type Handler struct {
-	schema  *Schema
-	handler *graphqlhandler.Handler
-	logger  *zap.Logger
-	limits  Limits
+	schema *Schema
+	logger *zap.Logger
+	limits Limits
 }
 
 // HandlerOptions contains optional configuration for the GraphQL handler
@@ -70,30 +68,16 @@ func NewHandlerWithOptions(store port.QueryStore, logger *zap.Logger, opts *Hand
 		return nil, err
 	}
 
-	h := graphqlhandler.New(&graphqlhandler.Config{
-		Schema:     &schema.schema,
-		Pretty:     true,
-		GraphiQL:   false,
-		Playground: true,
-	})
-
-	handler := &Handler{
-		schema:  schema,
-		handler: h,
-		logger:  logger,
-	}
+	handler := &Handler{schema: schema, logger: logger}
 	if opts != nil {
 		handler.limits = opts.Limits
 	}
 	return handler, nil
 }
 
-// ServeHTTP implements http.Handler
+// ServeHTTP implements http.Handler.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h.limits.enabled() && h.checkLimits(w, r) {
-		return
-	}
-	h.handler.ServeHTTP(w, r)
+	h.serveRequest(w, r)
 }
 
 // PlaygroundHandler returns a handler for GraphQL playground
