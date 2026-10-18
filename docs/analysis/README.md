@@ -8,6 +8,7 @@ Use [the documentation index](../README.md) for current usage and extension guid
 | --- | --- |
 | What is implemented, unresolved or deferred? | [Remaining work](open-items.md) |
 | What changed, failed or was measured, and under which conditions? | [October 2026 work log](work-log-2026-10.md) |
+| Do the draft Docker, capacity and recovery policies agree? | [Offline operations review](operations-offline-review.md) |
 | How was the original framework plan reviewed? | [Plan](refactoring-plan.md), [completion audit](plan-audit.md) |
 | Where are source-writer contracts and later verification details? | [Source facts](../SOURCE_FACTS.md) |
 
@@ -31,6 +32,7 @@ Check the corresponding maintained guide and code before relying on a proposed i
 | --- | --- |
 | [Windowed feed design](windowed-feed-design.md) | Design goals, storage/processing boundaries and staged acceptance criteria. Implemented settings are documented in [feed application](../FEED_APP.md) and [window storage](../WINDOW_STORAGE.md). |
 | [Arc peer capabilities](arc-peer-capabilities.md) | Input format and protocol audit; distinguish header/body/receipt supply from state, trace and blob support. |
+| [Arc testnet identity](arc-testnet-identity.md) | Public genesis/network evidence and the remaining peer and fork verification requirements. |
 | [Arc acquisition queue](arc-acquisition-queue.md) | RPC acquisition/processing split and its state-retention limits. |
 | [Node-feed options](node-feed-options.md) | Earlier node/ExEx comparison; it is not the default lightweight peer architecture. |
 | [Node-feed adapter](../NODE_FEED.md) | Optional historical ExEx/IPC implementation and validation limits. |

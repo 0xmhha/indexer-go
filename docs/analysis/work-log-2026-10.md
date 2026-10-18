@@ -1529,3 +1529,74 @@ README를 기존의 세션/작업 상태 순서에서 개발자의 평가·실�
 문서 목차를 시작/조회/확장/운영/선택 Arc feed로 재편하고 QUICKSTART를 로컬 시작→자기 RPC→저장/역할→문제 해결의 영문 가이드로 다시 썼다. CONTRIBUTING에는 기존 코드/내구성/검증/PR 규칙과 squash merge를 모았다. analysis 목차를 추가해 현재 계약·남은 일·제안·과거 증거를 구분한다. 상세 한국어 문서의 언어를 안내했고 기존 설계/실험 원본은 보존했다. 아키텍처 그림은 RPC와 disk-window/capture/DB facts/독립 projection의 현재 연결을 포함한다. 이미 확인한 제한 구간 멀티체인 검증을 미완료로 적은 부분과 strict 상태 방침/개인 운영 구성이 섞인 설명을 바로잡았다.
 
 문서 링크/앵커·Markdown 렌더·셸 구문·요청 JSON/API snapshot 대조를 검사했다. QUICKSTART의 새 YAML과 기존 Anvil/config.example의3개를 pinned Go1.24.9 실제 config.Load로 읽어 검증했다. 검증 도구는 `/private/tmp/indexer-docs-refresh-20261019/`에만 두며 runtime/RPC/DB를 시작하지 않는다. 추가 성능 측정·로컬 전체 회귀·200회 반복·Docker/노드 실행은 없었다. 변경은 Markdown 문서뿐이며 다른 프로젝트·DB4/예약1·RPC5 HTTP/s·커밋 직전 fresh·운영 설정·의존성은 그대로다.
+
+### 3.91 네 테스트넷 운영 설정 초안 (10/19)
+
+사용자가 권장안을 운영 초안으로 작성하되 포맷/실행/추가 측정은 보류하도록 요청했다. 별도 `docs/OPERATIONS_DRAFT.md`, `docs/examples/config-testnets-windowed.draft.yaml`, `docs/examples/postgresql-testnets.draft.conf`를 작성하고 문서 목차·CONFIG·R03에서 연결했다. 현재 무시 파일 `config.yaml`의 Pebble 설정은 변경하지 않았다.
+
+전용 APFS 후보X31·raw 전체160GiB/Arc128GiB·raw 쓰기 여유100GiB·DB계획160GiB·최소24h와 PostgreSQL16/체인별pool4개(합계16)/서버32개를 구분했다. DB160GiB는 자동 quota가 아니고 raw 여유 검사는 DB 쓰기 전체를 제한하지 않는다. 실제 APFS 확보/기존 자료 보존·DB 접속·enode·genesis/network/fork·finalized anchor와 나머지3체인 시작 높이·허용 중단/복구 시간은 미확정으로 남겼다. Docker 호스트/컨테이너 경로와 아직 없는 기동 전 mount 검사/조립을 표시했다. Arc만 execution-only로 상태 기능을 끄고, 다른3체인은 strict RPC를 유지한다. 초기화·GC는false이며 RPC-finalized authority와 후속 기능 확인/GC 전환 순서를 기록했다. 모든5 HTTP/s·commit fresh/epoch·내구성·ACK/삭제 fence는 그대로다. 별도 영구 객체 YAML이나 추가 proof/trace/worker는 켜지 않는다.
+
+중복 YAML key·11개 placeholder·보호값·용량/경로·PostgreSQL 조각·링크 대상을 점검했다. 별도 임시 검사기의 Go1.24.9 실제 config.Load가 원본 초안을 typed decode 단계에서 거부했고, 가상 높이/해시/문서용IP enode를 넣은 임시본은 strict known-fields·설정/Arc module/window 옵션 순수 검증을 통과했다. 가상 값을 실제 값으로 제시하지 않았고 App/feed.Open·RPC·DB·mount 초기화는 호출하지 않았다. 공유 Go 캐시 접근 제한은 소유 임시 캐시로 해결했으며 저장소 코드는 수정하지 않았다. 검토/가상 fixture 기록은 `/private/tmp/indexer-operations-draft-20261019/`에 남기고 검사기 소유 캐시는 정리했다. config.yaml·runtime/config/deps 등1094개 보호 파일 해시가 일치하며 다른 프로젝트·Docker 자원·디스크 포맷·추가 성능/전체 회귀/200회 반복·commit/push/PR 작업은 없다.
+
+### 3.92 Arc genesis·network ID 확인과 fork 후보 분리 (10/19)
+
+사용자 요청으로 미확정 네트워크 값을 읽기 전용 확인했다. 기존 공개 Arc endpoint에 `eth_chainId/net_version/block0/latest`의1배치와 `web3_clientVersion/arc_getVersion`의1배치, 총HTTP2회·method6개를 보냈다. HTTP5회/s를 넘지 않았고 failover/재시도·처리량/지연 측정은 없다. chain/network5042002, genesis hash `0xe20e653af4441e8c6088e172b129d56420139824400477287b46e7101ae2bb1f`를 확인했다. genesis hash는 공식 감사 commit6e764023의 testnet chainspec assertion과, timestamp는 genesis JSON과 각각 일치했다. genesis/network placeholder2개만 초안에 반영해 미확정 표시는9개가 남는다. 최신 관측 head67,881,454는 fork 계산에만 사용했으며 finalized/운영 checkpoint를 선택하지 않았다.
+
+공식 main은 기존 감사 commit6e764023과 같았다. built-in testnet은 genesis JSON 이후 별도 Arc hardfork 일정을 사용한다. Zero3/4의 블록11172019/26148086, Osaka·Zero5/6·Zero7·Zero8의 timestamp1779890400/1779894517/1781791200/1788447600을 사용하고 동시 Zero5/6은1회만 CRC32에 넣었다. Reth의 EIP-2124/6122 계산 규칙과 표준 벡터·독립 bitwise CRC를 대조해 공개 소스 기준 기대값`910609e1/next0`을 계산했다.
+
+RPC는 `v0.8.1-hotfix.rc1`, 별도 commit`6ede3f18a211315078909e9d3b5be1f6608fe9e8`을 보고했다. 이 commit의 공식 genesis/chainspec/hardfork raw 경로3개가404여서 배포 소스 일정이 감사 소스와 같다고 확인할 수 없었다. 실제 enode/peer status도 없으므로 fork YAML placeholder는 유지했다. [identity 근거](arc-testnet-identity.md)에 직접 확인/계산 후보/미확인을 나누고 운영 문서·R03을 갱신했다. 원문·source SHA256·계산기는 `/private/tmp/indexer-arc-identity-20261019/`에 보존한다. runtime/config/deps 보호1094개는 그대로이며 디스크 포맷·노드/indexer/DB/Docker 실행·추가 성능/전체 회귀/200회 반복·다른 프로젝트 변경·commit/push는 없다.
+
+### 3.93 Docker 운영 구성·APFS 검사·비공개 DSN 초안 (10/19)
+
+사용자 요청으로 [전용 Docker 초안](../../deployments/testnets/README.md)을 작성했다. 별도 Compose/Dockerfile·미확정 host manifest·호스트 검사기·DSN entrypoint·새 DB용 비관리자 role 초기 SQL과 오프라인 검사를 추가했다. 기존 root Compose/Dockerfile·무시된 config.yaml과 Go 실행 코드는 그대로다. 서비스는 PostgreSQL16과 멀티체인 indexer만이며 전용 project/profile·restart=no·내부 DB network·loopback API를 사용한다. 체인별 pool4개(합계16)·공유 RPC5 HTTP/s와 기존 커밋 직전 fresh/epoch·내구성·ACK/GC 경계를 유지한다.
+
+호스트 검사는 실제 macOS mount/APFS·VolumeUUID·외장 physical-store partition UUID·ownership·여유100GiB·같은 파일시스템의 기존 경로와 비공개 파일 권한을 확인한다. 모든 bind는 create_host_path=false이며 누락 경로를 만들지 않는다. 기본 lint/--check-host는 기동하지 않고, 향후 별도 --start만 전체 검사 후 고정 project/context에 no-build/pull=never로 넘긴다. 실행 보류 중 이 경로를 호출하지 않았다. private directory0700과 소유 regular/single-link 파일0600을 요구하며 DSN은 Compose 환경 정의나 argv에 값으로 넣지 않고 secret 파일에서 기존 프로세스 환경 변수로만 전달한다. 직접 DSN override·불일치 password·미확정 필드를 거부한다. 앱 role은 superuser/createdb/createrole이 없고 전용 DB의 schema 생성 권한만 갖도록 제안했다.
+
+최종 오프라인15개 검사를 통과했다. mount/UUID/물리 디스크/여유 공간·secret 권한/심볼릭 링크·DSN 정책·미확정 값 거부, 검사 후 identity 재확인, 실패 시 기동 차단과 성공 시 고정 dispatch를 fixture/mock으로 확인했다. entrypoint는 임시 가짜 프로그램으로 데이터 그대로 전달·정확한 인자·누락/override 거부를 확인했다. 별도 존재하지 않는 Docker 소켓과 가상 경로로 Compose config --quiet를 통과했으며 셸 구문·diff·문서 링크를 검사했다. 이는 실제 diskutil/APFS/컨테이너 UID/DB 초기 SQL/role grant/peer/24h/450ms 검증이 아니다. raw 초기화·GC는false이며 최초 provisioning은 별도 보류다. 기동 전 UUID 검사는 기동 후 장치 분리 시 PostgreSQL을 멈추는 watchdog이 아니며 실제 디스크 내구성과 Docker Desktop sharing은 미검증이다.
+
+실제 APFS UUID·private 경로/자격 증명·검토한 이미지·enode/peer fork·checkpoint는 미확정으로 남겼다. 포맷·초기화·이미지 build/pull·컨테이너/노드/indexer/DB 실행·공개 RPC·추가 성능/전체 회귀/200회 반복·다른 프로젝트 조작·commit/push는 없다. runtime/config/deps 보호1094개 해시와 현재 파일의 일치를 확인했다. 검사 범위와 한계는 `/private/tmp/indexer-docker-operations-draft-20261019/final-audit.json`에 기록한다.
+
+### 3.94 용량·backlog·복구 정책 초안 (10/19)
+
+사용자 요청으로 [정책 초안](../OPERATIONS_CAPACITY_DRAFT.md)을 작성하고 운영/Docker 안내·문서 목차·R03에서 연결했다. 기존 코드의 raw80/95%·filesystem floor100GiB와 free132/108GiB 압력·수신 capacity 대기/후처리 지속·severity 변경 로그를 확인했다. PostgreSQL160GiB는 강제 quota가 아니며 GC=false에서는 처리 완료만으로 raw가 회수되지 않는다. 내부 manager의 오류 체인 자동 재시작은 최초 Docker APFS 호스트 검사를 다시 거치지 않으므로 capacity/identity 사고 때 이 프로젝트 indexer 전체 중단과 재개 interlock이 필요한 공백을 기록했다.
+
+filesystem free150GiB 경고/120GiB indexer 중단/110GiB 긴급 DB 종료 판단·재개150GiB, PGDATA128/144/160GiB와 raw80/95/재개70%를 최초 제안으로 분리했다. worker 미처리 관측5분/30분·알려진 미처리 중 cursor5분 정지를 경보로 두되 지연만으로 자동 종료하지 않는다. source capture/기존 writer/필수 feature 완료·원격 latest를 구분하고 null/미관측을0으로 만들지 않는다. 현재 base raw 연속 intake/oldest pending/gross append 노출은 없고 선택 telemetry도 운영 YAML에 없음을 확인했다. 증가 예측·관측 누락·재개 hysteresis·초기화/GC/retention 불변과 영구 cursor 복구 조건을 정리했다. RPO/RTO·실제 peer 보존·백업/증설은 미확정이다.
+
+감시 주기·PGDATA/DB/schema/WAL 중복 합산 방지·서버32개 중 관리 단기 연결 최대1개·query 취소/반납·비밀 비노출·SQL 값 바인딩을 제안했다. 앱 pool은 체인별4개 그대로다. PostgreSQL16 공식 크기/디렉터리 함수·disk full·VACUUM 문서를 대조했으며 실제 쿼리는 실행하지 않았다. 감시·원인별 재시작 억제·중단 제어·제안 종료 유예(indexer120초/DB60초)는 미구현으로 표시하고 Compose에는 반영하지 않았다. 다음 문서 작업은 checkpoint/재시작/GC·백업/이전의 상세 runbook이다.
+
+문서 상대 파일 링크147개와 임계값 산식을 정적으로 검사했고 오류가 없었다. 기존 runtime/config/deps1094개와 추가 배포/설정11개 해시가 그대로이며 기존 deployment README만 의도한 문서 링크를 추가했다. 디스크 관찰/포맷·실제 DB/RPC/컨테이너/서비스·추가 성능/기능/전체 회귀/200회 실행·삭제/중단/재개·다른 프로젝트 조작·commit/push는 없다. DB4·RPC5·커밋 직전 fresh/epoch·내구성/ACK/GC를 유지했다. 정책 문서·정적 검토 범위/한계·보호 해시 기록은 `/private/tmp/indexer-capacity-policy-draft-20261019/{static-review,final-audit}.json`에 보존한다. 이 결과는 자동 운영 제어 구현이나 실제 장애 복구 검증의 완료가 아니다.
+
+### 3.95 Checkpoint·재시작·GC 운영 절차 초안 (10/19)
+
+사용자 요청으로 [운영 절차 초안](../OPERATIONS_RUNBOOK_DRAFT.md)을 작성하고 운영 설정·용량 정책·Docker 안내·문서 목차·R03에서 연결했다. 최초 anchor H0/hash와 source 연속 완료 C/세대 G·finalized F·writer P·필수 feature 완료/gap·raw identity·삭제 intent/완료 기록을 분리해 기록한다. 정상 종료는 이 프로젝트 indexer 전체 SIGTERM→task 취소/join/lease 반환·window/DB close 결과 확인→필요할 때 전용 PostgreSQL 정상 종료 순서이며 backlog0이나 stopped 로그 하나를 종료 성공으로 삼지 않는다. 종료 유예120/60초는 제안일 뿐 현재 Compose에는 반영하지 않았다.
+
+재개 전 APFS/용량 정책·같은 DB/schema/plan/anchor/authority/window binding·초기화false를 확인하고 기존 durable cursor로 이어가는 절차와 오류별 중단/재구성 분기를 정리했다. manager 내부 자동 재시작은 host guard 재검사/재개 승인이 아니며, 실제 host guard의100GiB 최소선은 용량 정책의150GiB 재개선과 다르다. 원본 누락/손상·필수 입력 pruned·finalized/깊은 reorg 충돌을 latest/0·새 anchor·수동 cursor 수정으로 우회하지 않는다. projection receipt·raw ACK·연속 완료를 구분하며 writer commit-ACK 사이 중단은 기존 복구 검증 경로를 따른다.
+
+새 GC 전에는 최소24h/정상 시계/sealed·같은 identity·필수 encoded bytes/정규화/영구 객체·canonical/finalized·기존 required supplement·모든 raw-only ACK/lease·durable generation fence·정확한 완료 기록을 확인한다. 코드상 collect=false는 새 Collect를 막지만 과거 승인된 삭제는 앱 생성 중 OpenWindow/OpenChecked/RecoverDeletion에서 완료될 수 있다. 따라서 startup은 읽기 전용 점검이 아니며 이 차이를 기존 운영/용량/Docker 문서에도 반영했다. 현재 preflight는 collect=true를 거부하므로 새 GC 적용은 별도 명시적 변경·검증 대상으로 남겼다. 파일 부재만으로 완료 추정/TTL fence 해제·이전 fork 원본 수동 삭제는 허용하지 않는다.
+
+DB/window 삭제 복구 코드를 대조해 intent만 남음·부분 unlink·완료 기록만 남고 DB fence 미해제·기록 불일치의 네 분기를 정리했다. 전체 checkpoint/PendingDelete/raw-only ACK/lease를 추출하는 읽기 전용 CLI/GC dry-run과 원인별 재시작 억제·중단 controller는 아직 없음을 표시했다. 관련 기존 검사 소스는 근거로 읽었으나 재실행하지 않았다. 백업/복원은 일관된 DB cluster/WAL·raw/삭제 기록·identity/binding 보존 원칙을 제안하고 PostgreSQL16 공식 종료/파일 백업 문서를 대조했다. 실제 보관/이전 방식·RPO/RTO·복원 검증은 미확정/미검증이다.
+
+상대 파일 링크175개·참조 anchor4개·diff를 정적으로 검사했고 오류가 없었다. 보호한 비Markdown1098개와 기존 runtime/config/deps1094개 해시가 모두 일치하며 앱 YAML의 DB4/RPC5/head·초기화/GC false·미확정 checkpoint 값을 유지했다. 포맷·디스크/host 관측·실제 DB/RPC·Docker/service·종료/복구/삭제·추가 성능/기능/전체 회귀/200회 실행·다른 프로젝트 조작·commit/push는0이다. 근거/해시/검토 범위는 `/private/tmp/indexer-checkpoint-runbook-draft-20261019/{static-review,final-audit}.json`에 보존한다. 절차 초안 작성은 실제 정상 종료/장애 복구/GC 운영 검증 완료나 실행 승인으로 표시하지 않는다.
+
+
+### 3.96 운영 문서·설정의 오프라인 일관성 점검 (10/19)
+
+사용자 요청으로 Docker·용량·checkpoint/정상 종료/재시작/GC 초안을 실제 설정·코드에 대조하고 [점검 결과](operations-offline-review.md)를 작성했다. 기존 host policy가 놓치던 RPC chain별 strict-state override·schema/window/floor·API listener를 보완하고, 공개 Compose/app/PostgreSQL 파일의 DB4/RPC5·secret/entrypoint·image·mount/network·내구성/로그 연결을 검사하는 check_artifacts를 모든 진입 전 적용했다. 두 파일을 같이 잘못 바꿔도 예산을 올리지 못하도록 고정 policy를 먼저 확인한다. 실제 config.yaml과 Go 실행 코드는 수정하지 않았다.
+
+manager의 max_unhealthy_duration은 기본값/전달만 있고 중단 timer로 사용되지 않아 운영 YAML에서 제외하고 CONFIG와 각 운영 문서에 표시했다. Docker 두 서비스에만 local log driver·10m/최대3파일 회전을 추가했으며 Docker Desktop 저장 영역 감시는 외장 APFS free와 별개라고 정리했다. warning과 resume이 같은 값에서 겹치던 경계는 free>150GiB/PGDATA<128GiB로 통일했다.420GiB는 raw160+DB160+floor100의 산술이고 재개 여유까지 계획하면470GiB 초과+관리 여유가 필요함을 보완했다. writer RAM 큐·raw 알림·디스크 backlog, Python3.9+/private manifest0600 조건도 구분했다.
+
+단일 live App/체인일 때의 연결 예산16개와 체인별 pool4/RPC5를 전역 hard cap으로 확대하지 않도록 했다. Stop timeout 뒤 Close 지연은 코드에서 확인했지만 실제 중복 App/예산 초과는 관측·재현하지 않았다. 종료/자원 반납 확인 전 재기동 금지와 미구현 interlock을 표시했다. 기존 GC=false와 pending 허가 복구의 차이·source/feature/ACK/finality/lease/삭제 fence·미확정 checkpoint·실행 보류는 유지했다. capacity controller·DB checkpoint/GC 진단·종료 유예·백업/RPO/RTO는 이 점검에서 구현/검증 완료로 취급하지 않는다.
+
+변경한 검사기의 최종 fixture21개가 실패/skip0으로 통과했다. 검사기 보완 전 실행과 최종 결과를 합산하지 않는다. 기본 lint는 artifacts consistent·host4/app9 미확정·service0을 반환했다. 존재하지 않는 daemon 소켓과 합성 경로/파일로 Compose config --quiet와 셸 구문도 통과했으며 이미지 build/pull·daemon 자원 조작은 없다. 상대 파일 링크186개·anchor4개·용량 산식/경계·diff를 검사했다. 이는 full Go schema/module 재검증·실제 APFS/UID/SQL bootstrap/log rotation/장애 복구·450ms/24h 운영의 증거가 아니다.
+
+runtime/config/deps1094개 해시가 같고 비Markdown 보호1098개 중 의도한 draft Compose/preflight/test/app YAML4개만 달라졌다. 공개 YAML에서는 미사용 timer를 제외하고 주석을 보완했으며 DB4·RPC5/head·초기화/GC false·미확정 값은 그대로다. 디스크/host 관찰·포맷·실제 DB/RPC·container/indexer/node 실행·종료/복구/삭제·추가 성능/전체 회귀/race200·다른 프로젝트 조작·commit/push는0이다. 합성 Compose 파일만 정리하고 근거/해시/범위는 /private/tmp/indexer-operations-offline-review-20261019/{offline-tests-final.log,offline-lint-final.json,compose-config.log,static-review.json,final-audit.json}에 보존한다.
+
+### 3.97 운영 초안 커밋·PR 제출 전 검증 (10/19)
+
+사용자 요청으로 누적된 운영 설정·Arc identity·Docker·용량·checkpoint/재시작/GC·오프라인 일관성 변경을 `chore/testnet-operations-drafts` 브랜치에서 함께 제출한다. 분석 목차에 새 근거 문서를 연결하고 PyYAML6.0.3을 전용 requirements로 고정했다. 기존 필수 CI의 test job에 Python3.12/21개 오프라인 fixture·draft lint·셸 구문 검사를 추가했다. 기존 lint/test/postgres/examples job 이름과 Go 회귀 명령은 그대로다.
+
+커밋 전 로컬 필수 race 회귀는 Go1.24.9·GOMAXPROCS2·전용 cache·네트워크 의존성 다운로드 차단으로1회 실행했다. `make test-race`의 GOTEST에 `test -json -timeout=20m -skip=^TestEngineLoad`를 지정하여 기존10,000 subscriber 성능 부하 검사만 로컬에서 제외했다. 추가 성능 측정 보류와 저장소 race 규칙을 함께 적용한 범위이며, 완전 무제외 실행으로 표시하지 않는다. 결과는75개 패키지 통과/19개 테스트 없음, 최상위2279개 통과/81개 opt-in 등 건너뜀·실패0·DATA RACE 경고0이다. PostgreSQL/live RPC/선택 Rust fixture 환경은 주입하지 않았다. 새 Go 동시성 검사가 없어 기존 완료한200회 검사는 반복하지 않았다.
+
+고정 PyYAML을 작업 전용 임시 경로에 설치해 오프라인21개를 실패/skip0으로 통과했고 lint·셸 구문·문서 파일 링크309개·diff/CI 구조를 검사했다. 기존 runtime/config/deps1094개 중 의도한 CI workflow 외 해시가 같으며 비공개 config.yaml의 ignore를 유지했다. Go 실행 코드/의존성·체인별 DB4·RPC5·커밋 직전 fresh/epoch·초기화/GC false와 다른 프로젝트는 그대로다. 실제 운영 디스크 검사/포맷·이미지 build/pull·노드/indexer/DB 운영 실행·추가 성능 비교는 하지 않았다. 원본과 범위 감사는 `/private/tmp/indexer-operations-pr-20261019/{race.log,race.result.json,offline.log,final-audit.json}`에 보존한다.
+
+제출 이후 GitHub의 기존 필수4개 CI 전체를 확인하고 보호 규칙을 우회하지 않는 squash merge 뒤 main을 fast-forward 동기화한다. CI PostgreSQL은 기존 격리 기능 회귀이며 운영용 DB 실행 승인이 아니다. 이 항목은 제출 전 로컬 결과이며 PR/CI/merge 완료 자체의 증거로 사용하지 않는다.

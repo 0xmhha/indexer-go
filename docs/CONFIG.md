@@ -26,6 +26,8 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 ## 원본 윈도우 저장 설정
 
+[네 테스트넷 운영 초안](OPERATIONS_DRAFT.md)은 APFS/DB 경로·체인별 연결4개·raw 용량과 미확정 peer/checkpoint를 구분한다. placeholder를 포함한 별도 예제이며 실제 `config.yaml`이나 실행 중인 구성을 변경하지 않는다.
+
 `window_storage`는 named `volumes`와 `windows`를 읽는 공통 layout이다. volume root/ID·공유 예산·여유 floor, instance별 경로/예산·최소24시간 retention을 검증하고 알 수 없는 nested 필드를 거부한다. 예시는 [standalone window-storage.yaml](examples/window-storage.yaml)이며 앱 설정에서는 그 전체 내용을 `window_storage:` 아래로 들여쓴다. 이 파일의 bytes는 정수이고 기간은 `24h` 같은 duration이다. `source.feed`의 현재 앱 설정은 [feed 실행](FEED_APP.md)을 따른다. 설계 문서의 `feed_storage`와 영구 객체 YAML은 아직 구현되지 않았다.
 
 파싱은 디스크를 초기화하지 않는다. `source.feed`로 등록 모듈과 이 layout의 예약을 명시하면 앱이 capture와 DB facts writer를 함께 실행한다. 현재 Arc ETH/68 테스트넷 header/body/receipt plan만 공급하며 상태 기능은 시작 전에 거부한다. layout만 있고 feed가 없으면 오류다. 최초 초기화·외장 mount·재시작·정책·멀티체인 설정은 [앱 feed 실행](FEED_APP.md), 저수준 세션은 [capture API](CAPTURE_STORAGE.md), 예약/압력은 [window API](WINDOW_STORAGE.md)를 따른다. 공유 RPC 요청 제한과 fresh canonical 검사를 유지한다. 기본값은 비활성이며 실제 peer·checkpoint·외장 저장소를 명시한 구성에서만 활성화한다.
@@ -448,7 +450,7 @@ eventbus:
 multichain:
   enabled: false
   health_check_interval: 30s
-  max_unhealthy_duration: 5m
+  max_unhealthy_duration: 5m             # 현재 자동 중단 timer에 연결되지 않음
   auto_restart: true
   auto_restart_delay: 10s
   chains:

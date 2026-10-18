@@ -1,0 +1,8 @@
+{
+  "mount_root": "/Volumes/IndexerData",
+  "apfs_volume_uuid": "UNCONFIRMED_APFS_VOLUME_UUID",
+  "physical_store_uuid": "UNCONFIRMED_APFS_PHYSICAL_STORE_PARTITION_UUID",
+  "private_dir": "UNCONFIRMED_ABSOLUTE_PRIVATE_DIRECTORY_OUTSIDE_REPOSITORY",
+  "indexer_image": "UNCONFIRMED_REVIEWED_OPERATIONS_IMAGE",
+  "docker_context": "desktop-linux"
+}

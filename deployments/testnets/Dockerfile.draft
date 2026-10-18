@@ -1,0 +1,22 @@
+# Build recipe only; no build/pull is part of draft validation.
+FROM golang:1.24.9-bookworm AS builder
+ENV GOTOOLCHAIN=local CGO_ENABLED=0
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY pkg/ ./pkg/
+COPY modules/feeds/ ./modules/feeds/
+RUN go build -trimpath -o /out/indexer-go ./cmd/indexer
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app /opt/indexer
+COPY --from=builder /out/indexer-go /app/indexer-go
+WORKDIR /app
+# Compose supplies the invoking non-root host UID/GID, including for secrets.
+USER 1000:1000
+EXPOSE 8088
+ENTRYPOINT ["/app/indexer-go"]

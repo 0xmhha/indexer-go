@@ -1,0 +1,123 @@
+# OPERATIONS DRAFT. No service has been built or started.
+# After the hold is lifted, use preflight.py --start as the guarded entry point.
+# Direct compose up bypasses the macOS APFS checks. See README.md.
+name: indexer-testnets-draft
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    profiles: [operations-draft]
+    user: "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}"
+    restart: "no"
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: indexer_testnets_v1
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      PGDATA: /var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/indexer.conf
+      - -c
+      - listen_addresses=*
+    volumes:
+      - type: bind
+        source: ${INDEXER_APFS_ROOT:?preflight required}/indexer/postgres/16
+        target: /var/lib/postgresql/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../docs/examples/postgresql-testnets.draft.conf
+        target: /etc/postgresql/indexer.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./init-indexer.sql
+        target: /docker-entrypoint-initdb.d/010-indexer.sql
+        read_only: true
+        bind:
+          create_host_path: false
+    secrets: [postgres_admin_password, indexer_password]
+    tmpfs:
+      - /tmp:mode=1777
+      - /var/run/postgresql:uid=${INDEXER_RUN_UID:?preflight required},gid=${INDEXER_RUN_GID:?preflight required},mode=0700
+    healthcheck:
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, postgres, -d, indexer_testnets_v1]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    networks: [database]
+
+  indexer:
+    image: ${INDEXER_OPERATIONS_IMAGE:?reviewed operations image required}
+    profiles: [operations-draft]
+    user: "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}"
+    restart: "no"
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: [/bin/sh, /opt/indexer/entrypoint.sh]
+    command: []
+    environment:
+      INDEXER_DB_POSTGRES_DSN_FILE: /run/secrets/postgres_dsn
+      INDEXER_DB_DRIVER: postgres
+      INDEXER_DB_POSTGRES_MAX_CONNS: "4"
+      INDEXER_RPC_RATE_LIMIT: "5"
+    secrets: [postgres_dsn]
+    volumes:
+      - type: bind
+        source: ${INDEXER_APFS_ROOT:?preflight required}
+        target: /data/feed
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/config.yaml
+        target: /etc/indexer/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./indexer-entrypoint.sh
+        target: /opt/indexer/entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:mode=1777
+    ports:
+      - "127.0.0.1:8088:8088"
+    healthcheck:
+      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1:8088/health]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [database, rpc]
+
+secrets:
+  postgres_admin_password:
+    file: ${INDEXER_PRIVATE_DIR:?preflight required}/postgres-admin-password
+  indexer_password:
+    file: ${INDEXER_PRIVATE_DIR:?preflight required}/indexer-password
+  postgres_dsn:
+    file: ${INDEXER_PRIVATE_DIR:?preflight required}/postgres-dsn
+
+networks:
+  database:
+    internal: true
+  rpc: {}
