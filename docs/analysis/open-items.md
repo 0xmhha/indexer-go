@@ -59,7 +59,7 @@ Arc의 첫 지원 plan은 header/body/receipt3개다. 독립 loopback 실제 TCP
 
 5번의 큰 객체 지원은 해당 크기의 필수 plan을 활성화하기 전에 끝내야 한다. 7번의 기존 API/writer까지 포함한 모드 활성화는4~6번의 완료를 전제로 한다. 기능 확장은 공급 가능한 plan 단위로 적용하고 모든 체인의 전체 상태를 얻을 수 있다고 가정하지 않는다.
 
-앱은 현재 Arc의 execution-only plan만 명시적으로 활성화하며 다른 세 체인은 기존 RPC 경로를 유지한다. 실제 네 테스트넷의 peer feed와 full state 기능이 완료된 것은 아니다. 운영용 enode/network/forkID·checkpoint·외장 mount/ID는 아직 제공되지 않았다.
+앱은 현재 Arc의 execution-only plan만 명시적으로 활성화하며 다른 세 체인은 기존 RPC 경로를 유지한다. 실제 네 테스트넷의 peer feed와 full state 기능이 완료된 것은 아니다. Arc genesis/network ID는 [확인 기록](arc-testnet-identity.md)에 따라 운영 초안에 반영했다. 실제 enode/peer fork ID·checkpoint·외장 mount/ID는 미확정이며 공개 소스의 계산 fork ID와 peer 검증을 구분한다.
 
 현재 pipeline은 수신 fsync 뒤 `OnReceived`, 검증/원천 DB commit 뒤 `OnCaptured` callback과 opt-in bounded-memory 계측을 제공한다. `/indexing/status.pipeline`은 수신/append·raw 대기·검증/원천 commit·proof/상태 처리·공유 RPC limiter/물리 HTTP의 count·p50/p95/p99·진행/적체를 구분한다. 실제 network head는 아직 알 수 없어 null이며 최근 수신 header를 latest로 대신하지 않는다. 관측 가능한 첫 proof/상태 대기 나이를 표시하지만 remote state retention 보장은 별도 운영 정보가 필요하다. 실제450ms/장기 추종 시험과 추가 feature writer의 상세 계측은9번에 남는다. 큰 큐만으로 수집 속도나 정확성이 달성됐다고 표시하지 않는다. segment 부분 compaction·추가 중복 제거·RPC 최적화는 이 측정에서 필요성을 확인한 뒤 적용한다.
 
@@ -117,7 +117,7 @@ Arc의 첫 지원 plan은 header/body/receipt3개다. 독립 loopback 실제 TCP
 
 | ID | 남은 항목 | 진행 조건과 현재 상태 |
 | --- | --- | --- |
-| R03 | 운영 설정 확정 | 실제 외장 mount/ID·용량·raw/영구 객체/DB 경로, 시작 checkpoint·기존 DB 다음 높이·backfill·허용 중단 시간과 체인별 상태 보존을 확인한다. 공개 RPC4개·체인별5 HTTP/s·strict 상태 정책은 이미 결정했다. 기존 generic EVM Arc DB는 새 회계로 재색인이 필요하다. 별도 full node 구축은 선행 조건이 아니다. |
+| R03 | 운영 초안1~4 오프라인 점검 완료·실환경 확정 대기 | [운영 초안](../OPERATIONS_DRAFT.md)에 전용 APFS·raw160GiB/Arc128GiB·여유100GiB·PostgreSQL16/DB계획160GiB·체인별pool4개(정상 단일 실행 예산16)·최근 finalized anchor와 Arc execution-only 방식을 정리했다. [Docker 초안](../../deployments/testnets/README.md)은 전용 Compose, APFS mount/volume·physical-store UUID 검사, 비공개 secret 파일 DSN 주입을 포함하며 최종 오프라인21개 검사·Compose 구문을 통과했다. [초안 일관성 점검](operations-offline-review.md)에서 파일 간 정책/경로·로그 상한·미사용 timer·재개 경계를 보완했다. [용량/backlog/복구 정책](../OPERATIONS_CAPACITY_DRAFT.md)은 PGDATA/WAL 증가·worker 지연·디스크 부족의 경고/중단/재개와 감시 누락 처리를 제안한다. 자동 감시·중단 interlock·내부 재시작 억제·종료 유예는 미구현이며 실제 mount/UID·DB 초기화·장치 분리 대응도 미검증이다. [checkpoint/정상 종료/재시작/GC 절차](../OPERATIONS_RUNBOOK_DRAFT.md)도 작성했다. 기존 pending 삭제는 GC=false여도 Open에서 완료될 수 있음을 구분하며 현재 host guard는 새 GC 활성화를 거부한다. 읽기 전용 checkpoint/GC 진단 도구와 백업 보관·이전의 실제 방식/RPO/RTO 확정은 남아 있다. [Arc identity 확인](arc-testnet-identity.md)으로 genesis/network ID는 반영했다. fork는 공개 소스 계산 후보`910609e1/0`이며 배포 commit 소스404·실제 peer 미확인이다. 실제 APFS 확보/기존 자료 보존·private 경로/자격 증명·운영 이미지·enode·checkpoint/peer fork·허용 중단/RPO/RTO·백업/증설 방침은 미확정이다. 포맷·실제 실행·추가 성능 측정·GC 활성화는 보류한다. 공개 RPC4개·체인별5 HTTP/s·커밋 fresh·strict 정책은 유지한다. 기존 generic EVM Arc DB는 새 회계로 재색인이 필요하며 별도 full node 구축은 선행 조건이 아니다. |
 | R05 | 실제 era1/RPC 비교 | 같은 체인의 실제 `gstable export-history` era1 파일과 RPC 접근이 필요하다. 변환 fixture 색인을 실제 export 비교 완료로 취급하지 않는다. |
 | R06 | Arc mainnet 검증 | 실제 접근 환경과 검증 범위를 정한 뒤 진행한다. 현재 testnet 표본을 mainnet 보장으로 확대하지 않는다. |
 | R07 | macOS SLO와 여러 호스트 비교 | 저장 commit/WAL 대기와 간헐 SLO 실패는 남아 있다. 실패 블록 trace로 원인을 확인한다. 로컬 Docker 비교는 승인됐고 추가 물리 호스트 비교는 접속 경로/시험 환경 확보 뒤 진행한다. Docker 용량 정리와 PostgreSQL 회귀 통과를 macOS SLO 해결로 표시하지 않는다. [3.22~3.23](work-log-2026-10.md#322-101415-macos-slo-재현캐시-수명-수정wal-대기-분리) |

@@ -1,0 +1,160 @@
+# OPERATIONS DRAFT — NOT RUNNABLE. See ../OPERATIONS_DRAFT.md.
+# UNCONFIRMED_* tokens require verified values; the loader does not interpolate
+# them. Numeric tokens deliberately fail typed decoding before any app startup.
+# Do not replace the local config.yaml or run this file during draft review.
+# Container paths assume a dedicated, verified APFS host mount at
+# /Volumes/IndexerData -> /data/feed; that mount does not exist by this proposal.
+
+rpc:
+  rate_limit: 5  # Per chain, shared by all HTTP attempts/fresh checks/retries.
+  timeout: 15s
+
+database:
+  driver: postgres
+  postgres:
+    dsn: ""  # Later supply INDEXER_DB_POSTGRES_DSN privately; never commit it.
+    schema: indexer_testnets_v1
+    max_conns: 4  # Per-chain Store pool; one live App per chain => 16-connection budget.
+
+node:
+  role: all
+
+indexer:
+  mode: full
+  workers: 2
+  chunk_size: 10
+  poll_interval: 2s
+  finality: head  # Feed projection target; NOT permission to skip commit fresh.
+  state_prefetch: true
+  state_workers: 4
+  state_batch_size: 1
+  state_max_bytes: 16777216
+  orphan_retention: 1000
+
+# Retain strict state reads on the three RPC chains. Arc overrides below.
+features:
+  balance.native:
+    enabled: true
+    allow_pruned_state: false
+  token.metadata:
+    enabled: true
+    allow_pruned_state: false
+
+api:
+  enabled: true
+  host: 0.0.0.0  # Container listener; planned host publication: 127.0.0.1:8088.
+  port: 8088
+  enable_graphql: true
+  enable_jsonrpc: true
+  enable_rest: true
+  enable_websocket: true
+  enable_websocket_keepalive: true
+  subscription_engine: true
+  enable_cors: false
+  graphql:
+    max_depth: 15
+    max_complexity: 5000
+  rate_limit:
+    enabled: true
+    per_second: 100
+    burst: 200
+
+multichain:
+  enabled: true
+  health_check_interval: 30s
+  # max_unhealthy_duration is omitted: the manager has no stop timer for it.
+  # The proposed worker 5m/30m alerts are a separate, unimplemented monitor.
+  auto_restart: true
+  auto_restart_delay: 10s
+  chains:
+    - id: stablenet-testnet
+      name: StableNet Testnet
+      enabled: true
+      chain_id: 8283
+      adapter_type: stablenet
+      rpc_endpoint: https://api.test.stablenet.network
+      start_height: "UNCONFIRMED_STABLENET_START_HEIGHT"
+      workers: 2
+
+    - id: bsc-testnet
+      name: BSC Testnet
+      enabled: true
+      chain_id: 97
+      adapter_type: evm
+      rpc_endpoint: https://bsc-testnet-dataseed.bnbchain.org
+      start_height: "UNCONFIRMED_BSC_START_HEIGHT"
+      workers: 2
+
+    - id: sepolia
+      name: Sepolia
+      enabled: true
+      chain_id: 11155111
+      adapter_type: evm
+      rpc_endpoint: https://ethereum-sepolia-rpc.publicnode.com
+      start_height: "UNCONFIRMED_SEPOLIA_START_HEIGHT"
+      workers: 2
+
+    - id: arc-testnet
+      name: Arc Testnet
+      enabled: true
+      chain_id: 5042002
+      adapter_type: arc
+      rpc_endpoint: https://rpc.testnet.arc.io
+      start_height: "UNCONFIRMED_ARC_START_HEIGHT"  # Exactly anchor_height + 1.
+      workers: 2
+      acquisition_queue: true
+      queue_blocks: 256  # In-memory writer queue; NOT raw notification refs or the 24h disk window.
+      queue_max_bytes: 268435456
+      state_batch_size: 16
+      features:
+        balance.native:
+          enabled: false
+          allow_pruned_state: false
+        token.metadata:
+          enabled: false
+          allow_pruned_state: false
+        dex.orderbook:
+          enabled: false
+      feed:
+        module: arc.eth68
+        window: arc-testnet
+        consumer: arc-explorer-v1
+        chain_id: "5042002"
+        # Live block 0 + official test assertion match; audit: ../analysis/arc-testnet-identity.md.
+        genesis_hash: "0xe20e653af4441e8c6088e172b129d56420139824400477287b46e7101ae2bb1f"
+        anchor_height: "UNCONFIRMED_ARC_FINALIZED_HEIGHT"
+        anchor_hash: "UNCONFIRMED_ARC_FINALIZED_HASH"
+        network_id: 5042002  # net_version confirmed 2026-10-19 KST; not inferred from chain ID.
+        # Public-spec expected ID: 910609e1 / next=0. Deployed RPC commit source
+        # is unavailable and peer status is unverified: keep these unresolved.
+        fork_hash: "UNCONFIRMED_ARC_FORK_HASH"  # Four bytes, 8 hex chars, no 0x.
+        fork_next: "UNCONFIRMED_ARC_FORK_NEXT"
+        key_file: /data/feed/indexer/identity/arc-peer.key  # Private regular file, 0600.
+        peers:
+          - "UNCONFIRMED_ARC_ENODE"
+        listen_addr: "127.0.0.1:0"  # Outbound peer connection; no inbound port plan.
+        initialize_volume: false  # Initialization is deferred, not automatic.
+        create_window: false
+        finality_authority: arc-testnet-public-rpc-v1  # Proposed stable policy label.
+        collect: false  # Initial review/restart checks first; GC activation deferred.
+        control_interval: 10s
+
+window_storage:
+  volumes:
+    external:
+      root: /data/feed  # Must be the actual bind-mount root, not an ordinary folder.
+      id: indexer-apfs-testnets-v1  # Proposed persistent marker/ledger identity.
+      max_bytes: 171798691840  # 160 GiB raw-volume budget, including manager overhead.
+      min_free_bytes: 107374182400  # 100 GiB filesystem free-space floor for raw writes.
+      allow_directory: false
+  windows:
+    arc-testnet:
+      volume: external
+      path: /data/feed/indexer/window/arc
+      max_bytes: 137438953472  # 128 GiB Arc raw cap; not a proven 24-hour capacity.
+      retention: 24h
+
+# No raw windows for the three RPC chains. No state_proofs, call_traces, blob,
+# extra projection workers, node-feed IPC, era source or recording are enabled.
+# Permanent source facts and projections use PostgreSQL; a separate objects
+# directory is not an implemented application YAML option.
