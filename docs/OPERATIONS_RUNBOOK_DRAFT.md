@@ -24,7 +24,7 @@
 
 Arc 진행은 `/chains/arc-testnet/indexing/status`의 DB-only snapshot을 참고하고 `next` pagination의 필수 unit을 빠뜨리지 않는다. source와 projection은 별도 DB snapshot이므로 generation/canonical 모순이 보이면 다시 확인할 대상으로 기록한다. `projectionMatchesCapture: true`도 모든 feature의 gap-free 완료나 삭제 승인이 아니다. projection receipt는 역사적 처리 ACK이며 raw ACK·연속 cursor·GC 허가가 아니다.
 
-현재 HTTP status는 `PendingDelete`, raw StoreID/전체 DB binding과 raw-only ACK/lease의 삭제 조건 전부를 노출하지 않는다. `State/PendingDeletion` 등의 라이브러리 조회는 있지만 **전체 운영 기록을 추출하는 읽기 전용 CLI/GC dry-run은 없다.** 확인할 수 없는 항목을 성공으로 표시하지 않으며, 향후 별도 조회 도구가 필요하다. DB 필드를 SQL로 수정하거나 startup을 조회 도구로 사용하지 않는다.
+현재 HTTP status는 삭제 조건 전부를 노출하지 않는다. 별도 [읽기 전용 진단 명령](OPERATIONS_INSPECTION.md)은 source/writer/feature 진행·DB/window binding·pending 삭제와 정확한 raw intent/완료 기록·범위를 명시한 raw ACK를 조회한다. 앱/window writer를 열거나 삭제 복구를 호출하지 않는다. live lease는 unknown, payload/proof integrity는 not_checked이며 완전한 GC 승인 dry-run은 아니다. 실제 DB/외장 디스크 실행 검증은 보류다. DB 필드를 SQL로 수정하거나 startup을 조회 도구로 사용하지 않는다.
 
 ## 2. 최초 anchor 확정 절차 — 적용은 보류
 
@@ -79,7 +79,7 @@ writer commit 직후 projection receipt 저장 전에 중단됐다면 기존 복
 
 manager의 `auto_restart: true`는 용량/identity 사고의 재개 승인 기능이 아니다. 현재 별도 원인별 재시작 억제·영구 중단 상태·host watchdog은 미구현이다. 운영 적용 전에 이 공백을 해결해야 하며, 문서로 해결됐다고 표시하지 않는다. 독립 CL certificate 검증·orphans 자동 수거·무제한 undo도 현재 운영 경로에 포함하지 않는다.
 
-`max_unhealthy_duration`의5m 값은 실제 중단 timer로 사용되지 않으므로 운영 초안에서 제외했다. worker 적체5분 경보와 같다고 해석하지 않는다. Docker 로그 회전은 Compose에 명시했지만 capacity controller·종료 유예·전체 DB checkpoint/GC 진단 도구는 여전히 미구현이다.
+`max_unhealthy_duration`의5m 값은 실제 중단 timer로 사용되지 않으므로 운영 초안에서 제외했다. worker 적체5분 경보와 같다고 해석하지 않는다. Docker 로그 회전과 읽기 전용 metadata 진단 도구는 있지만 capacity controller·종료 유예·실제 payload/proof/lease까지 검증하는 GC 승인 진단은 여전히 미구현이다.
 
 `ChainInstance.Stop`은 timeout 때 이전 pipeline이 끝난 뒤 Close하도록 지연할 수 있다. 따라서 StatusStopped/Stop 반환만으로 이전 pool이 모두 반납됐다고 보지 않고 프로세스·자원 종료를 확인한 후 재기동한다. 체인별4개/정상 합계16개와 RPC5는 각 live App의 pool 예산이며 중복 App까지 묶는 전역 상한이 아니다. 이번에 중복 실행을 재현하거나 실제 예산 초과를 측정하지 않았다.
 
@@ -120,7 +120,7 @@ finalized 조회가 null이면 새 GC를 보류한다. unsupported/malformed/통
 
 장치 손실/재구성이 필요할 때는 같은 시점의 PostgreSQL 전체 cluster/WAL·raw/삭제 기록·marker/ledger·설정/identity의 연관을 보존해야 한다. 비밀 파일은 접근 제한된 별도 보관 정책을 사용한다. SQL dump만으로 raw 삭제 intent·filesystem identity까지 복원됐다고 간주하지 않는다. 일반 파일 복사 백업은 indexer를 멈추고 PostgreSQL까지 정상 종료한 일관된 상태를 기준으로 계획하며, 온라인 snapshot/base backup은 별도 설계·검증 대상이다. [PostgreSQL16 파일 백업 조건](https://www.postgresql.org/docs/16/backup-file.html)을 따른다.
 
-복원은 원본을 덮어쓰지 않는 격리된 대상에서 검증하고 단일 writer와 DB/window binding을 확인하는 안이다. 새 디스크 UUID·경로·quota의 변경과 backup 정책/RPO/RTO는 별도 확정이 필요하다. 읽기 전용 CLI, GC 진단/dry-run·사건별 중단/재개 controller, 종료 유예, 실제 복원 검증은 아직 미구현/미검증이다.24h raw는 백업·24h undo·원격 상태 보존 보장이 아니다.
+복원은 원본을 덮어쓰지 않는 격리된 대상에서 검증하고 단일 writer와 DB/window binding을 확인하는 안이다. 새 디스크 UUID·경로·quota의 변경과 backup 정책/RPO/RTO는 별도 확정이 필요하다. 읽기 전용 metadata CLI는 모의 데이터로 검증했지만 완전한 GC 승인 dry-run·사건별 중단/재개 controller, 종료 유예, 실제 복원 검증은 아직 미구현/미검증이다.24h raw는 백업·24h undo·원격 상태 보존 보장이 아니다.
 
 운영 기록의 완료 표시는 **정상 종료 / 복구 확인 후 재개 / 관측·복구 미확인으로 중단 유지** 중 하나로 남긴다. 실제 승인된 삭제가 있었다면 대상 reference digest/segment·DB fence/완료 결과도 연결한다. 프로세스 재실행·높이 증가·API health만으로 데이터 무결성/삭제 완료를 선언하지 않는다.
 

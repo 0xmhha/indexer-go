@@ -43,3 +43,5 @@
 Docker 로그 설정은 [공식 local driver 설명](https://docs.docker.com/engine/logging/drivers/local/)의 per-container rotation 옵션을 사용한다. 최신 actual daemon 설정·디스크 여유·RPC/peer/DB 상태는 조회하지 않았다. 실제 포맷·초기화·종료/재개·삭제·장애/복원·성능 측정·다른 프로젝트 조작·commit/push는 없다.
 
 남은 것은 실제 입력 확정, 읽기 전용 checkpoint/GC 진단 도구, DB/filesystem/Docker 영역 감시와 중단/재개 interlock·종료 유예, 백업/이전/RPO/RTO와 실제 기능 검증이다. 기존 초안 작성/오프라인 점검을 이 구현·실환경 검증의 완료로 표시하지 않는다. 실행·포맷·추가 성능 측정 보류는 계속 유지한다.
+
+후속 구현(2026-10-19): [읽기 전용 checkpoint/GC metadata 명령](../OPERATIONS_INSPECTION.md)을 추가하고 모의 DB/임시 파일로 검증했다. 이로써 위 목록 중 metadata 조회 도구의 첫 구현은 완료했다. live lease·payload/proof integrity·완전한 GC 승인 진단, 실제 DB/APFS 검증과 나머지 운영 제어는 완료한 것으로 확대하지 않는다.

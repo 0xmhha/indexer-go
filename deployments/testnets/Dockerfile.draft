@@ -9,12 +9,14 @@ COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 COPY modules/feeds/ ./modules/feeds/
 RUN go build -trimpath -o /out/indexer-go ./cmd/indexer
+RUN go build -trimpath -o /out/indexer-inspect ./cmd/indexer-inspect
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app /opt/indexer
 COPY --from=builder /out/indexer-go /app/indexer-go
+COPY --from=builder /out/indexer-inspect /app/indexer-inspect
 WORKDIR /app
 # Compose supplies the invoking non-root host UID/GID, including for secrets.
 USER 1000:1000
