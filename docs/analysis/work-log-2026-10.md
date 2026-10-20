@@ -1633,3 +1633,12 @@ PR [#182](https://github.com/0xmhha/indexer-go/pull/182)의 첫 [CI](https://git
 
 
 보완 소스의 커밋 전 전체 race는 Go1.24.9·GOMAXPROCS2·각1회·package timeout20분·기존 성능 부하 TestEngineLoad 제외로 완료했다.77개 패키지/최상위2296개 통과·테스트 없는19개 패키지/opt-in 등81개 건너뜀·실패0·DATA RACE0이다. 새3개 동기식 회귀와 최종 pagination assertion을 포함한다. 전체 build/vet/root lint·Go1040개 fmt·셸 구문도 통과했다. 변경 없는 astgraph vet/lint·예제·cache lifecycle·진단14/39 기능 결과는 앞선 성공 범위를 유지한다. 보호13개와 진단 Go9개 해시·문서 상대 링크245개·diff를 재확인했다. 다음 제출은 보완4개 파일을 별도 fix 커밋으로 push하고 PR의 필수4개 CI를 새 head에서 확인하는 범위다. 이 기록은 새 head CI 완료를 대신하지 않는다.
+
+
+### 3.101 불필요한 작업의 목록 제외 (10/20)
+
+프로젝트 목적과 남은 작업을 다시 검토해 세 가지를 작업 목록에서 뺐다. 첫째는 로컬 공유 호스트의 API 3쌍 재측정이다. 3.74~3.77에서 여섯 번 준비했지만 호스트 부하 때문에 유효한 비교가 0회였다. 둘째는 capture SQL 36회 왕복을 immutable row 저장으로 묶는 평가다. 셋째는 K2 이진 키다. 디스크 절감이 6.7%에 그쳐 이미 보류 중이었다.
+
+뺀 근거는 병목 위치다. writer는 로컬에서 약 5블록/s를 처리해 Arc의 약 2블록/s보다 빠르다. 수집을 제한하는 것은 커밋 직전 fresh canonical 검사를 포함한 체인별 5 HTTP/s RPC 예산이다. 위 두 성능 항목이 이 제한을 바꾼다는 근거가 없다. 성능은 실제 peer와 운영 환경의 장기 측정(open-items 9번)에서 확인한다.
+
+남은 작업 목록(open-items.md)과 CLAUDE.md의 Current Work에서 해당 항목을 지웠다. 과거 측정·관찰 기록과 refactoring-plan의 K2 측정은 이력으로 그대로 둔다. 코드·설정·빌드·테스트 실행은 없다.
