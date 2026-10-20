@@ -122,3 +122,4 @@ solc-cache/
 # Binary of the code graph generator (go build in tools/astgraph)
 /tools/astgraph/astgraph
 /tools/astgraph/out/
+/tools/astgraph/__pycache__/

@@ -9,6 +9,10 @@ services:
     profiles: [operations-draft]
     user: "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}"
     restart: "no"
+    # Fast shutdown: sessions end, then a final checkpoint. A kill before it
+    # finishes leaves crash recovery for the next start.
+    stop_signal: SIGINT
+    stop_grace_period: 60s
     logging:
       driver: local
       options:
@@ -60,6 +64,10 @@ services:
     profiles: [operations-draft]
     user: "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}"
     restart: "no"
+    # SIGTERM cancels and joins every task, then closes the window and the
+    # database. Compose stops this service before PostgreSQL (depends_on).
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
     logging:
       driver: local
       options:

@@ -45,7 +45,7 @@ anchor 자체의 원본이 수집됐다는 뜻은 아니다. anchor 이전의 fe
 3. 수신·capture·writer·relay·선택 task가 반환하고 하위 goroutine/lease가 정리되는지 확인한다. feed 세션은 관련 task를 join한 뒤 raw window를 Close하고, 앱은 pipeline 수명 종료 후 DB/client를 닫는다. 진행 중 transaction은 성공한 durable commit 또는 취소/rollback 결과로 판정한다. 원본 fsync/채널 알림만으로 source/writer ACK를 남기지 않는다.
 4. process 종료와 Close/DB/독립 worker 오류·timeout 여부를 함께 기록한다. `stopped` 한 줄이나 정상 exit만으로 무오류 종료·backlog 완료를 선언하지 않는다. 마지막 완성된 raw/facts와 DB cursor는 남겨 재시작에 사용한다. 종료 직전 API가 사라졌으면 이전 표본을 최종 높이로 승격하지 않는다.
 5. DB도 중단해야 하는 경우에만 indexer 종료 뒤 **이 프로젝트 PostgreSQL의 정상 종료 경로**를 사용하고 DB 종료 결과를 확인한다. indexer만 재시작하는 경우 DB를 유지할 수 있다. 종료 모드는 [PostgreSQL16 공식 설명](https://www.postgresql.org/docs/16/server-shutdown.html)을 따른다.
-6. 제안 유예는 indexer120초/DB60초지만 현재 Compose에는 미적용이다. 시간 내 join/종료되지 않으면 정상 종료로 기록하지 않는다. 강제 종료가 필요했던 긴급 사건은 아래 장애 복구 대상으로 넘긴다. volume 삭제·광범위 prune·PID/LOCK 파일 수동 제거로 종료를 대신하지 않는다.
+6. Compose 초안의 유예는 indexer120초(SIGTERM)/DB60초(SIGINT, fast shutdown)다. 그 안에 끝나는지는 아직 실제로 재지 않았다. 시간 내 join/종료되지 않으면 정상 종료로 기록하지 않는다. 강제 종료가 필요했던 긴급 사건은 아래 장애 복구 대상으로 넘긴다. volume 삭제·광범위 prune·PID/LOCK 파일 수동 제거로 종료를 대신하지 않는다.
 
 정상 종료는 수신된 모든 블록의 후처리 완료를 요구하지 않는다. 반대로 DB에 남은 완료점 이상을 운영 기록으로 올려서도 안 된다. 이 초안은 종료 상태를 영구 기록하거나 timeout을 강제하는 새 controller를 구현하지 않는다.
 
