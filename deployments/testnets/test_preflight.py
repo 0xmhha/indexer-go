@@ -290,6 +290,57 @@ class HostTests(unittest.TestCase):
         with self.assertRaises(p.Refused):
             p.check_host(self.manifest)
 
+    def test_emergency_reasons(self):
+        self.assertIsNone(p.emergency(self.manifest))
+        latch = p.halt_latch(self.private)
+        self.write(latch, json.dumps({"version": 1, "reason": "capacity", "detail": "x"}))
+        self.assertIsNone(p.emergency(self.manifest), "a capacity halt keeps the database")
+        self.write(latch, json.dumps({"version": 1, "reason": "storage", "detail": "x", "stopDatabase": True}))
+        self.assertIn("latch", p.emergency(self.manifest))
+        latch.unlink()
+        with mock.patch.object(p.os, "statvfs", return_value=types.SimpleNamespace(f_bavail=p.EMERGENCY_FREE, f_frsize=1)):
+            self.assertIn("emergency line", p.emergency(self.manifest))
+        with mock.patch.object(p.os, "statvfs", return_value=types.SimpleNamespace(f_bavail=p.EMERGENCY_FREE + 1, f_frsize=1)):
+            self.assertIsNone(p.emergency(self.manifest))
+        self.info["VolumeUUID"] = "replaced"
+        self.assertIn("volume", p.emergency(self.manifest))
+        self.info["VolumeUUID"] = self.manifest["apfs_volume_uuid"]
+        with mock.patch.object(p.os.path, "ismount", return_value=False):
+            self.assertIn("volume", p.emergency(self.manifest))
+
+    def test_stop_stack_stops_indexer_before_postgres_and_removes_nothing(self):
+        with mock.patch.object(p.subprocess, "run") as run:
+            self.assertEqual(p.stop_stack(self.manifest), ["indexer", "postgres"])
+        commands = [c.args[0] for c in run.call_args_list]
+        self.assertEqual([c[-2:] for c in commands], [["stop", "indexer"], ["stop", "postgres"]])
+        for command in commands:
+            self.assertEqual(command[:len(p.COMPOSE)], p.COMPOSE)
+            self.assertFalse({"down", "rm", "-v", "--volumes", "kill"} & set(command))
+        self.assertEqual([c.kwargs["timeout"] for c in run.call_args_list], [180, 120])
+        self.assertEqual(run.call_args_list[0].kwargs["env"]["INDEXER_APFS_ROOT"], str(self.root))
+        with mock.patch.object(p.subprocess, "run", side_effect=p.subprocess.TimeoutExpired("docker", 180)) as run:
+            with self.assertRaises(p.Refused):
+                p.stop_stack(self.manifest)
+        self.assertEqual(run.call_count, 1, "PostgreSQL is not stopped while the indexer may still write")
+
+    def test_watch_polls_until_an_emergency_and_stops_once(self):
+        sleeps = []
+        reasons = iter([None, None, "free space at or below the110GiB emergency line"])
+        with mock.patch.object(p, "emergency", side_effect=lambda m: next(reasons)), mock.patch.object(p, "stop_stack", return_value=["indexer", "postgres"]) as stop:
+            result = p.watch(self.manifest, sleep=sleeps.append)
+        self.assertEqual(sleeps, [p.WATCH_INTERVAL, p.WATCH_INTERVAL])
+        stop.assert_called_once()
+        self.assertEqual(result["stopped"], ["indexer", "postgres"])
+        self.manifest["indexer_image"] = "UNCONFIRMED_REVIEWED_OPERATIONS_IMAGE"
+        with self.assertRaises(p.Refused):
+            p.watch(self.manifest, sleep=sleeps.append)
+
+    def test_watch_cli_reports_the_stop_and_exits_nonzero(self):
+        out = io.StringIO()
+        with mock.patch.object(p.sys, "argv", ["preflight.py", "--watch", "/manifest"]), mock.patch.object(p, "private_file", return_value=json.dumps(self.manifest).encode()), mock.patch.object(p, "watch", return_value={"emergencyStop": "x", "stopped": ["indexer", "postgres"]}), contextlib.redirect_stdout(out):
+            self.assertEqual(p.main(), 3)
+        self.assertEqual(json.loads(out.getvalue())["stopped"], ["indexer", "postgres"])
+
     def test_halt_latch_blocks_start_and_gates_resume(self):
         latch = self.private / "state" / "halt.json"
         with self.assertRaises(p.Refused):

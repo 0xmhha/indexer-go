@@ -49,6 +49,24 @@ func (e *HaltError) Error() string {
 	return fmt.Sprintf("operations halt (%s): %s", e.Reason, e.Detail)
 }
 
+// SQLSTATEs of PostgreSQL failing to write: disk_full (class 53,
+// insufficient resources) and io_error (class 58, system error).
+const (
+	sqlStateDiskFull = "53100"
+	sqlStateIOError  = "58030"
+)
+
+// sqlStater is a database error carrying its SQLSTATE, such as pgconn.PgError.
+type sqlStater interface{ SQLState() string }
+
+func sqlState(err error) string {
+	var s sqlStater
+	if errors.As(err, &s) {
+		return s.SQLState()
+	}
+	return ""
+}
+
 // ErrHalted is returned at startup while a halt latch exists.
 var ErrHalted = errors.New("opsguard: halt latch present")
 
@@ -62,6 +80,12 @@ func Classify(err error) (Reason, bool) {
 	if errors.As(err, &h) {
 		return h.Reason, true
 	}
+	switch sqlState(err) {
+	case sqlStateDiskFull:
+		return ReasonCapacity, true
+	case sqlStateIOError:
+		return ReasonStorage, true
+	}
 	switch {
 	case errors.Is(err, window.ErrCapacity):
 		return ReasonCapacity, true
@@ -71,4 +95,14 @@ func Classify(err error) (Reason, bool) {
 		return ReasonIntegrity, true
 	}
 	return "", false
+}
+
+// StopsDatabase reports whether err calls for stopping the database too,
+// not only the indexer: the storage under it failed, or PostgreSQL could not
+// write. A capacity threshold alone keeps the database for inspection.
+func StopsDatabase(err error) bool {
+	if r, ok := Classify(err); ok && r == ReasonStorage {
+		return true
+	}
+	return sqlState(err) == sqlStateDiskFull
 }

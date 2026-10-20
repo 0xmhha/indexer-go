@@ -77,9 +77,9 @@ writer commit 직후 projection receipt 저장 전에 중단됐다면 기존 복
 | finalized 충돌·bootstrap/undo 밖·재개 한도 초과 | `ErrFinalityConflict/ErrRebuildRequired` 등을 보존해 자동 복구 중단. 별도 원인 조사와 새 저장소/명시적 범위의 재구성 계획이 필요. 기존 DB/원본은 보존 |
 | checksum·plan·binding·필수 입력 불일치 | 손상/불일치 증거를 보존하고 재개하지 않음. empty/0/latest 대체·수동 cursor/fence 변경·필수 소비자 삭제로 통과시키지 않음 |
 
-manager의 `auto_restart: true`는 용량/identity 사고의 재개 승인 기능이 아니다. 현재 별도 원인별 재시작 억제·영구 중단 상태·host watchdog은 미구현이다. 운영 적용 전에 이 공백을 해결해야 하며, 문서로 해결됐다고 표시하지 않는다. 독립 CL certificate 검증·orphans 자동 수거·무제한 undo도 현재 운영 경로에 포함하지 않는다.
+manager의 `auto_restart: true`는 용량/identity 사고의 재개 승인 기능이 아니다. 원인별 재시작 억제와 중단 잠금은 10/20 구현했다. 호스트의 `preflight.py --watch`는 장치 제거·identity 불일치·여유110GiB 이하·잠금의 `stopDatabase`에서 indexer, 이어서 PostgreSQL을 멈춘다([용량 초안](OPERATIONS_CAPACITY_DRAFT.md#구현된-자동-감시와-중단)). 실제 호스트에서 상시 실행하는 설정과 동작 확인은 아직 없다. 독립 CL certificate 검증·orphans 자동 수거·무제한 undo도 현재 운영 경로에 포함하지 않는다.
 
-`max_unhealthy_duration`의5m 값은 실제 중단 timer로 사용되지 않으므로 운영 초안에서 제외했다. worker 적체5분 경보와 같다고 해석하지 않는다. Docker 로그 회전과 읽기 전용 metadata 진단 도구는 있지만 capacity controller·종료 유예·실제 payload/proof/lease까지 검증하는 GC 승인 진단은 여전히 미구현이다.
+`max_unhealthy_duration`의5m 값은 실제 중단 timer로 사용되지 않으므로 운영 초안에서 제외했다. worker 적체5분 경보와 같다고 해석하지 않는다. Docker 로그 회전·읽기 전용 metadata 진단 도구·용량 감시·종료 유예는 있지만 실제 payload/proof/lease까지 검증하는 GC 승인 진단은 여전히 미구현이다.
 
 `ChainInstance.Stop`은 timeout 때 이전 pipeline이 끝난 뒤 Close하도록 지연할 수 있다. 따라서 StatusStopped/Stop 반환만으로 이전 pool이 모두 반납됐다고 보지 않고 프로세스·자원 종료를 확인한 후 재기동한다. 체인별4개/정상 합계16개와 RPC5는 각 live App의 pool 예산이며 중복 App까지 묶는 전역 상한이 아니다. 이번에 중복 실행을 재현하거나 실제 예산 초과를 측정하지 않았다.
 

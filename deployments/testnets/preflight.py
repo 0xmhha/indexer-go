@@ -10,6 +10,7 @@ import re
 import stat
 import subprocess
 import sys
+import time
 from urllib.parse import parse_qs, unquote, urlsplit
 import uuid
 
@@ -23,6 +24,13 @@ STATE_DIR = "/var/lib/indexer-ops"
 # Docker images, container layers and the services' logs live on the Docker
 # VM disk, not on the monitored APFS volume. Initial review value.
 DOCKER_VM_MIN_FREE = 10 << 30
+# --watch stops this project's PostgreSQL too at or below this APFS free
+# space (the capacity draft's emergency line, below stop_free_bytes).
+EMERGENCY_FREE = 110 << 30
+WATCH_INTERVAL = 30
+# Bounds for compose stop: each service's grace period plus a margin.
+STOP_TIMEOUT = {"indexer": 180, "postgres": 120}
+COMPOSE = ["docker", "--context", "desktop-linux", "compose", "--project-name", "indexer-testnets-draft", "--file", str(HERE / "compose.draft.yaml"), "--profile", "operations-draft"]
 OPERATIONS = {
     "halt_file": STATE_DIR + "/halt.json",
     "journal_file": STATE_DIR + "/capacity.jsonl",
@@ -249,6 +257,60 @@ def halt_latch(private):
     return private / "state" / "halt.json"
 
 
+def compose_environment(manifest):
+    """The nonsecret variables the Compose file interpolates."""
+    return {"INDEXER_APFS_ROOT": manifest["mount_root"], "INDEXER_PRIVATE_DIR": manifest["private_dir"], "INDEXER_RUN_UID": str(os.getuid()), "INDEXER_RUN_GID": str(os.getgid()), "INDEXER_OPERATIONS_IMAGE": manifest["indexer_image"]}
+
+
+def emergency(manifest):
+    """Why this project's database must stop now, or None.
+
+    The volume is gone, replaced or below its startup floor; free space is at
+    or below the emergency line; or the indexer's latch asks for it.
+    """
+    try:
+        root = inspect_apfs(manifest)
+    except (Refused, OSError):
+        return "data volume unavailable, replaced or below its floor"
+    space = os.statvfs(root)
+    if space.f_bavail * space.f_frsize <= EMERGENCY_FREE:
+        return "free space at or below the110GiB emergency line"
+    try:
+        latch = json.loads(private_file(halt_latch(Path(manifest["private_dir"])), 4096))
+    except (Refused, ValueError):
+        return None  # no latch, or one the indexer itself refuses to start with
+    if isinstance(latch, dict) and latch.get("stopDatabase") is True:
+        return "halt latch asks to stop the database"
+    return None
+
+
+def stop_stack(manifest):
+    """Stop the indexer, then PostgreSQL, each within its grace period.
+
+    Never down, rm or volume removal: data and containers stay for recovery.
+    """
+    environment = {**os.environ, **compose_environment(manifest)}
+    stopped = []
+    for service in ("indexer", "postgres"):
+        try:
+            subprocess.run([*COMPOSE, "stop", service], check=True, capture_output=True, timeout=STOP_TIMEOUT[service], env=environment)
+        except (OSError, subprocess.SubprocessError):
+            raise Refused(f"Stopping {service} failed or timed out; check it by hand.") from None
+        stopped.append(service)
+    return stopped
+
+
+def watch(manifest, sleep=time.sleep):
+    """Check every WATCH_INTERVAL seconds; on an emergency stop the stack once and return."""
+    require(set(manifest) == MANIFEST_KEYS and not unresolved(manifest), "Host manifest fields do not match the draft schema.")
+    require(not any(os.environ.get(k) for k in ("DOCKER_HOST", "DOCKER_CONTEXT")), "Clear Docker endpoint overrides before watching.")
+    while True:
+        reason = emergency(manifest)
+        if reason is not None:
+            return {"emergencyStop": reason, "stopped": stop_stack(manifest)}
+        sleep(WATCH_INTERVAL)
+
+
 def check_host(manifest, resume=False):
     require(set(manifest) == MANIFEST_KEYS, "Host manifest fields do not match the draft schema.")
     require(not unresolved(manifest), "Host manifest still has unresolved inputs.")
@@ -299,7 +361,7 @@ def check_host(manifest, resume=False):
     require(docker_vm_free(manifest["indexer_image"]) > DOCKER_VM_MIN_FREE, "Docker VM disk has too little free space for images, container layers and logs.")
     # Detect removal/replacement during the checks before returning to the caller.
     require(inspect_apfs(manifest) == root, "APFS identity changed during inspection.")
-    return {"INDEXER_APFS_ROOT": str(root), "INDEXER_PRIVATE_DIR": str(private), "INDEXER_RUN_UID": str(os.getuid()), "INDEXER_RUN_GID": str(os.getgid()), "INDEXER_OPERATIONS_IMAGE": manifest["indexer_image"]}
+    return compose_environment(manifest)
 
 
 def main():
@@ -308,9 +370,14 @@ def main():
     mode.add_argument("--check-host", type=Path, help="inspect a completed private host manifest; no launch")
     mode.add_argument("--start", type=Path, help="AFTER the execution hold is lifted: inspect, then start only this stack")
     mode.add_argument("--resume", type=Path, help="inspect, then run the indexer's resume check, which removes the halt latch only if its conditions hold")
+    mode.add_argument("--watch", type=Path, help="every30s, stop the indexer and then PostgreSQL on a storage emergency; never restarts anything")
     args = parser.parse_args()
     try:
         check_artifacts()
+        if args.watch:
+            manifest = json.loads(private_file(args.watch).decode(), object_pairs_hook=unique)
+            print(json.dumps(watch(manifest)))
+            return 3
         if args.check_host or args.start or args.resume:
             manifest = json.loads(private_file(args.check_host or args.start or args.resume).decode(), object_pairs_hook=unique)
             environment = check_host(manifest, resume=bool(args.resume))
