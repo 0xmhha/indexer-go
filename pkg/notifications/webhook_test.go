@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -331,7 +332,7 @@ func TestWebhookHandler_Deliver(t *testing.T) {
 		notification := createTestNotification()
 		setting := &NotificationSetting{
 			Destination: Destination{
-				WebhookURL: "http://hooks.example.com/webhook",
+				WebhookURL: closedURL(t) + "/webhook",
 			},
 		}
 
@@ -436,6 +437,22 @@ func TestVerifyWebhookSignature(t *testing.T) {
 }
 
 // Helper functions
+
+// closedURL is an HTTP URL on a loopback port nothing listens on. A refused
+// connection fails at once and needs no name lookup: a resolver call cannot
+// be cancelled and could outlive the test.
+func closedURL(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return "http://" + addr
+}
 
 func createTestNotification() *Notification {
 	now := time.Now()

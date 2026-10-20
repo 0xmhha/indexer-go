@@ -302,7 +302,7 @@ func TestSlackHandler_Deliver(t *testing.T) {
 		notification := createTestSlackNotification()
 		setting := &NotificationSetting{
 			Destination: Destination{
-				SlackWebhookURL: "http://localhost:59998/nonexistent",
+				SlackWebhookURL: closedURL(t) + "/nonexistent",
 			},
 		}
 
