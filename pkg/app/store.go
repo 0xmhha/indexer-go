@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/pkg/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/storage/postgres"
 )
@@ -65,6 +66,12 @@ func openPostgres(ctx context.Context, db *config.DatabaseConfig) (*postgres.Sto
 		Schema:   db.Postgres.Schema,
 		MaxConns: db.Postgres.MaxConns,
 	})
+}
+
+// postgresStats returns the size statistics of a PostgreSQL store.
+func postgresStats(s storage.Storage) (opsguard.PostgresStats, bool) {
+	p, ok := s.(*postgres.Store)
+	return p, ok
 }
 
 // storeLocation describes where db keeps the index, for logs: the Pebble

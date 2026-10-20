@@ -119,8 +119,10 @@ type App struct {
 
 	// opsMonitor halts the process on capacity (operations.capacity); only
 	// the root App owns one. rawObserver receives raw window usage.
+	// statsDetach stops the monitor sampling this App's PostgreSQL store.
 	opsMonitor  *opsguard.Monitor
 	rawObserver func(window.Usage)
+	statsDetach func()
 	haltMu      sync.Mutex
 	haltRun     context.CancelCauseFunc
 
@@ -544,6 +546,7 @@ func (a *App) initStorageOnly(ctx context.Context) error {
 	// For multichain mode, use base storage directly
 	// For single chain mode, we'll wrap it with genesis initializer later
 	a.storage = baseStore
+	a.attachPostgresStats(a.opsMonitor)
 
 	a.logger.Info("Base storage initialized",
 		storeLocation(&a.config.Database),
@@ -941,6 +944,7 @@ func (a *App) newChainIndexer(ctx context.Context, cc *multichain.ChainConfig) (
 	}
 	// Set before the manager runs the chain, which starts its sessions.
 	app.rawObserver = a.rawObserver
+	app.attachPostgresStats(a.opsMonitor)
 	if cc.ChainID != 0 {
 		id, err := app.client.GetChainID(ctx)
 		if err == nil && (!id.IsUint64() || id.Uint64() != cc.ChainID) {

@@ -67,6 +67,32 @@ func TestCapacityHaltEndsRunAndLatches(t *testing.T) {
 	require.ErrorContains(t, resumeCheck(cfg, zap.NewNop()), "resume refused")
 }
 
+// TestPostgresStatsFollowTheStore: the monitor samples a PostgreSQL store,
+// and only a PostgreSQL store.
+func TestPostgresStatsFollowTheStore(t *testing.T) {
+	sc := testchain.BuildDefault()
+	srv := testchain.NewServer(sc.Chain)
+	t.Cleanup(srv.Close)
+	cfg := config.NewConfig()
+	cfg.RPC.Endpoint = srv.URL()
+	cfg.RPC.Timeout = 5 * time.Second
+	setTestDatabase(t, cfg, filepath.Join(t.TempDir(), "db"))
+	cfg.API.Enabled = false
+	enableTestChainFeatures(cfg)
+	cfg.Operations = operationsConfig(t.TempDir())
+	require.NoError(t, cfg.Validate())
+
+	a, err := NewApp(cfg, zap.NewNop(), false, "")
+	require.NoError(t, err)
+	t.Cleanup(a.Shutdown)
+	require.Equal(t, testOnPostgres(), a.statsDetach != nil, "only a PostgreSQL store has statistics")
+	if s, ok := postgresStats(a.storage); ok {
+		n, err := s.DatabaseBytes(context.Background())
+		require.NoError(t, err)
+		require.Positive(t, n)
+	}
+}
+
 // TestChainFailurePolicy: storage and capacity failures latch and stop the
 // process, integrity failures only stop their chain's restarts, others retry.
 func TestChainFailurePolicy(t *testing.T) {

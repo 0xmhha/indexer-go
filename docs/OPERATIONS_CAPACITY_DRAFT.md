@@ -113,6 +113,9 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 | PGDATA 할당량 `Dpg` | 5분 | 예산의 80% 이상 2회 연속, 90%는 준비 경고 | 예산 이상, 또는 예산까지 예상 2시간 이하 |
 | raw 사용률 | 세션의 usage 보고마다(기본 10초) | 80% 이상 2회 연속 | 95% 이상, 또는 95%까지 예상 1시간 이하 |
 | 관측 부재 | 위와 같음 | 표본 실패를 기록 | `F` 60초, `Dpg` 10분 넘게 유효 표본 없음 |
+| DB 크기 `Ddb`, 보유 WAL `Dwal` | 60초(`postgres_stats_interval`) | 없음. journal 기록만 | 없음 |
+
+`Ddb`는 `pg_database_size(current_database())`, `Dwal`은 `pg_ls_waldir()` 크기 합이다. PostgreSQL 저장소를 쓰는 App의 기존 연결 풀로 읽는다. 새 pool은 만들지 않고, 질의 하나는 30초로 제한한다. multichain에서는 체인들이 같은 database를 쓰므로 가장 최근에 열린 체인의 저장소 하나로 잰다. 중단 판정은 계속 `Dpg`만 쓴다. 통계를 읽지 못하면 journal에 unknown으로 남기고 처음 한 번 경고 로그를 낸다. 색인은 멈추지 않는다. 권한이 없어 실패한 것과 디스크가 찬 것을 구분할 수 없기 때문이다. `pg_ls_waldir()`는 superuser나 `pg_monitor`만 실행할 수 있다. Docker 초안의 `init-indexer.sql`은 `pg_monitor` 대신 이 함수의 EXECUTE만 준다. 이 SQL은 새 PGDATA를 초기화할 때만 실행되므로 이미 초기화한 DB에는 운영자가 같은 GRANT를 직접 실행해야 한다.
 
 예상 시간은 이 초안의 계산을 따른다. 최근 15분에서 1분 이상 간격의 가장 가파른 변화와 60분 평균 중 큰 쪽을 쓴다. 시계가 뒤로 가면 이력을 버린다. 변화가 없으면 예상은 unknown이며 무한으로 취급하지 않는다. raw의 증가 속도는 window를 연 뒤 새로 기록한 bytes(`Usage.AppendedBytes`)로 잰다. 수거가 꺼져 있으면 이것이 순증가와 같다. `Dpg`는 PGDATA를 du처럼 걷는다. 심볼릭 링크를 따라가지 않고 다른 파일시스템으로 넘어가지 않으며, 항목이 상한(기본 100만 개)을 넘거나 읽지 못하면 부분 합 대신 실패로 처리한다.
 
@@ -124,7 +127,6 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 
 아직 구현하지 않은 것은 다음과 같다.
 
-- `pg_database_size`·`pg_ls_waldir` 같은 PostgreSQL 통계(`Ddb`, `Dwal`). 원인 설명용 값이며 중단 판정 기준인 `Dpg`는 구현했다.
 - Docker Desktop VM과 컨테이너 로그 영역의 여유 공간. 컨테이너 안에서는 보이지 않으므로 호스트 쪽 감시가 필요하다.
 - free 110GiB 이하·ENOSPC·WAL 쓰기 오류의 긴급 분기에서 PostgreSQL까지 멈추는 동작. 지금은 indexer만 종료한다.
 - 수신만 멈추는 pause/drain 모드. Compose 종료 유예(indexer120초·DB60초)는 적용했다.
@@ -136,7 +138,7 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 
 현재 구현 완료로 간주하지 않을 후속 순서는 다음과 같다.
 
-1. PGDATA·filesystem·raw 감시와 bounded 기록, 누락 판정·경고 hysteresis는 구현했다(위 절). PostgreSQL 통계 `Ddb`/`Dwal`과 Docker VM 감시는 남는다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
+1. PGDATA·filesystem·raw 감시와 bounded 기록, 누락 판정·경고 hysteresis는 구현했다(위 절). PostgreSQL 통계 `Ddb`/`Dwal`의 journal 기록도 구현했다. Docker VM 감시는 남는다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
 2. raw 연속 intake·oldest-pending age·gross append bytes는 `pipeline.runtime.rawIntake`로 노출했다([계측](FEED_TELEMETRY.md)). 미관측은 null이다.
 3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock은 구현했다. Compose 종료 유예는 적용했고 단독 drain 모드는 남는다.
 4. [checkpoint/재시작/GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)과 [읽기 전용 metadata 진단 도구](OPERATIONS_INSPECTION.md)는 작성했다. 진단은 모의 데이터 범위이며 백업 보관·이전의 실제 방식/RPO/RTO와 실제 복구/완전한 GC 승인 진단은 남아 있다. 운영 적용·실제 장애/복원 검증은 저장소·enode 확보와 실행 보류 해제 이후다.

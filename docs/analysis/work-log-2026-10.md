@@ -1665,3 +1665,13 @@ Compose 초안에 종료 신호와 유예 시간이 없었다. 그래서 `docker
 운영 절차 초안이 제안한 값을 적용했다. indexer는 SIGTERM·120초, PostgreSQL은 SIGINT·60초다. PostgreSQL의 SIGTERM은 smart shutdown이라 연결이 모두 끊길 때까지 기다린다. SIGINT는 fast shutdown이라 세션을 끝내고 최종 checkpoint를 쓴다. 공식 이미지의 기본 신호도 SIGINT지만 이미지에 의존하지 않게 명시했다. Compose는 `depends_on` 역순으로 indexer를 먼저 멈춘다.
 
 `preflight.py`의 초안 검사가 네 값을 확인하고, 값이 빠지거나 바뀐 경우4개를 거부 검사에 더했다. preflight 25개·오프라인 lint·Compose 구문 검사가 통과했다. 실제 종료가 이 시간 안에 끝나는지는 재지 않았다. 함께 `tools/astgraph/__pycache__/`를 `.gitignore`에 넣었다.
+
+### 3.104 PostgreSQL 크기 통계 기록 (10/20)
+
+용량 초안의 `Ddb`(DB 크기)와 `Dwal`(보유 WAL)을 journal에 남기게 했다. 중단 판정은 계속 PGDATA를 걷는 `Dpg`가 맡는다. 두 값은 `Dpg`가 늘었을 때 원인이 DB 행인지 WAL인지 구분하는 데 쓴다.
+
+PostgreSQL 저장소를 연 App이 `opsguard.AttachPostgresStats`로 저장소를 monitor에 붙인다. monitor는 `postgres_stats_interval`(기본60초)마다 `pg_database_size(current_database())`와 `pg_ls_waldir()` 크기 합을 기존 연결 풀로 읽는다. 질의 하나는30초로 제한하고, `Run`은 진행 중인 질의를 취소한 뒤 끝날 때까지 기다린다. multichain에서는 체인 App이 열릴 때마다 붙고 닫힐 때 떨어진다. 같은 database를 쓰므로 가장 최근에 붙은 저장소 하나만 잰다. 읽지 못하면 unknown으로 기록하고 상태가 바뀔 때 한 번 로그를 낸다. 권한 부족과 디스크 문제를 구분할 수 없어서 색인은 멈추지 않는다.
+
+`pg_ls_waldir()`는 superuser나 `pg_monitor`만 실행할 수 있다. Docker 초안의 `init-indexer.sql`에 이 함수의 EXECUTE만 주는 GRANT를 더했다. `pg_monitor`는 다른 세션의 질의문까지 보이므로 넓다. 이 SQL은 새 PGDATA 초기화 때만 돌기 때문에, 이미 만든 DB에는 같은 GRANT를 직접 실행해야 한다.
+
+**검증.** opsguard 단위 검사(기록·unknown·분리 후 이전 저장소 사용·Run의 질의 취소 대기·주기 표본)를 race로 돌렸고, Run 관련 검사는 GOMAXPROCS1·race·200회 통과했다. 일회용 PostgreSQL16 container에서 `make test-postgres` 전체(postgres78.9초, app372.1초)가 통과했다. 새 검사3개는 최종 코드로 다시 실행해 skip 없이 통과했다. 그중 하나는 일반 role이 GRANT 전에는 42501로 거부되고 GRANT 뒤에는 WAL 크기를 읽는지 확인한다. 소유 container와 volume은 스크립트가 지웠다. 실제 운영 DB에서는 실행하지 않았다.

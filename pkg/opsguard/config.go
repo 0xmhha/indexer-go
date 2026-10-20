@@ -17,6 +17,7 @@ const (
 	DefaultFilesystemMissingStop = time.Minute
 	DefaultPostgresInterval      = 5 * time.Minute
 	DefaultPostgresMissingStop   = 10 * time.Minute
+	DefaultPostgresStatsInterval = time.Minute
 	DefaultStopForecast          = 2 * time.Hour
 	DefaultResumeSamples         = 3
 )
@@ -54,6 +55,9 @@ type CapacityConfig struct {
 	PostgresInterval    time.Duration `yaml:"postgres_interval"`
 	PostgresMissingStop time.Duration `yaml:"postgres_missing_stop"`
 	PostgresMaxEntries  int           `yaml:"postgres_max_entries"`
+	// PostgresStatsInterval samples the database and WAL sizes of an
+	// attached PostgreSQL store, for the journal only.
+	PostgresStatsInterval time.Duration `yaml:"postgres_stats_interval"`
 
 	// A forecast reaching the floor or budget within StopForecast halts.
 	StopForecast   time.Duration `yaml:"stop_forecast"`
@@ -77,6 +81,7 @@ func (c Config) WithDefaults() Config {
 	setDuration(&v.FilesystemMissingStop, DefaultFilesystemMissingStop)
 	setDuration(&v.PostgresInterval, DefaultPostgresInterval)
 	setDuration(&v.PostgresMissingStop, DefaultPostgresMissingStop)
+	setDuration(&v.PostgresStatsInterval, DefaultPostgresStatsInterval)
 	setDuration(&v.StopForecast, DefaultStopForecast)
 	setDuration(&v.ResumeInterval, v.FilesystemInterval)
 	if v.ResumeSamples == 0 {
@@ -131,7 +136,7 @@ func (v *CapacityConfig) validate() error {
 	for _, d := range []struct {
 		name  string
 		value time.Duration
-	}{{"filesystem_interval", v.FilesystemInterval}, {"filesystem_missing_stop", v.FilesystemMissingStop}, {"postgres_interval", v.PostgresInterval}, {"postgres_missing_stop", v.PostgresMissingStop}, {"stop_forecast", v.StopForecast}, {"resume_interval", v.ResumeInterval}} {
+	}{{"filesystem_interval", v.FilesystemInterval}, {"filesystem_missing_stop", v.FilesystemMissingStop}, {"postgres_interval", v.PostgresInterval}, {"postgres_missing_stop", v.PostgresMissingStop}, {"postgres_stats_interval", v.PostgresStatsInterval}, {"stop_forecast", v.StopForecast}, {"resume_interval", v.ResumeInterval}} {
 		if d.value < time.Second {
 			return fmt.Errorf("operations.capacity.%s must be at least 1s", d.name)
 		}
