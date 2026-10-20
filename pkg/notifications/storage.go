@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -167,11 +168,6 @@ func (s *PebbleStorage) SaveNotification(ctx context.Context, notification *Noti
 		return fmt.Errorf("failed to marshal notification: %w", err)
 	}
 
-	key := NotificationKey(notification.ID)
-	if err := s.put(ctx, key, data); err != nil {
-		return err
-	}
-
 	// Create status index
 	statusKey := NotificationStatusIndexKey(
 		string(notification.Status),
@@ -204,7 +200,10 @@ func (s *PebbleStorage) SaveNotification(ctx context.Context, notification *Noti
 		}
 	}
 
-	return nil
+	// Publish the record last. Cancellation must not leave a visible ID
+	// without its pending index: stream replay would treat it as complete
+	// and skip delivery. Readers ignore partial/stale index entries.
+	return s.put(ctx, NotificationKey(notification.ID), data)
 }
 
 // GetNotification returns a notification by ID.
@@ -347,12 +346,6 @@ func (s *PebbleStorage) ListNotifications(ctx context.Context, filter *Notificat
 	}
 
 	err := s.store.Iterate(ctx, prefix, func(key, value []byte) bool {
-		// Skip items before offset
-		if count < offset {
-			count++
-			return true
-		}
-
 		// Check limit
 		if len(notifications) >= limit {
 			return false
@@ -369,8 +362,20 @@ func (s *PebbleStorage) ListNotifications(ctx context.Context, filter *Notificat
 			loadErr = json.Unmarshal(value, notification)
 		}
 
-		if loadErr != nil {
+		if loadErr != nil || notification == nil {
 			return true // Skip invalid entries
+		}
+		// An interrupted creation can leave indexes without a record, or
+		// indexes at an earlier attempt's creation time. Only the published
+		// record's exact current index is visible to pagination.
+		if filter != nil && filter.SettingID != "" {
+			if !bytes.Equal(key, NotificationSettingIndexKey(notification.SettingID, notification.CreatedAt.UnixNano(), notification.ID)) {
+				return true
+			}
+		} else if filter != nil && len(filter.Status) > 0 {
+			if !bytes.Equal(key, NotificationStatusIndexKey(string(notification.Status), notification.CreatedAt.UnixNano(), notification.ID)) {
+				return true
+			}
 		}
 
 		// Apply time filters
@@ -381,6 +386,10 @@ func (s *PebbleStorage) ListNotifications(ctx context.Context, filter *Notificat
 			if filter.ToTime != nil && notification.CreatedAt.After(*filter.ToTime) {
 				return true
 			}
+		}
+		if count < offset {
+			count++
+			return true
 		}
 
 		notifications = append(notifications, notification)
@@ -409,6 +418,12 @@ func (s *PebbleStorage) GetPendingNotifications(ctx context.Context, limit int) 
 
 		notification, err := s.GetNotification(ctx, string(value))
 		if err != nil || notification == nil {
+			return true
+		}
+		if notification.Status != DeliveryStatusPending && notification.Status != DeliveryStatusRetrying {
+			return true
+		}
+		if !bytes.Equal(key, NotificationPendingIndexKey(pendingTime(notification), notification.ID)) {
 			return true
 		}
 

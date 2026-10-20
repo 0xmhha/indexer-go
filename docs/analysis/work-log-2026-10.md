@@ -1621,3 +1621,15 @@ Go1.24.9 대상 vet, macOS 별도 명령 build와 Linux arm64/CGO0 교차 build�
 첫 전체 race 실행은 제한된 환경의 loopback bind 거부로 기존 모의 서버 검사들이 실패해 중단했다. 이 실행을 성공에 합산하지 않는다. 로컬 테스트 소켓을 허용한 환경에서 bind 사전 확인 후 pinned Go1.24.9·GOMAXPROCS2·전용 cache·의존성 다운로드 차단으로 `make test-race`를1회 완료했다. GOTEST의 `test -json -timeout=20m -skip=^TestEngineLoad`로 기존 성능 부하 검사만 제외한 범위이며 완전 무제외 실행으로 표시하지 않는다. 최종 결과는77개 패키지 통과/19개 테스트 없음, 최상위2293개 통과/81개 opt-in 등 건너뜀·실패0·DATA RACE0이다. 외부 PostgreSQL/live RPC/선택 fixture 환경은 주입하지 않았다. 새 동시성 검사가 없어 기존200회 검사는 반복하지 않았다.
 
 진단 Go 소스9개는3.98의 최종 검증 후 동일하므로 기존 대상 기능/race14개·하위39개, vet, macOS/Linux arm64 build 결과도 유지된다. 보호13개 설정·수집/writer/fresh·의존성·운영 YAML/Compose 해시, gofmt·상대 문서 링크·staged diff를 최종 확인한다. 앱의 체인별 DB4·공유 RPC5 HTTP/s·커밋 직전 fresh/epoch·초기화/GC false와 다른 프로젝트는 그대로다. 디스크 포맷·이미지 build/pull·실제 운영 서비스/DB/노드·공개 RPC·추가 성능 측정은 없다. 이번 범위는 로컬 커밋이며 push/PR은 하지 않는다. 제한 환경 실패 원본과 최종 성공 로그·명령·해시는 `/private/tmp/indexer-inspection-commit-20261020/`에 보존한다.
+
+
+### 3.100 PR #182 PostgreSQL CI 실패 분리와 알림 생성 복구 보완 (10/20)
+
+PR [#182](https://github.com/0xmhha/indexer-go/pull/182)의 첫 [CI](https://github.com/0xmhha/indexer-go/actions/runs/39340912454)는 lint/test/examples를 통과했지만 postgres가 실패했다. adapter 패키지는251.632초에 통과했고 앱에서 TestNotificationsFollowTheChangeStream의 webhook 대기60초가 실패했다. 이후 진행하던 별도 source lookup 검사가16초인 상태에서 앱 패키지 전체가 Go 기본10분 제한으로 중단됐다. 개별 기능 실패와 suite 제한을 구분하며 제한 증가만으로 알림 실패를 숨기지 않는다.
+
+원본 알림 테스트의 독립 PostgreSQL1회는 통과해 CI의 취소 시점을 직접 재현했다고 표시하지 않는다. 대신 기존 저장 순서의 각 쓰기에 취소를 주입하는 동기식 회귀 검사에서6개 하위 실패로 유실 경로를 확인했다. 본문만 저장된 뒤 인덱스 쓰기가 실패하면 replay가 이미 있는 ID로 판단해 생성을 건너뛰고 pending index/queue가 비는 경로다. 인덱스가 모두 기록된 뒤 본문을 공개하도록 바꾸고, 조회는 미공개/과거 시각/상태의 인덱스를 제외한다. 같은 ID의 재시도에서 바뀐 CreatedAt 때문에 중복 목록이 생기거나 잘못된 offset을 소비하지 않도록 했다. 기존 키/값 형식·SQL 바인딩은 유지하고 과거 부분 레코드의 자동 삭제·수리나 migration은 추가하지 않는다. PostgreSQL 검사 스크립트의 외부 DSN/소유 Docker 두 경로에는 일반 CI와 같은 package timeout20분을 지정했다.
+
+보완 후 notifications 패키지 기능105개/하위175개와 임시 PostgreSQL의 알림/API/채널/재시작9개가 통과했고 성능 opt-in1개는 건너뛰었다. 임시 DB 두 실행은 fsync=on·앱 pool4이며 각 소유 container/volume을 정리했고 기존15개 container의 상태/시작 시각이 전후 같았다. 새 회귀3개는 worker Start 없이 동기식 쓰기 실패를 주입하므로 새 동시성200회 대상이 아니다. 운영 DB/서비스/노드·공개 RPC·APFS/디스크 포맷·추가 성능 비교·다른 프로젝트 변경은 없다. 보호13개 설정·수집/writer/fresh/GC·의존성과 체인별 DB4·RPC5·커밋 직전 fresh/epoch는 유지한다. 원래 CI 실패 로그, 실패 주입 red, 보완 후 기능 결과와 커밋 전 전체 race/정적 검사 결과는 `/private/tmp/indexer-inspection-pr-20261020/`와 `fix/`에 보존한다.
+
+
+보완 소스의 커밋 전 전체 race는 Go1.24.9·GOMAXPROCS2·각1회·package timeout20분·기존 성능 부하 TestEngineLoad 제외로 완료했다.77개 패키지/최상위2296개 통과·테스트 없는19개 패키지/opt-in 등81개 건너뜀·실패0·DATA RACE0이다. 새3개 동기식 회귀와 최종 pagination assertion을 포함한다. 전체 build/vet/root lint·Go1040개 fmt·셸 구문도 통과했다. 변경 없는 astgraph vet/lint·예제·cache lifecycle·진단14/39 기능 결과는 앞선 성공 범위를 유지한다. 보호13개와 진단 Go9개 해시·문서 상대 링크245개·diff를 재확인했다. 다음 제출은 보완4개 파일을 별도 fix 커밋으로 push하고 PR의 필수4개 CI를 새 head에서 확인하는 범위다. 이 기록은 새 head CI 완료를 대신하지 않는다.

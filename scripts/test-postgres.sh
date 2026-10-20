@@ -6,10 +6,12 @@
 set -euo pipefail
 
 pkgs=${*:-./pkg/storage/postgres/... ./pkg/app}
+# Match the root CI package timeout; the full PostgreSQL-backed app suite
+# can outgrow Go's default ten minutes even while individual tests progress.
 export INDEXER_TEST_DRIVER=postgres
 
 if [[ -n "${INDEXER_TEST_POSTGRES:-}" ]]; then
-	exec go test -count=1 $pkgs
+	exec go test -count=1 -timeout=20m $pkgs
 fi
 
 name="indexer-test-postgres-$$-${RANDOM}"
@@ -51,4 +53,4 @@ if [[ "$ready" != true ]]; then
 	exit 1
 fi
 
-INDEXER_TEST_POSTGRES="postgres://indexer@127.0.0.1:${port}/indexer" go test -count=1 $pkgs
+INDEXER_TEST_POSTGRES="postgres://indexer@127.0.0.1:${port}/indexer" go test -count=1 -timeout=20m $pkgs
