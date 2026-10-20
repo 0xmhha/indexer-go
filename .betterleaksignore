@@ -1,0 +1,8 @@
+# Known false positives in history (reviewed 2026-10-20). Values are public, not secrets.
+# Public Sepolia block 11901474 header field blockAccessListHash.
+de19d20967579c06ca25a54ab652b9d8a0c5793e:pkg/chains/evm/testdata/sepolia-header-11901474.json:generic-api-key:4
+# Public ERC-20/ERC-721 token contract addresses in example payloads (file since removed).
+c2010e93f23409815a72a82ee0bb9b54b06ed4cf:docs/WATCHLIST_API.md:generic-api-key:359
+c2010e93f23409815a72a82ee0bb9b54b06ed4cf:docs/WATCHLIST_API.md:generic-api-key:373
+# YOUR_API_KEY placeholder in a curl example (file since removed).
+d1c05483cfb8e002a996e1c156cbcc09bfb01193:docs/OPERATIONS_GUIDE.md:curl-auth-header:237
