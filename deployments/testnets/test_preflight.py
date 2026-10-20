@@ -60,6 +60,9 @@ class PolicyTests(unittest.TestCase):
             lambda c: c["window_storage"]["windows"]["arc-testnet"].update(min_free_bytes=200 << 30),
             lambda c: c["window_storage"]["windows"].update(extra={}),
             lambda c: c["api"].update(port=9090),
+            lambda c: c["operations"]["capacity"].update(stop_free_bytes=10 << 30),
+            lambda c: c["operations"].update(halt_file="/tmp/halt.json"),
+            lambda c: c.pop("operations"),
         )
         for mutate in mutations:
             cfg = copy.deepcopy(self.cfg)
@@ -119,6 +122,9 @@ class PolicyTests(unittest.TestCase):
                 self.assertEqual(volume["type"], "bind")
                 self.assertIs(volume["bind"]["create_host_path"], False)
         self.assertNotIn("ports", compose["services"]["postgres"])
+        state = {v["target"]: v for v in compose["services"]["indexer"]["volumes"]}[p.STATE_DIR]
+        self.assertEqual(state["source"], "${INDEXER_PRIVATE_DIR:?preflight required}/state")
+        self.assertNotIn("read_only", state)
         self.assertEqual(compose["services"]["indexer"]["secrets"], ["postgres_dsn"])
         self.assertNotIn("INDEXER_DB_POSTGRES_DSN", compose["services"]["indexer"]["environment"])
         self.assertEqual(compose["services"]["indexer"]["environment"]["INDEXER_DB_POSTGRES_MAX_CONNS"], str(self.cfg["database"]["postgres"]["max_conns"]))
@@ -135,6 +141,7 @@ class HostTests(unittest.TestCase):
         self.root.mkdir()
         self.private = self.base / "private"
         self.private.mkdir(mode=0o700)
+        (self.private / "state").mkdir(mode=0o700)
         for part in ("indexer/postgres/16", "indexer/window/arc", "indexer/identity"):
             (self.root / part).mkdir(parents=True, mode=0o700)
         self.manifest = {"mount_root": str(self.root), "apfs_volume_uuid": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "physical_store_uuid": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "private_dir": str(self.private), "indexer_image": "indexer-go:operations-reviewed", "docker_context": "desktop-linux"}
@@ -259,6 +266,27 @@ class HostTests(unittest.TestCase):
         with self.assertRaises(p.Refused):
             p.check_host(self.manifest)
 
+    def test_halt_latch_blocks_start_and_gates_resume(self):
+        latch = self.private / "state" / "halt.json"
+        with self.assertRaises(p.Refused):
+            p.check_host(self.manifest, resume=True)
+        self.write(latch, '{"version":1,"reason":"capacity"}')
+        with self.assertRaises(p.Refused):
+            p.check_host(self.manifest)
+        self.assertIn("INDEXER_PRIVATE_DIR", p.check_host(self.manifest, resume=True))
+        self.assertTrue(latch.exists(), "inspection never removes the latch")
+
+    def test_state_directory_must_be_private(self):
+        state = self.private / "state"
+        state.chmod(0o750)
+        with self.assertRaises(p.Refused):
+            p.check_host(self.manifest)
+        state.chmod(0o700)
+        state.rmdir()
+        with self.assertRaises(FileNotFoundError):
+            p.check_host(self.manifest)
+        self.assertFalse(state.exists())
+
     def test_cli_never_prints_credential_bearing_parse_errors(self):
         path = self.private / "host.json"
         self.write(path, json.dumps(self.manifest))
@@ -286,6 +314,14 @@ class EntrypointTests(unittest.TestCase):
             self.assertEqual(command[-5:], ["up", "--detach", "--no-build", "--pull", "never"])
             self.assertNotIn("INDEXER_DB_POSTGRES_DSN", execute.call_args.args[2])
 
+    def test_resume_runs_only_the_resume_check_without_database(self):
+        with mock.patch.object(p.sys, "argv", ["preflight.py", "--resume", "/not-a-real-manifest"]), mock.patch.object(p, "private_file", return_value=b"{}"), mock.patch.object(p, "check_host", return_value={"INDEXER_APFS_ROOT": "/fixture"}) as check, mock.patch.object(p.os, "execvpe") as execute:
+            self.assertEqual(p.main(), 0)
+            check.assert_called_once_with({}, resume=True)
+            command = execute.call_args.args[1]
+            self.assertEqual(command[-7:], ["run", "--rm", "--no-deps", "--pull", "never", "indexer", "--resume-check"])
+            self.assertNotIn("up", command)
+
     def test_secret_is_read_as_data_and_never_appears_in_output_or_argv(self):
         with tempfile.TemporaryDirectory(prefix="indexer-secret-fixture-") as name:
             tmp = Path(name)
@@ -312,6 +348,26 @@ class EntrypointTests(unittest.TestCase):
             result = subprocess.run(["/bin/sh", str(wrapper)], env=env, capture_output=True, text=True, timeout=5)
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn("injection-ok", result.stdout)
+
+    def test_entrypoint_accepts_only_the_resume_check(self):
+        with tempfile.TemporaryDirectory(prefix="indexer-entrypoint-fixture-") as name:
+            tmp = Path(name)
+            secret = tmp / "secret"
+            secret.write_text("postgresql://fixture@fixture.invalid/db")
+            fake = tmp / "fake-indexer"
+            fake.write_text("#!/bin/sh\nprintf '%s|' \"$@\"\n")
+            fake.chmod(0o700)
+            script = (p.HERE / "indexer-entrypoint.sh").read_text().replace("/run/secrets/postgres_dsn", str(secret)).replace("/app/indexer-go", str(fake))
+            wrapper = tmp / "entrypoint.sh"
+            wrapper.write_text(script)
+            env = {"PATH": os.environ["PATH"], "INDEXER_DB_POSTGRES_DSN_FILE": str(secret)}
+            run = lambda *args: subprocess.run(["/bin/sh", str(wrapper), *args], env=env, capture_output=True, text=True, timeout=5)
+            self.assertEqual(run().stdout, "--config|/etc/indexer/config.yaml|")
+            self.assertEqual(run("--resume-check").stdout, "--config|/etc/indexer/config.yaml|--resume-check|")
+            for args in (("--clear-data",), ("--resume-check", "--reindex"), ("",)):
+                result = run(*args)
+                self.assertNotEqual(result.returncode, 0, args)
+                self.assertEqual(result.stdout, "")
 
 
 if __name__ == "__main__":

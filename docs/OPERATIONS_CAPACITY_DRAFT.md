@@ -1,6 +1,6 @@
 # 용량·backlog·복구 정책 초안
 
-**상태: 정책 제안. 자동 감시·중단 제어는 구현하지 않았으며 운영 적용·디스크 포맷·초기화·서비스 실행·추가 성능 측정은 보류한다.**
+**상태: 정책 제안과 그 일부 구현. 파일시스템·PGDATA·raw 용량의 자동 감시와 중단·재개 잠금, 원인별 자동 재시작 억제를 구현했다(10/20, [구현 범위](#구현된-자동-감시와-중단)). 운영 적용·디스크 포맷·초기화·서비스 실행·추가 성능 측정은 보류한다.**
 
 2026-10-19의 [운영 설정](OPERATIONS_DRAFT.md)과 [Docker 초안](../deployments/testnets/README.md)을 위한 기준이다. 아래 숫자는 실측 SLO나 디스크 안전 보장이 아니라 최초 운영 검토용 임계값이다. 현재 `config.yaml`·실행 코드·Compose·애플리케이션 YAML을 변경하지 않는다. 체인별 DB pool4개(체인별 App이1개인 정상 실행 예산16개), 공유 RPC5 HTTP/s, source/writer 각각의 커밋 직전 fresh·epoch·내구성·ACK·삭제 fence를 유지한다.
 
@@ -49,13 +49,13 @@ PostgreSQL의 [크기/디렉터리 함수와 권한](https://www.postgresql.org/
 
 세 단계를 구분한다. 같은 chain·plan·현재 generation의 관측만 비교한다.
 
-1. **수신→capture:** raw가 durable해도 source facts가 DB에 commit된 것은 아니다. status의 `source.factsThrough`를 연속 저장 완료점 `C`로 사용한다. 현재 상태 API에는 검증된 raw 연속 수신 완료점/oldest-pending age가 없다. 선택 runtime의 `observedHeader`는 관측 후보일 뿐 latest/완료점이 아니므로 `observedHeader.height - C`는 진단용 후보 격차로만 표시한다. canonical backlog나 수집 누락이 없다는 증거가 아니다.
+1. **수신→capture:** raw가 durable해도 source facts가 DB에 commit된 것은 아니다. status의 `source.factsThrough`를 연속 저장 완료점 `C`로 사용한다. raw 연속 수신 지점과 oldest-pending age는 `pipeline.runtime.rawIntake`로 볼 수 있다. 다만 검증 전 수신 기록이며 canonical 완료점이 아니다. 선택 runtime의 `observedHeader`는 관측 후보일 뿐 latest/완료점이 아니므로 `observedHeader.height - C`는 진단용 후보 격차로만 표시한다. canonical backlog나 수집 누락이 없다는 증거가 아니다.
 2. **capture→writer:** `projectionHead`를 `P`로 두되 `projectionMatchesCapture: true`일 때만 `C-P`를 writer의 높이 격차로 쓴다. 두 DB snapshot을 조합한 값이므로 모순/변경 중이면 unknown으로 처리한다. head가 높은 것만으로 모든 feature가 연속 완료됐다고 하지 않는다.
 3. **feature별 완료:** 활성 필수 unit의 현재 `epoch/status/completeThrough/gap`를 함께 본다. `gap`·stale·unreported·누락 unit은 완료로 간주하지 않는다. 선택 worker의 `completeThrough`도 별도이며 이번 base plan에는 proof/state/추가 projection worker가 없다.
 
 `source.factsThrough`/cursor/age가 null이면0으로 바꾸지 않는다. anchor는 첫 처리 높이의 부모 기준일 뿐 source facts 완료로 표시하지 않는다. optional `proofBacklog/stateBacklog`를 base writer backlog로 재사용하지 않는다. 현재 YAML에는 `feed.telemetry`가 없어 runtime 계측이 꺼져 있다. 이 초안은 이를 켜지 않는다.
 
-지연 시간은 향후 감시기가 **미처리를 처음 확인한 시각**부터 따로 기록하는 안이다. 이는 적체가 이어진 관측 시간이며 가장 오래된 개별 블록의 대기 시간이 아니다. `rawQueue` 표본은 완료된 작업의 대기 시간이고, process-local proof/state age는 선택 단계의 일부 입력만 관측하므로 현재 가장 오래된 base 미처리 입력의 나이로 대체할 수 없다. raw의 원래 `FirstReceived`에 기반한 oldest-pending age와 연속 raw intake cursor를 내보내는 기능은 별도 구현이 필요하다. 상태 API 필드/한계는 [진행 상태 구현](../pkg/indexingstatus/status.go), [pipeline 구현](../pkg/indexingstatus/pipeline.go), [계측 설명](FEED_TELEMETRY.md)을 따른다.
+지연 시간은 향후 감시기가 **미처리를 처음 확인한 시각**부터 따로 기록하는 안이다. 이는 적체가 이어진 관측 시간이며 가장 오래된 개별 블록의 대기 시간이 아니다. `rawQueue` 표본은 완료된 작업의 대기 시간이고, process-local proof/state age는 선택 단계의 일부 입력만 관측하므로 현재 가장 오래된 base 미처리 입력의 나이로 대체할 수 없다. raw의 원래 `FirstReceived`에 기반한 oldest-pending age와 연속 raw intake cursor는 `feed.telemetry`를 켠 실행의 `pipeline.runtime.rawIntake`가 제공한다(10/20). 프로세스 안의 관측이므로 재시작 뒤에는 다시 전달된 입력부터 보인다. 상태 API 필드/한계는 [진행 상태 구현](../pkg/indexingstatus/status.go), [pipeline 구현](../pkg/indexingstatus/pipeline.go), [계측 설명](FEED_TELEMETRY.md)을 따른다.
 
 진행률을 얻을 수 있다면 `λ=동일 epoch의 새 입력/초`, `μ=연속 durable 완료/초`, `B=같은 범위의 미완료 블록 수`로 구분한다. `B>0`이고 `μ>λ`일 때만 `B/(μ-λ)`를 지속 유입 중 예상 추격 시간으로 계산한다. `μ≤λ`이면 현 조건에서 유한한 추격 시간을 제시할 수 없다. 실제 λ가 없는데 Arc를2블록/s로 고정해 완료 시간을 약속하지 않는다. 일시적인 μ 또는450ms 수신 목표를 지속 운영 보장으로 사용하지 않는다.
 
@@ -103,15 +103,42 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 4. Arc peer가 누락 구간의 header/body/receipt를 제공하는지 확인하고, 다른3체인은 strict 부모 상태의 가용성을 확인한다. peer의 실제 과거 보존 범위는 미확정이다. source와 writer의 fresh를 같은5 HTTP/s로 계속 실행한다.
 5. 모든 초기화 flag와 GC=false를 유지해 guarded 기동 절차로 재개한다. 단, GC=false여도 기존 durable 삭제 intent의 복구에서 정확한 과거 삭제가 완료될 수 있으므로 [해당 분기](OPERATIONS_RUNBOOK_DRAFT.md#7-중단된-삭제의-복구--gcfalse여도-별도-확인)를 먼저 확인한다. backlog를0으로 지우지 않고 정상 운영 감시에서 durable 진전과 여유를 확인한다. 관측 부재/동일 사고 재발 시 재시작을 반복하지 않는다. 성능·장기 측정은 별도 재개 요청 전 보류한다.
 
+## 구현된 자동 감시와 중단
+
+앱 설정의 `operations` 절이 이 초안의 중단·재개 기준을 프로세스 안에서 적용한다(`pkg/opsguard`). 절이 없으면 아무것도 하지 않는다. 바이트 기준값에는 기본값이 없다. 배포마다 디스크와 예산이 다르기 때문이다. 테스트넷 초안 값은 [설정 초안](examples/config-testnets-windowed.draft.yaml)에 있다.
+
+| 감시값 | 주기 | 경고 | 중단 |
+| --- | --- | --- | --- |
+| 파일시스템 여유 `F` | 30초 | `warn_free_bytes` 이하 2회 연속 | `stop_free_bytes` 이하 1회, 또는 floor까지 예상 2시간 이하 |
+| PGDATA 할당량 `Dpg` | 5분 | 예산의 80% 이상 2회 연속, 90%는 준비 경고 | 예산 이상, 또는 예산까지 예상 2시간 이하 |
+| raw 사용률 | 세션의 usage 보고마다(기본 10초) | 80% 이상 2회 연속 | 95% 이상, 또는 95%까지 예상 1시간 이하 |
+| 관측 부재 | 위와 같음 | 표본 실패를 기록 | `F` 60초, `Dpg` 10분 넘게 유효 표본 없음 |
+
+예상 시간은 이 초안의 계산을 따른다. 최근 15분에서 1분 이상 간격의 가장 가파른 변화와 60분 평균 중 큰 쪽을 쓴다. 시계가 뒤로 가면 이력을 버린다. 변화가 없으면 예상은 unknown이며 무한으로 취급하지 않는다. raw의 증가 속도는 window를 연 뒤 새로 기록한 bytes(`Usage.AppendedBytes`)로 잰다. 수거가 꺼져 있으면 이것이 순증가와 같다. `Dpg`는 PGDATA를 du처럼 걷는다. 심볼릭 링크를 따라가지 않고 다른 파일시스템으로 넘어가지 않으며, 항목이 상한(기본 100만 개)을 넘거나 읽지 못하면 부분 합 대신 실패로 처리한다.
+
+중단하면 먼저 `halt_file`에 잠금 파일을 기록한다. 첫 원인을 보존하기 위해 이미 있는 잠금은 덮어쓰지 않는다. 이어서 `App.Run`이 그 중단을 결과로 끝나고 프로세스는 오류로 종료한다. 잠금이 있으면 시작을 거부한다. 읽을 수 없는 잠금도 거부 사유다. 감시 표본과 상태 변화는 선택적으로 `journal_file`에 JSON 줄로 남긴다. 파일 하나는 최대 8MiB이고 회전본 하나만 둔다.
+
+재개는 `--resume-check`로만 한다. 30초 간격의 표본 3개가 모두 `resume_free_bytes`를 넘고 `Dpg`가 예산의 80% 미만일 때만 잠금을 지운다. 끝나면 색인을 시작하지 않고 종료한다. 운영자가 그다음에 정상 시작한다. raw 원인의 중단과 무결성 중단은 이 명령으로 지우지 않는다. GC가 꺼져 있으면 raw 사용률은 내려가지 않고, 무결성 원인은 운영자가 직접 확인해야 하기 때문이다. 저장소 identity는 다음 시작에서 window Open이 다시 검사한다. Docker 초안에서는 `preflight.py --resume`이 호스트 점검을 반복한 뒤 DB 없이 이 명령만 실행한다.
+
+실패의 원인도 분류한다. raw/객체 저장소 장애(`window.ErrUnavailable`, `ErrCorrupt`, 객체 영역 장애)는 storage, 용량 부족은 capacity, 불변 입력 충돌·finality 충돌·명시적 재구축 필요는 integrity다. multichain manager는 분류된 실패를 그 체인의 자동 재시작 대상에서 뺀다(`restartSuppressed`). storage와 capacity는 같은 디스크를 쓰는 모든 체인의 문제이므로 잠금을 쓰고 프로세스 전체를 끝낸다. integrity는 해당 체인만 멈추고 다른 체인은 계속한다. 명시적 StartChain은 억제를 해제한다. 단일 체인에서도 storage·capacity 오류로 끝나면 잠금을 쓴다. RPC 오류처럼 분류되지 않은 실패는 기존처럼 다시 시작한다.
+
+아직 구현하지 않은 것은 다음과 같다.
+
+- `pg_database_size`·`pg_ls_waldir` 같은 PostgreSQL 통계(`Ddb`, `Dwal`). 원인 설명용 값이며 중단 판정 기준인 `Dpg`는 구현했다.
+- Docker Desktop VM과 컨테이너 로그 영역의 여유 공간. 컨테이너 안에서는 보이지 않으므로 호스트 쪽 감시가 필요하다.
+- free 110GiB 이하·ENOSPC·WAL 쓰기 오류의 긴급 분기에서 PostgreSQL까지 멈추는 동작. 지금은 indexer만 종료한다.
+- Compose `stop_grace_period`와 수신만 멈추는 pause/drain 모드.
+- 실제 APFS·PGDATA에서의 동작 확인. 검증은 임시 디렉터리와 모의 probe 범위다.
+
 ## 복구 목표와 남은 작업
 
 운영자 대응15분·사고 발생 후2시간 내 복구/장기 중단 방침 결정·worker 지연5분/30분 경보를 최초 제안으로 둔다. 이는 RTO2시간 달성 보장이 아니다. **허용 데이터 손실(RPO), 실제 RTO, 최대 peer 미연결 시간과 장기 DB 백업/증설 방침은 아직 확정하지 않았다.** durable commit까지 보존하는 것이 목표지만 장치 자체 손실은 별도 일관된 DB·source/identity 백업과 복원 검증이 필요하다.24시간 raw 보관은 백업·24시간 undo·원격 상태/peer 보존 보장이 아니다.
 
 현재 구현 완료로 간주하지 않을 후속 순서는 다음과 같다.
 
-1. DB/PGDATA/WAL·filesystem 감시와 bounded 기록, 누락 판정·경고 hysteresis를 구현한다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
-2. raw 연속 intake/oldest-pending age·gross append bytes를 기존 내구성/예산 경계 안에서 노출한다. 미관측은 unknown으로 유지한다.
-3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock과 서비스 종료 유예를 반영한다. 단독 drain 모드는 필요성을 검토한 뒤 별도 설계한다.
+1. PGDATA·filesystem·raw 감시와 bounded 기록, 누락 판정·경고 hysteresis는 구현했다(위 절). PostgreSQL 통계 `Ddb`/`Dwal`과 Docker VM 감시는 남는다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
+2. raw 연속 intake·oldest-pending age·gross append bytes는 `pipeline.runtime.rawIntake`로 노출했다([계측](FEED_TELEMETRY.md)). 미관측은 null이다.
+3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock은 구현했다. 서비스 종료 유예와 단독 drain 모드는 남는다.
 4. [checkpoint/재시작/GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)과 [읽기 전용 metadata 진단 도구](OPERATIONS_INSPECTION.md)는 작성했다. 진단은 모의 데이터 범위이며 백업 보관·이전의 실제 방식/RPO/RTO와 실제 복구/완전한 GC 승인 진단은 남아 있다. 운영 적용·실제 장애/복원 검증은 저장소·enode 확보와 실행 보류 해제 이후다.
 
 이번 검토는 기존 코드·문서·공식 PostgreSQL 문서에 근거한 정적 검토다. 디스크 상태 재조회, DB 통계 쿼리, 컨테이너/서비스 실행, 실제 삭제·중단·재개, 성능 측정은 하지 않았다.

@@ -316,6 +316,9 @@ type Usage struct {
 	MinFreeBytes                             int64
 	Severity                                 string // normal, warning (80%), critical (95%)
 	Writable                                 bool
+	// AppendedBytes counts new frames since this handle was opened; unlike
+	// FileBytes, collection does not lower it (Stats.AppendedBytes).
+	AppendedBytes int64
 }
 
 // Usage reads current physical headroom and the durable allocation ledger.
@@ -325,7 +328,7 @@ type Usage struct {
 func (s *Store) Usage(ctx context.Context) (Usage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	u := Usage{Reservation: s.opts.Reservation, FileBytes: s.used, LimitBytes: s.opts.MaxBytes, IndexReserveBytes: s.opts.reservation(), Severity: "normal"}
+	u := Usage{Reservation: s.opts.Reservation, FileBytes: s.used, LimitBytes: s.opts.MaxBytes, IndexReserveBytes: s.opts.reservation(), Severity: "normal", AppendedBytes: s.appendedBytes}
 	err := s.withVolumeWrite(ctx, func() error {
 		if err := s.guard(); err != nil {
 			return err

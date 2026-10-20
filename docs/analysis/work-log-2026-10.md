@@ -1642,3 +1642,18 @@ PR [#182](https://github.com/0xmhha/indexer-go/pull/182)의 첫 [CI](https://git
 뺀 근거는 병목 위치다. writer는 로컬에서 약 5블록/s를 처리해 Arc의 약 2블록/s보다 빠르다. 수집을 제한하는 것은 커밋 직전 fresh canonical 검사를 포함한 체인별 5 HTTP/s RPC 예산이다. 위 두 성능 항목이 이 제한을 바꾼다는 근거가 없다. 성능은 실제 peer와 운영 환경의 장기 측정(open-items 9번)에서 확인한다.
 
 남은 작업 목록(open-items.md)과 CLAUDE.md의 Current Work에서 해당 항목을 지웠다. 과거 측정·관찰 기록과 refactoring-plan의 K2 측정은 이력으로 그대로 둔다. 코드·설정·빌드·테스트 실행은 없다.
+
+
+### 3.102 raw 수신 관측과 용량 중단·재개 잠금 (10/20)
+
+남은 작업 3장의 ①raw 수신 관측과 ②용량 감시·중단·재개 잠금을 구현했다. 그 전에 PR마다 겪는 `pkg/app` race 시간 초과도 원인을 확인하고 줄였다.
+
+**pkg/app race 시간.** 테스트별 시간을 JSON으로 기록해 보니 멈춘 테스트는 없었다. 상위 테스트206개의 합이473초로 패키지 시간475초와 같았다. 모두 차례로 돌기 때문이다. 가장 긴 것은 블록 1만 개를 색인하는 `TestUnboundedQueriesUseTheIndexes`(46초)다. 환경 변수를 바꾸지 않고, 직접 접속하는 고정 포트가 없고, 짧은 대기 창이 없는 무거운 테스트11개에만 `t.Parallel`을 넣었다. 1초 대기 창이 있는 source lookup/search 재시작 테스트는 그대로 뒀다. race 실행 네 번이321·382·338·335초였고 실패는 없었다. 382초는 전체 `make test-race` 안에서 다른 패키지와 함께 돈 값이다. Makefile의 시간 제한은 바꾸지 않았다.
+
+**raw 수신 관측.** `pipeline.runtime.rawIntake`가 세 가지를 보인다. 수신 세션 시작점부터 끊김 없이 받은 마지막 높이, 받았지만 capture하지 않은 블록과 그중 가장 이른 window `FirstReceived`, 실행 동안 새로 쓴 frame/bytes다. 다시 전달된 frame은 원래 수신 시각을 쓰고 bytes를 세지 않는다. 기록은1024블록까지이며 넘으면 `pendingTruncated`로 표시한다. window의 `Stats`/`Usage`에 새로 쓴 frame/bytes 누적값을 추가했다. 수거로 줄지 않는 값이다.
+
+**용량 감시와 잠금.** 새 패키지 `pkg/opsguard`와 앱 설정 `operations`다. 파일시스템 여유(30초), PGDATA 할당량(5분, 한도 있는 du), raw 사용률(세션 보고마다)을 본다. 기준값, 고갈 예상 시간(2시간, raw는95%까지1시간), 관측 부재(60초/10분)에서 잠금 파일을 쓰고 `App.Run`을 끝낸다. 잠금이 있으면 시작을 거부하고 `--resume-check`만 재개 조건을 다시 재서 지운다. raw·무결성 원인은 지우지 않는다. 오류를 storage·capacity·integrity로 분류해 multichain manager가 자동 재시작하지 않게 했다. storage·capacity는 모든 체인이 쓰는 디스크 문제라서 프로세스 전체를 멈춘다. Docker 초안에는 사설 `state` 디렉터리 mount, `preflight.py --resume`, 그 인자만 받는 entrypoint를 더했다.
+
+**검증.** Go1.26.8로 실행했다. `make test-race`에서 77개 패키지가 통과했다. `pkg/notifications` 1개는 webhook 테스트가 남긴 DNS 조회(getaddrinfo) 고루틴을 goleak이 잡아 실패했다. PR #183 때와 같은 증상이고 이번 변경과 관계없는 패키지다. 그 패키지만 다시 돌려 통과했다. 새 동시성 검사(opsguard 감시, 재시작 정책, raw 수신 기록)는 각각 race·GOMAXPROCS1·200회, 앱 수준 새 검사5개는 race20회 통과했다. lint0건, vet, gofmt, 예제, cache lifecycle, astgraph, preflight 25개·오프라인 lint·셸 문법도 통과했다. PostgreSQL 회귀(`make test-postgres`)는 로컬에 `postgres:16-alpine` 이미지가 없어 다운로드하지 않고 실행하지 않았다. CI의 postgres 작업에서 확인한다.
+
+**남은 것.** PostgreSQL 통계(`Ddb`/`Dwal`), Docker VM 공간 감시, 긴급 시 PostgreSQL 종료, Compose 종료 유예와 drain 모드, 실제 APFS·PGDATA에서의 동작 확인이다. 디스크 포맷·서비스 실행·실제 노드/RPC 접속·성능 측정은 하지 않았다.

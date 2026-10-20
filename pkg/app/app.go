@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -49,6 +50,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/multichain"
 	"github.com/0xmhha/indexer-go/pkg/notifications"
+	"github.com/0xmhha/indexer-go/pkg/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/rpcpool"
 	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/source"
@@ -115,6 +117,13 @@ type App struct {
 	// orderBook keeps the DEX order books (dex.orderbook), nil when off.
 	orderBook *orderbook.Service
 
+	// opsMonitor halts the process on capacity (operations.capacity); only
+	// the root App owns one. rawObserver receives raw window usage.
+	opsMonitor  *opsguard.Monitor
+	rawObserver func(window.Usage)
+	haltMu      sync.Mutex
+	haltRun     context.CancelCauseFunc
+
 	// Runtime flags
 	enableGapMode    bool
 	forceAdapterType string
@@ -159,6 +168,14 @@ func run() error {
 
 	for _, msg := range cfg.UnsupportedSettings() {
 		log.Warn("Unsupported setting ignored", zap.String("detail", msg))
+	}
+
+	if flags.resumeCheck {
+		return resumeCheck(cfg, log)
+	}
+	// A halt latch keeps the indexer stopped until the resume check passes.
+	if err := opsguard.CheckStartup(cfg.Operations.HaltFile); err != nil {
+		return err
 	}
 
 	// Log startup information
@@ -233,6 +250,7 @@ type Flags struct {
 	enableGapMode    bool
 	clearData        bool
 	reindex          bool // Clear blockchain data only, preserving verification data
+	resumeCheck      bool // check resume conditions, clear the halt latch and exit
 	enableAPI        bool
 	apiHost          string
 	apiPort          int
@@ -275,6 +293,7 @@ func parseFlagsFrom(args []string, onError flag.ErrorHandling) (*Flags, error) {
 	fs.BoolVar(&f.enableGapMode, "gap-recovery", false, "Enable gap detection and recovery at startup")
 	fs.BoolVar(&f.clearData, "clear-data", false, "Clear (delete) the data folder before starting")
 	fs.BoolVar(&f.reindex, "reindex", false, "Clear blockchain data only, preserving verification data (ABIs, source code, verification status)")
+	fs.BoolVar(&f.resumeCheck, "resume-check", false, "Sample the resume conditions of operations.capacity, remove the halt latch if they hold, and exit")
 
 	// API server flags
 	fs.BoolVar(&f.enableAPI, "api", false, "Enable API server")
@@ -367,6 +386,9 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 			app.closeAfterFailedStart()
 		}
 	}()
+	if err := app.initOperations(); err != nil {
+		return nil, err
+	}
 
 	ctx := context.Background()
 
@@ -804,6 +826,7 @@ func (a *App) initMultiChainManager() error {
 	if err != nil {
 		return fmt.Errorf("failed to create multi-chain manager: %w", err)
 	}
+	manager.SetFailurePolicy(a.chainFailure)
 
 	a.multichainManager = manager
 	a.logger.Info("Multi-chain manager created",
@@ -864,6 +887,8 @@ func chainFeatures(shared, chain map[string]config.FeatureConfig) map[string]con
 // the chain it was created under (/chains/{id}/).
 func (a *App) chainAppConfig(cc *multichain.ChainConfig) *config.Config {
 	cfg := *a.config
+	// The root App owns capacity monitoring and the halt latch.
+	cfg.Operations = opsguard.Config{}
 	cfg.RPC.Endpoint = cc.RPCEndpoint
 	if cc.CoalesceReads != nil {
 		cfg.RPC.CoalesceReads = *cc.CoalesceReads
@@ -914,6 +939,8 @@ func (a *App) newChainIndexer(ctx context.Context, cc *multichain.ChainConfig) (
 	if err != nil {
 		return nil, err
 	}
+	// Set before the manager runs the chain, which starts its sessions.
+	app.rawObserver = a.rawObserver
 	if cc.ChainID != 0 {
 		id, err := app.client.GetChainID(ctx)
 		if err == nil && (!id.IsUint64() || id.Uint64() != cc.ChainID) {
@@ -1319,6 +1346,33 @@ func (a *App) initContractVerifier() error {
 
 // Run starts the application and blocks until context is cancelled
 func (a *App) Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	a.haltMu.Lock()
+	a.haltRun = cancel
+	a.haltMu.Unlock()
+	var monitor sync.WaitGroup
+	if a.opsMonitor != nil {
+		monitor.Add(1)
+		go func() {
+			defer monitor.Done()
+			_ = a.opsMonitor.Run(ctx)
+		}()
+	}
+	err := a.run(ctx)
+	cause := context.Cause(ctx)
+	cancel(nil)
+	monitor.Wait()
+	var h *opsguard.HaltError
+	if errors.As(cause, &h) {
+		return h
+	}
+	a.latchFailure("", err)
+	return err
+}
+
+// run indexes until ctx ends.
+func (a *App) run(ctx context.Context) error {
 	a.logger.Info("Starting indexing...")
 
 	// Start notification service if enabled. An API process only serves
@@ -1425,6 +1479,7 @@ func (a *App) Shutdown() {
 	}
 
 	a.closeOrderBook()
+	a.closeOperations()
 	records.Detach(a.storage)
 	fetch.DetachProgress(a.storage)
 
@@ -1700,6 +1755,7 @@ func (a *App) closeAfterFailedStart() {
 		a.managedFeed.Stop()
 	}
 	a.closeOrderBook()
+	a.closeOperations()
 	records.Detach(a.storage)
 	fetch.DetachProgress(a.storage)
 	if a.eventBus != nil {

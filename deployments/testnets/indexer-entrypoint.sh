@@ -14,6 +14,15 @@ if [ "${INDEXER_DB_POSTGRES_DSN_FILE:-}" != /run/secrets/postgres_dsn ] || \
     echo 'Required DSN secret is unavailable.' >&2
     exit 1
 fi
+# The only accepted argument runs the capacity resume check instead of indexing.
+case "$#:${1:-}" in
+    0:) set -- ;;
+    1:--resume-check) set -- --resume-check ;;
+    *)
+        echo 'Unsupported arguments; only --resume-check is accepted.' >&2
+        exit 1
+        ;;
+esac
 INDEXER_DB_POSTGRES_DSN=$(cat /run/secrets/postgres_dsn)
 export INDEXER_DB_POSTGRES_DSN
-exec /app/indexer-go --config /etc/indexer/config.yaml
+exec /app/indexer-go --config /etc/indexer/config.yaml "$@"

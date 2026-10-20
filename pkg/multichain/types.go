@@ -28,18 +28,20 @@ const (
 
 // HealthStatus represents the health state of a chain connection.
 type HealthStatus struct {
-	ChainID       string        `json:"chainId"`
-	Status        ChainStatus   `json:"status"`
-	IsHealthy     bool          `json:"isHealthy"`
-	LatestHeight  uint64        `json:"latestHeight"`
-	IndexedHeight uint64        `json:"indexedHeight"`
-	SyncLag       uint64        `json:"syncLag"`
-	LastBlockTime time.Time     `json:"lastBlockTime"`
-	LastError     string        `json:"lastError,omitempty"`
-	LastErrorTime *time.Time    `json:"lastErrorTime,omitempty"`
-	RPCLatency    time.Duration `json:"rpcLatency"`
-	Uptime        time.Duration `json:"uptime"`
-	CheckedAt     time.Time     `json:"checkedAt"`
+	ChainID       string      `json:"chainId"`
+	Status        ChainStatus `json:"status"`
+	IsHealthy     bool        `json:"isHealthy"`
+	LatestHeight  uint64      `json:"latestHeight"`
+	IndexedHeight uint64      `json:"indexedHeight"`
+	SyncLag       uint64      `json:"syncLag"`
+	LastBlockTime time.Time   `json:"lastBlockTime"`
+	LastError     string      `json:"lastError,omitempty"`
+	LastErrorTime *time.Time  `json:"lastErrorTime,omitempty"`
+	// RestartSuppressed: the last failure is not retried automatically.
+	RestartSuppressed bool          `json:"restartSuppressed,omitempty"`
+	RPCLatency        time.Duration `json:"rpcLatency"`
+	Uptime            time.Duration `json:"uptime"`
+	CheckedAt         time.Time     `json:"checkedAt"`
 }
 
 // SyncProgress represents the synchronization progress of a chain.
