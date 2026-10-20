@@ -1,5 +1,5 @@
 # Build recipe only; no build/pull is part of draft validation.
-FROM golang:1.24.9-bookworm AS builder
+FROM golang:1.26.8-bookworm AS builder
 ENV GOTOOLCHAIN=local CGO_ENABLED=0
 WORKDIR /src
 COPY go.mod go.sum ./

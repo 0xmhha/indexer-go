@@ -7,7 +7,7 @@ This composition runs one multi-chain indexer and a dedicated PostgreSQL 16 inst
 | File | Purpose |
 | --- | --- |
 | [compose.draft.yaml](compose.draft.yaml) | Two explicitly selected services; private DB network; loopback-only API port8088 |
-| [Dockerfile.draft](Dockerfile.draft) | Separate Go1.24.9/CGO0 image recipe; not built or pulled |
+| [Dockerfile.draft](Dockerfile.draft) | Separate Go1.26.8/CGO0 image recipe; not built or pulled |
 | [host.draft.json](host.draft.json) | Proposed mount path and unresolved physical/volume UUIDs, private directory and image |
 | [preflight.py](preflight.py) | Offline lint, read-only macOS inspection, and a guarded future startup entry point |
 | [indexer-entrypoint.sh](indexer-entrypoint.sh) | Read a DSN secret as data and bridge it to the application's existing environment setting |

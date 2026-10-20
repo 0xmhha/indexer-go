@@ -3,7 +3,7 @@
 Build EVM indexing backends in Go. Turn blocks, transactions, receipts and logs into queryable application data, then extend the indexer with your own handlers, chain profiles and APIs.
 
 [![CI](https://github.com/0xmhha/indexer-go/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/0xmhha/indexer-go/actions/workflows/ci.yml)
-[![Go toolchain](https://img.shields.io/badge/Go-1.24.9-00ADD8?logo=go)](go.mod)
+[![Go toolchain](https://img.shields.io/badge/Go-1.26.8-00ADD8?logo=go)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 [Quickstart](docs/QUICKSTART.md) · [Documentation](docs/README.md) · [API reference](docs/API.md) · [SDK](docs/SDK.md) · [Examples](#examples)

@@ -1,8 +1,8 @@
 module github.com/0xmhha/indexer-go
 
-go 1.24.0
+go 1.26.0
 
-toolchain go1.24.9
+toolchain go1.26.8
 
 require (
 	github.com/99designs/gqlgen v0.17.81
@@ -27,7 +27,6 @@ require (
 	golang.org/x/sys v0.37.0
 	golang.org/x/time v0.9.0
 	golang.org/x/tools v0.37.0
-	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -111,6 +110,7 @@ require (
 	golang.org/x/text v0.29.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240826202546-f6391c0de4c7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240826202546-f6391c0de4c7 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
