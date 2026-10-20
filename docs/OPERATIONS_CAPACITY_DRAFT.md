@@ -24,7 +24,7 @@
 
 아래 주기는 **향후 운영 감시 제안**이며 이번에 poller·스케줄·추가 DB 연결·RPC 조회를 만들거나 실행하지 않는다. 기록은 이 프로젝트 전용의 bounded 파일/별도 모니터링 저장소에 두고 DSN·peer key·원본 payload는 남기지 않는다. 같은 APFS에 장기 로그/백업을 무제한 저장하지 않는다.
 
-Compose에는 이 프로젝트의 stdout/stderr 로그 회전(`local`,10m×최대3파일/서비스)을 명시했다. 이 로그·이미지·container writable layer는 Docker Desktop 저장 영역을 사용하므로 외장 APFS의 `F`와 별도 용량이다. Docker VM/호스트 내부 저장 공간 감시도 운영 적용 전에 필요하다. 이 설정은 WAL·DB rows·향후 모니터 기록의 상한이 아니며 기존 container나 daemon 전역 설정에 적용하지 않았다.
+Compose에는 이 프로젝트의 stdout/stderr 로그 회전(`local`,10m×최대3파일/서비스)을 명시했다. 이 로그·이미지·container writable layer는 Docker Desktop 저장 영역을 사용하므로 외장 APFS의 `F`와 별도 용량이다. `preflight.py`의 호스트 점검이 시작과 재개 전에 Docker VM 디스크의 여유를 한 번 읽는다(아래 절). 이 설정은 WAL·DB rows·향후 모니터 기록의 상한이 아니며 기존 container나 daemon 전역 설정에 적용하지 않았다.
 
 | 값 | 제안 주기 | 얻는 곳과 주의점 |
 | --- | --- | --- |
@@ -117,6 +117,8 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 
 `Ddb`는 `pg_database_size(current_database())`, `Dwal`은 `pg_ls_waldir()` 크기 합이다. PostgreSQL 저장소를 쓰는 App의 기존 연결 풀로 읽는다. 새 pool은 만들지 않고, 질의 하나는 30초로 제한한다. multichain에서는 체인들이 같은 database를 쓰므로 가장 최근에 열린 체인의 저장소 하나로 잰다. 중단 판정은 계속 `Dpg`만 쓴다. 통계를 읽지 못하면 journal에 unknown으로 남기고 처음 한 번 경고 로그를 낸다. 색인은 멈추지 않는다. 권한이 없어 실패한 것과 디스크가 찬 것을 구분할 수 없기 때문이다. `pg_ls_waldir()`는 superuser나 `pg_monitor`만 실행할 수 있다. Docker 초안의 `init-indexer.sql`은 `pg_monitor` 대신 이 함수의 EXECUTE만 준다. 이 SQL은 새 PGDATA를 초기화할 때만 실행되므로 이미 초기화한 DB에는 운영자가 같은 GRANT를 직접 실행해야 한다.
 
+Docker VM 디스크는 컨테이너 안의 앱이 볼 수 없다. 이미지·container layer·서비스 로그가 이 디스크를 쓴다. 그래서 `preflight.py --check-host`(따라서 `--start`, `--resume`)가 다른 점검을 모두 통과한 뒤 일회용 container 하나로 `df -P -k /`를 실행해 VM 디스크의 여유를 읽는다. 검토한 indexer 이미지를 `--pull never`·network 없음·capability 없음·읽기 전용 root로 쓰고 끝나면 지운다. 여유가10GiB(`DOCKER_VM_MIN_FREE`, 최초 검토값) 이하이면 거부한다. 점검하는 순간의 값이며 실행 중에는 다시 재지 않는다.
+
 예상 시간은 이 초안의 계산을 따른다. 최근 15분에서 1분 이상 간격의 가장 가파른 변화와 60분 평균 중 큰 쪽을 쓴다. 시계가 뒤로 가면 이력을 버린다. 변화가 없으면 예상은 unknown이며 무한으로 취급하지 않는다. raw의 증가 속도는 window를 연 뒤 새로 기록한 bytes(`Usage.AppendedBytes`)로 잰다. 수거가 꺼져 있으면 이것이 순증가와 같다. `Dpg`는 PGDATA를 du처럼 걷는다. 심볼릭 링크를 따라가지 않고 다른 파일시스템으로 넘어가지 않으며, 항목이 상한(기본 100만 개)을 넘거나 읽지 못하면 부분 합 대신 실패로 처리한다.
 
 중단하면 먼저 `halt_file`에 잠금 파일을 기록한다. 첫 원인을 보존하기 위해 이미 있는 잠금은 덮어쓰지 않는다. 이어서 `App.Run`이 그 중단을 결과로 끝나고 프로세스는 오류로 종료한다. 잠금이 있으면 시작을 거부한다. 읽을 수 없는 잠금도 거부 사유다. 감시 표본과 상태 변화는 선택적으로 `journal_file`에 JSON 줄로 남긴다. 파일 하나는 최대 8MiB이고 회전본 하나만 둔다.
@@ -127,7 +129,7 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 
 아직 구현하지 않은 것은 다음과 같다.
 
-- Docker Desktop VM과 컨테이너 로그 영역의 여유 공간. 컨테이너 안에서는 보이지 않으므로 호스트 쪽 감시가 필요하다.
+- 실행 중 Docker VM 디스크의 지속 감시. 지금은 시작·재개 전 점검 한 번뿐이다.
 - free 110GiB 이하·ENOSPC·WAL 쓰기 오류의 긴급 분기에서 PostgreSQL까지 멈추는 동작. 지금은 indexer만 종료한다.
 - 수신만 멈추는 pause/drain 모드. Compose 종료 유예(indexer120초·DB60초)는 적용했다.
 - 실제 APFS·PGDATA에서의 동작 확인. 검증은 임시 디렉터리와 모의 probe 범위다.
@@ -138,7 +140,7 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 
 현재 구현 완료로 간주하지 않을 후속 순서는 다음과 같다.
 
-1. PGDATA·filesystem·raw 감시와 bounded 기록, 누락 판정·경고 hysteresis는 구현했다(위 절). PostgreSQL 통계 `Ddb`/`Dwal`의 journal 기록도 구현했다. Docker VM 감시는 남는다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
+1. PGDATA·filesystem·raw 감시와 bounded 기록, 누락 판정·경고 hysteresis는 구현했다(위 절). PostgreSQL 통계 `Ddb`/`Dwal`의 journal 기록도 구현했다. Docker VM 디스크는 시작·재개 전 점검만 구현했고 실행 중 감시는 남는다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
 2. raw 연속 intake·oldest-pending age·gross append bytes는 `pipeline.runtime.rawIntake`로 노출했다([계측](FEED_TELEMETRY.md)). 미관측은 null이다.
 3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock은 구현했다. Compose 종료 유예는 적용했고 단독 drain 모드는 남는다.
 4. [checkpoint/재시작/GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)과 [읽기 전용 metadata 진단 도구](OPERATIONS_INSPECTION.md)는 작성했다. 진단은 모의 데이터 범위이며 백업 보관·이전의 실제 방식/RPO/RTO와 실제 복구/완전한 GC 승인 진단은 남아 있다. 운영 적용·실제 장애/복원 검증은 저장소·enode 확보와 실행 보류 해제 이후다.
