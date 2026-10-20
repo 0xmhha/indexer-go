@@ -158,3 +158,20 @@ window_storage:
 # extra projection workers, node-feed IPC, era source or recording are enabled.
 # Permanent source facts and projections use PostgreSQL; a separate objects
 # directory is not an implemented application YAML option.
+
+# Capacity halt (pkg/opsguard, docs/OPERATIONS_CAPACITY_DRAFT.md). The latch and
+# journal live in the private state directory, which survives a removed APFS.
+# A stop writes the latch and ends the process; startup refuses while it
+# exists and `preflight.py --resume` runs the resume check. Thresholds are the
+# draft's first review values, not measured limits.
+operations:
+  halt_file: /var/lib/indexer-ops/halt.json
+  journal_file: /var/lib/indexer-ops/capacity.jsonl  # 8 MiB plus one rotation.
+  capacity:
+    filesystem_path: /data/feed
+    floor_free_bytes: 107374182400   # 100 GiB, the raw windows' write floor.
+    stop_free_bytes: 128849018880    # 120 GiB
+    warn_free_bytes: 161061273600    # 150 GiB
+    resume_free_bytes: 161061273600  # Resume needs more than 150 GiB in 3 samples, 30s apart.
+    postgres_data_dir: /data/feed/indexer/postgres/16
+    postgres_budget_bytes: 171798691840  # 160 GiB planned; warn 80%, stop 100%, resume below 80%.

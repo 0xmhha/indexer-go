@@ -257,7 +257,7 @@ func (a *App) initManagedFeed(ctx context.Context) error {
 		return err
 	}
 
-	m := &managedFeed{store: st, program: p, db: db, storage: a.storage, log: a.logger, session: capture.SessionConfig{Storage: a.config.WindowStorage, Instance: c.Window, Plan: p.Plan, Anchor: p.Anchor, Logger: a.logger}}
+	m := &managedFeed{store: st, program: p, db: db, storage: a.storage, log: a.logger, session: capture.SessionConfig{Storage: a.config.WindowStorage, Instance: c.Window, Plan: p.Plan, Anchor: p.Anchor, Logger: a.logger, OnUsage: a.observeRaw}}
 	m.session.RequiredSupplement, m.session.SupplementVerifier = required, evmstate.Verifier(p.Profile)
 	m.build = func(ctx context.Context) (*fetch.Fetcher, uint64, error) {
 		return a.buildFactsFetcher(ctx, st, p, c.Consumer)

@@ -33,8 +33,11 @@ telemetry:
 | `networkHead` | 현재 항상 null. 추가 head RPC를 보내거나 최근 수신 높이를 실제 네트워크 latest라고 표시하지 않음 |
 | `runtime.observedHeader` | 이 실행에서 마지막으로 정상 envelope를 받은 header의 높이/hash/시각/경과 시간. canonical/연속 완료나 실제 latest 보장이 아님 |
 | `runtime.progress` | capture/proof/state 각 단계에서 성공한 exact input/시각/경과 시간. source generation이 다르면 제외 |
+| `runtime.rawIntake` | 이 실행의 수신 세션이 durable append한 raw 중 아직 capture하지 않은 블록. 세션 시작 전이면 null |
 
 age가 null이면 측정되지 않았거나 해당 적체가 없다. 해당 backlog도 함께 확인한다. 원격 상태가 만들어진 때부터의 나이가 아니므로 원격 pruning까지 남은 시간으로 사용할 수 없다. 재시작 전에 수집한 입력·계측 전 이미 처리된 입력·1024개 범위 밖 입력은 정확한 단계 간 시각을 알 수 없다. DB 가시화 직후 다음 worker가 먼저 실행되는 경우에도 queue 시간은 측정 없음일 수 있다. 0으로 보완하지 않는다.
+
+`rawIntake`의 필드는 다음과 같다. `startHeight`는 세션이 시작한 capture cursor다. `receivedThrough`는 그 위로 모든 높이가 같은 hash의 필수 dataset을 다 받았거나 capture된 마지막 높이다. 검증 전의 수신 기록이며 canonical 완료점이 아니다. `pendingBlocks`는 받았지만 capture하지 않은 블록 수이고, 일부 dataset만 받은 블록과 fork 후보도 센다. capture된 높이 이하의 블록은 fork를 포함해 제외한다. `oldestPending`은 그중 가장 이른 window `FirstReceived`와 경과 시간이다. 이전 실행이 저장하고 이번 세션이 다시 전달한 frame은 원래 수신 시각을 쓴다. 기록은 최대1024블록이며 넘으면 새 블록을 버리고 `pendingTruncated`를 true로 둔다. 이때 `receivedThrough`는 하한이다. wall clock이 저장된 수신 시각보다 뒤에 있으면 `oldestPending`은 null이다. `appendedFrames`/`appendedBytes`는 실행 동안 window에 새로 쓴 frame 수와 bytes다. 이미 있던 frame을 돌려받은 append는 세지 않으며, 수거로 줄지 않는다. 세션이 epoch 변경으로 다시 시작해도 누적값은 유지하고 대기 기록만 새로 시작한다.
 
 ## 단계 정의
 

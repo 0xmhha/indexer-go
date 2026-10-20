@@ -77,6 +77,9 @@ func PipelineTasks(adapter chainfeed.Adapter, assembler Assembler, opts Pipeline
 			return err
 		}
 		defer func() { _ = stream.Close() }()
+		recorder := feedtelemetry.From(ctx)
+		recorder.StartIntake(state.Through)
+		appended := raw.Stats()
 		for {
 			region := trace.StartRegion(ctx, "feed.next")
 			nextSpan := feedtelemetry.From(ctx).Start(feedtelemetry.ReceiveNext)
@@ -111,6 +114,14 @@ func PipelineTasks(adapter chainfeed.Adapter, assembler Assembler, opts Pipeline
 			appendSpan.End(err)
 			if err != nil {
 				return err
+			}
+			if recorder != nil {
+				now := raw.Stats()
+				recorder.Appended(now.AppendedRecords-appended.AppendedRecords, now.AppendedBytes-appended.AppendedBytes)
+				appended = now
+				for _, ref := range refs {
+					recorder.Received(ref.Block, ref.Kind, time.Unix(0, ref.FirstReceived))
+				}
 			}
 			for _, ref := range refs {
 				if opts.OnReceived != nil {

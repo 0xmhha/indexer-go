@@ -19,6 +19,20 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 CHAINS = {"stablenet-testnet": 8283, "bsc-testnet": 97, "sepolia": 11155111, "arc-testnet": 5042002}
 MANIFEST_KEYS = {"mount_root", "apfs_volume_uuid", "physical_store_uuid", "private_dir", "indexer_image", "docker_context"}
+STATE_DIR = "/var/lib/indexer-ops"
+OPERATIONS = {
+    "halt_file": STATE_DIR + "/halt.json",
+    "journal_file": STATE_DIR + "/capacity.jsonl",
+    "capacity": {
+        "filesystem_path": "/data/feed",
+        "floor_free_bytes": 100 << 30,
+        "stop_free_bytes": 120 << 30,
+        "warn_free_bytes": 150 << 30,
+        "resume_free_bytes": 150 << 30,
+        "postgres_data_dir": "/data/feed/indexer/postgres/16",
+        "postgres_budget_bytes": 160 << 30,
+    },
+}
 
 
 class Refused(Exception):
@@ -99,6 +113,7 @@ def check_policy(cfg, draft=False):
         require(volume["root"] == "/data/feed" and volume["id"] == "indexer-apfs-testnets-v1" and volume["allow_directory"] is False, "Unexpected raw volume binding.")
         require((volume["max_bytes"], volume["min_free_bytes"], window["max_bytes"], window["retention"]) == (160 << 30, 100 << 30, 128 << 30, "24h"), "Raw capacity/retention policy changed.")
         require(window["path"] == "/data/feed/indexer/window/arc", "Unexpected raw window path.")
+        require(cfg["operations"] == OPERATIONS, "Capacity halt latch/thresholds differ from the operating plan.")
         missing = unresolved(cfg)
         if not draft:
             require(not missing, "Runtime configuration has unresolved inputs: " + ", ".join(missing))
@@ -134,6 +149,8 @@ def check_artifacts(compose=None, postgres_conf=None):
         app_mounts = {v["target"]: v for v in app["volumes"]}
         db_mounts = {v["target"]: v for v in db["volumes"]}
         require(app_mounts["/data/feed"]["source"] == raw and app_mounts["/etc/indexer/config.yaml"]["source"] == prefix + "config.yaml" and app_mounts["/etc/indexer/config.yaml"]["read_only"] is True, "App data/config mount drift.")
+        state = app_mounts[STATE_DIR]
+        require(state["source"] == prefix + "state" and not state.get("read_only"), "Halt latch state mount drift.")
         require(app_mounts["/opt/indexer/entrypoint.sh"]["source"] == "./indexer-entrypoint.sh" and app_mounts["/opt/indexer/entrypoint.sh"]["read_only"] is True and app["entrypoint"] == ["/bin/sh", "/opt/indexer/entrypoint.sh"] and app["command"] == [], "Secret entrypoint wiring drift.")
         require(db_mounts["/var/lib/postgresql/data"]["source"] == raw + "/indexer/postgres/16" and db_mounts["/etc/postgresql/indexer.conf"]["source"] == "../../docs/examples/postgresql-testnets.draft.conf", "PGDATA/settings mount drift.")
         require(db["environment"]["PGDATA"] == "/var/lib/postgresql/data" and db_mounts["/etc/postgresql/indexer.conf"]["read_only"] is True and db_mounts["/docker-entrypoint-initdb.d/010-indexer.sql"]["source"] == "./init-indexer.sql" and db_mounts["/docker-entrypoint-initdb.d/010-indexer.sql"]["read_only"] is True, "PostgreSQL init/config wiring drift.")
@@ -210,7 +227,12 @@ def inspect_apfs(manifest):
     return root
 
 
-def check_host(manifest):
+def halt_latch(private):
+    """The latch the indexer writes on a capacity or storage halt."""
+    return private / "state" / "halt.json"
+
+
+def check_host(manifest, resume=False):
     require(set(manifest) == MANIFEST_KEYS, "Host manifest fields do not match the draft schema.")
     require(not unresolved(manifest), "Host manifest still has unresolved inputs.")
     for key in ("apfs_volume_uuid", "physical_store_uuid"):
@@ -226,6 +248,13 @@ def check_host(manifest):
     require(not private.is_relative_to(REPO) and not private.is_relative_to(root), "Private directory must be outside the repository and data volume.")
     s = private.stat()
     require(s.st_uid == os.getuid() and stat.S_IMODE(s.st_mode) == 0o700, "Private directory must be owner-only mode0700.")
+    state = private / "state"
+    canonical_directory(state)
+    s = state.stat()
+    require(s.st_uid == os.getuid() and stat.S_IMODE(s.st_mode) == 0o700, "Private state directory must be owner-only mode0700.")
+    latch = halt_latch(private)
+    require(resume or not latch.exists(), "A halt latch is present: resolve its cause, then run --resume before --start.")
+    require(not resume or latch.exists(), "No halt latch is present; nothing to resume.")
     cfg_path = private / "config.yaml"
     try:
         cfg = yaml.load(private_file(cfg_path, 1024 * 1024), Loader=StrictYAML)
@@ -260,12 +289,18 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check-host", type=Path, help="inspect a completed private host manifest; no launch")
     mode.add_argument("--start", type=Path, help="AFTER the execution hold is lifted: inspect, then start only this stack")
+    mode.add_argument("--resume", type=Path, help="inspect, then run the indexer's resume check, which removes the halt latch only if its conditions hold")
     args = parser.parse_args()
     try:
         check_artifacts()
-        if args.check_host or args.start:
-            manifest = json.loads(private_file(args.check_host or args.start).decode(), object_pairs_hook=unique)
-            environment = check_host(manifest)
+        if args.check_host or args.start or args.resume:
+            manifest = json.loads(private_file(args.check_host or args.start or args.resume).decode(), object_pairs_hook=unique)
+            environment = check_host(manifest, resume=bool(args.resume))
+            if args.resume:
+                # One container with the service's mounts and no database.
+                command = ["docker", "--context", "desktop-linux", "compose", "--project-name", "indexer-testnets-draft", "--file", str(HERE / "compose.draft.yaml"), "--profile", "operations-draft", "run", "--rm", "--no-deps", "--pull", "never", "indexer", "--resume-check"]
+                os.execvpe("docker", command, {**os.environ, **environment})
+                return 0
             if args.start:
                 # Never reached by lint/check-host. No daemon operation precedes
                 # the complete mount, identity, secret and policy checks.

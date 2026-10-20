@@ -28,6 +28,10 @@ type ChainInstance struct {
 	startedAt    *time.Time // When the chain was started (nil if never started)
 	lastError    error
 	lastErrorAt  *time.Time
+	// restartSuppressed keeps the manager from restarting the chain after a
+	// failure its FailurePolicy marked as not retryable.
+	restartSuppressed bool
+	onFailure         FailurePolicy
 
 	// Metrics (atomic for concurrent access)
 	blocksIndexed       atomic.Uint64
@@ -61,10 +65,12 @@ func (ci *ChainInstance) Start(ctx context.Context) error {
 		return ErrChainAlreadyRunning
 	}
 	ci.setStatusLocked(StatusStarting)
+	// An explicit start is the operator's decision to retry.
+	ci.restartSuppressed = false
 	ci.statusMu.Unlock()
 
 	if ci.factory == nil {
-		ci.setError(ErrIndexerRequired)
+		ci.fail(ErrIndexerRequired)
 		return ErrIndexerRequired
 	}
 
@@ -81,7 +87,7 @@ func (ci *ChainInstance) Start(ctx context.Context) error {
 	if err != nil {
 		cancel()
 		err = NewChainError(ci.Config.ID, ErrSourceInitFailed, err)
-		ci.setError(err)
+		ci.fail(err)
 		return err
 	}
 	now := time.Now()
@@ -262,6 +268,7 @@ func (ci *ChainInstance) healthCheck(ctx context.Context, maxAge time.Duration) 
 		status.LastError = ci.lastError.Error()
 		status.LastErrorTime = ci.lastErrorAt
 	}
+	status.RestartSuppressed = ci.restartSuppressed
 	ci.statusMu.RUnlock()
 
 	return status
@@ -294,8 +301,8 @@ func (ci *ChainInstance) run(ctx context.Context, idx Indexer) {
 	}
 
 	if err := idx.Run(ctx); err != nil && ctx.Err() == nil {
-		ci.setError(err)
 		ci.logger.Error("indexer error", zap.Error(err))
+		ci.fail(err)
 	}
 	ci.logger.Info("indexer stopped")
 }
@@ -348,6 +355,25 @@ func (ci *ChainInstance) setStatusLocked(status ChainStatus) {
 		)
 		ci.status = status
 	}
+}
+
+// fail records err and asks the failure policy whether a restart may follow.
+func (ci *ChainInstance) fail(err error) {
+	ci.setError(err)
+	if ci.onFailure == nil || !ci.onFailure(ci.Config.ID, err) {
+		return
+	}
+	ci.statusMu.Lock()
+	ci.restartSuppressed = true
+	ci.statusMu.Unlock()
+	ci.logger.Error("automatic restart suppressed", zap.Error(err))
+}
+
+// RestartSuppressed reports whether the last failure forbids an automatic restart.
+func (ci *ChainInstance) RestartSuppressed() bool {
+	ci.statusMu.RLock()
+	defer ci.statusMu.RUnlock()
+	return ci.restartSuppressed
 }
 
 // setError sets the error state.

@@ -92,6 +92,12 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      # Writable halt latch and capacity journal, off the monitored APFS.
+      - type: bind
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/state
+        target: /var/lib/indexer-ops
+        bind:
+          create_host_path: false
       - type: bind
         source: ./indexer-entrypoint.sh
         target: /opt/indexer/entrypoint.sh

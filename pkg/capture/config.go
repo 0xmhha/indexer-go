@@ -27,6 +27,9 @@ type SessionConfig struct {
 	Create             bool
 	UsageInterval      time.Duration
 	Logger             *zap.Logger
+	// OnUsage optionally receives every raw window usage sample after it is
+	// logged, for capacity monitoring; it must return promptly.
+	OnUsage func(window.Usage)
 }
 
 func RunConfiguredSession(ctx context.Context, db port.CaptureDatabase, fresh source.CanonicalReader, cfg SessionConfig, receive, process Task) error {
@@ -65,6 +68,13 @@ func configuredOptions(cfg SessionConfig) (SessionOptions, error) {
 			log.Warn("window storage pressure", fields...)
 		} else {
 			log.Info("window storage pressure", fields...)
+		}
+	}
+	if observe := cfg.OnUsage; observe != nil {
+		logUsage := onUsage
+		onUsage = func(u window.Usage) {
+			logUsage(u)
+			observe(u)
 		}
 	}
 	return SessionOptions{Window: opts, Objects: cfg.Objects, Plan: cfg.Plan, Anchor: cfg.Anchor, RawConsumers: cfg.RawConsumers, Create: cfg.Create, UsageInterval: cfg.UsageInterval, OnUsage: onUsage, RequiredSupplement: cfg.RequiredSupplement, SupplementVerifier: cfg.SupplementVerifier}, nil

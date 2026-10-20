@@ -35,6 +35,7 @@ func waitStateProofs(t *testing.T, a *App, n uint64) indexingstatus.Status {
 	return out
 }
 func TestManagedStateProofsRestartAndStatus(t *testing.T) {
+	t.Parallel()
 	c := testchain.NewChain(5042002, nil)
 	c.AddBlock() // no proof supply at height 1: configured scope starts at 2.
 	c.AddStateRootBlock(types.EmptyRootHash, nil)

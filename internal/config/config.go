@@ -15,6 +15,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/pkg/feed"
+	"github.com/0xmhha/indexer-go/pkg/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/window"
 	"gopkg.in/yaml.v3"
 )
@@ -37,6 +38,8 @@ type Config struct {
 	Node               NodeConfig               `yaml:"node"`
 	Verifier           VerifierConfig           `yaml:"verifier"`
 	AccountAbstraction AccountAbstractionConfig `yaml:"account_abstraction"`
+	// Operations is the capacity halt and its latch (pkg/opsguard).
+	Operations opsguard.Config `yaml:"operations,omitempty"`
 	// Features turns registered features on or off (pkg/feature). Features
 	// not listed keep the chain profile's default.
 	Features map[string]FeatureConfig `yaml:"features"`
@@ -736,6 +739,7 @@ func NewConfig() *Config {
 
 // SetDefaults sets default values for the configuration
 func (c *Config) SetDefaults() {
+	c.Operations = c.Operations.WithDefaults()
 	// RPC defaults
 	if c.Indexer.PollInterval == 0 {
 		c.Indexer.PollInterval = 50 * time.Millisecond
@@ -1519,6 +1523,9 @@ func isFalse(b *bool) bool { return b != nil && !*b }
 func (c *Config) Validate() error {
 	if err := c.WindowStorage.Validate(); err != nil {
 		return fmt.Errorf("window_storage: %w", err)
+	}
+	if err := c.Operations.WithDefaults().Validate(); err != nil {
+		return err
 	}
 	if !c.MultiChainMode() && c.Source.NodeFeedSocket != "" && (!filepath.IsAbs(c.Source.NodeFeedSocket) || !c.Indexer.AcquisitionQueue || !c.Indexer.StatePrefetch || c.Source.EraDir != "" || c.DeclaredMode()) {
 		return fmt.Errorf("source.node_feed_socket requires an absolute path, full mode, acquisition_queue, state_prefetch and no era archive")

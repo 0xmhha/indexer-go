@@ -26,7 +26,18 @@ type Manager struct {
 	mu         sync.RWMutex
 
 	isRunning bool
+
+	failurePolicy FailurePolicy
 }
+
+// FailurePolicy is told of each chain failure as it happens. Returning true
+// forbids automatic restarts of that chain until it is started explicitly.
+// It runs on the failing chain's goroutine and must return promptly.
+type FailurePolicy func(chainID string, err error) (suppressRestart bool)
+
+// SetFailurePolicy sets the policy for chains registered after the call;
+// set it before Start.
+func (m *Manager) SetFailurePolicy(p FailurePolicy) { m.failurePolicy = p }
 
 // NewManager returns a manager that builds each chain's indexer with
 // factory; every chain has its own storage.
@@ -160,6 +171,7 @@ func (m *Manager) RegisterChain(ctx context.Context, config *ChainConfig) (strin
 	}
 
 	instance := NewChainInstance(config, m.factory, m.logger)
+	instance.onFailure = m.failurePolicy
 	if err := m.registry.Register(instance); err != nil {
 		return "", err
 	}
@@ -304,8 +316,9 @@ func (m *Manager) checkAndRestartFailedChains() {
 		// Wait for restart delay
 		instance.statusMu.RLock()
 		waiting := instance.lastErrorAt != nil && time.Since(*instance.lastErrorAt) < m.config.AutoRestartDelay
+		suppressed := instance.restartSuppressed
 		instance.statusMu.RUnlock()
-		if waiting {
+		if waiting || suppressed {
 			continue
 		}
 
