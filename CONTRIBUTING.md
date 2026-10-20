@@ -10,7 +10,7 @@ For changes to storage formats, chain accounting, public SDK interfaces or sourc
 
 ## Development setup
 
-Clone the repository and install the Go toolchain pinned in [go.mod](go.mod). Main builds and tests use Go 1.24.9. CI uses Go 1.26.8 for the pinned golangci-lint and the separate `tools/astgraph` module.
+Clone the repository and install the Go toolchain pinned in [go.mod](go.mod). Builds, tests, golangci-lint and the separate `tools/astgraph` module use Go 1.26.8.
 
 ```bash
 go mod download

@@ -4,7 +4,7 @@ Build the indexer, collect a local EVM chain and query the result. Then connect 
 
 ## Prerequisites
 
-- Git, Make and Go. The repository pins `go1.24.9` in [go.mod](../go.mod).
+- Git, Make and Go. The repository pins `go1.26.8` in [go.mod](../go.mod).
 - An EVM JSON-RPC endpoint. The local walkthrough below uses [Anvil](https://getfoundry.sh/anvil/overview); install it separately if you want to follow that path.
 - Docker only if you run the disposable PostgreSQL integration tests. The local walkthrough uses embedded Pebble.
 

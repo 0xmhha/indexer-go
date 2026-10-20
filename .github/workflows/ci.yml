@@ -13,13 +13,13 @@ permissions:
   contents: read
 
 # Every job installs the Go of go.mod's toolchain line and uses it as is.
-# With go-version-file setup-go installed the go line (1.24.0) and each job
-# then downloaded 1.24.9 through the module proxy and checksum database;
+# With go-version-file setup-go installed the go line and each job then
+# downloaded the toolchain through the module proxy and checksum database;
 # when those did not answer the job failed before running anything.
 # GOTOOLCHAIN=local makes a mismatch fail instead of downloading; the lint
 # job checks the pin against go.mod.
 env:
-  GO_VERSION: "1.24.9"
+  GO_VERSION: "1.26.8"
   GOTOOLCHAIN: local
 
 # The jobs run the same commands as a local check (Makefile, scripts/), so
@@ -45,12 +45,6 @@ jobs:
           if [ -n "$unformatted" ]; then echo "not gofmt-clean:"; echo "$unformatted"; exit 1; fi
       - name: go vet
         run: go vet ./...
-      # golangci-lint v2.14.0 and tools/astgraph need a newer Go (their
-      # go.mod); installed here, after the steps that use the pinned one.
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.26.8"
-          cache: false # the module cache was restored by the first setup-go
       - name: golangci-lint
         run: make lint
       - name: golangci-lint (tools/astgraph)
