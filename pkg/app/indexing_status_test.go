@@ -164,6 +164,7 @@ func TestManagedFeedFeatureProgressRollsBackOnFailure(t *testing.T) {
 }
 
 func TestManagedFeedIndependentWorkerReorg(t *testing.T) {
+	t.Parallel()
 	cfg, c, _ := feedAppConfig(t)
 	cfg.Source.Feed.Projections = []string{projection.Summary}
 	a, e := NewApp(cfg, zap.NewNop(), false, "")

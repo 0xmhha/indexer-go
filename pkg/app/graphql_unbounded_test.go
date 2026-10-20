@@ -57,6 +57,7 @@ func newSparseFixture(t *testing.T) *pagingFixture {
 // chain block by block; a filter no index serves stops at the scan limit
 // and says where.
 func TestUnboundedQueriesUseTheIndexes(t *testing.T) {
+	t.Parallel()
 	f := newSparseFixture(t)
 	scenarioEnd := f.head - sparseTail
 	reset := func() {

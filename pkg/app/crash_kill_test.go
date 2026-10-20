@@ -58,6 +58,7 @@ func latestHeight(base string) (uint64, bool) {
 // that indexed the chain without interruption. Pebble only: a PostgreSQL
 // transaction is the server's to keep.
 func TestKillAtRandomPointsRecovers(t *testing.T) {
+	t.Parallel()
 	pebbleOnly(t)
 	if testing.Short() {
 		t.Skip("builds and kills the indexer binary")

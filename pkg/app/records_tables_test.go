@@ -38,6 +38,7 @@ var (
 // are read a range at a time. A table whose definition changed stops
 // startup; a removed table is recorded as stopped.
 func TestRecordsTableAddedIsBackfilled(t *testing.T) {
+	t.Parallel()
 	const head = 1_500
 	for name, mode := range map[string]func(*config.Config){
 		"full": func(*config.Config) {}, "declared per block": declaredMode, "declared ranges": sparseMode,
@@ -152,6 +153,7 @@ func withRebuild(spec declared.Spec, rebuild ...string) func(*config.Config) {
 // the new definition from the start. A table not listed is kept, and a
 // later start with the table still listed does not rebuild it again.
 func TestRecordsTableRebuilt(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	for name, mode := range map[string]func(*config.Config){
 		"full": func(*config.Config) {}, "declared ranges": sparseMode,

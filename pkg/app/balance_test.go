@@ -189,6 +189,7 @@ func TestTimeQueriesFindIndexedBlocks(t *testing.T) {
 // allow_pruned_state is set; the account then starts at 0 and indexing goes
 // on rather than stopping for good.
 func TestNativeBalancesSurviveNodeErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("node down for a while", func(t *testing.T) {
 		sc := testchain.BuildDefault()
 		srv := testchain.NewServer(sc.Chain)

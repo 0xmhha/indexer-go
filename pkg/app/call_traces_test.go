@@ -162,6 +162,7 @@ func waitCallTraces(t *testing.T, a *App, n uint64) indexingstatus.Status {
 	return out
 }
 func TestManagedCallTraceRestartReorgAndReadonlyAPI(t *testing.T) {
+	t.Parallel()
 	cfg, c, proxy := traceAppConfig(t)
 	a, e := NewApp(cfg, zap.NewNop(), false, "")
 	require.NoError(t, e)

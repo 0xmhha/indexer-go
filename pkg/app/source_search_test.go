@@ -216,6 +216,7 @@ func TestManagedSourceSearchOptIn(t *testing.T) {
 }
 
 func TestManagedSourceSearchCandidateAndBlockBudgets(t *testing.T) {
+	t.Parallel()
 	from, to := testchain.NewAccount(4), testchain.NewAccount(5)
 	c := testchain.NewChain(5042002, map[common.Address]*big.Int{from.Address: new(big.Int).Exp(big.NewInt(10), big.NewInt(21), nil)})
 	primary, other, wanted := common.Hash{1}, common.Hash{2}, common.Hash{3}

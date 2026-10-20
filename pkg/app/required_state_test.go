@@ -15,6 +15,7 @@ import (
 )
 
 func TestManagedRequiredStateCheckpointRestart(t *testing.T) {
+	t.Parallel()
 	for _, bootstrap := range []bool{true, false} {
 		name := "captured-parent"
 		if bootstrap {
