@@ -102,6 +102,8 @@ type Recorder struct {
 	stopped  *time.Time
 	metrics  [stages]metric
 	progress [phases]progress
+	kinds    map[model.DatasetKind]uint8 // required dataset bits; nil disables intake
+	intake   *intake
 }
 type Metric struct {
 	Count         uint64   `json:"count"`
@@ -129,6 +131,7 @@ type Snapshot struct {
 	StoppedAt               *time.Time          `json:"stoppedAt,omitempty"`
 	Metrics                 map[string]Metric   `json:"metrics"`
 	Progress                map[string]Progress `json:"progress"`
+	RawIntake               *RawIntake          `json:"rawIntake"`
 }
 
 var registry = struct {
@@ -152,6 +155,12 @@ func New(anchor model.FeedBlock, plan model.CapturePlan, target time.Duration) (
 		return nil, e
 	}
 	r := &Recorder{anchor: anchor, plan: digest, id: hex.EncodeToString(id[:]), started: time.Now(), target: target}
+	if n := len(plan.Required); n > 0 && n <= maxIntakeKinds {
+		r.kinds = make(map[model.DatasetKind]uint8, n)
+		for i, req := range plan.Required {
+			r.kinds[req.Kind] = uint8(i)
+		}
+	}
 	registry.Lock()
 	defer registry.Unlock()
 	if len(registry.entries) >= 64 {
@@ -299,6 +308,9 @@ func (r *Recorder) Complete(p Phase, id model.CaptureIdentity) {
 	g.entries[id] = now
 	g.ring[g.next] = id
 	g.next = (g.next + 1) % Points
+	if p == Captured && id.Block.Number > 0 {
+		r.intakeCaptured(id.Block.Number)
+	}
 	if g.last != nil && g.last.id.Generation == id.Generation && g.last.id.Block.Number >= id.Block.Number {
 		return
 	}
@@ -384,6 +396,7 @@ func (r *Recorder) snapshot() Snapshot {
 			out.ReceiveAssessment = "above_target"
 		}
 	}
+	out.RawIntake = r.intakeSnapshot(now)
 	for p := Phase(0); p < phases; p++ {
 		if v := r.progress[p].last; v != nil {
 			out.Progress[phaseNames[p]] = Progress{Input: v.id, CompletedAt: v.at, AgeMS: ms(now.Sub(v.at))}

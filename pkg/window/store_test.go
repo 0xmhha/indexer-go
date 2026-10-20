@@ -609,3 +609,19 @@ func TestReadOnlyMountedVolume(t *testing.T) {
 	_, err := Open(opts)
 	require.Error(t, err, "read-only storage must not open a writer or fall back")
 }
+
+func TestStatsCountGrossAppendsOnly(t *testing.T) {
+	opts, _ := fixture(t)
+	s := created(t, opts)
+	ctx := context.Background()
+	first, err := s.Append(ctx, envelope(opts, 1))
+	require.NoError(t, err)
+	again, err := s.Append(ctx, envelope(opts, 1))
+	require.NoError(t, err)
+	require.Equal(t, first, again)
+	second, err := s.Append(ctx, envelope(opts, 2))
+	require.NoError(t, err)
+	st := s.Stats()
+	require.Equal(t, uint64(2), st.AppendedRecords)
+	require.Equal(t, first.FrameBytes+second.FrameBytes, st.AppendedBytes)
+}

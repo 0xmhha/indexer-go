@@ -53,6 +53,8 @@ type Store struct {
 	segments            []*segment // bounded segment summaries, never all retained records
 	active              *activeSegment
 	used                int64
+	appendedRecords     uint64 // new frames written since Open; duplicates excluded
+	appendedBytes       int64
 	readers             int
 	readBytes           int64
 	fault               error
@@ -480,6 +482,8 @@ func (s *Store) appendLocked(ctx context.Context, e chainfeed.Envelope, flush bo
 		a.Newest = received
 	}
 	s.used += n
+	s.appendedRecords++
+	s.appendedBytes += n
 	return ref, nil
 }
 
@@ -577,12 +581,16 @@ type Stats struct {
 	Segments, Records, ActiveIndexRecords, Readers int
 	ReadReservedBytes                              int64
 	ClockUnsafe                                    bool
+	// Gross intake since this handle was opened. Unlike FileBytes, collection
+	// does not lower it, and an append returning an existing frame adds nothing.
+	AppendedRecords uint64
+	AppendedBytes   int64
 }
 
 func (s *Store) Stats() Stats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := Stats{FileBytes: s.used, Segments: len(s.segments), Readers: s.readers, ReadReservedBytes: s.readBytes, ClockUnsafe: s.clockUnsafe}
+	st := Stats{FileBytes: s.used, Segments: len(s.segments), Readers: s.readers, ReadReservedBytes: s.readBytes, ClockUnsafe: s.clockUnsafe, AppendedRecords: s.appendedRecords, AppendedBytes: s.appendedBytes}
 	for _, seg := range s.segments {
 		st.Records += seg.Count
 	}

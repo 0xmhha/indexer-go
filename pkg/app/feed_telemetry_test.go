@@ -50,6 +50,13 @@ func TestManagedFeedTelemetryReadonlyRestart(t *testing.T) {
 		require.NotNil(t, p.Runtime.Metrics[name].P95MS, name)
 	}
 	require.EqualValues(t, 3, p.Runtime.Metrics["captureCommit"].Count)
+	in := p.Runtime.RawIntake
+	require.NotNil(t, in)
+	require.EqualValues(t, 3, in.ReceivedThrough)
+	require.Zero(t, in.PendingBlocks)
+	require.Nil(t, in.OldestPending)
+	require.Positive(t, in.AppendedFrames)
+	require.Positive(t, in.AppendedBytes)
 	// These independent run-time observations may race a downstream DB reader;
 	// absent exact queue timing remains null rather than fabricating zero.
 	require.Nil(t, p.ProofOldestPendingAgeMS)
