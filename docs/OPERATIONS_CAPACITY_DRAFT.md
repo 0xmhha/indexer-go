@@ -112,6 +112,6 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 1. DB/PGDATA/WAL·filesystem 감시와 bounded 기록, 누락 판정·경고 hysteresis를 구현한다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
 2. raw 연속 intake/oldest-pending age·gross append bytes를 기존 내구성/예산 경계 안에서 노출한다. 미관측은 unknown으로 유지한다.
 3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock과 서비스 종료 유예를 반영한다. 단독 drain 모드는 필요성을 검토한 뒤 별도 설계한다.
-4. [checkpoint/재시작/GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)은 작성했다. 백업 보관·이전의 실제 방식/RPO/RTO와 조회·복구 도구를 구체화해야 한다. 운영 적용·실제 장애/복원 검증은 저장소·enode 확보와 실행 보류 해제 이후다.
+4. [checkpoint/재시작/GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)과 [읽기 전용 metadata 진단 도구](OPERATIONS_INSPECTION.md)는 작성했다. 진단은 모의 데이터 범위이며 백업 보관·이전의 실제 방식/RPO/RTO와 실제 복구/완전한 GC 승인 진단은 남아 있다. 운영 적용·실제 장애/복원 검증은 저장소·enode 확보와 실행 보류 해제 이후다.
 
 이번 검토는 기존 코드·문서·공식 PostgreSQL 문서에 근거한 정적 검토다. 디스크 상태 재조회, DB 통계 쿼리, 컨테이너/서비스 실행, 실제 삭제·중단·재개, 성능 측정은 하지 않았다.

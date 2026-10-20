@@ -42,6 +42,7 @@ The SDK defines its compatibility promise. Chain profile APIs and other internal
 - [Docker operations draft](../deployments/testnets/README.md) adds isolated Compose wiring, APFS identity checks and file-based DSN injection; service startup remains on hold.
 - [Capacity, backlog and recovery policy draft](OPERATIONS_CAPACITY_DRAFT.md) proposes DB growth monitoring and stop/resume criteria; it does not install automatic monitoring or controls.
 - [Checkpoint, restart and GC runbook draft](OPERATIONS_RUNBOOK_DRAFT.md) covers normal shutdown, incident recovery and deletion prerequisites; execution and GC activation remain on hold.
+- [Checkpoint and GC inspection](OPERATIONS_INSPECTION.md) documents the separate read-only metadata command, bounded observations and offline functional checks; it never starts the app or performs recovery.
 - [Offline draft consistency review](analysis/operations-offline-review.md) records corrected cross-file mismatches and the remaining operational gaps; it is not live deployment validation.
 - [Architecture](ARCHITECTURE.md) explains block transactions, reorg recovery and outbox delivery.
 - [Pipeline telemetry](FEED_TELEMETRY.md) defines feed-stage latency, backlog and unavailable observations.

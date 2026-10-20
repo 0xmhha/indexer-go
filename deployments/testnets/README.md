@@ -20,6 +20,8 @@ The [capacity, backlog and recovery policy draft](../../docs/OPERATIONS_CAPACITY
 
 The [checkpoint, restart and GC runbook draft](../../docs/OPERATIONS_RUNBOOK_DRAFT.md) separates normal shutdown, incident recovery and deletion prerequisites. `collect: false` prevents new collection; opening the app/window can still complete an already approved durable deletion. Startup is not a read-only inspection. The current host guard refuses `collect: true`; GC activation requires a separate reviewed change.
 
+The separate [checkpoint/GC metadata command](../../docs/OPERATIONS_INSPECTION.md) reads existing DB/window records without app startup or deletion recovery. Its mock-based checks do not validate actual PostgreSQL/APFS operation; physical inspection and service execution remain on hold.
+
 ## Fixed boundaries
 
 - `max_conns: 4` is per chain, shared by capture/writer/API; with one live App per chain, the four-chain pool budget is16. Server32 includes room for administration and the readiness probe, not additional application pools.
@@ -86,7 +88,7 @@ The offline tests replace `diskutil`, Docker context inspection and mount/free-s
 
 Default lint also cross-checks public Compose/application/PostgreSQL files: connection/RPC budgets, schema/window binding, effective strict-state overrides, API publication, secret/entrypoint paths, image reference, log limits, networks, mounts and durability settings. Completed private configs undergo the policy checks too. This is a selected operating-contract check, not the full Go schema/module validator or a check of live checkpoint/fork values. Unresolved host/application fields are listed by name; `draftArtifacts: consistent` does not mean runnable or approved.
 
-The [offline review](../../docs/analysis/operations-offline-review.md) records the corrections and the final21 fixture checks. Capacity proposals, shutdown grace periods and DB checkpoint/GC inspection remain separate operational work.
+The [offline review](../../docs/analysis/operations-offline-review.md) records the corrections and the final21 fixture checks. The separate metadata command has mock-based checks; live DB/window inspection, full GC eligibility validation, capacity controls and shutdown grace periods remain operational work.
 
 The required CI `test` job runs these fixture checks, draft lint and shell syntax with the pinned parser. It does not build the operations image, access real disks, contact peers/RPC or launch Docker/DB services for these checks.
 

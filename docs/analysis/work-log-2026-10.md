@@ -1600,3 +1600,36 @@ runtime/config/deps1094개 해시가 같고 비Markdown 보호1098개 중 의도
 고정 PyYAML을 작업 전용 임시 경로에 설치해 오프라인21개를 실패/skip0으로 통과했고 lint·셸 구문·문서 파일 링크309개·diff/CI 구조를 검사했다. 기존 runtime/config/deps1094개 중 의도한 CI workflow 외 해시가 같으며 비공개 config.yaml의 ignore를 유지했다. Go 실행 코드/의존성·체인별 DB4·RPC5·커밋 직전 fresh/epoch·초기화/GC false와 다른 프로젝트는 그대로다. 실제 운영 디스크 검사/포맷·이미지 build/pull·노드/indexer/DB 운영 실행·추가 성능 비교는 하지 않았다. 원본과 범위 감사는 `/private/tmp/indexer-operations-pr-20261019/{race.log,race.result.json,offline.log,final-audit.json}`에 보존한다.
 
 제출 이후 GitHub의 기존 필수4개 CI 전체를 확인하고 보호 규칙을 우회하지 않는 squash merge 뒤 main을 fast-forward 동기화한다. CI PostgreSQL은 기존 격리 기능 회귀이며 운영용 DB 실행 승인이 아니다. 이 항목은 제출 전 로컬 결과이며 PR/CI/merge 완료 자체의 증거로 사용하지 않는다.
+
+### 3.98 읽기 전용 checkpoint·GC metadata 진단 도구 (10/19)
+
+사용자 요청으로 `feat/checkpoint-inspection` 브랜치에 [별도 진단 명령](../OPERATIONS_INSPECTION.md)을 구현했다. `cmd/indexer-inspect`는 앱/source/window writer를 시작하지 않고 PostgreSQL의 기존 schema를 ReadOnly/no writable prefixes·관리용 최대1개 연결로 열어 source 세대/plan/anchor/Through/finality·writer/feature/worker의 기존 DB 상태·window binding·pending token/segment/reference digest와 raw ACK 표본을 읽는다. 앱의 체인별 pool4개를 바꾸거나 별도 앱 pool을 추가하지 않는다. RPC/peer 통신은0이다. 이번 CLI는 captured-feed/window schema 대상이며 RPC-only DB의 없는 capture 상태를 만들어내지 않는다.
+
+raw reader는 기존 mount/논리 marker·관리 ledger/store 연결·STORE.json·durable .gc/완료 기록과 pending 파일 존재를 O_RDONLY로 조회한다. quota claim/LOCK 생성·window Open·복구·seal/truncate/fsync/rename/unlink·DB update를 호출하지 않는다. missing 파일만으로 완료를 추정하지 않으며 matching receipt도 삭제 승인이 아니다. live lease는 unknown, payload/proof integrity는 not_checked, gcDecision은 항상 not_authorized다. ACK는 pending 첫16개 고유 블록 또는 Through만 관측하고 truncation/범위를 표시한다. feature 페이지의 unitsPageComplete는 열거 범위이며 처리 완료와 구분한다. checkpoint/ACK·feature 페이지·선택 raw metadata를 다시 읽어 관측 중 변화를 거부하되 분산 atomic snapshot이나 완전한 GC 승인 dry-run이라고 표시하지 않는다.
+
+첫 기능 검사에서 새 raw reader가 같은 root 내부 STORE.json 심볼릭 링크를 허용한 하위 검사1개가 실패했다. 읽기 플래그만 의존한 helper 재사용을 보완해 진단 경로에서 Lstat·열린 handle·재조회 identity/regular-file 여부를 확인한다. 기존 앱/GC 실행 소스는 수정하지 않았다. 초기 실패 원본은 functional-initial.log/result.json에 보존했다. 보완 후 기능 검사와 최종 소스 대상 race 각1회는3개 패키지·최상위14개/하위39개 통과, 실패/skip/DATA RACE0이었다. fake DB의 update는 panic이며 임시 파일의 내용/권한/수정 시각이 조회 전후 같음을 검사했다. pending/부분 삭제/완료 receipt/파일만 없음·identity/digest 오류·raw ACK 누락/손상/상한·페이지/세대 변화·취소·DSN0600/소유자/single-link/링크 거부·연결 반납·오류 비밀값 비노출을 포함한다.
+
+Go1.24.9 대상 vet, macOS 별도 명령 build와 Linux arm64/CGO0 교차 build도 통과했다. Docker 초안에는 진단 binary build/copy recipe만 추가했으며 entrypoint/기동 policy는 그대로다. DB binding의 컨테이너 경로와 호스트 alias를 임의 교환하지 않고 같은 namespace에서 조회하도록 문서화했다. 이미지 build/pull·Docker/서비스·실제 DB/APFS/노드/RPC 실행은 하지 않았다. 기존 배포 offline lint도 artifacts consistent·servicesStarted0/host4/app9 미확정을 유지했다.
+
+보호13개 config/의존성/수집·writer·fresh/GC/lifecycle·운영 YAML/Compose 해시와 기존 tracked Go 파일이 그대로임을 확인했다. 체인별 DB4·공유 RPC5 HTTP/s·커밋 직전 fresh/epoch·초기화/GC false·다른 프로젝트를 유지했다. 문서/남은 목록에는 metadata 조회 완료와 live lease/bytes·실제 DB/APFS·용량 controller·restart interlock·백업/RPO/RTO 미완료를 구분했다. 포맷·실제 운영 실행·추가 성능/전체 회귀/동시성200·commit/push/PR은 하지 않았다. 로그/도구 빌드/보호 해시/범위 감사는 `/private/tmp/indexer-checkpoint-inspection-20261019`에 보존한다.
+
+
+### 3.99 checkpoint-inspection 커밋 전 검증 (10/20)
+
+사용자 요청으로 `feat/checkpoint-inspection`의 진단 구현·기능 검사·Docker build recipe·문서18개 파일을 커밋한다. 요청한 읽기 전용 metadata 조회 범위는 구현됐으며 운영 전 실제 PostgreSQL read-only/no migration/write·취소/반납과 Docker/APFS identity/path 검증은 실행 보류로 남는다. 전체 raw/index/source bytes·required proof·ACK pagination·실행 중 writer의 읽기 전용 lease interface와 안전한 Pebble/RPC-only 조회는 선택 확장으로 구분했다. 자동 복구·fence 해제·기동·삭제는 이 진단 도구 범위가 아니다.
+
+첫 전체 race 실행은 제한된 환경의 loopback bind 거부로 기존 모의 서버 검사들이 실패해 중단했다. 이 실행을 성공에 합산하지 않는다. 로컬 테스트 소켓을 허용한 환경에서 bind 사전 확인 후 pinned Go1.24.9·GOMAXPROCS2·전용 cache·의존성 다운로드 차단으로 `make test-race`를1회 완료했다. GOTEST의 `test -json -timeout=20m -skip=^TestEngineLoad`로 기존 성능 부하 검사만 제외한 범위이며 완전 무제외 실행으로 표시하지 않는다. 최종 결과는77개 패키지 통과/19개 테스트 없음, 최상위2293개 통과/81개 opt-in 등 건너뜀·실패0·DATA RACE0이다. 외부 PostgreSQL/live RPC/선택 fixture 환경은 주입하지 않았다. 새 동시성 검사가 없어 기존200회 검사는 반복하지 않았다.
+
+진단 Go 소스9개는3.98의 최종 검증 후 동일하므로 기존 대상 기능/race14개·하위39개, vet, macOS/Linux arm64 build 결과도 유지된다. 보호13개 설정·수집/writer/fresh·의존성·운영 YAML/Compose 해시, gofmt·상대 문서 링크·staged diff를 최종 확인한다. 앱의 체인별 DB4·공유 RPC5 HTTP/s·커밋 직전 fresh/epoch·초기화/GC false와 다른 프로젝트는 그대로다. 디스크 포맷·이미지 build/pull·실제 운영 서비스/DB/노드·공개 RPC·추가 성능 측정은 없다. 이번 범위는 로컬 커밋이며 push/PR은 하지 않는다. 제한 환경 실패 원본과 최종 성공 로그·명령·해시는 `/private/tmp/indexer-inspection-commit-20261020/`에 보존한다.
+
+
+### 3.100 PR #182 PostgreSQL CI 실패 분리와 알림 생성 복구 보완 (10/20)
+
+PR [#182](https://github.com/0xmhha/indexer-go/pull/182)의 첫 [CI](https://github.com/0xmhha/indexer-go/actions/runs/39340912454)는 lint/test/examples를 통과했지만 postgres가 실패했다. adapter 패키지는251.632초에 통과했고 앱에서 TestNotificationsFollowTheChangeStream의 webhook 대기60초가 실패했다. 이후 진행하던 별도 source lookup 검사가16초인 상태에서 앱 패키지 전체가 Go 기본10분 제한으로 중단됐다. 개별 기능 실패와 suite 제한을 구분하며 제한 증가만으로 알림 실패를 숨기지 않는다.
+
+원본 알림 테스트의 독립 PostgreSQL1회는 통과해 CI의 취소 시점을 직접 재현했다고 표시하지 않는다. 대신 기존 저장 순서의 각 쓰기에 취소를 주입하는 동기식 회귀 검사에서6개 하위 실패로 유실 경로를 확인했다. 본문만 저장된 뒤 인덱스 쓰기가 실패하면 replay가 이미 있는 ID로 판단해 생성을 건너뛰고 pending index/queue가 비는 경로다. 인덱스가 모두 기록된 뒤 본문을 공개하도록 바꾸고, 조회는 미공개/과거 시각/상태의 인덱스를 제외한다. 같은 ID의 재시도에서 바뀐 CreatedAt 때문에 중복 목록이 생기거나 잘못된 offset을 소비하지 않도록 했다. 기존 키/값 형식·SQL 바인딩은 유지하고 과거 부분 레코드의 자동 삭제·수리나 migration은 추가하지 않는다. PostgreSQL 검사 스크립트의 외부 DSN/소유 Docker 두 경로에는 일반 CI와 같은 package timeout20분을 지정했다.
+
+보완 후 notifications 패키지 기능105개/하위175개와 임시 PostgreSQL의 알림/API/채널/재시작9개가 통과했고 성능 opt-in1개는 건너뛰었다. 임시 DB 두 실행은 fsync=on·앱 pool4이며 각 소유 container/volume을 정리했고 기존15개 container의 상태/시작 시각이 전후 같았다. 새 회귀3개는 worker Start 없이 동기식 쓰기 실패를 주입하므로 새 동시성200회 대상이 아니다. 운영 DB/서비스/노드·공개 RPC·APFS/디스크 포맷·추가 성능 비교·다른 프로젝트 변경은 없다. 보호13개 설정·수집/writer/fresh/GC·의존성과 체인별 DB4·RPC5·커밋 직전 fresh/epoch는 유지한다. 원래 CI 실패 로그, 실패 주입 red, 보완 후 기능 결과와 커밋 전 전체 race/정적 검사 결과는 `/private/tmp/indexer-inspection-pr-20261020/`와 `fix/`에 보존한다.
+
+
+보완 소스의 커밋 전 전체 race는 Go1.24.9·GOMAXPROCS2·각1회·package timeout20분·기존 성능 부하 TestEngineLoad 제외로 완료했다.77개 패키지/최상위2296개 통과·테스트 없는19개 패키지/opt-in 등81개 건너뜀·실패0·DATA RACE0이다. 새3개 동기식 회귀와 최종 pagination assertion을 포함한다. 전체 build/vet/root lint·Go1040개 fmt·셸 구문도 통과했다. 변경 없는 astgraph vet/lint·예제·cache lifecycle·진단14/39 기능 결과는 앞선 성공 범위를 유지한다. 보호13개와 진단 Go9개 해시·문서 상대 링크245개·diff를 재확인했다. 다음 제출은 보완4개 파일을 별도 fix 커밋으로 push하고 PR의 필수4개 CI를 새 head에서 확인하는 범위다. 이 기록은 새 head CI 완료를 대신하지 않는다.
