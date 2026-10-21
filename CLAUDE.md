@@ -18,6 +18,7 @@ cmd/cli/                        Command line (cobra): root command indexes, resu
 cmd/flags/                      Flag groups composed into a Set; each config flag names its YAML key and environment variable, applies only when given
 pkg/app/                        The engine: wiring and lifecycle (app.Start, app.ResumeCheck, app.ValidateConfig); no command-line code
 pkg/feature/featuretest/        Determinism checks for features (RequireDeterministic, RequireNoForbiddenUses; docs/EXTENDING.md 6). Projects extend through pkg/feature, pkg/api, pkg/features/records and pkg/chains directly (docs/EXTENDING.md; the former pkg/sdk alias layer is gone, no compatibility promise)
+pkg/app/apptest/                Public harness running the engine against pkg/testchain (Config, Start, Index, FetchAll; PostgreSQL with INDEXER_TEST_DRIVER); chain behaviour tests use it from x/<chain> (x/stablenet/bundle/e2e_test.go)
 pkg/testchain/                  Deterministic JSON-RPC test chain for end-to-end tests (also for projects' tests)
 examples/receipts/              P07 receipt indexer built on the extension packages, with its acceptance tests (own go.mod; make test-examples)
 examples/chainprofile/          Project Arc testnet profile in a separate module; preserves optional chain interfaces (docs/CHAIN_CUSTOMIZATION.md)
