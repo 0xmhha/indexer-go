@@ -71,5 +71,5 @@ func (s *Set) WriteUsage(w io.Writer) error {
 // Configuration returns the configuration groups of the indexing command,
 // in help order. Log is separate: every command takes it.
 func Configuration() []Group {
-	return []Group{RPC(), Database(), Indexer(), API()}
+	return []Group{Node(), RPC(), Database(), Indexer(), API()}
 }

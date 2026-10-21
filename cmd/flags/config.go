@@ -2,10 +2,14 @@ package flags
 
 import (
 	"fmt"
+	"slices"
+	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/pkg/fetch"
 )
 
 // Flag is one flag for a configuration field.
@@ -16,8 +20,8 @@ type Flag struct {
 	Key   string
 	Env   string
 	Usage string
-	// Field returns a pointer to the field in cfg: *string, *int, *uint64
-	// or *bool.
+	// Field returns a pointer to the field in cfg: *string, *[]string,
+	// *int, *uint64, *float64, *bool or *time.Duration.
 	Field func(cfg *config.Config) any
 }
 
@@ -48,6 +52,12 @@ func (g *ConfigGroup) AddFlags(fs *pflag.FlagSet) {
 		switch p := f.Field(g.values).(type) {
 		case *string:
 			fs.StringVar(p, f.Name, *p, usage)
+		case *[]string:
+			fs.StringSliceVar(p, f.Name, *p, usage)
+		case *float64:
+			fs.Float64Var(p, f.Name, *p, usage)
+		case *time.Duration:
+			fs.DurationVar(p, f.Name, *p, usage)
 		case *int:
 			fs.IntVar(p, f.Name, *p, usage)
 		case *uint64:
@@ -69,6 +79,12 @@ func (g *ConfigGroup) ApplyTo(cfg *config.Config, changed func(name string) bool
 		switch dst := f.Field(cfg).(type) {
 		case *string:
 			*dst = *f.Field(g.values).(*string)
+		case *[]string:
+			*dst = slices.Clone(*f.Field(g.values).(*[]string))
+		case *float64:
+			*dst = *f.Field(g.values).(*float64)
+		case *time.Duration:
+			*dst = *f.Field(g.values).(*time.Duration)
 		case *int:
 			*dst = *f.Field(g.values).(*int)
 		case *uint64:
@@ -79,19 +95,41 @@ func (g *ConfigGroup) ApplyTo(cfg *config.Config, changed func(name string) bool
 	}
 }
 
+// choices writes allowed values for a usage string.
+func choices(values ...string) string { return strings.Join(values, ", ") }
+
 // RPC is the chain node group.
 func RPC() *ConfigGroup {
 	return NewConfigGroup("Chain node",
 		Flag{Name: "rpc", Key: "rpc.endpoint", Env: "INDEXER_RPC_ENDPOINT", Usage: "JSON-RPC endpoint URL of the node",
 			Field: func(c *config.Config) any { return &c.RPC.Endpoint }},
+		Flag{Name: "rpc-fallback", Key: "rpc.fallback_endpoints", Env: "INDEXER_RPC_FALLBACK_ENDPOINTS", Usage: "Further HTTP(S) endpoints of the same chain, comma-separated, tried in order",
+			Field: func(c *config.Config) any { return &c.RPC.FallbackEndpoints }},
+		Flag{Name: "rpc-ws", Key: "rpc.ws_endpoint", Env: "INDEXER_RPC_WS_ENDPOINT", Usage: "WebSocket endpoint whose newHeads wake the live loop",
+			Field: func(c *config.Config) any { return &c.RPC.WSEndpoint }},
+		Flag{Name: "rpc-rate-limit", Key: "rpc.rate_limit", Env: "INDEXER_RPC_RATE_LIMIT", Usage: "HTTP requests per second to the nodes, every attempt included; 0 is unlimited",
+			Field: func(c *config.Config) any { return &c.RPC.RateLimit }},
+		Flag{Name: "rpc-timeout", Key: "rpc.timeout", Env: "INDEXER_RPC_TIMEOUT", Usage: "Timeout of one RPC attempt",
+			Field: func(c *config.Config) any { return &c.RPC.Timeout }},
 	)
 }
 
-// Database is the storage group.
+// Database is the storage group. The PostgreSQL DSN holds a password, so
+// it has no flag: set it in the file or INDEXER_DB_POSTGRES_DSN.
 func Database() *ConfigGroup {
 	return NewConfigGroup("Database",
+		Flag{Name: "db-driver", Key: "database.driver", Env: "INDEXER_DB_DRIVER", Usage: "Storage: " + choices(config.DriverPebble, config.DriverPostgres) + " (the PostgreSQL DSN has no flag)",
+			Field: func(c *config.Config) any { return &c.Database.Driver }},
 		Flag{Name: "db", Key: "database.path", Env: "INDEXER_DB_PATH", Usage: "Pebble database directory",
 			Field: func(c *config.Config) any { return &c.Database.Path }},
+	)
+}
+
+// Node is the process role group.
+func Node() *ConfigGroup {
+	return NewConfigGroup("Process role",
+		Flag{Name: "node-role", Key: "node.role", Env: "INDEXER_NODE_ROLE", Usage: "What this process does: " + choices(config.RoleAll, config.RoleIngest, config.RoleAPI),
+			Field: func(c *config.Config) any { return &c.Node.Role }},
 	)
 }
 
@@ -104,6 +142,14 @@ func Indexer() *ConfigGroup {
 			Field: func(c *config.Config) any { return &c.Indexer.Workers }},
 		Flag{Name: "chunk-size", Key: "indexer.chunk_size", Env: "INDEXER_CHUNK_SIZE", Usage: "Blocks per batch, positive; 1 is real-time mode",
 			Field: func(c *config.Config) any { return &c.Indexer.ChunkSize }},
+		Flag{Name: "mode", Key: "indexer.mode", Env: "INDEXER_MODE", Usage: "What is ingested: " + choices(config.ModeFull, config.ModeDeclared+" (only the logs features.records declares)"),
+			Field: func(c *config.Config) any { return &c.Indexer.Mode }},
+		Flag{Name: "finality", Key: "indexer.finality", Env: "INDEXER_FINALITY", Usage: "How far the live loop indexes: " + choices(fetch.FinalityHead, fetch.FinalityConfirmations, fetch.FinalityFinalized),
+			Field: func(c *config.Config) any { return &c.Indexer.Finality }},
+		Flag{Name: "confirmations", Key: "indexer.confirmations", Env: "INDEXER_CONFIRMATIONS", Usage: "Blocks behind the head with --finality confirmations",
+			Field: func(c *config.Config) any { return &c.Indexer.Confirmations }},
+		Flag{Name: "era-dir", Key: "source.era_dir", Env: "INDEXER_SOURCE_ERA_DIR", Usage: "Directory of era1 archives read before the node",
+			Field: func(c *config.Config) any { return &c.Source.EraDir }},
 	)
 }
 

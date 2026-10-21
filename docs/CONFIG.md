@@ -584,6 +584,8 @@ indexer version              버전을 출력한다(--version, -v도 같다)
 - 설정 플래그는 명시했을 때만 설정을 덮는다. 기본값이 파일이나 환경 변수의 값을 바꾸지 않고, `--api=false`처럼 끄는 데도 쓴다.
 - 도움말의 각 설정 플래그 옆 괄호에 YAML 키와 환경 변수가 있다(`--rpc`는 `rpc.endpoint`, `$INDEXER_RPC_ENDPOINT`). 플래그와 환경 변수가 같은 필드를 바꾸는지는 `TestFlagsMatchEnvironment`가 확인한다.
 - `--config`, `--log-level`, `--log-format`은 모든 명령이 받는다. 나머지는 색인 명령만 받는다.
+- 운영 설정도 플래그로 줄 수 있다: `--node-role`, `--db-driver`, `--mode`, `--finality`, `--confirmations`, `--rpc-fallback`(쉼표로 구분), `--rpc-ws`, `--rpc-rate-limit`, `--rpc-timeout`, `--era-dir`. 그 밖의 설정은 파일이나 환경 변수로 준다.
+- 비밀 값(PostgreSQL DSN, `api.keys`, 알림 비밀번호)은 플래그로 만들지 않는다. 프로세스 목록과 셸 기록에 남기 때문이다(`TestNoSecretFlags`). `--db-driver postgres`에는 DSN을 파일이나 `INDEXER_DB_POSTGRES_DSN`으로 준다.
 - `--chunk-size`는 `indexer.chunk_size`(배치당 블록 수, 1은 실시간 모드)이고 양수여야 한다. 이전의 `--batch-size`는 없앴다.
 - `--clear-data`와 `--reindex`는 함께 줄 수 없다.
 - `--adapter`는 이 바이너리가 링크한 profile id나 alias만 받는다. 빈 값, `auto`, 옛 `anvil`은 노드에서 감지한다. 다른 이름은 명령행 오류다.
