@@ -21,7 +21,7 @@ var chainNeutral = []string{
 	"fetch", "api", "source", "feature", "features", "storage", "events", "eventbus",
 	"core", "types", "token", "abi", "client", "rpcproxy", "notifications",
 	"multichain", "userop", "module", "verifier", "compiler", "price", "rpcpool",
-	"../internal",
+	"../internal", "../cmd/cli", "../cmd/flags",
 }
 
 // TestChainNeutralPackagesDoNotImportProfiles keeps chain-specific code in

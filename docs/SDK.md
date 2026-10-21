@@ -8,17 +8,19 @@
 
 처리기는 기능(feature)이다. `init`에서 등록하고, 색인되는 블록마다 그 블록의 저장 트랜잭션 안에서 호출된다. 그래서 처리기가 쓴 것은 블록과 함께 commit되고, reorg로 블록이 되돌려지면 함께 되돌려진다. 처리기는 GraphQL 조회와 HTTP 경로를 더할 수 있다.
 
-프로젝트는 자기 바이너리를 만든다. main 패키지가 처리기 패키지를 import하고 `sdk.Main()`을 부른다. 설정, 명령행 플래그, 수명 관리는 indexer와 같다.
+프로젝트는 자기 바이너리를 만든다. main 패키지가 처리기 패키지를 import하고 indexer 명령행(`cmd/cli`)의 `cli.Main()`을 부른다. 설정, 명령행 플래그, 수명 관리는 indexer와 같다.
 
 ```go
 package main
 
 import (
+	"os"
+
+	"github.com/0xmhha/indexer-go/cmd/cli"
 	_ "example.com/receipts" // 처리기를 등록한다
-	"github.com/0xmhha/indexer-go/pkg/sdk"
 )
 
-func main() { sdk.Main() }
+func main() { os.Exit(cli.Main(cli.WithName("receipts-indexer"))) }
 ```
 
 go.mod는 `github.com/0xmhha/indexer-go`를 require한다(저장소 안 예제는 `replace => ../..`).
@@ -129,3 +131,4 @@ full node도 필요한 높이의 상태를 보관하면 시작할 수 있다. ar
 
 - v0.2.0: SDK의 첫 발행. `pkg/sdk`(기능 등록, KV, 선언한 표, GraphQL 확장, HTTP 경로, `Main`, `ProgressOf`), `pkg/sdk/sdktest`(결정성 확인), `sdk.PartRegistrar`(선택 interface). 이후 버전은 이 면에서 바뀐 것만 적는다.
 - v0.2.5: `sdk.Table`에 `DefinitionChange` 메서드 추가(표 정의가 바뀐 방식, 깨는 변경 아님).
+- 다음 판: `sdk.Main` 제거(깨는 변경). 바이너리는 `cmd/cli`의 `cli.Main`으로 시작하고, `cli.WithName`으로 이름을 붙인다.

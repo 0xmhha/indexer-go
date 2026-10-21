@@ -128,5 +128,5 @@ func CheckStartup(path string) error {
 	if l == nil {
 		return nil
 	}
-	return fmt.Errorf("%w at %s: %s %s since %s (%s); resolve the cause, then run the resume check (--resume-check)", ErrHalted, path, l.Reason, l.Source, l.At.Format(time.RFC3339), l.Detail)
+	return fmt.Errorf("%w at %s: %s %s since %s (%s); resolve the cause, then run the resume check (indexer resume-check)", ErrHalted, path, l.Reason, l.Source, l.At.Format(time.RFC3339), l.Detail)
 }

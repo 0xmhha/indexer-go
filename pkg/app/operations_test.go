@@ -65,7 +65,7 @@ func TestCapacityHaltEndsRunAndLatches(t *testing.T) {
 	require.ErrorIs(t, opsguard.CheckStartup(cfg.Operations.HaltFile), opsguard.ErrHalted)
 	_, err = opsguard.Resume(ctx, cfg.Operations, opsguard.ResumeOptions{Sleep: func(context.Context, time.Duration) error { return nil }})
 	require.ErrorIs(t, err, opsguard.ErrResumeRefused)
-	require.ErrorContains(t, resumeCheck(cfg, zap.NewNop()), "resume refused")
+	require.ErrorContains(t, ResumeCheck(ctx, cfg, zap.NewNop()), "resume refused")
 }
 
 // TestPostgresStatsFollowTheStore: the monitor samples a PostgreSQL store,

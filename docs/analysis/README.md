@@ -16,6 +16,7 @@ The work log preserves the state at each date. Later entries can close an earlie
 
 ## Architecture decisions
 
+- [Command line and chain products](cli-and-products-design.md): cobra command line in cmd/, chain adapters under x/<chain>, per-chain binaries and the PR sequence.
 - [Chain profiles](chain-profile-design.md): chain-specific decoding, accounting and extensions.
 - [Feature registry](feature-registry-design.md): optional feature composition and dependencies.
 - [Reorg recovery](reorg-design.md): rollback and orphan handling.

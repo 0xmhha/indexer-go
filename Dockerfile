@@ -22,9 +22,9 @@ ARG COMMIT=none
 ARG BUILD_TIME=unknown
 
 RUN go build -ldflags "-s -w \
-    -X github.com/0xmhha/indexer-go/pkg/app.version=${VERSION} \
-    -X github.com/0xmhha/indexer-go/pkg/app.commit=${COMMIT} \
-    -X github.com/0xmhha/indexer-go/pkg/app.buildTime=${BUILD_TIME}" \
+    -X github.com/0xmhha/indexer-go/cmd/cli.version=${VERSION} \
+    -X github.com/0xmhha/indexer-go/cmd/cli.commit=${COMMIT} \
+    -X github.com/0xmhha/indexer-go/cmd/cli.buildTime=${BUILD_TIME}" \
     -o indexer-go ./cmd/indexer
 
 # Runtime stage

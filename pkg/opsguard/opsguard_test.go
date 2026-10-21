@@ -88,7 +88,7 @@ func TestLatchKeepsFirstCauseAndBlocksStartup(t *testing.T) {
 	require.True(t, at.Equal(l.At))
 	err = CheckStartup(path)
 	require.ErrorIs(t, err, ErrHalted)
-	require.Contains(t, err.Error(), "--resume-check")
+	require.Contains(t, err.Error(), "resume-check")
 	entries, err := os.ReadDir(filepath.Dir(path))
 	require.NoError(t, err)
 	require.Len(t, entries, 1, "no temporary file is left")
