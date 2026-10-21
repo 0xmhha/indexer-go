@@ -1683,3 +1683,15 @@ PostgreSQL 저장소를 연 App이 `opsguard.AttachPostgresStats`로 저장소�
 `preflight.py`의 호스트 점검이 다른 점검을 모두 통과한 뒤, 검토한 indexer 이미지로 `df -P -k /`를 실행한다. `--rm`, `--pull never`, network·capability 없음, 읽기 전용 root, 호스트 UID/GID다. 출력이 두 줄·여섯 필드·`/` mount가 아니면 거부하고, 여유가10GiB 이하여도 거부한다. `--start`와 `--resume`도 같은 점검을 거친다. 점검하는 순간의 값이며 실행 중 감시는 아니다.
 
 **검증.** preflight 26개(새 검사: 명령 flag, 기준값 경계, 빈 출력, 숫자가 아닌 값, 다른 mount)와 오프라인 lint가 통과했다. 이 기기는 Docker Desktop이 아니라 Rancher Desktop이다. context 이름만 바꿔 실제 함수를 `ubuntu:24.04`(GNU df)와 `alpine`(busybox df)으로 실행했다. 두 형식 모두 VM 디스크(`overlay`)의 여유 약61.7GiB를 읽었고 남은 container는 없었다. 실제 Docker Desktop과 운영 이미지로는 실행하지 않았다.
+
+### 3.106 긴급 시 PostgreSQL 중단과 drain 보류 (10/20)
+
+용량 초안은 여유110GiB 이하·ENOSPC·WAL 쓰기 오류·장치 제거에서 DB까지 제어된 종료 대상으로 삼는다. 지금까지는 indexer만 종료했다. 컨테이너 안의 indexer는 PostgreSQL 컨테이너를 멈출 수 없으므로 두 쪽으로 나눴다.
+
+**indexer.** 잠금 파일에 `stopDatabase`를 더했다. 저장소 장애와 PostgreSQL SQLSTATE `53100`(disk_full)·`58030`(io_error)이면 참이다. 두 SQLSTATE는 `opsguard.Classify`에서 각각 capacity·storage로 분류해 multichain 자동 재시작을 막고 프로세스를 멈춘다. pgconn을 직접 가져오지 않고 `SQLState()` 메서드로 판별한다. 용량 기준값 도달만으로는 DB를 남긴다.
+
+**호스트.** `preflight.py --watch`가30초마다 APFS mount·identity·100GiB 하한, 여유110GiB 이하, 잠금의 `stopDatabase`를 본다. 맞으면 `compose stop indexer`(최대180초), 이어서 `compose stop postgres`(최대120초)를 실행하고 exit 3으로 끝난다. indexer 종료가 실패하면 DB는 멈추지 않는다. `down`·`rm`·volume 삭제와 재시작은 하지 않는다. PostgreSQL이 WAL 쓰기 실패로 스스로 멈춘 경우는 indexer에게 연결 끊김으로만 보이므로 여유 공간 점검이 대신 잡는다.
+
+**drain 보류.** 지금 종료로도 durable 진행점과 raw가 남아 재시작이 이어 받는다. drain은 feed 세션의 "수신이나 처리 중 하나가 끝나면 둘 다 멈춘다"는 약속을 바꿔야 해서 raw ACK·GC·종료 순서와 얽힌다. 얻는 것(백업 직전 DB를 받은 블록까지 맞추기, 재시작 뒤 따라잡을 양 줄이기)에 비해 위험이 커서 보류했다.
+
+**검증.** Classify·StopsDatabase 단위 검사와 multichain 실패 정책 검사(disk_full·io_error·다른 SQLSTATE)를 race로 통과했다. preflight 30개(긴급 사유별 판정·경계값, indexer→PostgreSQL 순서·timeout·삭제 명령 없음, indexer 종료 실패 시 DB 유지, 반복 대기, CLI exit3)와 오프라인 lint가 통과했다. 실제 호스트에서 watch를 실행하거나 컨테이너를 멈추지는 않았다.

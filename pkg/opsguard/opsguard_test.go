@@ -19,6 +19,12 @@ import (
 
 const gib = int64(1) << 30
 
+// sqlErr is a database error with a SQLSTATE, like pgconn.PgError.
+type sqlErr string
+
+func (e sqlErr) Error() string    { return "sqlstate " + string(e) }
+func (e sqlErr) SQLState() string { return string(e) }
+
 func TestClassify(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -39,6 +45,9 @@ func TestClassify(t *testing.T) {
 		{"finality", capture.ErrFinalityConflict, ReasonIntegrity, true},
 		{"rebuild", capture.ErrRebuildRequired, ReasonIntegrity, true},
 		{"canonical is retried", capture.ErrCanonical, "", false},
+		{"database disk full", fmt.Errorf("commit: %w", sqlErr("53100")), ReasonCapacity, true},
+		{"database I/O error", sqlErr("58030"), ReasonStorage, true},
+		{"other database error", sqlErr("40001"), "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, ok := Classify(tc.err)
@@ -46,6 +55,13 @@ func TestClassify(t *testing.T) {
 			require.Equal(t, tc.reason, r)
 		})
 	}
+	require.True(t, StopsDatabase(fmt.Errorf("x: %w", window.ErrUnavailable)))
+	require.True(t, StopsDatabase(sqlErr("53100")))
+	require.True(t, StopsDatabase(sqlErr("58030")))
+	require.False(t, StopsDatabase(window.ErrCapacity), "a capacity threshold keeps the database")
+	require.False(t, StopsDatabase(&HaltError{Reason: ReasonCapacity, Source: SourceFilesystem}))
+	require.False(t, StopsDatabase(capture.ErrConflict))
+	require.False(t, StopsDatabase(nil))
 	require.True(t, ReasonCapacity.ProcessWide())
 	require.True(t, ReasonStorage.ProcessWide())
 	require.False(t, ReasonIntegrity.ProcessWide())

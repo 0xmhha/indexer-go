@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
@@ -101,11 +102,15 @@ func TestChainFailurePolicy(t *testing.T) {
 		err      error
 		suppress bool
 		latch    opsguard.Reason
+		stopDB   bool
 	}{
-		{"storage", fmt.Errorf("feed: %w", window.ErrUnavailable), true, opsguard.ReasonStorage},
-		{"capacity", window.ErrCapacity, true, opsguard.ReasonCapacity},
-		{"integrity", capture.ErrConflict, true, ""},
-		{"retryable", errors.New("rpc timeout"), false, ""},
+		{"storage", fmt.Errorf("feed: %w", window.ErrUnavailable), true, opsguard.ReasonStorage, true},
+		{"capacity", window.ErrCapacity, true, opsguard.ReasonCapacity, false},
+		{"database disk full", fmt.Errorf("commit block: %w", &pgconn.PgError{Code: "53100"}), true, opsguard.ReasonCapacity, true},
+		{"database I/O error", fmt.Errorf("commit block: %w", &pgconn.PgError{Code: "58030"}), true, opsguard.ReasonStorage, true},
+		{"integrity", capture.ErrConflict, true, "", false},
+		{"retryable", errors.New("rpc timeout"), false, "", false},
+		{"other database error", &pgconn.PgError{Code: "40001"}, false, "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := config.NewConfig()
@@ -123,6 +128,7 @@ func TestChainFailurePolicy(t *testing.T) {
 				return
 			}
 			require.Equal(t, tc.latch, l.Reason)
+			require.Equal(t, tc.stopDB, l.StopDatabase)
 			require.Equal(t, "arc", l.Chain)
 			var h *opsguard.HaltError
 			require.ErrorAs(t, context.Cause(ctx), &h)

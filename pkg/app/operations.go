@@ -96,7 +96,8 @@ func (a *App) latchFailure(chain string, err error) {
 	if !ok || !reason.ProcessWide() || path == "" {
 		return
 	}
-	if werr := opsguard.WriteLatch(path, opsguard.Latch{Reason: reason, Chain: chain, Detail: err.Error(), At: time.Now()}); werr != nil {
+	l := opsguard.Latch{Reason: reason, Chain: chain, Detail: err.Error(), At: time.Now(), StopDatabase: opsguard.StopsDatabase(err)}
+	if werr := opsguard.WriteLatch(path, l); werr != nil {
 		a.logger.Error("Failed to write the halt latch", zap.String("path", path), zap.Error(werr))
 	}
 }

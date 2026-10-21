@@ -26,6 +26,8 @@ type Latch struct {
 	Chain   string    `json:"chain,omitempty"`
 	Detail  string    `json:"detail"`
 	At      time.Time `json:"at"`
+	// StopDatabase asks the host to stop the database as well (StopsDatabase).
+	StopDatabase bool `json:"stopDatabase,omitempty"`
 }
 
 // WriteLatch durably records a halt. An existing latch is kept, so the first
