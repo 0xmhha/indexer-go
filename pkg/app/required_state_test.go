@@ -16,6 +16,9 @@ import (
 
 func TestManagedRequiredStateCheckpointRestart(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("long: restarts a managed feed with required state")
+	}
 	for _, bootstrap := range []bool{true, false} {
 		name := "captured-parent"
 		if bootstrap {

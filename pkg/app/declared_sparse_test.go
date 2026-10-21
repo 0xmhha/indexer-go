@@ -139,6 +139,9 @@ func TestSparseSplitsRefusedRanges(t *testing.T) {
 // declared database is backfilled from the node's logs (the database keeps
 // none), with every block's logs once, in both declared modes.
 func TestDeclaredBackfillReadsLogsFromTheNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("long: backfills declared logs over many blocks")
+	}
 	for name, mode := range map[string]func(*config.Config){"per block": declaredMode, "finalized ranges": sparseMode} {
 		t.Run(name, func(t *testing.T) {
 			sc := longReceipts(1_500)
@@ -205,6 +208,9 @@ func init() { feature.Register(onlineCountFeature{}) }
 // retry continues after the blocks already committed, so a counting
 // feature counts every log once.
 func TestOnlineBackfillResumesAfterCommittedBlocks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("long: backfills online over many blocks")
+	}
 	for name, mode := range map[string]func(*config.Config){"per block": declaredMode, "finalized ranges": sparseMode} {
 		t.Run(name, func(t *testing.T) {
 			sc := longReceipts(1_500)

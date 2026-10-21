@@ -18,6 +18,9 @@ import (
 // TestPortContracts checks the Pebble storage against the contracts of the
 // storage ports (refactoring plan R1-4).
 func TestPortContracts(t *testing.T) {
+	if testing.Short() {
+		t.Skip("long: runs every port contract")
+	}
 	porttest.Run(t, func(t *testing.T) any { return newTestPebble(t) })
 }
 

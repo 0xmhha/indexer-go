@@ -39,6 +39,9 @@ var (
 // startup; a removed table is recorded as stopped.
 func TestRecordsTableAddedIsBackfilled(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("long: backfills a table over many blocks")
+	}
 	const head = 1_500
 	for name, mode := range map[string]func(*config.Config){
 		"full": func(*config.Config) {}, "declared per block": declaredMode, "declared ranges": sparseMode,
@@ -154,6 +157,9 @@ func withRebuild(spec declared.Spec, rebuild ...string) func(*config.Config) {
 // later start with the table still listed does not rebuild it again.
 func TestRecordsTableRebuilt(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("long: rebuilds a table over many blocks")
+	}
 	ctx := context.Background()
 	for name, mode := range map[string]func(*config.Config){
 		"full": func(*config.Config) {}, "declared ranges": sparseMode,

@@ -181,6 +181,9 @@ func TestManagedFeedPreflightBeforeIO(t *testing.T) {
 }
 
 func TestManagedFeedFourChainIsolation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("long: runs four managed feeds")
+	}
 	cfg, arc, rpc := feedAppConfig(t)
 	cfg.API.Enabled = true
 	selected := cfg.Source.Feed

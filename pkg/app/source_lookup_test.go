@@ -25,6 +25,9 @@ import (
 )
 
 func TestManagedSourceLookupRestartReorgAndReadonlyAPI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("long: restarts a managed feed through a reorg")
+	}
 	from, to := testchain.NewAccount(1), testchain.NewAccount(2)
 	c := testchain.NewChain(5042002, map[common.Address]*big.Int{from.Address: new(big.Int).Exp(big.NewInt(10), big.NewInt(21), nil)})
 	for i := 0; i < 2; i++ {
