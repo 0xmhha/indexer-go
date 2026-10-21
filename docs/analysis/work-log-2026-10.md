@@ -1675,3 +1675,11 @@ PostgreSQL 저장소를 연 App이 `opsguard.AttachPostgresStats`로 저장소�
 `pg_ls_waldir()`는 superuser나 `pg_monitor`만 실행할 수 있다. Docker 초안의 `init-indexer.sql`에 이 함수의 EXECUTE만 주는 GRANT를 더했다. `pg_monitor`는 다른 세션의 질의문까지 보이므로 넓다. 이 SQL은 새 PGDATA 초기화 때만 돌기 때문에, 이미 만든 DB에는 같은 GRANT를 직접 실행해야 한다.
 
 **검증.** opsguard 단위 검사(기록·unknown·분리 후 이전 저장소 사용·Run의 질의 취소 대기·주기 표본)를 race로 돌렸고, Run 관련 검사는 GOMAXPROCS1·race·200회 통과했다. 일회용 PostgreSQL16 container에서 `make test-postgres` 전체(postgres78.9초, app372.1초)가 통과했다. 새 검사3개는 최종 코드로 다시 실행해 skip 없이 통과했다. 그중 하나는 일반 role이 GRANT 전에는 42501로 거부되고 GRANT 뒤에는 WAL 크기를 읽는지 확인한다. 소유 container와 volume은 스크립트가 지웠다. 실제 운영 DB에서는 실행하지 않았다.
+
+### 3.105 Docker VM 디스크 여유 점검 (10/20)
+
+이미지·container layer·서비스 로그는 외장 APFS가 아니라 Docker VM 디스크에 있다. 컨테이너 안의 앱은 이 디스크의 여유를 볼 수 없다. host 파일(Docker Desktop 설정과 `Docker.raw` 할당량)로 추정하는 방법은 문서화되지 않은 경로에 의존하고 이 기기에서 확인할 수 없어 쓰지 않았다. 사용자가 일회용 container 방식을 골랐다.
+
+`preflight.py`의 호스트 점검이 다른 점검을 모두 통과한 뒤, 검토한 indexer 이미지로 `df -P -k /`를 실행한다. `--rm`, `--pull never`, network·capability 없음, 읽기 전용 root, 호스트 UID/GID다. 출력이 두 줄·여섯 필드·`/` mount가 아니면 거부하고, 여유가10GiB 이하여도 거부한다. `--start`와 `--resume`도 같은 점검을 거친다. 점검하는 순간의 값이며 실행 중 감시는 아니다.
+
+**검증.** preflight 26개(새 검사: 명령 flag, 기준값 경계, 빈 출력, 숫자가 아닌 값, 다른 mount)와 오프라인 lint가 통과했다. 이 기기는 Docker Desktop이 아니라 Rancher Desktop이다. context 이름만 바꿔 실제 함수를 `ubuntu:24.04`(GNU df)와 `alpine`(busybox df)으로 실행했다. 두 형식 모두 VM 디스크(`overlay`)의 여유 약61.7GiB를 읽었고 남은 container는 없었다. 실제 Docker Desktop과 운영 이미지로는 실행하지 않았다.

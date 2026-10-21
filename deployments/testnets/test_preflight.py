@@ -163,6 +163,8 @@ class HostTests(unittest.TestCase):
         self.info = {"FilesystemType": "apfs", "MountPoint": str(self.root), "VolumeUUID": self.manifest["apfs_volume_uuid"], "GlobalPermissionsEnabled": True, "APFSContainerReference": "disk9"}
         self.store = {"DiskUUID": self.manifest["physical_store_uuid"], "DeviceIdentifier": "disk8s2"}
         self.physical = {"Internal": False, "VirtualOrPhysical": "Physical"}
+        self.vm_runs = []
+        self.vm_report = self.df_report(64 << 30)
         self.patches = [mock.patch.object(p.sys, "platform", "darwin"), mock.patch.object(p.os.path, "ismount", side_effect=lambda path: path == self.root), mock.patch.object(p.os, "statvfs", return_value=types.SimpleNamespace(f_bavail=500 << 30, f_frsize=1)), mock.patch.object(p, "probe", side_effect=self.probe), mock.patch.dict(os.environ, {}, clear=True)]
         for patch in self.patches:
             patch.start()
@@ -181,7 +183,25 @@ class HostTests(unittest.TestCase):
             return plistlib.dumps(self.physical)
         if args == ("docker", "context", "inspect", "desktop-linux"):
             return json.dumps([{"Name": "desktop-linux", "Endpoints": {"docker": {"Host": "unix:///fixture.sock"}}}]).encode()
+        if args[:4] == ("docker", "--context", "desktop-linux", "run"):
+            self.vm_runs.append(args)
+            return self.vm_report
         raise AssertionError("unexpected command")
+
+    def df_report(self, available_bytes):
+        return f"Filesystem 1024-blocks Used Available Capacity Mounted on\noverlay 102625208 32364980 {available_bytes // 1024} 34% /\n".encode()
+
+    def test_docker_vm_space_is_read_by_a_sealed_throwaway_container(self):
+        p.check_host(self.manifest)
+        self.assertEqual(len(self.vm_runs), 1)
+        command = self.vm_runs[0]
+        for flags in (("--rm",), ("--pull", "never"), ("--network", "none"), ("--read-only",), ("--cap-drop", "ALL"), ("--entrypoint", "df")):
+            self.assertTrue(any(command[i:i + len(flags)] == flags for i in range(len(command))), flags)
+        self.assertEqual(command[-4:], (self.manifest["indexer_image"], "-P", "-k", "/"))
+        for report in (self.df_report(p.DOCKER_VM_MIN_FREE), b"", b"Filesystem 1024-blocks Used Available Capacity Mounted on\noverlay 1 2 x 34% /\n", b"header\noverlay 1 2 3 4% /data\n"):
+            self.vm_report = report
+            with self.assertRaises(p.Refused):
+                p.check_host(self.manifest)
 
     def test_completed_fixture_passes_without_creating_any_file(self):
         before = sorted(str(f.relative_to(self.base)) for f in self.base.rglob("*"))

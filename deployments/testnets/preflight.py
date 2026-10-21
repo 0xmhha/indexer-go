@@ -20,6 +20,9 @@ REPO = HERE.parents[1]
 CHAINS = {"stablenet-testnet": 8283, "bsc-testnet": 97, "sepolia": 11155111, "arc-testnet": 5042002}
 MANIFEST_KEYS = {"mount_root", "apfs_volume_uuid", "physical_store_uuid", "private_dir", "indexer_image", "docker_context"}
 STATE_DIR = "/var/lib/indexer-ops"
+# Docker images, container layers and the services' logs live on the Docker
+# VM disk, not on the monitored APFS volume. Initial review value.
+DOCKER_VM_MIN_FREE = 10 << 30
 OPERATIONS = {
     "halt_file": STATE_DIR + "/halt.json",
     "journal_file": STATE_DIR + "/capacity.jsonl",
@@ -198,7 +201,7 @@ def probe(*args):
         require(len(result.stdout) <= 4 * 1024 * 1024, "Inspection output exceeded limit.")
         return result.stdout
     except (OSError, subprocess.SubprocessError):
-        raise Refused("Read-only disk/context inspection failed.") from None
+        raise Refused("Disk/context inspection failed.") from None
 
 
 def inspect_apfs(manifest):
@@ -226,6 +229,19 @@ def inspect_apfs(manifest):
     space = os.statvfs(root)
     require(space.f_bavail * space.f_frsize >= 100 << 30, "Filesystem free space is below the100GiB startup floor.")
     return root
+
+
+def docker_vm_free(image):
+    """Free bytes of the Docker VM disk, read by df in a throwaway container.
+
+    The container uses the reviewed image without pulling, has no network,
+    capabilities or writable root, and is removed when df exits.
+    """
+    out = probe("docker", "--context", "desktop-linux", "run", "--rm", "--pull", "never", "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", "--user", f"{os.getuid()}:{os.getgid()}", "--label", "com.0xmhha.indexer.owner=indexer-go", "--entrypoint", "df", image, "-P", "-k", "/")
+    lines = out.decode("ascii", "replace").splitlines()
+    fields = lines[1].split() if len(lines) == 2 else []
+    require(len(fields) == 6 and fields[3].isdigit() and fields[5] == "/", "Unexpected Docker VM disk report.")
+    return int(fields[3]) * 1024
 
 
 def halt_latch(private):
@@ -280,6 +296,7 @@ def check_host(manifest, resume=False):
     require(not any(c in dsn for c in "\r\n\0"), "DSN must be a single line.")
     contexts = json.loads(probe("docker", "context", "inspect", "desktop-linux"))
     require(len(contexts) == 1 and contexts[0].get("Name") == "desktop-linux" and contexts[0].get("Endpoints", {}).get("docker", {}).get("Host", "").startswith("unix://"), "Require the inspected local Docker Desktop context.")
+    require(docker_vm_free(manifest["indexer_image"]) > DOCKER_VM_MIN_FREE, "Docker VM disk has too little free space for images, container layers and logs.")
     # Detect removal/replacement during the checks before returning to the caller.
     require(inspect_apfs(manifest) == root, "APFS identity changed during inspection.")
     return {"INDEXER_APFS_ROOT": str(root), "INDEXER_PRIVATE_DIR": str(private), "INDEXER_RUN_UID": str(os.getuid()), "INDEXER_RUN_GID": str(os.getgid()), "INDEXER_OPERATIONS_IMAGE": manifest["indexer_image"]}
