@@ -131,6 +131,7 @@ func TestUsageErrors(t *testing.T) {
 		{"clear and reindex", []string{"--clear-data", "--reindex"}, []string{"give only one of them"}},
 		{"indexing flag on resume-check", []string{"resume-check", "--rpc", "x"}, []string{"unknown flag: --rpc", "Run 'indexer resume-check --help'"}},
 		{"bad value", []string{"--workers", "many"}, []string{`invalid argument "many" for "--workers"`}},
+		{"unknown adapter", []string{"--adapter", "stablenett"}, []string{`--adapter "stablenett" is not a chain profile of this binary`}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := run(t, nil, tc.args...)

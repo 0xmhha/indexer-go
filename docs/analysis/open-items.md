@@ -14,7 +14,7 @@
 - 원본은 수신 후 최소24시간 보관한다. 필수 데이터 DB 저장·검증된 finality·raw 소비자 ACK·lease 조건이 충족돼야 삭제한다. 처리 지연이나 용량 부족으로 미처리 원본을 버리지 않는다.
 - 외장 경로·volume identity·예산은 명시적으로 지정한다. 분리/손상 시 수신을 중단하고 내부 디스크로 자동 전환하지 않는다. 공간 부족 대기 중 후처리는 계속한다.
 - SQL 값 바인딩·검증/인용한 식별자, chain profile 검증, 순차 writer·undo/outbox·기존 처리 완료 ACK 의미를 유지한다. 기존 era/replay·declared·SDK 호환성을 회귀 범위에 둔다.
-- 체인 고유 코드는 `pkg/chains/<chain>` 또는 별도 모듈에 둔다. 공통 코어에 chain-id 조건문을 추가하지 않는다.
+- 체인 고유 코드는 `x/<chain>` 또는 별도 모듈에 둔다. 공통 코어에 chain-id 조건문을 추가하지 않는다.
 
 ## 2. 구현과 검증을 마친 기반
 
@@ -28,7 +28,7 @@
 | SQL 인젝션 방어 | 값/페이지 파라미터 바인딩, pgx 식별자 처리, 서버 바인딩 연결 정책과 실제 DB 공격 문자열 회귀. 새 원천 저장에도 동일 규칙 적용 |
 | Docker 공간과 DB 전체 회귀 | 시험 volume40개·약28.85GB 정리, 재검증용 자원 제거, 시험 스크립트의 named volume 정리 보강. **fsync-on/race PostgreSQL413개·capture45개 test/subtest 통과**. 공간 부족으로 남았던 전체 PostgreSQL 시험은 완료. [3.38](work-log-2026-10.md#338-docker-공간-확보와-postgresql-전체-회귀-재검증-1015) |
 
-Arc의 첫 지원 plan은 header/body/receipt3개다. 독립 loopback 실제 TCP/RLPx 수신·검증·저장과 부분 재시작을 확인했으나 실제 Arc peer 접속은 아직 없다. [모듈](../../modules/feeds/arc/README.md)과 [공급 감사](arc-peer-capabilities.md)를 참조한다. W0~W3 전체 완료나 포괄 상태 지원을 뜻하지 않는다. 현재 capture는 dataset당8MiB·블록당64MiB의 encoded 바이트를 저장하는 코어이며, 포괄 계정/계약/스토리지/trace/blob DB와 운영 수신기로 전환하는 작업은 남아 있다.
+Arc의 첫 지원 plan은 header/body/receipt3개다. 독립 loopback 실제 TCP/RLPx 수신·검증·저장과 부분 재시작을 확인했으나 실제 Arc peer 접속은 아직 없다. [모듈](../../x/arc/feed/README.md)과 [공급 감사](arc-peer-capabilities.md)를 참조한다. W0~W3 전체 완료나 포괄 상태 지원을 뜻하지 않는다. 현재 capture는 dataset당8MiB·블록당64MiB의 encoded 바이트를 저장하는 코어이며, 포괄 계정/계약/스토리지/trace/blob DB와 운영 수신기로 전환하는 작업은 남아 있다.
 
 ## 3. 다음 작업과 전체 구현 순서
 

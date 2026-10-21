@@ -14,10 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/pkg/chains/evm"
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/source"
 	"github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
+	"github.com/0xmhha/indexer-go/x/stablenet"
 )
 
 func dial(t *testing.T, url string) *gethrpc.Client {
@@ -130,7 +130,7 @@ type vectors struct {
 
 func loadVectors(t *testing.T) vectors {
 	t.Helper()
-	b, err := os.ReadFile("../../chains/stablenet/testdata/live_vectors.json")
+	b, err := os.ReadFile("../../../x/stablenet/testdata/live_vectors.json")
 	require.NoError(t, err)
 	var v vectors
 	require.NoError(t, json.Unmarshal(b, &v))

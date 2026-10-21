@@ -21,7 +21,6 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/capture"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata"
-	"github.com/0xmhha/indexer-go/pkg/chains/arc"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
@@ -30,6 +29,7 @@ import (
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 	"github.com/0xmhha/indexer-go/pkg/window"
+	"github.com/0xmhha/indexer-go/x/arc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	gethrpc "github.com/ethereum/go-ethereum/rpc"

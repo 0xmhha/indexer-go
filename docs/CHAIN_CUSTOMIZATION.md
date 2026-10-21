@@ -17,7 +17,7 @@
 | 모델의 체인 고유 필드 | `model.ExtKey`, `model.RegisterExtCodec` | typed accessor, 저장 codec과 round trip 제공 |
 | 고유 이벤트·통계·설정·API | feature 및 SDK registry | 블록 트랜잭션 안에 저장하고 조회·구독을 별도 등록 |
 
-내장 체인은 `pkg/chains/<chain>`에 둔다. 외부 프로젝트도 자기 모듈의 `pkg/chains/<chain>`에 둔다. 공통 fetch·storage·API에 체인 이름이나 chain id 조건문을 더하지 않는다. app/main은 등록 패키지를 import하는 조립 지점이다.
+내장 체인은 `x/<chain>`에 둔다. 외부 프로젝트도 자기 모듈의 `x/<chain>`에 둔다. 공통 fetch·storage·API에 체인 이름이나 chain id 조건문을 더하지 않는다. 체인별 바이너리(`x/<chain>/cmd/indexer-<chain>`)의 main이 그 체인의 bundle(`x/<chain>/bundle`)을 import하는 조립 지점이다. 엔진(`pkg/app`)과 기본 `indexer`는 체인 코드를 import하지 않는다(`TestOnlyProductsImportChains`).
 
 등록은 Go 패키지가 로드될 때 수행한다. YAML은 이미 연결된 profile과 feature를 선택·설정하며, 패키지를 다운로드하거나 동적으로 로드하지 않는다. 추가 패키지를 import한 자기 바이너리를 빌드한다.
 

@@ -6,7 +6,7 @@
 
 공식 Arc `6e764023ee6515fe70573e123ed2db912a7207b4`의 [생산 txpool 구성](https://github.com/circlefin/arc-node/blob/6e764023ee6515fe70573e123ed2db912a7207b4/crates/execution-txpool/src/pool.rs)은 `.no_eip4844()`와 blob cache0을 사용하고, 같은 파일의 시험도 blob 거래 거부를 확인한다. 이 근거는 **해당 노드 구성의 transaction admission 정책**이다. 모든 과거 블록의 blob 부재나 모든 consensus/fork 규칙을 증명한 것으로 확대하지 않는다. 실제 public deployment의 실행 버전도 별도 운영 증거가 필요하다.
 
-정책은 `pkg/chains/arc`에 두고 optional `chains.BlobCapabilityProfile`로 전달한다. generic EVM·optional 인터페이스가 없는 외부 profile은 `unknown/not_audited`다. embedding project profile이 ID를 바꾸면 원래 audit를 상속하되 선택된 외부 ID에 metadata를 결합한다. getter는 값 복사본을 반환한다.
+정책은 `x/arc`에 두고 optional `chains.BlobCapabilityProfile`로 전달한다. generic EVM·optional 인터페이스가 없는 외부 profile은 `unknown/not_audited`다. embedding project profile이 ID를 바꾸면 원래 audit를 상속하되 선택된 외부 ID에 metadata를 결합한다. getter는 값 복사본을 반환한다.
 
 `evmblob.New`와 profile을 사용하는 DB-only `ReadSnapshot`/`ReadPage`는 `unsupported`이면 `evmblob.ErrUnsupported`로 중단한다. provider/DB/canonical RPC를 호출하지 않으며 ‘검증된 빈 결과’로 바꾸지 않는다. 순수 `Decode`/`Verify`는 표준 암호 검증 도구로 유지한다. `unknown`인 profile의 library 사용은 명시적 provider와 실제 captured 입력을 전제로 하며, 앱에서 공급이 가능하다고 선언하는 것은 아니다.
 

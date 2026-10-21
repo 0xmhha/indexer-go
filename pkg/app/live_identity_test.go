@@ -20,12 +20,12 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
-	fdmeta "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
+	"github.com/0xmhha/indexer-go/x/stablenet"
+	fdmeta "github.com/0xmhha/indexer-go/x/stablenet/feedelegation"
 )
 
 // TestLiveStableNetIdentity indexes a running StableNet node and checks that

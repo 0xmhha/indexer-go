@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/opsguard"
 )
 
@@ -31,8 +32,15 @@ type StartOptions struct {
 	Reindex bool
 	// Adapter names a chain profile id or alias; empty detects it.
 	Adapter string
-	Build   BuildInfo
+	// CheckChain, if set, refuses a node the binary is not built for. It
+	// runs once the profile is selected, for every chain of the process.
+	CheckChain ChainCheck
+	Build      BuildInfo
 }
+
+// ChainCheck accepts or refuses the chain a run connects to: info is what
+// the node reports and profile the profile selected for it.
+type ChainCheck func(info chains.NodeInfo, profile chains.Profile) error
 
 // ValidateConfig checks a loaded configuration: the configuration's own
 // rules, then the ones this engine adds.
@@ -67,7 +75,7 @@ func Start(ctx context.Context, cfg *config.Config, log *zap.Logger, opts StartO
 		}
 	}
 
-	a, err := NewApp(cfg, log, opts.GapRecovery, opts.Adapter)
+	a, err := newApp(cfg, log, opts)
 	if err != nil {
 		return fmt.Errorf("failed to create application: %w", err)
 	}

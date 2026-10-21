@@ -7,7 +7,10 @@ RUN go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
-COPY modules/feeds/ ./modules/feeds/
+# The multi-chain draft configuration runs StableNet and Arc chains, whose
+# profiles moved to x/stablenet and x/arc; ./cmd/indexer links the generic
+# EVM profile only. Splitting the draft into one service per chain binary
+# (indexer-stablenet, indexer-arc, indexer) is pending.
 RUN go build -trimpath -o /out/indexer-go ./cmd/indexer
 RUN go build -trimpath -o /out/indexer-inspect ./cmd/indexer-inspect
 

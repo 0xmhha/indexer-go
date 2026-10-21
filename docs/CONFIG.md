@@ -467,7 +467,7 @@ multichain:
       batch_size: 10
 ```
 
-`adapter_type`는 앱이 등록한 profile id나 alias를 받는다. 외부 profile도 기존 registry에 등록하면 같은 설정으로 선택할 수 있다. 빈 값, `auto`, 기존 `anvil` 이름은 자동 감지를 선택한다. 등록되지 않은 다른 이름은 멀티체인 시작 전에 거부한다.
+`adapter_type`는 바이너리가 링크한 profile id나 alias를 받는다. 외부 profile도 기존 registry에 등록하면 같은 설정으로 선택할 수 있다. 빈 값, `auto`, 기존 `anvil` 이름은 자동 감지를 선택한다. 등록되지 않은 다른 이름은 멀티체인 시작 전에 거부한다.
 
 ### Notifications
 
@@ -586,6 +586,8 @@ indexer version              버전을 출력한다(--version, -v도 같다)
 - `--config`, `--log-level`, `--log-format`은 모든 명령이 받는다. 나머지는 색인 명령만 받는다.
 - `--chunk-size`는 `indexer.chunk_size`(배치당 블록 수, 1은 실시간 모드)이고 양수여야 한다. 이전의 `--batch-size`는 없앴다.
 - `--clear-data`와 `--reindex`는 함께 줄 수 없다.
+- `--adapter`는 이 바이너리가 링크한 profile id나 alias만 받는다. 빈 값, `auto`, 옛 `anvil`은 노드에서 감지한다. 다른 이름은 명령행 오류다.
+- 바이너리는 체인별로 나뉜다. `indexer`는 generic EVM, `indexer-stablenet`은 StableNet, `indexer-arc`는 Arc용이다(`make build CHAIN=<chain>`). 체인 바이너리는 다른 체인의 노드를 거부하고, `indexer`는 StableNet과 Arc 노드를 거부하며 실행할 바이너리 이름을 알려 준다.
 - 플래그는 대시 두 개로 쓴다(`--rpc`). 위치 인자는 받지 않는다. 잘못된 명령행은 무엇이 틀렸는지와 비슷한 플래그·명령을 알려 주고 종료 코드 2로 끝난다. 설정이 잘못되었거나 실행이 실패하면 1이다.
 
 ---
@@ -718,7 +720,7 @@ eventbus:
 블록체인 데이터만 삭제하고 검증 데이터(ABI, 소스코드)는 보존합니다.
 
 ```bash
-./indexer-go --config config.yaml --reindex
+./indexer --config config.yaml --reindex
 ```
 
 **보존되는 데이터:**
@@ -736,7 +738,7 @@ eventbus:
 ### 전체 초기화
 
 ```bash
-./indexer-go --config config.yaml --clear-data
+./indexer --config config.yaml --clear-data
 ```
 
 ---

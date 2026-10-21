@@ -15,10 +15,10 @@ git clone https://github.com/0xmhha/indexer-go.git
 cd indexer-go
 go mod download
 make build
-./build/indexer-go --version
+./build/indexer --version
 ```
 
-Run the remaining commands from the repository root. The binary is `build/indexer-go`.
+Run the remaining commands from the repository root. The binary is `build/indexer`, the indexer for generic EVM chains such as anvil, Sepolia or BSC. Chains with rules of their own have their own binaries: `make build CHAIN=stablenet` builds `build/indexer-stablenet` and `make build CHAIN=arc` builds `build/indexer-arc`. Each binary refuses the nodes of another binary's chain and names the one to run.
 
 ## Run a local chain
 
@@ -31,7 +31,7 @@ anvil --block-time 2
 Start the indexer:
 
 ```bash
-./build/indexer-go --config configs/config-anvil.yaml
+./build/indexer --config configs/config-anvil.yaml
 ```
 
 The [development configuration](../configs/config-anvil.yaml) connects to `http://127.0.0.1:8545`, uses the generic EVM profile, starts from genesis and stores its index in `./data-anvil`. Its API listens on port 8080. Stop the process with Ctrl+C; restarting with the same configuration resumes the saved index.
@@ -103,13 +103,13 @@ This example follows the head and caps physical HTTP RPC attempts at five per se
 Set `INDEXER_START_HEIGHT` to your chosen decimal block height, then run:
 
 ```bash
-./build/indexer-go --config config.yaml \
+./build/indexer --config config.yaml \
   --start-height "${INDEXER_START_HEIGHT:?set a retained starting block height}"
 ```
 
-Profiles are detected from the node. You can select a registered id or alias explicitly with `--adapter`, such as `evm`, `stablenet` / `stableone`, or `arc`. Check the selected-profile startup log; an unregistered adapter name currently falls back to detection.
+Profiles are detected from the node. You can select a profile the binary links explicitly with `--adapter`: `evm` for `indexer`, `stablenet` / `stableone` for `indexer-stablenet`, `arc` for `indexer-arc`. A name the binary does not link is refused.
 
-`config.yaml` is ignored by Git. Command-line flags override the corresponding configuration values when explicitly set. `./build/indexer-go --help` lists the flags by group, with the configuration key and environment variable each one sets. Additional environment variables, feature settings and batch options are documented in [CONFIG.md](CONFIG.md).
+`config.yaml` is ignored by Git. Command-line flags override the corresponding configuration values when explicitly set. `./build/indexer --help` lists the flags by group, with the configuration key and environment variable each one sets. Additional environment variables, feature settings and batch options are documented in [CONFIG.md](CONFIG.md).
 
 ## Choose storage and process roles
 

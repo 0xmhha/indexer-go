@@ -15,9 +15,9 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
+	"github.com/0xmhha/indexer-go/x/stablenet/systemcontracts"
 )
 
 // indexedBalanceAt returns the indexed balance of addr after block n and

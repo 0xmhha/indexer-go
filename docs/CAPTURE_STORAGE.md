@@ -2,7 +2,7 @@
 
 `pkg/capture`는 체인 adapter가 검증한 입력을 Pebble/PostgreSQL에 저장하는 공통 계층이다. 필수 dataset 바이트·manifest·canonical pointer·연속 완료 위치·내부 `facts_ready` 이벤트를 하나의 durable transaction으로 반영한다. `Commit` 성공 뒤에만 원천 저장 완료를 알릴 수 있다. 기존 writer의 처리 완료 ACK·undo·사용자 outbox와는 별도다.
 
-현재는 라이브러리 구현이다. [Arc 모듈](../modules/feeds/arc/README.md)이 ETH/68 header/body/receipt adapter와 두 worker를 `RunConfiguredSession`에 연결한다. `RunFeedSession`/`RunConfiguredFeed`와 Arc `RunManaged`는 명시적 RPC-finalized 정책·bounded reorg 재개·raw 소비자 ACK·선택적 GC를 연결한다. 실제 Arc peer/정책 운영 검증·독립 CL certificate·상태/trace/blob·기존 앱 활성화는 남아 있다. DB-only full-ingest projection은 [facts Source와 기존 writer](SOURCE_FACTS.md)에 연결했다. 삭제 잠금 복구 및 두 worker의 시작·취소·join lifecycle은 `RunSession`에 구현했다. 공유 volume 설정에서 instance를 선택하고 압력을 감시한다. [전체 설계](analysis/windowed-feed-design.md)와 [남은 작업](analysis/open-items.md)을 함께 따른다.
+현재는 라이브러리 구현이다. [Arc 모듈](../x/arc/feed/README.md)이 ETH/68 header/body/receipt adapter와 두 worker를 `RunConfiguredSession`에 연결한다. `RunFeedSession`/`RunConfiguredFeed`와 Arc `RunManaged`는 명시적 RPC-finalized 정책·bounded reorg 재개·raw 소비자 ACK·선택적 GC를 연결한다. 실제 Arc peer/정책 운영 검증·독립 CL certificate·상태/trace/blob·기존 앱 활성화는 남아 있다. DB-only full-ingest projection은 [facts Source와 기존 writer](SOURCE_FACTS.md)에 연결했다. 삭제 잠금 복구 및 두 worker의 시작·취소·join lifecycle은 `RunSession`에 구현했다. 공유 volume 설정에서 instance를 선택하고 압력을 감시한다. [전체 설계](analysis/windowed-feed-design.md)와 [남은 작업](analysis/open-items.md)을 함께 따른다.
 
 ## 저장 계약
 

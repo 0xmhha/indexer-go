@@ -1,8 +1,17 @@
-.PHONY: all build clean test test-race test-cache-lifecycle test-postgres test-slo test-examples lint lint-install coverage generate tools help
+.PHONY: all build build-all check-chain clean test test-short test-chain test-race test-cache-lifecycle test-postgres test-slo test-examples lint lint-install coverage generate tools help
 
 # Variables
-BINARY_NAME=indexer-go
+# CHAIN selects the binary: empty builds indexer (generic EVM, ./cmd/indexer),
+# a chain under x/ builds indexer-<chain> (./x/<chain>/cmd/indexer-<chain>).
+CHAIN?=
+CHAINS=$(notdir $(wildcard x/*))
+ifeq ($(CHAIN),)
+BINARY_NAME=indexer
 MAIN_PATH=./cmd/indexer
+else
+BINARY_NAME=indexer-$(CHAIN)
+MAIN_PATH=./x/$(CHAIN)/cmd/indexer-$(CHAIN)
+endif
 BUILD_DIR=./build
 COVERAGE_FILE=coverage.out
 
@@ -31,19 +40,27 @@ LDFLAGS=-ldflags "-s -w \
 	-X github.com/0xmhha/indexer-go/cmd/cli.version=$(VERSION) \
 	-X github.com/0xmhha/indexer-go/cmd/cli.commit=$(COMMIT) \
 	-X github.com/0xmhha/indexer-go/cmd/cli.buildTime=$(BUILD_TIME)"
-TAGS=-tags release
 
 all: clean build test
 
-## build: Build the binary
-build:
+# check-chain refuses a CHAIN that has no binary under x/.
+check-chain:
+	@test -z "$(CHAIN)" || test -d "$(MAIN_PATH)" || (echo "CHAIN=$(CHAIN) has no binary at $(MAIN_PATH); chains: $(CHAINS)"; exit 1)
+
+## build: Build the binary (CHAIN=<chain> for indexer-<chain>; chains are the directories under x/)
+build: check-chain
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) $(LDFLAGS) $(TAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
-## build-dev: Build for development (with debug info)
-build-dev:
+## build-all: Build indexer and every indexer-<chain>
+build-all:
+	@$(MAKE) --no-print-directory build CHAIN=
+	@for c in $(CHAINS); do $(MAKE) --no-print-directory build CHAIN=$$c || exit 1; done
+
+## build-dev: Build for development (with debug info; CHAIN as for build)
+build-dev: check-chain
 	@echo "Building $(BINARY_NAME) (development)..."
 	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
@@ -57,10 +74,19 @@ clean:
 	@rm -f $(COVERAGE_FILE)
 	@echo "Clean complete"
 
-## test: Run tests
+## test: Run every test
 test:
-	@echo "Running tests..."
-	$(GOTEST) -v -short ./...
+	$(GOTEST) ./...
+
+## test-short: Run the tests without the long ones (process kills, load, repeated measurements)
+test-short:
+	$(GOTEST) -short ./...
+
+## test-chain: Run one chain's tests and build its binary (CHAIN=<chain>)
+test-chain: check-chain
+	@test -n "$(CHAIN)" || (echo "Set CHAIN to one of: $(CHAINS)"; exit 1)
+	$(GOTEST) ./x/$(CHAIN)/...
+	$(GOBUILD) -o /dev/null $(MAIN_PATH)
 
 ## test-race: Run every test once with the race detector; run it before each commit and pull request (CI has no race job, to keep CI fast)
 test-race:
@@ -159,10 +185,10 @@ run: build-dev
 		--workers 10 \
 		--chunk-size 100
 
-## docker-build: Build Docker image
-docker-build:
+## docker-build: Build Docker image (CHAIN as for build)
+docker-build: check-chain
 	@echo "Building Docker image..."
-	docker build -t $(BINARY_NAME):latest .
+	docker build --build-arg CHAIN=$(CHAIN) -t $(BINARY_NAME):latest .
 	@echo "Docker image built: $(BINARY_NAME):latest"
 
 ## docker-run: Run Docker container
@@ -198,14 +224,14 @@ help:
 .PHONY: test-node-feed check-node-feed-arc
 ## test-node-feed: Check the Rust producer and Go IPC integration (requires Rust)
 test-node-feed:
-	cargo fmt --check --manifest-path modules/arc-node-feed/Cargo.toml
-	cargo test --locked --manifest-path modules/arc-node-feed/Cargo.toml
-	cargo check --locked --features reth --manifest-path modules/arc-node-feed/Cargo.toml
-	cargo build --locked --manifest-path modules/arc-node-feed/Cargo.toml --bin fixture
-	INDEXER_NODE_FEED_FIXTURE_BINARY="$(CURDIR)/modules/arc-node-feed/target/debug/fixture" $(GOCMD) test -race -count=1 ./pkg/source/nodefeed ./pkg/app -run '^TestNodeFeed'
+	cargo fmt --check --manifest-path x/arc/nodefeed/Cargo.toml
+	cargo test --locked --manifest-path x/arc/nodefeed/Cargo.toml
+	cargo check --locked --features reth --manifest-path x/arc/nodefeed/Cargo.toml
+	cargo build --locked --manifest-path x/arc/nodefeed/Cargo.toml --bin fixture
+	INDEXER_NODE_FEED_FIXTURE_BINARY="$(CURDIR)/x/arc/nodefeed/target/debug/fixture" $(GOCMD) test -race -count=1 ./pkg/source/nodefeed ./pkg/app -run '^TestNodeFeed'
 
 ## check-node-feed-arc: Type-check the optional hook in the audited Arc checkout
 check-node-feed-arc:
 	@test -n "$(ARC_NODE_CHECKOUT)" || (echo 'Set ARC_NODE_CHECKOUT to the audited checkout'; exit 1)
-	python3 modules/arc-node-feed/install_arc.py --arc-checkout "$(ARC_NODE_CHECKOUT)"
+	python3 x/arc/nodefeed/install_arc.py --arc-checkout "$(ARC_NODE_CHECKOUT)"
 	cargo check --manifest-path "$(ARC_NODE_CHECKOUT)/Cargo.toml" -p arc-node-execution --bin arc-node-execution

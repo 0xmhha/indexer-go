@@ -34,7 +34,7 @@ func (*Start) Name() string { return "Start" }
 
 // AddFlags implements Group.
 func (s *Start) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&s.opts.Adapter, "adapter", "", fmt.Sprintf("Chain profile id (%s) or alias; detected from the node if empty or not a profile", strings.Join(chains.IDs(), ", ")))
+	fs.StringVar(&s.opts.Adapter, "adapter", "", fmt.Sprintf("Chain profile id (%s) or alias; detected from the node if empty or %q", strings.Join(chains.IDs(), ", "), chains.DetectName))
 	fs.BoolVar(&s.opts.GapRecovery, "gap-recovery", false, "Detect and fill missing blocks at startup")
 	fs.BoolVar(&s.opts.ClearData, "clear-data", false, "Delete the databases before starting")
 	fs.BoolVar(&s.opts.Reindex, "reindex", false, "Delete the blockchain data before starting, keeping verification data (ABIs, sources)")
@@ -48,6 +48,10 @@ var ErrClearAndReindex = errors.New("--clear-data deletes all data and --reindex
 func (s *Start) Options() (app.StartOptions, error) {
 	if s.opts.ClearData && s.opts.Reindex {
 		return app.StartOptions{}, ErrClearAndReindex
+	}
+	if !chains.Selectable(s.opts.Adapter) {
+		return app.StartOptions{}, fmt.Errorf("--adapter %q is not a chain profile of this binary (profiles: %s; %q detects from the node)",
+			s.opts.Adapter, strings.Join(chains.IDs(), ", "), chains.DetectName)
 	}
 	return s.opts, nil
 }

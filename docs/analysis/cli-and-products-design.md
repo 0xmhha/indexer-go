@@ -50,8 +50,9 @@ pkg/
     evm/                       generic EVM 기본 어댑터와 옵션
   app/                         엔진: app.Start, app.ResumeCheck, app.ValidateConfig
   features/...                 체인과 무관한 공통 기능
+  startup/                     체인 패키지가 등록하는 시작 단계(StableNet 시스템 계약 검증 자료)
 x/
-  stablenet/                   지금의 pkg/chains/stablenet 전체
+  stablenet/                   이전의 pkg/chains/stablenet 전체
     bundle/                    이 체인의 부품을 모두 blank import하는 묶음
     cmd/indexer-stablenet/     제품 바이너리
   arc/                         지금의 pkg/chains/arc
@@ -68,7 +69,9 @@ x/
 - `x/<체인>`은 `pkg/`의 공개 패키지만 쓴다.
 - 같은 go.mod를 쓴다. 방향은 `pkg/chains/coupling_test.go`를 고쳐 강제한다.
 
-`pkg/app`의 테스트 14개 파일은 StableNet이나 Arc 시나리오를 쓴다. 이 테스트는 `pkg/app` 내부 도우미에 기대므로 처음에는 `_test.go`에서만 `x/` import를 허용한다. `x/`가 `pkg/app`을 import하지 않으므로 순환은 생기지 않는다. 나중에 도우미를 `pkg/app/apptest`로 공개하고 체인 전용 테스트를 `x/<체인>`으로 옮긴다.
+`pkg/app`의 테스트 14개 파일은 StableNet이나 Arc 시나리오를 쓴다. 이 테스트는 `pkg/app` 내부 도우미에 기대므로 처음에는 `_test.go`에서만 `x/` import를 허용한다. `pkg/app/chains_test.go`가 두 bundle을 링크하고, 프로세스를 띄우는 시험은 두 bundle을 넣은 시험용 바이너리(`pkg/app/testdata/indexer-all`)를 빌드한다. `x/`가 `pkg/app`을 import하지 않으므로 순환은 생기지 않는다. 나중에 도우미를 `pkg/app/apptest`로 공개하고 체인 전용 테스트를 `x/<체인>`으로 옮긴다.
+
+방향 규칙은 `pkg/chains/coupling_test.go`의 `TestOnlyProductsImportChains`가 강제한다. 체인 이름 개수 상한(`TestChainIdentifierLimits`)은 `x/`를 세지 않는다. 엔진이 체인 패키지에 직접 기대던 곳(StableNet 시스템 계약 검증 자료 준비)은 `pkg/startup`의 등록 단계로 바꿨다.
 
 ### 명령행 구조
 
@@ -113,8 +116,9 @@ x/
 그래서 시작할 때 다음을 검사한다.
 
 - 제품 main이 `cli.WithChain("stablenet")`처럼 자기 체인을 선언한다.
-- 노드에서 감지한 profile이 그 체인 것이 아니면 시작을 거부한다. 오류에 감지한 chain id와 맞는 바이너리 이름을 적는다.
-- 기본 `indexer`는 선언이 없으므로 자동 감지한다.
+- 노드에서 감지한 profile이 그 체인 것이 아니면 시작을 거부한다. 오류에 노드의 client 버전과 chain id를 적는다.
+- 기본 `indexer`는 generic EVM만 링크한다. 그래서 StableNet이나 Arc 노드도 generic EVM으로 감지해 잘못된 규칙으로 색인할 수 있다. 이를 막으려고 `cli.WithOtherProducts`로 다른 제품의 노드 판별 규칙을 받아, 해당 노드면 실행할 바이너리 이름을 적고 거부한다. 판별 규칙은 profile을 import하면 링크되어 버리므로 `cmd/indexer`에 데이터로 다시 적고, `cmd/indexer/main_test.go`가 각 profile의 `Detect`와 같은 답을 내는지 확인한다.
+- 검사는 profile을 고른 직후 노드에 `web3_clientVersion`, `eth_chainId`를 한 번씩 더 묻는다. 멀티체인 모드에서는 체인마다 같은 검사를 한다.
 - `--adapter`에 등록되지 않은 이름을 주면 자동 감지로 넘어가지 않고 오류를 낸다.
 - `version`과 시작 로그에 제품 이름을 찍는다.
 
@@ -124,8 +128,9 @@ x/
 
 | PR | 내용 | 상태 |
 |---|---|---|
-| 1 | cobra와 pflag 추가, `go mod tidy`. `cmd/cli`, `cmd/flags`. `pkg/app`을 엔진만 남김. 오류 안내, 종료 코드, 묶음별 도움말, ldflags 경로, `--batch-size`를 `--chunk-size`로, `--resume-check`를 `resume-check` 명령으로, `sdk.Main` 제거 | 이 문서와 함께 제출 |
-| 2 | `x/stablenet`, `x/arc` 이동. blank import를 bundle로 옮김. 제품 main, 제품 체인 검사, `--adapter` 미등록 이름 오류, Makefile `CHAIN`, Dockerfile, 배포 스크립트, coupling 테스트 | 남음 |
+| 1 | cobra와 pflag 추가, `go mod tidy`. `cmd/cli`, `cmd/flags`. `pkg/app`을 엔진만 남김. 오류 안내, 종료 코드, 묶음별 도움말, ldflags 경로, `--batch-size`를 `--chunk-size`로, `--resume-check`를 `resume-check` 명령으로, `sdk.Main` 제거 | 머지 대기 |
+| 2 | `x/stablenet`, `x/arc` 이동. blank import를 bundle로 옮김. 제품 main, 제품 체인 검사, `--adapter` 미등록 이름 오류, Makefile `CHAIN`, Dockerfile, 배포 스크립트, coupling 테스트 | 제출 |
+| 2a | 테스트넷 배포 초안을 체인별 프로세스로 나눔(Compose 서비스, entrypoint, `preflight.py`, 설정 초안) | 남음 |
 | 3 | `pkg/sdk` 해체. `sdktest`를 `pkg/feature/featuretest`로. examples 갱신. SDK와 체인 커스터마이징 문서를 어댑터와 확장 문서로 다시 씀 | 남음 |
 | 4 | 운영 플래그 추가(node-role, db-driver, finality, mode, rpc-fallback, rpc-ws, rpc-rate-limit, rpc-timeout, era-dir) | 남음 |
 | 5 | `-short` 표시 보강과 `test-short` 기준 정리 | 남음 |
@@ -138,13 +143,25 @@ x/
 
 별칭만 모아 둔 창구가 없어지면, 확장 코드가 만지면 안 되는 내부(writer, storage 구현)도 import할 수 있게 된다. 이것은 해당 패키지를 `internal/`로 옮겨 따로 막는다.
 
-## 7. 남은 결정
+## 7. 멀티체인 모드와 체인별 프로세스
 
-- 멀티체인 모드 제품: 한 프로세스가 여러 체인을 돌리면 그 체인들의 bundle이 모두 들어간 바이너리가 필요하다. 기본 `indexer`에 넣으면 "기본은 generic EVM" 원칙과 어긋난다. `x/multi/cmd/indexer-multi` 같은 별도 제품이 후보다. PR 2 전에 정한다.
-- CI test 작업의 `-short` 전환: 바꾸면 PR 시간이 줄지만 빠진 테스트는 로컬 `make test-race`에서만 돈다. PR 5 전에 정한다.
+멀티체인 모드는 프로세스 하나가 여러 체인을 색인하는 기능이다(`multichain.enabled`). 한 프로세스가 여러 체인을 돌리려면 그 체인들의 어댑터가 모두 한 바이너리에 있어야 한다. 이런 바이너리를 따로 두지 않기로 했다. 체인별 바이너리를 체인마다 다른 프로세스로 돌린다.
+
+이유는 다음과 같다.
+
+- 체인별 등록 장치가 프로세스 전체에 하나다. StableNet이 등록한 known token(`0x…1000`)은 주소만 키로 쓰므로 같은 프로세스의 다른 체인에도 적용된다. StableNet GraphQL 확장도 모든 체인의 스키마에 붙는다. 바이너리에 자기 체인 어댑터만 넣으면 이 섞임이 생기지 않는다.
+- 저장소·용량 장애는 halt latch를 쓰고 프로세스 전체를 멈춘다. 한 체인의 디스크 문제가 다른 체인 색인까지 멈추게 하지 않으려면 프로세스를 나눠야 한다.
+- 체인별로 업그레이드하고 재시작할 수 있다.
+
+비용도 있다. 테스트넷 초안의 Compose와 `preflight.py`는 indexer 서비스 하나를 전제로 하므로 다시 써야 한다. API 주소가 체인마다 생기고, 한 주소로 묶으려면 reverse proxy가 필요하다. 용량 감시와 halt latch가 프로세스마다 돈다.
+
+멀티체인 모드 코드는 남겨 둔다. generic EVM 체인 여러 개를 `indexer` 한 프로세스로 돌리는 선택지로 쓸 수 있다. 테스트넷 초안은 PR 2a에서 나누며, 그 전까지 초안 설정(StableNet, Arc, generic 체인을 한 프로세스에)은 어떤 바이너리로도 시작할 수 없다. 운영 시작은 원래 보류 상태다.
+
+남은 결정은 CI test 작업의 `-short` 전환 하나다. 바꾸면 PR 시간이 줄지만 빠진 테스트는 로컬 `make test-race`에서만 돈다. PR 5 전에 정한다.
 
 ## 8. 확인하지 않은 것
 
 - Go 진영의 선례(Kubernetes의 옵션 합성, Caddy의 외부 빌드, geth의 short 테스트, Cosmos SDK의 `x/` 모듈 배치)는 알고 있는 내용으로 판단했다. 이번에 각 저장소를 열어 확인하지 않았다.
-- 지금 배포 설정 중에 체인을 섞어 쓰는 멀티체인 구성이 있는지 확인하지 않았다.
+- 체인을 섞어 쓰는 구성은 테스트넷 초안(`docs/examples/config-testnets-windowed.draft.yaml`)에서 확인했다. 다른 외부 배포는 확인하지 않았다.
+- frontend가 `/chains/<id>/` 경로에 기대는지 확인하지 않았다.
 - `pkg/app` 테스트 중 체인 코드에 기대는 테스트 수(14개 파일)는 import 기준으로 셌다. 테스트 함수 단위로 세지 않았다.

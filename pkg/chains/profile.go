@@ -92,6 +92,23 @@ func RegisterAlias(alias, id string) {
 	aliases[alias] = id
 }
 
+// Names that select detection from the node instead of naming a profile:
+// "auto", and "anvil", a former adapter type with no profile of its own.
+const (
+	DetectName       = "auto"
+	LegacyDetectName = "anvil"
+)
+
+// Selectable reports whether name may select a profile: empty or a
+// detection name (detect from the node), or a registered id or alias.
+func Selectable(name string) bool {
+	if name == "" || name == DetectName || name == LegacyDetectName {
+		return true
+	}
+	_, ok := Lookup(name)
+	return ok
+}
+
 // Lookup returns the profile registered under id or an alias of it.
 func Lookup(id string) (Profile, bool) {
 	mu.RLock()

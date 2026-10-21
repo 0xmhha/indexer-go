@@ -79,6 +79,7 @@ func (c *cli) runIndexer(cmd *cobra.Command, _ []string) error {
 		return usageError{err: err}
 	}
 	opts.Build = app.BuildInfo{Name: c.name, Version: version, Commit: commit, Time: buildTime}
+	opts.CheckChain = c.chainCheck()
 	cfg, log, err := c.load(cmd, true)
 	if err != nil {
 		return err

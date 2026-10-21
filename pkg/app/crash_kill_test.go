@@ -20,11 +20,12 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 
-// buildIndexer builds the indexer command into dir.
+// buildIndexer builds the indexer command with every chain bundle
+// (testdata/indexer-all) into dir.
 func buildIndexer(t *testing.T, dir string) string {
 	t.Helper()
 	bin := filepath.Join(dir, "indexer")
-	out, err := exec.Command("go", "build", "-o", bin, "../../cmd/indexer").CombinedOutput()
+	out, err := exec.Command("go", "build", "-o", bin, "./testdata/indexer-all").CombinedOutput()
 	require.NoError(t, err, "%s", out)
 	return bin
 }

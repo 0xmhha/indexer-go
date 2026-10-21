@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/x/stablenet"
 )
 
 // TestLegacyReadsFindFeeDelegationTxs stores live StableNet block 33 (a
@@ -18,7 +18,7 @@ import (
 // block rebuilds 0x16 as type 2 under another hash; these paths must use
 // the hash the chain reports, or the 0x16 receipt is missed.
 func TestLegacyReadsFindFeeDelegationTxs(t *testing.T) {
-	raw, err := os.ReadFile("../chains/stablenet/testdata/live_vectors.json")
+	raw, err := os.ReadFile("../../x/stablenet/testdata/live_vectors.json")
 	require.NoError(t, err)
 	var v struct {
 		Blocks   map[string]json.RawMessage `json:"blocks"`

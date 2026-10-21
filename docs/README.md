@@ -55,7 +55,7 @@ The implemented base plan receives and verifies headers, bodies and receipts. It
 | Layer | Guide |
 | --- | --- |
 | Configuration, application lifecycle and mixed RPC/feed mode | [Feed application](FEED_APP.md) |
-| Arc protocol module and supported input plan | [Arc feed module](../modules/feeds/arc/README.md) |
+| Arc protocol module and supported input plan | [Arc feed module](../x/arc/feed/README.md) |
 | Raw disk window, external paths, leases and quotas | [Window storage](WINDOW_STORAGE.md) |
 | Verified source transactions, generations and deletion fences | [Capture storage](CAPTURE_STORAGE.md) |
 | Permanent objects and normalized source records | [Permanent source storage](PERMANENT_SOURCE_STORAGE.md) |

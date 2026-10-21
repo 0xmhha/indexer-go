@@ -152,11 +152,11 @@ func (c *ChainConfig) Validate() error {
 	}
 
 	if c.AdapterType == "" {
-		c.AdapterType = "auto"
+		c.AdapterType = chains.DetectName
 	}
 	// Match source selection without keeping a second list of profile names.
 	// Applications register their profiles and aliases before assembly.
-	if _, registered := chains.Lookup(c.AdapterType); !registered && c.AdapterType != "auto" && c.AdapterType != "anvil" {
+	if !chains.Selectable(c.AdapterType) {
 		return fmt.Errorf("invalid adapter_type: %s (use auto, anvil, or a registered chain profile or alias)", c.AdapterType)
 	}
 

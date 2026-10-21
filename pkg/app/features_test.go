@@ -12,8 +12,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/wbft"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/features/aa"
@@ -21,6 +19,8 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/features/balance"
 	"github.com/0xmhha/indexer-go/pkg/features/token"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
+	"github.com/0xmhha/indexer-go/x/stablenet/features/systemcontracts"
+	"github.com/0xmhha/indexer-go/x/stablenet/features/wbft"
 )
 
 // failingFeature fails on one block, to check that feature handlers run

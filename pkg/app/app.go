@@ -18,16 +18,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/api"
 	_ "github.com/0xmhha/indexer-go/pkg/api/indexing"
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	_ "github.com/0xmhha/indexer-go/pkg/chains/arc"                                // Arc USDC-native chain profile
-	_ "github.com/0xmhha/indexer-go/pkg/chains/evm"                                // generic EVM chain profile
-	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet"                          // StableNet chain profile
-	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/consensus/api"            // StableNet WBFT consensus API
-	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/feedelegation"   // stablenet.fee_delegation feature
-	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts" // stablenet.system_contracts feature
-	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/wbft"            // stablenet.wbft feature
-	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation/api"        // StableNet fee delegation API
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts"
-	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet/systemcontracts/api" // StableNet system contract API
+	_ "github.com/0xmhha/indexer-go/pkg/chains/evm" // generic EVM chain profile
 	"github.com/0xmhha/indexer-go/pkg/client"
 	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -53,6 +44,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/source/nodefeed"
 	"github.com/0xmhha/indexer-go/pkg/source/replay"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
+	"github.com/0xmhha/indexer-go/pkg/startup"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/stream"
 	"github.com/0xmhha/indexer-go/pkg/token"
@@ -116,18 +108,25 @@ type App struct {
 	// Runtime flags
 	enableGapMode    bool
 	forceAdapterType string
+	// checkChain refuses a node the binary is not built for (nil: any).
+	checkChain ChainCheck
 }
 
 // NewApp creates and initializes a new application instance
-func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapterType string) (_ *App, err error) {
-	if err := preflightFeeds(cfg, enableGapMode); err != nil {
+func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapterType string) (*App, error) {
+	return newApp(cfg, log, StartOptions{GapRecovery: enableGapMode, Adapter: forceAdapterType})
+}
+
+func newApp(cfg *config.Config, log *zap.Logger, opts StartOptions) (_ *App, err error) {
+	if err := preflightFeeds(cfg, opts.GapRecovery); err != nil {
 		return nil, err
 	}
 	app := &App{
 		config:           cfg,
 		logger:           log,
-		enableGapMode:    enableGapMode,
-		forceAdapterType: forceAdapterType,
+		enableGapMode:    opts.GapRecovery,
+		forceAdapterType: opts.Adapter,
+		checkChain:       opts.CheckChain,
 	}
 	// A failed start releases what it opened (the database lock above all),
 	// so the caller can retry in the same process.
@@ -256,6 +255,17 @@ func (a *App) initClient() error {
 	if a.profileErr == nil {
 		a.profile = a.profileSrc.Profile()
 		a.logger.Info("Chain profile selected", zap.String("profile", a.profile.ID()))
+		if a.checkChain != nil {
+			infoCtx, cancel := context.WithTimeout(ctx, a.config.RPC.Timeout)
+			info, err := sourcerpc.NodeInfo(infoCtx, a.client.RPCClient())
+			cancel()
+			if err != nil {
+				return fmt.Errorf("check the node's chain: %w", err)
+			}
+			if err := a.checkChain(info, a.profile); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -312,12 +322,10 @@ func (a *App) completeStorageInit(ctx context.Context) error {
 		a.logger.Info("Genesis balance auto-initialization enabled")
 	}
 
-	// Initialize system contract verifications if enabled
-	if a.config.SystemContracts.Enabled && a.config.SystemContracts.SourcePath != "" {
-		if err := a.initSystemContractVerifications(ctx); err != nil {
-			a.logger.Warn("Failed to initialize system contract verifications", zap.Error(err))
-		}
-	}
+	// Preparation steps of the linked-in chain packages (pkg/startup).
+	startup.Run(ctx, startup.Env{Config: a.config, Storage: a.storage, Logger: a.logger}, func(name string, err error) {
+		a.logger.Warn("Startup step failed", zap.String("step", name), zap.Error(err))
+	})
 
 	// Log latest indexed height
 	latestHeight, err := a.storage.GetLatestHeight(ctx)
@@ -344,28 +352,6 @@ func (a *App) initStorage(ctx context.Context) error {
 		return err
 	}
 	return a.completeStorageInit(ctx)
-}
-
-// initSystemContractVerifications initializes system contract verifications
-func (a *App) initSystemContractVerifications(ctx context.Context) error {
-	// Cast storage to required interfaces
-	writer, ok := a.storage.(port.ContractVerificationWriter)
-	if !ok {
-		return fmt.Errorf("storage does not support contract verification writes")
-	}
-
-	reader, ok := a.storage.(port.ContractVerificationReader)
-	if !ok {
-		return fmt.Errorf("storage does not support contract verification reads")
-	}
-
-	config := &systemcontracts.SystemContractVerificationConfig{
-		SourcePath:       a.config.SystemContracts.SourcePath,
-		IncludeAbstracts: a.config.SystemContracts.IncludeAbstracts,
-		Logger:           a.logger,
-	}
-
-	return systemcontracts.InitSystemContractVerifications(ctx, writer, reader, config)
 }
 
 // initEventBus initializes the event bus
@@ -686,7 +672,7 @@ func (a *App) newChainIndexer(ctx context.Context, cc *multichain.ChainConfig) (
 	if profile == "auto" {
 		profile = "" // detected from the node
 	}
-	app, err := NewApp(a.chainAppConfig(cc), a.logger.With(zap.String("chain", cc.ID)), a.enableGapMode, profile)
+	app, err := newApp(a.chainAppConfig(cc), a.logger.With(zap.String("chain", cc.ID)), StartOptions{GapRecovery: a.enableGapMode, Adapter: profile, CheckChain: a.checkChain})
 	if err != nil {
 		return nil, err
 	}
