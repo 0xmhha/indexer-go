@@ -1,7 +1,7 @@
 package graphql
 
 import (
-	"github.com/0xmhha/indexer-go/pkg/notifications"
+	"github.com/0xmhha/indexer-go/internal/notifications"
 	"github.com/graphql-go/graphql"
 )
 

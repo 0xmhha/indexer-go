@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/0xmhha/indexer-go/pkg/api/middleware"
-	"github.com/0xmhha/indexer-go/pkg/notifications"
+	"github.com/0xmhha/indexer-go/internal/api/middleware"
+	"github.com/0xmhha/indexer-go/internal/notifications"
 )
 
 // SetNotificationService sets the notification service of this handler

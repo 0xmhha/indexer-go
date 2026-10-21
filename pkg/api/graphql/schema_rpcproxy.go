@@ -1,7 +1,7 @@
 package graphql
 
 import (
-	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
+	"github.com/0xmhha/indexer-go/internal/rpcproxy"
 )
 
 // WithRPCProxy sets the RPC proxy service for the schema

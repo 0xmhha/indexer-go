@@ -219,7 +219,7 @@ pkg/window/                   segment, index, leases, retention, recovery, byte 
 pkg/capture/                  required plan, collection jobs, verification, FactsReady
 pkg/core/port/                capture transaction과 facts reader 및 cursor 저장 계약 추가
 pkg/source/facts/             원천 DB를 기존 source.Source로 읽는 adapter
-pkg/projection/               DB 기반 후처리 실행과 generation 및 consumer cursor
+internal/projection/               DB 기반 후처리 실행과 generation 및 consumer cursor
 modules/feeds/<chain>/        체인별 독립 모듈과 protocol 시험
 examples/windowed-indexer/    framework와 선택한 module을 연결하는 별도 실행 프로젝트
 ```

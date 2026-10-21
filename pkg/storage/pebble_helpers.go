@@ -3,8 +3,8 @@ package storage
 import (
 	"context"
 
+	"github.com/0xmhha/indexer-go/internal/storage/history"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage/history"
 	"github.com/ethereum/go-ethereum/common"
 )
 

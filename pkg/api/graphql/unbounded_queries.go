@@ -30,7 +30,7 @@ const logIndexWindow = 10000
 const addressIndexChunk = 256
 
 // addressIndexFeature is the feature that writes the address index
-// (pkg/features/address).
+// (internal/features/address).
 const addressIndexFeature = "address.index"
 
 // errOffsetTooDeep is returned when an unbounded list query asks for a page

@@ -65,13 +65,13 @@ RPC·era1·replay는 source 경계에서 profile을 거쳐 같은 모델로 바�
 | `pkg/storage`, `pkg/storage/postgres` | Pebble 및 PostgreSQL 포트 구현 |
 | `pkg/stream`, `pkg/events` | outbox 소비·relay·구독 엔진과 프로세스 내 버스 |
 | `pkg/api` | API·미들웨어·체인별 mount |
-| `pkg/notifications` | 설정·조건식·fast/durable 평가와 전달 |
+| `internal/notifications` | 설정·조건식·fast/durable 평가와 전달 |
 | `pkg/feature`, `pkg/feature/featuretest` | 기능 등록·실행 계약과 결정성 검증. 프로젝트 확장은 [확장 방법](EXTENDING.md) |
-| `pkg/multichain` | 체인별 App·DB·파이프라인의 관리 |
-| `pkg/rpcpool`, `pkg/rpcproxy` | 노드 failover·요청 제한, 조회 cache·circuit breaker |
+| `internal/multichain` | 체인별 App·DB·파이프라인의 관리 |
+| `pkg/rpcpool`, `internal/rpcproxy` | 노드 failover·요청 제한, 조회 cache·circuit breaker |
 | `examples/` | 별도 모듈의 profile·기능 확장 예제 |
 
-`pkg/adapters`, `pkg/types/chain`, 예전 storage `backend.go`는 현재 구조에 없다. WBFT·체인 고유 저장/API는 공통 consensus/storage 타입으로 다시 옮기지 않는다.
+`pkg/adapters`, `internal/types/chain`, 예전 storage `backend.go`는 현재 구조에 없다. WBFT·체인 고유 저장/API는 공통 consensus/storage 타입으로 다시 옮기지 않는다.
 
 ## 3. 체인과 기능 확장
 
@@ -88,7 +88,7 @@ Feature는 블록 context에 묶인 저장소로 쓰고, 자기 설정·의존 �
 - Reorg는 fork 지점까지 되돌리고 orphan을 보존한다. 최근 128블록의 undo를 유지하며 API로 reorg/orphan 정보를 제공한다. feature rollback hook은 이벤트를 철회할 수 있다.
 - PostgreSQL은 결과를 즉시 읽지 않는 쓰기를 batch로 모으고 잔액을 미리 읽는다. 삽입형 표는 `undo_height`로, 다른 변경은 trigger 기반 `undo_log`로 되돌린다. [undo 설계](analysis/postgres-undo-design.md) 참조.
 - Durable 이벤트는 outbox sequence와 소비자 위치로 재개한다. 구독 엔진은 직렬화 결과를 공유하고 연결마다 bounded queue를 둔다. 과부하 연결은 재개 위치를 포함한 오류로 종료한다.
-- 운영에 연결된 버스는 `pkg/events`의 프로세스 내 버스다. `pkg/eventbus`의 Redis/Kafka 구현은 현재 앱에 연결되지 않았다.
+- 운영에 연결된 버스는 `pkg/events`의 프로세스 내 버스다. `internal/eventbus`의 Redis/Kafka 구현은 현재 앱에 연결되지 않았다.
 
 ## 5. 실행 역할과 멀티체인
 

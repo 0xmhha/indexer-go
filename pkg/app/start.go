@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/internal/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	"github.com/0xmhha/indexer-go/pkg/opsguard"
 )
 
 // BuildInfo identifies the running binary in the startup log.

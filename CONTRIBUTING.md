@@ -30,7 +30,7 @@ The optional Rust adapter has its own prerequisites in [its README](x/arc/nodefe
 | Project handlers, derived records and HTTP/GraphQL routes | [Extending](docs/EXTENDING.md), `pkg/feature`, `pkg/api`, [receipts example](examples/receipts/README.md) |
 | Chain detection, decoding, verification or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md), `x/<chain>` |
 | Storage interfaces and driver implementations | `pkg/core/port`, `pkg/storage`, `pkg/storage/postgres` |
-| Application lifecycle and multi-chain wiring | `pkg/app`, `pkg/multichain` |
+| Application lifecycle and multi-chain wiring | `pkg/app`, `internal/multichain` |
 | Source/feed contracts and workers | `pkg/source`, `pkg/chainfeed`, `pkg/window`, `pkg/capture`, `x/arc/feed` |
 | API schema and registered methods | `pkg/api`, [API snapshots](pkg/app/testdata/api/) |
 

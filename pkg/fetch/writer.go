@@ -11,11 +11,11 @@ import (
 
 	"go.uber.org/zap"
 
+	unitprogress "github.com/0xmhha/indexer-go/internal/progress"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	unitprogress "github.com/0xmhha/indexer-go/pkg/progress"
 )
 
 // The writer is the single goroutine that changes indexed state. Indexing a

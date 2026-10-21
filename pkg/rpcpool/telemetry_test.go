@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/feedtelemetry"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
-	"github.com/0xmhha/indexer-go/pkg/feedtelemetry"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"

@@ -2,7 +2,7 @@
 
 현재 개발 방향은 [24시간 윈도우 수집과 원천 DB 설계](analysis/windowed-feed-design.md)다. 이 문서는 기존 Arc ExEx/IPC 비교 구현과 측정 기록을 보존한다. 해당 구현의 존재가 별도 Arc full node 설치·실행을 요구하는 현재 계획을 뜻하지 않는다.
 
-Arc full node의 실행 결과를 indexer에 전달한다. Arc 실행 노드에 붙이는 독립 Rust crate는 `x/arc/nodefeed`, Go wire 계약은 `pkg/nodefeed`, Source/state 어댑터는 `pkg/source/nodefeed`다. 기존 RPC 수집 경로와 비교할 수 있도록 기본은 비활성화다.
+Arc full node의 실행 결과를 indexer에 전달한다. Arc 실행 노드에 붙이는 독립 Rust crate는 `x/arc/nodefeed`, Go wire 계약은 `pkg/nodefeed`, Source/state 어댑터는 `internal/source/nodefeed`다. 기존 RPC 수집 경로와 비교할 수 있도록 기본은 비활성화다.
 
 ## 지원 확인과 구조
 

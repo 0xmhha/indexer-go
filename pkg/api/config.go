@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	apimiddleware "github.com/0xmhha/indexer-go/internal/api/middleware"
 	"github.com/0xmhha/indexer-go/internal/constants"
-	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
 )
 
 // Config holds API server configuration

@@ -40,7 +40,7 @@ reorg 세대가 바뀌면 이전 계산을 버리고 새 Source를 만든다. �
 
 ## HTTP 조회
 
-단일 체인은 다음 경로를 사용하고, 여러 체인은 `/chains/{id}`를 앞에 붙인다. 앱은 API route를 등록한다. 앱을 쓰지 않는 직접 API 조립에서는 `pkg/api/indexing`을 연결해야 한다. 기존 인증/요청 제한 middleware를 따른다.
+단일 체인은 다음 경로를 사용하고, 여러 체인은 `/chains/{id}`를 앞에 붙인다. 앱은 API route를 등록한다. 앱을 쓰지 않는 직접 API 조립에서는 `internal/api/indexing`을 연결해야 한다. 기존 인증/요청 제한 middleware를 따른다.
 
 - `GET /indexing/status?limit=50&after=<unit-name>`: 최대100 feature/part, 이름 순서의 keyset 페이지. 다음 페이지는 응답 `next`를 사용한다. `after`는 최대256바이트다.
 - `GET /indexing/workers/execution.summary.v1/blocks/123`: 해당 worker의 현재 canonical 완료 prefix에 포함된 block 결과.

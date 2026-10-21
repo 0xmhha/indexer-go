@@ -1,5 +1,5 @@
 // Package venueabi reads the pinned venue ABI fixtures in
-// pkg/features/dex/testdata/venues for the DEX conformance tests. It lives
+// internal/features/dex/testdata/venues for the DEX conformance tests. It lives
 // beside testchain, outside pkg/features, because it reads files.
 package venueabi
 

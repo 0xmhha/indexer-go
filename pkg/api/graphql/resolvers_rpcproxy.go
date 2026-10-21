@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
+	"github.com/0xmhha/indexer-go/internal/rpcproxy"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"

@@ -12,9 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/internal/storage/history"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage/history"
 )
 
 // Ensure PebbleStorage implements HistoricalReader and HistoricalWriter

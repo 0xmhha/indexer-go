@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/internal/features/agg"
+	"github.com/0xmhha/indexer-go/internal/features/dex"
+	"github.com/0xmhha/indexer-go/internal/features/dex/orderbook"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/features/agg"
-	"github.com/0xmhha/indexer-go/pkg/features/dex"
-	"github.com/0xmhha/indexer-go/pkg/features/dex/orderbook"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 

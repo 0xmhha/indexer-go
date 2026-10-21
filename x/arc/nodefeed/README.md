@@ -1,6 +1,6 @@
 # Arc node feed
 
-An optional ExEx for Arc's Reth v2.2.0 SDK node. It exposes bounded local IPC acquisition, hash-bound native state and commit acknowledgments. The Go adapter is `pkg/source/nodefeed`; the shared wire schema is `pkg/nodefeed`.
+An optional ExEx for Arc's Reth v2.2.0 SDK node. It exposes bounded local IPC acquisition, hash-bound native state and commit acknowledgments. The Go adapter is `internal/source/nodefeed`; the shared wire schema is `pkg/nodefeed`.
 
 See [the integration guide](../../../docs/NODE_FEED.md) for the audited Arc revision, hook installer, same-kernel socket placement, retention/ACK rules and validation limits.
 

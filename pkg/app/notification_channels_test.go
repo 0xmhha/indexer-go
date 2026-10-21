@@ -19,7 +19,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/pkg/notifications"
+	"github.com/0xmhha/indexer-go/internal/notifications"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 

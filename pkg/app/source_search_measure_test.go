@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/indexingstatus"
 	"github.com/0xmhha/indexer-go/pkg/capture"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/indexingstatus"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"

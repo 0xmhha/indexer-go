@@ -167,7 +167,7 @@ async function fetchBlocks(base: string, limit: number, offset: number) {
 
 ### 단점
 
-- REST 경로는 frontend가 지금 묻는 필드만 준다. 필드를 더 보여 주려면 백엔드의 REST 문서(`pkg/api/rest/rest.go`)도 바꿔야 한다. GraphQL처럼 frontend에서 필드를 마음대로 고를 수는 없다.
+- REST 경로는 frontend가 지금 묻는 필드만 준다. 필드를 더 보여 주려면 백엔드의 REST 문서(`internal/api/rest/rest.go`)도 바꿔야 한다. GraphQL처럼 frontend에서 필드를 마음대로 고를 수는 없다.
 - Apollo 캐시와 별도로 데이터를 들고 있게 되므로, 같은 데이터를 GraphQL로도 읽는 화면은 두 값이 잠깐 다를 수 있다.
 
 ---

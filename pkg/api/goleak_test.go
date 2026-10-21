@@ -11,9 +11,9 @@ import (
 	"go.uber.org/goleak"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/internal/multichain"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/multichain"
 )
 
 // oneChain serves one chain's store for the multi-chain routes.

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/indexingstatus"
 	"github.com/0xmhha/indexer-go/pkg/capture"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate"
-	"github.com/0xmhha/indexer-go/pkg/indexingstatus"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"

@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/0xmhha/indexer-go/internal/progress"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/progress"
 	"github.com/cockroachdb/pebble"
 )
 

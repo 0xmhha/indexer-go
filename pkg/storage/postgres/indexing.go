@@ -2,8 +2,8 @@ package postgres
 
 import (
 	"context"
+	"github.com/0xmhha/indexer-go/internal/progress"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/progress"
 	"github.com/jackc/pgx/v5"
 )
 

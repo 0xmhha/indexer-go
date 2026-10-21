@@ -228,7 +228,7 @@ test-node-feed:
 	cargo test --locked --manifest-path x/arc/nodefeed/Cargo.toml
 	cargo check --locked --features reth --manifest-path x/arc/nodefeed/Cargo.toml
 	cargo build --locked --manifest-path x/arc/nodefeed/Cargo.toml --bin fixture
-	INDEXER_NODE_FEED_FIXTURE_BINARY="$(CURDIR)/x/arc/nodefeed/target/debug/fixture" $(GOCMD) test -race -count=1 ./pkg/source/nodefeed ./pkg/app -run '^TestNodeFeed'
+	INDEXER_NODE_FEED_FIXTURE_BINARY="$(CURDIR)/x/arc/nodefeed/target/debug/fixture" $(GOCMD) test -race -count=1 ./internal/source/nodefeed ./pkg/app -run '^TestNodeFeed'
 
 ## check-node-feed-arc: Type-check the optional hook in the audited Arc checkout
 check-node-feed-arc:

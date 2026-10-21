@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/internal/storage/history"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage/history"
 )
 
 // The methods the application uses to assemble a store besides the ports

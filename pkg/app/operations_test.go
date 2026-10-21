@@ -15,9 +15,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/internal/multichain"
+	"github.com/0xmhha/indexer-go/internal/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/capture"
-	"github.com/0xmhha/indexer-go/pkg/multichain"
-	"github.com/0xmhha/indexer-go/pkg/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 	"github.com/0xmhha/indexer-go/pkg/window"
 )

@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/pkg/opsguard"
+	"github.com/0xmhha/indexer-go/internal/opsguard"
 )
 
 func TestOperationsConfigLoadsStrictly(t *testing.T) {

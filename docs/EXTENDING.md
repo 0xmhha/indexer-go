@@ -142,4 +142,4 @@ full node도 필요한 높이의 상태를 보관하면 시작할 수 있다. ar
 | `pkg/sdk/sdktest` | `pkg/feature/featuretest` |
 | `//sdk:nondeterministic` | `//feature:nondeterministic` |
 
-기능 작성자가 쓰면 안 되는 내부(writer, 저장소 구현)도 지금은 import할 수 있다. 이것을 `internal/`로 옮겨 막는 일은 따로 남아 있다.
+엔진만 쓰는 패키지(멀티체인 manager, 알림, RPC proxy, 용량 감시, API 내부, 내장 기능 구현 등)는 `internal/` 아래에 있어 다른 모듈이 import할 수 없다. 확장 지점(`pkg/feature`, `pkg/api`, `pkg/api/graphql`, `pkg/api/jsonrpc`, `pkg/chains`, `pkg/core`, `pkg/storage`, `pkg/fetch`, `pkg/features/records`, `pkg/events`, 체인 모듈용 `pkg/capture`·`pkg/window`·`pkg/chainfeed`·`pkg/source`, 시험용 `pkg/testchain`·`pkg/app/apptest`·`pkg/feature/featuretest`)은 `pkg/`에 남는다. `pkg/fetch`와 `pkg/storage`에는 writer와 저장소 구현도 함께 있으므로, 확장 코드는 이 문서가 든 함수만 쓴다.

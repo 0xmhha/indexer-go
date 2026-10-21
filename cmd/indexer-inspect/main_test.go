@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/0xmhha/indexer-go/internal/opsinspect"
 	"github.com/0xmhha/indexer-go/pkg/capture"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/opsinspect"
 	"github.com/0xmhha/indexer-go/pkg/storage/postgres"
 	"github.com/0xmhha/indexer-go/pkg/window"
 	"github.com/ethereum/go-ethereum/common"

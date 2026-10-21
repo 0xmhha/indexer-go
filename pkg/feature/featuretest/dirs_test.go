@@ -11,7 +11,7 @@ import (
 // featureDirs lists the packages of the indexer's features.
 func featureDirs(t *testing.T) []string {
 	var dirs []string
-	for _, root := range []string{"../../features", "../../../x/stablenet/features"} {
+	for _, root := range []string{"../../features", "../../../internal/features", "../../../x/stablenet/features"} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err

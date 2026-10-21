@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/pkg/notifications"
+	"github.com/0xmhha/indexer-go/internal/notifications"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 

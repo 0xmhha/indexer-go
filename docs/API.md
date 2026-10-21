@@ -84,7 +84,7 @@ query AddressTransactions($address: String!, $after: String) {
 - `GET /v1/addresses/{address}/transactions`
 - `GET /v1/stats/miners`, `GET /v1/stats/network`
 
-고정된 GraphQL 문서를 같은 resolver로 실행하며 응답은 `data`/`errors` 구조다. 성공 응답의 ETag·Cache-Control과 1초 cache를 사용한다. 상세 인자·범위·오류 동작은 [설정의 REST 설명](CONFIG.md)과 `pkg/api/rest`를 확인한다. frontend 이전 경로는 [이전 안내](FRONTEND_MIGRATION.md)에 있다.
+고정된 GraphQL 문서를 같은 resolver로 실행하며 응답은 `data`/`errors` 구조다. 성공 응답의 ETag·Cache-Control과 1초 cache를 사용한다. 상세 인자·범위·오류 동작은 [설정의 REST 설명](CONFIG.md)과 `internal/api/rest`를 확인한다. frontend 이전 경로는 [이전 안내](FRONTEND_MIGRATION.md)에 있다.
 
 ## 4. JSON-RPC API
 

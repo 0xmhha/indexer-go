@@ -164,10 +164,10 @@ type BlockHandler interface {
 
 | 기능 | 패키지 | 하는 일 | 기본값 |
 |---|---|---|---|
-| `address.index` | `pkg/features/address` | 거래를 송신자·수신자·fee payer 주소로 색인하고 컨트랙트 생성을 기록한다 | 모든 체인에서 켬 |
-| `balance.native` | `pkg/features/balance` | native 잔액 이력. 처음 보는 계정은 노드 잔액으로 시작하고, 블록 0에서는 miner의 genesis 잔액을 기록한다 | 모든 체인에서 켬 |
-| `token.transfers` | `pkg/features/token` | ERC-20·ERC-721 Transfer 색인 | 모든 체인에서 켬 |
-| `aa.eip7702`, `aa.erc4337`, `aa.erc7579` | `pkg/features/aa` | SetCode 인가, UserOperation, 모듈. 처리기 본체는 아직 `pkg/fetch`에 있고 기능은 그것을 연결한다 | 모든 체인에서 켬. 예전 설정 `account_abstraction.enabled: false`는 `features`에 따로 쓰지 않았으면 `aa.erc4337`·`aa.erc7579`를 끈다 |
+| `address.index` | `internal/features/address` | 거래를 송신자·수신자·fee payer 주소로 색인하고 컨트랙트 생성을 기록한다 | 모든 체인에서 켬 |
+| `balance.native` | `internal/features/balance` | native 잔액 이력. 처음 보는 계정은 노드 잔액으로 시작하고, 블록 0에서는 miner의 genesis 잔액을 기록한다 | 모든 체인에서 켬 |
+| `token.transfers` | `internal/features/token` | ERC-20·ERC-721 Transfer 색인 | 모든 체인에서 켬 |
+| `aa.eip7702`, `aa.erc4337`, `aa.erc7579` | `internal/features/aa` | SetCode 인가, UserOperation, 모듈. 처리기 본체는 아직 `pkg/fetch`에 있고 기능은 그것을 연결한다 | 모든 체인에서 켬. 예전 설정 `account_abstraction.enabled: false`는 `features`에 따로 쓰지 않았으면 `aa.erc4337`·`aa.erc7579`를 끈다 |
 
 등록부에는 `DefaultOn`(모든 체인에서 기본으로 켜는 기능), `Deps.BalanceAt`(노드 잔액 조회), `Block.Transactions`(거래와 receipt 짝짓기), `DelegatedFeePayer`(fee payer 조회 공용 함수)를 더했다. 수집기에는 core 저장과 기존 경로의 fee delegation 재조회, 실행되지 않는 genesis 토큰 메타 초기화만 남았다.
 

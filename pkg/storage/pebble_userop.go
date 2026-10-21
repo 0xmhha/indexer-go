@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/internal/userop"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/userop"
 )
 
 // Compile-time check to ensure PebbleStorage implements UserOp interfaces

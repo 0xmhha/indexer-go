@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/0xmhha/indexer-go/pkg/indexingstatus"
+	"github.com/0xmhha/indexer-go/internal/indexingstatus"
 	"net/http/httptest"
 	"os"
 	"path/filepath"

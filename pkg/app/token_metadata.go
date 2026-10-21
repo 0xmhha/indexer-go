@@ -11,9 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/internal/rpcproxy"
+	"github.com/0xmhha/indexer-go/internal/token"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
-	"github.com/0xmhha/indexer-go/pkg/token"
 )
 
 // proxyTokenMetadata reads the metadata of tokens the store lacks

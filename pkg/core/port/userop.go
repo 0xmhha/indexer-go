@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/0xmhha/indexer-go/pkg/userop"
+	"github.com/0xmhha/indexer-go/internal/userop"
 )
 
 // UserOpIndexReader defines read operations for ERC-4337 UserOperation indexing

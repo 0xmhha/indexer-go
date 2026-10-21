@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/verifier"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/api/middleware"
-	"github.com/0xmhha/indexer-go/pkg/notifications"
+	"github.com/0xmhha/indexer-go/internal/api/middleware"
+	"github.com/0xmhha/indexer-go/internal/notifications"
 	"github.com/graphql-go/graphql"
 )
 
