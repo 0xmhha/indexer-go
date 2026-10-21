@@ -467,7 +467,7 @@ class EntrypointTests(unittest.TestCase):
             self.assertEqual(p.main(), 0)
             check.assert_called_once_with({}, resume=True)
             command = execute.call_args.args[1]
-            self.assertEqual(command[-7:], ["run", "--rm", "--no-deps", "--pull", "never", "indexer", "--resume-check"])
+            self.assertEqual(command[-7:], ["run", "--rm", "--no-deps", "--pull", "never", "indexer", "resume-check"])
             self.assertNotIn("up", command)
 
     def test_secret_is_read_as_data_and_never_appears_in_output_or_argv(self):
@@ -511,8 +511,8 @@ class EntrypointTests(unittest.TestCase):
             env = {"PATH": os.environ["PATH"], "INDEXER_DB_POSTGRES_DSN_FILE": str(secret)}
             run = lambda *args: subprocess.run(["/bin/sh", str(wrapper), *args], env=env, capture_output=True, text=True, timeout=5)
             self.assertEqual(run().stdout, "--config|/etc/indexer/config.yaml|")
-            self.assertEqual(run("--resume-check").stdout, "--config|/etc/indexer/config.yaml|--resume-check|")
-            for args in (("--clear-data",), ("--resume-check", "--reindex"), ("",)):
+            self.assertEqual(run("resume-check").stdout, "--config|/etc/indexer/config.yaml|resume-check|")
+            for args in (("--clear-data",), ("--resume-check",), ("resume-check", "--reindex"), ("",)):
                 result = run(*args)
                 self.assertNotEqual(result.returncode, 0, args)
                 self.assertEqual(result.stdout, "")

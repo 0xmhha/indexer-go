@@ -129,7 +129,7 @@ indexer는 잠금 파일을 쓸 때 `stopDatabase`를 함께 정한다. 저장�
 
 중단하면 먼저 `halt_file`에 잠금 파일을 기록한다. 첫 원인을 보존하기 위해 이미 있는 잠금은 덮어쓰지 않는다. 이어서 `App.Run`이 그 중단을 결과로 끝나고 프로세스는 오류로 종료한다. 잠금이 있으면 시작을 거부한다. 읽을 수 없는 잠금도 거부 사유다. 감시 표본과 상태 변화는 선택적으로 `journal_file`에 JSON 줄로 남긴다. 파일 하나는 최대 8MiB이고 회전본 하나만 둔다.
 
-재개는 `--resume-check`로만 한다. 30초 간격의 표본 3개가 모두 `resume_free_bytes`를 넘고 `Dpg`가 예산의 80% 미만일 때만 잠금을 지운다. 끝나면 색인을 시작하지 않고 종료한다. 운영자가 그다음에 정상 시작한다. raw 원인의 중단과 무결성 중단은 이 명령으로 지우지 않는다. GC가 꺼져 있으면 raw 사용률은 내려가지 않고, 무결성 원인은 운영자가 직접 확인해야 하기 때문이다. 저장소 identity는 다음 시작에서 window Open이 다시 검사한다. Docker 초안에서는 `preflight.py --resume`이 호스트 점검을 반복한 뒤 DB 없이 이 명령만 실행한다.
+재개는 `indexer resume-check` 명령으로만 한다. 30초 간격의 표본 3개가 모두 `resume_free_bytes`를 넘고 `Dpg`가 예산의 80% 미만일 때만 잠금을 지운다. 끝나면 색인을 시작하지 않고 종료한다. 운영자가 그다음에 정상 시작한다. raw 원인의 중단과 무결성 중단은 이 명령으로 지우지 않는다. GC가 꺼져 있으면 raw 사용률은 내려가지 않고, 무결성 원인은 운영자가 직접 확인해야 하기 때문이다. 저장소 identity는 다음 시작에서 window Open이 다시 검사한다. Docker 초안에서는 `preflight.py --resume`이 호스트 점검을 반복한 뒤 DB 없이 이 명령만 실행한다.
 
 실패의 원인도 분류한다. raw/객체 저장소 장애(`window.ErrUnavailable`, `ErrCorrupt`, 객체 영역 장애)는 storage, 용량 부족은 capacity, 불변 입력 충돌·finality 충돌·명시적 재구축 필요는 integrity다. multichain manager는 분류된 실패를 그 체인의 자동 재시작 대상에서 뺀다(`restartSuppressed`). storage와 capacity는 같은 디스크를 쓰는 모든 체인의 문제이므로 잠금을 쓰고 프로세스 전체를 끝낸다. integrity는 해당 체인만 멈추고 다른 체인은 계속한다. 명시적 StartChain은 억제를 해제한다. 단일 체인에서도 storage·capacity 오류로 끝나면 잠금을 쓴다. RPC 오류처럼 분류되지 않은 실패는 기존처럼 다시 시작한다.
 

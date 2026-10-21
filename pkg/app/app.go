@@ -1,25 +1,20 @@
-// Package app is the indexer application: configuration, wiring of storage,
-// fetcher, features and API, and the process lifecycle. It links in the
-// standard features and chain profiles; Main runs it. A project adds its
-// own handlers by importing their packages and calling Main from its own
-// main package (refactoring plan R6-2).
+// Package app is the indexer engine: wiring of storage, fetcher, features
+// and API, and the lifecycle of one run. It links in the standard features
+// and chain profiles. Start runs it with a validated configuration; the
+// command line (cmd/cli) builds that configuration and calls Start.
 package app
 
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/constants"
-	"github.com/0xmhha/indexer-go/internal/logger"
 	"github.com/0xmhha/indexer-go/pkg/api"
 	_ "github.com/0xmhha/indexer-go/pkg/api/indexing"
 	"github.com/0xmhha/indexer-go/pkg/chains"
@@ -65,14 +60,6 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/window"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
-)
-
-var (
-	// Version information, injected at build time with
-	// -X github.com/0xmhha/indexer-go/pkg/app.version=...
-	version   = "dev"
-	commit    = "none"
-	buildTime = "unknown"
 )
 
 // App encapsulates all application components and lifecycle
@@ -129,245 +116,6 @@ type App struct {
 	// Runtime flags
 	enableGapMode    bool
 	forceAdapterType string
-}
-
-// Main runs the indexer as its command line asks and exits the process on
-// error. The indexer command calls it; a program that links in features or
-// GraphQL extensions of its own (refactoring plan R6-2, pkg/sdk) imports
-// them and calls it from its main.
-func Main() {
-	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-// run is the main entry point that orchestrates application lifecycle
-func run() error {
-	// Parse command-line flags
-	flags := parseFlags()
-
-	// Show version and exit if requested
-	if flags.showVersion {
-		fmt.Printf("indexer-go version %s\n", version)
-		fmt.Printf("  commit: %s\n", commit)
-		fmt.Printf("  built:  %s\n", buildTime)
-		return nil
-	}
-
-	// Load and validate configuration
-	cfg, err := loadAndValidateConfig(flags)
-	if err != nil {
-		return err
-	}
-
-	// Initialize logger
-	log, err := initLogger(cfg.Log.Level, cfg.Log.Format)
-	if err != nil {
-		return fmt.Errorf("failed to initialize logger: %w", err)
-	}
-	defer func() { _ = log.Sync() }()
-
-	for _, msg := range cfg.UnsupportedSettings() {
-		log.Warn("Unsupported setting ignored", zap.String("detail", msg))
-	}
-
-	if flags.resumeCheck {
-		return resumeCheck(cfg, log)
-	}
-	// A halt latch keeps the indexer stopped until the resume check passes.
-	if err := opsguard.CheckStartup(cfg.Operations.HaltFile); err != nil {
-		return err
-	}
-
-	// Log startup information
-	logStartupInfo(log, cfg, flags)
-
-	if err := preflightFeeds(cfg, flags.enableGapMode); err != nil {
-		return err
-	}
-
-	// Clear data folder if requested
-	if flags.clearData {
-		if err := clearDatabases(cfg, log); err != nil {
-			return fmt.Errorf("failed to clear data folder: %w", err)
-		}
-	}
-
-	// Reindex: clear blockchain data while preserving verification data
-	if flags.reindex && !flags.clearData {
-		if err := reindexDatabases(cfg, log); err != nil {
-			return fmt.Errorf("failed to reindex data: %w", err)
-		}
-	}
-
-	// Create and initialize application
-	app, err := NewApp(cfg, log, flags.enableGapMode, flags.forceAdapterType)
-	if err != nil {
-		return fmt.Errorf("failed to create application: %w", err)
-	}
-	defer app.Shutdown()
-
-	// Create context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Setup signal handling
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	// Run application
-	errChan := make(chan error, 1)
-	go func() {
-		errChan <- app.Run(ctx)
-	}()
-
-	// Wait for shutdown signal or error
-	select {
-	case sig := <-sigChan:
-		log.Info("Received shutdown signal", zap.String("signal", sig.String()))
-		cancel()
-	case err := <-errChan:
-		if err != nil && err != context.Canceled {
-			log.Error("Application stopped with error", zap.Error(err))
-			return err
-		}
-	}
-
-	log.Info("Shutting down gracefully...")
-	return nil
-}
-
-// Flags holds all command-line flag values
-type Flags struct {
-	configFile       string
-	showVersion      bool
-	rpcEndpoint      string
-	dbPath           string
-	startHeight      uint64
-	workers          int
-	batchSize        int
-	logLevel         string
-	logFormat        string
-	enableGapMode    bool
-	clearData        bool
-	reindex          bool // Clear blockchain data only, preserving verification data
-	resumeCheck      bool // check resume conditions, clear the halt latch and exit
-	enableAPI        bool
-	apiHost          string
-	apiPort          int
-	enableGraphQL    bool
-	enableJSONRPC    bool
-	enableWebSocket  bool
-	forceAdapterType string // chain profile id or alias (--adapter)
-
-	// set records the flags given on the command line. Only those override
-	// the configuration, so flag defaults never replace config values and
-	// boolean flags can switch features off as well as on.
-	set map[string]bool
-}
-
-// parseFlags parses the process command line.
-func parseFlags() *Flags {
-	f, err := parseFlagsFrom(os.Args[1:], flag.ExitOnError)
-	if err != nil {
-		// unreachable with ExitOnError
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
-	}
-	return f
-}
-
-// parseFlagsFrom parses args with a fresh flag set (testable).
-func parseFlagsFrom(args []string, onError flag.ErrorHandling) (*Flags, error) {
-	f := &Flags{set: map[string]bool{}}
-	fs := flag.NewFlagSet("indexer", onError)
-
-	fs.StringVar(&f.configFile, "config", "config.yaml", "Path to configuration file (YAML)")
-	fs.BoolVar(&f.showVersion, "version", false, "Show version information and exit")
-	fs.StringVar(&f.rpcEndpoint, "rpc", "", "Ethereum RPC endpoint URL")
-	fs.StringVar(&f.dbPath, "db", "", "Database path")
-	fs.Uint64Var(&f.startHeight, "start-height", 0, "Block height to start indexing from")
-	fs.IntVar(&f.workers, "workers", 100, "Number of concurrent workers")
-	fs.IntVar(&f.batchSize, "batch-size", 0, "Number of blocks per batch (0 = use config.yaml)")
-	fs.StringVar(&f.logLevel, "log-level", "", "Log level (debug, info, warn, error)")
-	fs.StringVar(&f.logFormat, "log-format", "", "Log format (json, console)")
-	fs.BoolVar(&f.enableGapMode, "gap-recovery", false, "Enable gap detection and recovery at startup")
-	fs.BoolVar(&f.clearData, "clear-data", false, "Clear (delete) the data folder before starting")
-	fs.BoolVar(&f.reindex, "reindex", false, "Clear blockchain data only, preserving verification data (ABIs, source code, verification status)")
-	fs.BoolVar(&f.resumeCheck, "resume-check", false, "Sample the resume conditions of operations.capacity, remove the halt latch if they hold, and exit")
-
-	// API server flags
-	fs.BoolVar(&f.enableAPI, "api", false, "Enable API server")
-	fs.StringVar(&f.apiHost, "api-host", "", "API server host")
-	fs.IntVar(&f.apiPort, "api-port", 0, "API server port")
-	fs.BoolVar(&f.enableGraphQL, "graphql", false, "Enable GraphQL API")
-	fs.BoolVar(&f.enableJSONRPC, "jsonrpc", false, "Enable JSON-RPC API")
-	fs.BoolVar(&f.enableWebSocket, "websocket", false, "Enable WebSocket API")
-
-	// Chain adapter flags
-	fs.StringVar(&f.forceAdapterType, "adapter", "", "Chain profile id or alias (stablenet, stableone, evm). Detected from the node if empty or not a profile")
-
-	if err := fs.Parse(args); err != nil {
-		return nil, err
-	}
-	fs.Visit(func(fl *flag.Flag) { f.set[fl.Name] = true })
-	return f, nil
-}
-
-// loadAndValidateConfig loads configuration and applies flags
-func loadAndValidateConfig(flags *Flags) (*config.Config, error) {
-	// The default config path is optional: without --config and without
-	// config.yaml, defaults, environment variables and flags are used.
-	// An explicitly given --config must exist.
-	configFile := flags.configFile
-	if !flags.set["config"] {
-		if _, statErr := os.Stat(configFile); errors.Is(statErr, os.ErrNotExist) {
-			configFile = ""
-		}
-	}
-	cfg, err := config.LoadUnvalidated(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	// Override config with flags given on the command line, then validate,
-	// so that flags can supply values the file leaves out.
-	applyFlags(cfg, flags)
-	applyAPIFlags(cfg, flags)
-
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
-	}
-	if err := validateConfig(cfg); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
-	}
-
-	return cfg, nil
-}
-
-// logStartupInfo logs startup information
-func logStartupInfo(log *zap.Logger, cfg *config.Config, flags *Flags) {
-	profileInfo := "auto-detect"
-	if flags.forceAdapterType != "" {
-		profileInfo = flags.forceAdapterType + " (forced)"
-	}
-
-	log.Info("Starting indexer",
-		zap.String("version", version),
-		zap.String("commit", commit),
-		zap.String("build_time", buildTime),
-		zap.String("rpc_endpoint", cfg.RPC.Endpoint),
-		zap.String("db_driver", cfg.Database.Driver),
-		zap.String("db_path", cfg.Database.Path),
-		zap.Uint64("start_height", cfg.Indexer.StartHeight),
-		zap.Int("workers", cfg.Indexer.Workers),
-		zap.Int("batch_size", cfg.Indexer.ChunkSize),
-		zap.Bool("gap_recovery", flags.enableGapMode),
-		zap.Bool("clear_data", flags.clearData),
-		zap.Bool("reindex", flags.reindex),
-		zap.String("chain_profile", profileInfo),
-	)
 }
 
 // NewApp creates and initializes a new application instance
@@ -1537,54 +1285,6 @@ func (a *App) Shutdown() {
 	a.logger.Info("Application stopped")
 }
 
-// applyFlags applies command-line flags that were given explicitly.
-func applyFlags(cfg *config.Config, f *Flags) {
-	if f.set["rpc"] {
-		cfg.RPC.Endpoint = f.rpcEndpoint
-	}
-	if f.set["db"] {
-		cfg.Database.Path = f.dbPath
-	}
-	if f.set["start-height"] {
-		cfg.Indexer.StartHeight = f.startHeight
-	}
-	if f.set["workers"] {
-		cfg.Indexer.Workers = f.workers
-	}
-	if f.set["batch-size"] {
-		cfg.Indexer.ChunkSize = f.batchSize
-	}
-	if f.set["log-level"] {
-		cfg.Log.Level = f.logLevel
-	}
-	if f.set["log-format"] {
-		cfg.Log.Format = f.logFormat
-	}
-}
-
-// applyAPIFlags applies API-related command-line flags that were given
-// explicitly. Boolean flags apply both ways (--api=false disables the API).
-func applyAPIFlags(cfg *config.Config, f *Flags) {
-	if f.set["api"] {
-		cfg.API.Enabled = f.enableAPI
-	}
-	if f.set["api-host"] {
-		cfg.API.Host = f.apiHost
-	}
-	if f.set["api-port"] {
-		cfg.API.Port = f.apiPort
-	}
-	if f.set["graphql"] {
-		cfg.API.EnableGraphQL = f.enableGraphQL
-	}
-	if f.set["jsonrpc"] {
-		cfg.API.EnableJSONRPC = f.enableJSONRPC
-	}
-	if f.set["websocket"] {
-		cfg.API.EnableWebSocket = f.enableWebSocket
-	}
-}
-
 // validateConfig validates the configuration
 func validateConfig(cfg *config.Config) error {
 	if cfg.Indexer.QueueBlocks < 0 || cfg.Indexer.QueueBlocks > 65536 || cfg.Indexer.QueueMaxBytes < 0 {
@@ -1622,21 +1322,6 @@ func validateConfig(cfg *config.Config) error {
 		return fmt.Errorf("database.readonly is not supported: an API process opens the database read-only with node.role: %s", config.RoleAPI)
 	}
 	return nil
-}
-
-// initLogger initializes the logger based on configuration
-func initLogger(level, format string) (*zap.Logger, error) {
-	if format == "json" || format == "production" {
-		return logger.NewProduction()
-	}
-
-	// Default to development logger
-	cfg := logger.Config{
-		Level:       level,
-		Encoding:    "console",
-		Development: true,
-	}
-	return logger.NewWithConfig(&cfg)
 }
 
 // clearDataFolder removes the data folder and all its contents

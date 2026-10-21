@@ -4,16 +4,19 @@
 // block's storage transaction (so what it writes commits with the block and
 // is rolled back with it on a reorganization) and may add GraphQL queries
 // and HTTP routes over the storage. The project builds its own binary: a
-// main package that imports the handler's package and calls Main.
+// main package that imports the handler's package and runs the indexer's
+// command line (cmd/cli).
 //
 //	package main
 //
 //	import (
-//		"github.com/0xmhha/indexer-go/pkg/sdk"
+//		"os"
+//
+//		"github.com/0xmhha/indexer-go/cmd/cli"
 //		_ "example.com/receipts" // registers its feature and routes
 //	)
 //
-//	func main() { sdk.Main() }
+//	func main() { os.Exit(cli.Main(cli.WithName("receipts-indexer"))) }
 //
 // Configuration is the indexer's (config.yaml, environment, flags): the
 // handler is enabled with features.<name>.enabled and reads its own section
@@ -35,7 +38,6 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/api"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
-	"github.com/0xmhha/indexer-go/pkg/app"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/declared"
@@ -45,10 +47,6 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
-
-// Main runs the indexer with the handlers the program links in. It parses
-// the command line, runs until interrupted and exits the process on error.
-func Main() { app.Main() }
 
 // Handlers (features).
 type (

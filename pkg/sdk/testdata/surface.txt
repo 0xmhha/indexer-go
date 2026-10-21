@@ -97,7 +97,6 @@ type Log = model.Log
 type LogsOnly = feature.LogsOnly
   method LogsOnly() bool
 func LookupRecords(ctx context.Context, s any, table string, values map[string]string, page sdk.Page) ([]*sdk.Record, string, error)
-func Main()
 type OrderIndependent = feature.OrderIndependent
   method OrderIndependent() bool
 type Page = port.Page

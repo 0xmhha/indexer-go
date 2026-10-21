@@ -17,9 +17,9 @@ fi
 # The only accepted argument runs the capacity resume check instead of indexing.
 case "$#:${1:-}" in
     0:) set -- ;;
-    1:--resume-check) set -- --resume-check ;;
+    1:resume-check) set -- resume-check ;;
     *)
-        echo 'Unsupported arguments; only --resume-check is accepted.' >&2
+        echo 'Unsupported arguments; only resume-check is accepted.' >&2
         exit 1
         ;;
 esac

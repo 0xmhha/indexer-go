@@ -28,9 +28,9 @@ GOLANGCI_LINT=$(shell $(GOCMD) env GOPATH)/bin/golangci-lint
 
 # Build flags with version information
 LDFLAGS=-ldflags "-s -w \
-	-X github.com/0xmhha/indexer-go/pkg/app.version=$(VERSION) \
-	-X github.com/0xmhha/indexer-go/pkg/app.commit=$(COMMIT) \
-	-X github.com/0xmhha/indexer-go/pkg/app.buildTime=$(BUILD_TIME)"
+	-X github.com/0xmhha/indexer-go/cmd/cli.version=$(VERSION) \
+	-X github.com/0xmhha/indexer-go/cmd/cli.commit=$(COMMIT) \
+	-X github.com/0xmhha/indexer-go/cmd/cli.buildTime=$(BUILD_TIME)"
 TAGS=-tags release
 
 all: clean build test
@@ -157,7 +157,7 @@ run: build-dev
 		--db ./dev-data \
 		--log-level debug \
 		--workers 10 \
-		--batch-size 100
+		--chunk-size 100
 
 ## docker-build: Build Docker image
 docker-build:

@@ -3,9 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -102,13 +99,13 @@ func (a *App) latchFailure(chain string, err error) {
 	}
 }
 
-// resumeCheck runs the operator's resume check (--resume-check).
-func resumeCheck(cfg *config.Config, log *zap.Logger) error {
+// ResumeCheck runs the operator's resume check (the resume-check command):
+// it samples the resume conditions of operations.capacity and removes the
+// halt latch if they hold. It never starts indexing.
+func ResumeCheck(ctx context.Context, cfg *config.Config, log *zap.Logger) error {
 	if cfg.Operations.HaltFile == "" {
-		return fmt.Errorf("--resume-check needs operations.halt_file")
+		return fmt.Errorf("resume-check needs operations.halt_file")
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	report, err := opsguard.Resume(ctx, cfg.Operations, opsguard.ResumeOptions{})
 	fields := []zap.Field{zap.String("latch", cfg.Operations.HaltFile), zap.Int64s("free_bytes", report.FreeBytes), zap.Bool("cleared", report.Cleared)}
 	if report.Postgres != nil {

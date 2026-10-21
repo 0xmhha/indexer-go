@@ -4,8 +4,10 @@
 package main
 
 import (
+	"os"
+
+	"github.com/0xmhha/indexer-go/cmd/cli"
 	_ "github.com/0xmhha/indexer-go/examples/receipts" // registers the handlers
-	"github.com/0xmhha/indexer-go/pkg/sdk"
 )
 
-func main() { sdk.Main() }
+func main() { os.Exit(cli.Main(cli.WithName("receipts-indexer"))) }

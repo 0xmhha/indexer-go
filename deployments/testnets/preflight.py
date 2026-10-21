@@ -490,7 +490,7 @@ def main():
             environment = check_host(manifest, resume=bool(args.resume))
             if args.resume:
                 # One container with the service's mounts and no database.
-                command = ["docker", "--context", "desktop-linux", "compose", "--project-name", "indexer-testnets-draft", "--file", str(HERE / "compose.draft.yaml"), "--profile", "operations-draft", "run", "--rm", "--no-deps", "--pull", "never", "indexer", "--resume-check"]
+                command = ["docker", "--context", "desktop-linux", "compose", "--project-name", "indexer-testnets-draft", "--file", str(HERE / "compose.draft.yaml"), "--profile", "operations-draft", "run", "--rm", "--no-deps", "--pull", "never", "indexer", "resume-check"]
                 os.execvpe("docker", command, {**os.environ, **environment})
                 return 0
             if args.start:

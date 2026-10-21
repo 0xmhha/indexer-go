@@ -573,42 +573,20 @@ node:
 
 ## CLI Flags
 
+명령행은 cobra로 만든다(`cmd/cli`, `cmd/flags`). 전체 도움말은 `indexer --help`가 보여 주며, 그 내용은 `cmd/cli/testdata/help.txt`에 고정되어 있다.
+
 ```text
-./indexer-go [flags]
-
-# 필수
-  --rpc string              RPC 엔드포인트 URL
-  --db string               데이터베이스 경로
-
-# 인덱서
-  --workers int             병렬 워커 수 (명시했을 때만 indexer.workers를 덮음)
-  --batch-size int          배치당 블록 수 (0 = 설정 파일 사용)
-  --start-height uint       시작 블록 높이 (default: 0)
-  --gap-recovery            갭 감지 및 복구 활성화
-
-# API 서버
-  --api                     API 서버 활성화
-  --api-host string         명시했을 때 설정의 API 호스트를 덮음
-  --api-port int            명시했을 때 설정의 API 포트를 덮음
-  --graphql                 GraphQL 활성화
-  --jsonrpc                 JSON-RPC 활성화
-  --websocket               WebSocket 활성화
-
-# 로깅
-  --log-level string        명시했을 때 설정의 로그 레벨을 덮음
-  --log-format string       명시했을 때 설정의 로그 포맷을 덮음
-
-# 체인 어댑터
-  --adapter string          등록된 profile/alias. 빈 값이나 미등록 이름이면 자동 감지
-
-# 데이터 관리
-  --clear-data              전체 데이터 삭제 후 시작
-  --reindex                 블록체인 데이터만 삭제 (검증 데이터 보존)
-
-# 기타
-  --config string           설정 파일 경로 (default: "config.yaml")
-  --version                 버전 정보 출력
+indexer [flags]              색인하고 API를 서빙한다
+indexer resume-check [flags] 용량 중단 뒤 재개 조건을 확인하고 halt latch를 지운다(색인은 하지 않는다)
+indexer version              버전을 출력한다(--version, -v도 같다)
 ```
+
+- 설정 플래그는 명시했을 때만 설정을 덮는다. 기본값이 파일이나 환경 변수의 값을 바꾸지 않고, `--api=false`처럼 끄는 데도 쓴다.
+- 도움말의 각 설정 플래그 옆 괄호에 YAML 키와 환경 변수가 있다(`--rpc`는 `rpc.endpoint`, `$INDEXER_RPC_ENDPOINT`). 플래그와 환경 변수가 같은 필드를 바꾸는지는 `TestFlagsMatchEnvironment`가 확인한다.
+- `--config`, `--log-level`, `--log-format`은 모든 명령이 받는다. 나머지는 색인 명령만 받는다.
+- `--chunk-size`는 `indexer.chunk_size`(배치당 블록 수, 1은 실시간 모드)이고 양수여야 한다. 이전의 `--batch-size`는 없앴다.
+- `--clear-data`와 `--reindex`는 함께 줄 수 없다.
+- 플래그는 대시 두 개로 쓴다(`--rpc`). 위치 인자는 받지 않는다. 잘못된 명령행은 무엇이 틀렸는지와 비슷한 플래그·명령을 알려 주고 종료 코드 2로 끝난다. 설정이 잘못되었거나 실행이 실패하면 1이다.
 
 ---
 

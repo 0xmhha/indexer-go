@@ -13,7 +13,7 @@ at priority 200 puts it before the built-in Arc profile (100); Arc mainnet
 keeps the built-in profile, and unrelated EVM chains keep their profiles.
 `project-arc-testnet` is an alias. Duplicate profile ids are rejected.
 
-The main package imports this module and calls `sdk.Main()`. A project's
+The main package imports this module and calls `cli.Main()` (`cmd/cli`). A project's
 optional features and routes can be linked the same way; the
 [receipts example](../receipts) demonstrates those SDK extensions.
 The profile APIs imported here are outside the SDK compatibility promise;

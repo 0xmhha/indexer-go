@@ -46,8 +46,10 @@ RPC·era1·replay는 source 경계에서 profile을 거쳐 같은 모델로 바�
 
 | 경로 | 책임 |
 |---|---|
-| `cmd/indexer` | `app.Main`을 호출하는 실행 명령 |
-| `pkg/app` | 설정·등록·저장소 선택·역할·수명 관리와 멀티체인 조립 |
+| `cmd/indexer` | `cli.Main`을 호출하는 실행 명령 |
+| `cmd/cli` | cobra 명령행. 설정을 읽어 검증하고 `app.Start`·`app.ResumeCheck`를 부른다. 종료 코드와 도움말 |
+| `cmd/flags` | 플래그 묶음. 설정 플래그는 YAML 키와 환경 변수를 함께 밝히고, 준 것만 설정에 반영한다 |
+| `pkg/app` | 엔진. 등록·저장소 선택·역할·수명 관리와 멀티체인 조립. 명령행 코드는 없다 |
 | `pkg/core/model` | 블록·거래·receipt·로그와 typed extension의 중립 모델 |
 | `pkg/core/port` | 모델을 읽고 쓰는 저장 인터페이스. 구현을 import하지 않음 |
 | `pkg/chains` | profile·alias·회계·native coin·fee delegation 등 registry |

@@ -1,0 +1,59 @@
+indexer: index an EVM chain and serve it over GraphQL, JSON-RPC, REST and WebSocket.
+
+Usage:
+  indexer [flags]              index the chain and serve the API
+  indexer <command> [flags]
+
+Commands:
+  help          Help about any command
+  resume-check  Check the resume conditions after a capacity halt and remove the halt latch
+  version       Print the version
+
+Settings are applied in this order, later ones winning:
+  defaults < --config file (config.yaml if present) < INDEXER_* environment variables < flags given here
+Each flag names the setting it sets and its environment variable in parentheses.
+Settings without a flag are set in the file or the environment (see configs/*.yaml).
+
+Configuration file:
+      --config string   YAML configuration file; the default is skipped if it does not exist, a given file must exist (default "config.yaml")
+
+Logging:
+      --log-format string   Log format: console or json (log.format, $INDEXER_LOG_FORMAT) (default "json")
+      --log-level string    Log level: debug, info, warn or error (log.level, $INDEXER_LOG_LEVEL) (default "info")
+
+Chain node:
+      --rpc string   JSON-RPC endpoint URL of the node (rpc.endpoint, $INDEXER_RPC_ENDPOINT)
+
+Database:
+      --db string   Pebble database directory (database.path, $INDEXER_DB_PATH)
+
+Indexing:
+      --chunk-size int      Blocks per batch, positive; 1 is real-time mode (indexer.chunk_size, $INDEXER_CHUNK_SIZE) (default 100)
+      --start-height uint   Block height to start indexing from (indexer.start_height, $INDEXER_START_HEIGHT)
+      --workers int         Blocks fetched concurrently (indexer.workers, $INDEXER_WORKERS) (default 100)
+
+API server:
+      --api               Serve the API (--api=false turns it off) (api.enabled, $INDEXER_API_ENABLED)
+      --api-host string   Address the API listens on (api.host, $INDEXER_API_HOST) (default "localhost")
+      --api-port int      Port the API listens on (api.port, $INDEXER_API_PORT) (default 8080)
+      --graphql           Serve GraphQL (api.enable_graphql, $INDEXER_API_GRAPHQL)
+      --jsonrpc           Serve JSON-RPC (api.enable_jsonrpc, $INDEXER_API_JSONRPC)
+      --websocket         Serve WebSocket (api.enable_websocket, $INDEXER_API_WEBSOCKET)
+
+Start:
+      --adapter string   Chain profile id (arc, stablenet, evm) or alias; detected from the node if empty or not a profile
+      --clear-data       Delete the databases before starting
+      --gap-recovery     Detect and fill missing blocks at startup
+      --reindex          Delete the blockchain data before starting, keeping verification data (ABIs, sources)
+
+Other:
+  -h, --help      Show this help ('indexer <command> --help' for a command)
+  -v, --version   Print the version
+
+Examples:
+  indexer --config config.yaml
+  indexer --rpc http://127.0.0.1:8545 --db ./data --api
+  indexer --config config.yaml --reindex
+  indexer resume-check --config /etc/indexer/config.yaml
+
+Documentation: README.md and docs/README.md in the source repository.

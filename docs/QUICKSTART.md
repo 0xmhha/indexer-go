@@ -109,7 +109,7 @@ Set `INDEXER_START_HEIGHT` to your chosen decimal block height, then run:
 
 Profiles are detected from the node. You can select a registered id or alias explicitly with `--adapter`, such as `evm`, `stablenet` / `stableone`, or `arc`. Check the selected-profile startup log; an unregistered adapter name currently falls back to detection.
 
-`config.yaml` is ignored by Git. Command-line flags override the corresponding configuration values when explicitly set. Additional environment variables, feature settings and batch options are documented in [CONFIG.md](CONFIG.md).
+`config.yaml` is ignored by Git. Command-line flags override the corresponding configuration values when explicitly set. `./build/indexer-go --help` lists the flags by group, with the configuration key and environment variable each one sets. Additional environment variables, feature settings and batch options are documented in [CONFIG.md](CONFIG.md).
 
 ## Choose storage and process roles
 
