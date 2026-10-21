@@ -9,6 +9,9 @@ INSTALL_DIR="/opt/indexer-go"
 CONFIG_DIR="/etc/indexer-go"
 DATA_DIR="/var/lib/indexer-go"
 LOG_DIR="/var/log/indexer-go"
+# The binary make build wrote: indexer, or indexer-<chain> with CHAIN=<chain>.
+# It is installed as bin/indexer-go, the service's binary.
+BINARY="${BINARY:-indexer}"
 USER="indexer"
 GROUP="indexer"
 
@@ -62,12 +65,12 @@ fi
 echo "[5/8] Installing binary..."
 if [ "${VERSION}" = "latest" ] || [ "${VERSION}" = "local" ]; then
     # Copy from build directory (for local development)
-    if [ -f "../../build/indexer-go" ]; then
-        cp "../../build/indexer-go" "${INSTALL_DIR}/bin/indexer-go"
-        echo "  ✓ Binary copied from local build"
+    if [ -f "../../build/${BINARY}" ]; then
+        cp "../../build/${BINARY}" "${INSTALL_DIR}/bin/indexer-go"
+        echo "  ✓ Binary copied from local build (${BINARY})"
     else
-        echo "  ERROR: Local binary not found at ../../build/indexer-go"
-        echo "  Run 'make build' first"
+        echo "  ERROR: Local binary not found at ../../build/${BINARY}"
+        echo "  Run 'make build' first (CHAIN=<chain> and BINARY=indexer-<chain> for a chain binary)"
         exit 1
     fi
 else

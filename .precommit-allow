@@ -1,0 +1,3 @@
+# Paths whose names match a sensitive-file pattern but hold no secrets.
+# Only the file name check skips them; the content scan still runs.
+x/stablenet/systemcontracts/page_tokens_history_test.go  # paging test of the token list ports

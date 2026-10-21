@@ -37,7 +37,8 @@ func isChainSpecific(s string) bool {
 }
 
 // TestChainIdentifierLimits counts chain-specific identifiers and strings
-// in the production code of every package outside pkg/chains/<chain>/ and
+// in the production code of every package outside x/<chain>/ and
+// pkg/chains/<profile>/ and
 // requires each count to equal its recorded limit: code that names a chain
 // must move into the chain's package, behind a registry or interface the
 // upper layers depend on (refactoring of chain-specific code, S0). When a
@@ -56,7 +57,7 @@ func TestChainIdentifierLimits(t *testing.T) {
 			switch {
 			case strings.HasPrefix(rel, ".") && rel != ".",
 				rel == "tools", rel == "docs", rel == "e2e",
-				rel == "pkg/testchain",
+				rel == "pkg/testchain", rel == "x", d.Name() == "testdata",
 				strings.HasPrefix(rel, "pkg/chains/") && strings.Count(rel, "/") >= 2: // pkg/chains/<chain>/...
 				return filepath.SkipDir
 			}
@@ -98,7 +99,7 @@ func TestChainIdentifierLimits(t *testing.T) {
 		}
 		sort.Strings(pkgs)
 		var b strings.Builder
-		b.WriteString("# Chain-specific identifiers and strings per package outside pkg/chains/<chain>/ (TestChainIdentifierLimits).\n")
+		b.WriteString("# Chain-specific identifiers and strings per package outside x/<chain>/ and pkg/chains/<profile>/ (TestChainIdentifierLimits).\n")
 		for _, p := range pkgs {
 			fmt.Fprintf(&b, "%s %d\n", p, counts[p])
 		}
@@ -130,7 +131,7 @@ func TestChainIdentifierLimits(t *testing.T) {
 	for p, n := range counts {
 		switch limit := limits[p]; {
 		case n > limit:
-			t.Errorf("%s: %d chain-specific names, limit %d: move chain-specific code into pkg/chains/<chain>/", p, n, limit)
+			t.Errorf("%s: %d chain-specific names, limit %d: move chain-specific code into x/<chain>/", p, n, limit)
 		case n < limit:
 			t.Errorf("%s: %d chain-specific names, below limit %d: lower the limit (go test ./pkg/chains -run TestChainIdentifierLimits -update)", p, n, limit)
 		}

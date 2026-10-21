@@ -32,7 +32,6 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chainfeed"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata"
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	"github.com/0xmhha/indexer-go/pkg/chains/arc"
 	"github.com/0xmhha/indexer-go/pkg/chains/evm"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -47,6 +46,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/storage/postgres"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 	"github.com/0xmhha/indexer-go/pkg/window"
+	"github.com/0xmhha/indexer-go/x/arc"
 )
 
 var ctx = context.Background()

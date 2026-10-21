@@ -29,6 +29,8 @@ go mod download
 make build
 ```
 
+`make build` writes `build/indexer`, the indexer for generic EVM chains. StableNet and Arc have their own binaries (`make build CHAIN=stablenet`, `make build CHAIN=arc`); see the [quickstart](docs/QUICKSTART.md).
+
 Start a local chain in a separate terminal:
 
 ```bash
@@ -38,7 +40,7 @@ anvil --block-time 2
 From the repository root, start the indexer with the local development configuration:
 
 ```bash
-./build/indexer-go --config configs/config-anvil.yaml
+./build/indexer --config configs/config-anvil.yaml
 ```
 
 Query the indexed height from another terminal:
@@ -61,7 +63,7 @@ For your own RPC endpoint, a retained starting height, or PostgreSQL, follow the
 | Add derived data, a block handler or a custom API | [Project SDK](docs/SDK.md) |
 | Support custom headers, transactions or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md) and the [profile example](examples/chainprofile/README.md) |
 | Integrate an API client | [API reference](docs/API.md) and [schema snapshots](pkg/app/testdata/api/) |
-| Decouple Arc intake from downstream processing | [Opt-in feed application](docs/FEED_APP.md) and [Arc feed module](modules/feeds/arc/README.md) |
+| Decouple Arc intake from downstream processing | [Opt-in feed application](docs/FEED_APP.md) and [Arc feed module](x/arc/feed/README.md) |
 
 Projects build their own binary and link the packages that register their features or profiles. YAML configures linked code; it does not load Go plugins. Pin your module version and check the [SDK compatibility boundary](docs/SDK.md#7-호환성-약속) before upgrading.
 

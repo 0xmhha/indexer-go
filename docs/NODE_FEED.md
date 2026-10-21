@@ -2,7 +2,7 @@
 
 현재 개발 방향은 [24시간 윈도우 수집과 원천 DB 설계](analysis/windowed-feed-design.md)다. 이 문서는 기존 Arc ExEx/IPC 비교 구현과 측정 기록을 보존한다. 해당 구현의 존재가 별도 Arc full node 설치·실행을 요구하는 현재 계획을 뜻하지 않는다.
 
-Arc full node의 실행 결과를 indexer에 전달한다. Arc 실행 노드에 붙이는 독립 Rust crate는 `modules/arc-node-feed`, Go wire 계약은 `pkg/nodefeed`, Source/state 어댑터는 `pkg/source/nodefeed`다. 기존 RPC 수집 경로와 비교할 수 있도록 기본은 비활성화다.
+Arc full node의 실행 결과를 indexer에 전달한다. Arc 실행 노드에 붙이는 독립 Rust crate는 `x/arc/nodefeed`, Go wire 계약은 `pkg/nodefeed`, Source/state 어댑터는 `pkg/source/nodefeed`다. 기존 RPC 수집 경로와 비교할 수 있도록 기본은 비활성화다.
 
 ## 지원 확인과 구조
 
@@ -32,7 +32,7 @@ native 초기 잔액·잔액 보정·lazy genesis 조회는 로컬 `state_by_blo
 공식 Arc checkout의 검증한 commit에서 실행한다. 설치 도우미는 revision을 검사하고 해당 checkout의 `crates/node/Cargo.toml`과 `crates/node/src/main.rs` 두 파일에만 선택적 의존성과 hook을 삽입한다. node를 시작하거나 네트워크 설정·체인 DB를 수정하지 않는다. 다른 revision은 자동 패치하지 않는다.
 
 ```sh
-python3 modules/arc-node-feed/install_arc.py --arc-checkout /absolute/path/to/arc-node
+python3 x/arc/nodefeed/install_arc.py --arc-checkout /absolute/path/to/arc-node
 cargo check --manifest-path /absolute/path/to/arc-node/Cargo.toml -p arc-node-execution --bin arc-node-execution
 # 실제 실행 파일 빌드와 CL/EL 운영은 Arc 공식 운영 절차를 따른다.
 ```
@@ -136,9 +136,9 @@ make check-node-feed-arc ARC_NODE_CHECKOUT=/absolute/path/to/arc-node
 재실행에는 `measurement-input.json`(chain_id/from/to, 불변 replay_archive 경로, JSON blocks, hash→address→hex 잔액의 strict_state)과 완전한 기록이 필요하다. 준비 도우미·입력·요청 원문·summary는 `/private/tmp/indexer-node-feed-measure-20261015/`에 있다.
 
 ```sh
-cargo build --release --locked --manifest-path modules/arc-node-feed/Cargo.toml --bin fixture
+cargo build --release --locked --manifest-path x/arc/nodefeed/Cargo.toml --bin fixture
 INDEXER_NODE_FEED_MEASURE_DIR=/private/tmp/indexer-node-feed-measure-20261015 \
-INDEXER_NODE_FEED_FIXTURE_BINARY="$PWD/modules/arc-node-feed/target/release/fixture" \
+INDEXER_NODE_FEED_FIXTURE_BINARY="$PWD/x/arc/nodefeed/target/release/fixture" \
 go test -v -count=1 -timeout=12m ./pkg/app -run '^TestNodeFeedRecordedMeasurement$'
 ```
 

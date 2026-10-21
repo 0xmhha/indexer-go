@@ -38,6 +38,6 @@
 
 ## 구현·시험과 남은 증거
 
-[Arc 모듈](../../modules/feeds/arc/README.md), `pkg/chainfeed/ethpeer`, `pkg/chainfeed/evmdata`, `pkg/capture.PipelineTasks`를 연결했다. loopback 실제 TCP/RLPx, Pebble/PostgreSQL, 처리기 정지 중 수신·부분 재시작·손상/누락·fresh mismatch·기존 제한 HTTP pool, 기록 블록67,019,625를 검증했다. 시험 결과는 [작업 기록3.40](work-log-2026-10.md#340-arc-eth68-peer와-두-worker-연결-1015)에 남긴다.
+[Arc 모듈](../../x/arc/feed/README.md), `pkg/chainfeed/ethpeer`, `pkg/chainfeed/evmdata`, `pkg/capture.PipelineTasks`를 연결했다. loopback 실제 TCP/RLPx, Pebble/PostgreSQL, 처리기 정지 중 수신·부분 재시작·손상/누락·fresh mismatch·기존 제한 HTTP pool, 기록 블록67,019,625를 검증했다. 시험 결과는 [작업 기록3.40](work-log-2026-10.md#340-arc-eth68-peer와-두-worker-연결-1015)에 남긴다.
 
 실제 Arc peer의 ETH/68 활성화·허용 연결·fork ID·history 보존·네트워크 단절/회복은 추가 검증이 필요하다. 현재는 ETH history polling이며 직접 gossip의 빠른 전파를 측정한 구현이 아니다. [Feed 런타임](../FEED_RUNTIME.md)은 명시적 RPC-finalized 정책·bounded reorg 재개·raw ACK·선택적 GC를 라이브러리로 연결한다. 독립 CL certificate 검증·이전 fork 원본 삭제 정책,450ms/2블록초·실제 peer/장기 운영, 전체 상태/trace/blob 공급, 기존 writer의 DB-only 처리와 앱/네 체인 조립은 후속 목록을 따른다. full node/노드 DB/snapshot은 설치하거나 실행하지 않았다.

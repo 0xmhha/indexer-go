@@ -21,17 +21,17 @@ Use a feature branch based on `main`. Keep local node credentials, `config.yaml`
 
 Docker is needed for `make test-postgres` unless you supply `INDEXER_TEST_POSTGRES`. The script creates an identifiable temporary PostgreSQL database with `fsync=on` and removes its own container and named volume. Use a disposable database when supplying a DSN yourself; the tests create schemas and write data.
 
-The optional Rust adapter has its own prerequisites in [its README](modules/arc-node-feed/README.md). Rust and an Arc execution node are not required for normal Go development.
+The optional Rust adapter has its own prerequisites in [its README](x/arc/nodefeed/README.md). Rust and an Arc execution node are not required for normal Go development.
 
 ## Find the right extension point
 
 | Change | Location or contract |
 | --- | --- |
 | Project handlers, derived records and HTTP/GraphQL routes | [SDK](docs/SDK.md), `pkg/sdk`, [receipts example](examples/receipts/README.md) |
-| Chain detection, decoding, verification or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md), `pkg/chains/<chain>` |
+| Chain detection, decoding, verification or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md), `x/<chain>` |
 | Storage interfaces and driver implementations | `pkg/core/port`, `pkg/storage`, `pkg/storage/postgres` |
 | Application lifecycle and multi-chain wiring | `pkg/app`, `pkg/multichain` |
-| Source/feed contracts and workers | `pkg/source`, `pkg/chainfeed`, `pkg/window`, `pkg/capture`, `modules/feeds/arc` |
+| Source/feed contracts and workers | `pkg/source`, `pkg/chainfeed`, `pkg/window`, `pkg/capture`, `x/arc/feed` |
 | API schema and registered methods | `pkg/api`, [API snapshots](pkg/app/testdata/api/) |
 
 Keep chain-specific rules in profiles or chain modules rather than adding chain-id branches to shared code. Project integrations should prefer the SDK over internal packages.

@@ -12,7 +12,7 @@ import (
 )
 
 // Methods registered by packages outside the API, such as chain-specific
-// code under pkg/chains/<chain>/, served after the built-in methods.
+// code under x/<chain>/, served after the built-in methods.
 
 // MethodDeps is what a registered method receives.
 type MethodDeps struct {

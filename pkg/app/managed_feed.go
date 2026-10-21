@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	_ "github.com/0xmhha/indexer-go/modules/feeds/arc" // registers the audited module
 	"github.com/0xmhha/indexer-go/pkg/capture"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace"

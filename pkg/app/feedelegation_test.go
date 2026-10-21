@@ -18,17 +18,17 @@ import (
 
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/feedelegation"
-	fdmeta "github.com/0xmhha/indexer-go/pkg/chains/stablenet/feedelegation"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
+	"github.com/0xmhha/indexer-go/x/stablenet/features/feedelegation"
+	fdmeta "github.com/0xmhha/indexer-go/x/stablenet/feedelegation"
 )
 
 // liveVectors are blocks and receipts recorded from a local go-stablenet
 // network (chain 8283); block 33 holds a fee delegation transaction (0x16).
 func liveVectors(t *testing.T) (blocks, receipts map[string]json.RawMessage) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "chains", "stablenet", "testdata", "live_vectors.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "x", "stablenet", "testdata", "live_vectors.json"))
 	require.NoError(t, err)
 	var v struct {
 		Blocks   map[string]json.RawMessage `json:"blocks"`

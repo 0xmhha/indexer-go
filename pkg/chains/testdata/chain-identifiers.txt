@@ -1,9 +1,10 @@
-# Chain-specific identifiers and strings per package outside pkg/chains/<chain>/ (TestChainIdentifierLimits).
+# Chain-specific identifiers and strings per package outside x/<chain>/ and pkg/chains/<profile>/ (TestChainIdentifierLimits).
+cmd/indexer 3
 internal/config 12
 internal/constants 3
 pkg/api/graphql 20
 pkg/api/jsonrpc 7
-pkg/app 19
+pkg/app 1
 pkg/chains 15
 pkg/core/port 3
 pkg/core/port/porttest 4

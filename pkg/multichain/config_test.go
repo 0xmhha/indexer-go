@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	_ "github.com/0xmhha/indexer-go/pkg/chains/arc"
 	"github.com/0xmhha/indexer-go/pkg/chains/evm"
-	_ "github.com/0xmhha/indexer-go/pkg/chains/stablenet"
+	_ "github.com/0xmhha/indexer-go/x/arc"
+	_ "github.com/0xmhha/indexer-go/x/stablenet"
 )
 
 func TestChainStateBatchSizeValidation(t *testing.T) {

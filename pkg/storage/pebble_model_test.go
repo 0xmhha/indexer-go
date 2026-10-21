@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/x/stablenet"
 )
 
 // TestModelStorageKeepsStableNetIdentity stores a block captured from
@@ -17,7 +17,7 @@ import (
 // model methods and finds everything again under the hashes the node reports
 // (D13, D16).
 func TestModelStorageKeepsStableNetIdentity(t *testing.T) {
-	raw, err := os.ReadFile("../chains/stablenet/testdata/live_vectors.json")
+	raw, err := os.ReadFile("../../x/stablenet/testdata/live_vectors.json")
 	require.NoError(t, err)
 	var v struct {
 		Blocks   map[string]json.RawMessage `json:"blocks"`

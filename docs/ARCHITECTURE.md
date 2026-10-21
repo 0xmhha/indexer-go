@@ -4,7 +4,7 @@
 
 indexer-go는 EVM 체인을 위한 프레임워크다. 공통 코어는 중립 모델·저장 포트·feature 계약을 사용하고, 체인 규칙은 별도 profile에 둔다. 현재 범위와 미검증 영역은 [남은 작업](analysis/open-items.md), 체인 구현 계약은 [커스터마이징 문서](CHAIN_CUSTOMIZATION.md)를 따른다.
 
-24시간 원본 보관과 DB 기반 후처리로 확장하는 단계는 [윈도우 수집 설계](analysis/windowed-feed-design.md)를 따른다. 기존 앱 경로와 라이브러리로 연결한 새 window/capture 경로를 구분한다. 새 경로는 [Arc ETH/68 모듈](../modules/feeds/arc/README.md)에서 수신→fsync window→bounded 참조 channel→검증·원천 DB commit까지 구현했다. 선택적 `RunManaged`는 명시적 RPC-finalized 정책·reorg supervisor·raw ACK·GC를 연결한다. [영구 원천 저장](PERMANENT_SOURCE_STORAGE.md)은 별도 객체 경로/예산·DB 참조·orphan 복구와 기본 정규화 행을 구현했다. [DB facts 후처리](SOURCE_FACTS.md)는 기존 writer·내구성·fresh 검사·처리 receipt까지 연결했다. [앱 실행](FEED_APP.md)은 opt-in 설정과 epoch/undo/종료를 연결했다. 실제 peer/mount 정책 운영 검증은 남아 있다.
+24시간 원본 보관과 DB 기반 후처리로 확장하는 단계는 [윈도우 수집 설계](analysis/windowed-feed-design.md)를 따른다. 기존 앱 경로와 라이브러리로 연결한 새 window/capture 경로를 구분한다. 새 경로는 [Arc ETH/68 모듈](../x/arc/feed/README.md)에서 수신→fsync window→bounded 참조 channel→검증·원천 DB commit까지 구현했다. 선택적 `RunManaged`는 명시적 RPC-finalized 정책·reorg supervisor·raw ACK·GC를 연결한다. [영구 원천 저장](PERMANENT_SOURCE_STORAGE.md)은 별도 객체 경로/예산·DB 참조·orphan 복구와 기본 정규화 행을 구현했다. [DB facts 후처리](SOURCE_FACTS.md)는 기존 writer·내구성·fresh 검사·처리 receipt까지 연결했다. [앱 실행](FEED_APP.md)은 opt-in 설정과 epoch/undo/종료를 연결했다. 실제 peer/mount 정책 운영 검증은 남아 있다.
 
 ## 1. 구성과 데이터 흐름
 
@@ -54,12 +54,12 @@ RPC·era1·replay는 source 경계에서 profile을 거쳐 같은 모델로 바�
 | `pkg/core/port` | 모델을 읽고 쓰는 저장 인터페이스. 구현을 import하지 않음 |
 | `pkg/chains` | profile·alias·회계·native coin·fee delegation 등 registry |
 | `pkg/chains/evm` | 표준 EVM 디코딩, 해시·sender 검증, binary 디코딩 |
-| `pkg/chains/stablenet` | WBFT·fee delegation·native 회계·시스템 기능/API |
-| `pkg/chains/arc` | Arc native 이벤트·수수료 회계와 native emitter |
+| `x/stablenet` | WBFT·fee delegation·native 회계·시스템 기능/API |
+| `x/arc` | Arc native 이벤트·수수료 회계와 native emitter |
 | `pkg/source` | RPC·era1·replay·연결된 source |
 | `pkg/chainfeed`, `pkg/chainfeed/ethpeer`, `pkg/chainfeed/evmdata` | bounded feed 계약·RLPx/ETH68 history·실행 입력 commitment 검증 |
 | `pkg/window`, `pkg/capture` | 외장 raw window·수신/검증 Task·원천 DB·finality/reorg supervisor·raw ACK·삭제 승인 |
-| `modules/feeds/arc` | Arc testnet의 검증된3-dataset plan·peer/session 라이브러리 조립 |
+| `x/arc/feed` | Arc testnet의 검증된3-dataset plan·peer/session 라이브러리 조립 |
 | `pkg/fetch` | 병렬 fetch, 순서 보장, 단일 writer, 복구·backfill·reorg |
 | `pkg/feature`, `pkg/features` | 선택적인 블록 처리기와 공통 기능 |
 | `pkg/storage`, `pkg/storage/postgres` | Pebble 및 PostgreSQL 포트 구현 |
@@ -77,7 +77,7 @@ RPC·era1·replay는 source 경계에서 profile을 거쳐 같은 모델로 바�
 
 Profile은 노드 감지, 원시 블록·receipt 디코딩, 체인 기본 기능을 정의한다. `AccountingProfile`·`NativeCoinProfile`·`BinaryProfile`은 선택 인터페이스다. generic EVM 위에 고유 거래·헤더·회계 규칙을 조합하거나 기존 profile을 감싼다. wrapper는 선택 인터페이스를 잃지 않아야 한다.
 
-내장 체인 또는 외부 모듈의 `pkg/chains/<chain>`에서 등록한다. 공통 fetch·storage·API는 특정 chain id 분기 대신 registry·포트·선택 인터페이스를 사용한다. YAML로 새 코드를 로드하지 않으며, 등록 패키지를 연결한 바이너리를 빌드한다. 자세한 방법은 [확장 계약](CHAIN_CUSTOMIZATION.md)과 [SDK](SDK.md)에 있다.
+내장 체인 또는 외부 모듈의 `x/<chain>`에서 등록한다. 공통 fetch·storage·API는 특정 chain id 분기 대신 registry·포트·선택 인터페이스를 사용한다. YAML로 새 코드를 로드하지 않으며, 등록 패키지를 연결한 바이너리를 빌드한다. 자세한 방법은 [확장 계약](CHAIN_CUSTOMIZATION.md)과 [SDK](SDK.md)에 있다.
 
 Feature는 블록 context에 묶인 저장소로 쓰고, 자기 설정·의존 기능·필요 포트를 선언한다. 나중에 켜면 backfill한다. 선언형 records는 표 정의로 로그를 수집하고 프로젝트 처리는 SDK로 붙인다. 기능이 모든 실행 방식에서 같은 결과를 내는지 `sdktest`와 예제로 확인한다.
 

@@ -39,6 +39,8 @@ func WithName(name string) Option { return func(c *cli) { c.name = name } }
 // tests replace start and resume.
 type cli struct {
 	name   string
+	chain  string    // WithChain
+	others []Product // WithOtherProducts
 	start  func(context.Context, *config.Config, *zap.Logger, app.StartOptions) error
 	resume func(context.Context, *config.Config, *zap.Logger) error
 

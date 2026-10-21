@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	statusapi "github.com/0xmhha/indexer-go/pkg/api/indexing"
-	"github.com/0xmhha/indexer-go/pkg/chains/arc"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/indexingstatus"
 	"github.com/0xmhha/indexer-go/pkg/progress"
+	"github.com/0xmhha/indexer-go/x/arc"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )

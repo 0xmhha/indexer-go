@@ -14,7 +14,7 @@ import (
 )
 
 // Extensions let packages outside the API, such as chain-specific code
-// under pkg/chains/<chain>/, add queries, mutations and subscriptions
+// under x/<chain>/, add queries, mutations and subscriptions
 // without the API depending on them. They register in init; every schema
 // built afterwards includes them, in name order.
 

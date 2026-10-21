@@ -23,8 +23,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet"
 	"github.com/0xmhha/indexer-go/pkg/source/era"
+	"github.com/0xmhha/indexer-go/x/stablenet"
 )
 
 // TestBinaryKeysOnRealData repeats the K2 measurement of the refactoring

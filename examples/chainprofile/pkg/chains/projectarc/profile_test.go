@@ -12,10 +12,10 @@ import (
 
 	"github.com/0xmhha/indexer-go/examples/chainprofile/pkg/chains/projectarc"
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	"github.com/0xmhha/indexer-go/pkg/chains/arc"
 	"github.com/0xmhha/indexer-go/pkg/chains/evm"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
+	"github.com/0xmhha/indexer-go/x/arc"
 )
 
 func TestSelection(t *testing.T) {

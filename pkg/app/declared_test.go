@@ -15,11 +15,11 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
-	"github.com/0xmhha/indexer-go/pkg/chains/stablenet/features/systemcontracts"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/features/records"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
+	"github.com/0xmhha/indexer-go/x/stablenet/features/systemcontracts"
 )
 
 // declaredMode configures the declared ingest mode with only the records

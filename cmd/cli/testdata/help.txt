@@ -41,7 +41,7 @@ API server:
       --websocket         Serve WebSocket (api.enable_websocket, $INDEXER_API_WEBSOCKET)
 
 Start:
-      --adapter string   Chain profile id (arc, stablenet, evm) or alias; detected from the node if empty or not a profile
+      --adapter string   Chain profile id (evm) or alias; detected from the node if empty or "auto"
       --clear-data       Delete the databases before starting
       --gap-recovery     Detect and fill missing blocks at startup
       --reindex          Delete the blockchain data before starting, keeping verification data (ABIs, sources)

@@ -120,7 +120,7 @@ type KVStore interface {
 }
 
 // KV is the storage port of code outside this package that keeps its own
-// data, such as chain-specific stores under pkg/chains/<chain>/. Reads and
+// data, such as chain-specific stores under x/<chain>/. Reads and
 // writes use the block transaction bound to ctx, so they commit, and roll
 // back on a reorganization, together with the block. Owners register
 // their key prefixes with RegisterKeyspace.

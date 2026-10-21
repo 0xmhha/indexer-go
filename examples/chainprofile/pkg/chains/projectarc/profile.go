@@ -4,8 +4,8 @@ package projectarc
 
 import (
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	"github.com/0xmhha/indexer-go/pkg/chains/arc"
 	"github.com/0xmhha/indexer-go/pkg/chains/evm"
+	"github.com/0xmhha/indexer-go/x/arc"
 )
 
 const ID = "project-arc"

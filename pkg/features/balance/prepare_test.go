@@ -12,11 +12,11 @@ import (
 	"testing"
 
 	"github.com/0xmhha/indexer-go/pkg/chains"
-	"github.com/0xmhha/indexer-go/pkg/chains/arc"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/rpcbatch"
+	"github.com/0xmhha/indexer-go/x/arc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -224,7 +224,7 @@ func TestPreparedArcBalancesSurvivePruning(t *testing.T) {
 	for _, height := range []uint64{66904957, 67017992, 67018549, 67018552, 67018564} {
 		t.Run(fmt.Sprint(height), func(t *testing.T) {
 			profile := arc.New()
-			prefix := "../../chains/arc/testdata/"
+			prefix := "../../../x/arc/testdata/"
 			raw, err := os.ReadFile(fmt.Sprintf("%sblock-%d.json", prefix, height))
 			require.NoError(t, err)
 			block, err := profile.DecodeBlock(raw)
