@@ -1695,3 +1695,13 @@ PostgreSQL 저장소를 연 App이 `opsguard.AttachPostgresStats`로 저장소�
 **drain 보류.** 지금 종료로도 durable 진행점과 raw가 남아 재시작이 이어 받는다. drain은 feed 세션의 "수신이나 처리 중 하나가 끝나면 둘 다 멈춘다"는 약속을 바꿔야 해서 raw ACK·GC·종료 순서와 얽힌다. 얻는 것(백업 직전 DB를 받은 블록까지 맞추기, 재시작 뒤 따라잡을 양 줄이기)에 비해 위험이 커서 보류했다.
 
 **검증.** Classify·StopsDatabase 단위 검사와 multichain 실패 정책 검사(disk_full·io_error·다른 SQLSTATE)를 race로 통과했다. preflight 30개(긴급 사유별 판정·경계값, indexer→PostgreSQL 순서·timeout·삭제 명령 없음, indexer 종료 실패 시 DB 유지, 반복 대기, CLI exit3)와 오프라인 lint가 통과했다. 실제 호스트에서 watch를 실행하거나 컨테이너를 멈추지는 않았다.
+
+### 3.107 시작 명령에 감시 연결 (10/21)
+
+3.106의 `--watch`는 운영자가 따로 띄워야 했다. 깜빡하면 indexer가 감시 없이 돈다. 두 서비스가 `restart: "no"`라 stack을 띄우는 길은 `--start` 하나이므로 감시를 여기에 붙였다.
+
+**동작.** `--start`는 호스트 점검 뒤 private 디렉터리의 `watch.lock`을 잡는다(flock, 감시 프로세스 PID 기록). 그다음 `compose up --detach`를 실행하고(최대300초) 끝나기를 기다린 뒤 같은 프로세스에서 감시를 이어 간다. 다른 감시가 잠금을 쥐고 있으면 아무것도 띄우지 않는다. Compose가 실패하면 감시 없이 오류로 끝난다. `--background`(`--start`와 `--watch`에 사용)는 fork 후 `setsid`로 터미널 session에서 떼어 내고 표준 입력은 `/dev/null`, 출력은 `watch.log`(0600)로 보낸다. 부모는 PID를 출력하고 0으로 끝난다. SIGTERM·Ctrl-C는 exit 130이며 stack은 감시 없이 남는다.
+
+**판단.** launchd 같은 상시 실행 설정은 운영 호스트의 계정·경로·전원 방침에 달려 있어 넣지 않았다. 감시가 죽었을 때 알리거나 다시 붙이는 장치도 아직 없다.
+
+**검증.** preflight 37개(시작→감시 순서, Compose 인자·DSN 비노출, 잠금 충돌 시 미시작, Compose 실패 시 감시 없음과 잠금 해제, background 부모·자식 경로, 중단 exit130, `--background` 단독 거부, 실제 fork로 session 분리와 로그 기록)와 오프라인 lint가 통과했다. 실제 호스트에서 `--start`를 실행하지는 않았다.

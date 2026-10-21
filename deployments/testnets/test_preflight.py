@@ -7,7 +7,9 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import stat
 import subprocess
+import sys
 import tempfile
 import types
 import unittest
@@ -341,6 +343,80 @@ class HostTests(unittest.TestCase):
             self.assertEqual(p.main(), 3)
         self.assertEqual(json.loads(out.getvalue())["stopped"], ["indexer", "postgres"])
 
+    def start(self, *extra, up=None, watch=None):
+        """Run --start with the host check passed; returns status and calls in order."""
+        calls = []
+        up = up or (lambda command, **kwargs: calls.append(("up", command, kwargs["env"])))
+        watch = watch or (lambda manifest, lock=None: calls.append(("watch", lock)) or {"emergencyStop": "x", "stopped": ["indexer", "postgres"]})
+        out, error = io.StringIO(), io.StringIO()
+        with mock.patch.object(p.sys, "argv", ["preflight.py", "--start", "/manifest", *extra]), mock.patch.object(p, "private_file", return_value=json.dumps(self.manifest).encode()), mock.patch.object(p, "check_host", return_value=p.compose_environment(self.manifest)), mock.patch.object(p.subprocess, "run", side_effect=up), mock.patch.object(p, "watch", side_effect=watch), mock.patch.object(p.signal, "signal"), contextlib.redirect_stdout(out), contextlib.redirect_stderr(error):
+            status = p.main()
+        return status, calls, out.getvalue(), error.getvalue()
+
+    def test_start_brings_up_the_stack_then_watches_it(self):
+        status, calls, out, _ = self.start()
+        self.assertEqual(status, 3)
+        self.assertEqual([c[0] for c in calls], ["up", "watch"])
+        command, env = calls[0][1], calls[0][2]
+        self.assertEqual(command[:len(p.COMPOSE)], p.COMPOSE)
+        self.assertEqual(command[len(p.COMPOSE):], ["up", "--detach", "--no-build", "--pull", "never"])
+        self.assertEqual(env["INDEXER_APFS_ROOT"], str(self.root))
+        self.assertNotIn("INDEXER_DB_POSTGRES_DSN", env)
+        self.assertIsNotNone(calls[1][1], "the watcher keeps the lock taken before startup")
+        self.assertEqual(json.loads(out)["stopped"], ["indexer", "postgres"])
+
+    def test_start_never_reaches_docker_if_host_check_fails(self):
+        with mock.patch.object(p.sys, "argv", ["preflight.py", "--start", "/manifest"]), mock.patch.object(p, "private_file", return_value=b"{}"), mock.patch.object(p, "check_host", side_effect=p.Refused("mount rejected")), mock.patch.object(p.subprocess, "run") as run, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(p.main(), 1)
+        run.assert_not_called()
+
+    def test_start_refuses_while_another_watcher_runs(self):
+        held = p.watch_lock(self.private)
+        self.addCleanup(os.close, held)
+        status, calls, _, error = self.start()
+        self.assertEqual((status, calls), (1, []), "no stack starts that this process could not watch")
+        self.assertIn("Another watcher", error)
+        self.assertEqual((self.private / p.WATCH_LOCK).read_text(), f"{os.getpid()}\n")
+        self.assertEqual(stat.S_IMODE((self.private / p.WATCH_LOCK).stat().st_mode), 0o600)
+
+    def test_start_reports_a_failed_startup_and_does_not_watch(self):
+        status, calls, _, error = self.start(up=mock.Mock(side_effect=p.subprocess.TimeoutExpired("docker", p.START_TIMEOUT)))
+        self.assertEqual((status, calls), (1, []))
+        self.assertIn("no watcher runs", error)
+        p.watch_lock(self.private)  # released: the next start may take it
+
+    def test_start_in_background_returns_while_its_child_watches(self):
+        with mock.patch.object(p, "detach", return_value=4321) as detach:
+            status, calls, out, _ = self.start("--background")
+        self.assertEqual(status, 0)
+        detach.assert_called_once_with(self.private)
+        self.assertEqual([c[0] for c in calls], ["up"], "the parent does not watch")
+        self.assertEqual(json.loads(out), {"watcher": 4321, "log": str(self.private / p.WATCH_LOG), "lock": str(self.private / p.WATCH_LOCK)})
+        with mock.patch.object(p, "detach", return_value=0):
+            status, calls, out, _ = self.start("--background")
+        self.assertEqual(status, 3)
+        self.assertEqual([c[0] for c in calls], ["up", "watch"], "the child watches")
+
+    def test_watcher_interrupt_leaves_the_stack_running(self):
+        status, calls, _, error = self.start(watch=mock.Mock(side_effect=KeyboardInterrupt))
+        self.assertEqual(status, 130)
+        self.assertEqual([c[0] for c in calls], ["up"])
+        self.assertIn("keeps running unwatched", error)
+
+    def test_watch_takes_the_lock_unless_held(self):
+        held = p.watch_lock(self.private)
+        with self.assertRaises(p.Refused):
+            p.watch(self.manifest, sleep=lambda s: None)
+        with mock.patch.object(p, "emergency", return_value="x"), mock.patch.object(p, "stop_stack", return_value=[]):
+            self.assertEqual(p.watch(self.manifest, lock=held)["emergencyStop"], "x")
+        os.close(held)
+
+    def test_background_needs_start_or_watch(self):
+        with mock.patch.object(p.sys, "argv", ["preflight.py", "--check-host", "/manifest", "--background"]), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as exit:
+                p.main()
+        self.assertEqual(exit.exception.code, 2)
+
     def test_halt_latch_blocks_start_and_gates_resume(self):
         latch = self.private / "state" / "halt.json"
         with self.assertRaises(p.Refused):
@@ -374,20 +450,17 @@ class HostTests(unittest.TestCase):
 
 
 class EntrypointTests(unittest.TestCase):
-    def test_start_never_reaches_docker_if_host_check_fails(self):
-        error = io.StringIO()
-        with mock.patch.object(p.sys, "argv", ["preflight.py", "--start", "/not-a-real-manifest"]), mock.patch.object(p, "private_file", return_value=b"{}"), mock.patch.object(p, "check_host", side_effect=p.Refused("mount rejected")), mock.patch.object(p.os, "execvpe") as execute, contextlib.redirect_stderr(error):
-            self.assertEqual(p.main(), 1)
-            execute.assert_not_called()
-
-    def test_start_uses_only_checked_nonsecret_environment_and_fixed_project(self):
-        with mock.patch.object(p.sys, "argv", ["preflight.py", "--start", "/not-a-real-manifest"]), mock.patch.object(p, "private_file", return_value=b"{}"), mock.patch.object(p, "check_host", return_value={"INDEXER_APFS_ROOT": "/fixture"}), mock.patch.object(p.os, "execvpe") as execute:
-            self.assertEqual(p.main(), 0)
-            command = execute.call_args.args[1]
-            self.assertEqual(command[:4], ["docker", "--context", "desktop-linux", "compose"])
-            self.assertIn("indexer-testnets-draft", command)
-            self.assertEqual(command[-5:], ["up", "--detach", "--no-build", "--pull", "never"])
-            self.assertNotIn("INDEXER_DB_POSTGRES_DSN", execute.call_args.args[2])
+    def test_detached_watcher_leaves_the_session_and_logs_privately(self):
+        # A real fork, in a separate interpreter so the test runner is never forked.
+        with tempfile.TemporaryDirectory(prefix="indexer-detach-fixture-") as name:
+            private = Path(name)
+            script = "import os, sys, preflight as p\npid = p.detach(__import__('pathlib').Path(sys.argv[1]))\nif pid == 0:\n    print('child', os.getsid(0) == os.getpid(), os.isatty(0), flush=True)\n    os._exit(0)\nos.waitpid(pid, 0)\nprint('parent')\n"
+            result = subprocess.run([sys.executable, "-c", script, name], cwd=p.HERE, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "parent\n", "the child writes nothing to the terminal")
+            log = private / p.WATCH_LOG
+            self.assertEqual(log.read_text(), "child True False\n")
+            self.assertEqual(stat.S_IMODE(log.stat().st_mode), 0o600)
 
     def test_resume_runs_only_the_resume_check_without_database(self):
         with mock.patch.object(p.sys, "argv", ["preflight.py", "--resume", "/not-a-real-manifest"]), mock.patch.object(p, "private_file", return_value=b"{}"), mock.patch.object(p, "check_host", return_value={"INDEXER_APFS_ROOT": "/fixture"}) as check, mock.patch.object(p.os, "execvpe") as execute:

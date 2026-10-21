@@ -121,6 +121,8 @@ Docker VM 디스크는 컨테이너 안의 앱이 볼 수 없다. 이미지·con
 
 긴급 분기에서 PostgreSQL까지 멈추는 일은 호스트의 `preflight.py --watch`가 맡는다. 컨테이너 안의 indexer는 PostgreSQL을 멈출 수 없기 때문이다. watch는 30초마다 세 가지를 본다. APFS mount·identity 점검이 실패하거나 100GiB 시작 하한 아래로 떨어졌는지, 여유가 110GiB 이하인지, 잠금 파일에 `stopDatabase`가 있는지다. 하나라도 맞으면 `compose stop indexer`, 이어서 `compose stop postgres`를 각자의 유예 안에서 실행하고 exit 3으로 끝난다. indexer 종료가 실패하거나 시간을 넘기면 PostgreSQL은 멈추지 않고 운영자에게 넘긴다. 아직 쓰는 중일 수 있는 indexer를 두고 DB만 멈추지 않기 위해서다. `down`·`rm`·volume 삭제는 하지 않고 아무것도 다시 시작하지 않는다.
 
+`preflight.py --start`는 stack을 띄운 뒤 끝나지 않고 같은 감시를 이어 간다. 그래서 지원하는 시작 경로로 띄운 stack에는 늘 감시가 붙는다. 시작 전에 private 디렉터리의 `watch.lock`을 잡으므로 다른 감시가 이미 붙은 stack은 다시 시작하지 않는다. `--background`를 붙이면 감시가 터미널에서 떨어진 별도 session으로 돌고 `watch.log`에 기록한다. 터미널을 닫아도 감시는 남는다. 감시가 중단되면(exit 130) stack은 감시 없이 계속 돈다. 서비스가 `restart: "no"`라 재부팅 뒤에는 둘 다 올라오지 않고 `--start`로 다시 띄운다.
+
 indexer는 잠금 파일을 쓸 때 `stopDatabase`를 함께 정한다. 저장소 장애(raw/객체 영역 제거·교체·I/O 오류)와 PostgreSQL의 `disk_full`(53100)·`io_error`(58030)이면 참이다. 두 SQLSTATE도 이제 각각 capacity·storage로 분류되어 multichain 자동 재시작에서 빠지고 프로세스 전체를 멈춘다. 용량 기준값 도달만으로는 거짓이다. 이 경우 DB는 점검을 위해 남긴다. PostgreSQL이 WAL 쓰기 실패로 스스로 멈춘 경우는 indexer에게 연결 끊김으로만 보여 구분하지 못한다. 그 상황은 watch의 여유 공간 점검이 잡는다.
 
 예상 시간은 이 초안의 계산을 따른다. 최근 15분에서 1분 이상 간격의 가장 가파른 변화와 60분 평균 중 큰 쪽을 쓴다. 시계가 뒤로 가면 이력을 버린다. 변화가 없으면 예상은 unknown이며 무한으로 취급하지 않는다. raw의 증가 속도는 window를 연 뒤 새로 기록한 bytes(`Usage.AppendedBytes`)로 잰다. 수거가 꺼져 있으면 이것이 순증가와 같다. `Dpg`는 PGDATA를 du처럼 걷는다. 심볼릭 링크를 따라가지 않고 다른 파일시스템으로 넘어가지 않으며, 항목이 상한(기본 100만 개)을 넘거나 읽지 못하면 부분 합 대신 실패로 처리한다.
@@ -134,7 +136,7 @@ indexer는 잠금 파일을 쓸 때 `stopDatabase`를 함께 정한다. 저장�
 아직 구현하지 않은 것은 다음과 같다.
 
 - 실행 중 Docker VM 디스크의 지속 감시. 지금은 시작·재개 전 점검 한 번뿐이다.
-- 실행 중 VM·APFS를 감시하는 `--watch`를 호스트에서 계속 띄워 두는 방법(launchd 등)과, 끝난 뒤 다시 띄우지 않게 하는 설정.
+- 감시 프로세스 자체가 죽었을 때 알리거나 다시 붙이는 장치. 재부팅 뒤 자동 시작(launchd 등)도 하지 않는다.
 - 수신만 멈추는 pause/drain 모드. 10/20 검토에서 보류했다. 지금 종료로도 durable 진행점과 raw가 남아 재시작이 이어 받으므로 얻는 것이 작고, feed 세션의 수신·처리 동시 종료 약속을 바꿔야 해서 위험이 크다. 백업 직전 DB를 받은 블록까지 맞출 필요가 실제로 생기면 다시 판단한다.
 - 실제 APFS·PGDATA에서의 동작 확인. 검증은 임시 디렉터리와 모의 probe 범위다.
 
@@ -146,7 +148,7 @@ indexer는 잠금 파일을 쓸 때 `stopDatabase`를 함께 정한다. 저장�
 
 1. PGDATA·filesystem·raw 감시와 bounded 기록, 누락 판정·경고 hysteresis는 구현했다(위 절). PostgreSQL 통계 `Ddb`/`Dwal`의 journal 기록도 구현했다. Docker VM 디스크는 시작·재개 전 점검만 구현했고 실행 중 감시는 남는다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
 2. raw 연속 intake·oldest-pending age·gross append bytes는 `pipeline.runtime.rawIntake`로 노출했다([계측](FEED_TELEMETRY.md)). 미관측은 null이다.
-3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock은 구현했다. Compose 종료 유예와 긴급 시 DB까지 멈추는 호스트 `--watch`는 구현했다. 단독 drain 모드는 보류했다.
+3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock은 구현했다. Compose 종료 유예와 긴급 시 DB까지 멈추는 호스트 감시(`--start`가 이어서 실행, `--watch`, `--background`)는 구현했다. 단독 drain 모드는 보류했다.
 4. [checkpoint/재시작/GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)과 [읽기 전용 metadata 진단 도구](OPERATIONS_INSPECTION.md)는 작성했다. 진단은 모의 데이터 범위이며 백업 보관·이전의 실제 방식/RPO/RTO와 실제 복구/완전한 GC 승인 진단은 남아 있다. 운영 적용·실제 장애/복원 검증은 저장소·enode 확보와 실행 보류 해제 이후다.
 
 이번 검토는 기존 코드·문서·공식 PostgreSQL 문서에 근거한 정적 검토다. 디스크 상태 재조회, DB 통계 쿼리, 컨테이너/서비스 실행, 실제 삭제·중단·재개, 성능 측정은 하지 않았다.
