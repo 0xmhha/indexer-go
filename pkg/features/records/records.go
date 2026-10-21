@@ -200,3 +200,27 @@ func Lookup(store any) *declared.Plan {
 
 // Detach removes the tables of store.
 func Detach(store any) { attached.Delete(store) }
+
+// LookupRecords returns one page of a declared table's records whose fields
+// have the given values for one of the table's declared keys, oldest first.
+// Values are normalized as records store them. store is the storage the
+// tables are served from (a route's or GraphQL extension's).
+func LookupRecords(ctx context.Context, store any, table string, values map[string]string, page port.Page) ([]*port.Record, string, error) {
+	tables := Lookup(store)
+	if tables == nil {
+		return nil, "", errors.New("records: no declared tables (features.records)")
+	}
+	t, ok := tables.Table(table)
+	if !ok {
+		return nil, "", fmt.Errorf("records: no table %s is declared", table)
+	}
+	id, normalized, err := t.Lookup(values)
+	if err != nil {
+		return nil, "", err
+	}
+	rs, ok := store.(port.RecordReader)
+	if !ok {
+		return nil, "", errors.New("records: the storage keeps no records")
+	}
+	return rs.ListRecordsByKey(ctx, table, port.RecordKey{ID: id, Values: normalized}, page)
+}

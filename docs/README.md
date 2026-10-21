@@ -28,12 +28,12 @@ Snapshots describe a test configuration. Your runtime schema and data depend on 
 
 | Goal | Reference or example |
 | --- | --- |
-| Add a feature, derived records or custom GraphQL/HTTP routes | [SDK](SDK.md) |
+| Add a feature, derived records or custom GraphQL/HTTP routes | [Extending](EXTENDING.md) |
 | Collect selected contract events with a project API | [receipts example](../examples/receipts/README.md), [declared records configuration](CONFIG.md#선언형-수집-featuresrecords-indexermode) |
 | Implement chain-specific decoding, verification or accounting | [Chain customization](CHAIN_CUSTOMIZATION.md) |
 | Register an external profile in your own binary | [chainprofile example](../examples/chainprofile/README.md) |
 
-The SDK defines its compatibility promise. Chain profile APIs and other internal packages have different upgrade boundaries; pin a version and run your extension's checks when upgrading.
+No package carries a compatibility promise; pin a version and run your extension's checks when upgrading.
 
 ## Configure and operate
 

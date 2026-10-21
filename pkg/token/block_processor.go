@@ -113,7 +113,7 @@ func (p *ContractIndexer) SetStateBatchSize(size int) {
 // IndexContract stores the metadata of the contract at address, created in
 // block blockNumber at blockTime, if it is a token not indexed yet. The
 // contract is read as of that block, so live indexing and a later backfill
-// store the same metadata (docs/SDK.md, determinism rules). Missing state
+// store the same metadata (docs/EXTENDING.md, determinism rules). Missing state
 // fails the block unless SetAllowPrunedState explicitly permits a warned
 // latest-state fallback. Unanswered reads and storage errors fail the block.
 func (p *ContractIndexer) IndexContract(ctx context.Context, address common.Address, blockNumber, blockTime uint64) error {

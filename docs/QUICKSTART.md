@@ -136,7 +136,7 @@ A database is tied to its chain, profile and collected range. In particular, an 
 
 ## Next steps
 
-- Build a contract-specific backend with the [receipts example](../examples/receipts/README.md) and [SDK](SDK.md).
+- Build a contract-specific backend with the [receipts example](../examples/receipts/README.md) and [extending the indexer](EXTENDING.md).
 - Add chain-specific behavior with [chain customization](CHAIN_CUSTOMIZATION.md).
 - Read the [architecture](ARCHITECTURE.md) before changing ingestion, rollback or storage.
 - Configure the experimental Arc disk-window path with [feed application](FEED_APP.md). It requires explicit peers, a checkpoint and storage configuration; it is separate from this RPC walkthrough.

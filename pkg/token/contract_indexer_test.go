@@ -104,7 +104,7 @@ func erc20Node(addr common.Address) *nodeAtBlock {
 }
 
 // TestIndexContractReadsTheCreationBlock: token.metadata follows the
-// determinism rules (docs/SDK.md): the contract is read as of its creation
+// determinism rules (docs/EXTENDING.md): the contract is read as of its creation
 // block, so a backfill stores what live indexing stored.
 func TestIndexContractReadsTheCreationBlock(t *testing.T) {
 	addr := common.HexToAddress("0x00000000000000000000000000000000000020")

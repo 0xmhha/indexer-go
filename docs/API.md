@@ -70,7 +70,7 @@ query AddressTransactions($address: String!, $after: String) {
 }
 ```
 
-넓은 범위 또는 색인이 없는 조건은 scan 상한과 `scannedThrough`로 조회한 범위를 알릴 수 있다. DEX·집계·records·AA·StableNet 전용 조회는 기능 설정과 저장된 자료가 필요하다. 프로젝트 조회는 [SDK](SDK.md)로 추가한다.
+넓은 범위 또는 색인이 없는 조건은 scan 상한과 `scannedThrough`로 조회한 범위를 알릴 수 있다. DEX·집계·records·AA·StableNet 전용 조회는 기능 설정과 저장된 자료가 필요하다. 프로젝트 조회는 [확장 방법](EXTENDING.md)으로 추가한다.
 
 ## 3. REST
 

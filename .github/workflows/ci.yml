@@ -63,7 +63,6 @@ jobs:
       - name: go build
         run: go build ./...
       - name: go test
-        # Includes TestSDKSurface, which pins the SDK (docs/SDK.md 7).
         run: go test ./... -count=1 -timeout 20m
       - name: Pebble cache lifecycle
         # Pebble disables its cache leak finalizer under -race.

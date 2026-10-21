@@ -181,7 +181,7 @@ func TestTimeQueriesFindIndexedBlocks(t *testing.T) {
 }
 
 // TestNativeBalancesSurviveNodeErrors: balance.native follows the
-// determinism rules (docs/SDK.md). A balance read the node does not answer
+// determinism rules (docs/EXTENDING.md). A balance read the node does not answer
 // fails the block, which is retried, so the balances still match the chain
 // (it used to start the account at 0). A node that answers with an error
 // (as one without an old block's state does) cannot give the balance: the

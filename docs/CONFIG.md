@@ -50,7 +50,7 @@ CLI 플래그는 명령줄에 실제로 준 것만 적용된다. 플래그의 �
 
 시작 검사 통과는 처리 중 상태 보존을 보장하지 않으며, 영구히 지워진 상태는 재시도로 복구되지 않는다. 공개 RPC 제한·처리 지연을 측정하고 상태가 남아 있는 동안 필요한 조회를 마쳐야 한다. 실제 보존 범위·허용 중단 시간과 성능 과제는 [남은 작업 R03/R04](analysis/open-items.md)에 있다. `allow_pruned_state: true`를 명시한 경우에만 기존의 경고를 남기는 근사 처리를 허용한다.
 
-[빠른 시작](QUICKSTART.md), [SDK 상태 규약](SDK.md#6-결정성-규약), [남은 운영 결정](analysis/open-items.md)을 함께 확인한다.
+[빠른 시작](QUICKSTART.md), [기능 상태 규약](EXTENDING.md#6-결정성-규약), [남은 운영 결정](analysis/open-items.md)을 함께 확인한다.
 
 ## Head 관측과 health 조회
 

@@ -47,7 +47,7 @@ unbound 조회는 계속 RepeatableRead/read-only snapshot이다. `State`는 sta
 
 append callback은 code-owned Commit의 generation/plan/next-height/parent/fresh 검사를 유지하며 공개 prefix를 변경하지 않는다. Reset 뒤 Through 위에 남은 이전 fork의 canonical pointer는 다음 높이 게시 때 교체할 수 있다. facts/event/object binding은 insert-only이고 같은 bytes의 재시도만 허용한다. ACK callback은 projection/* 이외의 쓰기를 거부한다. 동시 ACK가 모두 absent를 관측해도 서로 다른 bytes를 덮어쓰지 않으며 오류를 무시한 callback도 rollback한다. capture와 writer fresh는 각각 원래 transaction 내부에서 실제 RPC로 수행한다. 동시에 진행 가능한 두 조회가 기존 HTTP coalescer에서 묶일 수 있으나 캐시나 검사의 생략은 아니다.
 
-이 선택 포트가 없는 driver/wrapper는 `CaptureUpdate`/`CaptureView`로 동작한다. fast 경로가 오류를 반환한 뒤 fallback하지 않는다. Pebble의 기존 WAL/직렬화, raw ACK/GC 권한, 영구 객체 retirement, SDK/Source 계약은 유지한다. [연결4 잠금 경합 비교](SOURCE_FACTS.md)를 따른다.
+이 선택 포트가 없는 driver/wrapper는 `CaptureUpdate`/`CaptureView`로 동작한다. fast 경로가 오류를 반환한 뒤 fallback하지 않는다. Pebble의 기존 WAL/직렬화, raw ACK/GC 권한, 영구 객체 retirement, 기능 확장/Source 계약은 유지한다. [연결4 잠금 경합 비교](SOURCE_FACTS.md)를 따른다.
 
 
 | 항목 | Pebble | PostgreSQL |

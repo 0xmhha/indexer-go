@@ -1,4 +1,4 @@
-package sdktest_test
+package featuretest_test
 
 import (
 	"io/fs"

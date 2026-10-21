@@ -16,7 +16,7 @@ import (
 
 // TestReceiptsIndexer is the R6-2 criterion (refactoring plan): this module
 // is outside the indexer and changes none of it. It builds its own binary
-// (the indexer plus this package's handlers, through pkg/sdk), runs it with
+// (the indexer plus this package's handlers), runs it with
 // a configuration file against a test chain, and gets what its handlers
 // serve: here the receipts.totals feature, kept block by block in the
 // indexer's key-value store. The receipt lookup is P07's (acceptance_test.go).

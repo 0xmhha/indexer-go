@@ -1,6 +1,6 @@
 # Architecture
 
-[문서 목차](README.md) · [빠른 시작](QUICKSTART.md) · [SDK](SDK.md)
+[문서 목차](README.md) · [빠른 시작](QUICKSTART.md) · [확장](EXTENDING.md)
 
 indexer-go는 EVM 체인을 위한 프레임워크다. 공통 코어는 중립 모델·저장 포트·feature 계약을 사용하고, 체인 규칙은 별도 profile에 둔다. 현재 범위와 미검증 영역은 [남은 작업](analysis/open-items.md), 체인 구현 계약은 [커스터마이징 문서](CHAIN_CUSTOMIZATION.md)를 따른다.
 
@@ -27,7 +27,7 @@ flowchart TD
     SourceDB --> Independent[Independent projection workers]
     Independent --> Outputs[Projection outputs and cursors]
 
-    Writer --> Features[Built-in and SDK handlers]
+    Writer --> Features[Built-in and project features]
     Features --> Store[Pebble or PostgreSQL]
     Writer --> Outbox[Committed outbox]
     Outbox --> Relay[Relay and subscriptions]
@@ -66,10 +66,10 @@ RPC·era1·replay는 source 경계에서 profile을 거쳐 같은 모델로 바�
 | `pkg/stream`, `pkg/events` | outbox 소비·relay·구독 엔진과 프로세스 내 버스 |
 | `pkg/api` | API·미들웨어·체인별 mount |
 | `pkg/notifications` | 설정·조건식·fast/durable 평가와 전달 |
-| `pkg/sdk`, `pkg/sdk/sdktest` | 프로젝트 처리기·API 확장과 결정성 검증 |
+| `pkg/feature`, `pkg/feature/featuretest` | 기능 등록·실행 계약과 결정성 검증. 프로젝트 확장은 [확장 방법](EXTENDING.md) |
 | `pkg/multichain` | 체인별 App·DB·파이프라인의 관리 |
 | `pkg/rpcpool`, `pkg/rpcproxy` | 노드 failover·요청 제한, 조회 cache·circuit breaker |
-| `examples/` | 별도 모듈의 profile·SDK 사용 예제 |
+| `examples/` | 별도 모듈의 profile·기능 확장 예제 |
 
 `pkg/adapters`, `pkg/types/chain`, 예전 storage `backend.go`는 현재 구조에 없다. WBFT·체인 고유 저장/API는 공통 consensus/storage 타입으로 다시 옮기지 않는다.
 
@@ -77,9 +77,9 @@ RPC·era1·replay는 source 경계에서 profile을 거쳐 같은 모델로 바�
 
 Profile은 노드 감지, 원시 블록·receipt 디코딩, 체인 기본 기능을 정의한다. `AccountingProfile`·`NativeCoinProfile`·`BinaryProfile`은 선택 인터페이스다. generic EVM 위에 고유 거래·헤더·회계 규칙을 조합하거나 기존 profile을 감싼다. wrapper는 선택 인터페이스를 잃지 않아야 한다.
 
-내장 체인 또는 외부 모듈의 `x/<chain>`에서 등록한다. 공통 fetch·storage·API는 특정 chain id 분기 대신 registry·포트·선택 인터페이스를 사용한다. YAML로 새 코드를 로드하지 않으며, 등록 패키지를 연결한 바이너리를 빌드한다. 자세한 방법은 [확장 계약](CHAIN_CUSTOMIZATION.md)과 [SDK](SDK.md)에 있다.
+내장 체인 또는 외부 모듈의 `x/<chain>`에서 등록한다. 공통 fetch·storage·API는 특정 chain id 분기 대신 registry·포트·선택 인터페이스를 사용한다. YAML로 새 코드를 로드하지 않으며, 등록 패키지를 연결한 바이너리를 빌드한다. 자세한 방법은 [체인 커스터마이징 계약](CHAIN_CUSTOMIZATION.md)과 [확장 방법](EXTENDING.md)에 있다.
 
-Feature는 블록 context에 묶인 저장소로 쓰고, 자기 설정·의존 기능·필요 포트를 선언한다. 나중에 켜면 backfill한다. 선언형 records는 표 정의로 로그를 수집하고 프로젝트 처리는 SDK로 붙인다. 기능이 모든 실행 방식에서 같은 결과를 내는지 `sdktest`와 예제로 확인한다.
+Feature는 블록 context에 묶인 저장소로 쓰고, 자기 설정·의존 기능·필요 포트를 선언한다. 나중에 켜면 backfill한다. 선언형 records는 표 정의로 로그를 수집하고 프로젝트 처리는 기능으로 붙인다. 기능이 모든 실행 방식에서 같은 결과를 내는지 `featuretest`와 예제로 확인한다.
 
 ## 4. 저장·복구·stream
 

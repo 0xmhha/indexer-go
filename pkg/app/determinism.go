@@ -16,7 +16,7 @@ import (
 // IndexForCheck indexes the chain cfg names until block head is indexed
 // and every online backfill has finished, and returns the keys under
 // prefixes with their values. It is one indexing run of the determinism
-// check (pkg/sdk/sdktest.RequireDeterministic); the API is not served.
+// check (pkg/feature/featuretest.RequireDeterministic); the API is not served.
 func IndexForCheck(ctx context.Context, cfg *config.Config, head uint64, prefixes []string) (map[string][]byte, error) {
 	cfg.API.Enabled = false
 	a, err := NewApp(cfg, zap.NewNop(), false, "")
