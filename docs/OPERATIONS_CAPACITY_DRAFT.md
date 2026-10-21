@@ -91,7 +91,7 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 
 현재 공개된 운영 경로에는 수신만 pause/resume하거나 writer만 drain하는 제어가 없다. `StopChain`은 manager 라이브러리 기능이지 이 초안이 제공하는 운영 API가 아니다. capacity/identity의 강제 중단은 indexer 프로세스 전체 종료로 계획해 내부 auto-restart monitor도 함께 멈추게 한다. 오류 상태의 체인만 반복 재시작하도록 방치하지 않는다. 자동화하려면 원인별 재시작 억제와 capacity interlock이 필요하며 아직 구현하지 않았다.
 
-종료는 먼저 indexer에 SIGTERM을 보내 task 취소/join과 DB·window close를 기다리고, DB 중단이 필요하면 그다음 PostgreSQL을 종료하는 순서다. 긴급 사고는 이 순서를 끝까지 수행하지 못할 수 있다. 후속 적용 시 indexer120초·DB60초의 Compose 종료 유예를 제안하지만 **현재 Compose에는 `stop_grace_period`가 없고 이 값을 적용하지 않았다.** runtime join이 그 안에 끝난다는 증거도 없다. 종료 확인 없이 정상 종료로 표기하거나 `down -v`/광범위 prune으로 정리하지 않는다.
+종료는 먼저 indexer에 SIGTERM을 보내 task 취소/join과 DB·window close를 기다리고, DB 중단이 필요하면 그다음 PostgreSQL을 종료하는 순서다. 긴급 사고는 이 순서를 끝까지 수행하지 못할 수 있다. Compose 초안은 indexer에 SIGTERM·120초, PostgreSQL에 SIGINT(fast shutdown)·60초의 종료 유예를 둔다. Docker 기본10초가 지나면 SIGKILL이 되어 commit·fsync·최종 checkpoint를 끝내지 못하기 때문이다. `preflight.py`가 네 값을 검사한다. 실제 runtime join과 DB checkpoint가 그 안에 끝난다는 측정은 아직 없다. 종료 확인 없이 정상 종료로 표기하거나 `down -v`/광범위 prune으로 정리하지 않는다.
 
 공간 회수는 이 프로젝트가 소유한 불필요한 로그/명시적 임시 산출물의 확인, 별도 증설/이전 계획 순으로 판단한다. PGDATA 파일·`pg_wal`·source facts·marker/ledger·미승인 raw를 직접 삭제하지 않는다. [일반 VACUUM](https://www.postgresql.org/docs/16/routine-vacuuming.html)은 대개 공간 재사용이며 즉시 filesystem 반환을 보장하지 않는다. `VACUUM FULL`은 새 복사본 공간과 배타 잠금이 필요하므로 용량 고갈 시 자동 응급 처치로 실행하지 않는다. autovacuum을 끄거나 fsync/synchronous_commit을 완화하지 않는다.
 
@@ -127,7 +127,7 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 - `pg_database_size`·`pg_ls_waldir` 같은 PostgreSQL 통계(`Ddb`, `Dwal`). 원인 설명용 값이며 중단 판정 기준인 `Dpg`는 구현했다.
 - Docker Desktop VM과 컨테이너 로그 영역의 여유 공간. 컨테이너 안에서는 보이지 않으므로 호스트 쪽 감시가 필요하다.
 - free 110GiB 이하·ENOSPC·WAL 쓰기 오류의 긴급 분기에서 PostgreSQL까지 멈추는 동작. 지금은 indexer만 종료한다.
-- Compose `stop_grace_period`와 수신만 멈추는 pause/drain 모드.
+- 수신만 멈추는 pause/drain 모드. Compose 종료 유예(indexer120초·DB60초)는 적용했다.
 - 실제 APFS·PGDATA에서의 동작 확인. 검증은 임시 디렉터리와 모의 probe 범위다.
 
 ## 복구 목표와 남은 작업
@@ -138,7 +138,7 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 
 1. PGDATA·filesystem·raw 감시와 bounded 기록, 누락 판정·경고 hysteresis는 구현했다(위 절). PostgreSQL 통계 `Ddb`/`Dwal`과 Docker VM 감시는 남는다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
 2. raw 연속 intake·oldest-pending age·gross append bytes는 `pipeline.runtime.rawIntake`로 노출했다([계측](FEED_TELEMETRY.md)). 미관측은 null이다.
-3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock은 구현했다. 서비스 종료 유예와 단독 drain 모드는 남는다.
+3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock은 구현했다. Compose 종료 유예는 적용했고 단독 drain 모드는 남는다.
 4. [checkpoint/재시작/GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)과 [읽기 전용 metadata 진단 도구](OPERATIONS_INSPECTION.md)는 작성했다. 진단은 모의 데이터 범위이며 백업 보관·이전의 실제 방식/RPO/RTO와 실제 복구/완전한 GC 승인 진단은 남아 있다. 운영 적용·실제 장애/복원 검증은 저장소·enode 확보와 실행 보류 해제 이후다.
 
 이번 검토는 기존 코드·문서·공식 PostgreSQL 문서에 근거한 정적 검토다. 디스크 상태 재조회, DB 통계 쿼리, 컨테이너/서비스 실행, 실제 삭제·중단·재개, 성능 측정은 하지 않았다.

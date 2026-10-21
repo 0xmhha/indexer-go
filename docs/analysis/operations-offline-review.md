@@ -28,7 +28,7 @@
 | 재개 | floor100 통과는 운영 정책의 free>150·DB/raw·identity/관측 조건 통과와 다름. 현재 host guard는 추가 정책 전체를 자동 강제하지 않음 |
 | 생성·삭제 | `initialize_volume/create_window/collect=false` 유지. host guard는true를 거부. GC=false여도 과거 승인된 pending 삭제는 coordinated Open에서 복구 완료될 수 있음 |
 | checkpoint | 최초 anchor H0/hash 고정과 C/G/F·P·필수 unit을 분리. 재시작 때 최신 anchor로 점프하거나 receipt/최대 높이를 연속 완료로 대신하지 않음 |
-| 종료·장애 | indexer 취소/join/Close 후 필요 시 전용 DB 정상 종료.120/60초 유예·capacity controller·원인별 restart 억제는 아직 미구현 |
+| 종료·장애 | indexer 취소/join/Close 후 필요 시 전용 DB 정상 종료.120/60초 Compose 유예는 적용(실제 종료 시간 미측정), capacity controller·원인별 restart 억제는 10/20 구현 |
 | 비밀 | 소유자 전용 directory0700/일반 single-link 파일0600, DSN은 secret 파일에서 프로세스 환경으로만 전달. 실제 private 파일/키/자격 증명 생성 없음 |
 | 실제 환경 | host 입력4개와 app 입력9개가 미확정. enode/실제 fork·checkpoint·APFS UUID·이미지 등의 미확정을 임시 값으로 확정하지 않음 |
 
@@ -42,6 +42,6 @@
 
 Docker 로그 설정은 [공식 local driver 설명](https://docs.docker.com/engine/logging/drivers/local/)의 per-container rotation 옵션을 사용한다. 최신 actual daemon 설정·디스크 여유·RPC/peer/DB 상태는 조회하지 않았다. 실제 포맷·초기화·종료/재개·삭제·장애/복원·성능 측정·다른 프로젝트 조작·commit/push는 없다.
 
-남은 것은 실제 입력 확정, 읽기 전용 checkpoint/GC 진단 도구, DB/filesystem/Docker 영역 감시와 중단/재개 interlock·종료 유예, 백업/이전/RPO/RTO와 실제 기능 검증이다. 기존 초안 작성/오프라인 점검을 이 구현·실환경 검증의 완료로 표시하지 않는다. 실행·포맷·추가 성능 측정 보류는 계속 유지한다.
+남은 것은 실제 입력 확정, 읽기 전용 checkpoint/GC 진단 도구, DB/filesystem/Docker 영역 감시와 중단/재개 interlock(10/20 구현)·종료 유예(Compose 적용), 백업/이전/RPO/RTO와 실제 기능 검증이다. 기존 초안 작성/오프라인 점검을 이 구현·실환경 검증의 완료로 표시하지 않는다. 실행·포맷·추가 성능 측정 보류는 계속 유지한다.
 
 후속 구현(2026-10-19): [읽기 전용 checkpoint/GC metadata 명령](../OPERATIONS_INSPECTION.md)을 추가하고 모의 DB/임시 파일로 검증했다. 이로써 위 목록 중 metadata 조회 도구의 첫 구현은 완료했다. live lease·payload/proof integrity·완전한 GC 승인 진단, 실제 DB/APFS 검증과 나머지 운영 제어는 완료한 것으로 확대하지 않는다.

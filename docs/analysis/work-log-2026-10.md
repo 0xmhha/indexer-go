@@ -1657,3 +1657,11 @@ PR [#182](https://github.com/0xmhha/indexer-go/pull/182)의 첫 [CI](https://git
 **검증.** Go1.26.8로 실행했다. `make test-race`에서 77개 패키지가 통과했다. `pkg/notifications` 1개는 webhook 테스트가 남긴 DNS 조회(getaddrinfo) 고루틴을 goleak이 잡아 실패했다. PR #183 때와 같은 증상이고 이번 변경과 관계없는 패키지다. 그 패키지만 다시 돌려 통과했다. 새 동시성 검사(opsguard 감시, 재시작 정책, raw 수신 기록)는 각각 race·GOMAXPROCS1·200회, 앱 수준 새 검사5개는 race20회 통과했다. lint0건, vet, gofmt, 예제, cache lifecycle, astgraph, preflight 25개·오프라인 lint·셸 문법도 통과했다. PostgreSQL 회귀(`make test-postgres`)는 로컬에 `postgres:16-alpine` 이미지가 없어 다운로드하지 않고 실행하지 않았다. CI의 postgres 작업에서 확인한다.
 
 **남은 것.** PostgreSQL 통계(`Ddb`/`Dwal`), Docker VM 공간 감시, 긴급 시 PostgreSQL 종료, Compose 종료 유예와 drain 모드, 실제 APFS·PGDATA에서의 동작 확인이다. 디스크 포맷·서비스 실행·실제 노드/RPC 접속·성능 측정은 하지 않았다.
+
+### 3.103 Compose 종료 유예 (10/20)
+
+Compose 초안에 종료 신호와 유예 시간이 없었다. 그래서 `docker compose stop`이 Docker 기본값10초 뒤 SIGKILL을 보냈다. indexer는 SIGTERM을 받으면 task를 취소·join하고 window와 DB를 닫는다. `App.Shutdown`에는 API·알림·multichain 정지에 공유하는30초 제한이 있다. writer drain과 저장소 Close에는 따로 제한이 없다.10초 안에 이 순서를 끝내지 못하면 commit·fsync 도중에 죽는다.
+
+운영 절차 초안이 제안한 값을 적용했다. indexer는 SIGTERM·120초, PostgreSQL은 SIGINT·60초다. PostgreSQL의 SIGTERM은 smart shutdown이라 연결이 모두 끊길 때까지 기다린다. SIGINT는 fast shutdown이라 세션을 끝내고 최종 checkpoint를 쓴다. 공식 이미지의 기본 신호도 SIGINT지만 이미지에 의존하지 않게 명시했다. Compose는 `depends_on` 역순으로 indexer를 먼저 멈춘다.
+
+`preflight.py`의 초안 검사가 네 값을 확인하고, 값이 빠지거나 바뀐 경우4개를 거부 검사에 더했다. preflight 25개·오프라인 lint·Compose 구문 검사가 통과했다. 실제 종료가 이 시간 안에 끝나는지는 재지 않았다. 함께 `tools/astgraph/__pycache__/`를 `.gitignore`에 넣었다.

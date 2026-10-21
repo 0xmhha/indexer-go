@@ -86,6 +86,10 @@ class PolicyTests(unittest.TestCase):
             lambda c: c["services"]["postgres"].update(networks=["rpc"]),
             lambda c: c["services"]["indexer"].update(image="unchecked-image:latest"),
             lambda c: c["services"]["indexer"].update(entrypoint=["/app/indexer-go"]),
+            lambda c: c["services"]["indexer"].pop("stop_grace_period"),
+            lambda c: c["services"]["indexer"].update(stop_grace_period="10s"),
+            lambda c: c["services"]["postgres"].update(stop_signal="SIGTERM"),
+            lambda c: c["services"]["postgres"].pop("stop_grace_period"),
         )
         for mutate in mutations:
             compose = copy.deepcopy(original)
