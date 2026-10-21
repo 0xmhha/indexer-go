@@ -39,7 +39,22 @@ func (a *App) observeRaw(u window.Usage) {
 	}
 }
 
+// attachPostgresStats lets m sample the statistics of this App's store, if
+// it is PostgreSQL, until closeOperations.
+func (a *App) attachPostgresStats(m *opsguard.Monitor) {
+	if m == nil || a.statsDetach != nil {
+		return
+	}
+	if s, ok := postgresStats(a.storage); ok {
+		a.statsDetach = m.AttachPostgresStats(s)
+	}
+}
+
+// closeOperations runs before the store closes.
 func (a *App) closeOperations() {
+	if a.statsDetach != nil {
+		a.statsDetach()
+	}
 	if a.opsMonitor == nil {
 		return
 	}

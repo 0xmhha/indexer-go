@@ -75,6 +75,7 @@ type Monitor struct {
 	started time.Time
 	fs, pg  series
 	raw     map[string]*series // gross appended bytes per reservation
+	stats   []*statsSource     // attached PostgreSQL statistics, latest last
 	fsSeen  time.Time
 	pgSeen  time.Time
 	counts  map[string]int
@@ -119,11 +120,30 @@ func (m *Monitor) Done() <-chan struct{} { return m.done }
 
 // Run samples until ctx ends or the monitor halts, and returns the halt.
 // A probe that blocks, such as statfs on a vanished mount, is not waited for:
-// the missing observation halts once it exceeds its limit.
+// the missing observation halts once it exceeds its limit. A statistics
+// query is cancelled and waited for before Run returns.
 func (m *Monitor) Run(ctx context.Context) error {
 	fsResult := make(chan fsProbe, 1)
 	pgResult := make(chan pgProbe, 1)
 	fsBusy, pgBusy := false, false
+	var statsWG sync.WaitGroup
+	defer statsWG.Wait()
+	statsCtx, cancelStats := context.WithCancel(ctx)
+	defer cancelStats()
+	statsDone := make(chan struct{}, 1)
+	statsBusy := false
+	startStats := func() {
+		if statsBusy {
+			return
+		}
+		statsBusy = true
+		statsWG.Add(1)
+		go func() {
+			defer statsWG.Done()
+			m.sampleStats(statsCtx)
+			statsDone <- struct{}{}
+		}()
+	}
 	startFS := func() {
 		if fsBusy {
 			return
@@ -145,8 +165,11 @@ func (m *Monitor) Run(ctx context.Context) error {
 	defer fsTick.Stop()
 	pgTick := time.NewTicker(m.cfg.PostgresInterval)
 	defer pgTick.Stop()
+	statsTick := time.NewTicker(m.cfg.PostgresStatsInterval)
+	defer statsTick.Stop()
 	startFS()
 	startPG()
+	startStats()
 	for {
 		select {
 		case <-ctx.Done():
@@ -159,12 +182,16 @@ func (m *Monitor) Run(ctx context.Context) error {
 		case p := <-pgResult:
 			pgBusy = false
 			m.ObservePostgres(p.at, p.bytes, p.err)
+		case <-statsDone:
+			statsBusy = false
 		case <-fsTick.C:
 			m.checkMissing()
 			startFS()
 		case <-pgTick.C:
 			m.checkMissing()
 			startPG()
+		case <-statsTick.C:
+			startStats()
 		}
 	}
 }

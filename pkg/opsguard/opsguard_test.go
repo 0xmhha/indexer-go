@@ -148,6 +148,7 @@ func TestConfigValidation(t *testing.T) {
 		{"relative path", func(c *Config) { c.Capacity.FilesystemPath = "data" }, "filesystem_path"},
 		{"threshold order", func(c *Config) { c.Capacity.StopFreeBytes = c.Capacity.WarnFreeBytes }, "floor_free_bytes < stop_free_bytes"},
 		{"short interval", func(c *Config) { c.Capacity.FilesystemInterval = time.Millisecond }, "filesystem_interval"},
+		{"short stats interval", func(c *Config) { c.Capacity.PostgresStatsInterval = time.Millisecond }, "postgres_stats_interval"},
 		{"missing shorter", func(c *Config) { c.Capacity.FilesystemMissingStop = 10 * time.Second }, "filesystem_missing_stop"},
 		{"no budget", func(c *Config) { c.Capacity.PostgresBudgetBytes = 0 }, "postgres_budget_bytes must be positive"},
 		{"budget without dir", func(c *Config) { c.Capacity.PostgresDataDir = "" }, "needs postgres_data_dir"},

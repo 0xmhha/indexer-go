@@ -7,3 +7,5 @@ BEGIN
 END;
 $init$;
 GRANT CONNECT, CREATE ON DATABASE indexer_testnets_v1 TO indexer;
+-- Capacity statistics (Dwal): only the WAL directory listing, not pg_monitor.
+GRANT EXECUTE ON FUNCTION pg_ls_waldir() TO indexer;
