@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/internal/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
-	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 

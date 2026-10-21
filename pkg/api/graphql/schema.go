@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	abiDecoder "github.com/0xmhha/indexer-go/pkg/abi"
+	abiDecoder "github.com/0xmhha/indexer-go/internal/abi"
+	"github.com/0xmhha/indexer-go/internal/notifications"
+	"github.com/0xmhha/indexer-go/internal/rpcproxy"
+	"github.com/0xmhha/indexer-go/internal/verifier"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/notifications"
-	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/stream"
-	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/graphql-go/graphql"
 	"go.uber.org/zap"
 )

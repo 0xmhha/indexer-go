@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/internal/userop"
 	"github.com/0xmhha/indexer-go/pkg/storage"
-	"github.com/0xmhha/indexer-go/pkg/userop"
 )
 
 // TestUserOpListsFollowCursors: the UserOperation and bundler lists return

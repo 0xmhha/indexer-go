@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/multichain"
+	"github.com/0xmhha/indexer-go/internal/multichain"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"

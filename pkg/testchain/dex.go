@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/0xmhha/indexer-go/pkg/features/dex"
+	"github.com/0xmhha/indexer-go/internal/features/dex"
 )
 
 // DEX event signatures (Uniswap V3 and V2, and the perpetual engine and

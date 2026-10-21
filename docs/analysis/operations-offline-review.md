@@ -16,7 +16,7 @@
 | 접속 전제 | host manifest 파일의0600 조건과 `Path.is_relative_to`에 필요한 Python 버전 안내가 빠졌음 | private manifest 권한·보관 위치와 Python3.9+를 Docker 안내에 명시 |
 | 연결/RPC 적용 범위 | 정상 합계16개를 장애/중복 App까지 포함한 전역 hard cap으로 읽을 수 있었음 | 체인당 live App1개일 때의 pool 예산으로 한정. `Stop` timeout 뒤 지연 Close와 종료 확인 전 재기동 금지를 설명 |
 
-연결 범위의 코드 근거는 [Stop](../../pkg/multichain/instance.go)과 [manager 재기동](../../pkg/multichain/manager.go)이다. timeout 때 Close가 지연될 수 있다는 경로는 확인했지만 실제 중복 실행·연결/RPC 초과는 관측하거나 재현하지 않았다. Go 실행 코드를 고친 항목이 아니며 원인별 재시작 억제와 전역 interlock은 남아 있다.
+연결 범위의 코드 근거는 [Stop](../../internal/multichain/instance.go)과 [manager 재기동](../../internal/multichain/manager.go)이다. timeout 때 Close가 지연될 수 있다는 경로는 확인했지만 실제 중복 실행·연결/RPC 초과는 관측하거나 재현하지 않았다. Go 실행 코드를 고친 항목이 아니며 원인별 재시작 억제와 전역 interlock은 남아 있다.
 
 ## 공통 기준의 현재 상태
 

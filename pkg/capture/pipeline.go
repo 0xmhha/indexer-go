@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/feedtelemetry"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
-	"github.com/0xmhha/indexer-go/pkg/feedtelemetry"
 	"github.com/0xmhha/indexer-go/pkg/window"
 )
 

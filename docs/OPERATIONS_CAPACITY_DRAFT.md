@@ -18,7 +18,7 @@
 | 삭제 | 현재 `collect: false`; 기본 상태에서 원본 자동 수거 없음 | 공간 부족을 이유로 GC를 켜지 않음. 검증된 GC의 별도 적용 전에는 완료 데이터도 계속 공간 차지 |
 | 오류·재시작 | raw identity/I/O 오류는 세션 task 취소/join; manager는 `StatusError` 체인 자동 재시작 | 디스크/무결성 사고 후 자동 재시작 억제·재개 점검이 필요. 현재 호스트 검사는 컨테이너 최초 기동 전 검사이고 manager 내부 재시작에 다시 실행되지 않음 |
 
-코드 근거는 [Usage/용량 대기](../pkg/window/budget.go), [append](../pkg/window/store.go), [세션 수명](../pkg/capture/session.go), [압력 로그](../pkg/capture/config.go), [체인 재시작](../pkg/multichain/manager.go)다. marker/ledger의 quota는 Open 때 대조하므로 YAML 숫자만 바꿔 온라인 증설하는 방식은 지원하지 않는다.
+코드 근거는 [Usage/용량 대기](../pkg/window/budget.go), [append](../pkg/window/store.go), [세션 수명](../pkg/capture/session.go), [압력 로그](../pkg/capture/config.go), [체인 재시작](../internal/multichain/manager.go)다. marker/ledger의 quota는 Open 때 대조하므로 YAML 숫자만 바꿔 온라인 증설하는 방식은 지원하지 않는다.
 
 ## 감시할 값과 수집 범위
 
@@ -55,7 +55,7 @@ PostgreSQL의 [크기/디렉터리 함수와 권한](https://www.postgresql.org/
 
 `source.factsThrough`/cursor/age가 null이면0으로 바꾸지 않는다. anchor는 첫 처리 높이의 부모 기준일 뿐 source facts 완료로 표시하지 않는다. optional `proofBacklog/stateBacklog`를 base writer backlog로 재사용하지 않는다. 현재 YAML에는 `feed.telemetry`가 없어 runtime 계측이 꺼져 있다. 이 초안은 이를 켜지 않는다.
 
-지연 시간은 향후 감시기가 **미처리를 처음 확인한 시각**부터 따로 기록하는 안이다. 이는 적체가 이어진 관측 시간이며 가장 오래된 개별 블록의 대기 시간이 아니다. `rawQueue` 표본은 완료된 작업의 대기 시간이고, process-local proof/state age는 선택 단계의 일부 입력만 관측하므로 현재 가장 오래된 base 미처리 입력의 나이로 대체할 수 없다. raw의 원래 `FirstReceived`에 기반한 oldest-pending age와 연속 raw intake cursor는 `feed.telemetry`를 켠 실행의 `pipeline.runtime.rawIntake`가 제공한다(10/20). 프로세스 안의 관측이므로 재시작 뒤에는 다시 전달된 입력부터 보인다. 상태 API 필드/한계는 [진행 상태 구현](../pkg/indexingstatus/status.go), [pipeline 구현](../pkg/indexingstatus/pipeline.go), [계측 설명](FEED_TELEMETRY.md)을 따른다.
+지연 시간은 향후 감시기가 **미처리를 처음 확인한 시각**부터 따로 기록하는 안이다. 이는 적체가 이어진 관측 시간이며 가장 오래된 개별 블록의 대기 시간이 아니다. `rawQueue` 표본은 완료된 작업의 대기 시간이고, process-local proof/state age는 선택 단계의 일부 입력만 관측하므로 현재 가장 오래된 base 미처리 입력의 나이로 대체할 수 없다. raw의 원래 `FirstReceived`에 기반한 oldest-pending age와 연속 raw intake cursor는 `feed.telemetry`를 켠 실행의 `pipeline.runtime.rawIntake`가 제공한다(10/20). 프로세스 안의 관측이므로 재시작 뒤에는 다시 전달된 입력부터 보인다. 상태 API 필드/한계는 [진행 상태 구현](../internal/indexingstatus/status.go), [pipeline 구현](../internal/indexingstatus/pipeline.go), [계측 설명](FEED_TELEMETRY.md)을 따른다.
 
 진행률을 얻을 수 있다면 `λ=동일 epoch의 새 입력/초`, `μ=연속 durable 완료/초`, `B=같은 범위의 미완료 블록 수`로 구분한다. `B>0`이고 `μ>λ`일 때만 `B/(μ-λ)`를 지속 유입 중 예상 추격 시간으로 계산한다. `μ≤λ`이면 현 조건에서 유한한 추격 시간을 제시할 수 없다. 실제 λ가 없는데 Arc를2블록/s로 고정해 완료 시간을 약속하지 않는다. 일시적인 μ 또는450ms 수신 목표를 지속 운영 보장으로 사용하지 않는다.
 
@@ -105,7 +105,7 @@ raw 잔여 시간은 GC를 기대하지 않는 유입 bytes 기준으로 산출�
 
 ## 구현된 자동 감시와 중단
 
-앱 설정의 `operations` 절이 이 초안의 중단·재개 기준을 프로세스 안에서 적용한다(`pkg/opsguard`). 절이 없으면 아무것도 하지 않는다. 바이트 기준값에는 기본값이 없다. 배포마다 디스크와 예산이 다르기 때문이다. 테스트넷 초안 값은 [체인별 설정 초안](examples/testnets)에 있다. 체인 프로세스마다 같은 `operations` 절을 두고, halt latch는 체인별 상태 디렉터리에 둔다.
+앱 설정의 `operations` 절이 이 초안의 중단·재개 기준을 프로세스 안에서 적용한다(`internal/opsguard`). 절이 없으면 아무것도 하지 않는다. 바이트 기준값에는 기본값이 없다. 배포마다 디스크와 예산이 다르기 때문이다. 테스트넷 초안 값은 [체인별 설정 초안](examples/testnets)에 있다. 체인 프로세스마다 같은 `operations` 절을 두고, halt latch는 체인별 상태 디렉터리에 둔다.
 
 | 감시값 | 주기 | 경고 | 중단 |
 | --- | --- | --- | --- |

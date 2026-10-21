@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/internal/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/feed"
-	"github.com/0xmhha/indexer-go/pkg/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/window"
 	"gopkg.in/yaml.v3"
 )
@@ -38,7 +38,7 @@ type Config struct {
 	Node               NodeConfig               `yaml:"node"`
 	Verifier           VerifierConfig           `yaml:"verifier"`
 	AccountAbstraction AccountAbstractionConfig `yaml:"account_abstraction"`
-	// Operations is the capacity halt and its latch (pkg/opsguard).
+	// Operations is the capacity halt and its latch (internal/opsguard).
 	Operations opsguard.Config `yaml:"operations,omitempty"`
 	// Features turns registered features on or off (pkg/feature). Features
 	// not listed keep the chain profile's default.
@@ -131,7 +131,7 @@ type RPCConfig struct {
 	// CoalesceReads combines concurrent read envelopes without caching responses.
 	CoalesceReads bool `yaml:"coalesce_reads"`
 	// Endpoint is the node's JSON-RPC URL, or "replay:///dir" to serve a
-	// recorded archive instead of a node (pkg/source/replay).
+	// recorded archive instead of a node (internal/source/replay).
 	Endpoint string        `yaml:"endpoint"`
 	Timeout  time.Duration `yaml:"timeout"`
 	// RecordDir, when set, records every JSON-RPC call to the node into an

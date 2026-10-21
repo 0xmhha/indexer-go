@@ -20,8 +20,8 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/internal/features/dex"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/features/dex"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 

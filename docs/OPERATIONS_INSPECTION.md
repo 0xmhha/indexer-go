@@ -75,7 +75,7 @@ Capacity monitoring and restart interlocks are the next separate operating featu
 
 ```bash
 go test -race -count=1 -run '^(TestInspection|TestInspect|TestPrivateDSN)' \
-  ./pkg/window ./pkg/opsinspect ./cmd/indexer-inspect
+  ./pkg/window ./internal/opsinspect ./cmd/indexer-inspect
 ```
 
 These checks use no PostgreSQL service, application, node, Docker daemon or public RPC. DB writes panic in the fake adapter. Synthetic files cover pending/partial/completed/missing deletion evidence, identity/digest conflicts, active-lease unknown status, quota/path/symlink refusal, source/page changes, missing/malformed ACKs, bounded observation/pagination, cancellation, connection close and secret redaction. File content/permissions/modification times are compared before and after observation. They do not establish live PostgreSQL/APFS behavior or a performance result.

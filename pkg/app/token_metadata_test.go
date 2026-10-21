@@ -13,9 +13,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	featuretoken "github.com/0xmhha/indexer-go/internal/features/token"
+	"github.com/0xmhha/indexer-go/internal/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	featuretoken "github.com/0xmhha/indexer-go/pkg/features/token"
-	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 )
 

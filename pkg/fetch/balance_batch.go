@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/0xmhha/indexer-go/pkg/rpcbatch"
+	"github.com/0xmhha/indexer-go/internal/rpcbatch"
 	"github.com/ethereum/go-ethereum/common"
 )
 

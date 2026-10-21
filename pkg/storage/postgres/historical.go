@@ -12,9 +12,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/internal/storage/history"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage/history"
 )
 
 var (
@@ -23,7 +23,7 @@ var (
 	_ port.BalanceRecordChecker = (*Store)(nil)
 )
 
-// The statistics come from pkg/storage/history, shared with the Pebble
+// The statistics come from internal/storage/history, shared with the Pebble
 // store; the time queries read the blocks table by its time index, and
 // balances have tables of their own.
 

@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/0xmhha/indexer-go/pkg/abi"
+	"github.com/0xmhha/indexer-go/internal/abi"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/gethconv"
 	"github.com/0xmhha/indexer-go/pkg/core/model"

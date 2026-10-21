@@ -12,8 +12,8 @@ import (
 // allowedInternal lists the packages of this module the ports may use:
 // the chain-neutral model and the ERC-4337 value types.
 var allowedInternal = map[string]bool{
-	"github.com/0xmhha/indexer-go/pkg/core/model": true,
-	"github.com/0xmhha/indexer-go/pkg/userop":     true,
+	"github.com/0xmhha/indexer-go/pkg/core/model":  true,
+	"github.com/0xmhha/indexer-go/internal/userop": true,
 }
 
 // TestPortsImportNoImplementation keeps the ports free of any storage

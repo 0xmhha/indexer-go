@@ -131,7 +131,7 @@ StableNet(WBFT)은 블록이 즉시 확정되므로 reorg가 없다. 일반 EVM 
 **StableNet의 finalized 태그.** go-stablenet은 `finalized`·`safe`를 `latest`와 같게 답하지만, 10초 동안 737번 물으면 31%는 한 블록 뒤였다. finalized 정책의 head 지연은 p95 1.088초(head 정책은 46ms)다. WBFT 블록은 들어오는 즉시 확정이므로 StableNet에는 기본(head)이 맞다.
 
 **남긴 것.**
-- 알림 서비스(`pkg/notifications`)는 reorg 이벤트를 다루지 않는다.
+- 알림 서비스(`internal/notifications`)는 reorg 이벤트를 다루지 않는다.
 - 새 분기가 색인한 높이보다 짧은 동안에는 live 루프가 reorg를 보지 못한다(새 블록의 parent hash로 찾기 때문). 실제 체인은 새 분기가 계속 자라므로 다음 블록에서 처리된다.
 - JSON-RPC 필터는 폴링에서 높이를 읽은 뒤 hash를 읽기 전에 reorg가 나면, 그 한 번은 제거된 로그 일부를 알리지 못할 수 있다(창은 수 µs).
 - orphan 보관을 지우는 정책은 필요할 때 설정으로 넣는다.

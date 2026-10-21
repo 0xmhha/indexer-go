@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/0xmhha/indexer-go/internal/notifications"
+	"github.com/0xmhha/indexer-go/internal/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/notifications"
-	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/stream"
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/graphql/language/parser"

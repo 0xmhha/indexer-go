@@ -1,4 +1,9 @@
 # Paths whose names match a sensitive-file pattern but hold no secrets.
 # Only the file name check skips them; the content scan still runs.
 x/stablenet/systemcontracts/page_tokens_history_test.go  # paging test of the token list ports
-pkg/token/*.go  # the ERC-20 token package (metadata, transfers), not credentials
+internal/token/*.go  # the ERC-20 token package (metadata, transfers), not credentials
+internal/features/token/*.go  # the token.transfers and token.metadata features
+internal/api/etherscan/page_tokens_history_test.go  # paging test of the token list API
+pkg/app/token_metadata.go  # reads token metadata through the RPC proxy
+pkg/app/token_metadata_test.go
+pkg/storage/pebble_token.go  # Pebble token balance and transfer ports

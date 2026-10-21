@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/0xmhha/indexer-go/pkg/feedtelemetry"
+	"github.com/0xmhha/indexer-go/internal/feedtelemetry"
 	"io"
 	"net/http"
 	"net/url"

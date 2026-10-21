@@ -6,12 +6,12 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/0xmhha/indexer-go/internal/source/era"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/features/records"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/0xmhha/indexer-go/pkg/source"
-	"github.com/0xmhha/indexer-go/pkg/source/era"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 )
 

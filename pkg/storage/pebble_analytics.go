@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/0xmhha/indexer-go/internal/storage/history"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/storage/history"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -14,7 +14,7 @@ import (
 // Analytics Methods
 // ============================================================================
 
-// The statistics are computed from the ports by pkg/storage/history, which
+// The statistics are computed from the ports by internal/storage/history, which
 // every store shares.
 
 // GetGasStatsByBlockRange returns gas usage statistics for a block range

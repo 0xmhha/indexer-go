@@ -9,14 +9,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	apimiddleware "github.com/0xmhha/indexer-go/internal/api/middleware"
+	"github.com/0xmhha/indexer-go/internal/api/rest"
+	"github.com/0xmhha/indexer-go/internal/multichain"
+	"github.com/0xmhha/indexer-go/internal/notifications"
 	"github.com/0xmhha/indexer-go/pkg/api/graphql"
 	"github.com/0xmhha/indexer-go/pkg/api/jsonrpc"
-	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
-	"github.com/0xmhha/indexer-go/pkg/api/rest"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
-	"github.com/0xmhha/indexer-go/pkg/multichain"
-	"github.com/0xmhha/indexer-go/pkg/notifications"
 )
 
 // ChainStores gives the API the chains of multichain mode, each indexed

@@ -8,7 +8,7 @@
 
 ## 1. 결론
 
-사용자는 감시할 대상(EOA, 컨트랙트 전체, 컨트랙트의 특정 이벤트, 토큰 이동)을 구독으로 등록하고, 선택적으로 CEL 조건식과 보낼 내용을 고르는 식을 붙인다. indexer는 블록을 받아 decode한 직후, 저장 commit을 기다리지 않고 구독과 조건을 평가해 참인 것만 사용자의 스트림 연결이나 webhook으로 보낸다(fast path). 사용자 코드(WASM 모듈, 컨테이너)는 실행하지 않는다. 구독은 기존 알림 기능(`pkg/notifications`)을 확장해 만든다.
+사용자는 감시할 대상(EOA, 컨트랙트 전체, 컨트랙트의 특정 이벤트, 토큰 이동)을 구독으로 등록하고, 선택적으로 CEL 조건식과 보낼 내용을 고르는 식을 붙인다. indexer는 블록을 받아 decode한 직후, 저장 commit을 기다리지 않고 구독과 조건을 평가해 참인 것만 사용자의 스트림 연결이나 webhook으로 보낸다(fast path). 사용자 코드(WASM 모듈, 컨테이너)는 실행하지 않는다. 구독은 기존 알림 기능(`internal/notifications`)을 확장해 만든다.
 
 결정(10/10, 사용자):
 - 로직: 사용자 코드를 실행하지 않는다. 구독 유형(검토안 1.3)을 기본으로, 조건식(검토안 1.2)을 선택으로 둔다. Docker sandbox(검토안 1.1)와 WASM은 쓰지 않는다(2장).
@@ -74,7 +74,7 @@ indexer 안에서 조건을 평가하면 둘째 구간의 commit·relay 대기�
 
 설계:
 
-- `pkg/source/era`에 declared용 `Logs`를 둔다. `era.Source`를 감싸 블록마다 영수증의 로그를 선언한 주소·topic0로 거르고 헤더에서 트랜잭션을 뺀다(`sourcerpc.Logs`와 같은 모양).
+- `internal/source/era`에 declared용 `Logs`를 둔다. `era.Source`를 감싸 블록마다 영수증의 로그를 선언한 주소·topic0로 거르고 헤더에서 트랜잭션을 뺀다(`sourcerpc.Logs`와 같은 모양).
 - `fetch.RangeSource`(`LogsInRange`, `Headers`)도 구현해 finalized 범위 경로에서 쓴다. 파일에는 범위 색인이 없으므로 범위의 블록을 모두 읽는다.
 - era 범위는 era `Logs`, 그 뒤는 노드 `Logs`가 답하는 연결 source를 만들고 만나는 높이의 hash를 확인한다(`CheckJoin`).
 - 단점: 로그가 드문 컨트랙트는 노드의 `eth_getLogs`보다 느릴 수 있다. 노드 부담은 없다. 실제 era1 파일로 비교는 파일이 생기면 한다.
@@ -86,7 +86,7 @@ indexer 안에서 조건을 평가하면 둘째 구간의 commit·relay 대기�
 
 ### 4.1 기존 알림 기능과의 관계
 
-`pkg/notifications`에는 이미 설정(주소·topic 필터, webhook 목적지·서명 비밀), 저장, 재시도, 전달 기록, API(GraphQL·JSON-RPC)가 있다. 구독은 이것을 확장한다. 새로 더하는 것은 구독 유형, 이벤트 decode, 조건식, fast path 전달 모드, 스트림 채널, 키별 소유다. 같은 일을 두 벌로 만들지 않기 위해서다.
+`internal/notifications`에는 이미 설정(주소·topic 필터, webhook 목적지·서명 비밀), 저장, 재시도, 전달 기록, API(GraphQL·JSON-RPC)가 있다. 구독은 이것을 확장한다. 새로 더하는 것은 구독 유형, 이벤트 decode, 조건식, fast path 전달 모드, 스트림 채널, 키별 소유다. 같은 일을 두 벌로 만들지 않기 위해서다.
 
 | 항목 | 지금 알림 | 더하는 것 |
 |---|---|---|

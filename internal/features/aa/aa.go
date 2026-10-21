@@ -1,0 +1,163 @@
+// Package aa holds the account abstraction features: aa.eip7702 (SetCode
+// authorizations), aa.erc4337 (UserOperations, bundlers, paymasters) and
+// aa.erc7579 (smart account modules). The processors themselves are still
+// in pkg/fetch; these features attach them to the block pipeline.
+package aa
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/internal/userop"
+	"github.com/0xmhha/indexer-go/pkg/feature"
+	"github.com/0xmhha/indexer-go/pkg/fetch"
+)
+
+// Feature names.
+const (
+	EIP7702 = "aa.eip7702"
+	ERC4337 = "aa.erc4337"
+	ERC7579 = "aa.erc7579"
+)
+
+func logger(d feature.Deps) *zap.Logger {
+	if d.Logger == nil {
+		return zap.NewNop()
+	}
+	return d.Logger
+}
+
+type eip7702 struct{}
+
+func (eip7702) Name() string       { return EIP7702 }
+func (eip7702) Requires() []string { return nil }
+func (eip7702) DefaultOn() bool    { return true }
+
+func (eip7702) Register(r feature.Registrar) error {
+	d := r.Deps()
+	s, ok := d.Storage.(fetch.SetCodeIndexer)
+	if !ok {
+		return fmt.Errorf("storage does not support SetCode authorizations")
+	}
+	log := logger(d)
+	p := fetch.NewSetCodeProcessor(log, s)
+	r.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
+		for _, t := range b.Transactions() {
+			if t.Tx.Type != types.SetCodeTxType {
+				continue
+			}
+			if err := p.ProcessSetCodeTransactionAt(ctx, t.GethTx, t.GethReceipt, b.Model.Number, b.Model.Hash, b.Model.Time, uint64(t.Index)); err != nil {
+				return fmt.Errorf("SetCode transaction %s: %w", t.Tx.Hash.Hex(), err)
+			}
+		}
+		return nil
+	}))
+	return nil
+}
+
+// ERC4337Settings are the settings of aa.erc4337 (features.aa.erc4337).
+type ERC4337Settings struct {
+	// EntryPoints are EntryPoint contracts indexed besides the known ones
+	// (userop.KnownEntryPoints), such as a chain's own deployment.
+	EntryPoints []EntryPointSetting `yaml:"entry_points"`
+}
+
+// EntryPointSetting names one EntryPoint contract and its version.
+type EntryPointSetting struct {
+	Address string `yaml:"address"`
+	Version string `yaml:"version"` // one of userop.EntryPointVersions, e.g. "v0.9"
+}
+
+// entryPoints returns the known EntryPoints with the configured ones. A
+// configured address that is malformed, repeated, or known with another
+// version is an error.
+func (st ERC4337Settings) entryPoints() (map[common.Address]userop.EntryPointVersion, error) {
+	out := make(map[common.Address]userop.EntryPointVersion, len(userop.KnownEntryPoints)+len(st.EntryPoints))
+	for addr, v := range userop.KnownEntryPoints {
+		out[addr] = v
+	}
+	seen := make(map[common.Address]bool, len(st.EntryPoints))
+	for i, ep := range st.EntryPoints {
+		if !common.IsHexAddress(ep.Address) {
+			return nil, fmt.Errorf("features.%s.entry_points[%d]: address %q is not a hex address", ERC4337, i, ep.Address)
+		}
+		v, err := userop.ParseEntryPointVersion(ep.Version)
+		if err != nil {
+			return nil, fmt.Errorf("features.%s.entry_points[%d]: %w", ERC4337, i, err)
+		}
+		addr := common.HexToAddress(ep.Address)
+		if seen[addr] {
+			return nil, fmt.Errorf("features.%s.entry_points[%d]: %s is listed twice", ERC4337, i, addr.Hex())
+		}
+		seen[addr] = true
+		if known, ok := userop.KnownEntryPoints[addr]; ok && known != v {
+			return nil, fmt.Errorf("features.%s.entry_points[%d]: %s is the known EntryPoint %s, not %s", ERC4337, i, addr.Hex(), known, v)
+		}
+		out[addr] = v
+	}
+	return out, nil
+}
+
+type erc4337 struct{}
+
+func (erc4337) Name() string       { return ERC4337 }
+func (erc4337) Requires() []string { return nil }
+func (erc4337) DefaultOn() bool    { return true }
+
+func (erc4337) Register(r feature.Registrar) error {
+	d := r.Deps()
+	s, ok := d.Storage.(fetch.UserOpIndexer)
+	if !ok {
+		return fmt.Errorf("storage does not support UserOperations")
+	}
+	var st ERC4337Settings
+	if err := d.DecodeSettings(ERC4337, &st); err != nil {
+		return err
+	}
+	eps, err := st.entryPoints()
+	if err != nil {
+		return err
+	}
+	log := logger(d)
+	p := fetch.NewUserOpProcessor(log, s)
+	p.SetEntryPoints(eps)
+	r.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
+		txs := b.Transactions()
+		bundles := make([]fetch.UserOpBundle, 0, len(txs))
+		for _, t := range txs {
+			bundles = append(bundles, fetch.UserOpBundle{Sender: t.Tx.From, Receipt: t.GethReceipt})
+		}
+		return p.ProcessUserOps(ctx, b.Model.Number, b.Model.Hash, b.Model.Time, bundles)
+	}))
+	return nil
+}
+
+type erc7579 struct{}
+
+func (erc7579) Name() string       { return ERC7579 }
+func (erc7579) Requires() []string { return nil }
+func (erc7579) DefaultOn() bool    { return true }
+
+func (erc7579) Register(r feature.Registrar) error {
+	d := r.Deps()
+	s, ok := d.Storage.(fetch.ModuleIndexer)
+	if !ok {
+		return fmt.Errorf("storage does not support ERC-7579 modules")
+	}
+	log := logger(d)
+	p := fetch.NewModuleProcessor(log, s)
+	r.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
+		return p.ProcessModuleEventsFromBlock(ctx, b.Geth, b.GethReceipts)
+	}))
+	return nil
+}
+
+func init() {
+	feature.Register(eip7702{})
+	feature.Register(erc4337{})
+	feature.Register(erc7579{})
+}

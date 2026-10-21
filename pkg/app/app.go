@@ -13,42 +13,42 @@ import (
 	"sync"
 	"time"
 
+	_ "github.com/0xmhha/indexer-go/internal/api/indexing"
+	"github.com/0xmhha/indexer-go/internal/client"
+	"github.com/0xmhha/indexer-go/internal/compiler"
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/internal/constants"
+	"github.com/0xmhha/indexer-go/internal/features/aa"
+	_ "github.com/0xmhha/indexer-go/internal/features/address" // address.index feature
+	_ "github.com/0xmhha/indexer-go/internal/features/agg/api" // agg.candles, agg.timeseries and their GraphQL
+	_ "github.com/0xmhha/indexer-go/internal/features/balance" // balance.native feature
+	_ "github.com/0xmhha/indexer-go/internal/features/dex/api" // dex.pools, dex.trades, dex.orderbook and their GraphQL
+	"github.com/0xmhha/indexer-go/internal/features/dex/orderbook"
+	_ "github.com/0xmhha/indexer-go/internal/features/token" // token.transfers feature
+	"github.com/0xmhha/indexer-go/internal/multichain"
+	"github.com/0xmhha/indexer-go/internal/notifications"
+	"github.com/0xmhha/indexer-go/internal/opsguard"
+	"github.com/0xmhha/indexer-go/internal/rpcproxy"
+	"github.com/0xmhha/indexer-go/internal/source/era"
+	"github.com/0xmhha/indexer-go/internal/source/nodefeed"
+	"github.com/0xmhha/indexer-go/internal/source/replay"
+	"github.com/0xmhha/indexer-go/internal/token"
+	"github.com/0xmhha/indexer-go/internal/verifier"
 	"github.com/0xmhha/indexer-go/pkg/api"
-	_ "github.com/0xmhha/indexer-go/pkg/api/indexing"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	_ "github.com/0xmhha/indexer-go/pkg/chains/evm" // generic EVM chain profile
-	"github.com/0xmhha/indexer-go/pkg/client"
-	"github.com/0xmhha/indexer-go/pkg/compiler"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	"github.com/0xmhha/indexer-go/pkg/features/aa"
-	_ "github.com/0xmhha/indexer-go/pkg/features/address" // address.index feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/agg/api" // agg.candles, agg.timeseries and their GraphQL
-	_ "github.com/0xmhha/indexer-go/pkg/features/balance" // balance.native feature
-	_ "github.com/0xmhha/indexer-go/pkg/features/dex/api" // dex.pools, dex.trades, dex.orderbook and their GraphQL
-	"github.com/0xmhha/indexer-go/pkg/features/dex/orderbook"
 	"github.com/0xmhha/indexer-go/pkg/features/records"
 	_ "github.com/0xmhha/indexer-go/pkg/features/records/api" // records (declared tables) and its GraphQL
-	_ "github.com/0xmhha/indexer-go/pkg/features/token"       // token.transfers feature
 	"github.com/0xmhha/indexer-go/pkg/fetch"
-	"github.com/0xmhha/indexer-go/pkg/multichain"
-	"github.com/0xmhha/indexer-go/pkg/notifications"
-	"github.com/0xmhha/indexer-go/pkg/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/rpcpool"
-	"github.com/0xmhha/indexer-go/pkg/rpcproxy"
 	"github.com/0xmhha/indexer-go/pkg/source"
-	"github.com/0xmhha/indexer-go/pkg/source/era"
-	"github.com/0xmhha/indexer-go/pkg/source/nodefeed"
-	"github.com/0xmhha/indexer-go/pkg/source/replay"
 	sourcerpc "github.com/0xmhha/indexer-go/pkg/source/rpc"
 	"github.com/0xmhha/indexer-go/pkg/startup"
 	"github.com/0xmhha/indexer-go/pkg/storage"
 	"github.com/0xmhha/indexer-go/pkg/stream"
-	"github.com/0xmhha/indexer-go/pkg/token"
-	"github.com/0xmhha/indexer-go/pkg/verifier"
 	"github.com/0xmhha/indexer-go/pkg/window"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
@@ -71,7 +71,7 @@ type App struct {
 	apiServer  *api.Server
 	rpcProxy   *rpcproxy.Proxy
 
-	// RPC archive (pkg/source/replay): a local endpoint that records calls to
+	// RPC archive (internal/source/replay): a local endpoint that records calls to
 	// the node or replays a recorded archive.
 	rpcEndpoint *replay.Endpoint
 	rpcRecorder *replay.Writer

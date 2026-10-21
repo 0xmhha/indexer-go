@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	abiDecoder "github.com/0xmhha/indexer-go/pkg/abi"
+	abiDecoder "github.com/0xmhha/indexer-go/internal/abi"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"

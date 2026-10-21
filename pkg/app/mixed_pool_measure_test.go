@@ -24,11 +24,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/feedtelemetry"
 	"github.com/0xmhha/indexer-go/pkg/api"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feed"
-	"github.com/0xmhha/indexer-go/pkg/feedtelemetry"
 	"github.com/0xmhha/indexer-go/pkg/storage/postgres"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 	"github.com/ethereum/go-ethereum/common"

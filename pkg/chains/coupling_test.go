@@ -17,11 +17,9 @@ import (
 // codecs). The chain profiles are the chain-specific code outside this
 // list; pkg/app links the generic EVM profile only.
 var chainNeutral = []string{
-	"chainfeed", "window", "capture", "progress", "projection", "indexingstatus", "feed",
-	"fetch", "api", "source", "feature", "features", "storage", "events", "eventbus",
-	"core", "types", "token", "abi", "client", "rpcproxy", "notifications",
-	"multichain", "userop", "module", "verifier", "compiler", "price", "rpcpool",
-	"../internal", "../cmd/cli", "../cmd/flags", "startup",
+	"chainfeed", "window", "capture", "feed", "fetch", "api", "source", "feature",
+	"features", "storage", "events", "core", "rpcpool", "startup",
+	"../internal", "../cmd/cli", "../cmd/flags",
 }
 
 // TestChainNeutralPackagesDoNotImportProfiles keeps chain-specific code in

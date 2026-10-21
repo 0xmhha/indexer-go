@@ -42,6 +42,6 @@ def clo(seeds):
     pk=collections.Counter(s(x['pkg']) for x in d)
     return len(d), sum(x.get('lines',0) for x in d), pk.most_common(6)
 print('\nDECL CLOSURES')
-for seed in ['pkg/fetch.(Fetcher).FillGaps','pkg/fetch.(Fetcher).Run','pkg/api/middleware.RateLimit','pkg/abi.NewDecoder','pkg/eventbus.NewLocalEventBus','pkg/events.NewEventBus','pkg/fetch.NewFetcher','pkg/adapters/factory.NewFactory','pkg/token.NewDetector']:
+for seed in ['pkg/fetch.(Fetcher).FillGaps','pkg/fetch.(Fetcher).Run','internal/api/middleware.RateLimit','internal/abi.NewDecoder','internal/eventbus.NewLocalEventBus','pkg/events.NewEventBus','pkg/fetch.NewFetcher','pkg/adapters/factory.NewFactory','internal/token.NewDetector']:
     if P+seed in N: print(seed, clo([P+seed]))
     else: print(seed,'(missing)')

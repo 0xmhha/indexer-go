@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	modulepkg "github.com/0xmhha/indexer-go/internal/module"
+	"github.com/0xmhha/indexer-go/internal/userop"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	modulepkg "github.com/0xmhha/indexer-go/pkg/module"
-	"github.com/0xmhha/indexer-go/pkg/userop"
 )
 
 // The account abstraction processors return storage errors, so the block

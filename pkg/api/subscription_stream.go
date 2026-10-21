@@ -10,8 +10,8 @@ import (
 	gws "github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
-	apimiddleware "github.com/0xmhha/indexer-go/pkg/api/middleware"
-	"github.com/0xmhha/indexer-go/pkg/notifications"
+	apimiddleware "github.com/0xmhha/indexer-go/internal/api/middleware"
+	"github.com/0xmhha/indexer-go/internal/notifications"
 )
 
 // SubscriptionStreamPath is where a key's stream connection is served:

@@ -39,10 +39,10 @@ import 폐포를 크기순으로 보면 층이 뚜렷하다. 아래는 그중 �
 
 | 패키지 | 자체 줄 수 | import 폐포 줄 수 | 폐포 안 외부 모듈 | 뜻 |
 |---|---|---|---|---|
-| `pkg/client` | 357 | 357 | geth, zap | 독립. 배치 RPC가 있다 |
-| `pkg/api/middleware` | 447 | 447 | x/time, zap | 독립 |
-| `pkg/api/websocket` | 525 | 525 | gorilla/websocket, zap | 독립 |
-| `pkg/abi` | 715 | 715 | geth | 독립 |
+| `internal/client` | 357 | 357 | geth, zap | 독립. 배치 RPC가 있다 |
+| `internal/api/middleware` | 447 | 447 | x/time, zap | 독립 |
+| `internal/api/websocket` | 525 | 525 | gorilla/websocket, zap | 독립 |
+| `internal/abi` | 715 | 715 | geth | 독립 |
 | `pkg/storage` | 17,152 | 18,432 | geth, **pebble**, zap | 허브. fan-in 13 |
 | `pkg/resilience` | 1,158 | 19,590 | pebble 포함 | storage에 묶임 |
 | `pkg/events` | 4,994 | 23,426 | pebble, prometheus 포함 | storage에 묶임 |
@@ -62,16 +62,16 @@ testnet에서 조회 지연 0.12초도 확인했다. 아래 표는 이 구현을
 
 | 필요 기능 | 지금 P07 | indexer-go의 대응 | 선언 폐포(딸려 오는 것) | 방식 |
 |---|---|---|---|---|
-| HTTP 보호: 요청 속도 제한, panic 복구, 요청 로그, API 키 | 없음 | `pkg/api/middleware` | 22개 선언, 278줄. 외부는 zap, x/time/rate | **가져온다** |
-| 실시간 알림: 영수증이 생기면 키오스크·백오피스에 밀어 주기 | 없음(키오스크가 다시 묻는다) | `pkg/api/websocket` Hub, Server | 31개, 371줄. gorilla/websocket, zap | **가져온다**(쓸 때) |
-| 다른 이벤트의 decode: CashOut, Deposit, Withdrawal 등 백오피스 대사용 | PaymentSettled 하나를 손으로 decode | `pkg/abi` Decoder | 12개, 210줄. geth만 | **가져온다**(이벤트를 늘릴 때) |
-| 운영 알림: 수집이 멈추거나 뒤처질 때 webhook | 없음(healthz만) | `pkg/notifications` WebhookHandler, 서명 검증 | 17개, 235줄. zap | **가져온다** |
+| HTTP 보호: 요청 속도 제한, panic 복구, 요청 로그, API 키 | 없음 | `internal/api/middleware` | 22개 선언, 278줄. 외부는 zap, x/time/rate | **가져온다** |
+| 실시간 알림: 영수증이 생기면 키오스크·백오피스에 밀어 주기 | 없음(키오스크가 다시 묻는다) | `internal/api/websocket` Hub, Server | 31개, 371줄. gorilla/websocket, zap | **가져온다**(쓸 때) |
+| 다른 이벤트의 decode: CashOut, Deposit, Withdrawal 등 백오피스 대사용 | PaymentSettled 하나를 손으로 decode | `internal/abi` Decoder | 12개, 210줄. geth만 | **가져온다**(이벤트를 늘릴 때) |
+| 운영 알림: 수집이 멈추거나 뒤처질 때 webhook | 없음(healthz만) | `internal/notifications` WebhookHandler, 서명 검증 | 17개, 235줄. zap | **가져온다** |
 | RPC 재시도와 지수 backoff | 다음 폴링 주기에 같은 범위를 다시 읽는 것뿐 | `fetch.fetchBlockAndReceiptsWithRetry` | 메서드 하나지만 Fetcher가 storage에 묶여 있다 | **참고**(약 30줄 패턴) |
 | 지표: cursor, lag, RPC 오류, 처리량 | 없음(healthz의 cursor·lag) | `pkg/fetch/metrics.go`, eventbus의 Prometheus 사용 | prometheus client | **참고** |
 | 설정 파일과 로거 | 환경 변수, 표준 log | `internal/config`(YAML), `internal/logger`(zap, 151줄) | config 1,685줄 | **참고**. 로거만 가져오는 것도 가능 |
-| 배치 RPC | 범위 단위 `eth_getLogs` 한 번이라 필요 없다 | `pkg/client` BatchGetReceipts | 23개, 236줄 | 지금은 불필요 |
+| 배치 RPC | 범위 단위 `eth_getLogs` 한 번이라 필요 없다 | `internal/client` BatchGetReceipts | 23개, 236줄 | 지금은 불필요 |
 | gap 감지와 복구 | 구조상 gap이 없다(로그와 cursor를 한 트랜잭션으로 저장) | `Fetcher.DetectGaps/FillGaps` | 211개, 5,997줄. storage, events 포함 | 불필요. 블록마다 저장하는 모델용이다 |
-| 컨트랙트 등록과 ABI 기반 동적 이벤트 파싱 | 정산 컨트랙트 고정 | `events.ContractRegistrationService`, DynamicEventParser | 150개, 1,749줄. prometheus 포함 | 지금은 불필요. 이벤트가 여럿이 되면 `pkg/abi`로 충분하다 |
+| 컨트랙트 등록과 ABI 기반 동적 이벤트 파싱 | 정산 컨트랙트 고정 | `events.ContractRegistrationService`, DynamicEventParser | 150개, 1,749줄. prometheus 포함 | 지금은 불필요. 이벤트가 여럿이 되면 `internal/abi`로 충분하다 |
 | 로그 색인 저장 | PostgreSQL 인덱스 `(merchant, order_id, block_number)` | `storage.PebbleStorage` 로그 함수 | 37개, 631줄. pebble | **가져올 수 없다**(N25와 다른 저장소) |
 | 백오피스 조회: 가맹점·기간별 목록, 일/주/월 합계, 페이지 | 없음(단건 조회뿐) | GraphQL `logs(filter, pagination)`, 연결형 페이지 | 18,527줄 API 전체 | **참고**(페이지와 필터의 모양만). P05 백오피스 작업 때 PostgreSQL 질의로 만든다 |
 | 재색인 명령: 지정 블록부터 다시 쌓기 | cursor를 지우면 배포 블록부터 다시 읽는다 | `start_height` 설정 | — | 지금 방식으로 충분 |

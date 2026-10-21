@@ -51,7 +51,7 @@ AST 그래프로 본 사실은 다음과 같다.
 | 확인한 것 | 근거 |
 |---|---|
 | 저장소 구현이 하나뿐이다 | `NewPebbleStorage` 외 구현이 없다 |
-| 키 설계가 밖으로 새어 나간다 | `pkg/notifications`, `pkg/resilience`, `pkg/watchlist`, `cmd/indexer`가 `KVStore.Put/Iterate`로 자기 키를 직접 쓴다(40여 곳). SQL 저장소라면 이들을 위해 KV 흉내를 내야 한다 |
+| 키 설계가 밖으로 새어 나간다 | `internal/notifications`, `pkg/resilience`, `pkg/watchlist`, `cmd/indexer`가 `KVStore.Put/Iterate`로 자기 키를 직접 쓴다(40여 곳). SQL 저장소라면 이들을 위해 KV 흉내를 내야 한다 |
 | 조회 기능이 반복자 위에 손으로 짜여 있다 | `GetLogs`: 주소 또는 첫 topic 하나로만 색인 범위를 읽고, 나머지 topic과 주소는 메모리에서 거른다. 최대 10,000블록이다 |
 | 키가 문자열 포맷팅이다 | `fmt.Sprintf("%s%020d/%06d/%06d", ...)`로 쓰고 `fmt.Sscanf`로 읽는다 |
 | 정렬이 깨지는 키가 있다 | `BlockKey`, `TransactionKey`는 자리 채움 없는 `%d`라 사전순이 숫자순과 다르다("10" < "9"). 범위 함수 `BlockKeyRange`는 지금 쓰이지 않아 실제 오류는 나지 않지만, 쓰는 순간 잘못된 범위를 읽는다 |

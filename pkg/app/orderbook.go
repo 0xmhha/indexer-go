@@ -7,9 +7,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/internal/features/dex/orderbook"
+	"github.com/0xmhha/indexer-go/internal/token"
 	"github.com/0xmhha/indexer-go/pkg/feature"
-	"github.com/0xmhha/indexer-go/pkg/features/dex/orderbook"
-	"github.com/0xmhha/indexer-go/pkg/token"
 )
 
 // initOrderBook builds the DEX order books (refactoring plan R5-2) when

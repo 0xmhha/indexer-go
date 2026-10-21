@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/eventbus"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/eventbus"
 )
 
 // DetailedHealth provides comprehensive health information for the indexer service

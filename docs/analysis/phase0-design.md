@@ -258,7 +258,7 @@ func (s *PebbleStorage) nextAddrSeq(ctx context.Context, addr common.Address) (u
 | EIP-7702 SetCode | `SetSetCodeProcessor` 호출자 없음 | `initFetcher`에서 저장소가 `SetCodeIndexer`를 구현하면 `NewSetCodeProcessor`를 만들어 등록한다 | 항상 켬. tx type 4가 있을 때만 동작한다 |
 | ERC-4337 UserOp | `SetUserOpProcessor` 호출자 없음 | 같은 방식. `account_abstraction.entry_point_addresses`가 있으면 그 주소만, 없으면 지금처럼 이벤트 signature로 찾는다 | `account_abstraction.enabled`(지금 무시되는 키, 기본값 true로 정한다) |
 | ERC-7579 Module | 호출 위치도 없음 | `applyBlock`에서 UserOp 처리 뒤에 `ProcessModuleEventsFromBlock`을 부른다 | `account_abstraction.enabled` |
-| fee delegation | `*client.Client`가 `FeeDelegationClient`를 구현하지 않는다. `factory.EVMClient`는 메타 타입이 달라 역시 맞지 않는다 | `FeeDelegationMeta`를 공용 패키지(`pkg/types/chain`)로 옮겨 `fetch`와 `factory`가 같은 타입을 쓰게 한다. adapter가 stableone이면 그 클라이언트를 fetcher에 넘긴다 | adapter가 stableone일 때만 |
+| fee delegation | `*client.Client`가 `FeeDelegationClient`를 구현하지 않는다. `factory.EVMClient`는 메타 타입이 달라 역시 맞지 않는다 | `FeeDelegationMeta`를 공용 패키지(`internal/types/chain`)로 옮겨 `fetch`와 `factory`가 같은 타입을 쓰게 한다. adapter가 stableone이면 그 클라이언트를 fetcher에 넘긴다 | adapter가 stableone일 때만 |
 
 - 멀티체인 경로(`multichain/instance.go`)에도 같은 연결을 넣는다. 다만 멀티체인은 R0-9로 막혀 있으므로, 시험은 단일 체인으로만 한다.
 - 처리기 등록 코드는 `initFetcher` 한곳에 모은다. Phase 2의 기능 레지스트리로 옮길 때 이곳 하나만 바꾸면 되게 하려는 것이다.
@@ -387,7 +387,7 @@ GraphQL `transactions`/`logs`는 범위를 주지 않으면 0..latest 전체 블
 
 구현하면서 확인한 사실은 다음과 같다.
 - **F1·F2가 저장 결과로 확인되었다.** 시나리오에 시스템 컨트랙트 Mint·Burn, SetCode, UserOp, Module 이벤트를 넣었지만, golden에는 해당 키가 하나도 없다. R0-5·R0-6을 적용하면 golden에서 이 키들이 늘어나야 한다.
-- **결정성 결함이 하나 있다.** 토큰 메타데이터가 `createdAt`/`updatedAt`에 처리 시각(`time.Now()`, `pkg/token/block_processor.go:149`)을 저장한다. 같은 체인을 다시 색인하면 값이 달라진다. golden에서는 두 필드를 지우고 비교한다. 이 결함은 처리기 결정성 규약(refactoring-plan.md 8절)에서 블록 시각으로 바꾸는 대상으로 남긴다.
+- **결정성 결함이 하나 있다.** 토큰 메타데이터가 `createdAt`/`updatedAt`에 처리 시각(`time.Now()`, `internal/token/block_processor.go:149`)을 저장한다. 같은 체인을 다시 색인하면 값이 달라진다. golden에서는 두 필드를 지우고 비교한다. 이 결함은 처리기 결정성 규약(refactoring-plan.md 8절)에서 블록 시각으로 바꾸는 대상으로 남긴다.
 - **`.gitignore` 결함이 있었다.** 루트 실행 파일을 무시하려던 `indexer` 패턴이 `cmd/indexer/` 아래 새 파일까지 무시했다. `/indexer`로 고쳤다.
 - **GraphQL 조회 golden은 이 PR에 넣지 않았다.** API 동작이 바뀌는 R0-5(PR 9)에서 함께 추가한다.
 
@@ -481,7 +481,7 @@ golden 키 공간은 의도한 세 키만 늘었다. `/data/syscontracts/mint/�
 | EIP-7702 SetCode | `main.go`의 `registerFeatureProcessors`가 저장소가 `SetCodeIndexer`를 구현하면 처리기를 등록한다 | 항상 켬(type 4 트랜잭션이 있을 때만 동작) |
 | ERC-4337 UserOp | 같은 함수에서 `UserOpIndexer`일 때 등록한다 | `account_abstraction.enabled`. 기본값은 true다. `NewConfig`에서 넣으므로 설정 파일에서 키를 생략하면 켜지고, `false`를 명시하면 꺼진다(`TestAccountAbstractionDefault`). `entry_point_addresses`는 아직 처리기가 지원하지 않아 경고만 남긴다 |
 | ERC-7579 Module | `Fetcher.SetModuleProcessor`를 추가하고, 주소 색인 처리의 UserOp 다음에 호출한다 | `account_abstraction.enabled` |
-| fee delegation | `FeeDelegationMeta`를 `pkg/types/chain`으로 옮기고 `fetch`·`factory`에서는 type alias로 가리킨다. 그래서 `factory.EVMClient`가 `fetch.FeeDelegationClient`를 만족한다(`main.go`에 컴파일 시점 확인). `Fetcher.SetFeeDelegationClient`로 주입한다 | 노드 감지 결과가 StableOne일 때만 |
+| fee delegation | `FeeDelegationMeta`를 `internal/types/chain`으로 옮기고 `fetch`·`factory`에서는 type alias로 가리킨다. 그래서 `factory.EVMClient`가 `fetch.FeeDelegationClient`를 만족한다(`main.go`에 컴파일 시점 확인). `Fetcher.SetFeeDelegationClient`로 주입한다 | 노드 감지 결과가 StableOne일 때만 |
 
 검증 결과는 다음과 같다.
 - golden 키 공간에 SetCode·UserOp·Module(번들러 통계, 스마트 계정 포함) 키 20개가 추가되었다. 기존 키 변화는 없다.
@@ -535,7 +535,7 @@ golden 키 공간은 의도한 세 키만 늘었다. `/data/syscontracts/mint/�
 
 **기존 시험 race.** `pkg/events`의 `TestMetrics_FilteredEvents`가 race 검사에서 가끔 실패했다(변경 전 커밋 5회 중 1회). 원인은 시험 코드의 카운터를 잠금 없이 쓰는 것이었고, atomic으로 바꿨다. 별도 프로세스로 10회 돌려 실패 0회를 확인했다. 한 프로세스에서 `-count`를 2 이상 주면 Prometheus metric 중복 등록으로 panic이 나는데, 이것은 원래 시험 구조의 문제라 이번에는 고치지 않았다.
 
-**Etherscan 검증 상태 race(새로 찾음).** race 검사에서 `pkg/api/etherscan`이 실패했다(변경 전 커밋 3회 중 3회). 원인은 운영 코드에 있었다. 검증 상태 조회가 잠금 안에서 job 포인터만 꺼내고, 잠금을 푼 뒤 상태 필드를 읽었다. 그 사이 백그라운드 검증 고루틴이 같은 필드를 쓴다. 상태와 메시지를 잠금 안에서 복사하도록 고쳤고, 시험도 같은 방식으로 읽게 했다. race 검사 5회 모두 통과했다. 그 시험은 job이 아직 "Pending"이라고 가정한다. 검증 고루틴이 아주 빨리 끝나면 불안정해질 수 있다(5회 중 실패 없음).
+**Etherscan 검증 상태 race(새로 찾음).** race 검사에서 `internal/api/etherscan`이 실패했다(변경 전 커밋 3회 중 3회). 원인은 운영 코드에 있었다. 검증 상태 조회가 잠금 안에서 job 포인터만 꺼내고, 잠금을 푼 뒤 상태 필드를 읽었다. 그 사이 백그라운드 검증 고루틴이 같은 필드를 쓴다. 상태와 메시지를 잠금 안에서 복사하도록 고쳤고, 시험도 같은 방식으로 읽게 했다. race 검사 5회 모두 통과했다. 그 시험은 job이 아직 "Pending"이라고 가정한다. 검증 고루틴이 아주 빨리 끝나면 불안정해질 수 있다(5회 중 실패 없음).
 
 ### P0-12: 설정 정리와 멀티체인 차단 (10/3, F4·D4 임시 조치)
 

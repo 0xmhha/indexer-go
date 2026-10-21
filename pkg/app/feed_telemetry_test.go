@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/feedtelemetry"
+	"github.com/0xmhha/indexer-go/internal/indexingstatus"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/feed"
-	"github.com/0xmhha/indexer-go/pkg/feedtelemetry"
-	"github.com/0xmhha/indexer-go/pkg/indexingstatus"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"

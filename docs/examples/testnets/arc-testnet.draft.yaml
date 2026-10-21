@@ -110,7 +110,7 @@ window_storage:
 # Permanent source facts and projections use PostgreSQL; a separate objects
 # directory is not an implemented application YAML option.
 
-# Capacity halt (pkg/opsguard, docs/OPERATIONS_CAPACITY_DRAFT.md), in every
+# Capacity halt (internal/opsguard, docs/OPERATIONS_CAPACITY_DRAFT.md), in every
 # chain process: each samples the shared APFS volume and PGDATA. The latch and
 # journal live in this chain's private state directory
 # (state/arc-testnet), which survives a removed APFS.

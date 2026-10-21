@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/0xmhha/indexer-go/internal/notifications"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/pkg/notifications"
 	"go.uber.org/zap"
 )
 

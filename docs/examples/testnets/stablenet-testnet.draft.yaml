@@ -65,7 +65,7 @@ api:
 # No source.feed, raw window, state_proofs, call_traces, blob, extra projection
 # workers, node-feed IPC, era source or recording.
 
-# Capacity halt (pkg/opsguard, docs/OPERATIONS_CAPACITY_DRAFT.md), in every
+# Capacity halt (internal/opsguard, docs/OPERATIONS_CAPACITY_DRAFT.md), in every
 # chain process: each samples the shared APFS volume and PGDATA. The latch and
 # journal live in this chain's private state directory
 # (state/stablenet-testnet), which survives a removed APFS.

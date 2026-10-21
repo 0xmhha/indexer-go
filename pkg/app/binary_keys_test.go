@@ -23,7 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
-	"github.com/0xmhha/indexer-go/pkg/source/era"
+	"github.com/0xmhha/indexer-go/internal/source/era"
 	"github.com/0xmhha/indexer-go/x/stablenet"
 )
 

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xmhha/indexer-go/pkg/api/middleware"
+	"github.com/0xmhha/indexer-go/internal/api/middleware"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"

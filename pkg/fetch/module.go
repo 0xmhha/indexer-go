@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"
 
+	modulepkg "github.com/0xmhha/indexer-go/internal/module"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	modulepkg "github.com/0xmhha/indexer-go/pkg/module"
 )
 
 // ModuleIndexer defines the interface for indexing ERC-7579 module events
