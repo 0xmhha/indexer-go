@@ -1,9 +1,9 @@
-// Package sdktest checks that a project's handlers follow the determinism
-// rules of docs/SDK.md: the same chain gives the same stored data however
+// Package featuretest checks that features follow the determinism
+// rules of docs/EXTENDING.md: the same chain gives the same stored data however
 // it is indexed (from genesis, again, with a restart, or by backfill after
 // the feature is enabled late), and the handler's source reads no clock,
 // randomness, environment or network, and no "latest" node state.
-package sdktest
+package featuretest
 
 import (
 	"bytes"
@@ -67,11 +67,11 @@ func RequireDeterministic(t testing.TB, c Check) {
 		defer cancel()
 		cfg, err := c.config(srv.URL(), dir, features)
 		if err != nil {
-			t.Fatalf("sdktest: configuration: %v", err)
+			t.Fatalf("featuretest: configuration: %v", err)
 		}
 		keys, err := app.IndexForCheck(ctx, cfg, c.Chain.Head(), c.Prefixes)
 		if err != nil {
-			t.Fatalf("sdktest: indexing to block %d: %v", c.Chain.Head(), err)
+			t.Fatalf("featuretest: indexing to block %d: %v", c.Chain.Head(), err)
 		}
 		return keys
 	}
@@ -79,7 +79,7 @@ func RequireDeterministic(t testing.TB, c Check) {
 
 	ref := run(dir("reference"), true)
 	if len(ref) == 0 {
-		t.Fatalf("sdktest: the features stored nothing under %v; the check would prove nothing", c.Prefixes)
+		t.Fatalf("featuretest: the features stored nothing under %v; the check would prove nothing", c.Prefixes)
 	}
 	requireSame(t, "indexed again", ref, run(dir("again"), true))
 
@@ -154,7 +154,7 @@ func requireSame(t testing.TB, how string, want, got map[string][]byte) {
 	if len(diffs) > 10 {
 		diffs = append(diffs[:10], fmt.Sprintf("... %d more", len(diffs)-10))
 	}
-	t.Fatalf("sdktest: not deterministic: %s stores other data than indexing from genesis:\n  %s", how, strings.Join(diffs, "\n  "))
+	t.Fatalf("featuretest: not deterministic: %s stores other data than indexing from genesis:\n  %s", how, strings.Join(diffs, "\n  "))
 }
 
 func printable(k string) string { return fmt.Sprintf("%q", k) }

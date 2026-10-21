@@ -6,13 +6,13 @@ Build EVM indexing backends in Go. Turn blocks, transactions, receipts and logs 
 [![Go toolchain](https://img.shields.io/badge/Go-1.26.8-00ADD8?logo=go)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-[Quickstart](docs/QUICKSTART.md) · [Documentation](docs/README.md) · [API reference](docs/API.md) · [SDK](docs/SDK.md) · [Examples](#examples)
+[Quickstart](docs/QUICKSTART.md) · [Documentation](docs/README.md) · [API reference](docs/API.md) · [Extending](docs/EXTENDING.md) · [Examples](#examples)
 
 ## Why indexer-go?
 
 Use indexer-go when you need a backend for a block explorer, a contract event service, or a dApp that queries indexed chain data.
 
-- **Write application logic in Go.** Register project features and GraphQL or HTTP routes through the SDK. Declare contract events in configuration when you only need selected logs.
+- **Write application logic in Go.** Register project features and GraphQL or HTTP routes with the extension packages. Declare contract events in configuration when you only need selected logs.
 - **Keep block writes consistent.** Indexed data, feature writes, progress and durable outbox events commit with the block. Reorg recovery uses recorded undo.
 - **Choose your storage layout.** Run with embedded Pebble, or use PostgreSQL to separate ingestion and API processes. Multi-chain mode isolates each chain's database and API routes.
 - **Expose the data you collect.** Serve GraphQL, JSON-RPC, REST and GraphQL subscriptions, with cursor-based reads and resumable outbox-backed streams.
@@ -60,12 +60,12 @@ For your own RPC endpoint, a retained starting height, or PostgreSQL, follow the
 | Your goal | Start here |
 | --- | --- |
 | Collect selected contract events | [Declared records](docs/CONFIG.md#선언형-수집-featuresrecords-indexermode) and the [receipts example](examples/receipts/README.md) |
-| Add derived data, a block handler or a custom API | [Project SDK](docs/SDK.md) |
+| Add derived data, a block handler or a custom API | [Extending the indexer](docs/EXTENDING.md) |
 | Support custom headers, transactions or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md) and the [profile example](examples/chainprofile/README.md) |
 | Integrate an API client | [API reference](docs/API.md) and [schema snapshots](pkg/app/testdata/api/) |
 | Decouple Arc intake from downstream processing | [Opt-in feed application](docs/FEED_APP.md) and [Arc feed module](x/arc/feed/README.md) |
 
-Projects build their own binary and link the packages that register their features or profiles. YAML configures linked code; it does not load Go plugins. Pin your module version and check the [SDK compatibility boundary](docs/SDK.md#7-호환성-약속) before upgrading.
+Projects build their own binary and link the packages that register their features or profiles. YAML configures linked code; it does not load Go plugins. No package carries a compatibility promise: pin your module version and run your extension's tests before upgrading ([migration from the former SDK](docs/EXTENDING.md#8-이전-sdk에서-옮기기)).
 
 ## Examples
 
@@ -97,7 +97,7 @@ The [documentation index](docs/README.md) groups guides by task. Entry guides ar
 - [Quickstart](docs/QUICKSTART.md) — build, run and query a local chain; connect your own RPC.
 - [Configuration](docs/CONFIG.md) — features, databases, roles, multi-chain mode and notifications.
 - [API reference](docs/API.md) — endpoints, query examples, pagination and subscriptions.
-- [SDK](docs/SDK.md) and [chain customization](docs/CHAIN_CUSTOMIZATION.md) — extend application behavior and chain rules.
+- [Extending](docs/EXTENDING.md) and [chain customization](docs/CHAIN_CUSTOMIZATION.md) — extend application behavior and chain rules.
 - [Architecture](docs/ARCHITECTURE.md) — ingestion, storage, recovery and extension boundaries.
 
 ## Contributing and support

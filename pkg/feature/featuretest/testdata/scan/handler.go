@@ -22,7 +22,7 @@ func handle(ctx context.Context, c caller, block any) {
 	_, _ = c.CallContract(ctx, ethereum.CallMsg{}, nil)
 	_, _ = c.CallContract(ctx, ethereum.CallMsg{}, block)
 	_ = time.Unix(0, 0)
-	//sdk:nondeterministic a route's cache, not a handler
+	//feature:nondeterministic a route's cache, not a handler
 	_ = time.Now()
-	_ = time.Since(time.Time{}) //sdk:nondeterministic same line
+	_ = time.Since(time.Time{}) //feature:nondeterministic same line
 }

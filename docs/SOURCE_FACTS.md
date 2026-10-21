@@ -286,7 +286,7 @@ PostgreSQL10패키지169 tests/subtests·skip0, App managed/node-feed/prepared60
 
 예약 슬롯은 한 SQL의 rows/Scan/Exec 동안만 cancellable gate를 점유하며, model 디코딩/HTTP 응답/RPC 대기에는 점유하지 않는다. rows의 EOF/Close와 Row.Scan이 gate를 정확히 한 번 반환한다. 끊어진 연결은 같은 pool 안에서 다시 얻고, API Stop/최종 참조 해제는 원래 pool에 슬롯을 반환한다. Store.Close도 lease를 회수한다. SQL 인자는 기존 server parameter binding을 그대로 전달한다. 예약 슬롯이 바쁘면 같은 pool의 일반 연결을1ms씩 시도하고, 입장만 재시도하며 SQL은 재실행하지 않는다. 빈 일반 연결이 나중에 생기는 nested query도 진행할 수 있다. 연결 생성 오류에는50ms backoff를 두고 요청 취소/종료를 즉시 관찰한다. `ObserveQueries`의 acquire는 선택·대기·재연결 시간을 한 번만 측정하고 내부 tracer의 중복 기록을 막는다. 종료는 예약/차용 양쪽 rows와 대기자가 모두 해제될 때까지 기다린다.
 
-단일 체인의 `node.role: all`과 명시적 `database.postgres.max_conns: 4` 조합에서 앱이 이 정책을 선택한다. source/validate/fresh는 같은 Store의 일반 pool 연결에서 계속 동작한다. 전용 API/ingest 역할, 예제의2연결, 명시적1/default0 및 다른 예산은 자동 변경하지 않는다. 읽기 전용 Store와4 미만 pool은 예약하지 않는다. SDK의 직접 API 생성은 `api.Config.ReserveQueryReader`로 opt-in하며 기본값은 false다. 현재 예약은 일반 `q(ctx)` projection 조회의 root API 범위이고, source의 별도 snapshot API·멀티체인 route/추가 worker·무거운 조회 예산은 별도 검증 범위다.
+단일 체인의 `node.role: all`과 명시적 `database.postgres.max_conns: 4` 조합에서 앱이 이 정책을 선택한다. source/validate/fresh는 같은 Store의 일반 pool 연결에서 계속 동작한다. 전용 API/ingest 역할, 예제의2연결, 명시적1/default0 및 다른 예산은 자동 변경하지 않는다. 읽기 전용 Store와4 미만 pool은 예약하지 않는다. 직접 API 생성은 `api.Config.ReserveQueryReader`로 opt-in하며 기본값은 false다. 현재 예약은 일반 `q(ctx)` projection 조회의 root API 범위이고, source의 별도 snapshot API·멀티체인 route/추가 worker·무거운 조회 예산은 별도 검증 범위다.
 
 실제 pool 연결3개를 일반 작업이 점유한 상태에서 네 번째 일반 작업은 대기/취소되고 production HTTP API는 예약 슬롯으로 진행했다. staged projection은 API에 보이지 않고, lease context를 붙인 bound 읽기는 staged 값을 보아 원래 transaction을 우선함을 확인했다. 다른 Store의 context 격리, API 대기 취소/rows 반환, 연결 단절 복구,4개 상한, SQL 공격 문자열의 값 바인딩, lease 참조/Close 회수와1/2연결·read-only 제외를 검사했다.
 

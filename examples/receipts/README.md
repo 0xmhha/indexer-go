@@ -1,7 +1,7 @@
 # receipts: P07 on the indexer framework
 
 The P07 receipt indexer (nu-54v-dk-toy `products/p07-indexer`) rebuilt on
-the indexer SDK (`pkg/sdk`, docs/SDK.md) as a separate Go module that
+the indexer's extension packages (docs/EXTENDING.md) as a separate Go module that
 changes nothing in the indexer (refactoring plan R6-2 and R6-3).
 
 - Configuration does the ingestion: `indexer.mode: declared`,

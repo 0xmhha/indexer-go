@@ -7,13 +7,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Routes let packages outside the API, such as a project's own handlers
-// (refactoring plan R6-2, pkg/sdk), serve HTTP endpoints of their own next
+// (refactoring plan R6-2), serve HTTP endpoints of their own next
 // to the GraphQL API, for responses GraphQL cannot give (status codes,
 // fixed JSON shapes). They register in init; every single-chain server,
 // including one of declared data only, mounts them, and a multi-chain
@@ -77,3 +78,6 @@ func (s *Server) mountRoutes() {
 		s.logger.Info("Route registered", zap.String("method", r.Method), zap.String("pattern", r.Pattern))
 	}
 }
+
+// URLParam returns a parameter of a route pattern ("{name}").
+func URLParam(r *http.Request, name string) string { return chi.URLParam(r, name) }

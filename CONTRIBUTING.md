@@ -6,7 +6,7 @@ Contributions to the framework, examples and documentation are welcome. Start wi
 
 Use [GitHub Issues](https://github.com/0xmhha/indexer-go/issues) for questions, bugs and feature proposals. For a bug, include the commit or version, chain/profile, enabled features, storage driver, expected behavior and a minimal reproduction. Redact credentials from RPC URLs, DSNs and logs.
 
-For changes to storage formats, chain accounting, public SDK interfaces or source completeness, describe the compatibility and recovery behavior before implementation. Existing design notes are context; they do not make every proposal part of the supported runtime.
+For changes to storage formats, chain accounting, extension interfaces (`pkg/feature`, `pkg/api`, `pkg/chains`) or source completeness, describe the compatibility and recovery behavior before implementation. Existing design notes are context; they do not make every proposal part of the supported runtime.
 
 ## Development setup
 
@@ -27,19 +27,19 @@ The optional Rust adapter has its own prerequisites in [its README](x/arc/nodefe
 
 | Change | Location or contract |
 | --- | --- |
-| Project handlers, derived records and HTTP/GraphQL routes | [SDK](docs/SDK.md), `pkg/sdk`, [receipts example](examples/receipts/README.md) |
+| Project handlers, derived records and HTTP/GraphQL routes | [Extending](docs/EXTENDING.md), `pkg/feature`, `pkg/api`, [receipts example](examples/receipts/README.md) |
 | Chain detection, decoding, verification or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md), `x/<chain>` |
 | Storage interfaces and driver implementations | `pkg/core/port`, `pkg/storage`, `pkg/storage/postgres` |
 | Application lifecycle and multi-chain wiring | `pkg/app`, `pkg/multichain` |
 | Source/feed contracts and workers | `pkg/source`, `pkg/chainfeed`, `pkg/window`, `pkg/capture`, `x/arc/feed` |
 | API schema and registered methods | `pkg/api`, [API snapshots](pkg/app/testdata/api/) |
 
-Keep chain-specific rules in profiles or chain modules rather than adding chain-id branches to shared code. Project integrations should prefer the SDK over internal packages.
+Keep chain-specific rules in profiles or chain modules rather than adding chain-id branches to shared code. Project integrations should use the extension packages in [Extending](docs/EXTENDING.md) rather than storage or writer internals.
 
 ## Preserve the data contracts
 
 - Bind feature writes to the block transaction. Preserve rollback, cursor and outbox semantics on success, error, restart and reorg.
-- Keep deterministic handlers independent of wall clocks, randomness and unbound external state. Use the SDK's [determinism checks](docs/SDK.md#6-결정성-규약).
+- Keep deterministic handlers independent of wall clocks, randomness and unbound external state. Use the [determinism checks](docs/EXTENDING.md#6-결정성-규약) (`pkg/feature/featuretest`).
 - Keep canonical checks immediately before commit, with the existing generation/epoch fences. Physical RPC attempts, including retries and batch fallback, share the configured budget.
 - Keep PostgreSQL values parameter-bound and dynamic identifiers validated and quoted. Capture/projection ACKs require durable database commits.
 - Preserve raw retention, finality, lease and ACK gates. Missing data or failed validation must not become successful completion.

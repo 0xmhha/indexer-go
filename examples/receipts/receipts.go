@@ -1,5 +1,6 @@
 // Package receipts is an example of a project's own handlers built on the
-// indexer SDK (pkg/sdk) without changing the indexer: the receipt lookup of
+// indexer's extension points (feature, storage keyspace, HTTP routes,
+// declared records) without changing the indexer: the receipt lookup of
 // a payment settlement contract (the P07 receipt indexer).
 //
 // It reproduces the P07 receipt indexer on the indexer framework
@@ -31,7 +32,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 
-	"github.com/0xmhha/indexer-go/pkg/sdk"
+	"github.com/0xmhha/indexer-go/pkg/api"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/declared"
+	"github.com/0xmhha/indexer-go/pkg/feature"
+	"github.com/0xmhha/indexer-go/pkg/features/records"
+	"github.com/0xmhha/indexer-go/pkg/fetch"
+	"github.com/0xmhha/indexer-go/pkg/storage"
 )
 
 // Table is the declared table of PaymentSettled logs; it must declare the
@@ -48,11 +56,11 @@ const totalsPrefix = "/x/receipts/total/"
 const StaleBlocks = 60
 
 func init() {
-	sdk.RegisterFeature(totals{})
-	sdk.RegisterKeyspace(TotalsName, "/x/receipts/")
-	sdk.RegisterRoute(http.MethodGet, "/receipts/{merchant}/{orderId}", receiptRoute)
-	sdk.RegisterRoute(http.MethodGet, "/healthz", healthRoute)
-	sdk.RegisterRoute(http.MethodGet, "/merchants/{merchant}/totals", totalsRoute)
+	feature.Register(totals{})
+	storage.RegisterKeyspace(TotalsName, storage.ChainData, "/x/receipts/")
+	api.RegisterRoute(api.Route{Method: http.MethodGet, Pattern: "/receipts/{merchant}/{orderId}", Handler: receiptRoute})
+	api.RegisterRoute(api.Route{Method: http.MethodGet, Pattern: "/healthz", Handler: healthRoute})
+	api.RegisterRoute(api.Route{Method: http.MethodGet, Pattern: "/merchants/{merchant}/totals", Handler: totalsRoute})
 }
 
 // Receipt is the response of GET /receipts/{merchant}/{orderId}.
@@ -86,16 +94,16 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func receiptRoute(store sdk.Store, logger *zap.Logger) http.Handler {
+func receiptRoute(store port.QueryStore, logger *zap.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		merchant, order := sdk.URLParam(r, "merchant"), sdk.URLParam(r, "orderId")
+		merchant, order := api.URLParam(r, "merchant"), api.URLParam(r, "orderId")
 		if !addressPattern.MatchString(merchant) || !orderPattern.MatchString(order) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "BAD_REQUEST"})
 			return
 		}
 		// The earliest two logs of the order: one is the receipt, two mean
 		// the order settled twice.
-		recs, _, err := sdk.LookupRecords(r.Context(), store, Table, map[string]string{"merchant": merchant, "orderId": order}, sdk.Page{Limit: 2})
+		recs, _, err := records.LookupRecords(r.Context(), store, Table, map[string]string{"merchant": merchant, "orderId": order}, port.Page{Limit: 2})
 		if err != nil {
 			logger.Error("Receipt lookup failed", zap.Error(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "INTERNAL"})
@@ -103,7 +111,7 @@ func receiptRoute(store sdk.Store, logger *zap.Logger) http.Handler {
 		}
 		if len(recs) == 0 {
 			// Not indexed may also mean indexing is behind: say so.
-			if p, err := sdk.ProgressOf(r.Context(), store); err == nil && p.Lag() > StaleBlocks {
+			if p, err := fetch.IndexingOf(r.Context(), store); err == nil && p.Lag() > StaleBlocks {
 				writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "RPC_STALE", "cursor": p.Indexed})
 				return
 			}
@@ -122,9 +130,9 @@ func receiptRoute(store sdk.Store, logger *zap.Logger) http.Handler {
 // checksum writes an address with the EIP-55 checksum, as P07 answers.
 func checksum(address string) string { return common.HexToAddress(address).Hex() }
 
-func healthRoute(store sdk.Store, logger *zap.Logger) http.Handler {
+func healthRoute(store port.QueryStore, logger *zap.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p, err := sdk.ProgressOf(r.Context(), store)
+		p, err := fetch.IndexingOf(r.Context(), store)
 		if err != nil {
 			logger.Error("Progress failed", zap.Error(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "INTERNAL"})
@@ -142,9 +150,9 @@ type Totals struct {
 
 func totalsKey(merchant string) []byte { return []byte(totalsPrefix + merchant) }
 
-func readTotals(ctx context.Context, kv sdk.KV, merchant string) (Totals, error) {
+func readTotals(ctx context.Context, kv port.KV, merchant string) (Totals, error) {
 	data, err := kv.Get(ctx, totalsKey(merchant))
-	if errors.Is(err, sdk.ErrNotFound) {
+	if errors.Is(err, port.ErrNotFound) {
 		return Totals{Amount: "0"}, nil
 	}
 	if err != nil {
@@ -166,9 +174,9 @@ func (totals) OrderIndependent() bool { return true }
 // It reads only the declared logs, so it runs with indexer.mode declared.
 func (totals) LogsOnly() bool { return true }
 
-func (totals) Register(r sdk.Registrar) error {
+func (totals) Register(r feature.Registrar) error {
 	deps := r.Deps()
-	tables, err := sdk.DeclaredTables(deps)
+	tables, err := records.Settings(deps.DecodeSettings)
 	if err != nil {
 		return err
 	}
@@ -176,11 +184,11 @@ func (totals) Register(r sdk.Registrar) error {
 	if !ok {
 		return fmt.Errorf("%s needs the declared table %q", TotalsName, Table)
 	}
-	kv, err := sdk.KVOf(deps.Storage)
-	if err != nil {
-		return err
+	kv, ok := deps.Storage.(port.KV)
+	if !ok {
+		return errors.New("the storage has no key-value store")
 	}
-	r.OnBlock(sdk.BlockHandlerFunc(func(ctx context.Context, b *sdk.Block) error {
+	r.OnBlock(feature.BlockHandlerFunc(func(ctx context.Context, b *feature.Block) error {
 		for _, receipt := range b.Receipts {
 			for _, l := range receipt.Logs {
 				if !matches(tables, table, l) {
@@ -200,7 +208,7 @@ func (totals) Register(r sdk.Registrar) error {
 	return nil
 }
 
-func matches(tables *sdk.Tables, table *sdk.Table, l *sdk.Log) bool {
+func matches(tables *declared.Plan, table *declared.TablePlan, l *model.Log) bool {
 	for _, t := range tables.Match(l) {
 		if t == table {
 			return true
@@ -211,7 +219,7 @@ func matches(tables *sdk.Tables, table *sdk.Table, l *sdk.Log) bool {
 
 // add adds a receipt to a merchant's totals; inside the block transaction
 // a later read sees the write.
-func add(ctx context.Context, kv sdk.KV, merchant, amount string) error {
+func add(ctx context.Context, kv port.KV, merchant, amount string) error {
 	t, err := readTotals(ctx, kv, merchant)
 	if err != nil {
 		return err
@@ -230,15 +238,15 @@ func add(ctx context.Context, kv sdk.KV, merchant, amount string) error {
 	return kv.Put(ctx, totalsKey(merchant), data)
 }
 
-func totalsRoute(store sdk.Store, logger *zap.Logger) http.Handler {
+func totalsRoute(store port.QueryStore, logger *zap.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		merchant := sdk.URLParam(r, "merchant")
+		merchant := api.URLParam(r, "merchant")
 		if !addressPattern.MatchString(merchant) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "BAD_REQUEST"})
 			return
 		}
-		kv, err := sdk.KVOf(store)
-		if err == nil {
+		var err error = errors.New("the storage has no key-value store")
+		if kv, ok := store.(port.KV); ok {
 			var t Totals
 			if t, err = readTotals(r.Context(), kv, normalize(merchant)); err == nil {
 				writeJSON(w, http.StatusOK, t)

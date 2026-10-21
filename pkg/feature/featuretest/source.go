@@ -1,4 +1,4 @@
-package sdktest
+package featuretest
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 // AllowComment, on the line of a call or the line above, accepts it: code
 // that runs outside block handlers (an HTTP route's cache, a background
 // job) may read the clock. Give the reason after it.
-const AllowComment = "//sdk:nondeterministic"
+const AllowComment = "//feature:nondeterministic"
 
 // forbidden lists, per import path, the functions and variables a handler
 // must not use; "*" is every one of the package.
@@ -162,14 +162,14 @@ func RequireNoForbiddenUses(t testing.TB, dirs ...string) {
 	for _, dir := range dirs {
 		found, err := ScanSource(dir)
 		if err != nil {
-			t.Fatalf("sdktest: scan %s: %v", dir, err)
+			t.Fatalf("featuretest: scan %s: %v", dir, err)
 		}
 		for _, f := range found {
 			all = append(all, f.String())
 		}
 	}
 	if len(all) > 0 {
-		t.Fatalf("sdktest: handler code uses what the determinism rules forbid (accept a use outside handlers with %s <reason>):\n  %s",
+		t.Fatalf("featuretest: handler code uses what the determinism rules forbid (accept a use outside handlers with %s <reason>):\n  %s",
 			AllowComment, strings.Join(all, "\n  "))
 	}
 }

@@ -15,8 +15,8 @@ keeps the built-in profile, and unrelated EVM chains keep their profiles.
 
 The main package imports this module and calls `cli.Main()` (`cmd/cli`). A project's
 optional features and routes can be linked the same way; the
-[receipts example](../receipts) demonstrates those SDK extensions.
-The profile APIs imported here are outside the SDK compatibility promise;
+[receipts example](../receipts) demonstrates those extensions.
+No indexer package carries a compatibility promise;
 pin the indexer version and run these tests when upgrading.
 The Arc profile was added after tag `v0.2.15`; that tag alone cannot build
 this example. This checkout uses `replace => ../..`. Outside the checkout,

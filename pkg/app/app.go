@@ -210,7 +210,7 @@ func newApp(cfg *config.Config, log *zap.Logger, opts StartOptions) (_ *App, err
 			return nil, err
 		}
 		if app.fetcher != nil {
-			// Routes tell "not indexed yet" from "indexing is behind" (sdk.ProgressOf).
+			// Routes tell "not indexed yet" from "indexing is behind" (fetch.IndexingOf).
 			fetch.AttachProgress(app.storage, app.fetcher)
 		}
 	}

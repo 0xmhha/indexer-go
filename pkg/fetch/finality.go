@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 )
 
 // Finality policies (indexer.finality).
@@ -90,6 +92,37 @@ func ProgressOf(store any) (target uint64, ok, attached bool) {
 	}
 	target, ok = v.(*Fetcher).Progress()
 	return target, ok, true
+}
+
+// Indexing is how far indexing into a storage has come: Indexed is the
+// latest indexed block; Target the highest block the node offered under the
+// finality policy at the live loop's last poll, valid when Polled.
+type Indexing struct {
+	Indexed uint64
+	Target  uint64
+	Polled  bool
+}
+
+// Lag is Target minus Indexed (0 when indexing is ahead or not polled).
+func (p Indexing) Lag() uint64 {
+	if !p.Polled || p.Indexed >= p.Target {
+		return 0
+	}
+	return p.Target - p.Indexed
+}
+
+// IndexingOf returns how far indexing into a storage served in this process
+// has come. Without a live loop indexing into it (an API process of
+// node.role api) Polled is false.
+func IndexingOf(ctx context.Context, store port.Reader) (Indexing, error) {
+	var p Indexing
+	indexed, err := store.GetLatestHeight(ctx)
+	if err != nil && !errors.Is(err, port.ErrNotFound) {
+		return p, err
+	}
+	p.Indexed = indexed
+	p.Target, p.Polled, _ = ProgressOf(store)
+	return p, nil
 }
 
 // noFinalizedWarnEvery throttles the warning while the node reports no
