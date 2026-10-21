@@ -2,11 +2,13 @@
 """Offline draft lint, read-only host checks, or explicit guarded startup after the hold is lifted."""
 
 import argparse
+import fcntl
 import json
 import os
 from pathlib import Path
 import plistlib
 import re
+import signal
 import stat
 import subprocess
 import sys
@@ -30,6 +32,13 @@ EMERGENCY_FREE = 110 << 30
 WATCH_INTERVAL = 30
 # Bounds for compose stop: each service's grace period plus a margin.
 STOP_TIMEOUT = {"indexer": 180, "postgres": 120}
+# compose up waits for PostgreSQL's healthcheck before the indexer starts.
+START_TIMEOUT = 300
+# In the private directory, outside the state directory the indexer mounts:
+# the lock that keeps one watcher per stack, holding its PID, and the
+# background watcher's log.
+WATCH_LOCK = "watch.lock"
+WATCH_LOG = "watch.log"
 COMPOSE = ["docker", "--context", "desktop-linux", "compose", "--project-name", "indexer-testnets-draft", "--file", str(HERE / "compose.draft.yaml"), "--profile", "operations-draft"]
 OPERATIONS = {
     "halt_file": STATE_DIR + "/halt.json",
@@ -300,15 +309,111 @@ def stop_stack(manifest):
     return stopped
 
 
-def watch(manifest, sleep=time.sleep):
-    """Check every WATCH_INTERVAL seconds; on an emergency stop the stack once and return."""
+def check_watchable(manifest):
     require(set(manifest) == MANIFEST_KEYS and not unresolved(manifest), "Host manifest fields do not match the draft schema.")
     require(not any(os.environ.get(k) for k in ("DOCKER_HOST", "DOCKER_CONTEXT")), "Clear Docker endpoint overrides before watching.")
+
+
+def watch_lock(private):
+    """Hold the stack's watcher lock until this process (or its forked child) exits.
+
+    Refuses while another watcher holds it. The file holds the holder's PID.
+    """
+    try:
+        fd = os.open(private / WATCH_LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    except OSError:
+        raise Refused("Watcher lock file is unavailable.") from None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        raise Refused("Another watcher already runs for this stack.") from None
+    write_pid(fd)
+    return fd
+
+
+def write_pid(fd):
+    os.ftruncate(fd, 0)
+    os.pwrite(fd, f"{os.getpid()}\n".encode(), 0)
+
+
+def detach(private):
+    """Fork; the child leaves the terminal's session and logs to WATCH_LOG.
+
+    Returns the child's PID in the parent and 0 in the child.
+    """
+    log = os.open(private / WATCH_LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+    # Buffered output would otherwise be written twice, once by each process.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    pid = os.fork()
+    if pid:
+        os.close(log)
+        return pid
+    os.setsid()
+    null = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(null, 0)
+    os.dup2(log, 1)
+    os.dup2(log, 2)
+    os.close(null)
+    os.close(log)
+    return 0
+
+
+def watch(manifest, sleep=time.sleep, lock=None):
+    """Check every WATCH_INTERVAL seconds; on an emergency stop the stack once and return.
+
+    Takes the watcher lock unless the caller already holds it.
+    """
+    check_watchable(manifest)
+    if lock is None:
+        lock = watch_lock(Path(manifest["private_dir"]))
     while True:
         reason = emergency(manifest)
         if reason is not None:
             return {"emergencyStop": reason, "stopped": stop_stack(manifest)}
         sleep(WATCH_INTERVAL)
+
+
+def start_stack(environment):
+    """compose up the checked stack; returns once its services are up."""
+    try:
+        subprocess.run([*COMPOSE, "up", "--detach", "--no-build", "--pull", "never"], check=True, timeout=START_TIMEOUT, env={**os.environ, **environment})
+    except (OSError, subprocess.SubprocessError):
+        raise Refused("Compose startup failed or timed out; no watcher runs. Check the stack by hand.") from None
+
+
+def stop_watching(signum, frame):
+    raise KeyboardInterrupt
+
+
+def run_watch(manifest, background, lock=None):
+    """Watch in this process, or in a detached child when background is set.
+
+    Returns the exit status: 3 after an emergency stop, 0 for the parent of a
+    background watcher, 130 when the watcher is interrupted or terminated.
+    """
+    check_watchable(manifest)
+    private = Path(manifest["private_dir"])
+    if lock is None:
+        lock = watch_lock(private)
+    if background:
+        pid = detach(private)
+        if pid:
+            os.close(lock)
+            print(json.dumps({"watcher": pid, "log": str(private / WATCH_LOG), "lock": str(private / WATCH_LOCK)}))
+            return 0
+        write_pid(lock)
+    signal.signal(signal.SIGTERM, stop_watching)
+    try:
+        result = watch(manifest, lock=lock)
+    except KeyboardInterrupt:
+        print("Watcher stopped; the stack keeps running unwatched.", file=sys.stderr, flush=True)
+        return 130
+    finally:
+        os.close(lock)
+    print(json.dumps(result), flush=True)
+    return 3
 
 
 def check_host(manifest, resume=False):
@@ -368,16 +473,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check-host", type=Path, help="inspect a completed private host manifest; no launch")
-    mode.add_argument("--start", type=Path, help="AFTER the execution hold is lifted: inspect, then start only this stack")
+    mode.add_argument("--start", type=Path, help="AFTER the execution hold is lifted: inspect, start only this stack, then watch it as --watch does")
     mode.add_argument("--resume", type=Path, help="inspect, then run the indexer's resume check, which removes the halt latch only if its conditions hold")
     mode.add_argument("--watch", type=Path, help="every30s, stop the indexer and then PostgreSQL on a storage emergency; never restarts anything")
+    parser.add_argument("--background", action="store_true", help="with --start or --watch: watch in a detached process that logs to watch.log in the private directory")
     args = parser.parse_args()
+    if args.background and not (args.start or args.watch):
+        parser.error("--background needs --start or --watch")
     try:
         check_artifacts()
         if args.watch:
             manifest = json.loads(private_file(args.watch).decode(), object_pairs_hook=unique)
-            print(json.dumps(watch(manifest)))
-            return 3
+            return run_watch(manifest, args.background)
         if args.check_host or args.start or args.resume:
             manifest = json.loads(private_file(args.check_host or args.start or args.resume).decode(), object_pairs_hook=unique)
             environment = check_host(manifest, resume=bool(args.resume))
@@ -388,10 +495,17 @@ def main():
                 return 0
             if args.start:
                 # Never reached by lint/check-host. No daemon operation precedes
-                # the complete mount, identity, secret and policy checks.
-                command = ["docker", "--context", "desktop-linux", "compose", "--project-name", "indexer-testnets-draft", "--file", str(HERE / "compose.draft.yaml"), "--profile", "operations-draft", "up", "--detach", "--no-build", "--pull", "never"]
-                os.execvpe("docker", command, {**os.environ, **environment})
-                return 0
+                # the complete mount, identity, secret and policy checks, and
+                # the stack never starts without a watcher: the lock is taken
+                # first.
+                check_watchable(manifest)
+                lock = watch_lock(Path(manifest["private_dir"]))
+                try:
+                    start_stack(environment)
+                except BaseException:
+                    os.close(lock)
+                    raise
+                return run_watch(manifest, args.background, lock=lock)
             print(json.dumps({"hostCheck": "passed-at-this-instant", "composeEnvironment": environment, "servicesStarted": 0}))
         else:
             cfg = read_yaml(REPO / "docs/examples/config-testnets-windowed.draft.yaml")
