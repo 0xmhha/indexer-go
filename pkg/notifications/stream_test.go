@@ -139,6 +139,9 @@ func storedNotifications(t *testing.T, store Storage) map[DeliveryStatus]int {
 // exactly one delivered notification. Before, a full queue dropped the
 // notification without storing it.
 func TestNotificationsLoseNothingWithFullQueue(t *testing.T) {
+	if testing.Short() {
+		t.Skip("long: fills the notification queue")
+	}
 	f := newStreamFixture(t)
 	h := &countingHandler{got: map[uint64]int{}, delay: time.Millisecond}
 	svc := f.startService(t, f.store, h)
@@ -158,6 +161,9 @@ func TestNotificationsLoseNothingWithFullQueue(t *testing.T) {
 // being notified and a new one starts on the same database. Every event
 // gets its notification once and it is delivered.
 func TestNotificationsSurviveRestart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("long: restarts the notification service")
+	}
 	f := newStreamFixture(t)
 	h := &countingHandler{got: map[uint64]int{}, delay: 2 * time.Millisecond}
 	svc := f.startService(t, f.store, h)

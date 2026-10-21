@@ -24,6 +24,9 @@ import (
 )
 
 func TestManagedSourceSearchRestartReorgAndReadonlyAPI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("long: restarts a managed feed through a reorg")
+	}
 	from, to := testchain.NewAccount(1), testchain.NewAccount(2)
 	other := testchain.NewAccount(3)
 	c := testchain.NewChain(5042002, map[common.Address]*big.Int{from.Address: new(big.Int).Exp(big.NewInt(10), big.NewInt(21), nil)})
@@ -217,6 +220,9 @@ func TestManagedSourceSearchOptIn(t *testing.T) {
 
 func TestManagedSourceSearchCandidateAndBlockBudgets(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("long: searches large candidate sets")
+	}
 	from, to := testchain.NewAccount(4), testchain.NewAccount(5)
 	c := testchain.NewChain(5042002, map[common.Address]*big.Int{from.Address: new(big.Int).Exp(big.NewInt(10), big.NewInt(21), nil)})
 	primary, other, wanted := common.Hash{1}, common.Hash{2}, common.Hash{3}

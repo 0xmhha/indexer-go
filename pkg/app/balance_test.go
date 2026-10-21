@@ -190,6 +190,9 @@ func TestTimeQueriesFindIndexedBlocks(t *testing.T) {
 // on rather than stopping for good.
 func TestNativeBalancesSurviveNodeErrors(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("long: retries blocks through node errors")
+	}
 	t.Run("node down for a while", func(t *testing.T) {
 		sc := testchain.BuildDefault()
 		srv := testchain.NewServer(sc.Chain)

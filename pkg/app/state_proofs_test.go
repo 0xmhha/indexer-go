@@ -36,6 +36,9 @@ func waitStateProofs(t *testing.T, a *App, n uint64) indexingstatus.Status {
 }
 func TestManagedStateProofsRestartAndStatus(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("long: restarts a managed feed with state proofs")
+	}
 	c := testchain.NewChain(5042002, nil)
 	c.AddBlock() // no proof supply at height 1: configured scope starts at 2.
 	c.AddStateRootBlock(types.EmptyRootHash, nil)

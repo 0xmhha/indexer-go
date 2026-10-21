@@ -107,7 +107,11 @@ x/
 
 `x/`가 같은 모듈에 있으므로 CI의 `go build ./...`와 `go test ./...`가 모든 제품과 체인 테스트를 이미 덮는다. 필수 CI 작업 4개는 그대로 둔다. 체인별 Docker 이미지는 배포할 때 빌드한다.
 
-`test-short`는 로컬에서 빠르게 확인하는 용도다. 지금 `-short`로 건너뛰는 테스트는 6개뿐이다. 실제 프로세스를 띄우거나 강제 종료하는 테스트, 수백 블록 이상을 색인하는 부하 테스트, 반복 측정 테스트에 `testing.Short()` 검사를 더한다.
+`test-short`는 로컬에서 빠르게 확인하는 용도다. 기준은 단독 실행 시간 10초 이상인 시험이다. 2026-10-21에 `go test -json`으로 모든 시험의 시간을 재서 골랐다. 실제 프로세스를 강제 종료하는 시험, 수천 블록을 색인하거나 backfill하는 시험, managed feed를 재시작하거나 reorg를 거치는 시험, 모든 port 계약을 도는 시험이 여기에 든다. 이런 시험은 `if testing.Short() { t.Skip("long: <이유>") }`로 건너뛴다.
+
+같은 기계에서 `pkg/app`은 전체 351초, `-short` 201초였다. 저장소 전체 `go test -short ./...`는 210초 걸렸다.
+
+CI의 test 작업은 그대로 전체 시험을 돈다. 빠진 시험을 CI에서도 돌려야 회귀를 잡을 수 있기 때문이다. 커밋 전 `make test-race`도 전체 시험이다.
 
 ## 5. 제품을 잘못 붙이는 것 막기
 
@@ -132,8 +136,8 @@ x/
 | 2 | `x/stablenet`, `x/arc` 이동. blank import를 bundle로 옮김. 제품 main, 제품 체인 검사, `--adapter` 미등록 이름 오류, Makefile `CHAIN`, Dockerfile, 배포 스크립트, coupling 테스트 | 머지 |
 | 2a | 테스트넷 배포 초안을 체인별 프로세스로 나눔(Compose 서비스, entrypoint, `preflight.py`, 설정 초안) | 머지 |
 | 3 | `pkg/sdk` 해체. `sdktest`를 `pkg/feature/featuretest`로. examples 갱신. `docs/SDK.md`를 `docs/EXTENDING.md`(기능과 API 확장)로 다시 씀 | 머지 |
-| 4 | 운영 플래그 추가(node-role, db-driver, finality, confirmations, mode, rpc-fallback, rpc-ws, rpc-rate-limit, rpc-timeout, era-dir) | 제출 |
-| 5 | `-short` 표시 보강과 `test-short` 기준 정리 | 남음 |
+| 4 | 운영 플래그 추가(node-role, db-driver, finality, confirmations, mode, rpc-fallback, rpc-ws, rpc-rate-limit, rpc-timeout, era-dir) | 머지 |
+| 5 | `-short` 표시 보강과 `test-short` 기준 정리 | 제출 |
 
 ### PR 3에서 pkg/sdk가 나뉘는 방식
 
@@ -168,7 +172,7 @@ x/
 
 이 방식의 단점은 다음과 같다. 실패한 체인을 자동으로 다시 시작하던 멀티체인 manager의 동작이 없어졌다. 같은 디스크와 PGDATA를 프로세스 네 개가 각각 잰다(PGDATA 크기는 5분마다 네 번 잰다).
 
-남은 결정은 CI test 작업의 `-short` 전환 하나다. 바꾸면 PR 시간이 줄지만 빠진 테스트는 로컬 `make test-race`에서만 돈다. PR 5 전에 정한다.
+CI test 작업은 `-short`로 바꾸지 않고 전체 시험을 돌린다(4장).
 
 ## 8. 확인하지 않은 것
 

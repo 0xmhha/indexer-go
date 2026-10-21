@@ -35,6 +35,9 @@ func waitStateChanges(t *testing.T, a *App, n uint64) indexingstatus.Status {
 }
 func TestManagedStateProjectionRestartAPIAndReorg(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("long: restarts a managed feed through a reorg")
+	}
 	c := testchain.NewChain(5042002, nil)
 	for i := 0; i < 3; i++ {
 		c.AddStateRootBlock(types.EmptyRootHash, nil)
