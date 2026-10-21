@@ -131,8 +131,8 @@ x/
 | 1 | cobra와 pflag 추가, `go mod tidy`. `cmd/cli`, `cmd/flags`. `pkg/app`을 엔진만 남김. 오류 안내, 종료 코드, 묶음별 도움말, ldflags 경로, `--batch-size`를 `--chunk-size`로, `--resume-check`를 `resume-check` 명령으로, `sdk.Main` 제거 | 머지 |
 | 2 | `x/stablenet`, `x/arc` 이동. blank import를 bundle로 옮김. 제품 main, 제품 체인 검사, `--adapter` 미등록 이름 오류, Makefile `CHAIN`, Dockerfile, 배포 스크립트, coupling 테스트 | 머지 |
 | 2a | 테스트넷 배포 초안을 체인별 프로세스로 나눔(Compose 서비스, entrypoint, `preflight.py`, 설정 초안) | 머지 |
-| 3 | `pkg/sdk` 해체. `sdktest`를 `pkg/feature/featuretest`로. examples 갱신. `docs/SDK.md`를 `docs/EXTENDING.md`(기능과 API 확장)로 다시 씀 | 제출 |
-| 4 | 운영 플래그 추가(node-role, db-driver, finality, mode, rpc-fallback, rpc-ws, rpc-rate-limit, rpc-timeout, era-dir) | 남음 |
+| 3 | `pkg/sdk` 해체. `sdktest`를 `pkg/feature/featuretest`로. examples 갱신. `docs/SDK.md`를 `docs/EXTENDING.md`(기능과 API 확장)로 다시 씀 | 머지 |
+| 4 | 운영 플래그 추가(node-role, db-driver, finality, confirmations, mode, rpc-fallback, rpc-ws, rpc-rate-limit, rpc-timeout, era-dir) | 제출 |
 | 5 | `-short` 표시 보강과 `test-short` 기준 정리 | 남음 |
 
 ### PR 3에서 pkg/sdk가 나뉘는 방식

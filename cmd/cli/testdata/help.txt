@@ -21,16 +21,28 @@ Logging:
       --log-format string   Log format: console or json (log.format, $INDEXER_LOG_FORMAT) (default "json")
       --log-level string    Log level: debug, info, warn or error (log.level, $INDEXER_LOG_LEVEL) (default "info")
 
+Process role:
+      --node-role string   What this process does: all, ingest, api (node.role, $INDEXER_NODE_ROLE) (default "all")
+
 Chain node:
-      --rpc string   JSON-RPC endpoint URL of the node (rpc.endpoint, $INDEXER_RPC_ENDPOINT)
+      --rpc string             JSON-RPC endpoint URL of the node (rpc.endpoint, $INDEXER_RPC_ENDPOINT)
+      --rpc-fallback strings   Further HTTP(S) endpoints of the same chain, comma-separated, tried in order (rpc.fallback_endpoints, $INDEXER_RPC_FALLBACK_ENDPOINTS)
+      --rpc-rate-limit float   HTTP requests per second to the nodes, every attempt included; 0 is unlimited (rpc.rate_limit, $INDEXER_RPC_RATE_LIMIT)
+      --rpc-timeout duration   Timeout of one RPC attempt (rpc.timeout, $INDEXER_RPC_TIMEOUT) (default 30s)
+      --rpc-ws string          WebSocket endpoint whose newHeads wake the live loop (rpc.ws_endpoint, $INDEXER_RPC_WS_ENDPOINT)
 
 Database:
-      --db string   Pebble database directory (database.path, $INDEXER_DB_PATH)
+      --db string          Pebble database directory (database.path, $INDEXER_DB_PATH)
+      --db-driver string   Storage: pebble, postgres (the PostgreSQL DSN has no flag) (database.driver, $INDEXER_DB_DRIVER)
 
 Indexing:
-      --chunk-size int      Blocks per batch, positive; 1 is real-time mode (indexer.chunk_size, $INDEXER_CHUNK_SIZE) (default 100)
-      --start-height uint   Block height to start indexing from (indexer.start_height, $INDEXER_START_HEIGHT)
-      --workers int         Blocks fetched concurrently (indexer.workers, $INDEXER_WORKERS) (default 100)
+      --chunk-size int       Blocks per batch, positive; 1 is real-time mode (indexer.chunk_size, $INDEXER_CHUNK_SIZE) (default 100)
+      --confirmations uint   Blocks behind the head with --finality confirmations (indexer.confirmations, $INDEXER_CONFIRMATIONS)
+      --era-dir string       Directory of era1 archives read before the node (source.era_dir, $INDEXER_SOURCE_ERA_DIR)
+      --finality string      How far the live loop indexes: head, confirmations, finalized (indexer.finality, $INDEXER_FINALITY)
+      --mode string          What is ingested: full, declared (only the logs features.records declares) (indexer.mode, $INDEXER_MODE)
+      --start-height uint    Block height to start indexing from (indexer.start_height, $INDEXER_START_HEIGHT)
+      --workers int          Blocks fetched concurrently (indexer.workers, $INDEXER_WORKERS) (default 100)
 
 API server:
       --api               Serve the API (--api=false turns it off) (api.enabled, $INDEXER_API_ENABLED)

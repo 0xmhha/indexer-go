@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -106,6 +107,30 @@ func TestDefaultConfigFileIsOptional(t *testing.T) {
 	require.Equal(t, exitFailure, r.code)
 	require.False(t, r.started)
 	require.Contains(t, r.stderr, "no such file")
+}
+
+// TestOperationalFlags: the operational settings can be given on the
+// command line, and a PostgreSQL store still needs its DSN from the file
+// or the environment.
+func TestOperationalFlags(t *testing.T) {
+	path := configFile(t, baseConfig)
+	r := run(t, nil, "--config", path, "--log-level", "error", "--finality", "confirmations", "--confirmations", "3",
+		"--rpc-fallback", "http://127.0.0.1:8546,http://127.0.0.1:8547", "--rpc-rate-limit", "5", "--rpc-timeout", "7s", "--mode", "full")
+	require.Zero(t, r.code, r.stderr)
+	require.Equal(t, "confirmations", r.cfg.Indexer.Finality)
+	require.Equal(t, uint64(3), r.cfg.Indexer.Confirmations)
+	require.Equal(t, []string{"http://127.0.0.1:8546", "http://127.0.0.1:8547"}, r.cfg.RPC.FallbackEndpoints)
+	require.Equal(t, 5.0, r.cfg.RPC.RateLimit)
+	require.Equal(t, 7*time.Second, r.cfg.RPC.Timeout)
+
+	r = run(t, nil, "--config", path, "--db-driver", "postgres")
+	require.Equal(t, exitFailure, r.code)
+	require.False(t, r.started)
+	require.Contains(t, r.stderr, "dsn")
+
+	r = run(t, nil, "--config", path, "--node-role", "observer")
+	require.Equal(t, exitFailure, r.code)
+	require.False(t, r.started)
 }
 
 func TestStartOptions(t *testing.T) {

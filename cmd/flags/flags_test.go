@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,12 @@ func testValue(t *testing.T, p any) string {
 	switch v := p.(type) {
 	case *string:
 		return "value-" + *v
+	case *[]string:
+		return "https://a.example,https://b.example"
+	case *float64:
+		return fmt.Sprint(*v + 1.5)
+	case *time.Duration:
+		return (*v + 7*time.Second).String()
 	case *int:
 		return fmt.Sprint(*v + 7)
 	case *uint64:
@@ -107,4 +114,16 @@ func TestStartRejectsClearDataWithReindex(t *testing.T) {
 	require.NoError(t, fs.Parse([]string{"--clear-data", "--reindex"}))
 	_, err := s.Options()
 	require.ErrorIs(t, err, ErrClearAndReindex)
+}
+
+// TestNoSecretFlags: secrets stay out of the command line, which process
+// listings and shell histories keep.
+func TestNoSecretFlags(t *testing.T) {
+	for _, g := range configGroups() {
+		for _, f := range g.Flags() {
+			for _, word := range []string{"dsn", "password", "secret", "token", "keys"} {
+				require.NotContains(t, f.Name+" "+f.Key, word, "--%s", f.Name)
+			}
+		}
+	}
 }
