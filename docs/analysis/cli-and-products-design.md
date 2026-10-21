@@ -69,7 +69,9 @@ x/
 - `x/<체인>`은 `pkg/`의 공개 패키지만 쓴다.
 - 같은 go.mod를 쓴다. 방향은 `pkg/chains/coupling_test.go`를 고쳐 강제한다.
 
-`pkg/app`의 테스트 14개 파일은 StableNet이나 Arc 시나리오를 쓴다. 이 테스트는 `pkg/app` 내부 도우미에 기대므로 처음에는 `_test.go`에서만 `x/` import를 허용한다. `pkg/app/chains_test.go`가 두 bundle을 링크하고, 프로세스를 띄우는 시험은 두 bundle을 넣은 시험용 바이너리(`pkg/app/testdata/indexer-all`)를 빌드한다. `x/`가 `pkg/app`을 import하지 않으므로 순환은 생기지 않는다. 나중에 도우미를 `pkg/app/apptest`로 공개하고 체인 전용 테스트를 `x/<체인>`으로 옮긴다.
+`pkg/app`의 테스트 14개 파일은 StableNet이나 Arc 시나리오를 쓴다. 이 테스트는 `pkg/app` 내부 도우미에 기대므로 처음에는 `_test.go`에서만 `x/` import를 허용한다. `pkg/app/chains_test.go`가 두 bundle을 링크하고, 프로세스를 띄우는 시험은 두 bundle을 넣은 시험용 바이너리(`pkg/app/testdata/indexer-all`)를 빌드한다. `x/`가 `pkg/app`을 import하지 않으므로 순환은 생기지 않는다. 체인 동작만 확인하는 시험은 `x/<체인>`으로 옮겼다(R2). `pkg/app/apptest`가 시험 체인을 상대로 엔진을 띄우는 공개 도우미이고(`Config`, `Start`, `Index`, `FetchAll`, PostgreSQL 실행 포함), `App.Storage`, `App.EventBus`, `App.FetchRange`가 그 접근점이다. WBFT 서명, 시스템 계약 이벤트, fee delegation 조회 시험이 `x/stablenet/bundle/e2e_test.go`로 갔다. `scripts/test-postgres.sh`가 이 패키지도 PostgreSQL로 돌린다.
+
+`pkg/app`에 남긴 체인 시나리오 시험은 엔진 동작을 확인한다. 잔액 규칙 비교, 전체 keyspace golden, 기능 backfill, declared 모드, 저장소 dump 비교, binary key, 실제 노드 시험(`live_*`), Arc managed feed의 blob 정책이다. 이 시험은 `pkg/app` 내부 도우미(dump, 모드별 시작, managed feed 고정물)에 기대고, golden 파일이 모든 기능을 켠 keyspace를 고정한다. 그래서 `chains_test.go`로 두 bundle을 링크한 채 남긴다. 옮기려면 그 도우미까지 공개해야 하는데, 얻는 것에 비해 공개 면이 커서 하지 않았다.
 
 방향 규칙은 `pkg/chains/coupling_test.go`의 `TestOnlyProductsImportChains`가 강제한다. 체인 이름 개수 상한(`TestChainIdentifierLimits`)은 `x/`를 세지 않는다. 엔진이 체인 패키지에 직접 기대던 곳(StableNet 시스템 계약 검증 자료 준비)은 `pkg/startup`의 등록 단계로 바꿨다.
 
