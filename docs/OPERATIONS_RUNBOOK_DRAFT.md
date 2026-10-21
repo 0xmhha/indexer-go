@@ -118,6 +118,8 @@ finalized 조회가 null이면 새 GC를 보류한다. unsupported/malformed/통
 
 ## 8. 백업·이전과 완료 기록
 
+백업 방식, 등급별 RPO/RTO, 이전과 복원 검증 절차는 [백업·이전과 복구 목표 초안](OPERATIONS_BACKUP_DRAFT.md)에 있다. 이 절은 그 전제 조건이다.
+
 장치 손실/재구성이 필요할 때는 같은 시점의 PostgreSQL 전체 cluster/WAL·raw/삭제 기록·marker/ledger·설정/identity의 연관을 보존해야 한다. 비밀 파일은 접근 제한된 별도 보관 정책을 사용한다. SQL dump만으로 raw 삭제 intent·filesystem identity까지 복원됐다고 간주하지 않는다. 일반 파일 복사 백업은 indexer를 멈추고 PostgreSQL까지 정상 종료한 일관된 상태를 기준으로 계획하며, 온라인 snapshot/base backup은 별도 설계·검증 대상이다. [PostgreSQL16 파일 백업 조건](https://www.postgresql.org/docs/16/backup-file.html)을 따른다.
 
 복원은 원본을 덮어쓰지 않는 격리된 대상에서 검증하고 단일 writer와 DB/window binding을 확인하는 안이다. 새 디스크 UUID·경로·quota의 변경과 backup 정책/RPO/RTO는 별도 확정이 필요하다. 읽기 전용 metadata CLI는 모의 데이터로 검증했지만 완전한 GC 승인 dry-run·사건별 중단/재개 controller, 종료 유예, 실제 복원 검증은 아직 미구현/미검증이다.24h raw는 백업·24h undo·원격 상태 보존 보장이 아니다.
