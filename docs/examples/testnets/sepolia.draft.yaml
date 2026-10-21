@@ -1,0 +1,85 @@
+# OPERATIONS DRAFT — NOT RUNNABLE. See ../../OPERATIONS_DRAFT.md.
+# One process per chain: this file configures sepolia, run by indexer
+# (service indexer-sepolia in deployments/testnets/compose.draft.yaml).
+# UNCONFIRMED_* tokens require verified values; the loader does not interpolate
+# them. Numeric tokens deliberately fail typed decoding before any app startup.
+# Do not replace the local config.yaml or run this file during draft review.
+# Container paths assume a dedicated, verified APFS host mount at
+# /Volumes/IndexerData -> /data/feed; that mount does not exist by this proposal.
+
+rpc:
+  endpoint: https://ethereum-sepolia-rpc.publicnode.com
+  rate_limit: 5  # Shared by all HTTP attempts/fresh checks/retries of this chain.
+  timeout: 15s
+
+database:
+  driver: postgres
+  postgres:
+    schema: indexer_testnets_v1_sepolia  # The schema multi-chain mode used for this chain.
+    max_conns: 4  # This process's pool; four processes => 16-connection budget.
+
+node:
+  role: all
+
+indexer:
+  mode: full
+  workers: 2
+  chunk_size: 10
+  poll_interval: 2s
+  finality: head  # Existing head/fresh policy.
+  start_height: "UNCONFIRMED_SEPOLIA_START_HEIGHT"
+  state_prefetch: true
+  state_workers: 4
+  state_batch_size: 1
+  state_max_bytes: 16777216
+  orphan_retention: 1000
+
+# Strict state reads on this RPC chain.
+features:
+  balance.native:
+    enabled: true
+    allow_pruned_state: false
+  token.metadata:
+    enabled: true
+    allow_pruned_state: false
+
+api:
+  enabled: true
+  host: 0.0.0.0  # Container listener; planned host publication: 127.0.0.1:8090.
+  port: 8090
+  enable_graphql: true
+  enable_jsonrpc: true
+  enable_rest: true
+  enable_websocket: true
+  enable_websocket_keepalive: true
+  subscription_engine: true
+  enable_cors: false
+  graphql:
+    max_depth: 15
+    max_complexity: 5000
+  rate_limit:
+    enabled: true
+    per_second: 100
+    burst: 200
+
+# No source.feed, raw window, state_proofs, call_traces, blob, extra projection
+# workers, node-feed IPC, era source or recording.
+
+# Capacity halt (pkg/opsguard, docs/OPERATIONS_CAPACITY_DRAFT.md), in every
+# chain process: each samples the shared APFS volume and PGDATA. The latch and
+# journal live in this chain's private state directory
+# (state/sepolia), which survives a removed APFS.
+# A stop writes the latch and ends the process; startup refuses while it
+# exists and `preflight.py --resume` runs the resume check. Thresholds are the
+# draft's first review values, not measured limits.
+operations:
+  halt_file: /var/lib/indexer-ops/halt.json
+  journal_file: /var/lib/indexer-ops/capacity.jsonl  # 8 MiB plus one rotation.
+  capacity:
+    filesystem_path: /data/feed
+    floor_free_bytes: 107374182400   # 100 GiB, the raw windows' write floor.
+    stop_free_bytes: 128849018880    # 120 GiB
+    warn_free_bytes: 161061273600    # 150 GiB
+    resume_free_bytes: 161061273600  # Resume needs more than 150 GiB in 3 samples, 30s apart.
+    postgres_data_dir: /data/feed/indexer/postgres/16
+    postgres_budget_bytes: 171798691840  # 160 GiB planned; warn 80%, stop 100%, resume below 80%.

@@ -1,0 +1,130 @@
+# OPERATIONS DRAFT — NOT RUNNABLE. See ../../OPERATIONS_DRAFT.md.
+# One process per chain: this file configures arc-testnet, run by indexer-arc
+# (service indexer-arc-testnet in deployments/testnets/compose.draft.yaml).
+# UNCONFIRMED_* tokens require verified values; the loader does not interpolate
+# them. Numeric tokens deliberately fail typed decoding before any app startup.
+# Do not replace the local config.yaml or run this file during draft review.
+# Container paths assume a dedicated, verified APFS host mount at
+# /Volumes/IndexerData -> /data/feed; that mount does not exist by this proposal.
+
+rpc:
+  endpoint: https://rpc.testnet.arc.io
+  rate_limit: 5  # Shared by all HTTP attempts/fresh checks/retries of this chain.
+  timeout: 15s
+
+database:
+  driver: postgres
+  postgres:
+    schema: indexer_testnets_v1_arc_testnet  # The schema multi-chain mode used for this chain.
+    max_conns: 4  # This process's pool; four processes => 16-connection budget.
+
+node:
+  role: all
+
+indexer:
+  mode: full
+  workers: 2
+  chunk_size: 10
+  poll_interval: 2s
+  finality: head  # Feed projection target; NOT permission to skip commit fresh.
+  start_height: "UNCONFIRMED_ARC_START_HEIGHT"  # Exactly anchor_height + 1.
+  state_prefetch: true
+  state_workers: 4
+  state_batch_size: 16
+  state_max_bytes: 16777216
+  orphan_retention: 1000
+  acquisition_queue: true
+  queue_blocks: 256  # In-memory writer queue; NOT raw notification refs or the 24h disk window.
+  queue_max_bytes: 268435456
+
+# Arc is execution-only: no state reads.
+features:
+  balance.native:
+    enabled: false
+    allow_pruned_state: false
+  token.metadata:
+    enabled: false
+    allow_pruned_state: false
+  dex.orderbook:
+    enabled: false
+
+api:
+  enabled: true
+  host: 0.0.0.0  # Container listener; planned host publication: 127.0.0.1:8091.
+  port: 8091
+  enable_graphql: true
+  enable_jsonrpc: true
+  enable_rest: true
+  enable_websocket: true
+  enable_websocket_keepalive: true
+  subscription_engine: true
+  enable_cors: false
+  graphql:
+    max_depth: 15
+    max_complexity: 5000
+  rate_limit:
+    enabled: true
+    per_second: 100
+    burst: 200
+
+source:
+  feed:
+    module: arc.eth68
+    window: arc-testnet
+    consumer: arc-explorer-v1
+    chain_id: "5042002"
+    # Live block 0 + official test assertion match; audit: ../../analysis/arc-testnet-identity.md.
+    genesis_hash: "0xe20e653af4441e8c6088e172b129d56420139824400477287b46e7101ae2bb1f"
+    anchor_height: "UNCONFIRMED_ARC_FINALIZED_HEIGHT"
+    anchor_hash: "UNCONFIRMED_ARC_FINALIZED_HASH"
+    network_id: 5042002  # net_version confirmed 2026-10-19 KST; not inferred from chain ID.
+    # Public-spec expected ID: 910609e1 / next=0. Deployed RPC commit source
+    # is unavailable and peer status is unverified: keep these unresolved.
+    fork_hash: "UNCONFIRMED_ARC_FORK_HASH"  # Four bytes, 8 hex chars, no 0x.
+    fork_next: "UNCONFIRMED_ARC_FORK_NEXT"
+    key_file: /data/feed/indexer/identity/arc-peer.key  # Private regular file, 0600.
+    peers:
+      - "UNCONFIRMED_ARC_ENODE"
+    listen_addr: "127.0.0.1:0"  # Outbound peer connection; no inbound port plan.
+    initialize_volume: false  # Initialization is deferred, not automatic.
+    create_window: false
+    finality_authority: arc-testnet-public-rpc-v1  # Proposed stable policy label.
+    collect: false  # Initial review/restart checks first; GC activation deferred.
+    control_interval: 10s
+
+window_storage:
+  volumes:
+    external:
+      root: /data/feed  # Must be the actual bind-mount root, not an ordinary folder.
+      id: indexer-apfs-testnets-v1  # Proposed persistent marker/ledger identity.
+      max_bytes: 171798691840  # 160 GiB raw-volume budget, including manager overhead.
+      min_free_bytes: 107374182400  # 100 GiB filesystem free-space floor for raw writes.
+      allow_directory: false
+  windows:
+    arc-testnet:
+      volume: external
+      path: /data/feed/indexer/window/arc
+      max_bytes: 137438953472  # 128 GiB Arc raw cap; not a proven 24-hour capacity.
+      retention: 24h
+
+# Permanent source facts and projections use PostgreSQL; a separate objects
+# directory is not an implemented application YAML option.
+
+# Capacity halt (pkg/opsguard, docs/OPERATIONS_CAPACITY_DRAFT.md), in every
+# chain process: each samples the shared APFS volume and PGDATA. The latch and
+# journal live in this chain's private state directory
+# (state/arc-testnet), which survives a removed APFS.
+# A stop writes the latch and ends the process; startup refuses while it
+# exists and `preflight.py --resume` runs the resume check. Thresholds are the
+# draft's first review values, not measured limits.
+operations:
+  halt_file: /var/lib/indexer-ops/halt.json
+  journal_file: /var/lib/indexer-ops/capacity.jsonl  # 8 MiB plus one rotation.
+  capacity:
+    filesystem_path: /data/feed
+    floor_free_bytes: 107374182400   # 100 GiB, the raw windows' write floor.
+    stop_free_bytes: 128849018880    # 120 GiB
+    warn_free_bytes: 161061273600    # 150 GiB
+    resume_free_bytes: 161061273600  # Resume needs more than 150 GiB in 3 samples, 30s apart.
+    postgres_data_dir: /data/feed/indexer/postgres/16
+    postgres_budget_bytes: 171798691840  # 160 GiB planned; warn 80%, stop 100%, resume below 80%.

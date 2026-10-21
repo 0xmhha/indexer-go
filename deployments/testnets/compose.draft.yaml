@@ -1,4 +1,6 @@
 # OPERATIONS DRAFT. No service has been built or started.
+# One indexer process per chain, each running the binary built for its chain
+# (INDEXER_BINARY) with its own configuration, halt latch and API port.
 # After the hold is lifted, use preflight.py --start as the guarded entry point.
 # Direct compose up bypasses the macOS APFS checks. See README.md.
 name: indexer-testnets-draft
@@ -59,7 +61,208 @@ services:
       retries: 6
     networks: [database]
 
-  indexer:
+  indexer-stablenet-testnet:
+    image: ${INDEXER_OPERATIONS_IMAGE:?reviewed operations image required}
+    profiles: [operations-draft]
+    user: "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}"
+    restart: "no"
+    # SIGTERM cancels and joins every task, then closes the
+    # database. Compose stops this service before PostgreSQL (depends_on).
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: [/bin/sh, /opt/indexer/entrypoint.sh]
+    command: []
+    environment:
+      INDEXER_BINARY: indexer-stablenet
+      INDEXER_DB_POSTGRES_DSN_FILE: /run/secrets/postgres_dsn
+      INDEXER_DB_DRIVER: postgres
+      INDEXER_DB_POSTGRES_MAX_CONNS: "4"
+      INDEXER_RPC_RATE_LIMIT: "5"
+    secrets: [postgres_dsn]
+    volumes:
+      # Read-only: the capacity monitor samples the shared volume and PGDATA.
+      - type: bind
+        source: ${INDEXER_APFS_ROOT:?preflight required}
+        target: /data/feed
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/config-stablenet-testnet.yaml
+        target: /etc/indexer/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      # Writable halt latch and capacity journal of this chain, off the monitored APFS.
+      - type: bind
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/state/stablenet-testnet
+        target: /var/lib/indexer-ops
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./indexer-entrypoint.sh
+        target: /opt/indexer/entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:mode=1777
+    ports:
+      - "127.0.0.1:8088:8088"
+    healthcheck:
+      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1:8088/health]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [database, rpc]
+
+  indexer-bsc-testnet:
+    image: ${INDEXER_OPERATIONS_IMAGE:?reviewed operations image required}
+    profiles: [operations-draft]
+    user: "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}"
+    restart: "no"
+    # SIGTERM cancels and joins every task, then closes the
+    # database. Compose stops this service before PostgreSQL (depends_on).
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: [/bin/sh, /opt/indexer/entrypoint.sh]
+    command: []
+    environment:
+      INDEXER_BINARY: indexer
+      INDEXER_DB_POSTGRES_DSN_FILE: /run/secrets/postgres_dsn
+      INDEXER_DB_DRIVER: postgres
+      INDEXER_DB_POSTGRES_MAX_CONNS: "4"
+      INDEXER_RPC_RATE_LIMIT: "5"
+    secrets: [postgres_dsn]
+    volumes:
+      # Read-only: the capacity monitor samples the shared volume and PGDATA.
+      - type: bind
+        source: ${INDEXER_APFS_ROOT:?preflight required}
+        target: /data/feed
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/config-bsc-testnet.yaml
+        target: /etc/indexer/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      # Writable halt latch and capacity journal of this chain, off the monitored APFS.
+      - type: bind
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/state/bsc-testnet
+        target: /var/lib/indexer-ops
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./indexer-entrypoint.sh
+        target: /opt/indexer/entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:mode=1777
+    ports:
+      - "127.0.0.1:8089:8089"
+    healthcheck:
+      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1:8089/health]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [database, rpc]
+
+  indexer-sepolia:
+    image: ${INDEXER_OPERATIONS_IMAGE:?reviewed operations image required}
+    profiles: [operations-draft]
+    user: "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}"
+    restart: "no"
+    # SIGTERM cancels and joins every task, then closes the
+    # database. Compose stops this service before PostgreSQL (depends_on).
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: [/bin/sh, /opt/indexer/entrypoint.sh]
+    command: []
+    environment:
+      INDEXER_BINARY: indexer
+      INDEXER_DB_POSTGRES_DSN_FILE: /run/secrets/postgres_dsn
+      INDEXER_DB_DRIVER: postgres
+      INDEXER_DB_POSTGRES_MAX_CONNS: "4"
+      INDEXER_RPC_RATE_LIMIT: "5"
+    secrets: [postgres_dsn]
+    volumes:
+      # Read-only: the capacity monitor samples the shared volume and PGDATA.
+      - type: bind
+        source: ${INDEXER_APFS_ROOT:?preflight required}
+        target: /data/feed
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/config-sepolia.yaml
+        target: /etc/indexer/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      # Writable halt latch and capacity journal of this chain, off the monitored APFS.
+      - type: bind
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/state/sepolia
+        target: /var/lib/indexer-ops
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./indexer-entrypoint.sh
+        target: /opt/indexer/entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:mode=1777
+    ports:
+      - "127.0.0.1:8090:8090"
+    healthcheck:
+      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1:8090/health]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [database, rpc]
+
+  indexer-arc-testnet:
     image: ${INDEXER_OPERATIONS_IMAGE:?reviewed operations image required}
     profiles: [operations-draft]
     user: "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}"
@@ -83,6 +286,7 @@ services:
     entrypoint: [/bin/sh, /opt/indexer/entrypoint.sh]
     command: []
     environment:
+      INDEXER_BINARY: indexer-arc
       INDEXER_DB_POSTGRES_DSN_FILE: /run/secrets/postgres_dsn
       INDEXER_DB_DRIVER: postgres
       INDEXER_DB_POSTGRES_MAX_CONNS: "4"
@@ -95,14 +299,14 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: ${INDEXER_PRIVATE_DIR:?preflight required}/config.yaml
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/config-arc-testnet.yaml
         target: /etc/indexer/config.yaml
         read_only: true
         bind:
           create_host_path: false
-      # Writable halt latch and capacity journal, off the monitored APFS.
+      # Writable halt latch and capacity journal of this chain, off the monitored APFS.
       - type: bind
-        source: ${INDEXER_PRIVATE_DIR:?preflight required}/state
+        source: ${INDEXER_PRIVATE_DIR:?preflight required}/state/arc-testnet
         target: /var/lib/indexer-ops
         bind:
           create_host_path: false
@@ -115,9 +319,9 @@ services:
     tmpfs:
       - /tmp:mode=1777
     ports:
-      - "127.0.0.1:8088:8088"
+      - "127.0.0.1:8091:8091"
     healthcheck:
-      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1:8088/health]
+      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1:8091/health]
       interval: 30s
       timeout: 5s
       retries: 3

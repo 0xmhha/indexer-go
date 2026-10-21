@@ -20,7 +20,17 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-CHAINS = {"stablenet-testnet": 8283, "bsc-testnet": 97, "sepolia": 11155111, "arc-testnet": 5042002}
+# One indexer process per chain: Compose service indexer-<id>, running the
+# binary built for the chain with config-<id>.yaml and state/<id>.
+CHAINS = {
+    "stablenet-testnet": {"chain_id": 8283, "binary": "indexer-stablenet", "port": 8088},
+    "bsc-testnet": {"chain_id": 97, "binary": "indexer", "port": 8089},
+    "sepolia": {"chain_id": 11155111, "binary": "indexer", "port": 8090},
+    "arc-testnet": {"chain_id": 5042002, "binary": "indexer-arc", "port": 8091},
+}
+ARC = "arc-testnet"
+SCHEMA_BASE = "indexer_testnets_v1"
+DRAFTS = REPO / "docs/examples/testnets"
 MANIFEST_KEYS = {"mount_root", "apfs_volume_uuid", "physical_store_uuid", "private_dir", "indexer_image", "docker_context"}
 STATE_DIR = "/var/lib/indexer-ops"
 # Docker images, container layers and the services' logs live on the Docker
@@ -30,8 +40,11 @@ DOCKER_VM_MIN_FREE = 10 << 30
 # space (the capacity draft's emergency line, below stop_free_bytes).
 EMERGENCY_FREE = 110 << 30
 WATCH_INTERVAL = 30
-# Bounds for compose stop: each service's grace period plus a margin.
-STOP_TIMEOUT = {"indexer": 180, "postgres": 120}
+# Bounds for compose stop: each service's grace period plus a margin. The
+# indexers stop together, in one command.
+STOP_TIMEOUT = {"indexers": 180, "postgres": 120}
+# The resume check samples three times, 30s apart.
+RESUME_TIMEOUT = 300
 # compose up waits for PostgreSQL's healthcheck before the indexer starts.
 START_TIMEOUT = 300
 # In the private directory, outside the state directory the indexer mounts:
@@ -101,45 +114,57 @@ def read_yaml(path):
         raise Refused("Cannot read YAML configuration.") from None
 
 
-def check_policy(cfg, draft=False):
+def service(chain):
+    """The Compose service of a chain."""
+    return "indexer-" + chain
+
+
+def chain_schema(chain):
+    """The PostgreSQL schema of a chain: the one multi-chain mode used."""
+    return re.sub(r"[^a-z0-9_]", "_", f"{SCHEMA_BASE}_{chain}".lower())
+
+
+def draft_config(chain):
+    return read_yaml(DRAFTS / f"{chain}.draft.yaml")
+
+
+def check_policy(cfg, chain, draft=False):
+    """Check one chain's configuration; returns its unresolved fields."""
     try:
+        require(chain in CHAINS, "Unknown chain.")
         require(cfg["database"]["driver"] == "postgres" and cfg["database"]["postgres"]["max_conns"] == 4, "Require PostgreSQL and four connections per chain.")
-        require(cfg["database"]["postgres"]["schema"] == "indexer_testnets_v1", "Unexpected per-chain schema base.")
+        require(cfg["database"]["postgres"]["schema"] == chain_schema(chain), "Unexpected per-chain schema.")
         require(cfg["database"]["postgres"].get("dsn", "") == "", "Inline DSN is forbidden; use the secret file.")
         require(cfg["rpc"]["rate_limit"] == 5 and cfg["indexer"]["finality"] == "head", "Require shared RPC5 and the existing head/fresh policy.")
-        require(cfg["node"]["role"] == "all" and cfg["multichain"]["enabled"] is True, "Require one multi-chain all-role process.")
-        require(cfg["api"]["enabled"] is True and cfg["api"]["host"] == "0.0.0.0" and cfg["api"]["port"] == 8088, "App listener must match Compose publication/healthcheck.")
-        chains = cfg["multichain"]["chains"]
-        require(len(chains) == 4 and {c["id"]: c["chain_id"] for c in chains} == CHAINS and all(c["enabled"] is True for c in chains), "Require exactly the four configured testnets.")
-        arc = next(c for c in chains if c["id"] == "arc-testnet")
-        feed = arc["feed"]
-        require(all("feed" not in c for c in chains if c is not arc), "Only Arc may select the feed.")
-        require(feed["module"] == "arc.eth68" and feed["window"] == "arc-testnet", "Unexpected Arc feed module/window.")
-        require(feed["collect"] is False and feed["initialize_volume"] is False and feed["create_window"] is False, "GC and initialization remain deferred.")
-        require(not feed.get("state_proofs") and not feed.get("call_traces") and not feed.get("projections"), "Extra feed tasks are outside this draft.")
-        require(feed["key_file"] == "/data/feed/indexer/identity/arc-peer.key", "Unexpected peer identity path.")
-        for name in ("balance.native", "token.metadata", "dex.orderbook"):
-            require(arc["features"][name]["enabled"] is False, "Arc execution-only state features must remain disabled.")
-        for name in ("balance.native", "token.metadata"):
-            require(cfg["features"][name]["enabled"] is True and cfg["features"][name]["allow_pruned_state"] is False, "Strict RPC state features must remain enabled.")
-            for chain in chains:
-                if chain is not arc:
-                    effective = {**cfg["features"][name], **chain.get("features", {}).get(name, {})}
-                    require(effective["enabled"] is True and effective["allow_pruned_state"] is False, "Per-chain overrides must preserve strict RPC state reads.")
-        require(set(cfg["window_storage"]["volumes"]) == {"external"} and set(cfg["window_storage"]["windows"]) == {"arc-testnet"}, "Only the planned external volume and Arc raw window are allowed.")
-        volume = cfg["window_storage"]["volumes"]["external"]
-        window = cfg["window_storage"]["windows"]["arc-testnet"]
-        require(window["volume"] == "external" and max(window.get("min_free_bytes", 0), volume["min_free_bytes"]) == 100 << 30, "Window volume/floor differs from the operating plan.")
-        require(volume["root"] == "/data/feed" and volume["id"] == "indexer-apfs-testnets-v1" and volume["allow_directory"] is False, "Unexpected raw volume binding.")
-        require((volume["max_bytes"], volume["min_free_bytes"], window["max_bytes"], window["retention"]) == (160 << 30, 100 << 30, 128 << 30, "24h"), "Raw capacity/retention policy changed.")
-        require(window["path"] == "/data/feed/indexer/window/arc", "Unexpected raw window path.")
+        require(cfg["node"]["role"] == "all" and not cfg.get("multichain", {}).get("enabled"), "Require one single-chain all-role process per chain.")
+        require(cfg["api"]["enabled"] is True and cfg["api"]["host"] == "0.0.0.0" and cfg["api"]["port"] == CHAINS[chain]["port"], "App listener must match Compose publication/healthcheck.")
         require(cfg["operations"] == OPERATIONS, "Capacity halt latch/thresholds differ from the operating plan.")
+        if chain == ARC:
+            feed = cfg["source"]["feed"]
+            require(feed["module"] == "arc.eth68" and feed["window"] == "arc-testnet" and str(feed["chain_id"]) == str(CHAINS[ARC]["chain_id"]), "Unexpected Arc feed module/window/chain.")
+            require(feed["collect"] is False and feed["initialize_volume"] is False and feed["create_window"] is False, "GC and initialization remain deferred.")
+            require(not feed.get("state_proofs") and not feed.get("call_traces") and not feed.get("projections"), "Extra feed tasks are outside this draft.")
+            require(feed["key_file"] == "/data/feed/indexer/identity/arc-peer.key", "Unexpected peer identity path.")
+            for name in ("balance.native", "token.metadata", "dex.orderbook"):
+                require(cfg["features"][name]["enabled"] is False, "Arc execution-only state features must remain disabled.")
+            require(set(cfg["window_storage"]["volumes"]) == {"external"} and set(cfg["window_storage"]["windows"]) == {"arc-testnet"}, "Only the planned external volume and Arc raw window are allowed.")
+            volume = cfg["window_storage"]["volumes"]["external"]
+            window = cfg["window_storage"]["windows"]["arc-testnet"]
+            require(window["volume"] == "external" and max(window.get("min_free_bytes", 0), volume["min_free_bytes"]) == 100 << 30, "Window volume/floor differs from the operating plan.")
+            require(volume["root"] == "/data/feed" and volume["id"] == "indexer-apfs-testnets-v1" and volume["allow_directory"] is False, "Unexpected raw volume binding.")
+            require((volume["max_bytes"], volume["min_free_bytes"], window["max_bytes"], window["retention"]) == (160 << 30, 100 << 30, 128 << 30, "24h"), "Raw capacity/retention policy changed.")
+            require(window["path"] == "/data/feed/indexer/window/arc", "Unexpected raw window path.")
+        else:
+            require("feed" not in cfg.get("source", {}) and not cfg.get("window_storage"), "Only Arc may select the feed and a raw window.")
+            for name in ("balance.native", "token.metadata"):
+                require(cfg["features"][name]["enabled"] is True and cfg["features"][name]["allow_pruned_state"] is False, "Strict RPC state features must remain enabled.")
         missing = unresolved(cfg)
         if not draft:
             require(not missing, "Runtime configuration has unresolved inputs: " + ", ".join(missing))
-            require(type(feed["anchor_height"]) is int and arc["start_height"] == feed["anchor_height"] + 1, "Arc start must equal anchor + 1.")
+            if chain == ARC:
+                require(type(cfg["source"]["feed"]["anchor_height"]) is int and cfg["indexer"]["start_height"] == cfg["source"]["feed"]["anchor_height"] + 1, "Arc start must equal anchor + 1.")
         return missing
-    except (KeyError, TypeError, StopIteration):
+    except (KeyError, TypeError):
         raise Refused("Required operating configuration field is missing or malformed.") from None
 
 
@@ -150,37 +175,46 @@ def check_artifacts(compose=None, postgres_conf=None):
     if postgres_conf is None:
         postgres_conf = (REPO / "docs/examples/postgresql-testnets.draft.conf").read_text()
     try:
-        require(compose["name"] == "indexer-testnets-draft" and set(compose["services"]) == {"postgres", "indexer"}, "Unexpected Compose project/services.")
+        require(compose["name"] == "indexer-testnets-draft" and set(compose["services"]) == {"postgres"} | {service(c) for c in CHAINS}, "Unexpected Compose project/services.")
         services = compose["services"]
-        app, db = services["indexer"], services["postgres"]
-        require(app["image"] == "${INDEXER_OPERATIONS_IMAGE:?reviewed operations image required}", "Compose must use the checked image reference.")
+        db = services["postgres"]
         require(not compose.get("volumes") and not db.get("ports"), "Named storage or a published DB port is outside the draft.")
-        require(app["ports"] == ["127.0.0.1:8088:8088"] and app["read_only"] is True, "Unexpected API exposure or writable root filesystem.")
-        cfg = read_yaml(REPO / "docs/examples/config-testnets-windowed.draft.yaml")
-        check_policy(cfg, draft=True)
-        require(cfg["api"]["host"] == "0.0.0.0" and cfg["api"]["port"] == 8088, "App listener differs from Compose publication/healthcheck.")
-        require(app["environment"] == {"INDEXER_DB_POSTGRES_DSN_FILE": "/run/secrets/postgres_dsn", "INDEXER_DB_DRIVER": "postgres", "INDEXER_DB_POSTGRES_MAX_CONNS": str(cfg["database"]["postgres"]["max_conns"]), "INDEXER_RPC_RATE_LIMIT": str(cfg["rpc"]["rate_limit"])}, "Compose environment differs from app/secret policy.")
         prefix = "${INDEXER_PRIVATE_DIR:?preflight required}/"
         expected_secrets = {"postgres_admin_password": "postgres-admin-password", "indexer_password": "indexer-password", "postgres_dsn": "postgres-dsn"}
         require(compose["secrets"] == {key: {"file": prefix + name} for key, name in expected_secrets.items()}, "Secret file paths differ from host/entrypoint checks.")
-        require(app["secrets"] == ["postgres_dsn"] and db["secrets"] == ["postgres_admin_password", "indexer_password"], "Unexpected secret consumer.")
+        require(db["secrets"] == ["postgres_admin_password", "indexer_password"], "Unexpected secret consumer.")
         require(db["image"] == "postgres:16-bookworm" and db["environment"]["POSTGRES_DB"] == "indexer_testnets_v1" and db["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/postgres_admin_password", "PostgreSQL image/database/password file drift.")
         raw = "${INDEXER_APFS_ROOT:?preflight required}"
-        app_mounts = {v["target"]: v for v in app["volumes"]}
         db_mounts = {v["target"]: v for v in db["volumes"]}
-        require(app_mounts["/data/feed"]["source"] == raw and app_mounts["/etc/indexer/config.yaml"]["source"] == prefix + "config.yaml" and app_mounts["/etc/indexer/config.yaml"]["read_only"] is True, "App data/config mount drift.")
-        state = app_mounts[STATE_DIR]
-        require(state["source"] == prefix + "state" and not state.get("read_only"), "Halt latch state mount drift.")
-        require(app_mounts["/opt/indexer/entrypoint.sh"]["source"] == "./indexer-entrypoint.sh" and app_mounts["/opt/indexer/entrypoint.sh"]["read_only"] is True and app["entrypoint"] == ["/bin/sh", "/opt/indexer/entrypoint.sh"] and app["command"] == [], "Secret entrypoint wiring drift.")
         require(db_mounts["/var/lib/postgresql/data"]["source"] == raw + "/indexer/postgres/16" and db_mounts["/etc/postgresql/indexer.conf"]["source"] == "../../docs/examples/postgresql-testnets.draft.conf", "PGDATA/settings mount drift.")
         require(db["environment"]["PGDATA"] == "/var/lib/postgresql/data" and db_mounts["/etc/postgresql/indexer.conf"]["read_only"] is True and db_mounts["/docker-entrypoint-initdb.d/010-indexer.sql"]["source"] == "./init-indexer.sql" and db_mounts["/docker-entrypoint-initdb.d/010-indexer.sql"]["read_only"] is True, "PostgreSQL init/config wiring drift.")
-        require((app.get("stop_signal"), app.get("stop_grace_period"), db.get("stop_signal"), db.get("stop_grace_period")) == ("SIGTERM", "120s", "SIGINT", "60s"), "Shutdown signal/grace period drift.")
-        require(compose["networks"] == {"database": {"internal": True}, "rpc": {}} and db["networks"] == ["database"] and app["networks"] == ["database", "rpc"], "Unexpected DB/RPC network boundary.")
-        for service in services.values():
-            require(service["profiles"] == ["operations-draft"] and service["restart"] == "no" and not service.get("container_name") and not service.get("build"), "Unexpected automatic startup/build behavior.")
-            require(service["user"] == "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}", "Host UID/GID mapping drift.")
-            require(service["logging"] == {"driver": "local", "options": {"max-size": "10m", "max-file": "3"}}, "Require per-service bounded Docker logs.")
-            for mount in service["volumes"]:
+        require((db.get("stop_signal"), db.get("stop_grace_period")) == ("SIGINT", "60s") and db["networks"] == ["database"], "PostgreSQL shutdown/network drift.")
+        require(compose["networks"] == {"database": {"internal": True}, "rpc": {}}, "Unexpected DB/RPC network boundary.")
+        connections = 0
+        for chain, spec in CHAINS.items():
+            app = services[service(chain)]
+            cfg = draft_config(chain)
+            check_policy(cfg, chain, draft=True)
+            port = spec["port"]
+            connections += cfg["database"]["postgres"]["max_conns"]
+            require(app["image"] == "${INDEXER_OPERATIONS_IMAGE:?reviewed operations image required}", "Compose must use the checked image reference.")
+            require(app["ports"] == [f"127.0.0.1:{port}:{port}"] and app["read_only"] is True, "Unexpected API exposure or writable root filesystem.")
+            require(app["healthcheck"]["test"] == ["CMD", "wget", "--quiet", "--tries=1", "--spider", f"http://127.0.0.1:{port}/health"], "Healthcheck differs from the chain's API port.")
+            require(app["environment"] == {"INDEXER_BINARY": spec["binary"], "INDEXER_DB_POSTGRES_DSN_FILE": "/run/secrets/postgres_dsn", "INDEXER_DB_DRIVER": "postgres", "INDEXER_DB_POSTGRES_MAX_CONNS": str(cfg["database"]["postgres"]["max_conns"]), "INDEXER_RPC_RATE_LIMIT": str(cfg["rpc"]["rate_limit"])}, "Compose environment differs from the chain binary/app/secret policy.")
+            require(app["secrets"] == ["postgres_dsn"], "Unexpected secret consumer.")
+            mounts = {v["target"]: v for v in app["volumes"]}
+            require(set(mounts) == {"/data/feed", "/etc/indexer/config.yaml", STATE_DIR, "/opt/indexer/entrypoint.sh"}, "Unexpected indexer mounts.")
+            require(mounts["/data/feed"]["source"] == raw and bool(mounts["/data/feed"].get("read_only")) == (chain != ARC), "Only Arc may write the data volume.")
+            require(mounts["/etc/indexer/config.yaml"]["source"] == prefix + f"config-{chain}.yaml" and mounts["/etc/indexer/config.yaml"]["read_only"] is True, "App config mount drift.")
+            require(mounts[STATE_DIR]["source"] == prefix + f"state/{chain}" and not mounts[STATE_DIR].get("read_only"), "Halt latch state mount drift.")
+            require(mounts["/opt/indexer/entrypoint.sh"]["source"] == "./indexer-entrypoint.sh" and mounts["/opt/indexer/entrypoint.sh"]["read_only"] is True and app["entrypoint"] == ["/bin/sh", "/opt/indexer/entrypoint.sh"] and app["command"] == [], "Secret entrypoint wiring drift.")
+            require((app.get("stop_signal"), app.get("stop_grace_period")) == ("SIGTERM", "120s"), "Shutdown signal/grace period drift.")
+            require(app["networks"] == ["database", "rpc"] and app["depends_on"] == {"postgres": {"condition": "service_healthy"}}, "Unexpected indexer network/dependency.")
+        for name in services.values():
+            require(name["profiles"] == ["operations-draft"] and name["restart"] == "no" and not name.get("container_name") and not name.get("build"), "Unexpected automatic startup/build behavior.")
+            require(name["user"] == "${INDEXER_RUN_UID:?preflight required}:${INDEXER_RUN_GID:?preflight required}", "Host UID/GID mapping drift.")
+            require(name["logging"] == {"driver": "local", "options": {"max-size": "10m", "max-file": "3"}}, "Require per-service bounded Docker logs.")
+            for mount in name["volumes"]:
                 require(mount["type"] == "bind" and mount["bind"]["create_host_path"] is False, "All binds must refuse missing paths.")
         pairs = []
         for line in postgres_conf.splitlines():
@@ -191,6 +225,7 @@ def check_artifacts(compose=None, postgres_conf=None):
                 pairs.append(match.groups())
         settings = unique(pairs)
         require(settings == {"max_connections": "32", "fsync": "on", "synchronous_commit": "on", "full_page_writes": "on"}, "PostgreSQL connection/durability settings drift.")
+        require(connections < int(settings["max_connections"]), "The indexers' pools exceed PostgreSQL's connections.")
     except (KeyError, TypeError):
         raise Refused("Required Compose/settings field is missing or malformed.") from None
 
@@ -261,9 +296,14 @@ def docker_vm_free(image):
     return int(fields[3]) * 1024
 
 
-def halt_latch(private):
-    """The latch the indexer writes on a capacity or storage halt."""
-    return private / "state" / "halt.json"
+def halt_latch(private, chain):
+    """The latch a chain's indexer writes on a capacity or storage halt."""
+    return private / "state" / chain / "halt.json"
+
+
+def latched(private):
+    """The chains whose halt latch exists, in CHAINS order."""
+    return [c for c in CHAINS if halt_latch(private, c).exists()]
 
 
 def compose_environment(manifest):
@@ -275,7 +315,7 @@ def emergency(manifest):
     """Why this project's database must stop now, or None.
 
     The volume is gone, replaced or below its startup floor; free space is at
-    or below the emergency line; or the indexer's latch asks for it.
+    or below the emergency line; or an indexer's latch asks for it.
     """
     try:
         root = inspect_apfs(manifest)
@@ -284,28 +324,30 @@ def emergency(manifest):
     space = os.statvfs(root)
     if space.f_bavail * space.f_frsize <= EMERGENCY_FREE:
         return "free space at or below the110GiB emergency line"
-    try:
-        latch = json.loads(private_file(halt_latch(Path(manifest["private_dir"])), 4096))
-    except (Refused, ValueError):
-        return None  # no latch, or one the indexer itself refuses to start with
-    if isinstance(latch, dict) and latch.get("stopDatabase") is True:
-        return "halt latch asks to stop the database"
+    for chain in CHAINS:
+        try:
+            latch = json.loads(private_file(halt_latch(Path(manifest["private_dir"]), chain), 4096))
+        except (Refused, ValueError):
+            continue  # no latch, or one the indexer itself refuses to start with
+        if isinstance(latch, dict) and latch.get("stopDatabase") is True:
+            return f"{chain} halt latch asks to stop the database"
     return None
 
 
 def stop_stack(manifest):
-    """Stop the indexer, then PostgreSQL, each within its grace period.
+    """Stop every indexer together, then PostgreSQL, each within its grace period.
 
     Never down, rm or volume removal: data and containers stay for recovery.
     """
     environment = {**os.environ, **compose_environment(manifest)}
+    indexers = [service(c) for c in CHAINS]
     stopped = []
-    for service in ("indexer", "postgres"):
+    for group, names in (("indexers", indexers), ("postgres", ["postgres"])):
         try:
-            subprocess.run([*COMPOSE, "stop", service], check=True, capture_output=True, timeout=STOP_TIMEOUT[service], env=environment)
+            subprocess.run([*COMPOSE, "stop", *names], check=True, capture_output=True, timeout=STOP_TIMEOUT[group], env=environment)
         except (OSError, subprocess.SubprocessError):
-            raise Refused(f"Stopping {service} failed or timed out; check it by hand.") from None
-        stopped.append(service)
+            raise Refused(f"Stopping {group} failed or timed out; check it by hand.") from None
+        stopped.extend(names)
     return stopped
 
 
@@ -432,19 +474,20 @@ def check_host(manifest, resume=False):
     require(not private.is_relative_to(REPO) and not private.is_relative_to(root), "Private directory must be outside the repository and data volume.")
     s = private.stat()
     require(s.st_uid == os.getuid() and stat.S_IMODE(s.st_mode) == 0o700, "Private directory must be owner-only mode0700.")
-    state = private / "state"
-    canonical_directory(state)
-    s = state.stat()
-    require(s.st_uid == os.getuid() and stat.S_IMODE(s.st_mode) == 0o700, "Private state directory must be owner-only mode0700.")
-    latch = halt_latch(private)
-    require(resume or not latch.exists(), "A halt latch is present: resolve its cause, then run --resume before --start.")
-    require(not resume or latch.exists(), "No halt latch is present; nothing to resume.")
-    cfg_path = private / "config.yaml"
-    try:
-        cfg = yaml.load(private_file(cfg_path, 1024 * 1024), Loader=StrictYAML)
-    except yaml.YAMLError:
-        raise Refused("Cannot parse private runtime configuration.") from None
-    check_policy(cfg)
+    for path in [private / "state", *(private / "state" / c for c in CHAINS)]:
+        canonical_directory(path)
+        s = path.stat()
+        require(s.st_uid == os.getuid() and stat.S_IMODE(s.st_mode) == 0o700, "Private state directories must be owner-only mode0700.")
+    halted = latched(private)
+    require(resume or not halted, "A halt latch is present: resolve its cause, then run --resume before --start.")
+    require(not resume or halted, "No halt latch is present; nothing to resume.")
+    for chain in CHAINS:
+        try:
+            cfg = yaml.load(private_file(private / f"config-{chain}.yaml", 1024 * 1024), Loader=StrictYAML)
+        except yaml.YAMLError:
+            raise Refused("Cannot parse private runtime configuration.") from None
+        require(isinstance(cfg, dict), "Configuration must be a mapping.")
+        check_policy(cfg, chain)
     for name in ("indexer/postgres/16", "indexer/window/arc", "indexer/identity"):
         path = root / name
         canonical_directory(path)
@@ -469,13 +512,31 @@ def check_host(manifest, resume=False):
     return compose_environment(manifest)
 
 
+def resume(manifest, environment):
+    """Run the resume check of every latched chain, one container each.
+
+    Each container has its service's mounts and no database. Returns 0 if
+    every check cleared its latch, 1 otherwise; the others are still run.
+    """
+    status = 0
+    for chain in latched(Path(manifest["private_dir"])):
+        command = [*COMPOSE, "run", "--rm", "--no-deps", "--pull", "never", service(chain), "resume-check"]
+        try:
+            subprocess.run(command, check=True, timeout=RESUME_TIMEOUT, env={**os.environ, **environment})
+            print(json.dumps({"chain": chain, "resumeCheck": "cleared"}), flush=True)
+        except (OSError, subprocess.SubprocessError):
+            print(json.dumps({"chain": chain, "resumeCheck": "refused"}), flush=True)
+            status = 1
+    return status
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check-host", type=Path, help="inspect a completed private host manifest; no launch")
     mode.add_argument("--start", type=Path, help="AFTER the execution hold is lifted: inspect, start only this stack, then watch it as --watch does")
-    mode.add_argument("--resume", type=Path, help="inspect, then run the indexer's resume check, which removes the halt latch only if its conditions hold")
-    mode.add_argument("--watch", type=Path, help="every30s, stop the indexer and then PostgreSQL on a storage emergency; never restarts anything")
+    mode.add_argument("--resume", type=Path, help="inspect, then run the resume check of every latched chain, which removes its halt latch only if its conditions hold")
+    mode.add_argument("--watch", type=Path, help="every30s, stop the indexers and then PostgreSQL on a storage emergency; never restarts anything")
     parser.add_argument("--background", action="store_true", help="with --start or --watch: watch in a detached process that logs to watch.log in the private directory")
     args = parser.parse_args()
     if args.background and not (args.start or args.watch):
@@ -489,10 +550,7 @@ def main():
             manifest = json.loads(private_file(args.check_host or args.start or args.resume).decode(), object_pairs_hook=unique)
             environment = check_host(manifest, resume=bool(args.resume))
             if args.resume:
-                # One container with the service's mounts and no database.
-                command = ["docker", "--context", "desktop-linux", "compose", "--project-name", "indexer-testnets-draft", "--file", str(HERE / "compose.draft.yaml"), "--profile", "operations-draft", "run", "--rm", "--no-deps", "--pull", "never", "indexer", "resume-check"]
-                os.execvpe("docker", command, {**os.environ, **environment})
-                return 0
+                return resume(manifest, environment)
             if args.start:
                 # Never reached by lint/check-host. No daemon operation precedes
                 # the complete mount, identity, secret and policy checks, and
@@ -508,9 +566,9 @@ def main():
                 return run_watch(manifest, args.background, lock=lock)
             print(json.dumps({"hostCheck": "passed-at-this-instant", "composeEnvironment": environment, "servicesStarted": 0}))
         else:
-            cfg = read_yaml(REPO / "docs/examples/config-testnets-windowed.draft.yaml")
             manifest = json.loads((HERE / "host.draft.json").read_text(), object_pairs_hook=unique)
-            print(json.dumps({"mode": "offline-draft-lint", "draftArtifacts": "consistent", "unconfirmedHostFields": unresolved(manifest), "unconfirmedConfigFields": check_policy(cfg, draft=True), "servicesStarted": 0}))
+            pending = {chain: check_policy(draft_config(chain), chain, draft=True) for chain in CHAINS}
+            print(json.dumps({"mode": "offline-draft-lint", "draftArtifacts": "consistent", "unconfirmedHostFields": unresolved(manifest), "unconfirmedConfigFields": pending, "servicesStarted": 0}))
         return 0
     except (Refused, OSError, ValueError, KeyError, TypeError, plistlib.InvalidFileException):
         # Parser/URL/JSON exceptions can contain credential-bearing input.

@@ -22,55 +22,66 @@ import preflight as p
 
 class PolicyTests(unittest.TestCase):
     def setUp(self):
-        self.cfg = p.read_yaml(p.REPO / "docs/examples/config-testnets-windowed.draft.yaml")
+        self.cfgs = {chain: p.draft_config(chain) for chain in p.CHAINS}
+        self.arc = self.cfgs[p.ARC]
+
+    def refused(self, chain, mutate):
+        cfg = copy.deepcopy(self.cfgs[chain])
+        mutate(cfg)
+        with self.assertRaises(p.Refused):
+            p.check_policy(cfg, chain, draft=True)
 
     def test_draft_lists_pending_values_without_host_or_secret_access(self):
         with mock.patch.object(p, "probe", side_effect=AssertionError("inspection forbidden")), mock.patch.object(p, "private_file", side_effect=AssertionError("secret access forbidden")):
-            self.assertEqual(len(p.check_policy(self.cfg, draft=True)), 9)
+            pending = {chain: len(p.check_policy(cfg, chain, draft=True)) for chain, cfg in self.cfgs.items()}
+        self.assertEqual(pending, {"stablenet-testnet": 1, "bsc-testnet": 1, "sepolia": 1, "arc-testnet": 6})
+
+    def test_each_draft_is_one_single_chain_process(self):
+        for chain, cfg in self.cfgs.items():
+            self.assertNotIn("multichain", cfg)
+            self.assertEqual(cfg["database"]["postgres"]["schema"], p.chain_schema(chain))
+            self.assertEqual(cfg["api"]["port"], p.CHAINS[chain]["port"])
+        self.assertEqual(len({c["port"] for c in p.CHAINS.values()}), len(p.CHAINS), "every chain has its own API port")
+        self.refused("sepolia", lambda c: c.update(multichain={"enabled": True}))
 
     def test_pool_rate_and_strict_state_cannot_drift(self):
-        for section, key, value in (("rpc", "rate_limit", 6), ("indexer", "finality", "finalized")):
-            cfg = copy.deepcopy(self.cfg)
-            cfg[section][key] = value
-            with self.assertRaises(p.Refused):
-                p.check_policy(cfg, draft=True)
-        self.cfg["database"]["postgres"]["max_conns"] = 8
-        with self.assertRaises(p.Refused):
-            p.check_policy(self.cfg, draft=True)
+        for chain in p.CHAINS:
+            for section, key, value in (("rpc", "rate_limit", 6), ("indexer", "finality", "finalized")):
+                self.refused(chain, lambda c: c[section].update({key: value}))
+            self.refused(chain, lambda c: c["database"]["postgres"].update(max_conns=8))
 
     def test_inline_dsn_and_gc_are_refused(self):
-        for mutate in (lambda c: c["database"]["postgres"].update(dsn="private"), lambda c: c["multichain"]["chains"][-1]["feed"].update(collect=True)):
-            cfg = copy.deepcopy(self.cfg)
-            mutate(cfg)
-            with self.assertRaises(p.Refused):
-                p.check_policy(cfg, draft=True)
+        self.refused("bsc-testnet", lambda c: c["database"]["postgres"].update(dsn="private"))
+        self.refused(p.ARC, lambda c: c["source"]["feed"].update(collect=True))
 
-    def test_rpc_chain_feature_overrides_must_remain_strict(self):
-        for chain_index in range(3):
+    def test_rpc_chain_features_must_remain_strict(self):
+        for chain in p.CHAINS:
+            if chain == p.ARC:
+                continue
             for name in ("balance.native", "token.metadata"):
                 for change in ({"enabled": False}, {"allow_pruned_state": True}):
-                    with self.subTest(chain=chain_index, feature=name, change=change):
-                        cfg = copy.deepcopy(self.cfg)
-                        cfg["multichain"]["chains"][chain_index]["features"] = {name: change}
-                        with self.assertRaises(p.Refused):
-                            p.check_policy(cfg, draft=True)
+                    with self.subTest(chain=chain, feature=name, change=change):
+                        self.refused(chain, lambda c: c["features"][name].update(change))
+
+    def test_only_arc_selects_the_feed_and_a_window(self):
+        self.refused("sepolia", lambda c: c.update(source={"feed": copy.deepcopy(self.arc["source"]["feed"])}))
+        self.refused("stablenet-testnet", lambda c: c.update(window_storage=copy.deepcopy(self.arc["window_storage"])))
+        self.refused(p.ARC, lambda c: c["features"]["balance.native"].update(enabled=True))
 
     def test_schema_and_window_binding_cannot_drift(self):
         mutations = (
-            lambda c: c["database"]["postgres"].update(schema="different_schema"),
-            lambda c: c["window_storage"]["windows"]["arc-testnet"].update(volume="wrong_volume"),
-            lambda c: c["window_storage"]["windows"]["arc-testnet"].update(min_free_bytes=200 << 30),
-            lambda c: c["window_storage"]["windows"].update(extra={}),
-            lambda c: c["api"].update(port=9090),
-            lambda c: c["operations"]["capacity"].update(stop_free_bytes=10 << 30),
-            lambda c: c["operations"].update(halt_file="/tmp/halt.json"),
-            lambda c: c.pop("operations"),
+            ("sepolia", lambda c: c["database"]["postgres"].update(schema="different_schema")),
+            ("bsc-testnet", lambda c: c["database"]["postgres"].update(schema=p.chain_schema("sepolia"))),
+            (p.ARC, lambda c: c["window_storage"]["windows"]["arc-testnet"].update(volume="wrong_volume")),
+            (p.ARC, lambda c: c["window_storage"]["windows"]["arc-testnet"].update(min_free_bytes=200 << 30)),
+            (p.ARC, lambda c: c["window_storage"]["windows"].update(extra={})),
+            ("stablenet-testnet", lambda c: c["api"].update(port=8089)),
+            ("bsc-testnet", lambda c: c["operations"]["capacity"].update(stop_free_bytes=10 << 30)),
+            ("sepolia", lambda c: c["operations"].update(halt_file="/tmp/halt.json")),
+            (p.ARC, lambda c: c.pop("operations")),
         )
-        for mutate in mutations:
-            cfg = copy.deepcopy(self.cfg)
-            mutate(cfg)
-            with self.assertRaises(p.Refused):
-                p.check_policy(cfg, draft=True)
+        for chain, mutate in mutations:
+            self.refused(chain, mutate)
 
     def test_public_artifacts_are_checked_without_host_or_secret_access(self):
         with mock.patch.object(p, "probe", side_effect=AssertionError("inspection forbidden")), mock.patch.object(p, "private_file", side_effect=AssertionError("secret access forbidden")):
@@ -79,17 +90,27 @@ class PolicyTests(unittest.TestCase):
     def test_compose_cross_file_drift_is_refused(self):
         original = p.read_yaml(p.HERE / "compose.draft.yaml")
         mutations = (
-            lambda c: c["services"]["indexer"].update(ports=["0.0.0.0:9090:9090"]),
-            lambda c: c["services"]["indexer"]["environment"].update(INDEXER_DB_POSTGRES_MAX_CONNS="8"),
+            lambda c: c["services"]["indexer-sepolia"].update(ports=["0.0.0.0:9090:9090"]),
+            lambda c: c["services"]["indexer-bsc-testnet"].update(ports=["127.0.0.1:8088:8088"]),
+            lambda c: c["services"]["indexer-arc-testnet"]["environment"].update(INDEXER_DB_POSTGRES_MAX_CONNS="8"),
+            lambda c: c["services"]["indexer-arc-testnet"]["environment"].update(INDEXER_BINARY="indexer"),
+            lambda c: c["services"]["indexer-stablenet-testnet"]["environment"].update(INDEXER_BINARY="indexer-arc"),
             lambda c: c["secrets"]["postgres_dsn"].update(file="wrong-secret-file"),
-            lambda c: c["services"]["indexer"]["volumes"][0].update(source="/wrong-volume"),
+            lambda c: c["services"]["indexer-arc-testnet"]["volumes"][0].update(source="/wrong-volume"),
+            lambda c: c["services"]["indexer-sepolia"]["volumes"][0].pop("read_only"),
+            lambda c: c["services"]["indexer-arc-testnet"]["volumes"][0].update(read_only=True),
+            lambda c: c["services"]["indexer-sepolia"]["volumes"][1].update(source="${INDEXER_PRIVATE_DIR:?preflight required}/config-bsc-testnet.yaml"),
+            lambda c: c["services"]["indexer-sepolia"]["volumes"][2].update(source="${INDEXER_PRIVATE_DIR:?preflight required}/state/arc-testnet"),
+            lambda c: c["services"]["indexer-sepolia"]["healthcheck"].update(test=["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8088/health"]),
+            lambda c: c["services"].pop("indexer-bsc-testnet"),
+            lambda c: c["services"].update(indexer=copy.deepcopy(c["services"]["indexer-sepolia"])),
             lambda c: c["services"]["postgres"]["volumes"][0].update(source="/wrong-pgdata"),
             lambda c: c["services"]["postgres"]["logging"]["options"].update({"max-file": "50"}),
             lambda c: c["services"]["postgres"].update(networks=["rpc"]),
-            lambda c: c["services"]["indexer"].update(image="unchecked-image:latest"),
-            lambda c: c["services"]["indexer"].update(entrypoint=["/app/indexer-go"]),
-            lambda c: c["services"]["indexer"].pop("stop_grace_period"),
-            lambda c: c["services"]["indexer"].update(stop_grace_period="10s"),
+            lambda c: c["services"]["indexer-sepolia"].update(image="unchecked-image:latest"),
+            lambda c: c["services"]["indexer-arc-testnet"].update(entrypoint=["/app/indexer-arc"]),
+            lambda c: c["services"]["indexer-bsc-testnet"].pop("stop_grace_period"),
+            lambda c: c["services"]["indexer-bsc-testnet"].update(stop_grace_period="10s"),
             lambda c: c["services"]["postgres"].update(stop_signal="SIGTERM"),
             lambda c: c["services"]["postgres"].pop("stop_grace_period"),
         )
@@ -109,16 +130,16 @@ class PolicyTests(unittest.TestCase):
     def test_matching_public_config_and_compose_cannot_raise_pool_or_rpc(self):
         original = p.read_yaml(p.HERE / "compose.draft.yaml")
         for key, value, env_name in (("max_conns", 8, "INDEXER_DB_POSTGRES_MAX_CONNS"), ("rate_limit", 6, "INDEXER_RPC_RATE_LIMIT")):
-            cfg, compose = copy.deepcopy(self.cfg), copy.deepcopy(original)
-            section = cfg["database"]["postgres"] if key == "max_conns" else cfg["rpc"]
+            cfgs, compose = copy.deepcopy(self.cfgs), copy.deepcopy(original)
+            section = cfgs["sepolia"]["database"]["postgres"] if key == "max_conns" else cfgs["sepolia"]["rpc"]
             section[key] = value
-            compose["services"]["indexer"]["environment"][env_name] = str(value)
-            with mock.patch.object(p, "read_yaml", return_value=cfg), self.assertRaises(p.Refused):
+            compose["services"]["indexer-sepolia"]["environment"][env_name] = str(value)
+            with mock.patch.object(p, "draft_config", side_effect=lambda chain: cfgs[chain]), self.assertRaises(p.Refused):
                 p.check_artifacts(compose=compose)
 
     def test_compose_has_no_automatic_storage_creation_or_extra_node(self):
         compose = p.read_yaml(p.HERE / "compose.draft.yaml")
-        self.assertEqual(set(compose["services"]), {"indexer", "postgres"})
+        self.assertEqual(set(compose["services"]), {"postgres", "indexer-stablenet-testnet", "indexer-bsc-testnet", "indexer-sepolia", "indexer-arc-testnet"})
         self.assertNotIn("volumes", compose)
         for service in compose["services"].values():
             self.assertEqual(service["profiles"], ["operations-draft"])
@@ -128,13 +149,16 @@ class PolicyTests(unittest.TestCase):
                 self.assertEqual(volume["type"], "bind")
                 self.assertIs(volume["bind"]["create_host_path"], False)
         self.assertNotIn("ports", compose["services"]["postgres"])
-        state = {v["target"]: v for v in compose["services"]["indexer"]["volumes"]}[p.STATE_DIR]
-        self.assertEqual(state["source"], "${INDEXER_PRIVATE_DIR:?preflight required}/state")
-        self.assertNotIn("read_only", state)
-        self.assertEqual(compose["services"]["indexer"]["secrets"], ["postgres_dsn"])
-        self.assertNotIn("INDEXER_DB_POSTGRES_DSN", compose["services"]["indexer"]["environment"])
-        self.assertEqual(compose["services"]["indexer"]["environment"]["INDEXER_DB_POSTGRES_MAX_CONNS"], str(self.cfg["database"]["postgres"]["max_conns"]))
-        self.assertEqual(compose["services"]["indexer"]["environment"]["INDEXER_RPC_RATE_LIMIT"], str(self.cfg["rpc"]["rate_limit"]))
+        for chain, spec in p.CHAINS.items():
+            app = compose["services"][p.service(chain)]
+            state = {v["target"]: v for v in app["volumes"]}[p.STATE_DIR]
+            self.assertEqual(state["source"], "${INDEXER_PRIVATE_DIR:?preflight required}/state/" + chain)
+            self.assertNotIn("read_only", state)
+            self.assertEqual(app["secrets"], ["postgres_dsn"])
+            self.assertNotIn("INDEXER_DB_POSTGRES_DSN", app["environment"])
+            self.assertEqual(app["environment"]["INDEXER_BINARY"], spec["binary"])
+            self.assertEqual(app["environment"]["INDEXER_DB_POSTGRES_MAX_CONNS"], str(self.cfgs[chain]["database"]["postgres"]["max_conns"]))
+            self.assertEqual(app["environment"]["INDEXER_RPC_RATE_LIMIT"], str(self.cfgs[chain]["rpc"]["rate_limit"]))
 
 
 @unittest.skipIf(os.getuid() == 0, "host operation deliberately requires a non-root owner")
@@ -148,15 +172,18 @@ class HostTests(unittest.TestCase):
         self.private = self.base / "private"
         self.private.mkdir(mode=0o700)
         (self.private / "state").mkdir(mode=0o700)
+        for chain in p.CHAINS:
+            (self.private / "state" / chain).mkdir(mode=0o700)
         for part in ("indexer/postgres/16", "indexer/window/arc", "indexer/identity"):
             (self.root / part).mkdir(parents=True, mode=0o700)
         self.manifest = {"mount_root": str(self.root), "apfs_volume_uuid": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "physical_store_uuid": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "private_dir": str(self.private), "indexer_image": "indexer-go:operations-reviewed", "docker_context": "desktop-linux"}
-        cfg = p.read_yaml(p.REPO / "docs/examples/config-testnets-windowed.draft.yaml")
-        for chain in cfg["multichain"]["chains"]:
-            chain["start_height"] = 101
         public_key = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8"
-        cfg["multichain"]["chains"][-1]["feed"].update(anchor_height=100, anchor_hash="0x" + "2" * 64, fork_hash="910609e1", fork_next=0, peers=[f"enode://{public_key}@192.0.2.1:30303"])
-        self.write(self.private / "config.yaml", yaml.safe_dump(cfg))
+        for chain in p.CHAINS:
+            cfg = p.draft_config(chain)
+            cfg["indexer"]["start_height"] = 101
+            if chain == p.ARC:
+                cfg["source"]["feed"].update(anchor_height=100, anchor_hash="0x" + "2" * 64, fork_hash="910609e1", fork_next=0, peers=[f"enode://{public_key}@192.0.2.1:30303"])
+            self.write(self.private / f"config-{chain}.yaml", yaml.safe_dump(cfg))
         self.write(self.root / "indexer/identity/arc-peer.key", "1" * 64)
         self.password = "app-" + "b" * 40
         self.write(self.private / "postgres-admin-password", "admin-" + "a" * 40)
@@ -285,20 +312,25 @@ class HostTests(unittest.TestCase):
         with self.assertRaises(p.Refused):
             p.check_host(self.manifest)
         self.private.chmod(0o700)
-        cfg_path = self.private / "config.yaml"
+        cfg_path = self.private / "config-arc-testnet.yaml"
         cfg = p.read_yaml(cfg_path)
-        cfg["multichain"]["chains"][-1]["feed"]["anchor_height"] = "UNCONFIRMED_HEIGHT"
+        cfg["source"]["feed"]["anchor_height"] = "UNCONFIRMED_HEIGHT"
         self.write(cfg_path, yaml.safe_dump(cfg))
+        with self.assertRaises(p.Refused):
+            p.check_host(self.manifest)
+
+    def test_every_chain_needs_its_private_configuration(self):
+        (self.private / "config-sepolia.yaml").unlink()
         with self.assertRaises(p.Refused):
             p.check_host(self.manifest)
 
     def test_emergency_reasons(self):
         self.assertIsNone(p.emergency(self.manifest))
-        latch = p.halt_latch(self.private)
+        latch = p.halt_latch(self.private, "sepolia")
         self.write(latch, json.dumps({"version": 1, "reason": "capacity", "detail": "x"}))
         self.assertIsNone(p.emergency(self.manifest), "a capacity halt keeps the database")
         self.write(latch, json.dumps({"version": 1, "reason": "storage", "detail": "x", "stopDatabase": True}))
-        self.assertIn("latch", p.emergency(self.manifest))
+        self.assertIn("sepolia halt latch", p.emergency(self.manifest), "any chain's latch can ask")
         latch.unlink()
         with mock.patch.object(p.os, "statvfs", return_value=types.SimpleNamespace(f_bavail=p.EMERGENCY_FREE, f_frsize=1)):
             self.assertIn("emergency line", p.emergency(self.manifest))
@@ -310,11 +342,12 @@ class HostTests(unittest.TestCase):
         with mock.patch.object(p.os.path, "ismount", return_value=False):
             self.assertIn("volume", p.emergency(self.manifest))
 
-    def test_stop_stack_stops_indexer_before_postgres_and_removes_nothing(self):
+    def test_stop_stack_stops_indexers_before_postgres_and_removes_nothing(self):
+        indexers = [p.service(c) for c in p.CHAINS]
         with mock.patch.object(p.subprocess, "run") as run:
-            self.assertEqual(p.stop_stack(self.manifest), ["indexer", "postgres"])
+            self.assertEqual(p.stop_stack(self.manifest), [*indexers, "postgres"])
         commands = [c.args[0] for c in run.call_args_list]
-        self.assertEqual([c[-2:] for c in commands], [["stop", "indexer"], ["stop", "postgres"]])
+        self.assertEqual([c[len(p.COMPOSE):] for c in commands], [["stop", *indexers], ["stop", "postgres"]])
         for command in commands:
             self.assertEqual(command[:len(p.COMPOSE)], p.COMPOSE)
             self.assertFalse({"down", "rm", "-v", "--volumes", "kill"} & set(command))
@@ -323,7 +356,7 @@ class HostTests(unittest.TestCase):
         with mock.patch.object(p.subprocess, "run", side_effect=p.subprocess.TimeoutExpired("docker", 180)) as run:
             with self.assertRaises(p.Refused):
                 p.stop_stack(self.manifest)
-        self.assertEqual(run.call_count, 1, "PostgreSQL is not stopped while the indexer may still write")
+        self.assertEqual(run.call_count, 1, "PostgreSQL is not stopped while an indexer may still write")
 
     def test_watch_polls_until_an_emergency_and_stops_once(self):
         sleeps = []
@@ -418,7 +451,7 @@ class HostTests(unittest.TestCase):
         self.assertEqual(exit.exception.code, 2)
 
     def test_halt_latch_blocks_start_and_gates_resume(self):
-        latch = self.private / "state" / "halt.json"
+        latch = self.private / "state" / "arc-testnet" / "halt.json"
         with self.assertRaises(p.Refused):
             p.check_host(self.manifest, resume=True)
         self.write(latch, '{"version":1,"reason":"capacity"}')
@@ -428,11 +461,11 @@ class HostTests(unittest.TestCase):
         self.assertTrue(latch.exists(), "inspection never removes the latch")
 
     def test_state_directory_must_be_private(self):
-        state = self.private / "state"
-        state.chmod(0o750)
-        with self.assertRaises(p.Refused):
-            p.check_host(self.manifest)
-        state.chmod(0o700)
+        for state in (self.private / "state", self.private / "state" / "bsc-testnet"):
+            state.chmod(0o750)
+            with self.assertRaises(p.Refused):
+                p.check_host(self.manifest)
+            state.chmod(0o700)
         state.rmdir()
         with self.assertRaises(FileNotFoundError):
             p.check_host(self.manifest)
@@ -462,13 +495,23 @@ class EntrypointTests(unittest.TestCase):
             self.assertEqual(log.read_text(), "child True False\n")
             self.assertEqual(stat.S_IMODE(log.stat().st_mode), 0o600)
 
-    def test_resume_runs_only_the_resume_check_without_database(self):
-        with mock.patch.object(p.sys, "argv", ["preflight.py", "--resume", "/not-a-real-manifest"]), mock.patch.object(p, "private_file", return_value=b"{}"), mock.patch.object(p, "check_host", return_value={"INDEXER_APFS_ROOT": "/fixture"}) as check, mock.patch.object(p.os, "execvpe") as execute:
-            self.assertEqual(p.main(), 0)
-            check.assert_called_once_with({}, resume=True)
-            command = execute.call_args.args[1]
-            self.assertEqual(command[-7:], ["run", "--rm", "--no-deps", "--pull", "never", "indexer", "resume-check"])
-            self.assertNotIn("up", command)
+    def test_resume_runs_only_the_latched_chains_resume_checks_without_database(self):
+        with tempfile.TemporaryDirectory(prefix="indexer-resume-fixture-") as name:
+            private = Path(name)
+            for chain in p.CHAINS:
+                (private / "state" / chain).mkdir(parents=True)
+            for chain in ("bsc-testnet", "arc-testnet"):
+                (private / "state" / chain / "halt.json").write_text("{}")
+            manifest = {"private_dir": name}
+            refused = lambda command, **kwargs: (_ for _ in ()).throw(p.subprocess.CalledProcessError(1, command)) if "indexer-arc-testnet" in command else None
+            out = io.StringIO()
+            with mock.patch.object(p.sys, "argv", ["preflight.py", "--resume", "/not-a-real-manifest"]), mock.patch.object(p, "private_file", return_value=json.dumps(manifest).encode()), mock.patch.object(p, "check_host", return_value={"INDEXER_APFS_ROOT": "/fixture"}) as check, mock.patch.object(p.subprocess, "run", side_effect=refused) as run, contextlib.redirect_stdout(out):
+                self.assertEqual(p.main(), 1, "a refused check fails the command")
+            check.assert_called_once_with(manifest, resume=True)
+            commands = [c.args[0] for c in run.call_args_list]
+            self.assertEqual([c[len(p.COMPOSE):] for c in commands], [["run", "--rm", "--no-deps", "--pull", "never", "indexer-bsc-testnet", "resume-check"], ["run", "--rm", "--no-deps", "--pull", "never", "indexer-arc-testnet", "resume-check"]])
+            self.assertTrue(all("up" not in c for c in commands))
+            self.assertEqual([json.loads(line) for line in out.getvalue().splitlines()], [{"chain": "bsc-testnet", "resumeCheck": "cleared"}, {"chain": "arc-testnet", "resumeCheck": "refused"}])
 
     def test_secret_is_read_as_data_and_never_appears_in_output_or_argv(self):
         with tempfile.TemporaryDirectory(prefix="indexer-secret-fixture-") as name:
@@ -479,10 +522,10 @@ class EntrypointTests(unittest.TestCase):
             fake = tmp / "fake-indexer"
             fake.write_text("#!/bin/sh\n[ \"$INDEXER_DB_POSTGRES_DSN\" = '" + value + "' ] || exit 11\n[ \"$#\" = 2 ] && [ \"$1\" = --config ] && [ \"$2\" = /etc/indexer/config.yaml ] || exit 12\nprintf 'injection-ok\\n'\n")
             fake.chmod(0o700)
-            script = (p.HERE / "indexer-entrypoint.sh").read_text().replace("/run/secrets/postgres_dsn", str(secret)).replace("/app/indexer-go", str(fake))
+            script = (p.HERE / "indexer-entrypoint.sh").read_text().replace("/run/secrets/postgres_dsn", str(secret)).replace('"/app/$INDEXER_BINARY"', str(fake))
             wrapper = tmp / "entrypoint.sh"
             wrapper.write_text(script)
-            env = {"PATH": os.environ["PATH"], "INDEXER_DB_POSTGRES_DSN_FILE": str(secret)}
+            env = {"PATH": os.environ["PATH"], "INDEXER_DB_POSTGRES_DSN_FILE": str(secret), "INDEXER_BINARY": "indexer-arc"}
             result = subprocess.run(["/bin/sh", str(wrapper)], env=env, capture_output=True, text=True, timeout=5)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "injection-ok\n")
@@ -505,16 +548,21 @@ class EntrypointTests(unittest.TestCase):
             fake = tmp / "fake-indexer"
             fake.write_text("#!/bin/sh\nprintf '%s|' \"$@\"\n")
             fake.chmod(0o700)
-            script = (p.HERE / "indexer-entrypoint.sh").read_text().replace("/run/secrets/postgres_dsn", str(secret)).replace("/app/indexer-go", str(fake))
+            script = (p.HERE / "indexer-entrypoint.sh").read_text().replace("/run/secrets/postgres_dsn", str(secret)).replace('"/app/$INDEXER_BINARY"', str(fake))
             wrapper = tmp / "entrypoint.sh"
             wrapper.write_text(script)
-            env = {"PATH": os.environ["PATH"], "INDEXER_DB_POSTGRES_DSN_FILE": str(secret)}
+            env = {"PATH": os.environ["PATH"], "INDEXER_DB_POSTGRES_DSN_FILE": str(secret), "INDEXER_BINARY": "indexer"}
             run = lambda *args: subprocess.run(["/bin/sh", str(wrapper), *args], env=env, capture_output=True, text=True, timeout=5)
             self.assertEqual(run().stdout, "--config|/etc/indexer/config.yaml|")
             self.assertEqual(run("resume-check").stdout, "--config|/etc/indexer/config.yaml|resume-check|")
             for args in (("--clear-data",), ("--resume-check",), ("resume-check", "--reindex"), ("",)):
                 result = run(*args)
                 self.assertNotEqual(result.returncode, 0, args)
+                self.assertEqual(result.stdout, "")
+            for binary in ("", "indexer-go", "../indexer", "indexer-arc --clear-data"):
+                env["INDEXER_BINARY"] = binary
+                result = run()
+                self.assertNotEqual(result.returncode, 0, binary)
                 self.assertEqual(result.stdout, "")
 
 
