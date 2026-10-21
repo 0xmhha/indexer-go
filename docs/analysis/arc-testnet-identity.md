@@ -69,4 +69,4 @@ Python 표준 CRC32와 별도 bitwise IEEE CRC32 계산 결과가 일치했다. 
 
 RPC는 identity4개 method의 HTTP 배치1회와 버전2개 method의 배치1회로 **총2회**였다. 전체 HTTP 요청 자체가2회이므로 초당5회 한도를 넘지 않았고 재시도나 우회 endpoint도 사용하지 않았다. 속도·지연·처리량을 측정하지 않았고 archive/snapshot·노드 저장소를 다운로드하지 않았다. 공식 소스 텍스트와 RPC 원문·파생 계산 기록은 `/private/tmp/indexer-arc-identity-20261019/`에 보존했다.
 
-APFS 확보/포맷·DB 접속·실제 enode·peer fork ID·finalized anchor/hash·시작 높이·identity 생성·초기화/GC 활성화는 계속 보류/미확정이다. [YAML 초안](../examples/config-testnets-windowed.draft.yaml)은 숫자 placeholder가 남아 그대로 실행할 수 없다. 체인별 PostgreSQL pool4개(합계16), 공유 RPC5 HTTP/s, source와 writer 커밋 직전 fresh·epoch·내구성/ACK/삭제 fence와 다른 프로젝트를 유지한다.
+APFS 확보/포맷·DB 접속·실제 enode·peer fork ID·finalized anchor/hash·시작 높이·identity 생성·초기화/GC 활성화는 계속 보류/미확정이다. [Arc YAML 초안](../examples/testnets/arc-testnet.draft.yaml)은 숫자 placeholder가 남아 그대로 실행할 수 없다. 체인별 PostgreSQL pool4개(합계16), 공유 RPC5 HTTP/s, source와 writer 커밋 직전 fresh·epoch·내구성/ACK/삭제 fence와 다른 프로젝트를 유지한다.

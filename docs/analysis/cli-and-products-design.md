@@ -128,9 +128,9 @@ x/
 
 | PR | 내용 | 상태 |
 |---|---|---|
-| 1 | cobra와 pflag 추가, `go mod tidy`. `cmd/cli`, `cmd/flags`. `pkg/app`을 엔진만 남김. 오류 안내, 종료 코드, 묶음별 도움말, ldflags 경로, `--batch-size`를 `--chunk-size`로, `--resume-check`를 `resume-check` 명령으로, `sdk.Main` 제거 | 머지 대기 |
-| 2 | `x/stablenet`, `x/arc` 이동. blank import를 bundle로 옮김. 제품 main, 제품 체인 검사, `--adapter` 미등록 이름 오류, Makefile `CHAIN`, Dockerfile, 배포 스크립트, coupling 테스트 | 제출 |
-| 2a | 테스트넷 배포 초안을 체인별 프로세스로 나눔(Compose 서비스, entrypoint, `preflight.py`, 설정 초안) | 남음 |
+| 1 | cobra와 pflag 추가, `go mod tidy`. `cmd/cli`, `cmd/flags`. `pkg/app`을 엔진만 남김. 오류 안내, 종료 코드, 묶음별 도움말, ldflags 경로, `--batch-size`를 `--chunk-size`로, `--resume-check`를 `resume-check` 명령으로, `sdk.Main` 제거 | 머지 |
+| 2 | `x/stablenet`, `x/arc` 이동. blank import를 bundle로 옮김. 제품 main, 제품 체인 검사, `--adapter` 미등록 이름 오류, Makefile `CHAIN`, Dockerfile, 배포 스크립트, coupling 테스트 | 머지 |
+| 2a | 테스트넷 배포 초안을 체인별 프로세스로 나눔(Compose 서비스, entrypoint, `preflight.py`, 설정 초안) | 제출 |
 | 3 | `pkg/sdk` 해체. `sdktest`를 `pkg/feature/featuretest`로. examples 갱신. SDK와 체인 커스터마이징 문서를 어댑터와 확장 문서로 다시 씀 | 남음 |
 | 4 | 운영 플래그 추가(node-role, db-driver, finality, mode, rpc-fallback, rpc-ws, rpc-rate-limit, rpc-timeout, era-dir) | 남음 |
 | 5 | `-short` 표시 보강과 `test-short` 기준 정리 | 남음 |
@@ -155,13 +155,24 @@ x/
 
 비용도 있다. 테스트넷 초안의 Compose와 `preflight.py`는 indexer 서비스 하나를 전제로 하므로 다시 써야 한다. API 주소가 체인마다 생기고, 한 주소로 묶으려면 reverse proxy가 필요하다. 용량 감시와 halt latch가 프로세스마다 돈다.
 
-멀티체인 모드 코드는 남겨 둔다. generic EVM 체인 여러 개를 `indexer` 한 프로세스로 돌리는 선택지로 쓸 수 있다. 테스트넷 초안은 PR 2a에서 나누며, 그 전까지 초안 설정(StableNet, Arc, generic 체인을 한 프로세스에)은 어떤 바이너리로도 시작할 수 없다. 운영 시작은 원래 보류 상태다.
+멀티체인 모드 코드는 남겨 둔다. generic EVM 체인 여러 개를 `indexer` 한 프로세스로 돌리는 선택지로 쓸 수 있다.
+
+테스트넷 초안(PR 2a)은 이렇게 나눴다.
+
+- 설정 초안은 체인마다 하나다(`docs/examples/testnets/<chain>.draft.yaml`). schema 이름은 멀티체인 모드가 만들던 이름(`indexer_testnets_v1_<chain>`)과 같다.
+- 이미지 하나에 바이너리 세 개를 넣고, Compose 서비스(`indexer-<chain>`)가 `INDEXER_BINARY`로 고른다. entrypoint는 세 이름만 받는다.
+- API는 서비스마다 포트를 따로 둔다(StableNet 8088, BSC 8089, Sepolia 8090, Arc 8091). reverse proxy는 두지 않았다.
+- 용량 감시는 모든 체인 프로세스가 같은 기준으로 한다. halt latch는 `state/<chain>`에 둔다. Arc만 APFS를 쓰기로 mount하고, 나머지는 감시용으로 읽기 전용 mount한다.
+- `preflight.py --resume`은 latch가 있는 체인마다 재개 확인을 돌린다. `--watch`는 비상시에 indexer 네 개를 함께 멈춘 뒤 PostgreSQL을 멈춘다.
+- `TestTestnetDraftsLoadOnceResolved`가 placeholder를 채운 각 초안이 실제 설정으로 검증을 통과하는지 확인한다.
+
+이 방식의 단점은 다음과 같다. 실패한 체인을 자동으로 다시 시작하던 멀티체인 manager의 동작이 없어졌다. 같은 디스크와 PGDATA를 프로세스 네 개가 각각 잰다(PGDATA 크기는 5분마다 네 번 잰다).
 
 남은 결정은 CI test 작업의 `-short` 전환 하나다. 바꾸면 PR 시간이 줄지만 빠진 테스트는 로컬 `make test-race`에서만 돈다. PR 5 전에 정한다.
 
 ## 8. 확인하지 않은 것
 
 - Go 진영의 선례(Kubernetes의 옵션 합성, Caddy의 외부 빌드, geth의 short 테스트, Cosmos SDK의 `x/` 모듈 배치)는 알고 있는 내용으로 판단했다. 이번에 각 저장소를 열어 확인하지 않았다.
-- 체인을 섞어 쓰는 구성은 테스트넷 초안(`docs/examples/config-testnets-windowed.draft.yaml`)에서 확인했다. 다른 외부 배포는 확인하지 않았다.
+- 체인을 섞어 쓰는 구성은 테스트넷 초안(이전의 `docs/examples/config-testnets-windowed.draft.yaml`)에서 확인했다. 다른 외부 배포는 확인하지 않았다.
 - frontend가 `/chains/<id>/` 경로에 기대는지 확인하지 않았다.
 - `pkg/app` 테스트 중 체인 코드에 기대는 테스트 수(14개 파일)는 import 기준으로 셌다. 테스트 함수 단위로 세지 않았다.

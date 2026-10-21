@@ -14,6 +14,15 @@ if [ "${INDEXER_DB_POSTGRES_DSN_FILE:-}" != /run/secrets/postgres_dsn ] || \
     echo 'Required DSN secret is unavailable.' >&2
     exit 1
 fi
+# The service names the binary built for its chain; only the image's three
+# binaries are accepted.
+case "${INDEXER_BINARY:-}" in
+    indexer|indexer-stablenet|indexer-arc) ;;
+    *)
+        echo 'Unsupported INDEXER_BINARY; use indexer, indexer-stablenet or indexer-arc.' >&2
+        exit 1
+        ;;
+esac
 # The only accepted argument runs the capacity resume check instead of indexing.
 case "$#:${1:-}" in
     0:) set -- ;;
@@ -25,4 +34,4 @@ case "$#:${1:-}" in
 esac
 INDEXER_DB_POSTGRES_DSN=$(cat /run/secrets/postgres_dsn)
 export INDEXER_DB_POSTGRES_DSN
-exec /app/indexer-go --config /etc/indexer/config.yaml "$@"
+exec "/app/$INDEXER_BINARY" --config /etc/indexer/config.yaml "$@"
