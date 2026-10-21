@@ -440,6 +440,8 @@ eventbus:
 
 ### Multi-Chain
 
+한 프로세스에는 한 바이너리가 링크한 체인만 넣는다. 멀티체인 모드의 모든 체인은 그 바이너리의 체인 검사를 거친다. 그래서 `indexer`(generic EVM)는 StableNet·Arc 체인을, `indexer-stablenet`은 다른 체인을 거부하고 그 체인만 실패로 남긴다(`TestMultiChainAppliesTheChainCheck`). 서로 다른 체인 계열은 체인별 바이너리를 별도 프로세스로 돌린다([테스트넷 초안](../deployments/testnets/README.md)).
+
 > 체인마다 DB를 따로 둔다: `<database.path>/chains/<id>`(PostgreSQL이면 schema `<schema>_<id>`, schema를 비우면 `chain_<id>`. 소문자로 바꾸고 schema 이름에 쓸 수 없는 문자는 `_`로 바꾸며, 두 체인이 같은 schema가 되면 시작하지 않는다). 각 체인은 자기 수집 루프, 이벤트 버스, 기능으로 돌고 `features.*` 같은 공통 설정을 함께 쓴다. 체인 항목에 `features`를 두면 그 체인에서는 같은 이름의 공통 기능 설정을 통째로 바꾼다(`enabled`를 적지 않으면 공통 값). 체인마다 컨트랙트 주소가 다르므로 `records`(선언형 수집)는 보통 체인 항목에 적는다. 루트의 `rpc.endpoint`는 필요 없고(노드 주소와 대체 노드는 체인 항목의 `rpc_endpoint`, `ws_endpoint`, `fallback_endpoints`에 둔다), `rpc.fallback_endpoints`·`rpc.ws_endpoint`·`rpc.record_dir`·`source.era_dir`·`verifier`는 이 모드에서 쓰이지 않는다(시작 시 경고). `chain_id`는 노드가 알려 주는 값과 같아야 그 체인이 시작된다. `--reindex`는 체인 DB마다 적용된다.
 >
 > 알림은 공통 notifications 설정을 사용하며 체인별 App·DB·서비스에서 평가한다. 설정 API와 stream도 `/chains/<id>/` 아래 해당 체인의 서비스를 사용한다.

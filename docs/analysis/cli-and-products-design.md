@@ -141,7 +141,8 @@ CI의 test 작업은 그대로 전체 시험을 돈다. 빠진 시험을 CI에�
 | 4 | 운영 플래그 추가(node-role, db-driver, finality, confirmations, mode, rpc-fallback, rpc-ws, rpc-rate-limit, rpc-timeout, era-dir) | 머지 |
 | 5 | `-short` 표시 보강과 `test-short` 기준 정리 | 머지 |
 | R2 | 체인 동작 시험을 `x/stablenet`으로 옮기고 `pkg/app/apptest` 공개 | 머지 |
-| R1 | 엔진 전용 패키지 36개를 `internal/`로 이동 | 제출 |
+| R1 | 엔진 전용 패키지 36개를 `internal/`로 이동 | 머지 |
+| R3 | 멀티체인 모드 코드를 남기고 체인 검사 시험 추가 | 제출 |
 
 ### PR 3에서 pkg/sdk가 나뉘는 방식
 
@@ -165,7 +166,15 @@ CI의 test 작업은 그대로 전체 시험을 돈다. 빠진 시험을 CI에�
 
 비용도 있다. 테스트넷 초안의 Compose와 `preflight.py`는 indexer 서비스 하나를 전제로 하므로 다시 써야 한다. API 주소가 체인마다 생기고, 한 주소로 묶으려면 reverse proxy가 필요하다. 용량 감시와 halt latch가 프로세스마다 돈다.
 
-멀티체인 모드 코드는 남겨 둔다. generic EVM 체인 여러 개를 `indexer` 한 프로세스로 돌리는 선택지로 쓸 수 있다.
+### 멀티체인 모드 코드를 남긴다 (R3)
+
+멀티체인 모드 코드는 남긴다. 2026-10-21에 다음을 보고 정했다.
+
+- 쓰임: 체인 계열이 같은 체인 여러 개를 한 프로세스로 돌릴 수 있다. BSC와 Sepolia처럼 generic EVM 체인 여럿을 `indexer` 하나로 돌리면 프로세스, 연결 풀, 용량 감시가 하나로 준다. frontend 이전 문서(`docs/FRONTEND_MIGRATION.md`)도 멀티체인 경로 `/chains/{id}/v1/...`를 안내한다.
+- 지울 때 비용: `internal/multichain`만 시험을 포함해 4,541줄이고, `pkg/app`의 체인 조립, API의 체인별 mount와 알림, 멀티체인 시험 4개 파일, 설정 문서를 함께 지워야 한다. 지워서 얻는 측정된 이득은 없다.
+- 섞임 위험: 앞에서 본 등록 장치 섞임(known token, GraphQL 확장)은 서로 다른 체인 계열을 한 프로세스에 넣을 때 생긴다. 바이너리마다 한 계열만 링크하고, 멀티체인 모드의 모든 체인이 바이너리의 체인 검사를 거치므로 이 조합은 시작되지 않는다. `TestMultiChainAppliesTheChainCheck`가 이것을 확인한다. 거부된 체인은 그 이유를 health에 남기고, 다른 체인은 색인한다.
+
+규칙은 "한 프로세스에는 한 바이너리가 링크한 체인 계열만"이다. 같은 계열의 체인 둘(예: StableNet 메인넷과 테스트넷)을 한 프로세스에 넣으면 profile 인스턴스와 캐시를 함께 쓴다. 캐시 키가 블록 hash라 충돌하지 않을 것으로 보지만 확인하지 않았다.
 
 테스트넷 초안(PR 2a)은 이렇게 나눴다.
 
