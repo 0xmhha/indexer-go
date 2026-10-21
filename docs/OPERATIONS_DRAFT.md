@@ -8,6 +8,7 @@
 - [PostgreSQL 설정 조각](examples/postgresql-testnets.draft.conf)
 - [Docker 운영 구성 초안](../deployments/testnets/README.md): 전용 Compose·호스트 APFS/UUID 검사·secret 파일 DSN 주입과 오프라인 검증.
 - [용량·backlog·복구 정책 초안](OPERATIONS_CAPACITY_DRAFT.md): DB/WAL 증가 감시와 worker 지연·디스크 부족의 경고/중단/재개 제안; 자동 제어는 미구현.
+- [백업·이전과 복구 목표 초안](OPERATIONS_BACKUP_DRAFT.md): 다시 만들 수 없는 자료, RPO/RTO 제안, 연속 WAL 보관과 정지 상태 복사, 이전·복원 검증 절차.
 - [Checkpoint·재시작·GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md): 진행 기록·정상 종료·장애 복구·원본 삭제 전 조건과 중단된 삭제의 복구를 구분.
 - [문서·설정 오프라인 일관성 점검](analysis/operations-offline-review.md): 발견한 누락·수정·검사 범위와 남은 운영 구현을 정리.
 - [Arc identity 확인 결과](analysis/arc-testnet-identity.md): genesis/network ID 확정, fork ID는 공개 소스 계산 후보와 실제 peer 미확인을 구분.
@@ -75,7 +76,7 @@ PostgreSQL schema 기준 이름은 `indexer_testnets_v1`이며 체인별 설정�
 | 구분 | 미확정 항목 | 확정 방법/담당 |
 | --- | --- | --- |
 | 운영자 선택 | X31 사용 가능 여부, 기존 자료 보존, 전용 APFS 확보 방식·실제 mount root | 사용자가 저장소 사용 범위를 결정; 현재 exFAT을 포맷하지 않음 |
-| 운영자 선택 | 최대 허용 중단·복구 시간, 장기 DB 증설/백업 방침 | [정책 초안](OPERATIONS_CAPACITY_DRAFT.md)은 worker 적체5분/30분·운영자 대응15분·2시간 내 복구 방침 결정을 제안; RPO/RTO·실제 보존/복원 가능 시간은 미확정 |
+| 운영자 선택 | 최대 허용 중단·복구 시간, 장기 DB 증설/백업 방침 | [정책 초안](OPERATIONS_CAPACITY_DRAFT.md)은 worker 적체5분/30분·운영자 대응15분·2시간 내 복구 방침 결정을 제안; [백업 초안](OPERATIONS_BACKUP_DRAFT.md)이 등급별 RPO/RTO·WAL 보관소·주기를 제안. RPC 노드 상태 보관 범위와 실제 복원 가능 시간은 미확정 |
 | 접속 입력 | Arc 실행 계층의 실제 static enode | 현재 없음; 네트워크 운영자가 제공한 연결 가능한 peer 필요 |
 | 접속 입력 | PostgreSQL 자격 증명과 비공개 DSN 파일/host manifest 경로·운영 이미지 | Docker 내부 DB/role은 초안에 제안; 실제 값은 운영 적용 전 확정하고 키/비밀번호를 문서에 기록하지 않음 |
 | 확인 완료 | Arc genesis hash·network ID | 2026-10-19 공개 RPC·공식 소스로 확인해 YAML에 반영; [근거](analysis/arc-testnet-identity.md) |
