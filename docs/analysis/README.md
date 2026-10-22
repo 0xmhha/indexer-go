@@ -31,6 +31,7 @@ Check the corresponding maintained guide and code before relying on a proposed i
 
 | Note | How to use it |
 | --- | --- |
+| [Execution ingest design](execution-ingest-design.md) | Proposed: receive blocks from peers, execute them locally into receipt and state tables, delete raw blocks after commit; two start modes and per-chain execution modules. Not implemented. |
 | [Windowed feed design](windowed-feed-design.md) | Design goals, storage/processing boundaries and staged acceptance criteria. Implemented settings are documented in [feed application](../FEED_APP.md) and [window storage](../WINDOW_STORAGE.md). |
 | [Arc peer capabilities](arc-peer-capabilities.md) | Input format and protocol audit; distinguish header/body/receipt supply from state, trace and blob support. |
 | [Arc testnet identity](arc-testnet-identity.md) | Public genesis/network evidence and the remaining peer and fork verification requirements. |
