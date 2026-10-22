@@ -1705,3 +1705,52 @@ PostgreSQL 저장소를 연 App이 `opsguard.AttachPostgresStats`로 저장소�
 **판단.** launchd 같은 상시 실행 설정은 운영 호스트의 계정·경로·전원 방침에 달려 있어 넣지 않았다. 감시가 죽었을 때 알리거나 다시 붙이는 장치도 아직 없다.
 
 **검증.** preflight 37개(시작→감시 순서, Compose 인자·DSN 비노출, 잠금 충돌 시 미시작, Compose 실패 시 감시 없음과 잠금 해제, background 부모·자식 경로, 중단 exit130, `--background` 단독 거부, 실제 fork로 session 분리와 로그 기록)와 오프라인 lint가 통과했다. 실제 호스트에서 `--start`를 실행하지는 않았다.
+
+### 3.108 StableNet 블록 실행 검증 E0 (10/22)
+
+[실행 수집 설계](execution-ingest-design.md)의 E0다. go-stablenet의 실행 코드를 고치지 않고 import해서 StableNet testnet 블록을 실행하고, 계산한 state root와 receipt root가 header와 같은지 확인했다. 이 작업 전의 코드는 tag `v0.3.0`이다.
+
+**방법.** 저장소 밖에 별도 Go 모듈을 두고 `github.com/ethereum/go-ethereum`을 go-stablenet(`4d17eea01`, go-ethereum v1.13.14 기반)으로 `replace`했다. indexer 코어는 이 모듈에 넣지 않았다.
+
+- 실행: 거래마다 `core.ApplyTransaction`을 부르고, 블록 끝에 WBFT 엔진의 `Finalize`를 부른다. `Finalize`는 system contract 전이, base fee 분배, epoch 처리를 하고 state root를 계산한다. 엔진은 노드와 같은 방식(`new(wbft.Config)` + `ethconfig.SetConfigFromChainConfig`, `wbftengine.NewEngine`)으로 만들었다. `wbftengine.Engine`은 `consensus.Engine`을 다 구현하지 않아서, 실행이 부르는 `Author`와 `Finalize`만 넘기는 adapter를 두었다.
+- 상태: 공개 RPC가 hash scheme이라 `debug_dbGet(hash)`이 trie 노드를 돌려준다. 메모리 key-value 저장소가 없는 key를 이 호출로 받아 채운다. 거래가 있는 블록은 `debug_traceBlockByNumber`(prestateTracer)로 건드린 계정과 슬롯을 알아내고, `eth_getProof`(부모 블록) 묶음으로 노드를 미리 넣었다. 블록을 실행한 뒤 `StateDB.Commit`으로 메모리 trie에 넣고, 다음 블록은 우리가 계산한 root 위에서 실행했다.
+- 헤더: epoch 정보와 `BLOCKHASH`를 위해 go-stablenet `ethclient`로 header를 읽었다.
+- 측정: 바뀐 계정·슬롯 수(`StateDB`의 비공개 `accountsOrigin`, `storagesOrigin`을 reflect로 읽음), 새 trie 노드 바이트(`triedb.Size()`의 hashdb dirty 크기 차이), 실행·Finalize·Commit 시간, 원격 조회 수와 대기 시간.
+- RPC: `https://api.test.stablenet.network`, 읽기 요청만, HTTP 요청 사이 250ms(초당 4개 이하). 묶음 요청은 1개로 센다.
+
+**대상.** 최근 3,000블록에는 거래가 없었다. 체인 전체에서 표본을 뽑아 거래가 있던 두 구간을 찾았다. 거래는 300블록에 10개 안팎으로 드물다.
+
+- 연속 구간: 11,492,486부터 300블록. 거래 12개, epoch 블록 2개(11,492,600, 11,492,740). 처음 블록의 부모 상태에서 시작해 이어서 실행했다.
+- 거래 블록 모음: 8,801,922~8,821,922의 거래 블록 62개(거래 62개, gas 합 61,015,392). 블록마다 자기 부모 상태에서 따로 실행했다.
+
+**결과.**
+
+| 항목 | 연속 300블록 | 거래 블록 62개 |
+|---|---|---|
+| state root, receipt root, gas, bloom 일치 | 300/300 | 62/62 |
+| 거래 블록의 바뀐 계정 (중앙값, 최대) | 9, 10 | 9, 12 |
+| 거래 블록의 바뀐 슬롯 (중앙값, 최대) | 6.5, 12 | 1, 26 |
+| 거래 블록의 새 trie 노드 (중앙값, 최대) | 11,158B, 13,369B | 9,051B, 21,787B |
+| 빈 블록의 새 trie 노드 | 0B | 해당 없음 |
+| 거래 실행 시간 (중앙값) | 0.33ms | 0.17ms |
+| Finalize 시간 (상태가 이미 있을 때, 중앙값) | 0.11ms | 해당 없음 |
+| Commit 시간 (중앙값) | 0.06ms | 0.06ms |
+| 원격 노드 조회 | 300블록에 67개, 8,576B | 블록당 17~20개, 대기 4.2~5.6초 |
+| HTTP 요청 | 420개 | 1,470개 |
+
+거래 블록에서 바뀐 계정 9개에는 보낸 쪽과 받는 쪽 말고 base fee를 나눠 받는 validator가 들어 있다. 빈 블록은 gas를 쓰지 않아 base fee 분배가 없고 상태가 바뀌지 않는다.
+
+**판단.**
+
+- go-stablenet의 실행 규칙(fee delegation, Anzeon 수수료, WBFT base fee 분배와 epoch 처리)은 import만으로 맞았다. 로직을 새로 구현할 곳은 찾지 못했다. 필요한 것은 engine adapter와 header를 공급하는 chain reader다.
+- 상태가 이미 메모리에 있으면 블록 하나의 실행, root 계산, commit이 1ms 안에 끝났다. 시간의 대부분은 원격 노드 조회 대기였다. 연속 실행에서는 첫 블록 뒤로 원격 조회가 거의 없었다. 블록마다 따로 실행하면 Finalize가 읽는 system contract와 validator 노드를 매번 받아 블록당 4~6초가 걸렸다.
+- 이 체인의 상태 증가는 거래 수에 비례하고, 거래 블록 하나에 trie 노드 약 9~11KB와 이력 행 약 15개(계정 9개, 슬롯 1~7개)다. 거래가 몰린 구간의 비율(300블록에 거래 10개 정도)이 하루(86,400블록) 내내 이어지면 거래 블록 약 2,900개, trie 노드 약 30MB다. 최근 3,000블록처럼 거래가 없으면 0에 가깝다. 두 구간의 비율을 그대로 늘린 추정이다.
+
+**측정하지 않은 것.**
+
+- 전체 상태 크기. 이번 시험은 건드린 계정만 받아 왔고 전체 상태를 만들지 않았다. 전체 상태를 받는 방법(snap 또는 `debug_dbGet`으로 trie 전체 순회)과 그 크기는 따로 재야 한다.
+- PostgreSQL에 넣었을 때의 크기. 새 trie 노드 바이트는 메모리 hashdb의 dirty 크기이고, 행 머리·hash 키·색인 비용은 들어 있지 않다. 노드 수도 세지 않았다.
+- 거래가 많은 블록. 표본의 블록은 모두 거래가 1개였다. 블록당 거래가 많을 때의 실행 시간은 재지 않았다.
+- indexer 코어를 go-stablenet 위에서 컴파일하는 것. 이번 모듈은 코어를 포함하지 않았다.
+- 바뀐 상태를 reflect 없이 꺼내는 방법. go-stablenet `StateDB`에는 상태 변화를 알려 주는 hook이 없다. 제품 코드에서는 이 부분을 정해야 한다.
+- 공개 RPC가 `debug`와 `personal` 네임스페이스를 외부에 열어 두었다. 이번 시험은 `debug_dbGet`과 `debug_traceBlockByNumber`에 기댔지만, 제품 설계는 이 API가 열려 있다고 가정하지 않는다.
