@@ -135,6 +135,10 @@ go-ethereum v1.16.5에는 `state.NewWithReader(root, db, reader)`가 있다. `re
 
 실행 중 상태 읽기는 PostgreSQL에 바로 보내지 않는다. 거래 하나가 계정과 storage를 수천 번 읽을 수 있어서다. 프로세스 안의 상태 캐시에서 읽고, 캐시에 없을 때만 DB에서 읽는다. 블록 하나가 끝나면 바뀐 상태만 state queue로 보낸다.
 
+실행부는 체인마다 별도 프로세스로 둔다(10/22, 8.2). 실행부는 자기 fork의 go.mod로 빌드하고, indexer와는 IPC로 `pkg/core/model` 값과 상태 변화만 주고받는다. 위 `Executor`는 indexer 쪽에서 이 IPC를 감싼 client가 구현한다. 상태 캐시와 trie DB는 실행부 프로세스 안에 있다. DB 쓰기는 지금처럼 indexer의 단일 writer만 한다.
+
+블록이 바꾼 계정과 슬롯은 commit 전후의 trie를 비교해 구한다(10/22). fork에 hook을 추가하지 않기 위해서다. 비교는 commit이 내놓은 새 노드 경로만 따라가므로 바뀐 부분만 읽는다. 대신 비교 코드는 직접 써야 하고, 그만큼 블록마다 시간이 더 든다. 얼마나 드는지는 E1에서 잰다.
+
 ### 3.4 테이블과 writer
 
 새로 만드는 표는 다음과 같다.
@@ -314,38 +318,42 @@ peer만으로 처리하려면 체인의 합의를 우리가 검증해야 한다.
 - 10/13의 EVM 집중 결정을 "실행 수집에서는 EVM이 아닌 체인도 받는다"로 고친다.
 - 코어 모델과 port에서 EVM에 묶인 부분(주소 20바이트, 거래 type, receipt 구조)을 체인별 확장으로 뺄지, Starknet 전용 모델과 표를 따로 둘지 정한다. 이 설계는 후자를 기본안으로 둔다. EVM 체인의 코드 경로를 흔들지 않기 위해서다.
 
-**fork를 함께 쓰는 문제.** go-stablenet, op-geth, Nitro는 모두 `github.com/ethereum/go-ethereum`을 고친 fork다. Go 모듈 하나에는 한 module path의 버전을 하나만 둘 수 있다. 그래서 체인별 바이너리(`x/<chain>/cmd/...`)마다 Go 모듈을 따로 두고, 각자 자기 fork로 `replace`해야 한다.
+**fork를 함께 쓰는 문제.** go-stablenet, op-geth, Nitro는 모두 `github.com/ethereum/go-ethereum`을 고친 fork다. Go 모듈 하나에는 한 module path의 버전을 하나만 둘 수 있다. 그래서 fork 실행 코드를 import하는 Go 모듈은 자기 fork로 `replace`해야 한다.
 
-이렇게 하면 코어(`pkg/`)도 그 fork 위에서 컴파일된다. go-stablenet(`4d17eea01`)을 확인한 결과는 다음과 같다.
+그 모듈에 코어(`pkg/`)를 함께 넣으면 코어도 그 fork 위에서 컴파일된다. go-stablenet(`4d17eea01`)을 확인한 결과는 다음과 같다.
 
 - module path가 `github.com/ethereum/go-ethereum`이고, go-ethereum v1.13.14를 기반으로 한다(`go 1.23.0`). 이 프로젝트는 v1.16.5와 Go 1.26.8을 쓴다.
 - EIP-7702의 `SetCodeTx`와 `triedb`는 들어와 있다. Prague의 `RequestsHash`는 없다.
 - `state.New(root, db, snaps)`만 있고 `state.NewWithReader`는 없다. 3.3에서 쓰려던 reader 교체 경계가 없으므로, go-stablenet에서는 `state.Database`(`OpenTrie`, `ContractCode` 등)를 구현해 상태를 넣어야 한다.
-- 이 프로젝트를 go-stablenet으로 `replace`해 오프라인으로 빌드해 보려 했으나, go-stablenet의 의존성(`go-verkle`, `gnark-crypto` 등)이 module cache에 없어 컴파일 단계까지 가지 못했다. 코어가 v1.13.14 API로 컴파일되는지는 아직 모른다.
+- 이 프로젝트를 go-stablenet으로 `replace`해 빌드하면 의존성 두 곳(pebble, go-ipa)과 코어 네 패키지(`gethconv`, `chains/evm`, `testchain`, `capture`)가 깨진다(10/22, work log 3.109). pebble 충돌은 fork를 고쳐야 풀리고, `capture`의 trie는 v1.13에 없는 범위 순회에 기댄다.
 
 10/22 E0에서 go-stablenet의 실행 코드를 별도 모듈로 import해 StableNet testnet 블록 362개를 실행했다. 모두 state root와 receipt root가 header와 같았다(work log 3.108). 실행 규칙은 import만으로 맞았고, 필요한 것은 두 가지였다.
 
 - `wbftengine.Engine`은 `consensus.Engine`을 다 구현하지 않는다. 실행이 부르는 `Author`와 `Finalize`만 넘기는 adapter를 둔다.
 - `Finalize`가 epoch 정보를 읽으려고 이전 header를 찾는다. 실행부에 header를 공급하는 chain reader가 필요하다. 우리 DB의 `blocks` 표가 이 역할을 한다.
 
-go-stablenet `StateDB`에는 바뀐 상태를 알려 주는 hook이 없다. E0는 비공개 필드를 reflect로 읽었다. 제품 코드에서는 commit한 trie 노드를 비교해 바뀐 계정과 슬롯을 구하거나, go-stablenet에 hook을 추가해야 한다. 후자는 fork를 고치는 일이라 go-stablenet 쪽과 정해야 한다.
+go-stablenet `StateDB`에는 바뀐 상태를 알려 주는 hook이 없다. E0는 비공개 필드를 reflect로 읽었다. 제품 코드에서는 commit 전후의 trie를 비교해 바뀐 계정과 슬롯을 구한다(10/22). hook을 추가하려면 fork를 고쳐야 해서 택하지 않았다.
 
-그래서 코어를 fork 위에서 컴파일하는 대신, 실행부만 별도 모듈에 두고 코어와는 `pkg/core/model` 값으로만 주고받는 방식도 함께 검토한다(8.3). 이 경우 StableNet 실행부는 별도 프로세스가 되거나, 코어가 go-ethereum 타입을 쓰지 않도록 경계를 다시 그어야 한다. E0에서 정한다.
+그래서 코어를 fork 위에서 컴파일하지 않는다. 실행부를 체인마다 별도 프로세스로 두고, 코어와는 IPC로 `pkg/core/model` 값과 상태 변화만 주고받는다(10/22). 코어를 두 go-ethereum 버전에서 빌드되게 하는 방식은 변환층을 계속 관리해야 하고, fork가 늘수록 조합이 늘어나서 택하지 않았다. 별도 프로세스의 단점은 운영할 프로세스가 늘고, 결과를 직렬화하는 비용이 들고, IPC 프로토콜에 버전을 붙여 관리해야 한다는 점이다. 저장소에는 Reth ExEx용 framed Unix IPC(`internal/source/nodefeed`)가 이미 있어 이 형식을 참고한다.
 
 ### 8.3 모듈 구조
 
 ```
-pkg/execution/                 Executor, StateView, Result 계약과 상태 캐시 (chain-neutral)
-pkg/execution/statepg/         PostgreSQL 상태 표 읽기·쓰기
-pkg/execution/gethexec/        go-ethereum core를 import한 기본 Executor (Ethereum 계열)
-x/stablenet/execution/         go-stablenet core를 import한 Executor (별도 go.mod)
-x/op/execution/                op-geth (별도 go.mod)
-x/arbitrum/execution/          Nitro (별도 go.mod)
+pkg/execution/                 Executor, Result 계약과 IPC client, 실행부 프로세스 관리 (chain-neutral)
+execwire/                      IPC 메시지 형식과 버전 (별도 go.mod, 표준 라이브러리만 쓴다)
+pkg/execution/statepg/         PostgreSQL 상태 표 쓰기 (indexer 단일 writer 안에서)
+x/stablenet/executor/          go-stablenet core를 import한 실행부 프로세스 (별도 go.mod)
+x/ethereum/executor/           go-ethereum 실행부 (Sepolia, Hoodi, Ephemery; 별도 go.mod)
+x/op/executor/                 op-geth (별도 go.mod)
+x/arbitrum/executor/           Nitro (별도 go.mod)
 x/starknet/                    Starknet 전용 모델·표·실행기 연결 (8.2)
+x/arc/executor/                Rust 실행부 (8.2)
 x/<chain>/consensus/           체인별 canonical 검증 (7장)
 ```
 
 `pkg/execution`의 계약은 go-ethereum 타입을 쓰지 않고 `pkg/core/model`만 쓴다. fork마다 다른 타입이 코어로 새어 들어오지 않게 하기 위해서다.
+
+`execwire`는 indexer 모듈과 실행부 모듈이 함께 import하므로 별도 Go 모듈로 둔다. 실행부가 indexer 모듈을 import하면 indexer go.mod의 요구 버전(go-ethereum v1.16.5, pebble v1.1.5)이 실행부 모듈의 의존성 계산에 들어와 work log 3.109의 충돌이 다시 생긴다. `pkg/core/model`도 go-ethereum `common`과 `rlp`를 import하므로 쓸 수 없다. 그래서 `execwire`는 표준 라이브러리만 쓰고, hash와 주소는 고정 길이 바이트 배열로, 블록과 receipt는 RLP 바이트로 나른다. 양쪽이 각자 자기 go-ethereum 타입으로 바꾼다. go-ethereum 계열 실행부도 같은 형식으로 붙여, 실행부가 하나의 경로만 갖게 한다.
 
 ---
 
@@ -387,11 +395,13 @@ E0은 외부 RPC에 접속하고 go-stablenet 소스를 받아야 한다. 진행
 | storage 이력 | 전부 남긴다. 높이 범위 partition으로 저장하고, 압축과 압축된 자료의 조회는 별도 연구로 둔다 (10/22) |
 | 체인 순서 | StableNet, Sepolia, Hoodi, Ephemery, Arbitrum Sepolia, OP Sepolia, Starknet Sepolia, Arc (10/22) |
 | Starknet | Arc 앞에 넣는다 (10/22). 모델을 따로 둘지 넓힐지는 착수 전에 정한다 |
+| 실행부 위치 | 체인마다 별도 프로세스, 자기 fork의 go.mod로 빌드하고 IPC로 연결한다 (10/22, 8.2) |
+| 바뀐 상태 구하기 | commit 전후 trie 비교. fork에 hook을 추가하지 않는다 (10/22, 3.3) |
+| 기존 RPC 수집 | 유지한다. 실행 수집이 체인별로 검증되면 다시 정한다 (10/22) |
 
 | 정해야 할 것 | 선택지 | 제안 |
 |---|---|---|
 | 테이블 writer 분리 시점 | 처음부터 / 병목 확인 후 | 병목 확인 후 (E4) |
-| 기존 RPC 수집 | 유지 / 실행 수집으로 대체 | 유지한다. 실행 수집이 체인별로 검증되면 다시 정한다 |
 | 용량 계획 | E0 측정 후 | DB 계획 예산(160GiB)을 E0의 증가량으로 다시 정한다 |
 | 오래된 이력의 압축과 조회 | 별도 연구 | E0 뒤에 연구 계획을 따로 세운다 |
 
@@ -399,7 +409,8 @@ E0은 외부 RPC에 접속하고 go-stablenet 소스를 받아야 한다. 진행
 
 ## 12. 확인하지 않은 것
 
-- op-geth, Nitro의 go-ethereum 기반 버전. go-stablenet은 v1.13.14 기반이고 실행부만 별도 모듈로 쓸 수 있음을 E0에서 확인했다. 코어가 그 위에서 컴파일되는지는 아직 확인하지 않았다.
+- op-geth, Nitro의 go-ethereum 기반 버전. 실행부를 별도 프로세스로 두므로 코어와 맞출 필요는 없지만, 실행부 모듈이 빌드되는지는 확인하지 않았다.
+- 실행 결과를 IPC로 넘기는 비용과, trie 비교로 바뀐 상태를 구하는 시간.
 - StableNet 전체 상태의 크기와, 전체 상태를 받는 방법(snap 또는 trie 순회)의 시간. E0는 건드린 계정만 받아 왔다.
 - Starknet 실행기를 Go에서 쓸 수 있는지.
 - go-ethereum `StateDB`를 trie 없이 `NewWithReader`로 실행하고 상태 변화만 꺼낼 수 있는지. state root 계산 경로가 trie DB를 여는 것은 확인했지만, 피하는 방법은 시험하지 않았다.
