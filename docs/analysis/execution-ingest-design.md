@@ -1,6 +1,6 @@
 # 블록 실행 기반 수집 설계
 
-**상태: 설계 초안 (2026-10-22). 구현, 외부 peer 접속, 상태 내려받기, 성능 측정은 하지 않았다.**
+**상태: 설계 초안 (2026-10-22). 구현, 외부 peer 접속, 상태 내려받기, 성능 측정은 하지 않았다.** 이 작업 전의 코드는 tag `v0.3.0`(`675d616`)으로 남겼다.
 
 ## 1. 배경과 목표
 
@@ -14,7 +14,7 @@
 4. 처리를 마친 원본 블록은 바로 지운다. 노드 DB를 따로 두지 않으므로 저장소를 두 벌 쓰지 않는다.
 5. 시작 모드를 두 가지 둔다. 동기화 없이 최신 블록부터 처리하는 모드와, DB의 마지막 높이 다음부터 따라잡은 뒤 새 블록을 하나씩 처리하는 모드다.
 
-체인을 붙이는 원칙은 이렇다. 실행 규칙을 import로 가져올 수 있으면 import한다. 우리 구조에 맞게 로직을 바꿔야 하면 새로 구현한다. 붙일 순서는 StableNet, Arc, Sepolia, Hoodi, Ephemery, Arbitrum Sepolia, OP Sepolia, Starknet Sepolia다. 다만 Arc와 Starknet은 8장의 이유로 순서와 범위를 다시 정해야 한다.
+체인을 붙이는 원칙은 이렇다. 실행 규칙을 import로 가져올 수 있으면 import한다. 우리 구조에 맞게 로직을 바꿔야 하면 새로 구현한다. 붙일 순서는 StableNet, Sepolia, Hoodi, Ephemery, Arbitrum Sepolia, OP Sepolia, Starknet Sepolia, Arc다(10/22 결정). Arc는 Go에서 import할 수 없어 마지막에 둔다. Starknet은 EVM이 아니어서 코어 모델을 넓혀야 한다(8.2).
 
 ---
 
@@ -281,24 +281,34 @@ peer만으로 처리하려면 체인의 합의를 우리가 검증해야 한다.
 
 | 순서 | 체인 | 실행 규칙 | import 여부 | 블록 수신 | 시작 상태 |
 |---|---|---|---|---|---|
-| 1 | StableNet | go-stablenet (go-ethereum fork, Go) | import. fee delegation(0x16), Anzeon 수수료가 fork 안에 있다 | execution peer 전파 | 공개 RPC가 전체 상태를 내준다. 4.1의 두 방법 모두 쓸 수 있다 |
-| 2 | Arc | Reth 기반 (Rust) | 불가. Go로 다시 구현하거나 Rust 실행부를 별도 프로세스로 붙인다 | ETH/68 (전파 없음, 지금처럼 polling) | 공개 RPC가 전체 상태를 내준다 |
-| 3 | Sepolia | go-ethereum | import | beacon | 오래된 체인이라 snap 또는 proof 방식 |
-| 4 | Hoodi | go-ethereum | import | beacon | genesis부터 실행할 수 있는지 확인이 필요하다 |
-| 5 | Ephemery | go-ethereum | import | beacon | 주기적으로 genesis부터 다시 시작한다. 주기는 확인하지 않았다 |
-| 6 | Arbitrum Sepolia | Nitro (ArbOS, go-ethereum fork) | import. ArbOS 상태 전이가 크다 | sequencer feed + L1 inbox | 미정 |
-| 7 | OP Sepolia | op-geth (go-ethereum fork) | import. deposit 거래, L1 수수료 | op-node 방식 도출 + sequencer gossip | 미정 |
-| 8 | Starknet Sepolia | Cairo VM | 해당 없음 | Starknet 전용 | 해당 없음 |
+| 1 | StableNet | go-stablenet (go-ethereum v1.13.14 fork, Go) | import. fee delegation(0x16), Anzeon 수수료가 fork 안에 있다 | execution peer 전파 | 공개 RPC가 전체 상태를 내준다. 4.1의 두 방법 모두 쓸 수 있다 |
+| 2 | Sepolia | go-ethereum | import | beacon | 오래된 체인이라 snap 또는 proof 방식 |
+| 3 | Hoodi | go-ethereum | import | beacon | genesis부터 실행할 수 있는지 확인이 필요하다 |
+| 4 | Ephemery | go-ethereum | import | beacon | 주기적으로 genesis부터 다시 시작한다. 주기는 확인하지 않았다 |
+| 5 | Arbitrum Sepolia | Nitro (ArbOS, go-ethereum fork) | import. ArbOS 상태 전이가 크다 | sequencer feed + L1 inbox | 미정 |
+| 6 | OP Sepolia | op-geth (go-ethereum fork) | import. deposit 거래, L1 수수료 | op-node 방식 도출 + sequencer gossip | 미정 |
+| 7 | Starknet Sepolia | Cairo VM (Starknet 전용 실행기) | Go 실행기를 import할 수 있는지 확인이 필요하다 | Starknet 전용 | 미정 |
+| 8 | Arc | Reth 기반 (Rust) | 불가. Go로 다시 구현하거나 Rust 실행부를 별도 프로세스로 붙인다 | ETH/68 (전파 없음, 지금처럼 polling) | 공개 RPC가 전체 상태를 내준다 |
 
 ### 8.2 함께 정해야 할 것
 
-**Arc의 순서.** Arc는 Rust이고 native USDC 같은 고유 규칙이 있다. Go에서 import할 수 없어서 1번 원칙("import로 되면 import")을 적용할 수 없다. 2번 순서로 두면 실행부를 새로 구현하는 일이 앞당겨진다. Sepolia와 Hoodi를 먼저 하고 Arc를 뒤로 미루기를 제안한다.
+**Arc를 마지막에 두는 이유.** Arc는 Rust이고 native USDC 같은 고유 규칙이 있다. Go에서 import할 수 없어서 "import로 되면 import" 원칙을 적용할 수 없다. 실행부를 새로 구현하거나 Rust 실행부를 따로 붙여야 하므로, 다른 체인으로 구조를 굳힌 뒤에 한다.
 
-**Starknet.** Starknet은 EVM이 아니다. 주소, 거래 형식, 상태 구조, 실행기가 모두 다르다. 이 프로젝트는 10/13에 EVM 체인에 집중하기로 했고, 코어 모델(`pkg/core/model`)도 EVM 기준이다. 넣으려면 그 결정과 코어 모델을 다시 정해야 한다.
+**Starknet을 넣을 때 바뀌는 것.** Starknet은 EVM이 아니다. 주소(252비트 field element), 거래 형식, 상태 구조, 실행기(Cairo VM)가 모두 다르다. 이 프로젝트는 10/13에 EVM 체인에 집중하기로 했고, 코어 모델(`pkg/core/model`), storage port, 기능(`balance.native`, `token.*`), API 스키마도 EVM 기준이다. 그래서 Starknet 앞에 두 가지를 먼저 한다.
+
+- 10/13의 EVM 집중 결정을 "실행 수집에서는 EVM이 아닌 체인도 받는다"로 고친다.
+- 코어 모델과 port에서 EVM에 묶인 부분(주소 20바이트, 거래 type, receipt 구조)을 체인별 확장으로 뺄지, Starknet 전용 모델과 표를 따로 둘지 정한다. 이 설계는 후자를 기본안으로 둔다. EVM 체인의 코드 경로를 흔들지 않기 위해서다.
 
 **fork를 함께 쓰는 문제.** go-stablenet, op-geth, Nitro는 모두 `github.com/ethereum/go-ethereum`을 고친 fork다. Go 모듈 하나에는 한 module path의 버전을 하나만 둘 수 있다. 그래서 체인별 바이너리(`x/<chain>/cmd/...`)마다 Go 모듈을 따로 두고, 각자 자기 fork로 `replace`해야 한다.
 
-이렇게 하면 코어(`pkg/`)도 그 fork 위에서 컴파일된다. 코어가 쓰는 go-ethereum API는 주로 `common`, `core/types`, `rlp`, `crypto`라서 fork 사이에 크게 다르지 않을 것으로 본다. 그래도 fork의 기반 버전이 v1.16.5와 많이 다르면 `pkg/core/gethconv`처럼 타입을 맞물리는 곳에서 깨질 수 있다. go-stablenet의 기반 버전은 이 컴퓨터에 소스가 없어 확인하지 못했다.
+이렇게 하면 코어(`pkg/`)도 그 fork 위에서 컴파일된다. go-stablenet(`4d17eea01`)을 확인한 결과는 다음과 같다.
+
+- module path가 `github.com/ethereum/go-ethereum`이고, go-ethereum v1.13.14를 기반으로 한다(`go 1.23.0`). 이 프로젝트는 v1.16.5와 Go 1.26.8을 쓴다.
+- EIP-7702의 `SetCodeTx`와 `triedb`는 들어와 있다. Prague의 `RequestsHash`는 없다.
+- `state.New(root, db, snaps)`만 있고 `state.NewWithReader`는 없다. 3.3에서 쓰려던 reader 교체 경계가 없으므로, go-stablenet에서는 `state.Database`(`OpenTrie`, `ContractCode` 등)를 구현해 상태를 넣어야 한다.
+- 이 프로젝트를 go-stablenet으로 `replace`해 오프라인으로 빌드해 보려 했으나, go-stablenet의 의존성(`go-verkle`, `gnark-crypto` 등)이 module cache에 없어 컴파일 단계까지 가지 못했다. 코어가 v1.13.14 API로 컴파일되는지는 아직 모른다.
+
+그래서 코어를 fork 위에서 컴파일하는 대신, 실행부만 별도 모듈에 두고 코어와는 `pkg/core/model` 값으로만 주고받는 방식도 함께 검토한다(8.3). 이 경우 StableNet 실행부는 별도 프로세스가 되거나, 코어가 go-ethereum 타입을 쓰지 않도록 경계를 다시 그어야 한다. E0에서 정한다.
 
 ### 8.3 모듈 구조
 
@@ -309,6 +319,7 @@ pkg/execution/gethexec/        go-ethereum core를 import한 기본 Executor (Et
 x/stablenet/execution/         go-stablenet core를 import한 Executor (별도 go.mod)
 x/op/execution/                op-geth (별도 go.mod)
 x/arbitrum/execution/          Nitro (별도 go.mod)
+x/starknet/                    Starknet 전용 모델·표·실행기 연결 (8.2)
 x/<chain>/consensus/           체인별 canonical 검증 (7장)
 ```
 
@@ -338,7 +349,7 @@ RPC 수집과 기존 peer feed는 지우지 않는다. 실행 수집은 세 번�
 | E2 | 모드 1과 모드 2. 상태 bootstrap(4.1)과 head 시작 | 두 모드로 시작해 head를 따라간다. 재시작 뒤 이어 간다 |
 | E3 | 원본 즉시 삭제. window 삭제 규칙 변경 | 완료 높이와 reorg 깊이를 지난 원본이 지워진다. reorg 시험에서 다시 실행한다 |
 | E4 | 테이블 writer와 완료 높이. 쓰기가 병목으로 확인된 경우만 | 같은 입력에서 단일 writer와 결과가 같다. 반쯤 쓰인 블록이 API에 보이지 않는다 |
-| E5 | 체인 추가: Sepolia, Hoodi, Ephemery, OP, Arbitrum, Arc 순 | 체인마다 E0의 기준을 통과한다 |
+| E5 | 체인 추가: Sepolia, Hoodi, Ephemery, Arbitrum, OP, Starknet, Arc 순. Starknet 앞에 8.2의 모델 결정을 한다 | 체인마다 E0의 기준을 통과한다 |
 | E6 | 체인별 합의 검증으로 RPC 확인 대체 | RPC 없이 canonical과 finality를 정한다 |
 
 E0은 외부 RPC에 접속하고 go-stablenet 소스를 받아야 한다. 진행 전에 승인을 받는다.
@@ -353,15 +364,16 @@ E0은 외부 RPC에 접속하고 go-stablenet 소스를 받아야 한다. 진행
 | state root 검증 | trie 저장 / receipt root만 / receipt root + 표본 검사 | receipt root + 표본 검사로 시작한다 |
 | storage 변화 이력 | 전부 / 기능·계약 단위로 켬 / 없음 | 기능·계약 단위로 켠다 |
 | 테이블 writer 분리 시점 | 처음부터 / 병목 확인 후 | 병목 확인 후 (E4) |
-| Arc 순서 | 2번 / Ethereum 계열 뒤 | Ethereum 계열 뒤 |
-| Starknet | 범위에 넣음 / 뺌 | 뺀다. EVM 집중 결정을 유지한다 |
+| Arc 순서 | 마지막 | 확정 (10/22) |
+| Starknet | Arc 앞에 넣음 | 확정 (10/22). 모델을 따로 둘지 넓힐지는 Starknet 착수 전에 정한다 |
 | 기존 RPC 수집 | 유지 / 실행 수집으로 대체 | 유지한다. 실행 수집이 체인별로 검증되면 다시 정한다 |
 
 ---
 
 ## 12. 확인하지 않은 것
 
-- go-stablenet, op-geth, Nitro의 go-ethereum 기반 버전과, 이들을 별도 모듈로 import했을 때 코어가 컴파일되는지.
+- op-geth, Nitro의 go-ethereum 기반 버전. go-stablenet은 v1.13.14 기반임을 확인했지만, 코어가 그 위에서 컴파일되는지는 의존성이 없어 확인하지 못했다.
+- Starknet 실행기를 Go에서 쓸 수 있는지.
 - go-ethereum `StateDB`를 trie 없이 `NewWithReader`로 실행하고 상태 변화만 꺼낼 수 있는지. state root 계산 경로가 trie DB를 여는 것은 확인했지만, 피하는 방법은 시험하지 않았다.
 - 체인별 상태 크기와, 그 상태를 PostgreSQL에 넣었을 때의 크기.
 - 블록당 실행 시간. BSC처럼 블록이 빠른 체인에서 따라갈 수 있는지.
