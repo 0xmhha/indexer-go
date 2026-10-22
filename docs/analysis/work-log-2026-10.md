@@ -1754,3 +1754,39 @@ PostgreSQL 저장소를 연 App이 `opsguard.AttachPostgresStats`로 저장소�
 - indexer 코어를 go-stablenet 위에서 컴파일하는 것. 이번 모듈은 코어를 포함하지 않았다.
 - 바뀐 상태를 reflect 없이 꺼내는 방법. go-stablenet `StateDB`에는 상태 변화를 알려 주는 hook이 없다. 제품 코드에서는 이 부분을 정해야 한다.
 - 공개 RPC가 `debug`와 `personal` 네임스페이스를 외부에 열어 두었다. 이번 시험은 `debug_dbGet`과 `debug_traceBlockByNumber`에 기댔지만, 제품 설계는 이 API가 열려 있다고 가정하지 않는다.
+
+### 3.109 indexer 코어를 go-stablenet 위에서 빌드해 보기 (10/22)
+
+[실행 수집 설계](execution-ingest-design.md) 8.2의 남은 질문이다. StableNet 실행부를 체인 바이너리에 넣으려면, 그 바이너리의 Go 모듈이 `github.com/ethereum/go-ethereum`을 go-stablenet으로 `replace`해야 한다. Go 모듈 하나에는 한 module path의 버전을 하나만 둘 수 있으므로, 그러면 코어(`pkg/`)도 go-ethereum v1.13.14 위에서 컴파일된다. 이게 되는지 확인했다.
+
+**방법.** 저장소 사본(`git archive HEAD`)에서 go-ethereum을 go-stablenet(`4d17eea01`)으로 `replace`하고 `GOPROXY=off go build -gcflags=-e ./...`를 돌렸다. 저장소와 go-stablenet은 고치지 않았다. 외부 RPC는 쓰지 않았다.
+
+**의존성 충돌.**
+
+- pebble: indexer 저장소는 pebble v1.1.5를 쓴다. go-stablenet의 `ethdb/pebble`은 2023년 버전 API에 맞춰져 있어 v1.1.5에서 한 줄(`batch.Replay`의 `reader.Next`)이 컴파일되지 않는다. `core`가 `core/rawdb`를 거쳐 이 패키지를 import하므로 피할 수 없다. 시험에서는 `-overlay`로 그 줄만 고친 파일을 끼워 넘어갔다. 제품에서 쓰려면 fork를 고쳐야 한다.
+- go-ipa: indexer go.mod에 v1.16.5가 남긴 간접 의존성(`crate-crypto/go-ipa` 2024년 버전) 때문에 go-verkle이 깨졌다. go-stablenet의 버전으로 내리면 해결된다.
+
+**indexer 코드에서 깨진 곳.**
+
+| 패키지 | 깨진 곳 | 원인 |
+|---|---|---|
+| `pkg/core/gethconv` | `RequestsHash`, `Block.WithBody` | v1.13에는 Prague header 필드가 없고 `WithBody` 시그니처가 다르다 |
+| `pkg/chains/evm` | `RequestsHash` | 일반 EVM header hash 계산 |
+| `pkg/testchain` | `types.CreateBloom`, `types.NewBlock` | 시그니처가 다르다 |
+| `pkg/capture` | `database.NodeReader`, `trie.New`, `Trie.Commit`, `Trie.NodeIteratorWithRange` | source 조회용 trie가 v1.16 trie DB 인터페이스와 범위 순회에 기댄다. v1.13에는 범위 순회가 없다 |
+
+앞의 세 패키지는 사본에서 몇 줄 고쳐 넘어갔다. `RequestsHash`를 지우면 Prague 이후 header hash가 틀어지므로, 실제로는 버전마다 다른 코드가 필요하다. `pkg/capture`는 고치지 않았다. 저장소 패키지 102개 가운데 34개(`pkg/app`과 바이너리 포함)가 `pkg/capture`에 기대고 있어 빌드까지 가지 못했다.
+
+**판단.** 코어를 두 go-ethereum 버전에서 빌드되게 하려면 변환층을 계속 관리하고, capture trie를 v1.13용으로 따로 만들고, pebble 때문에 fork를 고쳐야 한다. op-geth, Nitro가 들어오면 조합이 더 늘어난다. 그래서 실행부를 체인마다 별도 프로세스로 두기로 했다(10/22). 각 실행부는 자기 fork의 go.mod로 빌드하고 fork 코드를 고치지 않고 import한다. 코어는 go-ethereum v1.16.5에 그대로 둔다. Arc(Reth, Rust)와 Starknet도 같은 구조로 붙는다.
+
+같은 날 함께 정한 것:
+
+- 블록이 바꾼 계정과 슬롯은 commit 전후의 trie를 비교해 구한다. go-stablenet에 hook을 추가하지 않는다.
+- 기존 RPC 수집은 유지한다.
+- 현재 RPC 수집에서 Sepolia와 BSC 상태 정책은 그 체인 작업을 할 때 정한다.
+
+**확인하지 않은 것.**
+
+- `pkg/capture`를 고친 뒤 나머지 34개 패키지가 빌드되는지. 별도 프로세스로 정했으므로 더 확인하지 않는다.
+- 테스트 실행. 빌드만 했다.
+- 실행 결과를 프로세스 사이로 넘기는 비용.

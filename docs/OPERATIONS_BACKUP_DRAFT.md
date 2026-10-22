@@ -150,7 +150,7 @@ A등급 표(알림, 계약 검증)는 `pg_dump --schema`로 하루 한 번 따�
 | 기준 백업·정지 복사 주기 | 확정 | 기준 백업 하루 1회, 정지 복사 주 1회와 큰 변경 직전 | 운영자 |
 | 백업 보존 기간 | 확정 | 기준 백업 7개, 정지 복사 4개 | 운영자 |
 | WAL 보관소 위치 | 미정 | 외장 APFS가 아닌 별도 장치. 장치가 정해질 때까지 PostgreSQL 설정과 `preflight.py`는 바꾸지 않는다 | 운영자 |
-| Sepolia·BSC testnet 상태 보관 | 미정 | 1장 측정 결과에 따라 archive RPC, `allow_pruned_state: true`, 기능 끄기 중 하나 | 운영자 |
+| Sepolia·BSC testnet 상태 보관 | 그 체인 작업을 할 때 정한다 (10/22) | 1장 측정 결과에 따라 archive RPC, `allow_pruned_state: true`, 기능 끄기 중 하나 | 운영자 |
 | secret 백업 | 제안 | 별도 secret 저장소. 백업 디렉터리에 평문으로 두지 않는다 | 보안 담당 |
 | Arc history 보관 범위 | 미확인 | 연결할 peer가 내주는 범위를 확인 | 네트워크 운영자 |
 
