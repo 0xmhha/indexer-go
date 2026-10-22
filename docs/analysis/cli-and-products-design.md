@@ -152,7 +152,7 @@ CI의 test 작업은 그대로 전체 시험을 돈다. 빠진 시험을 CI에�
 
 별칭만 모아 둔 창구가 없어지면, 확장 코드가 만지면 안 되는 내부도 import할 수 있게 된다. 그래서 엔진만 쓰는 패키지 36개를 `internal/`로 옮겼다(R1). 기준은 `x/`와 예제의 시험 아닌 코드가 쓰지 않고, 확장 문서가 들지 않는 패키지다. 멀티체인 manager, 알림, RPC proxy·batch·client, 용량 감시·점검, 검증기, API 내부(etherscan, indexing, middleware, rest, websocket), era·replay·IPC 소스, 내장 기능 구현, 상태 조회 패키지가 여기에 든다. 경로 깊이가 같아서 상대 경로 시험 자료는 바뀌지 않았다.
 
-한계도 있다. `internal/`은 다른 모듈만 막는다. 같은 모듈의 `x/<chain>`은 여전히 import할 수 있다. `pkg/fetch`와 `pkg/storage`는 확장 함수(`IndexingOf`, `RegisterKeyspace`)와 writer·저장소 구현이 한 패키지에 있어서 이번에 옮기지 않았다. 둘을 나누려면 확장 함수를 별도 공개 패키지로 빼야 한다. 아무도 import하지 않는 `price`, `types`는 지우지 않고 함께 옮겼다. 지울지는 따로 정한다.
+한계도 있다. `internal/`은 다른 모듈만 막는다. 같은 모듈의 `x/<chain>`은 여전히 import할 수 있다. `pkg/fetch`와 `pkg/storage`는 확장 함수(`IndexingOf`, `RegisterKeyspace`)와 writer·저장소 구현이 한 패키지에 있어서 이번에 옮기지 않았다. 둘을 나누려면 확장 함수를 별도 공개 패키지로 빼야 한다. 아무도 import하지 않던 `price`, `types`는 함께 옮긴 뒤 지웠다. 연결되지 않은 가격 oracle과 예전 블록 구조체였고, git 히스토리에 남아 있다.
 
 ## 7. 멀티체인 모드와 체인별 프로세스
 

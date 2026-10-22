@@ -46,7 +46,7 @@ internal/                       Engine-only packages an extension module cannot 
   api/{etherscan,indexing,middleware,rest,websocket}/   API parts behind pkg/api (websocket: /ws hub, not fed by the indexer yet)
   source/{era,replay,nodefeed}/ Era1, recorded JSON-RPC and IPC sources behind pkg/source
   features/{aa,address,agg,balance,dex,token}/   Built-in features (pkg/features/records stays public)
-  feedtelemetry/, indexingstatus/, progress/, projection/, storage/history/, userop/, module/, abi/, token/, price/, types/
+  feedtelemetry/, indexingstatus/, progress/, projection/, storage/history/, userop/, module/, abi/, token/
 x/                              Chain-specific code, linked only by the binaries built for it (TestOnlyProductsImportChains; chains do not import each other)
   stablenet/                    StableNet profile: fee delegation (0x16), WBFT hash, Anzeon fees, native accounting
     consensus/, consensus/api/          WBFT store, parser, statistics, events; GraphQL/JSON-RPC extension
