@@ -323,6 +323,13 @@ peer만으로 처리하려면 체인의 합의를 우리가 검증해야 한다.
 - `state.New(root, db, snaps)`만 있고 `state.NewWithReader`는 없다. 3.3에서 쓰려던 reader 교체 경계가 없으므로, go-stablenet에서는 `state.Database`(`OpenTrie`, `ContractCode` 등)를 구현해 상태를 넣어야 한다.
 - 이 프로젝트를 go-stablenet으로 `replace`해 오프라인으로 빌드해 보려 했으나, go-stablenet의 의존성(`go-verkle`, `gnark-crypto` 등)이 module cache에 없어 컴파일 단계까지 가지 못했다. 코어가 v1.13.14 API로 컴파일되는지는 아직 모른다.
 
+10/22 E0에서 go-stablenet의 실행 코드를 별도 모듈로 import해 StableNet testnet 블록 362개를 실행했다. 모두 state root와 receipt root가 header와 같았다(work log 3.108). 실행 규칙은 import만으로 맞았고, 필요한 것은 두 가지였다.
+
+- `wbftengine.Engine`은 `consensus.Engine`을 다 구현하지 않는다. 실행이 부르는 `Author`와 `Finalize`만 넘기는 adapter를 둔다.
+- `Finalize`가 epoch 정보를 읽으려고 이전 header를 찾는다. 실행부에 header를 공급하는 chain reader가 필요하다. 우리 DB의 `blocks` 표가 이 역할을 한다.
+
+go-stablenet `StateDB`에는 바뀐 상태를 알려 주는 hook이 없다. E0는 비공개 필드를 reflect로 읽었다. 제품 코드에서는 commit한 trie 노드를 비교해 바뀐 계정과 슬롯을 구하거나, go-stablenet에 hook을 추가해야 한다. 후자는 fork를 고치는 일이라 go-stablenet 쪽과 정해야 한다.
+
 그래서 코어를 fork 위에서 컴파일하는 대신, 실행부만 별도 모듈에 두고 코어와는 `pkg/core/model` 값으로만 주고받는 방식도 함께 검토한다(8.3). 이 경우 StableNet 실행부는 별도 프로세스가 되거나, 코어가 go-ethereum 타입을 쓰지 않도록 경계를 다시 그어야 한다. E0에서 정한다.
 
 ### 8.3 모듈 구조
@@ -359,7 +366,7 @@ RPC 수집과 기존 peer feed는 지우지 않는다. 실행 수집은 세 번�
 
 | 단계 | 내용 | 끝났다고 보는 기준 |
 |---|---|---|
-| E0 | StableNet 실행 검증. go-stablenet core를 별도 모듈로 import하고, RPC에서 받은 상태 위에서 블록 몇백 개를 실행한다 | 모든 블록의 state root와 receipt root가 header와 같다. 블록당 실행 시간, hash 계산 시간, 상태·trie·이력의 블록당 증가량을 기록하고, 이 값으로 용량 계획을 다시 세운다 |
+| E0 (10/22 완료, work log 3.108) | StableNet 실행 검증. go-stablenet core를 별도 모듈로 import하고, RPC에서 받은 상태 위에서 블록 몇백 개를 실행한다 | 모든 블록의 state root와 receipt root가 header와 같다. 블록당 실행 시간, hash 계산 시간, 상태·trie·이력의 블록당 증가량을 기록하고, 이 값으로 용량 계획을 다시 세운다 |
 | E1 | 상태 표와 `Executor` 계약. 기존 단일 writer에 실행 결과를 붙인다 | 같은 블록 범위에서 RPC 수집과 실행 수집의 블록, 거래, receipt, 로그, 잔액이 같다 |
 | E2 | 모드 1과 모드 2. 상태 bootstrap(4.1)과 head 시작 | 두 모드로 시작해 head를 따라간다. 재시작 뒤 이어 간다 |
 | E3 | 원본 즉시 삭제. window 삭제 규칙 변경 | 완료 높이와 reorg 깊이를 지난 원본이 지워진다. reorg 시험에서 다시 실행한다 |
@@ -392,7 +399,8 @@ E0은 외부 RPC에 접속하고 go-stablenet 소스를 받아야 한다. 진행
 
 ## 12. 확인하지 않은 것
 
-- op-geth, Nitro의 go-ethereum 기반 버전. go-stablenet은 v1.13.14 기반임을 확인했지만, 코어가 그 위에서 컴파일되는지는 의존성이 없어 확인하지 못했다.
+- op-geth, Nitro의 go-ethereum 기반 버전. go-stablenet은 v1.13.14 기반이고 실행부만 별도 모듈로 쓸 수 있음을 E0에서 확인했다. 코어가 그 위에서 컴파일되는지는 아직 확인하지 않았다.
+- StableNet 전체 상태의 크기와, 전체 상태를 받는 방법(snap 또는 trie 순회)의 시간. E0는 건드린 계정만 받아 왔다.
 - Starknet 실행기를 Go에서 쓸 수 있는지.
 - go-ethereum `StateDB`를 trie 없이 `NewWithReader`로 실행하고 상태 변화만 꺼낼 수 있는지. state root 계산 경로가 trie DB를 여는 것은 확인했지만, 피하는 방법은 시험하지 않았다.
 - 체인별 상태 크기와, 그 상태·trie·이력을 PostgreSQL에 넣었을 때의 크기와 블록당 증가량.
