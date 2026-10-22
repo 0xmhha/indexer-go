@@ -87,7 +87,7 @@ func (o *candidateCanonical) HashAt(ctx context.Context, n uint64) (common.Hash,
 
 func TestCanonicalCandidateUsesCommitFreshWithoutFuturePolling(t *testing.T) {
 	db := openFactory(t, "pebble")()
-	defer func() { require.NoError(t, db.Close()) }()
+	t.Cleanup(func() { require.NoError(t, db.Close()) }) // after the process goroutine is joined
 	views := &candidateViews{CaptureDatabase: db}
 	o := newOracle()
 	facts := service(t, views, o)
@@ -122,7 +122,7 @@ func TestCanonicalCandidateResolvesRetainedForks(t *testing.T) {
 		for _, mode := range []string{"ambiguous", "fresh-rejected", "future-rejected"} {
 			t.Run(backend+"/"+mode, func(t *testing.T) {
 				db := openFactory(t, backend)()
-				defer func() { require.NoError(t, db.Close()) }()
+				t.Cleanup(func() { require.NoError(t, db.Close()) }) // after the process goroutine is joined
 				o := newOracle()
 				fresh := &candidateCanonical{oracle: o}
 				facts, err := capture.New(db, chain, fresh)
