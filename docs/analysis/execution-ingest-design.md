@@ -131,7 +131,7 @@ type Executor interface {
 
 `Result`에는 receipt, 상태 변화(계정, code, storage), 내부 호출 기록(trace)을 담는다. 계산한 receipt root가 header와 다르면 실패한다. 이렇게 하면 실행 규칙이 체인과 어긋났을 때 그 블록에서 바로 멈춘다.
 
-go-ethereum v1.16.5에는 `state.NewWithReader(root, db, reader)`가 있다. `reader`는 `Account`, `Storage`, `Code`를 읽는 interface다 (`core/state/reader.go`). 이 interface를 PostgreSQL 위의 상태 캐시로 구현하면, go-ethereum의 실행 코드를 import해서 쓸 수 있다. 다만 state root를 계산하는 경로(`IntermediateRoot`, `Commit`)는 trie DB를 연다. 이 부분은 5.2의 결정에 따라 달라진다.
+go-ethereum v1.16.5에는 `state.NewWithReader(root, db, reader)`가 있다. `reader`는 `Account`, `Storage`, `Code`를 읽는 interface다 (`core/state/reader.go`). 이 interface를 PostgreSQL 위의 상태 캐시로 구현하면, go-ethereum의 실행 코드를 import해서 쓸 수 있다. state root를 계산하는 경로(`IntermediateRoot`, `Commit`)는 trie DB를 연다. 5.2에서 trie를 저장하기로 했으므로, 이 trie DB를 PostgreSQL의 `trie_nodes` 위에 구현한다.
 
 실행 중 상태 읽기는 PostgreSQL에 바로 보내지 않는다. 거래 하나가 계정과 storage를 수천 번 읽을 수 있어서다. 프로세스 안의 상태 캐시에서 읽고, 캐시에 없을 때만 DB에서 읽는다. 블록 하나가 끝나면 바뀐 상태만 state queue로 보낸다.
 
@@ -145,7 +145,8 @@ go-ethereum v1.16.5에는 `state.NewWithReader(root, db, reader)`가 있다. `re
 | `account_changes` | block, tx index, address | 블록·거래별 잔액과 nonce 변화 |
 | `contract_code` | code hash | code 바이트. 같은 code는 한 번만 저장한다 |
 | `storage_slots` | address, slot | 현재 값 |
-| `storage_changes` | block, tx index, address, slot | 변화 이력 (5.3에서 범위를 정한다) |
+| `storage_changes` | block, tx index, address, slot | 변화 이력. 이전 값과 새 값. 높이 범위로 partition한다 (5.3) |
+| `trie_nodes` | node hash | state root 계산용 trie 중간 노드 (5.2) |
 
 블록, 거래, receipt, 로그는 기존 표(`blocks`, `transactions`, `receipts`, `logs`)를 쓴다.
 
@@ -207,6 +208,8 @@ DB의 마지막 높이 다음 블록부터 받아서 실행하고, head를 따�
 | 필요한 것만 | 된다 | 된다 | 안 된다. 원격 보관 범위를 넘으면 모드 1로 다시 시작해야 한다 |
 | 전체 | 된다 (시작이 느리다) | 된다 | 된다. 원격에 묻지 않는다 |
 
+10/22에 모든 체인에서 전체 상태를 두기로 정했다(5.1). 그래서 모드 1은 "시작 블록의 전체 상태를 만든 뒤 head부터 처리"가 되고, 모드 2는 원격 보관 범위와 상관없이 이어 간다.
+
 ### 4.3 시작 높이 규칙
 
 - 모드 1은 `GetNextHeight`에 "head부터 시작" 선택을 추가한다. 지금은 설정의 `StartHeight`나 DB 높이 다음만 있다.
@@ -217,31 +220,42 @@ DB의 마지막 높이 다음 블록부터 받아서 실행하고, head를 따�
 
 ## 5. 상태를 어디까지 저장할지
 
-용량은 이 장의 결정에 따라 크게 달라진다. 노드를 따로 두는 방식보다 저장량이 적다는 것은 아래 결정을 작게 잡을 때만 성립한다.
+10/22에 세 가지를 정했다. 모든 체인에서 전체 상태를 둔다. state root를 블록마다 계산해 header와 비교한다. storage 변화 이력을 전부 남긴다. 이 결정으로 정확성과 이력은 full node, archive node 수준이 된다. 대신 용량은 노드를 따로 두는 방식보다 작다고 말할 수 없다. 줄어드는 것은 노드가 따로 들고 있던 블록, 거래, receipt와 원본 블록 보관분이다.
 
-### 5.1 줄어드는 것과 줄지 않는 것
+### 5.1 전체 상태
 
-- **줄어든다**: 노드의 블록, 거래, receipt 저장분과 원본 블록 보관분이다.
-- **줄지 않는다**: 실행에 필요한 현재 상태다. 4.2의 표에서 "전체"를 고르면 full node 상태 DB와 같은 양을 우리 DB에 둔다.
-- **늘 수도 있다**: PostgreSQL은 행마다 고정 비용이 붙고 기본으로 압축하지 않는다. 같은 상태가 노드의 LSM DB보다 커질 수 있다. 재 보지 않았다.
+모든 체인에서 시작 블록의 전체 상태를 우리 DB에 둔다. 원격이 상태를 얼마나 보관하든, 오래 멈췄다가 다시 시작해도 원격에 묻지 않고 이어 간다.
 
-### 5.2 state root 검증용 trie
+필요한 상태만 그때그때 받는 방식(4.1의 첫 번째 방법)은 쓰지 않는다. 원격이 상태를 보관하는 범위를 넘게 멈추면 이어 갈 수 없기 때문이다. 이 방식은 시작 상태를 만드는 동안의 보조 수단으로만 남긴다.
 
-실행 결과가 header의 state root와 맞는지 보려면 Merkle trie가 필요하다. full node 상태 DB의 큰 부분이 이 trie다.
+시작 상태를 만드는 방법은 체인마다 다르다. 최근에 시작한 체인(Hoodi, Ephemery)은 genesis부터 실행하고, 오래된 체인(StableNet, Sepolia)은 snap 프로토콜로 받는다. 8.1의 표를 따른다.
 
-| 선택 | 용량 | 검증 |
-|---|---|---|
-| trie를 저장한다 | 가장 크다 | 블록마다 상태가 정확한지 확인한다 |
-| trie 없이 receipt root만 비교한다 | 작다 | receipt(성공 여부, 누적 gas, 로그)가 맞는지만 확인한다. 상태가 틀린 것까지는 다 잡지 못한다 |
-| receipt root를 비교하고, 상태는 주기적으로 표본 검사한다 | 작다 | 무작위 계정을 `eth_getProof`로 state root에 대조한다. 틀린 것을 늦게 알아챈다 |
+PostgreSQL은 행마다 고정 비용이 붙고 기본으로 압축하지 않는다. 같은 상태가 노드의 LSM DB보다 커질 수 있다. 재 보지 않았다.
+
+### 5.2 블록마다 state root 계산
+
+header의 state root는 블록을 실행한 뒤 전체 상태를 Merkle trie로 묶은 요약값이다. 비교 자체는 값 하나를 견주는 일이지만, 우리 쪽 값을 계산하려면 바뀐 계정과 슬롯에서 root까지의 경로 hash를 다시 구해야 한다. 그래서 trie의 중간 노드를 저장한다. 전체 상태(trie의 잎)는 5.1에서 이미 갖고 있으므로, 더해지는 것은 중간 노드다.
+
+- 블록을 실행한 뒤 state root와 receipt root를 모두 계산해 header와 비교한다. 하나라도 다르면 그 블록에서 멈추고, DB에는 쓰지 않는다.
+- 중간 노드를 hash로 찾는 표(`trie_nodes`)를 둔다. 계산할 때 노드를 PostgreSQL에서 하나씩 읽으면 느리므로 프로세스 안에 노드 캐시를 둔다.
+- 상태와 trie가 있으므로 `eth_getProof`를 우리가 직접 응답할 수 있다.
+- go-stablenet은 `state.NewWithReader`가 없고 `state.Database`(`OpenTrie`, `ContractCode`)를 구현해야 한다(8.2). trie를 저장하면 이 경로에 그대로 맞는다.
+
+대가는 중간 노드의 용량과 블록마다 hash를 계산하는 CPU다. 둘 다 재 보지 않았다. E0에서 잰다.
 
 ### 5.3 상태 변화 이력
 
-모든 계정과 모든 storage 슬롯의 변화를 영구히 남기면 archive node와 같은 크기로 계속 커진다. 이렇게 나누기를 제안한다.
+- **현재 상태**: 전부 둔다 (`accounts`, `storage_slots`, `contract_code`, `trie_nodes`).
+- **잔액과 nonce 변화**: 영구히 둔다 (`account_changes`).
+- **storage 변화**: 영구히 둔다 (`storage_changes`). 한 줄은 높이, 거래 위치, 주소, 슬롯, 이전 값, 새 값으로 고정한다.
+- **되돌리기 정보**: 이력 표 자체가 이전 값을 갖고 있으므로, reorg는 최근 128블록의 이력을 거꾸로 적용해 되돌린다(6장).
 
-- **현재 상태**: 전부 둔다 (`accounts`, `storage_slots`, `contract_code`).
-- **되돌리기 정보**: 최근 128블록분만 둔다. reorg 때 쓴다.
-- **조회용 이력**: 잔액 변화(`account_changes`)는 영구히 둔다. 지금의 `balance_history`와 같은 범위다. storage 변화는 기본으로 두지 않고, 기능이나 계약 단위로 켠다.
+이력은 archive node처럼 계속 커진다. 나중에 압축 방법을 연구할 수 있도록 저장 형식을 이렇게 둔다.
+
+- 이력 표는 블록 높이 범위로 나눈다(PostgreSQL partition). 오래된 범위는 바뀌지 않으므로 그 partition만 떼어 압축하거나 다른 저장소로 옮길 수 있다. 전체를 다시 쓰지 않아도 된다.
+- 행 형식을 고정해, 열 단위 압축처럼 다른 저장 방식을 시험하기 쉽게 한다.
+
+오래된 이력을 어떻게 압축해 보관하고, 압축된 자료에서 어떻게 조회할지는 별도 연구로 둔다. 그 연구가 끝날 때까지 용량은 계속 늘어난다. 지금 운영 초안의 DB 계획 예산(160GiB)에 체인 여덟 개의 전체 상태, trie, 전체 이력이 들어갈 가능성은 낮다고 본다. 수치는 재 보지 않았다. E0의 블록당 증가량으로 용량 계획을 다시 세운다. 용량 감시(`opsguard`)는 바닥에 닿으면 멈추므로 조용히 넘치지는 않는다.
 
 ---
 
@@ -249,7 +263,8 @@ DB의 마지막 높이 다음 블록부터 받아서 실행하고, head를 따�
 
 지금은 블록을 커밋할 때 undo를 기록하고, reorg가 나면 128블록까지 되돌린다 (`pkg/storage/undo.go` `UndoWindow`). 실행 수집에서는 상태도 같이 되돌려야 한다.
 
-- 상태 표의 undo는 지금의 trigger 방식(`undo_log`)을 쓰거나, 높이별 이전 값을 따로 두는 방식을 새로 만든다. 상태 표는 갱신이 많아서 trigger 방식은 행 변경마다 jsonb 한 줄을 남긴다. 비용을 재 보고 정한다.
+- 현재 상태 표(`accounts`, `storage_slots`)는 이력 표(`account_changes`, `storage_changes`)의 이전 값으로 되돌린다. 이력을 전부 남기기로 했으므로(5.3) trigger 방식(`undo_log`)을 따로 둘 필요가 없다. 되돌린 블록의 이력 행은 지우고, orphan으로 옮길지는 지금의 orphan 규칙을 따른다.
+- `trie_nodes`는 hash로 찾는 표라서 되돌릴 필요가 없다. 되돌린 블록이 만든 노드는 쓰이지 않는 노드로 남는다. 정리 방법은 압축 연구(5.3)와 함께 정한다.
 - 프로세스 안의 상태 캐시도 되돌려야 한다. 가장 단순한 방법은 reorg 때 캐시를 비우고 DB에서 다시 읽는 것이다.
 - 되돌린 블록의 원본이 캐시에 남아 있어야 새 fork의 블록을 다시 실행할 수 있다. 그래서 3.2에서 reorg 깊이 안의 원본은 지우지 않는다.
 
@@ -344,7 +359,7 @@ RPC 수집과 기존 peer feed는 지우지 않는다. 실행 수집은 세 번�
 
 | 단계 | 내용 | 끝났다고 보는 기준 |
 |---|---|---|
-| E0 | StableNet 실행 검증. go-stablenet core를 별도 모듈로 import하고, RPC에서 받은 상태 위에서 블록 몇백 개를 실행한다 | 모든 블록의 receipt root가 header와 같다. 블록당 실행 시간과 상태 표 크기를 기록한다 |
+| E0 | StableNet 실행 검증. go-stablenet core를 별도 모듈로 import하고, RPC에서 받은 상태 위에서 블록 몇백 개를 실행한다 | 모든 블록의 state root와 receipt root가 header와 같다. 블록당 실행 시간, hash 계산 시간, 상태·trie·이력의 블록당 증가량을 기록하고, 이 값으로 용량 계획을 다시 세운다 |
 | E1 | 상태 표와 `Executor` 계약. 기존 단일 writer에 실행 결과를 붙인다 | 같은 블록 범위에서 RPC 수집과 실행 수집의 블록, 거래, receipt, 로그, 잔액이 같다 |
 | E2 | 모드 1과 모드 2. 상태 bootstrap(4.1)과 head 시작 | 두 모드로 시작해 head를 따라간다. 재시작 뒤 이어 간다 |
 | E3 | 원본 즉시 삭제. window 삭제 규칙 변경 | 완료 높이와 reorg 깊이를 지난 원본이 지워진다. reorg 시험에서 다시 실행한다 |
@@ -356,17 +371,22 @@ E0은 외부 RPC에 접속하고 go-stablenet 소스를 받아야 한다. 진행
 
 ---
 
-## 11. 정해야 할 것
+## 11. 정한 것과 정해야 할 것
 
-| 항목 | 선택지 | 제안 |
+| 항목 | 결정 |
+|---|---|
+| 상태 범위 | 모든 체인에서 전체 상태 (10/22) |
+| state root | 블록마다 계산해 header와 비교. trie 중간 노드를 저장한다 (10/22) |
+| storage 이력 | 전부 남긴다. 높이 범위 partition으로 저장하고, 압축과 압축된 자료의 조회는 별도 연구로 둔다 (10/22) |
+| 체인 순서 | StableNet, Sepolia, Hoodi, Ephemery, Arbitrum Sepolia, OP Sepolia, Starknet Sepolia, Arc (10/22) |
+| Starknet | Arc 앞에 넣는다 (10/22). 모델을 따로 둘지 넓힐지는 착수 전에 정한다 |
+
+| 정해야 할 것 | 선택지 | 제안 |
 |---|---|---|
-| 상태 범위 | 필요한 것만 / 전체 | 체인별로 정한다. 오래 멈출 수 있는 운영이면 전체 |
-| state root 검증 | trie 저장 / receipt root만 / receipt root + 표본 검사 | receipt root + 표본 검사로 시작한다 |
-| storage 변화 이력 | 전부 / 기능·계약 단위로 켬 / 없음 | 기능·계약 단위로 켠다 |
 | 테이블 writer 분리 시점 | 처음부터 / 병목 확인 후 | 병목 확인 후 (E4) |
-| Arc 순서 | 마지막 | 확정 (10/22) |
-| Starknet | Arc 앞에 넣음 | 확정 (10/22). 모델을 따로 둘지 넓힐지는 Starknet 착수 전에 정한다 |
 | 기존 RPC 수집 | 유지 / 실행 수집으로 대체 | 유지한다. 실행 수집이 체인별로 검증되면 다시 정한다 |
+| 용량 계획 | E0 측정 후 | DB 계획 예산(160GiB)을 E0의 증가량으로 다시 정한다 |
+| 오래된 이력의 압축과 조회 | 별도 연구 | E0 뒤에 연구 계획을 따로 세운다 |
 
 ---
 
@@ -375,7 +395,8 @@ E0은 외부 RPC에 접속하고 go-stablenet 소스를 받아야 한다. 진행
 - op-geth, Nitro의 go-ethereum 기반 버전. go-stablenet은 v1.13.14 기반임을 확인했지만, 코어가 그 위에서 컴파일되는지는 의존성이 없어 확인하지 못했다.
 - Starknet 실행기를 Go에서 쓸 수 있는지.
 - go-ethereum `StateDB`를 trie 없이 `NewWithReader`로 실행하고 상태 변화만 꺼낼 수 있는지. state root 계산 경로가 trie DB를 여는 것은 확인했지만, 피하는 방법은 시험하지 않았다.
-- 체인별 상태 크기와, 그 상태를 PostgreSQL에 넣었을 때의 크기.
+- 체인별 상태 크기와, 그 상태·trie·이력을 PostgreSQL에 넣었을 때의 크기와 블록당 증가량.
+- 블록마다 state root를 계산하는 시간과, trie 노드를 PostgreSQL에서 읽을 때 필요한 캐시 크기.
 - 블록당 실행 시간. BSC처럼 블록이 빠른 체인에서 따라갈 수 있는지.
 - 각 체인의 peer가 새 블록을 전파하는지, 과거 블록을 얼마나 내주는지. 8.1 표의 수신 방식은 프로토콜 문서와 지금 코드를 근거로 쓴 것이고, 실제 peer에 접속해 보지 않았다.
 - Hoodi를 genesis부터 실행할 수 있을 만큼 peer가 이력을 내주는지, Ephemery의 재시작 주기.
