@@ -91,6 +91,12 @@ test-chain: check-chain
 ## test-race: Run every test once with the race detector; run it before each commit and pull request (CI has no race job, to keep CI fast)
 test-race:
 	$(GOTEST) -race -count=1 ./...
+	cd execwire && $(GOTEST) -race -count=1 ./...
+
+.PHONY: test-execwire
+## test-execwire: Build and check the standalone standard-library execution wire module
+test-execwire:
+	cd execwire && $(GOBUILD) ./... && $(GOVET) ./... && $(GOTEST) -race -count=1 ./...
 
 ## test-cache-lifecycle: Check Pebble cache ownership with its leak finalizers (race disables these finalizers)
 test-cache-lifecycle:

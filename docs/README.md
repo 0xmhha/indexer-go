@@ -40,7 +40,7 @@ No package carries a compatibility promise; pin a version and run your extension
 - [Configuration](CONFIG.md) covers RPC budgets, PostgreSQL, ingest/API roles, multi-chain routing, notifications and data management.
 - [Testnet operations draft](OPERATIONS_DRAFT.md) separates the proposed APFS/PostgreSQL/Arc feed settings from unresolved storage, peer and checkpoint inputs; it is not a runnable deployment.
 - [Docker operations draft](../deployments/testnets/README.md) adds isolated Compose wiring, APFS identity checks and file-based DSN injection; service startup remains on hold.
-- [Capacity, backlog and recovery policy draft](OPERATIONS_CAPACITY_DRAFT.md) proposes DB growth monitoring and stop/resume criteria; it does not install automatic monitoring or controls.
+- [Capacity, backlog and recovery policy draft](OPERATIONS_CAPACITY_DRAFT.md) documents implemented filesystem/PGDATA/raw monitoring and halt/resume controls, plus the remaining live operational checks.
 - [Backup, migration and recovery objectives draft](OPERATIONS_BACKUP_DRAFT.md) classifies what cannot be rebuilt, proposes RPO/RTO per class, continuous WAL archiving plus stopped-state copies, and migration/restore checks; nothing is configured or run.
 - [Checkpoint, restart and GC runbook draft](OPERATIONS_RUNBOOK_DRAFT.md) covers normal shutdown, incident recovery and deletion prerequisites; execution and GC activation remain on hold.
 - [Checkpoint and GC inspection](OPERATIONS_INSPECTION.md) documents the separate read-only metadata command, bounded observations and offline functional checks; it never starts the app or performs recovery.
@@ -48,7 +48,7 @@ No package carries a compatibility promise; pin a version and run your extension
 - [Architecture](ARCHITECTURE.md) explains block transactions, reorg recovery and outbox delivery.
 - [Pipeline telemetry](FEED_TELEMETRY.md) defines feed-stage latency, backlog and unavailable observations.
 - [Remaining work](analysis/open-items.md) separates completed checks, unresolved operational requirements and deferred work.
-- [Handover 10/23](analysis/handoff-2026-10-23.md) records the move to execution-based ingest, the approved E1 design ([decisions](decisions/20261023-e1-design/decision.md), [design](codemine/runs/20261023-e1-execution/02-design.md)) and the next step (E1 plan).
+- [Handover 10/23](analysis/handoff-2026-10-23.md) points to the current [E1 plan](codemine/runs/20261023-e1-execution/03-plan.md), [checklist](codemine/runs/20261023-e1-execution/checklist.md) and [continuity](codemine/runs/20261023-e1-execution/continuity.json).
 
 ## Use the opt-in Arc feed
 
@@ -77,6 +77,8 @@ The implemented base plan receives and verifies headers, bodies and receipts. It
 These options have separate supply and completion contracts. Enabling one does not imply complete EVM state, independently proven call execution or additional raw-deletion authority.
 
 ## Design, validation and migration
+
+The standalone [execution wire v1 module](../execwire/README.md) implements bounded framing, journal encoding and cancellable transport. The [E1 checklist](codemine/runs/20261023-e1-execution/checklist.md) distinguishes this library from the remaining executor, PostgreSQL and application integration.
 
 Use the [analysis index](analysis/README.md) for design documents and dated evidence. It distinguishes implementation contracts, proposed work, historical measurements and the earlier ExEx comparison.
 

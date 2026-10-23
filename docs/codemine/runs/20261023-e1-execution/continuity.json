@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "plan": "03-plan.md",
+  "checklist": "checklist.md",
+  "current": {
+    "unit": "U01",
+    "state": "local_green_pending_pr_ci",
+    "intent": "stdlib-only bounded versioned wire/framing/parts and cancellable connection",
+    "files": [
+      "execwire/wire.go",
+      "execwire/codec.go",
+      "execwire/result.go",
+      "execwire/parts.go",
+      "execwire/conn.go",
+      "execwire/wire_test.go",
+      "execwire/bounds_test.go",
+      "execwire/README.md",
+      ".github/workflows/ci.yml",
+      "Makefile"
+    ],
+    "contracts": [
+      "8 MiB maximum frame",
+      "bounded block assembly and parts",
+      "deterministic payload digest",
+      "cancelled/partial I/O never corrupts the next frame"
+    ],
+    "verification": "API-shaped stub RED: 6 ErrUnimplemented failures; additional raw-segment and assembler-size RED: 2 failures. GREEN: wire build/vet/race/lint and one GOMAXPROCS=1/race/count=200 TestConn invocation. Full root race and disposable fsync-on PostgreSQL passed with test parallelism=1; Anvil skipped. Details and reproducible commands: checklist.md.",
+    "next": "Submit U00+U01 PR, require lint/test/postgres/examples, squash merge and fast-forward main, then U02 RED."
+  },
+  "previous": [],
+  "retained_previous_units": 2,
+  "holds": [
+    "node service startup",
+    "live peer access",
+    "performance measurements",
+    "disk provisioning",
+    "GC activation"
+  ],
+  "decision_authority": "User delegated recommended decisions, implementation and CI-gated squash merges on 2026-10-24; this is not a claim that the user reviewed the newly written plan.",
+  "planning_baseline": {
+    "unit": "U00",
+    "state": "local_checks_passed",
+    "intent": "2회 실행과 연결4개를 유지하는 E1 계약·기능별 RED/GREEN·PR 순서를 고정한다",
+    "files": [
+      "03-plan.md",
+      "checklist.md",
+      "continuity.json",
+      "workflow.json"
+    ],
+    "contracts": [
+      "two executions; no upstream patch",
+      "one existing pool with max_conns=4",
+      "seven queues; at most two concurrent part transactions",
+      "fresh canonical read immediately before atomic publication",
+      "RPC 5 physical HTTP attempts per second",
+      "as-of-visible state and fenced rewind"
+    ],
+    "verification": "Documentation links/JSON/fmt/build/vet/root+astgraph lint/cache lifecycle/examples/offline operations/full root race/real PostgreSQL passed; see checklist.",
+    "next": "U01: write failing wire contract tests before implementation"
+  }
+}

@@ -6,3 +6,21 @@ c2010e93f23409815a72a82ee0bb9b54b06ed4cf:docs/WATCHLIST_API.md:generic-api-key:3
 c2010e93f23409815a72a82ee0bb9b54b06ed4cf:docs/WATCHLIST_API.md:generic-api-key:373
 # YOUR_API_KEY placeholder in a curl example (file since removed).
 d1c05483cfb8e002a996e1c156cbcc09bfb01193:docs/OPERATIONS_GUIDE.md:curl-auth-header:237
+
+# Additional individual historical false positives (reviewed 2026-10-24).
+# explicit redaction-test sentinel.
+802c45301b79d470bbadab4e16abdee56f8f4ac0:cmd/indexer-inspect/main_test.go:generic-credential-uri:191
+802c45301b79d470bbadab4e16abdee56f8f4ac0:cmd/indexer-inspect/main_test.go:generic-credential-uri:76
+9f2217bb769df7068c5e553faf3063eb3863ce97:cmd/indexer-inspect/main_test.go:generic-credential-uri:191
+9f2217bb769df7068c5e553faf3063eb3863ce97:cmd/indexer-inspect/main_test.go:generic-credential-uri:76
+# local disposable PostgreSQL test DSN.
+41b95e66ed353fbc0f10d5dd9b28a5ae18b3fdfa:deployments/testnets/test_preflight.py:generic-credential-uri:220
+ab7cf457c0eb7fed99bbe9f1b872dfb94f0791e7:deployments/testnets/test_preflight.py:generic-credential-uri:220
+# secret-file identifier mapping, no credential value.
+41b95e66ed353fbc0f10d5dd9b28a5ae18b3fdfa:deployments/testnets/preflight.py:generic-password:129
+ab7cf457c0eb7fed99bbe9f1b872dfb94f0791e7:deployments/testnets/preflight.py:generic-password:129
+# public Sepolia block-access-list hash, not an API key.
+cbcfc0495b1c2398636945338ec7809ec5691ae6:pkg/chains/evm/testdata/sepolia-header-11901474.json:generic-api-key:4
+# configuration guide example DSN for local db service.
+23f41453c9bfd89847d8ff7e11757abb09894dc8:docs/CONFIG.md:generic-credential-uri:314
+b191ea06ab69e5afed7a44c675d878fded175949:docs/CONFIG.md:generic-credential-uri:314
