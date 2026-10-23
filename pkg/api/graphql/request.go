@@ -8,7 +8,6 @@ import (
 
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/graphql/gqlerrors"
-	"github.com/graphql-go/graphql/language/ast"
 	"github.com/graphql-go/graphql/language/parser"
 	"github.com/graphql-go/graphql/language/source"
 	graphqlhandler "github.com/graphql-go/handler"
@@ -53,29 +52,14 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request) {
 	// Match Do's request-local schema value, rather than passing the shared
 	// handler's schema pointer into the validator's internal helper caches.
 	schema := h.schema.schema
-	validated := graphql.ValidationResult{IsValid: true}
-	for _, definition := range doc.Definitions {
-		if _, fragment := definition.(*ast.FragmentDefinition); fragment {
-			// v0.8.1's overlapping-fields rule can recurse forever on a
-			// cyclic fragment. First run its official cycle rule on the SAME
-			// AST; then retain every standard rule for valid fragment graphs.
-			validated = graphql.ValidateDocument(&schema, doc, []graphql.ValidationRuleFn{graphql.NoFragmentCyclesRule})
-			break
-		}
-	}
-	if validated.IsValid {
-		validated = graphql.ValidateDocument(&schema, doc, nil)
-	}
+	validated := validateExecutionDocument(&schema, doc)
 	finishRequestPhase(finish)
 	if !validated.IsValid {
 		h.writeResult(w, r, &graphql.Result{Errors: validated.Errors})
 		return
 	}
 	finish = requestPhase(r.Context(), "execution")
-	result := graphql.Execute(graphql.ExecuteParams{
-		Schema: schema, Root: (map[string]interface{})(nil), AST: doc,
-		OperationName: opts.OperationName, Args: opts.Variables, Context: r.Context(),
-	})
+	result := h.executeParsed(r.Context(), schema, doc, opts.OperationName, opts.Variables)
 	finishRequestPhase(finish)
 	h.writeResult(w, r, result)
 }

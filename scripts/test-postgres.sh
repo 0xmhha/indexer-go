@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Runs the PostgreSQL adapter tests (pkg/storage/postgres) and the
-# end-to-end suites (pkg/app, x/stablenet/bundle) on PostgreSQL
+# end-to-end/API suites (pkg/app, pkg/api, x/stablenet/bundle) on PostgreSQL
 # (INDEXER_TEST_DRIVER), against
 # a disposable PostgreSQL container, or against INDEXER_TEST_POSTGRES when
 # it is set. The container is removed afterwards.
 set -euo pipefail
 
-pkgs=${*:-./pkg/storage/postgres/... ./pkg/app ./x/stablenet/bundle}
+pkgs=${*:-./pkg/storage/postgres/... ./pkg/app ./pkg/api ./x/stablenet/bundle}
 # Match the root CI package timeout; the full PostgreSQL-backed app suite
 # can outgrow Go's default ten minutes even while individual tests progress.
 export INDEXER_TEST_DRIVER=postgres

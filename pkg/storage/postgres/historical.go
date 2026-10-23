@@ -81,7 +81,7 @@ func (s *Store) GetBlocksByTimeRange(ctx context.Context, fromTime, toTime uint6
 	}
 	items, next, err := listQuery[blockAtTime]{
 		list: "blocks-time:" + u64s(fromTime) + "-" + u64s(toTime),
-		sql:  "SELECT data, time, number FROM blocks WHERE time >= $1 AND time <= $2",
+		sql:  "SELECT data, time, number FROM exec_visible_blocks WHERE time >= $1 AND time <= $2",
 		args: []any{bigintOf(fromTime), bigintOf(toTime)},
 		keys: []keyCol{{"time", kindInt, false}, {"number", kindInt, false}},
 		scan: scanBlockAtTime,
@@ -115,7 +115,7 @@ func (s *Store) GetNetworkMetrics(ctx context.Context, fromTime, toTime uint64) 
 		return nil, fmt.Errorf("fromTime (%d) cannot be greater than toTime (%d)", fromTime, toTime)
 	}
 	return history.NetworkMetrics(ctx, fromTime, toTime, func(yield func(*model.Block) error) error {
-		rows, err := s.q(ctx).Query(ctx, "SELECT data FROM blocks WHERE time >= $1 AND time <= $2 ORDER BY time, number",
+		rows, err := s.q(ctx).Query(ctx, "SELECT data FROM exec_visible_blocks WHERE time >= $1 AND time <= $2 ORDER BY time, number",
 			bigintOf(fromTime), bigintOf(toTime))
 		if err != nil {
 			return err
@@ -418,6 +418,11 @@ func (s *Store) GetBlockCount(ctx context.Context) (uint64, error) {
 // GetTransactionCount implements port.HistoricalReader: the count SetBlock
 // keeps, so the table is not scanned.
 func (s *Store) GetTransactionCount(ctx context.Context) (uint64, error) {
+	if s.executionMode.Load() {
+		var count int64
+		err := s.q(ctx).QueryRow(ctx, "SELECT count(*) FROM exec_visible_transactions").Scan(&count)
+		return uint64(count), err
+	}
 	n, err := s.metaUint(ctx, metaTransactionCount)
 	if errors.Is(err, port.ErrNotFound) {
 		return 0, nil

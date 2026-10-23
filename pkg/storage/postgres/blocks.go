@@ -37,54 +37,72 @@ func (s *Store) SetBlock(ctx context.Context, b *model.Block) error {
 		return fmt.Errorf("encode block %d: %w", b.Number, err)
 	}
 	return s.inTx(ctx, func(q querier) error {
-		if _, err := q.Exec(ctx, `INSERT INTO blocks (number, hash, parent_hash, time, miner, data)
-			VALUES ($1, $2, $3, $4, $5, $6)
-			ON CONFLICT (number) DO UPDATE SET hash = EXCLUDED.hash, parent_hash = EXCLUDED.parent_hash,
-				time = EXCLUDED.time, miner = EXCLUDED.miner, data = EXCLUDED.data`,
-			i64(b.Number), b.Hash.Bytes(), b.ParentHash.Bytes(), i64(b.Time), b.Miner.Bytes(), data); err != nil {
-			return fmt.Errorf("store block %d: %w", b.Number, err)
+		if err := writeBlockRow(ctx, q, b, data, false); err != nil {
+			return err
 		}
-		if len(b.Transactions) == 0 {
-			return nil
-		}
-		var (
-			hashes, froms, tos, datas [][]byte
-			indexes                   []int32
-		)
-		for i, tx := range b.Transactions {
-			txData, err := model.EncodeTransaction(tx)
-			if err != nil {
-				return fmt.Errorf("encode transaction %d of block %d: %w", i, b.Number, err)
-			}
-			var to []byte
-			if tx.To != nil {
-				to = tx.To.Bytes()
-			}
-			hashes, froms, tos, datas = append(hashes, tx.Hash.Bytes()), append(froms, tx.From.Bytes()), append(tos, to), append(datas, txData)
-			indexes = append(indexes, int32(i))
-		}
-		// One statement for the block's transactions; xmax = 0 marks the
-		// rows inserted rather than updated, which the transaction count
-		// adds.
-		var added int64
-		err := q.QueryRow(ctx, `WITH written AS (
-				INSERT INTO transactions (hash, block_number, tx_index, block_hash, from_addr, to_addr, data)
-				SELECT h, $2, i, $3, f, t, d FROM unnest($1::bytea[], $4::integer[], $5::bytea[], $6::bytea[], $7::bytea[]) AS x(h, i, f, t, d)
-				ON CONFLICT (hash) DO UPDATE SET block_number = EXCLUDED.block_number, tx_index = EXCLUDED.tx_index,
-					block_hash = EXCLUDED.block_hash, from_addr = EXCLUDED.from_addr, to_addr = EXCLUDED.to_addr, data = EXCLUDED.data
-				RETURNING xmax = 0 AS inserted)
-			SELECT count(*) FILTER (WHERE inserted) FROM written`,
-			hashes, i64(b.Number), b.Hash.Bytes(), indexes, froms, tos, datas).Scan(&added)
-		if err != nil {
-			return fmt.Errorf("store transactions of block %d: %w", b.Number, err)
-		}
-		if added == 0 {
-			return nil
-		}
-		_, err = q.Exec(ctx, `INSERT INTO meta (name, value) VALUES ($1, int8send($2::bigint))
-			ON CONFLICT (name) DO UPDATE SET value = int8send(('x' || encode(meta.value, 'hex'))::bit(64)::bigint + $2::bigint)`, metaTransactionCount, added)
-		return err
+		return writeBlockTransactions(ctx, q, b, false)
 	})
+}
+
+// writeBlockRow and writeBlockTransactions preserve SetBlock's atomic legacy
+// behavior and let execution queues own the two tables independently.
+func writeBlockRow(ctx context.Context, q querier, b *model.Block, data []byte, immutable bool) error {
+	guard := ""
+	if immutable {
+		guard = " WHERE blocks.hash=EXCLUDED.hash AND blocks.data=EXCLUDED.data"
+	}
+	tag, err := q.Exec(ctx, `INSERT INTO blocks(number,hash,parent_hash,time,miner,data) VALUES($1,$2,$3,$4,$5,$6)
+ ON CONFLICT(number) DO UPDATE SET hash=EXCLUDED.hash,parent_hash=EXCLUDED.parent_hash,time=EXCLUDED.time,miner=EXCLUDED.miner,data=EXCLUDED.data`+guard, i64(b.Number), b.Hash.Bytes(), b.ParentHash.Bytes(), i64(b.Time), b.Miner.Bytes(), data)
+	if err != nil {
+		return fmt.Errorf("store block %d: %w", b.Number, err)
+	}
+	if immutable && tag.RowsAffected() != 1 {
+		return port.ErrExecutionConflict
+	}
+	return nil
+}
+func writeBlockTransactions(ctx context.Context, q querier, b *model.Block, immutable bool) error {
+	if len(b.Transactions) == 0 {
+		return nil
+	}
+	var hashes, froms, tos, datas [][]byte
+	var indexes []int32
+	for i, tx := range b.Transactions {
+		data, err := model.EncodeTransaction(tx)
+		if err != nil {
+			return fmt.Errorf("encode transaction %d of block %d: %w", i, b.Number, err)
+		}
+		var to []byte
+		if tx.To != nil {
+			to = tx.To.Bytes()
+		}
+		hashes = append(hashes, tx.Hash.Bytes())
+		froms = append(froms, tx.From.Bytes())
+		tos = append(tos, to)
+		datas = append(datas, data)
+		indexes = append(indexes, int32(i))
+	}
+	guard := ""
+	if immutable {
+		guard = " WHERE transactions.block_number=EXCLUDED.block_number AND transactions.block_hash=EXCLUDED.block_hash AND transactions.tx_index=EXCLUDED.tx_index AND transactions.data=EXCLUDED.data"
+	}
+	var written, added int64
+	err := q.QueryRow(ctx, `WITH written AS(
+ INSERT INTO transactions(hash,block_number,tx_index,block_hash,from_addr,to_addr,data)
+ SELECT h,$2,i,$3,f,t,d FROM unnest($1::bytea[],$4::integer[],$5::bytea[],$6::bytea[],$7::bytea[]) AS x(h,i,f,t,d)
+ ON CONFLICT(hash) DO UPDATE SET block_number=EXCLUDED.block_number,tx_index=EXCLUDED.tx_index,block_hash=EXCLUDED.block_hash,from_addr=EXCLUDED.from_addr,to_addr=EXCLUDED.to_addr,data=EXCLUDED.data`+guard+`
+ RETURNING xmax=0 AS inserted) SELECT count(*),count(*) FILTER(WHERE inserted) FROM written`, hashes, i64(b.Number), b.Hash.Bytes(), indexes, froms, tos, datas).Scan(&written, &added)
+	if err != nil {
+		return fmt.Errorf("store transactions of block %d: %w", b.Number, err)
+	}
+	if immutable && written != int64(len(b.Transactions)) {
+		return port.ErrExecutionConflict
+	}
+	if added == 0 {
+		return nil
+	}
+	_, err = q.Exec(ctx, `INSERT INTO meta(name,value) VALUES($1,int8send($2::bigint)) ON CONFLICT(name) DO UPDATE SET value=int8send(('x'||encode(meta.value,'hex'))::bit(64)::bigint+$2::bigint)`, metaTransactionCount, added)
+	return err
 }
 
 // SetReceipt implements port.BlockWriter.
@@ -126,7 +144,7 @@ func (s *Store) GetBlockByHash(ctx context.Context, hash common.Hash) (*model.Bl
 
 func (s *Store) blockWhere(ctx context.Context, where string, arg any) (*model.Block, error) {
 	var data []byte
-	if err := s.q(ctx).QueryRow(ctx, "SELECT data FROM blocks WHERE "+where+" LIMIT 1", arg).Scan(&data); err != nil {
+	if err := s.q(ctx).QueryRow(ctx, "SELECT data FROM exec_visible_blocks WHERE "+where+" LIMIT 1", arg).Scan(&data); err != nil {
 		return nil, notFound(err)
 	}
 	if finish := observeDecode(ctx); finish != nil {
@@ -140,7 +158,7 @@ func (s *Store) GetBlocks(ctx context.Context, start, end uint64) ([]*model.Bloc
 	if start > end {
 		return nil, nil
 	}
-	rows, err := s.q(ctx).Query(ctx, "SELECT data FROM blocks WHERE number BETWEEN $1 AND $2 ORDER BY number", i64(start), i64(end))
+	rows, err := s.q(ctx).Query(ctx, "SELECT data FROM exec_visible_blocks WHERE number BETWEEN $1 AND $2 ORDER BY number", i64(start), i64(end))
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +188,7 @@ func (s *Store) GetTransaction(ctx context.Context, hash common.Hash) (*model.Tr
 		index     int32
 		blockHash []byte
 	)
-	err := s.q(ctx).QueryRow(ctx, "SELECT data, block_number, tx_index, block_hash FROM transactions WHERE hash = $1", hash.Bytes()).
+	err := s.q(ctx).QueryRow(ctx, "SELECT data, block_number, tx_index, block_hash FROM exec_visible_transactions WHERE hash = $1", hash.Bytes()).
 		Scan(&data, &number, &index, &blockHash)
 	if err != nil {
 		return nil, nil, notFound(err)
@@ -185,7 +203,7 @@ func (s *Store) GetTransaction(ctx context.Context, hash common.Hash) (*model.Tr
 // GetReceipt implements port.BlockReader.
 func (s *Store) GetReceipt(ctx context.Context, hash common.Hash) (*model.Receipt, error) {
 	var data []byte
-	if err := s.q(ctx).QueryRow(ctx, "SELECT data FROM receipts WHERE tx_hash = $1", hash.Bytes()).Scan(&data); err != nil {
+	if err := s.q(ctx).QueryRow(ctx, "SELECT data FROM exec_visible_receipts WHERE tx_hash = $1", hash.Bytes()).Scan(&data); err != nil {
 		return nil, notFound(err)
 	}
 	return model.DecodeReceipt(data)
@@ -208,7 +226,7 @@ func (s *Store) SetLatestHeight(ctx context.Context, height uint64) error {
 // metaUint reads an 8-byte meta value; port.ErrNotFound when absent.
 func (s *Store) metaUint(ctx context.Context, name string) (uint64, error) {
 	var v []byte
-	if err := s.q(ctx).QueryRow(ctx, "SELECT value FROM meta WHERE name = $1", name).Scan(&v); err != nil {
+	if err := s.q(ctx).QueryRow(ctx, "SELECT value FROM exec_public_meta WHERE name = $1", name).Scan(&v); err != nil {
 		return 0, notFound(err)
 	}
 	if len(v) != 8 {
@@ -266,7 +284,7 @@ func (s *Store) GetReceipts(ctx context.Context, hashes []common.Hash) ([]*model
 // GetReceiptsByBlockHash implements port.Reader.
 func (s *Store) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Hash) ([]*model.Receipt, error) {
 	var number int64
-	if err := s.q(ctx).QueryRow(ctx, "SELECT number FROM blocks WHERE hash = $1 LIMIT 1", blockHash.Bytes()).Scan(&number); err != nil {
+	if err := s.q(ctx).QueryRow(ctx, "SELECT number FROM exec_visible_blocks WHERE hash = $1 LIMIT 1", blockHash.Bytes()).Scan(&number); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("block %s: %w", blockHash.Hex(), port.ErrNotFound)
 		}
@@ -278,9 +296,9 @@ func (s *Store) GetReceiptsByBlockHash(ctx context.Context, blockHash common.Has
 // GetReceiptsByBlockNumber implements port.Reader: the receipts of the
 // stored block's transactions, in transaction order.
 func (s *Store) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64) ([]*model.Receipt, error) {
-	rows, err := s.q(ctx).Query(ctx, `SELECT r.data FROM blocks b
-		JOIN transactions t ON t.block_hash = b.hash AND t.block_number = b.number
-		JOIN receipts r ON r.tx_hash = t.hash
+	rows, err := s.q(ctx).Query(ctx, `SELECT r.data FROM exec_visible_blocks b
+		JOIN exec_visible_transactions t ON t.block_hash = b.hash AND t.block_number = b.number
+		JOIN exec_visible_receipts r ON r.tx_hash = t.hash
 		WHERE b.number = $1 ORDER BY t.tx_index`, i64(blockNumber))
 	if err != nil {
 		return nil, err
@@ -302,9 +320,9 @@ func (s *Store) GetReceiptsByBlockNumber(ctx context.Context, blockNumber uint64
 
 // GetMissingReceipts implements port.Reader.
 func (s *Store) GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
-	rows, err := s.q(ctx).Query(ctx, `SELECT t.hash FROM blocks b
-		JOIN transactions t ON t.block_hash = b.hash AND t.block_number = b.number
-		WHERE b.number = $1 AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.tx_hash = t.hash)
+	rows, err := s.q(ctx).Query(ctx, `SELECT t.hash FROM exec_visible_blocks b
+		JOIN exec_visible_transactions t ON t.block_hash = b.hash AND t.block_number = b.number
+		WHERE b.number = $1 AND NOT EXISTS (SELECT 1 FROM exec_visible_receipts r WHERE r.tx_hash = t.hash)
 		ORDER BY t.tx_index`, i64(blockNumber))
 	if err != nil {
 		return nil, err
@@ -314,17 +332,17 @@ func (s *Store) GetMissingReceipts(ctx context.Context, blockNumber uint64) ([]c
 
 // HasBlock implements port.Reader.
 func (s *Store) HasBlock(ctx context.Context, height uint64) (bool, error) {
-	return s.exists(ctx, "SELECT EXISTS (SELECT 1 FROM blocks WHERE number = $1)", i64(height))
+	return s.exists(ctx, "SELECT EXISTS (SELECT 1 FROM exec_visible_blocks WHERE number = $1)", i64(height))
 }
 
 // HasTransaction implements port.Reader.
 func (s *Store) HasTransaction(ctx context.Context, hash common.Hash) (bool, error) {
-	return s.exists(ctx, "SELECT EXISTS (SELECT 1 FROM transactions WHERE hash = $1)", hash.Bytes())
+	return s.exists(ctx, "SELECT EXISTS (SELECT 1 FROM exec_visible_transactions WHERE hash = $1)", hash.Bytes())
 }
 
 // HasReceipt implements port.Reader.
 func (s *Store) HasReceipt(ctx context.Context, hash common.Hash) (bool, error) {
-	return s.exists(ctx, "SELECT EXISTS (SELECT 1 FROM receipts WHERE tx_hash = $1)", hash.Bytes())
+	return s.exists(ctx, "SELECT EXISTS (SELECT 1 FROM exec_visible_receipts WHERE tx_hash = $1)", hash.Bytes())
 }
 
 func (s *Store) exists(ctx context.Context, sql string, args ...any) (bool, error) {

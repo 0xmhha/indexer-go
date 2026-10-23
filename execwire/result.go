@@ -21,6 +21,9 @@ func MarshalResult(r Result) ([]byte, error) {
 	if len(meta) > MaxMetadataBytes || n > MaxBlockBytes {
 		return nil, ErrLimit
 	}
+	if err := jsonBounds(meta); err != nil {
+		return nil, err
+	}
 	p := make([]byte, 16, n)
 	copy(p, "EXR1")
 	binary.BigEndian.PutUint32(p[4:8], uint32(len(meta)))

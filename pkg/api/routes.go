@@ -24,7 +24,9 @@ import (
 
 // Route is one HTTP endpoint.
 type Route struct {
-	Method string
+	// Streaming keeps long-lived GET streams outside a request read transaction.
+	Streaming bool
+	Method    string
 	// Pattern is a chi route pattern such as "/receipts/{merchant}/{id}";
 	// chi.URLParam reads its parameters.
 	Pattern string
@@ -74,7 +76,7 @@ func chainRoutable(r Route) bool {
 // mountRoutes mounts the registered routes over the server's storage.
 func (s *Server) mountRoutes() {
 	for _, r := range registeredRoutes() {
-		s.router.Method(r.Method, r.Pattern, r.Handler(s.storage, s.logger))
+		s.router.Method(r.Method, r.Pattern, s.readRoute(r))
 		s.logger.Info("Route registered", zap.String("method", r.Method), zap.String("pattern", r.Pattern))
 	}
 }

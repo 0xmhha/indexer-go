@@ -268,6 +268,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // respond returns the response of a request: kept, or executed once for
 // the requests asking for it together.
 func (h *Handler) respond(ctx context.Context, path string, ep endpoint, vars map[string]interface{}) (response, error) {
+	if policy, ok := h.exec.(interface{ FreshSnapshotRequired() bool }); ok && policy.FreshSnapshotRequired() {
+		// Execution visibility/reorg admission belongs to this request. Shared or
+		// cached work must not skip it or retain its transaction after cancellation.
+		resp, err := execute(ctx, h.exec, ep, vars)
+		resp.etag = ""
+		return resp, err
+	}
+
 	key, err := json.Marshal(vars) // map keys are sorted
 	if err != nil {
 		return response{}, fmt.Errorf("failed to encode the request")

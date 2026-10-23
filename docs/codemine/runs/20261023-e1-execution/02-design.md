@@ -69,7 +69,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
       ├ queue storage      → writer → state_storage_changes + state_storage
       ├ queue contracts    → writer → state_contracts + state_code
       └ 기존 기능 writer(주소 색인, 토큰, AA …)  ← 기존 단일 writer, 핵심 표는 쓰지 않음
-   watermark: visible_height = min(모든 writer cursor) → meta, outbox relay 문 열기, Committed(h)
+   publication: 같은 입력의 7개 part + 기능/outbox + 마지막 fresh → atomic visible_height/hash → Committed(h)
    조회(port, visible_height 필터) ─ GraphQL, JSON-RPC, WebSocket goroutine
 ```
 
@@ -118,7 +118,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 - 같은 거래 안의 여러 변화는 첫 전 값과 마지막 후 값 한 행으로 합친다.
 - base fee 분배와 system contract 전이는 둘 다 `Finalize` 안에서 일어난다. 그래서 cause 1 하나로 묶는다. 둘을 나누려면 `Finalize`의 내부 단계를 다시 구현해야 하는데, D11을 고른 이유와 맞지 않는다.
 
-**`state_storage_changes`**: 컬럼은 (height, ordinal, block_time, tx_index, tx_hash, cause, address, slot, value_before, value_after, baseline)이다. 기본 key는 (height, tx_index, cause, address, slot)이고, 색인은 (address, slot, height desc)다. 계정의 `storage_cleared`가 참이면, indexer는 clear tombstone을 기록하고 공개 시점 조회와 rollback에서 clear 이전 슬롯을 되살리지 않는다.
+**`state_storage_changes`**: 컬럼은 (height, ordinal, block_time, tx_index, tx_hash, cause, address, slot, value_before, value_after, baseline)이다. 기본 key는 (height, ordinal, address, slot)이고, 색인은 (address, slot, height desc)다. 계정의 `storage_cleared`가 참이면, indexer는 clear tombstone을 기록하고 공개 시점 조회와 rollback에서 clear 이전 슬롯을 되살리지 않는다.
 
 **`state_accounts`**(지금 값): 기본 key는 address다. 컬럼은 nonce, balance, code_hash, storage_root, extra, first_height, last_height, last_tx_hash다.
 
@@ -128,13 +128,13 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 
 **`state_code`**: 기본 key는 code_hash이고, 컬럼은 code, first_height다. 삽입만 한다.
 
-**`exec_cursors`**: writer마다 (name, generation, height, hash, digest)를 둔다. writer는 자기 표를 쓰는 트랜잭션에서 이 값을 함께 갱신한다. `exec_parts`의 블록별 완료 기록으로 연속성·동일 입력을 확인하며 최고 높이만으로 추정하지 않는다.
+**`exec_cursors`**: writer마다 (writer, generation, height, hash, parent, digest)를 둔다. writer는 자기 표를 쓰는 트랜잭션에서 이 값을 함께 갱신한다. `exec_parts`의 블록별 완료 기록으로 연속성·동일 입력을 확인하며 최고 높이만으로 추정하지 않는다.
 
 **`exec_rewind`**: 되돌리기가 진행 중일 때만 (target)을 둔다(5.6).
 
 **공개 control**: visible height/hash, generation, rewind 상태를 유지한다. 공개 transaction이 정확히 일치하는7개 결과와 기능 처리를 확인하고 새 fresh 검사를 통과한 뒤 갱신한다. API와 source ACK의 유일한 완료 경계다.
 
-**partition.** `*_changes` 표는 `execution.partition_blocks`(기본 1,000,000블록, 추정값)마다 partition을 만든다. writer는 다음 partition이 필요해지기 전에 미리 만든다.
+**partition.** `*_changes` 표는 `execution.partition_blocks`(기본 1,000,000블록, 추정값)마다 partition을 만든다. writer는 필요한 partition을 검증된 정수 범위·인용된 식별자로 생성한다. 운영 중 선행 생성은 별도 최적화다.
 
 ### 4.3 키로 잇기
 
@@ -162,7 +162,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 | execwire | `execwire/` (별도 go.mod, 표준 라이브러리만) | 프레임, 메시지, version | 실행부와 indexer가 함께 import한다. 어느 쪽 모듈에 두어도 다른 쪽의 go-ethereum 버전이 끌려온다(work log 3.109) |
 | 실행부 | `x/stablenet/executor/` (별도 go.mod) | 노드 조립, canonical 높이 걷기, 다시 실행과 기록, spool, IPC 서버, 시작할 때 되감기 | indexer 모듈에 둘 수 없다(같은 이유) |
 | 수신과 분배 | `pkg/execution/` | IPC client, assembler, 표별 queue, watermark, 되돌리기 조정 | 기존 `pkg/fetch`는 블록 하나를 writer 하나에 넘기는 구조라, 표별 writer를 담지 못한다 |
-| 상태 표 writer | `pkg/storage/postgres/execstate.go` + migration 0014 | 상태 표 COPY, cursor, 높이 단위 되돌리기 | 표 schema는 postgres 패키지가 소유한다 |
+| 상태 표 writer | `pkg/storage/postgres/exec_*.go` + migration 0014 | 상태 표 COPY, cursor, 높이 단위 되돌리기 | 표 schema는 postgres 패키지가 소유한다 |
 | 핵심 표 writer | `pkg/storage/postgres`의 기존 block, receipt 쓰기 함수 재사용 | 높이를 직접 넣는 쓰기 경로 | 함수는 재사용하고, 트랜잭션 방식만 4.1처럼 바꾼다 |
 | 조회 필터 | `pkg/storage/postgres` 읽기 | 실행 수집 모드에서 모든 핵심 표와 상태 표 읽기에 `높이 ≤ visible_height` 조건을 붙인다(5.4) | 읽기 경로의 소유자가 postgres 패키지다 |
 | 연결 | `pkg/app` | `indexer.mode: execution`, socket 경로, 연결 수 검사 | 구성 소유자 |
@@ -201,10 +201,10 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 - **writer.** 자기 cursor보다 높은 연속 높이만 꺼낸다. 이미 쓴 generation·height·hash·digest가 모두 같은 결과만 재사용한다. 높이만 같다고 건너뛰지 않는다.
   - 묶음 크기: 따라잡을 때는 queue 상한 이하, head를 따라갈 때는 1블록이다.
   - 자기 표에 COPY로 쓰고, 같은 트랜잭션에서 cursor를 갱신하고 커밋한다.
-  - 상태 writer는 COPY 전에 같은 트랜잭션에서 그 블록이 건드린 key의 지금 값을 한 번에 읽는다(`= ANY`). 그리고 실행부가 보낸 전 값과 비교한다. 다르면 그 블록을 쓰지 않고 멈춘다. 이전 행이 없는 key는 `baseline=true`일 때만 받아들인다.
+  - 상태 writer는 COPY 전에 같은 트랜잭션에서 그 블록이 건드린 key의 지금 값을 한 번에 읽는다(`= ANY`). 그리고 실행부가 보낸 전 값과 비교한다. 다르면 그 블록을 쓰지 않고 멈춘다. 기존 값이 필요한 key는 anchor baseline coverage를 요구한다. 입력이 부재 Before를 명시한 새 계정은 구분해 허용하며, 기존 계정의 Before로 baseline을 묵시적으로 만들지 않는다.
 - **watermark.** 표별 저장은 미공개 durable 자료다. 같은 generation·height·hash의 7개 결과가 모인 뒤 기능 writer의 transaction에서 기능 표·outbox·공개 높이를 원자적으로 commit한다. 바로 직전의 새 fresh 검사와 응답 후 epoch fence를 통과해야 공개·ACK한다([구현 계획 2.2](03-plan.md#22-미공개-저장과-공개-commit)).
 - **조회.** 실행 수집 모드의 불변 행은 `높이 ≤ visible_height`로 제한한다. hash·주소·로그·통계에도 적용한다. 작업용 최신 상태의 last_height만 필터링하지 않고 이력에서 공개 시점의 값을 읽는다. 삭제·clear·baseline을 구분한다. 읽기 transaction과 rewind의 advisory fence는 [구현 계획 2.3](03-plan.md#23-공개-높이와-최신-값-조회)을 따른다.
-- **이벤트(반증 CR-11).** 기능 writer는 지금처럼 자기 트랜잭션에서 outbox에 쓴다. outbox relay는 높이가 visible_height 이하인 항목까지만 내보낸다. 그래서 이벤트가 API보다 먼저 나가지 않고, 같은 이벤트를 두 번 내보내지도 않는다.
+- **이벤트(반증 CR-11).** 기능 writer는 공개 높이와 같은 트랜잭션에서 outbox에 쓴다. relay는 commit된 항목만 읽으므로 미공개 part의 이벤트가 먼저 나가지 않는다. exact publication 재시도는 outbox를 다시 쓰지 않는다. 소비자 전송은 기존 at-least-once/sequence 재개 계약을 따르며, 연결·장애 재개에서 같은 sequence를 중복 처리하지 않도록 해야 한다.
 
 ### 5.5 기존 기능 writer와의 분리
 
@@ -241,7 +241,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 
 - 노드 import, exporter, IPC 전송이 각각 따로 돈다.
 - indexer에서는 writer 7개가 처리한다. 표별 DB transaction 동시성은2이고 기능 writer의 최종 공개가 별도로 원자성을 보장한다.
-- 따라잡을 때는 writer가 여러 블록을 COPY 한 번으로 묶어 커밋 수를 줄인다.
+- 현재 writer는 블록별 COPY와 atomic part 완료 기록을 사용한다. 여러 높이를 한 COPY/transaction에 묶는 추가 최적화는 E4에서 before CAS·cursor·취소 경계를 검증한 뒤 진행한다.
 
 ---
 
@@ -293,7 +293,7 @@ indexer가 Hello(committed = visible_height k)를 보낸다. 실행부는 노드
 |---|---|
 | 실행부가 죽음 | indexer가 다시 연결하고 Hello부터 시작한다 |
 | indexer가 죽음 | 실행부는 spool에 계속 쌓는다. 상한에 닿으면 p2p를 멈춘다 |
-| writer 하나가 실패 | 그 writer만 다시 시도한다. visible_height는 멈춘다. 계속 실패하면 opsguard 분류에 따라 멈춘다 |
+| writer 하나가 실패 | 해당 generation의 queue를 취소·join하고 공개를 멈춘다. 원본과 durable parts를 보존하며 재시작 시 exact result를 재사용한다 |
 | root 불일치(5.2의 5) | 실행부가 멈추고 원인을 남긴다 |
 | 전 값 불일치(5.4) | indexer가 멈춘다 |
 | reorg | 5.3으로 fork 지점을 찾고 5.6으로 되돌린다 |

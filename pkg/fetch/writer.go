@@ -18,9 +18,9 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/feature"
 )
 
-// The writer is the single goroutine that changes indexed state. Indexing a
-// block, moving the cursor, rolling back after a reorg and backfilling a
-// feature are commands sent to it; it runs them one at a time, in the order
+// The writer serializes feature/publication state. In the execution path,
+// separate bounded workers store durable unpublished table parts. Legacy block
+// indexing, cursor changes, recovery and feature backfills are commands sent here; it runs them one at a time, in the order
 // they arrive. Only this file opens storage block transactions (a test
 // enforces it), so every state change is serialized in one place and
 // recovery after a crash has a single entry point.

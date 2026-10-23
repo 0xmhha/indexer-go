@@ -76,6 +76,8 @@ jobs:
         run: go test ./... -count=1 -timeout 20m
       - name: Event bus shutdown concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestEventBusStopDrainsAccepted|TestEventBusConcurrentStopPublishPreservesAccepted)$' ./pkg/events
+      - name: Execution queue, recovery, and API concurrency
+        run: GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestScheduler|TestController|TestExecution)' ./pkg/execution ./pkg/fetch ./pkg/api ./pkg/api/graphql ./pkg/api/jsonrpc ./internal/api/rest
       - name: Wire module contracts and concurrency
         run: |
           make test-execwire
@@ -115,6 +117,8 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: PostgreSQL adapter and end-to-end suite
         run: ./scripts/test-postgres.sh
+      - name: Execution DB admission and recovery concurrency
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence)$'
 
   examples:
     runs-on: ubuntu-latest

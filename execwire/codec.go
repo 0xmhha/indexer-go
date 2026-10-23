@@ -186,10 +186,9 @@ func Decode(r io.Reader) (Frame, error) {
 	return f, nil
 }
 
-// parseJSON bounds nesting and token counts before decoding into slices of
+// jsonBounds bounds nesting and token counts before decoding into slices of
 // structs, so a short array of empty objects cannot cause an enormous allocation.
-// Re-encoding rejects duplicate keys, alternate hex and ambiguous JSON encodings.
-func parseJSON(p []byte, out any) error {
+func jsonBounds(p []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(p))
 	depth, tokens := 0, 0
 	for {
@@ -218,7 +217,15 @@ func parseJSON(p []byte, out any) error {
 	if depth != 0 {
 		return fmt.Errorf("%w: JSON depth", ErrProtocol)
 	}
-	dec = json.NewDecoder(bytes.NewReader(p))
+	return nil
+}
+
+// parseJSON also rejects duplicate keys, alternate hex and ambiguous encodings.
+func parseJSON(p []byte, out any) error {
+	if err := jsonBounds(p); err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bytes.NewReader(p))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(out); err != nil {
 		return fmt.Errorf("%w: JSON fields", ErrProtocol)

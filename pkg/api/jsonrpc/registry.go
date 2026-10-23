@@ -24,8 +24,9 @@ type MethodDeps struct {
 type MethodFunc func(ctx context.Context, d MethodDeps, params json.RawMessage) (interface{}, *Error)
 
 var (
-	methodsMu sync.RWMutex
-	methods   = map[string]MethodFunc{}
+	methodsMu       sync.RWMutex
+	methods         = map[string]MethodFunc{}
+	mutationMethods = map[string]bool{}
 )
 
 // RegisterMethod adds a method. Registering a name twice panics: it is a
@@ -44,4 +45,21 @@ func registeredMethod(name string) (MethodFunc, bool) {
 	defer methodsMu.RUnlock()
 	fn, ok := methods[name]
 	return fn, ok
+}
+
+// RegisterMutationMethod opts a custom method out of read snapshots. Existing
+// registered methods are queries; writes must declare this boundary explicitly.
+func RegisterMutationMethod(name string, fn MethodFunc) {
+	methodsMu.Lock()
+	defer methodsMu.Unlock()
+	if _, dup := methods[name]; dup {
+		panic(fmt.Sprintf("jsonrpc: method %q registered twice", name))
+	}
+	methods[name] = fn
+	mutationMethods[name] = true
+}
+func registeredMutation(name string) bool {
+	methodsMu.RLock()
+	defer methodsMu.RUnlock()
+	return mutationMethods[name]
 }

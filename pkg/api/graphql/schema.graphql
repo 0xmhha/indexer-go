@@ -1031,6 +1031,10 @@ type AccountModules {
 
 # Query root type
 type Query {
+  # Explicitly covered state at the public execution height; unknown coverage is an error.
+  executionAccount(address: String!): ExecutionAccount
+  executionStorage(address: String!, slot: String!): ExecutionStorage
+  executionCode(address: String!): ExecutionCode
   # ========== Reorganization Queries ==========
 
   # Chain reorganizations the indexer rolled back, newest first
@@ -3687,4 +3691,36 @@ type SmartAccountConnection {
   nodes: [SmartAccount!]!
   totalCount: Int!
   pageInfo: PageInfo!
+}
+
+# Public execution state. Integer strings retain uint64/uint256 precision.
+type ExecutionAccount {
+  address: String!
+  height: String!
+  generation: String!
+  blockHash: String!
+  stateRoot: String!
+  exists: Boolean!
+  nonce: String!
+  balance: String!
+  extra: String!
+  codeHash: String!
+  storageRoot: String!
+}
+type ExecutionStorage {
+  address: String!
+  height: String!
+  generation: String!
+  blockHash: String!
+  stateRoot: String!
+  slot: String!
+  value: String!
+}
+type ExecutionCode {
+  address: String!
+  height: String!
+  generation: String!
+  blockHash: String!
+  stateRoot: String!
+  code: String!
 }

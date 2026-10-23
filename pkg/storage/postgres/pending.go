@@ -87,6 +87,9 @@ func (r errRow) Scan(...any) error { return r.err }
 // execLater runs a write whose result is not read: queued in the block
 // transaction bound to ctx, else run now.
 func (s *Store) execLater(ctx context.Context, sql string, args ...any) error {
+	if s.executionReadBound(ctx) {
+		return port.ErrReadOnly
+	}
 	if bt := s.boundTx(ctx); bt != nil {
 		bt.queue(sql, args...)
 		return nil

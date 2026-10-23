@@ -96,6 +96,19 @@ func (h *Handler) Close() {
 
 // HandleMethod handles a JSON-RPC method call
 func (h *Handler) HandleMethod(ctx context.Context, method string, params json.RawMessage) (interface{}, *Error) {
+	if strings.HasPrefix(method, "notification_") || method == "setContractABI" || method == "deleteContractABI" || registeredMutation(method) {
+		return h.handleMethod(ctx, method, params)
+	}
+	var result interface{}
+	var rpcErr *Error
+	err := port.WithQuerySnapshot(ctx, h.storage, func(view context.Context) error { result, rpcErr = h.handleMethod(view, method, params); return nil })
+	if err != nil {
+		return nil, NewError(-32050, "query snapshot unavailable", map[string]interface{}{"retryable": errors.Is(err, port.ErrExecutionRewinding), "reason": err.Error()})
+	}
+	return result, rpcErr
+}
+
+func (h *Handler) handleMethod(ctx context.Context, method string, params json.RawMessage) (interface{}, *Error) {
 	// Notification settings hold webhook destinations and secrets, and
 	// creating one makes the server send requests: only callers with an
 	// API key the server accepted (middleware.APIKeyIdentify) may use them.
@@ -105,6 +118,12 @@ func (h *Handler) HandleMethod(ctx context.Context, method string, params json.R
 		}
 	}
 	switch method {
+	case "getExecutionAccount":
+		return h.getExecutionState(ctx, "account", params)
+	case "getExecutionStorage":
+		return h.getExecutionState(ctx, "storage", params)
+	case "getExecutionCode":
+		return h.getExecutionState(ctx, "code", params)
 	case "getLatestHeight":
 		return h.getLatestHeight(ctx, params)
 	case "getBlock":

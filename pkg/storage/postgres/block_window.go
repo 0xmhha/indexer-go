@@ -22,11 +22,11 @@ func (s *Store) GetLatestBlockWindow(ctx context.Context, offset, limit int) (ui
 	rows, err := s.q(ctx).Query(ctx, `WITH tip AS MATERIALIZED (
 		SELECT value, CASE WHEN octet_length(value) = 8
 			THEN ('x' || encode(value, 'hex'))::bit(64)::bigint END AS height
-		FROM meta WHERE name = $1
+		FROM exec_public_meta WHERE name = $1
 	), bounds AS (
 		SELECT value, height, CASE WHEN height >= $2 THEN height - $2 ELSE 0 END AS hi FROM tip
 	)
-	SELECT bounds.value, b.data FROM bounds LEFT JOIN blocks b
+	SELECT bounds.value, b.data FROM bounds LEFT JOIN exec_visible_blocks b
 		ON bounds.height >= $2 AND b.number BETWEEN greatest(0, bounds.hi - ($3::bigint - 1)) AND bounds.hi
 	ORDER BY b.number`, metaLatestHeight, int64(offset), int64(limit))
 	if err != nil {

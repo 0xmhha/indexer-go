@@ -413,6 +413,30 @@ EpochSummary.validatorCount(): Int!
 EpochSummaryConnection.nodes(): [EpochSummary!]!
 EpochSummaryConnection.pageInfo(): PageInfo!
 EpochSummaryConnection.totalCount(): Int!
+ExecutionAccount.address(): String!
+ExecutionAccount.balance(): String!
+ExecutionAccount.blockHash(): String!
+ExecutionAccount.codeHash(): String!
+ExecutionAccount.exists(): Boolean!
+ExecutionAccount.extra(): String!
+ExecutionAccount.generation(): String!
+ExecutionAccount.height(): String!
+ExecutionAccount.nonce(): String!
+ExecutionAccount.stateRoot(): String!
+ExecutionAccount.storageRoot(): String!
+ExecutionCode.address(): String!
+ExecutionCode.blockHash(): String!
+ExecutionCode.code(): String!
+ExecutionCode.generation(): String!
+ExecutionCode.height(): String!
+ExecutionCode.stateRoot(): String!
+ExecutionStorage.address(): String!
+ExecutionStorage.blockHash(): String!
+ExecutionStorage.generation(): String!
+ExecutionStorage.height(): String!
+ExecutionStorage.slot(): String!
+ExecutionStorage.stateRoot(): String!
+ExecutionStorage.value(): String!
 FactoryStats.address(): String!
 FactoryStats.totalAccounts(): String!
 FactoryStatsConnection.nodes(): [FactoryStats!]!
@@ -634,6 +658,9 @@ OBJECT EpochData
 OBJECT EpochInfo
 OBJECT EpochSummary
 OBJECT EpochSummaryConnection
+OBJECT ExecutionAccount
+OBJECT ExecutionCode
+OBJECT ExecutionStorage
 OBJECT FactoryStats
 OBJECT FactoryStatsConnection
 OBJECT FeeDelegationStats
@@ -827,6 +854,9 @@ Query.erc721Owner(token: String!, tokenId: String!): String
 Query.erc721Transfer(logIndex: Int!, transactionHash: String!): ERC721Transfer
 Query.erc721TransfersByAddress(address: String!, isFrom: Boolean!, pagination: PaginationInput): ERC721TransferConnection
 Query.erc721TransfersByToken(pagination: PaginationInput, token: String!): ERC721TransferConnection
+Query.executionAccount(address: String!): ExecutionAccount
+Query.executionCode(address: String!): ExecutionCode
+Query.executionStorage(address: String!, slot: String!): ExecutionStorage
 Query.factories(pagination: PaginationInput): FactoryStatsConnection!
 Query.factory(address: String!): FactoryStats
 Query.feeDelegationStats(fromBlock: String, fromTime: String, toBlock: String, toTime: String): FeeDelegationStats

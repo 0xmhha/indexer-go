@@ -59,7 +59,7 @@ make test-postgres
 make test-examples
 ```
 
-`make test-race` is required locally before each commit and pull request because CI has no race job. Format Go files with the pinned toolchain before submitting. Run the linter with the toolchain used for lint in CI:
+`make test-race` is required locally before each commit and pull request because CI does not run the full root race suite. CI also checks execution and API concurrency with race and a single count of 200. Format Go files with the pinned toolchain before submitting. Run the linter with the toolchain used for lint in CI:
 
 ```bash
 GOTOOLCHAIN=go1.26.8 make lint
