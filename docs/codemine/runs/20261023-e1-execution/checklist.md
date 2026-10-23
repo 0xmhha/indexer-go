@@ -4,8 +4,8 @@
 
 ## 현재
 
-- 진행 중: U03 durable spool·ACK 로컬 검증 완료, PR·CI 준비. U02는 PR #211로 완료했다. U00·U01은 PR #210으로 완료했다.
-- 다음: U03 검증·PR·CI·squash/main, 이후 U04 PostgreSQL 상태 포트.
+- 진행 중: U03 PR #212의 종료·ACK quota 수정과 최종 로컬 회귀 완료, 수정 커밋·CI 갱신 대기. U02는 PR #211로 완료했다. U00·U01은 PR #210으로 완료했다.
+- 다음: 종료 누락 수정 검증·PR #212 갱신·CI·squash/main, 이후 U04 PostgreSQL 상태 포트.
 - 최근 완료 기능 n-1: U02 recorder(`4525ac6`, PR #211), n-2: U01 wire(`9f01b09`, PR #210).
 - `03-plan.md`는 사용자의 2026-10-24 위임에 따라 작성했다. 이전 구현 gate의 잠금은 이 위임으로 해제한다.
 
@@ -75,3 +75,10 @@ PR #211은 필수 CI4개 통과 후 `4525ac6ddd630b60f9a2d93b4653228ef934817d`�
 - 전체 PostgreSQL 실행에서 어댑터·StableNet bundle은 통과했고 기존 `TestDeclaredBackfillReadsLogsFromTheNode/per_block`만1,500블록의 고정30초 대기에 실패했다. 같은 기능의 root race와 분리 PG/race는 통과했다. helper가 기존1분 context를 끝까지 사용하고 조기 Run 오류·마지막 높이를 보고하며 실패/성공 모두 cancel·join하도록 수정했다. 최초 app의 실패 경로 Shutdown도 추가했다. 기능 단언·생산 경로·RPC 예산은 바꾸지 않았다. 영향받는11개 기존 기능은 root와 실제 PG에서 race로 통과했다. 전체 CI는 PR에서 다시 실행한다.
 
 - 최종 build/vet/lint(root·executor·astgraph), cache lifecycle, examples, 운영 Python·shell, JSON·문서 링크18개와 fmt 검사가 통과했다. 실제 노드·peer·추가 성능 측정은 보류했고 선택 Anvil은 검사 PATH에서 제외했다.
+
+- PR #212 첫 CI는 lint/examples/postgres 통과, test의 기존 `TestOutboxSequenceSurvivesCrashAndRestart`에서 sequence27 대신29를 받아 실패했다. 실제 원인은 앱이 relay보다 EventBus를 먼저 닫고, 버스가 수락한 publish queue를 버릴 수 있는 종료 경계였다. 이를 flaky 재실행으로 넘기지 않았다.
+- `TestEventBusStopDrainsAccepted`(수락128개 중 전달0), `TestEventBusConcurrentStopPublishPreservesAccepted`(수락 이벤트27개 누락) RED 후, Publish/Stop admission fence·수락 큐 drain·relay-before-bus join을 구현했다. 두 새 동시성 검사는 단일 GOMAXPROCS=1/race/count=200으로 GREEN이다. 정상 종료·버퍼 정책의 범위는 architecture 문서에 명시했다. 제품 코드 수정 후 전체 root/wire/executor/spool race와 실제 fsync-on PG 어댑터·앱·StableNet bundle, build/vet/lint·cache·examples·운영 초안 검사를 새로 통과했다.
+
+- ACK quota 최종 검토: `TestACKFailureCannotBypassCapacity`는 실패한 ACK 뒤 재open 없이 다시 써지는 결함으로 RED, `TestACKRequiresReservedMetadataSpace`는 metadata reserve 부족에도 ACK가 진행되는 결함으로 RED였다. 실패 receipt 뒤 reopen을 요구하고 ACK/receipt 복구 전 quota를 검사하도록 수정했다. 전체 executor/spool race와 lint가 GREEN이다. ACK된 원본 또는 미확인 입력을 quota 확보용으로 임의 삭제하지 않는다.
+
+- 최종 전체 명령은 module-cache 선택을 검사 subprocess에만 적용한 `make test-race`(root/wire/executor/spool)와 `make test-postgres` 모두 exit0이다. 모든 새 동시성 검사의 단일200회 근거와 초기 실패/수정 범위를 보존한다. 추가 성능 측정·실제 노드·peer는 실행하지 않았다.

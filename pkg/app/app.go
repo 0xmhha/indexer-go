@@ -1221,14 +1221,13 @@ func (a *App) Shutdown() {
 	records.Detach(a.storage)
 	fetch.DetachProgress(a.storage)
 
-	// Stop EventBus
-	if a.eventBus != nil {
-		a.eventBus.Stop()
-	}
-
-	// Stop the writer after its queued commands, before closing storage
+	// Join the writer and outbox relay before the bus drains its accepted
+	// events. No producer may enqueue after the bus begins shutdown.
 	if a.fetcher != nil {
 		a.fetcher.Close()
+	}
+	if a.eventBus != nil {
+		a.eventBus.Stop()
 	}
 
 	// Close storage, after reading the final height

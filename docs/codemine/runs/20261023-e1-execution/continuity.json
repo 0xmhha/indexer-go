@@ -4,7 +4,7 @@
   "checklist": "checklist.md",
   "current": {
     "unit": "U03",
-    "state": "local_checks_passed",
+    "state": "fix_local_checks_passed",
     "intent": "bounded fsync-before-transmit result spool and exact durable ACK cleanup/restart",
     "files": [
       "x/stablenet/executor/spool/",
@@ -17,8 +17,9 @@
       "quota counts temporary/quarantine/metadata as well as pending results",
       "no RPC, node startup, node DB GC or performance measurements"
     ],
-    "verification": "Stub RED 6 plus duplicate identity RED 1 and incomplete identity/unknown temporary RED 2. Module race/lint, single GOMAXPROCS=1/race/count=200 spool cancellation/join passed. Root/wire race, fsync-on PostgreSQL adapter/bundle, build/vet/lint, examples/cache/offline ops passed. Root make executor cache lookup corrected by dedicated-cache full module race. Existing PG backfill30s wait failed, helper cancellation/join/diagnostics corrected; all 11 affected functional tests pass with race on root and PG. See checklist for exact scope.",
-    "next": "Commit/PR and four required CI checks, squash/main; then U04 PostgreSQL control/state ports."
+    "verification": "Stub RED 6 plus duplicate identity RED 1 and incomplete identity/unknown temporary RED 2. Module race/lint, single GOMAXPROCS=1/race/count=200 spool cancellation/join passed. Root/wire race, fsync-on PostgreSQL adapter/bundle, build/vet/lint, examples/cache/offline ops passed. Root make executor cache lookup corrected by dedicated-cache full module race. Existing PG backfill30s wait failed, helper cancellation/join/diagnostics corrected; all 11 affected functional tests pass with race on root and PG. See checklist for exact scope. First CI lint/examples/postgres passed; test found preexisting real graceful-shutdown outbox loss. Two deterministic queued/concurrent shutdown RED tests added; publish/stop fence and drain + app relay-before-bus join GREEN in one GOMAXPROCS=1/race/count=200. Full regression rerunning after product fix. Additional ACK retry/file-count and metadata-reserve RED tests fixed; complete executor/spool race and lint GREEN. Final make test-race (root/wire/executor/spool) exit0 and complete fsync-on PG adapter/app/StableNet bundle exit0 after all product changes. Build/vet/lint/cache/examples/offline ops passed.",
+    "next": "Commit/push fixes to PR #212; four green CI checks, squash/main; then U04.",
+    "pr": "https://github.com/0xmhha/indexer-go/pull/212"
   },
   "previous": [
     {

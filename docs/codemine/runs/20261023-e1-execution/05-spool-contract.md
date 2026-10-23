@@ -1,6 +1,6 @@
 # U03 durable spool·ACK 계약
 
-상태: 구현·로컬 기능/회귀 검증 완료, PR·CI 준비. [E1 계획](03-plan.md)과 [체크리스트](checklist.md)를 따른다. 직전 두 기능은 U02 recorder(PR #211), U01 wire(PR #210)다.
+상태: PR #212에서 발견한 종료·ACK quota 보완과 최종 전체 로컬 회귀 완료. 수정 커밋·CI 갱신 대기. [E1 계획](03-plan.md)과 [체크리스트](checklist.md)를 따른다. 직전 두 기능은 U02 recorder(PR #211), U01 wire(PR #210)다.
 
 실행부 모듈 안에 결과 spool을 둔다. root indexer나 PostgreSQL을 import하지 않는다. 실제 노드·peer·추가 성능 측정·디스크 포맷·노드 DB GC는 보류한다.
 
@@ -27,3 +27,5 @@ ACK receipt를 먼저 fsync·seal하여 durable 증거로 남기고 결과를 �
 API형 stub으로 durable append/읽기, 정확한 ACK, ACK 유실 후 reopen, fsync·rename·delete 실패, 잘림·손상, quota, identity·lock·symlink와 취소를 RED로 고정한다. 각 장애 지점에서 원본이나 ACK 증거가 남는지 확인한다. 모든 파일은 임시 시험 directory에만 만든다. 새 동시성 검사는 GOMAXPROCS=1/race/단일200회로 완료한다.
 
 구현 파일은 `x/stablenet/executor/spool/`이다. ACK 단계별10개 장애 복구, 손상·잘림·identity·forward ACK, 대기 취소·Close join 검사가 통과했다. ACK된 Append의 Size/이력 멱등과 초기 identity 재지정·알 수 없는 임시 파일은 추가 RED 후 수정했다. 초기 identity 파일이 미완료면 자동 재초기화하지 않는다. 단일 GOMAXPROCS=1/race/200회 동시성 검사가 통과했다.
+
+ACK receipt 저장 실패 뒤에는 reopen이 필요하다. ACK 및 receipt 복구도 metadata reserve와 전체 retained 파일 budget을 통과해야 한다. 격리 자료가 예산을 소진하면 자동 삭제 대신 ErrFull로 중단한다. 이 두 경계는 추가 RED 후 전체 모듈 race/lint로 GREEN을 확인했다.

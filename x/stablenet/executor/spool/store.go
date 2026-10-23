@@ -250,16 +250,33 @@ func (s *Store) Acknowledge(ctx context.Context, f execwire.Frame) error {
 	if e.Ref != f.Header.Ref || e.Digest != f.Header.Digest {
 		return ErrConflict
 	}
+	if err := s.checkACKCapacity(); err != nil {
+		return err
+	}
 	data, err := sealJSON(ackReceipt{Version: 1, Chain: s.options.Chain, Entry: e})
 	if err != nil {
 		return err
 	}
 	if err := s.atomic(ctx, "ack", ackName(e.Ref), data); err != nil {
+		// A failed receipt may have left an unsealed file. Reopen accounts
+		// for that evidence before any retry can consume more capacity.
+		s.recovery = true
 		return err
 	}
 	if err := s.finishACK(ctx, e); err != nil {
 		s.recovery = true
 		return err
+	}
+	return nil
+}
+
+func (s *Store) checkACKCapacity() error {
+	used, records, _, err := s.usage()
+	if err != nil {
+		return err
+	}
+	if records > s.options.MaxRecords || used > s.options.MaxBytes-metadataReserve {
+		return ErrFull
 	}
 	return nil
 }
@@ -363,6 +380,11 @@ func (s *Store) recover(ctx context.Context) error {
 		}
 	}
 	sort.Slice(receipts, func(i, j int) bool { return receipts[i].Entry.Ref.Height < receipts[j].Entry.Ref.Height })
+	if len(receipts) != 0 {
+		if err := s.checkACKCapacity(); err != nil {
+			return err
+		}
+	}
 	for _, receipt := range receipts {
 		e := receipt.Entry
 		if old, ok := s.entries[e.Ref.Height]; ok && old != e {

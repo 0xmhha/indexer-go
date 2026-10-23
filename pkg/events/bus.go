@@ -86,6 +86,8 @@ type EventBus struct {
 
 	// publishCh is the channel for publishing events
 	publishCh chan Event
+	// publishMu fences accepted enqueues before shutdown drains the queue.
+	publishMu sync.RWMutex
 
 	// done signals when the event bus should stop
 	done chan struct{}
@@ -174,34 +176,38 @@ func (eb *EventBus) Run() {
 	for {
 		select {
 		case <-eb.ctx.Done():
-			// Shutdown: close all subscriptions
-			eb.closeAllSubscriptions()
-			return
+			// Stop fenced all publishers before cancelling. No accepted
+			// enqueue can arrive after this drain reports an empty queue.
+			for {
+				select {
+				case event := <-eb.publishCh:
+					eb.deliverEvent(event)
+				default:
+					eb.closeAllSubscriptions()
+					return
+				}
+			}
 
 		case event := <-eb.publishCh:
-			if eb.duplicate(event) {
-				continue
-			}
-			// Handle event publishing
-			eb.stats.totalEvents.Add(1)
-
-			// Store in history for replay
-			eb.storeEventInHistory(event)
-
-			// Record metrics
-			if eb.metrics != nil {
-				eb.metrics.RecordEventPublished(event.Type())
-			}
-
-			eb.broadcastEvent(event)
-			// Recorded after the broadcast, so LastSequence never reports
-			// an event subscribers may still receive: a subscription made
-			// once LastSequence reached a position gets none of the events
-			// up to it. Only this goroutine writes lastSeq.
-			if seq := SequenceOf(event); seq != 0 {
-				eb.lastSeq.Store(seq)
-			}
+			eb.deliverEvent(event)
 		}
+	}
+}
+
+func (eb *EventBus) deliverEvent(event Event) {
+	if eb.duplicate(event) {
+		return
+	}
+	eb.stats.totalEvents.Add(1)
+	eb.storeEventInHistory(event)
+	if eb.metrics != nil {
+		eb.metrics.RecordEventPublished(event.Type())
+	}
+	eb.broadcastEvent(event)
+	// Publish the delivered position only after the broadcast. Run is the
+	// sole writer, including while draining during graceful shutdown.
+	if seq := SequenceOf(event); seq != 0 {
+		eb.lastSeq.Store(seq)
 	}
 }
 
@@ -358,9 +364,12 @@ func (eb *EventBus) closeAllSubscriptions() {
 	eb.subscribers = make(map[SubscriptionID]*Subscription)
 }
 
-// Stop gracefully stops the event bus
+// Stop rejects new publishes, drains accepted events, then closes subscriptions.
+// Subscriber buffers retain the normal nonblocking/drop policy.
 func (eb *EventBus) Stop() {
+	eb.publishMu.Lock()
 	eb.cancel()
+	eb.publishMu.Unlock()
 	<-eb.done
 }
 
@@ -381,6 +390,8 @@ func (eb *EventBus) Stats() (totalEvents, totalDeliveries, droppedEvents uint64)
 // Publish publishes an event to all interested subscribers
 // This is a non-blocking operation - if the publish channel is full, it returns false
 func (eb *EventBus) Publish(event Event) bool {
+	eb.publishMu.RLock()
+	defer eb.publishMu.RUnlock()
 	// Check if bus is stopped first
 	select {
 	case <-eb.ctx.Done():

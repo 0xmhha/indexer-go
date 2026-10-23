@@ -16,6 +16,8 @@ ACK cleanup first seals a durable ACK receipt, then removes the exact result, ad
 
 Defaults are 4 GiB and 262,144 retained result/temporary files; configure both explicitly for deployment. Bytes include physical allocated size where available, metadata, temporary and quarantined files. A 64 KiB metadata reserve keeps space for ACK/checkpoint work. Capacity pressure returns `ErrFull` and never evicts unacknowledged data.
 
+ACK work and interrupted cleanup also require that reserve. A failed ACK receipt write requires reopen before retry. If quarantined data exhausts the file budget or metadata reserve, increase the configured budget or audit the quarantined evidence explicitly; repeated ACK attempts cannot allocate files past that gate.
+
 Known incomplete temporary files are quarantined and charged to the quota. Corrupt sealed files remain untouched. An interrupted initial identity write requires explicit operator recovery: it cannot be rebound automatically, even to the same identity. No automatic cleanup of quarantined data is provided. These are functional safety limits, not storage sizing measurements.
 
 Generation rewind requires the later coordinator's durable confirmation. This package does not infer it from a cursor and does not garbage-collect the node database. See the [E1 contract](../../../../docs/codemine/runs/20261023-e1-execution/05-spool-contract.md).

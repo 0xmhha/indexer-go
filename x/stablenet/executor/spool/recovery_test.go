@@ -291,3 +291,65 @@ func TestAppendSealFailureAndCancellationRecovery(t *testing.T) {
 		})
 	}
 }
+
+func TestACKFailureCannotBypassCapacity(t *testing.T) {
+	o, r := fixture(t)
+	o.MaxRecords = 1
+	s := opened(t, o)
+	e, err := s.Append(context.Background(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := s.ops
+	injected := errors.New("ACK file sync failed")
+	s.ops.syncFile = func(*os.File) error { return injected }
+	if err := s.Acknowledge(context.Background(), ack(o, e)); !errors.Is(err, injected) {
+		t.Fatal(err)
+	}
+	s.ops = original
+	if err := s.Acknowledge(context.Background(), ack(o, e)); !errors.Is(err, ErrRecovery) {
+		t.Fatalf("failed ACK admitted another write without recovery: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = opened(t, o)
+	before, err := s.Status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Acknowledge(context.Background(), ack(o, e)); !errors.Is(err, ErrFull) {
+		t.Fatalf("quarantined ACK bypassed retained-file quota: %v", err)
+	}
+	after, err := s.Status(context.Background())
+	if err != nil || before != after {
+		t.Fatal("capacity rejection changed retained data", err)
+	}
+	if _, err := s.Read(context.Background(), e.Ref); err != nil {
+		t.Fatal("capacity rejection deleted unacknowledged data", err)
+	}
+}
+
+func TestACKRequiresReservedMetadataSpace(t *testing.T) {
+	o, r := fixture(t)
+	s := opened(t, o)
+	e, err := s.Append(context.Background(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.Status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	o.MaxBytes = st.Bytes + metadataReserve - 1
+	s = opened(t, o)
+	if err := s.Acknowledge(context.Background(), ack(o, e)); !errors.Is(err, ErrFull) {
+		t.Fatalf("ACK ignored exhausted metadata reservation: %v", err)
+	}
+	if _, err := s.Read(context.Background(), e.Ref); err != nil {
+		t.Fatal("capacity rejection lost unacknowledged data", err)
+	}
+}
