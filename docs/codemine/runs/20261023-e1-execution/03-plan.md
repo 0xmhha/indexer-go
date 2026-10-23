@@ -49,6 +49,8 @@ writer 수는 goroutine/queue의 수이며 DB 연결을 계속 소유하는 수�
 
 여러 변화의 순서는 `(height, ordinal)`로 표현한다. transaction index와 hash는 별도 보존한다. baseline은 블록 실행 전, 거래 변화는 거래 순서, Finalize 변화는 마지막에 놓는다. Finalize의 `tx_index=-1`를 정렬 순서로 사용하지 않는다.
 
+E1의 초기 상태는 D18에 따라 녹화 구간 직전의 명시적인 account·slot·code baseline을 선언한 anchor에서 넣는다. 일반 변화의 Before 값을 묵시적인 초기화로 사용하지 않는다. baseline은 이후 첫 변경 높이가 아닌 anchor 높이의 이력으로 보존하여 공개 조회와 rewind에서 같은 시작 값을 복원한다. 기존 계정/비영(非零) 슬롯의 시작 값이 없으면 coverage 오류다. 검증된 실행 입력이 부재를 명시한 새 계정은 기존 값이 없는 경우와 구분한다. 전체 상태 확보·검증 및 head에서의 운영 시작 도구는 E2다.
+
 API 읽기는 공개 generation과 일관된 read transaction에 묶는다. 읽는 동안 reorg의 첫 fence와 충돌하지 않도록 rewind와 공통인 transaction-level advisory shared lock을 사용한다. read-only transaction에서 row lock을 요구하지 않는다. try-lock 실패는 연결을 점유하며 기다리지 않고 재시도 오류로 반환한다. rows를 닫거나 취소하면 lock과 연결을 반환한다. 새 조회가 rewinding 상태를 만나면 명시적 retryable 오류를 반환한다. 모든 결과를 0/없음으로 바꿔 성공시키지 않는다.
 
 ### 2.4 reorg와 재시작

@@ -149,6 +149,7 @@ func TestDeclaredBackfillReadsLogsFromTheNode(t *testing.T) {
 			defer srv.Close()
 			dir := filepath.Join(t.TempDir(), "db")
 			app := startRecordsApp(t, srv, dir, sc, mode)
+			defer app.Shutdown()
 			runLiveUntil(t, app, 1_500)
 			app.Shutdown()
 

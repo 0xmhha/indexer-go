@@ -6,7 +6,7 @@
 
 - [설계](../codemine/runs/20261023-e1-execution/02-design.md), [결정](../decisions/20261023-e1-design/decision.md), [구현 계획](../codemine/runs/20261023-e1-execution/03-plan.md)
 - [기능별 체크리스트](../codemine/runs/20261023-e1-execution/checklist.md), [n/n-1/n-2 연속성](../codemine/runs/20261023-e1-execution/continuity.json)
-- U00 계획과 U01 wire는 [PR #210](https://github.com/0xmhha/indexer-go/pull/210)으로 CI 통과·squash merge·main 동기화했다. 현재 U02 재실행 recorder·독립 기록 검증의 로컬 기능 검사를 완료하고 제출 회귀를 진행한다. 실행부·DB·앱 연결의 나머지는 체크리스트를 따른다.
+- U00 계획과 U01 wire는 [PR #210](https://github.com/0xmhha/indexer-go/pull/210)으로 CI 통과·squash merge·main 동기화했다. U02 recorder는 PR #211로 CI 통과·squash/main 동기화했다. 현재 U03의 [PR #212](https://github.com/0xmhha/indexer-go/pull/212) CI에서 발견한 이벤트 종료 누락과 ACK quota 보완을 마쳤으며 최종 전체 로컬 회귀가 통과했다. 수정 커밋과 CI 갱신을 진행한다. 실행부·DB·앱 연결의 나머지는 체크리스트를 따른다.
 
 2회 실행과 노드 프로젝트 미수정, 기존 pool4개, RPC5 HTTP/s와 공개 직전 fresh를 유지한다. writer7개는 DB 연결7개를 뜻하지 않는다. 공개 경계·reorg·기록 무누락 검증의 구체 계약은 구현 계획을 따른다. 현재 문서는 최신 상태만 유지하며 과거 판본·수치·종료된 실험은 Git history로 확인한다.
 

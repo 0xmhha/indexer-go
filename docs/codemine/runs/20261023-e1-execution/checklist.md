@@ -4,17 +4,17 @@
 
 ## 현재
 
-- 진행 중: U02 로컬 GREEN 완료, 커밋·PR 제출. U00·U01은 PR #210으로 완료했다.
-- 다음: U02 필수 CI·squash/main 동기화 후 U03 durable spool·ACK RED.
-- 최근 완료 기능 n-1: U01 wire. n-2 기능은 아직 없으며 U00 계획은 별도 보존한다.
+- 진행 중: U03 PR #212의 종료·ACK quota 수정과 최종 로컬 회귀 완료, 수정 커밋·CI 갱신 대기. U02는 PR #211로 완료했다. U00·U01은 PR #210으로 완료했다.
+- 다음: 종료 누락 수정 검증·PR #212 갱신·CI·squash/main, 이후 U04 PostgreSQL 상태 포트.
+- 최근 완료 기능 n-1: U02 recorder(`4525ac6`, PR #211), n-2: U01 wire(`9f01b09`, PR #210).
 - `03-plan.md`는 사용자의 2026-10-24 위임에 따라 작성했다. 이전 구현 gate의 잠금은 이 위임으로 해제한다.
 
 | ID | 상태 | RED 근거 | GREEN·통합 근거 | PR·merge |
 | --- | --- | --- | --- | --- |
 | U00 | 완료 | 문서 작업, 해당 없음 | 문서 링크114·JSON·fmt·build·vet·lint·전체 race·PostgreSQL·cache lifecycle·examples·운영 초안 통과 | [#210](https://github.com/0xmhha/indexer-go/pull/210), `9f01b09` |
 | U01 | 완료 | API형 stub의 미구현 오류로6건 FAIL. raw RLP·조립 frame 상한 추가2건 FAIL | `make test-execwire`, wire lint, GOMAXPROCS=1/race/단일200회 통과. 별도 모듈 CI 연결 | [#210](https://github.com/0xmhha/indexer-go/pull/210), `9f01b09` |
-| U02 | 구현·검증 중 | recorder·Replay API stub RED와 재생성 clear·빈 code 추가 RED 확인 | recorder와 실제 EVM replay GREEN. 실제 WBFT/fee payer/NativeManager·독립 양방향 대조·최종 검사는 남음 | — |
-| U03 | 대기 | 미실행 | 미구현 | — |
+| U02 | 완료 | recorder·Replay API stub, clear·빈 code·조기 상한 추가 RED | 실제 EVM/WBFT·fee payer·Extra·독립 양방향 대조, root/PG/모듈 회귀·동시성200회 통과 | [#211](https://github.com/0xmhha/indexer-go/pull/211), `4525ac6` |
+| U03 | 검증 중 | stub6건 RED. ACK 재전송 identity1건·초기 identity/unknown temp2건 추가 RED | durable spool·ACK10단계 복구·quota·손상·취소/join GREEN, race·lint·단일200회 및 root/wire·PG 회귀와 영향 helper11건 검증 통과 | — |
 | U04 | 대기 | 미실행 | 미구현 | — |
 | U05 | 대기 | 미실행 | 미구현 | — |
 | U06 | 대기 | 미실행 | 미구현 | — |
@@ -45,11 +45,11 @@
 - root 전체 회귀는 `make test-race 'GOTEST=go test -p=2 -parallel=1 -timeout=30m'`, 실제 임시 fsync-on PostgreSQL은 `GOFLAGS='-mod=readonly -p=2 -parallel=1' make test-postgres`로 통과했다. 기존1500블록 records 검사의 병렬 실행30초 실패는 단독 실행으로 분리했고 runner 병렬도만 낮췄다. 이를 E1 RED나 성능 증거로 쓰지 않는다.
 - `make test-cache-lifecycle`, `make test-examples`, root/astgraph lint, build/vet, 운영 초안 Python·shell 검사도 통과했다. 선택 Anvil 검사는 해당 테스트 프로세스 PATH에서 Anvil을 제외해 skip했으며 실제 노드는 시작하지 않았다.
 - `FuzzDecode`·`FuzzResult`의 제한된 기능 fuzz 검사와 잘림·정수 overflow·JSON 깊이/token 상한 검사도 통과했다. fuzz 처리량을 성능 증거로 사용하지 않는다.
-- 다음 U02는 wire의 exact reference·ordinal·Finalize·before/after·raw RLP 계약을 재사용한다. 실제 EVM 검증과 upstream state commit 금지를 여기서 완료했다고 주장하지 않는다.
+- U02는 wire의 exact reference·ordinal·Finalize·before/after·raw RLP 계약을 재사용한다. 실제 EVM 검증과 upstream state commit 금지를 여기서 완료했다고 주장하지 않는다.
 
 PR #210은 lint/test/postgres/examples 통과 후 `9f01b09493677cdfbd6dd40c861cf10d644b9bb8`로 squash merge했고 main을 fast-forward 동기화했다.
 
-## U02 현재 확인과 남은 검사
+## U02 계약과 검증 근거
 
 - `newRecorder`와 `Replay`를 API형 stub으로 두고 각각 `ErrNotImplemented` RED를 확인했다. 잘못된 EVM fixture의 root나 컴파일 오류는 RED로 세지 않았다.
 - recorder: account/storage before-after, Extra, revert, 거래 간 원복, code와 삭제, 원본 갱신을 유지한 record-only omission(account/storage/code), CopyTrie 격리, code batch 포함 commit 금지와 backing DB 비기록이 GREEN이다.
@@ -61,3 +61,24 @@ PR #210은 lint/test/postgres/examples 통과 후 `9f01b09493677cdfbd6dd40c861cf
 - transaction 수65536 상한의 조기 차단도 RED(`ErrRootMismatch`로 늦게 거절) 후 `execwire.ErrLimit`로 먼저 거절하도록 보완했다.
 
 - 고정 fork의 `core/sender_cacher.go`는 package init에서 `runtime.NumCPU()` 상주 worker를 만들고 종료 API를 제공하지 않는다. 첫 goleak 실패의 stack을 원본과 대조해 그 정확한 top 함수만 예외 처리했고, 수정 후 단일200회 전체 실행을 다시 통과했다. 소유 callback/worker를 일괄 제외하지 않았다.
+
+PR #211은 필수 CI4개 통과 후 `4525ac6ddd630b60f9a2d93b4653228ef934817d`로 squash merge하고 main을 fast-forward 동기화했다.
+
+## U03 계약과 검증 근거
+
+- 기준 `4525ac6ddd630b60f9a2d93b4653228ef934817d`에서 API형 stub6건이 `ErrNotImplemented`로 RED였다. 컴파일/환경 실패는 RED로 세지 않았다.
+- 추가 RED: ACK된 결과 Append가 원래 Size를 잃는 결함1건, 미완료 identity를 다른 체인으로 재초기화·unknown temporary를 임의 이동하는 결함2건. retained ACK history 재사용과 fail-closed identity/temporary 정책으로 수정했다.
+- GREEN: file fsync→rename→directory fsync 뒤 공개; exact·contiguous ACK; ACK10단계 장애 복구; 다음 미확인 원본 보존; digest/length 손상 보존; quota와 단일 소유권·symlink 거절; 취소·Close join. `go test -race -count=1 ./...`와 spool `GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConcurrentCancellationAndCloseJoin$' ./spool` 통과.
+- [spool 계약](05-spool-contract.md)과 모듈 README가 현재 API·복구·상한을 설명한다. 전체 회귀/CI 완료 전 완료로 표시하지 않는다.
+
+- 전체 root/wire race는 통과했다. make 마지막 executor 단계는 기본 캐시의 fork lookup이 GOPROXY=off로 막혀 실행 전 실패했고, 전용 module cache로 executor 전체 race를 다시 통과했다. 제품 의존성이나 Go/RPC/DB 설정은 바꾸지 않았다.
+- 전체 PostgreSQL 실행에서 어댑터·StableNet bundle은 통과했고 기존 `TestDeclaredBackfillReadsLogsFromTheNode/per_block`만1,500블록의 고정30초 대기에 실패했다. 같은 기능의 root race와 분리 PG/race는 통과했다. helper가 기존1분 context를 끝까지 사용하고 조기 Run 오류·마지막 높이를 보고하며 실패/성공 모두 cancel·join하도록 수정했다. 최초 app의 실패 경로 Shutdown도 추가했다. 기능 단언·생산 경로·RPC 예산은 바꾸지 않았다. 영향받는11개 기존 기능은 root와 실제 PG에서 race로 통과했다. 전체 CI는 PR에서 다시 실행한다.
+
+- 최종 build/vet/lint(root·executor·astgraph), cache lifecycle, examples, 운영 Python·shell, JSON·문서 링크18개와 fmt 검사가 통과했다. 실제 노드·peer·추가 성능 측정은 보류했고 선택 Anvil은 검사 PATH에서 제외했다.
+
+- PR #212 첫 CI는 lint/examples/postgres 통과, test의 기존 `TestOutboxSequenceSurvivesCrashAndRestart`에서 sequence27 대신29를 받아 실패했다. 실제 원인은 앱이 relay보다 EventBus를 먼저 닫고, 버스가 수락한 publish queue를 버릴 수 있는 종료 경계였다. 이를 flaky 재실행으로 넘기지 않았다.
+- `TestEventBusStopDrainsAccepted`(수락128개 중 전달0), `TestEventBusConcurrentStopPublishPreservesAccepted`(수락 이벤트27개 누락) RED 후, Publish/Stop admission fence·수락 큐 drain·relay-before-bus join을 구현했다. 두 새 동시성 검사는 단일 GOMAXPROCS=1/race/count=200으로 GREEN이다. 정상 종료·버퍼 정책의 범위는 architecture 문서에 명시했다. 제품 코드 수정 후 전체 root/wire/executor/spool race와 실제 fsync-on PG 어댑터·앱·StableNet bundle, build/vet/lint·cache·examples·운영 초안 검사를 새로 통과했다.
+
+- ACK quota 최종 검토: `TestACKFailureCannotBypassCapacity`는 실패한 ACK 뒤 재open 없이 다시 써지는 결함으로 RED, `TestACKRequiresReservedMetadataSpace`는 metadata reserve 부족에도 ACK가 진행되는 결함으로 RED였다. 실패 receipt 뒤 reopen을 요구하고 ACK/receipt 복구 전 quota를 검사하도록 수정했다. 전체 executor/spool race와 lint가 GREEN이다. ACK된 원본 또는 미확인 입력을 quota 확보용으로 임의 삭제하지 않는다.
+
+- 최종 전체 명령은 module-cache 선택을 검사 subprocess에만 적용한 `make test-race`(root/wire/executor/spool)와 `make test-postgres` 모두 exit0이다. 모든 새 동시성 검사의 단일200회 근거와 초기 실패/수정 범위를 보존한다. 추가 성능 측정·실제 노드·peer는 실행하지 않았다.
