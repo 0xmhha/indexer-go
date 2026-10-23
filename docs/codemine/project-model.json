@@ -1,0 +1,61 @@
+{
+  "schema_version": "1",
+  "project": "indexer-go",
+  "layers": ["delivery", "application", "infrastructure", "domain"],
+  "modules": [
+    {"id": "mod-app", "name": "Engine wiring", "path": "pkg/app", "layer": "delivery", "responsibility": "설정을 읽어 실행 수집 모드를 구성하고 수명을 관리한다", "capabilities": ["cap-exec-mode"], "depends_on": ["mod-execution", "mod-fetch", "mod-pg"]},
+    {"id": "mod-execution", "name": "Execution intake", "path": "pkg/execution", "layer": "application", "responsibility": "실행부에서 블록 결과를 받아 블록 단위로 모으고 표별 queue와 watermark를 관리한다", "capabilities": ["cap-intake", "cap-dispatch", "cap-watermark", "cap-rewind"], "depends_on": ["mod-execwire", "mod-pg", "mod-fetch"]},
+    {"id": "mod-fetch", "name": "Ordered feature writer", "path": "pkg/fetch", "layer": "application", "responsibility": "기능 표를 블록 순서대로 한 writer가 쓴다", "capabilities": ["cap-feature-write"], "depends_on": ["mod-pg"]},
+    {"id": "mod-pg", "name": "PostgreSQL storage", "path": "pkg/storage/postgres", "layer": "infrastructure", "responsibility": "표 schema와 migration을 소유하고 핵심 표, 상태 표, cursor를 쓴다", "capabilities": ["cap-core-tables", "cap-state-tables"], "depends_on": []},
+    {"id": "mod-execwire", "name": "Execution wire", "path": "execwire", "layer": "domain", "responsibility": "실행부와 indexer 사이의 프레임과 메시지 형식을 정한다", "capabilities": ["cap-wire"], "depends_on": []},
+    {"id": "mod-executor", "name": "StableNet executor", "path": "x/stablenet/executor", "layer": "delivery", "responsibility": "go-stablenet 노드로 블록을 받고 검증하고 실행해, 거래별 상태 변화를 구해 IPC로 보낸다", "capabilities": ["cap-node", "cap-export", "cap-attribution"], "depends_on": ["mod-execwire"]}
+  ],
+  "capabilities": [
+    {"id": "cap-exec-mode", "name": "실행 수집 모드 구성", "owner_module": "mod-app", "status": "planned"},
+    {"id": "cap-intake", "name": "블록 결과 수신과 조립", "owner_module": "mod-execution", "status": "planned"},
+    {"id": "cap-dispatch", "name": "표별 queue 분배", "owner_module": "mod-execution", "status": "planned"},
+    {"id": "cap-watermark", "name": "visible_height 관리", "owner_module": "mod-execution", "status": "planned"},
+    {"id": "cap-rewind", "name": "reorg와 되감기 처리", "owner_module": "mod-execution", "status": "planned"},
+    {"id": "cap-feature-write", "name": "기능 표 쓰기", "owner_module": "mod-fetch", "status": "implemented"},
+    {"id": "cap-core-tables", "name": "블록·거래·receipt·로그 표 쓰기", "owner_module": "mod-pg", "status": "implemented"},
+    {"id": "cap-state-tables", "name": "상태 이력과 지금 값 표 쓰기", "owner_module": "mod-pg", "status": "planned"},
+    {"id": "cap-wire", "name": "프레임 부호화와 해독", "owner_module": "mod-execwire", "status": "planned"},
+    {"id": "cap-node", "name": "go-stablenet 노드 조립과 블록 수신", "owner_module": "mod-executor", "status": "planned"},
+    {"id": "cap-export", "name": "블록 이벤트로 결과 내보내기", "owner_module": "mod-executor", "status": "planned"},
+    {"id": "cap-attribution", "name": "거래별 상태 변화 귀속과 trie 비교 맞춰 보기", "owner_module": "mod-executor", "status": "planned"}
+  ],
+  "scenarios": [
+    {"id": "scn-follow-head", "name": "head를 따라감", "status": "planned", "entrypoints": ["indexer --indexer.mode=execution"],
+     "steps": [
+       {"capability_id": "cap-node", "module_id": "mod-executor"},
+       {"capability_id": "cap-attribution", "module_id": "mod-executor"},
+       {"capability_id": "cap-export", "module_id": "mod-executor"},
+       {"capability_id": "cap-wire", "module_id": "mod-execwire"},
+       {"capability_id": "cap-intake", "module_id": "mod-execution"},
+       {"capability_id": "cap-dispatch", "module_id": "mod-execution"},
+       {"capability_id": "cap-core-tables", "module_id": "mod-pg"},
+       {"capability_id": "cap-state-tables", "module_id": "mod-pg"},
+       {"capability_id": "cap-feature-write", "module_id": "mod-fetch"},
+       {"capability_id": "cap-watermark", "module_id": "mod-execution"}
+     ], "tests": []},
+    {"id": "scn-restart", "name": "재시작과 되감기", "status": "planned", "entrypoints": ["Hello(committed=k)"],
+     "steps": [
+       {"capability_id": "cap-exec-mode", "module_id": "mod-app"},
+       {"capability_id": "cap-wire", "module_id": "mod-execwire"},
+       {"capability_id": "cap-node", "module_id": "mod-executor"},
+       {"capability_id": "cap-export", "module_id": "mod-executor"}
+     ], "tests": []},
+    {"id": "scn-reorg", "name": "reorg", "status": "planned", "entrypoints": ["Rewind(f)"],
+     "steps": [
+       {"capability_id": "cap-export", "module_id": "mod-executor"},
+       {"capability_id": "cap-rewind", "module_id": "mod-execution"},
+       {"capability_id": "cap-state-tables", "module_id": "mod-pg"},
+       {"capability_id": "cap-feature-write", "module_id": "mod-fetch"}
+     ], "tests": []},
+    {"id": "scn-writer-stall", "name": "writer 하나가 늦거나 죽음", "status": "planned", "entrypoints": ["writer failure"],
+     "steps": [
+       {"capability_id": "cap-state-tables", "module_id": "mod-pg"},
+       {"capability_id": "cap-watermark", "module_id": "mod-execution"}
+     ], "tests": []}
+  ]
+}
