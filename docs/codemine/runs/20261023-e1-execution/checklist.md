@@ -4,16 +4,16 @@
 
 ## 현재
 
-- 진행 중: U01 로컬 GREEN 완료, 첫 PR 제출. U00 계획 문서를 함께 포함한다.
-- 다음: 필수 CI·squash merge·main 동기화 후 U02 실행 recorder의 RED.
-- 최근 완료 기능 n-1/n-2: 아직 없음.
+- 진행 중: U02 로컬 GREEN 완료, 커밋·PR 제출. U00·U01은 PR #210으로 완료했다.
+- 다음: U02 필수 CI·squash/main 동기화 후 U03 durable spool·ACK RED.
+- 최근 완료 기능 n-1: U01 wire. n-2 기능은 아직 없으며 U00 계획은 별도 보존한다.
 - `03-plan.md`는 사용자의 2026-10-24 위임에 따라 작성했다. 이전 구현 gate의 잠금은 이 위임으로 해제한다.
 
 | ID | 상태 | RED 근거 | GREEN·통합 근거 | PR·merge |
 | --- | --- | --- | --- | --- |
-| U00 | 로컬 완료 | 문서 작업, 해당 없음 | 문서 링크114·JSON·fmt·build·vet·lint·전체 race·PostgreSQL·cache lifecycle·examples·운영 초안 통과 | U01과 함께 제출 |
-| U01 | 로컬 GREEN | API형 stub의 미구현 오류로6건 FAIL. raw RLP·조립 frame 상한 추가2건 FAIL | `make test-execwire`, wire lint, GOMAXPROCS=1/race/단일200회 통과. 별도 모듈 CI 연결 | 제출 중 |
-| U02 | 대기 | 미실행 | 미구현 | — |
+| U00 | 완료 | 문서 작업, 해당 없음 | 문서 링크114·JSON·fmt·build·vet·lint·전체 race·PostgreSQL·cache lifecycle·examples·운영 초안 통과 | [#210](https://github.com/0xmhha/indexer-go/pull/210), `9f01b09` |
+| U01 | 완료 | API형 stub의 미구현 오류로6건 FAIL. raw RLP·조립 frame 상한 추가2건 FAIL | `make test-execwire`, wire lint, GOMAXPROCS=1/race/단일200회 통과. 별도 모듈 CI 연결 | [#210](https://github.com/0xmhha/indexer-go/pull/210), `9f01b09` |
+| U02 | 구현·검증 중 | recorder·Replay API stub RED와 재생성 clear·빈 code 추가 RED 확인 | recorder와 실제 EVM replay GREEN. 실제 WBFT/fee payer/NativeManager·독립 양방향 대조·최종 검사는 남음 | — |
 | U03 | 대기 | 미실행 | 미구현 | — |
 | U04 | 대기 | 미실행 | 미구현 | — |
 | U05 | 대기 | 미실행 | 미구현 | — |
@@ -46,3 +46,18 @@
 - `make test-cache-lifecycle`, `make test-examples`, root/astgraph lint, build/vet, 운영 초안 Python·shell 검사도 통과했다. 선택 Anvil 검사는 해당 테스트 프로세스 PATH에서 Anvil을 제외해 skip했으며 실제 노드는 시작하지 않았다.
 - `FuzzDecode`·`FuzzResult`의 제한된 기능 fuzz 검사와 잘림·정수 overflow·JSON 깊이/token 상한 검사도 통과했다. fuzz 처리량을 성능 증거로 사용하지 않는다.
 - 다음 U02는 wire의 exact reference·ordinal·Finalize·before/after·raw RLP 계약을 재사용한다. 실제 EVM 검증과 upstream state commit 금지를 여기서 완료했다고 주장하지 않는다.
+
+PR #210은 lint/test/postgres/examples 통과 후 `9f01b09493677cdfbd6dd40c861cf10d644b9bb8`로 squash merge했고 main을 fast-forward 동기화했다.
+
+## U02 현재 확인과 남은 검사
+
+- `newRecorder`와 `Replay`를 API형 stub으로 두고 각각 `ErrNotImplemented` RED를 확인했다. 잘못된 EVM fixture의 root나 컴파일 오류는 RED로 세지 않았다.
+- recorder: account/storage before-after, Extra, revert, 거래 간 원복, code와 삭제, 원본 갱신을 유지한 record-only omission(account/storage/code), CopyTrie 격리, code batch 포함 commit 금지와 backing DB 비기록이 GREEN이다.
+- 삭제·재생성의 새 storage trie가 시작되는 clear와 빈 code 제거는 추가 RED 후 수정했다. 존재하는 재생성 계정 fixture에는 실제 CREATE처럼 nonce를 설정했다.
+- 실제 EVM 첫 실행과 Replay의 state/receipt root, 원본 header 보존, header.Root를 덮어쓰는 Finalize 모형의 원본 root 거절, 잘못된 stored receipt와 취소가 GREEN이다.
+- 실제 WBFT Finalize·fee payer·native mint와 NativeManager Extra, 독립 양방향 account/storage trie 대조, EVM 내부 취소/loop 중단·callback join, 생성 후 같은 블록에서 SELFDESTRUCT, 실제 EVM revert, path-mode parent와 missing-state fail-closed가 GREEN이다. WBFT fixture는 Applepie를 켰으며 seal admission을 검사했다고 주장하지 않는다. 실행부 build/vet/lint/race와 단일 GOMAXPROCS=1/race/200회, goleak 검사가 통과했다. upstream 패키지 초기화 sender-cache의 정확한 함수만 전역 상주 worker로 구분한다. root/wire 전체 race·PostgreSQL·build/vet/lint·astgraph lint·cache lifecycle·examples·오프라인 운영 검사와 staged/history secret 검사도 통과했다. 선택 Anvil은 테스트 PATH에서 제외했다. 실제 노드 서비스·peer·성능 측정은 실행하지 않았다.
+- `Replay`는 DAO/beacon의 pre-transaction protocol 변경 조합을 명시적으로 거절한다. 현재 StableNet 구성의 지원 범위를 확인하고 runtime 구성에서 같은 경계를 검사해야 한다. 잘못된 transaction/Finalize 원인으로 기록하지 않는다.
+
+- transaction 수65536 상한의 조기 차단도 RED(`ErrRootMismatch`로 늦게 거절) 후 `execwire.ErrLimit`로 먼저 거절하도록 보완했다.
+
+- 고정 fork의 `core/sender_cacher.go`는 package init에서 `runtime.NumCPU()` 상주 worker를 만들고 종료 API를 제공하지 않는다. 첫 goleak 실패의 stack을 원본과 대조해 그 정확한 top 함수만 예외 처리했고, 수정 후 단일200회 전체 실행을 다시 통과했다. 소유 callback/worker를 일괄 제외하지 않았다.

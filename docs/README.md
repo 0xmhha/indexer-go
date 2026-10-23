@@ -78,7 +78,7 @@ These options have separate supply and completion contracts. Enabling one does n
 
 ## Design, validation and migration
 
-The standalone [execution wire v1 module](../execwire/README.md) implements bounded framing, journal encoding and cancellable transport. The [E1 checklist](codemine/runs/20261023-e1-execution/checklist.md) distinguishes this library from the remaining executor, PostgreSQL and application integration.
+The standalone [execution wire v1 module](../execwire/README.md) implements bounded framing, journal encoding and cancellable transport. The [StableNet recorder](../x/stablenet/executor/README.md) implements second-pass state journals with offline EVM/WBFT validation. The [E1 checklist](codemine/runs/20261023-e1-execution/checklist.md) distinguishes this library from the remaining executor, PostgreSQL and application integration.
 
 Use the [analysis index](analysis/README.md) for design documents and dated evidence. It distinguishes implementation contracts, proposed work, historical measurements and the earlier ExEx comparison.
 
