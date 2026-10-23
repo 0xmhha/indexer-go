@@ -75,6 +75,9 @@ go-ethereum은 75개 패키지가 import한다. 대부분 `common`(536곳), `cor
 
 ## 3. 목표 구조
 
+> **10/23 갱신.** E1의 상세 설계와 결정이 정해졌다. 실행부는 go-stablenet 노드(`eth.New`)로 블록을 전파받아 자기 노드 DB에 저장하고, 블록을 다시 실행해 거래별 상태 변화를 IPC로 indexer에 보낸다. 실행부는 PostgreSQL에 접근하지 않고, indexer가 표마다 writer를 두어 archive 수준으로 쌓는다. 이 장의 내용 가운데 이와 다른 부분(실행부가 PostgreSQL에서 trie 노드를 읽는다, 단일 writer가 실행 결과를 쓴다 등)은 [E1 결정](../decisions/20261023-e1-design/decision.md)과 [E1 설계](../codemine/runs/20261023-e1-execution/02-design.md)가 대신한다.
+
+
 ```mermaid
 flowchart LR
   P[peer 또는 CL] --> R[수신 goroutine<br/>header 검증]
@@ -296,6 +299,9 @@ peer만으로 처리하려면 체인의 합의를 우리가 검증해야 한다.
 
 ## 8. 체인별 모듈
 
+> **10/23 갱신.** E1의 상세 설계와 결정이 정해졌다. 실행부는 go-stablenet 노드(`eth.New`)로 블록을 전파받아 자기 노드 DB에 저장하고, 블록을 다시 실행해 거래별 상태 변화를 IPC로 indexer에 보낸다. 실행부는 PostgreSQL에 접근하지 않고, indexer가 표마다 writer를 두어 archive 수준으로 쌓는다. 이 장의 내용 가운데 이와 다른 부분(실행부가 PostgreSQL에서 trie 노드를 읽는다, 단일 writer가 실행 결과를 쓴다 등)은 [E1 결정](../decisions/20261023-e1-design/decision.md)과 [E1 설계](../codemine/runs/20261023-e1-execution/02-design.md)가 대신한다.
+
+
 ### 8.1 체인별 실행부
 
 | 순서 | 체인 | 실행 규칙 | import 여부 | 블록 수신 | 시작 상태 |
@@ -387,6 +393,9 @@ E0은 외부 RPC에 접속하고 go-stablenet 소스를 받아야 한다. 진행
 ---
 
 ## 11. 정한 것과 정해야 할 것
+
+> **10/23 갱신.** E1의 상세 설계와 결정이 정해졌다. 실행부는 go-stablenet 노드(`eth.New`)로 블록을 전파받아 자기 노드 DB에 저장하고, 블록을 다시 실행해 거래별 상태 변화를 IPC로 indexer에 보낸다. 실행부는 PostgreSQL에 접근하지 않고, indexer가 표마다 writer를 두어 archive 수준으로 쌓는다. 이 장의 내용 가운데 이와 다른 부분(실행부가 PostgreSQL에서 trie 노드를 읽는다, 단일 writer가 실행 결과를 쓴다 등)은 [E1 결정](../decisions/20261023-e1-design/decision.md)과 [E1 설계](../codemine/runs/20261023-e1-execution/02-design.md)가 대신한다.
+
 
 | 항목 | 결정 |
 |---|---|

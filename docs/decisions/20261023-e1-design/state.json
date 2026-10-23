@@ -1,0 +1,129 @@
+{
+  "title": "E1 실행 수집 상세 설계",
+  "brownfield": true,
+  "created_at": "2026-10-23T05:35:37+00:00",
+  "topics": [
+    {
+      "id": "D1",
+      "title": "바뀐 상태를 꺼내는 방법",
+      "status": "decided"
+    },
+    {
+      "id": "D2",
+      "title": "실행부가 header를 얻는 곳",
+      "status": "decided"
+    },
+    {
+      "id": "D3",
+      "title": "실행부가 trie 노드와 code를 얻는 곳",
+      "status": "decided"
+    },
+    {
+      "id": "D4",
+      "title": "실행부와 DB의 높이가 어긋날 때",
+      "status": "decided"
+    },
+    {
+      "id": "D5",
+      "title": "wire 인코딩과 연결",
+      "status": "decided"
+    },
+    {
+      "id": "D6",
+      "title": "상태 표 구조",
+      "status": "decided"
+    },
+    {
+      "id": "D7",
+      "title": "token.metadata의 eth_call",
+      "status": "decided"
+    },
+    {
+      "id": "D8",
+      "title": "E1 시험의 기준 블록",
+      "status": "decided"
+    },
+    {
+      "id": "D9",
+      "title": "E1 시험의 시작 상태",
+      "status": "decided"
+    },
+    {
+      "id": "D10",
+      "title": "실행부가 가져오는 go-stablenet 범위 (peer, 검증, 실행)",
+      "status": "decided"
+    },
+    {
+      "id": "D11",
+      "title": "노드 클라이언트 DB 유지 여부",
+      "status": "decided"
+    },
+    {
+      "id": "D12",
+      "title": "PostgreSQL 테이블을 쓰는 주체",
+      "status": "decided"
+    },
+    {
+      "id": "D13",
+      "title": "실행 결과를 빠르게 넘기는 방법 (메모리 전달 vs 노드 DB 파일 읽기)",
+      "status": "decided"
+    },
+    {
+      "id": "D14",
+      "title": "노드 DB를 필요한 만큼만 유지하는 방법",
+      "status": "decided"
+    },
+    {
+      "id": "D15",
+      "title": "E1 완료 기준과 속도 목표",
+      "status": "decided"
+    },
+    {
+      "id": "D16",
+      "title": "archive 쿼리와 표별 writer의 완료 기준 추가",
+      "status": "decided"
+    },
+    {
+      "id": "D17",
+      "title": "증명 tool을 만드는 시점",
+      "status": "decided"
+    },
+    {
+      "id": "D18",
+      "title": "D9 시작 상태를 지금 구조에 맞추기",
+      "status": "decided"
+    },
+    {
+      "id": "D19",
+      "title": "거래별 상태 변화를 얻는 방법 (tracer 대신)",
+      "status": "decided"
+    },
+    {
+      "id": "D20",
+      "title": "표 이름과 writer 단위",
+      "status": "decided"
+    }
+  ],
+  "rounds": 46,
+  "ambiguity": 0.157,
+  "breakdown": {
+    "goal": {
+      "score": 0.83,
+      "justification": "13·23·31·43회차에서 목표를 직접 밝혔지만 42회차의 목표 한 문장은 확정하지 않았다."
+    },
+    "constraints": {
+      "score": 0.86,
+      "justification": "13·19·21·25·31·36~38회차에서 구체적인 경계를 정했다."
+    },
+    "success": {
+      "score": 0.87,
+      "justification": "29·39회차에서 기능 기준 1~7과 속도 기준 B를 확인했다."
+    },
+    "context": {
+      "score": 0.8,
+      "justification": "41·45·46회차에서 D9, D19, D20을 정했지만 44회차 반증 지적 일부는 사용자 답으로 다루지 않았다."
+    }
+  },
+  "streak": 3,
+  "schema_version": 1
+}
