@@ -2,11 +2,11 @@
 
 입력:
 - [01-discovery](01-discovery.md): 10/23 승인
-- [결정 기록](../../../decisions/20261023-e1-design/decision.md): D1~D20과 43회차 데이터 관점 설명
+- [결정 기록](../../../decisions/20261023-e1-design/decision.md): D1~D20과 데이터 관점
 
-1판은 반증 검토에서 blocker 6건, major 13건, minor 6건을 받았다. 이 2판은 그 지적을 반영했다. 사용자 결정이 필요했던 두 건은 D19와 D20으로 정했다. 나머지는 설계 결함이라 고쳤고, 어디를 고쳤는지는 12장에 적었다.
+D19의 2회 실행과 D20의 writer 7개를 유지한다. 1차 실행은 정상 import, 2차 실행은 상태 변화 기록이며 노드 상태를 다시 commit하지 않는다.
 
-이 문서가 승인되면 [실행 수집 설계](../../../analysis/execution-ingest-design.md)의 3장, 8장, 9장, 11장을 이 내용으로 고친다.
+이 문서는 승인된 E1 설계다. 2026-10-24에 사용자가 구현·검증·추천 결정을 위임했다. [구현 계획](03-plan.md)이 연결 4개, 공개·reorg·fresh 경계와 기록 검증을 구체화한다. 현재 진행은 [체크리스트](checklist.md)를 따른다. 과거 판본과 검토 이력은 Git history로 확인한다.
 
 표기:
 - **확인**: 코드를 읽었거나 돌려 본 것
@@ -24,9 +24,9 @@ E1은 StableNet 블록을 별도 실행부에서 go-stablenet 규칙으로 실�
 문서는 데이터에서 출발한다. 2장~4장은 데이터가 어디서 생기고, 어디에 얼마나 머물고, 어디로 가는지 정한다. 5장~6장은 그 흐름에 맞는 구조와 알고리즘을, 7장은 자원 상한을, 9장은 기능별 검증을 정한다.
 
 **E1에서 시작하는 조건.**
-- E1의 완료 기준은 시험으로 판단한다. 시험은 녹화한 testnet 구간과 genesis부터 돌리는 로컬 체인으로 한다(D8, D9, D18).
+- E1 구현은 녹화 fixture와 genesis 기반 EVM 라이브러리 검사로 검증한다(D8, D9, D18). 실제 노드 서비스·peer·성능 검사는 보류하며 별도 증거로 관리한다.
 - 운영 노드를 처음부터 띄우는 bootstrap은 E2다. 그래서 E1의 실행부는 아직 testnet head에서 바로 운영을 시작하지 못한다.
-- 속도 측정(D15)은 예외다. 이때는 실행부 노드를 snap sync로 head 근처까지 맞춘 뒤 잰다. 그 경우 처음 보는 계정은 PostgreSQL에 이전 이력이 없으므로, 그 계정의 첫 행에 `baseline=true`를 단다(4.2).
+- 속도 측정(D15)은 현재 보류다. 추후 승인된 측정에서는 실행부 노드를 snap sync로 head 근처까지 맞춘다. 그 경우 처음 보는 계정은 PostgreSQL에 이전 이력이 없으므로, 그 계정의 첫 행에 `baseline=true`를 단다(4.2).
 
 하지 않는 것은 decision.md 4장과 7장 그대로다. E2~E6, 계약 호출을 실행부로 옮기는 일, Pebble 지원, 기존 RPC 경로 변경이 여기에 들어간다.
 
@@ -99,6 +99,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 |---|---|---|
 | height | bigint | |
 | block_time | timestamptz | 날짜 쿼리용 |
+| ordinal | bigint | baseline→거래 순서→Finalize의 실행 순서. tx_index=-1를 정렬에 사용하지 않는다 |
 | tx_index | integer | 블록 단위 변화는 -1 |
 | tx_hash | bytea null | |
 | cause | smallint | 0 거래, 1 블록 단위(`Finalize`), 2 genesis, 3 시작 상태(D18) |
@@ -117,7 +118,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 - 같은 거래 안의 여러 변화는 첫 전 값과 마지막 후 값 한 행으로 합친다.
 - base fee 분배와 system contract 전이는 둘 다 `Finalize` 안에서 일어난다. 그래서 cause 1 하나로 묶는다. 둘을 나누려면 `Finalize`의 내부 단계를 다시 구현해야 하는데, D11을 고른 이유와 맞지 않는다.
 
-**`state_storage_changes`**: 컬럼은 (height, block_time, tx_index, tx_hash, cause, address, slot, value_before, value_after, baseline)이다. 기본 key는 (height, tx_index, cause, address, slot)이고, 색인은 (address, slot, height desc)다. 계정의 `storage_cleared`가 참이면, indexer는 그 주소의 `state_storage` 행마다 value_after=0인 행을 만든다.
+**`state_storage_changes`**: 컬럼은 (height, ordinal, block_time, tx_index, tx_hash, cause, address, slot, value_before, value_after, baseline)이다. 기본 key는 (height, tx_index, cause, address, slot)이고, 색인은 (address, slot, height desc)다. 계정의 `storage_cleared`가 참이면, indexer는 clear tombstone을 기록하고 공개 시점 조회와 rollback에서 clear 이전 슬롯을 되살리지 않는다.
 
 **`state_accounts`**(지금 값): 기본 key는 address다. 컬럼은 nonce, balance, code_hash, storage_root, extra, first_height, last_height, last_tx_hash다.
 
@@ -127,11 +128,11 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 
 **`state_code`**: 기본 key는 code_hash이고, 컬럼은 code, first_height다. 삽입만 한다.
 
-**`exec_cursors`**: writer마다 (name, height, hash)를 둔다. writer는 자기 표를 쓰는 트랜잭션에서 이 값을 함께 갱신한다.
+**`exec_cursors`**: writer마다 (name, generation, height, hash, digest)를 둔다. writer는 자기 표를 쓰는 트랜잭션에서 이 값을 함께 갱신한다. `exec_parts`의 블록별 완료 기록으로 연속성·동일 입력을 확인하며 최고 높이만으로 추정하지 않는다.
 
 **`exec_rewind`**: 되돌리기가 진행 중일 때만 (target)을 둔다(5.6).
 
-**meta `exec/visible_height`**: 모든 writer cursor의 최솟값이다.
+**공개 control**: visible height/hash, generation, rewind 상태를 유지한다. 공개 transaction이 정확히 일치하는7개 결과와 기능 처리를 확인하고 새 fresh 검사를 통과한 뒤 갱신한다. API와 source ACK의 유일한 완료 경계다.
 
 **partition.** `*_changes` 표는 `execution.partition_blocks`(기본 1,000,000블록, 추정값)마다 partition을 만든다. writer는 다음 partition이 필요해지기 전에 미리 만든다.
 
@@ -177,7 +178,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
    - 감싼 쪽은 바꾸기 직전 값을 원래 trie에서 읽어 전 값으로 삼는다.
    - fee payer, NativeManager, precompile의 쓰기도 모두 상태 객체를 거치므로 여기서 잡힌다.
 4. 마지막 거래 뒤 엔진의 `Finalize`를 적용하고 `IntermediateRoot`를 한 번 더 부른다. 이때 잡힌 것이 블록 단위 변화(cause 1)다.
-5. **빠짐없음 확인.** 4에서 나온 root가 header의 state root와 같아야 한다. root는 기록한 갱신으로만 계산되므로, 같으면 기록이 빠짐없다. 다르면 그 블록을 내보내지 않고 실행부가 멈춘다.
+5. **실행 결과 확인.** 4에서 나온 root가 header의 state root와 같아야 한다. 다르면 내보내지 않는다. 이 확인만으로 기록 목록의 무누락을 입증하지 않는다. 실제 trie 갱신은 전달하면서 기록만 버리는 fault와 독립 양방향 trie 비교를 검사한다([구현 계획 2.6](03-plan.md#26-실행-기록과-검증)).
 6. receipt는 다시 실행한 결과가 아니라 노드가 저장한 것(`bc.GetReceiptsByHash`)을 consensus RLP로 보낸다. 다시 실행한 receipt와 노드 receipt의 root가 같은지도 확인한다.
 7. 계정은 주소순, 슬롯은 (주소, 슬롯)순으로 정렬한다. 그래서 같은 블록이면 같은 바이트가 나온다.
 
@@ -197,12 +198,12 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 ### 5.4 표별 writer와 visible_height
 
 - **assembler.** 블록을 완성하면 각 queue에 넣는다.
-- **writer.** 자기 cursor보다 높은 연속 높이만 꺼낸다. 이미 쓴 높이는 건너뛴다. 그래서 다시 연결해도 같은 행을 두 번 쓰지 않는다(반증 CR-10).
+- **writer.** 자기 cursor보다 높은 연속 높이만 꺼낸다. 이미 쓴 generation·height·hash·digest가 모두 같은 결과만 재사용한다. 높이만 같다고 건너뛰지 않는다.
   - 묶음 크기: 따라잡을 때는 queue 상한 이하, head를 따라갈 때는 1블록이다.
   - 자기 표에 COPY로 쓰고, 같은 트랜잭션에서 cursor를 갱신하고 커밋한다.
   - 상태 writer는 COPY 전에 같은 트랜잭션에서 그 블록이 건드린 key의 지금 값을 한 번에 읽는다(`= ANY`). 그리고 실행부가 보낸 전 값과 비교한다. 다르면 그 블록을 쓰지 않고 멈춘다. 이전 행이 없는 key는 `baseline=true`일 때만 받아들인다.
-- **watermark.** goroutine 하나가 `visible_height = min(모든 cursor)`를 계산한다. 기능 writer의 cursor도 이 계산에 들어간다.
-- **조회 필터(반증 CR-05).** 실행 수집 모드에서는 postgres 읽기 함수가 핵심 표와 상태 표를 읽을 때 늘 `높이 ≤ visible_height` 조건을 붙인다. hash로 찾는 조회도 같다. 예를 들어 `transaction(hash)`는 찾은 행의 block_number가 visible_height를 넘으면 없음으로 답한다. 주소 색인과 로그 색인도 같은 조건을 붙인다.
+- **watermark.** 표별 저장은 미공개 durable 자료다. 같은 generation·height·hash의 7개 결과가 모인 뒤 기능 writer의 transaction에서 기능 표·outbox·공개 높이를 원자적으로 commit한다. 바로 직전의 새 fresh 검사와 응답 후 epoch fence를 통과해야 공개·ACK한다([구현 계획 2.2](03-plan.md#22-미공개-저장과-공개-commit)).
+- **조회.** 실행 수집 모드의 불변 행은 `높이 ≤ visible_height`로 제한한다. hash·주소·로그·통계에도 적용한다. 작업용 최신 상태의 last_height만 필터링하지 않고 이력에서 공개 시점의 값을 읽는다. 삭제·clear·baseline을 구분한다. 읽기 transaction과 rewind의 advisory fence는 [구현 계획 2.3](03-plan.md#23-공개-높이와-최신-값-조회)을 따른다.
 - **이벤트(반증 CR-11).** 기능 writer는 지금처럼 자기 트랜잭션에서 outbox에 쓴다. outbox relay는 높이가 visible_height 이하인 항목까지만 내보낸다. 그래서 이벤트가 API보다 먼저 나가지 않고, 같은 이벤트를 두 번 내보내지도 않는다.
 
 ### 5.5 기존 기능 writer와의 분리
@@ -214,18 +215,9 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 
 **확인할 것.** 기능 핸들러가 같은 트랜잭션 안에서 핵심 표 행을 다시 읽는지 확인해야 한다. 계획의 첫 단위에서 코드 그래프로 찾는다. 읽는다면 그 port를 assembler 데이터로 바꾼다.
 
-### 5.6 되돌리기 (반증 CR-12, CR-13)
+### 5.6 되돌리기
 
-1. `exec_rewind`에 target f를 기록하고 커밋한다. 다시 시작할 때 이 행이 있으면 되돌리기부터 다시 한다. 그래서 되돌리는 도중에 죽어도 이어 갈 수 있다.
-2. assembler와 queue를 멈추고 비운다.
-3. writer마다 자기 표를 한 트랜잭션에서 되돌린다.
-   - 상태 writer는 먼저 지금 값을 복원한 뒤 이력 행을 지운다. key마다, 높이 f 이상에서 가장 이른 change 행의 전 값으로 지금 값을 맞춘다. `existed_before`가 거짓이면 그 key의 지금 값 행을 지운다.
-   - 핵심 표 writer는 높이 f 이상의 행을 지운다.
-   - cursor를 f-1로 둔다.
-4. 기능 표는 기존 `RollbackTo(f-1)`로 되돌린다. 이것이 핵심 표의 같은 행을 다시 지우려 해도 이미 없으므로 해가 없다.
-5. `visible_height`를 f-1로 두고, `exec_rewind`를 지운다.
-
-깊이 상한은 128블록이다(5.3).
+[구현 계획 2.4](03-plan.md#24-reorg와-재시작)를 따른다. 첫 단계에서 새 generation과 durable rewind 상태로 공개·새 조회를 막고, 진행 중 작업을 취소·join한 뒤 표와 기존 기능 undo를 되돌린다. 완료를 확인한 뒤 공개 높이/hash와 조회를 재개한다. 중간 종료 뒤에는 이 절차부터 재개한다. 일부 표가 바뀐 상태에서 옛 공개 높이로 조회를 허용하지 않는다. 128블록보다 깊거나 복구 자료가 부족하면 멈춘다.
 
 ---
 
@@ -239,7 +231,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 | 노드 import | 1ms 안팎 + 디스크 | E0 실행 측정. 디스크는 재지 않았다 |
 | 다시 실행과 기록 | 1~수 ms | E0 측정에 거래별 root 계산이 더해진다. 재지 않았다 |
 | spool append + IPC | 1ms 미만 | 추정 |
-| 표별 writer 커밋 | writer 7개가 병렬로 각자 fsync 1회 | 재지 않았다. PostgreSQL group commit에 기댄다 |
+| 표별 writer 커밋 | writer 7개가 작업하고 DB transaction은 최대2개 동시 실행 | 재지 않았다. PostgreSQL group commit에 기댄다 |
 | watermark → API, 이벤트 | 1ms 미만 | 추정 |
 
 - 지금 RPC 경로는 polling(50ms)과 RPC 왕복을 거치고, 5 HTTP/s 상한을 받는다.
@@ -248,7 +240,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 ### 6.2 pipeline
 
 - 노드 import, exporter, IPC 전송이 각각 따로 돈다.
-- indexer에서는 writer 7개와 기능 writer가 병렬로 쓴다.
+- indexer에서는 writer 7개가 처리한다. 표별 DB transaction 동시성은2이고 기능 writer의 최종 공개가 별도로 원자성을 보장한다.
 - 따라잡을 때는 writer가 여러 블록을 COPY 한 번으로 묶어 커밋 수를 줄인다.
 
 ---
@@ -263,7 +255,7 @@ StableNet peers ─ eth/68 NewBlock (D11, 확인)
 | indexer assembler | 64블록, 256MiB | IPC 읽기를 멈춘다 |
 | 표별 queue | 64블록, 64MiB | assembler가 기다린다 |
 | writer 묶음 | queue 상한 이하 | 나눠 커밋한다 |
-| PostgreSQL 연결 | writer 7 + 기능 writer 1 + watermark 1 + 조회 pool | 실행 수집 모드에서 `max_conns`가 이보다 작으면 시작을 거부한다(반증 CR-16) |
+| PostgreSQL 연결 | 기존 pool 4개. API 예약1, 동시에 part transaction 최대2, 나머지는 공개·관리 | writer 7개는 연결을 상시 점유하지 않는다. permit·취소·반환과 공정성은 구현 계획 2.1을 따른다 |
 | 노드 DB | E1은 상한 없음, 증가량만 잰다 | E3에서 정리한다(D14) |
 
 - 모든 goroutine은 ctx로 멈추고, 소유자가 join한다. 모든 대기에는 ctx와 timeout이 있다.
@@ -306,7 +298,7 @@ indexer가 Hello(committed = visible_height k)를 보낸다. 실행부는 노드
 | 전 값 불일치(5.4) | indexer가 멈춘다 |
 | reorg | 5.3으로 fork 지점을 찾고 5.6으로 되돌린다 |
 | 128블록보다 깊은 reorg | 멈춘다 |
-| 빈 블록 | 핵심 표만 쓴다. 블록 단위 변화는 대개 없다 |
+| 빈 블록 | Finalize 변화가 있는지 실행해 확인한다. 빈 결과인 writer도 연속 완료를 기록한다 |
 | 계약 생성 또는 소멸 | `state_contracts`, `state_code`. 초기 hard fork의 SELFDESTRUCT는 `storage_cleared`로 남긴다 |
 | epoch 블록 | 블록 단위 변화가 크다. part로 나눠 보낸다 |
 | 디스크 부족 | 기존 opsguard가 처리한다. 실행부 디스크(노드 DB, spool)도 감시 대상에 넣는다 |
@@ -320,7 +312,7 @@ indexer가 Hello(committed = visible_height k)를 보낸다. 실행부는 노드
 | 기능 | 검증 | 일부러 틀리게 하는 방법 | 기준 |
 |---|---|---|---|
 | execwire | 단위 시험, 파서 fuzz, part 왕복 | 길이 조작, 잘린 프레임 | |
-| 거래별 기록(D19) | 녹화 구간과 로컬 체인의 모든 블록에서 root = header | 감싼 trie가 갱신 하나를 버리게 함 | 3 |
+| 거래별 기록(D19) | 녹화 구간과 로컬 체인의 모든 블록에서 root = header 및 독립 기록 대조 | 실제 trie 갱신을 유지하면서 journal 기록만 버림 | 3 |
 | 대조(D1) | 블록 단위 합 = 양방향 trie 비교(storage 포함) | 슬롯을 0으로 만드는 블록, 슬롯만 바뀌는 블록, fee delegation 블록, NativeManager 거래 | 3 |
 | 실행부 수락 | 모든 블록 수락 | header를 조작한 블록 | 2 |
 | RPC 수집과 같음 | `TestRPCArchiveStorageParity` 틀로 두 경로의 port 읽기 비교 | 한 receipt 필드를 바꿈 | 1 |
@@ -333,7 +325,7 @@ indexer가 Hello(committed = visible_height k)를 보낸다. 실행부는 노드
 | 속도 | testnet에서 두 경로를 동시에 돌려 p50, p99 비교. 계약 생성 블록은 따로 집계. 승인을 받은 뒤 실행 | | 속도 |
 | 동시성 | 새 goroutine 시험은 `-race`, `-count=200`, `GOMAXPROCS=1`, goleak | | |
 
-**기준 1의 비교 범위(반증 CR-15).** RPC JSON 경로와 binary 경로가 다를 수 있는 필드가 있다. BlobGasPrice, ContractAddress, Ext, EffectiveGasPrice다. `TestBinaryMatchesLiveJSON`(`x/stablenet/binary_test.go:46`)이 StableNet에서 이 차이를 고정한다. 계획의 첫 단위에서 그 시험이 허용하는 차이를 확인한다. 차이가 하나라도 있으면 기준 1의 "0건"을 어떻게 볼지 사용자에게 다시 묻는다.
+**기준 1의 비교 범위(반증 CR-15).** RPC JSON 경로와 binary 경로가 다를 수 있는 필드가 있다. BlobGasPrice, ContractAddress, Ext, EffectiveGasPrice다. `TestBinaryMatchesLiveJSON`(`x/stablenet/binary_test.go:46`)이 StableNet에서 이 차이를 고정한다. 계획의 첫 단위에서 그 시험이 허용하는 차이를 확인한다. 기존 fixture는 model codec 바이트를 그대로 비교하며 필드 차이 예외를 두지 않는다. 새 차이를 자동 허용하지 않고 원인을 고친다. 사용자에게 위임받은 구현 결정은 계획에 기록한다.
 
 실행부 모듈은 자기 go.mod에서 시험하므로, CI에 실행부 job을 하나 더한다.
 
@@ -343,7 +335,7 @@ indexer가 Hello(committed = visible_height k)를 보낸다. 실행부는 노드
 
 - 새 설정: `indexer.mode: execution`, `execution.socket`, `execution.partition_blocks`, `execution.spool_bytes`. 기존 설정의 뜻은 바꾸지 않는다.
 - migration 0014는 표를 더하기만 한다.
-- 실행 수집 모드에서 Pebble을 쓰거나 `max_conns`가 모자라면 시작을 거부한다.
+- 실행 수집 모드에서 Pebble을 쓰거나 정한 pool 4개 계약을 충족하지 않으면 시작을 거부한다.
 - 기존 RPC 수집 경로는 바꾸지 않는다. 5.5의 option과 5.4의 조회 필터는 실행 수집 모드에서만 켜진다.
 - execwire version은 1부터 시작한다. Hello에서 version이 다르면 거부한다.
 
@@ -353,39 +345,17 @@ indexer가 Hello(committed = visible_height k)를 보낸다. 실행부는 노드
 
 | 위험 | 언제 알게 되나 | 대응 |
 |---|---|---|
-| 감싼 `state.Database`가 go-stablenet 내부 가정(타입 단언 등)에 걸림 | 첫 단위(녹화 구간 root = header) | 걸리는 곳을 찾아 감싸는 범위를 조정한다. 안 되면 D19를 다시 묻는다 |
-| 거래별 root 계산 비용이 큼 | 로컬 체인의 거래 많은 블록 | 측정값을 들고 D19의 B를 다시 묻는다 |
-| 외부 trie 노드로 노드 DB를 채워 부모에서 시작하지 못함(D18) | 녹화 시험 준비 | 녹화 구간 실행은 E0 방식 실행기로 하고, 노드는 로컬 체인에서만 시험한다. 다시 묻는다 |
+| 감싼 `state.Database`가 go-stablenet 내부 가정(타입 단언 등)에 걸림 | 첫 단위(녹화 구간 root = header) | 걸리는 곳을 찾아 감싸는 범위를 조정한다. 안 되면 원인을 기록하고 위임된 범위에서 호환 구현을 선택한다 |
+| 거래별 root 계산 비용이 큼 | 로컬 체인의 거래 많은 블록 | 추가 측정은 보류하고 기능 정확성을 먼저 검증한다 |
+| 외부 trie 노드로 노드 DB를 채워 부모에서 시작하지 못함(D18) | 녹화 시험 준비 | 녹화 구간 실행은 E0 방식 실행기로 하고, 노드 서비스는 실행하지 않고 라이브러리 fixture로 시작 상태를 검증한다 |
 | pathdb `SetHead` 깊이 | 복구 시험 | 되감기 상한을 정한다 |
 | 기능 핸들러가 핵심 표를 다시 읽음 | 첫 단위의 그래프 확인 | 그 port를 assembler 데이터로 바꾼다 |
-| 기준 1의 필드 차이 | 첫 단위 | 사용자에게 묻는다 |
+| 기준 1의 필드 차이 | 첫 단위 | 차이의 원인을 분석하고 정확한 model codec parity를 유지한다 |
 | p2p를 멈췄다 다시 열 때 peer 점수가 깎임 | 운영 | static peer를 쓰고, 멈춤이 얼마나 자주 일어나는지 잰다 |
 | 실행부 프로세스 감시가 없음 | 운영 | E1은 Docker 감시를 쓴다 |
 
 ---
 
-## 12. 1판 반증 지적을 어떻게 처리했나
+## 12. 현재 구현 상태
 
-| 지적 | 처리 |
-|---|---|
-| CR-01 fee delegation, CR-04 Finalize 열거, CR-17 tracer 범위, CR-18 preimage | tracer를 버리고 감싼 `state.Database`로 바꿈(D19, 5.2). root = header로 빠짐없음 확인 |
-| CR-02 `Extra` | 컬럼 추가(4.2) |
-| CR-03 trie 비교 한계 | 시험 대조로만 쓰고, 양방향 비교와 storage까지 내려가기(5.2) |
-| CR-05, CR-19 visible_height 누출 | 모든 읽기에 높이 필터, 시험 대상 확대(5.4, 9장) |
-| CR-06 undo_height 충돌 | 표별 writer는 `indexer.undo`를 끄고 높이를 직접 넣음, 상태 표는 untracked(4.1, 4.4) |
-| CR-07 reorg 이벤트 | canonical 높이 걷기(5.3) |
-| CR-08 Feed 막힘, SetHead 잠금 | 받기만 하는 goroutine, spool, p2p를 켜기 전에 되감기(5.3, 7장, 8.2) |
-| CR-09 시작 조건 | 1장에 E1 시작 조건과 `baseline` 명시 |
-| CR-10 재연결 중복 | writer가 자기 cursor 이하를 건너뜀(5.4) |
-| CR-11 outbox 순서 | relay를 visible_height로 막음(5.4) |
-| CR-12 128블록 | 깊이 상한 128, 넘으면 멈춤(5.3) |
-| CR-13 되돌리기 순서, EOA | 복원한 뒤 삭제, `exec_rewind`, `existed_before`(5.6) |
-| CR-14 token.metadata 지연 | 속도 비교에서 따로 집계(6.1) |
-| CR-15 receipt 필드 | 첫 단위에서 확인하고, 차이가 있으면 묻기(9장) |
-| CR-16 연결 수 | 모자라면 시작 거부(7장) |
-| CR-20 인용 | pathdb 상수로 바꿈(3장) |
-| CR-21 key 충돌 | 기본 key에 cause 추가(4.2) |
-| CR-22 표와 writer | D20으로 정함 |
-| CR-23 바이트 상한 | queue에 바이트 상한, 묶음 ≤ queue(7장) |
-| CR-24 socket | 남은 socket 처리(7장) |
-| CR-25 전 값 크기 | 증가량 측정에 포함(9장) |
+U01의 [wire 모듈](../../../../execwire/README.md)은 version1 framing, raw block/receipt segment, ordered journal, bounded assembly와 취소를 구현했다. 실행부·DB·앱 통합은 별도 단계다. 기능별 상태·RED/GREEN·PR은 [체크리스트](checklist.md)에 기록한다. 위험과 단위별 롤백은 [구현 계획](03-plan.md)을 따른다. 실제 노드 운영과 속도 측정은 보류다.
