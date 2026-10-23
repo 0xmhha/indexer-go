@@ -71,6 +71,8 @@ API 읽기는 공개 generation과 일관된 read transaction에 묶는다. 읽�
 
 ### 2.6 실행 기록과 검증
 
+실행부의 입력·원본 root 보존·기록 누락 검증은 [U02 recorder 계약](04-recorder-contract.md)으로 구체화한다.
+
 2차 실행의 `state.Database`/trie wrapper는 before 값을 첫 변경 전에 읽고, 같은 거래 안에서는 최종 after 값과 묶는다. reverted 변경과 성공한 변경을 구분하며, fee payer·NativeManager·precompile·Finalize가 같은 상태 경계를 통과하는지 검사한다.
 
 state root 일치만으로 내보낸 기록의 무누락을 주장하지 않는다. **원래 trie 갱신은 실행하면서 기록만 버리는 fault**도 검사한다. 거래별 기록을 합친 결과와 별도의 양방향 trie 비교(계정·storage, 삭제 포함)를 대조한다. 전후 값이 현재 작업 상태와 다르면 저장하지 않는다. 노드가 보관한 receipt와 재실행 receipt root도 대조한다.

@@ -3,31 +3,55 @@
   "plan": "03-plan.md",
   "checklist": "checklist.md",
   "current": {
-    "unit": "U01",
+    "unit": "U02",
     "state": "local_green_pending_pr_ci",
-    "intent": "stdlib-only bounded versioned wire/framing/parts and cancellable connection",
+    "intent": "two-pass replay with per-transaction and Finalize journal, original-root parity, independent completeness verification and no persistent second-pass writes",
     "files": [
-      "execwire/wire.go",
-      "execwire/codec.go",
-      "execwire/result.go",
-      "execwire/parts.go",
-      "execwire/conn.go",
-      "execwire/wire_test.go",
-      "execwire/bounds_test.go",
-      "execwire/README.md",
+      "x/stablenet/executor/",
+      "04-recorder-contract.md",
       ".github/workflows/ci.yml",
-      "Makefile"
+      "Makefile",
+      "CONTRIBUTING.md"
     ],
     "contracts": [
-      "8 MiB maximum frame",
-      "bounded block assembly and parts",
-      "deterministic payload digest",
-      "cancelled/partial I/O never corrupts the next frame"
+      "official upstream commit pinned; no upstream patch",
+      "retain U01 wire reference/ordinal/raw RLP contracts",
+      "preserve original header root before WBFT Finalize mutates its copy",
+      "real EVM library fixtures only; no node.Start/peers",
+      "a record-only omission must fail even while actual trie updates continue"
     ],
-    "verification": "API-shaped stub RED: 6 ErrUnimplemented failures; additional raw-segment and assembler-size RED: 2 failures. GREEN: wire build/vet/race/lint and one GOMAXPROCS=1/race/count=200 TestConn invocation. Full root race and disposable fsync-on PostgreSQL passed with test parallelism=1; Anvil skipped. Details and reproducible commands: checklist.md.",
-    "next": "Submit U00+U01 PR, require lint/test/postgres/examples, squash merge and fast-forward main, then U02 RED."
+    "verification": "Module build/vet/lint/race and single GOMAXPROCS=1/race/count=200 passed; root/wire full race, actual fsync-on PostgreSQL, root build/vet/lint, astgraph lint, cache lifecycle, examples, offline operations and secret scans passed. Anvil skipped using test-only PATH; no nodes/peers/performance. Detailed functional/TDD evidence in checklist.md.",
+    "next": "Commit/PR; require lint/test/postgres/examples, squash merge exact head, sync main; then U03 RED."
   },
-  "previous": [],
+  "previous": [
+    {
+      "unit": "U01",
+      "state": "merged",
+      "intent": "stdlib-only bounded versioned wire/framing/parts and cancellable connection",
+      "files": [
+        "execwire/wire.go",
+        "execwire/codec.go",
+        "execwire/result.go",
+        "execwire/parts.go",
+        "execwire/conn.go",
+        "execwire/wire_test.go",
+        "execwire/bounds_test.go",
+        "execwire/README.md",
+        ".github/workflows/ci.yml",
+        "Makefile"
+      ],
+      "contracts": [
+        "8 MiB maximum frame",
+        "bounded block assembly and parts",
+        "deterministic payload digest",
+        "cancelled/partial I/O never corrupts the next frame"
+      ],
+      "verification": "API-shaped stub RED: 6 ErrUnimplemented failures; additional raw-segment and assembler-size RED: 2 failures. GREEN: wire build/vet/race/lint and one GOMAXPROCS=1/race/count=200 TestConn invocation. Full root race and disposable fsync-on PostgreSQL passed with test parallelism=1; Anvil skipped. Details and reproducible commands: checklist.md.",
+      "next": "U02 replay recorder",
+      "pr": "https://github.com/0xmhha/indexer-go/pull/210",
+      "merge_commit": "9f01b09493677cdfbd6dd40c861cf10d644b9bb8"
+    }
+  ],
   "retained_previous_units": 2,
   "holds": [
     "node service startup",

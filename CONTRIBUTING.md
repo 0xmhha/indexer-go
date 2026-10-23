@@ -65,7 +65,7 @@ make test-examples
 GOTOOLCHAIN=go1.26.8 make lint
 ```
 
-The `execwire` and `tools/astgraph` directories are separate Go modules. CI runs their vet and lint checks. `make test-execwire` builds, vets and tests the wire module; `make test-race` covers both root and wire. The modules under `examples/` are separate modules as well; root `go test ./...` does not cover them.
+The `execwire`, `x/stablenet/executor` and `tools/astgraph` directories are separate Go modules. CI runs their vet and lint checks. `make test-execwire` and `make test-executor-stablenet` build, vet and test the execution modules; `make test-race` covers root, wire and executor. Executor checks use EVM/WBFT libraries and start no node services. The modules under `examples/` are separate modules as well; root `go test ./...` does not cover them.
 
 New concurrency tests must pass with `GOMAXPROCS=1`, `-race` and a single `-count=200` invocation before push. Select the actual test names and package; partial runs are not equivalent to one complete run. Wait for the state a test checks instead of relying on fixed sleeps.
 
