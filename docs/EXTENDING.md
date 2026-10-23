@@ -81,6 +81,8 @@ func init() {
 
 - `graphql.RegisterExtension(name, func(*graphql.Extension))`: GraphQL 조회·구독을 더한다.
 - `api.RegisterRoute(api.Route{Method, Pattern, Handler})`: GraphQL 옆에 HTTP 경로를 더한다. `Handler`는 `func(store port.QueryStore, logger *zap.Logger) http.Handler`다. 상태 코드와 고정 JSON 형식이 필요할 때 쓴다. 경로 인자는 `api.URLParam(r, "name")`. 단일 체인 서버(declared 모드 포함)가 mount하고, 멀티체인 서버는 체인마다 `/chains/{id}/<pattern>`에 그 체인의 저장소로 mount한다. 경로 패턴에 `{id}` 인자가 있으면 체인 id와 겹치므로 멀티체인에서는 mount하지 않는다(경고 로그). `node.role: ingest`(health와 metrics만 제공)는 mount하지 않는다.
+- PostgreSQL 실행 수집의 query는 공개 generation의 read snapshot 안에서 처리한다. GraphQL mutation과 `jsonrpc.RegisterMutationMethod(name, fn)`로 등록한 쓰기는 이 읽기 전용 transaction에서 제외한다. 기존 `jsonrpc.RegisterMethod`는 query 등록이며, DB에 쓰는 확장은 mutation으로 선언해야 한다. 일반 RPC 수집 모드의 읽기/쓰기 동작은 유지한다.
+- 등록형 GET/HEAD route도 요청 단위 snapshot을 사용한다. 장시간 event/file stream은 `api.Route{Streaming: true, ...}`로 선언하여 연결 전체가 read transaction을 보유하지 않게 한다. stream에서 DB 조회가 필요하면 짧은 작업별로 `port.WithQuerySnapshot`을 사용한다. rewrite/restore 중에는 재시도 오류를 그대로 전달하고 임의0·없음으로 바꾸지 않는다.
 - `fetch.IndexingOf(ctx, store)`: 색인한 블록, live loop가 마지막으로 본 노드의 목표 블록(finality 정책 기준), 그 차이(`Lag`). "아직 색인 전"과 "색인이 늦음"을 구분할 때 쓴다(예제의 503 `RPC_STALE`). API 전용 프로세스(`node.role api`)에서는 `Polled`가 false다.
 
 ## 5. 시험

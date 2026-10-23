@@ -34,6 +34,7 @@ require (
 
 require (
 	cel.dev/expr v0.25.1 // indirect
+	github.com/0xmhha/indexer-go/execwire v0.0.0
 	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
@@ -119,3 +120,5 @@ require (
 
 // NOTE: Using standard go-ethereum for compatibility with all EVM clients (go-ethereum, go-stablenet, anvil)
 // Client-specific features are handled at the adapter layer (pkg/adapters/)
+
+replace github.com/0xmhha/indexer-go/execwire => ./execwire

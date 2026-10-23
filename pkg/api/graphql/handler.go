@@ -11,6 +11,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/events"
 	"github.com/0xmhha/indexer-go/pkg/stream"
 	"github.com/graphql-go/graphql"
+	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/parser"
 	"github.com/graphql-go/graphql/language/source"
 	"go.uber.org/zap"
@@ -136,23 +137,21 @@ func (h *Handler) Validate(document string) []string {
 // Execute runs a GraphQL document against the served schema, without the
 // request limits (for fixed documents such as the REST API's).
 func (h *Handler) Execute(ctx context.Context, document string, variables map[string]interface{}) *graphql.Result {
-	return graphql.Do(graphql.Params{
-		Schema:         h.schema.schema,
-		RequestString:  document,
-		VariableValues: variables,
-		Context:        ctx,
-	})
+	doc, err := parser.Parse(parser.ParseParams{Source: source.NewSource(&source.Source{Body: []byte(document), Name: "GraphQL request"})})
+	if err != nil {
+		return &graphql.Result{Errors: gqlerrors.FormatErrors(err)}
+	}
+	schema := h.schema.schema
+	validated := validateExecutionDocument(&schema, doc)
+	if !validated.IsValid {
+		return &graphql.Result{Errors: validated.Errors}
+	}
+	return h.executeParsed(ctx, schema, doc, "", variables)
 }
 
-// ExecuteQuery executes a GraphQL query (for testing)
+// ExecuteQuery executes a GraphQL query for tests using the same read boundary.
 func (h *Handler) ExecuteQuery(query string, variables map[string]interface{}) *graphql.Result {
-	params := graphql.Params{
-		Schema:         h.schema.schema,
-		RequestString:  query,
-		VariableValues: variables,
-		Context:        context.Background(),
-	}
-	return graphql.Do(params)
+	return h.Execute(context.Background(), query, variables)
 }
 
 // ExecuteQueryJSON executes a GraphQL query and returns JSON (for testing)

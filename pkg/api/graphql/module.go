@@ -27,6 +27,7 @@ func always(with func(*SchemaBuilder) *SchemaBuilder) func(*SchemaBuilder, *Hand
 
 var schemaModules = []schemaModule{
 	{name: "core", build: always((*SchemaBuilder).WithCoreQueries)},
+	{name: "execution", build: always((*SchemaBuilder).WithExecutionQueries)},
 	{name: "historical", build: always((*SchemaBuilder).WithHistoricalQueries)},
 	{name: "analytics", build: always((*SchemaBuilder).WithAnalyticsQueries)},
 	{name: "address", build: always((*SchemaBuilder).WithAddressIndexingQueries)},

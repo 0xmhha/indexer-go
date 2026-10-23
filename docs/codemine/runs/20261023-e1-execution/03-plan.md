@@ -63,6 +63,8 @@ API 읽기는 공개 generation과 일관된 read transaction에 묶는다. 읽�
 4. 기존 기능 표는 기존 undo로 되돌린다. 공개 높이/hash를 마지막 공통 부모로 옮기고 모든 writer의 결과를 확인한다.
 5. rewind 기록을 없애고 조회·처리를 재개한다. 중간 종료 뒤에는 이 절차부터 이어간다.
 
+구현은 durable marker를 먼저 commit한 뒤, feature undo·영향받은 상태 최신 값 복원·미공개 core 제거·cursor 초기화·조회 재개를 하나의 최대128블록 복구 transaction으로 수행한다. 중간 오류/종료는 전체 복구 transaction을 rollback하고 marker를 남긴다. 표별로 부분 commit한 진행 높이를 추정하지 않고, 재시작에서 같은 원자적 복구를 재개한다.
+
 128블록을 넘는 reorg, 부족한 undo/부모 상태, hash 불일치는 멈춘다. 일부 표만 바뀐 동안 조회를 허용하지 않는다. 최초 시작도 미완료 공개/rewind를 검사한 뒤 API를 연다. cursor의 높이만 같은 경우가 아니라 hash와 generation까지 같은 경우에만 멱등 완료로 인정한다.
 
 ### 2.5 fresh와 RPC 예산
@@ -89,7 +91,7 @@ spool은 fsync 뒤 전송하고 ACK와 같은 높이/hash/generation을 확인�
 
 ## 3. 기능 단위와 순서
 
-각 기능 단위는 소비자까지 연결하는 작은 PR로 마친다. 기능이 아닌 U00 계획 문서는 U01의 첫 PR에 함께 포함하여 문서 전용 CI 회전을 추가하지 않는다. RED는 해당 요구 때문에 실패해야 하며, 실패한 원본·명령·기준 commit을 보존한다. 구현 후 같은 검사를 GREEN으로 돌린다. 전체 기능을 끝까지 만든 뒤 테스트를 붙이는 방식을 쓰지 않는다.
+기능별 RED/GREEN과 문서 갱신은 각각 수행한다. U04~U08은 migration0014·writer·공개·API·rewind가 같은 일관성 경계를 공유하므로 하나의 통합 PR로 검증한다. migration을 미완료 상태로 릴리스한 뒤 수정하는 위험을 줄인다. 통합 단위의 코드가 준비된 후 필수 전체 검사·commit·PR·CI·squash/main을 완료한다. 기능이 아닌 U00 계획 문서는 U01의 첫 PR에 함께 포함하여 문서 전용 CI 회전을 추가하지 않는다. RED는 해당 요구 때문에 실패해야 하며, 실패한 원본·명령·기준 commit을 보존한다. 구현 후 같은 검사를 GREEN으로 돌린다. 전체 기능을 끝까지 만든 뒤 테스트를 붙이는 방식을 쓰지 않는다.
 
 | ID | 기능·파일·소비자 | RED / GREEN과 완료 기준 | 위험과 롤백 |
 | --- | --- | --- | --- |
@@ -118,7 +120,7 @@ spool은 fsync 뒤 전송하고 ACK와 같은 높이/hash/generation을 확인�
 4. 커밋 전에 build/fmt/vet/lint와 필수 race·cache lifecycle·PostgreSQL·examples를 완료한다. 성능/라이브 검사는 opt-in 상태를 유지한다. 새 동시성 검사는 GOMAXPROCS=1/race/단일 count=200을 완료한다.
 5. 경로를 명시해 stage하고 staged/history secret 검사를 수행한다. 영어 Conventional Commit을 사용하며 `codex` 접두사·공동 저자 표기를 붙이지 않는다.
 6. draft PR을 생성·연결하고 검사가 끝나면 ready로 바꾼다. 필수 lint/test/postgres/examples가 모두 통과해야 squash merge한다. 보호 규칙을 우회하지 않는다.
-7. main을 fast-forward로 동기화한 뒤 다음 단위의 브랜치를 만든다. 다른 시스템의 변경과 충돌하면 보존·통합하고 미완료 작업을 덮어쓰지 않는다.
+7. main을 fast-forward로 동기화한 뒤 다음 통합 단위의 브랜치를 만든다. U04~U08의 기능별 검사는 같은 브랜치에서 순서대로 진행하며 commit/PR 전 필수 전체 검사를 생략하지 않는다. 다른 시스템의 변경과 충돌하면 보존·통합하고 미완료 작업을 덮어쓰지 않는다.
 
 실패 시 같은 실행을 목적 없이 반복하지 않는다. 원인·수정·검사 범위를 기록하고 새 코드나 새 실패가 요구하는 검사만 반복한다. 다른 프로젝트의 프로세스·container·volume·캐시는 유지한다.
 

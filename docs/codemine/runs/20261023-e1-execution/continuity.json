@@ -3,74 +3,62 @@
   "plan": "03-plan.md",
   "checklist": "checklist.md",
   "current": {
-    "unit": "U03",
-    "state": "fix_local_checks_passed",
-    "intent": "bounded fsync-before-transmit result spool and exact durable ACK cleanup/restart",
+    "unit": "U08",
+    "state": "local_validation_complete_awaiting_commit_ci",
+    "integration_group": "U04-U08",
+    "intent": "durable fenced reorg/restart, unpublished purge and state/history rewind, stale generation rejection",
     "files": [
-      "x/stablenet/executor/spool/",
-      "05-spool-contract.md"
+      "pkg/storage/postgres/exec_rewind*.go",
+      "pkg/execution/controller.go",
+      "pkg/fetch/execution.go",
+      "10-rewind-contract.md"
     ],
     "contracts": [
-      "full result fsync+rename+directory sync before eligible transmission",
-      "exact chain/ref/hash/generation/digest ACK before cleanup",
-      "durable ACK receipt before removing a result",
-      "quota counts temporary/quarantine/metadata as well as pending results",
-      "no RPC, node startup, node DB GC or performance measurements"
+      "marker before partial rollback; reads/parts/publication fail closed",
+      "max128 and anchor/hash/root/undo coverage preflight",
+      "restart reruns atomic Resume from the durable marker; no partial recovery progress is inferred",
+      "rebuild latest from remaining history and exact writer cursor bases",
+      "fresh immediately before final reopen commit with post-response generation fence"
     ],
-    "verification": "Stub RED 6 plus duplicate identity RED 1 and incomplete identity/unknown temporary RED 2. Module race/lint, single GOMAXPROCS=1/race/count=200 spool cancellation/join passed. Root/wire race, fsync-on PostgreSQL adapter/bundle, build/vet/lint, examples/cache/offline ops passed. Root make executor cache lookup corrected by dedicated-cache full module race. Existing PG backfill30s wait failed, helper cancellation/join/diagnostics corrected; all 11 affected functional tests pass with race on root and PG. See checklist for exact scope. First CI lint/examples/postgres passed; test found preexisting real graceful-shutdown outbox loss. Two deterministic queued/concurrent shutdown RED tests added; publish/stop fence and drain + app relay-before-bus join GREEN in one GOMAXPROCS=1/race/count=200. Full regression rerunning after product fix. Additional ACK retry/file-count and metadata-reserve RED tests fixed; complete executor/spool race and lint GREEN. Final make test-race (root/wire/executor/spool) exit0 and complete fsync-on PG adapter/app/StableNet bundle exit0 after all product changes. Build/vet/lint/cache/examples/offline ops passed.",
-    "next": "Commit/push fixes to PR #212; four green CI checks, squash/main; then U04.",
-    "pr": "https://github.com/0xmhha/indexer-go/pull/212"
+    "verification": "PG marker/restart RED4, state restore RED1, missing explicit-zero coverage RED1 -> same tests race GREEN. All phase faults preserve logical state and reopen successfully; exactly128/129/deeper-retarget and actual shared read/part lock boundary PG/race GREEN. Controller RED3, feature recovery/target RED2, duplicate Future RED1, immutable fresh reference RED1 -> same race GREEN. Single GOMAXPROCS=1/race/count=200 root queue/API and actual PG concurrency passed. Build/vet/lint/cache/examples/offline operations and actual PG adapter suite passed. Full-root regression identified intended schema snapshot drift and the new pure wire port contract boundary; both corrected and focused tests passed, full app regression pending. Final full root/wire/executor race passed. Full PostgreSQL adapter/app/API/bundle run had only an early pre-fixture-update TestSchemaSnapshot failure; corrected snapshot passed full root race and is rechecked in PostgreSQL environment. Full latest-commit PostgreSQL CI is required before merge.",
+    "next": "Commit reviewed integration, attach draft PR, require four latest-head CI checks, ready/squash/main sync; only then U09."
   },
   "previous": [
     {
-      "unit": "U02",
-      "state": "merged",
-      "intent": "two-pass replay with per-transaction and Finalize journal, original-root parity, independent completeness verification and no persistent second-pass writes",
+      "unit": "U07",
+      "state": "functional_green_uncommitted",
+      "integration_group": "U04-U08",
+      "intent": "consistent API snapshot/fence, hide unpublished core on every read path and expose as-of-visible state",
       "files": [
-        "x/stablenet/executor/",
-        "04-recorder-contract.md",
-        ".github/workflows/ci.yml",
-        "Makefile",
-        "CONTRIBUTING.md"
+        "pkg/storage/postgres/exec_read.go",
+        "pkg/api/"
       ],
       "contracts": [
-        "official upstream commit pinned; no upstream patch",
-        "retain U01 wire reference/ordinal/raw RLP contracts",
-        "preserve original header root before WBFT Finalize mutates its copy",
-        "real EVM library fixtures only; no node.Start/peers",
-        "a record-only omission must fail even while actual trie updates continue"
+        "one existing reserved/borrowed pool4 connection per read snapshot",
+        "try shared lock and explicit rewind retry error",
+        "state from history at visible, never latest-row filtering",
+        "legacy mode results unchanged"
       ],
-      "verification": "Module build/vet/lint/race and single GOMAXPROCS=1/race/count=200 passed; root/wire full race, actual fsync-on PostgreSQL, root build/vet/lint, astgraph lint, cache lifecycle, examples, offline operations and secret scans passed. Anvil skipped using test-only PATH; no nodes/peers/performance. Detailed functional/TDD evidence in checklist.md.",
-      "next": "U03 durable spool",
-      "pr": "https://github.com/0xmhha/indexer-go/pull/211",
-      "merge_commit": "4525ac6ddd630b60f9a2d93b4653228ef934817d"
+      "verification": "PG visible core/snapshot RED3 and state RED1 -> race GREEN; all TestExecution through U07 PG/race GREEN. API snapshot RED2/state RED2/routes/cache/chain RED1 each -> race GREEN. See 09-read-contract.md. Final lint passed after correcting ignored Close errors; API schema/method snapshots match the intended extension.",
+      "next": "U08 durable rewind marker, restart recovery, stale queue cancel/join."
     },
     {
-      "unit": "U01",
-      "state": "merged",
-      "intent": "stdlib-only bounded versioned wire/framing/parts and cancellable connection",
+      "unit": "U06",
+      "state": "functional_green_uncommitted",
+      "integration_group": "U04-U08",
+      "intent": "atomic seven-part readiness, feature/outbox/publication and last fresh with post-response generation fence",
       "files": [
-        "execwire/wire.go",
-        "execwire/codec.go",
-        "execwire/result.go",
-        "execwire/parts.go",
-        "execwire/conn.go",
-        "execwire/wire_test.go",
-        "execwire/bounds_test.go",
-        "execwire/README.md",
-        ".github/workflows/ci.yml",
-        "Makefile"
+        "pkg/storage/postgres/exec_publish.go",
+        "pkg/fetch/execution.go"
       ],
       "contracts": [
-        "8 MiB maximum frame",
-        "bounded block assembly and parts",
-        "deterministic payload digest",
-        "cancelled/partial I/O never corrupts the next frame"
+        "flush feature/outbox/undo before fresh",
+        "no source ACK for unpublished parts",
+        "pool4 RPC5 unchanged",
+        "duplicate committed retry requires durable exact identity"
       ],
-      "verification": "API-shaped stub RED: 6 ErrUnimplemented failures; additional raw-segment and assembler-size RED: 2 failures. GREEN: wire build/vet/race/lint and one GOMAXPROCS=1/race/count=200 TestConn invocation. Full root race and disposable fsync-on PostgreSQL passed with test parallelism=1; Anvil skipped. Details and reproducible commands: checklist.md.",
-      "next": "U02 replay recorder",
-      "pr": "https://github.com/0xmhha/indexer-go/pull/210",
-      "merge_commit": "9f01b09493677cdfbd6dd40c861cf10d644b9bb8"
+      "verification": "Actual PG publication RED3 -> same tests race GREEN; generation/queued-error extra tests GREEN. Feature path RED2 -> race GREEN. See 08-publication-contract.md.",
+      "next": "U07 fenced API read snapshot and visible core/as-of state."
     }
   ],
   "retained_previous_units": 2,
@@ -102,5 +90,6 @@
     ],
     "verification": "Documentation links/JSON/fmt/build/vet/root+astgraph lint/cache lifecycle/examples/offline operations/full root race/real PostgreSQL passed; see checklist.",
     "next": "U01: write failing wire contract tests before implementation"
-  }
+  },
+  "integration_policy": "U04-U08 share one unmerged schema/visibility/rewind boundary. Each feature still RED/GREEN + docs/context; full checks before commit/PR and four CI before squash/main."
 }

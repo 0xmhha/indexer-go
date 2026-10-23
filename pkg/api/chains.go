@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -42,10 +44,11 @@ type ChainNotifications interface {
 // are built from its store when first requested and rebuilt when the chain
 // restarts with a new store.
 type chainRoutes struct {
-	chains    ChainStores
-	logger    *zap.Logger
-	keepAlive bool
-	direct    bool
+	chains         ChainStores
+	logger         *zap.Logger
+	keepAlive      bool
+	reserveReaders bool
+	direct         bool
 	// declaredOnly serves each chain as an indexer of declared data
 	// (indexer.mode declared): GraphQL extensions only, no JSON-RPC or
 	// REST, like the single-chain server.
@@ -62,12 +65,13 @@ type chainRoutes struct {
 
 // chainHandlers are one chain's API handlers over one store.
 type chainHandlers struct {
-	store   port.QueryStore
-	graphql *graphql.Handler
-	sub     http.Handler
-	rpc     *jsonrpc.Server
-	rest    http.Handler
-	routes  map[string]http.Handler // registered routes by method and pattern
+	store       port.QueryStore
+	queryReader port.QueryReaderLease
+	graphql     *graphql.Handler
+	sub         http.Handler
+	rpc         *jsonrpc.Server
+	rest        http.Handler
+	routes      map[string]http.Handler // registered routes by method and pattern
 	// streams serves the chain's notification stream; nil without one.
 	streams *subscriptionStreams
 }
@@ -82,6 +86,9 @@ func (h *chainHandlers) streamHandler() http.Handler {
 
 // stop ends the handlers' background work and stream connections.
 func (h *chainHandlers) stop() {
+	if h.queryReader != nil {
+		h.queryReader.Close()
+	}
 	h.rpc.Close()
 	if h.streams != nil {
 		h.streams.close()
@@ -90,14 +97,15 @@ func (h *chainHandlers) stop() {
 
 func (s *Server) mountChainRoutes(chains ChainStores) {
 	cr := &chainRoutes{
-		chains:       chains,
-		logger:       s.logger,
-		keepAlive:    s.config.EnableWebSocketKeepAlive,
-		direct:       s.config.DirectSubscriptions,
-		declaredOnly: s.config.DeclaredOnly,
-		handlers:     map[string]*chainHandlers{},
-		limits:       s.graphqlLimits(),
-		origins:      s.origins,
+		chains:         chains,
+		logger:         s.logger,
+		keepAlive:      s.config.EnableWebSocketKeepAlive,
+		reserveReaders: s.config.ReserveQueryReader,
+		direct:         s.config.DirectSubscriptions,
+		declaredOnly:   s.config.DeclaredOnly,
+		handlers:       map[string]*chainHandlers{},
+		limits:         s.graphqlLimits(),
+		origins:        s.origins,
 
 		streamOutbox: s.streamOutbox,
 	}
@@ -144,6 +152,9 @@ func (cr *chainRoutes) serve(pick func(*chainHandlers) http.Handler) http.Handle
 			writeJSONError(w, status, msg)
 			return
 		}
+		if h.queryReader != nil {
+			r = r.WithContext(h.queryReader.Context(r.Context()))
+		}
 		pick(h).ServeHTTP(w, r)
 	}
 }
@@ -170,6 +181,26 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 		old.stop() // the chain restarted with a new store
 	}
 	logger := cr.logger.With(zap.String("chain", id))
+	var lease port.QueryReaderLease
+	if cr.reserveReaders {
+		if reserver, ok := store.(port.QueryReaderReserver); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			var err error
+			lease, err = reserver.ReserveQueryReader(ctx)
+			cancel()
+			if err != nil {
+				logger.Error("failed to reserve chain API reader", zap.Error(err))
+				return nil, http.StatusServiceUnavailable
+			}
+		}
+	}
+	ready := false
+	defer func() {
+		if !ready && lease != nil {
+			lease.Close()
+		}
+	}()
+
 	outbox := cr.streamOutbox(store)
 	opts := &graphql.HandlerOptions{Limits: cr.limits, ExtensionsOnly: cr.declaredOnly}
 	if outbox != nil {
@@ -197,12 +228,13 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 		sub.SetOutbox(outbox)
 	}
 	h := &chainHandlers{
-		store:   store,
-		graphql: gql,
-		sub:     sub.Handler(),
-		rpc:     jsonrpc.NewServer(store, logger),
-		rest:    rest.NewHandler(gql),
-		routes:  map[string]http.Handler{},
+		store:       store,
+		queryReader: lease,
+		graphql:     gql,
+		sub:         sub.Handler(),
+		rpc:         jsonrpc.NewServer(store, logger),
+		rest:        rest.NewHandler(gql),
+		routes:      map[string]http.Handler{},
 	}
 	if notifier != nil {
 		h.rpc.SetNotificationService(notifier)
@@ -212,10 +244,11 @@ func (cr *chainRoutes) lookup(id string) (*chainHandlers, int) {
 	}
 	for _, r := range registeredRoutes() {
 		if chainRoutable(r) {
-			h.routes[r.Method+" "+r.Pattern] = r.Handler(store, logger)
+			h.routes[r.Method+" "+r.Pattern] = readRouteOver(r, store, logger)
 		}
 	}
 	cr.handlers[id] = h
+	ready = true
 	return h, http.StatusOK
 }
 

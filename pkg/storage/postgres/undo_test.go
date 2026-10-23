@@ -22,6 +22,10 @@ var untracked = map[string]bool{
 	"reorgs": true, "orphaned_blocks": true, "orphaned_transactions": true,
 	"outbox": true, "outbox_sequence": true, "outbox_cursors": true,
 	"capture_locks": true, "capture_records": true, // immutable source facts, not projection writes
+	"exec_control": true, "exec_cursors": true, "exec_parts": true, "exec_publications": true, "exec_rewinds": true, // execution rewind coordinator owns these
+	"state_accounts": true, "state_account_changes": true, // execution history/rewind owns parent and leaf partitions
+	"state_storage": true, "state_storage_roots": true, "state_storage_changes": true, "state_storage_clears": true, // execution storage/clear history and rewind
+	"state_code": true, "state_contracts": true, "state_contract_changes": true, // execution code retention and contract rewind
 }
 
 // trackedTables returns the tables of the store's schema that are not in
@@ -32,18 +36,20 @@ func trackedTables(t *testing.T, s *Store) map[string]bool {
 	rows, err := s.pool.Query(context.Background(), `SELECT c.relname,
 			EXISTS (SELECT 1 FROM pg_trigger g WHERE g.tgrelid = c.oid AND g.tgname = 'undo_record')
 			OR (EXISTS (SELECT 1 FROM undo_by_height u WHERE u.tbl = c.relname)
-				AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'undo_height'))
+				AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'undo_height')),
+			COALESCE((SELECT p.relname FROM pg_inherits i JOIN pg_class p ON p.oid=i.inhparent
+				WHERE i.inhrelid=c.oid AND c.relispartition AND p.relnamespace=c.relnamespace LIMIT 1),'')
 		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 		WHERE n.nspname = current_schema() AND c.relkind = 'r'`)
 	require.NoError(t, err)
 	out := map[string]bool{}
 	for rows.Next() {
 		var (
-			name    string
-			tracked bool
+			name, parent string
+			tracked      bool
 		)
-		require.NoError(t, rows.Scan(&name, &tracked))
-		if !untracked[name] {
+		require.NoError(t, rows.Scan(&name, &tracked, &parent))
+		if !untracked[name] && !untracked[parent] {
 			out[name] = tracked
 		}
 	}

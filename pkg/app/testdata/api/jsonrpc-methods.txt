@@ -32,6 +32,9 @@ getERC721Owner
 getERC721Transfer
 getERC721TransfersByAddress
 getERC721TransfersByToken
+getExecutionAccount
+getExecutionCode
+getExecutionStorage
 getInternalTransactions
 getInternalTransactionsByAddress
 getLatestEpochInfo

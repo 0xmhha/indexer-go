@@ -80,7 +80,11 @@ type trieValues [][]byte
 func (v trieValues) Len() int                           { return len(v) }
 func (v trieValues) EncodeIndex(i int, b *bytes.Buffer) { b.Write(v[i]) }
 func Root(raw []byte, typed bool) (common.Hash, error) {
-	items, err := Items(raw, MaxItems)
+	return rootBounded(raw, typed, MaxItems)
+}
+
+func rootBounded(raw []byte, typed bool, limit int) (common.Hash, error) {
+	items, err := Items(raw, limit)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -238,28 +242,37 @@ func normalizedRows(b *model.Block, receipts []*model.Receipt) ([]capture.Row, e
 // Decode revalidates bounded encoded facts through their chain profile and
 // header commitments. Both window capture and DB replay use this exact path.
 func Decode(profile chains.BinaryProfile, id model.FeedBlock, header, body, receipts []byte) (*model.Block, []*model.Receipt, error) {
+	return DecodeBounded(profile, id, header, body, receipts, DecodeLimits{PartBytes: 8 << 20, Items: MaxItems, Logs: MaxItems})
+}
+
+// DecodeBounded uses the same profile and commitment checks with explicit
+// resource limits. Counts are checked before allocating profile model objects.
+func DecodeBounded(profile chains.BinaryProfile, id model.FeedBlock, header, body, receipts []byte, limits DecodeLimits) (*model.Block, []*model.Receipt, error) {
+	if limits.PartBytes <= 0 || limits.PartBytes > 64<<20 || limits.Items <= 0 || limits.Items > 65536 || limits.Logs <= 0 || limits.Logs > 262144 {
+		return nil, nil, model.ErrCaptureInvalid
+	}
 	if profile == nil || id.Validate() != nil {
 		return nil, nil, model.ErrCaptureInvalid
 	}
-	if len(header) == 0 || len(header) > 64<<10 || len(body) == 0 || len(body) > 8<<20 || len(receipts) == 0 || len(receipts) > 8<<20 {
+	if len(header) == 0 || len(header) > 64<<10 || len(body) == 0 || len(body) > limits.PartBytes || len(receipts) == 0 || len(receipts) > limits.PartBytes {
 		return nil, nil, model.ErrCaptureIncomplete
 	}
 	parts, err := Items(body, 3)
 	if err != nil || len(parts) < 2 {
 		return nil, nil, errors.New("evmdata: invalid body")
 	}
-	if _, err := Items(parts[0], MaxItems); err != nil {
+	if _, err := Items(parts[0], limits.Items); err != nil {
 		return nil, nil, err
 	}
 	if _, err := Items(parts[1], 2); err != nil {
 		return nil, nil, err
 	}
 	if len(parts) == 3 {
-		if _, err := Items(parts[2], MaxItems); err != nil {
+		if _, err := Items(parts[2], limits.Items); err != nil {
 			return nil, nil, err
 		}
 	}
-	ri, err := Items(receipts, MaxItems)
+	ri, err := Items(receipts, limits.Items)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -281,12 +294,12 @@ func Decode(profile chains.BinaryProfile, id model.FeedBlock, header, body, rece
 		if err != nil || len(fields) != 4 {
 			return nil, nil, model.ErrCaptureInvalid
 		}
-		logs, err := Items(fields[3], MaxItems)
+		logs, err := Items(fields[3], limits.Logs)
 		if err != nil {
 			return nil, nil, err
 		}
 		logCount += len(logs)
-		if logCount > MaxItems {
+		if logCount > limits.Logs {
 			return nil, nil, model.ErrCaptureInvalid
 		}
 		for _, log := range logs {
@@ -322,19 +335,19 @@ func Decode(profile chains.BinaryProfile, id model.FeedBlock, header, body, rece
 			return nil, nil, errors.New("evmdata: receipt type mismatch")
 		}
 	}
-	txRoot, err := Root(parts[0], true)
+	txRoot, err := rootBounded(parts[0], true, limits.Items)
 	if err != nil || txRoot != b.TxRoot || crypto.Keccak256Hash(parts[1]) != b.UncleHash {
 		return nil, nil, errors.New("evmdata: body commitment mismatch")
 	}
 	if len(parts) == 3 {
-		r, err := Root(parts[2], false)
+		r, err := rootBounded(parts[2], false, limits.Items)
 		if err != nil || b.WithdrawalsRoot == nil || r != *b.WithdrawalsRoot {
 			return nil, nil, errors.New("evmdata: withdrawals commitment mismatch")
 		}
 	} else if b.WithdrawalsRoot != nil {
 		return nil, nil, errors.New("evmdata: missing withdrawals")
 	}
-	rr, err := Root(receipts, true)
+	rr, err := rootBounded(receipts, true, limits.Items)
 	if err != nil || rr != b.ReceiptRoot {
 		return nil, nil, errors.New("evmdata: receipt commitment mismatch")
 	}

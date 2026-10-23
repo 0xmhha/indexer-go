@@ -54,13 +54,14 @@ type Options struct {
 
 // Store implements the storage ports on PostgreSQL.
 type Store struct {
-	pool         *pgxpool.Pool
-	schema       string
-	readOnly     bool
-	writable     []string // key-value prefixes writable although readOnly
-	queryMu      sync.Mutex
-	queryReader  *reservedQueryReader
-	queryClosing bool
+	pool          *pgxpool.Pool
+	executionMode atomic.Bool
+	schema        string
+	readOnly      bool
+	writable      []string // key-value prefixes writable although readOnly
+	queryMu       sync.Mutex
+	queryReader   *reservedQueryReader
+	queryClosing  bool
 
 	// orphanRetention is how many reorganization records are kept with
 	// their orphaned blocks; 0 keeps all (SetOrphanRetention).
@@ -117,9 +118,17 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 			pool.Close()
 			return nil, err
 		}
+		if err := s.loadExecutionMode(ctx); err != nil {
+			pool.Close()
+			return nil, err
+		}
 		return s, nil
 	}
 	if err := s.Migrate(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	if err := s.loadExecutionMode(ctx); err != nil {
 		pool.Close()
 		return nil, err
 	}
@@ -156,6 +165,9 @@ func (s *Store) q(ctx context.Context) querier {
 		return tx.q()
 	}
 	if ctx != nil {
+		if view, ok := ctx.Value(executionReadKey{}).(*executionReadView); ok && view.owner == s {
+			return view
+		}
 		if reader, ok := ctx.Value(queryReaderKey{}).(*reservedQueryReader); ok && reader.owner == s {
 			return reader
 		}
@@ -198,6 +210,9 @@ func (s *Store) writeKey(key []byte) error {
 // inTx runs fn in the block transaction bound to ctx, or in a transaction
 // of its own, so a method's writes apply together.
 func (s *Store) inTx(ctx context.Context, fn func(q querier) error) error {
+	if s.executionReadBound(ctx) {
+		return port.ErrReadOnly
+	}
 	if err := s.write(); err != nil {
 		return err
 	}
@@ -232,6 +247,9 @@ var _ port.BlockTransactor = (*Store)(nil)
 
 // BeginBlock implements port.BlockTransactor.
 func (s *Store) BeginBlock(ctx context.Context) (context.Context, port.BlockTx, error) {
+	if s.executionReadBound(ctx) {
+		return nil, nil, port.ErrReadOnly
+	}
 	if err := s.write(); err != nil {
 		return nil, nil, err
 	}

@@ -185,8 +185,9 @@ type Fetcher struct {
 
 	// src, when set, reads blocks as raw JSON decoded by the chain profile
 	// instead of through client (chain profile design, CP-3).
-	src         source.Source
-	stateSource source.Source
+	src                source.Source
+	stateSource        source.Source
+	executionCanonical source.CanonicalReader
 
 	// txr opens per-block storage transactions (nil if the storage cannot).
 	txr port.BlockTransactor

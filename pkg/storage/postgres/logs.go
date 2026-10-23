@@ -79,12 +79,12 @@ func queueLog(b *pgx.Batch, l *model.Log) {
 
 // GetLogsByBlock implements port.LogReader.
 func (s *Store) GetLogsByBlock(ctx context.Context, blockNumber uint64) ([]*model.Log, error) {
-	return s.queryLogs(ctx, "SELECT "+logColumns+" FROM logs WHERE block_number = $1"+chainOrder, i64(blockNumber))
+	return s.queryLogs(ctx, "SELECT "+logColumns+" FROM exec_visible_logs WHERE block_number = $1"+chainOrder, i64(blockNumber))
 }
 
 // GetLogsByAddress implements port.LogReader.
 func (s *Store) GetLogsByAddress(ctx context.Context, address common.Address, fromBlock, toBlock uint64) ([]*model.Log, error) {
-	return s.queryLogs(ctx, "SELECT "+logColumns+" FROM logs WHERE address = $1 AND block_number BETWEEN $2 AND $3"+chainOrder,
+	return s.queryLogs(ctx, "SELECT "+logColumns+" FROM exec_visible_logs WHERE address = $1 AND block_number BETWEEN $2 AND $3"+chainOrder,
 		address.Bytes(), i64(fromBlock), i64(toBlock))
 }
 
@@ -94,7 +94,7 @@ func (s *Store) GetLogsByTopic(ctx context.Context, topic common.Hash, topicInde
 		return nil, fmt.Errorf("topic index %d out of range [0, 3]", topicIndex)
 	}
 	col := "topic" + strconv.Itoa(topicIndex)
-	return s.queryLogs(ctx, "SELECT "+logColumns+" FROM logs WHERE "+col+" = $1 AND block_number BETWEEN $2 AND $3"+chainOrder,
+	return s.queryLogs(ctx, "SELECT "+logColumns+" FROM exec_visible_logs WHERE "+col+" = $1 AND block_number BETWEEN $2 AND $3"+chainOrder,
 		topic.Bytes(), i64(fromBlock), i64(toBlock))
 }
 
@@ -148,7 +148,7 @@ func (s *Store) GetLogs(ctx context.Context, filter *port.LogFilter) ([]*model.L
 		}
 		where = append(where, "topic"+strconv.Itoa(i)+" = ANY("+arg(opts)+")")
 	}
-	return s.queryLogs(ctx, "SELECT "+logColumns+" FROM logs WHERE "+strings.Join(where, " AND ")+chainOrder, args...)
+	return s.queryLogs(ctx, "SELECT "+logColumns+" FROM exec_visible_logs WHERE "+strings.Join(where, " AND ")+chainOrder, args...)
 }
 
 func (s *Store) queryLogs(ctx context.Context, sql string, args ...any) ([]*model.Log, error) {

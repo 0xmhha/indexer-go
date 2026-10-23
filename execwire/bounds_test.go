@@ -30,6 +30,23 @@ func TestResultPreservesRawSegments(t *testing.T) {
 	}
 }
 
+func TestEncoderHonorsDecoderJSONTokenBudget(t *testing.T) {
+	_, _, r := fixture()
+	r.TxCount = 20000
+	r.Steps = make([]Step, int(r.TxCount)+1)
+	for i := uint32(0); i < r.TxCount; i++ {
+		h := Hash{}
+		binary.BigEndian.PutUint32(h[28:], i+1)
+		r.Steps[i] = Step{Ordinal: i, Cause: Transaction, TxIndex: int32(i), TxHash: h}
+	}
+	r.Steps[r.TxCount] = Step{Ordinal: r.TxCount, Cause: Finalize, TxIndex: -1}
+	p, err := MarshalResult(r)
+	if !errors.Is(err, ErrLimit) {
+		_, decodeErr := UnmarshalResult(p)
+		t.Fatalf("encoder accepted JSON above decoder token budget: encode=%v decode=%v", err, decodeErr)
+	}
+}
+
 func TestResultRejectsMalformedSegmentLengthsAndJSON(t *testing.T) {
 	_, _, v := fixture()
 	p, err := MarshalResult(v)

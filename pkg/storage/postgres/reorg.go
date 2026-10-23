@@ -34,6 +34,9 @@ func (s *Store) SetOrphanRetention(n uint64) { s.orphanRetention.Store(n) }
 // first records the reorganization. If a block in the range has no undo,
 // nothing changes.
 func (s *Store) RollbackTo(ctx context.Context, to uint64, onUndo port.UndoHook) (*port.Reorg, error) {
+	if s.executionMode.Load() {
+		return nil, port.ErrInvalidData
+	}
 	if err := s.write(); err != nil {
 		return nil, err
 	}
