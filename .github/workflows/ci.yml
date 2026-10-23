@@ -79,11 +79,12 @@ jobs:
           make test-execwire
           cd execwire
           GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConn' ./...
-      - name: StableNet replay contracts and concurrency
+      - name: StableNet replay and spool contracts and concurrency
         run: |
           make test-executor-stablenet
           cd x/stablenet/executor
           GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestCancelLogger|TestReplayCancellationDuringEVM)' ./...
+          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConcurrentCancellationAndCloseJoin$' ./spool
       - name: Pebble cache lifecycle
         # Pebble disables its cache leak finalizer under -race.
         run: make test-cache-lifecycle

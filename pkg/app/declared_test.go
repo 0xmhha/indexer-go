@@ -54,15 +54,25 @@ func requireOnlyDeclaredData(t *testing.T, dir string) {
 func runLiveUntil(t *testing.T, app *App, head uint64) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- app.fetcher.Run(ctx) }()
-	require.Eventually(t, func() bool {
+	done := make(chan struct{})
+	var runErr error
+	go func() { runErr = app.fetcher.Run(ctx); close(done) }()
+	defer func() { cancel(); <-done }()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
 		h, err := app.storage.GetLatestHeight(ctx)
-		return err == nil && h >= head
-	}, 30*time.Second, 10*time.Millisecond)
-	cancel()
-	<-done
+		if err == nil && h >= head {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("live ingest did not reach %d before its functional deadline: last height=%d read=%v context=%v", head, h, err, ctx.Err())
+		case <-done:
+			t.Fatalf("live ingest exited before %d: last height=%d read=%v run=%v", head, h, err, runErr)
+		case <-tick.C:
+		}
+	}
 }
 
 // TestDeclaredModeStoresOnlyDeclaredData (refactoring plan R6-1, P07-FR-01

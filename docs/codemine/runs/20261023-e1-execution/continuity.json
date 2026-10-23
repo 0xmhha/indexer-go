@@ -3,27 +3,47 @@
   "plan": "03-plan.md",
   "checklist": "checklist.md",
   "current": {
-    "unit": "U02",
-    "state": "local_green_pending_pr_ci",
-    "intent": "two-pass replay with per-transaction and Finalize journal, original-root parity, independent completeness verification and no persistent second-pass writes",
+    "unit": "U03",
+    "state": "local_checks_passed",
+    "intent": "bounded fsync-before-transmit result spool and exact durable ACK cleanup/restart",
     "files": [
-      "x/stablenet/executor/",
-      "04-recorder-contract.md",
-      ".github/workflows/ci.yml",
-      "Makefile",
-      "CONTRIBUTING.md"
+      "x/stablenet/executor/spool/",
+      "05-spool-contract.md"
     ],
     "contracts": [
-      "official upstream commit pinned; no upstream patch",
-      "retain U01 wire reference/ordinal/raw RLP contracts",
-      "preserve original header root before WBFT Finalize mutates its copy",
-      "real EVM library fixtures only; no node.Start/peers",
-      "a record-only omission must fail even while actual trie updates continue"
+      "full result fsync+rename+directory sync before eligible transmission",
+      "exact chain/ref/hash/generation/digest ACK before cleanup",
+      "durable ACK receipt before removing a result",
+      "quota counts temporary/quarantine/metadata as well as pending results",
+      "no RPC, node startup, node DB GC or performance measurements"
     ],
-    "verification": "Module build/vet/lint/race and single GOMAXPROCS=1/race/count=200 passed; root/wire full race, actual fsync-on PostgreSQL, root build/vet/lint, astgraph lint, cache lifecycle, examples, offline operations and secret scans passed. Anvil skipped using test-only PATH; no nodes/peers/performance. Detailed functional/TDD evidence in checklist.md.",
-    "next": "Commit/PR; require lint/test/postgres/examples, squash merge exact head, sync main; then U03 RED."
+    "verification": "Stub RED 6 plus duplicate identity RED 1 and incomplete identity/unknown temporary RED 2. Module race/lint, single GOMAXPROCS=1/race/count=200 spool cancellation/join passed. Root/wire race, fsync-on PostgreSQL adapter/bundle, build/vet/lint, examples/cache/offline ops passed. Root make executor cache lookup corrected by dedicated-cache full module race. Existing PG backfill30s wait failed, helper cancellation/join/diagnostics corrected; all 11 affected functional tests pass with race on root and PG. See checklist for exact scope.",
+    "next": "Commit/PR and four required CI checks, squash/main; then U04 PostgreSQL control/state ports."
   },
   "previous": [
+    {
+      "unit": "U02",
+      "state": "merged",
+      "intent": "two-pass replay with per-transaction and Finalize journal, original-root parity, independent completeness verification and no persistent second-pass writes",
+      "files": [
+        "x/stablenet/executor/",
+        "04-recorder-contract.md",
+        ".github/workflows/ci.yml",
+        "Makefile",
+        "CONTRIBUTING.md"
+      ],
+      "contracts": [
+        "official upstream commit pinned; no upstream patch",
+        "retain U01 wire reference/ordinal/raw RLP contracts",
+        "preserve original header root before WBFT Finalize mutates its copy",
+        "real EVM library fixtures only; no node.Start/peers",
+        "a record-only omission must fail even while actual trie updates continue"
+      ],
+      "verification": "Module build/vet/lint/race and single GOMAXPROCS=1/race/count=200 passed; root/wire full race, actual fsync-on PostgreSQL, root build/vet/lint, astgraph lint, cache lifecycle, examples, offline operations and secret scans passed. Anvil skipped using test-only PATH; no nodes/peers/performance. Detailed functional/TDD evidence in checklist.md.",
+      "next": "U03 durable spool",
+      "pr": "https://github.com/0xmhha/indexer-go/pull/211",
+      "merge_commit": "4525ac6ddd630b60f9a2d93b4653228ef934817d"
+    },
     {
       "unit": "U01",
       "state": "merged",
