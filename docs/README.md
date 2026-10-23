@@ -48,6 +48,7 @@ No package carries a compatibility promise; pin a version and run your extension
 - [Architecture](ARCHITECTURE.md) explains block transactions, reorg recovery and outbox delivery.
 - [Pipeline telemetry](FEED_TELEMETRY.md) defines feed-stage latency, backlog and unavailable observations.
 - [Remaining work](analysis/open-items.md) separates completed checks, unresolved operational requirements and deferred work.
+- [Handover 10/23](analysis/handoff-2026-10-23.md) records the move to execution-based ingest, the approved E1 design ([decisions](decisions/20261023-e1-design/decision.md), [design](codemine/runs/20261023-e1-execution/02-design.md)) and the next step (E1 plan).
 
 ## Use the opt-in Arc feed
 
