@@ -53,6 +53,9 @@ func NewController(ctx context.Context, limits Limits, store ControllerStore, ba
 	if err != nil {
 		return nil, err
 	}
+	if status.Maintenance {
+		return nil, port.ErrExecutionMaintenance
+	}
 	if status.Rewinding {
 		if err := recover(owned); err != nil {
 			return nil, err
@@ -71,6 +74,9 @@ func (c *Controller) start(ctx context.Context) error {
 	status, err := c.store.ExecutionStatus(ctx)
 	if err != nil {
 		return err
+	}
+	if status.Maintenance {
+		return port.ErrExecutionMaintenance
 	}
 	if status.Rewinding {
 		return port.ErrExecutionRewinding

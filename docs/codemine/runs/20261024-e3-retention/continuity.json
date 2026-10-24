@@ -1,0 +1,43 @@
+{
+  "goal": "E3 retention and offline GC",
+  "base": "ac6f0ac",
+  "source_branch": "refactor/e3-retention-gc",
+  "n": {
+    "unit": "U05",
+    "state": "locally_verified",
+    "contract": "one coherent E3 release; source-branch PR is authoritative for latest-head CI4/ready/squash/main",
+    "verification": {
+      "functional": "full root passed",
+      "race": "full root/wire/executor passed",
+      "postgres": "full disposable fsync-on suite passed; source/DB132-block supervisor roundtrip passed",
+      "concurrency": "all6 groups passed one GOMAXPROCS=1/race/count=200 invocation each; existing CI gates preserved",
+      "static": "build/fmt/vet/lint/cache/examples/offline operations passed",
+      "secrets": "staged/history scans no leaks",
+      "docs": "194 relative links valid; accepted E1/E2 plans preserved"
+    },
+    "scope": "no live node/peer, provisioning, operational GC or performance measurement"
+  },
+  "n-1": {
+    "unit": "U04",
+    "state": "implemented_targeted_verified",
+    "contract": "full baseline/digest, live pending DB lease and inherited challenge pipe; completed artifact cannot relaunch; current native/freezer and source postchecks, capacity and explicit release",
+    "red": "artifact output, unobservable storage, partial baseline, unsupervised DB lease and native future freezer all failed for requirements before their fixes",
+    "green": "actual132-block source plan/ACKs and root seven-part PG roundtrip; native reopen/import/reorg/state recovery/future freezer; inherited pipe cancellation correction verified",
+    "verification_pending": "full regression, new concurrency200, secrets and latest-head CI4/squash/main"
+  },
+  "n-2": {
+    "unit": "U03",
+    "state": "targeted_verified",
+    "contract": "offline COW node DB, full baseline authority, preserve headers/genesis/live path state and exact cutoff parent, chain freezer positions; explicit swap/recovery/release",
+    "red": "native hot/frozen fixture Compact returned ErrUnsafe before implementation",
+    "green": "all durable phase faults, native core.BlockChain reopen/import/short reorg, real state history ID/cutoff recovery; no node.Start"
+  },
+  "next": "Resolve source-branch PR: if absent/open finish draft/latest-head CI4/ready/squash/ff main; if merged E3 is complete. Report E4-E6 and held operational work, and do not start E4 automatically or repeat closed checks.",
+  "holds": [
+    "live node/peer",
+    "disk provisioning",
+    "operational GC activation",
+    "performance"
+  ],
+  "ci_and_merge_source": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe3-retention-gc"
+}

@@ -80,3 +80,29 @@ func TestClientRefusesConcurrentRunBeforeStartingAnotherNode(t *testing.T) {
 		t.Fatal("second node started")
 	}
 }
+
+func TestClientCapacityFailureStopsBeforeReplayAndPreservesACK(t *testing.T) {
+	s, b, o := collectorFixture(t, 16)
+	failure := errors.New("owned node storage over budget")
+	c := &Client{Chain: o.Chain, Spool: s, Backend: &synchronizedBackend{b: b}, Poll: time.Millisecond, Retry: time.Millisecond, Timeout: time.Second, BeforeCapture: func(context.Context) error { return failure }}
+	ctx, finish, done, _ := runClientTest(t, c, func(ctx context.Context, conn *execwire.Conn, _ int) error {
+		if err := fakeIndexerHello(ctx, conn, c.Chain, o.Anchor); err != nil {
+			return err
+		}
+		_, err := conn.Read(ctx)
+		return err
+	})
+	defer finish()
+	select {
+	case err := <-done:
+		if !errors.Is(err, failure) {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	status, err := s.Status(t.Context())
+	if err != nil || status.Committed != o.Anchor || status.Pending != 0 {
+		t.Fatal("capacity halt discarded/promoted raw", status, err)
+	}
+}

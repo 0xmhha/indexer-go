@@ -21,11 +21,17 @@ func Diagnose(db port.ExecutionControl, src format.SourceObservation) RecoveryRe
 	if db.Chain != src.Chain || db.Anchor != src.Anchor {
 		add("chain or original anchor mismatch")
 	}
+	if db.Maintenance {
+		add("DB has unfinished offline retention; exact completion/release required")
+	}
 	if db.Rewinding {
 		add("DB has unfinished rewind; use existing fenced recovery")
 	}
 	if !db.BaselineReady {
 		add("DB baseline is not ready")
+	}
+	if src.MaintenancePending {
+		add("source has unfinished offline retention; exact completion/release required")
 	}
 	if src.TransitionPending {
 		add("source has unfinished generation transition; inspect with owner stopped")

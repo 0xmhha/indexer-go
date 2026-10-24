@@ -3,7 +3,7 @@
   "base": "3ae27d5",
   "n": {
     "unit": "U04",
-    "state": "implemented_locally_verified",
+    "state": "merged",
     "files": [
       "docs/EXECUTION_BOOTSTRAP.md",
       "pkg/app/execution_postgres_test.go"
@@ -34,7 +34,7 @@
     ],
     "contract": "atomic empty-schema baseline, coverage and final uncached fresh; released E1 defaults partial"
   },
-  "next": "Resolve the source-branch PR. If not merged, finish its latest-head CI4/ready/squash and ff main. If merged, E2 is complete; next is E3 retention policy, with current operational holds. Do not repeat closed E1/E2 checks without a relevant change or failure.",
+  "next": "E2 is merged (#215). Do not repeat closed checks. Current requested E3 work and release gates are in ../20261024-e3-retention/continuity.json.",
   "holds": [
     "live node/peer",
     "formatting",
@@ -42,5 +42,10 @@
     "performance"
   ],
   "source_branch": "refactor/e2-checkpoint-bootstrap",
-  "ci_and_merge_source": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe2-checkpoint-bootstrap"
+  "ci_and_merge_source": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe2-checkpoint-bootstrap",
+  "release": {
+    "pr": 215,
+    "merge_commit": "ac6f0acd96d769ccbd098e9211b59a5312d53fdf",
+    "status": "merged"
+  }
 }

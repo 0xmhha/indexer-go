@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: EVM framework available; E1 execution ingest is merged (#214); E2 offline genesis/checkpoint preparation is tracked in `docs/codemine/runs/20261024-e2-bootstrap/plan.md`
+- **Current Stage**: EVM framework available; E1 (#214) and E2 (#215) are merged; E3 offline retention is tracked in `docs/codemine/runs/20261024-e3-retention/plan.md`
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context
@@ -193,12 +193,12 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 
 ### Current Work
 
-E2 checkpoint/bootstrap implementation and local verification are complete; resolve its source-branch PR/CI/merge from the E2 continuity record. E1 #214 is merged. Once the E2 PR is merged, proceed to E3 only when requested. Read these before continuing:
+E3 implementation and required local validation are complete; resolve its source-branch PR for CI/merge status. If merged, E3 is complete and closed checks must not be repeated. E1 #214 and E2 #215 are merged. Read:
 
-- `docs/decisions/20261023-e1-design/decision.md`: final decisions, including two executions and no upstream patch.
-- `docs/codemine/runs/20261023-e1-execution/02-design.md` and `03-plan.md`: current design and implementation contracts.
-- `docs/codemine/runs/20261024-e2-bootstrap/plan.md`, `checklist.md` and `continuity.json`: E2 scope, feature evidence and current n/n-1/n-2. E1 records remain its accepted design/reference.
-- `docs/analysis/open-items.md`: current remaining E2/E3–E6 and operational work.
+- `docs/codemine/runs/20261024-e3-retention/plan.md`, `checklist.md`, `continuity.json`, `validation.md`: current E3 scope, evidence and n/n-1/n-2.
+- `docs/EXECUTION_RETENTION.md`: supervised offline procedure, standard native layout, full-baseline requirement, window/copy/capacity and recovery limits.
+- Accepted E1 `docs/decisions/20261023-e1-design/decision.md`, `docs/codemine/runs/20261023-e1-execution/02-design.md` and `03-plan.md`; E2 `docs/codemine/runs/20261024-e2-bootstrap/plan.md` and continuity remain references, not work to repeat.
+- `docs/analysis/open-items.md`: E4–E6 and operational work. Do not start E4 automatically after E3.
 
 The user delegated recommended decisions and implementation through CI-gated squash merges on 2026-10-24. Write a requirement-failing RED test before each feature, implement it, then prove GREEN. Update current documentation and the checklist after each feature. Preserve the E1 design/plan and n/n-1/n-2 context; use Git history for obsolete records instead of appending stale current status.
 
@@ -206,7 +206,7 @@ Keep one existing PostgreSQL pool with max_conns=4. Seven writer queues share at
 
 Keep 5 physical HTTP attempts/s per chain, including retries/failover/batch fallback, parameter-bound PostgreSQL values and validated/quoted identifiers. Preserve existing RPC/facts/window/capture durability, undo/outbox, epoch/lease/ACK/GC contracts outside the opt-in execution mode. Never clear a pending deletion fence by TTL or silently replace missing partial state with latest/zero. E2 full coverage requires complete root reconstruction; only then may an unlisted account/slot be known zero from the anchor. Bootstrap requires an empty schema and preserves existing data. Chain-specific code stays under x/<chain> or its separate module.
 
-Actual node services, peer access, disk provisioning, GC activation and additional performance measurements are on hold. Offline functional EVM library tests are allowed. Do not start a full node or download a snapshot as a follow-up. Preserve other projects, shared caches and Docker resources; own disposable test resources explicitly.
+Actual node services, peer access, disk provisioning, operational GC activation and additional performance measurements are on hold. Owned temporary GC/native-library functional tests are allowed. Offline functional EVM library tests are allowed. Do not start a full node or download a snapshot as a follow-up. Preserve other projects, shared caches and Docker resources; own disposable test resources explicitly.
 
 Use explicit paths when staging; no git add -A. Use short English Conventional Commits without codex prefixes or attribution lines. Run required local race and staged/history secret checks before committing. New concurrency tests need a single GOMAXPROCS=1/race/count=200 run before push. Four required CI jobs must pass before squash merge; never bypass protection. Synchronize main before the next feature.
 

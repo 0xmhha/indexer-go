@@ -341,7 +341,7 @@ func (s *Store) usage() (uint64, int, int, error) {
 			return 0, 0, 0, err
 		}
 		bytes += charged(info)
-		if name.Name() != stateName && name.Name() != lockName && name.Name() != transitionName && !strings.HasSuffix(name.Name(), ".ack") {
+		if name.Name() != stateName && name.Name() != lockName && name.Name() != transitionName && name.Name() != gcIntentName && name.Name() != gcReceiptName && !strings.HasSuffix(name.Name(), ".ack") {
 			records++
 		}
 		if strings.HasPrefix(name.Name(), ".quarantine-") {

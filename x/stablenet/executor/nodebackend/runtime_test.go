@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/x/stablenet/executor/exporter"
+	"github.com/0xmhha/indexer-go/x/stablenet/executor/nodestore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -190,5 +191,24 @@ func TestOfflineExportGenesisDoesNotCreateNodeOrSpool(t *testing.T) {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatal("export created live data path", path, err)
 		}
+	}
+}
+
+func TestNodeRuntimeMaintenanceFencePreventsFactoryAndStart(t *testing.T) {
+	c, _ := runtimeConfig(t)
+	c.Peers = nil
+	if err := os.Mkdir(c.DataDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(c.DataDir, ".execution-retention"), []byte("preserve even corrupt evidence"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	err := run(t.Context(), c, func(Config, *core.Genesis) (ownedNode, error) { called = true; return nil, nil }, func(context.Context, *exporter.Client) error { return nil })
+	if !errors.Is(err, nodestore.ErrPending) || called {
+		t.Fatal("maintenance started a node", called, err)
+	}
+	if _, err = os.Stat(c.SpoolDir); !os.IsNotExist(err) {
+		t.Fatal("fenced startup initialized source")
 	}
 }

@@ -230,7 +230,7 @@ func TestBootstrapMigrationPreservesReleasedE1Baseline(t *testing.T) {
 	s, cfg, addr, a := accountFixture(t)
 	// Reconstruct the released v14 control shape, retaining its baseline rows
 	// and digest, then apply only the new migration as an upgrade.
-	_, err := s.pool.Exec(t.Context(), `ALTER TABLE exec_control DROP COLUMN coverage,DROP COLUMN start_mode,DROP COLUMN bootstrap_digest; DELETE FROM schema_migrations WHERE version=15`)
+	_, err := s.pool.Exec(t.Context(), `ALTER TABLE exec_control DROP COLUMN coverage,DROP COLUMN start_mode,DROP COLUMN bootstrap_digest; DROP TABLE exec_retention; DELETE FROM schema_migrations WHERE version>=15`)
 	require.NoError(t, err)
 	require.NoError(t, s.Migrate(t.Context()))
 	info, err := s.ExecutionBootstrapStatus(t.Context())

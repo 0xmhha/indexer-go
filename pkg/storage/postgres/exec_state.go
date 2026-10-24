@@ -85,7 +85,7 @@ func (s *Store) SeedExecution(ctx context.Context, b port.ExecutionBaseline) err
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock("+executionLockSQL+")"); err != nil {
 			return err
 		}
-		c, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL))
+		c, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL))
 		if err != nil {
 			return err
 		}

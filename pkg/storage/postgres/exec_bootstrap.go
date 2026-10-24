@@ -126,7 +126,7 @@ func (s *Store) BootstrapExecution(ctx context.Context, r io.Reader, m format.Ma
 		if e = ctx.Err(); e != nil {
 			return e
 		}
-		c, e := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL))
+		c, e := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL))
 		if e != nil {
 			return e
 		}
