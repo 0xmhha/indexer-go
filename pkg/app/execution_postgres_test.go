@@ -33,6 +33,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/storage/postgres"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -180,7 +181,7 @@ func TestExecutionFrozenEVMPostgresPublicationAndAPIParity(t *testing.T) {
 	for _, name := range []string{"evm-storage", "evm-revert", "evm-creations", "wbft-native"} {
 		t.Run(name, func(t *testing.T) {
 			f := loadExecutionFrozen(t, name)
-			s, _ := preparedExecutionDB(t, f)
+			s, cfg := preparedExecutionDB(t, f)
 			_, srv := fixtureRPC(t, f)
 			cl, err := client.NewClient(&client.Config{Endpoint: srv.URL, Timeout: time.Second, RateLimit: 5, Logger: zap.NewNop()})
 			require.NoError(t, err)
@@ -203,6 +204,14 @@ func TestExecutionFrozenEVMPostgresPublicationAndAPIParity(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			require.NoError(t, future.Wait(ctx))
+			observer, err := pgx.Connect(ctx, cfg.Database.Postgres.DSN)
+			require.NoError(t, err)
+			defer func() { require.NoError(t, observer.Close(context.Background())) }()
+			var duplicateBalances, duplicateHistory int
+			require.NoError(t, observer.QueryRow(ctx, "SELECT count(*) FROM "+pgx.Identifier{cfg.Database.Postgres.Schema, "balances"}.Sanitize()).Scan(&duplicateBalances))
+			require.NoError(t, observer.QueryRow(ctx, "SELECT count(*) FROM "+pgx.Identifier{cfg.Database.Postgres.Schema, "balance_history"}.Sanitize()).Scan(&duplicateHistory))
+			require.Zero(t, duplicateBalances, "native account writer is the only balance authority")
+			require.Zero(t, duplicateHistory, "feature writer must not duplicate account history")
 			result, err := execwire.UnmarshalResult(f.Payload)
 			require.NoError(t, err)
 			assertExecutionFrozen(t, ctx, s, f, result.Ref)

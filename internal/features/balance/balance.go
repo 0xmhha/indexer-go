@@ -54,11 +54,12 @@ func (balanceFeature) Register(r feature.Registrar) error {
 		logger = zap.NewNop()
 	}
 	prefetch, _ := d.Storage.(port.BalancePrefetcher) // optional
+	journal, _ := d.Storage.(port.ExecutionBalanceJournal)
 	r.OnBlock(&handler{
 		deps: d,
 		w:    w, r: rd, records: rc, prefetch: prefetch,
-		accounting: chains.AccountingOf(d.Profile),
-		balanceAt:  d.BalanceAt, blocks: d.Blocks(), logger: logger,
+		accounting: chains.AccountingOf(d.Profile), journal: journal,
+		balanceAt: d.BalanceAt, blocks: d.Blocks(), logger: logger,
 		allowPrunedState: st.AllowPrunedState,
 	})
 	return nil
@@ -79,6 +80,7 @@ type settings struct {
 func init() { feature.Register(balanceFeature{}) }
 
 type handler struct {
+	journal          port.ExecutionBalanceJournal
 	deps             feature.Deps
 	w                port.HistoricalWriter
 	r                port.HistoricalReader

@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: EVM framework available; E1 (#214) and E2 (#215) are merged; E3 offline retention is tracked in `docs/codemine/runs/20261024-e3-retention/plan.md`
+- **Current Stage**: EVM framework available; E1 (#214), E2 (#215) and E3 (#216) are merged; E4 feature writers are tracked in `docs/codemine/runs/20261024-e4-feature-writers/plan.md`
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context
@@ -193,12 +193,11 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 
 ### Current Work
 
-E3 implementation and required local validation are complete; resolve its source-branch PR for CI/merge status. If merged, E3 is complete and closed checks must not be repeated. E1 #214 and E2 #215 are merged. Read:
+E4 implementation and required local checks are complete on `refactor/e4-feature-writers`, based on E3 #216/main a493be8. Read current E4 plan/checklist/continuity/validation under `docs/codemine/runs/20261024-e4-feature-writers/`, and `docs/EXECUTION_FEATURE_WRITERS.md`. The source-branch PR is authoritative for release. If it is merged, E4 is complete; do not repeat closed checks or start E5 automatically.
 
-- `docs/codemine/runs/20261024-e3-retention/plan.md`, `checklist.md`, `continuity.json`, `validation.md`: current E3 scope, evidence and n/n-1/n-2.
-- `docs/EXECUTION_RETENTION.md`: supervised offline procedure, standard native layout, full-baseline requirement, window/copy/capacity and recovery limits.
-- Accepted E1 `docs/decisions/20261023-e1-design/decision.md`, `docs/codemine/runs/20261023-e1-execution/02-design.md` and `03-plan.md`; E2 `docs/codemine/runs/20261024-e2-bootstrap/plan.md` and continuity remain references, not work to repeat.
-- `docs/analysis/open-items.md`: E4–E6 and operational work. Do not start E4 automatically after E3.
+Feature-unit writers own preparation, grouped hooks and exact checkpoints; their SQL stays ordered inside the single final publication/undo/outbox transaction. No per-feature pool or concurrent use of one pgx transaction. Execution native balances/history use the account journal, not duplicate balances tables; the feature verifies exact stored input and writes no duplicate projection. Preserve ordinary RPC ingestion and independent capture projections. Existing projection rows are not deleted. Execution history cursors/anchor coverage differ as documented.
+
+E1 #214, E2 #215 and E3 #216 are merged. Preserve accepted E1 design/plan, E2 bootstrap and E3 retention records. Current E4 continuity retains n/n-1/n-2. `docs/analysis/open-items.md` tracks E5/E6 and held operations.
 
 The user delegated recommended decisions and implementation through CI-gated squash merges on 2026-10-24. Write a requirement-failing RED test before each feature, implement it, then prove GREEN. Update current documentation and the checklist after each feature. Preserve the E1 design/plan and n/n-1/n-2 context; use Git history for obsolete records instead of appending stale current status.
 

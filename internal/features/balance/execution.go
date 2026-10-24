@@ -23,6 +23,9 @@ func (h *handler) applyExecutionBalances(ctx context.Context, b *feature.Block) 
 	if b == nil || b.Model == nil {
 		return port.ErrInvalidData
 	}
+	if h.journal != nil {
+		return h.journal.ValidateExecutionBalances(ctx, b.Model.Number, b.Model.Hash, changes)
+	}
 	current := make(map[common.Address]*big.Int)
 	for _, change := range changes {
 		if err = ctx.Err(); err != nil {

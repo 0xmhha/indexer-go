@@ -82,7 +82,7 @@ exact duplicate는 feature/outbox를 반복하지 않는다. ACK 유실 뒤의 �
 
 API는 기존 예약/차용 연결의 repeatable-read snapshot과 rewind shared advisory fence를 사용한다. 중첩 읽기는 같은 연결을 재사용한다. rows 종료/취소가 끝난 뒤 rollback/release하고 retained context가 새 pool로 빠지지 않는다. rewind 중이거나 fence try-lock 실패면 명시적 재시도 오류다.
 
-PG native balance 조회는 기존 feature projection을 먼저 읽고 untouched account만 covered state로 보충한다. 공개 밖/coverage 누락을 genesis RPC나 0으로 보정하지 않는다. publication 안에서는 projection Before를 유지한다. GraphQL 표준 검증·깊이/복잡도·취소, JSON 오류 의미와 Playground를 유지한다. [읽기 계약](09-read-contract.md)을 따른다.
+E4 이후 PG native balance 조회는 account journal을 단일 권위로 사용하며 중복 feature projection은 쓰지 않는다. 기존 E1 projection 우선 규약은 [E4 계약](../../../EXECUTION_FEATURE_WRITERS.md)으로 대체됐다. 공개 밖/coverage 누락을 genesis RPC나 0으로 보정하지 않는다. GraphQL 표준 검증·깊이/복잡도·취소, JSON 오류 의미와 Playground를 유지한다. [읽기 계약](09-read-contract.md)을 따른다.
 
 ## 7. 시작·재연결·복구
 

@@ -9,12 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type NativeBalanceChange struct {
-	Address       common.Address
-	Before, After *big.Int
-	TxHash        common.Hash
-	Ordinal       uint32
-}
+type NativeBalanceChange = port.ExecutionBalanceChange
 
 type nativeBalanceKey struct{}
 type nativeBalanceInput struct {

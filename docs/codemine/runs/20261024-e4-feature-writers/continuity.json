@@ -1,0 +1,44 @@
+{
+  "goal": "E4 feature writers and native balance authority",
+  "base": "a493be8",
+  "source_branch": "refactor/e4-feature-writers",
+  "n": {
+    "unit": "U04",
+    "state": "locally_verified",
+    "contract": "full checks before commit; draft exact-head CI4 then ready/squash/ff main",
+    "passed": [
+      "normal root551s",
+      "full root/wire/executor race753.6s",
+      "full fsync-on PG540.3s",
+      "all15 static/build/cache/examples checks",
+      "gofmt1273 files",
+      "new single GOMAXPROCS1/race/count200",
+      "current docs/links",
+      "history secrets; staged scan required before commit"
+    ],
+    "pending": [
+      "commit/draft PR/latest-head CI4/ready/squash/ff main"
+    ]
+  },
+  "n-1": {
+    "unit": "U03",
+    "state": "targeted_green",
+    "contract": "per-unit checkpoint in final publication; all rollback on any unit/fresh failure",
+    "red": "TestExecutionUnitCheckpointsAreOrderedAtomicAndRetryable: second writer cannot observe first checkpoint on E3 path",
+    "tests": "fetch/feature/balance race plus actual frozen EVM/WBFT PG/API/IPC reorg/restart/lost ACK; no duplicate rows"
+  },
+  "n-2": {
+    "unit": "U02",
+    "state": "targeted_green",
+    "contract": "stored account journal is the only native balance authority; strict candidate validation, visible history and coverage",
+    "tests": "TestExecutionBalanceJournal* and TestExecutionBalanceReads*, actual fsync-on PG/race"
+  },
+  "next": "Resolve source-branch PR; if merged E4 is complete. Finish exact-head CI4/squash/main otherwise. Report E5/E6 and held operations; do not repeat closed checks or start E5 automatically.",
+  "holds": [
+    "live nodes/peers",
+    "provisioning",
+    "operational GC",
+    "performance",
+    "other projects"
+  ]
+}
