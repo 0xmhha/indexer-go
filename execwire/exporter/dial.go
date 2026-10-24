@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/0xmhha/indexer-go/x/stablenet/executor/spool"
+	"github.com/0xmhha/indexer-go/execwire/spool"
 )
 
 func dialExecution(ctx context.Context, path string) (net.Conn, error) {

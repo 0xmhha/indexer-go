@@ -95,7 +95,7 @@ test-race:
 	cd x/stablenet/executor && $(GOTEST) -race -count=1 ./...
 
 .PHONY: test-execwire
-## test-execwire: Build and check the standalone standard-library execution wire module
+## test-execwire: Build and check execution wire, durable spool and exporter supervision
 test-execwire:
 	cd execwire && $(GOBUILD) ./... && $(GOVET) ./... && $(GOTEST) -race -count=1 ./...
 

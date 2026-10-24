@@ -1,0 +1,67 @@
+{
+  "goal": "E5 continuous Arc collector",
+  "base": "3481cdda804e138409759a51161cba39a0ba1b16",
+  "source_branch": "refactor/e5-arc-collector",
+  "n": {
+    "unit": "U04",
+    "state": "locally_verified",
+    "contract": "required local matrix, no skipped import boundary; draft/exact-head CI4+Arc/ready/squash/ff main; remove owned build caches after release",
+    "passed": [
+      "root build/vet/lint/cache/examples/operations/other module static checks",
+      "new Arc child/socket/command GOMAXPROCS1/race/single200",
+      "new actual fsync-on PG spool/publication/lost-ACK GOMAXPROCS1/race/single200",
+      "native Rust build/fmt/clippy/tests and byte-identical fixtures",
+      "fixed original stdlib port boundary and macOS peer authentication race/single200",
+      "final affected-package normal/race/build/vet/lint and shared wire full race",
+      "full StableNet build/vet/race and Linux wire build",
+      "full sequential fsync-on PG storage/app/API/StableNet suite; all passed",
+      "docs/changed Go formatting/staged and base history secret scans"
+    ]
+  },
+  "n-1": {
+    "unit": "U03",
+    "state": "targeted_green",
+    "contract": "owned bounded read-only child, strict identity and replay validation; shared durable spool/exact ACK; native data independent; isolate upstream secondary logs and remove only owned inode-checked scratch after joined child",
+    "passed": [
+      "Go protocol/identity/cancellation/private socket",
+      "explicit command/help and invalid config",
+      "actual fsync-on PG collected publication and lost-ACK replay without duplicate outbox",
+      "private scratch isolation/native sentinel/owned child cleanup targeted checks"
+    ],
+    "pending": [
+      "full checks",
+      "new concurrency single200",
+      "CI gated release"
+    ]
+  },
+  "n-2": {
+    "unit": "U02",
+    "state": "targeted_green",
+    "contract": "versioned bounded sequential native stdio; exact retained parent and current native canonicality; completed import head",
+    "red": "native service unimplemented",
+    "passed": [
+      "Rust service invalid request bounds/sequence/arguments and EXR1 responses",
+      "official native replay tests",
+      "clippy"
+    ]
+  },
+  "next": "Resolve release through the source-branch PR. If open, complete exact-head CI4+Arc/ready/squash/ff main; if merged, this scope is complete. Report Arc native checkpoint export/retention, trace/blob/proofs, E6 and held operations without starting them automatically.",
+  "holds": [
+    "actual native DB/node/peer operations",
+    "disk provisioning",
+    "native operational GC",
+    "performance",
+    "other projects"
+  ],
+  "preserved": [
+    "E1 accepted design/two-pass/upstream unmodified",
+    "pool4/part2/API reservation",
+    "RPC5 physical attempts/s",
+    "final uncached fresh/generation fence",
+    "E2/E3/E4 contracts"
+  ],
+  "release": {
+    "authority": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-collector",
+    "completion": "exact-head CI4+Arc success, PR squash MERGED, clean local main synchronized to origin/main"
+  }
+}

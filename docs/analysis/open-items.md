@@ -1,10 +1,11 @@
 # 남은 작업
 
-E1 [#214](https://github.com/0xmhha/indexer-go/pull/214), E2 [#215](https://github.com/0xmhha/indexer-go/pull/215), E3 [#216](https://github.com/0xmhha/indexer-go/pull/216), E4 [#217](https://github.com/0xmhha/indexer-go/pull/217)은 main에 반영됐다. 현재 작업은 E5의 공식 Arc EVM 재실행·읽기 전용 단일 블록 export·보존 파일 전송이다. 정본은 E5 계획·체크리스트와 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-execution)이다. 해당 PR이 머지됐으면 이 릴리스 범위는 완료다. 지속 수집·checkpoint export·Arc 원본 보존 자동화까지 끝난 것은 아니다. 종료된 E1~E4 검사나 성능 측정을 이유 없이 반복하지 않는다.
+E1 [#214](https://github.com/0xmhha/indexer-go/pull/214), E2 [#215](https://github.com/0xmhha/indexer-go/pull/215), E3 [#216](https://github.com/0xmhha/indexer-go/pull/216), E4 [#217](https://github.com/0xmhha/indexer-go/pull/217), E5 Arc 재실행·파일 전송 [#218](https://github.com/0xmhha/indexer-go/pull/218)은 main에 반영됐다. 현재 릴리스는 E5 후속 지속 수집이다. 정본은 아래 계획·체크리스트와 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-collector)이다. 해당 PR이 머지됐으면 이 릴리스 범위는 완료다. Arc native checkpoint export·보존 자동화까지 완료된 것은 아니다. 종료된 검사나 성능 측정을 이유 없이 반복하지 않는다.
 
 ## 현재 정본과 연속성
 
-- E5 [계획](../codemine/runs/20261024-e5-arc-execution/plan.md), [체크리스트](../codemine/runs/20261024-e5-arc-execution/checklist.md), [연속성](../codemine/runs/20261024-e5-arc-execution/continuity.json), [검증](../codemine/runs/20261024-e5-arc-execution/validation.md), [Arc 실행 수집](../EXECUTION_ARC.md)
+- Arc collector [계획](../codemine/runs/20261025-e5-arc-collector/plan.md), [체크리스트](../codemine/runs/20261025-e5-arc-collector/checklist.md), [연속성](../codemine/runs/20261025-e5-arc-collector/continuity.json), [검증](../codemine/runs/20261025-e5-arc-collector/validation.md)
+- E5 replay [계획](../codemine/runs/20261024-e5-arc-execution/plan.md), [체크리스트](../codemine/runs/20261024-e5-arc-execution/checklist.md), [연속성](../codemine/runs/20261024-e5-arc-execution/continuity.json), [검증](../codemine/runs/20261024-e5-arc-execution/validation.md), [Arc 실행 수집](../EXECUTION_ARC.md)
 - E4 [계획](../codemine/runs/20261024-e4-feature-writers/plan.md), [체크리스트](../codemine/runs/20261024-e4-feature-writers/checklist.md), [연속성](../codemine/runs/20261024-e4-feature-writers/continuity.json), [검증](../codemine/runs/20261024-e4-feature-writers/validation.md), [기능 writer](../EXECUTION_FEATURE_WRITERS.md)
 
 - E3 [계획](../codemine/runs/20261024-e3-retention/plan.md), [체크리스트](../codemine/runs/20261024-e3-retention/checklist.md), [연속성](../codemine/runs/20261024-e3-retention/continuity.json), [기능 검증](../codemine/runs/20261024-e3-retention/validation.md), [사용법](../EXECUTION_RETENTION.md)
@@ -19,8 +20,7 @@ E1 [#214](https://github.com/0xmhha/indexer-go/pull/214), E2 [#215](https://gith
 
 | 단계 | 범위와 완료 조건 |
 | --- | --- |
-| E5 현재 릴리스 gate | 공식 Arc 재실행·단일 파일 export/ACK 전송, PreBlock 원인과 schema0017. 기능·race·정적·예제·전용 PG, 새 동시성 단일200, native Rust/fixture 재생성, secret scan, draft PR 최신-head CI4+Arc 후 squash/main. [체크리스트](../codemine/runs/20261024-e5-arc-execution/checklist.md)가 정본 |
-| E5 후속 1 | 지속 Arc collector의 durable cursor/spool quota, 재시작·reorg 세대/부모 선택과 ACK 감독. 현재 단일 파일 sender는 자동 재실행/rewind/삭제를 수행하지 않음 |
+| E5 collector 릴리스 gate | 공통 spool/exporter, Arc RO service/Go owner, durable cursor/quota·재시작/reorg·정확한 ACK. 로컬 필수 전체 검사와 새 동시성 단일200, native Rust/fixture 재생성, secret scan, draft PR 최신-head CI4+Arc 후 squash/main. [체크리스트](../codemine/runs/20261025-e5-arc-collector/checklist.md)가 정본 |
 | E5 후속 2 | Arc native full checkpoint export, 실제 보존 DB layout와 E3 lease/ACK/window/recovery 기반 native retention adapter. 기존 StableNet 삭제 도구를 Arc에 적용하지 않음 |
 | E5 후속 3 | 완전한 call trace/internal transaction, blob sidecar/KZG·가용성 및 상태 증명 공급. 현재 account/storage journal·receipt가 이 자료를 대신하지 않음. 기타 체인 producer 확대; 비EVM 모델은 별도 결정 |
 | E6 | 체인 합의에 근거한 canonical/finality 검증과 RPC 의존 축소. 현재 final fresh나 native-library 검사를 독립 합의/실제 peer 검증으로 확대하지 않음 |

@@ -1,6 +1,6 @@
 # Execution wire v1
 
-This standalone Go module defines the transport contract between verified execution producers and the indexer. It uses only the standard library, so consumers keep their EVM dependencies isolated. The [StableNet executor](../x/stablenet/executor/README.md) and [Arc native adapter](../x/arc/executor/README.md) emit the same bounded encoding. E1 integration is tracked in the [implementation checklist](../docs/codemine/runs/20261023-e1-execution/checklist.md).
+This standalone Go module defines the transport contract between verified execution producers and the indexer. The codec/checkpoint/retention contracts use only the standard library, so consumers keep their EVM dependencies isolated. Shared `spool` and `exporter` packages add durable source ownership and authenticated Unix supervision, also using only the standard library at runtime. Goleak is test-only; the original standard-library import-boundary check stays unchanged. The [StableNet executor](../x/stablenet/executor/README.md) and [Arc native adapter](../x/arc/executor/README.md) emit the same bounded encoding. E1 integration is tracked in the [implementation checklist](../docs/codemine/runs/20261023-e1-execution/checklist.md).
 
 ## Encoding
 
@@ -52,8 +52,14 @@ go test -race -count=1 ./...
 GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConn' ./...
 ```
 
-The root `make test-execwire` target and required CI jobs cover this separate module. Tests use bytes and `net.Pipe`; they start no nodes, peers or databases. Runtime integration and operational evidence remain separate from this codec's checks.
+The root `make test-execwire` target and required CI jobs cover this separate module. Tests use bytes, `net.Pipe`, owned temporary files and local Unix sockets; they start no nodes, live peers or databases. Runtime integration and operational evidence remain separate from this codec's checks.
 
 ## Offline checkpoint stream
 
 `execwire/checkpoint` is a stdlib-only NDJSON format, separate from the IPC result protocol. Consumers must verify trusted identity, full trie roots or selected proofs and terminal EOF before committing staged records. See [bootstrap](../docs/EXECUTION_BOOTSTRAP.md). Diagnostic source observations authorize no ACK, generation change or deletion.
+
+## Shared execution producer
+
+[`spool`](spool/README.md) persists a contiguous source tail, exact ACK cursor, crash receipts, generation transitions and hard quotas. `exporter.Client` independently collects and sends a bounded in-flight window over an authenticated private same-UID socket. It reconnects after transport loss, drains retained startup data, requests recovery through the indexer coordinator and rebinds only to a checked newer generation/canonical floor. Hello never acknowledges or deletes source results.
+
+The original StableNet package paths remain aliases, including native E3 permit/recovery APIs. Arc uses the same source format and supervision through [its collector](../docs/EXECUTION_ARC.md#continuous-collector). This reuse grants no Arc-native GC/checkpoint capability.
