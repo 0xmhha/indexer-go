@@ -93,34 +93,27 @@ func (f *Fetcher) PublishExecution(ctx context.Context, r execwire.Result, b *mo
 			}
 			// Prepare only on the new-publication callback: retries after a lost ACK
 			// cannot require old node state or apply a newly enabled feature silently.
-			if f.config.StatePrefetch && f.features != nil {
-				prepared, prepareErr := f.features.PrepareBlock(bound, fb.featureBlock())
-				if prepareErr != nil {
-					return prepareErr
-				}
-				fb.prepared = prepared
-				limit := f.config.StateMaxBytes
-				if limit <= 0 {
-					limit = defaultStateMaxBytes
-				}
-				if fb.prepared.Bytes() > limit {
-					return fmt.Errorf("execution: prepared feature inputs exceed state_max_bytes")
-				}
+			limit := f.config.StateMaxBytes
+			if limit <= 0 {
+				limit = defaultStateMaxBytes
+			}
+			writers, err := f.features.PrepareWriters(bound, fb.featureBlock(), f.config.StatePrefetch, limit)
+			if err != nil {
+				return err
 			}
 			if err := f.processBlockMetadata(bound, fb); err != nil {
 				return err
 			}
 			f.publish(f.blockEvent(fb))
-			if err := f.runFeatures(bound, fb); err != nil {
+			if err := writers.Apply(bound, fb.featureBlock(), func(ctx context.Context, unit feature.Unit) error {
+				return f.recordExecutionWriter(ctx, unit, r, digest)
+			}); err != nil {
 				return err
 			}
 			if b.Number != r.Ref.Height || execwire.Hash(b.Hash) != r.Ref.Hash || execwire.Hash(b.ParentHash) != r.Parent || execwire.Hash(b.StateRoot) != r.StateRoot {
 				return port.ErrExecutionConflict
 			}
 			f.publishBlockEvents(fb)
-			if err := f.recordExecutionFeatureProgress(bound, r, digest); err != nil {
-				return err
-			}
 			if f.outbox != nil {
 				if err := f.recordEvents(bound, pending); err != nil {
 					return err
@@ -163,24 +156,18 @@ type ExecutionFeatureCheckpoint struct {
 	Digest     execwire.Hash
 }
 
-func (f *Fetcher) recordExecutionFeatureProgress(ctx context.Context, r execwire.Result, digest execwire.Hash) error {
-	if f.features == nil {
-		return nil
-	}
+// recordExecutionWriter is called only after all hooks of this unit succeed.
+// Its checkpoint and feature writes share the final publication's undo/commit.
+func (f *Fetcher) recordExecutionWriter(ctx context.Context, unit feature.Unit, r execwire.Result, digest execwire.Hash) error {
 	kv, ok := f.storage.(port.KVStore)
 	if !ok {
 		return port.ErrInvalidData
 	}
-	for _, unit := range f.features.Units() {
-		data, err := json.Marshal(ExecutionFeatureCheckpoint{Version: 1, Definition: unit.Definition, Ref: r.Ref, Digest: digest})
-		if err != nil {
-			return err
-		}
-		if err := kv.Put(ctx, []byte(ExecutionFeaturePrefix+unit.Name), data); err != nil {
-			return err
-		}
+	data, err := json.Marshal(ExecutionFeatureCheckpoint{Version: 1, Definition: unit.Definition, Ref: r.Ref, Digest: digest})
+	if err != nil {
+		return err
 	}
-	return nil
+	return kv.Put(ctx, []byte(ExecutionFeaturePrefix+unit.Name), data)
 }
 
 // RecoverExecution serializes feature rollback/outbox with the same writer

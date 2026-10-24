@@ -285,6 +285,9 @@ func (s *Store) GetBalanceHistory(ctx context.Context, addr common.Address, from
 	if fromBlock > toBlock {
 		return nil, "", fmt.Errorf("fromBlock (%d) cannot be greater than toBlock (%d)", fromBlock, toBlock)
 	}
+	if s.executionMode.Load() {
+		return s.executionBalanceHistory(ctx, addr, fromBlock, toBlock, page)
+	}
 	type entry struct {
 		id   int64
 		snap port.BalanceSnapshot

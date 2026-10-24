@@ -1,8 +1,10 @@
 # 남은 작업
 
-StableNet·PostgreSQL E1은 [#214](https://github.com/0xmhha/indexer-go/pull/214), E2 checkpoint/bootstrap은 [#215](https://github.com/0xmhha/indexer-go/pull/215)로 main에 반영됐다. 사용자가 요청한 E3 구현·기능별 RED/GREEN·전체 로컬 회귀·새 동시성 단일200을 완료했다. 필수 CI·squash/main 동기화는 source-branch PR로 확인한다. 릴리스 정본은 [E3 source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe3-retention-gc)과 현재 체크리스트다. 해당 PR이 머지됐으면 E3는 완료이며 다음 코드 우선순위는 E4다. 미완료 release gate를 완료로 간주하거나, 머지 후 끝난 검사를 반복하지 않는다.
+E1 [#214](https://github.com/0xmhha/indexer-go/pull/214), E2 [#215](https://github.com/0xmhha/indexer-go/pull/215), E3 [#216](https://github.com/0xmhha/indexer-go/pull/216)은 main에 반영됐다. 현재 사용자 요청은 E4 기능별 writer와 잔액 단일 권위 정리다. 정본은 E4 계획·체크리스트와 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe4-feature-writers)이다. 해당 PR이 머지됐으면 E4는 완료이며 다음 코드 우선순위는 E5다. 끝난 E1~E3 검사나 성능 측정을 반복하지 않는다.
 
 ## 현재 정본과 연속성
+
+- E4 [계획](../codemine/runs/20261024-e4-feature-writers/plan.md), [체크리스트](../codemine/runs/20261024-e4-feature-writers/checklist.md), [연속성](../codemine/runs/20261024-e4-feature-writers/continuity.json), [검증](../codemine/runs/20261024-e4-feature-writers/validation.md), [기능 writer](../EXECUTION_FEATURE_WRITERS.md)
 
 - E3 [계획](../codemine/runs/20261024-e3-retention/plan.md), [체크리스트](../codemine/runs/20261024-e3-retention/checklist.md), [연속성](../codemine/runs/20261024-e3-retention/continuity.json), [기능 검증](../codemine/runs/20261024-e3-retention/validation.md), [사용법](../EXECUTION_RETENTION.md)
 - E2 [계획](../codemine/runs/20261024-e2-bootstrap/plan.md), [체크리스트](../codemine/runs/20261024-e2-bootstrap/checklist.md), [연속성](../codemine/runs/20261024-e2-bootstrap/continuity.json), [bootstrap](../EXECUTION_BOOTSTRAP.md)
@@ -16,8 +18,7 @@ StableNet·PostgreSQL E1은 [#214](https://github.com/0xmhha/indexer-go/pull/214
 
 | 단계 | 범위와 완료 조건 |
 | --- | --- |
-| E3 릴리스 gate | 전체 기능·race·정적·예제·전용 PG, 새 동시성 단일200, secret scan, draft PR 최신-head lint/test/postgres/examples 성공 후 squash/main 동기화. [체크리스트](../codemine/runs/20261024-e3-retention/checklist.md)가 정본 |
-| E4 · E3 이후 코드 우선순위 | 기존 기능 표 writer 분리와 중복 잔액/projection 정리. feature/undo/outbox/API 공개 경계를 보존하며 핵심 writer7개/pool4는 바꾸지 않음 |
+| E4 릴리스 gate | 기능 단위 writer·checkpoint, account journal 기반 잔액 단일 권위. 전체 기능·race·정적·예제·전용 PG, 새 동시성 단일200, secret scan, draft PR 최신-head CI4 후 squash/main 동기화. [체크리스트](../codemine/runs/20261024-e4-feature-writers/checklist.md)가 정본 |
 | E5 | Arc 등 체인별 producer·실행부 확대. 실제 공급 가능한 trace/blob/상태·증명 범위와 부족한 자료를 분리; 비EVM 모델은 별도 결정 |
 | E6 | 체인 합의에 근거한 canonical/finality 검증과 RPC 의존 축소. 현재 final fresh나 native-library 검사를 독립 합의/실제 peer 검증으로 확대하지 않음 |
 
@@ -33,4 +34,4 @@ StableNet·PostgreSQL E1은 [#214](https://github.com/0xmhha/indexer-go/pull/214
 | 성능 | E1 RPC 대비 및 E3 copy/정리 비용, macOS SLO·물리 호스트 비교. 추가 측정은 보류 |
 | Frontend | 별도 저장소의 GraphQL/REST 연동 확인. 이 작업에서 변경/재검증하지 않음. [이전 안내](../FRONTEND_MIGRATION.md) |
 
-실제 노드 서비스·peer·disk provisioning·운영 GC·추가 성능 측정은 보류한다. E3 완료 후 E4를 자동 시작하거나 태그·배포·원격 브랜치 삭제를 수행하지 않는다. 다른 프로젝트의 프로세스·container·volume·자료를 유지한다.
+실제 노드 서비스·peer·disk provisioning·운영 GC·추가 성능 측정은 보류한다. E4 완료 후 E5를 자동 시작하거나 태그·배포·원격 브랜치 삭제를 수행하지 않는다. 다른 프로젝트의 프로세스·container·volume·자료를 유지한다.
