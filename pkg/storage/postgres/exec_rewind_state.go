@@ -24,7 +24,7 @@ func (s *Store) rewindExecutionState(ctx context.Context, height uint64) error {
  WHERE NOT EXISTS(SELECT 1 FROM state_storage_changes h WHERE h.address=f.address AND h.slot=f.slot AND h.height<=$1)
  AND (f.value_before<>decode(repeat('00',32),'hex') OR (
  EXISTS(SELECT 1 FROM (SELECT exists_after,storage_root_after FROM state_account_changes a WHERE a.address=f.address AND a.height<=$1 ORDER BY height DESC,ordinal DESC LIMIT 1) a WHERE a.exists_after AND a.storage_root_after<>$2)
- AND NOT EXISTS(SELECT 1 FROM state_storage_clears c WHERE c.address=f.address AND c.height<=$1))))`, []any{int64(height), types.EmptyRootHash.Bytes()}},
+ AND NOT EXISTS(SELECT 1 FROM state_storage_clears c WHERE c.address=f.address AND c.height<=$1) AND NOT EXISTS(SELECT 1 FROM exec_control WHERE id AND coverage='full' AND anchor_height<=$1))))`, []any{int64(height), types.EmptyRootHash.Bytes()}},
 	}
 	for _, check := range checks {
 		var missing bool

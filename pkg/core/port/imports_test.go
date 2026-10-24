@@ -38,7 +38,7 @@ func TestExecutionWireContractUsesOnlyStandardLibrary(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if strings.Contains(strings.SplitN(p, "/", 2)[0], ".") {
+			if !wireContractImport(p) {
 				t.Errorf("execution wire contract %s imports implementation %s", path, p)
 			}
 		}
@@ -46,6 +46,25 @@ func TestExecutionWireContractUsesOnlyStandardLibrary(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Internal packages of the same dependency-free module can share wire types.
+// Every source file under that module is still checked recursively above.
+func wireContractImport(p string) bool {
+	const module = "github.com/0xmhha/indexer-go/execwire"
+	return !strings.Contains(strings.SplitN(p, "/", 2)[0], ".") || p == module || strings.HasPrefix(p, module+"/")
+}
+func TestWireContractImportBoundary(t *testing.T) {
+	for _, p := range []string{"context", "encoding/json", "github.com/0xmhha/indexer-go/execwire", "github.com/0xmhha/indexer-go/execwire/checkpoint"} {
+		if !wireContractImport(p) {
+			t.Errorf("contract import refused: %s", p)
+		}
+	}
+	for _, p := range []string{"github.com/0xmhha/indexer-go/execwire-implementation", "github.com/0xmhha/indexer-go/pkg/storage/postgres", "github.com/0xmhha/indexer-go/x/stablenet/executor", "github.com/ethereum/go-ethereum/common"} {
+		if wireContractImport(p) {
+			t.Errorf("implementation import admitted: %s", p)
+		}
 	}
 }
 

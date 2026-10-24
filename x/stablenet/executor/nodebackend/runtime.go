@@ -26,6 +26,7 @@ import (
 )
 
 type Config struct {
+	StartMode    string   `json:"start_mode"`
 	DataDir      string   `json:"data_dir"`
 	SpoolDir     string   `json:"spool_dir"`
 	Socket       string   `json:"socket"`
@@ -60,6 +61,9 @@ func settings(c Config, g *core.Genesis) (node.Config, ethconfig.Config, error) 
 	n, e := node.DefaultConfig, ethconfig.Defaults
 	invalid := func() (node.Config, ethconfig.Config, error) {
 		return node.Config{}, ethconfig.Config{}, fmt.Errorf("executor: invalid explicit node identity, paths, checkpoint, or fork configuration")
+	}
+	if c.StartMode != "" && c.StartMode != "genesis" && c.StartMode != "checkpoint" || c.StartMode == "genesis" && c.AnchorHeight != 0 {
+		return invalid()
 	}
 	if !filepath.IsAbs(c.DataDir) || !filepath.IsAbs(c.SpoolDir) || !filepath.IsAbs(c.Socket) || !filepath.IsAbs(c.GenesisFile) || c.NetworkID == 0 || c.AnchorHeight >= math.MaxInt64 || !validHash(c.GenesisHash) || !validHash(c.AnchorHash) || !validHash(c.AnchorRoot) || len(c.Peers) > 64 || c.SpoolRecords < 0 {
 		return invalid()
@@ -97,6 +101,7 @@ func settings(c Config, g *core.Genesis) (node.Config, ethconfig.Config, error) 
 	e.Genesis, e.NetworkId, e.SyncMode, e.StateScheme = g, c.NetworkID, downloader.FullSync, "path"
 	// Keep history until E3 supplies verified ACK/reorg-aware retention. This
 	// assembly never activates an automatic block/state deletion policy.
+	e.Preimages = true
 	e.StateHistory, e.TransactionHistory, e.EthDiscoveryURLs, e.SnapDiscoveryURLs = 0, 0, nil, nil
 	return n, e, nil
 }

@@ -32,7 +32,7 @@ Account and slot histories retain transaction order, before/after values, deleti
 - An original anchor block/hash/root and explicitly verified covered account, slot and code baseline. The prepared node DB must match that anchor.
 - A shared directory owned by the process user with mode `0700`; the indexer creates a new `0600` socket. Both processes must run as the same UID on macOS or Linux. The final socket path is published atomically after listen and permissions are ready. Existing socket paths are never replaced automatically.
 
-E1 exposes `InitExecution` and `SeedExecution` storage APIs and fails closed when preparation is missing. **It does not provide an operator bootstrap tool or turn an empty database into full head-state coverage.** E2 owns that work. Unknown coverage returns an error; it is not an account balance of zero. API height `0` in the existing balance port continues to mean latest.
+Use the [offline bootstrap tools](EXECUTION_BOOTSTRAP.md) to prepare a new schema from the full official genesis allocation or an explicitly trusted full/partial checkpoint. Full coverage requires rebuilding all storage/account roots; selected proofs remain partial. Missing partial coverage returns an error; it is not a balance of zero. A checkpoint does not supply earlier history or fabricate node state. API height `0` in the existing balance port continues to mean latest.
 
 ## Indexer configuration
 
@@ -83,6 +83,7 @@ go build -o /YOUR_BUILD_DIRECTORY/stablenet-executor ./cmd/stablenet-executor
 
 | Field | Required meaning |
 | --- | --- |
+| `start_mode` | Optional `genesis` (requires height0) or `checkpoint`; omission retains E1 prepared-checkpoint behavior |
 | `data_dir`, `spool_dir` | Separate absolute directories; neither may contain the other |
 | `socket` | The indexer's absolute private socket path |
 | `genesis_file` | Absolute path to the official genesis JSON, including fork/WBFT configuration |
@@ -92,7 +93,7 @@ go build -o /YOUR_BUILD_DIRECTORY/stablenet-executor ./cmd/stablenet-executor
 | `listen_addr` | Optional p2p address; default `127.0.0.1:0` |
 | `spool_bytes`, `spool_records` | Optional durable quotas; defaults 4 GiB and 262,144 records |
 
-The assembly uses full sync and path state storage, disables discovery and HTTP/WS/node IPC, and does not start mining. It starts peer import only after the authenticated indexer Hello and startup backlog ACK gate. It does not enable the Engine API. State and transaction history retention are set to zero (unlimited); **E1 activates no automatic node-history deletion policy**. Node storage can grow, and retained history does not guarantee direct access to every old root. E3 supplies verified retention/deletion policy.
+The assembly uses full sync and path state storage, disables discovery and HTTP/WS/node IPC, and does not start mining. It starts peer import only after the authenticated indexer Hello and startup backlog ACK gate. It does not enable the Engine API. State and transaction history retention are set to zero (unlimited); **E1 activates no automatic node-history deletion policy**. Preimage preservation is enabled for new imports so full checkpoint export can recover addresses/slots. It does not recover preimages missing from an older DB. Node storage can grow, and retained history does not guarantee direct access to every old root. E3 supplies verified retention/deletion policy.
 
 Keep actual node startup, peer onboarding, disk provisioning/formatting, GC activation and throughput measurements in separately approved operational validation. None is required by the offline functional checks described here.
 
@@ -102,10 +103,10 @@ Keep actual node startup, peer onboarding, disk provisioning/formatting, GC acti
 - Missing parents, identity/content conflicts, quota exhaustion and unsupported state coverage fail closed and preserve raw results. Quota failure closes only the owned node; it does not delete data or automatically restart a full spool.
 - A validated reorg durably advances generation and blocks publication/read admission before old workers join. Recovery atomically restores core/state/feature data to a common public parent, checks fresh again, and reopens. The bound is 128 public blocks and the original anchor.
 - Interrupted recovery leaves its durable marker for restart. A successful recovery forces a new Hello. Old-generation spool files are quarantined, retained and counted against quota; only exact ACKs authorize normal result cleanup.
-- Restoring the DB behind the source generation, missing node headers/state, or deeper reorgs requires explicit verified checkpoint recovery. There is no blind `SetHead`, latest-state fallback or automatic baseline inference.
+- Restoring the DB behind the source generation, missing node headers/state, or deeper reorgs requires [explicit checkpoint diagnosis/recovery](EXECUTION_BOOTSTRAP.md#read-only-diagnosis-and-explicit-recovery). Restore a matched backup or verify a new checkpoint into a new schema/spool; the tool never overwrites the old data. There is no blind `SetHead`, latest-state fallback or automatic baseline inference.
 
 ## Verification and remaining work
 
 `make test-race`, `make test-postgres` and the execution CI checks cover wire bounds, spool durability, ordered ACKs, worker cancellation, publication/read fences and recovery. Checked-in [fixtures](../testdata/execution/) are regenerated and byte-compared by the pinned executor's tests using actual EVM/WBFT first and second executions. The root integration suite consumes those same bytes through the seven writers, PostgreSQL and GraphQL, including native mint/fee delegation, revert, creation, lost ACK, reorg and restart. The fixture generator checks that replay leaves durable node state unchanged.
 
-These are functional results. Live peers, long-running node storage, deployment recovery and throughput remain unmeasured. The current [checklist](codemine/runs/20261023-e1-execution/checklist.md), [implementation plan](codemine/runs/20261023-e1-execution/03-plan.md), [recent context](codemine/runs/20261023-e1-execution/continuity.json) and [remaining work](analysis/open-items.md) distinguish E1 completion from E2 bootstrap, E3 retention, E4 feature-writer changes, E5 other chains and E6 consensus/finality work.
+These are functional results. Live peers, long-running node storage, deployment recovery and throughput remain unmeasured. The current [checklist](codemine/runs/20261023-e1-execution/checklist.md), [implementation plan](codemine/runs/20261023-e1-execution/03-plan.md), [recent context](codemine/runs/20261023-e1-execution/continuity.json) and [remaining work](analysis/open-items.md) record E1 completion. The [E2 checklist](codemine/runs/20261024-e2-bootstrap/checklist.md) tracks offline bootstrap release. E3 retention, E4 feature-writer changes, E5 other chains and E6 consensus/finality remain separate work.

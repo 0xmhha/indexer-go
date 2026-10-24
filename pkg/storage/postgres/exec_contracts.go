@@ -42,6 +42,13 @@ func (s *Store) ExecutionCodeAt(ctx context.Context, addr execwire.Address, heig
 	var hash []byte
 	err := s.q(ctx).QueryRow(ctx, "SELECT active_after,code_hash_after FROM state_contract_changes WHERE address=$1 AND height<=$2 ORDER BY height DESC,ordinal DESC LIMIT 1", addr[:], int64(height)).Scan(&active, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
+		full, e := s.executionFullCoverage(ctx, height)
+		if e != nil {
+			return nil, e
+		}
+		if full {
+			return []byte{}, nil
+		}
 		return nil, port.ErrExecutionCoverage
 	}
 	if err != nil {

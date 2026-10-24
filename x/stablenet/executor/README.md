@@ -2,6 +2,8 @@
 
 This standalone module replays an already imported block to export transaction and Finalize state changes for E1. The normal node import is the first execution; `Replay` is the second. It imports the official StableNet client without modifying its source and never commits second-pass state to the node database.
 
+The [offline checkpoint tools](../../../docs/EXECUTION_BOOTSTRAP.md) export full genesis/prepared-node state or selected proofs and inspect exact node/spool boundaries without starting services. A full state export requires address/slot preimages; new runtime settings preserve them. PostgreSQL bootstrap belongs to the indexer tool, never this module.
+
 The module provides replay, a [durable result spool](spool/README.md), canonical walking and bounded IPC export (`exporter`), and official `node`/`eth` assembly (`nodebackend`, `cmd/stablenet-executor`). See the [execution guide](../../../docs/EXECUTION_INGEST.md) for prepared-checkpoint requirements, settings and lifecycle. The [checklist](../../../docs/codemine/runs/20261023-e1-execution/checklist.md) records final verification and CI.
 
 ## Dependencies and integration

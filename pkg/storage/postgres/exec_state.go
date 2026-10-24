@@ -208,6 +208,13 @@ func (s *Store) ExecutionAccountAt(ctx context.Context, addr execwire.Address, h
 	}
 	a, err := scanExecutionAccount(s.q(ctx).QueryRow(ctx, "SELECT "+executionAccountAfterColumns+" FROM state_account_changes WHERE address=$1 AND height<=$2 ORDER BY height DESC,ordinal DESC LIMIT 1", addr[:], int64(height)))
 	if errors.Is(err, pgx.ErrNoRows) {
+		full, e := s.executionFullCoverage(ctx, height)
+		if e != nil {
+			return a, e
+		}
+		if full {
+			return a, nil
+		}
 		return a, port.ErrExecutionCoverage
 	}
 	return a, err

@@ -1,6 +1,7 @@
 package nodebackend
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,8 +9,12 @@ import (
 	"github.com/0xmhha/indexer-go/x/stablenet/executor/exporter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -103,5 +108,87 @@ func TestNodeRuntimeCanceledBeforeFactoryDoesNotOpenNode(t *testing.T) {
 	err := run(ctx, c, func(Config, *core.Genesis) (ownedNode, error) { called = true; return nil, nil }, nil)
 	if !errors.Is(err, context.Canceled) || called {
 		t.Fatalf("cancellation: %v factory=%v", err, called)
+	}
+}
+
+func TestNodeSettingsStartModesAndPreimages(t *testing.T) {
+	c, g := runtimeConfig(t)
+	c.Peers = nil
+	c.StartMode = "genesis"
+	_, e, err := settings(c, g)
+	if err != nil || !e.Preimages {
+		t.Fatal("genesis mode must preserve state preimages", err)
+	}
+	c.AnchorHeight = 1
+	if _, _, err = settings(c, g); err == nil {
+		t.Fatal("nonzero genesis anchor accepted")
+	}
+	c.StartMode = "unknown"
+	if _, _, err = settings(c, g); err == nil {
+		t.Fatal("unknown mode accepted")
+	}
+}
+func TestOfflineCheckpointMissingPathDoesNotCreateNodeData(t *testing.T) {
+	c, _ := runtimeConfig(t)
+	path := filepath.Join(t.TempDir(), "missing")
+	if _, err := InspectCheckpoint(t.Context(), c, path, ""); err == nil {
+		t.Fatal("missing database accepted")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("inspection created data")
+	}
+}
+
+func TestOfflineCheckpointReadsPreparedPathDBWithoutNodeStart(t *testing.T) {
+	c, g := runtimeConfig(t)
+	c.Peers = nil
+	g.Alloc = types.GenesisAlloc{common.Address{19: 1}: {Balance: big.NewInt(1)}}
+	path := filepath.Join(t.TempDir(), "chaindata")
+	disk, err := rawdb.Open(rawdb.OpenOptions{Directory: path, Cache: 16, Handles: 16})
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := state.NewDatabaseWithConfig(disk, &triedb.Config{PathDB: pathdb.Defaults, Preimages: true})
+	b, err := g.Commit(disk, db.TrieDB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.GenesisHash = b.Hash().Hex()
+	c.AnchorHash = b.Hash().Hex()
+	c.AnchorRoot = b.Root().Hex()
+	if err = errors.Join(db.TrieDB().Close(), disk.Close()); err != nil {
+		t.Fatal(err)
+	}
+	report, err := InspectCheckpoint(t.Context(), c, path, "")
+	if err != nil || !report.StateAvailable || !report.HeaderAvailable {
+		t.Fatal(report, err)
+	}
+	var out bytes.Buffer
+	if err = ExportCheckpoint(t.Context(), c, path, "", &out, nil); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() == 0 {
+		t.Fatal("no snapshot")
+	}
+	c.AnchorRoot = common.Hash{99}.Hex()
+	if _, err = InspectCheckpoint(t.Context(), c, path, ""); err == nil {
+		t.Fatal("wrong exact root accepted")
+	}
+}
+
+func TestOfflineExportGenesisDoesNotCreateNodeOrSpool(t *testing.T) {
+	c, _ := runtimeConfig(t)
+	c.Peers = nil
+	var out bytes.Buffer
+	if err := ExportGenesis(t.Context(), c, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() == 0 {
+		t.Fatal("empty export")
+	}
+	for _, path := range []string{c.DataDir, c.SpoolDir} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("export created live data path", path, err)
+		}
 	}
 }
