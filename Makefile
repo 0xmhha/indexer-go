@@ -103,7 +103,10 @@ test-execwire:
 .PHONY: test-executor-arc
 ## test-executor-arc: Build/lint/test official Arc replay libraries without starting a node
 test-executor-arc:
-	cd x/arc/executor && cargo fmt --check && cargo build --locked --all-targets && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked --all-targets
+	cd x/arc/executor && cargo fmt --check && cargo build --locked --all-targets && cargo clippy --locked --all-targets -- -D warnings && \
+	arc_target="$${CARGO_TARGET_DIR:-target}" && \
+	case "$$arc_target" in /*) ;; *) arc_target="$$(pwd)/$$arc_target" ;; esac && \
+	INDEXER_ARC_MAINTENANCE_BINARY="$$arc_target/debug/arc-native-maintenance" cargo test --locked --all-targets
 
 ## test-executor-stablenet: Check two-pass StableNet replay with offline EVM and WBFT fixtures
 test-executor-stablenet:

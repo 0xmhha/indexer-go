@@ -92,6 +92,8 @@ jobs:
           GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestClient|TestTransfer|TestPrivateDial)' ./exporter
       - name: Arc collector child lifecycle concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m ./x/arc/collector ./x/arc/cmd/execution-collector
+      - name: Arc native maintenance child and guard concurrency
+        run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^(TestNativeOwnedHoldCancellationAndStrictReplies|TestNativeGuardRejectsFenceAndPathOverrides|TestNativeGuardCancellationJoinsOwnedChild|TestNativeScratchReplacementIsPreserved)$' ./x/arc/nativeops
       - name: StableNet replay and spool contracts and concurrency
         run: |
           make test-executor-stablenet
@@ -158,6 +160,7 @@ jobs:
         working-directory: x/arc/executor
         env:
           INDEXER_ARC_FIXTURE_DIR: ${{ runner.temp }}/arc-fixtures
+          INDEXER_ARC_MAINTENANCE_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/arc-native-maintenance
         run: |
           cargo fmt --check
           cargo build --locked --all-targets
@@ -165,3 +168,4 @@ jobs:
           cargo test --locked --all-targets
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-storage.json" ../../../testdata/execution/arc-storage.json
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-create-gone.json" ../../../testdata/execution/arc-create-gone.json
+          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-native-checkpoint.ndjson" ../../../testdata/execution/arc-native-checkpoint.ndjson

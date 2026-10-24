@@ -131,6 +131,50 @@ fn imported() -> Result<Imported> {
     imported_case("empty")
 }
 
+#[test]
+fn native_checkpoint_full_root_and_missing_key_coverage() -> Result<()> {
+    let (_, state, _, _, _) = imported()?;
+    let parent = LOCAL_DEV.inner.genesis_header();
+    let mut keys = checkpoint::Keys::new();
+    for address in state.accounts.keys() {
+        keys.entry(*address).or_default();
+    }
+    for (address, slot) in state.storage.keys() {
+        keys.entry(*address).or_default().insert(*slot);
+    }
+    let mut stream = Vec::new();
+    checkpoint::export(
+        &mut stream,
+        "1337",
+        LOCAL_DEV.inner.genesis_hash(),
+        parent,
+        &state,
+        &keys,
+    )?;
+    assert!(stream.ends_with(b"{\"Kind\":\"end\"}\n"));
+    if let Ok(dir) = std::env::var("INDEXER_ARC_FIXTURE_DIR") {
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            std::path::Path::new(&dir).join("arc-native-checkpoint.ndjson"),
+            &stream,
+        )?;
+    }
+    let address = *keys.keys().next().unwrap();
+    keys.remove(&address);
+    assert!(
+        checkpoint::export(
+            Vec::new(),
+            "1337",
+            LOCAL_DEV.inner.genesis_hash(),
+            parent,
+            &state,
+            &keys
+        )
+        .is_err()
+    );
+    Ok(())
+}
+
 fn imported_case(case: &str) -> Result<Imported> {
     let spec = LOCAL_DEV.clone();
     let config = ArcEvmConfig::new(EthEvmConfig::new_with_evm_factory(
@@ -544,6 +588,81 @@ fn frozen_arc_consumer_fixtures_are_reproducible() -> Result<()> {
             dir.join(format!("arc-{case}.json")),
             serde_json::to_vec(&fixture)?,
         )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn native_checkpoint_storage_code_and_private_publication_fail_closed() -> Result<()> {
+    let (_, mut state, _, _, _) = imported_case("storage")?;
+    let h = Header {
+        number: 42,
+        state_root: state.state_root(Default::default())?,
+        ..Default::default()
+    };
+    let mut keys = checkpoint::Keys::new();
+    for a in state.accounts.keys() {
+        keys.entry(*a).or_default();
+    }
+    for (a, s) in state.storage.keys() {
+        keys.entry(*a).or_default().insert(*s);
+    }
+    let dir = tempfile::tempdir()?;
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700))?;
+    let path = dir.path().join("full.ndjson");
+    checkpoint::write_private(&path, |w| {
+        checkpoint::export(w, "1337", LOCAL_DEV.inner.genesis_hash(), &h, &state, &keys)
+    })?;
+    let (m, recovered) = checkpoint::seed(&path, "1337", LOCAL_DEV.inner.genesis_hash())?;
+    assert_eq!(m.r#ref.height, 42);
+    assert_eq!(recovered, keys);
+    let original = std::fs::read(&path)?;
+    assert!(
+        checkpoint::write_private(&path, |w| {
+            w.write_all(b"replace")?;
+            Ok(())
+        })
+        .is_err()
+    );
+    assert_eq!(std::fs::read(&path)?, original);
+    let (a, s) = *state.storage.keys().next().unwrap();
+    keys.get_mut(&a).unwrap().remove(&s);
+    let missing = dir.path().join("missing.ndjson");
+    assert!(
+        checkpoint::write_private(&missing, |w| checkpoint::export(
+            w,
+            "1337",
+            LOCAL_DEV.inner.genesis_hash(),
+            &h,
+            &state,
+            &keys
+        ))
+        .is_err()
+    );
+    assert!(!missing.exists());
+    keys.get_mut(&a).unwrap().insert(s);
+    state.code.clear();
+    assert!(
+        checkpoint::export(
+            Vec::new(),
+            "1337",
+            LOCAL_DEV.inner.genesis_hash(),
+            &h,
+            &state,
+            &keys
+        )
+        .is_err()
+    );
+    let corrupt = dir.path().join("corrupt.ndjson");
+    for bytes in [
+        original[..original.len() - 15].to_vec(),
+        [original.clone(), b"{}\n".to_vec()].concat(),
+        vec![b'x'; checkpoint::MAX_RECORD + 1],
+    ] {
+        std::fs::write(&corrupt, bytes)?;
+        std::fs::set_permissions(&corrupt, std::fs::Permissions::from_mode(0o600))?;
+        assert!(checkpoint::seed(&corrupt, "1337", LOCAL_DEV.inner.genesis_hash()).is_err());
     }
     Ok(())
 }

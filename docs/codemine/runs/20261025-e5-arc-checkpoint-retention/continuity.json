@@ -1,0 +1,64 @@
+{
+  "goal": "Arc native checkpoint export and retention",
+  "base": "27bb982c0bf76dfdf051bcf9081b12f46f6d92fe",
+  "source_branch": "refactor/e5-arc-checkpoint-retention",
+  "n": {
+    "unit": "U04",
+    "state": "locally_verified",
+    "contract": "sequential full functional/race/new single200/fsync-on PG, module static and secret scans; draft/exact-head CI4+Arc/ready/squash/ff main",
+    "passed": [
+      "root build/vet/lint/cache/examples/operations",
+      "native fmt/build/clippy/full functional including actual maintenance CLI and normal writer exclusion",
+      "Rust full NDJSON independent Go verification",
+      "Go-owned helper/guard/scratch/missing-path recovery targeted functional",
+      "full root functional",
+      "make test-race: root/wire/StableNet execution modules",
+      "new native helper/guard/scratch GOMAXPROCS1/race/single200",
+      "affected collector and command GOMAXPROCS1/race/single200",
+      "complete fsync-on disposable PostgreSQL storage/app/API/StableNet bundle; owned volume cleanup successful",
+      "wire/StableNet executor/AST module build/vet/lint",
+      "byte-identical three native fixtures; current links/fmt and staged secret scan"
+    ]
+  },
+  "n-1": {
+    "unit": "U03",
+    "state": "targeted_green",
+    "contract": "live E3 producer supervision, exact shared source completion/release; managed owner lease and pending fences; private owned helper scratch after joined exit, preserved replacement, sealed swap recovery",
+    "evidence": [
+      "pending-start requirement RED then GREEN",
+      "private config requirement failed then fixed with owned0600 check",
+      "same-process/cooperative RO is not writer exclusion; real separate native writer and exclusive helper probes passed",
+      "genesis query failed when first jar removed; retain first/pre-anchor jars"
+    ]
+  },
+  "n-2": {
+    "unit": "U02",
+    "state": "targeted_green",
+    "contract": "native v2 eligible whole payload jars, full cutoff seed, preserved native state/history/code/headers; owned COW and same-permit phase recovery",
+    "evidence": [
+      "permitted-copy requirement RED then GREEN",
+      "durable source ACK/window and receipt/release bridge",
+      "native-v2 fixture reopen state/window/canonical/cutoff checks"
+    ]
+  },
+  "holds": [
+    "actual node/peer/operator DB operations",
+    "disk provisioning",
+    "operational GC activation",
+    "performance",
+    "other projects"
+  ],
+  "preserved": [
+    "accepted E1/E2/E3/E4 design",
+    "upstream unmodified",
+    "pool4/part2/API reservation",
+    "RPC5 physical attempts/s",
+    "final uncached fresh/generation fence"
+  ],
+  "next": "Resolve release authority: if open complete exact-head CI4+Arc/ready/squash/ff main; if merged this scope is done. Report native history/catalog scaling, traces/blob/proofs, E6 and held operations; do not auto-start them.",
+  "release": {
+    "authority": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-checkpoint-retention",
+    "completion": "same-head CI4+Arc success, ready/squash MERGED, clean main synchronized to origin/main",
+    "source_branch_preserved": true
+  }
+}

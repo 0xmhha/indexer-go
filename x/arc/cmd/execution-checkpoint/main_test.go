@@ -66,3 +66,35 @@ func TestArcCheckpointVerifiesNativeBaselineWithoutDBOrRPC(t *testing.T) {
 	require.NoError(t, run(t.Context(), []string{"--help"}, &out))
 	require.Contains(t, out.String(), "-action")
 }
+
+// This stream comes from the Rust native exporter, not Go's checkpoint writer.
+// Its local-development genesis is synthetic test data, never an operator anchor.
+func TestArcCheckpointVerifiesNativeExportWithoutDBOrRPC(t *testing.T) {
+	payload, err := os.ReadFile("../../../../testdata/execution/arc-native-checkpoint.ndjson")
+	require.NoError(t, err)
+	first, err := format.NewDecoder(bytes.NewReader(payload)).Next()
+	require.NoError(t, err)
+	require.NotNil(t, first.Manifest)
+	m := *first.Manifest
+	require.Equal(t, "1337", m.Chain.ID)
+	require.Equal(t, "genesis", m.Mode)
+	require.Equal(t, m.Chain.Genesis, m.Ref.Hash)
+	dir := t.TempDir()
+	input, expected := filepath.Join(dir, "native.ndjson"), filepath.Join(dir, "expected.json")
+	require.NoError(t, os.WriteFile(input, payload, 0600))
+	manifest, err := json.Marshal(m)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(expected, manifest, 0600))
+	t.Setenv("INDEXER_DB_POSTGRES_DSN", "invalid-dsn")
+	t.Setenv("INDEXER_CHECKPOINT_RPC", "not-a-rpc")
+	var out bytes.Buffer
+	require.NoError(t, run(t.Context(), []string{"--input", input, "--expected", expected}, &out))
+	require.Contains(t, out.String(), `"Coverage":"full"`)
+	m.Root[0]++
+	manifest, err = json.Marshal(m)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(expected, manifest, 0600))
+	out.Reset()
+	require.Error(t, run(t.Context(), []string{"--input", input, "--expected", expected}, &out))
+	require.Empty(t, out.String())
+}
