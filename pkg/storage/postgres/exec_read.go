@@ -73,7 +73,7 @@ func (s *Store) ReadSnapshot(ctx context.Context, read func(context.Context) err
 	if !locked {
 		return port.ErrExecutionRewinding
 	}
-	c, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL))
+	c, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL))
 	if err != nil {
 		return err
 	}

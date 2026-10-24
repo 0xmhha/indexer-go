@@ -32,7 +32,7 @@ func (s *Store) WriteExecutionPart(ctx context.Context, p port.ExecutionPart, ap
 		if !locked {
 			return port.ErrExecutionRewinding
 		}
-		c, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL))
+		c, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL))
 		if err != nil {
 			return err
 		}

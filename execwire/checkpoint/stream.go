@@ -89,4 +89,5 @@ type SourceObservation struct {
 	Anchor, Committed, Parent                          execwire.Ref
 	ParentRoot                                         execwire.Hash
 	HeaderAvailable, StateAvailable, TransitionPending bool
+	MaintenancePending                                 bool
 }

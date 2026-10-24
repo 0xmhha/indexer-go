@@ -42,7 +42,7 @@ func (s *Store) ConfirmExecution(ctx context.Context, payload []byte, fresh func
 	if !locked {
 		return false, port.ErrExecutionRewinding
 	}
-	c, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
+	c, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
 	if err != nil {
 		return false, err
 	}
@@ -102,7 +102,7 @@ func (s *Store) ConfirmExecution(ctx context.Context, payload []byte, fresh func
 	if err = ctx.Err(); err != nil {
 		return false, err
 	}
-	after, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL))
+	after, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL))
 	if err != nil {
 		return false, err
 	}

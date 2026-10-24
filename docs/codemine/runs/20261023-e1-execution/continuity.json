@@ -104,5 +104,11 @@
     "verification": "Documentation links/JSON/fmt/build/vet/root+astgraph lint/cache lifecycle/examples/offline operations/full root race/real PostgreSQL passed; see checklist.",
     "next": "U01: write failing wire contract tests before implementation"
   },
-  "integration_policy": "U04-U08 merged #213. U09-U11 share final opt-in runtime integration PR; RED/GREEN and docs/context per feature, full validation/CI before squash/main."
+  "integration_policy": "U04-U08 merged #213. U09-U11 share final opt-in runtime integration PR; RED/GREEN and docs/context per feature, full validation/CI before squash/main.",
+  "release": {
+    "pr": 214,
+    "merge_commit": "3ae27d5",
+    "status": "merged"
+  },
+  "current_work": "E1 #214 and E2 #215 are merged. Current requested E3/release context: ../20261024-e3-retention/continuity.json. Completed unit-local next fields describe the accepted implementation sequence, not open work."
 }

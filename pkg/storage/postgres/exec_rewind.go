@@ -114,7 +114,7 @@ func (s *Store) BeginExecutionRewind(ctx context.Context, target execwire.Ref, r
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock("+executionLockSQL+")"); err != nil {
 			return err
 		}
-		c, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
+		c, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
 		if err != nil {
 			return err
 		}
@@ -183,7 +183,7 @@ func (s *Store) resumeExecutionRewind(ctx context.Context, onUndo port.UndoHook,
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock("+executionLockSQL+")"); err != nil {
 		return nil, err
 	}
-	c, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
+	c, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +302,7 @@ func (s *Store) resumeExecutionRewind(ctx context.Context, onUndo port.UndoHook,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	after, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL))
+	after, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL))
 	if err != nil {
 		return nil, err
 	}

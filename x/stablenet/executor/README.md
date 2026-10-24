@@ -4,6 +4,8 @@ This standalone module replays an already imported block to export transaction a
 
 The [offline checkpoint tools](../../../docs/EXECUTION_BOOTSTRAP.md) export full genesis/prepared-node state or selected proofs and inspect exact node/spool boundaries without starting services. A full state export requires address/slot preimages; new runtime settings preserve them. PostgreSQL bootstrap belongs to the indexer tool, never this module.
 
+[Offline retention](../../../docs/EXECUTION_RETENTION.md) adds standard-layout native DB/quarantine compaction with a live DB supervisor, explicit crash recovery/release and capacity gates. It starts no services; no operational GC is enabled by default.
+
 The module provides replay, a [durable result spool](spool/README.md), canonical walking and bounded IPC export (`exporter`), and official `node`/`eth` assembly (`nodebackend`, `cmd/stablenet-executor`). See the [execution guide](../../../docs/EXECUTION_INGEST.md) for prepared-checkpoint requirements, settings and lifecycle. The [checklist](../../../docs/codemine/runs/20261023-e1-execution/checklist.md) records final verification and CI.
 
 ## Dependencies and integration
@@ -53,6 +55,6 @@ GOMAXPROCS=1 go test -race -count=200 -timeout=5m \
 
 Fixtures use actual EVM, WBFT, fee delegation, native mint/Extra methods, hash/path databases, reverts, creation and SELFDESTRUCT. NativeManager Extra is exercised by a direct EVM-library call with its required council caller; that test is not a governance transaction. The WBFT fixture enables Applepie for fee delegation and performs no consensus seal admission. Independent bidirectional account/storage traversal checks the recorder separately from its product verifier. Record-only omission faults preserve the actual trie mutation and must fail.
 
-Tests start no node services or peers, format no disks, activate no GC and measure no performance. They do not establish live synchronization, deployment, recovery or speed claims.
+Tests start no node services or peers, format no disks, activate no operational GC and measure no performance. Retention tests delete only their owned temporary fixtures. They do not establish live synchronization, deployment, recovery or speed claims.
 
 Goroutine checks exempt only the exact upstream `core.(*txSenderCacher).cache` function: the pinned client initializes that process-lifetime pool before tests and exposes no shutdown API. Replay callbacks and executor-owned workers remain subject to leak checks.

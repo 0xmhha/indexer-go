@@ -176,6 +176,15 @@ func (o *clientRun) startCapture() {
 		}
 		collector := &Collector{Backend: o.c.Backend, Spool: o.c.Spool}
 		for {
+			if o.c.BeforeCapture != nil {
+				if err := o.c.BeforeCapture(ctx); err != nil {
+					run.err = err
+					if !errors.Is(err, context.Canceled) {
+						o.fail(err)
+					}
+					return
+				}
+			}
 			n, err := collector.CatchUp(ctx)
 			if err != nil {
 				run.err = err

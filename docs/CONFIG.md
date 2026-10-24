@@ -787,3 +787,5 @@ dispatcher는 최대 10ms 수집 창과 HTTP 토큰 대기 중 들어온 독립 
 ## StableNet execution ingest
 
 `source.execution` opts into the prepared StableNet PostgreSQL execution path. See [configuration and checkpoint requirements](EXECUTION_INGEST.md#indexer-configuration). It requires pool4, shared RPC5 and head/fresh publication, is mutually exclusive with other sources and defaults to off. An API-only process omits this option and detects the DB read fence automatically. Prepare new schemas with the [offline bootstrap tools](EXECUTION_BOOTSTRAP.md); normal restart does not rerun import. Executor `start_mode` and full/partial coverage are documented there.
+
+Executor offline retention, copy reserve, optional node capacity and resume thresholds are documented in [execution retention](EXECUTION_RETENTION.md). They do not change per-chain pool4, part concurrency2, RPC5 HTTP/s or final fresh. Operational GC remains explicit and off.

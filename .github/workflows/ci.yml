@@ -85,14 +85,16 @@ jobs:
           make test-execwire
           cd execwire
           GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConn' ./...
+          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestSupervisor' ./retention
       - name: StableNet replay and spool contracts and concurrency
         run: |
           make test-executor-stablenet
           cd x/stablenet/executor
           GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestCancelLogger|TestReplayCancellationDuringEVM)' ./...
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConcurrentCancellationAndCloseJoin$' ./spool
+          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestConcurrentCancellationAndCloseJoin|TestRetentionConcurrentReadCloseAndGenerationJoin)$' ./spool
           GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestClient|TestTransfer|TestPrivateDial)' ./exporter
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestNodeRuntime' ./nodebackend
+          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestNodeRuntime|TestCapacityBudgetResumeAndConcurrentChecks)' ./nodebackend
+          GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^TestCompactCapacityAndForeignLeasePreserveNode$' ./nodestore
       - name: Pebble cache lifecycle
         # Pebble disables its cache leak finalizer under -race.
         run: make test-cache-lifecycle
@@ -124,7 +126,7 @@ jobs:
       - name: Execution IPC and DB integration concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -failfast -count=200 -timeout=30m -run '^TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK$'
       - name: Execution DB admission and recovery concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence)$'
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence|TestExecutionRetentionDrainsReadLeaseAndCancel)$'
 
   examples:
     runs-on: ubuntu-latest

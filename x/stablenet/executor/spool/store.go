@@ -12,27 +12,44 @@ import (
 	"sync"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/execwire/retention"
 )
 
 type Store struct {
-	ops      fileOps
-	options  Options
-	path     string
-	gate     chan struct{}
-	done     chan struct{}
-	once     sync.Once
-	closeErr error
-	lock     *os.File
-	state    manifest
-	entries  map[uint64]Entry
-	recovery bool
+	ops         fileOps
+	options     Options
+	path        string
+	gate        chan struct{}
+	done        chan struct{}
+	once        sync.Once
+	closeErr    error
+	lock        *os.File
+	state       manifest
+	entries     map[uint64]Entry
+	recovery    bool
+	maintenance bool
 }
 
 const metadataReserve = 64 << 10
 const stateName = ".exec-spool-state"
 const lockName = ".exec-spool-lock"
 
-func Open(ctx context.Context, o Options) (*Store, error) {
+func Open(ctx context.Context, o Options) (*Store, error) { return open(ctx, o, nil) }
+
+// OpenMaintenance requires an existing exact permit to recover a pinned GC.
+func OpenMaintenance(ctx context.Context, o Options, p retention.Permit) (*Store, error) {
+	if p.Validate() != nil || o.Chain != p.Request.Chain || o.Anchor != p.Request.Anchor {
+		return nil, retention.ErrUnsafe
+	}
+	if err := regularPrivate(filepath.Join(o.Path, stateName)); err != nil {
+		return nil, err
+	}
+	if err := regularPrivate(filepath.Join(o.Path, lockName)); err != nil {
+		return nil, err
+	}
+	return open(ctx, o, &p)
+}
+func open(ctx context.Context, o Options, permit *retention.Permit) (*Store, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -109,6 +126,9 @@ func Open(ctx context.Context, o Options) (*Store, error) {
 			return nil, err
 		}
 	}
+	if err := s.checkMaintenance(permit); err != nil {
+		return nil, err
+	}
 	if err := s.recoverTransition(ctx); err != nil {
 		return nil, err
 	}
@@ -149,7 +169,7 @@ func (s *Store) Append(ctx context.Context, r execwire.Result) (Entry, error) {
 		return Entry{}, err
 	}
 	defer s.release()
-	if s.recovery {
+	if s.recovery || s.maintenance {
 		return Entry{}, ErrRecovery
 	}
 	p, err := execwire.MarshalResult(r)
@@ -205,7 +225,7 @@ func (s *Store) Read(ctx context.Context, ref execwire.Ref) (execwire.Result, er
 		return execwire.Result{}, err
 	}
 	defer s.release()
-	if s.recovery {
+	if s.recovery || s.maintenance {
 		return execwire.Result{}, ErrRecovery
 	}
 	e, ok := s.entries[ref.Height]
@@ -220,7 +240,7 @@ func (s *Store) Next(ctx context.Context) (Entry, bool, error) {
 		return Entry{}, false, err
 	}
 	defer s.release()
-	if s.recovery {
+	if s.recovery || s.maintenance {
 		return Entry{}, false, ErrRecovery
 	}
 	e, ok := s.entries[s.state.Committed.Height+1]
@@ -232,7 +252,7 @@ func (s *Store) Acknowledge(ctx context.Context, f execwire.Frame) error {
 		return err
 	}
 	defer s.release()
-	if s.recovery {
+	if s.recovery || s.maintenance {
 		return ErrRecovery
 	}
 	if f.Kind != execwire.Committed || f.Header.Chain != s.options.Chain || len(f.Payload) != 0 {
@@ -343,7 +363,7 @@ func (s *Store) recover(ctx context.Context) error {
 			return err
 		}
 		name := item.Name()
-		if name == stateName || name == lockName {
+		if name == stateName || name == lockName || name == gcIntentName || name == gcReceiptName {
 			continue
 		}
 		path := filepath.Join(s.path, name)
@@ -352,6 +372,8 @@ func (s *Store) recover(ctx context.Context) error {
 		}
 		switch {
 		case strings.HasPrefix(name, ".tmp-result-"), strings.HasPrefix(name, ".tmp-state-"), strings.HasPrefix(name, ".tmp-ack-"), strings.HasPrefix(name, ".tmp-transition-"):
+			temporary = append(temporary, name)
+		case strings.HasPrefix(name, ".tmp-gc-"):
 			temporary = append(temporary, name)
 		case strings.HasPrefix(name, ".quarantine-"):
 		case strings.HasSuffix(name, ".result"):

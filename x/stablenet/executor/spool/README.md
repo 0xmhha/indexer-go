@@ -18,9 +18,9 @@ Defaults are 4 GiB and 262,144 retained result/temporary files; configure both e
 
 ACK work and interrupted cleanup also require that reserve. A failed ACK receipt write requires reopen before retry. If quarantined data exhausts the file budget or metadata reserve, increase the configured budget or audit the quarantined evidence explicitly; repeated ACK attempts cannot allocate files past that gate.
 
-Known incomplete temporary files are quarantined and charged to the quota. Corrupt sealed files remain untouched. An interrupted initial identity write requires explicit operator recovery: it cannot be rebound automatically, even to the same identity. No automatic cleanup of quarantined data is provided. These are functional safety limits, not storage sizing measurements.
+Known incomplete temporary files are quarantined and charged to the quota. Corrupt sealed files remain untouched. An interrupted initial identity write requires explicit operator recovery: it cannot be rebound automatically, even to the same identity. Automatic eviction remains disabled. [Offline E3 maintenance](../../../../docs/EXECUTION_RETENTION.md) can remove at most128 validated expired old-generation result/ACK files per currently pending DB permit; unknown/corrupt/temporary data stays. These are functional safety limits, not storage sizing measurements.
 
-Generation rewind requires the later coordinator's durable confirmation. This package does not infer it from a cursor and does not garbage-collect the node database. See the [E1 contract](../../../../docs/codemine/runs/20261023-e1-execution/05-spool-contract.md).
+Generation rewind requires the later coordinator's durable confirmation. This package does not infer it from a cursor and does not itself garbage-collect the node database. E3 coordinates a native offline compactor under the same source operation gate, exact durable deletion intent and live DB supervisor. Normal Open refuses pending GC; explicit same-permit recovery and a DB-issued release are required. See the [E1 contract](../../../../docs/codemine/runs/20261023-e1-execution/05-spool-contract.md).
 
 ## Checks
 

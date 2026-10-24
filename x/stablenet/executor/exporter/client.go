@@ -21,6 +21,7 @@ type Client struct {
 	Poll, Retry, Timeout time.Duration
 	Wake                 <-chan struct{}
 	OnReady              func(context.Context) error
+	BeforeCapture        func(context.Context) error
 	OnError              func(error)
 	dial                 func(context.Context) (net.Conn, error)
 	wake                 chan struct{}

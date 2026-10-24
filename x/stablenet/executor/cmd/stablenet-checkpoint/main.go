@@ -26,7 +26,7 @@ func run(ctx context.Context, action, config, path, ancients, selection, output 
 	if action == "inspect" {
 		n, e := nodebackend.InspectCheckpoint(ctx, c, path, ancients)
 		s, se := spool.InspectMetadata(ctx, c.SpoolDir)
-		obs := format.SourceObservation{Chain: s.Chain, Anchor: s.Anchor, Committed: s.Committed, Parent: n.Ref, ParentRoot: n.Root, HeaderAvailable: n.HeaderAvailable, StateAvailable: n.StateAvailable, TransitionPending: s.TransitionPending}
+		obs := format.SourceObservation{Chain: s.Chain, Anchor: s.Anchor, Committed: s.Committed, Parent: n.Ref, ParentRoot: n.Root, HeaderAvailable: n.HeaderAvailable, StateAvailable: n.StateAvailable, TransitionPending: s.TransitionPending, MaintenancePending: s.MaintenancePending}
 		if err = json.NewEncoder(os.Stdout).Encode(obs); err != nil {
 			return err
 		}

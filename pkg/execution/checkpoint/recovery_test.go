@@ -15,13 +15,16 @@ func TestCheckpointRecoveryKeepsGenerationAndParentBoundaries(t *testing.T) {
 	c.Anchor = execwire.Ref{Generation: 1, Hash: c.Chain.Genesis}
 	src := format.SourceObservation{Chain: c.Chain, Anchor: c.Anchor, Committed: ref, Parent: ref, ParentRoot: c.Root, HeaderAvailable: true, StateAvailable: true}
 	require.Equal(t, "compatible_observation", Diagnose(c, src).Status)
-	for _, change := range []func(*format.SourceObservation){func(s *format.SourceObservation) { s.Committed.Generation++ }, func(s *format.SourceObservation) { s.Committed.Height++ }, func(s *format.SourceObservation) { s.StateAvailable = false }, func(s *format.SourceObservation) { s.ParentRoot[0]++ }, func(s *format.SourceObservation) { s.Anchor.Hash[0]++ }, func(s *format.SourceObservation) { s.TransitionPending = true }} {
+	for _, change := range []func(*format.SourceObservation){func(s *format.SourceObservation) { s.Committed.Generation++ }, func(s *format.SourceObservation) { s.Committed.Height++ }, func(s *format.SourceObservation) { s.StateAvailable = false }, func(s *format.SourceObservation) { s.ParentRoot[0]++ }, func(s *format.SourceObservation) { s.Anchor.Hash[0]++ }, func(s *format.SourceObservation) { s.TransitionPending = true }, func(s *format.SourceObservation) { s.MaintenancePending = true }} {
 		s := src
 		change(&s)
 		r := Diagnose(c, s)
 		require.Equal(t, "blocked", r.Status)
 		require.NotEmpty(t, r.Findings)
 	}
+	c.Maintenance = true
+	require.Equal(t, "blocked", Diagnose(c, src).Status)
+	c.Maintenance = false
 	// A lost ACK can leave the source behind; only normal handshake/fresh gates
 	// may confirm the surviving prefix. Diagnosis itself changes neither side.
 	src.Committed.Height--

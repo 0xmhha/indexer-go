@@ -13,6 +13,9 @@ func (s *Store) executionStatePoint(ctx context.Context) (port.ExecutionStatePoi
 	if err != nil {
 		return port.ExecutionStatePoint{}, err
 	}
+	if c.Maintenance {
+		return port.ExecutionStatePoint{}, port.ErrExecutionMaintenance
+	}
 	if c.Rewinding {
 		return port.ExecutionStatePoint{}, port.ErrExecutionRewinding
 	}

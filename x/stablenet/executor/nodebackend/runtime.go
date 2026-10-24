@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/x/stablenet/executor/exporter"
+	"github.com/0xmhha/indexer-go/x/stablenet/executor/nodestore"
 	"github.com/0xmhha/indexer-go/x/stablenet/executor/spool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -23,24 +24,27 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Config struct {
-	StartMode    string   `json:"start_mode"`
-	DataDir      string   `json:"data_dir"`
-	SpoolDir     string   `json:"spool_dir"`
-	Socket       string   `json:"socket"`
-	GenesisFile  string   `json:"genesis_file"`
-	ChainID      string   `json:"chain_id"`
-	NetworkID    uint64   `json:"network_id"`
-	GenesisHash  string   `json:"genesis_hash"`
-	AnchorHeight uint64   `json:"anchor_height"`
-	AnchorHash   string   `json:"anchor_hash"`
-	AnchorRoot   string   `json:"anchor_root"`
-	Peers        []string `json:"peers"`
-	ListenAddr   string   `json:"listen_addr"`
-	SpoolBytes   uint64   `json:"spool_bytes"`
-	SpoolRecords int      `json:"spool_records"`
+	StartMode             string          `json:"start_mode"`
+	DataDir               string          `json:"data_dir"`
+	SpoolDir              string          `json:"spool_dir"`
+	Socket                string          `json:"socket"`
+	GenesisFile           string          `json:"genesis_file"`
+	ChainID               string          `json:"chain_id"`
+	NetworkID             uint64          `json:"network_id"`
+	GenesisHash           string          `json:"genesis_hash"`
+	AnchorHeight          uint64          `json:"anchor_height"`
+	AnchorHash            string          `json:"anchor_hash"`
+	AnchorRoot            string          `json:"anchor_root"`
+	Peers                 []string        `json:"peers"`
+	ListenAddr            string          `json:"listen_addr"`
+	SpoolBytes            uint64          `json:"spool_bytes"`
+	SpoolRecords          int             `json:"spool_records"`
+	RetentionReserveBytes uint64          `json:"retention_reserve_bytes,omitempty"`
+	Capacity              *CapacityConfig `json:"capacity,omitempty"`
 }
 type ownedNode interface {
 	Start() error
@@ -59,6 +63,9 @@ func validHash(value string) bool {
 }
 func settings(c Config, g *core.Genesis) (node.Config, ethconfig.Config, error) {
 	n, e := node.DefaultConfig, ethconfig.Defaults
+	if err := c.Capacity.validate(); err != nil {
+		return node.Config{}, ethconfig.Config{}, err
+	}
 	invalid := func() (node.Config, ethconfig.Config, error) {
 		return node.Config{}, ethconfig.Config{}, fmt.Errorf("executor: invalid explicit node identity, paths, checkpoint, or fork configuration")
 	}
@@ -99,8 +106,9 @@ func settings(c Config, g *core.Genesis) (node.Config, ethconfig.Config, error) 
 		n.P2P.StaticNodes = append(n.P2P.StaticNodes, peer)
 	}
 	e.Genesis, e.NetworkId, e.SyncMode, e.StateScheme = g, c.NetworkID, downloader.FullSync, "path"
-	// Keep history until E3 supplies verified ACK/reorg-aware retention. This
-	// assembly never activates an automatic block/state deletion policy.
+	// Keep automatic head-based state pruning disabled. Offline retention owns
+	// the ACK/reorg-aware floor; a compacted store bounds auxiliary tx lookup
+	// separately when openNode reads its validated floor metadata.
 	e.Preimages = true
 	e.StateHistory, e.TransactionHistory, e.EthDiscoveryURLs, e.SnapDiscoveryURLs = 0, 0, nil, nil
 	return n, e, nil
@@ -151,6 +159,9 @@ func run(ctx context.Context, c Config, open nodeFactory, send clientRunner) (er
 	if err = ctx.Err(); err != nil {
 		return err
 	}
+	if err = nodestore.CheckStart(c.DataDir); err != nil {
+		return err
+	}
 	var genesis core.Genesis
 	if err = loadJSON(c.GenesisFile, &genesis, 16<<20, false); err != nil {
 		return err
@@ -189,11 +200,21 @@ func run(ctx context.Context, c Config, open nodeFactory, send clientRunner) (er
 	}
 	var once sync.Once
 	var startErr error
-	client := &exporter.Client{Chain: chain, Spool: s, Backend: backend, Socket: c.Socket, OnReady: func(ctx context.Context) error {
+	interval := 30 * time.Second
+	if c.Capacity != nil && c.Capacity.IntervalSeconds != 0 {
+		interval = time.Duration(c.Capacity.IntervalSeconds) * time.Second
+	}
+	checker := &capacityChecker{interval: interval, check: func(ctx context.Context) error { return checkNodeCapacity(ctx, c, false) }}
+	client := &exporter.Client{Chain: chain, Spool: s, Backend: backend, Socket: c.Socket, BeforeCapture: func(ctx context.Context) error { return checker.run(ctx, false) }, OnReady: func(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		once.Do(func() { startErr = n.Start() })
+		once.Do(func() {
+			startErr = checker.run(ctx, true)
+			if startErr == nil {
+				startErr = n.Start()
+			}
+		})
 		return startErr
 	}}
 	return send(ctx, client)
@@ -202,10 +223,11 @@ func run(ctx context.Context, c Config, open nodeFactory, send clientRunner) (er
 type nativeNode struct {
 	stack   *node.Node
 	backend *Backend
+	lease   *os.File
 }
 
 func (n *nativeNode) Start() error              { return n.stack.Start() }
-func (n *nativeNode) Close() error              { return n.stack.Close() }
+func (n *nativeNode) Close() error              { return errors.Join(n.stack.Close(), n.lease.Close()) }
 func (n *nativeNode) Backend() exporter.Backend { return n.backend }
 func openNode(c Config, g *core.Genesis) (ownedNode, error) {
 	ncfg, ecfg, err := settings(c, g)
@@ -216,16 +238,32 @@ func openNode(c Config, g *core.Genesis) (ownedNode, error) {
 	if err != nil {
 		return nil, err
 	}
+	lease, err := nodestore.AcquireRun(c.DataDir)
+	if err != nil {
+		_ = stack.Close()
+		return nil, err
+	}
+	lookup, err := nodestore.LookupWindow(c.DataDir)
+	if err != nil {
+		_ = lease.Close()
+		_ = stack.Close()
+		return nil, err
+	}
+	if lookup != 0 {
+		ecfg.TransactionHistory = lookup
+	}
 	service, err := eth.New(stack, &ecfg)
 	if err != nil {
+		_ = lease.Close()
 		_ = stack.Close()
 		return nil, err
 	}
 	bc := service.BlockChain()
 	anchor := bc.GetHeaderByNumber(c.AnchorHeight)
 	if anchor == nil || anchor.Hash() != common.HexToHash(c.AnchorHash) || anchor.Root != common.HexToHash(c.AnchorRoot) {
+		_ = lease.Close()
 		_ = stack.Close()
 		return nil, fmt.Errorf("%w: original anchor/header/root; explicit prepared node checkpoint required", exporter.ErrCheckpointRecovery)
 	}
-	return &nativeNode{stack: stack, backend: &Backend{chain: bc}}, nil
+	return &nativeNode{stack: stack, backend: &Backend{chain: bc}, lease: lease}, nil
 }

@@ -40,7 +40,7 @@ func (s *Store) CommitExecution(ctx context.Context, p port.ExecutionPublication
 	if !locked {
 		return false, port.ErrExecutionRewinding
 	}
-	c, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
+	c, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
 	if err != nil {
 		return false, err
 	}
@@ -132,7 +132,7 @@ func (s *Store) CommitExecution(ctx context.Context, p port.ExecutionPublication
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	after, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL))
+	after, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL))
 	if err != nil {
 		return false, err
 	}

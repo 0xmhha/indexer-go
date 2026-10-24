@@ -6,7 +6,7 @@
 - [x] U03: official state export RED/GREEN; full genesis/checkpoint and selected-proof fixtures; read-only existing path DB/spool inspection; start modes/preimages; generation/parent diagnosis. Operator tool → mock canonical RPC5 → PG → seven writers/API parity passed.
 - [x] U04 implementation/local verification: full functional and root/wire/executor race, PostgreSQL, build/vet/fmt/lint, cache lifecycle, examples, offline operations and staged/history secret checks. Developer docs and current continuity updated.
 
-[Functional evidence and commands](validation.md) and continuity record the acceptance checks. Release CI/merge are authoritative in the [PR for the source branch](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe2-checkpoint-bootstrap); require latest-head lint/test/postgres/examples before squash, then fast-forward main. The source commit cannot certify its own future merge. After that PR is merged, E3 is next; do not rerun E2 or performance screening merely to resume.
+[Functional evidence and commands](validation.md) record local acceptance checks. [PR #215](https://github.com/0xmhha/indexer-go/pull/215) passed all four latest-head required jobs, was squash-merged as `ac6f0acd96d769ccbd098e9211b59a5312d53fdf`, and main was synchronized. E2 is complete. Current requested work is [E3](../20261024-e3-retention/continuity.json); do not rerun E2 or performance screening merely to resume.
 
 Evidence is recorded per unit here and in continuity; functional results do not establish performance or live peer readiness.
 

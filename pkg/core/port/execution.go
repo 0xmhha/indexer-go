@@ -29,6 +29,7 @@ var (
 	ErrExecutionConflict      = errors.New("execution: conflicting identity or content")
 	ErrExecutionSequence      = errors.New("execution: noncontiguous part")
 	ErrExecutionStale         = errors.New("execution: stale generation")
+	ErrExecutionMaintenance   = errors.New("execution: offline retention in progress; explicit completion required")
 	ErrExecutionRewinding     = errors.New("execution: rewind in progress; retry")
 	ErrExecutionCoverage      = errors.New("execution: required initial state is not covered")
 	ErrExecutionUninitialized = errors.New("execution: control is not initialized")
@@ -47,6 +48,7 @@ type ExecutionControl struct {
 	Generation    uint64
 	Visible       execwire.Ref
 	Root          execwire.Hash
+	Maintenance   bool
 	Rewinding     bool
 	BaselineReady bool
 }

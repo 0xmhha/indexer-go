@@ -34,6 +34,9 @@ func validateExecutionControl(e *config.ExecutionSourceConfig, c port.ExecutionC
 	if e == nil || !chains.SupportsExecution(profile) {
 		return port.ErrInvalidData
 	}
+	if c.Maintenance {
+		return port.ErrExecutionMaintenance
+	}
 	if !c.BaselineReady {
 		return port.ErrExecutionCoverage
 	}
@@ -97,6 +100,9 @@ func (a *App) initExecution(ctx context.Context) error {
 		c, err := store.ExecutionStatus(ctx)
 		if err != nil {
 			return err
+		}
+		if c.Maintenance {
+			return port.ErrExecutionMaintenance
 		}
 		if c.Rewinding {
 			if err = a.fetcher.RecoverExecution(ctx); err != nil {

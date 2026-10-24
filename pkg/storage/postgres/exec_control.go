@@ -12,7 +12,7 @@ import (
 )
 
 const executionControlSQL = `SELECT chain_id,genesis,anchor_generation,anchor_height,anchor_hash,anchor_root,
- generation,visible_height,visible_hash,visible_root,partition_blocks,(rewinding OR EXISTS(SELECT 1 FROM exec_rewinds)),baseline_digest IS NOT NULL FROM exec_control WHERE id`
+ generation,visible_height,visible_hash,visible_root,partition_blocks,(rewinding OR EXISTS(SELECT 1 FROM exec_rewinds)),baseline_digest IS NOT NULL,EXISTS(SELECT 1 FROM exec_retention WHERE pending) FROM exec_control WHERE id`
 const executionLockSQL = `hashtextextended(current_schema() || ':execution',0)`
 
 var _ port.ExecutionStore = (*Store)(nil)
@@ -46,7 +46,7 @@ func scanExecutionControl(row pgx.Row) (port.ExecutionControl, error) {
 	var c port.ExecutionControl
 	var genesis, anchor, root, visible, visibleRoot []byte
 	var ag, ah, generation, height, partition int64
-	err := row.Scan(&c.Chain.ID, &genesis, &ag, &ah, &anchor, &root, &generation, &height, &visible, &visibleRoot, &partition, &c.Rewinding, &c.BaselineReady)
+	err := row.Scan(&c.Chain.ID, &genesis, &ag, &ah, &anchor, &root, &generation, &height, &visible, &visibleRoot, &partition, &c.Rewinding, &c.BaselineReady, &c.Maintenance)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, port.ErrExecutionUninitialized
 	}
@@ -62,6 +62,16 @@ func scanExecutionControl(row pgx.Row) (port.ExecutionControl, error) {
 	copy(c.Root[:], visibleRoot)
 	c.PartitionBlocks = uint64(partition)
 	return c, nil
+}
+
+// scanActiveExecutionControl is used at every execution admission/final fence.
+// Status inspection deliberately uses the raw scanner to expose a pending GC.
+func scanActiveExecutionControl(row pgx.Row) (port.ExecutionControl, error) {
+	c, err := scanExecutionControl(row)
+	if err == nil && c.Maintenance {
+		err = port.ErrExecutionMaintenance
+	}
+	return c, err
 }
 func (s *Store) InitExecution(ctx context.Context, cfg port.ExecutionConfig) error {
 	if s.executionReadBound(ctx) {
@@ -86,7 +96,7 @@ func (s *Store) InitExecution(ctx context.Context, cfg port.ExecutionConfig) err
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock("+executionLockSQL+")"); err != nil {
 			return err
 		}
-		old, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL))
+		old, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL))
 		if err == nil {
 			if old.ExecutionConfig != cfg {
 				return port.ErrExecutionConflict

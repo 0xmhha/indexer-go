@@ -28,7 +28,7 @@ go build -o /YOUR_BUILD_DIRECTORY/execution-checkpoint ./x/stablenet/cmd/executi
 
 ## Export and verify
 
-First prepare the explicit executor configuration described in [execution ingest](EXECUTION_INGEST.md#executor-configuration-and-build). `start_mode` accepts `genesis` (requires height0) or `checkpoint`; omission preserves E1 prepared-checkpoint behavior. Both retain unlimited state/transaction history pending E3 and preserve preimages. Choose the anchor explicitly; no command silently selects `latest`.
+First prepare the explicit executor configuration described in [execution ingest](EXECUTION_INGEST.md#executor-configuration-and-build). `start_mode` accepts `genesis` (requires height0) or `checkpoint`; omission preserves E1 prepared-checkpoint behavior. Both preserve preimages and disable native automatic state-history pruning. [E3 offline retention](EXECUTION_RETENTION.md) changes the floor only with a verified full baseline and supervised DB permit; a compacted producer separately limits auxiliary native transaction lookup. Choose the anchor explicitly; no command silently selects `latest`.
 
 Examples below describe **operator actions**, not actions performed during this implementation:
 
@@ -94,9 +94,9 @@ The DB inspection uses a read-only public snapshot and performs no RPC. Source i
 | Source generation/ACK ahead of restored DB | Preserve both. Restore a mutually matched backup, or choose a new independently verified anchor and new DB schema **and new spool**. Never lower generation or infer ACK from Hello. |
 | Exact public parent header/root/state missing | Restore matching node data/history. Latest state cannot replace it. If restoration is impossible, use a new verified checkpoint/schema/spool or genesis sync. |
 | Missing export preimages | Supply a node backup containing preimages or rebuild from genesis with preservation enabled. Selected proofs remain partial; they cannot silently upgrade to full. |
-| Quota/disk/retention problem | Preserve pending results/quarantine. E3 owns deletion policy; E2 deletes nothing to regain capacity. |
+| Quota/disk/retention problem | Preserve pending results/quarantine. Use the [explicit E3 retention procedure](EXECUTION_RETENTION.md); E2 deletes nothing to regain capacity. |
 
-No tool applies a recovery plan destructively. Old schema/node/spool remain available for investigation and rollback; selecting a new boundary explicitly changes the supported historical range. APFS provisioning, peer access, backup/WAL restoration drills, automatic retention and performance comparisons remain deferred.
+No tool applies a recovery plan destructively. Old schema/node/spool remain available for investigation and rollback; selecting a new boundary explicitly changes the supported historical range. APFS provisioning, peer access, backup/WAL restoration drills, operational retention activation and performance comparisons remain deferred.
 
 ## Functional evidence
 

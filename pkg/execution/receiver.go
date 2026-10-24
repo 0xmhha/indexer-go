@@ -75,6 +75,9 @@ func (r *Receiver) serveConn(parent context.Context, raw net.Conn) error {
 	if err != nil {
 		return err
 	}
+	if status.Maintenance {
+		return port.ErrExecutionMaintenance
+	}
 	if status.Chain != r.Chain || status.Rewinding || !status.BaselineReady {
 		return port.ErrExecutionCoverage
 	}
