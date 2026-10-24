@@ -100,6 +100,11 @@ test-execwire:
 	cd execwire && $(GOBUILD) ./... && $(GOVET) ./... && $(GOTEST) -race -count=1 ./...
 
 .PHONY: test-executor-stablenet
+.PHONY: test-executor-arc
+## test-executor-arc: Build/lint/test official Arc replay libraries without starting a node
+test-executor-arc:
+	cd x/arc/executor && cargo fmt --check && cargo build --locked --all-targets && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked --all-targets
+
 ## test-executor-stablenet: Check two-pass StableNet replay with offline EVM and WBFT fixtures
 test-executor-stablenet:
 	cd x/stablenet/executor && $(GOBUILD) ./... && $(GOVET) ./... && $(GOTEST) -race -count=1 ./...

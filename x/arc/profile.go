@@ -14,6 +14,7 @@ var NativeEmitter = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffff
 
 func New() *evm.Profile {
 	return evm.New(ID,
+		evm.WithExecutionJournals(true),
 		evm.WithBlobCapability(BlobCapability()),
 		evm.WithDetect(func(info chains.NodeInfo) bool { return info.ChainID == 5042 || info.ChainID == 5042002 }),
 		evm.WithNativeAccounting(Accounting{}),

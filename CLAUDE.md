@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: EVM framework available; E1 (#214), E2 (#215) and E3 (#216) are merged; E4 feature writers are tracked in `docs/codemine/runs/20261024-e4-feature-writers/plan.md`
+- **Current Stage**: E1 (#214), E2 (#215), E3 (#216) and E4 (#217) are merged; E5 Arc replay/file delivery is tracked in `docs/codemine/runs/20261024-e5-arc-execution/plan.md`
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context
@@ -58,6 +58,9 @@ x/                              Chain-specific code, linked only by the binaries
   arc/                          Arc profile (USDC-native accounting, blob capability)
     feed/                       Arc source.feed module (ETH/68 peers; package arcfeed)
     nodefeed/                   Optional Reth ExEx producer crate (Rust; make test-node-feed)
+    executor/                   Pinned official Arc EVM replay and read-only one-block export (Rust; make test-executor-arc); no node startup
+    cmd/execution-submit/       Retained private EXR1 file to existing same-UID indexer socket; exact durable ACK, no deletion/rewind
+    cmd/execution-checkpoint/   Shared offline state verify/import/inspect with Arc header codec; no node or application startup
     bundle/, cmd/indexer-arc/   Bundle and the Arc binary
 tools/astgraph/                 Code graph generator (separate Go module); query.py answers reachability from main (docs/analysis/plan-audit.md)
 ```
@@ -193,11 +196,13 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 
 ### Current Work
 
-E4 implementation and required local checks are complete on `refactor/e4-feature-writers`, based on E3 #216/main a493be8. Read current E4 plan/checklist/continuity/validation under `docs/codemine/runs/20261024-e4-feature-writers/`, and `docs/EXECUTION_FEATURE_WRITERS.md`. The source-branch PR is authoritative for release. If it is merged, E4 is complete; do not repeat closed checks or start E5 automatically.
+E5 Arc replay and retained one-file delivery are on `refactor/e5-arc-execution`, based on E4 #217/main 7ca9995. Read the current plan/checklist/continuity/validation under `docs/codemine/runs/20261024-e5-arc-execution/` and `docs/EXECUTION_ARC.md`. The source-branch PR is authoritative for release. If merged, this E5 release scope is complete; do not repeat closed checks or start another phase automatically. Continuous Arc collector/cursor/reorg supervision, native checkpoint export/retention, trace/blob availability and E6 remain separate follow-ups, not completed automation.
+
+Arc replays with pinned official ArcEvmConfig, exact retained parent and native intermediate roots; a separately reconstructed journal must match after pre-block, each transaction and Finalize. Wire cause4 is first-only system PreBlock, no tx identity. Migration0017 adds it to existing history partitions without data deletion; old consumers/schema builds cannot consume this new path. Native CLI reads existing DB only and outputs one private durable file; no Node.Start, peer import, FinishedHeight or native deletion. Go SubmitFile parses once, checks ownership/inode/peer, requires exact ACK and preserves its input on all outcomes. No Hello-driven generation rewrite or automatic rewind.
 
 Feature-unit writers own preparation, grouped hooks and exact checkpoints; their SQL stays ordered inside the single final publication/undo/outbox transaction. No per-feature pool or concurrent use of one pgx transaction. Execution native balances/history use the account journal, not duplicate balances tables; the feature verifies exact stored input and writes no duplicate projection. Preserve ordinary RPC ingestion and independent capture projections. Existing projection rows are not deleted. Execution history cursors/anchor coverage differ as documented.
 
-E1 #214, E2 #215 and E3 #216 are merged. Preserve accepted E1 design/plan, E2 bootstrap and E3 retention records. Current E4 continuity retains n/n-1/n-2. `docs/analysis/open-items.md` tracks E5/E6 and held operations.
+E1 #214, E2 #215, E3 #216 and E4 #217 are merged. Preserve accepted E1 design/plan, E2 bootstrap, E3 retention and E4 balance/feature authority. Current E5 continuity retains n/n-1/n-2. `docs/analysis/open-items.md` tracks release, E5 follow-ups, E6 and held operations.
 
 The user delegated recommended decisions and implementation through CI-gated squash merges on 2026-10-24. Write a requirement-failing RED test before each feature, implement it, then prove GREEN. Update current documentation and the checklist after each feature. Preserve the E1 design/plan and n/n-1/n-2 context; use Git history for obsolete records instead of appending stale current status.
 
@@ -207,6 +212,6 @@ Keep 5 physical HTTP attempts/s per chain, including retries/failover/batch fall
 
 Actual node services, peer access, disk provisioning, operational GC activation and additional performance measurements are on hold. Owned temporary GC/native-library functional tests are allowed. Offline functional EVM library tests are allowed. Do not start a full node or download a snapshot as a follow-up. Preserve other projects, shared caches and Docker resources; own disposable test resources explicitly.
 
-Use explicit paths when staging; no git add -A. Use short English Conventional Commits without codex prefixes or attribution lines. Run required local race and staged/history secret checks before committing. New concurrency tests need a single GOMAXPROCS=1/race/count=200 run before push. Four required CI jobs must pass before squash merge; never bypass protection. Synchronize main before the next feature.
+Use explicit paths when staging; no git add -A. Use short English Conventional Commits without codex prefixes or attribution lines. Run required local race and staged/history secret checks before committing. New concurrency tests need a single GOMAXPROCS=1/race/count=200 run before push. Four required CI jobs plus the Arc native build/fmt/clippy/offline fixture job must pass before squash merge; never bypass protection. Synchronize main before the next feature.
 
 Previously completed API diagnostics/single-parse/compact JSON, keepalive, DB integration and concurrency200 remain complete unless affected by new code/failure. Do not restart host-load screening loops, capture SQL batching or K2 binary-key work. Their older records are in Git history.

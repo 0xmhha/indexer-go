@@ -1,6 +1,6 @@
 # Execution wire v1
 
-This standalone Go module is the transport contract between the StableNet execution process and the indexer. It uses only the standard library, so neither consumer imports the other's EVM dependencies. E1 integration is tracked in the [implementation checklist](../docs/codemine/runs/20261023-e1-execution/checklist.md).
+This standalone Go module defines the transport contract between verified execution producers and the indexer. It uses only the standard library, so consumers keep their EVM dependencies isolated. The [StableNet executor](../x/stablenet/executor/README.md) and [Arc native adapter](../x/arc/executor/README.md) emit the same bounded encoding. E1 integration is tracked in the [implementation checklist](../docs/codemine/runs/20261023-e1-execution/checklist.md).
 
 ## Encoding
 
@@ -27,7 +27,9 @@ The body is at most 8 MiB; the JSON header is at most 64 KiB. Version, chain ID,
 canonical JSON metadata | raw block RLP | raw receipts RLP
 ```
 
-The whole result is at most 64 MiB; metadata is at most 16 MiB. Source block and receipt bytes remain unchanged. Journal ordinals are contiguous: optional baseline/genesis, transactions in order, then Finalize (including empty blocks). Accounts, slots and code are sorted and unique within each step. Account values retain existence, nonce, uint256 balance, code/storage hashes and StableNet Extra. A storage-clear marker and before/after values preserve deletion semantics. A result has at most 65,536 changes and a code item at most 1 MiB.
+The whole result is at most 64 MiB; metadata is at most 16 MiB. Source block and receipt bytes remain unchanged. Journal ordinals are contiguous: optional first-only baseline/genesis or `PreBlock` (numeric cause 4), transactions in order, then Finalize (including empty blocks). `PreBlock` records protocol system changes before transactions with index -1 and zero transaction hash; it cannot follow a baseline or transaction. Accounts, slots and code are sorted and unique within each step. Account values retain existence, nonce, uint256 balance, code/storage hashes and StableNet Extra. A storage-clear marker and before/after values preserve deletion semantics. A result has at most 65,536 changes and a code item at most 1 MiB.
+
+Existing StableNet cause numbers and canonical payloads are unchanged. Older readers reject cause 4; upgrade the indexer/API and PostgreSQL schema (migration 0017) before supplying a producer that emits it. The new schema retains existing partitioned history and still rejects unknown causes. This additive cause does not grant a chain execution capability or weaken native replay/root verification.
 
 SHA-256 protects transport identity. The consumer must separately verify EVM block/receipt/state roots, code hashes, chain identity, canonicality, generation and journal completeness. A valid wire message is not a durable database ACK. Only final publication may send `Committed`; the wire module has no RPC or database access.
 

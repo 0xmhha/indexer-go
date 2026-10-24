@@ -1,0 +1,60 @@
+{
+  "goal": "E5 Arc execution adapter",
+  "base": "7ca99958f5b6ef9bcace0b2386ae5e23456a5515",
+  "source_branch": "refactor/e5-arc-execution",
+  "n": {
+    "unit": "U04",
+    "state": "locally_verified",
+    "contract": "full required local checks and native reproducibility; draft exact-head CI4 plus arc, ready/squash/ff main",
+    "passed": [
+      "new transfer/socket/cancel/Hello/exact ACK single GOMAXPROCS1/race/count200",
+      "native build/fmt/clippy and offline native library tests",
+      "strict Rust-to-Go fixture compatibility",
+      "actual fsync-on PG/API and failed-fresh retry",
+      "root functional759.2s",
+      "full root/wire/StableNet executor race937.1s",
+      "full fsync-on PG1059.5s",
+      "all15 static/build/cache/examples checks",
+      "native Arc build/fmt/clippy/test and byte-identical regenerated fixtures",
+      "Arc checkpoint command full native baseline root verification and isolated verify mode; focused command build/vet/lint/race",
+      "gofmt/docs/secret scans"
+    ],
+    "pending": [
+      "commit/draft/latest-head CI4+arc/ready/squash/ff main"
+    ]
+  },
+  "n-1": {
+    "unit": "U03",
+    "state": "targeted_green",
+    "contract": "retained one-file delivery; explicit Arc capability based on official native producer; immutable inputs and exact ACK; existing public/fresh boundaries",
+    "red": [
+      "unimplemented SubmitResult/SubmitFile/command",
+      "Arc capability false"
+    ],
+    "tests": [
+      "canonical Rust wire and Go block verification",
+      "actual PG7/public API",
+      "fresh failure retains anchor; retry/confirmation fresh"
+    ]
+  },
+  "n-2": {
+    "unit": "U02",
+    "state": "targeted_green",
+    "contract": "official ArcEvmConfig replays exact retained parent; independently reconstruct each phase and transaction root; no upstream mutation",
+    "red": "native empty-block accounting and durable output unimplemented",
+    "tests": [
+      "native empty/transfer/storage/revert/creation/code/destruction",
+      "account/slot/code omission and false before rejection",
+      "native wrong roots/parent/gas/receipts/missing code",
+      "durable private no-overwrite output"
+    ]
+  },
+  "next": "Finish U04 checks once; address actual failures, then commit/draft exact-head CI4+arc, ready/squash/ff main. Report E5 continuous collector/native export/retention/trace/blob follow-ups and E6; do not claim automated Arc parity.",
+  "holds": [
+    "live nodes/peers",
+    "provisioning",
+    "operational GC",
+    "performance",
+    "other projects"
+  ]
+}

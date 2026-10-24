@@ -1,0 +1,19 @@
+# E5 validation
+
+Scope: pinned official Arc native libraries, bounded retained-file delivery and real fsync-on disposable PostgreSQL. No Node.Start, live peer/RPC, actual operator native DB, provisioning, operational GC or performance measurements. E5 continuous collection/export/retention follow-ups remain in the [current work list](../../../analysis/open-items.md).
+
+## RED and targeted GREEN
+
+- U01 wire: `TestPreBlockSystemJournalOrderAndAttribution` first failed with invalid journal cause; first-only system cause4 then passed all wire/checkpoint/retention race tests. Actual PG initially rejected `state_account_changes_cause_check`; migration0017 passed `TestExecutionPreBlock*`, including preservation of existing v16 partitions/history and rejection of cause5.
+- U02: the native empty-block test first failed with unimplemented Arc replay. Pinned native replay now passes empty system accounting, transfer/storage/revert, creation/runtime code/constructor destruction, wrong root/parent/gas/receipts, missing bytecode and independent journal omission/before-value rejection. Private durable output first failed its unimplemented path, then passed owned/private/no-overwrite/preservation checks. These use real Arc/revm code, not an EVM mock.
+- Dependency setup initially selected incompatible Alloy parser versions. The standalone lock starts from the audited Arc lock and retains its compatible versions/security patch; the final build uses `--locked`. Initial fixture setup also needed Cancun environment fields and native log bloom before the native transaction cases could execute. These setup failures are distinct from functional RED and are resolved.
+- U03: exact committed proof and retained-file/socket tests failed unimplemented transfer before implementation. Arc capability test failed until native producer evidence justified opt-in. Rust canonical bytes are independently accepted by Go's strict JSON/wire and block/body/receipt verifier. Actual PG publication/API tests pass for Arc storage and successful constructor destruction. Fresh failure keeps height/API state at the anchor despite seven durable parts; retry and lost-ACK confirmation pass through fresh again.
+- New transfer/socket/cancellation/Hello/ACK concurrency: one `GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^TestExecutionSubmit' ./pkg/execution` invocation passed (5.281s). This is a correctness stress check, not a throughput result.
+
+## Release checks
+
+All required local checks passed: root functional (759.2s), full root/wire/StableNet-executor race (937.1s), real fsync-on PostgreSQL adapter/app/API/bundle (1059.5s), all15 build/vet/lint/cache/examples/operations/static checks and native Arc build/fmt/clippy/offline tests plus byte-identical fixture regeneration. New code is gofmt-clean; relative documentation links and staged/history secret scans pass. Build times are verification elapsed time, not workload/SLO measurements. Optional live/Anvil cases stay excluded by test-only PATH and opt-in settings.
+
+Review also exposed sender help returning an error without flags and the existing checkpoint CLI being StableNet-specific. Both received requirement-failing tests before implementation. The new Arc checkpoint entrypoint reuses shared verify/import/inspect with the Arc codec; a full synthetic native baseline is independently rebuilt in Go with invalid DB/RPC settings proving verification isolation. Focused Arc command build/vet/lint/race checks passed after these final entrypoint changes; no closed full suite was repeated for the thin commands.
+
+CI/merge authority is the [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-execution); all four protected checks plus `arc` must pass on its exact head before ready/squash/main synchronization. A source commit cannot certify a later server merge.
