@@ -20,6 +20,7 @@ import (
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/pkg/execution"
 	"github.com/0xmhha/indexer-go/x/arc"
+	"github.com/0xmhha/indexer-go/x/arc/nativestore"
 )
 
 const arcRevision = "6e764023ee6515fe70573e123ed2db912a7207b4"
@@ -34,19 +35,20 @@ type Options struct {
 }
 
 type Backend struct {
-	chain    execwire.Chain
-	input    io.WriteCloser
-	output   io.ReadCloser
-	cancel   context.CancelFunc
-	done     chan struct{}
-	gate     chan struct{}
-	sequence uint64
-	timeout  time.Duration
-	stderr   boundedError
-	work     string
-	workInfo os.FileInfo
-	cleanup  sync.Once
-	closeErr error
+	chain       execwire.Chain
+	input       io.WriteCloser
+	output      io.ReadCloser
+	cancel      context.CancelFunc
+	done        chan struct{}
+	gate        chan struct{}
+	sequence    uint64
+	timeout     time.Duration
+	stderr      boundedError
+	work        string
+	workInfo    os.FileInfo
+	cleanup     sync.Once
+	closeErr    error
+	nativeLease *os.File
 }
 
 type boundedError struct {
@@ -100,6 +102,20 @@ func Start(parent context.Context, o Options) (*Backend, error) {
 	if o.ScratchDir != "" && !filepath.IsAbs(o.ScratchDir) {
 		return nil, ErrNative
 	}
+	o.DataDir, err = filepath.EvalSymlinks(o.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	lease, err := nativestore.AcquireRun(o.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = lease.Close()
+		}
+	}()
 	work, err := os.MkdirTemp(o.ScratchDir, ".arc-native-")
 	if err != nil {
 		return nil, err
@@ -116,6 +132,8 @@ func Start(parent context.Context, o Options) (*Backend, error) {
 		return nil, errors.Join(err, removeScratch(work, workInfo))
 	}
 	b.work, b.workInfo = work, workInfo
+	b.nativeLease = lease
+	transferred = true
 	return b, nil
 }
 
@@ -183,7 +201,12 @@ func (b *Backend) Close() error {
 	_ = b.input.Close()
 	_ = b.output.Close()
 	<-b.done
-	b.cleanup.Do(func() { b.closeErr = removeScratch(b.work, b.workInfo) })
+	b.cleanup.Do(func() {
+		b.closeErr = removeScratch(b.work, b.workInfo)
+		if b.nativeLease != nil {
+			b.closeErr = errors.Join(b.closeErr, b.nativeLease.Close())
+		}
+	})
 	return b.closeErr
 }
 func (b *Backend) reject(err error) error {

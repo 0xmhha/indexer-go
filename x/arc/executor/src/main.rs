@@ -5,21 +5,21 @@ use arc_execution_config::chainspec::{ArcChainSpec, MAINNET, TESTNET};
 use clap::{Parser, ValueEnum};
 use eyre::{Result, ensure, eyre};
 use indexer_arc_executor::{
-    ARC_REVISION, Verified, replay,
+    ARC_REVISION, Verified,
+    native::{NativeTypes, read_only_config},
+    replay,
     service::{self, Operation},
     write_result,
 };
 use reth_ethereum::{
     evm::EthEvmConfig,
     provider::{
-        BlockHashReader, BlockReader, EthStorage, HeaderProvider, ReceiptProvider,
-        providers::{ProviderFactoryBuilder, ReadOnlyConfig},
+        BlockHashReader, BlockReader, HeaderProvider, ReceiptProvider,
+        providers::ProviderFactoryBuilder,
     },
     tasks::Runtime,
 };
-use reth_ethereum_engine_primitives::EthPayloadTypes;
-use reth_ethereum_primitives::EthPrimitives;
-use reth_node_types::AnyNodeTypes;
+
 use reth_storage_api::BlockNumReader;
 use std::{path::PathBuf, sync::Arc};
 
@@ -50,68 +50,17 @@ struct Args {
     scratch_dir: Option<PathBuf>,
 }
 
-type NativeTypes = AnyNodeTypes<EthPrimitives, ArcChainSpec, EthStorage, EthPayloadTypes>;
-
-fn read_only_config(
-    datadir: &std::path::Path,
-    scratch: Option<&std::path::Path>,
-) -> Result<(ReadOnlyConfig, tempfile::TempDir)> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::{fs::MetadataExt, fs::symlink};
-        if let Some(parent) = scratch {
-            let info = std::fs::symlink_metadata(parent)?;
-            ensure!(
-                parent.is_absolute()
-                    && info.is_dir()
-                    && info.mode() & 0o777 == 0o700
-                    && info.uid() == rustix::process::geteuid().as_raw(),
-                "scratch parent must be absolute, owned and private"
-            );
-        }
-        let work = if let Some(parent) = scratch {
-            tempfile::Builder::new()
-                .prefix("secondary-")
-                .tempdir_in(parent)?
-        } else {
-            tempfile::Builder::new()
-                .prefix("arc-secondary-")
-                .tempdir()?
-        };
-        let native = datadir.canonicalize()?;
-        let private = work.path().canonicalize()?;
-        ensure!(
-            !private.starts_with(&native) && !native.starts_with(&private),
-            "native and scratch paths must be separate"
-        );
-        let primary = work.path().join("rocksdb-primary");
-        // The pinned upstream secondary puts its LOG directory next to the
-        // supplied primary path. Keep that lexical path in our private workdir;
-        // the symlink target is opened read-only and is never removed by cleanup.
-        symlink(native.join("rocksdb"), &primary)?;
-        let mut config = ReadOnlyConfig::from_datadir(datadir);
-        config.rocksdb_dir = primary;
-        // provider() synchronizes on every new native transaction. Avoid the
-        // upstream watcher retaining the factory and its secondary until exit.
-        config.watch = false;
-        Ok((config, work))
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = (datadir, scratch);
-        eyre::bail!("private native workspace requires Unix")
-    }
-}
-
 fn main() -> Result<()> {
     produce(Args::parse())
 }
 
-fn produce(args: Args) -> Result<()> {
+fn produce(mut args: Args) -> Result<()> {
     ensure!(
         args.datadir.is_absolute() && args.output.as_ref().is_none_or(|p| p.is_absolute()),
         "native/output paths must be absolute"
     );
+    args.datadir = args.datadir.canonicalize()?;
+    indexer_arc_executor::native::check_start(&args.datadir)?;
     for name in ["db", "rocksdb", "static_files"] {
         ensure!(
             args.datadir.join(name).is_dir(),

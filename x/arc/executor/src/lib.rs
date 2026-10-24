@@ -9,7 +9,12 @@ mod replay;
 pub mod wire;
 pub use output::write_result;
 pub use replay::{ReplayState, Verified, replay};
+pub mod checkpoint;
 pub mod service;
 
 #[cfg(test)]
 mod tests;
+
+pub mod native;
+
+pub mod retention;

@@ -1,0 +1,11 @@
+{
+  "NativeExecutable": "/YOUR_BUILD/arc-native-maintenance",
+  "NativeDataDir": "/PRIVATE_MANAGED_PARENT/native",
+  "SpoolDir": "/PRIVATE_MANAGED_PARENT/source",
+  "Chain": {"ID": "5042002", "Genesis": "REPLACE_WITH_VERIFIED_ARC_GENESIS"},
+  "Anchor": {"Generation": 1, "Height": 0, "Hash": "REPLACE_WITH_ORIGINAL_PREPARED_ANCHOR_HASH"},
+  "AnchorRoot": "REPLACE_WITH_ORIGINAL_VERIFIED_FULL_BASELINE_ROOT",
+  "SpoolBytes": 4294967296,
+  "SpoolRecords": 262144,
+  "ReserveBytes": 1073741824
+}

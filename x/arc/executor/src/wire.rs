@@ -1,12 +1,12 @@
 //! Exact Go execwire metadata ordering and hex/base64 representation.
 use alloy_primitives::{Address, B256};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub const TRANSACTION: u8 = 0;
 pub const FINALIZE: u8 = 1;
 pub const PRE_BLOCK: u8 = 4;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Ref {
     pub generation: u64,
@@ -14,7 +14,7 @@ pub struct Ref {
     pub hash: B256,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Account {
     pub exists: bool,
@@ -25,7 +25,7 @@ pub struct Account {
     pub extra: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct AccountChange {
     pub address: Address,
@@ -35,7 +35,7 @@ pub struct AccountChange {
     pub storage_cleared: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct StorageChange {
     pub address: Address,
@@ -45,7 +45,7 @@ pub struct StorageChange {
     pub baseline: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Code {
     pub hash: B256,
@@ -58,7 +58,7 @@ fn base64_bytes<S: serde::Serializer>(bytes: &[u8], s: S) -> std::result::Result
     s.serialize_str(&base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Step {
     pub ordinal: u32,
