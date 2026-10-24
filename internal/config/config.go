@@ -150,8 +150,9 @@ type RPCConfig struct {
 
 // SourceConfig selects where block data comes from besides the node.
 type SourceConfig struct {
-	Feed           *feed.Config `yaml:"feed,omitempty"`
-	NodeFeedSocket string       `yaml:"node_feed_socket"`
+	Execution      *ExecutionSourceConfig `yaml:"execution,omitempty"`
+	Feed           *feed.Config           `yaml:"feed,omitempty"`
+	NodeFeedSocket string                 `yaml:"node_feed_socket"`
 	// EraDir, when set, reads the blocks held by the era1 archives in this
 	// directory (exported by the node client) from the files, and every
 	// later block from the node. Requires indexer.profile_source.
@@ -1521,6 +1522,9 @@ func isFalse(b *bool) bool { return b != nil && !*b }
 
 // Validate validates the configuration
 func (c *Config) Validate() error {
+	if err := c.validateExecution(); err != nil {
+		return err
+	}
 	if err := c.WindowStorage.Validate(); err != nil {
 		return fmt.Errorf("window_storage: %w", err)
 	}

@@ -65,6 +65,9 @@ func (f BlockHandlerFunc) HandleBlock(ctx context.Context, b *Block) error { ret
 
 // Deps are the services a feature may use.
 type Deps struct {
+	// NativeBalances supplies an ordered execution journal in execution mode.
+	// Nil preserves profile accounting and existing RPC initialization.
+	NativeBalances func(context.Context, *Block) ([]NativeBalanceChange, error)
 	// PrepareConcurrency bounds node-read preparation across this pipeline.
 	PrepareConcurrency int
 	// StateBatchSize bounds the number of reads in one state RPC envelope.

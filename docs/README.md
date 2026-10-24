@@ -78,7 +78,7 @@ These options have separate supply and completion contracts. Enabling one does n
 
 ## Design, validation and migration
 
-The standalone [execution wire v1 module](../execwire/README.md) implements bounded framing, journal encoding and cancellable transport. The [StableNet recorder](../x/stablenet/executor/README.md) implements second-pass state journals with offline EVM/WBFT validation. The [E1 checklist](codemine/runs/20261023-e1-execution/checklist.md) distinguishes this library from the remaining executor, PostgreSQL and application integration.
+[StableNet execution ingest](EXECUTION_INGEST.md) documents the opt-in application and isolated official-client executor, prepared baseline requirements, seven queues on pool4, public/fresh/ACK boundaries and recovery. The [wire module](../execwire/README.md) and [executor](../x/stablenet/executor/README.md) have independent Go modules. The [E1 checklist](codemine/runs/20261023-e1-execution/checklist.md) records functional verification and CI; live node, deployment and performance validation remain on hold.
 
 Use the [analysis index](analysis/README.md) for design documents and dated evidence. It distinguishes implementation contracts, proposed work, historical measurements and the earlier ExEx comparison.
 

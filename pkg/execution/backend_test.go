@@ -17,6 +17,7 @@ type partProbe struct {
 	core, state []port.ExecutionWriter
 	parts       []port.ExecutionPart
 	fail        error
+	proofs      []port.ExecutionWriter
 }
 
 func (p *partProbe) WriteExecutionPart(ctx context.Context, part port.ExecutionPart, fn func(context.Context) error) error {
@@ -33,12 +34,28 @@ func (p *partProbe) ApplyExecutionCore(ctx context.Context, w port.ExecutionWrit
 	p.core = append(p.core, w)
 	return nil
 }
-func (p *partProbe) ApplyExecutionState(ctx context.Context, w port.ExecutionWriter, _ execwire.Result, _ ...port.ExecutionCreation) error {
+func (p *partProbe) ApplyExecutionState(ctx context.Context, w port.ExecutionWriter, _ execwire.Result, creations ...port.ExecutionCreation) error {
+	if len(creations) > 0 {
+		p.proofs = append(p.proofs, w)
+	}
 	if ctx.Value(backendKey{}) != w {
 		return errors.New("lost bound transaction")
 	}
 	p.state = append(p.state, w)
 	return nil
+}
+
+func TestStoreBackendCreationProofBelongsOnlyToContractWriter(t *testing.T) {
+	chain, _, raw := preparedFixture(t)
+	p, err := Prepare(evm.New("evm"), chain, raw)
+	require.NoError(t, err)
+	p.creations = []port.ExecutionCreation{{Address: execwire.Address{1}, TxIndex: 0, TxHash: execwire.Hash{2}}}
+	store := &partProbe{}
+	b := &StoreBackend{Store: store}
+	for _, w := range port.ExecutionWriters() {
+		require.NoError(t, b.Part(t.Context(), w, p))
+	}
+	require.Equal(t, []port.ExecutionWriter{port.ExecutionContracts}, store.proofs)
 }
 func TestStoreBackendUsesBoundPartAndSeparatesPublication(t *testing.T) {
 	chain, _, raw := preparedFixture(t)

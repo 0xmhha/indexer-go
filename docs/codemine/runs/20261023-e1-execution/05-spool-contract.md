@@ -1,6 +1,6 @@
 # U03 durable spool·ACK 계약
 
-상태: PR #212에서 발견한 종료·ACK quota 보완과 최종 전체 로컬 회귀 완료. 수정 커밋·CI 갱신 대기. [E1 계획](03-plan.md)과 [체크리스트](checklist.md)를 따른다. 직전 두 기능은 U02 recorder(PR #211), U01 wire(PR #210)다.
+상태: [PR #212](https://github.com/0xmhha/indexer-go/pull/212)에서 필수 CI·squash merge·main 동기화를 완료했다. 현재 계약과 후속 변경은 [체크리스트](checklist.md)를 따른다.
 
 실행부 모듈 안에 결과 spool을 둔다. root indexer나 PostgreSQL을 import하지 않는다. 실제 노드·peer·추가 성능 측정·디스크 포맷·노드 DB GC는 보류한다.
 

@@ -23,6 +23,9 @@ type preparedBalance struct {
 // entering the writer. The writer rechecks record existence; speculative
 // errors for accounts initialized by earlier in-flight blocks are ignored.
 func (h *handler) PrepareBlock(ctx context.Context, b *feature.Block) (feature.PreparedHandler, error) {
+	if h.deps.NativeBalances != nil {
+		return feature.PreparedHandler{}, ctx.Err()
+	}
 	parallel, ok := h.accounting.(chains.ConcurrentAccounting)
 	if !ok || !parallel.ConcurrentAccounting() || h.deps.BalanceAtHash == nil {
 		return feature.PreparedHandler{}, nil

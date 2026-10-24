@@ -56,9 +56,10 @@ import (
 
 // App encapsulates all application components and lifecycle
 type App struct {
-	config *config.Config
-	logger *zap.Logger
-	client *client.Client
+	executionFeed executionService
+	config        *config.Config
+	logger        *zap.Logger
+	client        *client.Client
 	// profile is the chain profile selected by --adapter or detected (nil if
 	// detection failed, see profileErr); profileSrc reads blocks with it.
 	profile    chains.Profile
@@ -118,6 +119,9 @@ func NewApp(cfg *config.Config, log *zap.Logger, enableGapMode bool, forceAdapte
 }
 
 func newApp(cfg *config.Config, log *zap.Logger, opts StartOptions) (_ *App, err error) {
+	if err := preflightExecution(cfg, opts); err != nil {
+		return nil, err
+	}
 	if err := preflightFeeds(cfg, opts.GapRecovery); err != nil {
 		return nil, err
 	}
@@ -316,6 +320,9 @@ func (a *App) initStorageOnly(ctx context.Context) error {
 // completeStorageInit completes storage initialization for single-chain mode
 // This wraps storage with genesis initializer and runs additional setup
 func (a *App) completeStorageInit(ctx context.Context) error {
+	if a.config.Source.Execution != nil {
+		return a.checkExecutionStorage(ctx)
+	}
 	// Wrap storage with genesis initializer (needs client)
 	if g, ok := a.storage.(storage.GenesisBalanceConfigurer); ok {
 		g.SetGenesisBalanceResolver(a.client)
@@ -856,6 +863,11 @@ func (a *App) initFetcher(ctx context.Context) error {
 		deps.BalanceAtHash = a.nodeFeed.BalanceAtHash
 		deps.BalanceBatchAtHash = a.nodeFeed.BalanceBatchAtHash
 	}
+	if a.config.Source.Execution != nil {
+		deps.NativeBalances = feature.NativeBalancesFromContext
+		deps.BalanceAt, deps.BalanceAtHash, deps.BalanceBatchAtHash = nil, nil, nil
+		deps.BlockAt = a.storage.GetBlock
+	}
 	pipeline, err := feature.Build(enabled, deps)
 	if err != nil {
 		return err
@@ -863,6 +875,9 @@ func (a *App) initFetcher(ctx context.Context) error {
 	a.fetcher.SetFeatures(pipeline)
 	a.features = pipeline
 	a.logger.Info("Features enabled", zap.Strings("features", pipeline.Features()))
+	if a.config.Source.Execution != nil {
+		return a.initExecution(ctx)
+	}
 
 	// Old blocks are processed for newly enabled features before ingest
 	// starts; events are not published for them.
@@ -1134,6 +1149,9 @@ func (a *App) run(ctx context.Context) error {
 		return ctx.Err()
 	}
 
+	if a.executionFeed != nil {
+		return a.executionFeed.Run(ctx)
+	}
 	if a.streamRelay != nil || a.fetcher == nil {
 		return a.runAPINode(ctx)
 	}
@@ -1170,6 +1188,9 @@ func (a *App) followHeads(ctx context.Context) {
 // Shutdown gracefully shuts down all application components
 func (a *App) Shutdown() {
 	a.logger.Info("Shutting down application components...")
+	if a.executionFeed != nil {
+		a.executionFeed.Stop()
+	}
 	if a.managedFeed != nil {
 		a.managedFeed.Stop()
 	}
@@ -1425,6 +1446,9 @@ func (a *App) featureOverrides() map[string]bool {
 
 // closeAfterFailedStart releases the resources NewApp opened before failing.
 func (a *App) closeAfterFailedStart() {
+	if a.executionFeed != nil {
+		a.executionFeed.Stop()
+	}
 	if a.managedFeed != nil {
 		a.managedFeed.Stop()
 	}

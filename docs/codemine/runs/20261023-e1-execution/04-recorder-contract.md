@@ -1,6 +1,6 @@
 # U02 재실행 recorder 계약
 
-상태: 구현과 로컬 기능·회귀 검증 완료, PR·CI 대기. 구현 완료는 [체크리스트](checklist.md)를 따른다. 직전 U01은 [PR #210](https://github.com/0xmhha/indexer-go/pull/210)으로 CI 통과·squash merge·main 동기화했다. 이 문서는 [E1 계획](03-plan.md)의 실행 기록 검증을 구체화한다.
+상태: [PR #211](https://github.com/0xmhha/indexer-go/pull/211)에서 필수 CI·squash merge·main 동기화를 완료했다. 현재 계약과 후속 변경은 [체크리스트](checklist.md)를 따른다.
 
 ## 입력과 출력
 
@@ -13,6 +13,7 @@
 - 부모 상태를 감싼 `state.Database`로 열고, 각 거래의 `SetTxContext`·공식 `ApplyTransaction`·`IntermediateRoot`를 순서대로 처리한다. Finalize는 마지막 ordinal이다.
 - 감싼 trie에서 변경 직전의 최초 값과 변경 후 최종 값을 모은다. reverted 변경은 StateDB에서 취소된 뒤 flush되므로 성공한 잔여 변화만 기록한다.
 - nonce·balance·code/storage root·Extra·존재 여부, storage slot과 clear, code bytes를 보존한다. 삭제 후 재생성과 계정은 그대로인 storage-only 변경을 검사한다.
+- 성공한 outer creation은 constructor 안에서 소멸해 전후가 모두 부재여도 실제 account witness를 보존한다. root 변화가 없다는 이유로 생성 증거를 버리지 않고 verified receipt와 연결한다. 실패 생성은 이에 포함하지 않는다.
 - `CopyTrie`는 감싼 객체를 풀어 공식 cachingDB가 처리할 concrete trie를 전달하고 다시 감싼다. 복사본의 추측 실행이 원본 기록을 오염시키면 안 된다.
 - DAO/beacon 등 transaction 이전의 실제 protocol 변경이 있는 구성은 원인을 잘못 귀속하지 않는다. 현재 StableNet 구성과 공식 processor를 확인해 정확히 기록하거나 지원하지 않는 조합을 명확하게 거절한다.
 - EVM 실행 중 취소와 모든 종료 경로에서 소유한 callback·worker를 정리한다. 취소된 결과를 내보내지 않는다.

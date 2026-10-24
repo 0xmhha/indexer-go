@@ -43,7 +43,7 @@ func parentState(t *testing.T) (ethdb.Database, state.Database, common.Hash) {
 	return disk, db, root
 }
 
-func dump(t *testing.T, disk ethdb.Database) map[string][]byte {
+func dump(t *testing.T, disk ethdb.KeyValueStore) map[string][]byte {
 	t.Helper()
 	it := disk.NewIterator(nil, nil)
 	defer it.Release()

@@ -1,6 +1,6 @@
 # U06: atomic execution publication
 
-현재 U04~U08 통합 브랜치의 기능 검사 결과다. 앱의 실행 모드 선택·IPC 연결은 U09/U10이다.
+상태: [PR #213](https://github.com/0xmhha/indexer-go/pull/213), merge `08098f2`에서 필수 CI 4개·squash/main 동기화를 완료했다. all-seven readiness·feature/outbox 원자성·커밋 직전 fresh와 응답 후 generation fence를 검증했다. 앱 연결은 U09~U11이다. 현재 작업은 [체크리스트](checklist.md)를 따른다.
 
 `CommitExecution`은 기존 pool4의 transaction 하나를 사용한다. shared advisory fence와 control row lock으로 generation·rewind를 검사하고, 같은 ref/parent/digest의 7개 durable part와 저장된 block/root를 확인한다. 명시적 anchor baseline이 없으면 거절한다.
 

@@ -250,6 +250,12 @@ func (s *Store) BeginBlock(ctx context.Context) (context.Context, port.BlockTx, 
 	if s.executionReadBound(ctx) {
 		return nil, nil, port.ErrReadOnly
 	}
+	if s.executionMode.Load() {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, port.ErrInvalidData
+	}
 	if err := s.write(); err != nil {
 		return nil, nil, err
 	}

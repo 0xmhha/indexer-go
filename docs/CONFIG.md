@@ -783,3 +783,7 @@ dispatcher는 최대 10ms 수집 창과 HTTP 토큰 대기 중 들어온 독립 
 ### Node-feed
 
 `source.node_feed_socket` 또는 체인별 `node_feed_socket`을 지정하면 Arc ExEx의 로컬 실행 입력과 native 상태를 사용한다. 기본은 비활성화이며 full ingest·state_prefetch·acquisition_queue가 필요하다. 공개 RPC5와 fresh canonical은 유지한다. producer hook, Docker socket 조건, 커밋 후 ACK·pruning/복구·자원 상한은 [NODE_FEED](NODE_FEED.md)를 따른다.
+
+## StableNet execution ingest
+
+`source.execution` opts into the prepared StableNet PostgreSQL execution path. See [configuration and checkpoint requirements](EXECUTION_INGEST.md#indexer-configuration). It requires pool4, shared RPC5 and head/fresh publication, is mutually exclusive with other sources and defaults to off. An API-only process omits this option and detects the DB read fence automatically.

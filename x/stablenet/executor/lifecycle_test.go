@@ -12,6 +12,27 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+func TestReplayKeepsSuccessfulConstructorDestructionAccountWitness(t *testing.T) {
+	init := append(append([]byte{0x73}, common.Address{88}.Bytes()...), 0xff)
+	_, in := evmFixtureWith(t, []byte{0}, []evmTxSpec{{input: init}})
+	if in.Receipts[0].Status != types.ReceiptStatusSuccessful {
+		t.Fatal("fixture creation failed")
+	}
+	out, err := Replay(t.Context(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range out.Steps[0].Accounts {
+		if a.Address == execwire.Address(in.Receipts[0].ContractAddress) {
+			if a.Before != (execwire.Account{}) || a.After != (execwire.Account{}) {
+				t.Fatal("constructor destruction not absent at both boundaries")
+			}
+			return
+		}
+	}
+	t.Fatal("successful constructor destruction lost its account witness")
+}
+
 func TestReplayEVMRevertKeepsFeesWithoutStorageOrValue(t *testing.T) {
 	code := []byte{0x60, 0x03, 0x60, 0x00, 0x55, 0x60, 0x00, 0x60, 0x00, 0xfd}
 	_, in := evmFixtureWith(t, code, []evmTxSpec{{to: &account, value: 1}})

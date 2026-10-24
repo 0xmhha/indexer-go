@@ -2,7 +2,7 @@
 
 This standalone module replays an already imported block to export transaction and Finalize state changes for E1. The normal node import is the first execution; `Replay` is the second. It imports the official StableNet client without modifying its source and never commits second-pass state to the node database.
 
-The module provides replay and a [durable result spool](spool/README.md). Transport, canonical walking and application/node assembly are later E1 units in the [implementation checklist](../../../docs/codemine/runs/20261023-e1-execution/checklist.md).
+The module provides replay, a [durable result spool](spool/README.md), canonical walking and bounded IPC export (`exporter`), and official `node`/`eth` assembly (`nodebackend`, `cmd/stablenet-executor`). See the [execution guide](../../../docs/EXECUTION_INGEST.md) for prepared-checkpoint requirements, settings and lifecycle. The [checklist](../../../docs/codemine/runs/20261023-e1-execution/checklist.md) records final verification and CI.
 
 ## Dependencies and integration
 

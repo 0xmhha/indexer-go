@@ -22,6 +22,7 @@ type recorder struct {
 	storageBefore  map[common.Address]state.Trie
 	storageCurrent map[common.Address]state.Trie
 	accounts       map[common.Address]bool
+	retainAccount  *common.Address
 	slots          map[common.Address]map[common.Hash]bool
 	cleared        map[common.Address]bool
 	codes          map[common.Hash][]byte
@@ -50,6 +51,7 @@ func (r *recorder) beginStep(cause execwire.Cause, index int32, hash common.Hash
 	r.before = r.db.Database.CopyTrie(r.main.Trie)
 	r.storageBefore = make(map[common.Address]state.Trie)
 	r.accounts = make(map[common.Address]bool)
+	r.retainAccount = nil
 	r.slots = make(map[common.Address]map[common.Hash]bool)
 	r.cleared = make(map[common.Address]bool)
 	r.codes = make(map[common.Hash][]byte)
@@ -132,7 +134,7 @@ func (r *recorder) finishStep(deleteEmpty bool) (execwire.Step, error) {
 			r.cleared[addr] = true
 		}
 		b, a := accountValue(before), accountValue(after)
-		if b != a || cleared {
+		if b != a || cleared || r.retainAccount != nil && addr == *r.retainAccount {
 			s.Accounts = append(s.Accounts, execwire.AccountChange{Address: execwire.Address(addr), Before: b, After: a, StorageCleared: cleared})
 		}
 	}

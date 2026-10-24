@@ -55,6 +55,9 @@ func ValidateConfig(cfg *config.Config) error {
 // which is a normal stop (nil), or the indexer fails. It refuses to start
 // while the operations halt latch exists.
 func Start(ctx context.Context, cfg *config.Config, log *zap.Logger, opts StartOptions) error {
+	if err := preflightExecution(cfg, opts); err != nil {
+		return err
+	}
 	for _, msg := range cfg.UnsupportedSettings() {
 		log.Warn("Unsupported setting ignored", zap.String("detail", msg))
 	}

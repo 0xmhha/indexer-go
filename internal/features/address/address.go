@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feature"
 )
@@ -69,7 +70,7 @@ func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
 			}
 		}
 
-		if tx.To == nil && receipt.ContractAddress != nil {
+		if tx.To == nil && receipt.Status == model.ReceiptStatusSuccessful && receipt.ContractAddress != nil && *receipt.ContractAddress != (common.Address{}) {
 			contract := *receipt.ContractAddress
 			creation := &port.ContractCreation{
 				ContractAddress: contract,

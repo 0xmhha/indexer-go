@@ -1,6 +1,6 @@
 # U05: bounded execution scheduler
 
-현재 U04~U08 통합 브랜치에서 기능 검사 완료. 공개 transaction과 실제 앱 연결 완료를 의미하지 않는다.
+상태: [PR #213](https://github.com/0xmhha/indexer-go/pull/213), merge `08098f2`에서 필수 CI 4개·squash/main 동기화를 완료했다. bounded queue 7개와 DB part 동시성2개를 검증했다. 실제 앱·IPC 연결은 U09~U11이다. 현재 작업은 [체크리스트](checklist.md)를 따른다.
 
 - `Prepare`는 wire를 소유한 자료로 복호화하고 기존 chain profile/evmdata 검증기로 header·body·receipt commitment, 거래 순서와 journal metadata를 대조한다. EVM·RPC는 실행하지 않는다. 명시적 anchor baseline만 허용하며 일반 결과의 baseline 단계는 거절한다.
 - sender와 성공한 outer CREATE receipt가 일치할 때만 creation 증거를 만든다. 빈 runtime code도 포함하며 실패 receipt는 제외한다. 내부 CREATE의 creator를 추정하지 않는다.
