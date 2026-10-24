@@ -69,6 +69,9 @@ const (
 	Finalize
 	Genesis
 	Baseline
+	// PreBlock identifies system changes before the first transaction. It is
+	// optional, first-only and never carries a user transaction identity.
+	PreBlock
 )
 
 type Account struct {

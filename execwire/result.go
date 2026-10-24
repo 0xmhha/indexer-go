@@ -81,7 +81,7 @@ func validateResult(r Result) error {
 			if i != len(r.Steps)-1 || s.TxIndex != -1 || s.TxHash != (Hash{}) {
 				return fmt.Errorf("%w: Finalize order", ErrProtocol)
 			}
-		case Genesis, Baseline:
+		case Genesis, Baseline, PreBlock:
 			if i != 0 || s.TxIndex != -1 || s.TxHash != (Hash{}) || s.Cause == Genesis && r.Ref.Height != 0 {
 				return fmt.Errorf("%w: baseline order", ErrProtocol)
 			}

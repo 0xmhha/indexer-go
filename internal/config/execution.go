@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// ExecutionSourceConfig opts into the prepared StableNet execution database.
+// ExecutionSourceConfig opts into a prepared chain-native execution database.
 // Its checkpoint is the original anchor, not the changing visible height.
 type ExecutionSourceConfig struct {
 	Socket       string        `yaml:"socket"`

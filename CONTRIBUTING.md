@@ -21,7 +21,7 @@ Use a feature branch based on `main`. Keep local node credentials, `config.yaml`
 
 Docker is needed for `make test-postgres` unless you supply `INDEXER_TEST_POSTGRES`. The script creates an identifiable temporary PostgreSQL database with `fsync=on` and removes its own container and named volume. Use a disposable database when supplying a DSN yourself; the tests create schemas and write data.
 
-The optional Rust adapter has its own prerequisites in [its README](x/arc/nodefeed/README.md). Rust and an Arc execution node are not required for normal Go development.
+The optional Rust native-feed adapter has its own prerequisites in [its README](x/arc/nodefeed/README.md). The [Arc execution adapter](x/arc/executor/README.md) pins Rust 1.98.1 and adds `make test-executor-arc` for build/fmt/clippy/offline replay. Its CI `arc` job also regenerates and compares the frozen Go inputs; it starts no node. Rust and an Arc execution node are not required for normal Go development.
 
 ## Find the right extension point
 
@@ -80,6 +80,8 @@ Use a concise English commit subject with a conventional prefix, such as `fix:`,
 A useful PR description explains the concrete problem, resulting behavior, compatibility/recovery considerations and validation. Call out incomplete checks and unresolved limitations. Include a reproduction or before/after example when it helps review.
 
 The protected `main` branch requires **lint**, **test**, **postgres** and **examples** to pass. Pull requests merge with **squash** after those checks pass; do not bypass protection. [The CI workflow](.github/workflows/ci.yml) is the source of truth for its commands and toolchain versions.
+
+Changes to the Arc execution adapter also require its **arc** job to pass before merging, in addition to the four protected checks. Do not treat native library fixtures as live peer, native data-directory or performance validation.
 
 ## Update documentation in the right place
 

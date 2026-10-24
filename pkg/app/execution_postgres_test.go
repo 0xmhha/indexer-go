@@ -178,7 +178,7 @@ func assertExecutionFrozen(t *testing.T, ctx context.Context, s *postgres.Store,
 
 func TestExecutionFrozenEVMPostgresPublicationAndAPIParity(t *testing.T) {
 	postgresDSN(t)
-	for _, name := range []string{"evm-storage", "evm-revert", "evm-creations", "wbft-native"} {
+	for _, name := range []string{"evm-storage", "evm-revert", "evm-creations", "wbft-native", "arc-storage", "arc-create-gone"} {
 		t.Run(name, func(t *testing.T) {
 			f := loadExecutionFrozen(t, name)
 			s, cfg := preparedExecutionDB(t, f)
@@ -227,6 +227,11 @@ func TestExecutionFrozenEVMPostgresPublicationAndAPIParity(t *testing.T) {
 				creations, _, err := s.ListContracts(ctx, port.Page{Limit: 100})
 				require.NoError(t, err)
 				require.Len(t, creations, 2, "successful empty/gone creations survive; reverted creation is excluded")
+			}
+			if name == "arc-create-gone" {
+				creations, _, err := s.ListContracts(ctx, port.Page{Limit: 100})
+				require.NoError(t, err)
+				require.Len(t, creations, 1, "Arc successful constructor-time destruction retains creation evidence")
 			}
 		})
 	}

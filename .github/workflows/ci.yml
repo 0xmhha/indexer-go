@@ -139,3 +139,27 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Example modules
         run: make test-examples
+
+  arc:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Arc native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libclang-dev pkg-config
+      - name: Pinned Rust toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+      - name: Arc native build, lint and offline replay
+        working-directory: x/arc/executor
+        env:
+          INDEXER_ARC_FIXTURE_DIR: ${{ runner.temp }}/arc-fixtures
+        run: |
+          cargo fmt --check
+          cargo build --locked --all-targets
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked --all-targets
+          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-storage.json" ../../../testdata/execution/arc-storage.json
+          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-create-gone.json" ../../../testdata/execution/arc-create-gone.json

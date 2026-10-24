@@ -2,6 +2,8 @@
 
 E2 adds offline preparation to [execution ingest](EXECUTION_INGEST.md). It does not start an indexer or node. The official StableNet client remains unmodified; ordinary import and journal replay still execute a block twice. PostgreSQL uses **four connections per chain/process**, parts use two permits, and public commits retain uncached fresh under the shared **5 physical HTTP attempts/s** budget.
 
+The node/export commands and path-state descriptions below are StableNet-specific. [Arc execution journals](EXECUTION_ARC.md) exposes the same bounded database verify/import/inspect operations through `x/arc/cmd/execution-checkpoint`, using Arc header verification. It does not apply StableNet node export/retention to an Arc DB; native Arc snapshot export remains separate work.
+
 ## Choose a starting boundary
 
 | Mode | Initial state and node requirement | Coverage |
