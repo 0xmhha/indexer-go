@@ -19,7 +19,10 @@
       "no node services, peers, performance measurements or GC activation"
     ],
     "verification": "Final root/wire/executor full race GREEN; full PostgreSQL adapter/app/API/bundle regression GREEN; build/fmt/vet/lint, astgraph, examples/cache/offline operations and secrets GREEN. Actual EVM/WBFT frozen-byte parity through seven writers/features/GraphQL, opt-in native IPC lost ACK/reorg/reopen GREEN. Queue/receiver/API, runtime, exporter, node lifecycle and final actual PG/IPC each single GOMAXPROCS=1/race/count200 GREEN. Linux receiver cross-build GREEN. Functional RED fixes include creation proof routing, constructor witness, failed creation index, fresh reorg reopen, cancellation errors, profile capability and atomic ready socket publication. Test setup/socket readiness failures were corrected and failed partial counts were not combined.",
-    "next": "Create and link final integration PR, verify latest-head CI4, ready+squash and main sync; subsequent implementation priority is E2 checkpoint/bootstrap/verified parent recovery. Keep operational holds."
+    "next": "PR #214 is the authoritative CI4/squash-merge record. Require latest-head CI4 before ready+squash and synchronize main. After this gate, the next implementation priority is E2 checkpoint/bootstrap and verified parent recovery; operational holds remain.",
+    "pull_request": "https://github.com/0xmhha/indexer-go/pull/214",
+    "ci_and_merge_source": "https://github.com/0xmhha/indexer-go/pull/214",
+    "source_commit": "c232988c0ea0772f7019bdd949888017a79267e1"
   },
   "previous": [
     {
@@ -44,7 +47,9 @@
         "execution support declared by the profile/producer; matching chain names alone are insufficient"
       ],
       "verification": "Native context/handler/publication RED -> race GREEN; config/live-RPC/preflight/control guards RED -> GREEN; DB baseline balance/legacy writer guards actual PostgreSQL RED -> race GREEN; app recovery-before-relay/serve, Stop join, feature-definition resume RED -> app race GREEN; official node adapter/lifecycle/settings RED -> nodebackend race GREEN without node.Start.",
-      "next": "Follow current U11 integration PR for CI4, squash and main; retain this feature contract during E2 work."
+      "next": "Follow current U11 integration PR for CI4, squash and main; retain this feature contract during E2 work.",
+      "pull_request": "https://github.com/0xmhha/indexer-go/pull/214",
+      "source_commit": "c232988c0ea0772f7019bdd949888017a79267e1"
     },
     {
       "unit": "U09",
@@ -64,7 +69,9 @@
         "cancel and join all owned workers; no live nodes/peers/performance"
       ],
       "verification": "Feature RED/GREEN and full exporter/spool race GREEN; exact ACK/lost ACK, generation quarantine, short reorg, startup backlog and reconnect/cancel joins covered. Final receiver/exporter single GOMAXPROCS=1/race/count200 and actual PG/IPC lost-ACK/reorg/restart single200 GREEN; whole final regression GREEN. PR/CI/merge follows U11.",
-      "next": "Follow current U11 integration PR for CI4, squash and main; retain this feature contract during E2 work."
+      "next": "Follow current U11 integration PR for CI4, squash and main; retain this feature contract during E2 work.",
+      "pull_request": "https://github.com/0xmhha/indexer-go/pull/214",
+      "source_commit": "c232988c0ea0772f7019bdd949888017a79267e1"
     }
   ],
   "retained_previous_units": 2,

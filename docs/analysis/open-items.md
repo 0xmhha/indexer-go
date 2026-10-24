@@ -6,7 +6,7 @@
 
 - [설계](../codemine/runs/20261023-e1-execution/02-design.md), [결정](../decisions/20261023-e1-design/decision.md), [구현 계획](../codemine/runs/20261023-e1-execution/03-plan.md)
 - [기능별 체크리스트](../codemine/runs/20261023-e1-execution/checklist.md), [n/n-1/n-2 연속성](../codemine/runs/20261023-e1-execution/continuity.json)
-- U00~U08은 #210~[#213](https://github.com/0xmhha/indexer-go/pull/213)에서 필수 CI·squash/main 동기화를 완료했다. U09~U11 실행 수집 구현과 최종 전체 기능·race·정적·예제·PostgreSQL 회귀, 새 동시성 단일200회 검증은 완료했다. 최종 통합 PR에서 최신-head CI4·squash/main 완료를 추적한다. 최신 사용법은 [실행 수집](../EXECUTION_INGEST.md), 현재 n/n-1/n-2는 U11/U10/U09다.
+- U00~U08은 #210~[#213](https://github.com/0xmhha/indexer-go/pull/213)에서 필수 CI·squash/main 동기화를 완료했다. U09~U11 실행 수집 구현과 최종 전체 기능·race·정적·예제·PostgreSQL 회귀, 새 동시성 단일200회 검증은 완료했다. 최종 통합 [PR #214](https://github.com/0xmhha/indexer-go/pull/214)에서 최신-head CI4·squash merge와 해당 main commit을 추적한다. 최신 사용법은 [실행 수집](../EXECUTION_INGEST.md), 현재 n/n-1/n-2는 U11/U10/U09다.
 
 2회 실행과 노드 프로젝트 미수정, 기존 pool4개, RPC5 HTTP/s와 공개 직전 fresh를 유지한다. writer7개는 DB 연결7개를 뜻하지 않는다. 공개 경계·reorg·기록 무누락 검증의 구체 계약은 구현 계획을 따른다. 현재 문서는 최신 상태만 유지하며 과거 판본·수치·종료된 실험은 Git history로 확인한다.
 

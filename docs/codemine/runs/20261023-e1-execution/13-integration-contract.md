@@ -1,6 +1,6 @@
 # U11 전체 기능 통합 계약
 
-상태: 실제 EVM/WBFT fixture와 PostgreSQL/API/IPC·ACK 유실·reorg·재시작, 최종 root/wire/executor 전체 race와 PostgreSQL 전체 회귀, build/fmt/vet/lint/예제/cache/오프라인 운영·secret 검사 GREEN. 새 receiver/runtime/exporter/node 및 실제 PG/IPC 각각 단일 GOMAXPROCS=1/race/count=200 GREEN. Linux receiver cross-build도 통과했다. PR/CI·squash/main 판정은 checklist의 연결 PR을 따른다. 실제 노드·peer·포맷·GC·성능 측정은 보류다.
+상태: 실제 EVM/WBFT fixture와 PostgreSQL/API/IPC·ACK 유실·reorg·재시작, 최종 root/wire/executor 전체 race와 PostgreSQL 전체 회귀, build/fmt/vet/lint/예제/cache/오프라인 운영·secret 검사 GREEN. 새 receiver/runtime/exporter/node 및 실제 PG/IPC 각각 단일 GOMAXPROCS=1/race/count=200 GREEN. Linux receiver cross-build도 통과했다. PR/CI·squash/main 판정은 [PR #214](https://github.com/0xmhha/indexer-go/pull/214)와 checklist를 따른다. 실제 노드·peer·포맷·GC·성능 측정은 보류다.
 
 ## 실제 실행과 모듈 경계
 

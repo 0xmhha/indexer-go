@@ -8,12 +8,12 @@ U00~U08은 필수 CI·squash/main 동기화를 완료했다. U04~U08 통합은 [
 
 U09~U11의 구현과 필수 로컬 검증을 완료했다. 실제 EVM/WBFT→PostgreSQL/API·IPC/ACK/reorg/restart, 최종 root/wire/executor 전체 race, 전체 PostgreSQL 회귀, build/fmt/vet/lint·예제·cache·오프라인 운영·secret 검사가 GREEN이다. 새 receiver/runtime/exporter/node lifecycle과 실제 PG/IPC 통합은 각각 단일 GOMAXPROCS=1/race/count=200을 통과했다. 실패한 부분 실행을 합산하지 않았다.
 
-최종 통합 PR의 최신 head에서 필수 CI4가 통과해야 ready·squash/main 동기화할 수 있다. 기능 완료와 CI/merge 판정은 연결 PR에서 추적한다. n=U11, n-1=U10, n-2=U09의 계약·검사 근거는 continuity에 유지한다.
+최종 통합 [PR #214](https://github.com/0xmhha/indexer-go/pull/214)의 최신 head에서 필수 CI4가 통과해야 ready·squash/main 동기화한다. 해당 PR이 CI·merge commit의 정본이며 기능별 계약과 로컬 검증 기록은 아래에 유지한다. n=U11, n-1=U10, n-2=U09의 계약·검사 근거는 continuity에 유지한다.
 
 | ID | 상태 | 요구 실패(RED) | 현재 GREEN·완료 근거 | PR·merge |
 | --- | --- | --- | --- | --- |
 | U00 | 완료 | 문서 작업, 해당 없음 | 계획·문서 링크·JSON, 필수 검사 | [#210](https://github.com/0xmhha/indexer-go/pull/210), `9f01b09` |
-| U01 | 완료·입력 상한 후속 수정은 통합 중 | wire API stub6, raw/조립 상한2 | codec·framing·parts·취소/race·단일200회·필수 CI | [#210](https://github.com/0xmhha/indexer-go/pull/210), `9f01b09` |
+| U01 | 완료 | wire API stub6, raw/조립 상한2 | codec·framing·parts·취소/race·단일200회·필수 CI | [#210](https://github.com/0xmhha/indexer-go/pull/210), `9f01b09` |
 | U02 | 완료 | recorder/Replay stub·clear/빈 code/조기 상한 | 실제 EVM/WBFT·Extra·fee payer·독립 trie oracle·commit 금지·race/200회·필수 CI | [#211](https://github.com/0xmhha/indexer-go/pull/211), `4525ac6` |
 | U03 | 완료 | spool stub6·identity/temporary3·ACK quota2·종료 drain2 | durable spool/ACK·quota·복구·취소/join·race/200회·전체 회귀·필수 CI | [#212](https://github.com/0xmhha/indexer-go/pull/212), `ec40728` |
 | U04 | 완료 | control3·account3·partition1·slot/time4·code3·core3·cursor1·creation2 | 실제 PG/race, 기존 port/undo/count/migration, control 단일200회. [계약](06-db-contract.md) | [#213](https://github.com/0xmhha/indexer-go/pull/213), `08098f2` |
@@ -21,9 +21,9 @@ U09~U11의 구현과 필수 로컬 검증을 완료했다. 실제 EVM/WBFT→Pos
 | U06 | 완료 | publication3·feature2 | PG/race, all-seven/fresh/undo/atomicity/중복·post-response fence. [계약](08-publication-contract.md) | [#213](https://github.com/0xmhha/indexer-go/pull/213), `08098f2` |
 | U07 | 완료 | PG read3·state1, API snapshot2·state2·route/cache/chain 각1 | 모든 현재 TestExecution PG/race, API/race·기존 parser/limits/cache/종료 검사. [계약](09-read-contract.md) | [#213](https://github.com/0xmhha/indexer-go/pull/213), `08098f2` |
 | U08 | 완료 | marker/복구4·상태1·zero coverage1·Controller3·feature2·duplicate/fresh 각1 | PG/race, 단계별 원자성·128/129·retarget·실제 read fence·취소/join. [계약](10-rewind-contract.md) | [#213](https://github.com/0xmhha/indexer-go/pull/213), `08098f2` |
-| U09 | 구현·로컬검증 완료 | spool generation3·pipeline1·manifest gap1·PG confirm2·IPC2·fetch confirm1 | spool/PG/IPC·collector·재연결·short reorg focused race GREEN. [계약](11-ipc-contract.md) | 최종 통합 PR 연결 |
-| U10 | 구현·로컬검증 완료 | native4·binding1·config/preflight/control·balance/read·runtime/feature/node | native/config/app/실제 PG/nodebackend focused race GREEN. [계약](12-runtime-contract.md) | 최종 통합 PR 연결 |
-| U11 | 구현·로컬검증 완료 | creation routing/witness·실패 생성·fresh 재연결·종료·profile capability·socket 원자 공개 | 실제 EVM/WBFT frozen fixture·PG/API·IPC ACK 유실/reorg/restart race GREEN. [계약](13-integration-contract.md) | 최종 통합 PR 연결 |
+| U09 | 구현·로컬검증 완료 | spool generation3·pipeline1·manifest gap1·PG confirm2·IPC2·fetch confirm1 | spool/PG/IPC·collector·재연결·short reorg focused race GREEN. [계약](11-ipc-contract.md) | [#214](https://github.com/0xmhha/indexer-go/pull/214), squash/main은 PR 상태 참조 |
+| U10 | 구현·로컬검증 완료 | native4·binding1·config/preflight/control·balance/read·runtime/feature/node | native/config/app/실제 PG/nodebackend focused race GREEN. [계약](12-runtime-contract.md) | [#214](https://github.com/0xmhha/indexer-go/pull/214), squash/main은 PR 상태 참조 |
+| U11 | 구현·로컬검증 완료 | creation routing/witness·실패 생성·fresh 재연결·종료·profile capability·socket 원자 공개 | 실제 EVM/WBFT frozen fixture·PG/API·IPC ACK 유실/reorg/restart race GREEN. [계약](13-integration-contract.md) | [#214](https://github.com/0xmhha/indexer-go/pull/214), squash/main은 PR 상태 참조 |
 
 ## 검사 판정과 PR
 
