@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/0xmhha/indexer-go/execwire"
-	"github.com/0xmhha/indexer-go/x/stablenet/executor/spool"
+	"github.com/0xmhha/indexer-go/execwire/spool"
 )
 
 var ErrCanonicalChanged = errors.New("exporter: canonical chain changed")

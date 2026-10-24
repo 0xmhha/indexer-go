@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: E1 (#214), E2 (#215), E3 (#216) and E4 (#217) are merged; E5 Arc replay/file delivery is tracked in `docs/codemine/runs/20261024-e5-arc-execution/plan.md`
+- **Current Stage**: E1 (#214), E2 (#215), E3 (#216) and E4 (#217) are merged; E5 Arc replay/file delivery #218 is merged; continuous collection is tracked in `docs/codemine/runs/20261025-e5-arc-collector/plan.md`
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context
@@ -58,7 +58,8 @@ x/                              Chain-specific code, linked only by the binaries
   arc/                          Arc profile (USDC-native accounting, blob capability)
     feed/                       Arc source.feed module (ETH/68 peers; package arcfeed)
     nodefeed/                   Optional Reth ExEx producer crate (Rust; make test-node-feed)
-    executor/                   Pinned official Arc EVM replay and read-only one-block export (Rust; make test-executor-arc); no node startup
+    executor/                   Pinned official Arc EVM replay and read-only file export/stdio service (Rust; make test-executor-arc); no node startup
+    collector/, cmd/execution-collector/  Owned RO adapter, shared spool/quota and restart/reorg/exact-ACK supervision
     cmd/execution-submit/       Retained private EXR1 file to existing same-UID indexer socket; exact durable ACK, no deletion/rewind
     cmd/execution-checkpoint/   Shared offline state verify/import/inspect with Arc header codec; no node or application startup
     bundle/, cmd/indexer-arc/   Bundle and the Arc binary
@@ -196,13 +197,13 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 
 ### Current Work
 
-E5 Arc replay and retained one-file delivery are on `refactor/e5-arc-execution`, based on E4 #217/main 7ca9995. Read the current plan/checklist/continuity/validation under `docs/codemine/runs/20261024-e5-arc-execution/` and `docs/EXECUTION_ARC.md`. The source-branch PR is authoritative for release. If merged, this E5 release scope is complete; do not repeat closed checks or start another phase automatically. Continuous Arc collector/cursor/reorg supervision, native checkpoint export/retention, trace/blob availability and E6 remain separate follow-ups, not completed automation.
+E5 replay/file delivery #218 is merged at main3481cdd. Current work is `refactor/e5-arc-collector`; read its plan/checklist/continuity/validation under `docs/codemine/runs/20261025-e5-arc-collector/` and `docs/EXECUTION_ARC.md`. The source-branch PR is release authority. Common durable spool/exporter code and its fault/concurrency tests now live in `execwire`; StableNet paths are compatibility aliases. Arc owns only a bounded read-only stdio child and shares the existing source supervision. Head uses completed native import (Finish), not merely the highest header. Upstream secondary LOGs use a private scratch workspace beside the source spool; the Go owner joins the child then removes only its inode-checked workspace. No watcher holds the native factory after EOF; provider synchronization remains per request. Quota does not budget native/scratch storage or delete unknown siblings. Native checkpoint export/retention, trace/blob availability and E6 remain separate. After release report them without automatically starting another phase.
 
-Arc replays with pinned official ArcEvmConfig, exact retained parent and native intermediate roots; a separately reconstructed journal must match after pre-block, each transaction and Finalize. Wire cause4 is first-only system PreBlock, no tx identity. Migration0017 adds it to existing history partitions without data deletion; old consumers/schema builds cannot consume this new path. Native CLI reads existing DB only and outputs one private durable file; no Node.Start, peer import, FinishedHeight or native deletion. Go SubmitFile parses once, checks ownership/inode/peer, requires exact ACK and preserves its input on all outcomes. No Hello-driven generation rewrite or automatic rewind.
+Arc replays with pinned official ArcEvmConfig, exact retained parent and native intermediate roots; a separately reconstructed journal must match after pre-block, each transaction and Finalize. Wire cause4 is first-only system PreBlock, no tx identity. Migration0017 adds it to existing history partitions without data deletion; old consumers/schema builds cannot consume this new path. Native CLI reads existing DB only and outputs a private durable file or serves sequential bounded read-only requests; no Node.Start, peer import, FinishedHeight or native deletion. Go SubmitFile parses once, checks ownership/inode/peer, requires exact ACK and preserves its input on all outcomes. The one-file path never rewrites generations or requests rewind. The continuous client uses the existing coordinator-verified recovery and checks native canonical floors before rebind; Hello alone still grants no ACK/deletion.
 
 Feature-unit writers own preparation, grouped hooks and exact checkpoints; their SQL stays ordered inside the single final publication/undo/outbox transaction. No per-feature pool or concurrent use of one pgx transaction. Execution native balances/history use the account journal, not duplicate balances tables; the feature verifies exact stored input and writes no duplicate projection. Preserve ordinary RPC ingestion and independent capture projections. Existing projection rows are not deleted. Execution history cursors/anchor coverage differ as documented.
 
-E1 #214, E2 #215, E3 #216 and E4 #217 are merged. Preserve accepted E1 design/plan, E2 bootstrap, E3 retention and E4 balance/feature authority. Current E5 continuity retains n/n-1/n-2. `docs/analysis/open-items.md` tracks release, E5 follow-ups, E6 and held operations.
+E1 #214, E2 #215, E3 #216 and E4 #217 are merged. Preserve accepted E1 design/plan, E2 bootstrap, E3 retention and E4 balance/feature authority. Current Arc collector continuity retains n/n-1/n-2. `docs/analysis/open-items.md` tracks release, E5 follow-ups, E6 and held operations.
 
 The user delegated recommended decisions and implementation through CI-gated squash merges on 2026-10-24. Write a requirement-failing RED test before each feature, implement it, then prove GREEN. Update current documentation and the checklist after each feature. Preserve the E1 design/plan and n/n-1/n-2 context; use Git history for obsolete records instead of appending stale current status.
 

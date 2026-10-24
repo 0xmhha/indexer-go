@@ -2,10 +2,16 @@ package app
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/execwire/exporter"
+	"github.com/0xmhha/indexer-go/execwire/spool"
 	"github.com/0xmhha/indexer-go/internal/client"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -17,6 +23,92 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
+
+type arcCollectedFixture struct{ result execwire.Result }
+
+func (b arcCollectedFixture) Head(context.Context) (execwire.Ref, error) { return b.result.Ref, nil }
+func (b arcCollectedFixture) Canonical(_ context.Context, height uint64) (execwire.Hash, error) {
+	if height == b.result.Ref.Height {
+		return b.result.Ref.Hash, nil
+	}
+	if height+1 == b.result.Ref.Height {
+		return b.result.Parent, nil
+	}
+	return execwire.Hash{}, errors.New("fixture header unavailable")
+}
+func (b arcCollectedFixture) Replay(_ context.Context, height, generation uint64) (execwire.Result, error) {
+	if height != b.result.Ref.Height {
+		return execwire.Result{}, errors.New("fixture state unavailable")
+	}
+	r := b.result
+	r.Ref.Generation = generation
+	return r, nil
+}
+
+func TestExecutionArcCollectedSpoolPublicationAndLostACK(t *testing.T) {
+	f := loadExecutionFrozen(t, "arc-storage")
+	s, _ := preparedExecutionDB(t, f)
+	_, srv := fixtureRPC(t, f)
+	cl, err := client.NewClient(&client.Config{Endpoint: srv.URL, Timeout: time.Second, RateLimit: 5, Logger: zap.NewNop()})
+	require.NoError(t, err)
+	defer cl.Close()
+	profile := arc.New()
+	fe := fetch.NewFetcher(cl, s, &fetch.Config{StatePrefetch: true, RPCTimeout: time.Second}, zap.NewNop(), nil)
+	defer fe.Close()
+	pipeline, err := feature.Build([]string{"address.index", "balance.native", "token.transfers"}, feature.Deps{Storage: s, Logger: zap.NewNop(), Profile: profile, NativeBalances: feature.NativeBalancesFromContext, BlockAt: s.GetBlock})
+	require.NoError(t, err)
+	fe.SetFeatures(pipeline)
+	fe.SetExecutionCanonical(sourcerpc.New(cl.RPCClient(), profile))
+	backend := &execution.StoreBackend{Store: s, Publisher: fe}
+	r, err := execwire.UnmarshalResult(f.Payload)
+	require.NoError(t, err)
+	receiver := &execution.Receiver{Chain: f.Chain, Profile: profile, Store: s, Confirm: fe.ConfirmExecution, Timeout: 3 * time.Second}
+	receiver.OpenController = func(ctx context.Context) (*execution.Controller, error) {
+		return execution.NewController(ctx, execution.Limits{MaxBlocks: 4, MaxBytes: 16 << 20}, s, backend, func(context.Context) error { return nil })
+	}
+	ipc, err := os.MkdirTemp("", "arc-ipc-")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, os.RemoveAll(ipc)) }()
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	socket := filepath.Join(ipc, "s")
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- receiver.Run(ctx, socket) }()
+	defer func() { cancel(); require.ErrorIs(t, <-serverDone, context.Canceled) }()
+	require.Eventually(t, func() bool { _, err := os.Stat(socket); return err == nil }, 3*time.Second, time.Millisecond)
+	var source *spool.Store
+	var publishedSequence uint64
+	for attempt := range 2 {
+		// A second fresh source has the original cursor but the DB already has
+		// the committed block: this is a lost-ACK replay, not Hello promotion.
+		source, err = spool.Open(ctx, spool.Options{Path: filepath.Join(t.TempDir(), "spool"), Chain: f.Chain, Anchor: f.Baseline.Ref, MaxBytes: 2 << 20, MaxRecords: 8})
+		require.NoError(t, err)
+		if attempt == 1 {
+			_, err = source.Append(ctx, r)
+			require.NoError(t, err)
+		}
+		clientCtx, stop := context.WithCancel(ctx)
+		done := make(chan error, 1)
+		c := &exporter.Client{Chain: f.Chain, Spool: source, Backend: arcCollectedFixture{r}, Socket: socket, Window: 2, Poll: time.Millisecond, Retry: time.Millisecond, Timeout: 3 * time.Second}
+		go func() { done <- c.Run(clientCtx) }()
+		finish := sync.OnceFunc(func() { stop(); require.ErrorIs(t, <-done, context.Canceled); require.NoError(t, source.Close()) })
+		t.Cleanup(finish)
+		require.Eventually(t, func() bool {
+			status, e := source.Status(ctx)
+			return e == nil && status.Committed == r.Ref && status.Pending == 0
+		}, 5*time.Second, time.Millisecond)
+		assertExecutionFrozen(t, ctx, s, f, r.Ref)
+		seq, e := s.LastOutboxSeq(ctx)
+		require.NoError(t, e)
+		if attempt == 0 {
+			publishedSequence = seq
+			require.NotZero(t, seq)
+		} else {
+			require.Equal(t, publishedSequence, seq, "duplicate ACK recovery must not repeat outbox publication")
+		}
+		finish()
+	}
+}
 
 func TestExecutionArcVerifiedProfileAndNativeWireCompatibility(t *testing.T) {
 	require.True(t, chains.SupportsExecution(arc.New()), "Arc must opt in only with its independently verified native producer")

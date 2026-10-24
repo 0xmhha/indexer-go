@@ -4,7 +4,11 @@ use arc_evm::{ArcEvmConfig, ArcEvmFactory};
 use arc_execution_config::chainspec::{ArcChainSpec, MAINNET, TESTNET};
 use clap::{Parser, ValueEnum};
 use eyre::{Result, ensure, eyre};
-use indexer_arc_executor::{replay, write_result};
+use indexer_arc_executor::{
+    ARC_REVISION, Verified, replay,
+    service::{self, Operation},
+    write_result,
+};
 use reth_ethereum::{
     evm::EthEvmConfig,
     provider::{
@@ -16,6 +20,7 @@ use reth_ethereum::{
 use reth_ethereum_engine_primitives::EthPayloadTypes;
 use reth_ethereum_primitives::EthPrimitives;
 use reth_node_types::AnyNodeTypes;
+use reth_storage_api::BlockNumReader;
 use std::{path::PathBuf, sync::Arc};
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -33,15 +38,70 @@ struct Args {
     chain: Chain,
     #[arg(long)]
     datadir: PathBuf,
-    #[arg(long, value_parser = clap::value_parser!(u64).range(1..=i64::MAX as u64))]
-    height: u64,
-    #[arg(long, value_parser = clap::value_parser!(u64).range(1..=i64::MAX as u64))]
-    generation: u64,
+    #[arg(long, required_unless_present = "serve", value_parser = clap::value_parser!(u64).range(1..=i64::MAX as u64))]
+    height: Option<u64>,
+    #[arg(long, required_unless_present = "serve", value_parser = clap::value_parser!(u64).range(1..=i64::MAX as u64))]
+    generation: Option<u64>,
+    #[arg(long, required_unless_present = "serve")]
+    output: Option<PathBuf>,
+    #[arg(long, conflicts_with_all = ["height", "generation", "output"])]
+    serve: bool,
     #[arg(long)]
-    output: PathBuf,
+    scratch_dir: Option<PathBuf>,
 }
 
 type NativeTypes = AnyNodeTypes<EthPrimitives, ArcChainSpec, EthStorage, EthPayloadTypes>;
+
+fn read_only_config(
+    datadir: &std::path::Path,
+    scratch: Option<&std::path::Path>,
+) -> Result<(ReadOnlyConfig, tempfile::TempDir)> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::{fs::MetadataExt, fs::symlink};
+        if let Some(parent) = scratch {
+            let info = std::fs::symlink_metadata(parent)?;
+            ensure!(
+                parent.is_absolute()
+                    && info.is_dir()
+                    && info.mode() & 0o777 == 0o700
+                    && info.uid() == rustix::process::geteuid().as_raw(),
+                "scratch parent must be absolute, owned and private"
+            );
+        }
+        let work = if let Some(parent) = scratch {
+            tempfile::Builder::new()
+                .prefix("secondary-")
+                .tempdir_in(parent)?
+        } else {
+            tempfile::Builder::new()
+                .prefix("arc-secondary-")
+                .tempdir()?
+        };
+        let native = datadir.canonicalize()?;
+        let private = work.path().canonicalize()?;
+        ensure!(
+            !private.starts_with(&native) && !native.starts_with(&private),
+            "native and scratch paths must be separate"
+        );
+        let primary = work.path().join("rocksdb-primary");
+        // The pinned upstream secondary puts its LOG directory next to the
+        // supplied primary path. Keep that lexical path in our private workdir;
+        // the symlink target is opened read-only and is never removed by cleanup.
+        symlink(native.join("rocksdb"), &primary)?;
+        let mut config = ReadOnlyConfig::from_datadir(datadir);
+        config.rocksdb_dir = primary;
+        // provider() synchronizes on every new native transaction. Avoid the
+        // upstream watcher retaining the factory and its secondary until exit.
+        config.watch = false;
+        Ok((config, work))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (datadir, scratch);
+        eyre::bail!("private native workspace requires Unix")
+    }
+}
 
 fn main() -> Result<()> {
     produce(Args::parse())
@@ -49,7 +109,7 @@ fn main() -> Result<()> {
 
 fn produce(args: Args) -> Result<()> {
     ensure!(
-        args.datadir.is_absolute() && args.output.is_absolute(),
+        args.datadir.is_absolute() && args.output.as_ref().is_none_or(|p| p.is_absolute()),
         "native/output paths must be absolute"
     );
     for name in ["db", "rocksdb", "static_files"] {
@@ -63,51 +123,100 @@ fn produce(args: Args) -> Result<()> {
         Chain::Testnet => TESTNET.clone(),
     };
     let runtime = Runtime::test();
+    let (readonly, _workspace) = read_only_config(&args.datadir, args.scratch_dir.as_deref())?;
     let factory = ProviderFactoryBuilder::<NativeTypes>::default().open_read_only(
         spec.clone(),
-        ReadOnlyConfig::from_datadir(&args.datadir),
+        readonly,
         runtime,
     )?;
-    // Header/body/receipts and the historical parent share one native RO view.
-    // No latest-state fallback and no global prune/FinishedHeight calls.
-    let provider = factory.provider()?;
     ensure!(
-        provider.block_hash(0)? == Some(spec.inner.genesis_hash()),
+        factory.provider()?.block_hash(0)? == Some(spec.inner.genesis_hash()),
         "native genesis differs from selected Arc chain"
     );
-    let block = provider
-        .block_by_number(args.height)?
-        .ok_or_else(|| eyre!("retained block unavailable"))?;
-    ensure!(
-        provider.block_hash(args.height)? == Some(block.header.hash_slow()),
-        "block is not canonical in native snapshot"
-    );
-    let parent = provider
-        .sealed_header(args.height - 1)?
-        .ok_or_else(|| eyre!("retained parent unavailable"))?;
-    let parent = parent.header().clone().seal_slow();
-    let receipts = provider
-        .receipts_by_block(block.header.hash_slow().into())?
-        .ok_or_else(|| eyre!("retained receipts unavailable"))?;
-    let state = provider.history_by_block_hash(parent.hash())?;
     let config = ArcEvmConfig::new(EthEvmConfig::new_with_evm_factory(
         spec.clone(),
         ArcEvmFactory::new(spec.clone()),
     ));
-    let result = replay(&config, &state, &parent, &block, &receipts, args.generation)?;
-    // Native canonicality is useful early rejection. It does not replace the
-    // indexer's final uncached RPC check and post-response generation fence.
-    ensure!(
-        factory.provider()?.block_hash(args.height)? == Some(result.result().r#ref.hash),
-        "native canonical block changed during replay"
-    );
-    write_result(&args.output, &result)?;
+    let replay_block = |height: u64, generation: u64| -> Result<Verified> {
+        // Header/body/receipts and the historical parent share one native RO view.
+        // No latest-state fallback and no global prune/FinishedHeight calls.
+        let provider = factory.provider()?;
+        ensure!(
+            height <= provider.best_block_number()?,
+            "block has not completed native import"
+        );
+        ensure!(
+            provider.block_hash(0)? == Some(spec.inner.genesis_hash()),
+            "native genesis differs from selected Arc chain"
+        );
+        let block = provider
+            .block_by_number(height)?
+            .ok_or_else(|| eyre!("retained block unavailable"))?;
+        ensure!(
+            provider.block_hash(height)? == Some(block.header.hash_slow()),
+            "block is not canonical in native snapshot"
+        );
+        let parent = provider
+            .sealed_header(height - 1)?
+            .ok_or_else(|| eyre!("retained parent unavailable"))?;
+        let parent = parent.header().clone().seal_slow();
+        let receipts = provider
+            .receipts_by_block(block.header.hash_slow().into())?
+            .ok_or_else(|| eyre!("retained receipts unavailable"))?;
+        let state = provider.history_by_block_hash(parent.hash())?;
+        let result = replay(&config, &state, &parent, &block, &receipts, generation)?;
+        // Native canonicality is useful early rejection. It does not replace the
+        // indexer's final uncached RPC check and post-response generation fence.
+        ensure!(
+            factory.provider()?.block_hash(height)? == Some(result.result().r#ref.hash),
+            "native canonical block changed during replay"
+        );
+        Ok(result)
+    };
+    if args.serve {
+        return service::serve(
+            std::io::stdin().lock(),
+            std::io::stdout().lock(),
+            |request| match request.op {
+                Operation::Identity => Ok(serde_json::to_vec(
+                    &serde_json::json!({"chain_id": spec.inner.chain.id().to_string(), "genesis": spec.inner.genesis_hash(), "revision": ARC_REVISION}),
+                )?),
+                Operation::Head => {
+                    let provider = factory.provider()?;
+                    let height = provider.best_block_number()?;
+                    let hash = provider
+                        .block_hash(height)?
+                        .ok_or_else(|| eyre!("native head header unavailable"))?;
+                    Ok(serde_json::to_vec(
+                        &serde_json::json!({"height": height, "hash": hash}),
+                    )?)
+                }
+                Operation::Canonical => {
+                    let hash = factory
+                        .provider()?
+                        .block_hash(request.height)?
+                        .ok_or_else(|| eyre!("retained canonical header unavailable"))?;
+                    Ok(serde_json::to_vec(
+                        &serde_json::json!({"height": request.height, "hash": hash}),
+                    )?)
+                }
+                Operation::Replay => replay_block(request.height, request.generation)?.encode(),
+            },
+        );
+    }
+    let height = args.height.ok_or_else(|| eyre!("height required"))?;
+    let generation = args
+        .generation
+        .ok_or_else(|| eyre!("generation required"))?;
+    let output = args.output.ok_or_else(|| eyre!("output required"))?;
+    let result = replay_block(height, generation)?;
+    write_result(&output, &result)?;
     println!(
         "verified Arc {} block {} generation {}: {}",
         spec.inner.chain.id(),
-        args.height,
-        args.generation,
-        args.output.display()
+        height,
+        generation,
+        output.display()
     );
     Ok(())
 }
@@ -116,9 +225,55 @@ fn produce(args: Args) -> Result<()> {
 mod tests {
     use super::*;
     #[test]
+    fn native_secondary_workspace_is_private_separate_and_removed_without_source_deletion()
+    -> Result<()> {
+        let native = tempfile::tempdir()?;
+        std::fs::create_dir(native.path().join("rocksdb"))?;
+        std::fs::write(native.path().join("rocksdb/KEEP"), b"source")?;
+        let (config, work) = read_only_config(native.path(), None)?;
+        let path = work.path().to_path_buf();
+        assert!(!config.watch);
+        assert_eq!(
+            std::fs::read_link(&config.rocksdb_dir)?,
+            native.path().canonicalize()?.join("rocksdb")
+        );
+        assert!(config.rocksdb_dir.starts_with(&path));
+        drop(work);
+        assert!(!path.exists());
+        assert_eq!(
+            std::fs::read(native.path().join("rocksdb/KEEP"))?,
+            b"source"
+        );
+        Ok(())
+    }
+    #[test]
     fn arguments_require_explicit_chain_paths_height_and_generation() {
         assert!(Args::try_parse_from(["arc-executor"]).is_err());
         assert!(Args::try_parse_from(["arc-executor", "--chain", "ethereum"]).is_err());
+        assert!(
+            Args::try_parse_from([
+                "arc-executor",
+                "--chain",
+                "testnet",
+                "--datadir",
+                "/missing",
+                "--serve"
+            ])
+            .is_ok()
+        );
+        assert!(
+            Args::try_parse_from([
+                "arc-executor",
+                "--chain",
+                "testnet",
+                "--datadir",
+                "/missing",
+                "--serve",
+                "--height",
+                "1"
+            ])
+            .is_err()
+        );
         let args = Args::try_parse_from([
             "arc-executor",
             "--chain",

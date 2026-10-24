@@ -4,7 +4,7 @@ Use this opt-in path to index verified transaction and Finalize state changes fr
 
 The separate [executor module](../x/stablenet/executor/README.md) imports the pinned official StableNet client without source patches. Normal node import executes a block once. `Replay` executes it again from its parent to export a journal and verify the original state and receipt roots. The second pass never commits node state.
 
-Arc uses its own pinned official EVM and a read-only, one-result file path; see [Arc execution journals](EXECUTION_ARC.md). The StableNet node/spool/retention assembly below is not an Arc continuous collector or native GC implementation.
+Arc uses its own pinned official EVM and a read-only continuous collector with a retained one-result alternative; see [Arc execution journals](EXECUTION_ARC.md). The StableNet node/spool/retention assembly below does not supply an Arc native GC implementation; Arc uses the shared source spool/exporter through its own adapter.
 
 ## Data and completion
 

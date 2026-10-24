@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/execwire"
-	"github.com/0xmhha/indexer-go/x/stablenet/executor/spool"
+	"github.com/0xmhha/indexer-go/execwire/spool"
 )
 
 type captureRun struct {
