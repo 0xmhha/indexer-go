@@ -73,6 +73,14 @@ func Replay(ctx context.Context, in ReplayInput) (execwire.Result, error) {
 		if err != nil {
 			return execwire.Result{}, fmt.Errorf("executor: transaction %d: %w", i, err)
 		}
+		// A successful constructor may SELFDESTRUCT before it leaves any net
+		// account change. Keep its verified before/after witness so the receipt
+		// can still prove creation without inventing state in the DB writer.
+		if tx.To() == nil && receipt.Status == types.ReceiptStatusSuccessful {
+			addr := receipt.ContractAddress
+			r.retainAccount = &addr
+			r.accounts[addr] = true
+		}
 		step, err := r.finishStep(config.IsEIP158(h.Number))
 		if err != nil {
 			return execwire.Result{}, err

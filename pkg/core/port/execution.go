@@ -32,6 +32,7 @@ var (
 	ErrExecutionRewinding     = errors.New("execution: rewind in progress; retry")
 	ErrExecutionCoverage      = errors.New("execution: required initial state is not covered")
 	ErrExecutionUninitialized = errors.New("execution: control is not initialized")
+	ErrExecutionCanonicalLag  = errors.New("execution: RPC canonical view has not converged with peer")
 )
 
 type ExecutionConfig struct {
@@ -108,6 +109,13 @@ type ExecutionPublication struct {
 }
 type ExecutionPublisher interface {
 	CommitExecution(context.Context, ExecutionPublication, func(context.Context) error, func(context.Context) error) (bool, error)
+}
+
+// ExecutionConfirmer verifies retained published payloads after a lost ACK,
+// including a canonical prefix published by an earlier generation. It never
+// replays features or promotes an unpublished height.
+type ExecutionConfirmer interface {
+	ConfirmExecution(context.Context, []byte, func(context.Context, execwire.Ref) error) (bool, error)
 }
 
 // ExecutionStatePoint is the public block against which a state value is read.

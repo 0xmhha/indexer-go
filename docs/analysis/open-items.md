@@ -6,7 +6,7 @@
 
 - [설계](../codemine/runs/20261023-e1-execution/02-design.md), [결정](../decisions/20261023-e1-design/decision.md), [구현 계획](../codemine/runs/20261023-e1-execution/03-plan.md)
 - [기능별 체크리스트](../codemine/runs/20261023-e1-execution/checklist.md), [n/n-1/n-2 연속성](../codemine/runs/20261023-e1-execution/continuity.json)
-- U00/U01은 PR #210, U02는 #211, U03은 [#212](https://github.com/0xmhha/indexer-go/pull/212)로 필수 CI·squash/main 동기화를 마쳤다. U04~U08 저장·queue·공개·API·reorg/restart의 기능 RED/GREEN을 마쳤고 현재 필수 전체 회귀·동시성200회와 통합 PR을 준비한다. U09 IPC와 U10 앱 연결·U11 전체 EVM parity는 아직 남아 있다. 공유 migration을 중간에 릴리스하지 않으며 기능마다 RED/GREEN·문서·최근 두 기능 context를 갱신한다.
+- U00~U08은 #210~[#213](https://github.com/0xmhha/indexer-go/pull/213)에서 필수 CI·squash/main 동기화를 완료했다. U09~U11 실행 수집 구현과 최종 전체 기능·race·정적·예제·PostgreSQL 회귀, 새 동시성 단일200회 검증은 완료했다. 최종 통합 [PR #214](https://github.com/0xmhha/indexer-go/pull/214)에서 최신-head CI4·squash merge와 해당 main commit을 추적한다. 최신 사용법은 [실행 수집](../EXECUTION_INGEST.md), 현재 n/n-1/n-2는 U11/U10/U09다.
 
 2회 실행과 노드 프로젝트 미수정, 기존 pool4개, RPC5 HTTP/s와 공개 직전 fresh를 유지한다. writer7개는 DB 연결7개를 뜻하지 않는다. 공개 경계·reorg·기록 무누락 검증의 구체 계약은 구현 계획을 따른다. 현재 문서는 최신 상태만 유지하며 과거 판본·수치·종료된 실험은 Git history로 확인한다.
 
@@ -20,11 +20,11 @@ API 시간 구분·오류 판정, GraphQL 단일 파싱·compact JSON, keepalive
 
 | 단계 | 남은 작업 |
 | --- | --- |
-| E2 | 시작 모드, 전체 상태 bootstrap, 상태 검증 도구. 초기 상태 없이 head에서 운영을 시작하는 경로 |
-| E3 | 노드 DB와 원본의 보존·정리. reorg·ACK·lease·복구 경계에서 삭제 검증 |
-| E4 | 기존 기능 표의 writer 분리와 중복 잔액 정리. 핵심 writer7개는 E1이다 |
-| E5 | 체인별 실행부 확대. 비EVM 지원은 모델 결정을 별도로 한다 |
-| E6 | 체인 합의에 근거한 canonical/finality 판정과 RPC 의존 축소 |
+| E2 · 다음 우선순위 | 시작 모드와 검증된 checkpoint/bootstrap 도구. 전체/부분 coverage 구분, anchor·baseline 검증, parent state/header 부족과 DB/source generation 차이의 명시적 복구 |
+| E3 | node DB·원본·quarantine 보존/정리. ACK·reorg·lease·복구를 통과한 삭제와 용량 중단/재개; 노드 history 자동 삭제 전 검증 |
+| E4 | 기존 기능 표 writer 분리와 중복 잔액/projection 정리. 기존 feature/undo/outbox/API 공개 경계 유지; 핵심 writer7개는 E1이다 |
+| E5 | Arc 등 체인별 producer·실행부 확대. trace/blob 등 자료 공급과 검증 범위를 구분하며 비EVM 모델은 별도 결정 |
+| E6 | 체인 합의에 근거한 canonical/finality 검증과 RPC 의존 축소. 현재 final fresh RPC를 독립 합의 검증 완료로 확대하지 않음 |
 
 ## 4. 운영과 외부 조건
 
@@ -35,6 +35,6 @@ API 시간 구분·오류 판정, GraphQL 단일 파싱·compact JSON, keepalive
 | 백업 | WAL 보관소, Sepolia/BSC의 상태 보존 방침, 실제 백업·복원과 RPO/RTO 검증 |
 | 실제 자료 검증 | 실제 era1 export/RPC 비교, Arc 실제 peer와 mainnet, 외장 mount·장치 분리·장기 운전 |
 | 성능 | E1 RPC 대비 p50/p99, macOS SLO·물리 호스트 비교. 추가 측정은 보류다 |
-| Frontend | 별도 저장소의 GraphQL26개 수정과 REST 이전. [이전 안내](../FRONTEND_MIGRATION.md) |
+| Frontend | 별도 저장소의 GraphQL/REST 연동 상태 확인. E1에서 그 저장소를 변경하거나 재검증하지 않음. [이전 안내](../FRONTEND_MIGRATION.md) |
 
 실제 노드 서비스, peer 접속, disk provisioning, GC 활성화, 추가 성능 측정은 보류한다. 태그·외부 배포·원격 정리는 자동 후속 단계가 아니다. 다른 프로젝트의 프로세스·container·volume·자료를 유지한다.

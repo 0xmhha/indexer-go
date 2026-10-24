@@ -20,6 +20,7 @@ type manifest struct {
 	Version   uint16
 	Chain     execwire.Chain
 	Anchor    execwire.Ref
+	Base      *execwire.Ref `json:",omitempty"`
 	Committed execwire.Ref
 	Digest    execwire.Hash
 	History   []Entry
@@ -116,18 +117,37 @@ func readManifest(path string) (manifest, error) {
 	if err := readSealedJSON(path, &m); err != nil {
 		return m, err
 	}
-	if m.Version != 1 || len(m.History) > 128 || m.Committed.Generation != m.Anchor.Generation || m.Committed.Height < m.Anchor.Height {
+	base := m.Anchor
+	if m.Version == 2 && m.Base != nil {
+		base = *m.Base
+	} else if m.Version != 1 || m.Base != nil {
+		return manifest{}, ErrCorrupt
+	}
+	if len(m.History) > 128 || m.Committed.Generation != base.Generation || m.Committed.Height < base.Height || base.Height < m.Anchor.Height || base.Generation < m.Anchor.Generation {
+		return manifest{}, ErrCorrupt
+	}
+	if base.Height == m.Anchor.Height && base.Hash != m.Anchor.Hash {
 		return manifest{}, ErrCorrupt
 	}
 	if err := validateAnchor(Options{Chain: m.Chain, Anchor: m.Anchor}); err != nil {
 		return manifest{}, ErrCorrupt
 	}
+	if err := validateAnchor(Options{Chain: m.Chain, Anchor: base}); err != nil {
+		return manifest{}, ErrCorrupt
+	}
 	if len(m.History) == 0 {
-		if m.Committed != m.Anchor || m.Digest != (execwire.Hash{}) {
+		if m.Committed != base || m.Digest != (execwire.Hash{}) {
 			return manifest{}, ErrCorrupt
 		}
 	} else {
+		first := m.History[0]
+		if len(m.History) < 128 && (first.Ref.Height != base.Height+1 || first.Parent != base.Hash) {
+			return manifest{}, ErrCorrupt
+		}
 		for i, e := range m.History {
+			if e.Ref.Generation != base.Generation || e.Ref.Height <= base.Height {
+				return manifest{}, ErrCorrupt
+			}
 			if err := validateReceipt(ackReceipt{Version: 1, Chain: m.Chain, Entry: e}); err != nil {
 				return manifest{}, ErrCorrupt
 			}
@@ -321,7 +341,7 @@ func (s *Store) usage() (uint64, int, int, error) {
 			return 0, 0, 0, err
 		}
 		bytes += charged(info)
-		if name.Name() != stateName && name.Name() != lockName && !strings.HasSuffix(name.Name(), ".ack") {
+		if name.Name() != stateName && name.Name() != lockName && name.Name() != transitionName && !strings.HasSuffix(name.Name(), ".ack") {
 			records++
 		}
 		if strings.HasPrefix(name.Name(), ".quarantine-") {

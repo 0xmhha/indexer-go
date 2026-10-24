@@ -30,6 +30,7 @@ func Detect(info chains.NodeInfo) bool {
 // New returns the StableNet profile.
 func New() *evm.Profile {
 	return evm.New(ID,
+		evm.WithExecutionJournals(true),
 		evm.WithDetect(Detect),
 		evm.WithFeatures(defaultFeatures...),
 		evm.WithHeaderHasher(HeaderHash),

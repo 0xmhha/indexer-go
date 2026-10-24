@@ -114,3 +114,7 @@ API 스키마·메서드 목록은 [API 안내](API.md)의 snapshot 링크에서
 `pkg/feed` registry와 `pkg/app`의 opt-in [source.feed](FEED_APP.md)는 체인 모듈이 선택한 capture와 DB facts projection을 별도 task로 실행한다. epoch가 바뀌면 이전 후처리/online backfill/writer/relay를 join한 뒤 새 Source와 undo를 조립한다. 현재 Arc의 execution-only plan과 다른 체인의 RPC를 혼합 실행하며 상태 reader는 거부한다. 원천 DB와 projection은 같은 handle을 쓰고 외장 window의 durable binding은 누락 디스크 재생성을 막는다.
 
 [기능별 완료](PROJECTION_PROGRESS.md)는 facts writer의 기존 block transaction/undo 안에 구간·hash·epoch를 기록한다. `execution.summary.v1` 독립 worker는 불변 block 결과와 자체 cursor/reset/output event를 별도 capture namespace transaction에 저장한다. source와 projection의 read-only snapshot을 대조하는 status/결과 HTTP API는 누락 상태를 unavailable로 표시한다. stateful 기존 feature의 전역 undo/outbox는 계속 단일 writer가 소유한다.
+
+## StableNet execution ingest
+
+The opt-in [execution path](EXECUTION_INGEST.md) isolates the pinned official StableNet client in a separate module. Normal import executes once and a non-committing replay exports verified state/receipt journals. Durable spool and private IPC feed seven ordered queues; two part permits share the existing pool4 alongside the API reservation and final feature/publication transaction. Uncached shared RPC5 fresh and a post-response generation fence precede publication/ACK. History-backed public snapshots hide ahead parts, and durable generation markers fence bounded reorg recovery. Empty/head bootstrap and node-history deletion remain E2/E3 work.

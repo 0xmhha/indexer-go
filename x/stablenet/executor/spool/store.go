@@ -109,6 +109,9 @@ func Open(ctx context.Context, o Options) (*Store, error) {
 			return nil, err
 		}
 	}
+	if err := s.recoverTransition(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.recover(ctx); err != nil {
 		return nil, err
 	}
@@ -287,7 +290,7 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	}
 	defer s.release()
 	used, _, quarantined, err := s.usage()
-	return Status{Pending: len(s.entries), Bytes: used, Committed: s.state.Committed, Digest: s.state.Digest, Quarantined: quarantined}, err
+	return Status{Chain: s.state.Chain, Anchor: s.state.Anchor, Pending: len(s.entries), Bytes: used, Committed: s.state.Committed, Digest: s.state.Digest, Quarantined: quarantined}, err
 }
 
 func (s *Store) Close() error {
@@ -348,7 +351,7 @@ func (s *Store) recover(ctx context.Context) error {
 			return err
 		}
 		switch {
-		case strings.HasPrefix(name, ".tmp-result-"), strings.HasPrefix(name, ".tmp-state-"), strings.HasPrefix(name, ".tmp-ack-"):
+		case strings.HasPrefix(name, ".tmp-result-"), strings.HasPrefix(name, ".tmp-state-"), strings.HasPrefix(name, ".tmp-ack-"), strings.HasPrefix(name, ".tmp-transition-"):
 			temporary = append(temporary, name)
 		case strings.HasPrefix(name, ".quarantine-"):
 		case strings.HasSuffix(name, ".result"):

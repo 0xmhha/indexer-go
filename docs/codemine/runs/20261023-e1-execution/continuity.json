@@ -3,62 +3,75 @@
   "plan": "03-plan.md",
   "checklist": "checklist.md",
   "current": {
-    "unit": "U08",
-    "state": "local_validation_complete_awaiting_commit_ci",
-    "integration_group": "U04-U08",
-    "intent": "durable fenced reorg/restart, unpublished purge and state/history rewind, stale generation rejection",
+    "unit": "U11",
+    "state": "implemented_locally_verified",
+    "integration_group": "U09-U11",
+    "intent": "actual EVM/WBFT frozen-fixture parity through IPC, seven writers, publication and DB/API; final checks and CI",
     "files": [
-      "pkg/storage/postgres/exec_rewind*.go",
-      "pkg/execution/controller.go",
-      "pkg/fetch/execution.go",
-      "10-rewind-contract.md"
+      "testdata/execution/",
+      "pkg/app/execution_postgres_test.go",
+      "x/stablenet/executor/integration_fixture_test.go",
+      ".github/workflows/ci.yml"
     ],
     "contracts": [
-      "marker before partial rollback; reads/parts/publication fail closed",
-      "max128 and anchor/hash/root/undo coverage preflight",
-      "restart reruns atomic Resume from the durable marker; no partial recovery progress is inferred",
-      "rebuild latest from remaining history and exact writer cursor bases",
-      "fresh immediately before final reopen commit with post-response generation fence"
+      "two actual executions; second pass never commits",
+      "DB pool4 / seven queues / concurrent part permits2 / shared RPC5 / final fresh remain",
+      "no node services, peers, performance measurements or GC activation"
     ],
-    "verification": "PG marker/restart RED4, state restore RED1, missing explicit-zero coverage RED1 -> same tests race GREEN. All phase faults preserve logical state and reopen successfully; exactly128/129/deeper-retarget and actual shared read/part lock boundary PG/race GREEN. Controller RED3, feature recovery/target RED2, duplicate Future RED1, immutable fresh reference RED1 -> same race GREEN. Single GOMAXPROCS=1/race/count=200 root queue/API and actual PG concurrency passed. Build/vet/lint/cache/examples/offline operations and actual PG adapter suite passed. Full-root regression identified intended schema snapshot drift and the new pure wire port contract boundary; both corrected and focused tests passed, full app regression pending. Final full root/wire/executor race passed. Full PostgreSQL adapter/app/API/bundle run had only an early pre-fixture-update TestSchemaSnapshot failure; corrected snapshot passed full root race and is rechecked in PostgreSQL environment. Full latest-commit PostgreSQL CI is required before merge.",
-    "next": "Commit reviewed integration, attach draft PR, require four latest-head CI checks, ready/squash/main sync; only then U09."
+    "verification": "Final root/wire/executor full race GREEN; full PostgreSQL adapter/app/API/bundle regression GREEN; build/fmt/vet/lint, astgraph, examples/cache/offline operations and secrets GREEN. Actual EVM/WBFT frozen-byte parity through seven writers/features/GraphQL, opt-in native IPC lost ACK/reorg/reopen GREEN. Queue/receiver/API, runtime, exporter, node lifecycle and final actual PG/IPC each single GOMAXPROCS=1/race/count200 GREEN. Linux receiver cross-build GREEN. Functional RED fixes include creation proof routing, constructor witness, failed creation index, fresh reorg reopen, cancellation errors, profile capability and atomic ready socket publication. Test setup/socket readiness failures were corrected and failed partial counts were not combined.",
+    "next": "PR #214 is the authoritative CI4/squash-merge record. Require latest-head CI4 before ready+squash and synchronize main. After this gate, the next implementation priority is E2 checkpoint/bootstrap and verified parent recovery; operational holds remain.",
+    "pull_request": "https://github.com/0xmhha/indexer-go/pull/214",
+    "ci_and_merge_source": "https://github.com/0xmhha/indexer-go/pull/214",
+    "source_commit": "c232988c0ea0772f7019bdd949888017a79267e1"
   },
   "previous": [
     {
-      "unit": "U07",
-      "state": "functional_green_uncommitted",
-      "integration_group": "U04-U08",
-      "intent": "consistent API snapshot/fence, hide unpublished core on every read path and expose as-of-visible state",
+      "unit": "U10",
+      "state": "implemented_locally_verified",
+      "integration_group": "U09-U11",
+      "intent": "opt-in StableNet execution runtime, native balances from verified journal, isolated node backend and lifecycle",
       "files": [
-        "pkg/storage/postgres/exec_read.go",
-        "pkg/api/"
+        "pkg/feature/",
+        "internal/features/balance/",
+        "pkg/fetch/execution.go",
+        "internal/config/",
+        "pkg/app/",
+        "x/stablenet/executor/"
       ],
       "contracts": [
-        "one existing reserved/borrowed pool4 connection per read snapshot",
-        "try shared lock and explicit rewind retry error",
-        "state from history at visible, never latest-row filtering",
-        "legacy mode results unchanged"
+        "default off; root never imports fork",
+        "one existing pool4, two concurrent part writes, shared RPC5 and last fresh unchanged",
+        "balance.native consumes execution before/after, no profile recomputation or balance RPC fallback",
+        "node peer startup only after validated indexer Hello; fake lifecycle tests only",
+        "baseline/checkpoint explicit; no implicit zero/bootstrap or blind SetHead",
+        "execution support declared by the profile/producer; matching chain names alone are insufficient"
       ],
-      "verification": "PG visible core/snapshot RED3 and state RED1 -> race GREEN; all TestExecution through U07 PG/race GREEN. API snapshot RED2/state RED2/routes/cache/chain RED1 each -> race GREEN. See 09-read-contract.md. Final lint passed after correcting ignored Close errors; API schema/method snapshots match the intended extension.",
-      "next": "U08 durable rewind marker, restart recovery, stale queue cancel/join."
+      "verification": "Native context/handler/publication RED -> race GREEN; config/live-RPC/preflight/control guards RED -> GREEN; DB baseline balance/legacy writer guards actual PostgreSQL RED -> race GREEN; app recovery-before-relay/serve, Stop join, feature-definition resume RED -> app race GREEN; official node adapter/lifecycle/settings RED -> nodebackend race GREEN without node.Start.",
+      "next": "Follow current U11 integration PR for CI4, squash and main; retain this feature contract during E2 work.",
+      "pull_request": "https://github.com/0xmhha/indexer-go/pull/214",
+      "source_commit": "c232988c0ea0772f7019bdd949888017a79267e1"
     },
     {
-      "unit": "U06",
-      "state": "functional_green_uncommitted",
-      "integration_group": "U04-U08",
-      "intent": "atomic seven-part readiness, feature/outbox/publication and last fresh with post-response generation fence",
+      "unit": "U09",
+      "state": "implemented_locally_verified",
+      "integration_group": "U09-U11",
+      "intent": "bounded private IPC, exact replay ACK, canonical range walk, crash-safe spool generation rebind without raw loss",
       "files": [
-        "pkg/storage/postgres/exec_publish.go",
-        "pkg/fetch/execution.go"
+        "pkg/execution/",
+        "pkg/storage/postgres/exec_confirm.go",
+        "x/stablenet/executor/spool/",
+        "x/stablenet/executor/exporter/"
       ],
       "contracts": [
-        "flush feature/outbox/undo before fresh",
-        "no source ACK for unpublished parts",
-        "pool4 RPC5 unchanged",
-        "duplicate committed retry requires durable exact identity"
+        "Hello never deletes results",
+        "ACK only after durable exact publication and uncached fresh",
+        "quarantine unacked old-generation data; quota includes retained files",
+        "cancel and join all owned workers; no live nodes/peers/performance"
       ],
-      "verification": "Actual PG publication RED3 -> same tests race GREEN; generation/queued-error extra tests GREEN. Feature path RED2 -> race GREEN. See 08-publication-contract.md.",
-      "next": "U07 fenced API read snapshot and visible core/as-of state."
+      "verification": "Feature RED/GREEN and full exporter/spool race GREEN; exact ACK/lost ACK, generation quarantine, short reorg, startup backlog and reconnect/cancel joins covered. Final receiver/exporter single GOMAXPROCS=1/race/count200 and actual PG/IPC lost-ACK/reorg/restart single200 GREEN; whole final regression GREEN. PR/CI/merge follows U11.",
+      "next": "Follow current U11 integration PR for CI4, squash and main; retain this feature contract during E2 work.",
+      "pull_request": "https://github.com/0xmhha/indexer-go/pull/214",
+      "source_commit": "c232988c0ea0772f7019bdd949888017a79267e1"
     }
   ],
   "retained_previous_units": 2,
@@ -73,7 +86,7 @@
   "planning_baseline": {
     "unit": "U00",
     "state": "local_checks_passed",
-    "intent": "2회 실행과 연결4개를 유지하는 E1 계약·기능별 RED/GREEN·PR 순서를 고정한다",
+    "intent": "2\ud68c \uc2e4\ud589\uacfc \uc5f0\uacb04\uac1c\ub97c \uc720\uc9c0\ud558\ub294 E1 \uacc4\uc57d\u00b7\uae30\ub2a5\ubcc4 RED/GREEN\u00b7PR \uc21c\uc11c\ub97c \uace0\uc815\ud55c\ub2e4",
     "files": [
       "03-plan.md",
       "checklist.md",
@@ -91,5 +104,5 @@
     "verification": "Documentation links/JSON/fmt/build/vet/root+astgraph lint/cache lifecycle/examples/offline operations/full root race/real PostgreSQL passed; see checklist.",
     "next": "U01: write failing wire contract tests before implementation"
   },
-  "integration_policy": "U04-U08 share one unmerged schema/visibility/rewind boundary. Each feature still RED/GREEN + docs/context; full checks before commit/PR and four CI before squash/main."
+  "integration_policy": "U04-U08 merged #213. U09-U11 share final opt-in runtime integration PR; RED/GREEN and docs/context per feature, full validation/CI before squash/main."
 }

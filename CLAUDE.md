@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: EVM framework available; E1 execution ingest is being planned and implemented under `docs/codemine/runs/20261023-e1-execution/03-plan.md`
+- **Current Stage**: EVM framework available; E1 execution ingest is opt-in for explicitly prepared checkpoints; its current verification is under `docs/codemine/runs/20261023-e1-execution/03-plan.md`
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context

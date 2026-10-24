@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
@@ -21,7 +22,12 @@ type StoreBackend struct {
 	Publisher Publisher
 }
 
-func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prepared) error {
+func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prepared) (err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("execution part %s: %w", w, err)
+		}
+	}()
 	if b == nil || b.Store == nil || p == nil {
 		return port.ErrInvalidData
 	}
@@ -37,8 +43,10 @@ func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prep
 		switch w {
 		case port.ExecutionBlocks, port.ExecutionTransactions, port.ExecutionReceipts, port.ExecutionLogs:
 			return b.Store.ApplyExecutionCore(bound, w, p.block, p.receipts)
-		default:
+		case port.ExecutionContracts:
 			return b.Store.ApplyExecutionState(bound, w, p.result, p.creations...)
+		default:
+			return b.Store.ApplyExecutionState(bound, w, p.result)
 		}
 	})
 }

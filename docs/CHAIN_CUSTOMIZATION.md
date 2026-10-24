@@ -98,3 +98,7 @@ HTTP/GraphQL 조회는 `api.RegisterRoute`, `graphql.RegisterExtension`으로 �
 호환성 약속을 둔 패키지는 없다. `pkg/chains`·`pkg/chains/evm`과 기능 패키지 모두 바뀔 수 있다. 프로젝트는 모듈 버전을 고정하고 업그레이드 때 예제를 빌드·검증한다.
 
 현재 Arc profile은 최신 발행 tag `v0.2.15` 이후 main에 추가됐다. 이 예제는 저장소 안의 `replace => ../..`로 검증한다. 저장소 밖으로 옮길 때는 Arc profile을 포함하는 commit 또는 향후 발행 버전을 고정해야 한다. 예제를 추가한다고 새 tag가 자동 발행되지는 않는다.
+
+## Execution journal capability
+
+A profile with a verified execution-journal producer explicitly declares `chains.ExecutionProfile`. Profiles built from `evm.Profile` use `evm.WithExecutionJournals(true)`; the default is false. A matching chain name alone never enables the [execution ingest path](EXECUTION_INGEST.md). The shipped declaration is in the StableNet profile; extending it requires a matching producer, encoding/accounting verification and prepared checkpoint coverage. This flag does not bootstrap state or prove consensus.

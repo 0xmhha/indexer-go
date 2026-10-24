@@ -5,17 +5,61 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
+	"github.com/0xmhha/indexer-go/pkg/feature"
 	"github.com/0xmhha/indexer-go/pkg/source"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // SetExecutionCanonical must receive the uncached source backed by the existing
 // shared RPC pool. It is configured before ingest, never replaced by raw input.
 func (f *Fetcher) SetExecutionCanonical(r source.CanonicalReader) { f.executionCanonical = r }
+
+func (f *Fetcher) ValidateExecutionReorg(ctx context.Context, ref execwire.Ref) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if f.executionCanonical == nil {
+		return port.ErrInvalidData
+	}
+	call, cancel := f.rpcCtx(ctx)
+	defer cancel()
+	hash, err := f.executionCanonical.HashAt(call, ref.Height)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return fmt.Errorf("%w: %w", port.ErrExecutionCanonicalLag, err)
+	}
+	if execwire.Hash(hash) != ref.Hash {
+		return port.ErrExecutionCanonicalLag
+	}
+	return nil
+}
+
+func (f *Fetcher) ConfirmExecution(ctx context.Context, payload []byte) (bool, error) {
+	store, ok := f.storage.(port.ExecutionConfirmer)
+	if !ok || f.executionCanonical == nil {
+		return false, port.ErrInvalidData
+	}
+	return store.ConfirmExecution(ctx, payload, func(bound context.Context, ref execwire.Ref) error {
+		call, cancel := f.rpcCtx(bound)
+		defer cancel()
+		hash, err := f.executionCanonical.HashAt(call, ref.Height)
+		if err != nil {
+			return err
+		}
+		if execwire.Hash(hash) != ref.Hash {
+			return &ReorgError{Height: ref.Height}
+		}
+		return nil
+	})
+}
 
 // PublishExecution applies legacy features exactly once after core/state parts.
 // The store owns the last flush/fresh/commit boundary. It sends no source ACK;
@@ -37,6 +81,16 @@ func (f *Fetcher) PublishExecution(ctx context.Context, r execwire.Result, b *mo
 		f.pendingEvents = &pending
 		defer func() { f.pendingEvents = nil }()
 		committed, err := publisher.CommitExecution(ctx, port.ExecutionPublication{Ref: r.Ref, Parent: r.Parent, Digest: digest, Root: r.StateRoot}, func(bound context.Context) error {
+			var native []feature.NativeBalanceChange
+			for _, step := range r.Steps {
+				for _, change := range step.Accounts {
+					native = append(native, feature.NativeBalanceChange{Address: common.Address(change.Address), Before: new(big.Int).SetBytes(change.Before.Balance[:]), After: new(big.Int).SetBytes(change.After.Balance[:]), TxHash: common.Hash(step.TxHash), Ordinal: step.Ordinal})
+				}
+			}
+			bound, bindErr := feature.WithNativeBalances(bound, b.Number, b.Hash, native)
+			if bindErr != nil {
+				return bindErr
+			}
 			// Prepare only on the new-publication callback: retries after a lost ACK
 			// cannot require old node state or apply a newly enabled feature silently.
 			if f.config.StatePrefetch && f.features != nil {

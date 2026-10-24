@@ -1,6 +1,6 @@
 # U07: public read boundary
 
-현재 U04~U08 통합 브랜치의 기능 검사 완료. 실행 모드는 control 초기화·baseline 확인 후 API를 조립하며, 이미 실행 중인 다른 API 프로세스에 hot-enable하지 않는다. 읽기 전용 API도 새 모드 시작 뒤 다시 열어 같은 control을 인식해야 한다.
+상태: [PR #213](https://github.com/0xmhha/indexer-go/pull/213), merge `08098f2`에서 필수 CI 4개·squash/main 동기화를 완료했다. 공개 높이에 고정한 core/state/API snapshot과 취소·반납을 검증했다. 실행 중인 다른 API 프로세스에 hot-enable하지 않으며 읽기 전용 API도 새 모드 시작 뒤 다시 열어 control을 인식해야 한다. 현재 작업은 [체크리스트](checklist.md)를 따른다.
 
 - core의 SELECT는 정적인 exec_visible_* view를 사용한다. block/tx/receipt/log의 hash·높이·목록·기간·존재 검사·receipt join을 공개 높이 이하로 제한한다. DML과 part/rewind 검증은 base table을 명시적으로 사용한다. SQL 문자열의 실행 시 치환이나 RLS 우회 가능성에 의존하지 않는다.
 - latest height metadata는 control의 공개 높이를 따른다. transaction count는 실행 모드에서 공개 transaction만 센다. legacy mode의 기존 count/meta 경로는 유지한다.

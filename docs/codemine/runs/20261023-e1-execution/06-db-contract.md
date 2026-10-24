@@ -1,6 +1,6 @@
 # U04~U08 DB 통합 계약
 
-상태: control·part RED3건과 account baseline/CAS/history RED3건 뒤 실제 PostgreSQL/race GREEN. 이력 partition 소유권의 추가 RED도 수정했다. slot/clear 및 anchor timestamp도 RED 후 PostgreSQL/race GREEN이다. code/contract도 RED3건 뒤 PostgreSQL/race GREEN이다. 핵심4개 표의 분리·immutable port도 RED 후 GREEN이다. U04 내부 저장과 U05 queue·U06 공개·U07 조회 기능이 준비됐으며 U08 rewind 통합 중이다. 통합 완료 전 migration0014를 릴리스하지 않는다. [계획](03-plan.md)과 [체크리스트](checklist.md)를 따른다.
+상태: [PR #213](https://github.com/0xmhha/indexer-go/pull/213), merge `08098f2`에서 필수 CI 4개·squash/main 동기화를 완료했다. DB control·part·state 이력·core writer·publication·조회·rewind를 통합했다. 현재 작업은 [체크리스트](checklist.md)를 따른다.
 
 ## 초기화와 part 내구성
 

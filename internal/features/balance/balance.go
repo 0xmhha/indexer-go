@@ -42,7 +42,7 @@ func (balanceFeature) Register(r feature.Registrar) error {
 	if !ok {
 		return fmt.Errorf("storage does not support balance history")
 	}
-	if d.BalanceAt == nil {
+	if d.BalanceAt == nil && d.NativeBalances == nil {
 		return fmt.Errorf("no node balance reader")
 	}
 	var st settings
@@ -103,6 +103,9 @@ type handler struct {
 // an answered node error to start a new account from 0 or skip a resync;
 // transport errors always fail the block.
 func (h *handler) HandleBlock(ctx context.Context, b *feature.Block) error {
+	if h.deps.NativeBalances != nil {
+		return h.applyExecutionBalances(ctx, b)
+	}
 	n := b.Model.Number
 	deltas, err := h.accounting.NativeDeltas(ctx, b.Model, b.Receipts, h.blocks)
 	if err != nil {

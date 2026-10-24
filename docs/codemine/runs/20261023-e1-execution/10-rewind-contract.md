@@ -1,6 +1,6 @@
 # U08: fenced rewind and restart
 
-현재 기능 RED/GREEN 완료. U04~U08의 전체 검사·동시성200회·PR/CI/merge는 checklist의 통합 상태로 추적한다. 실제 노드·peer·성능 측정은 보류다.
+상태: [PR #213](https://github.com/0xmhha/indexer-go/pull/213), merge `08098f2`에서 필수 CI 4개·squash/main 동기화를 완료했다. 영속 marker·원자적 rewind·단계별 장애/재시작·128/129 경계·retarget·읽기 차단을 검증했다. 실제 노드·peer·성능 측정은 보류다. 현재 작업은 [체크리스트](checklist.md)를 따른다.
 
 ## 저장과 복구
 

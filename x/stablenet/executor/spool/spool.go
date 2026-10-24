@@ -32,6 +32,8 @@ type Entry struct {
 	Size   uint64
 }
 type Status struct {
+	Chain       execwire.Chain
+	Anchor      execwire.Ref
 	Pending     int
 	Bytes       uint64
 	Committed   execwire.Ref

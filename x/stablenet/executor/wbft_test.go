@@ -26,6 +26,9 @@ import (
 )
 
 func wbftFixture(t *testing.T) (ethdb.Database, ReplayInput, common.Address, common.Address, common.Address) {
+	return wbftFixtureMint(t, 9)
+}
+func wbftFixtureMint(t *testing.T, amount byte) (ethdb.Database, ReplayInput, common.Address, common.Address, common.Address) {
 	t.Helper()
 	disk := rawdb.NewMemoryDatabase()
 	t.Cleanup(func() { _ = disk.Close() })
@@ -87,7 +90,7 @@ func wbftFixture(t *testing.T) (ethdb.Database, ReplayInput, common.Address, com
 	to := config.Anzeon.SystemContracts.NativeCoinAdapter.Address
 	data := append([]byte{}, vm.CoinManagerMintSelector[:]...)
 	data = append(data, common.LeftPadBytes(recipient.Bytes(), 32)...)
-	data = append(data, common.LeftPadBytes([]byte{9}, 32)...)
+	data = append(data, common.LeftPadBytes([]byte{amount}, 32)...)
 	dynamic := types.DynamicFeeTx{ChainID: config.ChainID, Nonce: 0, To: &to, Gas: 500_000, GasTipCap: new(big.Int).Set(h.GasTip()), GasFeeCap: new(big.Int).Add(h.BaseFee, h.GasTip()), Value: big.NewInt(0), Data: data}
 	signed, err := types.SignTx(types.NewTx(&dynamic), types.NewLondonSigner(config.ChainID), key)
 	if err != nil {

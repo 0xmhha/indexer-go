@@ -242,6 +242,9 @@ func (s *Store) GetAddressStats(ctx context.Context, addr common.Address) (*port
 // zero when none was recorded, unless the genesis lookup finds the
 // account's allocation (SetGenesisBalanceResolver).
 func (s *Store) GetAddressBalance(ctx context.Context, addr common.Address, blockNumber uint64) (*big.Int, error) {
+	if s.executionMode.Load() {
+		return s.executionBalance(ctx, addr, blockNumber)
+	}
 	var (
 		text string
 		err  error

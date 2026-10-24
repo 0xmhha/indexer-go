@@ -39,14 +39,15 @@ type TxDecoder func(raw json.RawMessage) (*model.Transaction, error)
 
 // Profile is an EVM chain profile.
 type Profile struct {
-	blobCapability   *model.BlobCapability
-	id               string
-	detect           func(chains.NodeInfo) bool
-	features         []string
-	txDecoders       map[uint8]TxDecoder
-	verifyHeaderHash bool
-	headerHash       func(*types.Header) common.Hash
-	customHeaderHash bool
+	executionJournals bool
+	blobCapability    *model.BlobCapability
+	id                string
+	detect            func(chains.NodeInfo) bool
+	features          []string
+	txDecoders        map[uint8]TxDecoder
+	verifyHeaderHash  bool
+	headerHash        func(*types.Header) common.Hash
+	customHeaderHash  bool
 
 	binaryTxDecoders  map[uint8]BinaryTxDecoder
 	effectiveGasPrice EffectiveGasPriceFunc
@@ -57,6 +58,11 @@ type Profile struct {
 
 // Option configures a Profile.
 type Option func(*Profile)
+
+// WithExecutionJournals opts a profile into its verified execution producer.
+// Decoding a familiar chain name does not implicitly enable this capability.
+func WithExecutionJournals(on bool) Option { return func(p *Profile) { p.executionJournals = on } }
+func (p *Profile) ExecutionJournals() bool { return p != nil && p.executionJournals }
 
 // WithDetect sets the detection rule (default: accept every node).
 func WithDetect(f func(chains.NodeInfo) bool) Option { return func(p *Profile) { p.detect = f } }
