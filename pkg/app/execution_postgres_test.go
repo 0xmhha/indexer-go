@@ -1,11 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	checkpointformat "github.com/0xmhha/indexer-go/execwire/checkpoint"
+	"github.com/0xmhha/indexer-go/internal/executionops"
 	"math/big"
 	"net"
 	"net/http"
@@ -332,4 +335,67 @@ func TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK(t *testing.T) {
 	for _, method := range m.methods {
 		require.False(t, strings.Contains(method, "getBalance"), method)
 	}
+}
+
+// Offline operator path: actual WBFT genesis snapshot → private env → shared
+// physical RPC budget → atomic PG bootstrap → existing seven-writer publication.
+func TestCheckpointBootstrapToolThenExecutionPublication(t *testing.T) {
+	f := loadExecutionFrozen(t, "wbft-native")
+	rpcMock, srv := fixtureRPC(t, f)
+	schema := testSchema(t.TempDir())
+	dsn := postgresDSN(t)
+	t.Cleanup(func() { dropTestSchemas(dsn, schema) })
+	t.Setenv("INDEXER_DB_POSTGRES_DSN", dsn)
+	t.Setenv("INDEXER_CHECKPOINT_RPC", srv.URL)
+	path := "../../testdata/execution/checkpoints/wbft-genesis.ndjson"
+	payload, err := os.ReadFile(path)
+	require.NoError(t, err)
+	first, err := checkpointformat.NewDecoder(bytes.NewReader(payload)).Next()
+	require.NoError(t, err)
+	expected, err := json.Marshal(first.Manifest)
+	require.NoError(t, err)
+	expectedPath := filepath.Join(t.TempDir(), "expected.json")
+	require.NoError(t, os.WriteFile(expectedPath, expected, 0600))
+	p, _ := chains.Lookup(f.Profile)
+	var output bytes.Buffer
+	require.NoError(t, executionops.Run(t.Context(), executionops.Options{Action: "import", Input: path, Expected: expectedPath, Schema: schema}, p.(chains.HeaderCodec), &output))
+	rpcMock.mu.Lock()
+	canonicalReads := 0
+	for _, method := range rpcMock.methods {
+		if method == "eth_getBlockByNumber" {
+			canonicalReads++
+		}
+	}
+	rpcMock.mu.Unlock()
+	require.Equal(t, 2, canonicalReads, "genesis identity and final fresh must be separate physical reads even at height0")
+	s, err := postgres.Open(t.Context(), postgres.Options{DSN: dsn, Schema: schema, MaxConns: 4})
+	require.NoError(t, err)
+	defer func() { _ = s.Close() }()
+	c, err := s.ExecutionStatus(t.Context())
+	require.NoError(t, err)
+	require.True(t, c.BaselineReady)
+	cl, err := client.NewClient(&client.Config{Endpoint: srv.URL, Timeout: time.Second, RateLimit: 5})
+	require.NoError(t, err)
+	defer cl.Close()
+	fe := fetch.NewFetcher(cl, s, &fetch.Config{StatePrefetch: true, RPCTimeout: time.Second, NoOutbox: true}, zap.NewNop(), nil)
+	defer fe.Close()
+	pipeline, err := feature.Build([]string{"address.index", "balance.native", "token.transfers"}, feature.Deps{Storage: s, Logger: zap.NewNop(), Profile: p, NativeBalances: feature.NativeBalancesFromContext, BlockAt: s.GetBlock})
+	require.NoError(t, err)
+	fe.SetFeatures(pipeline)
+	fe.SetExecutionCanonical(sourcerpc.New(cl.RPCClient(), p))
+	prepared, err := execution.Prepare(p.(chains.BinaryProfile), f.Chain, f.Payload)
+	require.NoError(t, err)
+	backend := &execution.StoreBackend{Store: s, Publisher: fe}
+	scheduler, err := execution.New(t.Context(), execution.Config{Anchor: c.Anchor, MaxBlocks: 4, MaxBytes: 64 << 20}, backend)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, scheduler.Close()) }()
+	future, err := scheduler.Submit(t.Context(), prepared)
+	require.NoError(t, err)
+	require.NoError(t, future.Wait(t.Context()))
+	result, err := execwire.UnmarshalResult(f.Payload)
+	require.NoError(t, err)
+	assertExecutionFrozen(t, t.Context(), s, f, result.Ref)
+	output.Reset()
+	require.NoError(t, executionops.Run(t.Context(), executionops.Options{Action: "inspect", Schema: schema}, p.(chains.HeaderCodec), &output))
+	require.Contains(t, output.String(), `"Coverage":"full"`)
 }

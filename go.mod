@@ -34,6 +34,7 @@ require (
 
 require (
 	cel.dev/expr v0.25.1 // indirect
+	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
 	github.com/0xmhha/indexer-go/execwire v0.0.0
 	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect

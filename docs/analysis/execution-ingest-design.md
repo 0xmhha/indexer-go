@@ -1,6 +1,6 @@
 # 블록 실행 기반 수집
 
-현재 첫 구현 단계는 StableNet·PostgreSQL의 E1이다. 정본은 [최종 결정](../decisions/20261023-e1-design/decision.md), [E1 설계](../codemine/runs/20261023-e1-execution/02-design.md), [구현 계획](../codemine/runs/20261023-e1-execution/03-plan.md)이다. 초기 설계와 바뀐 선택지는 Git history로 확인한다.
+StableNet·PostgreSQL의 E1은 #214로 main에 반영됐다. 현재 E2 정본은 [계획](../codemine/runs/20261024-e2-bootstrap/plan.md), [체크리스트](../codemine/runs/20261024-e2-bootstrap/checklist.md), [사용법](../EXECUTION_BOOTSTRAP.md)이다. 정본은 [최종 결정](../decisions/20261023-e1-design/decision.md), [E1 설계](../codemine/runs/20261023-e1-execution/02-design.md), [구현 계획](../codemine/runs/20261023-e1-execution/03-plan.md)이다. 초기 설계와 바뀐 선택지는 Git history로 확인한다.
 
 ## 1. 목표
 
@@ -14,7 +14,7 @@ indexer의 표별 queue·writer7개가 기존 pool4개를 공유한다. 미공�
 | --- | --- | --- |
 | E0 | 실행 엔진 import와 state/receipt root 타당성 조사 | 이전 조사 완료. 실제 운영/속도 보장은 아님 |
 | E1 | 실행부·IPC·spool·상태 이력·writer7개·공개 높이·복구·앱 연결 | [체크리스트](../codemine/runs/20261023-e1-execution/checklist.md) |
-| E2 | 시작 모드·전체 상태 bootstrap·검증 도구 | 후속 |
+| E2 | 시작 모드·전체 상태 bootstrap·검증 도구 | [체크리스트](../codemine/runs/20261024-e2-bootstrap/checklist.md) |
 | E3 | 노드 DB와 원본 보존·정리 | 후속 |
 | E4 | 기존 기능 표의 writer 분리·중복 데이터 정리 | 후속. 핵심 writer7개는 E1 |
 | E5 | 체인별 실행부 확대 | 후속. 비EVM은 모델 결정 필요 |

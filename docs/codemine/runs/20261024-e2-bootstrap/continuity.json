@@ -1,0 +1,46 @@
+{
+  "goal": "E2 checkpoint/bootstrap",
+  "base": "3ae27d5",
+  "n": {
+    "unit": "U04",
+    "state": "implemented_locally_verified",
+    "files": [
+      "docs/EXECUTION_BOOTSTRAP.md",
+      "pkg/app/execution_postgres_test.go"
+    ],
+    "contract": "full local functional/static/race/examples/PG checks, then one draft PR latest-head CI4/squash/main; no node/performance",
+    "verification": {
+      "functional": "go test -count=1 ./... passed",
+      "race": "make test-race root/wire/executor passed",
+      "postgres": "full disposable fsync-on suite and final bootstrap/upgrade/tool targeted race passed",
+      "static": "build/vet/fmt/lint/cache/examples/offline operations passed",
+      "secrets": "staged and history no leaks",
+      "concurrency": "no new concurrency mechanism; existing CI count200 gates unchanged"
+    }
+  },
+  "n-1": {
+    "unit": "U03",
+    "state": "verified",
+    "contract": "offline export/tools/recovery, no node.Start",
+    "red": "TestExportFullActualStateWithExtraStorageAndCode: ErrIncomplete before implementation",
+    "green": "real trie export with Extra/storage/code"
+  },
+  "n-2": {
+    "unit": "U02",
+    "state": "core_verified",
+    "files": [
+      "pkg/storage/postgres/exec_bootstrap.go",
+      "pkg/storage/postgres/migrations/0015_execution_bootstrap.sql"
+    ],
+    "contract": "atomic empty-schema baseline, coverage and final uncached fresh; released E1 defaults partial"
+  },
+  "next": "Resolve the source-branch PR. If not merged, finish its latest-head CI4/ready/squash and ff main. If merged, E2 is complete; next is E3 retention policy, with current operational holds. Do not repeat closed E1/E2 checks without a relevant change or failure.",
+  "holds": [
+    "live node/peer",
+    "formatting",
+    "GC activation",
+    "performance"
+  ],
+  "source_branch": "refactor/e2-checkpoint-bootstrap",
+  "ci_and_merge_source": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe2-checkpoint-bootstrap"
+}

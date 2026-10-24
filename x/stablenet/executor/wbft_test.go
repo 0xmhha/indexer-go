@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 
@@ -32,7 +33,7 @@ func wbftFixtureMint(t *testing.T, amount byte) (ethdb.Database, ReplayInput, co
 	t.Helper()
 	disk := rawdb.NewMemoryDatabase()
 	t.Cleanup(func() { _ = disk.Close() })
-	db := state.NewDatabase(disk)
+	db := state.NewDatabaseWithConfig(disk, &triedb.Config{Preimages: true})
 	t.Cleanup(func() { _ = db.TrieDB().Close() })
 	encoded, err := json.Marshal(params.TestWBFTChainConfig)
 	if err != nil {

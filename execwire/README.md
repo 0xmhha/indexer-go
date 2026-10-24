@@ -51,3 +51,7 @@ GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConn' ./...
 ```
 
 The root `make test-execwire` target and required CI jobs cover this separate module. Tests use bytes and `net.Pipe`; they start no nodes, peers or databases. Runtime integration and operational evidence remain separate from this codec's checks.
+
+## Offline checkpoint stream
+
+`execwire/checkpoint` is a stdlib-only NDJSON format, separate from the IPC result protocol. Consumers must verify trusted identity, full trie roots or selected proofs and terminal EOF before committing staged records. See [bootstrap](../docs/EXECUTION_BOOTSTRAP.md). Diagnostic source observations authorize no ACK, generation change or deletion.

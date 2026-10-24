@@ -51,6 +51,13 @@ func (s *Store) ExecutionStorageAt(ctx context.Context, addr execwire.Address, s
 		return value, nil
 	}
 	if data == nil {
+		full, e := s.executionFullCoverage(ctx, height)
+		if e != nil {
+			return value, e
+		}
+		if full {
+			return value, nil
+		}
 		return value, port.ErrExecutionCoverage
 	}
 	if len(data) != 32 {
@@ -231,6 +238,13 @@ func (s *Store) writeExecutionStorage(ctx context.Context, c port.ExecutionContr
 				}
 				if !known && (!a.Before.Exists || a.Before.StorageRoot == execwire.Hash(types.EmptyRootHash)) {
 					known = true
+				}
+				if !known {
+					full, e := s.executionFullCoverage(ctx, c.Anchor.Height)
+					if e != nil {
+						return e
+					}
+					known = full
 				}
 				if !known {
 					return port.ErrExecutionCoverage
