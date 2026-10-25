@@ -1,0 +1,44 @@
+{
+  "goal": "Arc native history and index compaction",
+  "base": "c24700b0d32b38b114363f66da31cbdc2044db80",
+  "source_branch": "refactor/e5-arc-history-compaction",
+  "n": {
+    "unit": "U04",
+    "state": "locally_verified",
+    "contract": "native local gates GREEN; lost-epoch RED->GREEN, CPU1/race/single200 and owned PG reorg+regression GREEN; follow-up build/vet/lint/fmt/full root-wire-StableNet race/docs GREEN; scans/fix commit/push/exact-head CI5/ready/squash/clean main remain release authority",
+    "new_go_concurrency": true,
+    "ci_failure": "initial PG reorg wait timeout lacked worker trace; lost-epoch hazard independently reproduced; no unique original-cause assertion"
+  },
+  "n-1": {
+    "unit": "U03",
+    "state": "green",
+    "contract": "native26+2 actual helper/adapter, v1/v2 compatibility, bounded shard/corruption/index postconditions, unchanged three fixtures"
+  },
+  "n-2": {
+    "unit": "U02",
+    "state": "targeted_green",
+    "contract": "old parent/seed floor RED then GREEN; rich native state cutoffs3->4, reopen/repeat/stale seed/full export",
+    "boundary": "native trie overlay requires target above prune checkpoint; checkpoint Through-1 and adapter floorThrough"
+  },
+  "preserved": [
+    "accepted E1/E2/E3/E4 plans",
+    "unmodified upstream",
+    "pool4/part2/API reservation",
+    "RPC5 physical attempts/s",
+    "final uncached fresh/generation fence",
+    "exact DB/source/node maintenance authority"
+  ],
+  "holds": [
+    "actual nodes/peers/operator DB",
+    "disk formatting/provisioning",
+    "operational GC",
+    "performance",
+    "other projects"
+  ],
+  "next": "resolve release authority: scans/commit/push/draft+attach/exact-head CI5/ready/squash/ff clean main; report further native allocation/index work, trace/blob/proofs and E6; no automatic next phase",
+  "release": {
+    "authority": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-history-compaction",
+    "completion": "same-head CI4+Arc success, ready/squash MERGED and clean main synchronized to origin/main",
+    "source_branch_preserved": true
+  }
+}

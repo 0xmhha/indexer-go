@@ -106,7 +106,7 @@ test-executor-arc:
 	cd x/arc/executor && cargo fmt --check && cargo build --locked --all-targets && cargo clippy --locked --all-targets -- -D warnings && \
 	arc_target="$${CARGO_TARGET_DIR:-target}" && \
 	case "$$arc_target" in /*) ;; *) arc_target="$$(pwd)/$$arc_target" ;; esac && \
-	INDEXER_ARC_MAINTENANCE_BINARY="$$arc_target/debug/arc-native-maintenance" cargo test --locked --all-targets
+	INDEXER_ARC_MAINTENANCE_BINARY="$$arc_target/debug/arc-native-maintenance" INDEXER_ARC_EXECUTOR_BINARY="$$arc_target/debug/indexer-arc-executor" cargo test --locked --all-targets
 
 ## test-executor-stablenet: Check two-pass StableNet replay with offline EVM and WBFT fixtures
 test-executor-stablenet:

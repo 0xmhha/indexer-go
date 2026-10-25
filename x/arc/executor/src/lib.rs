@@ -16,6 +16,7 @@ pub mod service;
 #[cfg(test)]
 mod tests;
 
+pub mod history;
 pub mod native;
 
 pub mod retention;

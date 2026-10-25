@@ -82,6 +82,8 @@ jobs:
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestExecutionRuntime' ./pkg/app
       - name: Execution feature writer ownership concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestExecutionWriterPlansForDifferentBlocksAreIndependent$' ./pkg/feature
+      - name: State projection epoch retry concurrency
+        run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestStateProjectionCanonicalFailureDoesNotMissEpoch$' ./pkg/chainfeed/evmstate
       - name: Wire module contracts and concurrency
         run: |
           make test-execwire
@@ -129,6 +131,8 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: PostgreSQL adapter and end-to-end suite
         run: ./scripts/test-postgres.sh
+      - name: State projection epoch retry on PostgreSQL
+        run: ./scripts/test-postgres.sh ./pkg/chainfeed/evmstate -race -run '^TestStateProjectionCanonicalFailureDoesNotMissEpoch$'
       - name: Execution IPC and DB integration concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -failfast -count=200 -timeout=40m -run '^(TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK|TestExecutionArcCollectedSpoolPublicationAndLostACK)$'
       - name: Execution DB admission and recovery concurrency
@@ -161,6 +165,7 @@ jobs:
         env:
           INDEXER_ARC_FIXTURE_DIR: ${{ runner.temp }}/arc-fixtures
           INDEXER_ARC_MAINTENANCE_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/arc-native-maintenance
+          INDEXER_ARC_EXECUTOR_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/indexer-arc-executor
         run: |
           cargo fmt --check
           cargo build --locked --all-targets

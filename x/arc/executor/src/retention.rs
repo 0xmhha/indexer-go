@@ -1,4 +1,4 @@
-//! Conservative native-v2 payload retention. State/history/headers stay intact.
+//! Native-v2 COW retention. Full cutoff seed and protected state stay intact.
 use crate::{
     checkpoint,
     native::{self, Factory},
@@ -88,6 +88,8 @@ struct Floor {
     permit_digest: B256,
     request: Request,
     checkpoint_digest: B256,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    history_floor: Option<u64>,
 }
 const SNAPSHOT: &str = ".arc-retention-checkpoint.ndjson";
 const FLOOR: &str = ".arc-retention-native.json";
@@ -133,7 +135,17 @@ pub fn inspect(f: &Factory, spec: &ArcChainSpec, r: &Request) -> Result<Observat
                 "native ACK/tail canonicality"
             );
         }
-        for n in [r.through, r.tail.height, height] {
+        ensure!(
+            crate::history::floor(f)? <= r.through,
+            "protected state is below native history floor"
+        );
+        for n in [
+            r.through,
+            r.through + 1,
+            r.ack.height,
+            r.tail.height,
+            height,
+        ] {
             let h = p
                 .header_by_number(n)?
                 .ok_or_else(|| eyre!("protected state header missing"))?;
@@ -170,10 +182,17 @@ fn expired(f: &Factory, datadir: &Path, r: &Request) -> Result<Vec<(StaticFileSe
             StaticFileSegment::Transactions
                 | StaticFileSegment::Receipts
                 | StaticFileSegment::TransactionSenders
+                | StaticFileSegment::AccountChangeSets
+                | StaticFileSegment::StorageChangeSets
         ) {
             continue;
         }
-        if range.end() > r.through
+        let history = matches!(
+            segment,
+            StaticFileSegment::AccountChangeSets | StaticFileSegment::StorageChangeSets
+        );
+        if (history && range.end() >= r.through)
+            || range.end() > r.through
             || sf
                 .get_highest_static_file_block(segment)
                 .is_none_or(|h| range.end() >= h)
@@ -252,7 +271,8 @@ pub fn prune(
     std::fs::rename(&next, &previous)?;
     std::fs::File::open(datadir)?.sync_all()?;
     let sf = f.static_file_provider();
-    // No history pruning: preserve raw-key recovery and native reorg history.
+    // The complete cutoff seed is durable before any history is removed.
+    crate::history::prune(f, a.request.through)?;
     for (segment, end) in expired(f, datadir, &a.request)? {
         sf.delete_jar(segment, end)?;
     }
@@ -279,11 +299,13 @@ pub fn prune(
         )?;
     }
     p.commit()?;
+    crate::history::compact(f)?;
     let floor = Floor {
-        version: 1,
+        version: 2,
         permit_digest: a.permit_digest,
         request: a.request.clone(),
         checkpoint_digest: digest,
+        history_floor: Some(a.request.through),
     };
     let floorpath = datadir.join(FLOOR);
     if floorpath.exists() {
@@ -309,11 +331,15 @@ pub fn verify(
     checkpoint::private_file(&path)?;
     let floor: Floor = serde_json::from_reader(std::fs::File::open(path)?)?;
     ensure!(
-        floor.version == 1
+        ((floor.version == 1 && floor.history_floor.is_none())
+            || (floor.version == 2 && floor.history_floor == Some(a.request.through)))
             && floor.permit_digest == a.permit_digest
             && serde_json::to_vec(&floor.request)? == serde_json::to_vec(&a.request)?,
         "native floor request/permit mismatch"
     );
+    if let Some(through) = floor.history_floor {
+        crate::history::verify(f, through)?;
+    }
     let snapshot = datadir.join(SNAPSHOT);
     ensure!(
         digest_file(&snapshot)? == floor.checkpoint_digest,
@@ -345,9 +371,16 @@ pub fn verify(
         &state,
         &keys,
     )?;
+    let remaining = expired(f, datadir, &a.request)?;
     ensure!(
-        expired(f, datadir, &a.request)?.is_empty(),
-        "eligible native payload jar remains"
+        !remaining
+            .iter()
+            .any(|(segment, _)| floor.history_floor.is_some()
+                || !matches!(
+                    segment,
+                    StaticFileSegment::AccountChangeSets | StaticFileSegment::StorageChangeSets
+                )),
+        "eligible native retention jar remains"
     );
     Ok(())
 }
@@ -484,6 +517,14 @@ mod tests {
         Ok(())
     }
     fn fixture() -> Result<(tempfile::TempDir, Factory, Arc<ArcChainSpec>, Apply)> {
+        fixture_mode(false)
+    }
+    fn fixture_mode(rich: bool) -> Result<(tempfile::TempDir, Factory, Arc<ArcChainSpec>, Apply)> {
+        use alloy_primitives::{Address, U256, keccak256};
+        use reth_ethereum::provider::db::models::{AccountBeforeTx, StorageBeforeTx};
+        use reth_primitives_traits::Account;
+        use reth_storage_api::{StateWriter, TrieWriter};
+        use reth_trie::{HashedPostState, HashedStorage};
         let dir = tempfile::tempdir()?;
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700))?;
         let db = init_db(dir.path().join("db"), Default::default())?;
@@ -496,12 +537,94 @@ mod tests {
         let spec = TESTNET.clone();
         let f: Factory = ProviderFactory::new(db, spec.clone(), sf, rocks, Runtime::test())?;
         reth_db_common::init::init_genesis(&f)?;
-        let p = f.provider_rw()?;
         let sf = f.static_file_provider();
         let genesis = spec.inner.genesis_header().clone();
         let mut parent = spec.inner.genesis_hash();
-        for n in 1..=132 {
+        let total = if rich { 134 } else { 132 };
+        let (a_addr, b_addr) = (Address::repeat_byte(0xa1), Address::repeat_byte(0xb2));
+        let slots = [B256::repeat_byte(1), B256::repeat_byte(2)];
+        let (mut a_info, mut b_info) = (None, None);
+        let mut values = [U256::ZERO; 2];
+        let mut last_root = genesis.state_root;
+        let mut ack_hash = B256::ZERO;
+        for n in 1..=total {
+            let mut account_reverts = Vec::new();
+            let mut storage_reverts = Vec::new();
+            let mut post = HashedPostState::default();
+            if rich && [1, 2, 3, 4, 5, 130].contains(&n) {
+                let info = (n != 5).then_some(Account {
+                    nonce: n,
+                    balance: U256::from(n * 11),
+                    bytecode_hash: None,
+                });
+                account_reverts.push(AccountBeforeTx {
+                    address: a_addr,
+                    info: a_info,
+                });
+                post.accounts.insert(keccak256(a_addr), info);
+                let next = match n {
+                    1 => [5, 0],
+                    2 => [7, 9],
+                    3 => [0, 9],
+                    4 => [13, 9],
+                    5 => [0, 0],
+                    _ => [17, 0],
+                }
+                .map(U256::from);
+                let mut hashed = HashedStorage {
+                    wiped: n == 5 || n == 130,
+                    ..Default::default()
+                };
+                for i in 0..2 {
+                    if values[i] != next[i] {
+                        storage_reverts.push(StorageBeforeTx {
+                            address: a_addr,
+                            key: slots[i],
+                            value: values[i],
+                        });
+                        hashed.storage.insert(keccak256(slots[i]), next[i]);
+                    }
+                }
+                post.storages.insert(keccak256(a_addr), hashed);
+                values = next;
+                a_info = info;
+            }
+            if rich && [1, 2].contains(&n) {
+                let info = (n == 1).then_some(Account {
+                    nonce: 1,
+                    balance: U256::from(8),
+                    bytecode_hash: None,
+                });
+                account_reverts.push(AccountBeforeTx {
+                    address: b_addr,
+                    info: b_info,
+                });
+                post.accounts.insert(keccak256(b_addr), info);
+                b_info = info;
+            }
+            let updates = if !account_reverts.is_empty() || !storage_reverts.is_empty() {
+                let (root, updates) = f.latest()?.state_root_with_updates(post.clone())?;
+                last_root = root;
+                Some(updates)
+            } else {
+                None
+            };
+            let p = f.provider_rw()?;
+            if let Some(updates) = updates {
+                p.write_hashed_state(&post.into_sorted())?;
+                p.write_trie_updates(updates)?;
+                p.with_rocksdb_batch(|mut batch| {
+                    for change in &account_reverts {
+                        batch.append_account_history_shard(change.address, vec![n])?;
+                    }
+                    for change in &storage_reverts {
+                        batch.append_storage_history_shard(change.address, change.key, vec![n])?;
+                    }
+                    Ok(((), Some(batch.into_inner())))
+                })?;
+            }
             let mut h = genesis.clone();
+            h.state_root = last_root;
             h.number = n;
             h.timestamp = genesis.timestamp + n;
             h.parent_hash = parent;
@@ -530,17 +653,20 @@ mod tests {
             }
             {
                 let mut w = sf.get_writer(n, StaticFileSegment::AccountChangeSets)?;
-                w.append_account_changeset(vec![], n)?;
+                w.append_account_changeset(account_reverts, n)?;
                 w.commit()?;
             }
             {
                 let mut w = sf.get_writer(n, StaticFileSegment::StorageChangeSets)?;
-                w.append_storage_changeset(vec![], n)?;
+                w.append_storage_changeset(storage_reverts, n)?;
                 w.commit()?;
             }
+            p.save_stage_checkpoint(StageId::Finish, StageCheckpoint::new(n))?;
+            p.commit()?;
+            if n == 132 {
+                ack_hash = parent;
+            }
         }
-        p.save_stage_checkpoint(StageId::Finish, StageCheckpoint::new(132))?;
-        p.commit()?;
         let r = Request {
             version: 1,
             chain: checkpoint::Chain {
@@ -555,19 +681,19 @@ mod tests {
             ack: Ref {
                 generation: 1,
                 height: 132,
-                hash: parent,
+                hash: ack_hash,
             },
             tail: Ref {
                 generation: 1,
-                height: 132,
+                height: total,
                 hash: parent,
             },
             head: Ref {
                 generation: 0,
-                height: 132,
+                height: total,
                 hash: parent,
             },
-            head_root: genesis.state_root,
+            head_root: last_root,
             source_digest: B256::repeat_byte(3),
             keep_blocks: 129,
             through: 3,
@@ -584,6 +710,186 @@ mod tests {
             Ok(())
         })?;
         Ok((dir, f, spec, a))
+    }
+    #[test]
+    fn native_history_cutoff_is_enforced_and_old_jars_reclaimed() -> Result<()> {
+        let (dir, f, spec, a) = fixture()?;
+        prune(&f, &spec, dir.path(), &a, dir.path())?;
+        let p = f.provider()?;
+        for segment in [PruneSegment::AccountHistory, PruneSegment::StorageHistory] {
+            assert_eq!(
+                p.get_prune_checkpoint(segment)?
+                    .and_then(|c| c.block_number),
+                Some(a.request.through - 1),
+                "history cutoff must be durable"
+            );
+        }
+        use reth_storage_api::AccountReader;
+        let state = p.history_by_block_number(a.request.through - 2)?;
+        assert!(
+            state
+                .basic_account(&alloy_primitives::Address::ZERO)
+                .is_err(),
+            "expired native state must not masquerade as zero/current state"
+        );
+        Ok(())
+    }
+    fn rich_state(f: &Factory, height: u64, nonce: Option<u64>, slots: [u64; 2]) -> Result<()> {
+        use alloy_primitives::{Address, U256};
+        let p = f.provider()?;
+        let state = p.history_by_block_number(height)?;
+        let address = Address::repeat_byte(0xa1);
+        let account = state.basic_account(&address)?;
+        assert_eq!(account.map(|a| a.nonce), nonce, "account at{height}");
+        if let Some(n) = nonce {
+            assert_eq!(account.unwrap().balance, U256::from(n * 11));
+        }
+        for (i, expected) in slots.iter().enumerate() {
+            assert_eq!(
+                state
+                    .storage(address, B256::repeat_byte(i as u8 + 1))?
+                    .unwrap_or_default(),
+                U256::from(*expected),
+                "slot{i} at{height}"
+            );
+        }
+        assert!(state.basic_account(&Address::repeat_byte(0xb2))?.is_none());
+        assert_eq!(
+            state.state_root(Default::default())?,
+            p.header_by_number(height)?.unwrap().state_root
+        );
+        Ok(())
+    }
+    #[test]
+    fn native_nonempty_history_survives_consecutive_cutoffs_and_reopen() -> Result<()> {
+        let (dir, f, spec, a) = fixture_mode(true)?;
+        let work = tempfile::tempdir()?;
+        std::fs::set_permissions(work.path(), std::fs::Permissions::from_mode(0o700))?;
+        let old = work.path().join("genesis.ndjson");
+        let before = work.path().join("before3.ndjson");
+        native::export_checkpoint(&f, &spec, 0, None, &old, work.path())?;
+        native::export_checkpoint(&f, &spec, 3, None, &before, work.path())?;
+        rich_state(&f, 3, Some(3), [0, 9])?;
+        rich_state(&f, 4, Some(4), [13, 9])?;
+        rich_state(&f, 5, None, [0, 0])?;
+        rich_state(&f, 129, None, [0, 0])?;
+        rich_state(&f, 130, Some(130), [17, 0])?;
+        prune(&f, &spec, dir.path(), &a, work.path())?;
+        assert_eq!(
+            std::fs::read(&before)?,
+            std::fs::read(dir.path().join(SNAPSHOT))?
+        );
+        assert!(crate::history::require(&f, 2).is_err());
+        drop(f);
+        if let Ok(binary) = std::env::var("INDEXER_ARC_EXECUTOR_BINARY") {
+            let output = work.path().join("old-parent.exr");
+            let result = std::process::Command::new(binary)
+                .args([
+                    "--chain",
+                    "testnet",
+                    "--datadir",
+                    dir.path().to_str().unwrap(),
+                    "--height",
+                    "3",
+                    "--generation",
+                    "1",
+                    "--output",
+                    output.to_str().unwrap(),
+                    "--scratch-dir",
+                    work.path().to_str().unwrap(),
+                ])
+                .output()?;
+            assert!(!result.status.success());
+            assert!(String::from_utf8_lossy(&result.stderr).contains("history floor"));
+            assert!(!output.exists());
+        }
+        let (f, secondary) = native::open_readonly(dir.path(), spec.clone(), true)?;
+        verify(&f, &spec, dir.path(), &a, work.path())?;
+        rich_state(&f, 3, Some(3), [0, 9])?;
+        rich_state(&f, 4, Some(4), [13, 9])?;
+        rich_state(&f, 5, None, [0, 0])?;
+        rich_state(&f, 129, None, [0, 0])?;
+        rich_state(&f, 134, Some(130), [17, 0])?;
+        let rejected = work.path().join("stale.ndjson");
+        let e = native::export_checkpoint(&f, &spec, 3, Some(&old), &rejected, work.path())
+            .unwrap_err();
+        assert!(e.to_string().contains("history floor"));
+        assert!(!rejected.exists());
+        let retained = dir.path().join(SNAPSHOT);
+        native::export_checkpoint(
+            &f,
+            &spec,
+            134,
+            Some(&retained),
+            &work.path().join("head.ndjson"),
+            work.path(),
+        )?;
+        drop(f);
+        drop(secondary);
+        let f = native::open_writable(dir.path(), spec.clone())?;
+        let mut next = Apply {
+            request: a.request.clone(),
+            permit_digest: B256::repeat_byte(8),
+        };
+        next.request.ack.height = 133;
+        next.request.ack.hash = f.provider()?.block_hash(133)?.unwrap();
+        next.request.through = 4;
+        assert!(
+            expired(&f, dir.path(), &next.request)?
+                .contains(&(StaticFileSegment::AccountChangeSets, 3))
+        );
+        std::fs::write(
+            dir.path().join(".execution-retention-copy"),
+            serde_json::to_vec(&serde_json::json!({"Data":{"PermitDigest":next.permit_digest}}))?,
+        )?;
+        prune(&f, &spec, dir.path(), &next, work.path())?;
+        let digest = digest_file(&dir.path().join(SNAPSHOT))?;
+        prune(&f, &spec, dir.path(), &next, work.path())?;
+        assert_eq!(digest_file(&dir.path().join(SNAPSHOT))?, digest);
+        assert!(crate::history::require(&f, 3).is_err());
+        rich_state(&f, 4, Some(4), [13, 9])?;
+        drop(f);
+        let (f, _secondary) = native::open_readonly(dir.path(), spec.clone(), true)?;
+        verify(&f, &spec, dir.path(), &next, work.path())?;
+        rich_state(&f, 4, Some(4), [13, 9])?;
+        rich_state(&f, 134, Some(130), [17, 0])?;
+        Ok(())
+    }
+    #[test]
+    fn native_v1_payload_floor_remains_readable() -> Result<()> {
+        let (dir, f, spec, mut a) = fixture_mode(true)?;
+        a.request.ack.height = 133;
+        a.request.ack.hash = f.provider()?.block_hash(133)?.unwrap();
+        a.request.through = 4;
+        assert!(
+            expired(&f, dir.path(), &a.request)?
+                .contains(&(StaticFileSegment::AccountChangeSets, 3))
+        );
+        let snapshot = dir.path().join(SNAPSHOT);
+        native::export_checkpoint(&f, &spec, a.request.through, None, &snapshot, dir.path())?;
+        let floor = Floor {
+            version: 1,
+            permit_digest: a.permit_digest,
+            request: a.request.clone(),
+            checkpoint_digest: digest_file(&snapshot)?,
+            history_floor: None,
+        };
+        for (segment, end) in expired(&f, dir.path(), &a.request)? {
+            if matches!(
+                segment,
+                StaticFileSegment::Transactions
+                    | StaticFileSegment::Receipts
+                    | StaticFileSegment::TransactionSenders
+            ) {
+                f.static_file_provider().delete_jar(segment, end)?;
+            }
+        }
+        checkpoint::write_private(&dir.path().join(FLOOR), |w| {
+            serde_json::to_writer(w, &floor)?;
+            Ok(())
+        })?;
+        verify(&f, &spec, dir.path(), &a, dir.path())?;
+        Ok(())
     }
     #[test]
     fn native_v2_checkpoint_retention_reopens_with_current_state_and_window() -> Result<()> {

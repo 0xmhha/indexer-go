@@ -49,7 +49,7 @@ commit 응답이 유실돼도 같은 입력의 retry는 기존 output/current/un
 
 source epoch가 바뀌면 이 worker의 현재 head에서 자신의 undo를 역순으로 적용한다. canonical prefix에 남은 exact input까지만 보존하며, 첫 입력 이전이면 부모 checkpoint의 값까지 되돌린다. 부모도 바뀌었거나 아직 새 prefix에 없다면 active head를 비우고 새 proof를 기다린다. old fork 출력/undo는 역사 자료로 보존하고 현재값으로 반환하지 않는다.
 
-revert event들·복원한 head·새 epoch/cursor·reset event는 **한 transaction**으로 바뀐다. 도중 실패하면 일부 revert나 새 완료점이 남지 않는다. 최대128입력을 되돌리며 넘으면 ErrRebuildRequired로 중단한다. 128개만 일부 되돌린 상태를 완료로 게시하거나 과거 fork를 조용히 건너뛰지 않는다. epoch 재개도 최대64회다. fresh canonical 불일치는 기존 capture supervisor의 epoch 변경을 최대2분 기다린다. 모든 task는 취소/join 후 DB/client를 닫는다.
+revert event들·복원한 head·새 epoch/cursor·reset event는 **한 transaction**으로 바뀐다. 도중 실패하면 일부 revert나 새 완료점이 남지 않는다. 최대128입력을 되돌리며 넘으면 ErrRebuildRequired로 중단한다. 128개만 일부 되돌린 상태를 완료로 게시하거나 과거 fork를 조용히 건너뛰지 않는다. epoch 재개도 최대64회다. fresh canonical 불일치는 **실패한 transaction이 관찰한 epoch**를 기준으로 기존 capture supervisor의 변경을 최대2분 기다린다. rollback 뒤 대기 시작 전에 이미 변경됐다면 다음 poll에서 재조정하며, 또 다른 epoch 변경을 기다리지 않는다. 실패한 cursor를 완료로 사용하지 않고 fresh 검사와 원자적 재조정을 다시 수행한다. 모든 task는 취소/join 후 DB/client를 닫는다.
 
 raw GC는 여전히 영구 source/proof 보존·선택 required 계약·24h/finality/lease/raw ACK를 따른다. 이 worker는 raw를 읽지 않으므로 처리 지연을 raw ACK로 위장하지 않는다. base Through·proof 완료·상태 후처리 완료·기존 feature/summary 완료는 서로 독립적이다.
 

@@ -1,8 +1,10 @@
 # 남은 작업
 
-E1 #214, E2 #215, E3 #216, E4 #217, E5 replay #218·collector #219·native checkpoint/보존 [#220](https://github.com/0xmhha/indexer-go/pull/220)은 main에 반영됐다. 현재 작업은 native 보존 확장의 선행 단계인 대규모 checkpoint catalog다. 정본은 아래 계획·체크리스트와 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-checkpoint-catalog)이다. 해당 PR이 CI4+Arc를 통과해 squash MERGED됐으면 이 범위는 완료다. 실제 운영 활성화와 state history 압축은 별도다. 종료된 검사·성능 측정을 새 이유 없이 반복하지 않는다.
+E1 #214, E2 #215, E3 #216, E4 #217, E5 replay #218·collector #219·native checkpoint/보존 #220·대규모 catalog [#221](https://github.com/0xmhha/indexer-go/pull/221)은 main에 반영됐다. 현재 작업은 Arc native 상태 이력·index 압축이다. 정본은 아래 계획·체크리스트와 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-history-compaction)이다. 해당 PR이 CI4+Arc를 통과해 squash MERGED됐으면 이 범위는 완료다. 실제 운영 활성화와 고정 native 디스크 크기 보장은 별도다. 종료된 검사·성능 측정을 새 이유 없이 반복하지 않는다.
 
 ## 현재 정본과 연속성
+
+- Arc history [계획](../codemine/runs/20261025-e5-arc-history/plan.md), [체크리스트](../codemine/runs/20261025-e5-arc-history/checklist.md), [연속성](../codemine/runs/20261025-e5-arc-history/continuity.json), [검증](../codemine/runs/20261025-e5-arc-history/validation.md)
 
 - Arc catalog [계획](../codemine/runs/20261025-e5-arc-checkpoint-catalog/plan.md), [체크리스트](../codemine/runs/20261025-e5-arc-checkpoint-catalog/checklist.md), [연속성](../codemine/runs/20261025-e5-arc-checkpoint-catalog/continuity.json), [검증](../codemine/runs/20261025-e5-arc-checkpoint-catalog/validation.md)
 
@@ -24,8 +26,8 @@ E1 #214, E2 #215, E3 #216, E4 #217, E5 replay #218·collector #219·native check
 
 | 단계 | 범위와 완료 조건 |
 | --- | --- |
-| Arc 대규모 catalog 릴리스 gate | 100만 키 초과 disk sort/merge, bounded buffer/fan-in/quota와 private scratch, streaming seed/export/storage·account trie 및 보존 cutoff 재검증. native/Go 독립 검증, 필수 로컬 검사와 최신-head CI4+Arc 후 squash/main. [체크리스트](../codemine/runs/20261025-e5-arc-checkpoint-catalog/checklist.md)가 정본 |
-| Native 보존 확장 | 현재는 만료된 전체 payload jar만 정리하고 최초/pre-anchor/boundary jar·상태 이력을 보존한다. catalog 릴리스 후 state-history/index 압축을 별도로 구현·검증. retained cutoff seed와 native historical floor·reorg 경계를 보존해야 함. 전체 native 디스크 고정 크기를 약속하지 않음 |
+| Arc history/index 릴리스 gate | cutoff full seed 선검증·저장, COW history index/changeset 정리·native floor·물리 compaction, 보호 상태·재시작·재시도·실패 보존과 문서. 필수 로컬 검사와 최신-head CI4+Arc 후 squash/main. [체크리스트](../codemine/runs/20261025-e5-arc-history/checklist.md)가 정본 |
+| Native 보존의 운영/추가 확장 | actual layout·backup·용량 검증 후 명시적 활성화. 최신 상태·headers·보수적 jar·기타 indices가 남으므로 전체 native 디스크 고정 크기를 약속하지 않음. MDBX 여유 페이지/추가 index 정리는 별도 검증 필요 |
 | E5 후속 3 | 완전한 call trace/internal transaction, blob sidecar/KZG·가용성 및 상태 증명 공급. 현재 account/storage journal·receipt가 이 자료를 대신하지 않음. 기타 체인 producer 확대; 비EVM 모델은 별도 결정 |
 | E6 | 체인 합의에 근거한 canonical/finality 검증과 RPC 의존 축소. 현재 final fresh나 native-library 검사를 독립 합의/실제 peer 검증으로 확대하지 않음 |
 
