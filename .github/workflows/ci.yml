@@ -161,6 +161,7 @@ jobs:
         env:
           INDEXER_ARC_FIXTURE_DIR: ${{ runner.temp }}/arc-fixtures
           INDEXER_ARC_MAINTENANCE_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/arc-native-maintenance
+          INDEXER_ARC_EXECUTOR_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/indexer-arc-executor
         run: |
           cargo fmt --check
           cargo build --locked --all-targets

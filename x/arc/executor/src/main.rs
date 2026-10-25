@@ -87,6 +87,7 @@ fn produce(mut args: Args) -> Result<()> {
         ArcEvmFactory::new(spec.clone()),
     ));
     let replay_block = |height: u64, generation: u64| -> Result<Verified> {
+        indexer_arc_executor::history::require(&factory, height - 1)?;
         // Header/body/receipts and the historical parent share one native RO view.
         // No latest-state fallback and no global prune/FinishedHeight calls.
         let provider = factory.provider()?;

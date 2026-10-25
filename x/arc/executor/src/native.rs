@@ -142,6 +142,7 @@ pub fn export_checkpoint(
     output: &Path,
     workspace: &Path,
 ) -> Result<()> {
+    crate::history::require(f, height)?;
     let p = f.provider()?;
     ensure!(
         p.cached_storage_settings().storage_v2,
@@ -178,6 +179,7 @@ pub fn export_checkpoint(
         }
         0
     };
+    crate::history::require(f, start)?;
     for n in start + 1..=height {
         for c in p.account_block_changeset(n)? {
             keys.push(Key::account(c.address))?;

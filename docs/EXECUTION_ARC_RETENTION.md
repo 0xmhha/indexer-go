@@ -74,17 +74,38 @@ The retention boundary is `Through = ACK.Height - KeepBlocks`, with `KeepBlocks 
 
 ## What is reclaimed and what remains
 
-Only complete native transaction, receipt and sender jars whose **entire fixed range** lies after the original anchor and at/below `Through` are removed, through the pinned native jar API. Never delete the highest jar or a boundary jar. Retain the first/pre-anchor transaction jar even when genesis has no transactions: Reth derives global history availability from that jar, and deleting it also makes genesis unavailable. This conservative fixed overhead is deliberate.
+The producer first writes and independently reconstructs a complete native cutoff checkpoint. Only then does it modify the sealed COW candidate. The original native directory stays intact until all native/source/DB verification and swap gates pass.
 
-All headers/number mappings, current hashed state, code, history/changeset records, pre-anchor payload, protected window and later/unacknowledged data remain. This release **does not prune state history or promise a fixed total native disk size**. History/index compaction remains a separate improvement; catalogs beyond the explicit input/scratch/stream bounds fail closed. Native format granularity may retain significantly more payload than the requested window.
+| Data | Retention boundary |
+| --- | --- |
+| Transaction, receipt and sender jars | Complete fixed ranges after the original anchor and at/below `Through` |
+| Account/storage changeset jars | Complete fixed ranges after the anchor and **strictly below** `Through` |
+| RocksDB account/storage history indices | Entries strictly below `Through`; suffix upper keys and final sentinels stay valid |
+| Native account/storage history checkpoints | `Through - 1`, with `Before(Through)` |
+| Adapter checkpoint/seed/replay state floor | `Through` |
+| Current hashed state, code, headers, number mappings and other logical indices | Retained |
 
-Each copy also preserves a verified full cutoff seed with its digest, and native prune checkpoints never move backwards. Postchecks reopen native storage and verify exact head/root/ACK/tail, cutoff/tail/current state and first-retained/tail/head payload, cutoff seed hash/coverage and absence of further eligible jars. Unknown source/quarantine evidence remains protected and charged by the common spool; native unknown files are copied and preserved.
+Never delete the first/pre-anchor, boundary or highest jar. Retain the first transaction jar even when genesis is empty: Reth derives global history availability from it. History jars containing cutoff are also retained. Native format granularity can retain significantly more data than the requested window.
+
+The one-block history guard is deliberate. In the pinned Reth build, basic state at height H uses changesets from H+1, but trie overlay/root calculations require H to be **above** the native prune checkpoint. Setting that checkpoint to `Through` rejected the protected cutoff root. Stop index/checkpoint pruning at `Through - 1`, keep the cutoff jar, and explicitly reject adapter requests below `Through`. Canonical header diagnostics can still read old headers. Some lower-level native basic reads may expose an extra older block; this is not an advertised replay/root boundary.
+
+Index rows are streamed through pinned native codecs, with at most 2,000 block entries per shard and 64 row mutations per WAL-synced batch. Empty/oversized shards, bad finite bounds, overlapping ranges or missing sentinels abort the candidate. The native RocksDB flush/compaction API then reclaims eligible tombstones; it can physically rewrite other column families without logically deleting their data. This is not a measured space-saving or fixed-size guarantee. Latest state, headers, conservative jars, other indices and MDBX allocation can still grow.
+
+Postchecks require exact native history checkpoints, no index entries below the boundary, no further eligible jars, the full cutoff seed's digest/coverage, canonical head/ACK/tail and roots at cutoff, its successor, ACK, tail and head. The cutoff seed remains usable after pruning and on the next retention pass. Unknown source/quarantine evidence stays protected and charged by the common spool; unknown native files are copied and preserved.
+
+## History floor and compatibility
+
+The private native floor metadata is version2 with `HistoryFloor = Through`. Version1 payload-only floors remain readable and verifiable. Upgrade the Arc producer/collector and native binaries together before activating history retention. Older maintenance binaries reject the new metadata field/version; do not use an older reader to bypass the advertised boundary.
+
+Checkpoint targets and seed starts must be at/above the maximum native history checkpoint plus one. Replay checks its **parent** against that boundary before reading/executing a block. Missing retained seeds, stale genesis/older seeds, insufficient raw history or an older restored source/DB never becomes latest/zero state or an automatic fast-forward. Use the retained full cutoff seed or a matching newer canonical full checkpoint. The original indexer anchor and source generation do not change, and earlier indexed data remains governed by the indexer's coverage/history contracts.
 
 ## Capacity and recovery
 
 Reserve at least `2 × logical native bytes + ReserveBytes` free on the same filesystem (`ReserveBytes` defaults to1GiB), plus snapshot/catalog/normal-growth headroom. The logical catalog/account-spool bound is 16 GiB; filesystem overhead and native secondary scratch are additional. This is not a disk-space reservation; the staged output can separately reach 64 GiB. Check all relevant filesystems before activation. Directory entries are bounded; unknown/foreign/link layouts fail closed. Snapshot serialization can require more space than native state; ENOSPC leaves the original and pending candidate for diagnosis. This is functional admission, not a capacity benchmark.
 
 The sealed journal binds exact permit and original/replacement directory device/inode identities. Phases are copy → swap → cleanup → done. Candidate files are newly copied, never hard-linked. Only a verified/fsynced candidate may replace the original; backup removal follows durable cleanup intent and native revalidation. The internal Rust prune operation accepts only the matching sealed COW candidate, never the operational native path.
+
+After an index batch, jar deletion, checkpoint or compaction failure, keep the partially modified candidate fenced; never open it as the operational node. The ordinary copy-phase recovery rebuilds only that permit’s owned candidate from the preserved original. There is no independent per-shard resume authority.
 
 After any failure, keep node/source/indexer pending fences and repeat supervised `collect` with the **same current DB permit**. Copy recovery removes only that permit's owned candidate; swap recovery handles either rename boundary; cleanup recovery removes only the recorded original backup inode. A different permit, replaced directory, corrupt/unknown candidate, missing history, stale native head, lost live lease or absent/mismatched release stops recovery. No normal startup performs GC or guessed repair. After DB completion, obtain/reuse the exact release and repeat producer `release`; completed DB collect does not launch deletion again.
 
