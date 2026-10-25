@@ -112,7 +112,7 @@ func TestExecutionArcCollectedSpoolPublicationAndLostACK(t *testing.T) {
 
 func TestExecutionArcVerifiedProfileAndNativeWireCompatibility(t *testing.T) {
 	require.True(t, chains.SupportsExecution(arc.New()), "Arc must opt in only with its independently verified native producer")
-	for _, name := range []string{"arc-storage", "arc-create-gone"} {
+	for _, name := range []string{"arc-storage", "arc-create-gone", "arc-calls", "arc-call-from-oog", "arc-call-from-direct"} {
 		f := loadExecutionFrozen(t, name)
 		r, err := execwire.UnmarshalResult(f.Payload)
 		require.NoError(t, err, "Rust bytes must exactly match canonical Go wire metadata")

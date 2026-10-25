@@ -119,4 +119,5 @@ type Result struct {
 	BlockRLP     []byte `json:"-"`
 	ReceiptsRLP  []byte `json:"-"`
 	Steps        []Step
+	CallTraces   *CallTraces `json:",omitempty"`
 }

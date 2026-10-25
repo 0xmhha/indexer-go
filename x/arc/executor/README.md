@@ -10,13 +10,13 @@ cd x/arc/executor
 cargo build --locked
 ```
 
-The tests use offline Arc EVM libraries and synthetic genesis allocations. They start no node, contact no peers and perform no performance measurements. The optional `INDEXER_ARC_FIXTURE_DIR` test variable regenerates the two [Go integration fixtures](../../../testdata/execution/README.md) in an explicitly selected output directory. Normal tests do not rewrite repository fixtures.
+The tests use offline Arc EVM libraries and synthetic genesis allocations. They start no node, contact no peers and perform no performance measurements. The optional `INDEXER_ARC_FIXTURE_DIR` test variable regenerates the five [Go integration fixtures](../../../testdata/execution/README.md) in an explicitly selected output directory. Normal tests do not rewrite repository fixtures.
 
 ## Library contract
 
 `replay(config, state, parent, block, receipts, generation)` returns `Verified` only after checking parent identity/state, transaction/ommer/withdrawal/receipt commitments, bloom, gas and final state. `config` is `ArcEvmConfig`; substituting an Ethereum EVM is unsupported. `state` must be the complete native historical parent provider. Native read failures propagate; unavailable bytecode or block hashes do not become zero/default values.
 
-The native state and an independently reconstructed journal are compared after the pre-block system phase, every transaction and Finalize. The state hook tracks committed storage destruction; it is not an opcode tracer. Reverted writes disappear; successful creations retain a witness even if their constructor destroys them. Bytecode is hash-checked. Result/metadata/change/code/token bounds match the Go wire reader. `Verified::encode()` emits canonical EXR1 metadata and original block/receipt RLP.
+The native state and an independently reconstructed journal are compared after the pre-block system phase, every transaction and Finalize. The state hook tracks committed storage destruction; it is not an opcode tracer. Reverted writes disappear; successful creations retain a witness even if their constructor destroys them. Bytecode is hash-checked. Result/metadata/change/code/token bounds match the Go wire reader. `Verified::encode()` emits canonical EXR1 metadata and original block/receipt RLP. A separate bounded inspector records [native call trees](../../../docs/EXECUTION_CALL_TRACES.md) in the same replay, retaining reverted attempts. CallFrom logical identities keep a physical transaction root and final completion failures; no third EVM is run.
 
 `write_result(path, verified)` requires an existing owned `0700` directory, writes a private temporary file, syncs it, publishes without replacing an existing path and syncs the directory. It creates no output directories and removes no prior results. Supported runtime filesystem/IPC platforms are macOS and Linux.
 

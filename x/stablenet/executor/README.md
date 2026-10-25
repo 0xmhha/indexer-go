@@ -35,7 +35,9 @@ Inputs belong to the caller and must remain immutable during replay. The returne
 - Every exported step applied independently to copied account/storage tries reproduces the actual step root. Missing slot records cannot hide behind a correct account storage-root field. Code transitions require matching code bytes.
 - Reverted changes are excluded; cross-transaction intermediate state is retained even if a contract is created and destroyed in the same block.
 - No second-pass durable writes. Trie commits fail. A private disk view stages/discards code batches because upstream StateDB writes code before committing the trie; the overall commit is rejected.
-- Speculative StateDB copies do not enter the primary journal. Cancellation interrupts the bound EVM and joins its callback; its one-shot transaction observer is detached before opcode interpretation. Journal collection uses trie wrappers.
+- Speculative StateDB copies do not enter the primary journal. Cancellation interrupts the bound EVM and joins its callback; the bounded call observer stays attached while its cancellation callback is joined. Journal collection still uses trie wrappers.
+
+[Native call traces](../../../docs/EXECUTION_CALL_TRACES.md) are recorded during this same second execution, including attempted/reverted calls, delegate/static calls, creation and SELFDESTRUCT. The library defaults `TraceProfile` to `stablenet`; generic offline fixtures explicitly bind `evm`. No extra EVM or RPC request supplies the trace.
 
 The parent must be available at the declared root. There is no latest-state fallback. DAO/beacon pre-transaction protocol-change configurations are explicitly rejected because E1's current journal has no separate cause for that prelude. StableNet configuration validation must preserve this boundary.
 

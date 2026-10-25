@@ -41,7 +41,19 @@ func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prep
 	part := port.ExecutionPart{Writer: w, Ref: p.result.Ref, Parent: p.result.Parent, Digest: p.digest}
 	return b.Store.WriteExecutionPart(ctx, part, func(bound context.Context) error {
 		switch w {
-		case port.ExecutionBlocks, port.ExecutionTransactions, port.ExecutionReceipts, port.ExecutionLogs:
+		case port.ExecutionTransactions:
+			if err := b.Store.ApplyExecutionCore(bound, w, p.block, p.receipts); err != nil {
+				return err
+			}
+			if p.result.CallTraces == nil {
+				return nil
+			}
+			writer, ok := b.Store.(port.ExecutionCallWriter)
+			if !ok {
+				return port.ErrInvalidData
+			}
+			return writer.ApplyExecutionCalls(bound, p.result, p.block, p.receipts)
+		case port.ExecutionBlocks, port.ExecutionReceipts, port.ExecutionLogs:
 			return b.Store.ApplyExecutionCore(bound, w, p.block, p.receipts)
 		case port.ExecutionContracts:
 			return b.Store.ApplyExecutionState(bound, w, p.result, p.creations...)

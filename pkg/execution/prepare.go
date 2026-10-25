@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata"
+	nativecalls "github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace/native"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -21,6 +22,7 @@ type Prepared struct {
 	block     *model.Block
 	receipts  []*model.Receipt
 	creations []port.ExecutionCreation
+	calls     []port.ExecutionCall
 	digest    execwire.Hash
 	bytes     int64
 }
@@ -54,6 +56,13 @@ func Prepare(profile chains.BinaryProfile, chain execwire.Chain, payload []byte)
 		return nil, port.ErrExecutionConflict
 	}
 	p := &Prepared{result: r, block: b, receipts: rs, digest: execwire.Hash(sha256.Sum256(payload)), bytes: int64(len(payload))*4 + 4096}
+	p.calls, err = nativecalls.Verify(profile.ID(), r, b, rs)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range p.calls {
+		p.bytes += 512 + int64(len(f.Path))*4
+	}
 	chainID, _ := new(big.Int).SetString(chain.ID, 10)
 	for _, s := range r.Steps {
 		if s.Cause == execwire.Baseline || s.Cause == execwire.Genesis {

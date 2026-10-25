@@ -1,0 +1,51 @@
+{
+  "goal": "E5 native same-replay call traces and internal calls",
+  "base": "439621e5540f7069158718f06e659b7be855b84e",
+  "source_branch": "refactor/e5-native-call-traces",
+  "n": {
+    "feature": "E5 native call traces/internal calls",
+    "state": "locally_verified",
+    "plan": "plan.md",
+    "checklist": "checklist.md",
+    "validation": "validation.md"
+  },
+  "n-1": {
+    "feature": "Arc history/index compaction",
+    "pr": 222,
+    "state": "merged",
+    "plan": "../20261025-e5-arc-history/plan.md"
+  },
+  "n-2": {
+    "feature": "Arc checkpoint catalog",
+    "pr": 221,
+    "state": "merged",
+    "plan": "../20261025-e5-arc-checkpoint-catalog/plan.md"
+  },
+  "preserved": [
+    "accepted E1/E2/E3/E4 plans",
+    "two executions and unmodified upstream",
+    "pool4/part2/API reservation",
+    "RPC5 physical attempts/s",
+    "final uncached fresh and generation fence",
+    "exact ACK/lease/retention authority"
+  ],
+  "holds": [
+    "actual nodes/peers/operator DB",
+    "disk formatting/provisioning",
+    "operational GC",
+    "performance",
+    "other projects"
+  ],
+  "next": "Resolve release authority then report E5 blobs/KZG/availability/proofs, optional query extensions and E6; no automatic next phase",
+  "units": {
+    "U01": "RED→GREEN: bounded canonical optional wire and root/profile validation",
+    "U02": "RED→GREEN: same-replay Arc/StableNet seven kinds, special CallFrom, bounds and actual producer fixtures",
+    "U03": "RED→GREEN: seven writers/PG visibility+corruption+ACK+reorg, fork-pinned DB-only API and read-only restart",
+    "U04": "All local gates, full race, final full PG and new single200 GREEN; scans/commit/PR/exact-head CI5/squash/main are release authority"
+  },
+  "release": {
+    "authority": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-native-call-traces",
+    "completion": "same-head CI4+Arc success, ready/squash MERGED and clean main synchronized to origin/main",
+    "source_branch_preserved": true
+  }
+}

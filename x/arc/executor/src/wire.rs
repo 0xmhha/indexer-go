@@ -84,4 +84,33 @@ pub struct Result {
     #[serde(skip)]
     pub receipts_rlp: Vec<u8>,
     pub steps: Vec<Step>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub call_traces: Option<CallTraces>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CallTraces {
+    pub version: u32,
+    pub profile: String,
+    pub frames: Vec<CallFrame>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CallFrame {
+    pub transaction_index: u32,
+    pub transaction_hash: B256,
+    pub parent: i32,
+    pub r#type: String,
+    pub from: Address,
+    pub to: Option<Address>,
+    pub value: Option<B256>,
+    pub gas: u64,
+    pub gas_used: u64,
+    #[serde(serialize_with = "base64_bytes")]
+    pub input: Vec<u8>,
+    #[serde(serialize_with = "base64_bytes")]
+    pub output: Vec<u8>,
+    pub error: String,
 }

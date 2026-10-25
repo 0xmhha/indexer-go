@@ -132,6 +132,21 @@ fn imported() -> Result<Imported> {
 }
 
 #[test]
+fn native_replay_exports_transaction_call_frames() -> Result<()> {
+    let (config, state, parent, block, receipts) = imported_case("storage")?;
+    let result = replay(&config, &state, &parent, &block, &receipts, 1)?;
+    let metadata = serde_json::to_value(result.result())?;
+    let calls = metadata
+        .get("CallTraces")
+        .expect("same replay must record call traces");
+    assert_eq!(calls["Version"], 1);
+    assert_eq!(calls["Frames"].as_array().unwrap().len(), 1);
+    assert_eq!(calls["Frames"][0]["Parent"], -1);
+    assert_eq!(calls["Frames"][0]["Type"], "CALL");
+    Ok(())
+}
+
+#[test]
 fn native_checkpoint_catalog_beyond_one_million() -> Result<()> {
     use crate::catalog::{Builder, Key};
     use std::os::unix::fs::PermissionsExt;
@@ -225,10 +240,76 @@ fn imported_case(case: &str) -> Result<Imported> {
     }
     let mut transactions = vec![];
     if case != "empty" {
-        let recipient = Address::repeat_byte(0x23);
+        let recipient = if case == "call-from-direct" {
+            subcall_address()
+        } else if case.starts_with("call-from") {
+            arc_execution_config::call_from::MEMO_ADDRESS
+        } else {
+            Address::repeat_byte(0x23)
+        };
         let code: Option<Bytes> = match case {
+            "call-from-oog" | "call-from-direct" => {
+                let helper = Address::repeat_byte(0x24);
+                let helper_code: Bytes =
+                    vec![0x60, 9, 0x5f, 0x55, 0x61, 0x80, 0x00, 0x5f, 0xf3].into();
+                let hash = keccak256(&helper_code);
+                state.accounts.insert(
+                    helper,
+                    Account {
+                        nonce: 1,
+                        balance: U256::ZERO,
+                        bytecode_hash: Some(hash),
+                    },
+                );
+                state.code.insert(hash, helper_code);
+                state.storage.insert((helper, B256::ZERO), U256::from(7));
+                if case == "call-from-direct" {
+                    None
+                } else {
+                    let mut code = vec![0x36, 0x5f, 0x5f, 0x37, 0x5f, 0x5f, 0x36, 0x5f, 0x5f, 0x73];
+                    code.extend_from_slice(subcall_address().as_slice());
+                    // The child can return 32KiB, but the CallFrom ABI-copy
+                    // completion cannot fit. Retain the physical CALL flag.
+                    code.extend([0x61, 0x38, 0xa4, 0xf1, 0x5f, 0x52, 0x60, 0x20, 0x5f, 0xf3]);
+                    Some(code.into())
+                }
+            }
             "storage" => Some(vec![0x60, 9, 0x5f, 0x55, 0x00].into()),
             "revert" => Some(vec![0x60, 9, 0x5f, 0x55, 0x5f, 0x5f, 0xfd].into()),
+            "calls" => {
+                let helper = Address::repeat_byte(0x24);
+                let doomed = Address::repeat_byte(0x25);
+                let helper_code: Bytes = [call_code(0xfa, Address::repeat_byte(0x26)), vec![0]]
+                    .concat()
+                    .into();
+                let doomed_code: Bytes = [vec![0x73], recipient.as_slice().to_vec(), vec![0xff]]
+                    .concat()
+                    .into();
+                for (a, code) in [(helper, helper_code), (doomed, doomed_code)] {
+                    let hash = keccak256(&code);
+                    state.accounts.insert(
+                        a,
+                        Account {
+                            nonce: 1,
+                            balance: U256::from(2),
+                            bytecode_hash: Some(hash),
+                        },
+                    );
+                    state.code.insert(hash, code);
+                }
+                let mut code = vec![];
+                for op in [0xf1, 0xf4, 0xf2, 0xfa] {
+                    code.extend(call_code(op, helper));
+                }
+                // CREATE(empty init), CREATE2(empty init,salt0), then a child
+                // SELFDESTRUCT. All succeed before the parent reverts.
+                code.extend([
+                    0x5f, 0x5f, 0x5f, 0xf0, 0x50, 0x5f, 0x5f, 0x5f, 0x5f, 0xf5, 0x50,
+                ]);
+                code.extend(call_code(0xf1, doomed));
+                code.extend([0x5f, 0x5f, 0xfd]);
+                Some(code.into())
+            }
             _ => None,
         };
         let hash = code.as_ref().map(keccak256);
@@ -248,14 +329,40 @@ fn imported_case(case: &str) -> Result<Imported> {
             chain_id: Some(1337),
             nonce: 0,
             gas_price: 21_000_000_000,
-            gas_limit: 100_000,
+            gas_limit: if case == "calls" || case.starts_with("call-from") {
+                1_000_000
+            } else {
+                100_000
+            },
             to: if case.starts_with("create") {
                 TxKind::Create
             } else {
                 TxKind::Call(recipient)
             },
-            value: U256::from(100),
+            value: if case.starts_with("call-from") {
+                U256::ZERO
+            } else {
+                U256::from(100)
+            },
             input: match case {
+                "call-from-oog" | "call-from-direct" => {
+                    let mut data =
+                        keccak256("callFrom(address,address,bytes)").as_slice()[..4].to_vec();
+                    let sender = if case == "call-from-oog" {
+                        recipient
+                    } else {
+                        Address::repeat_byte(0x44)
+                    };
+                    for word in [
+                        sender.into_word(),
+                        Address::repeat_byte(0x24).into_word(),
+                        B256::from(U256::from(96)),
+                        B256::ZERO,
+                    ] {
+                        data.extend_from_slice(word.as_slice());
+                    }
+                    data.into()
+                }
                 "create" => vec![0x5f, 0x5f, 0xf3].into(),
                 "create-code" => {
                     vec![0x60, 1, 0x60, 12, 0x60, 0, 0x39, 0x60, 1, 0x60, 0, 0xf3, 0].into()
@@ -333,6 +440,110 @@ fn imported_case(case: &str) -> Result<Imported> {
         block.header.logs_bloom |= receipt.bloom();
     }
     Ok((config, state, parent, block, output.receipts))
+}
+
+fn call_code(op: u8, to: Address) -> Vec<u8> {
+    let mut code = vec![0x5f, 0x5f, 0x5f, 0x5f];
+    if op == 0xf1 || op == 0xf2 {
+        code.push(0x5f);
+    }
+    code.push(0x73);
+    code.extend_from_slice(to.as_slice());
+    code.extend([0x61, 0xff, 0xff, op, 0x50]);
+    code
+}
+
+fn subcall_address() -> Address {
+    alloy_primitives::address!("1800000000000000000000000000000000000003")
+}
+
+#[test]
+fn native_direct_subcall_keeps_outer_transaction_root() -> Result<()> {
+    let (config, state, parent, block, receipts) = imported_case("call-from-direct")?;
+    let result = replay(&config, &state, &parent, &block, &receipts, 1)?;
+    let calls = result.result().call_traces.as_ref().unwrap();
+    assert_eq!(
+        calls.frames[0].from,
+        block.body.transactions[0].recover_signer()?
+    );
+    assert_eq!(calls.frames[0].to, Some(subcall_address()));
+    assert!(calls.frames[0].parent == -1 && !calls.frames[0].error.is_empty());
+    assert!(calls.frames.len() > 1 && calls.frames[1].parent == 0);
+    Ok(())
+}
+
+#[test]
+fn native_subcall_completion_failure_is_not_reported_success() -> Result<()> {
+    let (config, state, parent, block, receipts) = imported_case("call-from-oog")?;
+    let result = replay(&config, &state, &parent, &block, &receipts, 1)?;
+    let calls = result.result().call_traces.as_ref().unwrap();
+    assert!(receipts[0].status());
+    assert_eq!(
+        calls.frames[0].output,
+        vec![0; 32],
+        "fixture must exercise a failed physical CALL"
+    );
+    assert_eq!(calls.frames.len(), 2);
+    assert_eq!(
+        calls.frames[1].output.len(),
+        32768,
+        "fixture child must have finished execution (gas={}, used={}, error={}, reason={})",
+        calls.frames[1].gas,
+        calls.frames[1].gas_used,
+        calls.frames[1].error,
+        String::from_utf8_lossy(&calls.frames[1].output)
+    );
+    assert_eq!(
+        calls.frames[1].error, "ArcCallFromCompletionReverted",
+        "completion rollback cannot be reported as a successful child"
+    );
+    assert!(
+        result.result().steps.iter().all(|s| s
+            .storage
+            .iter()
+            .all(|v| v.address != Address::repeat_byte(0x24))),
+        "native journal must retain original child state"
+    );
+    Ok(())
+}
+
+#[test]
+fn native_call_tree_keeps_nested_and_reverted_attempts() -> Result<()> {
+    let (config, state, parent, block, receipts) = imported_case("calls")?;
+    let result = replay(&config, &state, &parent, &block, &receipts, 1)?;
+    let calls = result.result().call_traces.as_ref().unwrap();
+    let kinds = calls
+        .frames
+        .iter()
+        .map(|f| f.r#type.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        kinds,
+        [
+            "CALL",
+            "CALL",
+            "STATICCALL",
+            "DELEGATECALL",
+            "STATICCALL",
+            "CALLCODE",
+            "STATICCALL",
+            "STATICCALL",
+            "STATICCALL",
+            "CREATE",
+            "CREATE2",
+            "CALL",
+            "SELFDESTRUCT"
+        ]
+    );
+    assert!(!calls.frames[0].error.is_empty());
+    assert!(calls.frames[1..].iter().all(|f| f.error.is_empty()));
+    assert_eq!(calls.frames[2].parent, 1);
+    assert_eq!(calls.frames[4].parent, 3);
+    assert_eq!(calls.frames[12].parent, 11);
+    assert!(calls.frames[7].value.is_none());
+    assert!(calls.frames[9].to.is_some());
+    assert!(calls.frames[10].to.is_some());
+    Ok(())
 }
 
 #[test]
@@ -537,7 +748,13 @@ fn frozen_arc_consumer_fixtures_are_reproducible() -> Result<()> {
     use std::{fs, path::PathBuf};
     let dir = PathBuf::from(dir);
     fs::create_dir_all(&dir)?;
-    for case in ["storage", "create-gone"] {
+    for case in [
+        "storage",
+        "create-gone",
+        "calls",
+        "call-from-oog",
+        "call-from-direct",
+    ] {
         let (config, state, parent, block, receipts) = imported_case(case)?;
         let result = replay(&config, &state, &parent, &block, &receipts, 1)?;
         let mut accounts = vec![];
