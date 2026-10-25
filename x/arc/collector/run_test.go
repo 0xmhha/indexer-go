@@ -11,7 +11,24 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/x/arc/nativestore"
 )
+
+func TestArcCollectorRefusesPendingNativeRetentionBeforeChild(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(filepath.Dir(dir), "."+filepath.Base(dir)+".execution-retention")
+	if e := os.WriteFile(marker, []byte("pending"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	defer func() { _ = os.Remove(marker) }()
+	b, e := Start(t.Context(), Options{Executable: os.Args[0], DataDir: dir, Chain: execwire.Chain{ID: "5042002", Genesis: execwire.Hash{1}}, Timeout: time.Second})
+	if b != nil {
+		_ = b.Close()
+	}
+	if !errors.Is(e, nativestore.ErrPending) {
+		t.Fatalf("pending native fence must reject before launching a child: %v", e)
+	}
+}
 
 func TestArcCollectorOwnedAdapterAndAuthenticatedSocketJoin(t *testing.T) {
 	ipc, err := os.MkdirTemp("", "arc-c-")

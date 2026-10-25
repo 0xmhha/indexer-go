@@ -14,3 +14,5 @@ INDEXER_ARC_FIXTURE_DIR=/YOUR_OWNED_TEMP_DIRECTORY cargo test --locked --lib tes
 ```
 
 The Go app tests independently decode the raw block/body/receipt commitments and exercise the actual disposable PostgreSQL publication/API path. Native library tests independently reconstruct intermediate journal roots and reject omissions/corruption. No node service or live RPC is required.
+
+`arc-native-checkpoint.ndjson` is the pinned LOCAL_DEV genesis (chain1337) exported by the native Rust checkpoint writer and independently verified in Go. It is not a mainnet/testnet operational anchor. Regenerate with `INDEXER_ARC_FIXTURE_DIR=/YOUR_OWNED_TEMP_DIRECTORY cargo test --locked --lib native_checkpoint_full_root_and_missing_key_coverage`; CI compares bytes. The included Arc license also covers allocation code in this fixture.

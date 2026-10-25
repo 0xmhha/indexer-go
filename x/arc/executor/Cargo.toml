@@ -1,11 +1,15 @@
 [package]
 name = "indexer-arc-executor"
+default-run = "indexer-arc-executor"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.93"
 license = "MIT"
 
 [dependencies]
+sha2 = "0.10"
+reth-prune-types = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
+alloy-trie = { version = "0.9", features = ["ethereum"] }
 arc-evm = { git = "https://github.com/circlefin/arc-node", rev = "6e764023ee6515fe70573e123ed2db912a7207b4" }
 arc-execution-config = { git = "https://github.com/circlefin/arc-node", rev = "6e764023ee6515fe70573e123ed2db912a7207b4" }
 alloy-consensus = "=2.0.4"
@@ -19,7 +23,7 @@ clap = { version = "4.5", features = ["derive"] }
 tempfile = "3"
 rustix = { version = "1.1", features = ["process"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["raw_value"] }
 reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
 reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0", features = ["evm"] }
 reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
@@ -32,7 +36,8 @@ reth-ethereum-engine-primitives = { git = "https://github.com/paradigmxyz/reth",
 revm = "=38.0.0"
 
 [dev-dependencies]
-alloy-trie = { version = "0.9", features = ["ethereum"] }
+reth-db-common = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
+reth-stages-types = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
 arc-execution-config = { git = "https://github.com/circlefin/arc-node", rev = "6e764023ee6515fe70573e123ed2db912a7207b4", features = ["test-utils"] }
 
 # Match the audited upstream security patch; dependency workspace patches do
@@ -47,3 +52,7 @@ incremental = false
 [profile.test]
 debug = 0
 incremental = false
+
+[[bin]]
+name = "arc-native-maintenance"
+path = "src/maintenance.rs"
