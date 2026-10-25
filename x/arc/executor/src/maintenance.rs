@@ -87,6 +87,7 @@ fn main() -> Result<()> {
                 height,
                 a.seed.as_deref().or(retained.as_deref()),
                 &output,
+                a.scratch_dir.as_deref().unwrap_or(&parent),
             )?;
             println!("{{\"Status\":\"full_checkpoint_exported\"}}");
         }
@@ -124,7 +125,17 @@ fn main() -> Result<()> {
                 retention::candidate(&a.datadir, &apply)?;
                 checkpoint::private_file(&a.datadir.join(".execution-retention-copy"))?;
                 let f = native::open_writable(&a.datadir, spec.clone())?;
-                retention::prune(&f, &spec, &a.datadir, &apply)?;
+                let work = if let Some(parent) = a.scratch_dir.as_deref() {
+                    indexer_arc_executor::catalog::private_dir(parent)?;
+                    tempfile::Builder::new()
+                        .prefix("maintenance-sort-")
+                        .tempdir_in(parent)?
+                } else {
+                    tempfile::tempdir()?
+                };
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(work.path(), std::fs::Permissions::from_mode(0o700))?;
+                retention::prune(&f, &spec, &a.datadir, &apply, work.path())?;
             } else {
                 let (f, _work) = native::open_readonly_in(
                     &a.datadir,
@@ -132,7 +143,7 @@ fn main() -> Result<()> {
                     true,
                     a.scratch_dir.as_deref(),
                 )?;
-                retention::verify(&f, &spec, &a.datadir, &apply)?;
+                retention::verify(&f, &spec, &a.datadir, &apply, _work.path())?;
             }
             println!("{{\"Status\":\"native_verified\"}}");
         }

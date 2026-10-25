@@ -219,7 +219,13 @@ pub fn digest_file(path: &Path) -> Result<B256> {
     }
     Ok(B256::from_slice(&h.finalize()))
 }
-pub fn prune(f: &Factory, spec: &ArcChainSpec, datadir: &Path, a: &Apply) -> Result<()> {
+pub fn prune(
+    f: &Factory,
+    spec: &ArcChainSpec,
+    datadir: &Path,
+    a: &Apply,
+    workspace: &Path,
+) -> Result<()> {
     a.request.validate()?;
     ensure!(a.permit_digest != B256::ZERO, "permit digest missing");
     // Only a copy explicitly sealed by the Go COW coordinator is writable.
@@ -238,7 +244,7 @@ pub fn prune(f: &Factory, spec: &ArcChainSpec, datadir: &Path, a: &Apply) -> Res
         None
     };
     let next = datadir.join(".arc-retention-checkpoint-new.ndjson");
-    native::export_checkpoint(f, spec, a.request.through, seed, &next)?;
+    native::export_checkpoint(f, spec, a.request.through, seed, &next, workspace)?;
     let digest = digest_file(&next)?;
     if previous.exists() {
         std::fs::remove_file(&previous)?;
@@ -288,9 +294,15 @@ pub fn prune(f: &Factory, spec: &ArcChainSpec, datadir: &Path, a: &Apply) -> Res
         serde_json::to_writer(w, &floor)?;
         Ok(())
     })?;
-    verify(f, spec, datadir, a)
+    verify(f, spec, datadir, a, workspace)
 }
-pub fn verify(f: &Factory, spec: &ArcChainSpec, datadir: &Path, a: &Apply) -> Result<()> {
+pub fn verify(
+    f: &Factory,
+    spec: &ArcChainSpec,
+    datadir: &Path,
+    a: &Apply,
+    workspace: &Path,
+) -> Result<()> {
     a.request.validate()?;
     inspect(f, spec, &a.request)?;
     let path = datadir.join(FLOOR);
@@ -307,7 +319,14 @@ pub fn verify(f: &Factory, spec: &ArcChainSpec, datadir: &Path, a: &Apply) -> Re
         digest_file(&snapshot)? == floor.checkpoint_digest,
         "cutoff checkpoint digest differs"
     );
-    let (m, keys) = checkpoint::seed(&snapshot, &a.request.chain.id, a.request.chain.genesis)?;
+    let mut keys = crate::catalog::Builder::new(workspace)?;
+    let m = checkpoint::seed_into(
+        &snapshot,
+        &a.request.chain.id,
+        a.request.chain.genesis,
+        &mut keys,
+    )?;
+    let keys = keys.finish()?;
     ensure!(m.r#ref.height == a.request.through, "cutoff seed height");
     let p = f.provider()?;
     ensure!(
@@ -318,7 +337,7 @@ pub fn verify(f: &Factory, spec: &ArcChainSpec, datadir: &Path, a: &Apply) -> Re
         .header_by_number(m.r#ref.height)?
         .ok_or_else(|| eyre!("cutoff header"))?;
     let state = p.history_by_block_hash(m.r#ref.hash)?;
-    checkpoint::export(
+    checkpoint::export_catalog(
         std::io::sink(),
         &m.chain.id,
         m.chain.genesis,
@@ -571,13 +590,13 @@ mod tests {
         let (dir, f, spec, a) = fixture()?;
         inspect(&f, &spec, &a.request)?;
         assert!(!expired(&f, dir.path(), &a.request)?.is_empty());
-        prune(&f, &spec, dir.path(), &a)?;
+        prune(&f, &spec, dir.path(), &a, dir.path())?;
         assert!(expired(&f, dir.path(), &a.request)?.is_empty());
         let before = a.request.head_root;
         let original_seed = digest_file(&dir.path().join(SNAPSHOT))?;
         drop(f);
         let (f, _work) = native::open_readonly(dir.path(), spec.clone(), true)?;
-        verify(&f, &spec, dir.path(), &a)?;
+        verify(&f, &spec, dir.path(), &a, dir.path())?;
         assert_eq!(inspect(&f, &spec, &a.request)?.root, before);
         assert_eq!(digest_file(&dir.path().join(SNAPSHOT))?, original_seed);
         let sf = f.static_file_provider();

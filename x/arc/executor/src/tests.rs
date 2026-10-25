@@ -132,6 +132,28 @@ fn imported() -> Result<Imported> {
 }
 
 #[test]
+fn native_checkpoint_catalog_beyond_one_million() -> Result<()> {
+    use crate::catalog::{Builder, Key};
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir()?;
+    std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700))?;
+    let mut keys = Builder::new(root.path())?;
+    for n in 0..1_000_001u64 {
+        let mut address = [0u8; 20];
+        address[12..].copy_from_slice(&n.to_be_bytes());
+        keys.push(Key::account(Address::from(address)))?;
+    }
+    let keys = keys.finish()?;
+    let mut reader = keys.reader()?;
+    let mut count = 0;
+    while reader.next_key()?.is_some() {
+        count += 1;
+    }
+    assert_eq!(count, 1_000_001);
+    Ok(())
+}
+
+#[test]
 fn native_checkpoint_full_root_and_missing_key_coverage() -> Result<()> {
     let (_, state, _, _, _) = imported()?;
     let parent = LOCAL_DEV.inner.genesis_header();
@@ -664,5 +686,130 @@ fn native_checkpoint_storage_code_and_private_publication_fail_closed() -> Resul
         std::fs::set_permissions(&corrupt, std::fs::Permissions::from_mode(0o600))?;
         assert!(checkpoint::seed(&corrupt, "1337", LOCAL_DEV.inner.genesis_hash()).is_err());
     }
+    Ok(())
+}
+
+#[test]
+fn native_checkpoint_storage_spool_corruption_rejects_publication() -> Result<()> {
+    use sha2::{Digest, Sha256};
+    let original = [1u8; 64];
+    let digest = B256::from_slice(&Sha256::digest(original));
+    let mut corrupt = original;
+    corrupt[63] ^= 1;
+    let mut input = std::io::Cursor::new(corrupt);
+    assert!(
+        checkpoint::read_storage_spool(&mut input, 1, digest, |_| Ok(())).is_err(),
+        "changed temporary storage values must not be published with the original root"
+    );
+    Ok(())
+}
+
+#[test]
+fn native_checkpoint_streams_dense_account_seed_and_scratch_failures() -> Result<()> {
+    use crate::catalog::{Builder, Key, Limits};
+    use std::os::unix::fs::PermissionsExt;
+    let (_, mut state, _, _, _) = imported_case("storage")?;
+    let address = state.storage.keys().next().unwrap().0;
+    for n in 1000..2024u64 {
+        state.storage.insert(
+            (address, B256::from(U256::from(n).to_be_bytes::<32>())),
+            U256::from(n),
+        );
+    }
+    state
+        .storage
+        .insert((address, B256::repeat_byte(0x45)), U256::ZERO);
+    let header = Header {
+        number: 42,
+        state_root: state.state_root(Default::default())?,
+        ..Default::default()
+    };
+    let root = tempfile::tempdir()?;
+    std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700))?;
+    let limits = Limits {
+        chunk: 17,
+        fan_in: 2,
+        inputs: 10_000,
+        disk: 2 << 20,
+    };
+    let mut input = state
+        .accounts
+        .keys()
+        .copied()
+        .map(Key::account)
+        .collect::<Vec<_>>();
+    input.extend(state.storage.keys().map(|(a, s)| Key::storage(*a, *s)));
+    // A storage-only candidate still identifies its account. Deleted accounts
+    // and zero slots are candidates, never phantom output records.
+    input.push(Key::storage(Address::repeat_byte(0x98), B256::ZERO));
+    let mut catalog = Builder::with_limits(root.path(), limits)?;
+    for k in &input {
+        catalog.push(*k)?;
+    }
+    let catalog = catalog.finish()?;
+    let path = root.path().join("dense.ndjson");
+    checkpoint::write_private(&path, |w| {
+        checkpoint::export_catalog(
+            w,
+            "1337",
+            LOCAL_DEV.inner.genesis_hash(),
+            &header,
+            &state,
+            &catalog,
+        )
+    })?;
+    let mut seed = Builder::with_limits(root.path(), limits)?;
+    let manifest = checkpoint::seed_into(&path, "1337", LOCAL_DEV.inner.genesis_hash(), &mut seed)?;
+    assert_eq!(manifest.root, header.state_root);
+    let mut again = Vec::new();
+    checkpoint::export_catalog(
+        &mut again,
+        "1337",
+        LOCAL_DEV.inner.genesis_hash(),
+        &header,
+        &state,
+        &seed.finish()?,
+    )?;
+    assert_eq!(std::fs::read(&path)?, again);
+    let mut quota = Builder::with_limits(
+        root.path(),
+        Limits {
+            chunk: 32768,
+            fan_in: 2,
+            inputs: 10_000,
+            disk: input.len() as u64 * 117 + 63,
+        },
+    )?;
+    for k in &input {
+        quota.push(*k)?;
+    }
+    let quota = quota.finish()?;
+    let rejected = root.path().join("quota.ndjson");
+    assert!(
+        checkpoint::write_private(&rejected, |w| checkpoint::export_catalog(
+            w,
+            "1337",
+            LOCAL_DEV.inner.genesis_hash(),
+            &header,
+            &state,
+            &quota
+        ))
+        .is_err()
+    );
+    assert!(!rejected.exists());
+    let corrupt = root.path().join("truncated.ndjson");
+    std::fs::write(&corrupt, &again[..again.len() - 15])?;
+    std::fs::set_permissions(&corrupt, std::fs::Permissions::from_mode(0o600))?;
+    let mut poisoned = Builder::new(root.path())?;
+    assert!(
+        checkpoint::seed_into(
+            &corrupt,
+            "1337",
+            LOCAL_DEV.inner.genesis_hash(),
+            &mut poisoned
+        )
+        .is_err()
+    );
+    assert!(poisoned.finish().is_err());
     Ok(())
 }

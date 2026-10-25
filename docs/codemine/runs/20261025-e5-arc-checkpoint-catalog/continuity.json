@@ -1,0 +1,43 @@
+{
+  "goal": "Arc bounded-memory checkpoint catalogs",
+  "base": "03d079048d480dfb2f96d915a8d52a1ab6876ead",
+  "source_branch": "refactor/e5-arc-checkpoint-catalog",
+  "n": {
+    "unit": "U04",
+    "state": "locally_verified",
+    "contract": "all required local functional/static/race/owned fsync PG/native/fixtures/docs GREEN; staged/history scans and exact-head CI4+Arc/squash/clean main release",
+    "new_go_concurrency": false
+  },
+  "n-1": {
+    "unit": "U03",
+    "state": "targeted_green",
+    "contract": "native all-targets20+2, actual helper/owned DB, dense storage/seed/quota/checksum, unchanged Rust-to-Go fixtures"
+  },
+  "n-2": {
+    "unit": "U02",
+    "state": "green",
+    "contract": "streaming seed/export/retention trie roots and digest-checked per-account disk spool",
+    "red": "altered temporary storage row was accepted before digest check; regression RED then GREEN"
+  },
+  "preserved": [
+    "accepted E1/E2/E3/E4 plans",
+    "unmodified upstream",
+    "pool4/part2/API reservation",
+    "RPC5 physical attempts/s",
+    "final uncached fresh/generation fence",
+    "all native state history"
+  ],
+  "holds": [
+    "actual nodes/peers/operator DB operations",
+    "disk provisioning/formatting",
+    "operational GC",
+    "performance",
+    "other projects"
+  ],
+  "next": "resolve release authority: finish scans/commit/draft+attach/exact-head CI5/ready/squash/ff main; report history/index compaction, trace/blob/proofs and E6; do not auto-start another phase",
+  "release": {
+    "authority": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-checkpoint-catalog",
+    "completion": "exact-head CI4+Arc success, ready/squash MERGED, clean main synchronized to origin/main",
+    "source_branch_preserved": true
+  }
+}
