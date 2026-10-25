@@ -18,6 +18,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/feed"
 	"github.com/0xmhha/indexer-go/pkg/testchain"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -131,9 +132,15 @@ func TestManagedStateProjectionRestartAPIAndReorg(t *testing.T) {
 	c.Reorg(2)
 	c.AddStateRootBlock(types.EmptyRootHash, []byte("state branch"))
 	c.AddStateRootBlock(types.EmptyRootHash, []byte("state branch"))
-	require.Eventually(t, func() bool {
+	require.EventuallyWithT(t, func(tick *assert.CollectT) {
 		s, e := indexingstatus.Read(t.Context(), a.storage, "", 100)
-		return e == nil && s.StateChanges != nil && s.StateChanges.Epoch > status.StateChanges.Epoch && s.StateChanges.Complete != nil && s.StateChanges.Complete.Hash == c.Block(4).Block.Hash()
+		if !assert.NoError(tick, e) || !assert.NotNil(tick, s.StateChanges) {
+			return
+		}
+		assert.Greater(tick, s.StateChanges.Epoch, status.StateChanges.Epoch)
+		if assert.NotNil(tick, s.StateChanges.Complete, "state projection: %+v", s.StateChanges) {
+			assert.Equal(tick, c.Block(4).Block.Hash(), s.StateChanges.Complete.Hash, "state projection: %+v", s.StateChanges)
+		}
 	}, 35*time.Second, 20*time.Millisecond)
 	waitFeedProjection(t, a, c, 4)
 	events, e = indexingstatus.ReadStateEvents(t.Context(), a.storage, 0, 30)

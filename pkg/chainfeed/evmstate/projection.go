@@ -124,11 +124,9 @@ func RunProjection(ctx context.Context, store *capture.Store, profile chains.Bin
 		}
 		c, e := store.InitializeStateProjection(ctx, d)
 		if e == capture.ErrCanonical {
-			st, readErr := store.State(ctx)
-			if readErr != nil {
-				return readErr
-			}
-			if e = waitProjectionEpoch(ctx, store, st.Generation, poll); e == nil {
+			// The failed transaction returns its observed epoch. Re-reading
+			// it here could miss a reset committed after the fresh failure.
+			if e = waitProjectionEpoch(ctx, store, c.Epoch, poll); e == nil {
 				continue
 			}
 		}

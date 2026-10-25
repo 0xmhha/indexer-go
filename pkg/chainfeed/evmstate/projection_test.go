@@ -231,3 +231,66 @@ func TestStateProjectionCancellationPreservesIO(t *testing.T) {
 	require.ErrorIs(t, e, context.Canceled)
 	require.ErrorIs(t, e, errProofIO)
 }
+
+// A reset can commit after initialization rolls back its fresh check, before
+// the worker starts waiting. The wait must retain the failed attempt's epoch.
+func TestStateProjectionCanonicalFailureDoesNotMissEpoch(t *testing.T) {
+	for _, backend := range []string{"pebble", "postgres"} {
+		t.Run(backend, func(t *testing.T) {
+			db := openProofDB(t, backend)()
+			defer func() { require.NoError(t, db.Close()) }()
+			f := fixture(t)
+			_, id, _ := captured(t, db, f.root)
+			fresh := &projectionFresh{hashes: map[uint64]common.Hash{0: id.Block.Chain.GenesisHash, 1: id.Block.Hash}}
+			base, e := capture.New(db, id.Block.Chain, fresh)
+			require.NoError(t, e)
+			sel, digest, e := f.selection.Normalize()
+			require.NoError(t, e)
+			raw, e := json.Marshal(sel)
+			require.NoError(t, e)
+			d := ProjectionDescriptor(model.SupplementStreamDescriptor{Version: 1, Name: "epoch-race", Codec: Codec, Selection: raw, SelectionHash: digest, FromHeight: 1, ParentCheckpoint: true})
+			_, e = base.InitializeStateProjection(t.Context(), d)
+			require.NoError(t, e)
+			require.NoError(t, base.Reset(t.Context(), 1, id.Block))
+			// Force a real failed fresh check in generation 2. The DB wrapper
+			// advances to generation 3 only AFTER that transaction rolls back.
+			fresh.hashes[0] = common.Hash{99}
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			failed, retried := false, false
+			wrapped := projectionEpochDB{CaptureDatabase: db, after: func(err error) {
+				if !failed {
+					require.ErrorIs(t, err, capture.ErrCanonical)
+					failed = true
+					fresh.hashes[0] = id.Block.Chain.GenesisHash
+					require.NoError(t, base.Reset(ctx, 2, id.Block))
+					return
+				}
+				require.NoError(t, err)
+				retried = true
+				cancel()
+			}}
+			store, e := capture.New(wrapped, id.Block.Chain, fresh)
+			require.NoError(t, e)
+			e = RunProjection(ctx, store, evm.New("evm"), d, 20*time.Millisecond)
+			require.ErrorIs(t, e, ctx.Err())
+			require.True(t, failed, "must exercise a rolled-back fresh check")
+			require.True(t, retried, "must not wait for a fourth generation after already observing the third")
+			cursor, e := base.InitializeStateProjection(t.Context(), d)
+			require.NoError(t, e)
+			require.EqualValues(t, 3, cursor.Epoch)
+			require.EqualValues(t, 1, cursor.Sequence, "only the successful reconciliation may emit a reset")
+		})
+	}
+}
+
+type projectionEpochDB struct {
+	port.CaptureDatabase
+	after func(error)
+}
+
+func (d projectionEpochDB) CaptureUpdate(ctx context.Context, ch model.FeedChain, fn func(port.CaptureWriter) error) error {
+	err := d.CaptureDatabase.CaptureUpdate(ctx, ch, fn)
+	d.after(err)
+	return err
+}

@@ -1,6 +1,6 @@
 # Arc history compaction validation
 
-All required local checks are GREEN. The [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-history-compaction) resolves exact-head CI4+Arc and squash/main release status. Logs/build caches are owned by `/private/tmp/indexer-arc-history-20261025`; shared caches and other projects are preserved.
+All required local checks, including the projection epoch race fix found during release, are GREEN. The [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-history-compaction) resolves exact-head CI4+Arc and squash/main release status. Logs/build caches are owned by `/private/tmp/indexer-arc-history-20261025`; shared caches and other projects are preserved.
 
 ## Requirement evidence
 
@@ -12,9 +12,15 @@ All required local checks are GREEN. The [source-branch PR](https://github.com/0
 
 ## Completed local checks
 
-Native fmt/build/clippy warnings-as-errors and all-targets passed 26 library + 2 CLI tests, including the actual maintenance helper and actual replay adapter. Three regenerated Rust→Go fixtures are byte-identical. Root build/vet/lint/gofmt/cache/examples/offline operations/preflight/shell, separate wire/StableNet executor/AST module static, full root functional and complete root/wire/StableNet `make test-race` passed. Owned fsync-on PostgreSQL storage/app/API/StableNet bundle and its container/volume cleanup passed. No Go concurrency was introduced, so unchanged local single200 selectors are not restarted; existing CI selectors stay enabled.
+Native fmt/build/clippy warnings-as-errors and all-targets passed 26 library + 2 CLI tests, including the actual maintenance helper and actual replay adapter. Three regenerated Rust→Go fixtures are byte-identical. Root build/vet/lint/gofmt/cache/examples/offline operations/preflight/shell, separate wire/StableNet executor/AST module static, full root functional and complete root/wire/StableNet `make test-race` passed. Owned fsync-on PostgreSQL storage/app/API/StableNet bundle and its container/volume cleanup passed. Existing CI selectors stay enabled.
 
 The initial native build of new shard tests found a wrong test import path; it was corrected before the final complete native run. The two deliberate RED cases and the native boundary failure are distinct from build setup. No closed suite was restarted without a code change/failure.
+
+## Projection retry regression found during release
+
+CI PostgreSQL reported only `TestManagedStateProjectionRestartAPIAndReorg` timing out while waiting for the new fork; native/lint/examples passed. The log contains no worker trace, so it does not uniquely identify the timeout's cause. Static review found a separate lost-epoch race in initialization: a failed fresh transaction observes epoch2, a reset commits epoch3, then a fresh read incorrectly waits for epoch4. A deterministic wrapper performs exactly that ordering after the real rollback; the old code fails RED because no retry occurs.
+
+The fix waits from the failed transaction's returned epoch, then reruns initialization and its existing fresh checks. CPU1/race/single-count200 passed; the disposable fsync-on PostgreSQL regression and original managed reorg test passed. The latter now reports the last epoch/completion/hash on failure without increasing35s. CI keeps the new single200 and actual PostgreSQL regression. Follow-up root build/vet/lint/fmt, full root/wire/StableNet `make test-race` and changed-document relative links passed; latest-head CI5 is still required. An initial sandboxed full-race attempt could not bind local sockets and was terminated with only its owned process tree/build temporary directory cleaned. It is not counted as a code failure or a successful test run; the subsequent socket-enabled full run passed. Unchanged native checks are not locally repeated.
 
 ## Release gates and limits
 

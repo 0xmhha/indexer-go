@@ -5,8 +5,9 @@
   "n": {
     "unit": "U04",
     "state": "locally_verified",
-    "contract": "all local build/fmt/vet/lint/functional/race/owned PG/native26+2/fixtures/docs GREEN; scan/commit/draft/exact-head CI5/squash/clean main release",
-    "new_go_concurrency": false
+    "contract": "native local gates GREEN; lost-epoch RED->GREEN, CPU1/race/single200 and owned PG reorg+regression GREEN; follow-up build/vet/lint/fmt/full root-wire-StableNet race/docs GREEN; scans/fix commit/push/exact-head CI5/ready/squash/clean main remain release authority",
+    "new_go_concurrency": true,
+    "ci_failure": "initial PG reorg wait timeout lacked worker trace; lost-epoch hazard independently reproduced; no unique original-cause assertion"
   },
   "n-1": {
     "unit": "U03",

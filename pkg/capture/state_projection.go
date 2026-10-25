@@ -151,6 +151,8 @@ func emitState(tx port.CaptureWriter, d model.StateProjectionDescriptor, c *Stat
 // InitializeStateProjection reconciles ONLY this worker's mutable head and
 // undo/event namespace. A reset is atomic and walks at most 128 old inputs.
 // Old fork outputs/undo stay historical. No projection writer undo is touched.
+// On ErrCanonical, out.Epoch identifies the failed transaction's observed
+// generation for retry/wait purposes; the returned cursor is not committed.
 func (s *Store) InitializeStateProjection(ctx context.Context, d model.StateProjectionDescriptor) (out StateProjectionCursor, err error) {
 	if d.Validate() != nil {
 		return out, port.ErrInvalidData
