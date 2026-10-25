@@ -38,3 +38,5 @@ Response: `AXS1` (4 bytes), request ID (u64 big-endian), operation (u8: identity
 ## Native checkpoint and retention
 
 See the [Arc native guide](../../../docs/EXECUTION_ARC_RETENTION.md) for `arc-native-maintenance`, candidate key/root limits, private output, managed owner guards and E3 live-supervised copy/swap/release. State history and boundary/pre-anchor jars stay retained; no fixed total-disk promise or live-node validation is implied.
+
+Native checkpoint catalogs use bounded private disk sort/merge and incremental trie reconstruction, including a per-account storage spool. Export and retention cutoff verification share this path. See [workspace, input and capacity limits](../../../docs/EXECUTION_ARC_RETENTION.md#full-checkpoint-export); state-history compaction remains separate.

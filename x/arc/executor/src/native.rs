@@ -1,6 +1,9 @@
 //! Pinned native DB operations; never construct node services.
 
-use crate::checkpoint;
+use crate::{
+    catalog::{Builder, Key},
+    checkpoint,
+};
 use arc_execution_config::chainspec::ArcChainSpec;
 use eyre::{Result, ensure, eyre};
 use reth_ethereum::{
@@ -137,6 +140,7 @@ pub fn export_checkpoint(
     height: u64,
     seed: Option<&Path>,
     output: &Path,
+    workspace: &Path,
 ) -> Result<()> {
     let p = f.provider()?;
     ensure!(
@@ -150,49 +154,42 @@ pub fn export_checkpoint(
     let header = p
         .header_by_number(height)?
         .ok_or_else(|| eyre!("retained checkpoint header unavailable"))?;
-    let (start, mut keys) = if let Some(seed) = seed {
-        let (m, k) = checkpoint::seed(
+    let mut keys = Builder::new(workspace)?;
+    let start = if let Some(seed) = seed {
+        let m = checkpoint::seed_into(
             seed,
             &spec.inner.chain.id().to_string(),
             spec.inner.genesis_hash(),
+            &mut keys,
         )?;
         ensure!(
             m.r#ref.height <= height && p.block_hash(m.r#ref.height)? == Some(m.r#ref.hash),
             "seed is not a canonical ancestor"
         );
-        (m.r#ref.height, k)
+        m.r#ref.height
     } else {
-        let mut k = checkpoint::Keys::new();
         for (a, v) in &spec.inner.genesis.alloc {
-            k.entry(*a)
-                .or_default()
-                .extend(v.storage.clone().unwrap_or_default().keys().copied());
+            keys.push(Key::account(*a))?;
+            if let Some(storage) = &v.storage {
+                for slot in storage.keys() {
+                    keys.push(Key::storage(*a, *slot))?;
+                }
+            }
         }
-        checkpoint::validate_keys(&k)?;
-        (0, k)
+        0
     };
-    let mut count = keys.values().map(|s| s.len() + 1).sum::<usize>();
     for n in start + 1..=height {
         for c in p.account_block_changeset(n)? {
-            if let std::collections::btree_map::Entry::Vacant(e) = keys.entry(c.address) {
-                e.insert(Default::default());
-                count += 1;
-            }
+            keys.push(Key::account(c.address))?;
         }
         for c in p.storage_block_changeset(n)? {
-            if let std::collections::btree_map::Entry::Vacant(e) = keys.entry(c.address) {
-                e.insert(Default::default());
-                count += 1;
-            }
-            if keys.get_mut(&c.address).expect("inserted").insert(c.key) {
-                count += 1;
-            }
+            keys.push(Key::storage(c.address, c.key))?;
         }
-        ensure!(count <= checkpoint::MAX_KEYS, "checkpoint key limit");
     }
+    let keys = keys.finish()?;
     let state = p.history_by_block_hash(header.hash_slow())?;
     checkpoint::write_private(output, |w| {
-        checkpoint::export(
+        checkpoint::export_catalog(
             w,
             &spec.inner.chain.id().to_string(),
             spec.inner.genesis_hash(),

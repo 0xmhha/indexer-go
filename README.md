@@ -87,7 +87,7 @@ Run both example modules with `make test-examples`.
 | Storage | Pebble and PostgreSQL |
 | APIs | GraphQL, selected JSON-RPC methods, REST, GraphQL subscriptions and authenticated notification streams |
 | StableNet execution ingest | Two executions, durable result spool, seven writer queues on pool4, public state/API fence and bounded reorg; full/partial offline bootstrap and full-baseline-only offline retention with durable maintenance fences |
-| Arc execution adapter | Official Arc second-pass replay, pre-block/transaction/Finalize state journals and root checks, read-only continuous collection with durable quotas/cursor and exact-ACK/reorg supervision; [full native checkpoints and supervised payload retention](docs/EXECUTION_ARC_RETENTION.md). State-history compaction and traces/blob availability remain separate |
+| Arc execution adapter | Official Arc second-pass replay, pre-block/transaction/Finalize state journals and root checks, read-only continuous collection with durable quotas/cursor and exact-ACK/reorg supervision; [full native checkpoints with bounded disk catalogs and supervised payload retention](docs/EXECUTION_ARC_RETENTION.md). State-history compaction and traces/blob availability remain separate |
 | Arc feed | Opt-in ETH/68 header/body/receipt intake, a durable disk window, permanent source facts and independent projection workers |
 
 The Arc feed has local protocol and storage coverage; live Arc peer onboarding, external-volume operation and sustained throughput still need operational validation. Optional state proofs and provider-reported call traces have explicit scopes. Full blob verification is a separate library, and Arc blob admission is disabled.
