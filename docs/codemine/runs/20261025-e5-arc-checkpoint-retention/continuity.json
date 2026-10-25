@@ -18,7 +18,22 @@
       "complete fsync-on disposable PostgreSQL storage/app/API/StableNet bundle; owned volume cleanup successful",
       "wire/StableNet executor/AST module build/vet/lint",
       "byte-identical three native fixtures; current links/fmt and staged secret scan"
-    ]
+    ],
+    "ci_failure": {
+      "pr": 220,
+      "run": 40143373888,
+      "job": "test",
+      "case": "TestNativeOwnedHoldCancellationAndStrictReplies",
+      "fact": "canceled owner could see exit0 if EOF won CommandContext watcher; Wait alone was insufficient",
+      "fix": "retain derived context and join its error before cleanup cancellation; deterministic zero-exit canceled-owner RED/GREEN regression",
+      "preserved": "pool4/RPC5/final fresh and all native file/lease/ACK boundaries",
+      "verification": [
+        "deterministic zero-exit canceled-owner RED then GREEN",
+        "updated full make test-race GREEN",
+        "new five-case GOMAXPROCS1/race/single200 GREEN",
+        "affected build/vet/lint GREEN"
+      ]
+    }
   },
   "n-1": {
     "unit": "U03",

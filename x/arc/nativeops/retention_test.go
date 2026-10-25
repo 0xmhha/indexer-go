@@ -13,6 +13,7 @@ import (
 	"github.com/0xmhha/indexer-go/x/arc/nativestore"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"slices"
@@ -21,6 +22,49 @@ import (
 	"testing"
 	"time"
 )
+
+// An unbound fixture command deterministically exits zero after EOF even when
+// its owner's context is already canceled, reproducing the Wait/cancel race.
+func TestNativeSuccessfulExitStillReportsCanceledContext(t *testing.T) {
+	c, p := nativeFixture(t)
+	work, e := os.MkdirTemp(filepath.Dir(c.NativeDataDir), ".arc-maintenance-")
+	if e != nil {
+		t.Fatal(e)
+	}
+	info, e := os.Lstat(work)
+	if e != nil {
+		t.Fatal(e)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	cmd := exec.Command(c.NativeExecutable, "--datadir", c.NativeDataDir, "--operation", "hold", "--scratch-dir", work)
+	input, e := cmd.StdinPipe()
+	if e != nil {
+		t.Fatal(e)
+	}
+	output, e := cmd.StdoutPipe()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = cmd.Start(); e != nil {
+		t.Fatal(e)
+	}
+	h := &held{input: input, output: output, cmd: cmd, life: &childLifetime{ctx: ctx, cancel: cancel, path: work, info: info}}
+	defer func() { _ = h.Close() }()
+	if e = json.NewEncoder(input).Encode(p.Request); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = bufio.NewReader(output).ReadBytes('\n'); e != nil {
+		t.Fatal(e)
+	}
+	cancel()
+	if e = h.Close(); !errors.Is(e, context.Canceled) {
+		t.Fatalf("zero native exit must retain owner cancellation: %v", e)
+	}
+	if _, e = os.Stat(work); !os.IsNotExist(e) {
+		t.Fatal("joined child scratch remains:", e)
+	}
+}
 
 func nativeFixture(t *testing.T) (Config, retention.Permit) {
 	t.Helper()

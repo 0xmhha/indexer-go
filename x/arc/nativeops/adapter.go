@@ -81,7 +81,7 @@ func (n Native) start(parent context.Context, path, operation string, input any)
 		cancel()
 		return nil, nil, e
 	}
-	life := &childLifetime{cancel: cancel, path: work, info: workInfo}
+	life := &childLifetime{ctx: ctx, cancel: cancel, path: work, info: workInfo}
 	cmd := exec.CommandContext(ctx, n.Executable, "--chain", chain, "--datadir", path, "--operation", operation, "--scratch-dir", work)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "TZ=" + os.Getenv("TZ"), "TMPDIR=" + os.Getenv("TMPDIR")}
 	cmd.WaitDelay = 2 * time.Second
@@ -101,7 +101,7 @@ func (n Native) run(ctx context.Context, path, operation string, input, out any)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	if e = cmd.Run(); e != nil {
-		return fmt.Errorf("arc native %s: %w: %s", operation, e, stderr.String())
+		return fmt.Errorf("arc native %s: %w: %s", operation, errors.Join(e, life.ctx.Err()), stderr.String())
 	}
 	dec := json.NewDecoder(&stdout.Buffer)
 	dec.DisallowUnknownFields()
@@ -112,7 +112,7 @@ func (n Native) run(ctx context.Context, path, operation string, input, out any)
 	if dec.Decode(&extra) != io.EOF {
 		return retention.ErrUnsafe
 	}
-	return ctx.Err()
+	return errors.Join(ctx.Err(), life.ctx.Err())
 }
 func (n Native) Inspect(ctx context.Context, path string, r retention.Request) (Observation, error) {
 	var o Observation
@@ -160,7 +160,11 @@ func (h *held) Close() error {
 		_ = h.input.Close()
 		h.err = h.cmd.Wait()
 		_ = h.output.Close()
-		h.err = errors.Join(h.err, h.life.Close())
+		// EOF can win the race with CommandContext's process watcher and return
+		// exit0 after cancellation. Preserve the owner's state before cleanup's
+		// own cancel; normal successful close must remain successful.
+		cause := h.life.ctx.Err()
+		h.err = errors.Join(h.err, cause, h.life.Close())
 	})
 	return h.err
 }
@@ -213,6 +217,7 @@ func (n Native) Lock(ctx context.Context, path string, r retention.Request) (io.
 // Close runs only after the owned native child joins. Never remove a replaced
 // directory or follow its internal RocksDB primary symlink into native storage.
 type childLifetime struct {
+	ctx    context.Context
 	cancel context.CancelFunc
 	path   string
 	info   os.FileInfo

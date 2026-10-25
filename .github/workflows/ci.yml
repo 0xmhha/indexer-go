@@ -93,7 +93,7 @@ jobs:
       - name: Arc collector child lifecycle concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m ./x/arc/collector ./x/arc/cmd/execution-collector
       - name: Arc native maintenance child and guard concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^(TestNativeOwnedHoldCancellationAndStrictReplies|TestNativeGuardRejectsFenceAndPathOverrides|TestNativeGuardCancellationJoinsOwnedChild|TestNativeScratchReplacementIsPreserved)$' ./x/arc/nativeops
+        run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^(TestNativeOwnedHoldCancellationAndStrictReplies|TestNativeGuardRejectsFenceAndPathOverrides|TestNativeGuardCancellationJoinsOwnedChild|TestNativeScratchReplacementIsPreserved|TestNativeSuccessfulExitStillReportsCanceledContext)$' ./x/arc/nativeops
       - name: StableNet replay and spool contracts and concurrency
         run: |
           make test-executor-stablenet

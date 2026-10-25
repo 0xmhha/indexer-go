@@ -1,6 +1,6 @@
 # Arc checkpoint and retention validation
 
-All required local checks are GREEN. The [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-checkpoint-retention) resolves exact-head CI4+Arc and squash/main release status. Owned synthetic/native-library fixtures are functional evidence; actual node services/peers/operator DB maintenance, disk provisioning and performance measurements remain held.
+All required local checks are GREEN, including the CI cancellation correction below. The [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-checkpoint-retention) resolves exact-head CI4+Arc and squash/main release status. Owned synthetic/native-library fixtures are functional evidence; actual node services/peers/operator DB maintenance, disk provisioning and performance measurements remain held.
 
 ## Requirement evidence
 
@@ -31,3 +31,9 @@ Same-process/cooperative RO reopen is not native writer exclusion. Actual separa
 The full functional/race/PG/concurrency suites were each closed after their required run passed. No host-load/SLO or throughput experiment was added. Source packaging was corrected to explicit `src/maintenance.rs` because repository `bin/` ignore rules exclude implicit Rust bin sources; native build/lint/tests were rerun for that packaging change. The final Go-only child fixture passed affected vet/lint verification. A lint-only equivalent tagged-switch cleanup then passed the affected package race check; no closed full suite or single200 invocation was restarted. Optional live-node/Anvil paths were not activated. Secret history is scanned again after the feature commit and before push.
 
 Local logs/manifests are under `/private/tmp/indexer-arc-checkpoint-20261025/validation` during release; required commands and limits above remain the durable report. Build caches are task-owned and disposable; shared caches, other projects and operator data are preserved.
+
+## CI cancellation correction
+
+CI run40143373888 passed lint/examples/arc and the earlier test stages, then the new native single200 caught `cancelled native child reported success`. A canceled command can race stdin EOF and exit0 before CommandContext's watcher kills it, so `Wait` alone did not preserve cancellation. The owner now retains its derived context and joins its error **before** cleanup's own cancel; ordinary successful close remains successful. One-shot operations preserve the same derived deadline/cancel reason.
+
+`TestNativeSuccessfulExitStillReportsCanceledContext` deterministically uses a fixture command that exits0 after an already-canceled owner's EOF. It failed RED with nil, then passed GREEN with the cancellation error and joined scratch cleanup. This is a real semantic race, not a throughput experiment or a relaxed assertion. The regression is included in the single200 CI selection. Updated full `make test-race`, affected build/vet/lint and the five-case `GOMAXPROCS=1 -race -count=200` invocation all passed. Unchanged completed PG/native-format checks were not restarted; the new exact head still requires every CI4+Arc job before merge.
