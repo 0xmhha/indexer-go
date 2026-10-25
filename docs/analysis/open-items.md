@@ -1,8 +1,10 @@
 # 남은 작업
 
-E1 #214, E2 #215, E3 #216, E4 #217, E5 replay #218·collector #219·native checkpoint/보존 #220·대규모 catalog [#221](https://github.com/0xmhha/indexer-go/pull/221)은 main에 반영됐다. 현재 작업은 Arc native 상태 이력·index 압축이다. 정본은 아래 계획·체크리스트와 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-history-compaction)이다. 해당 PR이 CI4+Arc를 통과해 squash MERGED됐으면 이 범위는 완료다. 실제 운영 활성화와 고정 native 디스크 크기 보장은 별도다. 종료된 검사·성능 측정을 새 이유 없이 반복하지 않는다.
+E1 #214, E2 #215, E3 #216, E4 #217과 E5 Arc replay #218·collector #219·checkpoint/보존 #220·catalog #221·[history/index 정리 #222](https://github.com/0xmhha/indexer-go/pull/222)는 main에 반영됐다. 두 번째 native 실행의 call trace/internal call 기록·조회 구현과 로컬 검증을 추가한다. 정본은 아래 계획·체크리스트와 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-native-call-traces)이다. 해당 PR이 최신-head CI4+Arc 후 squash MERGED됐으면 이 범위는 완료다. 실제 운영 활성화·성능·독립 합의 검증은 별도다. 종료된 검사를 새 코드 변경/실패 없이 반복하지 않는다.
 
 ## 현재 정본과 연속성
+
+- Native calls [계획](../codemine/runs/20261025-e5-native-call-traces/plan.md), [체크리스트](../codemine/runs/20261025-e5-native-call-traces/checklist.md), [연속성](../codemine/runs/20261025-e5-native-call-traces/continuity.json), [검증](../codemine/runs/20261025-e5-native-call-traces/validation.md), [사용법](../EXECUTION_CALL_TRACES.md)
 
 - Arc history [계획](../codemine/runs/20261025-e5-arc-history/plan.md), [체크리스트](../codemine/runs/20261025-e5-arc-history/checklist.md), [연속성](../codemine/runs/20261025-e5-arc-history/continuity.json), [검증](../codemine/runs/20261025-e5-arc-history/validation.md)
 
@@ -26,10 +28,10 @@ E1 #214, E2 #215, E3 #216, E4 #217, E5 replay #218·collector #219·native check
 
 | 단계 | 범위와 완료 조건 |
 | --- | --- |
-| Arc history/index 릴리스 gate | cutoff full seed 선검증·저장, COW history index/changeset 정리·native floor·물리 compaction, 보호 상태·재시작·재시도·실패 보존과 문서. 필수 로컬 검사와 최신-head CI4+Arc 후 squash/main. [체크리스트](../codemine/runs/20261025-e5-arc-history/checklist.md)가 정본 |
-| Native 보존의 운영/추가 확장 | actual layout·backup·용량 검증 후 명시적 활성화. 최신 상태·headers·보수적 jar·기타 indices가 남으므로 전체 native 디스크 고정 크기를 약속하지 않음. MDBX 여유 페이지/추가 index 정리는 별도 검증 필요 |
-| E5 후속 3 | 완전한 call trace/internal transaction, blob sidecar/KZG·가용성 및 상태 증명 공급. 현재 account/storage journal·receipt가 이 자료를 대신하지 않음. 기타 체인 producer 확대; 비EVM 모델은 별도 결정 |
+| E5 다음 | blob sidecar/KZG·가용성 및 상태 inclusion proof 공급. 기존 journal/root나 call graph가 이를 대신하지 않음. 기타 체인 producer 확대·비EVM 모델은 별도 결정 |
+| Call 조회 확장 | 주소별 범위/coverage 검색, orphan trace 보관·조회 및 richer GraphQL/JSON-RPC는 별도 설계. 현재 native block/tx 페이지와 RPC provider 경로를 혼합하거나 legacy 미수집 구간을 빈 이력으로 표시하지 않음 |
 | E6 | 체인 합의에 근거한 canonical/finality 검증과 RPC 의존 축소. 현재 final fresh나 native-library 검사를 독립 합의/실제 peer 검증으로 확대하지 않음 |
+| Native 보존의 운영/추가 확장 | actual layout·backup·용량 검증 후 명시적 활성화. 최신 상태·headers·보수적 jar·기타 indices가 남으므로 전체 native 디스크 고정 크기를 약속하지 않음. MDBX 여유 페이지/추가 index 정리는 별도 검증 필요 |
 
 ## 운영과 별도 검증
 

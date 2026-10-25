@@ -19,8 +19,14 @@ type cancelLogger struct {
 
 func (t *cancelLogger) CaptureTxStart(env *vm.EVM, _ uint64, _ []types.SetCodeAuthorization) {
 	env.Config.Tracer = nil
+	t.arm(env)
+}
+func (t *cancelLogger) arm(env *vm.EVM) {
 	if t.ctx.Err() != nil {
 		env.Cancel()
+		return
+	}
+	if t.ctx.Done() == nil {
 		return
 	}
 	done := make(chan struct{})

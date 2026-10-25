@@ -3,6 +3,7 @@
 /// The source identity is part of the adapter's compatibility boundary.
 pub const ARC_REVISION: &str = "6e764023ee6515fe70573e123ed2db912a7207b4";
 
+mod calls;
 mod journal;
 mod output;
 mod replay;

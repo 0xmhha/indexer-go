@@ -61,16 +61,17 @@ func (s *Store) ConfirmExecution(ctx context.Context, payload []byte, fresh func
 	if err = executionDurable(ctx, tx); err != nil {
 		return false, err
 	}
-	rows, err := tx.Query(ctx, "SELECT generation,hash,parent,digest,root FROM exec_publications WHERE height=$1 LIMIT 2", int64(incoming.Height))
+	rows, err := tx.Query(ctx, "SELECT generation,hash,parent,digest,root,call_traces FROM exec_publications WHERE height=$1 LIMIT 2", int64(incoming.Height))
 	if err != nil {
 		return false, err
 	}
 	var generation int64
 	var hash, parent, digest, root []byte
+	var calls bool
 	count := 0
 	for rows.Next() {
 		count++
-		if err = rows.Scan(&generation, &hash, &parent, &digest, &root); err != nil {
+		if err = rows.Scan(&generation, &hash, &parent, &digest, &root, &calls); err != nil {
 			break
 		}
 	}
@@ -94,6 +95,12 @@ func (s *Store) ConfirmExecution(ctx context.Context, payload []byte, fresh func
 	expected := sha256.Sum256(normalized)
 	if !bytes.Equal(digest, expected[:]) {
 		return false, port.ErrExecutionConflict
+	}
+	if calls != (r.CallTraces != nil) {
+		return false, port.ErrExecutionConflict
+	}
+	if err = validateCallReceipt(ctx, tx, port.ExecutionPublication{Ref: r.Ref, Parent: r.Parent, Digest: execwire.Hash(expected), CallTraces: calls}, true); err != nil {
+		return false, err
 	}
 	bound := context.WithValue(ctx, blockTxKey{}, bt)
 	if err = fresh(bound, incoming); err != nil {

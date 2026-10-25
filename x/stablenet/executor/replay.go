@@ -52,6 +52,7 @@ func Replay(ctx context.Context, in ReplayInput) (execwire.Result, error) {
 	var used uint64
 	receipts := make(types.Receipts, 0, len(in.Receipts))
 	steps := make([]execwire.Step, 0, len(in.Receipts)+1)
+	calls := &callCollector{frames: []execwire.CallFrame{}}
 	for i, tx := range in.Block.Transactions() {
 		if err := ctx.Err(); err != nil {
 			return execwire.Result{}, err
@@ -60,11 +61,9 @@ func Replay(ctx context.Context, in ReplayInput) (execwire.Result, error) {
 			return execwire.Result{}, err
 		}
 		r.state.SetTxContext(tx.Hash(), i)
-		cfg := vm.Config{}
-		logger := &cancelLogger{ctx: ctx}
-		if ctx.Done() != nil {
-			cfg.Tracer = logger
-		}
+		logger := newCallLogger(ctx, calls, uint32(i), tx.Hash())
+		cfg := vm.Config{Tracer: logger}
+		root := len(calls.frames)
 		receipt, err := core.ApplyTransaction(config, in.Chain, nil, gp, r.state, h, tx, &used, cfg)
 		logger.close()
 		if err := ctx.Err(); err != nil {
@@ -72,6 +71,9 @@ func Replay(ctx context.Context, in ReplayInput) (execwire.Result, error) {
 		}
 		if err != nil {
 			return execwire.Result{}, fmt.Errorf("executor: transaction %d: %w", i, err)
+		}
+		if err := calls.end(root, tx, receipt); err != nil {
+			return execwire.Result{}, err
 		}
 		// A successful constructor may SELFDESTRUCT before it leaves any net
 		// account change. Keep its verified before/after witness so the receipt
@@ -120,6 +122,11 @@ func Replay(ctx context.Context, in ReplayInput) (execwire.Result, error) {
 		return execwire.Result{}, err
 	}
 	out := execwire.Result{Ref: execwire.Ref{Generation: in.Generation, Height: in.Block.NumberU64(), Hash: execwire.Hash(in.Block.Hash())}, Parent: execwire.Hash(in.Block.ParentHash()), Time: in.Block.Time(), StateRoot: execwire.Hash(expectedState), ReceiptsRoot: execwire.Hash(expectedReceipts), TxCount: uint32(len(in.Receipts)), BlockRLP: blockRLP, ReceiptsRLP: receiptRLP, Steps: steps}
+	profile := in.TraceProfile
+	if profile == "" {
+		profile = "stablenet"
+	}
+	out.CallTraces = &execwire.CallTraces{Version: 1, Profile: profile, Frames: calls.frames}
 	if _, err := execwire.MarshalResult(out); err != nil {
 		return execwire.Result{}, err
 	}

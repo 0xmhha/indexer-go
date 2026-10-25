@@ -140,7 +140,10 @@ pub fn replay<S: ReplayState>(
         .with_database(StrictDB(state))
         .with_bundle_update()
         .build();
-    let mut executor = config.executor_for_block(&mut db, &recovered)?;
+    let observer = crate::calls::Observer::default();
+    let calls = observer.0.clone();
+    let evm = config.evm_with_env_and_inspector(&mut db, config.evm_env(h)?, observer);
+    let mut executor = config.create_executor(evm, config.context_for_block(&recovered)?);
     let cleared: Arc<Mutex<BTreeSet<Address>>> = Arc::default();
     let tracking = cleared.clone();
     executor.set_state_hook(Some(Box::new(move |_, changes: &EvmState| {
@@ -173,7 +176,42 @@ pub fn replay<S: ReplayState>(
         },
     )?);
     for (index, tx) in recovered.transactions_recovered().enumerate() {
-        executor.execute_transaction(&tx)?;
+        calls
+            .lock()
+            .map_err(|_| eyre!("call observer poisoned"))?
+            .begin(index as u32, *tx.tx_hash())?;
+        let previous = if index == 0 {
+            0
+        } else {
+            receipts[index - 1].cumulative_gas_used()
+        };
+        let used = receipts[index]
+            .cumulative_gas_used()
+            .checked_sub(previous)
+            .ok_or_else(|| eyre!("receipt gas order"))?;
+        let physical =
+            crate::calls::root_frame(tx.signer(), tx.to(), tx.value(), tx.gas_limit(), tx.input())?;
+        let mut trace_result = None;
+        executor.execute_transaction_with_result_closure(&tx, |out| {
+            trace_result = Some((|| -> Result<()> {
+                let native = &out.result.result;
+                ensure!(
+                    native.is_success() == receipts[index].status(),
+                    "native call result/receipt status"
+                );
+                let error = match native {
+                    revm::context::result::ExecutionResult::Success { .. } => String::new(),
+                    revm::context::result::ExecutionResult::Revert { .. } => "Revert".into(),
+                    revm::context::result::ExecutionResult::Halt { reason, .. } => {
+                        format!("{reason:?}")
+                    }
+                };
+                let mut c = calls.lock().map_err(|_| eyre!("call observer poisoned"))?;
+                c.finish_root(physical, native.output().map_or(&[], |b| b.as_ref()), error)?;
+                c.end(tx.gas_limit(), used, native.is_success())
+            })());
+        })?;
+        trace_result.ok_or_else(|| eyre!("missing native call result"))??;
         let forced = if tx.to().is_none() && executor.receipts().last().is_some_and(|r| r.status())
         {
             Some(tx.signer().create(tx.nonce()))
@@ -243,6 +281,12 @@ pub fn replay<S: ReplayState>(
         block_rlp: alloy_rlp::encode(block),
         receipts_rlp,
         steps,
+        call_traces: Some(
+            calls
+                .lock()
+                .map_err(|_| eyre!("call observer poisoned"))?
+                .take()?,
+        ),
     });
     // No result escapes without all transport bounds and completeness checks.
     verified.encode()?;

@@ -39,15 +39,7 @@ func TestExecutionPreBlockMigrationPreservesExistingPartitions(t *testing.T) {
 	b.Nonce--
 	old := accountResult(cfg, addr, a, b, b)
 	require.NoError(t, applyStatePart(t, s, port.ExecutionAccounts, old))
-	// Restore the four exact v16 checks on an existing partitioned schema.
-	for _, table := range []string{"state_account_changes", "state_storage_changes", "state_storage_clears", "state_contract_changes"} {
-		identifier := pgx.Identifier{table}.Sanitize()
-		constraint := pgx.Identifier{table + "_cause_check"}.Sanitize()
-		_, err := s.pool.Exec(t.Context(), fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s; ALTER TABLE %s ADD CONSTRAINT %s CHECK(cause BETWEEN 0 AND 3)", identifier, constraint, identifier, constraint))
-		require.NoError(t, err)
-	}
-	_, err := s.pool.Exec(t.Context(), "DELETE FROM schema_migrations WHERE version=17")
-	require.NoError(t, err)
+	restoreExecutionV16(t, s)
 	require.NoError(t, s.Migrate(t.Context()))
 	c := b
 	c.Nonce--
@@ -60,4 +52,26 @@ func TestExecutionPreBlockMigrationPreservesExistingPartitions(t *testing.T) {
 	require.Equal(t, b, got, "the existing partition and its history survive the additive migration")
 	_, err = s.pool.Exec(t.Context(), "UPDATE state_account_changes SET cause=5 WHERE height=$1", int64(next.Ref.Height))
 	require.Error(t, err, "unknown future causes remain rejected")
+}
+
+// Reconstruct the released v16 fixture shape, removing later additive
+// tables/columns, before replaying upgrades. Deleting only one version entry
+// leaves a newer max(version), causing Migrate to skip the intended upgrade.
+// This is test-only reconstruction, not a supported production downgrade.
+func restoreExecutionV16(t *testing.T, s *Store) {
+	t.Helper()
+	_, err := s.pool.Exec(t.Context(), `DROP TABLE exec_call_frames,exec_call_blocks; ALTER TABLE exec_publications DROP COLUMN call_traces`)
+	require.NoError(t, err)
+	// Restore the four exact v16 checks on an existing partitioned schema.
+	for _, table := range []string{"state_account_changes", "state_storage_changes", "state_storage_clears", "state_contract_changes"} {
+		identifier := pgx.Identifier{table}.Sanitize()
+		constraint := pgx.Identifier{table + "_cause_check"}.Sanitize()
+		_, err := s.pool.Exec(t.Context(), fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s; ALTER TABLE %s ADD CONSTRAINT %s CHECK(cause BETWEEN 0 AND 3)", identifier, constraint, identifier, constraint))
+		require.NoError(t, err)
+	}
+	_, err = s.pool.Exec(t.Context(), "DELETE FROM schema_migrations WHERE version>=17")
+	require.NoError(t, err)
+	version, err := appliedVersion(t.Context(), s.pool)
+	require.NoError(t, err)
+	require.Equal(t, 16, version)
 }

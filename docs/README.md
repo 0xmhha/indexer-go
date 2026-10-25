@@ -21,6 +21,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Query captured source blocks, transactions, addresses or logs | [Source lookup and search](SOURCE_QUERIES.md) |
 | Read projection completion, gaps and independent worker output | [Projection progress](PROJECTION_PROGRESS.md) |
 | Query tracked account and storage changes | [Tracked-state projections](TRACKED_STATE_PROJECTION.md) |
+| Read native replay call trees and internal calls | [Native execution traces](EXECUTION_CALL_TRACES.md) |
 
 Snapshots describe a test configuration. Your runtime schema and data depend on the linked profiles, enabled features, mode and indexed range. Use runtime introspection when integrating a client.
 

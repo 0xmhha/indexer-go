@@ -178,7 +178,7 @@ func assertExecutionFrozen(t *testing.T, ctx context.Context, s *postgres.Store,
 
 func TestExecutionFrozenEVMPostgresPublicationAndAPIParity(t *testing.T) {
 	postgresDSN(t)
-	for _, name := range []string{"evm-storage", "evm-revert", "evm-creations", "wbft-native", "arc-storage", "arc-create-gone"} {
+	for _, name := range []string{"evm-storage", "evm-revert", "evm-creations", "evm-calls", "wbft-native", "arc-storage", "arc-create-gone", "arc-calls", "arc-call-from-oog", "arc-call-from-direct"} {
 		t.Run(name, func(t *testing.T) {
 			f := loadExecutionFrozen(t, name)
 			s, cfg := preparedExecutionDB(t, f)
@@ -215,6 +215,16 @@ func TestExecutionFrozenEVMPostgresPublicationAndAPIParity(t *testing.T) {
 			result, err := execwire.UnmarshalResult(f.Payload)
 			require.NoError(t, err)
 			assertExecutionFrozen(t, ctx, s, f, result.Ref)
+			if result.CallTraces != nil {
+				page, e := s.ExecutionCalls(ctx, port.ExecutionCallQuery{Height: result.Ref.Height, Limit: 256})
+				require.NoError(t, e)
+				require.EqualValues(t, len(result.CallTraces.Frames), page.Total)
+				if name == "arc-call-from-oog" {
+					require.False(t, page.Frames[0].Reverted)
+					require.True(t, page.Frames[1].Reverted)
+					require.True(t, page.Frames[1].Internal)
+				}
+			}
 			history, _, err := s.GetBalanceHistory(ctx, common.Address(f.Accounts[0].Address), 0, 1, port.Page{Limit: 100})
 			require.NoError(t, err)
 			require.NoError(t, backend.Publish(ctx, prepared))

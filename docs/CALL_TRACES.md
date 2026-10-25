@@ -1,5 +1,7 @@
 # 호출 trace 수집과 DB 조회
 
+이 문서는 **RPC window-feed** trace 경로다. Arc·StableNet의 두 번째 native 실행에서 얻는 호출과 internal call은 [native 실행 trace](EXECUTION_CALL_TRACES.md)를 사용한다. 두 경로의 provenance·저장·완료점을 혼합하지 않는다.
+
 window feed에 선택 `call_traces` worker를 연결했다. 이 worker는 저장된 블록의 정확한 hash로 RPC의 호출 trace를 얻고, 거래·receipt와 최상위 호출을 대조한 뒤 원천 DB에 보관한다. 이후 조회와 후처리는 DB 입력만 사용한다. 현재 Arc 모듈에는 디코더와 앱 연결을 제공하지만, 실제 공개 Arc RPC의 debug 활성화·tracer 형식·부모 상태 보존은 운영 환경에서 확인해야 한다.
 
 ## 자료의 의미와 검증 범위

@@ -61,16 +61,20 @@ func (s *Store) CommitExecution(ctx context.Context, p port.ExecutionPublication
 	}
 	bound := context.WithValue(ctx, blockTxKey{}, bt)
 	duplicate := p.Ref.Height <= c.Visible.Height
+	if err := validateCallReceipt(ctx, tx, p, true); err != nil {
+		return false, err
+	}
 	if duplicate {
 		var hash, parent, digest, root []byte
-		err := tx.QueryRow(ctx, "SELECT hash,parent,digest,root FROM exec_publications WHERE generation=$1 AND height=$2", int64(p.Ref.Generation), int64(p.Ref.Height)).Scan(&hash, &parent, &digest, &root)
+		var calls bool
+		err := tx.QueryRow(ctx, "SELECT hash,parent,digest,root,call_traces FROM exec_publications WHERE generation=$1 AND height=$2", int64(p.Ref.Generation), int64(p.Ref.Height)).Scan(&hash, &parent, &digest, &root, &calls)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, port.ErrExecutionConflict
 		}
 		if err != nil {
 			return false, err
 		}
-		if !bytes.Equal(p.Ref.Hash[:], hash) || !bytes.Equal(p.Parent[:], parent) || !bytes.Equal(p.Digest[:], digest) || !bytes.Equal(p.Root[:], root) {
+		if calls != p.CallTraces || !bytes.Equal(p.Ref.Hash[:], hash) || !bytes.Equal(p.Parent[:], parent) || !bytes.Equal(p.Digest[:], digest) || !bytes.Equal(p.Root[:], root) {
 			return false, port.ErrExecutionConflict
 		}
 	} else {
@@ -115,7 +119,7 @@ func (s *Store) CommitExecution(ctx context.Context, p port.ExecutionPublication
 		if err := s.SetLatestHeight(bound, p.Ref.Height); err != nil {
 			return false, err
 		}
-		if _, err := bt.q().Exec(ctx, "INSERT INTO exec_publications(generation,height,hash,parent,digest,root) VALUES($1,$2,$3,$4,$5,$6)", int64(p.Ref.Generation), int64(p.Ref.Height), p.Ref.Hash[:], p.Parent[:], p.Digest[:], p.Root[:]); err != nil {
+		if _, err := bt.q().Exec(ctx, "INSERT INTO exec_publications(generation,height,hash,parent,digest,root,call_traces) VALUES($1,$2,$3,$4,$5,$6,$7)", int64(p.Ref.Generation), int64(p.Ref.Height), p.Ref.Hash[:], p.Parent[:], p.Digest[:], p.Root[:], p.CallTraces); err != nil {
 			return false, err
 		}
 		if err := bt.flush(ctx); err != nil {

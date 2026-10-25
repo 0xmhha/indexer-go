@@ -13,7 +13,7 @@ Normal node import is the first execution. The adapter replays an imported block
 | Contract/code | Hash-checked bytecode and successful outer creation evidence, including empty code and constructor-time destruction |
 | Pre-block protocol changes | Optional first-only wire cause `PreBlock` = 4, index -1 and zero transaction hash; not attributed to a user transaction |
 | Finalize | Last step, including Arc system accounting in empty blocks; index -1 and zero transaction hash |
-| Call traces/internal transactions | Not supplied. Net committed state and receipts do not prove a complete call trace |
+| Call traces/internal calls | Bounded same-replay EVM hook trees, attempts/reverts and CallFrom completion handling; [native call guide](EXECUTION_CALL_TRACES.md). Root consistency does not independently commit to every child |
 | Blobs | Transaction references may be present in raw data; sidecars/KZG proofs and complete availability are not supplied. Existing [Arc blob policy audit](../x/arc/blobs.go) remains separate |
 | Account/storage inclusion proofs | Not exported by this adapter. Native/journal root equality is not an independent consensus/finality proof |
 

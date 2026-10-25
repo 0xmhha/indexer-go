@@ -29,4 +29,7 @@ type ReplayInput struct {
 	Block      *types.Block
 	Receipts   types.Receipts
 	Generation uint64
+	// TraceProfile defaults to stablenet; generic offline EVM fixtures bind
+	// their explicit profile. The node-backed StableNet adapter uses the default.
+	TraceProfile string
 }

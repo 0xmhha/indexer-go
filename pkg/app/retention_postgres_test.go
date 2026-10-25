@@ -69,7 +69,7 @@ func TestRetentionOfflineToolsConsumeFrozenProducerPlan(t *testing.T) {
 		for _, writer := range port.ExecutionWriters() {
 			require.NoError(t, backend.Part(t.Context(), writer, prepared))
 		}
-		_, err = s.CommitExecution(t.Context(), port.ExecutionPublication{Ref: result.Ref, Parent: result.Parent, Digest: prepared.Digest(), Root: result.StateRoot}, func(context.Context) error { return nil }, func(context.Context) error { return nil })
+		_, err = s.CommitExecution(t.Context(), port.ExecutionPublication{Ref: result.Ref, Parent: result.Parent, Digest: prepared.Digest(), Root: result.StateRoot, CallTraces: result.CallTraces != nil}, func(context.Context) error { return nil }, func(context.Context) error { return nil })
 		require.NoError(t, err)
 		var block types.Block
 		require.NoError(t, rlp.DecodeBytes(result.BlockRLP, &block))

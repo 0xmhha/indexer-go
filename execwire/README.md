@@ -31,6 +31,8 @@ The whole result is at most 64 MiB; metadata is at most 16 MiB. Source block and
 
 Existing StableNet cause numbers and canonical payloads are unchanged. Older readers reject cause 4; upgrade the indexer/API and PostgreSQL schema (migration 0017) before supplying a producer that emits it. The new schema retains existing partitioned history and still rejects unknown causes. This additive cause does not grant a chain execution capability or weaken native replay/root verification.
 
+Optional `CallTraces` metadata version1 adds bounded preorder transaction call frames with profile and parent ordinals. Missing means legacy/not collected; a present empty set requires zero transactions. Old canonical payloads remain byte-readable; old strict readers reject the new field. Upgrade the consumer/schema (migration0018) before the producer. Limits, nullable fields, physical-root/logical-CallFrom boundaries and recovery are in [native calls](../docs/EXECUTION_CALL_TRACES.md). The transport version and seven writer names are unchanged.
+
 SHA-256 protects transport identity. The consumer must separately verify EVM block/receipt/state roots, code hashes, chain identity, canonicality, generation and journal completeness. A valid wire message is not a durable database ACK. Only final publication may send `Committed`; the wire module has no RPC or database access.
 
 ## Ownership and limits

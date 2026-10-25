@@ -108,6 +108,7 @@ type ExecutionStore interface {
 type ExecutionPublication struct {
 	Ref                  execwire.Ref
 	Parent, Digest, Root execwire.Hash
+	CallTraces           bool
 }
 type ExecutionPublisher interface {
 	CommitExecution(context.Context, ExecutionPublication, func(context.Context) error, func(context.Context) error) (bool, error)

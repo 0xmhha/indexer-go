@@ -44,6 +44,7 @@ type frozenFixture struct {
 
 func freezeExecution(t *testing.T, profile string, in ReplayInput) []byte {
 	t.Helper()
+	in.TraceProfile = profile
 	out, err := Replay(t.Context(), in)
 	if err != nil {
 		t.Fatal(err)
@@ -145,6 +146,10 @@ func TestFrozenExecutionFixturesMatchActualEVMAndWBFT(t *testing.T) {
 			return "evm", in
 		},
 		"evm-storage": func(t *testing.T) (string, ReplayInput) { _, in := evmFixture(t); return "evm", in },
+		"evm-calls": func(t *testing.T) (string, ReplayInput) {
+			_, in := evmFixtureWith(t, allNativeCallsCode(), []evmTxSpec{{to: &account, value: 1}})
+			return "evm", in
+		},
 		"evm-revert": func(t *testing.T) (string, ReplayInput) {
 			_, in := evmFixtureWith(t, []byte{0x60, 3, 0x60, 0, 0x55, 0x60, 0, 0x60, 0, 0xfd}, []evmTxSpec{{to: &account, value: 1}})
 			return "evm", in

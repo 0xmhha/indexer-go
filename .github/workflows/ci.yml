@@ -134,7 +134,7 @@ jobs:
       - name: State projection epoch retry on PostgreSQL
         run: ./scripts/test-postgres.sh ./pkg/chainfeed/evmstate -race -run '^TestStateProjectionCanonicalFailureDoesNotMissEpoch$'
       - name: Execution IPC and DB integration concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -failfast -count=200 -timeout=40m -run '^(TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK|TestExecutionArcCollectedSpoolPublicationAndLostACK)$'
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -failfast -count=200 -timeout=40m -run '^(TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK|TestExecutionArcCollectedSpoolPublicationAndLostACK|TestExecutionNativeCallsPublicationPagesAndRestart)$'
       - name: Execution DB admission and recovery concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence|TestExecutionRetentionDrainsReadLeaseAndCancel)$'
 
@@ -173,4 +173,7 @@ jobs:
           cargo test --locked --all-targets
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-storage.json" ../../../testdata/execution/arc-storage.json
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-create-gone.json" ../../../testdata/execution/arc-create-gone.json
+          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-calls.json" ../../../testdata/execution/arc-calls.json
+          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-call-from-oog.json" ../../../testdata/execution/arc-call-from-oog.json
+          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-call-from-direct.json" ../../../testdata/execution/arc-call-from-direct.json
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-native-checkpoint.ndjson" ../../../testdata/execution/arc-native-checkpoint.ndjson

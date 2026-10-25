@@ -122,5 +122,5 @@ func validateResult(r Result) error {
 	if raw > MaxBlockBytes {
 		return ErrLimit
 	}
-	return nil
+	return ValidateCallTraces(r)
 }
