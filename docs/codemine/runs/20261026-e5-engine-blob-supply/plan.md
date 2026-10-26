@@ -1,0 +1,25 @@
+# Bounded Engine full-blob supply
+
+Priority 1 of the immutable [four-release contract](../../../../verification/seed-contract.json). Base main `361e550ad73908512c4d11b3bab2287c0696a610` (#226). Priority 2 implementation is prohibited until this feature's exact-head CI5, squash merge and clean main sync finish. Preserve source branches.
+
+## Supported contract and defaults
+
+Use the standard read-only `engine_getBlobsV1` method, not a new relay method. [Execution API Cancun](https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#engine_getblobsv1), [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844) and pinned [geth v1.16.5 GetBlobsV1](https://github.com/ethereum/go-ethereum/blob/v1.16.5/eth/catalyst/api.go) establish ordered full blobs/proofs, nullable missing/pruned pool entries, optional pool retention and Cancun/Prague endpoint applicability. Native fixture `evm-blobs.json` comes from the unchanged pinned two-pass EVM library recorder (`x/stablenet/executor/integration_fixture_test.go`), including EIP-4788 and signed type-3 transactions.
+
+The released acquisition contract deliberately supports **Ethereum mainnet Cancun blocks only**: exact chain ID/genesis, generic EVM profile, source-pinned Cancun timestamp through exclusive Prague timestamp, and at most six full blobs. An explicit separate chain-1337 `evm-dev-cancun-full-blobs.engine-v1` contract supports offline standard Cancun native fixtures. It is not a claim about arbitrary chain-1337 deployments or live mainnet evidence. Other contracts/profiles/forks fail closed. The low-level standard transport can decode up to the existing proof core's operational bound but grants no profile/fork admission on its own.
+
+Default max head distance is 64 blocks; valid explicit bounds are 1..8192. This is an intake guard, not a promise of remote retention. Each Engine request has a one-second deadline. Borrow the chain's existing uncached RPC client and shared response-bounded physical-attempt RPC5 pool; no library dialer, retry, fallback or cache. The opt-in standalone composer owns one such client for identity, head, Engine and fresh canonical reads; optional private JWT secret authentication is refreshed per request. There is no default endpoint or automatic activation.
+
+Compute the commitment from each full blob, bind its versioned hash to every signed transaction reference, and verify the full proof with the existing proof core. KZG proves neither beacon inclusion/consensus nor PeerDAS availability. Missing/pruned/null/unsupported-fork or invalid proofs cannot become empty success. Pinned Arc positive-reference admission stays closed.
+
+## Integration and authority
+
+Validate complete original EXR1 and reject prior enrichment before network IO. Verify remote chain/genesis with profile-hashed headers, enforce the head window, acquire all full blobs, compose a new immutable input, then perform an uncached profile-hashed exact canonical check. The receiver retains its separate NEW fresh -> generation fence -> COMMIT gate. No new EVM, writer, PG pool, API read or deletion authority.
+
+`EngineBlobBackend` decorates an existing two-pass exporter backend. `OpenSpool` pins the complete copied source policy hash before recovery; enabling, disabling or changing it on an existing source conflicts. The existing Collector walks every bounded canonical height and rechecks after Replay before sealing enriched bytes. Existing exporter window/capacity/restart/reorg/exact ACK machinery remains authoritative. Retained input remains usable after remote pruning; no result can be enriched after admission.
+
+Preserve chain/process pool4, part2, API reservation, seven writers, shared RPC5 physical attempts including retry/failover/batch fallback, bound SQL/validated quoted identifiers, two EVM executions, upstream unchanged, E3 full baseline/ownership/lease/permit/checkpoint/intent/completion/release/exact ACK and existing storage/query provenance. No actual node, peer, real provider/operator DB, provisioning/formatting, operating GC, performance/SLO/host loop, other-project edits, shared cleanup, tags/deploy/artifact publishing or remote branch deletion. Owned mocks/private files/fsync-on PG/native-library DB functional tests remain allowed.
+
+## Verification and release
+
+Run the named non-exempt feature test, real CLI/JWT mock, real transport -> owned fsync-on PG -> reserved DB-only pages -> restart integration, whole root+wire+StableNet race, examples/cache/offline ops, build/fmt/vet/lint, new concurrency single GOMAXPROCS=1/race/count200, and staged/history secret scans before commit/PR. Rust is unchanged; exact-head Arc CI is still mandatory. Create a draft PR attached to the Seed/task. Require lint/test/postgres/examples/arc all successful at that exact head before ready/squash/clean main sync. Update evidence/checklist, preserve n/n-1/n-2 and accepted E1-E4, then clean only this release's owned cache. The release observer must fail while any of the four releases is missing.

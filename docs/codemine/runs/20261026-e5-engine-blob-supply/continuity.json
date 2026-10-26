@@ -1,0 +1,35 @@
+{
+  "goal": "Priority 1 bounded standard Engine blob supply before immutable admission",
+  "base": "361e550ad73908512c4d11b3bab2287c0696a610",
+  "source_branch": "refactor/e5-engine-blob-supply",
+  "n": {
+    "feature": "Engine full-blob supply",
+    "state": "implemented and verified locally; draft PR / exact-head CI5 / squash / clean main sync pending",
+    "plan": "plan.md",
+    "checklist": "checklist.md",
+    "validation": "validation.md"
+  },
+  "n-1": {
+    "feature": "Arc native proofs",
+    "pr": 226,
+    "plan": "../20261026-e5-arc-native-proofs/plan.md"
+  },
+  "n-2": {
+    "feature": "execution state proofs",
+    "pr": 225,
+    "plan": "../20261026-e5-execution-state-proofs/plan.md"
+  },
+  "accepted": {
+    "E1": "../20261023-e1-execution/03-plan.md",
+    "E2": "../20261024-e2-bootstrap/plan.md",
+    "E3": "../20261024-e3-retention/plan.md",
+    "E4": "../20261024-e4-feature-writers/plan.md"
+  },
+  "holds": [
+    "actual nodes/peers/operator DB",
+    "disk provisioning/formatting",
+    "operational GC",
+    "performance",
+    "other projects"
+  ]
+}

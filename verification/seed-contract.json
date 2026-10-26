@@ -1,0 +1,248 @@
+{
+  "goal": "Implement and release FOUR priorities strictly in this order in indexer-go; complete each feature's CI5-gated squash merge and clean main sync BEFORE implementing the next. Deliver working tested code, not plans/interfaces/stubs. 1) Source-backed supported-chain blob supply/verification contracts and usable opt-in bounded transport integrated with existing proof/core, immutable admission, head/window/capacity/restart/reorg/exact ACK; offline mock success and missing/pruned/wrong-fork/proof/cancel/reorg failures. Keep unsupported pinned Arc admission closed; KZG is not beacon/PeerDAS verification. 2) Bounded address/block-range call queries, coverage, reorg orphan trace preservation/query and explicit GraphQL/JSON-RPC contracts; preserve epoch/original ref/digest, pagination/reserved DB-only reads and uncollected semantics. 3) E6 real cryptographic consensus/validator/trust-anchor/fork and ancestry/finality/reorg verification for an evidence-backed supported profile, with native/spec-derived good/bad fixtures, validator transitions/fork and recovery; unsupported profiles fail closed; RPC hash/interface/synthetic-success alone is insufficient. 4) Justified native index/MDBX reclamation plus consistent matched backup/restore and retained-state-floor verification under existing E3 ownership/lease/permit/checkpoint/exact-ACK/intent/completion/release gates, proven on owned temporary native DBs with interruption/corruption/missing/foreign-data and recovery tests. Audit existing implementations and choose justified technical defaults without routine user questions. Preserve every constraint supplied below at the TOP LEVEL of the executable Seed, provide meaningful runnable verification for each of the four features, and do not exempt their verification. Release means PR/CI/squash/main only. At completion report four releases, PRs, main SHA, tests, own cache cleanup and remaining held operations in Korean.",
+  "task_type": "code",
+  "brownfield_context": {
+    "project_type": "brownfield",
+    "context_references": [
+      {
+        "path": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+        "role": "primary",
+        "summary": "Existing indexer-go codebase to audit and extend across blob supply/verification, call queries and orphan traces, E6 consensus verification, and native index/MDBX reclamation and backup/restore."
+      }
+    ],
+    "existing_patterns": [
+      "Integration with existing proof/core.",
+      "Immutable admission and exact-ACK behavior.",
+      "Head/window/capacity bounds and restart/reorg handling.",
+      "Preservation of epoch, original reference, digest, pagination, reserved DB-only reads, and uncollected semantics.",
+      "Fail-closed handling of unsupported pinned Arc admission and unsupported consensus profiles.",
+      "Existing E3 ownership, lease, permit, checkpoint, exact-ACK, intent, completion, and release gates.",
+      "CI5-gated squash merge followed by clean main synchronization for each feature."
+    ],
+    "existing_dependencies": [
+      "Existing proof/core components.",
+      "Existing GraphQL and JSON-RPC surfaces.",
+      "Existing E6 consensus verification components to audit and extend.",
+      "Existing native index/MDBX storage and E3 gate machinery.",
+      "Existing CI5 and PR/squash/main release workflow."
+    ]
+  },
+  "constraints": [
+    "Work in /Users/kevin/work/github/0xmhha/stable-platform/indexer-go.",
+    "Preserve every supplied constraint at the top level of the executable Seed.",
+    "Implement priorities strictly in order: blob supply and verification; bounded call queries and orphan traces; E6 cryptographic consensus verification; native index/MDBX reclamation and backup/restore.",
+    "Complete each feature's CI5-gated squash merge and clean main synchronization before implementing the next feature.",
+    "Deliver working tested code, not plans, interfaces alone, or stubs.",
+    "Audit existing implementations and choose justified technical defaults without routine user questions.",
+    "Priority 1 requires source-backed supported-chain blob supply and verification contracts and usable opt-in bounded transport integrated with existing proof/core.",
+    "Priority 1 must preserve immutable admission and enforce head, window, capacity, restart, reorg, and exact-ACK behavior.",
+    "Priority 1 must demonstrate offline mock success and missing, pruned, wrong-fork, proof, cancellation, and reorg failure handling.",
+    "Keep unsupported pinned Arc admission closed; KZG verification alone does not constitute beacon or PeerDAS verification.",
+    "Priority 2 requires bounded address/block-range call queries, coverage information, preservation and querying of reorg-orphaned traces, and explicit GraphQL and JSON-RPC contracts.",
+    "Priority 2 must preserve epoch, original reference, digest, pagination, reserved DB-only reads, and uncollected-data semantics.",
+    "Priority 3 requires E6 real cryptographic consensus, validator, trust-anchor, fork, ancestry, finality, and reorg verification for an evidence-backed supported profile.",
+    "Priority 3 requires source-backed native/spec-derived good and bad fixtures, validator transitions, fork handling, and recovery verification.",
+    "Unsupported consensus profiles must fail closed; RPC hashes, interfaces, or synthetic success alone are insufficient verification.",
+    "Priority 4 requires justified native index/MDBX reclamation, consistent matched backup/restore, and retained-state-floor verification.",
+    "Priority 4 must preserve existing E3 ownership, lease, permit, checkpoint, exact-ACK, intent, completion, and release gates.",
+    "Prove priority 4 on owned temporary native databases with interruption, corruption, missing-data, foreign-data, and recovery tests.",
+    "Provide meaningful runnable verification for every feature; do not exempt any feature from verification.",
+    "Release means PR, CI, squash merge, and main synchronization only.",
+    "At completion, report all four releases, PRs, main SHA, tests, cleanup of execution-owned caches, and remaining held operations in Korean.",
+    "Strict four-phase order with separate refactor/ branches and CI-gated releases",
+    "preserve branches. Two EVM executions",
+    "upstream unchanged. Existing chain/process pool4, part2, API reservation, seven writers. Shared RPC5 physical HTTP attempts/s including retry/failover/batch fallback. NEW uncached fresh immediately before generation fence/COMMIT. Bound SQL values, validated/quoted identifiers",
+    "E3 gates/full-baseline and exact ACK unchanged.\nEach feature: runtime RED then GREEN, current docs/checklist and accepted E1-E4 plus n/n-1/n-2 continuity",
+    "mark PR226 complete. Required BEFORE every commit/PR: build/fmt/vet/lint",
+    "full root+wire+StableNet make test-race",
+    "fsync-on PG",
+    "examples/cache/offline ops. Changed Rust build/fmt/clippy/all-target offline tests plus fixture parity. New concurrency: GOMAXPROCS1 -race single count200 invocation, no partial sums. Recheck passed gates only for relevant changes/failures.\nExplicit staging, staged/history secrets scan, concise English conventional commits without attribution/codex. DRAFT PR and task attachment",
+    "exact-head lint/test/postgres/examples/arc ALL success before ready/squash/clean main sync and next feature. No bypass, tags/artifact publishing, guessed success or branch deletion. Use owned /private/tmp caches/logs",
+    "clean only own cache after release.\nAll four scopes need executable feature verification commands/fixtures plus semantic review",
+    "verification exemptions for feature ACs are unacceptable. Existing repo test commands are authoritative",
+    "include proof new tests actually executed. Report real unknowns/blockers candidly",
+    "no quiet reduction to design-only completion",
+    "Non-goal: NO actual node startup, real peer/provider/operator DB, disk formatting/provisioning, operating GC, extra performance/SLO/load/host-screen loops, other-project/frontend edits, shared-cache/process/Docker cleanup, tags/deploy or remote branch deletion. Owned temporary native-library DB/mock IPC/private files/fsync-on PG FUNCTIONAL tests and primary-source research are allowed. No blind SetHead/guessed generation/TTL fence clearing/partial-as-full or deleting required latest state/code/preimages/headers/indices"
+  ],
+  "acceptance_criteria": [
+    {
+      "description": "Supported-chain blob supply and verification operate through usable opt-in bounded transport integrated with existing proof/core. Source-backed contracts, immutable admission, head/window/capacity limits, restart, reorg, and exact ACK are enforced. Offline mocks demonstrate success and missing, pruned, wrong-fork, invalid-proof, cancellation, and reorg failures. Unsupported pinned Arc admission remains closed, and KZG alone cannot satisfy beacon/PeerDAS verification.",
+      "semantic_ac_key": "ac_a6a5be2946f53409",
+      "verify_command": "t=$(mktemp -d) && cp -R . \"$t/indexer-go\" && cd \"$t/indexer-go\" && go test -json ./... -run '^TestSeedPriority1BlobSupplyVerification$' -count=1 > \"$t/results.json\" && python3 -c \"import json,sys; events=[json.loads(s) for s in open(sys.argv[1])]; assert any(e.get('Action')=='pass' and e.get('Test')=='TestSeedPriority1BlobSupplyVerification' for e in events); assert not any(e.get('Action')=='fail' for e in events)\" \"$t/results.json\""
+    },
+    {
+      "description": "Address/block-range call queries enforce bounds and pagination and expose coverage and uncollected-data semantics through explicit GraphQL and JSON-RPC contracts. Reorg-orphaned traces remain preserved and queryable with their epoch, original reference, and digest intact, and reserved DB-only read behavior is preserved.",
+      "semantic_ac_key": "ac_c9a99bc0e43ef1dd",
+      "verify_command": "t=$(mktemp -d) && cp -R . \"$t/indexer-go\" && cd \"$t/indexer-go\" && go test -json ./... -run '^TestSeedPriority2CallQueriesAndOrphanTraces$' -count=1 > \"$t/results.json\" && python3 -c \"import json,sys; events=[json.loads(s) for s in open(sys.argv[1])]; assert any(e.get('Action')=='pass' and e.get('Test')=='TestSeedPriority2CallQueriesAndOrphanTraces' for e in events); assert not any(e.get('Action')=='fail' for e in events)\" \"$t/results.json\""
+    },
+    {
+      "description": "An evidence-backed supported E6 profile performs real cryptographic consensus, validator, trust-anchor, fork, ancestry, finality, and reorg verification. Native/spec-derived good and bad fixtures demonstrate verification, validator transitions, fork handling, and recovery. Unsupported profiles fail closed, and RPC hashes, interfaces, or synthetic success cannot substitute for cryptographic verification.",
+      "semantic_ac_key": "ac_7a88b2a441f1f78e",
+      "verify_command": "t=$(mktemp -d) && cp -R . \"$t/indexer-go\" && cd \"$t/indexer-go\" && go test -json ./... -run '^TestSeedPriority3E6CryptographicConsensus$' -count=1 > \"$t/results.json\" && python3 -c \"import json,sys; events=[json.loads(s) for s in open(sys.argv[1])]; assert any(e.get('Action')=='pass' and e.get('Test')=='TestSeedPriority3E6CryptographicConsensus' for e in events); assert not any(e.get('Action')=='fail' for e in events)\" \"$t/results.json\""
+    },
+    {
+      "description": "Justified native index/MDBX reclamation and consistent matched backup/restore preserve the retained-state floor and existing E3 ownership, lease, permit, checkpoint, exact-ACK, intent, completion, and release gates. Tests on owned temporary native databases demonstrate correct interruption, corruption, missing-data, foreign-data, and recovery behavior.",
+      "semantic_ac_key": "ac_543b2f65eb89b4cd",
+      "verify_command": "t=$(mktemp -d) && cp -R . \"$t/indexer-go\" && cd \"$t/indexer-go\" && go test -json ./... -run '^TestSeedPriority4NativeReclamationBackupRestore$' -count=1 > \"$t/results.json\" && python3 -c \"import json,sys; events=[json.loads(s) for s in open(sys.argv[1])]; assert any(e.get('Action')=='pass' and e.get('Test')=='TestSeedPriority4NativeReclamationBackupRestore' for e in events); assert not any(e.get('Action')=='fail' for e in events)\" \"$t/results.json\""
+    },
+    {
+      "description": "All four features have separate completed releases in the required order, with authoritative evidence that each passed CI5, was squash merged through its PR, and reached a clean synchronized main before implementation of the next began. The Korean completion report identifies all four releases and PRs, the final main SHA, test results, execution-owned cache cleanup, and remaining held operations. Release activity stays within PR/CI/squash/main scope.",
+      "semantic_ac_key": "ac_27e8acfb52b177df",
+      "verify_command": "python3 -B verification/verify_release_sequence.py"
+    }
+  ],
+  "assumptions": [
+    "The verification commands propose dedicated Go test identifiers and a read-only release observer at verification/verify_release_sequence.py. These names are verification scaffolding, not observed repository facts or user-required implementation paths; adapt them after auditing the repository while retaining decisive, non-exempt checks. The release observer must validate authoritative PR, CI5, Git, synchronization, cleanup, and completion-report evidence rather than accepting unchecked assertions."
+  ],
+  "open_questions": [
+    "2번의 주소·블록 범위 조회에 미수집 구간이 포함되면, 수집된 결과와 coverage·미수집 구간 정보를 함께 반환하는 부분 응답을 허용해야 하나요, 아니면 조회 전체를 명시적 오류로 거부해야 하나요?",
+    "1번의 blob 공급·검증과 3번의 합의 검증은 동일한 체인·프로필에서 통합 동작해야 하나요, 아니면 unsupported pinned Arc admission을 닫아 둔 채 각각 근거가 확보된 서로 다른 지원 프로필에서 성공 경로를 입증해도 되나요?",
+    "1번과 3번의 릴리스 승인에는 각각 실제 지원 네트워크에 접속한 성공 검증도 필수인가요, 아니면 출처가 확인되는 native/spec-derived fixture와 오프라인 mock으로 실제 구현의 성공·실패·복구 경로를 재현하고 CI5를 통과하면 충분한가요?"
+  ],
+  "sourced_scope": {
+    "goal": "Implement and release FOUR priorities strictly in this order in indexer-go; complete each feature's CI5-gated squash merge and clean main sync BEFORE implementing the next. Deliver working tested code, not plans/interfaces/stubs. 1) Source-backed supported-chain blob supply/verification contracts and usable opt-in bounded transport integrated with existing proof/core, immutable admission, head/window/capacity/restart/reorg/exact ACK; offline mock success and missing/pruned/wrong-fork/proof/cancel/reorg failures. Keep unsupported pinned Arc admission closed; KZG is not beacon/PeerDAS verification. 2) Bounded address/block-range call queries, coverage, reorg orphan trace preservation/query and explicit GraphQL/JSON-RPC contracts; preserve epoch/original ref/digest, pagination/reserved DB-only reads and uncollected semantics. 3) E6 real cryptographic consensus/validator/trust-anchor/fork and ancestry/finality/reorg verification for an evidence-backed supported profile, with native/spec-derived good/bad fixtures, validator transitions/fork and recovery; unsupported profiles fail closed; RPC hash/interface/synthetic-success alone is insufficient. 4) Justified native index/MDBX reclamation plus consistent matched backup/restore and retained-state-floor verification under existing E3 ownership/lease/permit/checkpoint/exact-ACK/intent/completion/release gates, proven on owned temporary native DBs with interruption/corruption/missing/foreign-data and recovery tests. Audit existing implementations and choose justified technical defaults without routine user questions. Preserve every constraint supplied below at the TOP LEVEL of the executable Seed, provide meaningful runnable verification for each of the four features, and do not exempt their verification. Release means PR/CI/squash/main only. At completion report four releases, PRs, main SHA, tests, own cache cleanup and remaining held operations in Korean.",
+    "constraints": [
+      "Strict four-phase order with separate refactor/ branches and CI-gated releases",
+      "preserve branches. Two EVM executions",
+      "upstream unchanged. Existing chain/process pool4, part2, API reservation, seven writers. Shared RPC5 physical HTTP attempts/s including retry/failover/batch fallback. NEW uncached fresh immediately before generation fence/COMMIT. Bound SQL values, validated/quoted identifiers",
+      "E3 gates/full-baseline and exact ACK unchanged.\nEach feature: runtime RED then GREEN, current docs/checklist and accepted E1-E4 plus n/n-1/n-2 continuity",
+      "mark PR226 complete. Required BEFORE every commit/PR: build/fmt/vet/lint",
+      "full root+wire+StableNet make test-race",
+      "fsync-on PG",
+      "examples/cache/offline ops. Changed Rust build/fmt/clippy/all-target offline tests plus fixture parity. New concurrency: GOMAXPROCS1 -race single count200 invocation, no partial sums. Recheck passed gates only for relevant changes/failures.\nExplicit staging, staged/history secrets scan, concise English conventional commits without attribution/codex. DRAFT PR and task attachment",
+      "exact-head lint/test/postgres/examples/arc ALL success before ready/squash/clean main sync and next feature. No bypass, tags/artifact publishing, guessed success or branch deletion. Use owned /private/tmp caches/logs",
+      "clean only own cache after release.\nAll four scopes need executable feature verification commands/fixtures plus semantic review",
+      "verification exemptions for feature ACs are unacceptable. Existing repo test commands are authoritative",
+      "include proof new tests actually executed. Report real unknowns/blockers candidly",
+      "no quiet reduction to design-only completion",
+      "Non-goal: NO actual node startup, real peer/provider/operator DB, disk formatting/provisioning, operating GC, extra performance/SLO/load/host-screen loops, other-project/frontend edits, shared-cache/process/Docker cleanup, tags/deploy or remote branch deletion. Owned temporary native-library DB/mock IPC/private files/fsync-on PG FUNCTIONAL tests and primary-source research are allowed. No blind SetHead/guessed generation/TTL fence clearing/partial-as-full or deleting required latest state/code/preimages/headers/indices"
+    ],
+    "acceptance_criteria": []
+  },
+  "ontology_schema": {
+    "name": "IndexerPriorityReleaseContract",
+    "description": "The four ordered feature outcomes, their source-backed verification evidence, preserved indexing and storage invariants, and gated release completion.",
+    "fields": [
+      {
+        "name": "priority",
+        "type": "number",
+        "description": "Required feature order from 1 through 4.",
+        "required": true
+      },
+      {
+        "name": "feature_outcome",
+        "type": "string",
+        "description": "Observable working behavior delivered by the priority.",
+        "required": true
+      },
+      {
+        "name": "supported_profile",
+        "type": "object",
+        "description": "Supported chain or consensus profile and the source evidence justifying its verification contract.",
+        "required": true
+      },
+      {
+        "name": "blob_contract",
+        "type": "object",
+        "description": "Supply, verification, bounded transport, immutable admission, head/window/capacity, restart, reorg, and exact-ACK behavior.",
+        "required": true
+      },
+      {
+        "name": "query_contract",
+        "type": "object",
+        "description": "Address/block bounds, pagination, GraphQL/JSON-RPC behavior, coverage, uncollected semantics, and reserved DB-only reads.",
+        "required": true
+      },
+      {
+        "name": "trace_provenance",
+        "type": "object",
+        "description": "Preserved epoch, original reference, digest, and reorg-orphan status of queryable traces.",
+        "required": true
+      },
+      {
+        "name": "consensus_contract",
+        "type": "object",
+        "description": "Cryptographic consensus, validator transitions, trust anchors, forks, ancestry, finality, reorg, recovery, and unsupported-profile rejection.",
+        "required": true
+      },
+      {
+        "name": "storage_contract",
+        "type": "object",
+        "description": "Native reclamation, matched backup/restore, retained-state floor, and preserved E3 gates.",
+        "required": true
+      },
+      {
+        "name": "verification_evidence",
+        "type": "array",
+        "description": "Runnable checks, fixture provenance, success/failure/recovery results, and native temporary-database evidence.",
+        "required": true
+      },
+      {
+        "name": "release_evidence",
+        "type": "object",
+        "description": "PR, CI5 gate result, squash merge, main SHA, clean synchronization, and evidence of ordering relative to subsequent implementation.",
+        "required": true
+      },
+      {
+        "name": "completion_report",
+        "type": "object",
+        "description": "Korean report covering four releases, PRs, final main SHA, tests, execution-owned cache cleanup, and remaining held operations.",
+        "required": true
+      }
+    ]
+  },
+  "evaluation_principles": [
+    {
+      "name": "Functional completeness",
+      "description": "Judge working integrated behavior for every stated feature and preserved invariant; plans, interfaces, and stubs do not satisfy delivery.",
+      "weight": 0.3
+    },
+    {
+      "name": "Evidence-backed verification",
+      "description": "Require source-backed supported profiles, real cryptographic checks, meaningful runnable feature verification, and the specified failure and recovery evidence.",
+      "weight": 0.3
+    },
+    {
+      "name": "Ordered release integrity",
+      "description": "Require each feature's CI5-gated squash merge and clean main synchronization before implementation of the next feature.",
+      "weight": 0.25
+    },
+    {
+      "name": "Preservation and completion evidence",
+      "description": "Check query provenance, unsupported-profile closure, E3 gates, storage consistency, and the complete Korean release report.",
+      "weight": 0.15
+    }
+  ],
+  "exit_conditions": [
+    {
+      "name": "Completed",
+      "description": "All requested feature and release outcomes are satisfied.",
+      "criteria": "All five acceptance criteria pass; four ordered CI5-gated squash releases are complete; main is clean and synchronized; the Korean report includes releases, PRs, final main SHA, tests, execution-owned cache cleanup, and remaining held operations."
+    },
+    {
+      "name": "Next-priority gate",
+      "description": "Later-priority implementation cannot begin while its predecessor's release is incomplete.",
+      "criteria": "If the current priority lacks its completed CI5-gated squash merge or clean main synchronization, do not begin implementing the next priority and do not declare the overall task complete."
+    },
+    {
+      "name": "Unsupported-profile closure",
+      "description": "Unsupported verification remains closed.",
+      "criteria": "An unsupported pinned Arc or consensus profile cannot be admitted or represented as successfully verified; unsupported-profile rejection does not establish a supported-profile success path."
+    }
+  ],
+  "metadata": {
+    "seed_id": "seed_cff4131c89a5",
+    "version": "1.0.0",
+    "created_at": "2026-10-26T10:52:50.321386Z",
+    "ambiguity_score": 0.164,
+    "gate_forced": true,
+    "interview_id": "interview_ff33435f715340bf",
+    "parent_seed_id": "seed_a7940cd3818c",
+    "generation_mode": "normal",
+    "degraded": false,
+    "unresolved_slots": [],
+    "recovery_reason": null
+  },
+  "runtime_workspace": "/Users/kevin/.ouroboros/worktrees/indexer-go/lin_indexer_four_repaired_0f79258729fc",
+  "source_seed_sha256": "5e35b2e262ce7c462fa8ea0178f06936924824fac0e76f845c7463510bd5e2bc"
+}

@@ -1,0 +1,25 @@
+# Priority 1 verification
+
+Owned run directory: `/private/tmp/indexer-four.ZgYGu8`. No real node/provider/operator DB was used.
+
+Runtime RED before implementation: `go test -count=1 ./cmd/execution-blobs -run '^TestEngineBlobOptInIsDiscoverable$'` failed on absent `engine-rpc` before implementation (`priority1-red.log`).
+
+A later isolated replay of the actual CLI/JWT/private-file success test against unchanged base main `361e550` also fails at runtime with `flag provided but not defined: -engine-rpc` (`priority1-baseline-functional-red.log`). The first attempt during incomplete checkout was a setup-only missing-package failure and is excluded; the completed baseline checkout runtime result is the RED evidence. The detached baseline worktree is execution-owned and will be removed after release.
+
+GREEN: actual named JSON pass for `TestSeedPriority1BlobSupplyVerification` with all subtests in `priority1-feature.json`. Covers native fixture -> real HTTP/shared RPC5 -> existing proof core, missing/pruned/bad proof/bad reference/unsupported fork/reorg/head/window/cancellation failure, pinned admission/restart/capacity/exact/lost ACK and closed pinned Arc policy. The initial full relevant package race command passed (`priority1-race.log`). CLI/JWT/private file execution passed with actual five HTTP calls and immutable retry (`priority1-cli.log`).
+
+Actual fsync-on owned PostgreSQL integration `./scripts/test-postgres.sh ./pkg/app -race -v -count=1 -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'` passed, not skipped (`priority1-postgres.log`): new transport input enters seven existing writer queues, remains unpublished until commit, serves reserved DB-only blob pages with no RPC and survives read-only reopen. Both complete immutable input and original file are checked.
+
+Root build/vet/lint (zero issues), gofmt/diff, examples, cache lifecycle, offline operations (40 tests plus preflight with zero services) and the complete root+wire+StableNet `make test-race` passed. The core/CLI single `GOMAXPROCS=1 -race -count=200` command completed both packages (execution 841.373s, CLI 256.068s). Full root functional tests, root/module build/vet/lint (all three nested modules report zero issues), full fsync-on PostgreSQL adapter/app/API/StableNet bundle and the new PG single GOMAXPROCS=1/race/count200 invocation also passed. PG200 completed all 200 iterations in 918.389s (`priority1-postgres200.log`); full PG app completed in 967.646s (`full-postgres.log`). The same single core/CLI200 command also completed the CLI package (256.068s); its process exited zero. No partial invocations were combined. Rust/upstream native code and frozen two-pass fixtures are unchanged; this does not replace mandatory Arc exact-head CI.
+
+## Semantic review
+
+Supported success is the explicitly selected standard Cancun execution-blob contract, reproduced by the native Cancun fixture and real mock HTTP protocol. Mainnet chain/genesis/timestamps use pinned geth parameters. No live mainnet/provider/remote-retention claim. Full KZG does not imply beacon/PeerDAS/consensus. The source admission hash includes chain, contract, provider and window before recovery. All reference positions are required. A failed acquisition has no spool input or publication, and restart uses sealed bytes without re-opening the remote pool. Existing receiver final fresh, generation fence and exact durable ACK remain separate gates. The decorator adds no third EVM, eighth writer, pool, maintenance permit or GC authority. No native Rust change or native reclamation is included in this priority.
+
+## Secret scan review
+
+The raw whole-history `gitleaks git --log-opts=--all --redact` scan covered 697 commits and reported 21 existing false positives. Each finding was reviewed in its original Git blob: public blockAccessListHash values, public token addresses in documentation, local mock API keys/deterministic test signing keys, and the literal YOUR_API_KEY documentation placeholder. [Exact fingerprint review](../../../../verification/secret-scan-reviewed.json) records file/line/commit/reason without values. Recheck uses only those exact historical fingerprints; no rule/path-wide suppression or real credential exception is installed. New staged/history findings remain failures. No upstream history or branches are rewritten.
+
+Staged scan additionally identified two public immutable Seed semantic AC IDs as generic keys. Only the exact IDs `ac_a6a5be2946f53409` and `ac_543b2f65eb89b4cd` are matched by a secret-value allowlist in the owned scanner configuration. The Seed fields/verification commands remain unchanged; there is no feature-verification exemption. All other new findings still fail.
+
+[Machine-readable local evidence](../../../../verification/priority1-local-evidence.json) records actual named Go JSON passes, all 200 PG iterations, exact commands and owned-log SHA256 values. Both complete single200 commands exited zero. Review and release remain separate: draft PR/task attachment and exact-head CI5/ready/squash/clean main sync are still required. Logs are retained; only execution-owned caches are removed after release.

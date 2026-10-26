@@ -1,11 +1,12 @@
 # 남은 작업과 우선순위
 
-E1 #214, E2 #215, E3 #216, E4 #217, E5 Arc replay·collector·checkpoint·catalog·history와 native calls #223, execution blobs #224, [선택 state proofs #225](https://github.com/0xmhha/indexer-go/pull/225)는 main에 반영됐다. 현재 릴리스 범위는 **Arc native selected proof export와 collector/window 결합**이다. 정본은 아래 계획과 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-native-proofs)이다. 정확한 head의 CI4+Arc 후 squash MERGED면 이 범위가 완료다. 선택 proof는 전체 상태·모든 변경·실제 peer·독립 합의 검증을 뜻하지 않는다.
+E1 #214, E2 #215, E3 #216, E4 #217, E5와 native calls #223, execution blobs #224, 선택 state proofs #225, [Arc native selected proofs #226](https://github.com/0xmhha/indexer-go/pull/226)는 main에 반영됐다. #226의 정확한 head CI5와 squash/main 동기화가 확인됐다. 현재는 네 단계 릴리스의 **1번: 표준 Engine V1 bounded full-blob 공급**을 검증 중이다. [불변 Seed 계약](../../verification/seed-contract.json)의 순서대로 현재 기능의 CI5·squash·깨끗한 main 동기화가 완료되어야 다음 구현을 시작한다. KZG는 beacon/PeerDAS/독립 합의 검증이 아니다.
 
 ## 현재 정본과 연속성
 
-- n: Arc native proofs [계획](../codemine/runs/20261026-e5-arc-native-proofs/plan.md), [체크리스트](../codemine/runs/20261026-e5-arc-native-proofs/checklist.md), [연속성](../codemine/runs/20261026-e5-arc-native-proofs/continuity.json), [검증](../codemine/runs/20261026-e5-arc-native-proofs/validation.md), [사용법](../EXECUTION_STATE_PROOFS.md#arc-native-acquisition-and-continuous-collection)
-- n−1: state proofs #225; n−2: blobs #224. 수용한 E1~E4 설계는 아래 링크로 보존한다.
+- n: Engine blob supply [계획](../codemine/runs/20261026-e5-engine-blob-supply/plan.md), [체크리스트](../codemine/runs/20261026-e5-engine-blob-supply/checklist.md), [검증](../codemine/runs/20261026-e5-engine-blob-supply/validation.md)
+- Arc native proofs [계획](../codemine/runs/20261026-e5-arc-native-proofs/plan.md), [체크리스트](../codemine/runs/20261026-e5-arc-native-proofs/checklist.md), [연속성](../codemine/runs/20261026-e5-arc-native-proofs/continuity.json), [검증](../codemine/runs/20261026-e5-arc-native-proofs/validation.md), [사용법](../EXECUTION_STATE_PROOFS.md#arc-native-acquisition-and-continuous-collection)
+- n−1: Arc native proofs #226; n−2: state proofs #225. 수용한 E1~E4 설계는 아래 링크로 보존한다.
 
 - Execution state proofs [계획](../codemine/runs/20261026-e5-execution-state-proofs/plan.md), [체크리스트](../codemine/runs/20261026-e5-execution-state-proofs/checklist.md), [연속성](../codemine/runs/20261026-e5-execution-state-proofs/continuity.json), [검증](../codemine/runs/20261026-e5-execution-state-proofs/validation.md), [사용법](../EXECUTION_STATE_PROOFS.md)
 
@@ -36,7 +37,7 @@ E1 #214, E2 #215, E3 #216, E4 #217, E5 Arc replay·collector·checkpoint·catalo
 | 우선순위 | 작업 | 완료 조건·의존성 |
 | --- | --- | --- |
 | P0 현재 릴리스 | Arc native selected proof와 collector/window | RED→GREEN, 실제 임시 native-v2/history와 2회 ArcEVM 증거, strict selection·고정 source 정책·capacity/lease/restart/reorg/ACK, PG/API, 전체 로컬 검사·새 CPU1/race/single200, staged/history scan, 정확한 head CI5, squash·깨끗한 main 동기화. source-branch PR을 완료 정본으로 사용 |
-| P1 | 지원 체인의 실제 blob transport | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
+| P1 | 지원 체인의 blob transport — 현재 검증 중 | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
 | P2 | Call 조회 확장 | 주소별 범위·coverage 검색, orphan trace 보관·조회, richer GraphQL/JSON-RPC의 별도 계약과 검증. 기존 block/tx 페이지·RPC provider 경로·legacy 미수집을 혼합하지 않음 |
 | P2 | **E6 독립 canonical/finality** | 체인 합의·validator/fork 정보에 근거한 검증과 reorg/finality 경계 설계, 결정적 fixture 및 실패/복구 검사. 그 증거 전까지 RPC5와 final fresh를 제거하거나 합의 검증으로 이름 붙이지 않음 |
 | P3 | Native 보존 추가 확장 | 실제 native layout에 맞춘 추가 indices/MDBX 공간 회수, backup/restore와 보존 floor 검증. 최신 상태·headers·code/preimages·필요 indices가 남으므로 전체 native DB가 고정 크기가 된다고 약속하지 않음 |
