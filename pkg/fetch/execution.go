@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/events"
@@ -72,6 +73,14 @@ func (f *Fetcher) PublishExecution(ctx context.Context, r execwire.Result, b *mo
 	if r.Ref.Height != b.Number || r.Ref.Hash != execwire.Hash(b.Hash) || r.Parent != execwire.Hash(b.ParentHash) || r.StateRoot != execwire.Hash(b.StateRoot) {
 		return port.ErrExecutionConflict
 	}
+	var header []byte
+	if len(r.BlockRLP) > 0 {
+		parts, e := evmdata.Items(r.BlockRLP, 4)
+		if e != nil || len(parts) < 3 {
+			return port.ErrInvalidData
+		}
+		header = parts[0]
+	}
 	fb, err := fetchedFromModel(b, rs)
 	if err != nil {
 		return err
@@ -80,7 +89,7 @@ func (f *Fetcher) PublishExecution(ctx context.Context, r execwire.Result, b *mo
 		var pending []events.Event
 		f.pendingEvents = &pending
 		defer func() { f.pendingEvents = nil }()
-		committed, err := publisher.CommitExecution(ctx, port.ExecutionPublication{Ref: r.Ref, Parent: r.Parent, Digest: digest, Root: r.StateRoot, CallTraces: r.CallTraces != nil, Blobs: r.BlobBundle != nil, StateProofs: r.StateProofBundle != nil}, func(bound context.Context) error {
+		committed, err := publisher.CommitExecution(ctx, port.ExecutionPublication{ConsensusHeader: header, Ref: r.Ref, Parent: r.Parent, Digest: digest, Root: r.StateRoot, CallTraces: r.CallTraces != nil, Blobs: r.BlobBundle != nil, StateProofs: r.StateProofBundle != nil}, func(bound context.Context) error {
 			var native []feature.NativeBalanceChange
 			for _, step := range r.Steps {
 				for _, change := range step.Accounts {

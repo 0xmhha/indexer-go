@@ -88,3 +88,5 @@ Use the [analysis index](analysis/README.md) for design documents and dated evid
 [Frontend migration](FRONTEND_MIGRATION.md) is a guide for consumers moving their GraphQL documents or REST calls. Changes to a separate frontend repository are outside this repository's implementation.
 
 [Arc native checkpoints and retention](EXECUTION_ARC_RETENTION.md) explains full native export/key coverage, private snapshots, managed ownership and E3 copy/swap/recovery without node startup.
+
+- [Independent WBFT consensus](EXECUTION_CONSENSUS.md): explicit trust policy, opt-in execution publication, finality/recovery and offline fixtures.

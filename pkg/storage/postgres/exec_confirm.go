@@ -46,6 +46,9 @@ func (s *Store) ConfirmExecution(ctx context.Context, payload []byte, fresh func
 	if err != nil {
 		return false, err
 	}
+	if err = confirmConsensus(ctx, tx, c); err != nil {
+		return false, err
+	}
 	if c.Rewinding {
 		return false, port.ErrExecutionRewinding
 	}

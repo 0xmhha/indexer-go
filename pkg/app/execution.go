@@ -95,6 +95,22 @@ func (a *App) initExecution(ctx context.Context) error {
 	if limits.MaxBytes == 0 {
 		limits.MaxBytes = 256 << 20
 	}
+	consensusStore, ok := a.storage.(interface {
+		ConfigureExecutionConsensus(context.Context, chains.ConsensusPolicy) error
+	})
+	if !ok {
+		return port.ErrInvalidData
+	}
+	var consensusPolicy chains.ConsensusPolicy
+	if e.Consensus != nil {
+		consensusPolicy = *e.Consensus
+		if consensusPolicy.Profile != profile.ID() {
+			return port.ErrExecutionConflict
+		}
+	}
+	if err := consensusStore.ConfigureExecutionConsensus(ctx, consensusPolicy); err != nil {
+		return err
+	}
 	a.fetcher.SetExecutionCanonical(a.profileSrc)
 	recoverExecution := func(ctx context.Context) error {
 		c, err := store.ExecutionStatus(ctx)

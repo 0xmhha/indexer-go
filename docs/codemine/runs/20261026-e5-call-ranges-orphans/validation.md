@@ -22,8 +22,8 @@ error semantics. PostgreSQL behavior is independently exercised by
 `TestExecutionCallRangePostgresAPI` and `TestExecutionCallRange*` storage tests.
 No live node/provider/peer, E6, native operational GC or performance claims.
 
-Release is pending until exact-head CI5, squash tree and clean main evidence
-are observed. The full `verification/verify_release_sequence.py` remains a
+Release evidence is independently recorded below; local gates do not establish
+GitHub release or main synchronization. The full `verification/verify_release_sequence.py` remains a
 fail-closed final all-four gate; it is not a phase2 substitute.
 
 ## Completed local gates
@@ -49,3 +49,24 @@ fail-closed final all-four gate; it is not a phase2 substitute.
 
 Rust/upstream is unchanged. Local success is not release; exact-head CI5,
 squash and clean primary main synchronization remain separate mandatory gates.
+
+## Released priority2
+
+- PR: https://github.com/0xmhha/indexer-go/pull/228 (draft → ready → squash).
+- Exact reviewed head: `b0e58642562b6aefef7e0a5e3f6bb806d81e5443`.
+- CI5: lint/test/postgres/examples/arc all success on run40347262650 at that head,
+  completed before merge at2026-10-26T16:27:01Z. No bypass or verification exemption.
+- Squash/main: `ba285da31bfe105813e81ebbbb510e3ac2921f97`, one parent and the exact reviewed head tree.
+- Primary main/origin-main/HEAD are clean and equal; independent sync receipt:
+  `verification/priority2-sync.json`. Source branch remains on origin.
+- Only this execution's `go-cache` and `lint-cache` under the owned run directory
+  were removed after release. Logs, scans, local/release audits and sync evidence
+  remain in `evidence/`. Owned fsync-on PostgreSQL scripts exited successfully
+  and cleaned their own containers/volumes; no shared resources were removed.
+- This worktree preserves post-release docs/ledger/sync as uncommitted handoff
+  evidence for the parent; the primary main is clean. No post-release code changes.
+
+Priorities3/4 remain required for the parent. The final all-four release observer
+is unchanged and still requires all four releases. Nodes/peers/operator DB,
+disks/operational GC, performance/SLO/load, tags/deploy/artifact publication and
+remote branch deletion remain held.

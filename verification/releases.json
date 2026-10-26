@@ -8,5 +8,15 @@
     "sync_evidence": "verification/priority1-sync.json",
     "owned_run_dir": "/private/tmp/indexer-four.ZgYGu8",
     "validation_path": "docs/codemine/runs/20261026-e5-engine-blob-supply/validation.md"
+  },
+  {
+    "priority": 2,
+    "pr": 228,
+    "branch": "refactor/e5-call-ranges-orphans",
+    "main_sha": "ba285da31bfe105813e81ebbbb510e3ac2921f97",
+    "head_sha": "b0e58642562b6aefef7e0a5e3f6bb806d81e5443",
+    "sync_evidence": "verification/priority2-sync.json",
+    "owned_run_dir": "/private/tmp/indexer-four.calls-6f7df360",
+    "validation_path": "docs/codemine/runs/20261026-e5-call-ranges-orphans/validation.md"
   }
 ]

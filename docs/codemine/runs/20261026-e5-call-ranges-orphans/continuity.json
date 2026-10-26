@@ -2,6 +2,18 @@
   "n": "20261026-e5-call-ranges-orphans",
   "n_minus_1": "20261026-e5-engine-blob-supply (#227)",
   "n_minus_2": "20261026-e5-arc-native-proofs (#226)",
-  "accepted_authorities": ["E1 #214", "E2 #215", "E3 #216", "E4 #217"],
-  "scope": "priority2 only; priorities3/4 remain with parent after release"
+  "accepted_authorities": [
+    "E1 #214",
+    "E2 #215",
+    "E3 #216",
+    "E4 #217"
+  ],
+  "scope": "priority2 only; priorities3/4 remain with parent after release",
+  "release": {
+    "pr": 228,
+    "head": "b0e58642562b6aefef7e0a5e3f6bb806d81e5443",
+    "squash_main": "ba285da31bfe105813e81ebbbb510e3ac2921f97",
+    "ci5_run": 40347262650,
+    "primary_main_clean": true
+  }
 }
