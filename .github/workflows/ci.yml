@@ -195,10 +195,24 @@ jobs:
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-call-from-oog.json" ../../../testdata/execution/arc-call-from-oog.json
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-call-from-direct.json" ../../../testdata/execution/arc-call-from-direct.json
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-native-checkpoint.ndjson" ../../../testdata/execution/arc-native-checkpoint.ndjson
+      - name: Preserve tested native binaries and release owned build cache
+        working-directory: x/arc/executor
+        run: |
+          # Only this completed job's target is disposable. Keep the exact
+          # tested binaries for the real COW/backup test, which needs disk headroom.
+          test "$PWD" = "$GITHUB_WORKSPACE/x/arc/executor"
+          test -d target && test ! -L target
+          native_bin="$RUNNER_TEMP/arc-native-bin"
+          mkdir -m 700 "$native_bin"
+          for name in arc-native-maintenance indexer-arc-executor; do
+            install -m 700 "target/debug/$name" "$native_bin/$name"
+            cmp "target/debug/$name" "$native_bin/$name"
+          done
+          rm -rf -- target
       - name: Real native-library matched backup and restore admission
         env:
           INDEXER_ARC_NATIVE_FIXTURE_DIR: ${{ runner.temp }}/arc-native-retention
-          INDEXER_ARC_MAINTENANCE_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/arc-native-maintenance
+          INDEXER_ARC_MAINTENANCE_BINARY: ${{ runner.temp }}/arc-native-bin/arc-native-maintenance
         run: |
           go vet -tags arc_native ./x/arc/nativeops
           go test -race -tags arc_native -count=1 -timeout=15m -v ./x/arc/nativeops -run '^TestArcNativeLibraryMatchedBackupAndRestore$'

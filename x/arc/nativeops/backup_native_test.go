@@ -168,6 +168,11 @@ func TestArcNativeLibraryMatchedBackupAndRestore(t *testing.T) {
 		}
 		t.Fatal("real native matched publication", err)
 	}
+	if info, e := os.Stat(filepath.Join(native, "db", "mdbx.dat")); e != nil {
+		t.Fatal(e)
+	} else {
+		t.Logf("owned native fixture MDBX geometry after compact: %d bytes", info.Size())
+	}
 	if afterBlocks := allocated(); afterBlocks >= beforeBlocks {
 		t.Fatalf("supervised production path did not physically compact MDBX: before=%d after=%d", beforeBlocks, afterBlocks)
 	}

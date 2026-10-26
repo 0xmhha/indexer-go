@@ -684,6 +684,10 @@ mod tests {
     #[test]
     fn native_matched_backup_fixture_export() -> Result<()> {
         let (dir, f, spec, a) = fixture_mode(true)?;
+        ensure!(
+            std::fs::metadata(dir.path().join("db/mdbx.dat"))?.len() <= 64 * 1024 * 1024,
+            "owned native fixture must use bounded native test geometry"
+        );
         inspect(&f, &spec, &a.request)?;
         if let Ok(output) = std::env::var("INDEXER_ARC_NATIVE_FIXTURE_DIR") {
             let output = Path::new(&output);
@@ -1030,7 +1034,13 @@ mod tests {
         use reth_trie::{HashedPostState, HashedStorage};
         let dir = tempfile::tempdir()?;
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700))?;
-        let db = init_db(dir.path().join("db"), Default::default())?;
+        // Keep owned functional fixtures on the pinned library's durable test
+        // geometry. Production defaults grow by 4 GiB and exhaust CI COW
+        // headroom despite this fixture containing only 134 small blocks.
+        let db = init_db(
+            dir.path().join("db"),
+            reth_ethereum::provider::db::mdbx::DatabaseArguments::test(),
+        )?;
         let sf = StaticFileProviderBuilder::read_write(dir.path().join("static_files"))
             .with_blocks_per_file(2)
             .build()?;

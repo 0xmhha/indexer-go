@@ -11,7 +11,7 @@ The cancelled worktree remains untouched. The pending patch SHA256
 `a9535d5cb9f4dac6ac42b10b5ed104ab416064f60f11e7cfe03ad16f4fc2437b`
 and both untracked hashes were verified before applying to clean E6 main.
 `prior-identity.json` records every Rust source/manifest and native binary hash,
-plus prior complete RED/GREEN receipts. Rust and frozen fixtures are unchanged;
+plus prior complete RED/GREEN receipts. At the first reviewed head, Rust sources matched the preserved implementation;
 `frozen-parity.json` independently compares all seven fixtures byte for byte.
 
 `receipt-red.log` records runtime subprocess failures in both directions:
@@ -29,6 +29,23 @@ of the previous owned cache; the new `lint-cache` is isolated. After release,
 the strict release observer checks both reviewed run generations; only proven
 owned caches/temporary native fixtures in these two run directories
 will be removed, preserving all logs, source branches and identity receipts.
+
+## CI fixture capacity correction
+
+Initial PR#230 head `f10fab8031648992c0d74601e78555958a8c8eac` Arc job
+121888098029/run40412977773 passed Rust43+2 and frozen7, then the real Go joined
+test correctly rejected insufficient COW reserve. The owned134-block fixture had
+Reth's production4GiB growth geometry. `fixture-geometry-red.log` reproduces this
+through real native APIs and a runtime size assertion; `fixture-geometry-green.log`
+passes after using pinned `DatabaseArguments::test()` (durable64MiB max/4MiB
+growth) in the test-only fixture builder. Production defaults, real data rows,
+root/seed checks, free-page assertions, reserve formula and1GiB backup headroom
+are unchanged. No runner images/shared caches are removed to bypass capacity.
+The changed Rust fixture requires a new full offline build/fmt/clippy/all-target
+run and joined native/frozen parity, plus final Go/PG gates before the new head.
+New owned `cargo-target`, `native-fixture-current` and `arc-fixtures-current`
+under the continuation directory are included in postrelease cleanup; old
+native binaries/fixtures/logs remain preserved until that release.
 
 ## Runtime RED then GREEN
 
@@ -118,3 +135,35 @@ PG command reran alone and passed as `postgres-final.log`: storage479.591s,
 app802.982s, API5.702s, StableNet9.702s, with successful owned container/volume
 cleanup. No external test DSN was configured. Commit/PR local gates are satisfied;
 exact-head CI5/squash/clean-main release remains pending.
+
+
+## Final fixture/CI correction gates
+
+`rust-final2.log` reruns the full offline build/fmt/clippy/all-target gate after
+the test-only geometry change:43 library and2 binary tests pass. All seven
+fresh frozen outputs match byte for byte (`frozen-parity-final2.json`).
+`final-native-identity.json` hashes current sources, executables and every owned
+native fixture file; the reviewed local-evidence JSON binds that receipt's hash.
+`real-native-backup-final2.log` passes239.74s with the4MiB input fixture and
+unchanged real rows/boundaries. Native rewrite still produces4GiB logical MDBX
+geometry while reducing allocated blocks. Backup/portable-copy headroom still
+counts logical bytes; this is not a total-size or measured production saving.
+
+CI therefore retains and byte-compares both tested executables in its private
+runner temp directory and removes only the completed job's own crate `target`
+before the joined Go test. No shared Cargo/Go cache, image, Docker resource or
+other workspace is removed. `ci-native-handoff-validation.json` verifies the
+exact workflow script on owned temporary files: outside-target data survives,
+both retained identities match, and both executables run. The full joined native
+test and tagged vet pass locally. Full root/wire/StableNet race and root
+build/vet/lint were repeated successfully (`test-race-release2.log`,
+`lint-release2.log`). The final isolated PG gate is `postgres-release2.log`.
+The previous failed CI head/run remains historical evidence, not CI5 release.
+
+
+Final isolated PG correction gate passed: storage248.909s, app525.790s,
+API4.759s and StableNet6.494s with owned container/volume cleanup. All final local
+gates are GREEN before the correction commit. The original complete single
+CPU1/race/count200 invocation remains applicable to unchanged selected Go
+concurrency code. The new current PR head still requires all five CI jobs before
+ready/squash/clean-main synchronization; no failed or superseded CI is counted.
