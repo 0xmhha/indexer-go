@@ -13,6 +13,7 @@
     "TestSeedPriority1BlobSupplyVerification/reorg",
     "TestSeedPriority1BlobSupplyVerification/head_behind",
     "TestSeedPriority1BlobSupplyVerification/outside_window",
+    "TestSeedPriority1BlobSupplyVerification/wrong_canonical_height",
     "TestSeedPriority1BlobSupplyVerification/cancel",
     "TestSeedPriority1BlobSupplyVerification/pinned_spool_restart_capacity_reorg_and_exact_ACK",
     "TestSeedPriority1BlobSupplyVerification/unsupported_pinned_Arc_policy",
@@ -132,6 +133,42 @@
         "exit_code": 0,
         "log": "/private/tmp/indexer-four.ZgYGu8/final-full-race.log",
         "sha256": "f03d85ebe4e9df4d0c7aeac1ee29fc428cad62906296d1187c5224f54e635cd5"
+      }
+    ]
+  },
+  "typed_reorg_correction": {
+    "production_source_sha256": "b33decb91d993663875ad07594a45d73f366017ff64b6ebda09d64f256af0c43",
+    "runtime_red_log": "/private/tmp/indexer-four.ZgYGu8/priority1-reorg-contract-red.log",
+    "checks": [
+      {
+        "command": "GOMAXPROCS=1 go test -race -count=200 -timeout=10m ./pkg/execution -run '^TestSeedPriority1BlobSupplyVerification/(reorg|wrong_canonical_height)$'",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-reorg-contract200.log",
+        "sha256": "6c7d0ced9c3e987e161cd25df8744b1457075322ff2da549d6f421da05498107"
+      },
+      {
+        "command": "make test-race",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/reorg-final-full-race.log",
+        "sha256": "47503757cde1393814b594c61df57d438fa2466b4123d685337b61a8a9acd48a"
+      },
+      {
+        "command": "go test -json -count=1 ./pkg/execution -run '^TestSeedPriority1BlobSupplyVerification$'",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-reorg-final-feature.json",
+        "sha256": "cbf5cd2e5c3bb9b66d232058b3474c648b956aa436f13942db39c3605e51d7bf"
+      },
+      {
+        "command": "./scripts/test-postgres.sh ./pkg/app -race -v -count=1 -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-reorg-final-postgres.log",
+        "sha256": "a560cf15048e8d0c1a182b1e1be05999904717f09cc396386206f015668e6d5e"
+      },
+      {
+        "command": "go build ./...; go vet ./...; make lint; gofmt check",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/reorg-final-static.log",
+        "sha256": "afa51c9dbbd37b37edddf1d3217625a46218598a4c8781e42a2608cd4de09e00"
       }
     ]
   }

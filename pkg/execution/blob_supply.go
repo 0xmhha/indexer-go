@@ -164,8 +164,11 @@ func AcquireEngineBlobInput(ctx context.Context, profile chains.BinaryProfile, p
 	if e != nil {
 		return nil, e
 	}
-	if number != prepared.Ref().Height || hash != prepared.block.Hash {
-		return nil, exporter.ErrCanonicalChanged
+	if number != prepared.Ref().Height {
+		return nil, port.ErrExecutionConflict
+	}
+	if hash != prepared.block.Hash {
+		return nil, &exporter.CanonicalChange{Ref: execwire.Ref{Generation: prepared.Ref().Generation, Height: number, Hash: execwire.Hash(hash)}}
 	}
 	if e := ctx.Err(); e != nil {
 		return nil, e

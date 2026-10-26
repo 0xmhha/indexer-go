@@ -117,7 +117,9 @@ func (m *engineBlobFixture) Canonical(_ context.Context, n uint64) (execwire.Has
 		return m.policy.Chain.Genesis, nil
 	}
 	if m.wrong {
-		return execwire.Hash{99}, nil
+		h := *m.header
+		h.Extra = []byte("reorg")
+		return execwire.Hash(h.Hash()), nil
 	}
 	return m.result.Ref.Hash, nil
 }
@@ -178,7 +180,7 @@ func TestSeedPriority1BlobSupplyVerification(t *testing.T) {
 		require.NotEqual(t, m.payload, enriched)
 		require.Equal(t, []string{"eth_chainId", "eth_getBlockByNumber", "eth_getBlockByNumber", "engine_getBlobsV1", "eth_getBlockByNumber"}, m.calls)
 	})
-	for _, kind := range []string{"missing", "pruned", "wrong_proof", "wrong_reference", "wrong_fork", "reorg", "head_behind", "outside_window", "cancel"} {
+	for _, kind := range []string{"missing", "pruned", "wrong_proof", "wrong_reference", "wrong_fork", "reorg", "head_behind", "outside_window", "wrong_canonical_height", "cancel"} {
 		t.Run(kind, func(t *testing.T) {
 			m := engineBlobMock(t)
 			ctx, cancel := context.WithCancel(t.Context())
@@ -200,6 +202,8 @@ func TestSeedPriority1BlobSupplyVerification(t *testing.T) {
 				m.head = 0
 			case "outside_window":
 				m.head = m.result.Ref.Height + 65
+			case "wrong_canonical_height":
+				m.after = func() { m.header.Number = big.NewInt(0) }
 			case "cancel":
 				m.after = cancel
 			}
@@ -210,9 +214,19 @@ func TestSeedPriority1BlobSupplyVerification(t *testing.T) {
 			require.Equal(t, original, m.payload)
 			if kind == "reorg" {
 				require.ErrorIs(t, e, exporter.ErrCanonicalChanged)
+				var fork *exporter.CanonicalChange
+				require.ErrorAs(t, e, &fork, "exporter recovery consumes the typed canonical candidate")
+				expected := *m.header
+				expected.Extra = []byte("reorg")
+				require.Equal(t, execwire.Ref{Generation: m.result.Ref.Generation, Height: m.result.Ref.Height, Hash: execwire.Hash(expected.Hash())}, fork.Ref)
 			}
 			if kind == "cancel" {
 				require.ErrorIs(t, e, context.Canceled)
+			}
+			if kind == "wrong_canonical_height" {
+				require.ErrorIs(t, e, port.ErrExecutionConflict)
+				var fork *exporter.CanonicalChange
+				require.False(t, errors.As(e, &fork), "a mismatched response height grants no recovery candidate")
 			}
 		})
 	}
