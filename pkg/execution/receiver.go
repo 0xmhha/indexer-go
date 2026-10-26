@@ -14,18 +14,19 @@ import (
 // Receiver is assembled before ingest. Its connection session is private;
 // the runtime listener must authenticate the Unix peer before invoking it.
 type Receiver struct {
-	Chain          execwire.Chain
-	Profile        chains.BinaryProfile
-	Store          port.ExecutionStore
-	OpenController func(context.Context) (*Controller, error)
-	Confirm        func(context.Context, []byte) (bool, error)
-	Reorg          func(context.Context, *Controller) error
-	ReorgOnError   func(error) bool
-	ValidateReorg  func(context.Context, execwire.Ref) error
-	Window         int
-	Timeout        time.Duration
-	OnSessionError func(error)
-	RetrySession   func(error) bool
+	RequireBlobSidecars bool
+	Chain               execwire.Chain
+	Profile             chains.BinaryProfile
+	Store               port.ExecutionStore
+	OpenController      func(context.Context) (*Controller, error)
+	Confirm             func(context.Context, []byte) (bool, error)
+	Reorg               func(context.Context, *Controller) error
+	ReorgOnError        func(error) bool
+	ValidateReorg       func(context.Context, execwire.Ref) error
+	Window              int
+	Timeout             time.Duration
+	OnSessionError      func(error)
+	RetrySession        func(error) bool
 }
 
 type receiverACK struct {
@@ -156,7 +157,7 @@ func (r *Receiver) serveConn(parent context.Context, raw net.Conn) error {
 			if !complete {
 				continue
 			}
-			prepared, err := Prepare(r.Profile, r.Chain, payload)
+			prepared, err := PrepareContext(ctx, r.Profile, r.Chain, payload, r.RequireBlobSidecars)
 			if err != nil {
 				return err
 			}

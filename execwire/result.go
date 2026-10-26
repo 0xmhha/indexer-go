@@ -122,5 +122,8 @@ func validateResult(r Result) error {
 	if raw > MaxBlockBytes {
 		return ErrLimit
 	}
+	if err := ValidateBlobBundle(r.BlobBundle); err != nil {
+		return err
+	}
 	return ValidateCallTraces(r)
 }

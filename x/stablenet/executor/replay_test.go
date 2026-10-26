@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -74,9 +75,10 @@ func evmFixture(t *testing.T) (ethdb.Database, ReplayInput) {
 }
 
 type evmTxSpec struct {
-	to    *common.Address
-	input []byte
-	value int64
+	to         *common.Address
+	input      []byte
+	value      int64
+	blobHashes []common.Hash
 }
 
 func evmFixtureWith(t *testing.T, code []byte, specs []evmTxSpec) (ethdb.Database, ReplayInput) {
@@ -102,6 +104,12 @@ func evmFixtureDatabase(t *testing.T, code []byte, specs []evmTxSpec, cache *tri
 	}
 	s.SetBalance(sender, uint256.NewInt(1_000_000_000_000_000_000))
 	s.SetCode(contract, code)
+	for _, spec := range specs {
+		if len(spec.blobHashes) > 0 {
+			s.SetCode(params.BeaconRootsStorageAddress, common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500"))
+			break
+		}
+	}
 	root, err := s.Commit(0, true)
 	if err != nil {
 		t.Fatal(err)
@@ -110,19 +118,66 @@ func evmFixtureDatabase(t *testing.T, code []byte, specs []evmTxSpec, cache *tri
 		t.Fatal(err)
 	}
 	config := *params.AllEthashProtocolChanges
+	hasBlobs := false
+	for _, spec := range specs {
+		if len(spec.blobHashes) > 0 {
+			hasBlobs = true
+		}
+	}
+	if hasBlobs {
+		zero := uint64(0)
+		config.ShanghaiTime = &zero
+		config.CancunTime = &zero
+	}
 	parent := &types.Header{Number: big.NewInt(0), Root: root, Time: 1, GasLimit: 30_000_000, BaseFee: big.NewInt(1_000_000_000), Difficulty: big.NewInt(1)}
+	if hasBlobs {
+		zero := uint64(0)
+		parent.Difficulty = big.NewInt(0)
+		parent.BlobGasUsed = &zero
+		parent.ExcessBlobGas = &zero
+		root := common.Hash{}
+		parent.ParentBeaconRoot = &root
+		withdrawals := types.EmptyRootHash
+		parent.WithdrawalsHash = &withdrawals
+	}
 	chain := &fixtureChain{config: &config, engine: ethash.NewFaker(), db: db, headers: map[uint64]*types.Header{0: parent}}
+	if hasBlobs {
+		chain.engine = beacon.New(ethash.NewFaker())
+	}
 	h := &types.Header{ParentHash: parent.Hash(), Number: big.NewInt(1), Time: 2, GasLimit: 30_000_000, BaseFee: big.NewInt(1_000_000_000), Difficulty: big.NewInt(1), Coinbase: common.BytesToAddress([]byte{99})}
+	if hasBlobs {
+		h.Difficulty = big.NewInt(0)
+		zero := uint64(0)
+		h.ExcessBlobGas = &zero
+		gas := uint64(0)
+		for _, spec := range specs {
+			gas += uint64(len(spec.blobHashes)) * 131072
+		}
+		h.BlobGasUsed = &gas
+		beacon := common.Hash{9}
+		h.ParentBeaconRoot = &beacon
+	}
 	first, err := state.New(root, db, nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if hasBlobs {
+		env := vm.NewEVM(core.NewEVMBlockContext(h, chain, nil), vm.TxContext{}, first, &config, vm.Config{})
+		core.ProcessBeaconBlockRoot(*h.ParentBeaconRoot, env, first)
 	}
 	var used uint64
 	gp := new(core.GasPool).AddGas(h.GasLimit)
 	var receipts types.Receipts
 	var txs []*types.Transaction
 	for i, spec := range specs {
-		tx, err := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: spec.to, Gas: 300_000, GasPrice: big.NewInt(2_000_000_000), Value: big.NewInt(spec.value), Data: spec.input}), types.MakeSigner(&config, h.Number, h.Time), key)
+		unsigned := types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: spec.to, Gas: 300_000, GasPrice: big.NewInt(2_000_000_000), Value: big.NewInt(spec.value), Data: spec.input})
+		if len(spec.blobHashes) > 0 {
+			if spec.to == nil {
+				t.Fatal("blob fixture requires target")
+			}
+			unsigned = types.NewTx(&types.BlobTx{ChainID: uint256.MustFromBig(config.ChainID), Nonce: uint64(i), Gas: 300_000, GasTipCap: uint256.NewInt(1_000_000_000), GasFeeCap: uint256.NewInt(2_000_000_000), To: *spec.to, Value: uint256.NewInt(uint64(spec.value)), Data: spec.input, BlobFeeCap: uint256.NewInt(2), BlobHashes: spec.blobHashes})
+		}
+		tx, err := types.SignTx(unsigned, types.MakeSigner(&config, h.Number, h.Time), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,6 +195,9 @@ func evmFixtureDatabase(t *testing.T, code []byte, specs []evmTxSpec, cache *tri
 	}
 	h.Root = first.IntermediateRoot(true)
 	block := types.NewBlock(h, txs, nil, receipts, trie.NewStackTrie(nil))
+	if hasBlobs {
+		block = types.NewBlockWithWithdrawals(h, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))
+	}
 	committed, err := first.Commit(1, true)
 	if err != nil {
 		t.Fatal(err)

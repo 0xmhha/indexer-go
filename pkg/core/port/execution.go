@@ -109,6 +109,7 @@ type ExecutionPublication struct {
 	Ref                  execwire.Ref
 	Parent, Digest, Root execwire.Hash
 	CallTraces           bool
+	Blobs                bool
 }
 type ExecutionPublisher interface {
 	CommitExecution(context.Context, ExecutionPublication, func(context.Context) error, func(context.Context) error) (bool, error)

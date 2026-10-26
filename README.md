@@ -14,6 +14,7 @@ Use indexer-go when you need a backend for a block explorer, a contract event se
 
 - **Write application logic in Go.** Register project features and GraphQL or HTTP routes with the extension packages. Declare contract events in configuration when you only need selected logs.
 - **Inspect native execution calls.** Arc and StableNet replay can retain [call trees and internal-call pages](docs/EXECUTION_CALL_TRACES.md), including reverted attempts, alongside verified state journals.
+- [Full execution blobs](docs/EXECUTION_BLOBS.md): retain complete EIP-4844 input before spool admission, verify KZG, and query bounded database pages with explicit collection status.
 - **Keep block writes consistent.** Indexed data, feature writes, progress and durable outbox events commit with the block. Reorg recovery uses recorded undo.
 - **Choose your storage layout.** Run with embedded Pebble, or use PostgreSQL to separate ingestion and API processes. Multi-chain mode isolates each chain's database and API routes.
 - **Expose the data you collect.** Serve GraphQL, JSON-RPC, REST and GraphQL subscriptions, with cursor-based reads and resumable outbox-backed streams.

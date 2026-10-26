@@ -1,0 +1,43 @@
+{
+  "goal": "E5 execution full-blob sidecars and explicit local availability",
+  "base": "6c8dd2ca8229172e417831345e111676aeb400b6",
+  "source_branch": "refactor/e5-execution-blobs",
+  "n": {
+    "feature": "execution blobs",
+    "state": "local_gates_green_release_authority_source_branch_pr",
+    "plan": "plan.md",
+    "checklist": "checklist.md",
+    "units": {
+      "U01": "wire RED→GREEN; malformed sidecar ignored RED→GREEN; strict lost-ACK bypass RED→GREEN; attach/private file RED→GREEN; actual EIP-4788/type3 replay RED unsupported→GREEN with code/storage and immutable source",
+      "U02": "PG native fixture via7 writers, publication/fresh rollback, exact ACK, page proofs, missing/corrupt input, prefix generation and rewind GREEN",
+      "U03": "CLI RED→GREEN; actual POS-like Cancun native/prelude→private file→seven writers→reserved DB-only API→exact ACK→test input removal→read-only reopen GREEN; strict config/negative bounds GREEN",
+      "U04": "Root/module static/fmt/cache/examples/offline ops, full functional, complete root/wire/StableNet make test-race, full fsync-on PG and new CPU1/race/single200 groups GREEN. Current docs/checklist complete; source-branch PR is mutable release authority for scans/exact-head CI5/squash/main."
+    }
+  },
+  "n-1": {
+    "feature": "native calls",
+    "pr": 223,
+    "plan": "../20261025-e5-native-call-traces/plan.md"
+  },
+  "n-2": {
+    "feature": "Arc history",
+    "pr": 222,
+    "plan": "../20261025-e5-arc-history/plan.md"
+  },
+  "preserved": [
+    "accepted E1/E2/E3/E4 designs",
+    "two executions/upstream unchanged",
+    "pool4/part2/API reservation",
+    "RPC5/final uncached fresh/generation fence",
+    "exact E3 ACK/lease/GC authority"
+  ],
+  "holds": [
+    "actual node/peer/operator DB",
+    "disk provisioning/formatting",
+    "operational GC",
+    "performance",
+    "other projects"
+  ],
+  "next": "While PR open: staged/history scans, commit/push/draft+attach, exact-head CI5, ready/squash/clean main sync and own-cache cleanup. MERGED with gates completes this scope; next separate priority is state inclusion proofs.",
+  "release_authority": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-execution-blobs"
+}

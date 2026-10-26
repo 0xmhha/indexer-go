@@ -64,17 +64,20 @@ func (s *Store) CommitExecution(ctx context.Context, p port.ExecutionPublication
 	if err := validateCallReceipt(ctx, tx, p, true); err != nil {
 		return false, err
 	}
+	if _, e := readBlobReceipt(ctx, tx, p, true); e != nil {
+		return false, e
+	}
 	if duplicate {
 		var hash, parent, digest, root []byte
-		var calls bool
-		err := tx.QueryRow(ctx, "SELECT hash,parent,digest,root,call_traces FROM exec_publications WHERE generation=$1 AND height=$2", int64(p.Ref.Generation), int64(p.Ref.Height)).Scan(&hash, &parent, &digest, &root, &calls)
+		var calls, blobs bool
+		err := tx.QueryRow(ctx, "SELECT hash,parent,digest,root,call_traces,blob_sidecars FROM exec_publications WHERE generation=$1 AND height=$2", int64(p.Ref.Generation), int64(p.Ref.Height)).Scan(&hash, &parent, &digest, &root, &calls, &blobs)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, port.ErrExecutionConflict
 		}
 		if err != nil {
 			return false, err
 		}
-		if calls != p.CallTraces || !bytes.Equal(p.Ref.Hash[:], hash) || !bytes.Equal(p.Parent[:], parent) || !bytes.Equal(p.Digest[:], digest) || !bytes.Equal(p.Root[:], root) {
+		if blobs != p.Blobs || calls != p.CallTraces || !bytes.Equal(p.Ref.Hash[:], hash) || !bytes.Equal(p.Parent[:], parent) || !bytes.Equal(p.Digest[:], digest) || !bytes.Equal(p.Root[:], root) {
 			return false, port.ErrExecutionConflict
 		}
 	} else {
@@ -119,7 +122,7 @@ func (s *Store) CommitExecution(ctx context.Context, p port.ExecutionPublication
 		if err := s.SetLatestHeight(bound, p.Ref.Height); err != nil {
 			return false, err
 		}
-		if _, err := bt.q().Exec(ctx, "INSERT INTO exec_publications(generation,height,hash,parent,digest,root,call_traces) VALUES($1,$2,$3,$4,$5,$6,$7)", int64(p.Ref.Generation), int64(p.Ref.Height), p.Ref.Hash[:], p.Parent[:], p.Digest[:], p.Root[:], p.CallTraces); err != nil {
+		if _, err := bt.q().Exec(ctx, "INSERT INTO exec_publications(generation,height,hash,parent,digest,root,call_traces,blob_sidecars) VALUES($1,$2,$3,$4,$5,$6,$7,$8)", int64(p.Ref.Generation), int64(p.Ref.Height), p.Ref.Hash[:], p.Parent[:], p.Digest[:], p.Root[:], p.CallTraces, p.Blobs); err != nil {
 			return false, err
 		}
 		if err := bt.flush(ctx); err != nil {

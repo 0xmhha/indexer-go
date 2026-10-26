@@ -16,6 +16,7 @@ import (
 
 type executionPartKey struct{}
 type executionPartScope struct {
+	chain  execwire.Chain
 	part   port.ExecutionPart
 	active atomic.Bool
 }

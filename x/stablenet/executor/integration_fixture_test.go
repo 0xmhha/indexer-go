@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -143,6 +144,14 @@ func TestFrozenExecutionFixturesMatchActualEVMAndWBFT(t *testing.T) {
 		},
 		"evm-creations": func(t *testing.T) (string, ReplayInput) {
 			_, in := evmFixtureWith(t, []byte{0}, []evmTxSpec{{input: []byte{0x60, 0, 0x60, 0, 0xf3}}, {input: append(append([]byte{0x73}, common.Address{88}.Bytes()...), 0xff)}, {input: []byte{0x60, 0, 0x60, 0, 0xfd}}})
+			return "evm", in
+		},
+		"evm-blobs": func(t *testing.T) (string, ReplayInput) {
+			var commitment [48]byte
+			commitment[0] = 0xc0
+			h := sha256.Sum256(commitment[:])
+			h[0] = 1
+			_, in := evmFixtureWith(t, []byte{0}, []evmTxSpec{{to: &account, blobHashes: []common.Hash{h, h, h}}})
 			return "evm", in
 		},
 		"evm-storage": func(t *testing.T) (string, ReplayInput) { _, in := evmFixture(t); return "evm", in },

@@ -100,7 +100,7 @@ jobs:
         run: |
           make test-executor-stablenet
           cd x/stablenet/executor
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestCancelLogger|TestReplayCancellationDuringEVM)' ./...
+          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestCancelLogger|TestReplayCancellationDuringEVM|TestReplayBeaconPreludeCancellation)' ./...
           GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestNodeRuntime|TestCapacityBudgetResumeAndConcurrentChecks)' ./nodebackend
           GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^TestCompactCapacityAndForeignLeasePreserveNode$' ./nodestore
       - name: Pebble cache lifecycle
@@ -135,6 +135,8 @@ jobs:
         run: ./scripts/test-postgres.sh ./pkg/chainfeed/evmstate -race -run '^TestStateProjectionCanonicalFailureDoesNotMissEpoch$'
       - name: Execution IPC and DB integration concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -failfast -count=200 -timeout=40m -run '^(TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK|TestExecutionArcCollectedSpoolPublicationAndLostACK|TestExecutionNativeCallsPublicationPagesAndRestart)$'
+      - name: Native full-blob files and DB-only API concurrency
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeBlobsPublicationPagesAndRestart$'
       - name: Execution DB admission and recovery concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence|TestExecutionRetentionDrainsReadLeaseAndCancel)$'
 

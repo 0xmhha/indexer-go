@@ -118,3 +118,7 @@ Execution balance history/coverage and cursor compatibility follow the [E4 guide
 ## Native call records
 
 The current Arc/StableNet producer includes [bounded native call traces and internal-call queries](EXECUTION_CALL_TRACES.md) from the same recording replay. Migration0018 stores them in the transactions part; seven queues/pool4/part2/API reservation and final fresh/generation/ACK gates stay intact. Old payloads remain readable and not-collected history is explicit. Do not infer native transfers or full consensus validity from the call list.
+
+## Complete blob sidecars
+
+[Execution blob inputs](EXECUTION_BLOBS.md) compose bounded full-blob relay bytes before spool admission, preserve exact source identity, and store verified rows in the transactions part. Optional `source.execution.require_blob_sidecars` rejects positive-reference inputs without sidecars before new work or lost-ACK confirmation. Schema0019, reader-first upgrades, explicit not-collected/empty states, fresh/ACK/GC boundaries and DB-only pages are documented there. It starts no provider and adds no EVM execution/RPC.

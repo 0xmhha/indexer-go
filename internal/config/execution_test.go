@@ -1,6 +1,7 @@
 package config
 
 import (
+	"gopkg.in/yaml.v3"
 	"strings"
 	"testing"
 	"time"
@@ -67,4 +68,20 @@ func TestExecutionSourceIsDefaultOffAndDoesNotChangeLegacyLimits(t *testing.T) {
 	c.RPC.RateLimit = 20
 	c.Database.Postgres.MaxConns = 16
 	require.NoError(t, c.validateExecution())
+}
+
+func TestExecutionRequiredBlobPolicyYAMLRoundTrip(t *testing.T) {
+	var source struct {
+		Execution ExecutionSourceConfig `yaml:"execution"`
+	}
+	decoder := yaml.NewDecoder(strings.NewReader("execution:\n  require_blob_sidecars: true\n"))
+	decoder.KnownFields(true)
+	require.NoError(t, decoder.Decode(&source))
+	require.True(t, source.Execution.RequireBlobSidecars)
+	c := executionConfigFixture()
+	c.Source.Execution.RequireBlobSidecars = source.Execution.RequireBlobSidecars
+	require.NoError(t, c.Validate())
+	data, e := yaml.Marshal(source)
+	require.NoError(t, e)
+	require.Contains(t, string(data), "require_blob_sidecars: true")
 }
