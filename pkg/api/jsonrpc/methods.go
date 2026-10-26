@@ -118,6 +118,8 @@ func (h *Handler) handleMethod(ctx context.Context, method string, params json.R
 		}
 	}
 	switch method {
+	case "getExecutionCalls":
+		return h.getExecutionCalls(ctx, params)
 	case "getExecutionAccount":
 		return h.getExecutionState(ctx, "account", params)
 	case "getExecutionStorage":

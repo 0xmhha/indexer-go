@@ -207,6 +207,12 @@ func (s *Store) resumeExecutionRewind(ctx context.Context, onUndo port.UndoHook,
 		}
 		return nil
 	}
+	if err := archiveExecutionCalls(ctx, tx, marker); err != nil {
+		return nil, err
+	}
+	if err := check("call_archive"); err != nil {
+		return nil, err
+	}
 	var rec *port.Reorg
 	if marker.From.Height > marker.Target.Height {
 		seq, err := s.metaUint(bound, metaReorgSeq)

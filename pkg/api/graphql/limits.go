@@ -90,15 +90,24 @@ func (c *costWalker) pageSize(field *ast.Field) int {
 		switch arg.Name.Value {
 		case "limit", "first":
 			if n, ok := c.intValue(arg.Value); ok {
-				return clampPage(n)
+				return callRangePageSize(field, clampPage(n))
 			}
 		case "pagination":
 			if n, ok := c.objectField(arg.Value, "limit"); ok {
-				return clampPage(n)
+				return callRangePageSize(field, clampPage(n))
 			}
 		}
 	}
-	return 1
+	return callRangePageSize(field, 1)
+}
+
+// Range responses include up to 128 coverage entries independently of the
+// call limit. Charge the larger bound, including an omitted/default limit.
+func callRangePageSize(field *ast.Field, n int) int {
+	if field.Name.Value == "executionCalls" {
+		return max(n, 128)
+	}
+	return n
 }
 
 func clampPage(n int) int { return min(max(n, 1), maxListMultiplier) }

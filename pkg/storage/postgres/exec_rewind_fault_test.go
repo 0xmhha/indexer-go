@@ -16,7 +16,7 @@ import (
 func executionRewindSnapshot(t *testing.T, s *Store) map[string]string {
 	t.Helper()
 	out := snapshot(t, s)
-	for _, table := range []string{"exec_control", "exec_rewinds", "exec_cursors", "exec_parts", "exec_publications", "state_accounts", "state_account_changes", "state_storage", "state_storage_roots", "state_storage_changes", "state_storage_clears", "state_contracts", "state_contract_changes", "state_code", "outbox", "outbox_sequence", "undo_log", "undo_blocks", "reorgs", "orphaned_blocks", "orphaned_transactions"} {
+	for _, table := range []string{"exec_call_blocks", "exec_call_frames", "exec_call_orphan_blocks", "exec_call_orphan_frames", "exec_control", "exec_rewinds", "exec_cursors", "exec_parts", "exec_publications", "state_accounts", "state_account_changes", "state_storage", "state_storage_roots", "state_storage_changes", "state_storage_clears", "state_contracts", "state_contract_changes", "state_code", "outbox", "outbox_sequence", "undo_log", "undo_blocks", "reorgs", "orphaned_blocks", "orphaned_transactions"} {
 		var data string
 		require.NoError(t, s.pool.QueryRow(t.Context(), "SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]'::jsonb)::text FROM "+pgx.Identifier{table}.Sanitize()+" t").Scan(&data))
 		out[table] = data
@@ -24,7 +24,7 @@ func executionRewindSnapshot(t *testing.T, s *Store) map[string]string {
 	return out
 }
 func TestExecutionRewindEveryMutationPhaseIsAtomicAndRestartable(t *testing.T) {
-	for _, stage := range []string{"feature_undo", "state_restore", "core_purge", "cursor_reset", "fresh"} {
+	for _, stage := range []string{"call_archive", "feature_undo", "state_restore", "core_purge", "cursor_reset", "fresh"} {
 		t.Run(stage, func(t *testing.T) {
 			s, cfg, _, _, _ := rewindStateFixture(t)
 			_, err := s.BeginExecutionRewind(t.Context(), cfg.Anchor, cfg.AnchorRoot)

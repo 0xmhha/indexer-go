@@ -424,12 +424,47 @@ ExecutionAccount.height(): String!
 ExecutionAccount.nonce(): String!
 ExecutionAccount.stateRoot(): String!
 ExecutionAccount.storageRoot(): String!
+ExecutionCallCoverage.blockHash(): String!
+ExecutionCallCoverage.collected(): Boolean!
+ExecutionCallCoverage.digest(): String!
+ExecutionCallCoverage.epoch(): String!
+ExecutionCallCoverage.generation(): String!
+ExecutionCallCoverage.height(): String!
+ExecutionCallCoverage.profile(): String!
+ExecutionCallMissingRange.fromBlock(): String!
+ExecutionCallMissingRange.toBlock(): String!
+ExecutionCallRangePage.calls(): [ExecutionRangeCall!]!
+ExecutionCallRangePage.complete(): Boolean!
+ExecutionCallRangePage.coverage(): [ExecutionCallCoverage!]!
+ExecutionCallRangePage.epoch(): String!
+ExecutionCallRangePage.missing(): [ExecutionCallMissingRange!]!
+ExecutionCallRangePage.next(): String!
+ExecutionCallRangePage.selection(): String!
 ExecutionCode.address(): String!
 ExecutionCode.blockHash(): String!
 ExecutionCode.code(): String!
 ExecutionCode.generation(): String!
 ExecutionCode.height(): String!
 ExecutionCode.stateRoot(): String!
+ExecutionRangeCall.ancestorReverted(): Boolean!
+ExecutionRangeCall.coverage(): ExecutionCallCoverage!
+ExecutionRangeCall.error(): String!
+ExecutionRangeCall.from(): String!
+ExecutionRangeCall.gas(): String!
+ExecutionRangeCall.gasUsed(): String!
+ExecutionRangeCall.input(): String!
+ExecutionRangeCall.internal(): Boolean!
+ExecutionRangeCall.ordinal(): Int!
+ExecutionRangeCall.output(): String!
+ExecutionRangeCall.parent(): Int!
+ExecutionRangeCall.path(): [Int!]!
+ExecutionRangeCall.reverted(): Boolean!
+ExecutionRangeCall.to(): String
+ExecutionRangeCall.transactionHash(): String!
+ExecutionRangeCall.transactionIndex(): Int!
+ExecutionRangeCall.type(): String!
+ExecutionRangeCall.value(): String
+ExecutionRangeCall.verification(): String!
 ExecutionStorage.address(): String!
 ExecutionStorage.blockHash(): String!
 ExecutionStorage.generation(): String!
@@ -659,7 +694,11 @@ OBJECT EpochInfo
 OBJECT EpochSummary
 OBJECT EpochSummaryConnection
 OBJECT ExecutionAccount
+OBJECT ExecutionCallCoverage
+OBJECT ExecutionCallMissingRange
+OBJECT ExecutionCallRangePage
 OBJECT ExecutionCode
+OBJECT ExecutionRangeCall
 OBJECT ExecutionStorage
 OBJECT FactoryStats
 OBJECT FactoryStatsConnection
@@ -855,6 +894,7 @@ Query.erc721Transfer(logIndex: Int!, transactionHash: String!): ERC721Transfer
 Query.erc721TransfersByAddress(address: String!, isFrom: Boolean!, pagination: PaginationInput): ERC721TransferConnection
 Query.erc721TransfersByToken(pagination: PaginationInput, token: String!): ERC721TransferConnection
 Query.executionAccount(address: String!): ExecutionAccount
+Query.executionCalls(address: String!, cursor: String, fromBlock: String!, limit: Int, orphanEpoch: String, partial: Boolean, selection: String, toBlock: String!): ExecutionCallRangePage
 Query.executionCode(address: String!): ExecutionCode
 Query.executionStorage(address: String!, slot: String!): ExecutionStorage
 Query.factories(pagination: PaginationInput): FactoryStatsConnection!

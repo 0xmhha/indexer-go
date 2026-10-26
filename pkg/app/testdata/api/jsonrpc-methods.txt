@@ -74,3 +74,5 @@ notification_retry
 notification_test
 notification_updateSetting
 setContractABI
+
+getExecutionCalls

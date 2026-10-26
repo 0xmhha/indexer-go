@@ -28,6 +28,7 @@ var executionStorageType = executionStateType("ExecutionStorage", graphql.Fields
 var executionCodeType = executionStateType("ExecutionCode", graphql.Fields{"code": &graphql.Field{Type: graphql.NewNonNull(graphql.String)}})
 
 func (b *SchemaBuilder) WithExecutionQueries() *SchemaBuilder {
+	b.withExecutionCallQueries()
 	for _, q := range []struct {
 		name, kind string
 		value      *graphql.Object

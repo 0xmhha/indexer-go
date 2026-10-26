@@ -1032,6 +1032,7 @@ type AccountModules {
 # Query root type
 type Query {
   # Explicitly covered state at the public execution height; unknown coverage is an error.
+  executionCalls(address: String!, fromBlock: String!, toBlock: String!, limit: Int = 50, selection: String = "canonical", orphanEpoch: String, partial: Boolean = false, cursor: String): ExecutionCallRangePage
   executionAccount(address: String!): ExecutionAccount
   executionStorage(address: String!, slot: String!): ExecutionStorage
   executionCode(address: String!): ExecutionCode
@@ -3723,4 +3724,49 @@ type ExecutionCode {
   blockHash: String!
   stateRoot: String!
   code: String!
+}
+
+# DB-only native calls. Block heights, epochs and uint64/uint256 values are decimal strings.
+type ExecutionCallCoverage {
+  height: String!
+  epoch: String!
+  generation: String!
+  blockHash: String!
+  digest: String!
+  profile: String!
+  collected: Boolean!
+}
+type ExecutionCallMissingRange {
+  fromBlock: String!
+  toBlock: String!
+}
+type ExecutionRangeCall {
+  coverage: ExecutionCallCoverage!
+  verification: String!
+  ordinal: Int!
+  parent: Int!
+  path: [Int!]!
+  transactionHash: String!
+  transactionIndex: Int!
+  type: String!
+  from: String!
+  to: String
+  value: String
+  gas: String!
+  gasUsed: String!
+  input: String!
+  output: String!
+  error: String!
+  internal: Boolean!
+  reverted: Boolean!
+  ancestorReverted: Boolean!
+}
+type ExecutionCallRangePage {
+  selection: String!
+  epoch: String!
+  complete: Boolean!
+  missing: [ExecutionCallMissingRange!]!
+  coverage: [ExecutionCallCoverage!]!
+  calls: [ExecutionRangeCall!]!
+  next: String!
 }

@@ -1,12 +1,12 @@
 # 남은 작업과 우선순위
 
-E1 #214, E2 #215, E3 #216, E4 #217, E5와 native calls #223, execution blobs #224, 선택 state proofs #225, [Arc native selected proofs #226](https://github.com/0xmhha/indexer-go/pull/226)는 main에 반영됐다. #226의 정확한 head CI5와 squash/main 동기화가 확인됐다. 현재는 네 단계 릴리스의 **1번: 표준 Engine V1 bounded full-blob 공급**을 검증 중이다. [불변 Seed 계약](../../verification/seed-contract.json)의 순서대로 현재 기능의 CI5·squash·깨끗한 main 동기화가 완료되어야 다음 구현을 시작한다. KZG는 beacon/PeerDAS/독립 합의 검증이 아니다.
+E1 #214, E2 #215, E3 #216, E4 #217, E5와 native calls #223, execution blobs #224, 선택 state proofs #225, [Arc native selected proofs #226](https://github.com/0xmhha/indexer-go/pull/226)는 main에 반영됐다. #226의 정확한 head CI5와 squash/main 동기화가 확인됐다. 네 단계 릴리스의 **1번: 표준 Engine V1 bounded full-blob 공급**은 [#227](https://github.com/0xmhha/indexer-go/pull/227)로 CI5·squash·깨끗한 main 동기화를 완료했다. 현재 main은 `449c31750bb4efb48d12b9264c1c1dc3fcb273aa`이며 2번 call-range/orphan은 현재 구현·검증 중이며 자체 CI5·squash·main 동기화가 남아 있다. 3/4번은 부모 실행에 남아 있다. [불변 Seed 계약](../../verification/seed-contract.json)의 순서대로 현재 기능의 CI5·squash·깨끗한 main 동기화가 완료되어야 다음 구현을 시작한다. KZG는 beacon/PeerDAS/독립 합의 검증이 아니다.
 
 ## 현재 정본과 연속성
 
-- n: Engine blob supply [계획](../codemine/runs/20261026-e5-engine-blob-supply/plan.md), [체크리스트](../codemine/runs/20261026-e5-engine-blob-supply/checklist.md), [검증](../codemine/runs/20261026-e5-engine-blob-supply/validation.md)
+- n: call ranges/orphan traces [계획](../codemine/runs/20261026-e5-call-ranges-orphans/plan.md), [체크리스트](../codemine/runs/20261026-e5-call-ranges-orphans/checklist.md), [검증](../codemine/runs/20261026-e5-call-ranges-orphans/validation.md)
 - Arc native proofs [계획](../codemine/runs/20261026-e5-arc-native-proofs/plan.md), [체크리스트](../codemine/runs/20261026-e5-arc-native-proofs/checklist.md), [연속성](../codemine/runs/20261026-e5-arc-native-proofs/continuity.json), [검증](../codemine/runs/20261026-e5-arc-native-proofs/validation.md), [사용법](../EXECUTION_STATE_PROOFS.md#arc-native-acquisition-and-continuous-collection)
-- n−1: Arc native proofs #226; n−2: state proofs #225. 수용한 E1~E4 설계는 아래 링크로 보존한다.
+- n−1: Engine blob supply #227; n−2: Arc native proofs #226. 수용한 E1~E4 설계는 아래 링크로 보존한다.
 
 - Execution state proofs [계획](../codemine/runs/20261026-e5-execution-state-proofs/plan.md), [체크리스트](../codemine/runs/20261026-e5-execution-state-proofs/checklist.md), [연속성](../codemine/runs/20261026-e5-execution-state-proofs/continuity.json), [검증](../codemine/runs/20261026-e5-execution-state-proofs/validation.md), [사용법](../EXECUTION_STATE_PROOFS.md)
 
@@ -36,8 +36,8 @@ E1 #214, E2 #215, E3 #216, E4 #217, E5와 native calls #223, execution blobs #22
 
 | 우선순위 | 작업 | 완료 조건·의존성 |
 | --- | --- | --- |
-| P0 현재 릴리스 | Arc native selected proof와 collector/window | RED→GREEN, 실제 임시 native-v2/history와 2회 ArcEVM 증거, strict selection·고정 source 정책·capacity/lease/restart/reorg/ACK, PG/API, 전체 로컬 검사·새 CPU1/race/single200, staged/history scan, 정확한 head CI5, squash·깨끗한 main 동기화. source-branch PR을 완료 정본으로 사용 |
-| P1 | 지원 체인의 blob transport — 현재 검증 중 | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
+| 완료 #226 | Arc native selected proof와 collector/window | RED→GREEN, 실제 임시 native-v2/history와 2회 ArcEVM 증거, strict selection·고정 source 정책·capacity/lease/restart/reorg/ACK, PG/API, 전체 로컬 검사·새 CPU1/race/single200, staged/history scan, 정확한 head CI5, squash·깨끗한 main 동기화. source-branch PR을 완료 정본으로 사용 |
+| 완료 #227 | 지원 체인의 bounded Engine blob transport | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
 | P2 | Call 조회 확장 | 주소별 범위·coverage 검색, orphan trace 보관·조회, richer GraphQL/JSON-RPC의 별도 계약과 검증. 기존 block/tx 페이지·RPC provider 경로·legacy 미수집을 혼합하지 않음 |
 | P2 | **E6 독립 canonical/finality** | 체인 합의·validator/fork 정보에 근거한 검증과 reorg/finality 경계 설계, 결정적 fixture 및 실패/복구 검사. 그 증거 전까지 RPC5와 final fresh를 제거하거나 합의 검증으로 이름 붙이지 않음 |
 | P3 | Native 보존 추가 확장 | 실제 native layout에 맞춘 추가 indices/MDBX 공간 회수, backup/restore와 보존 floor 검증. 최신 상태·headers·code/preimages·필요 indices가 남으므로 전체 native DB가 고정 크기가 된다고 약속하지 않음 |
@@ -62,4 +62,4 @@ E1 #214, E2 #215, E3 #216, E4 #217, E5와 native calls #223, execution blobs #22
 - 비EVM 모델은 현재 EVM 중심 범위 밖의 별도 결정이다.
 - 선택 proof는 bounded block-end evidence다. 전체 상태/모든 변경 coverage, transaction witness, 임의 `eth_call`, 과거 미수집 backfill이나 새 state projection을 자동 제공하지 않는다. 필요하면 별도 설계한다.
 
-완료된 API 시간 진단·single parse·compact JSON·keepalive·DB/race 검증·문서 정리와 E1~E4를 새 변경/실패 없이 다시 작업 목록에 올리지 않는다. 오래된 선택지·수치는 Git history를 참고하며 수용한 E1 설계와 n/n-1/n-2를 보존한다. 실제 노드/peer, 포맷·운영 GC·추가 성능 측정, 태그·배포·원격 브랜치 삭제는 보류한다. 다른 프로젝트의 프로세스·container·volume·공유 cache는 유지하고 이 작업 전용 cache만 정리한다. 현재 릴리스 완료 후 다음 기능을 자동 시작하지 않는다.
+완료된 API 시간 진단·single parse·compact JSON·keepalive·DB/race 검증·문서 정리와 E1~E4를 새 변경/실패 없이 다시 작업 목록에 올리지 않는다. 오래된 선택지·수치는 Git history를 참고하며 수용한 E1 설계와 n/n-1/n-2를 보존한다. 실제 노드/peer, 포맷·운영 GC·추가 성능 측정, 태그·배포·원격 브랜치 삭제는 보류한다. 다른 프로젝트의 프로세스·container·volume·공유 cache는 유지하고 이 작업 전용 cache만 정리한다. 현재 불변 Seed는 네 기능을 순서대로 계속 구현하도록 위임했다. 각 기능의 CI5·squash·깨끗한 main 동기화 후에만 다음 기능을 시작한다.
