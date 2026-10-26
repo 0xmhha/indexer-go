@@ -2,6 +2,7 @@
 package execution
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"github.com/0xmhha/indexer-go/execwire"
@@ -10,6 +11,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/execution/blobdata"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"io"
@@ -23,6 +25,8 @@ type Prepared struct {
 	receipts  []*model.Receipt
 	creations []port.ExecutionCreation
 	calls     []port.ExecutionCall
+	chain     execwire.Chain
+	blobs     *port.ExecutionBlobRecord
 	digest    execwire.Hash
 	bytes     int64
 }
@@ -30,6 +34,13 @@ type Prepared struct {
 // Prepare owns decoded input and authenticates all encoded commitments through
 // the selected profile. It runs neither EVM nor RPC and proves no new consensus.
 func Prepare(profile chains.BinaryProfile, chain execwire.Chain, payload []byte) (*Prepared, error) {
+	return PrepareContext(context.Background(), profile, chain, payload, false)
+}
+
+func PrepareContext(ctx context.Context, profile chains.BinaryProfile, chain execwire.Chain, payload []byte, requireBlobs bool) (*Prepared, error) {
+	if e := ctx.Err(); e != nil {
+		return nil, e
+	}
 	r, err := execwire.UnmarshalResult(payload)
 	if err != nil {
 		return nil, err
@@ -55,13 +66,17 @@ func Prepare(profile chains.BinaryProfile, chain execwire.Chain, payload []byte)
 	if execwire.Hash(b.ParentHash) != r.Parent || execwire.Hash(b.StateRoot) != r.StateRoot || execwire.Hash(b.ReceiptRoot) != r.ReceiptsRoot || b.Time != r.Time || len(b.Transactions) != int(r.TxCount) {
 		return nil, port.ErrExecutionConflict
 	}
-	p := &Prepared{result: r, block: b, receipts: rs, digest: execwire.Hash(sha256.Sum256(payload)), bytes: int64(len(payload))*4 + 4096}
+	p := &Prepared{chain: chain, result: r, block: b, receipts: rs, digest: execwire.Hash(sha256.Sum256(payload)), bytes: int64(len(payload))*4 + 4096}
 	p.calls, err = nativecalls.Verify(profile.ID(), r, b, rs)
 	if err != nil {
 		return nil, err
 	}
 	for _, f := range p.calls {
 		p.bytes += 512 + int64(len(f.Path))*4
+	}
+	p.blobs, err = blobdata.Validate(ctx, profile, chain, r, b, requireBlobs)
+	if err != nil {
+		return nil, err
 	}
 	chainID, _ := new(big.Int).SetString(chain.ID, 10)
 	for _, s := range r.Steps {

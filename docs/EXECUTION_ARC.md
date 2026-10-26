@@ -14,7 +14,7 @@ Normal node import is the first execution. The adapter replays an imported block
 | Pre-block protocol changes | Optional first-only wire cause `PreBlock` = 4, index -1 and zero transaction hash; not attributed to a user transaction |
 | Finalize | Last step, including Arc system accounting in empty blocks; index -1 and zero transaction hash |
 | Call traces/internal calls | Bounded same-replay EVM hook trees, attempts/reverts and CallFrom completion handling; [native call guide](EXECUTION_CALL_TRACES.md). Root consistency does not independently commit to every child |
-| Blobs | Transaction references may be present in raw data; sidecars/KZG proofs and complete availability are not supplied. Existing [Arc blob policy audit](../x/arc/blobs.go) remains separate |
+| Blobs | Pinned node policy remains unsupported for positive blob supply. The shared [execution blob module](EXECUTION_BLOBS.md) does not activate an Arc source or establish historical/network availability. Existing [Arc blob policy audit](../x/arc/blobs.go) remains separate |
 | Account/storage inclusion proofs | Not exported by this adapter. Native/journal root equality is not an independent consensus/finality proof |
 
 The native DB must retain the complete required parent state, code, headers, body and receipts. Missing data fails closed. This release does not create a checkpoint from current RPC state, download a snapshot, fill partial coverage with zero or restore pruned history.

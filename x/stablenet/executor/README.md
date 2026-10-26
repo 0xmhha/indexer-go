@@ -60,3 +60,7 @@ Fixtures use actual EVM, WBFT, fee delegation, native mint/Extra methods, hash/p
 Tests start no node services or peers, format no disks, activate no operational GC and measure no performance. Retention tests delete only their owned temporary fixtures. They do not establish live synchronization, deployment, recovery or speed claims.
 
 Goroutine checks exempt only the exact upstream `core.(*txSenderCacher).cache` function: the pinned client initializes that process-lifetime pool before tests and exposes no shutdown API. Replay callbacks and executor-owned workers remain subject to leak checks.
+
+## Cancun pre-block recording
+
+Declared Cancun/PoS beacon-root headers run the pinned library EIP-4788 operation in a separate PreBlock journal before transactions. The independently reconstructed changes include system storage/code/account effects without inventing signed transactions or user call frames. A joined cancellation logger arms after the library resets the system EVM. DAO and pre-fork/pre-Merge beacon-root inputs remain rejected. `evm-blobs.json` uses synthetic PoS/Cancun genesis, the standard beacon-roots code and signed type-3 references, with actual import/replay state comparison and no durable replay writes. This is library replay evidence, not live consensus or complete modern-fork support. Full sidecars are composed separately [before spool admission](../../../docs/EXECUTION_BLOBS.md); EVM execution cannot reconstruct their bytes.

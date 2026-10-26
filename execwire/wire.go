@@ -120,4 +120,5 @@ type Result struct {
 	ReceiptsRLP  []byte `json:"-"`
 	Steps        []Step
 	CallTraces   *CallTraces `json:",omitempty"`
+	BlobBundle   *BlobBundle `json:",omitempty"`
 }

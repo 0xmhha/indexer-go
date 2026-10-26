@@ -50,7 +50,7 @@ func SubmitFile(ctx context.Context, profile chains.BinaryProfile, chain execwir
 	if profile == nil {
 		return execwire.Frame{}, port.ErrInvalidData
 	}
-	p, err := Prepare(profile, chain, payload)
+	p, err := PrepareContext(ctx, profile, chain, payload, false)
 	if err != nil {
 		return execwire.Frame{}, err
 	}

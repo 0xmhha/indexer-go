@@ -45,14 +45,23 @@ func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prep
 			if err := b.Store.ApplyExecutionCore(bound, w, p.block, p.receipts); err != nil {
 				return err
 			}
-			if p.result.CallTraces == nil {
+			if p.result.CallTraces != nil {
+				writer, ok := b.Store.(port.ExecutionCallWriter)
+				if !ok {
+					return port.ErrInvalidData
+				}
+				if e := writer.ApplyExecutionCalls(bound, p.result, p.block, p.receipts); e != nil {
+					return e
+				}
+			}
+			if p.result.BlobBundle == nil {
 				return nil
 			}
-			writer, ok := b.Store.(port.ExecutionCallWriter)
+			writer, ok := b.Store.(port.ExecutionBlobWriter)
 			if !ok {
 				return port.ErrInvalidData
 			}
-			return writer.ApplyExecutionCalls(bound, p.result, p.block, p.receipts)
+			return writer.ApplyExecutionBlobs(bound, p.chain, p.result, p.block)
 		case port.ExecutionBlocks, port.ExecutionReceipts, port.ExecutionLogs:
 			return b.Store.ApplyExecutionCore(bound, w, p.block, p.receipts)
 		case port.ExecutionContracts:

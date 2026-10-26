@@ -2,6 +2,8 @@
 
 `pkg/chainfeed/evmblob`은 별도 공급자가 전달한 **전체 EIP-4844 blob**을 검증하고 영구 capture DB에 저장하는 라이브러리다. 독립 순차 worker와 DB-only 페이지를 제공한다. 후속 감사에서 고정 Arc 공식 노드의 blob 거래 비활성화 정책을 확인했다. Arc 공급기는 시작하지 않으며 현재 `source.feed` 설정에 blob 필드를 추가하거나 운영 config.yaml을 바꾸지 않았다.
 
+E1 실행 수집은 별도의 [execution blob 경로](EXECUTION_BLOBS.md)로 연결한다. 두 경로는 순수 `evmblob/proof` 검증 코어만 공유하며 completion/cursor를 혼합하지 않는다. 이 문서의 아래 공급·설정·HTTP 미연결 범위는 capture supplement worker에 해당한다.
+
 ## Arc 정책과 상태 조회
 
 공식 Arc `6e764023ee6515fe70573e123ed2db912a7207b4`의 [생산 txpool 구성](https://github.com/circlefin/arc-node/blob/6e764023ee6515fe70573e123ed2db912a7207b4/crates/execution-txpool/src/pool.rs)은 `.no_eip4844()`와 blob cache0을 사용하고, 같은 파일의 시험도 blob 거래 거부를 확인한다. 이 근거는 **해당 노드 구성의 transaction admission 정책**이다. 모든 과거 블록의 blob 부재나 모든 consensus/fork 규칙을 증명한 것으로 확대하지 않는다. 실제 public deployment의 실행 버전도 별도 운영 증거가 필요하다.

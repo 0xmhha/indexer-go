@@ -38,7 +38,10 @@ type nativeCallPage struct {
 }
 
 func callQuery(r *http.Request) (q port.ExecutionCallQuery, err error) {
-	q.Limit = 50
+	return parseExecutionQuery(r, 256, 50, execwire.MaxCallFrames, true)
+}
+func parseExecutionQuery(r *http.Request, maxLimit, defaultLimit, maxAfter uint64, allowInternal bool) (q port.ExecutionCallQuery, err error) {
+	q.Limit = uint32(defaultLimit)
 	query, e := url.ParseQuery(r.URL.RawQuery)
 	if e != nil {
 		return q, port.ErrInvalidData
@@ -55,12 +58,12 @@ func callQuery(r *http.Request) (q port.ExecutionCallQuery, err error) {
 			}
 			switch k {
 			case "limit":
-				if n == 0 || n > 256 {
+				if n == 0 || n > maxLimit {
 					return q, port.ErrInvalidData
 				}
 				q.Limit = uint32(n)
 			case "after":
-				if n > execwire.MaxCallFrames {
+				if n > maxAfter {
 					return q, port.ErrInvalidData
 				}
 				q.After = uint32(n)
@@ -78,6 +81,9 @@ func callQuery(r *http.Request) (q port.ExecutionCallQuery, err error) {
 				return q, port.ErrInvalidData
 			}
 		case "internal":
+			if !allowInternal {
+				return q, port.ErrInvalidData
+			}
 			if v[0] != "true" && v[0] != "false" {
 				return q, port.ErrInvalidData
 			}

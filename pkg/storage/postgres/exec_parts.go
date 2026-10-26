@@ -73,7 +73,7 @@ func (s *Store) WriteExecutionPart(ctx context.Context, p port.ExecutionPart, ap
 		}
 		bt := &blockTx{owner: s, tx: tx}
 		bound := context.WithValue(ctx, blockTxKey{}, bt)
-		scope := &executionPartScope{part: p}
+		scope := &executionPartScope{part: p, chain: c.Chain}
 		scope.active.Store(true)
 		defer scope.active.Store(false)
 		bound = context.WithValue(bound, executionPartKey{}, scope)

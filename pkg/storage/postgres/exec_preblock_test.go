@@ -60,7 +60,7 @@ func TestExecutionPreBlockMigrationPreservesExistingPartitions(t *testing.T) {
 // This is test-only reconstruction, not a supported production downgrade.
 func restoreExecutionV16(t *testing.T, s *Store) {
 	t.Helper()
-	_, err := s.pool.Exec(t.Context(), `DROP TABLE exec_call_frames,exec_call_blocks; ALTER TABLE exec_publications DROP COLUMN call_traces`)
+	_, err := s.pool.Exec(t.Context(), `DROP TABLE exec_blob_entries,exec_blob_blocks,exec_call_frames,exec_call_blocks; ALTER TABLE exec_publications DROP COLUMN call_traces,DROP COLUMN blob_sidecars`)
 	require.NoError(t, err)
 	// Restore the four exact v16 checks on an existing partitioned schema.
 	for _, table := range []string{"state_account_changes", "state_storage_changes", "state_storage_clears", "state_contract_changes"} {

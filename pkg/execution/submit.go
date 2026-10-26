@@ -20,7 +20,7 @@ func SubmitResult(ctx context.Context, raw net.Conn, profile chains.BinaryProfil
 	if profile == nil {
 		return execwire.Frame{}, port.ErrInvalidData
 	}
-	p, err := Prepare(profile, chain, payload)
+	p, err := PrepareContext(ctx, profile, chain, payload, false)
 	if err != nil {
 		return execwire.Frame{}, err
 	}

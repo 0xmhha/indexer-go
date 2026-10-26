@@ -80,7 +80,7 @@ func (f *Fetcher) PublishExecution(ctx context.Context, r execwire.Result, b *mo
 		var pending []events.Event
 		f.pendingEvents = &pending
 		defer func() { f.pendingEvents = nil }()
-		committed, err := publisher.CommitExecution(ctx, port.ExecutionPublication{Ref: r.Ref, Parent: r.Parent, Digest: digest, Root: r.StateRoot, CallTraces: r.CallTraces != nil}, func(bound context.Context) error {
+		committed, err := publisher.CommitExecution(ctx, port.ExecutionPublication{Ref: r.Ref, Parent: r.Parent, Digest: digest, Root: r.StateRoot, CallTraces: r.CallTraces != nil, Blobs: r.BlobBundle != nil}, func(bound context.Context) error {
 			var native []feature.NativeBalanceChange
 			for _, step := range r.Steps {
 				for _, change := range step.Accounts {

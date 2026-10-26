@@ -33,7 +33,10 @@ func Replay(ctx context.Context, in ReplayInput) (execwire.Result, error) {
 	if config == nil || in.Chain.Engine() == nil || h.Number.Sign() <= 0 || h.Number.BitLen() > 63 || in.Parent.Number.Sign() < 0 || new(big.Int).Add(in.Parent.Number, big.NewInt(1)).Cmp(h.Number) != 0 || h.ParentHash != in.Parent.Hash() {
 		return execwire.Result{}, fmt.Errorf("executor: invalid parent or configuration")
 	}
-	if h.ParentBeaconRoot != nil || config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(h.Number) == 0 {
+	if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(h.Number) == 0 {
+		return execwire.Result{}, ErrUnsupportedPrelude
+	}
+	if h.ParentBeaconRoot != nil && (!config.IsCancun(h.Number, h.Time) || h.Difficulty == nil || h.Difficulty.Sign() != 0) {
 		return execwire.Result{}, ErrUnsupportedPrelude
 	}
 	if len(in.Block.Withdrawals()) > 0 && !config.IsShanghai(h.Number, h.Time) {
@@ -53,6 +56,26 @@ func Replay(ctx context.Context, in ReplayInput) (execwire.Result, error) {
 	receipts := make(types.Receipts, 0, len(in.Receipts))
 	steps := make([]execwire.Step, 0, len(in.Receipts)+1)
 	calls := &callCollector{frames: []execwire.CallFrame{}}
+	if h.ParentBeaconRoot != nil {
+		if err := r.beginStep(execwire.PreBlock, -1, common.Hash{}); err != nil {
+			return execwire.Result{}, err
+		}
+		blockCtx := core.NewEVMBlockContext(h, in.Chain, nil)
+		logger := &preludeLogger{cancelLogger: cancelLogger{ctx: ctx}}
+		env := vm.NewEVM(blockCtx, vm.TxContext{}, r.state, config, vm.Config{Tracer: logger})
+		logger.env = env
+		core.ProcessBeaconBlockRoot(*h.ParentBeaconRoot, env, r.state)
+		logger.close()
+		if err := ctx.Err(); err != nil {
+			return execwire.Result{}, err
+		}
+		step, err := r.finishStep(config.IsEIP158(h.Number))
+		if err != nil {
+			return execwire.Result{}, err
+		}
+		steps = append(steps, step)
+	}
+
 	for i, tx := range in.Block.Transactions() {
 		if err := ctx.Err(); err != nil {
 			return execwire.Result{}, err

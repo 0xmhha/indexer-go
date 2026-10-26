@@ -121,7 +121,7 @@ func (a *App) initExecution(ctx context.Context) error {
 		return err
 	}
 	backend := &execution.StoreBackend{Store: store, Publisher: a.fetcher}
-	r := &execution.Receiver{Chain: execwire.Chain{}, Profile: profile, Store: store, Window: 8, Timeout: e.Timeout, Confirm: a.fetcher.ConfirmExecution, ValidateReorg: a.fetcher.ValidateExecutionReorg, ReorgOnError: func(err error) bool { return errors.Is(err, fetch.ErrReorg) }}
+	r := &execution.Receiver{RequireBlobSidecars: e.RequireBlobSidecars, Chain: execwire.Chain{}, Profile: profile, Store: store, Window: 8, Timeout: e.Timeout, Confirm: a.fetcher.ConfirmExecution, ValidateReorg: a.fetcher.ValidateExecutionReorg, ReorgOnError: func(err error) bool { return errors.Is(err, fetch.ErrReorg) }}
 	c, err := store.ExecutionStatus(ctx)
 	if err != nil {
 		return err
