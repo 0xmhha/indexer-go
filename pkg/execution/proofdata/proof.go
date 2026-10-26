@@ -97,3 +97,19 @@ func VerifyRecord(ctx context.Context, r port.ExecutionProofRecord) (stateproof.
 	}
 	return b, accounts, nil
 }
+
+// ParseSelection rejects unknown/duplicate keys before normalizing a copied scope.
+func ParseSelection(raw []byte) (stateproof.Selection, error) {
+	var s stateproof.Selection
+	if len(raw) == 0 || len(raw) > 16<<10 {
+		return s, stateproof.ErrProof
+	}
+	if e := json.Unmarshal(raw, &s); e != nil {
+		return s, e
+	}
+	if e := strictJSONShape(raw, proofShape.fields["selection"]); e != nil {
+		return s, e
+	}
+	out, _, e := s.Normalize()
+	return out, e
+}

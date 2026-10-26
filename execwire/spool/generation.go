@@ -18,7 +18,7 @@ func (s *Store) Rebind(ctx context.Context, base execwire.Ref) error {
 		return err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return ErrRecovery
 	}
 	activeBase := s.state.Anchor
@@ -60,7 +60,7 @@ func (s *Store) Retained(ctx context.Context, ref execwire.Ref) (execwire.Result
 		return execwire.Result{}, err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return execwire.Result{}, ErrRecovery
 	}
 	if ref.Generation != s.state.Committed.Generation {
@@ -115,7 +115,7 @@ func (s *Store) Checkpoint(ctx context.Context) (execwire.Ref, error) {
 		return execwire.Ref{}, err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return execwire.Ref{}, ErrRecovery
 	}
 	return s.state.Committed, nil
@@ -127,7 +127,7 @@ func (s *Store) Reference(ctx context.Context, height uint64) (execwire.Ref, boo
 		return execwire.Ref{}, false, err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return execwire.Ref{}, false, ErrRecovery
 	}
 	if height == s.state.Committed.Height {
@@ -162,7 +162,7 @@ func (s *Store) Tail(ctx context.Context) (execwire.Ref, error) {
 		return execwire.Ref{}, err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return execwire.Ref{}, ErrRecovery
 	}
 	tail := s.state.Committed
@@ -180,7 +180,7 @@ func (s *Store) After(ctx context.Context, ref execwire.Ref) (Entry, bool, error
 		return Entry{}, false, err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return Entry{}, false, ErrRecovery
 	}
 	if ref.Generation != s.state.Committed.Generation {

@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
+	"github.com/0xmhha/indexer-go/pkg/execution"
 	"github.com/0xmhha/indexer-go/x/arc/collector"
 )
 
@@ -43,6 +45,7 @@ func run(ctx context.Context, args []string, out io.Writer, start func(context.C
 	window := f.Int("window", 8, "bounded in-flight results (1..64)")
 	poll := f.Duration("poll", 100*time.Millisecond, "native head poll interval")
 	retry := f.Duration("retry", 500*time.Millisecond, "indexer transport reconnect interval")
+	proofs := f.String("state-proofs", "", "absolute private JSON selection; requires a fresh source spool when enabled or changed")
 	timeout := f.Duration("timeout", time.Minute, "individual native/transport call deadline, at most one hour")
 	if err := f.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -80,5 +83,13 @@ func run(ctx context.Context, args []string, out io.Writer, start func(context.C
 	if err != nil {
 		return err
 	}
-	return start(ctx, collector.Config{Native: collector.Options{Executable: *executable, DataDir: *datadir, Chain: execwire.Chain{ID: *id, Genesis: gen}, Timeout: *timeout}, Anchor: execwire.Ref{Generation: *generation, Height: *height, Hash: anchor}, SpoolDir: *spool, Socket: *socket, MaxBytes: *maxBytes, MaxRecords: *maxRecords, Window: *window, Poll: *poll, Retry: *retry})
+	var selection *stateproof.Selection
+	if *proofs != "" {
+		s, e := execution.ReadStateProofSelection(ctx, *proofs)
+		if e != nil {
+			return e
+		}
+		selection = &s
+	}
+	return start(ctx, collector.Config{Native: collector.Options{Executable: *executable, DataDir: *datadir, Chain: execwire.Chain{ID: *id, Genesis: gen}, Timeout: *timeout, StateProofs: selection}, Anchor: execwire.Ref{Generation: *generation, Height: *height, Hash: anchor}, SpoolDir: *spool, Socket: *socket, MaxBytes: *maxBytes, MaxRecords: *maxRecords, Window: *window, Poll: *poll, Retry: *retry})
 }

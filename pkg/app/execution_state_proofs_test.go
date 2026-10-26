@@ -28,13 +28,25 @@ import (
 )
 
 func TestExecutionNativeStateProofPublicationAndRestart(t *testing.T) {
+	testExecutionStateProofPublication(t, "evm-state-proofs")
+}
+func TestExecutionArcNativeStateProofPublicationAndRestart(t *testing.T) {
+	testExecutionStateProofPublication(t, "arc-state-proofs")
+}
+func testExecutionStateProofPublication(t *testing.T, name string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	f := loadExecutionFrozen(t, "evm-state-proofs")
+	f := loadExecutionFrozen(t, name)
 	var source struct{ ProofInput []byte }
-	encoded, e := os.ReadFile("../../testdata/execution/evm-state-proofs.json")
+	encoded, e := os.ReadFile("../../testdata/execution/" + name + ".json")
 	require.NoError(t, e)
 	require.NoError(t, json.Unmarshal(encoded, &source))
+	if name == "arc-state-proofs" {
+		r, e := execwire.UnmarshalResult(f.Payload)
+		require.NoError(t, e)
+		require.NotNil(t, r.StateProofBundle)
+		source.ProofInput = r.StateProofBundle.Response
+	}
 	var bundle stateproof.Bundle
 	require.NoError(t, json.Unmarshal(source.ProofInput, &bundle))
 	original := append([]byte{}, f.Payload...)
@@ -45,8 +57,16 @@ func TestExecutionNativeStateProofPublicationAndRestart(t *testing.T) {
 	require.NoError(t, os.WriteFile(proofs, source.ProofInput, 0600))
 	profile, ok := chains.Lookup(f.Profile)
 	require.True(t, ok)
-	attached, e := execution.AttachStateProofFiles(ctx, profile.(chains.BinaryProfile), f.Chain, input, proofs, complete, "native-state")
-	require.NoError(t, e)
+	var attached execution.InputAttachment
+	if name == "arc-state-proofs" {
+		require.NoError(t, os.WriteFile(complete, original, 0600))
+		r, e := execwire.UnmarshalResult(original)
+		require.NoError(t, e)
+		attached.Ref = r.Ref
+	} else {
+		attached, e = execution.AttachStateProofFiles(ctx, profile.(chains.BinaryProfile), f.Chain, input, proofs, complete, "native-state")
+		require.NoError(t, e)
+	}
 	f.Payload, e = os.ReadFile(complete)
 	require.NoError(t, e)
 	result, e := execwire.UnmarshalResult(f.Payload)

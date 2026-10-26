@@ -734,6 +734,40 @@ mod tests {
         );
         Ok(())
     }
+    #[test]
+    fn native_selected_proofs_bind_retained_block_end_and_absence() -> Result<()> {
+        use crate::proofs::{Selection, Target};
+        use alloy_primitives::Address;
+        let (_dir, f, _spec, _apply) = fixture_mode(true)?;
+        let selection = Selection {
+            targets: vec![Target {
+                address: Address::repeat_byte(0xa1),
+                code: true,
+                slots: vec![B256::repeat_byte(1), B256::repeat_byte(2)],
+            }],
+        };
+        for height in [3, 4, 5, 129, 130] {
+            let p = f.provider()?;
+            let header = p.header_by_number(height)?.unwrap();
+            let state = p.history_by_block_number(height)?;
+            let bytes = crate::proofs::export(&state, header.state_root, &selection)?;
+            let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+            assert_eq!(value["version"], 1);
+            assert_eq!(
+                value["evidence"][0]["proof"]["nonce"],
+                format!(
+                    "0x{:x}",
+                    if height == 3 || height == 4 || height == 130 {
+                        height
+                    } else {
+                        0
+                    }
+                )
+            );
+            assert!(crate::proofs::export(&state, B256::repeat_byte(9), &selection).is_err());
+        }
+        Ok(())
+    }
     fn rich_state(f: &Factory, height: u64, nonce: Option<u64>, slots: [u64; 2]) -> Result<()> {
         use alloy_primitives::{Address, U256};
         let p = f.provider()?;

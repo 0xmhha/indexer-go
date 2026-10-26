@@ -28,8 +28,11 @@ var proofShape = object(map[string]*shape{
 // Typed decoding bounds byte/cardinality first. This pass rejects duplicate and
 // unknown keys inside custom UnmarshalJSON types, preserving legacy null lists.
 func strictJSON(raw []byte) error {
+	return strictJSONShape(raw, proofShape)
+}
+func strictJSONShape(raw []byte, expected *shape) error {
 	d := json.NewDecoder(bytes.NewReader(raw))
-	if e := walkJSON(d, proofShape, 0); e != nil {
+	if e := walkJSON(d, expected, 0); e != nil {
 		return e
 	}
 	var extra any

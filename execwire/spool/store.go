@@ -16,18 +16,19 @@ import (
 )
 
 type Store struct {
-	ops         fileOps
-	options     Options
-	path        string
-	gate        chan struct{}
-	done        chan struct{}
-	once        sync.Once
-	closeErr    error
-	lock        *os.File
-	state       manifest
-	entries     map[uint64]Entry
-	recovery    bool
-	maintenance bool
+	ops             fileOps
+	options         Options
+	path            string
+	gate            chan struct{}
+	done            chan struct{}
+	once            sync.Once
+	closeErr        error
+	lock            *os.File
+	state           manifest
+	entries         map[uint64]Entry
+	recovery        bool
+	maintenance     bool
+	maintenanceOnly bool
 }
 
 const metadataReserve = 64 << 10
@@ -62,6 +63,13 @@ func open(ctx context.Context, o Options, permit *retention.Permit) (*Store, err
 	if o.Path == "" || o.MaxBytes <= metadataReserve || o.MaxRecords < 1 || o.MaxRecords > 1<<20 {
 		return nil, ErrFull
 	}
+	if o.Admission != nil {
+		if *o.Admission == (execwire.Hash{}) {
+			return nil, ErrConflict
+		}
+		h := *o.Admission
+		o.Admission = &h
+	}
 	if err := validateAnchor(o); err != nil {
 		return nil, err
 	}
@@ -79,13 +87,13 @@ func open(ctx context.Context, o Options, permit *retention.Permit) (*Store, err
 	if !info.IsDir() || info.Mode().Perm() != 0700 {
 		return nil, fmt.Errorf("%w: directory ownership or permissions", ErrConflict)
 	}
-	initial := manifest{Version: 1, Chain: o.Chain, Anchor: o.Anchor, Committed: o.Anchor}
+	initial := manifest{Version: 1, Chain: o.Chain, Anchor: o.Anchor, Committed: o.Anchor, Admission: o.Admission}
 	state, err := readManifest(filepath.Join(path, stateName))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
 	missing := errors.Is(err, os.ErrNotExist)
-	if !missing && (state.Chain != o.Chain || state.Anchor != o.Anchor) {
+	if !missing && (state.Chain != o.Chain || state.Anchor != o.Anchor || !admissionMatches(state.Admission, o.Admission, maintenanceAdmission(path, state.Admission, o.Admission, permit))) {
 		return nil, ErrConflict
 	}
 	s := &Store{options: o, path: path, gate: make(chan struct{}, 1), done: make(chan struct{}), entries: make(map[uint64]Entry), state: state, ops: defaultOps()}
@@ -107,7 +115,7 @@ func open(ctx context.Context, o Options, permit *retention.Permit) (*Store, err
 		return nil, err
 	}
 	missing = errors.Is(err, os.ErrNotExist)
-	if !missing && (state.Chain != o.Chain || state.Anchor != o.Anchor) {
+	if !missing && (state.Chain != o.Chain || state.Anchor != o.Anchor || !admissionMatches(state.Admission, o.Admission, maintenanceAdmission(path, state.Admission, o.Admission, permit))) {
 		return nil, ErrConflict
 	}
 	s.state = state
@@ -134,6 +142,9 @@ func open(ctx context.Context, o Options, permit *retention.Permit) (*Store, err
 	}
 	if err := s.recover(ctx); err != nil {
 		return nil, err
+	}
+	if permit != nil {
+		s.maintenanceOnly = true
 	}
 	ok = true
 	return s, nil
@@ -169,7 +180,7 @@ func (s *Store) Append(ctx context.Context, r execwire.Result) (Entry, error) {
 		return Entry{}, err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return Entry{}, ErrRecovery
 	}
 	p, err := execwire.MarshalResult(r)
@@ -225,7 +236,7 @@ func (s *Store) Read(ctx context.Context, ref execwire.Ref) (execwire.Result, er
 		return execwire.Result{}, err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return execwire.Result{}, ErrRecovery
 	}
 	e, ok := s.entries[ref.Height]
@@ -240,7 +251,7 @@ func (s *Store) Next(ctx context.Context) (Entry, bool, error) {
 		return Entry{}, false, err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return Entry{}, false, ErrRecovery
 	}
 	e, ok := s.entries[s.state.Committed.Height+1]
@@ -252,7 +263,7 @@ func (s *Store) Acknowledge(ctx context.Context, f execwire.Frame) error {
 		return err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return ErrRecovery
 	}
 	if f.Kind != execwire.Committed || f.Header.Chain != s.options.Chain || len(f.Payload) != 0 {
@@ -476,4 +487,28 @@ func (s *Store) recover(ctx context.Context) error {
 		tail = e.Ref
 	}
 	return nil
+}
+
+// Maintenance can preserve an opaque binding only under its existing exact permit.
+// Active collection must always supply the identical policy, even on an empty spool.
+func admissionMatches(stored, requested *execwire.Hash, maintenance bool) bool {
+	if maintenance && requested == nil {
+		return true
+	}
+	if stored == nil || requested == nil {
+		return stored == nil && requested == nil
+	}
+	return *stored == *requested
+}
+
+func maintenanceAdmission(path string, stored, requested *execwire.Hash, p *retention.Permit) bool {
+	if p == nil || stored == nil || requested != nil {
+		return false
+	}
+	var intent gcIntent
+	if e := readSealedJSON(filepath.Join(path, gcIntentName), &intent); e == nil {
+		return validateGCIntent(intent) == nil && intent.Permit == *p
+	}
+	var done gcCompletion
+	return readSealedJSON(filepath.Join(path, gcReceiptName), &done) == nil && done.Permit == *p && done.Receipt.Match(*p) == nil
 }

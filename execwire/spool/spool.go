@@ -19,6 +19,7 @@ var (
 )
 
 type Options struct {
+	Admission  *execwire.Hash
 	Path       string
 	Chain      execwire.Chain
 	Anchor     execwire.Ref

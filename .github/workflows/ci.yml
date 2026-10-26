@@ -92,7 +92,7 @@ jobs:
           cd execwire
           GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConn' ./...
           GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestSupervisor' ./retention
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestConcurrentCancellationAndCloseJoin|TestRetentionConcurrentReadCloseAndGenerationJoin)$' ./spool
+          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestConcurrentCancellationAndCloseJoin|TestRetentionConcurrentReadCloseAndGenerationJoin|TestAdmission.*)$' ./spool
           GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestClient|TestTransfer|TestPrivateDial)' ./exporter
       - name: Arc collector child lifecycle concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m ./x/arc/collector ./x/arc/cmd/execution-collector
@@ -140,7 +140,7 @@ jobs:
       - name: Native full-blob files and DB-only API concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeBlobsPublicationPagesAndRestart$'
       - name: Native state-proof files and DB-only API concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeStateProofPublicationAndRestart$'
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^(TestExecutionNativeStateProofPublicationAndRestart|TestExecutionArcNativeStateProofPublicationAndRestart|TestExecutionArcNativeProofSpoolPublicationAndLostACK|TestExecutionArcNativeProofFreshFailureRetainsUnpublishedParts)$'
       - name: Execution DB admission and recovery concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence|TestExecutionRetentionDrainsReadLeaseAndCancel)$'
 
@@ -178,6 +178,7 @@ jobs:
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked --all-targets
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-storage.json" ../../../testdata/execution/arc-storage.json
+          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-state-proofs.json" ../../../testdata/execution/arc-state-proofs.json
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-create-gone.json" ../../../testdata/execution/arc-create-gone.json
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-calls.json" ../../../testdata/execution/arc-calls.json
           cmp "$INDEXER_ARC_FIXTURE_DIR/arc-call-from-oog.json" ../../../testdata/execution/arc-call-from-oog.json

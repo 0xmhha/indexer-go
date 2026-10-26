@@ -48,6 +48,8 @@ struct Args {
     serve: bool,
     #[arg(long)]
     scratch_dir: Option<PathBuf>,
+    #[arg(long, conflicts_with = "serve")]
+    state_proofs: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
@@ -59,6 +61,11 @@ fn produce(mut args: Args) -> Result<()> {
         args.datadir.is_absolute() && args.output.as_ref().is_none_or(|p| p.is_absolute()),
         "native/output paths must be absolute"
     );
+    let selection = args
+        .state_proofs
+        .as_deref()
+        .map(indexer_arc_executor::proofs::read_selection)
+        .transpose()?;
     args.datadir = args.datadir.canonicalize()?;
     indexer_arc_executor::native::check_start(&args.datadir)?;
     for name in ["db", "rocksdb", "static_files"] {
@@ -86,7 +93,10 @@ fn produce(mut args: Args) -> Result<()> {
         spec.clone(),
         ArcEvmFactory::new(spec.clone()),
     ));
-    let replay_block = |height: u64, generation: u64| -> Result<Verified> {
+    let replay_block = |height: u64,
+                        generation: u64,
+                        proofs: Option<&indexer_arc_executor::proofs::Selection>|
+     -> Result<Verified> {
         indexer_arc_executor::history::require(&factory, height - 1)?;
         // Header/body/receipts and the historical parent share one native RO view.
         // No latest-state fallback and no global prune/FinishedHeight calls.
@@ -114,7 +124,11 @@ fn produce(mut args: Args) -> Result<()> {
             .receipts_by_block(block.header.hash_slow().into())?
             .ok_or_else(|| eyre!("retained receipts unavailable"))?;
         let state = provider.history_by_block_hash(parent.hash())?;
-        let result = replay(&config, &state, &parent, &block, &receipts, generation)?;
+        let mut result = replay(&config, &state, &parent, &block, &receipts, generation)?;
+        if let Some(selection) = proofs {
+            let block_end = provider.history_by_block_hash(result.result().r#ref.hash)?;
+            result = result.with_state_proofs(&block_end, selection)?;
+        }
         // Native canonicality is useful early rejection. It does not replace the
         // indexer's final uncached RPC check and post-response generation fence.
         ensure!(
@@ -150,7 +164,12 @@ fn produce(mut args: Args) -> Result<()> {
                         &serde_json::json!({"height": request.height, "hash": hash}),
                     )?)
                 }
-                Operation::Replay => replay_block(request.height, request.generation)?.encode(),
+                Operation::Replay | Operation::ReplayProofs => replay_block(
+                    request.height,
+                    request.generation,
+                    request.state_proofs.as_ref(),
+                )?
+                .encode(),
             },
         );
     }
@@ -159,7 +178,7 @@ fn produce(mut args: Args) -> Result<()> {
         .generation
         .ok_or_else(|| eyre!("generation required"))?;
     let output = args.output.ok_or_else(|| eyre!("output required"))?;
-    let result = replay_block(height, generation)?;
+    let result = replay_block(height, generation, selection.as_ref())?;
     write_result(&output, &result)?;
     println!(
         "verified Arc {} block {} generation {}: {}",

@@ -21,3 +21,5 @@ pub mod history;
 pub mod native;
 
 pub mod retention;
+
+pub mod proofs;
