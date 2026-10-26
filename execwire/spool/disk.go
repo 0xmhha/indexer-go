@@ -24,6 +24,7 @@ type manifest struct {
 	Committed execwire.Ref
 	Digest    execwire.Hash
 	History   []Entry
+	Admission *execwire.Hash `json:",omitempty"`
 }
 type ackReceipt struct {
 	Version uint16
@@ -127,6 +128,9 @@ func readManifest(path string) (manifest, error) {
 		return manifest{}, ErrCorrupt
 	}
 	if base.Height == m.Anchor.Height && base.Hash != m.Anchor.Hash {
+		return manifest{}, ErrCorrupt
+	}
+	if m.Admission != nil && *m.Admission == (execwire.Hash{}) {
 		return manifest{}, ErrCorrupt
 	}
 	if err := validateAnchor(Options{Chain: m.Chain, Anchor: m.Anchor}); err != nil {

@@ -11,6 +11,7 @@ pub enum Operation {
     Head = 2,
     Canonical = 3,
     Replay = 4,
+    ReplayProofs = 5,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -21,6 +22,8 @@ pub struct Request {
     pub op: Operation,
     pub height: u64,
     pub generation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_proofs: Option<crate::proofs::Selection>,
 }
 
 pub fn serve(
@@ -36,7 +39,10 @@ pub fn serve(
         }
         input.read_exact(&mut length[1..])?;
         let size = u32::from_be_bytes(length) as usize;
-        ensure!((1..=1024).contains(&size), "request length exceeds limit");
+        ensure!(
+            (1..=crate::proofs::MAX_SELECTION).contains(&size),
+            "request length exceeds limit"
+        );
         let mut bytes = vec![0; size];
         input.read_exact(&mut bytes)?;
         let request: Request = serde_json::from_slice(&bytes)?;
@@ -47,6 +53,18 @@ pub fn serve(
                 && request.generation <= i64::MAX as u64,
             "invalid version/id/range"
         );
+        if matches!(request.op, Operation::ReplayProofs) {
+            request
+                .state_proofs
+                .as_ref()
+                .ok_or_else(|| eyre::eyre!("selection required"))?
+                .normalize()?;
+        } else {
+            ensure!(
+                size <= 1024 && request.state_proofs.is_none(),
+                "unexpected selection/legacy size"
+            );
+        }
         match request.op {
             Operation::Identity | Operation::Head => ensure!(
                 request.height == 0 && request.generation == 0,
@@ -55,7 +73,7 @@ pub fn serve(
             Operation::Canonical => {
                 ensure!(request.generation == 0, "unexpected canonical generation")
             }
-            Operation::Replay => ensure!(
+            Operation::Replay | Operation::ReplayProofs => ensure!(
                 request.height > 0 && request.generation > 0,
                 "replay requires height/generation"
             ),
@@ -63,7 +81,7 @@ pub fn serve(
         let op = request.op;
         let id = request.id;
         let payload = handler(request)?;
-        let limit = if matches!(op, Operation::Replay) {
+        let limit = if matches!(op, Operation::Replay | Operation::ReplayProofs) {
             64 << 20
         } else {
             1024
@@ -72,7 +90,7 @@ pub fn serve(
             !payload.is_empty() && payload.len() <= limit,
             "response exceeds limit"
         );
-        if matches!(op, Operation::Replay) {
+        if matches!(op, Operation::Replay | Operation::ReplayProofs) {
             ensure!(
                 payload.starts_with(b"EXR1"),
                 "replay response requires verified EXR1"
@@ -102,6 +120,7 @@ mod tests {
             op,
             height,
             generation,
+            state_proofs: None,
         })
         .unwrap();
         let mut bytes = (json.len() as u32).to_be_bytes().to_vec();
@@ -162,6 +181,62 @@ mod tests {
             .is_err()
         );
         assert!(out.is_empty());
+        Ok(())
+    }
+    #[test]
+    fn proof_operation_requires_selection_and_keeps_legacy_scope_bounded() -> Result<()> {
+        let selection = crate::proofs::Selection {
+            targets: vec![crate::proofs::Target {
+                address: alloy_primitives::Address::repeat_byte(1),
+                code: true,
+                slots: vec![alloy_primitives::B256::ZERO],
+            }],
+        };
+        let framed = |r: &Request| -> Result<Vec<u8>> {
+            let p = serde_json::to_vec(r)?;
+            let mut b = (p.len() as u32).to_be_bytes().to_vec();
+            b.extend(p);
+            Ok(b)
+        };
+        let mut r = Request {
+            version: 1,
+            id: 1,
+            op: Operation::ReplayProofs,
+            height: 1,
+            generation: 1,
+            state_proofs: Some(selection),
+        };
+        let mut out = vec![];
+        serve(Cursor::new(framed(&r)?), &mut out, |r| {
+            assert!(r.state_proofs.is_some());
+            Ok(b"EXR1verified".to_vec())
+        })?;
+        assert_eq!(out[12], 5);
+        for op in [
+            Operation::Identity,
+            Operation::Head,
+            Operation::Canonical,
+            Operation::Replay,
+        ] {
+            r.op = op;
+            let mut called = false;
+            assert!(
+                serve(Cursor::new(framed(&r)?), vec![], |_| {
+                    called = true;
+                    Ok(vec![1])
+                })
+                .is_err()
+            );
+            assert!(!called);
+        }
+        r.op = Operation::ReplayProofs;
+        r.state_proofs = None;
+        assert!(
+            serve(Cursor::new(framed(&r)?), vec![], |_| panic!(
+                "missing proof reached handler"
+            ))
+            .is_err()
+        );
         Ok(())
     }
 }

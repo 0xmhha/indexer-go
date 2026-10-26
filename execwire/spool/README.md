@@ -32,3 +32,5 @@ GOMAXPROCS=1 go test -race -count=200 -timeout=5m \
 ```
 
 Tests use private temporary directories, inject failures at each ACK durability boundary, and verify recovery preserves later unacknowledged data. They also cover corruption, bounds, ownership, cancellation and joining. They start no node services or peers and measure no performance.
+
+An optional nonzero `Options.Admission` policy digest is copied and sealed in new manifests, without changing nil legacy bytes. Active Open must match exactly before any transition/ACK recovery and again under ownership. It cannot enable/disable/rebind an existing source. The collector defines and enforces the semantic policy before Append; the spool treats the hash as opaque. Old strict readers reject bound manifests. Exact-permit maintenance may preserve an omitted opaque binding only through its matching sealed intent/completion; maintenance handles cannot admit active work, including after release.

@@ -1,8 +1,11 @@
 # 남은 작업과 우선순위
 
-E1 #214, E2 #215, E3 #216, E4 #217과 E5 Arc replay·collector·checkpoint·catalog·history, [native calls #223](https://github.com/0xmhha/indexer-go/pull/223), [execution blobs #224](https://github.com/0xmhha/indexer-go/pull/224)는 main에 반영됐다. 현재 릴리스 범위는 **선택 account/code/storage inclusion proof의 E1 입력·DB·API 결합**이다. 정본은 아래 계획과 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-execution-state-proofs)이다. 최신 head의 CI4+Arc 후 squash MERGED면 이 범위가 완료다. 선택 proof는 전체 상태·모든 변경·실제 peer·독립 합의 검증을 뜻하지 않는다.
+E1 #214, E2 #215, E3 #216, E4 #217, E5 Arc replay·collector·checkpoint·catalog·history와 native calls #223, execution blobs #224, [선택 state proofs #225](https://github.com/0xmhha/indexer-go/pull/225)는 main에 반영됐다. 현재 릴리스 범위는 **Arc native selected proof export와 collector/window 결합**이다. 정본은 아래 계획과 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-arc-native-proofs)이다. 정확한 head의 CI4+Arc 후 squash MERGED면 이 범위가 완료다. 선택 proof는 전체 상태·모든 변경·실제 peer·독립 합의 검증을 뜻하지 않는다.
 
 ## 현재 정본과 연속성
+
+- n: Arc native proofs [계획](../codemine/runs/20261026-e5-arc-native-proofs/plan.md), [체크리스트](../codemine/runs/20261026-e5-arc-native-proofs/checklist.md), [연속성](../codemine/runs/20261026-e5-arc-native-proofs/continuity.json), [검증](../codemine/runs/20261026-e5-arc-native-proofs/validation.md), [사용법](../EXECUTION_STATE_PROOFS.md#arc-native-acquisition-and-continuous-collection)
+- n−1: state proofs #225; n−2: blobs #224. 수용한 E1~E4 설계는 아래 링크로 보존한다.
 
 - Execution state proofs [계획](../codemine/runs/20261026-e5-execution-state-proofs/plan.md), [체크리스트](../codemine/runs/20261026-e5-execution-state-proofs/checklist.md), [연속성](../codemine/runs/20261026-e5-execution-state-proofs/continuity.json), [검증](../codemine/runs/20261026-e5-execution-state-proofs/validation.md), [사용법](../EXECUTION_STATE_PROOFS.md)
 
@@ -32,8 +35,7 @@ E1 #214, E2 #215, E3 #216, E4 #217과 E5 Arc replay·collector·checkpoint·cata
 
 | 우선순위 | 작업 | 완료 조건·의존성 |
 | --- | --- | --- |
-| P0 현재 릴리스 | E1 선택 state proof 공급·검증·저장·조회 | RED→GREEN, native 실제 경로·DB/API/restart, 전체 로컬 검사·새 CPU1/race/single200, staged/history scan, 정확한 head의 CI5, squash와 깨끗한 main 동기화. 현재 source-branch PR을 완료 정본으로 사용 |
-| P1 | **Arc native proof export와 collector/window 연동** | Arc의 retained root에서 선택 account/code/storage proof를 만들고 E1 원본 spool admission **전** 합성. capacity·lease·재시작·reorg·exact ACK로 보호하고 보존 원본 DB 기능 검증. 이번 표준 MPT 입력/검증·네이티브 라이브러리 exporter·borrowed-RPC helper만으로 Arc native 자동 공급을 완료 처리하지 않음 |
+| P0 현재 릴리스 | Arc native selected proof와 collector/window | RED→GREEN, 실제 임시 native-v2/history와 2회 ArcEVM 증거, strict selection·고정 source 정책·capacity/lease/restart/reorg/ACK, PG/API, 전체 로컬 검사·새 CPU1/race/single200, staged/history scan, 정확한 head CI5, squash·깨끗한 main 동기화. source-branch PR을 완료 정본으로 사용 |
 | P1 | 지원 체인의 실제 blob transport | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
 | P2 | Call 조회 확장 | 주소별 범위·coverage 검색, orphan trace 보관·조회, richer GraphQL/JSON-RPC의 별도 계약과 검증. 기존 block/tx 페이지·RPC provider 경로·legacy 미수집을 혼합하지 않음 |
 | P2 | **E6 독립 canonical/finality** | 체인 합의·validator/fork 정보에 근거한 검증과 reorg/finality 경계 설계, 결정적 fixture 및 실패/복구 검사. 그 증거 전까지 RPC5와 final fresh를 제거하거나 합의 검증으로 이름 붙이지 않음 |

@@ -45,6 +45,22 @@ impl<T: StateProvider> ReplayState for T {
 /// Constructible only after native and journal validation, never from wire input.
 pub struct Verified(wire::Result);
 impl Verified {
+    /// Add only root-verified evidence from the caller's exact block-end view.
+    pub fn with_state_proofs(
+        mut self,
+        state: &(impl crate::proofs::Source + ?Sized),
+        selection: &crate::proofs::Selection,
+    ) -> Result<Self> {
+        let response = crate::proofs::export(state, self.0.state_root, selection)?;
+        self.0.state_proof_bundle = Some(wire::StateProofBundle {
+            version: 1,
+            format: "evm.state-proof.v1".into(),
+            profile: "arc".into(),
+            provider: "arc-native".into(),
+            response,
+        });
+        Ok(self)
+    }
     pub fn result(&self) -> &wire::Result {
         &self.0
     }
@@ -280,6 +296,7 @@ pub fn replay<S: ReplayState>(
         tx_count: receipts.len() as u32,
         block_rlp: alloy_rlp::encode(block),
         receipts_rlp,
+        state_proof_bundle: None,
         steps,
         call_traces: Some(
             calls

@@ -213,6 +213,9 @@ fn native_checkpoint_full_root_and_missing_key_coverage() -> Result<()> {
 }
 
 fn imported_case(case: &str) -> Result<Imported> {
+    Ok(imported_with_end(case)?.0)
+}
+fn imported_with_end(case: &str) -> Result<(Imported, FullState)> {
     let spec = LOCAL_DEV.clone();
     let config = ArcEvmConfig::new(EthEvmConfig::new_with_evm_factory(
         spec.clone(),
@@ -439,7 +442,34 @@ fn imported_case(case: &str) -> Result<Imported> {
     for receipt in &output.receipts {
         block.header.logs_bloom |= receipt.bloom();
     }
-    Ok((config, state, parent, block, output.receipts))
+    // Independent post-state oracle from the FIRST native execution, not EXR1 steps.
+    let mut end = state.clone();
+    for (address, a) in &db.bundle_state.state {
+        if a.was_destroyed() || a.info.is_none() {
+            end.storage.retain(|(owner, _), _| owner != address);
+        }
+        if let Some(info) = &a.info {
+            end.accounts.insert(
+                *address,
+                Account {
+                    nonce: info.nonce,
+                    balance: info.balance,
+                    bytecode_hash: (info.code_hash != keccak256([])).then_some(info.code_hash),
+                },
+            );
+            for (slot, value) in &a.storage {
+                end.storage
+                    .insert((*address, B256::from(*slot)), value.present_value);
+            }
+        } else {
+            end.accounts.remove(address);
+        }
+    }
+    for (hash, code) in &db.bundle_state.contracts {
+        end.code.insert(*hash, code.original_bytes());
+    }
+    assert_eq!(end.state_root(Default::default())?, block.header.state_root);
+    Ok(((config, state, parent, block, output.receipts), end))
 }
 
 fn call_code(op: u8, to: Address) -> Vec<u8> {
@@ -749,14 +779,23 @@ fn frozen_arc_consumer_fixtures_are_reproducible() -> Result<()> {
     let dir = PathBuf::from(dir);
     fs::create_dir_all(&dir)?;
     for case in [
+        "state-proofs",
         "storage",
         "create-gone",
         "calls",
         "call-from-oog",
         "call-from-direct",
     ] {
-        let (config, state, parent, block, receipts) = imported_case(case)?;
-        let result = replay(&config, &state, &parent, &block, &receipts, 1)?;
+        let ((config, state, parent, block, receipts), end) =
+            imported_with_end(if case == "state-proofs" {
+                "storage"
+            } else {
+                case
+            })?;
+        let mut result = replay(&config, &state, &parent, &block, &receipts, 1)?;
+        if case == "state-proofs" {
+            result = result.with_state_proofs(&end, &selected_scope())?;
+        }
         let mut accounts = vec![];
         let mut storage = vec![];
         let mut code = vec![];
@@ -1028,5 +1067,196 @@ fn native_checkpoint_streams_dense_account_seed_and_scratch_failures() -> Result
         .is_err()
     );
     assert!(poisoned.finish().is_err());
+    Ok(())
+}
+
+// Independent in-memory full-trie proof oracle. Production uses retained Reth providers.
+fn trie_proof(mut entries: Vec<(B256, Vec<u8>)>, key: B256) -> (B256, Vec<Bytes>) {
+    use alloy_trie::{HashBuilder, Nibbles, proof::ProofRetainer};
+    let path = Nibbles::unpack(key);
+    let mut builder = HashBuilder::default().with_proof_retainer(ProofRetainer::new(vec![path]));
+    entries.sort_by_key(|(key, _)| *key);
+    for (key, value) in entries {
+        builder.add_leaf(Nibbles::unpack(key), &value);
+    }
+    let root = builder.root();
+    let nodes = builder
+        .take_proof_nodes()
+        .matching_nodes_sorted(&path)
+        .into_iter()
+        .map(|(_, node)| node)
+        .collect();
+    (root, nodes)
+}
+impl crate::proofs::Source for FullState {
+    fn selected_proof(&self, address: Address, slots: &[B256]) -> Result<reth_trie::AccountProof> {
+        let mut entries = vec![];
+        for (a, info) in &self.accounts {
+            let account = TrieAccount {
+                nonce: info.nonce,
+                balance: info.balance,
+                code_hash: info.get_bytecode_hash(),
+                storage_root: self.storage_root(*a, Default::default())?,
+            };
+            entries.push((keccak256(a), alloy_rlp::encode(account)));
+        }
+        let (_, proof) = trie_proof(entries, keccak256(address));
+        let storage_root = self.storage_root(address, Default::default())?;
+        let mut storage_proofs = vec![];
+        for slot in slots {
+            let entries = self
+                .storage
+                .iter()
+                .filter(|((a, _), v)| *a == address && !v.is_zero())
+                .map(|((_, slot), v)| (keccak256(slot), alloy_rlp::encode(v)))
+                .collect();
+            let (_, nodes) = trie_proof(entries, keccak256(slot));
+            let mut p = reth_trie::StorageProof::new(*slot);
+            p.value = self
+                .storage
+                .get(&(address, *slot))
+                .copied()
+                .unwrap_or_default();
+            p.proof = nodes;
+            storage_proofs.push(p);
+        }
+        Ok(reth_trie::AccountProof {
+            address,
+            info: self.accounts.get(&address).copied(),
+            proof,
+            storage_root,
+            storage_proofs,
+        })
+    }
+    fn selected_code(&self, hash: B256) -> Result<Option<Bytes>> {
+        Ok(self.code.get(&hash).cloned())
+    }
+}
+fn selected_scope() -> crate::proofs::Selection {
+    crate::proofs::Selection {
+        targets: vec![
+            crate::proofs::Target {
+                address: Address::repeat_byte(0x23),
+                code: true,
+                slots: vec![B256::ZERO, B256::repeat_byte(1)],
+            },
+            crate::proofs::Target {
+                address: Address::repeat_byte(0xee),
+                code: true,
+                slots: vec![B256::ZERO],
+            },
+        ],
+    }
+}
+#[test]
+fn native_replay_selected_proofs_preserve_roots_code_and_exact_scope() -> Result<()> {
+    let ((config, state, parent, block, receipts), mut end) = imported_with_end("storage")?;
+    let verified = replay(&config, &state, &parent, &block, &receipts, 1)?
+        .with_state_proofs(&end, &selected_scope())?;
+    let proof = verified.result().state_proof_bundle.as_ref().unwrap();
+    assert_eq!((&*proof.profile, &*proof.provider), ("arc", "arc-native"));
+    let bundle: serde_json::Value = serde_json::from_slice(&proof.response)?;
+    assert_eq!(
+        bundle["evidence"][0]["proof"]["storageProof"][0]["value"],
+        "0x9"
+    );
+    assert_eq!(bundle["evidence"][1]["code"], "0x");
+    assert!(!verified.encode()?.is_empty());
+    assert!(crate::proofs::export(&state, block.header.state_root, &selected_scope()).is_err());
+    end.code.clear();
+    assert!(crate::proofs::export(&end, block.header.state_root, &selected_scope()).is_err());
+    let mut bad = selected_scope();
+    bad.targets.push(bad.targets[0].clone());
+    assert!(bad.normalize().is_err());
+    let mut bad = selected_scope();
+    bad.targets[0].slots = vec![B256::ZERO; 129];
+    assert!(bad.normalize().is_err());
+    let mut bad = selected_scope();
+    bad.targets[0].slots = vec![B256::ZERO; 2];
+    assert!(bad.normalize().is_err());
+    assert!(crate::proofs::Selection::parse(br#"{"targets":[],"targets":[]}"#).is_err());
+    assert!(crate::proofs::Selection::parse(br#"{"targets":[],"unknown":0}"#).is_err());
+    Ok(())
+}
+
+#[test]
+fn native_proof_selection_files_and_malformed_source_fail_closed() -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("selection.json");
+    let selection = selected_scope();
+    std::fs::write(&path, serde_json::to_vec(&selection)?)?;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    assert_eq!(crate::proofs::read_selection(&path)?.targets.len(), 2);
+    let link = dir.path().join("link");
+    std::os::unix::fs::symlink(&path, &link)?;
+    assert!(crate::proofs::read_selection(&link).is_err());
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644))?;
+    assert!(crate::proofs::read_selection(&path).is_err());
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    std::fs::write(&path, vec![b' '; (16 << 10) + 1])?;
+    assert!(crate::proofs::read_selection(&path).is_err());
+    struct Fault<'a> {
+        state: &'a FullState,
+        fault: &'static str,
+    }
+    impl crate::proofs::Source for Fault<'_> {
+        fn selected_proof(
+            &self,
+            address: Address,
+            slots: &[B256],
+        ) -> Result<reth_trie::AccountProof> {
+            let mut proof = crate::proofs::Source::selected_proof(self.state, address, slots)?;
+            match self.fault {
+                "address" => proof.address = Address::ZERO,
+                "slots" => {
+                    proof.storage_proofs.pop();
+                }
+                "key" => proof.storage_proofs[0].key = B256::repeat_byte(9),
+                "nodes" => proof.proof = vec![Bytes::from(vec![0x80]); 66],
+                "node-size" => proof.proof = vec![Bytes::from(vec![0; 1025])],
+                "damaged" => proof.proof = vec![Bytes::from(vec![0x80])],
+                _ => {}
+            }
+            Ok(proof)
+        }
+        fn selected_code(&self, _: B256) -> Result<Option<Bytes>> {
+            Ok(Some(Bytes::from(vec![0])))
+        }
+    }
+    let ((_, _, _, block, _), end) = imported_with_end("storage")?;
+    for fault in [
+        "address",
+        "slots",
+        "key",
+        "nodes",
+        "node-size",
+        "damaged",
+        "code",
+    ] {
+        assert!(
+            crate::proofs::export(
+                &Fault { state: &end, fault },
+                block.header.state_root,
+                &selection
+            )
+            .is_err(),
+            "{fault}"
+        );
+    }
+    let mut no_code = selection;
+    for target in &mut no_code.targets {
+        target.code = false;
+    }
+    let bytes = crate::proofs::export(
+        &Fault {
+            state: &end,
+            fault: "code",
+        },
+        block.header.state_root,
+        &no_code,
+    )?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert!(value["evidence"][0].get("code").is_none());
     Ok(())
 }

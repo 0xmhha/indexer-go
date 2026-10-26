@@ -26,6 +26,11 @@ type Config struct {
 // Run replays into a durable bounded queue independently of delivery. It owns
 // the source spool and the read-only adapter, never the separately operated node.
 func Run(ctx context.Context, c Config) (err error) {
+	selection, admission, err := proofPolicy(c.Native.StateProofs)
+	if err != nil {
+		return err
+	}
+	c.Native.StateProofs = selection
 	if c.Native.Timeout < 0 || c.Native.Timeout > time.Hour || c.Poll < 0 || c.Retry < 0 || c.Window < 0 || c.Window > 64 || c.MaxRecords < 0 || c.MaxRecords > 1<<20 || c.MaxBytes != 0 && c.MaxBytes <= 64<<10 {
 		return execwire.ErrLimit
 	}
@@ -52,7 +57,7 @@ func Run(ctx context.Context, c Config) (err error) {
 	if within(source, native) || within(native, source) {
 		return fmt.Errorf("%w: spool and native directories must be separate", ErrNative)
 	}
-	s, err := spool.Open(ctx, spool.Options{Path: c.SpoolDir, Chain: c.Native.Chain, Anchor: c.Anchor, MaxBytes: c.MaxBytes, MaxRecords: c.MaxRecords})
+	s, err := spool.Open(ctx, spool.Options{Path: c.SpoolDir, Chain: c.Native.Chain, Anchor: c.Anchor, MaxBytes: c.MaxBytes, MaxRecords: c.MaxRecords, Admission: admission})
 	if err != nil {
 		return err
 	}

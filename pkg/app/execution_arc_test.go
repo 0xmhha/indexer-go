@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
 	"os"
 	"path/filepath"
 	"sync"
@@ -46,7 +48,13 @@ func (b arcCollectedFixture) Replay(_ context.Context, height, generation uint64
 }
 
 func TestExecutionArcCollectedSpoolPublicationAndLostACK(t *testing.T) {
-	f := loadExecutionFrozen(t, "arc-storage")
+	testArcCollectedSpool(t, "arc-storage")
+}
+func TestExecutionArcNativeProofSpoolPublicationAndLostACK(t *testing.T) {
+	testArcCollectedSpool(t, "arc-state-proofs")
+}
+func testArcCollectedSpool(t *testing.T, name string) {
+	f := loadExecutionFrozen(t, name)
 	s, _ := preparedExecutionDB(t, f)
 	_, srv := fixtureRPC(t, f)
 	cl, err := client.NewClient(&client.Config{Endpoint: srv.URL, Timeout: time.Second, RateLimit: 5, Logger: zap.NewNop()})
@@ -63,6 +71,16 @@ func TestExecutionArcCollectedSpoolPublicationAndLostACK(t *testing.T) {
 	r, err := execwire.UnmarshalResult(f.Payload)
 	require.NoError(t, err)
 	receiver := &execution.Receiver{Chain: f.Chain, Profile: profile, Store: s, Confirm: fe.ConfirmExecution, Timeout: 3 * time.Second}
+	var admission *execwire.Hash
+	if r.StateProofBundle != nil {
+		var bundle stateproof.Bundle
+		require.NoError(t, json.Unmarshal(r.StateProofBundle.Response, &bundle))
+		receiver.RequiredStateProofs = &bundle.Selection
+		_, h, e := bundle.Selection.Normalize()
+		require.NoError(t, e)
+		hash := execwire.Hash(h)
+		admission = &hash
+	}
 	receiver.OpenController = func(ctx context.Context) (*execution.Controller, error) {
 		return execution.NewController(ctx, execution.Limits{MaxBlocks: 4, MaxBytes: 16 << 20}, s, backend, func(context.Context) error { return nil })
 	}
@@ -81,7 +99,7 @@ func TestExecutionArcCollectedSpoolPublicationAndLostACK(t *testing.T) {
 	for attempt := range 2 {
 		// A second fresh source has the original cursor but the DB already has
 		// the committed block: this is a lost-ACK replay, not Hello promotion.
-		source, err = spool.Open(ctx, spool.Options{Path: filepath.Join(t.TempDir(), "spool"), Chain: f.Chain, Anchor: f.Baseline.Ref, MaxBytes: 2 << 20, MaxRecords: 8})
+		source, err = spool.Open(ctx, spool.Options{Path: filepath.Join(t.TempDir(), "spool"), Chain: f.Chain, Anchor: f.Baseline.Ref, MaxBytes: 2 << 20, MaxRecords: 8, Admission: admission})
 		require.NoError(t, err)
 		if attempt == 1 {
 			_, err = source.Append(ctx, r)
@@ -98,6 +116,12 @@ func TestExecutionArcCollectedSpoolPublicationAndLostACK(t *testing.T) {
 			return e == nil && status.Committed == r.Ref && status.Pending == 0
 		}, 5*time.Second, time.Millisecond)
 		assertExecutionFrozen(t, ctx, s, f, r.Ref)
+		if r.StateProofBundle != nil {
+			record, e := s.ExecutionProof(ctx, port.ExecutionProofQuery{Height: r.Ref.Height, Address: execwire.Address(receiver.RequiredStateProofs.Targets[0].Address)})
+			require.NoError(t, e)
+			require.Equal(t, r.Ref, record.Ref)
+			require.Equal(t, "arc-native", record.Provider)
+		}
 		seq, e := s.LastOutboxSeq(ctx)
 		require.NoError(t, e)
 		if attempt == 0 {
@@ -112,7 +136,7 @@ func TestExecutionArcCollectedSpoolPublicationAndLostACK(t *testing.T) {
 
 func TestExecutionArcVerifiedProfileAndNativeWireCompatibility(t *testing.T) {
 	require.True(t, chains.SupportsExecution(arc.New()), "Arc must opt in only with its independently verified native producer")
-	for _, name := range []string{"arc-storage", "arc-create-gone", "arc-calls", "arc-call-from-oog", "arc-call-from-direct"} {
+	for _, name := range []string{"arc-storage", "arc-create-gone", "arc-calls", "arc-call-from-oog", "arc-call-from-direct", "arc-state-proofs"} {
 		f := loadExecutionFrozen(t, name)
 		r, err := execwire.UnmarshalResult(f.Payload)
 		require.NoError(t, err, "Rust bytes must exactly match canonical Go wire metadata")
@@ -125,7 +149,13 @@ func TestExecutionArcVerifiedProfileAndNativeWireCompatibility(t *testing.T) {
 }
 
 func TestExecutionArcFreshFailureRetainsUnpublishedParts(t *testing.T) {
-	f := loadExecutionFrozen(t, "arc-storage")
+	testArcFreshFailure(t, "arc-storage")
+}
+func TestExecutionArcNativeProofFreshFailureRetainsUnpublishedParts(t *testing.T) {
+	testArcFreshFailure(t, "arc-state-proofs")
+}
+func testArcFreshFailure(t *testing.T, name string) {
+	f := loadExecutionFrozen(t, name)
 	s, _ := preparedExecutionDB(t, f)
 	m, srv := fixtureRPC(t, f)
 	cl, err := client.NewClient(&client.Config{Endpoint: srv.URL, Timeout: time.Second, RateLimit: 5, Logger: zap.NewNop()})

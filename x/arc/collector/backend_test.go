@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -22,7 +24,11 @@ type frozen struct {
 
 func fixture(t *testing.T) (frozen, execwire.Result) {
 	t.Helper()
-	p, err := os.ReadFile("../../../testdata/execution/arc-storage.json")
+	return fixtureNamed(t, "arc-storage")
+}
+func fixtureNamed(t *testing.T, name string) (frozen, execwire.Result) {
+	t.Helper()
+	p, err := os.ReadFile("../../../testdata/execution/" + name + ".json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,6 +46,9 @@ func fixture(t *testing.T) (frozen, execwire.Result) {
 func helperBackend(t *testing.T, mode string) (*Backend, execwire.Result) {
 	t.Helper()
 	f, r := fixture(t)
+	if strings.HasPrefix(mode, "proof-") {
+		f, r = fixtureNamed(t, "arc-state-proofs")
+	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestArcBackendHelper$")
 	cmd.Env = append(os.Environ(), "INDEXER_ARC_BACKEND_HELPER="+mode, "GORACE=atexit_sleep_ms=0")
@@ -47,6 +56,13 @@ func helperBackend(t *testing.T, mode string) (*Backend, execwire.Result) {
 	if err != nil {
 		cancel()
 		t.Fatal(err)
+	}
+	if strings.HasPrefix(mode, "proof-") {
+		var bundle stateproof.Bundle
+		if err = json.Unmarshal(r.StateProofBundle.Response, &bundle); err != nil {
+			t.Fatal(err)
+		}
+		b.requiredStateProofs = &bundle.Selection
 	}
 	t.Cleanup(func() { _ = b.Close() })
 	return b, r
@@ -151,6 +167,9 @@ func TestArcBackendHelper(t *testing.T) {
 		return
 	}
 	f, r := fixture(t)
+	if strings.HasPrefix(mode, "proof-") {
+		f, r = fixtureNamed(t, "arc-state-proofs")
+	}
 	announced := false
 	for {
 		var size [4]byte
@@ -202,8 +221,38 @@ func TestArcBackendHelper(t *testing.T) {
 				}
 			}
 			payload, _ = json.Marshal(ref)
-		case "replay":
+		case "replay", "replayproofs":
+			if request.Op == "replayproofs" {
+				if request.StateProofs == nil {
+					os.Exit(2)
+				}
+				var bundle stateproof.Bundle
+				if strings.HasPrefix(mode, "proof-") {
+					if err := json.Unmarshal(r.StateProofBundle.Response, &bundle); err != nil {
+						os.Exit(2)
+					}
+					_, want, e := bundle.Selection.Normalize()
+					if e != nil {
+						os.Exit(2)
+					}
+					_, got, e := request.StateProofs.Normalize()
+					if e != nil || got != want {
+						os.Exit(2)
+					}
+				}
+			}
 			payload = f.Payload
+			switch mode {
+			case "proof-legacy":
+				r.StateProofBundle = nil
+				payload, _ = execwire.MarshalResult(r)
+			case "proof-provider":
+				r.StateProofBundle.Provider = "wrong"
+				payload, _ = execwire.MarshalResult(r)
+			case "proof-corrupt":
+				r.StateProofBundle.Response = []byte(`{"version":1}`)
+				payload, _ = execwire.MarshalResult(r)
+			}
 			if mode == "replay" {
 				payload = []byte("EXR1bad")
 			}
@@ -224,7 +273,7 @@ func TestArcBackendHelper(t *testing.T) {
 			case "truncated":
 				_, _ = os.Stdout.Write(header[:5])
 				os.Exit(0)
-			case "block":
+			case "block", "proof-block":
 				_, _ = os.Stdout.Write(header[:1])
 				_ = os.WriteFile(os.Getenv("INDEXER_ARC_HELPER_READY"), []byte("entered"), 0600)
 				_, _ = io.Copy(io.Discard, os.Stdin)

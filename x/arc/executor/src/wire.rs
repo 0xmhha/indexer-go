@@ -86,6 +86,8 @@ pub struct Result {
     pub steps: Vec<Step>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub call_traces: Option<CallTraces>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state_proof_bundle: Option<StateProofBundle>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -113,4 +115,15 @@ pub struct CallFrame {
     #[serde(serialize_with = "base64_bytes")]
     pub output: Vec<u8>,
     pub error: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct StateProofBundle {
+    pub version: u32,
+    pub format: String,
+    pub profile: String,
+    pub provider: String,
+    #[serde(serialize_with = "base64_bytes")]
+    pub response: Vec<u8>,
 }

@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: E1/E2/E3/E4 and E5 Arc replay/collector/checkpoint/catalog/history (#214–#222) are merged; native calls #223 are merged; current execution-blob work is tracked in `docs/codemine/runs/20261026-e5-execution-blobs/plan.md`
+- **Current Stage**: E1–E4 and E5 Arc replay/collector/checkpoint/catalog/history #214–#222, calls #223, blobs #224 and selected state proofs #225 are merged. Current Arc native proof/collector integration: `docs/codemine/runs/20261026-e5-arc-native-proofs/plan.md` (n), state proofs #225 (n−1), blobs #224 (n−2); accepted E1–E4 remain linked.
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context
@@ -197,7 +197,7 @@ Settings that are read but not wired (`eventbus.type` other than local, `node.pr
 
 ### Current Work
 
-E5 through execution blobs #224 is merged. Current scope is selected execution state proofs on `refactor/e5-execution-state-proofs`; read `docs/codemine/runs/20261026-e5-execution-state-proofs/` and `docs/EXECUTION_STATE_PROOFS.md`. Preserve native-call/blob graphs, proofs/ACK/page checks and exact old payload bytes. Optional StateProofBundle reuses the pure EIP-1186 verifier; required_state_proofs matches exact normalized selection before new work and retained-prefix confirmation. Missing history is not empty state. Consensus balance is not automatically Arc native USDC.
+E5 through selected state proofs #225 is merged. Current scope is Arc native selected proofs and collector/window integration on `refactor/e5-arc-native-proofs`; read `docs/codemine/runs/20261026-e5-arc-native-proofs/` and `docs/EXECUTION_STATE_PROOFS.md`. Native replay/proofs borrow one exact retained view, check end-root/code/scope and native canonicality, and add no RPC/third EVM/upstream change. Go independently verifies operation5 before source admission. Source manifests pin the normalized versioned policy before recovery; enabling/disabling/changing selection requires a fresh source. Exact-permit maintenance preserves the opaque binding without turning its handle into an active collector. Preserve legacy nil bytes, native-call/blob/proof ACK/query contracts and receiver exact required_state_proofs. Missing history is not empty state. Consensus balance is not automatically Arc native USDC.
 
 Migration0020 keeps proof evidence in the existing accounts part. Complete identity/checksum/MPT/code checks precede final fresh and exact ACK. Public account proof/value queries reuse reserved DB-only snapshots, current visible height/epoch and original prefix ref/digest; no RPC/raw/native fallback. Private composition creates a new exact input BEFORE any spool admission and grants no ACK/deletion authority. Native-library export reads an explicit retained root without EVM/services/source mutation; standard four-field accounts only. Optional borrowed RPC supply uses the existing shared client, one exact-hash requireCanonical batch and no dialer/latest fallback. Arc native proof acquisition/collector integration remains a follow-up; do not claim all-state/consensus coverage.
 
@@ -207,7 +207,7 @@ Arc replays with pinned official ArcEvmConfig, exact retained parent and native 
 
 Feature-unit writers own preparation, grouped hooks and exact checkpoints; their SQL stays ordered inside the single final publication/undo/outbox transaction. No per-feature pool or concurrent use of one pgx transaction. Execution native balances/history use the account journal, not duplicate balances tables; the feature verifies exact stored input and writes no duplicate projection. Preserve ordinary RPC ingestion and independent capture projections. Existing projection rows are not deleted. Execution history cursors/anchor coverage differ as documented.
 
-E1 #214, E2 #215, E3 #216 and E4 #217 are merged. Preserve accepted E1 design/plan, E2 bootstrap, E3 retention and E4 balance/feature authority. Current execution-proof continuity retains n/n-1/n-2 (proofs/blobs/native calls) and links the accepted earlier plans. `docs/analysis/open-items.md` tracks release, E5 follow-ups, E6 and held operations.
+E1 #214, E2 #215, E3 #216 and E4 #217 are merged. Preserve accepted E1 design/plan, E2 bootstrap, E3 retention and E4 balance/feature authority. Current continuity retains n/n-1/n-2 (Arc native proofs/state proofs #225/blobs #224) and links the accepted earlier plans. `docs/analysis/open-items.md` tracks release, E5 follow-ups, E6 and held operations.
 
 The user delegated recommended decisions and implementation through CI-gated squash merges on 2026-10-24. Write a requirement-failing RED test before each feature, implement it, then prove GREEN. Update current documentation and the checklist after each feature. Preserve the E1 design/plan and n/n-1/n-2 context; use Git history for obsolete records instead of appending stale current status.
 

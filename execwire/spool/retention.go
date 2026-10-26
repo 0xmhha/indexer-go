@@ -79,7 +79,7 @@ func (s *Store) RetentionRequest(ctx context.Context, head execwire.Ref, root ex
 		return retention.Request{}, err
 	}
 	defer s.release()
-	if s.recovery || s.maintenance {
+	if s.recovery || s.maintenance || s.maintenanceOnly {
 		return retention.Request{}, ErrRecovery
 	}
 	return s.retentionRequest(head, root, keep)

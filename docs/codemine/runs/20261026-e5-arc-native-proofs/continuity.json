@@ -1,0 +1,35 @@
+{
+  "goal": "Arc native selected proof acquisition before spool admission",
+  "base": "dd4110866deaf6e9d80c2d0ebea8d14b51773e57",
+  "source_branch": "refactor/e5-arc-native-proofs",
+  "n": {
+    "feature": "Arc native proofs",
+    "state": "implemented; all local gates and single200 passed; CI-gated release pending",
+    "plan": "plan.md",
+    "checklist": "checklist.md",
+    "validation": "validation.md"
+  },
+  "n-1": {
+    "feature": "execution state proofs",
+    "pr": 225,
+    "plan": "../20261026-e5-execution-state-proofs/plan.md"
+  },
+  "n-2": {
+    "feature": "execution blobs",
+    "pr": 224,
+    "plan": "../20261026-e5-execution-blobs/plan.md"
+  },
+  "accepted": {
+    "E1": "../20261023-e1-execution/03-plan.md",
+    "E2": "../20261024-e2-bootstrap/plan.md",
+    "E3": "../20261024-e3-retention/plan.md",
+    "E4": "../20261024-e4-feature-writers/plan.md"
+  },
+  "holds": [
+    "actual nodes/peers/operator DB",
+    "disk provisioning/formatting",
+    "operational GC",
+    "performance",
+    "other projects"
+  ]
+}
