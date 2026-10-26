@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"errors"
+	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
 	"net"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 // Receiver is assembled before ingest. Its connection session is private;
 // the runtime listener must authenticate the Unix peer before invoking it.
 type Receiver struct {
+	RequiredStateProofs *stateproof.Selection
 	RequireBlobSidecars bool
 	Chain               execwire.Chain
 	Profile             chains.BinaryProfile
@@ -157,7 +159,7 @@ func (r *Receiver) serveConn(parent context.Context, raw net.Conn) error {
 			if !complete {
 				continue
 			}
-			prepared, err := PrepareContext(ctx, r.Profile, r.Chain, payload, r.RequireBlobSidecars)
+			prepared, err := PrepareWithRequirements(ctx, r.Profile, r.Chain, payload, Requirements{BlobSidecars: r.RequireBlobSidecars, StateProofs: r.RequiredStateProofs})
 			if err != nil {
 				return err
 			}

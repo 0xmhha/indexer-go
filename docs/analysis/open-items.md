@@ -1,8 +1,10 @@
-# 남은 작업
+# 남은 작업과 우선순위
 
-E1 #214, E2 #215, E3 #216, E4 #217과 E5 Arc replay·collector·checkpoint·catalog·history 및 [native calls #223](https://github.com/0xmhha/indexer-go/pull/223)은 main에 반영됐다. 현재 범위는 full blob 입력의 E1 결합·KZG·명시적 보존 상태·DB-only 조회다. 정본은 아래 계획과 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-execution-blobs)이다. 최신-head CI4+Arc 후 squash MERGED면 이 범위는 완료다. 실제 Arc blob 공급 활성화나 독립 합의/네트워크 가용성을 뜻하지 않는다. 종료한 검사를 새 변경/실패 없이 반복하지 않는다.
+E1 #214, E2 #215, E3 #216, E4 #217과 E5 Arc replay·collector·checkpoint·catalog·history, [native calls #223](https://github.com/0xmhha/indexer-go/pull/223), [execution blobs #224](https://github.com/0xmhha/indexer-go/pull/224)는 main에 반영됐다. 현재 릴리스 범위는 **선택 account/code/storage inclusion proof의 E1 입력·DB·API 결합**이다. 정본은 아래 계획과 [source-branch PR](https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-execution-state-proofs)이다. 최신 head의 CI4+Arc 후 squash MERGED면 이 범위가 완료다. 선택 proof는 전체 상태·모든 변경·실제 peer·독립 합의 검증을 뜻하지 않는다.
 
 ## 현재 정본과 연속성
+
+- Execution state proofs [계획](../codemine/runs/20261026-e5-execution-state-proofs/plan.md), [체크리스트](../codemine/runs/20261026-e5-execution-state-proofs/checklist.md), [연속성](../codemine/runs/20261026-e5-execution-state-proofs/continuity.json), [검증](../codemine/runs/20261026-e5-execution-state-proofs/validation.md), [사용법](../EXECUTION_STATE_PROOFS.md)
 
 - Execution blobs [계획](../codemine/runs/20261026-e5-execution-blobs/plan.md), [체크리스트](../codemine/runs/20261026-e5-execution-blobs/checklist.md), [연속성](../codemine/runs/20261026-e5-execution-blobs/continuity.json), [검증](../codemine/runs/20261026-e5-execution-blobs/validation.md), [사용법](../EXECUTION_BLOBS.md)
 
@@ -26,26 +28,35 @@ E1 #214, E2 #215, E3 #216, E4 #217과 E5 Arc replay·collector·checkpoint·cata
 
 현재 문서는 최신 상태를 유지한다. 과거 판본·수치·종료된 실험은 Git history로 확인하며, 수용한 E1/E2 설계와 현재 n/n-1/n-2는 유지한다. 이미 끝난 API 진단/파싱/compact JSON/keepalive/DB 검증을 새 이유 없이 반복하거나 host-load/SLO 확인 루프를 다시 제안하지 않는다.
 
-## 다음 우선순위
+## 구현 후속 작업
 
-| 단계 | 범위와 완료 조건 |
+| 우선순위 | 작업 | 완료 조건·의존성 |
+| --- | --- | --- |
+| P0 현재 릴리스 | E1 선택 state proof 공급·검증·저장·조회 | RED→GREEN, native 실제 경로·DB/API/restart, 전체 로컬 검사·새 CPU1/race/single200, staged/history scan, 정확한 head의 CI5, squash와 깨끗한 main 동기화. 현재 source-branch PR을 완료 정본으로 사용 |
+| P1 | **Arc native proof export와 collector/window 연동** | Arc의 retained root에서 선택 account/code/storage proof를 만들고 E1 원본 spool admission **전** 합성. capacity·lease·재시작·reorg·exact ACK로 보호하고 보존 원본 DB 기능 검증. 이번 표준 MPT 입력/검증·네이티브 라이브러리 exporter·borrowed-RPC helper만으로 Arc native 자동 공급을 완료 처리하지 않음 |
+| P1 | 지원 체인의 실제 blob transport | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
+| P2 | Call 조회 확장 | 주소별 범위·coverage 검색, orphan trace 보관·조회, richer GraphQL/JSON-RPC의 별도 계약과 검증. 기존 block/tx 페이지·RPC provider 경로·legacy 미수집을 혼합하지 않음 |
+| P2 | **E6 독립 canonical/finality** | 체인 합의·validator/fork 정보에 근거한 검증과 reorg/finality 경계 설계, 결정적 fixture 및 실패/복구 검사. 그 증거 전까지 RPC5와 final fresh를 제거하거나 합의 검증으로 이름 붙이지 않음 |
+| P3 | Native 보존 추가 확장 | 실제 native layout에 맞춘 추가 indices/MDBX 공간 회수, backup/restore와 보존 floor 검증. 최신 상태·headers·code/preimages·필요 indices가 남으므로 전체 native DB가 고정 크기가 된다고 약속하지 않음 |
+
+## 운영·실제 자료 검증 — 현재 보류
+
+| 항목 | 남은 전체 조건 |
 | --- | --- |
-| E5 다음 | 상태 inclusion proof 공급. journal/root나 call graph, KZG blob이 account/storage inclusion proof를 대신하지 않음. 기타 체인 producer 확대·비EVM 모델은 별도 결정 |
-| 실제 blob transport | 지원 체인의 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 증거를 확보한 뒤 head 수신·local window·capacity·재시작을 연결. Arc pinned policy는 positive supply 미지원이며 강제 활성화하지 않음. private full-blob 파일 경로는 실제 network DA/SSZ inclusion/PeerDAS 검증을 대신하지 않음 |
-| Call 조회 확장 | 주소별 범위/coverage 검색, orphan trace 보관·조회 및 richer GraphQL/JSON-RPC는 별도 설계. 현재 native block/tx 페이지와 RPC provider 경로를 혼합하거나 legacy 미수집 구간을 빈 이력으로 표시하지 않음 |
-| E6 | 체인 합의에 근거한 canonical/finality 검증과 RPC 의존 축소. 현재 final fresh나 native-library 검사를 독립 합의/실제 peer 검증으로 확대하지 않음 |
-| Native 보존의 운영/추가 확장 | actual layout·backup·용량 검증 후 명시적 활성화. 최신 상태·headers·보수적 jar·기타 indices가 남으므로 전체 native 디스크 고정 크기를 약속하지 않음. MDBX 여유 페이지/추가 index 정리는 별도 검증 필요 |
+| 외장 디스크·배포 값 확정 | APFS mount/device identity, 실제 경로·용량·안전 여유, 이미지/체인별 private DSN·자격 증명, 원본/PGDATA/native 경로, 중단·재개 기준 확정. 포맷·provisioning·운영 실행은 하지 않음 |
+| DB 연결 예산 | 기존 PostgreSQL 방식과 **체인별·프로세스별 pool4/part2/API 예약** 유지. 여러 ingest/API 프로세스를 함께 운영할 때 서버 전체 연결 합산과 메모리·용량 계획 확정. writer7개를 연결7개로 바꾸지 않음 |
+| Arc 접속·fork·시작점 | 공식 EL enode/접속 조건, 실제 실행 노드의 fork·genesis/network identity·보존 범위, 검증된 checkpoint/anchor와 시작 모드 확정. 공개 자료/오프라인 조사 결과를 실제 peer 연결 성공으로 처리하지 않음 |
+| E3 운영 활성화 | 실제 외장 디스크에서 COW 여유, 전원/분리 장애, native layout·backup·실제 노드 보존 범위를 검증한 뒤 명시적 활성화. 현재 DB pending permit/live lease, checkpoint·source exact ACK·삭제 intent/완료/release가 모두 필요. 원본 checkpoint 이전 미수집 payload·필요 headers/indices·현재 state/code/preimages를 보존 |
+| 용량·backlog 운영 | 실제 node/raw/PG budget·임계값·중단/재개 기준, DB 증가 감시, worker 지연·watcher 장애 알림, Docker VM 여유와 외장 mount 분리 대응 검증. 이미 구현된 filesystem/capacity guard를 운영 증거로 혼동하지 않음 |
+| 일관된 백업·복원 | WAL 보관소, 체인별 상태 보존, matched DB/node/spool/checkpoint backup·restore와 RPO/RTO 검증. 서로 다른 시점의 임의 자료로 ACK/GC 완료를 추정하지 않음 |
+| 실제 source conformance | 실제 era1 export/RPC 대조, StableNet/Arc peer·mainnet·실제 retained DB와 fork 경계, 외장 디스크 분리·장기 운전 검증. public RPC의 proof/hash-selector와 실제 blob source 지원·원격 보존은 아직 미확인 |
+| 성능 | 합의된 범위에서만 E1/RPC 대비, Arc 수신·writer·ACK/API tail·backlog, E3 copy/정리 비용, macOS/Docker/물리 호스트 비교. **추가 성능 측정은 보류**하며 host-load/SLO 재측정 루프를 재개하지 않음 |
+| 별도 frontend 저장소 | GraphQL/REST 및 필요한 새 실행 API 연동 확인. 다른 프로젝트를 이 작업에서 수정·재검증하지 않음. [이전 안내](../FRONTEND_MIGRATION.md) |
 
-## 운영과 별도 검증
+## 선택적 확장·별도 결정
 
-| 항목 | 남은 조건 |
-| --- | --- |
-| 운영 설정 | APFS mount/device identity·실제 용량·private 경로/자격 증명·이미지·checkpoint·Arc enode/peer fork/보존 범위 확정 |
-| E3 활성화 | 실제 외장 디스크에서 copy 여유와 전원/분리 장애, native layout·백업·기존 노드 보존 범위 검증 후 명시적 활성화. 원본 checkpoint 이전 미수집 payload, 모든 headers/indices, 현재 상태/code/preimages는 유지하므로 전체 디스크가 고정 크기가 되지는 않음 |
-| 용량 감시 | 실제 node budget/중단·재개 기준 확정, Docker VM 여유와 watcher 장애 알림. app filesystem/PGDATA/raw와 선택 producer capacity guard는 구현 |
-| 백업 | WAL 보관소, 체인별 상태 보존, 실제 matched DB/node/spool 백업·복원과 RPO/RTO 검증 |
-| 실제 자료 | 실제 era1 export/RPC 비교, StableNet/Arc 실제 peer와 mainnet, 외장 mount·장치 분리·장기 운전 |
-| 성능 | E1 RPC 대비 및 E3 copy/정리 비용, macOS SLO·물리 호스트 비교. 추가 측정은 보류 |
-| Frontend | 별도 저장소의 GraphQL/REST 연동 확인. 이 작업에서 변경/재검증하지 않음. [이전 안내](../FRONTEND_MIGRATION.md) |
+- 다른 EVM 체인의 native producer와 custom account/header/fork encoding은 실제 지원 계약·fixture를 확보한 뒤 확대한다. 표준 MPT나 일반 `evm` profile 이름만으로 체인별 실행 conformance를 선언하지 않는다.
+- 비EVM 모델은 현재 EVM 중심 범위 밖의 별도 결정이다.
+- 선택 proof는 bounded block-end evidence다. 전체 상태/모든 변경 coverage, transaction witness, 임의 `eth_call`, 과거 미수집 backfill이나 새 state projection을 자동 제공하지 않는다. 필요하면 별도 설계한다.
 
-실제 노드 서비스·peer·disk provisioning·운영 GC·추가 성능 측정은 보류한다. 현재 릴리스 완료 후 다음 단계를 자동 시작하거나 태그·배포·원격 브랜치 삭제를 수행하지 않는다. 다른 프로젝트의 프로세스·container·volume·자료를 유지한다.
+완료된 API 시간 진단·single parse·compact JSON·keepalive·DB/race 검증·문서 정리와 E1~E4를 새 변경/실패 없이 다시 작업 목록에 올리지 않는다. 오래된 선택지·수치는 Git history를 참고하며 수용한 E1 설계와 n/n-1/n-2를 보존한다. 실제 노드/peer, 포맷·운영 GC·추가 성능 측정, 태그·배포·원격 브랜치 삭제는 보류한다. 다른 프로젝트의 프로세스·container·volume·공유 cache는 유지하고 이 작업 전용 cache만 정리한다. 현재 릴리스 완료 후 다음 기능을 자동 시작하지 않는다.

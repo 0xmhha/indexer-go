@@ -264,7 +264,7 @@ func (s *Store) resumeExecutionRewind(ctx context.Context, onUndo port.UndoHook,
 	if _, err := tx.Exec(ctx, "UPDATE exec_cursors SET generation=$1,height=$2,hash=$3,parent=$4,digest=$5", int64(marker.Target.Generation), int64(marker.Target.Height), marker.Target.Hash[:], b.ParentHash.Bytes(), make([]byte, 32)); err != nil {
 		return nil, err
 	}
-	for _, table := range []string{"exec_blob_blocks", "exec_call_blocks", "exec_parts", "exec_publications"} {
+	for _, table := range []string{"exec_state_proofs", "exec_blob_blocks", "exec_call_blocks", "exec_parts", "exec_publications"} {
 		if _, err := tx.Exec(ctx, "DELETE FROM "+pgx.Identifier{table}.Sanitize()+" WHERE height>$1", int64(marker.Target.Height)); err != nil {
 			return nil, err
 		}

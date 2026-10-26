@@ -61,17 +61,17 @@ func (s *Store) ConfirmExecution(ctx context.Context, payload []byte, fresh func
 	if err = executionDurable(ctx, tx); err != nil {
 		return false, err
 	}
-	rows, err := tx.Query(ctx, "SELECT generation,hash,parent,digest,root,call_traces,blob_sidecars FROM exec_publications WHERE height=$1 LIMIT 2", int64(incoming.Height))
+	rows, err := tx.Query(ctx, "SELECT generation,hash,parent,digest,root,call_traces,blob_sidecars,state_proofs FROM exec_publications WHERE height=$1 LIMIT 2", int64(incoming.Height))
 	if err != nil {
 		return false, err
 	}
 	var generation int64
 	var hash, parent, digest, root []byte
-	var calls, blobs bool
+	var calls, blobs, proofs bool
 	count := 0
 	for rows.Next() {
 		count++
-		if err = rows.Scan(&generation, &hash, &parent, &digest, &root, &calls, &blobs); err != nil {
+		if err = rows.Scan(&generation, &hash, &parent, &digest, &root, &calls, &blobs, &proofs); err != nil {
 			break
 		}
 	}
@@ -110,6 +110,16 @@ func (s *Store) ConfirmExecution(ctx context.Context, payload []byte, fresh func
 		return false, e
 	}
 	if blobs && (blobRecord.Chain != c.Chain || blobRecord.Profile != r.BlobBundle.Profile || blobRecord.Provider != r.BlobBundle.Provider || blobRecord.InputDigest != execwire.Hash(sha256.Sum256(r.BlobBundle.Response))) {
+		return false, port.ErrExecutionConflict
+	}
+	if proofs != (r.StateProofBundle != nil) {
+		return false, port.ErrExecutionConflict
+	}
+	proofRecord, _, _, e := readProofReceipt(ctx, tx, port.ExecutionPublication{Ref: r.Ref, Parent: r.Parent, Root: r.StateRoot, Digest: execwire.Hash(expected), StateProofs: proofs}, c.Chain)
+	if e != nil {
+		return false, e
+	}
+	if proofs && (proofRecord.Profile != r.StateProofBundle.Profile || proofRecord.Provider != r.StateProofBundle.Provider || proofRecord.InputDigest != execwire.Hash(sha256.Sum256(r.StateProofBundle.Response))) {
 		return false, port.ErrExecutionConflict
 	}
 	bound := context.WithValue(ctx, blockTxKey{}, bt)

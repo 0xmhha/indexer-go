@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
 	"math"
 	"path/filepath"
 	"strings"
@@ -13,20 +14,26 @@ import (
 // ExecutionSourceConfig opts into a prepared chain-native execution database.
 // Its checkpoint is the original anchor, not the changing visible height.
 type ExecutionSourceConfig struct {
-	RequireBlobSidecars bool          `yaml:"require_blob_sidecars"`
-	Socket              string        `yaml:"socket"`
-	AnchorHeight        uint64        `yaml:"anchor_height"`
-	AnchorHash          string        `yaml:"anchor_hash"`
-	AnchorRoot          string        `yaml:"anchor_root"`
-	QueueBlocks         int           `yaml:"queue_blocks"`
-	QueueBytes          int64         `yaml:"queue_bytes"`
-	Timeout             time.Duration `yaml:"timeout"`
+	RequiredStateProofs *stateproof.Selection `yaml:"required_state_proofs"`
+	RequireBlobSidecars bool                  `yaml:"require_blob_sidecars"`
+	Socket              string                `yaml:"socket"`
+	AnchorHeight        uint64                `yaml:"anchor_height"`
+	AnchorHash          string                `yaml:"anchor_hash"`
+	AnchorRoot          string                `yaml:"anchor_root"`
+	QueueBlocks         int                   `yaml:"queue_blocks"`
+	QueueBytes          int64                 `yaml:"queue_bytes"`
+	Timeout             time.Duration         `yaml:"timeout"`
 }
 
 func (c *Config) validateExecution() error {
 	e := c.Source.Execution
 	if e == nil {
 		return nil
+	}
+	if e.RequiredStateProofs != nil {
+		if _, _, err := e.RequiredStateProofs.Normalize(); err != nil {
+			return fmt.Errorf("source.execution.required_state_proofs: %w", err)
+		}
 	}
 	if !filepath.IsAbs(e.Socket) {
 		return fmt.Errorf("source.execution.socket must be an absolute private Unix socket path")

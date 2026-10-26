@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/x/stablenet/executor/checkpoint"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -41,9 +42,10 @@ type frozenFixture struct {
 	Payload      []byte
 	Accounts     []frozenState
 	Storage      []execwire.StorageChange
+	ProofInput   []byte `json:",omitempty"`
 }
 
-func freezeExecution(t *testing.T, profile string, in ReplayInput) []byte {
+func freezeExecution(t *testing.T, profile string, in ReplayInput, targets ...execwire.StateProofTarget) []byte {
 	t.Helper()
 	in.TraceProfile = profile
 	out, err := Replay(t.Context(), in)
@@ -129,6 +131,13 @@ func freezeExecution(t *testing.T, profile string, in ReplayInput) []byte {
 	}
 	sort.Slice(f.Baseline.Storage, func(i, j int) bool { return less(f.Baseline.Storage[i], f.Baseline.Storage[j]) })
 	sort.Slice(f.Storage, func(i, j int) bool { return less(f.Storage[i], f.Storage[j]) })
+	if len(targets) > 0 {
+		var buf bytes.Buffer
+		if e := checkpoint.ExportStateProofs(t.Context(), &buf, in.Database, in.Block.Root(), targets); e != nil {
+			t.Fatal(e)
+		}
+		f.ProofInput = buf.Bytes()
+	}
 	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +163,8 @@ func TestFrozenExecutionFixturesMatchActualEVMAndWBFT(t *testing.T) {
 			_, in := evmFixtureWith(t, []byte{0}, []evmTxSpec{{to: &account, blobHashes: []common.Hash{h, h, h}}})
 			return "evm", in
 		},
-		"evm-storage": func(t *testing.T) (string, ReplayInput) { _, in := evmFixture(t); return "evm", in },
+		"evm-state-proofs": func(t *testing.T) (string, ReplayInput) { _, in := evmFixture(t); return "evm", in },
+		"evm-storage":      func(t *testing.T) (string, ReplayInput) { _, in := evmFixture(t); return "evm", in },
 		"evm-calls": func(t *testing.T) (string, ReplayInput) {
 			_, in := evmFixtureWith(t, allNativeCallsCode(), []evmTxSpec{{to: &account, value: 1}})
 			return "evm", in
@@ -168,7 +178,11 @@ func TestFrozenExecutionFixturesMatchActualEVMAndWBFT(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			profile, in := build(t)
 			snapshot := dump(t, in.Database.DiskDB())
-			data := freezeExecution(t, profile, in)
+			var targets []execwire.StateProofTarget
+			if name == "evm-state-proofs" {
+				targets = []execwire.StateProofTarget{{Address: execwire.Address(account), Code: true, Slots: []execwire.Word{{}, {31: 255}}}, {Address: execwire.Address{19: 255}, Code: true, Slots: []execwire.Word{{}}}}
+			}
+			data := freezeExecution(t, profile, in, targets...)
 			if !reflect.DeepEqual(snapshot, dump(t, in.Database.DiskDB())) {
 				t.Fatal("fixture replay changed durable state")
 			}

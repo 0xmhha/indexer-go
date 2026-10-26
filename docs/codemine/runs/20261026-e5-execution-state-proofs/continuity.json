@@ -1,0 +1,47 @@
+{
+  "n": {
+    "feature": "execution state proofs",
+    "state": "local_gates_green_release_authority_source_branch_pr",
+    "plan": "plan.md",
+    "checklist": "checklist.md",
+    "units": {
+      "U01": "Wire canonical baseline RED→GREEN; malformed input and strict lost-ACK RED→GREEN; pure proof reuse/context and no-slot null round-trip RED→GREEN",
+      "U02": "Actual native export/absence/source immutability/cancel RED→GREEN; file/CLI/borrowed shared batch and preflight RED→GREEN",
+      "U03": "Actual PG publication/fresh rollback/exact ACK/semantic corruption/prefix/rewind/no-slot GREEN; API/standard checksum RED→GREEN; native files→seven queues→reserved API→test input removal→RO reopen GREEN",
+      "U04": "All required local static/fmt/examples/cache/ops, full functional, complete root/wire/StableNet make test-race, full fsync-on PG and all new CPU1/race/single200 GREEN. Current docs and all remaining work complete. Source-branch PR is mutable release authority for staged/history scans/exact-head CI5/squash/main."
+    }
+  },
+  "n-1": {
+    "feature": "execution blobs",
+    "pr": 224,
+    "plan": "../20261026-e5-execution-blobs/plan.md"
+  },
+  "n-2": {
+    "feature": "native calls",
+    "pr": 223,
+    "plan": "../20261025-e5-native-call-traces/plan.md"
+  },
+  "preserve": [
+    "accepted E1/E2/E3/E4 designs",
+    "two executions/upstream unchanged",
+    "pool4/part2/RPC5/final fresh/E3 authority"
+  ],
+  "holds": [
+    "actual node/peer/operator DB",
+    "disk formatting/provisioning",
+    "operational GC",
+    "performance",
+    "other projects"
+  ],
+  "accepted": {
+    "E1": "../20261023-e1-execution/03-plan.md",
+    "E2": "../20261024-e2-bootstrap/plan.md",
+    "E3": "../20261024-e3-retention/plan.md",
+    "E4": "../20261024-e4-feature-writers/plan.md"
+  },
+  "next": "While open: staged/history scans, commit/push/draft+attach, exact-head CI5, ready/squash/main sync and own-cache cleanup. MERGED completes this scope; next separate priority is Arc native proof export/collector/window integration.",
+  "goal": "E5 selected execution account/code/storage proofs",
+  "base": "1bb8b1906d6411ab64ebeea4e785ec910c5e8d62",
+  "source_branch": "refactor/e5-execution-state-proofs",
+  "release_authority": "https://github.com/0xmhha/indexer-go/pulls?q=is%3Apr+head%3Arefactor%2Fe5-execution-state-proofs"
+}

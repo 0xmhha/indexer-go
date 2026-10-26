@@ -64,6 +64,18 @@ func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prep
 			return writer.ApplyExecutionBlobs(bound, p.chain, p.result, p.block)
 		case port.ExecutionBlocks, port.ExecutionReceipts, port.ExecutionLogs:
 			return b.Store.ApplyExecutionCore(bound, w, p.block, p.receipts)
+		case port.ExecutionAccounts:
+			if e := b.Store.ApplyExecutionState(bound, w, p.result); e != nil {
+				return e
+			}
+			if p.result.StateProofBundle == nil {
+				return nil
+			}
+			writer, ok := b.Store.(port.ExecutionProofWriter)
+			if !ok {
+				return port.ErrInvalidData
+			}
+			return writer.ApplyExecutionProofs(bound, p.chain, p.result)
 		case port.ExecutionContracts:
 			return b.Store.ApplyExecutionState(bound, w, p.result, p.creations...)
 		default:
