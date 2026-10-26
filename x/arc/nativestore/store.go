@@ -102,6 +102,13 @@ func paths(o Options) (path, marker, stage, backup string, err error) {
 	return
 }
 func CheckStart(dataDir string) error {
+	// A detached matched snapshot carries its pending intent inside the copy.
+	// Its archived inode journal is evidence, never destination start authority.
+	if _, err := os.Lstat(filepath.Join(dataDir, ".execution-retention-pending")); err == nil {
+		return ErrPending
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	_, e := os.Lstat(filepath.Join(filepath.Dir(dataDir), "."+filepath.Base(dataDir)+".execution-retention"))
 	if e == nil {
 		return ErrPending
@@ -455,4 +462,41 @@ func AcquireRun(dataDir string) (*os.File, error) {
 		return nil, e
 	}
 	return lease, nil
+}
+
+// WithRetentionSnapshot keeps the native maintenance lease and native-library
+// hold until the callback has copied the complete verified store. It requires
+// the current completed COW journal; an archived permit alone is insufficient.
+func WithRetentionSnapshot(ctx context.Context, o Options, p retention.Permit, copySnapshot func(string) error) (err error) {
+	if p.Validate() != nil || o.Adapter == nil || copySnapshot == nil {
+		return ErrUnsafe
+	}
+	path, marker, _, _, err := paths(o)
+	if err != nil {
+		return err
+	}
+	lease, err := takeLease(o.DataDir)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, lease.Close()) }()
+	var f fence
+	if err = readJSON(marker, &f); err != nil {
+		return err
+	}
+	if f.Version != 1 || f.Permit != p || f.Phase != "done" || !sameDir(path, f.Replacement) {
+		return ErrPending
+	}
+	if err = verifyCandidate(ctx, o, path, p); err != nil {
+		return err
+	}
+	hold, err := o.Adapter.Lock(ctx, path, p.Request)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, hold.Close()) }()
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	return errors.Join(copySnapshot(path), ctx.Err())
 }

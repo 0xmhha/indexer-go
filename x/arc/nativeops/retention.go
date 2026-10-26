@@ -16,12 +16,16 @@ import (
 )
 
 type Config struct {
-	NativeExecutable, NativeDataDir, SpoolDir string
-	Chain                                     execwire.Chain
-	Anchor                                    execwire.Ref
-	AnchorRoot                                execwire.Hash
-	SpoolBytes, ReserveBytes                  uint64
-	SpoolRecords                              int
+	// Set only by the inherited supervisor after receipt matching. Every later
+	// receipt read must still match this authority, including after native work.
+	backupDigest                                                   execwire.Hash
+	NativeExecutable, NativeDataDir, SpoolDir                      string
+	BackupOutput, IndexerReceipt, IndexerArtifact, RestoreManifest string
+	Chain                                                          execwire.Chain
+	Anchor                                                         execwire.Ref
+	AnchorRoot                                                     execwire.Hash
+	SpoolBytes, ReserveBytes                                       uint64
+	SpoolRecords                                                   int
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -43,6 +47,15 @@ func options(c Config) (spool.Options, nativestore.Options, error) {
 	if (c.Chain.ID != "5042" && c.Chain.ID != "5042002") || c.Chain.Genesis == (execwire.Hash{}) || c.AnchorRoot == (execwire.Hash{}) || c.Anchor.Generation == 0 || !filepath.IsAbs(c.NativeExecutable) || !filepath.IsAbs(c.NativeDataDir) || !filepath.IsAbs(c.SpoolDir) {
 		return spool.Options{}, nativestore.Options{}, retention.ErrUnsafe
 	}
+	if c.BackupOutput != "" || c.RestoreManifest != "" || c.IndexerReceipt != "" || c.IndexerArtifact != "" {
+		if !filepath.IsAbs(c.IndexerReceipt) || !filepath.IsAbs(c.IndexerArtifact) ||
+			(c.BackupOutput == "" && c.RestoreManifest == "") ||
+			(c.BackupOutput != "" && !filepath.IsAbs(c.BackupOutput)) ||
+			(c.RestoreManifest != "" && !filepath.IsAbs(c.RestoreManifest)) {
+			return spool.Options{}, nativestore.Options{}, retention.ErrUnsafe
+		}
+	}
+
 	native, e := filepath.EvalSymlinks(c.NativeDataDir)
 	if errors.Is(e, os.ErrNotExist) {
 		parent, pe := filepath.EvalSymlinks(filepath.Dir(c.NativeDataDir))
@@ -104,7 +117,22 @@ func applyRetention(ctx context.Context, c Config, p retention.Permit) (r retent
 		return r, err
 	}
 	defer func() { err = errors.Join(err, s.Close()) }()
-	return s.CollectRetention(ctx, p, func(ctx context.Context) error { return nativestore.Compact(ctx, node, p) })
+	r, err = s.CollectRetention(ctx, p, func(ctx context.Context) error { return nativestore.Compact(ctx, node, p) })
+	if err != nil || c.BackupOutput == "" {
+		return r, err
+	}
+	external, err := indexerBackup(ctx, c, p)
+	if err != nil {
+		return r, err
+	}
+	err = s.WithRetentionSnapshot(ctx, p, func(sourcePath string) error {
+		return nativestore.WithRetentionSnapshot(ctx, node, p, func(nativePath string) error {
+			return nativestore.PublishMatchedBackup(ctx, c.BackupOutput, p, external, nativePath, sourcePath, c.IndexerArtifact, func(root string) error {
+				return verifyBackupComponents(ctx, c, p, root)
+			})
+		})
+	})
+	return r, err
 }
 func ReleaseRetention(ctx context.Context, c Config, p retention.Permit, release retention.Release) (err error) {
 	source, node, err := options(c)
@@ -136,8 +164,8 @@ type CLI struct {
 }
 
 func RunRetention(ctx context.Context, o CLI, out io.Writer) error {
-	if o.Action != "plan" && o.Action != "inspect" && o.Action != "apply" && o.Action != "release" {
-		return fmt.Errorf("action must be plan, inspect, apply or release")
+	if o.Action != "plan" && o.Action != "inspect" && o.Action != "apply" && o.Action != "release" && o.Action != "restore-admit" {
+		return fmt.Errorf("action must be plan, inspect, apply, restore-admit or release")
 	}
 	c, e := LoadConfig(o.Config)
 	if e != nil {
@@ -183,7 +211,7 @@ func RunRetention(ctx context.Context, o CLI, out io.Writer) error {
 	if e = p.Validate(); e != nil {
 		return e
 	}
-	if o.Action == "apply" {
+	if o.Action == "apply" || o.Action == "restore-admit" {
 		if o.Supervisor == nil {
 			return fmt.Errorf("apply requires live inherited DB supervisor; use execution-retention collect")
 		}
@@ -192,7 +220,30 @@ func RunRetention(ctx context.Context, o CLI, out io.Writer) error {
 			return e
 		}
 		defer stop()
-		r, e := applyRetention(guarded, c, p)
+		var expected execwire.Hash
+		if c.BackupOutput != "" || o.Action == "restore-admit" {
+			external, err := indexerBackup(guarded, c, p)
+			if err != nil {
+				return err
+			}
+			expected, err = retention.Digest(external)
+			if err != nil {
+				return err
+			}
+		}
+		if hello.BackupDigest != expected {
+			return retention.ErrUnsafe
+		}
+		c.backupDigest = expected
+		var r retention.Receipt
+		if o.Action == "restore-admit" {
+			r, e = admitRestore(guarded, c, p)
+		} else {
+			if c.RestoreManifest != "" {
+				return retention.ErrUnsafe
+			}
+			r, e = applyRetention(guarded, c, p)
+		}
 		if e != nil {
 			return e
 		}

@@ -18,5 +18,15 @@
     "sync_evidence": "verification/priority2-sync.json",
     "owned_run_dir": "/private/tmp/indexer-four.calls-6f7df360",
     "validation_path": "docs/codemine/runs/20261026-e5-call-ranges-orphans/validation.md"
+  },
+  {
+    "priority": 3,
+    "pr": 229,
+    "branch": "refactor/e6-independent-consensus",
+    "main_sha": "f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818",
+    "head_sha": "f89109a492fc9991fd8ec0f636d78a937a22ba97",
+    "sync_evidence": "verification/priority3-sync.json",
+    "owned_run_dir": "/private/tmp/indexer-four.e6.z7M46d",
+    "validation_path": "docs/codemine/runs/20261027-e6-independent-consensus/validation.md"
   }
 ]

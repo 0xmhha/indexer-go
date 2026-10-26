@@ -7,5 +7,9 @@
   "AnchorRoot": "REPLACE_WITH_ORIGINAL_VERIFIED_FULL_BASELINE_ROOT",
   "SpoolBytes": 4294967296,
   "SpoolRecords": 262144,
-  "ReserveBytes": 1073741824
+  "ReserveBytes": 1073741824,
+  "BackupOutput": "",
+  "IndexerReceipt": "",
+  "IndexerArtifact": "",
+  "RestoreManifest": ""
 }

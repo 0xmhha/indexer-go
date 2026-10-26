@@ -241,3 +241,49 @@ func TestExecutionRetentionSupervisorRequiresLivePendingPermit(t *testing.T) {
 	require.Error(t, s.WithExecutionRetention(t.Context(), p, func(context.Context) error { called++; return nil }), "a completed artifact is never a live deletion lease")
 	require.Equal(t, 1, called)
 }
+
+func TestExecutionMatchedBackupRequiresExactLivePermitPublicationAndFinalFresh(t *testing.T) {
+	s, request := retentionFixture(t)
+	p, err := s.BeginExecutionRetention(t.Context(), request, func(context.Context) error { return nil })
+	require.NoError(t, err)
+	pd, err := retention.Digest(p)
+	require.NoError(t, err)
+	r := retention.IndexerBackup{Version: 1, PermitDigest: pd, ArtifactDigest: execwire.Hash{3}, SnapshotIdentity: "external-authenticated-snapshot"}
+	var raw []byte
+	require.NoError(t, s.pool.QueryRow(t.Context(), `SELECT current_database() || '/' || current_schema(),pg_current_wal_lsn()::text,digest FROM exec_publications WHERE height=$1 AND hash=$2`, int64(p.Visible.Height), p.Visible.Hash[:]).Scan(&r.DatabaseIdentity, &r.WALBoundary, &raw))
+	copy(r.PublicationDigest[:], raw)
+	require.NoError(t, s.WithExecutionRetention(t.Context(), p, func(bound context.Context) error { return s.ValidateExecutionBackup(bound, p, r) }))
+	for _, field := range []string{"database", "publication", "permit", "wal"} {
+		t.Run(field, func(t *testing.T) {
+			bad := r
+			switch field {
+			case "database":
+				bad.DatabaseIdentity += "foreign"
+			case "publication":
+				bad.PublicationDigest[0]++
+			case "permit":
+				bad.PermitDigest[0]++
+			case "wal":
+				bad.WALBoundary = "FFFFFFFF/FFFFFFFF"
+			}
+			require.Error(t, s.WithExecutionRetention(t.Context(), p, func(bound context.Context) error { return s.ValidateExecutionBackup(bound, p, bad) }))
+		})
+	}
+	calls := 0
+	require.NoError(t, s.CheckExecutionRestore(t.Context(), p, func(context.Context) error { calls++; return nil }))
+	require.Equal(t, 1, calls)
+	failure := errors.New("fresh changed")
+	require.ErrorIs(t, s.CheckExecutionRestore(t.Context(), p, func(context.Context) error { return failure }), failure)
+	require.Error(t, s.CheckExecutionRestore(t.Context(), p, func(bound context.Context) error {
+		_, e := s.q(bound).Exec(bound, "UPDATE exec_control SET generation=generation+1 WHERE id")
+		return e
+	}))
+	c, err := s.ExecutionStatus(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, p.Visible.Generation, c.Generation)
+	require.True(t, c.Maintenance)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	require.ErrorIs(t, s.CheckExecutionRestore(ctx, p, func(context.Context) error { t.Fatal("cancelled restore read"); return nil }), context.Canceled)
+	require.LessOrEqual(t, s.pool.Stat().TotalConns(), int32(4))
+}

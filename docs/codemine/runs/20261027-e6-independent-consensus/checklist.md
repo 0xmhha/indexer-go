@@ -11,9 +11,9 @@
 - [x] Build/fmt/vet/lint, nested static, examples/cache/offline checks.
 - [x] One complete CPU1/race/count200 invocation for new app/PG integration.
 - [x] Reviewed staged and whole-history secret scans.
-- [ ] Draft PR, exact-head CI5, ready/squash without bypass.
-- [ ] One-parent squash tree matches reviewed head; clean main/origin-main.
-- [ ] Owned temporary resource cleanup and Korean stage report.
+- [x] Draft PR #229, exact-head CI5 run40377905374, ready/squash without bypass.
+- [x] One-parent squash tree matches reviewed head; clean primary main/origin-main.
+- [x] Owned temporary resource cleanup and Korean stage report; evidence/source branch retained.
 
 No actual node/peer/operator-anchor validation, deployment, operational GC,
 performance loop, or priority 4 work is authorized by this stage's completion.

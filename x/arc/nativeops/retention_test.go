@@ -214,6 +214,18 @@ func TestArcRetentionSourceCopyCompletionAndExactRelease(t *testing.T) {
 	if e = os.WriteFile(filepath.Join(node.DataDir, "EXPIRED"), []byte("old payload"), 0600); e != nil {
 		t.Fatal(e)
 	}
+	c.BackupOutput = filepath.Join(filepath.Dir(c.NativeDataDir), "matched-backup.json")
+	c.IndexerArtifact = filepath.Join(filepath.Dir(c.NativeDataDir), "database.backup")
+	c.IndexerReceipt = filepath.Join(filepath.Dir(c.NativeDataDir), "database-receipt.json")
+	artifact := []byte("external PostgreSQL backup fixture; production requires authenticated DB/WAL receipt")
+	if e = os.WriteFile(c.IndexerArtifact, artifact, 0600); e != nil {
+		t.Fatal(e)
+	}
+	pdBackup, _ := retention.Digest(p)
+	external := retention.IndexerBackup{Version: 1, PermitDigest: pdBackup, ArtifactDigest: execwire.Hash(sha256.Sum256(artifact)), PublicationDigest: execwire.Hash{9}, DatabaseIdentity: "fixture/schema", SnapshotIdentity: "fixture-snapshot", WALBoundary: "0/123"}
+	if e = retention.WriteArtifact(c.IndexerReceipt, external); e != nil {
+		t.Fatal(e)
+	}
 	receipt, e := applyRetention(t.Context(), c, p)
 	if e != nil {
 		t.Fatal(e)
@@ -228,6 +240,20 @@ func TestArcRetentionSourceCopyCompletionAndExactRelease(t *testing.T) {
 	if e != nil || repeat != receipt {
 		t.Fatal("completion recovery:", repeat, e)
 	}
+	c.RestoreManifest = c.BackupOutput
+	admitted, e := admitRestore(t.Context(), c, p)
+	if e != nil || admitted != receipt {
+		t.Fatal("matched source/native/indexer restore admission", admitted, e)
+	}
+	wrongPermit := p
+	wrongPermit.Visible.Height = p.Request.Through - 1
+	if _, e = admitRestore(t.Context(), c, wrongPermit); e == nil {
+		t.Fatal("old restored consumer accepted")
+	}
+	if e = nativestore.CheckStart(node.DataDir); !errors.Is(e, nativestore.ErrPending) {
+		t.Fatal("restore admission released live fences", e)
+	}
+	c.RestoreManifest = ""
 	pd, _ := retention.Digest(p)
 	rd, _ := retention.Digest(receipt)
 	release := retention.Release{Version: 1, PermitDigest: pd, ReceiptDigest: rd}
@@ -454,7 +480,7 @@ func TestNativeHelper(t *testing.T) {
 		switch op {
 		case "prune":
 			fail(os.Remove(filepath.Join(dir, "EXPIRED")))
-		case "verify":
+		case "verify", "match-backup":
 			if _, e := os.Stat(filepath.Join(dir, "EXPIRED")); !os.IsNotExist(e) {
 				os.Exit(2)
 			}
@@ -464,4 +490,38 @@ func TestNativeHelper(t *testing.T) {
 		fail(json.NewEncoder(os.Stdout).Encode(struct{ Status string }{"native_verified"}))
 	}
 	os.Exit(0)
+}
+
+func TestIndexerReceiptRemainsBoundAfterSupervision(t *testing.T) {
+	c, p := nativeFixture(t)
+	c.IndexerArtifact = filepath.Join(filepath.Dir(c.NativeDataDir), "indexer.backup")
+	c.IndexerReceipt = filepath.Join(filepath.Dir(c.NativeDataDir), "indexer.json")
+	data := []byte("owned external artifact")
+	if err := os.WriteFile(c.IndexerArtifact, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	pd, _ := retention.Digest(p)
+	a := retention.IndexerBackup{Version: 1, PermitDigest: pd, ArtifactDigest: execwire.Hash(sha256.Sum256(data)), PublicationDigest: execwire.Hash{9}, DatabaseIdentity: "accepted/schema", SnapshotIdentity: "accepted", WALBoundary: "0/10"}
+	c.backupDigest, _ = retention.Digest(a)
+	if err := retention.WriteArtifact(c.IndexerReceipt, a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := indexerBackup(t.Context(), c, p); err != nil {
+		t.Fatal(err)
+	}
+	b := a
+	b.DatabaseIdentity = "foreign/schema"
+	b.WALBoundary = "F/FFFFFFFF"
+	if err := b.Validate(p); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(c.IndexerReceipt); err != nil {
+		t.Fatal(err)
+	}
+	if err := retention.WriteArtifact(c.IndexerReceipt, b); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := indexerBackup(t.Context(), c, p); !errors.Is(err, retention.ErrUnsafe) {
+		t.Fatalf("substituted receipt accepted after supervisor match: %v", err)
+	}
 }

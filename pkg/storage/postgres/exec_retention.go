@@ -261,6 +261,53 @@ func (s *Store) WithExecutionRetention(ctx context.Context, p retention.Permit, 
 		if coverage != p.Coverage || !bytes.Equal(baseline, p.BaselineDigest[:]) {
 			return port.ErrExecutionCoverage
 		}
-		return apply(ctx)
+		return apply(context.WithValue(ctx, blockTxKey{}, &blockTx{owner: s, tx: tx}))
+	})
+}
+
+// ValidateExecutionBackup compares an externally authenticated backup receipt
+// against the exact live publication under the caller's E3 lease. Receipt bytes
+// alone never establish authority. SQL backup installation and WAL replay remain
+// external operations; this validates admission without opening another pool.
+func (s *Store) ValidateExecutionBackup(ctx context.Context, p retention.Permit, r retention.IndexerBackup) error {
+	if r.Validate(p) != nil {
+		return retention.ErrUnsafe
+	}
+	current, pending, _, err := readRetention(ctx, s.q(ctx))
+	if err != nil {
+		return err
+	}
+	if !pending || current != p {
+		return port.ErrExecutionMaintenance
+	}
+	c, err := scanExecutionControl(s.q(ctx).QueryRow(ctx, executionControlSQL))
+	if err != nil {
+		return err
+	}
+	if !c.Maintenance || c.Rewinding || !c.BaselineReady || c.Visible != p.Visible || c.Root != p.Root || c.Generation != p.Visible.Generation || c.Chain != p.Request.Chain || c.Anchor != p.Request.Anchor {
+		return port.ErrExecutionConflict
+	}
+	var identity string
+	var digest []byte
+	var walAvailable bool
+	err = s.q(ctx).QueryRow(ctx, `SELECT current_database() || '/' || current_schema(), digest, $3::pg_lsn <= pg_current_wal_lsn()
+      FROM exec_publications WHERE height=$1 AND hash=$2 AND generation=$4 AND root=$5`, int64(p.Visible.Height), p.Visible.Hash[:], r.WALBoundary, int64(p.Visible.Generation), p.Root[:]).Scan(&identity, &digest, &walAvailable)
+	if err != nil {
+		return err
+	}
+	if identity != r.DatabaseIdentity || !bytes.Equal(digest, r.PublicationDigest[:]) || !walAvailable {
+		return port.ErrExecutionConflict
+	}
+	return nil
+}
+
+// CheckExecutionRestore retains the final NEW canonical read followed by the
+// exact generation/publication fence in the same E3 transaction.
+func (s *Store) CheckExecutionRestore(ctx context.Context, p retention.Permit, fresh func(context.Context) error) error {
+	if fresh == nil {
+		return retention.ErrUnsafe
+	}
+	return s.WithExecutionRetention(ctx, p, func(bound context.Context) error {
+		return s.retentionFresh(bound, s.boundTx(bound).tx, p, true, fresh)
 	})
 }

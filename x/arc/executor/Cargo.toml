@@ -8,6 +8,7 @@ license = "MIT"
 
 [dependencies]
 sha2 = "0.10"
+reth-libmdbx = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
 reth-prune-types = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
 alloy-trie = { version = "0.9", features = ["ethereum"] }
 arc-evm = { git = "https://github.com/circlefin/arc-node", rev = "6e764023ee6515fe70573e123ed2db912a7207b4" }

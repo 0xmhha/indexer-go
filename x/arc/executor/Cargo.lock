@@ -4118,6 +4118,7 @@ dependencies = [
  "reth-ethereum-engine-primitives",
  "reth-ethereum-primitives",
  "reth-evm",
+ "reth-libmdbx",
  "reth-node-types",
  "reth-primitives-traits",
  "reth-prune-types",

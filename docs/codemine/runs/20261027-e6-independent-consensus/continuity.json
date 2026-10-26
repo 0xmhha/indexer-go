@@ -1,5 +1,5 @@
 {
-  "n": "E6 independent StableNet WBFT consensus; local gates passed, exact-head CI5/release pending",
+  "n": "E6 independent StableNet WBFT consensus released as #229",
   "n_minus_1": {
     "pr": 228,
     "main": "ba285da31bfe105813e81ebbbb510e3ac2921f97",
@@ -16,6 +16,12 @@
     216,
     217
   ],
-  "next": "priority4 only after E6 CI5/squash/clean main release",
-  "release": null
+  "next": "priority4 remains with the parent; E6 release gate is satisfied",
+  "release": {
+    "pr": 229,
+    "head": "f89109a492fc9991fd8ec0f636d78a937a22ba97",
+    "ci_run": 40377905374,
+    "main": "f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818",
+    "sync": "../../../../verification/priority3-sync.json"
+  }
 }

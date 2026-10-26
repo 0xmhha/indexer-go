@@ -15,6 +15,7 @@ import (
 type Supervision struct {
 	Version                 uint16
 	PermitDigest, Challenge execwire.Hash
+	BackupDigest            execwire.Hash
 }
 type SupervisedReply struct {
 	Version   uint16

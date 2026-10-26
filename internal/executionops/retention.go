@@ -19,14 +19,14 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/storage/postgres"
 )
 
-type RetentionOptions struct{ Action, Request, Permit, Schema, Output, Producer, ProducerConfig string }
+type RetentionOptions struct{ Action, Request, Permit, Schema, Output, Producer, ProducerConfig, BackupReceipt string }
 
 // RunRetention uses one existing-size pool4 and no application services. DSN
 // and canonical RPC credentials are accepted only through private environment.
 // Source/node observations never release the durable DB fence by themselves.
 func RunRetention(ctx context.Context, o RetentionOptions, profile chains.Profile, out io.Writer) error {
-	if o.Action != "inspect" && o.Action != "authorize" && o.Action != "collect" {
-		return fmt.Errorf("action must be inspect, authorize or collect")
+	if o.Action != "inspect" && o.Action != "authorize" && o.Action != "collect" && o.Action != "restore-admit" {
+		return fmt.Errorf("action must be inspect, authorize, collect or restore-admit")
 	}
 	emit := func(v any) error {
 		if o.Output != "" {
@@ -45,7 +45,7 @@ func RunRetention(ctx context.Context, o RetentionOptions, profile chains.Profil
 			return e
 		}
 	}
-	if o.Action == "collect" {
+	if o.Action == "collect" || o.Action == "restore-admit" {
 		if e := retention.ReadArtifact(o.Permit, &permit); e != nil {
 			return e
 		}
@@ -134,21 +134,38 @@ func RunRetention(ctx context.Context, o RetentionOptions, profile chains.Profil
 	if current != permit {
 		return port.ErrExecutionConflict
 	}
+	if o.Action == "restore-admit" && o.BackupReceipt == "" {
+		return retention.ErrUnsafe
+	}
 	if pending {
 		e = s.WithExecutionRetention(ctx, permit, func(bound context.Context) error {
 			var err error
-			receipt, err = runRetentionProducer(bound, o, permit)
+			receipt, err = runValidatedRetentionProducer(bound, o, permit, s.ValidateExecutionBackup)
 			return err
 		})
 		if e != nil {
 			return e
 		}
 	} else {
+		if o.Action == "restore-admit" {
+			return port.ErrExecutionMaintenance
+		}
 		// Completed permit replay returns the existing release, NEVER launches GC.
 		if stored == nil {
 			return retention.ErrUnsafe
 		}
 		receipt = *stored
+	}
+	if o.Action == "restore-admit" {
+		// A fresh uncached check plus exact DB generation/pending fence remains
+		// mandatory. This read-only action emits no completion or release.
+		if e = s.CheckExecutionRestore(ctx, permit, fresh); e != nil {
+			return e
+		}
+		return emit(struct {
+			Status string
+			Permit retention.Permit
+		}{"matched_restore_admitted_no_activation", permit})
 	}
 	if e = s.CompleteExecutionRetention(ctx, permit, receipt, fresh); e != nil {
 		return e
