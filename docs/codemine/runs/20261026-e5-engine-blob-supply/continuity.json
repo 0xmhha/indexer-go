@@ -4,10 +4,12 @@
   "source_branch": "refactor/e5-engine-blob-supply",
   "n": {
     "feature": "Engine full-blob supply",
-    "state": "implemented and verified locally; draft PR / exact-head CI5 / squash / clean main sync pending",
+    "state": "released: exact-head CI5, squash merge and clean main sync complete; execution-owned caches cleaned",
     "plan": "plan.md",
     "checklist": "checklist.md",
-    "validation": "validation.md"
+    "validation": "validation.md",
+    "pr": 227,
+    "main_sha": "449c31750bb4efb48d12b9264c1c1dc3fcb273aa"
   },
   "n-1": {
     "feature": "Arc native proofs",

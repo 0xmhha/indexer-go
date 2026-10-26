@@ -198,6 +198,16 @@ func TestExecutionCallsEmptySetDiffersFromLegacyAbsence(t *testing.T) {
 			_, e = s.CommitExecution(t.Context(), port.ExecutionPublication{Ref: r.Ref, Parent: r.Parent, Root: r.StateRoot, Digest: p.Digest, CallTraces: collected}, func(context.Context) error { return nil }, func(context.Context) error { return nil })
 			require.NoError(t, e)
 			page, e := s.ExecutionCalls(t.Context(), port.ExecutionCallQuery{Height: 1, Limit: 10})
+			rangePage, rangeErr := s.ExecutionCallRange(t.Context(), port.ExecutionCallRangeQuery{FromBlock: 1, ToBlock: 1, Limit: 10, Selection: "canonical"})
+			if collected {
+				require.NoError(t, rangeErr)
+				require.True(t, rangePage.Complete)
+				require.Empty(t, rangePage.Missing)
+				require.Empty(t, rangePage.Calls)
+			} else {
+				require.ErrorIs(t, rangeErr, port.ErrExecutionCoverage)
+			}
+
 			if !collected {
 				require.ErrorIs(t, e, port.ErrNotFound)
 				return

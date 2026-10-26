@@ -135,3 +135,11 @@ func TestHandlerLimits(t *testing.T) {
 	assert.NotEmpty(t, out["errors"])
 	assert.Empty(t, errorCode(out))
 }
+
+func TestExecutionCallRangeCostIncludesDefaultsAndCoverage(t *testing.T) {
+	_, implicit := cost(t, `{executionCalls(address:"0x01",fromBlock:"0",toBlock:"127"){calls{ordinal} coverage{height}}}`, nil)
+	_, explicit := cost(t, `{executionCalls(address:"0x01",fromBlock:"0",toBlock:"127",limit:50){calls{ordinal} coverage{height}}}`, nil)
+	_, one := cost(t, `{executionCalls(address:"0x01",fromBlock:"0",toBlock:"127",limit:1){calls{ordinal} coverage{height}}}`, nil)
+	require.Equal(t, explicit, implicit, "omitted limit still executes the default page")
+	require.GreaterOrEqual(t, one, 1+128*4, "coverage can contain 128 heights even with one call")
+}

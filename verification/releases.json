@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "priority": 1,
+    "pr": 227,
+    "branch": "refactor/e5-engine-blob-supply",
+    "main_sha": "449c31750bb4efb48d12b9264c1c1dc3fcb273aa",
+    "head_sha": "f3b689d546b07209dedecc9e0f42a7a1a38c4cbc",
+    "sync_evidence": "verification/priority1-sync.json",
+    "owned_run_dir": "/private/tmp/indexer-four.ZgYGu8",
+    "validation_path": "docs/codemine/runs/20261026-e5-engine-blob-supply/validation.md"
+  }
+]

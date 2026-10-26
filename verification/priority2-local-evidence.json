@@ -1,0 +1,42 @@
+{
+  "priority": 2,
+  "scope": "call ranges/orphan traces only; priorities3/4 remain",
+  "run_dir": "/private/tmp/indexer-four.calls-6f7df360",
+  "named_functional_test": "TestSeedPriority2CallQueriesAndOrphanTraces",
+  "named_test_event_log": "/private/tmp/indexer-four.calls-6f7df360/evidence/named-test.jsonl",
+  "full_race": "passed root + execwire + StableNet",
+  "full_fsync_postgres": "passed storage + app + API + StableNet bundle",
+  "concurrency200": {
+    "GOMAXPROCS": 1,
+    "race": true,
+    "count": 200,
+    "single_invocation": true,
+    "packages": [
+      "./pkg/api",
+      "./pkg/storage/postgres"
+    ],
+    "log": "/private/tmp/indexer-four.calls-6f7df360/evidence/concurrency200.log"
+  },
+  "other_gates": [
+    "build",
+    "gofmt",
+    "vet",
+    "lint",
+    "nested build/vet/lint",
+    "examples",
+    "cache lifecycle",
+    "offline operations"
+  ],
+  "red_green_logs": [
+    "api-red.log",
+    "storage-red.log",
+    "params-red.log",
+    "cost-red.log",
+    "api-green.log",
+    "storage-green.log",
+    "params-green.log",
+    "cost-green.log",
+    "feature-postgres-final.log"
+  ],
+  "release": "pending exact-head CI5, squash and main sync; never established by local tests"
+}

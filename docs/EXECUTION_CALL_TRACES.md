@@ -20,7 +20,7 @@ Migration0018 adds `exec_call_blocks` and `exec_call_frames` and an explicit col
 
 Durable parts remain invisible. Only final publication advances public height and can authorize an ACK. Before the NEW uncached fresh canonical read, publication and lost-ACK confirmation verify trace receipt identity, contiguous row count and bounded stored-row byte checksums. Missing or damaged collected data fails rather than becoming an empty result or a successful ACK. The post-response generation fence remains unchanged. Retry/restart reuse the original exact records; a retained canonical prefix keeps its original source generation.
 
-Trace rows are permanent indexed data independent of the raw/native window. The execution coordinator removes abandoned heights, including unpublished trace rows, during rewind. Reader snapshots use the same public visible height and reject rewind/pending maintenance. A read-only API process can reopen the existing migrated schema without starting an app or invoking RPC. Pool4 is per chain/process, not a server-wide PostgreSQL limit.
+Trace rows are permanent indexed data independent of the raw/native window. Migration0021 archives published orphan trace bytes and explicit collection coverage, with original ref/digest and the public epoch before rewind. This happens in the same durable transaction before any canonical deletion. The execution coordinator then removes abandoned canonical heights and unpublished part-only trace rows. Orphan rows are permanent indexed observations and are never relabeled canonical. Reader snapshots use the same public visible height and reject rewind/pending maintenance. A read-only API process can reopen the existing migrated schema without starting an app or invoking RPC. Pool4 is per chain/process, not a server-wide PostgreSQL limit.
 
 ## Query the database
 
@@ -44,7 +44,70 @@ GET /execution/traces/transactions/{transactionHash}?internal=true&after=<next>&
 
 The client must retain its transaction/internal filter. Unknown/duplicate/malformed query fields, zero/incomplete pins and an unpinned continuation return400. A changed public generation/hash returns409, even if a reorg lowers the public tip below the requested height. Start that result again from its first page. Unknown, unpublished or legacy/not-collected data returns404. Collected empty data returns200 with an empty array. Disabled/uninitialized/rewinding/maintenance state returns503; storage corruption/I/O returns500 without private SQL/DSN/path details.
 
-Pages authenticate only the requested rows after checking the bounded metadata/ordinal receipt; they do not load every trace body to return a small page. Publication/ACK checks authenticate the complete retained set. The APIs issue **zero RPCs**. The old GraphQL/JSON-RPC `InternalTransaction` model does not represent nullable targets/values, paths and this provenance, so these records are exposed through the richer native routes instead of lossy legacy rows. Existing APIs are unchanged.
+Pages authenticate only the requested rows after checking the bounded metadata/ordinal receipt; they do not load every trace body to return a small page. Publication/ACK checks authenticate the complete retained set. The APIs issue **zero RPCs**. The old GraphQL/JSON-RPC `InternalTransaction` model does not represent nullable targets/values, paths and this provenance, so these records use the richer native REST and range contracts below. Existing block/transaction contracts are unchanged.
+
+## Address and block-range contracts
+
+GraphQL `executionCalls` and JSON-RPC `getExecutionCalls` share one DB-only
+contract. The address matches either caller or target, once per frame. Attempts,
+reverts and nullable creation targets retain their original meaning.
+
+```graphql
+{
+  executionCalls(address: "0x0000000000000000000000000000000000000001",
+                 fromBlock: "100", toBlock: "110", limit: 50) {
+    selection epoch complete next
+    missing { fromBlock toBlock }
+    coverage { height collected epoch generation blockHash digest profile }
+    calls { ordinal parent path type from to value gas gasUsed input output
+            transactionHash transactionIndex internal reverted ancestorReverted
+            error verification coverage { height epoch generation blockHash digest } }
+  }
+}
+```
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"getExecutionCalls","params":{"address":"0x0000000000000000000000000000000000000001","fromBlock":"100","toBlock":"110","limit":50,"selection":"canonical"}}
+```
+
+Bounds are checked before range reads: exactly one 20-byte hex address, an
+inclusive nonnegative int64 block range of at most128 heights, and limit1..256
+(default50). The result is ordered by height then original global ordinal.
+`next` is an opaque cursor for the first omitted matching row; pass it as `cursor`
+with the same address/range/limit/selection/partial/epoch arguments. Empty `next`
+means no further matching calls. The cursor fences the public generation and
+all requested coverage identities, so a fork, newly visible coverage or any
+filter change requires restarting the query. It never grants access beyond the
+validated range. Heights/epochs/generation/gas/value are decimal strings; hashes,
+addresses and input/output are hex strings. Values and targets remain nullable.
+
+Strict complete coverage is the default. A missing publication, an uncollected
+legacy publication, an unpublished part or a height beyond visibility produces
+`execution_calls_not_collected` with merged inclusive `missing` ranges. A
+successfully collected empty trace set returns `complete:true` and no calls.
+Only explicit `partial:true` allows incomplete success, always with
+`complete:false`, `missing` ranges and per-height coverage/provenance. A partial
+response never marks an uncollected height collected.
+
+Canonical and orphan selections are separate. Use `selection:"orphan"` with
+`orphanEpoch:"<public epoch before removal>"` to query one historical branch;
+that epoch is required for orphans and forbidden for canonical queries. The
+returned coverage epoch is the archived public epoch, while generation/hash and
+digest retain the immutable original payload identity, including a common
+prefix originally collected in an earlier generation. An absent archived height
+is unknown coverage, not proof of an empty orphan set. Reopening an API/store
+preserves the archive. There is no automatic historical backfill.
+
+GraphQL reports compact errors with `extensions.code` and, for strict missing
+coverage, `extensions.missing`. JSON-RPC uses -32602 for invalid input, -32051 for
+missing coverage, -32052 for stale cursors and -32050 for unavailable/cancelled
+reads. Unknown/duplicate/null JSON-RPC parameters are rejected; partial opt-in
+cannot be ambiguous. Private SQL/paths/DSNs are never returned. Standard
+GraphQL validation, depth/complexity admission, single document parsing and
+Playground remain active. Both contracts borrow the existing reserved snapshot,
+obey cancellation and return its slot; they issue zero node RPCs. Address reads
+scan only the bounded retained frames and return at most limit+1 rows; no new
+connection, pool, writer or EVM execution is introduced.
 
 ## Resource and recovery boundaries
 
