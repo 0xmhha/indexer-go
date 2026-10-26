@@ -1,0 +1,175 @@
+{
+  "base_main": "361e550ad73908512c4d11b3bab2287c0696a610",
+  "branch": "refactor/e5-engine-blob-supply",
+  "named_feature_pass": "TestSeedPriority1BlobSupplyVerification",
+  "passed_subtests": [
+    "TestSeedPriority1BlobSupplyVerification/prague_header_before_transport",
+    "TestSeedPriority1BlobSupplyVerification/native_replay_to_real_HTTP_transport",
+    "TestSeedPriority1BlobSupplyVerification/missing",
+    "TestSeedPriority1BlobSupplyVerification/pruned",
+    "TestSeedPriority1BlobSupplyVerification/wrong_proof",
+    "TestSeedPriority1BlobSupplyVerification/wrong_reference",
+    "TestSeedPriority1BlobSupplyVerification/wrong_fork",
+    "TestSeedPriority1BlobSupplyVerification/reorg",
+    "TestSeedPriority1BlobSupplyVerification/head_behind",
+    "TestSeedPriority1BlobSupplyVerification/outside_window",
+    "TestSeedPriority1BlobSupplyVerification/wrong_canonical_height",
+    "TestSeedPriority1BlobSupplyVerification/cancel",
+    "TestSeedPriority1BlobSupplyVerification/pinned_spool_restart_capacity_reorg_and_exact_ACK",
+    "TestSeedPriority1BlobSupplyVerification/unsupported_pinned_Arc_policy",
+    "TestSeedPriority1BlobSupplyVerification/already_admitted_input_is_immutable"
+  ],
+  "pg_single_count200_observed_passes": 200,
+  "commands": [
+    {
+      "command": "go build ./...",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "go vet ./...",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "make lint",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/lint.log",
+      "sha256": "afa51c9dbbd37b37edddf1d3217625a46218598a4c8781e42a2608cd4de09e00"
+    },
+    {
+      "command": "nested modules: go build ./...; go vet ./...; golangci-lint run ./...",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/modules-static.log",
+      "sha256": "3c6f43c00b56d7116263f7523bfb6a311aed70cff8c5f4d73ab254b299717fdf"
+    },
+    {
+      "command": "go test -count=1 -timeout=20m ./...",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/full-test.log",
+      "sha256": "af418bd36bbfe2126c45422e0d7a75cb2412b93cf682c3e88a26f10ab75a8589"
+    },
+    {
+      "command": "make test-race",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/full-race.log",
+      "sha256": "93a281ff236aabdb3e8455d5eb4037adadf67dbd218482ee44e5317383837f8d"
+    },
+    {
+      "command": "make test-postgres",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/full-postgres.log",
+      "sha256": "3cc9a0397652057b733e99f6f5ec0e86c3b1294f5d79a2f623b46df5f44736f8"
+    },
+    {
+      "command": "make test-examples",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/examples.log",
+      "sha256": "401f9daf90fb3ba5bf3a291cde7906585910e8c10f7a8f98968e1560e1265791"
+    },
+    {
+      "command": "make test-cache-lifecycle",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/cache-lifecycle.log",
+      "sha256": "23ed36fbd3fef66fbd641a1471b8275f88765c3bf5cd66f23e30430c0f9a3ec1"
+    },
+    {
+      "command": "python3 -m unittest discover -s deployments/testnets -p test_preflight.py -v; python3 deployments/testnets/preflight.py; sh -n deployments/testnets/indexer-entrypoint.sh",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/offline-ops.log",
+      "sha256": "45b52c0c641a9b089b3b739d3ee5a73bf4730cd7f1e1fe3fee3b41e3aa01aab1"
+    },
+    {
+      "command": "GOMAXPROCS=1 go test -race -count=200 -timeout=20m -run '^(TestSeedPriority1BlobSupplyVerification|TestEngineBlob)' ./pkg/execution ./cmd/execution-blobs",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/priority1-concurrency200.log",
+      "sha256": "bafde48f3a4440d45de3983dcaa1e26f6d771b69c28020400b9ea833c853b6f0"
+    },
+    {
+      "command": "GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -count=200 -timeout=30m -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'",
+      "exit_code": 0,
+      "log": "/private/tmp/indexer-four.ZgYGu8/priority1-postgres200.log",
+      "sha256": "cefedc8144910c79ca0bddafecad4cb5516a36078164a22b7a51e8749c8bb804"
+    }
+  ],
+  "limits": [
+    "offline native fixture and mock HTTP only",
+    "no live provider/node/peer/operator DB",
+    "Rust and frozen upstream fixtures unchanged",
+    "CI5/squash/main release still pending"
+  ],
+  "fork_boundary_correction": {
+    "production_source_sha256": "f63a737404723ccc4224ff9309199950f434dec8d2c0a2d3e13a10dfa6b34368",
+    "runtime_red_log": "/private/tmp/indexer-four.ZgYGu8/priority1-fork-red.log",
+    "checks": [
+      {
+        "command": "go test -json -count=1 -run '^TestSeedPriority1BlobSupplyVerification$' ./pkg/execution",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-final-feature.json",
+        "sha256": "2165981ad435bcd550da80c1099abb37e966ecdf0661c40849874e56358f1e84"
+      },
+      {
+        "command": "GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestEngineBlobRejectsPragueHeaderBeforeTransport$' ./pkg/execution",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-fork200.log",
+        "sha256": "099e59f37caa2b12fb81ac26cd57f90e7f5450c6b91b28a541ee5f1644270b52"
+      },
+      {
+        "command": "go test -race -count=1 -run '^(TestSeedPriority1BlobSupplyVerification|TestEngineBlob)' ./pkg/execution ./cmd/execution-blobs",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-final-targeted.log",
+        "sha256": "91760d323ca554d58627663cd32bb2c00d83e8ccf03b2b770ba23d3cc39334b9"
+      },
+      {
+        "command": "./scripts/test-postgres.sh ./pkg/app -race -v -count=1 -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-final-postgres.log",
+        "sha256": "20a622f387473cb750109c163b37b77f0f6376591dc02464d61d9ede046b988c"
+      },
+      {
+        "command": "make test-race",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/final-full-race.log",
+        "sha256": "f03d85ebe4e9df4d0c7aeac1ee29fc428cad62906296d1187c5224f54e635cd5"
+      }
+    ]
+  },
+  "typed_reorg_correction": {
+    "production_source_sha256": "b33decb91d993663875ad07594a45d73f366017ff64b6ebda09d64f256af0c43",
+    "runtime_red_log": "/private/tmp/indexer-four.ZgYGu8/priority1-reorg-contract-red.log",
+    "checks": [
+      {
+        "command": "GOMAXPROCS=1 go test -race -count=200 -timeout=10m ./pkg/execution -run '^TestSeedPriority1BlobSupplyVerification/(reorg|wrong_canonical_height)$'",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-reorg-contract200.log",
+        "sha256": "6c7d0ced9c3e987e161cd25df8744b1457075322ff2da549d6f421da05498107"
+      },
+      {
+        "command": "make test-race",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/reorg-final-full-race.log",
+        "sha256": "47503757cde1393814b594c61df57d438fa2466b4123d685337b61a8a9acd48a"
+      },
+      {
+        "command": "go test -json -count=1 ./pkg/execution -run '^TestSeedPriority1BlobSupplyVerification$'",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-reorg-final-feature.json",
+        "sha256": "cbf5cd2e5c3bb9b66d232058b3474c648b956aa436f13942db39c3605e51d7bf"
+      },
+      {
+        "command": "./scripts/test-postgres.sh ./pkg/app -race -v -count=1 -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-reorg-final-postgres.log",
+        "sha256": "a560cf15048e8d0c1a182b1e1be05999904717f09cc396386206f015668e6d5e"
+      },
+      {
+        "command": "go build ./...; go vet ./...; make lint; gofmt check",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/reorg-final-static.log",
+        "sha256": "afa51c9dbbd37b37edddf1d3217625a46218598a4c8781e42a2608cd4de09e00"
+      }
+    ]
+  }
+}

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmblob/proof"
 	"github.com/0xmhha/indexer-go/pkg/execution/blobdata"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"net/http/httptest"
 	"os"
@@ -33,6 +35,12 @@ import (
 // Actual Cancun transaction/prelude replay -> private retained full-blob file
 // -> seven queues -> durable PG -> reserved DB-only API -> exact ACK/RO reopen.
 func TestExecutionNativeBlobsPublicationPagesAndRestart(t *testing.T) {
+	testExecutionNativeBlobsPublicationPagesAndRestart(t, false)
+}
+func TestExecutionEngineBlobsPublicationPagesAndRestart(t *testing.T) {
+	testExecutionNativeBlobsPublicationPagesAndRestart(t, true)
+}
+func testExecutionNativeBlobsPublicationPagesAndRestart(t *testing.T, engine bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	f := loadExecutionFrozen(t, "evm-blobs")
@@ -54,17 +62,34 @@ func TestExecutionNativeBlobsPublicationPagesAndRestart(t *testing.T) {
 	require.NoError(t, os.WriteFile(sidecar, encoded, 0600))
 	profile, ok := chains.Lookup(f.Profile)
 	require.True(t, ok)
-	attachment, e := execution.AttachBlobFiles(ctx, profile.(chains.BinaryProfile), f.Chain, input, sidecar, complete, "retained-sidecars")
+
+	m, srv := fixtureRPC(t, f)
+	cl, e := client.NewClient(&client.Config{Endpoint: srv.URL, Timeout: time.Second, RateLimit: 5, Logger: zap.NewNop()})
+	require.NoError(t, e)
+	defer cl.Close()
+	var attachment execution.BlobAttachment
+	if engine {
+		var parent, header types.Header
+		require.NoError(t, rlp.DecodeBytes(f.ParentHeader, &parent))
+		parts, err := proof.SplitList(result.BlockRLP, 4)
+		require.NoError(t, err)
+		require.NoError(t, rlp.DecodeBytes(parts[0], &header))
+		m.mu.Lock()
+		m.headers = map[uint64]*types.Header{0: &parent, 1: &header}
+		for _, entry := range response.Entries {
+			m.engineBlobs = append(m.engineBlobs, map[string]any{"blob": hexutil.Bytes(entry.Blob[:]), "proof": hexutil.Bytes(entry.Proof[:])})
+		}
+		m.mu.Unlock()
+		attachment, e = execution.AcquireEngineBlobFiles(ctx, profile.(chains.BinaryProfile), execution.BlobSupplyPolicy{Contract: execution.DevEngineBlobContract, Chain: f.Chain, Provider: "engine-v1", MaxLagBlocks: 64}, input, complete, cl.RPCClient())
+	} else {
+		attachment, e = execution.AttachBlobFiles(ctx, profile.(chains.BinaryProfile), f.Chain, input, sidecar, complete, "retained-sidecars")
+	}
 	require.NoError(t, e)
 	f.Payload, e = os.ReadFile(complete)
 	require.NoError(t, e)
 	require.Equal(t, result.Ref, attachment.Ref)
 	s, cfg := preparedExecutionDB(t, f)
 	cfg.Source.Execution.RequireBlobSidecars = true
-	m, srv := fixtureRPC(t, f)
-	cl, e := client.NewClient(&client.Config{Endpoint: srv.URL, Timeout: time.Second, RateLimit: 5, Logger: zap.NewNop()})
-	require.NoError(t, e)
-	defer cl.Close()
 
 	fe := fetch.NewFetcher(cl, s, &fetch.Config{StatePrefetch: true, RPCTimeout: time.Second, NoOutbox: true}, zap.NewNop(), nil)
 	defer fe.Close()

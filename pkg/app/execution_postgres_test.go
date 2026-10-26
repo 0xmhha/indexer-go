@@ -33,6 +33,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/storage/postgres"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -86,11 +87,13 @@ func preparedExecutionDB(t *testing.T, f executionFrozen) (*postgres.Store, *con
 }
 
 type executionRPCMock struct {
-	mu        sync.Mutex
-	chain     execwire.Chain
-	canonical map[uint64]execwire.Hash
-	methods   []string
-	fresh     int
+	mu          sync.Mutex
+	chain       execwire.Chain
+	canonical   map[uint64]execwire.Hash
+	methods     []string
+	fresh       int
+	headers     map[uint64]*types.Header
+	engineBlobs []any
 }
 
 func (m *executionRPCMock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -116,12 +119,21 @@ func (m *executionRPCMock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result = hexutil.EncodeBig(id)
 	case "eth_blockNumber":
 		result = "0x1"
+	case "engine_getBlobsV1":
+		result = m.engineBlobs
 	case "eth_getBlockByNumber":
 		var number string
 		_ = json.Unmarshal(req.Params[0], &number)
 		height, err := hexutil.DecodeUint64(number)
+		if number == "latest" && m.headers != nil {
+			height = 1
+			err = nil
+		}
 		if err == nil {
 			result = map[string]any{"hash": common.Hash(m.canonical[height]).Hex()}
+			if h := m.headers[height]; h != nil && execwire.Hash(h.Hash()) == m.canonical[height] {
+				result = h
+			}
 			if height > 0 {
 				m.fresh++
 			}

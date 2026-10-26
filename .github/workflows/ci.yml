@@ -78,6 +78,8 @@ jobs:
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestEventBusStopDrainsAccepted|TestEventBusConcurrentStopPublishPreservesAccepted)$' ./pkg/events
       - name: Execution queue, recovery, and API concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestScheduler|TestController|TestReceiver|TestExecution)' ./pkg/execution ./pkg/fetch ./pkg/api ./pkg/api/graphql ./pkg/api/jsonrpc ./internal/api/rest
+      - name: Engine full-blob transport and immutable source contracts
+        run: GOMAXPROCS=1 go test -race -count=200 -timeout=20m -run '^(TestSeedPriority1BlobSupplyVerification|TestEngineBlob)' ./pkg/execution ./cmd/execution-blobs
       - name: Offline state-proof command concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m ./cmd/execution-state-proofs
       - name: Execution runtime lifecycle concurrency
@@ -139,6 +141,8 @@ jobs:
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -failfast -count=200 -timeout=40m -run '^(TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK|TestExecutionArcCollectedSpoolPublicationAndLostACK|TestExecutionNativeCallsPublicationPagesAndRestart)$'
       - name: Native full-blob files and DB-only API concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeBlobsPublicationPagesAndRestart$'
+      - name: Engine full-blob supply and DB-only publication concurrency
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=30m -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'
       - name: Native state-proof files and DB-only API concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^(TestExecutionNativeStateProofPublicationAndRestart|TestExecutionArcNativeStateProofPublicationAndRestart|TestExecutionArcNativeProofSpoolPublicationAndLostACK|TestExecutionArcNativeProofFreshFailureRetainsUnpublishedParts)$'
       - name: Execution DB admission and recovery concurrency

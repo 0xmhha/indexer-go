@@ -1,10 +1,10 @@
 # Full blobs in execution ingestion
 
-Use this opt-in path to retain complete EIP-4844 blobs alongside E1 execution inputs. It reuses the existing [full-blob proof core](../pkg/chainfeed/evmblob/proof/blob.go), keeps seven writers and adds no EVM execution or RPC. The separate [capture supplement worker](BLOB_INPUTS.md) keeps its own input/cursor contract; these paths do not silently backfill or merge each other's completion.
+Use this opt-in path to retain complete EIP-4844 blobs alongside E1 execution inputs. It reuses the existing [full-blob proof core](../pkg/chainfeed/evmblob/proof/blob.go), keeps seven writers and adds no EVM execution. Offline file composition uses no RPC; the explicit Engine source below borrows the existing bounded RPC path. The separate [capture supplement worker](BLOB_INPUTS.md) keeps its own input/cursor contract; these paths do not silently backfill or merge each other's completion.
 
 ## Scope and trust
 
-An execution body contains signed transaction references, not full blob data. A full-blob relay/beacon/peer source must first retain all blob bytes, commitments and full-blob proofs. [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844) defines this binding; [EIP-7594](https://eips.ethereum.org/EIPS/eip-7594) cells/proofs and beacon SSZ sidecars are different transport formats. The input here is the documented `eth.full-blobs.rlp.v1` relay envelope. It does not decode SSZ, run PeerDAS, reconstruct missing cells or call `engine_getBlobs`.
+An execution body contains signed transaction references, not full blob data. A full-blob relay/beacon/peer source must first retain all blob bytes, commitments and full-blob proofs. [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844) defines this binding; [EIP-7594](https://eips.ethereum.org/EIPS/eip-7594) cells/proofs and beacon SSZ sidecars are different transport formats. The input here is the documented `eth.full-blobs.rlp.v1` relay envelope. It does not decode SSZ, run PeerDAS or reconstruct missing cells. The optional Engine V1 acquisition below translates standard full blobs/proofs into this same proof envelope.
 
 Go verifies every position against the profile-verified block and signed transaction hash lists: exact chain/genesis/height/block hash, reference count/order, versioned commitment hash, full KZG proof and blob gas fields. Repeated hashes at different positions are valid. Invalid, missing, extra or reordered inputs fail; no truncated input is marked complete. This is local retained data, not independent beacon inclusion, network-wide availability, consensus/finality or a fork-specific gas-limit audit.
 
@@ -28,9 +28,33 @@ go run ./cmd/execution-blobs \
   --output /YOUR_PRIVATE_DIR/complete.exr --provider retained-sidecars
 ```
 
-Omit `--sidecars` only for a block proven to have no references. Output JSON reports `ref`, new whole-payload `digest` and `bytes`. Default timeout is 15 seconds, with a maximum of one hour. No URL, credentials, network/default endpoint or node flags are accepted. The full-blob source must supply the existing relay format; renaming an SSZ/cell file does not convert it.
+Omit `--sidecars` only for a block proven to have no references. Output JSON reports `ref`, new whole-payload `digest` and `bytes`. Default timeout is 15 seconds, with a maximum of one hour. The offline form accepts no endpoint or node flags. The separate explicit Engine form below accepts a caller-selected HTTP endpoint and an optional private JWT file; neither form starts a node. The full-blob source must supply the existing relay format; renaming an SSZ/cell file does not convert it.
 
 Pass the **new complete file** to the existing submission/exporter integration before admitting that input to any spool or publishing its digest. Enrichment changes the exact payload digest. It cannot retrofit an already stored/ACKed bare result; immutable retries would conflict. Existing spool/lease/ACK/GC authority remains mandatory. Retain early sidecar files within an explicitly budgeted directory until the applicable completion gates authorize deletion. A local 24-hour window does not guarantee 24-hour remote blob retention.
+
+## Opt in to standard Engine V1 acquisition
+
+`execution.AcquireEngineBlobInput` and `AcquireEngineBlobFiles` use the standard [Engine Cancun getBlobsV1 contract](https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#engine_getblobsv1), implemented by the pinned [geth v1.16.5](https://github.com/ethereum/go-ethereum/blob/v1.16.5/eth/catalyst/api.go). The production acquisition contract `ethereum-cancun-full-blobs.engine-v1` supports only exact Ethereum mainnet chain ID/genesis and Cancun blocks before Prague, with at most six blobs. Both source contracts require exactly 20 post-Merge header fields and all Cancun commitments; Prague/future suffixes and missing older fork fields fail before transport. Other forks/contracts fail closed. `evm-dev-cancun-full-blobs.engine-v1` is an explicit chain-1337 standard Cancun native-fixture contract; it is not evidence of live chain support. Both require profile `evm`; pinned unsupported Arc remains closed.
+
+```sh
+go run ./cmd/execution-blobs \
+  --chain-id 1 --genesis YOUR_EXACT_ETHEREUM_MAINNET_GENESIS \
+  --result /YOUR_PRIVATE_DIR/original.exr \
+  --output /YOUR_PRIVATE_DIR/complete.exr --provider engine-v1 \
+  --engine-rpc http://YOUR_ENGINE_ENDPOINT \
+  --engine-jwt-file /YOUR_PRIVATE_DIR/jwt.hex \
+  --max-lag-blocks 64
+```
+
+Use `--sidecars` or `--engine-rpc`. No endpoint is selected by default. The optional JWT file contains exactly 32 hex-encoded bytes (an optional `0x` prefix and surrounding whitespace are accepted), is private `0600` and belongs to the current user; its parent directory is private. Keep credentials out of endpoint URLs. The endpoint must provide the read-only `eth_chainId`, `eth_getBlockByNumber` and `engine_getBlobsV1` methods. It may reject the method at its current fork; that is a supply failure, never a compatibility fallback. The standalone command uses one response-bounded RPC5 pool for every physical attempt, including identity/head/Engine/final canonical reads; it installs no running collector. In a running producer, pass its existing uncached shared client instead of creating another pool.
+
+The default head-distance guard is 64 blocks; valid bounds are 1..8192. Each Engine call has a one-second deadline inside the caller's overall context. The entire shared HTTP response is bounded (10 MiB in the standalone command); raw Engine JSON, list cardinality, blob/proof sizes and the existing 32-blob core bound are checked before proof processing. Acquisition checks exact remote chain/genesis, profile-hashed headers, the bounded head window, every signed transaction reference, then a new uncached canonical header. A real canonical hash change returns the existing typed exporter candidate (verified height/hash and unchanged source generation), allowing its coordinator to authenticate recovery. A mismatched response height grants no candidate. This is additional to the receiver's existing final fresh/generation/COMMIT gate.
+
+Engine returns only full blobs and proofs. The adapter computes each commitment and verifies every ordered versioned hash and full KZG proof with the existing core. A null or pruned/missing pool entry stops the whole block. Engine pools make no retention guarantee; even a recent block may already be unavailable. There is no latest-data, alternate-format, empty, beacon or PeerDAS fallback. Historical mainnet success is supported by the contract, not asserted as live evidence.
+
+For continuous intake, construct `execution.NewEngineBlobBackend(profile, policy, sharedClient, existingTwoPassBackend)`, open its spool with `backend.OpenSpool(ctx, options)`, and use the existing `exporter.Collector`/`exporter.Client`. The wrapper copies the policy, whose digest includes contract, exact chain, provider and window; `OpenSpool` pins it before any recovery. A legacy/different policy needs a fresh source. Collector walks bounded canonical ranges, enriches before admission, checks canonicality again and accounts the complete bytes against existing capacity. Existing transfer window, exact ACK, authorized rebind and retention gates stay in force. Restart reads the sealed exact result even if the remote pool has pruned it. Never manually enrich a result already retained or ACKed.
+
+Executable evidence: `go test -count=1 ./pkg/execution -run '^TestSeedPriority1BlobSupplyVerification$'`, `go test -race -count=1 ./cmd/execution-blobs -run '^TestEngineBlob'`, and `./scripts/test-postgres.sh ./pkg/app -race -v -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'`. See the [current plan/checklist/semantic review](codemine/runs/20261026-e5-engine-blob-supply/plan.md).
 
 ## Require full data when needed
 
@@ -45,7 +69,7 @@ source:
 
 The default is `false` for legacy compatibility. With `true`, a positive-reference block without its complete bundle is rejected **before** scheduling or lost-ACK confirmation. Opaque transactions cannot prove absent references under strict mode. A no-reference block needs no sidecars; without explicit empty evidence its blob API still reports not collected. Invalid supplied bundles are rejected in either mode. Missing data is never skipped or converted to an empty result.
 
-This flag installs no provider. Node-facing acquisition must retain transient bytes early; later workers can compose/verify from those retained bytes. Actual provider transport, remote retention/fork evidence and operating activation remain separate work.
+This flag installs no provider. Node-facing acquisition must retain transient bytes early; later workers can compose/verify from those retained bytes. The bounded Engine V1 transport below is available for its audited contracts. Live provider support, remote retention and operating activation remain unverified and held.
 
 ## Storage, visibility and recovery
 

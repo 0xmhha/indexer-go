@@ -4,7 +4,7 @@
   "source_branch": "refactor/e5-arc-native-proofs",
   "n": {
     "feature": "Arc native proofs",
-    "state": "implemented; all local gates and single200 passed; CI-gated release pending",
+    "state": "released as PR #226; exact-head CI5 success; squash 361e550ad73908512c4d11b3bab2287c0696a610; main synchronized",
     "plan": "plan.md",
     "checklist": "checklist.md",
     "validation": "validation.md"
