@@ -90,6 +90,17 @@ func AcquireEngineBlobInput(ctx context.Context, profile chains.BinaryProfile, p
 	if policy.Contract == EngineBlobContract && (prepared.block.Time < *params.MainnetChainConfig.CancunTime || prepared.block.Time >= *params.MainnetChainConfig.PragueTime) {
 		return nil, evmblob.ErrUnsupported
 	}
+	// Cancun has exactly 20 header fields. Reject both older missing fork
+	// commitments and Prague/future suffixes even on the explicit dev chain.
+	parts, e := proof.SplitList(prepared.result.BlockRLP, 4)
+	if e != nil || len(parts) < 3 {
+		return nil, evmblob.ErrUnsupported
+	}
+	fields, e := proof.SplitList(parts[0], 20)
+	block := prepared.block
+	if e != nil || len(fields) != 20 || block.Difficulty == nil || block.Difficulty.Sign() != 0 || block.WithdrawalsRoot == nil || block.BlobGasUsed == nil || block.ExcessBlobGas == nil || block.ParentBeaconRoot == nil || block.RequestsHash != nil {
+		return nil, evmblob.ErrUnsupported
+	}
 	refs, e := proof.References(prepared.block)
 	if e != nil {
 		return nil, e

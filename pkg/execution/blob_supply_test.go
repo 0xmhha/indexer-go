@@ -128,6 +128,7 @@ func (m *engineBlobFixture) Replay(_ context.Context, n, g uint64) (execwire.Res
 }
 
 func TestSeedPriority1BlobSupplyVerification(t *testing.T) {
+	t.Run("prague_header_before_transport", TestEngineBlobRejectsPragueHeaderBeforeTransport)
 	t.Run("native_replay_to_real_HTTP_transport", func(t *testing.T) {
 		m := engineBlobMock(t)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -307,4 +308,27 @@ func TestSeedPriority1BlobSupplyVerification(t *testing.T) {
 
 func modelUnsupportedBlobPolicy() model.BlobCapability {
 	return model.BlobCapability{Version: 1, Profile: "evm", Status: model.BlobUnsupported, Reason: "eip4844_disabled_by_node_policy", Basis: "node_transaction_admission", Revision: "6e764023ee6515fe70573e123ed2db912a7207b4", SourceURL: "https://github.com/circlefin/arc-node/blob/6e764023ee6515fe70573e123ed2db912a7207b4/crates/execution-txpool/src/pool.rs"}
+}
+
+func TestEngineBlobRejectsPragueHeaderBeforeTransport(t *testing.T) {
+	m := engineBlobMock(t)
+	requests := types.EmptyRequestsHash
+	m.header.RequestsHash = &requests
+	parts, e := proof.SplitList(m.result.BlockRLP, 4)
+	require.NoError(t, e)
+	parts[0], e = rlp.EncodeToBytes(m.header)
+	require.NoError(t, e)
+	m.result.BlockRLP, e = rlp.EncodeToBytes(parts)
+	require.NoError(t, e)
+	m.result.Ref.Hash = execwire.Hash(m.header.Hash())
+	m.payload, e = execwire.MarshalResult(m.result)
+	require.NoError(t, e)
+	// The body/receipt/native-call commitments still decode correctly. This
+	// test specifically requires the audited source fork boundary to reject it.
+	_, e = Prepare(evm.New("evm"), m.policy.Chain, m.payload)
+	require.NoError(t, e)
+	out, e := AcquireEngineBlobInput(t.Context(), evm.New("evm"), m.policy, m.payload, m)
+	require.ErrorIs(t, e, evmblob.ErrUnsupported)
+	require.Nil(t, out)
+	require.Empty(t, m.calls, "wrong source fork must not open transport")
 }

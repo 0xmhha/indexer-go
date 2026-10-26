@@ -3,6 +3,7 @@
   "branch": "refactor/e5-engine-blob-supply",
   "named_feature_pass": "TestSeedPriority1BlobSupplyVerification",
   "passed_subtests": [
+    "TestSeedPriority1BlobSupplyVerification/prague_header_before_transport",
     "TestSeedPriority1BlobSupplyVerification/native_replay_to_real_HTTP_transport",
     "TestSeedPriority1BlobSupplyVerification/missing",
     "TestSeedPriority1BlobSupplyVerification/pruned",
@@ -97,5 +98,41 @@
     "no live provider/node/peer/operator DB",
     "Rust and frozen upstream fixtures unchanged",
     "CI5/squash/main release still pending"
-  ]
+  ],
+  "fork_boundary_correction": {
+    "production_source_sha256": "f63a737404723ccc4224ff9309199950f434dec8d2c0a2d3e13a10dfa6b34368",
+    "runtime_red_log": "/private/tmp/indexer-four.ZgYGu8/priority1-fork-red.log",
+    "checks": [
+      {
+        "command": "go test -json -count=1 -run '^TestSeedPriority1BlobSupplyVerification$' ./pkg/execution",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-final-feature.json",
+        "sha256": "2165981ad435bcd550da80c1099abb37e966ecdf0661c40849874e56358f1e84"
+      },
+      {
+        "command": "GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestEngineBlobRejectsPragueHeaderBeforeTransport$' ./pkg/execution",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-fork200.log",
+        "sha256": "099e59f37caa2b12fb81ac26cd57f90e7f5450c6b91b28a541ee5f1644270b52"
+      },
+      {
+        "command": "go test -race -count=1 -run '^(TestSeedPriority1BlobSupplyVerification|TestEngineBlob)' ./pkg/execution ./cmd/execution-blobs",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-final-targeted.log",
+        "sha256": "91760d323ca554d58627663cd32bb2c00d83e8ccf03b2b770ba23d3cc39334b9"
+      },
+      {
+        "command": "./scripts/test-postgres.sh ./pkg/app -race -v -count=1 -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/priority1-final-postgres.log",
+        "sha256": "20a622f387473cb750109c163b37b77f0f6376591dc02464d61d9ede046b988c"
+      },
+      {
+        "command": "make test-race",
+        "exit_code": 0,
+        "log": "/private/tmp/indexer-four.ZgYGu8/final-full-race.log",
+        "sha256": "f03d85ebe4e9df4d0c7aeac1ee29fc428cad62906296d1187c5224f54e635cd5"
+      }
+    ]
+  }
 }
