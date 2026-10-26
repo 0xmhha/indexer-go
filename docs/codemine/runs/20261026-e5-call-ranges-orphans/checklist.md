@@ -9,8 +9,8 @@
 - [x] Full build/fmt/vet/lint, root+wire+StableNet race, fsync-on PostgreSQL, examples/cache/offline operations.
 - [x] One complete GOMAXPROCS1/race/count200 run of new API/storage cases.
 - [x] Explicit staging and reviewed staged/whole-history secret scans.
-- [ ] Draft PR, exact-head lint/test/postgres/examples/arc success, ready/squash, clean primary main sync.
-- [ ] Remove owned caches/fixtures after release, retaining evidence and branch.
+- [x] Draft PR, exact-head lint/test/postgres/examples/arc success, ready/squash, clean primary main sync.
+- [x] Remove owned caches/fixtures after release, retaining evidence and branch.
 
 Priorities3/4 remain for the parent. This checklist never establishes the final
 four-feature acceptance gate.

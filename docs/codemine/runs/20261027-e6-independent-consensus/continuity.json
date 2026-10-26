@@ -1,0 +1,21 @@
+{
+  "n": "E6 independent StableNet WBFT consensus; local gates passed, exact-head CI5/release pending",
+  "n_minus_1": {
+    "pr": 228,
+    "main": "ba285da31bfe105813e81ebbbb510e3ac2921f97",
+    "plan": "../20261026-e5-call-ranges-orphans/plan.md"
+  },
+  "n_minus_2": {
+    "pr": 227,
+    "main": "449c31750bb4efb48d12b9264c1c1dc3fcb273aa",
+    "plan": "../20261026-e5-engine-blob-supply/plan.md"
+  },
+  "accepted": [
+    214,
+    215,
+    216,
+    217
+  ],
+  "next": "priority4 only after E6 CI5/squash/clean main release",
+  "release": null
+}

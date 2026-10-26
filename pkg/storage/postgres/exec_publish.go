@@ -61,6 +61,9 @@ func (s *Store) CommitExecution(ctx context.Context, p port.ExecutionPublication
 	}
 	bound := context.WithValue(ctx, blockTxKey{}, bt)
 	duplicate := p.Ref.Height <= c.Visible.Height
+	if err := verifyConsensusPublication(ctx, tx, c, p, duplicate); err != nil {
+		return false, err
+	}
 	if err := validateCallReceipt(ctx, tx, p, true); err != nil {
 		return false, err
 	}

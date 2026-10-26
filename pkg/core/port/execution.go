@@ -106,6 +106,7 @@ type ExecutionStore interface {
 // apply once after all seven durable parts, flushes undo/outbox before fresh,
 // then checks the generation again and commits. Only success permits source ACK.
 type ExecutionPublication struct {
+	ConsensusHeader      []byte
 	Ref                  execwire.Ref
 	Parent, Digest, Root execwire.Hash
 	CallTraces           bool

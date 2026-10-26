@@ -38,5 +38,5 @@
     "cost-green.log",
     "feature-postgres-final.log"
   ],
-  "release": "pending exact-head CI5, squash and main sync; never established by local tests"
+  "release": "Released independently as PR228; see priority2-sync.json and priority2-release.ko.md. Local tests alone never establish release."
 }

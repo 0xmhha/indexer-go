@@ -1,0 +1,40 @@
+{
+  "priority": 3,
+  "scope": "E6 only; priority4 remains for the parent after release",
+  "protocol": "stablenet-wbft-4d17eea018c8",
+  "fork": "anzeon-v1, explicitly bounded constant epoch/period interval",
+  "trust": "explicit externally authenticated anchor/header/applied/next committee; development fixtures are not live operator trust",
+  "named_tests": [
+    "TestSeedPriority3E6CryptographicConsensus",
+    "TestSeedPriority3E6PostgresPublicationRecovery",
+    "TestSeedPriority3E6CorruptRecoveryFailsBeforeAdmission",
+    "TestSeedPriority3E6OptInIndexerIPC"
+  ],
+  "full_race": "passed root + execwire + StableNet executor",
+  "full_fsync_postgres": "passed storage + app + API + StableNet bundle",
+  "concurrency200": {
+    "GOMAXPROCS": 1,
+    "race": true,
+    "count": 200,
+    "single_invocation": true,
+    "packages": [
+      "./pkg/app",
+      "./pkg/storage/postgres"
+    ],
+    "exit_code": 0,
+    "log": "validated-concurrency200.log"
+  },
+  "other_gates": [
+    "build",
+    "gofmt",
+    "vet",
+    "lint",
+    "nested static",
+    "examples",
+    "cache lifecycle",
+    "offline operations",
+    "staged/history secret scans"
+  ],
+  "evidence_dir": "/private/tmp/indexer-four.e6.z7M46d",
+  "release": "pending exact-head CI5, squash and clean primary main sync; local tests alone are not release"
+}

@@ -62,6 +62,9 @@ func rawExecutionBlock(ctx context.Context, q querier, height uint64) (*model.Bl
 	return model.DecodeBlock(data)
 }
 func validateExecutionRewind(ctx context.Context, tx pgx.Tx, c port.ExecutionControl, from, target execwire.Ref, root execwire.Hash) error {
+	if err := consensusRewindAllowed(ctx, tx, target); err != nil {
+		return err
+	}
 	if target.Height < c.Anchor.Height || target.Height > from.Height || from.Height-target.Height > UndoWindow {
 		return port.ErrNoUndo
 	}
