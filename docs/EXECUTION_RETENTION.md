@@ -96,7 +96,7 @@ Do not invoke producer `apply` manually; it requires the coordinator's live FD3 
 
 [Plan](codemine/runs/20261024-e3-retention/plan.md), [checklist](codemine/runs/20261024-e3-retention/checklist.md), [continuity](codemine/runs/20261024-e3-retention/continuity.json) and [validation](codemine/runs/20261024-e3-retention/validation.md) track E3. Tests use owned temporary files, actual native storage/path history/freezers, a native `core.BlockChain` with a fake consensus engine, mock RPC and disposable fsync-on PostgreSQL. They cover real library reopen/import/short reorg/future freezing, state-ID recovery, crash boundaries, live-pipe cancellation and the shared 132-block producer/DB format.
 
-This does not establish live WBFT peer/finality behavior, power-loss behavior on the chosen external device, production sizing, backup RPO/RTO or throughput. Existing two executions, writer7/pool4/part2, shared RPC5 physical HTTP attempts/s, parameter binding and final publication fresh stay in force. E4 feature writers, E5 other producers and E6 independent consensus/finality remain separate work.
+This does not establish live WBFT peer/finality behavior, power-loss behavior on the chosen external device, production sizing, backup RPO/RTO or throughput. Existing two executions, writer7/pool4/part2, shared RPC5 physical HTTP attempts/s, parameter binding and final publication fresh stay in force. [E4 feature writers](EXECUTION_FEATURE_WRITERS.md) are implemented. E5 native/provider follow-ups and E6 independent consensus/finality are tracked in [remaining work](analysis/open-items.md).
 
 ## Arc native adapter
 

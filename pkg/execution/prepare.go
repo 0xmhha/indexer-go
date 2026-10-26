@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata"
+	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
 	nativecalls "github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace/native"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/execution/blobdata"
+	"github.com/0xmhha/indexer-go/pkg/execution/proofdata"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"io"
@@ -37,7 +39,15 @@ func Prepare(profile chains.BinaryProfile, chain execwire.Chain, payload []byte)
 	return PrepareContext(context.Background(), profile, chain, payload, false)
 }
 
+type Requirements struct {
+	BlobSidecars bool
+	StateProofs  *stateproof.Selection
+}
+
 func PrepareContext(ctx context.Context, profile chains.BinaryProfile, chain execwire.Chain, payload []byte, requireBlobs bool) (*Prepared, error) {
+	return PrepareWithRequirements(ctx, profile, chain, payload, Requirements{BlobSidecars: requireBlobs})
+}
+func PrepareWithRequirements(ctx context.Context, profile chains.BinaryProfile, chain execwire.Chain, payload []byte, requirements Requirements) (*Prepared, error) {
 	if e := ctx.Err(); e != nil {
 		return nil, e
 	}
@@ -74,8 +84,11 @@ func PrepareContext(ctx context.Context, profile chains.BinaryProfile, chain exe
 	for _, f := range p.calls {
 		p.bytes += 512 + int64(len(f.Path))*4
 	}
-	p.blobs, err = blobdata.Validate(ctx, profile, chain, r, b, requireBlobs)
+	p.blobs, err = blobdata.Validate(ctx, profile, chain, r, b, requirements.BlobSidecars)
 	if err != nil {
+		return nil, err
+	}
+	if err = proofdata.Validate(ctx, profile.ID(), chain, r, requirements.StateProofs); err != nil {
 		return nil, err
 	}
 	chainID, _ := new(big.Int).SetString(chain.ID, 10)

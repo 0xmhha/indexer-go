@@ -78,6 +78,8 @@ jobs:
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestEventBusStopDrainsAccepted|TestEventBusConcurrentStopPublishPreservesAccepted)$' ./pkg/events
       - name: Execution queue, recovery, and API concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestScheduler|TestController|TestReceiver|TestExecution)' ./pkg/execution ./pkg/fetch ./pkg/api ./pkg/api/graphql ./pkg/api/jsonrpc ./internal/api/rest
+      - name: Offline state-proof command concurrency
+        run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m ./cmd/execution-state-proofs
       - name: Execution runtime lifecycle concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestExecutionRuntime' ./pkg/app
       - name: Execution feature writer ownership concurrency
@@ -100,7 +102,7 @@ jobs:
         run: |
           make test-executor-stablenet
           cd x/stablenet/executor
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestCancelLogger|TestReplayCancellationDuringEVM|TestReplayBeaconPreludeCancellation)' ./...
+          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestCancelLogger|TestReplayCancellationDuringEVM|TestReplayBeaconPreludeCancellation|TestNativeStateProofExport)' ./...
           GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestNodeRuntime|TestCapacityBudgetResumeAndConcurrentChecks)' ./nodebackend
           GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^TestCompactCapacityAndForeignLeasePreserveNode$' ./nodestore
       - name: Pebble cache lifecycle
@@ -137,6 +139,8 @@ jobs:
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -failfast -count=200 -timeout=40m -run '^(TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK|TestExecutionArcCollectedSpoolPublicationAndLostACK|TestExecutionNativeCallsPublicationPagesAndRestart)$'
       - name: Native full-blob files and DB-only API concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeBlobsPublicationPagesAndRestart$'
+      - name: Native state-proof files and DB-only API concurrency
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeStateProofPublicationAndRestart$'
       - name: Execution DB admission and recovery concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence|TestExecutionRetentionDrainsReadLeaseAndCancel)$'
 

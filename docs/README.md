@@ -23,6 +23,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Query tracked account and storage changes | [Tracked-state projections](TRACKED_STATE_PROJECTION.md) |
 | Read native replay call trees and internal calls | [Native execution traces](EXECUTION_CALL_TRACES.md) |
 | Full blobs in execution ingestion | [Private retained input, KZG, strict policy and DB-only pages](EXECUTION_BLOBS.md) |
+| Retain selected account/storage proofs in execution inputs | [Execution state proofs](EXECUTION_STATE_PROOFS.md) |
 
 Snapshots describe a test configuration. Your runtime schema and data depend on the linked profiles, enabled features, mode and indexed range. Use runtime introspection when integrating a client.
 

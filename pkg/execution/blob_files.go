@@ -62,7 +62,14 @@ func privateBlobUnchanged(path string, info os.FileInfo) bool {
 
 // AttachBlobFiles publishes a NEW private immutable EXR1. It starts no service,
 // rewrites no source/generation, obtains no ACK and grants no deletion rights.
+type InputAttachment = BlobAttachment
+
 func AttachBlobFiles(ctx context.Context, p chains.BinaryProfile, chain execwire.Chain, input, sidecars, output, provider string) (out BlobAttachment, err error) {
+	return composePrivateInput(ctx, input, sidecars, output, execwire.MaxBlobResponseBytes, func(payload, response []byte) ([]byte, error) {
+		return AttachBlobInput(ctx, p, chain, payload, provider, response)
+	})
+}
+func composePrivateInput(ctx context.Context, input, sidecars, output string, responseLimit int64, compose func([]byte, []byte) ([]byte, error)) (out InputAttachment, err error) {
 	if e := ctx.Err(); e != nil {
 		return out, e
 	}
@@ -89,12 +96,12 @@ func AttachBlobFiles(ctx context.Context, p chains.BinaryProfile, chain execwire
 	var response []byte
 	var sidecarInfo os.FileInfo
 	if sidecars != "" {
-		response, sidecarInfo, e = readPrivateBlobFile(ctx, sidecars, execwire.MaxBlobResponseBytes)
+		response, sidecarInfo, e = readPrivateBlobFile(ctx, sidecars, responseLimit)
 		if e != nil {
 			return out, e
 		}
 	}
-	data, e := AttachBlobInput(ctx, p, chain, payload, provider, response)
+	data, e := compose(payload, response)
 	if e != nil {
 		return out, e
 	}

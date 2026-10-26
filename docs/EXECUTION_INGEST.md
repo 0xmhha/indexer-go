@@ -122,3 +122,7 @@ The current Arc/StableNet producer includes [bounded native call traces and inte
 ## Complete blob sidecars
 
 [Execution blob inputs](EXECUTION_BLOBS.md) compose bounded full-blob relay bytes before spool admission, preserve exact source identity, and store verified rows in the transactions part. Optional `source.execution.require_blob_sidecars` rejects positive-reference inputs without sidecars before new work or lost-ACK confirmation. Schema0019, reader-first upgrades, explicit not-collected/empty states, fresh/ACK/GC boundaries and DB-only pages are documented there. It starts no provider and adds no EVM execution/RPC.
+
+## Selected state proofs
+
+[Execution state proofs](EXECUTION_STATE_PROOFS.md) optionally attach standard-MPT account/code/storage evidence to the verified block-end root before spool admission. `required_state_proofs` enforces an exact selection before scheduling and lost-ACK confirmation. The existing accounts part persists it; complete receipt/proof checks precede the final NEW uncached fresh read. DB-only reserved snapshots distinguish uncollected keys from proven absence. This does not expand E2 coverage, map consensus balance to native currency or grant E3 GC authority.

@@ -1,6 +1,8 @@
 package config
 
 import (
+	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
+	"github.com/ethereum/go-ethereum/common"
 	"gopkg.in/yaml.v3"
 	"strings"
 	"testing"
@@ -84,4 +86,24 @@ func TestExecutionRequiredBlobPolicyYAMLRoundTrip(t *testing.T) {
 	data, e := yaml.Marshal(source)
 	require.NoError(t, e)
 	require.Contains(t, string(data), "require_blob_sidecars: true")
+}
+
+func TestExecutionRequiredStateProofsYAMLAndSelection(t *testing.T) {
+	c := executionConfigFixture()
+	decoder := yaml.NewDecoder(strings.NewReader("required_state_proofs:\n  targets:\n    - address: '0x1111111111111111111111111111111111111111'\n      code: true\n      slots: ['0x0000000000000000000000000000000000000000000000000000000000000003']\n"))
+	decoder.KnownFields(true)
+	require.NoError(t, decoder.Decode(c.Source.Execution))
+	require.NoError(t, c.Validate())
+}
+
+func TestExecutionRequiredStateProofsRejectInvalidSelections(t *testing.T) {
+	for _, selection := range []stateproof.Selection{{}, {Targets: make([]stateproof.Target, 9)}, {Targets: []stateproof.Target{{}, {}}}, {Targets: []stateproof.Target{{Slots: make([]common.Hash, 129)}}}} {
+		c := executionConfigFixture()
+		c.Source.Execution.RequiredStateProofs = &selection
+		require.ErrorContains(t, c.Validate(), "required_state_proofs")
+	}
+	decoder := yaml.NewDecoder(strings.NewReader("required_state_proofs:\n  targets:\n    - adress: '0x1111111111111111111111111111111111111111'\n"))
+	decoder.KnownFields(true)
+	var config ExecutionSourceConfig
+	require.Error(t, decoder.Decode(&config))
 }

@@ -110,15 +110,16 @@ type Step struct {
 	Code     []Code
 }
 type Result struct {
-	Ref          Ref
-	Parent       Hash
-	Time         uint64
-	StateRoot    Hash
-	ReceiptsRoot Hash
-	TxCount      uint32
-	BlockRLP     []byte `json:"-"`
-	ReceiptsRLP  []byte `json:"-"`
-	Steps        []Step
-	CallTraces   *CallTraces `json:",omitempty"`
-	BlobBundle   *BlobBundle `json:",omitempty"`
+	Ref              Ref
+	Parent           Hash
+	Time             uint64
+	StateRoot        Hash
+	ReceiptsRoot     Hash
+	TxCount          uint32
+	BlockRLP         []byte `json:"-"`
+	ReceiptsRLP      []byte `json:"-"`
+	Steps            []Step
+	CallTraces       *CallTraces       `json:",omitempty"`
+	BlobBundle       *BlobBundle       `json:",omitempty"`
+	StateProofBundle *StateProofBundle `json:",omitempty"`
 }

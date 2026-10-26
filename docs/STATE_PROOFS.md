@@ -1,5 +1,7 @@
 # 지정 계정·code·storage 증명 공급
 
+E1 실행 입력·7개 writer·공개 높이·exact ACK에 결합된 선택 proof는 [Execution state proofs](EXECUTION_STATE_PROOFS.md)를 사용한다. 아래 capture stream과 cursor·완료·GC 계약은 독립적이며 자동 backfill/통합하지 않는다.
+
 `pkg/chainfeed/evmstate`와 `arcfeed.NewStateSupplier`는 이미 수집한 블록에 대해 **명시적으로 선택한 주소·슬롯의 블록 종료 시점 상태**를 검증·보존한다. 앱은 선택 `feed.state_proofs`로 별도 수집 goroutine을 실행하고 `facts.Source.StateSnapshot`으로 후처리에서 읽는다. 전체 계정 변경 목록·모든 contract storage·EVM 실행·trace·blob을 공급하는 기능은 아니다. 앱의 state feature 거부와 기존3종 capture plan은 유지된다.
 
 ## 조회·검증과 보존

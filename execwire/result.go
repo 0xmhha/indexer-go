@@ -125,5 +125,8 @@ func validateResult(r Result) error {
 	if err := ValidateBlobBundle(r.BlobBundle); err != nil {
 		return err
 	}
+	if err := ValidateStateProofBundle(r.StateProofBundle); err != nil {
+		return err
+	}
 	return ValidateCallTraces(r)
 }

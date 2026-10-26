@@ -23,7 +23,7 @@ var untracked = map[string]bool{
 	"outbox": true, "outbox_sequence": true, "outbox_cursors": true,
 	"capture_locks": true, "capture_records": true, // immutable source facts, not projection writes
 	"exec_control": true, "exec_cursors": true, "exec_parts": true, "exec_publications": true, "exec_rewinds": true, "exec_retention": true, // execution rewind coordinator owns these
-	"exec_blob_blocks": true, "exec_blob_entries": true, "exec_call_blocks": true, "exec_call_frames": true, // same transaction part; coordinator purges abandoned trace heights
+	"exec_state_proofs": true, "exec_blob_blocks": true, "exec_blob_entries": true, "exec_call_blocks": true, "exec_call_frames": true, // same transaction part; coordinator purges abandoned trace heights
 	"state_accounts": true, "state_account_changes": true, // execution history/rewind owns parent and leaf partitions
 	"state_storage": true, "state_storage_roots": true, "state_storage_changes": true, "state_storage_clears": true, // execution storage/clear history and rewind
 	"state_code": true, "state_contracts": true, "state_contract_changes": true, // execution code retention and contract rewind

@@ -1,6 +1,7 @@
 package evmstate
 
 import (
+	"context"
 	"encoding/json"
 	"math/big"
 	"strings"
@@ -148,4 +149,22 @@ func TestEmptyStateAndSelectionBounds(t *testing.T) {
 	require.Error(t, json.Unmarshal([]byte(`[`+strings.Repeat(`"0x80",`, MaxNodes)+`"0x80"]`), &nodes))
 	var bundle Bundle
 	require.Error(t, json.Unmarshal([]byte(`{"evidence":[`+strings.Repeat(`{},`, MaxAccounts)+`{}]}`), &bundle))
+}
+
+func TestProofNoSlotsRoundTripAndCanceledContext(t *testing.T) {
+	f := fixture(t)
+	f.selection.Targets[0].Slots = nil
+	f.bundle.Selection = f.selection
+	f.bundle.Evidence[0].Proof.StorageProof = nil
+	raw, e := json.Marshal(f.bundle)
+	require.NoError(t, e)
+	var decoded Bundle
+	require.NoError(t, json.Unmarshal(raw, &decoded), "our own nil storage proof encoding must be readable when no slot was selected")
+	accounts, e := Verify(f.root, f.selection, decoded)
+	require.NoError(t, e)
+	require.Len(t, accounts[0].Storage, 0)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, e = VerifyContext(ctx, f.root, f.selection, decoded)
+	require.ErrorIs(t, e, context.Canceled)
 }
