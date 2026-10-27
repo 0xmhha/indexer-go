@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,5 +61,59 @@ func TestArcCollectorCommandProofSelectionBeforeStart(t *testing.T) {
 	_ = os.Chmod(p, 0644)
 	if e := run(t.Context(), args, &output, start); e == nil || called {
 		t.Fatal("unsafe selection started collector", e)
+	}
+}
+
+func TestExplicitCollectorConfigNoOverride(t *testing.T) {
+	data, err := os.ReadFile("../../../../configs/execution/preflight/synthetic-arc/native.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "collector.json")
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	started := 0
+	start := func(_ context.Context, c collector.Config) error {
+		started++
+		if c.Native.DataDir != "/synthetic/native" {
+			t.Fatal("config was overridden")
+		}
+		return nil
+	}
+	if err = run(context.Background(), []string{"--config", path}, io.Discard, start); err != nil || started != 1 {
+		t.Fatal(err, started)
+	}
+	if err = run(context.Background(), []string{"--config", path, "--window", "9"}, io.Discard, start); err == nil || started != 1 {
+		t.Fatal("mixed overrides accepted")
+	}
+}
+
+func TestCollectorJSONRequiresExplicitAnchorHeight(t *testing.T) {
+	data, err := os.ReadFile("../../../../configs/execution/preflight/synthetic-arc/native.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj map[string]any
+	if err = json.Unmarshal(data, &obj); err != nil {
+		t.Fatal(err)
+	}
+	anchor := obj["Anchor"].(map[string]any)
+	// A valid height-zero tuple must still require an explicitly declared 0.
+	anchor["Height"] = float64(0)
+	anchor["Hash"] = obj["Native"].(map[string]any)["Chain"].(map[string]any)["Genesis"]
+	delete(anchor, "Height")
+	data, err = json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "collector.json")
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	started := false
+	err = run(context.Background(), []string{"--config", path}, io.Discard, func(context.Context, collector.Config) error { started = true; return nil })
+	if err == nil || started {
+		t.Fatal("missing height silently became a genesis start")
 	}
 }

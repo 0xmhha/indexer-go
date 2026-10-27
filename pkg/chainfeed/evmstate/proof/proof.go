@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/0xmhha/indexer-go/execwire/configfile"
 	"math/big"
 	"sort"
 
@@ -50,7 +51,7 @@ func (s *Selection) UnmarshalJSON(raw []byte) error {
 	}
 	type plain Selection
 	var out plain
-	if e := json.Unmarshal(raw, &out); e != nil {
+	if e := configfile.JSON(raw, &out); e != nil {
 		return e
 	}
 	*s = Selection(out)

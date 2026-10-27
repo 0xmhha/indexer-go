@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/execwire/configfile"
 	"github.com/0xmhha/indexer-go/execwire/retention"
 	"github.com/0xmhha/indexer-go/execwire/spool"
 	"github.com/0xmhha/indexer-go/x/arc/nativestore"
@@ -36,24 +37,20 @@ func LoadConfig(path string) (Config, error) {
 	if e := nativestore.PrivateFile(path); e != nil {
 		return c, e
 	}
-	// Same private artifact parser/bounds used for E3 permits; config has no DSN.
-	if e := retention.ReadArtifact(path, &c); e != nil {
+	// Strict bounded production schema; config has no DSN.
+	b, e := configfile.Read(path)
+	if e != nil {
 		return c, e
 	}
-	_, _, e := options(c)
+	if e := configfile.JSON(b, &c); e != nil {
+		return c, e
+	}
+	_, _, e = options(c)
 	return c, e
 }
 func options(c Config) (spool.Options, nativestore.Options, error) {
-	if (c.Chain.ID != "5042" && c.Chain.ID != "5042002") || c.Chain.Genesis == (execwire.Hash{}) || c.AnchorRoot == (execwire.Hash{}) || c.Anchor.Generation == 0 || !filepath.IsAbs(c.NativeExecutable) || !filepath.IsAbs(c.NativeDataDir) || !filepath.IsAbs(c.SpoolDir) {
-		return spool.Options{}, nativestore.Options{}, retention.ErrUnsafe
-	}
-	if c.BackupOutput != "" || c.RestoreManifest != "" || c.IndexerReceipt != "" || c.IndexerArtifact != "" {
-		if !filepath.IsAbs(c.IndexerReceipt) || !filepath.IsAbs(c.IndexerArtifact) ||
-			(c.BackupOutput == "" && c.RestoreManifest == "") ||
-			(c.BackupOutput != "" && !filepath.IsAbs(c.BackupOutput)) ||
-			(c.RestoreManifest != "" && !filepath.IsAbs(c.RestoreManifest)) {
-			return spool.Options{}, nativestore.Options{}, retention.ErrUnsafe
-		}
+	if err := ValidateDeclared(c); err != nil {
+		return spool.Options{}, nativestore.Options{}, err
 	}
 
 	native, e := filepath.EvalSymlinks(c.NativeDataDir)
@@ -257,4 +254,21 @@ func RunRetention(ctx context.Context, o CLI, out io.Writer) error {
 		return e
 	}
 	return emit(struct{ Status string }{"producer_fences_released"})
+}
+
+// ValidateDeclared checks file values without inspecting native/source paths.
+func ValidateDeclared(c Config) error {
+	if (c.Chain.ID != "5042" && c.Chain.ID != "5042002") || c.Chain.Genesis == (execwire.Hash{}) || c.AnchorRoot == (execwire.Hash{}) || c.Anchor.Generation == 0 || !filepath.IsAbs(c.NativeExecutable) || !filepath.IsAbs(c.NativeDataDir) || !filepath.IsAbs(c.SpoolDir) {
+		return retention.ErrUnsafe
+	}
+	if c.BackupOutput != "" || c.RestoreManifest != "" || c.IndexerReceipt != "" || c.IndexerArtifact != "" {
+		if !filepath.IsAbs(c.IndexerReceipt) || !filepath.IsAbs(c.IndexerArtifact) ||
+			(c.BackupOutput == "" && c.RestoreManifest == "") ||
+			(c.BackupOutput != "" && !filepath.IsAbs(c.BackupOutput)) ||
+			(c.RestoreManifest != "" && !filepath.IsAbs(c.RestoreManifest)) {
+			return retention.ErrUnsafe
+		}
+	}
+
+	return nil
 }

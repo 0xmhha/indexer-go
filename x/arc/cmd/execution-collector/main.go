@@ -31,6 +31,7 @@ func main() {
 func run(ctx context.Context, args []string, out io.Writer, start func(context.Context, collector.Config) error) error {
 	f := flag.NewFlagSet("execution-collector", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
+	configPath := f.String("config", "", "explicit collector JSON; exclusive of other flags")
 	id := f.String("chain-id", "", "Arc chain ID: 5042 or 5042002")
 	genesis := f.String("genesis", "", "exact lowercase genesis hash")
 	executable := f.String("native-executable", "", "absolute pinned Arc executor binary")
@@ -54,6 +55,22 @@ func run(ctx context.Context, args []string, out io.Writer, start func(context.C
 			return nil
 		}
 		return err
+	}
+	configSupplied := false
+	f.Visit(func(v *flag.Flag) {
+		if v.Name == "config" {
+			configSupplied = true
+		}
+	})
+	if configSupplied {
+		if *configPath == "" || f.NFlag() != 1 || f.NArg() != 0 || start == nil {
+			return fmt.Errorf("config is exclusive of overrides")
+		}
+		c, err := collector.LoadConfig(*configPath)
+		if err != nil {
+			return err
+		}
+		return start(ctx, c)
 	}
 	explicitHeight := false
 	f.Visit(func(v *flag.Flag) {

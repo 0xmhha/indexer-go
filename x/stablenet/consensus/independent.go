@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/execwire/configfile"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/x/stablenet"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	blst "github.com/supranational/blst/bindings/go"
-	"io"
 	"math"
 	"math/big"
 )
@@ -306,14 +306,8 @@ func DecodeTrustPolicy(raw []byte) (TrustPolicy, error) {
 	if len(raw) > 1<<20 {
 		return p, ErrIndependent
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&p); err != nil {
+	if err := configfile.JSON(raw, &p); err != nil {
 		return p, err
-	}
-	var tail any
-	if err := decoder.Decode(&tail); err != io.EOF {
-		return p, ErrIndependent
 	}
 	return p, nil
 }

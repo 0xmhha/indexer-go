@@ -2,11 +2,12 @@ package nodebackend
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/execwire/configfile"
+	"github.com/0xmhha/indexer-go/execwire/nativecfg"
 	"github.com/0xmhha/indexer-go/x/stablenet/executor/exporter"
 	"github.com/0xmhha/indexer-go/x/stablenet/executor/nodestore"
 	"github.com/0xmhha/indexer-go/x/stablenet/executor/spool"
@@ -18,34 +19,15 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"io"
-	"math"
-	"net"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
 
-type Config struct {
-	StartMode             string          `json:"start_mode"`
-	DataDir               string          `json:"data_dir"`
-	SpoolDir              string          `json:"spool_dir"`
-	Socket                string          `json:"socket"`
-	GenesisFile           string          `json:"genesis_file"`
-	ChainID               string          `json:"chain_id"`
-	NetworkID             uint64          `json:"network_id"`
-	GenesisHash           string          `json:"genesis_hash"`
-	AnchorHeight          uint64          `json:"anchor_height"`
-	AnchorHash            string          `json:"anchor_hash"`
-	AnchorRoot            string          `json:"anchor_root"`
-	Peers                 []string        `json:"peers"`
-	ListenAddr            string          `json:"listen_addr"`
-	SpoolBytes            uint64          `json:"spool_bytes"`
-	SpoolRecords          int             `json:"spool_records"`
-	RetentionReserveBytes uint64          `json:"retention_reserve_bytes,omitempty"`
-	Capacity              *CapacityConfig `json:"capacity,omitempty"`
-}
+type Config = nativecfg.Config
+
+func validHash(value string) bool { return nativecfg.ValidHash(value) }
+
 type ownedNode interface {
 	Start() error
 	Close() error
@@ -54,30 +36,13 @@ type ownedNode interface {
 type nodeFactory func(Config, *core.Genesis) (ownedNode, error)
 type clientRunner func(context.Context, *exporter.Client) error
 
-func validHash(value string) bool {
-	if len(value) != 66 || !strings.HasPrefix(value, "0x") {
-		return false
-	}
-	b, err := hex.DecodeString(value[2:])
-	return err == nil && common.BytesToHash(b) != (common.Hash{})
-}
 func settings(c Config, g *core.Genesis) (node.Config, ethconfig.Config, error) {
 	n, e := node.DefaultConfig, ethconfig.Defaults
-	if err := c.Capacity.validate(); err != nil {
+	if err := c.ValidateDeclared(); err != nil {
 		return node.Config{}, ethconfig.Config{}, err
 	}
 	invalid := func() (node.Config, ethconfig.Config, error) {
 		return node.Config{}, ethconfig.Config{}, fmt.Errorf("executor: invalid explicit node identity, paths, checkpoint, or fork configuration")
-	}
-	if c.StartMode != "" && c.StartMode != "genesis" && c.StartMode != "checkpoint" || c.StartMode == "genesis" && c.AnchorHeight != 0 {
-		return invalid()
-	}
-	if !filepath.IsAbs(c.DataDir) || !filepath.IsAbs(c.SpoolDir) || !filepath.IsAbs(c.Socket) || !filepath.IsAbs(c.GenesisFile) || c.NetworkID == 0 || c.AnchorHeight >= math.MaxInt64 || !validHash(c.GenesisHash) || !validHash(c.AnchorHash) || !validHash(c.AnchorRoot) || len(c.Peers) > 64 || c.SpoolRecords < 0 {
-		return invalid()
-	}
-	a, b := filepath.Clean(c.DataDir), filepath.Clean(c.SpoolDir)
-	if a == b || strings.HasPrefix(a, b+string(os.PathSeparator)) || strings.HasPrefix(b, a+string(os.PathSeparator)) {
-		return invalid()
 	}
 	if g == nil || g.Config == nil || g.Config.ChainID == nil || g.Config.ChainID.Sign() <= 0 || g.Config.ChainID.String() != c.ChainID || !g.Config.AnzeonEnabled() || g.Config.Anzeon.WBFT == nil || g.Config.DAOForkSupport {
 		return invalid()
@@ -92,9 +57,7 @@ func settings(c Config, g *core.Genesis) (node.Config, ethconfig.Config, error) 
 	if c.ListenAddr == "" {
 		c.ListenAddr = "127.0.0.1:0"
 	}
-	if _, _, err := net.SplitHostPort(c.ListenAddr); err != nil {
-		return invalid()
-	}
+
 	n.Name, n.DataDir, n.IPCPath, n.HTTPHost, n.WSHost = "indexer-stablenet", c.DataDir, "", "", ""
 	n.P2P.ListenAddr, n.P2P.NoDiscovery, n.P2P.MaxPeers = c.ListenAddr, true, 8
 	n.P2P.BootstrapNodes, n.P2P.BootstrapNodesV5, n.P2P.StaticNodes, n.P2P.TrustedNodes = nil, nil, nil, nil
@@ -145,7 +108,10 @@ func loadJSON(path string, target any, limit int64, strict bool) error {
 // node, opens its data directory, dials a peer, or changes disk provisioning.
 func LoadConfig(path string) (Config, error) {
 	var c Config
-	err := loadJSON(path, &c, 1<<20, true)
+	b, err := configfile.Read(path)
+	if err == nil {
+		err = configfile.JSON(b, &c)
+	}
 	return c, err
 }
 

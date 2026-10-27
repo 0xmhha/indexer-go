@@ -9,3 +9,7 @@ Startup holds the shared [native owner lease](../../../docs/EXECUTION_ARC_RETENT
 ## Optional selected state proofs
 
 `--state-proofs /ABSOLUTE/PRIVATE/selection.json` enables native block-end account/code/storage evidence. The file is private, bounded and strictly validated before startup. The collector requests operation5 and independently verifies exact scope/root/provenance before source admission. Its versioned normalized policy is sealed into the spool manifest; existing spools cannot switch policies, even after draining. Resume with the same selection and original anchor. Match the receiver's `required_state_proofs`. Full quota/window, reorg/restart/exact ACK and native owner lease protections remain. [Contracts and JSON format](../../../docs/EXECUTION_STATE_PROOFS.md#arc-native-acquisition-and-continuous-collection).
+
+## Explicit configuration files
+
+`execution-collector --config FILE` reads the production collector JSON schema and refuses other flags alongside it. [Offline native preflight](../../../docs/NATIVE_EXECUTION_PREFLIGHT.md) compares that same file against App, retention and checkpoint metadata before any separate runtime invocation. File PASS grants no startup or deletion authority.

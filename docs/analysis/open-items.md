@@ -1,12 +1,13 @@
 # 남은 작업과 우선순위
 
-E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #225·Arc proofs #226을 보존한다. 네 순차 기능은 [Engine blob #227](https://github.com/0xmhha/indexer-go/pull/227), [call ranges/orphan #228](https://github.com/0xmhha/indexer-go/pull/228), [E6 WBFT #229](https://github.com/0xmhha/indexer-go/pull/229), [native retention/backup #230](https://github.com/0xmhha/indexer-go/pull/230)으로 모두 exact-head CI5·squash·깨끗한 main 동기화를 마쳤다. 최종 main/origin-main은 `724405594990128471d04fe825b09b0797bd21df`다. 4번 head `76b5c06dbec45dcf928f7dbe0d9e46f27181f457`의 run40418831898 다섯 job은 모두 success이며 한 부모·reviewed tree 일치를 검증했다. [운영 준비 현황](../OPERATIONS_READINESS.md)에 검증된 인계와 미확정 운영 입력을 반영했다. KZG는 beacon/PeerDAS/독립 합의가 아니며 E6 지원은 명시적 trust/fork 범위에 한정된다.
+E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #225·Arc proofs #226을 보존한다. 네 순차 기능은 [Engine blob #227](https://github.com/0xmhha/indexer-go/pull/227), [call ranges/orphan #228](https://github.com/0xmhha/indexer-go/pull/228), [E6 WBFT #229](https://github.com/0xmhha/indexer-go/pull/229), [native retention/backup #230](https://github.com/0xmhha/indexer-go/pull/230)으로 모두 exact-head CI5·squash·깨끗한 main 동기화를 마쳤다. [운영 준비 현황](../OPERATIONS_READINESS.md)에 검증된 인계와 미확정 운영 입력을 반영했다. KZG는 beacon/PeerDAS/독립 합의가 아니며 E6 지원은 명시적 trust/fork 범위에 한정된다.
 
 ## 현재 정본과 연속성
 
-- n: native retention [계획](../codemine/runs/20261027-native-retention-backup/plan.md), [체크리스트](../codemine/runs/20261027-native-retention-backup/checklist.md), [사용법](../EXECUTION_ARC_RETENTION.md)
-- n−1: E6 #229 [계획](../codemine/runs/20261027-e6-independent-consensus/plan.md), [체크리스트](../codemine/runs/20261027-e6-independent-consensus/checklist.md), [사용법](../EXECUTION_CONSENSUS.md)
-- n−2: call ranges/orphan traces #228 [계획](../codemine/runs/20261026-e5-call-ranges-orphans/plan.md), [체크리스트](../codemine/runs/20261026-e5-call-ranges-orphans/checklist.md), [검증](../codemine/runs/20261026-e5-call-ranges-orphans/validation.md)
+- n: offline native preflight [계획](../codemine/runs/20261028-native-preflight/plan.md), [체크리스트](../codemine/runs/20261028-native-preflight/checklist.md), [사용법](../NATIVE_EXECUTION_PREFLIGHT.md)
+- n−1: native retention [계획](../codemine/runs/20261027-native-retention-backup/plan.md), [체크리스트](../codemine/runs/20261027-native-retention-backup/checklist.md), [사용법](../EXECUTION_ARC_RETENTION.md)
+- n−2: E6 #229 [계획](../codemine/runs/20261027-e6-independent-consensus/plan.md), [체크리스트](../codemine/runs/20261027-e6-independent-consensus/checklist.md), [사용법](../EXECUTION_CONSENSUS.md)
+- 이전 완료: call ranges/orphan traces #228 [계획](../codemine/runs/20261026-e5-call-ranges-orphans/plan.md), [체크리스트](../codemine/runs/20261026-e5-call-ranges-orphans/checklist.md), [검증](../codemine/runs/20261026-e5-call-ranges-orphans/validation.md)
 - Arc native proofs [계획](../codemine/runs/20261026-e5-arc-native-proofs/plan.md), [체크리스트](../codemine/runs/20261026-e5-arc-native-proofs/checklist.md), [연속성](../codemine/runs/20261026-e5-arc-native-proofs/continuity.json), [검증](../codemine/runs/20261026-e5-arc-native-proofs/validation.md), [사용법](../EXECUTION_STATE_PROOFS.md#arc-native-acquisition-and-continuous-collection)
 - Engine blob supply #227. 수용한 E1~E4 설계는 아래 링크로 보존한다.
 
@@ -38,6 +39,8 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 
 | 우선순위 | 작업 | 완료 조건·의존성 |
 | --- | --- | --- |
+| 구현 | Native 실행 설정 통합 검사 | [오프라인 preflight](../NATIVE_EXECUTION_PREFLIGHT.md): production schema·strict 입력·PASS/HOLD/FAIL·운영 권한 없음. 릴리스 증거는 PR metadata와 부모 인계 영수증 참조 |
+| 다음 offline | Native 진단 → Docker wiring → backup adapter → monitoring | 실제 노드/운영 DB/peer/APFS 없이 재현 가능한 기능부터 진행. 미확정 운영 입력은 HOLD 유지 |
 | 완료 #226 | Arc native selected proof와 collector/window | RED→GREEN, 실제 임시 native-v2/history와 2회 ArcEVM 증거, strict selection·고정 source 정책·capacity/lease/restart/reorg/ACK, PG/API, 전체 로컬 검사·새 CPU1/race/single200, staged/history scan, 정확한 head CI5, squash·깨끗한 main 동기화. source-branch PR을 완료 정본으로 사용 |
 | 완료 #227 | 지원 체인의 bounded Engine blob transport | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
 | 완료 #228 | Call 조회 확장 | 주소별 범위·coverage 검색, orphan trace 보관·조회, richer GraphQL/JSON-RPC의 별도 계약과 검증. 기존 block/tx 페이지·RPC provider 경로·legacy 미수집을 혼합하지 않음 |
@@ -64,4 +67,4 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 - 비EVM 모델은 현재 EVM 중심 범위 밖의 별도 결정이다.
 - 선택 proof는 bounded block-end evidence다. 전체 상태/모든 변경 coverage, transaction witness, 임의 `eth_call`, 과거 미수집 backfill이나 새 state projection을 자동 제공하지 않는다. 필요하면 별도 설계한다.
 
-완료된 API 시간 진단·single parse·compact JSON·keepalive·DB/race 검증·문서 정리와 E1~E4를 새 변경/실패 없이 다시 작업 목록에 올리지 않는다. 오래된 선택지·수치는 Git history를 참고하며 수용한 E1 설계와 n/n-1/n-2를 보존한다. 실제 노드/peer, 포맷·운영 GC·추가 성능 측정, 태그·배포·원격 브랜치 삭제는 보류한다. 다른 프로젝트의 프로세스·container·volume·공유 cache는 유지하고 이 작업 전용 cache만 정리한다. 네 기능 순차 릴리스는 완료됐다. 다음 우선순위는 운영 입력 확정이며 누락된 외부 입력은 HOLD로 기록한다.
+완료된 API 시간 진단·single parse·compact JSON·keepalive·DB/race 검증·문서 정리와 E1~E4를 새 변경/실패 없이 다시 작업 목록에 올리지 않는다. 오래된 선택지·수치는 Git history를 참고하며 수용한 E1 설계와 n/n-1/n-2를 보존한다. 실제 노드/peer, 포맷·운영 GC·추가 성능 측정, 태그·배포·원격 브랜치 삭제는 보류한다. 다른 프로젝트의 프로세스·container·volume·공유 cache는 유지하고 이 작업 전용 cache만 정리한다. 네 기능 순차 릴리스는 완료됐다. 누락된 운영 입력은 HOLD로 유지한다. 다음 offline 우선순위는 native 진단, Docker wiring, backup adapter와 monitoring이다.

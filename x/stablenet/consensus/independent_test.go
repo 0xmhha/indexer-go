@@ -155,3 +155,9 @@ func TestIndependentTrustAnchorCommitteeConsistency(t *testing.T) {
 	_, e = NewIndependent(f.Policy)
 	require.Error(t, e)
 }
+
+func TestTrustPolicyStrictDuplicateKeys(t *testing.T) {
+	if _, err := DecodeTrustPolicy([]byte(`{"Fork":"anzeon-v1","Fork":"unknown"}`)); err == nil {
+		t.Fatal("duplicate known policy keys must fail in the production decoder")
+	}
+}

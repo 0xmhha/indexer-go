@@ -1,0 +1,32 @@
+{
+  "profile": "arc-native",
+  "chain": {
+    "ID": "5042002",
+    "Genesis": "0xe20e653af4441e8c6088e172b129d56420139824400477287b46e7101ae2bb1f"
+  },
+  "network_id": 5042002,
+  "anchor": {
+    "Generation": 1,
+    "Height": 100,
+    "Hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "root": "0x2222222222222222222222222222222222222222222222222222222222222222",
+  "start_height": 101,
+  "retained_floor": 100,
+  "checkpoint_path": "",
+  "checkpoint_authority": "HOLD",
+  "apfs_identity": "HOLD",
+  "enode": "",
+  "pg_data": "/synthetic/pgdata",
+  "native_bytes": 1073741824,
+  "free_bytes": 21474836480,
+  "backup_bytes": 8589934592,
+  "part_transactions": 2,
+  "api_reservation": 1,
+  "logical_writers": 7,
+  "fresh_policy": "new_uncached_canonical_post_response_generation_fence_commit",
+  "indexer_bytes": 1073741824,
+  "checkpoint_bytes": 1048576,
+  "scratch_bytes": 1048576,
+  "start_mode": "initial"
+}
