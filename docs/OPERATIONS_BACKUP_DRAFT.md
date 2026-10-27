@@ -2,6 +2,8 @@
 
 **상태: 초안. 백업 실행, 보관소 준비, PostgreSQL 설정 변경, 복원 시험은 하지 않았다.**
 
+현재 입력과 native 경로는 [운영 준비 현황](OPERATIONS_READINESS.md), matched seal/restore admission은 [Arc backup 계약](EXECUTION_ARC_RETENTION.md#matched-backup-and-restore-admission)을 따른다. 아래 legacy 절차는 실제 복원 성공 증거가 아니다.
+
 이 문서는 테스트넷 운영 초안([운영 초안](OPERATIONS_DRAFT.md), [Docker 초안](../deployments/testnets/README.md))에서 무엇을 어떻게 보존하고, 장애 뒤 어느 시점까지 얼마 만에 되돌릴지를 제안한다. 체인마다 indexer 프로세스가 하나씩 있고(StableNet, BSC, Sepolia, Arc), 네 프로세스가 PostgreSQL 16 하나를 체인별 schema로 나눠 쓴다. Arc만 외장 APFS에 24시간 raw window를 둔다. 기존 [재시작·GC 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md) 8장과 [용량 정책 초안](OPERATIONS_CAPACITY_DRAFT.md)의 복구 목표 절을 이어 받는다.
 
 ## 1. 다시 만들 수 없는 자료가 있다
@@ -42,7 +44,7 @@
 | StableNet testnet | `api.test.stablenet.network` | 블록 1까지 | 전체 | 없음 |
 | Arc testnet | `rpc.testnet.arc.io` | 블록 1까지 | 전체 | 없음 (Arc는 상태를 읽지 않는다) |
 
-StableNet은 archive처럼 동작한다. 백업이 오래돼도 상태 때문에 이어 가지 못하는 일은 없다.
+당시 StableNet endpoint는 archive처럼 응답했다. 현재 보존 계약이나 오래된 백업의 복구 가능성을 보장하지 않는다.
 
 Sepolia와 BSC testnet은 문제가 백업보다 크다. 엄격 모드는 처음 보는 계정이 나온 블록에서 그 직전 잔액을 노드에 묻고, 새로 만든 계약은 만든 블록의 상태로 토큰인지 묻는다(`internal/features/balance/balance.go`). 활발한 테스트넷에서는 대부분의 블록이 여기에 걸릴 것으로 본다. 그래서 색인이 head보다 Sepolia는 약 26분, BSC는 약 1분 넘게 뒤처지면 그 블록에서 멈춘다. 백업 복원뿐 아니라 평소의 재시작, 이미지 교체, 짧은 장애도 같다. BSC는 블록이 약 0.45초마다 나오므로, 5 HTTP/s 예산 안에서 색인 속도가 블록 생성을 따라가는지부터 확인해야 한다. 이 판단은 계산이며 실행해 보지 않았다.
 
@@ -68,7 +70,7 @@ Arc도 비슷하다. Arc는 상태를 읽지 않지만, 복원한 DB 이후의 �
 | B | 색인 자료(RPC 체인, Arc) | 노드·peer 보관 범위 안. 5분 이하를 목표로 한다 | 2시간 + 따라잡기 시간 | 보관 범위를 넘으면 이력을 잃는다 |
 | C | 설정, 이미지, peer key, secret | 바뀔 때마다 | 30분 | 수작업으로 다시 만들 수 있다 |
 
-B등급의 5분 목표는 StableNet과 Arc에만 의미가 있다. Sepolia와 BSC testnet은 1장의 측정대로 노드 보관 범위가 약 26분과 약 1분이라, 5분 전 백업도 BSC에서는 이어 가지 못한다. 두 체인의 RPO는 6장의 결정에 달려 있다.
+B등급의 5분 목표도 실제 node/peer 보존과 백업 검증에 달려 있다. Sepolia와 BSC testnet은 1장의 측정대로 노드 보관 범위가 약 26분과 약 1분이라, 5분 전 백업도 BSC에서는 이어 가지 못한다. 두 체인의 RPO는 6장의 결정에 달려 있다.
 
 RTO 2시간은 용량 정책 초안의 "사고 발생 후 2시간 내 복구 방침 결정"을 그대로 쓴 것이다. 달성을 보장하는 값이 아니다.
 
@@ -79,7 +81,7 @@ RTO 2시간은 용량 정책 초안의 "사고 발생 후 2시간 내 복구 방
 - 쌓인 블록 수 N = 중단 시간 × 블록 생성 속도
 - 따라잡기 시간 = N ÷ (색인 속도 − 블록 생성 속도)
 
-예를 들어 Arc feed writer의 로컬 비교 측정값 약 5.1블록/초(5 HTTP/s 제한 아래, 32블록 입력, [work log](analysis/work-log-2026-10.md)에 기록)와 블록 생성 2블록/초를 넣으면, 순수 따라잡기 속도는 약 3블록/초다. 1시간 중단이면 7,200블록이고 약 40분이 걸린다. RPC 체인의 실제 색인 속도는 측정하지 않았다. 상태 조회가 블록마다 더 들어가므로 이보다 느릴 수 있다.
+예를 들어 Arc feed writer의 로컬 비교 측정값 약 5.1블록/초(5 HTTP/s 제한 아래, 32블록 입력, [work log](analysis/work-log-2026-10.md)에 기록)와 블록 생성 2블록/초를 넣으면, 그 과거 입력의 산술상 순수 따라잡기 속도는 약 3블록/초다. 1시간 중단이면 7,200블록이고 약 40분이 걸린다. 이 legacy 32블록 수치를 현재 native 실행/운영 throughput이나 RTO로 사용하지 않는다. RPC 체인의 실제 색인 속도는 측정하지 않았다. 상태 조회가 블록마다 더 들어가므로 이보다 느릴 수 있다.
 
 따라잡는 동안에도 노드의 상태 보관 범위를 넘으면 안 된다. 중단 시간과 따라잡기 시간의 합이 보관 범위보다 길면, 백업이 최신이어도 엄격 모드로 이어서 색인할 수 없다.
 
@@ -101,7 +103,7 @@ RTO 2시간은 용량 정책 초안의 "사고 발생 후 2시간 내 복구 방
 
 ### 3.2 정지 상태 전체 복사 (Arc와 이전용)
 
-indexer 네 개를 멈추고 PostgreSQL을 정상 종료한 뒤, PGDATA, Arc raw window 디렉터리(marker/ledger 포함), peer key, private 디렉터리를 같은 시점에 복사한다([PostgreSQL 16 파일 백업](https://www.postgresql.org/docs/16/backup-file.html)). 재시작·GC 절차 초안 8장이 요구하는 "같은 시점의 DB와 raw 연결"을 지키는 유일한 방법이다.
+indexer 네 개를 멈추고 PostgreSQL을 정상 종료한 뒤, PGDATA, Arc raw window 디렉터리(marker/ledger 포함), peer key, private 디렉터리를 같은 시점에 복사한다([PostgreSQL 16 파일 백업](https://www.postgresql.org/docs/16/backup-file.html)). 재시작·GC 절차 초안 8장이 요구하는 "같은 시점의 DB와 raw 연결"을 지키기 위한 legacy 제안 중 하나다. 새 native 경로는 matched native/source/indexer seal과 인증된 외부 PG snapshot+WAL을 요구한다. 어느 방식도 실제 운영 복원 성공을 뜻하지 않는다.
 
 - 순서: `preflight.py --watch`가 쓰는 것과 같은 순서로 indexer들을 멈추고(SIGTERM, 120초), 그다음 PostgreSQL을 멈춘다(SIGINT, 60초).
 - 복사가 끝날 때까지 서비스가 멈춘다. 주기는 주 1회 또는 큰 변경(이미지 교체, 설정 변경, 디스크 이전) 직전을 제안한다.
@@ -109,7 +111,7 @@ indexer 네 개를 멈추고 PostgreSQL을 정상 종료한 뒤, PGDATA, Arc raw
 
 ### 3.3 Arc를 연속 WAL로 복원할 때의 한계
 
-연속 WAL로 DB만 과거 시점으로 되돌리면, raw window에는 그 시점 이후의 원본과 삭제 기록이 남는다. 지금 코드는 DB와 window 기록이 어긋나면 시작을 멈춘다(fail-closed). 이 경우 raw window를 다시 만드는 절차가 필요한데, 최초 window 생성은 아직 보류된 provisioning 절차다. 그래서 Arc는 3.2의 정지 상태 복사본으로 복원하는 것을 기본으로 둔다. Arc를 연속 WAL로 되돌리는 절차는 정하지 않았다.
+연속 WAL로 DB만 과거 시점으로 되돌리면, raw window에는 그 시점 이후의 원본과 삭제 기록이 남는다. 지금 코드는 DB와 window 기록이 어긋나면 시작을 멈춘다(fail-closed). 이 경우 raw window를 다시 만드는 절차가 필요한데, 최초 window 생성은 아직 보류된 provisioning 절차다. legacy Arc feed 초안은 3.2의 정지 상태 복사를 기본 제안으로 뒀다. native 경로에는 matched backup/restore admission이 추가됐지만 실제 PG snapshot/WAL 생성·인증·복구·설치와 재활성화는 운영 입력이며 계속 보류한다.
 
 ### 3.4 보조: schema별 논리 덤프
 
@@ -122,7 +124,7 @@ A등급 표(알림, 계약 검증)는 `pg_dump --schema`로 하루 한 번 따�
 1. 3.2의 정지 상태 복사본을 만든다. 원본은 지우지 않는다.
 2. 새 대상에 복사한다. 새 APFS의 VolumeUUID, physical-store UUID, mount root를 host manifest에 새로 적는다. window의 marker identity(`indexer-apfs-testnets-v1`)는 볼륨과 함께 옮겨지므로 바꾸지 않는다.
 3. 원본과 새 대상을 동시에 시작하지 않는다. writer는 하나만 있어야 한다.
-4. 새 대상에서 `preflight.py --check-host`를 통과시킨다.
+4. 후속 운영 승인 범위에서 새 대상의 host 점검을 수행한다. `preflight.py --check-host`는 throwaway 컨테이너를 실행하므로 이번 문서 검토에서는 실행하지 않는다.
 5. 5장의 복원 검증을 새 대상에서 한 뒤에 원본을 정리한다.
 
 ---

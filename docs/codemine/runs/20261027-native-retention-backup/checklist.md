@@ -6,9 +6,9 @@
 - [x] Matched component sealing and restore admission with live E3/DB/source/native gates.
 - [x] Immutable DB-validated receipt handoff and later child-read binding, runtime RED/GREEN.
 - [x] Complete real native preservation/consumer tests and all local/Rust/PG/count200 gates.
-- [ ] Staged/history secret scans; draft PR and exact current-head CI5.
-- [ ] Ready/squash, one-parent reviewed tree and clean primary main sync.
-- [ ] All-four strict observer, Korean completion report and owned-cache cleanup.
+- [x] Staged/history secret scans; draft PR and exact current-head CI5.
+- [x] Ready/squash, one-parent reviewed tree and clean primary main sync.
+- [x] All-four strict observer, Korean completion report and owned-cache cleanup.
 
 Operations, node startup/peers/providers, operator DBs, disk provisioning, operational
 GC/restore activation and performance/SLO measurements remain held.

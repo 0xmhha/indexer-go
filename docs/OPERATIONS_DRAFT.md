@@ -2,12 +2,14 @@
 
 **상태: 초안 작성 완료, 운영 적용·디스크 포맷·초기화·서비스 실행·추가 성능 측정은 보류.**
 
+현재 확정/권고/미확정 값은 [운영 준비 현황](OPERATIONS_READINESS.md)이 정본이다. 이 문서는 legacy `arc.eth68` baseline이며 새 native execution/collector/E6 배포 설정이 아니다. Native Docker wiring은 추가하지 않았다.
+
 2026-10-19 기준 사용자 요청에 따른 운영안이다. 현재 무시 파일인 `config.yaml`은 Pebble 기반이며 변경하지 않았다. 이 초안은 PostgreSQL로의 전환과 Arc execution-only feed 활성화 목표를 기록한다. APFS 저장소·peer·checkpoint가 확정되기 전에는 실행 설정이 아니다.
 
 - [체인별 애플리케이션 YAML 초안](examples/testnets): 체인마다 프로세스 하나(StableNet은 `indexer-stablenet`, Arc는 `indexer-arc`, BSC와 Sepolia는 `indexer`)
 - [PostgreSQL 설정 조각](examples/postgresql-testnets.draft.conf)
 - [Docker 운영 구성 초안](../deployments/testnets/README.md): 전용 Compose·호스트 APFS/UUID 검사·secret 파일 DSN 주입과 오프라인 검증.
-- [용량·backlog·복구 정책 초안](OPERATIONS_CAPACITY_DRAFT.md): DB/WAL 증가 감시와 worker 지연·디스크 부족의 경고/중단/재개 제안; 자동 제어는 미구현.
+- [용량·backlog·복구 정책 초안](OPERATIONS_CAPACITY_DRAFT.md): DB/WAL 증가 감시와 worker 지연·디스크 부족의 경고/중단/재개 제안; 한정된 capacity guard/latch와 호스트 watcher는 구현됐고 실제 운영 검증은 보류.
 - [백업·이전과 복구 목표 초안](OPERATIONS_BACKUP_DRAFT.md): 다시 만들 수 없는 자료, RPO/RTO 제안, 연속 WAL 보관과 정지 상태 복사, 이전·복원 검증 절차.
 - [Checkpoint·재시작·GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md): 진행 기록·정상 종료·장애 복구·원본 삭제 전 조건과 중단된 삭제의 복구를 구분.
 - [문서·설정 오프라인 일관성 점검](analysis/operations-offline-review.md): 발견한 누락·수정·검사 범위와 남은 운영 구현을 정리.
@@ -36,9 +38,9 @@ YAML의 `UNCONFIRMED_*`는 수동으로 검증된 값으로 교체할 표시이�
 
 연결4개는 수집·writer·API가 함께 나누는 pool이다. 다른 indexer/API 프로세스를 추가하면 각 프로세스가 새 pool을 만들므로 합계가 증가한다. 이번 초안에는 별도 API 프로세스를 추가하지 않는다. 체인 프로세스마다 단일 체인 root API이므로 예약1개/유휴 연결 차용 동작이 각 프로세스에 적용된다. 이 조합을 실제로 측정하지는 않았다. SQL 값의 파라미터 바인딩은 기존 구현을 유지한다.
 
-16개는 단일 실행 예산이며 장애 시까지 포함한 전역 hard cap이 아니다. 같은 체인의 프로세스를 겹쳐 실행하지 않고, 종료·반납 완료를 확인한 후 재기동해야 한다. RPC5도 기존 live pool의 공유 예산이다. 전체 중단/재개 interlock은 미구현이며 실제 중복 실행/초과를 이번에 관측한 것은 아니다.
+16개는 단일 실행 예산이며 장애 시까지 포함한 전역 hard cap이 아니다. 같은 체인의 프로세스를 겹쳐 실행하지 않고, 종료·반납 완료를 확인한 후 재기동해야 한다. RPC5도 기존 live pool의 공유 예산이다. 한정된 capacity latch/resume-check와 watcher 중단은 구현됐으나 실제 운영 검증·watcher 상주 관리는 보류이며 실제 중복 실행/초과를 이번에 관측한 것은 아니다.
 
-체인마다 프로세스를 나누면서 멀티체인 manager의 자동 재시작(`auto_restart`)이 없어졌다. 실패한 체인은 운영자가 다시 시작할 때까지 멈춰 있고, 다른 체인은 영향을 받지 않는다. worker5분/30분 경보·capacity 중단/재개는 별도 미구현 감시 정책이다. Arc `queue_blocks: 256`/256MiB는 writer의 RAM 큐이고 raw 알림 채널·24h 디스크 backlog와 별개다.
+체인마다 프로세스를 나누면서 멀티체인 manager의 자동 재시작(`auto_restart`)이 없어졌다. 실패한 체인은 운영자가 다시 시작할 때까지 멈춰 있고, 다른 체인은 영향을 받지 않는다. worker5분/30분 경보는 미구현이다. capacity 중단/resume interlock은 구현됐으나 실제 외장 저장소 검증은 보류다. Arc `queue_blocks: 256`/256MiB는 writer의 RAM 큐이고 raw 알림 채널·24h 디스크 backlog와 별개다.
 
 PostgreSQL schema 기준 이름은 `indexer_testnets_v1`이며 체인별 설정이 각각 `indexer_testnets_v1_stablenet_testnet`, `indexer_testnets_v1_bsc_testnet`, `indexer_testnets_v1_sepolia`, `indexer_testnets_v1_arc_testnet`을 지정한다(이전 멀티체인 구성이 만들던 이름과 같다). Docker 초안의 DSN은 전용 내부 network의 `postgres:5432/indexer_testnets_v1`, 비관리자 `indexer` role과 `sslmode=disable`을 제안한다. 외부 DB용 TLS 구성으로 재사용하지 않는다. 실제 자격 증명과 비공개 파일 경로는 미확정이다. DSN 값은 secret 파일에서 `INDEXER_DB_POSTGRES_DSN`으로 주입하고 Git에 기록하지 않는다. PostgreSQL 설정 조각만으로 인증·접속 경로·컨테이너를 구성하거나 시작하지 않는다.
 
@@ -53,7 +55,7 @@ PostgreSQL schema 기준 이름은 `indexer_testnets_v1`이며 체인별 설정�
 | PostgreSQL PGDATA | `/Volumes/IndexerData/indexer/postgres/16` | DB 컨테이너의 `/var/lib/postgresql/data` | 경로 제안만 |
 | Arc peer identity | `/Volumes/IndexerData/indexer/identity/arc-peer.key` | `/data/feed/indexer/identity/arc-peer.key` | 키 미생성; 일반 파일0600 필요 |
 
-두 컨테이너의 mount는 각 용도에 맞춰 별도로 구성한다. Docker Desktop 전체 데이터 위치나 다른 프로젝트의 volume을 옮기지 않는다. [Docker 초안](../deployments/testnets/README.md)은 APFS VolumeUUID·physical-store partition UUID·외장 physical disk·ownership·여유100GiB와 경로/secret/연결 예산을 검사하는 호스트 진입점을 포함한다. 모든 bind는 `create_host_path: false`이며 누락 경로를 자동 생성하지 않는다. **구성·검사 코드는 작성했으나 실제 APFS/컨테이너/DB 기동으로 검증하지 않았다.** 기본 모드는 오프라인 lint, `--check-host`는 읽기 전용이며 별도 `--start`는 실행 보류 해제 이후의 진입점이다. 직접 Compose 기동은 호스트 검사를 우회하므로 사용 경로로 삼지 않는다. PostgreSQL이 보는 Linux 컨테이너 경로와 macOS 호스트 경로를 혼용하지 않는다.
+두 컨테이너의 mount는 각 용도에 맞춰 별도로 구성한다. Docker Desktop 전체 데이터 위치나 다른 프로젝트의 volume을 옮기지 않는다. [Docker 초안](../deployments/testnets/README.md)은 APFS VolumeUUID·physical-store partition UUID·외장 physical disk·ownership·여유100GiB와 경로/secret/연결 예산을 검사하는 호스트 진입점을 포함한다. 모든 bind는 `create_host_path: false`이며 누락 경로를 자동 생성하지 않는다. **구성·검사 코드는 작성했으나 실제 APFS/컨테이너/DB 기동으로 검증하지 않았다.** 기본 모드는 오프라인 lint, `--check-host`는 throwaway `df` 컨테이너를 실행하므로 순수 파일 metadata 확인이 아니며 이번에는 실행하지 않았고, 별도 `--start`는 실행 보류 해제 이후의 진입점이다. 직접 Compose 기동은 호스트 검사를 우회하므로 사용 경로로 삼지 않는다. PostgreSQL이 보는 Linux 컨테이너 경로와 macOS 호스트 경로를 혼용하지 않는다.
 
 호스트 전용 private directory0700의 config·DSN·앱/관리자 password 파일0600을 각각 마운트한다. DSN 값은 Compose 환경 정의/인자/로그에 넣지 않고 indexer entrypoint에서 secret 파일을 읽어 기존 `INDEXER_DB_POSTGRES_DSN`으로만 전달한다. PostgreSQL은 별도 비관리자 앱 role을 사용한다. 현재 파일들은 생성하지 않았다. 호스트 UID/GID 매핑, 초기 SQL role 생성, Docker Desktop의 APFS sharing/fsync는 실제 실행 보류 해제 후 확인해야 한다. 기동 전 UUID 검사는 장치 분리 이후 PostgreSQL을 정지시키는 실시간 watchdog이 아니며 원본 저장소의 기존 runtime guard는 유지한다.
 
@@ -62,7 +64,7 @@ PostgreSQL schema 기준 이름은 `indexer_testnets_v1`이며 체인별 설정�
 | raw volume 전체 예산 | 160GiB = 171798691840 bytes | window manager의 논리 한도; 물리 preallocation 아님 |
 | Arc raw window | 128GiB = 137438953472 bytes | 체인별 논리 한도; 전체 예산의 나머지는 관리/미할당 여유 |
 | 원본 쓰기 최소 여유 | 100GiB = 107374182400 bytes | raw append/seal의 filesystem 여유 검사 |
-| PostgreSQL 데이터·색인·WAL | 160GiB 계획 예산 | **자동 quota/삭제/DB 쓰기 제한 아님**; [감시·중단 기준 초안](OPERATIONS_CAPACITY_DRAFT.md)은 작성했으나 자동 제어는 미구현 |
+| PostgreSQL 데이터·색인·WAL | 160GiB 계획 예산 | **자동 quota/삭제/DB 쓰기 제한 아님**; [감시·중단 기준 초안](OPERATIONS_CAPACITY_DRAFT.md)의 guard/latch는 구현됐으나 실제 운영 검증은 보류 |
 | raw retention | 24h | 최소 보관 시간; 삭제 조건 충족까지 더 오래 보존 |
 
 전체 raw160 + DB계획160 + runtime 최소 여유100 = **420GiB**는 코드의 floor만 반영한 산술이다. [용량 정책](OPERATIONS_CAPACITY_DRAFT.md)의 재개 여유 **150GiB 초과**까지 두 예산을 보수적으로 합산하면 **470GiB 초과에 filesystem/관리 여유를 더한 계획**이 필요하다. 현재 X31의 과거 exFAT 여유로 APFS 공간이 확보됐다고 보지 않으며 APFS 확보 후 실제 가용 공간을 다시 확인해야 한다. 어느 합계도 물리 예약·지속 용량 보장이 아니다. 같은 물리 디스크에서 raw와 DB가 I/O를 공유하므로 이 배치의 처리량 우위는 검증하지 않았다. raw의100GiB floor가 PostgreSQL의 공간 소비까지 차단하는 것은 아니다. 영구 DB는 원본 윈도우와 달리 계속 증가한다.

@@ -1,5 +1,7 @@
 # indexer-go
 
+현재 배포 판정과 운영자 입력은 [운영 준비 현황](docs/OPERATIONS_READINESS.md)을 따른다. 배포는 HOLD이며 legacy 초안과 native 실행 경로를 구분한다.
+
 Build EVM indexing backends in Go. Turn blocks, transactions, receipts and logs into queryable application data, then extend the indexer with your own handlers, chain profiles and APIs.
 
 [![CI](https://github.com/0xmhha/indexer-go/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/0xmhha/indexer-go/actions/workflows/ci.yml)

@@ -1,9 +1,14 @@
-# Priority4 validation and release gate
+# Priority4 validation and release evidence
 
 Owned continuation directory: `/private/tmp/indexer-four.receipt.Rh9qzP`.
 Preserved prior implementation/evidence: `/private/tmp/indexer-four.retention.wjtBlm`.
 Base release: E6 #229, squash f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818.
 Branch: `refactor/native-retention-matched-backup`.
+
+**Released #230:** exact head `76b5c06dbec45dcf928f7dbe0d9e46f27181f457`, CI5 run40418831898 all success,
+squash/main `724405594990128471d04fe825b09b0797bd21df`, sole parent E6 f7c0fa2 and identical reviewed
+tree. Primary main/origin-main were synchronized and clean at release. The verified
+postrelease handoff is now reconciled in the [readiness record](../../../OPERATIONS_READINESS.md).
 
 ## Immutable receipt continuation
 
@@ -25,10 +30,9 @@ pipes and challenged child receipts. Existing fsync-on PG tests separately
 validate exact database/publication/permit/WAL and final fresh/generation gates.
 
 Shared Go caches are preserved. The new owned `go-cache` is a filesystem clone
-of the previous owned cache; the new `lint-cache` is isolated. After release,
-the strict release observer checks both reviewed run generations; only proven
-owned caches/temporary native fixtures in these two run directories
-will be removed, preserving all logs, source branches and identity receipts.
+of the previous owned cache; the new `lint-cache` is isolated. After release, the strict observer checked both reviewed run generations. Only
+proven owned caches/temporary native fixtures were removed, preserving all logs,
+source branches, both binary generations and identity receipts.
 
 ## CI fixture capacity correction
 
@@ -44,8 +48,9 @@ are unchanged. No runner images/shared caches are removed to bypass capacity.
 The changed Rust fixture requires a new full offline build/fmt/clippy/all-target
 run and joined native/frozen parity, plus final Go/PG gates before the new head.
 New owned `cargo-target`, `native-fixture-current` and `arc-fixtures-current`
-under the continuation directory are included in postrelease cleanup; old
-native binaries/fixtures/logs remain preserved until that release.
+under the continuation directory were included in postrelease cleanup. Both
+exact binary generations and all logs/identity receipts remain preserved;
+temporary DB fixtures and build caches were removed only after release.
 
 ## Runtime RED then GREEN
 
@@ -101,11 +106,9 @@ protected jars survive; only source-justified expired hash lookups are added to
 logical pruning. Native physical reclaim uses MDBX compact-copy, separately
 from RocksDB compaction.
 
-All required local gates completed. Exact current-head CI5,
-ready/squash, reviewed one-parent tree, clean primary main sync and the strict
-all-four observer are subsequent required release evidence. Postrelease ledger,
-Korean completion and cleanup receipts may remain as an identified local
-managed-worktree handoff while primary main stays clean. Preserve all source
+All required local gates and exact-head CI5/ready/squash/one-parent reviewed
+tree/clean primary main synchronization completed. The strict all-four observer
+checks the real ledger, GitHub, ancestry, reflog, tree and named tests. The verified postrelease status is committed with the operations-readiness documentation. Preserve all source
 branches and evidence. Actual node/peer/provider/operator DB, disks, operational
 GC/restore, performance/SLO, tags/deploy/artifact publication remain held.
 
@@ -133,8 +136,8 @@ omitted the build tag and had zero matches; only the corrected tagged run is
 counted. These failed/empty invocations are not passed release gates. The full
 PG command reran alone and passed as `postgres-final.log`: storage479.591s,
 app802.982s, API5.702s, StableNet9.702s, with successful owned container/volume
-cleanup. No external test DSN was configured. Commit/PR local gates are satisfied;
-exact-head CI5/squash/clean-main release remains pending.
+cleanup. No external test DSN was configured. These completed local gates preceded the initial reviewed head; final exact-head
+CI5/squash/clean-main results are recorded above.
 
 
 ## Final fixture/CI correction gates
@@ -165,5 +168,19 @@ Final isolated PG correction gate passed: storage248.909s, app525.790s,
 API4.759s and StableNet6.494s with owned container/volume cleanup. All final local
 gates are GREEN before the correction commit. The original complete single
 CPU1/race/count200 invocation remains applicable to unchanged selected Go
-concurrency code. The new current PR head still requires all five CI jobs before
-ready/squash/clean-main synchronization; no failed or superseded CI is counted.
+concurrency code. Final head76b5c06 subsequently passed all five CI jobs in run40418831898 before
+ready/squash/clean-main synchronization. No failed or superseded CI is counted.
+
+
+Postrelease actual cleanup: 10 proven owned cache/fixture
+paths removed across both generations; all logs and both exact native binary
+generations remain. The preserved cleanup receipt records each original device/inode. Shared caches/Docker resources and source/comparison
+branches/worktrees are preserved. The final normal non-race root command also
+passed (`test-normal-final.log`). Final-head Linux Arc actually passed Rust43+2,
+frozen7 and the joined native test after the owned-target handoff; complete
+CI logs are preserved as `ci-final.log` and `ci-arc-final.raw.log`.
+
+
+Strict all-four observer **PASS**: `python3 -B verification/verify_release_sequence.py`
+actually rechecked all four PRs/heads/CI5/squash/ancestry/reflog/tree/main states
+and executed each named test without skip. Preserved log SHA256 `5e1cb69539c87365f0f8958b6862c409fdae0fc38c4fe52a953efca6dbe1fbb5`. No engine counters or superseded/partial runs are used.

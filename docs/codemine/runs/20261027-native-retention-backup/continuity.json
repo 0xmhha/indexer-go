@@ -13,5 +13,12 @@
   "accepted_design": "../20261023-e1-execution/02-design.md",
   "accepted_plan": "../20261023-e1-execution/03-plan.md",
   "e3": "../20261024-e3-retention/plan.md",
-  "release": "all local gates passed; exact-head CI5/squash/clean-main release pending"
+  "release": {
+    "pr": 230,
+    "head": "76b5c06dbec45dcf928f7dbe0d9e46f27181f457",
+    "ci_run": 40418831898,
+    "main": "724405594990128471d04fe825b09b0797bd21df",
+    "sync": "../../../../verification/priority4-sync.json",
+    "postrelease_handoff": "Verified handoff reconciled into maintained documentation; deployment HOLD"
+  }
 }

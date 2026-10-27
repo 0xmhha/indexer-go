@@ -1,5 +1,7 @@
 # Documentation
 
+현재 배포 판정과 운영자 입력은 [운영 준비 현황](OPERATIONS_READINESS.md)을 따른다. 배포는 HOLD이며 legacy 초안과 native 실행 경로를 구분한다.
+
 Start with the task you want to complete. The quickstart and contribution guide are in English; most detailed references are in Korean. Examples include their own English READMEs and runnable Go modules.
 
 ## Get started
