@@ -1,0 +1,24 @@
+{
+  "priority": 4,
+  "pr": 230,
+  "url": "https://github.com/0xmhha/indexer-go/pull/230",
+  "head": "76b5c06dbec45dcf928f7dbe0d9e46f27181f457",
+  "ci_run": 40418831898,
+  "ci_url": "https://github.com/0xmhha/indexer-go/actions/runs/40418831898",
+  "ci5": {
+    "lint": "success",
+    "test": "success",
+    "postgres": "success",
+    "examples": "success",
+    "arc": "success"
+  },
+  "squash": "724405594990128471d04fe825b09b0797bd21df",
+  "main": "724405594990128471d04fe825b09b0797bd21df",
+  "origin_main": "724405594990128471d04fe825b09b0797bd21df",
+  "parent": "f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818",
+  "reviewed_tree": "ffb8a42b9d73dab7b441430d73e77de01451a6c6",
+  "one_parent_reviewed_tree_match": true,
+  "primary_status": "",
+  "source_branch_preserved": true,
+  "observed_at": "2026-10-27T00:35:28Z"
+}

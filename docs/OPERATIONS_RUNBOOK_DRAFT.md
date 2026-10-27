@@ -1,5 +1,7 @@
 # Checkpoint·재시작·GC 운영 절차 초안
 
+현재 배포 판정과 운영자 입력은 [운영 준비 현황](OPERATIONS_READINESS.md)을 따른다. 배포는 HOLD이며 legacy 초안과 native 실행 경로를 구분한다.
+
 **상태: 절차 초안. 디스크 포맷·초기화·실제 서비스 실행·삭제·장애 시험·추가 성능 측정은 보류한다.**
 
 [운영 설정](OPERATIONS_DRAFT.md), [Docker 구성](../deployments/testnets/README.md), [용량·backlog 정책](OPERATIONS_CAPACITY_DRAFT.md)을 적용할 때 사용할 절차다. 이 문서는 실행 승인이나 새 운영 도구가 아니다. 체인별 DB pool4개(체인별 App이1개일 때16개), 체인별 공유 RPC5 HTTP/s, source와 writer 각각의 커밋 직전 fresh·응답 후 epoch·transaction fence, 내구성/ACK/최소24h 삭제 조건을 유지한다. 다른 프로젝트·기존 DB·디스크를 정리하거나 별도 full node를 시작하지 않는다.

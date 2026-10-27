@@ -2,6 +2,8 @@
 
 **상태: 정책 제안과 그 일부 구현. 파일시스템·PGDATA·raw 용량의 자동 감시와 중단·재개 잠금, 원인별 자동 재시작 억제를 구현했다(10/20, [구현 범위](#구현된-자동-감시와-중단)). 운영 적용·디스크 포맷·초기화·서비스 실행·추가 성능 측정은 보류한다.**
 
+현재 입력·native COW 여유는 [운영 준비 현황](OPERATIONS_READINESS.md)을 따른다.
+
 2026-10-19의 [운영 설정](OPERATIONS_DRAFT.md)과 [Docker 초안](../deployments/testnets/README.md)을 위한 기준이다. 아래 숫자는 실측 SLO나 디스크 안전 보장이 아니라 최초 운영 검토용 임계값이다. 현재 `config.yaml`·실행 코드·Compose·애플리케이션 YAML을 변경하지 않는다. 체인별 DB pool4개(체인별 App이1개인 정상 실행 예산16개), 공유 RPC5 HTTP/s, source/writer 각각의 커밋 직전 fresh·epoch·내구성·ACK·삭제 fence를 유지한다.
 
 진행 기록·정상 종료·장애 분기와 GC/중단된 삭제의 복구는 [운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)에 정리했다. 새 자동 운영 도구를 제공하는 문서는 아니다.
@@ -14,15 +16,15 @@
 | raw 압력 | `(FileBytes + IndexReserveBytes) / LimitBytes`80% warning·95% critical; 쓸 여유가 없으면 critical | critical을 정상 운영으로 방치하지 않는 대응 기준; 로그 자체는 중단 명령이 아님 |
 | filesystem 압력 | 여유100GiB 위 margin이 volume160GiB의20%/5% 이하면 warning/critical | 이 초안에서는 각각 free132GiB/108GiB 이하에 해당. DB를 보호하기 위해 더 일찍 대응 |
 | 수신 역압력 | `AppendWait`/`AppendBatchWait`는 용량 부족 시 같은 입력을 대기·재시도; 후처리는 계속 | 미처리 입력 폐기·ACK 위조·retention 축소 없이 원인 해소 |
-| DB | PostgreSQL160GiB는 데이터·색인·WAL의 **계획 예산**, 자동 quota/중단 기능 없음 | PGDATA 전체 증가 감시·원인 분리·예산 소진 전 운영 중단 |
+| DB | PostgreSQL160GiB는 데이터·색인·WAL의 **계획 예산**, 자동 quota는 없음; operations guard의 PGDATA budget 초과 중단은 구현 | PGDATA 전체 증가 감시·원인 분리·예산 소진 전 운영 중단 |
 | 삭제 | 현재 `collect: false`; 기본 상태에서 원본 자동 수거 없음 | 공간 부족을 이유로 GC를 켜지 않음. 검증된 GC의 별도 적용 전에는 완료 데이터도 계속 공간 차지 |
-| 오류·재시작 | raw identity/I/O 오류는 세션 task 취소/join; manager는 `StatusError` 체인 자동 재시작 | 디스크/무결성 사고 후 자동 재시작 억제·재개 점검이 필요. 현재 호스트 검사는 컨테이너 최초 기동 전 검사이고 manager 내부 재시작에 다시 실행되지 않음 |
+| 오류·재시작 | raw identity/I/O 오류는 세션 task 취소/join; 분류된 storage/capacity/integrity는 manager 자동 재시작 억제 | 디스크/무결성 사고 후 재개 점검과 실제 운영 검증이 필요. 현재 호스트 검사는 컨테이너 최초 기동 전 검사이고 manager 내부 재시작에 다시 실행되지 않음 |
 
 코드 근거는 [Usage/용량 대기](../pkg/window/budget.go), [append](../pkg/window/store.go), [세션 수명](../pkg/capture/session.go), [압력 로그](../pkg/capture/config.go), [체인 재시작](../internal/multichain/manager.go)다. marker/ledger의 quota는 Open 때 대조하므로 YAML 숫자만 바꿔 온라인 증설하는 방식은 지원하지 않는다.
 
 ## 감시할 값과 수집 범위
 
-아래 주기는 **향후 운영 감시 제안**이며 이번에 poller·스케줄·추가 DB 연결·RPC 조회를 만들거나 실행하지 않는다. 기록은 이 프로젝트 전용의 bounded 파일/별도 모니터링 저장소에 두고 DSN·peer key·원본 payload는 남기지 않는다. 같은 APFS에 장기 로그/백업을 무제한 저장하지 않는다.
+아래 주기는 **일부 구현된 운영 감시 제안**이며 이번에 poller·스케줄·추가 DB 연결·RPC 조회를 만들거나 실행하지 않는다. 기록은 이 프로젝트 전용의 bounded 파일/별도 모니터링 저장소에 두고 DSN·peer key·원본 payload는 남기지 않는다. 같은 APFS에 장기 로그/백업을 무제한 저장하지 않는다.
 
 Compose에는 이 프로젝트의 stdout/stderr 로그 회전(`local`,10m×최대3파일/서비스)을 명시했다. 이 로그·이미지·container writable layer는 Docker Desktop 저장 영역을 사용하므로 외장 APFS의 `F`와 별도 용량이다. `preflight.py`의 호스트 점검이 시작과 재개 전에 Docker VM 디스크의 여유를 한 번 읽는다(아래 절). 이 설정은 WAL·DB rows·향후 모니터 기록의 상한이 아니며 기존 container나 daemon 전역 설정에 적용하지 않았다.
 

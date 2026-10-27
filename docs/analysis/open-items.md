@@ -1,6 +1,6 @@
 # 남은 작업과 우선순위
 
-E1 #214, E2 #215, E3 #216, E4 #217, E5와 native calls #223, execution blobs #224, 선택 state proofs #225, [Arc native selected proofs #226](https://github.com/0xmhha/indexer-go/pull/226)는 main에 반영됐다. #226의 정확한 head CI5와 squash/main 동기화가 확인됐다. 네 단계 릴리스의 **1번: 표준 Engine V1 bounded full-blob 공급**은 [#227](https://github.com/0xmhha/indexer-go/pull/227)로 CI5·squash·깨끗한 main 동기화를 완료했다. 2번 call-range/orphan도 [#228](https://github.com/0xmhha/indexer-go/pull/228)로 exact-head CI5·squash·깨끗한 primary main 동기화를 마쳤다. 2번 call-range/orphan은 #228로 릴리스됐고, 3번 E6도 [#229](https://github.com/0xmhha/indexer-go/pull/229)로 정확한 head CI5·squash·깨끗한 main 동기화를 완료했다. 현재 main은 `f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818`이며 4번 native reclamation/backup은 `refactor/native-retention-matched-backup`에서 구현하며 전체 로컬 검사·exact-head CI5·squash/main 동기화가 릴리스 조건이다. [불변 Seed 계약](../../verification/seed-contract.json)의 순서대로 현재 기능의 CI5·squash·깨끗한 main 동기화가 완료되어야 다음 구현을 시작한다. KZG는 beacon/PeerDAS/독립 합의 검증이 아니다.
+E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #225·Arc proofs #226을 보존한다. 네 순차 기능은 [Engine blob #227](https://github.com/0xmhha/indexer-go/pull/227), [call ranges/orphan #228](https://github.com/0xmhha/indexer-go/pull/228), [E6 WBFT #229](https://github.com/0xmhha/indexer-go/pull/229), [native retention/backup #230](https://github.com/0xmhha/indexer-go/pull/230)으로 모두 exact-head CI5·squash·깨끗한 main 동기화를 마쳤다. 최종 main/origin-main은 `724405594990128471d04fe825b09b0797bd21df`다. 4번 head `76b5c06dbec45dcf928f7dbe0d9e46f27181f457`의 run40418831898 다섯 job은 모두 success이며 한 부모·reviewed tree 일치를 검증했다. [운영 준비 현황](../OPERATIONS_READINESS.md)에 검증된 인계와 미확정 운영 입력을 반영했다. KZG는 beacon/PeerDAS/독립 합의가 아니며 E6 지원은 명시적 trust/fork 범위에 한정된다.
 
 ## 현재 정본과 연속성
 
@@ -42,7 +42,7 @@ E1 #214, E2 #215, E3 #216, E4 #217, E5와 native calls #223, execution blobs #22
 | 완료 #227 | 지원 체인의 bounded Engine blob transport | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
 | 완료 #228 | Call 조회 확장 | 주소별 범위·coverage 검색, orphan trace 보관·조회, richer GraphQL/JSON-RPC의 별도 계약과 검증. 기존 block/tx 페이지·RPC provider 경로·legacy 미수집을 혼합하지 않음 |
 | 완료 #229 | **E6 독립 canonical/finality** | 고정 go-stablenet4d17eea018c8 WBFT BLS quorum·명시적 trust/fork·인증 전환·원자적 finality/복구 구현과 로컬 전체 게이트가 통과했다. 정확한 head `f89109a492fc9991fd8ec0f636d78a937a22ba97`의 CI5 run40377905374, squash/main `f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818`, 한 부모·reviewed tree 일치와 깨끗한 primary main 동기화·전용 임시 자료 정리가 확인됐다. RPC5/final fresh를 유지하며 기본 경로를 독립 검증으로 이름 붙이지 않음 |
-| P3 | Native 보존 추가 확장 | 실제 native layout에 맞춘 추가 indices/MDBX 공간 회수, backup/restore와 보존 floor 검증. 최신 상태·headers·code/preimages·필요 indices가 남으므로 전체 native DB가 고정 크기가 된다고 약속하지 않음 |
+| 완료 #230 | Native 보존 추가 확장 | 실제 v2 lookup/MDBX compact-copy, matched native/source/indexer backup 및 restore/floor admission을 구현하고 real native·PG·RED/GREEN·전체 로컬·CI5 run40418831898 뒤 squash/main 동기화를 검증했다. 외부 PG snapshot/WAL 인증·설치와 운영 활성화는 보류하며 native 전체 고정 크기·측정 절감량을 약속하지 않음 |
 
 ## 운영·실제 자료 검증 — 현재 보류
 
@@ -64,4 +64,4 @@ E1 #214, E2 #215, E3 #216, E4 #217, E5와 native calls #223, execution blobs #22
 - 비EVM 모델은 현재 EVM 중심 범위 밖의 별도 결정이다.
 - 선택 proof는 bounded block-end evidence다. 전체 상태/모든 변경 coverage, transaction witness, 임의 `eth_call`, 과거 미수집 backfill이나 새 state projection을 자동 제공하지 않는다. 필요하면 별도 설계한다.
 
-완료된 API 시간 진단·single parse·compact JSON·keepalive·DB/race 검증·문서 정리와 E1~E4를 새 변경/실패 없이 다시 작업 목록에 올리지 않는다. 오래된 선택지·수치는 Git history를 참고하며 수용한 E1 설계와 n/n-1/n-2를 보존한다. 실제 노드/peer, 포맷·운영 GC·추가 성능 측정, 태그·배포·원격 브랜치 삭제는 보류한다. 다른 프로젝트의 프로세스·container·volume·공유 cache는 유지하고 이 작업 전용 cache만 정리한다. 현재 불변 Seed는 네 기능을 순서대로 계속 구현하도록 위임했다. 각 기능의 CI5·squash·깨끗한 main 동기화 후에만 다음 기능을 시작한다.
+완료된 API 시간 진단·single parse·compact JSON·keepalive·DB/race 검증·문서 정리와 E1~E4를 새 변경/실패 없이 다시 작업 목록에 올리지 않는다. 오래된 선택지·수치는 Git history를 참고하며 수용한 E1 설계와 n/n-1/n-2를 보존한다. 실제 노드/peer, 포맷·운영 GC·추가 성능 측정, 태그·배포·원격 브랜치 삭제는 보류한다. 다른 프로젝트의 프로세스·container·volume·공유 cache는 유지하고 이 작업 전용 cache만 정리한다. 네 기능 순차 릴리스는 완료됐다. 다음 우선순위는 운영 입력 확정이며 누락된 외부 입력은 HOLD로 기록한다.

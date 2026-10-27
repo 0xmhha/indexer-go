@@ -1,5 +1,7 @@
 # Four-testnet Docker operations draft
 
+현재 배포 판정과 운영자 입력은 [운영 준비 현황](../../docs/OPERATIONS_READINESS.md)을 따른다. 배포는 HOLD이며 legacy 초안과 native 실행 경로를 구분한다.
+
 **Draft only. Disk formatting, initialization, image builds/pulls, service startup and performance measurements remain on hold.** The checked-in manifests contain unresolved inputs and are not a deployment approval.
 
 This composition runs one indexer process per chain and a dedicated PostgreSQL 16 instance: `indexer-stablenet` for StableNet, `indexer-arc` for Arc, and the generic `indexer` for BSC and for Sepolia. Each chain has its own configuration, halt latch and API port. It includes no execution/consensus node, snapshot downloader, Docker socket mount, global container name, fixed network subnet or shared Docker volume. It does not use or modify the repository's legacy root Compose/Dockerfile.
