@@ -8,8 +8,8 @@ import (
 	"github.com/0xmhha/indexer-go/execwire/configfile"
 )
 
-// Unknown tracks only explicitly selected operator identity fields. Limits,
-// arbitrary syntax, nulls and unknown keys never become unresolved input.
+// Unknown tracks selected operator identity, boundary and capacity fields.
+// Runtime limits, arbitrary syntax, nulls and unknown keys stay invalid.
 type Unknown map[string]bool
 type Placeholder struct {
 	Path, Key string

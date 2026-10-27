@@ -7,7 +7,9 @@
 - [x] Identity/anchor/root/generation/start/floor, paths, capacity/quota, DB4/part2/API1/writer7/RPC5/fresh policy.
 - [x] Native/E6 positive, negative, unresolved, malformed and source-preservation tests; no runtime startup.
 - [x] Developer docs/examples/backlog/continuity and explicit offline limitations.
-- [x] Final contributor gates and secret scans: see validation receipt.
+- [x] App numeric HOLD/missing/quoted values, strict schema, E6, independent known conflicts and initial start/floor boundaries: behavioral RED→GREEN.
+- [x] Final review build/vet/lint/fmt, CLI, documentation, examples, cache lifecycle, full functional and full root/wire/executor race: source hash unchanged.
+- [x] Final staged/history secret scans before commit.
 - Commit/draft PR identity: source branch `refactor/native-execution-preflight`; exact metadata belongs to the handoff receipt and GitHub PR.
 
 Release owner: parent checks actual lint/test/postgres/examples/arc at the exact

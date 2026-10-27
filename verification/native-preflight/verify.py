@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
 binary = str(Path(sys.argv[1]).resolve())
 base = Path('configs/execution/preflight/synthetic-arc')
@@ -24,6 +25,19 @@ for declaration, status, code in [('declaration.json', 'PASS', 0), ('declaration
     assert all(set(item) == {'field', 'status', 'code'} for item in report['findings'])
     again = subprocess.run(args + ['--declaration', str(base / declaration)], capture_output=True, check=False)
     assert again.stdout == result.stdout
+with tempfile.TemporaryDirectory(prefix='indexer-preflight-app-hold-') as fixture:
+    app = Path(fixture) / 'app.yaml'
+    source = (base / 'app.yaml').read_text()
+    assert 'anchor_height: 100' in source and 'start_height: 101' in source
+    app.write_text(source.replace('anchor_height: 100', 'anchor_height: HOLD')
+                   .replace('start_height: 101', 'start_height: HOLD'))
+    hold_args = args.copy()
+    hold_args[2] = str(app)
+    result = subprocess.run(hold_args + ['--declaration', str(base / 'declaration.json')], capture_output=True, check=False)
+    report = json.loads(result.stdout)
+    assert result.returncode == 2 and report['status'] == 'HOLD'
+    assert report['operational_readiness'] == 'not_authorized' and not result.stderr
+    assert 'anchor_height: HOLD' in app.read_text()
 result = subprocess.run([binary, '--unsupported=secret-query-token'], capture_output=True, check=False)
 assert result.returncode == 1 and json.loads(result.stdout)['status'] == 'FAIL'
 assert b'secret-query-token' not in result.stdout + result.stderr

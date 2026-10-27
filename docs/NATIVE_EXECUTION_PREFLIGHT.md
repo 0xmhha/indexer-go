@@ -92,7 +92,12 @@ full reconstruction say `not_performed`. A broken output writer returns 1.
 Only empty/missing operator strings or exact `HOLD` are unresolved. Selected
 JSON identity fields (chain ID/genesis, original anchor height/hash/generation
 and root; StableNet network ID) also support absent values or exact `HOLD`.
-App anchor hash/root/socket support empty or `HOLD`. Neutral values used solely
+App anchor hash/root/socket support empty or `HOLD`. The selected App numeric
+fields `source.execution.anchor_height` and `indexer.start_height` support absent
+values, an empty quoted string, or exact `HOLD` (quoted or unquoted). An explicit
+numeric zero remains known. Their original YAML structure is checked before a
+detached validation copy is normalized; nulls, aliases, duplicate/unknown keys
+and trailing documents still FAIL. Neutral values used solely
 inside detached validation copies are tracked as unknown, never written or
 reported as matching verified identities. Two identical placeholders therefore
 remain HOLD. Known zero/invalid hashes, arbitrary `???`, invalid types, unknown
@@ -102,13 +107,17 @@ zero/invalid budgets FAIL. Known lower bounds are still checked when another
 capacity component is unresolved. StableNet spool quota0 resolves to the actual
 production default4GiB/262144 records, preserving its capacity requirement. A missing explicit input *file* is a CLI/I/O
 failure; a missing authoritative checkpoint *path or authority declaration* is
-HOLD. Production startup loaders continue to refuse unresolved identities.
+HOLD. Production numeric defaults and requirements remain unchanged; literal
+`HOLD` continues to fail the typed runtime App decoder. Preflight's neutral
+copies never update an input file or install an operational anchor/start height.
 
 The declaration supplies original `chain`, `network_id`, `anchor`, `root`,
 `start_height` and `retained_floor`; `start_mode: initial` requires start=original anchor+1 and floor=original anchor.
 `start_mode: resume` allows a declared retained floor at/after the original anchor
-and a start strictly after that floor, cross-checked against App start. This is
-only a configuration declaration; current stored head/floor/ACK/generation are
+and a start strictly after that floor, cross-checked against App start. A known
+App start still constrains initial mode when the declaration start is HOLD, and
+the known start/floor relation remains enforced if heights are HOLD. These are
+configuration declarations; current stored head/floor/ACK/generation are
 not inspected or authorized. StableNet `start_mode: genesis` also fixes the
 original anchor height to zero, even when `anchor_height` is unresolved; a known
 nonzero anchor in another file therefore FAILs. Generation must be 1; it is

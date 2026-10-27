@@ -1,50 +1,220 @@
 {
   "source_branch": "refactor/native-execution-preflight",
   "base_commit": "b21ead0be74ef907954f16da027eaaac7c19edbc",
-  "go_patch_sha256": "27363b000d0babcc4d5a99c745d30aaece5a3894d96fbfd51b1aaf0e4759b300",
+  "go_patch_sha256": "a9fc8a0934e8f2e8a6da76625a5e7294e4dfee73da571bf087fcc216237a5e14",
   "checks": [
     {
-      "scope": "full root functional",
-      "command": "GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod go test -count=1 -timeout 20m ./... > /tmp/native-preflight-retry-test.log 2>&1",
+      "scope": "build",
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
       "exit_code": 0,
-      "log_sha256": "1afebee64e7b5fbb00a690243c1e63608bad03b208260bd3c56f27493619747d"
+      "log": "parent-final-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_artifact": "verification/native-preflight/gates.log"
     },
     {
-      "scope": "full root/wire/executor race",
-      "command": "GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod GOFLAGS=-p=2 make test-race GOTEST='go test -timeout=20m' > /tmp/native-preflight-retry-race-final.log 2>&1",
+      "scope": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
       "exit_code": 0,
-      "log_sha256": "8039c01fe1c01f3f2990726b3e6cc036c7a894fab7236263279d528149a4a5cb"
+      "log": "parent-final-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_artifact": "verification/native-preflight/gates.log"
     },
     {
-      "scope": "owned PostgreSQL16 fsync-on full regression and cleanup",
-      "command": "PGBIN=/Library/PostgreSQL/16/bin GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod GOFLAGS=-p=1 bash verification/native-preflight/postgres-fixture.sh > /tmp/native-preflight-retry-postgres-final.log 2>&1",
+      "scope": "lint",
+      "command": [
+        "make",
+        "lint"
+      ],
       "exit_code": 0,
-      "log_sha256": "01718e80101b59177632ec2cc7b56c17f563bd1dd46803c1973984a8d6f9920f"
+      "log": "parent-final-lint.log",
+      "log_sha256": "afa51c9dbbd37b37edddf1d3217625a46218598a4c8781e42a2608cd4de09e00",
+      "output_artifact": "verification/native-preflight/gates.log"
+    },
+    {
+      "scope": "cli-build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "build/arc-execution-preflight",
+        "./x/arc/cmd/execution-preflight"
+      ],
+      "exit_code": 0,
+      "log": "parent-final-cli-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_artifact": "verification/native-preflight/gates.log"
+    },
+    {
+      "scope": "cli",
+      "command": [
+        "python3",
+        "verification/native-preflight/verify.py",
+        "build/arc-execution-preflight"
+      ],
+      "exit_code": 0,
+      "log": "parent-final-cli.log",
+      "log_sha256": "f98bf1b4769714ae0b1bf273a80c71f263b3bc6a741b1b2cf7616d35ce4bf6b5",
+      "output_artifact": "verification/native-preflight/gates.log"
+    },
+    {
+      "scope": "docs",
+      "command": [
+        "python3",
+        "verification/native-preflight/check-docs.py"
+      ],
+      "exit_code": 0,
+      "log": "parent-final-docs.log",
+      "log_sha256": "2ca4d2490f3bfc523e480d014ac32963c50d36edaee82bc156dc5b8da8685874",
+      "output_artifact": "verification/native-preflight/gates.log"
+    },
+    {
+      "scope": "examples",
+      "command": [
+        "make",
+        "test-examples"
+      ],
+      "exit_code": 0,
+      "log": "parent-final-examples.log",
+      "log_sha256": "f8b3c7da0b0a099065a0b5914021eb00aee06109431cdd2ab1fe972347416499",
+      "output_artifact": "verification/native-preflight/gates.log"
+    },
+    {
+      "scope": "cache",
+      "command": [
+        "make",
+        "test-cache-lifecycle"
+      ],
+      "exit_code": 0,
+      "log": "parent-final-cache.log",
+      "log_sha256": "fe21d61251a28ce1dd25159f9b0eb87a104be1f3b55306fa7a8d97c54b2209d2",
+      "output_artifact": "verification/native-preflight/gates.log"
+    },
+    {
+      "scope": "functional",
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "-timeout",
+        "20m",
+        "./..."
+      ],
+      "exit_code": 0,
+      "log": "parent-final-functional.log",
+      "log_sha256": "45eda8a7841ae82241ce05eb040a800f60778167872f5804cb69d448a9dd6aaf",
+      "output_artifact": "verification/native-preflight/gates.log"
+    },
+    {
+      "scope": "race",
+      "command": [
+        "make",
+        "test-race",
+        "GOTEST=go test -timeout=20m"
+      ],
+      "exit_code": 0,
+      "log": "parent-final-race.log",
+      "log_sha256": "f32ffd744a03cfbda9b810493f3ffd2bcbc500356d16491a98effe6faead6757",
+      "output_artifact": "verification/native-preflight/gates.log"
     }
   ],
-  "static_checks": [
-    "root build/vet/lint",
-    "execwire build/vet/lint/race",
-    "StableNet executor build/vet/lint/race",
-    "astgraph vet/lint",
-    "tracked Go gofmt",
-    "documentation links/anchors",
-    "executable PASS/0 HOLD/2 FAIL/1, redaction, deterministic output and unchanged fixtures",
-    "cache lifecycle invariants",
-    "example modules",
-    "staged/base-history secret scans"
-  ],
-  "postgres_version": "16.3",
-  "retry_conditions": [
-    "initial parallel race: blob deadline and App 10m timeout; complete functional suite passed",
-    "PG15 parallel regression: migration-lock deadlines in two API tests; normal shutdown and owned cleanup completed",
-    "final full race uses package parallelism2 and timeout20m; final full PG16 uses package parallelism1"
-  ],
+  "format_check": {
+    "scope": "gofmt changed Go sources",
+    "exit_code": 0,
+    "files": 27
+  },
+  "behavioral_red": {
+    "checks": [
+      {
+        "command": "go test ./x/arc/preflight -run '^TestAppNumericPlaceholders$' -count=1",
+        "exit_code": 1,
+        "kind": "behavioral_assertion_failure",
+        "log_sha256": "738a4e9c6a758617333831a8eadf1135d970dcf5efe35d0ad3e62dedfc98c5d4",
+        "phase": "before numeric placeholder normalization"
+      },
+      {
+        "command": "go test ./x/arc/preflight -run 'TestAppNumericPlaceholders/known_start' -count=1",
+        "exit_code": 1,
+        "kind": "behavioral_assertion_failure",
+        "log_sha256": "4754208a3cd57033bc24e59633b83abf3a5ca373fca1664126050eb4f239d6a3",
+        "phase": "before known start/floor boundary correction"
+      }
+    ],
+    "review_base_commit": "2b0bf9d4c4e89fa5bc7facef57bcc7404670a5a2"
+  },
+  "prior_implementation": {
+    "commit": "2b0bf9d4c4e89fa5bc7facef57bcc7404670a5a2",
+    "go_patch_sha256": "27363b000d0babcc4d5a99c745d30aaece5a3894d96fbfd51b1aaf0e4759b300",
+    "checks": [
+      {
+        "scope": "full root functional",
+        "command": "GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod go test -count=1 -timeout 20m ./... > /tmp/native-preflight-retry-test.log 2>&1",
+        "exit_code": 0,
+        "log_sha256": "1afebee64e7b5fbb00a690243c1e63608bad03b208260bd3c56f27493619747d"
+      },
+      {
+        "scope": "full root/wire/executor race",
+        "command": "GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod GOFLAGS=-p=2 make test-race GOTEST='go test -timeout=20m' > /tmp/native-preflight-retry-race-final.log 2>&1",
+        "exit_code": 0,
+        "log_sha256": "8039c01fe1c01f3f2990726b3e6cc036c7a894fab7236263279d528149a4a5cb"
+      },
+      {
+        "scope": "owned PostgreSQL16 fsync-on full regression and cleanup",
+        "command": "PGBIN=/Library/PostgreSQL/16/bin GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod GOFLAGS=-p=1 bash verification/native-preflight/postgres-fixture.sh > /tmp/native-preflight-retry-postgres-final.log 2>&1",
+        "exit_code": 0,
+        "log_sha256": "01718e80101b59177632ec2cc7b56c17f563bd1dd46803c1973984a8d6f9920f"
+      }
+    ],
+    "static_checks": [
+      "root build/vet/lint",
+      "execwire build/vet/lint/race",
+      "StableNet executor build/vet/lint/race",
+      "astgraph vet/lint",
+      "tracked Go gofmt",
+      "documentation links/anchors",
+      "executable PASS/0 HOLD/2 FAIL/1, redaction, deterministic output and unchanged fixtures",
+      "cache lifecycle invariants",
+      "example modules",
+      "staged/base-history secret scans"
+    ],
+    "postgres_version": "16.3",
+    "retry_conditions": [
+      "initial parallel race: blob deadline and App 10m timeout; complete functional suite passed",
+      "PG15 parallel regression: migration-lock deadlines in two API tests; normal shutdown and owned cleanup completed",
+      "final full race uses package parallelism2 and timeout20m; final full PG16 uses package parallelism1"
+    ]
+  },
+  "environment": {
+    "GOFLAGS": "-p=2",
+    "GOMAXPROCS": "4",
+    "GOTOOLCHAIN": "go1.26.8"
+  },
   "limits": [
     "explicit offline declarations only",
     "no operational startup/GC/restore authority",
     "no live freshness, full state reconstruction, genesis contents or host/peer verification",
     "no extra performance measurement",
     "parent owns exact-head CI5 and squash/main release"
+  ],
+  "secret_checks": [
+    {
+      "scope": "staged",
+      "exit_code": 0,
+      "findings": 0,
+      "report_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "scope": "history",
+      "exit_code": 0,
+      "findings": 0,
+      "report_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
   ]
 }

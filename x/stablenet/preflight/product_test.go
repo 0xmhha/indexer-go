@@ -1,6 +1,7 @@
 package preflight
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -16,6 +17,24 @@ import (
 	"github.com/0xmhha/indexer-go/x/stablenet/consensus"
 	"gopkg.in/yaml.v3"
 )
+
+func TestAppNumericHOLDWithE6(t *testing.T) {
+	in, app, native, declaration := stableFixture(t)
+	writeJSON(t, in.Native, native)
+	writeJSON(t, in.Declaration, declaration)
+	b, err := yaml.Marshal(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b = bytes.ReplaceAll(b, []byte("anchor_height: 0"), []byte("anchor_height: HOLD"))
+	b = bytes.ReplaceAll(b, []byte("start_height: 1"), []byte("start_height: HOLD"))
+	if err = os.WriteFile(in.App, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if r := nativepreflight.Check(context.Background(), in, Product()); r.Status != "HOLD" {
+		t.Fatalf("E6 policy cannot verify unresolved App numeric inputs: %+v", r)
+	}
+}
 
 func stableFixture(t *testing.T) (nativepreflight.Inputs, *config.Config, nativecfg.Config, nativepreflight.Declaration) {
 	t.Helper()

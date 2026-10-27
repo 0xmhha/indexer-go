@@ -258,7 +258,7 @@ func Check(ctx context.Context, in Inputs, p Product) Report {
 		e := c.Source.Execution
 		if e != nil {
 			u := unknownIdentity()
-			u["height"] = false
+			u["height"] = au["height"]
 			u["hash"] = au["hash"]
 			u["root"] = au["root"]
 			var hash, root execwire.Hash
@@ -276,7 +276,7 @@ func Check(ctx context.Context, in Inputs, p Product) Report {
 		if e == nil {
 			r.Add("app.source.execution", Fail, "native_source_required")
 		} else if nativeOK {
-			r.MatchKnown("app.anchor_height", e.AnchorHeight, n.Anchor.Height, n.Unknown["height"])
+			r.MatchKnown("app.anchor_height", e.AnchorHeight, n.Anchor.Height, n.Unknown["height"] || au["height"])
 			r.MatchKnown("app.anchor_hash", e.AnchorHash, hashText(n.Anchor.Hash), n.Unknown["hash"] || au["hash"])
 			r.MatchKnown("app.anchor_root", e.AnchorRoot, hashText(n.Root), n.Unknown["root"] || au["root"])
 			r.MatchKnown("app.socket", e.Socket, n.Socket, au["socket"])
@@ -359,16 +359,20 @@ func Check(ctx context.Context, in Inputs, p Product) Report {
 			height = m.Ref.Height
 			knownHeight = true
 		}
-		if !knownHeight && appOK && c.Source.Execution != nil {
+		if !knownHeight && appOK && c.Source.Execution != nil && !au["height"] {
 			height = c.Source.Execution.AnchorHeight
 			knownHeight = true
 		}
-		if knownHeight && (height >= math.MaxInt64 || !du["floor"] && d.RetainedFloor < height || !du["start"] && d.StartHeight <= height) || !du["generation"] && d.Anchor.Generation != 1 || !du["floor"] && !du["start"] && d.RetainedFloor >= d.StartHeight {
+		start, knownStart := d.StartHeight, !du["start"]
+		if !knownStart && appOK && !au["start"] {
+			start, knownStart = c.Indexer.StartHeight, true
+		}
+		if knownHeight && (height >= math.MaxInt64 || !du["floor"] && d.RetainedFloor < height || knownStart && start <= height) || !du["generation"] && d.Anchor.Generation != 1 || !du["floor"] && knownStart && d.RetainedFloor >= start {
 			r.Add("declaration.boundaries", Fail, "invalid_start_anchor_floor")
 		}
 		switch d.StartMode {
 		case "initial":
-			if knownHeight && (!du["start"] && d.StartHeight != height+1 || !du["floor"] && d.RetainedFloor != height) {
+			if knownHeight && (knownStart && start != height+1 || !du["floor"] && d.RetainedFloor != height) || knownStart && !du["floor"] && (d.RetainedFloor == math.MaxUint64 || start != d.RetainedFloor+1) {
 				r.Add("declaration.start_mode", Fail, "invalid_initial_boundary")
 			}
 		case "resume":
@@ -471,7 +475,7 @@ func Check(ctx context.Context, in Inputs, p Product) Report {
 			}
 		}
 		if appOK {
-			r.MatchKnown("app.start_height", c.Indexer.StartHeight, d.StartHeight, du["start"])
+			r.MatchKnown("app.start_height", c.Indexer.StartHeight, d.StartHeight, du["start"] || au["start"])
 		}
 	}
 	if checkpointOK {
@@ -525,12 +529,12 @@ func Check(ctx context.Context, in Inputs, p Product) Report {
 	if appOK && c.Source.Execution != nil {
 		e := c.Source.Execution
 		if declOK {
-			r.MatchKnown("app/declaration.height", e.AnchorHeight, d.Anchor.Height, du["height"])
+			r.MatchKnown("app/declaration.height", e.AnchorHeight, d.Anchor.Height, du["height"] || au["height"])
 			r.MatchKnown("app/declaration.hash", e.AnchorHash, hashText(d.Anchor.Hash), au["hash"] || du["hash"])
 			r.MatchKnown("app/declaration.root", e.AnchorRoot, hashText(d.Root), au["root"] || du["root"])
 		}
 		if checkpointOK {
-			r.MatchKnown("app/checkpoint.height", e.AnchorHeight, m.Ref.Height, mu["height"])
+			r.MatchKnown("app/checkpoint.height", e.AnchorHeight, m.Ref.Height, mu["height"] || au["height"])
 			r.MatchKnown("app/checkpoint.hash", e.AnchorHash, hashText(m.Ref.Hash), au["hash"] || mu["hash"])
 			r.MatchKnown("app/checkpoint.root", e.AnchorRoot, hashText(m.Root), au["root"] || mu["root"])
 		}

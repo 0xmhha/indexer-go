@@ -12,12 +12,32 @@ import (
 // YAML is strict against the actual Config schema; aliases/merge keys are refused
 // to keep expansion bounded and prevent duplicate-key ambiguity.
 func DecodeStrict(b []byte, c *Config) error {
-	if len(b) == 0 || len(b) > configfile.MaxBytes {
+	if _, err := ParseStrictYAML(b); err != nil {
+		return err
+	}
+	d := yaml.NewDecoder(bytes.NewReader(b))
+	d.KnownFields(true)
+	if err := d.Decode(c); err != nil {
 		return configfile.ErrInput
 	}
+	return nil
+}
+
+// ParseStrictYAML checks the original App document before selected operator
+// placeholders can be normalized in a detached tree. Typed field validation
+// remains the responsibility of DecodeStrict.
+func ParseStrictYAML(b []byte) (*yaml.Node, error) {
+	if len(b) == 0 || len(b) > configfile.MaxBytes {
+		return nil, configfile.ErrInput
+	}
 	var root yaml.Node
-	if err := yaml.Unmarshal(b, &root); err != nil {
-		return configfile.ErrInput
+	d := yaml.NewDecoder(bytes.NewReader(b))
+	if err := d.Decode(&root); err != nil {
+		return nil, configfile.ErrInput
+	}
+	var tail yaml.Node
+	if d.Decode(&tail) != io.EOF {
+		return nil, configfile.ErrInput
 	}
 	var walk func(*yaml.Node, int) bool
 	walk = func(n *yaml.Node, depth int) bool {
@@ -42,18 +62,9 @@ func DecodeStrict(b []byte, c *Config) error {
 		return true
 	}
 	if !walk(&root, 0) || !validYAMLNulls(&root, reflect.TypeOf(Config{})) {
-		return configfile.ErrInput
+		return nil, configfile.ErrInput
 	}
-	d := yaml.NewDecoder(bytes.NewReader(b))
-	d.KnownFields(true)
-	if err := d.Decode(c); err != nil {
-		return configfile.ErrInput
-	}
-	var tail any
-	if d.Decode(&tail) != io.EOF {
-		return configfile.ErrInput
-	}
-	return nil
+	return &root, nil
 }
 
 func validYAMLNulls(n *yaml.Node, t reflect.Type) bool {

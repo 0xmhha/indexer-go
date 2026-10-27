@@ -56,6 +56,25 @@ No operator cluster or Docker daemon/image/container/volume is used.
 
 ## Offline evidence limits and release owner
 
+The final parent review added a separate behavioral RED before its small parser
+fix: `go test ./x/arc/preflight -run '^TestAppNumericPlaceholders$' -count=1`
+compiled and failed because App numeric `HOLD`/missing values became schema
+errors or known zeroes. A second focused RED,
+`go test ./x/arc/preflight -run 'TestAppNumericPlaceholders/known_start' -count=1`,
+exposed known initial start/floor conflicts hidden by another input's HOLD.
+Both became GREEN. Arc and StableNet/E6 regressions now cover quoted/empty/
+missing numeric inputs, unchanged source files, independent known conflicts,
+strict null/alias/duplicate/unknown/trailing rejection, and the typed runtime
+decoder's continued refusal of numeric HOLD. Only detached validation copies
+use neutral numbers; they never establish a checkpoint or start height.
+
+The parent freezes Go sources before final contributor checks. The portable
+receipt separates the completed implementation checks at `2b0bf9d` (including
+the owned PG16 full regression) from final review checks and their source hash.
+The final PR's exact-head CI5 remains required for release. No new DB/storage/
+writer/RPC execution code, operating service or performance run is introduced
+by this review correction.
+
 The executable check is
 `python3 verification/native-preflight/verify.py build/arc-execution-preflight`;
 links/anchors use `python3 verification/native-preflight/check-docs.py`.
@@ -73,3 +92,5 @@ Owned library/mock and disposable PG functional regressions are test evidence.
 The parent owns exact-head lint/test/postgres/examples/arc CI5, tree review,
 ready+squash merge and clean main synchronization. This implementation handoff
 never polls CI, merges, deletes branches or resumes previous jobs/observers.
+
+Final parent review gates passed with frozen Go patch `a9fc8a0934e8f2e8a6da76625a5e7294e4dfee73da571bf087fcc216237a5e14`: build, vet, lint, gofmt, actual CLI HOLD/exit2 and source preservation, documentation, examples, cache lifecycle, full functional tests and the full root/wire/executor race target. The current receipt records actual commands/exits and separates the earlier PG16 regression at `2b0bf9d`; the final PR still requires all five CI jobs at its final head. No new concurrency test was added, so no new count200 campaign was introduced.

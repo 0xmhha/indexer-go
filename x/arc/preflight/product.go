@@ -53,6 +53,11 @@ func decode(b, ret []byte, r *nativepreflight.Report) (nativepreflight.Native, e
 	// Missing paths are checked on neutral copies so known policy conflicts
 	// still fail. Original observations remain unresolved in the report.
 	validated := c
+	// A missing height must not make the detached validation copy assert a
+	// height-zero/genesis relation. Original observations stay unknown below.
+	if u["height"] {
+		validated.Anchor.Height = 1
+	}
 	for _, v := range []struct {
 		field string
 		value *string
@@ -63,6 +68,9 @@ func decode(b, ret []byte, r *nativepreflight.Report) (nativepreflight.Native, e
 		}
 	}
 	validatedRetention := t
+	if ut["height"] {
+		validatedRetention.Anchor.Height = 1
+	}
 	for _, v := range []struct {
 		field string
 		value *string
