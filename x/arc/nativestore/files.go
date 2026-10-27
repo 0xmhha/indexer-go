@@ -149,6 +149,9 @@ func (r contextReader) Read(p []byte) (int, error) {
 	return r.r.Read(p)
 }
 func copyTree(ctx context.Context, source, dest string) error {
+	return copyTreeWithOwner(ctx, source, dest, false)
+}
+func copyTreeWithOwner(ctx context.Context, source, dest string, preserveOwner bool) error {
 	return filepath.WalkDir(source, func(path string, d os.DirEntry, e error) error {
 		if e != nil {
 			return e
@@ -170,7 +173,7 @@ func copyTree(ctx context.Context, source, dest string) error {
 			}
 			return os.Mkdir(target, 0700)
 		}
-		if rel == ownerName {
+		if rel == ownerName && !preserveOwner {
 			return nil
 		}
 		if e = regular(path); e != nil {

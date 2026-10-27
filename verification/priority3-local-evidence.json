@@ -36,5 +36,14 @@
     "staged/history secret scans"
   ],
   "evidence_dir": "/private/tmp/indexer-four.e6.z7M46d",
-  "release": "pending exact-head CI5, squash and clean primary main sync; local tests alone are not release"
+  "release": {
+    "pr": 229,
+    "head": "f89109a492fc9991fd8ec0f636d78a937a22ba97",
+    "ci_run": 40377905374,
+    "main": "f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818",
+    "clean_primary_main": true,
+    "source_branch_preserved": true,
+    "owned_cleanup_complete": true,
+    "sync_evidence": "verification/priority3-sync.json"
+  }
 }

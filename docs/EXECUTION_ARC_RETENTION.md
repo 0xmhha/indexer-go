@@ -83,19 +83,20 @@ The producer first writes and independently reconstructs a complete native cutof
 | RocksDB account/storage history indices | Entries strictly below `Through`; suffix upper keys and final sentinels stay valid |
 | Native account/storage history checkpoints | `Through - 1`, with `Before(Through)` |
 | Adapter checkpoint/seed/replay state floor | `Through` |
-| Current hashed state, code, headers, number mappings and other logical indices | Retained |
+| RocksDB `TransactionHashNumbers` | Only transaction ranges in the same complete expired transaction jars; delete before the payloads |
+| Current hashed/plain state, code/preimages, headers, canonical number mappings, `TransactionBlocks`, `BlockBodyIndices` and trie indices | Retained |
 
 Never delete the first/pre-anchor, boundary or highest jar. Retain the first transaction jar even when genesis is empty: Reth derives global history availability from it. History jars containing cutoff are also retained. Native format granularity can retain significantly more data than the requested window.
 
 The one-block history guard is deliberate. In the pinned Reth build, basic state at height H uses changesets from H+1, but trie overlay/root calculations require H to be **above** the native prune checkpoint. Setting that checkpoint to `Through` rejected the protected cutoff root. Stop index/checkpoint pruning at `Through - 1`, keep the cutoff jar, and explicitly reject adapter requests below `Through`. Canonical header diagnostics can still read old headers. Some lower-level native basic reads may expose an extra older block; this is not an advertised replay/root boundary.
 
-Index rows are streamed through pinned native codecs, with at most 2,000 block entries per shard and 64 row mutations per WAL-synced batch. Empty/oversized shards, bad finite bounds, overlapping ranges or missing sentinels abort the candidate. The native RocksDB flush/compaction API then reclaims eligible tombstones; it can physically rewrite other column families without logically deleting their data. This is not a measured space-saving or fixed-size guarantee. Latest state, headers, conservative jars, other indices and MDBX allocation can still grow.
+Index rows are streamed through pinned native codecs, with at most 2,000 block entries per shard and 64 row mutations per WAL-synced batch. Empty/oversized shards, bad finite bounds, overlapping ranges or missing sentinels abort the candidate. The native RocksDB flush/compaction API then reclaims eligible tombstones; it can physically rewrite other column families without logically deleting their data. This is not a measured space-saving or fixed-size guarantee. Latest state, headers, conservative jars and other indices can still grow. MDBX is compact-copied separately as described below; its configured file geometry may remain unchanged even when allocated disk blocks fall.
 
-Postchecks require exact native history checkpoints, no index entries below the boundary, no further eligible jars, the full cutoff seed's digest/coverage, canonical head/ACK/tail and roots at cutoff, its successor, ACK, tail and head. The cutoff seed remains usable after pruning and on the next retention pass. Unknown source/quarantine evidence stays protected and charged by the common spool; unknown native files are copied and preserved.
+Postchecks require exact native history checkpoints, no index entries below the boundary, no further eligible jars, the full cutoff seed's digest/coverage and exact regenerated serialized values, canonical head/ACK/tail and roots at cutoff, its successor, ACK, tail and head. The cutoff seed remains usable after pruning and on the next retention pass. Unknown source/quarantine evidence stays protected and charged by the common spool; unknown native files are copied and preserved.
 
 ## History floor and compatibility
 
-The private native floor metadata is version2 with `HistoryFloor = Through`. Version1 payload-only floors remain readable and verifiable. Upgrade the Arc producer/collector and native binaries together before activating history retention. Older maintenance binaries reject the new metadata field/version; do not use an older reader to bypass the advertised boundary.
+The private native floor metadata is version3 with `HistoryFloor = Through` and transaction-lookup postchecks. Version1 payload-only and version2 history floors remain readable and verifiable. Upgrade the Arc producer/collector and native binaries together before activating history retention. Older maintenance binaries reject the new metadata field/version; do not use an older reader to bypass the advertised boundary.
 
 Checkpoint targets and seed starts must be at/above the maximum native history checkpoint plus one. Replay checks its **parent** against that boundary before reading/executing a block. Missing retained seeds, stale genesis/older seeds, insufficient raw history or an older restored source/DB never becomes latest/zero state or an automatic fast-forward. Use the retained full cutoff seed or a matching newer canonical full checkpoint. The original indexer anchor and source generation do not change, and earlier indexed data remains governed by the indexer's coverage/history contracts.
 
@@ -110,3 +111,120 @@ After an index batch, jar deletion, checkpoint or compaction failure, keep the p
 After any failure, keep node/source/indexer pending fences and repeat supervised `collect` with the **same current DB permit**. Copy recovery removes only that permit's owned candidate; swap recovery handles either rename boundary; cleanup recovery removes only the recorded original backup inode. A different permit, replaced directory, corrupt/unknown candidate, missing history, stale native head, lost live lease or absent/mismatched release stops recovery. No normal startup performs GC or guessed repair. After DB completion, obtain/reuse the exact release and repeat producer `release`; completed DB collect does not launch deletion again.
 
 The shared DB coordinator still uses four connections per chain/process and the shared RPC5 physical HTTP attempts/s limiter, including retries/failover. Final uncached fresh and post-response generation fences remain immediately before publication/completion. Native checks supplement these boundaries.
+
+## Additional indices and physical MDBX reclaim
+
+The source pins are official Arc `6e764023ee6515fe70573e123ed2db912a7207b4`
+and Reth v2.2.0 `88505c7f`. Reth's
+[`TransactionLookup`](https://github.com/paradigmxyz/reth/blob/88505c7f/crates/prune/prune/src/segments/user/transaction_lookup.rs)
+uses RocksDB in storage v2, and
+[`Bodies`](https://github.com/paradigmxyz/reth/blob/88505c7f/crates/prune/prune/src/segments/user/bodies.rs)
+orders lookup pruning before deleting bodies. The adapter reads each selected
+jar's native transaction range, reads payloads in batches of 64, verifies any
+existing hash/number mapping, then deletes only those hash lookups. It retains
+pre-anchor, first, boundary and highest jars and all their lookups. Every
+surviving lookup must resolve to the exact native transaction hash. Its resume
+checkpoint records the last block and transaction actually pruned, and the floor
+binds that checkpoint so restart never resumes from genesis across deleted jars. It retains
+`TransactionBlocks`: native ceiling seeks rely on its block-boundary keys.
+No current state, bytecode, preimage, header or trie table is cleared.
+
+After all writable native handles close, the sealed COW candidate is opened
+exclusively using the pinned `reth-libmdbx` API. Its public native FFI performs
+`mdbx_env_copy2fd(..., MDBX_CP_COMPACT)` into a new private file, omitting free
+pages. The output is fsynced, the source environment closes, and only the
+candidate's `db/mdbx.dat` is replaced atomically. The DB directory is fsynced;
+native providers reopen and repeat full root/seed/lookup verification before
+the existing inode-bound COW swap can proceed. A crash rebuilds that permit's
+candidate from the preserved operational original. There is no operational
+in-place fallback. The file geometry can retain a sparse minimum size; tests
+check allocated disk blocks and reopen correctness, not a fixed DB-size promise.
+
+## Matched backup and restore admission
+
+`BackupOutput`, `IndexerReceipt` and `IndexerArtifact` in the private native
+configuration opt into a matched backup during supervised collection. All three
+are absolute paths. Use a new manifest path in a dedicated owned0700 directory,
+separate from native/source inputs. `IndexerArtifact` is an **external** PostgreSQL
+snapshot plus its required WAL recovery material, packed into one bounded private
+file. `IndexerReceipt` is an externally authenticated private JSON receipt:
+
+```json
+{
+  "Version": 1,
+  "PermitDigest": "EXACT_RETENTION_PERMIT_DIGEST",
+  "ArtifactDigest": "SHA256_OF_EXTERNAL_DATABASE_ARTIFACT",
+  "PublicationDigest": "EXACT_VISIBLE_EXEC_PUBLICATIONS_DIGEST",
+  "DatabaseIdentity": "DATABASE_NAME/SCHEMA_NAME",
+  "SnapshotIdentity": "EXTERNALLY_AUTHENTICATED_SNAPSHOT_ID",
+  "WALBoundary": "0/12345678"
+}
+```
+
+The receipt's provenance is an external operational trust input, like the E2
+anchor. This tool does not generate, authenticate or replay a SQL dump/WAL.
+An operator must attest that the artifact restores the exact receipt publication
+and contains all WAL required to that boundary. A hash of arbitrary SQL bytes is
+insufficient operational evidence. Autonomous PostgreSQL snapshot/restore and
+WAL archiving remain unimplemented and held.
+
+Pass the same receipt to the DB coordinator using `-backup-receipt`. Under the
+existing live E3 transaction, it compares current database/schema, canonical
+publication digest, permit/full-baseline/generation/root and WAL boundary. The
+inherited supervisor binds the digest of the exact decoded receipt validated in
+that live DB transaction. It never rereads a pathname to select authority. A
+backup request without nonzero validated authority fails closed; subsequent
+child receipt reads must match that same digest, including after native work. The
+supervisor binds the exact receipt digest; a producer cannot silently
+substitute another receipt or omit the backup. The source gate and native
+maintenance lease/library hold remain joined until both snapshots have been
+copied. Source raw payloads are decoded and verified, not merely hashed. The
+archive binds native chain/head/root/floor/checkpoint, exact original source
+manifest/anchor/ACK/tail/generation/digest, native pending intent, and external
+indexer publication identity through the same permit and component checksums.
+Native roots and the indexer's exact visible block/root are independently read
+through the native library before publication.
+
+The manifest names a sibling `.components` directory containing native, source
+and indexer copies. Every listed durable data file is owned/private, bounded, checksummed and
+fsynced. The sole checksum exclusion is native `db/mdbx.lck`: the pinned MDBX API
+recreates this coordination file and writes it even during read-only opens. It
+still must be an owned private regular unlinked file of at most2MiB, matching
+the pinned32000-reader bound. Data, source manifests, checkpoints, receipts and
+pending intents have no such exclusion. Native exclusive opens and the E3
+directory-inode/lease gates remain mandatory. A fully written temporary manifest is linked atomically without
+replacement. No manifest is published for an incomplete copy. The intent records
+permit, external receipt and component-directory inode. Same-permit recovery may
+rebuild only that owned partial directory; foreign/replaced/corrupt or already
+published evidence is preserved and rejected. A previously published exact
+archive is idempotently verified. A supplied copy may have new filesystem inodes,
+but must retain the manifest/component basenames and pass every checksum and
+live DB/source/native identity check. The original component inode authorizes
+only partial-publication cleanup, never destination restore activation. Pending E3/native/source intents remain until
+the existing exact DB completion/release sequence finishes.
+
+For **admission only**, set `RestoreManifest` to the existing matched manifest,
+keep `IndexerReceipt` and `IndexerArtifact`, and run the DB coordinator with
+`-action restore-admit -backup-receipt /PRIVATE/receipt.json` plus the existing
+permit/producer/config/schema arguments. The external database must already be
+restored and independently authenticated at the exact original database/schema,
+publication and pending E3 permit; automatic database installation is absent.
+The supervisor compares that live DB with the receipt, then the producer verifies
+all supplied component checksums, native exact publication/root/full cutoff seed,
+source completion and floor. A fresh uncached canonical read followed by the
+post-response generation fence remains mandatory. Missing, corrupt, foreign,
+mixed, stale and below-floor consumers fail closed. There is no latest-state
+inference or silent fast-forward. Admission emits no release, activates no copied
+directory, and starts no node. Applying restored components operationally remains
+held; it requires separately validated source/DB installation and the existing
+exact E3 completion/release authorities. Archived inode evidence must never be
+reused as a destination swap authority. Both startup guards reject the embedded
+`.execution-retention-pending` marker in a detached native snapshot; admission
+does not clear it.
+
+An archive's total copied component bytes are bounded at64GiB and the metadata
+manifest at2MiB. Before copying, require its complete logical bytes plus1GiB free
+on the archive filesystem, in addition to native COW/catalog and normal-growth
+headroom. These are admission bounds, not reservations or measured capacity/RTO.
+Interruptions preserve the source/native/indexer pending fences and owned partial
+copy. Cancel/lease loss joins owned helpers before scratch cleanup.

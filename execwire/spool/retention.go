@@ -496,3 +496,74 @@ func ResumeCapacity(ctx context.Context, o Options) error {
 	}
 	return ctx.Err()
 }
+
+// WithRetentionSnapshot joins the source operation gate under the exact durable
+// maintenance intent and completion. The callback must finish copying before it
+// returns. This is snapshot authority only; it cannot release the E3 fences.
+func (s *Store) WithRetentionSnapshot(ctx context.Context, p retention.Permit, copySnapshot func(string) error) error {
+	if err := s.acquire(ctx); err != nil {
+		return err
+	}
+	defer s.release()
+	if p.Validate() != nil || copySnapshot == nil || s.recovery {
+		return retention.ErrUnsafe
+	}
+	r, err := s.retentionRequest(p.Request.Head, p.Request.HeadRoot, p.Request.KeepBlocks)
+	if err != nil || r != p.Request {
+		return ErrConflict
+	}
+	var intent gcIntent
+	if err = readSealedJSON(filepath.Join(s.path, gcIntentName), &intent); err != nil {
+		return err
+	}
+	if validateGCIntent(intent) != nil || intent.Permit != p {
+		return ErrConflict
+	}
+	var done gcCompletion
+	if err = readSealedJSON(filepath.Join(s.path, gcReceiptName), &done); err != nil {
+		return err
+	}
+	if done.Permit != p || done.Receipt.Match(p) != nil {
+		return ErrConflict
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	for _, entry := range s.entries {
+		if _, err = readResult(ctx, filepath.Join(s.path, recordName(entry.Ref)), s.state.Chain, entry); err != nil {
+			return err
+		}
+	}
+	names, err := os.ReadDir(s.path)
+	if err != nil {
+		return err
+	}
+	for _, item := range names {
+		name := item.Name()
+		if !strings.HasPrefix(name, ".quarantine-") {
+			continue
+		}
+		path := filepath.Join(s.path, name)
+		if strings.HasSuffix(name, ".result") {
+			entry, e := readEntry(path, s.state.Chain)
+			if e != nil {
+				return e
+			}
+			if name != ".quarantine-"+recordName(entry.Ref) {
+				return ErrCorrupt
+			}
+			if _, e = readResult(ctx, path, s.state.Chain, entry); e != nil {
+				return e
+			}
+		} else if strings.HasSuffix(name, ".ack") {
+			var a ackReceipt
+			if e := readSealedJSON(path, &a); e != nil {
+				return e
+			}
+			if a.Chain != s.state.Chain || a.Version != 1 || validateReceipt(a) != nil || name != ".quarantine-"+ackName(a.Entry.Ref) {
+				return ErrCorrupt
+			}
+		}
+	}
+	return errors.Join(copySnapshot(s.path), ctx.Err())
+}

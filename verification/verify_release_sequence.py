@@ -31,6 +31,33 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def sync_status(sync):
+    """Accept the exact predecessor receipt spellings; absence is never clean."""
+    names = [name for name in ("status", "primary_status") if name in sync]
+    require(bool(names), "synchronization receipt omits primary status")
+    require(all(sync[name] == "" for name in names), "synchronization receipt is dirty or conflicting")
+    return ""
+
+
+def owned_run_paths(release, validation):
+    """Every cleanup generation must be scoped and present in reviewed docs."""
+    additional = release.get("additional_owned_run_dirs", [])
+    require(isinstance(additional, list), "additional owned runs must be a list")
+    names = [release["owned_run_dir"], *additional]
+    require(all(isinstance(name, str) for name in names), "owned run path must be a string")
+    require(len(set(names)) == len(names), "duplicate owned run paths")
+    paths = []
+    for name in names:
+        path = pathlib.Path(name)
+        require(path.is_absolute() and path.parent == pathlib.Path("/private/tmp")
+                and path.name.startswith("indexer-four.") and path.name != "indexer-four."
+                and str(path) == name,
+                "cache cleanup ownership is not scoped")
+        require(name in validation, "owned run path differs from reviewed validation evidence")
+        paths.append(path)
+    return paths
+
+
 def observe():
     path = ROOT / "verification/releases.json"
     require(path.is_file(), "release ledger is missing; no release completion established")
@@ -84,7 +111,7 @@ def observe():
             run("git", "merge-base", "--is-ancestor", previous["mergeCommit"]["oid"], first + "^")
         evidence = ROOT / release["sync_evidence"]
         sync = json.loads(evidence.read_text())
-        require(sync["main"] == sha and sync["origin_main"] == sha and sync["status"] == "",
+        require(sync["main"] == sha and sync["origin_main"] == sha and sync_status(sync) == "",
                 "main synchronization evidence is dirty or mismatched")
         require(pr["mergedAt"] <= sync["observed_at"], "sync evidence predates merge")
         # The ledger is not authority for a historical main update: cross-check
@@ -98,14 +125,11 @@ def observe():
                     "next implementation committed before clean main sync")
         pr["sync_observed_at"] = sync["observed_at"]
         previous = pr
-        run_dir = pathlib.Path(release["owned_run_dir"])
-        require(run_dir.is_absolute() and run_dir.parent == pathlib.Path("/private/tmp")
-                and run_dir.name.startswith("indexer-four."), "cache cleanup ownership is not scoped")
         validation = run("git", "show", release["head_sha"] + ":" + release["validation_path"])
-        require(str(run_dir) in validation, "owned run path differs from reviewed validation evidence")
-        for name in ("go-cache", "lint-cache"):
-            cache = run_dir / name
-            require(not cache.exists() and not cache.is_symlink(), "execution-owned cache remains: " + str(cache))
+        for run_dir in owned_run_paths(release, validation):
+            for name in ("go-cache", "lint-cache"):
+                cache = run_dir / name
+                require(not cache.exists() and not cache.is_symlink(), "execution-owned cache remains: " + str(cache))
         # Demand an actual named pass. Zero matching tests or a skipped feature
         # is a failure, even when `go test` exits successfully.
         output = run("go", "test", "-json", "-count=1", "./...", "-run", "^" + TESTS[priority - 1] + "$")

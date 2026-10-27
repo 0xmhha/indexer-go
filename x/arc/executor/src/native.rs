@@ -208,6 +208,13 @@ pub fn export_checkpoint(
 }
 
 pub fn check_start(datadir: &Path) -> Result<()> {
+    match std::fs::symlink_metadata(datadir.join(".execution-retention-pending")) {
+        Ok(_) => eyre::bail!(
+            "matched native snapshot remains fenced; exact E3 restore activation required"
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
     let name = datadir
         .file_name()
         .ok_or_else(|| eyre!("native directory name"))?

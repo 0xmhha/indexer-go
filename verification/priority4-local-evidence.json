@@ -1,0 +1,177 @@
+{
+  "base": "f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818",
+  "branch": "refactor/native-retention-matched-backup",
+  "continuation_run": "/private/tmp/indexer-four.receipt.Rh9qzP",
+  "preserved_run": "/private/tmp/indexer-four.retention.wjtBlm",
+  "pending_patch_sha256": "a9535d5cb9f4dac6ac42b10b5ed104ab416064f60f11e7cfe03ad16f4fc2437b",
+  "untracked_handoff": [
+    {
+      "path": "docs/codemine/runs/20261027-native-retention-backup/validation.md",
+      "sha256": "5ba188dbd0814204ef7967f0aa3677c8acea64c7472c4d26efdc35047419f408"
+    },
+    {
+      "path": "x/arc/nativeops/backup_native_test.go",
+      "sha256": "b865b953939ef5d3207c4b49b50b4f1b3eacf55f140ba63e2c007b791b134621"
+    }
+  ],
+  "frozen_fixture_parity": {
+    "arc-call-from-direct.json": "195168f45feaf6729bfd033634c4f4f7277ece2c238c00f13b936eba59248f90",
+    "arc-native-checkpoint.ndjson": "27fbcadb5c9f128c4a3b83d4c66e3f68f765a27b58eb7b3a05c3bff6b2081689",
+    "arc-create-gone.json": "ca6a5b2338c17d48d9beb31642381ec2967c13ca4b602d3d57773cf3f21ca4e2",
+    "arc-call-from-oog.json": "3e5b24ade4cbc0e31c7b922879f5a412562fd174e346e26beff572468e4b87b4",
+    "arc-calls.json": "71103c402fe623c11c186a17582aa26fb87c9b1d4cc4dc19c314392dd5193764",
+    "arc-state-proofs.json": "2438bfa534e8847ebf20e797dbe7ab492e02fbf88011bf5033922ee14d0f5ebb",
+    "arc-storage.json": "c1015d75f3fa2fe8eeea0abb737a088a1d64485c02a55b825ad4ac3c2201913a"
+  },
+  "receipt_correction": {
+    "red": "/private/tmp/indexer-four.receipt.Rh9qzP/receipt-red.log",
+    "child_red": "/private/tmp/indexer-four.receipt.Rh9qzP/child-receipt-red.log",
+    "test": "TestRetentionValidatedReceiptMutation",
+    "later_read_test": "TestIndexerReceiptRemainsBoundAfterSupervision"
+  },
+  "status": "all final local gates passed after fixture/CI correction; new exact-head CI5 and release pending",
+  "limits": [
+    "external DB snapshot authentication and WAL restoration remain operator inputs",
+    "no node, operator DB, peer, disk provisioning, operational GC or restore activation",
+    "no measured savings, fixed total DB size, performance/RPO/RTO claim"
+  ],
+  "completed_continuation_gates": [
+    "root build/vet/lint",
+    "wire/StableNet/astgraph build/vet/lint",
+    "examples/cache lifecycle",
+    "40 offline operations tests and no-service preflight",
+    "observer receipt tests",
+    "named priority4 feature test executed without skip",
+    "single GOMAXPROCS=1/race/count200 receipt mutation and native snapshot invocation",
+    "receipt/nativeops/nativestore packages race",
+    "whole-history secret scan, exact reviewed fingerprints only",
+    "tagged real native-library matched backup/restore: PASS507.00s",
+    "complete final root+execwire+StableNet make test-race: GOFLAGS=-p=2,-timeout=20m",
+    "complete isolated fsync-on make test-postgres: storage479.591/app802.982/API5.702/StableNet9.702 seconds; owned script cleanup succeeded"
+  ],
+  "failed_attempts": {
+    "test-race.log": "existing blob request deadline and root app default10m timeout under concurrent broad gates; complete rerun uses GOFLAGS=-p=2,-timeout=20m",
+    "receipt-all-green.log": "existing native helper5s timeout under concurrent broad gates; all three affected packages subsequently passed",
+    "lint.log": "golangci parallel-run lock; nested then root lint both subsequently passed",
+    "real-native-backup.log": "missing required arc_native build tag gave no matching tests; corrected tagged invocation actually passed",
+    "postgres-full.log": "complete invocation failed: app20m timeout while broad gates ran concurrently; storage/API/StableNet passed, but this is not a passed full gate. Full PG will rerun without other broad suites."
+  },
+  "native_source_pins": [
+    "git+https://github.com/circlefin/arc-node?rev=6e764023ee6515fe70573e123ed2db912a7207b4#6e764023ee6515fe70573e123ed2db912a7207b4",
+    "git+https://github.com/paradigmxyz/reth?tag=v2.2.0#88505c7fcbfdebfd3b56d88c86b62e950043c6c4"
+  ],
+  "audited_reth_source_sha256": {
+    "crates/prune/prune/src/segments/user/transaction_lookup.rs": "31cd6d7a3f7351ef3f19c4f453049480dcf8eb8ecbe84e51dcf609bb71eb68fb",
+    "crates/prune/prune/src/segments/user/bodies.rs": "067e598470e2bbe582994865f3c2037c41516575bc2440542e1b965c21d0efc4",
+    "crates/storage/libmdbx-rs/src/environment.rs": "b6e51bf0ab385bd3d2bc20d93f42c04ed6e3feaf2a72baf16603ba772d6e61fa",
+    "crates/storage/libmdbx-rs/mdbx-sys/libmdbx/mdbx.h": "5541305bccfd6bd1adb20ded07241912b8278f4fd719093027006ea5f1210bef",
+    "crates/storage/db/src/implementation/mdbx/mod.rs": "b8828d68216597794ccb6b89da27ea7fb558f72c10c7aa500f453a14dd22b7d0"
+  },
+  "final_test_commands": [
+    "GOCACHE=/private/tmp/indexer-four.receipt.Rh9qzP/go-cache GOFLAGS='-p=2 -timeout=20m' make test-race > /private/tmp/indexer-four.receipt.Rh9qzP/test-race-release2.log 2>&1",
+    "GOCACHE=/private/tmp/indexer-four.receipt.Rh9qzP/go-cache make test-postgres > /private/tmp/indexer-four.receipt.Rh9qzP/postgres-release2.log 2>&1",
+    "CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/private/tmp/indexer-four.receipt.Rh9qzP/cargo-target INDEXER_ARC_FIXTURE_DIR=/private/tmp/indexer-four.receipt.Rh9qzP/arc-fixtures-current INDEXER_ARC_NATIVE_FIXTURE_DIR=/private/tmp/indexer-four.receipt.Rh9qzP/native-fixture-current make test-executor-arc > /private/tmp/indexer-four.receipt.Rh9qzP/rust-final2.log 2>&1",
+    "GOCACHE=/private/tmp/indexer-four.receipt.Rh9qzP/go-cache INDEXER_ARC_NATIVE_FIXTURE_DIR=/private/tmp/indexer-four.receipt.Rh9qzP/native-fixture-current INDEXER_ARC_MAINTENANCE_BINARY=/private/tmp/indexer-four.receipt.Rh9qzP/cargo-target/debug/arc-native-maintenance go test -tags=arc_native -race -v -count=1 -timeout=20m ./x/arc/nativeops -run '^TestArcNativeLibraryMatchedBackupAndRestore$' > /private/tmp/indexer-four.receipt.Rh9qzP/real-native-backup-final2.log 2>&1",
+    "python3 /private/tmp/indexer-four.receipt.Rh9qzP/check-ci-handoff.py"
+  ],
+  "ci_failure": {
+    "pr": 230,
+    "head": "f10fab8031648992c0d74601e78555958a8c8eac",
+    "run": 40412977773,
+    "job": 121888098029,
+    "log": "/private/tmp/indexer-four.receipt.Rh9qzP/ci-arc-failed-job.log",
+    "cause": "4GiB production growth geometry on 134-block owned fixture exhausted conservative COW headroom; native capacity guard correctly preserved source",
+    "rust_result": "43 library + 2 binary passed and frozen7 parity passed before joined Go capacity rejection",
+    "fix": "test fixture only uses pinned native DatabaseArguments::test() durable64MiB/4MiB geometry; production APIs/defaults and capacity guards unchanged",
+    "red": "/private/tmp/indexer-four.receipt.Rh9qzP/fixture-geometry-red.log",
+    "green": "/private/tmp/indexer-four.receipt.Rh9qzP/fixture-geometry-green.log"
+  },
+  "initial_preserved_identity": {
+    "x/arc/executor/Cargo.toml": "552a1e41b00b49e7562d98960319155d47e6b59dbb81332ffc7c477ac798f54b",
+    "x/arc/executor/Cargo.lock": "6ed2f67681040b55e3e9d9186e51ffae8a7719c10310fd91f91b0cac00e11dcb",
+    "x/arc/executor/rust-toolchain.toml": "887f9be066a15585a2c583578e84b0fcb541126d81546276bad3d2ff00d61167",
+    "x/arc/executor/src/native.rs": "10f798f7a1cecef7138896e458294b168d52323c6e9f42cb97ca89d35d424c28",
+    "x/arc/executor/src/maintenance.rs": "016bc3e8612bafe9b9d836841f72d084607f1e664e511f2e9d636c835bb5a4b7",
+    "x/arc/executor/src/checkpoint.rs": "c9fbfdc04b9e34ff18ed5db5748f20d3f257db6b0fbf5cd5d9afbbf0b35a2cfa",
+    "x/arc/executor/src/journal.rs": "f455133e4fdeb7e89d8525f8a406a84ad616ae06ca59583ca7834f0174ce475e",
+    "x/arc/executor/src/lib.rs": "07f853f2112dc08bd3692a247bdc675b3d8a77cb0dd85a3e312f2ea0513fd9d0",
+    "x/arc/executor/src/catalog.rs": "889b5df338268d49562bbe1c21bf895af1edeef31342b4fd596fe9e94534e173",
+    "x/arc/executor/src/service.rs": "cd5689582c63d43b39f4249693ca6edfbfa86029f30b2afa7c052c4f6330e68e",
+    "x/arc/executor/src/calls.rs": "f341ddd3b98dd884ed3ce625fdff1d78da0f01a782f928d0e4aa39e152fc6722",
+    "x/arc/executor/src/history.rs": "e1bf1d42ca6a7721e7039b30679c4d19f3e1f9941f3e0ac1d873d290b03a3b6d",
+    "x/arc/executor/src/proofs.rs": "f9dae8cecf4c148962054d134dc5d72425136cd096dcf8b2f0b8ac7e3fff0034",
+    "x/arc/executor/src/output.rs": "482f2aec673b12836775ac62902ab2ace784e88df775c71378d3699521490e84",
+    "x/arc/executor/src/main.rs": "2c4de484aeec3607f2e6d7fa2ff70536b19b5c38ee615e9674d59982e95af539",
+    "x/arc/executor/src/tests.rs": "d29393a252cac6c44eb1c7f5161f48048fc5a045675a90cdd223d3a9a3609055",
+    "x/arc/executor/src/retention.rs": "ead9f24d0593dc486635ae7f2bdeedeefc823e1648bab490f165b421f4d43951",
+    "x/arc/executor/src/wire.rs": "efd30253747f20ec2e77d93ee7d6c575b4e04c53a83fc49716358e7f286f2c25",
+    "x/arc/executor/src/replay.rs": "91e44a7eb6a6e8f0c7a8c289cbac29370e8b3168cd90a00c2ccaeb11e193b9ef",
+    "/private/tmp/indexer-four.retention.wjtBlm/arc-release-final.log": "377e19b5b5360022796740ddbf861ddc7a9839b296e9b0306a9cd8754fa930f9",
+    "/private/tmp/indexer-four.retention.wjtBlm/real-native-backup-final.log": "08e22167c6f54ed6fdacddabcf05f8f22f4a93937adab66e0a7e49e20f8cb047",
+    "/private/tmp/indexer-four.retention.wjtBlm/postgres-full.log": "220f1a4224f1d649e528788043ddc771b9bd4b034e8a15ab7a3fba3b93d394c3",
+    "/private/tmp/indexer-four.retention.wjtBlm/native-red.log": "27fc42ad8bdb93577b2f5eb0b367cbae036c37b3be2857faedf986b7a7fbc243",
+    "/private/tmp/indexer-four.retention.wjtBlm/lookup-resume-red.log": "639068cc38db6340d531153ddc8551acf63c17b5fb38c561ade635d67d6480db",
+    "/private/tmp/indexer-four.retention.wjtBlm/backup-red.log": "ac4484bd6962fc05be69e8c28f308baef7d353436e2bd3a9c8e46915a0bd2b4f",
+    "/private/tmp/indexer-four.retention.wjtBlm/real-native-backup-red.log": "2e9d4c09396623f0b8a8020b70db893cd8f9e142ea2543fb618dfacaf9a89f2a",
+    "/private/tmp/indexer-four.retention.wjtBlm/concurrency200-final.log": "988c1ff1984dbea4b1e6d825308bb7ff9d47e20aa6fb2311156c7d02303d7e1b",
+    "/private/tmp/indexer-four.retention.wjtBlm/cargo-target/debug/arc-native-maintenance": "d127bb43b9dfe0d6d7a55b8143b0cb19454b947933483b1c332ce4c2a41ad35c",
+    "/private/tmp/indexer-four.retention.wjtBlm/cargo-target/debug/indexer-arc-executor": "35018c0925fda80645106c83fdce9d0b29f239444b35052a22075709e1cde00f"
+  },
+  "fresh_native_identity": {
+    "receipt": "/private/tmp/indexer-four.receipt.Rh9qzP/final-native-identity.json",
+    "receipt_sha256": "688c8f7fbf5a292aba863e946cae195bf97e9148b3e1240fc5539165aa57b57d",
+    "file_count": 1397,
+    "source_and_binaries": {
+      "x/arc/executor/Cargo.toml": "552a1e41b00b49e7562d98960319155d47e6b59dbb81332ffc7c477ac798f54b",
+      "x/arc/executor/Cargo.lock": "6ed2f67681040b55e3e9d9186e51ffae8a7719c10310fd91f91b0cac00e11dcb",
+      "x/arc/executor/rust-toolchain.toml": "887f9be066a15585a2c583578e84b0fcb541126d81546276bad3d2ff00d61167",
+      "x/arc/executor/src/native.rs": "10f798f7a1cecef7138896e458294b168d52323c6e9f42cb97ca89d35d424c28",
+      "x/arc/executor/src/maintenance.rs": "016bc3e8612bafe9b9d836841f72d084607f1e664e511f2e9d636c835bb5a4b7",
+      "x/arc/executor/src/checkpoint.rs": "c9fbfdc04b9e34ff18ed5db5748f20d3f257db6b0fbf5cd5d9afbbf0b35a2cfa",
+      "x/arc/executor/src/journal.rs": "f455133e4fdeb7e89d8525f8a406a84ad616ae06ca59583ca7834f0174ce475e",
+      "x/arc/executor/src/lib.rs": "07f853f2112dc08bd3692a247bdc675b3d8a77cb0dd85a3e312f2ea0513fd9d0",
+      "x/arc/executor/src/catalog.rs": "889b5df338268d49562bbe1c21bf895af1edeef31342b4fd596fe9e94534e173",
+      "x/arc/executor/src/service.rs": "cd5689582c63d43b39f4249693ca6edfbfa86029f30b2afa7c052c4f6330e68e",
+      "x/arc/executor/src/calls.rs": "f341ddd3b98dd884ed3ce625fdff1d78da0f01a782f928d0e4aa39e152fc6722",
+      "x/arc/executor/src/history.rs": "e1bf1d42ca6a7721e7039b30679c4d19f3e1f9941f3e0ac1d873d290b03a3b6d",
+      "x/arc/executor/src/proofs.rs": "f9dae8cecf4c148962054d134dc5d72425136cd096dcf8b2f0b8ac7e3fff0034",
+      "x/arc/executor/src/output.rs": "482f2aec673b12836775ac62902ab2ace784e88df775c71378d3699521490e84",
+      "x/arc/executor/src/main.rs": "2c4de484aeec3607f2e6d7fa2ff70536b19b5c38ee615e9674d59982e95af539",
+      "x/arc/executor/src/tests.rs": "d29393a252cac6c44eb1c7f5161f48048fc5a045675a90cdd223d3a9a3609055",
+      "x/arc/executor/src/retention.rs": "d294271ee716f45f0492ef1c0b099b073efc2c438c9a3b11a8ef102aad2518c7",
+      "x/arc/executor/src/wire.rs": "efd30253747f20ec2e77d93ee7d6c575b4e04c53a83fc49716358e7f286f2c25",
+      "x/arc/executor/src/replay.rs": "91e44a7eb6a6e8f0c7a8c289cbac29370e8b3168cd90a00c2ccaeb11e193b9ef",
+      "/private/tmp/indexer-four.receipt.Rh9qzP/cargo-target/debug/arc-native-maintenance": "0a108495e3e2356270fc61e44e4630296b101f31b64b81a2041680e5abbc85ec",
+      "/private/tmp/indexer-four.receipt.Rh9qzP/cargo-target/debug/indexer-arc-executor": "97a6440445b700598bab5dc00f78c1448c4e1770aa3c7fd1d6d2a2d7abe0812d"
+    },
+    "note": "Complete native fixture file checksums remain in the hashed owned receipt; fixture DBs are temporary and removed only after release."
+  },
+  "fresh_frozen_fixture_parity": {
+    "arc-call-from-direct.json": "195168f45feaf6729bfd033634c4f4f7277ece2c238c00f13b936eba59248f90",
+    "arc-native-checkpoint.ndjson": "27fbcadb5c9f128c4a3b83d4c66e3f68f765a27b58eb7b3a05c3bff6b2081689",
+    "arc-create-gone.json": "ca6a5b2338c17d48d9beb31642381ec2967c13ca4b602d3d57773cf3f21ca4e2",
+    "arc-call-from-oog.json": "3e5b24ade4cbc0e31c7b922879f5a412562fd174e346e26beff572468e4b87b4",
+    "arc-calls.json": "71103c402fe623c11c186a17582aa26fb87c9b1d4cc4dc19c314392dd5193764",
+    "arc-state-proofs.json": "2438bfa534e8847ebf20e797dbe7ab492e02fbf88011bf5033922ee14d0f5ebb",
+    "arc-storage.json": "c1015d75f3fa2fe8eeea0abb737a088a1d64485c02a55b825ad4ac3c2201913a"
+  },
+  "ci_binary_handoff": {
+    "binaries": {
+      "arc-native-maintenance": "0a108495e3e2356270fc61e44e4630296b101f31b64b81a2041680e5abbc85ec",
+      "indexer-arc-executor": "97a6440445b700598bab5dc00f78c1448c4e1770aa3c7fd1d6d2a2d7abe0812d"
+    },
+    "exact_workflow_script_executed": true,
+    "owned_target_removed": true,
+    "outside_target_preserved": true,
+    "both_retained_binaries_execute_help": true
+  },
+  "latest_gates": {
+    "Rust": "full offline build/fmt/clippy/all-target PASS43+2, rust-final2.log",
+    "frozen": "7 byte-identical, frozen-parity-final2.json",
+    "real_native": "PASS239.74s, real-native-backup-final2.log; initial4MiB and postcompact4GiB logical geometry, physical blocks reclaimed",
+    "Go_race": "complete root/execwire/StableNet PASS, test-race-release2.log",
+    "Go_static": "build/vet/lint PASS, lint-release2.log; tagged native vet PASS",
+    "PG": "complete isolated fsync-on PASS storage248.909/app525.790/API4.759/StableNet6.494 seconds; owned container/volume cleanup succeeded",
+    "concurrency200": "unchanged selected Go concurrency source; prior complete single invocation in this runtime remains valid"
+  }
+}

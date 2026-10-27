@@ -15,13 +15,14 @@ import (
 
 func main() {
 	var o executionops.RetentionOptions
-	flag.StringVar(&o.Action, "action", "inspect", "inspect, authorize or collect; never starts the app")
+	flag.StringVar(&o.Action, "action", "inspect", "inspect, authorize, collect or restore-admit; never starts the app")
 	flag.StringVar(&o.Schema, "schema", "", "explicit PostgreSQL schema")
 	flag.StringVar(&o.Request, "request", "", "offline producer request JSON")
 	flag.StringVar(&o.Permit, "permit", "", "DB-issued permit JSON")
 	flag.StringVar(&o.Output, "output", "", "new artifact in a private directory (otherwise stdout)")
 	flag.StringVar(&o.Producer, "producer", "", "absolute compiled arc-native-retention binary for supervised collect")
 	flag.StringVar(&o.ProducerConfig, "producer-config", "", "explicit private Arc native retention config for supervised collect")
+	flag.StringVar(&o.BackupReceipt, "backup-receipt", "", "externally authenticated PostgreSQL backup receipt, validated against the live E3 DB")
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

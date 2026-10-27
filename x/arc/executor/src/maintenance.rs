@@ -21,6 +21,7 @@ enum Operation {
     Hold,
     Prune,
     Verify,
+    MatchBackup,
 }
 #[derive(Parser)]
 #[command(
@@ -112,6 +113,19 @@ fn main() -> Result<()> {
                 ensure!(input.read(&mut extra)? == 0, "extra hold input");
             }
         }
+        Operation::MatchBackup => {
+            ensure!(
+                a.height.is_none() && a.output.is_none() && a.seed.is_none(),
+                "unexpected backup arguments"
+            );
+            let b: retention::BackupApply = read_input(&mut input)?;
+            let mut extra = [0u8; 1];
+            ensure!(input.read(&mut extra)? == 0, "extra backup input");
+            let (f, work) =
+                native::open_readonly_in(&a.datadir, spec.clone(), true, a.scratch_dir.as_deref())?;
+            retention::verify_backup(&f, &spec, &a.datadir, &b, work.path())?;
+            println!("{{\"Status\":\"native_verified\"}}");
+        }
         Operation::Prune | Operation::Verify => {
             ensure!(
                 a.height.is_none() && a.output.is_none() && a.seed.is_none(),
@@ -136,6 +150,15 @@ fn main() -> Result<()> {
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(work.path(), std::fs::Permissions::from_mode(0o700))?;
                 retention::prune(&f, &spec, &a.datadir, &apply, work.path())?;
+                drop(f);
+                retention::compact_mdbx(&a.datadir, &apply)?;
+                let (f, _secondary) = native::open_readonly_in(
+                    &a.datadir,
+                    spec.clone(),
+                    true,
+                    a.scratch_dir.as_deref(),
+                )?;
+                retention::verify(&f, &spec, &a.datadir, &apply, work.path())?;
             } else {
                 let (f, _work) = native::open_readonly_in(
                     &a.datadir,

@@ -1,0 +1,25 @@
+{
+  "priority": 3,
+  "pr": 229,
+  "url": "https://github.com/0xmhha/indexer-go/pull/229",
+  "head": "f89109a492fc9991fd8ec0f636d78a937a22ba97",
+  "ci_run": 40377905374,
+  "ci_url": "https://github.com/0xmhha/indexer-go/actions/runs/40377905374",
+  "ci5": {
+    "arc": "success",
+    "examples": "success",
+    "lint": "success",
+    "postgres": "success",
+    "test": "success"
+  },
+  "squash": "f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818",
+  "main": "f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818",
+  "origin_main": "f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818",
+  "parent": "ba285da31bfe105813e81ebbbb510e3ac2921f97",
+  "reviewed_tree": "33dc1174625932c7cef7280dce222a81358861ad",
+  "one_parent_reviewed_tree_match": true,
+  "primary_status": "",
+  "source_branch_preserved": true,
+  "observed_at": "2026-10-26T20:09:09.352941+00:00",
+  "priority4": "left to parent after this release"
+}

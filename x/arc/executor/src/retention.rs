@@ -90,6 +90,8 @@ struct Floor {
     checkpoint_digest: B256,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     history_floor: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lookup_checkpoint: Option<PruneCheckpoint>,
 }
 const SNAPSHOT: &str = ".arc-retention-checkpoint.ndjson";
 const FLOOR: &str = ".arc-retention-native.json";
@@ -272,6 +274,7 @@ pub fn prune(
     std::fs::File::open(datadir)?.sync_all()?;
     let sf = f.static_file_provider();
     // The complete cutoff seed is durable before any history is removed.
+    let lookup_checkpoint = prune_lookups(f, datadir, &a.request)?;
     crate::history::prune(f, a.request.through)?;
     for (segment, end) in expired(f, datadir, &a.request)? {
         sf.delete_jar(segment, end)?;
@@ -298,14 +301,23 @@ pub fn prune(
             },
         )?;
     }
+    if let Some(checkpoint) = lookup_checkpoint {
+        let previous = p.get_prune_checkpoint(PruneSegment::TransactionLookup)?;
+        if previous.is_none_or(|old| old.block_number <= checkpoint.block_number) {
+            p.save_prune_checkpoint(PruneSegment::TransactionLookup, checkpoint)?;
+        }
+    }
     p.commit()?;
     crate::history::compact(f)?;
     let floor = Floor {
-        version: 2,
+        version: 3,
         permit_digest: a.permit_digest,
         request: a.request.clone(),
         checkpoint_digest: digest,
         history_floor: Some(a.request.through),
+        lookup_checkpoint: f
+            .provider()?
+            .get_prune_checkpoint(PruneSegment::TransactionLookup)?,
     };
     let floorpath = datadir.join(FLOOR);
     if floorpath.exists() {
@@ -331,14 +343,36 @@ pub fn verify(
     checkpoint::private_file(&path)?;
     let floor: Floor = serde_json::from_reader(std::fs::File::open(path)?)?;
     ensure!(
-        ((floor.version == 1 && floor.history_floor.is_none())
-            || (floor.version == 2 && floor.history_floor == Some(a.request.through)))
+        ((floor.version == 1
+            && floor.history_floor.is_none()
+            && floor.lookup_checkpoint.is_none())
+            || (floor.version == 2
+                && floor.history_floor == Some(a.request.through)
+                && floor.lookup_checkpoint.is_none())
+            || (floor.version == 3 && floor.history_floor == Some(a.request.through)))
             && floor.permit_digest == a.permit_digest
             && serde_json::to_vec(&floor.request)? == serde_json::to_vec(&a.request)?,
         "native floor request/permit mismatch"
     );
     if let Some(through) = floor.history_floor {
         crate::history::verify(f, through)?;
+    }
+    if floor.version == 3 {
+        ensure!(
+            f.provider()?
+                .get_prune_checkpoint(PruneSegment::TransactionLookup)?
+                == floor.lookup_checkpoint,
+            "native lookup checkpoint differs from exact floor"
+        );
+        if let Some(cp) = floor.lookup_checkpoint {
+            ensure!(
+                cp.block_number
+                    .is_some_and(|n| n > a.request.anchor.height && n <= a.request.through)
+                    && cp.tx_number.is_some(),
+                "native lookup checkpoint boundary"
+            );
+        }
+        verify_lookups(f)?;
     }
     let snapshot = datadir.join(SNAPSHOT);
     ensure!(
@@ -363,14 +397,19 @@ pub fn verify(
         .header_by_number(m.r#ref.height)?
         .ok_or_else(|| eyre!("cutoff header"))?;
     let state = p.history_by_block_hash(m.r#ref.hash)?;
+    let mut regenerated = DigestWriter(Sha256::new());
     checkpoint::export_catalog(
-        std::io::sink(),
+        &mut regenerated,
         &m.chain.id,
         m.chain.genesis,
         &h,
         &state,
         &keys,
     )?;
+    ensure!(
+        B256::from_slice(&regenerated.0.finalize()) == floor.checkpoint_digest,
+        "cutoff seed values differ from exact retained state"
+    );
     let remaining = expired(f, datadir, &a.request)?;
     ensure!(
         !remaining
@@ -384,6 +423,43 @@ pub fn verify(
     );
     Ok(())
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+pub struct BackupApply {
+    pub apply: Apply,
+    pub visible: Ref,
+    pub root: B256,
+}
+pub fn verify_backup(
+    f: &Factory,
+    spec: &ArcChainSpec,
+    datadir: &Path,
+    b: &BackupApply,
+    workspace: &Path,
+) -> Result<()> {
+    verify(f, spec, datadir, &b.apply, workspace)?;
+    ensure!(
+        b.visible.generation == b.apply.request.ack.generation
+            && b.visible.height >= b.apply.request.through
+            && b.visible.height <= b.apply.request.head.height,
+        "backup consumer generation/floor/head mismatch"
+    );
+    let p = f.provider()?;
+    let header = p
+        .header_by_number(b.visible.height)?
+        .ok_or_else(|| eyre!("backup consumer header missing"))?;
+    ensure!(
+        header.hash_slow() == b.visible.hash && header.state_root == b.root,
+        "backup indexer/native publication mismatch"
+    );
+    let state = p.history_by_block_hash(b.visible.hash)?;
+    ensure!(
+        state.state_root(Default::default())? == b.root,
+        "backup consumer exact retained root unavailable"
+    );
+    Ok(())
+}
+
 pub fn retained_seed(datadir: &Path) -> Option<PathBuf> {
     let p = datadir.join(SNAPSHOT);
     p.exists().then_some(p)
@@ -454,6 +530,142 @@ pub fn candidate(datadir: &Path, a: &Apply) -> Result<()> {
     Ok(())
 }
 
+// Lookups are pruned before their payload jars, exactly as in the pinned
+// Reth v2 TransactionLookup/Bodies dependency. Do not clear a whole table.
+fn prune_lookups(f: &Factory, datadir: &Path, r: &Request) -> Result<Option<PruneCheckpoint>> {
+    use alloy_eips::eip2718::Encodable2718;
+    use reth_ethereum::provider::{RocksDBProviderFactory, TransactionsProvider, db::tables};
+    let rocks = f.rocksdb_provider();
+    let previous = f
+        .provider()?
+        .get_prune_checkpoint(PruneSegment::TransactionLookup)?;
+    ensure!(
+        previous.is_none_or(|cp| cp.block_number.is_none_or(|n| n <= r.through)),
+        "native lookup checkpoint exceeds protected window"
+    );
+    let mut checkpoint = None;
+    for (segment, end) in expired(f, datadir, r)? {
+        if segment != StaticFileSegment::Transactions {
+            continue;
+        }
+        let sf = f.static_file_provider();
+        let jar = sf.get_segment_provider_for_block(segment, end, None)?;
+        if let Some(range) = jar.user_header().tx_range() {
+            checkpoint = Some(PruneCheckpoint {
+                block_number: Some(end),
+                tx_number: Some(range.end()),
+                prune_mode: PruneMode::Before(end + 1),
+            });
+            let p = f.provider()?;
+            let mut start = range.start();
+            while start <= range.end() {
+                let last = start.saturating_add(63).min(range.end());
+                let txs = p.transactions_by_tx_range(start..=last)?;
+                ensure!(
+                    txs.len() as u64 == last - start + 1,
+                    "expired native transaction gap"
+                );
+                let mut batch = rocks.batch();
+                for (offset, tx) in txs.iter().enumerate() {
+                    let hash = tx.trie_hash();
+                    let number = start + offset as u64;
+                    ensure!(
+                        rocks
+                            .get::<tables::TransactionHashNumbers>(hash)?
+                            .is_none_or(|n| n == number),
+                        "foreign transaction lookup"
+                    );
+                    batch.delete::<tables::TransactionHashNumbers>(hash)?;
+                }
+                batch.commit()?;
+                start = last
+                    .checked_add(1)
+                    .ok_or_else(|| eyre!("native transaction overflow"))?;
+            }
+        }
+    }
+    Ok(checkpoint)
+}
+
+struct DigestWriter(Sha256);
+impl std::io::Write for DigestWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+fn verify_lookups(f: &Factory) -> Result<()> {
+    use alloy_eips::eip2718::Encodable2718;
+    use reth_ethereum::provider::{RocksDBProviderFactory, TransactionsProvider, db::tables};
+    let p = f.provider()?;
+    for row in f
+        .rocksdb_provider()
+        .iter::<tables::TransactionHashNumbers>()?
+    {
+        let (hash, number) = row?;
+        let tx = p
+            .transaction_by_id(number)?
+            .ok_or_else(|| eyre!("lookup references missing native transaction"))?;
+        ensure!(
+            tx.trie_hash() == hash,
+            "native transaction lookup identity mismatch"
+        );
+    }
+    Ok(())
+}
+
+/// Physical reclaim is restricted to the same sealed COW candidate as pruning.
+/// The caller must drop every Factory/provider/static/secondary handle first.
+pub fn compact_mdbx(datadir: &Path, a: &Apply) -> Result<()> {
+    candidate(datadir, a)?;
+    checkpoint::private_file(&datadir.join(".execution-retention-copy"))?;
+    compact_mdbx_copy(datadir)
+}
+fn compact_mdbx_copy(datadir: &Path) -> Result<()> {
+    compact_mdbx_phases(datadir, |_| Ok(()))
+}
+fn compact_mdbx_phases(datadir: &Path, phase: impl Fn(&str) -> Result<()>) -> Result<()> {
+    use reth_libmdbx::{Environment, EnvironmentFlags, Mode, ffi};
+    use std::os::fd::AsRawFd;
+    let db = datadir.join("db");
+    let data = db.join("mdbx.dat");
+    let info = std::fs::symlink_metadata(&data)?;
+    ensure!(info.is_file(), "regular MDBX data file required");
+    let mut builder = Environment::builder();
+    builder.set_max_dbs(256);
+    builder.set_flags(EnvironmentFlags {
+        mode: Mode::ReadOnly,
+        exclusive: true,
+        ..Default::default()
+    });
+    // Exclusive open fails if a native owner still holds this candidate.
+    let env = builder.open(&db)?;
+    let output = tempfile::Builder::new()
+        .prefix(".mdbx-compact-")
+        .tempfile_in(&db)?;
+    // SAFETY: the environment pointer stays inside the closure, and output owns
+    // its writable file descriptor for the whole synchronous native copy call.
+    let code = env.with_raw_env_ptr(|ptr| unsafe {
+        ffi::mdbx_env_copy2fd(ptr, output.as_file().as_raw_fd(), ffi::MDBX_CP_COMPACT)
+    });
+    ensure!(code == 0, "native MDBX compact-copy failed: {code}");
+    phase("mdbx_copied")?;
+    output.as_file().sync_all()?;
+    phase("mdbx_durable")?;
+    drop(env);
+    phase("mdbx_closed")?;
+    // Replacement is inside the disposable candidate only. The Go COW journal
+    // still protects the original and discards this candidate on interruption.
+    output.persist(&data)?;
+    phase("mdbx_replaced")?;
+    std::fs::File::open(&db)?.sync_all()?;
+    phase("mdbx_directory_durable")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -469,6 +681,299 @@ mod tests {
     use reth_stages_types::{StageCheckpoint, StageId};
     use reth_storage_api::StageCheckpointWriter;
     use std::{os::unix::fs::PermissionsExt, sync::Arc};
+    #[test]
+    fn native_matched_backup_fixture_export() -> Result<()> {
+        let (dir, f, spec, a) = fixture_mode(true)?;
+        ensure!(
+            std::fs::metadata(dir.path().join("db/mdbx.dat"))?.len() <= 64 * 1024 * 1024,
+            "owned native fixture must use bounded native test geometry"
+        );
+        inspect(&f, &spec, &a.request)?;
+        if let Ok(output) = std::env::var("INDEXER_ARC_NATIVE_FIXTURE_DIR") {
+            let output = Path::new(&output);
+            ensure!(
+                output.is_absolute() && !output.exists(),
+                "new owned native fixture output required"
+            );
+            std::fs::create_dir(output)?;
+            std::fs::set_permissions(output, std::fs::Permissions::from_mode(0o700))?;
+            let p = f.provider()?;
+            let refs = (1..=a.request.head.height)
+                .map(|height| {
+                    Ok(Ref {
+                        generation: 1,
+                        height,
+                        hash: p
+                            .block_hash(height)?
+                            .ok_or_else(|| eyre!("native fixture header"))?,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let anchor_root = p.header_by_number(0)?.unwrap().state_root;
+            drop(p);
+            native::export_checkpoint(&f, &spec, 0, None, &output.join("genesis.ndjson"), output)?;
+            let metadata = serde_json::json!({"Chain":a.request.chain,"Anchor":a.request.anchor,"AnchorRoot":anchor_root,"Head":a.request.head,"HeadRoot":a.request.head_root,"Refs":refs});
+            drop(f);
+            fn copy(source: &Path, dest: &Path) -> Result<()> {
+                std::fs::create_dir(dest)?;
+                std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o700))?;
+                for item in std::fs::read_dir(source)? {
+                    let item = item?;
+                    if item.file_type()?.is_dir() {
+                        copy(&item.path(), &dest.join(item.file_name()))?;
+                    } else {
+                        ensure!(
+                            item.file_type()?.is_file(),
+                            "native fixture links forbidden"
+                        );
+                        std::fs::copy(item.path(), dest.join(item.file_name()))?;
+                        std::fs::set_permissions(
+                            dest.join(item.file_name()),
+                            std::fs::Permissions::from_mode(0o600),
+                        )?;
+                    }
+                }
+                Ok(())
+            }
+            copy(dir.path(), &output.join("native"))?;
+            checkpoint::write_private(&output.join("fixture.json"), |w| {
+                serde_json::to_writer(w, &metadata)?;
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+    #[test]
+    fn detached_native_snapshot_pending_intent_forbids_start() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        native::check_start(dir.path())?;
+        std::fs::write(
+            dir.path().join(".execution-retention-pending"),
+            b"pending matched snapshot",
+        )?;
+        assert!(native::check_start(dir.path()).is_err());
+        Ok(())
+    }
+    #[test]
+    fn native_mdbx_interrupted_copy_phases_reopen_and_retry() -> Result<()> {
+        use reth_ethereum::provider::db::{Database, transaction::DbTx};
+        for interrupted in [
+            "mdbx_copied",
+            "mdbx_durable",
+            "mdbx_closed",
+            "mdbx_replaced",
+            "mdbx_directory_durable",
+        ] {
+            let dir = tempfile::tempdir()?;
+            let db = init_db(dir.path().join("db"), Default::default())?;
+            let tx = db.tx_mut()?;
+            tx.put::<tables::HeaderNumbers>(B256::repeat_byte(7), 132)?;
+            tx.commit()?;
+            drop(db);
+            assert!(
+                compact_mdbx_phases(dir.path(), |at| {
+                    ensure!(at != interrupted, "injected durable-phase interruption");
+                    Ok(())
+                })
+                .is_err()
+            );
+            let db = reth_ethereum::provider::db::open_db_read_only(
+                dir.path().join("db"),
+                Default::default(),
+            )?;
+            assert_eq!(
+                db.tx()?
+                    .get::<tables::HeaderNumbers>(B256::repeat_byte(7))?,
+                Some(132)
+            );
+            drop(db);
+            compact_mdbx_copy(dir.path())?;
+            let db = reth_ethereum::provider::db::open_db_read_only(
+                dir.path().join("db"),
+                Default::default(),
+            )?;
+            assert_eq!(db.tx()?.entries::<tables::HeaderNumbers>()?, 1);
+        }
+        Ok(())
+    }
+    #[test]
+    fn native_sealed_candidate_compact_reopen_and_matched_consumer() -> Result<()> {
+        let (dir, f, spec, mut a) = fixture_mode(true)?;
+        drop(f);
+        let entries = std::fs::read_dir(dir.path())?.collect::<std::io::Result<Vec<_>>>()?;
+        let stage = dir.path().join(".native.execution-retention-new");
+        std::fs::create_dir(&stage)?;
+        std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(0o700))?;
+        for item in entries {
+            std::fs::rename(item.path(), stage.join(item.file_name()))?;
+        }
+        let permit = serde_json::json!({"Version":1,"Coverage":"full","BaselineDigest":B256::repeat_byte(2),"Token":B256::repeat_byte(3),"Request":a.request,"Visible":a.request.ack,"Root":a.request.head_root});
+        a.permit_digest = B256::from_slice(&Sha256::digest(serde_json::to_vec(&permit)?));
+        let intent = serde_json::json!({"Version":1,"Permit":permit,"Phase":"copy","Original":{"Device":1,"Inode":2},"Replacement":{"Device":0,"Inode":0}});
+        let digest = B256::from_slice(&Sha256::digest(serde_json::to_vec(&intent)?));
+        let marker = dir.path().join(".native.execution-retention");
+        checkpoint::write_private(&marker, |w| {
+            serde_json::to_writer(w, &serde_json::json!({"Data":intent,"Digest":digest}))?;
+            Ok(())
+        })?;
+        std::fs::write(
+            stage.join(".execution-retention-copy"),
+            serde_json::to_vec(&serde_json::json!({"Data":{"PermitDigest":a.permit_digest}}))?,
+        )?;
+        let f = native::open_writable(&stage, spec.clone())?;
+        candidate(&stage, &a)?;
+        prune(&f, &spec, &stage, &a, dir.path())?;
+        assert!(
+            compact_mdbx(&stage, &a).is_err(),
+            "open native handles must prevent physical replacement"
+        );
+        drop(f);
+        compact_mdbx(&stage, &a)?;
+        let (f, secondary) = native::open_readonly(&stage, spec.clone(), true)?;
+        rich_state(&f, 3, Some(3), [0, 9])?;
+        rich_state(&f, 134, Some(130), [17, 0])?;
+        let provider = f.provider()?;
+        let state = provider.history_by_block_number(3)?;
+        let root = provider.header_by_number(3)?.unwrap().state_root;
+        crate::proofs::export(
+            &state,
+            root,
+            &crate::proofs::Selection {
+                targets: vec![crate::proofs::Target {
+                    address: alloy_primitives::Address::repeat_byte(0xa1),
+                    code: true,
+                    slots: vec![B256::repeat_byte(1), B256::repeat_byte(2)],
+                }],
+            },
+        )?;
+        drop(state);
+        drop(provider);
+        let mut b = BackupApply {
+            visible: a.request.ack.clone(),
+            root: a.request.head_root,
+            apply: a,
+        };
+        verify_backup(&f, &spec, &stage, &b, dir.path())?;
+        b.root = B256::repeat_byte(99);
+        assert!(verify_backup(&f, &spec, &stage, &b, dir.path()).is_err());
+        b.root = b.apply.request.head_root;
+        b.visible.height = b.apply.request.through - 1;
+        assert!(verify_backup(&f, &spec, &stage, &b, dir.path()).is_err());
+        drop(f);
+        drop(secondary);
+        compact_mdbx(&stage, &b.apply)?;
+        let (f, _secondary) = native::open_readonly(&stage, spec.clone(), true)?;
+        verify(&f, &spec, &stage, &b.apply, dir.path())?;
+        Ok(())
+    }
+    #[test]
+    fn native_cutoff_seed_values_must_equal_retained_state() -> Result<()> {
+        let (dir, f, spec, a) = fixture_mode(true)?;
+        prune(&f, &spec, dir.path(), &a, dir.path())?;
+        let snapshot = dir.path().join(SNAPSHOT);
+        let text = std::fs::read_to_string(&snapshot)?;
+        let mut changed = false;
+        let mut output = String::new();
+        for line in text.lines() {
+            let mut row: serde_json::Value = serde_json::from_str(line)?;
+            if row["Kind"] == "account" && !changed {
+                row["Account"]["Nonce"] = serde_json::json!(999);
+                changed = true;
+            }
+            output.push_str(&serde_json::to_string(&row)?);
+            output.push('\n');
+        }
+        assert!(changed, "fixture must contain nonempty full cutoff state");
+        // Change the payload and its outer checksum together. Key coverage and
+        // canonical header alone must not accept false checkpoint values.
+        std::fs::write(&snapshot, output)?;
+        let floorpath = dir.path().join(FLOOR);
+        let mut floor: Floor = serde_json::from_reader(std::fs::File::open(&floorpath)?)?;
+        floor.checkpoint_digest = digest_file(&snapshot)?;
+        std::fs::write(&floorpath, serde_json::to_vec(&floor)?)?;
+        assert!(
+            verify(&f, &spec, dir.path(), &a, dir.path()).is_err(),
+            "cutoff payload differs from exact native state"
+        );
+        Ok(())
+    }
+    #[test]
+    fn native_expired_transaction_lookup_removed_retained_lookup_preserved() -> Result<()> {
+        use reth_ethereum::provider::{RocksDBProviderFactory, TransactionsProvider};
+        let (dir, f, spec, a) = fixture_mode(true)?;
+        let p = f.provider()?;
+        let old = *p.transaction_by_id(1)?.unwrap().hash(); // block 2, expired jar 2..3
+        let boundary = *p.transaction_by_id(3)?.unwrap().hash(); // block 4, retained
+        let pre_anchor = *p.transaction_by_id(0)?.unwrap().hash(); // first jar
+        let head = *p.transaction_by_id(133)?.unwrap().hash();
+        drop(p);
+        prune(&f, &spec, dir.path(), &a, dir.path())?;
+        let rocks = f.rocksdb_provider();
+        let cp = f
+            .provider()?
+            .get_prune_checkpoint(PruneSegment::TransactionLookup)?
+            .expect("lookup resume checkpoint");
+        assert_eq!(cp.block_number, Some(3));
+        assert_eq!(
+            cp.tx_number,
+            Some(2),
+            "native restart must resume after the exact pruned transaction"
+        );
+        assert_eq!(
+            rocks.get::<tables::TransactionHashNumbers>(old)?,
+            None,
+            "obsolete lookup must be deleted before its body jar"
+        );
+        assert_eq!(
+            rocks.get::<tables::TransactionHashNumbers>(boundary)?,
+            Some(3)
+        );
+        assert_eq!(
+            rocks.get::<tables::TransactionHashNumbers>(pre_anchor)?,
+            Some(0)
+        );
+        assert_eq!(
+            rocks.get::<tables::TransactionHashNumbers>(head)?,
+            Some(133)
+        );
+        verify(&f, &spec, dir.path(), &a, dir.path())?;
+        Ok(())
+    }
+    #[test]
+    fn native_mdbx_compact_copy_reopens_and_reclaims_free_pages() -> Result<()> {
+        use reth_ethereum::provider::db::{Database, transaction::DbTx};
+        let dir = tempfile::tempdir()?;
+        let db = init_db(dir.path().join("db"), Default::default())?;
+        let tx = db.tx_mut()?;
+        for n in 0..100_000u64 {
+            tx.put::<tables::HeaderNumbers>(B256::from(alloy_primitives::U256::from(n)), n)?;
+        }
+        tx.commit()?;
+        let tx = db.tx_mut()?;
+        tx.clear::<tables::HeaderNumbers>()?;
+        tx.put::<tables::HeaderNumbers>(B256::repeat_byte(9), 132)?;
+        tx.commit()?;
+        drop(db);
+        let data = dir.path().join("db/mdbx.dat");
+        use std::os::unix::fs::MetadataExt;
+        let before = std::fs::metadata(&data)?.blocks();
+        compact_mdbx_copy(dir.path())?;
+        assert!(
+            std::fs::metadata(&data)?.blocks() < before,
+            "compact-copy must reclaim MDBX free pages"
+        );
+        let db = reth_ethereum::provider::db::open_db_read_only(
+            dir.path().join("db"),
+            Default::default(),
+        )?;
+        let tx = db.tx()?;
+        assert_eq!(
+            tx.get::<tables::HeaderNumbers>(B256::repeat_byte(9))?,
+            Some(132)
+        );
+        assert_eq!(tx.entries::<tables::HeaderNumbers>()?, 1);
+        Ok(())
+    }
     #[test]
     fn native_candidate_requires_sealed_copy_intent_and_exact_permit() -> Result<()> {
         let root = tempfile::tempdir()?;
@@ -520,14 +1025,22 @@ mod tests {
         fixture_mode(false)
     }
     fn fixture_mode(rich: bool) -> Result<(tempfile::TempDir, Factory, Arc<ArcChainSpec>, Apply)> {
+        use alloy_consensus::{SignableTransaction, TxLegacy};
         use alloy_primitives::{Address, U256, keccak256};
         use reth_ethereum::provider::db::models::{AccountBeforeTx, StorageBeforeTx};
         use reth_primitives_traits::Account;
+        use reth_primitives_traits::SignerRecoverable;
         use reth_storage_api::{StateWriter, TrieWriter};
         use reth_trie::{HashedPostState, HashedStorage};
         let dir = tempfile::tempdir()?;
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700))?;
-        let db = init_db(dir.path().join("db"), Default::default())?;
+        // Keep owned functional fixtures on the pinned library's durable test
+        // geometry. Production defaults grow by 4 GiB and exhaust CI COW
+        // headroom despite this fixture containing only 134 small blocks.
+        let db = init_db(
+            dir.path().join("db"),
+            reth_ethereum::provider::db::mdbx::DatabaseArguments::test(),
+        )?;
         let sf = StaticFileProviderBuilder::read_write(dir.path().join("static_files"))
             .with_blocks_per_file(2)
             .build()?;
@@ -555,7 +1068,7 @@ mod tests {
                 let info = (n != 5).then_some(Account {
                     nonce: n,
                     balance: U256::from(n * 11),
-                    bytecode_hash: None,
+                    bytecode_hash: Some(keccak256([0x60, 0x01, 0x00])),
                 });
                 account_reverts.push(AccountBeforeTx {
                     address: a_addr,
@@ -609,7 +1122,30 @@ mod tests {
             } else {
                 None
             };
+            let tx: reth_ethereum_primitives::TransactionSigned = TxLegacy {
+                chain_id: Some(5042002),
+                nonce: n,
+                gas_limit: 21000,
+                gas_price: 1,
+                ..Default::default()
+            }
+            .into_signed(alloy_primitives::Signature::test_signature())
+            .into();
+            let tx_hash = *tx.hash();
             let p = f.provider_rw()?;
+            p.tx_ref().put::<tables::TransactionBlocks>(n - 1, n)?;
+            p.with_rocksdb_batch(|mut batch| {
+                batch.put::<tables::TransactionHashNumbers>(tx_hash, &(n - 1))?;
+                Ok(((), Some(batch.into_inner())))
+            })?;
+            if rich {
+                p.tx_ref().put::<tables::Bytecodes>(
+                    keccak256([0x60, 0x01, 0x00]),
+                    reth_primitives_traits::Bytecode(revm::bytecode::Bytecode::new_raw(
+                        vec![0x60, 0x01, 0x00].into(),
+                    )),
+                )?;
+            }
             if let Some(updates) = updates {
                 p.write_hashed_state(&post.into_sorted())?;
                 p.write_trie_updates(updates)?;
@@ -633,8 +1169,8 @@ mod tests {
             p.tx_ref().put::<tables::BlockBodyIndices>(
                 n,
                 StoredBlockBodyIndices {
-                    first_tx_num: 0,
-                    tx_count: 0,
+                    first_tx_num: n - 1,
+                    tx_count: 1,
                 },
             )?;
             {
@@ -649,6 +1185,14 @@ mod tests {
             ] {
                 let mut w = sf.get_writer(n, segment)?;
                 w.increment_block(n)?;
+                match segment {
+                    StaticFileSegment::Transactions => w.append_transaction(n - 1, &tx)?,
+                    StaticFileSegment::Receipts => w.append_receipt(n - 1, &Default::default())?,
+                    StaticFileSegment::TransactionSenders => {
+                        w.append_transaction_sender(n - 1, &tx.recover_signer()?)?
+                    }
+                    _ => unreachable!(),
+                }
                 w.commit()?;
             }
             {
@@ -777,6 +1321,12 @@ mod tests {
         assert_eq!(account.map(|a| a.nonce), nonce, "account at{height}");
         if let Some(n) = nonce {
             assert_eq!(account.unwrap().balance, U256::from(n * 11));
+            assert!(
+                state
+                    .bytecode_by_hash(&alloy_primitives::keccak256([0x60, 0x01, 0x00]))?
+                    .is_some(),
+                "retained account bytecode unavailable"
+            );
         }
         for (i, expected) in slots.iter().enumerate() {
             assert_eq!(
@@ -907,6 +1457,7 @@ mod tests {
             request: a.request.clone(),
             checkpoint_digest: digest_file(&snapshot)?,
             history_floor: None,
+            lookup_checkpoint: None,
         };
         for (segment, end) in expired(&f, dir.path(), &a.request)? {
             if matches!(

@@ -1,0 +1,17 @@
+{
+  "n": "native retention / MDBX compact-copy / matched backup and restore admission",
+  "n_minus_1": {
+    "pr": 229,
+    "main": "f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818",
+    "plan": "../20261027-e6-independent-consensus/plan.md"
+  },
+  "n_minus_2": {
+    "pr": 228,
+    "main": "ba285da31bfe105813e81ebbbb510e3ac2921f97",
+    "plan": "../20261026-e5-call-ranges-orphans/plan.md"
+  },
+  "accepted_design": "../20261023-e1-execution/02-design.md",
+  "accepted_plan": "../20261023-e1-execution/03-plan.md",
+  "e3": "../20261024-e3-retention/plan.md",
+  "release": "all local gates passed; exact-head CI5/squash/clean-main release pending"
+}
