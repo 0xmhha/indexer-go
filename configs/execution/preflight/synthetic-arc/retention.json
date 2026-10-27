@@ -1,0 +1,18 @@
+{
+  "NativeExecutable": "/synthetic/bin/maintenance",
+  "NativeDataDir": "/synthetic/native",
+  "SpoolDir": "/synthetic/spool",
+  "Chain": {
+    "ID": "5042002",
+    "Genesis": "0xe20e653af4441e8c6088e172b129d56420139824400477287b46e7101ae2bb1f"
+  },
+  "Anchor": {
+    "Generation": 1,
+    "Height": 100,
+    "Hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "AnchorRoot": "0x2222222222222222222222222222222222222222222222222222222222222222",
+  "SpoolBytes": 4294967296,
+  "SpoolRecords": 262144,
+  "ReserveBytes": 1073741824
+}

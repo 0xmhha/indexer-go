@@ -1,0 +1,18 @@
+rpc:
+  endpoint: https://synthetic.invalid
+  rate_limit: 5
+database:
+  driver: postgres
+  postgres:
+    dsn: postgres://synthetic.invalid/synthetic
+    max_conns: 4
+indexer:
+  state_prefetch: true
+  finality: head
+  start_height: 101
+source:
+  execution:
+    socket: /synthetic/ipc/execution.sock
+    anchor_height: 100
+    anchor_hash: 0x1111111111111111111111111111111111111111111111111111111111111111
+    anchor_root: 0x2222222222222222222222222222222222222222222222222222222222222222

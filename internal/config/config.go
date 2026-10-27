@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xmhha/indexer-go/execwire/configfile"
 	"github.com/0xmhha/indexer-go/internal/constants"
 	"github.com/0xmhha/indexer-go/internal/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/feed"
@@ -1448,16 +1449,11 @@ func (c *Config) LoadFromEnv() error {
 
 // LoadFromFile loads configuration from a YAML file
 func (c *Config) LoadFromFile(filename string) error {
-	data, err := os.ReadFile(filename)
+	data, err := configfile.Read(filename)
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+		return fmt.Errorf("config file: %w", err)
 	}
-
-	if err := yaml.Unmarshal(data, c); err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	return nil
+	return DecodeStrict(data, c)
 }
 
 // MultiChainMode reports whether the indexer runs the chains listed in

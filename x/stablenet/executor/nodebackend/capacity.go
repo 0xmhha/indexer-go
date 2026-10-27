@@ -2,34 +2,20 @@ package nodebackend
 
 import (
 	"context"
-	"fmt"
+	"github.com/0xmhha/indexer-go/execwire/nativecfg"
 	"sync"
 	"time"
 
 	"github.com/0xmhha/indexer-go/x/stablenet/executor/nodestore"
 )
 
-type CapacityConfig struct {
-	NodeBytes       uint64 `json:"node_bytes"`
-	StopFreeBytes   uint64 `json:"stop_free_bytes"`
-	ResumeFreeBytes uint64 `json:"resume_free_bytes"`
-	IntervalSeconds uint64 `json:"interval_seconds"`
-}
+type CapacityConfig = nativecfg.CapacityConfig
 
-func (c *CapacityConfig) validate() error {
-	if c == nil {
-		return nil
-	}
-	if c.NodeBytes == 0 || c.StopFreeBytes == 0 || c.ResumeFreeBytes <= c.StopFreeBytes || c.IntervalSeconds > 3600 {
-		return fmt.Errorf("executor: capacity needs positive node_bytes, stop_free_bytes < resume_free_bytes and interval_seconds <= 3600")
-	}
-	return nil
-}
 func checkNodeCapacity(ctx context.Context, c Config, resume bool) error {
 	if c.Capacity == nil {
 		return nil
 	}
-	if e := c.Capacity.validate(); e != nil {
+	if e := c.Capacity.Validate(); e != nil {
 		return e
 	}
 	free := c.Capacity.StopFreeBytes

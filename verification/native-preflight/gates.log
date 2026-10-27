@@ -1,0 +1,618 @@
+IMPLEMENTATION BASE 2b0bf9d
+full root functional
+GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod go test -count=1 -timeout 20m ./... > /tmp/native-preflight-retry-test.log 2>&1
+ok  	github.com/0xmhha/indexer-go/cmd/cli	0.877s
+ok  	github.com/0xmhha/indexer-go/cmd/execution-blobs	7.932s
+ok  	github.com/0xmhha/indexer-go/cmd/execution-state-proofs	1.437s
+ok  	github.com/0xmhha/indexer-go/cmd/flags	2.034s
+ok  	github.com/0xmhha/indexer-go/cmd/indexer	2.542s
+ok  	github.com/0xmhha/indexer-go/cmd/indexer-inspect	5.239s
+ok  	github.com/0xmhha/indexer-go/e2e	3.842s
+?   	github.com/0xmhha/indexer-go/e2e/anvil	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/abi	3.086s
+ok  	github.com/0xmhha/indexer-go/internal/api/etherscan	3.572s
+?   	github.com/0xmhha/indexer-go/internal/api/executioncalls	[no test files]
+?   	github.com/0xmhha/indexer-go/internal/api/executionstate	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/api/indexing	3.980s
+ok  	github.com/0xmhha/indexer-go/internal/api/middleware	4.229s
+ok  	github.com/0xmhha/indexer-go/internal/api/rest	4.427s
+ok  	github.com/0xmhha/indexer-go/internal/api/websocket	11.477s
+ok  	github.com/0xmhha/indexer-go/internal/client	4.434s
+ok  	github.com/0xmhha/indexer-go/internal/compiler	4.247s
+ok  	github.com/0xmhha/indexer-go/internal/config	4.017s
+?   	github.com/0xmhha/indexer-go/internal/constants	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/eventbus	4.554s
+ok  	github.com/0xmhha/indexer-go/internal/executionops	25.842s
+?   	github.com/0xmhha/indexer-go/internal/features/aa	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/features/address	4.064s
+ok  	github.com/0xmhha/indexer-go/internal/features/agg	4.157s
+?   	github.com/0xmhha/indexer-go/internal/features/agg/api	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/features/balance	4.224s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex	4.116s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex/api	4.571s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex/orderbook	4.465s
+ok  	github.com/0xmhha/indexer-go/internal/features/token	4.522s
+ok  	github.com/0xmhha/indexer-go/internal/feedtelemetry	4.385s
+ok  	github.com/0xmhha/indexer-go/internal/indexingstatus	9.073s
+ok  	github.com/0xmhha/indexer-go/internal/logger	11.924s
+?   	github.com/0xmhha/indexer-go/internal/module	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/multichain	15.235s
+ok  	github.com/0xmhha/indexer-go/internal/nativepreflight	12.788s
+ok  	github.com/0xmhha/indexer-go/internal/notifications	77.339s
+ok  	github.com/0xmhha/indexer-go/internal/opsguard	15.884s
+ok  	github.com/0xmhha/indexer-go/internal/opsinspect	22.165s
+ok  	github.com/0xmhha/indexer-go/internal/progress	15.000s
+?   	github.com/0xmhha/indexer-go/internal/projection	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/rpcbatch	14.364s
+ok  	github.com/0xmhha/indexer-go/internal/rpcproxy	14.980s
+ok  	github.com/0xmhha/indexer-go/internal/source/era	13.228s
+ok  	github.com/0xmhha/indexer-go/internal/source/nodefeed	11.818s
+ok  	github.com/0xmhha/indexer-go/internal/source/replay	10.947s
+?   	github.com/0xmhha/indexer-go/internal/storage/history	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/testutil	11.137s
+ok  	github.com/0xmhha/indexer-go/internal/token	10.291s
+?   	github.com/0xmhha/indexer-go/internal/userop	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/verifier	8.934s
+ok  	github.com/0xmhha/indexer-go/pkg/api	9.654s
+ok  	github.com/0xmhha/indexer-go/pkg/api/graphql	13.111s
+ok  	github.com/0xmhha/indexer-go/pkg/api/jsonrpc	11.408s
+ok  	github.com/0xmhha/indexer-go/pkg/app	616.141s
+?   	github.com/0xmhha/indexer-go/pkg/app/apptest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/capture	98.917s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed	12.623s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/ethpeer	13.652s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmblob	19.928s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmblob/proof	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata	14.678s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmlookup	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate	22.696s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace	15.824s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace/native	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chains	13.382s
+ok  	github.com/0xmhha/indexer-go/pkg/chains/evm	11.197s
+?   	github.com/0xmhha/indexer-go/pkg/core/gethconv	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/core/model	8.463s
+ok  	github.com/0xmhha/indexer-go/pkg/core/port	7.421s
+?   	github.com/0xmhha/indexer-go/pkg/core/port/porttest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/declared	6.135s
+ok  	github.com/0xmhha/indexer-go/pkg/events	8.513s
+ok  	github.com/0xmhha/indexer-go/pkg/execution	6.955s
+?   	github.com/0xmhha/indexer-go/pkg/execution/blobdata	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/execution/checkpoint	2.226s
+?   	github.com/0xmhha/indexer-go/pkg/execution/proofdata	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/feature	2.680s
+ok  	github.com/0xmhha/indexer-go/pkg/feature/featuretest	29.433s
+ok  	github.com/0xmhha/indexer-go/pkg/features/records	1.679s
+?   	github.com/0xmhha/indexer-go/pkg/features/records/api	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/feed	2.702s
+ok  	github.com/0xmhha/indexer-go/pkg/fetch	33.305s
+?   	github.com/0xmhha/indexer-go/pkg/nodefeed	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/rpcpool	5.672s
+ok  	github.com/0xmhha/indexer-go/pkg/source	5.143s
+ok  	github.com/0xmhha/indexer-go/pkg/source/facts	57.962s
+ok  	github.com/0xmhha/indexer-go/pkg/source/rpc	10.639s
+?   	github.com/0xmhha/indexer-go/pkg/startup	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/storage	417.652s
+ok  	github.com/0xmhha/indexer-go/pkg/storage/postgres	5.963s
+ok  	github.com/0xmhha/indexer-go/pkg/stream	74.721s
+?   	github.com/0xmhha/indexer-go/pkg/stream/streamtest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/testchain	0.711s
+?   	github.com/0xmhha/indexer-go/pkg/testchain/venueabi	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/window	85.245s
+ok  	github.com/0xmhha/indexer-go/x/arc	0.745s
+?   	github.com/0xmhha/indexer-go/x/arc/bundle	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-checkpoint	1.397s
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-collector	0.709s
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-node-guard	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-preflight	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-retention	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-submit	0.454s
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/indexer-arc	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/native-retention	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/collector	4.587s
+ok  	github.com/0xmhha/indexer-go/x/arc/feed	39.250s
+ok  	github.com/0xmhha/indexer-go/x/arc/nativeops	54.560s
+ok  	github.com/0xmhha/indexer-go/x/arc/nativestore	60.594s
+ok  	github.com/0xmhha/indexer-go/x/arc/preflight	29.119s
+ok  	github.com/0xmhha/indexer-go/x/stablenet	0.512s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/bundle	4.770s
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-checkpoint	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-preflight	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-retention	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/indexer-stablenet	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/consensus	19.084s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/consensus/api	11.657s
+?   	github.com/0xmhha/indexer-go/x/stablenet/features/feedelegation	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/features/systemcontracts	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/features/wbft	0.607s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/feedelegation	1.855s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/feedelegation/api	1.090s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/preflight	5.598s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/systemcontracts	23.194s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/systemcontracts/api	1.783s
+
+full root/wire/executor race
+GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod GOFLAGS=-p=2 make test-race GOTEST='go test -timeout=20m' > /tmp/native-preflight-retry-race-final.log 2>&1
+go test -timeout=20m -race -count=1 ./...
+ok  	github.com/0xmhha/indexer-go/cmd/cli	1.898s
+ok  	github.com/0xmhha/indexer-go/cmd/execution-blobs	14.067s
+ok  	github.com/0xmhha/indexer-go/cmd/execution-state-proofs	1.427s
+ok  	github.com/0xmhha/indexer-go/cmd/flags	1.700s
+ok  	github.com/0xmhha/indexer-go/cmd/indexer	1.694s
+ok  	github.com/0xmhha/indexer-go/cmd/indexer-inspect	3.093s
+ok  	github.com/0xmhha/indexer-go/e2e	2.455s
+?   	github.com/0xmhha/indexer-go/e2e/anvil	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/abi	1.423s
+ok  	github.com/0xmhha/indexer-go/internal/api/etherscan	1.623s
+?   	github.com/0xmhha/indexer-go/internal/api/executioncalls	[no test files]
+?   	github.com/0xmhha/indexer-go/internal/api/executionstate	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/api/indexing	1.683s
+ok  	github.com/0xmhha/indexer-go/internal/api/middleware	2.047s
+ok  	github.com/0xmhha/indexer-go/internal/api/rest	1.592s
+ok  	github.com/0xmhha/indexer-go/internal/api/websocket	6.364s
+ok  	github.com/0xmhha/indexer-go/internal/client	1.471s
+ok  	github.com/0xmhha/indexer-go/internal/compiler	1.435s
+ok  	github.com/0xmhha/indexer-go/internal/config	1.479s
+?   	github.com/0xmhha/indexer-go/internal/constants	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/eventbus	2.169s
+ok  	github.com/0xmhha/indexer-go/internal/executionops	2.427s
+?   	github.com/0xmhha/indexer-go/internal/features/aa	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/features/address	1.499s
+ok  	github.com/0xmhha/indexer-go/internal/features/agg	1.517s
+?   	github.com/0xmhha/indexer-go/internal/features/agg/api	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/features/balance	1.564s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex	1.635s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex/api	1.643s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex/orderbook	1.560s
+ok  	github.com/0xmhha/indexer-go/internal/features/token	1.509s
+ok  	github.com/0xmhha/indexer-go/internal/feedtelemetry	1.642s
+ok  	github.com/0xmhha/indexer-go/internal/indexingstatus	1.414s
+ok  	github.com/0xmhha/indexer-go/internal/logger	1.563s
+?   	github.com/0xmhha/indexer-go/internal/module	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/multichain	4.622s
+ok  	github.com/0xmhha/indexer-go/internal/nativepreflight	1.734s
+ok  	github.com/0xmhha/indexer-go/internal/notifications	61.075s
+ok  	github.com/0xmhha/indexer-go/internal/opsguard	2.099s
+ok  	github.com/0xmhha/indexer-go/internal/opsinspect	5.750s
+ok  	github.com/0xmhha/indexer-go/internal/progress	1.813s
+?   	github.com/0xmhha/indexer-go/internal/projection	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/rpcbatch	1.399s
+ok  	github.com/0xmhha/indexer-go/internal/rpcproxy	2.088s
+ok  	github.com/0xmhha/indexer-go/internal/source/era	1.465s
+ok  	github.com/0xmhha/indexer-go/internal/source/nodefeed	1.886s
+ok  	github.com/0xmhha/indexer-go/internal/source/replay	1.676s
+?   	github.com/0xmhha/indexer-go/internal/storage/history	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/testutil	1.424s
+ok  	github.com/0xmhha/indexer-go/internal/token	1.416s
+?   	github.com/0xmhha/indexer-go/internal/userop	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/verifier	1.448s
+ok  	github.com/0xmhha/indexer-go/pkg/api	1.970s
+ok  	github.com/0xmhha/indexer-go/pkg/api/graphql	4.870s
+ok  	github.com/0xmhha/indexer-go/pkg/api/jsonrpc	2.236s
+ok  	github.com/0xmhha/indexer-go/pkg/app	419.110s
+?   	github.com/0xmhha/indexer-go/pkg/app/apptest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/capture	18.146s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed	1.391s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/ethpeer	1.735s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmblob	15.021s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmblob/proof	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata	1.902s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmlookup	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate	5.776s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace	3.813s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace/native	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chains	11.886s
+ok  	github.com/0xmhha/indexer-go/pkg/chains/evm	3.185s
+?   	github.com/0xmhha/indexer-go/pkg/core/gethconv	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/core/model	1.921s
+ok  	github.com/0xmhha/indexer-go/pkg/core/port	1.442s
+?   	github.com/0xmhha/indexer-go/pkg/core/port/porttest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/declared	1.431s
+ok  	github.com/0xmhha/indexer-go/pkg/events	4.494s
+ok  	github.com/0xmhha/indexer-go/pkg/execution	16.403s
+?   	github.com/0xmhha/indexer-go/pkg/execution/blobdata	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/execution/checkpoint	1.442s
+?   	github.com/0xmhha/indexer-go/pkg/execution/proofdata	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/feature	1.515s
+ok  	github.com/0xmhha/indexer-go/pkg/feature/featuretest	6.720s
+ok  	github.com/0xmhha/indexer-go/pkg/features/records	1.532s
+?   	github.com/0xmhha/indexer-go/pkg/features/records/api	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/feed	1.442s
+ok  	github.com/0xmhha/indexer-go/pkg/fetch	7.873s
+?   	github.com/0xmhha/indexer-go/pkg/nodefeed	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/rpcpool	2.635s
+ok  	github.com/0xmhha/indexer-go/pkg/source	1.457s
+ok  	github.com/0xmhha/indexer-go/pkg/source/facts	7.971s
+ok  	github.com/0xmhha/indexer-go/pkg/source/rpc	4.410s
+?   	github.com/0xmhha/indexer-go/pkg/startup	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/storage	155.293s
+ok  	github.com/0xmhha/indexer-go/pkg/storage/postgres	1.763s
+ok  	github.com/0xmhha/indexer-go/pkg/stream	75.724s
+?   	github.com/0xmhha/indexer-go/pkg/stream/streamtest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/testchain	1.803s
+?   	github.com/0xmhha/indexer-go/pkg/testchain/venueabi	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/window	19.609s
+ok  	github.com/0xmhha/indexer-go/x/arc	1.511s
+?   	github.com/0xmhha/indexer-go/x/arc/bundle	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-checkpoint	1.747s
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-collector	1.536s
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-node-guard	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-preflight	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-retention	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-submit	1.430s
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/indexer-arc	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/native-retention	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/collector	4.443s
+ok  	github.com/0xmhha/indexer-go/x/arc/feed	11.873s
+ok  	github.com/0xmhha/indexer-go/x/arc/nativeops	11.654s
+ok  	github.com/0xmhha/indexer-go/x/arc/nativestore	6.849s
+ok  	github.com/0xmhha/indexer-go/x/arc/preflight	3.226s
+ok  	github.com/0xmhha/indexer-go/x/stablenet	1.516s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/bundle	2.484s
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-checkpoint	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-preflight	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-retention	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/indexer-stablenet	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/consensus	3.981s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/consensus/api	3.681s
+?   	github.com/0xmhha/indexer-go/x/stablenet/features/feedelegation	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/features/systemcontracts	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/features/wbft	1.581s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/feedelegation	1.805s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/feedelegation/api	1.951s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/preflight	2.210s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/systemcontracts	5.016s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/systemcontracts/api	2.004s
+cd execwire && go test -timeout=20m -race -count=1 ./...
+ok  	github.com/0xmhha/indexer-go/execwire	2.629s
+ok  	github.com/0xmhha/indexer-go/execwire/checkpoint	1.861s
+ok  	github.com/0xmhha/indexer-go/execwire/configfile	1.543s
+ok  	github.com/0xmhha/indexer-go/execwire/exporter	3.229s
+?   	github.com/0xmhha/indexer-go/execwire/nativecfg	[no test files]
+ok  	github.com/0xmhha/indexer-go/execwire/retention	1.457s
+ok  	github.com/0xmhha/indexer-go/execwire/spool	6.209s
+cd x/stablenet/executor && go test -timeout=20m -race -count=1 ./...
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor	2.080s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/checkpoint	2.170s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/cmd/stablenet-checkpoint	1.656s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/cmd/stablenet-executor	1.643s
+?   	github.com/0xmhha/indexer-go/x/stablenet/executor/cmd/stablenet-retention	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/executor/exporter	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/nodebackend	14.134s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/nodestore	31.123s
+?   	github.com/0xmhha/indexer-go/x/stablenet/executor/spool	[no test files]
+
+owned PostgreSQL16 fsync-on full regression and cleanup
+PGBIN=/Library/PostgreSQL/16/bin GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod GOFLAGS=-p=1 bash verification/native-preflight/postgres-fixture.sh > /tmp/native-preflight-retry-postgres-final.log 2>&1
+waiting for server to start.... done
+server started
+ok  	github.com/0xmhha/indexer-go/pkg/storage/postgres	69.782s
+ok  	github.com/0xmhha/indexer-go/pkg/app	327.622s
+ok  	github.com/0xmhha/indexer-go/pkg/api	1.250s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/bundle	1.304s
+
+
+FINAL PARENT REVIEW GO PATCH a9fc8a0934e8f2e8a6da76625a5e7294e4dfee73da571bf087fcc216237a5e14
+
+parent-final-build.log
+
+
+parent-final-vet.log
+
+
+parent-final-lint.log
+Running linter...
+/Users/kevin/.gvm/pkgsets/go1.26.8/global/bin/golangci-lint run ./...
+0 issues.
+
+
+parent-final-cli-build.log
+
+
+parent-final-cli.log
+PASS: executable PASS/0 HOLD/2 FAIL/1, deterministic bounded redaction, unchanged explicit source fixtures
+
+
+parent-final-docs.log
+PASS: 220 relative documentation links/anchors
+
+
+parent-final-examples.log
+== examples/chainprofile/
+?   	github.com/0xmhha/indexer-go/examples/chainprofile/cmd/project-indexer	[no test files]
+ok  	github.com/0xmhha/indexer-go/examples/chainprofile/pkg/chains/projectarc	0.516s
+== examples/receipts/
+ok  	github.com/0xmhha/indexer-go/examples/receipts	12.085s
+?   	github.com/0xmhha/indexer-go/examples/receipts/cmd/receipts-indexer	[no test files]
+
+
+parent-final-cache.log
+go test -tags=invariants -count=1 -run '^TestPebbleCacheLifecycle$' ./pkg/storage
+ok  	github.com/0xmhha/indexer-go/pkg/storage	1.034s
+
+
+parent-final-functional.log
+ok  	github.com/0xmhha/indexer-go/cmd/cli	0.709s
+ok  	github.com/0xmhha/indexer-go/cmd/execution-blobs	3.529s
+ok  	github.com/0xmhha/indexer-go/cmd/execution-state-proofs	0.781s
+ok  	github.com/0xmhha/indexer-go/cmd/flags	0.923s
+ok  	github.com/0xmhha/indexer-go/cmd/indexer	0.593s
+ok  	github.com/0xmhha/indexer-go/cmd/indexer-inspect	2.088s
+ok  	github.com/0xmhha/indexer-go/e2e	1.769s
+?   	github.com/0xmhha/indexer-go/e2e/anvil	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/abi	0.390s
+ok  	github.com/0xmhha/indexer-go/internal/api/etherscan	0.479s
+?   	github.com/0xmhha/indexer-go/internal/api/executioncalls	[no test files]
+?   	github.com/0xmhha/indexer-go/internal/api/executionstate	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/api/indexing	0.605s
+ok  	github.com/0xmhha/indexer-go/internal/api/middleware	0.965s
+ok  	github.com/0xmhha/indexer-go/internal/api/rest	0.894s
+ok  	github.com/0xmhha/indexer-go/internal/api/websocket	7.462s
+ok  	github.com/0xmhha/indexer-go/internal/client	0.457s
+ok  	github.com/0xmhha/indexer-go/internal/compiler	0.447s
+ok  	github.com/0xmhha/indexer-go/internal/config	0.466s
+?   	github.com/0xmhha/indexer-go/internal/constants	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/eventbus	1.140s
+ok  	github.com/0xmhha/indexer-go/internal/executionops	1.080s
+?   	github.com/0xmhha/indexer-go/internal/features/aa	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/features/address	0.471s
+ok  	github.com/0xmhha/indexer-go/internal/features/agg	0.450s
+?   	github.com/0xmhha/indexer-go/internal/features/agg/api	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/features/balance	0.626s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex	0.474s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex/api	0.573s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex/orderbook	0.729s
+ok  	github.com/0xmhha/indexer-go/internal/features/token	0.479s
+ok  	github.com/0xmhha/indexer-go/internal/feedtelemetry	0.701s
+ok  	github.com/0xmhha/indexer-go/internal/indexingstatus	0.427s
+ok  	github.com/0xmhha/indexer-go/internal/logger	0.610s
+?   	github.com/0xmhha/indexer-go/internal/module	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/multichain	3.892s
+ok  	github.com/0xmhha/indexer-go/internal/nativepreflight	0.637s
+ok  	github.com/0xmhha/indexer-go/internal/notifications	59.729s
+ok  	github.com/0xmhha/indexer-go/internal/opsguard	1.209s
+ok  	github.com/0xmhha/indexer-go/internal/opsinspect	5.523s
+ok  	github.com/0xmhha/indexer-go/internal/progress	0.796s
+?   	github.com/0xmhha/indexer-go/internal/projection	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/rpcbatch	0.407s
+ok  	github.com/0xmhha/indexer-go/internal/rpcproxy	1.066s
+ok  	github.com/0xmhha/indexer-go/internal/source/era	0.476s
+ok  	github.com/0xmhha/indexer-go/internal/source/nodefeed	0.663s
+ok  	github.com/0xmhha/indexer-go/internal/source/replay	0.603s
+?   	github.com/0xmhha/indexer-go/internal/storage/history	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/testutil	0.419s
+ok  	github.com/0xmhha/indexer-go/internal/token	0.415s
+?   	github.com/0xmhha/indexer-go/internal/userop	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/verifier	0.417s
+ok  	github.com/0xmhha/indexer-go/pkg/api	0.838s
+ok  	github.com/0xmhha/indexer-go/pkg/api/graphql	3.203s
+ok  	github.com/0xmhha/indexer-go/pkg/api/jsonrpc	1.142s
+ok  	github.com/0xmhha/indexer-go/pkg/app	390.819s
+?   	github.com/0xmhha/indexer-go/pkg/app/apptest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/capture	23.019s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed	0.400s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/ethpeer	0.707s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmblob	4.499s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmblob/proof	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata	0.907s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmlookup	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate	4.581s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace	2.693s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace/native	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chains	1.087s
+ok  	github.com/0xmhha/indexer-go/pkg/chains/evm	0.757s
+?   	github.com/0xmhha/indexer-go/pkg/core/gethconv	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/core/model	0.591s
+ok  	github.com/0xmhha/indexer-go/pkg/core/port	0.423s
+?   	github.com/0xmhha/indexer-go/pkg/core/port/porttest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/declared	0.415s
+ok  	github.com/0xmhha/indexer-go/pkg/events	3.226s
+ok  	github.com/0xmhha/indexer-go/pkg/execution	3.548s
+?   	github.com/0xmhha/indexer-go/pkg/execution/blobdata	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/execution/checkpoint	0.423s
+?   	github.com/0xmhha/indexer-go/pkg/execution/proofdata	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/feature	0.475s
+ok  	github.com/0xmhha/indexer-go/pkg/feature/featuretest	5.225s
+ok  	github.com/0xmhha/indexer-go/pkg/features/records	0.471s
+?   	github.com/0xmhha/indexer-go/pkg/features/records/api	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/feed	0.424s
+ok  	github.com/0xmhha/indexer-go/pkg/fetch	6.857s
+?   	github.com/0xmhha/indexer-go/pkg/nodefeed	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/rpcpool	1.649s
+ok  	github.com/0xmhha/indexer-go/pkg/source	0.467s
+ok  	github.com/0xmhha/indexer-go/pkg/source/facts	7.427s
+ok  	github.com/0xmhha/indexer-go/pkg/source/rpc	2.964s
+?   	github.com/0xmhha/indexer-go/pkg/startup	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/storage	157.376s
+ok  	github.com/0xmhha/indexer-go/pkg/storage/postgres	1.000s
+ok  	github.com/0xmhha/indexer-go/pkg/stream	35.167s
+?   	github.com/0xmhha/indexer-go/pkg/stream/streamtest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/testchain	0.580s
+?   	github.com/0xmhha/indexer-go/pkg/testchain/venueabi	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/window	28.082s
+ok  	github.com/0xmhha/indexer-go/x/arc	0.447s
+?   	github.com/0xmhha/indexer-go/x/arc/bundle	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-checkpoint	0.627s
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-collector	0.528s
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-node-guard	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-preflight	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-retention	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-submit	0.412s
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/indexer-arc	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/native-retention	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/collector	1.993s
+ok  	github.com/0xmhha/indexer-go/x/arc/feed	19.273s
+ok  	github.com/0xmhha/indexer-go/x/arc/nativeops	16.860s
+ok  	github.com/0xmhha/indexer-go/x/arc/nativestore	6.480s
+ok  	github.com/0xmhha/indexer-go/x/arc/preflight	1.555s
+ok  	github.com/0xmhha/indexer-go/x/stablenet	0.410s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/bundle	1.160s
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-checkpoint	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-preflight	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-retention	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/indexer-stablenet	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/consensus	3.998s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/consensus/api	2.648s
+?   	github.com/0xmhha/indexer-go/x/stablenet/features/feedelegation	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/features/systemcontracts	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/features/wbft	0.508s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/feedelegation	0.683s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/feedelegation/api	0.631s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/preflight	0.720s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/systemcontracts	3.782s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/systemcontracts/api	0.817s
+
+
+parent-final-race.log
+go test -timeout=20m -race -count=1 ./...
+ok  	github.com/0xmhha/indexer-go/cmd/cli	1.864s
+ok  	github.com/0xmhha/indexer-go/cmd/execution-blobs	13.463s
+ok  	github.com/0xmhha/indexer-go/cmd/execution-state-proofs	1.437s
+ok  	github.com/0xmhha/indexer-go/cmd/flags	1.700s
+ok  	github.com/0xmhha/indexer-go/cmd/indexer	1.693s
+ok  	github.com/0xmhha/indexer-go/cmd/indexer-inspect	2.867s
+ok  	github.com/0xmhha/indexer-go/e2e	2.516s
+?   	github.com/0xmhha/indexer-go/e2e/anvil	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/abi	1.666s
+ok  	github.com/0xmhha/indexer-go/internal/api/etherscan	1.542s
+?   	github.com/0xmhha/indexer-go/internal/api/executioncalls	[no test files]
+?   	github.com/0xmhha/indexer-go/internal/api/executionstate	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/api/indexing	1.684s
+ok  	github.com/0xmhha/indexer-go/internal/api/middleware	1.453s
+ok  	github.com/0xmhha/indexer-go/internal/api/rest	1.626s
+ok  	github.com/0xmhha/indexer-go/internal/api/websocket	6.402s
+ok  	github.com/0xmhha/indexer-go/internal/client	1.520s
+ok  	github.com/0xmhha/indexer-go/internal/compiler	1.504s
+ok  	github.com/0xmhha/indexer-go/internal/config	1.542s
+?   	github.com/0xmhha/indexer-go/internal/constants	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/eventbus	2.217s
+ok  	github.com/0xmhha/indexer-go/internal/executionops	2.380s
+?   	github.com/0xmhha/indexer-go/internal/features/aa	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/features/address	1.499s
+ok  	github.com/0xmhha/indexer-go/internal/features/agg	1.543s
+?   	github.com/0xmhha/indexer-go/internal/features/agg/api	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/features/balance	1.565s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex	1.671s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex/api	2.001s
+ok  	github.com/0xmhha/indexer-go/internal/features/dex/orderbook	1.895s
+ok  	github.com/0xmhha/indexer-go/internal/features/token	1.499s
+ok  	github.com/0xmhha/indexer-go/internal/feedtelemetry	1.684s
+ok  	github.com/0xmhha/indexer-go/internal/indexingstatus	1.462s
+ok  	github.com/0xmhha/indexer-go/internal/logger	1.629s
+?   	github.com/0xmhha/indexer-go/internal/module	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/multichain	4.620s
+ok  	github.com/0xmhha/indexer-go/internal/nativepreflight	1.733s
+ok  	github.com/0xmhha/indexer-go/internal/notifications	60.860s
+ok  	github.com/0xmhha/indexer-go/internal/opsguard	2.079s
+ok  	github.com/0xmhha/indexer-go/internal/opsinspect	5.869s
+ok  	github.com/0xmhha/indexer-go/internal/progress	1.804s
+?   	github.com/0xmhha/indexer-go/internal/projection	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/rpcbatch	1.401s
+ok  	github.com/0xmhha/indexer-go/internal/rpcproxy	2.104s
+ok  	github.com/0xmhha/indexer-go/internal/source/era	1.480s
+ok  	github.com/0xmhha/indexer-go/internal/source/nodefeed	1.835s
+ok  	github.com/0xmhha/indexer-go/internal/source/replay	1.717s
+?   	github.com/0xmhha/indexer-go/internal/storage/history	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/testutil	1.424s
+ok  	github.com/0xmhha/indexer-go/internal/token	1.430s
+?   	github.com/0xmhha/indexer-go/internal/userop	[no test files]
+ok  	github.com/0xmhha/indexer-go/internal/verifier	1.442s
+ok  	github.com/0xmhha/indexer-go/pkg/api	1.942s
+ok  	github.com/0xmhha/indexer-go/pkg/api/graphql	4.874s
+ok  	github.com/0xmhha/indexer-go/pkg/api/jsonrpc	2.277s
+ok  	github.com/0xmhha/indexer-go/pkg/app	439.991s
+?   	github.com/0xmhha/indexer-go/pkg/app/apptest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/capture	18.722s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed	1.405s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/ethpeer	1.666s
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmblob	15.256s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmblob/proof	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata	1.943s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmlookup	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate	6.484s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace	3.849s
+?   	github.com/0xmhha/indexer-go/pkg/chainfeed/evmtrace/native	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/chains	11.692s
+ok  	github.com/0xmhha/indexer-go/pkg/chains/evm	3.215s
+?   	github.com/0xmhha/indexer-go/pkg/core/gethconv	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/core/model	1.902s
+ok  	github.com/0xmhha/indexer-go/pkg/core/port	1.455s
+?   	github.com/0xmhha/indexer-go/pkg/core/port/porttest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/declared	1.455s
+ok  	github.com/0xmhha/indexer-go/pkg/events	4.479s
+ok  	github.com/0xmhha/indexer-go/pkg/execution	16.242s
+?   	github.com/0xmhha/indexer-go/pkg/execution/blobdata	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/execution/checkpoint	1.467s
+?   	github.com/0xmhha/indexer-go/pkg/execution/proofdata	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/feature	1.503s
+ok  	github.com/0xmhha/indexer-go/pkg/feature/featuretest	7.477s
+ok  	github.com/0xmhha/indexer-go/pkg/features/records	1.531s
+?   	github.com/0xmhha/indexer-go/pkg/features/records/api	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/feed	1.464s
+ok  	github.com/0xmhha/indexer-go/pkg/fetch	8.090s
+?   	github.com/0xmhha/indexer-go/pkg/nodefeed	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/rpcpool	2.700s
+ok  	github.com/0xmhha/indexer-go/pkg/source	1.432s
+ok  	github.com/0xmhha/indexer-go/pkg/source/facts	8.983s
+ok  	github.com/0xmhha/indexer-go/pkg/source/rpc	4.839s
+?   	github.com/0xmhha/indexer-go/pkg/startup	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/storage	170.896s
+ok  	github.com/0xmhha/indexer-go/pkg/storage/postgres	1.765s
+ok  	github.com/0xmhha/indexer-go/pkg/stream	68.159s
+?   	github.com/0xmhha/indexer-go/pkg/stream/streamtest	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/testchain	1.709s
+?   	github.com/0xmhha/indexer-go/pkg/testchain/venueabi	[no test files]
+ok  	github.com/0xmhha/indexer-go/pkg/window	19.573s
+ok  	github.com/0xmhha/indexer-go/x/arc	1.508s
+?   	github.com/0xmhha/indexer-go/x/arc/bundle	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-checkpoint	1.775s
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-collector	1.447s
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-node-guard	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-preflight	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/execution-retention	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/cmd/execution-submit	1.454s
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/indexer-arc	[no test files]
+?   	github.com/0xmhha/indexer-go/x/arc/cmd/native-retention	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/arc/collector	3.521s
+ok  	github.com/0xmhha/indexer-go/x/arc/feed	11.784s
+ok  	github.com/0xmhha/indexer-go/x/arc/nativeops	11.774s
+ok  	github.com/0xmhha/indexer-go/x/arc/nativestore	6.795s
+ok  	github.com/0xmhha/indexer-go/x/arc/preflight	3.452s
+ok  	github.com/0xmhha/indexer-go/x/stablenet	1.498s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/bundle	2.455s
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-checkpoint	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-preflight	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/execution-retention	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/cmd/indexer-stablenet	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/consensus	4.045s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/consensus/api	3.334s
+?   	github.com/0xmhha/indexer-go/x/stablenet/features/feedelegation	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/features/systemcontracts	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/features/wbft	1.568s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/feedelegation	1.758s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/feedelegation/api	1.767s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/preflight	2.282s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/systemcontracts	4.974s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/systemcontracts/api	1.930s
+cd execwire && go test -timeout=20m -race -count=1 ./...
+ok  	github.com/0xmhha/indexer-go/execwire	2.609s
+ok  	github.com/0xmhha/indexer-go/execwire/checkpoint	1.742s
+ok  	github.com/0xmhha/indexer-go/execwire/configfile	1.412s
+ok  	github.com/0xmhha/indexer-go/execwire/exporter	3.221s
+?   	github.com/0xmhha/indexer-go/execwire/nativecfg	[no test files]
+ok  	github.com/0xmhha/indexer-go/execwire/retention	1.447s
+ok  	github.com/0xmhha/indexer-go/execwire/spool	6.611s
+cd x/stablenet/executor && go test -timeout=20m -race -count=1 ./...
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor	2.058s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/checkpoint	1.986s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/cmd/stablenet-checkpoint	1.627s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/cmd/stablenet-executor	2.151s
+?   	github.com/0xmhha/indexer-go/x/stablenet/executor/cmd/stablenet-retention	[no test files]
+?   	github.com/0xmhha/indexer-go/x/stablenet/executor/exporter	[no test files]
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/nodebackend	17.595s
+ok  	github.com/0xmhha/indexer-go/x/stablenet/executor/nodestore	42.344s
+?   	github.com/0xmhha/indexer-go/x/stablenet/executor/spool	[no test files]

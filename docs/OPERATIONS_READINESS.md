@@ -1,6 +1,6 @@
 # 운영 설정 준비 현황
 
-**배포 판정: HOLD.** 네 기능 릴리스 완료와 실제 운영 준비를 구분한다. 이 문서는 운영자가 정할 값만 모으는 다음 우선순위의 문서 릴리스다. 설정·Go/Rust/SQL·Compose·테스트·런타임 동작은 변경하지 않는다. 추가 성능 측정은 하지 않았다.
+**배포 판정: HOLD.** 네 기능 릴리스 완료와 실제 운영 준비를 구분한다. [Native 설정 통합 검사](NATIVE_EXECUTION_PREFLIGHT.md)는 명시적 파일을 오프라인 검증하며 PASS도 운영을 승인하지 않는다. 아래 과거 관측과 실제 운영 미확정 값은 그대로 구분한다. 추가 성능 측정은 하지 않았다.
 
 ## 근거와 완료 범위
 
@@ -15,7 +15,7 @@
 
 해시 검증한 이전 최종 인계의 patch SHA256은 `6db158c8e392db38293ae91cb48b64b7a9457a5950fb87747795ad2777101c83`, 완료 보고는 `3ac41ad0cc39b3ab79591f2366fb5b90a769ccbd6f8c28c4d39f27baa7c689a2`, 동기화 원본은 `1704b5d005c4c87b72064a5c866edef537fa802e0efc32c32ccc90af2e551141`이다. 보존된 strict all-four observer 로그도 SHA256 `5e1cb69539c87365f0f8958b6862c409fdae0fc38c4fe52a953efca6dbe1fbb5`와 일치했다. 이는 **이전 릴리스의 증거**이며 이번 세션에서 native/PG/200 실험을 반복했다는 뜻이 아니다. 선택한 현재 문서와 휴대 가능한 영수증을 저장소에 반영했으며 원본 작업트리는 수정하지 않았다. `verification/releases.json`과 observer는 과거 machine-local 실행 ledger 형식으로 유지하고 현재 릴리스 현황은 이 표와 각 portable sync를 따른다. 해당 observer를 이번 문서 릴리스 뒤의 main 검증기로 재사용하지 않는다.
 
-기존 n은 #230 native retention, n−1은 #229 E6, n−2는 #228 call ranges다. [수용한 E1 설계](codemine/runs/20261023-e1-execution/02-design.md)와 [계획](codemine/runs/20261023-e1-execution/03-plan.md), [현재 backlog](analysis/open-items.md)를 보존한다.
+현재 n은 [Native preflight](NATIVE_EXECUTION_PREFLIGHT.md), n−1은 #230 native retention, n−2는 #229 E6이며 #228 call ranges 참조도 보존한다. [수용한 E1 설계](codemine/runs/20261023-e1-execution/02-design.md)와 [계획](codemine/runs/20261023-e1-execution/03-plan.md), [현재 backlog](analysis/open-items.md)를 보존한다.
 
 ## 현재 확인한 저장소와 설정
 
