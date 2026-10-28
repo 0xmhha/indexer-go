@@ -4,12 +4,14 @@
 
 **Draft only. Disk formatting, initialization, image builds/pulls, service startup and performance measurements remain on hold.** The checked-in manifests contain unresolved inputs and are not a deployment approval.
 
+The separate [Native diagnostic profile](../native/README.md) only wires offline preflight/metadata commands; it does not replace this composition or inject DSNs. Both recipes include the local execwire module before resolving dependencies.
+
 This composition runs one indexer process per chain and a dedicated PostgreSQL 16 instance: `indexer-stablenet` for StableNet, `indexer-arc` for Arc, and the generic `indexer` for BSC and for Sepolia. Each chain has its own configuration, halt latch and API port. It includes no execution/consensus node, snapshot downloader, Docker socket mount, global container name, fixed network subnet or shared Docker volume. It does not use or modify the repository's legacy root Compose/Dockerfile.
 
 | File | Purpose |
 | --- | --- |
 | [compose.draft.yaml](compose.draft.yaml) | PostgreSQL and one indexer service per chain (`indexer-<chain>`); private DB network; loopback-only API ports 8088 (StableNet), 8089 (BSC), 8090 (Sepolia), 8091 (Arc) |
-| [Dockerfile.draft](Dockerfile.draft) | Separate Go1.26.8/CGO0 image recipe with the three binaries; each service selects its chain's with `INDEXER_BINARY`; not built or pulled |
+| [Dockerfile.draft](Dockerfile.draft) | Separate Go1.26.8/CGO1 image recipe (existing BLS requires CGO) with the three binaries; each service selects its chain's with `INDEXER_BINARY`; not built or pulled |
 | [host.draft.json](host.draft.json) | Proposed mount path and unresolved physical/volume UUIDs, private directory and image |
 | [preflight.py](preflight.py) | Offline lint, read-only macOS inspection, and a guarded future startup entry point |
 | [indexer-entrypoint.sh](indexer-entrypoint.sh) | Read a DSN secret as data and bridge it to the application's existing environment setting |

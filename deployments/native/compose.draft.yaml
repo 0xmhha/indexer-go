@@ -1,0 +1,165 @@
+# DIAGNOSTIC DRAFT ONLY. No build/pull/start authorization. No host path is created.
+name: indexer-native-diagnostics-draft
+services:
+  arc-config:
+    image: ${INDEXER_NATIVE_DIAGNOSTICS_IMAGE:?HOLD reviewed diagnostic image digest
+      required}
+    pull_policy: never
+    profiles:
+    - native-diagnostics-draft
+    user: ${INDEXER_RUN_UID:?HOLD host UID required}:${INDEXER_RUN_GID:?HOLD host
+      GID required}
+    network_mode: none
+    read_only: true
+    restart: 'no'
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    entrypoint:
+    - /app/arc-execution-preflight
+    command:
+    - --app
+    - /inputs/app.yaml
+    - --native
+    - /inputs/native.json
+    - --retention
+    - /inputs/retention.json
+    - --checkpoint
+    - /inputs/checkpoint.json
+    - --declaration
+    - /inputs/declaration.json
+    volumes:
+    - type: bind
+      source: ${INDEXER_ARC_NATIVE_INPUTS:?HOLD selected input directory required}
+      target: /inputs
+      read_only: true
+      bind:
+        create_host_path: false
+  arc-metadata:
+    image: ${INDEXER_NATIVE_DIAGNOSTICS_IMAGE:?HOLD reviewed diagnostic image digest
+      required}
+    pull_policy: never
+    profiles:
+    - native-diagnostics-draft
+    user: ${INDEXER_RUN_UID:?HOLD host UID required}:${INDEXER_RUN_GID:?HOLD host
+      GID required}
+    network_mode: none
+    read_only: true
+    restart: 'no'
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    entrypoint:
+    - /app/arc-execution-diagnose
+    command:
+    - --native
+    - /native/${INDEXER_ARC_NATIVE_NAME:?HOLD native directory basename required}
+    - --spool
+    - /source
+    - --source-artifact
+    - /observations/source.json
+    - --checkpoint-artifact
+    - /observations/checkpoint.json
+    - --retention-artifact
+    - /observations/retention.json
+    volumes:
+    - type: bind
+      source: ${INDEXER_ARC_NATIVE_SPOOL:?HOLD selected source spool required}
+      target: /source
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_ARC_NATIVE_PARENT:?HOLD dedicated native parent required}
+      target: /native
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_ARC_NATIVE_EXPORTS:?HOLD selected metadata exports required}
+      target: /observations
+      read_only: true
+      bind:
+        create_host_path: false
+  stablenet-config:
+    image: ${INDEXER_NATIVE_DIAGNOSTICS_IMAGE:?HOLD reviewed diagnostic image digest
+      required}
+    pull_policy: never
+    profiles:
+    - native-diagnostics-draft
+    user: ${INDEXER_RUN_UID:?HOLD host UID required}:${INDEXER_RUN_GID:?HOLD host
+      GID required}
+    network_mode: none
+    read_only: true
+    restart: 'no'
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    entrypoint:
+    - /app/stablenet-execution-preflight
+    command:
+    - --app
+    - /inputs/app.yaml
+    - --native
+    - /inputs/native.json
+    - --checkpoint
+    - /inputs/checkpoint.json
+    - --declaration
+    - /inputs/declaration.json
+    volumes:
+    - type: bind
+      source: ${INDEXER_STABLENET_NATIVE_INPUTS:?HOLD selected input directory required}
+      target: /inputs
+      read_only: true
+      bind:
+        create_host_path: false
+  stablenet-metadata:
+    image: ${INDEXER_NATIVE_DIAGNOSTICS_IMAGE:?HOLD reviewed diagnostic image digest
+      required}
+    pull_policy: never
+    profiles:
+    - native-diagnostics-draft
+    user: ${INDEXER_RUN_UID:?HOLD host UID required}:${INDEXER_RUN_GID:?HOLD host
+      GID required}
+    network_mode: none
+    read_only: true
+    restart: 'no'
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    entrypoint:
+    - /app/stablenet-execution-diagnose
+    command:
+    - --native
+    - /native/${INDEXER_STABLENET_NATIVE_NAME:?HOLD native directory basename required}
+    - --spool
+    - /source
+    - --source-artifact
+    - /observations/source.json
+    - --checkpoint-artifact
+    - /observations/checkpoint.json
+    - --retention-artifact
+    - /observations/retention.json
+    volumes:
+    - type: bind
+      source: ${INDEXER_STABLENET_NATIVE_SPOOL:?HOLD selected source spool required}
+      target: /source
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_STABLENET_NATIVE_PARENT:?HOLD dedicated native parent required}
+      target: /native
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_STABLENET_NATIVE_EXPORTS:?HOLD selected metadata exports required}
+      target: /observations
+      read_only: true
+      bind:
+        create_host_path: false

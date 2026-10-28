@@ -172,5 +172,4 @@ identifiers, E1–E4/full baseline/E3 exact permit/live lease/sourceACK/window/
 intent/completion/release and E6 authenticated trust/fork boundaries are unchanged.
 No pool/client or hot-path collector/writer/API refactor is introduced. Functional
 library/mock/owned PostgreSQL checks are not P2P, performance or operational proof.
-Next priorities remain Docker wiring, backup adapter, then monitoring; those are
-not implemented here. Start/GC/recovery/restore/activation remain held.
+The separate [Docker diagnostic draft](../deployments/native/README.md) now wires these commands with read-only native-parent/source/export bindings. It grants no execution approval. Next priorities are the backup adapter, then monitoring. Start/GC/recovery/restore/activation remain held.

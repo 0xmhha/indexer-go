@@ -1,0 +1,18 @@
+{
+  "base": "63fafea527e4751bb1d348ef0daa0306e0f3e988",
+  "branch": "refactor/native-docker-diagnostics",
+  "go_source_sha256": "e4ec28b6fcf8181f0fb79baeb953e9e4695efeaa251b3e31782a0330bb7cba38",
+  "files": {
+    ".github/workflows/ci.yml": "b10212f905eec04c1b33a2630426079c966cc5f2a3eb04e7a5b866de2f0bcb73",
+    "deployments/native/Dockerfile.draft": "f62b6bdd162c87fe8f342eb1506f13d0bbcd70857c30eeb1246e5ae26da14d6e",
+    "deployments/native/Dockerfile.draft.dockerignore": "8562fc0801dfac858e251330ee3012ef004cb0ba272f530d08cc8e2fb1c7e67f",
+    "deployments/native/check.py": "314c4f503bc6d72b55d1bbff01f85e51f2717528c6d471d5a3fd02d4692907b5",
+    "deployments/native/compose.draft.yaml": "02bc5f1b263bdfbdf5e76e673a2d653ccaecda8867bb4e15d8ba1a9039000b9a",
+    "deployments/native/test-cli.sh": "aa5a0e85f003cfabcc216d8cb6a78ba2ceb96d56d55db5d2b5e27a762c2e5184",
+    "deployments/native/test_diagnostics.py": "e7c022d14ed3330df147323d752a3b3bc2808b60f6f92bf9eb694e79a201ee6c",
+    "deployments/testnets/Dockerfile.draft": "0b4eb04a50f83d4e7b2e5ebecbe69abc916c1bb0706bd096947dcb13b69b896a"
+  },
+  "go_version": "go version go1.26.8 darwin/arm64",
+  "parser": "PyYAML6.0.3",
+  "scope": "diagnostic Docker declarations; no Go runtime changes; no Docker/operating DB/performance"
+}

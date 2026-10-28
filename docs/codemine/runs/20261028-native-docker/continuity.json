@@ -1,0 +1,11 @@
+{
+  "n": "Native diagnostic Docker wiring",
+  "n_minus_1": {"pr": 233, "main": "63fafea527e4751bb1d348ef0daa0306e0f3e988", "plan": "../20261028-native-diagnostics/plan.md"},
+  "n_minus_2": {"pr": 232, "plan": "../20261028-native-preflight/plan.md"},
+  "retention": "../20261027-native-retention-backup/plan.md",
+  "e6": "../20261027-e6-independent-consensus/plan.md",
+  "accepted_design": "../20261023-e1-execution/02-design.md",
+  "accepted_plan": "../20261023-e1-execution/03-plan.md",
+  "next": ["backup adapter", "monitoring"],
+  "operational_readiness": "HOLD"
+}

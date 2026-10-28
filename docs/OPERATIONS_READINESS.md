@@ -15,7 +15,7 @@
 
 해시 검증한 이전 최종 인계의 patch SHA256은 `6db158c8e392db38293ae91cb48b64b7a9457a5950fb87747795ad2777101c83`, 완료 보고는 `3ac41ad0cc39b3ab79591f2366fb5b90a769ccbd6f8c28c4d39f27baa7c689a2`, 동기화 원본은 `1704b5d005c4c87b72064a5c866edef537fa802e0efc32c32ccc90af2e551141`이다. 보존된 strict all-four observer 로그도 SHA256 `5e1cb69539c87365f0f8958b6862c409fdae0fc38c4fe52a953efca6dbe1fbb5`와 일치했다. 이는 **이전 릴리스의 증거**이며 이번 세션에서 native/PG/200 실험을 반복했다는 뜻이 아니다. 선택한 현재 문서와 휴대 가능한 영수증을 저장소에 반영했으며 원본 작업트리는 수정하지 않았다. `verification/releases.json`과 observer는 과거 machine-local 실행 ledger 형식으로 유지하고 현재 릴리스 현황은 이 표와 각 portable sync를 따른다. 해당 observer를 이번 문서 릴리스 뒤의 main 검증기로 재사용하지 않는다.
 
-현재 n은 [Native 읽기 전용 진단](NATIVE_EXECUTION_DIAGNOSTICS.md), n−1은 [Native preflight #232](NATIVE_EXECUTION_PREFLIGHT.md), n−2는 #230 native retention이며 #229 E6와 #228 call ranges 참조도 보존한다. [수용한 E1 설계](codemine/runs/20261023-e1-execution/02-design.md)와 [계획](codemine/runs/20261023-e1-execution/03-plan.md), [현재 backlog](analysis/open-items.md)를 보존한다.
+현재 n은 [Native 진단 Docker 연결](../deployments/native/README.md), n−1은 [Native 읽기 전용 진단 #233](NATIVE_EXECUTION_DIAGNOSTICS.md), n−2는 [Native preflight #232](NATIVE_EXECUTION_PREFLIGHT.md)이며 #230 native retention과 #229 E6· #228 call ranges 참조도 보존한다. [수용한 E1 설계](codemine/runs/20261023-e1-execution/02-design.md)와 [계획](codemine/runs/20261023-e1-execution/03-plan.md), [현재 backlog](analysis/open-items.md)를 보존한다.
 
 ## 현재 확인한 저장소와 설정
 
@@ -70,7 +70,7 @@
 | StableNet E6 | [지원 정책](EXECUTION_CONSENSUS.md) `stablenet-wbft-4d17eea018c8`, 공식 pinned WBFT·bounded Anzeon 구간 | 전체 정책·chain/genesis·AnchorHeader·Applied/Next validator sets의 외부 인증·일치 checkpoint 필요. fixture anchor를 운영값으로 사용 불가 |
 | 나머지 RPC 시작 | 최근 확정 기준과 strict 부모 상태 조회 가능성 필요 | 실제 시작 높이와 provider 상태 보존 계약 unknown. 10/22 retention/speed는 현재 보장 아님 |
 
-[기존 운영 초안](OPERATIONS_DRAFT.md)의 `source.feed.module: arc.eth68`는 header/body/receipt 중심 legacy baseline이다. 새 native execution/collector·checkpoint·E6 경로는 opt-in이고 [Compose 초안](../deployments/testnets/compose.draft.yaml)에 native Docker wiring을 추가한 적 없다. 옛 YAML을 native 완성 배포로 이름만 바꾸거나 실제 config를 교체하지 않는다.
+[기존 운영 초안](OPERATIONS_DRAFT.md)의 `source.feed.module: arc.eth68`는 header/body/receipt 중심 legacy baseline이다. 새 native execution/collector·checkpoint·E6 경로는 opt-in이고 [legacy Compose 초안](../deployments/testnets/compose.draft.yaml)에 native App/collector/executor 운영 서비스를 추가하지 않았다. 별도 [진단 전용 Docker 초안](../deployments/native/README.md)은 설정 검사와 읽기 전용 metadata 명령만 연결하며 네트워크·DSN·DB 의존성과 실제 실행은 없다. 옛 YAML을 native 완성 배포로 이름만 바꾸거나 실제 config를 교체하지 않는다.
 
 ## 백업 custody와 복구 판정
 
