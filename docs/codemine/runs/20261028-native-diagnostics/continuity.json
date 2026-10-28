@@ -1,0 +1,23 @@
+{
+  "n": "Native read-only diagnostics",
+  "n_minus_1": {
+    "pr": 232,
+    "main": "8fdd0b6eaca27fb107e9b2129fd0112b296f2b92",
+    "plan": "../20261028-native-preflight/plan.md"
+  },
+  "n_minus_2": {
+    "pr": 230,
+    "plan": "../20261027-native-retention-backup/plan.md"
+  },
+  "e6": "../20261027-e6-independent-consensus/plan.md",
+  "calls": "../20261026-e5-call-ranges-orphans/plan.md",
+  "accepted_design": "../20261023-e1-execution/02-design.md",
+  "accepted_plan": "../20261023-e1-execution/03-plan.md",
+  "next": [
+    "Docker wiring",
+    "backup adapter",
+    "monitoring"
+  ],
+  "operational_readiness": "HOLD",
+  "worker": "local commit only; parent owns PR, exact-head CI5, squash and clean main sync"
+}

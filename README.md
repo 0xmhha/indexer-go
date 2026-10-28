@@ -68,6 +68,7 @@ For your own RPC endpoint, a retained starting height, or PostgreSQL, follow the
 | Add derived data, a block handler or a custom API | [Extending the indexer](docs/EXTENDING.md) |
 | Support custom headers, transactions or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md) and the [profile example](examples/chainprofile/README.md) |
 | Integrate an API client | [API reference](docs/API.md) and [schema snapshots](pkg/app/testdata/api/) |
+| Diagnose existing native/source maintenance and exported checkpoints | [Native read-only diagnostics](docs/NATIVE_EXECUTION_DIAGNOSTICS.md) — bounded metadata, no operational authority |
 | Check declared native settings without starting services | [Native execution preflight](docs/NATIVE_EXECUTION_PREFLIGHT.md) — PASS/HOLD/FAIL, never operational authorization |
 | Index verified StableNet execution journals into PostgreSQL | [Execution ingest](docs/EXECUTION_INGEST.md), [offline bootstrap](docs/EXECUTION_BOOTSTRAP.md), [offline retention](docs/EXECUTION_RETENTION.md) — opt-in, explicit trusted anchor |
 | Continuously collect verified Arc execution journals | [Arc execution adapter](docs/EXECUTION_ARC.md) — official Arc EVM, read-only native adapter, bounded durable queue and restart/reorg/ACK supervision; live operation remains unverified |

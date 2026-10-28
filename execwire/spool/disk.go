@@ -118,6 +118,10 @@ func readManifest(path string) (manifest, error) {
 	if err := readSealedJSON(path, &m); err != nil {
 		return m, err
 	}
+	return validateManifest(m)
+}
+
+func validateManifest(m manifest) (manifest, error) {
 	base := m.Anchor
 	if m.Version == 2 && m.Base != nil {
 		base = *m.Base

@@ -16,7 +16,7 @@ func identity(path string) (fileIdentity, error) {
 	if !ok || !info.IsDir() || st.Uid != uint32(os.Geteuid()) {
 		return fileIdentity{}, ErrUnsafe
 	}
-	return fileIdentity{uint64(st.Dev), st.Ino}, nil
+	return fileIdentity{Device: uint64(st.Dev), Inode: st.Ino}, nil
 }
 func regular(path string) error {
 	info, e := os.Lstat(path)

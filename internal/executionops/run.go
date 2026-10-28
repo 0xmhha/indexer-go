@@ -97,12 +97,7 @@ func Run(ctx context.Context, o Options, p chains.HeaderCodec, out io.Writer) er
 	}
 	defer func() { _ = s.Close() }()
 	if o.Action == "inspect" {
-		var result struct {
-			Control   any
-			Bootstrap any
-			Recovery  *checkpoint.RecoveryReport
-			Scope     string
-		}
+		var result CheckpointInspection
 		err = s.ReadSnapshot(ctx, func(bound context.Context) error {
 			c, e := s.ExecutionStatus(bound)
 			if e != nil {

@@ -186,6 +186,7 @@ fixture anchor is never supplied as an operating-network authority.
 
 [Plan/checklist](codemine/runs/20261028-native-preflight/plan.md) and
 [validation](codemine/runs/20261028-native-preflight/validation.md) record tests and
-handoff scope. Remaining offline priorities are native diagnostics, native Docker
+handoff scope. The next offline [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md)
+observes fixed maintenance metadata and exported snapshots. Later priorities are native Docker
 wiring, backup adapter and monitoring; provisioning, actual operation and extra
 performance measurements remain on hold.

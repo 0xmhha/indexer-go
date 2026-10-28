@@ -33,17 +33,9 @@ type Options struct {
 const ownerName = ".execution-retention-copy"
 const floorName = ".execution-retention-floor"
 
-type fence struct {
-	Version               uint16
-	Permit                retention.Permit
-	Phase                 string
-	Original, Replacement fileIdentity
-}
+type fence = retention.NativeFence
+type floor = retention.NativeFloor
 type copyOwner struct{ PermitDigest execwire.Hash }
-type floor struct {
-	Version uint16
-	Permit  retention.Permit
-}
 
 type hooks struct {
 	phase func(string) error

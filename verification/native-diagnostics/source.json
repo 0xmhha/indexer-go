@@ -1,0 +1,5 @@
+{
+  "base": "8fdd0b6eaca27fb107e9b2129fd0112b296f2b92",
+  "source_sha256": "e4ec28b6fcf8181f0fb79baeb953e9e4695efeaa251b3e31782a0330bb7cba38",
+  "go_version": "go version go1.26.8 darwin/arm64"
+}
