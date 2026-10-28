@@ -6,6 +6,8 @@
 
 이 문서는 테스트넷 운영 초안([운영 초안](OPERATIONS_DRAFT.md), [Docker 초안](../deployments/testnets/README.md))에서 무엇을 어떻게 보존하고, 장애 뒤 어느 시점까지 얼마 만에 되돌릴지를 제안한다. 체인마다 indexer 프로세스가 하나씩 있고(StableNet, BSC, Sepolia, Arc), 네 프로세스가 PostgreSQL 16 하나를 체인별 schema로 나눠 쓴다. Arc만 외장 APFS에 24시간 raw window를 둔다. 기존 [재시작·GC 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md) 8장과 [용량 정책 초안](OPERATIONS_CAPACITY_DRAFT.md)의 복구 목표 절을 이어 받는다.
 
+[오프라인 백업 어댑터](EXECUTION_BACKUP_ADAPTER.md)는 별도로 신뢰한 제공자 공개키로 snapshot/WAL 영수증의 서명과 제공된 파일을 인증한다. 기존 matched 경로용 영수증만 선택적으로 내보내며, 실제 PG 내용·WAL 연속성·복구 성공을 검증하거나 백업을 실행하지 않는다. 실제 생성·복원·설치와 운영 활성화는 계속 보류한다.
+
 ## 1. 다시 만들 수 없는 자료가 있다
 
 먼저 자료마다 잃었을 때 다시 만들 수 있는지를 본다. 결론은 "체인 자료는 노드에서 다시 받으면 된다"가 아니라는 점이다.

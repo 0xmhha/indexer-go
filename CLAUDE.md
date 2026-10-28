@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: Current n: Native diagnostic Docker wiring (`deployments/native/README.md`, `docs/codemine/runs/20261028-native-docker/plan.md`); n−1: Native diagnostics #233; n−2: Native preflight #232. Native retention/backup #230 remains complete. E6 #229 remains complete. Call ranges/orphans #228 remain complete. Operations readiness stays HOLD; file PASS never authorizes startup/GC/restore.
+- **Current Stage**: Current n: Offline backup attestation adapter (`docs/EXECUTION_BACKUP_ADAPTER.md`, `docs/codemine/runs/20261028-backup-adapter/plan.md`); n−1: Native diagnostic Docker #234; n−2: Native diagnostics #233. Native preflight #232 remains linked. Native retention/backup #230 remains complete. E6 #229 remains complete. Call ranges/orphans #228 remain complete. Operations readiness stays HOLD; file PASS never authorizes startup/GC/restore.
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context
@@ -207,7 +207,7 @@ Arc replays with pinned official ArcEvmConfig, exact retained parent and native 
 
 Feature-unit writers own preparation, grouped hooks and exact checkpoints; their SQL stays ordered inside the single final publication/undo/outbox transaction. No per-feature pool or concurrent use of one pgx transaction. Execution native balances/history use the account journal, not duplicate balances tables; the feature verifies exact stored input and writes no duplicate projection. Preserve ordinary RPC ingestion and independent capture projections. Existing projection rows are not deleted. Execution history cursors/anchor coverage differ as documented.
 
-E1 #214, E2 #215, E3 #216 and E4 #217 are merged. Preserve accepted E1 design/plan, E2 bootstrap, E3 retention and E4 balance/feature authority. Current continuity retains n/n-1/n-2 (diagnostic Docker wiring/native diagnostics #233/native preflight #232); native retention #230 and E6 #229 remain linked, with completed call ranges #228 and the accepted earlier plans linked from the current preflight plan. `docs/analysis/open-items.md` tracks release, E5 follow-ups, E6 and held operations.
+E1 #214, E2 #215, E3 #216 and E4 #217 are merged. Preserve accepted E1 design/plan, E2 bootstrap, E3 retention and E4 balance/feature authority. Current continuity retains n/n-1/n-2 (offline backup adapter/diagnostic Docker #234/native diagnostics #233); native retention #230 and E6 #229 remain linked, with completed call ranges #228 and the accepted earlier plans linked from the current preflight plan. `docs/analysis/open-items.md` tracks release, E5 follow-ups, E6 and held operations.
 
 The user delegated recommended decisions and implementation through CI-gated squash merges on 2026-10-24. Write a requirement-failing RED test before each feature, implement it, then prove GREEN. Update current documentation and the checklist after each feature. Preserve the E1 design/plan and n/n-1/n-2 context; use Git history for obsolete records instead of appending stale current status.
 

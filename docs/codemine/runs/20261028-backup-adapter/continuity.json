@@ -1,0 +1,12 @@
+{
+  "n": "Offline backup attestation adapter",
+  "n_minus_1": {"pr": 234, "main": "8fd812c504adc00abd541023c8efd8e94d7ca005", "plan": "../20261028-native-docker/plan.md"},
+  "n_minus_2": {"pr": 233, "plan": "../20261028-native-diagnostics/plan.md"},
+  "preflight": "../20261028-native-preflight/plan.md",
+  "retention": "../20261027-native-retention-backup/plan.md",
+  "e6": "../20261027-e6-independent-consensus/plan.md",
+  "accepted_design": "../20261023-e1-execution/02-design.md",
+  "accepted_plan": "../20261023-e1-execution/03-plan.md",
+  "next": ["offline monitoring", "provider snapshot/WAL content and restore validation when authorized resources exist"],
+  "operational_readiness": "HOLD"
+}
