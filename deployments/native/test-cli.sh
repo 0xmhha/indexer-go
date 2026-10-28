@@ -11,3 +11,4 @@ for product in arc stablenet; do
   done
 done
 INDEXER_NATIVE_DIAGNOSTICS_TEST_BIN_DIR="$fixture/bin" python3 -B -m unittest discover -s deployments/native -p test_diagnostics.py -v
+INDEXER_NATIVE_DIAGNOSTICS_TEST_BIN_DIR="$fixture/bin" python3 -B -m unittest discover -s deployments/native/runtime -p test_runtime.py -v

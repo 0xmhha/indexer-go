@@ -1,0 +1,22 @@
+[
+  {
+    "scope": "known DB/RPC/fresh conflicts masked by HOLD",
+    "expected_test_exit": 1,
+    "log_sha256": "69dfda154b4bc0b01073468cd96406bcf98a5484ef510098611574b6a1f0e7b5"
+  },
+  {
+    "scope": "known GID conflict masked by unknown UID",
+    "expected_test_exit": 1,
+    "log_sha256": "5febbc665b03656b9e2da4fcd2820050ce4e1bcfffd2ab8c50dc18cef5f039b6"
+  },
+  {
+    "scope": "Arc run-lease parent was declared read-only",
+    "expected_test_exit": 1,
+    "log_sha256": "0106dc0999b3edc7acc27b4c1e584d2480ff13a12c6ab3dba00c391b27af4cb0"
+  },
+  {
+    "scope": "actual Go file preflight rejects source/scratch overlap",
+    "expected_test_exit": 1,
+    "log_sha256": "75ddf50c8ffae248f6560137aa2720b8dc1cea5b1c6f39fff1d931b3d248cfac"
+  }
+]

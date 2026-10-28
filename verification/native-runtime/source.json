@@ -1,0 +1,14 @@
+{
+  "base": "1f311393b391e02d847f305c2fa5e9aa067c8f3d",
+  "branch": "refactor/native-runtime-draft",
+  "go_source_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+  "files": {
+    "deployments/native/runtime/check.py": "daa22798bdb61a31e9c66c4a38ef0cf01629e9dcf94209e713e43ae097ece0b7",
+    "deployments/native/runtime/test_runtime.py": "d2fc20aebcb6f9a600aaad8f99dcf331d1cc7ad2b500fb9e42720cb8900ec620",
+    "deployments/native/runtime/compose.draft.yaml": "3a97a018467276164edf9c568a6b53f6c235ce20979bedfba89dfdd91dc3e774",
+    ".github/workflows/ci.yml": "575d068fa1356462e7cbd0af1f6238d6275dce56617f0b8f5f756f348af376a8",
+    "deployments/native/test-cli.sh": "2b5d3753f6d3ea2f3662dbe4fb492ddbbbf141badf28f79a0024d20c55332776"
+  },
+  "runtime_execution": "none; owned diagnostic builds/file fixtures only",
+  "operational_readiness": "HOLD"
+}
