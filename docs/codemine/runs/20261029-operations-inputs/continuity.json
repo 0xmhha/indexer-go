@@ -1,0 +1,14 @@
+{
+  "n": "Operations input recommendations; actual deployment HOLD",
+  "n_minus_1": {"pr": 236, "main": "a49065d292258c0399296a5e1cc45989c295cbc8", "plan": "../20261028-offline-monitoring/plan.md"},
+  "n_minus_2": {"pr": 235, "main": "e20635f7777a848515606cfa96b88c78bd445b4c", "plan": "../20261028-backup-adapter/plan.md"},
+  "diagnostic_docker": "../20261028-native-docker/plan.md",
+  "diagnostics": "../20261028-native-diagnostics/plan.md",
+  "preflight": "../20261028-native-preflight/plan.md",
+  "retention": "../20261027-native-retention-backup/plan.md",
+  "e6": "../20261027-e6-independent-consensus/plan.md",
+  "accepted_design": "../20261023-e1-execution/02-design.md",
+  "accepted_plan": "../20261023-e1-execution/03-plan.md",
+  "next": ["actual APFS identity, capacity and private deployment values when provided", "official Arc EL peer and authenticated checkpoint", "actual provider snapshot/WAL content and restore validation when resources and authorization exist"],
+  "operational_readiness": "HOLD"
+}

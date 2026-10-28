@@ -4,9 +4,10 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 
 ## 현재 정본과 연속성
 
-- n: 오프라인 Native 모니터링 [계획](../codemine/runs/20261028-offline-monitoring/plan.md), [체크리스트](../codemine/runs/20261028-offline-monitoring/checklist.md), [연속성](../codemine/runs/20261028-offline-monitoring/continuity.json), [사용법](../NATIVE_OFFLINE_MONITORING.md)
-- n−1: 오프라인 백업 어댑터 #235 [계획](../codemine/runs/20261028-backup-adapter/plan.md), [체크리스트](../codemine/runs/20261028-backup-adapter/checklist.md), [연속성](../codemine/runs/20261028-backup-adapter/continuity.json), [사용법](../EXECUTION_BACKUP_ADAPTER.md)
-- n−2: Native 진단 Docker 연결 #234 [계획](../codemine/runs/20261028-native-docker/plan.md), [체크리스트](../codemine/runs/20261028-native-docker/checklist.md), [연속성](../codemine/runs/20261028-native-docker/continuity.json), [사용법](../../deployments/native/README.md)
+- n: 운영 입력 권장안 [계획](../codemine/runs/20261029-operations-inputs/plan.md), [체크리스트](../codemine/runs/20261029-operations-inputs/checklist.md), [연속성](../codemine/runs/20261029-operations-inputs/continuity.json), [결정표](../OPERATIONS_READINESS.md)
+- n−1: 오프라인 Native 모니터링 #236 [계획](../codemine/runs/20261028-offline-monitoring/plan.md), [체크리스트](../codemine/runs/20261028-offline-monitoring/checklist.md), [연속성](../codemine/runs/20261028-offline-monitoring/continuity.json), [사용법](../NATIVE_OFFLINE_MONITORING.md)
+- n−2: 오프라인 백업 어댑터 #235 [계획](../codemine/runs/20261028-backup-adapter/plan.md), [체크리스트](../codemine/runs/20261028-backup-adapter/checklist.md), [연속성](../codemine/runs/20261028-backup-adapter/continuity.json), [사용법](../EXECUTION_BACKUP_ADAPTER.md)
+- 이전 완료: Native 진단 Docker 연결 #234 [계획](../codemine/runs/20261028-native-docker/plan.md), [체크리스트](../codemine/runs/20261028-native-docker/checklist.md), [연속성](../codemine/runs/20261028-native-docker/continuity.json), [사용법](../../deployments/native/README.md)
 - 이전 완료: Native 읽기 전용 진단 #233 [계획](../codemine/runs/20261028-native-diagnostics/plan.md), [체크리스트](../codemine/runs/20261028-native-diagnostics/checklist.md), [연속성](../codemine/runs/20261028-native-diagnostics/continuity.json), [사용법](../NATIVE_EXECUTION_DIAGNOSTICS.md)
 - 이전 완료: Native preflight #232 [계획](../codemine/runs/20261028-native-preflight/plan.md), [체크리스트](../codemine/runs/20261028-native-preflight/checklist.md), [사용법](../NATIVE_EXECUTION_PREFLIGHT.md)
 - 이전 완료: native retention #230 [계획](../codemine/runs/20261027-native-retention-backup/plan.md), [체크리스트](../codemine/runs/20261027-native-retention-backup/checklist.md), [사용법](../EXECUTION_ARC_RETENTION.md)
@@ -47,8 +48,9 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 | 완료 #233 | Native 읽기 전용 진단 | [진단](../NATIVE_EXECUTION_DIAGNOSTICS.md): source/native 유지보수 metadata·checkpoint/ACK/generation/floor/fence·명시적 export 관찰, 운영 권한 없음. exact-head CI5 run40619486115 뒤 squash/main63fafea 동기화 완료 |
 | 완료 #232 | Native 실행 설정 통합 검사 | [오프라인 preflight](../NATIVE_EXECUTION_PREFLIGHT.md): production schema·strict 입력·PASS/HOLD/FAIL·운영 권한 없음. 릴리스 증거는 PR metadata와 부모 인계 영수증 참조 |
 | 완료 #235 | 오프라인 backup adapter | [백업 영수증 서명·파일 인증](../EXECUTION_BACKUP_ADAPTER.md), pinned key/chain/DB·exact permit·private atomic receipt. 실제 PG 내용·WAL 연속성·복원·운영 권한은 검증하지 않음. CI5 run40667988110 통과 후 squash/main e20635f 동기화 완료 |
-| 구현 완료 | 오프라인 monitoring | [일회성 경보 판정](../NATIVE_OFFLINE_MONITORING.md): Arc/StableNet 진단 JSON·선언된 capacity/pipeline·명시적 시각, strict 입력·unknown/stale·redaction·독립 위험 판정. 체인/DB/RPC/watcher/알림·actuation 없음. 최종 릴리스 증거는 PR/CI와 Git metadata 참조 |
-| 다음 운영 준비·HOLD | 저장소·배포 값 → Arc 접속·인증 checkpoint → 실제 backup/restore 검증 | 아래 미확정 조건을 충족한 뒤 별도 운영 범위로 진행. 현재 계획한 공통 오프라인 후속 목록은 완료 범위이며 새 측정·운영 확인 루프를 만들지 않음 |
+| 완료 #236 | 오프라인 monitoring | [일회성 경보 판정](../NATIVE_OFFLINE_MONITORING.md): Arc/StableNet 진단 JSON·선언된 capacity/pipeline·명시적 시각, strict 입력·unknown/stale·redaction·독립 위험 판정. 체인/DB/RPC/watcher/알림·actuation 없음. 최종 CI5 run40704614928 통과 후 squash/main a49065d 동기화 완료 |
+| 권장안 정리 완료·실제 값 HOLD | 저장소·배포 입력 | [결정표](../OPERATIONS_READINESS.md): 체인별 분리 경로, PostgreSQL pool4의 전체 예산, Arc 24h/172800블록의 가정과 native/spool 추가 용량, 인증 checkpoint 시작 권장안. 읽기 전용 metadata만 확인. 미확정 값을 template에 채우거나 provisioning하지 않음 |
+| 다음 운영 준비·HOLD | 실제 APFS·배포 값 → Arc 접속·인증 checkpoint → 실제 backup/restore 검증 | 아래 미확정 조건을 충족한 뒤 별도 운영 범위로 진행. 현재 계획한 공통 오프라인 후속 목록은 완료 범위이며 새 측정·운영 확인 루프를 만들지 않음 |
 | 완료 #226 | Arc native selected proof와 collector/window | RED→GREEN, 실제 임시 native-v2/history와 2회 ArcEVM 증거, strict selection·고정 source 정책·capacity/lease/restart/reorg/ACK, PG/API, 전체 로컬 검사·새 CPU1/race/single200, staged/history scan, 정확한 head CI5, squash·깨끗한 main 동기화. source-branch PR을 완료 정본으로 사용 |
 | 완료 #227 | 지원 체인의 bounded Engine blob transport | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
 | 완료 #228 | Call 조회 확장 | 주소별 범위·coverage 검색, orphan trace 보관·조회, richer GraphQL/JSON-RPC의 별도 계약과 검증. 기존 block/tx 페이지·RPC provider 경로·legacy 미수집을 혼합하지 않음 |
