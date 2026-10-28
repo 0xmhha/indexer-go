@@ -121,6 +121,7 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check --only-binary=:all: -r deployments/testnets/requirements.txt
           python -m unittest discover -s deployments/testnets -p 'test_preflight.py' -v
+          bash deployments/native/test-cli.sh
           python -B -m unittest discover -s verification -p 'test_release_sequence.py' -v
           python deployments/testnets/preflight.py
           sh -n deployments/testnets/indexer-entrypoint.sh

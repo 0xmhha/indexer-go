@@ -1,0 +1,19 @@
+# Restrict this diagnostic build context to source inputs. No operator bundles.
+**
+!go.mod
+!go.sum
+!execwire/
+!execwire/**
+!internal/
+!internal/**
+!pkg/
+!pkg/**
+!x/
+!x/**
+**/.git
+**/target
+**/node_modules
+**/data
+**/.env*
+**/*.key
+**/config.yaml

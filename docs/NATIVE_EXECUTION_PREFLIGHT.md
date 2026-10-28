@@ -5,6 +5,8 @@ node, native executable, DB, RPC client, peer, listener or Docker. It creates no
 storage directories, LOCK, checkpoints, migrations, permits, fences or recovery
 state. Runtime startup, GC and restore remain **not authorized**, even on PASS.
 
+The separate [Docker diagnostic draft](../deployments/native/README.md) binds these product commands to explicit read-only input bundles without runtime startup.
+
 ## Supported products and inputs
 
 Build one product binary; the products never link each other's chain modules:

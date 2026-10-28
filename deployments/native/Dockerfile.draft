@@ -1,0 +1,21 @@
+# Diagnostic recipe only. Image build, pull and container execution remain HOLD.
+FROM golang:1.26.8-bookworm AS builder
+ENV GOTOOLCHAIN=local CGO_ENABLED=1
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY execwire/ ./execwire/
+RUN go mod download
+COPY internal/ ./internal/
+COPY pkg/ ./pkg/
+COPY x/ ./x/
+RUN go build -trimpath -o /out/arc-execution-preflight ./x/arc/cmd/execution-preflight
+RUN go build -trimpath -o /out/arc-execution-diagnose ./x/arc/cmd/execution-diagnose
+RUN go build -trimpath -o /out/stablenet-execution-preflight ./x/stablenet/cmd/execution-preflight
+RUN go build -trimpath -o /out/stablenet-execution-diagnose ./x/stablenet/cmd/execution-diagnose
+
+# CGO/BLS needs libc from the same Debian family as the builder. No indexer,
+# native executor, credentials, DB client or extra packages are installed.
+FROM debian:bookworm-slim
+COPY --from=builder /out/ /app/
+USER 1000:1000
+ENTRYPOINT ["/app/arc-execution-diagnose"]

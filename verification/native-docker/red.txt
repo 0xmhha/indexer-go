@@ -1,0 +1,25 @@
+Observed behavioral REDs before the corresponding corrections:
+
+python3 -B -m unittest discover -s deployments/native -p test_diagnostics.py -k checked_in_draft -v
+exit1: test_checked_in_draft_is_hold_without_environment_or_host_access
+AssertionError: 'PASS' != 'HOLD'
+
+python3 -B -m unittest discover -s deployments/native -p test_diagnostics.py -k image_build_targets -v
+exit1: local replace module is missing from the build stage
+AssertionError: 'COPY execwire/' not found in the original legacy Docker recipe
+
+python3 -B -m unittest discover -s deployments/native -p test_diagnostics.py -k credentialed -v
+exit1: test_credentialed_or_malformed_image_is_not_a_valid_digest_pin
+AssertionError: 'HOLD' != 'FAIL'
+
+python3 -B -m unittest discover -s deployments/native -p test_diagnostics.py -k closed_cli -v
+exit1: test_closed_cli_output_pipe_is_failure_without_traceback
+AssertionError: 120 != 1
+
+python3 -B -m unittest discover -s deployments/native -p test_diagnostics.py -k known_system -v
+exit1: test_known_system_mount_aliases_cannot_be_selected_as_data
+AssertionError: 'PASS' != 'FAIL'
+
+A separate actual CGO0 host build failed blst/rb_tree.go: undefined: Message.
+This was a build-validation failure, not a behavioral test RED. CGO1 preserves
+existing crypto and the final four-host-binary fixture passed all13 cases.
