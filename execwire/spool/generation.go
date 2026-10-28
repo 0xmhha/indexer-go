@@ -231,17 +231,27 @@ func (s *Store) recoverTransition(ctx context.Context) error {
 	return s.finishTransition(ctx, j)
 }
 
-func (s *Store) finishTransition(ctx context.Context, j transition) error {
-	if j.Version != 1 || j.Chain != s.options.Chain || j.Anchor != s.state.Anchor || j.To.Generation <= j.From.Generation || j.To.Height > j.From.Height || j.To.Height < j.Anchor.Height || j.To.Height == j.Anchor.Height && j.To.Hash != j.Anchor.Hash {
+// validateTransition is the production pure journal/state check. Inspection may
+// call it without entering recovery, directory scans, quarantine or state writes.
+func validateTransition(state manifest, chain execwire.Chain, j transition) error {
+	if j.Version != 1 || j.Chain != chain || j.Anchor != state.Anchor || j.To.Generation <= j.From.Generation || j.To.Height > j.From.Height || j.To.Height < j.Anchor.Height || j.To.Height == j.Anchor.Height && j.To.Hash != j.Anchor.Hash {
 		return ErrCorrupt
 	}
 	if err := validateAnchor(Options{Chain: j.Chain, Anchor: j.To}); err != nil {
 		return ErrCorrupt
 	}
-	already := s.state.Base != nil && *s.state.Base == j.To && s.state.Committed == j.To
-	if s.state.Committed != j.From && !already {
+	already := state.Base != nil && *state.Base == j.To && state.Committed == j.To
+	if state.Committed != j.From && !already {
 		return ErrCorrupt
 	}
+	return nil
+}
+
+func (s *Store) finishTransition(ctx context.Context, j transition) error {
+	if err := validateTransition(s.state, s.options.Chain, j); err != nil {
+		return err
+	}
+
 	names, err := os.ReadDir(s.path)
 	if err != nil {
 		return err

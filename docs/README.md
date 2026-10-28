@@ -23,6 +23,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Query captured source blocks, transactions, addresses or logs | [Source lookup and search](SOURCE_QUERIES.md) |
 | Read projection completion, gaps and independent worker output | [Projection progress](PROJECTION_PROGRESS.md) |
 | Query tracked account and storage changes | [Tracked-state projections](TRACKED_STATE_PROJECTION.md) |
+| Diagnose native/source metadata and exported checkpoint/retention observations | [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md) |
 | Check native App/collector/checkpoint/retention files offline | [Native execution preflight](NATIVE_EXECUTION_PREFLIGHT.md) |
 | Read native replay call trees and internal calls | [Native execution traces](EXECUTION_CALL_TRACES.md) |
 | Full blobs in execution ingestion | [Bounded Engine V1 supply, private retained input, KZG and DB-only pages](EXECUTION_BLOBS.md) |

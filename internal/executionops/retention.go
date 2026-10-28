@@ -72,13 +72,7 @@ func RunRetention(ctx context.Context, o RetentionOptions, profile chains.Profil
 		if e != nil && !errors.Is(e, port.ErrNotFound) {
 			return e
 		}
-		return emit(struct {
-			Control port.ExecutionControl
-			Permit  retention.Permit
-			Pending bool
-			Receipt *retention.Receipt
-			Scope   string
-		}{control, p, pending, r, "separate read-only DB observations; no source/node deletion or recovery"})
+		return emit(RetentionInspection{control, p, pending, r, "separate read-only DB observations; no source/node deletion or recovery"})
 	}
 	endpoint := os.Getenv("INDEXER_CHECKPOINT_RPC")
 	if !strings.HasPrefix(endpoint, "https://") && !strings.HasPrefix(endpoint, "http://") {

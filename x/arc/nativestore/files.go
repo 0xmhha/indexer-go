@@ -14,7 +14,7 @@ import (
 	"github.com/0xmhha/indexer-go/execwire/retention"
 )
 
-type fileIdentity struct{ Device, Inode uint64 }
+type fileIdentity = retention.FileIdentity
 
 func sameDir(path string, id fileIdentity) bool {
 	got, e := identity(path)

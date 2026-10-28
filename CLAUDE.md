@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: Current n: offline native configuration preflight (`docs/NATIVE_EXECUTION_PREFLIGHT.md`, `docs/codemine/runs/20261028-native-preflight/plan.md`); n−1: native retention/backup #230; n−2: E6 #229. Call ranges/orphans #228 remain complete. Operations readiness stays HOLD; file PASS never authorizes startup/GC/restore.
+- **Current Stage**: Current n: Native read-only diagnostics (`docs/NATIVE_EXECUTION_DIAGNOSTICS.md`, `docs/codemine/runs/20261028-native-diagnostics/plan.md`); n−1: Native preflight #232; n−2: native retention/backup #230. E6 #229 remains complete. Call ranges/orphans #228 remain complete. Operations readiness stays HOLD; file PASS never authorizes startup/GC/restore.
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context

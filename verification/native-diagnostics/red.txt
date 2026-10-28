@@ -1,0 +1,5 @@
+--- FAIL: TestUnknownNeverReady (0.00s)
+    diagnose_test.go:11: uninspected native/source/indexer must HOLD/2, got 0:
+FAIL
+FAIL	github.com/0xmhha/indexer-go/internal/nativediagnostics	0.384s
+FAIL
