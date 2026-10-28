@@ -18,6 +18,12 @@ with owned fake stores/exports and declared synthetic metrics only.
 6. Explicit stage, staged/history secret scans, Conventional commit/one PR,
    actual final-head CI5, SHA-guarded squash and clean primary main sync.
 
+The original final-head CI297 exposed an existing aggregate20-minute budget
+across four state-proof cases×200. Preserve every test and condition while giving
+each its own sequential20-minute package budget, with an offline coverage/flags
+regression test. No Go/runtime change or blind retry is used; the corrected final
+head must again pass all five CI jobs before release.
+
 No new concurrent runtime state; no new concurrency200 campaign. No operating
 node/DB/peer/watcher/alert, image/container run, format/provisioning, performance
 trial, GC or restore activation. Pool4/part2/API1/writer7/RPC5/NEW final fresh,

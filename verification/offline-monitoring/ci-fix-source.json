@@ -1,0 +1,18 @@
+{
+  "reviewed_initial_head": "2f635a5e77c43cc4a7bf315fa590ae00528d2a00",
+  "unchanged_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+  "files": {
+    ".github/workflows/ci.yml": "64499200ee820f123a6ea4e4d32c56cb5f4100ac9988201afba9c5cb1bdb474d",
+    "verification/test_ci_state_proof_batches.py": "108128757a1661acef5897c5534c2aae1ae53cbf7e0e14a5bcf900957fc7d869"
+  },
+  "parser": "6.0.3",
+  "initial_ci_run": 40691037595,
+  "initial_failed_job": 122825596577,
+  "failure": "aggregate_20m_timeout_across_four_cases_x200",
+  "baseline_ci_run": 40667988110,
+  "baseline_successful_group_seconds": 1189.933,
+  "same_cases": 4,
+  "count_per_case": 200,
+  "total_cases": 800,
+  "godebug_rpc_pool_fsync_and_test_assertions": "unchanged"
+}

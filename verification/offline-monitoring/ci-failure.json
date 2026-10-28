@@ -1,0 +1,19 @@
+{
+  "failed_run": 40691037595,
+  "failed_job": 122825596577,
+  "failed_head": "2f635a5e77c43cc4a7bf315fa590ae00528d2a00",
+  "step": "Native state-proof files and DB-only API concurrency",
+  "panic": "test timed out after 20m0s",
+  "active_test": "TestExecutionNativeStateProofPublicationAndRestart",
+  "active_test_age_seconds": 1,
+  "stack": "rpcpool limiter wait during final fresh ConfirmExecution",
+  "failed_log_sha256": "d2d883249b11e363fa4fc30bd7d9ed13331147eb826e0024855a8566479a8505",
+  "baseline_run": 40667988110,
+  "baseline_job": 122747286261,
+  "baseline_group_seconds": 1189.933,
+  "baseline_log_sha256": "79d13b184b2e2ba3680f47e7453b74418b4a748e01924e2fd63915deb6af19b8",
+  "known_assertion_or_race_failures": 0,
+  "next_db_admission_step": "skipped_not_passed",
+  "fix": "four sequential independent case budgets, same CPU1/race/count200/20m per case",
+  "no_unchanged_Go_repeat": "original full-race evidence retained only after full Go/draft hash equality"
+}

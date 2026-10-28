@@ -1,0 +1,64 @@
+[
+  {
+    "gate": "ci-budget-contract",
+    "argv": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "verification",
+      "-p",
+      "test_ci_state_proof_batches.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log_sha256": "27e1a0b192772d60581c3070e5e626bca2245c86c089c3587cc7465bf3803cca",
+    "unchanged_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "ci_config_unchanged_during_gate": true
+  },
+  {
+    "gate": "release-sequence",
+    "argv": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "verification",
+      "-p",
+      "test_release_sequence.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log_sha256": "8fb5982ea121041d5560af8084988a2f3d6f9ffaa0516504d8a722e7dc166802",
+    "unchanged_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "ci_config_unchanged_during_gate": true
+  },
+  {
+    "gate": "whitespace",
+    "argv": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "unchanged_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "ci_config_unchanged_during_gate": true
+  },
+  {
+    "gate": "docs",
+    "argv": [
+      "python3",
+      "-B",
+      "/private/tmp/indexer-native-docker-20261028/docs.py"
+    ],
+    "exit": 0,
+    "log_sha256": "0ce1d95f9251f42a5ad41a430c334febd7394d6168eacba24887cc4bc3e9972e",
+    "unchanged_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "ci_config_unchanged_during_gate": true
+  }
+]

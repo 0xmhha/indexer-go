@@ -34,3 +34,30 @@ pool or RPC implementation is modified. No local operational PostgreSQL, Rust
 node build/run, Docker execution, format, GC/restore activation or performance
 test is part of this feature. Actual final-head CI postgres/arc remain mandatory
 before merge; their temporary functional fixtures are not operational evidence.
+
+The original [CI297](https://github.com/0xmhha/indexer-go/actions/runs/40691037595)
+at `2f635a5e77c43cc4a7bf315fa590ae00528d2a00` passed lint/test/examples/arc,
+but PostgreSQL exhausted the20-minute **package** timer for four state-proof
+cases each repeated200 times. Its active test had run for1 second, waiting in
+the5/s limiter during `ConfirmExecution`'s fresh read. No assertion or race
+failure was reported. The prior successful identical group took1189.933 seconds
+of1200; this is existing-log evidence, not a new performance measurement. The
+subsequent DB-admission step was skipped and is not reported as passed.
+
+The CI-only correction gives each existing case a separate sequential package
+invocation with unchanged CPU1/race/count200/20m conditions. It neither removes
+coverage nor changes the RPC cap, pool, fresh queries, individual-test deadlines,
+assertions, PostgreSQL fixture ownership/cleanup or fsync. The offline coverage
+contract first failed with1 invocation instead of4, then passed with the pinned
+PyYAML6.0.3. An exact workflow comparison allows only the split and its guard's
+CI invocation; all other jobs/steps and runtime code remain unchanged.
+
+[Failure evidence](../../../../verification/offline-monitoring/ci-failure.json),
+[CI configuration identity](../../../../verification/offline-monitoring/ci-fix-source.json),
+[configuration checks](../../../../verification/offline-monitoring/ci-fix-checks.json)
+and [RED](../../../../verification/offline-monitoring/ci-budget-red.txt) preserve
+the distinction. All final Go/draft bytes still match the original source
+manifest, so the already-passed full local Go race/build/vet/lint evidence is
+reused without claiming a second execution. The correction has its own offline
+checks and [staged/history scan](../../../../verification/offline-monitoring/ci-fix-secrets.json). Final corrected-head CI5 is required before
+squash; release identity remains the PR/CI/Git metadata.

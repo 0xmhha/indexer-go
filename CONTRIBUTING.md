@@ -69,6 +69,12 @@ The `execwire`, `x/stablenet/executor` and `tools/astgraph` directories are sepa
 
 New concurrency tests must pass with `GOMAXPROCS=1`, `-race` and a single `-count=200` invocation before push. Select the actual test names and package; partial runs are not equivalent to one complete run. Wait for the state a test checks instead of relying on fixed sleeps.
 
+The four PostgreSQL state-proof acceptance cases use separate sequential CI steps,
+each with `GOMAXPROCS=1`, `-race`, a single `-count=200` and its own20-minute
+package timeout. Keep all four cases and those conditions; combining them under
+one shared20-minute timer can exhaust the aggregate budget while tests progress.
+The offline `verification/test_ci_state_proof_batches.py` checks coverage and flags.
+
 Public-RPC and live-node checks are opt-in. Run workload/SLO checks only when they are relevant to an agreed validation scope. Keep functional success, performance measurements and live operational evidence distinct; report commands, inputs, skips, failures and the limits of the result.
 
 For documentation changes, verify relative links and section anchors, match flags and configuration keys to the code, and check that examples point to real files. Keep dated measurements out of onboarding instructions.
