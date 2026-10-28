@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "expected": null,
+  "max_age_seconds": null,
+  "capacity_warn_bps": null,
+  "capacity_stop_bps": null,
+  "min_free_bytes": null,
+  "backlog_warn_blocks": null,
+  "backlog_stop_blocks": null,
+  "lag_warn_seconds": null,
+  "lag_stop_seconds": null,
+  "required_storage": []
+}

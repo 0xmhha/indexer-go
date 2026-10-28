@@ -68,6 +68,7 @@ For your own RPC endpoint, a retained starting height, or PostgreSQL, follow the
 | Add derived data, a block handler or a custom API | [Extending the indexer](docs/EXTENDING.md) |
 | Support custom headers, transactions or native accounting | [Chain customization](docs/CHAIN_CUSTOMIZATION.md) and the [profile example](examples/chainprofile/README.md) |
 | Integrate an API client | [API reference](docs/API.md) and [schema snapshots](pkg/app/testdata/api/) |
+| Evaluate saved native diagnostics and declared pressure metrics | [Offline monitoring](docs/NATIVE_OFFLINE_MONITORING.md) — no chain, probes or actuation |
 | Authenticate external backup evidence offline | [Backup attestation adapter](docs/EXECUTION_BACKUP_ADAPTER.md) — pinned provider signature and exact file, no restore |
 | Review diagnostic-only Docker wiring | [Native Docker draft](deployments/native/README.md) — offline checks, no container startup |
 | Diagnose existing native/source maintenance and exported checkpoints | [Native read-only diagnostics](docs/NATIVE_EXECUTION_DIAGNOSTICS.md) — bounded metadata, no operational authority |

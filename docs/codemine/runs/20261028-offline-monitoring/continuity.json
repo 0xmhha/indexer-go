@@ -1,0 +1,13 @@
+{
+  "n": "Offline Native monitoring",
+  "n_minus_1": {"pr": 235, "main": "e20635f7777a848515606cfa96b88c78bd445b4c", "plan": "../20261028-backup-adapter/plan.md"},
+  "n_minus_2": {"pr": 234, "plan": "../20261028-native-docker/plan.md"},
+  "diagnostics": "../20261028-native-diagnostics/plan.md",
+  "preflight": "../20261028-native-preflight/plan.md",
+  "retention": "../20261027-native-retention-backup/plan.md",
+  "e6": "../20261027-e6-independent-consensus/plan.md",
+  "accepted_design": "../20261023-e1-execution/02-design.md",
+  "accepted_plan": "../20261023-e1-execution/03-plan.md",
+  "next": ["operator APFS/deployment identity and budgets", "official Arc EL peer and authenticated checkpoint", "provider snapshot/WAL content and actual restore validation when authorized resources exist"],
+  "operational_readiness": "HOLD"
+}

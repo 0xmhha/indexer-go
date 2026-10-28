@@ -1,0 +1,15 @@
+Behavioral RED before implementation; exit1
+--- FAIL: TestKnownCriticalSurvivesMissingStaleAndUnknownInputs (0.00s)
+    monitor_test.go:39: known capacity critical was masked: {Version:1 Status:HOLD AlertLevel:unknown Scope: OperationalReadiness: LiveFreshness: Authenticity: Actuation: Findings:[]}
+FAIL
+FAIL	github.com/0xmhha/indexer-go/internal/nativemonitor	0.444s
+FAIL
+
+Additional pre-fix generation/anchor RED; exit1
+--- FAIL: TestUnknownGenerationCannotBecomeMeasuredBacklog (0.00s)
+    monitor_test.go:190: unknown generation became measured backlog: {Version:1 Status:FAIL AlertLevel:critical Scope:submitted_unverified_separate_samples_only OperationalReadiness:not_authorized LiveFreshness:not_performed Authenticity:not_verified Actuation:none Findings:[{Field:authority Status:HOLD Code:live_probes_not_performed} {Field:diagnostics.time Status:PASS Code:within_declared_age} {Field:diagnostics Status:HOLD Code:reported_incomplete} {Field:metrics.time Status:PASS Code:within_declared_age} {Field:pipeline.generation Status:HOLD Code:not_observed} {Field:pipeline.receive_gap Status:PASS Code:below_warning_threshold} {Field:pipeline.backlog Status:FAIL Code:stop_threshold_reached} {Field:pipeline.ack_gap Status:PASS Code:below_warning_threshold} {Field:pipeline.oldest_pending Status:PASS Code:below_warning_threshold} {Field:pipeline.ack_lag Status:PASS Code:below_warning_threshold} {Field:pipeline.worker_lag Status:PASS Code:below_warning_threshold} {Field:storage.raw.usage Status:PASS Code:below_warning_threshold} {Field:storage.indexer.usage Status:PASS Code:below_warning_threshold} {Field:storage.filesystem.free Status:PASS Code:above_free_floor}]}
+--- FAIL: TestPipelineCannotPrecedeItsDeclaredAnchor (0.00s)
+    monitor_test.go:204: below-anchor pipeline accepted: {Version:1 Status:FAIL AlertLevel:critical Scope:submitted_unverified_separate_samples_only OperationalReadiness:not_authorized LiveFreshness:not_performed Authenticity:not_verified Actuation:none Findings:[{Field:authority Status:HOLD Code:live_probes_not_performed} {Field:diagnostics.time Status:PASS Code:within_declared_age} {Field:diagnostics Status:HOLD Code:reported_incomplete} {Field:metrics.time Status:PASS Code:within_declared_age} {Field:pipeline.receive_gap Status:PASS Code:below_warning_threshold} {Field:pipeline.backlog Status:PASS Code:below_warning_threshold} {Field:pipeline.ack_gap Status:FAIL Code:stop_threshold_reached} {Field:pipeline.oldest_pending Status:PASS Code:below_warning_threshold} {Field:pipeline.ack_lag Status:PASS Code:below_warning_threshold} {Field:pipeline.worker_lag Status:PASS Code:below_warning_threshold} {Field:storage.raw.usage Status:PASS Code:below_warning_threshold} {Field:storage.indexer.usage Status:PASS Code:below_warning_threshold} {Field:storage.filesystem.free Status:PASS Code:above_free_floor}]}
+FAIL
+FAIL	github.com/0xmhha/indexer-go/internal/nativemonitor	0.486s
+FAIL
