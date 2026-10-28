@@ -1,0 +1,14 @@
+test_all_cases_keep_independent_budgets_and_required_conditions (test_ci_state_proof_batches.StateProofBudgets.test_all_cases_keep_independent_budgets_and_required_conditions) ... FAIL
+
+======================================================================
+FAIL: test_all_cases_keep_independent_budgets_and_required_conditions (test_ci_state_proof_batches.StateProofBudgets.test_all_cases_keep_independent_budgets_and_required_conditions)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go/verification/test_ci_state_proof_batches.py", line 28, in test_all_cases_keep_independent_budgets_and_required_conditions
+    self.assertEqual(
+AssertionError: 1 != 4 : four acceptance cases need independent package timeout budgets
+
+----------------------------------------------------------------------
+Ran 1 test in 0.007s
+
+FAILED (failures=1)

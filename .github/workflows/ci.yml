@@ -123,6 +123,7 @@ jobs:
           python -m unittest discover -s deployments/testnets -p 'test_preflight.py' -v
           bash deployments/native/test-cli.sh
           python -B -m unittest discover -s verification -p 'test_release_sequence.py' -v
+          python -B -m unittest discover -s verification -p 'test_ci_state_proof_batches.py' -v
           python deployments/testnets/preflight.py
           sh -n deployments/testnets/indexer-entrypoint.sh
 
@@ -147,8 +148,16 @@ jobs:
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeBlobsPublicationPagesAndRestart$'
       - name: Engine full-blob supply and DB-only publication concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=30m -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'
-      - name: Native state-proof files and DB-only API concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^(TestExecutionNativeStateProofPublicationAndRestart|TestExecutionArcNativeStateProofPublicationAndRestart|TestExecutionArcNativeProofSpoolPublicationAndLostACK|TestExecutionArcNativeProofFreshFailureRetainsUnpublishedParts)$'
+      # Give these four cases independent package timeout budgets.
+      # Each still runs once with race/count200/CPU1, preserving all checks.
+      - name: Native state-proof publication and restart concurrency
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeStateProofPublicationAndRestart$'
+      - name: Arc native state-proof publication and restart concurrency
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionArcNativeStateProofPublicationAndRestart$'
+      - name: Arc state-proof spool and lost-ACK concurrency
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionArcNativeProofSpoolPublicationAndLostACK$'
+      - name: Arc state-proof fresh-failure retention concurrency
+        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionArcNativeProofFreshFailureRetainsUnpublishedParts$'
       - name: Execution DB admission and recovery concurrency
         run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence|TestExecutionRetentionDrainsReadLeaseAndCancel)$'
 

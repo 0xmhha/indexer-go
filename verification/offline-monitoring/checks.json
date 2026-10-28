@@ -1,0 +1,119 @@
+[
+  {
+    "gate": "functional",
+    "argv": [
+      "go",
+      "test",
+      "-count=1",
+      "-v",
+      "./internal/nativemonitor",
+      "./cmd/execution-monitor"
+    ],
+    "exit": 0,
+    "log_sha256": "4463599a59f0a5a5041e78d960ec9c4daa91313c891e23f5a1c8b364162acff1",
+    "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "source_files_unchanged": true
+  },
+  {
+    "gate": "boundaries",
+    "argv": [
+      "python3",
+      "-B",
+      "/private/tmp/indexer-offline-monitoring-20261028/boundaries.py"
+    ],
+    "exit": 0,
+    "log_sha256": "1d94e8958597b220329b535e10e1aa4dd080506d40097b4ecb702c994fecfd68",
+    "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "source_files_unchanged": true
+  },
+  {
+    "gate": "format",
+    "argv": [
+      "python3",
+      "-B",
+      "/private/tmp/indexer-offline-monitoring-20261028/format.py"
+    ],
+    "exit": 0,
+    "log_sha256": "6d77cba8319763329ae89aae6e7c2dc4bd004f4674f6483665974b3bd443b733",
+    "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "source_files_unchanged": true
+  },
+  {
+    "gate": "build-vet-lint",
+    "argv": [
+      "bash",
+      "-e",
+      "-c",
+      "for module in . execwire x/stablenet/executor tools/astgraph; do (cd \"$module\"; go build ./...; go vet ./...; \"$(go env GOPATH)/bin/golangci-lint\" run ./...); done"
+    ],
+    "exit": 0,
+    "log_sha256": "5f4ff97d3e607c3574b4ff46ecbc9c4baf8f6e5fa825e8dc4f4effab5ecadc21",
+    "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "source_files_unchanged": true
+  },
+  {
+    "gate": "race",
+    "argv": [
+      "make",
+      "test-race",
+      "GOTEST=go test -timeout=20m"
+    ],
+    "exit": 0,
+    "log_sha256": "19999d4fc634883bdecf2a8ac0e652371edb075f7a2abf445b9f06a15951bf89",
+    "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "source_files_unchanged": true
+  },
+  {
+    "gate": "cache",
+    "argv": [
+      "make",
+      "test-cache-lifecycle"
+    ],
+    "exit": 0,
+    "log_sha256": "e6194920ba71086801fc03918a200ce9ddf8c16faf5cae9a34122f95ad615e56",
+    "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "source_files_unchanged": true
+  },
+  {
+    "gate": "examples",
+    "argv": [
+      "make",
+      "test-examples"
+    ],
+    "exit": 0,
+    "log_sha256": "7a2b6599da878413856f02291aee9012f08be17c560d778455233b7d9e4873e8",
+    "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "source_files_unchanged": true
+  },
+  {
+    "gate": "release-sequence",
+    "argv": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "verification",
+      "-p",
+      "test_release_sequence.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log_sha256": "8fb5982ea121041d5560af8084988a2f3d6f9ffaa0516504d8a722e7dc166802",
+    "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "source_files_unchanged": true
+  },
+  {
+    "gate": "docs",
+    "argv": [
+      "python3",
+      "-B",
+      "/private/tmp/indexer-native-docker-20261028/docs.py"
+    ],
+    "exit": 0,
+    "log_sha256": "9fa9c86e628bbf39366d727d776e4e6f398b28130f579b5c7c2580fb1cfb635b",
+    "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "source_files_unchanged": true
+  }
+]

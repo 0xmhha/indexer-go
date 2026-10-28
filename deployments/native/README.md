@@ -12,6 +12,10 @@ deployment is not included. The separate four-testnet
 [legacy operations composition](../testnets/README.md) retains its existing
 host/APFS guard and private DSN injection; it is not merged with this profile.
 
+[Offline monitoring](../../docs/NATIVE_OFFLINE_MONITORING.md) is a separate host
+command consuming saved JSON; its [unresolved input drafts](monitoring/policy.draft.json)
+add no Docker service, probe, DB/RPC connection or notification to this profile.
+
 ## Developer checks
 
 Use Python3.9+ with the repository's pinned parser:

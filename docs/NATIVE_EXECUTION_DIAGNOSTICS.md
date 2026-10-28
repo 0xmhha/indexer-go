@@ -31,6 +31,10 @@ build/arc-execution-diagnose \
   --retention-artifact /selected/exports/retention.json
 ```
 
+The separate [offline monitor](NATIVE_OFFLINE_MONITORING.md) consumes this JSON
+as submitted evidence alongside explicit sample times and declared metrics. It
+never invokes this command, upgrades its HOLD to readiness, or clears fences.
+
 ## Inputs and production contracts
 
 | Input | Observations and limits |

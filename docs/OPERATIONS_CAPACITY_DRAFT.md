@@ -22,6 +22,8 @@
 
 코드 근거는 [Usage/용량 대기](../pkg/window/budget.go), [append](../pkg/window/store.go), [세션 수명](../pkg/capture/session.go), [압력 로그](../pkg/capture/config.go), [체인 재시작](../internal/multichain/manager.go)다. marker/ledger의 quota는 Open 때 대조하므로 YAML 숫자만 바꿔 온라인 증설하는 방식은 지원하지 않는다.
 
+[오프라인 Native 모니터](NATIVE_OFFLINE_MONITORING.md)는 저장된 진단과 명시적으로 제출한 용량·pipeline 수치의 일회성 경보 판정을 제공한다. 실제 측정·DB 성장 추세 수집·watcher·hysteresis·latch·중단/재개를 새로 실행하지 않는다. 오래되거나 미관측인 값은 HOLD로 유지하며, 알려진 위험은 독립적으로 표시한다. 기존 live opsguard와 운영 보류 상태는 유지한다.
+
 ## 감시할 값과 수집 범위
 
 아래 주기는 **일부 구현된 운영 감시 제안**이며 이번에 poller·스케줄·추가 DB 연결·RPC 조회를 만들거나 실행하지 않는다. 기록은 이 프로젝트 전용의 bounded 파일/별도 모니터링 저장소에 두고 DSN·peer key·원본 payload는 남기지 않는다. 같은 APFS에 장기 로그/백업을 무제한 저장하지 않는다.

@@ -1,0 +1,19 @@
+{
+  "base": "e20635f7777a848515606cfa96b88c78bd445b4c",
+  "branch": "refactor/offline-native-monitoring",
+  "go_source_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+  "files": {
+    "cmd/execution-monitor/main.go": "7f11d2bc6bd94a49c5d5384cde3dfae0baf53f410269ac2b7cd6caf28722286c",
+    "deployments/native/monitoring/policy.draft.json": "911b1a1779107581a79a85a881ad6f56ff15fe1d373f0f5d3053f6cdc3b9c5a0",
+    "deployments/native/monitoring/snapshot.draft.json": "d13f2e9ce6cee25e7707392ea054fc0daad9d3f364a3a85e8e59befe6bad22c5",
+    "internal/nativemonitor/diagnostics.go": "25d268c2dc1d516c991d91885930ac727892fe42403e94fa463388bc7b84c9e9",
+    "internal/nativemonitor/evaluate.go": "4c0326c533249d3a2a21dd9ab8771b1f98b4eb945c20c5393312a6ac5458991f",
+    "internal/nativemonitor/monitor_test.go": "0d911b7cee5ff7ad7c0cde65f91ca3085ac49e34934c3987ffb7ac8c05b2bc61",
+    "internal/nativemonitor/products_test.go": "b5d3380d439d9732266d52b707079341ea47a42792ff960ce45cd0618b2cbb46",
+    "internal/nativemonitor/run.go": "a6c85808d844004097e960a530a247da18bafcf898b7dc8c6647288327c81479",
+    "internal/nativemonitor/run_test.go": "f97ec8302f2efb656ccedddc36dc1e2cbbd293faec6025786568bd73cd1ba07d",
+    "internal/nativemonitor/types.go": "a68f1285ee45265d2a8acffdb52d29b687b3bd90e8fc8ad76f2888f64d91c9c7"
+  },
+  "go_version": "go version go1.26.8 darwin/arm64",
+  "scope": "offline submitted diagnostic+metrics evaluator; no chain/probes/runtime configuration/operating resources"
+}
