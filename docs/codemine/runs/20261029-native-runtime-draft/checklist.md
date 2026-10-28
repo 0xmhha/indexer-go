@@ -9,7 +9,7 @@
 - [x] Current lifecycle/paths/HOLD docs, backlog and continuity updated.
 - [x] Pinned-parser unit/compatibility, exact-source reuse, config, docs and syntax gates.
 - [x] Final explicit-path/staged-history secret checks; Conventional commit prepared.
-- [x]238 relative links/3 anchors and no new secrets; historical15 public fixtures distinguished.
+- [x] 238 relative links/3 anchors and no new secrets; historical15 public fixtures distinguished.
 
 Release condition: final-head CI5 success, guarded squash and clean main sync.
 The final state is recorded by PR/CI and Git metadata rather than a pre-commit
