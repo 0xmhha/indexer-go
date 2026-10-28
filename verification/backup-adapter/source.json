@@ -1,0 +1,15 @@
+{
+  "base": "8fd812c504adc00abd541023c8efd8e94d7ca005",
+  "branch": "refactor/offline-backup-adapter",
+  "go_source_sha256": "0e4e8ba5e69a1f7bb3e7cffbea24a873bdc2f5d11e7e58f61e666954b4af35a9",
+  "files": {
+    "cmd/execution-backup/main.go": "3b10b0a0f480e2a8bbee351ae50a31c115308a0382c058182ce1f3838e1f1351",
+    "internal/executionbackup/backup.go": "b1b99121c0a9e49419dc1602caaa88f745f081bc2d2dc01faca64bc50aae3d99",
+    "internal/executionbackup/backup_test.go": "e0e1e605545b4c5410dd2f55f7546a5a96ee31b2cfdd8f3969af73b505a756d7",
+    "internal/executionbackup/private_other.go": "4ce65b072c4629dc0fe85f32f8cce4b5d07982a12a53ce209a6d33c9e0936f03",
+    "internal/executionbackup/private_unix.go": "bd5b3fc1e7b3ccdb34ee27623ea87822c091aebdfc8c69e3f48904aa0fd6c26a",
+    "internal/executionbackup/run.go": "4520f64500bee4c95470b2e14d9607fcf5bd1d2f1281acef455c3bddaa932dad"
+  },
+  "go_version": "go version go1.26.8 darwin/arm64",
+  "scope": "offline signed backup evidence; no SQL/RPC/runtime configuration or operating resources"
+}

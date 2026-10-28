@@ -1,0 +1,6 @@
+Behavioral RED before implementation; exit1
+--- FAIL: TestBackupAuthenticatesBoundReceiptAndPreservesInputs (0.01s)
+    backup_test.go:70: valid authenticated receipt refused: retention: invalid or unsafe maintenance evidence
+FAIL
+FAIL	github.com/0xmhha/indexer-go/internal/executionbackup	0.481s
+FAIL

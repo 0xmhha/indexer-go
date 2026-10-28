@@ -162,7 +162,12 @@ file. `IndexerReceipt` is an externally authenticated private JSON receipt:
 ```
 
 The receipt's provenance is an external operational trust input, like the E2
-anchor. This tool does not generate, authenticate or replay a SQL dump/WAL.
+anchor. The optional [offline backup adapter](EXECUTION_BACKUP_ADAPTER.md)
+authenticates an externally signed receipt and exact packed bytes using a
+separately pinned provider key/chain/DB scope; it can export this compatible
+receipt. The receipt alone is not self-authenticating. Native retention does not
+generate or replay a SQL dump/WAL, and the adapter does not verify its contents
+or recovery success.
 An operator must attest that the artifact restores the exact receipt publication
 and contains all WAL required to that boundary. A hash of arbitrary SQL bytes is
 insufficient operational evidence. Autonomous PostgreSQL snapshot/restore and
