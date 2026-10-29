@@ -3,8 +3,8 @@
 N2 adds `arc-native-import`, an explicit bounded stdin/stdout writer using the
 pinned official Arc EVM and native-v2 storage libraries. It imports into an
 [N1 verified bootstrap](EXECUTION_ARC_BOOTSTRAP.md), without NodeBuilder,
-network/RPC/SQL clients, an upstream patch or a separate node service. App-owned
-ingress, the managed collector/reorg bridge and permanent raw/GC remain N3–N6.
+network/RPC/SQL clients, an upstream patch or a separate node service.
+[App-owned ingress](EXECUTION_ARC_INGRESS.md) is implemented by N3; the managed collector/reorg bridge, permanent raw/GC and combined acceptance remain N4–N6.
 Operational execution, APFS/enode/authenticated production inputs and performance
 measurements remain **HOLD**.
 
@@ -102,9 +102,9 @@ contains the committed ImportReceipt. Ready/head/native receipt is **not** a
 Hello-derived E1 ACK, finality, public completion or deletion permit. Output
 failure leaves the completed receipt for an exact duplicate retry.
 
-The future Go owner must filter the child environment, bound diagnostics and
-cancel/join its own child. It must reuse the App RPC5 budget and same Store,
-never create another dialer/pool. Those lifecycle bindings are N3/N4.
+The N3 Go owner filters the child environment, bounds diagnostics and
+cancels/joins its own child. It reuses App RPC5 and the same Store,
+without another dialer/pool. N3 implements the [App ingress lifecycle](EXECUTION_ARC_INGRESS.md); N4 binds the managed collector.
 
 ## Evidence and limits
 

@@ -1,0 +1,16 @@
+{
+  "base": "636c10b7e488e45b2871c91f2af81a834a486a66",
+  "branch": "refactor/arc-native-n3",
+  "algorithm": "SHA256 of UTF-8 compact sorted JSON path-to-file-SHA256 map",
+  "go_source_sha256": "69b5e0e181a0bf7dfc057e95acaa0cbcae18a8a96670f080363142cca01e9ad9",
+  "go_files": 1476,
+  "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
+  "rust_mode": "REUSED exact unchanged N2 source; retained actual build/fmt/clippy/76 tests verified; final CI arc required",
+  "constants": [
+    "pool4/part2/API1/logical-writers7",
+    "shared RPC5 physical attempts including retries",
+    "NEW fresh -> generation fence -> COMMIT -> exact ACK",
+    "two normal EVM executions"
+  ],
+  "operating": "HOLD; no live node/peer, user config, formatting, operational GC/restore or performance campaign"
+}

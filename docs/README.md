@@ -28,7 +28,8 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Review diagnostic-only Docker image/profile wiring | [Native Docker draft](../deployments/native/README.md) |
 | Build a new Arc native DB offline from an authenticated full checkpoint | [Arc native bootstrap](EXECUTION_ARC_BOOTSTRAP.md) |
 | Review the owned Arc first-execution native writer and crash fences | [Arc native writer](EXECUTION_ARC_NATIVE_WRITER.md) |
-| Review Arc first-import design, N0–N2 and remaining N3–N6 | [Arc native import design](ARC_NATIVE_IMPORT_DESIGN.md) |
+| Configure opt-in App-owned raw/native intake and its safety boundaries | [Arc ingress](EXECUTION_ARC_INGRESS.md) |
+| Review Arc first-import design, N0–N3 and remaining N4–N6 | [Arc native import design](ARC_NATIVE_IMPORT_DESIGN.md) |
 | Review Native App/collector/executor topology and held lifecycle | [Native runtime composition draft](../deployments/native/runtime/README.md) |
 | Diagnose native/source metadata and exported checkpoint/retention observations | [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md) |
 | Check native App/collector/checkpoint/retention files offline | [Native execution preflight](NATIVE_EXECUTION_PREFLIGHT.md) |

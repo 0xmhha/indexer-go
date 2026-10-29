@@ -125,3 +125,27 @@ func TestReceiverSocketPathPublishedOnlyAfterReadyAndNeverReplaces(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, []byte("preserve concurrent owner"), data)
 }
+
+func TestReceiverReadyCallbackSeesPublishedPrivateSocketAndFailureCleansUp(t *testing.T) {
+	r, _, _ := receiverFixture(t, &controlledBackend{})
+	path := executionSocket(t)
+	want := errors.New("prepared owner refused start")
+	called := false
+	r.OnReady = func() error {
+		called = true
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSocket == 0 || info.Mode().Perm() != 0600 {
+			return errors.New("readiness preceded private socket publication")
+		}
+		return want
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	require.ErrorIs(t, r.Run(ctx, path), want, "ready callback must run after publication and before serving")
+	require.True(t, called)
+	_, err := os.Lstat(path)
+	require.ErrorIs(t, err, os.ErrNotExist)
+}

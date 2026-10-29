@@ -25,7 +25,7 @@ the release-gate item as a claim that CI has already run.
 - [x] N0 bounded frame/private pending fence and real pinned SDK qualification; [checks](../20261029-arc-native-n0/checklist.md).
 - [x] N1 authenticated native bootstrap builder; [checks](../20261029-arc-native-n1/checklist.md), release gates remain separately recorded.
 - [x] N2 first-execution writer, durable intents/receipts and reader gates; [checks](../20261029-arc-native-n2/checklist.md), actual release gates recorded separately.
-- [ ] N3 Arc App-owned P2P ingress, bounded raw/channel lifecycle and shared limits.
+- [x] N3 App-owned ingress, bounded raw/channel lifecycle and shared limits; [checks](../20261030-arc-native-n3/checklist.md), actual release gates recorded separately.
 - [ ] N4 managed collector and receiver-authorized reorg/restart bridge.
 - [ ] N5 permanent ingress bytes, authoritative GC/retention and held deployment.
 - [ ] N6 integrated offline acceptance and feature release verification.

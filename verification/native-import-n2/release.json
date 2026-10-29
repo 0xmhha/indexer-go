@@ -1,0 +1,40 @@
+{
+  "stage": "N2",
+  "status": "COMPLETE",
+  "pr": 243,
+  "url": "https://github.com/0xmhha/indexer-go/pull/243",
+  "base": "4586b04c010131e6e65c2d7431ce7934f4fdfa6a",
+  "head": "6d0211260c75d6330f34911f1f23985bfb1b541b",
+  "tree": "7289804b9397b8e50adddf6cb9a698a7b73bae31",
+  "main": "636c10b7e488e45b2871c91f2af81a834a486a66",
+  "ci_run": 40909181788,
+  "ci_run_number": 314,
+  "jobs": [
+    {
+      "id": 123572880709,
+      "name": "postgres",
+      "conclusion": "success"
+    },
+    {
+      "id": 123572880989,
+      "name": "test",
+      "conclusion": "success"
+    },
+    {
+      "id": 123572881073,
+      "name": "examples",
+      "conclusion": "success"
+    },
+    {
+      "id": 123572881181,
+      "name": "arc",
+      "conclusion": "success"
+    },
+    {
+      "id": 123572881337,
+      "name": "lint",
+      "conclusion": "success"
+    }
+  ],
+  "scope": "N2 native writer complete; N3-N6 pending; operational execution HOLD"
+}

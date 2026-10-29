@@ -10,6 +10,6 @@
 - [x] Complete wrong-input, cancellation/output and startup/fence failure matrix, including legacy maintenance refusal.
 - [x] Review code, full local Rust76/build/fmt/clippy and exact unchanged Go evidence.
 - [x] Final document352 links/12 anchors and staged/history secret checks;0 new/unreviewed findings.
-- [ ] Actual exact-head CI5, guarded squash and clean main sync before N3.
+- [x] Actual exact-head CI314 five jobs passed; #243 squash/main636c10b clean before N3; [release](../../../../verification/native-import-n2/release.json).
 
 Operations remain HOLD. No Native ready/receipt grants public/ACK/GC authority.

@@ -4,6 +4,7 @@
 package bundle
 
 import (
-	_ "github.com/0xmhha/indexer-go/x/arc"      // chain profile
-	_ "github.com/0xmhha/indexer-go/x/arc/feed" // source.feed module
+	_ "github.com/0xmhha/indexer-go/x/arc"         // chain profile
+	_ "github.com/0xmhha/indexer-go/x/arc/feed"    // source.feed module
+	_ "github.com/0xmhha/indexer-go/x/arc/ingress" // opt-in App-owned native input
 )
