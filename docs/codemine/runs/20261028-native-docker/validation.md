@@ -37,7 +37,7 @@ INDEXER/PG environment values. Owned host-binary fixture directories are removed
 on exit. Logs remain in this attempt's private temporary directory; receipts
 retain their SHA256 and exact command/exit rather than committing full logs.
 
-[Secret receipts](../../../../verification/native-docker/secrets.json) record
+[Secret receipts](../../../../verification/native-docker/leak-scan.json) record
 staged findings0 and history15 reviewed public fixtures, unreviewed0. Raw history
 scanner exit1 is not represented as zero findings. [RED observations](../../../../verification/native-docker/red.txt)
 retain the specific pre-correction assertion failures. The commit/PR and Git

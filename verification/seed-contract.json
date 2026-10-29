@@ -5,7 +5,7 @@
     "project_type": "brownfield",
     "context_references": [
       {
-        "path": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+        "path": ".",
         "role": "primary",
         "summary": "Existing indexer-go codebase to audit and extend across blob supply/verification, call queries and orphan traces, E6 consensus verification, and native index/MDBX reclamation and backup/restore."
       }
@@ -28,7 +28,7 @@
     ]
   },
   "constraints": [
-    "Work in /Users/kevin/work/github/0xmhha/stable-platform/indexer-go.",
+    "Work in the repository root.",
     "Preserve every supplied constraint at the top level of the executable Seed.",
     "Implement priorities strictly in order: blob supply and verification; bounded call queries and orphan traces; E6 cryptographic consensus verification; native index/MDBX reclamation and backup/restore.",
     "Complete each feature's CI5-gated squash merge and clean main synchronization before implementing the next feature.",
@@ -243,6 +243,6 @@
     "unresolved_slots": [],
     "recovery_reason": null
   },
-  "runtime_workspace": "/Users/kevin/.ouroboros/worktrees/indexer-go/lin_indexer_four_repaired_0f79258729fc",
+  "runtime_workspace": ".",
   "source_seed_sha256": "5e35b2e262ce7c462fa8ea0178f06936924824fac0e76f845c7463510bd5e2bc"
 }

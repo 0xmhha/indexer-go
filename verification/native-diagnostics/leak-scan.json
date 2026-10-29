@@ -7,7 +7,7 @@
       "--redact",
       "--no-banner",
       "--report-format=json",
-      "--report-path=/Users/kevin/.ouroboros/worktrees/indexer-go/orch_94d4f7f9bd18/verification/native-diagnostics/logs/staged-secrets.json",
+      "--report-path=verification/native-diagnostics/logs/staged-leak-scan.json",
       "--staged",
       "."
     ],
@@ -25,7 +25,7 @@
       "--redact",
       "--no-banner",
       "--report-format=json",
-      "--report-path=/Users/kevin/.ouroboros/worktrees/indexer-go/orch_94d4f7f9bd18/verification/native-diagnostics/logs/history-secrets.json",
+      "--report-path=verification/native-diagnostics/logs/history-leak-scan.json",
       "--log-opts=HEAD",
       "."
     ],
