@@ -84,6 +84,8 @@ jobs:
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m ./cmd/execution-state-proofs
       - name: Execution runtime lifecycle concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestExecutionRuntime' ./pkg/app
+      - name: Managed native ingress ownership and shutdown concurrency
+        run: GOMAXPROCS=1 go test -race -count=200 -timeout=20m -run '^(TestOwnedWindowConcurrentCASHasOneWinnerAndJoinsClose|TestIngressPrepareCancellationClosesReturnedResources|TestNativeCaptureContinuesWhileWriterBlockedAndCancellationJoins|TestNativeOwnedChild)' ./pkg/window ./pkg/execution/ingress ./x/arc/ingress
       - name: Execution feature writer ownership concurrency
         run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestExecutionWriterPlansForDifferentBlocksAreIndependent$' ./pkg/feature
       - name: State projection epoch retry concurrency

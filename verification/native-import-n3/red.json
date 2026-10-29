@@ -1,0 +1,80 @@
+[
+  {
+    "case": "owner-red",
+    "log_name": "n3-owner-red.log",
+    "log_sha256": "87c4874b317a831ace5ad34e87ec867f434538df3ec7aa04fa841fbc07458e41",
+    "exit": 1
+  },
+  {
+    "case": "owner-live-fence-red",
+    "log_name": "n3-owner-live-fence-red.log",
+    "log_sha256": "aad2091a1aa0131ab6a8d0ccd4e1a0f8e9ab6b6b0fad3cf4cd61dd1553ba5fed",
+    "exit": 1
+  },
+  {
+    "case": "registry-red",
+    "log_name": "n3-registry-red.log",
+    "log_sha256": "3bc59eef37e5eaacdda9b7498114854797147ff30c6161899bd646f847c1ba0d",
+    "exit": 1
+  },
+  {
+    "case": "prepare-cancel-red",
+    "log_name": "n3-prepare-cancel-red.log",
+    "log_sha256": "a33a9735a1e7d6f26682e4485b15db6a3a02c95830c6b675da4be6fd99abb536",
+    "exit": 1
+  },
+  {
+    "case": "app-preflight-red",
+    "log_name": "n3-app-preflight-red.log",
+    "log_sha256": "e2c33d728f21d2c4efad98af03b30062ccbeeb1463ca24cd6dc4256755b374eb",
+    "exit": 1
+  },
+  {
+    "case": "app-preparation-red",
+    "log_name": "n3-app-preparation-red.log",
+    "log_sha256": "ffb3488386c8c171980bffd859810e222ca163a55a0ac913e49484052a49f90a",
+    "exit": 1
+  },
+  {
+    "case": "runtime-ready-red",
+    "log_name": "n3-runtime-ready-red.log",
+    "log_sha256": "fbb608e8d2c7a981fa635ca4e7759963e1ea10b56ed25e9bbbbcb06a27a93535",
+    "exit": 1
+  },
+  {
+    "case": "listener-ready-red",
+    "log_name": "n3-listener-ready-red.log",
+    "log_sha256": "e6256f1730a0a6d3eba35ad9a973c8cbbe4547e058e911772010efac1d522295",
+    "exit": 1
+  },
+  {
+    "case": "native-protocol-red",
+    "log_name": "n3-native-protocol-red.log",
+    "log_sha256": "ce6032cdca503d8b2812ea29942ae71ff0f3f4bd8313b32a302e0fc3ca7c582d",
+    "exit": 1
+  },
+  {
+    "case": "raw-verification-red",
+    "log_name": "n3-raw-verification-red.log",
+    "log_sha256": "2ccbdf9921d886f904a89b64ba112da5983c8e720207505e8c74e83e69d69074",
+    "exit": 1
+  },
+  {
+    "case": "native-safety-red",
+    "log_name": "n3-native-safety-red.log",
+    "log_sha256": "1be2b76c3af3428abc6137f1b79e213746b3bd9a09f2723779048df3088675f5",
+    "exit": 1
+  },
+  {
+    "case": "restart-reconcile-red",
+    "log_name": "n3-restart-reconcile-red.log",
+    "log_sha256": "3e423e6018f1c53bb8ce5d8182eeb50c75205f49b361a6b647c208ca99646141",
+    "exit": 1
+  },
+  {
+    "case": "native-generation-red",
+    "log_name": "n3-native-generation-red.log",
+    "log_sha256": "13df67d98d8107153647589d044d8ecf4292c7fa1a7402daf6567f5577db8956",
+    "exit": 1
+  }
+]

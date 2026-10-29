@@ -6,6 +6,7 @@ import (
 	"fmt"
 	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/execution/ingress"
 	"math"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 // ExecutionSourceConfig opts into a prepared chain-native execution database.
 // Its checkpoint is the original anchor, not the changing visible height.
 type ExecutionSourceConfig struct {
+	Ingress             *ingress.Config         `yaml:"ingress,omitempty"`
 	Consensus           *chains.ConsensusPolicy `yaml:"consensus"`
 	RequiredStateProofs *stateproof.Selection   `yaml:"required_state_proofs"`
 	RequireBlobSidecars bool                    `yaml:"require_blob_sidecars"`
@@ -63,6 +65,14 @@ func (c *Config) validateExecution() error {
 	}
 	if c.Indexer.Finality != "" && c.Indexer.Finality != "head" || c.Indexer.Confirmations != 0 {
 		return fmt.Errorf("source.execution supports head canonical publication; finality/confirmations must not be silently ignored")
+	}
+	if e.Ingress != nil {
+		if err := e.Ingress.Validate(); err != nil {
+			return fmt.Errorf("source.execution.ingress: %w", err)
+		}
+		if c.Indexer.StartHeight != e.AnchorHeight+1 {
+			return fmt.Errorf("source.execution.ingress start_height must equal the original anchor height + 1")
+		}
 	}
 	return nil
 }

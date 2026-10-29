@@ -12,6 +12,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
+	"sync"
 )
 
 func preflightExecution(cfg *config.Config, opts StartOptions) error {
@@ -133,9 +134,16 @@ func (a *App) initExecution(ctx context.Context) error {
 	}
 	// Recovery completes before newApp exposes the API, and is checked again
 	// before the relay/listener starts. No legacy backfill or Fetcher.Run runs.
-	if err := recoverExecution(ctx); err != nil {
+	owned, err := prepareExecutionIngress(ctx, a.config, store, a.profileSrc, profile, recoverExecution)
+	if err != nil {
 		return err
 	}
+	transferred := false
+	defer func() {
+		if owned != nil && !transferred {
+			owned.Stop()
+		}
+	}()
 	backend := &execution.StoreBackend{Store: store, Publisher: a.fetcher}
 	r := &execution.Receiver{RequireBlobSidecars: e.RequireBlobSidecars, RequiredStateProofs: e.RequiredStateProofs, Chain: execwire.Chain{}, Profile: profile, Store: store, Window: 8, Timeout: e.Timeout, Confirm: a.fetcher.ConfirmExecution, ValidateReorg: a.fetcher.ValidateExecutionReorg, ReorgOnError: func(err error) bool { return errors.Is(err, fetch.ErrReorg) }}
 	c, err := store.ExecutionStatus(ctx)
@@ -154,6 +162,13 @@ func (a *App) initExecution(ctx context.Context) error {
 		return c.Rewind(ctx, target, root)
 	}
 	r.OnSessionError = func(err error) { a.logger.Warn("Execution session ended", zap.Error(err)) }
-	a.executionFeed = &executionRuntime{recover: recoverExecution, relay: a.fetcher.StartRelay, serve: func(ctx context.Context) error { return r.Run(ctx, e.Socket) }}
+	var ready chan struct{}
+	if owned != nil {
+		ready = make(chan struct{})
+		publish := sync.OnceFunc(func() { close(ready) })
+		r.OnReady = func() error { publish(); return nil }
+	}
+	a.executionFeed = &executionRuntime{recover: recoverExecution, relay: a.fetcher.StartRelay, serve: func(ctx context.Context) error { return r.Run(ctx, e.Socket) }, ingress: owned, ready: ready}
+	transferred = true
 	return nil
 }

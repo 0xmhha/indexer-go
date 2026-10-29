@@ -133,6 +133,14 @@ func (r *Receiver) Run(ctx context.Context, path string) error {
 		}
 		_ = l.Close()
 	}()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if r.OnReady != nil {
+		if err := r.OnReady(); err != nil {
+			return err
+		}
+	}
 	for {
 		conn, err := l.AcceptUnix()
 		if err != nil {

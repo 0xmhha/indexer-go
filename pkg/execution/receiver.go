@@ -28,7 +28,9 @@ type Receiver struct {
 	Window              int
 	Timeout             time.Duration
 	OnSessionError      func(error)
-	RetrySession        func(error) bool
+	// OnReady runs after the owned private listener is published, before accept.
+	OnReady      func() error
+	RetrySession func(error) bool
 }
 
 type receiverACK struct {

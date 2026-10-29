@@ -13,8 +13,10 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/capture"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/ethpeer"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata"
+	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/feed"
+	"github.com/0xmhha/indexer-go/pkg/source"
 	"github.com/0xmhha/indexer-go/x/arc"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -56,27 +58,45 @@ func openConfig(ctx context.Context, c feed.Config, fresh feed.Fresh) (feed.Prog
 	if err != nil {
 		return feed.Program{}, err
 	}
+	peer, err := openPeer(ctx, c, anchor, fresh)
+	if err != nil {
+		return feed.Program{}, err
+	}
+	p := feed.Program{Chain: anchor.Chain, Anchor: anchor, Plan: evmdata.BasePlan(), Profile: arc.New()}
+	if c.FinalityAuthority != "" {
+		p.Policy, err = TrustedRPCFinality(fresh, anchor.Chain, c.FinalityAuthority)
+		if err != nil {
+			return p, err
+		}
+	}
+	p.Run = func(ctx context.Context, db port.CaptureDatabase, session capture.SessionConfig) error {
+		return RunManaged(ctx, db, fresh, peer, session, capture.RuntimeOptions{Collect: c.Collect, ControlInterval: c.ControlInterval}, c.FinalityAuthority)
+	}
+	return p, nil
+}
+
+func openPeer(ctx context.Context, c feed.Config, anchor model.FeedBlock, fresh source.CanonicalReader) (ethpeer.Config, error) {
 	// A key is supplied explicitly, never generated in an unexpected directory.
 	file, err := os.Open(c.KeyFile)
 	if err != nil {
-		return feed.Program{}, err
+		return ethpeer.Config{}, err
 	}
 	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
-		return feed.Program{}, err
+		return ethpeer.Config{}, err
 	}
 	pathInfo, e := os.Lstat(c.KeyFile)
 	if e != nil || !os.SameFile(info, pathInfo) || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 128 {
-		return feed.Program{}, fmt.Errorf("arc.eth68: key_file must be a private regular file (0600)")
+		return ethpeer.Config{}, fmt.Errorf("arc.eth68: key_file must be a private regular file (0600)")
 	}
 	encoded, err := io.ReadAll(io.LimitReader(file, 129))
 	if err != nil {
-		return feed.Program{}, err
+		return ethpeer.Config{}, err
 	}
 	key, err := crypto.HexToECDSA(strings.TrimSpace(string(encoded)))
 	if err != nil {
-		return feed.Program{}, fmt.Errorf("arc.eth68: cannot load peer identity key")
+		return ethpeer.Config{}, fmt.Errorf("arc.eth68: cannot load peer identity key")
 	}
 
 	fork, _ := hex.DecodeString(c.ForkHash)
@@ -93,21 +113,11 @@ func openConfig(ctx context.Context, c feed.Config, fresh feed.Fresh) (feed.Prog
 	}{{0, anchor.Chain.GenesisHash}, {anchor.Number, anchor.Hash}} {
 		h, e := fresh.HashAt(ctx, b.n)
 		if e != nil {
-			return feed.Program{}, e
+			return ethpeer.Config{}, e
 		}
 		if h != b.hash {
-			return feed.Program{}, capture.ErrCanonical
+			return ethpeer.Config{}, capture.ErrCanonical
 		}
 	}
-	p := feed.Program{Chain: anchor.Chain, Anchor: anchor, Plan: evmdata.BasePlan(), Profile: arc.New()}
-	if c.FinalityAuthority != "" {
-		p.Policy, err = TrustedRPCFinality(fresh, anchor.Chain, c.FinalityAuthority)
-		if err != nil {
-			return p, err
-		}
-	}
-	p.Run = func(ctx context.Context, db port.CaptureDatabase, session capture.SessionConfig) error {
-		return RunManaged(ctx, db, fresh, peer, session, capture.RuntimeOptions{Collect: c.Collect, ControlInterval: c.ControlInterval}, c.FinalityAuthority)
-	}
-	return p, nil
+	return peer, nil
 }

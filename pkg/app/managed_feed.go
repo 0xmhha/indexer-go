@@ -31,8 +31,27 @@ import (
 
 // Validate all enabled chain plans before any chain can open a DB/RPC/volume.
 func preflightFeeds(cfg *config.Config, gap bool) error {
+	if cfg.Source.Execution != nil && cfg.Source.Execution.Ingress != nil && cfg.MultiChain.Enabled {
+		return fmt.Errorf("source.execution.ingress requires exclusive single-chain full ingest")
+	}
 	used := map[string]bool{}
 	check := func(c *config.Config) error {
+		if e := c.Source.Execution; e != nil && e.Ingress != nil {
+			if gap {
+				return fmt.Errorf("source.execution.ingress does not permit legacy gap recovery")
+			}
+			if err := c.Validate(); err != nil {
+				return err
+			}
+			if err := e.Ingress.Preflight(c.WindowStorage, e.Socket); err != nil {
+				return err
+			}
+			if used[e.Ingress.Window] {
+				return fmt.Errorf("source.execution.ingress window reservation is shared by multiple chains")
+			}
+			used[e.Ingress.Window] = true
+			return nil
+		}
 		f := c.Source.Feed
 		if f == nil {
 			return nil
@@ -97,7 +116,7 @@ func preflightFeeds(cfg *config.Config, gap bool) error {
 		return err
 	}
 	if cfg.WindowStorage.Configured() && len(used) == 0 {
-		return fmt.Errorf("window_storage requires source.feed/capture.RunConfiguredSession with verified feed/assembler tasks")
+		return fmt.Errorf("window_storage requires source.feed/capture.RunConfiguredSession with verified feed/assembler tasks or explicit source.execution.ingress")
 	}
 	return nil
 }

@@ -68,6 +68,8 @@ type Store struct {
 	afterGCCompletion   func()
 	checkRecoveryIntent func(DeletionRecord) error // optional coordinated Open, before any recovery unlink
 	kind                string                     // empty: raw window; objects-v1: permanent streaming objects
+	ownerDomain         string                     // owned-raw-v1: explicit immutable application namespace
+	ownerReady          bool                       // control validated before recovery/admission
 }
 
 // Create is explicit initialization. Open never creates a missing store.
@@ -253,6 +255,9 @@ func (s *Store) guard() error {
 	}
 	if err == nil {
 		err = s.checkMarker()
+	}
+	if err == nil && s.ownerReady {
+		_, err = s.readOwner()
 	}
 	if err == nil && s.opts.Volume.MaxBytes > 0 {
 		var info os.FileInfo
@@ -708,6 +713,9 @@ func parseSegment(name string) (uint64, string, error) {
 }
 
 func (s *Store) recover() error {
+	if err := s.recoverOwner(); err != nil {
+		return err
+	}
 	entries, err := s.entries()
 	if err != nil {
 		return err
@@ -749,6 +757,9 @@ func (s *Store) recover() error {
 	seals := map[uint64]segment{}
 	for _, e := range entries {
 		name := e.Name()
+		if name == ownerName && s.kind == ownedRawKind {
+			continue
+		}
 		if name == completedGC {
 			data, err := readSmall(s.root, name, maxMeta)
 			if err != nil {

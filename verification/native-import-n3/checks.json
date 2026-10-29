@@ -1,0 +1,194 @@
+[
+  {
+    "check": "go-full-race",
+    "argv": [
+      "make",
+      "test-race"
+    ],
+    "exit": 0,
+    "go_source_sha256": "69b5e0e181a0bf7dfc057e95acaa0cbcae18a8a96670f080363142cca01e9ad9",
+    "log_name": "n3-full-race.log",
+    "log_sha256": "d7baf973ebb90e4f5423a0ae5a9ee7eb5d34d23368628750ada5c99e9d3b51ac"
+  },
+  {
+    "check": "new-concurrency200",
+    "argv": [
+      "GOMAXPROCS=1",
+      "go",
+      "test",
+      "-race",
+      "-count=200",
+      "-timeout=20m",
+      "-run",
+      "^(TestOwnedWindow|TestIngressPrepareCancellation|TestExecutionIngress|TestExecutionRuntimeIngress|TestReceiverReady|TestNative(Capture|Raw|OwnedChild|Prepared|Reconcile|Ready|ChildCancelled|Input|Reply))",
+      "./pkg/window",
+      "./pkg/execution/ingress",
+      "./pkg/app",
+      "./pkg/execution",
+      "./x/arc/ingress"
+    ],
+    "exit": 0,
+    "go_source_sha256": "69b5e0e181a0bf7dfc057e95acaa0cbcae18a8a96670f080363142cca01e9ad9",
+    "log_name": "n3-concurrency200-final.log",
+    "log_sha256": "057a87473bb00e2cf5b821fdacedce9b4b06eae48aa38d91d9b423a5634f5017"
+  },
+  {
+    "check": "affected-functionality",
+    "argv": [
+      "go",
+      "test",
+      "./x/arc/ingress",
+      "./pkg/app",
+      "./pkg/execution/ingress",
+      "./pkg/window",
+      "./x/arc/feed",
+      "./pkg/chains",
+      "-count=1"
+    ],
+    "exit": 0,
+    "go_source_sha256": "69b5e0e181a0bf7dfc057e95acaa0cbcae18a8a96670f080363142cca01e9ad9",
+    "log_name": "n3-all-affected-functional.log",
+    "log_sha256": "8100bfd994b9b197d76506412f97d860a12fa1dd55f12ffe2b84459b1d005aa1"
+  },
+  {
+    "check": "go-build-vet",
+    "argv": [
+      "go build ./...",
+      "go vet ./..."
+    ],
+    "exit": 0,
+    "go_source_sha256": "69b5e0e181a0bf7dfc057e95acaa0cbcae18a8a96670f080363142cca01e9ad9",
+    "log_name": "n3-build-vet-final.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "root-lint",
+    "argv": [
+      "make",
+      "lint"
+    ],
+    "exit": 0,
+    "go_source_sha256": "69b5e0e181a0bf7dfc057e95acaa0cbcae18a8a96670f080363142cca01e9ad9",
+    "log_name": "n3-lint-final.log",
+    "log_sha256": "afa51c9dbbd37b37edddf1d3217625a46218598a4c8781e42a2608cd4de09e00"
+  },
+  {
+    "check": "module-build-vet-lint",
+    "argv": [
+      "execwire,x/stablenet/executor,tools/astgraph: go build/vet and golangci-lint run ./..."
+    ],
+    "exit": 0,
+    "go_source_sha256": "69b5e0e181a0bf7dfc057e95acaa0cbcae18a8a96670f080363142cca01e9ad9",
+    "log_name": "n3-module-static.log",
+    "log_sha256": "3c6f43c00b56d7116263f7523bfb6a311aed70cff8c5f4d73ab254b299717fdf"
+  },
+  {
+    "check": "rust-build",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "build",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--all-targets"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
+    "log_name": "n2-ci-build.log",
+    "log_sha256": "19997ef6c253e2804372b73299e3a53120b7904ccde8c8e1dbfa8314c548c447",
+    "mode": "REUSED exact unchanged N2 source and retained actual successful log; final CI arc still required"
+  },
+  {
+    "check": "rust-format",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--check"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
+    "log_name": "n2-ci-fmt.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "mode": "REUSED exact unchanged N2 source and retained actual successful log; final CI arc still required"
+  },
+  {
+    "check": "rust-clippy",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
+    "log_name": "n2-ci-clippy.log",
+    "log_sha256": "ce96912203d3baf633087f588c100b387f5b2d27398cc42521ed86a54fd2c8fe",
+    "mode": "REUSED exact unchanged N2 source and retained actual successful log; final CI arc still required"
+  },
+  {
+    "check": "rust-tests",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--all-targets"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
+    "log_name": "n2-ci-rust-all.log",
+    "log_sha256": "82ec1a54cf1fd8867f41bdaff008302afb4b1402c9ea195c0a72fd011ec27779",
+    "library_tests": 72,
+    "command_tests": 4,
+    "failed": 0,
+    "ignored": 0,
+    "mode": "REUSED exact unchanged N2 source and retained actual successful log; final CI arc still required"
+  },
+  {
+    "check": "examples-cache-postgres",
+    "argv": [
+      "make",
+      "test-examples",
+      "test-cache-lifecycle",
+      "test-postgres"
+    ],
+    "exit": 0,
+    "go_source_sha256": "69b5e0e181a0bf7dfc057e95acaa0cbcae18a8a96670f080363142cca01e9ad9",
+    "log_name": "n3-examples-cache-postgres.log",
+    "log_sha256": "386462c29095a5bc634d9308c0927dc25fd12119d80f0dea3261a6013507d9e1",
+    "scope": "owned fixtures only; PostgreSQL fsync=on; script cleanup succeeded"
+  },
+  {
+    "check": "gofmt",
+    "argv": [
+      "gofmt -l all tracked Go files"
+    ],
+    "exit": 0,
+    "go_source_sha256": "69b5e0e181a0bf7dfc057e95acaa0cbcae18a8a96670f080363142cca01e9ad9",
+    "log_name": "n3-gofmt.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scope": "no output"
+  },
+  {
+    "check": "documents",
+    "links": 342,
+    "anchors": 12,
+    "broken": 0,
+    "files": 15
+  }
+]

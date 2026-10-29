@@ -75,6 +75,7 @@ For your own RPC endpoint, a retained starting height, or PostgreSQL, follow the
 | Check declared native settings without starting services | [Native execution preflight](docs/NATIVE_EXECUTION_PREFLIGHT.md) — PASS/HOLD/FAIL, never operational authorization |
 | Index verified StableNet execution journals into PostgreSQL | [Execution ingest](docs/EXECUTION_INGEST.md), [offline bootstrap](docs/EXECUTION_BOOTSTRAP.md), [offline retention](docs/EXECUTION_RETENTION.md) — opt-in, explicit trusted anchor |
 | Continuously collect verified Arc execution journals | [Arc execution adapter](docs/EXECUTION_ARC.md) — official Arc EVM, read-only native adapter, bounded durable queue and restart/reorg/ACK supervision; live operation remains unverified |
+| Review App-owned Arc native intake | [Arc ingress](docs/EXECUTION_ARC_INGRESS.md) — bounded raw/first writer; managed collector/reorg/GC integration remains N4–N6, operations HOLD |
 | Decouple Arc intake from downstream processing | [Opt-in feed application](docs/FEED_APP.md) and [Arc feed module](x/arc/feed/README.md) |
 
 Projects build their own binary and link the packages that register their features or profiles. YAML configures linked code; it does not load Go plugins. No package carries a compatibility promise: pin your module version and run your extension's tests before upgrading ([migration from the former SDK](docs/EXTENDING.md#8-이전-sdk에서-옮기기)).
