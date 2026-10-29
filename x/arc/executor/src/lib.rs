@@ -21,6 +21,7 @@ pub mod bootstrap;
 pub mod history;
 pub mod native;
 pub mod native_import;
+pub mod native_writer;
 
 pub mod retention;
 

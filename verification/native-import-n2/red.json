@@ -1,0 +1,84 @@
+{
+  "actual_behavioral_RED": [
+    {
+      "case": "writer",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-writer-red.log",
+      "log_sha256": "af442b7e82607d49cde9dec487bcc8af0faf99c72d386b5b3a9704cf2a9e5949",
+      "failure": "native writer not implemented",
+      "initial_source_sha256": "21b88635fccce9f215f1c47619abc922679c91b25e02f1544e68aa5653173e2f"
+    },
+    {
+      "case": "protocol",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-protocol-red.log",
+      "log_sha256": "4ef66ca4cea95587cec5df6020e76631060f443e881360a25790d6dd823094f5",
+      "failure": "native writer protocol not implemented",
+      "initial_source_sha256": "83160c33502f7ce1eafc87d79cc05c09a59177bd72e5b3b3eb64d1fbb2df56b2"
+    },
+    {
+      "case": "checksum",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-checksum-red.log",
+      "log_sha256": "01aefc6d223382706905d7a82d56783fcd4b2184fb2a176011d47824f13c90fa",
+      "failure": "canonical corrupted head token accepted"
+    },
+    {
+      "case": "read-run-lease",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-read-lease-red.log",
+      "log_sha256": "1dc63c37308e19e41cdf0343a2bbe01a49587b6346f145f27d0c1f1e236ed629",
+      "failure": "read guard did not retain existing native maintenance lease"
+    },
+    {
+      "case": "completion-binding",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-head-binding-red.log",
+      "log_sha256": "a622c257abb99ea22d840cc35369cb5cce0ed11d43077e287bb62c4cdc3c3cc1",
+      "failure": "valid checksum accepted without matching immutable completion"
+    },
+    {
+      "case": "legacy-maintenance",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-legacy-maintenance-red.log",
+      "log_sha256": "e73fbd3177665732ab1130dff0999c642cb70faf05b57595eaba0ddd52b2b309",
+      "failure": "managed DB could enter legacy maintenance without its owner"
+    },
+    {
+      "case": "owned-child-diagnostics",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-ci-diagnostics-red.log",
+      "log_sha256": "c6845042349c984442e61c26a7f999a96ea32fea6530fcaeb64499d9d75f3f4c",
+      "failure": "child failure discarded expected phase and bounded error"
+    },
+    {
+      "case": "post-execution-rendezvous",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-ci-rendezvous-red.log",
+      "log_sha256": "d52b6877c0a480b889e40a9a74ea16a9b8d06c64a4caa04b7ce262a803807733",
+      "failure": "child had no explicit post-execution rendezvous before publication wait observation"
+    }
+  ],
+  "qualification_RED": [
+    {
+      "case": "transaction-fixture",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-transaction-red.log",
+      "log_sha256": "73529b36ddd12f0fd71fa37725e4e82f7ce4f3265942c0296fa22bee072f195d",
+      "failure": "test-only synthetic native writer fixture not yet implemented"
+    }
+  ],
+  "excluded_from_RED": [
+    "compiler Debug bound correction for transparent test DB wrapper",
+    "test helper/namespace compile corrections are not behavioral failures"
+  ]
+}

@@ -2,8 +2,8 @@
 
 `arc-native-bootstrap` builds a **new** private native-v2 DB offline. It uses
 pinned Arc/Reth storage libraries, starts no node, makes no RPC/SQL connection,
-and performs no EVM execution. The continuing writer and App integration are
-N2–N6 in the [first-import plan](codemine/runs/20261029-arc-first-import/plan.md).
+and performs no EVM execution. The [N2 continuing writer](EXECUTION_ARC_NATIVE_WRITER.md) is implemented; App/collector/retention integration remains
+N3–N6 in the [first-import plan](codemine/runs/20261029-arc-first-import/plan.md).
 Operational storage, enode and authenticated production inputs remain **HOLD**.
 
 ## Trust and required inputs

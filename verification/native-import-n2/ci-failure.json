@@ -1,0 +1,18 @@
+{
+  "run": 40900319864,
+  "number": 313,
+  "head": "cb6a40bf51fab57a0837f38480a1494251c04a6e",
+  "job": 123540498137,
+  "url": "https://github.com/0xmhha/indexer-go/actions/runs/40900319864/job/123540498137",
+  "result": "failure",
+  "tests": {
+    "passed": 70,
+    "failed": 1,
+    "ignored": 0
+  },
+  "failure": "writer_turnstile_blocks_new_readers_until_publication_and_existing_reader_refreshes: channel is empty and sending half is closed at native_writer_processes.rs:164",
+  "confirmed": "Child diagnostics were discarded; generic expect error omitted expected phase. The turnstile is acquired for both initial shared read admission and later exclusive publication. Old test did not distinguish them.",
+  "fix": "Explicit Executed child rendezvous before observing publication wait; retain bounded child stdout/stderr and expected-phase failure after owned child/pipe joins.",
+  "scope": "Test synchronization/diagnostics only; production native locking and EVM/storage unchanged. New exact-head CI5 mandatory; original failed run is not release evidence.",
+  "unconfirmed": "The exact child error and failing expected tag from CI313 cannot be recovered because the old helper discarded diagnostics. Confusing initial read admission with publication wait is a source-supported timing hypothesis, not a recovered child stack."
+}

@@ -44,6 +44,31 @@ pub struct Frame {
 }
 
 impl Frame {
+    #[cfg(test)]
+    pub(crate) fn fixture(meta: Meta, block: Vec<u8>, receipts: Vec<u8>) -> Result<Self> {
+        // Synthetic genesis injection is never reachable through production
+        // framing or CLI options. Preserve the exact AIN1 digest algorithm.
+        let encoded = serde_json::to_vec(&meta)?;
+        let mut header = b"AIN1".to_vec();
+        for n in [encoded.len(), block.len(), receipts.len()] {
+            header.extend_from_slice(&(n as u32).to_be_bytes());
+        }
+        let mut digest = Sha256::new();
+        for bytes in [
+            header.as_slice(),
+            encoded.as_slice(),
+            block.as_slice(),
+            receipts.as_slice(),
+        ] {
+            digest.update(bytes);
+        }
+        Ok(Self {
+            meta,
+            block,
+            receipts,
+            digest: B256::from_slice(&digest.finalize()),
+        })
+    }
     /// Decode one bounded frame. RLP contents are opaque here: this is not an
     /// execution, canonicality, publication, completion or ACK validation.
     pub fn read(mut input: impl Read) -> Result<Option<Self>> {

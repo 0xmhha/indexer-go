@@ -1,0 +1,38 @@
+[
+  {
+    "scope": "staged",
+    "argv": [
+      "gitleaks",
+      "git",
+      "--redact",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=n2-ci-staged-leak-scan.json",
+      "--staged",
+      "."
+    ],
+    "scanner_exit": 0,
+    "findings": 0,
+    "reviewed": 0,
+    "unreviewed": 0,
+    "report_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+    "scope": "history",
+    "argv": [
+      "gitleaks",
+      "git",
+      "--redact",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=n2-ci-history-leak-scan.json",
+      "--log-opts=HEAD",
+      "."
+    ],
+    "scanner_exit": 1,
+    "findings": 15,
+    "reviewed": 15,
+    "unreviewed": 0,
+    "report_sha256": "e26582db815788f2a7f131ddba6f21b348148eb43f9c53e76ac2e6a4f88c974f"
+  }
+]

@@ -55,6 +55,7 @@ fn read_input<T: serde::de::DeserializeOwned>(r: &mut impl BufRead) -> Result<T>
 fn main() -> Result<()> {
     let mut a = Args::parse();
     a.datadir = a.datadir.canonicalize()?;
+    native::check_legacy_maintenance(&a.datadir)?;
     native::layout(&a.datadir)?;
     let spec: Arc<ArcChainSpec> = match a.chain {
         Chain::Mainnet => MAINNET.clone(),

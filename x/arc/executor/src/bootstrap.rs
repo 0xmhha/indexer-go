@@ -70,6 +70,10 @@ pub struct ReceiptRecord {
 pub fn build(input: &Inputs<'_>) -> Result<Manifest> {
     build_with_spec(input, arc_execution_config::chainspec::TESTNET.clone())
 }
+#[cfg(test)]
+pub(crate) fn build_fixture(input: &Inputs<'_>, spec: Arc<ArcChainSpec>) -> Result<Manifest> {
+    build_with_spec(input, spec)
+}
 fn private_dir(path: &Path) -> Result<File> {
     ensure!(path.is_absolute(), "absolute private directory required");
     let fd = rustix::fs::open(
