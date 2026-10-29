@@ -26,6 +26,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Evaluate saved diagnostic/capacity/backlog observations | [Offline Native monitoring](NATIVE_OFFLINE_MONITORING.md) |
 | Authenticate external PostgreSQL backup evidence | [Offline backup adapter](EXECUTION_BACKUP_ADAPTER.md) |
 | Review diagnostic-only Docker image/profile wiring | [Native Docker draft](../deployments/native/README.md) |
+| Review the proposed Arc first-import owner, native bootstrap and N0-N6 plan | [Arc native import design](ARC_NATIVE_IMPORT_DESIGN.md) |
 | Review Native App/collector/executor topology and held lifecycle | [Native runtime composition draft](../deployments/native/runtime/README.md) |
 | Diagnose native/source metadata and exported checkpoint/retention observations | [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md) |
 | Check native App/collector/checkpoint/retention files offline | [Native execution preflight](NATIVE_EXECUTION_PREFLIGHT.md) |

@@ -57,6 +57,12 @@ not enforced by Docker. Actual application file validation still belongs to
 
 ## Processes and missing first import
 
+The [first-import design](../../../docs/ARC_NATIVE_IMPORT_DESIGN.md) now selects
+an opt-in Go supervisor inside Arc App and an owned Rust native writer sharing
+the App RPC budget; the existing collector keeps the second EVM pass. N0-N6
+implementation is pending. This draft still has no importer or App native-RW/
+ingress mounts. The design does not activate or change this composition.
+
 ```mermaid
 flowchart LR
   Import[Arc first-import provider: HOLD] --> ArcDB[Imported retained Arc DB]

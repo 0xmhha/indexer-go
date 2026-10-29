@@ -1,0 +1,32 @@
+{
+  "n": "Arc first-import design confirmed; N0-N6 implementation pending; operations HOLD",
+  "n_minus_1": {
+    "pr": 238,
+    "main": "934f9da34496cb526393ca2e7b9a0d30848c2fdb",
+    "plan": "../20261029-native-runtime-draft/plan.md"
+  },
+  "n_minus_2": {
+    "pr": 237,
+    "main": "1f311393b391e02d847f305c2fa5e9aa067c8f3d",
+    "plan": "../20261029-operations-inputs/plan.md"
+  },
+  "monitoring": "../20261028-offline-monitoring/plan.md",
+  "backup_adapter": "../20261028-backup-adapter/plan.md",
+  "diagnostic_docker": "../20261028-native-docker/plan.md",
+  "diagnostics": "../20261028-native-diagnostics/plan.md",
+  "preflight": "../20261028-native-preflight/plan.md",
+  "retention": "../20261027-native-retention-backup/plan.md",
+  "e6": "../20261027-e6-independent-consensus/plan.md",
+  "accepted_design": "../20261023-e1-execution/02-design.md",
+  "accepted_plan": "../20261023-e1-execution/03-plan.md",
+  "next": [
+    "N0 pinned SDK/seed/RO qualification and bounded contract",
+    "N1 authenticated native bootstrap",
+    "N2 first execution and native publication",
+    "N3 embedded App ingress owner",
+    "N4 E1 reorg and managed collector",
+    "N5 permanent ingress coverage/GC and deployment draft",
+    "N6 offline integrated acceptance"
+  ],
+  "operational_readiness": "HOLD"
+}
