@@ -1,0 +1,49 @@
+{
+  "base": "934f9da34496cb526393ca2e7b9a0d30848c2fdb",
+  "arc_pin": "6e764023ee6515fe70573e123ed2db912a7207b4",
+  "reth_pin": "88505c7fcbfdebfd3b56d88c86b62e950043c6c4",
+  "upstream_sources": [
+    {
+      "repository": "paradigmxyz/reth",
+      "commit": "88505c7fcbfdebfd3b56d88c86b62e950043c6c4",
+      "path": "crates/storage/provider/src/providers/database/provider.rs",
+      "blob": "b95ce3cd2219685a4d947b8f7ede795b5d8d0021",
+      "sha256": "9f5e764dcde2823f33d5f290dd4b7bae15c221cad9e2bd481a16151ac825ad99",
+      "cached_selected_file_matches_HEAD": true,
+      "github_primary_excerpt_also_checked": true
+    },
+    {
+      "repository": "paradigmxyz/reth",
+      "commit": "88505c7fcbfdebfd3b56d88c86b62e950043c6c4",
+      "path": "crates/engine/tree/src/persistence.rs",
+      "blob": "da778e1a30f92853fd9eebe64c3d70832354978a",
+      "sha256": "647bd5540ff3ae436e06c6a8d68e383c0f3636628394ba762d7b686f5568d116",
+      "cached_selected_file_matches_HEAD": true,
+      "github_primary_excerpt_also_checked": false
+    },
+    {
+      "repository": "paradigmxyz/reth",
+      "commit": "88505c7fcbfdebfd3b56d88c86b62e950043c6c4",
+      "path": "crates/storage/db-common/src/init.rs",
+      "blob": "f42eca05925a110a91e81167238e6f61e9e97eeb",
+      "sha256": "ab8ff80a33216586f96be646bddf396e8f36e9426859c27789dc18e517200e01",
+      "cached_selected_file_matches_HEAD": true,
+      "github_primary_excerpt_also_checked": true
+    }
+  ],
+  "existing_integration": [
+    "pkg/chainfeed/ethpeer/peer.go",
+    "pkg/feed/config.go",
+    "pkg/app/execution.go",
+    "pkg/app/execution_runtime.go",
+    "pkg/fetch/execution.go",
+    "pkg/execution/receiver.go",
+    "execwire/exporter/runtime.go",
+    "x/arc/executor/src/native.rs",
+    "x/arc/executor/src/replay.rs",
+    "x/arc/collector/run.go",
+    "pkg/window/gc.go",
+    "pkg/storage/postgres/exec_core.go"
+  ],
+  "evidence_limit": "Source-level audit only. No new compile, native DB, node, service, peer, SQL or performance execution. SDK behavior and proposed adapters remain N0-N6 qualification."
+}
