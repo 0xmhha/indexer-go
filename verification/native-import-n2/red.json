@@ -49,6 +49,22 @@
       "log_name": "n2-legacy-maintenance-red.log",
       "log_sha256": "e73fbd3177665732ab1130dff0999c642cb70faf05b57595eaba0ddd52b2b309",
       "failure": "managed DB could enter legacy maintenance without its owner"
+    },
+    {
+      "case": "owned-child-diagnostics",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-ci-diagnostics-red.log",
+      "log_sha256": "c6845042349c984442e61c26a7f999a96ea32fea6530fcaeb64499d9d75f3f4c",
+      "failure": "child failure discarded expected phase and bounded error"
+    },
+    {
+      "case": "post-execution-rendezvous",
+      "selected_tests": 1,
+      "exit": 101,
+      "log_name": "n2-ci-rendezvous-red.log",
+      "log_sha256": "d52b6877c0a480b889e40a9a74ea16a9b8d06c64a4caa04b7ce262a803807733",
+      "failure": "child had no explicit post-execution rendezvous before publication wait observation"
     }
   ],
   "qualification_RED": [

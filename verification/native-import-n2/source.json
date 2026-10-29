@@ -1,7 +1,7 @@
 {
   "base": "4586b04c010131e6e65c2d7431ce7934f4fdfa6a",
   "branch": "refactor/arc-native-n2",
-  "rust_source_sha256": "84878c87c5ef2d81f8837febd653feba27151e96aa8785b5f44fc067fca1acb3",
+  "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
   "files": {
     "x/arc/executor/Cargo.toml": "7206296f22ed0a2a815ae3d2cba35a18e0207f850fc2b9d42836184db8e3629f",
     "x/arc/executor/Cargo.lock": "1308d0ab088c9c3f9dddf731b1a1c70142b9f16aad05739c83d55cde95ca033e",
@@ -19,7 +19,7 @@
     "x/arc/executor/src/native.rs": "1ba9199ebd6d3da1be3fc9fbe1f46cbfea64de8178d577fb2f30ae29e6a2d3df",
     "x/arc/executor/src/native_import.rs": "bc81016aee7481e5148a238ce1af298ad23a2860aded48788e0bdf4bd7b9ac0f",
     "x/arc/executor/src/native_writer.rs": "94976aec6b10f6dcd6d15d7c5f85d7c9fc12979c04c3744fe8d49920bb76646a",
-    "x/arc/executor/src/native_writer_processes.rs": "9261148016e69c04ab45d61a42c07f3d41968bb66060d884296f4a231e6883ce",
+    "x/arc/executor/src/native_writer_processes.rs": "185c814c968ddb1a88e4e61bdafa8e8ff14754e101fded62d61d000667d36d0b",
     "x/arc/executor/src/output.rs": "482f2aec673b12836775ac62902ab2ace784e88df775c71378d3699521490e84",
     "x/arc/executor/src/proofs.rs": "f9dae8cecf4c148962054d134dc5d72425136cd096dcf8b2f0b8ac7e3fff0034",
     "x/arc/executor/src/replay.rs": "91e44a7eb6a6e8f0c7a8c289cbac29370e8b3168cd90a00c2ccaeb11e193b9ef",
@@ -33,5 +33,9 @@
   "reth_pin": "88505c7fcbfdebfd3b56d88c86b62e950043c6c4",
   "dependency_change": "Promote already-locked reth-chain-state to production; direct locked getrandom0.3.4 and dev tracing0.1.44 edges; all other lock package records identical",
   "operating": "HOLD; owned native stdio writer only, App/peer/SQL/managed collector/GC integration pending N3-N6",
-  "log_scope": "actual task-owned private logs; portable names/digests only"
+  "log_scope": "actual task-owned private logs; portable names/digests only",
+  "rust_source_before_ci_fix": "84878c87c5ef2d81f8837febd653feba27151e96aa8785b5f44fc067fca1acb3",
+  "rust_source_algorithm": "SHA256 of UTF-8 canonical compact sorted JSON path-to-file-SHA256 map",
+  "freeze_timing": "captured during final tests after all Rust edits; no Rust source edits permitted before gate completion",
+  "freeze_verified_after_gates": true
 }

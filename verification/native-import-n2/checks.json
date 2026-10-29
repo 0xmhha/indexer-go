@@ -12,9 +12,9 @@
       "--all-targets"
     ],
     "exit": 0,
-    "rust_source_sha256": "84878c87c5ef2d81f8837febd653feba27151e96aa8785b5f44fc067fca1acb3",
-    "log_name": "n2-build.log",
-    "log_sha256": "f939b7261c76a7382787b093da5dd0ed1d255266cbb13f44a755b0ac7729f3b7"
+    "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
+    "log_name": "n2-ci-build.log",
+    "log_sha256": "19997ef6c253e2804372b73299e3a53120b7904ccde8c8e1dbfa8314c548c447"
   },
   {
     "check": "rust-format",
@@ -27,8 +27,8 @@
       "--check"
     ],
     "exit": 0,
-    "rust_source_sha256": "84878c87c5ef2d81f8837febd653feba27151e96aa8785b5f44fc067fca1acb3",
-    "log_name": "n2-fmt.log",
+    "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
+    "log_name": "n2-ci-fmt.log",
     "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   {
@@ -47,9 +47,9 @@
       "warnings"
     ],
     "exit": 0,
-    "rust_source_sha256": "84878c87c5ef2d81f8837febd653feba27151e96aa8785b5f44fc067fca1acb3",
-    "log_name": "n2-clippy-final.log",
-    "log_sha256": "6aa6f044359d97a68e0c1583c6b86fde3ece2ae128b47576398c0a1ec79037e6"
+    "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
+    "log_name": "n2-ci-clippy.log",
+    "log_sha256": "ce96912203d3baf633087f588c100b387f5b2d27398cc42521ed86a54fd2c8fe"
   },
   {
     "check": "rust-tests",
@@ -64,10 +64,10 @@
       "--all-targets"
     ],
     "exit": 0,
-    "rust_source_sha256": "84878c87c5ef2d81f8837febd653feba27151e96aa8785b5f44fc067fca1acb3",
-    "log_name": "n2-rust-all.log",
-    "log_sha256": "baa2648f8c0697e56529b1e7070b8c6c26bff04cb57ca5e85766101631588290",
-    "library_tests": 71,
+    "rust_source_sha256": "c12973ef8ec20a46492a35746e6e25bf1ae2c84022538f7c36cf64b77c6f6ac1",
+    "log_name": "n2-ci-rust-all.log",
+    "log_sha256": "82ec1a54cf1fd8867f41bdaff008302afb4b1402c9ea195c0a72fd011ec27779",
+    "library_tests": 72,
     "command_tests": 4,
     "failed": 0,
     "ignored": 0
@@ -83,8 +83,8 @@
   },
   {
     "check": "documents",
-    "links": 305,
-    "anchors": 9,
+    "links": 352,
+    "anchors": 12,
     "broken": 0
   }
 ]

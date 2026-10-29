@@ -7,7 +7,7 @@
       "--redact",
       "--no-banner",
       "--report-format=json",
-      "--report-path=n2-staged-leak-scan.json",
+      "--report-path=n2-ci-staged-leak-scan.json",
       "--staged",
       "."
     ],
@@ -25,7 +25,7 @@
       "--redact",
       "--no-banner",
       "--report-format=json",
-      "--report-path=n2-history-leak-scan.json",
+      "--report-path=n2-ci-history-leak-scan.json",
       "--log-opts=HEAD",
       "."
     ],
@@ -33,6 +33,6 @@
     "findings": 15,
     "reviewed": 15,
     "unreviewed": 0,
-    "report_sha256": "ce88f047225a76d9866c4246b908f30376fd7a3b53e92498fb134c8db865585f"
+    "report_sha256": "e26582db815788f2a7f131ddba6f21b348148eb43f9c53e76ac2e6a4f88c974f"
   }
 ]

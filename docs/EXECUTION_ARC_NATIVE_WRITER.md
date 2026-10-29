@@ -119,3 +119,10 @@ DB pool4/part2/API1/seven logical writers, shared5 physical HTTP attempts/s and
 NEW uncached canonical response → post-response generation fence → COMMIT → exact
 ACK remain unchanged. Native admission/completion never substitutes for final
 E1 fresh. There is no new public API or SQL schema in N2.
+
+The owned-process fairness test waits for an explicit post-execution rendezvous
+before observing publication admission: the initial shared read admission uses
+the same turnstile briefly. Child failures report the expected phase with a
+bounded16KiB stdout/stderr capture after cancel/join; EOF alone does not diagnose
+a storage failure. [CI correction](../verification/native-import-n2/ci-failure.json)
+records the original failed run without treating it as release evidence.

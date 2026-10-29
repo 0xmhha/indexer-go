@@ -108,6 +108,12 @@ struct Process {
     lines: Option<mpsc::Receiver<String>>,
     output: Option<thread::JoinHandle<()>>,
     errors: Option<thread::JoinHandle<()>>,
+    diagnostics: Arc<Mutex<Vec<u8>>>,
+}
+fn remember(diagnostics: &Mutex<Vec<u8>>, bytes: &[u8]) {
+    let mut saved = diagnostics.lock().unwrap();
+    let remaining = (16 << 10_usize) - saved.len();
+    saved.extend_from_slice(&bytes[..remaining.min(bytes.len())]);
 }
 impl Process {
     fn start(path: &Path, role: &str, point: &str) -> Result<Self> {
@@ -130,14 +136,19 @@ impl Process {
         let stdout = child.stdout.take().ok_or_else(|| eyre!("owned stdout"))?;
         let stderr = child.stderr.take().ok_or_else(|| eyre!("owned stderr"))?;
         let (tx, rx) = mpsc::sync_channel(16);
+        let diagnostics = Arc::new(Mutex::new(Vec::new()));
+        let captured_output = diagnostics.clone();
         let output = thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             loop {
                 let mut line = String::new();
                 match (&mut reader).take(4097).read_line(&mut line) {
                     Ok(0) | Err(_) => break,
-                    Ok(_) if line.len() > 4096 => break,
                     Ok(_) => {
+                        remember(&captured_output, line.as_bytes());
+                        if line.len() > 4096 {
+                            break;
+                        }
                         if tx.send(line).is_err() {
                             break;
                         }
@@ -145,10 +156,16 @@ impl Process {
                 }
             }
         });
+        let captured_error = diagnostics.clone();
         let errors = thread::spawn(move || {
             let mut r = stderr;
             let mut buf = [0u8; 1024];
-            while r.read(&mut buf).is_ok_and(|n| n > 0) {}
+            while let Ok(n) = r.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                remember(&captured_error, &buf[..n]);
+            }
         });
         Ok(Self {
             child,
@@ -156,6 +173,7 @@ impl Process {
             lines: Some(rx),
             output: Some(output),
             errors: Some(errors),
+            diagnostics,
         })
     }
     fn expect(&mut self, tag: &str) -> Result<()> {
@@ -165,7 +183,27 @@ impl Process {
                 .lines
                 .as_ref()
                 .unwrap()
-                .recv_timeout(end.saturating_duration_since(Instant::now()))?;
+                .recv_timeout(end.saturating_duration_since(Instant::now()));
+            let line = match line {
+                Ok(line) => line,
+                Err(error) => {
+                    // Drop the receiver before joining its bounded sender;
+                    // killing a child alone cannot unblock a full channel.
+                    drop(self.lines.take());
+                    let _ = self.child.kill();
+                    let status = self.child.wait();
+                    for handle in [self.output.take(), self.errors.take()]
+                        .into_iter()
+                        .flatten()
+                    {
+                        let _ = handle.join();
+                    }
+                    return Err(eyre!(
+                        "owned child expected {tag}: {error}; status {status:?}; diagnostics: {}",
+                        String::from_utf8_lossy(&self.diagnostics.lock().unwrap())
+                    ));
+                }
+            };
             if line.trim().ends_with(tag) {
                 return Ok(());
             }
@@ -231,6 +269,10 @@ fn writer_process_child() -> Result<()> {
         let mut input = std::io::stdin().lock();
         let frame = Frame::read(&mut input)?.ok_or_else(|| eyre!("owned frame absent"))?;
         writer.import_with_hook(&frame, &mut |phase| {
+            if phase == Phase::Executed && point == "none" {
+                println!("\nEXECUTED");
+                std::io::stdout().flush()?;
+            }
             if phase == Phase::BeforeExecution && point == "vm-basic" {
                 VM_ARMED.store(true, Ordering::SeqCst);
             }
@@ -351,6 +393,9 @@ fn writer_turnstile_blocks_new_readers_until_publication_and_existing_reader_ref
     let mut first = Process::start(&path, "reader-hold", "none")?;
     first.expect("HELD:0")?;
     writer.frame(&frame)?;
+    // The initial read admission also owns the turnstile briefly. Only the
+    // post-execution rendezvous makes its next acquisition a publication wait.
+    writer.expect("EXECUTED")?;
     let turn = lock_file(&path, ".arc-native-import-turn")?;
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
@@ -373,5 +418,22 @@ fn writer_turnstile_blocks_new_readers_until_publication_and_existing_reader_ref
     late.expect("READ:1")?;
     first.line("read")?;
     first.expect("READ:1")?;
+    Ok(())
+}
+
+#[test]
+fn writer_process_failure_reports_expected_phase_and_bounded_child_error() -> Result<()> {
+    let (_work, path, _frame) = super::tests::setup()?;
+    let mut child = Process::start(&path, "invalid-role", "none")?;
+    let error = child.expect("NEVER_READY").unwrap_err().to_string();
+    assert!(
+        error.contains("NEVER_READY"),
+        "missing expected phase: {error}"
+    );
+    assert!(
+        error.contains("invalid owned test role"),
+        "missing child failure: {error}"
+    );
+    assert!(error.len() < 20 << 10, "unbounded child diagnostics");
     Ok(())
 }
