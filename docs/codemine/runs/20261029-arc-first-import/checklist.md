@@ -20,9 +20,9 @@ Release execution is recorded in the associated PR's actual checks and merge
 metadata, not pre-certified by this documentation checklist. Do not interpret
 the release-gate item as a claim that CI has already run.
 
-## Future implementation — not completed by this change
+## Implementation milestones
 
-- [ ] N0 pinned SDK/seed/RO conformance and bounded import contract.
+- [x] N0 bounded frame/private pending fence and real pinned SDK qualification; [checks](../20261029-arc-native-n0/checklist.md).
 - [ ] N1 authenticated native bootstrap builder.
 - [ ] N2 first-execution writer, durable intents/receipts and reader gates.
 - [ ] N3 Arc App-owned P2P ingress, bounded raw/channel lifecycle and shared limits.

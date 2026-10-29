@@ -1,8 +1,9 @@
 # Arc first-import implementation plan
 
-The selected next step confirms the design of the missing Arc first execution
-and continuous native DB update module. This change is documentation and source
-audit only. N0-N6 below are future implementation, not completed features.
+The plan implements the missing Arc first execution and continuous native DB
+update module. N0 now implements bounded framing/private pending fences and
+qualifies the real pinned SDK; see [N0](../20261029-arc-native-n0/plan.md).
+N1-N6 remain future implementation. The full runtime module is not yet complete.
 The [canonical design](../../../ARC_NATIVE_IMPORT_DESIGN.md) owns architecture
 and safety boundaries; this plan owns sequence and acceptance.
 

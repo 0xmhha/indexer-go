@@ -12,6 +12,14 @@ cargo build --locked
 
 The tests use offline Arc EVM libraries and synthetic genesis allocations. They start no node, contact no peers and perform no performance measurements. The optional `INDEXER_ARC_FIXTURE_DIR` test variable regenerates the six JSON and checkpoint [Go integration fixtures](../../../testdata/execution/README.md) in an explicitly selected output directory. Normal tests do not rewrite repository fixtures.
 
+First-import development has reached [N0](../../../docs/ARC_NATIVE_IMPORT_DESIGN.md#n0-구현과-검증-경계):
+`native_import` implements bounded AIN1 input framing and a durable no-overwrite
+pending fence. Real native-v2 tests qualify Full outcome persistence, an owned
+separate RO process, checkpoint coverage, replay, unwind and reopen. Framing
+alone does not validate RLP execution or authorize E1 ACK/GC. The actual first
+writer, bootstrap and App/collector integration remain N1-N6; no new runtime
+command or startup path is enabled by N0.
+
 ## Library contract
 
 `replay(config, state, parent, block, receipts, generation)` returns `Verified` only after checking parent identity/state, transaction/ommer/withdrawal/receipt commitments, bloom, gas and final state. `config` is `ArcEvmConfig`; substituting an Ethereum EVM is unsupported. `state` must be the complete native historical parent provider. Native read failures propagate; unavailable bytecode or block hashes do not become zero/default values.

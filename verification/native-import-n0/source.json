@@ -1,0 +1,16 @@
+{
+  "base": "39a0082c32e384e3f601c7d89ed6c97a5114fcbc",
+  "branch": "refactor/arc-native-n0",
+  "files": {
+    "x/arc/executor/Cargo.toml": "4d04b9b3ff06cacd4cce613b682443117367d3ffba5ef0f0900a1536f36a5bd1",
+    "x/arc/executor/Cargo.lock": "8a2dbff720e18a4ee1917dc1b17c1b72bc75f57106d7efbb81d229b67259126c",
+    "x/arc/executor/src/lib.rs": "2069417fc086133421534a4dc11b383ab099c0c126d323742e449c4cc8686f05",
+    "x/arc/executor/src/native_import.rs": "ea32c0e5327c1988178651a6b26cb512d498cdc5e6fdf5be4399cb24d854dff7"
+  },
+  "go_source_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+  "arc_pin": "6e764023ee6515fe70573e123ed2db912a7207b4",
+  "reth_pin": "88505c7fcbfdebfd3b56d88c86b62e950043c6c4",
+  "dependency_change": "two direct dev edges to already-locked alloy-genesis/reth-chain-state; all other lock package records identical",
+  "operating": "HOLD; no runtime writer/App/peer startup",
+  "log_scope": "actual private task-owned logs retained outside checkout; no machine paths or fixture data committed"
+}

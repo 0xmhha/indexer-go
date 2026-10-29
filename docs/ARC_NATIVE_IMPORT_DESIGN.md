@@ -1,11 +1,37 @@
 # Arc 첫 import와 native DB 갱신 설계
 
-**설계 확정·구현 전. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
+**N0 입력·fence 계약과 SDK qualification 구현. N1~N6 구현 전. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
 읽고 두 번째 EVM 실행으로 E1 입력을 만든다. 빠져 있는 첫 실행과 지속적인
 native DB 갱신을 아래 모듈이 담당하도록 한다. 전체 노드 프로세스와 upstream
-코드 수정은 추가하지 않는다. 이 문서의 새 모듈·타입·metadata는 제안이며 현재
+코드 수정은 추가하지 않는다. 아래 N0 이외의 새 모듈·타입·metadata는 제안이며 현재
 실행할 수 있는 명령·설정이 아니다. [구현 순서](#구현-순서)와
 [체크리스트](codemine/runs/20261029-arc-first-import/checklist.md)를 함께 따른다.
+
+## N0 구현과 검증 경계
+
+[native_import](../x/arc/executor/src/native_import.rs)는 라이브러리의 bounded 입력과
+미완료 fence를 구현한다. CLI·App·peer·native writer는 시작하지 않는다.
+
+| 항목 | 현재 계약 |
+| --- | --- |
+| 입력 | `AIN1` + metadata/block/receipts 길이3개(u32 big endian) + 해당 bytes. metadata16KiB, block10MiB, receipts10MiB 상한. 합계는20MiB+16KiB+16bytes 이하 |
+| metadata | PascalCase version1, RequestID·ImportEpoch·Height의 양수 signed64 범위, 공식 testnet5042002/genesis와 고정 Arc/Reth pin, hash/parent/root. unknown/duplicate 필드·잘림·잘못된 identity 거부 |
+| digest | 원래 header+metadata+block+receipts 전체의 SHA256. 입력 RLP는 이 계층에서 opaque이며 구조·실행·root/canonical 검증은 N2에서 수행 |
+| pending | owned0700 absolute native directory를 descriptor로 열고 no-follow/exclusive create로 `.arc-native-import.pending`0600을 쓴 뒤 file+directory fsync. 기존 E3 fence를 존중하고 기존 파일을 덮어쓰거나 삭제하지 않음 |
+| 재시작 | pending object가 symlink/directory/partial/corrupt 상태여도 차단. 나이·완료 높이·Hello로 해제하지 않음. 이 helper는 run lease/publication gate를 획득하지 않으며 N2/N4 owner가 연결해야 함 |
+
+SDK qualification은 실제 임시 native-v2 DB에서 공식 Arc EVM 첫 실행 결과를
+`save_blocks(Full)`로 저장하고, 별도 RO 프로세스의 provider 갱신·두 번째 replay·
+reopen을 확인한다. 빈 블록과 합성 genesis의 transaction/storage/code/receipt를
+함께 검사한다. non-genesis full checkpoint export/root/preimage coverage,
+unwind/reimport와 controlled transaction 중단 전후의 fence·별도 프로세스 재시작도
+검사한다. 합성 genesis 주입과 보조 프로세스는 `cfg(test)`에만 있다.
+
+같은 PID에서 독립 RW/RO environment를 여는 방식은 로컬 MDBX에서 EAGAIN을
+반환했으며 지원 경로로 채택하지 않았다. 별도 writer/reader 프로세스가 설계와
+검증 대상이다. controlled transaction 중단은 전원 장애/각 store 내부 killpoint와
+자동 복구를 입증하지 않는다. 그것은 N2의 managed 저장·영수증·복구 검사로 남는다.
+N0의 frame/pending은 E1 공개·ACK·삭제 권한이 아니다. [N0 계획](codemine/runs/20261029-arc-native-n0/plan.md)을 따른다.
 
 ## 고정하는 구조
 
@@ -64,8 +90,9 @@ ETH/68 수신과 EVM root 대조만으로 Arc 합의를 독립 검증했다고 �
 [persistence](https://github.com/paradigmxyz/reth/blob/88505c7fcbfdebfd3b56d88c86b62e950043c6c4/crates/engine/tree/src/persistence.rs),
 [bootstrap](https://github.com/paradigmxyz/reth/blob/88505c7fcbfdebfd3b56d88c86b62e950043c6c4/crates/storage/db-common/src/init.rs).
 [소스 감사](codemine/runs/20261029-arc-first-import/source-audit.json)는 경로·pin·blob을 기록한다.
-API 존재와 코드상 저장 순서는 확인했으나, 새 writer의 컴파일·RO 공존·장애 복구는
-아직 입증하지 않았다. pin 변경 없이 N0의 임시 DB 시험으로 확인한다.
+API 존재와 저장 순서 외에 N0의 임시 DB 시험으로 Full 저장/RO 갱신/reopen과
+위 SDK 범위를 검증했다. 새 운영 writer와 각 store killpoint·managed 복구는
+N2/N4에서 구현·검증하며 실제 host/container·서비스는 여전히 미확인이다.
 
 ## 준비와 bootstrap
 
@@ -227,7 +254,7 @@ intent/completion/release를 모두 유지한다. swap 뒤 inode/bind와 origina
 
 | 단계 | 구현 범위 | 요구사항을 먼저 RED로 증명할 기능 검사 |
 | --- | --- | --- |
-| N0 | pinned SDK 저장/seed/RO 공존 qualification과 bounded import 계약 | 실제 임시 native-v2 root/preimage/history, Full 저장·reopen·취소/중단 fence. 단순 compile probe는 RED 대체가 아님 |
+| N0 구현 | pinned SDK 저장/seed/별도 RO 프로세스 qualification과 bounded import 계약 | 실제 임시 native-v2 Full 저장·state/code/receipt/history·H1 checkpoint·reopen·unwind/reimport, controlled 중단 fence. 운영 writer/killpoint 복구는 N2 |
 | N1 | offline authenticated native bootstrap builder | 잘못된 root/coverage/anchor/pin·기존 target 거부, staged 실패 보존, exact H/H+1와 parent 재실행 |
 | N2 | 첫 실행 writer·intent·publication gate·완료 receipt | 정상 첫 실행 횟수, 모든 store commit 중단점, 중복/불일치·동시 reader·cancel/join·재시작 fencing |
 | N3 | Arc App 감독/등록·기존 P2P·durable raw·bounded 채널 | 시작 gate·backlog·byte/count·불연속/과대 입력·shared RPC5·pool4·비밀 미상속·stop/join |
@@ -237,6 +264,6 @@ intent/completion/release를 모두 유지한다. swap 뒤 inode/bind와 origina
 
 각 단계는 의미 있는 RED→구현→GREEN, 현재 문서·체크리스트 갱신, 필요한 새 동시성
 단일 GOMAXPROCS=1/race/count200, 정확한 최종 head의 CI5 성공, squash/main 동기화 후
-다음 단계로 진행한다. N0의 SDK 불일치는 요구사항/guard 완화로 해결하지 않고 해당
-adapter를 수정하거나 구현 계획을 갱신한다. 오늘의 완료 범위는 설계와 순서의 확정이며
-N0~N6은 아직 완료되지 않았다.
+다음 단계로 진행한다. SDK 불일치는 요구사항/guard 완화로 해결하지 않고 해당
+adapter를 수정하거나 구현 계획을 갱신한다. N0의 현재 구현·검증과 N1~N6의 남은
+구현을 구분하며, 운영 값과 실제 실행은 계속 HOLD다.
