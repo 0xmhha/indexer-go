@@ -1,0 +1,40 @@
+{
+  "stage": "N1",
+  "status": "COMPLETE",
+  "pr": 242,
+  "url": "https://github.com/0xmhha/indexer-go/pull/242",
+  "base": "223f61735a343bf730560151617dd2f4616b66e5",
+  "head": "6b2b5a74da7d835208bb0bc541f1bfb9adee11c6",
+  "tree": "bd5f58275f5ef5173df54261a064c7d53353e194",
+  "main": "4586b04c010131e6e65c2d7431ce7934f4fdfa6a",
+  "ci_run": 40877891503,
+  "ci_run_number": 311,
+  "jobs": [
+    {
+      "id": 123461363091,
+      "name": "arc",
+      "conclusion": "success"
+    },
+    {
+      "id": 123461363456,
+      "name": "test",
+      "conclusion": "success"
+    },
+    {
+      "id": 123461363545,
+      "name": "examples",
+      "conclusion": "success"
+    },
+    {
+      "id": 123461363619,
+      "name": "lint",
+      "conclusion": "success"
+    },
+    {
+      "id": 123461363628,
+      "name": "postgres",
+      "conclusion": "success"
+    }
+  ],
+  "scope": "N1 authenticated offline native bootstrap complete; N2-N6 pending; operating HOLD"
+}

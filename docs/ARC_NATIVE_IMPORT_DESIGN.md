@@ -1,9 +1,9 @@
 # Arc 첫 import와 native DB 갱신 설계
 
-**N0 입력·fence와 N1 인증 native bootstrap 구현. N2~N6 구현 전. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
+**N0 입력·fence, N1 인증 bootstrap과 N2 native writer 구현. N3~N6 구현 전. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
 읽고 두 번째 EVM 실행으로 E1 입력을 만든다. 빠져 있는 첫 실행과 지속적인
 native DB 갱신을 아래 모듈이 담당하도록 한다. 전체 노드 프로세스와 upstream
-코드 수정은 추가하지 않는다. 아래 N0·N1 이외의 새 모듈·타입·metadata는 제안이며 현재
+코드 수정은 추가하지 않는다. 아래 N0·N1·N2 이외의 새 모듈·타입·metadata는 제안이며 현재
 실행할 수 있는 명령·설정이 아니다. [구현 순서](#구현-순서)와
 [체크리스트](codemine/runs/20261029-arc-first-import/checklist.md)를 함께 따른다.
 
@@ -44,8 +44,24 @@ rename으로 공개한다. 원본 전체 상태/preimage와 immutable original a
 
 이 오프라인 도구는 SQL baseline import와 별개이며 node/RPC/App을 시작하지 않는다.
 과거 body/state/feature coverage를 만들지 않는다. 실제 인증 checkpoint·외장 APFS·
-peer는 여전히 HOLD이며, 계속되는 첫 실행 writer와 App/collector·ACK/GC 통합은
-N2~N6으로 남는다. [N1 계획](codemine/runs/20261029-arc-native-n1/plan.md)을 따른다.
+peer는 여전히 HOLD이며, N2의 첫 실행 writer는 구현됐으며 App/collector·ACK/GC 통합은
+N3~N6으로 남는다. [N1 계획](codemine/runs/20261029-arc-native-n1/plan.md)을 따른다.
+
+## N2 구현과 검증 경계
+
+[소유한 native writer](EXECUTION_ARC_NATIVE_WRITER.md)는 공식 Arc EVM 첫 실행
+한 번의 결과를 Full 저장한다. 별도 RPC/SQL/NodeBuilder는 없다. 단일 writer와 기존
+E3 shared run lease, turnstile·read/publication gate를 사용한다. pending을 먼저
+동기화하고 pinned static/RocksDB/MDBX commit과 원본 bytes 확인을 마친 뒤 checksum으로
+보호한 영수증·head를 공개하고 정확한 intent를 완료한다. AWH1 ready는 상태이며
+AWR1은 해당 입력의 native 완료다. 둘 다 E1 ACK·공개·삭제 권한이 아니다.
+
+실제 owned child SIGKILL로 EVM·SDK 저장 경계·reply 유실과 pending 보존을 검사했고,
+별도 RO process의 catch-up과 대기 writer 공정성을 확인한다. 이는 전원/APFS 분리나
+실제 peer·운영·속도 증거가 아니다. 관리 identity가 있으면 기존 unguarded replay·
+maintenance CLI를 거부한다. managed collector·receiver-authorized reorg는 N4,
+관리 유지보수·영구 원본·GC는 N5에서 연결하며 현재는 epoch1 append만 지원한다.
+[계획](codemine/runs/20261029-arc-native-n2/plan.md)을 따른다.
 
 ## 고정하는 구조
 
@@ -270,7 +286,7 @@ intent/completion/release를 모두 유지한다. swap 뒤 inode/bind와 origina
 | --- | --- | --- |
 | N0 구현 | pinned SDK 저장/seed/별도 RO 프로세스 qualification과 bounded import 계약 | 실제 임시 native-v2 Full 저장·state/code/receipt/history·H1 checkpoint·reopen·unwind/reimport, controlled 중단 fence. 운영 writer/killpoint 복구는 N2 |
 | N1 구현 | offline authenticated native bootstrap builder | 잘못된 root/coverage/anchor/pin·기존 target 거부, staged 실패 보존, exact H/H+1와 parent 재실행 |
-| N2 | 첫 실행 writer·intent·publication gate·완료 receipt | 정상 첫 실행 횟수, 모든 store commit 중단점, 중복/불일치·동시 reader·cancel/join·재시작 fencing |
+| N2 구현 | 첫 실행 writer·intent·publication gate·완료 receipt | 정상 첫 실행 횟수, 모든 store commit 중단점, 중복/불일치·동시 reader·cancel/join·재시작 fencing |
 | N3 | Arc App 감독/등록·기존 P2P·durable raw·bounded 채널 | 시작 gate·backlog·byte/count·불연속/과대 입력·shared RPC5·pool4·비밀 미상속·stop/join |
 | N4 | managed collector read-view와 E1 transition 연결 | normal/short/deep reorg·소스 세대 분리·read fence·새 final fresh·Hello/receipt의 ACK 오인 거부 |
 | N5 | lossless 영구 raw archive·권한 있는 ingress GC·용량/배포 초안 연동 | blocks part/pool4·undo/orphan·bytes/hash·unACKed 보존·exact 삭제 guard·E3 양쪽 종료·known bad FAIL/unknown HOLD |
@@ -279,5 +295,5 @@ intent/completion/release를 모두 유지한다. swap 뒤 inode/bind와 origina
 각 단계는 의미 있는 RED→구현→GREEN, 현재 문서·체크리스트 갱신, 필요한 새 동시성
 단일 GOMAXPROCS=1/race/count200, 정확한 최종 head의 CI5 성공, squash/main 동기화 후
 다음 단계로 진행한다. SDK 불일치는 요구사항/guard 완화로 해결하지 않고 해당
-adapter를 수정하거나 구현 계획을 갱신한다. N0·N1의 현재 구현·검증과 N2~N6의 남은
+adapter를 수정하거나 구현 계획을 갱신한다. N0~N2의 현재 구현·검증과 N3~N6의 남은
 구현을 구분하며, 운영 값과 실제 실행은 계속 HOLD다.

@@ -11,6 +11,6 @@
 - [x] Persist full preimages, immutable original anchor/floor/H+1 and input digests.
 - [x] Reopen verification and atomic NOREPLACE publication; incomplete stages stay fenced.
 - [x] Final local build/fmt/clippy/full Rust and document/secret checks.
-- [ ] Actual final-head CI5, expected-head squash and clean main synchronization.
+- [x] Actual final-head CI5 run40877891503, expected-head squash #242 and clean main4586b04 synchronization; [release](../../../../verification/native-import-n1/release.json).
 
 Operational APFS/enode/authenticated checkpoint/private deployment remain HOLD.

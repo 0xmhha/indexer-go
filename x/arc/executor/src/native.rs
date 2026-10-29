@@ -208,11 +208,40 @@ pub fn export_checkpoint(
 }
 
 pub fn check_start(datadir: &Path) -> Result<()> {
+    check_fences(datadir)?;
+    check_unmanaged(datadir)
+}
+fn check_unmanaged(datadir: &Path) -> Result<()> {
+    match std::fs::symlink_metadata(datadir.join(crate::native_writer::IDENTITY)) {
+        Ok(_) => eyre::bail!(
+            "managed native DB requires its publication/read gate; legacy access refused"
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+pub(crate) fn check_fences(datadir: &Path) -> Result<()> {
+    check_import_fences(datadir)?;
+    check_retention_fences(datadir)
+}
+pub fn check_import_fences(datadir: &Path) -> Result<()> {
+    match std::fs::symlink_metadata(datadir.join(crate::native_import::PENDING)) {
+        Ok(_) => eyre::bail!("native import incomplete; exact recovery required"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
     match std::fs::symlink_metadata(datadir.join(crate::bootstrap::PENDING)) {
         Ok(_) => eyre::bail!("native bootstrap incomplete; explicit inspection required"),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
+    Ok(())
+}
+pub fn check_legacy_maintenance(datadir: &Path) -> Result<()> {
+    check_import_fences(datadir)?;
+    check_unmanaged(datadir)
+}
+fn check_retention_fences(datadir: &Path) -> Result<()> {
     match std::fs::symlink_metadata(datadir.join(".execution-retention-pending")) {
         Ok(_) => eyre::bail!(
             "matched native snapshot remains fenced; exact E3 restore activation required"

@@ -12,13 +12,16 @@ cargo build --locked
 
 The tests use offline Arc EVM libraries and synthetic genesis allocations. They start no node, contact no peers and perform no performance measurements. The optional `INDEXER_ARC_FIXTURE_DIR` test variable regenerates the six JSON and checkpoint [Go integration fixtures](../../../testdata/execution/README.md) in an explicitly selected output directory. Normal tests do not rewrite repository fixtures.
 
-First-import development includes [N0 framing and qualification](../../../docs/ARC_NATIVE_IMPORT_DESIGN.md#n0-구현과-검증-경계)
-and the [N1 offline native bootstrap](../../../docs/EXECUTION_ARC_BOOTSTRAP.md).
+First-import development includes [N0 framing and qualification](../../../docs/ARC_NATIVE_IMPORT_DESIGN.md#n0-구현과-검증-경계),
+the [N1 offline native bootstrap](../../../docs/EXECUTION_ARC_BOOTSTRAP.md), and
+[N2 first-execution writer](../../../docs/EXECUTION_ARC_NATIVE_WRITER.md).
 `native_import` implements bounded AIN1 inputs and pending fences. The explicit
 `arc-native-bootstrap --action build` creates a new verified native-v2 DB from
 an independently trusted full anchor and authentic header/body/receipt context;
-it never overwrites an existing path or starts services. Actual continuous first
-execution, App/collector and authoritative ACK/GC integration remain N2–N6.
+it never overwrites an existing path or starts services. The explicit
+`arc-native-import --serve` owns one first execution, durable native
+completion and reader gates. App/collector and authoritative ACK/GC integration
+remain N3–N6.
 Operational inputs and runtime activation remain HOLD.
 
 ## Library contract

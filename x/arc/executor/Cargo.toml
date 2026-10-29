@@ -42,9 +42,12 @@ reth-stages-types = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0
 
 reth-trie-db = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
 
-[dev-dependencies]
-alloy-genesis = "=2.0.4"
+getrandom = "=0.3.4"
 reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
+
+[dev-dependencies]
+tracing = "=0.1.44"
+alloy-genesis = "=2.0.4"
 arc-execution-config = { git = "https://github.com/circlefin/arc-node", rev = "6e764023ee6515fe70573e123ed2db912a7207b4", features = ["test-utils"] }
 
 # Match the audited upstream security patch; dependency workspace patches do
@@ -67,3 +70,7 @@ path = "src/maintenance.rs"
 [[bin]]
 name = "arc-native-bootstrap"
 path = "src/bootstrap_cli.rs"
+
+[[bin]]
+name = "arc-native-import"
+path = "src/import_cli.rs"

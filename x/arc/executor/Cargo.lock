@@ -4114,6 +4114,7 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "eyre",
+ "getrandom 0.3.4",
  "reth-chain-state",
  "reth-db-common",
  "reth-ethereum",
@@ -4135,6 +4136,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
