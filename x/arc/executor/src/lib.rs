@@ -17,6 +17,7 @@ pub mod service;
 #[cfg(test)]
 mod tests;
 
+pub mod bootstrap;
 pub mod history;
 pub mod native;
 pub mod native_import;

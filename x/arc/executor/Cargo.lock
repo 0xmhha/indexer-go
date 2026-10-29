@@ -4128,6 +4128,7 @@ dependencies = [
  "reth-stages-types",
  "reth-storage-api",
  "reth-trie",
+ "reth-trie-db",
  "revm",
  "rustix",
  "serde",

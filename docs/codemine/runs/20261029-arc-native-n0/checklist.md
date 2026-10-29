@@ -12,9 +12,11 @@
 - [x] Update current docs and n/n-1/n-2; verify links and leak scans.
 - [x] Define and enforce exact-head CI5/squash/main release gate before N1.
 
-Actual CI/merge/main evidence is recorded in the release PR metadata and private
-continuation ledger. This source checklist does not pre-certify a future CI run.
+Actual [N0 release evidence](../../../../verification/native-import-n0/release.json):
+PR #241 head cc4517755e312a297571da9a1c1bee723b439bba passed CI5 run40858712523
+and squash/main223f61735a343bf730560151617dd2f4616b66e5 was synchronized.
+This receipt records completed events; it does not pre-certify later CI runs.
 
-N1-N6 remain pending; no operational activation or performance evidence is claimed.
+Current implementation status is in the [central checklist](../20261029-arc-first-import/checklist.md); no operational activation or performance evidence is claimed.
 
 [Validation](validation.md) separates actual RED/GREEN from probes and held work.

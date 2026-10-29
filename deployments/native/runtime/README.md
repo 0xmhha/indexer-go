@@ -60,7 +60,7 @@ not enforced by Docker. Actual application file validation still belongs to
 The [first-import design](../../../docs/ARC_NATIVE_IMPORT_DESIGN.md) now selects
 an opt-in Go supervisor inside Arc App and an owned Rust native writer sharing
 the App RPC budget; the existing collector keeps the second EVM pass. N0 now
-provides bounded inputs/fences and actual SDK qualification; N1-N6 implementation
+provides bounded inputs/fences and actual SDK qualification. N1 adds the [offline native bootstrap](../../../docs/EXECUTION_ARC_BOOTSTRAP.md); N2-N6 implementation
 is pending. This draft still has no importer or App native-RW/
 ingress mounts. The design does not activate or change this composition.
 

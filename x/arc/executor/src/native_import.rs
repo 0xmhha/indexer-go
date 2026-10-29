@@ -195,7 +195,7 @@ pub fn require_clean(native: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use alloy_consensus::{BlockBody, Header, SignableTransaction, TxLegacy, TxReceipt, proofs};
     use alloy_primitives::{Address, B256, Sealable, Signature, TxKind, U256};
@@ -413,7 +413,7 @@ mod tests {
         .into()
     }
 
-    fn native(
+    pub(crate) fn native(
         funded: bool,
     ) -> Result<(tempfile::TempDir, crate::native::Factory, Arc<ArcChainSpec>)> {
         let dir = tempfile::tempdir()?;
@@ -459,11 +459,21 @@ mod tests {
 
     // ONE actual official Arc EVM run. Persisting the resulting SDK object below
     // cannot call this executor again: save_blocks receives the outcome, not an EVM.
-    fn first(f: &crate::native::Factory, spec: Arc<ArcChainSpec>) -> Result<ExecutedBlock> {
-        let parent = f.provider()?.header_by_number(0)?.unwrap();
+    pub(crate) fn first(
+        f: &crate::native::Factory,
+        spec: Arc<ArcChainSpec>,
+    ) -> Result<ExecutedBlock> {
+        next(f, spec, 0)
+    }
+    pub(crate) fn next(
+        f: &crate::native::Factory,
+        spec: Arc<ArcChainSpec>,
+        height: u64,
+    ) -> Result<ExecutedBlock> {
+        let parent = f.provider()?.header_by_number(height)?.unwrap();
         let mut block = Block {
             header: Header {
-                number: 1,
+                number: height + 1,
                 parent_hash: parent.hash_slow(),
                 timestamp: parent.timestamp + 1,
                 gas_limit: 30_000_000,
@@ -471,13 +481,14 @@ mod tests {
                 ..parent.clone()
             },
             body: BlockBody {
-                transactions: if spec
-                    .inner
-                    .genesis
-                    .alloc
-                    .get(&recipient())
-                    .and_then(|a| a.code.as_ref())
-                    .is_some_and(|b| b.as_ref() == CODE)
+                transactions: if height == 0
+                    && spec
+                        .inner
+                        .genesis
+                        .alloc
+                        .get(&recipient())
+                        .and_then(|a| a.code.as_ref())
+                        .is_some_and(|b| b.as_ref() == CODE)
                 {
                     vec![transaction(&spec)]
                 } else {

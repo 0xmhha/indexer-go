@@ -1,0 +1,90 @@
+[
+  {
+    "check": "rust-build",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "build",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--all-targets"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "a90881acf1b0f6491ca4fa6b1a1cf5e34340fe92e25cf0c3ef579515d377c002",
+    "log_name": "n1-frozen-build.log",
+    "log_sha256": "b7f45d97ce783d19bbcf02d68be782296d6bf38f2de121a06e2a4f9bf32b7dcc"
+  },
+  {
+    "check": "rust-format",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--check"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "a90881acf1b0f6491ca4fa6b1a1cf5e34340fe92e25cf0c3ef579515d377c002",
+    "log_name": "n1-frozen-fmt.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "rust-clippy",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "a90881acf1b0f6491ca4fa6b1a1cf5e34340fe92e25cf0c3ef579515d377c002",
+    "log_name": "n1-frozen-clippy.log",
+    "log_sha256": "9d1b19b4cd39097ede66c36708c26a9d882ba8e184f1c247dba51db3e9274492"
+  },
+  {
+    "check": "rust-tests",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--all-targets"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "a90881acf1b0f6491ca4fa6b1a1cf5e34340fe92e25cf0c3ef579515d377c002",
+    "log_name": "n1-frozen-test.log",
+    "log_sha256": "787fa2c36cec9c3e5d5758d9d028fd27b35b3b82ca7ddda64b0c98494625aeb1",
+    "library_tests": 57,
+    "command_tests": 3,
+    "failed": 0,
+    "ignored": 0
+  },
+  {
+    "check": "go-full-race",
+    "mode": "REUSED exact unchanged Go/module source; no new Go or concurrency test",
+    "go_source_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+    "prior_receipt": "verification/offline-monitoring/checks.json",
+    "prior_successful_log_sha256": "19999d4fc634883bdecf2a8ac0e652371edb075f7a2abf445b9f06a15951bf89",
+    "retained_actual_log_verified": true,
+    "exit": 0
+  },
+  {
+    "check": "documents",
+    "links": 290,
+    "anchors": 8,
+    "broken": 0
+  }
+]

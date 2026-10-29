@@ -24,14 +24,14 @@ pub const MAX_BYTES: u64 = 64 << 30;
 #[cfg(test)]
 pub type Keys = BTreeMap<Address, BTreeSet<B256>>;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase", deny_unknown_fields)]
 pub struct Chain {
     #[serde(rename = "ID")]
     pub id: String,
     pub genesis: B256,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase", deny_unknown_fields)]
 pub struct Manifest {
     pub version: u8,
@@ -406,6 +406,327 @@ pub fn seed_into(
         catalog.poison();
     }
     result
+}
+
+// Strict nested types belong only to authenticated full bootstrap. Legacy
+// seed/wire deserialization keeps its existing compatibility contract.
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct FullRef {
+    generation: u64,
+    height: u64,
+    hash: B256,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct FullManifest {
+    version: u8,
+    mode: String,
+    coverage: String,
+    chain: Chain,
+    r#ref: FullRef,
+    root: B256,
+    #[serde(default)]
+    header: String,
+}
+impl From<FullManifest> for Manifest {
+    fn from(m: FullManifest) -> Self {
+        Self {
+            version: m.version,
+            mode: m.mode,
+            coverage: m.coverage,
+            chain: m.chain,
+            r#ref: Ref {
+                generation: m.r#ref.generation,
+                height: m.r#ref.height,
+                hash: m.r#ref.hash,
+            },
+            root: m.root,
+            header: m.header,
+        }
+    }
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct FullAccount {
+    exists: bool,
+    nonce: u64,
+    balance: B256,
+    code_hash: B256,
+    storage_root: B256,
+    extra: u64,
+}
+impl From<FullAccount> for Account {
+    fn from(a: FullAccount) -> Self {
+        Self {
+            exists: a.exists,
+            nonce: a.nonce,
+            balance: a.balance,
+            code_hash: a.code_hash,
+            storage_root: a.storage_root,
+            extra: a.extra,
+        }
+    }
+}
+#[derive(Deserialize)]
+#[serde(
+    tag = "Kind",
+    rename_all = "lowercase",
+    rename_all_fields = "PascalCase",
+    deny_unknown_fields
+)]
+enum FullRecord {
+    Manifest {
+        manifest: FullManifest,
+    },
+    Account {
+        address: Address,
+        account: FullAccount,
+        code: String,
+    },
+    Storage {
+        address: Address,
+        slot: B256,
+        value: B256,
+    },
+    End {},
+}
+impl From<FullRecord> for Record {
+    fn from(r: FullRecord) -> Self {
+        match r {
+            FullRecord::Manifest { manifest } => Self {
+                kind: "manifest".into(),
+                manifest: Some(manifest.into()),
+                ..Default::default()
+            },
+            FullRecord::Account {
+                address,
+                account,
+                code,
+            } => Self {
+                kind: "account".into(),
+                address: Some(address),
+                account: Some(account.into()),
+                code: Some(code),
+                ..Default::default()
+            },
+            FullRecord::Storage {
+                address,
+                slot,
+                value,
+            } => Self {
+                kind: "storage".into(),
+                address: Some(address),
+                slot: Some(slot),
+                value: Some(value),
+                ..Default::default()
+            },
+            FullRecord::End {} => Self {
+                kind: "end".into(),
+                ..Default::default()
+            },
+        }
+    }
+}
+pub(crate) fn read_expected(input: impl Read) -> Result<Manifest> {
+    Ok(serde_json::from_reader::<_, FullManifest>(input)?.into())
+}
+
+/// One validated row at a time; callers may write only a private staged DB until
+/// the final root succeeds. Unlike seed_into, this authenticates all VALUES.
+pub(crate) enum FullRow {
+    Account(Address, Account, Vec<u8>),
+    Storage(Address, B256, B256),
+}
+pub(crate) fn read_full(
+    mut input: impl BufRead,
+    expected: &Manifest,
+    mut push: impl FnMut(FullRow) -> Result<()>,
+) -> Result<Manifest> {
+    let mut manifest = None;
+    let mut current: Option<(Address, Account)> = None;
+    let mut accounts = HashBuilder::default();
+    let mut storage = HashBuilder::default();
+    let mut previous_address = None;
+    let mut previous_slot = None;
+    let mut ended = false;
+    let mut total = 0u64;
+    let mut count = 0usize;
+    fn finish(
+        current: &mut Option<(Address, Account)>,
+        storage: &mut HashBuilder,
+        accounts: &mut HashBuilder,
+    ) -> Result<()> {
+        if let Some((address, account)) = current.take() {
+            ensure!(
+                storage.root() == account.storage_root,
+                "full storage root mismatch"
+            );
+            let value = TrieAccount {
+                nonce: account.nonce,
+                balance: alloy_primitives::U256::from_be_bytes(account.balance.0),
+                storage_root: account.storage_root,
+                code_hash: account.code_hash,
+            };
+            accounts.add_leaf(
+                Nibbles::unpack(keccak256(address)),
+                &alloy_rlp::encode(value),
+            );
+            *storage = HashBuilder::default();
+        }
+        Ok(())
+    }
+    loop {
+        let mut line = Vec::new();
+        (&mut input)
+            .take((MAX_RECORD + 1) as u64)
+            .read_until(b'\n', &mut line)?;
+        if line.is_empty() {
+            ensure!(ended, "full checkpoint missing end");
+            let m: Manifest = manifest.ok_or_else(|| eyre::eyre!("full manifest missing"))?;
+            ensure!(accounts.root() == m.root, "full account root mismatch");
+            return Ok(m);
+        }
+        total = total
+            .checked_add(line.len() as u64)
+            .ok_or_else(|| eyre::eyre!("full byte overflow"))?;
+        ensure!(
+            !ended && line.len() <= MAX_RECORD && total <= MAX_BYTES && count < MAX_RECORDS,
+            "full checkpoint bounds/trailing records"
+        );
+        let r: Record = serde_json::from_slice::<FullRecord>(&line)?.into();
+        ensure!(r.proof.is_none(), "full coverage cannot contain proofs");
+        match r.kind.as_str() {
+            "manifest" => {
+                ensure!(
+                    count == 0
+                        && r.address.is_none()
+                        && r.account.is_none()
+                        && r.slot.is_none()
+                        && r.value.is_none()
+                        && r.code.is_none(),
+                    "full manifest format/order"
+                );
+                let m = r
+                    .manifest
+                    .ok_or_else(|| eyre::eyre!("full manifest required"))?;
+                ensure!(
+                    m.version == 1
+                        && m.coverage == "full"
+                        && m.r#ref.generation == 1
+                        && m.r#ref.height < i64::MAX as u64
+                        && m.mode
+                            == if m.r#ref.height == 0 {
+                                "genesis"
+                            } else {
+                                "checkpoint"
+                            },
+                    "full manifest identity/coverage"
+                );
+                ensure!(
+                    m.version == expected.version
+                        && m.mode == expected.mode
+                        && m.coverage == expected.coverage
+                        && m.chain == expected.chain
+                        && m.r#ref == expected.r#ref
+                        && m.root == expected.root
+                        && (expected.header.is_empty() || m.header == expected.header),
+                    "independent expected anchor mismatch"
+                );
+                let raw = STANDARD.decode(&m.header)?;
+                let mut raw = raw.as_slice();
+                let h = <Header as alloy_rlp::Decodable>::decode(&mut raw)?;
+                ensure!(
+                    raw.is_empty()
+                        && h.number == m.r#ref.height
+                        && h.hash_slow() == m.r#ref.hash
+                        && h.state_root == m.root
+                        && h.timestamp <= i64::MAX as u64
+                        && (h.number != 0 || h.hash_slow() == m.chain.genesis),
+                    "full header commitment"
+                );
+                manifest = Some(m);
+            }
+            "account" => {
+                ensure!(
+                    manifest.is_some()
+                        && r.manifest.is_none()
+                        && r.slot.is_none()
+                        && r.value.is_none(),
+                    "full account format/order"
+                );
+                finish(&mut current, &mut storage, &mut accounts)?;
+                let address = r
+                    .address
+                    .ok_or_else(|| eyre::eyre!("full address missing"))?;
+                let account = r
+                    .account
+                    .ok_or_else(|| eyre::eyre!("full account missing"))?;
+                let hash = keccak256(address);
+                ensure!(
+                    account.exists
+                        && account.extra == 0
+                        && previous_address.is_none_or(|p| p < hash),
+                    "full account format/hash order"
+                );
+                let encoded = r.code.ok_or_else(|| eyre::eyre!("full code missing"))?;
+                ensure!(
+                    encoded.len() <= (1usize << 20).div_ceil(3) * 4,
+                    "full code size"
+                );
+                let code = STANDARD.decode(encoded)?;
+                ensure!(
+                    code.len() <= 1 << 20 && keccak256(&code) == account.code_hash,
+                    "full code hash"
+                );
+                push(FullRow::Account(address, account.clone(), code))?;
+                current = Some((address, account));
+                previous_address = Some(hash);
+                previous_slot = None;
+            }
+            "storage" => {
+                ensure!(
+                    r.manifest.is_none() && r.account.is_none() && r.code.is_none(),
+                    "full storage format"
+                );
+                let a = r
+                    .address
+                    .ok_or_else(|| eyre::eyre!("full storage address"))?;
+                let slot = r.slot.ok_or_else(|| eyre::eyre!("full storage slot"))?;
+                let value = r.value.ok_or_else(|| eyre::eyre!("full storage value"))?;
+                let hash = keccak256(slot);
+                ensure!(
+                    current.as_ref().is_some_and(|(address, _)| *address == a)
+                        && value != B256::ZERO
+                        && previous_slot.is_none_or(|p| p < hash),
+                    "full storage account/nonzero/hash order"
+                );
+                storage.add_leaf(
+                    Nibbles::unpack(hash),
+                    alloy_rlp::encode_fixed_size(&alloy_primitives::U256::from_be_bytes(value.0))
+                        .as_ref(),
+                );
+                push(FullRow::Storage(a, slot, value))?;
+                previous_slot = Some(hash);
+            }
+            "end" => {
+                ensure!(
+                    manifest.is_some()
+                        && r.manifest.is_none()
+                        && r.address.is_none()
+                        && r.account.is_none()
+                        && r.slot.is_none()
+                        && r.value.is_none()
+                        && r.code.is_none(),
+                    "full end format"
+                );
+                finish(&mut current, &mut storage, &mut accounts)?;
+                ended = true;
+            }
+            _ => eyre::bail!("unknown full checkpoint record"),
+        }
+        count += 1;
+    }
 }
 #[cfg(test)]
 pub fn seed(path: &Path, chain: &str, genesis: B256) -> Result<(Manifest, Keys)> {
