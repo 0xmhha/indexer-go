@@ -1,0 +1,270 @@
+# RUNTIME DESIGN DRAFT ONLY. No build/pull/start authorization.
+# Profiles and x-notes are not an execution interlock. See README.md.
+name: indexer-native-runtime-draft
+x-indexer-native-plan:
+  version: 1
+  deployment_state: HOLD
+  postgres: external_prepared_16
+  arc_executor: collector_owned_stdio_child
+  stablenet_executor: owned_import_and_replay
+  socket: /ipc/execution.sock
+  native: /native/node
+  spool: /source/spool
+  maintenance: separate_supervised_manual
+  contracts:
+    max_conns: 4
+    part_transactions: 2
+    api_reservation: 1
+    logical_writers: 7
+    physical_http_attempts_per_second: 5
+    fresh: new_uncached_canonical_post_response_generation_fence_commit
+    evm_executions: 2
+  external_requirements:
+    apfs_identity_and_capacity: HOLD
+    private_image_and_configs: HOLD
+    authenticated_full_checkpoint: HOLD
+    official_peers: HOLD
+    arc_first_import_provider: HOLD
+    prepared_postgres_schema: HOLD
+    host_uid_and_socket_mapping: HOLD
+  arc_scratch: /scratch
+  arc_run_lease: /native/.node.execution-retention-lock
+services:
+  arc-app:
+    image: ${INDEXER_NATIVE_APP_IMAGE:?HOLD reviewed image digest required}
+    pull_policy: never
+    profiles:
+    - native-runtime-draft
+    user: ${INDEXER_RUN_UID:?HOLD host UID required}:${INDEXER_RUN_GID:?HOLD host GID required}
+    restart: 'no'
+    init: true
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
+    tmpfs:
+    - /tmp:mode=1777
+    entrypoint:
+    - /bin/sh
+    - /opt/indexer/entrypoint.sh
+    command: []
+    environment:
+      INDEXER_BINARY: indexer-arc
+      INDEXER_DB_POSTGRES_DSN_FILE: /run/secrets/postgres_dsn
+      INDEXER_DB_DRIVER: postgres
+      INDEXER_DB_POSTGRES_MAX_CONNS: '4'
+      INDEXER_RPC_RATE_LIMIT: '5'
+    secrets:
+    - source: arc-postgres-dsn
+      target: postgres_dsn
+    networks:
+    - database
+    - rpc
+    volumes:
+    - type: bind
+      source: ${INDEXER_ARC_RUNTIME_APP_CONFIG:?HOLD app config required}
+      target: /etc/indexer/config.yaml
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_ARC_RUNTIME_IPC:?HOLD ipc required}
+      target: /ipc
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ../../testnets/indexer-entrypoint.sh
+      target: /opt/indexer/entrypoint.sh
+      read_only: true
+      bind:
+        create_host_path: false
+  arc-collector:
+    image: ${INDEXER_ARC_COLLECTOR_IMAGE:?HOLD reviewed image digest required}
+    pull_policy: never
+    profiles:
+    - native-runtime-draft
+    user: ${INDEXER_RUN_UID:?HOLD host UID required}:${INDEXER_RUN_GID:?HOLD host GID required}
+    restart: 'no'
+    init: true
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
+    tmpfs:
+    - /tmp:mode=1777
+    entrypoint:
+    - /app/arc-execution-collector
+    command:
+    - --config
+    - /etc/indexer/native.json
+    depends_on:
+      arc-app:
+        condition: service_started
+    volumes:
+    - type: bind
+      source: ${INDEXER_ARC_RUNTIME_NATIVE_CONFIG:?HOLD native config required}
+      target: /etc/indexer/native.json
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_ARC_RUNTIME_NATIVE_PARENT:?HOLD native parent required}
+      target: /native
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_ARC_RUNTIME_NATIVE_PARENT:?HOLD native parent required}/node
+      target: /native/node
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_ARC_RUNTIME_SOURCE_PARENT:?HOLD source parent required}
+      target: /source
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_ARC_RUNTIME_SCRATCH:?HOLD scratch directory required}
+      target: /scratch
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_ARC_RUNTIME_IPC:?HOLD ipc required}
+      target: /ipc
+      read_only: false
+      bind:
+        create_host_path: false
+    network_mode: none
+  stablenet-app:
+    image: ${INDEXER_NATIVE_APP_IMAGE:?HOLD reviewed image digest required}
+    pull_policy: never
+    profiles:
+    - native-runtime-draft
+    user: ${INDEXER_RUN_UID:?HOLD host UID required}:${INDEXER_RUN_GID:?HOLD host GID required}
+    restart: 'no'
+    init: true
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
+    tmpfs:
+    - /tmp:mode=1777
+    entrypoint:
+    - /bin/sh
+    - /opt/indexer/entrypoint.sh
+    command: []
+    environment:
+      INDEXER_BINARY: indexer-stablenet
+      INDEXER_DB_POSTGRES_DSN_FILE: /run/secrets/postgres_dsn
+      INDEXER_DB_DRIVER: postgres
+      INDEXER_DB_POSTGRES_MAX_CONNS: '4'
+      INDEXER_RPC_RATE_LIMIT: '5'
+    secrets:
+    - source: stablenet-postgres-dsn
+      target: postgres_dsn
+    networks:
+    - database
+    - rpc
+    volumes:
+    - type: bind
+      source: ${INDEXER_STABLENET_RUNTIME_APP_CONFIG:?HOLD app config required}
+      target: /etc/indexer/config.yaml
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_STABLENET_RUNTIME_IPC:?HOLD ipc required}
+      target: /ipc
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ../../testnets/indexer-entrypoint.sh
+      target: /opt/indexer/entrypoint.sh
+      read_only: true
+      bind:
+        create_host_path: false
+  stablenet-executor:
+    image: ${INDEXER_STABLENET_EXECUTOR_IMAGE:?HOLD reviewed image digest required}
+    pull_policy: never
+    profiles:
+    - native-runtime-draft
+    user: ${INDEXER_RUN_UID:?HOLD host UID required}:${INDEXER_RUN_GID:?HOLD host GID required}
+    restart: 'no'
+    init: true
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
+    tmpfs:
+    - /tmp:mode=1777
+    entrypoint:
+    - /app/stablenet-executor
+    command:
+    - --config
+    - /etc/indexer/native.json
+    depends_on:
+      stablenet-app:
+        condition: service_started
+    volumes:
+    - type: bind
+      source: ${INDEXER_STABLENET_RUNTIME_NATIVE_CONFIG:?HOLD native config required}
+      target: /etc/indexer/native.json
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_STABLENET_RUNTIME_NATIVE_PARENT:?HOLD native parent required}
+      target: /native
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_STABLENET_RUNTIME_SOURCE_PARENT:?HOLD source parent required}
+      target: /source
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_STABLENET_RUNTIME_IPC:?HOLD ipc required}
+      target: /ipc
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_STABLENET_RUNTIME_GENESIS_FILE:?HOLD genesis file required}
+      target: /etc/indexer/genesis.json
+      read_only: true
+      bind:
+        create_host_path: false
+    networks:
+    - peers
+networks:
+  database:
+    external: true
+    name: ${INDEXER_NATIVE_DATABASE_NETWORK:?HOLD prepared database network required}
+  rpc:
+    driver: bridge
+  peers:
+    driver: bridge
+secrets:
+  arc-postgres-dsn:
+    file: ${INDEXER_ARC_RUNTIME_DSN_FILE:?HOLD private DSN file required}
+  stablenet-postgres-dsn:
+    file: ${INDEXER_STABLENET_RUNTIME_DSN_FILE:?HOLD private DSN file required}

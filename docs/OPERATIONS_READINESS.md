@@ -16,7 +16,7 @@
 
 해시 검증한 이전 최종 인계의 patch SHA256은 `6db158c8e392db38293ae91cb48b64b7a9457a5950fb87747795ad2777101c83`, 완료 보고는 `3ac41ad0cc39b3ab79591f2366fb5b90a769ccbd6f8c28c4d39f27baa7c689a2`, 동기화 원본은 `1704b5d005c4c87b72064a5c866edef537fa802e0efc32c32ccc90af2e551141`이다. 보존된 strict all-four observer 로그도 SHA256 `5e1cb69539c87365f0f8958b6862c409fdae0fc38c4fe52a953efca6dbe1fbb5`와 일치했다. 이는 **이전 릴리스의 증거**이며 이번 세션에서 native/PG/200 실험을 반복했다는 뜻이 아니다. 선택한 현재 문서와 휴대 가능한 영수증을 저장소에 반영했으며 원본 작업트리는 수정하지 않았다. `verification/releases.json`과 observer는 과거 machine-local 실행 ledger 형식으로 유지하고 현재 릴리스 현황은 이 표와 각 portable sync를 따른다. 해당 observer를 이번 문서 릴리스 뒤의 main 검증기로 재사용하지 않는다.
 
-현재 n은 [운영 입력 권장안](codemine/runs/20261029-operations-inputs/plan.md), n−1은 [오프라인 Native 모니터링 #236](NATIVE_OFFLINE_MONITORING.md), n−2는 [백업 어댑터 #235](EXECUTION_BACKUP_ADAPTER.md)다. [Native 진단 Docker #234](../deployments/native/README.md), #230 native retention과 #229 E6· #228 call ranges 참조도 보존한다. [수용한 E1 설계](codemine/runs/20261023-e1-execution/02-design.md)와 [계획](codemine/runs/20261023-e1-execution/03-plan.md), [현재 backlog](analysis/open-items.md)를 보존한다.
+현재 n은 [Native 운영 구성 초안](codemine/runs/20261029-native-runtime-draft/plan.md), n−1은 [운영 입력 권장안 #237](codemine/runs/20261029-operations-inputs/plan.md), n−2는 [오프라인 Native 모니터링 #236](NATIVE_OFFLINE_MONITORING.md)다. [백업 어댑터 #235](EXECUTION_BACKUP_ADAPTER.md), [Native 진단 Docker #234](../deployments/native/README.md), #230 native retention과 #229 E6· #228 call ranges 참조도 보존한다. [수용한 E1 설계](codemine/runs/20261023-e1-execution/02-design.md)와 [계획](codemine/runs/20261023-e1-execution/03-plan.md), [현재 backlog](analysis/open-items.md)를 보존한다.
 
 ## 현재 확인한 저장소와 설정
 
@@ -42,7 +42,7 @@
 | --- | --- | --- |
 | legacy raw window | root 아래 `indexer/window/arc`, volume160GiB / Arc128GiB, 최소24h | [legacy YAML](examples/testnets/arc-testnet.draft.yaml)용 논리 한도. native spool 예산과 혼합하지 않음. 24h 수용 보장 없음 |
 | native DB | `<root>/indexer/native/<chain>/node` | `<chain>`별 전용 parent를 두고 진단에는 parent를 mount. 실제 root·크기·증가 예산 미확정. mount point 자체를 native directory로 사용하지 않음 |
-| 실행 source spool | `<root>/indexer/source/<chain>` | native parent와 서로 포함하지 않는 경로. 실제 quota HOLD. [실행 수집](EXECUTION_INGEST.md)의 기본4GiB/262144 records는 24h 보장 아님 |
+| 실행 source spool | 전용 부모 `<root>/indexer/source/<chain>` 아래 `spool` | [runtime 초안](../deployments/native/runtime/README.md)은 부모를 `/source` RW mount, spool을 `/source/spool`로 선언. Arc scratch는 별도 `/scratch` mount·명시적 설정으로 분리. native와 분리하며 실제 quota·scratch 예산 HOLD. 기본4GiB/262144 records는 24h 보장 아님. 기존 경로 이동 없음 |
 | checkpoint·seed·scratch·export | `<root>/indexer/checkpoints/<chain>`, `<root>/indexer/scratch/<chain>`, `<root>/indexer/exports/<chain>` | native parent/source와 분리. 인증 full baseline·retained seed·출력 예산/보관/소유권 HOLD. partial proof를 full baseline으로 사용 불가 |
 | PGDATA | root 아래 `indexer/postgres/16`, 계획160GiB | 데이터·색인·WAL 포함 계획이며 quota 아님. Docker 컨테이너의 `/var/lib/postgresql/data`와 호스트 경로 구분 |
 | identity·private 설정 | `<root>/indexer/identity/<chain>-peer.key`; repo·데이터 볼륨 밖의 전용 private 설정/상태 디렉터리 | 디렉터리0700/파일0600, non-root 소유권 권장. 진단/Indexer UID 후보501:20이며 매핑 확인 전 HOLD. PostgreSQL 서비스 UID/PGDATA 소유권은 별도 HOLD. key/설정 생성·이동 없음 |
@@ -92,6 +92,8 @@
 
 [기존 운영 초안](OPERATIONS_DRAFT.md)의 `source.feed.module: arc.eth68`는 header/body/receipt 중심 legacy baseline이다. 새 native execution/collector·checkpoint·E6 경로는 opt-in이고 [legacy Compose 초안](../deployments/testnets/compose.draft.yaml)에 native App/collector/executor 운영 서비스를 추가하지 않았다. 별도 [진단 전용 Docker 초안](../deployments/native/README.md)은 설정 검사와 읽기 전용 metadata 명령만 연결하며 네트워크·DSN·DB 의존성과 실제 실행은 없다. 옛 YAML을 native 완성 배포로 이름만 바꾸거나 실제 config를 교체하지 않는다.
 
+[Native runtime 구성 초안](../deployments/native/runtime/README.md)은 두 체인의 App과 producer 네 서비스를 별도로 선언하고 PostgreSQL16을 준비된 외부 의존성으로 둔다. Arc Rust executor는 collector의 같은 컨테이너 stdio 자식이며 별도 sidecar가 아니다. StableNet executor는 기존 import/replay를 소유한다. **Arc의 계속되는 first import/P2P 동기화 공급자는 아직 이 구성에 없다.** 이미 import된 compatible native DB와 그 갱신 경로가 필요하며 enode·checkpoint만 확보해도 자동으로 해결되지 않는다. 공급자 선택·통합은 HOLD다. runtime checker는 선언만 검사하며 앱 설정/host/image/readiness를 증명하거나 실제 실행을 막는 startup interlock을 제공하지 않는다.
+
 ## 백업 custody와 복구 판정
 
 [백업 초안](OPERATIONS_BACKUP_DRAFT.md)의 운영자 수용값은 **archive_timeout5분, 기준 백업 매일·7개, 정지 복사 매주·4개 및 큰 변경 전**이다. 수용한 방침이며 PostgreSQL 설정 적용·아카이브 실행 사실은 아니다. WAL 목적 장치·실경로·용량·암호화·secret 저장소·보관 책임자와 RPO/RTO 실증은 미확정이다.
@@ -102,4 +104,4 @@
 
 권장 경로 배치·DB 방식·프로세스 계획·24h 산식은 위와 같이 선택했다. 실제 APFS mount/UUID/ownership와 native/spool/checkpoint/PGDATA 예산·COW headroom, private 실경로·자격 증명·reviewed image digest, 공식 EL peer와 인증 checkpoint/E6 trust, 별도 WAL/백업 장치와 custody/RPO/RTO가 남는다. 파일 예제·fixture·과거 head를 채워 HOLD를 해제하지 않는다. [Native preflight](NATIVE_EXECUTION_PREFLIGHT.md)의 declaration은 실제 값을 확보한 뒤 해당 schema로 작성하며, 이 문서는 새 실행 가능한 manifest가 아니다.
 
-다음 단계는 실제 저장소가 제공되면 identity/경로/예산을 검토하고, 공식 Arc EL peer·인증 checkpoint를 확보한 뒤 기존 오프라인 검사에 연결하는 것이다. 지금은 외부 입력을 반복 요청하거나 새 운영/성능 확인 루프를 만들지 않는다. [계획·체크리스트·검증 근거](codemine/runs/20261029-operations-inputs/plan.md)를 유지한다. 운영 적용·provisioning·GC·restore activation과 추가 성능 측정은 계속 보류한다.
+다음 단계는 실제 저장소가 제공되면 identity/경로/예산을 검토하고, Arc first-import 공급 경로·공식 EL peer·인증 checkpoint를 확보한 뒤 기존 오프라인 검사에 연결하는 것이다. 지금은 외부 입력을 반복 요청하거나 새 운영/성능 확인 루프를 만들지 않는다. [운영 입력 계획](codemine/runs/20261029-operations-inputs/plan.md)과 [runtime 초안 계획](codemine/runs/20261029-native-runtime-draft/plan.md)을 유지한다. 운영 적용·provisioning·GC·restore activation과 추가 성능 측정은 계속 보류한다.

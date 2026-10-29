@@ -130,9 +130,12 @@ Pool4/part2/API reservation1/seven writers, two EVM executions, RPC5 physical
 attempts/s and the final NEW uncached canonical → generation fence → COMMIT
 remain in the existing runtime code. No application/RPC/SQL code changes here.
 
-Next offline priorities are the backup adapter, then monitoring. Native runtime
-deployment/activation still needs the external APFS/host manifest, official peer,
-authenticated checkpoint and previously held operational checks.
+The backup adapter and offline monitoring are implemented. The separate
+[runtime composition draft](runtime/README.md) describes Apps, producer ownership,
+private sockets/DSNs and lifecycle with an offline contract checker. Runtime
+deployment/activation still needs actual APFS/private inputs, authenticated
+checkpoint, official peer and the Arc first-import provider. The collector does
+not implement that provider; filling an enode does not close that dependency.
 
 Docker semantics: [build-context ignore files](https://docs.docker.com/build/concepts/context/#dockerignore-files),
 [service bind mounts](https://docs.docker.com/reference/compose-file/services/#volumes).

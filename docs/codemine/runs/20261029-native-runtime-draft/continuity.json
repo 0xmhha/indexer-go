@@ -1,0 +1,15 @@
+{
+  "n": "Native runtime composition draft; operating execution HOLD",
+  "n_minus_1": {"pr": 237, "main": "1f311393b391e02d847f305c2fa5e9aa067c8f3d", "plan": "../20261029-operations-inputs/plan.md"},
+  "n_minus_2": {"pr": 236, "main": "a49065d292258c0399296a5e1cc45989c295cbc8", "plan": "../20261028-offline-monitoring/plan.md"},
+  "backup_adapter": "../20261028-backup-adapter/plan.md",
+  "diagnostic_docker": "../20261028-native-docker/plan.md",
+  "diagnostics": "../20261028-native-diagnostics/plan.md",
+  "preflight": "../20261028-native-preflight/plan.md",
+  "retention": "../20261027-native-retention-backup/plan.md",
+  "e6": "../20261027-e6-independent-consensus/plan.md",
+  "accepted_design": "../20261023-e1-execution/02-design.md",
+  "accepted_plan": "../20261023-e1-execution/03-plan.md",
+  "next": ["actual APFS/private image and deployment inputs", "Arc first-import provider and official EL peers", "authenticated full checkpoint and matched native/source/schema", "actual PG snapshot/WAL and restore validation when resources and execution are authorized"],
+  "operational_readiness": "HOLD"
+}

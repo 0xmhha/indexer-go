@@ -1,0 +1,87 @@
+{
+  "parser": "6.0.3",
+  "checks": [
+    {
+      "gate": "runtime-real-fixtures",
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "deployments/native/runtime",
+        "-p",
+        "test_runtime.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_sha256": "458aa5cc45112a793f0e7f638f68ddc6824dfc7f1086eb531d44d34dee740df5"
+    },
+    {
+      "gate": "diagnostic-real-fixtures",
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "deployments/native",
+        "-p",
+        "test_diagnostics.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_sha256": "8f3bdf4c9b45b1bcc9f879d0e1a62202bcc69d3097599f5b51e166c54b60cd0c"
+    },
+    {
+      "gate": "release-contracts",
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "verification",
+        "-p",
+        "test_ci_state_proof_batches.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_sha256": "55dfeb98efdae5175bb849efb15e33cf1eb5e621b452e39a9ffa56fa27bc30e6"
+    },
+    {
+      "gate": "release-sequence",
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "verification",
+        "-p",
+        "test_release_sequence.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_sha256": "f7ac4305ef222130b10c70c70f40c4f717b0e074bc5f7b5b1b4df3635e1a95a9"
+    }
+  ],
+  "final_runtime_tests": "13 passed, no skips, includes actual Arc/StableNet file preflights",
+  "final_diagnostic_tests": "13 passed, no skips, actual owned CLI fixture",
+  "source_go_sha256": "b8da45385fbb6a218fb63f22b7d1517113acfbfa65f87c7323c5e98d08a98f92",
+  "prior_complete_local_race": "exact-byte evidence reused, retained log SHA verified",
+  "new_concurrent_runtime_state": false,
+  "configuration_preserved": true,
+  "operational_execution": "none",
+  "shell_and_python_syntax": "PASS",
+  "docs": {
+    "relative_links": 238,
+    "anchors": 3,
+    "continuity": "PASS",
+    "whitespace": "PASS"
+  }
+}
