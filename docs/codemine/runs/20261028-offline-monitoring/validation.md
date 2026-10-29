@@ -28,7 +28,7 @@ draft HOLD and broken-output-pipe exit checks; its owned fixture was removed.
 No new concurrent state or concurrency test was added, so no new local200-repeat
 campaign was required. No local PostgreSQL rerun or Rust rebuild was needed for
 unchanged SQL/storage/native implementation; actual final-head CI5 remains
-mandatory. [Secret scans](../../../../verification/offline-monitoring/secrets.json)
+mandatory. [Secret scans](../../../../verification/offline-monitoring/leak-scan.json)
 distinguish staged findings from reviewed public history fixtures. No SQL/storage/operational source,
 pool or RPC implementation is modified. No local operational PostgreSQL, Rust
 node build/run, Docker execution, format, GC/restore activation or performance
@@ -59,5 +59,5 @@ and [RED](../../../../verification/offline-monitoring/ci-budget-red.txt) preserv
 the distinction. All final Go/draft bytes still match the original source
 manifest, so the already-passed full local Go race/build/vet/lint evidence is
 reused without claiming a second execution. The correction has its own offline
-checks and [staged/history scan](../../../../verification/offline-monitoring/ci-fix-secrets.json). Final corrected-head CI5 is required before
+checks and [staged/history scan](../../../../verification/offline-monitoring/ci-fix-leak-scan.json). Final corrected-head CI5 is required before
 squash; release identity remains the PR/CI/Git metadata.

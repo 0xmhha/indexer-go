@@ -27,7 +27,7 @@ sequential, so no new concurrency200 campaign was needed. No local PostgreSQL
 rerun or Rust rebuild was needed for unchanged SQL/storage/native code; actual
 final-head CI postgres and arc success remain required before merge.
 
-[Secret scans](../../../../verification/backup-adapter/secrets.json) retain
+[Secret scans](../../../../verification/backup-adapter/leak-scan.json) retain
 staged versus previously reviewed public historical fixtures separately. No actual external snapshot/WAL creation,
 operating DB/node, Docker build/run, disk format or performance test is performed.
 No SQL/storage/pool/RPC/publication implementation is changed. Live receipt

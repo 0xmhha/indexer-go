@@ -7,5 +7,3 @@ internal/api/etherscan/page_tokens_history_test.go  # paging test of the token l
 pkg/app/token_metadata.go  # reads token metadata through the RPC proxy
 pkg/app/token_metadata_test.go
 pkg/storage/pebble_token.go  # Pebble token balance and transfer ports
-verification/native-diagnostics/secrets.json  # secret-scan receipt: scanner argv and finding counts only
-verification/native-diagnostics/check-secrets.py  # runs the secret scanner and writes that receipt

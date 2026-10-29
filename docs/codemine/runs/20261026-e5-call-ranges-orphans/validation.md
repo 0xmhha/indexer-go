@@ -45,7 +45,7 @@ fail-closed final all-four gate; it is not a phase2 substitute.
 - Build/vet/lint passed in execwire, StableNet executor and tools/astgraph.
 - Relative guide links, schema snapshot and actual named-test PASS event checked.
 - Staged and whole-history gitleaks scans passed with only exact previously
-  reviewed fingerprints from `verification/secret-scan-reviewed.json` excluded.
+  reviewed fingerprints from `verification/leak-scan-reviewed.json` excluded.
 
 Rust/upstream is unchanged. Local success is not release; exact-head CI5,
 squash and clean primary main synchronization remain separate mandatory gates.
