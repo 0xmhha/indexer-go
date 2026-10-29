@@ -37,6 +37,8 @@ reth-ethereum-engine-primitives = { git = "https://github.com/paradigmxyz/reth",
 revm = "=38.0.0"
 
 [dev-dependencies]
+alloy-genesis = "=2.0.4"
+reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
 reth-db-common = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
 reth-stages-types = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }
 arc-execution-config = { git = "https://github.com/circlefin/arc-node", rev = "6e764023ee6515fe70573e123ed2db912a7207b4", features = ["test-utils"] }

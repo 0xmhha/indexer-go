@@ -19,6 +19,7 @@ mod tests;
 
 pub mod history;
 pub mod native;
+pub mod native_import;
 
 pub mod retention;
 

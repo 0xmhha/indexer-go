@@ -1,0 +1,77 @@
+[
+  {
+    "check": "rust-build",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "build",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--all-targets"
+    ],
+    "exit": 0,
+    "log_name": "n0-build.log",
+    "log_sha256": "18ab1ca8b1f3a3f4e3758fb417cc2b574ef8a2f9af2fc7236fff2c96cfbce2b6"
+  },
+  {
+    "check": "rust-clippy",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "log_name": "n0-clippy.log",
+    "log_sha256": "37e895a44964a99734e4364305ff9537059ae2f970f4ca6d32e7d584d1de13a4"
+  },
+  {
+    "check": "rust-tests",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--all-targets"
+    ],
+    "exit": 0,
+    "log_name": "n0-rust-all.log",
+    "log_sha256": "17fed35ec28ee0be08cee8c0afbe944c581e86da4eb3f4b6b1f822f4b3be053b",
+    "library_tests": 51,
+    "command_tests": 2,
+    "ignored": 0
+  },
+  {
+    "check": "rust-format",
+    "cwd": ".",
+    "argv": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "x/arc/executor/Cargo.toml",
+      "--check"
+    ],
+    "exit": 0,
+    "log_name": "n0-fmt.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "documents",
+    "documents": 12,
+    "relative_links": 272,
+    "anchors": 8,
+    "broken": 0
+  }
+]
