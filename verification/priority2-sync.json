@@ -3,7 +3,7 @@
   "origin_main": "ba285da31bfe105813e81ebbbb510e3ac2921f97",
   "status": "",
   "observed_at": "2026-10-26T16:27:22.469205+00:00",
-  "main_worktree": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+  "main_worktree": ".",
   "pr": 228,
   "head": "b0e58642562b6aefef7e0a5e3f6bb806d81e5443"
 }

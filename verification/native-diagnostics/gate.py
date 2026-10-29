@@ -9,6 +9,14 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
+HOME = str(Path.home())
+
+
+def portable(value):
+    # Committed receipts must not carry a machine's home directory.
+    if value is None:
+        return None
+    return value.replace(HOME, '~', 1) if value.startswith(HOME) else value
 
 def source_hash():
     files = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '*.go', 'go.mod', 'go.sum', '**/go.mod', '**/go.sum'], cwd=ROOT).split(b'\0')
@@ -39,7 +47,7 @@ def main():
     with log.open('wb') as stream:
         result = subprocess.run(argv, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, check=False)
     after = source_hash()
-    receipt = {'cwd': str(ROOT), 'scope': label, 'argv': argv, 'source_sha256': expected, 'source_after_sha256': after, 'environment': {key: os.environ.get(key) for key in ['GOTOOLCHAIN','GOMODCACHE','GOFLAGS','PGBIN','GOMAXPROCS']}, 'exit': result.returncode, 'log': str(log.relative_to(ROOT)), 'log_sha256': hashlib.sha256(log.read_bytes()).hexdigest(), 'log_bytes': log.stat().st_size}
+    receipt = {'cwd': '.', 'scope': label, 'argv': argv, 'source_sha256': expected, 'source_after_sha256': after, 'environment': {key: portable(os.environ.get(key)) for key in ['GOTOOLCHAIN','GOMODCACHE','GOFLAGS','PGBIN','GOMAXPROCS']}, 'exit': result.returncode, 'log': str(log.relative_to(ROOT)), 'log_sha256': hashlib.sha256(log.read_bytes()).hexdigest(), 'log_bytes': log.stat().st_size}
     record = HERE / 'checks.jsonl'
     with record.open('a') as stream:
         stream.write(json.dumps(receipt, sort_keys=True) + '\n')

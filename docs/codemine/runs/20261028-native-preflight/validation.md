@@ -11,11 +11,11 @@ Commit/PR/head identity belongs to GitHub metadata and the parent handoff.
 Two new tests compiled successfully and failed their behavioral assertions before
 production fixes in this retry:
 
-- `GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod go test ./x/arc/preflight -run 'TestNativePreflightBehavior/shared_native_executable$' -count=1`
+- `GOMODCACHE=~/Library/Caches/go/pkg-mod go test ./x/arc/preflight -run 'TestNativePreflightBehavior/shared_native_executable$' -count=1`
   returned FAIL instead of PASS: a shared collector/retention executable was
   compared against itself. It is now checked once against every storage path;
   a paired negative case keeps executables inside native data forbidden.
-- `GOMODCACHE=/Users/kevin/Library/Caches/go/pkg-mod go test ./x/stablenet/preflight -run TestGenesisModeCannotHideKnownCheckpointConflict -count=1`
+- `GOMODCACHE=~/Library/Caches/go/pkg-mod go test ./x/stablenet/preflight -run TestGenesisModeCannotHideKnownCheckpointConflict -count=1`
   returned HOLD instead of FAIL: an unresolved native height hid genesis mode's
   known height0 constraint when all other files agreed on a nonzero checkpoint.
   The fix retains the missing-input finding while comparing the mode constraint.

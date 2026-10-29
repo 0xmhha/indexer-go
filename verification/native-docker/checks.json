@@ -5,7 +5,7 @@
       "bash",
       "deployments/native/test-cli.sh"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/native-cli.log",
     "log_sha256": "5b092bf1bac9bba4c5bd6d58bc43efb313f1e663270b9e6e4e3021077d381b14",
@@ -26,7 +26,7 @@
       "test_preflight.py",
       "-v"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/legacy-fixtures.log",
     "log_sha256": "4449a3a11a209be641719aeaa4d0364c7e413bf76a19bf93df263c8c4789c8c7",
@@ -40,7 +40,7 @@
       "-B",
       "deployments/testnets/preflight.py"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/legacy-draft.log",
     "log_sha256": "bdcf27b371b73d53fff925b60ac14dc119eb39ea90c55ad0ffa7358b1e9c0651",
@@ -61,7 +61,7 @@
       "test_release_sequence.py",
       "-v"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/release-sequence.log",
     "log_sha256": "85ea654a0b26d6bbb3feda42d4625780ccf0cf6f03333fbc3f9ef4f679a99ea4",
@@ -76,7 +76,7 @@
       "-c",
       "bash -n deployments/native/test-cli.sh\nsh -n deployments/testnets/indexer-entrypoint.sh"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/shell-syntax.log",
     "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -90,7 +90,7 @@
       "-B",
       "/private/tmp/indexer-native-docker-20261028/format.py"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/format.log",
     "log_sha256": "51579e07b114eecbf78d61b64ca5dff222e641968f103426f58ecdf23130c786",
@@ -105,7 +105,7 @@
       "-c",
       "for module in . execwire x/stablenet/executor tools/astgraph; do (cd \"$module\"; go build ./...; go vet ./...; \"$(go env GOPATH)/bin/golangci-lint\" run ./...); done"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/build-vet-lint.log",
     "log_sha256": "5f4ff97d3e607c3574b4ff46ecbc9c4baf8f6e5fa825e8dc4f4effab5ecadc21",
@@ -119,7 +119,7 @@
       "test-race",
       "GOTEST=go test -timeout=20m"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/race.log",
     "log_sha256": "882efeb95afa7be3cab96567a1909d5abe8a692182397b64275e1eb711ef7608",
@@ -132,7 +132,7 @@
       "make",
       "test-cache-lifecycle"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/cache.log",
     "log_sha256": "127aa5e573780b4f9e9082b3e19238f66a8484f065c51937cd4eed1148809c23",
@@ -145,7 +145,7 @@
       "make",
       "test-examples"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/examples.log",
     "log_sha256": "1ce251184ebcec9ebf151f32b3ca48717da8c6d1edab0a180c688401cf693f6b",
@@ -159,7 +159,7 @@
       "-B",
       "/private/tmp/indexer-native-docker-20261028/docs.py"
     ],
-    "cwd": "/Users/kevin/work/github/0xmhha/stable-platform/indexer-go",
+    "cwd": ".",
     "exit": 0,
     "log": "/private/tmp/indexer-native-docker-20261028/logs/docs.log",
     "log_sha256": "c70a151ced182b24bd280381f7233d95db77143f6becb6e4fb32a60893c85909",

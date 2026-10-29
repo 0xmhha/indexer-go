@@ -2,6 +2,7 @@
 """Scan staged task files and reachable history, retaining reviewed baseline distinctions."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -12,7 +13,7 @@ reviewed = {item['fingerprint'] for item in json.loads(Path('verification/secret
 receipts = []
 for scope, options in [('staged', ['--staged']), ('history', ['--log-opts=HEAD'])]:
     report = logs / (scope + '-secrets.json')
-    command = ['gitleaks', 'git', '--redact', '--no-banner', '--report-format=json', '--report-path=' + str(report), *options, '.']
+    command = ['gitleaks', 'git', '--redact', '--no-banner', '--report-format=json', '--report-path=' + os.path.relpath(report), *options, '.']
     result = subprocess.run(command, text=True, capture_output=True, check=False)
     assert result.returncode in [0, 1], 'secret scanner execution failed'
     findings = json.loads(report.read_text())
