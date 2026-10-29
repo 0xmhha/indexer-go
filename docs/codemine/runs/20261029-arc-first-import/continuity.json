@@ -1,15 +1,15 @@
 {
-  "n": "N0 bounded import/fence and pinned SDK qualification; N1-N6 pending; operations HOLD",
+  "n": "N1 authenticated offline native bootstrap; N2-N6 pending; operations HOLD",
   "n_minus_1": {
+    "pr": 241,
+    "main": "223f61735a343bf730560151617dd2f4616b66e5",
+    "plan": "../20261029-arc-native-n0/plan.md"
+  },
+  "n_minus_2": {
     "pr": 239,
     "main": "eaa3dc86e10a92db5f9bfcd74a29664fd7c131bf",
     "plan": "plan.md",
     "design": "../../../ARC_NATIVE_IMPORT_DESIGN.md"
-  },
-  "n_minus_2": {
-    "pr": 238,
-    "main": "934f9da34496cb526393ca2e7b9a0d30848c2fdb",
-    "plan": "../20261029-native-runtime-draft/plan.md"
   },
   "monitoring": "../20261028-offline-monitoring/plan.md",
   "backup_adapter": "../20261028-backup-adapter/plan.md",
@@ -21,7 +21,6 @@
   "accepted_design": "../20261023-e1-execution/02-design.md",
   "accepted_plan": "../20261023-e1-execution/03-plan.md",
   "next": [
-    "N1 authenticated native bootstrap",
     "N2 first execution and native publication",
     "N3 embedded App ingress owner",
     "N4 E1 reorg and managed collector",
@@ -29,9 +28,10 @@
     "N6 offline integrated acceptance"
   ],
   "operational_readiness": "HOLD",
-  "n_plan": "../20261029-arc-native-n0/plan.md",
+  "n_plan": "../20261029-arc-native-n1/plan.md",
   "operations_inputs": "../20261029-operations-inputs/plan.md",
   "completed": [
-    "N0 implementation and offline SDK qualification; actual CI/merge evidence in release PR"
+    "N0 implementation and offline SDK qualification; actual CI/merge evidence in release PR",
+    "N1 offline bootstrap implementation; actual release gates recorded separately"
   ]
 }

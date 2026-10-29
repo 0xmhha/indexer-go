@@ -1,0 +1,40 @@
+{
+  "actual_behavioral_RED": [
+    {
+      "case": "genesis-bootstrap",
+      "exit": 101,
+      "selected_tests": 1,
+      "initial_bootstrap_source_sha256": "4917964a0dd3c92636b7d5fff467b0ebe4e2c8e6385b453cf8a556c8e9251c69",
+      "evidence": "actual tool transcript, exec session3833 final failure",
+      "behavioral_failure": "valid genesis build fails with native bootstrap not implemented"
+    },
+    {
+      "case": "h-plus-one",
+      "exit": 101,
+      "selected_tests": 1,
+      "log_name": "n1-checkpoint-first.log",
+      "log_sha256": "e8a321e49b58cd6e325f9e81bd6f3f1cd610e9113bc052f704d4ce8b14395aad",
+      "behavioral_failure": "block2 save expected AccountChangeSets block1 after otherwise successful bootstrap"
+    },
+    {
+      "case": "anchor-body",
+      "exit": 101,
+      "selected_tests": 1,
+      "log_name": "n1-withdrawals-red.log",
+      "log_sha256": "a1c98dde15c5a9d3d3de52b4b20f1c5e0fbf39fed6a59c898c32ca1133e76d41",
+      "behavioral_failure": "nonempty withdrawal lost in native anchor block round-trip"
+    },
+    {
+      "case": "legacy-compatibility",
+      "exit": 101,
+      "selected_tests": 1,
+      "log_name": "n1-legacy-scope-red.log",
+      "log_sha256": "fe9287141fb78a460906cf17d6f6edcd2dbcdb0d28ce4df44eb344f617e60c9c",
+      "behavioral_failure": "bootstrap strict nested fields inadvertently reject legacy wire extension; scope to bootstrap-only types"
+    }
+  ],
+  "excluded_from_RED": [
+    "compile/import corrections",
+    "already-passing empty-body round-trip probe"
+  ]
+}

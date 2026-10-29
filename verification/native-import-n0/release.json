@@ -1,0 +1,40 @@
+{
+  "stage": "N0",
+  "status": "COMPLETE",
+  "pr": 241,
+  "url": "https://github.com/0xmhha/indexer-go/pull/241",
+  "base": "39a0082c32e384e3f601c7d89ed6c97a5114fcbc",
+  "head": "cc4517755e312a297571da9a1c1bee723b439bba",
+  "tree": "8cdb58c5733d16d64a4c889e0aa51b7094f0a47f",
+  "main": "223f61735a343bf730560151617dd2f4616b66e5",
+  "ci_run": 40858712523,
+  "ci_run_number": 309,
+  "jobs": [
+    {
+      "id": 123396151292,
+      "name": "lint",
+      "conclusion": "success"
+    },
+    {
+      "id": 123396151657,
+      "name": "examples",
+      "conclusion": "success"
+    },
+    {
+      "id": 123396151661,
+      "name": "test",
+      "conclusion": "success"
+    },
+    {
+      "id": 123396151709,
+      "name": "postgres",
+      "conclusion": "success"
+    },
+    {
+      "id": 123396151780,
+      "name": "arc",
+      "conclusion": "success"
+    }
+  ],
+  "scope": "N0 actual bounded framing/fence and real SDK qualification; N1-N6 pending; operating HOLD"
+}

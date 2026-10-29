@@ -208,6 +208,11 @@ pub fn export_checkpoint(
 }
 
 pub fn check_start(datadir: &Path) -> Result<()> {
+    match std::fs::symlink_metadata(datadir.join(crate::bootstrap::PENDING)) {
+        Ok(_) => eyre::bail!("native bootstrap incomplete; explicit inspection required"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
     match std::fs::symlink_metadata(datadir.join(".execution-retention-pending")) {
         Ok(_) => eyre::bail!(
             "matched native snapshot remains fenced; exact E3 restore activation required"
