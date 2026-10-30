@@ -151,14 +151,14 @@ func TestNativePreparedCheckRejectsLiveFenceBeforeAndAfterInspection(t *testing.
 		t.Run(map[bool]string{false: "before", true: "after"}[after], func(t *testing.T) {
 			p, _ := recoveryFixture(t)
 			calls := 0
-			p.deps.Store = preparedStatusFunc(func(context.Context) (port.ExecutionControl, error) {
+			p.deps.Store = preparedStatusWithOwner{originOwnerStore: p.deps.Store.(originOwnerStore), status: preparedStatusFunc(func(context.Context) (port.ExecutionControl, error) {
 				calls++
 				c := p.deps.Control
 				if !after || calls > 1 {
 					c.ReorgPending = true
 				}
 				return c, nil
-			})
+			})}
 			require.ErrorIs(t, p.Check(t.Context()), port.ErrExecutionRewinding)
 			if after {
 				require.GreaterOrEqual(t, calls, 2, "a successful inspection must recheck the live SQL fence before API exposure")
@@ -183,13 +183,13 @@ func TestNativePreparedCheckBindsCurrentPublishedPrefixAndRejectsMidInspectionAd
 				s.control.Root = execwire.Hash{99}
 			case "advanced":
 				calls := 0
-				p.deps.Store = preparedStatusFunc(func(context.Context) (port.ExecutionControl, error) {
+				p.deps.Store = preparedStatusWithOwner{originOwnerStore: p.deps.Store.(originOwnerStore), status: preparedStatusFunc(func(context.Context) (port.ExecutionControl, error) {
 					calls++
 					if calls == 1 {
 						return p.deps.Control, nil
 					}
 					return current, nil
-				})
+				})}
 			}
 			err := p.Check(t.Context())
 			switch kind {

@@ -1,0 +1,14 @@
+{
+  "stage": "N5 SQL/backend archive foundation",
+  "status": "COMPLETE",
+  "pr": 250,
+  "base": "6daa40cd28288e6729a6d484451fd7bc18f841f9",
+  "head": "4ccf2b56fc132a87c38cbba6d6d6330958b110f9",
+  "tree": "8fa8ea06793c2f83ae797e767a45459b74c0383f",
+  "main": "add9e59012357064c04ea4a5fac40136927d3574",
+  "ci_run": 40999590626,
+  "ci_run_number": 326,
+  "checks": "scope+five namedjobs allsuccess; actualshortGo/PG11; native/full200 intentionallyskipped; localnewOriginCPU1/race200 andwholePGshort0",
+  "sync": "exactreviewedtree, oneparent/base, cleanHEAD=origin/main, privateconfigunchanged",
+  "overall_N5": "INCOMPLETE: actualApp/Arc binding/resolver, rawGC, managedmaintenance/drain, heldDocker; N6 follows"
+}

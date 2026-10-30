@@ -308,6 +308,9 @@ func (a *App) initStorageOnly(ctx context.Context) error {
 	// For multichain mode, use base storage directly
 	// For single chain mode, we'll wrap it with genesis initializer later
 	a.storage = baseStore
+	if err := a.configureExecutionIngressOwner(ctx); err != nil {
+		return fmt.Errorf("execution ingress ownership: %w", err)
+	}
 	a.attachPostgresStats(a.opsMonitor)
 
 	a.logger.Info("Base storage initialized",

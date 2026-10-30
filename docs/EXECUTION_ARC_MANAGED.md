@@ -88,10 +88,13 @@ attempts/s remain unchanged. Admission/watcher canonical reads consume that same
 budget and never replace **NEW final fresh → generation fence → COMMIT → exact
 ACK**. Native Ready/import/transition receipts and Hello grant no ACK or deletion.
 
-N5 must bind permanent SQL native/source ownership, archive exact input bytes in
-the existing blocks part and add explicit stopped-owner maintenance/GC authority.
-Removing ingress configuration on a bound SQL database is not yet protected by
-N4's native/spool binding alone. Managed maintenance and raw GC remain refused.
+N5 now binds permanent SQL native/raw/source ownership and archives exact input
+bytes in the existing blocks part. App refuses removal or changes of a bound
+ingest configuration before RPC/API initialization. See the
+[origin lifecycle](EXECUTION_INGRESS_ARCHIVE.md#arc-origin-lifecycle) for exact
+receipt/raw verification and pre-SQL lease release. Explicit stopped-owner
+maintenance/GC authority remains incomplete; managed maintenance and raw GC
+remain refused.
 Owned SDK/process and protocol fixtures qualify individual boundaries; N6 must
 combine actual native processes, mock ETH/68, App, durable PostgreSQL, APIs and
 ACKs. These functional checks make no throughput or live peer claim.

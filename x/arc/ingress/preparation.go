@@ -35,6 +35,10 @@ func (p *program) Check(parent context.Context) error {
 	if err != nil {
 		return err
 	}
+	owner, err := sourceOwner(ctx, p.deps.Store, p.deps.Policy, c.ExecutionConfig, false)
+	if err != nil {
+		return err
+	}
 	if err := checkPaths(p.cfg, p.opts, p.deps.Socket); err != nil {
 		return fmt.Errorf("native paths: %w", err)
 	}
@@ -74,6 +78,9 @@ func (p *program) Check(parent context.Context) error {
 	ready.Version = 1
 	err = readArtifact(filepath.Join(p.cfg.Native.DataDir, identityName), &ready.Identity)
 	if errors.Is(err, os.ErrNotExist) {
+		if owner.Binding != nil {
+			return ErrNative
+		}
 		for _, name := range []string{headName, ".arc-native-import-receipts"} {
 			if _, e := os.Lstat(filepath.Join(p.cfg.Native.DataDir, name)); !errors.Is(e, os.ErrNotExist) {
 				return ErrNative
@@ -99,6 +106,9 @@ func (p *program) Check(parent context.Context) error {
 	p.identity, p.head = ready.Identity, ready.Head
 	if p.raw == nil {
 		if _, err = os.Lstat(p.opts.Path); errors.Is(err, os.ErrNotExist) {
+			if owner.Binding != nil {
+				return ErrNative
+			}
 			if !p.cfg.CreateWindow || ready.Head.Tip != ready.Identity.Anchor {
 				return ErrNative
 			}
@@ -116,6 +126,20 @@ func (p *program) Check(parent context.Context) error {
 	defer release()
 	if err = p.reconcile(ctx); err != nil {
 		return err
+	}
+	if owner.Binding != nil {
+		snapshot, e := p.originSnapshotLocked()
+		if e != nil {
+			return e
+		}
+		binding, e := p.actualSourceBinding(ctx, snapshot)
+		if e != nil {
+			return e
+		}
+		digest, e := binding.Digest()
+		if e != nil || digest != owner.BindingDigest {
+			return port.ErrExecutionConflict
+		}
 	}
 	return p.checkPreparedControl(ctx, c)
 }

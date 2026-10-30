@@ -59,6 +59,7 @@ type Dependencies struct {
 	Socket      string
 	StateProofs *stateproof.Selection
 	FenceReorg  func(context.Context, execwire.Ref) error
+	Policy      *port.ExecutionIngressPolicy
 }
 type Program interface {
 	// Check validates prepared state before API exposure without starting peers.
@@ -80,6 +81,7 @@ type Module struct {
 	Profile  string
 	Validate func(Config) error
 	Recovery bool
+	Origins  bool
 	// Preflight is pure; it may inspect declared bounds, never open a resource.
 	Preflight func(Config, window.Options) error
 	Prepare   func(context.Context, Config, Dependencies) (Program, error)
@@ -144,6 +146,11 @@ func supported(name string) (Module, bool) {
 	defer modules.RUnlock()
 	m, ok := modules.values[name]
 	return m, ok
+}
+
+func OwnsOrigins(name string) bool {
+	m, ok := supported(name)
+	return ok && m.Origins
 }
 func validWindowName(name string) bool {
 	if len(name) == 0 || len(name) > 64 || name == "." || name == ".." {
@@ -217,6 +224,13 @@ func Prepare(ctx context.Context, c Config, d Dependencies) (Program, error) {
 	m, _ := supported(c.Module)
 	if d.Store == nil || d.Canonical == nil || d.Profile == nil || d.Profile.ID() != m.Profile {
 		return nil, port.ErrInvalidData
+	}
+	if m.Origins && (d.Policy == nil || d.Policy.Validate() != nil || d.Policy.Module != c.Module || d.Policy.Chain != d.Control.Chain || d.Policy.Anchor != d.Control.Anchor || d.Policy.AnchorRoot != d.Control.AnchorRoot) {
+		return nil, port.ErrExecutionConflict
+	}
+	if d.Policy != nil {
+		policy := *d.Policy
+		d.Policy = &policy
 	}
 	current, err := d.Store.ExecutionStatus(ctx)
 	if err != nil {

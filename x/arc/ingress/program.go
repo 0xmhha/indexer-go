@@ -38,6 +38,10 @@ type program struct {
 	nativeStart      func(context.Context) (nativeProcess, error)
 	peerStart        func(context.Context, model.FeedBlock) (peerProcess, error)
 	collectorRun     func(context.Context, collector.Config) error
+	originWG         sync.WaitGroup
+	originCancels    map[uint64]context.CancelFunc
+	originSequence   uint64
+	originsClosing   bool
 }
 
 func activeBytes(o window.Options) int64 { return 8*o.MaxPayloadBytes + (1 << 20) }
@@ -61,6 +65,7 @@ func (p *program) Run(parent context.Context) error {
 	return p.runOwnedLoop(parent, p.runRound)
 }
 func (p *program) closeRaw() {
+	p.joinOrigins(true)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.raw != nil {
@@ -83,6 +88,7 @@ func (p *program) Stop() {
 	if round != nil {
 		round.pause()
 	}
+	p.joinOrigins(false)
 	if done != nil {
 		<-done
 	}

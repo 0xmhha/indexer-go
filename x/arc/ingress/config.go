@@ -14,7 +14,7 @@ const ModuleName = "arc.native"
 const ownerDomain = "arc.native/ain1/v1"
 
 func init() {
-	ingress.Register(ModuleName, ingress.Module{Profile: "arc", Recovery: true, Validate: func(c ingress.Config) error {
+	ingress.Register(ModuleName, ingress.Module{Profile: "arc", Recovery: true, Origins: true, Validate: func(c ingress.Config) error {
 		if err := collectorConfig(c); err != nil {
 			return err
 		}

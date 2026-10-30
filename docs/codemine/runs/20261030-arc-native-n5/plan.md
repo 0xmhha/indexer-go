@@ -1,6 +1,8 @@
 # N5 permanent ingress coverage and managed retention
 
-Start from clean main07bb84c after N4 #245 and scoped CI #246–#248. The
+N5 started from clean main07bb84c after N4 #245 and scoped CI #246–#248.
+Legacy admission #249 and SQL/backend foundation #250 are released; App/Arc
+actual owner/origin integration follows mainadd9e59. The
 [accepted first-import plan](../20261029-arc-first-import/plan.md) remains the
 authority. Native n−1 is [N4](../20261030-arc-native-n4/plan.md); n−2 is
 [N3](../20261030-arc-native-n3/plan.md). Preserve the accepted

@@ -133,6 +133,13 @@ func (a *App) initExecution(ctx context.Context) error {
 		}
 	}()
 	backend := &execution.StoreBackend{Store: store, Publisher: a.fetcher}
+	if owned != nil && e.Ingress != nil && ingress.OwnsOrigins(e.Ingress.Module) {
+		origin, ok := owned.(port.ExecutionIngressOriginResolver)
+		if !ok {
+			return port.ErrInvalidData
+		}
+		backend.Origin = origin
+	}
 	r := &execution.Receiver{RequireBlobSidecars: e.RequireBlobSidecars, RequiredStateProofs: e.RequiredStateProofs, Chain: execwire.Chain{}, Profile: profile, Store: store, Window: 8, Timeout: e.Timeout, Confirm: a.fetcher.ConfirmExecution, ValidateReorg: a.fetcher.ValidateExecutionReorg, ReorgOnError: func(err error) bool { return errors.Is(err, fetch.ErrReorg) }}
 	c, err := store.ExecutionStatus(ctx)
 	if err != nil {

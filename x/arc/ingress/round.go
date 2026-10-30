@@ -120,8 +120,17 @@ func (p *program) initializeRaw(ctx context.Context, ready nativeReady) error {
 	}
 	defer release()
 	p.mu.Lock()
-	p.identity, p.head = ready.Identity, ready.Head
+	err = p.initializeRawLocked(ctx, ready)
 	p.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return p.bindSourceOwner(ctx, ready)
+}
+
+// Startup migration and origin snapshots share the same state boundary.
+func (p *program) initializeRawLocked(ctx context.Context, ready nativeReady) error {
+	p.identity, p.head = ready.Identity, ready.Head
 	if p.raw == nil {
 		if !p.cfg.CreateWindow || ready.Head.Tip != ready.Identity.Anchor {
 			return ErrNative

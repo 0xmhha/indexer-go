@@ -6,6 +6,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/internal/config"
 	"github.com/0xmhha/indexer-go/pkg/chains"
+	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/execution/ingress"
 	"github.com/0xmhha/indexer-go/pkg/source"
 )
@@ -24,7 +25,26 @@ func prepareExecutionIngressWithRecovery(ctx context.Context, cfg *config.Config
 	if err = validateExecutionControl(cfg.Source.Execution, c, profile); err != nil {
 		return nil, err
 	}
-	p, err := ingress.Prepare(ctx, *cfg.Source.Execution.Ingress, ingress.Dependencies{Store: store, Canonical: canonical, Profile: profile, Control: c, Layout: cfg.WindowStorage, Socket: cfg.Source.Execution.Socket, StateProofs: cfg.Source.Execution.RequiredStateProofs, FenceReorg: fence})
+	policy, err := executionIngressPolicy(cfg, c)
+	if err != nil {
+		return nil, err
+	}
+	if policy != nil {
+		owner, ok := store.(interface {
+			ExecutionIngressOwner(context.Context) (port.ExecutionIngressOwner, error)
+		})
+		if !ok {
+			return nil, port.ErrInvalidData
+		}
+		pinned, err := owner.ExecutionIngressOwner(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if pinned.Policy != *policy {
+			return nil, port.ErrExecutionConflict
+		}
+	}
+	p, err := ingress.Prepare(ctx, *cfg.Source.Execution.Ingress, ingress.Dependencies{Store: store, Canonical: canonical, Profile: profile, Control: c, Layout: cfg.WindowStorage, Socket: cfg.Source.Execution.Socket, StateProofs: cfg.Source.Execution.RequiredStateProofs, FenceReorg: fence, Policy: policy})
 	if err != nil {
 		return nil, err
 	}

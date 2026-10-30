@@ -1,0 +1,60 @@
+[
+  {
+    "check": "n5-origin-final-green",
+    "exit": 0,
+    "log_name": "n5-origin-final-green.log",
+    "log_sha256": "a56be3a539868e95c8fa71ffe77cc3eb6fcc0e0c4aa8848c4f812549c343ec2d"
+  },
+  {
+    "check": "n5-origin-app-db-final",
+    "exit": 0,
+    "log_name": "n5-origin-app-db-final.log",
+    "log_sha256": "022e265bc439f228a7af8f49b5537436f8f685b5dd596f2d6689dac297e0df91"
+  },
+  {
+    "check": "n5-origin-race200",
+    "exit": 0,
+    "log_name": "n5-origin-race200.log",
+    "log_sha256": "31476519133bbeb2a1afe45b3b0f8f5312a419f872b87b576b307c4ba5d44ac6",
+    "command": "GOMAXPROCS=1 go test -race -count=200 -timeout=8m -run '^(TestArcOriginReadyAndResolveSharePreparedState|TestArcOriginResolvesExactNativeAndRawBeforeMemoryOnlyHandoff|TestArcOriginStopCancelsAndJoinsBlockedNativeView)$' ./x/arc/ingress",
+    "selected_top_level_tests": 3,
+    "actual_seconds": 94.451
+  },
+  {
+    "check": "n5-origin-related-short",
+    "exit": 0,
+    "log_name": "n5-origin-related-short.log",
+    "log_sha256": "33f42b21ff6ee64754b1597b93582ec268e78b89c35217fe4e83a82d31de2dcd",
+    "scope": "Initial four-package short pass including app192.079s; final Arc refinements separately qualified in final-green and current App test in app-db-final."
+  },
+  {
+    "check": "n5-origin-build",
+    "exit": 0,
+    "log_name": "n5-origin-build.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "n5-origin-vet",
+    "exit": 0,
+    "log_name": "n5-origin-vet.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "n5-origin-lint",
+    "exit": 0,
+    "log_name": "n5-origin-lint.log",
+    "log_sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+  },
+  {
+    "check": "changed-documents",
+    "files": 10,
+    "links": 274,
+    "broken": 0
+  },
+  {
+    "check": "offline-CI-policy",
+    "exit": 0,
+    "tests": 23,
+    "log_sha256": "3af22351580f9b221ca18c63a2b10547a92fabe46d85ace530fdb859b66c2020"
+  }
+]
