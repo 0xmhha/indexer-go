@@ -57,6 +57,9 @@ func (s *Store) WriteExecutionPart(ctx context.Context, p port.ExecutionPart, ap
 			if old != p || cursor.Ref.Height < p.Ref.Height || cursor.Ref.Height == p.Ref.Height && cursor != old {
 				return port.ErrExecutionConflict
 			}
+			if c.IngressOwned {
+				return requireIngressPart(ctx, tx, p)
+			}
 			return nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -79,6 +82,11 @@ func (s *Store) WriteExecutionPart(ctx context.Context, p port.ExecutionPart, ap
 		bound = context.WithValue(bound, executionPartKey{}, scope)
 		if err := apply(bound); err != nil {
 			return err
+		}
+		if c.IngressOwned {
+			if err := requireIngressPart(ctx, tx, p); err != nil {
+				return err
+			}
 		}
 		if err := ctx.Err(); err != nil {
 			return err

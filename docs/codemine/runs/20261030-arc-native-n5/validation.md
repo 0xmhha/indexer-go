@@ -18,5 +18,20 @@ duplicate main runs/cache files, and #248/CI324 proves documentation-only CI
 in17s without Go/Rust/Docker setup. Times exclude queue and make no runtime
 performance claim. All three squash merges were cleanly synchronized.
 
-This branch has not yet passed its PR release gate. Operational launch,
-provisioning, GC/restore and additional performance measurements remain HOLD.
+The admission subfeature passed actual CI325 and was squash-merged as #249,
+then synchronized cleanly at main6daa40c with the exact reviewed tree and one
+parent/base. Private config remained unchanged.
+
+The next [archive foundation](../../../EXECUTION_INGRESS_ARCHIVE.md) has separate
+RED assertions for missing ownership, missing blocks archive, pre-SQL origin
+failure, invalid header layout and cancellation precedence. SQL owner/archive,
+atomic rollback, seven-part publication, differing counters, corrupt bytes,
+missing pinned owner, migration and undo ownership pass10 owned PG cases.
+Backend functionality and its new concurrent input/cancellation case pass a
+single CPU1/race/count200 invocation. Root build/vet and affected lint pass.
+The complete affected PostgreSQL short suite passed143.418s; core/port and
+execution short packages also passed. This foundation's PR gate remains pending.
+Actual App/Arc resolver/binding and the remaining N5 steps are not implemented.
+
+Operational launch, provisioning, GC/restore and additional performance
+measurements remain HOLD.

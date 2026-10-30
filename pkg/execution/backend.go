@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -20,6 +21,7 @@ type Publisher interface {
 type StoreBackend struct {
 	Store     PartStore
 	Publisher Publisher
+	Origin    port.ExecutionIngressOriginResolver
 }
 
 func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prepared) (err error) {
@@ -37,6 +39,31 @@ func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prep
 	}
 	if !valid {
 		return port.ErrInvalidData
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	var archive *port.ExecutionIngressArchive
+	if w == port.ExecutionBlocks && b.Origin != nil {
+		input := port.ExecutionIngressInput{Chain: p.chain, Ref: p.result.Ref, Parent: p.result.Parent, Digest: p.digest, Root: p.result.StateRoot, ReceiptsRoot: p.result.ReceiptsRoot, BlockRLP: bytes.Clone(p.result.BlockRLP), ReceiptsRLP: bytes.Clone(p.result.ReceiptsRLP)}
+		origin, release, err := b.Origin.ResolveExecutionOrigin(ctx, input)
+		if release != nil {
+			defer release()
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		if release == nil {
+			return port.ErrExecutionConflict
+		}
+		original := port.ExecutionIngressInput{Ref: p.result.Ref, Parent: p.result.Parent, Digest: p.digest, BlockRLP: p.result.BlockRLP, ReceiptsRLP: p.result.ReceiptsRLP}
+		if err := matchIngressArchive(origin, original); err != nil {
+			return err
+		}
+		archive = &origin
 	}
 	part := port.ExecutionPart{Writer: w, Ref: p.result.Ref, Parent: p.result.Parent, Digest: p.digest}
 	return b.Store.WriteExecutionPart(ctx, part, func(bound context.Context) error {
@@ -62,7 +89,19 @@ func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prep
 				return port.ErrInvalidData
 			}
 			return writer.ApplyExecutionBlobs(bound, p.chain, p.result, p.block)
-		case port.ExecutionBlocks, port.ExecutionReceipts, port.ExecutionLogs:
+		case port.ExecutionBlocks:
+			if err := b.Store.ApplyExecutionCore(bound, w, p.block, p.receipts); err != nil {
+				return err
+			}
+			if archive == nil {
+				return nil
+			}
+			writer, ok := b.Store.(port.ExecutionIngressArchiveWriter)
+			if !ok {
+				return port.ErrInvalidData
+			}
+			return writer.ApplyExecutionIngress(bound, *archive)
+		case port.ExecutionReceipts, port.ExecutionLogs:
 			return b.Store.ApplyExecutionCore(bound, w, p.block, p.receipts)
 		case port.ExecutionAccounts:
 			if e := b.Store.ApplyExecutionState(bound, w, p.result); e != nil {

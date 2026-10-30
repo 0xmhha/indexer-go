@@ -168,6 +168,12 @@ func (s *Store) ClearChainData(ctx context.Context, kvPrefixes []string, all boo
 		return nil, err
 	}
 	err = s.inTx(ctx, func(q querier) error {
+		if _, err := q.Exec(ctx, "SELECT pg_advisory_xact_lock("+executionLockSQL+")"); err != nil {
+			return err
+		}
+		if err := refuseIngressReset(ctx, q); err != nil {
+			return err
+		}
 		if len(tables) > 0 {
 			quoted := make([]string, len(tables))
 			for i, t := range tables {

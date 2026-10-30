@@ -1,0 +1,37 @@
+[
+  {
+    "check": "n5-owner-red",
+    "exit": 1,
+    "classification": "behavioral assertions with compiled contract scaffolding/owned fixtures; not a compile or dependency failure",
+    "log_name": "n5-owner-red.log",
+    "log_sha256": "fda4c737861530ace0f407e3fe4618bfb5d2f3fdad14ad6123b76db8b196c7e5"
+  },
+  {
+    "check": "n5-archive-backend-red",
+    "exit": 1,
+    "classification": "behavioral assertions with compiled contract scaffolding/owned fixtures; not a compile or dependency failure",
+    "log_name": "n5-archive-backend-red.log",
+    "log_sha256": "101638097a3fae0cc6a12e87a1e14eeb07d8b4265605e8723434e29372d01fc8"
+  },
+  {
+    "check": "n5-archive-db-red",
+    "exit": 1,
+    "classification": "behavioral assertions with compiled contract scaffolding/owned fixtures; not a compile or dependency failure",
+    "log_name": "n5-archive-db-red.log",
+    "log_sha256": "719cf3d52a18eb4f0618873fefdeaf69febe20c1c5f67f7025677948841db15b"
+  },
+  {
+    "check": "n5-archive-layout-red",
+    "exit": 1,
+    "classification": "behavioral assertions with compiled contract scaffolding/owned fixtures; not a compile or dependency failure",
+    "log_name": "n5-archive-layout-red.log",
+    "log_sha256": "4698b7221d6d52d3ef7b5e3561be33c76f7be60fe52dbf13667617374b5bb377"
+  },
+  {
+    "check": "n5-archive-cancel-red",
+    "exit": 1,
+    "classification": "behavioral assertions with compiled contract scaffolding/owned fixtures; not a compile or dependency failure",
+    "log_name": "n5-archive-cancel-red.log",
+    "log_sha256": "d3c2f68a34e7a41812fedaa17b21f4734f7d01fba4e1f7e2114bb22afea033fb"
+  }
+]
