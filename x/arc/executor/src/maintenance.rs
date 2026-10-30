@@ -42,6 +42,8 @@ struct Args {
     seed: Option<PathBuf>,
     #[arg(long)]
     scratch_dir: Option<PathBuf>,
+    #[arg(long)]
+    managed_context: Option<PathBuf>,
 }
 fn read_input<T: serde::de::DeserializeOwned>(r: &mut impl BufRead) -> Result<T> {
     let mut line = Vec::new();
@@ -55,7 +57,19 @@ fn read_input<T: serde::de::DeserializeOwned>(r: &mut impl BufRead) -> Result<T>
 fn main() -> Result<()> {
     let mut a = Args::parse();
     a.datadir = a.datadir.canonicalize()?;
-    native::check_legacy_maintenance(&a.datadir)?;
+    let managed = if let Some(context) = a.managed_context.as_deref() {
+        ensure!(
+            matches!(
+                a.operation,
+                Operation::Inspect | Operation::Hold | Operation::Prune | Operation::Verify
+            ),
+            "unsupported managed maintenance operation"
+        );
+        Some(indexer_arc_executor::managed_maintenance::Managed::inherited(&a.datadir, context, 3)?)
+    } else {
+        native::check_legacy_maintenance(&a.datadir)?;
+        None
+    };
     native::layout(&a.datadir)?;
     let spec: Arc<ArcChainSpec> = match a.chain {
         Chain::Mainnet => MAINNET.clone(),
@@ -105,6 +119,10 @@ fn main() -> Result<()> {
             }
             let (f, _work) =
                 native::open_readonly_in(&a.datadir, spec.clone(), true, a.scratch_dir.as_deref())?;
+            if let Some(m) = &managed {
+                m.request(&r)?;
+                m.verify(&f)?;
+            }
             let observed = retention::inspect(&f, &spec, &r)?;
             serde_json::to_writer(std::io::stdout().lock(), &observed)?;
             println!();
@@ -134,12 +152,18 @@ fn main() -> Result<()> {
             );
             let apply: retention::Apply = read_input(&mut input)?;
             apply.request.validate()?;
+            if let Some(m) = &managed {
+                m.request(&apply.request)?;
+            }
             let mut extra = [0u8; 1];
             ensure!(input.read(&mut extra)? == 0, "extra maintenance input");
             if matches!(a.operation, Operation::Prune) {
                 retention::candidate(&a.datadir, &apply)?;
                 checkpoint::private_file(&a.datadir.join(".execution-retention-copy"))?;
                 let f = native::open_writable(&a.datadir, spec.clone())?;
+                if let Some(m) = &managed {
+                    m.verify(&f)?;
+                }
                 let work = if let Some(parent) = a.scratch_dir.as_deref() {
                     indexer_arc_executor::catalog::private_dir(parent)?;
                     tempfile::Builder::new()
@@ -167,10 +191,16 @@ fn main() -> Result<()> {
                     true,
                     a.scratch_dir.as_deref(),
                 )?;
+                if let Some(m) = &managed {
+                    m.verify(&f)?;
+                }
                 retention::verify(&f, &spec, &a.datadir, &apply, _work.path())?;
             }
             println!("{{\"Status\":\"native_verified\"}}");
         }
+    }
+    if let Some(m) = managed {
+        m.check()?;
     }
     Ok(())
 }

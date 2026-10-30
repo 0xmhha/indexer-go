@@ -4,7 +4,8 @@ Arc raw collection is an explicit library operation: `arcingress.CollectRaw`
 and `arcingress.RecoverRaw`, using `RawRetentionOptions` and the existing
 PostgreSQL Store. It starts no App, peer or SDK child and provisions no path.
 [App drain](EXECUTION_DRAIN.md) provides the joined worker boundary; managed
-native COW wiring remains a separate N5 step.
+[native COW bridge](EXECUTION_MANAGED_MAINTENANCE.md) is implemented separately.
+The App/E3 phase coordinator remains an N5 integration step.
 Operational invocation, formatting and performance measurements remain HOLD.
 Call these functions with an unbound context: they acquire the existing E3
 lease internally. Do not nest them inside another E3 transaction callback.

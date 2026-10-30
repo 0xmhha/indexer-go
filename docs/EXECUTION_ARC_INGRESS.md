@@ -5,7 +5,7 @@ prepared execution Store and canonical reader. It creates no SQL pool or RPC
 client, starts no node and changes no upstream code. Normal processing still
 uses two EVM passes: the native writer's first execution and the collector's
 second replay. N4 implements the [managed replay/reorg bridge](EXECUTION_ARC_MANAGED.md);
-permanent ingress bytes/authorized raw GC are N5; combined native/App/PostgreSQL acceptance is N6.
+permanent ingress bytes/authorized raw GC #251–#252 and graceful drain #253 are released. Explicit App/E3 maintenance coordination remains N5; combined native/App/PostgreSQL acceptance is N6.
 Until those are released, this is an implementation boundary, not an operating
 configuration. APFS, official enode, authenticated checkpoint and private inputs
 remain HOLD. No live execution or performance result is claimed.
@@ -137,7 +137,7 @@ Stop is idempotent and releases prepared resources even if Run never starts.
 An interrupted native multi-store mutation preserves its pending fence for
 explicit recovery. Age, Hello, a raw height or a native receipt cannot clear it
 or authorize deletion. Explicit [raw GC/recovery](EXECUTION_RAW_RETENTION.md)
-is available; graceful drain and managed native maintenance wiring remain N5.
+is available. Graceful drain #253 and the [managed native bridge](EXECUTION_MANAGED_MAINTENANCE.md) are implemented; App/E3 phase coordination and held deployment wiring remain N5.
 See the
 [current plan](codemine/runs/20261030-arc-native-n5/plan.md),
 [checklist](codemine/runs/20261030-arc-native-n5/checklist.md) and

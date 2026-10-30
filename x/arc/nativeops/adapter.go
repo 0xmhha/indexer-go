@@ -20,10 +20,13 @@ import (
 )
 
 type Native struct {
-	Executable string
-	Chain      execwire.Chain
-	Timeout    time.Duration
-	AnchorRoot execwire.Hash
+	Executable  string
+	Chain       execwire.Chain
+	Timeout     time.Duration
+	AnchorRoot  execwire.Hash
+	Managed     *ManagedContext
+	runLease    *os.File
+	boundPermit *retention.Permit
 }
 type Observation struct {
 	Head             execwire.Ref
@@ -83,6 +86,14 @@ func (n Native) start(parent context.Context, path, operation string, input any)
 	}
 	life := &childLifetime{ctx: ctx, cancel: cancel, path: work, info: workInfo}
 	cmd := exec.CommandContext(ctx, n.Executable, "--chain", chain, "--datadir", path, "--operation", operation, "--scratch-dir", work)
+	if n.Managed != nil {
+		managed, e := n.writeManaged(path, operation, work)
+		if e != nil {
+			return nil, nil, errors.Join(e, life.Close())
+		}
+		cmd.Args = append(cmd.Args, "--managed-context", managed)
+		cmd.ExtraFiles = []*os.File{n.runLease}
+	}
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "TZ=" + os.Getenv("TZ"), "TMPDIR=" + os.Getenv("TMPDIR")}
 	cmd.WaitDelay = 2 * time.Second
 	if input != nil {
@@ -120,6 +131,13 @@ func (n Native) Inspect(ctx context.Context, path string, r retention.Request) (
 	if e == nil && (o.Head.Generation != 0 || o.Head.Hash == (execwire.Hash{}) || o.Root == (execwire.Hash{}) || o.AnchorRoot == (execwire.Hash{}) || o.Head.Height < r.Anchor.Height) {
 		e = retention.ErrUnsafe
 	}
+	if e == nil && n.Managed != nil {
+		h := n.Managed.Proof.Head.Tip
+		i := n.Managed.Proof.Identity
+		if o.Head.Height != h.Height || o.Head.Hash != h.Hash || o.Root != h.Root || o.AnchorRoot != i.Anchor.Root {
+			e = retention.ErrUnsafe
+		}
+	}
 	return o, e
 }
 func (n Native) Prune(ctx context.Context, path string, p retention.Permit) error {
@@ -129,7 +147,7 @@ func (n Native) Verify(ctx context.Context, path string, p retention.Permit) err
 	return n.apply(ctx, path, "verify", p)
 }
 func (n Native) apply(ctx context.Context, path, operation string, p retention.Permit) error {
-	if p.Validate() != nil || p.Request.Chain != n.Chain {
+	if p.Validate() != nil || p.Request.Chain != n.Chain || n.Managed != nil && (n.boundPermit == nil || *n.boundPermit != p) {
 		return retention.ErrUnsafe
 	}
 	digest, e := retention.Digest(p)
@@ -169,7 +187,7 @@ func (h *held) Close() error {
 	return h.err
 }
 func (n Native) Lock(ctx context.Context, path string, r retention.Request) (io.Closer, error) {
-	if r.Validate() != nil || r.Chain != n.Chain {
+	if r.Validate() != nil || r.Chain != n.Chain || n.Managed != nil && (n.boundPermit == nil || n.boundPermit.Request != r) {
 		return nil, retention.ErrUnsafe
 	}
 	cmd, life, e := n.start(ctx, path, "hold", nil)

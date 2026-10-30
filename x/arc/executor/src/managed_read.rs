@@ -35,6 +35,16 @@ pub fn snapshot(
     crate::native_epoch::valid_head(&head, &identity)?;
     writer::check_native(f, &head, &identity)?;
     writer::check_completion(native, f, &head, &identity)?;
+    let actual = crate::history::floor(f)?;
+    if let Some(floor) = view.floor.get() {
+        ensure!(
+            *floor == actual,
+            "managed history floor changed under run SH"
+        );
+    } else {
+        crate::retention::managed_floor(f, native, &identity)?;
+        let _ = view.floor.set(actual);
+    }
     // Bind even a head-only/canonical-anchor reply to the exact latest input.
     let current = if head.tip.height > identity.anchor.height {
         Some(checked_receipt(
@@ -175,6 +185,7 @@ pub struct InheritedView {
     directory: File,
     parent: File,
     _run: File,
+    floor: std::sync::OnceLock<u64>,
 }
 impl InheritedView {
     #[cfg(test)]
@@ -205,6 +216,7 @@ impl InheritedView {
             directory,
             parent,
             _run: run,
+            floor: std::sync::OnceLock::new(),
         })
     }
     fn check_descriptor(native: &Path, descriptor: i32) -> Result<()> {

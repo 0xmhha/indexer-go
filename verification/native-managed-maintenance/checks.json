@@ -1,0 +1,76 @@
+[
+  {
+    "check": "affected-go-short",
+    "exit": 0,
+    "log": "n5-managed-go-short.log",
+    "sha256": "aca281c290940684f9daa34ff1a3b3817a8aa02ad1c9502496a856495c105d48"
+  },
+  {
+    "check": "final-native-go-short",
+    "exit": 0,
+    "log": "n5-managed-final-go-short.log",
+    "sha256": "1774cbceb1513a87ebd491d6904bccedf01766ad35b6e790cbdfd2913d3f2610"
+  },
+  {
+    "check": "new-sdk-three",
+    "exit": 0,
+    "log": "n5-managed-sdk-green.log",
+    "sha256": "d609ccb61b65024cb42146fd02542b60b4f8660690760b14a43c81c84ed4920f"
+  },
+  {
+    "check": "full-sdk88-once",
+    "exit": 0,
+    "log": "n5-managed-sdk-full.log",
+    "sha256": "1e6d1b6bccc9e2002e59fd6ae987b0d411da7388ad7b78f3b8d39e83213457c2"
+  },
+  {
+    "check": "all-native-binaries",
+    "exit": 0,
+    "log": "n5-managed-rust-build.log",
+    "sha256": "669c053cd27d35ece61b413b021db3df53a6c090e8ee121e7864663961658535"
+  },
+  {
+    "check": "native-all-target-clippy-Dwarnings",
+    "exit": 0,
+    "log": "n5-managed-rust-clippy.log",
+    "sha256": "067011e9ae491fc7bc8149bcca0688664749f5d54f9e0cc9ec149501961e5380"
+  },
+  {
+    "check": "go-build",
+    "exit": 0,
+    "log": "n5-managed-go-build.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "ci-policy23",
+    "exit": 0,
+    "log": "n5-managed-ci-policy.log",
+    "sha256": "b173ce5e8baa7d6e6528cc9c959552f5c1d9877aab4a46ed9a82679f45357ad7"
+  },
+  {
+    "check": "final-new-child-cpu1-race200",
+    "exit": 0,
+    "log": "n5-managed-final-child-race200.log",
+    "sha256": "b373fbef703f7211f584b25f9704cb5a7020923f17f779de3d0f9468c40afe35"
+  },
+  {
+    "check": "static",
+    "result": "affected Go vet/lint exit0; native fmt --check exit0; Cargo source dependencies remain pinned"
+  },
+  {
+    "check": "qualification-boundary",
+    "result": "Go/COW protocol fixtures and actual Rust SDK fixtures are separate. SDK case runs132 real generated/imported Arc EVM blocks; this does not certify combined App/mock ETH68/SDK/SQL/E3 orchestration."
+  },
+  {
+    "check": "superseded-fixtures",
+    "result": "Initial Rust stub failure preceded a canonical-path fixture correction and is not the authoritative floor RED. Rust ack ownership compile correction and long generator nonempty assertion are not RED proof. Dedicated continued() allows legitimate empty changes while retaining existing next() assertion."
+  },
+  {
+    "check": "new-workspace-fix",
+    "result": "Cutoff verification initially exposed default scratch0755 refusal; explicit0700 fixed it without relaxing private catalog checks. Final SDK88 all passed403.46s."
+  },
+  {
+    "check": "superseded-child-stress",
+    "result": "First CPU1/race200 failed while awaiting child readiness at the fixture-only1s deadline. Changed fixture to existing5s convention; no operational timeout changed. Final selected normal/cancel child case CPU1/race/parallel1/count200 passed109.274s after SDK regression. Failed run is not counted as success."
+  }
+]

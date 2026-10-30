@@ -3,8 +3,9 @@
 N5 started from clean main07bb84c after N4 #245 and scoped CI #246–#248.
 Legacy admission #249 and SQL/backend foundation #250 are released; App/Arc
 actual owner/origin #251/CI327 is released at main2458776. Explicit raw deletion/recovery #252 is released at main867d1be.
-[Graceful worker drain](../../../EXECUTION_DRAIN.md) is implemented; the managed
-native COW bridge remains separate. The
+[Graceful worker drain](../../../EXECUTION_DRAIN.md) #253/CI329 is released at
+mainf63d0ff. The [managed native COW bridge](../../../EXECUTION_MANAGED_MAINTENANCE.md)
+is implemented; explicit App/E3 phase orchestration remains separate. The
 [accepted first-import plan](../20261029-arc-first-import/plan.md) remains the
 authority. Native n−1 is [N4](../20261030-arc-native-n4/plan.md); n−2 is
 [N3](../20261030-arc-native-n3/plan.md). Preserve the accepted
@@ -27,7 +28,10 @@ Implement in reviewable steps; N5 stays incomplete until every step qualifies:
 4. Gracefully stop admission, finish active native work, drain through exact
    public/ACK N, join importer and collector, and only then take run EX for
    explicit managed COW/retention. Preserve original identity/anchor/receipts
-   and verify the actual retained floor before restart. No ambiguous repair.
+   and verify the actual retained floor before restart. The inherited bridge
+   and completed-floor checks do not replace the App/E3 coordinator. Persist
+   exact raw-first/COW/release/resume phases, including a zero-deletion raw
+   completion; recover without inferring completion from absence. No ambiguous repair.
 5. Update the held Docker/capacity/inspection draft for App-owned Arc ingress
    and remove the external Arc collector from that composition. Unknown actual
    APFS, enode, checkpoint, image and private inputs remain HOLD.

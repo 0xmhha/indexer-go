@@ -1,0 +1,15 @@
+{
+  "stage": "N5 graceful drain/verified resume",
+  "status": "COMPLETE",
+  "pr": 253,
+  "url": "https://github.com/0xmhha/indexer-go/pull/253",
+  "base": "867d1bee3f896bbbbe1821e531967cd22dcdbb9f",
+  "head": "acfa5af81ed0817f2bf071cfcb1619f65a22f1f3",
+  "tree": "792dad829b66ccf34c117388cae821e5b5cdb065",
+  "main": "f63d0ffec444fc23930bbddd32bd47806667b4dd",
+  "ci_run": 41044019932,
+  "ci_run_number": 329,
+  "checks": "scope+allfive namedjobs actualsuccess; actualshortGo/corePG11/build/lint/examples; defaultfullsteps intentionallyskipped; local targetednew lifecycle/reorg/App and ACK observer CPU1/race/single200 pass",
+  "sync": "exactreviewedtree/oneparent/base/cleanHEAD=originmain/privateconfigunchanged",
+  "overall_N5": "INCOMPLETE: managed native COW bridge and held Docker/capacity/inspection; N6 follows"
+}

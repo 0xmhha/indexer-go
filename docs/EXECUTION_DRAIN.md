@@ -62,6 +62,6 @@ resume, parked Run and cancellation/join. They start no node or peer network.
 Targeted new concurrency uses one local CPU1/race/count200 invocation per
 scope; default CI stays [scoped short](CI.md).
 
-This feature alone does not authorize native COW. The explicit inherited run
-lease/managed SDK bridge, held Docker draft and combined actual SDK/App/SQL N6
-acceptance remain distinct work in the [N5 plan](codemine/runs/20261030-arc-native-n5/plan.md).
+This feature alone does not authorize native COW. The [inherited run lease/managed SDK bridge](EXECUTION_MANAGED_MAINTENANCE.md)
+is implemented separately. The App/E3 coordinator, held Docker draft and
+combined actual SDK/App/SQL N6 acceptance remain distinct work in the [N5 plan](codemine/runs/20261030-arc-native-n5/plan.md).

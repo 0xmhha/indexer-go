@@ -24,6 +24,12 @@ type Adapter interface {
 	Verify(context.Context, string, retention.Permit) error
 }
 
+// RunLeaseBinder receives the actually held EX open-file description. It must
+// return an immutable bound copy and never reacquire or unlock that lease.
+type RunLeaseBinder interface {
+	BindRunLease(*os.File, retention.Permit) (Adapter, error)
+}
+
 type Options struct {
 	Adapter      Adapter
 	DataDir      string
@@ -145,6 +151,15 @@ func compact(ctx context.Context, o Options, p retention.Permit, h hooks) error 
 		return e
 	}
 	defer func() { _ = lease.Close() }()
+	if binder, ok := o.Adapter.(RunLeaseBinder); ok {
+		o.Adapter, e = binder.BindRunLease(lease, p)
+		if e != nil {
+			return e
+		}
+		if o.Adapter == nil {
+			return ErrUnsafe
+		}
+	}
 	var f fence
 	e = readJSON(marker, &f)
 	if errors.Is(e, os.ErrNotExist) {
@@ -408,6 +423,15 @@ func Release(ctx context.Context, o Options, p retention.Permit, r retention.Rec
 		return e
 	}
 	defer func() { _ = lease.Close() }()
+	if binder, ok := o.Adapter.(RunLeaseBinder); ok {
+		o.Adapter, e = binder.BindRunLease(lease, p)
+		if e != nil {
+			return e
+		}
+		if o.Adapter == nil {
+			return ErrUnsafe
+		}
+	}
 	var f fence
 	e = readJSON(marker, &f)
 	if errors.Is(e, os.ErrNotExist) {
@@ -474,6 +498,15 @@ func WithRetentionSnapshot(ctx context.Context, o Options, p retention.Permit, c
 		return err
 	}
 	defer func() { err = errors.Join(err, lease.Close()) }()
+	if binder, ok := o.Adapter.(RunLeaseBinder); ok {
+		o.Adapter, err = binder.BindRunLease(lease, p)
+		if err != nil {
+			return err
+		}
+		if o.Adapter == nil {
+			return ErrUnsafe
+		}
+	}
 	var f fence
 	if err = readJSON(marker, &f); err != nil {
 		return err
