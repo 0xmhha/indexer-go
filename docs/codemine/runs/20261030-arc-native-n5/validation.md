@@ -10,8 +10,8 @@ The three new top-level cases pass one actual CPU1/race/count200 invocation.
 They prove pre-child refusal, importer-start exclusion, retained unmanaged RO
 coexistence, cancellation/join and writer reacquisition after the child exits.
 Existing affected guard cases and build/vet/lint also pass. The N5 checklist
-continues to distinguish this subfeature from permanent SQL ownership/archive,
-raw deletion and managed maintenance that remain incomplete.
+distinguishes released SQL ownership/archive, raw deletion and drain from
+the remaining explicit App/E3 phase coordinator and combined acceptance.
 
 The CI priority is released: #246/CI321 short code span432s, #247/CI323 removes
 duplicate main runs/cache files, and #248/CI324 proves documentation-only CI
@@ -105,3 +105,35 @@ CPU1/race/single200 passed for four new Arc lifecycle cases, the affected reorg
 proposal and App delegation (Arc199.692s, App2.639s). The ACK observer's own
 CPU1/race/single200 passed34.677s. Wire short, final build, vet/lint,23 CI policy
 tests and changed-document links passed. Default CI was not expanded.
+
+## Managed native maintenance bridge
+
+The preceding drain feature passed CI329 and was squash-merged as #253; clean
+mainf63d0ff matches its reviewed tree and parent/base. Its release receipt is
+preserved with the next feature evidence, without a self-referential commit.
+
+The common COW adapter now borrows the actual run EX for compact/release/snapshot.
+Managed Arc children inherit that descriptor and frozen context; global legacy
+managed refusal remains. Completed Go/Rust cutoff proofs are mandatory at
+managed startup. Actual SDK tests prove that I/bootstrap/original anchor remain
+unchanged after cutoff, next import and a retained-window native epoch rewind.
+An advanced floor without completion is rejected. The current retained seed
+is validated independently of the historical retention head after reorg.
+
+Local Go/protocol tests and actual Rust SDK fixtures are separate; they do not
+certify a combined App/SDK/SQL cycle. The App/E3 durable phase coordinator,
+held Docker wiring and N6 remain incomplete. No operation was activated.
+
+[RED](../../../../verification/native-managed-maintenance/red.json),
+[source](../../../../verification/native-managed-maintenance/source.json),
+[checks](../../../../verification/native-managed-maintenance/checks.json) and
+[preceding drain release](../../../../verification/native-managed-maintenance/drain-release.json)
+separate the current scope and its actual qualification. The full native lib
+suite passed once:88 tests/403.46s. New SDK cases passed46.24s. All native
+binaries, fmt and clippy(all-targets, -D warnings) passed. Affected Go short,
+build, vet/lint and23 CI policy tests passed. The final new child lifecycle
+CPU1/race/parallel1/count200 passed109.274s. An earlier fixture1s startup timeout
+failed; after changing only its readiness deadline to5s, the final selected run
+passed. That failed run, initial compile/canonical-path/long-generator fixture
+corrections and default0755 scratch refusal are explicitly separated in evidence.
+Default CI gained no stress or full-SDK requirement.

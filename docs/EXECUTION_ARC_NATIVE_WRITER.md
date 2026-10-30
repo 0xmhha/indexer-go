@@ -4,7 +4,7 @@ N2 adds `arc-native-import`, an explicit bounded stdin/stdout writer using the
 pinned official Arc EVM and native-v2 storage libraries. It imports into an
 [N1 verified bootstrap](EXECUTION_ARC_BOOTSTRAP.md), without NodeBuilder,
 network/RPC/SQL clients, an upstream patch or a separate node service.
-[App-owned ingress](EXECUTION_ARC_INGRESS.md) and the [N4 managed collector/reorg bridge](EXECUTION_ARC_MANAGED.md) are implemented; permanent raw/GC and combined acceptance remain N5–N6.
+[App-owned ingress](EXECUTION_ARC_INGRESS.md) and the [N4 managed collector/reorg bridge](EXECUTION_ARC_MANAGED.md) are implemented; raw GC #252 and graceful drain #253 are released; App/E3 phase coordination, held deployment and combined N6 acceptance remain.
 Operational execution, APFS/enode/authenticated production inputs and performance
 measurements remain **HOLD**.
 
@@ -47,9 +47,10 @@ response verification or cancellation/join.
 
 A managed identity blocks legacy unguarded replay and maintenance CLI access.
 The N4 bridge supplies the explicit inherited read-view contract to the owned
-collector; it never silently upgrades an unmanaged reader. Managed maintenance stays refused until the N5
-owner/stop/join/permit bridge is implemented; merely stopping a writer is not a
-maintenance permit. Raw/native import epoch, native read epoch and
+collector; it never silently upgrades an unmanaged reader. Legacy managed
+maintenance stays refused. The explicit [N5 inherited bridge](EXECUTION_MANAGED_MAINTENANCE.md)
+connects run EX to COW; App/E3 phase coordination remains incomplete. Merely
+stopping a writer is not a maintenance permit. Raw/native import epoch, native read epoch and
 receiver-owned E1 generation are separate. N4 adds bounded receiver-authorized
 epoch transitions and SDK unwind with immutable original-prefix receipts.
 

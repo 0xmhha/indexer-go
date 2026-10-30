@@ -337,8 +337,50 @@ pub fn verify(
     a: &Apply,
     workspace: &Path,
 ) -> Result<()> {
+    verify_inner(f, spec, datadir, a, workspace, false)
+}
+fn verify_inner(
+    f: &Factory,
+    spec: &ArcChainSpec,
+    datadir: &Path,
+    a: &Apply,
+    workspace: &Path,
+    current: bool,
+) -> Result<()> {
     a.request.validate()?;
-    inspect(f, spec, &a.request)?;
+    if current {
+        // The historical retention head may have advanced OR been rewound.
+        // The retained cutoff/seed is immutable; old ACK/head are not a claim
+        // about the current branch after a coordinator-bound epoch change.
+        let mut now = a.request.clone();
+        now.head.hash = B256::ZERO;
+        let observed = inspect(f, spec, &now)?;
+        ensure!(
+            observed.head.height >= a.request.through,
+            "completed head below retained floor"
+        );
+        let p = f.provider()?;
+        for n in [
+            a.request.through,
+            a.request.through + 1,
+            observed.head.height,
+        ] {
+            if n > observed.head.height {
+                continue;
+            }
+            let h = p
+                .header_by_number(n)?
+                .ok_or_else(|| eyre!("managed retained state header missing"))?;
+            ensure!(
+                p.history_by_block_hash(h.hash_slow())?
+                    .state_root(Default::default())?
+                    == h.state_root,
+                "managed retained state unavailable"
+            );
+        }
+    } else {
+        inspect(f, spec, &a.request)?;
+    }
     let path = datadir.join(FLOOR);
     checkpoint::private_file(&path)?;
     let floor: Floor = serde_json::from_reader(std::fs::File::open(path)?)?;
@@ -423,6 +465,100 @@ pub fn verify(
     );
     Ok(())
 }
+// Validate a completed managed cutoff once per native owner/read child. A
+// parent's run lease excludes any legitimate COW while that owner stays open.
+pub fn managed_floor(
+    f: &Factory,
+    datadir: &Path,
+    i: &crate::native_writer::Identity,
+) -> Result<()> {
+    let floor = crate::history::floor(f)?;
+    let go = datadir.join(".execution-retention-floor");
+    let native = datadir.join(FLOOR);
+    let exists = |p: &Path| -> Result<bool> {
+        match std::fs::symlink_metadata(p) {
+            Ok(_) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e.into()),
+        }
+    };
+    let (has_go, has_native) = (exists(&go)?, exists(&native)?);
+    if !has_go && !has_native {
+        ensure!(
+            floor == i.anchor.height,
+            "advanced floor lacks completed COW/seed proof"
+        );
+        return Ok(());
+    }
+    ensure!(has_go && has_native, "partial managed cutoff proof");
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "PascalCase", deny_unknown_fields)]
+    struct Completed {
+        version: u16,
+        permit: Box<serde_json::value::RawValue>,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase", deny_unknown_fields)]
+    struct Permit {
+        coverage: String,
+        baseline_digest: B256,
+        version: u16,
+        token: B256,
+        request: Request,
+        visible: Ref,
+        root: B256,
+    }
+    let completed: Completed = crate::native_writer::artifact(&go)?;
+    let digest = B256::from_slice(&Sha256::digest(completed.permit.get().as_bytes()));
+    let permit: Permit = serde_json::from_str(completed.permit.get())?;
+    let r = &permit.request;
+    r.validate()?;
+    ensure!(
+        completed.version == 1
+            && permit.version == 1
+            && permit.coverage == "full"
+            && permit.baseline_digest != B256::ZERO
+            && permit.token != B256::ZERO
+            && r.chain.id == i.chain_id.to_string()
+            && r.chain.genesis == i.genesis
+            && r.anchor.height == i.anchor.height
+            && r.anchor.hash == i.anchor.hash
+            && permit.visible == r.ack
+            && r.tail == r.ack
+            && r.head.height == r.ack.height
+            && r.head.hash == r.ack.hash
+            && permit.root == r.head_root
+            && floor == r.through,
+        "managed COW completion/identity/floor mismatch"
+    );
+    checkpoint::private_file(&native)?;
+    let recorded: Floor = serde_json::from_reader(std::fs::File::open(native)?)?;
+    ensure!(
+        recorded.version == 3,
+        "managed cutoff requires current native proof"
+    );
+    let work = tempfile::Builder::new()
+        .prefix(".arc-managed-floor-")
+        .tempdir_in(
+            datadir
+                .parent()
+                .ok_or_else(|| eyre!("managed native parent"))?,
+        )?;
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(work.path(), std::fs::Permissions::from_mode(0o700))?;
+    verify_inner(
+        f,
+        &arc_execution_config::chainspec::TESTNET,
+        datadir,
+        &Apply {
+            request: permit.request,
+            permit_digest: digest,
+        },
+        work.path(),
+        true,
+    )
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase", deny_unknown_fields)]
 pub struct BackupApply {

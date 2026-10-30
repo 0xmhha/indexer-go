@@ -10,6 +10,7 @@ import (
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/execwire/retention"
 	"github.com/0xmhha/indexer-go/execwire/spool"
+	"github.com/0xmhha/indexer-go/x/arc/nativeinput"
 	"github.com/0xmhha/indexer-go/x/arc/nativestore"
 	"io"
 	"os"
@@ -435,6 +436,30 @@ func TestNativeHelper(t *testing.T) {
 			fail(os.WriteFile(filepath.Join(dir, "guard-stopped"), []byte("stopped"), 0600))
 		}
 		os.Exit(0)
+	}
+	if contextPath := value("--managed-context"); contextPath != "" {
+		fail(nativestore.PrivateFile(contextPath))
+		data, e := os.ReadFile(contextPath)
+		fail(e)
+		var c ManagedContext
+		fail(nativeinput.Decode(data, &c))
+		fail(nativeinput.VerifyCurrent(dir, c.Proof, c.Proof.Identity))
+		inherited := os.NewFile(3, "inherited-run")
+		got, e := inherited.Stat()
+		fail(e)
+		expected := filepath.Join(filepath.Dir(c.OriginalDataDir), "."+filepath.Base(c.OriginalDataDir)+".execution-retention-lock")
+		want, e := os.Lstat(expected)
+		fail(e)
+		if !os.SameFile(got, want) {
+			fail(retention.ErrUnsafe)
+		}
+		probe, e := os.OpenFile(expected, os.O_RDWR, 0600)
+		fail(e)
+		e = syscall.Flock(int(probe.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+		_ = probe.Close()
+		if e == nil {
+			fail(retention.ErrUnsafe)
+		}
 	}
 	op := value("--operation")
 	var raw json.RawMessage

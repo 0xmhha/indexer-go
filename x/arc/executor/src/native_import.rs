@@ -495,6 +495,23 @@ pub(crate) mod tests {
         spec: Arc<ArcChainSpec>,
         height: u64,
     ) -> Result<ExecutedBlock> {
+        next_checked(f, spec, height, true)
+    }
+    // Long retention fixtures also execute legitimate empty blocks after the
+    // system-contract state stabilizes. Existing next() retains its assertion.
+    pub(crate) fn continued(
+        f: &crate::native::Factory,
+        spec: Arc<ArcChainSpec>,
+        height: u64,
+    ) -> Result<ExecutedBlock> {
+        next_checked(f, spec, height, false)
+    }
+    fn next_checked(
+        f: &crate::native::Factory,
+        spec: Arc<ArcChainSpec>,
+        height: u64,
+        require_changes: bool,
+    ) -> Result<ExecutedBlock> {
         let parent = f.provider()?.header_by_number(height)?.unwrap();
         let mut block = Block {
             header: Header {
@@ -552,7 +569,7 @@ pub(crate) mod tests {
             block.header.logs_bloom |= r.bloom();
         }
         assert!(
-            !output.state.state.is_empty(),
+            !require_changes || !output.state.state.is_empty(),
             "exercise actual native state, not headers only"
         );
         Ok(ExecutedBlock::new(

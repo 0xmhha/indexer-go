@@ -23,7 +23,7 @@ it never overwrites an existing path or starts services. The explicit
 completion and reader gates. App/collector and authoritative ACK/GC integration
 are connected by [App ingress](../../../docs/EXECUTION_ARC_INGRESS.md) and the
 [N4 managed replay/reorg bridge](../../../docs/EXECUTION_ARC_MANAGED.md).
-Permanent raw/GC and combined acceptance remain N5–N6.
+Raw GC #252 and graceful drain #253 are released; explicit App/E3 phase coordination, held deployment and combined N6 acceptance remain.
 Operational inputs and runtime activation remain HOLD.
 
 ## Library contract
@@ -60,3 +60,12 @@ Optional one-file `--state-proofs /ABSOLUTE/PRIVATE/selection.json` reads a priv
 See the [Arc native guide](../../../docs/EXECUTION_ARC_RETENTION.md) for `arc-native-maintenance`, candidate key/root limits, private output, managed owner guards and E3 live-supervised copy/swap/release. State history and boundary/pre-anchor jars stay retained; no fixed total-disk promise or live-node validation is implied.
 
 Native checkpoint catalogs use bounded private disk sort/merge and incremental trie reconstruction, including a per-account storage spool. Export and retention cutoff verification share this path. See [workspace, input and capacity limits](../../../docs/EXECUTION_ARC_RETENTION.md#full-checkpoint-export); account/storage history pruning retains a one-block root guard. [Native history floor and compatibility](../../../docs/EXECUTION_ARC_RETENTION.md#history-floor-and-compatibility) apply to replay parents and seed starts. Further native allocation/index reclamation remains separate.
+
+## Managed maintenance boundary
+
+App-owned managed state uses the internal inherited-fd maintenance bridge, not
+the legacy command admission path. See [managed COW and restart proof](../../../docs/EXECUTION_MANAGED_MAINTENANCE.md).
+Only inspect/hold/prune/verify accept its frozen private context and fd3. The
+actual Go run EX and existing E3 live lease remain caller obligations. No node,
+automatic GC or operational activation is added. Managed writer/RO startup now
+requires the completed Go/Rust cutoff/seed proof for an advanced native floor.

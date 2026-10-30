@@ -33,6 +33,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Understand managed read views, native epochs and E1 reorg recovery | [Managed Arc replay](EXECUTION_ARC_MANAGED.md) |
 | Integrate App source ownership, Arc origin and the blocks-part input archive | [Ingress ownership and archive](EXECUTION_INGRESS_ARCHIVE.md) |
 | Park and resume App-owned execution workers before maintenance | [Execution drain](EXECUTION_DRAIN.md) |
+| Review inherited managed COW and completed-floor restart | [Managed native maintenance](EXECUTION_MANAGED_MAINTENANCE.md) |
 | Review explicit raw deletion authority and crash recovery | [Managed raw retention](EXECUTION_RAW_RETENTION.md) |
 | Review Arc first-import design, N0–N4 and remaining N5–N6 | [Arc native import design](ARC_NATIVE_IMPORT_DESIGN.md) |
 | Review Native App/collector/executor topology and held lifecycle | [Native runtime composition draft](../deployments/native/runtime/README.md) |

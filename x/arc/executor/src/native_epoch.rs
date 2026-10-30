@@ -295,6 +295,7 @@ pub(crate) fn transition_with_hook(
         let f = crate::native::open_writable(native, TESTNET.clone())?;
         writer::check_native(&f, &current, &identity)?;
         writer::check_completion(native, &f, &current, &identity)?;
+        crate::retention::managed_floor(&f, native, &identity)?;
         if has_pending {
             std::fs::remove_file(pending)?;
             directory.sync_all()?;
@@ -320,6 +321,7 @@ pub(crate) fn transition_with_hook(
     let f = crate::native::open_writable(native, TESTNET.clone())?;
     writer::check_native(&f, &current, &identity)?;
     writer::check_completion(native, &f, &current, &identity)?;
+    crate::retention::managed_floor(&f, native, &identity)?;
     crate::history::require(&f, result.head.tip.height)?;
     ensure!(
         f.provider()?

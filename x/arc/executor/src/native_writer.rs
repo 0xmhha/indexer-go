@@ -626,6 +626,7 @@ impl Writer {
         directory(&path.join(RECEIPTS))?;
         check_native(&f, &head, &identity)?;
         check_completion(path, &f, &head, &identity)?;
+        crate::retention::managed_floor(&f, path, &identity)?;
         drop(guard);
         Ok(Self {
             f,

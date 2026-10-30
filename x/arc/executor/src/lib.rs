@@ -19,6 +19,7 @@ mod tests;
 
 pub mod bootstrap;
 pub mod history;
+pub mod managed_maintenance;
 pub mod managed_read;
 pub mod native;
 pub mod native_epoch;

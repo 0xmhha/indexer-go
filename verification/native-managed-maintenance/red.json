@@ -1,0 +1,30 @@
+[
+  {
+    "command": "go test ./x/arc/nativestore -short -run ^TestMaintenanceAdapterBorrows -count=1",
+    "exit": 1,
+    "assertion": "adapter never received the owned EX descriptor",
+    "classification": "compiled behavioral requirement; receipt observed in tool output"
+  },
+  {
+    "command": "go test ./x/arc/nativeops -short -run ^TestManagedNativeBinds -count=1",
+    "exit": 1,
+    "assertion": "managed adapter cannot borrow the current EX lease",
+    "classification": "compiled behavioral requirement against refusing stub; metadata-only owned Go fixture, not SDK"
+  },
+  {
+    "command": "cargo test --lib managed_maintenance::tests::managed_writer_rejects_advanced_floor_without_completed_cow_evidence -- --exact --test-threads=1",
+    "exit": 101,
+    "log": "n5-managed-floor-red.log",
+    "sha256": "dc62be6695f678273f6e99c4bd7631ef85cfcd8b62abb9b85afafe5246d1e227",
+    "assertion": "advanced floor was trusted without completed COW/seed proof",
+    "classification": "actual SDK advanced history floor accepted by pre-feature Writer.open; valid behavioral RED"
+  },
+  {
+    "command": "go test ./x/arc/nativeops -short -run ^TestManagedNativeRejectsPublic -count=1",
+    "exit": 1,
+    "log": "n5-managed-prefix-red.log",
+    "sha256": "40201934764656dd7eb1a444ef2c169d7431e48d2e0e8574092f7620b2ffb361",
+    "assertion": "managed bridge accepted a public prefix ahead of frozen ACK/native N",
+    "classification": "compiled behavioral requirement using a legacy-valid permit"
+  }
+]
