@@ -57,3 +57,8 @@ passed [CI321](https://github.com/0xmhha/indexer-go/actions/runs/40989226640):
 excluding queue time. PostgreSQL took 45 seconds including setup and cleanup;
 all eleven core cases actually passed. This is one observed run, not a promised
 duration for every change or a cold native build.
+
+Documentation-only [PR #248](https://github.com/0xmhha/indexer-go/pull/248) passed
+[CI324](https://github.com/0xmhha/indexer-go/actions/runs/40991521083) in17 seconds
+excluding queue time. Its scope was docs_only=true; all Go/Rust/Docker/runtime
+setup steps were skipped and links/policy checks ran. This is an observed run.

@@ -1,14 +1,14 @@
 {
-  "n": "N4 released by #245; short CI #246 released; duplicate-main/cache cleanup before N5/N6",
+  "n": "N5 first legacy admission subfeature locally qualified; overall N5 and N6 incomplete",
   "n_minus_1": {
+    "pr": 245,
+    "main": "d6ed1eb7758f70fc52ded3242815c1b53aecf441",
+    "plan": "../20261030-arc-native-n4/plan.md"
+  },
+  "n_minus_2": {
     "pr": 244,
     "main": "a203193eeeb60b09cc88d64576604e9ea65af92e",
     "plan": "../20261030-arc-native-n3/plan.md"
-  },
-  "n_minus_2": {
-    "pr": 243,
-    "main": "636c10b7e488e45b2871c91f2af81a834a486a66",
-    "plan": "../20261029-arc-native-n2/plan.md"
   },
   "monitoring": "../20261028-offline-monitoring/plan.md",
   "backup_adapter": "../20261028-backup-adapter/plan.md",
@@ -20,12 +20,12 @@
   "accepted_design": "../20261023-e1-execution/02-design.md",
   "accepted_plan": "../20261023-e1-execution/03-plan.md",
   "next": [
-    "Remove duplicate main CI/generated Python caches, then resume N5/N6",
-    "N5 permanent ingress coverage/GC and deployment draft",
+    "Release N5 legacy writer admission; SQL source ownership and lossless archive",
+    "N5 authoritative raw GC/managed maintenance/held Docker",
     "N6 offline integrated acceptance"
   ],
   "operational_readiness": "HOLD",
-  "n_plan": "../20261030-arc-native-n4/plan.md",
+  "n_plan": "../20261030-arc-native-n5/plan.md",
   "operations_inputs": "../20261029-operations-inputs/plan.md",
   "completed": [
     "N0 implementation and offline SDK qualification; actual CI/merge evidence in release PR",
@@ -40,5 +40,16 @@
     "main": "c36e84e262b437258bdd55cee17c93d80126f0ce",
     "ci_run": 40989226640,
     "execution_seconds_excluding_queue": 432
+  },
+  "ci_cleanup_release": {
+    "pr": 247,
+    "main": "c03559a5185a1b04d545d5d64a10f3702b43f907",
+    "ci_run": 40990524417
+  },
+  "ci_docs_release": {
+    "pr": 248,
+    "main": "07bb84c4287ae86fbbc26cb1cb2e370110177147",
+    "ci_run": 40991521083,
+    "execution_seconds_excluding_queue": 17
   }
 }

@@ -4,9 +4,9 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 
 ## 현재 정본과 연속성
 
-- n: N4 [계획](../codemine/runs/20261030-arc-native-n4/plan.md), [체크리스트](../codemine/runs/20261030-arc-native-n4/checklist.md). managed replay·E1 reorg 통합 #245 릴리스 완료. CI short #246·main 중복/캐시 정리 #247 릴리스 완료. 다음은 N5. N5~N6 미완료
-- n−1: N3 #244 [계획](../codemine/runs/20261030-arc-native-n3/plan.md), [App ingress](../EXECUTION_ARC_INGRESS.md)
-- n−2: N2 #243 [계획](../codemine/runs/20261029-arc-native-n2/plan.md), [writer](../EXECUTION_ARC_NATIVE_WRITER.md)
+- n: N5 [계획](../codemine/runs/20261030-arc-native-n5/plan.md), [체크리스트](../codemine/runs/20261030-arc-native-n5/checklist.md). 관리형 DB의 legacy writer 우회 차단은 로컬 검증 완료, PR 릴리스 전이다. SQL owner/archive·raw GC·관리 유지보수·Docker와 N6는 미완료. CI short #246·중복/캐시 정리 #247·문서 전용 검증 #248 릴리스 완료.
+- n−1: N4 #245 [계획](../codemine/runs/20261030-arc-native-n4/plan.md), [관리형 replay](../EXECUTION_ARC_MANAGED.md)
+- n−2: N3 #244 [계획](../codemine/runs/20261030-arc-native-n3/plan.md), [App ingress](../EXECUTION_ARC_INGRESS.md)
 - 수용한 Arc first-import 설계 #239 [정본](../ARC_NATIVE_IMPORT_DESIGN.md), [계획](../codemine/runs/20261029-arc-first-import/plan.md), [체크리스트](../codemine/runs/20261029-arc-first-import/checklist.md), [연속성](../codemine/runs/20261029-arc-first-import/continuity.json)
 - 이전 완료: Native 운영 구성 초안 #238 [계획](../codemine/runs/20261029-native-runtime-draft/plan.md), [사용법](../../deployments/native/runtime/README.md)
 - 이전 완료: 운영 입력 권장안 #237 [계획](../codemine/runs/20261029-operations-inputs/plan.md), [체크리스트](../codemine/runs/20261029-operations-inputs/checklist.md), [연속성](../codemine/runs/20261029-operations-inputs/continuity.json), [결정표](../OPERATIONS_READINESS.md)

@@ -1,0 +1,15 @@
+{
+  "stage": "CI docs-only proof",
+  "status": "COMPLETE",
+  "pr": 248,
+  "url": "https://github.com/0xmhha/indexer-go/pull/248",
+  "base": "c03559a5185a1b04d545d5d64a10f3702b43f907",
+  "head": "bbaa5771e0e0fd223fdfc824c2b803e331d4a4fe",
+  "tree": "f2d6ebed64ff5cac4b1807878fe9bb1ee6ebd8cb",
+  "main": "07bb84c4287ae86fbbc26cb1cb2e370110177147",
+  "ci_run": 40991521083,
+  "ci_run_number": 324,
+  "checks": "actual docs_only=true/code=false/arc=false/full=false;23 policy cases; all Go/Rust/Docker/cache/runtime setup skipped, each namedjob reports scope",
+  "sync": "exact reviewedtree, oneparent/base, clean HEAD=origin/main, privateconfigunchanged",
+  "execution_seconds_excluding_queue": 17
+}

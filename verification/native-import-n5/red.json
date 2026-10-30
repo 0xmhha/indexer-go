@@ -1,0 +1,9 @@
+{
+  "feature": "legacy managed writer admission",
+  "exit": 1,
+  "top_level_behavioral_failures": 3,
+  "log_name": "n5-legacy-guard-red.log",
+  "log_sha256": "38ce90ce7e42c206bd1d8570c7f79098c4948021849d8321a8c1487ff7b3d72b",
+  "classification": "expected refusal assertions failed after actual owned helper startup; no compile/dependency/node failure",
+  "fixture_note": "final cancellation observation uses a closed completion channel; the failing ownership/lock assertions are unchanged"
+}

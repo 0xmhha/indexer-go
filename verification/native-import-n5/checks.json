@@ -1,0 +1,52 @@
+[
+  {
+    "check": "n5-legacy-guard-green",
+    "exit": 0,
+    "log_name": "n5-legacy-guard-green.log",
+    "log_sha256": "fa94272ebe4fedf3cb66107151ad9dc304a797d9aef0dc39eabc4f2cf74f2cd2"
+  },
+  {
+    "check": "n5-legacy-guard-race200",
+    "exit": 0,
+    "log_name": "n5-legacy-guard-race200.log",
+    "log_sha256": "46d2e8d09f72ecb88aac9af736e251a9dfc5fd0bb1efd6fa845db7257f0e62e2",
+    "command": "GOMAXPROCS=1 go test -race -count=200 -timeout=8m -run ^TestNativeLegacyGuard ./x/arc/nativeops",
+    "selected_top_level_tests": 3
+  },
+  {
+    "check": "n5-legacy-guard-build",
+    "exit": 0,
+    "log_name": "n5-legacy-guard-build.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "n5-legacy-guard-vet",
+    "exit": 0,
+    "log_name": "n5-legacy-guard-vet.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "n5-legacy-guard-lint",
+    "exit": 0,
+    "log_name": "n5-legacy-guard-lint.log",
+    "log_sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+  },
+  {
+    "check": "n5-legacy-guard-regression",
+    "exit": 0,
+    "log_name": "n5-legacy-guard-regression.log",
+    "log_sha256": "0a75b43ae352c4d31e033cb7c078285efabc34857de75bdbab05fe6addb2db73"
+  },
+  {
+    "check": "n5-legacy-guard-policy",
+    "exit": 0,
+    "log_name": "n5-legacy-guard-policy.log",
+    "log_sha256": "75e2820bb9f17bbfccf6f76048723173e2ee0eb94c1e0d0e53e8bdb4b6b8f840"
+  },
+  {
+    "check": "changed-documents",
+    "files": 10,
+    "relative_links": 145,
+    "broken": 0
+  }
+]

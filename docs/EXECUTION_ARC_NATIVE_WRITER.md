@@ -30,6 +30,14 @@ final symlink. Native/parent control directories are private `0700`. Live MDBX
 uses the pinned nonexclusive environment with durable synchronization; the old
 exclusive maintenance opener is not reused for live import.
 
+The legacy `execution-node-guard` also holds the sole-writer lock until its
+child joins and refuses any first-import identity, orphan head/receipts/epoch,
+bootstrap receipt or pending marker before starting a child. A malformed file,
+directory or dangling identity link cannot turn managed storage into unmanaged
+storage. This closes the interval before the first importer creates identity;
+the shared run lease still permits existing unmanaged RO clients. It does not
+authorize node execution or the remaining N5 managed maintenance path.
+
 Execution holds a stable shared native view, releases it, then obtains exclusive
 publication and rechecks parent/head/epoch before mutation. Queue waits, RPC,
 SQL and stdio output waits hold no publication gate. An active Rust read guard
