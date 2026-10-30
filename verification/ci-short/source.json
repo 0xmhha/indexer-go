@@ -4,10 +4,10 @@
   "source_files": {
     ".github/workflows/ci.yml": "f8d505f7a721c7adb23d317a7fc5f5ccd61f42c406228bde0488eace5855958b",
     "Makefile": "beeb4cc964fb755ec684b913bbb5ca14db5dfecea24347241d52a8c9eef57726",
-    "scripts/ci_scope.py": "b2966c54e77033c8c45b23339accf62f4632511f31208458256fae5698bd05bc",
+    "scripts/ci_scope.py": "fb623b465f4f2ab3a69a4799fa834317190cc2bc0fe40e610c98f694f0593ab6",
     "scripts/check_docs.py": "e0b45d1ecba260d454a1f034c8d900a3d2ee39c47320f2fd1039771380f6e98a",
     "scripts/ci_postgres_smoke.py": "adfb8195980138fa90a6ad69d65317213245326b291c56ff7e82c9d6f75dd382",
-    "verification/test_ci_scope.py": "788bc4f7fcc733960d85895bd2f749b14442d9bf9dc1c5e43880bd365d64fcce",
+    "verification/test_ci_scope.py": "46279922a486c2e5c47fb4c18f328793ecf62e820a2e514909877eb9630b406f",
     "verification/test_ci_docs.py": "68f9a24f2a614008e3952fceb3e8701b7a7acaadd85010ea4ebe814cc4014d73",
     "verification/test_ci_postgres_smoke.py": "6b3ebb9d270828482fecefc778c231022be1dc469e41686f747d197812ea5a28",
     "verification/test_ci_short_workflow.py": "63393cb1821fec095cffa4d8a6ce4f3c822a9e5600839f9ba54f4fa9031e9709"

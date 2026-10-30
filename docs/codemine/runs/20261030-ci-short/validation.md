@@ -2,7 +2,7 @@
 
 [Behavioral RED](../../../../verification/ci-short/red.json) precedes default
 short, documentation/native scope and explicit manual-full behavior. Current
-[checks](../../../../verification/ci-short/checks.json) pass: 20 offline policy/
+[checks](../../../../verification/ci-short/checks.json) pass: 21 offline policy/
 scope/docs/core-smoke tests, Actions actionlint, root/wire/StableNet short once,
 and actual owned PostgreSQL fsync-on11 named core cases with no skipped/missing
 case. The shallow PR merge fixture proves fetch-depth2 contains exact base/head;

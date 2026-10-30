@@ -30,6 +30,13 @@ class Scope(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(scope.classify(["README.md", path])["arc"])
 
+    def test_text_dependency_and_runtime_fixtures_are_code(self):
+        for path in ["requirements.txt", "deployments/testnets/requirements.txt", "testdata/fixture.txt", "pkg/api/testdata/query.md", "x/arc/executor/testdata/expected.txt"]:
+            with self.subTest(path=path):
+                result = scope.classify([path])
+                self.assertTrue(result["code"])
+                self.assertEqual(result["arc"], path.startswith("x/arc/executor/"))
+
     def test_unknown_diff_and_explicit_full_do_not_skip(self):
         for paths in [None, []]:
             self.assertTrue(scope.classify(paths)["code"])

@@ -61,5 +61,12 @@
     "files": 10,
     "links": 240,
     "broken": 0
+  },
+  {
+    "check": "scope-text-fixture-final",
+    "exit": 0,
+    "tests": 21,
+    "log_name": "ci-short-offline-text-release.log",
+    "log_sha256": "fc70a40935ecb252a48dc85cfc174a1d4b538d44c0eb616e1634d71bb345facc"
   }
 ]

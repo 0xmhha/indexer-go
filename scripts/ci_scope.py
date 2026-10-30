@@ -14,9 +14,16 @@ def classify(paths, full=False):
         ) and not any(ord(char) < 32 for char in path)
 
     def document(path):
-        suffix = PurePosixPath(path).suffix.lower()
-        return suffix in (".md", ".rst", ".txt") or path in ("LICENSE", "NOTICE", "COPYING") or (
-            path.startswith("docs/") and suffix in (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif")
+        parsed = PurePosixPath(path)
+        suffix = parsed.suffix.lower()
+        if "testdata" in parsed.parts or parsed.name.lower().startswith("requirements"):
+            return False
+        if path in ("LICENSE", "NOTICE", "COPYING"):
+            return True
+        if path.startswith("docs/"):
+            return suffix in (".md", ".rst", ".txt", ".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif")
+        return suffix in (".md", ".rst") and (
+            len(parsed.parts) == 1 or parsed.stem.upper() in ("README", "CONTRIBUTING", "CLAUDE", "CHANGELOG", "LICENSE", "NOTICE", "COPYING")
         )
 
     unknown = not paths or any(not valid(path) for path in paths)

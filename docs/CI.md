@@ -5,7 +5,7 @@ not a prerequisite for every documentation or small code change.
 
 | Change | Default checks |
 | --- | --- |
-| Markdown/text or documentation images only | Relative links, anchors and CI policy; no Go/Rust/Docker setup |
+| Root Markdown, maintained documentation or documentation images only | Relative links, anchors and CI policy; no Go/Rust/Docker setup |
 | Go, SQL, config, workflow or unknown code path | Build/vet/lint, one root/wire/StableNet short functional pass, examples, offline config checks and durable DB core smoke |
 | Arc executor Rust/Cargo | The code checks plus pinned cached native compilation and bounded frame/read-view/unwind smoke |
 | Unavailable/invalid diff | Conservative code/native checks; never assume documentation-only |
@@ -14,6 +14,8 @@ The existing `lint`, `test`, `postgres`, `examples` and `arc` names remain. A sm
 scope job classifies exact base/head paths. Non-applicable jobs report their
 scope without starting a compiler or service. Renames/deletes, workflow/config
 changes and mixed documentation/code changes cannot hide code from checks.
+Text dependencies and runtime/test fixtures remain code, even with a Markdown
+or text extension. Unknown nested documents conservatively run code checks.
 
 ## Run short checks locally
 
