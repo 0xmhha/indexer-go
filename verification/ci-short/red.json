@@ -17,5 +17,12 @@
     "behavioral_failures": 5,
     "log_name": "ci-short-text-scope-red.log",
     "log_sha256": "10c8d41041e8311d15cd59a706abae6bbecbd2dade0a091a882bb0eaa8c05548"
+  },
+  {
+    "check": "no-main-duplicate-and-no-generated-bytecode",
+    "exit": 1,
+    "behavioral_failures": 2,
+    "log_name": "ci-pr-only-red.log",
+    "log_sha256": "b81818575b9a2317cd99ca0a044dac8534f14d978d3e6d6ed01b5558e7d3f97b"
   }
 ]

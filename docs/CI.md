@@ -1,7 +1,8 @@
 # CI checks for developers
 
-PRs and main pushes use short checks. Full regression is an explicit operation,
-not a prerequisite for every documentation or small code change.
+PRs use short checks once. Merging a checked PR does not automatically repeat
+the same suite on main. Full regression is an explicit operation, not a
+prerequisite for every documentation or small code change.
 
 | Change | Default checks |
 | --- | --- |
@@ -48,3 +49,10 @@ services, operational data, provisioning and performance checks remain opt-in.
 Native dependencies/target are cached by OS, pinned Rust and Cargo.lock. A cold
 native build can still take time; ordinary Go/documentation PRs avoid it entirely.
 Workflow/job durations are evidence of CI execution, not indexer throughput.
+
+The first released short-code PR, [#246](https://github.com/0xmhha/indexer-go/pull/246),
+passed [CI321](https://github.com/0xmhha/indexer-go/actions/runs/40989226640):
+7 minutes 12 seconds from the first job start to the last job completion,
+excluding queue time. PostgreSQL took 45 seconds including setup and cleanup;
+all eleven core cases actually passed. This is one observed run, not a promised
+duration for every change or a cold native build.

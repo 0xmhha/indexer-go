@@ -123,3 +123,8 @@ solc-cache/
 /tools/astgraph/astgraph
 /tools/astgraph/out/
 /tools/astgraph/__pycache__/
+
+# Generated Python bytecode
+__pycache__/
+*.pyc
+*.pyo

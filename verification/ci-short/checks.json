@@ -68,5 +68,13 @@
     "tests": 21,
     "log_name": "ci-short-offline-text-release.log",
     "log_sha256": "fc70a40935ecb252a48dc85cfc174a1d4b538d44c0eb616e1634d71bb345facc"
+  },
+  {
+    "check": "pr-once-hygiene-policy",
+    "exit": 0,
+    "tests": 23,
+    "log_name": "ci-pr-only-green.log",
+    "log_sha256": "7b54f5d7aa4738397ef188c3df8330354aa32673acdfe86dfbc550f61496b88a",
+    "actionlint_exit": 0
   }
 ]

@@ -1,5 +1,5 @@
 {
-  "n": "N4 released by #245; CI short refactor takes priority before N5/N6",
+  "n": "N4 released by #245; short CI #246 released; duplicate-main/cache cleanup before N5/N6",
   "n_minus_1": {
     "pr": 244,
     "main": "a203193eeeb60b09cc88d64576604e9ea65af92e",
@@ -20,7 +20,7 @@
   "accepted_design": "../20261023-e1-execution/02-design.md",
   "accepted_plan": "../20261023-e1-execution/03-plan.md",
   "next": [
-    "Scoped short PR CI requested by user",
+    "Remove duplicate main CI/generated Python caches, then resume N5/N6",
     "N5 permanent ingress coverage/GC and deployment draft",
     "N6 offline integrated acceptance"
   ],
@@ -34,5 +34,11 @@
     "N3 embedded ingress implementation; actual release gates recorded separately",
     "N4 managed replay/reorg released #245/main d6ed1eb; exact CI318 five jobs recorded"
   ],
-  "ci_priority": "../20261030-ci-short/plan.md"
+  "ci_priority": "../20261030-ci-short/plan.md",
+  "ci_short_release": {
+    "pr": 246,
+    "main": "c36e84e262b437258bdd55cee17c93d80126f0ce",
+    "ci_run": 40989226640,
+    "execution_seconds_excluding_queue": 432
+  }
 }
