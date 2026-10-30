@@ -1,0 +1,29 @@
+{
+  "base": "245877643d690bc167370c4fcabf6e6b4a34123f",
+  "branch": "refactor/arc-native-raw-deletion",
+  "scope": "N5 explicit raw GC/recovery only; graceful App drain/managed COW, held Docker and N6 remain pending",
+  "source_files": {
+    "execwire/spool/retention.go": "70079c2a07f52f70a2654f6bcdc1b92290dd20009d851dddc1709620e7347481",
+    "execwire/spool/retention_evidence.go": "74ea91702ac2a98274a23175a3ad023067e0b1fb53ef873ae9c768e256766cbd",
+    "execwire/spool/retention_evidence_test.go": "70603891b447241a0fd391f9305fe5795af02ce58cf89013932868498d4517ee",
+    "pkg/execution/ingress/raw_deletion.go": "563eaf3e1235bbfda6047d303bbc098e7f78995952e63591d9cd9876af95a3d9",
+    "pkg/storage/postgres/exec_preblock_test.go": "7c0acd4968ab3e415de5e2a8ce19f50eb77d12a3839333fa9495bef29711c7c1",
+    "pkg/storage/postgres/exec_raw_coverage.go": "9cffbb724de02021d491e4c94d6dac8d6e7b8d61476ef0dd0cd4736ffd28821e",
+    "pkg/storage/postgres/exec_raw_deletion.go": "ec18200c0c526d0893645b8892a7c4b887727ac2dd4fdd1ce7d53bf2cfe31b12",
+    "pkg/storage/postgres/exec_raw_deletion_test.go": "ce71dc6693430ebac733e574b148f4f95cd0ccecbacfc5f45e49a927b374278f",
+    "pkg/storage/postgres/exec_raw_files_test.go": "c97036bbb4b417f29b7b72b3379d4ec3fee783a72c85aa8bc5758e78033d222b",
+    "pkg/storage/postgres/exec_retention.go": "a573e98a30bc2351c4b1f594a0441614caf491cf01049cf82517995113a02621",
+    "pkg/storage/postgres/migrations/0025_execution_raw_deletion.sql": "228748bbeedcfda7e9850f165fc8407a9ff2711198f6b2ce1a6312a69903b1b1",
+    "pkg/storage/postgres/undo_test.go": "0aa733c1608610592d040dc163d5b944f29bdebfec75f73dc6fd4d03ab04988d",
+    "pkg/window/gc.go": "874ed64c28a51c1a918bff1d5a9d5d0911c08b3c2e800a6d444dcdb546d6e7dd",
+    "pkg/window/gc_record_test.go": "2405382a6c19e80036ca9320c74cd9b94341b6d80c60b7f4d6a91c95f14319d6",
+    "pkg/window/owner.go": "bc24827bd20f907babdceb680a192c755fb3297412581ebd229fb74a3de7c6a5",
+    "x/arc/ingress/raw_gc.go": "e3c942467e91fee1c0d0d46525aff3d196d1d137acf9cd9f6504e4345f41fbbd",
+    "x/arc/ingress/raw_gc_test.go": "b19b1e4631ee945c7764d70fdefca4bd1d17dd16340818b63c4f61749a1ef404",
+    "x/arc/nativestore/exclusive.go": "40f952d2e93df9975c379e500e8e4f1db523edcb8c1f183b0f032497c9f21382",
+    "x/arc/nativestore/exclusive_test.go": "a90b3c01d62dd62a2b7f8b458e16a2734ab76bbfc33900749e822292c192f839",
+    "x/arc/nativestore/store.go": "54470eb04365c1b02e37d8803c6ce4713d584f2d14a311335d55d4345959aca5"
+  },
+  "invariants": "same pool4/part2/API1/writers7/sharedRPC5/finalfresh-generation-COMMIT-exactACK/twoEVM; no Rust/upstream/privateconfig changes",
+  "fixture_note": "Arc RED compiled against a longer real-ACK setup; final fixture uses sealed base129 metadata plus one actual append/ACK with unchanged assertions. An earlier unused fixture import correction is not RED proof."
+}

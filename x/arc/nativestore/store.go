@@ -431,7 +431,9 @@ func Release(ctx context.Context, o Options, p retention.Permit, r retention.Rec
 // AcquireRun excludes an offline compactor throughout native node ownership.
 // The caller has already created/locked the dedicated node directory, but has
 // not opened eth services or started import yet.
-func AcquireRun(dataDir string) (*os.File, error) {
+func AcquireRun(dataDir string) (*os.File, error) { return acquireRun(dataDir, takeRunLease) }
+
+func acquireRun(dataDir string, take func(string) (*os.File, error)) (*os.File, error) {
 	if !filepath.IsAbs(dataDir) || filepath.Clean(dataDir) == string(os.PathSeparator) {
 		return nil, ErrUnsafe
 	}
@@ -445,7 +447,7 @@ func AcquireRun(dataDir string) (*os.File, error) {
 	if info.Mode().Perm()&0022 != 0 {
 		return nil, ErrUnsafe
 	}
-	lease, e := takeRunLease(dataDir)
+	lease, e := take(dataDir)
 	if e != nil {
 		return nil, e
 	}

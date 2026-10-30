@@ -18,7 +18,8 @@ import (
 // untracked lists the tables whose changes a rollback keeps: the schema
 // version, undo itself, orphans and the outbox (migration 0006).
 var untracked = map[string]bool{
-	"exec_source_owner": true, "exec_ingress_payloads": true, // immutable ingress identity/branch bytes survive rewind
+	"exec_raw_deletions": true,                                // exact retention approval/completion survives rewind
+	"exec_source_owner":  true, "exec_ingress_payloads": true, // immutable ingress identity/branch bytes survive rewind
 	"exec_reorg_checks": true, // target-free durable fence owned by the existing E1 coordinator
 	"schema_migrations": true, "undo_log": true, "undo_blocks": true, "undo_by_height": true,
 	"reorgs": true, "orphaned_blocks": true, "orphaned_transactions": true,

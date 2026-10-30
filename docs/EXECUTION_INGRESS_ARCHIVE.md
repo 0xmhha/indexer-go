@@ -3,8 +3,9 @@
 The N5 SQL/backend foundation and App/Arc owner/origin integration are
 implemented. App checks persistent ownership before RPC or API initialization;
 Arc binds the actual native/raw/source identity after SDK Ready. Authoritative
-raw GC, stopped-owner maintenance, held deployment composition and N6 acceptance
-remain pending. Operational startup, GC/restore and performance runs remain HOLD.
+raw GC and crash recovery are explicit library operations. Stopped-owner
+maintenance wiring, held deployment composition and N6 acceptance remain pending.
+Operational startup, GC/restore and performance runs remain HOLD.
 
 ## Integrate a source
 
@@ -87,11 +88,12 @@ passes and the shared physical RPC5 budget do not change.
 
 `ExecutionIngressArchive` is a private coverage observation. It rejects
 unpublished/noncanonical/mismatched parts and checksum corruption; it is not a
-stable API snapshot or deletion permit. Public API routes are unchanged. Future
-GC must recheck coverage under the existing live E3 permit and exact source ACK,
-bind the full deletion record durably before unlink and prove completion.
-Archive existence alone authorizes no deletion. Ingress still retains raw bytes
-and stops at quota until the remaining N5 integration is complete.
+stable API snapshot or deletion permit. Public API routes are unchanged. The
+[raw retention module](EXECUTION_RAW_RETENTION.md) rechecks coverage under the
+existing live E3 permit and exact source ACK, commits the full deletion record
+before unlink and proves completion. Archive existence alone authorizes no
+deletion. Automatic maintenance wiring remains pending; live ingress retains
+raw bytes and stops at quota until that integration is complete.
 
 See [N5 checklist](codemine/runs/20261030-arc-native-n5/checklist.md),
 [managed Arc flow](EXECUTION_ARC_MANAGED.md) and [short CI](CI.md).

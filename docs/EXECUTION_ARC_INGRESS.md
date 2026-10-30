@@ -55,7 +55,9 @@ source:
 172800 retained blocks is a planning assumption of two blocks/s for24h, not a
 measured Arc rate or a byte-capacity promise. The actual raw count includes
 retained fork/partial datasets (three per complete block); disk quota, shared
-volume budget and free-space floor are independent. Raw GC remains refused until N5.
+volume budget and free-space floor are independent. Automatic GC remains off;
+explicit [raw retention](EXECUTION_RAW_RETENTION.md) requires stopped owners,
+exact source ACK and the existing live E3 permit.
 Explicit initialization can initialize a new window on an already supplied
 volume; it never provisions or formats a disk, adopts a legacy window or repairs
 an incomplete owner. Current private configuration is unchanged.
@@ -134,7 +136,9 @@ Stop is idempotent and releases prepared resources even if Run never starts.
 
 An interrupted native multi-store mutation preserves its pending fence for
 explicit recovery. Age, Hello, a raw height or a native receipt cannot clear it
-or authorize deletion. N5 will add coordinated maintenance/GC. See the
-[current plan](codemine/runs/20261030-arc-native-n4/plan.md),
-[checklist](codemine/runs/20261030-arc-native-n4/checklist.md) and
+or authorize deletion. Explicit [raw GC/recovery](EXECUTION_RAW_RETENTION.md)
+is available; graceful drain and managed native maintenance wiring remain N5.
+See the
+[current plan](codemine/runs/20261030-arc-native-n5/plan.md),
+[checklist](codemine/runs/20261030-arc-native-n5/checklist.md) and
 [native writer](EXECUTION_ARC_NATIVE_WRITER.md).

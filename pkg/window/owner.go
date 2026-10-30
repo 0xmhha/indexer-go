@@ -66,12 +66,33 @@ func OpenOwnedChecked(opts Options, domain string, check func(DeletionRecord) er
 	}
 	return openOwned(opts, false, domain, nil, check)
 }
+
+// OpenOwnedAuthorized supplies the validated durable owner BEFORE recovery
+// may unlink. The callback must not call window methods or escape this call.
+func OpenOwnedAuthorized(opts Options, domain string, check func(Owner, DeletionRecord) error) (*Store, error) {
+	if !validOwnerDomain(domain) || check == nil {
+		return nil, ErrConflict
+	}
+	return openOwnedAuthorized(opts, false, domain, nil, nil, check)
+}
 func openOwned(opts Options, create bool, domain string, state []byte, check func(DeletionRecord) error) (_ *Store, err error) {
+	return openOwnedAuthorized(opts, create, domain, state, check, nil)
+}
+func openOwnedAuthorized(opts Options, create bool, domain string, state []byte, check func(DeletionRecord) error, ownedCheck func(Owner, DeletionRecord) error) (_ *Store, err error) {
 	s, err := openArea(opts, create, ownedRawKind, check)
 	if err != nil {
 		return nil, err
 	}
 	s.ownerDomain = domain
+	if ownedCheck != nil {
+		s.checkRecoveryIntent = func(r DeletionRecord) error {
+			owner, err := s.readOwner()
+			if err != nil {
+				return err
+			}
+			return ownedCheck(owner, r)
+		}
+	}
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, s.closeHandles())

@@ -1,0 +1,99 @@
+[
+  {
+    "check": "related-final",
+    "exit": 0,
+    "log_name": "n5-raw-related-final.log",
+    "log_sha256": "3d0447180bb1c0689148457ef10ddf249382811f641f31e98f7df83f2fc33568"
+  },
+  {
+    "check": "source-green",
+    "exit": 0,
+    "log_name": "n5-raw-source-green.log",
+    "log_sha256": "72eae7fcdc21fc5d0c7f059bf8d1a7b4ca1f304b6bd5e7798fd2866f6f78ba95"
+  },
+  {
+    "check": "wire-final",
+    "exit": 0,
+    "log_name": "n5-raw-wire-final.log",
+    "log_sha256": "c2206cb698e8da3c2e913ef2c202213d0625d82253b3248fd0ffbe544bc742ac"
+  },
+  {
+    "check": "db-files-green",
+    "exit": 0,
+    "log_name": "n5-raw-db-files-green.log",
+    "log_sha256": "1e57e3736af7202e9d9b5c742e3946e5deadecb4622c367b158dee7ab681e805"
+  },
+  {
+    "check": "postgres-short",
+    "exit": 0,
+    "log_name": "n5-raw-postgres-short.log",
+    "log_sha256": "f368ee47df36bbf696dd191b2f308b0cef8f87ccf92ed0bd04e647851844f0f1"
+  },
+  {
+    "check": "window-native-race200",
+    "exit": 0,
+    "log_name": "n5-raw-window-native-race200.log",
+    "log_sha256": "47bf2717eda07daea608e405b18b5fab456fca2a288948214c09772b00f1becc",
+    "command": "GOMAXPROCS=1 go test -race -count=200 -timeout=8m -run '^(TestCollectionFullRecordRejectsEscapedCallback|TestExclusiveRawMaintenanceExcludesImporterAndCollector)$' ./pkg/window ./x/arc/nativestore",
+    "selected_top_level_tests": 2
+  },
+  {
+    "check": "source-race200",
+    "exit": 0,
+    "log_name": "n5-raw-source-race200.log",
+    "log_sha256": "7bd247ce71bf98ccff7047b321673043726beeb4f87cde97fec39672572b8d32",
+    "command": "GOMAXPROCS=1 go test -race -count=200 -timeout=8m -run '^TestRetentionEvidenceOwnsExactSourceUntilCallbackAndRefusesAdmissionChange$' ./spool",
+    "selected_top_level_tests": 1
+  },
+  {
+    "check": "db-race200",
+    "exit": 0,
+    "log_name": "n5-raw-db-race200.log",
+    "log_sha256": "6cd885c75b57a69ad0ebe098daa3bb03a3b1e3143f5745af3c7ed630530ffcb5",
+    "command": "GOMAXPROCS=1 scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=8m -run '^TestExecutionRawDeletionLiveLeaseBlocksReleaseAndJoinsCancellation$'",
+    "selected_top_level_tests": 1,
+    "resources": "owned named disposable PostgreSQL, fsync-on, same pool4; no operator DB"
+  },
+  {
+    "check": "build",
+    "exit": 0,
+    "log_name": "n5-raw-build.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "vet",
+    "exit": 0,
+    "log_name": "n5-raw-vet.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "lint",
+    "exit": 0,
+    "log_name": "n5-raw-lint.log",
+    "log_sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+  },
+  {
+    "check": "wire-vet",
+    "exit": 0,
+    "log_name": "n5-raw-wire-vet.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "wire-lint",
+    "exit": 0,
+    "log_name": "n5-raw-wire-lint.log",
+    "log_sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+  },
+  {
+    "check": "policy",
+    "exit": 0,
+    "log_name": "n5-raw-policy.log",
+    "log_sha256": "5d6a64a93505f78fa71c853740038ddf6f3a5d8590c98fd235b3ad8662febcb7"
+  },
+  {
+    "check": "changed-documents",
+    "files": 12,
+    "links": 292,
+    "broken": 0
+  }
+]
