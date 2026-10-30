@@ -1,0 +1,11 @@
+{
+  "base": "07bb84c4287ae86fbbc26cb1cb2e370110177147",
+  "branch": "refactor/arc-native-n5",
+  "stage": "N5 legacy admission subfeature only",
+  "files": {
+    "x/arc/nativeops/guard.go": "d98d92ec97f814665e8091f10e4baf06ead0d6a229f3df51b3293060ab13f3fa",
+    "x/arc/nativeops/managed_guard_test.go": "e55448c64a46eca786ac23da8a95e1178ae99632233ebf6367721178acfa034a",
+    "x/arc/nativestore/unmanaged_run.go": "7804e4659035a57d400ec66a6e122165ecbbc6e9ad123d272230253a6c376804"
+  },
+  "scope": "no Rust, upstream/dependency/pool/RPC/final fresh/ACK/GC authority changes"
+}

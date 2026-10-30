@@ -58,7 +58,7 @@ Native import epoch, raw epoch and receiver-owned E1 generation are distinct.
 
 Each feature: RED→implementation→GREEN, appropriate local checks and any new
 concurrency single GOMAXPROCS=1/race/count200, current docs/checklist update,
-exact-head CI5 success, guarded squash and clean main sync before the next one.
+exact-head applicable scoped CI success, guarded squash and clean main sync before the next one.
 SDK incompatibility is resolved in the adapter/plan, never by relaxing roots,
 final fresh, generation/ACK/GC authority or retaining partial state as complete.
 
@@ -73,7 +73,7 @@ final fresh, generation/ACK/GC authority or retaining partial state as complete.
 - Keep APFS/enode/authenticated checkpoint/private deployment inputs HOLD.
   No format, operational App/node/DB/Docker/peer, snapshot download, operational GC/restore or measurement. Owned mock App/native-library/disposable PostgreSQL fsync-on functional fixtures are allowed.
 - Check document links/anchors, pins and unchanged runtime/config bytes; reuse
-  exact-byte local race evidence transparently and require new final-head CI5.
+  exact-byte local race evidence transparently and require new final-head applicable CI.
 
 Keep [n/n−1/n−2](continuity.json), the accepted E1 design/plan and older release
 references. See [checklist](checklist.md) and [validation](validation.md).

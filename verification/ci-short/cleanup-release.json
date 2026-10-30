@@ -1,0 +1,14 @@
+{
+  "stage": "CI PR-only cleanup",
+  "status": "COMPLETE",
+  "pr": 247,
+  "url": "https://github.com/0xmhha/indexer-go/pull/247",
+  "base": "c36e84e262b437258bdd55cee17c93d80126f0ce",
+  "head": "157349228ba828fb94e49f7b49d81be1ca5bf352",
+  "tree": "320f7e09d01bae37418ff301f95a954551895752",
+  "main": "c03559a5185a1b04d545d5d64a10f3702b43f907",
+  "ci_run": 40990524417,
+  "ci_run_number": 323,
+  "checks": "scope + five named jobs actualsuccess; PG11/policy23/Go short; nofull200 or nativebuild; no main-push trigger",
+  "sync": "exactreviewedtree, oneparent/base, clean HEAD=origin/main, privateconfigunchanged"
+}

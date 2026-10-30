@@ -14,8 +14,9 @@ import (
 )
 
 // RunGuard is an explicit operator command, never called by collection or GC.
-// Only the standard managed layout is supported; config/path overrides must
-// not bypass the shared native owner lease. Tests substitute an owned fixture.
+// Only the standard native layout is supported. Managed first-import state
+// refuses this path; the shared run and sole-writer leases last through child
+// join. Tests substitute an owned protocol fixture.
 func RunGuard(ctx context.Context, executable, datadir, chain string, args []string, in io.Reader, out, stderr io.Writer) error {
 	if (chain != "arc-mainnet" && chain != "arc-testnet") || !filepath.IsAbs(executable) || !filepath.IsAbs(datadir) {
 		return nativestore.ErrUnsafe
@@ -48,7 +49,7 @@ func RunGuard(ctx context.Context, executable, datadir, chain string, args []str
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 || info.Mode().Perm()&0022 != 0 {
 		return nativestore.ErrUnsafe
 	}
-	lease, e := nativestore.AcquireRun(datadir)
+	lease, e := nativestore.AcquireUnmanagedRun(datadir)
 	if e != nil {
 		return e
 	}
