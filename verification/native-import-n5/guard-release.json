@@ -1,0 +1,14 @@
+{
+  "stage": "N5 legacy admission subfeature",
+  "status": "COMPLETE",
+  "pr": 249,
+  "base": "07bb84c4287ae86fbbc26cb1cb2e370110177147",
+  "head": "244a4385643a6b4f7ac45f01e790219756184372",
+  "tree": "d29445d201b36b4a2629d654310cad6cd06697b8",
+  "main": "6daa40cd28288e6729a6d484451fd7bc18f841f9",
+  "ci_run": 40993256785,
+  "ci_run_number": 325,
+  "checks": "scope+five namedjobs allsuccess; actualshortGo/PG11; native/full200 intentionallyskipped; localnew3 CPU1/race2000",
+  "sync": "exactreviewedtree, oneparent/base, cleanHEAD=origin/main, privateconfigunchanged",
+  "overall_N5": "INCOMPLETE: SQLowner/archive, rawGC, managedmaintenance/drain, heldDocker remain; N6 follows"
+}

@@ -1,0 +1,22 @@
+{
+  "branch": "refactor/arc-native-ingress-archive",
+  "base": "6daa40cd28288e6729a6d484451fd7bc18f841f9",
+  "scope": "SQL/backend foundation only; App/Arc actual binding/resolver and remainingN5/N6 pending",
+  "source_files": {
+    "pkg/core/port/execution.go": "6db55300d960f079256675589bcd665f2704dbf49d0dbe17105e3d446c3442d8",
+    "pkg/core/port/execution_ingress.go": "c6eabc74d6e028c16b61b9b343ae5a9d1d168142a27cc0fe6ce68d11d9f004da",
+    "pkg/execution/backend.go": "e21d8babfe3315061f01434f3f2fc816c4fa73a7b00e2cf487c332a57f9fb87e",
+    "pkg/execution/ingress_archive.go": "4327a6a61030d541aed5fffe26f66c35d542f5214d158550b1c36ee94b178b08",
+    "pkg/execution/ingress_archive_test.go": "c45f562f1d1282c8b9735b2fecab296861baae050878e5db212dc26a80a28676",
+    "pkg/storage/postgres/assembly.go": "97fa8c7c68da5156b9bd56460a34256d7d86c03b4f14a489103230ad7fb0faeb",
+    "pkg/storage/postgres/exec_control.go": "cb9791c00d5736f9e44a083a84fb5605f031b2befad4fafdd850022e1120a636",
+    "pkg/storage/postgres/exec_ingress.go": "85a5fb7f5b25c584fbedc7254a70823def41aa2f59ab86fc634fd322166f8d26",
+    "pkg/storage/postgres/exec_ingress_archive.go": "10083ab6c3509b8d1aeb72974b03b1a4b062392a1c79ba08bebc6abbcf4019b1",
+    "pkg/storage/postgres/exec_ingress_test.go": "b52a506a30f9e0d53437e9d5120a2ec4602600857587baf0605333901c49420c",
+    "pkg/storage/postgres/exec_parts.go": "f002f1f972e3e930ab08103f38fadfed7017122d315d59dab19bdf8718df4cfe",
+    "pkg/storage/postgres/exec_preblock_test.go": "b07a236166c160312803616acc06d4a11f76809f3d8b4ac7bb858f1f0601dea8",
+    "pkg/storage/postgres/migrations/0024_execution_ingress.sql": "3d39c9a132bda668f56cf66479b4770d87c9e5e2fe9ce847d75fe72944d74426",
+    "pkg/storage/postgres/undo_test.go": "22d185336a0177067a4b95cac5b5d4f9207a4c82af977cd6339b08c1ea9602fa"
+  },
+  "runtime_invariants": "same pool4/part2/API1/writers7/RPC5/finalfresh-generation-COMMIT-ACK; no Rust/upstream/config changes"
+}

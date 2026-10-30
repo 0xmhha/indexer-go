@@ -1,5 +1,5 @@
 {
-  "n": "N5 first legacy admission subfeature locally qualified; overall N5 and N6 incomplete",
+  "n": "N5 SQLowner/archive/backend primitives qualifying; actual App/Arc binding/resolver and remainingN5/N6 incomplete",
   "n_minus_1": {
     "pr": 245,
     "main": "d6ed1eb7758f70fc52ded3242815c1b53aecf441",
@@ -20,7 +20,7 @@
   "accepted_design": "../20261023-e1-execution/02-design.md",
   "accepted_plan": "../20261023-e1-execution/03-plan.md",
   "next": [
-    "Release N5 legacy writer admission; SQL source ownership and lossless archive",
+    "Release N5 SQLowner/archive/backend primitives; integrate App/Arc native origins",
     "N5 authoritative raw GC/managed maintenance/held Docker",
     "N6 offline integrated acceptance"
   ],
@@ -51,5 +51,19 @@
     "main": "07bb84c4287ae86fbbc26cb1cb2e370110177147",
     "ci_run": 40991521083,
     "execution_seconds_excluding_queue": 17
-  }
+  },
+  "previous_features": [
+    {
+      "pr": 249,
+      "main": "6daa40cd28288e6729a6d484451fd7bc18f841f9",
+      "feature": "legacy native writer admission",
+      "plan": "../20261030-arc-native-n5/plan.md"
+    },
+    {
+      "pr": 245,
+      "main": "d6ed1eb7758f70fc52ded3242815c1b53aecf441",
+      "feature": "N4 managed replay/reorg",
+      "plan": "../20261030-arc-native-n4/plan.md"
+    }
+  ]
 }

@@ -52,6 +52,7 @@ type ExecutionControl struct {
 	Rewinding     bool
 	BaselineReady bool
 	ReorgPending  bool
+	IngressOwned  bool `json:"-"`
 }
 
 // ExecutionBaseline is an explicit, upstream-verified snapshot of covered keys

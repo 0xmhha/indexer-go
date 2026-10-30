@@ -31,6 +31,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Configure opt-in App-owned raw/native intake and its safety boundaries | [Arc ingress](EXECUTION_ARC_INGRESS.md) |
 | Run focused PR checks or request full qualification | [CI tiers](CI.md) |
 | Understand managed read views, native epochs and E1 reorg recovery | [Managed Arc replay](EXECUTION_ARC_MANAGED.md) |
+| Integrate immutable source ownership and the blocks-part input archive | [Ingress archive foundation](EXECUTION_INGRESS_ARCHIVE.md) |
 | Review Arc first-import design, N0–N3 and remaining N4–N6 | [Arc native import design](ARC_NATIVE_IMPORT_DESIGN.md) |
 | Review Native App/collector/executor topology and held lifecycle | [Native runtime composition draft](../deployments/native/runtime/README.md) |
 | Diagnose native/source metadata and exported checkpoint/retention observations | [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md) |
