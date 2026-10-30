@@ -12,7 +12,7 @@ import (
 )
 
 const executionControlSQL = `SELECT chain_id,genesis,anchor_generation,anchor_height,anchor_hash,anchor_root,
- generation,visible_height,visible_hash,visible_root,partition_blocks,(rewinding OR EXISTS(SELECT 1 FROM exec_rewinds)),baseline_digest IS NOT NULL,EXISTS(SELECT 1 FROM exec_retention WHERE pending) FROM exec_control WHERE id`
+ generation,visible_height,visible_hash,visible_root,partition_blocks,(rewinding OR EXISTS(SELECT 1 FROM exec_rewinds)),baseline_digest IS NOT NULL,EXISTS(SELECT 1 FROM exec_retention WHERE pending),EXISTS(SELECT 1 FROM exec_reorg_checks) FROM exec_control WHERE id`
 const executionLockSQL = `hashtextextended(current_schema() || ':execution',0)`
 
 var _ port.ExecutionStore = (*Store)(nil)
@@ -46,7 +46,7 @@ func scanExecutionControl(row pgx.Row) (port.ExecutionControl, error) {
 	var c port.ExecutionControl
 	var genesis, anchor, root, visible, visibleRoot []byte
 	var ag, ah, generation, height, partition int64
-	err := row.Scan(&c.Chain.ID, &genesis, &ag, &ah, &anchor, &root, &generation, &height, &visible, &visibleRoot, &partition, &c.Rewinding, &c.BaselineReady, &c.Maintenance)
+	err := row.Scan(&c.Chain.ID, &genesis, &ag, &ah, &anchor, &root, &generation, &height, &visible, &visibleRoot, &partition, &c.Rewinding, &c.BaselineReady, &c.Maintenance, &c.ReorgPending)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, port.ErrExecutionUninitialized
 	}
@@ -70,6 +70,9 @@ func scanActiveExecutionControl(row pgx.Row) (port.ExecutionControl, error) {
 	c, err := scanExecutionControl(row)
 	if err == nil && c.Maintenance {
 		err = port.ErrExecutionMaintenance
+	}
+	if err == nil && c.ReorgPending {
+		err = port.ErrExecutionRewinding
 	}
 	return c, err
 }

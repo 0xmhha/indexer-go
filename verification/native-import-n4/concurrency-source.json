@@ -1,0 +1,10 @@
+{
+  "invocation_start_go_sha256": "8636ad6c655532d00aaafa4cac6141698161c9f8b00564f54e3c4d6ed99e062b",
+  "final_go_sha256": "9d7753b5ba2c74e3bbfa4ff3aacc9b1a600eb26bd1dd4ffeb1b00e1c18f30c66",
+  "selector": "^(TestManagedReadView|TestManagedBackend|TestManagedAdapterRequires|TestManagedAdapterRejects|TestManagedAdapterStartup|TestControllerReorgCheck|TestReorgGate|TestNativeRecovery|TestNativeOwnedLoop|TestNativeRound|TestNativeProgramRun|TestNativeTransitionOwnedChildCancellation)",
+  "only_changed_file": "x/arc/ingress/preparation_test.go",
+  "old_file_sha256": "25d3e5ffdacd1f572d39e18152b9a6a6c04311af3d864193f1119bfbb2bd66bf",
+  "new_file_sha256": "8d89d730694f983769ddd4a1958f5ba9adedf4a303935cd8b49e9a7326739869",
+  "proof": "Inverse equivalent tagged-switch transformation exactly reproduces original file SHA256; the pure test is excluded by selector; all production sources and selected concurrency bodies/helpers are unchanged",
+  "full_final_tree_qualification": "whole local race and exact-head CI required separately; no partial counts combined"
+}

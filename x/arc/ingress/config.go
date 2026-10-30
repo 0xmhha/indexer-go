@@ -14,17 +14,33 @@ const ModuleName = "arc.native"
 const ownerDomain = "arc.native/ain1/v1"
 
 func init() {
-	ingress.Register(ModuleName, ingress.Module{Profile: "arc", Validate: func(c ingress.Config) error {
+	ingress.Register(ModuleName, ingress.Module{Profile: "arc", Recovery: true, Validate: func(c ingress.Config) error {
+		if err := collectorConfig(c); err != nil {
+			return err
+		}
 		if c.MaxActiveBlocks < 2 {
 			return ErrNative
 		}
 		return arcfeed.ValidatePeer(c.Peer)
 	}, Preflight: func(c ingress.Config, o window.Options) error {
+		for _, path := range []string{c.Collector.SpoolDir, c.Collector.Executable} {
+			if ingress.Overlap(path, o.Path) {
+				return ErrNative
+			}
+		}
 		if o.MaxPayloadBytes > 8<<20 || c.MaxActiveBytes < 2*activeBytes(o) {
 			return ErrNative
 		}
 		return nil
 	}, Prepare: func(_ context.Context, c ingress.Config, d ingress.Dependencies) (ingress.Program, error) {
+		if d.FenceReorg == nil {
+			return nil, ErrNative
+		}
+		if _, ok := d.Canonical.(interface {
+			Head(context.Context) (uint64, error)
+		}); !ok {
+			return nil, ErrNative
+		}
 		if d.Control.Chain.ID != "5042002" {
 			return nil, ErrNative
 		}

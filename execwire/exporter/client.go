@@ -20,6 +20,7 @@ type Client struct {
 	Window               int
 	Poll, Retry, Timeout time.Duration
 	Wake                 <-chan struct{}
+	Proposals            <-chan execwire.Ref
 	OnReady              func(context.Context) error
 	BeforeCapture        func(context.Context) error
 	OnError              func(error)

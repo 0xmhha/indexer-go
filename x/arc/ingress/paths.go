@@ -38,7 +38,7 @@ func resolvePlanned(path string) (string, error) {
 	return base, nil
 }
 func checkPaths(c ingress.Config, o window.Options, socket string) error {
-	for _, dir := range []string{c.Native.DataDir, filepath.Dir(c.Native.DataDir), filepath.Dir(socket)} {
+	for _, dir := range []string{c.Native.DataDir, filepath.Dir(c.Native.DataDir), filepath.Dir(socket), filepath.Dir(c.Collector.SpoolDir)} {
 		info, err := os.Lstat(dir)
 		if err != nil {
 			return err
@@ -47,15 +47,17 @@ func checkPaths(c ingress.Config, o window.Options, socket string) error {
 			return ErrNative
 		}
 	}
-	info, err := os.Lstat(c.Native.Executable)
-	if err != nil {
-		return err
-	}
-	if !ownedExecutable(info) {
-		return ErrNative
+	for _, path := range []string{c.Native.Executable, c.Collector.Executable} {
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		if !ownedExecutable(info) {
+			return ErrNative
+		}
 	}
 	var paths []string
-	for _, path := range []string{c.Native.DataDir, o.Path, filepath.Dir(socket), c.Native.Executable} {
+	for _, path := range []string{c.Native.DataDir, o.Path, filepath.Dir(socket), c.Native.Executable, c.Collector.Executable, c.Collector.SpoolDir} {
 		resolved, err := resolvePlanned(path)
 		if err != nil {
 			return err

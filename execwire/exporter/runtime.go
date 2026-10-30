@@ -65,7 +65,7 @@ func (c *Client) Run(parent context.Context) error {
 	if timeout == 0 {
 		timeout = time.Minute
 	}
-	if poll <= 0 || retry <= 0 || timeout <= 0 || timeout > time.Hour || c.Window < 0 || c.Window > 64 || c.dial == nil && !filepath.IsAbs(c.Socket) {
+	if poll <= 0 || retry <= 0 || timeout <= 0 || timeout > time.Hour || c.Window < 0 || c.Window > 64 || cap(c.Proposals) > 1 || c.dial == nil && !filepath.IsAbs(c.Socket) {
 		return execwire.ErrLimit
 	}
 	status, err := c.Spool.Status(parent)
@@ -100,6 +100,10 @@ func (c *Client) Run(parent context.Context) error {
 		}
 		if ctx.Err() != nil {
 			return context.Cause(ctx)
+		}
+		var proposed *proposedChange
+		if errors.As(err, &proposed) {
+			return proposed.CanonicalChange
 		}
 		var fork *CanonicalChange
 		if errors.As(err, &fork) {
@@ -409,6 +413,29 @@ func (o *clientRun) stream(conn *execwire.Conn) error {
 		select {
 		case <-ctx.Done():
 			errs <- ctx.Err()
+		case ref, ok := <-o.c.Proposals:
+			if !ok {
+				errs <- execwire.ErrLimit
+				return
+			}
+			status, err := o.c.Spool.Status(ctx)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if ref.Generation != status.Committed.Generation {
+				errs <- spool.ErrConflict
+				return
+			}
+			o.stopCapture()
+			call, finish := context.WithTimeout(ctx, o.timeout)
+			err = conn.Write(call, execwire.Frame{Kind: execwire.Rewind, Header: execwire.Header{Version: execwire.Version, Chain: o.c.Chain, Ref: ref}})
+			finish()
+			if err != nil {
+				errs <- err
+				return
+			}
+			errs <- &proposedChange{CanonicalChange: &CanonicalChange{Ref: ref}}
 		case <-capture.exited:
 			var fork *CanonicalChange
 			if errors.As(capture.err, &fork) {

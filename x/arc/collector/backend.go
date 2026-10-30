@@ -21,6 +21,7 @@ import (
 	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
 	"github.com/0xmhha/indexer-go/pkg/execution"
 	"github.com/0xmhha/indexer-go/x/arc"
+	"github.com/0xmhha/indexer-go/x/arc/nativeinput"
 	"github.com/0xmhha/indexer-go/x/arc/nativestore"
 )
 
@@ -34,6 +35,7 @@ type Options struct {
 	Chain               execwire.Chain
 	Timeout             time.Duration
 	StateProofs         *stateproof.Selection
+	Managed             *nativeinput.Identity
 }
 
 type Backend struct {
@@ -52,6 +54,14 @@ type Backend struct {
 	cleanup             sync.Once
 	closeErr            error
 	nativeLease         *os.File
+	readView            *nativestore.ReadView
+	lifetime            context.Context
+	lifeMu              sync.Mutex
+	closed              bool
+	operations          sync.WaitGroup
+	operationGate       chan struct{}
+	managed             *nativeinput.Identity
+	dataDir             string
 }
 
 type boundedError struct {
@@ -94,6 +104,16 @@ func Start(parent context.Context, o Options) (*Backend, error) {
 		return nil, err
 	}
 	o.StateProofs = selection
+	if o.Timeout < 0 || o.Timeout > time.Hour {
+		return nil, execwire.ErrLimit
+	}
+	if o.Managed != nil {
+		identity := *o.Managed
+		if nativeinput.ValidIdentity(identity) != nil || o.Chain.ID != "5042002" || identity.Genesis != o.Chain.Genesis {
+			return nil, ErrNative
+		}
+		o.Managed = &identity
+	}
 	chain := map[string]string{"5042": "mainnet", "5042002": "testnet"}[o.Chain.ID]
 	if chain == "" || !filepath.IsAbs(o.Executable) || !filepath.IsAbs(o.DataDir) {
 		return nil, ErrNative
@@ -115,16 +135,40 @@ func Start(parent context.Context, o Options) (*Backend, error) {
 	if err != nil {
 		return nil, err
 	}
-	lease, err := nativestore.AcquireRun(o.DataDir)
-	if err != nil {
-		return nil, err
-	}
+	var lease *os.File
+	var view *nativestore.ReadView
+	var startup *nativestore.ViewLease
 	transferred := false
 	defer func() {
 		if !transferred {
-			_ = lease.Close()
+			if startup != nil {
+				_ = startup.Close()
+			}
+			if view != nil {
+				_ = view.Close()
+			}
+			if lease != nil {
+				_ = lease.Close()
+			}
 		}
 	}()
+	if o.Managed == nil {
+		lease, err = nativestore.AcquireRun(o.DataDir)
+	} else {
+		view, err = nativestore.OpenReadView(parent, o.DataDir)
+		if err == nil {
+			timeout := o.Timeout
+			if timeout == 0 {
+				timeout = time.Minute
+			}
+			call, stop := context.WithTimeout(parent, timeout)
+			startup, err = view.Acquire(call)
+			stop()
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
 	work, err := os.MkdirTemp(o.ScratchDir, ".arc-native-")
 	if err != nil {
 		return nil, err
@@ -136,7 +180,12 @@ func Start(parent context.Context, o Options) (*Backend, error) {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	cmd := exec.CommandContext(ctx, o.Executable, "--chain", chain, "--datadir", o.DataDir, "--scratch-dir", work, "--serve")
-	b, err := startOwnedBackend(ctx, cancel, cmd, o.Chain, o.Timeout, &backendOwnership{work: work, info: workInfo, lease: lease})
+	cmd.Env = nativeinput.ChildEnvironment()
+	if view != nil {
+		cmd.Args = append(cmd.Args, "--managed-view-fd", "3")
+		cmd.ExtraFiles = []*os.File{view.File()}
+	}
+	b, err := startOwnedBackend(ctx, cancel, cmd, o.Chain, o.Timeout, &backendOwnership{work: work, info: workInfo, lease: lease, view: view, startup: startup, identity: o.Managed, dataDir: o.DataDir})
 	if err != nil {
 		return nil, errors.Join(err, removeScratch(work, workInfo))
 	}
@@ -163,9 +212,13 @@ func removeScratch(path string, expected os.FileInfo) error {
 }
 
 type backendOwnership struct {
-	work  string
-	info  os.FileInfo
-	lease *os.File
+	work     string
+	info     os.FileInfo
+	lease    *os.File
+	view     *nativestore.ReadView
+	startup  *nativestore.ViewLease
+	identity *nativeinput.Identity
+	dataDir  string
 }
 
 func startBackend(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, chain execwire.Chain, timeout time.Duration) (*Backend, error) {
@@ -183,10 +236,12 @@ func startOwnedBackend(ctx context.Context, cancel context.CancelFunc, cmd *exec
 	if timeout <= 0 || timeout > time.Hour {
 		return nil, execwire.ErrLimit
 	}
-	b := &Backend{chain: chain, cancel: cancel, done: make(chan struct{}), gate: make(chan struct{}, 1), timeout: timeout}
+	b := &Backend{chain: chain, cancel: cancel, lifetime: ctx, done: make(chan struct{}), gate: make(chan struct{}, 1), operationGate: make(chan struct{}, 1), timeout: timeout}
+	b.operationGate <- struct{}{}
 	// Install ownership before any child/handshake cancellation can call Close.
 	if owner != nil {
 		b.work, b.workInfo, b.nativeLease = owner.work, owner.info, owner.lease
+		b.readView, b.managed, b.dataDir = owner.view, owner.identity, owner.dataDir
 	}
 	b.gate <- struct{}{}
 	if b.input, err = cmd.StdinPipe(); err != nil {
@@ -205,30 +260,49 @@ func startOwnedBackend(ctx context.Context, cancel context.CancelFunc, cmd *exec
 	}
 	go func() { _ = cmd.Wait(); close(b.done) }()
 	p, err := b.query(ctx, "identity", 0, 0)
-	if err != nil {
-		_ = b.Close()
-		return nil, err
-	}
 	var identity nativeIdentity
-	if decode(p, &identity) != nil || identity.ChainID != chain.ID || identity.Genesis != chain.Genesis || identity.Revision != arcRevision {
-		_ = b.Close()
-		return nil, ErrNative
+	if err == nil && (decode(p.payload, &identity) != nil || identity.ChainID != chain.ID || identity.Genesis != chain.Genesis || identity.Revision != arcRevision) {
+		err = ErrNative
+	}
+	if owner != nil && owner.startup != nil {
+		if err == nil {
+			err = owner.startup.Validate()
+		}
+		// An interrupted startup joins the inherited child BEFORE SH is released.
+		if err != nil {
+			b.interrupt()
+			<-b.done
+		}
+		err = errors.Join(err, owner.startup.Close())
+	}
+	if err != nil {
+		return nil, fmt.Errorf("arc native startup identity: %w; adapter: %s", errors.Join(err, b.Close()), b.stderr.String())
 	}
 	return b, nil
 }
 
 func (b *Backend) Close() error {
-	b.cancel()
-	_ = b.input.Close()
-	_ = b.output.Close()
+	b.lifeMu.Lock()
+	b.closed = true
+	b.lifeMu.Unlock()
+	b.interrupt()
 	<-b.done
+	b.operations.Wait()
 	b.cleanup.Do(func() {
 		b.closeErr = removeScratch(b.work, b.workInfo)
+		if b.readView != nil {
+			b.closeErr = errors.Join(b.closeErr, b.readView.Close())
+		}
 		if b.nativeLease != nil {
 			b.closeErr = errors.Join(b.closeErr, b.nativeLease.Close())
 		}
 	})
 	return b.closeErr
+}
+func (b *Backend) interrupt() {
+	b.cancel()
+	_ = b.input.Close()
+	_ = b.output.Close()
 }
 func (b *Backend) reject(err error) error {
 	closeErr := b.Close()
@@ -239,27 +313,32 @@ func operationCode(op string) uint8 {
 	return map[string]uint8{"identity": 1, "head": 2, "canonical": 3, "replay": 4, "replayproofs": 5}[op]
 }
 
-func (b *Backend) query(parent context.Context, op string, height, generation uint64) ([]byte, error) {
+type nativeResponse struct {
+	payload []byte
+	proof   nativeinput.Proof
+}
+
+func (b *Backend) query(parent context.Context, op string, height, generation uint64) (nativeResponse, error) {
 	if err := parent.Err(); err != nil {
-		return nil, err
+		return nativeResponse{}, err
 	}
 	ctx, cancel := context.WithTimeout(parent, b.timeout)
 	defer cancel()
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nativeResponse{}, ctx.Err()
 	case <-b.done:
-		return nil, ErrNative
+		return nativeResponse{}, ErrNative
 	case <-b.gate:
 	}
 	defer func() { b.gate <- struct{}{} }()
 	select {
 	case <-b.done:
-		return nil, ErrNative
+		return nativeResponse{}, ErrNative
 	default:
 	}
 	if height > math.MaxInt64 || generation > math.MaxInt64 {
-		return nil, execwire.ErrLimit
+		return nativeResponse{}, execwire.ErrLimit
 	}
 	b.sequence++
 	request := nativeRequest{Version: 1, ID: b.sequence, Op: op, Height: height, Generation: generation}
@@ -268,27 +347,27 @@ func (b *Backend) query(parent context.Context, op string, height, generation ui
 	}
 	payload, err := json.Marshal(request)
 	if err != nil {
-		return nil, err
+		return nativeResponse{}, err
 	}
 	limitRequest := 1024
 	if op == "replayproofs" {
 		limitRequest = 16 << 10
 	}
 	if len(payload) > limitRequest {
-		return nil, execwire.ErrLimit
+		return nativeResponse{}, execwire.ErrLimit
 	}
 	stopped := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = b.Close(); close(stopped) })
+	stop := context.AfterFunc(ctx, func() { b.interrupt(); close(stopped) })
 	defer func() {
 		if !stop() {
 			<-stopped
 		}
 	}()
-	failIO := func(err error) ([]byte, error) {
+	failIO := func(err error) (nativeResponse, error) {
 		if ctx.Err() != nil {
 			err = ctx.Err()
 		}
-		return nil, b.reject(err)
+		return nativeResponse{}, err
 	}
 	var length [4]byte
 	binary.BigEndian.PutUint32(length[:], uint32(len(payload)))
@@ -300,12 +379,37 @@ func (b *Backend) query(parent context.Context, op string, height, generation ui
 		return failIO(err)
 	}
 	size := binary.BigEndian.Uint32(header[13:])
+	var proof nativeinput.Proof
+	magic := "AXS1"
+	if b.managed != nil {
+		magic = "AXM1"
+	}
+	if string(header[:4]) != magic || binary.BigEndian.Uint64(header[4:12]) != request.ID || header[12] != operationCode(op) {
+		return nativeResponse{}, ErrNative
+	}
+	if b.managed != nil {
+		if size == 0 || size > nativeinput.MaxMeta {
+			return nativeResponse{}, ErrNative
+		}
+		var length [4]byte
+		if _, err = io.ReadFull(b.output, length[:]); err != nil {
+			return failIO(err)
+		}
+		metadata := make([]byte, size)
+		if _, err = io.ReadFull(b.output, metadata); err != nil {
+			return failIO(err)
+		}
+		if nativeinput.Decode(metadata, &proof) != nil {
+			return nativeResponse{}, ErrNative
+		}
+		size = binary.BigEndian.Uint32(length[:])
+	}
 	limit := uint32(1024)
 	if op == "replay" || op == "replayproofs" {
 		limit = execwire.MaxBlockBytes
 	}
-	if string(header[:4]) != "AXS1" || binary.BigEndian.Uint64(header[4:12]) != request.ID || header[12] != operationCode(op) || size == 0 || size > limit {
-		return nil, b.reject(ErrNative)
+	if size == 0 || size > limit {
+		return nativeResponse{}, ErrNative
 	}
 	result := make([]byte, size)
 	if _, err = io.ReadFull(b.output, result); err != nil {
@@ -314,7 +418,19 @@ func (b *Backend) query(parent context.Context, op string, height, generation ui
 	if err = ctx.Err(); err != nil {
 		return failIO(err)
 	}
-	return result, nil
+	if b.managed != nil {
+		if nativeinput.VerifyCurrent(b.dataDir, proof, *b.managed) != nil {
+			return nativeResponse{}, ErrNative
+		}
+		if op == "identity" || op == "head" {
+			if proof.Ref != proof.Head.Tip {
+				return nativeResponse{}, ErrNative
+			}
+		} else if proof.Ref.Height != height {
+			return nativeResponse{}, ErrNative
+		}
+	}
+	return nativeResponse{payload: result, proof: proof}, nil
 }
 
 func decode(p []byte, out any) error {
@@ -329,15 +445,21 @@ func decode(p []byte, out any) error {
 	return nil
 }
 func (b *Backend) head(ctx context.Context, op string, height uint64) (nativeHead, error) {
-	p, err := b.query(ctx, op, height, 0)
-	if err != nil {
-		return nativeHead{}, err
-	}
 	var h nativeHead
-	if decode(p, &h) != nil || h.Height > math.MaxInt64 || h.Hash == (execwire.Hash{}) || op == "canonical" && h.Height != height {
-		return h, b.reject(ErrNative)
-	}
-	return h, nil
+	err := b.operation(ctx, func(call context.Context) error {
+		p, err := b.query(call, op, height, 0)
+		if err != nil {
+			return err
+		}
+		if decode(p.payload, &h) != nil || h.Height > math.MaxInt64 || h.Hash == (execwire.Hash{}) || op == "canonical" && h.Height != height {
+			return ErrNative
+		}
+		if b.managed != nil && (h.Height != p.proof.Ref.Height || h.Hash != p.proof.Ref.Hash) {
+			return ErrNative
+		}
+		return nil
+	})
+	return h, err
 }
 func (b *Backend) Head(ctx context.Context) (execwire.Ref, error) {
 	h, err := b.head(ctx, "head", 0)
@@ -355,19 +477,25 @@ func (b *Backend) Replay(ctx context.Context, height, generation uint64) (execwi
 	if b.requiredStateProofs != nil {
 		op = "replayproofs"
 	}
-	p, err := b.query(ctx, op, height, generation)
-	if err != nil {
-		return execwire.Result{}, err
-	}
-	// The chain-specific Go decoder independently authenticates the raw block
-	// and receipt commitments before any shared spool append can make it durable.
-	prepared, err := execution.PrepareWithRequirements(ctx, arc.New(), b.chain, p, execution.Requirements{StateProofs: b.requiredStateProofs})
-	if err != nil {
-		return execwire.Result{}, b.reject(err)
-	}
-	r, err := execwire.UnmarshalResult(p)
-	if err != nil || prepared.Ref().Height != height || prepared.Ref().Generation != generation || b.requiredStateProofs != nil && (r.StateProofBundle == nil || r.StateProofBundle.Provider != "arc-native") {
-		return execwire.Result{}, b.reject(ErrNative)
-	}
-	return r, nil
+	var r execwire.Result
+	err := b.operation(ctx, func(call context.Context) error {
+		p, err := b.query(call, op, height, generation)
+		if err != nil {
+			return err
+		}
+		// Keep the managed view through ALL independent Go/proof validation.
+		prepared, err := execution.PrepareWithRequirements(call, arc.New(), b.chain, p.payload, execution.Requirements{StateProofs: b.requiredStateProofs})
+		if err != nil {
+			return err
+		}
+		r, err = execwire.UnmarshalResult(p.payload)
+		if err != nil || prepared.Ref().Height != height || prepared.Ref().Generation != generation || b.requiredStateProofs != nil && (r.StateProofBundle == nil || r.StateProofBundle.Provider != "arc-native") {
+			return ErrNative
+		}
+		if b.managed != nil {
+			return nativeinput.ValidatePayload(p.proof, r)
+		}
+		return nil
+	})
+	return r, err
 }

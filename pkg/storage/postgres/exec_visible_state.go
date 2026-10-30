@@ -16,7 +16,7 @@ func (s *Store) executionStatePoint(ctx context.Context) (port.ExecutionStatePoi
 	if c.Maintenance {
 		return port.ExecutionStatePoint{}, port.ErrExecutionMaintenance
 	}
-	if c.Rewinding {
+	if c.Rewinding || c.ReorgPending {
 		return port.ExecutionStatePoint{}, port.ErrExecutionRewinding
 	}
 	if !c.BaselineReady {

@@ -46,6 +46,8 @@ struct Args {
     output: Option<PathBuf>,
     #[arg(long, conflicts_with_all = ["height", "generation", "output"])]
     serve: bool,
+    #[arg(long, requires = "serve", conflicts_with_all = ["height", "generation", "output", "state_proofs"], value_parser = clap::value_parser!(u64).range(3..=3))]
+    managed_view_fd: Option<u64>,
     #[arg(long)]
     scratch_dir: Option<PathBuf>,
     #[arg(long, conflicts_with = "serve")]
@@ -58,6 +60,10 @@ fn main() -> Result<()> {
 
 fn produce(mut args: Args) -> Result<()> {
     ensure!(
+        args.managed_view_fd.is_none() || args.serve && matches!(args.chain, Chain::Testnet),
+        "managed reader requires testnet"
+    );
+    ensure!(
         args.datadir.is_absolute() && args.output.as_ref().is_none_or(|p| p.is_absolute()),
         "native/output paths must be absolute"
     );
@@ -67,7 +73,14 @@ fn produce(mut args: Args) -> Result<()> {
         .map(indexer_arc_executor::proofs::read_selection)
         .transpose()?;
     args.datadir = args.datadir.canonicalize()?;
-    indexer_arc_executor::native::check_start(&args.datadir)?;
+    let managed_view = if let Some(fd) = args.managed_view_fd {
+        Some(
+            indexer_arc_executor::managed_read::InheritedView::inherited(&args.datadir, fd as i32)?,
+        )
+    } else {
+        indexer_arc_executor::native::check_start(&args.datadir)?;
+        None
+    };
     for name in ["db", "rocksdb", "static_files"] {
         ensure!(
             args.datadir.join(name).is_dir(),
@@ -138,40 +151,66 @@ fn produce(mut args: Args) -> Result<()> {
         Ok(result)
     };
     if args.serve {
-        return service::serve(
-            std::io::stdin().lock(),
-            std::io::stdout().lock(),
-            |request| match request.op {
-                Operation::Identity => Ok(serde_json::to_vec(
-                    &serde_json::json!({"chain_id": spec.inner.chain.id().to_string(), "genesis": spec.inner.genesis_hash(), "revision": ARC_REVISION}),
-                )?),
-                Operation::Head => {
-                    let provider = factory.provider()?;
-                    let height = provider.best_block_number()?;
-                    let hash = provider
-                        .block_hash(height)?
-                        .ok_or_else(|| eyre!("native head header unavailable"))?;
-                    Ok(serde_json::to_vec(
-                        &serde_json::json!({"height": height, "hash": hash}),
-                    )?)
-                }
-                Operation::Canonical => {
-                    let hash = factory
-                        .provider()?
-                        .block_hash(request.height)?
-                        .ok_or_else(|| eyre!("retained canonical header unavailable"))?;
-                    Ok(serde_json::to_vec(
-                        &serde_json::json!({"height": request.height, "hash": hash}),
-                    )?)
-                }
-                Operation::Replay | Operation::ReplayProofs => replay_block(
-                    request.height,
-                    request.generation,
-                    request.state_proofs.as_ref(),
-                )?
-                .encode(),
-            },
-        );
+        let handle = |request: service::Request| match request.op {
+            Operation::Identity => Ok(serde_json::to_vec(
+                &serde_json::json!({"chain_id": spec.inner.chain.id().to_string(), "genesis": spec.inner.genesis_hash(), "revision": ARC_REVISION}),
+            )?),
+            Operation::Head => {
+                let provider = factory.provider()?;
+                let height = provider.best_block_number()?;
+                let hash = provider
+                    .block_hash(height)?
+                    .ok_or_else(|| eyre!("native head header unavailable"))?;
+                Ok(serde_json::to_vec(
+                    &serde_json::json!({"height": height, "hash": hash}),
+                )?)
+            }
+            Operation::Canonical => {
+                let hash = factory
+                    .provider()?
+                    .block_hash(request.height)?
+                    .ok_or_else(|| eyre!("retained canonical header unavailable"))?;
+                Ok(serde_json::to_vec(
+                    &serde_json::json!({"height": request.height, "hash": hash}),
+                )?)
+            }
+            Operation::Replay | Operation::ReplayProofs => replay_block(
+                request.height,
+                request.generation,
+                request.state_proofs.as_ref(),
+            )?
+            .encode(),
+        };
+        if let Some(view) = &managed_view {
+            return service::serve_managed(
+                std::io::stdin().lock(),
+                std::io::stdout().lock(),
+                |request| {
+                    let height = match request.op {
+                        Operation::Identity | Operation::Head => None,
+                        _ => Some(request.height),
+                    };
+                    let before =
+                        indexer_arc_executor::managed_read::snapshot(view, &factory, height)?;
+                    if matches!(request.op, Operation::Replay | Operation::ReplayProofs) {
+                        ensure!(
+                            before.receipt.is_some(),
+                            "managed replay requires completed import input"
+                        );
+                    }
+                    let proof = serde_json::to_vec(&before)?;
+                    let payload = handle(request)?;
+                    let after =
+                        indexer_arc_executor::managed_read::snapshot(view, &factory, height)?;
+                    ensure!(
+                        serde_json::to_vec(&after)? == proof,
+                        "managed view changed during operation"
+                    );
+                    Ok((proof, payload))
+                },
+            );
+        }
+        return service::serve(std::io::stdin().lock(), std::io::stdout().lock(), handle);
     }
     let height = args.height.ok_or_else(|| eyre!("height required"))?;
     let generation = args
@@ -193,6 +232,50 @@ fn produce(mut args: Args) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn managed_arguments_require_serve_testnet_and_inherited_fd3() {
+        let base = [
+            "arc-executor",
+            "--chain",
+            "testnet",
+            "--datadir",
+            "/missing",
+            "--serve",
+            "--managed-view-fd",
+            "3",
+        ];
+        assert!(
+            Args::try_parse_from(base).is_ok(),
+            "explicit managed mode must accept inherited fd3"
+        );
+        for fd in ["0", "2", "4", "-1"] {
+            let mut args = base;
+            args[7] = fd;
+            assert!(Args::try_parse_from(args).is_err());
+        }
+        let mut mainnet = base;
+        mainnet[2] = "mainnet";
+        let err = produce(Args::try_parse_from(mainnet).unwrap()).unwrap_err();
+        assert!(err.to_string().contains("managed reader requires testnet"));
+        assert!(
+            Args::try_parse_from([
+                "arc-executor",
+                "--chain",
+                "testnet",
+                "--datadir",
+                "/missing",
+                "--height",
+                "1",
+                "--generation",
+                "1",
+                "--output",
+                "/missing/out",
+                "--managed-view-fd",
+                "3"
+            ])
+            .is_err()
+        );
+    }
     #[test]
     fn native_secondary_workspace_is_private_separate_and_removed_without_source_deletion()
     -> Result<()> {

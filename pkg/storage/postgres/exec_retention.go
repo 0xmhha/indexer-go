@@ -69,7 +69,7 @@ func (s *Store) BeginExecutionRetention(ctx context.Context, r retention.Request
 		if e != nil {
 			return e
 		}
-		if c.Rewinding {
+		if c.Rewinding || c.ReorgPending {
 			return port.ErrExecutionRewinding
 		}
 		if !c.BaselineReady {
@@ -219,7 +219,7 @@ func (s *Store) retentionFresh(ctx context.Context, tx pgx.Tx, p retention.Permi
 		return port.ErrExecutionCoverage
 	}
 
-	if c.Maintenance != pending || c.Rewinding || c.Chain != p.Request.Chain || c.Anchor != p.Request.Anchor || c.Generation != p.Visible.Generation || c.Visible != p.Visible || c.Root != p.Root || !c.BaselineReady {
+	if c.Maintenance != pending || (c.Rewinding || c.ReorgPending) || c.Chain != p.Request.Chain || c.Anchor != p.Request.Anchor || c.Generation != p.Visible.Generation || c.Visible != p.Visible || c.Root != p.Root || !c.BaselineReady {
 		return port.ErrExecutionConflict
 	}
 	return nil
@@ -250,7 +250,7 @@ func (s *Store) WithExecutionRetention(ctx context.Context, p retention.Permit, 
 		if err != nil {
 			return err
 		}
-		if !c.Maintenance || c.Rewinding || c.Visible != p.Visible || c.Root != p.Root || c.Generation != p.Visible.Generation || c.Chain != p.Request.Chain || c.Anchor != p.Request.Anchor {
+		if !c.Maintenance || (c.Rewinding || c.ReorgPending) || c.Visible != p.Visible || c.Root != p.Root || c.Generation != p.Visible.Generation || c.Chain != p.Request.Chain || c.Anchor != p.Request.Anchor {
 			return port.ErrExecutionConflict
 		}
 		var coverage string
@@ -284,7 +284,7 @@ func (s *Store) ValidateExecutionBackup(ctx context.Context, p retention.Permit,
 	if err != nil {
 		return err
 	}
-	if !c.Maintenance || c.Rewinding || !c.BaselineReady || c.Visible != p.Visible || c.Root != p.Root || c.Generation != p.Visible.Generation || c.Chain != p.Request.Chain || c.Anchor != p.Request.Anchor {
+	if !c.Maintenance || (c.Rewinding || c.ReorgPending) || !c.BaselineReady || c.Visible != p.Visible || c.Root != p.Root || c.Generation != p.Visible.Generation || c.Chain != p.Request.Chain || c.Anchor != p.Request.Anchor {
 		return port.ErrExecutionConflict
 	}
 	var identity string

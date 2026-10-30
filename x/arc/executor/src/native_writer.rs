@@ -109,7 +109,7 @@ enum Phase {
     Cleared,
 }
 
-fn directory(path: &Path) -> Result<File> {
+pub(crate) fn directory(path: &Path) -> Result<File> {
     ensure!(path.is_absolute(), "absolute native directory required");
     let file = File::from(rustix::fs::open(
         path,
@@ -123,7 +123,7 @@ fn directory(path: &Path) -> Result<File> {
     );
     Ok(file)
 }
-fn lock_file(native: &Path, suffix: &str) -> Result<File> {
+pub(crate) fn lock_file(native: &Path, suffix: &str) -> Result<File> {
     let parent = native.parent().ok_or_else(|| eyre!("native parent"))?;
     let parent_fd = directory(parent)?;
     let name = format!(
@@ -156,7 +156,7 @@ pub struct ReadGuard {
     _view: File,
     _run: File,
 }
-struct WriteGuard {
+pub(crate) struct WriteGuard {
     _view: File,
     _turn: File,
 }
@@ -186,7 +186,7 @@ pub fn read_guard(native: &Path) -> Result<ReadGuard> {
         _run: run,
     })
 }
-fn write_guard(native: &Path) -> Result<WriteGuard> {
+pub(crate) fn write_guard(native: &Path) -> Result<WriteGuard> {
     let (turn, view) = gate(native, true)?;
     Ok(WriteGuard {
         _view: view,
@@ -199,7 +199,7 @@ struct Sealed {
     data: Box<serde_json::value::RawValue>,
     digest: B256,
 }
-fn private_bytes(path: &Path) -> Result<Vec<u8>> {
+pub(crate) fn private_bytes(path: &Path) -> Result<Vec<u8>> {
     checkpoint::private_file(path)?;
     let file = File::from(rustix::fs::open(
         path,
@@ -232,7 +232,7 @@ fn canonical<T: DeserializeOwned + Serialize>(bytes: &[u8]) -> Result<T> {
     );
     Ok(value)
 }
-fn artifact<T: DeserializeOwned + Serialize>(path: &Path) -> Result<T> {
+pub(crate) fn artifact<T: DeserializeOwned + Serialize>(path: &Path) -> Result<T> {
     let sealed: Sealed = canonical(&private_bytes(path)?)?;
     let data = sealed.data.get().as_bytes();
     ensure!(
@@ -251,14 +251,14 @@ fn sealed_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     );
     Ok(bytes)
 }
-fn create<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+pub(crate) fn create<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let bytes = sealed_bytes(value)?;
     checkpoint::write_private(path, |w| {
         w.write_all(&bytes)?;
         Ok(())
     })
 }
-fn replace_head(path: &Path, old: &Head, new: &Head) -> Result<()> {
+pub(crate) fn replace_head(path: &Path, old: &Head, new: &Head) -> Result<()> {
     ensure!(artifact::<Head>(path)? == *old, "native head changed");
     let parent = path.parent().ok_or_else(|| eyre!("head parent"))?;
     let mut temp = tempfile::NamedTempFile::new_in(parent)?;
@@ -268,7 +268,7 @@ fn replace_head(path: &Path, old: &Head, new: &Head) -> Result<()> {
     File::open(parent)?.sync_all()?;
     Ok(())
 }
-fn receipt_path(native: &Path, epoch: u64, height: u64) -> PathBuf {
+pub(crate) fn receipt_path(native: &Path, epoch: u64, height: u64) -> PathBuf {
     native.join(RECEIPTS).join(format!("{epoch}-{height}.json"))
 }
 fn live_factory(path: &Path, spec: Arc<ArcChainSpec>) -> Result<native::Factory> {
@@ -283,7 +283,7 @@ fn live_factory(path: &Path, spec: Arc<ArcChainSpec>) -> Result<native::Factory>
         .build()?;
     Ok(ProviderFactory::new(db, spec, sf, rocks, Runtime::test())?)
 }
-fn check_native(f: &native::Factory, head: &Head, identity: &Identity) -> Result<()> {
+pub(crate) fn check_native(f: &native::Factory, head: &Head, identity: &Identity) -> Result<()> {
     let p = f.provider()?;
     ensure!(
         p.cached_storage_settings().storage_v2
@@ -299,22 +299,17 @@ fn check_native(f: &native::Factory, head: &Head, identity: &Identity) -> Result
     );
     Ok(())
 }
-fn check_completion(
+pub(crate) fn check_completion(
     path: &Path,
     f: &native::Factory,
     head: &Head,
     identity: &Identity,
 ) -> Result<()> {
-    ensure!(
-        head.import_epoch == 1
-            && head.request_id == head.tip.height - identity.anchor.height
-            && head.request_id.checked_add(1) == Some(head.read_epoch),
-        "unsupported or inconsistent native sequence/epoch"
-    );
+    let base = crate::native_epoch::receipt_context(path, identity, head, head.tip.height)?;
     if head.tip == identity.anchor {
         return Ok(());
     }
-    let r: ImportReceipt = artifact(&receipt_path(path, head.import_epoch, head.tip.height))?;
+    let r: ImportReceipt = artifact(&receipt_path(path, base.import_epoch, head.tip.height))?;
     let p = f.provider()?;
     let h = p
         .header_by_number(head.tip.height)?
@@ -325,9 +320,10 @@ fn check_completion(
     ensure!(
         r.version == 1
             && r.identity == *identity
-            && r.request_id == head.request_id
-            && r.import_epoch == head.import_epoch
-            && r.read_epoch == head.read_epoch
+            && r.request_id == head.tip.height - base.tip.height
+            && r.import_epoch == base.import_epoch
+            && base.read_epoch.checked_add(r.request_id) == Some(r.read_epoch)
+            && r.read_epoch <= head.read_epoch
             && r.height == head.tip.height
             && r.hash == head.tip.hash
             && r.root == head.tip.root
@@ -339,7 +335,32 @@ fn check_completion(
     );
     Ok(())
 }
-fn validate_identity(
+pub(crate) fn bootstrap_record(
+    path: &Path,
+    spec: &ArcChainSpec,
+) -> Result<(bootstrap::ReceiptRecord, B256)> {
+    let boot_bytes = private_bytes(&path.join(bootstrap::RECEIPT))?;
+    let boot: bootstrap::ReceiptRecord = canonical(&boot_bytes)?;
+    ensure!(
+        boot.version == 1
+            && boot.arc_revision == crate::ARC_REVISION
+            && boot.reth_revision == native_import::RETH_REVISION
+            && boot.anchor.version == 1
+            && boot.anchor.coverage == "full"
+            && boot.anchor.chain.id == "5042002"
+            && boot.anchor.chain.genesis == spec.inner.genesis_hash()
+            && boot.anchor.r#ref.generation == 1
+            && boot.floor == boot.anchor.r#ref.height
+            && boot.next
+                == boot
+                    .floor
+                    .checked_add(1)
+                    .ok_or_else(|| eyre!("bootstrap height"))?,
+        "verified native bootstrap required"
+    );
+    Ok((boot, B256::from_slice(&Sha256::digest(&boot_bytes))))
+}
+pub(crate) fn validate_identity(
     i: &Identity,
     boot: &bootstrap::ReceiptRecord,
     digest: B256,
@@ -408,7 +429,7 @@ fn decoded(frame: &Frame) -> Result<(Block, Vec<Receipt>)> {
     );
     Ok((block, receipts.into_iter().map(|r| r.receipt).collect()))
 }
-fn encode_receipts(receipts: &[Receipt]) -> Vec<u8> {
+pub(crate) fn encode_receipts(receipts: &[Receipt]) -> Vec<u8> {
     let mut data = Vec::new();
     for r in receipts {
         r.with_bloom_ref().network_encode(&mut data);
@@ -527,26 +548,7 @@ impl Writer {
         let guard = write_guard(path)?;
         native_import::require_clean(path)?;
         native::check_fences(path)?;
-        let boot_bytes = private_bytes(&path.join(bootstrap::RECEIPT))?;
-        let boot: bootstrap::ReceiptRecord = canonical(&boot_bytes)?;
-        ensure!(
-            boot.version == 1
-                && boot.arc_revision == crate::ARC_REVISION
-                && boot.reth_revision == native_import::RETH_REVISION
-                && boot.anchor.version == 1
-                && boot.anchor.coverage == "full"
-                && boot.anchor.chain.id == "5042002"
-                && boot.anchor.chain.genesis == spec.inner.genesis_hash()
-                && boot.anchor.r#ref.generation == 1
-                && boot.floor == boot.anchor.r#ref.height
-                && boot.next
-                    == boot
-                        .floor
-                        .checked_add(1)
-                        .ok_or_else(|| eyre!("bootstrap height"))?,
-            "verified native bootstrap required"
-        );
-        let boot_digest = B256::from_slice(&Sha256::digest(&boot_bytes));
+        let (boot, boot_digest) = bootstrap_record(path, &spec)?;
         let f = live_factory(path, spec.clone())?;
         let identity_path = path.join(IDENTITY);
         let head_path = path.join(HEAD);
@@ -825,7 +827,7 @@ impl Writer {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::{
         bootstrap, checkpoint, native,
@@ -837,7 +839,7 @@ mod tests {
     use arc_execution_config::chainspec::TESTNET;
     use std::{io::Write, os::unix::fs::PermissionsExt, path::PathBuf};
 
-    pub(super) fn setup() -> Result<(tempfile::TempDir, PathBuf, Frame)> {
+    pub(crate) fn setup() -> Result<(tempfile::TempDir, PathBuf, Frame)> {
         let (_source, f, spec) = fixture(false)?;
         let work = tempfile::tempdir()?;
         std::fs::set_permissions(work.path(), std::fs::Permissions::from_mode(0o700))?;

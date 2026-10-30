@@ -8,53 +8,22 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/x/arc/nativeinput"
 	"io"
 	"math"
 )
 
-const ArcRevision = "6e764023ee6515fe70573e123ed2db912a7207b4"
-const RethRevision = "88505c7fcbfdebfd3b56d88c86b62e950043c6c4"
+const ArcRevision = nativeinput.ArcRevision
+const RethRevision = nativeinput.RethRevision
 const maxMeta = 16 << 10
 const maxPart = 10 << 20
 
-type nativeRef struct {
-	Height     uint64
-	Hash, Root execwire.Hash
-}
-type nativeIdentity struct {
-	Version                           uint8
-	Instance                          execwire.Hash
-	ChainID                           uint64
-	Genesis                           execwire.Hash
-	ArcRevision, RethRevision, Layout string
-	BootstrapDigest                   execwire.Hash
-	Anchor                            nativeRef
-}
-type nativeHead struct {
-	Version                           uint8
-	Instance                          execwire.Hash
-	ImportEpoch, ReadEpoch, RequestID uint64
-	Tip                               nativeRef
-}
-type nativeReady struct {
-	Version  uint8
-	Identity nativeIdentity
-	Head     nativeHead
-}
-type importMeta struct {
-	Version                   uint8
-	RequestID, ChainID        uint64
-	Genesis                   execwire.Hash
-	ArcRevision, RethRevision string
-	ImportEpoch, Height       uint64
-	Hash, Parent, ParentRoot  execwire.Hash
-}
-type importReceipt struct {
-	Version                                                   uint8
-	Identity                                                  nativeIdentity
-	RequestID, ImportEpoch, ReadEpoch, Height                 uint64
-	Hash, Parent, ParentRoot, Root, ReceiptsRoot, InputDigest execwire.Hash
-}
+type nativeRef = nativeinput.Ref
+type nativeIdentity = nativeinput.Identity
+type nativeHead = nativeinput.Head
+type nativeReady = nativeinput.Ready
+type importMeta = nativeinput.Meta
+type importReceipt = nativeinput.Receipt
 
 var ErrNative = errors.New("arc ingress: invalid, conflicting or unavailable native input; preserved for explicit recovery")
 

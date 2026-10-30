@@ -10,10 +10,12 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"github.com/0xmhha/indexer-go/pkg/source"
 	"github.com/0xmhha/indexer-go/pkg/window"
 	"github.com/0xmhha/indexer-go/x/arc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
+	"time"
 )
 
 type nativeWriter interface {
@@ -21,12 +23,14 @@ type nativeWriter interface {
 }
 type execHash = execwire.Hash
 type rawControl struct {
-	Version  uint8
-	Instance execHash
-	Chain    model.FeedChain
-	Anchor   nativeRef
-	RawEpoch uint64
-	Received nativeRef
+	Version     uint8
+	Instance    execHash
+	Chain       model.FeedChain
+	Anchor      nativeRef
+	RawEpoch    uint64
+	Received    nativeRef
+	NativeEpoch uint64 `json:",omitempty"`
+	Generation  uint64 `json:",omitempty"`
 }
 type capturedBlock struct {
 	envelopes         []chainfeed.Envelope
@@ -39,8 +43,11 @@ func verifyBatch(chain model.FeedChain, parent nativeRef, batch []chainfeed.Enve
 	if err != nil {
 		return capturedBlock{}, err
 	}
-	if b.block.Number != parent.Height+1 || b.block.ParentHash != common.Hash(parent.Hash) {
+	if b.block.Number != parent.Height+1 {
 		return capturedBlock{}, ErrNative
+	}
+	if b.block.ParentHash != common.Hash(parent.Hash) {
+		return capturedBlock{}, errors.Join(ErrNative, errRawFork)
 	}
 	return b, nil
 }
@@ -120,7 +127,7 @@ func (p *program) persist(ctx context.Context, batch []chainfeed.Envelope) error
 		return err
 	}
 	next := p.control
-	next.Received = nativeRef{b.block.Number, execwire.Hash(b.block.Hash), execwire.Hash(b.block.StateRoot)}
+	next.Received = nativeRef{Height: b.block.Number, Hash: execwire.Hash(b.block.Hash), Root: execwire.Hash(b.block.StateRoot)}
 	oldJSON, _ := json.Marshal(p.control)
 	newJSON, _ := json.Marshal(next)
 	if err = p.raw.CompareOwner(ctx, oldJSON, newJSON); err != nil {
@@ -163,7 +170,16 @@ func (p *program) readBatch(ctx context.Context, id model.FeedBlock) ([]chainfee
 	return batch, refs, nil
 }
 func (p *program) consume(ctx context.Context, w nativeWriter, wake <-chan struct{}, observe func([]window.Reference) error) error {
+	return p.consumeUntil(ctx, w, wake, observe, nil)
+}
+func (p *program) consumeUntil(ctx context.Context, w nativeWriter, wake <-chan struct{}, observe func([]window.Reference) error, stop <-chan struct{}) error {
+	var lagSince time.Time
 	for {
+		select {
+		case <-stop:
+			return port.ErrExecutionRewinding
+		default:
+		}
 		p.mu.Lock()
 		h, r, chain := p.head, p.control.Received, p.control.Chain
 		p.mu.Unlock()
@@ -171,6 +187,8 @@ func (p *program) consume(ctx context.Context, w nativeWriter, wake <-chan struc
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
+			case <-stop:
+				return port.ErrExecutionRewinding
 			case <-wake:
 				continue
 			}
@@ -179,11 +197,38 @@ func (p *program) consume(ctx context.Context, w nativeWriter, wake <-chan struc
 		if err != nil {
 			return err
 		}
+		select {
+		case <-stop:
+			release()
+			return port.ErrExecutionRewinding
+		default:
+		}
+		attempted := time.Now()
 		err = p.importNext(ctx, w, h, chain, observe)
 		release()
+		if errors.Is(err, port.ErrExecutionCanonicalLag) {
+			if lagSince.IsZero() {
+				lagSince = attempted
+			}
+			if time.Since(lagSince) >= p.cfg.Timeout {
+				return err
+			}
+			timer := time.NewTimer(min(100*time.Millisecond, p.cfg.Timeout))
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-stop:
+				timer.Stop()
+				return port.ErrExecutionRewinding
+			case <-timer.C:
+			}
+			continue
+		}
 		if err != nil {
 			return err
 		}
+		lagSince = time.Time{}
 	}
 }
 func (p *program) importNext(ctx context.Context, w nativeWriter, h nativeHead, chain model.FeedChain, observe func([]window.Reference) error) error {
@@ -191,16 +236,27 @@ func (p *program) importNext(ctx context.Context, w nativeWriter, h nativeHead, 
 		return err
 	}
 	// An admission read never substitutes E1's separate final NEW fresh check.
-	hash, err := p.deps.Canonical.HashAt(ctx, h.Tip.Height+1)
+	call, finish := context.WithTimeout(ctx, p.cfg.Timeout)
+	hash, err := p.deps.Canonical.HashAt(call, h.Tip.Height+1)
+	finish()
+	if fence := p.stable(ctx); fence != nil {
+		return fence
+	}
 	if err != nil {
+		if errors.Is(err, source.ErrNotFound) || errors.Is(err, context.DeadlineExceeded) {
+			return errors.Join(port.ErrExecutionCanonicalLag, err)
+		}
 		return err
 	}
-	if err = p.stable(ctx); err != nil {
-		return err
+	if hash == (common.Hash{}) {
+		return ErrNative
 	}
 	id := model.FeedBlock{Chain: chain, Number: h.Tip.Height + 1, Hash: hash}
 	b, refs, err := p.load(ctx, id, h.Tip)
 	if err != nil {
+		if errors.Is(err, window.ErrNotFound) {
+			return errors.Join(errRawMismatch, err)
+		}
 		return err
 	}
 	m := p.meta(h, id)
@@ -220,28 +276,32 @@ func (p *program) importNext(ctx context.Context, w nativeWriter, h nativeHead, 
 		return err
 	}
 	p.mu.Lock()
-	p.head = nativeHead{Version: 1, Instance: r.Identity.Instance, ImportEpoch: r.ImportEpoch, ReadEpoch: r.ReadEpoch, RequestID: r.RequestID, Tip: nativeRef{r.Height, r.Hash, r.Root}}
+	p.head = nativeHead{Version: 1, Instance: r.Identity.Instance, ImportEpoch: r.ImportEpoch, ReadEpoch: r.ReadEpoch, RequestID: r.RequestID, Tip: nativeRef{Height: r.Height, Hash: r.Hash, Root: r.Root}}
 	p.mu.Unlock()
 	return observe(refs)
 }
 func (p *program) stable(ctx context.Context) error {
+	_, err := p.currentControl(ctx)
+	return err
+}
+func (p *program) currentControl(ctx context.Context) (port.ExecutionControl, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return port.ExecutionControl{}, err
 	}
 	c, err := p.deps.Store.ExecutionStatus(ctx)
 	if err != nil {
-		return err
+		return c, err
 	}
 	if c.Maintenance {
-		return port.ErrExecutionMaintenance
+		return c, port.ErrExecutionMaintenance
 	}
-	if c.Rewinding || c.Generation != p.deps.Control.Generation {
-		return port.ErrExecutionRewinding
+	if c.Rewinding || c.ReorgPending || c.Generation != p.deps.Control.Generation {
+		return c, port.ErrExecutionRewinding
 	}
 	if !c.BaselineReady || c.Chain != p.deps.Control.Chain || c.Anchor != p.deps.Control.Anchor || c.AnchorRoot != p.deps.Control.AnchorRoot {
-		return port.ErrExecutionConflict
+		return c, port.ErrExecutionConflict
 	}
-	return nil
+	return c, nil
 }
 func (p *program) meta(h nativeHead, id model.FeedBlock) importMeta {
 	return importMeta{Version: 1, RequestID: h.RequestID + 1, ChainID: 5042002, Genesis: execwire.Hash(id.Chain.GenesisHash), ArcRevision: ArcRevision, RethRevision: RethRevision, ImportEpoch: h.ImportEpoch, Height: id.Number, Hash: execwire.Hash(id.Hash), Parent: h.Tip.Hash, ParentRoot: h.Tip.Root}

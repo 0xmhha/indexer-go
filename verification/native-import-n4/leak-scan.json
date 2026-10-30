@@ -1,0 +1,89 @@
+[
+  {
+    "scope": "final-staged",
+    "scanner_exit": 0,
+    "findings": 0,
+    "unreviewed": 0,
+    "report_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+    "scope": "history",
+    "scanner_exit": 1,
+    "findings": 25,
+    "reviewed_public_fixtures": 25,
+    "unreviewed": 0,
+    "additional_fixture_review": [
+      {
+        "commit": "14c5c298cd608423a7d40310f66b430e09613aa4",
+        "file": "verification/seed-contract.json",
+        "line": 70,
+        "rule": "generic-api-key",
+        "classification": "public semantic acceptance identifier"
+      },
+      {
+        "commit": "14c5c298cd608423a7d40310f66b430e09613aa4",
+        "file": "verification/seed-contract.json",
+        "line": 85,
+        "rule": "generic-api-key",
+        "classification": "public semantic acceptance identifier"
+      },
+      {
+        "commit": "cbcfc0495b1c2398636945338ec7809ec5691ae6",
+        "file": "pkg/chains/evm/testdata/sepolia-header-11901474.json",
+        "line": 4,
+        "rule": "generic-api-key",
+        "classification": "public blockAccessListHash"
+      },
+      {
+        "commit": "60cdf222801c4cf36b9a795cbb8880032ac28607",
+        "file": "pkg/app/notification_channels_test.go",
+        "line": 54,
+        "rule": "generic-api-key",
+        "classification": "literal credential for local test HTTP auth/notifications"
+      },
+      {
+        "commit": "2ec823bc94f2229b4d07333cbf6e60cd3724f6b0",
+        "file": "pkg/app/live_notification_test.go",
+        "line": 102,
+        "rule": "generic-api-key",
+        "classification": "literal credential for local test HTTP auth/notifications"
+      },
+      {
+        "commit": "f3e895882ad809490022bce05482ac6e211ac769",
+        "file": "pkg/app/multichain_notification_test.go",
+        "line": 38,
+        "rule": "generic-api-key",
+        "classification": "literal credential for local test HTTP auth/notifications"
+      },
+      {
+        "commit": "dd4eec88a932cb9305ddde3f1d032f4b3e110800",
+        "file": "pkg/app/notification_expression_test.go",
+        "line": 135,
+        "rule": "generic-api-key",
+        "classification": "literal credential for local test HTTP auth/notifications"
+      },
+      {
+        "commit": "ddb77c54f93fb2c64fb9450ce6aec0200e2a4a59",
+        "file": "pkg/app/notification_expression_test.go",
+        "line": 34,
+        "rule": "generic-api-key",
+        "classification": "literal credential for local test HTTP auth/notifications"
+      },
+      {
+        "commit": "fe98a3564d005f00fcf9bad840b7230cca1a15b6",
+        "file": "pkg/api/middleware/auth_test.go",
+        "line": 298,
+        "rule": "generic-api-key",
+        "classification": "literal credential for local test HTTP auth/notifications"
+      },
+      {
+        "commit": "fe98a3564d005f00fcf9bad840b7230cca1a15b6",
+        "file": "pkg/app/notification_api_test.go",
+        "line": 30,
+        "rule": "generic-api-key",
+        "classification": "literal credential for local test HTTP auth/notifications"
+      }
+    ],
+    "report_sha256": "cc4d27add3b0a0278c4178a69ee9c5cfbdf8791519b3b085d17549236b0368c9"
+  }
+]

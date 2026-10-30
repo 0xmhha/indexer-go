@@ -1,0 +1,229 @@
+[
+  {
+    "check": "build-release",
+    "argv": [
+      "go",
+      "build",
+      "./..."
+    ],
+    "exit": 0,
+    "log_name": "n4-build-release.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_scope": "current production and all tests; tagged-switch static edit in separate pure test documented"
+  },
+  {
+    "check": "vet-release",
+    "argv": [
+      "go",
+      "vet",
+      "./..."
+    ],
+    "exit": 0,
+    "log_name": "n4-vet-release-final.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_scope": "current production and all tests; tagged-switch static edit in separate pure test documented"
+  },
+  {
+    "check": "lint-release",
+    "argv": [
+      "make",
+      "lint"
+    ],
+    "exit": 0,
+    "log_name": "n4-lint-release-final.log",
+    "log_sha256": "afa51c9dbbd37b37edddf1d3217625a46218598a4c8781e42a2608cd4de09e00",
+    "source_scope": "current production and all tests; tagged-switch static edit in separate pure test documented"
+  },
+  {
+    "check": "gofmt-release",
+    "argv": [
+      "gofmt",
+      "-l",
+      "all Go sources"
+    ],
+    "exit": 0,
+    "log_name": "n4-gofmt-release-final.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_scope": "current production and all tests; tagged-switch static edit in separate pure test documented"
+  },
+  {
+    "check": "module-static",
+    "argv": [
+      "execwire,StableNet executor,AST module build/vet/lint"
+    ],
+    "exit": 0,
+    "log_name": "n4-module-static.log",
+    "log_sha256": "3c6f43c00b56d7116263f7523bfb6a311aed70cff8c5f4d73ab254b299717fdf",
+    "source_scope": "unchanged module/production subset; final whole-root race is recorded separately"
+  },
+  {
+    "check": "examples-cache",
+    "argv": [
+      "make",
+      "test-examples",
+      "test-cache-lifecycle"
+    ],
+    "exit": 0,
+    "log_name": "n4-examples-cache.log",
+    "log_sha256": "c23014002d5025c215b8c59ef5d87375dfa7999e684ec56ad4ad9566be4a49e4",
+    "source_scope": "unchanged module/production subset; final whole-root race is recorded separately"
+  },
+  {
+    "check": "offline-draft-tests",
+    "argv": [
+      "offline native deployment Python/CLI checks"
+    ],
+    "exit": 0,
+    "log_name": "n4-offline-draft-tests.log",
+    "log_sha256": "4345d695370eff82f6ba4ab3c251292527f880934add990334375cccbad56092",
+    "source_scope": "unchanged module/production subset; final whole-root race is recorded separately"
+  },
+  {
+    "check": "wire-concurrency200",
+    "argv": [
+      "GOMAXPROCS=1",
+      "go",
+      "test",
+      "-race",
+      "-count=200",
+      "-timeout=10m",
+      "-run",
+      "^TestClientOwnedProposalUsesSameSessionAfterCaptureJoinAndPreservesACK$",
+      "./exporter"
+    ],
+    "exit": 0,
+    "log_name": "n4-wire-concurrency200.log",
+    "log_sha256": "e9b2527de4b30cf898f1f07e00912ad76003e79b4d616a667f1f5e527405540f",
+    "source_scope": "unchanged module/production subset; final whole-root race is recorded separately"
+  },
+  {
+    "check": "rust-fmt",
+    "argv": [
+      "cargo",
+      "fmt",
+      "--check"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "65355604aacfe3baeb89b8277d4124de9e52ad1c54643910f2ed27f2a5fdf63e",
+    "log_name": "n4-rust-fmt.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "rust-build",
+    "argv": [
+      "cargo",
+      "build",
+      "--locked",
+      "--offline",
+      "--all-targets"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "65355604aacfe3baeb89b8277d4124de9e52ad1c54643910f2ed27f2a5fdf63e",
+    "log_name": "n4-rust-build.log",
+    "log_sha256": "42514b1562f6824fb22abb04075d4122f32a1083626f5eed8fb7fad4a73234b2"
+  },
+  {
+    "check": "rust-clippy",
+    "argv": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--offline",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "65355604aacfe3baeb89b8277d4124de9e52ad1c54643910f2ed27f2a5fdf63e",
+    "log_name": "n4-rust-clippy.log",
+    "log_sha256": "e11a57b0b0730473e062eb6130a56214c9d70090df2554ef4e4cc4cf72fefde8"
+  },
+  {
+    "check": "rust-all",
+    "argv": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "--all-targets"
+    ],
+    "exit": 0,
+    "rust_source_sha256": "65355604aacfe3baeb89b8277d4124de9e52ad1c54643910f2ed27f2a5fdf63e",
+    "log_name": "n4-rust-all.log",
+    "log_sha256": "dac63df3e00133e71c951644ac4f1cc75c7fee40a2604450bad0b3479015a208"
+  },
+  {
+    "check": "postgres-functional-package-set",
+    "exit": 0,
+    "durability": "owned PostgreSQL fsync=on; script cleanup completed",
+    "passed_in_first_invocation": [
+      "pkg/storage/postgres",
+      "pkg/app",
+      "x/stablenet/bundle"
+    ],
+    "failed_in_first_invocation": "pkg/api fixture15sec startup during existing migration0002",
+    "isolated_same_code_api_exit": 0,
+    "initial_log_sha256": "6a8802e123d43d6a6f20167134cff933518a2f4dcb3a7a4805972652fc5a160c",
+    "scope": "passing package results composed explicitly; initial aggregate exit1 preserved; final whole race passed in its separate record",
+    "isolated_package_log_sha256": "c7c9419dcd7d91b82389c66cf1447e0bf110784e253705e6db8d3a139da860f7"
+  },
+  {
+    "check": "new-root-concurrency200",
+    "argv": [
+      "GOMAXPROCS=1",
+      "go",
+      "test",
+      "-race",
+      "-count=200",
+      "-timeout=20m",
+      "-run",
+      "^(TestManagedReadView|TestManagedBackend|TestManagedAdapterRequires|TestManagedAdapterRejects|TestManagedAdapterStartup|TestControllerReorgCheck|TestReorgGate|TestNativeRecovery|TestNativeOwnedLoop|TestNativeRound|TestNativeProgramRun|TestNativeTransitionOwnedChildCancellation)",
+      "./x/arc/nativestore",
+      "./x/arc/collector",
+      "./pkg/execution",
+      "./x/arc/ingress"
+    ],
+    "exit": 0,
+    "packages": 4,
+    "source_boundary": "concurrency-source.json",
+    "log_name": "n4-concurrency200-release.log",
+    "log_sha256": "8ad11fb67ee1dd4a8ef5783c66c1752693036775948d0bb267342a435409e06e"
+  },
+  {
+    "check": "full-root-wire-stablenet-race",
+    "argv": [
+      "make",
+      "GOTEST=go test -timeout=20m -p=2 -parallel=2",
+      "test-race"
+    ],
+    "exit": 0,
+    "go_source_sha256": "9d7753b5ba2c74e3bbfa4ff3aacc9b1a600eb26bd1dd4ffeb1b00e1c18f30c66",
+    "log_name": "n4-full-race-release.log",
+    "log_sha256": "49c357a97a9efcf2554f4408c4445ea7d80b5421326cc5b3a270745df6af5970"
+  },
+  {
+    "check": "current-boundaries-race",
+    "argv": [
+      "go",
+      "test",
+      "-race",
+      "-count=1",
+      "./x/arc/ingress",
+      "./x/arc/collector",
+      "./pkg/app",
+      "-run",
+      "^(TestNative|TestManaged|TestArcBackend|TestExecutionNativeRecovery|TestExecutionIngress)"
+    ],
+    "exit": 0,
+    "log_name": "n4-final-boundaries-green.log",
+    "log_sha256": "006a4c678aeb2c60a7a49b886837feb5f3039ce31a2ffa2c015939b91d6b8fd6"
+  },
+  {
+    "check": "documents",
+    "files": 14,
+    "links": 270,
+    "anchors": 11,
+    "broken": 0
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "stage": "N3",
+  "status": "COMPLETE",
+  "pr": 244,
+  "url": "https://github.com/0xmhha/indexer-go/pull/244",
+  "base": "636c10b7e488e45b2871c91f2af81a834a486a66",
+  "head": "a76196fd29a5847f3d9b7d15e613539063db77cf",
+  "tree": "f275415e0ecee0827d10916350e0c3a0929ec2be",
+  "main": "a203193eeeb60b09cc88d64576604e9ea65af92e",
+  "ci_run": 40933966055,
+  "ci_run_number": 316,
+  "jobs": [
+    {
+      "id": 123659473629,
+      "name": "examples",
+      "conclusion": "success"
+    },
+    {
+      "id": 123659473995,
+      "name": "arc",
+      "conclusion": "success"
+    },
+    {
+      "id": 123659474120,
+      "name": "lint",
+      "conclusion": "success"
+    },
+    {
+      "id": 123659474172,
+      "name": "test",
+      "conclusion": "success"
+    },
+    {
+      "id": 123659474294,
+      "name": "postgres",
+      "conclusion": "success"
+    }
+  ],
+  "scope": "N3 App-owned ingress complete; N4-N6 pending; operational execution HOLD"
+}

@@ -14,6 +14,7 @@ import (
 
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed"
+	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
@@ -27,12 +28,19 @@ type NativeConfig struct {
 	Executable string `yaml:"executable"`
 	DataDir    string `yaml:"data_dir"`
 }
+type CollectorConfig struct {
+	Executable string `yaml:"executable"`
+	SpoolDir   string `yaml:"spool_dir"`
+	MaxBytes   uint64 `yaml:"max_bytes"`
+	MaxRecords int    `yaml:"max_records"`
+}
 type Config struct {
 	Module           string                 `yaml:"module"`
 	Window           string                 `yaml:"window"`
 	InitializeVolume bool                   `yaml:"initialize_volume"`
 	CreateWindow     bool                   `yaml:"create_window"`
 	Native           NativeConfig           `yaml:"native"`
+	Collector        CollectorConfig        `yaml:"collector"`
 	Peer             chainfeed.PeerSettings `yaml:"peer"`
 	MaxRawBlocks     int                    `yaml:"max_raw_blocks"`
 	MaxActiveBlocks  int                    `yaml:"max_active_blocks"`
@@ -43,12 +51,14 @@ type StatusReader interface {
 	ExecutionStatus(context.Context) (port.ExecutionControl, error)
 }
 type Dependencies struct {
-	Store     StatusReader
-	Canonical source.CanonicalReader
-	Profile   chains.BinaryProfile
-	Control   port.ExecutionControl
-	Layout    window.Layout
-	Socket    string
+	Store       StatusReader
+	Canonical   source.CanonicalReader
+	Profile     chains.BinaryProfile
+	Control     port.ExecutionControl
+	Layout      window.Layout
+	Socket      string
+	StateProofs *stateproof.Selection
+	FenceReorg  func(context.Context, execwire.Ref) error
 }
 type Program interface {
 	// Check validates prepared state before API exposure without starting peers.
@@ -58,9 +68,18 @@ type Program interface {
 	// resources if Run never started. Run after Stop must open no resources.
 	Stop()
 }
+
+// RecoveryProgram joins its DB children and changes native/raw lineage while
+// the existing receiver-owned SQL rewind marker still fences visibility.
+type RecoveryProgram interface {
+	Program
+	Recover(context.Context, port.ExecutionRewind) error
+	Recovered(context.Context, port.ExecutionControl) error
+}
 type Module struct {
 	Profile  string
 	Validate func(Config) error
+	Recovery bool
 	// Preflight is pure; it may inspect declared bounds, never open a resource.
 	Preflight func(Config, window.Options) error
 	Prepare   func(context.Context, Config, Dependencies) (Program, error)
@@ -99,6 +118,12 @@ func (c *Config) UnmarshalYAML(n *yaml.Node) error {
 }
 
 func (c Config) Normalize() Config {
+	if c.Collector.MaxBytes == 0 {
+		c.Collector.MaxBytes = 256 << 20
+	}
+	if c.Collector.MaxRecords == 0 {
+		c.Collector.MaxRecords = 4096
+	}
 	if c.MaxRawBlocks == 0 {
 		c.MaxRawBlocks = 172800
 	}
@@ -206,7 +231,7 @@ func Prepare(ctx context.Context, c Config, d Dependencies) (Program, error) {
 	if current.Maintenance {
 		return nil, port.ErrExecutionMaintenance
 	}
-	if current.Rewinding {
+	if (current.Rewinding || current.ReorgPending) && !m.Recovery {
 		return nil, port.ErrExecutionRewinding
 	}
 	if current.Root == (execwire.Hash{}) || current.AnchorRoot == (execwire.Hash{}) || current.Anchor.Generation == 0 || current.Anchor.Height > current.Visible.Height || current.Visible.Generation != current.Generation {
@@ -216,6 +241,11 @@ func Prepare(ctx context.Context, c Config, d Dependencies) (Program, error) {
 		return nil, err
 	}
 	p, err := m.Prepare(ctx, c.Normalize(), d)
+	if err == nil && m.Recovery {
+		if _, ok := p.(RecoveryProgram); !ok {
+			err = port.ErrInvalidData
+		}
+	}
 	if err == nil {
 		err = ctx.Err()
 	}

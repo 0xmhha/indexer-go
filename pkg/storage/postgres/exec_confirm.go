@@ -49,7 +49,7 @@ func (s *Store) ConfirmExecution(ctx context.Context, payload []byte, fresh func
 	if err = confirmConsensus(ctx, tx, c); err != nil {
 		return false, err
 	}
-	if c.Rewinding {
+	if c.Rewinding || c.ReorgPending {
 		return false, port.ErrExecutionRewinding
 	}
 	if incoming.Generation != c.Generation {
@@ -136,7 +136,7 @@ func (s *Store) ConfirmExecution(ctx context.Context, payload []byte, fresh func
 	if err != nil {
 		return false, err
 	}
-	if after.Rewinding || after.Generation != incoming.Generation {
+	if (after.Rewinding || after.ReorgPending) || after.Generation != incoming.Generation {
 		return false, port.ErrExecutionStale
 	}
 	if after.Visible != c.Visible || after.Root != c.Root {

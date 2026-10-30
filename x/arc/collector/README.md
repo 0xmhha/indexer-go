@@ -13,3 +13,5 @@ Startup holds the shared [native owner lease](../../../docs/EXECUTION_ARC_RETENT
 ## Explicit configuration files
 
 `execution-collector --config FILE` reads the production collector JSON schema and refuses other flags alongside it. [Offline native preflight](../../../docs/NATIVE_EXECUTION_PREFLIGHT.md) compares that same file against App, retention and checkpoint metadata before any separate runtime invocation. File PASS grants no startup or deletion authority.
+
+App-owned managed native storage uses the explicit [inherited-view and AXM1 contract](../../../docs/EXECUTION_ARC_MANAGED.md). It binds immutable native identity and proof scope to the spool, retains the view through complete response verification, and uses the existing receiver session for reorg proposals. Standalone unmanaged collection retains its existing protocol; it cannot adopt a managed identity or spool.

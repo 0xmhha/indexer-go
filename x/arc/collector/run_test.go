@@ -14,6 +14,29 @@ import (
 	"github.com/0xmhha/indexer-go/x/arc/nativestore"
 )
 
+func ownedAdapterScript(t *testing.T, mode, marker, before string) string {
+	t.Helper()
+	quote := func(v string) string { return "'" + strings.ReplaceAll(v, "'", "'\"'\"'") + "'" }
+	binary := filepath.Join(t.TempDir(), "adapter")
+	script := "#!/bin/sh\n" + before + "\nexport INDEXER_ARC_BACKEND_HELPER=" + quote(mode) + " INDEXER_ARC_HELPER_READY=" + quote(marker) + " GORACE=atexit_sleep_ms=0\nexec " + quote(os.Args[0]) + " -test.run=^TestArcBackendHelper$ -- \"$@\"\n"
+	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	return binary
+}
+
+func TestArcCollectorProductionStartFiltersInheritedPrivateEnvironment(t *testing.T) {
+	t.Setenv("INDEXER_ARC_PRIVATE_FIXTURE", "must-not-reach-child")
+	binary := ownedAdapterScript(t, "idle", "", "test -z \"${INDEXER_ARC_PRIVATE_FIXTURE-}\" || exit 17")
+	b, err := Start(t.Context(), Options{Executable: binary, DataDir: t.TempDir(), Chain: execwire.Chain{ID: "5042002", Genesis: execwire.Hash{1}}, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("production adapter inherited private App environment: %v", err)
+	}
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestArcCollectorRefusesPendingNativeRetentionBeforeChild(t *testing.T) {
 	dir := t.TempDir()
 	marker := filepath.Join(filepath.Dir(dir), "."+filepath.Base(dir)+".execution-retention")
@@ -70,15 +93,7 @@ func TestArcCollectorOwnedAdapterAndAuthenticatedSocketJoin(t *testing.T) {
 		serverDone <- e
 	}()
 	marker := filepath.Join(t.TempDir(), "ready")
-	t.Setenv("INDEXER_ARC_HELPER_READY", marker)
-	t.Setenv("INDEXER_ARC_BACKEND_HELPER", "idle")
-	t.Setenv("GORACE", "atexit_sleep_ms=0")
-	binary := filepath.Join(t.TempDir(), "adapter")
-	// This executable starts only our helper process; no native DB is opened.
-	quoted := "'" + strings.ReplaceAll(os.Args[0], "'", "'\"'\"'") + "'"
-	if err = os.WriteFile(binary, []byte("#!/bin/sh\nexec "+quoted+" -test.run=^TestArcBackendHelper$ -- \"$@\"\n"), 0700); err != nil {
-		t.Fatal(err)
-	}
+	binary := ownedAdapterScript(t, "idle", marker, "")
 	config := Config{Native: Options{Executable: binary, DataDir: t.TempDir(), Chain: chain, Timeout: 5 * time.Second}, Anchor: anchor, SpoolDir: filepath.Join(t.TempDir(), "spool"), Socket: socket, Poll: time.Millisecond}
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, config) }()

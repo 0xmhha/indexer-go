@@ -117,9 +117,22 @@ func (s *Store) BeginExecutionRewind(ctx context.Context, target execwire.Ref, r
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock("+executionLockSQL+")"); err != nil {
 			return err
 		}
-		c, err := scanActiveExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
+		// This coordinator operation replaces a pending search fence atomically.
+		c, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
 		if err != nil {
 			return err
+		}
+		if c.Maintenance {
+			return port.ErrExecutionMaintenance
+		}
+		if c.ReorgPending {
+			check, err := scanExecutionReorgCheck(tx.QueryRow(ctx, executionReorgCheckSQL))
+			if err != nil {
+				return err
+			}
+			if c.Rewinding || check != (port.ExecutionReorgCheck{Generation: c.Generation, From: c.Visible, Root: c.Root}) {
+				return port.ErrExecutionConflict
+			}
 		}
 		if !c.BaselineReady {
 			return port.ErrExecutionCoverage
@@ -163,6 +176,10 @@ func (s *Store) BeginExecutionRewind(ctx context.Context, target execwire.Ref, r
 			return err
 		}
 		_, err = tx.Exec(ctx, "UPDATE exec_control SET generation=$1,rewinding=true WHERE id", int64(marker.Target.Generation))
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, "DELETE FROM exec_reorg_checks WHERE id")
 		return err
 	})
 	return marker, err

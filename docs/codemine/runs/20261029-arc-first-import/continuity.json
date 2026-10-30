@@ -1,14 +1,14 @@
 {
-  "n": "N3 embedded App ingress; release gates in progress; N4-N6 pending; operations HOLD",
+  "n": "N4 managed replay and E1 reorg integration in progress; N5/N6 pending; operations HOLD",
   "n_minus_1": {
+    "pr": 244,
+    "main": "a203193eeeb60b09cc88d64576604e9ea65af92e",
+    "plan": "../20261030-arc-native-n3/plan.md"
+  },
+  "n_minus_2": {
     "pr": 243,
     "main": "636c10b7e488e45b2871c91f2af81a834a486a66",
     "plan": "../20261029-arc-native-n2/plan.md"
-  },
-  "n_minus_2": {
-    "pr": 242,
-    "main": "4586b04c010131e6e65c2d7431ce7934f4fdfa6a",
-    "plan": "../20261029-arc-native-n1/plan.md"
   },
   "monitoring": "../20261028-offline-monitoring/plan.md",
   "backup_adapter": "../20261028-backup-adapter/plan.md",
@@ -25,7 +25,7 @@
     "N6 offline integrated acceptance"
   ],
   "operational_readiness": "HOLD",
-  "n_plan": "../20261030-arc-native-n3/plan.md",
+  "n_plan": "../20261030-arc-native-n4/plan.md",
   "operations_inputs": "../20261029-operations-inputs/plan.md",
   "completed": [
     "N0 implementation and offline SDK qualification; actual CI/merge evidence in release PR",

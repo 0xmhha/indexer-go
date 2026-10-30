@@ -21,7 +21,9 @@ an independently trusted full anchor and authentic header/body/receipt context;
 it never overwrites an existing path or starts services. The explicit
 `arc-native-import --serve` owns one first execution, durable native
 completion and reader gates. App/collector and authoritative ACK/GC integration
-are connected by [N3 App ingress](../../../docs/EXECUTION_ARC_INGRESS.md); managed collector/reorg, permanent raw/GC and combined acceptance remain N4–N6.
+are connected by [App ingress](../../../docs/EXECUTION_ARC_INGRESS.md) and the
+[N4 managed replay/reorg bridge](../../../docs/EXECUTION_ARC_MANAGED.md).
+Permanent raw/GC and combined acceptance remain N5–N6.
 Operational inputs and runtime activation remain HOLD.
 
 ## Library contract

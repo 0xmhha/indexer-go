@@ -28,6 +28,7 @@ type Receiver struct {
 	Window              int
 	Timeout             time.Duration
 	OnSessionError      func(error)
+	OnController        func(*Controller) func()
 	// OnReady runs after the owned private listener is published, before accept.
 	OnReady      func() error
 	RetrySession func(error) bool
@@ -76,6 +77,11 @@ func (r *Receiver) serveConn(parent context.Context, raw net.Conn) error {
 		return err
 	}
 	defer func() { _ = controller.Close() }()
+	if r.OnController != nil {
+		if release := r.OnController(controller); release != nil {
+			defer release()
+		}
+	}
 	status, err := r.Store.ExecutionStatus(parent)
 	if err != nil {
 		return err
@@ -83,7 +89,7 @@ func (r *Receiver) serveConn(parent context.Context, raw net.Conn) error {
 	if status.Maintenance {
 		return port.ErrExecutionMaintenance
 	}
-	if status.Chain != r.Chain || status.Rewinding || !status.BaselineReady {
+	if status.Chain != r.Chain || status.Rewinding || status.ReorgPending || !status.BaselineReady {
 		return port.ErrExecutionCoverage
 	}
 	if hello.Header.Ref.Generation > status.Generation {

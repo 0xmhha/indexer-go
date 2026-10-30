@@ -26,7 +26,15 @@ type program struct {
 func (*program) Check(context.Context) error { return nil }
 func (*program) Run(context.Context) error   { return nil }
 func (p *program) Stop()                     { p.stopped.Store(true) }
+
+type recoveringProgram struct{ program }
+
+func (*recoveringProgram) Recover(context.Context, port.ExecutionRewind) error    { return nil }
+func (*recoveringProgram) Recovered(context.Context, port.ExecutionControl) error { return nil }
 func init() {
+	Register(testModule+".recovery", Module{Profile: "test", Recovery: true, Validate: func(Config) error { return nil }, Prepare: func(_ context.Context, _ Config, d Dependencies) (Program, error) {
+		return &recoveringProgram{program: program{deps: d}}, nil
+	}})
 	Register(testModule, Module{Profile: "test", Validate: func(Config) error { return nil }, Prepare: func(_ context.Context, _ Config, d Dependencies) (Program, error) {
 		prepared.Add(1)
 		return &program{deps: d}, nil
@@ -37,6 +45,21 @@ func init() {
 		<-w.release
 		return w.result, nil
 	}})
+}
+func TestIngressPrepareFencedRecoveryRequiresExplicitModuleAndProgram(t *testing.T) {
+	for _, rewinding := range []bool{false, true} {
+		d := depsFixture()
+		d.Control.ReorgPending = !rewinding
+		d.Control.Rewinding = rewinding
+		d.Store = &status{d.Control}
+		_, err := Prepare(t.Context(), configFixture(), d)
+		require.ErrorIs(t, err, port.ErrExecutionRewinding, "legacy factories must not bypass a pending recovery")
+		c := configFixture()
+		c.Module += ".recovery"
+		p, err := Prepare(t.Context(), c, d)
+		require.NoError(t, err, "explicit recovery factory must prepare while SQL remains fenced")
+		p.Stop()
+	}
 }
 
 type waitingStore struct {

@@ -241,7 +241,7 @@ pub fn check_legacy_maintenance(datadir: &Path) -> Result<()> {
     check_import_fences(datadir)?;
     check_unmanaged(datadir)
 }
-fn check_retention_fences(datadir: &Path) -> Result<()> {
+pub(crate) fn check_retention_fences(datadir: &Path) -> Result<()> {
     match std::fs::symlink_metadata(datadir.join(".execution-retention-pending")) {
         Ok(_) => eyre::bail!(
             "matched native snapshot remains fenced; exact E3 restore activation required"

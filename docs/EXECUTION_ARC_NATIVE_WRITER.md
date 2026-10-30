@@ -4,7 +4,7 @@ N2 adds `arc-native-import`, an explicit bounded stdin/stdout writer using the
 pinned official Arc EVM and native-v2 storage libraries. It imports into an
 [N1 verified bootstrap](EXECUTION_ARC_BOOTSTRAP.md), without NodeBuilder,
 network/RPC/SQL clients, an upstream patch or a separate node service.
-[App-owned ingress](EXECUTION_ARC_INGRESS.md) is implemented by N3; the managed collector/reorg bridge, permanent raw/GC and combined acceptance remain N4–N6.
+[App-owned ingress](EXECUTION_ARC_INGRESS.md) and the [N4 managed collector/reorg bridge](EXECUTION_ARC_MANAGED.md) are implemented; permanent raw/GC and combined acceptance remain N5–N6.
 Operational execution, APFS/enode/authenticated production inputs and performance
 measurements remain **HOLD**.
 
@@ -37,13 +37,13 @@ also retains the E3 run lease. A persistent owned reader must retain its run
 lease for its entire native-provider lifetime and keep its view guard through
 response verification or cancellation/join.
 
-A managed identity blocks legacy unguarded replay and maintenance CLI access. The N4 bridge must
-supply the explicit managed reader contract; this feature does not silently
-upgrade the existing collector. Managed maintenance stays refused until the N5
+A managed identity blocks legacy unguarded replay and maintenance CLI access.
+The N4 bridge supplies the explicit inherited read-view contract to the owned
+collector; it never silently upgrades an unmanaged reader. Managed maintenance stays refused until the N5
 owner/stop/join/permit bridge is implemented; merely stopping a writer is not a
 maintenance permit. Raw/native import epoch, native read epoch and
-receiver-owned E1 generation are separate. N2 supports normal epoch1 append;
-receiver-authorized transitions and rewind are N4 work.
+receiver-owned E1 generation are separate. N4 adds bounded receiver-authorized
+epoch transitions and SDK unwind with immutable original-prefix receipts.
 
 ## Execution and durable completion
 
@@ -81,7 +81,7 @@ Receipts and raw input are not pruned here.
 
 ## Bounded stdio
 
-The command is an interface for the future owning Go supervisor. This is not an
+The command is an interface for the owning Go supervisor. This is not an
 operational start recommendation:
 
 ```sh
