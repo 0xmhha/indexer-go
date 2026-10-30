@@ -86,6 +86,9 @@ func rawProgram(t *testing.T) *program {
 	p := &program{cfg: ingress.Config{MaxRawBlocks: 10, MaxActiveBlocks: 2, MaxActiveBytes: 8 << 20}.Normalize(), opts: o, raw: raw, control: control, identity: r.Identity, head: r.Head, slots: make(chan struct{}, 2), bytes: semaphore.NewWeighted(8 << 20)}
 	p.deps.Control = c
 	p.deps.Store = &mutableStatus{control: c}
+	owner, err := p.deps.Store.(*mutableStatus).ExecutionIngressOwner(t.Context())
+	require.NoError(t, err)
+	p.deps.Policy = &owner.Policy
 	t.Cleanup(p.Stop)
 	return p
 }
@@ -93,6 +96,7 @@ func rawProgram(t *testing.T) *program {
 type mutableStatus struct {
 	mu      sync.Mutex
 	control port.ExecutionControl
+	owner   *port.ExecutionIngressOwner
 }
 
 func (s *mutableStatus) ExecutionStatus(context.Context) (port.ExecutionControl, error) {

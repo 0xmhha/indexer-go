@@ -1,9 +1,10 @@
 # Execution ingress ownership and input archive
 
-This is the N5 storage/backend foundation. Its SQL and optional backend APIs
-are implemented. Automatic App startup admission, actual Arc SDK Ready binding
-and the Arc origin resolver remain the next integration step. N5 and N6 are
-incomplete; operational startup, GC/restore and performance runs remain HOLD.
+The N5 SQL/backend foundation and App/Arc owner/origin integration are
+implemented. App checks persistent ownership before RPC or API initialization;
+Arc binds the actual native/raw/source identity after SDK Ready. Authoritative
+raw GC, stopped-owner maintenance, held deployment composition and N6 acceptance
+remain pending. Operational startup, GC/restore and performance runs remain HOLD.
 
 ## Integrate a source
 
@@ -27,10 +28,35 @@ Use the existing PostgreSQL Store and seven-writer execution backend:
 The SQL policy has a separate permanent control pin. Removing/changing the row
 is a conflict, and legacy `ClearChainData` refuses a pinned owner inside the
 same exclusive coordinator transaction. Read-only API inspection creates no
-owner or writer. The library rejects a missing ingest policy when configured;
-automatic App calls remain pending. Module code must independently verify native
+owner or writer. App calls this guard on every storage initialization, including
+when execution/ingress configuration has been removed. Origin-owning modules
+require an exact immutable policy; other modules retain their existing behavior.
+Module code must independently verify native
 identity/provenance: SQL validates bounded metadata, checksums and exact bound
 part identity, not an EVM or remote consensus result.
+
+## Arc origin lifecycle
+
+`arc.native` pins module, chain, original anchor/root, normalized proof selection,
+blob and consensus requirements. Paths, limits and current counters do not change
+that identity. Ready binds the native instance/bootstrap, raw StoreID and the
+collector's exact managed admission digest, before starting collector or peers.
+Restart checks an existing binding before children; missing native/raw state or
+a changed owner is refused rather than adopted.
+
+The blocks writer borrows an origin resolver from the same App-owned program.
+It verifies the original sealed AIN1 receipt under a native shared view, reads
+the exact three raw envelopes and matches complete accepted block/receipt bytes.
+It records original import/read epochs and request ID, not a reconstructed
+current epoch. It closes every native/raw lease before the final SQL status read
+and the blocks transaction. No extra EVM, client, child or pool is introduced.
+
+Origin work registers before bounded memory admission. Stop and recovery close
+admission, cancel blocked work and join it before raw storage closes. Successful
+handoff retains a memory-only, idempotent release callback; it may outlive Stop
+without retaining a file gate or blocking native publication. A changed generation,
+baseline or recovery/maintenance fence after IO rejects the handoff; existing
+SQL part and final publication checks still decide commit.
 
 ## Stored data and limits
 

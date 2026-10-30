@@ -51,6 +51,7 @@ func (p *program) quiesce(ctx context.Context) error {
 	p.recovering = true
 	r := p.round
 	p.mu.Unlock()
+	p.joinOrigins(false)
 	if r != nil {
 		r.pause()
 		select {

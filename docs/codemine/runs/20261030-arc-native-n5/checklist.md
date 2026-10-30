@@ -4,8 +4,9 @@
 - [x] Legacy unmanaged writer admission rejects managed/partial state under the common sole-writer lease; RED/GREEN and targeted CPU1/race/single200 pass.
 - [x] Legacy admission subfeature #249/CI325 released; clean main6daa40c synchronized.
 - [x] SQL policy/binding and immutable blocks archive library APIs; targeted RED/GREEN.
-- [ ] Primitive foundation regression/static/docs and applicable short CI release.
-- [ ] Actual App pre-API ownership and Arc SDK Ready/raw/source binding/origin resolver.
+- [x] Primitive foundation regression/static/docs and applicable short CI release #250/CI326; clean mainadd9e59 synchronized.
+- [x] Actual App pre-API ownership and Arc SDK Ready/raw/source binding/origin resolver; behavioral RED→GREEN.
+- [ ] App/origin affected functional/static, local targeted concurrency and applicable short CI release.
 - [ ] Existing E3 permit and durable full-record raw deletion/recovery proof.
 - [ ] Both-worker drain/join and explicit managed native maintenance bridge.
 - [ ] Held Docker/capacity/inspection composition updated consistently.

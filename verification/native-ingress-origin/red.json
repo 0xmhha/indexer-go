@@ -1,0 +1,34 @@
+[
+  {
+    "check": "n5-app-owner-red",
+    "exit": 1,
+    "log_name": "n5-app-owner-red.log",
+    "log_sha256": "c0da7a34032dcfc4bbe35421ca174921e5213d107b6e1e73b6bfea11eb4fbe4e",
+    "top_level_failures": 1,
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "n5-arc-origin-red",
+    "exit": 1,
+    "log_name": "n5-arc-origin-red.log",
+    "log_sha256": "e8bbd9f96ed903f488b099df7a45f743928051ddaaeb4787a02fdec976dde8ee",
+    "top_level_failures": 3,
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "n5-arc-prepared-owner-red",
+    "exit": 1,
+    "log_name": "n5-arc-prepared-owner-red.log",
+    "log_sha256": "a44148297d1ddca8f5ef92e3a1c871e1d10fedfe1751834e651b60a2b27cc1bc",
+    "top_level_failures": 1,
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "n5-origin-final-fence-red",
+    "exit": 1,
+    "log_name": "n5-origin-final-fence-red.log",
+    "log_sha256": "baa53a4a354dbdd75a469940e136f3758392517003e2cb4e4a124c9a18c2a2b8",
+    "top_level_failures": 2,
+    "classification": "compiled behavioral requirement assertion failed"
+  }
+]

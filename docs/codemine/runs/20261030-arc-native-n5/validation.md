@@ -22,16 +22,30 @@ The admission subfeature passed actual CI325 and was squash-merged as #249,
 then synchronized cleanly at main6daa40c with the exact reviewed tree and one
 parent/base. Private config remained unchanged.
 
-The next [archive foundation](../../../EXECUTION_INGRESS_ARCHIVE.md) has separate
-RED assertions for missing ownership, missing blocks archive, pre-SQL origin
-failure, invalid header layout and cancellation precedence. SQL owner/archive,
-atomic rollback, seven-part publication, differing counters, corrupt bytes,
-missing pinned owner, migration and undo ownership pass10 owned PG cases.
-Backend functionality and its new concurrent input/cancellation case pass a
-single CPU1/race/count200 invocation. Root build/vet and affected lint pass.
-The complete affected PostgreSQL short suite passed143.418s; core/port and
-execution short packages also passed. This foundation's PR gate remains pending.
-Actual App/Arc resolver/binding and the remaining N5 steps are not implemented.
+The [SQL/backend foundation](../../../EXECUTION_INGRESS_ARCHIVE.md) passed actual
+CI326 and was squash-merged as #250. Clean mainadd9e59 has the reviewed tree
+and one parent/base. Its owned PG owner/archive, atomic rollback, seven-part
+publication, differing counters, corruption, migration and undo cases passed;
+the affected PostgreSQL short suite passed143.418s. Its new backend concurrency
+case passed one local CPU1/race/count200 invocation.
+
+Current App/Arc integration has separate compiled behavioral RED assertions for
+pre-RPC config removal, absent origin contract, exact native/raw handoff, blocked
+native-view cancellation, changed owner, mutable policy and lost baseline.
+[RED](../../../../verification/native-ingress-origin/red.json),
+[source](../../../../verification/native-ingress-origin/source.json) and
+[checks](../../../../verification/native-ingress-origin/checks.json) distinguish
+these from an earlier fixture-only compile correction, which is not RED proof.
+
+Current affected short checks pass. Five selected App contract cases pass on
+owned fsync-on disposable PostgreSQL, including removal refusal with zero RPC.
+Three new origin lifecycle cases pass one CPU1/race/count200 invocation94.451s:
+Ready/resolution state ownership, pre-SQL lease release with a memory-only loan,
+and Stop cancellation/join while native EX stays held. Root build, affected
+vet/lint pass. Actual pinned SDK plus App/mock ETH68/SQL integration is reserved
+for N6; these source/fixture tests do not certify that combined path. Current
+integration PR and its applicable short CI gate remain pending. Authoritative
+raw GC, graceful drain/managed maintenance and held Docker remain incomplete.
 
 Operational launch, provisioning, GC/restore and additional performance
 measurements remain HOLD.

@@ -1,0 +1,26 @@
+{
+  "base": "add9e59012357064c04ea4a5fac40136927d3574",
+  "branch": "refactor/arc-native-origin-integration",
+  "scope": "App pre-API owner guard, Arc Ready native/raw/source binding and exact pre-SQL origin; rawGC/managedmaintenance/heldDocker/N6 remain pending",
+  "source_files": {
+    "pkg/app/app.go": "c904e33c8f6dee0a57439659c0db6e371562a7ca0a0f24e55aa4b78d2ab11728",
+    "pkg/app/execution.go": "3109c75b57116acbbe8f67324a742efffa175780555e389c90df444b514a873f",
+    "pkg/app/execution_ingress.go": "b5762464e5ba36cd680f2fcd9f3e33c68e4cc373037cd78e979a03413878b1c1",
+    "pkg/app/execution_ingress_owner.go": "05f932e50442f3095adbc1bad374f50bb0040bc4ba4afd6299dde37cdeb23da1",
+    "pkg/app/execution_ingress_owner_test.go": "cde33e891b6be59d8ef3874ec12574bd57da1786329d8b31b4c39f90888e1618",
+    "pkg/execution/ingress/config.go": "c8a0b50dc4b817241890053992e6f246696cf182466770cca2f36fbd214661d3",
+    "pkg/execution/ingress/config_test.go": "fc7cdfebf360cf5672688331e2514f41a7c25b7adc076b9975a8bcc79284ead3",
+    "x/arc/collector/proofs.go": "7da7f5eef7eae6cb55e4fce34d0870d34859258b6891d549f51b98921ac4c304",
+    "x/arc/ingress/config.go": "f8cd3b778858b5a5c94850cb3ac182a289a51381f729bb2e858ecd99a2703c8b",
+    "x/arc/ingress/origin.go": "0191800dc150ff4b2c87b8c045c270960baa5f9863e0609624820e624ed0ff8e",
+    "x/arc/ingress/origin_test.go": "1c9a72e2c6654bdd4ac1ca8401eb5174042c6f60f0dde8385a6bf4a239ac25f1",
+    "x/arc/ingress/owner_fixture_test.go": "2f38374e91ad216324bac03a6ef06a2676c8f332924137ccca820c23bf3be0d4",
+    "x/arc/ingress/preparation.go": "4bfacff9a344f6ecd7c4a35ffbdbaeb73af79198321b3e07bf58016673dd4dd1",
+    "x/arc/ingress/preparation_test.go": "2e08ff141fea7cd6897043400de358ecae3ca3e8ac9beb13e5c336d9605d293e",
+    "x/arc/ingress/program.go": "f416fe1f787923bf6091ef6db294a64c1fb7b8705221bc6bc8c3c071e8ff8204",
+    "x/arc/ingress/recovery.go": "541b347b0afb3079e6068d980aa021ef0c40f356ca316c1b085ded3d0b6caf84",
+    "x/arc/ingress/round.go": "b804a9ac2a578da421ed16b8444c0e2bc894c20bb45d461398b654172507d76f",
+    "x/arc/ingress/runtime_test.go": "bab1f455421bece9e7c3ccd9f32b49873653b8e5869808c6e321be4515f920d5"
+  },
+  "invariants": "pool4/part2/API1/writers7/sharedRPC5/finalfresh-generation-COMMIT-exactACK/twoEVM; no SDK/upstream/private-config changes"
+}

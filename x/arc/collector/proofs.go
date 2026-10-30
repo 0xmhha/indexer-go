@@ -46,3 +46,18 @@ func admissionPolicy(o Options) (*stateproof.Selection, *execwire.Hash, error) {
 	copy(binding[:], h.Sum(nil))
 	return selection, &binding, nil
 }
+
+// ManagedAdmissionBinding reuses the collector's exact persistent source policy.
+func ManagedAdmissionBinding(o Options) (execwire.Hash, error) {
+	if o.Managed == nil {
+		return execwire.Hash{}, ErrNative
+	}
+	_, policy, err := admissionPolicy(o)
+	if err != nil {
+		return execwire.Hash{}, err
+	}
+	if policy == nil {
+		return execwire.Hash{}, ErrNative
+	}
+	return *policy, nil
+}

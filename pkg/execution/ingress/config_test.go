@@ -32,6 +32,9 @@ type recoveringProgram struct{ program }
 func (*recoveringProgram) Recover(context.Context, port.ExecutionRewind) error    { return nil }
 func (*recoveringProgram) Recovered(context.Context, port.ExecutionControl) error { return nil }
 func init() {
+	Register(testModule+".origins", Module{Profile: "test", Origins: true, Validate: func(Config) error { return nil }, Prepare: func(_ context.Context, _ Config, d Dependencies) (Program, error) {
+		return &program{deps: d}, nil
+	}})
 	Register(testModule+".recovery", Module{Profile: "test", Recovery: true, Validate: func(Config) error { return nil }, Prepare: func(_ context.Context, _ Config, d Dependencies) (Program, error) {
 		return &recoveringProgram{program: program{deps: d}}, nil
 	}})
@@ -45,6 +48,19 @@ func init() {
 		<-w.release
 		return w.result, nil
 	}})
+}
+func TestIngressOriginPolicyIsRequiredAndOwnedByPreparedProgram(t *testing.T) {
+	c, d := configFixture(), depsFixture()
+	c.Module += ".origins"
+	_, err := Prepare(t.Context(), c, d)
+	require.ErrorIs(t, err, port.ErrExecutionConflict)
+	d.Policy = &port.ExecutionIngressPolicy{Version: 1, Module: c.Module, Chain: d.Control.Chain, Anchor: d.Control.Anchor, AnchorRoot: d.Control.AnchorRoot, Requirements: execwire.Hash{9}}
+	want := *d.Policy
+	p, err := Prepare(t.Context(), c, d)
+	require.NoError(t, err)
+	defer p.Stop()
+	d.Policy.Requirements[0]++
+	require.Equal(t, want, *p.(*program).deps.Policy, "prepared ownership must not borrow the caller's mutable policy")
 }
 func TestIngressPrepareFencedRecoveryRequiresExplicitModuleAndProgram(t *testing.T) {
 	for _, rewinding := range []bool{false, true} {
