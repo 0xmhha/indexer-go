@@ -178,6 +178,13 @@ func (s *Store) CompleteExecutionRetention(ctx context.Context, p retention.Perm
 		if old != p {
 			return port.ErrExecutionConflict
 		}
+		var rawPending bool
+		if e = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM exec_raw_deletions WHERE NOT completed)").Scan(&rawPending); e != nil {
+			return e
+		}
+		if rawPending {
+			return port.ErrExecutionMaintenance
+		}
 		if !pending {
 			if receipt == nil || *receipt != r {
 				return port.ErrExecutionConflict
@@ -229,6 +236,10 @@ func (s *Store) retentionFresh(ctx context.Context, tx pgx.Tx, p retention.Permi
 // durable pending fence. Only a current pending permit can launch a producer;
 // completed/stale artifact files never authorize a second collection.
 func (s *Store) WithExecutionRetention(ctx context.Context, p retention.Permit, apply func(context.Context) error) error {
+	return s.withExecutionRetention(ctx, p, false, apply)
+}
+
+func (s *Store) withExecutionRetention(ctx context.Context, p retention.Permit, rawRecovery bool, apply func(context.Context) error) error {
 	if err := s.rewindWriteAllowed(ctx); err != nil {
 		return err
 	}
@@ -245,6 +256,15 @@ func (s *Store) WithExecutionRetention(ctx context.Context, p retention.Permit, 
 		}
 		if !pending || current != p {
 			return port.ErrExecutionMaintenance
+		}
+		if !rawRecovery {
+			var rawPending bool
+			if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM exec_raw_deletions WHERE NOT completed)").Scan(&rawPending); err != nil {
+				return err
+			}
+			if rawPending {
+				return port.ErrExecutionMaintenance
+			}
 		}
 		c, err := scanExecutionControl(tx.QueryRow(ctx, executionControlSQL+" FOR UPDATE"))
 		if err != nil {

@@ -24,6 +24,13 @@ type DeletionGuard interface {
 	WithDeletePermit(context.Context, []Reference, func() error) error
 }
 
+// RecordDeletionGuard additionally binds the complete durable intent identity.
+// The supplied synchronous, once-only callback succeeds only after the exact
+// completion receipt is durable. Legacy guards retain their existing contract.
+type RecordDeletionGuard interface {
+	WithDeleteRecord(context.Context, DeletionRecord, []Reference, func() error) error
+}
+
 type gcMarker struct {
 	StoreID        common.Hash
 	Segment        uint64
@@ -122,7 +129,7 @@ func (s *Store) Collect(ctx context.Context, guard DeletionGuard) (int, error) {
 		var callMu sync.Mutex
 		open, called, deleted := true, false, false
 		var deleteErr error
-		err = guard.WithDeletePermit(ctx, refs, func() error {
+		remove := func() error {
 			callMu.Lock()
 			defer callMu.Unlock()
 			if !open || called {
@@ -132,9 +139,21 @@ func (s *Store) Collect(ctx context.Context, guard DeletionGuard) (int, error) {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			deleteErr = s.deleteApproved(ctx, id, refs)
+			if _, full := guard.(RecordDeletionGuard); full && deleteErr == nil {
+				deleteErr = s.checkRecovery(ctx, refs)
+			}
 			deleted = deleteErr == nil
 			return deleteErr
-		})
+		}
+		if full, ok := guard.(RecordDeletionGuard); ok {
+			record, e := DescribeDeletion(refs)
+			if e != nil {
+				return removed, e
+			}
+			err = full.WithDeleteRecord(ctx, record, append([]Reference(nil), refs...), remove)
+		} else {
+			err = guard.WithDeletePermit(ctx, refs, remove)
+		}
 		callMu.Lock()
 		open = false
 		if deleted {

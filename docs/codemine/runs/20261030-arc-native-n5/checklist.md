@@ -6,8 +6,9 @@
 - [x] SQL policy/binding and immutable blocks archive library APIs; targeted RED/GREEN.
 - [x] Primitive foundation regression/static/docs and applicable short CI release #250/CI326; clean mainadd9e59 synchronized.
 - [x] Actual App pre-API ownership and Arc SDK Ready/raw/source binding/origin resolver; behavioral RED→GREEN.
-- [ ] App/origin affected functional/static, local targeted concurrency and applicable short CI release.
-- [ ] Existing E3 permit and durable full-record raw deletion/recovery proof.
+- [x] App/origin functional/static and local targeted concurrency; #251/CI327 squash and clean main2458776 synchronization complete.
+- [x] Existing E3 permit and durable full-record raw deletion/recovery; compiled RED→GREEN, exact owner/source/ACK/coverage, pre-unlink commit and real file receipts.
+- [x] Raw GC local affected short/full-adapter-short, build/vet/lint and four new CPU1/race/single200 cases pass; [evidence](../../../../verification/native-raw-retention/checks.json). Per-feature CI/squash status is recorded in the associated PR metadata.
 - [ ] Both-worker drain/join and explicit managed native maintenance bridge.
 - [ ] Held Docker/capacity/inspection composition updated consistently.
 - [ ] RED/GREEN, affected regression/static/concurrency and current evidence.

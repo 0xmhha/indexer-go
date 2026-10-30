@@ -4,7 +4,7 @@ The opt-in [App ingress](EXECUTION_ARC_INGRESS.md) owns one first-execution writ
 one read-only collector and its durable source spool. The collector uses the
 existing receiver socket and seven E1 queues. Normal blocks execute once in the
 native writer and once in replay; Full persistence consumes the first outcome.
-N5 permanent ingress coverage/GC and N6 combined native/App/PostgreSQL acceptance
+Remaining N5 drain/maintenance wiring and N6 combined native/App/PostgreSQL acceptance
 remain required before operational readiness. APFS/enode/authenticated checkpoint,
 actual deployment and performance measurements remain **HOLD**.
 
@@ -93,8 +93,9 @@ bytes in the existing blocks part. App refuses removal or changes of a bound
 ingest configuration before RPC/API initialization. See the
 [origin lifecycle](EXECUTION_INGRESS_ARCHIVE.md#arc-origin-lifecycle) for exact
 receipt/raw verification and pre-SQL lease release. Explicit stopped-owner
-maintenance/GC authority remains incomplete; managed maintenance and raw GC
-remain refused.
+maintenance wiring remains incomplete. Explicit [raw GC/recovery](EXECUTION_RAW_RETENTION.md)
+requires native EX, exact source ownership and the live E3 permit; automatic
+collection and managed native COW remain unconfigured.
 Owned SDK/process and protocol fixtures qualify individual boundaries; N6 must
 combine actual native processes, mock ETH/68, App, durable PostgreSQL, APIs and
 ACKs. These functional checks make no throughput or live peer claim.

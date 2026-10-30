@@ -1,0 +1,74 @@
+[
+  {
+    "check": "record",
+    "exit": 1,
+    "top_level_failures": 2,
+    "log_name": "n5-raw-record-red.log",
+    "log_sha256": "cf2f40611734d920e12264767d0144e4552b4579b57b27230e55e5ee255aa067",
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "source",
+    "exit": 1,
+    "top_level_failures": 1,
+    "log_name": "n5-raw-source-red.log",
+    "log_sha256": "2e95a26e0ecafdc055a841a68fa4bd8133f69bac4e91b2ff71bcf28e09a6622b",
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "exclusive",
+    "exit": 1,
+    "top_level_failures": 1,
+    "log_name": "n5-raw-exclusive-red.log",
+    "log_sha256": "2c17572ec25a5cee6cac216211d692e98ce1997c5f806f3b28e939be6349247f",
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "db",
+    "exit": 1,
+    "top_level_failures": 1,
+    "log_name": "n5-raw-db-red.log",
+    "log_sha256": "e153c533771e7ad932e02004d2900670d230a084a5ccf63055258a3b82cd14cc",
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "owner-recovery",
+    "exit": 1,
+    "top_level_failures": 1,
+    "log_name": "n5-raw-owner-recovery-red.log",
+    "log_sha256": "29b8476217e2e32b1b00f9f8435cb39081e7f5ba16dea7aa9d00003d76fe5038",
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "arc",
+    "exit": 1,
+    "top_level_failures": 2,
+    "log_name": "n5-raw-arc-red.log",
+    "log_sha256": "1591b57d09739cce576ef62765ee24491ef8749cb15542e8f3d3f8bc16d722d3",
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "cursor-parent",
+    "exit": 1,
+    "top_level_failures": 1,
+    "log_name": "n5-raw-cursor-parent-red.log",
+    "log_sha256": "d84e0f9bd13e16c9dc724aa5db4814076a6a9efaa12ddc196bfd2eebb324c54b",
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "bounded-receipt",
+    "exit": 1,
+    "top_level_failures": 1,
+    "log_name": "n5-raw-bounded-receipt-red.log",
+    "log_sha256": "9b117c1317dde3a032b80e28eba53a91ec6eb6722fc77f1f169ac3b203f12e68",
+    "classification": "compiled behavioral requirement assertion failed"
+  },
+  {
+    "check": "maintenance-fence",
+    "exit": 1,
+    "top_level_failures": 1,
+    "log_name": "n5-raw-maintenance-fence-red.log",
+    "log_sha256": "3b836f3d5eecc7e1545d01d4dc8deea950404af9c8ff69b3f06065f58c2a771e",
+    "classification": "compiled behavioral requirement assertion failed"
+  }
+]

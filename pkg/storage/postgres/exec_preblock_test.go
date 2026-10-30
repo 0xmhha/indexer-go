@@ -60,7 +60,7 @@ func TestExecutionPreBlockMigrationPreservesExistingPartitions(t *testing.T) {
 // This is test-only reconstruction, not a supported production downgrade.
 func restoreExecutionV16(t *testing.T, s *Store) {
 	t.Helper()
-	_, err := s.pool.Exec(t.Context(), `ALTER TABLE exec_control DROP COLUMN consensus_policy_digest,DROP COLUMN ingress_policy_digest; DROP TABLE exec_ingress_payloads,exec_source_owner,exec_reorg_checks,exec_consensus,exec_call_orphan_frames,exec_call_orphan_blocks,exec_state_proofs,exec_blob_entries,exec_blob_blocks,exec_call_frames,exec_call_blocks; ALTER TABLE exec_publications DROP COLUMN call_traces,DROP COLUMN blob_sidecars,DROP COLUMN state_proofs`)
+	_, err := s.pool.Exec(t.Context(), `ALTER TABLE exec_control DROP COLUMN consensus_policy_digest,DROP COLUMN ingress_policy_digest; DROP TABLE exec_raw_deletions,exec_ingress_payloads,exec_source_owner,exec_reorg_checks,exec_consensus,exec_call_orphan_frames,exec_call_orphan_blocks,exec_state_proofs,exec_blob_entries,exec_blob_blocks,exec_call_frames,exec_call_blocks; ALTER TABLE exec_publications DROP COLUMN call_traces,DROP COLUMN blob_sidecars,DROP COLUMN state_proofs`)
 	require.NoError(t, err)
 	// Restore the four exact v16 checks on an existing partitioned schema.
 	for _, table := range []string{"state_account_changes", "state_storage_changes", "state_storage_clears", "state_contract_changes"} {

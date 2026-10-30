@@ -1,0 +1,14 @@
+{
+  "stage": "N5 App/Arc owner and origin integration",
+  "status": "COMPLETE",
+  "pr": 251,
+  "base": "add9e59012357064c04ea4a5fac40136927d3574",
+  "head": "259dfda9c56921a26b15bc0f21623b791cb90ef4",
+  "tree": "35d9e2cdb1ca435ecf93bb00c1636dbb1c2d857a",
+  "main": "245877643d690bc167370c4fcabf6e6b4a34123f",
+  "ci_run": 41003518209,
+  "ci_run_number": 327,
+  "checks": "scope+five named jobs actualsuccess; shortGo/build/lint/examples/PG11; allfull200 and nativebuild/SDK intentionallyskipped; new lifecyclelocalCPU1/race200 actual94.451s",
+  "sync": "exactreviewedtree/oneparent/base/cleanHEAD=originmain/configunchanged",
+  "overall_N5": "INCOMPLETE: E3rawGC, gracefuldrain/managedmaintenance, heldDocker; N6 follows"
+}

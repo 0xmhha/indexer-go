@@ -87,65 +87,74 @@ func (s *Store) RetentionRequest(ctx context.Context, head execwire.Ref, root ex
 
 // InspectRetention reads existing sealed source metadata under its ownership
 // lock, without initialization, ACK/transition recovery, deletion or repair.
-func InspectRetention(ctx context.Context, o Options, head execwire.Ref, root execwire.Hash, keep uint64) (retention.Request, error) {
+func InspectRetention(ctx context.Context, o Options, head execwire.Ref, root execwire.Hash, keep uint64) (out retention.Request, err error) {
+	err = withInspectedRetention(ctx, o, head, root, keep, func(r retention.Request, _ manifest) error { out = r; return nil })
+	return
+}
+
+func withInspectedRetention(ctx context.Context, o Options, head execwire.Ref, root execwire.Hash, keep uint64, apply func(retention.Request, manifest) error) (err error) {
 	if err := ctx.Err(); err != nil {
-		return retention.Request{}, err
+		return err
 	}
 	info, err := os.Lstat(o.Path)
 	if err != nil {
-		return retention.Request{}, err
+		return err
 	}
 	if !info.IsDir() || info.Mode().Perm() != 0700 {
-		return retention.Request{}, ErrConflict
+		return ErrConflict
 	}
 	if err = regularPrivate(filepath.Join(o.Path, lockName)); err != nil {
-		return retention.Request{}, err
+		return err
 	}
 	lock, err := takeLock(filepath.Join(o.Path, lockName))
 	if err != nil {
-		return retention.Request{}, err
+		return err
 	}
-	defer func() { _ = releaseLock(lock) }()
+	defer func() {
+		if closeErr := releaseLock(lock); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
+	}()
 	state, err := readManifest(filepath.Join(o.Path, stateName))
 	if err != nil {
-		return retention.Request{}, err
+		return err
 	}
 	if state.Chain != o.Chain || state.Anchor != o.Anchor {
-		return retention.Request{}, ErrConflict
+		return ErrConflict
 	}
 	s := &Store{path: o.Path, state: state, entries: map[uint64]Entry{}}
 	if err = s.checkMaintenance(nil); err != nil {
-		return retention.Request{}, err
+		return err
 	}
 	names, err := os.ReadDir(o.Path)
 	if err != nil {
-		return retention.Request{}, err
+		return err
 	}
 	if len(names) > 2*(1<<20)+260 {
-		return retention.Request{}, ErrFull
+		return ErrFull
 	}
 	for _, item := range names {
 		if err = ctx.Err(); err != nil {
-			return retention.Request{}, err
+			return err
 		}
 		name := item.Name()
 		path := filepath.Join(o.Path, name)
 		if err = regularPrivate(path); err != nil {
-			return retention.Request{}, err
+			return err
 		}
 		switch {
 		case name == stateName || name == lockName || name == gcReceiptName || strings.HasPrefix(name, ".quarantine-"):
 		case strings.HasSuffix(name, ".result"):
 			e, err := readEntry(path, o.Chain)
 			if err != nil {
-				return retention.Request{}, err
+				return err
 			}
 			if recordName(e.Ref) != name || e.Ref.Generation != state.Committed.Generation {
-				return retention.Request{}, ErrConflict
+				return ErrConflict
 			}
 			s.entries[e.Ref.Height] = e
 		default:
-			return retention.Request{}, ErrRecovery
+			return ErrRecovery
 		}
 	}
 	heights := make([]uint64, 0, len(s.entries))
@@ -157,11 +166,18 @@ func InspectRetention(ctx context.Context, o Options, head execwire.Ref, root ex
 	for _, n := range heights {
 		e := s.entries[n]
 		if e.Ref.Height != tail.Height+1 || e.Parent != tail.Hash {
-			return retention.Request{}, ErrSequence
+			return ErrSequence
 		}
 		tail = e.Ref
 	}
-	return s.retentionRequest(head, root, keep)
+	request, err := s.retentionRequest(head, root, keep)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	return apply(request, state)
 }
 func (s *Store) checkMaintenance(permit *retention.Permit) error {
 	var done gcCompletion
