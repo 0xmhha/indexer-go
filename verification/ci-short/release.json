@@ -1,0 +1,14 @@
+{
+  "stage": "CI short",
+  "status": "COMPLETE",
+  "pr": 246,
+  "url": "https://github.com/0xmhha/indexer-go/pull/246",
+  "base": "d6ed1eb7758f70fc52ded3242815c1b53aecf441",
+  "head": "30a986a9fb881250dff2a678b38a4a7be0d23c94",
+  "tree": "0da0e135139a24a04543edd1e991d1fae61d7e13",
+  "main": "c36e84e262b437258bdd55cee17c93d80126f0ce",
+  "ci_run": 40989226640,
+  "ci_run_number": 321,
+  "checks": "scope + lint/test/postgres/examples/arc allsuccess; actual shortGo andPG11, arc/full200 intentionallyskipped",
+  "sync": "exact reviewed tree, one parent/base, clean HEAD=origin/main, privateconfig unchanged"
+}

@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import unittest
 import yaml
 
@@ -40,6 +41,15 @@ class ShortWorkflow(unittest.TestCase):
         full = events["workflow_dispatch"]["inputs"]["full"]
         self.assertEqual(full["type"], "boolean")
         self.assertIs(full["default"], False)
+
+    def test_default_ci_does_not_repeat_on_main_push(self):
+        events = self.workflow.get("on", self.workflow.get(True, {}))
+        self.assertIn("pull_request", events)
+        self.assertNotIn("push", events)
+
+    def test_generated_python_bytecode_is_not_tracked(self):
+        tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
+        self.assertEqual([p for p in tracked if "__pycache__" in Path(p).parts or p.endswith((".pyc", ".pyo"))], [])
 
     def test_postgres_pr_keeps_durable_core_smoke(self):
         commands = "\n".join(step.get("run", "") for step in self.workflow["jobs"]["postgres"]["steps"])
