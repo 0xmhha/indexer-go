@@ -1,0 +1,22 @@
+# Scoped short PR checks
+
+Latest user steering: the existing roughly74-minute N4 CI blocks development.
+Default PR/main checks must be short; documentation alone must not build runtime
+modules or start services. This supersedes earlier blanket per-PR full/race200
+requirements. Safety semantics and meaningful negative tests remain.
+
+1. Keep required named jobs and classify exact base/head paths conservatively.
+2. Docs-only: links/anchors/policy. Code: short once for root/wire/StableNet,
+   lint/build/vet/examples/offline config and fsync-on DB core smoke once.
+3. Arc Rust only: cache pinned dependencies/target, compile and protocol/unwind
+   smoke. Keep full SDK/SIGKILL/COW/fixture parity and every existing200 command
+   behind explicit workflow_dispatch full=true. Add no scheduled runs.
+4. RED→GREEN scope/workflow/actual-smoke contracts, local short checks and actual
+   short PR CI. Squash/main sync, then resume N5/N6. New concurrency logic still
+   requires targeted local200; workflow/docs edits do not require full runtime.
+
+N4 is released #245/main d6ed1eb7758f70fc52ded3242815c1b53aecf441 with exact
+[CI318 proof](../../../../verification/native-import-n4/release.json).
+Native n−1 N3#244 and n−2 N2#243/E1 accepted design remain in
+[continuity](../20261029-arc-first-import/continuity.json).
+Operations, external peers/DB, formatting and indexer performance remain HOLD.

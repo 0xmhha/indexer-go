@@ -82,13 +82,24 @@ test:
 test-short:
 	$(GOTEST) -short ./...
 
+.PHONY: test-ci-short test-ci-postgres-short
+## test-ci-short: One short functional pass of the root and execution modules
+test-ci-short:
+	$(GOTEST) -short -count=1 -timeout=10m ./...
+	cd execwire && $(GOTEST) -short -count=1 -timeout=5m ./...
+	cd x/stablenet/executor && $(GOTEST) -short -count=1 -timeout=5m ./...
+
+## test-ci-postgres-short: One fsync-on core publication/fence/ACK/pool smoke pass
+test-ci-postgres-short:
+	python3 -B scripts/ci_postgres_smoke.py
+
 ## test-chain: Run one chain's tests and build its binary (CHAIN=<chain>)
 test-chain: check-chain
 	@test -n "$(CHAIN)" || (echo "Set CHAIN to one of: $(CHAINS)"; exit 1)
 	$(GOTEST) ./x/$(CHAIN)/...
 	$(GOBUILD) -o /dev/null $(MAIN_PATH)
 
-## test-race: Run every test once with the race detector; run it before each commit and pull request (CI has no race job, to keep CI fast)
+## test-race: Full local race qualification for affected runtime/native/storage changes
 test-race:
 	$(GOTEST) -race -count=1 ./...
 	cd execwire && $(GOTEST) -race -count=1 ./...

@@ -1,6 +1,6 @@
 # Arc 첫 import와 native DB 갱신 설계
 
-**N0~N3 릴리스 완료. N4 managed replay·E1 reorg 통합 구현·로컬 검증을 완료했고 CI 릴리스를 기다리며 N5~N6 미완료. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
+**N0~N3 릴리스 완료. N4 managed replay·E1 reorg 통합을 #245로 릴리스했고 N5~N6 미완료. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
 읽고 두 번째 EVM 실행으로 E1 입력을 만든다. 빠져 있는 첫 실행과 지속적인
 native DB 갱신을 아래 모듈이 담당하도록 한다. 전체 노드 프로세스와 upstream
 코드 수정은 추가하지 않는다. 설정·원본·child 수명주기는 [Arc ingress](EXECUTION_ARC_INGRESS.md), N4의 구현된 managed replay/reorg 경계는 [관리형 replay](EXECUTION_ARC_MANAGED.md)에 정리한다. N5~N6의 남은 연결은 제안이며 운영 실행 설정이 아니다. [구현 순서](#구현-순서)와

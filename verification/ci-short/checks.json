@@ -1,0 +1,72 @@
+[
+  {
+    "check": "ci-short-go",
+    "argv": [
+      "make",
+      "test-ci-short"
+    ],
+    "exit": 0,
+    "log_name": "ci-short-go.log",
+    "log_sha256": "9b5cd1def4a7c996ebcfe27d838a81de96f6382d9c4e21e072124df22c147293"
+  },
+  {
+    "check": "ci-short-postgres",
+    "argv": [
+      "make",
+      "test-ci-postgres-short"
+    ],
+    "exit": 0,
+    "log_name": "ci-short-postgres.log",
+    "log_sha256": "c3fae84994f42a44648a9138fa6d8f40d2ec8880a21168213c45580840e88e13"
+  },
+  {
+    "check": "ci-short-offline-release",
+    "argv": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "verification",
+      "-p",
+      "test_ci_*.py"
+    ],
+    "exit": 0,
+    "log_name": "ci-short-offline-release.log",
+    "log_sha256": "8f8d163459bb7e9d63ed6b2d036b2f2ae28e04d2ceff16e52212b737f8f853e5"
+  },
+  {
+    "check": "ci-short-actionlint-final",
+    "argv": [
+      "actionlint v1.7.7",
+      ".github/workflows/ci.yml"
+    ],
+    "exit": 0,
+    "log_name": "ci-short-actionlint-final.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "pinned-native-short-smoke",
+    "exit": 0,
+    "actual_tests": 5,
+    "failed": 0,
+    "ignored": 0,
+    "log_name": "ci-short-rust-smoke.log",
+    "log_sha256": "868b05b17f7246f1c1f87aab8d935790888da788bd18ae86e9fd650e2a826f23",
+    "scope": "existing exact N4 SDK source/cache; no node or performance run"
+  },
+  {
+    "check": "changed-documents",
+    "files": 10,
+    "links": 240,
+    "broken": 0
+  },
+  {
+    "check": "scope-text-fixture-final",
+    "exit": 0,
+    "tests": 21,
+    "log_name": "ci-short-offline-text-release.log",
+    "log_sha256": "fc70a40935ecb252a48dc85cfc174a1d4b538d44c0eb616e1634d71bb345facc"
+  }
+]
