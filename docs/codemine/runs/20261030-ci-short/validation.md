@@ -21,7 +21,10 @@ were correctly skipped. Squash/main c36e84e matches the exact reviewed tree,
 has one parent/base and was synchronized cleanly with private config unchanged.
 Observed execution span was432 seconds, excluding queue time.
 
-The follow-up removes duplicate main-push CI and two accidentally committed
-Python bytecode files, adds ignore rules, and first proves both requirements RED.
+Follow-up #247 removed duplicate main-push CI and two accidentally committed
+Python bytecode files, added ignore rules, and first proved both requirements RED.
+All23 offline cases, actionlint and actual CI323 passed. Squash/main c03559a
+matched the reviewed tree and was synchronized cleanly; private config stayed
+unchanged. Normal merges now trigger no second automatic CI run.
 No runtime Go/Rust/DB behavior changes. No indexer throughput, operational
 node/peer/DB, disk format or deployment evidence is claimed.

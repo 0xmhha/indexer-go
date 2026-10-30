@@ -4,7 +4,7 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 
 ## 현재 정본과 연속성
 
-- n: N4 [계획](../codemine/runs/20261030-arc-native-n4/plan.md), [체크리스트](../codemine/runs/20261030-arc-native-n4/checklist.md). managed replay·E1 reorg 통합 #245 릴리스 완료. CI short #246 릴리스 완료; main 중복 검사·Python 캐시 정리를 마친 뒤 N5 진행. N5~N6 미완료
+- n: N4 [계획](../codemine/runs/20261030-arc-native-n4/plan.md), [체크리스트](../codemine/runs/20261030-arc-native-n4/checklist.md). managed replay·E1 reorg 통합 #245 릴리스 완료. CI short #246·main 중복/캐시 정리 #247 릴리스 완료. 다음은 N5. N5~N6 미완료
 - n−1: N3 #244 [계획](../codemine/runs/20261030-arc-native-n3/plan.md), [App ingress](../EXECUTION_ARC_INGRESS.md)
 - n−2: N2 #243 [계획](../codemine/runs/20261029-arc-native-n2/plan.md), [writer](../EXECUTION_ARC_NATIVE_WRITER.md)
 - 수용한 Arc first-import 설계 #239 [정본](../ARC_NATIVE_IMPORT_DESIGN.md), [계획](../codemine/runs/20261029-arc-first-import/plan.md), [체크리스트](../codemine/runs/20261029-arc-first-import/checklist.md), [연속성](../codemine/runs/20261029-arc-first-import/continuity.json)
@@ -56,7 +56,7 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 | 완료 #236 | 오프라인 monitoring | [일회성 경보 판정](../NATIVE_OFFLINE_MONITORING.md): Arc/StableNet 진단 JSON·선언된 capacity/pipeline·명시적 시각, strict 입력·unknown/stale·redaction·독립 위험 판정. 체인/DB/RPC/watcher/알림·actuation 없음. 최종 CI5 run40704614928 통과 후 squash/main a49065d 동기화 완료 |
 | 권장안 정리 완료·실제 값 HOLD | 저장소·배포 입력 | [결정표](../OPERATIONS_READINESS.md): 체인별 분리 경로, PostgreSQL pool4의 전체 예산, Arc 24h/172800블록의 가정과 native/spool 추가 용량, 인증 checkpoint 시작 권장안. 읽기 전용 metadata만 확인. 미확정 값을 template에 채우거나 provisioning하지 않음 |
 | 초안 구현·운영 HOLD | Native App/collector/executor 구성 | [별도 runtime 초안](../../deployments/native/runtime/README.md): 두 App과 producer, 외부 PostgreSQL16·DSN_FILE·private IPC·분리 scratch·native lease/RO DB mount·수동 lifecycle. bounded 오프라인 검사와 모의 기능 검증. Arc executor는 collector의 stdio 자식. 실제 image/host/서비스는 검증·실행하지 않음 |
-| 설계·N0~N4 릴리스, N5~N6 미완료 | Arc first-import 공급 경로 | [App 내부 Go 감독+Rust 첫 실행 설계](../ARC_NATIVE_IMPORT_DESIGN.md)와 N0~N6 계획 확정. 기존 ETH/68과 공유 RPC5/Store4, 두 번째 collector를 유지. native bootstrap·첫 writer·App ingress는 릴리스했고 N4 managed collector·E1 reorg는 #245로 릴리스했고 CI short #246은 릴리스했고 중복 main 검사·캐시 정리를 우선 마무리한다. N5 영구 raw/GC·SQL owner binding과 N6 통합 acceptance는 미완료다. 전체 노드/새 독립 RPC·DB pool 없음 |
+| 설계·N0~N4 릴리스, N5~N6 미완료 | Arc first-import 공급 경로 | [App 내부 Go 감독+Rust 첫 실행 설계](../ARC_NATIVE_IMPORT_DESIGN.md)와 N0~N6 계획 확정. 기존 ETH/68과 공유 RPC5/Store4, 두 번째 collector를 유지. native bootstrap·첫 writer·App ingress는 릴리스했고 N4 managed collector·E1 reorg는 #245로 릴리스했고 CI short #246·중복 main 검사/캐시 정리 #247도 릴리스했다. N5 영구 raw/GC·SQL owner binding과 N6 통합 acceptance는 미완료다. 전체 노드/새 독립 RPC·DB pool 없음 |
 | N0 구현 | bounded import/fence와 pinned SDK qualification | [N0](../codemine/runs/20261029-arc-native-n0/plan.md): AIN1 frame·private durable fence RED→GREEN, 실제 native-v2 Full 저장·별도 RO 갱신·두 번째 replay·H1 full checkpoint·unwind/reimport·controlled 중단/재시작. 운영 writer/실제 실행은 없음 |
 | N1 구현 | 인증된 native bootstrap | [전체 상태 검증·새 DB 초기화](../EXECUTION_ARC_BOOTSTRAP.md), original anchor/floor/H+1·authentic header/body/receipts와 atomic no-overwrite publication. 운영 입력 HOLD |
 | N2 구현 | 첫 실행 writer | [owned stdio·첫 Arc 실행·native 완료](../EXECUTION_ARC_NATIVE_WRITER.md), 단일 writer/run/publication/read gate, checksum intent/receipt/head·실제 SIGKILL·정확한 duplicate. 관리 legacy 유지보수 거부 |
