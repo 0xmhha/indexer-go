@@ -1,9 +1,9 @@
 # Arc 첫 import와 native DB 갱신 설계
 
-**N0~N2와 N3 App-owned ingress 구현. N3 release gates 진행 중, N4~N6 미완료. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
+**N0~N3 릴리스 완료. N4 managed replay·E1 reorg 통합 구현·로컬 검증을 완료했고 CI 릴리스를 기다리며 N5~N6 미완료. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
 읽고 두 번째 EVM 실행으로 E1 입력을 만든다. 빠져 있는 첫 실행과 지속적인
 native DB 갱신을 아래 모듈이 담당하도록 한다. 전체 노드 프로세스와 upstream
-코드 수정은 추가하지 않는다. N3 설정·원본·child 수명주기는 [Arc ingress](EXECUTION_ARC_INGRESS.md)에 정리한다. N4~N6의 미구현 연결은 제안이며 운영 실행 설정이 아니다. [구현 순서](#구현-순서)와
+코드 수정은 추가하지 않는다. 설정·원본·child 수명주기는 [Arc ingress](EXECUTION_ARC_INGRESS.md), N4의 구현된 managed replay/reorg 경계는 [관리형 replay](EXECUTION_ARC_MANAGED.md)에 정리한다. N5~N6의 남은 연결은 제안이며 운영 실행 설정이 아니다. [구현 순서](#구현-순서)와
 [체크리스트](codemine/runs/20261029-arc-first-import/checklist.md)를 함께 따른다.
 
 ## N0 구현과 검증 경계
@@ -70,9 +70,22 @@ maintenance CLI를 거부한다. managed collector·receiver-authorized reorg는
 새 pool/client를 만들지 않는다. owned-raw-v1과 bounded checksummed control은
 기존 quota로 계산하고, 원본 fsync 후에만 R을 높인다. 고루틴별 active count/bytes와
 coalescing wake로 durable backlog를 분리해 capture가 느린 native N을 기다리지 않는다.
-N3는 epoch1 append만 지원하며 generation 변화/부분 저장은 HOLD다. native 완료는
+N3의 초기 append 경로를 N4의 검증된 epoch 전환으로 확장한다. 부분 저장은 HOLD다. native 완료는
 정확한 영수증/root/digest 재검증 후에만 peer에 제공하고 E1 ACK로 사용하지 않는다.
-N4~N6의 managed second replay/reorg·영구 bytes/GC·실제 통합 fixture가 남는다.
+N4는 managed second replay/reorg를 구현하며 N5~N6의 영구 bytes/GC·SQL owner binding·실제 통합 fixture가 남는다.
+
+## N4 구현과 검증 경계
+
+관리형 RO 프로세스는 Go가 보유하는 read-view OFD를 fd3으로 상속하며, 완전한
+EXR1/epoch/원본 digest 검증 또는 취소 후 child join까지 같은 SH를 유지한다.
+명시적 operation unlock 뒤 동일 native factory가 갱신된 완료 head를 읽는다.
+수신 receiver의 기존 controller가 target-free pending fence를 먼저 저장하고,
+기존 finder와 rewind coordinator만 복구 높이·generation을 결정한다. native/RO
+child를 join한 뒤 ANT1/ATR1이 정확한 SQL marker의 unwind를 수행한다. 원래 anchor와
+prefix receipt는 보존하며 raw epoch·native import/read epoch·E1 generation은 분리한다.
+N>P인 시작 경로에서도 SQL 공개 prefix의 hash/root를 동일 SH에서 확인한다.
+구체적 계약과 미완료 N5/N6 경계는 [관리형 replay](EXECUTION_ARC_MANAGED.md),
+[N4 계획](codemine/runs/20261030-arc-native-n4/plan.md)과 체크리스트를 따른다.
 
 ## 고정하는 구조
 

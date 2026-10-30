@@ -29,6 +29,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Build a new Arc native DB offline from an authenticated full checkpoint | [Arc native bootstrap](EXECUTION_ARC_BOOTSTRAP.md) |
 | Review the owned Arc first-execution native writer and crash fences | [Arc native writer](EXECUTION_ARC_NATIVE_WRITER.md) |
 | Configure opt-in App-owned raw/native intake and its safety boundaries | [Arc ingress](EXECUTION_ARC_INGRESS.md) |
+| Understand managed read views, native epochs and E1 reorg recovery | [Managed Arc replay](EXECUTION_ARC_MANAGED.md) |
 | Review Arc first-import design, N0–N3 and remaining N4–N6 | [Arc native import design](ARC_NATIVE_IMPORT_DESIGN.md) |
 | Review Native App/collector/executor topology and held lifecycle | [Native runtime composition draft](../deployments/native/runtime/README.md) |
 | Diagnose native/source metadata and exported checkpoint/retention observations | [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md) |

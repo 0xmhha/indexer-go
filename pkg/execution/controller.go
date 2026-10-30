@@ -30,6 +30,7 @@ type Controller struct {
 	life              chan struct{}
 	mu                sync.Mutex
 	scheduler         *Scheduler
+	generation        uint64
 	rewinding, closed bool
 	closeOnce         sync.Once
 }
@@ -56,7 +57,7 @@ func NewController(ctx context.Context, limits Limits, store ControllerStore, ba
 	if status.Maintenance {
 		return nil, port.ErrExecutionMaintenance
 	}
-	if status.Rewinding {
+	if status.Rewinding || status.ReorgPending {
 		if err := recover(owned); err != nil {
 			return nil, err
 		}
@@ -78,7 +79,7 @@ func (c *Controller) start(ctx context.Context) error {
 	if status.Maintenance {
 		return port.ErrExecutionMaintenance
 	}
-	if status.Rewinding {
+	if status.Rewinding || status.ReorgPending {
 		return port.ErrExecutionRewinding
 	}
 	if !status.BaselineReady {
@@ -95,6 +96,7 @@ func (c *Controller) start(ctx context.Context) error {
 		return port.ErrClosed
 	}
 	c.scheduler = s
+	c.generation = status.Generation
 	c.rewinding = false
 	c.mu.Unlock()
 	return nil
@@ -162,6 +164,55 @@ func (c *Controller) Rewind(ctx context.Context, target execwire.Ref, root execw
 		return err
 	}
 	return c.start(work)
+}
+
+// CheckReorg establishes the same coordinator's target-free durable fence.
+func (c *Controller) CheckReorg(ctx context.Context) error {
+	c.mu.Lock()
+	generation := c.generation
+	c.mu.Unlock()
+	return c.CheckReorgAt(ctx, generation)
+}
+func (c *Controller) CheckReorgAt(ctx context.Context, generation uint64) error {
+	store, ok := c.store.(port.ExecutionReorgCheckStore)
+	if !ok {
+		return port.ErrInvalidData
+	}
+	work, finish := c.ownedCall(ctx)
+	select {
+	case c.life <- struct{}{}:
+	case <-work.Done():
+		finish()
+		return work.Err()
+	}
+	defer func() { finish(); <-c.life }()
+	if err := work.Err(); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return port.ErrClosed
+	}
+	if generation == 0 || generation != c.generation {
+		c.mu.Unlock()
+		return port.ErrExecutionStale
+	}
+	c.rewinding = true
+	old := c.scheduler
+	c.mu.Unlock()
+	check, err := store.BeginExecutionReorgCheck(work)
+	if err == nil && check.Generation != generation {
+		err = port.ErrExecutionStale
+	}
+	if old != nil {
+		_ = old.Close()
+	}
+	c.mu.Lock()
+	c.scheduler = nil
+	c.mu.Unlock()
+	// Failure keeps local admission closed; a durable check has no TTL reset.
+	return err
 }
 func (c *Controller) Close() error {
 	c.closeOnce.Do(func() {

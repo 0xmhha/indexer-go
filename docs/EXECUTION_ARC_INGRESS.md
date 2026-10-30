@@ -4,8 +4,8 @@ N3 adds the opt-in `arc.native` module to the Arc bundle. It borrows App's
 prepared execution Store and canonical reader. It creates no SQL pool or RPC
 client, starts no node and changes no upstream code. Normal processing still
 uses two EVM passes: the native writer's first execution and the collector's
-second replay. The managed second replay/reorg bridge is N4; permanent ingress
-bytes/authorized raw GC are N5; combined native/App/PostgreSQL acceptance is N6.
+second replay. N4 implements the [managed replay/reorg bridge](EXECUTION_ARC_MANAGED.md);
+permanent ingress bytes/authorized raw GC are N5; combined native/App/PostgreSQL acceptance is N6.
 Until those are released, this is an implementation boundary, not an operating
 configuration. APFS, official enode, authenticated checkpoint and private inputs
 remain HOLD. No live execution or performance result is claimed.
@@ -34,6 +34,11 @@ source:
       native:
         executable: /app/arc-native-import
         data_dir: /native/node
+      collector:
+        executable: /app/indexer-arc-executor
+        spool_dir: /source/arc-spool
+        max_bytes: 268435456
+        max_records: 4096
       peer:
         network_id: 0      # HOLD: explicit verified network identity required
         fork_hash: HOLD   # HOLD: audited four-byte fork hash required
@@ -50,7 +55,7 @@ source:
 172800 retained blocks is a planning assumption of two blocks/s for24h, not a
 measured Arc rate or a byte-capacity promise. The actual raw count includes
 retained fork/partial datasets (three per complete block); disk quota, shared
-volume budget and free-space floor are independent. No raw GC runs in N3.
+volume budget and free-space floor are independent. Raw GC remains refused until N5.
 Explicit initialization can initialize a new window on an already supplied
 volume; it never provisions or formats a disk, adopts a legacy window or repairs
 an incomplete owner. Current private configuration is unchanged.
@@ -66,9 +71,13 @@ data; it never drops an unsaved block or fabricates completion.
 ## Preparation, capture and execution
 
 Pure preflight validates settings and disjoint native/raw/socket paths before
-resource startup. Preparation checks the private native layout, canonical N1
+resource startup, including separate writer/collector binaries and collector spool.
+Preparation checks the private native layout, canonical N1
 bootstrap receipt, immutable original anchor, pending/maintenance fences and
-existing native/raw binding before API exposure. It starts no peer or child.
+existing native/raw binding before API exposure. When N exceeds public P, the
+original receipt at the current SQL P must still match its published hash/root
+under the same shared native view. The SQL control is checked again afterward;
+changed visibility or an active recovery refuses readiness. It starts no peer or child.
 An absent native identity is allowed only for a clean explicit first window at
 the SQL anchor. Partial identity/head/owner is HOLD, never regenerated.
 
@@ -99,10 +108,11 @@ the designed maximum8; no throughput guarantee follows from this choice.
 
 Admission fresh is independent of E1's **NEW uncached canonical response →
 post-response generation fence → COMMIT → exact ACK**. R/N, SQL public P,
-collector seal S and source ACK A are distinct. N3 owns R/N only. It never calls
-the E1 publisher or ACK path. Native/raw epochs and receiver generation are not
-interchangeable. N3 supports initial epoch1; reorg/changed generation fails
-closed until the N4 coordinator bridge is implemented.
+collector seal S and source ACK A are distinct. The ingress owner never calls
+the E1 publisher or manufactures ACKs. Native import/read epochs, raw epoch and
+receiver generation are independent. [N4](EXECUTION_ARC_MANAGED.md) connects the
+managed collector and existing E1 coordinator for reorg recovery; it adds no
+generation authority, RPC client, SQL pool or writer queue.
 
 ## Restart and shutdown
 
@@ -125,6 +135,6 @@ Stop is idempotent and releases prepared resources even if Run never starts.
 An interrupted native multi-store mutation preserves its pending fence for
 explicit recovery. Age, Hello, a raw height or a native receipt cannot clear it
 or authorize deletion. N5 will add coordinated maintenance/GC. See the
-[plan](codemine/runs/20261030-arc-native-n3/plan.md),
-[checklist](codemine/runs/20261030-arc-native-n3/checklist.md) and
+[current plan](codemine/runs/20261030-arc-native-n4/plan.md),
+[checklist](codemine/runs/20261030-arc-native-n4/checklist.md) and
 [native writer](EXECUTION_ARC_NATIVE_WRITER.md).

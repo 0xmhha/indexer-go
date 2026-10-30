@@ -21,6 +21,7 @@ type Config struct {
 	MaxBytes           uint64
 	MaxRecords, Window int
 	Poll, Retry        time.Duration
+	Proposals          <-chan execwire.Ref `json:"-"`
 }
 
 // Run replays into a durable bounded queue independently of delivery. It owns
@@ -29,7 +30,11 @@ func Run(ctx context.Context, c Config) (err error) {
 	if err := ValidateConfig(c); err != nil {
 		return err
 	}
-	selection, admission, err := proofPolicy(c.Native.StateProofs)
+	if c.Native.Managed != nil {
+		identity := *c.Native.Managed
+		c.Native.Managed = &identity
+	}
+	selection, admission, err := admissionPolicy(c.Native)
 	if err != nil {
 		return err
 	}
@@ -79,17 +84,17 @@ func Run(ctx context.Context, c Config) (err error) {
 	if hash != c.Anchor.Hash {
 		return exporter.ErrCheckpointRecovery
 	}
-	client := &exporter.Client{Chain: c.Native.Chain, Spool: s, Backend: b, Socket: c.Socket, Window: c.Window, Poll: c.Poll, Retry: c.Retry, Timeout: c.Native.Timeout}
+	client := &exporter.Client{Chain: c.Native.Chain, Spool: s, Backend: b, Socket: c.Socket, Window: c.Window, Poll: c.Poll, Retry: c.Retry, Timeout: c.Native.Timeout, Proposals: c.Proposals}
 	return client.Run(ctx)
 }
 
 // ValidateConfig performs only the collector's pure configuration checks.
 func ValidateConfig(c Config) error {
-	_, _, err := proofPolicy(c.Native.StateProofs)
+	_, _, err := admissionPolicy(c.Native)
 	if err != nil {
 		return err
 	}
-	if c.Native.Timeout < 0 || c.Native.Timeout > time.Hour || c.Poll < 0 || c.Retry < 0 || c.Window < 0 || c.Window > 64 || c.MaxRecords < 0 || c.MaxRecords > 1<<20 || c.MaxBytes != 0 && c.MaxBytes <= 64<<10 {
+	if c.Native.Timeout < 0 || c.Native.Timeout > time.Hour || c.Poll < 0 || c.Retry < 0 || c.Window < 0 || c.Window > 64 || cap(c.Proposals) > 1 || c.MaxRecords < 0 || c.MaxRecords > 1<<20 || c.MaxBytes != 0 && c.MaxBytes <= 64<<10 {
 		return execwire.ErrLimit
 	}
 	if c.Native.Chain.ID != "5042" && c.Native.Chain.ID != "5042002" || !filepath.IsAbs(c.SpoolDir) || !filepath.IsAbs(c.Native.DataDir) || !filepath.IsAbs(c.Socket) {

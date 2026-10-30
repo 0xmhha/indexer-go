@@ -87,6 +87,15 @@ func TestNativeOwnedChildFiltersEnvironmentAndValidatesCompletion(t *testing.T) 
 	_, err = lease.Stat()
 	require.ErrorIs(t, err, os.ErrClosed)
 }
+func TestNativeOwnedChildWithoutLocaleStillFiltersPrivateEnvironment(t *testing.T) {
+	for _, key := range []string{"LANG", "LC_ALL", "TZ"} {
+		t.Setenv(key, "")
+		require.NoError(t, os.Unsetenv(key))
+	}
+	t.Setenv("INDEXER_NATIVE_TEST_SECRET", "must-not-reach-child")
+	c, _, _ := fixtureClient(t, "valid")
+	c.Close()
+}
 func TestNativeOwnedChildWrongReplyAndCancellationJoinBeforeLeaseRelease(t *testing.T) {
 	for _, mode := range []string{"wrong-id", "blocked"} {
 		t.Run(mode, func(t *testing.T) {

@@ -8,6 +8,6 @@
 - [x] Startup/lost-reply/cancellation/failure and unchanged shared budget coverage.
 - [x] New concurrency single CPU1/race/count200; required local regression gates.
 - [x] Current docs/checklist/continuity, source freeze and staged/history scans.
-- [ ] Actual exact-head CI5, guarded squash and clean main sync before N4.
+- [x] Actual CI316 five jobs, guarded squash [#244](https://github.com/0xmhha/indexer-go/pull/244), clean main a203193; [release](../../../../verification/native-import-n3/release.json).
 
 Operational execution/inputs and performance stay HOLD; native receipt is no ACK.

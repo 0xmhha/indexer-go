@@ -1,0 +1,433 @@
+[
+  {
+    "case": "app-recovery-order",
+    "log_name": "n4-app-recovery-order-red.log",
+    "log_sha256": "5cbebff23144f2c1686b74ad5c52f0c1707e26e20552d7099334c5f628003ab9",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestExecutionNativeRecoveryPrecedesSQLFreshAndResume (0.00s)"
+    ]
+  },
+  {
+    "case": "artifacts",
+    "log_name": "n4-artifacts-red.log",
+    "log_sha256": "c6179b2d9d580c594b2c42c83b0b0adb2cf50ec91c8c050a1f8363631d7d7fac",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedArtifactsRequireExactPrivateCanonicalChecksummedFiles (0.00s)"
+    ]
+  },
+  {
+    "case": "collector-config",
+    "log_name": "n4-collector-config-red.log",
+    "log_sha256": "7223d2dd4ff620143d764ba19189725a45964dd3cac214586b16aad6f20439b2",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeCollectorConfigRequiresExplicitSeparateBoundedInputs (0.00s)"
+    ]
+  },
+  {
+    "case": "collector-env",
+    "log_name": "n4-collector-env-red.log",
+    "log_sha256": "c47604213361c07d9d541a14c26c8ade50b142c23fc152c87586455f65028516",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestArcCollectorProductionStartFiltersInheritedPrivateEnvironment (0.35s)"
+    ]
+  },
+  {
+    "case": "coordinator-check",
+    "log_name": "n4-coordinator-check-red.log",
+    "log_sha256": "884d0251622e4a9cdff26a48bc52eb51bad1c4bcb0ab4802aacab2d10694d565",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestControllerReorgCheckDurablyFencesAndJoinsBeforeTargetSearch (0.00s)",
+      "--- FAIL: TestControllerReorgCheckRestartRecoversBeforeWorkers (0.00s)"
+    ]
+  },
+  {
+    "case": "current-proof",
+    "log_name": "n4-current-proof-red.log",
+    "log_sha256": "2eaf2107bd47cb2e5cb7d544ee03a64f2c5994d09d865186d1ed104d85d36e8e",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedCurrentProofMustEqualSealedControlsAndImmutableInput (0.02s)"
+    ]
+  },
+  {
+    "case": "current-published-prefix",
+    "log_name": "n4-current-published-prefix-red.log",
+    "log_sha256": "aea1ad8cd265a0b8803e126d308e5f4367e98d89cfc4568384ddd84e79a55dae",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativePreparedCheckBindsCurrentPublishedPrefixAndRejectsMidInspectionAdvance (0.43s)"
+    ]
+  },
+  {
+    "case": "decode-cancel",
+    "log_name": "n4-decode-cancel-red.log",
+    "log_sha256": "2161ba5ac567320791ce85fe7aa053de7fd9d37e373ab2a433886aeb251e2990",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedBackendCancelDuringDecodeJoinsChildBeforeViewUnlock (5.03s)"
+    ]
+  },
+  {
+    "case": "early-reorg-route",
+    "log_name": "n4-early-reorg-route-red.log",
+    "log_sha256": "bdeb9780ab6cd63990e1fefb22b9654d2ad9891b15d1ded2eaa030eabe8ce113",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestReorgGateUsesExistingControllerForEarlyFenceBeforeProposalTransport (0.00s)",
+      "--- FAIL: TestReorgGateUnboundWaitIsCancelledAndInvalidGenerationCannotFence (0.00s)"
+    ]
+  },
+  {
+    "case": "embedded-round",
+    "log_name": "n4-embedded-round-red.log",
+    "log_sha256": "6bde6a05c84dc0fdab756be135432c2ac054eef5e85ed6add77cc3a59c758efd",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeRoundNativeAheadOrShorterRPCProposesOnExistingCollectorWithoutAssigningGeneration (0.25s)",
+      "--- FAIL: TestNativeRoundRawOnlyForkRotatesRawEpochAfterAllChildrenJoin (0.12s)",
+      "--- FAIL: TestNativeRoundPauseFinishesActiveImportBeforeClosingPeerAndNative (0.13s)"
+    ]
+  },
+  {
+    "case": "empty-env",
+    "log_name": "n4-empty-env-red.log",
+    "log_sha256": "eaef3e4efc2c88dfa3b524b87805c93339f77584b2a84c02367f7d1392aacb7a",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeOwnedChildWithoutLocaleStillFiltersPrivateEnvironment (0.01s)"
+    ]
+  },
+  {
+    "case": "go-epoch",
+    "log_name": "n4-go-epoch-red.log",
+    "log_sha256": "0a2b5f83ffd8b870c3860f5095d960cff8ac06c2f36187ba13988b72c3d8c923",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedEpochRetainedPrefixUsesOriginalInputAndIndependentCoordinatorGeneration (0.00s)"
+    ]
+  },
+  {
+    "case": "inherited-rust",
+    "log_name": "n4-inherited-rust-red.log",
+    "log_sha256": "587b01e7b2c29492f23af93911e96dbdbfc401c1be9e6759b8869c727644216c",
+    "exit": 1,
+    "behavioral_failures": [
+      "test managed_read::tests::inherited_view_rejects_wrong_fd_pending_or_replaced_lock ... FAILED",
+      "test managed_read::tests::inherited_view_borrows_without_nested_turn_or_unlocking_parent ... FAILED"
+    ]
+  },
+  {
+    "case": "live-pending-read-clean",
+    "log_name": "n4-live-pending-read-clean-red.log",
+    "log_sha256": "739bec848122825782a9ab393a07da4216699ed1a9ed3d169cdeb46e73e92e24",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedReadViewWaitsForOwnedPublicationBeforeEvaluatingPending (0.01s)"
+    ]
+  },
+  {
+    "case": "managed-cli",
+    "log_name": "n4-managed-cli-red.log",
+    "log_sha256": "142c14535458a0c763ca268e404088cf416d415a784a3e3ebf8920e83da55c75",
+    "exit": 1,
+    "behavioral_failures": [
+      "test tests::managed_arguments_require_serve_testnet_and_inherited_fd3 ... FAILED"
+    ]
+  },
+  {
+    "case": "managed-native-process",
+    "log_name": "n4-managed-native-process-red.log",
+    "log_sha256": "1e7a1183bd7af82308bb7ebd31ea6017076ebd077effb5ce9a73ff8c52caff81",
+    "exit": 1,
+    "behavioral_failures": [
+      "test native_writer::processes::managed_inherited_process_cancel_joins_before_parent_shared_view_release ... FAILED",
+      "test native_writer::processes::managed_inherited_process_refreshes_same_native_factory_and_replays_after_parent_unlock ... FAILED",
+      "test native_writer::processes::writer_process_child ... FAILED",
+      "test native_writer::processes::writer_process_child ... FAILED"
+    ]
+  },
+  {
+    "case": "managed-proof",
+    "log_name": "n4-managed-proof-red.log",
+    "log_sha256": "ce3f7f46b9fe1c67e8066e846f0aba42981985af827bdddf346a0ecc6c9c178e",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedProofRequiresExactIdentityCompletedHeadAndSelectedReceipt (0.00s)",
+      "--- FAIL: TestManagedProofCanonicalBoundedJSONRejectsDuplicateUnknownAndTrailing (0.00s)"
+    ]
+  },
+  {
+    "case": "managed-service",
+    "log_name": "n4-managed-service-red.log",
+    "log_sha256": "6708e998ee14643990781dbea5fa911b8e4c1e6d7b0192ec289ab424febfad4a",
+    "exit": 1,
+    "behavioral_failures": [
+      "test service::tests::managed_service_frames_proof_separately_and_rejects_oversize_before_output ... FAILED"
+    ]
+  },
+  {
+    "case": "managed-spool",
+    "log_name": "n4-managed-spool-red.log",
+    "log_sha256": "b9ce10ee5264b7ab4f1d255920704c5da2a89063686be10bce0a732225492097",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedSpoolPolicyPinsImmutableInstanceBootstrapAndProofScope (0.01s)"
+    ]
+  },
+  {
+    "case": "managed-start",
+    "log_name": "n4-managed-start-red.log",
+    "log_sha256": "57ad6a845c28379711580a8cd77836f428c2b54920faea6ce9e9a94b19cf1679",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedAdapterRequiresAXM1AndCurrentProofBeforeAcceptingHead (0.37s)",
+      "--- FAIL: TestManagedAdapterRejectsLegacyDowngradeAndMalformedProofBeforeReady (1.43s)"
+    ]
+  },
+  {
+    "case": "native-marker-reuse",
+    "log_name": "n4-native-marker-reuse-red.log",
+    "log_sha256": "51f7962dadfef8519a8d7c747e675caec3ed69da6996d89ed73f0081bf07a40a",
+    "exit": 1,
+    "behavioral_failures": [
+      "test native_epoch::tests::transition_unwinds_actual_native_and_restarts_relative_sequence_without_moving_anchor ... FAILED"
+    ]
+  },
+  {
+    "case": "native-recovery",
+    "log_name": "n4-native-recovery-red.log",
+    "log_sha256": "c93645e7283728c75b117d75eabc732fee30394e230f383e0d915007dd72cf29",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeRecoveryWaitsForJoinedRoundAndReusesExactCompletedMarkerBeforeSQLResume (0.11s)",
+      "--- FAIL: TestNativeRecoveryFailurePreservesRawAndSQLFence (0.09s)"
+    ]
+  },
+  {
+    "case": "native-snapshot",
+    "log_name": "n4-native-snapshot-red.log",
+    "log_sha256": "2bc75370db1f8dd714f99cfdc84ba8c79935176c59b2f1c7c1e52c54b2050381",
+    "exit": 1,
+    "behavioral_failures": [
+      "test managed_read::tests::snapshot_binds_actual_completed_native_root_and_original_input_digest ... FAILED"
+    ]
+  },
+  {
+    "case": "native-transition",
+    "log_name": "n4-native-transition-red.log",
+    "log_sha256": "73198223ac5197ff3ee8e98d13f3aaa60fd468735f66c213805b14a384c6835f",
+    "exit": 1,
+    "behavioral_failures": [
+      "test native_epoch::tests::transition_unwinds_actual_native_and_restarts_relative_sequence_without_moving_anchor ... FAILED"
+    ]
+  },
+  {
+    "case": "operation-lifetime",
+    "log_name": "n4-operation-lifetime-red.log",
+    "log_sha256": "08a6edb243ed9c3eaa078f19fecd8d3f55534a6ff026ad806295d077a50b1366",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedBackendCloseWaitsForCompleteDecodeBeforeDescriptorRelease (0.02s)",
+      "--- FAIL: TestManagedBackendOperationFailureDeregistersBeforeFatalClose (0.02s)"
+    ]
+  },
+  {
+    "case": "original-input",
+    "log_name": "n4-original-input-red.log",
+    "log_sha256": "84209a411f70d6bbf2ba6fdebd233d13d0d77e488ad4da25a1e04a7d9f39f681",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedPayloadBindsOriginalAIN1BytesAndKeepsE1GenerationIndependent (0.00s)"
+    ]
+  },
+  {
+    "case": "owned-transition",
+    "log_name": "n4-owned-transition-red.log",
+    "log_sha256": "e0f44d42cbb73f19ff1cda6da88e0105d8b9dbaa5ceac77559e62dee9b033547",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeTransitionOwnedChildBindsExactCoordinatorReplyAndDiskProof (0.03s)"
+    ]
+  },
+  {
+    "case": "owner-loop",
+    "log_name": "n4-owner-loop-red.log",
+    "log_sha256": "00319e5ca195a85fedbebe69bcacce4edb1cc199ec31ad6e9c642189a72997b2",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeOwnedLoopPausesJoinedRoundAndResumesWithNewOwnerUntilStop (0.05s)"
+    ]
+  },
+  {
+    "case": "prepared-live-fence",
+    "log_name": "n4-prepared-live-fence-red.log",
+    "log_sha256": "f9bbe25b8a9536a711357f56f31a659f89e31749a8a01ff9735e957c4643a9d5",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativePreparedCheckRejectsLiveFenceBeforeAndAfterInspection (0.36s)",
+      "--- FAIL: TestNativeRecoveryCheckCannotInspectWhileExclusiveTransitionIsActive (0.15s)"
+    ]
+  },
+  {
+    "case": "production-round-dispatch",
+    "log_name": "n4-production-round-dispatch-red.log",
+    "log_sha256": "a4686c67779b7f23c6f579250c7073a973e4825e76a6b984872ee1fd447cf9e0",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeProgramRunUsesOwnedRoundAndStopJoinsAllWorkers (0.13s)"
+    ]
+  },
+  {
+    "case": "published-prefix",
+    "log_name": "n4-published-prefix-red.log",
+    "log_sha256": "5e8f8a1307431e1c33810502a7a6dfbd4d4d335bb0f55683fc70f1f521ad7204",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativePreparedCheckRejectsPublishedPrefixConflictBelowAheadHead (0.40s)"
+    ]
+  },
+  {
+    "case": "raw-control-v2",
+    "log_name": "n4-raw-control-v2-red.log",
+    "log_sha256": "afd74d5819464f614e143daa314b84033a18a182566d3d711a77e03fed55c46d",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeRawControlV1MigrationRequiresCompleteInitialReadyAndSQLBinding (0.22s)",
+      "--- FAIL: TestNativeRawControlV2BindsIndependentNativeReceiverAndRawEpochs (0.39s)"
+    ]
+  },
+  {
+    "case": "raw-mismatch-hold",
+    "log_name": "n4-raw-mismatch-hold-red.log",
+    "log_sha256": "2a1e2bf4cdaa3777e27826b870012a572b7c0c1aa73431ae2b1b487b8082697c",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeRoundMissingCanonicalRawWithMatchingTipStaysHold (0.20s)"
+    ]
+  },
+  {
+    "case": "read-lifetime",
+    "log_name": "n4-read-lifetime-red.log",
+    "log_sha256": "d213cab956898934593a28448fe7b9490af51cb997bff29480a07ef73d9dc2f7",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedReadViewKeepsInheritedOFDButExplicitlyUnlocksEachOperation (0.01s)",
+      "--- FAIL: TestManagedReadViewRejectsPendingReplacedOrPublicLockAndKeepsData (0.03s)"
+    ]
+  },
+  {
+    "case": "read-view",
+    "log_name": "n4-read-view-red.log",
+    "log_sha256": "03c1f59178ca9018be6babd56fe8245b05b09685eef8660ed06976e41d257acb",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedReadViewKeepsInheritedOFDButExplicitlyUnlocksEachOperation (0.01s)",
+      "--- FAIL: TestManagedReadViewWriterTurnstileCancellationAndConcurrentCloseJoin (0.00s)",
+      "--- FAIL: TestManagedReadViewRejectsPendingReplacedOrPublicLockAndKeepsData (0.01s)"
+    ]
+  },
+  {
+    "case": "recovery-factory",
+    "log_name": "n4-recovery-factory-red.log",
+    "log_sha256": "f3f077eaa3df1a5da4d578c2d7a122bfdf0c647e28cbf22a6c6c7066c7b65ab5",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestIngressPrepareFencedRecoveryRequiresExplicitModuleAndProgram (0.00s)"
+    ]
+  },
+  {
+    "case": "recovery-stop-clean",
+    "log_name": "n4-recovery-stop-clean-red.log",
+    "log_sha256": "bd3e29d9d1d349d26029c5bdba9ec2b24d9d293f5e189c666a7fb8df858cd350",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeRecoveryStopCancelsAndJoinsBeforeClosingRaw (0.13s)"
+    ]
+  },
+  {
+    "case": "reorg-check-db",
+    "log_name": "n4-reorg-check-db-red.log",
+    "log_sha256": "2e9d76ed60984f5048c2859c82e8e492f819cbdf6f916087b2e2296ed1a6467c",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestExecutionReorgCheckFencesBeforeTargetSearchSurvivesRestartAndConvertsAtomically (0.49s)"
+    ]
+  },
+  {
+    "case": "reorg-corrupt-check",
+    "log_name": "n4-reorg-corrupt-check-red.log",
+    "log_sha256": "eaeed7e858668272da2d498db21bbd6c36efa4cf55f73f72dd874104f26b671e",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestExecutionReorgCheckCorruptFenceCannotBecomeRewind (0.59s)"
+    ]
+  },
+  {
+    "case": "shared-proposal",
+    "log_name": "n4-shared-proposal-red.log",
+    "log_sha256": "1092ded1cc37cc5aa2c5aa068b28a1f9fda6b49233dba3af9201e7f79b7d7ce7",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestClientOwnedProposalUsesSameSessionAfterCaptureJoinAndPreservesACK (1.02s)"
+    ]
+  },
+  {
+    "case": "snapshot-head-binding",
+    "log_name": "n4-snapshot-head-binding-red.log",
+    "log_sha256": "fc8c3a3617914417ed1136af9b80fdfafa843ddfe9edc6a878069d3632e52890",
+    "exit": 1,
+    "behavioral_failures": [
+      "test managed_read::tests::snapshot_binds_actual_completed_native_root_and_original_input_digest ... FAILED"
+    ]
+  },
+  {
+    "case": "startup-diagnostic",
+    "log_name": "n4-startup-diagnostic-red.log",
+    "log_sha256": "d9a4415f1524e054e64c94312b357e91bbe8109741060e9054b8fec366125375",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestManagedAdapterStartupIdentityFailurePreservesCauseAndBoundedDiagnostic (0.49s)"
+    ]
+  },
+  {
+    "case": "transition-cli",
+    "log_name": "n4-transition-cli-red.log",
+    "log_sha256": "44ee191a464c5e89b31b12436655fe79763cf30e7effc65c7ec2902b463b7918",
+    "exit": 1,
+    "behavioral_failures": [
+      "test tests::transition_is_explicit_and_mutually_exclusive_with_import_stream ... FAILED"
+    ]
+  },
+  {
+    "case": "transition-diagnostic",
+    "log_name": "n4-transition-diagnostic-red.log",
+    "log_sha256": "883e7ba7347edc0eaa3856f13e386fb77ee9675558771f56b015368e6b5cac81",
+    "exit": 1,
+    "behavioral_failures": [
+      "--- FAIL: TestNativeTransitionOwnedChildBindsExactCoordinatorReplyAndDiskProof (0.42s)"
+    ]
+  },
+  {
+    "case": "transition-lineage-fences",
+    "log_name": "n4-transition-lineage-fences-red.log",
+    "log_sha256": "af69b227517fddb7b8aa772613a6dfb8cbe720cf89f97e66ebf744c90600a6df",
+    "exit": 1,
+    "behavioral_failures": [
+      "test native_epoch::tests::transition_rejects_dangling_bootstrap_pending_without_mutation ... FAILED"
+    ]
+  },
+  {
+    "case": "transition-protocol",
+    "log_name": "n4-transition-protocol-red.log",
+    "log_sha256": "4e86d3cbcfcfe5a11d25bdb5e710bd972c709027cf7530c0203d486406af5109",
+    "exit": 1,
+    "behavioral_failures": [
+      "test native_epoch::tests::transition_protocol_is_bounded_canonical_single_action_and_exact_completed_reply ... FAILED"
+    ]
+  }
+]

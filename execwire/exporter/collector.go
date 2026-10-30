@@ -15,6 +15,10 @@ var ErrCanonicalChanged = errors.New("exporter: canonical chain changed")
 
 type CanonicalChange struct{ Ref execwire.Ref }
 
+type proposedChange struct{ *CanonicalChange }
+
+func (p *proposedChange) Unwrap() error { return p.CanonicalChange }
+
 func (*CanonicalChange) Error() string { return ErrCanonicalChanged.Error() }
 func (*CanonicalChange) Unwrap() error { return ErrCanonicalChanged }
 

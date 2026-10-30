@@ -1,17 +1,14 @@
 package arcingress
 
 import (
-	"crypto/sha256"
 	"encoding/json"
-	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/execwire/checkpoint"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
-	"github.com/0xmhha/indexer-go/x/arc/nativestore"
+	"github.com/0xmhha/indexer-go/x/arc/nativeinput"
 )
 
 const identityName = ".arc-native-import.identity.json"
@@ -30,46 +27,14 @@ type bootstrapReceipt struct {
 	HeadersDigest, BlockDigest, ReceiptsDigest *execwire.Hash
 }
 
-func privateBytes(path string) ([]byte, error) {
-	if err := nativestore.PrivateFile(path); err != nil {
-		return nil, err
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = f.Close() }()
-	info, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	actual, err := os.Lstat(path)
-	if err != nil || !os.SameFile(info, actual) || info.Size() > maxMeta {
-		return nil, ErrNative
-	}
-	p, err := io.ReadAll(io.LimitReader(f, maxMeta+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(p) > maxMeta {
-		return nil, ErrNative
-	}
-	return p, nil
-}
-func readArtifact(path string, out any) error {
-	p, err := privateBytes(path)
-	if err != nil {
-		return err
-	}
-	var s sealedArtifact
-	if strictJSON(p, &s) != nil || execwire.Hash(sha256.Sum256(s.Data)) != s.Digest {
-		return ErrNative
-	}
-	return strictJSON(s.Data, out)
-}
+func privateBytes(path string) ([]byte, error) { return nativeinput.PrivateBytes(path) }
+func readArtifact(path string, out any) error  { return nativeinput.ReadArtifact(path, out) }
 func validateReady(r nativeReady, c port.ExecutionControl, bootDigest execwire.Hash) error {
 	i, h := r.Identity, r.Head
-	if r.Version != 1 || i.Version != 1 || i.ChainID != 5042002 || c.Chain.ID != "5042002" || i.Genesis != c.Chain.Genesis || i.ArcRevision != ArcRevision || i.RethRevision != RethRevision || i.Layout != "reth-native-v2" || i.Instance == (execwire.Hash{}) || i.BootstrapDigest != bootDigest || i.Anchor != (nativeRef{c.Anchor.Height, c.Anchor.Hash, c.AnchorRoot}) || h.Version != 1 || h.Instance != i.Instance || h.ImportEpoch != 1 || !positive(h.ReadEpoch) || h.ReadEpoch != h.RequestID+1 || h.Tip.Height < i.Anchor.Height || h.RequestID != h.Tip.Height-i.Anchor.Height || h.Tip.Hash == (execwire.Hash{}) || h.Tip.Root == (execwire.Hash{}) || h.Tip.Height < c.Visible.Height {
+	if r.Version != 1 || i.Version != 1 || i.ChainID != 5042002 || c.Chain.ID != "5042002" || i.Genesis != c.Chain.Genesis || i.ArcRevision != ArcRevision || i.RethRevision != RethRevision || i.Layout != "reth-native-v2" || i.Instance == (execwire.Hash{}) || i.BootstrapDigest != bootDigest || i.Anchor != (nativeRef{Height: c.Anchor.Height, Hash: c.Anchor.Hash, Root: c.AnchorRoot}) || h.Version != 1 || h.Instance != i.Instance || !positive(h.ImportEpoch) || h.ImportEpoch > 128 || !positive(h.ReadEpoch) || !positive(h.RequestID+1) || h.Tip.Height < i.Anchor.Height || h.Tip.Hash == (execwire.Hash{}) || h.Tip.Root == (execwire.Hash{}) || h.Tip.Height < c.Visible.Height {
+		return ErrNative
+	}
+	if h.ImportEpoch == 1 && (h.RequestID != h.Tip.Height-i.Anchor.Height || h.ReadEpoch != h.RequestID+1) {
 		return ErrNative
 	}
 	if h.Tip.Height == i.Anchor.Height && h.Tip != i.Anchor {

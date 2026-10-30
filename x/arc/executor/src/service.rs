@@ -26,10 +26,29 @@ pub struct Request {
     pub state_proofs: Option<crate::proofs::Selection>,
 }
 
+/// Managed response: separate bounded proof metadata and the unchanged payload.
+pub fn serve_managed(
+    input: impl Read,
+    output: impl Write,
+    mut handler: impl FnMut(Request) -> Result<(Vec<u8>, Vec<u8>)>,
+) -> Result<()> {
+    serve_inner(input, output, true, |r| {
+        handler(r).map(|(proof, payload)| (Some(proof), payload))
+    })
+}
+
 pub fn serve(
+    input: impl Read,
+    output: impl Write,
+    mut handler: impl FnMut(Request) -> Result<Vec<u8>>,
+) -> Result<()> {
+    serve_inner(input, output, false, |r| handler(r).map(|p| (None, p)))
+}
+fn serve_inner(
     mut input: impl Read,
     mut output: impl Write,
-    mut handler: impl FnMut(Request) -> Result<Vec<u8>>,
+    managed: bool,
+    mut handler: impl FnMut(Request) -> Result<(Option<Vec<u8>>, Vec<u8>)>,
 ) -> Result<()> {
     let mut expected = 1_u64;
     loop {
@@ -80,7 +99,7 @@ pub fn serve(
         }
         let op = request.op;
         let id = request.id;
-        let payload = handler(request)?;
+        let (proof, payload) = handler(request)?;
         let limit = if matches!(op, Operation::Replay | Operation::ReplayProofs) {
             64 << 20
         } else {
@@ -96,10 +115,23 @@ pub fn serve(
                 "replay response requires verified EXR1"
             );
         }
-        output.write_all(b"AXS1")?;
+        ensure!(
+            proof
+                .as_ref()
+                .is_some_and(|p| !p.is_empty() && p.len() <= crate::native_import::MAX_META)
+                == managed,
+            "managed proof length exceeds limit"
+        );
+        output.write_all(if managed { b"AXM1" } else { b"AXS1" })?;
         output.write_all(&id.to_be_bytes())?;
         output.write_all(&[op as u8])?;
+        if let Some(proof) = &proof {
+            output.write_all(&(proof.len() as u32).to_be_bytes())?;
+        }
         output.write_all(&(payload.len() as u32).to_be_bytes())?;
+        if let Some(proof) = &proof {
+            output.write_all(proof)?;
+        }
         output.write_all(&payload)?;
         output.flush()?;
         expected = expected
@@ -126,6 +158,54 @@ mod tests {
         let mut bytes = (json.len() as u32).to_be_bytes().to_vec();
         bytes.extend(json);
         bytes
+    }
+
+    #[test]
+    fn managed_service_frames_proof_separately_and_rejects_oversize_before_output() -> Result<()> {
+        let mut input = request(1, Operation::Head, 0, 0);
+        input.extend(request(2, Operation::Replay, 1, 7));
+        let mut output = vec![];
+        let proof = br#"{"Version":1}"#.to_vec();
+        serve_managed(Cursor::new(input), &mut output, |r| {
+            Ok((
+                proof.clone(),
+                if matches!(r.op, Operation::Replay) {
+                    b"EXR1verified".to_vec()
+                } else {
+                    br#"{"height":1}"#.to_vec()
+                },
+            ))
+        })?;
+        let mut bytes = output.as_slice();
+        for (id, op) in [(1_u64, 2_u8), (2, 4)] {
+            let mut h = [0; 21];
+            bytes.read_exact(&mut h)?;
+            assert_eq!(
+                &h[..4],
+                b"AXM1",
+                "managed mode must never downgrade to legacy framing"
+            );
+            assert_eq!(u64::from_be_bytes(h[4..12].try_into()?), id);
+            assert_eq!(h[12], op);
+            let m = u32::from_be_bytes(h[13..17].try_into()?) as usize;
+            let p = u32::from_be_bytes(h[17..21].try_into()?) as usize;
+            assert_eq!(&bytes[..m], proof);
+            bytes = &bytes[m + p..];
+        }
+        assert!(bytes.is_empty());
+        for proof in [vec![], vec![1; (16 << 10) + 1]] {
+            let mut output = vec![];
+            assert!(
+                serve_managed(
+                    Cursor::new(request(1, Operation::Head, 0, 0)),
+                    &mut output,
+                    |_| Ok((proof.clone(), vec![1]))
+                )
+                .is_err()
+            );
+            assert!(output.is_empty());
+        }
+        Ok(())
     }
 
     #[test]

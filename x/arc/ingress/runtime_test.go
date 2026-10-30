@@ -154,7 +154,7 @@ func TestNativeCaptureContinuesWhileWriterBlockedAndCancellationJoins(t *testing
 		b := rawFixture(t, p.control.Chain, parent, h)
 		batches <- b
 		canonical[h] = b[0].Block.Hash
-		parent = nativeRef{h, execwire.Hash(b[0].Block.Hash), parent.Root}
+		parent = nativeRef{Height: h, Hash: execwire.Hash(b[0].Block.Hash), Root: parent.Root}
 	}
 	p.deps.Canonical = canonical
 	ctx, cancel := context.WithCancel(t.Context())
@@ -200,7 +200,7 @@ func TestNativeRawQuotaPreservesExactRetryPrefixAndNeverAdvancesControl(t *testi
 	_, err := p.raw.Append(t.Context(), b[0])
 	require.NoError(t, err)
 	require.NoError(t, p.persist(t.Context(), b), "durable partial prefix is not charged twice")
-	b2 := rawFixture(t, p.control.Chain, nativeRef{1, execwire.Hash(b[0].Block.Hash), p.identity.Anchor.Root}, 2)
+	b2 := rawFixture(t, p.control.Chain, nativeRef{Height: 1, Hash: execwire.Hash(b[0].Block.Hash), Root: p.identity.Anchor.Root}, 2)
 	require.ErrorIs(t, p.persist(t.Context(), b2), window.ErrCapacity)
 	require.Equal(t, uint64(1), p.control.Received.Height)
 	require.Equal(t, 3, p.raw.Stats().Records)

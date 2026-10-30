@@ -4,9 +4,9 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 
 ## 현재 정본과 연속성
 
-- n: N3 [계획](../codemine/runs/20261030-arc-native-n3/plan.md), [체크리스트](../codemine/runs/20261030-arc-native-n3/checklist.md), [사용법](../EXECUTION_ARC_INGRESS.md). App-owned ingress 구현, release gates 진행 중. N4~N6 미완료
-- n−1: N2 #243 [계획](../codemine/runs/20261029-arc-native-n2/plan.md), [writer](../EXECUTION_ARC_NATIVE_WRITER.md)
-- n−2: N1 #242 [계획](../codemine/runs/20261029-arc-native-n1/plan.md), [bootstrap](../EXECUTION_ARC_BOOTSTRAP.md)
+- n: N4 [계획](../codemine/runs/20261030-arc-native-n4/plan.md), [체크리스트](../codemine/runs/20261030-arc-native-n4/checklist.md). managed replay·E1 reorg 통합 구현·로컬 검증 완료, CI 릴리스 대기. N5~N6 미완료
+- n−1: N3 #244 [계획](../codemine/runs/20261030-arc-native-n3/plan.md), [App ingress](../EXECUTION_ARC_INGRESS.md)
+- n−2: N2 #243 [계획](../codemine/runs/20261029-arc-native-n2/plan.md), [writer](../EXECUTION_ARC_NATIVE_WRITER.md)
 - 수용한 Arc first-import 설계 #239 [정본](../ARC_NATIVE_IMPORT_DESIGN.md), [계획](../codemine/runs/20261029-arc-first-import/plan.md), [체크리스트](../codemine/runs/20261029-arc-first-import/checklist.md), [연속성](../codemine/runs/20261029-arc-first-import/continuity.json)
 - 이전 완료: Native 운영 구성 초안 #238 [계획](../codemine/runs/20261029-native-runtime-draft/plan.md), [사용법](../../deployments/native/runtime/README.md)
 - 이전 완료: 운영 입력 권장안 #237 [계획](../codemine/runs/20261029-operations-inputs/plan.md), [체크리스트](../codemine/runs/20261029-operations-inputs/checklist.md), [연속성](../codemine/runs/20261029-operations-inputs/continuity.json), [결정표](../OPERATIONS_READINESS.md)
@@ -56,11 +56,11 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 | 완료 #236 | 오프라인 monitoring | [일회성 경보 판정](../NATIVE_OFFLINE_MONITORING.md): Arc/StableNet 진단 JSON·선언된 capacity/pipeline·명시적 시각, strict 입력·unknown/stale·redaction·독립 위험 판정. 체인/DB/RPC/watcher/알림·actuation 없음. 최종 CI5 run40704614928 통과 후 squash/main a49065d 동기화 완료 |
 | 권장안 정리 완료·실제 값 HOLD | 저장소·배포 입력 | [결정표](../OPERATIONS_READINESS.md): 체인별 분리 경로, PostgreSQL pool4의 전체 예산, Arc 24h/172800블록의 가정과 native/spool 추가 용량, 인증 checkpoint 시작 권장안. 읽기 전용 metadata만 확인. 미확정 값을 template에 채우거나 provisioning하지 않음 |
 | 초안 구현·운영 HOLD | Native App/collector/executor 구성 | [별도 runtime 초안](../../deployments/native/runtime/README.md): 두 App과 producer, 외부 PostgreSQL16·DSN_FILE·private IPC·분리 scratch·native lease/RO DB mount·수동 lifecycle. bounded 오프라인 검사와 모의 기능 검증. Arc executor는 collector의 stdio 자식. 실제 image/host/서비스는 검증·실행하지 않음 |
-| 설계·N0~N3 구현, runtime은 미완료 | Arc first-import 공급 경로 | [App 내부 Go 감독+Rust 첫 실행 설계](../ARC_NATIVE_IMPORT_DESIGN.md)와 N0~N6 계획 확정. 기존 ETH/68과 공유 RPC5/Store4, 두 번째 collector를 유지. native bootstrap·첫 writer·저장 완료/read gate·App ingress는 구현했고 managed collector·E1 reorg·영구 raw/GC·통합 acceptance는 미완료다. 전체 노드/새 독립 RPC·DB pool 없음 |
+| 설계·N0~N3 릴리스, N4 구현/검증 중 | Arc first-import 공급 경로 | [App 내부 Go 감독+Rust 첫 실행 설계](../ARC_NATIVE_IMPORT_DESIGN.md)와 N0~N6 계획 확정. 기존 ETH/68과 공유 RPC5/Store4, 두 번째 collector를 유지. native bootstrap·첫 writer·App ingress는 릴리스했고 N4 managed collector·E1 reorg는 구현·로컬 검증을 완료했고 CI 릴리스를 기다린다. N5 영구 raw/GC·SQL owner binding과 N6 통합 acceptance는 미완료다. 전체 노드/새 독립 RPC·DB pool 없음 |
 | N0 구현 | bounded import/fence와 pinned SDK qualification | [N0](../codemine/runs/20261029-arc-native-n0/plan.md): AIN1 frame·private durable fence RED→GREEN, 실제 native-v2 Full 저장·별도 RO 갱신·두 번째 replay·H1 full checkpoint·unwind/reimport·controlled 중단/재시작. 운영 writer/실제 실행은 없음 |
 | N1 구현 | 인증된 native bootstrap | [전체 상태 검증·새 DB 초기화](../EXECUTION_ARC_BOOTSTRAP.md), original anchor/floor/H+1·authentic header/body/receipts와 atomic no-overwrite publication. 운영 입력 HOLD |
 | N2 구현 | 첫 실행 writer | [owned stdio·첫 Arc 실행·native 완료](../EXECUTION_ARC_NATIVE_WRITER.md), 단일 writer/run/publication/read gate, checksum intent/receipt/head·실제 SIGKILL·정확한 duplicate. 관리 legacy 유지보수 거부 |
-| N3 구현, release gates 진행 중 | N3 App-owned ingress | generic opt-in factory와 Arc bundle 등록, 기존 ETH/68·verifier·공유 RPC5/Store4, bounded durable raw/channel과 child env/cancel/join. 이후 N4 managed collector/reorg→N5 영구 raw/GC→N6 통합 |
+| N3 #244 릴리스 완료 | N3 App-owned ingress | generic opt-in factory와 Arc bundle 등록, 기존 ETH/68·verifier·공유 RPC5/Store4, bounded durable raw/channel과 child env/cancel/join. 이후 N4 managed collector/reorg→N5 영구 raw/GC→N6 통합 |
 | 다음 운영 준비·HOLD | 실제 APFS·배포 값 → Arc 공급자·접속·인증 checkpoint → 실제 backup/restore 검증 | 아래 미확정 조건을 충족한 뒤 별도 운영 범위로 진행. 새 측정·운영 확인 루프를 만들지 않음 |
 | 완료 #226 | Arc native selected proof와 collector/window | RED→GREEN, 실제 임시 native-v2/history와 2회 ArcEVM 증거, strict selection·고정 source 정책·capacity/lease/restart/reorg/ACK, PG/API, 전체 로컬 검사·새 CPU1/race/single200, staged/history scan, 정확한 head CI5, squash·깨끗한 main 동기화. source-branch PR을 완료 정본으로 사용 |
 | 완료 #227 | 지원 체인의 bounded Engine blob transport | 명시적 peer/beacon/relay·fork/proof 형식과 원격 보존 범위를 확보하고 head 수신·local window·capacity·재시작에 연결. Arc pinned positive admission 미지원 정책을 강제 활성화하지 않음. full-blob 파일 보존/KZG는 beacon SSZ inclusion·PeerDAS/cell 복원을 대신하지 않음 |
@@ -68,7 +68,7 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 | 완료 #229 | **E6 독립 canonical/finality** | 고정 go-stablenet4d17eea018c8 WBFT BLS quorum·명시적 trust/fork·인증 전환·원자적 finality/복구 구현과 로컬 전체 게이트가 통과했다. 정확한 head `f89109a492fc9991fd8ec0f636d78a937a22ba97`의 CI5 run40377905374, squash/main `f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818`, 한 부모·reviewed tree 일치와 깨끗한 primary main 동기화·전용 임시 자료 정리가 확인됐다. RPC5/final fresh를 유지하며 기본 경로를 독립 검증으로 이름 붙이지 않음 |
 | 완료 #230 | Native 보존 추가 확장 | 실제 v2 lookup/MDBX compact-copy, matched native/source/indexer backup 및 restore/floor admission을 구현하고 real native·PG·RED/GREEN·전체 로컬·CI5 run40418831898 뒤 squash/main 동기화를 검증했다. 외부 PG snapshot/WAL 인증·설치와 운영 활성화는 보류하며 native 전체 고정 크기·측정 절감량을 약속하지 않음 |
 
-N1의 [오프라인 인증 native bootstrap](../EXECUTION_ARC_BOOTSTRAP.md)은 구현됐으며 실제 운영 입력은 HOLD다. N2 writer는 구현했으며 N3 App ingress는 구현했고 N4~N6의 managed collector·영구 raw/GC·통합 acceptance가 남는다.
+N1의 [오프라인 인증 native bootstrap](../EXECUTION_ARC_BOOTSTRAP.md)은 구현됐으며 실제 운영 입력은 HOLD다. N2 writer는 구현했으며 N3 App ingress는 구현했고 N4 managed collector/reorg를 구현/검증하며 N5 영구 raw/GC·SQL owner binding과 N6 통합 acceptance가 남는다.
 
 ## 운영·실제 자료 검증 — 현재 보류
 

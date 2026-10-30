@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/x/arc/nativeinput"
 	"github.com/0xmhha/indexer-go/x/arc/nativestore"
 )
 
@@ -27,6 +29,14 @@ func (b *boundedError) Write(p []byte) (int, error) {
 	}
 	return len(p), nil
 }
+func (b *boundedError) String() string { b.mu.Lock(); defer b.mu.Unlock(); return string(b.bytes) }
+func nativeFailure(err error, diagnostic *boundedError) error {
+	joined := errors.Join(ErrNative, err)
+	if detail := diagnostic.String(); detail != "" {
+		return fmt.Errorf("%w; native adapter: %s", joined, detail)
+	}
+	return joined
+}
 
 type nativeClient struct {
 	input     io.WriteCloser
@@ -42,14 +52,10 @@ type nativeClient struct {
 	stderr    boundedError
 }
 
+func (c *nativeClient) Initial() nativeReady { return c.ready }
+
 func childEnvironment() []string {
-	var env []string
-	for _, key := range []string{"LANG", "LC_ALL", "TZ"} {
-		if v, ok := os.LookupEnv(key); ok {
-			env = append(env, key+"="+v)
-		}
-	}
-	return env
+	return nativeinput.ChildEnvironment()
 }
 func startNative(ctx context.Context, executable, dir string, timeout time.Duration) (*nativeClient, error) {
 	if err := ctx.Err(); err != nil {
@@ -90,7 +96,7 @@ func startOwnedNative(ctx context.Context, cancel context.CancelFunc, cmd *exec.
 	err = c.operation(ctx, func() error { return readReply(c.output, "AWH1", 0, &c.ready) })
 	if err != nil {
 		c.Close()
-		return nil, err
+		return nil, nativeFailure(err, &c.stderr)
 	}
 	c.head = c.ready.Head
 	return c, nil
@@ -148,12 +154,12 @@ func (c *nativeClient) Import(ctx context.Context, m importMeta, block, receipts
 		if err = validateCompletion(c.ready.Identity, c.head, m, digest, root, receiptsRoot, out); err != nil {
 			return err
 		}
-		c.head = nativeHead{Version: 1, Instance: out.Identity.Instance, ImportEpoch: out.ImportEpoch, ReadEpoch: out.ReadEpoch, RequestID: out.RequestID, Tip: nativeRef{out.Height, out.Hash, out.Root}}
+		c.head = nativeHead{Version: 1, Instance: out.Identity.Instance, ImportEpoch: out.ImportEpoch, ReadEpoch: out.ReadEpoch, RequestID: out.RequestID, Tip: nativeRef{Height: out.Height, Hash: out.Hash, Root: out.Root}}
 		return nil
 	})
 	if err != nil {
 		c.Close()
-		return out, errors.Join(ErrNative, err)
+		return out, nativeFailure(err, &c.stderr)
 	}
 	return out, nil
 }

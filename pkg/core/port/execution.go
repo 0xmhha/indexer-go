@@ -51,6 +51,7 @@ type ExecutionControl struct {
 	Maintenance   bool
 	Rewinding     bool
 	BaselineReady bool
+	ReorgPending  bool
 }
 
 // ExecutionBaseline is an explicit, upstream-verified snapshot of covered keys
@@ -158,4 +159,17 @@ type ExecutionRewindStore interface {
 	BeginExecutionRewind(context.Context, execwire.Ref, execwire.Hash) (ExecutionRewind, error)
 	ExecutionRewindStatus(context.Context) (ExecutionRewind, error)
 	ResumeExecutionRewind(context.Context, UndoHook, func(context.Context, execwire.Ref) error) (*Reorg, error)
+}
+
+// ExecutionReorgCheck fences reads/publication before common-parent RPC search.
+// It chooses no target and advances no generation. The existing coordinator
+// atomically replaces it with a validated ExecutionRewind marker.
+type ExecutionReorgCheck struct {
+	Generation uint64
+	From       execwire.Ref
+	Root       execwire.Hash
+}
+type ExecutionReorgCheckStore interface {
+	BeginExecutionReorgCheck(context.Context) (ExecutionReorgCheck, error)
+	ExecutionReorgCheckStatus(context.Context) (ExecutionReorgCheck, error)
 }

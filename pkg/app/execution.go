@@ -9,6 +9,7 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/chains"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/0xmhha/indexer-go/pkg/execution"
+	"github.com/0xmhha/indexer-go/pkg/execution/ingress"
 	"github.com/0xmhha/indexer-go/pkg/fetch"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
@@ -113,28 +114,15 @@ func (a *App) initExecution(ctx context.Context) error {
 		return err
 	}
 	a.fetcher.SetExecutionCanonical(a.profileSrc)
-	recoverExecution := func(ctx context.Context) error {
-		c, err := store.ExecutionStatus(ctx)
-		if err != nil {
-			return err
-		}
-		if c.Maintenance {
-			return port.ErrExecutionMaintenance
-		}
-		if c.Rewinding {
-			if err = a.fetcher.RecoverExecution(ctx); err != nil {
-				return err
-			}
-			c, err = store.ExecutionStatus(ctx)
-			if err != nil {
-				return err
-			}
-		}
+	reorgGate := execution.NewReorgGate(store)
+	var owned ingress.Program
+	recovery := executionRecovery{store: store, target: a.fetcher.ExecutionRecoveryTarget, sql: a.fetcher.RecoverExecution, validate: func(ctx context.Context, c port.ExecutionControl) error {
 		return validateExecutionFeatures(ctx, store, c, a.features.Units())
-	}
-	// Recovery completes before newApp exposes the API, and is checked again
-	// before the relay/listener starts. No legacy backfill or Fetcher.Run runs.
-	owned, err := prepareExecutionIngress(ctx, a.config, store, a.profileSrc, profile, recoverExecution)
+	}}
+	recoverExecution := func(ctx context.Context) error { return recovery.Run(ctx, owned) }
+	// Prepare and recover native while SQL is still fenced, before API exposure.
+	var err error
+	owned, err = prepareExecutionIngressWithRecovery(ctx, a.config, store, a.profileSrc, profile, recovery.Run, reorgGate.Fence)
 	if err != nil {
 		return err
 	}
@@ -151,10 +139,16 @@ func (a *App) initExecution(ctx context.Context) error {
 		return err
 	}
 	r.Chain = c.Chain
+	r.OnController = reorgGate.Bind
 	r.OpenController = func(ctx context.Context) (*execution.Controller, error) {
 		return execution.NewController(ctx, limits, store, backend, recoverExecution)
 	}
 	r.Reorg = func(ctx context.Context, c *execution.Controller) error {
+		if owned != nil {
+			if err := c.CheckReorg(ctx); err != nil {
+				return err
+			}
+		}
 		target, root, err := a.fetcher.ExecutionRecoveryTarget(ctx)
 		if err != nil {
 			return err

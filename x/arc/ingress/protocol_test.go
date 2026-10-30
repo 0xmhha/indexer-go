@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/x/arc/nativeinput"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -29,6 +30,9 @@ func TestNativeInputExactFramingAndDigest(t *testing.T) {
 	expected.Write(receipts)
 	require.Equal(t, expected.Bytes(), frame)
 	require.Equal(t, execwire.Hash(sha256.Sum256(frame)), digest)
+	shared, err := nativeinput.Digest(m, block, receipts)
+	require.NoError(t, err)
+	require.Equal(t, digest, shared, "managed replay and import must bind the same exact AIN1 bytes")
 	m.RequestID = 0
 	_, _, err = encodeInput(m, block, receipts)
 	require.Error(t, err)
