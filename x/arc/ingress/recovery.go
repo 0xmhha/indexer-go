@@ -21,9 +21,12 @@ type roundRun struct {
 	once        sync.Once
 	pauseMu     sync.Mutex
 	pauseCancel context.CancelFunc
+	nativeStop  chan struct{}
+	nativeOnce  sync.Once
 }
 
 func (r *roundRun) pause() {
+	r.stopNative()
 	r.once.Do(func() { close(r.stop) })
 	r.pauseMu.Lock()
 	cancel := r.pauseCancel
@@ -31,6 +34,21 @@ func (r *roundRun) pause() {
 	if cancel != nil {
 		cancel()
 	}
+}
+
+// Native admission is distinct from the coordinator signal: ordinary input
+// teardown must still allow a reorg proposal over the existing collector.
+func (r *roundRun) nativeAdmission() chan struct{} {
+	r.pauseMu.Lock()
+	defer r.pauseMu.Unlock()
+	if r.nativeStop == nil {
+		r.nativeStop = make(chan struct{})
+	}
+	return r.nativeStop
+}
+func (r *roundRun) stopNative() {
+	stop := r.nativeAdmission()
+	r.nativeOnce.Do(func() { close(stop) })
 }
 func (r *roundRun) bindPause(cancel context.CancelFunc) {
 	r.pauseMu.Lock()
@@ -44,7 +62,7 @@ func (r *roundRun) bindPause(cancel context.CancelFunc) {
 }
 func (p *program) quiesce(ctx context.Context) error {
 	p.mu.Lock()
-	if p.stopped {
+	if p.stopped || p.draining != nil {
 		p.mu.Unlock()
 		return port.ErrClosed
 	}

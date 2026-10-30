@@ -36,6 +36,7 @@ func (p *program) runOwnedLoop(parent context.Context, run func(context.Context,
 	ctx, cancel := context.WithCancel(parent)
 	p.started = true
 	p.cancel = cancel
+	p.runCtx = ctx
 	p.done = make(chan struct{})
 	p.resume = make(chan struct{}, 1)
 	done := p.done
@@ -54,7 +55,25 @@ func (p *program) runOwnedLoop(parent context.Context, run func(context.Context,
 		p.mu.Lock()
 		p.round = nil
 		recovering := p.recovering
+		request := p.draining
 		p.mu.Unlock()
+		if request != nil {
+			if !errors.Is(err, errParked) {
+				request.result <- drainResult{err: executionDrainError(err)}
+				return executionDrainError(err)
+			}
+			p.closeRaw()
+			p.mu.Lock()
+			request.parked = true
+			p.mu.Unlock()
+			request.result <- drainResult{point: request.point}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-p.resume:
+			}
+			continue
+		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -72,4 +91,11 @@ func (p *program) runOwnedLoop(parent context.Context, run func(context.Context,
 		}
 		return err
 	}
+}
+
+func executionDrainError(err error) error {
+	if err == nil {
+		return io.ErrUnexpectedEOF
+	}
+	return err
 }

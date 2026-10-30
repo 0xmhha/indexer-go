@@ -17,12 +17,14 @@ import (
 )
 
 // Check starts no peer/child. The writer independently rechecks live SDK roots.
-func (p *program) Check(parent context.Context) error {
+func (p *program) Check(parent context.Context) error { return p.checkPrepared(parent, false) }
+
+func (p *program) checkPrepared(parent context.Context, parked bool) error {
 	ctx, cancel := context.WithTimeout(parent, p.cfg.Timeout)
 	defer cancel()
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.stopped || p.started {
+	if p.stopped || p.started && (!parked || p.draining == nil || !p.draining.parked) {
 		return port.ErrClosed
 	}
 	if p.recovering {

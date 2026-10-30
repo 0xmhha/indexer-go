@@ -1,0 +1,20 @@
+[
+  {
+    "command": "go test ./exporter -run ^TestCommittedObserver -count=1",
+    "exit": 1,
+    "assertion": "missing durable ACK observer",
+    "classification": "compiled behavioral assertion using reflection before the field existed"
+  },
+  {
+    "command": "go test ./x/arc/ingress -short -count=1 -run ^TestNativeDrain",
+    "exit": 1,
+    "assertion": "drain ended before stopping admission: invalid data",
+    "classification": "compiled behavioral assertion against refusing Drain stub; later nil callback fixture panic is excluded"
+  },
+  {
+    "command": "go test ./pkg/app -short -count=1 -run ^TestExecutionAppDrain",
+    "exit": 1,
+    "assertion": "App must forward optional drain without closing its SQL/receiver owner",
+    "classification": "compiled behavioral assertion"
+  }
+]

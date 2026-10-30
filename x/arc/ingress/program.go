@@ -28,6 +28,8 @@ type program struct {
 	started, stopped bool
 	cancel           context.CancelFunc
 	done             chan struct{}
+	runCtx           context.Context
+	draining         *drainRequest
 	recoveryMu       sync.Mutex
 	recoveryCancel   context.CancelFunc
 	recovering       bool

@@ -24,9 +24,12 @@ type Client struct {
 	OnReady              func(context.Context) error
 	BeforeCapture        func(context.Context) error
 	OnError              func(error)
-	dial                 func(context.Context) (net.Conn, error)
-	wake                 chan struct{}
-	running              atomic.Bool
+	// OnCommitted observes an already durable source ACK. It must not block.
+	// An anchor/Hello without a result digest is never reported.
+	OnCommitted func(execwire.Header)
+	dial        func(context.Context) (net.Conn, error)
+	wake        chan struct{}
+	running     atomic.Bool
 }
 
 func (c *Client) transfer(parent context.Context, conn *execwire.Conn) error {
@@ -58,6 +61,7 @@ func (c *Client) transfer(parent context.Context, conn *execwire.Conn) error {
 	if err != nil {
 		return err
 	}
+	c.committed(status)
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	closed := make(chan struct{})
@@ -171,6 +175,9 @@ func (c *Client) transfer(parent context.Context, conn *execwire.Conn) error {
 					return err
 				}
 				lastACK = e.Ref
+				if c.OnCommitted != nil {
+					c.OnCommitted(frame.Header)
+				}
 				<-active
 			}
 		}()
@@ -185,6 +192,12 @@ func (c *Client) transfer(parent context.Context, conn *execwire.Conn) error {
 		}
 	}
 	return first
+}
+
+func (c *Client) committed(s spool.Status) {
+	if c.OnCommitted != nil && s.Digest != (execwire.Hash{}) {
+		c.OnCommitted(execwire.Header{Version: execwire.Version, Chain: s.Chain, Ref: s.Committed, Digest: s.Digest})
+	}
 }
 
 func transportError(err error) bool {

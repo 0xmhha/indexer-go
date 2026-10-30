@@ -1,0 +1,19 @@
+{
+  "base": "867d1bee3f896bbbbe1821e531967cd22dcdbb9f",
+  "files": {
+    "execwire/exporter/client.go": "bd69ad1f50b9543f929152a6aa908cf1806b5fafd0e9528cac2cf820d4b080ef",
+    "execwire/exporter/committed_test.go": "cfec1e5fa3e0dc159364b93a36f1d9d97d5a016918e3e5728a1322a01642e958",
+    "execwire/exporter/runtime.go": "80b5b4d326e0a7c8248ca38c31165fc7b335d6a35b15ab4f989ca3251aa132fe",
+    "pkg/app/execution_drain.go": "890abe688142f2dd8f48a7e54cc8c639b30598cffde2b4fe619bc490b02fb6fb",
+    "pkg/app/execution_drain_test.go": "a2bb2b2540d8d5220bd86d9a55ea5f3cad78f7b31276fb9df184a69a49c67cd2",
+    "pkg/execution/ingress/drain.go": "6d1de5927a485f5308547d47d06bb9438b5ef1c62c04573ea4d914aa58df7231",
+    "x/arc/collector/run.go": "fec48b22743edde6f0058eaded229ef31e6edea632f30058f8c91efb8c4eded5",
+    "x/arc/ingress/drain.go": "6a16de6b383d8c0be6feee566556abe867f250427e59ef9ad1524c5a7c26984d",
+    "x/arc/ingress/drain_test.go": "43ee508b5348eda5ae062026bbabcd6df51eb6d62f09db957b354038e3550e13",
+    "x/arc/ingress/loop.go": "f601c4f5fef633a177b5638c26e63ce0b4bbd8df6ed06a751d913a6099a0cbc8",
+    "x/arc/ingress/preparation.go": "44ee9283576df36a7ff31f24697467b21332c9fce327f80301c55eae2e537405",
+    "x/arc/ingress/program.go": "6199e3e35a124efffc8ad79fc8c67fff266c544745b57a49a7bdb8b732042c79",
+    "x/arc/ingress/recovery.go": "3451495bfb2bd4630fdd0bdf333b82e4891d8cc584db40c9e2d2560d39f2df1a",
+    "x/arc/ingress/round.go": "ba51b244b8708e4ad247e768869367e67205581b9834d29b2dbe3e6aa2b6da88"
+  }
+}

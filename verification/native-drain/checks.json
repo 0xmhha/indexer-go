@@ -1,0 +1,58 @@
+[
+  {
+    "check": "arc-short",
+    "exit": 0,
+    "log": "n5-drain-arc-short.log",
+    "sha256": "832b3260e4523fadb2cda5f2e09f84052c11800badedad72bf412dc3aebd968f"
+  },
+  {
+    "check": "wire-short",
+    "exit": 0,
+    "log": "n5-drain-wire-short.log",
+    "sha256": "9d59eee7fe856bcc4cb26880210f0c6bb65759ad76cf451352b6b1e0875e6935"
+  },
+  {
+    "check": "final-build",
+    "exit": 0,
+    "log": "n5-drain-final-build.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "ci-policy23",
+    "exit": 0,
+    "log": "n5-drain-ci-policy.log",
+    "sha256": "21ab333c603058ece066c3a23503fd5eb4a86cfc5a1360cd296db6bcf776f511"
+  },
+  {
+    "check": "drain-reorg-app-race200",
+    "exit": 0,
+    "log": "n5-drain-final-race200.log",
+    "sha256": "1f8768785b457f5f8fab2c1fa9ee90bb51f320fe108e7848c264bd235dbed119",
+    "condition": "GOMAXPROCS=1, -short -race -parallel=1 -count=200; local targeted functionality, no performance claim"
+  },
+  {
+    "check": "ack-race200",
+    "exit": 0,
+    "log": "n5-ack-race200.log",
+    "sha256": "a5b91237c6d2f71522be6f023ccdbac0b6b25cdad624ddc53fb068a1801cb1e1",
+    "condition": "GOMAXPROCS=1, -short -race -parallel=1 -count=200; local targeted functionality, no performance claim"
+  },
+  {
+    "check": "affected-short",
+    "result": "pkg/app 210.265s; collector 6.240s; common ingress 2.052s, actual tool outputs; initial Arc proposal regression fixed and separately rerun successfully"
+  },
+  {
+    "check": "static",
+    "result": "affected root vet/lint and wire vet/lint exit0, 0 lint issues"
+  },
+  {
+    "check": "documentation",
+    "files": 8,
+    "links": 221,
+    "errors": 0
+  },
+  {
+    "check": "superseded-qualification",
+    "result": "initial signal reuse regressed reorg proposal; fixed separate admission signal. Earlier race200 run terminated explicitly (143); it is not a pass. Final selected lifecycle/reorg/App run passed."
+  }
+]

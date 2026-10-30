@@ -1,0 +1,15 @@
+{
+  "stage": "N5 explicit raw deletion and recovery",
+  "status": "COMPLETE",
+  "pr": 252,
+  "url": "https://github.com/0xmhha/indexer-go/pull/252",
+  "base": "245877643d690bc167370c4fcabf6e6b4a34123f",
+  "head": "795c5626c9f7c75e2adf7fea4414bccc793afd65",
+  "tree": "32626929b3ffee64749606183b233203bae34a33",
+  "main": "867d1bee3f896bbbbe1821e531967cd22dcdbb9f",
+  "ci_run": 41013010304,
+  "ci_run_number": 328,
+  "checks": "scope+allfive namedjobs actualsuccess; actualshortGo/corePG11/build/lint/examples; full/nativeSDK intentionallyskipped; localnew4 cases CPU1/race/single200 pass; fullPGshort once pass",
+  "sync": "exactreviewedtree/oneparent/base/cleanHEAD=originmain/configunchanged",
+  "overall_N5": "INCOMPLETE: graceful both-worker drain/managed native COW wiring, held Docker/capacity/inspection; N6 follows"
+}

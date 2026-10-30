@@ -17,6 +17,7 @@ import (
 	arcfeed "github.com/0xmhha/indexer-go/x/arc/feed"
 	"github.com/ethereum/go-ethereum/common"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 )
 
@@ -37,7 +38,9 @@ type ownedRound struct {
 	writer                                      nativeProcess
 	peer                                        peerProcess
 	stream                                      chainfeed.Stream
-	nativeStop                                  chan struct{}
+	nativeStop                                  <-chan struct{}
+	ack                                         atomic.Pointer[execwire.Header]
+	inputErr                                    error
 	captureCancel, watchCancel, collectorCancel context.CancelFunc
 	results                                     chan error
 	workers, joined                             int
@@ -53,7 +56,7 @@ func (r *ownedRound) stopInputs() {
 		return
 	}
 	r.inputsClosed = true
-	close(r.nativeStop)
+	r.control.stopNative()
 	if r.captureCancel != nil {
 		r.captureCancel()
 	}
@@ -64,7 +67,8 @@ func (r *ownedRound) stopInputs() {
 		_ = r.stream.Close()
 	}
 	for r.joined < r.workers {
-		<-r.results
+		err := <-r.results
+		r.recordInputError(err)
 		r.joined++
 	}
 	if r.peer != nil {
@@ -87,7 +91,7 @@ func (r *ownedRound) close() { r.stopInputs(); r.stopCollector() }
 func (r *ownedRound) startCollector() {
 	p := r.p
 	identity := p.identity
-	c := collector.Config{Native: collector.Options{Executable: p.cfg.Collector.Executable, DataDir: p.cfg.Native.DataDir, ScratchDir: filepath.Dir(p.cfg.Collector.SpoolDir), Chain: p.deps.Control.Chain, Timeout: p.cfg.Timeout, Managed: &identity, StateProofs: p.deps.StateProofs}, Anchor: p.deps.Control.Anchor, SpoolDir: p.cfg.Collector.SpoolDir, Socket: p.deps.Socket, MaxBytes: p.cfg.Collector.MaxBytes, MaxRecords: p.cfg.Collector.MaxRecords, Window: 8, Poll: 100 * time.Millisecond, Retry: 500 * time.Millisecond, Proposals: r.proposals}
+	c := collector.Config{OnCommitted: func(h execwire.Header) { r.ack.Store(&h) }, Native: collector.Options{Executable: p.cfg.Collector.Executable, DataDir: p.cfg.Native.DataDir, ScratchDir: filepath.Dir(p.cfg.Collector.SpoolDir), Chain: p.deps.Control.Chain, Timeout: p.cfg.Timeout, Managed: &identity, StateProofs: p.deps.StateProofs}, Anchor: p.deps.Control.Anchor, SpoolDir: p.cfg.Collector.SpoolDir, Socket: p.deps.Socket, MaxBytes: p.cfg.Collector.MaxBytes, MaxRecords: p.cfg.Collector.MaxRecords, Window: 8, Poll: 100 * time.Millisecond, Retry: 500 * time.Millisecond, Proposals: r.proposals}
 	ctx, cancel := context.WithCancel(r.ctx)
 	r.collectorCancel = cancel
 	r.collectorDone = make(chan error, 1)
@@ -183,6 +187,7 @@ func (r *ownedRound) captureAndConsume() error {
 	go func() { r.results <- p.watchNative(watchCtx) }()
 	select {
 	case err := <-r.results:
+		r.recordInputError(err)
 		r.joined++
 		return err
 	case err := <-r.collectorDone:
@@ -227,7 +232,7 @@ func (p *program) runRound(ctx context.Context, control *roundRun) error {
 	if err := p.stable(ctx); err != nil {
 		return err
 	}
-	round := &ownedRound{p: p, ctx: ctx, control: control, nativeStop: make(chan struct{}), results: make(chan error, 3), proposals: make(chan execwire.Ref, 1)}
+	round := &ownedRound{p: p, ctx: ctx, control: control, nativeStop: control.nativeAdmission(), results: make(chan error, 3), proposals: make(chan execwire.Ref, 1)}
 	defer round.close()
 	writer, err := p.startRoundNative(ctx)
 	if err != nil {
@@ -255,7 +260,17 @@ func (p *program) runRound(ctx context.Context, control *roundRun) error {
 	}
 	p.mu.Lock()
 	recovering := p.recovering
+	request := p.draining
 	p.mu.Unlock()
+	if request != nil {
+		if round.inputErr != nil {
+			return round.inputErr
+		}
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, port.ErrExecutionRewinding) {
+			return err
+		}
+		return round.drain(request)
+	}
 	if recovering || errors.Is(err, port.ErrExecutionRewinding) {
 		return port.ErrExecutionRewinding
 	}
@@ -307,4 +322,10 @@ func (p *program) runRound(ctx context.Context, control *roundRun) error {
 	}
 	round.stopCollector()
 	return p.rotateRaw(ctx, head)
+}
+
+func (r *ownedRound) recordInputError(err error) {
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, port.ErrExecutionRewinding) {
+		r.inputErr = errors.Join(r.inputErr, err)
+	}
 }
