@@ -17,7 +17,12 @@ import (
 )
 
 // Check starts no peer/child. The writer independently rechecks live SDK roots.
-func (p *program) Check(parent context.Context) error { return p.checkPrepared(parent, false) }
+func (p *program) Check(parent context.Context) error {
+	if err := p.maintenanceGate(parent); err != nil {
+		return err
+	}
+	return p.checkPrepared(parent, false)
+}
 
 func (p *program) checkPrepared(parent context.Context, parked bool) error {
 	ctx, cancel := context.WithTimeout(parent, p.cfg.Timeout)

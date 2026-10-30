@@ -12,8 +12,9 @@ The caller supplies a frozen `ManagedContext`: version1, original canonical
 native directory and `nativeinput.Proof` for its sealed completed head. The
 immutable identity, bootstrap digest, original anchor, receipt and epochs must
 match the actual target. Copying or stopping a writer is not deletion authority.
-Use the [App drain boundary](EXECUTION_DRAIN.md) before maintenance; independently
-obtain the existing E3 permit and live SQL lease. All seven public parts, exact
+The [explicit App/E3 coordinator](EXECUTION_MAINTENANCE_COORDINATOR.md) uses the
+[App drain boundary](EXECUTION_DRAIN.md) and independently obtains the existing
+E3 permit and live SQL lease. All seven public parts, exact
 source ACK/admission and archived raw input coverage remain mandatory.
 
 `nativestore` acquires its existing run EX, then invokes optional
@@ -78,14 +79,14 @@ rewind. Legitimate empty state-change blocks use a dedicated test generator;
 existing short fixtures retain their nonempty-state assertion.
 
 Go child/protocol/COW fixtures and actual Rust SDK fixtures are separate.
-Combined App/mock ETH68/SDK/SQL/GC acceptance is still N6. This bridge does not
-automatically invoke maintenance from App. The next N5 subfeature is an explicit
-App/E3 coordinator: drain → independently observed plan → E3 fresh authorization
-→ raw GC/recovery first → native/source COW under the live lease → E3 fresh
-completion → exact file release → verified resume. Its durable phase journal
-must distinguish zero-deletion raw completion from an unstarted raw phase and
-preserve exact recovery across each boundary. Until that integration qualifies,
-manual artifacts or the drain point cannot activate this sequence.
+Combined App/mock ETH68/SDK/SQL/GC acceptance is still N6. The separate
+[App/E3 coordinator](EXECUTION_MAINTENANCE_COORDINATOR.md) implements explicit
+drain → independently observed plan → E3 fresh authorization → raw GC/recovery
+first → native/source COW under the live lease → E3 fresh completion → exact
+file release → verified resume. Its durable journal distinguishes zero-deletion
+raw completion from an unstarted phase. This remains an explicit library call;
+manual artifacts or a drain point alone grant no maintenance authority. Held
+Docker/capacity/inspection composition and N6 remain incomplete.
 
 Pool4/part2/API1, seven logical writers, physical RPC5 and NEW final canonical
 response → generation fence → COMMIT → exact ACK stay unchanged. Default CI

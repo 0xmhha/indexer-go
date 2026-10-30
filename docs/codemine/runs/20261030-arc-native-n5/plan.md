@@ -5,7 +5,10 @@ Legacy admission #249 and SQL/backend foundation #250 are released; App/Arc
 actual owner/origin #251/CI327 is released at main2458776. Explicit raw deletion/recovery #252 is released at main867d1be.
 [Graceful worker drain](../../../EXECUTION_DRAIN.md) #253/CI329 is released at
 mainf63d0ff. The [managed native COW bridge](../../../EXECUTION_MANAGED_MAINTENANCE.md)
-is implemented; explicit App/E3 phase orchestration remains separate. The
+is released as #254/CI330 at main9af6e0f. The explicit
+[App/E3 coordinator](../../../EXECUTION_MAINTENANCE_COORDINATOR.md) is implemented;
+its [qualification](../20261031-arc-maintenance-coordinator/checklist.md) remains
+distinct from held Docker composition and combined N6 acceptance. The
 [accepted first-import plan](../20261029-arc-first-import/plan.md) remains the
 authority. Native n−1 is [N4](../20261030-arc-native-n4/plan.md); n−2 is
 [N3](../20261030-arc-native-n3/plan.md). Preserve the accepted

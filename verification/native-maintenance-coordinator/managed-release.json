@@ -1,0 +1,16 @@
+{
+  "stage": "N5 managed native COW bridge/completed-floor restart",
+  "status": "COMPLETE",
+  "pr": 254,
+  "url": "https://github.com/0xmhha/indexer-go/pull/254",
+  "base": "f63d0ffec444fc23930bbddd32bd47806667b4dd",
+  "head": "e840bc89a32106adca926fc8f022c119238b263c",
+  "tree": "b421dc09b76eb97adf858db5ff3cedecd95ad50f",
+  "main": "9af6e0f720029959b8a149e66d05dd5fcfba4c6a",
+  "ci_run": 41048889015,
+  "ci_run_number": 330,
+  "checks": "all six actual named jobs success; actual short Go/corePG11/native smoke5/build/lint/examples; full/stress CI skipped by policy; local actual SDK88 once and new child CPU1/race/single200 pass",
+  "cache_observation": "Native CI initial pinned-key miss. Build12m41s, clippy1m52s, lib test compilation59.63s; smoke5 passed <1s total. Exact pinned target/dependency key saved. No promise of future elapsed time.",
+  "sync": "reviewed exact tree/oneparent/base/cleanHEAD=originmain/configunchanged",
+  "overall_N5": "INCOMPLETE: explicit App/E3 durable phase coordinator (raw-first including zero deletions, COW/release/resume recovery), held Docker/capacity/inspection and N6 combined acceptance"
+}

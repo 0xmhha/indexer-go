@@ -40,7 +40,8 @@ source ownership, the existing E3 live lease, archive coverage and fresh
 canonical checks are still required by [raw retention](EXECUTION_RAW_RETENTION.md)
 and the managed native maintenance bridge. No permit is inferred from N alone.
 
-Resume refuses a SQL maintenance/reorg fence, changed public Ref/root/parts,
+Resume refuses an unfinished/corrupt [maintenance journal](EXECUTION_MAINTENANCE_COORDINATOR.md),
+a SQL maintenance/reorg fence, changed public Ref/root/parts,
 pending native/raw intent, replaced source identity or mismatching native
 controls. It repeats the prepared-state inspection while parked, reopens only
 the verified raw window, then releases the admission fence. A failed inspection
@@ -63,5 +64,6 @@ Targeted new concurrency uses one local CPU1/race/count200 invocation per
 scope; default CI stays [scoped short](CI.md).
 
 This feature alone does not authorize native COW. The [inherited run lease/managed SDK bridge](EXECUTION_MANAGED_MAINTENANCE.md)
-is implemented separately. The App/E3 coordinator, held Docker draft and
-combined actual SDK/App/SQL N6 acceptance remain distinct work in the [N5 plan](codemine/runs/20261030-arc-native-n5/plan.md).
+is implemented separately. The [explicit App/E3 coordinator](EXECUTION_MAINTENANCE_COORDINATOR.md)
+now connects that sequence with durable phases and recovery. Held Docker draft
+and combined actual SDK/App/SQL N6 acceptance remain distinct work in the [N5 plan](codemine/runs/20261030-arc-native-n5/plan.md).
