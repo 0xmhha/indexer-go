@@ -1,7 +1,8 @@
 # CI checks for developers
 
 PRs use short checks once. Merging a checked PR does not automatically repeat
-the same suite on main. Full regression is an explicit operation, not a
+the same suite on main ([#247](https://github.com/0xmhha/indexer-go/pull/247)).
+Full regression is an explicit operation, not a
 prerequisite for every documentation or small code change.
 
 | Change | Default checks |
