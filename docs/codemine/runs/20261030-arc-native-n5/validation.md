@@ -45,8 +45,8 @@ and Stop cancellation/join while native EX stays held. Root build, affected
 vet/lint pass. Actual pinned SDK plus App/mock ETH68/SQL integration is reserved
 for N6; these source/fixture tests do not certify that combined path. App/origin #251 passed exact-head CI327, was squash-merged and synchronized
 cleanly at main2458776 with the reviewed tree, one parent/base and private config
-unchanged. Explicit raw GC/recovery is the current follow-up; graceful drain/
-managed maintenance and held Docker remain incomplete.
+unchanged. Explicit raw GC/recovery #252/CI328 is released at main867d1be.
+Graceful drain and the managed maintenance bridge follow as distinct steps.
 
 Operational launch, provisioning, GC/restore and additional performance
 measurements remain HOLD.
@@ -77,3 +77,31 @@ suite passed once; affected window/Arc/native/spool short suites, build, vet and
 lint passed. Four new cases passed their respective single CPU1/race/count200
 invocations: late window callback, native EX exclusion, source ownership and
 real DB lease/release cancellation. No default CI stress/SDK step was added.
+
+## Graceful drain
+
+Compiled requirement RED reproduced the missing durable ACK observer and App
+delegation. With the common drain contract and a refusing stub in place, the
+real-round test failed because admission was not stopped. An initial test
+fixture nil callback panic was not counted as RED proof. A later wire fixture
+used a result frame header for a control ACK and was corrected; that fixture
+failure is not a production defect.
+
+The implementation observes successful durable source ACKs, preserves active
+native work and waits for exact seven-writer SQL/publication evidence before
+joining the collector and parking Run. Cancellation joins outside recoveryMu;
+verified resume repeats preparation and keeps pending state HOLD. These are
+owned Go fixtures, not combined SDK/SQL N6 acceptance. The native COW bridge
+and operational inputs remain separate.
+
+[RED](../../../../verification/native-drain/red.json),
+[source](../../../../verification/native-drain/source.json) and
+[checks](../../../../verification/native-drain/checks.json) record this scope.
+Affected App/common ingress/collector short tests passed. The initial Arc short
+run found that shared input teardown closed the reorg coordinator signal;
+separate native admission restored the proposal path, and final Arc short passed.
+The superseded incomplete stress run is not counted as a pass. Final local
+CPU1/race/single200 passed for four new Arc lifecycle cases, the affected reorg
+proposal and App delegation (Arc199.692s, App2.639s). The ACK observer's own
+CPU1/race/single200 passed34.677s. Wire short, final build, vet/lint,23 CI policy
+tests and changed-document links passed. Default CI was not expanded.

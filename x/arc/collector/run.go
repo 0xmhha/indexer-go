@@ -21,7 +21,8 @@ type Config struct {
 	MaxBytes           uint64
 	MaxRecords, Window int
 	Poll, Retry        time.Duration
-	Proposals          <-chan execwire.Ref `json:"-"`
+	Proposals          <-chan execwire.Ref   `json:"-"`
+	OnCommitted        func(execwire.Header) `json:"-"`
 }
 
 // Run replays into a durable bounded queue independently of delivery. It owns
@@ -84,7 +85,7 @@ func Run(ctx context.Context, c Config) (err error) {
 	if hash != c.Anchor.Hash {
 		return exporter.ErrCheckpointRecovery
 	}
-	client := &exporter.Client{Chain: c.Native.Chain, Spool: s, Backend: b, Socket: c.Socket, Window: c.Window, Poll: c.Poll, Retry: c.Retry, Timeout: c.Native.Timeout, Proposals: c.Proposals}
+	client := &exporter.Client{Chain: c.Native.Chain, Spool: s, Backend: b, Socket: c.Socket, Window: c.Window, Poll: c.Poll, Retry: c.Retry, Timeout: c.Native.Timeout, Proposals: c.Proposals, OnCommitted: c.OnCommitted}
 	return client.Run(ctx)
 }
 

@@ -75,6 +75,7 @@ func (c *Client) Run(parent context.Context) error {
 	if status.Chain != c.Chain {
 		return spool.ErrConflict
 	}
+	c.committed(status)
 	if err = execwire.Encode(io.Discard, execwire.Frame{Kind: execwire.Hello, Header: execwire.Header{Version: execwire.Version, Chain: c.Chain, Ref: status.Committed}}); err != nil {
 		return err
 	}
