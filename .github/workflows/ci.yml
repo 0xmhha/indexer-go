@@ -1,235 +1,340 @@
+# PR/main: short checks. Explicit workflow_dispatch full=true retains the complete slow qualification.
 name: CI
-
-on:
-  pull_request:
+'on':
+  pull_request: null
   push:
-    branches: [main]
-
+    branches:
+    - main
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run full regression, race200 and native qualification (slow)
+        type: boolean
+        default: false
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.full && 'full' || 'short' }}
   cancel-in-progress: true
-
 permissions:
   contents: read
-
-# Every job installs the Go of go.mod's toolchain line and uses it as is.
-# With go-version-file setup-go installed the go line and each job then
-# downloaded the toolchain through the module proxy and checksum database;
-# when those did not answer the job failed before running anything.
-# GOTOOLCHAIN=local makes a mismatch fail instead of downloading; the lint
-# job checks the pin against go.mod.
 env:
-  GO_VERSION: "1.26.8"
+  GO_VERSION: 1.26.8
   GOTOOLCHAIN: local
-
-# The jobs run the same commands as a local check (Makefile, scripts/), so
-# CI and local results mean the same thing.
+  CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+  CI_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+      arc: ${{ steps.scope.outputs.arc }}
+      full: ${{ steps.scope.outputs.full }}
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+    - name: Classify exact diff conservatively
+      id: scope
+      env:
+        CI_FULL: ${{ github.event_name == 'workflow_dispatch' && inputs.full || false }}
+      run: python3 -B scripts/ci_scope.py --base "$CI_BASE" --head "$CI_HEAD" --full "$CI_FULL" --github-output "$GITHUB_OUTPUT"
   lint:
+    needs: scope
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Go version matches go.mod
-        run: |
-          want=$(sed -n 's/^toolchain go//p' go.mod)
-          [ "$want" = "$GO_VERSION" ] || { echo "go.mod toolchain go$want, CI GO_VERSION $GO_VERSION"; exit 1; }
-          for m in execwire/go.mod x/stablenet/executor/go.mod examples/*/go.mod; do
-            [ "$(sed -n 's/^toolchain go//p' "$m")" = "$want" ] || { echo "$m toolchain differs from go.mod"; exit 1; }
-          done
-      - name: gofmt
-        run: |
-          unformatted=$(gofmt -l $(git ls-files '*.go'))
-          if [ -n "$unformatted" ]; then echo "not gofmt-clean:"; echo "$unformatted"; exit 1; fi
-      - name: go vet
-        run: go vet ./...
-      - name: golangci-lint
-        run: make lint
-      - name: Wire module vet and lint
-        working-directory: execwire
-        run: |
-          go vet ./...
-          "$(go env GOPATH)/bin/golangci-lint" run ./...
-      - name: StableNet executor vet and lint
-        working-directory: x/stablenet/executor
-        run: |
-          go vet ./...
-          "$(go env GOPATH)/bin/golangci-lint" run ./...
-      - name: golangci-lint (tools/astgraph)
-        working-directory: tools/astgraph
-        run: |
-          go vet ./...
-          go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...
-
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Documentation and CI policy (no runtime)
+      run: |-
+        python -m pip install --disable-pip-version-check --only-binary=:all: -r deployments/testnets/requirements.txt
+        python -B scripts/check_docs.py --base "$CI_BASE" --head "$CI_HEAD"
+        python -B -m unittest discover -s verification -p 'test_ci_*.py' -v
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+      if: needs.scope.outputs.code == 'true'
+    - name: Go version matches go.mod
+      run: |
+        want=$(sed -n 's/^toolchain go//p' go.mod)
+        [ "$want" = "$GO_VERSION" ] || { echo "go.mod toolchain go$want, CI GO_VERSION $GO_VERSION"; exit 1; }
+        for m in execwire/go.mod x/stablenet/executor/go.mod examples/*/go.mod; do
+          [ "$(sed -n 's/^toolchain go//p' "$m")" = "$want" ] || { echo "$m toolchain differs from go.mod"; exit 1; }
+        done
+      if: needs.scope.outputs.code == 'true'
+    - name: gofmt
+      run: |
+        unformatted=$(gofmt -l $(git ls-files '*.go'))
+        if [ -n "$unformatted" ]; then echo "not gofmt-clean:"; echo "$unformatted"; exit 1; fi
+      if: needs.scope.outputs.code == 'true'
+    - name: go vet
+      run: go vet ./...
+      if: needs.scope.outputs.code == 'true'
+    - name: golangci-lint
+      run: make lint
+      if: needs.scope.outputs.code == 'true'
+    - name: Wire module vet and lint
+      working-directory: execwire
+      run: |
+        go vet ./...
+        "$(go env GOPATH)/bin/golangci-lint" run ./...
+      if: needs.scope.outputs.code == 'true'
+    - name: StableNet executor vet and lint
+      working-directory: x/stablenet/executor
+      run: |
+        go vet ./...
+        "$(go env GOPATH)/bin/golangci-lint" run ./...
+      if: needs.scope.outputs.code == 'true'
+    - name: golangci-lint (tools/astgraph)
+      working-directory: tools/astgraph
+      run: |
+        go vet ./...
+        go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...
+      if: needs.scope.outputs.code == 'true'
   test:
+    needs: scope
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: go build
-        run: go build ./...
-      - name: go test
-        run: go test ./... -count=1 -timeout 20m
-      - name: Event bus shutdown concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestEventBusStopDrainsAccepted|TestEventBusConcurrentStopPublishPreservesAccepted)$' ./pkg/events
-      - name: Execution queue, recovery, and API concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestScheduler|TestController|TestReceiver|TestExecution)' ./pkg/execution ./pkg/fetch ./pkg/api ./pkg/api/graphql ./pkg/api/jsonrpc ./internal/api/rest
-      - name: Engine full-blob transport and immutable source contracts
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=20m -run '^(TestSeedPriority1BlobSupplyVerification|TestEngineBlob)' ./pkg/execution ./cmd/execution-blobs
-      - name: Offline state-proof command concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m ./cmd/execution-state-proofs
-      - name: Execution runtime lifecycle concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestExecutionRuntime' ./pkg/app
-      - name: Managed native ingress ownership and shutdown concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=20m -run '^(TestOwnedWindowConcurrentCASHasOneWinnerAndJoinsClose|TestIngressPrepareCancellationClosesReturnedResources|TestNativeCaptureContinuesWhileWriterBlockedAndCancellationJoins|TestNativeOwnedChild)' ./pkg/window ./pkg/execution/ingress ./x/arc/ingress
-      - name: Managed native read views and coordinator recovery concurrency
-        # Controller cases already match the execution step; the complete
-        # collector package and TestClient* proposal cases have their own200.
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=20m -run '^(TestManagedReadView|TestReorgGate|TestNativeRecovery|TestNativeOwnedLoop|TestNativeRound|TestNativeProgramRun|TestNativeTransitionOwnedChildCancellation)' ./x/arc/nativestore ./pkg/execution ./x/arc/ingress
-      - name: Execution feature writer ownership concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestExecutionWriterPlansForDifferentBlocksAreIndependent$' ./pkg/feature
-      - name: State projection epoch retry concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestStateProjectionCanonicalFailureDoesNotMissEpoch$' ./pkg/chainfeed/evmstate
-      - name: Wire module contracts and concurrency
-        run: |
-          make test-execwire
-          cd execwire
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConn' ./...
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestSupervisor' ./retention
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestConcurrentCancellationAndCloseJoin|TestRetentionConcurrentReadCloseAndGenerationJoin|TestAdmission.*)$' ./spool
-          GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestClient|TestTransfer|TestPrivateDial)' ./exporter
-      - name: Arc collector child lifecycle concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m ./x/arc/collector ./x/arc/cmd/execution-collector
-      - name: Arc native maintenance child and guard concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^(TestNativeOwnedHoldCancellationAndStrictReplies|TestNativeGuardRejectsFenceAndPathOverrides|TestNativeGuardCancellationJoinsOwnedChild|TestNativeScratchReplacementIsPreserved|TestNativeSuccessfulExitStillReportsCanceledContext)$' ./x/arc/nativeops
-      - name: StableNet replay and spool contracts and concurrency
-        run: |
-          make test-executor-stablenet
-          cd x/stablenet/executor
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestCancelLogger|TestReplayCancellationDuringEVM|TestReplayBeaconPreludeCancellation|TestNativeStateProofExport)' ./...
-          GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestNodeRuntime|TestCapacityBudgetResumeAndConcurrentChecks)' ./nodebackend
-          GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^TestCompactCapacityAndForeignLeasePreserveNode$' ./nodestore
-      - name: Matched receipt and native snapshot concurrency
-        run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m ./internal/executionops ./x/arc/nativestore -run '^(TestRetentionValidatedReceiptMutation|TestMatchedSnapshotCancellationRetainsExactNativeFence)$'
-      - name: Pebble cache lifecycle
-        # Pebble disables its cache leak finalizer under -race.
-        run: make test-cache-lifecycle
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Operations drafts (offline)
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
-        run: |
-          python -m pip install --disable-pip-version-check --only-binary=:all: -r deployments/testnets/requirements.txt
-          python -m unittest discover -s deployments/testnets -p 'test_preflight.py' -v
-          python -B -m unittest discover -s deployments/native/runtime -p 'test_runtime.py' -v
-          bash deployments/native/test-cli.sh
-          python -B -m unittest discover -s verification -p 'test_release_sequence.py' -v
-          python -B -m unittest discover -s verification -p 'test_ci_state_proof_batches.py' -v
-          python deployments/testnets/preflight.py
-          sh -n deployments/testnets/indexer-entrypoint.sh
-
+    - uses: actions/checkout@v4
+      if: needs.scope.outputs.code == 'true'
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+      if: needs.scope.outputs.code == 'true'
+    - name: go build
+      run: go build ./...
+      if: needs.scope.outputs.code == 'true'
+    - name: Short root and execution module contracts
+      if: needs.scope.outputs.code == 'true' && needs.scope.outputs.full != 'true'
+      run: make test-ci-short
+    - name: go test
+      run: go test ./... -count=1 -timeout 20m
+      if: needs.scope.outputs.full == 'true'
+    - name: Event bus shutdown concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestEventBusStopDrainsAccepted|TestEventBusConcurrentStopPublishPreservesAccepted)$' ./pkg/events
+      if: needs.scope.outputs.full == 'true'
+    - name: Execution queue, recovery, and API concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestScheduler|TestController|TestReceiver|TestExecution)' ./pkg/execution ./pkg/fetch ./pkg/api ./pkg/api/graphql ./pkg/api/jsonrpc ./internal/api/rest
+      if: needs.scope.outputs.full == 'true'
+    - name: Engine full-blob transport and immutable source contracts
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=20m -run '^(TestSeedPriority1BlobSupplyVerification|TestEngineBlob)' ./pkg/execution ./cmd/execution-blobs
+      if: needs.scope.outputs.full == 'true'
+    - name: Offline state-proof command concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m ./cmd/execution-state-proofs
+      if: needs.scope.outputs.full == 'true'
+    - name: Execution runtime lifecycle concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestExecutionRuntime' ./pkg/app
+      if: needs.scope.outputs.full == 'true'
+    - name: Managed native ingress ownership and shutdown concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=20m -run '^(TestOwnedWindowConcurrentCASHasOneWinnerAndJoinsClose|TestIngressPrepareCancellationClosesReturnedResources|TestNativeCaptureContinuesWhileWriterBlockedAndCancellationJoins|TestNativeOwnedChild)' ./pkg/window ./pkg/execution/ingress ./x/arc/ingress
+      if: needs.scope.outputs.full == 'true'
+    - name: Managed native read views and coordinator recovery concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=20m -run '^(TestManagedReadView|TestReorgGate|TestNativeRecovery|TestNativeOwnedLoop|TestNativeRound|TestNativeProgramRun|TestNativeTransitionOwnedChildCancellation)' ./x/arc/nativestore ./pkg/execution ./x/arc/ingress
+      if: needs.scope.outputs.full == 'true'
+    - name: Execution feature writer ownership concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestExecutionWriterPlansForDifferentBlocksAreIndependent$' ./pkg/feature
+      if: needs.scope.outputs.full == 'true'
+    - name: State projection epoch retry concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestStateProjectionCanonicalFailureDoesNotMissEpoch$' ./pkg/chainfeed/evmstate
+      if: needs.scope.outputs.full == 'true'
+    - name: Wire module contracts and concurrency
+      run: |
+        make test-execwire
+        cd execwire
+        GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestConn' ./...
+        GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^TestSupervisor' ./retention
+        GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestConcurrentCancellationAndCloseJoin|TestRetentionConcurrentReadCloseAndGenerationJoin|TestAdmission.*)$' ./spool
+        GOMAXPROCS=1 go test -race -count=200 -timeout=10m -run '^(TestClient|TestTransfer|TestPrivateDial)' ./exporter
+      if: needs.scope.outputs.full == 'true'
+    - name: Arc collector child lifecycle concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m ./x/arc/collector ./x/arc/cmd/execution-collector
+      if: needs.scope.outputs.full == 'true'
+    - name: Arc native maintenance child and guard concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^(TestNativeOwnedHoldCancellationAndStrictReplies|TestNativeGuardRejectsFenceAndPathOverrides|TestNativeGuardCancellationJoinsOwnedChild|TestNativeScratchReplacementIsPreserved|TestNativeSuccessfulExitStillReportsCanceledContext)$' ./x/arc/nativeops
+      if: needs.scope.outputs.full == 'true'
+    - name: StableNet replay and spool contracts and concurrency
+      run: |
+        make test-executor-stablenet
+        cd x/stablenet/executor
+        GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestCancelLogger|TestReplayCancellationDuringEVM|TestReplayBeaconPreludeCancellation|TestNativeStateProofExport)' ./...
+        GOMAXPROCS=1 go test -race -count=200 -timeout=5m -run '^(TestNodeRuntime|TestCapacityBudgetResumeAndConcurrentChecks)' ./nodebackend
+        GOMAXPROCS=1 go test -race -count=200 -timeout=15m -run '^TestCompactCapacityAndForeignLeasePreserveNode$' ./nodestore
+      if: needs.scope.outputs.full == 'true'
+    - name: Matched receipt and native snapshot concurrency
+      run: GOMAXPROCS=1 go test -race -count=200 -timeout=15m ./internal/executionops ./x/arc/nativestore -run '^(TestRetentionValidatedReceiptMutation|TestMatchedSnapshotCancellationRetainsExactNativeFence)$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Pebble cache lifecycle
+      run: make test-cache-lifecycle
+      if: needs.scope.outputs.code == 'true'
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+      if: needs.scope.outputs.code == 'true'
+    - name: Operations drafts (offline)
+      env:
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: |
+        python -m pip install --disable-pip-version-check --only-binary=:all: -r deployments/testnets/requirements.txt
+        python -m unittest discover -s deployments/testnets -p 'test_preflight.py' -v
+        python -B -m unittest discover -s deployments/native/runtime -p 'test_runtime.py' -v
+        bash deployments/native/test-cli.sh
+        python -B -m unittest discover -s verification -p 'test_release_sequence.py' -v
+        python -B -m unittest discover -s verification -p 'test_ci_state_proof_batches.py' -v
+        python deployments/testnets/preflight.py
+        sh -n deployments/testnets/indexer-entrypoint.sh
+      if: needs.scope.outputs.code == 'true'
+    - name: Scope result
+      if: needs.scope.outputs.code != 'true'
+      run: printf '%s\n' 'No applicable runtime/native source change; this check requires no build or service.'
   postgres:
+    needs: scope
     runs-on: ubuntu-latest
-    # The test job runs in UTC; this one in another zone, so stored or
-    # returned values that depend on the host's time zone fail a job.
     env:
       TZ: Asia/Seoul
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: PostgreSQL adapter and end-to-end suite
-        run: ./scripts/test-postgres.sh
-      - name: State projection epoch retry on PostgreSQL
-        run: ./scripts/test-postgres.sh ./pkg/chainfeed/evmstate -race -run '^TestStateProjectionCanonicalFailureDoesNotMissEpoch$'
-      - name: Execution IPC and DB integration concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -failfast -count=200 -timeout=40m -run '^(TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK|TestExecutionArcCollectedSpoolPublicationAndLostACK|TestExecutionNativeCallsPublicationPagesAndRestart)$'
-      - name: Native full-blob files and DB-only API concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeBlobsPublicationPagesAndRestart$'
-      - name: Engine full-blob supply and DB-only publication concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=30m -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'
-      # Give these four cases independent package timeout budgets.
-      # Each still runs once with race/count200/CPU1, preserving all checks.
-      - name: Native state-proof publication and restart concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeStateProofPublicationAndRestart$'
-      - name: Arc native state-proof publication and restart concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionArcNativeStateProofPublicationAndRestart$'
-      - name: Arc state-proof spool and lost-ACK concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionArcNativeProofSpoolPublicationAndLostACK$'
-      - name: Arc state-proof fresh-failure retention concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionArcNativeProofFreshFailureRetainsUnpublishedParts$'
-      - name: Execution DB admission and recovery concurrency
-        run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence|TestExecutionRetentionDrainsReadLeaseAndCancel)$'
-
+    - uses: actions/checkout@v4
+      if: needs.scope.outputs.code == 'true'
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+      if: needs.scope.outputs.code == 'true'
+    - name: Durable core smoke once
+      if: needs.scope.outputs.code == 'true' && needs.scope.outputs.full != 'true'
+      run: make test-ci-postgres-short
+    - name: PostgreSQL adapter and end-to-end suite
+      run: ./scripts/test-postgres.sh
+      if: needs.scope.outputs.full == 'true'
+    - name: State projection epoch retry on PostgreSQL
+      run: ./scripts/test-postgres.sh ./pkg/chainfeed/evmstate -race -run '^TestStateProjectionCanonicalFailureDoesNotMissEpoch$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Execution IPC and DB integration concurrency
+      run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -v -failfast -count=200 -timeout=40m -run '^(TestExecutionAppFrozenWBFTIPCReorgRestartAndLostACK|TestExecutionArcCollectedSpoolPublicationAndLostACK|TestExecutionNativeCallsPublicationPagesAndRestart)$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Native full-blob files and DB-only API concurrency
+      run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeBlobsPublicationPagesAndRestart$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Engine full-blob supply and DB-only publication concurrency
+      run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=30m -run '^TestExecutionEngineBlobsPublicationPagesAndRestart$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Native state-proof publication and restart concurrency
+      run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionNativeStateProofPublicationAndRestart$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Arc native state-proof publication and restart concurrency
+      run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionArcNativeStateProofPublicationAndRestart$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Arc state-proof spool and lost-ACK concurrency
+      run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionArcNativeProofSpoolPublicationAndLostACK$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Arc state-proof fresh-failure retention concurrency
+      run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/app -race -count=200 -timeout=20m -run '^TestExecutionArcNativeProofFreshFailureRetainsUnpublishedParts$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Execution DB admission and recovery concurrency
+      run: GOMAXPROCS=1 ./scripts/test-postgres.sh ./pkg/storage/postgres -race -count=200 -timeout=20m -run '^(TestExecutionPartConcurrentReadersAndRewindFence|TestExecutionReadSnapshotReservedSlotParallelCancelAndRewind|TestExecutionReadSnapshotUsesReservedFourthSlotAndRejectsWrites|TestExecutionReadSnapshotClosesAbandonedRowsAndRejectsRetainedContext|TestExecutionReadSnapshotCancellationJoinsActiveSQL|TestExecutionRewindReadAdmissionFence|TestExecutionRetentionDrainsReadLeaseAndCancel)$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Scope result
+      if: needs.scope.outputs.code != 'true'
+      run: printf '%s\n' 'No applicable runtime/native source change; this check requires no build or service.'
   examples:
+    needs: scope
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Example modules
-        run: make test-examples
-
+    - uses: actions/checkout@v4
+      if: needs.scope.outputs.code == 'true'
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+      if: needs.scope.outputs.code == 'true'
+    - name: Example modules
+      run: make test-examples
+      if: needs.scope.outputs.code == 'true'
+    - name: Scope result
+      if: needs.scope.outputs.code != 'true'
+      run: printf '%s\n' 'No applicable runtime/native source change; this check requires no build or service.'
   arc:
+    needs: scope
     runs-on: ubuntu-latest
     env:
-      CARGO_BUILD_JOBS: "2"
+      CARGO_BUILD_JOBS: '2'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Arc native build prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libclang-dev pkg-config
-      - name: Pinned Rust toolchain
-        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
-      - name: Arc native build, lint and offline replay
-        working-directory: x/arc/executor
-        env:
-          INDEXER_ARC_FIXTURE_DIR: ${{ runner.temp }}/arc-fixtures
-          INDEXER_ARC_NATIVE_FIXTURE_DIR: ${{ runner.temp }}/arc-native-retention
-          INDEXER_ARC_MAINTENANCE_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/arc-native-maintenance
-          INDEXER_ARC_EXECUTOR_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/indexer-arc-executor
-        run: |
-          cargo fmt --check
-          cargo build --locked --all-targets
-          cargo clippy --locked --all-targets -- -D warnings
-          cargo test --locked --all-targets
-          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-storage.json" ../../../testdata/execution/arc-storage.json
-          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-state-proofs.json" ../../../testdata/execution/arc-state-proofs.json
-          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-create-gone.json" ../../../testdata/execution/arc-create-gone.json
-          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-calls.json" ../../../testdata/execution/arc-calls.json
-          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-call-from-oog.json" ../../../testdata/execution/arc-call-from-oog.json
-          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-call-from-direct.json" ../../../testdata/execution/arc-call-from-direct.json
-          cmp "$INDEXER_ARC_FIXTURE_DIR/arc-native-checkpoint.ndjson" ../../../testdata/execution/arc-native-checkpoint.ndjson
-      - name: Preserve tested native binaries and release owned build cache
-        working-directory: x/arc/executor
-        run: |
-          # Only this completed job's target is disposable. Keep the exact
-          # tested binaries for the real COW/backup test, which needs disk headroom.
-          test "$PWD" = "$GITHUB_WORKSPACE/x/arc/executor"
-          test -d target && test ! -L target
-          native_bin="$RUNNER_TEMP/arc-native-bin"
-          mkdir -m 700 "$native_bin"
-          for name in arc-native-maintenance indexer-arc-executor; do
-            install -m 700 "target/debug/$name" "$native_bin/$name"
-            cmp "target/debug/$name" "$native_bin/$name"
-          done
-          rm -rf -- target
-      - name: Real native-library matched backup and restore admission
-        env:
-          INDEXER_ARC_NATIVE_FIXTURE_DIR: ${{ runner.temp }}/arc-native-retention
-          INDEXER_ARC_MAINTENANCE_BINARY: ${{ runner.temp }}/arc-native-bin/arc-native-maintenance
-        run: |
-          go vet -tags arc_native ./x/arc/nativeops
-          go test -race -tags arc_native -count=1 -timeout=15m -v ./x/arc/nativeops -run '^TestArcNativeLibraryMatchedBackupAndRestore$'
+    - uses: actions/checkout@v4
+      if: needs.scope.outputs.arc == 'true'
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+      if: needs.scope.outputs.full == 'true'
+    - name: Arc native build prerequisites
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends libclang-dev pkg-config
+      if: needs.scope.outputs.arc == 'true'
+    - name: Pinned Rust toolchain
+      run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+      if: needs.scope.outputs.arc == 'true'
+    - name: Cache pinned native dependencies and build
+      if: needs.scope.outputs.arc == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |-
+          ~/.cargo/registry
+          ~/.cargo/git
+          x/arc/executor/target
+        key: ${{ runner.os }}-arc-rust-1.98.1-${{ hashFiles('x/arc/executor/Cargo.lock') }}
+    - name: Arc compile and bounded protocol smoke
+      if: needs.scope.outputs.arc == 'true' && needs.scope.outputs.full != 'true'
+      working-directory: x/arc/executor
+      run: |-
+        cargo fmt --check
+        cargo build --locked --bins
+        cargo clippy --locked --bins -- -D warnings
+        cargo test --locked --lib native_import::tests::import_frame_
+        cargo test --locked --lib managed_read::tests::inherited_view_
+        cargo test --locked --lib native_epoch::tests::transition_unwinds_actual_native_and_restarts_relative_sequence_without_moving_anchor
+    - name: Arc native build, lint and offline replay
+      working-directory: x/arc/executor
+      env:
+        INDEXER_ARC_FIXTURE_DIR: ${{ runner.temp }}/arc-fixtures
+        INDEXER_ARC_NATIVE_FIXTURE_DIR: ${{ runner.temp }}/arc-native-retention
+        INDEXER_ARC_MAINTENANCE_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/arc-native-maintenance
+        INDEXER_ARC_EXECUTOR_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/indexer-arc-executor
+      run: |
+        cargo fmt --check
+        cargo build --locked --all-targets
+        cargo clippy --locked --all-targets -- -D warnings
+        cargo test --locked --all-targets
+        cmp "$INDEXER_ARC_FIXTURE_DIR/arc-storage.json" ../../../testdata/execution/arc-storage.json
+        cmp "$INDEXER_ARC_FIXTURE_DIR/arc-state-proofs.json" ../../../testdata/execution/arc-state-proofs.json
+        cmp "$INDEXER_ARC_FIXTURE_DIR/arc-create-gone.json" ../../../testdata/execution/arc-create-gone.json
+        cmp "$INDEXER_ARC_FIXTURE_DIR/arc-calls.json" ../../../testdata/execution/arc-calls.json
+        cmp "$INDEXER_ARC_FIXTURE_DIR/arc-call-from-oog.json" ../../../testdata/execution/arc-call-from-oog.json
+        cmp "$INDEXER_ARC_FIXTURE_DIR/arc-call-from-direct.json" ../../../testdata/execution/arc-call-from-direct.json
+        cmp "$INDEXER_ARC_FIXTURE_DIR/arc-native-checkpoint.ndjson" ../../../testdata/execution/arc-native-checkpoint.ndjson
+      if: needs.scope.outputs.full == 'true'
+    - name: Preserve tested native binaries and release owned build cache
+      working-directory: x/arc/executor
+      run: |
+        # Only this completed job's target is disposable. Keep the exact
+        # tested binaries for the real COW/backup test, which needs disk headroom.
+        test "$PWD" = "$GITHUB_WORKSPACE/x/arc/executor"
+        test -d target && test ! -L target
+        native_bin="$RUNNER_TEMP/arc-native-bin"
+        mkdir -m 700 "$native_bin"
+        for name in arc-native-maintenance indexer-arc-executor; do
+          install -m 700 "target/debug/$name" "$native_bin/$name"
+          cmp "target/debug/$name" "$native_bin/$name"
+        done
+        rm -rf -- target
+      if: needs.scope.outputs.full == 'true'
+    - name: Real native-library matched backup and restore admission
+      env:
+        INDEXER_ARC_NATIVE_FIXTURE_DIR: ${{ runner.temp }}/arc-native-retention
+        INDEXER_ARC_MAINTENANCE_BINARY: ${{ runner.temp }}/arc-native-bin/arc-native-maintenance
+      run: |
+        go vet -tags arc_native ./x/arc/nativeops
+        go test -race -tags arc_native -count=1 -timeout=15m -v ./x/arc/nativeops -run '^TestArcNativeLibraryMatchedBackupAndRestore$'
+      if: needs.scope.outputs.full == 'true'
+    - name: Scope result
+      if: needs.scope.outputs.arc != 'true'
+      run: printf '%s\n' 'No applicable runtime/native source change; this check requires no build or service.'

@@ -8,6 +8,6 @@
 - [x] Embedded collector/spool, raw-only/native-ahead restart and bounded joins.
 - [x] RED/GREEN and new CPU1/race/single200; full local regression gates.
 - [x] Current docs/continuity/source freeze and staged/history checks.
-- [ ] Exact-head CI5, guarded squash, clean main synchronization before N5.
+- [x] Exact-head CI318 five jobs, guarded squash245 and clean main d6ed1eb7758f70fc52ded3242815c1b53aecf441.
 
 Operational execution and performance remain HOLD; N5/N6 remain required.

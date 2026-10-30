@@ -1,0 +1,14 @@
+[
+  {
+    "log_name": "ci-short-policy-repo-red.log",
+    "exit": 1,
+    "log_sha256": "8960c68b14f0e042a7df7563174f0710f53c80a27e448d6c4f897443665dc3a6",
+    "classification": "behavioral workflow/scope assertion failure; not a compile/setup failure"
+  },
+  {
+    "log_name": "ci-short-scope-red.log",
+    "exit": 1,
+    "log_sha256": "a7f1126f1ff223eae4120cf3f39211ea3bff68305d0559cea63346a947408ae4",
+    "classification": "behavioral workflow/scope assertion failure; not a compile/setup failure"
+  }
+]

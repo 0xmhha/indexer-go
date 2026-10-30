@@ -1,0 +1,41 @@
+{
+  "stage": "N4",
+  "status": "COMPLETE",
+  "pr": 245,
+  "url": "https://github.com/0xmhha/indexer-go/pull/245",
+  "base": "a203193eeeb60b09cc88d64576604e9ea65af92e",
+  "head": "320885dbd03558087a0a1862620f47581a312ca1",
+  "tree": "f2884eea7bc59400ee0527defd0da2e6fb5f9960",
+  "main": "d6ed1eb7758f70fc52ded3242815c1b53aecf441",
+  "ci_run": 40978595763,
+  "ci_run_number": 318,
+  "jobs": [
+    {
+      "id": 123812668756,
+      "name": "lint",
+      "conclusion": "success"
+    },
+    {
+      "id": 123812668985,
+      "name": "postgres",
+      "conclusion": "success"
+    },
+    {
+      "id": 123812668994,
+      "name": "examples",
+      "conclusion": "success"
+    },
+    {
+      "id": 123812669145,
+      "name": "arc",
+      "conclusion": "success"
+    },
+    {
+      "id": 123812669191,
+      "name": "test",
+      "conclusion": "success"
+    }
+  ],
+  "sync": "exact reviewed tree, one parent/base, HEAD=origin/main, clean, private config unchanged",
+  "scope": "offline N4 complete; CI shortening takes priority before N5/N6; operations HOLD"
+}

@@ -1,5 +1,5 @@
 {
-  "n": "N4 managed replay and E1 reorg integration in progress; N5/N6 pending; operations HOLD",
+  "n": "N4 released by #245; CI short refactor takes priority before N5/N6",
   "n_minus_1": {
     "pr": 244,
     "main": "a203193eeeb60b09cc88d64576604e9ea65af92e",
@@ -20,7 +20,7 @@
   "accepted_design": "../20261023-e1-execution/02-design.md",
   "accepted_plan": "../20261023-e1-execution/03-plan.md",
   "next": [
-    "N4 E1 reorg and managed collector",
+    "Scoped short PR CI requested by user",
     "N5 permanent ingress coverage/GC and deployment draft",
     "N6 offline integrated acceptance"
   ],
@@ -31,6 +31,8 @@
     "N0 implementation and offline SDK qualification; actual CI/merge evidence in release PR",
     "N1 offline bootstrap implementation; actual release gates recorded separately",
     "N2 first execution and native publication implementation; actual release gates recorded separately",
-    "N3 embedded ingress implementation; actual release gates recorded separately"
-  ]
+    "N3 embedded ingress implementation; actual release gates recorded separately",
+    "N4 managed replay/reorg released #245/main d6ed1eb; exact CI318 five jobs recorded"
+  ],
+  "ci_priority": "../20261030-ci-short/plan.md"
 }

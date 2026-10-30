@@ -47,29 +47,27 @@ Keep chain-specific rules in profiles or chain modules rather than adding chain-
 
 ## Run the checks
 
-Run the relevant package checks while developing, then the repository checks required before submission:
+Run checks for the changed code while developing. The default PR checks are short:
 
 ```bash
 go build ./...
 go vet ./...
-go test -count=1 -timeout 20m ./...
-make test-race
-make test-cache-lifecycle
-make test-postgres
+make test-ci-short
+make test-ci-postgres-short
 make test-examples
 ```
 
-`make test-race` is required locally before each commit and pull request because CI does not run the full root race suite. CI also checks execution and API concurrency with race and a single count of 200. Format Go files with the pinned toolchain before submitting. Run the linter with the toolchain used for lint in CI:
+Documentation-only changes need link/anchor and CI policy checks, with no Go, Rust or PostgreSQL startup. PRs run one short functional pass and a durable core DB smoke; they do not run stress200 or the full native qualification. See [CI tiers](docs/CI.md). Format Go files before submitting. Run the linter with the pinned toolchain:
 
 ```bash
 GOTOOLCHAIN=go1.26.8 make lint
 ```
 
-The `execwire`, `x/stablenet/executor` and `tools/astgraph` directories are separate Go modules. CI runs their vet and lint checks. `make test-execwire` and `make test-executor-stablenet` build, vet and test the execution modules; `make test-race` covers root, wire and executor. Executor checks use EVM/WBFT libraries and start no node services. The modules under `examples/` are separate modules as well; root `go test ./...` does not cover them.
+The `execwire`, `x/stablenet/executor` and `tools/astgraph` directories are separate Go modules. Code PRs check their vet/lint contracts; `test-ci-short` includes root, wire and the StableNet executor. Examples are separate modules too. Executor tests use EVM/WBFT libraries and start no node services.
 
-New concurrency tests must pass with `GOMAXPROCS=1`, `-race` and a single `-count=200` invocation before push. Select the actual test names and package; partial runs are not equivalent to one complete run. Wait for the state a test checks instead of relying on fixed sleeps.
+New concurrency logic requires targeted local race checks, including one `GOMAXPROCS=1 -race -count=200` invocation of its new cases. Partial counts are not equivalent. Run broader local regression when storage/native/lifecycle changes or failures justify it; documentation and workflow-only edits do not require a full runtime race rerun. Wait for the state a test checks instead of relying on fixed sleeps.
 
-The four PostgreSQL state-proof acceptance cases use separate sequential CI steps,
+The explicitly requested **full** workflow retains four PostgreSQL state-proof cases in separate sequential steps,
 each with `GOMAXPROCS=1`, `-race`, a single `-count=200` and its own20-minute
 package timeout. Keep all four cases and those conditions; combining them under
 one shared20-minute timer can exhaust the aggregate budget while tests progress.
@@ -85,9 +83,9 @@ Use a concise English commit subject with a conventional prefix, such as `fix:`,
 
 A useful PR description explains the concrete problem, resulting behavior, compatibility/recovery considerations and validation. Call out incomplete checks and unresolved limitations. Include a reproduction or before/after example when it helps review.
 
-The protected `main` branch requires **lint**, **test**, **postgres** and **examples** to pass. Pull requests merge with **squash** after those checks pass; do not bypass protection. [The CI workflow](.github/workflows/ci.yml) is the source of truth for its commands and toolchain versions.
+The protected `main` branch requires **lint**, **test**, **postgres** and **examples** to pass. Pull requests merge with **squash** after the applicable short checks pass; do not bypass protection. Each named job explicitly records a documentation-only no-runtime scope. [The CI workflow](.github/workflows/ci.yml) is the source of truth for commands and toolchains.
 
-Changes to the Arc execution adapter also require its **arc** job to pass before merging, in addition to the four protected checks. Do not treat native library fixtures as live peer, native data-directory or performance validation.
+The **arc** job compiles and runs bounded protocol smoke only when Arc Rust changes; Go/docs changes do not rebuild the native SDK. Full SDK/process-kill/COW qualification is available through manual `workflow_dispatch` with `full=true`, and is run locally when native changes require it. Do not treat native library fixtures as live peer, native data-directory or performance validation.
 
 ## Update documentation in the right place
 
