@@ -1,0 +1,30 @@
+[
+  {
+    "test": "TestExecutionRetentionReleaseRequiresExactCompletedReceipt",
+    "result": "expected behavioral failure",
+    "log": "n5-coordinator-release-red.log",
+    "sha256": "d300ee0e7bb9d8d110507fd7f0e60e0302984cf20d6d1b2069fe554556d093df",
+    "boundary": "Actual fsync-on PG, compiled refusing release scope; exact completed receipt must enter EX callback."
+  },
+  {
+    "test": "TestMaintenanceRawZeroIsDurableBeforeNativeCOW",
+    "result": "expected behavioral failure",
+    "log": "n5-coordinator-phase-red.log",
+    "sha256": "95f08e3fad78b2258bc87fae430b3f6761acf9f7051c84f80754460b0795b574",
+    "boundary": "Valid actual source ACK; compiled refusing coordinator failed to persist raw_complete for zero candidates."
+  },
+  {
+    "test": "TestExecutionAppMaintenanceDelegatesWithoutClosingReceiver",
+    "result": "expected behavioral failure",
+    "log": "n5-coordinator-app-red.log",
+    "sha256": "8e22f9c3cbbadf2b38c5de0fddf0d91aae004a2ce0bacd56a8cfc881bda55983",
+    "boundary": "Runtime interface assertion failed without App maintenance methods; no compile failure counted."
+  },
+  {
+    "test": "TestMaintenanceUnfinishedReleaseBlocksStartupAndResume",
+    "result": "expected behavioral failure",
+    "log": "n5-coordinator-gate-red.log",
+    "sha256": "00911aba995de553cac9fa7a06f3d552cc9f1249e459a0812ce1708d1cbae507",
+    "boundary": "Released file fences alone bypassed absent journal gate; expected pending-maintenance error was missing."
+  }
+]

@@ -77,8 +77,16 @@ func (p *program) Drain(parent context.Context) (ingress.DrainPoint, error) {
 }
 
 func (p *program) Resume(ctx context.Context) error {
+	p.maintenanceMu.Lock()
+	defer p.maintenanceMu.Unlock()
 	p.recoveryMu.Lock()
 	defer p.recoveryMu.Unlock()
+	if err := p.maintenanceGate(ctx); err != nil {
+		return err
+	}
+	return p.resumeLocked(ctx)
+}
+func (p *program) resumeLocked(ctx context.Context) error {
 	p.mu.Lock()
 	request := p.draining
 	valid := request != nil && request.parked && p.started && !p.stopped && !p.recovering

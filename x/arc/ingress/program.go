@@ -30,6 +30,7 @@ type program struct {
 	done             chan struct{}
 	runCtx           context.Context
 	draining         *drainRequest
+	maintenanceMu    sync.Mutex
 	recoveryMu       sync.Mutex
 	recoveryCancel   context.CancelFunc
 	recovering       bool

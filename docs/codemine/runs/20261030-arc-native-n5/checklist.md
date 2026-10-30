@@ -10,8 +10,8 @@
 - [x] Existing E3 permit and durable full-record raw deletion/recovery; compiled RED→GREEN, exact owner/source/ACK/coverage, pre-unlink commit and real file receipts.
 - [x] Raw GC local affected short/full-adapter-short, build/vet/lint and four new CPU1/race/single200 cases pass; [evidence](../../../../verification/native-raw-retention/checks.json). Per-feature CI/squash status is recorded in the associated PR metadata.
 - [x] Both-worker graceful drain/join, real source ACK observation and verified resume #253/CI329 released; clean mainf63d0ff synchronized.
-- [x] Explicit inherited native run lease and managed COW bridge implemented with completed-floor startup validation; current local/CI qualification is distinct from App/E3 activation.
-- [ ] App/E3 phase coordinator with durable exact raw-first/COW/release/resume recovery (including zero-deletion raw completion).
+- [x] Explicit inherited native run lease and managed COW bridge/completed-floor validation released as #254/CI330; clean main9af6e0f synchronized. [Release receipt](../../../../verification/native-maintenance-coordinator/managed-release.json).
+- [x] App/E3 phase coordinator implemented with durable exact raw-first/COW/release/resume recovery (including zero-deletion raw completion); [feature qualification checklist](../20261031-arc-maintenance-coordinator/checklist.md) separates local/CI release evidence.
 - [ ] Held Docker/capacity/inspection composition updated consistently.
 - [ ] RED/GREEN, affected regression/static/concurrency and current evidence.
 - [ ] Applicable short CI, guarded squash and clean main synchronization.

@@ -1,0 +1,120 @@
+[
+  {
+    "check": "real-db-release-green",
+    "result": "PASS",
+    "log": "n5-coordinator-release-green.log",
+    "sha256": "7950d92a2eec8c30abcdc9668872cc7aa81bd64e293b0cd5cf45a9ee77ad30f6"
+  },
+  {
+    "check": "zero-raw-phase-green",
+    "result": "PASS",
+    "log": "n5-coordinator-phase-green.log",
+    "sha256": "a7b3791655feea58b043c7eba5f5e61fd5ba68d57f11c041397f4dfc3b199b3d"
+  },
+  {
+    "check": "app-startup-gates",
+    "result": "PASS",
+    "log": "n5-coordinator-app-gate-green.log",
+    "sha256": "9a22071417727201f02608b3ce90255d194a83209600b9855d46b78cbb9b3169"
+  },
+  {
+    "check": "durable-boundary-matrix",
+    "result": "PASS",
+    "log": "n5-coordinator-recovery-green.log",
+    "sha256": "938a2ff21fa2eb550ee4d4c1cdb38b096e2b82b3a2bef45a471adf63349add9e"
+  },
+  {
+    "check": "actual-owned-ingress-run",
+    "result": "PASS",
+    "log": "n5-coordinator-live-green.log",
+    "sha256": "f94f13f1f95b97577c5c80d76908b7ef4d170c1d081041f4ca5fddedbad3d4e6"
+  },
+  {
+    "check": "actual-PG-coordinator",
+    "result": "PASS",
+    "log": "n5-coordinator-postgres-green.log",
+    "sha256": "91714447133ad14e7a1aadfbe2a563d89869e69b0db40f825d510d6a969621e8"
+  },
+  {
+    "check": "affected-short-once",
+    "result": "PASS",
+    "log": "n5-coordinator-affected-short.log",
+    "sha256": "c1129a48cde175fb2d078a5c03cc0273757cb95a4e83ba0a527a1927a45fe744"
+  },
+  {
+    "check": "affected-PG-retention-raw-regression-once",
+    "result": "PASS",
+    "log": "n5-coordinator-postgres-regression.log",
+    "sha256": "0df83b71fc3d05569ec9b2c4112ff4b41dbbdcd3c33ef18f39a41d3c4b792b8c"
+  },
+  {
+    "check": "new-live-App-CPU1-race-parallel1-count200",
+    "result": "PASS",
+    "log": "n5-coordinator-live-race200.log",
+    "sha256": "3e6a4c3dcdfc2f3c1a73421df570ecb4015eebae4fb2f510398ccb700c714f4f"
+  },
+  {
+    "check": "new-PG-release-CPU1-race-parallel1-count200",
+    "result": "PASS",
+    "log": "n5-coordinator-db-race200.log",
+    "sha256": "3642bc65f0512e32acc9c5c4edbd1e442a478067a6a3eca055b77fe2248f67be"
+  },
+  {
+    "check": "fmt",
+    "result": "PASS",
+    "log": "n5-coordinator-final-fmt.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "root-build",
+    "result": "PASS",
+    "log": "n5-coordinator-final-build.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "affected-vet",
+    "result": "PASS",
+    "log": "n5-coordinator-final-vet.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "check": "final-lint",
+    "result": "PASS",
+    "log": "n5-coordinator-lint-pass.log",
+    "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+  },
+  {
+    "check": "CI-policy23",
+    "result": "PASS",
+    "log": "n5-coordinator-ci-policy.log",
+    "sha256": "1162af1fadc55112563687127810a3355e670833529aa6119dadf5420199b442"
+  },
+  {
+    "check": "changed-plus-entry-doc-links",
+    "result": "PASS",
+    "log": "n5-coordinator-docs.json",
+    "sha256": "be38dfdb8fe2e7cdf31fff8261760cb4c5f7ee72f66dde0f28c11bb88b57470f"
+  },
+  {
+    "check": "qualification-command-live-App",
+    "command": "GOMAXPROCS=1 go test ./x/arc/ingress ./pkg/app -short -race -parallel=1 -count=200 -timeout=20m -run '^(TestMaintenanceLiveRunDrainsAndResumesBothOwnedWorkers|TestMaintenanceStopCancelsAndJoinsBeforeReturningOwnership|TestExecutionAppMaintenanceDelegatesWithoutClosingReceiver)$'",
+    "result": "Arc728.352s and App1.984s; each selected case200, no retry"
+  },
+  {
+    "check": "qualification-command-PG",
+    "command": "GOMAXPROCS=1 env -u INDEXER_TEST_POSTGRES scripts/test-postgres.sh ./pkg/storage/postgres -short -race -parallel=1 -count=200 -timeout=12m -run '^TestExecutionRetentionReleaseExcludesReorgAndJoinsCancellation$'",
+    "result": "Actual fsync-on disposable PG441.836s, selected case200, no retry"
+  },
+  {
+    "check": "lint-correction",
+    "result": "Two superseded lint outputs reported six redundant embedded test selectors (three per output limit). Final lint0issues. Shortening the same promoted fields changed no concurrency/production logic; the running single200 invocation was retained. No stress rerun for style-only selectors."
+  },
+  {
+    "check": "limits",
+    "result": "Go protocol/native metadata fixtures and actual PG/files integration, not combined actual SDK/App acceptance. Rust SDK88 and bridge #254 proof reused unchanged. Held Docker/capacity/inspection and N6 remain; operational node/peer/format/GC/restore/deploy/performance HOLD."
+  },
+  {
+    "check": "receipt-recovery",
+    "result": "Original exec output was truncated and session IDs lost. All selected package OK lines and actual log files were recovered from the existing processes without restarting unchanged tests. Final static commands alone were rerun with explicit exit receipts because their original output had no retained receipt."
+  }
+]
