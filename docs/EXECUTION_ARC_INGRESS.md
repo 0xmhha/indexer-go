@@ -5,9 +5,8 @@ prepared execution Store and canonical reader. It creates no SQL pool or RPC
 client, starts no node and changes no upstream code. Normal processing still
 uses two EVM passes: the native writer's first execution and the collector's
 second replay. N4 implements the [managed replay/reorg bridge](EXECUTION_ARC_MANAGED.md);
-permanent ingress bytes/authorized raw GC #251–#252 and graceful drain #253 are released. Explicit [App/E3 maintenance coordination #255](EXECUTION_MAINTENANCE_COORDINATOR.md) is released; the [held runtime](../deployments/native/runtime/README.md) now declares App-owned Arc ingress. Managed file inspection and combined native/App/PostgreSQL acceptance remain N6.
-This is an implementation boundary; actual operating configuration and N6
-acceptance remain unverified. APFS, official enode, authenticated checkpoint and private inputs
+permanent ingress bytes/authorized raw GC #251–#252 and graceful drain #253 are released. Explicit [App/E3 maintenance coordination #255](EXECUTION_MAINTENANCE_COORDINATOR.md) is released; the [held runtime](../deployments/native/runtime/README.md) now declares App-owned Arc ingress. [Managed file inspection](EXECUTION_MANAGED_INSPECTION.md) is implemented; [N6 owned integration](EXECUTION_ARC_ACCEPTANCE.md) now qualifies the actual App/native/PostgreSQL boundary.
+This is an owned functional qualification; actual operating configuration remains unverified. APFS, official enode, authenticated checkpoint and private inputs
 remain HOLD. No live execution or performance result is claimed.
 
 ## Configuration contract
@@ -137,7 +136,7 @@ Stop is idempotent and releases prepared resources even if Run never starts.
 An interrupted native multi-store mutation preserves its pending fence for
 explicit recovery. Age, Hello, a raw height or a native receipt cannot clear it
 or authorize deletion. Explicit [raw GC/recovery](EXECUTION_RAW_RETENTION.md)
-is available. Graceful drain #253 and the [managed native bridge](EXECUTION_MANAGED_MAINTENANCE.md) are implemented; App/E3 phase coordination and held deployment wiring remain N5.
+is available. Graceful drain #253 and the [managed native bridge](EXECUTION_MANAGED_MAINTENANCE.md) are implemented; App/E3 phase coordination and held deployment wiring are implemented; N6 qualifies their actual owned integration.
 See the
 [current plan](codemine/runs/20261030-arc-native-n5/plan.md),
 [checklist](codemine/runs/20261030-arc-native-n5/checklist.md) and

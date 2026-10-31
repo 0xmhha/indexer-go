@@ -48,9 +48,9 @@ The owned host CLI fixture preserves existing **legacy collector/executor** file
 preflight and read-only diagnostic contracts. Its Arc `/scratch` is a standalone
 synthetic legacy declaration, not this managed App mount layout. Those checks do
 not validate the App-owned ingress configuration or its raw/SQL/coordinator-journal
-state. Managed App file-preflight/diagnostic integration and combined actual
-SDK/App/SQL acceptance remain explicit follow-ups; no legacy PASS substitutes
-for them. See [preflight](../../../docs/NATIVE_EXECUTION_PREFLIGHT.md) and
+state. Managed App file-preflight/diagnostics #257 and [N6 owned SDK/App/SQL
+acceptance](../../../docs/EXECUTION_ARC_ACCEPTANCE.md) are separately qualified;
+no legacy PASS substitutes for them. See [preflight](../../../docs/NATIVE_EXECUTION_PREFLIGHT.md) and
 [diagnostic coverage](../../../docs/NATIVE_EXECUTION_DIAGNOSTICS.md).
 
 ## Process ownership and networks
@@ -166,7 +166,7 @@ There is no automatic GC/timer/maintenance service or CLI activation in Compose.
 The same Store/RPC budget and pending fences remain mandatory; no TTL repair.
 
 N5 declaration alignment and [managed file inspection](../../../docs/EXECUTION_MANAGED_INSPECTION.md)
-are implemented. N6 combined App/mock ETH68/actual SDK/SQL/GC acceptance remains.
+are implemented. [N6 combined App/mock ETH68/actual SDK/SQL/GC acceptance](../../../docs/EXECUTION_ARC_ACCEPTANCE.md) is qualified with owned fixtures.
 Metadata inspection cannot certify SDK state, part coverage, live freshness or resume. Actual APFS, peers/fork,
 authenticated checkpoint, private config/image, prepared DB and matched backup/
 restore evidence all remain HOLD. Other projects/resources/config are unchanged.

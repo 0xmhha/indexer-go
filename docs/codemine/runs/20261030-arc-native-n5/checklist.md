@@ -20,6 +20,6 @@ synchronization; associated PR metadata and post-merge receipt retain those
 identities. No operational activation is implied by implementation completion.
 
 N5 implementation is complete with per-feature release evidence. Managed file inspection is now implemented in the
-[next feature checklist](../20261031-managed-inspection/checklist.md); N6 combined
-actual SDK/App/SQL acceptance remains incomplete.
+[next feature checklist](../20261031-managed-inspection/checklist.md); [N6 combined actual SDK/App/SQL acceptance](../20261031-arc-native-n6/checklist.md)
+is now implemented and locally qualified, with its own release gate.
 Operational inputs and execution remain HOLD.

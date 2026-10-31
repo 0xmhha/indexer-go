@@ -1,0 +1,26 @@
+[
+  {
+    "log": "fixture-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "requirement": "compiled exporter assertion; required checkpoint missing",
+    "sha256": "7b3eb98fb4d211927fb71505c50622bd733406321393f83f64c7b16800599df7"
+  },
+  {
+    "log": "app-first-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "requirement": "actual App3 public+ACK; EVM invocation trace intentionally absent",
+    "sha256": "c609d9643cfd9d0561054f1cdef0d581e7c6843b9ded5e18883227525e017bfd"
+  },
+  {
+    "log": "layout-clock-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "requirement": "compiled layout hook assertion; clock could not be forwarded",
+    "sha256": "d2144514d86b9fba63abce44b9d2791a451f9636df269dddb9d18ed787bc5b58"
+  },
+  {
+    "log": "workflow-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "requirement": "heavy integration had no explicit full-only workflow step",
+    "sha256": "caff9b08f7b91a8f52fb5abc2bdce629d29d36b0e7ec1bf1c49e181868bcd635"
+  }
+]

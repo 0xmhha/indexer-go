@@ -1,9 +1,9 @@
 # Arc 첫 import와 native DB 갱신 설계
 
-**N0~N3 릴리스 완료. N4 managed replay·E1 reorg 통합을 #245로 릴리스했고 N5~N6 미완료. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
-읽고 두 번째 EVM 실행으로 E1 입력을 만든다. 빠져 있는 첫 실행과 지속적인
-native DB 갱신을 아래 모듈이 담당하도록 한다. 전체 노드 프로세스와 upstream
-코드 수정은 추가하지 않는다. 설정·원본·child 수명주기는 [Arc ingress](EXECUTION_ARC_INGRESS.md), N4의 구현된 managed replay/reorg 경계는 [관리형 replay](EXECUTION_ARC_MANAGED.md)에 정리한다. N5~N6의 남은 연결은 제안이며 운영 실행 설정이 아니다. [구현 순서](#구현-순서)와
+**N0~N6 구현과 owned 오프라인 통합 검증을 완료했다. [N6 증거](EXECUTION_ARC_ACCEPTANCE.md)와 각 PR의 실제 release gate를 구분한다. 운영 판정 HOLD.** 기존 collector는 import된 Arc DB를
+읽고 두 번째 EVM 실행으로 E1 입력을 만든다. 구현한 첫 실행과 지속적인
+native DB 갱신은 아래 모듈이 담당한다. 전체 노드 프로세스와 upstream
+코드 수정은 추가하지 않는다. 설정·원본·child 수명주기는 [Arc ingress](EXECUTION_ARC_INGRESS.md), N4의 구현된 managed replay/reorg 경계는 [관리형 replay](EXECUTION_ARC_MANAGED.md)에 정리한다. N5~N6 연결은 구현·owned 검증됐으며 실제 운영 실행 설정은 아니다. [구현 순서](#구현-순서)와
 [체크리스트](codemine/runs/20261029-arc-first-import/checklist.md)를 함께 따른다.
 
 ## N0 구현과 검증 경계
@@ -317,7 +317,6 @@ intent/completion/release를 모두 유지한다. swap 뒤 inode/bind와 origina
 | N6 | offline end-to-end 회귀와 인계 | 같은 합성 블록의 두 EVM 실행→native reopen→collector→기존 writer7/SQL/API/ACK. 장애 행렬 전체·기존 경로 회귀. 운영 실행/성능 아님 |
 
 각 단계는 의미 있는 RED→구현→GREEN, 현재 문서·체크리스트 갱신, 필요한 새 동시성
-단일 GOMAXPROCS=1/race/count200, 정확한 최종 head의 CI5 성공, squash/main 동기화 후
+단일 GOMAXPROCS=1/race/count200, 정확한 최종 head의 적용 대상 scoped CI 성공, squash/main 동기화 후
 다음 단계로 진행한다. SDK 불일치는 요구사항/guard 완화로 해결하지 않고 해당
-adapter를 수정하거나 구현 계획을 갱신한다. N0~N2의 현재 구현·검증과 N3~N6의 남은
-구현을 구분하며, 운영 값과 실제 실행은 계속 HOLD다.
+adapter를 수정하거나 구현 계획을 갱신한다. N0~N6의 구현·owned 검증과 외부 자료/실제 운영의 HOLD를 구분하며, 운영 값과 실제 실행은 계속 HOLD다.

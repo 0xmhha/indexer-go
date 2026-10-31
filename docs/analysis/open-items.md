@@ -4,8 +4,8 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 
 ## 현재 정본과 연속성
 
-- 완료한 N5 [계획](../codemine/runs/20261030-arc-native-n5/plan.md), [체크리스트](../codemine/runs/20261030-arc-native-n5/checklist.md). 관리형 DB legacy writer 차단은 #249로 릴리스했다. SQL owner/archive·backend primitive는 #250/CI326으로 릴리스했다. 실제 App/Arc owner/origin 연결은 #251/CI327로 릴리스했다. 명시적 raw GC·장애 복구는 #252/CI328로 릴리스했다. Worker drain·검증 후 재개 #253/CI329와 관리형 native COW bridge·완료 floor 검증 #254/CI330을 릴리스했다. [App/E3 phase 조정 #255/CI331](../EXECUTION_MAINTENANCE_COORDINATOR.md)을 릴리스했다. [Docker/capacity/inspection 초안 정합성](../codemine/runs/20261031-native-runtime-alignment/checklist.md)을 구현하고 기능별 release gate를 점검한다. 관리형 App 파일·SQL metadata 점검은 구현됐고 실제 SDK/App/SQL 통합 N6 acceptance가 남는다. CI short #246·중복/캐시 정리 #247·문서 전용 검증 #248 릴리스 완료.
-- 현재 기능 n: [관리형 파일/SQL 진단](../codemine/runs/20261031-managed-inspection/plan.md). n−1: [runtime 정합성 #256](../codemine/runs/20261031-native-runtime-alignment/plan.md), n−2: [App/E3 coordinator #255](../EXECUTION_MAINTENANCE_COORDINATOR.md). N5/N4/N3와 수용한 first-import/E1 설계를 보존한다.
+- 완료한 N5 [계획](../codemine/runs/20261030-arc-native-n5/plan.md), [체크리스트](../codemine/runs/20261030-arc-native-n5/checklist.md). 관리형 DB legacy writer 차단은 #249로 릴리스했다. SQL owner/archive·backend primitive는 #250/CI326으로 릴리스했다. 실제 App/Arc owner/origin 연결은 #251/CI327로 릴리스했다. 명시적 raw GC·장애 복구는 #252/CI328로 릴리스했다. Worker drain·검증 후 재개 #253/CI329와 관리형 native COW bridge·완료 floor 검증 #254/CI330을 릴리스했다. [App/E3 phase 조정 #255/CI331](../EXECUTION_MAINTENANCE_COORDINATOR.md)을 릴리스했다. [Docker/capacity/inspection 초안 정합성](../codemine/runs/20261031-native-runtime-alignment/checklist.md)을 구현하고 기능별 release gate를 점검한다. 관리형 App 파일·SQL metadata 점검은 #257로 릴리스했고 [N6](../EXECUTION_ARC_ACCEPTANCE.md)의 실제 owned SDK/App/SQL/GC·복구 통합 검증을 완료했다. CI short #246·중복/캐시 정리 #247·문서 전용 검증 #248 릴리스 완료.
+- 현재 기능 n: [N6 통합 acceptance](../codemine/runs/20261031-arc-native-n6/plan.md). n−1: [관리형 진단 #257](../EXECUTION_MANAGED_INSPECTION.md), n−2: [runtime 정합성 #256](../codemine/runs/20261031-native-runtime-alignment/plan.md). N0~N6·first-import/E1와 이전 두 기능의 증거를 보존한다.
 - 단계 연속성: N4 #245 [계획](../codemine/runs/20261030-arc-native-n4/plan.md)·[관리형 replay](../EXECUTION_ARC_MANAGED.md), N3 #244 [계획](../codemine/runs/20261030-arc-native-n3/plan.md)·[App ingress](../EXECUTION_ARC_INGRESS.md).
 - 수용한 Arc first-import 설계 #239 [정본](../ARC_NATIVE_IMPORT_DESIGN.md), [계획](../codemine/runs/20261029-arc-first-import/plan.md), [체크리스트](../codemine/runs/20261029-arc-first-import/checklist.md), [연속성](../codemine/runs/20261029-arc-first-import/continuity.json)
 - 이전 완료: Native 운영 구성 초안 #238 [계획](../codemine/runs/20261029-native-runtime-draft/plan.md), [사용법](../../deployments/native/runtime/README.md)
@@ -56,7 +56,7 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 | 완료 #236 | 오프라인 monitoring | [일회성 경보 판정](../NATIVE_OFFLINE_MONITORING.md): Arc/StableNet 진단 JSON·선언된 capacity/pipeline·명시적 시각, strict 입력·unknown/stale·redaction·독립 위험 판정. 체인/DB/RPC/watcher/알림·actuation 없음. 최종 CI5 run40704614928 통과 후 squash/main a49065d 동기화 완료 |
 | 권장안 정리 완료·실제 값 HOLD | 저장소·배포 입력 | [결정표](../OPERATIONS_READINESS.md): 체인별 분리 경로, PostgreSQL pool4의 전체 예산, Arc 24h/172800블록의 가정과 native/spool 추가 용량, 인증 checkpoint 시작 권장안. 읽기 전용 metadata만 확인. 미확정 값을 template에 채우거나 provisioning하지 않음 |
 | 초안 구현·운영 HOLD | Native App/collector/executor 구성 | [별도 runtime 초안](../../deployments/native/runtime/README.md): 세 서비스(Arc App·StableNet App·StableNet executor), 외부 PostgreSQL16·DSN_FILE·private IPC·Arc source-parent scratch·App RW native/raw/source·수동 lifecycle. bounded 오프라인 검사와 모의 기능 검증. Arc executor는 collector의 stdio 자식. 실제 image/host/서비스는 검증·실행하지 않음 |
-| N0~N5 구현·N6 미완료 | Arc first-import 공급 경로 | [App 내부 Go 감독+Rust 첫 실행 설계](../ARC_NATIVE_IMPORT_DESIGN.md)와 N0~N6 계획 확정. 기존 ETH/68과 공유 RPC5/Store4, 두 번째 collector를 유지. native bootstrap·첫 writer·App ingress는 릴리스했고 N4 managed collector·E1 reorg는 #245로 릴리스했고 CI short #246·중복 main 검사/캐시 정리 #247도 릴리스했다. N5 SQL owner/archive #250과 App/Arc 연결 #251은 릴리스했다. 명시적 raw GC·복구 #252는 릴리스했고 worker drain #253은 릴리스했다. 관리형 COW bridge/floor #254와 App/E3 coordinator #255를 릴리스했다. held Docker/capacity/inspection 선언 정합성은 #256으로 릴리스했다. [관리형 App preflight·metadata 진단](../EXECUTION_MANAGED_INSPECTION.md)을 구현했으며 기능/릴리스 검증을 해당 체크리스트로 구분한다. 실제 SDK/App/mock ETH68/SQL/GC의 N6 통합 acceptance가 남는다. metadata 일치는 runtime acceptance나 fresh/GC 권한이 아니다. 전체 노드/새 독립 RPC·DB pool 없음 |
+| N0~N6 구현·owned 검증 | Arc first-import 공급 경로 | [App 내부 Go 감독+Rust 첫 실행 설계](../ARC_NATIVE_IMPORT_DESIGN.md)와 N0~N6 계획 확정. 기존 ETH/68과 공유 RPC5/Store4, 두 번째 collector를 유지. native bootstrap·첫 writer·App ingress는 릴리스했고 N4 managed collector·E1 reorg는 #245로 릴리스했고 CI short #246·중복 main 검사/캐시 정리 #247도 릴리스했다. N5 SQL owner/archive #250과 App/Arc 연결 #251은 릴리스했다. 명시적 raw GC·복구 #252는 릴리스했고 worker drain #253은 릴리스했다. 관리형 COW bridge/floor #254와 App/E3 coordinator #255를 릴리스했다. held Docker/capacity/inspection 선언 정합성은 #256으로 릴리스했다. [관리형 App preflight·metadata 진단](../EXECUTION_MANAGED_INSPECTION.md)을 구현했으며 기능/릴리스 검증을 해당 체크리스트로 구분한다. [N6](../EXECUTION_ARC_ACCEPTANCE.md)는 실제 App/mock ETH68/SDK/SQL/API/ACK, 재시작/재전송/reorg/양의 원본 GC/COW·명시적 복구를 owned fixture에서 검증했다. 현재 PR의 CI/스쿼시/main 증거는 feature 체크리스트와 PR metadata로 구분한다. metadata 일치는 runtime acceptance나 fresh/GC 권한이 아니다. 전체 노드/새 독립 RPC·DB pool 없음 |
 | N0 구현 | bounded import/fence와 pinned SDK qualification | [N0](../codemine/runs/20261029-arc-native-n0/plan.md): AIN1 frame·private durable fence RED→GREEN, 실제 native-v2 Full 저장·별도 RO 갱신·두 번째 replay·H1 full checkpoint·unwind/reimport·controlled 중단/재시작. 운영 writer/실제 실행은 없음 |
 | N1 구현 | 인증된 native bootstrap | [전체 상태 검증·새 DB 초기화](../EXECUTION_ARC_BOOTSTRAP.md), original anchor/floor/H+1·authentic header/body/receipts와 atomic no-overwrite publication. 운영 입력 HOLD |
 | N2 구현 | 첫 실행 writer | [owned stdio·첫 Arc 실행·native 완료](../EXECUTION_ARC_NATIVE_WRITER.md), 단일 writer/run/publication/read gate, checksum intent/receipt/head·실제 SIGKILL·정확한 duplicate. 관리 legacy 유지보수 거부 |
@@ -68,15 +68,28 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 | 완료 #229 | **E6 독립 canonical/finality** | 고정 go-stablenet4d17eea018c8 WBFT BLS quorum·명시적 trust/fork·인증 전환·원자적 finality/복구 구현과 로컬 전체 게이트가 통과했다. 정확한 head `f89109a492fc9991fd8ec0f636d78a937a22ba97`의 CI5 run40377905374, squash/main `f7c0fa26f6e2b62fa2dc50820369ea9a3b9a5818`, 한 부모·reviewed tree 일치와 깨끗한 primary main 동기화·전용 임시 자료 정리가 확인됐다. RPC5/final fresh를 유지하며 기본 경로를 독립 검증으로 이름 붙이지 않음 |
 | 완료 #230 | Native 보존 추가 확장 | 실제 v2 lookup/MDBX compact-copy, matched native/source/indexer backup 및 restore/floor admission을 구현하고 real native·PG·RED/GREEN·전체 로컬·CI5 run40418831898 뒤 squash/main 동기화를 검증했다. 외부 PG snapshot/WAL 인증·설치와 운영 활성화는 보류하며 native 전체 고정 크기·측정 절감량을 약속하지 않음 |
 
-N1의 [오프라인 인증 native bootstrap](../EXECUTION_ARC_BOOTSTRAP.md)은 구현됐으며 실제 운영 입력은 HOLD다. N2 writer는 구현했으며 N3 App ingress는 구현했고 N4 managed collector/reorg는 #245로 릴리스했다. N5 SQL owner/archive #250은 릴리스했고 App/Arc owner/origin #251은 릴리스했다. 명시적 raw GC·장애 복구 #252는 릴리스했고 worker drain #253은 릴리스했다. 관리형 COW bridge/floor #254와 App/E3 coordinator #255를 릴리스했다. held Docker/capacity/inspection 선언 정합성은 #256으로 릴리스했다. [관리형 App preflight·metadata 진단](../EXECUTION_MANAGED_INSPECTION.md)을 구현했으며 기능/릴리스 검증을 해당 체크리스트로 구분한다. 실제 SDK/App/mock ETH68/SQL/GC의 N6 통합 acceptance가 남는다. metadata 일치는 runtime acceptance나 fresh/GC 권한이 아니다.
+N1의 [오프라인 인증 native bootstrap](../EXECUTION_ARC_BOOTSTRAP.md)은 구현됐으며 실제 운영 입력은 HOLD다. N2 writer는 구현했으며 N3 App ingress는 구현했고 N4 managed collector/reorg는 #245로 릴리스했다. N5 SQL owner/archive #250은 릴리스했고 App/Arc owner/origin #251은 릴리스했다. 명시적 raw GC·장애 복구 #252는 릴리스했고 worker drain #253은 릴리스했다. 관리형 COW bridge/floor #254와 App/E3 coordinator #255를 릴리스했다. held Docker/capacity/inspection 선언 정합성은 #256으로 릴리스했다. [관리형 App preflight·metadata 진단](../EXECUTION_MANAGED_INSPECTION.md)을 구현했으며 기능/릴리스 검증을 해당 체크리스트로 구분한다. [N6](../EXECUTION_ARC_ACCEPTANCE.md)는 실제 App/mock ETH68/SDK/SQL/API/ACK, 재시작/재전송/reorg/양의 원본 GC/COW·명시적 복구를 owned fixture에서 검증했다. 현재 PR의 CI/스쿼시/main 증거는 feature 체크리스트와 PR metadata로 구분한다. metadata 일치는 runtime acceptance나 fresh/GC 권한이 아니다.
 
-## 다음 우선순위 — 외부 입력 없이 가능
+## 다음 우선순위 — 외부 입력 준비와 승인 범위 분리
 
-1. **N6 통합 acceptance**: 실제 pinned SDK를 사용하는 owned App/mock ETH68/SQL fixture에서 두 번 실행, exact ACK/재시작/reorg/보존/GC를 함께 확인한다. 기존 단위 증거를 재측정으로 반복하지 않고 새 연결 경계만 RED→GREEN으로 검증한다. 운영 node/peer나 성능 측정은 포함하지 않는다.
-2. **N6 실패·복구 인계**: 위 통합 경로에서 누락/손상/취소·중단의 정확한 fence와 재시작 조건을 검증하고 checklist/문서를 최신으로 맞춘다. 추가 동시성 변경이 있을 때만 그 사례의 단일 CPU1/race200을 수행한다.
-3. **릴리스 증거 정리**: scoped short CI, PR squash와 main 동기화를 완료한다. 기존 검사나 운영 HOLD를 반복하는 무한 측정 루프를 만들지 않는다.
+N0~N6의 오프라인 구현 계획은 완료했다. 새 변경/실패 없이 SDK·DB·200회나
+호스트/SLO 측정을 반복하지 않는다. 아래 운영 입력을 확보하기 전에는
+기존 선언/진단 도구의 HOLD를 해제하거나 서비스를 실행하지 않는다.
 
-관리형 파일 진단은 구현됐다. 기존 pool의 READ ONLY SQL export, 예약 reader 차용·반납, 명시적 raw/SQL artifact, 독립 R/N/P·epoch와 source admission/ACK 비교를 제공한다. 실제 DB를 새로 여는 CLI나 live health 판정은 제공하지 않는다.
+1. **외장 APFS와 배포 값**: 전용 root·VolumeUUID/physical store·ownership,
+   경로별 실제 용량/안전 여유, reviewed image와 private manifest 확정. 포맷과
+   데이터 이동은 별도 범위다. 다른 프로젝트·공유 cache는 유지한다.
+2. **Arc 공급 계약과 인증 시작점**: 공식 EL enode/접속 조건·fork/genesis/network,
+   원격 보존 범위, 인증 full checkpoint H/hash/root/coverage와 H+1 시작점 확보.
+   mock ETH68와 official H0 fixture 통과를 실제 peer/checkpoint 인증으로 쓰지 않는다.
+3. **운영 admission과 복구 증거**: 실제 private DSN/key·prepared schema,
+   matched native/source/indexer backup/WAL·RPO/RTO, COW 여유와 분리/장애 복구
+   증거를 기존 preflight/diagnostic/guard로 확인한다. 실행·운영 GC/복원·성능
+   검증은 HOLD 해제 후 별도 명시된 범위에서만 한다.
+
+관리형 SQL export/metadata 진단과 N6는 구현됐다. pool4/part2/API1/writers7,
+shared physicalRPC5와 NEW final fresh/fence/COMMIT/exact ACK를 유지한다.
+실제 운영 확인과 선택적 확장의 전체 남은 항목은 아래와 같다.
 
 ## 운영·실제 자료 검증 — 현재 보류
 

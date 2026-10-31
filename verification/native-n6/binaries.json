@@ -1,0 +1,9 @@
+{
+  "feature": "acceptance-trace; per actual import/replay EVM entry only; default build excludes calls",
+  "binaries": {
+    "arc-native-bootstrap": "824f2ca5a0c6141457437523aa9d38ba34e549df6061985b63c1bb0347c7e75b",
+    "arc-native-import": "67fb1e63f33f58b392a9dfdabddc2b8ab40cdcc7be312a79ed9587f3e69bde48",
+    "arc-native-maintenance": "3213ed2e9c1d84537a57d9463fe0178e9c145cabca5fca9b00231f0531d53ddf",
+    "indexer-arc-executor": "abc2236f0ec097a66d8385a82d34f8baf968fc6d828ec6c04c4cfd26cab5b04b"
+  }
+}

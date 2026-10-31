@@ -1,0 +1,82 @@
+[
+  {
+    "log": "fixture-with-retransmit-green.log",
+    "result": "PASS",
+    "sha256": "4edf81beda6626c8c838edd63fe2e965c0442de9a5b7623746bea98ac732d470"
+  },
+  {
+    "log": "trace-bins-final-build.log",
+    "result": "PASS",
+    "sha256": "4670d77374e0bf71325a2c488c8eadba4f564507abfa807ed788e633abc12a2d"
+  },
+  {
+    "log": "app-matrix-aged-clock.log",
+    "result": "PASS",
+    "sha256": "6c69a95c6c9cf0402788e20c2c0c32e9d9a9a7743deaa18999f63d02e404e23b"
+  },
+  {
+    "log": "app-matrix-recovery.log",
+    "result": "PASS",
+    "sha256": "ff218821bc97d6e116744cef5bac18983c84e54aa51a9ebf50bd724706eb7f3b"
+  },
+  {
+    "log": "app-refusal-final-green.log",
+    "result": "PASS",
+    "sha256": "85a9a5e2a7042383a3e32ce7ddd661ad774da2df91517e76e1b4dd73c8b5055b"
+  },
+  {
+    "log": "new-cases-race200.log",
+    "result": "PASS",
+    "sha256": "4b7965c26176ae33f3ca8b6b407ea015ce8ac60ff4f50affcfac742c75035275"
+  },
+  {
+    "log": "layout-clock-green.log",
+    "result": "PASS",
+    "sha256": "6bd3bf9c3e209dfdb777ab3ffc9652723957e5e60eb67a9d8613f9d393d434c8"
+  },
+  {
+    "log": "rust-default-smoke.log",
+    "result": "PASS",
+    "sha256": "f9cda9a69394dc498a90ee1c15ee00b8975cf89a7ec7f2becee78ba093608cb3"
+  },
+  {
+    "log": "rust-clippy-trace.log",
+    "result": "PASS",
+    "sha256": "d452660f05a2ab3f3dc2c010985568704d8344987cedba34c481ff017a68cca3"
+  },
+  {
+    "log": "rust-fmt.log",
+    "result": "PASS",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "log": "go-final-vet.log",
+    "result": "PASS",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "log": "go-final-lint.log",
+    "result": "PASS",
+    "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+  },
+  {
+    "log": "workflow-final-green.log",
+    "result": "PASS",
+    "sha256": "7403c747376d01057f12edb941cdedb666ca3cd315ae2db90cc16566922592da"
+  },
+  {
+    "log": "go-build.log",
+    "result": "PASS",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "log": "go-affected-short.log",
+    "result": "PASS",
+    "sha256": "1be815a4ef5abb514cfa8073025c96cbae3fdc73f6aafde8a3c815db6ce89616"
+  },
+  {
+    "log": "docs.json",
+    "result": "PASS",
+    "sha256": "313c74b70399c4bb84610969f441931f0e89c4600546783123559b8b8e7715ca"
+  }
+]

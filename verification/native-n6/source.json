@@ -1,0 +1,19 @@
+{
+  "base": "f4335d29c012f645c9c5d67914883ee73afe6442",
+  "files": {
+    ".github/workflows/ci.yml": "c38044e448d67b998bf464bcf885d52349b7a648eb8466321627097d510b3275",
+    "pkg/window/config.go": "6a241793d4cb46b53c60634330c12162ef33496602a6d94875f018efdff8a5eb",
+    "verification/test_ci_short_workflow.py": "63db7a0ca8dbe361b2d2a45eaa36cbf1f3640b171dab87bdf5f7e70a9c110d80",
+    "x/arc/executor/Cargo.toml": "ef742d1cf478cbffccf390b5644aba9947fd210d010f7e72537bcab17b013fb6",
+    "x/arc/executor/src/lib.rs": "9944da0f29de0ccc1d39ecc1eba621a0147cb070af86c0828b7f7affcd5dcf1b",
+    "x/arc/executor/src/native_import.rs": "23e481a46870a3573cf300089103beb94f2d1179c8f504e90d4d7602315a03e5",
+    "x/arc/executor/src/native_writer.rs": "38220d8479428b79a310637ea6ecd2ea65074d55b44ef6e821ea41bc9de524cb",
+    "x/arc/executor/src/replay.rs": "3b10dd36a82984763ff0220ac64a69aa0f3e042e86151e43eb27ff501c3b2c2a",
+    "pkg/window/layout_clock_test.go": "1f425cb9caf4704d4058a8b7f75d6a2ab62d84e172ab173f42de36731f71d6b4",
+    "verification/test_ci_native_acceptance.py": "8ddee62f0a8c1cf4d35b04ee1fb6215f696a9a4f455dbc5bab6e8a7de88369ea",
+    "x/arc/acceptance/doc.go": "079f5b79e003cf799510497e4cc23322625d3e8a0caa95f48a3ad56e99e921dc",
+    "x/arc/acceptance/integration_test.go": "ec58b61acadab1c1886ce50db35024751ccb9597d0d9a042dd9dcf604f3c575c",
+    "x/arc/acceptance/transport_test.go": "e7e2b3b1e5d8aa2894dca4367a623d2896c4c253f7d9a22d7fd62040f7758041",
+    "x/arc/executor/src/acceptance.rs": "b06ae20335dff1d77657493815b862ba5f97e9d8b14f5a1e0b261f01578ae595"
+  }
+}

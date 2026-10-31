@@ -1,0 +1,69 @@
+{
+  "stage": "Managed Arc App preflight and read-only metadata/SQL inspection",
+  "status": "COMPLETE",
+  "pr": 257,
+  "url": "https://github.com/0xmhha/indexer-go/pull/257",
+  "base": "3f0426a2d66d75731664e6be585685cfa89b72f2",
+  "head": "5d7a65ed17536e499897decc1ef8bd1150e94334",
+  "tree": "50aff6bf614a12b5547657e7ee26256207fbb3ff",
+  "main": "f4335d29c012f645c9c5d67914883ee73afe6442",
+  "ci_run": 41156325570,
+  "ci_run_number": 333,
+  "jobs": [
+    {
+      "id": 124403806552,
+      "name": "scope",
+      "conclusion": "success"
+    },
+    {
+      "id": 124403832867,
+      "name": "arc",
+      "conclusion": "success"
+    },
+    {
+      "id": 124403832868,
+      "name": "postgres",
+      "conclusion": "success"
+    },
+    {
+      "id": 124403832906,
+      "name": "examples",
+      "conclusion": "success"
+    },
+    {
+      "id": 124403832919,
+      "name": "test",
+      "conclusion": "success"
+    },
+    {
+      "id": 124403832947,
+      "name": "lint",
+      "conclusion": "success"
+    }
+  ],
+  "checks": "All six actual jobs success, short/build/vet/lint/examples/cache/offline ops steps passed, corePG11 no skips and owned CLI15/runtime16 passed. Native SDK/full stress intentionally skipped. Local behavioral RED->GREEN, affected short, fsync-on PG and one new reserved-reader CPU1/race/single200 pass; staged/history leaks no new findings.",
+  "sync": "reviewed exact tree; one parent/base; clean HEAD=origin/main; config SHA/mode unchanged; feature branch retained",
+  "remaining": [
+    "N6 combined actual SDK/App/mock ETH68/SQL/GC owned-fixture acceptance",
+    "N6 recovery handoff and applicable release qualification",
+    "actual APFS/enode/fork/history/authenticated checkpoint/private deployment inputs remain HOLD"
+  ],
+  "invariants": [
+    "pool4/part2/API1/writers7",
+    "shared physical HTTP5 including retries/failover/batch",
+    "NEW uncached fresh->post-response generation fence->COMMIT->exactACK",
+    "two EVM passes",
+    "other projects and private config unchanged"
+  ],
+  "held": [
+    "actual nodes/peers/deployment",
+    "format/provisioning/operational GC/restore",
+    "extra performance or host-load measurement"
+  ],
+  "ci_log_sha256": {
+    "ci-test.log": "2540e2958fa8d51a63b6027f7b01dab989546efd3bbc11051b016894f91cd06b",
+    "ci-lint.log": "bf991e4f7aac01480cd6209281ed8210b4cb8d0ee0df5fec2474ff4e40770328",
+    "ci-postgres.log": "2fb645c919e92f232febe20ab3433dbf7fc94061b76e818dfe2105f87d3e6115",
+    "ci-examples.log": "a981142c08fe61b125b3e5116d98674e3461448a125542740bee67afb19bafe3"
+  }
+}

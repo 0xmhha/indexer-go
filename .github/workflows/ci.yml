@@ -286,6 +286,8 @@ jobs:
         cargo fmt --check
         cargo build --locked --bins
         cargo clippy --locked --bins -- -D warnings
+        # Four owned blocks only; no131-block export or PG/App in default CI.
+        cargo test --locked --lib acceptance::integrated_fixture_exports_official_checkpoint_and_two_branches
         cargo test --locked --lib native_import::tests::import_frame_
         cargo test --locked --lib managed_read::tests::inherited_view_
         cargo test --locked --lib native_epoch::tests::transition_unwinds_actual_native_and_restarts_relative_sequence_without_moving_anchor
@@ -293,14 +295,15 @@ jobs:
       working-directory: x/arc/executor
       env:
         INDEXER_ARC_FIXTURE_DIR: ${{ runner.temp }}/arc-fixtures
+        INDEXER_ARC_INGRESS_FIXTURE_DIR: ${{ runner.temp }}/arc-ingress-fixture
         INDEXER_ARC_NATIVE_FIXTURE_DIR: ${{ runner.temp }}/arc-native-retention
         INDEXER_ARC_MAINTENANCE_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/arc-native-maintenance
         INDEXER_ARC_EXECUTOR_BINARY: ${{ github.workspace }}/x/arc/executor/target/debug/indexer-arc-executor
       run: |
         cargo fmt --check
-        cargo build --locked --all-targets
-        cargo clippy --locked --all-targets -- -D warnings
-        cargo test --locked --all-targets
+        cargo build --locked --features acceptance-trace --all-targets
+        cargo clippy --locked --features acceptance-trace --all-targets -- -D warnings
+        cargo test --locked --features acceptance-trace --all-targets
         cmp "$INDEXER_ARC_FIXTURE_DIR/arc-storage.json" ../../../testdata/execution/arc-storage.json
         cmp "$INDEXER_ARC_FIXTURE_DIR/arc-state-proofs.json" ../../../testdata/execution/arc-state-proofs.json
         cmp "$INDEXER_ARC_FIXTURE_DIR/arc-create-gone.json" ../../../testdata/execution/arc-create-gone.json
@@ -318,7 +321,7 @@ jobs:
         test -d target && test ! -L target
         native_bin="$RUNNER_TEMP/arc-native-bin"
         mkdir -m 700 "$native_bin"
-        for name in arc-native-maintenance indexer-arc-executor; do
+        for name in arc-native-bootstrap arc-native-import arc-native-maintenance indexer-arc-executor; do
           install -m 700 "target/debug/$name" "$native_bin/$name"
           cmp "target/debug/$name" "$native_bin/$name"
         done
@@ -332,6 +335,15 @@ jobs:
         go vet -tags arc_native ./x/arc/nativeops
         go test -race -tags arc_native -count=1 -timeout=15m -v ./x/arc/nativeops -run '^TestArcNativeLibraryMatchedBackupAndRestore$'
       if: needs.scope.outputs.full == 'true'
+    - name: Real Arc App native ingress and retention acceptance
+      if: needs.scope.outputs.full == 'true'
+      env:
+        INDEXER_ARC_INGRESS_FIXTURE_DIR: ${{ runner.temp }}/arc-ingress-fixture
+        INDEXER_ARC_ACCEPTANCE_BIN_DIR: ${{ runner.temp }}/arc-native-bin
+      run: |
+        # The helper owns and cleans a fsync-on disposable PostgreSQL only.
+        # No live peer, node service, operator config or throughput measurement.
+        env -u INDEXER_TEST_POSTGRES ./scripts/test-postgres.sh ./x/arc/acceptance -tags arc_native -race -parallel=1 -count=1 -timeout=20m -v -run '^TestArcNativeIntegrated'
     - name: Scope result
       if: needs.scope.outputs.arc != 'true'
       run: printf '%s\n' 'No applicable runtime/native source change; this check requires no build or service.'

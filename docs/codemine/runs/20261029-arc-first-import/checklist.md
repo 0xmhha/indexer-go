@@ -29,7 +29,7 @@ the release-gate item as a claim that CI has already run.
 - [x] N4 managed collector and receiver-authorized reorg/restart bridge; #245/CI318 released.
 - [x] N5 permanent ingress bytes, authoritative GC/retention and held deployment declaration implemented; [N5 evidence](../20261030-arc-native-n5/checklist.md) and final [declaration release gate](../20261031-native-runtime-alignment/checklist.md). No operational activation.
 - [x] Managed App file preflight/read-only raw/native/journal/SQL-export inspection; [scope and qualification](../20261031-managed-inspection/checklist.md), no integrated runtime authority.
-- [ ] N6 integrated offline acceptance and feature release verification.
+- [x] N6 actual App/mock ETH68/SDK/SQL/API/ACK/restart/reorg/GC/exact recovery acceptance; [qualification checklist](../20261031-arc-native-n6/checklist.md) separates local checks and actual CI/merge release identities.
 
 Actual APFS/private deployment identity, official enode/fork/history contract,
 authenticated checkpoint and backup/restore remain HOLD. No actual service,

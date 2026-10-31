@@ -158,6 +158,8 @@ pub fn replay<S: ReplayState>(
         .build();
     let observer = crate::calls::Observer::default();
     let calls = observer.0.clone();
+    #[cfg(feature = "acceptance-trace")]
+    crate::acceptance_trace("replay", h.number, h.hash_slow(), generation);
     let evm = config.evm_with_env_and_inspector(&mut db, config.evm_env(h)?, observer);
     let mut executor = config.create_executor(evm, config.context_for_block(&recovered)?);
     let cleared: Arc<Mutex<BTreeSet<Address>>> = Arc::default();

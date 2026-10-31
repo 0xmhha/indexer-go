@@ -23,7 +23,11 @@ it never overwrites an existing path or starts services. The explicit
 completion and reader gates. App/collector and authoritative ACK/GC integration
 are connected by [App ingress](../../../docs/EXECUTION_ARC_INGRESS.md) and the
 [N4 managed replay/reorg bridge](../../../docs/EXECUTION_ARC_MANAGED.md).
-Raw GC #252 and graceful drain #253 are released; explicit App/E3 phase coordination, held deployment and combined N6 acceptance remain.
+Raw GC #252, graceful drain #253, App/E3 coordination #255 and held deployment
+#256 are implemented. [N6 owned acceptance](../../../docs/EXECUTION_ARC_ACCEPTANCE.md)
+connects actual App/ETH68/SDK/SQL/ACK/reorg/GC/recovery. The optional
+`acceptance-trace` feature emits stderr EVM-entry observations only in explicit
+qualification builds; default binaries and wire framing are unchanged.
 Operational inputs and runtime activation remain HOLD.
 
 ## Library contract

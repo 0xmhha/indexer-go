@@ -115,6 +115,5 @@ RED→GREEN and release scope. The discovered reserved-reader wait has a real
 PostgreSQL regression and one CPU1/race/200 qualification. It reuses the existing
 loan instead of waiting for a fifth connection.
 
-Next is N6 combined App/mock ETH68/actual pinned SDK/SQL/GC acceptance using owned
-fixtures. Actual APFS/enode/authenticated checkpoint, operating nodes, format,
+[N6 combined App/mock ETH68/actual pinned SDK/SQL/GC acceptance](EXECUTION_ARC_ACCEPTANCE.md) is qualified using owned fixtures. Actual APFS/enode/authenticated checkpoint, operating nodes, format,
 provisioning and additional performance measurements remain HOLD.

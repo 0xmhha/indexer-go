@@ -1,0 +1,38 @@
+{
+  "current": {
+    "stage": "N6 owned Arc integrated acceptance",
+    "plan": "docs/codemine/runs/20261031-arc-native-n6/plan.md",
+    "checklist": "docs/codemine/runs/20261031-arc-native-n6/checklist.md"
+  },
+  "previous": [
+    {
+      "stage": "managed inspection",
+      "pr": 257,
+      "main": "f4335d29c012f645c9c5d67914883ee73afe6442",
+      "receipt": "verification/native-n6/inspection-release.json"
+    },
+    {
+      "stage": "held runtime alignment",
+      "pr": 256,
+      "main": "3f0426a2d66d75731664e6be585685cfa89b72f2",
+      "receipt": "verification/managed-inspection/runtime-release.json"
+    }
+  ],
+  "preserved_plans": [
+    "docs/codemine/runs/20261029-arc-first-import/plan.md",
+    "docs/codemine/runs/20261030-arc-native-n5/plan.md",
+    "docs/codemine/runs/20261023-e1-execution/02-design.md"
+  ],
+  "held": [
+    "operating nodes/peers/deployment",
+    "APFS/provisioning/format",
+    "authenticated operating checkpoint/private deployment inputs",
+    "operational GC/restore and extra performance/SLO"
+  ],
+  "invariants": [
+    "pool4/part2/API1/writers7",
+    "shared physicalHTTP5 retries/failover/batch",
+    "two normal EVM entries; no execution during Full persistence",
+    "NEW uncached canonical then post-response generation fence then COMMIT then exact ACK"
+  ]
+}
