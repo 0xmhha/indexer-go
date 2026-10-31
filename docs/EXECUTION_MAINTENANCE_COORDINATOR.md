@@ -99,6 +99,5 @@ local CPU1/race/single200 qualification. Default [CI](CI.md) remains scoped shor
 this Go-only change does not rebuild the unchanged Rust SDK. The prior actual
 SDK bridge qualification is recorded separately in
 [managed maintenance](EXECUTION_MANAGED_MAINTENANCE.md). Combined App/mock ETH68/
-actual SDK/SQL/GC acceptance remains N6. Held Docker/capacity/inspection
-composition is the next N5 step. See the [plan](codemine/runs/20261031-arc-maintenance-coordinator/plan.md)
+actual SDK/SQL/GC acceptance remains N6. The [held Docker/capacity/inspection declaration](../deployments/native/runtime/README.md) is aligned separately; managed file inspection and N6 remain. See the [plan](codemine/runs/20261031-arc-maintenance-coordinator/plan.md)
 and [checklist](codemine/runs/20261031-arc-maintenance-coordinator/checklist.md).

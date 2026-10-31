@@ -2,15 +2,15 @@
 # Profiles and x-notes are not an execution interlock. See README.md.
 name: indexer-native-runtime-draft
 x-indexer-native-plan:
-  version: 1
+  version: 2
   deployment_state: HOLD
   postgres: external_prepared_16
-  arc_executor: collector_owned_stdio_child
+  arc_executor: app_owned_capture_import_and_replay
   stablenet_executor: owned_import_and_replay
   socket: /ipc/execution.sock
   native: /native/node
   spool: /source/spool
-  maintenance: separate_supervised_manual
+  maintenance: existing_app_e3_explicit_library
   contracts:
     max_conns: 4
     part_transactions: 2
@@ -24,10 +24,22 @@ x-indexer-native-plan:
     private_image_and_configs: HOLD
     authenticated_full_checkpoint: HOLD
     official_peers: HOLD
-    arc_first_import_provider: HOLD
+    arc_app_ingress_acceptance: HOLD
     prepared_postgres_schema: HOLD
     host_uid_and_socket_mapping: HOLD
-  arc_scratch: /scratch
+  arc_scratch: /source
+  arc_raw_volume: /raw
+  arc_raw_window: /raw/arc-raw
+  arc_maintenance_journal: /native/.node.arc-execution-maintenance
+  arc_ingress:
+    module: arc.native
+    native_executable: /app/arc-native-import
+    collector_executable: /app/indexer-arc-executor
+    peer_key_file: /run/private/arc-peer-key
+    initialize_volume: false
+    create_window: false
+    window: arc-raw
+    max_raw_blocks: 172800
   arc_run_lease: /native/.node.execution-retention-lock
 services:
   arc-app:
@@ -63,6 +75,7 @@ services:
     networks:
     - database
     - rpc
+    - peers
     volumes:
     - type: bind
       source: ${INDEXER_ARC_RUNTIME_APP_CONFIG:?HOLD app config required}
@@ -77,74 +90,35 @@ services:
       bind:
         create_host_path: false
     - type: bind
-      source: ../../testnets/indexer-entrypoint.sh
-      target: /opt/indexer/entrypoint.sh
-      read_only: true
-      bind:
-        create_host_path: false
-  arc-collector:
-    image: ${INDEXER_ARC_COLLECTOR_IMAGE:?HOLD reviewed image digest required}
-    pull_policy: never
-    profiles:
-    - native-runtime-draft
-    user: ${INDEXER_RUN_UID:?HOLD host UID required}:${INDEXER_RUN_GID:?HOLD host GID required}
-    restart: 'no'
-    init: true
-    read_only: true
-    cap_drop:
-    - ALL
-    security_opt:
-    - no-new-privileges:true
-    stop_signal: SIGTERM
-    stop_grace_period: 120s
-    tmpfs:
-    - /tmp:mode=1777
-    entrypoint:
-    - /app/arc-execution-collector
-    command:
-    - --config
-    - /etc/indexer/native.json
-    depends_on:
-      arc-app:
-        condition: service_started
-    volumes:
-    - type: bind
-      source: ${INDEXER_ARC_RUNTIME_NATIVE_CONFIG:?HOLD native config required}
-      target: /etc/indexer/native.json
-      read_only: true
-      bind:
-        create_host_path: false
-    - type: bind
-      source: ${INDEXER_ARC_RUNTIME_NATIVE_PARENT:?HOLD native parent required}
+      source: ${INDEXER_ARC_RUNTIME_NATIVE_PARENT:?HOLD private input required}
       target: /native
       read_only: false
       bind:
         create_host_path: false
     - type: bind
-      source: ${INDEXER_ARC_RUNTIME_NATIVE_PARENT:?HOLD native parent required}/node
-      target: /native/node
-      read_only: true
-      bind:
-        create_host_path: false
-    - type: bind
-      source: ${INDEXER_ARC_RUNTIME_SOURCE_PARENT:?HOLD source parent required}
+      source: ${INDEXER_ARC_RUNTIME_SOURCE_PARENT:?HOLD private input required}
       target: /source
       read_only: false
       bind:
         create_host_path: false
     - type: bind
-      source: ${INDEXER_ARC_RUNTIME_SCRATCH:?HOLD scratch directory required}
-      target: /scratch
+      source: ${INDEXER_ARC_RUNTIME_RAW_VOLUME:?HOLD private input required}
+      target: /raw
       read_only: false
       bind:
         create_host_path: false
     - type: bind
-      source: ${INDEXER_ARC_RUNTIME_IPC:?HOLD ipc required}
-      target: /ipc
-      read_only: false
+      source: ${INDEXER_ARC_RUNTIME_PEER_KEY_FILE:?HOLD private input required}
+      target: /run/private/arc-peer-key
+      read_only: true
       bind:
         create_host_path: false
-    network_mode: none
+    - type: bind
+      source: ../../testnets/indexer-entrypoint.sh
+      target: /opt/indexer/entrypoint.sh
+      read_only: true
+      bind:
+        create_host_path: false
   stablenet-app:
     image: ${INDEXER_NATIVE_APP_IMAGE:?HOLD reviewed image digest required}
     pull_policy: never

@@ -156,6 +156,20 @@ a lease or a cross-store transaction. Changes detected while sampling HOLD;
 cancellation/I/O never yield readiness. External APFS/enode/private manifest
 inputs remain unavailable and HOLD, without an operator questionnaire.
 
+## Managed App ingress coverage
+
+The [current runtime declaration](../deployments/native/runtime/README.md) has
+App-owned Arc raw/import/replay and no external collector. This command still
+observes only existing native/source metadata and explicit export inputs.
+It does not read managed raw ownership, SQL E3 completion or the coordinator
+phase journal. Native/source observations cannot prove cross-store agreement,
+worker resume or deletion authority. Missing observations stay unknown.
+
+Managed App file inspection and combined actual SDK/App/SQL/GC acceptance remain
+follow-ups. The separate diagnostic profile stays read-only/network-none/no-DSN;
+it is not the RW App runtime profile. No new input path or runtime capability
+is silently added to this command.
+
 ## Validation and unchanged runtime boundaries
 
 The synthetic tests exercise compatible products, all/mixed unknowns, missing
@@ -176,4 +190,4 @@ identifiers, E1–E4/full baseline/E3 exact permit/live lease/sourceACK/window/
 intent/completion/release and E6 authenticated trust/fork boundaries are unchanged.
 No pool/client or hot-path collector/writer/API refactor is introduced. Functional
 library/mock/owned PostgreSQL checks are not P2P, performance or operational proof.
-The separate [Docker diagnostic draft](../deployments/native/README.md) now wires these commands with read-only native-parent/source/export bindings. It grants no execution approval. Next priorities are the backup adapter, then monitoring. Start/GC/recovery/restore/activation remain held.
+The separate [Docker diagnostic draft](../deployments/native/README.md) now wires these commands with read-only native-parent/source/export bindings. It grants no execution approval. Backup adapter and monitoring are implemented separately; managed App inspection and N6 remain. Start/GC/recovery/restore/activation remain held.

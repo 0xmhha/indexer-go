@@ -12,8 +12,13 @@
 - [x] Both-worker graceful drain/join, real source ACK observation and verified resume #253/CI329 released; clean mainf63d0ff synchronized.
 - [x] Explicit inherited native run lease and managed COW bridge/completed-floor validation released as #254/CI330; clean main9af6e0f synchronized. [Release receipt](../../../../verification/native-maintenance-coordinator/managed-release.json).
 - [x] App/E3 phase coordinator implemented with durable exact raw-first/COW/release/resume recovery (including zero-deletion raw completion); [feature qualification checklist](../20261031-arc-maintenance-coordinator/checklist.md) separates local/CI release evidence.
-- [ ] Held Docker/capacity/inspection composition updated consistently.
-- [ ] RED/GREEN, affected regression/static/concurrency and current evidence.
-- [ ] Applicable short CI, guarded squash and clean main synchronization.
+- [x] Held three-service Docker/capacity/inspection declaration aligned with App-owned Arc; [scope/checklist](../20261031-native-runtime-alignment/checklist.md) keeps managed file inspection and N6 distinct.
+- [x] N5 runtime subfeatures have RED/GREEN, affected regression/static and new-concurrency qualification; declaration-only final step uses Python/owned diagnostic CLI checks, without repeating200.
 
-N5 and N6 remain incomplete. Operational inputs and execution remain HOLD.
+Final declaration release requires exact-head short CI, squash and clean main
+synchronization; associated PR metadata and post-merge receipt retain those
+identities. No operational activation is implied by implementation completion.
+
+N5 implementation is complete with per-feature release evidence. N6 managed
+file inspection and combined native/App/SQL acceptance remain incomplete.
+Operational inputs and execution remain HOLD.

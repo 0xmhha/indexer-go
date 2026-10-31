@@ -3,7 +3,7 @@
 The plan implements the missing Arc first execution and continuous native DB
 update module. N0 now implements bounded framing/private pending fences and
 qualifies the real pinned SDK; see [N0](../20261029-arc-native-n0/plan.md).
-N1 now implements offline authenticated native bootstrap; see [N1](../20261029-arc-native-n1/plan.md). N2 now implements the first-execution writer and durable publication; see [N2](../20261029-arc-native-n2/plan.md). N3 now implements App-owned ingress; see [N3](../20261030-arc-native-n3/plan.md). N4 implements managed replay and E1 reorg integration; see [N4](../20261030-arc-native-n4/plan.md). N5/N6 permanent coverage/owner maintenance and combined acceptance remain incomplete. The full runtime module is not yet complete.
+N1 implements offline authenticated native bootstrap; see [N1](../20261029-arc-native-n1/plan.md). N2 implements the first-execution writer and durable publication; see [N2](../20261029-arc-native-n2/plan.md). N3 implements App-owned ingress; see [N3](../20261030-arc-native-n3/plan.md). N4 implements managed replay and E1 reorg integration; see [N4](../20261030-arc-native-n4/plan.md). N5 permanent coverage/owner maintenance and held runtime declaration are implemented with [per-feature evidence](../20261030-arc-native-n5/checklist.md). N6 managed file inspection and combined acceptance remain incomplete. The full runtime module is not yet qualified.
 The [canonical design](../../../ARC_NATIVE_IMPORT_DESIGN.md) owns architecture
 and safety boundaries; this plan owns sequence and acceptance.
 

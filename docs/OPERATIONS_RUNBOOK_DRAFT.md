@@ -2,6 +2,16 @@
 
 현재 배포 판정과 운영자 입력은 [운영 준비 현황](OPERATIONS_READINESS.md)을 따른다. 배포는 HOLD이며 legacy 초안과 native 실행 경로를 구분한다.
 
+관리형 Arc는 [App 소유 runtime 초안](../deployments/native/runtime/README.md)과
+[명시적 App/E3 coordinator](EXECUTION_MAINTENANCE_COORDINATOR.md)를 따른다.
+아래 legacy capture/finalized 절차를 관리형 raw/SQL/phase 복구에 그대로 적용하지 않는다.
+App이 두 worker를 drain/join하고 준비·허가·raw 완료(0건 포함)·COW 완료·DB 완료·파일 해제를
+내구 기록한 뒤 검증 후 재개한다. 미완료/손상 journal과 volume/owner 불일치는 HOLD이며
+임의 파일 삭제·TTL·latest·0으로 완료를 추정하지 않는다. journal과 lock은 `/native` 부모,
+DB는 교체 가능한 `/native/node` 자식이다. 기존 legacy 진단 PASS는 통합 상태 검증이 아니다.
+실제 실행·신호·삭제·복원은 계속 보류한다.
+
+
 **상태: 절차 초안. 디스크 포맷·초기화·실제 서비스 실행·삭제·장애 시험·추가 성능 측정은 보류한다.**
 
 [운영 설정](OPERATIONS_DRAFT.md), [Docker 구성](../deployments/testnets/README.md), [용량·backlog 정책](OPERATIONS_CAPACITY_DRAFT.md)을 적용할 때 사용할 절차다. 이 문서는 실행 승인이나 새 운영 도구가 아니다. 체인별 DB pool4개(체인별 App이1개일 때16개), 체인별 공유 RPC5 HTTP/s, source와 writer 각각의 커밋 직전 fresh·응답 후 epoch·transaction fence, 내구성/ACK/최소24h 삭제 조건을 유지한다. 다른 프로젝트·기존 DB·디스크를 정리하거나 별도 full node를 시작하지 않는다.

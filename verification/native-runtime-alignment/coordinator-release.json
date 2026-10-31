@@ -1,0 +1,48 @@
+{
+  "stage": "N5 explicit App/E3 maintenance phase coordinator",
+  "status": "COMPLETE",
+  "pr": 255,
+  "url": "https://github.com/0xmhha/indexer-go/pull/255",
+  "base": "9af6e0f720029959b8a149e66d05dd5fcfba4c6a",
+  "head": "c9db39a8db001d4472285398da1e3c1d50ae5a86",
+  "tree": "e496b20d493ba1ae3670a90aca2951824be884f1",
+  "main": "6d0b442841ac8e2c32e054a3c0be0b56fbb1f884",
+  "ci_run": 41087199593,
+  "ci_run_number": 331,
+  "jobs": [
+    {
+      "id": 124171351580,
+      "name": "scope",
+      "conclusion": "success"
+    },
+    {
+      "id": 124171412137,
+      "name": "postgres",
+      "conclusion": "success"
+    },
+    {
+      "id": 124171412195,
+      "name": "lint",
+      "conclusion": "success"
+    },
+    {
+      "id": 124171412228,
+      "name": "test",
+      "conclusion": "success"
+    },
+    {
+      "id": 124171412258,
+      "name": "arc",
+      "conclusion": "success"
+    },
+    {
+      "id": 124171412272,
+      "name": "examples",
+      "conclusion": "success"
+    }
+  ],
+  "checks": "All six actual named jobs success; actual build/short/vet/lint/examples/corePG11 without skips/cache lifecycle/offline ops. Native Rust build/full stress intentionally skipped for unchanged Go-only scope. New live/App and actual PG local CPU1/race/single200 passed once each.",
+  "sync": "exact reviewed tree, one parent/base, clean HEAD=origin/main, private config SHA/mode unchanged; feature branch retained",
+  "overall_N5": "INCOMPLETE: held Docker/capacity/inspection composition; N6 combined App/mockETH68/actualSDK/SQL/GC acceptance remains separate.",
+  "held": "actual nodes/peers, format/provisioning, operational GC/restore, deployment and additional performance measurements; other projects unchanged"
+}

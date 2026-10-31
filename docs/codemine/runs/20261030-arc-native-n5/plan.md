@@ -8,7 +8,9 @@ mainf63d0ff. The [managed native COW bridge](../../../EXECUTION_MANAGED_MAINTENA
 is released as #254/CI330 at main9af6e0f. The explicit
 [App/E3 coordinator](../../../EXECUTION_MAINTENANCE_COORDINATOR.md) is implemented;
 its [qualification](../20261031-arc-maintenance-coordinator/checklist.md) remains
-distinct from held Docker composition and combined N6 acceptance. The
+distinct from the [held Docker alignment](../20261031-native-runtime-alignment/plan.md)
+and combined N6 acceptance. The declaration alignment is implemented; its
+checklist tracks qualification. Managed file inspection and N6 remain separate. The
 [accepted first-import plan](../20261029-arc-first-import/plan.md) remains the
 authority. Native n−1 is [N4](../20261030-arc-native-n4/plan.md); n−2 is
 [N3](../20261030-arc-native-n3/plan.md). Preserve the accepted

@@ -85,8 +85,7 @@ drain → independently observed plan → E3 fresh authorization → raw GC/reco
 first → native/source COW under the live lease → E3 fresh completion → exact
 file release → verified resume. Its durable journal distinguishes zero-deletion
 raw completion from an unstarted phase. This remains an explicit library call;
-manual artifacts or a drain point alone grant no maintenance authority. Held
-Docker/capacity/inspection composition and N6 remain incomplete.
+manual artifacts or a drain point alone grant no maintenance authority. The [held runtime declaration](../deployments/native/runtime/README.md) is aligned separately; managed file inspection and N6 remain incomplete.
 
 Pool4/part2/API1, seven logical writers, physical RPC5 and NEW final canonical
 response → generation fence → COMMIT → exact ACK stay unchanged. Default CI
