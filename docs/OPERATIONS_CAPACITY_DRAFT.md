@@ -1,5 +1,7 @@
 # 용량·backlog·복구 정책 초안
 
+[관리형 App 읽기 전용 진단](EXECUTION_MANAGED_INSPECTION.md)은 선언된 raw/source COW 여유와 고정 native/raw/journal·SQL-export metadata를 비교한다. 실제 용량·SDK 상태·worker 재개·live fresh/GC 허가는 확인하지 않는다. 누락은 HOLD이고 손상은 FAIL이며, 이 도구가 복구·삭제를 수행하지 않는다.
+
 **상태: 정책 제안과 그 일부 구현. 파일시스템·PGDATA·raw 용량의 자동 감시와 중단·재개 잠금, 원인별 자동 재시작 억제를 구현했다(10/20, [구현 범위](#구현된-자동-감시와-중단)). 운영 적용·디스크 포맷·초기화·서비스 실행·추가 성능 측정은 보류한다.**
 
 현재 입력·native COW 여유는 [운영 준비 현황](OPERATIONS_READINESS.md)을 따른다.

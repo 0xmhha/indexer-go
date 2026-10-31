@@ -1,0 +1,24 @@
+{
+  "Native": {
+    "Executable": "/app/indexer-arc-executor",
+    "DataDir": "/native/node",
+    "ScratchDir": "/source",
+    "Chain": {
+      "ID": "5042002",
+      "Genesis": "0xe20e653af4441e8c6088e172b129d56420139824400477287b46e7101ae2bb1f"
+    },
+    "Timeout": 60000000000
+  },
+  "Anchor": {
+    "Generation": 1,
+    "Height": 100,
+    "Hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "SpoolDir": "/source/spool",
+  "Socket": "/ipc/execution.sock",
+  "MaxBytes": 268435456,
+  "MaxRecords": 4096,
+  "Window": 8,
+  "Poll": 100000000,
+  "Retry": 500000000
+}

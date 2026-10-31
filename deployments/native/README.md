@@ -32,7 +32,7 @@ bash deployments/native/test-cli.sh
 `test-cli.sh` builds four host Go1.26.8 binaries with CGO enabled, runs their real
 commands against owned synthetic bindings, and removes its temporary binaries
 on exit. It does not build an image or invoke Docker/native services/DB/RPC.
-The default unit invocation skips this one host-binary fixture; the script and
+The default unit invocation skips the host-binary fixtures; the script and
 CI run it. New concurrent runtime state is not introduced.
 
 ## Files and commands
@@ -43,7 +43,7 @@ CI run it. New concurrent runtime state is not introduced.
 | [Dockerfile.draft.dockerignore](Dockerfile.draft.dockerignore) | Only Go/module source inputs; operator bundles, root config/secrets, Git data and native build targets are outside the selected context |
 | [compose.draft.yaml](compose.draft.yaml) | Separate project `indexer-native-diagnostics-draft`, profile `native-diagnostics-draft`; no default services or application/DB dependencies |
 | `arc-config` / `stablenet-config` | Product-specific `execution-preflight`, fixed explicit App/native/checkpoint/declaration flags; Arc also uses retention.json |
-| `arc-metadata` / `stablenet-metadata` | Product-specific `execution-diagnose`, fixed source/native/three export arguments |
+| `arc-metadata` / `stablenet-metadata` | Product-specific `execution-diagnose`, fixed source/native/export arguments; Arc also selects raw and ingress export |
 | [check.py](check.py) | Bounded offline declaration check, with no environment expansion or host-source traversal |
 
 CGO0 does not compile the current `blst` dependency. Both this recipe and the
@@ -71,7 +71,9 @@ identifiers, not Docker secret-remapping assumptions.
 | --- | --- |
 | `INDEXER_NATIVE_DIAGNOSTICS_IMAGE`, `INDEXER_RUN_UID`, `INDEXER_RUN_GID` | Shared image and user; unresolved today |
 | `INDEXER_ARC_NATIVE_INPUTS` / `INDEXER_STABLENET_NATIVE_INPUTS` | `/inputs`, existing dedicated file-preflight bundle |
-| `..._SPOOL` | `/source`, existing source spool |
+| `INDEXER_STABLENET_NATIVE_SPOOL` | `/source`, existing StableNet spool |
+| `INDEXER_ARC_NATIVE_SOURCE_PARENT` | `/source`, dedicated Arc source parent; selected spool is `/source/spool` |
+| `INDEXER_ARC_NATIVE_RAW_VOLUME` / `INDEXER_ARC_NATIVE_RAW_NAME` | `/raw`, dedicated raw volume; selected window is `/raw/<RAW_NAME>` |
 | `..._PARENT` | `/native`, **dedicated parent** of the existing native directory |
 | `..._NAME` | One directory basename; selected DB is `/native/<NAME>` |
 | `..._EXPORTS` | `/observations`, existing supported source/checkpoint/retention export bundle |
@@ -79,19 +81,25 @@ identifiers, not Docker secret-remapping assumptions.
 `INPUTS` contains `app.yaml`, `native.json`, `checkpoint.json`, `declaration.json`
 and, for Arc, `retention.json`. `EXPORTS` contains `source.json`,
 `checkpoint.json`, `retention.json`, using the existing typed export contracts.
+Arc also requires `ingress.json`, complete canonical saved output from an existing
+Store as described in [managed inspection](../../docs/EXECUTION_MANAGED_INSPECTION.md).
 No exporter is run to obtain them. Do not invent empty/genesis exports or put
 runtime credential files in these bundles. Diagnostic services receive no DSN
 secret; legacy runtime DSN injection is unchanged.
 
 The native **parent** mount keeps Arc's sibling
-`.<NAME>.execution-retention` visible during directory swaps. StableNet's fence
+`.<NAME>.execution-retention` and managed
+`.<NAME>.arc-execution-maintenance` journal visible during directory swaps. StableNet's fence
 and floor remain below the selected native root. Mounting only the DB directory
 would hide Arc's sibling fence. The fixture checks exercise both products using
 real binaries and preserve input bytes/inodes without creating LOCK/ACK/manifest
 or maintenance records.
 
 Use mutually disjoint, clean absolute directories for each product's inputs,
-source, native parent and exports. Paths are declarations only: the checker
+source, raw volume, native parent and exports. For Arc managed inspection, use
+the original runtime container scopes for native/source/raw (for example
+`/native/node`, `/source/spool`, `/raw/arc-raw`); journal scopes are compared
+without remapping. A different historical path fails instead of being followed. Paths are declarations only: the checker
 does not test existence, APFS identity, permissions, symlink resolution, available
 space, Docker sharing or image authenticity/availability. The actual diagnostic
 readers still enforce their own strict metadata/file ownership contracts.

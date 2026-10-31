@@ -5,7 +5,7 @@
 - **What**: Blockchain indexer framework for EVM chains, including StableNet (Stable-One) and Arc. Stable (USDT0-native, Tendermint/CometBFT) is outside the current scope (decision 10/13).
 - **Target User**: StableNet dApp developers, block explorer backends
 - **Core Value**: Block/transaction indexing with GraphQL, JSON-RPC and WebSocket APIs
-- **Current Stage**: Current feature n: N5 held Docker/capacity/inspection declaration alignment; plan/checklist at `docs/codemine/runs/20261031-native-runtime-alignment/`. n−1: App/E3 coordinator #255/CI331 released at clean main6d0b442; n−2: managed COW/floor #254. N5 implementation now includes owner/raw archive/GC, drain, COW/floor, exact phase recovery and three-service held runtime declaration. N6 managed App file inspection and combined actual SDK/App/SQL acceptance remain. Preserve N5/N4/N3, accepted first-import/E1 plans and short CI policy. Operations stay HOLD.
+- **Current Stage**: Current feature n: managed Arc App file preflight and read-only raw/native/coordinator/SQL-export inspection; plan/checklist at `docs/codemine/runs/20261031-managed-inspection/`. n−1: held runtime alignment #256/CI332 released at clean main3f0426a; n−2: App/E3 coordinator #255/CI331. N5 implementation remains complete. Managed metadata inspection preserves independent R/N/P/epochs and never grants operational authority. Next: N6 combined actual SDK/App/mock ETH68/SQL/GC acceptance. Preserve N5/N4/N3, accepted first-import/E1 plans, previous two feature contexts and scoped short CI policy. Operations stay HOLD.
 - **Dependencies**: `indexer-frontend` consumes this service's GraphQL API
 
 ## Technical Context

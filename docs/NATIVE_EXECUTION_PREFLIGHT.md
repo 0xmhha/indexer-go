@@ -189,19 +189,28 @@ fixture anchor is never supplied as an operating-network authority.
 ## App-owned Arc runtime boundary
 
 The [managed runtime draft](../deployments/native/runtime/README.md) gives Arc App
-raw/native/source ownership and an in-process collector. This file preflight
-still accepts the separate legacy collector/native JSON schema; it does not
-establish managed App ingress/raw/SQL/phase-journal consistency. The command
-does not register `arc.native` as an operating file profile; an App YAML that
-requires that unsupported ingress fails closed. Legacy synthetic PASS cannot
-substitute for managed App acceptance. Keep deployment HOLD until dedicated
-managed file validation and N6 integration qualify it. Production App validation
-and startup ownership checks remain independently mandatory. No real App or
-declared data path is opened to make this check pass.
+raw/native/source ownership and an in-process collector. The Arc product hook
+now registers `arc.native` for pure declaration validation on testnet5042002.
+It compares the selected App layout/quotas/peers and exact derived source-parent
+scratch against explicit review files, with prepared-only storage flags. Missing
+selected identity/path values stay HOLD; typed limits and known conflicts FAIL.
+Every managed declaration remains HOLD for uninspected runtime evidence.
+
+Use the five [synthetic managed files](../configs/execution/preflight/synthetic-managed-arc/app.yaml)
+with the same command flags above for HOLD/2. Their numeric quotas, fork and
+loopback peer are synthetic. `native.json` is a review mirror, not another App
+runtime input or external collector. No paths inside the files are opened.
+
+For managed headroom, add raw quota to backup and free requirements above, and
+one extra source quota to free headroom for source COW. Only the exact declared
+source-parent scratch overlap is permitted. See
+[managed inspection](EXECUTION_MANAGED_INSPECTION.md) for SQL export, diagnostics
+and remaining N6 SDK/App/SQL acceptance. Actual startup ownership, fresh and
+retention gates remain independently mandatory.
 
 [Plan/checklist](codemine/runs/20261028-native-preflight/plan.md) and
 [validation](codemine/runs/20261028-native-preflight/validation.md) record tests and
 handoff scope. [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md),
 diagnostic Docker, backup adapter and monitoring are implemented with separate
-evidence limits. Managed App file inspection and N6 acceptance remain;
+evidence limits. Managed file inspection is implemented; combined N6 acceptance remains;
 provisioning, actual operation and extra performance measurements stay HOLD.

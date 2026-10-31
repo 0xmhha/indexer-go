@@ -17,6 +17,7 @@ import (
 	"github.com/0xmhha/indexer-go/execwire"
 	format "github.com/0xmhha/indexer-go/execwire/checkpoint"
 	"github.com/0xmhha/indexer-go/execwire/configfile"
+	"github.com/0xmhha/indexer-go/internal/config"
 
 	appruntime "github.com/0xmhha/indexer-go/pkg/app"
 	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
@@ -84,6 +85,8 @@ type Native struct {
 	SpoolBytes, Reserve                       uint64
 	SpoolRecords                              int
 	StateProofs                               *stateproof.Selection
+	RawBytes                                  uint64
+	SourceParentScratch                       bool
 }
 type Product struct {
 	SeparateRetention, PeerMembership, CollectorScratch bool
@@ -94,6 +97,8 @@ type Product struct {
 	Decode                                              func([]byte, []byte, *Report) (Native, error)
 	Consensus                                           func(execwire.Chain, chains.ConsensusPolicy) (chains.ConsensusVerifier, error)
 	Identity                                            func(execwire.Chain, uint64, Unknown, *Report)
+	// App is pure and normalizes only detached unresolved validation inputs.
+	App func(*config.Config, Unknown, *Native, *Report)
 }
 
 // Declaration is supplemental offline operator metadata, never a host manifest
@@ -234,6 +239,9 @@ func Check(ctx context.Context, in Inputs, p Product) Report {
 		r.Add("native.identity", Fail, "invalid_identity")
 	}
 	if appOK {
+		if nativeOK && p.App != nil {
+			p.App(c, au, &n, &r)
+		}
 		r.Match("app.database.postgres.max_conns", c.Database.Postgres.MaxConns, int32(4))
 		r.Match("app.rpc.rate_limit", c.RPC.RateLimit, float64(5))
 		// Validate a copy with neutral values only for absent credential inputs. No
@@ -411,9 +419,9 @@ func Check(ctx context.Context, in Inputs, p Product) Report {
 			if n.NetworkID != 0 {
 				r.MatchKnown("declaration.network_id", d.NetworkID, n.NetworkID, n.Unknown["network_id"] || du["network"])
 			}
-			if p.PeerMembership && !Unresolved(d.Enode) {
+			if (p.PeerMembership || len(n.Peers) > 0) && !Unresolved(d.Enode) {
 				found := false
-				unresolvedPeers := len(n.Peers) == 0
+				unresolvedPeers := len(n.Peers) == 0 || n.Unknown["peers"]
 				for _, peer := range n.Peers {
 					unresolvedPeers = unresolvedPeers || Unresolved(peer)
 					found = found || peer == d.Enode
@@ -430,10 +438,14 @@ func Check(ctx context.Context, in Inputs, p Product) Report {
 				reserve = 1 << 30
 			}
 			invalidCapacity := !du["native_bytes"] && d.NativeBytes == 0 || !du["indexer_bytes"] && d.IndexerBytes == 0 || !du["checkpoint_bytes"] && d.CheckpointBytes == 0 || !du["scratch_bytes"] && d.ScratchBytes == 0
-			if !du["backup_bytes"] && !fits(d.BackupBytes, d.NativeBytes, n.SpoolBytes, d.IndexerBytes) {
+			if !du["backup_bytes"] && !fits(d.BackupBytes, d.NativeBytes, n.SpoolBytes, d.IndexerBytes, n.RawBytes) {
 				invalidCapacity = true
 			}
-			if !du["free_bytes"] && !fits(d.FreeBytes, d.NativeBytes, d.NativeBytes, reserve, n.SpoolBytes, d.IndexerBytes, d.CheckpointBytes, d.ScratchBytes, d.BackupBytes) {
+			var extraSource uint64
+			if n.SourceParentScratch {
+				extraSource = n.SpoolBytes // source COW in addition to its retained spool
+			}
+			if !du["free_bytes"] && !fits(d.FreeBytes, d.NativeBytes, d.NativeBytes, reserve, n.SpoolBytes, d.IndexerBytes, d.CheckpointBytes, d.ScratchBytes, d.BackupBytes, n.RawBytes, extraSource) {
 				invalidCapacity = true
 			}
 			if invalidCapacity {
@@ -468,6 +480,9 @@ func Check(ctx context.Context, in Inputs, p Product) Report {
 			}
 			for i, a := range paths {
 				for j := i + 1; j < len(paths); j++ {
+					if n.SourceParentScratch && a.Field == "native.spool" && paths[j].Field == "native.scratch" && filepath.Dir(a.Value) == paths[j].Value {
+						continue
+					}
 					if valid[i] && valid[j] && overlaps(a.Value, paths[j].Value) {
 						r.Add(a.Field+"/"+paths[j].Field, Fail, "path_overlap")
 					}

@@ -3,13 +3,13 @@ package postgres
 import (
 	"bytes"
 	"context"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"sync"
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/core/port"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type executionReadKey struct{}
@@ -42,17 +42,7 @@ func (s *Store) ReadSnapshot(ctx context.Context, read func(context.Context) err
 	if s.executionReadBound(ctx) || s.boundTx(ctx) != nil || !s.executionMode.Load() {
 		return read(ctx)
 	}
-	var conn *pgxpool.Conn
-	var connRelease func()
-	var err error
-	if reader, ok := ctx.Value(queryReaderKey{}).(*reservedQueryReader); ok && reader.owner == s {
-		conn, connRelease, err = reader.acquire(ctx)
-	} else {
-		conn, err = s.pool.Acquire(ctx)
-		if err == nil {
-			connRelease = conn.Release
-		}
-	}
+	conn, connRelease, err := s.executionReadConnection(ctx)
 	if err != nil {
 		return err
 	}
@@ -85,6 +75,19 @@ func (s *Store) ReadSnapshot(ctx context.Context, read func(context.Context) err
 	v.gate <- struct{}{}
 	defer v.stop()
 	return read(context.WithValue(viewCtx, executionReadKey{}, v))
+}
+
+// executionReadConnection reuses an API reservation when supplied. The caller
+// must finish its transaction before returning this synchronous connection loan.
+func (s *Store) executionReadConnection(ctx context.Context) (*pgxpool.Conn, func(), error) {
+	if reader, ok := ctx.Value(queryReaderKey{}).(*reservedQueryReader); ok && reader.owner == s {
+		return reader.acquire(ctx)
+	}
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return conn, conn.Release, nil
 }
 
 type executionReadView struct {

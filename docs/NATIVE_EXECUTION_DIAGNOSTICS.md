@@ -158,17 +158,26 @@ inputs remain unavailable and HOLD, without an operator questionnaire.
 
 ## Managed App ingress coverage
 
-The [current runtime declaration](../deployments/native/runtime/README.md) has
-App-owned Arc raw/import/replay and no external collector. This command still
-observes only existing native/source metadata and explicit export inputs.
-It does not read managed raw ownership, SQL E3 completion or the coordinator
-phase journal. Native/source observations cannot prove cross-store agreement,
-worker resume or deletion authority. Missing observations stay unknown.
+The Arc-only optional flags `--raw WINDOW` and `--ingress-artifact FILE` select
+[managed inspection](EXECUTION_MANAGED_INSPECTION.md). They add fixed raw/native
+control, source admission/ACK, coordinator phase and current-owner SQL-export
+checks to the legacy observations. Neither new flag follows configuration paths
+or opens a store. Either selects the managed callback; missing scopes stay HOLD.
+StableNet refuses these Arc selections.
 
-Managed App file inspection and combined actual SDK/App/SQL/GC acceptance remain
-follow-ups. The separate diagnostic profile stays read-only/network-none/no-DSN;
-it is not the RW App runtime profile. No new input path or runtime capability
-is silently added to this command.
+The report adds `received_ref`, `native_tip`, `raw_epoch`, `native_epoch` and
+`native_read_epoch`; input refs have height/hash/root without SQL generation.
+Known corrupt/immutable identity conflicts FAIL; missing, changing, pending or
+separate mutable samples HOLD. Historical completion is not current head or
+worker resume. The SQL artifact must be complete canonical bounded output from
+an existing Store's optional Inspector, with explicit null/false absence.
+It is unauthenticated saved evidence, not a live DB/canonical observation.
+
+Native SDK state/full lineage, payload/part coverage, quota and fresh canonical
+state remain uninspected. The report retains128 findings/12 observations/64KiB,
+separate-samples and no-authority limits. The diagnostic profile stays read-only,
+network-none and without DSN. Combined actual SDK/App/SQL/GC acceptance remains
+N6; managed preflight/metadata inspection is implemented separately.
 
 ## Validation and unchanged runtime boundaries
 
@@ -190,4 +199,4 @@ identifiers, E1–E4/full baseline/E3 exact permit/live lease/sourceACK/window/
 intent/completion/release and E6 authenticated trust/fork boundaries are unchanged.
 No pool/client or hot-path collector/writer/API refactor is introduced. Functional
 library/mock/owned PostgreSQL checks are not P2P, performance or operational proof.
-The separate [Docker diagnostic draft](../deployments/native/README.md) now wires these commands with read-only native-parent/source/export bindings. It grants no execution approval. Backup adapter and monitoring are implemented separately; managed App inspection and N6 remain. Start/GC/recovery/restore/activation remain held.
+The separate [Docker diagnostic draft](../deployments/native/README.md) now wires these commands with read-only native-parent/source/export bindings. It grants no execution approval. Backup adapter and monitoring are implemented separately; managed App inspection is implemented; N6 combined acceptance remains. Start/GC/recovery/restore/activation remain held.

@@ -8,7 +8,7 @@ import (
 )
 
 func Product() nativediagnostics.Product {
-	return nativediagnostics.Product{Name: "arc-native", InspectNative: nativestore.InspectMetadata, ChainAllowed: func(c execwire.Chain) bool {
+	return nativediagnostics.Product{Name: "arc-native", InspectNative: nativestore.InspectMetadata, Managed: inspectManaged, ChainAllowed: func(c execwire.Chain) bool {
 		if c.ID == "5042" {
 			return true
 		}

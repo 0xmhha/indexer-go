@@ -12,7 +12,7 @@ import (
 )
 
 func Product() nativepreflight.Product {
-	return nativepreflight.Product{Profile: "arc-native", SeparateRetention: true, CollectorScratch: true, ConsensusProfile: "arc", HeaderCodec: arc.New(), Decode: decode, Identity: func(c execwire.Chain, network uint64, u nativepreflight.Unknown, r *nativepreflight.Report) {
+	return nativepreflight.Product{Profile: "arc-native", SeparateRetention: true, CollectorScratch: true, ConsensusProfile: "arc", HeaderCodec: arc.New(), Decode: decode, App: managedApp, Identity: func(c execwire.Chain, network uint64, u nativepreflight.Unknown, r *nativepreflight.Report) {
 		if u["chain_id"] {
 			return
 		}

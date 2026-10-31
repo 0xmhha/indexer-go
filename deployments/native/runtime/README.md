@@ -165,10 +165,11 @@ corrupt journals block normal startup/resume; offline recovery starts no App.
 There is no automatic GC/timer/maintenance service or CLI activation in Compose.
 The same Store/RPC budget and pending fences remain mandatory; no TTL repair.
 
-N5 declaration alignment is separate from N6's managed file inspection and
-combined App/mock ETH68/actual SDK/SQL/GC acceptance. Actual APFS, peers/fork,
+N5 declaration alignment and [managed file inspection](../../../docs/EXECUTION_MANAGED_INSPECTION.md)
+are implemented. N6 combined App/mock ETH68/actual SDK/SQL/GC acceptance remains.
+Metadata inspection cannot certify SDK state, part coverage, live freshness or resume. Actual APFS, peers/fork,
 authenticated checkpoint, private config/image, prepared DB and matched backup/
 restore evidence all remain HOLD. Other projects/resources/config are unchanged.
 
-See the [current plan/checklist](../../../docs/codemine/runs/20261031-native-runtime-alignment/plan.md),
+See the [current inspection plan/checklist](../../../docs/codemine/runs/20261031-managed-inspection/plan.md),
 [readiness](../../../docs/OPERATIONS_READINESS.md) and [remaining work](../../../docs/analysis/open-items.md).

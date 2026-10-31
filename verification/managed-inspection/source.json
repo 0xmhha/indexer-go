@@ -1,0 +1,33 @@
+{
+  "base": "3f0426a2d66d75731664e6be585685cfa89b72f2",
+  "files": {
+    "deployments/native/check.py": "52c4d7d738166633216e79c692cc37c5a9a16abc7a7d76eae6c53d1cf0736c69",
+    "deployments/native/compose.draft.yaml": "fa2996033cbf8cede72d0600c269f76ce2755b6c4e8821b26de4b168e07754c6",
+    "deployments/native/test_diagnostics.py": "6116d654471d2e2c52bd94b9e0aca5427babad1f5a2ecaa6a8b23fa652cedb05",
+    "execwire/spool/inspect.go": "301169d6f19bc28eb696d679b57e6ef60d2e9f5511f99afe2db2452b9fcfcbe3",
+    "execwire/spool/inspect_test.go": "de9d395d914e4a665638ec19016371c1ccab877fbf23383e70ce4a0c5041f224",
+    "internal/nativediagnostics/diagnose.go": "0a242f1fb9d0f0a4d2f9014aacf1ed45f63e8368f019c913539770762eb3cc1b",
+    "internal/nativemonitor/diagnostics.go": "5dd9ad718c72fba9320350f737d6042686887afb27b49896b6f5fa8a7d7bae89",
+    "internal/nativemonitor/types.go": "6d6511718383b6d30be4f1775f6d1bec6923a0da6b560b7d3d5631f53137919d",
+    "internal/nativepreflight/app.go": "7416774d0ad41cfd049629b47325fdf6635b4e7d52a8e2e2b89c253e15907a26",
+    "internal/nativepreflight/preflight.go": "656b788d62b0da13954efc20b2e92c8fe2a53f19d22dd122f99d1b1e77b52e87",
+    "pkg/storage/postgres/exec_read.go": "6aac31f2529fd087c0e8e40d9e9e2534651ceb61a58159d536feeb8c46d2f4f8",
+    "x/arc/diagnostics/product.go": "f326b20a46d18858d21b924bbe5453b7b3ad8af00600dd46986b215545d740f6",
+    "x/arc/preflight/product.go": "f286d612ea9197f405a8f711d8d37992cfe02f3ce334de192daf8df958e407aa",
+    "configs/execution/preflight/synthetic-managed-arc/app.yaml": "24c1eeaeae892da2c06a1b3e71f15e2f86af41bb50a71fd45e91ba736806d806",
+    "configs/execution/preflight/synthetic-managed-arc/checkpoint.json": "19d989ddfb381bc76f11689cbe096a26002e2fb3d14d29c2cb014900548d45bf",
+    "configs/execution/preflight/synthetic-managed-arc/declaration.json": "5ec1a4d48c06098a1fadc0cc0f077ccd3a5cc0d02b0471a665d8a865a8b92227",
+    "configs/execution/preflight/synthetic-managed-arc/native.json": "0b11481e8be9fe19724a7da596ddb1d0b2ee92e5d73d5c20cc9d7c59fe5a2a94",
+    "configs/execution/preflight/synthetic-managed-arc/retention.json": "a6a1575f5bbd3609af35e0796ff80037c6ac43b638b525ba0e30a593a66ec931",
+    "internal/nativemonitor/managed_test.go": "f4b0ca83802db55a828656a44d2c5ca69150a8fba3f016de72d04b2d7cfa9164",
+    "pkg/execution/ingress/inspection.go": "d10d3c07898c687b70aa9211c9c29417456d35d22f047e88aa2911eb8e674df4",
+    "pkg/storage/postgres/exec_inspection.go": "87424b0c516360dd65863ec8ae7c4d5c4f5dc487a3724287aa27b3e06421da83",
+    "pkg/storage/postgres/exec_inspection_test.go": "c723b18d5c7e3bcfa796c09717b729e7e050855726c89897e1e7ee1d0bd897c8",
+    "x/arc/diagnostics/managed.go": "6e5b24d8b1fed7225d677a7b5d963f6d2f12d4b6c1b55714116b8b74377f1e0c",
+    "x/arc/diagnostics/managed_test.go": "c290a65ba344716a39e47cb5a663de7f9e7f241d18f12e2ae0e4a85023bc8398",
+    "x/arc/ingress/inspection.go": "a54126b1d180c05fca94ee5c1591aa4acc71a6d746d92a444955d7ab8a3fdacb",
+    "x/arc/ingress/inspection_test.go": "5bf94f36e177dbcd595434554b341815f5a91ab0836f7142e8d632c30de49218",
+    "x/arc/preflight/managed.go": "d89517f54451affa5da777653cba510f7156b558c8d4421e49cbd2b11377dbca",
+    "x/arc/preflight/managed_test.go": "59816a33ec03aef193e305e96765c9b7b5a5fded0b3316e1f4fc651897a96f0a"
+  }
+}

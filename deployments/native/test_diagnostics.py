@@ -23,6 +23,18 @@ class DiagnosticDockerTests(unittest.TestCase):
     def draft(self):
         return yaml.safe_load((HERE / "compose.draft.yaml").read_text())
 
+    def test_managed_arc_diagnostics_mounts_raw_readonly_without_credentials(self):
+        service = self.draft()["services"]["arc-metadata"]
+        command = service["command"]
+        self.assertIn("--raw", command, "managed raw must be an explicit read-only selection")
+        self.assertIn("--ingress-artifact", command)
+        mounts = {m["target"]: m for m in service["volumes"]}
+        self.assertIn("/raw", mounts)
+        self.assertIs(True, mounts["/raw"]["read_only"])
+        self.assertEqual("none", service["network_mode"])
+        self.assertNotIn("environment", service)
+        self.assertNotIn("secrets", service)
+
     def resolved(self):
         d = self.draft()
         for name, service in d["services"].items():
@@ -30,11 +42,37 @@ class DiagnosticDockerTests(unittest.TestCase):
             service["image"] = "example.invalid/indexer-diagnostics@sha256:" + "1" * 64
             service["user"] = "501:20"
             for volume in service["volumes"]:
-                role = {"/inputs": "inputs", "/source": "spool", "/native": "native-parent", "/observations": "exports"}[volume["target"]]
+                role = {"/inputs": "inputs", "/source": "spool", "/native": "native-parent", "/observations": "exports", "/raw": "raw-volume"}[volume["target"]]
                 volume["source"] = "/synthetic/" + product + "/" + role
             if name.endswith("metadata"):
                 service["command"][1] = "/native/custom-db"
+                if product == "arc":
+                    service["command"][11] = "/raw/arc-raw"
         return d
+
+    @unittest.skipUnless(os.environ.get("INDEXER_NATIVE_DIAGNOSTICS_TEST_BIN_DIR"), "owned host-binary fixture only; run test-cli.sh")
+    def test_real_managed_app_preflight_is_hold_and_opens_no_declared_store(self):
+        binary = Path(os.environ["INDEXER_NATIVE_DIAGNOSTICS_TEST_BIN_DIR"]) / "arc-execution-preflight"
+        original = ROOT / "configs/execution/preflight/synthetic-managed-arc"
+        with tempfile.TemporaryDirectory(prefix="managed-file-preflight-") as temp:
+            temp = Path(temp).resolve()
+            for source in original.iterdir():
+                if source.is_file():
+                    target = temp / source.name
+                    target.write_bytes(source.read_bytes())
+                    target.chmod(0o600)
+            before = {p.name: (p.stat().st_ino, p.read_bytes()) for p in temp.iterdir()}
+            args = []
+            for flag, name in (("--app", "app.yaml"), ("--native", "native.json"), ("--checkpoint", "checkpoint.json"), ("--retention", "retention.json"), ("--declaration", "declaration.json")):
+                args.extend((flag, str(temp / name)))
+            result = subprocess.run([str(binary), *args], capture_output=True, timeout=30, check=False)
+            report = json.loads(result.stdout)
+            self.assertEqual(2, result.returncode, report)
+            self.assertEqual("not_authorized", report["operational_readiness"])
+            self.assertEqual("not_checked", report["live_freshness"])
+            self.assertFalse(result.stderr)
+            self.assertNotIn(str(temp).encode(), result.stdout)
+            self.assertEqual(before, {p.name: (p.stat().st_ino, p.read_bytes()) for p in temp.iterdir()})
 
     def test_unknown_inputs_never_become_ready(self):
         result = check.check_document({"name": "indexer-native-diagnostics-draft", "services": {}})

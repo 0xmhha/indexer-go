@@ -34,6 +34,20 @@ type Product struct {
 	Name          string
 	InspectNative func(context.Context, string) (retention.NativeMetadata, error)
 	ChainAllowed  func(execwire.Chain) bool
+	Managed       func(context.Context, ManagedInputs) ManagedResult
+}
+
+type ManagedInputs struct{ Native, Raw, Spool, Artifact string }
+type ManagedResult struct {
+	Findings     []Finding
+	Observations []Observation
+}
+
+// InputRef carries no SQL generation. Raw/native epochs remain independent.
+type InputRef struct {
+	Height uint64        `json:"height"`
+	Hash   execwire.Hash `json:"hash"`
+	Root   execwire.Hash `json:"root"`
 }
 
 type Finding struct {
@@ -61,6 +75,11 @@ type Observation struct {
 	MaintenancePending *bool          `json:"maintenance_pending,omitempty"`
 	HeaderAvailable    *bool          `json:"header_available,omitempty"`
 	StateAvailable     *bool          `json:"state_available,omitempty"`
+	Received           *InputRef      `json:"received_ref,omitempty"`
+	NativeTip          *InputRef      `json:"native_tip,omitempty"`
+	RawEpoch           *uint64        `json:"raw_epoch,omitempty"`
+	NativeEpoch        *uint64        `json:"native_epoch,omitempty"`
+	NativeReadEpoch    *uint64        `json:"native_read_epoch,omitempty"`
 }
 type Report struct {
 	chainAllowed  func(execwire.Chain) bool
@@ -87,6 +106,18 @@ func (r *Report) observe(o Observation) {
 	}
 	if o.Root != nil && *o.Root == (execwire.Hash{}) {
 		o.Root = nil
+	}
+	for _, ref := range []**InputRef{&o.Received, &o.NativeTip} {
+		if *ref != nil && ((*ref).Height > math.MaxInt64 || (*ref).Height < o.Anchor.Height || (*ref).Hash == (execwire.Hash{}) || (*ref).Root == (execwire.Hash{}) || (*ref).Height == 0 && (*ref).Hash != o.Chain.Genesis) {
+			r.add("managed.reference", Fail, "invalid_input_reference")
+			*ref = nil
+		}
+	}
+	for _, epoch := range []**uint64{&o.RawEpoch, &o.NativeEpoch, &o.NativeReadEpoch} {
+		if *epoch != nil && (**epoch == 0 || **epoch > math.MaxInt64) {
+			r.add("managed.epoch", Fail, "invalid_epoch_metadata")
+			*epoch = nil
+		}
 	}
 	if len(r.Observations) >= 12 {
 		r.add("report", Fail, "observation_limit_exceeded")
@@ -163,10 +194,13 @@ func (r *Report) control(field string, c port.ExecutionControl) {
 	}
 }
 
-type inputs struct{ spool, native, source, checkpoint, retention string }
+type inputs struct {
+	spool, native, source, checkpoint, retention, raw, ingress string
+	managed                                                    bool
+}
 
 func parse(args []string) (in inputs, ok bool) {
-	if len(args) > 10 {
+	if len(args) > 14 {
 		return in, false
 	}
 	seen := map[string]bool{}
@@ -190,6 +224,10 @@ func parse(args []string) (in inputs, ok bool) {
 			in.checkpoint = value
 		case "--retention-artifact":
 			in.retention = value
+		case "--raw":
+			in.raw, in.managed = value, true
+		case "--ingress-artifact":
+			in.ingress, in.managed = value, true
 		default:
 			return in, false
 		}
@@ -215,6 +253,19 @@ func Check(ctx context.Context, args []string, product Product) Report {
 	r.chainAllowed = product.ChainAllowed
 	r.add("native.head_state_indexes", Hold, "actual_native_db_uninspected")
 	r.add("indexer.live", Hold, "operating_db_uninspected")
+	if in.managed {
+		if product.Managed == nil {
+			r.add("managed", Fail, "unsupported_managed_inputs")
+		} else {
+			v := product.Managed(ctx, ManagedInputs{Native: in.native, Raw: in.raw, Spool: in.spool, Artifact: in.ingress})
+			for _, f := range v.Findings {
+				r.add(f.Field, f.Status, f.Code)
+			}
+			for _, o := range v.Observations {
+				r.observe(o)
+			}
+		}
+	}
 	reader := metadata.New(ctx)
 	artifact := func(field, path string, target any) bool {
 		if path == "" {

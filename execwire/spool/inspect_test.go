@@ -12,6 +12,32 @@ import (
 	"testing"
 )
 
+func TestInspectMetadataRetainsSourceAdmissionAndACKDigest(t *testing.T) {
+	o, result := fixture(t)
+	admission := execwire.Hash{91}
+	o.Admission = &admission
+	s, err := Open(t.Context(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	entry, err := s.Append(t.Context(), result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Acknowledge(t.Context(), ack(o, entry)); err != nil {
+		t.Fatal(err)
+	}
+	observed, err := InspectMetadata(t.Context(), o.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if observed.Admission == nil || *observed.Admission != admission || observed.Digest != entry.Digest {
+		t.Fatal("source metadata binding lost")
+	}
+
+}
+
 func TestInspectMetadataDoesNotRecoverCreateOrACK(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "absent")
 	if _, err := InspectMetadata(t.Context(), path); !os.IsNotExist(err) {

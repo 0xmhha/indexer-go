@@ -22,6 +22,8 @@ type MetadataObservation struct {
 	Maintenance        *retention.Permit
 	Completion         *retention.Permit
 	Scope              string
+	Admission          *execwire.Hash
+	Digest             execwire.Hash
 }
 
 func InspectMetadata(ctx context.Context, path string) (out MetadataObservation, err error) {
@@ -42,6 +44,7 @@ func InspectMetadata(ctx context.Context, path string) (out MetadataObservation,
 		return out, err
 	}
 	out = MetadataObservation{Chain: m.Chain, Anchor: m.Anchor, Committed: m.Committed, Base: m.Anchor, Scope: "separate metadata samples; no payload scan, atomicity, lease, freshness or ACK/GC/start authorization"}
+	out.Admission, out.Digest = m.Admission, m.Digest
 	if m.Base != nil {
 		out.Base = *m.Base
 	}

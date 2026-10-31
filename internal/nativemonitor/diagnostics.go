@@ -70,6 +70,16 @@ func (r *Report) diagnostics(p *Policy, s *Snapshot, at *time.Time) {
 				r.add("diagnostics.reference", fail, "invalid_reference")
 			}
 		}
+		for _, ref := range []*InputRef{o.Received, o.NativeTip} {
+			if ref != nil && (ref.Height > math.MaxInt64 || ref.Hash == (execwire.Hash{}) || ref.Root == (execwire.Hash{}) || ref.Height < o.Anchor.Height || ref.Height == 0 && ref.Hash != o.Chain.Genesis) {
+				r.add("diagnostics.reference", fail, "invalid_input_reference")
+			}
+		}
+		for _, epoch := range []*uint64{o.RawEpoch, o.NativeEpoch, o.NativeReadEpoch} {
+			if epoch != nil && (*epoch == 0 || *epoch > math.MaxInt64) {
+				r.add("diagnostics.observation", fail, "invalid_epoch_metadata")
+			}
+		}
 		if o.Root != nil && *o.Root == (execwire.Hash{}) || o.Generation != nil && (*o.Generation == 0 || *o.Generation > math.MaxInt64) || o.Floor != nil && *o.Floor > math.MaxInt64 {
 			r.add("diagnostics.observation", fail, "invalid_numeric_metadata")
 		}
@@ -107,6 +117,10 @@ func validBasis(kind, basis string) bool {
 		return basis == "separate_metadata_samples"
 	case "source.artifact", "checkpoint.public", "retention.public":
 		return basis == "exported_artifact_unauthenticated_not_live"
+	case "managed.sql":
+		return basis == "exported_artifact_unauthenticated_not_live"
+	case "managed.raw", "managed.native", "managed.maintenance":
+		return basis == "fixed_managed_metadata_not_sdk_state_or_lease"
 	case "source.maintenance.permit", "native.fence.permit", "native.floor.permit", "indexer.retention.permit":
 		return basis == "recorded_permit_metadata_not_current_native_head"
 	}

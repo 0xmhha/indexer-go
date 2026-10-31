@@ -57,16 +57,20 @@ services:
     - --native
     - /native/${INDEXER_ARC_NATIVE_NAME:?HOLD native directory basename required}
     - --spool
-    - /source
+    - /source/spool
     - --source-artifact
     - /observations/source.json
     - --checkpoint-artifact
     - /observations/checkpoint.json
     - --retention-artifact
     - /observations/retention.json
+    - --raw
+    - /raw/${INDEXER_ARC_NATIVE_RAW_NAME:?HOLD selected raw window name required}
+    - --ingress-artifact
+    - /observations/ingress.json
     volumes:
     - type: bind
-      source: ${INDEXER_ARC_NATIVE_SPOOL:?HOLD selected source spool required}
+      source: ${INDEXER_ARC_NATIVE_SOURCE_PARENT:?HOLD selected source parent required}
       target: /source
       read_only: true
       bind:
@@ -80,6 +84,12 @@ services:
     - type: bind
       source: ${INDEXER_ARC_NATIVE_EXPORTS:?HOLD selected metadata exports required}
       target: /observations
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${INDEXER_ARC_NATIVE_RAW_VOLUME:?HOLD selected raw volume required}
+      target: /raw
       read_only: true
       bind:
         create_host_path: false

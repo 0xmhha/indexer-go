@@ -1,0 +1,47 @@
+[
+  {
+    "log": "preflight-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "sha256": "39cdc0ffb69019e6d54a590b014087e0a11bb873bf1fbbb9c5f03f84d534fa0f"
+  },
+  {
+    "log": "sql-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "sha256": "19780fb0191d3dd88bc16c3fe223c49f61d6727ab97b8cb5e675e180bde52ba5"
+  },
+  {
+    "log": "reservation-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "sha256": "da261fe961947fe27e12d5ce5f6751d56d1f2796490be53d592bb0a979a42cf9"
+  },
+  {
+    "log": "metadata-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "sha256": "d2e4b28897b8a46e8409fbedfeb28ed125452510f29280efa7a108cb57e05e45"
+  },
+  {
+    "log": "diagnostic-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "sha256": "8cbd0024bd396fc7d75f2825747e04bd0c6d9031186e9733ef2ce907f4d6ea31"
+  },
+  {
+    "log": "source-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "sha256": "eaa0a1b5156f14cb151e41ec1a90f407be6013a5bd94646a7d9e752a50f41393"
+  },
+  {
+    "log": "consumer-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "sha256": "c66d25e930848ce9d7d9f1ef00252fc30016c952ad8ae169992026b5cc8fd45e"
+  },
+  {
+    "log": "docker-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "sha256": "5d786292de223aa9124c5944b1a2f236eb13cca61747f1e6fed82fd09177e984"
+  },
+  {
+    "log": "source-corrupt-red.log",
+    "result": "EXPECTED_BEHAVIORAL_FAIL",
+    "sha256": "64192a5d0b68bcfbfe810a0be925aee2ac6edaeb3da8bcf0e23f955a0ef42792"
+  }
+]
