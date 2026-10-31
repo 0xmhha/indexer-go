@@ -19,6 +19,7 @@ Final declaration release requires exact-head short CI, squash and clean main
 synchronization; associated PR metadata and post-merge receipt retain those
 identities. No operational activation is implied by implementation completion.
 
-N5 implementation is complete with per-feature release evidence. N6 managed
-file inspection and combined native/App/SQL acceptance remain incomplete.
+N5 implementation is complete with per-feature release evidence. Managed file inspection is now implemented in the
+[next feature checklist](../20261031-managed-inspection/checklist.md); N6 combined
+actual SDK/App/SQL acceptance remains incomplete.
 Operational inputs and execution remain HOLD.

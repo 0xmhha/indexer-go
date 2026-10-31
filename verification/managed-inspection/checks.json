@@ -1,0 +1,97 @@
+[
+  {
+    "log": "preflight-green.log",
+    "result": "PASS",
+    "sha256": "a32109d75172c31b914dd7febf62437cf496ef6e3c00575f9b2909636ab23727"
+  },
+  {
+    "log": "reservation-green.log",
+    "result": "PASS",
+    "sha256": "c21d9156754747815c3b4e093704c48f8aa3707bb88ff24a55950e22074c5bec"
+  },
+  {
+    "log": "reservation-race200.log",
+    "result": "PASS",
+    "sha256": "7f71854b5795c7f5acabc8e904ebfec82388db0d73dfc05111771cb73c4da01b"
+  },
+  {
+    "log": "metadata-green.log",
+    "result": "PASS",
+    "sha256": "2fa1fe790d466b9312ec80bdf74ef4707a19b7abafc2d6424f0d98e6e55cb68d"
+  },
+  {
+    "log": "diagnostic-final-green.log",
+    "result": "PASS",
+    "sha256": "3b3c309bab28f46e52f5d761a8e139e3f329c4eed808a3dc452822f93dc6c453"
+  },
+  {
+    "log": "consumer-green.log",
+    "result": "PASS",
+    "sha256": "68dbe2ef7adab999abd0c1ec009ff53722360480b10f9bcc9a9831c47dde4339"
+  },
+  {
+    "log": "source-green.log",
+    "result": "PASS",
+    "sha256": "a8e2486526ae0e51e8b55f81e0279b8b6f0f3e083536ea5320a969be4073f3a7"
+  },
+  {
+    "log": "affected-first-green.log",
+    "result": "PASS",
+    "sha256": "964bed17a02121c0372584de03392e62c694b9a5f6b0b9a3069b507ed590c846"
+  },
+  {
+    "log": "affected-final-short.log",
+    "result": "PASS",
+    "sha256": "022170c684299a75587b24c381122dc9ef46d43ee068ea500d74d067de6d8da6"
+  },
+  {
+    "log": "host-cli-final-green.log",
+    "result": "PASS",
+    "sha256": "52c694b4ae4f926d5a19555f68e2a2671e09291204cd74aa5afee80badd99d16"
+  },
+  {
+    "log": "build.log",
+    "result": "PASS",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "log": "vet.log",
+    "result": "PASS",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "log": "lint.log",
+    "result": "PASS",
+    "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+  },
+  {
+    "log": "wire-short.log",
+    "result": "PASS",
+    "sha256": "de11f05306daeff4c102e693ac248f4913c30a2e5c750b8fb0482072aaf2b921"
+  },
+  {
+    "log": "wire-vet.log",
+    "result": "PASS",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "log": "wire-lint.log",
+    "result": "PASS",
+    "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+  },
+  {
+    "log": "ci-policy.log",
+    "result": "PASS",
+    "sha256": "dd94987a859207db49329df8d7f790886b45c66bae0a3de1344b02ae9a2deba0"
+  },
+  {
+    "log": "docs.json",
+    "result": "PASS",
+    "sha256": "768ca5dddf76b0ff2f6db1473c8ed87f20a7de8173d28e0a554a0f8ea9290339"
+  },
+  {
+    "log": "docker-final.log",
+    "result": "PASS;15 cases,2 explicit host-only skips already qualified in host CLI run",
+    "sha256": "08da43e67627e15b4807670aa40effff4639e3dc95488a57e2d79f83bb80fc4b"
+  }
+]

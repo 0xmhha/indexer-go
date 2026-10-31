@@ -1,0 +1,54 @@
+{
+  "stage": "N5 held Docker/capacity/inspection alignment",
+  "status": "COMPLETE",
+  "pr": 256,
+  "url": "https://github.com/0xmhha/indexer-go/pull/256",
+  "base": "6d0b442841ac8e2c32e054a3c0be0b56fbb1f884",
+  "head": "0cb0991d5bf54080954c8e0d14b9726dda6da442",
+  "tree": "ba76001a0ea870f365ce1f08fb318bdb2abae63b",
+  "main": "3f0426a2d66d75731664e6be585685cfa89b72f2",
+  "ci_run": 41147943391,
+  "ci_run_number": 332,
+  "jobs": [
+    {
+      "id": 124377335022,
+      "name": "scope",
+      "conclusion": "success"
+    },
+    {
+      "id": 124377374108,
+      "name": "arc",
+      "conclusion": "success"
+    },
+    {
+      "id": 124377374119,
+      "name": "postgres",
+      "conclusion": "success"
+    },
+    {
+      "id": 124377374183,
+      "name": "lint",
+      "conclusion": "success"
+    },
+    {
+      "id": 124377374263,
+      "name": "test",
+      "conclusion": "success"
+    },
+    {
+      "id": 124377374360,
+      "name": "examples",
+      "conclusion": "success"
+    }
+  ],
+  "checks": "All six actual jobs success; applicable short/build/vet/lint/examples/cache/offline operations and corePG11 no skips. Native SDK/full stress intentionally skipped. Local behavioral RED->GREEN, owned host diagnostic13/runtime16 no skips, final pure suite and docs448/policy23/leak gates passed.",
+  "sync": "reviewed exact tree; one parent/base; clean HEAD=origin/main; config SHA/mode unchanged; feature branch retained",
+  "N5": "IMPLEMENTATION COMPLETE with per-feature release evidence; operating activation remains HOLD",
+  "remaining": [
+    "Managed App file preflight and raw/SQL/E3/coordinator journal diagnostic integration",
+    "N6 combined mockETH68/real SDK/App/SQL/GC offline acceptance",
+    "Actual APFS/enode/authenticated checkpoint/private image/config/DB/backup evidence, operational tests only after HOLD lifted"
+  ],
+  "invariants": "pool4/part2/API1/writers7, two EVM passes, shared physicalRPC5, final fresh/fence/COMMIT/exact ACK",
+  "held": "actual nodes/peers/DB deployment, format/provisioning, operational GC/restore/deploy and additional performance/host-load screening; other projects unchanged"
+}

@@ -98,6 +98,17 @@ type Observation struct {
 	MaintenancePending *bool          `json:"maintenance_pending,omitempty"`
 	HeaderAvailable    *bool          `json:"header_available,omitempty"`
 	StateAvailable     *bool          `json:"state_available,omitempty"`
+	Received           *InputRef      `json:"received_ref,omitempty"`
+	NativeTip          *InputRef      `json:"native_tip,omitempty"`
+	RawEpoch           *uint64        `json:"raw_epoch,omitempty"`
+	NativeEpoch        *uint64        `json:"native_epoch,omitempty"`
+	NativeReadEpoch    *uint64        `json:"native_read_epoch,omitempty"`
+}
+
+type InputRef struct {
+	Height uint64        `json:"height"`
+	Hash   execwire.Hash `json:"hash"`
+	Root   execwire.Hash `json:"root"`
 }
 
 type Finding struct {

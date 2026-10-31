@@ -1,5 +1,7 @@
 # Checkpoint·재시작·GC 운영 절차 초안
 
+[관리형 App 읽기 전용 진단](EXECUTION_MANAGED_INSPECTION.md)은 선언된 raw/source COW 여유와 고정 native/raw/journal·SQL-export metadata를 비교한다. 실제 용량·SDK 상태·worker 재개·live fresh/GC 허가는 확인하지 않는다. 누락은 HOLD이고 손상은 FAIL이며, 이 도구가 복구·삭제를 수행하지 않는다.
+
 현재 배포 판정과 운영자 입력은 [운영 준비 현황](OPERATIONS_READINESS.md)을 따른다. 배포는 HOLD이며 legacy 초안과 native 실행 경로를 구분한다.
 
 관리형 Arc는 [App 소유 runtime 초안](../deployments/native/runtime/README.md)과

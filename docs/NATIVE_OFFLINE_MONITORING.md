@@ -1,11 +1,11 @@
 # Offline Native monitoring
 
 The [managed App runtime](../deployments/native/runtime/README.md) retains raw,
-native, SQL public and source ACK boundaries separately. This monitor still
-uses submitted partial observations; it does not inspect managed raw ownership,
-SQL E3 or coordinator journals. Absent data stays unknown. A legacy diagnostic
-PASS or runtime declaration HOLD grants no integrated acceptance/GC authority.
-
+native, SQL public and source ACK boundaries separately. This monitor accepts
+saved [managed diagnostic observations](EXECUTION_MANAGED_INSPECTION.md), including
+received/native input refs and independent raw/native/read epochs. It does not
+itself open raw/native/SQL or journals. Missing data stays unknown; metadata
+compatibility grants no integrated acceptance, freshness or GC authority.
 
 `cmd/execution-monitor` evaluates **saved, submitted observations** once. It runs
 no chain. Functional fixtures consume the real Arc and StableNet

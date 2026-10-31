@@ -36,6 +36,17 @@ func appCopy(b []byte, r *Report) (*config.Config, Unknown, error) {
 			}
 		}
 	}
+	if ing := appYAMLField(root, "source", "execution", "ingress"); ing != nil {
+		peer := appYAMLField(ing, "peer")
+		n := appYAMLField(peer, "network_id")
+		if n == nil || n.Kind == yaml.ScalarNode && n.Tag == "!!str" && Unresolved(n.Value) {
+			u["ingress_network"] = true
+			r.Add("app.ingress.peer.network_id", Hold, "operator_input_missing")
+			if n != nil {
+				n.Tag, n.Value, n.Style = "!!int", "0", 0
+			}
+		}
+	}
 	if len(u) > 0 {
 		b, err = yaml.Marshal(root)
 		if err != nil {

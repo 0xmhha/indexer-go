@@ -1,0 +1,61 @@
+# SYNTHETIC OFFLINE FIXTURE ONLY. No real peer/fork/DB/volume authority.
+rpc:
+  endpoint: https://synthetic.invalid
+  rate_limit: 5
+database:
+  driver: postgres
+  postgres:
+    dsn: postgres://synthetic.invalid/synthetic
+    max_conns: 4
+indexer:
+  state_prefetch: true
+  finality: head
+  start_height: 101
+source:
+  execution:
+    socket: /ipc/execution.sock
+    anchor_height: 100
+    anchor_hash: '0x1111111111111111111111111111111111111111111111111111111111111111'
+    anchor_root: '0x2222222222222222222222222222222222222222222222222222222222222222'
+    ingress:
+      module: arc.native
+      window: arc-raw
+      initialize_volume: false
+      create_window: false
+      native:
+        executable: /app/arc-native-import
+        data_dir: /native/node
+      collector:
+        executable: /app/indexer-arc-executor
+        spool_dir: /source/spool
+        max_bytes: 268435456
+        max_records: 4096
+      peer:
+        network_id: 5042002
+        fork_hash: '01020304'
+        fork_next: 0
+        key_file: /run/private/arc-peer-key
+        peers:
+        - enode://79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8@127.0.0.1:30303
+        listen_addr: 127.0.0.1:0
+      max_raw_blocks: 172800
+      max_active_blocks: 8
+      max_active_bytes: 268435456
+      timeout: 1m
+window_storage:
+  volumes:
+    raw:
+      root: /raw
+      id: synthetic-managed-raw
+      allow_directory: false
+      max_bytes: 67108864
+  windows:
+    arc-raw:
+      volume: raw
+      path: /raw/arc-raw
+      max_bytes: 4194304
+      segment_bytes: 65536
+      max_payload_bytes: 4096
+      read_budget_bytes: 2097152
+      max_readers: 2
+      retention: 24h

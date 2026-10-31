@@ -148,16 +148,27 @@ def check_document(document):
                 require(s["command"] == command, name + ".command")
                 targets = [("/inputs", "INPUTS")]
             else:
-                command = ["--native", None, "--spool", "/source", "--source-artifact", "/observations/source.json", "--checkpoint-artifact", "/observations/checkpoint.json", "--retention-artifact", "/observations/retention.json"]
+                command = ["--native", None, "--spool", "/source/spool" if product == "arc" else "/source", "--source-artifact", "/observations/source.json", "--checkpoint-artifact", "/observations/checkpoint.json", "--retention-artifact", "/observations/retention.json"]
+                if product == "arc":
+                    command += ["--raw", None, "--ingress-artifact", "/observations/ingress.json"]
                 actual = s["command"]
-                if require(isinstance(actual, list) and len(actual) == len(command) and actual[:1] == command[:1] and actual[2:] == command[2:], name + ".command"):
+                if require(isinstance(actual, list) and len(actual) == len(command) and actual[:1] == command[:1] and all(expected is None or got == expected for got, expected in zip(actual[2:], command[2:])), name + ".command"):
                     native = actual[1]
                     suffix = native[len("/native/"):] if isinstance(native, str) and native.startswith("/native/") else None
                     if unknown(suffix, prefix + "NAME"):
                         add(name + ".native_name", "HOLD", "operator_input_unresolved")
                     else:
                         require(isinstance(suffix, str) and len(suffix) <= 255 and suffix not in (".", "..") and re.fullmatch(r"[A-Za-z0-9_.-]+", suffix) is not None, name + ".native_name", "single_directory_name_required")
-                targets = [("/source", "SPOOL"), ("/native", "PARENT"), ("/observations", "EXPORTS")]
+                if product == "arc" and isinstance(actual, list) and len(actual) == len(command):
+                    raw = actual[11]
+                    suffix = raw[len("/raw/"):] if isinstance(raw, str) and raw.startswith("/raw/") else None
+                    if unknown(suffix, prefix + "RAW_NAME"):
+                        add(name + ".raw_name", "HOLD", "operator_input_unresolved")
+                    else:
+                        require(isinstance(suffix, str) and len(suffix) <= 255 and suffix not in (".", "..") and re.fullmatch(r"[A-Za-z0-9_.-]+", suffix) is not None, name + ".raw_name", "single_directory_name_required")
+                targets = [("/source", "SOURCE_PARENT" if product == "arc" else "SPOOL"), ("/native", "PARENT"), ("/observations", "EXPORTS")]
+                if product == "arc":
+                    targets.append(("/raw", "RAW_VOLUME"))
             mounts = s["volumes"]
             if not require(isinstance(mounts, list) and len(mounts) == len(targets), name + ".mounts"):
                 continue

@@ -65,6 +65,7 @@ No package carries a compatibility promise; pin a version and run your extension
 - [Capacity, backlog and recovery policy draft](OPERATIONS_CAPACITY_DRAFT.md) documents implemented filesystem/PGDATA/raw monitoring and halt/resume controls, plus the remaining live operational checks.
 - [Backup, migration and recovery objectives draft](OPERATIONS_BACKUP_DRAFT.md) classifies what cannot be rebuilt, proposes RPO/RTO per class, continuous WAL archiving plus stopped-state copies, and migration/restore checks; nothing is configured or run.
 - [Checkpoint, restart and GC runbook draft](OPERATIONS_RUNBOOK_DRAFT.md) covers normal shutdown, incident recovery and deletion prerequisites; execution and GC activation remain on hold.
+- [Managed Arc inspection](EXECUTION_MANAGED_INSPECTION.md) compares declared App settings and explicit raw/native/journal/source/SQL metadata without opening runtime stores or granting start/GC authority.
 - [Checkpoint and GC inspection](OPERATIONS_INSPECTION.md) documents the separate read-only metadata command, bounded observations and offline functional checks; it never starts the app or performs recovery.
 - [Offline draft consistency review](analysis/operations-offline-review.md) records corrected cross-file mismatches and the remaining operational gaps; it is not live deployment validation.
 - [Architecture](ARCHITECTURE.md) explains block transactions, reorg recovery and outbox delivery.

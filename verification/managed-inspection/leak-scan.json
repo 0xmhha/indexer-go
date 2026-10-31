@@ -1,0 +1,16 @@
+[
+  {
+    "scope": "staged",
+    "findings": 0,
+    "reviewed_public_test_fixtures": 0,
+    "unreviewed": 0,
+    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+    "scope": "history",
+    "findings": 15,
+    "reviewed_public_test_fixtures": 15,
+    "unreviewed": 0,
+    "sha256": "03ffea306caec2760b57826eac2e895a7b1b9a2dca54fa468730080e6a49b28a"
+  }
+]
