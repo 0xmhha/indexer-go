@@ -4,8 +4,8 @@ The opt-in [App ingress](EXECUTION_ARC_INGRESS.md) owns one first-execution writ
 one read-only collector and its durable source spool. The collector uses the
 existing receiver socket and seven E1 queues. Normal blocks execute once in the
 native writer and once in replay; Full persistence consumes the first outcome.
-Remaining N5 drain/maintenance wiring and N6 combined native/App/PostgreSQL acceptance
-remain required before operational readiness. APFS/enode/authenticated checkpoint,
+N5 drain/maintenance wiring is implemented. [N6 integration](EXECUTION_ARC_ACCEPTANCE.md)
+qualifies actual owned native/App/PostgreSQL publication, ACK, reorg and recovery. APFS/enode/authenticated checkpoint,
 actual deployment and performance measurements remain **HOLD**.
 
 ## Read-view lifetime
@@ -93,9 +93,8 @@ bytes in the existing blocks part. App refuses removal or changes of a bound
 ingest configuration before RPC/API initialization. See the
 [origin lifecycle](EXECUTION_INGRESS_ARCHIVE.md#arc-origin-lifecycle) for exact
 receipt/raw verification and pre-SQL lease release. Explicit stopped-owner
-maintenance wiring remains incomplete. Explicit [raw GC/recovery](EXECUTION_RAW_RETENTION.md)
+[App/E3 coordination](EXECUTION_MAINTENANCE_COORDINATOR.md) is implemented. Explicit [raw GC/recovery](EXECUTION_RAW_RETENTION.md)
 requires native EX, exact source ownership and the live E3 permit; automatic
-collection and managed native COW remain unconfigured.
-Owned SDK/process and protocol fixtures qualify individual boundaries; N6 must
-combine actual native processes, mock ETH/68, App, durable PostgreSQL, APIs and
-ACKs. These functional checks make no throughput or live peer claim.
+collection remains disabled; managed native COW is explicitly supervised.
+N6 combines actual native processes, mock ETH/68, App, durable PostgreSQL, APIs,
+ACKs and positive raw/COW/recovery checks using owned fixtures. These functional checks make no throughput or live peer claim.

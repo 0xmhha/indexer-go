@@ -73,12 +73,22 @@ class ShortWorkflow(unittest.TestCase):
         for line in step["run"].splitlines():
             argv = shlex.split(line)
             if argv[:2] == ["cargo", "test"]:
-                module, _, prefix = argv[-1].split("::")
+                parts = argv[-1].split("::")
+                self.assertIn(len(parts), (2, 3), "bounded native filter must name its module and test")
+                if len(parts) == 3:
+                    self.assertEqual(parts[1], "tests")
+                module, prefix = parts[0], parts[-1]
                 source = (ROOT / "x/arc/executor/src" / (module + ".rs")).read_text()
                 names = re.findall(r"\bfn (\w+)\(", source)
                 self.assertTrue(any(name.startswith(prefix) for name in names), argv)
                 filters.append(argv[-1])
-        self.assertEqual(len(filters), 3)
+        self.assertEqual(set(filters), {
+            "acceptance::integrated_fixture_exports_official_checkpoint_and_two_branches",
+            "native_import::tests::import_frame_",
+            "managed_read::tests::inherited_view_",
+            "native_epoch::tests::transition_unwinds_actual_native_and_restarts_relative_sequence_without_moving_anchor",
+        })
+        self.assertEqual(len(filters), 4)
 
 
 if __name__ == "__main__":

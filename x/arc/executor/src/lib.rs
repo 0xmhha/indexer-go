@@ -15,6 +15,8 @@ pub mod checkpoint;
 pub mod service;
 
 #[cfg(test)]
+mod acceptance;
+#[cfg(test)]
 mod tests;
 
 pub mod bootstrap;
@@ -29,3 +31,9 @@ pub mod native_writer;
 pub mod retention;
 
 pub mod proofs;
+
+// Kept outside the binary protocol and absent from ordinary builds.
+#[cfg(feature = "acceptance-trace")]
+pub(crate) fn acceptance_trace(stage: &str, height: u64, hash: alloy_primitives::B256, epoch: u64) {
+    eprintln!("ARC_ACCEPTANCE_EVM {stage} {height} {hash} {epoch}");
+}

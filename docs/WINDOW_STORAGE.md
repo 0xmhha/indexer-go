@@ -110,3 +110,16 @@ macOS race와 CPU1 경합50회, Linux Docker의 실제 bind/읽기 전용 mount�
 ## 영구 객체 영역
 
 `window.Objects`는 raw segment와 별도의 `ObjectOptions.Path`/reservation을 쓰는 영구 저장 형식이다. 같은 volume guard/공유 예산을 재사용하며 raw retention/Collect가 영구 객체를 만료시키지 않는다. 스트리밍 검증·DB binding·orphan retirement와 복구는 [영구 원천 저장](PERMANENT_SOURCE_STORAGE.md)을 따른다. 기존 raw 저장소는 marker 형식을 유지하며 객체 저장소와 혼용하지 않는다.
+
+## Go embedding 시계와 오프라인 검증
+
+`Layout.Now`는 기존 `Options.Now`로 전달하는 선택적 Go 함수다. nil이면 기존
+`time.Now`를 사용한다. 호출자는 동시 호출이 안전한 함수를 제공해야 한다.
+YAML/JSON에 노출하지 않고 환경 변수·CLI binding도 없다. 순수 파싱·검증에서는
+함수를 호출하지 않는다. 24시간 최소 보존, 삭제 permit·원본 증거·epoch·ACK
+검사는 그대로 유지한다.
+
+[N6 owned 통합 검사](EXECUTION_ARC_ACCEPTANCE.md)는 원본 window에만 제어 시계를
+주어 25시간 경과를 표현한다. RPC/native/SQL 시계나 운영 파일을 바꾸지 않고,
+정책을 짧게 하거나 실제 하루를 기다리지 않으면서 양의 원본 삭제를 검증한다.
+운영자의 timestamp·fence 수정이나 GC 활성화를 허용하는 설정이 아니다.

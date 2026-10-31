@@ -506,11 +506,28 @@ pub(crate) mod tests {
     ) -> Result<ExecutedBlock> {
         next_checked(f, spec, height, false)
     }
+    pub(crate) fn continued_variant(
+        f: &crate::native::Factory,
+        spec: Arc<ArcChainSpec>,
+        height: u64,
+        extra: alloy_primitives::Bytes,
+    ) -> Result<ExecutedBlock> {
+        next_checked_variant(f, spec, height, false, extra)
+    }
     fn next_checked(
         f: &crate::native::Factory,
         spec: Arc<ArcChainSpec>,
         height: u64,
         require_changes: bool,
+    ) -> Result<ExecutedBlock> {
+        next_checked_variant(f, spec, height, require_changes, Default::default())
+    }
+    fn next_checked_variant(
+        f: &crate::native::Factory,
+        spec: Arc<ArcChainSpec>,
+        height: u64,
+        require_changes: bool,
+        extra: alloy_primitives::Bytes,
     ) -> Result<ExecutedBlock> {
         let parent = f.provider()?.header_by_number(height)?.unwrap();
         let mut block = Block {
@@ -519,6 +536,13 @@ pub(crate) mod tests {
                 parent_hash: parent.hash_slow(),
                 timestamp: parent.timestamp + 1,
                 gas_limit: 30_000_000,
+                // Keep Arc's fee metadata intact. The variant changes the
+                // prevrandao input before the real fixture EVM execution.
+                mix_hash: if extra.is_empty() {
+                    parent.mix_hash
+                } else {
+                    alloy_primitives::keccak256(&extra)
+                },
                 parent_beacon_block_root: Some(B256::ZERO),
                 ..parent.clone()
             },

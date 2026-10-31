@@ -212,5 +212,5 @@ retention gates remain independently mandatory.
 [validation](codemine/runs/20261028-native-preflight/validation.md) record tests and
 handoff scope. [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md),
 diagnostic Docker, backup adapter and monitoring are implemented with separate
-evidence limits. Managed file inspection is implemented; combined N6 acceptance remains;
+evidence limits. Managed file inspection is implemented; [N6 owned acceptance](EXECUTION_ARC_ACCEPTANCE.md) is qualified; operating activation remains held;
 provisioning, actual operation and extra performance measurements stay HOLD.

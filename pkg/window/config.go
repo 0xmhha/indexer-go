@@ -14,9 +14,14 @@ import (
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 )
 
-// Layout is a pure configuration plan. Parsing/validation never initializes a
-// volume, migrates a marker, creates paths, opens RPC or activates a feed.
+// Layout describes window configuration and an optional Go embedding clock.
+// Parsing/validation stays pure: no clock calls, volume initialization, marker
+// migration, paths, RPC or feed activation.
 type Layout struct {
+	// Now is an embedding clock forwarded to Store options. It is deliberately
+	// absent from config decoding/encoding. Nil keeps time.Now; callers that
+	// supply it must make concurrent calls safe, as with Options.Now.
+	Now     func() time.Time        `yaml:"-" json:"-"`
 	Volumes map[string]VolumeSpec   `yaml:"volumes"`
 	Windows map[string]WindowConfig `yaml:"windows"`
 }
@@ -140,5 +145,7 @@ func (l Layout) OptionsFor(instance string, verifiedChain model.FeedChain) (Opti
 	if !ok {
 		return Options{}, fmt.Errorf("window: unknown instance %q", instance)
 	}
-	return w.options(instance, l.Volumes[w.Volume], verifiedChain).Normalize()
+	options := w.options(instance, l.Volumes[w.Volume], verifiedChain)
+	options.Now = l.Now
+	return options.Normalize()
 }

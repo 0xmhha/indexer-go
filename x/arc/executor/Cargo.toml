@@ -6,6 +6,11 @@ edition = "2024"
 rust-version = "1.93"
 license = "MIT"
 
+# Diagnostic instrumentation for owned acceptance builds only. No extra CLI,
+# environment capability, state mutation or protocol fields in default builds.
+[features]
+acceptance-trace = []
+
 [dependencies]
 sha2 = "0.10"
 reth-libmdbx = { git = "https://github.com/paradigmxyz/reth", tag = "v2.2.0" }

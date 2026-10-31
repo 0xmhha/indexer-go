@@ -176,8 +176,7 @@ It is unauthenticated saved evidence, not a live DB/canonical observation.
 Native SDK state/full lineage, payload/part coverage, quota and fresh canonical
 state remain uninspected. The report retains128 findings/12 observations/64KiB,
 separate-samples and no-authority limits. The diagnostic profile stays read-only,
-network-none and without DSN. Combined actual SDK/App/SQL/GC acceptance remains
-N6; managed preflight/metadata inspection is implemented separately.
+network-none and without DSN. [N6 owned SDK/App/SQL/GC acceptance](EXECUTION_ARC_ACCEPTANCE.md) is now qualified; managed preflight/metadata inspection is implemented separately.
 
 ## Validation and unchanged runtime boundaries
 
@@ -199,4 +198,4 @@ identifiers, E1–E4/full baseline/E3 exact permit/live lease/sourceACK/window/
 intent/completion/release and E6 authenticated trust/fork boundaries are unchanged.
 No pool/client or hot-path collector/writer/API refactor is introduced. Functional
 library/mock/owned PostgreSQL checks are not P2P, performance or operational proof.
-The separate [Docker diagnostic draft](../deployments/native/README.md) now wires these commands with read-only native-parent/source/export bindings. It grants no execution approval. Backup adapter and monitoring are implemented separately; managed App inspection is implemented; N6 combined acceptance remains. Start/GC/recovery/restore/activation remain held.
+The separate [Docker diagnostic draft](../deployments/native/README.md) now wires these commands with read-only native-parent/source/export bindings. It grants no execution approval. Backup adapter and monitoring are implemented separately; managed App inspection is implemented; [N6 owned acceptance](EXECUTION_ARC_ACCEPTANCE.md) is qualified; operating activation remains held. Start/GC/recovery/restore/activation remain held.

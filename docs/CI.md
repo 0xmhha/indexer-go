@@ -9,7 +9,7 @@ prerequisite for every documentation or small code change.
 | --- | --- |
 | Root Markdown, maintained documentation or documentation images only | Relative links, anchors and CI policy; no Go/Rust/Docker setup |
 | Go, SQL, config, workflow or unknown code path | Build/vet/lint, one root/wire/StableNet short functional pass, examples, offline config checks and durable DB core smoke |
-| Arc executor Rust/Cargo | The code checks plus pinned cached native compilation and bounded frame/read-view/unwind smoke |
+| Arc executor Rust/Cargo | The code checks plus pinned cached native compilation and bounded frame/read-view/unwind and four-block fixture smoke |
 | Unavailable/invalid diff | Conservative code/native checks; never assume documentation-only |
 
 The existing `lint`, `test`, `postgres`, `examples` and `arc` names remain. A small
@@ -46,6 +46,12 @@ Use the full mode or relevant local full checks for releases and native/storage/
 concurrency changes that need that evidence. New concurrency code still needs
 its targeted local single200; a documentation edit does not. Public RPC, node
 services, operational data, provisioning and performance checks remain opt-in.
+
+N6's [actual App/native/SQL acceptance](EXECUTION_ARC_ACCEPTANCE.md) remains explicit
+full-only in the existing `arc` job. It preserves all four exact native binaries
+before owned target cleanup, then uses the owned fsync-on PostgreSQL helper.
+Default native smoke exports only four owned blocks, without the131-block export,
+trace feature or App/DB matrix. The independent state-proof200 batches stay intact.
 
 Native dependencies/target are cached by OS, pinned Rust and Cargo.lock. A cold
 native build can still take time; ordinary Go/documentation PRs avoid it entirely.

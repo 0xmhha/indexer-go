@@ -4,7 +4,7 @@ N2 adds `arc-native-import`, an explicit bounded stdin/stdout writer using the
 pinned official Arc EVM and native-v2 storage libraries. It imports into an
 [N1 verified bootstrap](EXECUTION_ARC_BOOTSTRAP.md), without NodeBuilder,
 network/RPC/SQL clients, an upstream patch or a separate node service.
-[App-owned ingress](EXECUTION_ARC_INGRESS.md) and the [N4 managed collector/reorg bridge](EXECUTION_ARC_MANAGED.md) are implemented; raw GC #252 and graceful drain #253 are released; App/E3 phase coordination, held deployment and combined N6 acceptance remain.
+[App-owned ingress](EXECUTION_ARC_INGRESS.md) and the [N4 managed collector/reorg bridge](EXECUTION_ARC_MANAGED.md) are implemented; raw GC #252 and graceful drain #253 are released; App/E3 phase coordination and held deployment are implemented; [N6](EXECUTION_ARC_ACCEPTANCE.md) qualifies actual owned native/App/SQL and two normal execution entries.
 Operational execution, APFS/enode/authenticated production inputs and performance
 measurements remain **HOLD**.
 

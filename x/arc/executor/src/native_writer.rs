@@ -721,6 +721,8 @@ impl Writer {
             let db = reth_revm::database::StateProviderDatabase::new(p.latest());
             #[cfg(test)]
             let db = ObservedDB(db);
+            #[cfg(feature = "acceptance-trace")]
+            crate::acceptance_trace("import", m.height, m.hash, m.import_epoch);
             let output = config.executor(db).execute(&recovered)?;
             let hashed = HashedPostState::from_bundle_state::<reth_trie::KeccakKeyHasher>(
                 output.state.state.iter(),
