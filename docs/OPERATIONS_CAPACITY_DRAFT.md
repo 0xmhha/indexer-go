@@ -4,7 +4,7 @@
 
 현재 입력·native COW 여유는 [운영 준비 현황](OPERATIONS_READINESS.md)을 따른다.
 
-2026-10-19의 [운영 설정](OPERATIONS_DRAFT.md)과 [Docker 초안](../deployments/testnets/README.md)을 위한 기준이다. 아래 숫자는 실측 SLO나 디스크 안전 보장이 아니라 최초 운영 검토용 임계값이다. 현재 `config.yaml`·실행 코드·Compose·애플리케이션 YAML을 변경하지 않는다. 체인별 DB pool4개(체인별 App이1개인 정상 실행 예산16개), 공유 RPC5 HTTP/s, source/writer 각각의 커밋 직전 fresh·epoch·내구성·ACK·삭제 fence를 유지한다.
+2026-10-19의 [운영 설정](OPERATIONS_DRAFT.md)과 [Docker 초안](../deployments/testnets/README.md)을 위한 기준이다. 아래 숫자는 실측 SLO나 디스크 안전 보장이 아니라 최초 운영 검토용 임계값이다. 실제 `config.yaml`·실행 설정·서비스는 변경하지 않는다. Native의 별도 held Compose 정합성은 아래 절과 최신 runtime 초안을 따른다. 체인별 DB pool4개(체인별 App이1개인 정상 실행 예산16개), 공유 RPC5 HTTP/s, source/writer 각각의 커밋 직전 fresh·epoch·내구성·ACK·삭제 fence를 유지한다.
 
 진행 기록·정상 종료·장애 분기와 GC/중단된 삭제의 복구는 [운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)에 정리했다. 새 자동 운영 도구를 제공하는 문서는 아니다.
 
@@ -23,6 +23,25 @@
 코드 근거는 [Usage/용량 대기](../pkg/window/budget.go), [append](../pkg/window/store.go), [세션 수명](../pkg/capture/session.go), [압력 로그](../pkg/capture/config.go), [체인 재시작](../internal/multichain/manager.go)다. marker/ledger의 quota는 Open 때 대조하므로 YAML 숫자만 바꿔 온라인 증설하는 방식은 지원하지 않는다.
 
 [오프라인 Native 모니터](NATIVE_OFFLINE_MONITORING.md)는 저장된 진단과 명시적으로 제출한 용량·pipeline 수치의 일회성 경보 판정을 제공한다. 실제 측정·DB 성장 추세 수집·watcher·hysteresis·latch·중단/재개를 새로 실행하지 않는다. 오래되거나 미관측인 값은 HOLD로 유지하며, 알려진 위험은 독립적으로 표시한다. 기존 live opsguard와 운영 보류 상태는 유지한다.
+
+## App 소유 Arc native의 별도 예산과 관측 경계
+
+[세 서비스 runtime 초안](../deployments/native/runtime/README.md)은 Arc App이 수신·첫 실행·collector 재실행을 소유한다. legacy160/128GiB나 외부 collector4GiB/262144 records를 관리형 raw/source 예산으로 자동 전용하지 않는다. 실제 값은 HOLD다.
+
+| 영역 | 용량·중단·복구 기준 |
+| --- | --- |
+| `/raw/arc-raw` | 독립 준비 volume marker/identity/reservation과 raw byte/index quota. 172800블록은2blocks/s×24h 가정이며 fork·partial3종 dataset·indices도 용량에 포함. 보유 개수를 byte 예산이나 RAM queue로 환산하지 않음 |
+| `/native/node`와 부모 | native 정상 증가와 COW 후보/이전 복사본·retained state/seed·run lock·phase journal을 별도 예산화. 부모 RW 안에서 child 교체를 관찰; 개별 child mount로 inode 고정 금지 |
+| `/source/spool`와 부모 | 관리형 source 기본256MiB/4096 records는 운영 크기 약속이 아님. source COW·관리형 collector 임시 scratch(`/source`의 자식)는 spool quota에 포함되지 않으므로 추가 여유 필요 |
+| PostgreSQL·checkpoint·backup | rows/indices/undo/outbox/원본 archive와 WAL 증가, checkpoint·backup staging·정상 증가·filesystem reserve를 합산. SQL 원본 archive는 raw 삭제 후에도 증가함 |
+
+서로 다른 filesystem은 각각 여유를 확인해야 하며 한 장치의 free 합계나 논리 quota로 다른 장치를 보증하지 않는다. Docker VM 이미지/로그와 host APFS의 용량도 별도다. 숫자를 채우거나 실제 probe·DB 질의·서비스 실행을 하지 않는다.
+
+수신 R, 첫 native 완료 N, SQL 공개 P, source seal과 durable ACK A를 구분한다. `R-P`는 진단 격차이며 canonical 처리량/누락 증거가 아니다. DB 부분 writer7개 완료와 공개/ACK도 같지 않다. 새 RPC poller나 pool을 만들어 측정하지 않고 미관측은 unknown으로 유지한다.
+
+명시적 [App/E3 maintenance](EXECUTION_MAINTENANCE_COORDINATOR.md)는 drain/join → exact plan/새 fresh 허가 → raw 처리 완료(0건 포함) → native/source COW → 새 fresh SQL 완료 → exact 파일 해제 → 검증 후 재개를 제공한다. 용량 경보가 자동으로 이 절차를 실행하지 않는다. 미완료/손상 journal, volume 교체, 범위 불일치, disk full은 HOLD이며 TTL·latest·0·수동 fence 삭제로 복구하지 않는다. 취소/Stop은 자식 join을 확인하고 원본 증거를 보존한다. 실제 보유 한계·중단 유예·장치 분리·복구는 N6 fixture와 운영 검증을 구분한다.
+
+기존 Native 파일 진단/모니터는 일부 metadata·제출된 수치만 관찰하며 관리형 raw owner·SQL E3·coordinator phase를 통합 검사하지 않는다. 기존 legacy preflight PASS나 완성된 선언의 HOLD는 실제 여유·worker 재개·GC 권한이 아니다. 이 통합 점검과 실제 SDK/App/SQL acceptance는 남은 작업이다.
 
 ## 감시할 값과 수집 범위
 
@@ -141,7 +160,7 @@ indexer는 잠금 파일을 쓸 때 `stopDatabase`를 함께 정한다. 저장�
 
 - 실행 중 Docker VM 디스크의 지속 감시. 지금은 시작·재개 전 점검 한 번뿐이다.
 - 감시 프로세스 자체가 죽었을 때 알리거나 다시 붙이는 장치. 재부팅 뒤 자동 시작(launchd 등)도 하지 않는다.
-- 수신만 멈추는 pause/drain 모드. 10/20 검토에서 보류했다. 지금 종료로도 durable 진행점과 raw가 남아 재시작이 이어 받으므로 얻는 것이 작고, feed 세션의 수신·처리 동시 종료 약속을 바꿔야 해서 위험이 크다. 백업 직전 DB를 받은 블록까지 맞출 필요가 실제로 생기면 다시 판단한다.
+- 일반 legacy feed 세션의 수신만 멈추는 pause/drain 모드는 보류다. Arc native에는 별도의 명시적 App drain/maintenance library가 구현돼 있지만 일반 feed나 operations guard의 자동 동작으로 연결하지 않는다.
 - 실제 APFS·PGDATA에서의 동작 확인. 검증은 임시 디렉터리와 모의 probe 범위다.
 
 ## 복구 목표와 남은 작업
@@ -152,7 +171,7 @@ indexer는 잠금 파일을 쓸 때 `stopDatabase`를 함께 정한다. 저장�
 
 1. PGDATA·filesystem·raw 감시와 bounded 기록, 누락 판정·경고 hysteresis는 구현했다(위 절). PostgreSQL 통계 `Ddb`/`Dwal`의 journal 기록도 구현했다. Docker VM 디스크는 시작·재개 전 점검만 구현했고 실행 중 감시는 남는다. 별도 앱 pool이나 새 RPC polling은 만들지 않는다.
 2. raw 연속 intake·oldest-pending age·gross append bytes는 `pipeline.runtime.rawIntake`로 노출했다([계측](FEED_TELEMETRY.md)). 미관측은 null이다.
-3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock은 구현했다. Compose 종료 유예와 긴급 시 DB까지 멈추는 호스트 감시(`--start`가 이어서 실행, `--watch`, `--background`)는 구현했다. 단독 drain 모드는 보류했다.
+3. 원인별 자동 재시작 억제·중단 상태 보존·재개 interlock은 구현했다. Compose 종료 유예와 긴급 시 DB까지 멈추는 호스트 감시(`--start`가 이어서 실행, `--watch`, `--background`)는 구현했다. 일반 feed의 단독 drain은 보류하며 Arc native의 명시적 library와 구분한다.
 4. [checkpoint/재시작/GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)과 [읽기 전용 metadata 진단 도구](OPERATIONS_INSPECTION.md)는 작성했다. 진단은 모의 데이터 범위이며 백업 보관·이전의 실제 방식/RPO/RTO와 실제 복구/완전한 GC 승인 진단은 남아 있다. 운영 적용·실제 장애/복원 검증은 저장소·enode 확보와 실행 보류 해제 이후다.
 
 이번 검토는 기존 코드·문서·공식 PostgreSQL 문서에 근거한 정적 검토다. 디스크 상태 재조회, DB 통계 쿼리, 컨테이너/서비스 실행, 실제 삭제·중단·재개, 성능 측정은 하지 않았다.

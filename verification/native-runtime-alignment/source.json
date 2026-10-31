@@ -1,0 +1,8 @@
+{
+  "base": "6d0b442841ac8e2c32e054a3c0be0b56fbb1f884",
+  "files": {
+    "deployments/native/runtime/check.py": "0e8fc430bb15a2e0d313defcb5dfbb7a33d1d6d7ac91e09d5175745a879f1007",
+    "deployments/native/runtime/test_runtime.py": "51184c47e2c33a4c398264a2b8ff1124d484b2b9c9b6a8af356d4a254be39460",
+    "deployments/native/runtime/compose.draft.yaml": "9eadf8c0fd9dbf1a4b055dd7bd519931d355d7525893c0f6445154e063b40d83"
+  }
+}

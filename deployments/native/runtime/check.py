@@ -19,12 +19,17 @@ COMMON = {
     "tmpfs": ["/tmp:mode=1777"],
 }
 PLAN = {
-    "version": 1, "deployment_state": "HOLD", "postgres": "external_prepared_16",
-    "arc_executor": "collector_owned_stdio_child",
+    "version": 2, "deployment_state": "HOLD", "postgres": "external_prepared_16",
+    "arc_executor": "app_owned_capture_import_and_replay",
     "stablenet_executor": "owned_import_and_replay",
     "socket": "/ipc/execution.sock", "native": "/native/node", "spool": "/source/spool",
-    "arc_scratch": "/scratch", "arc_run_lease": "/native/.node.execution-retention-lock",
-    "maintenance": "separate_supervised_manual",
+    "arc_scratch": "/source", "arc_run_lease": "/native/.node.execution-retention-lock",
+    "arc_raw_volume": "/raw", "arc_raw_window": "/raw/arc-raw",
+    "arc_maintenance_journal": "/native/.node.arc-execution-maintenance",
+    "arc_ingress": {"module": "arc.native", "native_executable": "/app/arc-native-import",
+                    "collector_executable": "/app/indexer-arc-executor", "peer_key_file": "/run/private/arc-peer-key",
+                    "initialize_volume": False, "create_window": False, "window": "arc-raw", "max_raw_blocks": 172800},
+    "maintenance": "existing_app_e3_explicit_library",
     "contracts": {
         "max_conns": 4, "part_transactions": 2, "api_reservation": 1,
         "logical_writers": 7, "physical_http_attempts_per_second": 5,
@@ -33,7 +38,7 @@ PLAN = {
     },
     "external_requirements": {k: "HOLD" for k in (
         "apfs_identity_and_capacity", "private_image_and_configs",
-        "authenticated_full_checkpoint", "official_peers", "arc_first_import_provider",
+        "authenticated_full_checkpoint", "official_peers", "arc_app_ingress_acceptance",
         "prepared_postgres_schema", "host_uid_and_socket_mapping",
     )},
 }
@@ -81,10 +86,10 @@ def check_document(document):
     require(document["name"] == "indexer-native-runtime-draft", "project")
     require(same(document["x-indexer-native-plan"], PLAN), "plan", "runtime_boundaries_must_remain_explicit")
     for field in PLAN["external_requirements"]:
-        add("external." + field, "HOLD", "arc_first_import_provider_unverified" if field == "arc_first_import_provider" else "external_evidence_not_checked")
+        add("external." + field, "HOLD", "arc_app_ingress_unverified" if field == "arc_app_ingress_acceptance" else "external_evidence_not_checked")
 
     services = document["services"]
-    if not require(isinstance(services, dict) and set(services) == {"arc-app", "arc-collector", "stablenet-app", "stablenet-executor"}, "services", "no_extra_node_or_stdio_sidecar"):
+    if not require(isinstance(services, dict) and set(services) == {"arc-app", "stablenet-app", "stablenet-executor"}, "services", "no_extra_node_or_stdio_sidecar"):
         return report
     known_paths, bindings, user_parts, app_images = [], {}, (set(), set()), set()
 
@@ -108,16 +113,18 @@ def check_document(document):
     for product in ("arc", "stablenet"):
         prefix = "INDEXER_" + product.upper() + "_RUNTIME_"
         for app in (True, False):
-            name = product + ("-app" if app else "-collector" if product == "arc" else "-executor")
+            if product == "arc" and not app:
+                continue
+            name = product + ("-app" if app else "-executor")
             service = services[name]
-            network = {"networks": ["database", "rpc"]} if app else {"network_mode": "none"} if product == "arc" else {"networks": ["peers"]}
+            network = {"networks": ["database", "rpc", "peers"] if product == "arc" else ["database", "rpc"]} if app else {"networks": ["peers"]}
             extra = {"environment", "secrets"} if app else {"depends_on"}
             keys = set(COMMON) | {"image", "user", "entrypoint", "command", "volumes"} | set(network) | extra
             if not require(isinstance(service, dict) and set(service) == keys, name):
                 continue
             for key, expected in {**COMMON, **network}.items():
                 require(same(service[key], expected), name + "." + key)
-            image_var = "INDEXER_NATIVE_APP_IMAGE" if app else "INDEXER_ARC_COLLECTOR_IMAGE" if product == "arc" else "INDEXER_STABLENET_EXECUTOR_IMAGE"
+            image_var = "INDEXER_NATIVE_APP_IMAGE" if app else "INDEXER_STABLENET_EXECUTOR_IMAGE"
             image = service["image"]
             if not unresolved(image, image_var, name + ".image"):
                 if require(isinstance(image, str) and len(image) <= 512 and shared.IMAGE.fullmatch(image) is not None and not image.endswith("0" * 64), name + ".image", "reviewed_digest_required") and app:
@@ -139,19 +146,16 @@ def check_document(document):
                 require(same(service["entrypoint"], ["/bin/sh", "/opt/indexer/entrypoint.sh"]) and same(service["command"], []), name + ".command")
                 require(same(service["environment"], {"INDEXER_BINARY": "indexer-" + product, "INDEXER_DB_POSTGRES_DSN_FILE": "/run/secrets/postgres_dsn", "INDEXER_DB_DRIVER": "postgres", "INDEXER_DB_POSTGRES_MAX_CONNS": "4", "INDEXER_RPC_RATE_LIMIT": "5"}), name + ".environment", "dsn_file_and_existing_limits_required")
                 require(same(service["secrets"], [{"source": product + "-postgres-dsn", "target": "postgres_dsn"}]), name + ".secrets")
-                targets = [("/etc/indexer/config.yaml", "APP_CONFIG", True), ("/ipc", "IPC", False), ("/opt/indexer/entrypoint.sh", None, True)]
+                targets = [("/etc/indexer/config.yaml", "APP_CONFIG", True), ("/ipc", "IPC", False)]
+                if product == "arc":
+                    targets += [("/native", "NATIVE_PARENT", False), ("/source", "SOURCE_PARENT", False),
+                                ("/raw", "RAW_VOLUME", False), ("/run/private/arc-peer-key", "PEER_KEY_FILE", True)]
+                targets.append(("/opt/indexer/entrypoint.sh", None, True))
             else:
-                require(same(service["entrypoint"], ["/app/arc-execution-collector" if product == "arc" else "/app/stablenet-executor"]) and same(service["command"], ["--config", "/etc/indexer/native.json"]), name + ".command", "production_config_entrypoint_required")
+                require(same(service["entrypoint"], ["/app/stablenet-executor"]) and same(service["command"], ["--config", "/etc/indexer/native.json"]), name + ".command", "production_config_entrypoint_required")
                 require(same(service["depends_on"], {product + "-app": {"condition": "service_started"}}), name + ".depends_on")
-                targets = [("/etc/indexer/native.json", "NATIVE_CONFIG", True), ("/native", "NATIVE_PARENT", False)]
-                if product == "arc":
-                    targets.append(("/native/node", "NATIVE_CHILD", True))
-                targets.append(("/source", "SOURCE_PARENT", False))
-                if product == "arc":
-                    targets.append(("/scratch", "SCRATCH", False))
-                targets.append(("/ipc", "IPC", False))
-                if product == "stablenet":
-                    targets.append(("/etc/indexer/genesis.json", "GENESIS_FILE", True))
+                targets = [("/etc/indexer/native.json", "NATIVE_CONFIG", True), ("/native", "NATIVE_PARENT", False),
+                           ("/source", "SOURCE_PARENT", False), ("/ipc", "IPC", False), ("/etc/indexer/genesis.json", "GENESIS_FILE", True)]
             mounts = service["volumes"]
             if not require(isinstance(mounts, list) and len(mounts) == len(targets), name + ".mounts"):
                 continue
@@ -160,11 +164,7 @@ def check_document(document):
                 if not require(isinstance(mount, dict) and set(mount) == {"type", "source", "target", "read_only", "bind"}, field):
                     continue
                 require(mount["type"] == "bind" and mount["target"] == target and same(mount["read_only"], ro) and same(mount["bind"], {"create_host_path": False}), field, "production_mount_scope_required")
-                if variable == "NATIVE_CHILD":
-                    parent = mounts[1]
-                    source = parent.get("source") if isinstance(parent, dict) else None
-                    require(isinstance(source, str) and mount["source"] == source + "/node", field, "read_only_child_must_match_native_parent")
-                elif variable:
+                if variable:
                     path(mount["source"], prefix + variable, field, (product, variable))
                 else:
                     require(mount["source"] == "../../testnets/indexer-entrypoint.sh", field, "existing_dsn_wrapper_required")

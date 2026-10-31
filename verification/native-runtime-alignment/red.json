@@ -1,0 +1,12 @@
+[
+  {
+    "log": "topology-red.log",
+    "result": "compiled behavioral requirement failure before declaration/checker implementation",
+    "sha256": "dff6bf21530bc65e234b5f61c5a3a31e5dd2fcdb95f4b850a299ab362a49f125"
+  },
+  {
+    "log": "phase-path-red.log",
+    "result": "compiled behavioral requirement failure before declaration/checker implementation",
+    "sha256": "1e5d6647fe857b34f3c8cc3c9dbdee9564e325510a6a1edd5d7b223d141ccc7e"
+  }
+]

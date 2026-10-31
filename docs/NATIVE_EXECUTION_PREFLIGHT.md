@@ -186,9 +186,22 @@ The StableNet tests construct a complete synthetic declaration from the existing
 E6 native fixture and check both policy-present and policy-absent behavior; that
 fixture anchor is never supplied as an operating-network authority.
 
+## App-owned Arc runtime boundary
+
+The [managed runtime draft](../deployments/native/runtime/README.md) gives Arc App
+raw/native/source ownership and an in-process collector. This file preflight
+still accepts the separate legacy collector/native JSON schema; it does not
+establish managed App ingress/raw/SQL/phase-journal consistency. The command
+does not register `arc.native` as an operating file profile; an App YAML that
+requires that unsupported ingress fails closed. Legacy synthetic PASS cannot
+substitute for managed App acceptance. Keep deployment HOLD until dedicated
+managed file validation and N6 integration qualify it. Production App validation
+and startup ownership checks remain independently mandatory. No real App or
+declared data path is opened to make this check pass.
+
 [Plan/checklist](codemine/runs/20261028-native-preflight/plan.md) and
 [validation](codemine/runs/20261028-native-preflight/validation.md) record tests and
-handoff scope. The next offline [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md)
-observes fixed maintenance metadata and exported snapshots. Later priorities are native Docker
-wiring, backup adapter and monitoring; provisioning, actual operation and extra
-performance measurements remain on hold.
+handoff scope. [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md),
+diagnostic Docker, backup adapter and monitoring are implemented with separate
+evidence limits. Managed App file inspection and N6 acceptance remain;
+provisioning, actual operation and extra performance measurements stay HOLD.

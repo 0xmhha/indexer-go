@@ -1,227 +1,174 @@
 # Native runtime composition draft
 
-Review the future process topology without starting it. This is separate from
-the [diagnostic-only profile](../README.md) and the four-testnet
-[legacy stack](../../testnets/README.md). **Image build/pull, Docker/App/node/DB/
-peer execution, disk provisioning/formatting, GC/restore and additional
-performance measurements remain HOLD.** No operating file, secret or data
-directory is created, opened or changed by this draft's offline checker.
+Review process ownership and mounts without starting services. This is separate
+from the [diagnostic profile](../README.md) and four-testnet [legacy stack](../../testnets/README.md).
+**Docker build/pull/start, App/node/DB/peer execution, provisioning/format, operational
+GC/restore, deployment and additional performance measurements remain HOLD.**
 
-The [Compose declaration](compose.draft.yaml) is a design artifact, not a tested
-operating stack. Its required-variable placeholders block ordinary unresolved
-Compose interpolation, but **profiles, `x-` notes and the offline checker are
-not a startup interlock**. A direct Compose invocation after filling variables
-can bypass the documented HOLD. No start command, activation wrapper, image
-recipe or automatic recovery is provided. The legacy host guard does not
-authorize or validate this different native composition.
+The [Compose declaration](compose.draft.yaml) version2 has three services:
+`arc-app`, `stablenet-app`, `stablenet-executor`. Arc App owns the implemented
+[ingress](../../../docs/EXECUTION_ARC_INGRESS.md), Rust first-execution child,
+in-process collector and Rust second-execution child. There is no external Arc
+collector or full-node service. Version1 declarations with a separate Arc
+collector are rejected by the updated checker. Upstream clients and two EVM
+passes are unchanged.
 
-## Offline review
+Compose profiles, required variables, `x-` metadata and the offline checker are
+**not a startup interlock**. A direct Compose invocation with filled variables can
+bypass documented HOLD. No activation wrapper or runtime image recipe is provided.
+The legacy host guard does not certify this different composition.
 
-Use Python3.9+ and the repository's [pinned YAML parser](../../testnets/requirements.txt):
+## Offline checks and their limits
+
+Use Python3.9+ with the [pinned YAML parser](../../testnets/requirements.txt):
 
 ```sh
 python3 -B deployments/native/runtime/check.py
-# HOLD / exit2, declared_contract valid, operation not authorized.
+# Valid declaration: HOLD / exit2, never startup authorization.
 python3 -B -m unittest discover -s deployments/native/runtime -p test_runtime.py -v
-# Full owned fixture, builds four read-only Go diagnostic commands only:
+# Owned host binaries for existing legacy file preflight/diagnostic fixtures:
 bash deployments/native/test-cli.sh
 ```
 
-The full fixture reuses those owned binaries, copies only public synthetic
-inputs, rewrites declared container paths and runs both real product file
-preflights. It checks input bytes/inodes/files remain unchanged. It opens no
-declared native/spool/checkpoint/DB/socket path and proves no Docker mount,
-actual lease, image, network or operating readiness.
+The checker reads only this declaration or an explicit `--file FILE`, using the
+existing bounded strict decoder: one regular non-symlink leaf, nonblocking,
+maximum1MiB/32 nesting/8192 events. It expands no environment and follows no
+bind/config/secret/raw/native path. It starts no process or network connection.
+Unknown fields, repeated mappings, aliases, merge input, unsafe mounts, stale topology and
+limit drift fail closed. Output has at most128 fixed-code findings/64KiB;
+raw values, paths, credentials and parser errors are not emitted.
 
-The checker accepts no flags (this public draft) or `--file FILE` (one explicit
-complete declaration). It imports the existing bounded strict YAML decoder;
-reads only that selected regular non-symlink leaf, at most1MiB, nonblocking;
-and follows no bind, secret, config or native path. It does not expand environment
-variables or inspect Docker, APFS, images, schema, socket, credentials or peers.
-Input ancestor paths and actual bind identity are not certified.
+`declared_contract: valid` remains separate from `status: HOLD`, exit2,
+`operational_readiness: not_authorized`, `live_freshness: not_checked` and
+`actuation: none`. Even fully resolved synthetic paths/images never become READY.
+The checker certifies neither actual APFS identity/aliases/permissions nor image
+contents, private App YAML, network, schema, key, checkpoint or live readiness.
 
-Duplicate keys, aliases, merge keys, unknown schemas, multiple documents,
-nesting over32, over8192 parser events, unsafe bindings and CLI/I/O/output
-failures return FAIL/1. Known conflicts dominate other unresolved inputs.
-Fixed-code output has at most128 findings and stays below64KiB, with no raw
-values, paths, secrets or parser errors. Short/broken output returns1.
+The owned host CLI fixture preserves existing **legacy collector/executor** file
+preflight and read-only diagnostic contracts. Its Arc `/scratch` is a standalone
+synthetic legacy declaration, not this managed App mount layout. Those checks do
+not validate the App-owned ingress configuration or its raw/SQL/coordinator-journal
+state. Managed App file-preflight/diagnostic integration and combined actual
+SDK/App/SQL acceptance remain explicit follow-ups; no legacy PASS substitutes
+for them. See [preflight](../../../docs/NATIVE_EXECUTION_PREFLIGHT.md) and
+[diagnostic coverage](../../../docs/NATIVE_EXECUTION_DIAGNOSTICS.md).
 
-`declared_contract: valid` is separate from `status: HOLD`, exit2. Even fully
-filled synthetic image/path/UID declarations remain HOLD because external
-evidence is unperformed. `operational_readiness: not_authorized`,
-`live_freshness: not_checked`, `actuation: none` never grant startup, ACK,
-generation, deletion or recovery authority. `x-indexer-native-plan` records fixed
-design boundaries; editing its HOLD notes to READY is rejected by the checker,
-not enforced by Docker. Actual application file validation still belongs to
-[execution-preflight](../../../docs/NATIVE_EXECUTION_PREFLIGHT.md).
-
-## Processes and missing first import
-
-The [first-import design](../../../docs/ARC_NATIVE_IMPORT_DESIGN.md) now selects
-an opt-in Go supervisor inside Arc App and an owned Rust native writer sharing
-the App RPC budget; the existing collector keeps the second EVM pass. N0 now
-provides bounded inputs/fences and actual SDK qualification. N1 adds the [offline native bootstrap](../../../docs/EXECUTION_ARC_BOOTSTRAP.md); the [N2 native writer](../../../docs/EXECUTION_ARC_NATIVE_WRITER.md) adds owned stdio/first execution and gates; N3-N6 implementation
-is pending. This draft still has no importer or App native-RW/
-ingress mounts. The design does not activate or change this composition.
+## Process ownership and networks
 
 ```mermaid
 flowchart LR
-  Import[Arc first-import provider: HOLD] --> ArcDB[Imported retained Arc DB]
-  ArcDB --> Collector[Arc collector and owned Rust stdio child]
-  Collector --> ArcIPC[Arc source spool and authenticated IPC]
-  ArcIPC --> ArcApp[Arc App: pool4]
-  Stable[StableNet executor: peer import and second execution] --> StableIPC[StableNet source spool and authenticated IPC]
-  StableIPC --> StableApp[StableNet App: pool4]
-  ArcApp --> PG[Prepared external PostgreSQL16]
+  Peer[Official Arc ETH68 peer: HOLD] --> App[Arc App: raw capture + first-execution supervisor]
+  App --> Raw[Owned raw window R]
+  Raw --> First[Owned Rust native import]
+  First --> Native[Managed native DB N]
+  Native --> Second[In-process collector + owned Rust replay]
+  Second --> Receiver[Same App receiver: source ACK A / public P]
+  Receiver --> PG[Prepared external PostgreSQL16]
+  Stable[StableNet executor: import + replay] --> StableApp[StableNet App]
   StableApp --> PG
 ```
 
-| Service / dependency | Contract |
-| --- | --- |
-| `arc-app`, `stablenet-app` | Product App binaries via the existing mounted DSN wrapper; one writer owner per chain/schema; canonical RPC and external DB access |
-| `arc-collector` | `/app/arc-execution-collector --config /etc/indexer/native.json`; owns `/app/arc-executor` as its stdio child in this same container, no network or DSN |
-| `stablenet-executor` | `/app/stablenet-executor --config /etc/indexer/native.json`; owns official peer import, replay and source transport; no DB secret, HTTP/WS/Engine service or published peer port |
-| PostgreSQL16 | Already prepared external server/schema/network, fsync and synchronous durability. Not initialized or started by this composition |
-| Arc first-import provider | **HOLD.** The [collector](../../../x/arc/collector/run.go) reads already imported blocks and starts no peer importer. A reviewed provider must maintain compatible native data and complete import stages; an enode or a copied checkpoint alone cannot supply continuing import |
+Arc's first-import implementation is present; its actual peer, authenticated
+checkpoint and managed runtime acceptance remain HOLD. Receiver readiness gates
+owned child startup. Capture R, native completion N, source seal/ACK and SQL
+public P are separate observations. Only final publication performs NEW uncached
+canonical fresh → post-response generation fence → COMMIT → exact ACK. Neither
+raw fsync, native Ready nor a child reply is public completion/deletion authority.
 
-Arc's current adapter is a read-only second execution, not a standalone socket
-sidecar or P2P synchronizer. The first-import integration remains an explicit
-unfinished dependency. No full-node service is silently added to satisfy it.
-StableNet uses its own existing owned importer; it cannot read Arc's native
-format. Both preserve two EVM executions and unchanged upstream clients.
+Apps borrow the existing pool4/part2/API1 and physical RPC5 budget. Seven logical
+writers are not seven connections. Retries/failover/batch fallback share RPC5.
+Two native Apps use8 nominal DB connections; four chain Apps use16. Do not run
+legacy/native writers together against the same schema or add a maintenance pool.
+See the [whole-server budget](../../../docs/OPERATIONS_READINESS.md).
 
-These two Apps replace the same chains' legacy writers; they must never run
-alongside them against the same schema. BSC/Sepolia are unchanged. Two native
-Apps use8 nominal DB connections; with the other two chain Apps the baseline
-is16. Extra API/maintenance Store pools are separate additions; see the
-[whole-server budget](../../../docs/OPERATIONS_READINESS.md).
+Arc App needs database/RPC/static-peer egress. StableNet App needs database/RPC;
+its separate executor needs static-peer egress and no DB secret. No peer port,
+HTTP/WS/Engine service, Docker socket or health probe is published. Actual peer
+reachability and fork/history support remain untested. The separate diagnostic
+profile remains network-none/no-DSN/read-only.
 
-## Images, identity, secrets and mounts
+## Images, credentials and paths
 
-All image inputs must be reviewed digest references, not mutable tags. The
-shared `INDEXER_NATIVE_APP_IMAGE` must contain both Go product binaries and
-`/bin/sh`/`cat` for the existing [DSN wrapper](../../testnets/indexer-entrypoint.sh).
-`INDEXER_ARC_COLLECTOR_IMAGE` must contain the collector and pinned Rust
-`/app/arc-executor`; `INDEXER_STABLENET_EXECUTOR_IMAGE` contains its separate
-Go fork-module executable. Image contents, revisions, ABI and availability
-remain unverified. The diagnostic image supplies none of these runtime images.
+All images require reviewed digest references and `pull_policy: never`.
+`INDEXER_NATIVE_APP_IMAGE` must contain both Go product binaries, `/bin/sh`/`cat`
+for the existing [DSN wrapper](../../testnets/indexer-entrypoint.sh), plus the
+pinned `/app/arc-native-import`, `/app/indexer-arc-executor` and explicit
+`/app/arc-native-maintenance` binaries. `INDEXER_STABLENET_EXECUTOR_IMAGE` supplies
+its separate executor. No Arc collector image variable is used. Actual contents,
+pins, ABI and availability remain HOLD; the diagnostic image is insufficient.
 
-All services require an explicit same non-root `INDEXER_RUN_UID:GID`, with
-read-only roots, `init: true`, dropped capabilities, no-new-privileges,
-`restart: no`, SIGTERM/120s grace and private runtime directories.120s is a
-proposed grace period, not evidence that actual queues flush within it.
-Only a private tmpfs `/tmp` and the selected writable mounts are writable.
-No application/native ports, Docker socket, anonymous/named data volumes,
-health probes, image pull/build or maintenance service are declared.
+Services use an explicit same non-root UID:GID, private host inputs/directories,
+read-only root, init, dropped capabilities, no-new-privileges, restart:no and
+SIGTERM/120s grace. Grace is a proposal, not measured queue-flush evidence.
+Every bind has `create_host_path: false`; no anonymous/named data volume is added.
 
-`INDEXER_NATIVE_DATABASE_NETWORK` names an existing PostgreSQL network; it is
-not created here. App RPC and StableNet explicit-peer egress use separate bridge
-networks. Arc collection communicates through files/IPC and uses network-none.
-The caller must review the actual DB host routing and canonical/peer endpoints.
-
-For each `INDEXER_<ARC|STABLENET>_RUNTIME_` prefix:
-
-| Variable suffix / host input | Container path | Access |
+| Host variable suffix | Container target | Owner / access |
 | --- | --- | --- |
-| `APP_CONFIG` | `/etc/indexer/config.yaml` | App read-only; production single-chain execution YAML |
-| `NATIVE_CONFIG` | `/etc/indexer/native.json` | Producer read-only; production Arc collector or StableNet executor JSON |
-| `NATIVE_PARENT` | `/native` | Producer read/write; Arc needs sibling run-lease lock and visible fence; StableNet owns import writes |
-| `NATIVE_PARENT` + `/node` (Arc only) | `/native/node` | Nested read-only bind protects Arc DB contents while the parent lock remains writable |
-| `SOURCE_PARENT` | `/source` with source spool `/source/spool` | Producer read/write; dedicated to this chain, separate from native and IPC |
-| `SCRATCH` (Arc only) | `/scratch` | Producer read/write; separate from spool/native, explicitly set in collector config |
-| `IPC` | `/ipc`, socket `/ipc/execution.sock` | App and its producer read/write; same off-data host directory,0700/same UID;0600 socket |
-| `GENESIS_FILE` (StableNet only) | `/etc/indexer/genesis.json` | Executor read-only, explicit official genesis/fork input |
-| `DSN_FILE` | App secret `/run/secrets/postgres_dsn` | Only the selected App; private0600 file outside repo/data volume |
+| `APP_CONFIG` (each chain) | `/etc/indexer/config.yaml` | App RO; actual single-chain YAML, Arc includes `source.execution.ingress` |
+| `IPC` (each chain) | `/ipc`, socket `/ipc/execution.sock` | Selected App; StableNet executor also RW;0700 same UID/0600 socket |
+| `NATIVE_PARENT` (each chain) | `/native`, DB `/native/node` | Arc App or StableNet executor RW; private parent holds locks/COW siblings |
+| `SOURCE_PARENT` (each chain) | `/source`, spool `/source/spool` | Arc App or StableNet executor RW |
+| `RAW_VOLUME` (Arc) | `/raw`, window `/raw/arc-raw` | Arc App RW; exact prepared volume marker/identity/reservation, independent quota |
+| `PEER_KEY_FILE` (Arc) | `/run/private/arc-peer-key` | Arc App RO; private0600 key, never a diagnostic input |
+| `NATIVE_CONFIG` (StableNet only) | `/etc/indexer/native.json` | Executor RO |
+| `GENESIS_FILE` (StableNet only) | `/etc/indexer/genesis.json` | Executor RO |
+| `DSN_FILE` (each chain) | `/run/secrets/postgres_dsn` | Selected App only, private file outside repo/data |
 
-Every bind has `create_host_path: false`. Native/source/scratch/IPC and selected
-private input paths must be disjoint, except the same chain's shared IPC and
-the explicitly checked native parent/read-only child relationship. App
-and producer IPC paths must agree. The checker checks lexical declarations,
-not existence, symlink aliases, case-insensitive identity or actual permissions.
-Actual APFS UUID/ownership/free-space checks remain required separately.
+Use the `INDEXER_<ARC|STABLENET>_RUNTIME_` prefix. Arc has no external NATIVE_CONFIG
+or SCRATCH mount. Its App config names `arc.native`, the two child executables,
+`/native/node`, `/source/spool`, `/raw/arc-raw` through `window_storage`, and the
+private peer key. `initialize_volume` and `create_window` remain false in this
+prepared-storage draft. Initial bootstrap/volume preparation is a separate held
+procedure; no placeholder is a valid typed runtime value.
 
-Use separate chain/schema credentials. The unchanged wrapper refuses direct
-`INDEXER_DB_POSTGRES_DSN` overrides and reads the mounted DSN into its child
-environment without tracing, echoing, sourcing it as code or adding it to argv.
-No DSN is passed to producers or diagnostic bundles. Host and Docker secret
-UID/permission mappings still need real validation.
+The managed collector currently derives scratch as `dirname(collector.spool_dir)`:
+`/source`. It creates owned temporary children there, outside `/source/spool`.
+Spool quota does not include all scratch/COW bytes. Do not delete that parent to
+free space. A separately configurable scratch directory is not implemented.
 
-Arc's collector creates `.arc-native-*` under `Native.ScratchDir`. The collector
-runtime can default to the spool's parent, but the production file preflight
-requires a declared scratch path disjoint from spool/native. This draft sets
-`/scratch` explicitly and reserves `/source/spool` for durable source. Source
-quota does not charge all native/scratch bytes: budget scratch separately.
-The existing [run guard](../../../x/arc/nativestore/capacity_unix.go) opens
-`/native/.node.execution-retention-lock` with
-create/read-write flags, so a wholly read-only native parent is incompatible.
-The parent is writable for that guard and fence visibility, while the nested
-DB bind is read-only. These are declarations; Docker Desktop permission/flock/
-nested-mount behavior still needs actual validation. No data directory is moved
-or existing config rewritten by this layout proposal.
+The native **parent** is RW and there is no nested `/native/node` bind: child
+replacement during COW must be visible through the same parent. The run lock
+`/native/.node.execution-retention-lock`, journal
+`/native/.node.arc-execution-maintenance` and its `.lock` remain outside the
+native COW child. Mounting the child separately could pin an old inode. Actual
+Docker Desktop bind/flock/identity behavior is still unverified; replacing the
+parent or detaching the disk requires stopped owners and fresh host validation.
 
-Actual private files must agree on these **container paths**:
+Native/source/raw/IPC/config/key/DSN host bindings must be lexically disjoint,
+except each chain's shared IPC. The checker rejects overlaps, but certifies no
+filesystem aliases, case folding or APFS UUID. The unchanged DSN wrapper refuses
+direct DSN overrides and passes the file value only to its App environment,
+without echo/source/argv. Owned Arc Rust children receive the existing filtered
+environment, not DSN/API credentials. No producer or diagnostic bundle gets a DSN.
 
-- Both App and producer: `/ipc/execution.sock`, original authenticated anchor.
-- Arc collector: `Native.Executable=/app/arc-executor`,
-  `Native.DataDir=/native/node`, `Native.ScratchDir=/scratch`,
-  `SpoolDir=/source/spool`; explicit original `Anchor.Height/Hash/Generation`.
-- StableNet executor: `data_dir=/native/node`, `spool_dir=/source/spool`,
-  `genesis_file=/etc/indexer/genesis.json`, explicit identity/peers/start mode.
+## Capacity, restart and maintenance remain held
 
-Do not fill authenticated hash/root/anchor, provider, bytes/records budgets or
-peer fields from synthetic examples. Literal HOLD is accepted only by the
-offline draft tools, not the typed operating runtime. Host-to-container path
-mapping is not automatically rewritten by preflight.
+Budget raw bytes/indices/forks, native steady growth plus COW candidate/old copy,
+source plus COW, collector scratch, PostgreSQL rows/indices/WAL, checkpoints,
+backup staging and filesystem reserve separately. Root/native/source quota is
+not total free space.172800 blocks assumes2blocks/s for24h; it is neither a RAM
+queue nor proof that a byte quota lasts24h. Current source defaults256MiB/4096
+records are bounds, not operating sizing. See [capacity](../../../docs/OPERATIONS_CAPACITY_DRAFT.md).
 
-## Future lifecycle — execution still HOLD
+Arc App owns normal startup/stop of capture, importer, collector and receiver;
+there is no second Arc service to start or stop. StableNet retains App-first,
+executor-second readiness and executor-first shutdown. PostgreSQL is an already
+prepared external dependency, never created/stopped by this declaration.
+Normal restart preserves original I/bootstrap/anchor and raw/native/source/SQL
+identities; it never rewrites generation from Hello/latest/zero.
 
-1. Review images and actual APFS identity/capacity/ownership, off-data IPC/private
-   files, exclusive writer ownership, prepared external PostgreSQL/schema and
-   independent authenticated full checkpoint/native/source agreement. Perform
-   the existing explicit-file preflight; it cannot certify these live conditions.
-2. Resolve Arc first import and official peer/fork/history support. Without a
-   continuing native import provider, Arc collection is not an operating feed.
-3. Start the selected prepared App first. Confirm actual socket/owner/permissions
-   and receiver readiness. `depends_on: service_started` is only process ordering;
-   it cannot prove socket readiness, empty/prepared schema or matching anchor.
-4. Start that chain's producer. Startup backlog must receive exact durable ACKs
-   before new import/capture under the existing gates. StableNet starts peer
-   import after authenticated Hello/backlog. Arc starts its read-only child and
-   checks native identity/retained original anchor. Transport loss can leave
-   capture running until quota; quota failure preserves unacknowledged records.
-5. Parts use at most2 connections from pool4 with API reservation1 and seven
-   logical writers. Only final publication runs NEW uncached canonical fresh
-   through shared5 physical HTTP attempts/s, checks generation after response,
-   commits public height/outbox and then ACKs. No extra RPC client/pool or
-   per-worker rate allowance is introduced; retries/failover count too.
-6. Stop producer first with SIGTERM; wait for its owned child/tasks to join and
-   source files to close. Unacknowledged backlog stays durable, not forcibly
-   ACKed or deleted. Then stop App and join workers/close socket/DB. External
-   provider and PostgreSQL ownership remain outside this composition. Compose's
-   reverse dependency order helps this sequence but proves no durability/grace.
+[Explicit App/E3 maintenance](../../../docs/EXECUTION_MAINTENANCE_COORDINATOR.md)
+drains and joins both workers, independently authorizes E3, records raw completion
+including zero candidates, completes native/source COW under live leases, uses
+fresh SQL completion, releases exact files and verifies resume. Unfinished or
+corrupt journals block normal startup/resume; offline recovery starts no App.
+There is no automatic GC/timer/maintenance service or CLI activation in Compose.
+The same Store/RPC budget and pending fences remain mandatory; no TTL repair.
 
-Restart with the same original anchor and exact native/source/schema generation,
-not a guessed Hello/current tip. Drain retained backlog and let the coordinator
-perform verified reorg/rebind. Stale socket, missing history, old restored DB,
-foreign process, pending deletion fence, corrupt/quarantined/full source or
-incompatible image/schema requires explicit diagnosis. No automatic socket
-removal, TTL fence clearing, latest/zero fallback, restore or deletion is added.
+N5 declaration alignment is separate from N6's managed file inspection and
+combined App/mock ETH68/actual SDK/SQL/GC acceptance. Actual APFS, peers/fork,
+authenticated checkpoint, private config/image, prepared DB and matched backup/
+restore evidence all remain HOLD. Other projects/resources/config are unchanged.
 
-The [E3 maintenance gates](../../../docs/EXECUTION_RETENTION.md) and
-[Arc supervised retention](../../../docs/EXECUTION_ARC_RETENTION.md) remain
-separate manual procedures with full baseline, current pending permit/live
-lease, source exact ACK/window, intent/completion/release and COW headroom.
-The run lease must be released before a COW swap. A nested DB bind can retain
-the old directory identity while mounted; after native replacement, explicitly
-revalidate bindings and recreate the stopped collector container as needed.
-Do not assume process restart observes a replaced host directory or bypass the
-lease to swap beneath a running producer. This procedure remains unexecuted.
-The proposed172800-block Arc window at assumed2blocks/s is neither a memory
-queue setting nor proof that native/source/scratch capacity lasts24h. Actual
-APFS, peer, checkpoint/provider, matched PostgreSQL/WAL backup/restore and
-long-running operational evidence remain HOLD.
-
-Current [plan/checklist](../../../docs/codemine/runs/20261029-native-runtime-draft/plan.md),
-[readiness decisions](../../../docs/OPERATIONS_READINESS.md) and
-[remaining work](../../../docs/analysis/open-items.md) preserve the accepted E1
-design/plan and current n/n−1/n−2. Other projects and shared resources are unchanged.
+See the [current plan/checklist](../../../docs/codemine/runs/20261031-native-runtime-alignment/plan.md),
+[readiness](../../../docs/OPERATIONS_READINESS.md) and [remaining work](../../../docs/analysis/open-items.md).

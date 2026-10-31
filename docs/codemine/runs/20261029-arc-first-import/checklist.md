@@ -27,7 +27,7 @@ the release-gate item as a claim that CI has already run.
 - [x] N2 first-execution writer, durable intents/receipts and reader gates; [checks](../20261029-arc-native-n2/checklist.md), actual release gates recorded separately.
 - [x] N3 App-owned ingress, bounded raw/channel lifecycle and shared limits; [checks](../20261030-arc-native-n3/checklist.md), actual release gates recorded separately.
 - [x] N4 managed collector and receiver-authorized reorg/restart bridge; #245/CI318 released.
-- [ ] N5 permanent ingress bytes, authoritative GC/retention and held deployment.
+- [x] N5 permanent ingress bytes, authoritative GC/retention and held deployment declaration implemented; [N5 evidence](../20261030-arc-native-n5/checklist.md) and final [declaration release gate](../20261031-native-runtime-alignment/checklist.md). No operational activation.
 - [ ] N6 integrated offline acceptance and feature release verification.
 
 Actual APFS/private deployment identity, official enode/fork/history contract,

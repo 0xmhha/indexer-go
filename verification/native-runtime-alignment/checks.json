@@ -1,0 +1,44 @@
+[
+  {
+    "log": "runtime-first-green.log",
+    "result": "PASS",
+    "sha256": "e4ee36b61b092fbb180fa37a6d6a2bcdf4ecf0d8875a8bc6729385f7137a99ab"
+  },
+  {
+    "log": "runtime-final-green.log",
+    "result": "PASS",
+    "sha256": "1c118414f4b7a93eb46215071c29b2f4f54c77be61d763ef7dd6f80579c8b253"
+  },
+  {
+    "log": "host-cli-green.log",
+    "result": "PASS",
+    "sha256": "a8b0eb6b1aeed6b329c8e3c454f8867c487eb69cfb2bad5bc145e90b9cbf3f10"
+  },
+  {
+    "log": "ci-policy.log",
+    "result": "PASS",
+    "sha256": "535ee29812a63719226164a67c872ef5602336e3ccb38ba9e54e0bfb22b7fc54"
+  },
+  {
+    "check": "owned-host-boundary",
+    "result": "Four Go diagnostic commands built only in owned temporary directory; legacy diagnostic13/runtime16 actual passes, no skipped host fixture. Final pure suite16 has one explicit host-only skip; its new raw/key overlap assertions were checked without rebuilding unchanged host binaries."
+  },
+  {
+    "check": "scope",
+    "result": "Only held Compose/Python checker/tests/docs changed. No Go/Rust source or runtime concurrency; no repeated SDK/race200, DB startup, Docker build/pull/run, node/peer, formatting, operational GC/restore/deploy/performance."
+  },
+  {
+    "check": "known-limit",
+    "result": "Runtime declaration is always HOLD. Existing legacy product file preflight does not register/certify managed App ingress. Diagnostics/monitor do not read managed raw ownership, SQL E3 or coordinator journal. Managed file inspection and combined SDK/App/SQL acceptance remain explicit follow-ups."
+  },
+  {
+    "log": "declaration-hold.json",
+    "result": "valid declaration; HOLD2/not_authorized/none",
+    "sha256": "05add747b348c46e551cae46d1761cb02be565894f452db744c7e28b74bddd04"
+  },
+  {
+    "log": "docs.json",
+    "result": "22 selected documents,448 relative links,zero errors",
+    "sha256": "b7cfe5246f9e1b803a9857c64289d77aa3f70d816ef40ad30c3db52851553e60"
+  }
+]
