@@ -65,5 +65,9 @@ scope; default CI stays [scoped short](CI.md).
 
 This feature alone does not authorize native COW. The [inherited run lease/managed SDK bridge](EXECUTION_MANAGED_MAINTENANCE.md)
 is implemented separately. The [explicit App/E3 coordinator](EXECUTION_MAINTENANCE_COORDINATOR.md)
-now connects that sequence with durable phases and recovery. Held Docker draft
-and combined actual SDK/App/SQL N6 acceptance remain distinct work in the [N5 plan](codemine/runs/20261030-arc-native-n5/plan.md).
+now connects that sequence with durable phases and recovery. The
+[held Docker declaration](../deployments/native/runtime/README.md) is aligned;
+[N6 owned acceptance](EXECUTION_ARC_ACCEPTANCE.md) qualifies the combined actual
+App/mock ETH68/SDK/SQL/GC/recovery path separately from this drain feature.
+Actual storage, official peer, authenticated checkpoint and private deployment
+inputs remain HOLD; see [readiness](OPERATIONS_READINESS.md).

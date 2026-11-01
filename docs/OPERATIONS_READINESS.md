@@ -10,15 +10,33 @@
 | 완료 #228 | call 범위·orphan trace | [PR #228](https://github.com/0xmhha/indexer-go/pull/228), [동기화](../verification/priority2-sync.json). 미수집 과거 coverage를 만들지 않음 |
 | 완료 #229 | 지원 WBFT 독립 canonical/finality | [PR #229](https://github.com/0xmhha/indexer-go/pull/229), [동기화](../verification/priority3-sync.json). 인증된 정책·anchor와 지원 fork 범위만 |
 | 완료 #230 | native lookup/MDBX 회수, matched backup/restore admission | [PR #230](https://github.com/0xmhha/indexer-go/pull/230), [CI5](https://github.com/0xmhha/indexer-go/actions/runs/40418831898), [동기화](../verification/priority4-sync.json), [검증](codemine/runs/20261027-native-retention-backup/validation.md). 외부 PG snapshot/WAL 생성·인증·실제 복원은 별도 |
-| 이번 관측 | 아래 저장소·설정 metadata | 2026-10-29 01:27~01:35 KST. 지정 볼륨의 `diskutil info -plist`·`statvfs`, 경로 존재·mode, 허용한 설정 필드, UID/GID와 Docker context만 읽음. 각 값은 별도 관측이며 원자적 snapshot이 아님 |
+| 이전 관측 | 아래 저장소·설정 metadata | 2026-10-29 01:27~01:35 KST. 지정 볼륨의 `diskutil info -plist`·`statvfs`, 경로 존재·mode, 허용한 설정 필드, UID/GID와 Docker context만 읽음. 각 값은 별도 관측이며 원자적 snapshot이 아님 |
 | 완료 #236 | 오프라인 Native 모니터링 | [PR #236](https://github.com/0xmhha/indexer-go/pull/236), [최종 CI5](https://github.com/0xmhha/indexer-go/actions/runs/40704614928), squash/main `a49065d292258c0399296a5e1cc45989c295cbc8`. Arc/StableNet 파일 형식과 제출된 수치만 판정하며 실제 체인을 실행하지 않음 |
 | 운영 미확인 | APFS·peer·checkpoint·비밀 파일·백업 보관소·복구 증명 | node/RPC/provider/운영 DB/Docker/container probe, 실행·provisioning·GC·복원·성능 측정 없음 |
 
 해시 검증한 이전 최종 인계의 patch SHA256은 `6db158c8e392db38293ae91cb48b64b7a9457a5950fb87747795ad2777101c83`, 완료 보고는 `3ac41ad0cc39b3ab79591f2366fb5b90a769ccbd6f8c28c4d39f27baa7c689a2`, 동기화 원본은 `1704b5d005c4c87b72064a5c866edef537fa802e0efc32c32ccc90af2e551141`이다. 보존된 strict all-four observer 로그도 SHA256 `5e1cb69539c87365f0f8958b6862c409fdae0fc38c4fe52a953efca6dbe1fbb5`와 일치했다. 이는 **이전 릴리스의 증거**이며 이번 세션에서 native/PG/200 실험을 반복했다는 뜻이 아니다. 선택한 현재 문서와 휴대 가능한 영수증을 저장소에 반영했으며 원본 작업트리는 수정하지 않았다. `verification/releases.json`과 observer는 과거 machine-local 실행 ledger 형식으로 유지하고 현재 릴리스 현황은 이 표와 각 portable sync를 따른다. 해당 observer를 이번 문서 릴리스 뒤의 main 검증기로 재사용하지 않는다.
 
-현재 기능 n은 [N6 owned 통합 acceptance](codemine/runs/20261031-arc-native-n6/plan.md)다. n−1은 [관리형 진단 #257/CI333](EXECUTION_MANAGED_INSPECTION.md), n−2는 [runtime 정합성 #256/CI332](codemine/runs/20261031-native-runtime-alignment/plan.md)다. N0~N6 구현과 실제 App/mock ETH68/SDK/SQL/API/ACK/reorg/GC·명시적 복구의 오프라인 기능 검증을 완료했다. 실제 CI/merge는 각 PR의 release gate로 구분한다. 외부 APFS·peer·인증 checkpoint·private 배포/백업·운영 증거는 HOLD다. [수용한 first-import 설계](ARC_NATIVE_IMPORT_DESIGN.md)·[계획](codemine/runs/20261029-arc-first-import/plan.md), [E1 설계](codemine/runs/20261023-e1-execution/02-design.md)와 [backlog](analysis/open-items.md)를 보존한다.
+현재 n은 [운영 입력 인계](codemine/runs/20261101-operations-handoff/plan.md)다. n−1인 [N6](EXECUTION_ARC_ACCEPTANCE.md)는 [PR #258](https://github.com/0xmhha/indexer-go/pull/258), [CI334](https://github.com/0xmhha/indexer-go/actions/runs/41162469157)의 실제 6개 job 성공 후 squash/main `a282758b92a40f8cd46fee34d3e648f7a6b855a7` 동기화를 완료했다. n−2는 [관리형 진단 #257/CI333](EXECUTION_MANAGED_INSPECTION.md)이며 [runtime 정합성 #256](codemine/runs/20261031-native-runtime-alignment/plan.md)도 보존한다. N0~N6의 owned 오프라인 구현·통합 검증은 완료했다. SDK/App/PG의 무거운 검증은 로컬 결과이며 short CI에서 재실행한 것으로 해석하지 않는다. [수용한 first-import 설계](ARC_NATIVE_IMPORT_DESIGN.md)·[계획](codemine/runs/20261029-arc-first-import/plan.md), [E1 설계](codemine/runs/20261023-e1-execution/02-design.md)와 [backlog](analysis/open-items.md)를 보존한다.
 
-## 현재 확인한 저장소와 설정
+## 운영 입력 재확인 — 2026-11-01
+
+15:36~15:37 KST에 지정 경로의 존재와 X31의 파일시스템 identity만 읽었다.
+용량·호스트 부하·RPC·DB·Docker·peer를 측정하거나 실행하지 않았다.
+[점검 범위와 릴리스 근거](codemine/runs/20261101-operations-handoff/validation.md)를 구분한다.
+
+| 순서 | 이번 확인 / 현재 판정 | 다음에 필요한 증거 |
+| --- | --- | --- |
+| 1. APFS 저장소 | `/Volumes/IndexerData` 없음. X31은 기존 UUID의 external ExFAT이며 APFS가 아님. **HOLD** | 실제 전용 APFS root·VolumeUUID/physical-store·ownership, 경로별 용량·COW 여유. 포맷·이동은 별도 범위 |
+| 2. 배포 입력 | 기존 후보 `deployments/testnets/host.json`, `deployments/native/host.json` 없음. 후자는 지원 native host schema가 아님. 다른 위치 존재 여부는 unknown. 기존 config hash/mode 동일. **HOLD** | 실제 선언 파일의 위치·지원 schema, reviewed image digest, private DSN/key 경로, 준비된 DB/schema·전체 연결 예산 |
+| 3. Arc 공급 계약 | 공식 enode·fork/history·인증 checkpoint의 새 운영 자료가 지정되지 않음. 이번 접속·재조회 없음. **HOLD** | 공식 접속 계약, 독립 인증된 H/hash/root/full coverage와 H+1 시작점 |
+| 4. 백업·복구 | 실제 matched backup/WAL/복원 자료가 지정되지 않음. **HOLD** | 일치하는 native/source/indexer 백업·WAL 경계·인증·별도 장치, RPO/RTO와 별도로 허용된 복구 검증 범위 |
+
+지정 후보 경로의 부재는 머신 전체에 파일이 없다는 뜻이 아니다. 비밀 파일이나
+사용자 데이터는 열지 않았으며 다른 위치를 임의로 탐색하지 않는다. 이미 선택한
+경로 배치·DB 방식·pool4·checkpoint 시작 권장안은 유지한다. 입력이 준비되지 않아
+운영 검증으로 넘어가지 않으며 fixture·과거 head·placeholder로 대신하지 않는다.
+
+## 2026-10-29 저장소·설정 관측
 
 | 값 | 현재 확인 | 판정·운영자가 정할 값 |
 | --- | --- | --- |

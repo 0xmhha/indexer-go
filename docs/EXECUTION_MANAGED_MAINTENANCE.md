@@ -78,14 +78,19 @@ without moving I/anchor. It also rejects missing Go completion and below-floor
 rewind. Legitimate empty state-change blocks use a dedicated test generator;
 existing short fixtures retain their nonempty-state assertion.
 
-Go child/protocol/COW fixtures and actual Rust SDK fixtures are separate.
-Combined App/mock ETH68/SDK/SQL/GC acceptance is still N6. The separate
+Go child/protocol/COW fixtures and actual Rust SDK fixtures retain their separate
+evidence. [N6 owned acceptance](EXECUTION_ARC_ACCEPTANCE.md) now qualifies the
+combined App/mock ETH68/SDK/SQL/GC/recovery path. The separate
 [App/E3 coordinator](EXECUTION_MAINTENANCE_COORDINATOR.md) implements explicit
 drain → independently observed plan → E3 fresh authorization → raw GC/recovery
 first → native/source COW under the live lease → E3 fresh completion → exact
 file release → verified resume. Its durable journal distinguishes zero-deletion
 raw completion from an unstarted phase. This remains an explicit library call;
-manual artifacts or a drain point alone grant no maintenance authority. The [held runtime declaration](../deployments/native/runtime/README.md) is aligned separately; managed file inspection and N6 remain incomplete.
+manual artifacts or a drain point alone grant no maintenance authority. The
+[held runtime declaration](../deployments/native/runtime/README.md) is aligned
+and [managed file inspection](EXECUTION_MANAGED_INSPECTION.md) is implemented.
+N6 is complete; actual storage/peer/checkpoint/private operating inputs remain
+HOLD in [readiness](OPERATIONS_READINESS.md).
 
 Pool4/part2/API1, seven logical writers, physical RPC5 and NEW final canonical
 response → generation fence → COMMIT → exact ACK stay unchanged. Default CI
