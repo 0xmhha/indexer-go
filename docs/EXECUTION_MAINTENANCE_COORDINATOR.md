@@ -98,6 +98,10 @@ New live lifecycle/App and DB exclusion/cancellation cases receive targeted
 local CPU1/race/single200 qualification. Default [CI](CI.md) remains scoped short;
 this Go-only change does not rebuild the unchanged Rust SDK. The prior actual
 SDK bridge qualification is recorded separately in
-[managed maintenance](EXECUTION_MANAGED_MAINTENANCE.md). Combined App/mock ETH68/
-actual SDK/SQL/GC acceptance remains N6. The [held Docker/capacity/inspection declaration](../deployments/native/runtime/README.md) is aligned separately; managed file inspection and N6 remain. See the [plan](codemine/runs/20261031-arc-maintenance-coordinator/plan.md)
+[managed maintenance](EXECUTION_MANAGED_MAINTENANCE.md). [N6 owned acceptance](EXECUTION_ARC_ACCEPTANCE.md)
+now qualifies the combined App/mock ETH68/actual SDK/SQL/GC/recovery path. The
+[held Docker/capacity/inspection declaration](../deployments/native/runtime/README.md)
+is aligned and [managed inspection](EXECUTION_MANAGED_INSPECTION.md) is implemented.
+Actual storage, official peer, authenticated checkpoint, private deployment and
+matched backup/restore evidence remain HOLD. See the [plan](codemine/runs/20261031-arc-maintenance-coordinator/plan.md)
 and [checklist](codemine/runs/20261031-arc-maintenance-coordinator/checklist.md).

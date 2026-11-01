@@ -3,8 +3,10 @@
 The N5 SQL/backend foundation and App/Arc owner/origin integration are
 implemented. App checks persistent ownership before RPC or API initialization;
 Arc binds the actual native/raw/source identity after SDK Ready. Authoritative
-raw GC and crash recovery are explicit library operations. Stopped-owner
-maintenance wiring, held deployment composition and N6 acceptance remain pending.
+raw GC and crash recovery are explicit library operations. [App/E3 maintenance](EXECUTION_MAINTENANCE_COORDINATOR.md),
+the [held deployment declaration](../deployments/native/runtime/README.md) and
+[N6 owned acceptance](EXECUTION_ARC_ACCEPTANCE.md) are implemented and qualified
+in their documented scopes. Actual APFS/peer/checkpoint/private inputs remain HOLD.
 Operational startup, GC/restore and performance runs remain HOLD.
 
 ## Integrate a source
