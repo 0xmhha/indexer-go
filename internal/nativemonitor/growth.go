@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"time"
+
+	"github.com/0xmhha/indexer-go/internal/monitorpredicate"
 )
 
 // Evaluate preserves the one-sample API. An enabled growth policy without its
@@ -218,7 +220,7 @@ func (r *Report) indexerGrowth(p *Policy, s, previous *Snapshot, at *time.Time) 
 	delta, remaining := *current.Used-*prior.Used, *current.Limit-*current.Used
 	// remaining*span/delta <= horizon, without division, rounding or overflow.
 	within := func(seconds uint64) bool {
-		return productGE(delta, seconds*uint64(time.Second), remaining, uint64(span))
+		return monitorpredicate.ProductGE(delta, seconds*uint64(time.Second), remaining, uint64(span))
 	}
 	switch {
 	case within(*g.StopWithinSeconds):
