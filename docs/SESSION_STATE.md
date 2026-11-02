@@ -7,12 +7,12 @@ Git/PR/CI와 이 스냅샷을 대조한다. 이 파일은 runtime 상태나 운�
 
 | 항목 | 확인된 상태 |
 | --- | --- |
-| 마지막 완료 기능 | 오프라인 DB 증가 추세, [PR #260](https://github.com/0xmhha/indexer-go/pull/260), squash/main `030c1646b02f41dbad57022681d180c59e135458` |
+| 마지막 완료 릴리스 | MON-01 설계, [PR #262](https://github.com/0xmhha/indexer-go/pull/262), squash/main `f81f28873ba271ae9028d19f02ba20634c8a8ff0` |
 | 구현 범위 | E1~E6의 수용 범위, Arc N0~N6와 기존 진단/백업/모니터링·두 스냅샷 증가 추세 구현 완료. 실제 운영 검증과 선택 확장은 남음 |
-| 활성 작업 | MON-01 / READY / REVIEW. 재사용 설계·후속 RED 조건은 문서화했으며 현재 문서 PR의 CI/머지/main 상태를 실제 Git/PR에서 확인. runtime 구현·실행은 없음 |
-| 작업 기준·계획 | base main `5250f4d3753e5321aae9736991922345b55b75c1`, branch `refactor/monitoring-integration-design`, [계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md) |
-| 현재 인계 문서의 릴리스 | 실제 branch/HEAD/PR/CI를 확인. 위 SHA는 마지막 검증된 기능 기준점이며 후속 문서 커밋의 HEAD를 뜻하지 않음 |
-| 다음 행동 | 현재 문서 릴리스를 정리한 뒤 [MON-02-A](codemine/runs/20261102-mon01-observation-design/implementation.md#mon-02-a--다음-권장-순수-관측-모델과-qualification): 순수 관측 DTO/qualification과 공통 predicate 추출을 RED→GREEN으로 구현 |
+| 활성 작업 | MON-02-A / READY / REVIEW. 순수 관측 모델·qualification·공통 predicate 구현과 행동 RED→GREEN. 현재 PR/CI/머지 상태는 실제 Git/PR와 대조 |
+| 작업 기준·계획 | base main `f81f28873ba271ae9028d19f02ba20634c8a8ff0`, branch `refactor/observation-model`, [계획](codemine/runs/20261102-mon02a-observation-model/plan.md)·[체크리스트](codemine/runs/20261102-mon02a-observation-model/checklist.md)·[검증](codemine/runs/20261102-mon02a-observation-model/validation.md) |
+| 현재 인계 문서의 릴리스 | 실제 branch/HEAD/PR/CI를 확인. MON-01 #262의 exact-head CI338 성공·squash/main 동기화 확인. 이 문서를 포함한 후속 SHA는 Git 정본 |
+| 다음 행동 | 현재 slice의 applicable short CI·squash·clean main을 확인한 뒤 [MON-02-B](codemine/runs/20261102-mon01-observation-design/implementation.md#mon-02-b--기존-owner-결과-tap과-통계-sampler-소유권): 기존 owner 결과 tap·sampler 중복 방지/취소/join 소유권 |
 | 외부 입력 | 마지막 관측은 [운영 준비 현황](OPERATIONS_READINESS.md). 이후 APFS/enode/checkpoint/private 배포·백업 값의 새 제공/검증 없음 |
 
 프로세스가 없거나 어떤 CI가 현재 실행 중인지 이 파일만으로 추정하지 않는다.
@@ -23,15 +23,13 @@ Git/PR/CI와 이 스냅샷을 대조한다. 이 파일은 runtime 상태나 운�
 
 | 맥락 | 정본과 릴리스 | 실제 검증 범위 |
 | --- | --- | --- |
-| n: MON-01 설계 | [정본](NATIVE_MONITORING_INTEGRATION.md)·[계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md) | 코드 source 분석과 문서 검증. 실제 수집/경보 구현·실행이 아니며 현재 PR 릴리스는 실제 Git/CI에서 확인 |
-| n−1: 세션 인계 구조 | [규약](SESSION_HANDOFF.md), [PR261](https://github.com/0xmhha/indexer-go/pull/261), [CI337](https://github.com/0xmhha/indexer-go/actions/runs/41395065513), main `5250f4d3753e5321aae9736991922345b55b75c1` | 6개 docs-only job 성공. 링크255/정책24, compiler/DB/서비스 실행 없음. 현재 상태·작업 ID·실제 Git/PR 대조 절차 확립 |
-| n−2: DB 증가 추세 | [계획](codemine/runs/20261102-indexer-growth/plan.md)·[체크리스트](codemine/runs/20261102-indexer-growth/checklist.md)·[검증](codemine/runs/20261102-indexer-growth/validation.md), [PR260](https://github.com/0xmhha/indexer-go/pull/260), [CI336](https://github.com/0xmhha/indexer-go/actions/runs/41386648007) | 6개 job 성공. Go build/short/정적/예제·disposable PG 핵심11개, 로컬 RED→GREEN·monitor race·strict/private 파일/경계 검사. native SDK/full stress는 적용하지 않음 |
+| n: MON-02-A 순수 관측 모델 | [계획](codemine/runs/20261102-mon02a-observation-model/plan.md)·[체크리스트](codemine/runs/20261102-mon02a-observation-model/checklist.md)·[검증](codemine/runs/20261102-mon02a-observation-model/validation.md) | 행동 RED→GREEN, resource/시각/quality/epoch/원본 anchor/조건부 추세. 실제 수집·App/DB/RPC/sender 연결 없음. 릴리스는 실제 Git/PR/CI 확인 |
+| n−1: MON-01 설계 | [정본](NATIVE_MONITORING_INTEGRATION.md)·[계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md), [PR262](https://github.com/0xmhha/indexer-go/pull/262), [CI338](https://github.com/0xmhha/indexer-go/actions/runs/41408868611), main `f81f28873ba271ae9028d19f02ba20634c8a8ff0` | 6개 docs-only job 성공. 링크292/정책24, runtime 없음. source `dbaf4516e7eab7e2635e1840ef8b25561528e23c`, reviewed tree `c7c20aaf207c9ac613c91ceada993cc34d14ee8d` |
+| n−2: 세션 인계 구조 | [규약](SESSION_HANDOFF.md), [PR261](https://github.com/0xmhha/indexer-go/pull/261), [CI337](https://github.com/0xmhha/indexer-go/actions/runs/41395065513), main `5250f4d3753e5321aae9736991922345b55b75c1` | 6개 docs-only job 성공. 링크255/정책24, compiler/DB/서비스 실행 없음. 현재 상태·작업 ID·실제 Git/PR 대조 절차 확립 |
 
-직전 기능 #260의 source head는 `680d57c0b4b1ae8047424180d660ea130886a620`,
-reviewed tree는 `157ddb05974220efae05be51eaddcfa1ec3910bc`이다. Squash/main
-`030c1646b02f41dbad57022681d180c59e135458`의 tree가 같고 부모는
-`cc3e35c27d255e5efb0907b332b7ded0c711bb03`이었다. 실제 CI와 Git을 다시 확인할
-식별자이며 로컬 `/private/tmp`의 영수증이 없어도 재개할 수 있다.
+앞선 [오프라인 증가 추세 검증](codemine/runs/20261102-indexer-growth/validation.md)은
+v1 CLI 호환/이력의 근거다. [PR260](https://github.com/0xmhha/indexer-go/pull/260)의
+실제 검증을 이번 순수 모델 구현이나 운영 검증으로 바꿔 쓰지 않는다.
 
 수용한 [E1 설계](codemine/runs/20261023-e1-execution/02-design.md)·[구현 계획](codemine/runs/20261023-e1-execution/03-plan.md),
 [E2 bootstrap](codemine/runs/20261024-e2-bootstrap/plan.md),

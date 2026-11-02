@@ -5,9 +5,12 @@
 진행한다. 이전 slice를 main에 반영한 뒤 다음으로 이동한다. 새 runtime 검사는
 그때 실제 바뀐 코드에만 적용하며, 이 문서 작업에서는 실행하지 않았다.
 
-## MON-02-A — 다음 권장: 순수 관측 모델과 qualification
+## MON-02-A — 구현: 순수 관측 모델과 qualification
 
-변경 후보는 새 `internal/nativeobserve`의 DTO/metric definitions/scope binder/
+[A 구현/검증](../20261102-mon02a-observation-model/validation.md)을 따른다. 실제 릴리스는
+Git/PR/CI와 SESSION_STATE에서 확인한다. 다음 추천은 B다.
+
+변경 범위는 새 `internal/nativeobserve`의 DTO/metric definitions/scope binder/
 qualification과 단위 테스트, 기존 budget/horizon predicate의 순수 공통 helper
 추출(예: `internal/monitorpredicate`)이다. chain-bound v1 Evaluate에 가짜 identity를
 넣지 않고 math를 재사용한다. CLI/보고 동작·App·Store·guard·schema·실제 설정은

@@ -4,10 +4,10 @@ import (
 	"context"
 	"io"
 	"math"
-	"math/bits"
 	"time"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/internal/monitorpredicate"
 )
 
 const (
@@ -146,12 +146,6 @@ func (r *Report) threshold(field string, value uint64, w, s *uint64) {
 		r.add(field, pass, "below_warning_threshold")
 	}
 }
-func productGE(a, b, c, d uint64) bool {
-	ah, al := bits.Mul64(a, b)
-	bh, bl := bits.Mul64(c, d)
-	return ah > bh || ah == bh && al >= bl
-}
-
 func (r *Report) storage(p *Policy, m *Metrics) {
 	seen := map[string]bool{}
 	if len(m.Storage) > 6 {
@@ -200,9 +194,9 @@ func (r *Report) storage(p *Policy, m *Metrics) {
 			continue
 		}
 		switch {
-		case p.CapacityStopBPS != nil && *p.CapacityStopBPS > 0 && productGE(*v.Used, 10000, *v.Limit, *p.CapacityStopBPS):
+		case p.CapacityStopBPS != nil && *p.CapacityStopBPS > 0 && monitorpredicate.ProductGE(*v.Used, 10000, *v.Limit, *p.CapacityStopBPS):
 			r.add(field+".usage", fail, "stop_threshold_reached")
-		case p.CapacityWarnBPS != nil && *p.CapacityWarnBPS > 0 && productGE(*v.Used, 10000, *v.Limit, *p.CapacityWarnBPS):
+		case p.CapacityWarnBPS != nil && *p.CapacityWarnBPS > 0 && monitorpredicate.ProductGE(*v.Used, 10000, *v.Limit, *p.CapacityWarnBPS):
 			r.add(field+".usage", warn, "warning_threshold_reached")
 		case p.CapacityWarnBPS == nil || p.CapacityStopBPS == nil:
 			r.add(field+".usage", hold, "threshold_unavailable")

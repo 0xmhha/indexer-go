@@ -2,11 +2,36 @@
 
 작업 [MON-01](analysis/open-items.md#mon-01)의 설계 정본이다. 현재 코드는
 capacity guard, DB 통계 journal, runtime telemetry, 파일 진단과 오프라인
-평가기를 각각 제공한다. 아래의 통합 관측/경보 경로는 **MON-02/03 구현 계획**이며
+평가기를 각각 제공한다. MON-02-A의 순수 관측 모델·qualification·공통 수치
+predicate는 구현했다. 수집/경보/App 통합은 **MON-02-B~D/03 구현 계획**이며
 아직 실행 경로나 설정 키가 아니다. 운영 실행·추가 측정·알림 발송은 HOLD다.
 
 [계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md)과
 [현재 상태](SESSION_STATE.md)를 함께 따른다.
+
+## 구현된 순수 관측 계층
+
+[`internal/nativeobserve`](../internal/nativeobserve/types.go)는 metric/unit/
+resource/measurement/budget scope·owner source/incarnation/run·chain anchor와
+receiver/capture/raw/native/read domain을 타입으로 구분한다. `NewCatalog`는
+resource64/key1024 상한 안에서 입력을 복사하고, 중복 key·모순된 resource·DB 전체
+값의 schema 예산 바인딩을 거부한다. ID는 opaque 선언이며 DB 인증은 아니다.
+
+`Qualify`는 각 component의 원래 획득 시각·quality·coverage를 독립 검사한다.
+missing과 known0, 실패와 stale, 원본 없는 position과 알려진 충돌을 구분하며,
+부분 누락이 다른 알려진 오류를 가리지 않는다. schema별 측정은 unsupported다.
+startup ACK ref의 새 관측은 새 처리 event 시각이 아니다. head나 stage간 backlog를
+계산하지 않으며 truncated/lower-bound received 값을 exact로 승격하지 않는다.
+
+`CompareGrowth`는 같은 binding/연속 per-key sequence의 유효 표본 쌍만 비교한다.
+현재 freshness와 과거 표본의 원래 quality/쌍 interval을 구분한다.
+재시작·restore·rebind·정의/예산/정책/epoch 변경은 baseline reset, flat/shrink나
+stale/missing은 예측 불가다. 기존 v1과 공통 `monitorpredicate.ProductGE`의128-bit
+수치 비교를 사용한다. `Growth.Within`의 known=false는 정상 여유가 아니다.
+
+현재는 순수 함수만 있으며 collector·파일·DB/RPC·App·경보/전송을 추가하지 않는다.
+CLI v1 schema/출력/설정도 그대로다. [구현 검증](codemine/runs/20261102-mon02a-observation-model/validation.md)을
+따른다. 아래의 수집·supervisor·경보 lifecycle은 후속 slice의 계약이다.
 
 ## 현재 코드에서 확인한 재사용 지점
 
@@ -32,7 +57,8 @@ capacity guard, DB 통계 journal, runtime telemetry, 파일 진단과 오프라
 
 ## 선택한 구조와 소유권
 
-아래 모듈명과 경로는 제안이며 현재 구현을 뜻하지 않는다.
+아래 구조 중 nativeobserve의 순수 모델/qualification만 구현됐고,
+inbox·supervisor·nativealerts·App 연결은 제안이다.
 
 ```mermaid
 flowchart LR
@@ -44,8 +70,8 @@ flowchart LR
   G[Existing capacity guard] --> H[Existing latch and halt]
 ```
 
-- 제안 `internal/nativeobserve`: bounded immutable 관측 DTO·qualifier·어댑터와
-  supervisor. 실제 Store/SQL/파일/transport 구현은 App assembly가 read-only
+- `internal/nativeobserve`: bounded immutable 관측 DTO·qualifier 구현.
+  어댑터·supervisor는 후속 작업이다. 실제 Store/SQL/파일/transport 구현은 App assembly가 read-only
   capability로 주입한다. 이 모듈에는 canonical reader, writer, GC/Resume나
   notification setting 변경 권한을 주지 않는다.
 - 제안 `internal/nativealerts`: 순수 전이 reducer, 제한된 checkpoint/delivery
@@ -60,9 +86,9 @@ flowchart LR
 
 ## 관측 계약
 
-v1 외부 snapshot과 wire/diagnostic schema는 바꾸지 않는다. 새 live 경로는
-별도 내부 observation DTO로 시작하고, CLI/file format 확장은 필요한 시점에
-명시적 version/admission으로 다룬다. 필드 이름은 MON-02-A에서 타입으로 고정한다.
+v1 외부 snapshot과 wire/diagnostic schema는 바꾸지 않는다. 새 관측 모델은
+별도 내부 observation DTO이며, CLI/file format 확장은 필요한 시점에
+명시적 version/admission으로 다룬다. 필드 이름은 MON-02-A 타입을 따른다.
 
 | 필드군 | 필요한 의미 |
 | --- | --- |
@@ -192,5 +218,5 @@ APFS/peer/checkpoint/private 입력의 HOLD는 [운영 준비](OPERATIONS_READIN
 
 구체적인 source 변경 후보와 RED→GREEN 표는
 [MON-02/03 구현 계획](codemine/runs/20261102-mon01-observation-design/implementation.md)을 따른다.
-다음 추천은 MON-02-A의 순수 관측 모델/qualification이다. 실제 App tap·수집·
+다음 추천은 MON-02-B의 owner result tap·sampler 소유권이다. 실제 App tap·수집·
 알림·Docker probe 활성화까지 한 번에 확대하지 않는다.

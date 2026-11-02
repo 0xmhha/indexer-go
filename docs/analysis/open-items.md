@@ -2,7 +2,7 @@
 
 현재 작업의 시작점은 [SESSION_STATE](../SESSION_STATE.md), 인계 방식은
 [세션 규약](../SESSION_HANDOFF.md)이다. 이 문서는 **활성 작업 ID·의존성·완료 조건**을
-관리한다. 마지막 완료 기능은 오프라인 DB 증가 추세 #260이며, E1~E6의 수용 범위와
+관리한다. 마지막 완료 릴리스는 MON-01 설계 #262이며, E1~E6의 수용 범위와
 Arc N0~N6는 완료했다. 실제 운영과 선택 확장은 별개다.
 
 ## 상태와 선택 규칙
@@ -26,7 +26,7 @@ OPS-01→OPS-02→OPS-03→OPS-04이며 입력과 실행 보류를 먼저 해소
 
 | ID | 상태 | 작업 | 완료 조건·의존성 |
 | --- | --- | --- | --- |
-| <a id="mon-02"></a>MON-02 | READY | DB 추세 수집·watcher/hysteresis·경보 어댑터 통합 | [A→B→C→D 순차 계획](../codemine/runs/20261102-mon01-observation-design/implementation.md). 지금 READY 범위는 A의 순수 DTO/qualification·공통 predicate 추출이다. B는 owner tap/sampler·pool4/API1, C는 경보 상태·checkpoint/fake sink, D는 disabled opt-in App/transport 경계. slice마다 RED→GREEN·CI·squash/main 후 다음 진행. 실제 수집·발송·stop/resume 활성화는 OPS-05의 별도 운영 범위 |
+| <a id="mon-02"></a>MON-02 | READY | DB 추세 수집·watcher/hysteresis·경보 어댑터 통합 | [A→B→C→D 순차 계획](../codemine/runs/20261102-mon01-observation-design/implementation.md). A의 [순수 DTO/qualification·공통 predicate](../codemine/runs/20261102-mon02a-observation-model/validation.md)는 구현·로컬 검증했으며 현재 PR/CI/머지 상태는 SESSION_STATE와 Git에서 대조한다. 다음 READY slice B는 owner tap/sampler·pool4/API1, C는 경보 상태·checkpoint/fake sink, D는 disabled opt-in App/transport 경계. slice마다 RED→GREEN·CI·squash/main 후 다음 진행. 실제 수집·발송·stop/resume 활성화는 OPS-05의 별도 운영 범위 |
 | <a id="mon-03"></a>MON-03 | PLAN | Docker VM 지속 관측과 watcher 장애 감지 | [관측 계약](../NATIVE_MONITORING_INTEGRATION.md)·[adapter/RED 계획](../codemine/runs/20261102-mon01-observation-design/implementation.md#mon-03--docker-vm-source와-observer-health)을 따른다. fake process/parser·동시1개/cancel/late-result/권한·unknown부터 구현. Docker/호스트의 실제 probe·container 실행·알림 발송은 보류 |
 
 이미 구현된 [두 스냅샷 DB 증가 추세](../NATIVE_OFFLINE_MONITORING.md#optional-indexer-growth-assessment)는
