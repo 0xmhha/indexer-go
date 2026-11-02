@@ -8,7 +8,7 @@
 ## MON-02-A — 구현: 순수 관측 모델과 qualification
 
 [A 구현/검증](../20261102-mon02a-observation-model/validation.md)을 따른다. 실제 릴리스는
-Git/PR/CI와 SESSION_STATE에서 확인한다. B의 owner tap/sampler까지 구현했다. 다음 추천은 C다.
+Git/PR/CI와 SESSION_STATE에서 확인한다. B의 owner tap/sampler와 C의 alert/checkpoint까지 구현했다. 다음 추천은 D다.
 
 변경 범위는 새 `internal/nativeobserve`의 DTO/metric definitions/scope binder/
 qualification과 단위 테스트, 기존 budget/horizon predicate의 순수 공통 helper
@@ -61,6 +61,9 @@ fsync-on disposable fixture에서만 검증하고 운영 DB/노드에는 연결�
 성능 캠페인을 반복하지 않는다.
 
 ## MON-02-C — 경보 reducer와 private checkpoint/queue
+
+[C 구현/검증](../20261102-mon02c-alert-state/validation.md)을 따른다. App/config/
+transport 활성화는 D이며, derived metric producer가 없으면 UNKNOWN을 유지한다.
 
 변경 후보: 새 `internal/nativealerts`의 pure reducer, bounded private checkpoint,
 delivery queue/fake sink. source/row/block/transaction payload를 저장하지 않는다.
