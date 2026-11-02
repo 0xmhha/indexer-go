@@ -91,8 +91,24 @@ The **arc** job compiles and runs bounded protocol smoke only when Arc Rust chan
 
 - [README](README.md): project fit, first successful run, developer entry points and support.
 - [Documentation index](docs/README.md): task-based navigation to maintained guides.
+- [Current session state](docs/SESSION_STATE.md): current scope, next task ID, previous two feature contexts and verified release identities.
 - Guides: current configuration, interfaces, examples and implementation contracts.
-- [Remaining work](docs/analysis/open-items.md): open requirements, dependencies and deferred work.
+- [Remaining work](docs/analysis/open-items.md): stable task IDs, status, dependencies, acceptance criteria and deferred work.
 - [Analysis and validation](docs/analysis/README.md): dated decisions, failures, measurements and their scope.
 
 Preserve historical evidence when correcting a current guide. If a link or example becomes obsolete, update its callers along with it.
+
+## Continue work across sessions
+
+Start with [AGENTS.md](AGENTS.md), [current state](docs/SESSION_STATE.md) and the
+selected backlog ID. Reconcile those notes with the actual branch, HEAD, diff
+and PR/CI result before editing. A recorded checkpoint is neither permission to
+discard local changes nor proof that a process is still running.
+
+Follow the [handoff protocol](docs/SESSION_HANDOFF.md) when selecting a task,
+changing scope, pausing or completing it. Keep current state concise and replace
+stale entries; retain accepted plans and previous two contexts through links.
+Record tested source, commands, results/skips, next action and input holds in
+Git. Temporary logs and chat history may add detail but must not be the only
+continuation record. Do not add a commit/CI loop solely to write a document's own
+future squash SHA; reconcile the actual release from Git/PR metadata on resume.

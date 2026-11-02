@@ -16,7 +16,7 @@
 
 해시 검증한 이전 최종 인계의 patch SHA256은 `6db158c8e392db38293ae91cb48b64b7a9457a5950fb87747795ad2777101c83`, 완료 보고는 `3ac41ad0cc39b3ab79591f2366fb5b90a769ccbd6f8c28c4d39f27baa7c689a2`, 동기화 원본은 `1704b5d005c4c87b72064a5c866edef537fa802e0efc32c32ccc90af2e551141`이다. 보존된 strict all-four observer 로그도 SHA256 `5e1cb69539c87365f0f8958b6862c409fdae0fc38c4fe52a953efca6dbe1fbb5`와 일치했다. 이는 **이전 릴리스의 증거**이며 이번 세션에서 native/PG/200 실험을 반복했다는 뜻이 아니다. 선택한 현재 문서와 휴대 가능한 영수증을 저장소에 반영했으며 원본 작업트리는 수정하지 않았다. `verification/releases.json`과 observer는 과거 machine-local 실행 ledger 형식으로 유지하고 현재 릴리스 현황은 이 표와 각 portable sync를 따른다. 해당 observer를 이번 문서 릴리스 뒤의 main 검증기로 재사용하지 않는다.
 
-현재 n은 [오프라인 DB 증가 추세 판정](codemine/runs/20261102-indexer-growth/plan.md)이다. n−1인 [운영 입력 인계 #259](codemine/runs/20261101-operations-handoff/plan.md)는 CI335 후 squash/main `cc3e35c` 동기화를 완료했고, n−2인 [N6 #258](EXECUTION_ARC_ACCEPTANCE.md)는 CI334 후 squash/main `a282758` 동기화를 완료했다. [연속성](codemine/runs/20261102-indexer-growth/continuity.md)에 실제 CI·이전 두 기능과 수용한 E1/first-import를 보존한다. N0~N6의 owned 오프라인 구현·통합 검증은 완료했으며 SDK/App/PG의 로컬 검증과 short CI 범위는 구분한다. 새 추세 판정은 제출된 두 스냅샷만 사용하고 실제 DB 수집이나 운영 권한을 추가하지 않는다. 운영 입력은 아래의 마지막 관측 이후 새로 확인하거나 추정하지 않았다.
+현재 작업·직전 세 맥락·릴리스 기준점은 [SESSION_STATE](SESSION_STATE.md), 작업 ID·우선순위·완료 조건은 [남은 작업](analysis/open-items.md)에서 관리한다. 이 문서는 실제 운영 입력의 관측·권장값·HOLD만 관리한다. N0~N6와 [오프라인 두 스냅샷 증가 추세 #260](NATIVE_OFFLINE_MONITORING.md)은 구현·검증됐으며, 로컬 기능 검증·short CI·실제 운영 증거를 구분한다. 운영 입력은 아래의 마지막 관측 이후 새로 확인하거나 추정하지 않았다.
 
 ## 운영 입력 재확인 — 2026-11-01
 

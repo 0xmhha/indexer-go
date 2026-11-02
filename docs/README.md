@@ -13,6 +13,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Configure features, RPC access, databases or roles | [Configuration](CONFIG.md) |
 | Learn the components and data flow | [Architecture](ARCHITECTURE.md) |
 | Develop and submit a change | [Contributing](../CONTRIBUTING.md) |
+| Resume work in another session or machine | [Current state](SESSION_STATE.md), [handoff protocol](SESSION_HANDOFF.md), [task IDs](analysis/open-items.md) |
 
 ## Query indexed data
 
@@ -36,7 +37,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Review inherited managed COW and completed-floor restart | [Managed native maintenance](EXECUTION_MANAGED_MAINTENANCE.md) |
 | Coordinate explicit App/E3 maintenance and exact phase recovery | [Maintenance coordinator](EXECUTION_MAINTENANCE_COORDINATOR.md) |
 | Review explicit raw deletion authority and crash recovery | [Managed raw retention](EXECUTION_RAW_RETENTION.md) |
-| Review Arc first-import design, N0–N4 and remaining N5–N6 | [Arc native import design](ARC_NATIVE_IMPORT_DESIGN.md) |
+| Review Arc first-import design and completed N0–N6 boundaries | [Arc native import design](ARC_NATIVE_IMPORT_DESIGN.md) |
 | Review Native App/collector/executor topology and held lifecycle | [Native runtime composition draft](../deployments/native/runtime/README.md) |
 | Diagnose native/source metadata and exported checkpoint/retention observations | [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md) |
 | Check native App/collector/checkpoint/retention files offline | [Native execution preflight](NATIVE_EXECUTION_PREFLIGHT.md) |
@@ -72,7 +73,7 @@ No package carries a compatibility promise; pin a version and run your extension
 - [Architecture](ARCHITECTURE.md) explains block transactions, reorg recovery and outbox delivery.
 - [Pipeline telemetry](FEED_TELEMETRY.md) defines feed-stage latency, backlog and unavailable observations.
 - [Remaining work](analysis/open-items.md) separates completed checks, unresolved operational requirements and deferred work.
-- [Handover 10/23](analysis/handoff-2026-10-23.md) points to the current [E1 plan](codemine/runs/20261023-e1-execution/03-plan.md), [checklist](codemine/runs/20261023-e1-execution/checklist.md) and [continuity](codemine/runs/20261023-e1-execution/continuity.json).
+- [Historical E1 handover 10/23](analysis/handoff-2026-10-23.md) preserves the accepted [E1 plan](codemine/runs/20261023-e1-execution/03-plan.md), [checklist](codemine/runs/20261023-e1-execution/checklist.md) and [continuity](codemine/runs/20261023-e1-execution/continuity.json). Use [SESSION_STATE](SESSION_STATE.md) for current work.
 
 ## Use the opt-in Arc feed
 
