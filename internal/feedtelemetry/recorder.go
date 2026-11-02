@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/nativeobserve"
+
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -92,19 +94,36 @@ type Observed struct {
 	AgeMS float64         `json:"ageMs"`
 }
 type Recorder struct {
-	mu       sync.Mutex
-	anchor   model.FeedBlock
-	plan     common.Hash
-	id       string
-	target   time.Duration
-	received *receivedPoint
-	started  time.Time
-	stopped  *time.Time
-	metrics  [stages]metric
-	progress [phases]progress
-	kinds    map[model.DatasetKind]uint8 // required dataset bits; nil disables intake
-	intake   *intake
+	observation *nativeobserve.Tap
+	mu          sync.Mutex
+	anchor      model.FeedBlock
+	plan        common.Hash
+	id          string
+	target      time.Duration
+	received    *receivedPoint
+	started     time.Time
+	stopped     *time.Time
+	metrics     [stages]metric
+	progress    [phases]progress
+	kinds       map[model.DatasetKind]uint8 // required dataset bits; nil disables intake
+	intake      *intake
 }
+
+// AttachObservation changes only the value-result tap, never a capture cursor.
+// The App owner retires an old tap before its resource closes.
+func (r *Recorder) AttachObservation(tap *nativeobserve.Tap) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.stopped != nil {
+		tap.Retire()
+		return
+	}
+	r.observation = tap
+}
+
 type Metric struct {
 	Count         uint64   `json:"count"`
 	Failures      uint64   `json:"failures"`
@@ -190,6 +209,8 @@ func (r *Recorder) Stop() {
 		now := time.Now()
 		r.stopped = &now
 	}
+	r.observation.Retire()
+	r.observation = nil
 }
 func (r *Recorder) Close() {
 	if r == nil {

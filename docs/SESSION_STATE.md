@@ -7,12 +7,12 @@ Git/PR/CI와 이 스냅샷을 대조한다. 이 파일은 runtime 상태나 운�
 
 | 항목 | 확인된 상태 |
 | --- | --- |
-| 마지막 완료 릴리스 | MON-01 설계, [PR #262](https://github.com/0xmhha/indexer-go/pull/262), squash/main `f81f28873ba271ae9028d19f02ba20634c8a8ff0` |
+| 마지막 완료 릴리스 | MON-02-A, [PR #263](https://github.com/0xmhha/indexer-go/pull/263), squash/main `acb2f93e8958f15abac35c864246c6bbd16ff27f` |
 | 구현 범위 | E1~E6의 수용 범위, Arc N0~N6와 기존 진단/백업/모니터링·두 스냅샷 증가 추세 구현 완료. 실제 운영 검증과 선택 확장은 남음 |
-| 활성 작업 | MON-02-A / READY / REVIEW. 순수 관측 모델·qualification·공통 predicate 구현과 행동 RED→GREEN. 현재 PR/CI/머지 상태는 실제 Git/PR와 대조 |
-| 작업 기준·계획 | base main `f81f28873ba271ae9028d19f02ba20634c8a8ff0`, branch `refactor/observation-model`, [계획](codemine/runs/20261102-mon02a-observation-model/plan.md)·[체크리스트](codemine/runs/20261102-mon02a-observation-model/checklist.md)·[검증](codemine/runs/20261102-mon02a-observation-model/validation.md) |
-| 현재 인계 문서의 릴리스 | 실제 branch/HEAD/PR/CI를 확인. MON-01 #262의 exact-head CI338 성공·squash/main 동기화 확인. 이 문서를 포함한 후속 SHA는 Git 정본 |
-| 다음 행동 | 현재 slice의 applicable short CI·squash·clean main을 확인한 뒤 [MON-02-B](codemine/runs/20261102-mon01-observation-design/implementation.md#mon-02-b--기존-owner-결과-tap과-통계-sampler-소유권): 기존 owner 결과 tap·sampler 중복 방지/취소/join 소유권 |
+| 활성 작업 | MON-02-B / READY / REVIEW. 단일 stats sampler·취소/join·비차단 owner tap과 partial progress. 로컬 RED→GREEN/race200/owned PG 검증 완료. 실제 릴리스는 Git/PR/CI 확인 |
+| 작업 기준·계획 | base main `acb2f93e8958f15abac35c864246c6bbd16ff27f`, branch `refactor/observation-owner-taps`, [계획](codemine/runs/20261102-mon02b-owner-taps/plan.md)·[체크리스트](codemine/runs/20261102-mon02b-owner-taps/checklist.md)·[검증](codemine/runs/20261102-mon02b-owner-taps/validation.md) |
+| 현재 인계 문서의 릴리스 | 실제 branch/HEAD/PR/CI를 확인. MON-02-A #263의 exact-head CI339 성공·squash/main 동기화 확인. 이 문서를 포함한 후속 SHA는 Git 정본 |
+| 다음 행동 | B의 applicable short CI·squash·clean main을 확인한 뒤 [MON-02-C](codemine/runs/20261102-mon01-observation-design/implementation.md#mon-02-c--경보-reducer와-private-checkpointqueue): 순수 alert reducer·private checkpoint/queue·fake/disabled sink |
 | 외부 입력 | 마지막 관측은 [운영 준비 현황](OPERATIONS_READINESS.md). 이후 APFS/enode/checkpoint/private 배포·백업 값의 새 제공/검증 없음 |
 
 프로세스가 없거나 어떤 CI가 현재 실행 중인지 이 파일만으로 추정하지 않는다.
@@ -23,9 +23,9 @@ Git/PR/CI와 이 스냅샷을 대조한다. 이 파일은 runtime 상태나 운�
 
 | 맥락 | 정본과 릴리스 | 실제 검증 범위 |
 | --- | --- | --- |
-| n: MON-02-A 순수 관측 모델 | [계획](codemine/runs/20261102-mon02a-observation-model/plan.md)·[체크리스트](codemine/runs/20261102-mon02a-observation-model/checklist.md)·[검증](codemine/runs/20261102-mon02a-observation-model/validation.md) | 행동 RED→GREEN, resource/시각/quality/epoch/원본 anchor/조건부 추세. 실제 수집·App/DB/RPC/sender 연결 없음. 릴리스는 실제 Git/PR/CI 확인 |
-| n−1: MON-01 설계 | [정본](NATIVE_MONITORING_INTEGRATION.md)·[계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md), [PR262](https://github.com/0xmhha/indexer-go/pull/262), [CI338](https://github.com/0xmhha/indexer-go/actions/runs/41408868611), main `f81f28873ba271ae9028d19f02ba20634c8a8ff0` | 6개 docs-only job 성공. 링크292/정책24, runtime 없음. source `dbaf4516e7eab7e2635e1840ef8b25561528e23c`, reviewed tree `c7c20aaf207c9ac613c91ceada993cc34d14ee8d` |
-| n−2: 세션 인계 구조 | [규약](SESSION_HANDOFF.md), [PR261](https://github.com/0xmhha/indexer-go/pull/261), [CI337](https://github.com/0xmhha/indexer-go/actions/runs/41395065513), main `5250f4d3753e5321aae9736991922345b55b75c1` | 6개 docs-only job 성공. 링크255/정책24, compiler/DB/서비스 실행 없음. 현재 상태·작업 ID·실제 Git/PR 대조 절차 확립 |
+| n: MON-02-B owner tap/sampler | [계획](codemine/runs/20261102-mon02b-owner-taps/plan.md)·[체크리스트](codemine/runs/20261102-mon02b-owner-taps/checklist.md)·[검증](codemine/runs/20261102-mon02b-owner-taps/validation.md) | RED→GREEN·focused race·새 concurrency7종 CPU1/race/single200·실제 owned PG pool4/API1·취소. 실제 App/config 활성화/발송·운영 검증은 없음. 릴리스는 실제 Git/PR/CI 확인 |
+| n−1: MON-02-A 순수 관측 모델 | [계획](codemine/runs/20261102-mon02a-observation-model/plan.md)·[검증](codemine/runs/20261102-mon02a-observation-model/validation.md), [PR263](https://github.com/0xmhha/indexer-go/pull/263), [CI339](https://github.com/0xmhha/indexer-go/actions/runs/41414832596), main `acb2f93e8958f15abac35c864246c6bbd16ff27f` | 6개 job 성공, root/execution short·build/vet/lint·examples·PG core11. source `f1af07360629db7fcd2adf0bbc302542b2cff290`, reviewed tree `098df8201528c0342dc2fbad150ec80fc5899e32`. Runtime 수집/알림 없음 |
+| n−2: MON-01 설계 | [정본](NATIVE_MONITORING_INTEGRATION.md)·[계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md), [PR262](https://github.com/0xmhha/indexer-go/pull/262), [CI338](https://github.com/0xmhha/indexer-go/actions/runs/41408868611), main `f81f28873ba271ae9028d19f02ba20634c8a8ff0` | 6개 docs-only job 성공. 링크292/정책24, runtime 없음. source `dbaf4516e7eab7e2635e1840ef8b25561528e23c`, reviewed tree `c7c20aaf207c9ac613c91ceada993cc34d14ee8d` |
 
 앞선 [오프라인 증가 추세 검증](codemine/runs/20261102-indexer-growth/validation.md)은
 v1 CLI 호환/이력의 근거다. [PR260](https://github.com/0xmhha/indexer-go/pull/260)의

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/internal/nativeobserve"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/evmdata"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
@@ -134,6 +135,10 @@ func (p *program) persist(ctx context.Context, batch []chainfeed.Envelope) error
 		return err
 	}
 	p.control = next
+	if tap := p.deps.Observation; tap != nil {
+		at := time.Now()
+		tap.Progress(nativeobserve.RawDurableHeight, next.Received.Height, nativeobserve.Hash(next.Received.Hash), nativeobserve.Epochs{Receiver: nativeobserve.ReceiverGeneration(next.Generation), Raw: nativeobserve.RawEpoch(next.RawEpoch)}, at, at, nativeobserve.Exact)
+	}
 	return nil
 }
 func (p *program) load(ctx context.Context, id model.FeedBlock, parent nativeRef) (capturedBlock, []window.Reference, error) {
@@ -277,7 +282,12 @@ func (p *program) importNext(ctx context.Context, w nativeWriter, h nativeHead, 
 	}
 	p.mu.Lock()
 	p.head = nativeHead{Version: 1, Instance: r.Identity.Instance, ImportEpoch: r.ImportEpoch, ReadEpoch: r.ReadEpoch, RequestID: r.RequestID, Tip: nativeRef{Height: r.Height, Hash: r.Hash, Root: r.Root}}
+	generation := p.control.Generation
 	p.mu.Unlock()
+	if tap := p.deps.Observation; tap != nil {
+		at := time.Now()
+		tap.Progress(nativeobserve.NativeExecutedHeight, r.Height, nativeobserve.Hash(r.Hash), nativeobserve.Epochs{Receiver: nativeobserve.ReceiverGeneration(generation), Native: nativeobserve.NativeEpoch(r.ImportEpoch)}, at, at, nativeobserve.Exact)
+	}
 	return observe(refs)
 }
 func (p *program) stable(ctx context.Context) error {

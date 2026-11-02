@@ -1,6 +1,7 @@
 package feedtelemetry
 
 import (
+	"github.com/0xmhha/indexer-go/internal/nativeobserve"
 	"time"
 
 	"github.com/0xmhha/indexer-go/pkg/core/model"
@@ -111,6 +112,16 @@ func (r *Recorder) Received(block model.FeedBlock, kind model.DatasetKind, first
 	}
 	p.mask |= 1 << bit
 	r.advanceIntake()
+	if r.observation != nil {
+		coverage := nativeobserve.Unverified
+		if in.truncated {
+			coverage = nativeobserve.Truncated
+		}
+		at := time.Now()
+		// This is the actual delivered block and original receive time, not a
+		// fabricated contiguous/canonical head or a borrowed capture generation.
+		r.observation.Progress(nativeobserve.CaptureReceivedHeight, block.Number, nativeobserve.Hash(block.Hash), nativeobserve.Epochs{}, firstReceived, at, coverage)
+	}
 }
 
 // advanceIntake moves the contiguous cursor over complete pending heights.

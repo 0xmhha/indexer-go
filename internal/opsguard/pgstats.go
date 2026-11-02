@@ -2,10 +2,11 @@ package opsguard
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
+
+	"github.com/0xmhha/indexer-go/internal/nativeobserve"
 )
 
 // Journal kinds of PostgreSQL's own size statistics. They explain a data
@@ -25,57 +26,30 @@ type PostgresStats interface {
 	WALBytes(ctx context.Context) (int64, error)
 }
 
-type statsSource struct{ s PostgresStats }
-
-// AttachPostgresStats samples s at postgres_stats_interval until the returned
-// detach runs; detach must run before s closes, and may run more than once.
-// While several are attached the latest is sampled: the chains of
-// multichain mode share one database.
-func (m *Monitor) AttachPostgresStats(s PostgresStats) (detach func()) {
-	src := &statsSource{s: s}
-	m.mu.Lock()
-	m.stats = append(m.stats, src)
-	m.mu.Unlock()
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			m.mu.Lock()
-			defer m.mu.Unlock()
-			for i, x := range m.stats {
-				if x == src {
-					m.stats = append(m.stats[:i], m.stats[i+1:]...)
-					break
-				}
-			}
-		})
+// AttachPostgresStats shares the monitor's single sampler. Detach cancels and
+// joins any read using this source before the Store may close. Latest attach
+// wins; removing it falls back to the earlier live source.
+func (m *Monitor) AttachPostgresStats(s PostgresStats) func() {
+	detach, err := m.statsSampler.Attach(s, nil)
+	if err != nil {
+		return func() {}
 	}
+	return detach
 }
 
-// sampleStats journals one sample of each statistic of the latest attached
-// source, if any.
-func (m *Monitor) sampleStats(ctx context.Context) {
-	m.mu.Lock()
-	var s PostgresStats
-	if n := len(m.stats); n > 0 {
-		s = m.stats[n-1].s
-	}
-	m.mu.Unlock()
-	if s == nil {
-		return
-	}
-	for _, q := range []struct {
-		kind string
-		read func(context.Context) (int64, error)
-	}{{KindPostgresDatabase, s.DatabaseBytes}, {KindPostgresWAL, s.WALBytes}} {
-		qctx, cancel := context.WithTimeout(ctx, statsTimeout)
-		v, err := q.read(qctx)
-		cancel()
-		if ctx.Err() != nil {
-			return
-		}
-		m.observeStat(m.now(), q.kind, v, err)
-	}
+// StatsSampler exposes the existing owner for opt-in observation integration;
+// consumers must share it instead of constructing another poller.
+func (m *Monitor) StatsSampler() *StatsSampler { return m.statsSampler }
+
+// WithObservationStats opts into stricter acquisition bounds, without changing
+// legacy defaults or introducing a configuration key.
+func WithObservationStats() Option { return func(m *Monitor) { m.observedStats = true } }
+
+// AttachObservedPostgresStats attaches a typed nonblocking tap to that same owner.
+func (m *Monitor) AttachObservedPostgresStats(s PostgresStats, tap *nativeobserve.Tap) (func(), error) {
+	return m.statsSampler.Attach(s, tap)
 }
+func (m *Monitor) sampleStats(ctx context.Context) { m.statsSampler.Sample(ctx) }
 
 func (m *Monitor) observeStat(at time.Time, kind string, v int64, err error) {
 	rec := Record{At: at, Kind: kind, Level: LevelNormal}

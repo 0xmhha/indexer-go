@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/internal/nativeobserve"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed"
 	stateproof "github.com/0xmhha/indexer-go/pkg/chainfeed/evmstate/proof"
 	"github.com/0xmhha/indexer-go/pkg/chains"
@@ -51,6 +52,8 @@ type StatusReader interface {
 	ExecutionStatus(context.Context) (port.ExecutionControl, error)
 }
 type Dependencies struct {
+	// Observation is a disabled-by-default, value-only owner-result tap.
+	Observation *nativeobserve.Tap
 	Store       StatusReader
 	Canonical   source.CanonicalReader
 	Profile     chains.BinaryProfile

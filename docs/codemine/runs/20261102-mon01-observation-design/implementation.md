@@ -8,7 +8,7 @@
 ## MON-02-A — 구현: 순수 관측 모델과 qualification
 
 [A 구현/검증](../20261102-mon02a-observation-model/validation.md)을 따른다. 실제 릴리스는
-Git/PR/CI와 SESSION_STATE에서 확인한다. 다음 추천은 B다.
+Git/PR/CI와 SESSION_STATE에서 확인한다. B의 owner tap/sampler까지 구현했다. 다음 추천은 C다.
 
 변경 범위는 새 `internal/nativeobserve`의 DTO/metric definitions/scope binder/
 qualification과 단위 테스트, 기존 budget/horizon predicate의 순수 공통 helper
@@ -35,6 +35,9 @@ qualification과 단위 테스트, 기존 budget/horizon predicate의 순수 공
 보여준다. 순수 layer이므로 새 동시성200 캠페인을 붙이지 않는다.
 
 ## MON-02-B — 기존 owner 결과 tap과 통계 sampler 소유권
+
+[B 구현/검증](../20261102-mon02b-owner-taps/validation.md)을 따른다. actual App/config
+활성화는 D이며, partial ACK/SQL epoch와 legacy generation은 UNKNOWN으로 보존한다.
 
 변경 후보: `internal/opsguard/pgstats.go`와 monitor의 result 경계,
 `pkg/app/operations.go`/lifecycle, Arc round·SQL visibility·기존 telemetry의
