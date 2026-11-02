@@ -71,17 +71,24 @@ type Monitor struct {
 	tree    func(context.Context, string, int) (int64, error)
 	onHalt  func(*HaltError)
 
-	mu      sync.Mutex
-	started time.Time
-	fs, pg  series
-	raw     map[string]*series // gross appended bytes per reservation
-	stats   []*statsSource     // attached PostgreSQL statistics, latest last
-	fsSeen  time.Time
-	pgSeen  time.Time
-	counts  map[string]int
-	levels  map[string]Level
-	halted  *HaltError
-	done    chan struct{}
+	mu            sync.Mutex
+	started       time.Time
+	fs, pg        series
+	raw           map[string]*series // gross appended bytes per reservation
+	statsSampler  *StatsSampler
+	observedStats bool
+	runMu         sync.Mutex
+	runCancel     context.CancelFunc
+	runDone       chan struct{}
+	closed        bool
+	closeOnce     sync.Once
+	closeErr      error
+	fsSeen        time.Time
+	pgSeen        time.Time
+	counts        map[string]int
+	levels        map[string]Level
+	halted        *HaltError
+	done          chan struct{}
 }
 
 // NewMonitor returns a monitor of a validated configuration with defaults.
@@ -94,6 +101,11 @@ func NewMonitor(cfg Config, onHalt func(*HaltError), opts ...Option) (*Monitor, 
 	for _, o := range opts {
 		o(m)
 	}
+	m.statsSampler = &StatsSampler{queryLimit: statsTimeout, now: m.now, journal: m.observeStat}
+	if m.observedStats {
+		m.statsSampler.queryLimit = ObservationQueryLimit
+		m.statsSampler.roundLimit = ObservationRoundLimit
+	}
 	m.started = m.now()
 	if cfg.JournalFile != "" {
 		j, err := OpenJournal(cfg.JournalFile, cfg.JournalMaxBytes)
@@ -105,8 +117,25 @@ func NewMonitor(cfg Config, onHalt func(*HaltError), opts ...Option) (*Monitor, 
 	return m, nil
 }
 
-// Close closes the journal. It does not remove a latch.
-func (m *Monitor) Close() error { return m.journal.Close() }
+// Close cancels/joins owned statistics and Run before closing the journal.
+// It does not remove a latch or pretend a blocked filesystem probe joined.
+func (m *Monitor) Close() error {
+	m.closeOnce.Do(func() {
+		m.runMu.Lock()
+		m.closed = true
+		cancel, done := m.runCancel, m.runDone
+		if cancel != nil {
+			cancel()
+		}
+		m.runMu.Unlock()
+		m.statsSampler.Close()
+		if done != nil {
+			<-done
+		}
+		m.closeErr = m.journal.Close()
+	})
+	return m.closeErr
+}
 
 // Halted returns the halt, or nil.
 func (m *Monitor) Halted() *HaltError {
@@ -123,6 +152,27 @@ func (m *Monitor) Done() <-chan struct{} { return m.done }
 // the missing observation halts once it exceeds its limit. A statistics
 // query is cancelled and waited for before Run returns.
 func (m *Monitor) Run(ctx context.Context) error {
+	m.runMu.Lock()
+	if m.closed {
+		m.runMu.Unlock()
+		return nil
+	}
+	if m.runDone != nil {
+		m.runMu.Unlock()
+		return errors.New("opsguard: monitor already running")
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	m.runCancel, m.runDone = cancel, done
+	m.runMu.Unlock()
+	defer func() {
+		cancel()
+		m.runMu.Lock()
+		m.runCancel = nil
+		m.runDone = nil
+		close(done)
+		m.runMu.Unlock()
+	}()
 	fsResult := make(chan fsProbe, 1)
 	pgResult := make(chan pgProbe, 1)
 	fsBusy, pgBusy := false, false
@@ -130,20 +180,8 @@ func (m *Monitor) Run(ctx context.Context) error {
 	defer statsWG.Wait()
 	statsCtx, cancelStats := context.WithCancel(ctx)
 	defer cancelStats()
-	statsDone := make(chan struct{}, 1)
-	statsBusy := false
-	startStats := func() {
-		if statsBusy {
-			return
-		}
-		statsBusy = true
-		statsWG.Add(1)
-		go func() {
-			defer statsWG.Done()
-			m.sampleStats(statsCtx)
-			statsDone <- struct{}{}
-		}()
-	}
+	statsWG.Add(1)
+	go func() { defer statsWG.Done(); _ = m.statsSampler.Run(statsCtx, m.cfg.PostgresStatsInterval) }()
 	startFS := func() {
 		if fsBusy {
 			return
@@ -165,11 +203,8 @@ func (m *Monitor) Run(ctx context.Context) error {
 	defer fsTick.Stop()
 	pgTick := time.NewTicker(m.cfg.PostgresInterval)
 	defer pgTick.Stop()
-	statsTick := time.NewTicker(m.cfg.PostgresStatsInterval)
-	defer statsTick.Stop()
 	startFS()
 	startPG()
-	startStats()
 	for {
 		select {
 		case <-ctx.Done():
@@ -182,16 +217,12 @@ func (m *Monitor) Run(ctx context.Context) error {
 		case p := <-pgResult:
 			pgBusy = false
 			m.ObservePostgres(p.at, p.bytes, p.err)
-		case <-statsDone:
-			statsBusy = false
 		case <-fsTick.C:
 			m.checkMissing()
 			startFS()
 		case <-pgTick.C:
 			m.checkMissing()
 			startPG()
-		case <-statsTick.C:
-			startStats()
 		}
 	}
 }

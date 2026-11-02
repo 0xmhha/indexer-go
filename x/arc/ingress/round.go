@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/0xmhha/indexer-go/execwire"
 	"github.com/0xmhha/indexer-go/execwire/exporter"
+	"github.com/0xmhha/indexer-go/internal/nativeobserve"
 	"github.com/0xmhha/indexer-go/pkg/capture"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed"
 	"github.com/0xmhha/indexer-go/pkg/chainfeed/ethpeer"
@@ -17,6 +18,7 @@ import (
 	arcfeed "github.com/0xmhha/indexer-go/x/arc/feed"
 	"github.com/ethereum/go-ethereum/common"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -40,6 +42,8 @@ type ownedRound struct {
 	stream                                      chainfeed.Stream
 	nativeStop                                  <-chan struct{}
 	ack                                         atomic.Pointer[execwire.Header]
+	ackMu                                       sync.Mutex
+	ackClock                                    nativeobserve.ACKClock
 	inputErr                                    error
 	captureCancel, watchCancel, collectorCancel context.CancelFunc
 	results                                     chan error
@@ -91,7 +95,7 @@ func (r *ownedRound) close() { r.stopInputs(); r.stopCollector() }
 func (r *ownedRound) startCollector() {
 	p := r.p
 	identity := p.identity
-	c := collector.Config{OnCommitted: func(h execwire.Header) { r.ack.Store(&h) }, Native: collector.Options{Executable: p.cfg.Collector.Executable, DataDir: p.cfg.Native.DataDir, ScratchDir: filepath.Dir(p.cfg.Collector.SpoolDir), Chain: p.deps.Control.Chain, Timeout: p.cfg.Timeout, Managed: &identity, StateProofs: p.deps.StateProofs}, Anchor: p.deps.Control.Anchor, SpoolDir: p.cfg.Collector.SpoolDir, Socket: p.deps.Socket, MaxBytes: p.cfg.Collector.MaxBytes, MaxRecords: p.cfg.Collector.MaxRecords, Window: 8, Poll: 100 * time.Millisecond, Retry: 500 * time.Millisecond, Proposals: r.proposals}
+	c := collector.Config{OnCommitted: r.observeACK, Native: collector.Options{Executable: p.cfg.Collector.Executable, DataDir: p.cfg.Native.DataDir, ScratchDir: filepath.Dir(p.cfg.Collector.SpoolDir), Chain: p.deps.Control.Chain, Timeout: p.cfg.Timeout, Managed: &identity, StateProofs: p.deps.StateProofs}, Anchor: p.deps.Control.Anchor, SpoolDir: p.cfg.Collector.SpoolDir, Socket: p.deps.Socket, MaxBytes: p.cfg.Collector.MaxBytes, MaxRecords: p.cfg.Collector.MaxRecords, Window: 8, Poll: 100 * time.Millisecond, Retry: 500 * time.Millisecond, Proposals: r.proposals}
 	ctx, cancel := context.WithCancel(r.ctx)
 	r.collectorCancel = cancel
 	r.collectorDone = make(chan error, 1)
@@ -327,5 +331,19 @@ func (p *program) runRound(ctx context.Context, control *roundRun) error {
 func (r *ownedRound) recordInputError(err error) {
 	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, port.ErrExecutionRewinding) {
 		r.inputErr = errors.Join(r.inputErr, err)
+	}
+}
+
+// observeACK runs only after the collector's durable source ACK. Its header has
+// no native/read epochs, so those remain absent rather than borrowing a newer
+// native head. The first callback may be a restored ACK and has no event time.
+func (r *ownedRound) observeACK(h execwire.Header) {
+	r.ack.Store(&h)
+	if tap := r.p.deps.Observation; tap != nil {
+		at := time.Now()
+		r.ackMu.Lock()
+		event := r.ackClock.Observe(h.Ref.Height, nativeobserve.Hash(h.Ref.Hash), nativeobserve.ReceiverGeneration(h.Ref.Generation), at)
+		r.ackMu.Unlock()
+		tap.Progress(nativeobserve.SourceACKHeight, h.Ref.Height, nativeobserve.Hash(h.Ref.Hash), nativeobserve.Epochs{Receiver: nativeobserve.ReceiverGeneration(h.Ref.Generation)}, event, at, nativeobserve.Unverified)
 	}
 }

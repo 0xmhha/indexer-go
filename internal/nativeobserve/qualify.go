@@ -228,11 +228,11 @@ func qualifyValue(o Observation, at time.Time, maxAge time.Duration, historical 
 		a.add(InvalidNumber)
 	}
 	if o.Binding.Unit == Blocks && o.Number.Present && (o.Number.Value < o.Binding.Chain.AnchorHeight ||
-		o.Number.Value == o.Binding.Chain.AnchorHeight && o.Position.Hash != o.Binding.Chain.AnchorHash) {
+		o.Number.Value == o.Binding.Chain.AnchorHeight && o.Position.Hash != (Hash{}) && o.Position.Hash != o.Binding.Chain.AnchorHash) {
 		a.add(InvalidPosition)
 	}
-	if (o.Number.Present || o.Position != (Position{})) && !validPosition(o.Binding, o.Position) {
-		a.add(InvalidPosition)
+	if o.Number.Present || o.Position != (Position{}) {
+		qualifyPosition(o.Binding, o.Position, a)
 	}
 }
 
@@ -263,9 +263,23 @@ func validEpochs(b Binding) bool {
 	}
 }
 
-func validPosition(b Binding, p Position) bool {
+func qualifyPosition(b Binding, p Position, a *Assessment) {
 	if b.Unit != Blocks {
-		return p == (Position{})
+		if p != (Position{}) {
+			a.add(InvalidPosition)
+		}
+		return
 	}
-	return p.Hash != (Hash{}) && p.Epochs == b.Epochs
+	if p.Hash == (Hash{}) {
+		a.add(PositionIncomplete)
+	}
+	actual := []uint64{uint64(p.Receiver), uint64(p.Capture), uint64(p.Raw), uint64(p.Native), uint64(p.Read)}
+	expected := []uint64{uint64(b.Epochs.Receiver), uint64(b.Epochs.Capture), uint64(b.Epochs.Raw), uint64(b.Epochs.Native), uint64(b.Epochs.Read)}
+	for n, v := range actual {
+		if v == 0 && expected[n] != 0 {
+			a.add(PositionIncomplete)
+		} else if v != expected[n] {
+			a.add(InvalidPosition)
+		}
+	}
 }

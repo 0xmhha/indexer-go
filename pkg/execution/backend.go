@@ -6,8 +6,10 @@ import (
 	"fmt"
 
 	"github.com/0xmhha/indexer-go/execwire"
+	"github.com/0xmhha/indexer-go/internal/nativeobserve"
 	"github.com/0xmhha/indexer-go/pkg/core/model"
 	"github.com/0xmhha/indexer-go/pkg/core/port"
+	"time"
 )
 
 type PartStore interface {
@@ -19,9 +21,10 @@ type Publisher interface {
 	PublishExecution(context.Context, execwire.Result, *model.Block, []*model.Receipt, execwire.Hash) error
 }
 type StoreBackend struct {
-	Store     PartStore
-	Publisher Publisher
-	Origin    port.ExecutionIngressOriginResolver
+	Observation *nativeobserve.Tap
+	Store       PartStore
+	Publisher   Publisher
+	Origin      port.ExecutionIngressOriginResolver
 }
 
 func (b *StoreBackend) Part(ctx context.Context, w port.ExecutionWriter, p *Prepared) (err error) {
@@ -126,7 +129,14 @@ func (b *StoreBackend) Publish(ctx context.Context, p *Prepared) error {
 	if b == nil || b.Publisher == nil || p == nil {
 		return port.ErrInvalidData
 	}
-	return b.Publisher.PublishExecution(ctx, p.result, p.block, p.receipts, p.digest)
+	err := b.Publisher.PublishExecution(ctx, p.result, p.block, p.receipts, p.digest)
+	if err == nil && b.Observation != nil {
+		// Success may confirm a prior publication after a lost ACK. No new
+		// commit time or native/read epoch is inferred from that confirmation.
+		at := time.Now()
+		b.Observation.Progress(nativeobserve.SQLVisibleHeight, p.result.Ref.Height, nativeobserve.Hash(p.result.Ref.Hash), nativeobserve.Epochs{Receiver: nativeobserve.ReceiverGeneration(p.result.Ref.Generation)}, time.Time{}, at, nativeobserve.Exact)
+	}
+	return err
 }
 func (p *Prepared) Ref() execwire.Ref     { return p.result.Ref }
 func (p *Prepared) Digest() execwire.Hash { return p.digest }

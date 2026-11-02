@@ -3,7 +3,8 @@
 작업 [MON-01](analysis/open-items.md#mon-01)의 설계 정본이다. 현재 코드는
 capacity guard, DB 통계 journal, runtime telemetry, 파일 진단과 오프라인
 평가기를 각각 제공한다. MON-02-A의 순수 관측 모델·qualification·공통 수치
-predicate는 구현했다. 수집/경보/App 통합은 **MON-02-B~D/03 구현 계획**이며
+predicate와 MON-02-B의 단일 sampler·비차단 owner tap은 구현했다.
+경보와 실제 App/config 통합은 **MON-02-C~D/03 구현 계획**이며
 아직 실행 경로나 설정 키가 아니다. 운영 실행·추가 측정·알림 발송은 HOLD다.
 
 [계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md)과
@@ -29,7 +30,8 @@ startup ACK ref의 새 관측은 새 처리 event 시각이 아니다. head나 s
 stale/missing은 예측 불가다. 기존 v1과 공통 `monitorpredicate.ProductGE`의128-bit
 수치 비교를 사용한다. `Growth.Within`의 known=false는 정상 여유가 아니다.
 
-현재는 순수 함수만 있으며 collector·파일·DB/RPC·App·경보/전송을 추가하지 않는다.
+순수 model/qualification 외에 B의 IO 없는 inbox/tap·기존 sampler 소유권을 구현했다.
+새 DB/RPC/pool·파일 저장·경보/전송·App 설정 활성화는 추가하지 않았다.
 CLI v1 schema/출력/설정도 그대로다. [구현 검증](codemine/runs/20261102-mon02a-observation-model/validation.md)을
 따른다. 아래의 수집·supervisor·경보 lifecycle은 후속 slice의 계약이다.
 
@@ -38,10 +40,10 @@ CLI v1 schema/출력/설정도 그대로다. [구현 검증](codemine/runs/20261
 | 근거 | 확인된 사실 | 통합 시 경계 |
 | --- | --- | --- |
 | [opsguard Monitor](../internal/opsguard/monitor.go)·[설정](../internal/opsguard/config.go) | filesystem/PGDATA/raw 관측, warning 연속 표본, 한 번의 halt/latch. 통계 query는 별도 직렬 작업이며 기존 주기 기본1분 | 보호·중단 정책과 latch를 새 경보기가 대체하거나 해제하지 않음. 기존 hard guard는 알림 실패와 무관하게 유지 |
-| [PG 통계 sampler](../internal/opsguard/pgstats.go) | 가장 최근 attach한 source를 선택해 DB/WAL을 순서대로 읽음. query당 현재 timeout30초, 실패는 unknown journal이며 통계 자체로 halt하지 않음 | 기존 작업의 결과를 tap. 새 독립 SQL poller를 중복 생성하지 않음. detach만으로 이미 시작된 read가 join됐다고 간주하지 않음 |
+| [PG 통계 sampler](../internal/opsguard/stats_sampler.go) | 최신 source의 직렬 DB/WAL owner 하나. 기본 query30초, programmatic 관측 mode2초/round5초. detach는 취소·join하고 late 결과를 fence | 같은 owner/result를 공유. 실패는 unknown·비중단. API/transaction context 값·새 pool·추가 poller를 사용하지 않음 |
 | [DatabaseBytes/WALBytes](../pkg/storage/postgres/capacity.go) | 기존 Store pool에 직접 질의. DB 전체 `pg_database_size`, 서버 WAL `pg_ls_waldir`; 체인 schema별 크기가 아님 | Ddb/Dwal/Dpg를 섞거나 체인마다 합산하지 않음. 권한 실패는 디스크 full/0 bytes가 아님 |
 | [API 예약 reader](../pkg/storage/postgres/query_reader.go)·[SQL read](../pkg/storage/postgres/exec_read.go) | 기존 pool4 안에서 API1을 예약하며 일반 조회는 남은 pool을 사용. context로 예약 reader를 전달할 때만 그 경로를 재사용 | background 관측에는 API lease/context를 전달하지 않음. 별도 pool·API 예약·동시 stats query 없음 |
-| [App operations](../pkg/app/operations.go)·[Run/Shutdown](../pkg/app/app.go) | App이 guard/attach를 소유. Run은 monitor 종료를 기다리고 Shutdown은 detach/journal 정리 후 Store를 닫음 | 새 수집 작업은 detach/cancel/join을 명시적으로 소유하고 Store close 전에 끝내야 함. 직접 Shutdown·다중 체인 close도 검사 |
+| [App operations](../pkg/app/operations.go)·[Run/Shutdown](../pkg/app/app.go) | App이 guard/attach를 소유. Run은 monitor 종료를 기다리고 Shutdown은 detach/journal 정리 후 Store를 닫음 | Monitor.Close는 sampler/run을 cancel·join하고 journal을 닫음. detach는 해당 Store read를 join. direct Shutdown/child close를 기능 검사했으며 실제 운영 IO 종료 보장은 별도 |
 | [window Usage](../pkg/window/budget.go) | 실제 free-space/ledger를 읽고 volume write lock·guard/poison 경로에 진입 | 이름만 보고 순수 getter로 poll하지 않음. 이미 완료한 owner 관측을 복사 |
 | [feed telemetry](../internal/feedtelemetry/recorder.go)·[raw intake](../internal/feedtelemetry/intake.go) | process-local bounded ledger, 원래 receive/completion 시각. raw received-through는 미검증이며 truncation 시 lower bound | 계열/run/coverage를 함께 보존. truncated pending 수를 exact backlog로 표시하거나 재생 데이터 시각을 현재로 갱신하지 않음 |
 | [indexing pipeline](../internal/indexingstatus/pipeline.go)·[status](../internal/indexingstatus/status.go) | capture generation과 runtime 표본은 별개. 현재 pipeline의 NetworkHead는 채워지지 않음 | capture generation을 execution SQL generation으로 바꾸지 않음. head 누락을 received/latest로 채우지 않음 |
@@ -57,8 +59,8 @@ CLI v1 schema/출력/설정도 그대로다. [구현 검증](codemine/runs/20261
 
 ## 선택한 구조와 소유권
 
-아래 구조 중 nativeobserve의 순수 모델/qualification만 구현됐고,
-inbox·supervisor·nativealerts·App 연결은 제안이다.
+아래 구조 중 nativeobserve model/qualification·bounded inbox/tap과 기존 stats
+supervisor는 구현됐다. nativealerts·actual App/설정 연결은 제안이다.
 
 ```mermaid
 flowchart LR
@@ -70,8 +72,8 @@ flowchart LR
   G[Existing capacity guard] --> H[Existing latch and halt]
 ```
 
-- `internal/nativeobserve`: bounded immutable 관측 DTO·qualifier 구현.
-  어댑터·supervisor는 후속 작업이다. 실제 Store/SQL/파일/transport 구현은 App assembly가 read-only
+- `internal/nativeobserve`: bounded immutable DTO·qualifier와 비차단 inbox/tap 구현.
+  owner-result hooks와 공유 stats sampler는 B 범위다. 실제 Store/SQL/파일/transport 구현은 App assembly가 read-only
   capability로 주입한다. 이 모듈에는 canonical reader, writer, GC/Resume나
   notification setting 변경 권한을 주지 않는다.
 - 제안 `internal/nativealerts`: 순수 전이 reducer, 제한된 checkpoint/delivery
@@ -83,6 +85,28 @@ flowchart LR
 - 제안 config namespace는 `operations.observation`, 기본 nil/disabled이다.
   현재 parser에는 없으며 예제/실제 설정에 추가하지 않는다. 기존 capacity
   section/Resume 의미를 그대로 두고, 관측 전용 mode는 halt file을 만들지 않는다.
+
+## 구현된 owner 결과 연결
+
+[MON-02-B 검증](codemine/runs/20261102-mon02b-owner-taps/validation.md)을 따른다.
+`Monitor.StatsSampler()`는 기존 owner를 공유하며 새 periodic `Run` 중복을 거부한다.
+`WithObservationStats`/`NewObservationStatsSampler`는 programmatic opt-in이며
+현재 YAML 설정이나 자동 App 활성화를 뜻하지 않는다. 수동 `Sample`은 명시적
+owner 작업이며 consumer의 별도 polling 경로로 사용하지 않는다.
+
+Inbox는 bounded channel, per-key sequence·sticky lifetime loss와 retired source
+필터를 제공한다. callback/IO는 없고, 포화가 query/commit/ACK 결과를 바꾸지 않는다.
+상호 독립된 owner에는 별도 tap을 사용하고, retire 후 새 registration이 필요하다.
+Recorder/Arc stop과 stats detach/close는 해당 tap을 retire한다. SQL backend의
+borrowed tap은 D의 App owner가 receiver join 뒤 retire해야 한다.
+
+DB/WAL은 각 query 시각을 보존한다. Arc raw/native는 기존 durable completion을
+복사하며, ACK 최초 관측/복원은 새 progress 시각이 아니다. SQL 성공은 이전 commit
+확인일 수도 있어 event 시각을 만들지 않는다. ACK/SQL header에 없는 native/read
+epoch와 legacy intake에 없는 capture generation은 채우지 않고 incomplete로 남긴다.
+legacy received는 원래 receive 시각과 unverified/truncated coverage를 보존한다.
+이 부분 자료로 exact backlog·최신 network head를 만들지 않는다. Inbox loss의
+자동 복구·알림 해제·파일·sender는 아직 없고 C/D에서 별도 검증한다.
 
 ## 관측 계약
 
@@ -149,10 +173,10 @@ backlog가 아니다. 실제 수신한 head 관측이 없으면 head−R은 UNKN
 - 기존 Store pool4/part2/API1을 유지한다. 통계는 일반 pool을 사용하는 한 번의
   직렬 작업이며 acquire 시간도 deadline에 포함한다. 새 pool/API lease·SQL
   retry loop·node RPC 호출이 없다. SQL 값은 바인딩, 동적 식별자는 검증/quote한다.
-- 현재 legacy 통계 timeout은30초다. 향후 opt-in 관측 mode의 권장 hard cap은
+- 현재 legacy 통계 timeout은30초다. B의 programmatic opt-in 관측 mode cap은
   query별2초·한 DB/WAL sampling round5초이며 기존30초 default를 몰래 바꾸지
   않는다. timeout이면 unknown으로 넘기고 해당 주기에 즉시 retry하지 않는다.
-  이는 계획된 코드 상한이며 실제 운영 SLO나 무경합 보장이 아니다.
+  이는 구현된 context 상한이며 취소 무시 provider를 강제 종료하거나 실제 운영 SLO/무경합을 보장하지 않는다.
 - SQL inspection/read는 필요한 기존 결과를 우선 사용한다. 추가 bounded query가
   필요하면 명시적 provider/주기·같은 일반 pool에서 한 번만 수행한다. final
   fresh/COMMIT 주변·SQL/native/file lease 안에서는 observer IO를 하지 않는다.
@@ -180,11 +204,11 @@ backlog가 아니다. 실제 수신한 head 관측이 없으면 head−R은 UNKN
 | series/policy/scope 변경 | 새 temporal baseline 필요. 이전 경보를 새 resource로 이전하거나 scope reset을 recovered로 보내지 않음 |
 | 같은 상태 반복 | 같은 transition ID로 dedupe; 재통지는 명시적 cooldown/예산에 한정 |
 
-초기 구현의 제안 상한은 resource64, observation key1024, rule state128,
+구현된 관측 상한은 resource64/key1024이며, 경보 계층의 제안 상한은 rule state128,
 대기 delivery256, event64KiB와 private alert checkpoint1MiB다. 운영 용량을
 보장하는 값이 아니며, 초과 구성은 거부한다. payload/block/log는 큐에 넣지 않는다.
 
-producer tap은 bounded TryOffer만 수행한다. overflow는 sticky lost-sequence/quality
+producer tap은 bounded `Tap.Offer`만 수행한다. overflow는 sticky lost-sequence/quality
 신호로 남기며 이미 확인한 critical/미전송 전이를 지우지 않는다. 포화 중의 모든
 짧은 peak를 포착한다고 약속하지 않는다. loss 이후 baseline/연속 관측이 다시
 확보되기 전에는 정상 복귀를 내보내지 않는다. alert sink/디스크/네트워크 지연이
@@ -218,5 +242,5 @@ APFS/peer/checkpoint/private 입력의 HOLD는 [운영 준비](OPERATIONS_READIN
 
 구체적인 source 변경 후보와 RED→GREEN 표는
 [MON-02/03 구현 계획](codemine/runs/20261102-mon01-observation-design/implementation.md)을 따른다.
-다음 추천은 MON-02-B의 owner result tap·sampler 소유권이다. 실제 App tap·수집·
+다음 추천은 MON-02-C의 alert reducer·private checkpoint/fake sink다. 실제 App/config·수집·
 알림·Docker probe 활성화까지 한 번에 확대하지 않는다.

@@ -79,6 +79,7 @@ func (p *program) closeRaw() {
 func (p *program) Stop() {
 	p.mu.Lock()
 	p.stopped = true
+	p.deps.Observation.Retire()
 	cancel, done := p.cancel, p.done
 	recoveryCancel, round := p.recoveryCancel, p.round
 	p.mu.Unlock()
