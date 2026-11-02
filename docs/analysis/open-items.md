@@ -16,7 +16,8 @@ Arc N0~N6는 완료했다. 실제 운영과 선택 확장은 별개다.
 | DEFERRED | 현재 수용 범위 밖의 선택적 확장. 자동 착수하지 않음 |
 | DONE | 완료 요약·정본으로 이동. ID 재사용과 불필요한 재검증 없음 |
 
-권장 다음은 **[MON-01](#mon-01)의 오프라인 설계**다. 실제 운영의 우선순위는
+[MON-01 설계](../NATIVE_MONITORING_INTEGRATION.md)는 완료했다. 문서 릴리스 정리 후
+권장 다음은 **[MON-02](#mon-02)-A의 순수 모델/qualification 구현**이다. 실제 운영의 우선순위는
 OPS-01→OPS-02→OPS-03→OPS-04이며 입력과 실행 보류를 먼저 해소해야 한다.
 사용자의 새로운 지시가 우선한다. `다음 진행`으로 HOLD 해제나 선택 확장을
 추정하지 않고, 선택한 ID와 다음 행동을 SESSION_STATE에 기록한다.
@@ -25,9 +26,8 @@ OPS-01→OPS-02→OPS-03→OPS-04이며 입력과 실행 보류를 먼저 해소
 
 | ID | 상태 | 작업 | 완료 조건·의존성 |
 | --- | --- | --- | --- |
-| <a id="mon-01"></a>MON-01 | READY | 실제 관측·경보 연동의 재사용 설계 | 기존 opsguard·DB 통계·진단/telemetry·오프라인 평가기의 필드/단위/소유권을 대조하고, 측정 계열 reset·시각·취소/종료·unknown·backlog 경계와 테스트 계획을 확정. 파일/코드 분석과 모의 설계만 수행하며 새 collector/watcher/알림을 실행하지 않음 |
-| <a id="mon-02"></a>MON-02 | PLAN | DB 추세 수집·watcher/hysteresis·경보 어댑터 통합 | [MON-01](#mon-01) 후 구현 범위와 RED 조건을 확정. 기존 guard·예약 연결/통계 경로를 재사용하고 새 pool/RPC 예산을 만들지 않음. 모의 데이터로 stale·누락·reset·취소/반납·중복/폭주/재시작을 검증. 실제 수집·발송·stop/resume 활성화는 OPS-05의 별도 운영 범위 |
-| <a id="mon-03"></a>MON-03 | PLAN | Docker VM 지속 관측과 watcher 장애 감지 | 기존 시작/재개 점검과 실행 중 감시를 구분하고 권한·관측 실패/지연·중단/복구 신호를 설계. [MON-01](#mon-01)과 공통 경보 계약을 공유하며 Docker/호스트의 실제 probe·container 실행·알림 발송은 보류 |
+| <a id="mon-02"></a>MON-02 | READY | DB 추세 수집·watcher/hysteresis·경보 어댑터 통합 | [A→B→C→D 순차 계획](../codemine/runs/20261102-mon01-observation-design/implementation.md). 지금 READY 범위는 A의 순수 DTO/qualification·공통 predicate 추출이다. B는 owner tap/sampler·pool4/API1, C는 경보 상태·checkpoint/fake sink, D는 disabled opt-in App/transport 경계. slice마다 RED→GREEN·CI·squash/main 후 다음 진행. 실제 수집·발송·stop/resume 활성화는 OPS-05의 별도 운영 범위 |
+| <a id="mon-03"></a>MON-03 | PLAN | Docker VM 지속 관측과 watcher 장애 감지 | [관측 계약](../NATIVE_MONITORING_INTEGRATION.md)·[adapter/RED 계획](../codemine/runs/20261102-mon01-observation-design/implementation.md#mon-03--docker-vm-source와-observer-health)을 따른다. fake process/parser·동시1개/cancel/late-result/권한·unknown부터 구현. Docker/호스트의 실제 probe·container 실행·알림 발송은 보류 |
 
 이미 구현된 [두 스냅샷 DB 증가 추세](../NATIVE_OFFLINE_MONITORING.md#optional-indexer-growth-assessment)는
 제출된 값의 조건부 예산 소진 판정이다. 실제 수집·지속 추세·hysteresis·latch·알림
@@ -66,6 +66,12 @@ DB 방식은 PostgreSQL 운영 초안이며 pool4/part2/API 예약1은 체인·�
 
 완료된 기능을 다음 작업으로 다시 나열하지 않는다. 최근 세 맥락의 실제 PR/CI와
 source/main 식별자는 [SESSION_STATE](../SESSION_STATE.md)에서 관리한다.
+
+<a id="mon-01"></a>**MON-01 · DONE — 설계 완료.** [정본](../NATIVE_MONITORING_INTEGRATION.md),
+[계획/체크리스트](../codemine/runs/20261102-mon01-observation-design/plan.md),
+[후속 구현/RED 계획](../codemine/runs/20261102-mon01-observation-design/implementation.md).
+리소스·시각·epoch·예산·reset/unknown·cancel/join·경보/sink 경계를 확정했다.
+현재 문서 릴리스는 실제 PR/CI로 확인하며 runtime 구현/실행 완료를 뜻하지 않는다.
 
 | 완료 범위 | 정본·한계 |
 | --- | --- |

@@ -62,7 +62,12 @@ Compose에는 이 프로젝트의 stdout/stderr 로그 회전(`local`,10m×최�
 | source/feature 진행·오류 | 체인별30초, 직렬 조회 | `/chains/{id}/indexing/status`; pagination의 `next`가 있으면 끝까지 읽어 필수 unit 누락을 구분. DB-only/RPC0이며 기존 체인 pool4개 안에서 조회 |
 | 증가율·backlog 추세 | 위 표본의15분/60분 구간 | 시간·단위·generation/runId와 관측 누락을 기록. 재시작/epoch 변경 전후 높이 차이를 처리량으로 계산하지 않음 |
 
-DB 통계는 서버32개 연결 중 관리 예산에서 **동시에 최대1개의 단기 연결**로 직렬 수집하는 안이다. 앱 pool4개에 연결을 더하거나 별도 앱/API pool을 만들지 않는다. 제안 query timeout2초·전체 검사5초에서 취소/반납하고 다음 주기까지 기다리며 중첩 재시도를 하지 않는다. 권한은 통계에 필요한 범위만 별도 검토한다. `pg_ls_waldir`를 위해 앱 role에 superuser/`pg_monitor`를 추가하지 않는다. 향후 쿼리의 값은 파라미터 바인딩, schema/table 식별자는 검증·`pgx.Identifier`를 사용한다.
+현재 DB 통계는 App의 기존 Store pool4에서 DB/WAL을 직렬 조회하며, query당 timeout은30초다. 별도 관리용 단기 연결을 추가하는 이전 초안은 native 관측 연동에 적용하지 않는다. [MON-01 설계](NATIVE_MONITORING_INTEGRATION.md)의 opt-in 후속 구현은 같은 sampler 결과를 재사용하고 API 예약1을 빌리지 않으며, 명시적 관측 mode에서 query2초·round5초 상한을 권장한다. 이 상한은 아직 구현/적용하지 않았고 legacy30초 default를 바꾼 사실이 아니다. 실패는 unknown이며 해당 주기의 중첩 재시도·새 pool은 없다. 권한은 운영 범위에서 별도 검토하고, 진단을 위해 superuser/`pg_monitor`를 자동 부여하지 않는다. 향후 쿼리 값은 파라미터 바인딩, 식별자는 검증/quote한다.
+
+위의 schema 합계·상태 API·15분/60분 추세는 운영 제안이며 native 통합 관측의
+구현 현황이 아니다. Ddb는 DB 전체, Dwal은 cluster 전체여서 schema/체인 예산에
+바로 대입할 수 없다. native 연동은 owner의 기존 완료 결과와 각 component의
+원래 시각/epoch를 우선 사용하고, 자기 상태 API를 새 주기 poller로 조회하지 않는다.
 
 `Dpg`가160GiB 예산의 판정 기준이다. `Ddb`·schema 합·`Dwal`은 증가 원인을 설명하는 하위 관측이며 `Dpg`에 다시 더하지 않는다. PGDATA 표본이 오래됐거나 실패하면 예산 준수 여부는 unknown이다. filesystem `F`는 raw·DB·snapshot·다른 사용자의 소비를 모두 반영하므로 공간 고갈 판단의 최우선 값이다.
 

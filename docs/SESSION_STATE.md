@@ -9,9 +9,10 @@ Git/PR/CI와 이 스냅샷을 대조한다. 이 파일은 runtime 상태나 운�
 | --- | --- |
 | 마지막 완료 기능 | 오프라인 DB 증가 추세, [PR #260](https://github.com/0xmhha/indexer-go/pull/260), squash/main `030c1646b02f41dbad57022681d180c59e135458` |
 | 구현 범위 | E1~E6의 수용 범위, Arc N0~N6와 기존 진단/백업/모니터링·두 스냅샷 증가 추세 구현 완료. 실제 운영 검증과 선택 확장은 남음 |
-| 활성 코드 작업 | 없음. 현재 변경은 문서/세션 인계 구조 정리이며 새 runtime 구현이 아님 |
+| 활성 작업 | MON-01 / READY / REVIEW. 재사용 설계·후속 RED 조건은 문서화했으며 현재 문서 PR의 CI/머지/main 상태를 실제 Git/PR에서 확인. runtime 구현·실행은 없음 |
+| 작업 기준·계획 | base main `5250f4d3753e5321aae9736991922345b55b75c1`, branch `refactor/monitoring-integration-design`, [계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md) |
 | 현재 인계 문서의 릴리스 | 실제 branch/HEAD/PR/CI를 확인. 위 SHA는 마지막 검증된 기능 기준점이며 후속 문서 커밋의 HEAD를 뜻하지 않음 |
-| 권장 다음 작업 | [MON-01](analysis/open-items.md#mon-01): 기존 guard·통계·진단 입력을 재사용하는 실제 수집/경보 연동 설계. 오프라인 설계부터 시작 |
+| 다음 행동 | 현재 문서 릴리스를 정리한 뒤 [MON-02-A](codemine/runs/20261102-mon01-observation-design/implementation.md#mon-02-a--다음-권장-순수-관측-모델과-qualification): 순수 관측 DTO/qualification과 공통 predicate 추출을 RED→GREEN으로 구현 |
 | 외부 입력 | 마지막 관측은 [운영 준비 현황](OPERATIONS_READINESS.md). 이후 APFS/enode/checkpoint/private 배포·백업 값의 새 제공/검증 없음 |
 
 프로세스가 없거나 어떤 CI가 현재 실행 중인지 이 파일만으로 추정하지 않는다.
@@ -22,9 +23,9 @@ Git/PR/CI와 이 스냅샷을 대조한다. 이 파일은 runtime 상태나 운�
 
 | 맥락 | 정본과 릴리스 | 실제 검증 범위 |
 | --- | --- | --- |
-| n: DB 증가 추세 | [계획](codemine/runs/20261102-indexer-growth/plan.md)·[체크리스트](codemine/runs/20261102-indexer-growth/checklist.md)·[검증](codemine/runs/20261102-indexer-growth/validation.md), [PR260](https://github.com/0xmhha/indexer-go/pull/260), [CI336](https://github.com/0xmhha/indexer-go/actions/runs/41386648007) | 6개 job 성공. Go build/short/정적/예제와 실제 disposable PG 핵심11개 통과. native SDK·full stress는 적용하지 않음. 로컬 RED→GREEN·monitor race·strict/private 파일·경계 검증 완료 |
-| n−1: 운영 입력 인계 | [계획](codemine/runs/20261101-operations-handoff/plan.md)·[체크리스트](codemine/runs/20261101-operations-handoff/checklist.md)·[검증](codemine/runs/20261101-operations-handoff/validation.md), [PR259](https://github.com/0xmhha/indexer-go/pull/259), [CI335](https://github.com/0xmhha/indexer-go/actions/runs/41281829653), main `cc3e35c` | 6개 docs-only job 성공. 문서 링크/정책 검사만 수행하고 compiler/DB/서비스는 실행하지 않음 |
-| n−2: Arc N6 acceptance | [계획](codemine/runs/20261031-arc-native-n6/plan.md)·[체크리스트](codemine/runs/20261031-arc-native-n6/checklist.md)·[검증](codemine/runs/20261031-arc-native-n6/validation.md), [PR258](https://github.com/0xmhha/indexer-go/pull/258), [CI334](https://github.com/0xmhha/indexer-go/actions/runs/41162469157), main `a282758` | owned App/mock ETH68/SDK/SQL/131블록·두 EVM/ACK/restart/reorg/GC/복구는 로컬 기능 검증. CI는 applicable short/PG/native bounded smoke, 6개 job 성공. 실제 peer·운영 체인이나 성능 검증이 아님 |
+| n: MON-01 설계 | [정본](NATIVE_MONITORING_INTEGRATION.md)·[계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md) | 코드 source 분석과 문서 검증. 실제 수집/경보 구현·실행이 아니며 현재 PR 릴리스는 실제 Git/CI에서 확인 |
+| n−1: 세션 인계 구조 | [규약](SESSION_HANDOFF.md), [PR261](https://github.com/0xmhha/indexer-go/pull/261), [CI337](https://github.com/0xmhha/indexer-go/actions/runs/41395065513), main `5250f4d3753e5321aae9736991922345b55b75c1` | 6개 docs-only job 성공. 링크255/정책24, compiler/DB/서비스 실행 없음. 현재 상태·작업 ID·실제 Git/PR 대조 절차 확립 |
+| n−2: DB 증가 추세 | [계획](codemine/runs/20261102-indexer-growth/plan.md)·[체크리스트](codemine/runs/20261102-indexer-growth/checklist.md)·[검증](codemine/runs/20261102-indexer-growth/validation.md), [PR260](https://github.com/0xmhha/indexer-go/pull/260), [CI336](https://github.com/0xmhha/indexer-go/actions/runs/41386648007) | 6개 job 성공. Go build/short/정적/예제·disposable PG 핵심11개, 로컬 RED→GREEN·monitor race·strict/private 파일/경계 검사. native SDK/full stress는 적용하지 않음 |
 
 직전 기능 #260의 source head는 `680d57c0b4b1ae8047424180d660ea130886a620`,
 reviewed tree는 `157ddb05974220efae05be51eaddcfa1ec3910bc`이다. Squash/main
@@ -38,7 +39,8 @@ reviewed tree는 `157ddb05974220efae05be51eaddcfa1ec3910bc`이다. Squash/main
 [E4 writer](codemine/runs/20261024-e4-feature-writers/plan.md),
 [Arc first-import](codemine/runs/20261029-arc-first-import/plan.md),
 [N5](codemine/runs/20261030-arc-native-n5/plan.md)와
-[관리형 진단](EXECUTION_MANAGED_INSPECTION.md)을 보존한다.
+[관리형 진단](EXECUTION_MANAGED_INSPECTION.md),
+[N6 acceptance 계획](codemine/runs/20261031-arc-native-n6/plan.md)·[검증](codemine/runs/20261031-arc-native-n6/validation.md)을 보존한다.
 
 ## 유지할 경계
 
