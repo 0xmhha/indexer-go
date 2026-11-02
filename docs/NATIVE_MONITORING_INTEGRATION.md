@@ -3,8 +3,9 @@
 작업 [MON-01](analysis/open-items.md#mon-01)의 설계 정본이다. 현재 코드는
 capacity guard, DB 통계 journal, runtime telemetry, 파일 진단과 오프라인
 평가기를 각각 제공한다. MON-02-A의 순수 관측 모델·qualification·공통 수치
-predicate와 MON-02-B의 단일 sampler·비차단 owner tap은 구현했다.
-경보와 실제 App/config 통합은 **MON-02-C~D/03 구현 계획**이며
+predicate, MON-02-B의 단일 sampler/owner tap, MON-02-C의 경보 reducer·private
+checkpoint·fake/disabled sink를 구현했다. 실제 App/config/transport 통합은
+**MON-02-D/03 구현 계획**이며
 아직 실행 경로나 설정 키가 아니다. 운영 실행·추가 측정·알림 발송은 HOLD다.
 
 [계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md)과
@@ -59,8 +60,8 @@ CLI v1 schema/출력/설정도 그대로다. [구현 검증](codemine/runs/20261
 
 ## 선택한 구조와 소유권
 
-아래 구조 중 nativeobserve model/qualification·bounded inbox/tap과 기존 stats
-supervisor는 구현됐다. nativealerts·actual App/설정 연결은 제안이다.
+아래 구조의 model/qualification·bounded inbox/tap·stats owner와 nativealerts는
+구현됐다. 실제 App/설정/transport 연결은 제안이다.
 
 ```mermaid
 flowchart LR
@@ -76,8 +77,8 @@ flowchart LR
   owner-result hooks와 공유 stats sampler는 B 범위다. 실제 Store/SQL/파일/transport 구현은 App assembly가 read-only
   capability로 주입한다. 이 모듈에는 canonical reader, writer, GC/Resume나
   notification setting 변경 권한을 주지 않는다.
-- 제안 `internal/nativealerts`: 순수 전이 reducer, 제한된 checkpoint/delivery
-  계약과 fake sink. 기존 `internal/nativemonitor`는 순수 evaluator/파일 CLI로
+- `internal/nativealerts`: 순수 reducer, bounded checkpoint/delivery 상태와
+  fake/disabled sink를 구현했다. 기존 `internal/nativemonitor`는 순수 evaluator/파일 CLI로
   유지하며 live Store·client를 import하지 않는다.
 - App이 생명주기를 소유한다. 기존 owner의 성공 결과와 verified progress를
   비차단 tap으로 복사하고, 한 DB resource에 하나의 sampler만 둔다. legacy
@@ -204,8 +205,8 @@ backlog가 아니다. 실제 수신한 head 관측이 없으면 head−R은 UNKN
 | series/policy/scope 변경 | 새 temporal baseline 필요. 이전 경보를 새 resource로 이전하거나 scope reset을 recovered로 보내지 않음 |
 | 같은 상태 반복 | 같은 transition ID로 dedupe; 재통지는 명시적 cooldown/예산에 한정 |
 
-구현된 관측 상한은 resource64/key1024이며, 경보 계층의 제안 상한은 rule state128,
-대기 delivery256, event64KiB와 private alert checkpoint1MiB다. 운영 용량을
+구현된 관측 상한은 resource64/key1024이며, 경보 state128, 총 pending delivery256
+(queued128+deferred critical128), event64KiB와 private alert checkpoint1MiB를 제한한다. 운영 용량을
 보장하는 값이 아니며, 초과 구성은 거부한다. payload/block/log는 큐에 넣지 않는다.
 
 producer tap은 bounded `Tap.Offer`만 수행한다. overflow는 sticky lost-sequence/quality
@@ -219,6 +220,39 @@ GC journal에 알림 상태를 쓰지 않는다. atomic/private persistence를 �
 corrupt/missing 상태는 state-lost/unknown이며 과거 경보가 해소됐다는 뜻이 아니다.
 restart는 rate history를 새로 시작하고 미확정 active alert·delivery 상태만
 독립적으로 복원한다. 알림 저장이 보호 latch나 source ACK 권한을 주지 않는다.
+
+## 구현된 경보와 private checkpoint
+
+[MON-02-C 검증](codemine/runs/20261102-mon02c-alert-state/validation.md)을 따른다.
+모듈은 caller-driven single owner이며 새 App/worker/config나 실제 sender를 시작하지
+않는다. `CapacitySignal`은 resource별 A qualification과128-bit threshold를 재사용한다.
+backlog/lag/health kinds는 이미 검증된 derived signal을 요구하며 producer adapter는
+후속 범위다. 단순 block height나 전체 HOLD를 backlog/정상 값으로 사용하지 않는다.
+
+Critical은 즉시, warning/clear는 각각 count+dwell과 별도 clear threshold로 전이한다.
+unknown/stale·누락·gap·binding/run/policy 변경은 dwell을 재설정하고 기존 unresolved
+level을 유지한다. quality는 별도다. transition ID는 유지하며 cooldown reminder는
+별도 delivery ID를 사용한다. unconfirmed 전이가 있으면 reminder 중복을 억제한다.
+
+128 states/64 resources와 총 pending256을 제한한다. queued128과 각 rule당 opening
+critical 하나의 deferred128로 나누어, 포화에도 critical ID를 보존한다. 다른 포화
+전이는 backpressure/unknown으로 거부하고 정상 복귀를 수락하지 않는다. 명시적
+Dispatch는 attempt reservation을 먼저 저장하고 exact delivery receipt 뒤 제거한다.
+저장 실패는 미확정이며 동일 ID 재전달이 가능하다. bounded retry/dead letter를
+유지하고, 뒤의 resolved가 같은 key의 미확정 critical을 앞질러 발송되지 않는다.
+
+v1 checkpoint는 incident/delivery metadata만 보유한다. sample/sequence/run/dwell과
+rate history·블록/SQL/outbox/source ACK는 저장하지 않는다. 새 Engine의 초기 Load/
+Restore만 허용하며 temporal baseline은 다시 수집한다. missing/corrupt 입력이나
+live restore는 state-lost/unknown으로 막고 기존 in-memory critical은 보존한다.
+실패 뒤 자동 apply/save/dispatch나 이전 파일 덮어쓰기를 하지 않는다.
+
+Unix store는 descriptor 기반 no-symlink path·owner0700/0600·regular/single-link·
+nonblocking writer flock을 검증한다. fixed alerts.json의 strict bounded JSON은
+필드 누락/duplicate/unknown/null scalar·잘린 배열·잘못된 순서/크기를 거부한다.
+owned temp→file fsync→atomic rename→directory fsync이며, rename 후 barrier 실패는
+성공이 아니다. 기존 파일을 읽기 전 교체하거나 corrupt/link 입력을 자동 재구성하지
+않는다. 같은 UID 임의 편집자에 대한 인증이나 실제 장치 장애 보장은 아니다.
 
 ## Sink와 실행 경계
 
@@ -242,5 +276,5 @@ APFS/peer/checkpoint/private 입력의 HOLD는 [운영 준비](OPERATIONS_READIN
 
 구체적인 source 변경 후보와 RED→GREEN 표는
 [MON-02/03 구현 계획](codemine/runs/20261102-mon01-observation-design/implementation.md)을 따른다.
-다음 추천은 MON-02-C의 alert reducer·private checkpoint/fake sink다. 실제 App/config·수집·
+다음 추천은 MON-02-D의 disabled opt-in App/config·transport 경계다. 실제 App/config·수집·
 알림·Docker probe 활성화까지 한 번에 확대하지 않는다.
