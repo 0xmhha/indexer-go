@@ -204,3 +204,7 @@ The existing pool4/part2/API reservation, seven logical writers, RPC5 physical
 attempts/s, NEW fresh canonical read and post-response generation fence before
 commit, E1–E6 ACK/lease/window/full-baseline contracts and two EVM passes are
 unchanged. Other projects and shared caches are untouched.
+
+[MON-01 관측·경보 연동 설계](NATIVE_MONITORING_INTEGRATION.md)는 기존 producer의
+scope/time/epoch와 소유권을 대조하고 후속 MON-02/03을 정의한다. 이 파일 CLI의
+v1 계약은 그대로이며, 새 live DTO·sampler·hysteresis·sender가 구현됐다는 뜻이 아니다.
