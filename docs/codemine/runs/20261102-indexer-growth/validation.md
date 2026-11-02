@@ -1,5 +1,22 @@
 # Indexer growth qualification
 
+## Released result
+
+[PR260](https://github.com/0xmhha/indexer-go/pull/260) source head
+`680d57c0b4b1ae8047424180d660ea130886a620` passed
+[CI336](https://github.com/0xmhha/indexer-go/actions/runs/41386648007): all six jobs
+succeeded. Root/execution short tests, build, static checks, examples, cache and
+offline operations passed; durable PostgreSQL core11 passed with no fail/skip.
+The Go-only change did not run native SDK smoke or manual full/stress suites.
+
+Squash/main `030c1646b02f41dbad57022681d180c59e135458` has reviewed tree
+`157ddb05974220efae05be51eaddcfa1ec3910bc` and one parent
+`cc3e35c27d255e5efb0907b332b7ded0c711bb03`. Clean local main/origin sync and
+unchanged private config were verified at release. This records completed
+historical evidence; it does not claim another test run during the session
+documentation update. [Current state](../../../SESSION_STATE.md) is portable;
+machine-local logs are supplementary.
+
 ## Behavioral RED and GREEN
 
 The first compiled command-level RED required a stop-horizon finding for two
