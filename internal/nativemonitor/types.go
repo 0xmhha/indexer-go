@@ -16,17 +16,28 @@ type Identity struct {
 
 // Nil numeric fields mean unobserved, never a measured zero or a default limit.
 type Policy struct {
-	Version           int       `json:"version"`
-	Expected          *Identity `json:"expected"`
-	MaxAgeSeconds     *uint64   `json:"max_age_seconds"`
-	CapacityWarnBPS   *uint64   `json:"capacity_warn_bps"`
-	CapacityStopBPS   *uint64   `json:"capacity_stop_bps"`
-	MinFreeBytes      *uint64   `json:"min_free_bytes"`
-	BacklogWarnBlocks *uint64   `json:"backlog_warn_blocks"`
-	BacklogStopBlocks *uint64   `json:"backlog_stop_blocks"`
-	LagWarnSeconds    *uint64   `json:"lag_warn_seconds"`
-	LagStopSeconds    *uint64   `json:"lag_stop_seconds"`
-	RequiredStorage   []string  `json:"required_storage"`
+	Version           int           `json:"version"`
+	Expected          *Identity     `json:"expected"`
+	MaxAgeSeconds     *uint64       `json:"max_age_seconds"`
+	CapacityWarnBPS   *uint64       `json:"capacity_warn_bps"`
+	CapacityStopBPS   *uint64       `json:"capacity_stop_bps"`
+	MinFreeBytes      *uint64       `json:"min_free_bytes"`
+	BacklogWarnBlocks *uint64       `json:"backlog_warn_blocks"`
+	BacklogStopBlocks *uint64       `json:"backlog_stop_blocks"`
+	LagWarnSeconds    *uint64       `json:"lag_warn_seconds"`
+	LagStopSeconds    *uint64       `json:"lag_stop_seconds"`
+	RequiredStorage   []string      `json:"required_storage"`
+	IndexerGrowth     *GrowthPolicy `json:"indexer_growth,omitempty"`
+}
+
+// GrowthPolicy selects a declared DB/schema measurement incarnation, never a
+// DSN or a request to measure it. Nil keeps single-sample behavior unchanged.
+type GrowthPolicy struct {
+	SeriesID           string  `json:"series_id"`
+	WarnWithinSeconds  *uint64 `json:"warn_within_seconds"`
+	StopWithinSeconds  *uint64 `json:"stop_within_seconds"`
+	MinIntervalSeconds *uint64 `json:"min_interval_seconds"`
+	MaxIntervalSeconds *uint64 `json:"max_interval_seconds"`
 }
 
 type Pipeline struct {
@@ -41,10 +52,11 @@ type Pipeline struct {
 }
 
 type Storage struct {
-	Kind  string  `json:"kind"`
-	Used  *uint64 `json:"used_bytes"`
-	Limit *uint64 `json:"limit_bytes"`
-	Free  *uint64 `json:"free_bytes"`
+	Kind     string  `json:"kind"`
+	Used     *uint64 `json:"used_bytes"`
+	Limit    *uint64 `json:"limit_bytes"`
+	Free     *uint64 `json:"free_bytes"`
+	SeriesID string  `json:"series_id,omitempty"`
 }
 
 type Metrics struct {

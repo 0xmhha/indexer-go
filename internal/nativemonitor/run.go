@@ -11,14 +11,14 @@ import (
 	"github.com/0xmhha/indexer-go/execwire/metadata"
 )
 
-func arguments(args []string) (policy, snapshot, at string, ok bool) {
-	if len(args) > 6 || len(args)%2 != 0 {
-		return "", "", "", false
+func arguments(args []string) (policy, snapshot, previous, at string, ok bool) {
+	if len(args) > 8 || len(args)%2 != 0 {
+		return "", "", "", "", false
 	}
 	seen := map[string]bool{}
 	for i := 0; i < len(args); i += 2 {
 		if len(args[i+1]) > 4096 {
-			return "", "", "", false
+			return "", "", "", "", false
 		}
 		name := ""
 		switch args[i] {
@@ -26,13 +26,15 @@ func arguments(args []string) (policy, snapshot, at string, ok bool) {
 			name = "policy"
 		case "-snapshot", "--snapshot":
 			name = "snapshot"
+		case "-previous-snapshot", "--previous-snapshot":
+			name = "previous_snapshot"
 		case "-at", "--at":
 			name = "at"
 		default:
-			return "", "", "", false
+			return "", "", "", "", false
 		}
 		if seen[name] {
-			return "", "", "", false
+			return "", "", "", "", false
 		}
 		seen[name] = true
 		v := args[i+1]
@@ -44,17 +46,19 @@ func arguments(args []string) (policy, snapshot, at string, ok bool) {
 			policy = v
 		case "snapshot":
 			snapshot = v
+		case "previous_snapshot":
+			previous = v
 		case "at":
 			at = v
 		}
 	}
-	return policy, snapshot, at, true
+	return policy, snapshot, previous, at, true
 }
 
-// CheckFiles reads only two selected files. The exported diagnostic is inline
+// CheckFiles reads only explicitly selected files. The diagnostic is inline
 // data, never a request to call an exporter or traverse embedded paths.
 func CheckFiles(ctx context.Context, args []string) Report {
-	policy, snapshot, clock, ok := arguments(args)
+	policy, snapshot, previous, clock, ok := arguments(args)
 	if !ok {
 		r := newReport()
 		r.add("cli", fail, "invalid_arguments")
@@ -79,14 +83,19 @@ func CheckFiles(ctx context.Context, args []string) Report {
 	}
 	var p Policy
 	var s Snapshot
+	var previousSample Snapshot
 	var pp *Policy
 	var sp *Snapshot
+	var prior *Snapshot
 	var at *time.Time
 	if read("policy", policy, &p) {
 		pp = &p
 	}
 	if read("snapshot", snapshot, &s) {
 		sp = &s
+	}
+	if read("previous_snapshot", previous, &previousSample) {
+		prior = &previousSample
 	}
 	if clock != "" {
 		v, err := time.Parse(time.RFC3339Nano, clock)
@@ -96,7 +105,7 @@ func CheckFiles(ctx context.Context, args []string) Report {
 			at = &v
 		}
 	}
-	r := Evaluate(ctx, pp, sp, at)
+	r := EvaluateWithPrevious(ctx, pp, sp, prior, at)
 	for _, f := range errorsFound {
 		r.add(f.Field, f.Status, f.Code)
 	}
@@ -115,7 +124,7 @@ func CheckFiles(ctx context.Context, args []string) Report {
 
 func Run(ctx context.Context, args []string, out io.Writer) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-help" || args[0] == "-h") {
-		text := "execution-monitor --policy FILE --snapshot FILE --at RFC3339\nOffline submitted observations only; no chain, DB, RPC, watcher or actuation.\n"
+		text := "execution-monitor --policy FILE --snapshot FILE --at RFC3339 [--previous-snapshot FILE]\nOffline submitted observations only; no chain, DB, RPC, watcher or actuation.\n"
 		n, err := io.WriteString(out, text)
 		if err != nil || n != len(text) {
 			return 1

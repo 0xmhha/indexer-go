@@ -24,7 +24,7 @@
 
 코드 근거는 [Usage/용량 대기](../pkg/window/budget.go), [append](../pkg/window/store.go), [세션 수명](../pkg/capture/session.go), [압력 로그](../pkg/capture/config.go), [체인 재시작](../internal/multichain/manager.go)다. marker/ledger의 quota는 Open 때 대조하므로 YAML 숫자만 바꿔 온라인 증설하는 방식은 지원하지 않는다.
 
-[오프라인 Native 모니터](NATIVE_OFFLINE_MONITORING.md)는 저장된 진단과 명시적으로 제출한 용량·pipeline 수치의 일회성 경보 판정을 제공한다. 실제 측정·DB 성장 추세 수집·watcher·hysteresis·latch·중단/재개를 새로 실행하지 않는다. 오래되거나 미관측인 값은 HOLD로 유지하며, 알려진 위험은 독립적으로 표시한다. 기존 live opsguard와 운영 보류 상태는 유지한다.
+[오프라인 Native 모니터](NATIVE_OFFLINE_MONITORING.md)는 저장된 진단과 명시적으로 제출한 용량·pipeline 수치의 일회성 경보 판정을 제공한다. 선택적 이전 스냅샷과 명시적 `indexer_growth` 정책이 있으면 동일 DB 측정 계열의 두 시점으로 예산 소진 위험을 판정한다. 계열/generation/예산 변경·오래된 관측·감소/정체는 추세 HOLD이며 운영 권한을 주지 않는다. 실제 측정·DB 성장 추세 수집·watcher·hysteresis·latch·중단/재개를 새로 실행하지 않는다. 알려진 현재 위험은 독립적으로 표시하며 기존 live opsguard와 운영 보류 상태는 유지한다.
 
 ## App 소유 Arc native의 별도 예산과 관측 경계
 

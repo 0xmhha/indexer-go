@@ -9,5 +9,6 @@
   "backlog_stop_blocks": null,
   "lag_warn_seconds": null,
   "lag_stop_seconds": null,
-  "required_storage": []
+  "required_storage": [],
+  "indexer_growth": null
 }
