@@ -275,7 +275,7 @@ func (r *Report) pipeline(p *Policy, q *Pipeline) {
 	}
 }
 
-func Evaluate(ctx context.Context, p *Policy, s *Snapshot, at *time.Time) Report {
+func evaluateCurrent(ctx context.Context, p *Policy, s *Snapshot, at *time.Time) Report {
 	r := newReport()
 	if ctx.Err() != nil {
 		r.add("input", fail, "cancelled")

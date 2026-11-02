@@ -5,7 +5,7 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 ## 현재 정본과 연속성
 
 - 완료한 N5 [계획](../codemine/runs/20261030-arc-native-n5/plan.md), [체크리스트](../codemine/runs/20261030-arc-native-n5/checklist.md). 관리형 DB legacy writer 차단은 #249로 릴리스했다. SQL owner/archive·backend primitive는 #250/CI326으로 릴리스했다. 실제 App/Arc owner/origin 연결은 #251/CI327로 릴리스했다. 명시적 raw GC·장애 복구는 #252/CI328로 릴리스했다. Worker drain·검증 후 재개 #253/CI329와 관리형 native COW bridge·완료 floor 검증 #254/CI330을 릴리스했다. [App/E3 phase 조정 #255/CI331](../EXECUTION_MAINTENANCE_COORDINATOR.md)을 릴리스했다. [Docker/capacity/inspection 초안 정합성 #256](../codemine/runs/20261031-native-runtime-alignment/checklist.md)은 릴리스했다. 관리형 App 파일·SQL metadata 점검은 #257로 릴리스했고 [N6](../EXECUTION_ARC_ACCEPTANCE.md)의 실제 owned SDK/App/SQL/GC·복구 통합 검증을 완료했다. CI short #246·중복/캐시 정리 #247·문서 전용 검증 #248 릴리스 완료.
-- 현재 n: [운영 입력 인계](../codemine/runs/20261101-operations-handoff/plan.md)·[체크리스트](../codemine/runs/20261101-operations-handoff/checklist.md). n−1: N6 [PR #258](https://github.com/0xmhha/indexer-go/pull/258)·[CI334](https://github.com/0xmhha/indexer-go/actions/runs/41162469157), 실제 6개 job 성공 후 squash/main `a282758b92a40f8cd46fee34d3e648f7a6b855a7` 동기화 완료. n−2: [관리형 진단 #257](../EXECUTION_MANAGED_INSPECTION.md). [연속성](../codemine/runs/20261101-operations-handoff/continuity.md)에 runtime 정합성 #256·수용한 first-import/E1와 이전 두 기능의 증거를 보존한다.
+- 현재 n: [오프라인 DB 증가 추세](../codemine/runs/20261102-indexer-growth/plan.md)·[체크리스트](../codemine/runs/20261102-indexer-growth/checklist.md). n−1: 운영 입력 인계 #259/CI335, squash/main `cc3e35c` 완료. n−2: N6 #258/CI334, squash/main `a282758` 완료. [연속성](../codemine/runs/20261102-indexer-growth/continuity.md)에 실제 릴리스와 수용한 E1/first-import, 관리형 진단 #257의 증거를 보존한다.
 - 단계 연속성: N4 #245 [계획](../codemine/runs/20261030-arc-native-n4/plan.md)·[관리형 replay](../EXECUTION_ARC_MANAGED.md), N3 #244 [계획](../codemine/runs/20261030-arc-native-n3/plan.md)·[App ingress](../EXECUTION_ARC_INGRESS.md).
 - 수용한 Arc first-import 설계 #239 [정본](../ARC_NATIVE_IMPORT_DESIGN.md), [계획](../codemine/runs/20261029-arc-first-import/plan.md), [체크리스트](../codemine/runs/20261029-arc-first-import/checklist.md), [연속성](../codemine/runs/20261029-arc-first-import/continuity.json)
 - 이전 완료: Native 운영 구성 초안 #238 [계획](../codemine/runs/20261029-native-runtime-draft/plan.md), [사용법](../../deployments/native/runtime/README.md)
@@ -54,6 +54,7 @@ E1 #214~E4 #217 및 기존 E5/native calls #223·blobs #224·selected proofs #22
 | 완료 #232 | Native 실행 설정 통합 검사 | [오프라인 preflight](../NATIVE_EXECUTION_PREFLIGHT.md): production schema·strict 입력·PASS/HOLD/FAIL·운영 권한 없음. 릴리스 증거는 PR metadata와 부모 인계 영수증 참조 |
 | 완료 #235 | 오프라인 backup adapter | [백업 영수증 서명·파일 인증](../EXECUTION_BACKUP_ADAPTER.md), pinned key/chain/DB·exact permit·private atomic receipt. 실제 PG 내용·WAL 연속성·복원·운영 권한은 검증하지 않음. CI5 run40667988110 통과 후 squash/main e20635f 동기화 완료 |
 | 완료 #236 | 오프라인 monitoring | [일회성 경보 판정](../NATIVE_OFFLINE_MONITORING.md): Arc/StableNet 진단 JSON·선언된 capacity/pipeline·명시적 시각, strict 입력·unknown/stale·redaction·독립 위험 판정. 체인/DB/RPC/watcher/알림·actuation 없음. 최종 CI5 run40704614928 통과 후 squash/main a49065d 동기화 완료 |
+| 오프라인 확장·운영 HOLD | DB 증가 추세의 조건부 예산 소진 경보 | [선택적 두 스냅샷 판정](../NATIVE_OFFLINE_MONITORING.md#optional-indexer-growth-assessment): 명시적 이전 파일·정책, 같은 chain/anchor/generation/측정 계열/예산과 시간 범위 검증, 정확한 정수 경계·독립 현재 위험 유지. 실제 DB 수집·watcher·hysteresis·latch·알림·중단/재개는 추가하지 않음 |
 | 권장안 정리 완료·실제 값 HOLD | 저장소·배포 입력 | [결정표](../OPERATIONS_READINESS.md): 체인별 분리 경로, PostgreSQL pool4의 전체 예산, Arc 24h/172800블록의 가정과 native/spool 추가 용량, 인증 checkpoint 시작 권장안. 읽기 전용 metadata만 확인. 미확정 값을 template에 채우거나 provisioning하지 않음 |
 | 초안 구현·운영 HOLD | Native App/collector/executor 구성 | [별도 runtime 초안](../../deployments/native/runtime/README.md): 세 서비스(Arc App·StableNet App·StableNet executor), 외부 PostgreSQL16·DSN_FILE·private IPC·Arc source-parent scratch·App RW native/raw/source·수동 lifecycle. bounded 오프라인 검사와 모의 기능 검증. Arc executor는 collector의 stdio 자식. 실제 image/host/서비스는 검증·실행하지 않음 |
 | N0~N6 구현·owned 검증 | Arc first-import 공급 경로 | [App 내부 Go 감독+Rust 첫 실행 설계](../ARC_NATIVE_IMPORT_DESIGN.md)와 N0~N6 계획 확정. 기존 ETH/68과 공유 RPC5/Store4, 두 번째 collector를 유지. native bootstrap·첫 writer·App ingress는 릴리스했고 N4 managed collector·E1 reorg는 #245로 릴리스했고 CI short #246·중복 main 검사/캐시 정리 #247도 릴리스했다. N5 SQL owner/archive #250과 App/Arc 연결 #251은 릴리스했다. 명시적 raw GC·복구 #252는 릴리스했고 worker drain #253은 릴리스했다. 관리형 COW bridge/floor #254와 App/E3 coordinator #255를 릴리스했다. held Docker/capacity/inspection 선언 정합성은 #256으로 릴리스했다. [관리형 App preflight·metadata 진단 #257](../EXECUTION_MANAGED_INSPECTION.md)은 릴리스했다. [N6](../EXECUTION_ARC_ACCEPTANCE.md)는 실제 App/mock ETH68/SDK/SQL/API/ACK, 재시작/재전송/reorg/양의 원본 GC/COW·명시적 복구를 owned fixture에서 검증했다. N6는 #258/CI334의 실제 6개 job 성공과 squash/main 동기화를 완료했다. 로컬 SDK/App/PG 통합 검증과 short CI의 범위를 [릴리스 근거](../codemine/runs/20261101-operations-handoff/validation.md)로 구분한다. metadata 일치는 runtime acceptance나 fresh/GC 권한이 아니다. 전체 노드/새 독립 RPC·DB pool 없음 |
@@ -120,13 +121,14 @@ Native 진단·preflight·백업 어댑터·오프라인 일회성 monitoring과
 운영 DB·backup/WAL·restore 증거가 없는 현재 운영 판정은 HOLD다. 서명·파일
 무결성이나 선언의 일치는 실제 snapshot 내용·WAL 연속성·복구 성공을 대신하지 않는다.
 
-운영 watcher/DB 증가 추세·hysteresis 통합·알림 연동, Docker VM 지속 감시와
-실제 장애 검증은 남아 있다. 모의 자료를 사용하는 추가 개발은 별도 범위로
-선택할 수 있지만, 이미 끝난 오프라인 monitoring을 다시 구현하지 않는다.
+같은 DB 측정 계열의 이전·현재 스냅샷을 이용한 조건부 성장/예산 소진 판정은
+[오프라인 확장](../NATIVE_OFFLINE_MONITORING.md#optional-indexer-growth-assessment)으로 구현했다.
+실제 DB 추세 수집·운영 watcher/hysteresis/latch·알림 연동, Docker VM 지속 감시와
+실제 장애 검증은 남아 있다. 기존 live opsguard와 역할·운영 권한을 혼합하지 않는다.
 
-지금 권장 순서는 문서 정합성 보완 → 지정된 운영 입력의 읽기 전용 점검 →
-입력 확보 후 별도로 허용된 실제 백업/복구 검증이다. 이번
-[인계 점검](../codemine/runs/20261101-operations-handoff/validation.md)은 첫 두
-단계를 수행했으며 미확정 입력을 HOLD로 유지한다. 실제 App/node/peer,
+[문서·운영 입력 인계 #259](../codemine/runs/20261101-operations-handoff/validation.md)는
+완료했다. 다음 운영 순서는 실제 APFS·배포·공식 peer/인증 checkpoint 입력 확보 →
+별도로 허용된 실제 백업/복구 검증이다. 추세 기능의 모의 검증으로 운영 HOLD를
+해제하거나 미확정 입력을 채우지 않는다. 실제 App/node/peer,
 포맷·운영 GC/복원·추가 성능 측정·태그/배포·원격 브랜치 삭제는 보류한다.
 다른 프로젝트의 프로세스/container/volume/공유 cache는 유지한다.

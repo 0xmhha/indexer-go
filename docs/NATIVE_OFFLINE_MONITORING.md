@@ -7,7 +7,8 @@ received/native input refs and independent raw/native/read epochs. It does not
 itself open raw/native/SQL or journals. Missing data stays unknown; metadata
 compatibility grants no integrated acceptance, freshness or GC authority.
 
-`cmd/execution-monitor` evaluates **saved, submitted observations** once. It runs
+`cmd/execution-monitor` evaluates **saved, submitted observations** once, with an
+optional previous snapshot for indexer growth assessment. It runs
 no chain. Functional fixtures consume the real Arc and StableNet
 [diagnostic command](NATIVE_EXECUTION_DIAGNOSTICS.md) output against owned fake
 source/export files, with synthetic capacity/pipeline numbers. They connect to
@@ -47,7 +48,8 @@ build/execution-monitor --policy "$monitor_demo_dir/policy.json" \
 # HOLD, exit2. No defaults or host measurements are invented.
 ```
 
-Accepted flags are `--policy FILE`, `--snapshot FILE`, `--at RFC3339`, each once;
+Accepted flags are `--policy FILE`, `--snapshot FILE`, `--at RFC3339` and optional
+`--previous-snapshot FILE`, each once;
 one-dash forms are equivalent. Missing/empty/`HOLD` arguments are unobserved.
 Unknown, duplicated, dangling or positional arguments fail. No environment,
 config/DSN, embedded pathname, URL, command or filesystem usage probe is followed.
@@ -58,7 +60,7 @@ operations and currently returns HOLD/2 or FAIL/1.
 ## Policy and snapshot contract
 
 The [consumer types](../internal/nativemonitor/types.go) define version1 JSON.
-Both files require `version: 1`. Nullable numeric fields distinguish missing
+Policy and selected snapshot files require `version: 1`. Nullable numeric fields distinguish missing
 observations from a measured zero. Negative/string numeric fields, unknown or
 duplicate keys, trailing JSON and scalar nulls are rejected. Each input is at
 most1MiB and uses the shared owned/private regular-file metadata reader with
@@ -77,6 +79,7 @@ an atomic snapshot nor a maintenance lease.
 | `backlog_warn_blocks`, `backlog_stop_blocks` | Positive warn < stop block gaps, each at most signed64-bit maximum. |
 | `lag_warn_seconds`, `lag_stop_seconds` | Positive warn < stop lag limits, each at most604800 seconds. |
 | `required_storage` | Explicit unique subset of `raw`, `native`, `indexer`, `wal`, `filesystem`, `docker_vm`. Empty means unresolved. At most6 kinds. |
+| `indexer_growth` | Optional policy for the two-snapshot indexer budget forecast below. Omitted/null disables it and preserves single-sample behavior. An object with missing values stays unresolved. |
 
 Missing thresholds stay HOLD; known zero/invalid limits or threshold-order
 conflicts FAIL. The draft selects no operational capacity or lag limits.
@@ -108,11 +111,64 @@ disagreement stays HOLD as an unverified rebind; archived permits and native
 header parents are not treated as current source generation.
 
 `metrics.storage` contains at most6 unique `{kind, used_bytes, limit_bytes,
-free_bytes}` entries. Budget kinds (`raw`, `native`, `indexer`, `wal`) use
+free_bytes}` entries, with optional `series_id` on the indexer measurement for
+the opt-in growth assessment. Budget kinds (`raw`, `native`, `indexer`, `wal`) use
 used/limit only; filesystem/Docker VM kinds use free only. A zero used value is
 observed zero; null is unknown. Missing required kinds/values HOLD. Zero budget,
 used greater than budget, invalid kinds or mixed field meanings FAIL. The tool
 does not locate the measured disk or validate APFS identity itself.
+
+## Optional indexer growth assessment
+
+Supply the previous file explicitly; no file is found or sampled automatically:
+
+```sh
+build/execution-monitor --policy /PRIVATE/policy.json \
+  --snapshot /PRIVATE/current.json --previous-snapshot /PRIVATE/previous.json \
+  --at 2026-11-02T12:00:00Z
+```
+
+These paths/time are syntax examples, not existing operating inputs. All selected
+files use the same bounded private-file checks and final reread. The output
+echoes neither paths, series IDs, identities nor byte/rate/forecast values.
+
+| `indexer_growth` member | Contract |
+| --- | --- |
+| `series_id` | Nonzero lowercase64-hex identifier declared for one DB/schema/measurement incarnation. Both indexer storage samples must carry the same ID as the policy. Empty/`HOLD` means unknown. It is neither a DSN nor authenticated provenance. |
+| `stop_within_seconds`, `warn_within_seconds` | Explicit positive horizons, stop < warn ≤604800. Forecast equal to a horizon is included. No operating defaults are chosen. |
+| `min_interval_seconds`, `max_interval_seconds` | Explicit positive sample interval bounds, min ≤ max ≤86400. Endpoints are included. |
+
+Both snapshots must have the same known profile/chain/original anchor and
+generation. Current sample age uses `max_age_seconds`; prior sample lookback
+uses the declared interval bounds, rather than making old diagnostics current.
+Only the prior identity, metrics time, generation and indexer storage measurement
+are used. Prior diagnostics are not re-evaluated, merged into current status or
+substituted for current diagnostics. The byte budget must be positive and equal.
+The current series must match the policy; a different prior series, generation
+or budget stays HOLD as a reset/rebind. Malformed identities, samples, policy or
+non-increasing/future timestamps FAIL. Missing/stale observations stay HOLD.
+Known invalid budget/series values are not hidden by another missing field.
+
+For positive net growth, remaining bytes are compared against the two-point
+growth rate using128-bit products of bytes and elapsed nanoseconds, with no
+floating-point rounding, integer division or uint64 overflow. A stop-horizon
+finding is FAIL/critical; a warning-horizon finding is WARN; an estimate outside
+the warning horizon is a fixed PASS finding. Overall live readiness remains
+HOLD/not_authorized even with normal observations. Flat or shrinking usage is
+unknown growth, never an infinite-capacity claim. Existing current capacity,
+backlog, diagnostic or pending-fence findings are preserved independently.
+
+Reset `series_id` after DB/schema replacement, restore, counter reset or a change
+to measurement units/scope. The submitter must actually keep samples comparable:
+the evaluator cannot authenticate that declaration or detect an undeclared
+rebuild, compaction, temporary burst, shared database or source change. Two
+samples provide a conditional estimate, not sustained growth, burst detection,
+physical free space, WAL recoverability or a guaranteed time to exhaustion.
+
+The [plan/checklist](codemine/runs/20261102-indexer-growth/plan.md) records its
+RED→GREEN and strict-input/overflow/reset/no-mutation qualification. This adds no
+poller, metric collection, persistent history, latch, hysteresis, alert sender,
+stop/resume action or operating activation.
 
 ## Results and limits
 
@@ -138,10 +194,10 @@ name only fixed checks and allowlisted storage kinds. Every result declares:
 `operational_readiness: not_authorized`, `live_canonical_freshness: not_performed`,
 `snapshot_authenticity: not_verified`, `actuation: none`.
 
-This is a stateless single-sample evaluator, not the legacy
+This is a stateless evaluator of supplied samples, not the legacy
 [opsguard](../internal/opsguard/monitor.go) live monitor. It does not replace that
-monitor's hysteresis/latch/interlocks, calculate DB growth forecasts from one
-sample, create a metric exporter, prove WAL recoverability, or install an
+monitor's hysteresis/latch/interlocks, infer DB growth from one sample,
+create a metric exporter, prove WAL recoverability, or install an
 operational watcher/notification path. Those require explicitly scoped host and
 operating observations after the current HOLD conditions are resolved.
 The existing pool4/part2/API reservation, seven logical writers, RPC5 physical
