@@ -96,7 +96,7 @@ The **arc** job compiles and runs bounded protocol smoke only when Arc Rust chan
 - [Remaining work](docs/analysis/open-items.md): stable task IDs, status, dependencies, acceptance criteria and deferred work.
 - [Analysis and validation](docs/analysis/README.md): dated decisions, failures, measurements and their scope.
 
-Preserve historical evidence when correcting a current guide. If a link or example becomes obsolete, update its callers along with it.
+Keep README focused on current project purpose, supported paths, a first run and developer entry points. Replace superseded statements instead of appending release/session timelines. The backlog contains outstanding work only; session state owns current continuation metadata. Preserve accepted designs and required scoped validation evidence through their index, while superseded working narratives remain in Git history. If a guide is renamed or removed, update its callers and check links.
 
 ## Continue work across sessions
 

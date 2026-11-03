@@ -1,56 +1,23 @@
 # 운영 설정 준비 현황
 
-**배포 판정: HOLD.** 운영 입력 권장안을 정리했으며 실제 APFS·접속·인증 값은 미확정이다. [Native 설정 통합 검사](NATIVE_EXECUTION_PREFLIGHT.md)는 명시적 파일을 오프라인 검증하며 PASS도 운영을 승인하지 않는다. 관측·권장안·미확정 값을 구분한다. 추가 성능 측정은 하지 않았다.
+**배포 판정: HOLD.** 운영 입력은 제공/검증되지 않았으며 아래 값은 권장안이다.
+현재 코드의 구현 범위는 [문서 색인](README.md), 미완료 작업·우선순위는
+[남은 작업](analysis/open-items.md), 개발 인계 상태는 [SESSION_STATE](SESSION_STATE.md)가
+관리한다. 이 문서에 완료 PR·세션 로그·과거 측정치를 누적하지 않는다.
 
-## 근거와 완료 범위
+## 입력 상태
 
-| 구분 | 확인 내용 | 근거와 한계 |
+| 입력 | 현재 판정 | 다음에 필요한 것 |
 | --- | --- | --- |
-| 완료 #227 | bounded Engine full-blob 공급 | [PR #227](https://github.com/0xmhha/indexer-go/pull/227), [동기화](../verification/priority1-sync.json). KZG는 beacon/PeerDAS 합의 검증이 아님 |
-| 완료 #228 | call 범위·orphan trace | [PR #228](https://github.com/0xmhha/indexer-go/pull/228), [동기화](../verification/priority2-sync.json). 미수집 과거 coverage를 만들지 않음 |
-| 완료 #229 | 지원 WBFT 독립 canonical/finality | [PR #229](https://github.com/0xmhha/indexer-go/pull/229), [동기화](../verification/priority3-sync.json). 인증된 정책·anchor와 지원 fork 범위만 |
-| 완료 #230 | native lookup/MDBX 회수, matched backup/restore admission | [PR #230](https://github.com/0xmhha/indexer-go/pull/230), [CI5](https://github.com/0xmhha/indexer-go/actions/runs/40418831898), [동기화](../verification/priority4-sync.json), [검증](codemine/runs/20261027-native-retention-backup/validation.md). 외부 PG snapshot/WAL 생성·인증·실제 복원은 별도 |
-| 이전 관측 | 아래 저장소·설정 metadata | 2026-10-29 01:27~01:35 KST. 지정 볼륨의 `diskutil info -plist`·`statvfs`, 경로 존재·mode, 허용한 설정 필드, UID/GID와 Docker context만 읽음. 각 값은 별도 관측이며 원자적 snapshot이 아님 |
-| 완료 #236 | 오프라인 Native 모니터링 | [PR #236](https://github.com/0xmhha/indexer-go/pull/236), [최종 CI5](https://github.com/0xmhha/indexer-go/actions/runs/40704614928), squash/main `a49065d292258c0399296a5e1cc45989c295cbc8`. Arc/StableNet 파일 형식과 제출된 수치만 판정하며 실제 체인을 실행하지 않음 |
-| 운영 미확인 | APFS·peer·checkpoint·비밀 파일·백업 보관소·복구 증명 | node/RPC/provider/운영 DB/Docker/container probe, 실행·provisioning·GC·복원·성능 측정 없음 |
+| 전용 외장 APFS | HOLD · 준비된 실제 경로 미제공/미검증 | 실제 mount·VolumeUUID/physical-store·ownership와 경로별 예산 |
+| Arc peer·시작점 | HOLD · 공식 EL enode와 인증 checkpoint 미제공/미검증 | 접속/fork/history 조건, full state H/hash/root/coverage와 인증 주체 |
+| 배포·DB | HOLD · private host/App 선언·image digest·역할/schema 미확정 | 지원 schema·비밀 파일 경로·UID/IPC/mount·준비된 전용 PG |
+| WAL·백업 | HOLD · 별도 장치/custody·snapshot/WAL/복구 증거 미확정 | 인증된 matched backup와 실제 복구 검증 범위/RPO/RTO |
 
-해시 검증한 이전 최종 인계의 patch SHA256은 `6db158c8e392db38293ae91cb48b64b7a9457a5950fb87747795ad2777101c83`, 완료 보고는 `3ac41ad0cc39b3ab79591f2366fb5b90a769ccbd6f8c28c4d39f27baa7c689a2`, 동기화 원본은 `1704b5d005c4c87b72064a5c866edef537fa802e0efc32c32ccc90af2e551141`이다. 보존된 strict all-four observer 로그도 SHA256 `5e1cb69539c87365f0f8958b6862c409fdae0fc38c4fe52a953efca6dbe1fbb5`와 일치했다. 이는 **이전 릴리스의 증거**이며 이번 세션에서 native/PG/200 실험을 반복했다는 뜻이 아니다. 선택한 현재 문서와 휴대 가능한 영수증을 저장소에 반영했으며 원본 작업트리는 수정하지 않았다. `verification/releases.json`과 observer는 과거 machine-local 실행 ledger 형식으로 유지하고 현재 릴리스 현황은 이 표와 각 portable sync를 따른다. 해당 observer를 이번 문서 릴리스 뒤의 main 검증기로 재사용하지 않는다.
-
-현재 작업·직전 세 맥락·릴리스 기준점은 [SESSION_STATE](SESSION_STATE.md), 작업 ID·우선순위·완료 조건은 [남은 작업](analysis/open-items.md)에서 관리한다. 이 문서는 실제 운영 입력의 관측·권장값·HOLD만 관리한다. N0~N6와 [오프라인 두 스냅샷 증가 추세 #260](NATIVE_OFFLINE_MONITORING.md)은 구현·검증됐으며, 로컬 기능 검증·short CI·실제 운영 증거를 구분한다. 운영 입력은 아래의 마지막 관측 이후 새로 확인하거나 추정하지 않았다.
-
-## 운영 입력 재확인 — 2026-11-01
-
-15:36~15:37 KST에 지정 경로의 존재와 X31의 파일시스템 identity만 읽었다.
-용량·호스트 부하·RPC·DB·Docker·peer를 측정하거나 실행하지 않았다.
-[점검 범위와 릴리스 근거](codemine/runs/20261101-operations-handoff/validation.md)를 구분한다.
-
-| 순서 | 이번 확인 / 현재 판정 | 다음에 필요한 증거 |
-| --- | --- | --- |
-| 1. APFS 저장소 | `/Volumes/IndexerData` 없음. X31은 기존 UUID의 external ExFAT이며 APFS가 아님. **HOLD** | 실제 전용 APFS root·VolumeUUID/physical-store·ownership, 경로별 용량·COW 여유. 포맷·이동은 별도 범위 |
-| 2. 배포 입력 | 기존 후보 `deployments/testnets/host.json`, `deployments/native/host.json` 없음. 후자는 지원 native host schema가 아님. 다른 위치 존재 여부는 unknown. 기존 config hash/mode 동일. **HOLD** | 실제 선언 파일의 위치·지원 schema, reviewed image digest, private DSN/key 경로, 준비된 DB/schema·전체 연결 예산 |
-| 3. Arc 공급 계약 | 공식 enode·fork/history·인증 checkpoint의 새 운영 자료가 지정되지 않음. 이번 접속·재조회 없음. **HOLD** | 공식 접속 계약, 독립 인증된 H/hash/root/full coverage와 H+1 시작점 |
-| 4. 백업·복구 | 실제 matched backup/WAL/복원 자료가 지정되지 않음. **HOLD** | 일치하는 native/source/indexer 백업·WAL 경계·인증·별도 장치, RPO/RTO와 별도로 허용된 복구 검증 범위 |
-
-지정 후보 경로의 부재는 머신 전체에 파일이 없다는 뜻이 아니다. 비밀 파일이나
-사용자 데이터는 열지 않았으며 다른 위치를 임의로 탐색하지 않는다. 이미 선택한
-경로 배치·DB 방식·pool4·checkpoint 시작 권장안은 유지한다. 입력이 준비되지 않아
-운영 검증으로 넘어가지 않으며 fixture·과거 head·placeholder로 대신하지 않는다.
-
-## 2026-10-29 저장소·설정 관측
-
-| 값 | 현재 확인 | 판정·운영자가 정할 값 |
-| --- | --- | --- |
-| 외장 후보 | `/Volumes/X31`, external `disk6s1`, exFAT | APFS가 아님. 기존 자료 보존·전용 외장 APFS 확보 방법 결정 필요. device 번호는 고정 identity가 아님 |
-| X31 identity | volume UUID `C1B1E211-6452-39C0-AD82-831FDE1B0D8C` | exFAT identity이며 APFS UUID로 사용 불가. device 번호는 재연결 시 변동 가능 |
-| X31 용량 | diskutil/statvfs 총 1,024,190,578,688 bytes, 가용 434,701,860,864 bytes ≈404.8GiB | 현재 한 번의 관측. 예약·지속 용량·fsync 증거 아님 |
-| 외장 APFS root | `/Volumes/IndexerData` 없음 | mount/device/VolumeUUID/physical-store UUID·ownership 모두 HOLD. 내부 APFS로 대체하지 않음 |
-| 기존 ignored config | 현재 checkout의 `config.yaml` 존재, mode0644; driver `pebble`, path `./data/multichain-testnets`, PostgreSQL max_conns 미지정; rpc.rate_limit5, indexer.finality head/workers2/poll_interval2s | 개발 설정이며 아래 PostgreSQL 운영 권장안 적용 사실이 아님. bounded 파일을 파싱해 허용 필드만 추출. endpoint/DSN 값은 출력·사용하지 않고 참조 데이터를 열지 않음. 파일·mode 그대로 유지 |
-| private manifest | 현재 checkout의 `deployments/testnets/host.json`과 `deployments/native/host.json` 없음 | 후자는 탐색한 경로일 뿐 지원 입력 schema가 아님. 다른 위치 존재 여부는 unknown. [host 초안](../deployments/testnets/host.draft.json)의 private_dir/image/UUID는 placeholder |
-| 호스트 사용자·Docker | UID501 / GID20, 현재 context `desktop-linux` | 호스트 metadata만 확인. container UID 매핑·APFS 소유권·daemon·이미지·bind mount는 검증하지 않음 |
-| DSN·password·peer key | 실제 private 위치가 없어 존재·0600·소유자·자격 증명 유효성 unknown | 비공개 디렉터리0700/일반 파일0600 제안. 비밀 값은 문서·PR에 넣지 않음. 파일 생성 없음 |
-| 운영 이미지 | reviewed tag/digest 미확정 | 이미지 선택 필요. pull/inspect/build/컨테이너 실행 없음 |
-
-`diskutil`의 partition 크기와 파일시스템 총 크기는 다를 수 있다. X31의 현재 여유는 legacy 계획의 470GiB 초과에도 못 미치며, 포맷 후 용량이나 native 여유를 추정하지 않는다. 저장소 내부의 사용자 파일은 순회하지 않았다. 아카이브 장치는 unknown이다.
+새 운영 입력이나 실제 관측은 추가되지 않았다. 마지막 지정 경로/identity 확인은
+2026-11-01이며 그 당시 경로 부재나 외장 후보 exFAT를 현재 APFS 상태로 추정하지 않는다.
+현재 디스크 여유·호스트 부하·Docker/RPC/DB/peer를 재측정하지 않았다. 개발용
+config.yaml을 PostgreSQL 운영 설정으로 교체하지 않았고 비밀 값은 기록하지 않는다.
 
 ## 경로와 용량 결정표
 
@@ -69,9 +36,9 @@
 | native COW·checkpoint | 동일 filesystem에서 최소 `2 × logical native bytes + ReserveBytes` free, 기본 ReserveBytes1GiB | [Arc retention](EXECUTION_ARC_RETENTION.md) 기준. snapshot/catalog/secondary scratch·정상 증가·백업 공간은 추가. catalog16GiB/출력64GiB 상한도 별도 고려. legacy470GiB에 이미 포함된 것으로 계산 금지 |
 | 백업·WAL | 데이터 디스크와 다른 장치 | 장치 identity·실경로·용량·암호화/권한·책임자·오프사이트/검증 보관 모두 unknown |
 
-파일시스템·PGDATA·raw guard와 latch, PostgreSQL 크기 journal, 호스트 watcher의 중단은 구현돼 있다. 실제 외장 APFS/운영 DB에서 입증한 것은 아니다. Docker VM 여유는 시작·재개 전 점검뿐이며 실행 중 지속 감시는 미구현이다. watcher 자체 재시작/알림·부팅 자동 시작·실제 종료 유예 충족·장애/복원 입증은 여전히 보류다. `--check-host`는 throwaway `df` 컨테이너를 실행하므로 이번 허용 범위의 순수 metadata 관측에 포함되지 않으며 실행하지 않았다.
+파일시스템/PGDATA/raw guard·latch와 호스트 watcher 중단, PostgreSQL 크기 journal은 구현돼 있다. [DB/WAL 관측](NATIVE_MONITORING_INTEGRATION.md)은 opt-in/disabled sink이며 [VM probe/health](NATIVE_VM_OBSERVATION.md)는 injected 라이브러리다. 실제 Docker 실행기/App 연결·durable crash admission·watcher 재시작/전달·부팅 자동 시작은 미구현/보류다. 실제 외장 APFS/운영 DB의 장애·종료·복구 보장은 검증하지 않았다. `--check-host`도 container를 실행하므로 순수 metadata 점검으로 취급하지 않는다.
 
-## 이번에 선택한 운영 권장안 — 아직 미적용
+## 운영 권장안 — 아직 미적용
 
 | 결정 | 권장안 | 적용 상태 |
 | --- | --- | --- |
@@ -86,7 +53,7 @@
 
 용량은 체인별 **native current+retained state**, source spool, PGDATA/index/WAL, checkpoint/catalog, scratch/export, 같은 장치에 남기는 복사본을 각각 합산한다. 그 위에 유지보수 시 `free >= 2 × logical native bytes + ReserveBytes`를 만족하는 headroom과 정상 증가/중단·재개 여유를 남긴다. 유지보수·export를 한 번에 하나씩 수행하는 운영 방침을 권장하지만 자동 직렬화가 배포된 사실은 아니다. 같은 APFS container의 free를 체인별로 중복 할당하거나 logical quota를 물리 예약으로 계산하지 않는다.
 
-실제 native/spool 증가량이 없으므로 native 총 필요량·충분한 디스크 크기·24h 수용 여부는 **HOLD**다. 추가 측정 대신 이 값을 추측하지 않는다. legacy raw160GiB·PG160GiB·여유150GiB의 470GiB 초과 예산은 legacy 초안 비교용이며 새 native 계획의 합계가 아니다. X31의 exFAT 여유 공간을 새 APFS에 이미 확보된 공간으로 계산하지 않는다. 별도 장치의 WAL/백업 예산도 아직 없다.
+실제 native/spool 증가량이 없으므로 native 총 필요량·충분한 디스크 크기·24h 수용 여부는 **HOLD**다. 추가 측정 대신 이 값을 추측하지 않는다. legacy raw160GiB·PG160GiB·여유150GiB의 470GiB 초과 예산은 legacy 초안 비교용이며 새 native 계획의 합계가 아니다. 기존 외장 후보의 과거 exFAT 여유를 새 APFS에 확보된 공간으로 계산하지 않는다. 별도 장치의 WAL/백업 예산도 아직 없다.
 
 ## 연결과 정확성 — 유지할 값
 
@@ -101,7 +68,7 @@
 
 | 항목 | 확인·권고 | 미확정 외부 입력 |
 | --- | --- | --- |
-| Arc identity | [2026-10-19 기록](analysis/arc-testnet-identity.md)의 chain/network5042002, genesis `0xe20e653af4441e8c6088e172b129d56420139824400477287b46e7101ae2bb1f` | 당시 공식 소스/RPC 대조이며 이번 재조회 아님. 실제 연결할 공식 EL peer의 identity 일치 확인 필요 |
+| Arc identity | [pinned identity 근거](analysis/arc-testnet-identity.md)의 chain/network5042002, genesis `0xe20e653af4441e8c6088e172b129d56420139824400477287b46e7101ae2bb1f` | 고정된 소스/RPC 근거이며 현재 peer 인증이나 재조회가 아님. 실제 연결할 공식 EL peer의 identity 일치 확인 필요 |
 | EL peer/fork | fork 후보 `910609e1` / next0은 과거 소스 계산값 | 공식 온보딩 enode·접속 조건·배포 소스/fork 광고·history 보존 범위 unknown. 추측·Discord 연락·peer 연결 없음 |
 | legacy 시작 | RPC finalized H/hash와 start H+1을 맞추는 초안 | H/hash 미정. 과거 관측 head를 checkpoint로 복사하지 않음 |
 | native 실행 시작 | [bootstrap](EXECUTION_BOOTSTRAP.md), [Arc collector](EXECUTION_ARC.md)의 인증된 expected manifest·full state root/coverage·일치하는 native/source/schema | checkpoint origin/height/hash/root·인증 주체/정책·start 모드·기존 anchor와 보존 floor 일치 unknown. retained cutoff seed는 원래 anchor를 이동시키지 않음 |
@@ -122,4 +89,4 @@
 
 권장 경로 배치·DB 방식·프로세스 계획·24h 산식은 위와 같이 선택했다. 실제 APFS mount/UUID/ownership와 native/spool/checkpoint/PGDATA 예산·COW headroom, private 실경로·자격 증명·reviewed image digest, 공식 EL peer와 인증 checkpoint/E6 trust, 별도 WAL/백업 장치와 custody/RPO/RTO가 남는다. 파일 예제·fixture·과거 head를 채워 HOLD를 해제하지 않는다. [Native preflight](NATIVE_EXECUTION_PREFLIGHT.md)의 declaration은 실제 값을 확보한 뒤 해당 schema로 작성하며, 이 문서는 새 실행 가능한 manifest가 아니다.
 
-관리형 진단과 N6 owned 통합 acceptance는 구현·검증됐다. 다음은 아래 실제 APFS·peer·인증 checkpoint·private 배포 및 matched backup/restore 입력 확보와 검토다. 미확정 값을 추측해 채우거나 같은 측정을 반복하지 않는다. 기존 N0~N5 기능·동시성 검사를 새 실패 없이 반복하지 않는다. 실제 저장소·공식 EL peer·인증 checkpoint·private 설정/이미지는 계속 HOLD이며 반복 요청하거나 운영/성능 확인 루프를 만들지 않는다. [최신 통합 검증 계획](codemine/runs/20261031-arc-native-n6/plan.md)을 따르고 수용한 E1/first-import 계획을 유지한다. 운영 적용·provisioning·GC/restore activation과 추가 성능 측정은 보류한다.
+관리형 진단과 N6 owned 통합 acceptance는 구현·검증됐다. 다음은 실제 APFS·peer·인증 checkpoint·private 배포 및 matched backup/restore 입력 확보와 검토다. 미확정 값을 추측해 채우거나 같은 측정을 반복하지 않는다. 기존 N0~N5 기능·동시성 검사를 새 실패 없이 반복하지 않는다. 실제 저장소·공식 EL peer·인증 checkpoint·private 설정/이미지는 계속 HOLD이며 반복 요청하거나 운영/성능 확인 루프를 만들지 않는다. [최신 통합 검증 계획](codemine/runs/20261031-arc-native-n6/plan.md)을 따르고 수용한 E1/first-import 계획을 유지한다. 운영 적용·provisioning·GC/restore activation과 추가 성능 측정은 보류한다.

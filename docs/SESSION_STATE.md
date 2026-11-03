@@ -7,12 +7,12 @@ Git/PR/CI와 이 스냅샷을 대조한다. 이 파일은 runtime 상태나 운�
 
 | 항목 | 확인된 상태 |
 | --- | --- |
-| 마지막 완료 릴리스 | MON-02-D, [PR #266](https://github.com/0xmhha/indexer-go/pull/266), squash/main `e16c337e515ed2280a9c6624a31d40edd37594cb` |
-| 구현 범위 | E1~E6의 수용 범위, Arc N0~N6와 기존 진단/백업/모니터링·두 스냅샷 증가 추세 구현 완료. 실제 운영 검증과 선택 확장은 남음 |
-| 활성 작업 | MON-03 / READY / REVIEW. injected fake Runner·bounded parser·single-flight/cancel/join·별도 health 구현·로컬 검증. 실제 Docker/운영/발송은 보류 |
-| 작업 기준·계획 | base main `e16c337e515ed2280a9c6624a31d40edd37594cb`, branch `refactor/docker-observer-lifecycle`, [계획](codemine/runs/20261103-mon03-vm-observer/plan.md)·[체크리스트](codemine/runs/20261103-mon03-vm-observer/checklist.md)·[검증](codemine/runs/20261103-mon03-vm-observer/validation.md) |
-| 현재 인계 문서의 릴리스 | D #266 / exact-head CI342 success / squash·clean main 동기화 확인. 현재 문서의 후속 source/CI는 Git/PR 정본 |
-| 다음 행동 | MON-03 actual PR/CI·squash·clean main 확인. 완료됐다면 OPS-01~04 입력 준비만 남으며 실제 probe/운영/추가 측정·선택 확장을 자동 착수하지 않음 |
+| 마지막 완료 릴리스 | MON-03, [PR #267](https://github.com/0xmhha/indexer-go/pull/267), squash/main `1ce1476f7e8380fb414dd2841d5617d60cfac0b6` |
+| 구현 범위 | E1~E6 수용 범위·Arc N0~N6·MON-01~03 오프라인 구현 완료. 운영 입력/실행과 선택 확장은 남음 |
+| 활성 작업 | DOCS-01 / READY / REVIEW. 사용자 요청: 남은 작업 정본·문서 용도별 색인·최신 코드 기준 개발자 README. 과거 진행 기록을 현재 가이드에 쌓지 않음 |
+| 작업 기준·수용 조건 | base main `1ce1476f7e8380fb414dd2841d5617d60cfac0b6`, branch `docs/current-developer-guides`. root README는 제품 소개/시작/확장만, docs 색인은 목적별 전체 안내, backlog는 미완료만. 오래된 task/proposal·재개 안내를 정리하고 E1/first-import·최근 세 기능 정본은 보존 |
+| 현재 릴리스 기준 | MON-03 #267 / exact-head CI343 success / squash·clean main 확인. 현재 문서를 포함한 실제 후속 HEAD/CI는 Git/PR 정본 |
+| 다음 행동 | 현재 코드/스키마 대조·235 Markdown/1179링크 오류0·CI policy24·문서 전용 분류 확인. secret staged0/history15 reviewed/unreviewed0 확인. docs-only PR/CI·squash/main. runtime/SDK/DB/200/성능 검사 없음. 완료 뒤 OPS-01 입력 대기 |
 | 외부 입력 | 마지막 관측은 [운영 준비 현황](OPERATIONS_READINESS.md). 이후 APFS/enode/checkpoint/private 배포·백업 값의 새 제공/검증 없음 |
 
 프로세스가 없거나 어떤 CI가 현재 실행 중인지 이 파일만으로 추정하지 않는다.
@@ -23,7 +23,7 @@ Git/PR/CI와 이 스냅샷을 대조한다. 이 파일은 runtime 상태나 운�
 
 | 맥락 | 정본과 릴리스 | 실제 검증 범위 |
 | --- | --- | --- |
-| n: MON-03 VM probe/health | [계획](codemine/runs/20261103-mon03-vm-observer/plan.md)·[체크리스트](codemine/runs/20261103-mon03-vm-observer/checklist.md)·[검증](codemine/runs/20261103-mon03-vm-observer/validation.md) | compiled RED→GREEN·새18사례 focused race·probe/capture16종 CPU1/race/count200·build/vet/lint. injected fake만 사용, 실제 Docker/DB/SDK/성능 없음. release gates는 Git/PR/CI 정본 |
+| n: MON-03 VM probe/health | [계획](codemine/runs/20261103-mon03-vm-observer/plan.md)·[검증](codemine/runs/20261103-mon03-vm-observer/validation.md), [PR267](https://github.com/0xmhha/indexer-go/pull/267), [CI343](https://github.com/0xmhha/indexer-go/actions/runs/41556806270), main `1ce1476f7e8380fb414dd2841d5617d60cfac0b6` | 6 job 성공. source `83b3ecade1e5853d56b19dc715668c2b5ccfedfd`, tree `30afb1f090577aa96af6b7903c49315e5ddb0a69`. 로컬18사례 focused race·probe/capture16종 CPU1/race/count200·build/vet/lint. fake만 사용, 실제 Docker/DB/SDK/성능 없음 |
 | n−1: MON-02-D App/config | [계획](codemine/runs/20261102-mon02d-app-assembly/plan.md)·[검증](codemine/runs/20261102-mon02d-app-assembly/validation.md), [PR266](https://github.com/0xmhha/indexer-go/pull/266), [CI342](https://github.com/0xmhha/indexer-go/actions/runs/41550432485), main `e16c337e515ed2280a9c6624a31d40edd37594cb` | 6 job 성공. source `f26c476c627d9e634abf749c6988968c45356c75`, tree `44f1f75e8a5638f4a8c0cc4e625d5682f54a6839`. 로컬 새13사례 race200·owned PG3·build/vet/lint. 기본 비활성 DB/WAL만 연결; 실제 운전/발송/성능 없음 |
 | n−2: MON-02-C alert/checkpoint | [계획](codemine/runs/20261102-mon02c-alert-state/plan.md)·[검증](codemine/runs/20261102-mon02c-alert-state/validation.md), [PR265](https://github.com/0xmhha/indexer-go/pull/265), [CI341](https://github.com/0xmhha/indexer-go/actions/runs/41475394794), main `7c4e9f62c5e0babe823b093c552a0e0e48985030` | 6 job 성공. source `b9c8fbda30c3504b5e730fa2700be09809c6cf05`, tree `61a3bed04a5caf15519c58450c4f4f8a4349844b`. 로컬 reducer/file RED→GREEN·focused race·private writer1사례 CPU1/race/count200. 실제 DB/native/발송/성능 없음 |
 

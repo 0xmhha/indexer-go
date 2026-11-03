@@ -231,9 +231,13 @@ api:
 
 ```
 
-PostgreSQL facts 수집과 writer를 함께 실행하면 `database.postgres.max_conns: 2` 또는 `INDEXER_DB_POSTGRES_MAX_CONNS=2`를 시작점으로 사용한다. 이 값은 저장소 전체 pool 상한이다. writer는 fresh 검사 중에도 자신의 block transaction/연결을 유지하고, 사전 facts 읽기는 나머지 연결에서 read-only snapshot을 연다. 커밋 직전의 source 검증은 기존 bound transaction의 generation fence(공개 prefix는 KEY SHARE)를 재사용하므로 별도 읽기 연결로 이동하지 않는다. 명시적인1은 계속 단일 연결로 동작하며 자동으로 늘리지 않는다.0은 DSN의 `pool_max_conns`나 pgxpool 기본값을 따르고1을 뜻하지 않는다. 멀티체인에서는 체인별 pool이며 다른 프로세스도 별도 연결 예산을 사용한다. [고정 입력 비교](SOURCE_FACTS.md)를 참고한다. 원천이 이미 준비된 writer 비교의 시작 예산은2이며, 같은 DB에서 수집·writer·API 두 client(최대20 RPS)를 함께 실행한 비교에서는4개가 API p95를 약192→9.46ms로 줄였다. API tail이 중요한 혼합 구성은4개부터 다시 측정하되 수집 처리량 증가로 해석하지 않는다. 후속 연결4 고정 비교에서는 raw 단일 후보와 기존 commit fresh를 사용해 선행 resolve RPC를 줄였고 누적32블록 처리량이2.282→2.458블록/s로 개선됐다. 이때 backlog 중간 ACK와 API tail은 증가했으므로 [측정 조건과 지연 차이](SOURCE_FACTS.md)를 함께 확인한다. pool 예산을 자동 변경하거나 fresh/세대 fence를 완화하지 않는다. 후속 잠금 분리에서는 같은4연결로 append·공개 prefix 검증·immutable ACK를 병행해 누적 ACK p50 9.004→4.621초, 최근8블록 API p99 89.179→41.285ms를 관측했다. 임의 mutable 값을 읽는 bound full view와 Reset/삭제는 계속 배타 보호하며 실행별 tail 편차도 함께 기록했다.
+PostgreSQL의 `max_conns`는 Store 전체 pool 상한이며 멀티체인은 체인별,
+추가 프로세스는 별도 예산이다. 운영 초안/native execution의 pool4·part2·API1을
+유지하고 별도 write pool을 만들지 않는다. source 검증은 기존 bound transaction의
+generation fence를 재사용한다. 일반 facts 경로의 명시적1/2/기본0 예산은 자동
+증액하지 않으며0은 DSN/pgxpool 기본값이다. 현재 [facts 연결 계약](SOURCE_FACTS.md#db-연결과-api-예약)을 따른다.
 
-단일 체인 `node.role: all`에서 `database.postgres.max_conns: 4`를 명시하면 root API의 짧은 projection SQL에 최소1개를 예약한다. 같은 pool 안의 사용 가능한 일반 연결도 짧게 빌려 병렬 조회하므로 연결을 추가하지 않고 총4개를 유지한다. source/commit 검증은 원래 Store의 bound transaction을 우선 사용한다. API/ingest 전용 역할과1/2/default0·다른 예산은 자동 변경하지 않는다. read-only Store는 예약하지 않는다. SDK 직접 API 생성은 `api.Config.ReserveQueryReader`(기본 false)로 선택한다. source snapshot/멀티체인 route/무거운 조회와 추가 worker 예산은 별도 측정 대상이다. [계측·수명·측정 범위](SOURCE_FACTS.md#api-tail-계측과-불필요-작업-지연-2026-10-17)를 따른다.
+단일 체인 `node.role: all`에서 `database.postgres.max_conns: 4`를 명시하면 root API의 짧은 projection SQL에 최소1개를 예약한다. 같은 pool 안의 사용 가능한 일반 연결도 짧게 빌려 병렬 조회하므로 연결을 추가하지 않고 총4개를 유지한다. source/commit 검증은 원래 Store의 bound transaction을 우선 사용한다. API/ingest 전용 역할과1/2/default0·다른 예산은 자동 변경하지 않는다. read-only Store는 예약하지 않는다. SDK 직접 API 생성은 `api.Config.ReserveQueryReader`(기본 false)로 선택한다. source snapshot/멀티체인 route/무거운 조회와 추가 worker 예산은 별도 측정 대상이다. [계측·수명·측정 범위](SOURCE_FACTS.md#api-진단과-오류-판정)를 따른다.
 
 
 
@@ -747,17 +751,11 @@ eventbus:
 
 ---
 
-## Performance Tuning
+## 처리량과 자원 설정
 
-| 파라미터 | 기본값 | 권장 (동기화) | 권장 (실시간) | 설명 |
-|---------|--------|-------------|-------------|------|
-| `workers` | 100 | 200-500 | 50-100 | RPC 노드 용량에 따라 조정 |
-| `chunk_size` | 1 | 10-50 | 1 | 실시간 모드에서는 1 권장 |
-| `eventbus.publish_buffer_size` | 1000 | 5000 | 1000 | EventBus 버퍼 크기 |
-| `eventbus.history_size` | 100 | 100 | 500 | 이벤트 히스토리 (Replay용) |
-
-> **SSD 사용 권장**: PebbleDB 성능을 위해 SSD 스토리지를 사용하세요.
-> **IPv4 권장**: `127.0.0.1` 사용 (`localhost`는 IPv6로 해석될 수 있음).
+worker·queue·batch 크기는 노드 quota, 필요한 상태 보존과 DB/디스크 예산 안에서
+정한다. 크기를 늘리면 빨라진다는 보장은 없다. 현재 계약은 [facts/진단](SOURCE_FACTS.md),
+실제 운영 입력과 추가 측정 보류는 [남은 작업](analysis/open-items.md)을 따른다.
 
 ### 독립 읽기 RPC의 HTTP 배치 통합
 

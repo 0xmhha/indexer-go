@@ -1,6 +1,6 @@
 # 전체 blob 공급·검증 모듈
 
-`pkg/chainfeed/evmblob`은 별도 공급자가 전달한 **전체 EIP-4844 blob**을 검증하고 영구 capture DB에 저장하는 라이브러리다. 독립 순차 worker와 DB-only 페이지를 제공한다. 후속 감사에서 고정 Arc 공식 노드의 blob 거래 비활성화 정책을 확인했다. Arc 공급기는 시작하지 않으며 현재 `source.feed` 설정에 blob 필드를 추가하거나 운영 config.yaml을 바꾸지 않았다.
+`pkg/chainfeed/evmblob`은 별도 공급자가 전달한 **전체 EIP-4844 blob**을 검증하고 영구 capture DB에 저장하는 라이브러리다. 독립 순차 worker와 DB-only 페이지를 제공한다. 고정 Arc 공식 노드의 profile 정책은 blob 거래 admission을 비활성화한다. Arc 공급기는 시작하지 않으며 현재 `source.feed` 설정에 blob 필드를 추가하거나 운영 config.yaml을 바꾸지 않았다.
 
 E1 실행 수집은 별도의 [execution blob 경로](EXECUTION_BLOBS.md)로 연결한다. 두 경로는 순수 `evmblob/proof` 검증 코어만 공유하며 completion/cursor를 혼합하지 않는다. 이 문서의 아래 공급·설정·HTTP 미연결 범위는 capture supplement worker에 해당한다.
 

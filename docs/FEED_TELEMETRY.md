@@ -1,14 +1,8 @@
-# Feed 단계별 지연과 운영 판단
+# Feed 파이프라인 계측
 
-후속 [누적 API 재검증](SOURCE_FACTS.md#누적-api-재검증과-호스트-부하-확인-2026-10-17)은 호스트 포화로 미완료다. 동일 바이너리 대조와 변경 전후18회 계획 중6회 시도/5회 통과 후 기준 코드의 API2초 timeout1건으로 중단했다. 저부하 조건 통과0회이며3쌍 중앙값을 만들지 않는다. placement 측정 도구의 선택적 `--max-host-load`는 startup의 Docker 접근 전·실행 전후에 부하를 확인하고 `host-load.json`/부분 `runs.json`/원본 log를 남긴다. 이를 CPU/메모리/I/O 격리로 해석하지 않는다. 기존 API SQL1회·DB4·RPC5/fresh 구현은 그대로이며 추가 실행 코드 튜닝은 하지 않았다.
-
-Streaming capture 후속 분석은 [회전 메타데이터 준비와128블록 재측정](SOURCE_FACTS.md#streaming-capture와-회전-메타데이터-준비-2026-10-17)을 따른다. 같은 블록의 raw seal/create·capture RPC 큐·SQL span을 분리했다. 독립 임시 metadata를 먼저 쓰되 각각의 full Sync/Close/rename·index/metadata directory barrier와 다음 raw 생성 순서는 유지한다. fsync 횟수 감소가 아니다. 모드별3쌍에서 Streaming capture p99 중앙값477.593→239.330ms였지만 첫 쌍과32블록 trace 진단은 악화했다. 누적 목록 API p99도13.569→58.024ms로 세 쌍 모두 증가했다. 기존 API SQL1회·DB4·5 HTTP/s·새 fresh 구현은 그대로지만 호스트 load164.67~243.08의 공유 환경이므로 수치상 API 개선 유지나 성능 수용을 완료로 표시하지 않는다.
-
-누적 API의 후속 분석은 [최신 높이·블록 윈도우 통합 조회](SOURCE_FACTS.md#누적-api의-최신-높이블록-윈도우-통합-조회-2026-10-17)를 따른다. handler와 resolver의 goroutine이 다를 수 있어 같은 goroutine의 SQL 수만으로 RPC0/SQL0을 판단하지 않는다. 별도 observer overlay의 backend PID/시각과 요청별 wire/서버 parse·bind·execute를 대응하고 모호한 매칭을 제외했다. 이 overlay는 본 측정/운영 바이너리에 없다. 기본 목록은 같은 statement의 tip/높이 윈도우로 SQL2→1회이며 fresh 검사를 공유하거나 줄이지 않는다. busy token을 근거로 유지보수 grace를 줄이는 후보는 Streaming HTTP를 늘려 제외했고 기존 정책을 유지했다. 누적 API 중앙값 감소와 Streaming capture/일부 API tail 증가는 함께 기록한다.
-
-RPC 역할/배치 합류의 후속 실험은 [유지보수 RPC와 fresh](SOURCE_FACTS.md#유지보수-rpc의-fresh-배치-합류-2026-10-17)를 따른다. trace의 `rpc.readRole`은 context의 선택적인 foreground/maintenance 힌트이고 `rpc.window`/`rpc.first`는 첫 요청과 모으기 시간을 연결한다. 역할은 완료/삭제 증거가 아니며 HTTP header/params로 전송하지 않는다. ControlStep의 transaction 밖 사전 조회만 표시하고 데이터/writer/finality commit은 원래 context를 쓴다. 낮은 rate/burst1에서 유지보수만 최대500ms 모으며 foreground 도착 시 즉시 끝난다. caller deadline·5 HTTP/s·새 fresh·응답 뒤 epoch는 유지한다. 모으기 예산과 전체 RPC latency/foreground 대기를 구분한다. streaming 개선과 누적 API tail 증가도 함께 확인해야 한다.
-
-현재 계측은 window feed의 병목을 찾는 **진단 기능**이다. 실제 Arc peer·공개 RPC의 상태 보존 기간·450ms/2블록/s·24시간 운영은 아직 검증하지 않았다. 완료/삭제의 근거는 기존 DB cursor·proof 검증·fresh canonical·raw ACK/lease이며 계측값이 이를 대체하지 않는다.
+window feed의 runtime 표본과 단계별 대기를 설명하는 opt-in 진단 기능이다.
+관측한 완료·시각과 미검증 received/backlog를 구분하며, 누락 표본을0으로 만들지 않는다.
+이 기능은 처리량·450ms 목표·24시간 보존이나 실제 Arc peer 운전을 보장하지 않는다.
 
 ## 설정과 조회
 
@@ -76,24 +70,27 @@ runId/목표만 기존 projection descriptor 기록에 포함한다. hot-path �
 
 managed task들을 취소/join하면 `stopped`를 표시한다. 공유 RPC dispatcher에 이미 예약된 token/요청은 잠시 drain 중일 수 있으며 inFlight로 보인다. App Shutdown이 기존 pool을 닫고 recorder를 해제한다. 진단 snapshot의 나이는 조회 시점까지 증가한다. 모든 stage 표본은 실행 전체(여러 epoch 포함)의 관측이며 현재 epoch의 완료 보증이 아니다.
 
-## 운영 기준과 다음 측정
+## 관측 해석
 
-1. `receiveBlockInterval` 최근 표본2개 이상에서 p95와450ms 목표를 비교해 `within_target`/`above_target`을 표시한다. 그 전에는 `unmeasured`다. chain이 느리거나 멈춘 구간도 간격에 포함하므로 이것은 수신 관측 경고다. worker의 CPU 처리 속도나 운영 SLO 통과 판정으로 쓰지 않는다. 실제 생성률과 관측 구간/표본 수를 함께 기록해야 한다.
-2. 같은 실제 입력·선택 범위·RPC/DB/window 조건으로 기존 RPC와 feed를 비교하고 수신 간격, capture/proof/state backlog의 시간 변화, 각 p95/p99와 RPC 대기를 함께 본다. RPC 대기가 주원인이면 내부 큐 확대만으로 지속 처리량이 늘지 않는다. proof batch와 모든 fresh 요청이5 HTTP/s를 공유하며, batching은 provider의 member quota나 state retention을 늘리지 않는다.
-3. proof 확보는 원격 trie가 삭제되기 전에 끝나야 한다. provider가 보장하는 **실제 보존 높이/시간과 중단 여유**를 확인한 뒤 수집/공급 age·backlog 경보선을 정한다. 현재는 그 보장을 모르므로 ‘24시간 안전’이나 임의 숫자의 pruning 안전선을 표시하지 않는다. 원본 window24시간은 원격 계정/storage proof24시간을 보장하지 않는다. proof 미공급/pruned는 기존 strict 오류이며 latest/0으로 건너뛰지 않는다.
-4. proof가 영구 DB에 저장된 뒤의 상태 후처리는 그 입력으로 재생할 수 있다. readyStateBacklog가 늘면 stateApply/DB/fresh/RPC 경합을 확인한다. required proof/기존 raw ACK/finality/lease/최소24시간 삭제 gate는 계측과 독립적으로 유지한다.
-5. 실제 enode·외장 mount·provider 보존 정보가 준비되면 짧은 연속 관측→장기/재연결/장애 시험 순으로 진행한다. 로컬 fixture 결과를 실제 Arc 처리량·24시간 용량·포괄 state/trace/blob 완료로 확대하지 않는다.
+원본 수신·검증·DB 준비·worker 완료·처리 ACK는 별도 단계다. source의 verified
+prefix와 runtime 메모리 표본을 같은 atomic snapshot으로 합치지 않는다. proof나
+worker cursor가 stale이면 해당 backlog는 UNKNOWN이며, 높은 received-through를
+실제 network head로 바꾸지 않는다. 지표는 기존 fresh/ACK/lease/GC 권한을 대체하지 않는다.
 
-선택 [원천 검색](SOURCE_QUERIES.md) worker의 `lookupVerify`는 영구 source 읽기/commitment 재검증을, `lookupCommit`은 trie 구성·DB transaction·fresh 대기와 commit을 포함한다. 자체 완료점은 status workers의 `source.lookup.v1`이다. 표본 부재를0이나 검색 완료로 해석하지 않는다.
-
-선택 source.search.v1은 `searchVerify`(영구 source/commitment 검증)와 `searchCommit`(trie 구성·transaction·fresh/commit)을 추가한다. 완료점은 worker cursor이며 HTTP 검색의 scannedCandidates/decodedBlocks는 요청별 검사량이다. 런타임 지연 표본과 실제 Arc 처리량·지속 운영을 구분한다.
+선택 lookup/search worker의 Verify/Commit 지표는 해당 worker의 읽기/검증과
+transaction/fresh/commit 경로를 뜻한다. HTTP 검색의 scannedCandidates/decodedBlocks는
+요청별 검사량이며 runtime 지연이나 전체 체인 처리량과 다르다.
 
 ## Fresh와 API의 별도 runtime trace
 
-Go runtime trace를 명시적으로 켠 진단 실행에서는 writer fresh의 사전 검사·RPC·응답 후 epoch 검사를 구분한다. `postgres.query`/`postgres.acquire` task는 query/row 소비와 연결 획득을 나누며, 다른 goroutine에서 종료될 수 있다. `rpc.read` ID를 dispatcher의 member ID와 연결해 논리 요청의 큐 대기와 실제 `rpc.http` 시도를 구분한다. 기존 공유 limiter의 `rpc.limitWait`와 큐 대기의 **겹친 구간**은 기록할 수 있지만, 그 전체를 특정 요청의 token 대기로 단정하지 않는다. 추가 SQL/RPC·새 limiter·fresh 캐시는 없다. trace가 꺼진 일반 실행에는 새 요청 ID 할당과 trace용 clock/수집을 하지 않는다.
+명시적 Go runtime trace는 writer의 사전 검사·RPC·응답 후 epoch fence를 구분한다.
+postgres.query/acquire는 행 소비와 연결 획득, rpc.read/http는 논리 요청과 실제
+HTTP 시도를 구분한다. limiter와 큐의 겹친 시간을 특정 요청의 대기로 단정하지 않는다.
+role/window 힌트는 관측 metadata이며 완료/삭제 증거가 아니다.
 
-API handler와 GraphQL resolver는 서로 다른 goroutine일 수 있다. handler 아래의 같은 goroutine SQL 개수만 세면 실제 조회가0회로 잘못 보일 수 있으므로, 요청 context의 `ObserveQueries` 진단을 사용한다. `AcquireMS`는 연결 admission, `QueryMS`는 드라이버의 응답·행 소비까지 포함한 시간이다. `ServerMS`에서 이 두 시간을 뺀 값은 handler/GraphQL/스케줄링을 포함한 나머지 구간이며, HTTP 왕복 전체와도 구분한다. PostgreSQL의 statement duration은 별도 서버 측 관측이다. 요청별로 연결하지 않은 SQL 모양별 집계와 API percentile을 차감하거나, 서로 다른 표본의 stage percentile을 합산하지 않는다.
-
-runtime trace·서버 SQL duration logging·IO timing은 별도 짧은 진단에만 사용하고 원래 설정으로 복원한다. 전후 성능 비교는 이를 끈 상태에서 실행한다. [Fresh DB/RPC와 API tail 분석](SOURCE_FACTS.md#fresh-dbrpc-대기와-api-tail-분리-2026-10-17)을 따른다.
-
-capture와 bound writer의 transaction-local SQL에도 기존 API와 같은 socket 취소 감시를 사용한다. 정상 statement 종료마다 감시 goroutine과 채널로 만나는 비용을 줄이고, rows 소비/취소 callback 종료 후 소켓을 다음 statement에 돌려준다. 원래 context의 scope·fresh·취소 검사와 BEGIN/COMMIT/ROLLBACK·SendBatch·pool admission은 그대로다. profile에서 누적 scheduling delay가 줄어도 raw fsync·RPC 슬롯·WAL/HTTP tail이 남을 수 있다. [후속 비교](SOURCE_FACTS.md#capture와-writer-sql-종료-대기-감소-2026-10-17)는 API tail 감소와 streaming capture p99 증가를 함께 기록한다.
+API handler/resolver의 goroutine과 중첩 구간을 구분하고, 신뢰된 request context의
+ObserveQueries·GraphQL observer를 사용한다. 현재 [API 진단·오류 판정](SOURCE_FACTS.md#api-진단과-오류-판정)을 따른다.
+표본/지표만으로 API 지연 원인이나 개선율·운영 SLO를 확정하지 않는다.
+trace/SQL logging/IO timing은 별도 허용된 진단 범위에서만 사용한다.
+실제 peer/mount/provider와 실행·추가 성능 측정은 [작업 목록](analysis/open-items.md)의
+보류를 유지한다. 과거 수치는 Git history로 확인한다.

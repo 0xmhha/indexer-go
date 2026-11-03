@@ -1,16 +1,14 @@
-# Native 관측·경보 연동 설계
+# Native 관측과 경보 연동
 
-작업 [MON-01](analysis/open-items.md#mon-01)의 설계 정본이다. 현재 코드는
-capacity guard, DB 통계 journal, runtime telemetry, 파일 진단과 오프라인
-평가기를 각각 제공한다. MON-02-A의 순수 관측 모델·qualification·공통 수치
-predicate, MON-02-B의 단일 sampler/owner tap, MON-02-C의 경보 reducer·private
-checkpoint·fake/disabled sink와 MON-02-D의 기본 비활성 App/config·공유 worker를 구현했다.
-현재 App adapter는 DB 전체/WAL의 명시적 용량 예산만 지원한다. MON-03의
-[VM probe/health 라이브러리](NATIVE_VM_OBSERVATION.md)는 injected fake 경계로 구현했고
-실제 Docker 실행기/App 활성화·운영 실행·추가 측정·알림 발송은 HOLD다.
+기존 capacity guard와 분리된 기본 비활성 관측 계층이다. immutable metric/scope/
+source·시각 qualification, 단일 DB/WAL sampler, 경보 reducer·private checkpoint와
+App worker를 제공한다. 현재 App adapter는 명시적 DB 전체/WAL 예산만 지원하고
+YAML sink는 disabled다. [VM probe/health](NATIVE_VM_OBSERVATION.md)는 주입 실행기
+라이브러리이며 실제 Docker/네트워크 전송/운영 activation은 연결하지 않았다.
 
-[계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md)과
-[현재 상태](SESSION_STATE.md)를 함께 따른다.
+현재 지원 필드와 lifecycle은 [App 설정](#구현된-opt-in-app-설정과-lifecycle),
+남은 source/운영 작업은 [작업 목록](analysis/open-items.md), 수용 설계·bounded
+검증 근거는 [설계 색인](analysis/README.md)을 따른다.
 
 ## 구현된 순수 관측 계층
 
@@ -32,7 +30,7 @@ startup ACK ref의 새 관측은 새 처리 event 시각이 아니다. head나 s
 stale/missing은 예측 불가다. 기존 v1과 공통 `monitorpredicate.ProductGE`의128-bit
 수치 비교를 사용한다. `Growth.Within`의 known=false는 정상 여유가 아니다.
 
-A의 순수 계층은 DB/RPC/pool이나 파일 IO를 추가하지 않는다. B~D의 opt-in
+순수 관측 계층은 DB/RPC/pool이나 파일 IO를 추가하지 않는다. App의 opt-in
 연결은 아래 별도 경계를 따른다. CLI v1 schema/출력은 그대로다. [A 구현 검증](codemine/runs/20261102-mon02a-observation-model/validation.md)을
 따른다. 아래에서 구현한 범위와 후속 adapter 계약을 구분한다.
 
@@ -61,7 +59,7 @@ A의 순수 계층은 DB/RPC/pool이나 파일 IO를 추가하지 않는다. B~D
 ## 선택한 구조와 소유권
 
 아래 구조의 model/qualification·bounded inbox/tap·stats owner와 nativealerts는
-구현됐다. D는 DB/WAL App 연결과 비활성 sink까지만 지원한다. 다른
+구현됐다. App은 DB/WAL 연결과 비활성 sink까지만 지원한다. 다른
 source·derived rule·네트워크 transport는 이 설계의 후속 경계다.
 
 ```mermaid
@@ -92,7 +90,7 @@ flowchart LR
 
 [MON-02-B 검증](codemine/runs/20261102-mon02b-owner-taps/validation.md)을 따른다.
 `Monitor.StatsSampler()`는 기존 owner를 공유하며 새 periodic `Run` 중복을 거부한다.
-D의 App은 opt-in 설정에 따라 `WithObservationStats`/`NewObservationStatsSampler`를
+App은 opt-in 설정에 따라 `WithObservationStats`/`NewObservationStatsSampler`를
 선택한다. 수동 `Sample`은 명시적
 owner 작업이며 consumer의 별도 polling 경로로 사용하지 않는다.
 
@@ -109,7 +107,7 @@ DB/WAL은 각 query 시각을 보존한다. Arc raw/native는 기존 durable com
 epoch와 legacy intake에 없는 capture generation은 채우지 않고 incomplete로 남긴다.
 legacy received는 원래 receive 시각과 unverified/truncated coverage를 보존한다.
 이 부분 자료로 exact backlog·최신 network head를 만들지 않는다. Inbox loss의
-자동 복구나 알림 해제를 만들지 않는다. C/D의 private 상태·disabled/fake sink는
+자동 복구나 알림 해제를 만들지 않는다. private 상태·disabled/fake sink는
 아래 별도 경계로 검증했다. 실제 sender는 없다.
 
 ## 관측 계약
@@ -177,7 +175,7 @@ backlog가 아니다. 실제 수신한 head 관측이 없으면 head−R은 UNKN
 - 기존 Store pool4/part2/API1을 유지한다. 통계는 일반 pool을 사용하는 한 번의
   직렬 작업이며 acquire 시간도 deadline에 포함한다. 새 pool/API lease·SQL
   retry loop·node RPC 호출이 없다. SQL 값은 바인딩, 동적 식별자는 검증/quote한다.
-- 현재 legacy 통계 timeout은30초다. B의 programmatic opt-in 관측 mode cap은
+- 현재 legacy 통계 timeout은30초다. programmatic opt-in 관측 mode cap은
   query별2초·한 DB/WAL sampling round5초이며 기존30초 default를 몰래 바꾸지
   않는다. timeout이면 unknown으로 넘기고 해당 주기에 즉시 retry하지 않는다.
   이는 구현된 context 상한이며 취소 무시 provider를 강제 종료하거나 실제 운영 SLO/무경합을 보장하지 않는다.
@@ -227,7 +225,7 @@ restart는 rate history를 새로 시작하고 미확정 active alert·delivery 
 ## 구현된 경보와 private checkpoint
 
 [MON-02-C 검증](codemine/runs/20261102-mon02c-alert-state/validation.md)을 따른다.
-C 모듈은 caller-driven single owner다. D의 별도 alert worker가 이를 직렬로
+경보 모듈은 caller-driven single owner다. App의 별도 alert worker가 이를 직렬로
 소유하며 실제 sender는 시작하지 않는다. `CapacitySignal`은 resource별 A qualification과128-bit threshold를 재사용한다.
 backlog/lag/health kinds는 이미 검증된 derived signal을 요구하며 producer adapter는
 후속 범위다. 단순 block height나 전체 HOLD를 backlog/정상 값으로 사용하지 않는다.
@@ -269,7 +267,7 @@ chain event 설정·block outbox를 capacity 경보에 공유하지 않는다. �
 source ACK와 다른 이름/타입이며 로컬 통지 상태만 바꾼다. 네트워크 전송은
 exactly-once가 아니므로 stable transition ID와 bounded retry/dead-letter,
 재시작 후 at-least-once 가능성을 명시한다. 실제 발송은 별도 명시된 허용 범위가
-있어야 하며 MON-01에서는 수신자/secret/연결을 구성하지 않는다.
+있어야 한다. 현재 YAML은 disabled sink만 받으며 수신자/secret을 구성하지 않는다.
 
 새 경보기는 haltProcess/Resume/GC/restore/COMMIT/source ACK를 호출하지 않는다.
 기존 hard guard·latch가 actuator 정본이다. 포맷/운영 실행/추가 측정과
@@ -341,11 +339,10 @@ operations:
 실제 transport, native/backlog/lag/health producer 연결이나 실제 운전을 완료했다고
 해석하지 않는다. 미관측 값은 정상/0으로 추정하지 않는다.
 
-## 후속 구현 순서
+## 현재 지원 경계
 
-구체적인 source 변경 후보와 RED→GREEN 표는
-[MON-02/03 구현 계획](codemine/runs/20261102-mon01-observation-design/implementation.md)을 따른다.
-MON-03의 [fake process/parser·cancel/join·unknown](NATIVE_VM_OBSERVATION.md) 구현과
-[검증](codemine/runs/20261103-mon03-vm-observer/validation.md)을 완료했다. 해당 릴리스의
-actual PR/CI/squash/main을 확인한 뒤 새 운영 입력 없이 probe를 반복하지 않는다.
-현재 다음은 OPS-01~04 입력 확정이며 실제 Docker/운영/추가 측정 HOLD를 유지한다.
+DB/WAL opt-in App과 private 경보 상태, injected VM probe/health가 현재 구현
+범위다. 미확정 native/derived epoch·backlog/lag/growth adapter와 실제 operator
+transport·Docker 실행기는 자동 활성화하지 않는다. 실제 운영 입력·범위는
+[남은 작업](analysis/open-items.md), 검증된 functional scope는
+[현재 기능 맥락](SESSION_STATE.md)을 따른다.

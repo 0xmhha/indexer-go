@@ -1,116 +1,121 @@
 # Documentation
 
-현재 배포 판정과 운영자 입력은 [운영 준비 현황](OPERATIONS_READINESS.md)을 따른다. 배포는 HOLD이며 legacy 초안과 native 실행 경로를 구분한다.
+Choose the task you want to complete. Start with the [project README](../README.md) for project fit and a first run; use [remaining work](analysis/open-items.md) for priorities and [operating readiness](OPERATIONS_READINESS.md) for deployment inputs. Detailed references are primarily in Korean.
 
-Start with the task you want to complete. The quickstart and contribution guide are in English; most detailed references are in Korean. Examples include their own English READMEs and runnable Go modules.
+## Document roles
+
+| Location | Owns |
+| --- | --- |
+| Root README | Current product purpose, supported paths, quickstart and developer entry points |
+| This index | Navigation by task; one primary category per root guide |
+| `analysis/open-items.md` | Outstanding tasks, dependencies and release/input/run gates |
+| `SESSION_STATE.md` | Replaceable current continuation state and recent functional contexts |
+| Maintained guides | Current code/config/API behavior and usage boundaries |
+| Accepted designs and validation | Explicit contracts and bounded evidence; not deployment approval |
+
+Keep guides current by replacing superseded statements. Do not append PR timelines, session diaries or old performance results to README/usage guides. Use Git history for superseded narrative; retain required accepted plans and scoped validation evidence through the design index.
 
 ## Get started
 
 | Task | Guide |
 | --- | --- |
-| Understand the project and choose an entry point | [Project README](../README.md) |
-| Build, run a local node and query the index | [Quickstart](QUICKSTART.md) |
-| Configure features, RPC access, databases or roles | [Configuration](CONFIG.md) |
-| Learn the components and data flow | [Architecture](ARCHITECTURE.md) |
-| Develop and submit a change | [Contributing](../CONTRIBUTING.md) |
-| Resume work in another session or machine | [Current state](SESSION_STATE.md), [handoff protocol](SESSION_HANDOFF.md), [task IDs](analysis/open-items.md) |
+| Build, run a local EVM chain and query the index | [Quickstart](QUICKSTART.md) |
+| Configure features, RPC, storage, roles and multi-chain routes | [Configuration Guide](CONFIG.md) |
+| Understand components, publication and recovery boundaries | [Architecture](ARCHITECTURE.md) |
+| Add Go handlers, derived records and APIs | [기능과 API 확장](EXTENDING.md) |
+| Implement chain profiles and custom accounting | [EVM 체인 커스터마이징 계약](CHAIN_CUSTOMIZATION.md) |
 
 ## Query indexed data
 
-| Task | Reference |
+| Task | Guide |
 | --- | --- |
-| Use GraphQL, JSON-RPC, REST or subscriptions | [API reference](API.md) |
-| Inspect the schema and registered method names | [GraphQL snapshot](../pkg/app/testdata/api/graphql-schema.txt), [JSON-RPC snapshot](../pkg/app/testdata/api/jsonrpc-methods.txt) |
-| Query captured source blocks, transactions, addresses or logs | [Source lookup and search](SOURCE_QUERIES.md) |
-| Read projection completion, gaps and independent worker output | [Projection progress](PROJECTION_PROGRESS.md) |
-| Query tracked account and storage changes | [Tracked-state projections](TRACKED_STATE_PROJECTION.md) |
-| Evaluate saved diagnostic/capacity/backlog observations and optional DB growth | [Offline Native monitoring](NATIVE_OFFLINE_MONITORING.md) |
-| Configure opt-in DB/WAL observation and review source/alert boundaries | [Native observation integration](NATIVE_MONITORING_INTEGRATION.md) |
-| Embed/test bounded VM probe work and distinguish sensor health from free space | [VM observation library](NATIVE_VM_OBSERVATION.md) |
-| Authenticate external PostgreSQL backup evidence | [Offline backup adapter](EXECUTION_BACKUP_ADAPTER.md) |
-| Review diagnostic-only Docker image/profile wiring | [Native Docker draft](../deployments/native/README.md) |
-| Build a new Arc native DB offline from an authenticated full checkpoint | [Arc native bootstrap](EXECUTION_ARC_BOOTSTRAP.md) |
-| Review the owned Arc first-execution native writer and crash fences | [Arc native writer](EXECUTION_ARC_NATIVE_WRITER.md) |
-| Configure opt-in App-owned raw/native intake and its safety boundaries | [Arc ingress](EXECUTION_ARC_INGRESS.md) |
-| Run focused PR checks or request full qualification | [CI tiers](CI.md) |
-| Understand managed read views, native epochs and E1 reorg recovery | [Managed Arc replay](EXECUTION_ARC_MANAGED.md) |
-| Integrate App source ownership, Arc origin and the blocks-part input archive | [Ingress ownership and archive](EXECUTION_INGRESS_ARCHIVE.md) |
-| Park and resume App-owned execution workers before maintenance | [Execution drain](EXECUTION_DRAIN.md) |
-| Review inherited managed COW and completed-floor restart | [Managed native maintenance](EXECUTION_MANAGED_MAINTENANCE.md) |
-| Coordinate explicit App/E3 maintenance and exact phase recovery | [Maintenance coordinator](EXECUTION_MAINTENANCE_COORDINATOR.md) |
-| Review explicit raw deletion authority and crash recovery | [Managed raw retention](EXECUTION_RAW_RETENTION.md) |
-| Review Arc first-import design and completed N0–N6 boundaries | [Arc native import design](ARC_NATIVE_IMPORT_DESIGN.md) |
-| Review Native App/collector/executor topology and held lifecycle | [Native runtime composition draft](../deployments/native/runtime/README.md) |
-| Diagnose native/source metadata and exported checkpoint/retention observations | [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md) |
-| Check native App/collector/checkpoint/retention files offline | [Native execution preflight](NATIVE_EXECUTION_PREFLIGHT.md) |
-| Read native replay call trees and internal calls | [Native execution traces](EXECUTION_CALL_TRACES.md) |
-| Full blobs in execution ingestion | [Bounded Engine V1 supply, private retained input, KZG and DB-only pages](EXECUTION_BLOBS.md) |
-| Retain selected account/storage proofs in execution inputs | [Execution state proofs](EXECUTION_STATE_PROOFS.md) |
+| GraphQL, JSON-RPC, REST, subscriptions and pagination | [API 안내](API.md) |
+| Current UserOperation, bundler and paymaster queries | [Account abstraction queries](ACCOUNT_ABSTRACTION.md) |
+| Permanent source lookup and search | [영구 원천 데이터 검색](SOURCE_QUERIES.md) |
+| Worker completion, gaps and output APIs | [기능별 완료·독립 worker·coverage API](PROJECTION_PROGRESS.md) |
+| Tracked values, changes and undo | [지정 상태 후처리 worker](TRACKED_STATE_PROJECTION.md) |
+| Provider-reported capture traces and DB pages | [호출 trace 수집과 DB 조회](CALL_TRACES.md) |
+| Selected capture proofs and their completion gates | [지정 계정·code·storage 증명 공급](STATE_PROOFS.md) |
+| Capture full-blob verification and profile admission | [전체 blob 공급·검증 모듈](BLOB_INPUTS.md) |
 
-Snapshots describe a test configuration. Your runtime schema and data depend on the linked profiles, enabled features, mode and indexed range. Use runtime introspection when integrating a client.
+## Ingest and store source data
 
-## Extend the framework
-
-| Goal | Reference or example |
+| Task | Guide |
 | --- | --- |
-| Add a feature, derived records or custom GraphQL/HTTP routes | [Extending](EXTENDING.md) |
-| Collect selected contract events with a project API | [receipts example](../examples/receipts/README.md), [declared records configuration](CONFIG.md#선언형-수집-featuresrecords-indexermode) |
-| Implement chain-specific decoding, verification or accounting | [Chain customization](CHAIN_CUSTOMIZATION.md) |
-| Register an external profile in your own binary | [chainprofile example](../examples/chainprofile/README.md) |
+| Opt-in feed application and mixed RPC/feed mode | [앱의 window feed 실행](FEED_APP.md) |
+| Feed finality, reorg, ACK and collection | [Feed finality·reorg·GC 런타임](FEED_RUNTIME.md) |
+| Raw disk window, external paths, leases and quotas | [원본 디스크 윈도우 저장소](WINDOW_STORAGE.md) |
+| Verified source transactions, generations and deletion fences | [원천 데이터 저장과 삭제 승인](CAPTURE_STORAGE.md) |
+| Permanent objects and normalized records | [영구 객체와 정규화 원천 저장](PERMANENT_SOURCE_STORAGE.md) |
+| DB-backed input for the existing ordered writer | [원천 DB를 이용한 기존 writer 후처리](SOURCE_FACTS.md) |
+| Stage timings and backlog interpretation | [Feed 단계별 지연과 운영 판단](FEED_TELEMETRY.md) |
+| Optional node-feed/ExEx IPC contract | [Node-feed 연결](NODE_FEED.md) |
 
-No package carries a compatibility promise; pin a version and run your extension's checks when upgrading.
+## Native execution contracts
 
-## Configure and operate
-
-- [Configuration](CONFIG.md) covers RPC budgets, PostgreSQL, ingest/API roles, multi-chain routing, notifications and data management.
-- [Testnet operations draft](OPERATIONS_DRAFT.md) separates the proposed APFS/PostgreSQL/Arc feed settings from unresolved storage, peer and checkpoint inputs; it is not a runnable deployment.
-- [Docker operations draft](../deployments/testnets/README.md) adds isolated Compose wiring, APFS identity checks and file-based DSN injection; service startup remains on hold.
-- [Capacity, backlog and recovery policy draft](OPERATIONS_CAPACITY_DRAFT.md) documents implemented filesystem/PGDATA/raw monitoring and halt/resume controls, plus the remaining live operational checks.
-- [Backup, migration and recovery objectives draft](OPERATIONS_BACKUP_DRAFT.md) classifies what cannot be rebuilt, proposes RPO/RTO per class, continuous WAL archiving plus stopped-state copies, and migration/restore checks; nothing is configured or run.
-- [Checkpoint, restart and GC runbook draft](OPERATIONS_RUNBOOK_DRAFT.md) covers normal shutdown, incident recovery and deletion prerequisites; execution and GC activation remain on hold.
-- [Arc native integrated acceptance](EXECUTION_ARC_ACCEPTANCE.md) qualifies the production App with owned ETH/68, pinned SDK, durable SQL, two normal EVM passes, restart/reorg/GC and exact recovery; it starts no operating chain.
-- [Managed Arc inspection](EXECUTION_MANAGED_INSPECTION.md) compares declared App settings and explicit raw/native/journal/source/SQL metadata without opening runtime stores or granting start/GC authority.
-- [Checkpoint and GC inspection](OPERATIONS_INSPECTION.md) documents the separate read-only metadata command, bounded observations and offline functional checks; it never starts the app or performs recovery.
-- [Offline draft consistency review](analysis/operations-offline-review.md) records corrected cross-file mismatches and the remaining operational gaps; it is not live deployment validation.
-- [Architecture](ARCHITECTURE.md) explains block transactions, reorg recovery and outbox delivery.
-- [Pipeline telemetry](FEED_TELEMETRY.md) defines feed-stage latency, backlog and unavailable observations.
-- [Remaining work](analysis/open-items.md) separates completed checks, unresolved operational requirements and deferred work.
-- [Historical E1 handover 10/23](analysis/handoff-2026-10-23.md) preserves the accepted [E1 plan](codemine/runs/20261023-e1-execution/03-plan.md), [checklist](codemine/runs/20261023-e1-execution/checklist.md) and [continuity](codemine/runs/20261023-e1-execution/continuity.json). Use [SESSION_STATE](SESSION_STATE.md) for current work.
-
-## Use the opt-in Arc feed
-
-The implemented base plan receives and verifies headers, bodies and receipts. Its local tests do not establish live peer access, sustained Arc throughput or external-disk reliability. Start with the application guide before selecting storage or optional workers.
-
-| Layer | Guide |
+| Task | Guide |
 | --- | --- |
-| Configuration, application lifecycle and mixed RPC/feed mode | [Feed application](FEED_APP.md) |
-| Arc protocol module and supported input plan | [Arc feed module](../x/arc/feed/README.md) |
-| Raw disk window, external paths, leases and quotas | [Window storage](WINDOW_STORAGE.md) |
-| Verified source transactions, generations and deletion fences | [Capture storage](CAPTURE_STORAGE.md) |
-| Permanent objects and normalized source records | [Permanent source storage](PERMANENT_SOURCE_STORAGE.md) |
-| Finality policy, reorg recovery, ACK and garbage collection | [Feed runtime](FEED_RUNTIME.md) |
-| DB-only inputs for the existing ordered writer | [Source facts](SOURCE_FACTS.md) |
-| Independent worker completion and output APIs | [Projection progress](PROJECTION_PROGRESS.md) |
+| Prepared PostgreSQL execution input and publication | [StableNet execution ingest](EXECUTION_INGEST.md) |
+| Full/partial checkpoint preparation and import | [Execution checkpoint preparation](EXECUTION_BOOTSTRAP.md) |
+| Logical writers, public visibility and native balance authority | [Execution feature writers](EXECUTION_FEATURE_WRITERS.md) |
+| Supervised retention and recovery fences | [Offline execution retention](EXECUTION_RETENTION.md) |
+| Replay call trees and internal-call pages | [Native replay call traces and internal calls](EXECUTION_CALL_TRACES.md) |
+| Bounded execution full blobs, KZG and Engine supply | [Full blobs in execution ingestion](EXECUTION_BLOBS.md) |
+| Selected account/code/storage evidence and DB queries | [Selected state inclusion proofs in execution ingestion](EXECUTION_STATE_PROOFS.md) |
+| Authenticated bounded StableNet WBFT policy | [Independent execution consensus](EXECUTION_CONSENSUS.md) |
 
-### Optional data and workers
+## Arc native lifecycle
 
-- [State proofs](STATE_PROOFS.md): explicitly selected accounts, code and storage; parent checkpoints and completion gates.
-- [Tracked-state projections](TRACKED_STATE_PROJECTION.md): current values, per-block changes and independent undo/events.
-- [Call traces](CALL_TRACES.md): provider-reported call trees, validation boundaries and DB-only pages.
-- [Blob inputs](BLOB_INPUTS.md): full-blob/KZG verification and the current Arc admission policy. This library does not provide a configured blob transport.
-- [Source lookup and search](SOURCE_QUERIES.md): independent indexes and epoch-pinned pages.
-- [Pipeline telemetry](FEED_TELEMETRY.md): stage timing and backlog interpretation.
+| Task | Guide |
+| --- | --- |
+| Pinned Arc replay and continuous collector | [Arc execution journals](EXECUTION_ARC.md) |
+| Authenticated full-state native bootstrap | [Arc native full-state bootstrap](EXECUTION_ARC_BOOTSTRAP.md) |
+| First execution, native publication and crash fences | [Arc first-execution native writer](EXECUTION_ARC_NATIVE_WRITER.md) |
+| App-owned ETH68/raw/import/replay composition | [App-owned Arc native ingress](EXECUTION_ARC_INGRESS.md) |
+| Managed read views, native epochs and reorg recovery | [Managed Arc replay and reorg recovery](EXECUTION_ARC_MANAGED.md) |
+| Source ownership and original input archive | [Execution ingress ownership and input archive](EXECUTION_INGRESS_ARCHIVE.md) |
+| Park/resume workers before explicit maintenance | [Execution worker drain](EXECUTION_DRAIN.md) |
+| Managed copy-on-write maintenance | [Managed Arc native maintenance bridge](EXECUTION_MANAGED_MAINTENANCE.md) |
+| Maintenance coordination and phase recovery | [Explicit Arc execution maintenance](EXECUTION_MAINTENANCE_COORDINATOR.md) |
+| Raw deletion authority and recovery | [Managed execution raw retention](EXECUTION_RAW_RETENTION.md) |
+| Native full export, lookup reclamation and matched backup admission | [Arc native checkpoints and retention](EXECUTION_ARC_RETENTION.md) |
+| Read-only diagnosis of managed metadata | [Managed Arc execution inspection](EXECUTION_MANAGED_INSPECTION.md) |
+| Owned integrated acceptance scope and reproduction | [Arc native integrated acceptance](EXECUTION_ARC_ACCEPTANCE.md) |
+| Accepted native import and ownership design | [Arc 첫 import와 native DB 갱신 설계](ARC_NATIVE_IMPORT_DESIGN.md) |
 
-These options have separate supply and completion contracts. Enabling one does not imply complete EVM state, independently proven call execution or additional raw-deletion authority.
+## Operate and observe
 
-## Design, validation and migration
+| Task | Guide |
+| --- | --- |
+| Current operating inputs, recommendations and HOLD | [운영 설정 준비 현황](OPERATIONS_READINESS.md) |
+| Testnet storage and deployment configuration draft | [네 테스트넷 운영 설정 초안](OPERATIONS_DRAFT.md) |
+| Capacity, backlog and halt/resume policy | [용량·backlog·복구 정책 초안](OPERATIONS_CAPACITY_DRAFT.md) |
+| Backup custody, WAL and recovery objectives | [백업·이전과 복구 목표 초안](OPERATIONS_BACKUP_DRAFT.md) |
+| Shutdown, checkpoint, restart and GC prerequisites | [Checkpoint·재시작·GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md) |
+| Read-only checkpoint/GC inspection | [Checkpoint and GC inspection](OPERATIONS_INSPECTION.md) |
+| Native/source and exported checkpoint diagnostics | [Native read-only diagnostics](NATIVE_EXECUTION_DIAGNOSTICS.md) |
+| Offline settings admission: PASS/HOLD/FAIL | [Native execution file preflight](NATIVE_EXECUTION_PREFLIGHT.md) |
+| Evaluate supplied diagnostics, metrics and growth snapshots | [Offline Native monitoring](NATIVE_OFFLINE_MONITORING.md) |
+| Opt-in DB/WAL observation, alert state and source boundaries | [Native 관측·경보 연동 설계](NATIVE_MONITORING_INTEGRATION.md) |
+| Injected VM probe lifecycle and separate observer health | [Docker VM 관측 라이브러리와 observer health](NATIVE_VM_OBSERVATION.md) |
+| Authenticate external PostgreSQL backup evidence offline | [Offline PostgreSQL backup attestation adapter](EXECUTION_BACKUP_ADAPTER.md) |
 
-[StableNet execution ingest](EXECUTION_INGEST.md) documents the opt-in application and isolated official-client executor, prepared baseline requirements, seven queues on pool4, public/fresh/ACK boundaries and recovery. The [wire module](../execwire/README.md) and [executor](../x/stablenet/executor/README.md) have independent Go modules. [Arc execution journals](EXECUTION_ARC.md) adds the pinned official Arc EVM, read-only native replay and continuous source-spool/ACK/restart/reorg supervision, with a retained one-file alternative; Arc native checkpoint export and retention remain separate. [Offline bootstrap](EXECUTION_BOOTSTRAP.md) covers full genesis/checkpoint state, selected proofs, atomic new-schema import and read-only recovery diagnosis. [Offline retention](EXECUTION_RETENTION.md) covers supervised ACK/window-based node and quarantine collection, crash recovery and capacity gates. [Execution feature writers](EXECUTION_FEATURE_WRITERS.md) covers per-unit publication and native journal balance/history/cursor compatibility. The [E1 checklist](codemine/runs/20261023-e1-execution/checklist.md), [E2 checklist](codemine/runs/20261024-e2-bootstrap/checklist.md), [E3 checklist](codemine/runs/20261024-e3-retention/checklist.md), [E4 checklist](codemine/runs/20261024-e4-feature-writers/checklist.md) [E5 replay checklist](codemine/runs/20261024-e5-arc-execution/checklist.md) and [Arc collector checklist](codemine/runs/20261025-e5-arc-collector/checklist.md) record functional verification and CI; live node, deployment and performance validation remain on hold.
+## Contribute and continue
 
-Use the [analysis index](analysis/README.md) for design documents and dated evidence. It distinguishes implementation contracts, proposed work, historical measurements and the earlier ExEx comparison.
+| Task | Guide |
+| --- | --- |
+| Scoped short checks and explicit full qualification | [CI checks for developers](CI.md) |
+| Integrate a client with the current backend contract | [Frontend integration](FRONTEND_MIGRATION.md) |
+| Current task and previous functional contexts | [현재 작업과 다음 세션 시작점](SESSION_STATE.md) |
+| Resume/update protocol across sessions | [세션 재개와 인계 규약](SESSION_HANDOFF.md) |
 
-[Frontend migration](FRONTEND_MIGRATION.md) is a guide for consumers moving their GraphQL documents or REST calls. Changes to a separate frontend repository are outside this repository's implementation.
+## Designs and validation
 
-[Arc native checkpoints and retention](EXECUTION_ARC_RETENTION.md) explains full native export/key coverage, private snapshots, managed ownership and E3 copy/swap/recovery without node startup.
+- [Design index](analysis/README.md): accepted architecture contracts and evidence entry points.
+- [E1 execution plan](codemine/runs/20261023-e1-execution/03-plan.md) and [Arc first-import plan](codemine/runs/20261029-arc-first-import/plan.md): preserved accepted designs.
+- [N6 acceptance](codemine/runs/20261031-arc-native-n6/validation.md): integrated offline verification scope.
+- [Code graph](analysis/graph/README.md): a source-identified analysis artifact, not a current runtime inventory.
 
-- [Independent WBFT consensus](EXECUTION_CONSENSUS.md): explicit trust policy, opt-in execution publication, finality/recovery and offline fixtures.
+Use runtime introspection and the indexed range/collection status when integrating a client. The [schema snapshots](../pkg/app/testdata/api/) describe their fixture configuration. Native replay, proofs, traces, blobs and diagnostics have distinct supply/verification contracts.
+
+Docker compositions remain documented drafts: [testnets](../deployments/testnets/README.md), [native diagnostics](../deployments/native/README.md) and [native runtime](../deployments/native/runtime/README.md). Mock/library checks do not establish live peer access, physical storage reliability or operating readiness.

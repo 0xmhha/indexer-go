@@ -68,33 +68,6 @@ multi-chain에서는 `/chains/{id}`를 앞에 붙인다. `from`/`to`는 양 끝�
 timestamp/OR·다중 주소 조건을 구현했고 아래 고정 입력으로 조회와 색인 용량을 비교한다. 전용 관계형 source 테이블의 운영 적용은 별도 원자성·epoch/복구 계약 검증 후 결정한다. 실제 Arc peer/보존·450ms/24시간 운영 측정과 추가 stateful worker의 소유권은 별도 잔여 항목이다.
 
 
-## 고정 입력 비교 (2026-10-16)
-
-`TestMeasureSourceSearch`는 같은32블록·64거래·512로그를 실제 profile/영구 DB/선택 worker에 넣는다. 두 주소 OR + topic1의 두 값 OR + 시간 구간을 결합한 결과16행이 전체 검증 스캔과 byte 단위로 일치하는지 확인한다. 전체 스캔도 동일한 source commitment 검증과 페이지/시간 조건을 수행하고, 주소/topic 조건만 읽은 행에 적용한다. 색인 검색은64후보/4블록, 전체 스캔은512후보/32블록을 검사했다. 두 경로의 측정 중 RPC 호출은0회다. 수집/commit은 기존5 HTTP/s 설정을 사용했다.
-
-한 번 예열한 뒤20회 반복한 전체 조회 완료 지연(ms)이다. 측정은 race instrumentation 없이 macOS native Pebble과 로컬 Docker PostgreSQL16(fsync on)에서 순차 실행했다. 테스트 도우미의 결과 일치 검사 비용도 포함한다.20개 표본의 p99는 최대 표본이며 운영 SLO 추정치가 아니다.
-
-| DB / 조회 경로 | p50 | p95 | p99 |
-|---|---:|---:|---:|
-| Pebble / 전체 검증 스캔 | 10.904 | 11.577 | 11.639 |
-| Pebble / 색인 + 원천 재검증 | 1.447 | 1.553 | 1.855 |
-| PostgreSQL / 전체 검증 스캔 | 516.917 | 580.427 | 593.003 |
-| PostgreSQL / 색인 + 원천 재검증 | 80.448 | 93.261 | 94.682 |
-
-후보 발견 단계만 별도로 비교했다. SQL은 같은512로그의 높이/ordinal/hash/주소/topic/시각을 파라미터 바인딩으로 넣은 세션 전용 임시 테이블에 `(height,ordinal)` PK와 `(address,height,ordinal)` B-tree를 둔다. trie와 SQL 모두 주소 OR의64개 후보를 높이/ordinal/hash까지 대조한다. 양쪽 모두 이 단계에서는 시간/topic secondary 조건을 적용하지 않는다.
-
-| 후보 발견 경로 | p50 ms | p95 ms | p99 ms |
-|---|---:|---:|---:|
-| Pebble trie | 0.309 | 0.439 | 0.935 |
-| PostgreSQL capture KV trie | 37.634 | 49.457 | 55.199 |
-| PostgreSQL 임시 관계형 후보 | 0.618 | 0.763 | 0.778 |
-
-이 입력의 보존된 과거 root 포함 trie node는 두 DB에서 모두1,974개, namespace를 제외한 node key+value 합계357,648bytes(약349.3KiB)다. SQL 임시 테이블+PK/주소 색인의 실제 relation 크기는204,800bytes(200KiB)다. **동일 보장/기능의 디스크 비교는 아니다.** trie 수치에는 거래/from-to/topic·높이 색인과 모든 과거 root의 node가 들어가지만 물리 DB page/WAL/namespace overhead는 제외했다. SQL 프로토타입은 로그 후보만 다루며 과거 root·epoch·fresh/원자적 cursor/event·reorg 복구·원천 재검증·영구 commit을 구현하지 않았다. 이 작은 fixture를 하루 DB 용량이나 장기 GC 추정으로 외삽하지 않는다.
-
-첫 비교는 PostgreSQL에서 trie node별 `CaptureReader.Get`가 SQL 왕복을 만드는 비용을 보여 주었다. 아래 스냅샷 내부 캐시/일괄 읽기를 반영하고 같은 입력을 다시 측정했다. 별도 관계형 source 색인을 도입한다면 현재 epoch/고정 범위 cursor·fresh·원자성·복구를 먼저 갖춰야 한다. 시간 색인의 추가 가치는 별도 분포로 판단한다. 실제 Arc ingest/450ms/24시간 검증은 이 조회 측정에 포함되지 않는다.
-
-재현은 `INDEXER_MEASURE_SOURCE_SEARCH=1 go test -count=1 -v ./pkg/app -run '^TestMeasureSourceSearch$'`로 한다. 실제 SQL 비교에는 테스트 전용 DB의 `INDEXER_TEST_POSTGRES`와 `INDEXER_TEST_DRIVER=postgres`를 함께 설정한다. 앱 fixture는 pool1을 사용한다. SQL 프로토타입 테이블은 연결 종료 때 사라진다. 이번 컨테이너/볼륨과 Linux 바이너리는 테스트 소유 자원만 정리했다. 원본 측정·검증 로그는 `/private/tmp/indexer-source-search-or-20261016/`에 있다.
-
 
 ## PostgreSQL trie 읽기 최적화
 
@@ -109,22 +82,6 @@ prefetch한 형제 node가 누락/손상됐어도 그 query가 사용하지 않�
 쓰기·worker root/digest/cursor/event·fresh·source plan/Through·undo/outbox·raw ACK/GC 계약은 동일하다. 새 SQL table/migration·설정·공유 전역 cache는 추가하지 않았다. source.search/source.lookup worker의 optional 활성화와5 HTTP/s 비용도 기존과 같다.
 
 
-2026-10-17에 변경 전 코드를 바이너리로 보관한 뒤 최종 바이너리와 같은32블록/64거래/512로그 fixture를 순차 실행했다. PostgreSQL은 같은 임시 fsync-on 서버에 별도 테스트 schema를 사용했다. 다른 검증 실행은 끝낸 상태였으며 기존 상시 호스트 작업은 유지했다. 수집 설정은5 HTTP/s이고 조회 중 RPC는0회였다. 두 버전 모두 검증 스캔과 같은16행을 반환했고, 후보64개/검증4블록·과거 trie1,974node/357,648bytes도 같았다. 각 경로20 warm 표본의 ms다.
-
-| 경로 | 전 p50 | 후 p50 | 전 p95 | 후 p95 | 전 p99 | 후 p99 |
-|---|---:|---:|---:|---:|---:|---:|
-| Pebble 검증 검색 | 1.490 | 1.344 | 1.879 | 1.776 | 2.093 | 2.174 |
-| PostgreSQL 검증 검색 | 88.159 | 58.996 | 226.101 | 70.853 | 527.756 | 95.621 |
-| PostgreSQL 후보 발견 | 43.621 | 15.680 | 54.459 | 19.783 | 143.850 | 23.739 |
-| PostgreSQL 검증 전체 스캔 | 576.358 | 372.753 | 625.310 | 442.234 | 710.227 | 448.186 |
-
-별도의 진단 query는 latency 표본 밖에서 수행했다. 최종 코드에서 캐시는 유지하고 optional batch capability만 숨긴 Get-only control은 PostgreSQL node 단건88회였고, batch를 켠 경우 단건5회+배치19회=24회였다. 전체 capture 읽기는175단건→92단건+19배치=111회였다. 배치에서는102개 key·반환 key/value16,285bytes를 읽었다. 이 수치는 CaptureReader 호출만 세며 트랜잭션 begin/commit·ReadIndexingPage·모든 SQL 문장 수를 뜻하지 않는다. 시간 측정에 이 카운터 wrapper를 넣지 않았다.
-
-SQL 임시 후보 테이블은 이번에도 후보 발견만 검증한 프로토타입이고 운영 source index로 바꾸지 않았다.20개 warm 표본의 p99는 최대값이므로 운영 tail/SLO 개선으로 해석하지 않는다. 실제 Arc의 수집/450ms/장기 보존 결과는 별도로 검증해야 한다. 임시 컨테이너·볼륨·변경 전후 및 Linux 바이너리는 소유 자원만 제거했다. 증거는 `/private/tmp/indexer-trie-batch-20261017/measurements.json`과 `validation.json`이다.
-
-이후 metadata/영구 원천 입력 읽기를 아래 단일 스냅샷 경로로 합쳤다. 노드 조회에 맞춘1MiB GetMany 한도는 그대로 유지하고 큰 원천 payload에는 적용하지 않는다.
-
-
 ## Canonical 원천 입력의 단일 스냅샷 읽기
 
 `capture.Store`/`Reader.ReadProjectionInput(ctx, epoch, identity)`는 현재 canonical 입력을 한 `CaptureView`에서 읽는다. 같은 snapshot의 state·height pointer·manifest를 확인한 뒤 inline dataset과 영구 객체 바인딩/bytes를 읽는다. 선택 GetMany가 있으면 작은 metadata3개만 바인딩된 한 SQL query로 받는다. Get-only 구현도 같은 metadata1MiB 한도를 적용하고 wrapped missing과 joined I/O 오류를 구분한다. metadata는 현재 snapshot 내부에서만 보유하고 다른 view/요청으로 넘기지 않는다. writer의 내부 checkProjection/fresh/commit 계약은 그대로다. public ValidateProjection도 같은 snapshot 내부 metadata 배치를 사용한다.
@@ -133,19 +90,4 @@ SQL 임시 후보 테이블은 이번에도 후보 발견만 검증한 프로토
 
 `evmdata.ReadCaptured`는 optional ProjectionInputReader를 발견하면 이 경로를 사용한다. 기존 CapturedReader 필수 interface는 그대로이며 확장 없는 reader는 기존 검증/읽기 경로를 사용한다. 선택 경로가 실패하면 레거시/RPC/원본 window로 재시도하지 않는다. profile hash/sender·transaction/receipt root·gas/bloom·parent 검증을 그대로 수행한다. **디코딩 뒤 독립적인 최신 epoch/canonical ValidateProjection도 유지한다.** 읽기 snapshot이 일관됐다는 것만으로 디코딩 중 reset을 무시하거나 현재 canonical임을 보장하지 않는다. 현재 epoch2에서 retained canonical 입력의 원래 generation1을 읽는 것도 지원한다.
 
-이 경로는 source 해시/검색 API와 선택 lookup/search worker 및 facts Source의 실제 BlockWithReceipts 소비에 적용된다. facts writer도 같은 단일 snapshot materialization을 사용하고 기존 coverage 오류·부모 자료·profile 재검증·디코딩 뒤 epoch barrier·처리 ACK/fresh 계약을 유지한다. 실제 writer 비교는 [facts 읽기/쓰기](SOURCE_FACTS.md)의 측정 결과를 따른다. raw ACK/24시간 GC·undo/outbox·DB table/migration·운영 YAML은 변경하지 않았다.
-
-
-2026-10-17에 변경 전후 app 바이너리를 같은32블록/64거래/512로그 입력으로 순차 비교했다. 비교 동안 다른 검증 명령은 실행하지 않았고 기존 상시 호스트 작업은 유지했다. SQL은 같은 PostgreSQL16 fsync-on 서버의 별도 테스트 schema에서 측정했다. 양쪽 모두 전체 검증 스캔과 같은16행·후보64개·검증4블록을 반환하고 조회 RPC0, 과거 trie1,974nodes/357,648bytes를 유지했다. 각20 warm 표본의 ms다.
-
-| 경로 | 전 p50 | 후 p50 | 전 p95 | 후 p95 | 전 p99 | 후 p99 |
-|---|---:|---:|---:|---:|---:|---:|
-| PostgreSQL 원천 검증 포함 검색 | 74.502 | 46.108 | 96.927 | 85.307 | 152.403 | 94.592 |
-| PostgreSQL 검증 전체 스캔 | 427.000 | 278.567 | 604.736 | 440.869 | 694.196 | 573.135 |
-| Pebble 원천 검증 포함 검색 | 1.431 | 1.469 | 1.846 | 2.191 | 1.999 | 3.035 |
-
-진단 counter는 시간 표본 밖에서만 켰다. 최적화 query의 PostgreSQL CaptureReader 호출은 기존92단건+19배치=111회에서57단건+28배치=85회로 줄었다. 새 배치28개는 node19개와 metadata9개다. node 조회 자체는 단건5회+node 배치19회=24회로 이전과 같고, 이번 감소는 원천/메타데이터 경로에서 발생했다. 전체 배치 입력129keys·반환 key/value44,906bytes였다. 최종 query의 CaptureView는16회다. 변경 전 바이너리는 Views counter가 없으므로 그 JSON에서 전후 view 수를 비교하지 않는다. 코드/테스트상 블록별 ReadCaptured의 입력 경로는 사전 검증/Read/사후 검증3개 view에서 통합 입력/사후 검증2개 view로 줄었다. 이 카운터는 모든 SQL 문장/transaction begin·commit·ReadIndexingPage를 세는 수치가 아니다.
-
-같은 최종 코드에서 optional batch capability를 숨긴 Get-only control도 동일16행을 반환했다. SQL Get-only control의 단건175→167회는 input snapshot 통합의 효과이고, 실제 optimized path에는 작은 metadata 배치도 포함한다. 새로운 query p50은 이번 실행의 변경 전/후를 비교한 값이며 이전 날짜의 수치를 그대로 기준 삼지 않는다.20표본 p99는 최대 표본이고 tail/SLO 추정치가 아니다. 실제 Arc ingest/450ms/24시간 보존은 별도로 남는다.
-
-후속 작업에서 facts Source.BlockWithReceipts도 새 경로에 연결하고 coverage 오류·큰 객체 스트리밍·부모 자료·era/replay·commit fresh·처리 ACK 경계를 확인했다. [실제 writer 전후 측정](SOURCE_FACTS.md#실제-facts-writer-전후-측정-2026-10-17)은 단독 읽기와 writer 내부 대기·최종 처리량을 구분한다. 이 절의 검색 비교 증거는 `/private/tmp/indexer-input-read-20261017/validation.json`·`measurements.json`과 SQL/Linux/동시성/비교 로그에 있다. UUID 컨테이너·명시적 볼륨·비교/Linux 바이너리는 소유 자원만 정리했다.
+이 경로는 source 해시/검색 API와 선택 lookup/search worker 및 facts Source의 실제 BlockWithReceipts 소비에 적용된다. facts writer도 같은 단일 snapshot materialization을 사용하고 기존 coverage 오류·부모 자료·profile 재검증·디코딩 뒤 epoch barrier·처리 ACK/fresh 계약을 유지한다. writer의 연결·커밋·진단 계약은 [facts 읽기/쓰기](SOURCE_FACTS.md)를 따른다. raw ACK/24시간 GC·undo/outbox·DB table/migration·운영 YAML은 변경하지 않았다.
