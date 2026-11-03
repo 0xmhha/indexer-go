@@ -117,3 +117,5 @@ API key 알림은 `/v1/subscriptions/stream`을 사용한다. 설정은 만든 k
 알림 설정 API는 `api.keys`의 key가 필요하다. Key 소유권·rate limit·trusted proxy·CORS·GraphQL depth/complexity·WebSocket Origin 검사 등 접근 조건은 [설정](CONFIG.md)에 있다.
 
 API snapshot과 로컬 시험은 이름·계약·회귀를 검증한다. 실제 노드의 전체 데이터·내부 이동·native 잔액 정확성 또는 모든 체인의 동시 운영을 보장하지 않는다. 미검증 영역과 후속 작업은 [open-items](analysis/open-items.md), 실제 공개 RPC 표본은 [작업 기록](analysis/work-log-2026-10.md)에 있다.
+
+ERC-4337 클라이언트는 [현재 AA 목록·상세 쿼리](ACCOUNT_ABSTRACTION.md)를 따른다.

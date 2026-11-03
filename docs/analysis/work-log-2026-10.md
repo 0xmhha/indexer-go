@@ -171,7 +171,7 @@ PostgreSQL로도 실제 공개 RPC를 색인하고 기록을 offline replay한 �
 
 R01을 수행했다. 운영 회계·저장소·API·SDK 코드는 변경하지 않았다. Arc 전용 표본과 회계 회귀는 `pkg/chains/arc/testdata`와 `accounting_test.go`에, profile과 무관한 기록/재생 비교 도구는 `pkg/app/rpc_parity_test.go`에 둔다. 공통 코어에 체인 조건문이나 새 인터페이스를 더하지 않는다.
 
-Arc testnet RPC `https://rpc.testnet.arc.io`(5042002)에서 66,917,992 / 66,918,549 / 66,918,552 / 66,918,564의 block·receipt와 각 블록 전후 `eth_getBalance` 응답을 독립적으로 수집했다. 각각 19 / 13 / 10 / 13개 주소, 총 55개 계정/블록 델타가 회계 출력과 일치했다. mint 2건, burn 1건, 실패 거래의 gas 지불, miner의 base fee 포함 전체 execution fee, 최상위 거래의 from/to와 다른 native 이동이 포함된다. balance feature가 잘못된 잔액을 노드 값으로 reset하기 **전**의 델타를 검증한다. [표본 설명](../../pkg/chains/arc/testdata/README.md)에 범위와 수집 방법이 있다.
+Arc testnet RPC `https://rpc.testnet.arc.io`(5042002)에서 66,917,992 / 66,918,549 / 66,918,552 / 66,918,564의 block·receipt와 각 블록 전후 `eth_getBalance` 응답을 독립적으로 수집했다. 각각 19 / 13 / 10 / 13개 주소, 총 55개 계정/블록 델타가 회계 출력과 일치했다. mint 2건, burn 1건, 실패 거래의 gas 지불, miner의 base fee 포함 전체 execution fee, 최상위 거래의 from/to와 다른 native 이동이 포함된다. balance feature가 잘못된 잔액을 노드 값으로 reset하기 **전**의 델타를 검증한다. [표본 설명](../../x/arc/testdata/README.md)에 범위와 수집 방법이 있다.
 
 별도의 연속 구간 66,919,625~66,919,724(100블록)을 production `NewApp` 기본 기능으로 색인했다. 600개 거래(실패 101개), 1,436개 로그, native transfer 430건과 burn 1건을 포함한다. 블록·거래·receipt·로그·GraphQL/JSON-RPC 블록 해시를 확인했다. 461개 계정의 980개 블록별 마지막 잔액이 같은 높이의 노드 상태와 일치했다. 이 구간에는 mint가 없으며 위 고정 표본에서 별도로 검증했다.
 
@@ -1088,7 +1088,7 @@ ordered 독립 worker가 captured DB prefix를 큐로 사용하고 한 블록만
 
 선택 `TestMeasureSourceSearch`에 같은32블록/64거래/512로그·주소 OR/topic OR/시간 조건을 넣었다. 전체 검증 스캔과 색인+원천 재검증의 결과16행이 byte 단위로 같았다. 색인은64후보/4블록, 전체 스캔은512후보/32블록을 검사했고 조회 RPC는0회였다. 다른 검증 실행과 분리한 최종 warm20회·race 없는 측정의 p50/p95/p99(ms)는 Pebble 전체10.904/11.577/11.639→색인1.447/1.553/1.855, PostgreSQL 전체516.917/580.427/593.003→색인80.448/93.261/94.682였다.20표본의 p99는 최대 표본이며 Arc ingest/SLO 근거가 아니다. 초기 경합이 있던 측정은 별도로 보존했다.
 
-같은64개 후보의 높이/ordinal/hash를 대조한 후보 발견 단계 p50은 Pebble trie0.309ms·PostgreSQL KV trie37.634ms·임시 SQL B-tree0.618ms였다. SQL 비교는 세션 임시 테이블+주소 index/PK만 사용하며 epoch/fresh/원자적 cursor/event·reorg 복구·원천 재검증을 구현한 대체 저장소가 아니다. 두 DB trie는 과거 root 포함1,974nodes·논리 key/value357,648bytes였고 임시 SQL table+index의 물리 크기는204,800bytes다. 기능/보존/overhead가 달라 동등한 디스크 효율 비교나 하루 용량 외삽으로 쓰지 않는다. [측정 방법과 한계](../SOURCE_QUERIES.md#고정-입력-비교-2026-10-16)를 따른다.
+같은64개 후보의 높이/ordinal/hash를 대조한 후보 발견 단계 p50은 Pebble trie0.309ms·PostgreSQL KV trie37.634ms·임시 SQL B-tree0.618ms였다. SQL 비교는 세션 임시 테이블+주소 index/PK만 사용하며 epoch/fresh/원자적 cursor/event·reorg 복구·원천 재검증을 구현한 대체 저장소가 아니다. 두 DB trie는 과거 root 포함1,974nodes·논리 key/value357,648bytes였고 임시 SQL table+index의 물리 크기는204,800bytes다. 기능/보존/overhead가 달라 동등한 디스크 효율 비교나 하루 용량 외삽으로 쓰지 않는다. [측정 방법과 한계](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_QUERIES.md#고정-입력-비교-2026-10-16)를 따른다.
 
 증거는 `/private/tmp/indexer-source-search-or-20261016/validation.json`·`measurements.json`과 native/SQL/Linux/CPU1·자원 로그다. 다음은 PostgreSQL의 node별 CaptureReader.Get 왕복을 bounded batch/요청 단위 hash 검증 캐시로 줄이고 같은 입력으로 재측정하는 것이다. 전용 관계형 source 색인은 필요하면 현재 epoch/커서/내구성 계약부터 갖춘다. worker 소유권, 실제 peer/mount·보존·450ms/24시간 SLO는 남아 있다.
 
@@ -1107,7 +1107,7 @@ ordered 독립 worker가 captured DB prefix를 큐로 사용하고 한 블록만
 
 변경 전 app test 바이너리를 소스 수정 전에 보관하고, 최종 바이너리와 같은32블록/64거래/512로그 fixture를 race 없이 순차 측정했다. SQL은 같은 임시 서버의 개별 schema, 각 경로 warm20표본을 사용했다. 두 버전 모두 전체 검증 스캔과 결과16행이 byte 단위로 일치했고 후보64/검증4블록·과거 trie1,974nodes/357,648bytes·조회 RPC0이 같았다. PostgreSQL 검증 검색 p50/p95/p99(ms)는88.159/226.101/527.756→58.996/70.853/95.621, 후보 발견43.621/54.459/143.850→15.680/19.783/23.739였다. Pebble 검증 검색은1.490/1.879/2.093→1.344/1.776/2.174였다.20표본 p99는 최대값이며 운영 tail/SLO 추정치가 아니다.
 
-최종 코드에서 cache를 유지하고 batch만 숨긴 진단 control은 PostgreSQL node 단건88회, batch 사용 시 단건5+배치19=24회였다. 전체 CaptureReader 읽기는175단건→92단건+19배치=111회, batch102keys/16,285bytes였다. 이는 전체 SQL 문장 수가 아니며 counter wrapper는 latency 표본 밖에만 적용했다. [방법·한도·수치](../SOURCE_QUERIES.md#postgresql-trie-읽기-최적화)를 따른다. 비교용 SQL 후보 table은 세션 전용 프로토타입이고 운영 source 계약을 대체하지 않는다.
+최종 코드에서 cache를 유지하고 batch만 숨긴 진단 control은 PostgreSQL node 단건88회, batch 사용 시 단건5+배치19=24회였다. 전체 CaptureReader 읽기는175단건→92단건+19배치=111회, batch102keys/16,285bytes였다. 이는 전체 SQL 문장 수가 아니며 counter wrapper는 latency 표본 밖에만 적용했다. [방법·한도·수치](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_QUERIES.md#postgresql-trie-읽기-최적화)를 따른다. 비교용 SQL 후보 table은 세션 전용 프로토타입이고 운영 source 계약을 대체하지 않는다.
 
 검증/비교의 UUID PostgreSQL 컨테이너·명시적 볼륨을 제거했고 변경 전후 바이너리133,525,364bytes도 정리했다. 이전10개 Docker 컨테이너는 이름/실행 상태를 보존했다. 증거는 `/private/tmp/indexer-trie-batch-20261017/validation.json`·`measurements.json`과 회귀/SQL/Linux/CPU1/비교/자원 기록이다. 다음은 남은 metadata/영구 원천 입력의 반복 CaptureView/SQL을 일관된 읽기 범위로 줄이는 작업이다. 큰 payload/외부 객체·epoch/pool1·손상/누락 계약과 source node용1MiB 한도를 구분한다. 실제 Arc peer/mount·보존·450ms/24시간 SLO, worker 소유권은 남아 있으며 전체 app/SLO·운영 활성화·commit/push를 수행한 결과가 아니다.
 
@@ -1128,7 +1128,7 @@ materialization은 dataset별8MiB·합계64MiB·기존11종 한도를 둔다. �
 
 변경 전후 바이너리와 같은32블록/64거래/512로그 입력을 다른 검증 종료 뒤 순차 비교했다. SQL은 같은 임시 서버의 개별 schema를 사용했다. 양쪽 모두 전체 검증 스캔과 같은16행·64후보/4검증 블록·과거 trie1,974nodes/357,648bytes·조회 RPC0을 유지했다.20 warm 표본의 PostgreSQL 검증 검색 p50/p95/p99(ms)는74.502/96.927/152.403→46.108/85.307/94.592, 검증 전체 스캔426.999/604.736/694.196→278.567/440.869/573.135였다. Pebble 검증 검색은1.431/1.846/1.999→1.469/2.191/3.035로 이번 작은 표본에서 소폭 느렸다. 운영 tail/SLO나 Arc ingest 개선을 주장하지 않는다.
 
-시간 표본 밖의 counter로 optimized query는92단건+19배치=111회→57단건+28배치=85회 CaptureReader 읽기를 확인했다. 새28배치는 node19+metadata9개이며 node 자체는 기존5단건+19배치=24회와 같다. 최종 View16회·129batch keys/44,906bytes다. 변경 전 바이너리에는 Views counter가 없으며 모든 SQL 문장/transaction/ReadIndexingPage 수로 해석하지 않는다. [방법·범위](../SOURCE_QUERIES.md#canonical-원천-입력의-단일-스냅샷-읽기)를 따른다.
+시간 표본 밖의 counter로 optimized query는92단건+19배치=111회→57단건+28배치=85회 CaptureReader 읽기를 확인했다. 새28배치는 node19+metadata9개이며 node 자체는 기존5단건+19배치=24회와 같다. 최종 View16회·129batch keys/44,906bytes다. 변경 전 바이너리에는 Views counter가 없으며 모든 SQL 문장/transaction/ReadIndexingPage 수로 해석하지 않는다. [방법·범위](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_QUERIES.md#canonical-원천-입력의-단일-스냅샷-읽기)를 따른다.
 
 검증/비교 UUID PostgreSQL 컨테이너·명시적 볼륨·변경 전후 바이너리133,595,652bytes도 정리하고 기존 Docker10개를 보존했다. 증거는 `/private/tmp/indexer-input-read-20261017/validation.json`·`measurements.json`과 DB/객체/동시성/Linux/비교/자원 로그다. 다음은 facts Source의 직접 materialization을 연결하고 coverage 오류·큰 객체·부모·era/replay·commit fresh/처리 ACK 경계를 검증하는 작업이다. 실제 peer/mount·보존·450ms/24시간 SLO와 추가 worker 소유권은 남는다. 실제 공개 Arc·노드/스냅샷·운영 활성화·commit/push는 수행하지 않았다.
 
@@ -1142,7 +1142,7 @@ DB-only p50/p95/p99(ms)는 PostgreSQL inline6.993/15.418/19.568→5.363/6.090/7.
 
 실제 writer의 source 읽기 p50(ms)은 SQL inline192.294→190.009, 객체204.636→189.795, Pebble inline0.313→0.354, 객체6.087→1.683이었다. SQL pool1에서는 fresh 검사 동안의 block transaction/connection 대기가 병렬 읽기에 포함된다. sourceValidate p50도 약162~170ms다. 최종 durable ACK 처리량(blocks/s)은 SQL inline5.097→5.111, 객체5.085→5.108, Pebble inline5.014→5.070, 객체5.134→5.125로 비슷했다. byte 소비 개선만으로 전체 처리량이 빨라졌다고 주장하지 않는다. fresh 검사는 transaction 안에 그대로 둔다.
 
-SQL 객체 DB-only CaptureReader 호출은 블록당23 Get+1 batch=24→6 Get+2 batch=8, CaptureView7→4다. 실제 writer 전체 source 읽기는37→21회/블록, View17→14다. Pebble 객체는26→12 Get, inline은11→12 Get으로 늘었다. 카운터는 CaptureView Get/GetMany 진단이며 모든 SQL/쓰기/ACK 내부 호출의 합계가 아니다. 모든8개 비교 실행은 입력/저장 block·receipt/생성 시각을 뺀608 outbox event digest가 같고32개 ACK identity를 확인했다. fresh canonical 물리 HTTP32회·validator32회·ACK32회·오류0을 유지했다. transport 시각으로5 HTTP/s/burst1 envelope를 확인했다(20ms scheduler 오차 허용). 초기 token1개를 포함한 짧은32블록 평균이5를 조금 넘는 것은 지속 한도를 바꾼 것이 아니다. DB-only 읽기 RPC0이다. [측정 범위·전체 표](../SOURCE_FACTS.md#실제-facts-writer-전후-측정-2026-10-17)를 따른다.
+SQL 객체 DB-only CaptureReader 호출은 블록당23 Get+1 batch=24→6 Get+2 batch=8, CaptureView7→4다. 실제 writer 전체 source 읽기는37→21회/블록, View17→14다. Pebble 객체는26→12 Get, inline은11→12 Get으로 늘었다. 카운터는 CaptureView Get/GetMany 진단이며 모든 SQL/쓰기/ACK 내부 호출의 합계가 아니다. 모든8개 비교 실행은 입력/저장 block·receipt/생성 시각을 뺀608 outbox event digest가 같고32개 ACK identity를 확인했다. fresh canonical 물리 HTTP32회·validator32회·ACK32회·오류0을 유지했다. transport 시각으로5 HTTP/s/burst1 envelope를 확인했다(20ms scheduler 오차 허용). 초기 token1개를 포함한 짧은32블록 평균이5를 조금 넘는 것은 지속 한도를 바꾼 것이 아니다. DB-only 읽기 RPC0이다. [측정 범위·전체 표](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#실제-facts-writer-전후-측정-2026-10-17)를 따른다.
 
 검증:
 
@@ -1172,7 +1172,7 @@ SQL 객체 DB-only CaptureReader 호출은 블록당23 Get+1 batch=24→6 Get+2 
 
 연결1→2의 객체 writer 읽기 p50은약95.2%, inline은약96.2% 감소했다. 객체 DB-only p50은6.862→6.450ms로 비슷하고 입력/정규 결과·CaptureView/Get/GetMany 수는 동일했다. 줄어든 값은 주로 writer의 connection 대기다.4개도 개선했지만2개 대비 처리량 증가는 거의 없고 inline tail/처리량 편차가 더 커 현재 후처리의 시작 예산은2로 정했다.4개가 일반적으로 더 빠르거나 느리다는 결론은 아니다. 실제 수집/API/선택 worker 동시 작업량에 따라 필요한 예산은 별도 검증한다. sourceValidate p50은 객체 약172~178ms이며 최종 객체 처리량은약5.1블록/s로 비슷했다. 작은32블록/64읽기·3회 값은 실제 Arc 수신/장기 tail/450ms/24시간 운영 SLO를 뜻하지 않는다.
 
-모든18개 layout 측정에서 입력/저장 block·receipt/생성 시각을 제외한608 outbox event digest·32 ACK identity가 같았다. writer 구간별 fresh 물리 HTTP32회·sourceValidate32회·sourceACK32회·오류0·5 HTTP/s/burst1 envelope를 확인했고 DB-only 읽기 RPC0이다. Source 생성의 genesis/anchor fresh2회는 writer 구간 밖이다. [전체 방법/표](../SOURCE_FACTS.md#postgresql-연결-경합-비교-2026-10-17)를 따른다.
+모든18개 layout 측정에서 입력/저장 block·receipt/생성 시각을 제외한608 outbox event digest·32 ACK identity가 같았다. writer 구간별 fresh 물리 HTTP32회·sourceValidate32회·sourceACK32회·오류0·5 HTTP/s/burst1 envelope를 확인했고 DB-only 읽기 RPC0이다. Source 생성의 genesis/anchor fresh2회는 writer 구간 밖이다. [전체 방법/표](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#postgresql-연결-경합-비교-2026-10-17)를 따른다.
 
 검증은 native facts/config race66 tests/subtests 통과·SQL14skip, fetch/rpcpool185통과·opt-in1skip, 실제 PostgreSQL9패키지119통과·test skip0(앱72.385s)이었다. 실제4연결 fresh gate/읽기/reset 경합은 단일 Go CPU/race/count200으로200회(부모/자식400 test 기록) 통과했다. 기존 bound transaction pool1·fsync-on/synchronous commit·extended parameter binding/SQL injection 값·객체/coverage/epoch/reorg/ACK·검색 앱 회귀도 유지했다. 전체 compile/vet/lint0 issues·예제2모듈·gofmt/diff를 확인했다. 전체 app/SLO나 이번 단계의 별도 Linux client suite를 실행한 것으로 표시하지 않는다. SQL 서버는 Docker Linux PostgreSQL16이다.
 
@@ -1198,7 +1198,7 @@ API 두 client는 단일 블록과 최근8블록 목록을 번갈아100ms ticker
 | 공개→ACK 관측 p50/p95 ms | 1119.622 / 1619.802 | 1219.944 / 1820.002 |
 | 최대 전체 적체 높이 중앙값 | 4 | 4 |
 
-4개는 API 최근8블록 p95를약95.1% 줄였으나 수집/writer 처리량 개선은 관측하지 못했고 이번 실행의 전체 완료는 소폭 느렸다. 최대 수신→capture3블록/capture→writer2블록 적체는 같았다. API가 실제로 더 많은 요청을 완료한 상태이며 이3회 비교만으로 수집 지연 차이의 일반 원인을 확정하지 않는다. 원천 완료 뒤 후처리만 하는 경우2개 시작 권장은 유지하고, 동일 DB의 실제 수집/writer/API에서 API tail이 중요하면4개를 시작점으로 권장한다. backlog-only5.1블록/s와 직접 비교하거나4개가 수집을 가속했다고 표시하지 않는다. [전체 조건/표](../SOURCE_FACTS.md#수집writerhttp-api-동시-부하-비교-2026-10-17)를 따른다.
+4개는 API 최근8블록 p95를약95.1% 줄였으나 수집/writer 처리량 개선은 관측하지 못했고 이번 실행의 전체 완료는 소폭 느렸다. 최대 수신→capture3블록/capture→writer2블록 적체는 같았다. API가 실제로 더 많은 요청을 완료한 상태이며 이3회 비교만으로 수집 지연 차이의 일반 원인을 확정하지 않는다. 원천 완료 뒤 후처리만 하는 경우2개 시작 권장은 유지하고, 동일 DB의 실제 수집/writer/API에서 API tail이 중요하면4개를 시작점으로 권장한다. backlog-only5.1블록/s와 직접 비교하거나4개가 수집을 가속했다고 표시하지 않는다. [전체 조건/표](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#수집writerhttp-api-동시-부하-비교-2026-10-17)를 따른다.
 
 6회 모두 API 오류0(연결2 총988/연결4 총1040 측정 cohort), 최종 block/receipt·생성 시각을 제외한646 outbox event digest가 같고34 canonical input/처리 ACK identity를 확인했다. 진행 시점에 따라 API 최신 목록이 달라지므로 response bytes 전체가 같은 것은 아니다. captureCommit34회·writer sourceValidate34회·sourceACK34회·오류0이며 기존 shared5 HTTP/s/burst1·커밋 직전 fresh·SHARE fence·durable commit 뒤 ACK를 유지했다. timed HTTP 도착 수는 양쪽 중앙값73회이고 기존 envelope 검사도 통과했다. 초기 RPC/Source 확인은 timed 구간 밖이며, 중단 뒤 같은 API 두 조회는 RPC0임을 확인했다. 수신·capture·ACK 관측은 원자적 snapshot이 아니며 API 완료율/latency cohort 구간도 구분했다.
 
@@ -1216,7 +1216,7 @@ API 두 client는 단일 블록과 최근8블록 목록을 번갈아100ms ticker
 
 각 실행 percentile/rate의3회 중앙값으로 streaming 공개→capture p50/p95 807.135/1414.645→178.940/346.977ms, 공개→ACK p50 1119.945→380.953ms, 최종 완료 17.420→16.380s였다. rawQueue p50 482.958→9.434ms, sourceACK 212.874→8.584ms, 최대 total gap 중앙값4→2블록이었다. 누적 부하 완료 14.021→13.020s, 처리량 2.282→2.458블록/s(+7.7%)였다. 논리 RPC streaming 118→81/backlog 112→77, 물리 HTTP 72→66/67→65로 구분한다.
 
-지연이 모두 개선된 것은 아니다. backlog capture→writer 최대 gap 중앙값2→16, 공개→ACK p50 7603.946→9643.989ms였고 API tail도 일부 증가했다. streaming 최근8블록 API p95/p99 3.797/7.887→7.255/65.466ms, backlog API p95 4.024→9.071ms였다. 최종 완료·원천 확보와 중간 후처리 지연의 차이를 보고하고 다음 병목은 필수 fresh/세대 fence를 유지한 lock 점유·공정성으로 남긴다. [전체 표/조건](../SOURCE_FACTS.md#연결4-수집writer-병목-개선-전후-2026-10-17)을 따른다.
+지연이 모두 개선된 것은 아니다. backlog capture→writer 최대 gap 중앙값2→16, 공개→ACK p50 7603.946→9643.989ms였고 API tail도 일부 증가했다. streaming 최근8블록 API p95/p99 3.797/7.887→7.255/65.466ms, backlog API p95 4.024→9.071ms였다. 최종 완료·원천 확보와 중간 후처리 지연의 차이를 보고하고 다음 병목은 필수 fresh/세대 fence를 유지한 lock 점유·공정성으로 남긴다. [전체 표/조건](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#연결4-수집writer-병목-개선-전후-2026-10-17)을 따른다.
 
 12회 모두 final34block/68receipt·646 normalized outbox digest·34 canonical input/ACK가 같고 captureCommit/sourceValidate/sourceACK 각34회·오류0이었다. API 전체 측정 cohort 3641건 오류0, DB-only API 추가 RPC0과5 HTTP/s envelope를 확인했다. ACK는20ms nominal polling 상한, 단계 계측34/warm 포함과 공개→완료32를 구분했다. native 관련8패키지 race 및 최종3패키지 재검증, App60통과/선택2skip, PostgreSQL10패키지129통과/skip0, 최종CPU1/race200회1000 tests/subtests, streaming/backlog4블록 race, 전체 compile/vet·최종 관련 vet/전체 lint0·예제2모듈을 확인했다. 전체 app/SLO suite를 실행한 것으로 표시하지 않는다.
 
@@ -1234,7 +1234,7 @@ State 한 건·공개 prefix CanonicalAt·state/pointer/manifest ValidateProject
 
 실행별 percentile/rate의3회 중앙값으로 backlog ACK p50/p95 9004.156/14328.976→4620.655/7824.005ms, API blocks8 p95/p99 33.828/89.179→17.023/41.285ms였다. 최종 완료 14.540→8.041초, 처리량 2.201→3.980블록/s(+80.8%), peak capture→writer gap 중앙값14→3블록이었다. 실제 API 완료율은19.876→19.745/s였다. 이전 단계와 환경 시점이 달라 그 수치를 baseline으로 재사용하지 않았다.
 
-backlog API p50은4.942→5.709ms, DB commit p99는15.103→32.889ms로 늘었다. API p99는 전68.705~860.750/후18.143~200.769ms로 편차가 크고 두 번째 쌍에서는 증가했다. 모든 실행/지표의 개선이나 strict FIFO/장기 SLO를 주장하지 않는다. streaming 최종 완료는16.361→16.420초로 비슷하며 ACK p95 840.019→520.568ms, API p99 62.833→20.298ms였다. 첫 after streaming API p99 353.043ms도 그대로 남겼다. [전체 표/범위](../SOURCE_FACTS.md#연결4-잠금-분리와-ack-공정성-2026-10-17)를 따른다.
+backlog API p50은4.942→5.709ms, DB commit p99는15.103→32.889ms로 늘었다. API p99는 전68.705~860.750/후18.143~200.769ms로 편차가 크고 두 번째 쌍에서는 증가했다. 모든 실행/지표의 개선이나 strict FIFO/장기 SLO를 주장하지 않는다. streaming 최종 완료는16.361→16.420초로 비슷하며 ACK p95 840.019→520.568ms, API p99 62.833→20.298ms였다. 첫 after streaming API p99 353.043ms도 그대로 남겼다. [전체 표/범위](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#연결4-잠금-분리와-ack-공정성-2026-10-17)를 따른다.
 
 12회 모두 최종34블록/68receipt·646 normalized outbox digest·34 canonical input/ACK가 같고 captureCommit/sourceValidate/sourceACK 각34회·오류0이었다. API 전체3248건 오류0, DB-only API 추가 RPC0,5 HTTP/s envelope를 확인했다. 필수 fresh 수는 그대로이며 독립 fresh가 기존 coalescer에서 묶여 backlog 물리 HTTP66→39회가 됐다. 논리 RPC79→72회는 짧아진 실행의 control tick 감소를 포함한다. streaming 물리 HTTP는 배치 타이밍 차이로70→78회 늘었고 제한은 유지했다. ACK는20ms nominal polling 상한이며34블록 단계 계측과32블록 공개 지연을 구분했다.
 
@@ -1260,7 +1260,7 @@ GraphQL `blocks`는 요청하지 않은 count 계산으로 최신 높이를 다�
 
 실행 중 턴 중단으로 runner/child가 종료된 사례는 테스트 assertion 실패로 분류하지 않는다. 완료4회를 보존하고 미완료 로그를 별도 보관했으며, 바이너리 SHA·소유 label·fsync를 확인해 같은 서버/바이너리로 남은8회만 이어 실행했다. 최종 집계와 자원 감사는 `/private/tmp/indexer-api-tail-20261017`에 기록한다.
 
-최종12회에서 backlog 최근8블록 API p95/p99는4.675/12.173→3.348/5.901ms, streaming은6.615/31.347→3.348/8.239ms였다(실행별3회 중앙값). 각각p99 약51.5%/73.7% 감소다. 처리량은 backlog4.915→4.915블록/s, streaming 완료64.281→64.340초로 유지됐고 실제 API 완료율도약19.9/s였다. backlog 단일 블록 p99는3.640→4.735ms, ACK p50은약60ms 늘어 모든 지표 개선으로 해석하지 않는다. [조건·모든 실행 범위·한계](../SOURCE_FACTS.md#api-tail-계측과-불필요-작업-지연-2026-10-17)를 따른다.
+최종12회에서 backlog 최근8블록 API p95/p99는4.675/12.173→3.348/5.901ms, streaming은6.615/31.347→3.348/8.239ms였다(실행별3회 중앙값). 각각p99 약51.5%/73.7% 감소다. 처리량은 backlog4.915→4.915블록/s, streaming 완료64.281→64.340초로 유지됐고 실제 API 완료율도약19.9/s였다. backlog 단일 블록 p99는3.640→4.735ms, ACK p50은약60ms 늘어 모든 지표 개선으로 해석하지 않는다. [조건·모든 실행 범위·한계](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#api-tail-계측과-불필요-작업-지연-2026-10-17)를 따른다.
 
 최종130블록/260receipt/2,470 outbox digest와canonical ACK가12회 모두 같고 captureCommit/sourceValidate/sourceACK 각130회·오류0, 전체API10,826건 오류0이었다. 필수 fresh/5 HTTP/s와 SQL값 바인딩을 유지했다. 최종 SQL/race65통과·skip0, 프런트엔드 앱12통과, native API/GraphQL286통과·선택1skip, 포트/계층17통과,130블록 race·compile/vet·lint0·SDK 예제2모듈을 확인했다. 모든 소유 컨테이너/볼륨을 제거하고 기존10개 status/StartedAt을 보존했다. 비교 바이너리9개/약602MB를 정리했다.
 
@@ -1275,7 +1275,7 @@ DB 연결4·공유5 HTTP/s/burst1·same Store/bound transaction과 커밋 직전
 
 32블록 placement 탐색 뒤 동일 Go1.26.8/CGO0·128블록·같은 PostgreSQL named volume에서 native→Docker DB와 별도 app/DB 컨테이너→전용 bridge를3쌍/모드 비교했다. point p99 중앙값은 backlog **3.059→1.855ms**, streaming **10.379→4.780ms**였다. streaming 첫 쌍2.508→3.592ms는 악화했다. 처리량은4.885→4.961블록/s 또는 입력-bound1.988→1.989블록/s였다. OS/runtime·network·raw temp 저장 위치의 묶음 비교이며 pure network/코드 인과/운영 SLO 증거는 아니다. 일반 API를 위해 새 연결 정책을 채택하지 않는다.
 
-최종12회 모두130 capture/validate/ACK·260receipt·2080로그·2470 outbox digest와 API10,839건 오류0을 확인했다. SQL1/2회·물리5/s·fresh·post-decode epoch·undo/outbox·서버 파라미터 바인딩을 보존했다. 운영/예제 YAML·Go 의존성·handoff는 그대로다. [자세한 결과/제약](../SOURCE_FACTS.md#단일-블록-p99와-예약-연결-반환-대기-2026-10-17)을 따른다.
+최종12회 모두130 capture/validate/ACK·260receipt·2080로그·2470 outbox digest와 API10,839건 오류0을 확인했다. SQL1/2회·물리5/s·fresh·post-decode epoch·undo/outbox·서버 파라미터 바인딩을 보존했다. 운영/예제 YAML·Go 의존성·handoff는 그대로다. [자세한 결과/제약](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#단일-블록-p99와-예약-연결-반환-대기-2026-10-17)을 따른다.
 
 `scripts/measure-api-placement.py`는 고유 label의 DB/app/network/named volume과 동일 CGO0 빌드로 재현한다. 로컬 Unix Docker만 허용하고 성공/실패/중단 정리·원본 로그 보존을 구현했다.4블록 smoke와 build 실패 cleanup·원격 endpoint 사전 거부를 확인한다. 실험 원본은 `/private/tmp/indexer-point-tail-20261017`, 최종 배치 비교는 `placement128/measurements.json`에 보존한다. 실제 peer/외장 mount/장기 부하·무거운 API/추가 worker 예산은 남는다.
 
@@ -1307,7 +1307,7 @@ DB 연결4·공유5 HTTP/s/burst1·capture/writer 커밋 직전 uncached fresh·
 
 최종12회 모두130 capture/validate/ACK·260 receipt·2080로그·2470 normalized outbox digest·공유 물리 RPC envelope를 통과했고 API10807건 오류0이었다. 관련 race tests/subtests466회·선택/helper9skip, vet/lint0 issues가 통과했다. fsync 직후 프로세스 종료·batch 회전/중복/충돌/완성 prefix·취소/guard fail closed·legacy stream·128블록 writer/API·restart/reorg/shutdown을 포함한다. profiler/DB timing은 본 실행과 분리했고 설정은 off로 복원했다. 기존 Go/의존성/YAML/handoff/이전 query IO/reader/writer hash는 유지했다.
 
-소유 테스트 컨테이너2개·network·named volume과 바이너리3개187703550bytes를 정리했고 기존10개 컨테이너 name/status/StartedAt이 같았다. 최종 근거는 `/private/tmp/indexer-raw-latency-20261017/measurements.json`, 별도 진단은 `trace-batch-*`, 제외 후보는 `prefetch-probe/`다. [상세 수치/한계](../SOURCE_FACTS.md#원본-저장수신ack-분리와-같은-블록-fsync-공유-2026-10-17)를 따른다. 다음은 metadata/index 회전 I/O와5 HTTP/s 안의 fresh admission 공정성을 API 회귀와 함께 점검하는 것이다. 실제 Arc peer·외장 mount·24시간·추가 worker 운영은 남는다.
+소유 테스트 컨테이너2개·network·named volume과 바이너리3개187703550bytes를 정리했고 기존10개 컨테이너 name/status/StartedAt이 같았다. 최종 근거는 `/private/tmp/indexer-raw-latency-20261017/measurements.json`, 별도 진단은 `trace-batch-*`, 제외 후보는 `prefetch-probe/`다. [상세 수치/한계](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#원본-저장수신ack-분리와-같은-블록-fsync-공유-2026-10-17)를 따른다. 다음은 metadata/index 회전 I/O와5 HTTP/s 안의 fresh admission 공정성을 API 회귀와 함께 점검하는 것이다. 실제 Arc peer·외장 mount·24시간·추가 worker 운영은 남는다.
 
 
 ### 3.68 Seal과 다음 번호의 directory fsync 공유 (10/17)
@@ -1318,7 +1318,7 @@ DB 연결4·공유5 HTTP/s/burst1·capture/writer 커밋 직전 uncached fresh·
 
 동일 Go1.26.8/CGO0 Docker app/PG16·128 timed+2 warm·모드별3교대쌍·pool4/최소API예약1/차용·5 HTTP/s·커밋 직전 fresh를 유지했다. 원본 append p99 중앙값은 streaming117.574→101.277ms, 누적99.247→28.885ms; 누적 시간은2616→2197/570→349ms였다. streaming capture247.272→237.260ms, ACK459.994→458.814ms·누적 ACK25478→25462ms로 ACK/최종1.990·4.961blocks/s는 사실상 같다. streaming 수신 간격562.516→580.149ms와 API 단일/목록8 p993.450/4.608→4.521/5.688ms는 증가했다. 마지막 streaming 쌍의 원본/capture/ACK·첫/세 번째 API 증가도 보존한다. 전체 tail/통계적 유의성/운영 SLO를 주장하지 않는다.
 
-최종12회 모두130 capture/validate/ACK·260receipt·2080로그·2470 outbox digest·RPC envelope를 통과했고 API10812건 오류0이었다. 최종 관련 race348 tests/subtests·선택/helper7skip, vet/lint0 issues가 통과했다. 모든 빌드/검사/별도 profiler 뒤 본 비교를 실행했고 PG timing은 off로 복원했다. 테스트 소유 컨테이너2개·network·named volume과 바이너리2개125142322bytes를 정리했다. 기존10개 컨테이너 상태와 보호한 config/deps/handoff/RPC/source/writer/API/fixture hash는 같다. 근거는 `/private/tmp/indexer-rotation-20261017/measurements.json`과 [상세 기록](../SOURCE_FACTS.md#seal과-다음-번호의-directory-fsync-공유-2026-10-17)이다. 다음은 fresh 내부 DB/RPC 대기와 API tail의 IO 부하 재현이다. 실제 peer/외장 mount/24시간·무거운 API/추가 worker는 남는다.
+최종12회 모두130 capture/validate/ACK·260receipt·2080로그·2470 outbox digest·RPC envelope를 통과했고 API10812건 오류0이었다. 최종 관련 race348 tests/subtests·선택/helper7skip, vet/lint0 issues가 통과했다. 모든 빌드/검사/별도 profiler 뒤 본 비교를 실행했고 PG timing은 off로 복원했다. 테스트 소유 컨테이너2개·network·named volume과 바이너리2개125142322bytes를 정리했다. 기존10개 컨테이너 상태와 보호한 config/deps/handoff/RPC/source/writer/API/fixture hash는 같다. 근거는 `/private/tmp/indexer-rotation-20261017/measurements.json`과 [상세 기록](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#seal과-다음-번호의-directory-fsync-공유-2026-10-17)이다. 다음은 fresh 내부 DB/RPC 대기와 API tail의 IO 부하 재현이다. 실제 peer/외장 mount/24시간·무거운 API/추가 worker는 남는다.
 
 ### 3.69 Fresh DB/RPC 대기와 API tail 분리 (10/17)
 
@@ -1328,7 +1328,7 @@ DB 연결4·공유5 HTTP/s/burst1·capture/writer 커밋 직전 uncached fresh·
 
 Go1.26.8/CGO0 Linux arm64·같은 격리 Docker app/PG16·fsync-on·raw 배치/metadata barrier·2 warm+128 timed·workers2/chunk1/base plan/API2 clients를 고정했다. streaming500ms/backlog1ms 각각3 alternating pairs로 총12회이며 본 측정 중 빌드/검사/프로파일러는 없었다. 실행 percentile의3회 중앙값으로 streaming API 단일/목록8 p99는5.292/6.660→3.233/4.456ms였지만 누적은1.609/2.200→1.813/2.732ms로 증가했다. streaming 두 번째·누적 두 번째와 세 번째 쌍의 API가 증가했다. streaming capture233.728→269.861ms·ACK459.421→479.407ms·raw p9979.061→157.230ms도 증가했다. fresh p99는 streaming185.766→185.544/누적185.097→184.877ms, 누적 ACK25458.680→25461.021ms·처리량4.957블록/s로 사실상 같았다. host1분 load13.86~57.11의 소수3쌍이므로 시간 차이 전체의 코드 인과/통계적 유의성을 주장하지 않는다. 채택 범위는 같은 snapshot의 안전한 SQL11→5 감소이며 전체 API/수집 tail 해결은 아니다.
 
-12회 모두130 capture/validate/ACK·동일2470 outbox digest·API10812건 오류0·SQL1/2회·물리5/s envelope·offline API RPC0을 통과했다. 관련 race337 tests/subtests(반복 포함)·선택1skip, vet/lint0 issues였다. 새 두 backend preflight·fresh 재호출·RPC 중 Reset과 기존 publication/fence/재시작/reorg/128블록 혼합·SQL 보안을 검사했다. 테스트 소유 app/DB/network/named volume·바이너리125152749bytes를 정리했고 기존10개 컨테이너 상태와 보호 config/deps/handoff/raw/pipeline/writer/query IO hash가 같다. 최종 원본은 `/private/tmp/indexer-fresh-tail-20261017/measurements.json`, 진단·표·한계는 [상세 기록](../SOURCE_FACTS.md#fresh-dbrpc-대기와-api-tail-분리-2026-10-17)을 따른다. 다음은 같은 예산의 capture/writer RPC admission과 CPU/IO를 고정한 HTTP/행 소비 tail 재현이다. 실제 peer/mount/24시간 운영은 남는다.
+12회 모두130 capture/validate/ACK·동일2470 outbox digest·API10812건 오류0·SQL1/2회·물리5/s envelope·offline API RPC0을 통과했다. 관련 race337 tests/subtests(반복 포함)·선택1skip, vet/lint0 issues였다. 새 두 backend preflight·fresh 재호출·RPC 중 Reset과 기존 publication/fence/재시작/reorg/128블록 혼합·SQL 보안을 검사했다. 테스트 소유 app/DB/network/named volume·바이너리125152749bytes를 정리했고 기존10개 컨테이너 상태와 보호 config/deps/handoff/raw/pipeline/writer/query IO hash가 같다. 최종 원본은 `/private/tmp/indexer-fresh-tail-20261017/measurements.json`, 진단·표·한계는 [상세 기록](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#fresh-dbrpc-대기와-api-tail-분리-2026-10-17)을 따른다. 다음은 같은 예산의 capture/writer RPC admission과 CPU/IO를 고정한 HTTP/행 소비 tail 재현이다. 실제 peer/mount/24시간 운영은 남는다.
 
 ### 3.70 Capture와 writer SQL 종료 대기 감소 (10/17)
 
@@ -1340,7 +1340,7 @@ Go1.26.8/CGO0 Linux arm64·같은 격리 Docker app/PG16·fsync-on·raw 배치/m
 
 streaming capture p99는246.489→253.436ms로약2.8% 증가했고 한 쌍 감소·두 쌍 증가였다. capture commit p99~219ms·ACK440.739→440.736ms는 비슷했다. 원본 p99/누적/수신 간격 중앙값도 늘었으나 해당 파일 hash는 초기값과 같다. 누적 ACK25649→25737ms·처리량4.919→4.908블록/s도 개선으로 표시하지 않는다. host load6.03~16.69·소수3쌍의 시간 차이를 모두 코드 단독 인과나 통계적 유의성으로 확정하지 않는다. 채택 범위는 정상 SQL 종료 비용 감소와 관측한 API tail 개선이며 capture tail/SLO 해결은 남는다.
 
-12회 모두130 capture/validate/ACK·2470 outbox digest·API10836건 오류0·SQL1/2회·물리5/s envelope·offline API RPC0을 통과했다. 전체 PostgreSQL/capture/facts/RPC/telemetry와128블록 혼합·managed features/독립 worker/reorg/재시작/종료 등 관련 race729 tests/subtests(반복 포함)·선택2skip, vet와 변경 패키지 lint0 issues였다. 새 취소/스트리밍/EOF·완료 뒤 같은 tx의 다음 statement·이미 취소 시 SQL0·context 진단 보존을 검증했다. 테스트 소유 app/DB/network/named volume·바이너리125158887bytes를 정리했고 기존10개 컨테이너 상태를 보존했다. 원본은 `/private/tmp/indexer-capture-api-tail-20261017/measurements.json`, [분석·표·회귀와 한계](../SOURCE_FACTS.md#capture와-writer-sql-종료-대기-감소-2026-10-17)를 따른다. 다음은 head/capture/writer RPC 예약과 원본 fsync를 동일 블록으로 연결한 streaming tail 개선이다. 실제 peer/외장 mount/24시간 운영은 미검증이다.
+12회 모두130 capture/validate/ACK·2470 outbox digest·API10836건 오류0·SQL1/2회·물리5/s envelope·offline API RPC0을 통과했다. 전체 PostgreSQL/capture/facts/RPC/telemetry와128블록 혼합·managed features/독립 worker/reorg/재시작/종료 등 관련 race729 tests/subtests(반복 포함)·선택2skip, vet와 변경 패키지 lint0 issues였다. 새 취소/스트리밍/EOF·완료 뒤 같은 tx의 다음 statement·이미 취소 시 SQL0·context 진단 보존을 검증했다. 테스트 소유 app/DB/network/named volume·바이너리125158887bytes를 정리했고 기존10개 컨테이너 상태를 보존했다. 원본은 `/private/tmp/indexer-capture-api-tail-20261017/measurements.json`, [분석·표·회귀와 한계](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#capture와-writer-sql-종료-대기-감소-2026-10-17)를 따른다. 다음은 head/capture/writer RPC 예약과 원본 fsync를 동일 블록으로 연결한 streaming tail 개선이다. 실제 peer/외장 mount/24시간 운영은 미검증이다.
 
 
 ### 3.71 유지보수 RPC의 fresh 배치 합류 (10/17)
@@ -1353,7 +1353,7 @@ streaming capture p99는246.489→253.436ms로약2.8% 증가했고 한 쌍 감�
 
 누적은 physical HTTP129회씩·ACK25460.508→25444.814ms·처리량4.961블록/s로 사실상 같았다. 반면 API 단일/목록8 p99는1.607/2.456→1.875/3.157ms로약16.7%/28.5% 증가했고 세 쌍 모두 증가했다. admission은 낮아졌으나 SQL-wire tail은 늘어 연결 개수 하나로 설명하지 않는다. host load3.22~9.22·소수3쌍의 편차·유지보수 지연·누적 API 회귀를 명시하고 실제 Arc/450ms/장기 SLO 완료로 표시하지 않는다.
 
-12회 모두130 capture/validate/ACK·2470 outbox digest·API10808건 오류0·SQL1/2회·물리5/s envelope·offline API RPC0을 통과했다. 최종 관련 race1728 tests/subtests(단일 CPU200회1400 포함)·선택2skip, vet/lint0 issues였다. 취소/deadline/FIFO/인증/member 한도/새 응답/finality commit 역할과 capture/facts/Arc/128블록 writer/API·reorg/재시작/종료를 검사했다.75ms 후보 검사는 최종 수에서 제외했다. 테스트 소유 app/DB/network/named volume·바이너리3개187742684bytes를 정리했고 기존10개 컨테이너 상태와 보호 source/config/deps/handoff hash를 보존했다. 원본은 `/private/tmp/indexer-rpc-admission-20261017/measurements.json`, [정책·블록별 분석·전체 표](../SOURCE_FACTS.md#유지보수-rpc의-fresh-배치-합류-2026-10-17)를 따른다. 다음은 누적 API wire/행 소비 tail과 token 부족 시 모으기 정책·API/commit 시점의 겹침을 분리하는 작업, 이후 raw seal/create sync 비용이다. 실제 peer/외장 mount/24시간 운영은 남는다.
+12회 모두130 capture/validate/ACK·2470 outbox digest·API10808건 오류0·SQL1/2회·물리5/s envelope·offline API RPC0을 통과했다. 최종 관련 race1728 tests/subtests(단일 CPU200회1400 포함)·선택2skip, vet/lint0 issues였다. 취소/deadline/FIFO/인증/member 한도/새 응답/finality commit 역할과 capture/facts/Arc/128블록 writer/API·reorg/재시작/종료를 검사했다.75ms 후보 검사는 최종 수에서 제외했다. 테스트 소유 app/DB/network/named volume·바이너리3개187742684bytes를 정리했고 기존10개 컨테이너 상태와 보호 source/config/deps/handoff hash를 보존했다. 원본은 `/private/tmp/indexer-rpc-admission-20261017/measurements.json`, [정책·블록별 분석·전체 표](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#유지보수-rpc의-fresh-배치-합류-2026-10-17)를 따른다. 다음은 누적 API wire/행 소비 tail과 token 부족 시 모으기 정책·API/commit 시점의 겹침을 분리하는 작업, 이후 raw seal/create sync 비용이다. 실제 peer/외장 mount/24시간 운영은 남는다.
 
 ### 3.72 누적 API의 최신 높이·블록 윈도우 통합 조회 (10/17)
 
@@ -1371,7 +1371,7 @@ Streaming은 같은320논리조회에서6회 모두HTTP256회로 배치 이점�
 
 12회 모두130 capture/validate/ACK·390원본자료·260거래/receipt·2080로그·2470 outbox digest가 같았다. API10804건 오류0, 기준SQL1/2·후보1/1, 물리5/s envelope·offline API RPC0을 확인했다. 전체 RPC/capture/facts/Arc·PostgreSQL/API/GraphQL 회귀 후 최종 경로 race와 실제128블록 앱 race·vet/lint0 issues를 다시 통과했다. 같은 transaction/미커밋 차단·gap/offset/경계·손상/취소·필터/페이지/fallback을 검사했다. 제외한 busy 후보의 반복 검사는 최종 코드의 새 concurrency 테스트 수로 세지 않았다.
 
-근거는 /private/tmp/indexer-backlog-api-20261017의 measurements/supplemental-summary/sql-match/api-schedule/validation JSON, 원본 trace·전후 소스/해시·overlay·재현 스크립트와 [상세 분석](../SOURCE_FACTS.md#누적-api의-최신-높이블록-윈도우-통합-조회-2026-10-17)이다. 소유 app/DB/network/named volume과 임시 바이너리7개438077110bytes를 정리하고 기존10개 컨테이너 상태를 보존했다. 다음은 raw seal/create sync와 API handler/서버 대기의 동시 변화·누적 목록 마지막 쌍의 악화를 같은 블록/요청으로 연결한다. 실제 peer·외장 mount·장기 운영은 별도다.
+근거는 /private/tmp/indexer-backlog-api-20261017의 measurements/supplemental-summary/sql-match/api-schedule/validation JSON, 원본 trace·전후 소스/해시·overlay·재현 스크립트와 [상세 분석](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#누적-api의-최신-높이블록-윈도우-통합-조회-2026-10-17)이다. 소유 app/DB/network/named volume과 임시 바이너리7개438077110bytes를 정리하고 기존10개 컨테이너 상태를 보존했다. 다음은 raw seal/create sync와 API handler/서버 대기의 동시 변화·누적 목록 마지막 쌍의 악화를 같은 블록/요청으로 연결한다. 실제 peer·외장 mount·장기 운영은 별도다.
 
 ### 3.73 Streaming capture와 회전 메타데이터 준비 (10/17)
 
@@ -1391,7 +1391,7 @@ Streaming capture p99는477.593→239.330ms(약49.9% 감소), ACK686.458→533.8
 
 최종 관련 race407 tests/subtests 통과·선택7skip, Linux window98통과·선택6skip, 실제128블록 writer/API·capture/facts/RPC/Arc·회전/복구·vet/lint0 issues를 확인했다. 최초 병렬 RPC telemetry 대기시간 assertion과 Arc reorg5초 DB I/O timeout은 같은 코드의 패키지 전체를 순차 race로 재실행해 모두 통과했다. assertion/timeout을 바꾸지 않았고 실패 로그를 보존했다. Linux 최초 상대 fixture 누락도 fixture/cwd 복원 후 같은 바이너리 전체를 통과했다. 선택200회 stress는 반복 I/O를 중단했으며 성공 수에 넣지 않았다.
 
-근거는 `/private/tmp/indexer-stream-capture-20261017/measurements.json`, supplemental-summary/api-tail-check/block-stages/trace-analysis/validation/final-audit JSON과 전후 소스/해시·원본 trace·재현 스크립트다. [상세 표·계약·한계](../SOURCE_FACTS.md#streaming-capture와-회전-메타데이터-준비-2026-10-17)를 따른다. 소유 app/DB/network/named volume·바이너리3개133632465bytes를 정리했고 시작 시점 기존12개 컨테이너 상태를 보존했다. 실제 peer·외장 mount·장기 운영은 별도다.
+근거는 `/private/tmp/indexer-stream-capture-20261017/measurements.json`, supplemental-summary/api-tail-check/block-stages/trace-analysis/validation/final-audit JSON과 전후 소스/해시·원본 trace·재현 스크립트다. [상세 표·계약·한계](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#streaming-capture와-회전-메타데이터-준비-2026-10-17)를 따른다. 소유 app/DB/network/named volume·바이너리3개133632465bytes를 정리했고 시작 시점 기존12개 컨테이너 상태를 보존했다. 실제 peer·외장 mount·장기 운영은 별도다.
 
 ### 3.74 누적 API 재검증과 호스트 부하 확인 (10/17)
 
@@ -1407,9 +1407,9 @@ Streaming capture p99는477.593→239.330ms(약49.9% 감소), ACK686.458→533.8
 
 이번 코드 변경은 placement 측정 도구의 선택적 `--max-host-load`다. startup의 Docker 접근/자원 생성 전과 각 실행 전후에 부하를 확인한다. host-load.json·부분 runs.json·원본 log를 남기며 기존 소유 label cleanup을 유지한다. 생략 시 제한 없이 부하만 기록한다. AST/help·잘못된 인자4종·실제 과부하 startup 중단을 확인했고 마지막 검사는 host-load.json만 만들었다. 전후 확인은 순간별 부하나 장비 격리를 보장하지 않는다. 별도 gate가 있는 저부하 재시도 계획은 준비했지만 기준 미달로 시작하지 않았다.
 
-근거는 `/private/tmp/indexer-api-recheck-20261017`의 attempted-runs/tail-requests/incomplete-audit/protocol/host-load/guard-validation JSON·원본 log·script diff와 [상세 분석](../SOURCE_FACTS.md#누적-api-재검증과-호스트-부하-확인-2026-10-17)이다. 미시작 계획은 `/private/tmp/indexer-api-recheck-lowload-20261017/not-started.json`이다. 소유 app/DB/network/named volume과 바이너리2개125168526bytes를 정리했고 기존12개 컨테이너 상태를 유지했다. 미시작 바이너리2개도125168526bytes 정리했다. 다음 조건은 다른 CPU/메모리 집중 작업 종료 뒤 안정된 호스트이며 같은3쌍으로 API 회귀 재검증 후 capture SQL 묶음을 평가한다. timeout/RPC/fresh 기준을 완화하지 않았고3.73 성능 수용·실제 peer/mount/장기 SLO는 미완료다.
+근거는 `/private/tmp/indexer-api-recheck-20261017`의 attempted-runs/tail-requests/incomplete-audit/protocol/host-load/guard-validation JSON·원본 log·script diff와 [상세 분석](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#누적-api-재검증과-호스트-부하-확인-2026-10-17)이다. 미시작 계획은 `/private/tmp/indexer-api-recheck-lowload-20261017/not-started.json`이다. 소유 app/DB/network/named volume과 바이너리2개125168526bytes를 정리했고 기존12개 컨테이너 상태를 유지했다. 미시작 바이너리2개도125168526bytes 정리했다. 다음 조건은 다른 CPU/메모리 집중 작업 종료 뒤 안정된 호스트이며 같은3쌍으로 API 회귀 재검증 후 capture SQL 묶음을 평가한다. timeout/RPC/fresh 기준을 완화하지 않았고3.73 성능 수용·실제 peer/mount/장기 SLO는 미완료다.
 
-22:49~22:54 KST 사용자 요청으로 호스트를 재확인했다. 첫1분 load23.27·별도 CPU idle47.56% 표본 뒤 빌드를 마치고22:51:16~22:54:16의180초 동안5초 간격37표본을 기록했다. load27.96~119.23·마지막117.29였고 연속60초≤24/비율≤1.25 기준은 충족하지 않았다. 누적128블록·3쌍의 동일 바이너리는 준비했지만 측정0회·Docker 자원 생성0회로 종료하고2개125168526bytes를 제거했다. 보호58 source/config/deps 파일 해시와 DB4/RPC5/commit fresh는 그대로다. 새 API 성능 수치나 추가 회귀 검사 성공 수를 만들지 않는다. 근거는 `/private/tmp/indexer-backlog-recheck-20261017/preflight.json`, `host-summary-preflight.txt`, `final-audit.json`과 [안정성 재확인](../SOURCE_FACTS.md#호스트-안정성-재확인-2026-10-17-22492254-kst)이다. 저부하3쌍 검증은 계속 미완료다.
+22:49~22:54 KST 사용자 요청으로 호스트를 재확인했다. 첫1분 load23.27·별도 CPU idle47.56% 표본 뒤 빌드를 마치고22:51:16~22:54:16의180초 동안5초 간격37표본을 기록했다. load27.96~119.23·마지막117.29였고 연속60초≤24/비율≤1.25 기준은 충족하지 않았다. 누적128블록·3쌍의 동일 바이너리는 준비했지만 측정0회·Docker 자원 생성0회로 종료하고2개125168526bytes를 제거했다. 보호58 source/config/deps 파일 해시와 DB4/RPC5/commit fresh는 그대로다. 새 API 성능 수치나 추가 회귀 검사 성공 수를 만들지 않는다. 근거는 `/private/tmp/indexer-backlog-recheck-20261017/preflight.json`, `host-summary-preflight.txt`, `final-audit.json`과 [안정성 재확인](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#호스트-안정성-재확인-2026-10-17-22492254-kst)이다. 저부하3쌍 검증은 계속 미완료다.
 
 ### 3.75 호스트 부하 원인과 고아 CI 조회 정리 (10/17)
 
@@ -1419,7 +1419,7 @@ indexer cwd의 고아 쉘76116은 과거 Claude job으로5일 넘게 커밋7a919
 
 추가 indexer 실행 파일은 발견되지 않았고 과거 소유9기록과 전체 Docker 대조에서도 소유 컨테이너0이었다. 기존12개 name/state/StartedAt은 같았다. Go 실행 코드/측정 도구/config/deps 보호58파일도 같은 해시다. DB4/예약1·5 HTTP/s/burst1·commit fresh·API SQL1회·raw/barrier를 유지한 동일128+2warm/3 alternating pairs를 준비했으나23:05:02~23:08:02의37표본 load73.75~196.89·마지막188.58로 안정 기준을 충족하지 못했다. 측정0회·Docker 자원 생성0회로 끝냈고 임시 바이너리2개125168526bytes를 제거했다.
 
-근거는 `/private/tmp/indexer-host-audit-20261017`의 final-audit/process-cleanup/external-ownership/memory-summary JSON·소유/프로세스 표본과 measurement/preflight·final-audit JSON, [상세 분석](../SOURCE_FACTS.md#호스트-부하-원인과-고아-ci-조회-정리-2026-10-17)이다. API3쌍/3.73 성능 수용은 미완료이며 다음 조건은 별도 CPU/메모리 집중 작업 종료 후 안정된 호스트다. timeout/RPC/fresh 조건을 완화하지 않았고 새 API 수치나 Go 회귀 검사 성공 수를 만들지 않았다.
+근거는 `/private/tmp/indexer-host-audit-20261017`의 final-audit/process-cleanup/external-ownership/memory-summary JSON·소유/프로세스 표본과 measurement/preflight·final-audit JSON, [상세 분석](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#호스트-부하-원인과-고아-ci-조회-정리-2026-10-17)이다. API3쌍/3.73 성능 수용은 미완료이며 다음 조건은 별도 CPU/메모리 집중 작업 종료 후 안정된 호스트다. timeout/RPC/fresh 조건을 완화하지 않았고 새 API 수치나 Go 회귀 검사 성공 수를 만들지 않았다.
 
 23:12~23:15 KST 후속 요청에 따라 다른 프로젝트를 유지하고 부하만 재확인했다. 약181초/37표본의1분 load184.75~293.78·마지막293.78로 기존 안정 조건은 충족하지 않았다. 빌드0·누적 API 측정0·Docker 자원 생성0회이며 다른 프로젝트에 종료/수정 명령을 내리지 않았다. 보호58파일과 DB4/RPC5/commit fresh는 그대로다. `/private/tmp/indexer-backlog-stability-20261017/preflight.json`, `final-audit.json`을 보존했고 API3쌍 검증은 계속 미완료다.
 
@@ -1429,13 +1429,13 @@ indexer cwd의 고아 쉘76116은 과거 Claude job으로5일 넘게 커밋7a919
 
 모든 준비 후00:11:36~00:14:36의180초/37표본은load30.15~82.39·마지막42.67·마지막 구간비율1.93으로 다시 안정 기준에 미달했다. 본128+2warm/3쌍 측정은0회이며 API percentile/개선율을 만들지 않는다. 준비의 잔여 OS 작업과 외부 작업의 영향은 분리하지 않았다. 보호58파일·DB4/예약1·5 HTTP/s/burst1·commit fresh·API SQL1·raw/barrier는 그대로다. 새 Go 회귀 검사 성공 수도 없다.
 
-소유 app/DB/network/named volume과 바이너리2개125168526bytes를 정리했고 기존12개 컨테이너 상태를 보존했다. 다른 프로젝트에 종료/수정 명령은 없었다. 근거는 `/private/tmp/indexer-backlog-stability-20261018`의 final-audit/screen/comparison-builds/cleanup JSON·before-final-screen protocol/guard log와 [상세 기록](../SOURCE_FACTS.md#누적-api-비교-준비와-최종-호스트-안정성-확인-2026-10-18)이다.5분 관찰 연장 보조 스크립트는 미실행이다. API3쌍/3.73 성능 수용은 계속 미완료이며 최종 준비 후 안정 상태에서 재검증해야 한다.
+소유 app/DB/network/named volume과 바이너리2개125168526bytes를 정리했고 기존12개 컨테이너 상태를 보존했다. 다른 프로젝트에 종료/수정 명령은 없었다. 근거는 `/private/tmp/indexer-backlog-stability-20261018`의 final-audit/screen/comparison-builds/cleanup JSON·before-final-screen protocol/guard log와 [상세 기록](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#누적-api-비교-준비와-최종-호스트-안정성-확인-2026-10-18)이다.5분 관찰 연장 보조 스크립트는 미실행이다. API3쌍/3.73 성능 수용은 계속 미완료이며 최종 준비 후 안정 상태에서 재검증해야 한다.
 
 ### 3.77 모든 측정 준비 후 호스트 부하 재확인 (10/18)
 
 사용자 요청대로 빌드·3.73 변경 전후 SHA 일치·소유 Docker 환경·바이너리 복사·PG fsync-on/진단 off 확인을00:21:11 KST에 모두 마치고 부하를 관찰했다.00:21:22~00:24:22의180.26초/37표본에서1분 load35.97~145.08·마지막132.45였다. 마지막60초 비율1.142는 충족했지만 부하 상한24를 계속 넘었으므로128+2warm/3 alternating pairs는0회다. 관찰 중 추가 빌드·DB 준비·benchmark는 없었고 새 API 수치/Go 회귀 성공 수도 없다.
 
-다른 프로젝트에 종료/수정 명령을 내리지 않았고 기존12개 컨테이너 name/state/StartedAt을 보존했다. 보호58파일·branch·DB4/예약1·5 HTTP/s/burst1·commit fresh·API SQL1·raw/barrier는 그대로다. 소유 app/DB/network/named volume과 바이너리2개125168526bytes를 정리했다. 근거는 `/private/tmp/indexer-prepared-recheck-20261018/final-audit.json` 및 [준비 완료 후 관찰 기록](../SOURCE_FACTS.md#모든-측정-준비-후-호스트-부하-재확인-2026-10-18)이다. API3쌍/3.73 성능 수용은 계속 미완료다.
+다른 프로젝트에 종료/수정 명령을 내리지 않았고 기존12개 컨테이너 name/state/StartedAt을 보존했다. 보호58파일·branch·DB4/예약1·5 HTTP/s/burst1·commit fresh·API SQL1·raw/barrier는 그대로다. 소유 app/DB/network/named volume과 바이너리2개125168526bytes를 정리했다. 근거는 `/private/tmp/indexer-prepared-recheck-20261018/final-audit.json` 및 [준비 완료 후 관찰 기록](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#모든-측정-준비-후-호스트-부하-재확인-2026-10-18)이다. API3쌍/3.73 성능 수용은 계속 미완료다.
 
 후속 재확인은00:31:19 KST에 빌드/SHA·소유 Docker·복사·PG 설정까지 모두 끝내고00:31:23~00:34:23에180.24초/37표본을 관찰했다. load257.92~351.68·마지막257.92·마지막60초 비율1.276으로 안정 기준을 충족하지 않아128블록·3쌍은0회다. 새 API/Go 회귀 성공 수는 없다. 다른 프로젝트와 기존12개 컨테이너 상태·보호58파일·DB4/예약1·RPC5/commit fresh/API SQL1/raw barrier를 유지했다. 소유4종 Docker 자원과 바이너리2개125168526bytes를 정리했고 `/private/tmp/indexer-prepared-recheck-20261018-0030/final-audit.json` 및 준비/screen/정리 원본을 보존했다.
 
@@ -1449,7 +1449,7 @@ indexer cwd의 고아 쉘76116은 과거 Claude job으로5일 넘게 커밋7a919
 
 먼저 공유할 안은①HTTP/클라이언트 검증·handler 단계·admission 분기 구분과 API 오류 후 PASS 오해 방지②제한/표준 validation·취소·요청/오류/extension 계약을 보존한 요청 내 단일 파싱③별도 작은 compact JSON 변경이다. **아직 구현하지 않았다.** 새 pool/연결·cache·fresh/RPC/timeout/barrier 완화나 근거 없는 DB 요약 schema 확장은 제외한다. DB4/예약1·5 HTTP/s/burst1·커밋 직전 새 fresh와 post-RPC epoch/transaction·다른 프로젝트를 유지했다.
 
-[사실·가설·수정 범위](../SOURCE_FACTS.md#기존-api-로그와-코드의-원인-검토수정-제안-2026-10-18)와 `/private/tmp/indexer-api-static-review-20261018/request-review.json`에 원본 SHA·요청별 수치를 기록했다. 문서 외 실행 소스는 수정하지 않았고 보호58파일과 읽은 코드15파일 해시를 대조했다. 사용자 요청 없이 추가 측정을 실행하지 않는다.
+[사실·가설·수정 범위](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#기존-api-로그와-코드의-원인-검토수정-제안-2026-10-18)와 `/private/tmp/indexer-api-static-review-20261018/request-review.json`에 원본 SHA·요청별 수치를 기록했다. 문서 외 실행 소스는 수정하지 않았고 보호58파일과 읽은 코드15파일 해시를 대조했다. 사용자 요청 없이 추가 측정을 실행하지 않는다.
 
 ### 3.79 API 시간 구분과 오류 판정 구현 (10/18)
 
@@ -1457,7 +1457,7 @@ indexer cwd의 고아 쉘76116은 과거 Claude job으로5일 넘게 커밋7a919
 
 측정 요청의 모든 API 오류·handler 미완료와 늦게 시작한 제외 요청의 오류를 verdict에 포함한다. 원본 JSON을 먼저 출력하고 Go fixture를 실패시킨다. runner는 실패한 subprocess의 JSON도 `.failed.json`에 보존하고 PASS가 있어도 API 오류/미완료면 거부한다. 파싱 불가/누락은 실패 사유와 raw log로 남긴다. 늦은 callback 뒤 snapshot map의 경쟁을 방지했다.
 
-실제 DB/노드/HTTP server 없이 mock/메모리 transport/취소·종료 경로의 대상3 Go 패키지 기능 검사·최종 GOMAXPROCS1/race와 Python 결과 판정4검사를 통과했다. 범위 감사는 `/private/tmp/indexer-api-diagnostics-20261018/final-audit.json`에 기록했다. DB 예약/차용 성공 assertion은 추가했지만 DB 통합 실행은 하지 않았다. 추가 부하 측정·호스트 관찰·Docker/DB/RPC 조작은0이며 다른 프로젝트를 건드리지 않았다. DB4/예약1·RPC5/burst1·commit fresh·raw/barrier·SQL 바인딩·설정/의존성은 유지했다. 중복 파싱/Pretty 변경은 아직 미구현이고 성능 효과는 미확인이다. [변경 내용·시간 의미·검증 범위](../SOURCE_FACTS.md#api-시간-구분과-오류-판정-구현-2026-10-18)를 따른다.
+실제 DB/노드/HTTP server 없이 mock/메모리 transport/취소·종료 경로의 대상3 Go 패키지 기능 검사·최종 GOMAXPROCS1/race와 Python 결과 판정4검사를 통과했다. 범위 감사는 `/private/tmp/indexer-api-diagnostics-20261018/final-audit.json`에 기록했다. DB 예약/차용 성공 assertion은 추가했지만 DB 통합 실행은 하지 않았다. 추가 부하 측정·호스트 관찰·Docker/DB/RPC 조작은0이며 다른 프로젝트를 건드리지 않았다. DB4/예약1·RPC5/burst1·commit fresh·raw/barrier·SQL 바인딩·설정/의존성은 유지했다. 중복 파싱/Pretty 변경은 아직 미구현이고 성능 효과는 미확인이다. [변경 내용·시간 의미·검증 범위](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#api-시간-구분과-오류-판정-구현-2026-10-18)를 따른다.
 
 ### 3.80 GraphQL 요청의 단일 파싱 구현 (10/18)
 
@@ -1465,27 +1465,27 @@ indexer cwd의 고아 쉘76116은 과거 Claude job으로5일 넘게 커밋7a919
 
 제한 on/off 각20종의 기존 adapter와 status/header/body 호환 비교40개, depth/complexity/표준 오류의 resolver 실행 차단, 실행 전/중 취소와 context 값·본문 오류를 기능 검사했다. 순환 fragment 검사가 기존 검증기 내부의 무한 재귀/stack overflow를 드러내 같은 AST의 공식 NoFragmentCyclesRule을 먼저 적용하고 정상 fragment 그래프에는 전체 규칙을 유지했다. 자기/상호 순환과 제한 off도 오류로 거절한다.
 
-공유 Go cache 누락/std 조회 오류·분리 과정의 import 누락·검증기 stack overflow 로그를 보존했다. 다른 프로젝트 환경/cache를 삭제하지 않고 전용 GOCACHE로 검사했으며 최종 GraphQL·REST 기능 검사는 통과했다. 전체 race는 기존 WebSocket `TestKeepAlive/answering_client_stays`의200ms 시간 조건에서 실패했고 원인은 미확정이다. 이 별도 경로와 조건을 바꾸지 않았으며 전체 race 통과로 표기하지 않는다. 데이터 경쟁 경고는 없었고, 변경한 HTTP 경로의 별도 race·REST race는 통과했다. 실패/성공 원본·보호 소스·작업 전용 cache 정리 결과는 `/private/tmp/indexer-graphql-single-parse-20261018/final-audit.json`에 기록했다. 추가 성능 측정·호스트 부하 관찰·Docker/실제 DB/공개 RPC 조작은0이다. DB4/예약1·RPC5/burst1·커밋 직전 fresh/post-RPC epoch/transaction·raw/SQL 바인딩·설정/의존성과 다른 프로젝트를 유지했다. [변경·호환·실패와 보완](../SOURCE_FACTS.md#graphql-요청의-단일-파싱-구현-2026-10-18)을 따른다. 처리 속도 개선/SLO 검증은 미완료이며 새 수치를 만들지 않는다.
+공유 Go cache 누락/std 조회 오류·분리 과정의 import 누락·검증기 stack overflow 로그를 보존했다. 다른 프로젝트 환경/cache를 삭제하지 않고 전용 GOCACHE로 검사했으며 최종 GraphQL·REST 기능 검사는 통과했다. 전체 race는 기존 WebSocket `TestKeepAlive/answering_client_stays`의200ms 시간 조건에서 실패했고 원인은 미확정이다. 이 별도 경로와 조건을 바꾸지 않았으며 전체 race 통과로 표기하지 않는다. 데이터 경쟁 경고는 없었고, 변경한 HTTP 경로의 별도 race·REST race는 통과했다. 실패/성공 원본·보호 소스·작업 전용 cache 정리 결과는 `/private/tmp/indexer-graphql-single-parse-20261018/final-audit.json`에 기록했다. 추가 성능 측정·호스트 부하 관찰·Docker/실제 DB/공개 RPC 조작은0이다. DB4/예약1·RPC5/burst1·커밋 직전 fresh/post-RPC epoch/transaction·raw/SQL 바인딩·설정/의존성과 다른 프로젝트를 유지했다. [변경·호환·실패와 보완](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#graphql-요청의-단일-파싱-구현-2026-10-18)을 따른다. 처리 속도 개선/SLO 검증은 미완료이며 새 수치를 만들지 않는다.
 
 ### 3.81 GraphQL JSON 꾸밈 출력 제거 (10/18)
 
-사용자 요청으로3번을 구현했다. GraphQL HTTP의 MarshalIndent를 Marshal로 바꾸고, 기존 Pretty adapter에서 꾸밈 공백만 제거한 JSON과 응답을 비교한다. 정상 데이터+resolver 오류가 함께 있는 경우를 추가해 제한 on/off42개 호환 비교와 GraphQL·REST 기능 검사를1회 실행, 모두 통과했다. HTTP status/header·JSON 값과 오류 의미·Playground HTML·단일 파싱/제한/표준 검증/취소는 유지했다. 추가 성능 측정·호스트 관찰·Docker/실제 DB/공개 RPC 조작은0이고 DB4/예약1·RPC5/burst1·commit fresh/postepoch/raw/SQL/설정/의존성과 다른 프로젝트는 그대로다.135개 보호 파일 중 request.go/request_test.go만 변경됐으며 production 변경은 인코딩1줄이다. 이번 race는 미실행이며 이전 keepalive race 실패 원인은 미확정이다. 작업 전용 cache만 정리하고 성공 로그·diff/범위 감사는 `/private/tmp/indexer-graphql-compact-json-20261018/final-audit.json`에 보존했다. [변경·검증 범위](../SOURCE_FACTS.md#graphql-json-꾸밈-출력-제거-2026-10-18)를 따른다.1~3번은 구현했지만 처리 속도/p99/SLO 효과를 새로 측정하거나 확정하지 않았다.
+사용자 요청으로3번을 구현했다. GraphQL HTTP의 MarshalIndent를 Marshal로 바꾸고, 기존 Pretty adapter에서 꾸밈 공백만 제거한 JSON과 응답을 비교한다. 정상 데이터+resolver 오류가 함께 있는 경우를 추가해 제한 on/off42개 호환 비교와 GraphQL·REST 기능 검사를1회 실행, 모두 통과했다. HTTP status/header·JSON 값과 오류 의미·Playground HTML·단일 파싱/제한/표준 검증/취소는 유지했다. 추가 성능 측정·호스트 관찰·Docker/실제 DB/공개 RPC 조작은0이고 DB4/예약1·RPC5/burst1·commit fresh/postepoch/raw/SQL/설정/의존성과 다른 프로젝트는 그대로다.135개 보호 파일 중 request.go/request_test.go만 변경됐으며 production 변경은 인코딩1줄이다. 이번 race는 미실행이며 이전 keepalive race 실패 원인은 미확정이다. 작업 전용 cache만 정리하고 성공 로그·diff/범위 감사는 `/private/tmp/indexer-graphql-compact-json-20261018/final-audit.json`에 보존했다. [변경·검증 범위](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#graphql-json-꾸밈-출력-제거-2026-10-18)를 따른다.1~3번은 구현했지만 처리 속도/p99/SLO 효과를 새로 측정하거나 확정하지 않았다.
 
 ### 3.82 API 변경1~3 종합 검토 (10/18)
 
-사용자 요청으로 현재 코드/기존3.78 분석·3.79~3.81 검사 원본을 종합 검토했다.1~3 구현/대상 기능 검사는 완료이며 서로 연결돼 있다. 최종42개 호환/GraphQL·REST 기능은 통과했으나3.80 전체 race의 별도 keepalive 실패와 실제 DB 진단 통합 검증은 미완료다. 큰 API tail은 기존 요청별로 handler 밖/입장/SQL 왕복/미분리 handler에 분산되고 단일 원인·호스트/metadata 변경의 인과·성능 개선율은 미확정이다. 다음 순서는 keepalive 실패 원인 분석→실제 DB 통합 기능 검증→사용자 재개 요청 전 성능 검증 보류→근거 있는 구간만 최적화다. 이번 빌드/검사/성능 측정/호스트 관찰/Docker/실제 DB/RPC 조작은0이며 실행 코드/DB4/예약1/RPC5/burst1/commit fresh/다른 프로젝트를 유지했다. 문서만 갱신했고 [종합 근거와 우선순위](../SOURCE_FACTS.md#api-변경13-종합-검토와-남은-우선순위-2026-10-18) 및 `/private/tmp/indexer-api-integrated-review-20261018/final-audit.json`에 기록했다.
+사용자 요청으로 현재 코드/기존3.78 분석·3.79~3.81 검사 원본을 종합 검토했다.1~3 구현/대상 기능 검사는 완료이며 서로 연결돼 있다. 최종42개 호환/GraphQL·REST 기능은 통과했으나3.80 전체 race의 별도 keepalive 실패와 실제 DB 진단 통합 검증은 미완료다. 큰 API tail은 기존 요청별로 handler 밖/입장/SQL 왕복/미분리 handler에 분산되고 단일 원인·호스트/metadata 변경의 인과·성능 개선율은 미확정이다. 다음 순서는 keepalive 실패 원인 분석→실제 DB 통합 기능 검증→사용자 재개 요청 전 성능 검증 보류→근거 있는 구간만 최적화다. 이번 빌드/검사/성능 측정/호스트 관찰/Docker/실제 DB/RPC 조작은0이며 실행 코드/DB4/예약1/RPC5/burst1/commit fresh/다른 프로젝트를 유지했다. 문서만 갱신했고 [종합 근거와 우선순위](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#api-변경13-종합-검토와-남은-우선순위-2026-10-18) 및 `/private/tmp/indexer-api-integrated-review-20261018/final-audit.json`에 기록했다.
 
 ### 3.83 WebSocket keepalive 검사 안정화 (10/18)
 
-기존 실패는 DATA RACE 경고 없는 연결 생존 assertion이었다.200ms 만료·180ms ping은 pong 수락에20ms만 남기며 client callback 계수는 server deadline 갱신을 증명하지 못한다. 당시 오류가 bool/Nop logger로 사라져 정확한 소켓 종료/스케줄링 원인은 미확정이다. 테스트만 수정해 실제 제어프레임과 server deadline 갱신은 OS 타이머를 분리해 관찰하고,무응답 실제200ms 만료·명시적 read 만료 뒤 늦은 pong·비활성 동작/reader join을 따로 검사했다. production60s/54s와 TTL·DB4/예약1/RPC5/burst1/commit fresh/raw/SQL/설정/의존성/다른 프로젝트는 그대로다. GOMAXPROCS1/race keepalive10회·40하위경우 및 GOMAXPROCS2/race GraphQL/REST 패키지1회 모두 통과했고 goleak/경쟁 경고는 없다. 전체 repository race/과거 정확 원인 규명/성능 개선 증거로 표기하지 않는다. 추가 성능 측정/호스트 관찰/Docker/실제 DB/RPC 조작은0이다. 원본·diff/141파일 해시/audit와 후속 검사 재사용용 private Go cache를 `/private/tmp/indexer-keepalive-functional-20261018`에 보존했다. [변경과 한계](../SOURCE_FACTS.md#websocket-keepalive-검사-안정화-2026-10-18)를 따른다.
+기존 실패는 DATA RACE 경고 없는 연결 생존 assertion이었다.200ms 만료·180ms ping은 pong 수락에20ms만 남기며 client callback 계수는 server deadline 갱신을 증명하지 못한다. 당시 오류가 bool/Nop logger로 사라져 정확한 소켓 종료/스케줄링 원인은 미확정이다. 테스트만 수정해 실제 제어프레임과 server deadline 갱신은 OS 타이머를 분리해 관찰하고,무응답 실제200ms 만료·명시적 read 만료 뒤 늦은 pong·비활성 동작/reader join을 따로 검사했다. production60s/54s와 TTL·DB4/예약1/RPC5/burst1/commit fresh/raw/SQL/설정/의존성/다른 프로젝트는 그대로다. GOMAXPROCS1/race keepalive10회·40하위경우 및 GOMAXPROCS2/race GraphQL/REST 패키지1회 모두 통과했고 goleak/경쟁 경고는 없다. 전체 repository race/과거 정확 원인 규명/성능 개선 증거로 표기하지 않는다. 추가 성능 측정/호스트 관찰/Docker/실제 DB/RPC 조작은0이다. 원본·diff/141파일 해시/audit와 후속 검사 재사용용 private Go cache를 `/private/tmp/indexer-keepalive-functional-20261018`에 보존했다. [변경과 한계](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#websocket-keepalive-검사-안정화-2026-10-18)를 따른다.
 
 ### 3.84 실제 DB에서 API 변경1~3 통합 기능 검증 (10/18)
 
-라벨 있는 임시 PostgreSQL/volume과 pool4/예약1로 finite HTTP8개 및 실제 adapter 취소/반납을 검사했다. pinned/borrowed,background3개 점유 중 취소 후 pin 재사용,SQL lock 대기 확인 뒤 취소/오류 정규화/복구,단일/목록 SQL1/decode/GraphQL 단계와 compact JSON,검증·깊이 제한 SQL0·실제 오류 verdict 실패/원본 보존을 통과했다. 첫 app fixture의 초기 배포1거래/기대2거래 오류는 명시적2거래 데이터로 수정했으며 validator는 유지했다. 초기 저장소/API PASS+app fixture FAIL·최종 app PASS 원본을 모두 보존했다. 최종 소스의 대상10 Go 검사 GOMAXPROCS1/race·Python4·실제 DB verdict 거절 검사를 통과했다. 기존 측정 fixture와 새 functional이 공통 test-only HTTP 진단 wrapper를 쓰도록 helper2파일을 보완하고 새 test2파일을 추가했으며 production 수정은 없다. 실제 부하/처리량/p99/host screen/공개 RPC는0,DB4/RPC5/commit fresh/raw/SQL/설정/의존성·다른 프로젝트 유지다. 소유 DB와volume만 제거했고 기존12개 상태/StartedAt은 같았다. `/private/tmp/indexer-db-api-integration-20261018/final-audit.json`과 [상세 범위/한계](../SOURCE_FACTS.md#실제-db에서-api-변경13-통합-기능-검증-2026-10-18)를 따른다. 전체 repository/200회/성능 인과 검증은 미실행이며 API tail 효과는 미확정이다.
+라벨 있는 임시 PostgreSQL/volume과 pool4/예약1로 finite HTTP8개 및 실제 adapter 취소/반납을 검사했다. pinned/borrowed,background3개 점유 중 취소 후 pin 재사용,SQL lock 대기 확인 뒤 취소/오류 정규화/복구,단일/목록 SQL1/decode/GraphQL 단계와 compact JSON,검증·깊이 제한 SQL0·실제 오류 verdict 실패/원본 보존을 통과했다. 첫 app fixture의 초기 배포1거래/기대2거래 오류는 명시적2거래 데이터로 수정했으며 validator는 유지했다. 초기 저장소/API PASS+app fixture FAIL·최종 app PASS 원본을 모두 보존했다. 최종 소스의 대상10 Go 검사 GOMAXPROCS1/race·Python4·실제 DB verdict 거절 검사를 통과했다. 기존 측정 fixture와 새 functional이 공통 test-only HTTP 진단 wrapper를 쓰도록 helper2파일을 보완하고 새 test2파일을 추가했으며 production 수정은 없다. 실제 부하/처리량/p99/host screen/공개 RPC는0,DB4/RPC5/commit fresh/raw/SQL/설정/의존성·다른 프로젝트 유지다. 소유 DB와volume만 제거했고 기존12개 상태/StartedAt은 같았다. `/private/tmp/indexer-db-api-integration-20261018/final-audit.json`과 [상세 범위/한계](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#실제-db에서-api-변경13-통합-기능-검증-2026-10-18)를 따른다. 전체 repository/200회/성능 인과 검증은 미실행이며 API tail 효과는 미확정이다.
 
 ### 3.85 API 변경1~3 및 실제 DB 검증 최종 정리 (10/18)
 
-새 실행 없이 현재143개 소스와3.79~3.84 기능/race/DB/parser/정리 원본을 대조했다. DB 검증 후 해시는 모두 같고 추가 확정 결함은 찾지 못했다.1~3·keepalive·실제 DB 통합은 완료로 마감하고 open-items의 과거 현재 표기를 이력으로 바꿔 완료 항목을 반복 제안하지 않도록 했다. 남은 순서는 변경 확정/PR 전 전체 회귀/정적/race/example 및 push 시 새 동시성200회 규칙,사용자 재개 요청 전 성능 인과/효과 검증 보류,증거 있는 구간만 후속 최적화다. 대상10검사·42호환·package race는 repository 전체/성능/SLO 완료와 다르다. 이번 코드/빌드/검사/측정/host/Docker/DB/RPC 조작은0이고 다른 프로젝트·DB4/예약1/RPC5/commit fresh/raw/SQL/설정/의존성을 유지했다. [최종 범위와 우선순위](../SOURCE_FACTS.md#api-변경13-및-실제-db-검증-최종-정리-2026-10-18), `/private/tmp/indexer-api-final-review-20261018/final-audit.json`에 기록했다.
+새 실행 없이 현재143개 소스와3.79~3.84 기능/race/DB/parser/정리 원본을 대조했다. DB 검증 후 해시는 모두 같고 추가 확정 결함은 찾지 못했다.1~3·keepalive·실제 DB 통합은 완료로 마감하고 open-items의 과거 현재 표기를 이력으로 바꿔 완료 항목을 반복 제안하지 않도록 했다. 남은 순서는 변경 확정/PR 전 전체 회귀/정적/race/example 및 push 시 새 동시성200회 규칙,사용자 재개 요청 전 성능 인과/효과 검증 보류,증거 있는 구간만 후속 최적화다. 대상10검사·42호환·package race는 repository 전체/성능/SLO 완료와 다르다. 이번 코드/빌드/검사/측정/host/Docker/DB/RPC 조작은0이고 다른 프로젝트·DB4/예약1/RPC5/commit fresh/raw/SQL/설정/의존성을 유지했다. [최종 범위와 우선순위](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#api-변경13-및-실제-db-검증-최종-정리-2026-10-18), `/private/tmp/indexer-api-final-review-20261018/final-audit.json`에 기록했다.
 
 ### 3.86 PR 전 전체 회귀 검증 (10/18)
 
@@ -1495,7 +1495,7 @@ indexer cwd의 고아 쉘76116은 과거 Claude job으로5일 넘게 커밋7a919
 
 PostgreSQL16/fsync=on/Asia-Seoul의 DB 분기9개 package race 원본은8개 package PASS, app의 선택적 결과 파일 출력 디렉터리를 runner가 준비하지 않아1건 FAIL(exit1)이다. 다른 상위368개는 통과했다. 경로 준비 후 같은 소스의 해당1개만 race 재검사해 통과했으며 전체 PG를 반복하지 않았다. 최종 기능 근거는369개 통과의 합집합이고 최초 전체 명령이 exit0이었다고 표시하지 않는다. 실제 verdict는8요청/의도 오류4개/미완료0/Passed=false. 운영 코드/판정 기준 수정은 없었다.
 
-소유 DB/container·volume/DSN을 정리하고 기존12개 container 상태/StartedAt 보존을 확인했다. 전용 Rust target은 정리하고 Go cache/toolchain은 보존한다. 추가 성능 측정·host screen·공개 RPC0, 다른 프로젝트 조작0. [전체 결과·제외·실패 해결 근거](../SOURCE_FACTS.md#pr-전-전체-회귀-검증-2026-10-18), `/private/tmp/indexer-pr-regression-20261018/{regression-audit,resolution,cleanup,build-cleanup}.json`을 따른다. PR 전 비성능 전체 회귀는 마감하며 새 변경/실패 없이 반복 제안하지 않는다. push 시 새 동시성200회 규칙·실제 peer/mount는 별도이고 API tail 효과/SLO는 사용자 재개 전 보류한다.
+소유 DB/container·volume/DSN을 정리하고 기존12개 container 상태/StartedAt 보존을 확인했다. 전용 Rust target은 정리하고 Go cache/toolchain은 보존한다. 추가 성능 측정·host screen·공개 RPC0, 다른 프로젝트 조작0. [전체 결과·제외·실패 해결 근거](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#pr-전-전체-회귀-검증-2026-10-18), `/private/tmp/indexer-pr-regression-20261018/{regression-audit,resolution,cleanup,build-cleanup}.json`을 따른다. PR 전 비성능 전체 회귀는 마감하며 새 변경/실패 없이 반복 제안하지 않는다. push 시 새 동시성200회 규칙·실제 peer/mount는 별도이고 API tail 효과/SLO는 사용자 재개 전 보류한다.
 
 ### 3.87 Push 전 API 동시성 200회 검증 (10/18)
 
@@ -1505,7 +1505,7 @@ PostgreSQL16/fsync=on/Asia-Seoul의 DB 분기9개 package race 원본은8개 pac
 
 초기화용 PostgreSQL 임시 서버가 실제 DB 생성 전에 ready를 반환한 것도 원본에서 확인했다. test-postgres.sh는 최종 TCP/test DB의 SELECT1 성공을 확인하고 bounded startup 실패를 명시한다. 실제 스크립트/진단/race1회 및 소유 자원 정리를 확인했으며 그1회는3600에 미산입했다. 코드 변경은 테스트1개/검사 스크립트1개뿐, package vet/gofmt·shell/diff 검사를 통과했다.
 
-운영 소스/설정/의존성·DB4/예약1/RPC5/burst1/커밋 fresh/postepoch/fences/raw/SQL binding·다른 프로젝트를 보존했다. 새 성능/host screen/공개 RPC0, Git 변경 명령0. 소유 DB/volume/DSN 제거·기존12개 container 상태/StartedAt 보존을 확인했다. [범위·실패·수정·단일200회 근거](../SOURCE_FACTS.md#push-전-api-동시성-200회-검증-2026-10-18), `/private/tmp/indexer-concurrency200-20261018/{verification,final-audit,failure-analysis,single-invocation-correction,script-functional,cleanup}.json`을 따른다. 이 API push 전200회 항목은 마감하며 같은 소스를 이유 없이 반복 제안하지 않는다. 성능 인과/SLO·실제 peer/mount는 기존 범위대로 보류/미확정이다.
+운영 소스/설정/의존성·DB4/예약1/RPC5/burst1/커밋 fresh/postepoch/fences/raw/SQL binding·다른 프로젝트를 보존했다. 새 성능/host screen/공개 RPC0, Git 변경 명령0. 소유 DB/volume/DSN 제거·기존12개 container 상태/StartedAt 보존을 확인했다. [범위·실패·수정·단일200회 근거](https://github.com/0xmhha/indexer-go/blob/1ce1476f7e8380fb414dd2841d5617d60cfac0b6/docs/SOURCE_FACTS.md#push-전-api-동시성-200회-검증-2026-10-18), `/private/tmp/indexer-concurrency200-20261018/{verification,final-audit,failure-analysis,single-invocation-correction,script-functional,cleanup}.json`을 따른다. 이 API push 전200회 항목은 마감하며 같은 소스를 이유 없이 반복 제안하지 않는다. 성능 인과/SLO·실제 peer/mount는 기존 범위대로 보류/미확정이다.
 
 
 ### 3.88 누적 변경 PR 제출 준비 (10/19)

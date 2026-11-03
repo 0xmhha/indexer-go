@@ -1,6 +1,6 @@
 # Docker VM 관측 라이브러리와 observer health
 
-[MON-03](analysis/open-items.md#mon-03)의 비운영 구현이다.
+주입 실행기로 VM probe를 소유하고 결과와 observer health를 구분하는 라이브러리다.
 [`internal/vmobserve`](../internal/vmobserve/probe.go)는 주입된 Runner의 작업을
 bounded single-flight로 소유하고 결과·health를 분리한다. 실제 Docker/OS 실행기,
 App/config/CLI 연결, container 생성, 자동 복구/알림 발송은 추가하지 않았다.
