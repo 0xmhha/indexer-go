@@ -8,7 +8,7 @@
 ## MON-02-A — 구현: 순수 관측 모델과 qualification
 
 [A 구현/검증](../20261102-mon02a-observation-model/validation.md)을 따른다. 실제 릴리스는
-Git/PR/CI와 SESSION_STATE에서 확인한다. B의 owner tap/sampler와 C의 alert/checkpoint까지 구현했다. 다음 추천은 D다.
+Git/PR/CI와 SESSION_STATE에서 확인한다. B의 owner tap/sampler와 C의 alert/checkpoint까지 구현했다. D의 App/config·worker 연결도 구현했다. 다음 추천은 MON-03 fake process/parser다.
 
 변경 범위는 새 `internal/nativeobserve`의 DTO/metric definitions/scope binder/
 qualification과 단위 테스트, 기존 budget/horizon predicate의 순수 공통 helper
@@ -81,6 +81,10 @@ resource가 복구됐다는 event를 만들지 않는다. persistence 실패로 
 block하거나 durable source ACK/GC/COMMIT 결과를 변경하지 않는다.
 
 ## MON-02-D — opt-in App assembly와 sink 경계
+
+[D 구현/검증](../20261102-mon02d-app-assembly/validation.md)을 따른다. DB 전체/WAL
+예산만 opt-in App에 연결했고 실제 sink는 disabled다. 미확정 native/derived source와
+네트워크 transport·운영 활성화는 확장하지 않았다. 아래는 유지하는 수용 계약이다.
 
 변경 후보: disabled 기본 config/validation과 App assembly, 제한된 adapter.
 `operations.observation`은 이때 실제 지원 필드가 된다. off일 때 이전 동작·

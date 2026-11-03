@@ -9,6 +9,7 @@ import (
 // sticky for this inbox lifetime; it cannot be mistaken for a recovered resource.
 type Inbox struct {
 	entries chan queuedObservation
+	ready   chan struct{}
 	lost    atomic.Bool
 }
 type queuedObservation struct {
@@ -29,7 +30,7 @@ func NewInbox(size int) (*Inbox, error) {
 	if size < 1 || size > MaxKeys {
 		return nil, errors.New("observation: invalid inbox bound")
 	}
-	return &Inbox{entries: make(chan queuedObservation, size)}, nil
+	return &Inbox{entries: make(chan queuedObservation, size), ready: make(chan struct{}, 1)}, nil
 }
 func (i *Inbox) Bind(bindings []Binding) (*Tap, error) {
 	if i == nil {
@@ -70,9 +71,11 @@ func (t *Tap) Offer(metric Metric, value Observation) bool {
 		}
 		select {
 		case t.inbox.entries <- queuedObservation{value, t}:
+			t.inbox.wake()
 			return true
 		default:
 			t.inbox.lost.Store(true)
+			t.inbox.wake()
 			return false
 		}
 	}
@@ -84,6 +87,16 @@ func (t *Tap) Retire() {
 	}
 }
 func (i *Inbox) Lost() bool { return i != nil && i.lost.Load() }
+
+func (i *Inbox) wake() {
+	select {
+	case i.ready <- struct{}{}:
+	default:
+	}
+}
+
+// Ready signals work/loss only; it cannot consume values or bypass retirement.
+func (i *Inbox) Ready() <-chan struct{} { return i.ready }
 
 // Poll is bounded even if retired producers race the consumer. Queued results
 // of detached sources are discarded; timestamps are never refreshed on dequeue.

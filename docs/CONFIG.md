@@ -789,3 +789,13 @@ dispatcher는 최대 10ms 수집 창과 HTTP 토큰 대기 중 들어온 독립 
 `source.execution` opts into the prepared StableNet PostgreSQL execution path. See [configuration and checkpoint requirements](EXECUTION_INGEST.md#indexer-configuration). It requires pool4, shared RPC5 and head/fresh publication, is mutually exclusive with other sources and defaults to off. An API-only process omits this option and detects the DB read fence automatically. Prepare new schemas with the [offline bootstrap tools](EXECUTION_BOOTSTRAP.md); normal restart does not rerun import. Executor `start_mode` and full/partial coverage are documented there.
 
 Executor offline retention, copy reserve, optional node capacity and resume thresholds are documented in [execution retention](EXECUTION_RETENTION.md). They do not change per-chain pool4, part concurrency2, RPC5 HTTP/s or final fresh. Operational GC remains explicit and off.
+
+## Optional operations observation
+
+`operations.observation` defaults to disabled. Its v1 App adapter grades explicit
+whole-database and server-WAL budgets through one shared PostgreSQL sampler and
+a separate bounded alert worker; it supports a disabled sink only. Enabled mode
+requires pool4, declared resource/series identities and an existing private
+checkpoint directory. See [supported fields, defaults and lifecycle](NATIVE_MONITORING_INTEGRATION.md#구현된-opt-in-app-설정과-lifecycle).
+This does not enable deployment, peers, disk provisioning, GC or network alerts.
+Existing capacity/latch/Resume behavior and physical RPC5/final fresh stay intact.

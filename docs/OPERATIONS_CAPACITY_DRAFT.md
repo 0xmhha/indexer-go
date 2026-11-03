@@ -182,3 +182,12 @@ indexer는 잠금 파일을 쓸 때 `stopDatabase`를 함께 정한다. 저장�
 4. [checkpoint/재시작/GC 운영 절차 초안](OPERATIONS_RUNBOOK_DRAFT.md)과 [읽기 전용 metadata 진단 도구](OPERATIONS_INSPECTION.md)는 작성했다. 진단은 모의 데이터 범위이며 백업 보관·이전의 실제 방식/RPO/RTO와 실제 복구/완전한 GC 승인 진단은 남아 있다. 운영 적용·실제 장애/복원 검증은 저장소·enode 확보와 실행 보류 해제 이후다.
 
 이번 검토는 기존 코드·문서·공식 PostgreSQL 문서에 근거한 정적 검토다. 디스크 상태 재조회, DB 통계 쿼리, 컨테이너/서비스 실행, 실제 삭제·중단·재개, 성능 측정은 하지 않았다.
+
+### 선택적 관측과 기존 보호 정책
+
+[operations.observation](NATIVE_MONITORING_INTEGRATION.md#구현된-opt-in-app-설정과-lifecycle)은
+기본 비활성 DB 전체/WAL 예산 경보 adapter다. 위 표의 기존 DB 통계는 journal만
+기록하며 중단시키지 않는 의미를 유지한다. 관측을 함께 켜면 같은 sampler를
+공유하고 query2초/round5초로 제한하며 두 stats interval은 같아야 한다. 별도
+alert checkpoint/worker·disabled sink는 기존 halt/latch/Resume나 운영 HOLD를
+바꾸지 않는다. PGDATA·schema·물리 디스크 예산을 DB/WAL budget으로 대체하지 않는다.
