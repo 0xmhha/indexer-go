@@ -26,6 +26,7 @@ Start with the task you want to complete. The quickstart and contribution guide 
 | Query tracked account and storage changes | [Tracked-state projections](TRACKED_STATE_PROJECTION.md) |
 | Evaluate saved diagnostic/capacity/backlog observations and optional DB growth | [Offline Native monitoring](NATIVE_OFFLINE_MONITORING.md) |
 | Configure opt-in DB/WAL observation and review source/alert boundaries | [Native observation integration](NATIVE_MONITORING_INTEGRATION.md) |
+| Embed/test bounded VM probe work and distinguish sensor health from free space | [VM observation library](NATIVE_VM_OBSERVATION.md) |
 | Authenticate external PostgreSQL backup evidence | [Offline backup adapter](EXECUTION_BACKUP_ADAPTER.md) |
 | Review diagnostic-only Docker image/profile wiring | [Native Docker draft](../deployments/native/README.md) |
 | Build a new Arc native DB offline from an authenticated full checkpoint | [Arc native bootstrap](EXECUTION_ARC_BOOTSTRAP.md) |

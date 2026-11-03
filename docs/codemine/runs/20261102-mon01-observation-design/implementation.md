@@ -8,7 +8,7 @@
 ## MON-02-A — 구현: 순수 관측 모델과 qualification
 
 [A 구현/검증](../20261102-mon02a-observation-model/validation.md)을 따른다. 실제 릴리스는
-Git/PR/CI와 SESSION_STATE에서 확인한다. B의 owner tap/sampler와 C의 alert/checkpoint까지 구현했다. D의 App/config·worker 연결도 구현했다. 다음 추천은 MON-03 fake process/parser다.
+Git/PR/CI와 SESSION_STATE에서 확인한다. B의 owner tap/sampler와 C의 alert/checkpoint까지 구현했다. D의 App/config·worker 연결도 구현했다. MON-03 fake process/parser도 구현했다. 실제 활성화는 운영 입력/승인 전까지 보류다.
 
 변경 범위는 새 `internal/nativeobserve`의 DTO/metric definitions/scope binder/
 qualification과 단위 테스트, 기존 budget/horizon predicate의 순수 공통 helper
@@ -102,6 +102,10 @@ transition ID, no halt/Resume/GC/write capability, shutdown join을 fake sink와
 소유 fixture로 확인한다. 외부 endpoint/운영 secret/실제 알림은 사용하지 않는다.
 
 ## MON-03 — Docker VM source와 observer health
+
+[구현/검증](../20261103-mon03-vm-observer/validation.md)·[현재 계약](../../../NATIVE_VM_OBSERVATION.md)을 따른다.
+주입 Runner와 fake process로 아래 non-operating 수용 범위를 구현했다. 실제 OS/Docker
+실행기와 App/config activation·durable crash admission은 OPS-03/05의 보류 범위다.
 
 별도 adapter로 probe interface·strict bounded result parser·fake process runner부터
 구현한다. 현재 `docker_vm_free`는 container 실행이므로 가벼운 read-only getter로
