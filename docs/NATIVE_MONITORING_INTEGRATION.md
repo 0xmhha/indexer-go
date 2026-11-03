@@ -5,8 +5,9 @@ capacity guard, DB 통계 journal, runtime telemetry, 파일 진단과 오프라
 평가기를 각각 제공한다. MON-02-A의 순수 관측 모델·qualification·공통 수치
 predicate, MON-02-B의 단일 sampler/owner tap, MON-02-C의 경보 reducer·private
 checkpoint·fake/disabled sink와 MON-02-D의 기본 비활성 App/config·공유 worker를 구현했다.
-현재 App adapter는 DB 전체/WAL의 명시적 용량 예산만 지원한다. Docker VM/health
-adapter는 MON-03이며 운영 실행·추가 측정·실제 알림 발송은 HOLD다.
+현재 App adapter는 DB 전체/WAL의 명시적 용량 예산만 지원한다. MON-03의
+[VM probe/health 라이브러리](NATIVE_VM_OBSERVATION.md)는 injected fake 경계로 구현했고
+실제 Docker 실행기/App 활성화·운영 실행·추가 측정·알림 발송은 HOLD다.
 
 [계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md)과
 [현재 상태](SESSION_STATE.md)를 함께 따른다.
@@ -344,5 +345,7 @@ operations:
 
 구체적인 source 변경 후보와 RED→GREEN 표는
 [MON-02/03 구현 계획](codemine/runs/20261102-mon01-observation-design/implementation.md)을 따른다.
-다음 추천은 MON-03의 fake process/parser·cancel/join·unknown 구현이다.
-실제 Docker probe·container·운영 수집·알림 발송은 계속 HOLD다.
+MON-03의 [fake process/parser·cancel/join·unknown](NATIVE_VM_OBSERVATION.md) 구현과
+[검증](codemine/runs/20261103-mon03-vm-observer/validation.md)을 완료했다. 해당 릴리스의
+actual PR/CI/squash/main을 확인한 뒤 새 운영 입력 없이 probe를 반복하지 않는다.
+현재 다음은 OPS-01~04 입력 확정이며 실제 Docker/운영/추가 측정 HOLD를 유지한다.
