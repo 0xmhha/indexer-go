@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/0xmhha/indexer-go/internal/observeconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -29,9 +30,10 @@ type Config struct {
 	// volume being present.
 	HaltFile string `yaml:"halt_file"`
 	// JournalFile optionally keeps capacity samples and transitions as JSON lines.
-	JournalFile     string          `yaml:"journal_file"`
-	JournalMaxBytes int64           `yaml:"journal_max_bytes"`
-	Capacity        *CapacityConfig `yaml:"capacity"`
+	JournalFile     string                `yaml:"journal_file"`
+	JournalMaxBytes int64                 `yaml:"journal_max_bytes"`
+	Capacity        *CapacityConfig       `yaml:"capacity"`
+	Observation     *observeconfig.Config `yaml:"observation,omitempty"`
 }
 
 // CapacityConfig selects what the Monitor samples and when it halts.
@@ -70,6 +72,10 @@ func (c Config) Enabled() bool { return c.Capacity != nil }
 
 // WithDefaults fills unset sampling settings.
 func (c Config) WithDefaults() Config {
+	if c.Observation != nil {
+		v := c.Observation.WithDefaults()
+		c.Observation = &v
+	}
 	if c.JournalMaxBytes == 0 {
 		c.JournalMaxBytes = DefaultJournalMaxBytes
 	}
@@ -102,6 +108,14 @@ func setDuration(d *time.Duration, def time.Duration) {
 
 // Validate checks a configuration after WithDefaults.
 func (c Config) Validate() error {
+	if c.Observation != nil {
+		if err := c.Observation.Validate(); err != nil {
+			return err
+		}
+		if c.Observation.Enabled && c.Capacity != nil && c.Observation.Interval != c.Capacity.PostgresStatsInterval {
+			return observeconfig.ErrConfig
+		}
+	}
 	if c.HaltFile == "" {
 		if c.Capacity != nil {
 			return errors.New("operations.halt_file is required with operations.capacity")

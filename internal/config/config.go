@@ -1527,6 +1527,9 @@ func (c *Config) Validate() error {
 	if err := c.Operations.WithDefaults().Validate(); err != nil {
 		return err
 	}
+	if c.Operations.Observation != nil && c.Operations.Observation.Enabled && (c.Database.Driver != DriverPostgres || c.Database.Postgres.MaxConns != 4) {
+		return fmt.Errorf("operations.observation requires PostgreSQL max_conns=4")
+	}
 	if !c.MultiChainMode() && c.Source.NodeFeedSocket != "" && (!filepath.IsAbs(c.Source.NodeFeedSocket) || !c.Indexer.AcquisitionQueue || !c.Indexer.StatePrefetch || c.Source.EraDir != "" || c.DeclaredMode()) {
 		return fmt.Errorf("source.node_feed_socket requires an absolute path, full mode, acquisition_queue, state_prefetch and no era archive")
 	}

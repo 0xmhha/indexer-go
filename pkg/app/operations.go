@@ -8,23 +8,52 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/0xmhha/indexer-go/internal/config"
+	"github.com/0xmhha/indexer-go/internal/observation"
 	"github.com/0xmhha/indexer-go/internal/opsguard"
 	"github.com/0xmhha/indexer-go/pkg/window"
 )
 
-// initOperations builds the capacity monitor, which Run starts. Chain Apps of
-// multichain mode have no operations section and share the root's monitor.
+// initOperations constructs owners without starting observation IO. Chain Apps
+// borrow the root's owners and detach only their own source on closure.
 func (a *App) initOperations() error {
 	ops := a.config.Operations.WithDefaults()
-	if !ops.Enabled() {
-		return nil
+	observed := ops.Observation != nil && ops.Observation.Enabled
+	if observed {
+		if err := ops.Validate(); err != nil {
+			return err
+		}
+		if a.config.Database.Driver != config.DriverPostgres || a.config.Database.Postgres.MaxConns != 4 {
+			return fmt.Errorf("operations.observation requires PostgreSQL max_conns=4")
+		}
 	}
-	m, err := opsguard.NewMonitor(ops, a.haltProcess, opsguard.WithLogger(a.logger.Named("capacity")))
-	if err != nil {
-		return fmt.Errorf("operations: %w", err)
+	if ops.Enabled() {
+		options := []opsguard.Option{opsguard.WithLogger(a.logger.Named("capacity"))}
+		if observed {
+			options = append(options, opsguard.WithObservationStats())
+		}
+		m, err := opsguard.NewMonitor(ops, a.haltProcess, options...)
+		if err != nil {
+			return fmt.Errorf("operations: %w", err)
+		}
+		a.opsMonitor, a.rawObserver = m, m.ObserveRaw
 	}
-	a.opsMonitor = m
-	a.rawObserver = m.ObserveRaw
+	if observed {
+		var sampler *opsguard.StatsSampler
+		own := a.opsMonitor == nil
+		if own {
+			sampler = opsguard.NewObservationStatsSampler()
+		} else {
+			sampler = a.opsMonitor.StatsSampler()
+		}
+		r, err := observation.New(*ops.Observation, sampler, own, observation.Options{Logger: a.logger.Named("observation")})
+		if err != nil {
+			if own {
+				sampler.Close()
+			}
+			return err
+		}
+		a.observation, a.ownObservation = r, true
+	}
 	return nil
 }
 
@@ -38,19 +67,30 @@ func (a *App) observeRaw(u window.Usage) {
 
 // attachPostgresStats lets m sample the statistics of this App's store, if
 // it is PostgreSQL, until closeOperations.
-func (a *App) attachPostgresStats(m *opsguard.Monitor) {
-	if m == nil || a.statsDetach != nil {
-		return
+func (a *App) attachPostgresStats(m *opsguard.Monitor) error {
+	if a.statsDetach != nil {
+		return nil
 	}
 	if s, ok := postgresStats(a.storage); ok {
-		a.statsDetach = m.AttachPostgresStats(s)
+		if a.observation != nil {
+			var err error
+			a.statsDetach, err = a.observation.AttachStats(s)
+			return err
+		}
+		if m != nil {
+			a.statsDetach = m.AttachPostgresStats(s)
+		}
 	}
+	return nil
 }
 
 // closeOperations runs before the store closes.
 func (a *App) closeOperations() {
 	if a.statsDetach != nil {
 		a.statsDetach()
+	}
+	if a.ownObservation {
+		a.observation.Stop()
 	}
 	if a.opsMonitor == nil {
 		return

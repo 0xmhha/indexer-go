@@ -2,7 +2,7 @@
 
 현재 작업의 시작점은 [SESSION_STATE](../SESSION_STATE.md), 인계 방식은
 [세션 규약](../SESSION_HANDOFF.md)이다. 이 문서는 **활성 작업 ID·의존성·완료 조건**을
-관리한다. 마지막 완료 릴리스는 MON-02-B #264이며, E1~E6의 수용 범위와
+관리한다. 마지막 확인된 완료 릴리스는 MON-02-C #265이며, E1~E6의 수용 범위와
 Arc N0~N6는 완료했다. 실제 운영과 선택 확장은 별개다.
 
 ## 상태와 선택 규칙
@@ -16,8 +16,8 @@ Arc N0~N6는 완료했다. 실제 운영과 선택 확장은 별개다.
 | DEFERRED | 현재 수용 범위 밖의 선택적 확장. 자동 착수하지 않음 |
 | DONE | 완료 요약·정본으로 이동. ID 재사용과 불필요한 재검증 없음 |
 
-[MON-01 설계](../NATIVE_MONITORING_INTEGRATION.md)는 완료했다. 문서 릴리스 정리 후
-권장 다음은 **[MON-02](#mon-02)-A의 순수 모델/qualification 구현**이다. 실제 운영의 우선순위는
+[MON-01 설계](../NATIVE_MONITORING_INTEGRATION.md)는 완료했다. [MON-02](#mon-02)-D의 로컬 구현/검증 후 릴리스 gates를 확인하고,
+권장 다음은 **[MON-03](#mon-03)의 fake process/parser·lifecycle 구현**이다. 실제 운영의 우선순위는
 OPS-01→OPS-02→OPS-03→OPS-04이며 입력과 실행 보류를 먼저 해소해야 한다.
 사용자의 새로운 지시가 우선한다. `다음 진행`으로 HOLD 해제나 선택 확장을
 추정하지 않고, 선택한 ID와 다음 행동을 SESSION_STATE에 기록한다.
@@ -26,7 +26,7 @@ OPS-01→OPS-02→OPS-03→OPS-04이며 입력과 실행 보류를 먼저 해소
 
 | ID | 상태 | 작업 | 완료 조건·의존성 |
 | --- | --- | --- | --- |
-| <a id="mon-02"></a>MON-02 | READY | DB 추세 수집·watcher/hysteresis·경보 어댑터 통합 | [A→B→C→D 순차 계획](../codemine/runs/20261102-mon01-observation-design/implementation.md). A/B는 #263/#264로 완료했고 [C alert/checkpoint](../codemine/runs/20261102-mon02c-alert-state/validation.md)는 구현·로컬 검증했다. 현재 C의 PR/CI/머지는 SESSION_STATE와 Git에서 대조한다. 다음 READY slice D는 disabled opt-in App/config·worker lifecycle·별도 operator transport 경계다. derived backlog/lag/health의 source 증거가 없으면 UNKNOWN, 실제 발송은 별도 허용 전까지 disabled다. slice마다 RED→GREEN·CI·squash/main 후 다음 진행. 실제 수집·발송·stop/resume 활성화는 OPS-05의 별도 운영 범위 |
+| <a id="mon-02"></a>MON-02 | READY / REVIEW | 기본 비활성 DB/WAL 관측·경보 App 통합 릴리스 | [A→B→C→D 계획](../codemine/runs/20261102-mon01-observation-design/implementation.md). A/B/C는 #263/#264/#265로 완료. [D 검증](../codemine/runs/20261102-mon02d-app-assembly/validation.md)은 RED→GREEN·새13사례 race200·owned PG·정적 검사를 완료. 현재 D의 normal PR/actual exact-head short CI/squash/clean main을 Git에서 확인하고, 완료됐다면 구현을 반복하지 않고 MON-03으로 이동. App v1은 DB 전체/WAL budget만; native/derived epoch·backlog/lag·growth forecast producer는 미관측이며 0/정상을 만들지 않음. 실제 발송·stop/resume 확장은 OPS-05 범위 |
 | <a id="mon-03"></a>MON-03 | PLAN | Docker VM 지속 관측과 watcher 장애 감지 | [관측 계약](../NATIVE_MONITORING_INTEGRATION.md)·[adapter/RED 계획](../codemine/runs/20261102-mon01-observation-design/implementation.md#mon-03--docker-vm-source와-observer-health)을 따른다. fake process/parser·동시1개/cancel/late-result/권한·unknown부터 구현. Docker/호스트의 실제 probe·container 실행·알림 발송은 보류 |
 
 이미 구현된 [두 스냅샷 DB 증가 추세](../NATIVE_OFFLINE_MONITORING.md#optional-indexer-growth-assessment)는

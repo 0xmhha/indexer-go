@@ -4,9 +4,9 @@
 capacity guard, DB 통계 journal, runtime telemetry, 파일 진단과 오프라인
 평가기를 각각 제공한다. MON-02-A의 순수 관측 모델·qualification·공통 수치
 predicate, MON-02-B의 단일 sampler/owner tap, MON-02-C의 경보 reducer·private
-checkpoint·fake/disabled sink를 구현했다. 실제 App/config/transport 통합은
-**MON-02-D/03 구현 계획**이며
-아직 실행 경로나 설정 키가 아니다. 운영 실행·추가 측정·알림 발송은 HOLD다.
+checkpoint·fake/disabled sink와 MON-02-D의 기본 비활성 App/config·공유 worker를 구현했다.
+현재 App adapter는 DB 전체/WAL의 명시적 용량 예산만 지원한다. Docker VM/health
+adapter는 MON-03이며 운영 실행·추가 측정·실제 알림 발송은 HOLD다.
 
 [계획](codemine/runs/20261102-mon01-observation-design/plan.md)·[체크리스트](codemine/runs/20261102-mon01-observation-design/checklist.md)·[검증](codemine/runs/20261102-mon01-observation-design/validation.md)과
 [현재 상태](SESSION_STATE.md)를 함께 따른다.
@@ -31,10 +31,9 @@ startup ACK ref의 새 관측은 새 처리 event 시각이 아니다. head나 s
 stale/missing은 예측 불가다. 기존 v1과 공통 `monitorpredicate.ProductGE`의128-bit
 수치 비교를 사용한다. `Growth.Within`의 known=false는 정상 여유가 아니다.
 
-순수 model/qualification 외에 B의 IO 없는 inbox/tap·기존 sampler 소유권을 구현했다.
-새 DB/RPC/pool·파일 저장·경보/전송·App 설정 활성화는 추가하지 않았다.
-CLI v1 schema/출력/설정도 그대로다. [구현 검증](codemine/runs/20261102-mon02a-observation-model/validation.md)을
-따른다. 아래의 수집·supervisor·경보 lifecycle은 후속 slice의 계약이다.
+A의 순수 계층은 DB/RPC/pool이나 파일 IO를 추가하지 않는다. B~D의 opt-in
+연결은 아래 별도 경계를 따른다. CLI v1 schema/출력은 그대로다. [A 구현 검증](codemine/runs/20261102-mon02a-observation-model/validation.md)을
+따른다. 아래에서 구현한 범위와 후속 adapter 계약을 구분한다.
 
 ## 현재 코드에서 확인한 재사용 지점
 
@@ -61,7 +60,8 @@ CLI v1 schema/출력/설정도 그대로다. [구현 검증](codemine/runs/20261
 ## 선택한 구조와 소유권
 
 아래 구조의 model/qualification·bounded inbox/tap·stats owner와 nativealerts는
-구현됐다. 실제 App/설정/transport 연결은 제안이다.
+구현됐다. D는 DB/WAL App 연결과 비활성 sink까지만 지원한다. 다른
+source·derived rule·네트워크 transport는 이 설계의 후속 경계다.
 
 ```mermaid
 flowchart LR
@@ -83,23 +83,24 @@ flowchart LR
 - App이 생명주기를 소유한다. 기존 owner의 성공 결과와 verified progress를
   비차단 tap으로 복사하고, 한 DB resource에 하나의 sampler만 둔다. legacy
   monitor의 result tap과 관측 전용 mode가 둘 다 sampler를 띄우지 않게 한다.
-- 제안 config namespace는 `operations.observation`, 기본 nil/disabled이다.
-  현재 parser에는 없으며 예제/실제 설정에 추가하지 않는다. 기존 capacity
-  section/Resume 의미를 그대로 두고, 관측 전용 mode는 halt file을 만들지 않는다.
+- config namespace는 `operations.observation`, 기본 nil/disabled이다. 아래
+  지원 필드만 strict parser로 받는다. 실제 config.yaml은 바꾸지 않았다. 기존
+  capacity/Resume 의미를 유지하며 관측 전용 mode는 halt file을 만들지 않는다.
 
 ## 구현된 owner 결과 연결
 
 [MON-02-B 검증](codemine/runs/20261102-mon02b-owner-taps/validation.md)을 따른다.
 `Monitor.StatsSampler()`는 기존 owner를 공유하며 새 periodic `Run` 중복을 거부한다.
-`WithObservationStats`/`NewObservationStatsSampler`는 programmatic opt-in이며
-현재 YAML 설정이나 자동 App 활성화를 뜻하지 않는다. 수동 `Sample`은 명시적
+D의 App은 opt-in 설정에 따라 `WithObservationStats`/`NewObservationStatsSampler`를
+선택한다. 수동 `Sample`은 명시적
 owner 작업이며 consumer의 별도 polling 경로로 사용하지 않는다.
 
 Inbox는 bounded channel, per-key sequence·sticky lifetime loss와 retired source
 필터를 제공한다. callback/IO는 없고, 포화가 query/commit/ACK 결과를 바꾸지 않는다.
 상호 독립된 owner에는 별도 tap을 사용하고, retire 후 새 registration이 필요하다.
 Recorder/Arc stop과 stats detach/close는 해당 tap을 retire한다. SQL backend의
-borrowed tap은 D의 App owner가 receiver join 뒤 retire해야 한다.
+borrowed SQL/native tap의 자동 App 연결은 아직 없으며 해당 receiver join 뒤
+retire하는 계약을 유지한다. 미검증 epoch로 경보를 만들지 않는다.
 
 DB/WAL은 각 query 시각을 보존한다. Arc raw/native는 기존 durable completion을
 복사하며, ACK 최초 관측/복원은 새 progress 시각이 아니다. SQL 성공은 이전 commit
@@ -107,7 +108,8 @@ DB/WAL은 각 query 시각을 보존한다. Arc raw/native는 기존 durable com
 epoch와 legacy intake에 없는 capture generation은 채우지 않고 incomplete로 남긴다.
 legacy received는 원래 receive 시각과 unverified/truncated coverage를 보존한다.
 이 부분 자료로 exact backlog·최신 network head를 만들지 않는다. Inbox loss의
-자동 복구·알림 해제·파일·sender는 아직 없고 C/D에서 별도 검증한다.
+자동 복구나 알림 해제를 만들지 않는다. C/D의 private 상태·disabled/fake sink는
+아래 별도 경계로 검증했다. 실제 sender는 없다.
 
 ## 관측 계약
 
@@ -224,8 +226,8 @@ restart는 rate history를 새로 시작하고 미확정 active alert·delivery 
 ## 구현된 경보와 private checkpoint
 
 [MON-02-C 검증](codemine/runs/20261102-mon02c-alert-state/validation.md)을 따른다.
-모듈은 caller-driven single owner이며 새 App/worker/config나 실제 sender를 시작하지
-않는다. `CapacitySignal`은 resource별 A qualification과128-bit threshold를 재사용한다.
+C 모듈은 caller-driven single owner다. D의 별도 alert worker가 이를 직렬로
+소유하며 실제 sender는 시작하지 않는다. `CapacitySignal`은 resource별 A qualification과128-bit threshold를 재사용한다.
 backlog/lag/health kinds는 이미 검증된 derived signal을 요구하며 producer adapter는
 후속 범위다. 단순 block height나 전체 HOLD를 backlog/정상 값으로 사용하지 않는다.
 
@@ -272,9 +274,75 @@ exactly-once가 아니므로 stable transition ID와 bounded retry/dead-letter,
 기존 hard guard·latch가 actuator 정본이다. 포맷/운영 실행/추가 측정과
 APFS/peer/checkpoint/private 입력의 HOLD는 [운영 준비](OPERATIONS_READINESS.md)를 따른다.
 
+## 구현된 opt-in App 설정과 lifecycle
+
+[D 계획/검증](codemine/runs/20261102-mon02d-app-assembly/validation.md),
+[`observeconfig`](../internal/observeconfig/config.go),
+[`observation.Runtime`](../internal/observation/runtime.go)와
+[App 조립](../pkg/app/operations.go)을 따른다. nil/off일 때 관측 worker, RNG,
+checkpoint factory/file, sampler를 만들지 않는다. 기존 capacity만 켰을 때의
+30초 query deadline·설정·latch는 유지한다.
+
+현재 지원은 하나의 **DB 전체 논리 크기**와 같은 서버의 **WAL 논리 크기**다.
+resource/series는 nonzero lowercase hex64 선언이며 DB 인증이 아니다. DB와 WAL은
+서로 다른 ID와 explicit byte budget을 요구한다. schema별·PGDATA·물리 디스크
+예산을 이 값에 넣지 않는다. 여러 chain schema는 같은 configured database의
+관측 하나를 공유한다. 실제 설정·DSN·비밀 값이나 사용자 event/outbox는 공유하지 않는다.
+
+| 필드 | enabled일 때의 계약/기본값 |
+| --- | --- |
+| `checkpoint_dir`, `initialize` | 기존 owner0700 절대 경로. 기본 initialize=false. true도 **없는 alerts.json**만 최초 저장하며 손상·부적합·기존 변경 이력은 대체하지 않음 |
+| `sink`, `operator_id` | YAML v1은 disabled만 허용. operator_id는 선택 hex64; 프로그램으로 주입하는 enabled fake sink는 별도 exact nonzero operator binding 필요 |
+| `database`, `wal` | 각각 id/series/budget_bytes 필수. budget>0, 두 resource ID가 같으면 거부 |
+| `interval`, `max_age` | 기본1분/interval의3배. interval 1초~1시간, max_age는 interval 이상~24시간 |
+| `warn_bps`, `stop_bps`, `clear_bps` | 명시적 `clear < warn < stop <= 10000`. 기본 예산/threshold 없음 |
+| `warn_count`, `clear_count` | 각각 기본3, 2~100 |
+| `warn_dwell`, `clear_dwell`, `cooldown` | 기본 interval의2배/2배/15분. 상한은 reducer의24시간/24시간/7일 |
+| `inbox_size`, `delivery_timeout` | 기본256/2초. 각각1~1024, >0~5초. 수신 보장·성능 수치가 아님 |
+
+enabled는 PostgreSQL `max_conns=4`를 요구한다. capacity도 켰다면
+`capacity.postgres_stats_interval`과 observation.interval이 같아야 한다.
+기존 Monitor의 sampler를 **하나만** 공유하며, 관측만 켜면 standalone sampler
+하나를 소유한다. query2초/round5초이며 기존 일반 pool을 사용하고 API 예약
+context 값을 제거한다. 별도 DB pool, RPC·retry loop를 만들지 않는다.
+
+Run은 값만 받는 bounded inbox와 독립 alert worker를 시작한다. producer Offer는
+비차단이며 checkpoint/sink의 느림·실패가 query/COMMIT/source ACK 반환을 바꾸지
+않는다. 각 DB/WAL 값은 dequeue 후 현재 시각과 비교하며 원래 획득 시각을 유지한다.
+source 선택과 순수 grading은 짧은 같은 lock으로 fence하고 IO는 lock 밖에서 한다.
+latest attach를 detach하면 앞선 live Store로 돌아간다. child는 자기 source만
+retire/cancel/join하며 root worker를 닫지 않는다. root Run 종료와 direct Shutdown,
+실패한 시작·never-started 종료도 source/worker를 join한 뒤 Store를 닫는다.
+취소를 무시하는 IO는 실제 반환을 기다리며 강제 종료 성공을 가장하지 않는다.
+
+checkpoint startup 실패는 StateLost/UNKNOWN으로 freeze하고 자동 재생성·send를
+하지 않는다. indexing은 계속되며 hard guard·latch를 바꾸지 않는다. 정상 로드 후
+save 실패는 UNKNOWN이며 retry는 interval보다 자주 하지 않는다. inbox loss는
+해당 실행 동안 sticky GAP이므로 warning/clear를 진행하지 않고 알려진 critical을
+유지한다. 안전한 재시작은 기존 incident를 복원하고 새 표본으로 dwell을 다시 쌓는다.
+`Runtime.Status`는 복사된 severity/quality·sequence·획득 시각·queue/health만 제공하며
+새 HTTP/API나 DB 진단 응답을 만들지 않는다.
+
+YAML fragment의 안전한 비활성 예제(이 값은 운영 입력이 아니다):
+
+```yaml
+operations:
+  observation:
+    enabled: false
+    checkpoint_dir: HOLD
+    initialize: false
+    sink: disabled
+    database: {id: HOLD_DB_ID, series: HOLD_DB_SERIES, budget_bytes: 0}
+    wal: {id: HOLD_WAL_ID, series: HOLD_WAL_SERIES, budget_bytes: 0}
+```
+
+검증은 owned mock/임시 PG와 private checkpoint·fake sink만 사용했다. 수신자·키·
+실제 transport, native/backlog/lag/health producer 연결이나 실제 운전을 완료했다고
+해석하지 않는다. 미관측 값은 정상/0으로 추정하지 않는다.
+
 ## 후속 구현 순서
 
 구체적인 source 변경 후보와 RED→GREEN 표는
 [MON-02/03 구현 계획](codemine/runs/20261102-mon01-observation-design/implementation.md)을 따른다.
-다음 추천은 MON-02-D의 disabled opt-in App/config·transport 경계다. 실제 App/config·수집·
-알림·Docker probe 활성화까지 한 번에 확대하지 않는다.
+다음 추천은 MON-03의 fake process/parser·cancel/join·unknown 구현이다.
+실제 Docker probe·container·운영 수집·알림 발송은 계속 HOLD다.

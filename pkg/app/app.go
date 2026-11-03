@@ -27,6 +27,7 @@ import (
 	_ "github.com/0xmhha/indexer-go/internal/features/token" // token.transfers feature
 	"github.com/0xmhha/indexer-go/internal/multichain"
 	"github.com/0xmhha/indexer-go/internal/notifications"
+	"github.com/0xmhha/indexer-go/internal/observation"
 	"github.com/0xmhha/indexer-go/internal/opsguard"
 	"github.com/0xmhha/indexer-go/internal/rpcproxy"
 	"github.com/0xmhha/indexer-go/internal/source/era"
@@ -100,11 +101,13 @@ type App struct {
 	// opsMonitor halts the process on capacity (operations.capacity); only
 	// the root App owns one. rawObserver receives raw window usage.
 	// statsDetach stops the monitor sampling this App's PostgreSQL store.
-	opsMonitor  *opsguard.Monitor
-	rawObserver func(window.Usage)
-	statsDetach func()
-	haltMu      sync.Mutex
-	haltRun     context.CancelCauseFunc
+	opsMonitor     *opsguard.Monitor
+	observation    *observation.Runtime
+	ownObservation bool
+	rawObserver    func(window.Usage)
+	statsDetach    func()
+	haltMu         sync.Mutex
+	haltRun        context.CancelCauseFunc
 
 	// Runtime flags
 	enableGapMode    bool
@@ -311,7 +314,9 @@ func (a *App) initStorageOnly(ctx context.Context) error {
 	if err := a.configureExecutionIngressOwner(ctx); err != nil {
 		return fmt.Errorf("execution ingress ownership: %w", err)
 	}
-	a.attachPostgresStats(a.opsMonitor)
+	if err := a.attachPostgresStats(a.opsMonitor); err != nil {
+		return fmt.Errorf("observation source: %w", err)
+	}
 
 	a.logger.Info("Base storage initialized",
 		storeLocation(&a.config.Database),
@@ -688,7 +693,11 @@ func (a *App) newChainIndexer(ctx context.Context, cc *multichain.ChainConfig) (
 	}
 	// Set before the manager runs the chain, which starts its sessions.
 	app.rawObserver = a.rawObserver
-	app.attachPostgresStats(a.opsMonitor)
+	app.observation = a.observation // borrowed, never started/stopped by this child
+	if err := app.attachPostgresStats(a.opsMonitor); err != nil {
+		app.closeAfterFailedStart()
+		return nil, fmt.Errorf("observation source: %w", err)
+	}
 	if cc.ChainID != 0 {
 		id, err := app.client.GetChainID(ctx)
 		if err == nil && (!id.IsUint64() || id.Uint64() != cc.ChainID) {
@@ -1108,6 +1117,13 @@ func (a *App) Run(ctx context.Context) error {
 	a.haltRun = cancel
 	a.haltMu.Unlock()
 	var monitor sync.WaitGroup
+	if a.ownObservation && a.observation != nil {
+		monitor.Go(func() {
+			if err := a.observation.Run(ctx); err != nil {
+				a.logger.Warn("Observation worker unavailable; indexing authority is unchanged")
+			}
+		})
+	}
 	if a.opsMonitor != nil {
 		monitor.Add(1)
 		go func() {
